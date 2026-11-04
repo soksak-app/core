@@ -51,7 +51,7 @@ test("a document that does not reply to a request and to the probe after it make
   const record = JSON.parse(readFileSync(join(configDir, "unresponsive.json"), "utf8"));
   assert.equal(record.check, "probe check");
   assert.equal(record.request, "wailsv3 status.get core.settings");
-  await assert.rejects(session.get("core.page.error"),
+  await assert.rejects(session.get("core.workbench.error"),
     /^Error: wailsv3 stopped replying in the check "probe check" at wailsv3 status\.get core\.settings, so this request is not sent; /);
   await assert.rejects(open({ name: "a later check" }, app),
     /^Error: wailsv3 stopped replying in the check "probe check" at wailsv3 status\.get core\.settings, so this check does not run; /);

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { createServer } from "node:http";
 import test from "node:test";
 
-import { APPS, open, recordingFolders } from "@soksak/window-check/app.mjs";
+import { APPS, MAIN_PAGE_APPS, open, recordingFolders } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 
@@ -45,8 +45,8 @@ function settingsAboveSurfaces(state) {
 
 /** Checks that the background blur is applied to the main document and the documents of the visible plugin surfaces as enabled says. */
 async function background(s, enabled) {
-  await s.until("core.window.document", (doc) => doc.background === enabled,
-    `the main document background state must be ${enabled}`);
+  await s.until("core.window.workbench", (workbench) => workbench.background === enabled,
+    `the workbench background state must be ${enabled}`);
   for (const surface of await s.surfaces()) {
     // The host blurs the page of a view surface and its regions natively, and host.window reports the filter of each document
     // web view as blurred (docs/spec/native-surfaces.md#regions); a module surface carries the CSS blur of its document.
@@ -139,7 +139,11 @@ for (const app of Object.values(APPS)) {
         `brightness ${brightness(frame).toFixed(1)} against ${before.toFixed(1)} before opening`);
     }
   });
+}
 
+// These cases read the modal document (core.modal document), hold its first answer (diagnostics.modal.hold) or dispatch events
+// to its elements, so they run on the applications that create modal web views (MAIN_PAGE_APPS).
+for (const app of MAIN_PAGE_APPS) {
   test(`${app.name}: an open modal's document receives the content the page updates`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
@@ -197,10 +201,10 @@ for (const app of Object.values(APPS)) {
     await openSettings(s);
     await s.presented();
     settingsAboveSurfaces(await s.get("host.window"));
-    const origin = (await s.get("core.window.document")).timeOrigin;
+    const origin = (await s.get("core.window.workbench")).start;
     await s.run("host.window.reload");
-    await s.until("core.window.document", (doc) => doc.timeOrigin !== origin && doc.readyState === "complete",
-      "the main document did not reload");
+    await s.until("core.window.workbench", (workbench) => workbench.start !== origin && workbench.readyState === "complete",
+      "the workbench did not start again");
     await s.until("host.window", (state) => state.modal === null,
       "the old document's overlay survives after its owning DOM is gone");
     await background(s, false);
@@ -297,8 +301,8 @@ for (const app of Object.values(APPS)) {
     const state = await s.until("host.window", (w) => w.content.width === 1000 && w.content.height === 620
       && w.modal?.frame?.width === 1000 && w.modal.frame.height === 620, "the window and settings did not resize");
     settingsAboveSurfaces(state);
-    await s.until("core.window.document", (doc) => doc.width === 1000 && doc.height === 620,
-      "the main document did not take the new size");
+    await s.until("core.window.workbench", (workbench) => workbench.width === 1000 && workbench.height === 620,
+      "the workbench did not take the new size");
     await s.presented();
     const resized = rectOf(await s.rect("core.settings-modal.card"));
     assert.ok(resized.x >= 0 && resized.y >= 0 && resized.x + resized.width <= 1000 && resized.y + resized.height <= 620,

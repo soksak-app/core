@@ -12,7 +12,7 @@ const coreNames = ["core.surface.document", "core.surface.hit", "core.surface.in
 const declarations = {
   status: ["document", "input"].map((name) => ({ name: `core.surface.${name}`, description: name, schema: {} })),
   commands: [{ name: "core.surface.hit", description: "Hits the document.", params: { type: "object" }, result: { type: "boolean" } }],
-  dom: [],
+  element: [],
 };
 
 function setup(t, { surface = true, params = { path: "sample.txt" }, levels } = {}) {
@@ -153,7 +153,7 @@ test("the document audit includes separate binders and open shadow roots and rel
   await request("status.watch", "core.surface.document");
   second.dispose();
   await turn();
-  assert.deepEqual(changes("core.surface.document").at(-1).value.unbound, [{ tag: "button", expose: "probe.shadow", command: null, text: "Shadow" }]);
+  assert.deepEqual(changes("core.surface.document").at(-1).value.unbound, [{ role: "button", expose: "probe.shadow", command: null, text: "Shadow" }]);
   assert.deepEqual(first.audit(view.document.body), [], "the document audit changed an individual binder's contract");
   await request("status.unwatch", "core.surface.document");
 });

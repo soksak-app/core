@@ -21,7 +21,7 @@ import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets } from "@soksak/window-check/event-log.mjs";
 import { EVERY_LEVEL } from "@soksak/window-check/log-policy.mjs";
 import { chainOf, declaredChains, PERFORMED, tailOf } from "./chains.mjs";
-import { fresh, pluginChangeApplied } from "./fixture.mjs";
+import { fresh, pluginChangeApplied, restoreRegistry, useRegistry } from "./fixture.mjs";
 
 const REGISTRY = fileURLToPath(new URL("../target/registry/", import.meta.url));
 const NEWER = "99.0.0";
@@ -120,9 +120,9 @@ for (const app of Object.values(APPS)) {
         await s.run("core.library.page", { page: "projects" });
         await s.run("core.library.return");
       }
-      await s.run("core.plugins.registry", { index: before.registry });
+      await restoreRegistry(s);
     });
-    await s.run("core.plugins.registry", { index: address });
+    await useRegistry(s, address);
     await s.until("core.app", (value) => value.available?.version === NEWER, "the registry with a newer core did not list an update");
     await s.run("core.plugins.show-updates");
     await s.until("core.library", (library) => library.page === "plugins", "the plugin page did not show");

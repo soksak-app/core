@@ -60,10 +60,10 @@ for (const app of Object.values(APPS)) {
       `the terminal cell height must grow by the card factor: ${session.cellHeight} → ${after.cellHeight}`);
 
     // The card scale is stored with the layout and stays after reading again.
-    const documentBefore = (await s.get("core.window.document")).timeOrigin;
+    const documentBefore = (await s.get("core.window.workbench")).start;
     await s.run("host.window.reload");
-    await s.until("core.window.document", (doc) => doc.timeOrigin !== documentBefore && doc.readyState === "complete",
-      "the main document did not reload");
+    await s.until("core.window.workbench", (workbench) => workbench.start !== documentBefore && workbench.readyState === "complete",
+      "the workbench did not start again");
     await s.until("core.text", (value) => value.cards[card.id] === 1.1, "the card factor did not survive a reload");
 
     // When the frame is pressed, the frame is the scope, the space row grows, and the board stays inside the window.

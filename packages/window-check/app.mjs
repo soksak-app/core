@@ -29,7 +29,7 @@ const declared = (name) => {
 
 // The applications that SOKSAK_APP may name, and the set that a session covers when SOKSAK_APP is unset. The mygo
 // application is not built yet (F502-24), so the default set holds only the Wails and the Tauri application.
-const APP_NAMES = ["wailsv3", "tauriv2", "mygo"];
+export const APP_NAMES = ["wailsv3", "tauriv2", "mygo"];
 const DEFAULT_APPS = ["wailsv3", "tauriv2"];
 
 /**
@@ -44,12 +44,14 @@ export function requiredApps(env) {
 }
 
 /**
- * Whether the required set holds both the wailsv3 and the tauriv2 application, so that a check that compares these two
- * hosts is part of the session.
+ * Whether the required set holds every application of the default set (DEFAULT_APPS), so that a check that compares
+ * the hosts of the session with each other is part of the session; it then compares every application of APPS. A
+ * session of one application compares nothing. defaults is the default set; a check passes none, and a test passes
+ * another set to show that the answer follows the default set.
  */
-export function requiresBoth(env) {
+export function requiresAll(env, defaults = DEFAULT_APPS) {
   const names = requiredApps(env);
-  return names.includes("wailsv3") && names.includes("tauriv2");
+  return defaults.every((name) => names.includes(name));
 }
 
 /** The applications to check: the executable and the configuration folder. */
@@ -63,8 +65,15 @@ export const APPS = Object.fromEntries(requiredApps(process.env).map((name) => [
   configDir: process.env.SOKSAK_CONFIG_DIR ?? join(process.env.SOKSAK_CONFIG_ROOT ?? tmpdir(), `soksak-check-${name}`),
 }]));
 
-/** The applications with a main page: a check whose subject is the main page or a modal web view runs against them (docs/spec/host-parity.md). */
-export const MAIN_PAGE_APPS = Object.values(APPS).filter((app) => app.name !== "mygo");
+// The applications that have a main page: their host draws the workbench in a web page; the mygo host draws it in native
+// UI and has no main page (docs/spec/hosts.md#mygo-host).
+const MAIN_PAGE_NAMES = ["wailsv3", "tauriv2"];
+
+/**
+ * The applications of APPS that have a main page. A window check whose subject is the main page or a modal web view
+ * iterates this list; every other window check iterates Object.values(APPS).
+ */
+export const MAIN_PAGE_APPS = Object.values(APPS).filter((app) => MAIN_PAGE_NAMES.includes(app.name));
 
 /** Verifies that the running endpoint is not older than the current build. */
 export function assertEndpointUsesCurrentBuild(endpoint, resolvedBinary, binaryMtimeMs) {
@@ -176,10 +185,10 @@ function unresponsiveError(app, consequence = "this request is not sent") {
   return new Error(`${app.name} stopped replying in the check "${record.check}" at ${record.request}, so ${consequence}; ${record.error}`);
 }
 
-/** Whether the document of the window answers one status request; a reply in any form, also an error, shows that it runs. */
-async function documentReplies(client, window) {
+/** Whether the workbench of the window answers one status request; a reply in any form, also an error, shows that it runs. */
+async function workbenchReplies(client, window) {
   try {
-    await client.request("status.get", { window, name: "core.page.error" });
+    await client.request("status.get", { window, name: "core.workbench.error" });
     return true;
   } catch (error) {
     return !(error instanceof EndpointError && /did not reply within/.test(error.message));
@@ -505,9 +514,9 @@ export class Session {
           } catch (failure) {
             error.message += `; sampling the host failed: ${failure.message}`;
           }
-          // A document that does not reply to one more request either has stopped, so the later checks of the application fail at
+          // A workbench that does not reply to one more request either has stopped, so the later checks of the application fail at
           // once with this record instead of each waiting for its own timeouts (F351).
-          if (!(await documentReplies(this.client, this.window))) {
+          if (!(await workbenchReplies(this.client, this.window))) {
             error.message += `; ${this.app.name} does not reply to a probe either, so its later checks fail at once`;
             writeFileSync(unresponsivePath(this.app.configDir),
               `${JSON.stringify({ check: this.check ?? null, request: what, error: error.message })}\n`);
@@ -529,11 +538,11 @@ export class Session {
   }
 
   rect(name, index, surface) {
-    return this.request("dom.rect", compact({ name, index, surface }));
+    return this.request("element.rect", compact({ name, index, surface }));
   }
 
   act(name, action, { index, value, event, surface } = {}) {
-    return this.request("dom.act", compact({ name, action, index, value, event, surface }));
+    return this.request("element.act", compact({ name, action, index, value, event, surface }));
   }
 
   async pointer(x, y, phase, options = {}) {
@@ -765,7 +774,7 @@ export class Session {
   }
 
   /**
-   * Waits until the surface has registered every entry of `entries` (`status <name>`, `command <name>` or `dom <name>`, as
+   * Waits until the surface has registered every entry of `entries` (`status <name>`, `command <name>` or `element <name>`, as
    * `core.surfaces` lists them). The phase `ready` of a view surface means that the view declared its composition; the view
    * registers its exposure after that (docs/spec/native-surfaces.md), so a check that runs a command or reads a status of a
    * new view waits here.
@@ -925,7 +934,7 @@ const START = { width: 1200, height: 760 };
 
 /**
  * Puts the window into the start state of a check. It closes the other windows, restores the size and position of the
- * window, opens the test project with the settings in a new layout (diagnostics.fixture), reloads the main document and
+ * window, opens the test project with the settings in a new layout (diagnostics.fixture), starts the workbench again and
  * verifies that no display failure occurred in between. Waiting for the surfaces of the layout is done by the
  * preparation of the repository that knows those surfaces.
  *
@@ -973,10 +982,10 @@ export async function prepareFixture(s, { settings = {}, performanceTrace = TRAC
       throw new Error(`test preparation reported presentation errors before reload: ${JSON.stringify(presentationErrors)}; ` +
         `native state: ${JSON.stringify(await s.get("host.window"))}`);
     }
-    const before = (await s.get("core.window.document")).timeOrigin;
+    const before = (await s.get("core.window.workbench")).start;
     await s.run("host.window.reload");
-    await s.until("core.window.document", (doc) => doc.timeOrigin !== before && doc.readyState === "complete",
-      "the main document did not reload");
+    await s.until("core.window.workbench", (workbench) => workbench.start !== before && workbench.readyState === "complete",
+      "the workbench did not start again");
   } finally {
     offErrors();
     records = await verification.stop();

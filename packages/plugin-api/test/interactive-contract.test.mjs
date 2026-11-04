@@ -9,6 +9,7 @@ import { INTERACTIVE, createBinder } from "../binder.js";
 const CONTRACT = JSON.parse(readFileSync(new URL("../contract/interactive.json", import.meta.url), "utf8"));
 const EXPECTED_IDS = [
   "interactive.audit.lists-unconnected-and-unnamed-elements",
+  "interactive.audit.role-takes-the-attribute-then-the-implicit-role",
   "interactive.audit.text-takes-label-then-title-then-truncates",
 ];
 

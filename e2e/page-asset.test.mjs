@@ -2,11 +2,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { MAIN_PAGE_APPS, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, untilEventLines } from "@soksak/window-check/event-log.mjs";
 import { fresh, reading } from "./fixture.mjs";
 
-for (const app of Object.values(APPS)) {
+// The subject is a file request of the main page, so the check runs on the applications that have one (MAIN_PAGE_APPS).
+for (const app of MAIN_PAGE_APPS) {
   test(`${app.name}: a request for a missing page file writes one error line for each path`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);

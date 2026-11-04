@@ -11,7 +11,7 @@ import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
-import { fresh } from "./fixture.mjs";
+import { fresh, restoreRegistry, useRegistry } from "./fixture.mjs";
 
 const REGISTRY = fileURLToPath(new URL("../target/registry/", import.meta.url));
 
@@ -27,7 +27,8 @@ for (const app of Object.values(APPS)) {
     const index = JSON.parse(readFileSync(join(REGISTRY, "index.json"), "utf8"));
     const browser = index.plugins.find((plugin) => plugin.id === "browser");
     const newer = `${installed.split(".").slice(0, 2).join(".")}.${Number(installed.split(".")[2]) + 1}`;
-    browser.versions.push({ ...structuredClone(browser.versions.at(-1)), version: newer });
+    // The new version accepts the running core, so the check does not depend on the range of the release that the index lists.
+    browser.versions.push({ ...structuredClone(browser.versions.at(-1)), version: newer, engines: { soksak: `^${before.core}` } });
     browser.versions.at(-1).release.sha256 = "0".repeat(64);
     const folder = mkdtempSync(join(tmpdir(), "soksak-plugin-updates-"));
     writeFileSync(join(folder, "index.json"), JSON.stringify(index));
@@ -38,10 +39,10 @@ for (const app of Object.values(APPS)) {
         await s.run("core.library.page", { page: "projects" });
         await s.run("core.library.return");
       }
-      await s.run("core.plugins.registry", { index: before.registry });
+      await restoreRegistry(s);
     });
 
-    await s.run("core.plugins.registry", { index: address });
+    await useRegistry(s, address);
     const listed = await s.until("core.plugins", (value) => value.registry === address && value.error === null && value.updates.length > 0,
       "the registry with a newer version did not list an update");
     assert.deepEqual(listed.updates, [{ id: "browser", installed, latest: newer }]);
@@ -66,7 +67,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(failed.plugins.find((entry) => entry.id === "browser").installed.version, installed);
 
     // The control leaves with the last update.
-    await s.run("core.plugins.registry", { index: before.registry });
+    await restoreRegistry(s);
     await s.until("core.plugins", (value) => value.updates.length === 0, "the original registry still lists an update");
     await assert.rejects(s.rect("core.chrome.updates"), /core\.chrome\.updates/);
   });

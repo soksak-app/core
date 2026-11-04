@@ -13,10 +13,10 @@ for (const app of Object.values(APPS)) {
     assert.ok(tabs.length > 1, `the fixture space has fewer than two tabs: ${JSON.stringify(tabs)}`);
     const closed = tabs.at(-1);
     await s.run("core.tab.close", { tab: closed.id });
-    const before = (await s.get("core.window.document")).timeOrigin;
+    const before = (await s.get("core.window.workbench")).start;
     await s.run("host.window.reload");
-    await s.until("core.window.document", (doc) => doc.timeOrigin !== before && doc.readyState === "complete",
-      "the main document did not reload");
+    await s.until("core.window.workbench", (workbench) => workbench.start !== before && workbench.readyState === "complete",
+      "the workbench did not start again");
     const after = (await s.get("core.grid")).cards.flatMap((card) => card.tabs ?? []).map((tab) => tab.id);
     assert.ok(!after.includes(closed.id), `the closed tab ${closed.id} returned after the reload: ${JSON.stringify(after)}`);
   });

@@ -26,6 +26,7 @@ import shortcutTable from "./shortcuts.json" with { type: "json" };
 import { documentRegions } from "./document-regions.js";
 import { forgetViewFocus } from "./view-focus.js";
 import { trace, traceEnabled } from "./performance.js";
+import { onRunEnd, runActive } from "./run-state.js";
 const mounted = new Map();
 let placementTail = Promise.resolve();
 const mounting = new Map();
@@ -290,7 +291,7 @@ function viewStartValuesFromDeclarations(surface, project, origin, declarations)
     params: surface.params ?? null,
     origin,
     project: project === null ? null : { id: project.id, root: project.root },
-    declarations: Object.fromEntries(["status", "commands", "dom"].map((kind) =>
+    declarations: Object.fromEntries(["status", "commands", "element"].map((kind) =>
       [kind, [...declarations[kind], ...(surface.declarations[kind] ?? [])]])), // default: a surface without plugin declarations contributes none beyond core declarations.
     // The surface of each plugin carries its diagnostic declaration, which is null without one (docs/spec/native-surfaces.md#view-surfaces).
     diagnostics: surface.diagnostics,
@@ -460,6 +461,7 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
       read: () => logGate.classes(),
       on: (listener) => Promise.resolve(logGate.onChange(listener)),
     },
+    run: { active: runActive, onEnd: onRunEnd },
     push: (event, data) => scoped.native.call("viewEvent", { generation: viewGeneration, event, data }),
     closing,
     leftOut: () => surfaceLeftOut(surface.surfaceId),
@@ -593,7 +595,7 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
         },
       },
       exposure: {
-        // A status or dom registration of the view: the registry validates the declaration and applies it, then the host
+        // A status or element registration of the view: the registry validates the declaration and applies it, then the host
         // records it, so a reloaded main page receives it again (docs/spec/exposure.md#relay).
         registered: async ({ kind, name }) => {
           registry.registered({ surface: surface.surfaceId, kind, name });

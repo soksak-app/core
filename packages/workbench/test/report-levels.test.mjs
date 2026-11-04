@@ -36,7 +36,7 @@ test("a surface module reports its failure as an error line", async () => {
 
 test("a failed settling wait of a core command and a refused registration are error lines", async () => {
   const { connectExposure, registry, revisitRegistrations } = await import("../exposure.js");
-  registry.declare("core", { status: [], dom: [], commands: [{
+  registry.declare("core", { status: [], element: [], commands: [{
     name: "core.fixture.add", description: "Adds.",
     params: { type: "object", properties: { n: { type: "integer" } } }, result: { type: "integer" },
   }] });

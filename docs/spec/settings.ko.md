@@ -68,7 +68,7 @@
 
 ### 사이드바
 
-이 절은 세트 목록과 새 세트를 보여 준다. 각 행은 세트 제목, 배치(목록 또는 탭), 섹션 이름, 버튼 둘을 보여 준다. 편집(`core.settings-modal.edit {set}`)과 삭제(`core.settings.sets.delete {id, scope}`)다. 줄은 버튼이 남긴 행 너비를 쓰고, 버튼은 행의 오른쪽 끝에 놓이며, 각 줄은 세트 순서대로 dom entry `core.settings-modal.set-caption`이다. 새 세트는 `core.settings.sets.create {scope}`를 실행한다. 이 명령은 제목 "새 세트", 배치 `list`, 섹션이 없는 세트를 더하고 그 세트의 편집을 연다.
+이 절은 세트 목록과 새 세트를 보여 준다. 각 행은 세트 제목, 배치(목록 또는 탭), 섹션 이름, 버튼 둘을 보여 준다. 편집(`core.settings-modal.edit {set}`)과 삭제(`core.settings.sets.delete {id, scope}`)다. 줄은 버튼이 남긴 행 너비를 쓰고, 버튼은 행의 오른쪽 끝에 놓이며, 각 줄은 세트 순서대로 element entry `core.settings-modal.set-caption`이다. 새 세트는 `core.settings.sets.create {scope}`를 실행한다. 이 명령은 제목 "새 세트", 배치 `list`, 섹션이 없는 세트를 더하고 그 세트의 편집을 연다.
 
 세트 편집은 다음을 보여 준다.
 
@@ -104,7 +104,7 @@
 
 세트 편집도 같은 컨트롤을 쓴다. 이름은 글자 입력, 배치는 선택 상자, 섹션 행은 각각 선택 상자다. 버튼(전역값 사용, 편집, 삭제, 새 세트, ▲ ▼ − +, 목록, 플러그인 관리)은 동작을 실행하며 설정 컨트롤이 아니다. 범위 탭은 보이는 범위를 고르며 설정이 아니다. `textSize`, `sets`, `diagnostics.performance`, `diagnostics.log`처럼 이 표에 컨트롤이 없는 설정은 자기 명령이나 설정 파일로 바꾼다.
 
-워크벤치는 `~/Projects/polyspec/crudui`의 폼 라이브러리로 창을 그리지 않고 이 컨트롤 묶음을 직접 정한다. 그 라이브러리는 폼 template을 compile하고, 애플리케이션이 한 번에 제출하는 record를 bind하며, 행 identity, undo history, `name` 기반 컨트롤과 자기 event binding(`connectForm`)을 가진다. 설정 창은 바뀐 값을 선언된 명령으로 바로 적용하고, 모든 컨트롤은 공유 binder로 자기 명령을 가리키며 dom 이름을 가지고([exposure](exposure.ko.md)), host는 listener가 동작하지 않는 카드 사본을 그린다([네이티브 모달](native-modals.ko.md)). 그 라이브러리의 markup과 binding은 출력을 다시 쓰는 층 없이는 이 규칙을 하나도 만족하지 않고, plugin 설정 선언에는 위 표의 형식만 필요하므로 의존성을 더할 이유가 없다.
+워크벤치는 `~/Projects/polyspec/crudui`의 폼 라이브러리로 창을 그리지 않고 이 컨트롤 묶음을 직접 정한다. 그 라이브러리는 폼 template을 compile하고, 애플리케이션이 한 번에 제출하는 record를 bind하며, 행 identity, undo history, `name` 기반 컨트롤과 자기 event binding(`connectForm`)을 가진다. 설정 창은 바뀐 값을 선언된 명령으로 바로 적용하고, 모든 컨트롤은 공유 binder로 자기 명령을 가리키며 element 이름을 가지고([exposure](exposure.ko.md)), host는 listener가 동작하지 않는 카드 사본을 그린다([네이티브 모달](native-modals.ko.md)). 그 라이브러리의 markup과 binding은 출력을 다시 쓰는 층 없이는 이 규칙을 하나도 만족하지 않고, plugin 설정 선언에는 위 표의 형식만 필요하므로 의존성을 더할 이유가 없다.
 
 ## 값
 
@@ -200,7 +200,7 @@ theme catalog와 mode, font, menu 언어와 기본 언어, 그리고 이 설정�
 | `plugin` | 페이지가 보이는 플러그인 또는 `null` |
 | `editing` | 편집 중인 세트 id 또는 `null` |
 | `rows` | 플러그인 페이지의 선언된 설정 행마다 `{key, name, description}` |
-| `controls` | 모든 컨트롤과 그 dom 이름, 키, 명령, 현재 값, 선택 상자의 항목 값(`options`, 다른 컨트롤은 `null`) |
+| `controls` | 모든 컨트롤과 그 element 이름, 키, 명령, 현재 값, 선택 상자의 항목 값(`options`, 다른 컨트롤은 `null`) |
 
 `core.plugins`는 [plugin 화면](installation.ko.md#plugin-화면)이 정한다.
 

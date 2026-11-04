@@ -16,7 +16,7 @@ registry.declare("core", {
     { name: "core.fixture.press", description: "Press.", params: { type: "object", properties: { id: { type: "string" } } }, result: {} },
     { name: "core.fixture.put", description: "Put.", params: { type: "object", properties: { key: { type: "string" }, text: { type: "string" } } }, result: { type: "null" } },
   ],
-  dom: [],
+  element: [],
 });
 const calls = [];
 registry.command("core.fixture.press", (params) => { calls.push(["press", params]); return "pressed"; });
@@ -25,7 +25,7 @@ registry.command("core.fixture.put", (params) => { calls.push(["put", params]); 
 registry.declare("fixture", {
   status: [],
   commands: [{ name: "fixture.select", description: "Selects.", params: { type: "object", properties: { id: { type: "string" } } }, result: {} }],
-  dom: [],
+  element: [],
 });
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
@@ -92,7 +92,7 @@ test("binding an undeclared command throws, and audit finds unbound controls", (
   const loose = document.createElement("button");
   loose.dataset.expose = "core.fixture.loose";
   root.append(named, loose);
-  assert.deepEqual(audit(root), [{ tag: "button", expose: "core.fixture.loose", command: null, text: "" }]);
+  assert.deepEqual(audit(root), [{ role: "button", expose: "core.fixture.loose", command: null, text: "" }]);
 });
 
 test("run rejects undeclared commands and invalid parameters", async () => {

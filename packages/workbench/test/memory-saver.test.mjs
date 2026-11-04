@@ -375,6 +375,36 @@ test("a rejected interactionState read ends the attempt with a reported failure 
   assert.deepEqual(state.states, []);
 });
 
+for (const [step, options] of Object.entries({
+  "the regions read": { regions: async () => { throw new Error("step refused"); } },
+  "the interactionState read": { interaction: async () => { throw new Error("step refused"); } },
+  "the commit": { commit: async () => { throw new Error("step refused"); } },
+})) {
+  test(`a failed ${step} at the deadline runs again one delay later, not at the deadline that passed`, async () => {
+    const { saver, state } = harness(options);
+    saver.observe(new Set(["b"]), tabs("a", "b"));
+    mock.timers.tick(120 * MINUTE);
+    await settle();
+    const attempts = () => named("workbench.tab.unload.failed").length;
+    assert.equal(attempts(), 1);
+    // A tick of 0 runs a timer that the end of the attempt set for the same time.
+    for (let turn = 0; turn < 5; turn++) {
+      mock.timers.tick(0);
+      await settle();
+    }
+    assert.equal(attempts(), 1);
+    assert.equal(saver.status().tabs.find(({ tab }) => tab === "a").unloadAt, 1_000_000 + 240 * MINUTE);
+    mock.timers.tick(120 * MINUTE - 1);
+    await settle();
+    assert.equal(attempts(), 1);
+    mock.timers.tick(1);
+    await settle();
+    assert.equal(attempts(), 2);
+    assert.equal(saver.unloaded("a"), false);
+    assert.ok(state.failures.length >= 2);
+  });
+}
+
 test("a shown unloaded tab is restoring until its surface mounts, and a failed restore is reported", async () => {
   const { saver, state } = harness();
   saver.observe(new Set(["b"]), tabs("a", "b"));

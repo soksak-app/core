@@ -16,20 +16,32 @@ function fixture(settings) {
   const configDir = mkdtempSync(join(tmpdir(), "soksak-prepare-"));
   test.after(() => rmSync(configDir, { recursive: true }));
   const levels = ["lifecycle", "input", "call", "io", "frame"];
+  const reloads = [];
   const statuses = {
     "host.windows": [{ window: "main", ready: true }],
     "host.window": { content: { width: 1200, height: 760 }, frame: { x: 0, y: 0, width: 1200, height: 760 } },
     "host.screens": [{ visible: { x: 0, y: 0, width: 2000, height: 1200 } }],
-    "core.window.document": { timeOrigin: 2, readyState: "complete" },
+    "core.window.workbench": { start: "start-1", startedAt: 2, readyState: "complete" },
     "core.verify": { rows: [] },
   };
   const read = (name) => (name === "core.settings" ? { values: { ...settings } } : statuses[name]);
   const client = {
     endpoint: { pid: 1 },
     on: () => () => {},
-    watch: async (window, name) => read(name),
+    // A watch answers the current value when it satisfies the predicate; a value that does not is an error, because
+    // nothing in the fixture changes it later.
+    watch: async (window, name, predicate) => {
+      const value = read(name);
+      if (predicate && !predicate(value)) throw new Error(`the fixture value of ${name} does not satisfy the wait: ${JSON.stringify(value)}`);
+      return value;
+    },
     request: async (method, params) => {
       if (method === "status.get") return read(params.name);
+      // The reload starts the workbench again: a new start in the same page process.
+      if (method === "command.run" && params.name === "host.window.reload") {
+        reloads.push(statuses["core.window.workbench"].start);
+        statuses["core.window.workbench"] = { start: `start-${reloads.length + 1}`, startedAt: 2 + reloads.length, readyState: "complete" };
+      }
       if (method === "command.run" && params.name === "core.settings.set") Object.assign(settings, params.params.patch);
       if (method === "diagnostics.fixture") {
         Object.assign(settings, params.settings);
@@ -39,7 +51,9 @@ function fixture(settings) {
       return null;
     },
   };
-  return new Session({ name: "wailsv3", configDir }, client);
+  const session = new Session({ name: "wailsv3", configDir }, client);
+  session.reloads = reloads;
+  return session;
 }
 
 test("the preparation of a check restores the settings that it changed when the check ends", async () => {
@@ -49,6 +63,13 @@ test("the preparation of a check restores the settings that it changed when the 
   assert.deepEqual(settings, { "diagnostics.performance": false, "diagnostics.log": {}, theme: "light" }, "the preparation did not change the settings");
   for (const clean of session.cleanups.reverse()) await clean();
   assert.deepEqual(settings, { "diagnostics.performance": true, "diagnostics.log": { call: "info" }, theme: "dark" });
+});
+
+test("the preparation reloads the workbench and waits for a new start of core.window.workbench", async () => {
+  const session = fixture({});
+  await prepareFixture(session, { performanceTrace: false });
+  assert.deepEqual(session.reloads, ["start-1"], "the preparation did not reload the workbench once");
+  assert.equal((await session.get("core.window.workbench")).start, "start-2");
 });
 
 // F192.3-2: a check declares the log policy it needs and the records it reads; a declaration whose policy does not store a

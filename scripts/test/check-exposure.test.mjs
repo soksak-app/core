@@ -40,7 +40,7 @@ test('a copy of workbench.json in a language host library that differs from its 
  ]);
 });
 
-const declared={status:[{name:'core.layout'}],commands:[{name:'core.space.add'}],dom:[{name:'core.chrome.left'}]};
+const declared={status:[{name:'core.layout'}],commands:[{name:'core.space.add'}],element:[{name:'core.chrome.left'}]};
 const goSource=(text)=>[{path:'packages/workbench-mygo/src/fixture.go',text}];
 
 test('a Go source of the mygo workbench that registers an undeclared status fails',{timeout:1000},()=>{

@@ -6,23 +6,27 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { APPS, keepCommonSettings, open, requiresBoth, windowPosition } from "@soksak/window-check/app.mjs";
+import { APPS, keepCommonSettings, open, requiresAll, windowPosition } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 
-// The check places two windows, so it is registered only when the required set holds both applications.
-if (requiresBoth(process.env)) test("fresh places the two check windows at their own frames", async (t) => {
+// The check places the window of every application, so it is registered only when the required set holds all of them.
+if (requiresAll(process.env)) test("fresh places every check window at its own frame", async (t) => {
   const sessions = [];
   for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     sessions.push(s);
   }
-  // Overlaps both windows at the same position and then checks that fresh returns each to its own position. Positioning sets only the position of the window.
-  // Whether a window of another application covers a check window does not depend on the position, so this check does not measure it.
-  const { frame } = await sessions[0].get("host.window");
-  await sessions[1].run("host.window.move", { x: frame.x, y: frame.y });
-  await sessions[1].until("host.window", (w) => w.frame.x === frame.x && w.frame.y === frame.y, "the second window did not move onto the first");
+  // Moves every window onto the position of the first one and then checks that fresh returns each to its own position.
+  // Positioning sets only the position of the window. Whether a window of another application covers a check window does
+  // not depend on the position, so this check does not measure it.
+  const [first, ...others] = sessions;
+  const { frame } = await first.get("host.window");
+  for (const s of others) {
+    await s.run("host.window.move", { x: frame.x, y: frame.y });
+    await s.until("host.window", (w) => w.frame.x === frame.x && w.frame.y === frame.y, `the ${s.app.name} window did not move onto the first`);
+  }
   for (const s of sessions) await fresh(s);
-  const [screen] = await sessions[0].get("host.screens");
+  const [screen] = await first.get("host.screens");
   const area = screen.visible;
   const frames = await Promise.all(sessions.map(async (s) => (await s.get("host.window")).frame));
   // The rule of the positions is windowPosition of @soksak/window-check, which place() of fresh applies; the check reads it and
@@ -32,9 +36,15 @@ if (requiresBoth(process.env)) test("fresh places the two check windows at their
     const position = windowPosition(s.app.name, area, frame);
     assert.deepEqual([frame.x, frame.y], [position.x, position.y], `${s.app.name} is not at its window position in the visible area`);
   }
-  // The two windows do not cover each other's position completely.
+  // No window covers the position of another one completely.
   const contains = (a, b) => a.x <= b.x && a.y <= b.y && a.x + a.width >= b.x + b.width && a.y + a.height >= b.y + b.height;
-  assert.ok(!contains(frames[0], frames[1]) && !contains(frames[1], frames[0]), `one check window covers the other: ${JSON.stringify(frames)}`);
+  for (const [index, s] of sessions.entries()) {
+    for (const [other, o] of sessions.entries()) {
+      if (other === index) continue;
+      assert.ok(!contains(frames[index], frames[other]),
+        `the ${s.app.name} window covers the ${o.app.name} window: ${JSON.stringify(frames)}`);
+    }
+  }
 });
 
 // The front-to-back order cannot be changed without activation, so the window of each application is covered by the project window that the application newly opened. The new window becomes the front window of that application.

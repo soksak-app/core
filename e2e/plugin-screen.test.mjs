@@ -77,17 +77,17 @@ for (const app of Object.values(APPS)) {
     assert.equal(listed.plugins.find((row) => row.id === "files").state, "loaded");
     assert.equal(listed.reload, false);
 
-    // A plugin operation reloads the page of the window, which then reports the change without an application restart
-    // (docs/spec/installation.md#applying-a-change). The page process changes with each reload.
+    // A plugin operation starts the workbench of the window again, which then reports the change without an application restart
+    // (docs/spec/installation.md#applying-a-change). Each reload is a new start of the workbench.
     const reloaded = async (before, message) => {
-      const window = await s.until("host.window", (value) => value.pageProcess !== 0 && value.pageProcess !== before, message);
-      await s.until("host.windows", (list) => list.some((item) => item.window === s.window && item.ready), `${message}: the new page did not report ready`);
-      return window;
+      const workbench = await s.until("core.window.workbench", (value) => value.start !== before && value.readyState === "complete", message);
+      await s.until("host.windows", (list) => list.some((item) => item.window === s.window && item.ready), `${message}: the new workbench did not report ready`);
+      return workbench;
     };
     assert.ok(actionsOf(await s.get("core.library"), "files").includes("disable"), "the files card has no 사용 안 함");
-    let page = (await s.get("host.window")).pageProcess;
+    let start = (await s.get("core.window.workbench")).start;
     await s.run("core.plugins.disable", { plugin: "files" });
-    page = (await reloaded(page, "disabling files did not reload the window")).pageProcess;
+    start = (await reloaded(start, "disabling files did not reload the window")).start;
     const disabled = await s.until("core.plugins", (value) => value.plugins.find((row) => row.id === "files")?.state === "disabled",
       "the reloaded window did not report files disabled");
     assert.equal(disabled.reload, false);
@@ -96,7 +96,7 @@ for (const app of Object.values(APPS)) {
     await showPlugins(s);
     await s.until("core.library", (value) => actionsOf(value, "files").includes("enable"), "the files card did not offer 사용");
     await s.run("core.plugins.enable", { plugin: "files" });
-    await reloaded(page, "enabling files did not reload the window");
+    await reloaded(start, "enabling files did not reload the window");
     const enabled = await s.until("core.plugins", (value) => value.plugins.find((row) => row.id === "files")?.state === "loaded",
       "the reloaded window did not load files");
     assert.equal(enabled.reload, false);
@@ -113,10 +113,10 @@ for (const app of Object.values(APPS)) {
     mkdirSync(join(project.root, folder));
     writeFileSync(file, "alpha\n");
     s.cleanup(() => rmSync(join(project.root, folder), { recursive: true, force: true }));
-    const page = async () => (await s.get("host.window")).pageProcess;
+    const start = async () => (await s.get("core.window.workbench")).start;
     const reloaded = async (before, message) => {
-      await s.until("host.window", (value) => value.pageProcess !== 0 && value.pageProcess !== before, message);
-      await s.until("host.windows", (list) => list.some((item) => item.window === s.window && item.ready), `${message}: the new page did not report ready`);
+      await s.until("core.window.workbench", (value) => value.start !== before && value.readyState === "complete", message);
+      await s.until("host.windows", (list) => list.some((item) => item.window === s.window && item.ready), `${message}: the new workbench did not report ready`);
     };
 
     const { tab: surface } = await s.run("core.file.open", { path });
@@ -137,11 +137,11 @@ for (const app of Object.values(APPS)) {
     // The browser plugin is enabled again after the check, which reloads the window once more.
     s.cleanup(async () => {
       if ((await s.get("core.plugins")).plugins.find((row) => row.id === "browser").installed.enabled) return;
-      const before = await page();
+      const before = await start();
       await s.run("core.plugins.enable", { plugin: "browser" });
       await reloaded(before, "enabling browser did not reload the window");
     });
-    const before = await page();
+    const before = await start();
     await s.run("core.plugins.disable", { plugin: "browser" });
     const ask = async () => (await s.until("core.picker", (picker) => picker.open && picker.title.includes("저장하지 않은 변경이 있습니다"),
       "the plugin change did not ask about the modified tab")).items.map((item) => item.name);
@@ -151,7 +151,7 @@ for (const app of Object.values(APPS)) {
     const kept = await s.until("core.plugins", (value) => value.plugins.find((row) => row.id === "browser").state === "reload",
       "적용하지 않기 did not leave the browser change waiting for a reload");
     assert.equal(kept.reload, true);
-    assert.equal(await page(), before, "적용하지 않기 reloaded the window");
+    assert.equal(await start(), before, "적용하지 않기 reloaded the window");
 
     // core.plugins.apply asks again, and the action that applies without saving reloads the window without writing the file.
     const applying = s.run("core.plugins.apply", {});

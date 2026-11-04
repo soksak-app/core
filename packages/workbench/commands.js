@@ -7,7 +7,7 @@ import { registry } from "./exposure.js";
 
 export { commandOf, valueOf } from "@soksak/plugin-api";
 
-/* The function to call when a binding changes. The watch of core.page.audit registers it. */
+/* The function to call when a binding changes. The watch of core.workbench.audit registers it. */
 const listeners = new Set();
 
 /**

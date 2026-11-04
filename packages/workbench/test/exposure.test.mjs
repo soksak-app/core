@@ -55,7 +55,7 @@ const coreExposes = () => ({
     { name: "core.surface.document", description: "Registered by surface pages.", schema: {} },
   ],
   commands: [{ name: "core.fixture.add", description: "Adds.", params: { type: "object", properties: { n: { type: "integer" } } }, result: { type: "integer" } }],
-  dom: [
+  element: [
     { name: "core.fixture.button", description: "Button." },
     { name: "core.fixture.row", description: "Rows.", many: true },
     { name: "core.fixture.missing", description: "Absent." },
@@ -111,7 +111,7 @@ test("registration tracing attributes core loss to its document and live request
 const probeExposes = () => ({
   status: [{ name: "probe.lines", description: "Lines.", schema: { type: "array" } }],
   commands: [{ name: "probe.send", description: "Sends.", params: { type: "object" }, result: {} }],
-  dom: [{ name: "probe.lines", description: "Output." }],
+  element: [{ name: "probe.lines", description: "Output." }],
 });
 
 /** Records the host calls and gives exposureForward the reply that answer sets. */
@@ -146,7 +146,7 @@ test("the core declaration file is valid and every main-page entry is registered
   // Reads every owning module of the staging declaration. A separated operation module passes the same name check.
   const modules = JSON.parse(source("package.json")).files.filter((name) => name.endsWith(".js"));
   const markup = ["index.html", ...modules].map(source).join("\n");
-  for (const { name } of file.exposes.dom) {
+  for (const { name } of file.exposes.element) {
     assert.ok(markup.includes(`"${name}"`) || markup.includes(`'${name}'`), `${name} has no data-expose in the markup`);
   }
 });
@@ -155,7 +155,7 @@ test("the registry registers the core declarations of the exposure file", () => 
   const served = { exposes: coreExposes() };
   installExposure(structuredClone(served));
   const listed = registry.list();
-  assert.deepEqual(Object.keys(listed), ["status", "commands", "dom"]);
+  assert.deepEqual(Object.keys(listed), ["status", "commands", "element"]);
   assert.deepEqual(listed.commands, [{ ...served.exposes.commands[0], registered: false }],
     "entries keep the declaration format and add registered");
   assert.deepEqual(Object.values(listed).flat().map((entry) => `${entry.name} ${entry.registered}`), [
@@ -166,8 +166,8 @@ test("the registry registers the core declarations of the exposure file", () => 
     "core.fixture.row false",
     "core.fixture.missing false",
   ], "nothing is registered before core registration");
-  registry.dom("core.fixture.row");
-  assert.equal(registry.list().dom.find((entry) => entry.name === "core.fixture.row").registered, true);
+  registry.element("core.fixture.row");
+  assert.equal(registry.list().element.find((entry) => entry.name === "core.fixture.row").registered, true);
 });
 
 test("core entries answer requests and undeclared or unregistered names fail with their codes", async () => {
@@ -181,13 +181,13 @@ test("core entries answer requests and undeclared or unregistered names fail wit
   let emit = null;
   made.status("core.fixture.count", () => count, (fn) => { emit = fn; return () => { emit = null; }; });
   made.command("core.fixture.add", ({ n }) => (count += n));
-  made.dom("core.fixture.button");
-  made.dom("core.fixture.row");
-  made.dom("core.fixture.missing");
+  made.element("core.fixture.button");
+  made.element("core.fixture.row");
+  made.element("core.fixture.missing");
 
   const code = async (request) => (await made.handle(request)).error?.code;
   assert.equal(await code({ method: "status.get", params: { name: "core.fixture.none" } }), EXPOSURE_ERRORS.unknownName);
-  assert.equal(await code({ method: "dom.rect", params: { name: "core.fixture.missing" } }), EXPOSURE_ERRORS.unregistered);
+  assert.equal(await code({ method: "element.rect", params: { name: "core.fixture.missing" } }), EXPOSURE_ERRORS.unregistered);
   assert.equal(await code({ method: "command.run", params: { name: "core.fixture.add", params: { n: "1" } } }), EXPOSURE_ERRORS.invalidParams);
   assert.equal(await code({ method: "windows.list", params: {} }), EXPOSURE_ERRORS.unknownMethod);
 
@@ -196,16 +196,16 @@ test("core entries answer requests and undeclared or unregistered names fail wit
 
   const button = document.querySelector('[data-expose="core.fixture.button"]');
   button.getBoundingClientRect = () => ({ left: 4, top: 5, width: 6, height: 7 });
-  assert.deepEqual(await made.handle({ method: "dom.rect", params: { name: "core.fixture.button" } }),
+  assert.deepEqual(await made.handle({ method: "element.rect", params: { name: "core.fixture.button" } }),
     { result: { x: 4, y: 5, width: 6, height: 7, zoom: 1, document: { x: 0, y: 0 } } });
   let clicked = 0;
   button.addEventListener("click", () => clicked++);
-  assert.deepEqual(await made.handle({ method: "dom.act", params: { name: "core.fixture.button", action: "click" } }), { result: null });
+  assert.deepEqual(await made.handle({ method: "element.act", params: { name: "core.fixture.button", action: "click" } }), { result: null });
   assert.equal(clicked, 1);
   const rows = [...document.querySelectorAll('[data-expose="core.fixture.row"]')];
   const seen = [];
   rows[1].addEventListener("keydown", (event) => seen.push([event.key, event.isTrusted]));
-  await made.handle({ method: "dom.act", params: { name: "core.fixture.row", index: 1, action: "dispatch", event: { type: "keydown", key: "Escape" } } });
+  await made.handle({ method: "element.act", params: { name: "core.fixture.row", index: 1, action: "dispatch", event: { type: "keydown", key: "Escape" } } });
   assert.deepEqual(seen, [["Escape", false]]);
 
   assert.deepEqual(await made.handle({ method: "status.watch", params: { name: "core.fixture.count" } }), { result: null });
@@ -222,7 +222,7 @@ test("core entries answer requests and undeclared or unregistered names fail wit
   const listed = made.list();
   const find = (key, name) => listed[key].find((entry) => entry.name === name);
   assert.equal(find("status", "core.fixture.count").registered, true);
-  assert.equal(find("dom", "core.fixture.missing").registered, false);
+  assert.equal(find("element", "core.fixture.missing").registered, false);
   assert.equal(find("status", "probe.lines").registered, false);
   assert.equal(find("commands", "core.fixture.add").params.type, "object");
   assert.equal("kind" in find("commands", "core.fixture.add"), false);
@@ -245,7 +245,7 @@ test("surface registrations are checked against the declarations and the surface
   let changes = 0;
   made.configure({ surfacePlugin: (surface) => plugins[surface] ?? null, registrationChanged: () => changes++ });
   made.registered({ surface: "tab-a", kind: "status", name: "probe.lines" });
-  made.registered({ surface: "tab-a", kind: "dom", name: "probe.lines" });
+  made.registered({ surface: "tab-a", kind: "element", name: "probe.lines" });
   assert.throws(() => made.registered({ surface: "tab-a", kind: "command", name: "probe.lines" }), /undeclared command probe.lines/);
   assert.throws(() => made.registered({ surface: "tab-a", kind: "status", name: "core.fixture.count" }), /undeclared/);
   assert.throws(() => made.registered({ surface: "tab-c", kind: "command", name: "probe.send" }), /of plugin other cannot register/);
@@ -262,7 +262,7 @@ test("surface registrations are checked against the declarations and the surface
   plugins["tab-y"] = "probe";
   made.revisit();
   assert.deepEqual(made.namesOf("tab-y"), [], "a closed surface drops its held registrations");
-  assert.deepEqual(made.namesOf("tab-a"), ["status probe.lines", "dom probe.lines"]);
+  assert.deepEqual(made.namesOf("tab-a"), ["status probe.lines", "element probe.lines"]);
   assert.equal(changes, 4, "each accepted registration and closed surface is reported");
   made.registered({ surface: "tab-a", closed: true });
   assert.equal(changes, 5, "a closed surface is reported");
@@ -290,18 +290,18 @@ test("a view rectangle uses the selected surface's current applied origin once",
   const unmarks = [...placements.keys()].map((surface) => markViewSurface(surface));
   made.configure({ surfacePlugin: () => "probe", preferred: () => ["tab-b"],
     surfaceFrame: (surface) => placements.get(surface) });
-  for (const surface of placements.keys()) made.registered({ surface, kind: "dom", name: "probe.lines" });
+  for (const surface of placements.keys()) made.registered({ surface, kind: "element", name: "probe.lines" });
   try {
     for (const [surface, placement] of placements) {
-      const result = (await made.handle({ method: "dom.rect", params: { name: "probe.lines", surface } })).result;
+      const result = (await made.handle({ method: "element.rect", params: { name: "probe.lines", surface } })).result;
       assert.deepEqual(result, { ...local, x: local.x + placement.x, y: local.y + placement.y, document: { x: 0, y: 0 } });
     }
     placements.set("tab-b", { x: 120, y: 180, w: 0, h: 0, visible: false });
-    const moved = (await made.handle({ method: "dom.rect", params: { name: "probe.lines" } })).result;
+    const moved = (await made.handle({ method: "element.rect", params: { name: "probe.lines" } })).result;
     assert.deepEqual(moved, { ...local, x: 132, y: 204, document: { x: 0, y: 0 } },
       "the preferred hidden view uses its applied origin without scaling or a guessed viewport ratio");
     placements.delete("tab-b");
-    assert.match((await made.handle({ method: "dom.rect", params: { name: "probe.lines" } })).error.message,
+    assert.match((await made.handle({ method: "element.rect", params: { name: "probe.lines" } })).error.message,
       /tab-b.*applied frame/, "a missing applied frame must not become a valid-looking zero origin");
   } finally {
     for (const unmark of unmarks) unmark();
@@ -328,17 +328,17 @@ test("mounted surface rectangles retain application coordinates after layout cha
     ["tab-c", { x: 457.5, y: 116, width: 233.5, height: 286.5 }],
   ]);
   const host = fakeHost(({ surface, method }) => {
-    assert.equal(method, "dom.rect");
+    assert.equal(method, "element.rect");
     return { result: rectangles.get(surface) };
   });
   const made = coreRegistry(host);
   made.configure({ surfacePlugin: () => "probe" });
-  for (const surface of rectangles.keys()) made.registered({ surface, kind: "dom", name: "probe.lines" });
+  for (const surface of rectangles.keys()) made.registered({ surface, kind: "element", name: "probe.lines" });
   for (const offset of [0, -200, 0]) {
     for (const [surface, before] of rectangles) {
       const expected = { ...before, x: before.x + offset };
       rectangles.set(surface, expected);
-      const { result } = await made.handle({ method: "dom.rect", params: { name: "probe.lines", surface } });
+      const { result } = await made.handle({ method: "element.rect", params: { name: "probe.lines", surface } });
       assert.deepEqual(result, { ...expected, document: { x: 0, y: 0 } });
       assert.equal(result.document.x + result.x + result.width / 2, expected.x + expected.width / 2);
       assert.equal(result.document.y + result.y + result.height / 2, expected.y + expected.height / 2);
@@ -350,12 +350,12 @@ test("mounted surface rectangles retain application coordinates after layout cha
 test("an independent document retains its explicit origin", { timeout: 10000 }, async () => {
   const made = coreRegistry(null);
   const modal = { x: 12, y: 24, width: 30, height: 20, document: { x: 300, y: 180 } };
-  made.method("dom.rect", () => modal);
-  assert.deepEqual(await made.handle({ method: "dom.rect", params: { name: "core.fixture.button" } }), { result: modal });
+  made.method("element.rect", () => modal);
+  assert.deepEqual(await made.handle({ method: "element.rect", params: { name: "core.fixture.button" } }), { result: modal });
 });
 
 test("requests for surface names are forwarded to the preferred surface in the application document", { timeout: 10000 }, async () => {
-  const host = fakeHost(({ surface, method }) => (method === "dom.rect"
+  const host = fakeHost(({ surface, method }) => (method === "element.rect"
     ? { result: { x: 1, y: 2, width: 3, height: 4 } }
     : method === "command.run" ? { result: surface } : { error: { code: 1003, message: "gone" } }));
   const made = coreRegistry(host);
@@ -368,12 +368,12 @@ test("requests for surface names are forwarded to the preferred surface in the a
     EXPOSURE_ERRORS.unregistered);
   made.registered({ surface: "tab-a", kind: "command", name: "probe.send" });
   made.registered({ surface: "tab-b", kind: "command", name: "probe.send" });
-  made.registered({ surface: "tab-a", kind: "dom", name: "probe.lines" });
+  made.registered({ surface: "tab-a", kind: "element", name: "probe.lines" });
   assert.deepEqual(await made.handle({ method: "command.run", params: { name: "probe.send", params: {} } }), { result: "tab-b" },
     "without a preference the latest registration receives the request");
   preferred = ["tab-c", "tab-a"];
   assert.deepEqual(await made.handle({ method: "command.run", params: { name: "probe.send", params: {} } }), { result: "tab-a" });
-  assert.deepEqual(await made.handle({ method: "dom.rect", params: { name: "probe.lines" } }),
+  assert.deepEqual(await made.handle({ method: "element.rect", params: { name: "probe.lines" } }),
     { result: { x: 1, y: 2, width: 3, height: 4, document: { x: 0, y: 0 } } });
   const forwarded = host.calls.filter(([name]) => name === "exposureForward").map(([, arg]) => arg);
   assert.deepEqual(forwarded.at(-1).params, { name: "probe.lines" });

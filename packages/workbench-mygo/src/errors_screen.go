@@ -37,7 +37,7 @@ func (e *ShownErrors) Text(where string) (string, bool) {
 	return text, ok
 }
 
-// DrawErrorBanner draws the error banner of the workbench, the value of `core.page.error`. It draws nothing without an error.
+// DrawErrorBanner draws the error banner of the workbench, the value of `core.workbench.error`. It draws nothing without an error.
 func DrawErrorBanner(c *ui.Context, errors *ShownErrors) {
 	if text, ok := errors.Text(workbenchErrorPlace); ok {
 		drawErrorText(c, text)

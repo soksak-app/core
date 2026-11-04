@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
 // status reads a status of the shell through its JSON form, as a reader of the endpoint gets it.
@@ -212,8 +214,21 @@ func TestAViewReadsAndWritesTheDataOfItsProject(t *testing.T) {
 
 func TestWorkbenchStatusNamesThisStart(t *testing.T) {
 	f, _ := surfaceShell(t)
-	workbench := status[map[string]any](t, f, "core.window.workbench")
-	if start, ok := workbench["start"].(string); !ok || start == "" || workbench["started_at"] == nil {
-		t.Fatalf("core.window.workbench is %v", workbench)
+	state := status[map[string]any](t, f, "core.window.workbench")
+	if start, ok := state["start"].(string); !ok || start == "" || state["startedAt"] == nil {
+		t.Fatalf("core.window.workbench is %v", state)
+	}
+	if state["readyState"] != "complete" || state["visibility"] != "visible" || state["scheme"] != "dark" ||
+		state["background"] != false || state["scale"] != 2.0 || state["width"] != 1200.0 || state["height"] != 800.0 {
+		t.Fatalf("core.window.workbench is %v", state)
+	}
+}
+
+func TestWorkbenchStatusFollowsTheWindow(t *testing.T) {
+	f, shown := surfaceShell(t)
+	shown.window = workbench.WindowView{Scale: 1, Width: 640, Height: 480}
+	state := status[map[string]any](t, f, "core.window.workbench")
+	if state["visibility"] != "hidden" || state["scale"] != 1.0 || state["width"] != 640.0 || state["height"] != 480.0 {
+		t.Fatalf("core.window.workbench is %v", state)
 	}
 }

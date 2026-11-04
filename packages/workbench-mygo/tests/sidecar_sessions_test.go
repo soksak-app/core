@@ -96,12 +96,12 @@ func TestAFailedRetainIsShown(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.pending.drain(t)
-	shown, err := f.shell.Registry().Read("core.page.error")
+	shown, err := f.shell.Registry().Read("core.workbench.error")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if text, ok := shown.(*string); !ok || text == nil || !strings.Contains(*text, "retain was not answered") {
-		t.Fatalf("the status core.page.error is %v", shown)
+		t.Fatalf("the status core.workbench.error is %v", shown)
 	}
 }
 
@@ -123,11 +123,11 @@ func TestAStoredLayoutThatCannotBeReadKeepsTheStoredEntries(t *testing.T) {
 	stored := &storedHost{projects: []map[string]any{broken}, sessionTabs: []string{"tab-gone"}, startFails: true}
 	f := newTabShell(t, stored)
 	equal(t, f.sessionPuts, []string(nil))
-	shown, err := f.shell.Registry().Read("core.page.error")
+	shown, err := f.shell.Registry().Read("core.workbench.error")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if text, ok := shown.(*string); !ok || text == nil || !strings.Contains(*text, "space spc-aaaaaa") {
-		t.Fatalf("the status core.page.error is %v", shown)
+		t.Fatalf("the status core.workbench.error is %v", shown)
 	}
 }

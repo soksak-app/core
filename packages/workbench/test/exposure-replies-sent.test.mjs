@@ -18,7 +18,7 @@ const { logGate } = await import("../log-gate.js");
 logGate.set({ lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" });
 
 test("whenRepliesSent resolves after the reply of a running command request is sent", async () => {
-  registry.declare("core", { status: [], dom: [], commands: [{
+  registry.declare("core", { status: [], element: [], commands: [{
     name: "core.fixture.wait", description: "Waits for the test.",
     params: { type: "object", properties: {} }, result: { type: "null" },
   }] });
@@ -36,7 +36,7 @@ test("whenRepliesSent resolves after the reply of a running command request is s
 });
 
 test("a command request is the event workbench.command with its name, duration and outcome", async () => {
-  registry.declare("core", { status: [], dom: [], commands: [
+  registry.declare("core", { status: [], element: [], commands: [
     { name: "core.fixture.fine", description: "Succeeds.", params: { type: "object", properties: {} }, result: { type: "null" } },
     { name: "core.fixture.broken", description: "Fails.", params: { type: "object", properties: {} }, result: { type: "null" } },
   ] });
@@ -60,7 +60,7 @@ test("a command request is the event workbench.command with its name, duration a
 test("the reply of a surface request without a view mark or surface port passes the reply gate", async () => {
   // A view whose page has not mounted has neither mark nor port, so the page answers its request itself; that reply is a reply of the surface.
   const { gateSurfaceReplies } = await import("../exposure.js");
-  registry.declare("core", { status: [], dom: [], commands: [{
+  registry.declare("core", { status: [], element: [], commands: [{
     name: "core.fixture.gated", description: "Answers for the gate.",
     params: { type: "object", properties: {} }, result: { type: "string" },
   }] });

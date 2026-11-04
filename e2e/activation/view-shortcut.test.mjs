@@ -16,7 +16,7 @@ for (const app of Object.values(APPS)) {
     const browser = (await s.get("core.surfaces")).find(item => item.plugin === "browser" && item.visible);
     assert.ok(browser, "the fixture has no visible browser view");
     await s.until("core.surfaces", all => all.some(item => item.surface === browser.surface
-      && item.exposes.includes("status browser.address.text") && item.exposes.includes("dom browser.address")),
+      && item.exposes.includes("status browser.address.text") && item.exposes.includes("element browser.address")),
     "the browser did not register its address field");
     const card = (await s.get("core.grid")).cards.find(item => item.tabs.some(tab => tab.id === browser.surface));
     assert.ok(card, "the browser has no owning card");
@@ -58,7 +58,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(captured.length, stopped.count, "the shortcut gesture has missing frame files");
     assert.ok(captured.length > 1, "the shortcut gesture has no complete recording");
     assert.equal(stopped.limited, false, "the shortcut gesture exceeded its recording capacity");
-    assert.deepEqual((await s.get("core.page.audit")).unbound, []);
+    assert.deepEqual((await s.get("core.workbench.audit")).unbound, []);
     t.diagnostic(`native menu shortcut: ${captured.length} frames, gap ${stopped.longestGap}ms`);
   });
 }

@@ -75,7 +75,7 @@ async function harness(t) {
 
 const expectedReply = (host, id, result) => ({ id, result, page: host.page, generation: 1 });
 
-const declarations = { status: [], commands: [], dom: [] };
+const declarations = { status: [], commands: [], element: [] };
 const viewOf = (surfaceId, pluginId, unload) => ({
   surfaceId, pluginId, declarations, sidecars: [], unload,
   composition: { kind: "view", page: "ui/page.html", regions: [], overlays: [] },
@@ -304,12 +304,12 @@ test("a replacement view registers its command once in its own source generation
     registrations.push(fields);
     return registered(fields);
   });
-  registry.declare("fixture-plain", { status: [], commands: [{ name: command, description: "Runs the fixture command.", params: { type: "object" }, result: { type: "null" } }], dom: [] });
+  registry.declare("fixture-plain", { status: [], commands: [{ name: command, description: "Runs the fixture command.", params: { type: "object" }, result: { type: "null" } }], element: [] });
   recordOrigin(id, null, "test fixture");
   seedSourceOrigins({ floor: 1, views: { [id]: 1 } });
   h.modules.authorizeSurface(id);
   await h.modules.mountSurface(h.slot, { ...viewOf(id, "fixture-plain", false),
-    declarations: { status: [], commands: [{ name: command, description: "Runs the fixture command.", params: { type: "object" }, result: { type: "null" } }], dom: [] },
+    declarations: { status: [], commands: [{ name: command, description: "Runs the fixture command.", params: { type: "object" }, result: { type: "null" } }], element: [] },
   });
   try {
     assert.deepEqual(await h.viewCall("runtime.command.register", { name: command }), expectedReply(h, 1, null));

@@ -91,13 +91,13 @@ export function operationSteps({ window, windows, plugins, run, request, until, 
       await until("core.settings-modal", (modal) => !modal.open);
     },
     "plugins.apply": async () => {
-      const before = (await status("core.window.document")).timeOrigin;
+      const before = (await status("core.window.workbench")).start;
       const { reloaded } = await run(["core.plugins.apply", "--window", window]);
       if (reloaded !== true) throw new Error("core.plugins.apply kept a modified tab, so the workbench did not start again");
-      // The reply comes before the new start of the workbench, so the next operation waits until the window reports a document of
-      // another time origin that is complete, as the preparation of a window check does; a window without a main page starts its
-      // workbench again without a new page process.
-      await until("core.window.document", (document) => document.timeOrigin !== before && document.readyState === "complete");
+      // The reply comes before the new start of the workbench, so the next operation waits until the window reports another
+      // start of its workbench that is complete, as the preparation of a window check does; a window without a main page
+      // starts its workbench again without a new page process.
+      await until("core.window.workbench", (workbench) => workbench.start !== before && workbench.readyState === "complete");
     },
     "project.window": async () => {
       const known = new Set(windows.map((entry) => entry.window));

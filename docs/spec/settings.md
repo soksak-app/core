@@ -68,7 +68,7 @@ The page of a plugin replaces the search field and the list. It shows:
 
 ### 사이드바
 
-The section shows the set list and 새 세트. Each row shows the set title, its layout (목록 or 탭), its section names, and two buttons: 편집 (`core.settings-modal.edit {set}`) and 삭제 (`core.settings.sets.delete {id, scope}`). The line takes the width of the row that the buttons leave, the buttons stand at the right end of the row, and each line is the dom entry `core.settings-modal.set-caption` in set order. 새 세트 runs `core.settings.sets.create {scope}`, which adds a set titled "새 세트" with layout `list` and no sections, and opens it for editing.
+The section shows the set list and 새 세트. Each row shows the set title, its layout (목록 or 탭), its section names, and two buttons: 편집 (`core.settings-modal.edit {set}`) and 삭제 (`core.settings.sets.delete {id, scope}`). The line takes the width of the row that the buttons leave, the buttons stand at the right end of the row, and each line is the element entry `core.settings-modal.set-caption` in set order. 새 세트 runs `core.settings.sets.create {scope}`, which adds a set titled "새 세트" with layout `list` and no sections, and opens it for editing.
 
 The editor of a set shows:
 
@@ -104,7 +104,7 @@ The window draws every setting with one control of a fixed set, chosen by the fo
 
 The set editor uses the same controls: 이름 is a text field, 배치 a select box and each section row a select box. Buttons run actions (전역값 사용, 편집, 삭제, 새 세트, ▲ ▼ − +, 목록, 플러그인 관리) and are not setting controls; the scope tabs select the shown scope and are not a setting. A setting without a control in this table, such as `textSize`, `sets`, `diagnostics.performance` and `diagnostics.log`, is changed by its own command or the settings file.
 
-The workbench defines this control set instead of rendering the window with the form library at `~/Projects/polyspec/crudui`. That library compiles a form template, binds a record that the application submits as a whole, and keeps row identity, an undo history, `name`-based controls and its own event binding (`connectForm`). The settings window applies each change at once through a declared command, every control names its command through the shared binder and carries a dom name ([exposure](exposure.md)), and the host draws a copy of the card in which no listener runs ([native modals](native-modals.md)). The library's markup and binding meet none of these rules without a layer that rewrites its output, while the plugin setting declarations need only the forms of the table above, so adding the dependency is not justified.
+The workbench defines this control set instead of rendering the window with the form library at `~/Projects/polyspec/crudui`. That library compiles a form template, binds a record that the application submits as a whole, and keeps row identity, an undo history, `name`-based controls and its own event binding (`connectForm`). The settings window applies each change at once through a declared command, every control names its command through the shared binder and carries an element name ([exposure](exposure.md)), and the host draws a copy of the card in which no listener runs ([native modals](native-modals.md)). The library's markup and binding meet none of these rules without a layer that rewrites its output, while the plugin setting declarations need only the forms of the table above, so adding the dependency is not justified.
 
 ## Values
 
@@ -200,7 +200,7 @@ The lengths, ratios and durations of the workbench stylesheets (`app.css`, `libr
 | `plugin` | The plugin whose page is shown, or `null` |
 | `editing` | The edited set id, or `null` |
 | `rows` | Each declared plugin setting row on a plugin page as `{key, name, description}` |
-| `controls` | Every control with its dom name, key, command, current value, and the option values of a select box (`options`, otherwise `null`) |
+| `controls` | Every control with its element name, key, command, current value, and the option values of a select box (`options`, otherwise `null`) |
 
 [Plugin screen](installation.md#plugin-screen) defines `core.plugins`.
 

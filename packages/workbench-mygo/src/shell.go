@@ -47,9 +47,19 @@ type ShellOptions struct {
 	Element func(id string) (surface, key uintptr, ok bool)
 	// Installed is the document of the installed plugins.
 	Installed []byte
+	// Window reads the state of the window that core.window.workbench states.
+	Window func() (WindowView, error)
 	// Tabs returns the ports of the file commands, the memory saver, the tab stores and the background sessions of the shell. Without it
 	// they are not registered.
 	Tabs func(shell *Shell) TabPorts
+}
+
+// WindowView is the state of a window that core.window.workbench states.
+type WindowView struct {
+	// Visible is false while the window is minimized or not shown.
+	Visible bool
+	// Scale is the backing scale, and Width and Height are the content size in points.
+	Scale, Width, Height float64
 }
 
 // environmentGrid is the grid of a new space of the environment declaration.
@@ -132,7 +142,9 @@ func readProject(raw json.RawMessage) (projectRecord, error) {
 
 // Shell is the workbench of one window.
 type Shell struct {
-	options  ShellOptions
+	options ShellOptions
+	// drawn tells that a frame of this start of the workbench drew the shell.
+	drawn    bool
 	metrics  metrics
 	palette  Palette
 	registry *Registry
@@ -254,7 +266,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.page = issueID("wbn-", func(string) bool { return false })
 	s.requests = NewRequests(s.registry, s.calls, options.Post, s.events.Error)
 	s.linkSurfaces()
-	s.registry.Status("core.page.error", func() any {
+	s.registry.Status("core.workbench.error", func() any {
 		if text, ok := s.errors.Text(workbenchErrorPlace); ok {
 			return &text
 		}
@@ -509,5 +521,6 @@ func (s *Shell) View(c *ui.Context) {
 	s.forgetUnseated()
 	s.placeSurfaces()
 	s.clearVisibleNotices()
+	s.drawn = true
 	s.pushStatuses()
 }

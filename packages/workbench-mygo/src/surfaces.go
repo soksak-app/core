@@ -33,7 +33,7 @@ type surfaceDeclaration struct {
 type Exposes struct {
 	Status   []json.RawMessage `json:"status"`
 	Commands []json.RawMessage `json:"commands"`
-	Dom      []json.RawMessage `json:"dom"`
+	Element  []json.RawMessage `json:"element"`
 }
 
 // installedUnit is what the surfaces read of an installed plugin.
@@ -129,7 +129,7 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 			}
 			unit.Exposes.Status = append(unit.Exposes.Status, diagnostics.Exposes.Status...)
 			unit.Exposes.Commands = append(unit.Exposes.Commands, diagnostics.Exposes.Commands...)
-			unit.Exposes.Dom = append(unit.Exposes.Dom, diagnostics.Exposes.Dom...)
+			unit.Exposes.Element = append(unit.Exposes.Element, diagnostics.Exposes.Element...)
 		}
 		if plugin.Manifest.Surface == nil || len(plugin.Manifest.Surface.Composition) == 0 {
 			continue
@@ -365,7 +365,7 @@ func (s *Shell) forgetSurfaces(tabs []string) {
 // of the plugin.
 func (s *Shell) surfaceDeclarations(unit *installedUnit) (map[string]any, error) {
 	marks := map[string]any{}
-	for kind, own := range map[string][]json.RawMessage{"status": unit.Exposes.Status, "commands": unit.Exposes.Commands, "dom": unit.Exposes.Dom} {
+	for kind, own := range map[string][]json.RawMessage{"status": unit.Exposes.Status, "commands": unit.Exposes.Commands, "element": unit.Exposes.Element} {
 		entries := []any{}
 		for _, entry := range s.options.Declared.exposes[kind] {
 			if name, _ := entry["name"].(string); surfaceNames[name] { // silent: the declaration test holds a name on each entry.

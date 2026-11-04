@@ -54,7 +54,7 @@ commands:
   windows
   exposures [window]
   status NAME [window] [--surface S] [--watch]
-  dom rect|click|input|dispatch NAME [window] [--surface S] [--index N] [--value V] [--event JSON]
+  element rect|click|input|dispatch NAME [window] [--surface S] [--index N] [--value V] [--event JSON]
   input pointer [window] --x X --y Y --phase move|down|drag|up|scroll [--button left|right] [--delta-x N] [--delta-y N] [--activate]
   input key [window] --key K --phase down|up [--text T] [--modifiers shift,control,option,command]
   debug query [--channel C] [--level L] [--class C] [--layer L] [--event E] [--event-prefix P] [--surface S] [--session S] [--cid C] [--run R] [--text T] [--from T] [--to T] [--order asc|desc] [--limit N] [--after CURSOR]
@@ -320,8 +320,8 @@ fn plan(
                 field: None,
             })
         }
-        "dom" => {
-            let action = a.positional(1, "dom action")?;
+        "element" => {
+            let action = a.positional(1, "element action")?;
             let name = a.positional(2, "NAME")?;
             let index = a.number("index")?;
             let window = window()?;
@@ -333,7 +333,7 @@ fn plan(
             ];
             match action.as_str() {
                 "rect" => Ok(Request {
-                    method: "dom.rect",
+                    method: "element.rect",
                     params: Some(compact(base)),
                     watch: false,
                     field: None,
@@ -341,7 +341,7 @@ fn plan(
                 "click" => {
                     base.push(("action", text("click".into())));
                     Ok(Request {
-                        method: "dom.act",
+                        method: "element.act",
                         params: Some(compact(base)),
                         watch: false,
                         field: None,
@@ -352,7 +352,7 @@ fn plan(
                     base.push(("action", text("input".into())));
                     base.push(("value", text(value)));
                     Ok(Request {
-                        method: "dom.act",
+                        method: "element.act",
                         params: Some(compact(base)),
                         watch: false,
                         field: None,
@@ -368,13 +368,13 @@ fn plan(
                     base.push(("action", text("dispatch".into())));
                     base.push(("event", Some(event)));
                     Ok(Request {
-                        method: "dom.act",
+                        method: "element.act",
                         params: Some(compact(base)),
                         watch: false,
                         field: None,
                     })
                 }
-                _ => Err(usage!("unknown dom action: {action}")),
+                _ => Err(usage!("unknown element action: {action}")),
             }
         }
         "input" => {

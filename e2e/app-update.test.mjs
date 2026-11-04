@@ -12,7 +12,7 @@ import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
-import { fresh } from "./fixture.mjs";
+import { fresh, restoreRegistry, useRegistry } from "./fixture.mjs";
 
 const REGISTRY = fileURLToPath(new URL("../target/registry/", import.meta.url));
 const NEWER = "99.0.0";
@@ -34,9 +34,9 @@ for (const app of Object.values(APPS)) {
         await s.run("core.library.page", { page: "projects" });
         await s.run("core.library.return");
       }
-      await s.run("core.plugins.registry", { index: before.registry });
+      await restoreRegistry(s);
     });
-    await s.run("core.plugins.registry", { index: address });
+    await useRegistry(s, address);
     return s.until("core.app", (value) => value.available?.version === NEWER, "the registry with a newer core did not list an update");
   }
 

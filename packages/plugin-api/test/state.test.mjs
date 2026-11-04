@@ -8,7 +8,7 @@ const base = () => ({
   sections: [{ id: "probe.marks", name: "Marks", composition: { kind: "view", page: "ui/page.html" }, height: "fill" }],
   dependencies: { "@scope/sidecar-probe": "~0.4.1" },
   data: { marks: { schema: { type: "array", items: { type: "string" } }, default: [] } },
-  exposes: { status: [{ name: "probe.marks", description: "Marks.", schema: { type: "array" } }], commands: [], dom: [] },
+  exposes: { status: [{ name: "probe.marks", description: "Marks.", schema: { type: "array" } }], commands: [], element: [] },
 });
 
 test("a section view may declare project data, sidecars, and exposes", () => {

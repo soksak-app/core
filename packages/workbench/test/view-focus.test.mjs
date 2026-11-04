@@ -1,4 +1,4 @@
-// core.focus reports the focused exposed element of the document that holds the first responder of the window: the main page reads its
+// core.focus reports the focused exposed element of the document that holds the first responder of the window: the workbench reads its
 // own element, a view surface the element that its view reported with tab.focus, and every other owner has none
 // (docs/spec/exposure.md#keyboard-focus).
 import assert from "node:assert/strict";
@@ -16,7 +16,7 @@ test("core.focus follows the first responder to the element that a view reports"
   assert.equal(await call("tab-view", { name: "fixture.address", index: 0 }), null, "the page refused the focus report of a view");
   const { setResponder, forgetViewFocus } = await import("../view-focus.js");
   assert.deepEqual(focusState(document), { name: "core.chrome.projects", index: 0, surface: null },
-    "the main page lost its focus before a first responder event");
+    "the workbench lost its focus before a first responder event");
   setResponder({ owner: "surface", surface: "tab-view", document: null });
   assert.deepEqual(focusState(document), { name: "fixture.address", index: 0, surface: "tab-view" },
     "core.focus did not report the focused element of the view that holds the first responder");

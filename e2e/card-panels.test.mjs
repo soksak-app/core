@@ -384,7 +384,7 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: the card header has a fold control for each sidebar the card shows`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
-    const listed = (await s.request("exposure.list")).dom.find((entry) => entry.name === "core.card.sidebar.fold");
+    const listed = (await s.request("exposure.list")).element.find((entry) => entry.name === "core.card.sidebar.fold");
     assert.ok(listed, "the card header fold control is not declared");
     const set = (await s.get("core.settings")).values.sets[0];
     for (const side of ["top", "left"]) await s.run("core.card.sidebar.set", { card: "terminal", side, set: set.id });

@@ -57,7 +57,7 @@ test("a view call of a surface with surface.unload waits for the tab state store
   registerPlugin({ id: pluginId, surface: () => null });
   const composition = { kind: "view", page: "ui/page.html" };
   const unload = { format: 2, maxBytes: 64 };
-  const surface = { module: null, surfaceId, pluginId, unload, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
+  const surface = { module: null, surfaceId, pluginId, unload, declarations: { status: [], commands: [], element: [] }, sidecars: [], composition };
   try {
     authorizeSurface(surfaceId);
     const mounted = mountSurface(document.querySelector("#slot"), surface, { onState: () => {} });

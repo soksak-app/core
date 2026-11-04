@@ -417,7 +417,7 @@ export function createViewBridge({ handler, report }) {
     },
     report,
   });
-  // The exposure of the page: status and dom registrations go through the channel, and the reply to a forwarded exposure
+  // The exposure of the page: status and element registrations go through the channel, and the reply to a forwarded exposure
   // request carries the id of that request (docs/spec/exposure.md#relay, docs/spec/native-surfaces.md#view-surfaces).
   // The port has no unregister. The registrations of a view end with the view: the host removes them when the surface closes
   // (exposure-registered with closed, docs/spec/exposure.md#relay) and when the view process ends (docs/spec/native-surfaces.md,

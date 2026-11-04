@@ -76,7 +76,7 @@ func (b *Binder) fail(command string, err error) {
 // interactive are the actions that make an element of the element tree interactive (docs/spec/hosts.md#workbench).
 const interactive = ui.ActionPress | ui.ActionIncrement | ui.ActionDecrement | ui.ActionSetValue | ui.ActionExpand
 
-// Unbound is an interactive element that has no command or no element name, in the form that core.page.audit gives on every host.
+// Unbound is an interactive element that has no command or no element name, in the form that core.workbench.audit gives on every host.
 type Unbound struct {
 	Role    string `json:"role"`
 	Expose  string `json:"expose"`

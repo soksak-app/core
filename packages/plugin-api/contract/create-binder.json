@@ -482,7 +482,7 @@
             "failed": [],
             "result": [
               {
-                "tag": "button",
+                "role": "button",
                 "expose": "demo.free",
                 "command": null,
                 "text": "Free"

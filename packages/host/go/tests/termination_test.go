@@ -7,16 +7,22 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
+	"testing/fstest"
 	"time"
+	"unsafe"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 )
 
 // terminationChild is the environment variable that tells that the process is a child process.
 const terminationChild = "SOKSAK_TERMINATION_CHILD"
+
+// terminationStart is the environment variable that names the configuration folder of a child that runs the start of the host.
+const terminationStart = "SOKSAK_TERMINATION_START"
 
 // terminationDirectory is the environment variable that names the configuration folder of the child that records its end.
 const terminationDirectory = "SOKSAK_TERMINATION_DIRECTORY"
@@ -72,6 +78,103 @@ func terminate() {
 	fmt.Println("the second signal did not end the process")
 	os.Exit(3)
 }
+
+// contract: termination.signal.first-requests-quit-second-ends-process
+// The host waits for the start of the application before it requests the quit of a signal, so the start ends that wait.
+func TestATerminationSignalAfterTheStartQuitsTheFramework(t *testing.T) {
+	directory := t.TempDir()
+	command := exec.Command(os.Args[0])
+	command.Env = append(os.Environ(), terminationStart+"="+directory)
+	output, err := command.Output()
+	if err == nil && string(output) == "quit requested\n" {
+		return
+	}
+	// The start moves the standard error of the child to the files of its logs folder.
+	files, failure := filepath.Glob(filepath.Join(directory, "logs", "host-*.[sc]*"))
+	if failure != nil {
+		t.Fatal(failure)
+	}
+	for _, file := range files {
+		text, failure := os.ReadFile(file)
+		if failure != nil {
+			t.Fatal(failure)
+		}
+		t.Logf("%s: %s", filepath.Base(file), text)
+	}
+	t.Fatalf("child ended with %v, output %q", err, output)
+}
+
+// quitAfterTheStart runs the start of the host with quitFramework, delivers the termination signal and reports whether the
+// framework received the quit. The start of the host runs on the main thread, so TestMain calls it.
+func quitAfterTheStart(directory string) {
+	quit := make(chan struct{})
+	session, err := host.Prepare(quitFramework{quit: quit}, fstest.MapFS{
+		"frontend/background.js":                            {},
+		"frontend/modules/@soksak/plugin-api/view-start.js": {},
+		"frontend/view-imports.json":                        {Data: []byte("{}")},
+	}, host.Options{ConfigDir: directory})
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(2)
+	}
+	defer session.End()
+	if err := session.Open(); err != nil {
+		fmt.Println(err)
+		os.Exit(2)
+	}
+	session.Started()[0]()
+	select {
+	case <-quit:
+		fmt.Println("the start failed:", session.Finish(nil))
+		return
+	default:
+	}
+	self, err := os.FindProcess(os.Getpid())
+	if err == nil {
+		err = self.Signal(syscall.SIGTERM)
+	}
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	select {
+	case <-quit:
+		fmt.Println("quit requested")
+	case <-time.After(5 * time.Second):
+		fmt.Println("the framework received no quit")
+	}
+}
+
+// quitFramework is the framework of the start of the host without an application. A step of the main thread is a native call that
+// needs the application, so it does not run.
+type quitFramework struct {
+	host.Framework
+	quit chan struct{}
+}
+
+func (quitFramework) ApplicationName() string   { return "termination-test" }
+func (quitFramework) DisplayName() string       { return "Test" }
+func (quitFramework) Step(func())               {}
+func (quitFramework) Post(func())               {}
+func (quitFramework) SetMenu([]host.Menu) error { return nil }
+func (f quitFramework) Quit()                   { close(f.quit) }
+func (quitFramework) NewWindow(options host.WindowOptions) host.Frontend {
+	return quitWindow{name: options.Name}
+}
+
+// quitWindow is a window that has no native window, as a window has before the application runs.
+type quitWindow struct {
+	host.Frontend
+	name string
+}
+
+func (quitWindow) ID() uint                               { return 1 }
+func (w quitWindow) Name() string                         { return w.name }
+func (quitWindow) NativeWindow() unsafe.Pointer           { return nil }
+func (quitWindow) OnWindowEvent(host.WindowEvent, func()) {}
+func (quitWindow) OnClosing(func() bool)                  {}
+func (quitWindow) IsFocused() bool                        { return false }
+func (quitWindow) Emit(string, ...any)                    {}
 
 // contract: log.closed.signal-before-quit
 func TestTerminationSignalRecordsLogClosedBeforeQuit(t *testing.T) {

@@ -27,7 +27,7 @@ commands:
   windows
   exposures [window]
   status NAME [window] [--surface S] [--watch]
-  dom rect|click|input|dispatch NAME [window] [--surface S] [--index N] [--value V] [--event JSON]
+  element rect|click|input|dispatch NAME [window] [--surface S] [--index N] [--value V] [--event JSON]
   input pointer [window] --x X --y Y --phase move|down|drag|up|scroll [--button left|right] [--delta-x N] [--delta-y N] [--activate]
   input key [window] --key K --phase down|up [--text T] [--modifiers shift,control,option,command]
   debug query [--channel C] [--level L] [--class C] [--layer L] [--event E] [--event-prefix P] [--surface S] [--session S] [--cid C] [--run R] [--text T] [--from T] [--to T] [--order asc|desc] [--limit N] [--after CURSOR]
@@ -224,8 +224,8 @@ func plan(a arguments, window func() (string, error)) (request, error) {
 			}
 			return request{method: method, params: compact("window", w, "name", name, "surface", optional(a, "surface")), watch: a.flags["watch"]}, nil
 		})
-	case "dom":
-		action, err := a.positional(1, "dom action")
+	case "element":
+		action, err := a.positional(1, "element action")
 		if err != nil {
 			return request{}, err
 		}
@@ -241,15 +241,15 @@ func plan(a arguments, window func() (string, error)) (request, error) {
 			base := []any{"window", w, "name", name, "surface", optional(a, "surface"), "index", index}
 			switch action {
 			case "rect":
-				return request{method: "dom.rect", params: compact(base...)}, nil
+				return request{method: "element.rect", params: compact(base...)}, nil
 			case "click":
-				return request{method: "dom.act", params: compact(append(base, "action", "click")...)}, nil
+				return request{method: "element.act", params: compact(append(base, "action", "click")...)}, nil
 			case "input":
 				value, err := a.required("value")
 				if err != nil {
 					return request{}, err
 				}
-				return request{method: "dom.act", params: compact(append(base, "action", "input", "value", value)...)}, nil
+				return request{method: "element.act", params: compact(append(base, "action", "input", "value", value)...)}, nil
 			case "dispatch":
 				text, err := a.required("event")
 				if err != nil {
@@ -262,9 +262,9 @@ func plan(a arguments, window func() (string, error)) (request, error) {
 				if _, ok := event["type"].(string); !ok {
 					return request{}, usage("--event must be a JSON object with a type")
 				}
-				return request{method: "dom.act", params: compact(append(base, "action", "dispatch", "event", event)...)}, nil
+				return request{method: "element.act", params: compact(append(base, "action", "dispatch", "event", event)...)}, nil
 			}
-			return request{}, usage("unknown dom action: %s", action)
+			return request{}, usage("unknown element action: %s", action)
 		})
 	case "input":
 		kind, err := a.positional(1, "input kind")

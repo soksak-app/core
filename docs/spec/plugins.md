@@ -308,6 +308,8 @@ The `@soksak/plugin-api` package publishes every file under its `contract/` dire
 
 The debug staging targets `frontend-wailsv3`, `frontend-tauriv2` and `frontend-mygo` add `--diagnostics`; release builds contain no page diagnostic code, and a release build does not read the [diagnostic declarations](#diagnostic-declarations) that a plugin release holds. `make release-check` fails when a staged release frontend contains `/transcript.js` or a page diagnostic module.
 
+Staging fails when `index.html` or `overlay.html` reaches a script, a style or a module import that the staged frontend does not hold, and it names each reference. Two kinds of reference are outside this check: a document of `STAGED.served`, which a host creates for each request, and an import of a module in the runtime directory, which staging copies whole and whose modules import what their framework or host serves.
+
 Every workbench page declares one import map equal to `PAGE_IMPORTS`: `soksak`, `@soksak/plugin-api`, `@soksak/plugin-api/page`, `@soksak/plugin-api/screen-hash` (the [screen hash](replay.md#screen-hash) of a screen message), `@soksak/runtime`, `@soksak/shared/` and `@soksak/workbench/`. A view page holds no import map of its own; the host inserts `VIEW_IMPORTS` into it ([plugin processes](plugin-processes.md), rule 4).
 
 ## Runtime module

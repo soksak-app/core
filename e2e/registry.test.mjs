@@ -13,7 +13,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets } from "@soksak/window-check/event-log.mjs";
-import { fresh, pluginChangeApplied } from "./fixture.mjs";
+import { fresh, pluginChangeApplied, restoreRegistry, useRegistry } from "./fixture.mjs";
 
 const TLS = join(process.env.SOKSAK_CONFIG_ROOT ?? tmpdir(), "soksak-check-registry-tls");
 const REGISTRY = fileURLToPath(new URL("../target/registry/", import.meta.url));
@@ -61,14 +61,13 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     await fresh(s);
     await keepCommonSettings(s);
-    const before = await s.get("core.plugins");
     const registry = await serveRegistry();
     // Restores the state so that the next check starts from the same registry and installation even if the check fails midway. The cleanup runs in the reverse order of the registration.
     s.cleanup(registry.close);
     s.cleanup(async () => {
       // A failure can leave the page reloading after the last operation; the host answers that the page is ready again.
       await s.windows(1, "the page was not ready for the cleanup");
-      await s.run("core.plugins.registry", { index: before.registry });
+      await restoreRegistry(s);
       const now = await s.get("core.plugins");
       if (now.plugins.find((row) => row.id === "browser")?.installed) return;
       const offsets = currentEventOffsets(s.app.configDir);
@@ -77,7 +76,7 @@ for (const app of Object.values(APPS)) {
     });
     const use = async (path) => {
       const index = `${registry.base}${path}`;
-      await s.run("core.plugins.registry", { index });
+      await useRegistry(s, index);
       return s.until("core.plugins", (value) => value.registry === index && value.error === null, `the registry did not change to ${index}`);
     };
     const remove = async () => {

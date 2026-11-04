@@ -14,7 +14,7 @@ const META_CAPABILITIES = "io.modelcontextprotocol/clientCapabilities";
 const META_SERVER = "io.modelcontextprotocol/serverInfo";
 const SERVER_INFO = { name: "soksak-mcp", version: "0.0.1" };
 const INSTRUCTIONS =
-  "Tools read status values, run declared commands, and act on declared DOM elements of a running soksak application. " +
+  "Tools read status values, run declared commands, and act on declared elements of a running soksak application. " +
   "The window argument defaults to the selected window.";
 const COMMAND_PREFIX = "command_run_";
 
@@ -97,10 +97,10 @@ function paramsOf(command) {
 // Builds the tool list from the result of exposure.list.
 function buildTools(window, exposure) {
   // exposure.list always holds all three lists (docs/spec/endpoint.md). A missing list is a response error.
-  for (const key of ["status", "commands", "dom"]) {
+  for (const key of ["status", "commands", "element"]) {
     if (!Array.isArray(exposure[key])) throw new Error(`exposure.list has no ${key} list`);
   }
-  const { status, commands, dom } = exposure;
+  const { status, commands, element } = exposure;
   const object = (properties, required = []) => ({ type: "object", properties, required, additionalProperties: false });
   const tools = [
     {
@@ -142,21 +142,21 @@ function buildTools(window, exposure) {
   }
   tools.push(
     {
-      name: "dom_rect",
-      description: `Returns the rectangle of a declared DOM element in CSS pixels and its document origin in window coordinates.\n${describe(dom)}`,
+      name: "element_rect",
+      description: `Returns the rectangle of a declared element and its document origin in window coordinates.\n${describe(element)}`,
       inputSchema: object(
-        { window: windowProperty, name: nameProperty(dom, "DOM entry name."), surface: surfaceProperty, index: { type: "integer", description: "Element index for entries with many elements." } },
+        { window: windowProperty, name: nameProperty(element, "Element name."), surface: surfaceProperty, index: { type: "integer", description: "Element index for entries with many elements." } },
         ["name"],
       ),
       annotations: { readOnlyHint: true },
     },
     {
-      name: "dom_act",
-      description: "Sends synthetic DOM events (isTrusted false) to a declared DOM element. Use input_pointer and input_key to test real input.",
+      name: "element_act",
+      description: "Acts on a declared element with a synthetic action; an element of a page receives DOM events with isTrusted false. Use input_pointer and input_key to test real input.",
       inputSchema: object(
         {
           window: windowProperty,
-          name: nameProperty(dom, "DOM entry name."),
+          name: nameProperty(element, "Element name."),
           surface: surfaceProperty,
           index: { type: "integer" },
           action: { type: "string", enum: ["click", "input", "dispatch"] },
@@ -222,7 +222,7 @@ async function callTool(params) {
   const args = params?.arguments ?? {};
   if (typeof name !== "string") throw new RpcError(-32602, "tools/call requires name");
   if (typeof args !== "object" || Array.isArray(args)) throw new RpcError(-32602, "arguments must be an object");
-  const known = ["windows_list", "status_get", "status_watch_once", "dom_rect", "dom_act", "input_pointer", "input_key"];
+  const known = ["windows_list", "status_get", "status_watch_once", "element_rect", "element_act", "input_pointer", "input_key"];
   if (!known.includes(name) && !(name.startsWith(COMMAND_PREFIX) && /^[a-z0-9_-]+$/.test(name.slice(COMMAND_PREFIX.length)))) {
     throw new RpcError(-32602, `unknown tool: ${name}`);
   }
@@ -240,11 +240,11 @@ async function callTool(params) {
         case "status_watch_once":
           value = await watchOnce(c, window, args);
           break;
-        case "dom_rect":
-          value = await c.request("dom.rect", withWindow(window, args, ["name", "surface", "index"]));
+        case "element_rect":
+          value = await c.request("element.rect", withWindow(window, args, ["name", "surface", "index"]));
           break;
-        case "dom_act":
-          value = await c.request("dom.act", withWindow(window, args, ["name", "surface", "index", "action", "value", "event"]));
+        case "element_act":
+          value = await c.request("element.act", withWindow(window, args, ["name", "surface", "index", "action", "value", "event"]));
           break;
         case "input_pointer":
           value = await c.request("input.pointer", withWindow(window, args, ["x", "y", "phase", "button", "deltaX", "deltaY", "activate"]));

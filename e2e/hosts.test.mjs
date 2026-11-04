@@ -1,10 +1,10 @@
-// Compares the final requests and the display coordinates of the two hosts.
+// Compares the final requests and the display coordinates of the hosts of the session: each host with the first one.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { APPS, drag, open, requiresBoth } from "@soksak/window-check/app.mjs";
+import { APPS, drag, open, requiresAll } from "@soksak/window-check/app.mjs";
 import { fresh, recordCatalog } from "./fixture.mjs";
 import { textDifference } from "@soksak/window-check/text-difference.mjs";
 
@@ -62,7 +62,7 @@ const settled = (lines) => lines.some((line) => /^info workbench workbench: host
 /** Records the content size and the layout input when the host results are compared. */
 async function layoutState(s) {
   const [window, document, settings] = await Promise.all([
-    s.get("host.window"), s.get("core.window.document"), s.get("core.settings"),
+    s.get("host.window"), s.get("core.window.workbench"), s.get("core.settings"),
   ]);
   const values = settings.values;
   return {
@@ -81,17 +81,23 @@ async function layoutState(s) {
 }
 
 /**
- * Connects to both applications. The tests below are registered only when requiresBoth holds, so APPS holds both
- * applications here and each open returns a session.
+ * Connects to every application of the session. The tests below are registered only when requiresAll holds, so APPS holds
+ * every application here and each open returns a session.
  */
-async function both(t) {
+async function all(t) {
   const sessions = {};
   for (const app of Object.values(APPS)) sessions[app.name] = await open(t, app);
   return sessions;
 }
 
-if (requiresBoth(process.env)) test("both hosts answer the same page the same way", async (t) => {
-  const sessions = await both(t);
+/** The first application of the session, whose results the results of every other application are compared with. */
+const comparison = (sessions) => {
+  const [baseline, ...others] = Object.keys(sessions);
+  return { baseline, others };
+};
+
+if (requiresAll(process.env)) test("every host answers the same page the same way", async (t) => {
+  const sessions = await all(t);
   const dragged = {};
   const results = {};
   const logs = {};
@@ -139,10 +145,11 @@ if (requiresBoth(process.env)) test("both hosts answer the same page the same wa
     await s.run("core.settings.close");
   }
 
-  const restedWails = atRest(transcript(dragged.wailsv3));
-  const restedTauri = atRest(transcript(dragged.tauriv2));
-  assert.ok(restedWails, `the Wails host recorded no settled commit:\n${dragged.wailsv3.join("\n")}`);
-  assert.ok(restedTauri, `the Tauri host recorded no settled commit:\n${dragged.tauriv2.join("\n")}`);
+  const { baseline, others } = comparison(sessions);
+  const rested = Object.fromEntries(Object.keys(sessions).map((name) => [name, atRest(transcript(dragged[name]))]));
+  for (const [name, found] of Object.entries(rested)) {
+    assert.ok(found, `${name} recorded no settled commit:\n${dragged[name].join("\n")}`);
+  }
   // On failure, it writes the order of the x of the first surface of the settled layouts of each host and the boundary of the drag result.
   const boundary = (result) => result.boundary && [result.boundary[0], result.boundary.at(-1)];
   const dragState = Object.fromEntries(Object.entries(results).map(([name, result]) => [name, {
@@ -150,35 +157,38 @@ if (requiresBoth(process.env)) test("both hosts answer the same page the same wa
     late: result.late, deepest: result.deepest, boundary: boundary(result),
   }]));
   const stateReport = `window, document, and layout settings by host: ${JSON.stringify(states)}`;
-  assert.equal(restedTauri.request, restedWails.request, "the two hosts give the page a different plane to lay out " +
-    `after the drag:\nWails ${restedWails.request}\nTauri ${restedTauri.request}\n` +
-    `settled first-surface x: Wails ${JSON.stringify(settledX(dragged.wailsv3))}, Tauri ${JSON.stringify(settledX(dragged.tauriv2))}; ` +
-    `drag measurements: ${JSON.stringify(dragState)}; ` +
-    stateReport);
-  assert.equal(restedTauri.answer, restedWails.answer,
-    `the two hosts place the same surfaces differently; ${stateReport}`);
-  const wails = transcript([...dragged.wailsv3, ...logs.wailsv3]);
-  const tauri = transcript([...dragged.tauriv2, ...logs.tauriv2]);
-  const onlyWails = [...wails.keys()].filter((name) => !tauri.has(name));
-  const onlyTauri = [...tauri.keys()].filter((name) => !wails.has(name));
-  assert.deepEqual({ onlyWails, onlyTauri }, { onlyWails: [], onlyTauri: [] },
-    "the two hosts were asked for different things");
-  for (const name of wails.keys()) {
-    if (name === "syncSurfaces" || name === "presentSurfaces") continue;
-    const mine = wails.get(name).at(-1);
-    const theirs = tauri.get(name).at(-1);
-    // To classify an intermittent difference, the failure message holds all requests and replies of both hosts.
-    const answers = `\nWails ${mine.request} -> ${mine.answer}\nTauri ${theirs.request} -> ${theirs.answer}`;
-    // A long request is cut in the message, so the message first names the place where the requests first differ (F40).
-    assert.equal(theirs.request, mine.request,
-      `${name} was asked differently, Tauri ${textDifference(theirs.request, mine.request)} of Wails; ${stateReport}:${answers}`);
-    assert.equal(theirs.answer, mine.answer,
-      `${name} was answered differently, Tauri ${textDifference(theirs.answer, mine.answer)} of Wails:${answers}`);
+  const mine = transcript([...dragged[baseline], ...logs[baseline]]);
+  for (const other of others) {
+    assert.equal(rested[other].request, rested[baseline].request, `${other} and ${baseline} give the page a different plane to lay out ` +
+      `after the drag:\n${baseline} ${rested[baseline].request}\n${other} ${rested[other].request}\n` +
+      `settled first-surface x: ${baseline} ${JSON.stringify(settledX(dragged[baseline]))}, ${other} ${JSON.stringify(settledX(dragged[other]))}; ` +
+      `drag measurements: ${JSON.stringify(dragState)}; ` +
+      stateReport);
+    assert.equal(rested[other].answer, rested[baseline].answer,
+      `${other} and ${baseline} place the same surfaces differently; ${stateReport}`);
+    const theirs = transcript([...dragged[other], ...logs[other]]);
+    const only = {
+      [baseline]: [...mine.keys()].filter((name) => !theirs.has(name)),
+      [other]: [...theirs.keys()].filter((name) => !mine.has(name)),
+    };
+    assert.deepEqual(only, { [baseline]: [], [other]: [] }, `${other} and ${baseline} were asked for different things`);
+    for (const name of mine.keys()) {
+      if (name === "syncSurfaces" || name === "presentSurfaces") continue;
+      const own = mine.get(name).at(-1);
+      const their = theirs.get(name).at(-1);
+      // To classify an intermittent difference, the failure message holds all requests and replies of the two compared hosts.
+      const answers = `\n${baseline} ${own.request} -> ${own.answer}\n${other} ${their.request} -> ${their.answer}`;
+      // A long request is cut in the message, so the message first names the place where the requests first differ (F40).
+      assert.equal(their.request, own.request,
+        `${name} was asked differently, ${other} ${textDifference(their.request, own.request)} of ${baseline}; ${stateReport}:${answers}`);
+      assert.equal(their.answer, own.answer,
+        `${name} was answered differently, ${other} ${textDifference(their.answer, own.answer)} of ${baseline}:${answers}`);
+    }
   }
 });
 
-if (requiresBoth(process.env)) test("both hosts lay out the same page the same way after a resize", async (t) => {
-  const sessions = await both(t);
+if (requiresAll(process.env)) test("every host lays out the same page the same way after a resize", async (t) => {
+  const sessions = await all(t);
   const rested = {};
   for (const [name, s] of Object.entries(sessions)) {
     // The call records show which phase of presentSurfaces held a commit that does not settle. The settled-commit wait reads
@@ -188,17 +198,20 @@ if (requiresBoth(process.env)) test("both hosts lay out the same page the same w
     await s.run("host.window.resize", SIZE);
     await s.until("host.window", (w) => w.content.width === SIZE.width && w.content.height === SIZE.height,
       "the window did not resize");
-    await s.until("core.window.document", (doc) => doc.width === SIZE.width && doc.height === SIZE.height,
-      "the main document did not take the new size");
+    await s.until("core.window.workbench", (workbench) => workbench.width === SIZE.width && workbench.height === SIZE.height,
+      "the workbench did not take the new size");
     const lines = await log.until(settled, "the resize did not end with a settled commit").then(() => log.stop());
     const found = atRest(transcript(lines));
     assert.ok(found, `${name} recorded no settled commit after the resize:\n${lines.join("\n")}`);
     rested[name] = found;
   }
-  assert.equal(rested.tauriv2.request, rested.wailsv3.request,
-    `the two hosts give the page a different plane at ${SIZE.width}x${SIZE.height}`);
-  assert.equal(rested.tauriv2.answer, rested.wailsv3.answer,
-    `the two hosts place the same surfaces differently at ${SIZE.width}x${SIZE.height}`);
+  const { baseline, others } = comparison(sessions);
+  for (const other of others) {
+    assert.equal(rested[other].request, rested[baseline].request,
+      `${other} and ${baseline} give the page a different plane at ${SIZE.width}x${SIZE.height}`);
+    assert.equal(rested[other].answer, rested[baseline].answer,
+      `${other} and ${baseline} place the same surfaces differently at ${SIZE.width}x${SIZE.height}`);
+  }
 });
 
 /** The menu table of the host contract specification. The declaration is the reference, so the check reads it from the specification file. */
@@ -228,8 +241,8 @@ function normalizeMenus(menus, names, windowTitles, declaredCounts) {
   }));
 }
 
-if (requiresBoth(process.env)) test("both hosts serve the declared application menu", async (t) => {
-  const sessions = await both(t);
+if (requiresAll(process.env)) test("every host serves the declared application menu", async (t) => {
+  const sessions = await all(t);
   const contract = await menuContract();
   // The active language that the host reports is the reference. The check does not guess it from the title (docs/spec/host-contract.md).
   // The reported language must be a language column of the table, and a new language is declared by adding a column.
@@ -255,12 +268,12 @@ if (requiresBoth(process.env)) test("both hosts serve the declared application m
     observed[name] = { language: report.language, menus: normalizeMenus(report.menus, names, titles, declaredCounts) };
   }
   const languages = Object.values(observed).map((value) => value.language);
-  assert.equal(new Set(languages).size, 1, `both hosts must serve the same menu language: ${JSON.stringify(languages)}`);
+  assert.equal(new Set(languages).size, 1, `every host must serve the same menu language: ${JSON.stringify(languages)}`);
   const column = columns.indexOf(languages[0]) + 1;
 
   // The observed menus follow the order and the titles of the declared top-level menus. The title of the app menu is the normalized application name.
-  const [first, ...rest] = Object.values(observed).map((value) => value.menus);
-  for (const menus of [first, ...rest]) {
+  const served = Object.values(observed).map((value) => value.menus);
+  for (const menus of served) {
     assert.equal(menus.length, contract.menus.length, `menu count differs: ${JSON.stringify(menus.map((m) => m.title))}`);
     contract.menus.forEach((row, index) => {
       const expected = row[column];
@@ -282,7 +295,7 @@ if (requiresBoth(process.env)) test("both hosts serve the declared application m
       title: row[0] === "app" && appPrefixed.has(row[1]) ? `APP ${row[column + 2]}` : row[column + 2],
     });
   }
-  for (const menus of [first, ...rest]) {
+  for (const menus of served) {
     contract.menus.forEach(([id], index) => {
       declared[id].forEach((item, offset) => {
         const actual = menus[index].items[offset];
@@ -305,8 +318,11 @@ if (requiresBoth(process.env)) test("both hosts serve the declared application m
       items: menu.items.map((item, offset) => rows[offset]?.[2] === "system" ? { title: "system", key: "" } : item),
     };
   });
-  assert.deepEqual(markSystemItems(first), markSystemItems(rest[0]),
-    "the two hosts must serve the same application menu");
+  const { baseline, others } = comparison(observed);
+  for (const other of others) {
+    assert.deepEqual(markSystemItems(observed[other].menus), markSystemItems(observed[baseline].menus),
+      `${other} and ${baseline} must serve the same application menu`);
+  }
 
   // The layout and the native surfaces do not follow the web view zoom, and a reload changes the state of the main page.
   const forbidden = Object.values(observed).flatMap(({ menus }) => menus.flatMap((menu) => menu.items))

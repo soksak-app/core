@@ -976,8 +976,8 @@ var endpointMethods = map[string]endpointMethod{
 	"exposure.list": exposureList,
 	"status.get":    statusGet,
 	"command.run":   commandRun,
-	"dom.rect":      domRequest("dom.rect"),
-	"dom.act":       domRequest("dom.act"),
+	"element.rect":  elementRequest("element.rect"),
+	"element.act":   elementRequest("element.act"),
 	"input.pointer": inputPointer,
 	"input.key":     inputKey,
 }
@@ -1090,8 +1090,8 @@ func exposureList(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, er
 	for _, entry := range listedEntries(hostCommands, false) {
 		list["commands"] = append(list["commands"], mustJSON(entry))
 	}
-	if list["dom"] == nil {
-		list["dom"] = []json.RawMessage{}
+	if list["element"] == nil {
+		list["element"] = []json.RawMessage{}
 	}
 	return list, nil
 }
@@ -1164,14 +1164,14 @@ func commandRun(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, erro
 	return e.backend.PageRequest(window, "command.run", withoutWindow(params))
 }
 
-func domRequest(method string) endpointMethod {
+func elementRequest(method string) endpointMethod {
 	return func(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
 		window, name, err := e.named(params)
 		if err != nil {
 			return nil, err
 		}
 		if isHostName(name) {
-			return nil, rpcError(codeUnknownName, "the host declares no dom entry %s", name)
+			return nil, rpcError(codeUnknownName, "the host declares no element entry %s", name)
 		}
 		return e.backend.PageRequest(window, method, withoutWindow(params))
 	}

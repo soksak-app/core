@@ -380,7 +380,7 @@ func (s *Shell) surfacesState() []surfaceStatus {
 // exposedNames lists what the plugin of a surface registers, as "<kind> <name>".
 func (u *installedUnit) exposedNames() []string {
 	names := []string{}
-	for kind, entries := range map[string][]json.RawMessage{"status": u.Exposes.Status, "command": u.Exposes.Commands, "dom": u.Exposes.Dom} {
+	for kind, entries := range map[string][]json.RawMessage{"status": u.Exposes.Status, "command": u.Exposes.Commands, "element": u.Exposes.Element} {
 		for _, raw := range entries {
 			var entry struct {
 				Name string `json:"name"`
@@ -459,9 +459,23 @@ func (s *Shell) registerStatuses() {
 	})
 	s.registry.Status("core.rail", func() any { return s.railState() })
 	s.registry.Status("core.window.workbench", func() any {
-		return map[string]any{"start": s.events.Start(), "started_at": float64(s.events.StartedAt().UnixMilli())}
+		window, err := s.options.Window()
+		if err != nil {
+			s.fail(err)
+			return nil
+		}
+		ready, visibility := "interactive", "hidden"
+		if s.drawn {
+			ready = "complete"
+		}
+		if window.Visible {
+			visibility = "visible"
+		}
+		return map[string]any{"start": s.events.Start(), "startedAt": float64(s.events.StartedAt().UnixMilli()), "readyState": ready,
+			"visibility": visibility, "scheme": s.settings.Scheme(), "background": false, // no modal of this host blurs the workbench
+			"scale": window.Scale, "width": window.Width, "height": window.Height}
 	})
-	s.registry.Status("core.page.audit", func() any {
+	s.registry.Status("core.workbench.audit", func() any {
 		tree, err := s.options.Elements.ElementTree()
 		if err != nil {
 			s.fail(err)

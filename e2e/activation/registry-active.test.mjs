@@ -9,7 +9,7 @@ import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
-import { fresh } from "../fixture.mjs";
+import { fresh, restoreRegistry, useRegistry } from "../fixture.mjs";
 
 const REGISTRY = fileURLToPath(new URL("../../target/registry/", import.meta.url));
 
@@ -41,9 +41,9 @@ for (const app of Object.values(APPS)) {
       for (const project of await s.get("core.projects")) {
         if (project.root.startsWith(folder)) await s.run("core.project.close", { id: project.id });
       }
-      await s.run("core.plugins.registry", { index: before.registry });
+      await restoreRegistry(s);
     });
-    await s.run("core.plugins.registry", { index: pathToFileURL(file).href });
+    await useRegistry(s, pathToFileURL(file).href);
     await s.until("core.plugins", (value) => value.registry === pathToFileURL(file).href && value.error === null,
       "the registry did not change");
     assert.deepEqual((await s.get("core.plugins")).updates, []);

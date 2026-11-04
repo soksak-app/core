@@ -49,9 +49,13 @@ for (const app of Object.values(APPS)) {
       await child.until("core.surfaces", (surfaces) => surfaces.some((surface) => surface.visible),
         `${label}: the project window showed no surface`);
       await child.presented();
+      // A window whose host.window reports pageProcess null has no main page (the window of the mygo host), so it leaves no
+      // page process to end; every other value names the page process of the window.
       const { pageProcess } = await child.get("host.window");
-      assert.ok(Number.isInteger(pageProcess) && pageProcess > 0, `${label}: the project window has no page process: ${pageProcess}`);
-      pageProcesses.push(pageProcess);
+      if (pageProcess !== null) {
+        assert.ok(Number.isInteger(pageProcess) && pageProcess > 0, `${label}: the project window has no page process: ${pageProcess}`);
+        pageProcesses.push(pageProcess);
+      }
       const showing = await counts(s);
       measured.push(showing);
       // The composition view, surface, and input registration of an open window must be counted so that the value after closing shows the release.

@@ -22,12 +22,12 @@ function replaceFile(file, text) {
   renameSync(temporary, file);
 }
 
-/** Runs a plugin change, which reloads the window, and waits until the new page is ready. */
+/** Runs a plugin change, which starts the workbench of the window again, and waits until the new start is ready. */
 async function change(s, action) {
-  const before = (await s.get("host.window")).pageProcess;
+  const before = (await s.get("core.window.workbench")).start;
   await s.run(`core.plugins.${action}`, { plugin: "hwp" });
-  await s.until("host.window", (value) => value.pageProcess !== 0 && value.pageProcess !== before, `${action} did not reload the window`);
-  await s.until("host.windows", (list) => list.some((item) => item.window === s.window && item.ready), `the page did not report ready after ${action}`);
+  await s.until("core.window.workbench", (value) => value.start !== before && value.readyState === "complete", `${action} did not reload the window`);
+  await s.until("host.windows", (list) => list.some((item) => item.window === s.window && item.ready), `the workbench did not report ready after ${action}`);
 }
 
 for (const app of Object.values(APPS)) {

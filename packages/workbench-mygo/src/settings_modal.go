@@ -887,6 +887,14 @@ func (s *Shell) tellLanguage(locale string) {
 	})
 }
 
+// Scheme is the color scheme of the effective mode.
+func (s *SettingsStore) Scheme() string {
+	if s.Value("mode") == "light" {
+		return "light"
+	}
+	return "dark"
+}
+
 // Palette is the palette of the effective theme, mode, gap and radius.
 func (s *SettingsStore) Palette() (Palette, error) {
 	name, _ := s.Value("theme").(string)
@@ -895,7 +903,7 @@ func (s *SettingsStore) Palette() (Palette, error) {
 		return Palette{}, err
 	}
 	colors := theme.Dark
-	if s.Value("mode") == "light" {
+	if s.Scheme() == "light" {
 		colors = theme.Light
 	}
 	color := func(key string) ui.Color { return ui.Hex(colors[key]) }

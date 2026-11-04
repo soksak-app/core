@@ -25,7 +25,7 @@ for (const app of Object.values(APPS)) {
       // Session.record stops an unfinished recording during cleanup and preserves its failure.
       const { tab } = await s.run("core.card.add-tab", { card: card.id, plugin: "browser" });
       await s.until("core.surfaces", surfaces => surfaces.some(surface => surface.surface === tab && surface.visible &&
-        surface.exposes.includes("dom browser.empty")), "the new view did not expose its empty document");
+        surface.exposes.includes("element browser.empty")), "the new view did not expose its empty document");
       await s.until("core.surface.document", doc => doc?.readyState === "complete" && doc.themed,
         "the new view did not apply its first theme", { surface: tab });
       const empty = await s.rect("browser.empty", undefined, tab);

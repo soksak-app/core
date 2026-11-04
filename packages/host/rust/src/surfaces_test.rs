@@ -107,7 +107,7 @@ mod declaration_table {
         let first: SyncRequest = serde_json::from_value(serde_json::json!({
             "settled": true,
             "titlebar": 40.0,
-            "declarations": [{"commands": ["open"], "dom": ["alpha"], "nested": {"keep": true}}],
+            "declarations": [{"commands": ["open"], "element": ["alpha"], "nested": {"keep": true}}],
             "surfaces": [
                 {"id":"one","x":0.0,"y":0.0,"w":10.0,"h":10.0,"visible":true,"dim":false,
                  "plugin":"page","composition":{"kind":"view","page":"one.html"},
@@ -135,7 +135,9 @@ mod declaration_table {
         );
         assert_eq!(
             one.declarations,
-            Some(serde_json::json!({"commands":["open"],"dom":["alpha"],"nested":{"keep":true}}))
+            Some(
+                serde_json::json!({"commands":["open"],"element":["alpha"],"nested":{"keep":true}})
+            )
         );
         let two = resolved.surfaces[1]
             .start
@@ -152,7 +154,7 @@ mod declaration_table {
                 &soksak_sok::log_policy::LogPolicy::default().classes()
             )
             .expect("the resolved start values form a valid script"),
-            r##"window.sokSurface = Object.freeze({"surface":"two","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({"commands":["open"],"dom":["alpha"],"nested":{"keep":true}}),"diagnostics":null,"section":null,"levels":Object.freeze({"call":"error","frame":"error","input":"error","io":"error","lifecycle":"error"})});"##
+            r##"window.sokSurface = Object.freeze({"surface":"two","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({"commands":["open"],"element":["alpha"],"nested":{"keep":true}}),"diagnostics":null,"section":null,"levels":Object.freeze({"call":"error","frame":"error","input":"error","io":"error","lifecycle":"error"})});"##
         );
 
         let next: SyncRequest = serde_json::from_value(serde_json::json!({

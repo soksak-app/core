@@ -1,10 +1,10 @@
-# 노출: status, command, dom
+# 노출: status, command, element
 
 [English](exposure.md)
 
 코어, 플러그인 API, 셸·브라우저 플러그인, macOS 호스트가 이 명세를 구현하며 [기능 상태](../features.ko.md)가 검증 결과를 기록한다.
 
-코어(워크벤치와 네이티브 호스트)는 선언된 상태 값, 명령, DOM 요소를 [로컬 엔드포인트](endpoint.ko.md)로 외부 클라이언트에 공개한다. 임의 코드를 실행하는 메서드는 없다.
+코어(워크벤치와 네이티브 호스트)는 선언된 상태 값, 명령, 요소를 [로컬 엔드포인트](endpoint.ko.md)로 외부 클라이언트에 공개한다. 임의 코드를 실행하는 메서드는 없다.
 
 ## 선언
 
@@ -15,7 +15,7 @@
   "exposes": {
     "status": [],
     "commands": [],
-    "dom": []
+    "element": []
   }
 }
 ```
@@ -38,13 +38,13 @@
 | command | `params` | 매개변수 스키마 |
 | command | `result` | 결과 스키마 |
 | command | `timeout` | 선택. 명령이 답하는 데 걸릴 수 있는 시간(ms, 1–600000). 없으면 10초다. 호스트는 표면 페이지로 전달한 명령에, 메인 페이지는 스스로 실행하는 명령의 handler에 이를 적용하며, 넘으면 -32000과 `command <name> did not reply within <ms>ms`로 실패한다. 동기든 비동기든 예외를 던진 handler는 자기 오류로 명령을 실패시키며, 시간 제한도 그때 끝난다. core 명령은 그 뒤 배치 표시를 기다린다. 이 기다림은 timeout에 포함하지 않는다. 표시 경로의 각 단계가 자기 한도 안에 자기 오류로 실패하기 때문이다([네이티브 호스트](native-host.ko.md)) |
-| dom | `name` | 항목 이름 |
-| dom | `description` | 한 문장 설명 |
-| dom | `many` | 선택. 여러 요소가 같은 이름을 쓰면 `true`이며, 요청은 `index`로 요소 하나를 지정한다 |
+| element | `name` | 항목 이름 |
+| element | `description` | 한 문장 설명 |
+| element | `many` | 선택. 여러 요소가 같은 이름을 쓰면 `true`이며, 요청은 `index`로 요소 하나를 지정한다 |
 
 스키마는 `type`, `properties`, `items`, `enum` 키워드만 쓰는 JSON Schema 부분집합이다. `type`은 `string`, `number`, `integer`, `boolean`, `object`, `array`, `null` 이름 가운데 하나이거나 그 이름들의 비어 있지 않은 목록이며, 그 밖의 값은 거부한다. `null`과 목록 안의 목록도 거부한다. `enum`은 비어 있지 않은 목록이고, 값은 같은 JSON 값일 때 항목과 일치하며, 객체의 member는 순서와 무관하게 비교한다.
 
-dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 없으면 그 이름을 가진 요소는 정확히 하나다.
+element 항목의 요소는 `data-expose="<이름>"` 속성을 가지며, 그 이름이 element 이름이다. `many`가 없으면 그 이름을 가진 요소는 정확히 하나다. `exposes.dom`을 선언한 플러그인 manifest는 `plugin <id>: exposes.dom is removed; an exposed element is declared in exposes.element`로 거부한다.
 
 ## 사용자 인터페이스
 
@@ -52,11 +52,11 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 
 - 문서의 모든 사용자 조작은 선언된 명령을 실행한다. 컨트롤은 `data-command="<이름>"`으로 명령을 가리키고, 고정 매개변수는 `data-params`에 JSON 객체로 적는다. 값을 입력하는 컨트롤은 그 값을 `data-value`가 가리키는 매개변수 이름(기본 `value`)으로 더한다. 명령을 먼저 선언하고(`exposure.json`, `plugin.json`), 문서는 `@soksak/plugin-api`의 `createBinder(run)`으로 선언된 명령에만 요소를 연결한다. `bind(요소, 이름, 매개변수, {event, when, stop, failed})`는 이벤트에서 명령을 실행하고, `mark(요소, 이름, 매개변수, 값 이름)`은 속성을 붙이며, `delegate(루트)`는 `bind`가 연결하지 않은 표시된 하위 요소의 누름과 값 변경을 실행한다. `bind`로 연결한 요소는 자기 이벤트에서만 명령을 실행하므로, Enter에 연결한 텍스트 필드는 같은 Enter가 일으키는 `change`에서 명령을 다시 실행하지 않는다. 선언되지 않은 이름을 연결하거나 표시하면 예외를 던진다. 워크벤치는 `packages/workbench/commands.js`(등록소 위의 연결기)를, 플러그인 페이지는 페이지가 등록한 명령을 실행하는 `expose.bind`, `expose.mark`, `expose.delegate`를 쓴다. 처리기는 모듈 함수를 직접 부르지 않는다. 탭 드래그 같은 연속 조작은 결과를 만드는 명령(`core.tab.move`)을 가지며, 키보드 단축키도 명령을 실행한다. `bind`의 `params`가 함수이면 실행마다 이벤트를 받아 그 실행의 매개변수가 되며, 그 요소에는 `data-params`가 없으므로 `mark`는 아무것도 쓰지 않는다.
 - 문서에 보이는 모든 상태는 status로 읽을 수 있다.
-- 모든 조작 요소(`button`, `input`, `select`, `textarea`, `role="button"`, `contenteditable`)는 명령에 연결되고(직접 연결되거나, 위임한 루트 안에서 `data-command`를 가짐) dom 이름을 가진다.
+- 모든 조작 요소(`button`, `input`, `select`, `textarea`, `role="button"`, `contenteditable`)는 명령에 연결되고(직접 연결되거나, 위임한 루트 안에서 `data-command`를 가짐) element 이름을 가진다.
 - 다시 그리기는 문서에 남는 모든 컨트롤을 제자리에 두고, 순서가 틀린 컨트롤만 옮긴다. WebKit은 누름과 뗌 사이에 요소가 문서에서 빠진 누름에 `click`을 보내지 않고, `insertBefore`로 요소를 옮기면 요소가 먼저 문서에서 빠지므로, 컨트롤을 옮긴 다시 그리기는 그동안 누른 click을 잃었다. plugin page는 key마다 요소를 제자리에 두는 `@soksak/plugin-api`의 `drawList`로 컨트롤 목록을 그린다.
-- 네이티브 모달은 요소의 사본을 그리고 컨트롤의 key로 답한다. 메인 페이지는 자기 요소에서 그 컨트롤을 찾아 명령을 실행한다.
+- 네이티브 모달은 요소의 사본을 그리고 컨트롤의 key로 답한다. 워크벤치는 자기 요소에서 그 컨트롤을 찾아 명령을 실행한다.
 
-충족 여부는 실행 중인 문서에서 판단한다. 보이는 view 표면의 page가 `core.surface.document`를 노출하지 않으면 audit이 실패한다. view는 별도의 문서이므로 audit이 그렇지 않으면 그 조작을 판단할 수 없기 때문이다. 연결기의 `audit(루트)`는 연결되지 않았거나 dom 이름이 없는 조작 요소를 `{tag, expose, command, text}`로 나열한다. 메인 페이지는 이를 `core.page.audit`로, 모든 view surface document는 `core.surface.document`의 `unbound`로 공개한다. `e2e/audit.test.mjs`가 두 앱의 모든 화면, 모달 구역, 메뉴, 편집 상태, 보이는 플러그인 표면을 방문해 빈 목록을 요구한다. `scripts/check-exposure.mjs`(`make exposure-check`)는 `@soksak/plugin-api`의 `exposure-check.js`로 워크벤치 소스가 적은 것만 검사한다. 소스에 적은 이름은 모두 선언되고, 선언한 status와 명령은 등록되며, 선언한 dom 이름은 공개 값으로 적혀 있다. view는 코어 status와 자기 plugin의 섹션 id를 적을 수 있고([섹션](plugins.ko.md#섹션)), 자기 plugin의 명령을 view bridge의 `commands.register`로 등록하며, `runtime.command`로 코어 명령이나 자기 plugin이 선언한 명령을 실행한다([view 표면](native-surfaces.ko.md#view-표면)). 코어 이름은 코어가 선언해야 한다. 플러그인 repository는 같은 module인 `soksak-exposure`로 자기 페이지와 섹션의 이름을 검사하며, 이 module은 package의 `core-exposure.json`에서 코어 이름을 읽는다. 그 파일이 워크벤치 선언과 다르면 `make exposure-check`가 실패하고, `node scripts/check-exposure.mjs --write`가 그 파일을 쓴다.
+충족 여부는 실행 중인 문서에서 판단한다. 보이는 view 표면의 page가 `core.surface.document`를 노출하지 않으면 audit이 실패한다. view는 별도의 문서이므로 audit이 그렇지 않으면 그 조작을 판단할 수 없기 때문이다. 연결기의 `audit(루트)`는 연결되지 않았거나 element 이름이 없는 조작 요소를 `{role, expose, command, text}`로 나열한다. `role`은 요소의 ARIA role이다: `role` 속성의 첫 token, 없으면 tag와 input type의 implicit role(`button`, `textbox`, `combobox`, `listbox`, `checkbox`, `radio`, `slider`, `spinbutton`, `searchbox`), `contenteditable` 요소는 `textbox`, role이 없는 input type은 `null`이다. 워크벤치는 이를 `core.workbench.audit`로, 모든 view surface document는 `core.surface.document`의 `unbound`로 공개한다. `e2e/audit.test.mjs`가 두 앱의 모든 화면, 모달 구역, 메뉴, 편집 상태, 보이는 플러그인 표면을 방문해 빈 목록을 요구한다. `scripts/check-exposure.mjs`(`make exposure-check`)는 `@soksak/plugin-api`의 `exposure-check.js`로 워크벤치 소스가 적은 것만 검사한다. 소스에 적은 이름은 모두 선언되고, 선언한 status와 명령은 등록되며, 선언한 element 이름은 공개 값으로 적혀 있다. view는 코어 status와 자기 plugin의 섹션 id를 적을 수 있고([섹션](plugins.ko.md#섹션)), 자기 plugin의 명령을 view bridge의 `commands.register`로 등록하며, `runtime.command`로 코어 명령이나 자기 plugin이 선언한 명령을 실행한다([view 표면](native-surfaces.ko.md#view-표면)). 코어 이름은 코어가 선언해야 한다. 플러그인 repository는 같은 module인 `soksak-exposure`로 자기 페이지와 섹션의 이름을 검사하며, 이 module은 package의 `core-exposure.json`에서 코어 이름을 읽는다. 그 파일이 워크벤치 선언과 다르면 `make exposure-check`가 실패하고, `node scripts/check-exposure.mjs --write`가 그 파일을 쓴다.
 
 ## 키보드 단축키
 
@@ -100,7 +100,7 @@ view는 넘길 수 있는 행을 view call `runtime.shortcuts.read`로 읽는다
 
 ## 키보드 포커스
 
-status `core.focus`는 창의 first responder를 가진 문서에서 키보드 포커스를 가진 exposed element를 `{name, index, surface}`나 `null`로 알린다. 호스트는 각 창의 first responder를 `firstResponder`의 key-value observing으로 관찰하고, page가 ready를 알릴 때와 그 뒤 바뀔 때마다 main page에 창 event `window-responder {owner, surface, document}`를 보낸다. `owner`, `surface`, `document`는 `host.window`의 `responder`와 같은 값이다. ready를 알리지 않은 page는 event를 받지 않는다. 그 page의 ready가 현재 값을 보내기 때문이다. view surface는 자기 문서를 가진다. 그 bridge는 문서의 포커스가 움직일 때마다 포커스를 가진 exposed element를 읽고, 값이 바뀌면 view call `tab.focus`로 `{name, index}`나 `null`을 알린다. page는 다른 값을 `view call tab.focus requires {name, index} or null, not <value>`로 거부하고, view 문서가 끝나거나 surface가 닫히면 그 값을 잊는다. page는 둘을 합친다:
+status `core.focus`는 창의 first responder를 가진 문서에서 키보드 포커스를 가진 exposed element를 `{name, index, surface}`나 `null`로 알린다. 호스트는 각 창의 first responder를 `firstResponder`의 key-value observing으로 관찰하고, 워크벤치가 ready를 알릴 때와 그 뒤 바뀔 때마다 워크벤치에 창 event `window-responder {owner, surface, document}`를 보낸다. `owner`, `surface`, `document`는 `host.window`의 `responder`와 같은 값이다. ready를 알리지 않은 워크벤치는 event를 받지 않는다. 그 ready가 현재 값을 보내기 때문이다. view surface는 자기 문서를 가진다. 그 bridge는 문서의 포커스가 움직일 때마다 포커스를 가진 exposed element를 읽고, 값이 바뀌면 view call `tab.focus`로 `{name, index}`나 `null`을 알린다. 워크벤치는 다른 값을 `view call tab.focus requires {name, index} or null, not <value>`로 거부하고, view 문서가 끝나거나 surface가 닫히면 그 값을 잊는다. 워크벤치는 둘을 합친다:
 
 | first responder의 `owner` | `core.focus` |
 |---|---|
@@ -108,11 +108,23 @@ status `core.focus`는 창의 first responder를 가진 문서에서 키보드 �
 | `surface` | `surface`의 view가 `tab.focus`로 마지막에 알린 값과 그 `surface`. 알린 것이 없으면 `null` |
 | `document`, `modal`, `webview`, `native` | `null`. document region, native modal, 등록되지 않은 web view, native view는 exposed focus를 알리지 않는다 |
 
-첫 `window-responder` event 전과 호스트가 없는 runtime에서는 main 문서가 포커스를 가진다. member가 문자열이나 `null`인 `{owner, surface, document}`가 아닌 `window-responder` event는 `error: window responder: invalid window-responder event <value>`로 알린다.
+첫 `window-responder` event 전과 호스트가 없는 runtime에서는 워크벤치가 포커스를 가진다. member가 문자열이나 `null`인 `{owner, surface, document}`가 아닌 `window-responder` event는 `error: window responder: invalid window-responder event <value>`로 알린다.
+
+## 워크벤치 status
+
+워크벤치 선언의 각 status와 명령은 페이지가 아니라 창의 워크벤치에 대해 정의된다. 위치는 창 point로 주고, plane 좌표의 위치는 plane 좌표로 남는다. Wails와 Tauri 호스트에서는 메인 페이지가 워크벤치를 그리고, mygo 호스트는 native UI로 그린다. 목록의 워크벤치 순서는 워크벤치의 element tree에서 그 요소들이 놓인 순서이며, Wails와 Tauri 호스트에서는 메인 페이지의 문서 순서다.
+
+| Status | 값 |
+| --- | --- |
+| `core.window.workbench` | `{start, startedAt, readyState, visibility, scheme, background, scale, width, height}`. `start`는 워크벤치의 시작 하나를 식별하고 `startedAt`은 그 시작 시각을 epoch 이후 millisecond로 나타낸다. Wails와 Tauri 호스트에서는 메인 페이지의 page identity와 time origin이고, mygo 호스트에서는 워크벤치를 만들 때마다 새 값이다. `readyState`는 `loading`, `interactive`, `complete` 중 하나이며, mygo 호스트는 워크벤치의 첫 표시 프레임 전까지 `loading`, 그 뒤 `complete`를 알린다. `visibility`는 창이 최소화되었거나 보이지 않는 동안 `hidden`, 그 밖에는 `visible`이다. `scheme`은 워크벤치의 color scheme(`dark` 또는 `light`)이다. `background`는 열린 모달의 배경 blur로 워크벤치를 그리는지 알린다. `scale`은 창의 backing scale이다. `width`와 `height`는 창 콘텐츠 크기를 point로 나타낸다 |
+| `core.workbench.error` | 워크벤치가 보이는 오류 문장, 또는 `null` |
+| `core.workbench.audit` | `{unbound}`: audit이 나열한 워크벤치의 조작 요소([사용자 인터페이스](#사용자-인터페이스)) |
+
+`host.window.reload`는 창의 워크벤치를 다시 시작하고, `plugins-changed`를 받거나 `core.plugins.apply`를 실행한 창도 같은 방식으로 다시 시작한다([설치](installation.ko.md#변경-적용)). 워크벤치의 새 시작을 기다리는 window check와 측정 대상은 새 page process가 아니라 `core.window.workbench`의 새 `start`를 기다린다.
 
 ## 등록
 
-워크벤치는 코어 항목을 메인 페이지의 등록소에 등록한다. 플러그인 표면 페이지는 `@soksak/plugin-api/page`로 항목을 등록한다. 코어 명령은 handler가 시작한 비동기 작업까지 handler가 끝나고, 판이 가장 새 배치를 그린 뒤 답한다. 배치를 바꾸는 명령 뒤에 배치를 읽는 쪽은 그려진 배치를 읽는다. 기다림은 가장 새 배치를 기다리고, 기다리는 동안 더 새 배치가 예약되면 다시 기다린다. 더 새 배치가 대신한 배치는 그리지 않고 끝나기 때문이다. 그 뒤 그 그리기의 표면 slot을 읽고, slot이 가리키는 각 표면의 선언된 composition을 기다린다. 같은 표면의 이전 dispose를 기다리기 전에 mount 요청을 composition wait에 등록한다. replacement mount가 대기 중인 표면을 slot이 가리키면 그 mount를 기다리며 mount 실패를 그대로 보고한다. 이 명령이나 뒤의 명령이 제거한 표면은 기다림이 slot을 읽을 때 slot이 없다. 가장 새 그리기 뒤에 mount되지도 않고 mount 중도 아닌 표면을 가리키는 slot은 결함이며, 기다림은 `surface <id> is not mounted`로 실패한다. replacement가 없는 dispose는 mount된 상태나 대기 상태를 남기지 않는다. mounted surface entry에서 시작한 composition wait는 mount 등록이 pending이어도 해당 entry를 따른다. entry가 composition을 선언하기 전에 dispose가 시작되면 wait는 `surface <id> was disposed before declaring composition`으로 끝나며, mount 실패는 원래 오류를 반환한다. replacement mount를 기다리는 wait는 replacement entry를 따른다. 가장 새 배치가 실패하면 배치 대기열이 그 실패를 보이고, 그 배치는 표시되지 않았으므로 기다림은 slot을 읽지 않고 끝난다. 기다림 자체의 실패는 `exposure settled failed: <text>`로 쓴다. 두 경우 모두 명령은 handler의 결과로 답하며, 그 실패는 [애플리케이션 로그](hosts.ko.md#애플리케이션-로그)에 한 줄을 가진다.
+워크벤치는 코어 항목을 자기 등록소에 등록한다. 플러그인 표면 페이지는 `@soksak/plugin-api/page`로 항목을 등록한다. 코어 명령은 handler가 시작한 비동기 작업까지 handler가 끝나고, 판이 가장 새 배치를 그린 뒤 답한다. 배치를 바꾸는 명령 뒤에 배치를 읽는 쪽은 그려진 배치를 읽는다. 기다림은 가장 새 배치를 기다리고, 기다리는 동안 더 새 배치가 예약되면 다시 기다린다. 더 새 배치가 대신한 배치는 그리지 않고 끝나기 때문이다. 그 뒤 그 그리기의 표면 slot을 읽고, slot이 가리키는 각 표면의 선언된 composition을 기다린다. 같은 표면의 이전 dispose를 기다리기 전에 mount 요청을 composition wait에 등록한다. replacement mount가 대기 중인 표면을 slot이 가리키면 그 mount를 기다리며 mount 실패를 그대로 보고한다. 이 명령이나 뒤의 명령이 제거한 표면은 기다림이 slot을 읽을 때 slot이 없다. 가장 새 그리기 뒤에 mount되지도 않고 mount 중도 아닌 표면을 가리키는 slot은 결함이며, 기다림은 `surface <id> is not mounted`로 실패한다. replacement가 없는 dispose는 mount된 상태나 대기 상태를 남기지 않는다. mounted surface entry에서 시작한 composition wait는 mount 등록이 pending이어도 해당 entry를 따른다. entry가 composition을 선언하기 전에 dispose가 시작되면 wait는 `surface <id> was disposed before declaring composition`으로 끝나며, mount 실패는 원래 오류를 반환한다. replacement mount를 기다리는 wait는 replacement entry를 따른다. 가장 새 배치가 실패하면 배치 대기열이 그 실패를 보이고, 그 배치는 표시되지 않았으므로 기다림은 slot을 읽지 않고 끝난다. 기다림 자체의 실패는 `exposure settled failed: <text>`로 쓴다. 두 경우 모두 명령은 handler의 결과로 답하며, 그 실패는 [애플리케이션 로그](hosts.ko.md#애플리케이션-로그)에 한 줄을 가진다.
 
 
 Native listener 등록은 그 외에는 ready가 될 view mount나 composition wait를 지연하지 않는다. Ready 전에 등록이 reject되면 mount와 composition wait는 해당 오류로 reject된다. 워크벤치는 등록에 성공한 모든 listener를 해제하고 view-command layer를 닫으며 실패한 mounted entry를 제거한다. 이 실패 관측은 native-surface authorization에 의존하지 않는다. Ready 뒤 등록이 reject되면 workbench는 surface status로 오류를 보고하고 view를 정리해 mounted entry를 제거한다. 이미 resolve된 mount나 composition wait의 결과는 유지한다.
@@ -124,10 +136,10 @@ Surface별 mount registration은 이전 entry의 dispose를 기다리기 전에 
 | --- | --- |
 | `expose.status(name, read, subscribe)` | `read()`는 현재 값을 반환하고, `subscribe(fn)`은 값이 바뀔 때마다 `fn(value)`를 호출한다 |
 | `expose.command(name, run)` | `run(params)`는 결과 또는 결과의 Promise를 반환한다 |
-| `expose.dom(name, element)` | dom 항목의 요소. exposure가 그 요소에 이름을 표시한다 |
-| `expose.dom(name, provide)` | `many`인 dom 항목에서 현재 요소들을 돌려주는 함수. 요청마다 다시 읽으므로, 행 요소를 바꾸는 목록은 지운 요소를 들고 있지 않는다. 페이지는 각 요소를 그릴 때 이름(`dataset.expose`)을 표시한다 |
+| `expose.element(name, element)` | element 항목의 요소. exposure가 그 요소에 이름을 표시한다 |
+| `expose.element(name, provide)` | `many`인 element 항목에서 현재 요소들을 돌려주는 함수. 요청마다 다시 읽으므로, 행 요소를 바꾸는 목록은 지운 요소를 들고 있지 않는다. 페이지는 각 요소를 그릴 때 이름(`dataset.expose`)을 표시한다 |
 
-네이티브 호스트는 [사이드카](sidecars.ko.md) 메시지를 전달하는 방식과 같은 방식으로 표면 페이지와 메인 페이지 등록소 사이에서 등록과 요청을 전달한다. 표면 페이지가 닫히면 등록소는 그 페이지의 등록을 제거한다.
+네이티브 호스트는 [사이드카](sidecars.ko.md) 메시지를 전달하는 방식과 같은 방식으로 표면 페이지와 워크벤치 등록소 사이에서 등록과 요청을 전달한다. 표면 페이지가 닫히면 등록소는 그 페이지의 등록을 제거한다.
 
 페이지는 자신을 식별하는 key, 즉 그 등록의 owner key 아래에서 등록한다. 표면 페이지는 자기 surface id 아래에서 자기 plugin을 owner로 하여 등록한다.
 
@@ -139,7 +151,7 @@ document audit는 open shadow tree를 포함하여 그 document의 모든 shared
 
 | 종류 | 이름 | 의미 |
 | --- | --- | --- |
-| status | `core.surface.document` | `{url, timeOrigin, readyState, themed, scale, body, viewport, filter, unbound, params}`: 문서 주소, 시간 원점, 준비 상태, 첫 테마 적용 여부, 기기 픽셀 비율, 표면 내용의 크기인 `body`(표면 요소의 상자에 그 밖으로 넘치거나 스크롤되는 내용을 더한 크기)와 표면 요소의 보이는 상자 크기인 `viewport`(모두 CSS 픽셀이며, 내용이 들어맞지 않을 때만 `body`가 `viewport`보다 크다), 루트 요소의 계산된 `filter`, 조작 요소의 audit(`core.page.audit`와 같은 형식), view bridge 시작 시 읽은 정확한 `window.sokSurface.params` 값의 snapshot인 `params`(`null` 포함). 값이 없거나 object 또는 null이 아니면 관측 시작을 거부하고 필드명을 보고함 |
+| status | `core.surface.document` | `{url, timeOrigin, readyState, themed, scale, body, viewport, filter, unbound, params}`: 문서 주소, 시간 원점, 준비 상태, 첫 테마 적용 여부, 기기 픽셀 비율, 표면 내용의 크기인 `body`(표면 요소의 상자에 그 밖으로 넘치거나 스크롤되는 내용을 더한 크기)와 표면 요소의 보이는 상자 크기인 `viewport`(모두 CSS 픽셀이며, 내용이 들어맞지 않을 때만 `body`가 `viewport`보다 크다), 루트 요소의 계산된 `filter`, 조작 요소의 audit(`core.workbench.audit`와 같은 형식), view bridge 시작 시 읽은 정확한 `window.sokSurface.params` 값의 snapshot인 `params`(`null` 포함). 값이 없거나 object 또는 null이 아니면 관측 시작을 거부하고 필드명을 보고함 |
 | status | `core.surface.input` | 문서의 최근 입력 이벤트 32개(신뢰 여부 포함)를 순서대로 담는다. `pointerdown`, `pointerup`, `pointermove`, `click`, `wheel`, `keydown`에 대한 `{sequence, type, trusted, x, y, key, modifiers}`. `modifiers`는 이벤트가 담은 수정 키(`shift`, `alt`, `control`, `command`)의 목록이다. `sequence`는 1부터 기록한 이벤트마다 1씩 증가한다 |
 | command | `core.surface.hit` | CSS 픽셀 단위 `{x, y}`. 그 점에 문서의 요소가 있으면 `true`를 반환한다 |
 
@@ -149,7 +161,7 @@ document audit는 open shadow tree를 포함하여 그 document의 모든 shared
 
 ### 모달 문서
 
-네이티브 모달 문서는 렌더, 배치, 테마 변경마다 모달 응답 경로로 키 `document`를 사용해 자기 상태를 메인 페이지에 보고한다. 메인 페이지는 이를 status `core.modal`로 공개한다. 열린 모달이 없으면 `null`이고, 있으면 `{id, mode, document}`다. `document`는 첫 보고 전에는 `null`이며 이후 `{mode, filter, htmlBackground, bodyBackground, scrimBackground, loaded, rect}`다: 렌더한 요소의 `data-native-modal`, 루트의 계산된 `filter`, 루트와 body의 계산된 배경색, 대화상자 scrim에 사용하는 `body::before`의 계산된 배경색, 문서가 첫 내용 요청의 응답을 처리했는지(적용한 변경보다 오래되어 버린 경우도 포함), CSS 픽셀 단위 요소 사각형.
+네이티브 모달 문서는 렌더, 배치, 테마 변경마다 모달 응답 경로로 키 `document`를 사용해 자기 상태를 메인 페이지에 보고한다. 워크벤치는 이를 status `core.modal`로 공개한다. 열린 모달이 없으면 `null`이고, 있으면 `{id, mode, document}`다. `document`는 모달 web view를 만드는 호스트에서만 알리며, 첫 보고 전에는 `null`이며 이후 `{mode, filter, htmlBackground, bodyBackground, scrimBackground, loaded, rect}`다: 렌더한 요소의 `data-native-modal`, 루트의 계산된 `filter`, 루트와 body의 계산된 배경색, 대화상자 scrim에 사용하는 `body::before`의 계산된 배경색, 문서가 첫 내용 요청의 응답을 처리했는지(적용한 변경보다 오래되어 버린 경우도 포함), CSS 픽셀 단위 요소 사각형.
 
 모달 문서에는 status watch 경로가 없다. 메인 페이지는 status watch를 surface에만 전달한다. 그래서 모달 문서의 exposure port는 watch된 값을 `status <name> of document <id> cannot be sent: a modal document has no status watch route`로 거부한다. 따라서 page API는 문서 시작에서 그 port를 받아들이고, 값은 보고 없이 문서를 떠나지 않는다.
 
@@ -159,7 +171,7 @@ document audit는 open shadow tree를 포함하여 그 document의 모든 shared
 
 ### 표면 선택
 
-여러 표면 페이지가 같은 이름을 등록할 수 있다. 이런 이름에 대한 `status.get`, `status.watch`, `status.unwatch`, `command.run`, `dom.rect`, `dom.act` 요청은 `core.surfaces`의 식별자인 `surface`를 포함할 수 있다. `surface`가 없으면 메인 페이지가 포커스된 카드의 활성 탭, 최근 배치의 보이는 표면, 마지막 등록 순서로 고른다. 그 이름을 등록하지 않은 `surface`는 1002를 반환한다. `surface` 없이 고르는 경우는 탭 표면만 고른다. section 표면은 그 이름을 적은 요청과 자기 view가 실행하는 명령([view call](native-surfaces.ko.md#view-표면))에만 답한다. 한 plugin의 여러 section이 같은 이름을 등록하고, section은 `core.sidebars`가 알리는 탭을 따르기 때문이다.
+여러 표면 페이지가 같은 이름을 등록할 수 있다. 이런 이름에 대한 `status.get`, `status.watch`, `status.unwatch`, `command.run`, `element.rect`, `element.act` 요청은 `core.surfaces`의 식별자인 `surface`를 포함할 수 있다. `surface`가 없으면 워크벤치가 포커스된 카드의 활성 탭, 최근 배치의 보이는 표면, 마지막 등록 순서로 고른다. 그 이름을 등록하지 않은 `surface`는 1002를 반환한다. `surface` 없이 고르는 경우는 탭 표면만 고른다. section 표면은 그 이름을 적은 요청과 자기 view가 실행하는 명령([view call](native-surfaces.ko.md#view-표면))에만 답한다. 한 plugin의 여러 section이 같은 이름을 등록하고, section은 `core.sidebars`가 알리는 탭을 따르기 때문이다.
 
 ## Tab memory
 
@@ -170,7 +182,7 @@ document audit는 open shadow tree를 포함하여 그 document의 모든 shared
 - Command `core.tab.keep {tab, keep}`은 사람의 표시 `kept`를 정하거나(`true`) 지우고(`false`) `tab-state.json`에 저장한다. 멱등이며 바뀔 때마다 `workbench.tab.keep.changed`를 하나 낸다. 알 수 없는 탭이나 boolean이 아닌 `keep`에는 -32602로, 절대 unload될 수 없는 탭에는 이유 `undeclared`나 `background`를 담은 `tab <id> can never be unloaded: <reason>`로 실패한다.
 - 각 탭 단추는 자기 `state`(`loaded`, `unloaded`, `restoring`)를 담은 `data-tab-state`를 가진다. 보호는 `reasons`로만 보인다.
 - 명령 `core.tab.menu {tab, x, y}`는 탭 context menu를 창의 `x`, `y`에 선택 layer로 연다. 탭 버튼의 오른쪽 클릭은 menu에 항목이 있을 때 이를 실행한다. 알 수 없는 탭에는 -32602로, 절대 unload될 수 없는 탭에는 `tab <id> has no menu items`로 실패한다.
-- dom 이름 `core.tab.menu-keep`인 탭 context menu 항목은 binder로 `core.picker.pick`을 거쳐 골라지고 표시를 뒤집은 값으로 `core.tab.keep`을 실행한다. `core.tab.memory`의 reasons에 `kept`가 있는 동안 `core.picker`에서 `active`이며, 절대 unload될 수 없는 탭에는 없다. exposure 검사는 접두사 `core.`가 있는 이름만 읽으므로, 이 이름은 core가 선언하는 모든 dom 이름처럼 그 접두사를 갖는다.
+- element 이름 `core.tab.menu-keep`인 탭 context menu 항목은 binder로 `core.picker.pick`을 거쳐 골라지고 표시를 뒤집은 값으로 `core.tab.keep`을 실행한다. `core.tab.memory`의 reasons에 `kept`가 있는 동안 `core.picker`에서 `active`이며, 절대 unload될 수 없는 탭에는 없다. exposure 검사는 접두사 `core.`가 있는 이름만 읽으므로, 이 이름은 core가 선언하는 모든 element 이름처럼 그 접두사를 갖는다.
 
 ## Plugin processes
 
@@ -183,7 +195,7 @@ document audit는 open shadow tree를 포함하여 그 document의 모든 shared
 
 ## 창
 
-애플리케이션에는 창이 하나 이상 있고, 창마다 메인 페이지와 등록소가 따로 있다. `windows.list`와 `log.query`를 제외한 모든 메서드는 `window`를 받는다. 이 값은 `windows.list`가 반환하는 식별자다. 더 이상 없는 창을 요청하면 오류 1003 `window "<name>" does not exist`를 반환한다. host가 요청을 받은 뒤 닫힌 창도 같다. host는 native 창을 native code에 넘기는 main thread 단계에서 읽고, 그 단계 전에 닫힌 창은 native code에 닿지 않고 요청을 1003으로 실패시킨다. 그런 창의 `host.window` 변경은 아무것도 알리지 않는다. 닫기는 `host.windows`에서 창이 빠지는 것으로 알려진다.
+애플리케이션에는 창이 하나 이상 있고, 창마다 워크벤치와 등록소가 따로 있다. `windows.list`와 `log.query`를 제외한 모든 메서드는 `window`를 받는다. 이 값은 `windows.list`가 반환하는 식별자다. 더 이상 없는 창을 요청하면 오류 1003 `window "<name>" does not exist`를 반환한다. host가 요청을 받은 뒤 닫힌 창도 같다. host는 native 창을 native code에 넘기는 main thread 단계에서 읽고, 그 단계 전에 닫힌 창은 native code에 닿지 않고 요청을 1003으로 실패시킨다. 그런 창의 `host.window` 변경은 아무것도 알리지 않는다. 닫기는 `host.windows`에서 창이 빠지는 것으로 알려진다.
 
 ## 호스트 항목
 
@@ -193,7 +205,7 @@ document audit는 open shadow tree를 포함하여 그 document의 모든 shared
 
 | 종류 | 이름 | 의미 |
 | --- | --- | --- |
-| status | `host.window` | `{frame, pointer, content, scale, refreshRate, maximized, key, active, occluded, children, pageProcess, quitting, controls, webviews, surfaces, documents, regions, modal, responder, frames, commandBuffers, settled}`: 창 프레임, 상태를 읽은 때의 화면 좌표 시스템 포인터 위치 `{x, y}`, 콘텐츠 크기, 백킹 배율, 창이 놓인 화면의 최대 재생률(어느 화면에도 없으면 `null`), 프레임이 최대화 프레임인지, 키 창 여부, 애플리케이션 활성 여부, 앱 페이지를 그리는 WebContent process의 process 식별자(`pageProcess`, 그 process가 시작되기 전에는 0), 다른 창이 창 전체를 가리는지(AppKit 의 가림 상태로, 창이나 그 그림자의 일부라도 보이면 보이는 창이므로 같은 자리의 두 창은 서로를 가리지 않는다. 이 값이 바뀌면 호스트가 `host.window` 감시자에게 알린다. 가려진 창은 WebKit 이 덜 자주 그리므로 표시 측정은 이 값이 거짓이어야 한다), 자식 OS 창 수, `hidden`을 포함한 창 단추 프레임, 창 좌표계의 웹뷰 프레임 `{frame, main, document, visible, focused, order}`, 네이티브 표면 `{id, frame, visible, order}`, [문서 영역](native-surfaces.ko.md#문서-영역) `{surface, document, frame, visible, focused, order, process}`, [그림 영역](native-surfaces.ko.md#그림-영역) `{surface, name, frame, visible, drawing, focused, presented, presentedFrames, error}`. `drawing`은 호스트가 공급자에게 마지막으로 보낸 [그리기](native-surfaces.ko.md#그림-영역) 상태다. `presented`는 표시 중인 그림의 `{width, height, scale, generation, raster, sequence}`이며, `generation`, `raster`, `sequence`는 호스트가 표시됨으로 기록한 프레임을 식별한다. 현재 래스터의 프레임이 표시되지 않은 동안 `presented`는 `null`이다. `presentedFrames`는 region이 attach된 뒤 호스트가 표시됨으로 기록한 그 region의 프레임 수이며, 래스터가 바뀌어도 0으로 돌아가지 않는다. 열린 네이티브 모달 `{id, mode, shown, frame, order, background}` 또는 `null`, 창의 첫 응답자 `{class, owner, surface, document}`. `owner`는 `workbench`(main 웹뷰, 또는 main page가 없는 창의 content view), `surface`(surface 웹뷰, 또는 `documents`가 그 surface의 document `""`로 나열하는 view surface의 view), `document`(document region), `modal`, `webview`(등록되지 않은 웹뷰), `native`(이미지 영역처럼 모든 웹뷰 밖의 뷰) 중 하나다. `frames`, `commandBuffers`, `settled`는 workbench의 프레임 수, commit된 command buffer 수, 창이 마지막 프레임 뒤에 settle했는지이며, Wails와 Tauri host에서는 WebKit이 workbench를 그리고 호스트가 그 프레임도 command buffer도 세지 않으므로 `null`이다 |
+| status | `host.window` | `{frame, pointer, content, scale, refreshRate, maximized, key, active, occluded, children, pageProcess, quitting, controls, webviews, surfaces, documents, regions, modal, responder, frames, commandBuffers, settled}`: 창 프레임, 상태를 읽은 때의 화면 좌표 시스템 포인터 위치 `{x, y}`, 콘텐츠 크기, 백킹 배율, 창이 놓인 화면의 최대 재생률(어느 화면에도 없으면 `null`), 프레임이 최대화 프레임인지, 키 창 여부, 애플리케이션 활성 여부, 메인 페이지를 그리는 WebContent process의 process 식별자(`pageProcess`, 그 process가 시작되기 전에는 0, 메인 페이지가 없는 호스트에서는 `null`), 다른 창이 창 전체를 가리는지(AppKit 의 가림 상태로, 창이나 그 그림자의 일부라도 보이면 보이는 창이므로 같은 자리의 두 창은 서로를 가리지 않는다. 이 값이 바뀌면 호스트가 `host.window` 감시자에게 알린다. 가려진 창은 WebKit 이 덜 자주 그리므로 표시 측정은 이 값이 거짓이어야 한다), 자식 OS 창 수, `hidden`을 포함한 창 단추 프레임, 창 좌표계의 웹뷰 프레임 `{frame, main, document, visible, focused, order}`, 네이티브 표면 `{id, frame, visible, order}`, [문서 영역](native-surfaces.ko.md#문서-영역) `{surface, document, frame, visible, focused, order, process}`, [그림 영역](native-surfaces.ko.md#그림-영역) `{surface, name, frame, visible, drawing, focused, presented, presentedFrames, error}`. `drawing`은 호스트가 공급자에게 마지막으로 보낸 [그리기](native-surfaces.ko.md#그림-영역) 상태다. `presented`는 표시 중인 그림의 `{width, height, scale, generation, raster, sequence}`이며, `generation`, `raster`, `sequence`는 호스트가 표시됨으로 기록한 프레임을 식별한다. 현재 래스터의 프레임이 표시되지 않은 동안 `presented`는 `null`이다. `presentedFrames`는 region이 attach된 뒤 호스트가 표시됨으로 기록한 그 region의 프레임 수이며, 래스터가 바뀌어도 0으로 돌아가지 않는다. 열린 네이티브 모달 `{id, mode, shown, frame, order, background}` 또는 `null`, 창의 첫 응답자 `{class, owner, surface, document}`. `owner`는 `workbench`(워크벤치를 그리는 뷰: Wails와 Tauri 호스트에서는 메인 페이지, mygo 호스트에서는 워크벤치의 surface 뷰), `surface`(surface 웹뷰, 또는 `documents`가 그 surface의 document `""`로 나열하는 view surface의 view), `document`(document region), `modal`, `webview`(등록되지 않은 웹뷰), `native`(이미지 영역처럼 모든 웹뷰 밖의 뷰) 중 하나다. `frames`, `commandBuffers`, `settled`는 workbench의 프레임 수, commit된 command buffer 수, 창이 마지막 프레임 뒤에 settle했는지이며, Wails와 Tauri host에서는 WebKit이 workbench를 그리고 호스트가 그 프레임도 command buffer도 세지 않으므로 `null`이다 |
 | status | `host.windows` | `windows.list` 결과. 창이 열리거나 닫힐 때와 창의 제목, 프로젝트, 키 상태, 페이지 준비 상태가 바뀔 때 바뀐다 |
 | status | `host.screens` | `[{x, y, width, height, scale, visible}]`: 화면 좌표의 디스플레이와 백킹 배율, 그리고 메뉴 막대와 Dock 을 뺀 영역 `visible`(최대화한 창의 프레임) |
 | status | `host.dock` | 애플리케이션 Dock 메뉴 항목 제목의 순서 목록 |
@@ -207,9 +219,9 @@ document audit는 open shadow tree를 포함하여 그 document의 모든 shared
 | command | `host.window.maximize` | 창을 최대화한다. `{on: false}`이면 원래 크기로 되돌린다 |
 | command | `host.window.fullscreen` | 전체 화면으로 바꾸거나 `on`이 false 이면 되돌린다. 전환이 끝난 뒤에 답한다. macOS 는 전환 중의 요청을 무시하므로 호스트가 그 전환이 끝난 뒤에 적용한다 |
 | command | `host.window.resize` | 콘텐츠 영역 크기를 `{width, height}`로 바꾼다 |
-| command | `host.window.reload` | 메인 페이지를 다시 로드하고 새 페이지가 준비를 알린 뒤 완료한다. 10초 안에 알리지 않으면 1005다 |
+| command | `host.window.reload` | 창의 워크벤치를 저장된 상태에서 다시 시작하고 워크벤치가 준비를 알린 뒤 완료한다. 10초 안에 알리지 않으면 1005다. Wails와 Tauri 호스트는 메인 페이지를 다시 로드하고, mygo 호스트는 native 워크벤치를 다시 만든다 |
 | command | `host.window.presented` | 메인 페이지와 표시 중인 modal이 현재 배치를 화면에 표시하고, 표시 중인 모든 그림 영역이 정확한 현재 래스터를 표시한 뒤 완료된다. 창의 열린 표면 배치 트랜잭션이 먼저 커밋되기를 기다리며 명령 제한 시간 안에 현재 래스터가 도착하지 않으면 실패한다([네이티브 표면](native-surfaces.ko.md), [표면 합성](surface-composition.ko.md)). 그 상태를 보여 주는 화면 갱신 시각(ms, 녹화 프레임 시각과 같은 시계) `{displayed}`를 반환한다(표시 뒤 창이 있는 화면의 다음 갱신. 창이 어느 화면에도 없으면 호출 시각) |
-| command | `host.hit` | 창 좌표의 점 `{x, y}`를 소유한 대상을 반환한다: 메인 페이지면 `{kind: "page"}`(DOM 표면과 그림 영역은 DOM 입력을 받으므로 여기에 속한다, [표면 합성](surface-composition.ko.md)), 문서 영역이면 `{kind: "document", surface, document}`, 네이티브 hit 이면 `{kind: "native", identifier, view}`다. 네이티브 뷰가 없으면 `view`는 `null`, 있으면 hit-test 된 실제 leaf 뷰의 창 콘텐츠 좌표 프레임과 클래스 `{class, frame}`를 담는다 |
+| command | `host.hit` | 창 좌표의 점 `{x, y}`를 소유한 대상을 반환한다: 워크벤치면 `{kind: "workbench"}`(Wails와 Tauri 호스트에서는 그림 영역이 DOM 입력을 받으므로 여기에 속한다, [표면 합성](surface-composition.ko.md)), 문서 영역이면 `{kind: "document", surface, document}`, 네이티브 hit 이면 `{kind: "native", identifier, view}`다. 네이티브 뷰가 없으면 `view`는 `null`, 있으면 hit-test 된 실제 leaf 뷰의 창 콘텐츠 좌표 프레임과 클래스 `{class, frame}`를 담는다 |
 | command | `host.dock.select` | 제목이 `{title}`인 Dock 메뉴 항목을 실행한다 |
 | command | `host.quit` | 대기 중인 저장을 포함한 일반 애플리케이션 종료를 요청한다 |
 
@@ -221,13 +233,13 @@ document audit는 open shadow tree를 포함하여 그 document의 모든 shared
 | --- | --- | --- |
 | `windows.list` | 없음 | `[{window, title, project, key, ready}]`. `project`는 창에 마지막으로 열린 프로젝트의 루트 디렉터리이며, 창에 열린 프로젝트가 없으면 `null`이다. 창의 마지막 프로젝트를 해제하면 창 제목도 라이브러리 제목으로 돌아간다. `ready`는 창의 메인 페이지가 준비를 알린 뒤 참이고 로드하는 동안 거짓이다. 페이지가 로드 중인 창에 대한 요청은 1003으로 실패한다 |
 | `log.query` | 질의 매개변수, `window` 없음 | `{rows, next, tail, scanned}`: 설정 폴더의 event 파일의 event page 하나([endpoint](endpoint.ko.md#log-query), [logging](logging.ko.md#질의)) |
-| `exposure.list` | `{window, owner?}` | `{status, commands, dom}`: 코어, 호스트, 로드된 플러그인의 선언 항목을 선언 형식으로 반환한다. 각 항목에 `registered`가 있다. `owner`가 `host`이면 호스트 항목만 반환하며, 호스트가 main page 없이 답하므로 page가 시작하지 않은 동안에도 목록이 나온다. 다른 `owner`는 `exposure.list owner must be host`로 거부한다. `sok command`는 `host.` 명령을 호스트 항목으로 검사한다 |
+| `exposure.list` | `{window, owner?}` | `{status, commands, element}`: 코어, 호스트, 로드된 플러그인의 선언 항목을 선언 형식으로 반환한다. 각 항목에 `registered`가 있다. `owner`가 `host`이면 호스트 항목만 반환하며, 호스트가 main page 없이 답하므로 page가 시작하지 않은 동안에도 목록이 나온다. 다른 `owner`는 `exposure.list owner must be host`로 거부한다. `sok command`는 `host.` 명령을 호스트 항목으로 검사한다 |
 | `status.get` | `{window, name, surface?}` | 현재 값 |
 | `status.watch` | `{window, name, surface?}` | `null`. 이후 `status.unwatch`를 받거나 연결이 닫힐 때까지 값이 바뀔 때마다 호스트가 `status.changed` 알림 `{window, name, surface?, value}`를 보낸다. `surface` 값이 다른 감시는 서로 별개다 |
 | `status.unwatch` | `{window, name, surface?}` | `null` |
 | `command.run` | `{window, name, params, surface?, cids?}` | 명령 결과. `cids`는 실행의 원인인 상관 식별자이며, view의 명령이 받는다([view 표면](native-surfaces.ko.md#view-표면)) |
-| `dom.rect` | `{window, name, index?}` | `{x, y, width, height}`: 소유 문서의 CSS 픽셀로 나타낸 요소의 `getBoundingClientRect()`, `zoom`: 요소의 유효 CSS zoom으로, 요소와 flat tree의 각 ancestor의 computed `zoom`을 곱한 값, 그리고 창 좌표로 나타낸 문서 원점 `{document}`. CSS `zoom` subtree 안에서 WebKit 7624 이후는 CSS Viewport zoom object model이 정의하는 대로 zoom을 적용한 rectangle을 보고하고, 그 이전 WebKit은 `zoom`으로 나눈 rectangle을 보고한다 |
-| `dom.act` | `{window, name, index?, action, value?, event?}` | `null`. `action`은 `click`, `input`, `dispatch` 중 하나다. 페이지는 `isTrusted`가 false인 합성 DOM 이벤트를 받는다 |
+| `element.rect` | `{window, name, index?}` | `{x, y, width, height}`: 소유 문서의 CSS 픽셀로 나타낸 요소의 `getBoundingClientRect()`, `zoom`: 요소의 유효 CSS zoom으로, 요소와 flat tree의 각 ancestor의 computed `zoom`을 곱한 값, 그리고 창 좌표로 나타낸 문서 원점 `{document}`. CSS `zoom` subtree 안에서 WebKit 7624 이후는 CSS Viewport zoom object model이 정의하는 대로 zoom을 적용한 rectangle을 보고하고, 그 이전 WebKit은 `zoom`으로 나눈 rectangle을 보고한다 |
+| `element.act` | `{window, name, index?, action, value?, event?}` | `null`. `action`은 `click`, `input`, `dispatch` 중 하나다. 페이지는 `isTrusted`가 false인 합성 DOM 이벤트를 받는다 |
 | `input.pointer` | `{window, x, y, phase, button?, deltaX?, deltaY?, activate?}` | `null`. 창 좌표를 쓴다. `phase`는 `move`, `down`, `drag`, `up`, `scroll` 중 하나다. `button`은 `left`(기본값) 또는 `right`다. `deltaX`, `deltaY`는 포인트 단위 스크롤 거리다. `activate`는 `move`에 적용한다 |
 | `input.key` | `{window, key, text?, modifiers?, phase}` | `null`. `key`는 키 이름(`Enter`, `Tab`, `Escape`, `Backspace`, `Delete`, `Space`, `ArrowLeft`, `ArrowRight`, `ArrowUp`, `ArrowDown`, `Home`, `End`, `PageUp`, `PageDown`) 또는 문자 하나다. `modifiers`는 `shift`, `control`, `option`, `command`의 배열이다. `phase`는 `down` 또는 `up`이다 |
 
@@ -235,7 +247,7 @@ document audit는 open shadow tree를 포함하여 그 document의 모든 shared
 
 네이티브 포인터 주입은 창과 버튼별로 누름을 받은 뷰를 유지한다. 포인터가 다른 뷰를 가로질러도 끌기와 뗌을 그 뷰에 전달하며 뗌의 수신 확인은 누름을 받은 문서를 기다린다. 일치하는 누름 없는 끌기·뗌, 같은 버튼을 누른 상태에서의 추가 누름, 제거된 누름 대상 뷰는 명시적 입력 거부를 반환한다. 스크롤과 버튼 없는 이동은 현재 포인터 위치를 사용한다.
 
-workbench page와 card 요소는 app DOM document를 공유하고 view surface는 자기 document를 가진다. main registry는 선택된 surface가 답할 때 view 내부 `dom.rect`에 현재 applied view 원점을 한 번 더한다. view의 native page zoom은 1이고 CSS sizing은 이미 element rectangle에 반영되므로 text-size나 capture scale을 곱하지 않는다. 반환된 rectangle은 app-document 좌표이고 `document` 원점은 `{x: 0, y: 0}`이다. applied frame이 없으면 surface 식별자를 담아 실패하며 zero origin으로 대체하지 않는다. hidden 또는 zero-size view도 자기 applied origin을 사용한다. native modal은 별도 document이므로 rectangle은 modal-local 좌표를 유지하고 `document` 원점은 실제 modal frame 원점이다. client는 보고된 document origin을 정확히 한 번 더하며 surface kind나 card placement에 따라 보정하지 않는다.
+workbench page와 card 요소는 app DOM document를 공유하고 view surface는 자기 document를 가진다. main registry는 선택된 surface가 답할 때 view 내부 `element.rect`에 현재 applied view 원점을 한 번 더한다. view의 native page zoom은 1이고 CSS sizing은 이미 element rectangle에 반영되므로 text-size나 capture scale을 곱하지 않는다. 반환된 rectangle은 app-document 좌표이고 `document` 원점은 `{x: 0, y: 0}`이다. applied frame이 없으면 surface 식별자를 담아 실패하며 zero origin으로 대체하지 않는다. hidden 또는 zero-size view도 자기 applied origin을 사용한다. native modal은 별도 document이므로 rectangle은 modal-local 좌표를 유지하고 `document` 원점은 실제 modal frame 원점이다. client는 보고된 document origin을 정확히 한 번 더하며 surface kind나 card placement에 따라 보정하지 않는다. mygo 호스트에서 워크벤치의 요소에 대한 `element.rect`는 창 point로 나타낸 요소의 frame을 `zoom` 1, `document` `{x: 0, y: 0}`으로 반환하고, `element.act`는 `click`과 `input`을 받는다. `dispatch`는 `the mygo workbench has no DOM events`로 실패한다. view 페이지의 요소는 모든 호스트에서 모든 동작을 유지한다.
 
 호스트는 `input.pointer`와 `input.key`를 네이티브 이벤트로 전달하며 페이지는 신뢰 이벤트를 받는다. `activate: true`인 `move`를 제외하면 애플리케이션을 활성화하지 않는다. macOS에서는 다음과 같다.
 
@@ -247,7 +259,7 @@ workbench page와 card 요소는 app DOM document를 공유하고 view surface�
 - `activate: true`이면 호스트가 애플리케이션을 활성화하고 창을 키 창으로 만든 뒤, 창에서 보이는 모든 webview가 활성 상태를 웹 프로세스에 보낼 때까지 기다렸다가 이동을 전달한다. 사용자가 쓰고 있는 애플리케이션의 키보드 포커스를 가져온다. 활성화가 5초 안에 끝나지 않으면 멈춘 단계를 적은 1006을 반환한다. 단계는 시스템이 애플리케이션을 활성화하지 않음, 창이 키 창이 되지 않음, webview가 활성 상태를 반영하지 않음, 반영 전에 창이 활성 상태를 잃음이다. Webview 단계를 뺀 메시지에는 최전면 애플리케이션을 적는다. macOS는 백그라운드로 실행된 뒤 사용자가 활성화한 적 없는 애플리케이션의 자기 활성화 요청을 거절한다(협조적 활성화). 그래서 activation 등급 검사는 사람이 앱을 전환하듯 검사 프로세스에서 `NSRunningApplication`으로 먼저 애플리케이션을 활성화하고, 호스트 요청은 그 뒤 키 창과 webview 단계를 마친다. Callback registration 전에 timeout되면 native error record는 member ID를 추정하지 않고 webview activity-state registration이 대기 중이라고 보고한다. Callback registration 뒤 timeout되면 미완료 visible webview만 기존 role 또는 view identifier와 등록 index로 식별한다. 각 completion은 자신이 등록된 webview만 완료 처리하며, 중복 또는 늦은 completion은 aggregate를 일찍 완료하거나 두 번 완료하지 않는다.
 - OS 입력기는 활성 애플리케이션의 키 창에 있는 활성 입력 컨텍스트만 처리한다. 그 키 창이 아닌 창에 보낸 `input.key`는 다른 창이 키 창이면 거부되고, 키 창이 없는 애플리케이션에서는 전달되지만 입력기에 도달하지 않으므로 그 결과는 입력기 증거가 아니다. 문자 키를 입력 컨텍스트에 넘기는 뷰(예: 터미널 그림 영역)는 애플리케이션이 한 번 활성화된 뒤 키 창이 없는 동안 그 키의 문자를 받지 못한다. 입력 컨텍스트가 키를 받고 입력기가 답하지 않기 때문이다. 터미널 그림 영역은 이런 키를 오류 `input method did not answer native keyCode=<code> outside the key window of the active application`으로 보고한다. 영역이 직접 보고하는 이름 있는 키와 Control 또는 Option 조합은 어느 창에서나 전달된다. web view도 문자 키를 같은 방식으로 입력 컨텍스트에 넘기므로, 애플리케이션이 한 번 활성이었으면 document 영역도 활성 애플리케이션의 키 창에서만 입력한 문자를 받는다. 활성화를 막는 native test처럼 한 번도 활성이 아니었던 애플리케이션은 여전히 받는다. 터미널이나 document 영역의 문자 입력과 입력기 동작은 활성화 등급 검사로만 검증한다.
 
-실제 입력 경로를 검사하는 테스트는 `input.pointer`와 `input.key`만 사용한다. 테스트는 상태 준비에만 `dom.act`를 사용한다.
+실제 입력 경로를 검사하는 테스트는 `input.pointer`와 `input.key`만 사용한다. 테스트는 상태 준비에만 `element.act`를 사용한다.
 
 ## 전달
 
@@ -255,10 +267,10 @@ workbench page와 card 요소는 app DOM document를 공유하고 view surface�
 
 | 방향 | 메시지 | 내용 |
 | --- | --- | --- |
-| 호스트 → 메인 페이지 | 이벤트 `exposure-request` | 코어와 플러그인 이름에 대한 `exposure.list`, `status.*`, `command.run`, `dom.*`의 `{id, method, params}`. 호스트는 답을 10초 기다린다. `command.run`은 예외이며, 메인 페이지는 명령을 전달하든 스스로 답하든 그 명령의 제한 시간 안에 답한다. 준비되지 않은 메인 페이지는 1003을 반환하고, 다시 읽히거나 닫히는 메인 페이지에 보낸 요청은 1003으로 끝난다 |
+| 호스트 → 메인 페이지 | 이벤트 `exposure-request` | 코어와 플러그인 이름에 대한 `exposure.list`, `status.*`, `command.run`, `element.*`의 `{id, method, params}`. 호스트는 답을 10초 기다린다. `command.run`은 예외이며, 메인 페이지는 명령을 전달하든 스스로 답하든 그 명령의 제한 시간 안에 답한다. 준비되지 않은 메인 페이지는 1003을 반환하고, 다시 읽히거나 닫히는 메인 페이지에 보낸 요청은 1003으로 끝난다 |
 | 메인 페이지 → 호스트 | 호출 `exposureReply` | `{id, result}` 또는 `{id, error: {code, message}}` |
 | 메인 페이지 → 호스트 | 호출 `exposureChanged` | 감시 중인 상태의 `{name, surface?, value}`. 감시가 표면을 지정했으면 `surface`가 있다. 호스트는 `host.`로 시작하는 이름을 `the page cannot change host status <name>`으로 거부한다. host 상태는 호스트만 바꾼다 |
-| 표면 페이지 → 호스트 | 호출 `exposureRegister` | `{surface, kind, name}`. view의 페이지는 surface 브리지가 없다. view 채널을 통해 `runtime.native.call`에 `{name: "registered", payload: {kind, name}}`로 호출하고([view surfaces](native-surfaces.ko.md#view-표면)), 메인 페이지가 이 호출로 전달한다. 메인 페이지가 전달한 등록은 view를 가진 surface에만 허용된다 |
+| 표면 페이지 → 호스트 | 호출 `exposureRegister` | `{surface, kind, name}`. `kind`는 `status`, `command`, `element` 중 하나다. view의 페이지는 surface 브리지가 없다. view 채널을 통해 `runtime.native.call`에 `{name: "registered", payload: {kind, name}}`로 호출하고([view surfaces](native-surfaces.ko.md#view-표면)), 메인 페이지가 이 호출로 전달한다. 메인 페이지가 전달한 등록은 view를 가진 surface에만 허용된다 |
 | 호스트 → 메인 페이지 | 이벤트 `exposure-registered` | `{surface, kind, name}`. 표면이 제거되면 `{surface, closed: true}`. 표면은 메인 페이지를 다시 읽어도 남으므로 메인 페이지가 준비를 알린 뒤 호스트가 살아 있는 등록을 모두 다시 보낸다 |
 | 메인 페이지 → 호스트 | 호출 `exposureForward` | 표면 페이지가 등록한 이름에 대한 `{id, surface, method, params, timeout?}`. `timeout`은 명령 선언에서 가져온 1 이상 600000 이하의 정수 밀리초이며, 없으면 호스트는 10초를 기다린다. 올바르지 않은 `timeout`은 -32602를 반환한다 |
 | 호스트 → 표면 페이지 | 이벤트 `exposure-request` | `{id, method, params}`. view의 경우 이벤트는 `surface`를 담고, 메인 페이지가 view의 `exposure-request` 구독(`runtime.native.on`)을 통해 view에 전달하며, `data`는 `{id, surface, method, params}`다 |

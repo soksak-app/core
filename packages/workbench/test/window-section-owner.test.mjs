@@ -4,7 +4,7 @@ import {createRegistry} from "../exposure.js";
 
 test("exact window section ownership does not choose another registered surface",()=>{
  const made=createRegistry();
- made.declare("fixture",{status:[{name:"fixture.lines",description:"Lines.",schema:{type:"array"}}],commands:[],dom:[]});
+ made.declare("fixture",{status:[{name:"fixture.lines",description:"Lines.",schema:{type:"array"}}],commands:[],element: []});
  made.configure({surfacePlugin:()=>"fixture",preferred:()=>["other"]});
  made.registered({surface:"other",kind:"status",name:"fixture.lines"});
  assert.equal(made.chosen("status","fixture.lines","owner",true),null);

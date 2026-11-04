@@ -3,9 +3,9 @@
 //
 // Rules:
 //     1. Every exposed name written in a source (a name in quotes, data-expose, data-command, bindings and runs) is declared.
-//     2. A declared status and command is registered, and a declared dom name is written as a value attached to an element.
+//     2. A declared status and command is registered, and a declared element name is written as a value attached to an element.
 // The core checks the workbench with this check, and each plugin repository checks its own pages and sections. The core
-// status and commands that a section module writes are compared with the declarations in core-exposure.json. Whether an operable element has a command and a dom name is decided by the audit of the running
+// status and commands that a section module writes are compared with the declarations in core-exposure.json. Whether an operable element has a command and an element name is decided by the audit of the running
 // document.
 //
 //   soksak-exposure [plugin repository]
@@ -44,9 +44,9 @@ export function* sourceFiles(dir, test) {
 export function auditExposure({ owner, where, exposes, sources, registrations = [], core = null, sections = [] }) {
   const errors = [];
   const report = (path, index, text) => errors.push(`${path}:${index + 1}: ${text}`);
-  // default: status, commands and dom of exposes are optional fields; when missing, there is no declaration of that kind.
+  // default: status, commands and element of exposes are optional fields; when missing, there is no declaration of that kind.
   const entries = (list) => new Set((list ?? []).map((e) => e.name));
-  const declared = { status: entries(exposes.status), command: entries(exposes.commands), dom: entries(exposes.dom) };
+  const declared = { status: entries(exposes.status), command: entries(exposes.commands), element: entries(exposes.element) };
   // default: without core (the check of the core itself) the core name list is empty.
   const coreNames = (list) => new Set(list ?? []);
   const coreCommand = coreNames(core?.commands);
@@ -79,19 +79,20 @@ export function auditExposure({ owner, where, exposes, sources, registrations = 
       for (const [, name] of line.matchAll(/(?<!runtime\.)\b(?:run|command)\(\s*["']([^"']+)["']/g)) {
         if (!declared.command.has(name)) report(path, index, `${name} is run but is not a declared command`);
       }
-      const domNames = [
+      // A Set, because the attribute form data-expose="x" also matches the expose= form, and one name is one report.
+      const elementNames = new Set([
         ...[...line.matchAll(/data-expose=["']([^"']+)["']/g)].map((m) => m[1]),
         ...[...line.matchAll(/[Ee]xpose\s*[:=]\s*["']([^"']+)["']/g)].map((m) => m[1]),
         ...(line.includes("dataset.expose") ? [...line.matchAll(quoted)].map((m) => m[1]) : []),
-        ...[...line.matchAll(/(?:expose|context\.exposure)\.dom\(\s*["']([^"']+)["']/g)].map((m) => m[1]),
-      ];
-      // Some functions (act, field and others) take a name as an argument and attach it to an element, so a place where a declared dom name is written in quotes
+        ...[...line.matchAll(/(?:expose|context\.exposure)\.element\(\s*["']([^"']+)["']/g)].map((m) => m[1]),
+      ]);
+      // Some functions (act, field and others) take a name as an argument and attach it to an element, so a place where a declared element name is written in quotes
       // counts as a marked place.
-      for (const [, name] of line.matchAll(quoted)) if (declared.dom.has(name)) shown.add(name);
-      for (const name of domNames) {
+      for (const [, name] of line.matchAll(quoted)) if (declared.element.has(name)) shown.add(name);
+      for (const name of elementNames) {
         if (name.includes("${")) continue;
         shown.add(name);
-        if (!declared.dom.has(name)) report(path, index, `data-expose ${name} is not a declared dom entry`);
+        if (!declared.element.has(name)) report(path, index, `data-expose ${name} is not a declared element entry`);
       }
     });
   }
@@ -108,8 +109,8 @@ export function auditExposure({ owner, where, exposes, sources, registrations = 
       : `(?:(?:expose|context\\.exposure)\\.command|commands\\.register)\\(\\s*["']${name}["']`;
     if (!new RegExp(pattern).test(all)) errors.push(`${where}: command ${name} is declared but not registered`);
   }
-  for (const name of declared.dom) {
-    if (!shown.has(name)) errors.push(`${where}: dom ${name} is declared but no element carries it`);
+  for (const name of declared.element) {
+    if (!shown.has(name)) errors.push(`${where}: element ${name} is declared but no element carries it`);
   }
   return errors;
 }
@@ -125,7 +126,7 @@ export function checkPluginRepository(root, core = coreExposure()) {
   const diagnosticsPath = join(root, "diagnostics.json");
   // default: a plugin without diagnostics.json has no declarations of the diagnostic build.
   const diagnostics = existsSync(diagnosticsPath) ? readJson(diagnosticsPath).exposes : {};
-  const exposes = Object.fromEntries(["status", "commands", "dom"].map((key) =>
+  const exposes = Object.fromEntries(["status", "commands", "element"].map((key) =>
     // default: exposes and its entries are optional fields of plugin.json; when missing, there is no declaration.
     [key, [...(manifest.exposes?.[key] ?? []), ...(diagnostics[key] ?? [])]]));
   return auditExposure({

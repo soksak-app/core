@@ -127,7 +127,10 @@ func newTabShellWithState(t *testing.T, stored *storedHost, refused error) *tabS
 	table["sidecarListen"] = record("listen")
 	table["sidecarSend"] = record("send")
 	shell, err := workbench.NewShell(workbench.ShellOptions{
-		Detaching:   func() []string { return nil },
+		Detaching: func() []string { return nil },
+		Window: func() (workbench.WindowView, error) {
+			return workbench.WindowView{Visible: true, Scale: 2, Width: 1200, Height: 800}, nil
+		},
 		Located:     func(string) {},
 		Element:     func(string) (uintptr, uintptr, bool) { return 0, 0, false },
 		Declared:    declared,

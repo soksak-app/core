@@ -271,7 +271,7 @@ for (const app of Object.values(APPS)) {
           longestGap: stopped.longestGap, frames: stopped.frames })}`);
       }
       projects.before = projectBefore;
-      const projectResult = projects.owner.kind === "page"
+      const projectResult = projects.owner.kind === "workbench"
         ? await waitForStatus("core.screen", (value) => value.screen === "library", `projects icon did not open the library at ${width}`)
         : {};
       projects.after = (await s.get("core.screen")).screen;
@@ -291,7 +291,7 @@ for (const app of Object.values(APPS)) {
       for (const key of ["left", "right"]) {
         const before = initialSettings.values[key];
         const click = await clickChrome(`core.chrome.${key}`);
-        const result = click.owner.kind === "page"
+        const result = click.owner.kind === "workbench"
           ? await waitForStatus("core.settings", (settings) => settings.values[key] !== before,
             `${key} sidebar icon did not change the setting at ${width}`)
           : {};
@@ -303,7 +303,7 @@ for (const app of Object.values(APPS)) {
       const mode = initialSettings.values.mode;
       const modeClick = await clickChrome("core.chrome.mode");
       const nextMode = mode === "dark" ? "light" : "dark";
-      const modeResult = modeClick.owner.kind === "page"
+      const modeResult = modeClick.owner.kind === "workbench"
         ? await waitForStatus("core.settings", (settings) => settings.values.mode === nextMode,
           `theme icon did not change the mode at ${width}`)
         : {};
@@ -313,7 +313,7 @@ for (const app of Object.values(APPS)) {
       await restoreSetting("mode");
 
       const settingsClick = await clickChrome("core.chrome.settings");
-      const settingsResult = settingsClick.owner.kind === "page"
+      const settingsResult = settingsClick.owner.kind === "workbench"
         ? await waitForStatus("core.settings-modal", (modal) => modal.open, `settings icon did not open settings at ${width}`)
         : {};
       const settingsOpen = (await s.get("core.settings-modal")).open;
@@ -325,7 +325,7 @@ for (const app of Object.values(APPS)) {
       }
 
       const failed = outcomes.filter(({ owner, effect, inMainWebview, hitViewContains }) =>
-        owner.kind !== "page" || !effect || !inMainWebview || !hitViewContains);
+        owner.kind !== "workbench" || !effect || !inMainWebview || !hitViewContains);
       t.diagnostic(`chrome click outcomes ${JSON.stringify({ width, outcomes, mainWebview: main.frame })}`);
       failures.push(...failed.map((outcome) => ({ width, ...outcome })));
       const finalGeometry = await s.get("host.window");

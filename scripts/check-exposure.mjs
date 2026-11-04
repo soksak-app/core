@@ -3,8 +3,8 @@
 // Rules (AGENTS.md, docs/spec/exposure.md):
 //   1. Every exposed name written in the sources (names in quotes, data-expose, data-command, bindings and runs)
 //      is declared.
-//   2. Every declared status and command is registered, and every declared dom name is written as a value attached to an element.
-// Whether an interactive element has a command and a dom name is judged by the audit of the running document (core.page.audit,
+//   2. Every declared status and command is registered, and every declared element name is written as a value attached to an element.
+// Whether an interactive element has a command and an element name is judged by the audit of the running workbench (core.workbench.audit,
 // unbound of core.surface.document). It is not guessed from the shape of the source.
 // Checks the workbench (core). The check rules are in exposure-check.js of plugin-api, and each plugin repository checks the plugin pages with that module.
 // It also holds the copies of the workbench declarations equal to their source.
@@ -50,7 +50,7 @@ export function auditDeclarationCopies(copies, read) {
 const WORKBENCH_NAME_USES = [
   { pattern: /\.Status\(\s*"([^"]+)"/g, kinds: [["status", "status"]] },
   { pattern: /\.Command\(\s*"([^"]+)"/g, kinds: [["commands", "command"]] },
-  { pattern: /\.(?:Press|Control)\(\s*\w+,\s*"([^"]+)",\s*"([^"]+)"/g, kinds: [["dom", "element name"], ["commands", "command"]] },
+  { pattern: /\.(?:Press|Control)\(\s*\w+,\s*"([^"]+)",\s*"([^"]+)"/g, kinds: [["element", "element name"], ["commands", "command"]] },
 ];
 
 /** Names each status, command and element name that a Go source of the mygo workbench passes and that exposes does not declare. */

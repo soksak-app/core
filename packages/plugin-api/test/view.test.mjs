@@ -196,7 +196,7 @@ test("createViewBridge rejects a call with the error that the host forwards", as
   await assert.rejects(reply, { code: -32000, message: "tab.state is not declared" });
 });
 
-test("exposure.register sends the status or dom registration through the channel and resolves on the reply", async (t) => {
+test("exposure.register sends the status or element registration through the channel and resolves on the reply", async (t) => {
   const { posted, host } = setup(t);
   const { exposure } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
   const registered = exposure.register("status", "probe.state");

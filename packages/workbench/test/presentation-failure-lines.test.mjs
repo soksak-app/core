@@ -59,7 +59,7 @@ test("one presentation timeout writes one workbench error line", async () => {
   });
   await connectExposure({ settled: page.drawn, report });
   await surfaces.theme({ scheme: "light", tokens: {} });
-  registry.declare("core", { status: [], dom: [], commands: [{
+  registry.declare("core", { status: [], element: [], commands: [{
     name: "core.fixture.split", description: "Splits.", params: { type: "object", properties: {} }, result: { type: "null" },
   }] });
   registry.command("core.fixture.split", () => {

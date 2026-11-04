@@ -102,8 +102,8 @@ test("legacy initialize handshake then tools/list", async (t) => {
     "status_watch_once",
     "command_run_core_project_open",
     "command_run_host_window_reload",
-    "dom_rect",
-    "dom_act",
+    "element_rect",
+    "element_act",
     "input_pointer",
     "input_key",
   ]);
@@ -127,7 +127,7 @@ test("modern tools/list generates schemas from exposure.list of the key window",
   assert.equal(reply.result.resultType, "complete");
   const tools = Object.fromEntries(reply.result.tools.map((tool) => [tool.name, tool]));
   assert.deepEqual(tools.status_get.inputSchema.properties.name.enum, ["core.screen", "host.window"]);
-  assert.deepEqual(tools.dom_rect.inputSchema.properties.name.enum, ["core.tab"]);
+  assert.deepEqual(tools.element_rect.inputSchema.properties.name.enum, ["core.tab"]);
   assert.deepEqual(tools.command_run_core_project_open.inputSchema.properties.params, {
     type: "object",
     properties: { root: { type: "string" } },
@@ -159,8 +159,8 @@ test("tools/call maps tools to endpoint methods", async (t) => {
   assert.equal(await call("status_get", { name: "core.screen" }), "home");
   assert.equal(await call("status_get", { name: "core.screen", surface: "tab-a" }), "home");
   assert.deepEqual(await call("command_run_core_project_open", { params: { root: "/p" } }), { opened: "/p" });
-  assert.equal((await call("dom_rect", { name: "core.tab", index: 1 })).index, 1);
-  assert.equal(await call("dom_act", { name: "core.tab", action: "input", value: "v" }), null);
+  assert.equal((await call("element_rect", { name: "core.tab", index: 1 })).index, 1);
+  assert.equal(await call("element_act", { name: "core.tab", action: "input", value: "v" }), null);
   assert.equal(await call("input_pointer", { x: 1, y: 2, phase: "move" }), null);
   assert.equal(await call("input_pointer", { x: 1, y: 2, phase: "down", button: "right" }), null);
   assert.equal(await call("input_pointer", { x: 1, y: 2, phase: "move", activate: true }), null);
@@ -172,8 +172,8 @@ test("tools/call maps tools to endpoint methods", async (t) => {
       ["status.get", { window: "main", name: "core.screen" }],
       ["status.get", { window: "main", name: "core.screen", surface: "tab-a" }],
       ["command.run", { window: "main", name: "core.project.open", params: { root: "/p" } }],
-      ["dom.rect", { window: "main", name: "core.tab", index: 1 }],
-      ["dom.act", { window: "main", name: "core.tab", action: "input", value: "v" }],
+      ["element.rect", { window: "main", name: "core.tab", index: 1 }],
+      ["element.act", { window: "main", name: "core.tab", action: "input", value: "v" }],
       ["input.pointer", { window: "main", x: 1, y: 2, phase: "move" }],
       ["input.pointer", { window: "main", x: 1, y: 2, phase: "down", button: "right" }],
       ["input.pointer", { window: "main", x: 1, y: 2, phase: "move", activate: true }],
@@ -276,7 +276,7 @@ test("the server exits when stdin closes", async (t) => {
 
 test("tools/list reports an exposure.list without a list or a command params schema instead of filling them in", async (t) => {
   for (const [label, change, message] of [
-    ["no dom list", (entries) => { delete entries.dom; }, /exposure.list has no dom list/],
+    ["no element list", (entries) => { delete entries.element; }, /exposure.list has no element list/],
     ["no params schema", (entries) => { delete entries.commands[0].params; }, /declares no params schema/],
   ]) {
     const sample = sampleHandlers();

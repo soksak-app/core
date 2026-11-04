@@ -150,7 +150,7 @@ fn host_declarations() -> Value {
             {"name": "host.hit", "description": "Returns the owner and native hit-view class and frame of a point in window coordinates.",
              "params": {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}}},
              "result": {"type": "object", "properties": {
-                 "kind": {"type": "string", "enum": ["page", "document", "native"]},
+                 "kind": {"type": "string", "enum": ["workbench", "document", "native"]},
                  "surface": {"type": "string"}, "document": {"type": "string"},
                  "identifier": {"type": "string"},
                  "view": {"type": ["object", "null"], "properties": {
@@ -170,13 +170,13 @@ fn host_declarations() -> Value {
              "result": nothing},
             {"name": "host.window.presented", "description": "Resolves after the main page, visible application documents, and visible image regions have presented their current geometry and raster, with the display time of that frame.",
              "params": empty, "result": {"type": "object", "properties": {"displayed": {"type": "number"}}}},
-            {"name": "host.window.reload", "description": "Reloads the main page.",
+            {"name": "host.window.reload", "description": "Starts the workbench of the window again.",
              "params": empty, "result": nothing},
             {"name": "host.window.resize", "description": "Resizes the content area.",
              "params": {"type": "object", "properties": {"width": {"type": "number"}, "height": {"type": "number"}}},
              "result": nothing},
         ],
-        "dom": [],
+        "element": [],
     })
 }
 
@@ -185,6 +185,7 @@ pub fn check_host_name(method: &str, name: &str) -> Result<(), Failure> {
     let kind = match method {
         "status.get" | "status.watch" | "status.unwatch" => "status",
         "command.run" => "commands",
+        "element.rect" | "element.act" => "element",
         _ => "",
     };
     let declared = host_declarations();
@@ -1061,6 +1062,15 @@ pub fn check_registration_caller(
     Err(format!("{caller} cannot register for surface {requested}"))
 }
 
+/// Checks the kind of a relayed registration: status, command or element (docs/spec/exposure.md#relay).
+pub fn check_registration_kind(kind: &str) -> Result<(), String> {
+    if matches!(kind, "status" | "command" | "element") {
+        Ok(())
+    } else {
+        Err(format!("unknown exposure kind {kind}"))
+    }
+}
+
 /// Passes the registration of a surface page to the main page. A surface page registers only with its own surface id;
 /// the main page relays the registration of a view page (docs/spec/exposure.md#relay).
 pub fn register(webview: &Webview, request: Register) -> Result<(), String> {
@@ -1080,9 +1090,7 @@ pub fn register(webview: &Webview, request: Register) -> Result<(), String> {
         caller_is_main_page,
         has_view,
     )?;
-    if !matches!(request.kind.as_str(), "status" | "command" | "dom") {
-        return Err(format!("unknown exposure kind {}", request.kind));
-    }
+    check_registration_kind(&request.kind)?;
     // The only core names that a surface registers are core.surface.* (docs/spec/exposure.md).
     let name = &request.name;
     let core = name.starts_with("core.") && !name.starts_with("core.surface.");
@@ -2211,7 +2219,7 @@ fn hit(window: &Window, x: f64, y: f64) -> Result<Value, Failure> {
     let main = root_view_on_main(window).map_err(internal)?;
     let page = with_view(&main, move |view| platform.view_id(view)).map_err(internal)?;
     if found.chain.contains(&page) {
-        return Ok(json!({"kind": "page"}));
+        return Ok(json!({"kind": "workbench"}));
     }
     Ok(json!({"kind": "native", "identifier": found.identifier, "view": hit_view}))
 }

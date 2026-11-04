@@ -1,6 +1,6 @@
-// Checks, in the running documents, that the interactive elements of every screen and state have a declared command and a dom name.
+// Checks, in the running documents, that the interactive elements of every screen and state have a declared command and an element name.
 //
-// For the main document it uses core.page.audit, and for plugin surface documents the unbound of core.surface.document, which
+// For the workbench it uses core.workbench.audit, and for plugin surface documents the unbound of core.surface.document, which
 // report interactive elements that are not bound to a command or have no name (docs/spec/exposure.md).
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -9,10 +9,10 @@ import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { unauditedViews } from "./audit-surfaces.mjs";
 
-/** Confirms that the audit of the main document and of every visible plugin surface document is empty. */
+/** Confirms that the audit of the workbench and of every visible plugin surface document is empty. */
 async function clean(s, where) {
-  const { unbound } = await s.get("core.page.audit");
-  assert.deepEqual(unbound, [], `${where}: main document controls without a command or dom name`);
+  const { unbound } = await s.get("core.workbench.audit");
+  assert.deepEqual(unbound, [], `${where}: workbench controls without a command or element name`);
   // A view that a focus change draws registers its entries after it is placed, so the wait ends when every visible view exposes its document.
   await s.until("core.surfaces", (all) => unauditedViews(all.filter((surface) => surface.visible)).length === 0,
     `${where}: visible views whose page does not expose core.surface.document`);
@@ -20,7 +20,7 @@ async function clean(s, where) {
   for (const surface of surfaces) {
     if (!surface.exposes.includes("status core.surface.document")) continue;
     const doc = await s.get("core.surface.document", surface.surface);
-    assert.deepEqual(doc.unbound, [], `${where}: ${surface.plugin} surface ${surface.surface} controls without a command or dom name`);
+    assert.deepEqual(doc.unbound, [], `${where}: ${surface.plugin} surface ${surface.surface} controls without a command or element name`);
   }
 }
 
@@ -34,7 +34,7 @@ async function menu(s, name, params, where) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: every control on every screen runs a declared command and has a dom name`, async (t) => {
+  test(`${app.name}: every control on every screen runs a declared command and has an element name`, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const surfaces = await s.surfaces();

@@ -33,6 +33,21 @@ test("sampleProcess runs sample on the host process into the given file and repo
     /^Error: sample 4321 exited with 1: sample cannot examine process 4321$/);
 });
 
+test("a process ended at its limit is named with the signal, the limit and its standard error", async () => {
+  const { runProcess } = await import("../stall-sample.mjs");
+  const ended = (script) => sampleProcess(4321, "/x/stall.txt", () => runProcess("/bin/sh", ["-c", script], 200));
+  await assert.rejects(ended("echo held >&2; exec sleep 5"),
+    /^Error: sample 4321: ended by SIGTERM at its limit of 200 ms; standard error: held$/);
+  await assert.rejects(ended("exec sleep 5"),
+    /^Error: sample 4321: ended by SIGTERM at its limit of 200 ms; standard error: none$/);
+});
+
+test("a process ended by a signal of another sender is not reported as ended at its limit", async () => {
+  const { runProcess } = await import("../stall-sample.mjs");
+  await assert.rejects(sampleProcess(4321, "/x/stall.txt", () => runProcess("/bin/sh", ["-c", "echo held >&2; kill -KILL $$"], 5000)),
+    /^Error: sample 4321: ended by SIGKILL; standard error: held$/);
+});
+
 test("the page processes of a host are the running WebContent services of its launchd domain", async () => {
   const { pageProcesses } = await import("../stall-sample.mjs");
   const stdout = "pid/10 = {\n\tservices = {\n\t\t       0      - \tcom.apple.WebKit.WebContent\n" +

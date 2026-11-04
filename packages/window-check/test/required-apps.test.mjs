@@ -70,9 +70,36 @@ test("open returns null without reading the binary of an application outside the
   });
 });
 
-test("requiresBoth is true only when the required set holds both applications", () => {
-  assert.equal(harness.requiresBoth({}), true);
-  assert.equal(harness.requiresBoth({ SOKSAK_APP: "wailsv3" }), false);
-  assert.equal(harness.requiresBoth({ SOKSAK_APP: "tauriv2" }), false);
-  assert.equal(harness.requiresBoth({ SOKSAK_APP: "mygo" }), false);
+test("requiresAll is true only when the required set holds every application of the default set", () => {
+  assert.equal(harness.requiresAll({}), true);
+  assert.equal(harness.requiresAll({ SOKSAK_APP: "wailsv3" }), false);
+  assert.equal(harness.requiresAll({ SOKSAK_APP: "tauriv2" }), false);
+  assert.equal(harness.requiresAll({ SOKSAK_APP: "mygo" }), false);
+});
+
+test("requiresAll reads the default set, so a default set of three applications is not held by a required set of two", () => {
+  const three = ["wailsv3", "tauriv2", "mygo"];
+  assert.deepEqual(harness.requiredApps({}), ["wailsv3", "tauriv2"]);
+  assert.equal(harness.requiresAll({}, three), false);
+  assert.equal(harness.requiresAll({}, ["wailsv3", "tauriv2"]), true);
+});
+
+test("APP_NAMES names the three applications that SOKSAK_APP may name", () => {
+  assert.deepEqual(harness.APP_NAMES, ["wailsv3", "tauriv2", "mygo"]);
+});
+
+let fresh = 0;
+/** Imports app.mjs again under SOKSAK_APP set to the value, so that APPS and MAIN_PAGE_APPS are computed for it. */
+const appsUnder = (value) => withSet(value, () => import(`../app.mjs?main-page=${++fresh}`));
+
+test("MAIN_PAGE_APPS holds the session applications that have a main page", async () => {
+  const names = async (value) => (await appsUnder(value)).MAIN_PAGE_APPS.map((app) => app.name);
+  assert.deepEqual(await names(undefined), ["wailsv3", "tauriv2"]);
+  assert.deepEqual(await names("tauriv2"), ["tauriv2"]);
+  assert.deepEqual(await names("mygo"), []);
+});
+
+test("MAIN_PAGE_APPS holds the same application objects as APPS", async () => {
+  const module = await appsUnder(undefined);
+  for (const app of module.MAIN_PAGE_APPS) assert.equal(app, module.APPS[app.name]);
 });

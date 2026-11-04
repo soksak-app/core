@@ -96,7 +96,7 @@ for (const app of Object.values(APPS)) {
     };
     assert.ok(focusInk(icon) > 0 && focusInk(close) === 0,
       `the pressed fullscreen toggle is not drawn in the focus color: icon ${focusInk(icon)} px, close ${focusInk(close)} px`);
-    assert.deepEqual((await s.get("core.page.audit")).unbound, []);
+    assert.deepEqual((await s.get("core.workbench.audit")).unbound, []);
     assert.deepEqual((await s.get("host.window")).frame, windowBefore.frame, "card fullscreen changed the OS window");
     await assert.rejects(s.run("core.card.fullscreen", { card: "missing-card" }), /no card/);
     assert.equal((await s.get("core.grid")).fullscreen, target.id);

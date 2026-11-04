@@ -1,12 +1,14 @@
 // Checks that staging puts the diagnostics module only in the diagnostic build, and that an application without a host uses the installed plugins as the host.
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { PAGE_IMPORTS, VIEW_IMPORTS, VIEW_IMPORTS_FILE, pageImports, viewImports } from "@soksak/plugin-api";
+import { JSDOM } from "jsdom";
+import { PAGE_IMPORTS, VIEW_IMPORTS, VIEW_IMPORTS_FILE, importSpecifiers, pageImports, viewImports } from "@soksak/plugin-api";
+import { STAGED, missingPageReferences, pageReferences } from "../staged.js";
 
 const STAGE = fileURLToPath(new URL("../stage.mjs", import.meta.url));
 const OBSERVE = fileURLToPath(new URL("../observe.js", import.meta.url));
@@ -260,4 +262,59 @@ test("staging writes the view import map as the JSON text of VIEW_IMPORTS, which
   stage(app, "--diagnostics");
   assert.equal(readFileSync(join(app, "out", VIEW_IMPORTS_FILE), "utf8"),
     JSON.stringify({ imports: viewImports({ diagnostics: true }) }));
+});
+
+/** The scripts and styles that a page names, read by a browser parser, with the specifiers of its inline scripts. */
+function parsedReferences(html) {
+  const { document } = new JSDOM(html).window;
+  return [
+    ...[...document.querySelectorAll("script:not([type=importmap])")].flatMap((script) => (script.src ? [script.getAttribute("src")] : importSpecifiers(script.textContent))),
+    ...[...document.querySelectorAll("link[rel=stylesheet]")].map((link) => link.getAttribute("href")),
+  ];
+}
+
+test("staging reads the references of a page as a browser parser does", (t) => {
+  const app = fixtureApp(t);
+  stage(app);
+  for (const page of STAGED.pages) {
+    const html = readFileSync(join(app, "out", page), "utf8");
+    assert.deepEqual(pageReferences(html), parsedReferences(html), page);
+  }
+});
+
+test("staging holds every file that a staged page reaches, in a release and in a diagnostic build", (t) => {
+  for (const flags of [[], ["--diagnostics"]]) {
+    const app = fixtureApp(t);
+    stage(app, ...flags);
+    for (const page of STAGED.pages) {
+      assert.deepEqual(missingPageReferences(join(app, "out"), page), [], `${page} ${flags.join(" ")}`);
+    }
+  }
+});
+
+test("staging leaves the imports of the application runtime to its host", (t) => {
+  const app = fixtureApp(t);
+  writeFileSync(join(app, "runtime/index.js"), "import \"/wails/runtime.js\";\nexport const host = null;\n");
+  writeFileSync(join(app, "runtime/start.js"), "import start from \"soksak://core/start.json\" with { type: \"json\" };\nexport default start;\n");
+  assert.match(stage(app), /staged the workbench/);
+});
+
+/** A copy of the workbench package whose files leave out one file that a page reaches. */
+function workbenchWithout(t, file) {
+  const copy = mkdtempSync(join(tmpdir(), "soksak-workbench-"));
+  t.after(() => rmSync(copy, { recursive: true, force: true }));
+  const source = fileURLToPath(new URL("../", import.meta.url));
+  cpSync(source, copy, { recursive: true, filter: (path) => !/\/(node_modules|test)(\/|$)/.test(path.slice(source.length - 1)) });
+  symlinkSync(join(source, "node_modules"), join(copy, "node_modules"));
+  const manifest = JSON.parse(readFileSync(join(copy, "package.json"), "utf8"));
+  writeFileSync(join(copy, "package.json"), JSON.stringify({ ...manifest, files: manifest.files.filter((name) => name !== file) }));
+  return copy;
+}
+
+test("staging fails on a page that reaches a file that is not staged, and names the file", (t) => {
+  const app = fixtureApp(t);
+  const workbench = workbenchWithout(t, "head-fit.js");
+  const run = spawnSync(process.execPath, [join(workbench, "stage.mjs"), "out"], { cwd: app, encoding: "utf8" });
+  assert.notEqual(run.status, 0, "staging succeeded without a file that a page reaches");
+  assert.match(run.stderr, /plane\.js imports \.\/head-fit\.js, which is not staged/);
 });

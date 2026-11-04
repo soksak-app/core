@@ -26,6 +26,12 @@ type Painted interface {
 	Address() string
 	// SetAddress sets the address of the window.
 	SetAddress(address string)
+	// Visible tells whether the window shows, which it does not while it is minimized or not shown.
+	Visible() bool
+	// ContentSize is the content size of the window in points.
+	ContentSize() (width, height float64)
+	// Scale is the backing scale of the window.
+	Scale() (float64, error)
 }
 
 // projectOfAddress returns the project that a window address names, and "" without one.
@@ -119,7 +125,14 @@ func (a *App) Build(window host.Frontend) func(c *ui.Context) {
 		Project:   projectOfAddress(painted.Address()),
 		Located:   func(project string) { painted.SetAddress(addressOfProject(project)) },
 		Element:   func(id string) (uintptr, uintptr, bool) { return a.options.Element(window, id) }, Invalidate: painted.Invalidate, Elements: painted, Post: a.options.Post, Report: a.options.Report,
-		Tabs: a.tabPorts})
+		Tabs: a.tabPorts, Window: func() (WindowView, error) {
+			scale, err := painted.Scale()
+			if err != nil {
+				return WindowView{}, err
+			}
+			width, height := painted.ContentSize()
+			return WindowView{Visible: painted.Visible(), Scale: scale, Width: width, Height: height}, nil
+		}})
 	if err != nil {
 		panic(err) // The environment declaration is staged with the application, and its test holds its form.
 	}

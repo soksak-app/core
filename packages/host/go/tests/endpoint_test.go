@@ -85,7 +85,7 @@ func (b *fakeBackend) PageRequest(window, method string, params json.RawMessage)
 		return nil, failure
 	}
 	if method == "exposure.list" {
-		return json.RawMessage(`{"status":[{"name":"core.layout","registered":true}],"commands":[],"dom":[]}`), nil
+		return json.RawMessage(`{"status":[{"name":"core.layout","registered":true}],"commands":[],"element":[]}`), nil
 	}
 	return json.RawMessage(`null`), nil
 }
@@ -300,9 +300,12 @@ func TestEndpointClosesOnNonRPCObject(t *testing.T) {
 func TestEndpointClosesOnUndeclaredMethod(t *testing.T) {
 	backend := newFakeBackend()
 	_, address, _ := serve(t, backend)
-	conn := dial(t, address)
-	send(t, conn, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "page.eval", "params": map[string]any{"window": "main"}})
-	expectClosed(t, conn)
+	// dom.rect and dom.act are removed: an element is measured with element.rect and acted on with element.act.
+	for _, method := range []string{"page.eval", "dom.rect", "dom.act"} {
+		conn := dial(t, address)
+		send(t, conn, map[string]any{"jsonrpc": "2.0", "id": 1, "method": method, "params": map[string]any{"window": "main", "name": "core.card"}})
+		expectClosed(t, conn)
+	}
 	if requests, _ := backend.seen(); len(requests) != 0 {
 		t.Fatalf("an undeclared method reached the page: %v", requests)
 	}
@@ -415,10 +418,12 @@ func TestEndpointTargetParamsOrder(t *testing.T) {
 		{map[string]any{"window": "gone", "name": 3}, -32602, name},
 		{map[string]any{"window": "gone", "name": "layout"}, -32602, name},
 	}
-	for id, c := range cases {
-		got := call(t, conn, 30+id, "status.get", c.params)
-		if got.Error == nil || got.Error.Code != c.code || got.Error.Message != c.message {
-			t.Fatalf("status.get %v: %+v, want %d %q", c.params, got.Error, c.code, c.message)
+	for m, method := range []string{"status.get", "element.rect", "element.act"} {
+		for id, c := range cases {
+			got := call(t, conn, 30+100*m+id, method, c.params)
+			if got.Error == nil || got.Error.Code != c.code || got.Error.Message != c.message {
+				t.Fatalf("%s %v: %+v, want %d %q", method, c.params, got.Error, c.code, c.message)
+			}
 		}
 	}
 	if requests, _ := backend.seen(); len(requests) != 0 {
@@ -442,6 +447,13 @@ func TestEndpointNameErrors(t *testing.T) {
 		got = call(t, conn, 10+id, "status.get", map[string]any{"window": "main", "name": name})
 		if got.Error == nil || got.Error.Code != -32602 {
 			t.Fatalf("name %v: %+v", name, got)
+		}
+	}
+	// The host declares no element entry, so an element request for a host name is an unknown name and reaches no page.
+	for id, method := range []string{"element.rect", "element.act"} {
+		got = call(t, conn, 40+id, method, map[string]any{"window": "main", "name": "host.buttons", "action": "click"})
+		if got.Error == nil || got.Error.Code != 1001 || got.Error.Message != "the host declares no element entry host.buttons" {
+			t.Fatalf("%s of a host name: %+v", method, got.Error)
 		}
 	}
 	got = call(t, conn, 3, "input.pointer", map[string]any{"window": "main", "x": 1, "y": 2, "phase": "hover"})

@@ -33,6 +33,8 @@ const installedDocument = `{"plugins": [
 // surfaceHost records the surface calls of the workbench.
 type surfaceHost struct {
 	storedHost
+	// window is the state of the window that core.window.workbench reads.
+	window   workbench.WindowView
 	requests []map[string]any
 	placed   int
 	declared []string
@@ -130,7 +132,7 @@ func surfaceShell(t *testing.T) (*shellFixture, *surfaceHost) {
 // surfaceShellOf opens a project in a shell with the plugins of document.
 func surfaceShellOf(t testing.TB, document string) (*shellFixture, *surfaceHost) {
 	t.Helper()
-	stored := &surfaceHost{}
+	stored := &surfaceHost{window: workbench.WindowView{Visible: true, Scale: 2, Width: 1200, Height: 800}}
 	return surfaceShellOn(t, document, stored), stored
 }
 
@@ -156,6 +158,7 @@ func surfaceShellOn(t testing.TB, document string, stored *surfaceHost) *shellFi
 		Reload:      func() { f.reloads++ },
 		Elements:    fixtureElements{f},
 		Tabs:        stored.tabs,
+		Window:      func() (workbench.WindowView, error) { return stored.window, nil },
 	})
 	if err != nil {
 		t.Fatal(err)

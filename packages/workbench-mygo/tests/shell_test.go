@@ -320,7 +320,10 @@ func newShell(t testing.TB, stored *storedHost) *shellFixture {
 	}
 	f := &shellFixture{t: t, host: stored, pending: make(steps, 256)}
 	shell, err := workbench.NewShell(workbench.ShellOptions{
-		Detaching:   func() []string { return nil },
+		Detaching: func() []string { return nil },
+		Window: func() (workbench.WindowView, error) {
+			return workbench.WindowView{Visible: true, Scale: 2, Width: 1200, Height: 800}, nil
+		},
 		Element:     func(string) (uintptr, uintptr, bool) { return 0, 0, false },
 		Declared:    declared,
 		Calls:       workbench.NewCalls(stored.table(), f.pending.post),
@@ -647,12 +650,12 @@ func TestHostFailureShowsInTheLibrary(t *testing.T) {
 	if !f.tester.HasText("project directory is gone") {
 		t.Fatalf("the library shows %q", f.tester.Texts())
 	}
-	shown, err := f.shell.Registry().Read("core.page.error")
+	shown, err := f.shell.Registry().Read("core.workbench.error")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if text, ok := shown.(*string); !ok || text == nil || *text != "project directory is gone" {
-		t.Fatalf("the status core.page.error is %v", shown)
+		t.Fatalf("the status core.workbench.error is %v", shown)
 	}
 }
 

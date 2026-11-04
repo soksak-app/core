@@ -463,7 +463,7 @@ type Surfaces struct {
 	shown string
 	root  string
 	ready bool
-	// responder is the first responder that the page last received (window-responder).
+	// responder is the first responder that the workbench last received (window-responder).
 	responder responderState
 	// responderObservation is the first responder observation of the window, which close ends. It is read and changed only on
 	// the UI thread.

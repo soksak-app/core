@@ -156,7 +156,7 @@ for (const app of Object.values(APPS)) {
       const remaining = await s.get("core.projects");
       if (!(await s.get("core.project")) && remaining.length) await s.run("core.project.activate", { id: remaining[0].id });
       await s.run("core.projects.flush");
-      assert.equal(await s.get("core.page.error") ?? "", "");
+      assert.equal(await s.get("core.workbench.error") ?? "", "");
     });
 
     const first = await s.get("core.project");
@@ -200,8 +200,8 @@ for (const app of Object.values(APPS)) {
 
     await settings(s, { mode: "dark" }, "common");
     await openSettings(child);
-    assert.equal((await s.get("core.window.document")).background, false);
-    assert.equal((await child.get("core.window.document")).background, true);
+    assert.equal((await s.get("core.window.workbench")).background, false);
+    assert.equal((await child.get("core.window.workbench")).background, true);
     await openSettings(s);
     const tabs = await scopeTabs(child);
     assert.equal((await child.get("core.settings-modal")).controls
@@ -255,7 +255,7 @@ for (const app of Object.values(APPS)) {
     await child.run("core.projects.browse");
     assert.equal((await child.get("core.screen")).screen, "library");
     assert.equal(await mode(child), "dark", "library must apply common settings after leaving a project");
-    assert.equal((await child.get("core.window.document")).scheme, "dark");
+    assert.equal((await child.get("core.window.workbench")).scheme, "dark");
     await openSettings(child);
     const libraryTabs = await scopeTabs(child);
     assert.deepEqual(libraryTabs.map((b) => ({ label: b.label, on: b.on })), [{ label: "전역", on: true }]);
@@ -272,7 +272,7 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(read(join(second.root, ".soksak/settings.json")), projectSettings);
     await activate(child, second.id, "return from the library window");
     assert.equal(await mode(child), "light", "workspace must restore its project override");
-    assert.equal((await child.get("core.window.document")).scheme, "light");
+    assert.equal((await child.get("core.window.workbench")).scheme, "light");
     await openSettings(child);
     assert.deepEqual((await scopeTabs(child)).map((b) => b.label), ["전역", "프로젝트"]);
     await closeSettings(child);
@@ -332,10 +332,10 @@ for (const app of Object.values(APPS)) {
     await s.run("core.project.move", { id: third.id, delta: -2 });
     await s.run("core.project.rename", { id: third.id, title: "First saved project" });
     await s.run("core.projects.flush");
-    const origin = (await s.get("core.window.document")).timeOrigin;
+    const origin = (await s.get("core.window.workbench")).start;
     await s.run("host.window.reload");
-    await s.until("core.window.document", (doc) => doc.timeOrigin !== origin && doc.readyState === "complete",
-      "main document did not reload");
+    await s.until("core.window.workbench", (workbench) => workbench.start !== origin && workbench.readyState === "complete",
+      "the workbench did not start again");
     await s.until("core.project", (value) => value?.id === first.id, "reload did not retain the current project");
     assert.equal((await s.get("host.windows")).length, 1);
     assert.equal((await s.get("core.projects"))[0].title, "First saved project");
@@ -361,7 +361,7 @@ for (const app of Object.values(APPS)) {
         if (project.root === root) await s.run("core.project.close", { id: project.id });
       }
       await s.run("core.projects.flush");
-      assert.equal(await s.get("core.page.error"), null);
+      assert.equal(await s.get("core.workbench.error"), null);
     });
 
     await settings(s, { projectOpening: "windows" }, "common");
@@ -384,7 +384,7 @@ for (const app of Object.values(APPS)) {
       await window.until("host.window", (state) => state.surfaces.find((item) =>
         item.id === surface.surface && item.visible && item.frame.width > 0 && item.frame.height > 0),
       `${phase}: the active terminal native surface was not placed`);
-      assert.equal(await window.get("core.page.error"), null, `${phase}: initial view mount reported an application error`);
+      assert.equal(await window.get("core.workbench.error"), null, `${phase}: initial view mount reported an application error`);
       return surface.surface;
     };
 
@@ -445,7 +445,7 @@ for (const app of Object.values(APPS)) {
       "the tab of the plugin that is not loaded was not reported");
     assert.deepEqual(surfaces.filter((surface) => surface.placeholder !== null).map((surface) => [surface.plugin, surface.placeholder]),
       [["gone", "missing"]]);
-    assert.equal(await s.get("core.page.error"), null, "opening the layout reported an error");
+    assert.equal(await s.get("core.workbench.error"), null, "opening the layout reported an error");
     // Saving does not change that tab.
     await s.run("core.projects.flush");
     const after = projectRecords(read(join(config, "projects.json")), "projects.json").find((p) => p.id === saved.id);
@@ -490,7 +490,7 @@ for (const app of Object.values(APPS)) {
     await s.windows(1, "the first project opened another window instead of replacing the library");
     await s.until("core.project", (project) => project?.id === opened.id, "the library window did not show the project");
     // If a page error occurs in the process of closing and opening the project, the check fails. The error is shown only on the screen and the command succeeds.
-    assert.equal(await s.get("core.page.error"), null, "closing and opening projects reported a page error");
+    assert.equal(await s.get("core.workbench.error"), null, "closing and opening projects reported a page error");
   });
 
   test(`${app.name}: a window that holds no open project reports no project`, { timeout: 60000 }, async (t) => {
@@ -542,7 +542,7 @@ for (const app of Object.values(APPS)) {
       "the library still draws Files sidebar sections after project close");
     await s.until("core.surfaces", (all) => filesSurfaces(all).length === 0,
       "the section surfaces of the closed project are still registered");
-    assert.equal(await s.get("core.page.error"), null, "closing the shown project reported an application error");
+    assert.equal(await s.get("core.workbench.error"), null, "closing the shown project reported an application error");
     // The title of a window that shows the library does not hold the name of the closed project.
     const { title } = (await s.get("host.windows")).find((item) => item.window === s.window);
     assert.ok(!title.includes(basename(root)), `the window title still names the closed project: ${title}`);
@@ -590,6 +590,6 @@ for (const app of Object.values(APPS)) {
       assert.fail(`the window became uncovered during the check: window ${state(after)}, ` +
         `cover ${state(await cover.get("host.window"))}, frontmost application ${frontmostApp()}, host ${s.client.endpoint.pid}`);
     }
-    assert.equal((await s.get("core.window.document")).visibility, "visible", "the covered window hid its document");
+    assert.equal((await s.get("core.window.workbench")).visibility, "visible", "the covered window hid its document");
   });
 }

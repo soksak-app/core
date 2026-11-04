@@ -7,12 +7,20 @@ import { join } from "node:path";
 /** The seconds in which sample watches the host. One short record shows the stack of the blocked main thread. */
 const SECONDS = 2;
 
+// The error of a process that did not reach its own exit. A signal is named with what is known of its sender, because
+// the text of execFile names neither: `killed` is set when the limit ended the process.
+function endError(error, stderr, limitMs) {
+  if (!error.signal) return error;
+  const limit = error.killed ? ` at its limit of ${limitMs} ms` : "";
+  return new Error(`ended by ${error.signal}${limit}; standard error: ${stderr.trim() || "none"}`);
+}
+
 // Child operations have their own limit and never block endpoint reads or test deadlines.
-function runProcess(command, args) {
+export function runProcess(command, args, limitMs = 10000) {
   return new Promise((resolve) => {
-    execFile(command, args, { encoding: "utf8", timeout: 10000 }, (error, stdout, stderr) => {
+    execFile(command, args, { encoding: "utf8", timeout: limitMs }, (error, stdout, stderr) => {
       resolve({ status: error?.code ?? 0, stdout, stderr,
-        error: error && typeof error.code !== "number" ? error : undefined });
+        error: error && typeof error.code !== "number" ? endError(error, stderr, limitMs) : undefined });
     });
   });
 }

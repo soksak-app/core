@@ -4,8 +4,8 @@ import { byteLength } from "@soksak/plugin-api/bounded-json.js";
 import { surfaceSyncRequestDifference, surfaceSyncRequestWithDeclarationTable } from "../surface-sync-request.js";
 
 test("surface sync declarations use a request-local table and preserve view start context", { timeout: 5000 }, () => {
-  const startDeclarationA = { status: [{ name: "core.surface.document" }], commands: [], dom: [] };
-  const startDeclarationB = { status: [{ name: "core.surface.input" }], commands: [], dom: [] };
+  const startDeclarationA = { status: [{ name: "core.surface.document" }], commands: [], element: [] };
+  const startDeclarationB = { status: [{ name: "core.surface.input" }], commands: [], element: [] };
   const wireInput = {
     settled: false, overlays: [], titlebar: 40,
     surfaces: [
@@ -60,7 +60,7 @@ test("surface sync declarations use a request-local table and preserve view star
   assert.throws(() => surfaceSyncRequestWithDeclarationTable({ surfaces: [
     { id: "non-finite", composition: { kind: "view" }, start: {
       params: null, origin: { directory: null }, project: null,
-      declarations: { status: [{ value: Number.NaN }], commands: [], dom: [] },
+      declarations: { status: [{ value: Number.NaN }], commands: [], element: [] },
     } },
   ] }, new Map()), /finite/, "non-finite declaration values must not stringify as JSON null");
   assert.deepEqual(surfaceSyncRequestWithDeclarationTable({ surfaces: [] }, new Map()).request.declarations, [],

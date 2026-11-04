@@ -13,7 +13,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets } from "@soksak/window-check/event-log.mjs";
 import { pluginEntry, pnpmPack } from "../scripts/workspace-registry.mjs";
-import { fresh, pluginChangeApplied } from "./fixture.mjs";
+import { fresh, pluginChangeApplied, restoreRegistry, useRegistry } from "./fixture.mjs";
 
 const REGISTRY = fileURLToPath(new URL("../target/registry/", import.meta.url));
 const PROBES = fileURLToPath(new URL("./fixtures/extension-probe/", import.meta.url));
@@ -39,7 +39,6 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     await fresh(s);
     await keepCommonSettings(s);
-    const before = await s.get("core.plugins");
     const folder = probeRegistry(join(dirname(app.binary), "sok"));
     s.cleanup(() => rmSync(folder, { recursive: true, force: true }));
     s.cleanup(async () => {
@@ -50,9 +49,9 @@ for (const app of Object.values(APPS)) {
         await s.run("core.plugins.remove", { plugin: id });
         await pluginChangeApplied(s, offsets, `remove ${id} in the cleanup`);
       }
-      await s.run("core.plugins.registry", { index: before.registry });
+      await restoreRegistry(s);
     });
-    await s.run("core.plugins.registry", { index: pathToFileURL(join(folder, "index.json")).href });
+    await useRegistry(s, pathToFileURL(join(folder, "index.json")).href);
     await s.until("core.plugins", (value) => value.plugins.some((row) => row.id === "probecontributor"), "the probe registry did not list the contributor");
     const offsets = currentEventOffsets(app.configDir);
     await s.run("core.plugins.install", { plugin: "probecontributor" });

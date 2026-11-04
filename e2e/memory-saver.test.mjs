@@ -17,7 +17,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets } from "@soksak/window-check/event-log.mjs";
 import { allRows, tailOf } from "./chains.mjs";
-import { fresh, pluginChangeApplied } from "./fixture.mjs";
+import { fresh, pluginChangeApplied, restoreRegistry, useRegistry } from "./fixture.mjs";
 import { fixtureRegistry } from "./benchmark/cases/floor-page.mjs";
 
 const PROBE = fileURLToPath(new URL("./fixtures/memory-saver/unload-probe/", import.meta.url));
@@ -76,7 +76,6 @@ for (const app of Object.values(APPS)) {
     await step(t, s, "prepare the fixture", () => fresh(s, { settings: { memorySaver: true, memorySaverDelay: 720 },
       log: { lifecycle: "info" }, reads: ["workbench.tab.restored", "workbench.tab.unloaded", "workbench.tab.unload.skipped"] }));
     const pages = await serve(s);
-    const before = await s.get("core.plugins");
     const folder = fixtureRegistry({ sok: join(dirname(app.binary), "sok"), plugin: PROBE });
     s.cleanup(() => rmSync(folder, { recursive: true, force: true }));
     s.cleanup(async () => {
@@ -84,10 +83,10 @@ for (const app of Object.values(APPS)) {
       if ((await s.get("core.plugins")).plugins.find((row) => row.id === "probeunload")?.installed) {
         await pluginChange(s, "the removal of probeunload in the cleanup", () => s.run("core.plugins.remove", { plugin: "probeunload" }));
       }
-      await s.run("core.plugins.registry", { index: before.registry });
+      await restoreRegistry(s);
     });
     await step(t, s, "install the unload probe", async () => {
-      await s.run("core.plugins.registry", { index: pathToFileURL(join(folder, "index.json")).href });
+      await useRegistry(s, pathToFileURL(join(folder, "index.json")).href);
       await s.until("core.plugins", (value) => value.plugins.some((row) => row.id === "probeunload"), "the probe registry did not list the unload probe");
       await pluginChange(s, "the install of probeunload", () => s.run("core.plugins.install", { plugin: "probeunload" }));
     });

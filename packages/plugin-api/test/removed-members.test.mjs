@@ -26,6 +26,14 @@ test("the hostOperations member is refused as removed", () => {
   });
 });
 
+test("the exposes member dom is refused as removed, and exposes.element declares an exposed element", () => {
+  const element = [{ name: "probe.row", description: "A row.", many: true }];
+  assert.equal(validateManifest({ ...plugin, exposes: { element } }).exposes.element, element);
+  assert.throws(() => validateManifest({ ...plugin, exposes: { dom: element } }), {
+    message: "plugin probe: exposes.dom is removed; an exposed element is declared in exposes.element",
+  });
+});
+
 test("a sidecar declares its message form and no host read operations", () => {
   assert.equal(validateSidecar(sidecar), sidecar);
   assert.throws(() => validateSidecar({ ...sidecar, message: { form: "text", operationField: "operation" } }),

@@ -1,7 +1,7 @@
 // Files section views check: the files sections of a sidebar are section surfaces that mount with their document and run the
 // files commands on their own surface, and a file that the tree view opens with no plugin for it stays out of the error display.
 // The rows and bookmark entries that the views draw are not observable through the core exposure, because the files plugin
-// declares no status or dom for them. The checks that need them are held until the plugin declares them (docs/features.md, F332-4-4).
+// declares no status or element entry for them. The checks that need them are held until the plugin declares them (docs/features.md, F332-4-4).
 import assert from "node:assert/strict";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -89,10 +89,10 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     await fresh(s);
     // Without the editor, which opens every file, no plugin opens the files of the check. Each change of the plugin reloads the window.
-    const page = async () => (await s.get("host.window")).pageProcess;
+    const start = async () => (await s.get("core.window.workbench")).start;
     const reloaded = async (before, message) => {
-      await s.until("host.window", (value) => value.pageProcess !== 0 && value.pageProcess !== before, message);
-      await s.until("host.windows", (list) => list.some((item) => item.window === s.window && item.ready), `${message}: the new page did not report ready`);
+      await s.until("core.window.workbench", (value) => value.start !== before && value.readyState === "complete", message);
+      await s.until("host.windows", (list) => list.some((item) => item.window === s.window && item.ready), `${message}: the new workbench did not report ready`);
     };
     const initialPlugins = await s.get("core.plugins");
     const editorBefore = initialPlugins.plugins.find((row) => row.id === "editor");
@@ -103,7 +103,7 @@ for (const app of Object.values(APPS)) {
       const current = (await s.get("core.plugins")).plugins.find((row) => row.id === "editor");
       assert.ok(current, "core.plugins did not list editor during failure cleanup");
       if (current.installed.enabled === editorBefore.installed.enabled) return;
-      const before = await page();
+      const before = await start();
       const action = editorBefore.installed.enabled ? "enable" : "disable";
       await s.run(`core.plugins.${action}`, { plugin: "editor" });
       await reloaded(before, `${action} editor did not reload the window during cleanup`);
@@ -114,7 +114,7 @@ for (const app of Object.values(APPS)) {
           && value.reload === false;
       }, `editor did not return to its initial state during cleanup`);
     });
-    const beforeDisable = await page();
+    const beforeDisable = await start();
     await s.run("core.plugins.disable", { plugin: "editor" });
     await reloaded(beforeDisable, "disabling editor did not reload the window");
     const disabled = await s.until("core.plugins", (value) => {
@@ -134,6 +134,6 @@ for (const app of Object.values(APPS)) {
     await s.run("files.refresh", {}, tree);
     // files.open answers null when no plugin opens the file: the tree view shows the failure, so the error display stays empty.
     assert.equal(await s.run("files.open", { path: `${folder}/note.zzz` }, tree), null);
-    assert.equal(await s.get("core.page.error"), null, "the failure to open a file reached the error display");
+    assert.equal(await s.get("core.workbench.error"), null, "the failure to open a file reached the error display");
   });
 }

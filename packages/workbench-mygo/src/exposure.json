@@ -2,15 +2,15 @@
   "exposes": {
     "status": [
       {
-        "name": "core.window.document",
-        "description": "The main document's page identity, time origin, ready state, visibility, applied color scheme, background blur, device pixel ratio, and viewport size.",
+        "name": "core.window.workbench",
+        "description": "The workbench of the window: start identifies one start of the workbench and startedAt is its start time in milliseconds since the epoch (the page identity and the time origin of the main page on a host with a main page); readyState; visibility, hidden while the window is minimized or not shown; scheme, the color scheme of the workbench (dark or light); background, whether the workbench is drawn with the background blur of an open modal; scale, the backing scale of the window; width and height, the content size of the window in points.",
         "schema": {
           "type": "object",
           "properties": {
-            "page": {
+            "start": {
               "type": "string"
             },
-            "timeOrigin": {
+            "startedAt": {
               "type": "number"
             },
             "readyState": {
@@ -45,19 +45,8 @@
         }
       },
       {
-        "name": "core.window.workbench",
-        "description": "The start of the workbench of the window: the identity of this start and its time in milliseconds since the epoch.",
-        "schema": {
-          "type": "object",
-          "properties": {
-            "start": { "type": "string" },
-            "started_at": { "type": "number" }
-          }
-        }
-      },
-      {
         "name": "core.screen",
-        "description": "The shown screen and the open modal of the main document.",
+        "description": "The shown screen and the open modal of the workbench.",
         "schema": {
           "type": "object",
           "properties": {
@@ -83,8 +72,8 @@
         }
       },
       {
-        "name": "core.page.error",
-        "description": "The error text shown in the main document, or null.",
+        "name": "core.workbench.error",
+        "description": "The error text shown in the workbench, or null.",
         "schema": {
           "type": [
             "string",
@@ -93,8 +82,8 @@
         }
       },
       {
-        "name": "core.page.audit",
-        "description": "Interactive elements of the main document (button, input, select, textarea, role=button, contenteditable) that are not connected to a declared command or have no dom name. Each is {tag, expose, command, text}; an empty list means every control runs a command.",
+        "name": "core.workbench.audit",
+        "description": "Interactive elements of the workbench (button, input, select, textarea, role=button, contenteditable) that are not connected to a declared command or have no element name. Each is {role, expose, command, text}, where role is the ARIA role of the element (its role attribute, else the implicit role of its tag and input type, textbox for contenteditable, null for an input type without one); an empty list means every control runs a command.",
         "schema": {
           "type": "object",
           "properties": {
@@ -103,8 +92,11 @@
               "items": {
                 "type": "object",
                 "properties": {
-                  "tag": {
-                    "type": "string"
+                  "role": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "expose": {
                     "type": [
@@ -159,7 +151,7 @@
       },
       {
         "name": "core.sidebars",
-        "description": "The drawn sidebars in document order: the sidebar (`left` or `right` for a fixed window sidebar, `<card>:<side>` for an internal card sidebar), placement (`window` or `card`), its set, layout, horizontal or vertical orientation, selected tab or null, the card and active tab its sections receive (for a fixed window sidebar, the focused content card and its active tab while a plugin override applies, otherwise null), the overriding plugin and side of a fixed window sidebar or null, its rectangle, and each section's id, name, fold state, whether its tab text is clipped (always false in list layout), `surfaceId` (the section surface `<space>/<sidebar>/<section>`), `surface` (the surface that the section follows, as the sidebar reports it), its declared `height` (`fill` or pixels), `size` (the height that the person dragged the section to, or null), `mounted` (whether the section view is mounted), `phase` (the page status of the section view or null before its mount) and `error` (its mount error or null).",
+        "description": "The drawn sidebars in workbench order: the sidebar (`left` or `right` for a fixed window sidebar, `<card>:<side>` for an internal card sidebar), placement (`window` or `card`), its set, layout, horizontal or vertical orientation, selected tab or null, the card and active tab its sections receive (for a fixed window sidebar, the focused content card and its active tab while a plugin override applies, otherwise null), the overriding plugin and side of a fixed window sidebar or null, its rectangle, and each section's id, name, fold state, whether its tab text is clipped (always false in list layout), `surfaceId` (the section surface `<space>/<sidebar>/<section>`), `surface` (the surface that the section follows, as the sidebar reports it), its declared `height` (`fill` or pixels), `size` (the height that the person dragged the section to, or null), `mounted` (whether the section view is mounted), `phase` (the page status of the section view or null before its mount) and `error` (its mount error or null).",
         "schema": {
           "type": "array",
           "items": {
@@ -220,7 +212,7 @@
       },
       {
         "name": "core.grid",
-        "description": "The current grid: size, gap, boundary positions, and cards in document order with their rectangles in plane coordinates, or null, with each card's tabs (with the title a surface reported as label, its notice, the footer text it reported, whether it holds unsaved changes as modified, and the operation error it shows as error or null) and the text its content footer shows as status, tool buttons (enabled, hidden, title), header fit, and effective card sidebars by side with set, size, actual collapsed state, requestedCollapsed, autoCollapsed and collapseReason (null or insufficient-width/insufficient-height); fullscreen is the presented card ID or null, and card rectangles describe current presentation.",
+        "description": "The current grid: size, gap, boundary positions, and cards in workbench order with their rectangles in plane coordinates, or null, with each card's tabs (with the title a surface reported as label, its notice, the footer text it reported, whether it holds unsaved changes as modified, and the operation error it shows as error or null) and the text its content footer shows as status, tool buttons (enabled, hidden, title), header fit, and effective card sidebars by side with set, size, actual collapsed state, requestedCollapsed, autoCollapsed and collapseReason (null or insufficient-width/insufficient-height); fullscreen is the presented card ID or null, and card rectangles describe current presentation.",
         "schema": {
           "type": [
             "object",
@@ -568,7 +560,7 @@
       },
       {
         "name": "core.tab.memory",
-        "description": "The memory saver of the main page: the settings memorySaver (enabled) and memorySaverDelay (delay, minutes), the last memory pressure report, and each tab with its state, the reasons that protect it, the time it was hidden, its next delay deadline and the time of the last decision that read the regions. kind is tab for a tab and section for a section surface, which the tab commands refuse.",
+        "description": "The memory saver of the workbench: the settings memorySaver (enabled) and memorySaverDelay (delay, minutes), the last memory pressure report, and each tab with its state, the reasons that protect it, the time it was hidden, its next delay deadline and the time of the last decision that read the regions. kind is tab for a tab and section for a section surface, which the tab commands refuse.",
         "schema": {
           "type": "object",
           "properties": {
@@ -662,7 +654,7 @@
       },
       {
         "name": "core.drop",
-        "description": "The files last dropped on the window: their URLs, the drop point in page coordinates, the surface under the point, the drop command its plugin declares, and the reason when nothing ran.",
+        "description": "The files last dropped on the window: their URLs, the drop point in window points, the surface under the point, the drop command its plugin declares, and the reason when nothing ran.",
         "schema": {
           "type": ["object", "null"],
           "properties": {
@@ -732,7 +724,7 @@
       },
       {
         "name": "core.contributions",
-        "description": "The contributions of the installed and enabled plugins to extension points, resolved when the page loaded, sorted by plugin, point and item: the contributing plugin id, the point as <plugin id>.<point>, the item index, the state (connected, provider-missing, version-mismatch or invalid) and the reason, or null for a connected item.",
+        "description": "The contributions of the installed and enabled plugins to extension points, resolved when the workbench started, sorted by plugin, point and item: the contributing plugin id, the point as <plugin id>.<point>, the item index, the state (connected, provider-missing, version-mismatch or invalid) and the reason, or null for a connected item.",
         "schema": {
           "type": "array",
           "items": {
@@ -1501,7 +1493,7 @@
       },
       {
         "name": "core.surface.document",
-        "description": "Registered by every plugin surface page: its address, time origin, ready state, whether the first theme is applied, device pixel ratio, body and viewport sizes, and the root filter, and the page's interactive elements without a command binding or dom name (`unbound`, as in core.page.audit).",
+        "description": "Registered by every plugin surface page: its address, time origin, ready state, whether the first theme is applied, device pixel ratio, body and viewport sizes, and the root filter, and the page's interactive elements without a command binding or element name (`unbound`, as in core.workbench.audit).",
         "schema": {
           "type": "object",
           "properties": {
@@ -1550,8 +1542,11 @@
               "items": {
                 "type": "object",
                 "properties": {
-                  "tag": {
-                    "type": "string"
+                  "role": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "expose": {
                     "type": [
@@ -1612,7 +1607,7 @@
       },
       {
         "name": "core.modal",
-        "description": "The open native modal of this window with the state its document reported, or null.",
+        "description": "The open native modal of this window, or null; document, the state that the modal document reported, is reported only on a host that creates modal web views.",
         "schema": {
           "type": "object",
           "properties": {
@@ -1824,7 +1819,7 @@
       },
       {
         "name": "core.pointer",
-        "description": "The last pointer sequence that the main document received: a press increments sequence, and down, up and click name the exposed element (or tag) that received pointerdown, pointerup and click; pressedConnected tells whether the pressed element was still in the document at pointerup. A click is missing when the pressed element was replaced before the release.",
+        "description": "The last pointer sequence that the workbench received: a press increments sequence, and down, up and click name the exposed element (or tag) that received pointerdown, pointerup and click; pressedConnected tells whether the pressed element was still in the document at pointerup. A click is missing when the pressed element was replaced before the release.",
         "schema": {
           "type": "object",
           "properties": {
@@ -1838,7 +1833,7 @@
       },
       {
         "name": "core.focus",
-        "description": "The exposed element that has keyboard focus in the document that holds the first responder of the window: the main document, including surface modules mounted in shadow roots, or the document of a view surface, which reports its element; its name, its index within its own document or shadow root, and the surface id (null in the main document); null when focus is elsewhere or a document region, modal or native view holds the first responder. Changes with every focus transition and first responder change.",
+        "description": "The exposed element that has keyboard focus in the part of the window that holds the first responder: the workbench, including surface modules mounted in shadow roots, or the document of a view surface, which reports its element; its name, its index within its own document or shadow root, and the surface id (null in the workbench); null when focus is elsewhere or a document region, modal or native view holds the first responder. Changes with every focus transition and first responder change.",
         "schema": {
           "type": [
             "object",
@@ -2822,7 +2817,7 @@
       },
       {
         "name": "core.plugins.install",
-        "description": "Installs a plugin from the registry index through the host, as sok plugin install does; the host applies the change to its sidecars and every window reloads its page after the questions of its modified tabs.",
+        "description": "Installs a plugin from the registry index through the host, as sok plugin install does; the host applies the change to its sidecars and every window starts its workbench again after the questions of its modified tabs.",
         "params": {
           "type": "object",
           "properties": {
@@ -2833,11 +2828,12 @@
         },
         "result": {
           "type": "null"
-        }
+        },
+        "timeout": 600000
       },
       {
         "name": "core.plugins.update",
-        "description": "Installs the selected version of an installed plugin through the host, as sok plugin update does; the host applies the change to its sidecars and every window reloads its page after the questions of its modified tabs.",
+        "description": "Installs the selected version of an installed plugin through the host, as sok plugin update does; the host applies the change to its sidecars and every window starts its workbench again after the questions of its modified tabs.",
         "params": {
           "type": "object",
           "properties": {
@@ -2848,11 +2844,12 @@
         },
         "result": {
           "type": "null"
-        }
+        },
+        "timeout": 600000
       },
       {
         "name": "core.plugins.remove",
-        "description": "Removes an installed plugin through the host, as sok plugin remove does; the host applies the change to its sidecars and every window reloads its page after the questions of its modified tabs.",
+        "description": "Removes an installed plugin through the host, as sok plugin remove does; the host applies the change to its sidecars and every window starts its workbench again after the questions of its modified tabs.",
         "params": {
           "type": "object",
           "properties": {
@@ -2863,11 +2860,12 @@
         },
         "result": {
           "type": "null"
-        }
+        },
+        "timeout": 600000
       },
       {
         "name": "core.plugins.enable",
-        "description": "Enables an installed plugin through the host, as sok plugin enable does; the host applies the change to its sidecars and every window reloads its page after the questions of its modified tabs.",
+        "description": "Enables an installed plugin through the host, as sok plugin enable does; the host applies the change to its sidecars and every window starts its workbench again after the questions of its modified tabs.",
         "params": {
           "type": "object",
           "properties": {
@@ -2878,11 +2876,12 @@
         },
         "result": {
           "type": "null"
-        }
+        },
+        "timeout": 120000
       },
       {
         "name": "core.plugins.disable",
-        "description": "Disables an installed plugin through the host, as sok plugin disable does; the host applies the change to its sidecars and every window reloads its page after the questions of its modified tabs.",
+        "description": "Disables an installed plugin through the host, as sok plugin disable does; the host applies the change to its sidecars and every window starts its workbench again after the questions of its modified tabs.",
         "params": {
           "type": "object",
           "properties": {
@@ -2893,11 +2892,12 @@
         },
         "result": {
           "type": "null"
-        }
+        },
+        "timeout": 120000
       },
       {
         "name": "core.plugins.apply",
-        "description": "Asks for each modified tab of the window whether to save it, discard its changes or keep the page, then saves the projects and reloads the page so that it loads the plugins that installed.json lists; answers reloaded false when a tab is kept.",
+        "description": "Asks for each modified tab of the window whether to save it, discard its changes or keep the workbench, then saves the projects and starts the workbench of the window again so that it loads the plugins that installed.json lists, answering reloaded true before the new start; answers reloaded false when a tab is kept.",
         "params": {
           "type": "object",
           "properties": {}
@@ -2987,7 +2987,8 @@
         },
         "result": {
           "type": "null"
-        }
+        },
+        "timeout": 180000
       },
       {
         "name": "core.plugins.browse",
@@ -3893,7 +3894,7 @@
       },
       {
         "name": "core.focus.set",
-        "description": "Gives keyboard focus to an exposed element of the main document.",
+        "description": "Gives keyboard focus to an exposed element of the workbench.",
         "params": {
           "type": "object",
           "properties": {
@@ -3928,7 +3929,7 @@
         }
       }
     ],
-    "dom": [
+    "element": [
       {
         "name": "core.brand",
         "description": "The soksak logo at the start of the title bar; its letters are light in dark mode and dark in light mode."
@@ -3985,107 +3986,107 @@
       },
       {
         "name": "core.card",
-        "description": "The cards in document order.",
+        "description": "The cards in workbench order.",
         "many": true
       },
       {
         "name": "core.card.tab",
-        "description": "The tabs of every card in document order.",
+        "description": "The tabs of every card in workbench order.",
         "many": true
       },
       {
         "name": "core.card.sidebar.grip",
-        "description": "The dividers of card sidebars in document order; dragging sizes a side and clicking folds or unfolds it.",
+        "description": "The dividers of card sidebars in workbench order; dragging sizes a side and clicking folds or unfolds it.",
         "many": true
       },
       {
         "name": "core.sidebar",
-        "description": "The drawn sidebars in document order, in the order of core.sidebars; each holds its sections.",
+        "description": "The drawn sidebars in workbench order, in the order of core.sidebars; each holds its sections.",
         "many": true
       },
       {
         "name": "core.card.header",
-        "description": "The headers of cards with tabs in document order.",
+        "description": "The headers of cards with tabs in workbench order.",
         "many": true
       },
       {
         "name": "core.card.status",
-        "description": "The content footers of cards with tabs in document order; each spans only its card's content column.",
+        "description": "The content footers of cards with tabs in workbench order; each spans only its card's content column.",
         "many": true
       },
       {
         "name": "core.sidebar.status",
-        "description": "The status lines that end the fixed left and right window sidebars in document order.",
+        "description": "The status lines that end the fixed left and right window sidebars in workbench order.",
         "many": true
       },
       {
         "name": "core.sidebar.fold",
-        "description": "The fold controls at the end of the window sidebar status lines in document order; each turns its sidebar off with core.settings.set, and the window header control turns it on again.",
+        "description": "The fold controls at the end of the window sidebar status lines in workbench order; each turns its sidebar off with core.settings.set, and the window header control turns it on again.",
         "many": true
       },
       {
         "name": "core.card.sidebar.fold",
-        "description": "The sidebar controls of the card headers in document order: one for each side a card shows, before the card tools in the order top, bottom, left, right; each runs core.card.sidebar.toggle for its side and is pressed while the side is open.",
+        "description": "The sidebar controls of the card headers in workbench order: one for each side a card shows, before the card tools in the order top, bottom, left, right; each runs core.card.sidebar.toggle for its side and is pressed while the side is open.",
         "many": true
       },
       {
         "name": "core.card.sidebar.status",
-        "description": "The status lines that end the open card sidebars in document order; each names its side and its set.",
+        "description": "The status lines that end the open card sidebars in workbench order; each names its side and its set.",
         "many": true
       },
       {
         "name": "core.sidebar.section",
-        "description": "The section elements of drawn sidebars in document order; each holds the view of its section surface.",
+        "description": "The section elements of drawn sidebars in workbench order; each holds the view of its section surface.",
         "many": true
       },
       {
         "name": "core.sidebar.section.header",
-        "description": "The fold headers of sections in list-layout sidebars in document order.",
+        "description": "The fold headers of sections in list-layout sidebars in workbench order.",
         "many": true
       },
       {
         "name": "core.sidebar.tabs",
-        "description": "The tab strips of tabs-layout sidebars in document order.",
+        "description": "The tab strips of tabs-layout sidebars in workbench order.",
         "many": true
       },
       {
         "name": "core.sidebar.section.name",
-        "description": "The names in the fold headers of list-layout sidebars in document order.",
+        "description": "The names in the fold headers of list-layout sidebars in workbench order.",
         "many": true
       },
       {
         "name": "core.sidebar.section.divider",
-        "description": "The dividers between adjacent open sections of vertical list-layout sidebars in document order; dragging one sizes a section.",
+        "description": "The dividers between adjacent open sections of vertical list-layout sidebars in workbench order; dragging one sizes a section.",
         "many": true
       },
       {
         "name": "core.sidebar.section.tab",
-        "description": "The section tabs of tabs-layout sidebars in document order.",
+        "description": "The section tabs of tabs-layout sidebars in workbench order.",
         "many": true
       },
       {
         "name": "core.card.add",
-        "description": "The add-tab buttons of pane cards in document order.",
+        "description": "The add-tab buttons of pane cards in workbench order.",
         "many": true
       },
       {
         "name": "core.card.split-x",
-        "description": "The vertical split buttons of pane cards in document order.",
+        "description": "The vertical split buttons of pane cards in workbench order.",
         "many": true
       },
       {
         "name": "core.card.split-y",
-        "description": "The horizontal split buttons of pane cards in document order.",
+        "description": "The horizontal split buttons of pane cards in workbench order.",
         "many": true
       },
       {
         "name": "core.card.fullscreen",
-        "description": "The card fullscreen toggles immediately before each header close button, in document order.",
+        "description": "The card fullscreen toggles immediately before each header close button, in workbench order.",
         "many": true
       },
       {
         "name": "core.card.close",
-        "description": "The close buttons of pane cards in document order.",
+        "description": "The close buttons of pane cards in workbench order.",
         "many": true
       },
       {
@@ -4128,7 +4129,7 @@
       },
       {
         "name": "core.library.plugins.action",
-        "description": "The action buttons of the plugin cards in document order: 설치, 업데이트, 사용 or 사용 안 함, and 제거, each bound to its core.plugins command.",
+        "description": "The action buttons of the plugin cards in workbench order: 설치, 업데이트, 사용 or 사용 안 함, and 제거, each bound to its core.plugins command.",
         "many": true
       },
       {
@@ -4236,11 +4237,11 @@
       },
       {
         "name": "core.debug.card",
-        "description": "The debug card in the main document; the native modal draws it at the same rectangle."
+        "description": "The debug card in the workbench; the native modal draws it at the same rectangle."
       },
       {
         "name": "core.debug.scrim",
-        "description": "The layer that blocks the main document while the debug view is open."
+        "description": "The layer that blocks the workbench while the debug view is open."
       },
       {
         "name": "core.debug.close",
@@ -4413,11 +4414,11 @@
       },
       {
         "name": "core.settings-modal.card",
-        "description": "The settings card in the main document; the native modal draws it at the same rectangle."
+        "description": "The settings card in the workbench; the native modal draws it at the same rectangle."
       },
       {
         "name": "core.settings-modal.scrim",
-        "description": "The layer that blocks the main document while settings are open."
+        "description": "The layer that blocks the workbench while settings are open."
       },
       {
         "name": "core.settings-modal.grip",
@@ -4444,7 +4445,7 @@
       },
       {
         "name": "core.settings-modal.set",
-        "description": "The setting controls in document order (switches, select boxes, sliders and text fields, one control per setting form); core.settings-modal lists their keys.",
+        "description": "The setting controls in workbench order (switches, select boxes, sliders and text fields, one control per setting form); core.settings-modal lists their keys.",
         "many": true
       },
       {
@@ -4453,7 +4454,7 @@
       },
       {
         "name": "core.settings-modal.reset",
-        "description": "The buttons that remove project overrides in document order.",
+        "description": "The buttons that remove project overrides in workbench order.",
         "many": true
       },
       {
@@ -4503,7 +4504,7 @@
       },
       {
         "name": "core.settings-modal.row-act",
-        "description": "The ▲, ▼, and − buttons of the set editor rows in document order.",
+        "description": "The ▲, ▼, and − buttons of the set editor rows in workbench order.",
         "many": true
       },
       {
@@ -4537,7 +4538,7 @@
       },
       {
         "name": "core.card.tab-close",
-        "description": "The close buttons of the tabs in cards, in document order.",
+        "description": "The close buttons of the tabs in cards, in workbench order.",
         "many": true
       },
       {
@@ -4551,7 +4552,7 @@
       },
       {
         "name": "core.drop",
-        "description": "The drop preview of the main document."
+        "description": "The drop preview of the workbench."
       },
       {
         "name": "core.projects.column",

@@ -99,7 +99,7 @@ const (
 )
 
 // exposeKinds gives the entry kind of each key of the declaration file.
-var exposeKinds = map[string]string{"status": "status", "commands": "command", "dom": "dom"}
+var exposeKinds = map[string]string{"status": "status", "commands": "command", "element": "element"}
 
 func declarationKey(kind, name string) string { return kind + " " + name }
 
@@ -130,7 +130,7 @@ func (r *Registry) Declare(owner string, exposes Exposes) error {
 	for _, list := range []struct {
 		key     string
 		entries []json.RawMessage
-	}{{"status", exposes.Status}, {"commands", exposes.Commands}, {"dom", exposes.Dom}} {
+	}{{"status", exposes.Status}, {"commands", exposes.Commands}, {"element", exposes.Element}} {
 		kind := exposeKinds[list.key]
 		for _, raw := range list.entries {
 			fields := map[string]any{}
@@ -187,7 +187,7 @@ func (r *Registry) CommandTimeout(name string) time.Duration {
 
 // isDeclared tells whether the core or a plugin declares the name of kind.
 func (r *Registry) isDeclared(kind, name string) bool {
-	core := map[string]map[string]bool{"status": r.declared.Statuses, "command": r.declared.Commands, "dom": r.declared.Elements}[kind]
+	core := map[string]map[string]bool{"status": r.declared.Statuses, "command": r.declared.Commands, "element": r.declared.Elements}[kind]
 	return core[name] || r.surfaces.declared[declarationKey(kind, name)]
 }
 
@@ -397,7 +397,7 @@ func (r *Registry) forward(surface, method string, params json.RawMessage, answe
 			answer(nil, reply.Error)
 			return
 		}
-		if method == "dom.rect" && len(reply.Result) > 0 && string(reply.Result) != "null" {
+		if method == "element.rect" && len(reply.Result) > 0 && string(reply.Result) != "null" {
 			answer(r.placedRect(surface, reply.Result))
 			return
 		}

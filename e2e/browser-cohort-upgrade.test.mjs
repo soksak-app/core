@@ -52,7 +52,7 @@ for (const app of Object.values(APPS)) {
         `${plugin} has no ready surface`);
     }
 
-    assert.equal(await s.get("core.page.error"), null, "the page reports an application error");
+    assert.equal(await s.get("core.workbench.error"), null, "the page reports an application error");
     assert.equal((await s.get("core.verify")).failed, 0, "the page reports failed verification checks");
   });
 }

@@ -136,3 +136,19 @@ test("the release page of a command that carries the cids of its cause opens it 
   await update.openRelease({ cids: ["p1700000000000.6"] });
   assert.deepEqual(calls.at(-1), { name: "linkOpen", params: { url: "https://github.com/soksak-app/core/releases/tag/v0.0.9" }, options: { cids: ["p1700000000000.6"] } });
 });
+
+test("an update state read that ended after a newer read does not replace its state", async () => {
+  const replies = [];
+  const host = { call: (name) => {
+    assert.equal(name, "appUpdateState");
+    return new Promise((resolve) => replies.push(resolve));
+  } };
+  const update = createAppUpdate({ host, changed: () => {} });
+  const older = update.refresh();
+  const newer = update.refresh();
+  replies[1]({ current: "0.0.8", available });
+  await newer;
+  replies[0]({ current: "0.0.8", available: null });
+  await older;
+  assert.equal(update.status().available?.version, "0.0.9", "the older read replaced the state of the newer read");
+});

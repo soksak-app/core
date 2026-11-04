@@ -9,14 +9,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { MAIN_PAGE_APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 
 const CYCLES = 4;
 
 const counts = (s, equal) => s.request("diagnostics.native.objects", equal ? { equal } : {});
 
-for (const app of Object.values(APPS)) {
+// The subject is the modal web view, so the check runs on the applications that create modal web views (MAIN_PAGE_APPS).
+for (const app of MAIN_PAGE_APPS) {
   test(`${app.name}: closed modals release their webviews and attached native objects`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);

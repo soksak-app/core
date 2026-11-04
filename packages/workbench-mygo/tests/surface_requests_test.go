@@ -18,7 +18,7 @@ func terminalExposes() workbench.Exposes {
 	return workbench.Exposes{
 		Status:   []json.RawMessage{json.RawMessage(`{"name": "terminal.screen"}`)},
 		Commands: []json.RawMessage{json.RawMessage(`{"name": "terminal.input"}`), json.RawMessage(`{"name": "terminal.close", "timeout": 2500}`)},
-		Dom:      []json.RawMessage{json.RawMessage(`{"name": "terminal.view"}`)},
+		Element:  []json.RawMessage{json.RawMessage(`{"name": "terminal.view"}`)},
 	}
 }
 
@@ -128,13 +128,13 @@ func TestTheListHoldsThePluginNamesWithTheirRegistration(t *testing.T) {
 		t.Fatalf("the list has no %s %s", key, name)
 		return false
 	}
-	if registered("commands", "terminal.input") || registered("status", "terminal.screen") || registered("dom", "terminal.view") {
+	if registered("commands", "terminal.input") || registered("status", "terminal.screen") || registered("element", "terminal.view") {
 		t.Fatal("a name that no surface registered is registered")
 	}
 	f.register("tab-a", "command", "terminal.input")
 	f.register("tab-a", "status", "terminal.screen")
-	f.register("tab-a", "dom", "terminal.view")
-	if !registered("commands", "terminal.input") || !registered("status", "terminal.screen") || !registered("dom", "terminal.view") {
+	f.register("tab-a", "element", "terminal.view")
+	if !registered("commands", "terminal.input") || !registered("status", "terminal.screen") || !registered("element", "terminal.view") {
 		t.Fatal("a registered name is not registered")
 	}
 	f.register("tab-a", "status", "core.surface.input")
@@ -272,7 +272,7 @@ func TestAForwardedCommandIsRecordedWhenItEnds(t *testing.T) {
 func TestTheStatusAndTheElementOfASurfaceAreForwarded(t *testing.T) {
 	f := newSurfaceRequests(t)
 	f.register("tab-a", "status", "terminal.screen")
-	f.register("tab-a", "dom", "terminal.view")
+	f.register("tab-a", "element", "terminal.view")
 	f.reply = func(map[string]any) (any, error) { return map[string]any{"result": map[string]any{"rows": 2}}, nil }
 	if got := f.ask("status.get", `{"name": "terminal.screen"}`)["result"]; !reflect.DeepEqual(got, map[string]any{"rows": float64(2)}) {
 		t.Fatalf("the status is %v", got)
@@ -280,18 +280,18 @@ func TestTheStatusAndTheElementOfASurfaceAreForwarded(t *testing.T) {
 	f.reply = func(map[string]any) (any, error) {
 		return map[string]any{"result": map[string]any{"x": 3, "y": 4, "width": 10, "height": 20, "zoom": 1}}, nil
 	}
-	f.refuses2("dom.rect", `{"name": "terminal.view"}`, workbench.Failed, "surface tab-a has no valid applied frame")
+	f.refuses2("element.rect", `{"name": "terminal.view"}`, workbench.Failed, "surface tab-a has no valid applied frame")
 	f.frames["tab-a"] = [2]float64{100, 50}
 	want := map[string]any{"x": float64(103), "y": float64(54), "width": float64(10), "height": float64(20), "zoom": float64(1),
 		"document": map[string]any{"x": float64(0), "y": float64(0)}}
-	if got := f.ask("dom.rect", `{"name": "terminal.view"}`)["result"]; !reflect.DeepEqual(got, want) {
+	if got := f.ask("element.rect", `{"name": "terminal.view"}`)["result"]; !reflect.DeepEqual(got, want) {
 		t.Fatalf("the rectangle is %v", got)
 	}
 	f.reply = func(map[string]any) (any, error) { return map[string]any{}, nil }
-	if reply := f.ask("dom.act", `{"name": "terminal.view", "action": "click"}`); reply["result"] != nil {
+	if reply := f.ask("element.act", `{"name": "terminal.view", "action": "click"}`); reply["result"] != nil {
 		t.Fatalf("the action answered %v", reply)
 	}
-	if last := f.forwards[len(f.forwards)-1]; last["method"] != "dom.act" {
+	if last := f.forwards[len(f.forwards)-1]; last["method"] != "element.act" {
 		t.Fatalf("the forward is %v", last)
 	}
 }

@@ -199,9 +199,9 @@ func TestTheOnlyWindowIsUsedAndParametersAreSent(t *testing.T) {
 	}{
 		{[]string{"status", "core.screen", "--surface", "tab-1"}, "status.get", `{"name":"core.screen","surface":"tab-1","window":"main"}`},
 		{[]string{"exposures"}, "exposure.list", `{"window":"main"}`},
-		{[]string{"dom", "rect", "core.card", "--index", "2"}, "dom.rect", `{"index":2,"name":"core.card","window":"main"}`},
-		{[]string{"dom", "input", "fixture.input", "--value", "ls"}, "dom.act", `{"action":"input","name":"fixture.input","value":"ls","window":"main"}`},
-		{[]string{"dom", "dispatch", "x.y", "--event", `{"type":"keydown","key":"a"}`}, "dom.act", `{"action":"dispatch","event":{"key":"a","type":"keydown"},"name":"x.y","window":"main"}`},
+		{[]string{"element", "rect", "core.card", "--index", "2"}, "element.rect", `{"index":2,"name":"core.card","window":"main"}`},
+		{[]string{"element", "input", "fixture.input", "--value", "ls"}, "element.act", `{"action":"input","name":"fixture.input","value":"ls","window":"main"}`},
+		{[]string{"element", "dispatch", "x.y", "--event", `{"type":"keydown","key":"a"}`}, "element.act", `{"action":"dispatch","event":{"key":"a","type":"keydown"},"name":"x.y","window":"main"}`},
 		{[]string{"input", "pointer", "--x", "1.5", "--y", "2", "--phase", "move", "--activate"}, "input.pointer", `{"activate":true,"phase":"move","window":"main","x":1.5,"y":2}`},
 		{[]string{"input", "key", "--key", "a", "--phase", "down", "--modifiers", "shift,,command"}, "input.key", `{"key":"a","modifiers":["shift","command"],"phase":"down","window":"main"}`},
 	}
@@ -302,7 +302,7 @@ func declared(t *testing.T) *fakeEndpoint {
 	exposures := `{"status":[],"commands":[{"name":"fixture.do","description":"d","params":{"type":"object","properties":{` +
 		`"text":{"type":"string"},"count":{"type":"number"},"whole":{"type":"integer"},"flag":{"type":"boolean"},` +
 		`"choice":{"enum":["one","two"]},"maybe":{"type":["string","null"]},"object":{"type":"object"},"list":{"type":"array"}}},` +
-		`"result":{"type":"object"}},{"name":"fixture.none","description":"n","params":{"type":"object","properties":{}}}],"dom":[]}`
+		`"result":{"type":"object"}},{"name":"fixture.none","description":"n","params":{"type":"object","properties":{}}}],"element":[]}`
 	return startEndpoint(t, func(method string, params map[string]any) answer {
 		switch method {
 		case "windows.list":
@@ -319,7 +319,7 @@ func declared(t *testing.T) *fakeEndpoint {
 
 // contract: cli.command.host-command-without-page
 func TestAHostCommandIsCheckedAgainstTheHostEntriesWithoutThePage(t *testing.T) {
-	host := `{"status":[],"commands":[{"name":"host.quit","description":"q","params":{"type":"object","properties":{}},"registered":true}],"dom":[]}`
+	host := `{"status":[],"commands":[{"name":"host.quit","description":"q","params":{"type":"object","properties":{}},"registered":true}],"element":[]}`
 	fake := startEndpoint(t, func(method string, params map[string]any) answer {
 		switch method {
 		case "windows.list":

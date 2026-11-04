@@ -184,7 +184,7 @@ func (r *Registry) Names() (commands, statuses []string) {
 // methodKinds gives the entry kind that each request method handles.
 var methodKinds = map[string]string{
 	"status.get": "status", "status.watch": "status", "status.unwatch": "status",
-	"command.run": "command", "dom.rect": "dom", "dom.act": "dom",
+	"command.run": "command", "element.rect": "element", "element.act": "element",
 }
 
 // causeID is the form of a correlation identifier of the cause of a request (docs/spec/exposure.md#requests).
@@ -288,13 +288,13 @@ func (r *Registry) dispatch(method string, params json.RawMessage, changed Chang
 		if fields["index"] != nil {
 			return nil, Refuse(InvalidParams, "a request gives index or address, not both")
 		}
-		return nil, Refuse(InvalidParams, "dom %s takes no address", *name)
+		return nil, Refuse(InvalidParams, "element %s takes no address", *name)
 	}
 	element, err := r.element(*name, fields["index"])
 	if err != nil {
 		return nil, err
 	}
-	if method == "dom.rect" {
+	if method == "element.rect" {
 		return map[string]any{"x": element.Bounds.X, "y": element.Bounds.Y, "width": element.Bounds.W, "height": element.Bounds.H,
 			"zoom": 1, "document": map[string]any{"x": 0, "y": 0}}, nil
 	}
@@ -336,10 +336,10 @@ func (r *Registry) element(name string, index json.RawMessage) (ui.ElementNode, 
 	}
 	list := drawn[name]
 	if len(list) == 0 {
-		return none, Refuse(Unregistered, "dom %s has no element", name)
+		return none, Refuse(Unregistered, "element %s has no element", name)
 	}
 	if !r.declared.many[name] && len(list) > 1 {
-		return none, Refuse(Unregistered, "dom %s has %d elements", name, len(list))
+		return none, Refuse(Unregistered, "element %s has %d elements", name, len(list))
 	}
 	position := 0
 	if index != nil {
@@ -352,7 +352,7 @@ func (r *Registry) element(name string, index json.RawMessage) (ui.ElementNode, 
 			return none, Refuse(InvalidParams, "index must be a non-negative integer")
 		}
 		if value >= float64(len(list)) {
-			return none, Refuse(Unregistered, "dom %s has no element at index %v", name, value)
+			return none, Refuse(Unregistered, "element %s has no element at index %v", name, value)
 		}
 		position = int(value)
 	}
@@ -368,7 +368,7 @@ func (r *Registry) act(name string, element ui.ElementNode, fields map[string]js
 	switch action {
 	case "click":
 		if element.Actions&ui.ActionPress == 0 {
-			return Refuse(Failed, "dom %s takes no click", name)
+			return Refuse(Failed, "element %s takes no click", name)
 		}
 		return r.perform(name, element, ui.ActionPress, "")
 	case "input":
@@ -377,7 +377,7 @@ func (r *Registry) act(name string, element ui.ElementNode, fields map[string]js
 			return Refuse(InvalidParams, "input requires a string value")
 		}
 		if element.Actions&ui.ActionSetValue == 0 {
-			return Refuse(Failed, "dom %s takes no input", name)
+			return Refuse(Failed, "element %s takes no input", name)
 		}
 		return r.perform(name, element, ui.ActionSetValue, *value)
 	case "dispatch":
@@ -388,7 +388,7 @@ func (r *Registry) act(name string, element ui.ElementNode, fields map[string]js
 
 func (r *Registry) perform(name string, element ui.ElementNode, action ui.Actions, text string) error {
 	if err := r.elements.ActElement(element.ID, action, text); err != nil {
-		return Refuse(Failed, "dom %s: %v", name, err)
+		return Refuse(Failed, "element %s: %v", name, err)
 	}
 	return nil
 }
@@ -448,7 +448,7 @@ func (r *Registry) list() (map[string][]map[string]any, error) {
 	registered := map[string]func(name string) bool{
 		"status":   func(name string) bool { return r.statuses[name] != nil },
 		"commands": func(name string) bool { return r.commands[name] != nil || r.later[name] != nil },
-		"dom":      func(name string) bool { return len(drawn[name]) > 0 },
+		"element":  func(name string) bool { return len(drawn[name]) > 0 },
 	}
 	out := map[string][]map[string]any{}
 	for key := range exposeKinds {

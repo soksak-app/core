@@ -17,9 +17,9 @@ The current Linux and Windows platform implementations report that process exit 
 | `sok <command> [window] [--surface <id>] [--<parameter> <value>]... [--params <json>]` | Runs a command that core or a plugin declares in the running application, through the [endpoint](endpoint.md) method `command.run` |
 | `sok commands [window]` | Prints the `commands` list of `exposure.list`: each declared command with its description, parameter and result schemas |
 | `sok windows` | Lists the windows of the running application |
-| `sok exposures [window]` | Lists every declared status, command and DOM entry |
+| `sok exposures [window]` | Lists every declared status, command and element entry |
 | `sok status <name> [window] [--surface <id>] [--watch]` | Prints a status value; `--watch` prints the value and then each change, one JSON line each |
-| `sok dom rect\|click\|input\|dispatch <name> [window] [--surface <id>] [--index <n>] [--value <text>] [--event <json>]` | Acts on a declared DOM entry |
+| `sok element rect\|click\|input\|dispatch <name> [window] [--surface <id>] [--index <n>] [--value <text>] [--event <json>]` | Acts on a declared element entry |
 | `sok input pointer [window] --x <x> --y <y> --phase move\|down\|drag\|up\|scroll [--button left\|right] [--delta-x <n>] [--delta-y <n>] [--activate]` | Sends native pointer input |
 | `sok input key [window] --key <key> --phase down\|up [--text <text>] [--modifiers shift,control,option,command]` | Sends native key input |
 | `sok debug query [--channel <channel>] [--level <level>] [--class <class>] [--layer <layer>] [--event <name>] [--event-prefix <prefix>] [--surface <id>] [--session <id>] [--cid <id>] [--run <id>] [--text <text>] [--from <time>] [--to <time>] [--order asc\|desc] [--limit <n>] [--after <cursor>] [--around <cursor> [--earlier <n>] [--later <n>]]` | Prints one page of the events of the event files of the configuration directory that pass the filter, one text line each, through the indexes of the files ([logging](logging.md#query), [debug](debug.md#timeline)); it does not need a running application |

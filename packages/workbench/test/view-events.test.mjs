@@ -292,3 +292,42 @@ test("a subscription whose registrar throws is refused with its error and regist
   await assert.rejects(subs.textSize(), /no surface/);
   await subs.close();
 });
+
+test("a status watch holds the values of a run and delivers the newest at its end", async () => {
+  const f = fakes();
+  let active = false;
+  let ended = null;
+  let observer = null;
+  const canceled = [];
+  const subs = createViewSubscriptions({
+    ...f, report: (text) => f.failures.push(text), cancel: (event) => canceled.push(event),
+    status: (name, surface, listener) => { observer = listener; return () => {}; },
+    run: { active: () => active, onEnd: (fn) => { ended = fn; return () => {}; } },
+  });
+  await subs.statusWatch("core.grid");
+  active = true;
+  observer({ w: 1 });
+  await new Promise(setImmediate);
+  assert.deepEqual(f.pushed.map(({ data }) => data.value), [{ w: 1 }], "the first value of a watch waited for the end of a run");
+  observer({ w: 2 });
+  observer({ w: 3 });
+  await new Promise(setImmediate);
+  assert.equal(f.pushed.length, 1, "a value of a run was delivered during the run");
+  assert.deepEqual(canceled, ["status"], "a value that a newer value replaced has no record");
+  active = false;
+  ended();
+  await new Promise(setImmediate);
+  assert.deepEqual(f.pushed.map(({ data }) => data.value), [{ w: 1 }, { w: 3 }], "the newest value was not delivered at the end of the run");
+  observer({ w: 4 });
+  await new Promise(setImmediate);
+  assert.deepEqual(f.pushed.at(-1).data.value, { w: 4 }, "a value after the run was not delivered at once");
+
+  active = true;
+  observer({ w: 5 });
+  await subs.statusUnwatch("core.grid");
+  active = false;
+  ended();
+  await new Promise(setImmediate);
+  assert.deepEqual(f.pushed.at(-1).data.value, { w: 4 }, "a held value was delivered after its unwatch");
+  assert.deepEqual(f.failures, []);
+});

@@ -175,6 +175,35 @@ func (f *Frontend) Size() (width, height float64) {
 	return float64(w), float64(h)
 }
 
+// ContentSize is the content size in logical pixels.
+func (f *Frontend) ContentSize() (width, height float64) {
+	w, h := f.window.ContentSize()
+	return float64(w), float64(h)
+}
+
+// Visible tells whether the window shows, which it does not while it is minimized or not shown.
+func (f *Frontend) Visible() bool { return f.window.IsVisible() && !f.window.IsMinimized() }
+
+// Scale is the backing scale of the window, from its native facts.
+func (f *Frontend) Scale() (float64, error) {
+	system, err := platform.Current()
+	if err != nil {
+		return 0, err
+	}
+	var text string
+	mygo.RunOnMain(func() { text, err = system.WindowFacts(f.NativeWindow()) })
+	if err != nil {
+		return 0, err
+	}
+	var facts struct {
+		Scale float64 `json:"scale"`
+	}
+	if err := json.Unmarshal([]byte(text), &facts); err != nil {
+		return 0, fmt.Errorf("window facts: %w", err)
+	}
+	return facts.Scale, nil
+}
+
 // Position is the position in logical pixels.
 func (f *Frontend) Position() (x, y float64) {
 	left, top := f.window.Position()

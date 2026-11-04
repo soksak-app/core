@@ -1457,14 +1457,14 @@ fn responder_changed(window: &Window) {
     crate::routine::spawn_named("window-responder", move || send_responder(&window, false));
 }
 
-/// Sends the current first responder to the page that reported ready.
-fn responder_page_ready(window: &Window) {
+/// Sends the current first responder to the workbench that reported ready.
+fn responder_workbench_ready(window: &Window) {
     let window = window.clone();
     crate::routine::spawn_named("window-responder", move || send_responder(&window, true));
 }
 
 fn send_responder(window: &Window, ready: bool) {
-    // silent: a window whose records the close removed has no page that receives the responder.
+    // silent: a window whose records the close removed has no workbench that receives the responder.
     let Some(data) = window_data_if_registered(window) else {
         return;
     };
@@ -1492,7 +1492,7 @@ pub fn window_ready(window: &Window) -> Result<(), String> {
             log_error("image-detach-ended", error);
         }
     }
-    responder_page_ready(window);
+    responder_workbench_ready(window);
     crate::exposure::replay_registrations(window);
     crate::exposure::windows_changed(window.app_handle());
     for ready in data

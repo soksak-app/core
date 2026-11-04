@@ -65,6 +65,8 @@ func TestRelayedViewRegistrationIsRecordedAndAnnounced(t *testing.T) {
 func TestRelayedViewRegistrationRefusalsRecordNothing(t *testing.T) {
 	for _, test := range []struct{ name, kind, want string }{
 		{"probe.lines", "entry", `unknown exposure kind "entry"`},
+		{"probe.card", "dom", `unknown exposure kind "dom"`},
+		{"probe.card", "element", ""},
 		{"host.buttons", "status", `a surface cannot register "host.buttons"`},
 		{"core.grid", "status", `a surface cannot register "core.grid"`},
 		{"core.surface.document", "status", ""},

@@ -60,7 +60,7 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 test("a layout failure of a project switch started from the interface writes one workbench error line", async () => {
   reportRejectionsAsPage();
   lines.length = 0;
-  registry.declare("core", { status: [], dom: [], commands: [{
+  registry.declare("core", { status: [], element: [], commands: [{
     name: "core.fixture.activate", description: "Activates.", params: { type: "object", properties: {} }, result: { type: "null" },
   }] });
   // A project switch schedules the loaded layout on the plane, waits for its presentation, and then replies (showProject of projects.js).

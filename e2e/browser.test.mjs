@@ -532,7 +532,7 @@ for (const app of Object.values(APPS)) {
     await s.until("core.settings", (value) => value.values.mode === "dark" && !value.saving,
       "host did not settle dark theme before reload");
     await s.run("host.window.reload");
-    await s.until("core.window.document", (doc) => doc.readyState === "complete", "main document did not reload");
+    await s.until("core.window.workbench", (workbench) => workbench.readyState === "complete", "the workbench did not start again");
     const restored = await browsers(s);
     const restoredSurface = restored.find((item) => item.surface === surface)?.surface ?? restored[0]?.surface;
     assert.ok(restoredSurface, "reloaded browser document did not restore");

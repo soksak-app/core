@@ -140,11 +140,11 @@ var Declared = sync.OnceValues(func() (*Declarations, error) {
 		params[entry["name"].(string)] = entry["params"]
 	}
 	many := map[string]bool{}
-	for _, entry := range exposure.Exposes["dom"] {
+	for _, entry := range exposure.Exposes["element"] {
 		many[entry["name"].(string)] = entry["many"] == true
 	}
 	return &Declarations{
-		Statuses: names(exposure.Exposes["status"]), Commands: names(exposure.Exposes["commands"]), Elements: names(exposure.Exposes["dom"]),
+		Statuses: names(exposure.Exposes["status"]), Commands: names(exposure.Exposes["commands"]), Elements: names(exposure.Exposes["element"]),
 		Shortcuts: shortcuts.Shortcuts, exposes: exposure.Exposes, params: params, many: many, chrome: values.Chrome, themes: values.Themes,
 	}, nil
 })

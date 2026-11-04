@@ -36,7 +36,7 @@ const lane = (capability, language, implementation, tests, options = {}) => ({
 
 // The connections of existing components are also kept as a file list. They are not interpreted as behavior evidence.
 const MATRIX = [
-  lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/rust-repeat.test.mjs", "scripts/test/windows-build-check.test.mjs", "scripts/test/e2e-registry-tls.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/rust-repeat.test.mjs", "scripts/test/windows-build-check.test.mjs", "scripts/test/host-debug-check.test.mjs", "scripts/test/e2e-registry-tls.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("macOS application bundle preparation", "js-ts", ["scripts/platform/darwin/prepare-app-bundle.mjs"], ["scripts/test/platform/darwin/bundle-preparation.test.mjs"], { sharedTests: true }),
   lane("CI workflows", "workflow", [".github/workflows/*.yml"], ["scripts/test/workflows.test.mjs", "scripts/test/test-kinds.test.mjs"], { testLanguage: "js-ts" }),
   lane("CI toolchain setup actions", "workflow", [".github/actions/setup-*/action.yml"], ["scripts/test/workflow-setup.test.mjs"], { testLanguage: "js-ts" }),
@@ -47,7 +47,7 @@ const MATRIX = [
     "scripts/check-e2e-host-parity.mjs",
     "scripts/check-exposure.mjs",
     "scripts/check-host-parity.mjs",
-  ], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/e2e-host-parity.test.mjs", "scripts/test/check-host-parity.test.mjs", "scripts/test/check-exposure.test.mjs"], { sharedTests: true }),
+  ], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/e2e-host-parity.test.mjs", "scripts/test/main-page-apps.test.mjs", "scripts/test/check-host-parity.test.mjs", "scripts/test/check-exposure.test.mjs"], { sharedTests: true }),
   lane("test inventory", "js-ts", ["scripts/check-test-parity.mjs"], ["scripts/test/test-parity.test.mjs"]),
   lane("host contract audit", "js-ts", ["scripts/check-host-contract.mjs"], ["scripts/test/check-host-contract.test.mjs", "scripts/test/view-region-calls.test.mjs", "scripts/test/plugin-host-calls.test.mjs"]),
 lane("command supervision", "js-ts", ["scripts/test-command.mjs"], ["scripts/test/test-command.test.mjs"]),
@@ -141,7 +141,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Tauri framework adapter", "rust", ["packages/host/tauriv2/src/**/*.rs"], ["packages/host/tauriv2/tests/**/*.rs", "packages/host/tauriv2/src/plugins_starter_test.rs"]),
   lane("Tauri application bootstrap", "rust", ["apps/tauriv2/src/main.rs", "apps/tauriv2/build.rs"], ["e2e/**/*.mjs", "e2e/platform/platform.js", "e2e/platform/darwin/darwin.js", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js", "e2e/fixtures/*/*/ui/*.html"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
 
-  lane("Go language host library", "go", ["packages/host/go/src/**/*.go"], ["packages/host/go/tests/**/*.go", "packages/host/go/tests/fixtures/**/*.json", "packages/host/go/src/exposure_settled_test.go", "packages/host/go/src/projects_test.go", "packages/host/go/src/windows_main_page_test.go", "packages/host/go/src/document_post_test.go", "packages/host/go/src/images_relay_test.go", "packages/host/go/src/image_detach_test.go", "packages/host/go/src/responder_test.go", "packages/host/go/src/start_test.go", "packages/host/go/src/diagnostics_test.go", "packages/host/go/src/diagnostics_input_reference_test.go", "packages/host/go/src/diagnostics_clock_test.go", "packages/host/go/src/composition_overlay_test.go", "packages/host/go/src/platform/darwin/webview_overlay_test.go", "packages/host/go/src/platform/darwin/document_test.go", "packages/host/go/src/platform/darwin/input_reference_test.go", "packages/host/go/src/exposure_status_test.go", "packages/host/go/src/exposure_webviews_test.go", "packages/host/go/src/modals_readiness_test.go", "packages/host/go/src/object_counts_test.go", "packages/host/go/src/view_lifecycle_test.go", "packages/host/go/src/view_responsiveness_test.go", "packages/host/go/src/view_theme_test.go", "packages/host/go/src/view_start_test.go", "packages/host/go/src/log_policy_levels_test.go", "packages/host/go/src/view_call_peer_test.go", "packages/host/go/src/view_call_record_test.go", "packages/host/go/src/view_error_test.go", "packages/host/go/src/view_binary_test.go", "packages/host/go/src/documents_test.go", "packages/host/go/src/presentation_wait_test.go", "packages/host/go/src/view_join_test.go", "packages/host/go/src/sidecar_reply_test.go", "packages/host/go/src/surface_elements_test.go", "packages/host/go/src/surfaces_test.go", "packages/host/go/src/view_origin_test.go", "packages/host/go/src/source_origins_test.go", "packages/host/go/src/sidecar_routes_test.go", "packages/host/go/src/sidecars_session_retention_test.go", "packages/host/go/src/plugins_starter_test.go", "packages/host/go/src/images_test.go", "packages/host/go/src/windows_front_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
+  lane("Go language host library", "go", ["packages/host/go/src/**/*.go"], ["packages/host/go/tests/**/*.go", "packages/host/go/tests/fixtures/**/*.json", "packages/host/go/src/exposure_settled_test.go", "packages/host/go/src/projects_test.go", "packages/host/go/src/windows_main_page_test.go", "packages/host/go/src/surface_elements_test.go", "packages/host/go/src/document_post_test.go", "packages/host/go/src/images_relay_test.go", "packages/host/go/src/image_detach_test.go", "packages/host/go/src/responder_test.go", "packages/host/go/src/start_test.go", "packages/host/go/src/diagnostics_test.go", "packages/host/go/src/diagnostics_input_reference_test.go", "packages/host/go/src/diagnostics_clock_test.go", "packages/host/go/src/composition_overlay_test.go", "packages/host/go/src/platform/darwin/webview_overlay_test.go", "packages/host/go/src/platform/darwin/document_test.go", "packages/host/go/src/platform/darwin/input_reference_test.go", "packages/host/go/src/exposure_status_test.go", "packages/host/go/src/exposure_webviews_test.go", "packages/host/go/src/modals_readiness_test.go", "packages/host/go/src/object_counts_test.go", "packages/host/go/src/view_lifecycle_test.go", "packages/host/go/src/view_responsiveness_test.go", "packages/host/go/src/view_theme_test.go", "packages/host/go/src/view_start_test.go", "packages/host/go/src/log_policy_levels_test.go", "packages/host/go/src/view_call_peer_test.go", "packages/host/go/src/view_call_record_test.go", "packages/host/go/src/view_error_test.go", "packages/host/go/src/view_binary_test.go", "packages/host/go/src/documents_test.go", "packages/host/go/src/presentation_wait_test.go", "packages/host/go/src/view_join_test.go", "packages/host/go/src/sidecar_reply_test.go", "packages/host/go/src/surfaces_test.go", "packages/host/go/src/view_origin_test.go", "packages/host/go/src/source_origins_test.go", "packages/host/go/src/sidecar_routes_test.go", "packages/host/go/src/sidecars_session_retention_test.go", "packages/host/go/src/plugins_starter_test.go", "packages/host/go/src/images_test.go", "packages/host/go/src/windows_front_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
   lane("Wails framework adapter", "go", ["packages/host/wailsv3/src/**/*.go"], ["packages/host/wailsv3/tests/**/*.go"], { sharedTests: true }),
   lane("mygo framework adapter", "go", ["packages/host/mygo/src/**/*.go"], ["packages/host/mygo/tests/**/*.go"], { sharedTests: true }),
   lane("empty mygo window benchmark", "go", ["packages/host/mygo/benchmark/empty_window.go", "packages/host/mygo/benchmark/cmd/main.go"], ["packages/host/mygo/benchmark/empty_window_test.go"], { sharedTests: true }),
@@ -213,8 +213,8 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("mygo environment declaration", "declaration", ["apps/mygo/environment.json"], ["apps/mygo/test/environment.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Go host bridge", "js-ts", ["packages/host/go/src/bridge.js"], ["apps/wailsv3/test/runtime-contract.test.mjs"], { sharedTests: true }),
   lane("Go host native webview bridge", "objective-c", ["packages/host/go/src/platform/darwin/webview.m"], ["packages/host/go/tests/documents_test.go"], { testLanguage: "go", sharedTests: true }),
-  lane("Go host main-thread interface", "native-interface", ["packages/host/go/src/platform/darwin/main_thread.h"], ["packages/host/wailsv3/tests/platform/darwin/main_thread_stack_test.go", "packages/host/go/tests/main_thread_test.go", "packages/host/go/src/platform/darwin/main_test.go"], { testLanguage: "go", sharedTests: true }),
-  lane("Go host main-thread functions", "objective-c", ["packages/host/go/src/platform/darwin/main_thread.m"], ["packages/host/wailsv3/tests/platform/darwin/main_thread_stack_test.go", "packages/host/go/tests/main_thread_test.go", "packages/host/go/src/platform/darwin/main_test.go"], { testLanguage: "go", sharedTests: true }),
+  lane("Go host main-thread interface", "native-interface", ["packages/host/go/src/platform/darwin/main_thread.h"], ["packages/host/wailsv3/tests/platform/darwin/main_thread_stack_test.go", "packages/host/go/tests/main_thread_test.go", "packages/host/go/src/platform/darwin/main_test.go", "packages/host/go/src/main_test.go"], { testLanguage: "go", sharedTests: true }),
+  lane("Go host main-thread functions", "objective-c", ["packages/host/go/src/platform/darwin/main_thread.m"], ["packages/host/wailsv3/tests/platform/darwin/main_thread_stack_test.go", "packages/host/go/tests/main_thread_test.go", "packages/host/go/src/platform/darwin/main_test.go", "packages/host/go/src/main_test.go"], { testLanguage: "go", sharedTests: true }),
   lane("Workbench styles", "stylesheet", ["packages/workbench/app.css", "packages/workbench/library.css"], ["packages/workbench/test/background.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Workbench declarations", "declaration", ["packages/workbench/exposure.json"], ["packages/workbench/test/exposure.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("mygo workbench declarations", "declaration", ["packages/workbench-mygo/src/exposure.json"], ["scripts/test/check-exposure.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
@@ -475,14 +475,14 @@ const FEATURE_LINKS = [
     id: "F502-2-2",
     implementation: [
       { file: "packages/window-check/app.mjs", symbol: "export function requiredApps(env) {" },
-      { file: "packages/window-check/app.mjs", symbol: "export function requiresBoth(env) {" },
+      { file: "packages/window-check/app.mjs", symbol: "export function requiresAll(env, defaults = DEFAULT_APPS) {" },
       { file: "packages/window-check/app.mjs", symbol: "export function windowPosition(name, area, frame) {" },
       { file: "packages/window-check/view-metrics.mjs", symbol: "export function domMountBaselineMs(host, recordedMs) {" },
       { file: "e2e/benchmark/cases/hwp.mjs", symbol: "export function hwpFirstDisplayLimitMs(host) {" },
     ],
     tests: [
       { file: "packages/window-check/test/required-apps.test.mjs", id: "requiredApps accepts mygo as SOKSAK_APP and keeps it out of the set without SOKSAK_APP" },
-      { file: "packages/window-check/test/required-apps.test.mjs", id: "requiresBoth is true only when the required set holds both applications" },
+      { file: "packages/window-check/test/required-apps.test.mjs", id: "requiresAll is true only when the required set holds every application of the default set" },
       { file: "packages/window-check/test/window-position.test.mjs", id: "windowPosition gives each of the three applications its own position inside the visible area" },
       { file: "packages/window-check/test/window-position.test.mjs", id: "windowPosition centres mygo on whole points in an area of odd remaining width" },
       { file: "packages/window-check/test/window-position.test.mjs", id: "windowPosition rejects an application that has no window position" },
@@ -492,7 +492,7 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/test/view-metrics.test.mjs", id: "view metric runner evaluates the mygo host with the lower of the recorded baselines" },
       { file: "e2e/test/hwp-view-metrics-case.test.mjs", id: "HWP first-display limit is the DOM mount baseline of the host plus the first-display margin" },
     ],
-    expected: "SOKSAK_APP=mygo selects the mygo application while the set without SOKSAK_APP stays wailsv3 and tauriv2, requiresBoth names wailsv3 and tauriv2, the three applications have three window positions in the visible area, and one function gives the DOM mount baseline of each host, the lower recorded value for mygo.",
+    expected: "SOKSAK_APP=mygo selects the mygo application while the set without SOKSAK_APP stays wailsv3 and tauriv2, requiresAll holds when the required set holds every application of that set, the three applications have three window positions in the visible area, and one function gives the DOM mount baseline of each host, the lower recorded value for mygo.",
     levels: ["unit"],
   },
   {
@@ -675,7 +675,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/src/surface_elements_test.go", id: "TestAnElementReleasesItsViewsWhenNoFrameCanFollow" },
       { file: "packages/host/go/src/surface_elements_test.go", id: "TestAWindowWithAMainPageHasNoElements" },
       { file: "packages/host/go/src/surface_elements_test.go", id: "TestAWindowWithoutAMainPageStartsWithoutThePageTitleBar" },
-      { file: "packages/host/go/src/surface_elements_test.go", id: "TestAWindowWithoutAMainPageCountsItsHostObjects" },
+      { file: "packages/host/go/src/object_counts_test.go", id: "TestAWindowWithoutAMainPageCountsItsHostObjects" },
       { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestACardDrawsTheNativeViewElementOfItsSurface" },
       { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestADiagnosticPluginAddsItsDeclarationsToTheSurface" },
       { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestAViewFollowsTheSettingsOfItsPlugin" },
@@ -814,6 +814,36 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F532",
+    implementation: [
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "crate::event_record::quit_with_cause(\"update\", || host.0.quit());" },
+      { file: "Makefile", symbol: "hosts-check: windows-build-check host-debug-check" },
+    ],
+    tests: [
+      { file: "scripts/test/host-debug-check.test.mjs", id: "the debug check compiles the features and tags of the debug apps" },
+      { file: "scripts/test/host-debug-check.test.mjs", id: "hosts-check runs the debug check" },
+    ],
+    expected: "make hosts-check compiles the sources and the tests of the two hosts and the two apps with the features and the tags of the debug apps, and the update step of the Rust diagnostics ends the application through quit.",
+    levels: ["unit"],
+  },
+  {
+    id: "F530",
+    implementation: [
+      { file: "packages/workbench/package.json", symbol: "\"head-fit.js\"," },
+      { file: "packages/plugin-api/index.js", symbol: "export function importSpecifiers(source) {" },
+      { file: "packages/workbench/staged.js", symbol: "export function missingPageReferences(out, page) {" },
+      { file: "packages/workbench/stage.mjs", symbol: "const missing = STAGED.pages.flatMap((page) => missingPageReferences(target, page));" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/stage.test.mjs", id: "staging holds every file that a staged page reaches, in a release and in a diagnostic build" },
+      { file: "packages/workbench/test/stage.test.mjs", id: "staging fails on a page that reaches a file that is not staged, and names the file" },
+      { file: "packages/workbench/test/stage.test.mjs", id: "staging leaves the imports of the application runtime to its host" },
+      { file: "packages/workbench/test/stage.test.mjs", id: "staging reads the references of a page as a browser parser does" },
+    ],
+    expected: "Every script, style and import that a staged page reaches in a release and in a diagnostic build is staged, except the documents that a host creates for each request.",
+    levels: ["unit"],
+  },
+  {
     id: "F527",
     implementation: [
       { file: "packages/workbench/settings.js", symbol: "export function settingType(key) {" },
@@ -824,6 +854,37 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/settings-change-types.test.mjs", id: "core.settings.change gives each setting a value of its declared type" },
     ],
     expected: "core.settings.change takes the type of a setting from its declaration, converts only the string of a control, and refuses a value of another type with invalid params and the check of its setting.",
+    levels: ["unit"],
+  },
+  {
+    id: "F502-13",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "export const EXPOSE_KINDS = Object.freeze({ status: \"status\", commands: \"command\", element: \"element\" });" },
+      { file: "packages/plugin-api/binder.js", symbol: "export function roleOf(element) {" },
+      { file: "packages/workbench/core-exposure.js", symbol: "status(\"core.window.workbench\", () => ({" },
+      { file: "packages/host/go/src/endpoint.go", symbol: "\"element.rect\":  elementRequest(\"element.rect\")," },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "pub fn check_registration_kind(kind: &str) -> Result<(), String> {" },
+      { file: "packages/sok/go/src/manifest.go", symbol: "exposes.dom is removed; an exposed element is declared in exposes.element" },
+      { file: "packages/sok/rust/src/manifest.rs", symbol: "exposes.dom is removed; an exposed element is declared in exposes.element" },
+      { file: "packages/window-check/app.mjs", symbol: "export const MAIN_PAGE_APPS = Object.values(APPS).filter((app) => MAIN_PAGE_NAMES.includes(app.name));" },
+      { file: "scripts/check-e2e-host-parity.mjs", symbol: "function selections(text) {" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/removed-members.test.mjs", id: "the exposes member dom is refused as removed, and exposes.element declares an exposed element" },
+      { file: "packages/plugin-api/test/exposure-check.test.mjs", id: "a name registered with expose.element is an element name and must be declared" },
+      { file: "packages/workbench/test/workbench-statuses.test.mjs", id: "core.window.workbench, core.workbench.error and core.workbench.audit describe the workbench and the page names are refused" },
+      { file: "packages/host/go/src/exposure_status_test.go", id: "TestRelayedViewRegistrationRefusalsRecordNothing" },
+      { file: "packages/host/go/tests/exposure_test.go", id: "TestHostHitDeclaresTheWorkbenchDocumentAndNativeKinds" },
+      { file: "packages/host/rust/tests/exposure_test.rs", id: "a_registration_kind_is_status_command_or_element" },
+      { file: "packages/host/rust/tests/exposure_test.rs", id: "host_hit_declares_the_workbench_document_and_native_kinds" },
+      { file: "packages/client/test/client.test.mjs", id: "the sample endpoint lists element entries and answers element.rect and element.act" },
+      { file: "packages/window-check/test/required-apps.test.mjs", id: "requiresAll reads the default set, so a default set of three applications is not held by a required set of two" },
+      { file: "packages/window-check/test/prepare-fixture-settings.test.mjs", id: "the preparation reloads the workbench and waits for a new start of core.window.workbench" },
+      { file: "scripts/test/e2e-host-parity.test.mjs", id: "a window check that iterates another set of applications is an error" },
+      { file: "scripts/test/main-page-apps.test.mjs", id: "MAIN_PAGE_APPS lists the applications whose environment.json names a runtime" },
+      { file: "scripts/test/measure-object-counts.test.mjs", id: "the plugins apply waits for a new start of core.window.workbench, which comes in the same page process" },
+    ],
+    expected: "The exposure kind is element on the plugin API, the workbench, both hosts, sok, MCP and the client, a manifest with exposes.dom is refused, the workbench statuses are defined over the workbench, an audit row names the role of an element, and a window check iterates Object.values(APPS) or MAIN_PAGE_APPS.",
     levels: ["unit"],
   },
   {
@@ -903,6 +964,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F526",
+    implementation: [
+      { file: "packages/window-check/stall-sample.mjs", symbol: "function endError(error, stderr, limitMs) {" },
+      { file: "packages/window-check/stall-sample.mjs", symbol: "export function runProcess(command, args, limitMs = 10000) {" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/stall-sample.test.mjs", id: "a process ended at its limit is named with the signal, the limit and its standard error" },
+      { file: "packages/window-check/test/stall-sample.test.mjs", id: "a process ended by a signal of another sender is not reported as ended at its limit" },
+    ],
+    expected: "A process of the stall sample that does not reach its own exit fails with its signal, the limit when the limit ended it, and its standard error.",
+    levels: ["unit"],
+  },
+  {
     id: "F523",
     implementation: [
       { file: "packages/plugin-api/exposure-check.js", symbol: "export function checkContractCopies(root) {" },
@@ -915,6 +989,51 @@ const FEATURE_LINKS = [
       { file: "packages/plugin-api/test/exposure-check.test.mjs", id: "a release without contract-copies.json holds no contract copy" },
     ],
     expected: "checkPluginRepository compares each member of contract-copies.json with the SHA-256 of the file of the same name in contract/ of its package and reports a name that contract/ does not hold or a digest that differs.",
+    levels: ["unit"],
+  },
+  {
+    id: "F528",
+    implementation: [
+      { file: "packages/host/go/src/host.go", symbol: "<-session.started" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/termination_test.go", id: "TestATerminationSignalAfterTheStartQuitsTheFramework" },
+    ],
+    expected: "The first termination signal after the start of the application reaches the quit of the framework.",
+    levels: ["unit"],
+  },
+  {
+    id: "F522",
+    implementation: [
+      { file: "native/darwin/src/image_region.m", symbol: "@interface SPRegionInputContext : NSTextInputContext" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_region_input_document_test.m", id: "the region makes its input context" },
+    ],
+    expected: "The input context of an image region states no document access, so Korean composes from its first syllable.",
+    levels: ["native"],
+  },
+  {
+    id: "F533",
+    implementation: [
+      { file: "packages/workbench/memory-saver.js", symbol: 'if (trigger === "delay") entry.unloadAt = now() + delayMs();' },
+    ],
+    tests: [
+      { file: "packages/workbench/test/memory-saver.test.mjs", id: "a failed ${step} at the deadline runs again one delay later, not at the deadline that passed" },
+    ],
+    expected: "A delay unload that fails runs again one delay later.",
+    levels: ["unit"],
+  },
+  {
+    id: "F531",
+    implementation: [
+      { file: "scripts/measure-app-usage.mjs", symbol: "const remaining = unattributed.filter(({ pid }) => !ended.has(pid));" },
+    ],
+    tests: [
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "measureApps leaves out a process of no application that ends between the cpu reads" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "measureApps reports a process of the application that ends between the cpu reads" },
+    ],
+    expected: "A process of no application that ends during a measurement leaves the measurement, and a process of the application that ends fails it.",
     levels: ["unit"],
   },
   {
@@ -4123,7 +4242,7 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/plugin-api/binder.js", symbol: "parentNode" }],
     tests: [
       { file: "packages/plugin-api/test/binder.test.mjs", id: "audit recognizes delegated controls inside a shadow root" },
-      { file: "e2e/audit.test.mjs", id: "every control on every screen runs a declared command and has a dom name" },
+      { file: "e2e/audit.test.mjs", id: "every control on every screen runs a declared command and has an element name" },
     ],
     expected: "Delegated controls inside plugin ShadowRoots are recognized by the runtime audit in both rebuilt hosts.",
     levels: ["unit", "application"],
@@ -4131,21 +4250,21 @@ const FEATURE_LINKS = [
   {
     id: "F11-1",
     implementation: [
-      { file: "packages/workbench/core-exposure.js", symbol: "core.page.audit" },
+      { file: "packages/workbench/core-exposure.js", symbol: "core.workbench.audit" },
       { file: "packages/plugin-api/surface-document.js", symbol: "unbound" },
     ],
-    tests: [{ file: "e2e/audit.test.mjs", id: "every control on every screen runs a declared command and has a dom name" }],
-    expected: "Rebuilt Tauri and Wails audit every visible control on workspace, menus, renames, settings scopes and sections, library forms/search, and the return path; every control has a declared command and DOM name.",
+    tests: [{ file: "e2e/audit.test.mjs", id: "every control on every screen runs a declared command and has an element name" }],
+    expected: "Rebuilt Tauri and Wails audit every visible control on workspace, menus, renames, settings scopes and sections, library forms/search, and the return path; every control has a declared command and element name.",
     levels: ["application"],
   },
   {
     id: "F11",
     implementation: [
-      { file: "packages/workbench/core-exposure.js", symbol: "core.page.audit" },
+      { file: "packages/workbench/core-exposure.js", symbol: "core.workbench.audit" },
       { file: "scripts/language-test-adapters.mjs", symbol: "runLanguageCases" },
     ],
     tests: [
-      { file: "e2e/audit.test.mjs", id: "every control on every screen runs a declared command and has a dom name" },
+      { file: "e2e/audit.test.mjs", id: "every control on every screen runs a declared command and has an element name" },
       { file: "scripts/test/test-language-test-adapters.test.mjs", id: "parses each language result and rejects zero, skipped, and crashed outcomes" },
     ],
     expected: "Exposure declarations, runtime binder coverage, and every declared JS/TS, Rust, Go, and Objective-C language lane provide attributable behavior results without hidden skips or fallback success.",
@@ -5487,7 +5606,7 @@ const FEATURE_LINKS = [
       { file: "scripts/check-app-update.mjs", symbol: "export function endpointOf" },
     ],
     tests: [
-      { file: "packages/plugin-api/test/exposure.test.mjs", id: "a dom request refuses an index that is not a non-negative integer instead of reading it as the first element" },
+      { file: "packages/plugin-api/test/exposure.test.mjs", id: "an element request refuses an index that is not a non-negative integer instead of reading it as the first element" },
       { file: "packages/plugin-api/test/exposure.test.mjs", id: "an undefined status value or command result is refused with an error that names it, and null is the no-value" },
       { file: "packages/workbench/test/surface-view.test.mjs", id: "a view reply the host refuses is reported through the page error path" },
       { file: "packages/workbench/test/exposure.test.mjs", id: "an observation whose watch the surface refuses reports the error with its surface" },
@@ -7129,7 +7248,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/workbench/test/picker-layer.test.mjs", id: "a grouped picker draws headings that take no press and counts only the items" },
-      { file: "packages/workbench/test/picker-layer.test.mjs", id: "the icon and the name of a heading and of an item carry declared dom names and the headings are reported" },
+      { file: "packages/workbench/test/picker-layer.test.mjs", id: "the icon and the name of a heading and of an item carry declared element names and the headings are reported" },
       { file: "packages/workbench/test/picker-columns.test.mjs", id: "the icon and the name of a heading and of its items share one column at every depth" },
       { file: "e2e/space-apps.test.mjs", id: "a fullscreen card lists the apps of the space by card and switches to a picked one" },
     ],
@@ -9061,7 +9180,7 @@ const FEATURE_LINKS = [
   {
     id: "F351",
     implementation: [
-      { file: "packages/window-check/app.mjs", symbol: "async function documentReplies(client, window)" },
+      { file: "packages/window-check/app.mjs", symbol: "async function workbenchReplies(client, window)" },
     ],
     tests: [
       { file: "packages/window-check/test/unresponsive.test.mjs", id: "a document that does not reply to a request and to the probe after it makes the later checks of its application fail at once" },
@@ -9680,7 +9799,7 @@ const FEATURE_LINKS = [
   {
     id: "F418",
     implementation: [{ file: "e2e/hosts.test.mjs", symbol: "const byPosition" }],
-    tests: [{ file: "e2e/hosts.test.mjs", id: "both hosts answer the same page the same way" }],
+    tests: [{ file: "e2e/hosts.test.mjs", id: "every host answers the same page the same way" }],
     expected: "The settled drag check compares surface frames ordered by position.",
     levels: ["application"],
   },
@@ -11793,7 +11912,7 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // F503 states the framework fork that the Wails host pins in the native surfaces specification and in the go.mod comments; it
 // changes no runtime capability.
 // F524 corrects the release checks that the verification specification states; it changes no runtime capability.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
+const NON_CAPABILITY_COMPLETIONS = new Set(["F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66), the window checks of plugins (F110) and the registry listing of the hwp plugin (F141, registry items G37 and G38). Core cannot read

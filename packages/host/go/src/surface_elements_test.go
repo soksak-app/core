@@ -121,39 +121,3 @@ func TestAWindowWithoutAMainPageStartsWithoutThePageTitleBar(t *testing.T) {
 		t.Fatal("the start asked for the title bar of a main page")
 	}
 }
-
-// objectPlatform counts the objects of each page, and a window without a main page has no main web view to count.
-type objectPlatform struct {
-	pagelessPlatform
-}
-
-func (*objectPlatform) MainWebview(unsafe.Pointer) (unsafe.Pointer, error) {
-	return nil, errors.New("the window has no registered app DOM webview")
-}
-
-func (*objectPlatform) CountPageObjects(_ unsafe.Pointer, _ bool, done func(elements, documents int64, err error)) {
-	done(3, 1, nil)
-}
-
-func TestAWindowWithoutAMainPageCountsItsHostObjects(t *testing.T) {
-	window := &elementWindow{}
-	window.native = unsafe.Pointer(new(byte))
-	previousFramework, previousSystem := framework, system
-	framework, system = pagelessFramework{window: window}, &objectPlatform{}
-	t.Cleanup(func() { framework, system = previousFramework, previousSystem })
-	sidecars, err := NewSidecars(nil, t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	surfaces := NewSurfaces(window, sidecars)
-	surfaces.name = "window-a"
-	h := &Host{windows: map[uint]*Surfaces{1: surfaces}, sidecars: sidecars, relay: NewRelay[relayTarget]()}
-	h.endpoint = NewEndpoint(hostBackend{h})
-	counts, err := hostBackend{h}.ObjectCounts("window-a")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if counts.Payload()["page"] != nil || len(counts.Sessions) != 0 {
-		t.Fatalf("the counts are %+v", counts.Payload())
-	}
-}

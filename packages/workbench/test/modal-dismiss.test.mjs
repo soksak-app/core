@@ -16,7 +16,7 @@ registry.declare("core", {
   commands: [
     { name: "core.modal.dismiss", description: "Dismisses the open native menu.", params: { type: "object", properties: {} }, result: { type: "null" } },
   ],
-  dom: [],
+  element: [],
 });
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));

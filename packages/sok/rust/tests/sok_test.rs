@@ -248,24 +248,24 @@ fn the_only_window_is_used_and_parameters_are_sent() {
         ),
         (&["exposures"], "exposure.list", r#"{"window":"main"}"#),
         (
-            &["dom", "rect", "core.card", "--index", "2"],
-            "dom.rect",
+            &["element", "rect", "core.card", "--index", "2"],
+            "element.rect",
             r#"{"index":2,"name":"core.card","window":"main"}"#,
         ),
         (
-            &["dom", "input", "fixture.input", "--value", "ls"],
-            "dom.act",
+            &["element", "input", "fixture.input", "--value", "ls"],
+            "element.act",
             r#"{"action":"input","name":"fixture.input","value":"ls","window":"main"}"#,
         ),
         (
             &[
-                "dom",
+                "element",
                 "dispatch",
                 "x.y",
                 "--event",
                 r#"{"type":"keydown","key":"a"}"#,
             ],
-            "dom.act",
+            "element.act",
             r#"{"action":"dispatch","event":{"key":"a","type":"keydown"},"name":"x.y","window":"main"}"#,
         ),
         (
@@ -483,7 +483,7 @@ fn declared() -> Fake {
         r#"{"status":[],"commands":[{"name":"fixture.do","description":"d","params":{"type":"object","properties":{"#,
         r#""text":{"type":"string"},"count":{"type":"number"},"whole":{"type":"integer"},"flag":{"type":"boolean"},"#,
         r#""choice":{"enum":["one","two"]},"maybe":{"type":["string","null"]},"object":{"type":"object"},"list":{"type":"array"}}},"#,
-        r#""result":{"type":"object"}},{"name":"fixture.none","description":"n","params":{"type":"object","properties":{}}}],"dom":[]}"#
+        r#""result":{"type":"object"}},{"name":"fixture.none","description":"n","params":{"type":"object","properties":{}}}],"element":[]}"#
     );
     start(move |method, params| match method {
         "windows.list" => result(ONE_WINDOW),
@@ -500,7 +500,7 @@ fn declared() -> Fake {
 // contract: cli.command.host-command-without-page
 #[test]
 fn a_host_command_is_checked_against_the_host_entries_without_the_page() {
-    let host = r#"{"status":[],"commands":[{"name":"host.quit","description":"q","params":{"type":"object","properties":{}},"registered":true}],"dom":[]}"#;
+    let host = r#"{"status":[],"commands":[{"name":"host.quit","description":"q","params":{"type":"object","properties":{}},"registered":true}],"element":[]}"#;
     let fake = start(move |method, params| match method {
         "windows.list" => result(ONE_WINDOW),
         "exposure.list" if params["owner"] == "host" => result(host),

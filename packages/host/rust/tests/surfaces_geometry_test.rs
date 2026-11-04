@@ -50,8 +50,8 @@ fn sync_request_resolves_request_local_view_declaration_indices() {
     );
 
     let declarations = serde_json::json!([
-        {"commands": ["open"], "dom": ["one"]},
-        {"commands": ["save"], "dom": ["two"]},
+        {"commands": ["open"], "element": ["one"]},
+        {"commands": ["save"], "element": ["two"]},
     ]);
     let request: SyncRequest = serde_json::from_value(serde_json::json!({
         "settled": true,

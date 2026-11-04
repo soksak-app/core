@@ -39,7 +39,7 @@ test("mounting a view whose stored origin is refused leaves the view out and doe
   assert.notEqual(viewRefusal(surfaceId), null, "the layout read refused the view tab");
   registerPlugin({ id: pluginId, surface: () => null });
   const composition = { kind: "view", page: "ui/page.html" };
-  const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
+  const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], element: [] }, sidecars: [], composition };
   try {
     authorizeSurface(surfaceId);
     await mountSurface(document.querySelector("#slot"), surface, { onState: () => {} });

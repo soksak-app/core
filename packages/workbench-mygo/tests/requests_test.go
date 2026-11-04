@@ -126,11 +126,11 @@ func TestARequestIsRefusedAsThePageRefusesIt(t *testing.T) {
 		{"status.get", `{"name":"core.absent"}`, 1001, "unknown status core.absent"},
 		{"status.watch", `{"name":"core.screen"}`, 1002, "status core.screen is not registered"},
 		{"status.watch", `{"name":"core.absent"}`, 1001, "unknown status core.absent"},
-		{"dom.rect", `{"name":"core.card"}`, 1002, "dom core.card has no element"},
-		{"dom.act", `{"name":"core.card","action":"click"}`, 1002, "dom core.card has no element"},
-		{"dom.rect", `{"name":"core.absent"}`, 1001, "unknown dom core.absent"},
-		{"dom.rect", `{"name":"core.card","address":"a"}`, -32602, "dom core.card takes no address"},
-		{"dom.rect", `{"name":"core.card","address":"a","index":1}`, -32602, "a request gives index or address, not both"},
+		{"element.rect", `{"name":"core.card"}`, 1002, "element core.card has no element"},
+		{"element.act", `{"name":"core.card","action":"click"}`, 1002, "element core.card has no element"},
+		{"element.rect", `{"name":"core.absent"}`, 1001, "unknown element core.absent"},
+		{"element.rect", `{"name":"core.card","address":"a"}`, -32602, "element core.card takes no address"},
+		{"element.rect", `{"name":"core.card","address":"a","index":1}`, -32602, "a request gives index or address, not both"},
 		{"diagnostics.fixture", `{}`, -32601, "unknown method diagnostics.fixture"},
 	} {
 		code, message := r.refused(r.ask(row.method, row.params))
@@ -189,7 +189,7 @@ func TestTheListGivesEveryDeclarationWithItsRegistration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for key, count := range map[string]int{"status": len(names.Statuses), "commands": len(names.Commands), "dom": len(names.Elements)} {
+	for key, count := range map[string]int{"status": len(names.Statuses), "commands": len(names.Commands), "element": len(names.Elements)} {
 		if entries, _ := list[key].([]any); len(entries) != count {
 			t.Fatalf("%s lists %d entries, want %d", key, len(entries), count)
 		}
@@ -211,7 +211,7 @@ func TestTheListGivesEveryDeclarationWithItsRegistration(t *testing.T) {
 		t.Fatalf("the entry has lost its params: %v", split)
 	}
 	if find("commands", "core.card.close")["registered"] != false || find("status", "core.screen")["registered"] != true ||
-		find("dom", "core.card")["registered"] != false {
+		find("element", "core.card")["registered"] != false {
 		t.Fatalf("the registrations are wrong: %v", list)
 	}
 }
@@ -251,7 +251,7 @@ func TestAWatchSendsTheCurrentValueAndEachChange(t *testing.T) {
 	if len(r.changes) != 0 {
 		t.Fatal("a value was sent after the watch ended")
 	}
-	if reply := r.ask("status.unwatch", `{"name":"core.window.document"}`); reply["result"] != nil || reply["error"] != nil {
+	if reply := r.ask("status.unwatch", `{"name":"core.window.workbench"}`); reply["result"] != nil || reply["error"] != nil {
 		t.Fatalf("the end of an absent watch answered %v", reply)
 	}
 }
@@ -329,10 +329,10 @@ func TestAnElementRequestAnswersFromTheElementTree(t *testing.T) {
 	}
 	want := map[string]any{"x": float64(second.Bounds.X), "y": float64(second.Bounds.Y), "width": float64(second.Bounds.W),
 		"height": float64(second.Bounds.H), "zoom": float64(1), "document": map[string]any{"x": float64(0), "y": float64(0)}}
-	if reply := r.ask("dom.rect", `{"name":"core.card","index":1}`); !reflect.DeepEqual(reply["result"], want) {
+	if reply := r.ask("element.rect", `{"name":"core.card","index":1}`); !reflect.DeepEqual(reply["result"], want) {
 		t.Fatalf("the rectangle is %v, want %v", reply, want)
 	}
-	if reply := r.ask("dom.rect", `{"name":"core.debug.close"}`); reply["error"] != nil {
+	if reply := r.ask("element.rect", `{"name":"core.debug.close"}`); reply["error"] != nil {
 		t.Fatalf("an element that a screen named answered %v", reply)
 	}
 	if second.Bounds.H <= 0 {
@@ -347,17 +347,17 @@ func TestAnElementRequestIsRefusedAsThePageRefusesIt(t *testing.T) {
 		code           int
 		message        string
 	}{
-		{"dom.rect", `{"name":"core.library.return"}`, 1002, "dom core.library.return has no element"},
-		{"dom.rect", `{"name":"core.library.add"}`, 1002, "dom core.library.add has 2 elements"},
-		{"dom.rect", `{"name":"core.card","index":2}`, 1002, "dom core.card has no element at index 2"},
-		{"dom.rect", `{"name":"core.card","index":-1}`, -32602, "index must be a non-negative integer"},
-		{"dom.rect", `{"name":"core.card","index":1.5}`, -32602, "index must be a non-negative integer"},
-		{"dom.rect", `{"name":"core.card","index":null}`, -32602, "index must be a non-negative integer"},
-		{"dom.act", `{"name":"core.library.form.name","action":"input"}`, -32602, "input requires a string value"},
-		{"dom.act", `{"name":"core.card","action":"dispatch","event":{"type":"click"}}`, -32000, "the mygo workbench has no DOM events"},
-		{"dom.act", `{"name":"core.card","action":"hover"}`, -32602, "unknown action hover"},
-		{"dom.act", `{"name":"core.card"}`, -32602, "unknown action undefined"},
-		{"dom.act", `{"name":"core.card","action":"input","value":"x"}`, -32000, "dom core.card takes no input"},
+		{"element.rect", `{"name":"core.library.return"}`, 1002, "element core.library.return has no element"},
+		{"element.rect", `{"name":"core.library.add"}`, 1002, "element core.library.add has 2 elements"},
+		{"element.rect", `{"name":"core.card","index":2}`, 1002, "element core.card has no element at index 2"},
+		{"element.rect", `{"name":"core.card","index":-1}`, -32602, "index must be a non-negative integer"},
+		{"element.rect", `{"name":"core.card","index":1.5}`, -32602, "index must be a non-negative integer"},
+		{"element.rect", `{"name":"core.card","index":null}`, -32602, "index must be a non-negative integer"},
+		{"element.act", `{"name":"core.library.form.name","action":"input"}`, -32602, "input requires a string value"},
+		{"element.act", `{"name":"core.card","action":"dispatch","event":{"type":"click"}}`, -32000, "the mygo workbench has no DOM events"},
+		{"element.act", `{"name":"core.card","action":"hover"}`, -32602, "unknown action hover"},
+		{"element.act", `{"name":"core.card"}`, -32602, "unknown action undefined"},
+		{"element.act", `{"name":"core.card","action":"input","value":"x"}`, -32000, "element core.card takes no input"},
 	} {
 		code, message := r.refused(r.ask(row.method, row.params))
 		if code != row.code || message != row.message {
@@ -368,14 +368,14 @@ func TestAnElementRequestIsRefusedAsThePageRefusesIt(t *testing.T) {
 
 func TestAnElementActionReachesTheElement(t *testing.T) {
 	r, tester, ran, value := elementScene(t)
-	if reply := r.ask("dom.act", `{"name":"core.card","index":1,"action":"click"}`); reply["error"] != nil || reply["result"] != nil {
+	if reply := r.ask("element.act", `{"name":"core.card","index":1,"action":"click"}`); reply["error"] != nil || reply["result"] != nil {
 		t.Fatalf("the click answered %v", reply)
 	}
 	tester.Frame()
 	if !reflect.DeepEqual(*ran, []string{`{"card":"c2"}`}) {
 		t.Fatalf("the commands that ran are %v", *ran)
 	}
-	if reply := r.ask("dom.act", `{"name":"core.library.form.name","action":"input","value":"after"}`); reply["error"] != nil {
+	if reply := r.ask("element.act", `{"name":"core.library.form.name","action":"input","value":"after"}`); reply["error"] != nil {
 		t.Fatalf("the input answered %v", reply)
 	}
 	tester.Frame()
@@ -389,7 +389,7 @@ func TestTheListReportsADrawnElementAsRegistered(t *testing.T) {
 	r, _, _, _ := elementScene(t)
 	list := r.ask("exposure.list", `{}`)["result"].(map[string]any)
 	registered := map[string]any{}
-	for _, entry := range list["dom"].([]any) {
+	for _, entry := range list["element"].([]any) {
 		registered[entry.(map[string]any)["name"].(string)] = entry.(map[string]any)["registered"]
 	}
 	if registered["core.card"] != true || registered["core.library.return"] != false {

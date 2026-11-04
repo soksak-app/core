@@ -93,7 +93,7 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
     const startValuesSurfaces = ["tab-snapshot-one", "tab-snapshot-two"].map((surfaceId) => {
       recordOrigin(surfaceId, null, "test fixture");
       return { id: surfaceId, surface: {
-        surfaceId, pluginId, params: null, declarations: { status: [], commands: [], dom: [] },
+        surfaceId, pluginId, params: null, declarations: { status: [], commands: [], element: [] },
         composition: { kind: "view", page: "ui/index.html" },
       } };
     });
@@ -101,7 +101,7 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
     let declarationReads = 0;
     registry.surfaceDeclarations = () => {
       const version = ++declarationReads;
-      return Object.fromEntries(["status", "commands", "dom"].map((kind) => [kind, [
+      return Object.fromEntries(["status", "commands", "element"].map((kind) => [kind, [
         { name: `core.${kind}.snapshot-${version}` },
       ]]));
     };
@@ -110,14 +110,14 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
       assert.equal(declarationReads, 1,
         "one placement must project the complete declaration registry once, not three times for each view");
       for (const start of starts) {
-        for (const kind of ["status", "commands", "dom"]) {
+        for (const kind of ["status", "commands", "element"]) {
           assert.equal(start.declarations[kind][0].name, `core.${kind}.snapshot-1`,
             `${kind} declarations came from a different registry snapshot`);
         }
       }
       const directStart = viewStartValues(startValuesSurfaces[0].surface, null);
       assert.equal(declarationReads, 2, "a direct single-view start-value calculation must read one declaration snapshot");
-      for (const kind of ["status", "commands", "dom"]) {
+      for (const kind of ["status", "commands", "element"]) {
         assert.equal(directStart.declarations[kind][0].name, `core.${kind}.snapshot-2`);
       }
     } finally {

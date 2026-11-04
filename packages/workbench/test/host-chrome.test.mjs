@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { JSDOM } from "jsdom";
 import { clockAnswer } from "./support/records.mjs";
-const emptySurfaceDeclarations = { status: [], commands: [], dom: [] };
+const emptySurfaceDeclarations = { status: [], commands: [], element: [] };
 
 test("a view surface carries its start values in the preparation and a surface without them carries none", async (t) => {
   const dom = new JSDOM('<div id="plane"></div>');
@@ -310,6 +310,47 @@ test("an initial placement defers an unmounted view until its drawn commit", asy
     assert.deepEqual(calls.filter(({ name }) => name === "syncSurfaces").at(-1).request.surfaces.map(({ id }) => [id]),
       [["view-mount-order"]], "the declared view was not sent after mount registration");
     assert.deepEqual(order, ["syncSurfaces", "composition:view-mount-order", "syncSurfaces", "presentSurfaces"]);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test("a release during an open preparation presents that preparation as settled without a second synchronization", { timeout: 5000 }, async (t) => {
+  const dom = new JSDOM('<div id="plane"></div>');
+  globalThis.document = dom.window.document;
+  const calls = [];
+  let ticket = 0;
+  t.mock.module("../surface-modules.js", { namedExports: {
+    mountedSurface: () => null,
+    waitSurfaceCompositionDeclared: async () => {},
+  } });
+  t.mock.module("@soksak/runtime", { namedExports: { host: {
+    on: () => {},
+    page: (path) => path,
+    call: async (name, request) => {
+      if (name === "log") return clockAnswer(name, request);
+      calls.push({ name, request });
+      if (name === "syncSurfaces") return { ticket: ++ticket, placements: [], chrome: { controls: { x: 13, y: 13, w: 54, h: 14 }, row: request.titlebar } };
+      if (name === "presentSurfaces") return request.placements;
+      throw new Error(`unexpected host call ${name}`);
+    },
+  } } });
+  const { surfaces } = await import("../host.js?release");
+  const record = (drawn, settled) => ({ surfaces: [], settled, drawn, titlebar: 40 });
+  try {
+    await surfaces.place(record(false, false));
+    await surfaces.place(record(true, true));
+    assert.deepEqual(calls.map((c) => c.name), ["syncSurfaces", "presentSurfaces"],
+      "the settled value alone sent a second synchronization of an open preparation");
+    assert.deepEqual([calls[1].request.ticket, calls[1].request.settled], [1, true],
+      "the open preparation was not presented as settled");
+    await surfaces.place(record(false, false));
+    await surfaces.place(record(true, false));
+    calls.length = 0;
+    await surfaces.place(record(true, true));
+    assert.deepEqual(calls.map((c) => c.name), ["syncSurfaces", "presentSurfaces"],
+      "a release after the presentation of an equal placement did not end the run");
+    assert.equal(calls[1].request.settled, true);
   } finally {
     dom.window.close();
   }

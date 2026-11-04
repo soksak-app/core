@@ -5,6 +5,7 @@
 // the layer scale is the number of device pixels that one unit covers. The pointer passes through (hitTest → nil).
 
 #import <Carbon/Carbon.h>
+#import <objc/runtime.h>
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import <IOSurface/IOSurface.h>
@@ -64,6 +65,7 @@ static void failFrameIdentitySession(NSString *message) {
 @property int presentedSequence;
 @property(copy) NSString *presentationError;
 @property(retain) NSTextInputContext *givenInputContext;  // The context of sp_region_set_input_context, or nil.
+@property(retain) NSTextInputContext *regionInputContext;  // The context of the region, made when it is first asked for.
 @property(assign) NSView *webSurface;  // The logical surface view. Not owned by this object.
 @property NSEdgeInsets insets;
 @property NSPoint caretPos;
@@ -83,7 +85,6 @@ static void failFrameIdentitySession(NSString *message) {
 @property NSRange reportedMarkedRange;
 @property NSRange reportedSelectedRange;
 @property BOOL reportedHasMarkedText;
-@property(copy) NSString *unhandledKey;     // The report of a special key given to the input method first. Reported if the input method does not handle it.
 @property NSUInteger reports;               // The number of reports sent. Used to check whether the input context answered a key.
 @property(copy) NSString *activeCid;        // The correlation identifier of the input being processed; nil outside one.
 @property(retain) NSMutableArray *inputActions;
@@ -309,6 +310,33 @@ static void spEnsurePressOriginMonitor(void) {
         });
 }
 
+// The context of an image region. A client whose document states document access receives each key as committed text, which
+// the input method reads back to compose it. The region holds only its marked buffer, so the input method would lose the first
+// syllable. The input method reads the property when the document first activates, so the property leaves the document at its
+// creation, and every key then arrives as marked text. AppKit gives no public access to the document of a context that is not
+// active.
+@interface SPRegionInputContext : NSTextInputContext
+@end
+
+@implementation SPRegionInputContext
+
+- (instancetype)initWithClient:(id<NSTextInputClient>)client {
+    self = [super initWithClient:client];
+    if (!self) return nil;
+    Ivar ivar = class_getInstanceVariable(NSTextInputContext.class, "_documentID");
+    OSStatus status = ivar
+        ? TSMRemoveDocumentProperty(*(TSMDocumentID *)((char *)self + ivar_getOffset(ivar)), kTSMDocumentSupportDocumentAccessPropertyTag)
+        : paramErr;
+    // A document that does not state document access already has what the removal asks for.
+    if (status != noErr && status != tsmDocPropertyNotFoundErr) {
+        NSString *reason = [NSString stringWithFormat:@"the input document keeps document access (status %d)", (int)status];
+        [(SPImageRegion *)client failInput:reason where:"input method" text:reason];
+    }
+    return self;
+}
+
+@end
+
 @implementation SPImageRegion
 
 - (void)drawRect:(NSRect)dirtyRect {
@@ -343,7 +371,6 @@ static void spEnsurePressOriginMonitor(void) {
 - (void)dealloc {
     [NSNotificationCenter.defaultCenter removeObserver:self];
     [_reportedPreedit release];
-    [_unhandledKey release];
     [_inputActions release];
     [_inputErrors release];
     [_inputPreedit release];
@@ -358,13 +385,15 @@ static void spEnsurePressOriginMonitor(void) {
     [_presentationError release];
     [_accessibilityText release];
     [_givenInputContext release];
+    [_regionInputContext release];
     [super dealloc];
 }
 
-// The keys of the region go to the supplied diagnostic context when present, and otherwise to AppKit's context.
+// The keys of the region go to the supplied diagnostic context when present, and otherwise to the context of the region.
 - (NSTextInputContext *)inputContext {
     if (self.givenInputContext) return self.givenInputContext;
-    return [super inputContext];
+    if (!self.regionInputContext) self.regionInputContext = [[[SPRegionInputContext alloc] initWithClient:self] autorelease];
+    return self.regionInputContext;
 }
 
 - (BOOL)acceptsFirstResponder {
@@ -950,17 +979,6 @@ static void spEnsurePressOriginMonitor(void) {
                 alt ? "true" : "false",
                 ctrl ? "true" : "false"];
         }
-        // If the input method still has a string it can revise, the special key is given to the input method first
-        // (for example, Backspace
-        // during composition turns a syllable with a final consonant into one without it). If the input method does
-        // not handle the key, AppKit requests the command of that key, and
-        // then the remaining string is committed and the original key is reported (doCommandBySelector:).
-        if (isSpecialKey && !hasCtrlOrOption && self.markedTextBuffer.length > 0) {
-            self.unhandledKey = json;
-            [self interpretKeyEvents:@[event]];
-            self.unhandledKey = nil;
-            return;
-        }
         [self commitPending];
         [self report:json.UTF8String];
         return;
@@ -991,24 +1009,15 @@ static void spEnsurePressOriginMonitor(void) {
 
 - (void)handleCommand:(SEL)selector {
     if (self.inputFailureReason) {
-        NSString *fields = [NSString stringWithFormat:@"\"selector\":\"%@\",\"unhandledKey\":\"%@\"",
-            [self jsonEscapedString:NSStringFromSelector(selector)], [self jsonEscapedString:self.unhandledKey ?: @""]];
+        NSString *fields = [NSString stringWithFormat:@"\"selector\":\"%@\"",
+            [self jsonEscapedString:NSStringFromSelector(selector)]];
         [self rejectCallbackAfterInputFailure:@"doCommandBySelector" fields:fields before:[self inputState]];
         return;
     }
-    // A noop: command that no unhandled key accompanies is dropped below, and the record says so.
-    BOOL dropped = !self.unhandledKey && selector == @selector(noop:);
-    [self logInput:@"doCommandBySelector" fields:[NSString stringWithFormat:@"\"selector\":\"%@\",\"unhandledKey\":\"%@\"%@",
-        [self jsonEscapedString:NSStringFromSelector(selector)], [self jsonEscapedString:self.unhandledKey ?: @""],
-        dropped ? @",\"dropped\":\"noop\"" : @""] before:nil];
-    // A special key that the input method did not handle is reported as the original key, not as a command.
-    NSString *key = [[self.unhandledKey retain] autorelease];
-    if (key) {
-        self.unhandledKey = nil;
-        [self commitPending];
-        [self report:key.UTF8String];
-        return;
-    }
+    // A noop: command is dropped below, and the record says so.
+    BOOL dropped = selector == @selector(noop:);
+    [self logInput:@"doCommandBySelector" fields:[NSString stringWithFormat:@"\"selector\":\"%@\"%@",
+        [self jsonEscapedString:NSStringFromSelector(selector)], dropped ? @",\"dropped\":\"noop\"" : @""] before:nil];
     // The standard key bindings of AppKit send noop: for input that performs no action.
     // Passing it to the sidecar would make a selector that is not a key input a sidecar error.
     if (selector == @selector(noop:)) return;
