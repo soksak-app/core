@@ -6,12 +6,16 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/egoist/mygo/ui"
 
+	host "github.com/soksak-app/core/packages/host/go/src"
+	sok "github.com/soksak-app/core/packages/sok/go/src"
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
@@ -23,12 +27,70 @@ type storedHost struct {
 	failing  map[string]error
 	// installed is the document of the installed plugins, and it is empty without plugins.
 	installed string
+	// classes is the policy in force that the host call log answers; none stores the errors.
+	classes map[string]any
+	// batchCalls makes each batch of events a call of calls.
+	batchCalls bool
+	mu         sync.Mutex
+	batches    []map[string]any
+}
+
+// log answers the host call log and keeps the events of its batches.
+func (h *storedHost) log(_ context.Context, argument json.RawMessage) (any, error) {
+	if err := h.failing["log"]; err != nil {
+		return nil, err
+	}
+	var request struct {
+		Action string           `json:"action"`
+		Events []map[string]any `json:"events"`
+	}
+	if err := json.Unmarshal(argument, &request); err != nil {
+		return nil, err
+	}
+	switch request.Action {
+	case "clock":
+		return &host.ClockReading{TsMicros: time.Now().UnixMicro(), MonoNs: 1 << 40}, nil
+	case "policy-read":
+		if h.classes != nil {
+			return map[string]any{"classes": h.classes}, nil
+		}
+		return map[string]any{"classes": sok.DefaultLogPolicy().Classes()}, nil
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.batches = append(h.batches, request.Events...)
+	if h.batchCalls {
+		h.calls = append(h.calls, "log")
+	}
+	return nil, nil
+}
+
+// called reports whether the host received the call name.
+func (h *storedHost) called(name string) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return slices.Contains(h.calls, name)
+}
+
+// written returns the events named name that reached the host.
+func (h *storedHost) written(name string) []map[string]any {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	var events []map[string]any
+	for _, event := range h.batches {
+		if event["event"] == name {
+			events = append(events, event)
+		}
+	}
+	return events
 }
 
 func (h *storedHost) table() map[string]workbench.HostCall {
 	answer := func(name string, read func(argument json.RawMessage) (any, error)) workbench.HostCall {
 		return func(_ context.Context, argument json.RawMessage) (any, error) {
+			h.mu.Lock()
 			h.calls = append(h.calls, name)
+			h.mu.Unlock()
 			if err := h.failing[name]; err != nil {
 				return nil, err
 			}
@@ -37,6 +99,7 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 	}
 	none := func(json.RawMessage) (any, error) { return nil, nil }
 	return map[string]workbench.HostCall{
+		"log":       h.log,
 		"workspace": answer("workspace", h.workspace),
 		"projectFolder": answer("projectFolder", func(argument json.RawMessage) (any, error) {
 			var root string
@@ -182,6 +245,9 @@ func (f *shellFixture) settle() {
 	f.tester.Frame()
 	if len(f.lines) > 0 {
 		f.t.Fatalf("the shell reported %q", f.lines)
+	}
+	if errors := f.host.written("workbench.record.error"); len(errors) > 0 {
+		f.t.Fatalf("the shell recorded %v", errors)
 	}
 }
 
@@ -448,6 +514,22 @@ func TestHostFailureShowsInTheLibrary(t *testing.T) {
 }
 
 // drain runs the later steps until no call of the host is answering. The handlers of storedHost answer at once.
+// until runs the steps until done reports true.
+func (s steps) until(t *testing.T, done func() bool) {
+	t.Helper()
+	limit := time.After(5 * time.Second)
+	for !done() {
+		select {
+		case task := <-s:
+			task()
+		case <-time.After(time.Millisecond):
+			// The state can arrive on the goroutine of a host call, without a step.
+		case <-limit:
+			t.Fatal("the steps ended before the state arrived")
+		}
+	}
+}
+
 func (s steps) drain(t *testing.T) {
 	t.Helper()
 	for {

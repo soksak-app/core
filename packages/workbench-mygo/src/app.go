@@ -27,7 +27,7 @@ type AppOptions struct {
 	Post func(task func())
 	// Table returns the host calls of a window.
 	Table func(window host.Frontend) map[string]HostCall
-	// Report writes a line of a shown error to the application log.
+	// Report writes a failure of the event writer to the application log.
 	Report func(line string)
 	// Installed reads the document of the installed plugins.
 	Installed func() []byte
@@ -87,6 +87,7 @@ func (a *App) Close(window host.Frontend) {
 	delete(a.shells, window)
 	a.mu.Unlock()
 	if shell != nil {
+		shell.events.End()
 		a.options.Post(shell.flushTabs)
 	}
 }
@@ -131,11 +132,15 @@ func (s *Shell) Event(name string, data []any) {
 	case "project-close-request":
 		s.keep()
 		s.flushTabs()
-		s.calls.CallInOrder("workspace", "windowClose", nil, func(_ any, err error) {
-			if err != nil {
-				s.fail(err)
-			}
+		s.events.Flush(func() {
+			s.calls.CallInOrder("workspace", "windowClose", nil, func(_ any, err error) {
+				if err != nil {
+					s.fail(err)
+				}
+			})
 		})
+	case "log-policy":
+		s.events.Follow(data...)
 	default:
 		s.tabEvent(name, data)
 	}
