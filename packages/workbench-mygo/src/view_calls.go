@@ -225,7 +225,14 @@ func (s *Shell) runRegion(call viewCallEvent, answer viewAnswer) error {
 	}
 	switch call.Command {
 	case "document.attach":
-		document("documentAttach", map[string]any{})
+		// The workbench gives no region a stored session history here, so the region starts empty.
+		s.surfaceCall(call, "documentAttach", map[string]any{"document": fields.Name}, func(_ any, err error) {
+			if err != nil {
+				answer(nil, err)
+				return
+			}
+			answer(map[string]any{"history": false}, nil)
+		})
 	case "document.load":
 		document("documentLoad", map[string]any{"url": fields.URL})
 	case "document.zoom":
@@ -1077,15 +1084,15 @@ func (s *Shell) surfacePressed(data []any) {
 	if len(data) != 1 || s.plane == nil {
 		return
 	}
-	event, err := decode[surfaceEvent](data[0])
-	if err != nil {
-		s.fail(fmt.Errorf("surface pressed: %w", err))
+	surface, ok := data[0].(string)
+	if !ok {
+		s.fail(fmt.Errorf("surface pressed: the event names no surface: %v", data[0]))
 		return
 	}
 	for _, card := range s.plane.Cards() {
 		if held, err := s.cardData(card.ID); err == nil && held != nil {
 			for _, tab := range held.TabList() {
-				if tab.ID == event.Surface && s.focused != card.ID {
+				if tab.ID == surface && s.focused != card.ID {
 					s.focused = card.ID
 					s.options.Invalidate()
 				}
