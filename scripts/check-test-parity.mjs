@@ -146,6 +146,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Darwin document and surface", "objective-c", [
     "native/darwin/src/document_view.m",
     "native/darwin/src/image_region.m",
+    "native/darwin/src/declared_color_space.m",
     "native/darwin/src/image_capture_match.m",
     "native/darwin/src/surface_layout.m",
     "native/darwin/src/webview_geometry.m",
@@ -421,6 +422,18 @@ const FEATURE_LINKS = [
     ],
     expected: "Both hosts, the browser runtime and the workbench refuse the four common-only keys in a project settings file and in a project write with `<key> is common-only`, and the host parity check fails when their lists differ.",
     levels: ["unit"],
+  },
+  {
+    id: "F519",
+    implementation: [
+      { file: "native/darwin/src/declared_color_space.m", symbol: "CGColorSpaceRef sp_declared_color_space_create(CFTypeRef declaration, CFStringRef *error) {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_region_test.m", id: "TEST 23: accepted snapshot preserves the IOSurface sRGB color-space tag" },
+      { file: "native/darwin/tests/image_region_test.m", id: "as the declared color space rejects the frame with an error naming" },
+      { file: "native/darwin/tests/image_region_test.m", id: "TEST 23: a DisplayP3 name string as the declared color space is accepted" },
+    ],
+    expected: "A declared color space that is a property list, a name or the number of a named space is decoded, and every other declaration rejects the frame with an error naming kIOSurfaceColorSpace and the type of its value instead of stopping the process.",
     levels: ["unit"],
   },
   {

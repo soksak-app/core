@@ -1,10 +1,13 @@
 // Reads the presented frame of an image layer. An image region presents a host-owned IOSurface as the contents of its layer
 // (docs/spec/native-surfaces.md#image-regions), so a check copies the bytes of that surface into a CGImage with the color space
-// that the surface declares, or DeviceRGB when it declares none. A frame that carries the opt-in diagnostic identity code is a
-// CGImage, which is returned as it is. The image is autoreleased; NULL means the layer has no image.
+// that the surface declares, which sp_declared_color_space_create reads, or DeviceRGB when it declares none. A frame that
+// carries the opt-in diagnostic identity code is a CGImage, which is returned as it is. The image is autoreleased; NULL means
+// the layer has no image, or a declaration that names no color space, whose error is written to the standard error.
 #import <CoreGraphics/CoreGraphics.h>
 #import <IOSurface/IOSurface.h>
 #import <QuartzCore/QuartzCore.h>
+#include <stdio.h>
+#import "declared_color_space.h"
 
 static inline CGImageRef layerContentsImage(CALayer *layer) {
     id contents = layer.contents;
@@ -19,8 +22,15 @@ static inline CGImageRef layerContentsImage(CALayer *layer) {
     CFDataRef data = CFDataCreate(NULL, IOSurfaceGetBaseAddress(surface), bytesPerRow * height);
     IOSurfaceUnlock(surface, kIOSurfaceLockReadOnly, NULL);
     CFPropertyListRef colorProperties = IOSurfaceCopyValue(surface, kIOSurfaceColorSpace);
-    CGColorSpaceRef colors = colorProperties ? CGColorSpaceCreateWithPropertyList(colorProperties) : CGColorSpaceCreateDeviceRGB();
+    CFStringRef error = NULL;
+    CGColorSpaceRef colors = colorProperties ? sp_declared_color_space_create(colorProperties, &error) : CGColorSpaceCreateDeviceRGB();
     if (colorProperties) CFRelease(colorProperties);
+    if (!colors) {
+        fprintf(stderr, "layer contents: %s\n", error ? [(__bridge NSString *)error UTF8String] : "DeviceRGB could not be created");
+        if (error) CFRelease(error);
+        CFRelease(data);
+        return NULL;
+    }
     CGDataProviderRef provider = CGDataProviderCreateWithCFData(data);
     CGImageRef image = CGImageCreate(width, height, 8, 32, bytesPerRow, colors,
         kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst, provider, NULL, false, kCGRenderingIntentDefault);
