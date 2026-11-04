@@ -35,8 +35,8 @@ const THING = 'native/darwin/tests/thing_test.m';
 const WINDOW = 'native/darwin/src/window.m';
 const DELEGATE = 'native/darwin/src/delegate.m';
 const HOOK = 'native/darwin/tests/hook_test.m';
-const GO = 'packages/host/wailsv3/src/platform/darwin/thing.go';
-const RUST = 'packages/host/tauriv2/src/platform/darwin/field.rs';
+const GO = 'packages/host/go/src/platform/darwin/thing.go';
+const RUST = 'packages/host/rust/src/platform/darwin/field.rs';
 const SOURCES = new Map([
   [SCALE, 'void sp_scale(WKWebView *view) {\n    [view _setScale:2];\n}\n'],
   [OCCLUSION, '- (void)hide {\n    [self.view _setOcclusion:YES];\n    // WKDoThing(1) is not called here.\n}\n'],

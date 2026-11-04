@@ -1,4 +1,4 @@
-package host_test
+package adapter_test
 
 import (
 	"slices"
@@ -6,7 +6,8 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
-	host "github.com/soksak-app/core/packages/host/wailsv3/src"
+	host "github.com/soksak-app/core/packages/host/go/src"
+	adapter "github.com/soksak-app/core/packages/host/wailsv3/src"
 )
 
 // labels collects the names of all items of the menus and submenus in order.
@@ -36,7 +37,7 @@ func submenuOf(menu *application.Menu, title string) *application.Menu {
 func TestApplicationMenuViewHasFullScreenAndTextSize(t *testing.T) {
 	// The About item of the app menu reads the application name, so an application that does not run is created.
 	application.New(application.Options{Name: "soksak-menu-test"})
-	menu, err := host.ApplicationMenuFor("en")
+	menu, err := adapter.ApplicationMenuFor("en")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +90,7 @@ func TestApplicationMenuLanguages(t *testing.T) {
 	}
 	menus := map[string]*application.Menu{}
 	for _, language := range []string{"ko", "en"} {
-		menu, err := host.ApplicationMenuFor(language)
+		menu, err := adapter.ApplicationMenuFor(language)
 		if err != nil {
 			t.Fatalf("%s: %v", language, err)
 		}
@@ -105,7 +106,7 @@ func TestApplicationMenuLanguages(t *testing.T) {
 		}
 	}
 	// A language that is not in the contract table does not build a menu.
-	if _, err := host.ApplicationMenuFor("fr"); err == nil {
+	if _, err := adapter.ApplicationMenuFor("fr"); err == nil {
 		t.Fatal("an unknown menu language built a menu")
 	}
 }
@@ -114,7 +115,7 @@ func TestApplicationMenuLanguages(t *testing.T) {
 func TestApplicationMenuHelpHasDebug(t *testing.T) {
 	application.New(application.Options{Name: "soksak-menu-test"})
 	for language, want := range map[string][2]string{"en": {"Help", "Debug"}, "ko": {"도움말", "디버그"}} {
-		menu, err := host.ApplicationMenuFor(language)
+		menu, err := adapter.ApplicationMenuFor(language)
 		if err != nil {
 			t.Fatal(err)
 		}

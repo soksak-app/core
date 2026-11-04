@@ -19,7 +19,10 @@ const SPEC = 'docs/spec/host-contract.md';
 const HOSTS = ['wailsv3', 'tauriv2'];
 const CASE_ID = /^[a-z][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)+$/;
 
-/** Reads the case ID, behavior, and scope from the "Contract cases" table of the specification. The scope is `both` or the name of one host. */
+/**
+ * Reads the case ID, behavior, and scope from the "Contract cases" table of the specification. The scope is `all`, or
+ * `<host>[, <host>] only: <reason>`, which names each host of the case and the reason that the other hosts do not have it.
+ */
 export function parseContractCases(markdown) {
   const start = markdown.indexOf('\n## Contract cases\n');
   if (start < 0) throw new Error(`${SPEC} has no "Contract cases" section`);
@@ -34,13 +37,22 @@ export function parseContractCases(markdown) {
     if (cases.has(id)) throw new Error(`contract case ${id} is defined twice`);
     const [behavior, scope] = cells;
     if (!behavior) throw new Error(`contract case ${id} has no behavior`);
-    const hosts = scope === 'both' ? HOSTS : HOSTS.filter((host) => scope?.startsWith(`${host} only`));
-    if (hosts.length === 0) throw new Error(`contract case ${id} has scope "${scope}"; use "both" or "<host> only: <reason>"`);
-    if (hosts.length === 1 && !/only:\s*\S/.test(scope)) throw new Error(`contract case ${id} limits its scope without a reason`);
-    cases.set(id, { behavior, hosts });
+    cases.set(id, { behavior, hosts: scopeHosts(id, scope) });
   }
   if (cases.size === 0) throw new Error(`${SPEC} defines no contract cases`);
   return cases;
+}
+
+/** Returns the hosts of the scope of case id. */
+function scopeHosts(id, scope) {
+  if (scope === 'all') return HOSTS;
+  const limited = scope?.match(/^([a-z0-9]+(?:,\s*[a-z0-9]+)*) only(:\s*\S.*)?$/);
+  if (!limited) throw new Error(`contract case ${id} has scope "${scope}"; use "all" or "<host>[, <host>] only: <reason>"`);
+  if (!limited[2]) throw new Error(`contract case ${id} limits its scope without a reason`);
+  const hosts = limited[1].split(/,\s*/);
+  for (const host of hosts) if (!HOSTS.includes(host)) throw new Error(`contract case ${id} names unknown host ${host}`);
+  if (new Set(hosts).size !== hosts.length) throw new Error(`contract case ${id} names a host twice`);
+  return hosts;
 }
 
 const TEST_FUNCTION = {
@@ -367,25 +379,28 @@ const HOST_SOURCES = {
 const TEST_TIMEOUT_MS = 120_000;
 
 const GO_RUNS = (ldflags) => [
-  { id: 'wailsv3-tests', patterns: ['./packages/host/wailsv3/...'], ldflags },
-  { id: 'wailsv3-diagnostics-tests', patterns: ['./packages/host/wailsv3/...'], tags: 'diagnostics', ldflags },
-  { id: 'wailsv3-sok-tests', patterns: ['./packages/sok/wailsv3/...'] },
-  { id: 'wailsv3-sok-diagnostics-tests', patterns: ['./packages/sok/wailsv3/...'], tags: 'diagnostics' },
-  { id: 'wailsv3-sok-dev-tests', patterns: ['./packages/sok/wailsv3/...'], tags: 'diagnostics dev' },
+  { id: 'wailsv3-tests', patterns: ['./packages/host/go/...', './packages/host/wailsv3/...'], ldflags },
+  { id: 'wailsv3-diagnostics-tests', patterns: ['./packages/host/go/...', './packages/host/wailsv3/...'], tags: 'diagnostics', ldflags },
+  { id: 'wailsv3-sok-tests', patterns: ['./packages/sok/go/...'] },
+  { id: 'wailsv3-sok-diagnostics-tests', patterns: ['./packages/sok/go/...'], tags: 'diagnostics' },
+  { id: 'wailsv3-sok-dev-tests', patterns: ['./packages/sok/go/...'], tags: 'diagnostics dev' },
 ];
 
 const RUST_RUNS = [
-  { id: 'tauriv2-tests', packageName: 'soksak-host-tauriv2' },
-  { id: 'tauriv2-diagnostics-tests', packageName: 'soksak-host-tauriv2', features: 'diagnostics' },
-  { id: 'tauriv2-sok-tests', packageName: 'soksak-sok-tauriv2' },
-  { id: 'tauriv2-sok-diagnostics-tests', packageName: 'soksak-sok-tauriv2', features: 'diagnostics' },
-  { id: 'tauriv2-sok-dev-tests', packageName: 'soksak-sok-tauriv2', features: 'diagnostics,dev' },
+  { id: 'tauriv2-tests', packageName: 'soksak-host' },
+  { id: 'tauriv2-diagnostics-tests', packageName: 'soksak-host', features: 'diagnostics' },
+  { id: 'tauriv2-adapter-tests', packageName: 'soksak-host-tauriv2' },
+  { id: 'tauriv2-adapter-diagnostics-tests', packageName: 'soksak-host-tauriv2', features: 'diagnostics' },
+  { id: 'tauriv2-sok-tests', packageName: 'soksak-sok' },
+  { id: 'tauriv2-sok-diagnostics-tests', packageName: 'soksak-sok', features: 'diagnostics' },
+  { id: 'tauriv2-sok-dev-tests', packageName: 'soksak-sok', features: 'diagnostics,dev' },
 ];
 
 /** The source files in the Rust host and CLI crates, including files excluded by this target's cfg. */
 function rustSourceFiles() {
-  return [...sources('packages/host/tauriv2/tests', '.rs'), ...sources('packages/host/tauriv2/src', '.rs'),
-    ...sources('packages/sok/tauriv2/tests', '.rs'), ...sources('packages/sok/tauriv2/src', '.rs')];
+  return [...sources('packages/host/rust/tests', '.rs'), ...sources('packages/host/rust/src', '.rs'),
+    ...sources('packages/host/tauriv2/tests', '.rs'), ...sources('packages/host/tauriv2/src', '.rs'),
+    ...sources('packages/sok/rust/tests', '.rs'), ...sources('packages/sok/rust/src', '.rs')];
 }
 
 /**

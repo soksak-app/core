@@ -1,4 +1,4 @@
-package host_test
+package adapter_test
 
 // Checks the launch activation of the application (docs/spec/hosts.md#launch-activation).
 
@@ -7,12 +7,12 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
-	host "github.com/soksak-app/core/packages/host/wailsv3/src"
+	adapter "github.com/soksak-app/core/packages/host/wailsv3/src"
 )
 
 // contract: application.launch.system-decides-activation
 func TestTheApplicationLeavesTheLaunchActivationToTheSystem(t *testing.T) {
-	options := host.LaunchMacOptions()
+	options := adapter.LaunchMacOptions()
 	if options.ActivationPolicy != application.ActivationPolicyRegular {
 		t.Fatalf("activation policy %d, want regular", options.ActivationPolicy)
 	}

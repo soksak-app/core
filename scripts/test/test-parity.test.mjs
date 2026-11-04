@@ -367,17 +367,17 @@ test("JS failure audit rejects promise handlers that hide rejection", { timeout:
 
 test("Rust failure audit rejects ignored outcomes in the scoped production lane", { timeout: 1000 }, () => {
   const errors = auditRustFailurePropagation([
-    "packages/sok/tauriv2/src/registry.rs",
-    "packages/sok/tauriv2/src/platform/path.rs",
-    "packages/sok/tauriv2/tests/registry_test.rs",
+    "packages/sok/rust/src/registry.rs",
+    "packages/sok/rust/src/platform/path.rs",
+    "packages/sok/rust/tests/registry_test.rs",
     "packages/host/tauriv2/src/ignored.rs",
   ], (file) => ({
-    "packages/sok/tauriv2/src/registry.rs": "let _ = actor.await;",
-    "packages/sok/tauriv2/src/platform/path.rs": "let result = work();",
-    "packages/sok/tauriv2/tests/registry_test.rs": "let _ = serve(...);",
+    "packages/sok/rust/src/registry.rs": "let _ = actor.await;",
+    "packages/sok/rust/src/platform/path.rs": "let result = work();",
+    "packages/sok/rust/tests/registry_test.rs": "let _ = serve(...);",
     "packages/host/tauriv2/src/ignored.rs": "let _ = host();",
-  }[file] ?? ""), "packages/sok/tauriv2/src/");
-  assert.deepEqual(errors, ["packages/sok/tauriv2/src/registry.rs:1: ignored Rust result or task outcome"]);
+  }[file] ?? ""), "packages/sok/rust/src/");
+  assert.deepEqual(errors, ["packages/sok/rust/src/registry.rs:1: ignored Rust result or task outcome"]);
   assert.deepEqual(auditRustFailurePropagation([
     "packages/host/tauriv2/src/ignored.rs",
     "packages/host/tauriv2/tests/ignored.rs",
@@ -388,15 +388,17 @@ test("Rust failure audit rejects ignored outcomes in the scoped production lane"
 
 test("Rust failure audit covers every production lane", { timeout: 1000 }, () => {
   const files = [
+    "packages/host/rust/src/host.rs",
     "packages/host/tauriv2/src/host.rs",
-    "packages/sok/tauriv2/src/sok.rs",
+    "packages/sok/rust/src/sok.rs",
     "apps/tauriv2/src/main.rs",
     "packages/other/src/other.rs",
   ];
   const rust = auditFailureMatrix(files, () => "let _ = host();").lanes.find((lane) => lane.language === "rust");
   assert.deepEqual(rust.errors, [
+    "packages/host/rust/src/host.rs:1: ignored Rust result or task outcome",
     "packages/host/tauriv2/src/host.rs:1: ignored Rust result or task outcome",
-    "packages/sok/tauriv2/src/sok.rs:1: ignored Rust result or task outcome",
+    "packages/sok/rust/src/sok.rs:1: ignored Rust result or task outcome",
     "apps/tauriv2/src/main.rs:1: ignored Rust result or task outcome",
   ]);
 });
@@ -405,7 +407,7 @@ test("Darwin native failure audit rejects log-only capture boundaries", { timeou
   const files = [
     "native/darwin/src/capture.h",
     "native/darwin/src/capture.m",
-    "packages/host/tauriv2/src/platform/darwin/capture.rs",
+    "packages/host/rust/src/platform/darwin/capture.rs",
   ];
   const sources = new Map([
     [files[0], "void sp_capture_open(long windowNumber, bool display);"],
@@ -419,7 +421,7 @@ test("Darwin native failure audit accepts explicit capture results", { timeout: 
   const files = [
     "native/darwin/src/capture.h",
     "native/darwin/src/capture.m",
-    "packages/host/tauriv2/src/platform/darwin/capture.rs",
+    "packages/host/rust/src/platform/darwin/capture.rs",
   ];
   const sources = new Map([
     [files[0], "bool sp_capture_open(long windowNumber, bool display); const char *sp_capture_error(void);"],
@@ -432,7 +434,7 @@ test("Darwin native failure audit accepts explicit capture results", { timeout: 
 test("Go failure audit rejects ignored results in every Go production lane", { timeout: 1000 }, () => {
   const files = [
     "packages/host/wailsv3/src/host.go",
-    "packages/sok/wailsv3/src/sok.go",
+    "packages/sok/go/src/sok.go",
     "packages/host/wailsv3/tests/ignored_test.go",
   ];
   const sources = new Map([

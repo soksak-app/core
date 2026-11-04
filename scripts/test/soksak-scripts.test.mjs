@@ -16,7 +16,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
 import { BREAKS } from "../../packages/soksak/scripts/breaks.mjs";
 import { find as findReleaseMarkers } from "../check-release.mjs";
-import { auditHostPairs, findStubs, findUndecodedCommandArguments } from "../check-hosts.mjs";
+import { FRAMEWORK_TABLE, LANGUAGE_TABLE, auditHostPairs, findStubs, findUndecodedCommandArguments } from "../check-hosts.mjs";
 import { auditPlatformSource } from "../check-platforms.mjs";
 import { auditActivationUnboundNames, auditE2ESource } from "../check-e2e.mjs";
 
@@ -175,8 +175,85 @@ test("host structure audit reports a clean paired-host graph", { timeout: TREE_A
   assert.match(result.stdout, /Host structure checks passed:/);
 });
 
+// The allowed differences of a tree with language host libraries and framework adapters: a language table and a framework table.
+const TWO_TABLES = `## Allowed differences
+
+### Language table
+
+| ID | Go | Rust | Reason |
+| --- | --- | --- | --- |
+| H1 | none | \`build.rs\` | Build script |
+| H2 | \`go.mod\` | \`Cargo.toml\` | Manifests of the libraries |
+| C1 | \`src/cmd/sok/main.go\` | \`src/main.rs\` | Command |
+| C2 | \`go.mod\` | \`Cargo.toml\` | Manifests of the command lines |
+
+### Framework table
+
+| ID | Wails | Tauri | Reason |
+| --- | --- | --- | --- |
+| H3 | \`src/bridge.js\` | none | Call channel |
+| A2 | none | \`build.rs\` | Build script |
+
+## Memory pressure
+`;
+
+test("host structure audit compares the language host libraries, the framework adapters and the command lines", { timeout: 1000 }, () => {
+  const tracked = [
+    "packages/host/go/go.mod", "packages/host/go/src/host.go",
+    "packages/host/rust/Cargo.toml", "packages/host/rust/build.rs", "packages/host/rust/src/host.rs",
+    "packages/host/wailsv3/src/host.go", "packages/host/wailsv3/src/bridge.js",
+    "packages/host/tauriv2/src/host.rs",
+    "packages/sok/go/go.mod", "packages/sok/go/src/sok.go", "packages/sok/go/src/cmd/sok/main.go",
+    "packages/sok/rust/Cargo.toml", "packages/sok/rust/src/sok.rs", "packages/sok/rust/src/main.rs",
+    "apps/wailsv3/src/main.go", "apps/tauriv2/src/main.rs", "apps/tauriv2/build.rs",
+  ];
+  assert.deepEqual(auditHostPairs(tracked, undefined, TWO_TABLES), []);
+  assert.deepEqual(auditHostPairs([...tracked, "packages/host/go/src/extra.go"], undefined, TWO_TABLES),
+    ["packages/host/go/src/extra: no counterpart in packages/host/rust"]);
+  assert.deepEqual(auditHostPairs([...tracked, "packages/host/wailsv3/src/extra.go"], undefined, TWO_TABLES),
+    ["packages/host/wailsv3/src/extra: no counterpart in packages/host/tauriv2"]);
+  assert.deepEqual(auditHostPairs([...tracked, "packages/host/tauriv2/build.rs"], undefined, TWO_TABLES),
+    ["packages/host/tauriv2/build: no counterpart in packages/host/wailsv3"]);
+  assert.throws(() => auditHostPairs(tracked, undefined, TWO_TABLES.replace("| A2 |", "| H1 |")),
+    /row H1 appears in the Language table and in the Framework table/);
+});
+
+test("host structure audit rejects a language host library that imports a package of a framework", { timeout: 1000 }, async () => {
+  const { auditLibraryImports } = await import("../check-hosts.mjs");
+  const files = {
+    "packages/host/go/src/windows.go": 'package host\n\nimport (\n\t"github.com/wailsapp/wails/v3/pkg/application"\n)\n',
+    "packages/host/go/src/platform/darwin/window.go": 'package darwin\n\nimport _ "github.com/wailsapp/wails/v3/pkg/events"\n',
+    "packages/host/go/go.mod": "module m\n\nrequire github.com/wailsapp/wails/v3 v3.0.0\n",
+    "packages/host/go/src/quit.go": "package host\n\n// Wails is a word of this comment.\n",
+    "packages/host/rust/src/windows.rs": "use tauri::Manager;\n",
+    "packages/host/rust/Cargo.toml": '[dependencies]\ntauri = "2"\n',
+    "packages/host/rust/src/quit.rs": "// tauri is a word of this comment.\n",
+    "packages/host/wailsv3/src/windows.go": 'package adapter\n\nimport "github.com/wailsapp/wails/v3/pkg/application"\n',
+  };
+  assert.deepEqual(auditLibraryImports(Object.keys(files), (file) => files[file]), [
+    "packages/host/go/go.mod:3: the language host library requires the framework github.com/wailsapp/wails/v3",
+    "packages/host/go/src/platform/darwin/window.go:3: the language host library imports the framework package github.com/wailsapp/wails/v3/pkg/events",
+    "packages/host/go/src/windows.go:4: the language host library imports the framework package github.com/wailsapp/wails/v3/pkg/application",
+    "packages/host/rust/Cargo.toml:2: the language host library requires the framework crate tauri",
+    "packages/host/rust/src/windows.rs:1: the language host library names the framework crate tauri",
+  ]);
+});
+
+test("a prefix audit of the host structure fails when a prefix selects no file", { timeout: 1000 }, async () => {
+  const { auditPrefixes } = await import("../check-hosts.mjs");
+  const tracked = ["packages/host/go/src/platform/darwin/window.go", "packages/host/tauriv2/src/host.rs", "packages/host/go/src/host.go",
+    "packages/host/rust/src/host.rs", "packages/host/wailsv3/src/host.go", "native/darwin/src/a.m"];
+  assert.deepEqual(auditPrefixes(tracked), []);
+  assert.deepEqual(auditPrefixes(tracked.filter((path) => !path.includes("/platform/darwin/"))), [
+    "the main-thread audit selects no file with the prefix packages/host/go/src/platform/darwin/",
+  ]);
+  assert.deepEqual(auditPrefixes(tracked.filter((path) => path !== "packages/host/rust/src/host.rs")), [
+    "the stub check selects no file with the prefix packages/host/rust/src/",
+  ]);
+});
+
 test("host structure audit rejects a missing host and a missing counterpart", { timeout: 1000 }, () => {
-  const pairs = [{ left: "hosts/wails", right: "hosts/tauri", rows: [] }];
+  const pairs = [{ left: "hosts/wails", right: "hosts/tauri", table: FRAMEWORK_TABLE, rows: [] }];
   assert.deepEqual(auditHostPairs(["hosts/wails/src/host.go"], pairs), ["hosts/tauri: no files", "hosts/wails/src/host: no counterpart in hosts/tauri"]);
   assert.deepEqual(auditHostPairs(["hosts/wails/src/host.go", "hosts/tauri/src/host.rs", "hosts/tauri/src/extra.rs"], pairs), ["hosts/tauri/src/extra: no counterpart in hosts/wails"]);
 });
@@ -184,22 +261,41 @@ test("host structure audit rejects a missing host and a missing counterpart", { 
 test("host structure audit reads the allowed file differences from the table rows", { timeout: 1000 }, async () => {
   const hostsSpec = await readFile(join(root, "docs/spec/hosts.md"), "utf8");
   const withoutH1 = hostsSpec.split("\n").filter((line) => !line.startsWith("| H1 |")).join("\n");
-  const tracked = ["packages/host/wailsv3/src/host.go", "packages/host/tauriv2/src/host.rs", "packages/host/tauriv2/build.rs"];
-  assert.throws(() => auditHostPairs(tracked, undefined, withoutH1), /H1/);
-  const pairs = [{ left: "hosts/wails", right: "hosts/tauri", rows: ["H1"] }];
+  const tracked = ["packages/host/go/src/host.go", "packages/host/rust/src/host.rs", "packages/host/rust/build.rs"];
+  const libraries = [{ left: "packages/host/go", right: "packages/host/rust", table: LANGUAGE_TABLE, letter: "H" }];
+  assert.deepEqual(auditHostPairs(tracked, libraries, hostsSpec), []);
+  assert.deepEqual(auditHostPairs(tracked, libraries, withoutH1), ["packages/host/rust/build: no counterpart in packages/host/go"]);
+  assert.throws(() => auditHostPairs(tracked, [{ ...libraries[0], rows: ["H1"] }], withoutH1), /H1/);
+  const pairs = [{ left: "hosts/wails", right: "hosts/tauri", table: LANGUAGE_TABLE, rows: ["H1"] }];
   assert.deepEqual(auditHostPairs(["hosts/wails/src/host.go", "hosts/tauri/src/host.rs", "hosts/tauri/build.rs"], pairs, hostsSpec), []);
   assert.deepEqual(auditHostPairs(["hosts/wails/src/host.go", "hosts/tauri/src/host.rs", "hosts/tauri/src/extra.rs"], pairs, hostsSpec), ["hosts/tauri/src/extra: no counterpart in hosts/wails"]);
 });
 
-test("host structure audit permits only Tauri channel adapter tests in H15", { timeout: 1000 }, async () => {
+test("host structure audit permits only the Rust channel send test in H15", { timeout: 1000 }, async () => {
+  const hostsSpec = await readFile(join(root, "docs/spec/hosts.md"), "utf8");
+  const tracked = [
+    "packages/host/go/src/host.go",
+    "packages/host/rust/src/host.rs",
+    "packages/host/rust/tests/view_source_stream/stream_test.rs",
+  ];
+  const pairs = [{ left: "packages/host/go", right: "packages/host/rust", table: LANGUAGE_TABLE, rows: ["H15"] }];
+  assert.deepEqual(auditHostPairs(tracked, pairs, hostsSpec), []);
+  assert.deepEqual(auditHostPairs([
+    ...tracked,
+    "packages/host/rust/tests/view_source_stream/unlisted_test.rs",
+  ], pairs, hostsSpec), [
+    "packages/host/rust/tests/view_source_stream/unlisted_test: no counterpart in packages/host/go",
+  ]);
+});
+
+test("host structure audit permits only the child tests of the Tauri commands in H30", { timeout: 1000 }, async () => {
   const hostsSpec = await readFile(join(root, "docs/spec/hosts.md"), "utf8");
   const tracked = [
     "packages/host/wailsv3/src/host.go",
     "packages/host/tauriv2/src/host.rs",
     "packages/host/tauriv2/tests/view_source_stream/bindings_test.rs",
-    "packages/host/tauriv2/tests/view_source_stream/stream_test.rs",
   ];
-  const pairs = [{ left: "packages/host/wailsv3", right: "packages/host/tauriv2", rows: ["H15"] }];
+  const pairs = [{ left: "packages/host/wailsv3", right: "packages/host/tauriv2", table: FRAMEWORK_TABLE, rows: ["H30"] }];
   assert.deepEqual(auditHostPairs(tracked, pairs, hostsSpec), []);
   assert.deepEqual(auditHostPairs([
     ...tracked,
@@ -212,55 +308,55 @@ test("host structure audit permits only Tauri channel adapter tests in H15", { t
 test("host structure audit maps only the Go view-record test package paths in H16", { timeout: 1000 }, async () => {
   const hostsSpec = await readFile(join(root, "docs/spec/hosts.md"), "utf8");
   const tracked = [
-    "packages/host/wailsv3/src/host.go",
-    "packages/host/tauriv2/src/host.rs",
-    "packages/host/wailsv3/src/view_call_record_test.go",
-    "packages/host/wailsv3/src/view_error_test.go",
-    "packages/host/tauriv2/tests/view_call_record_test.rs",
-    "packages/host/tauriv2/tests/view_error_test.rs",
+    "packages/host/go/src/host.go",
+    "packages/host/rust/src/host.rs",
+    "packages/host/go/src/view_call_record_test.go",
+    "packages/host/go/src/view_error_test.go",
+    "packages/host/rust/tests/view_call_record_test.rs",
+    "packages/host/rust/tests/view_error_test.rs",
   ];
-  const pairs = [{ left: "packages/host/wailsv3", right: "packages/host/tauriv2", rows: ["H16"] }];
+  const pairs = [{ left: "packages/host/go", right: "packages/host/rust", table: LANGUAGE_TABLE, rows: ["H16"] }];
   assert.deepEqual(auditHostPairs(tracked, pairs, hostsSpec), []);
   assert.deepEqual(auditHostPairs([
     ...tracked,
-    "packages/host/wailsv3/src/unlisted_view_test.go",
+    "packages/host/go/src/unlisted_view_test.go",
   ], pairs, hostsSpec), [
-    "packages/host/wailsv3/src/unlisted_view_test: no counterpart in packages/host/tauriv2",
+    "packages/host/go/src/unlisted_view_test: no counterpart in packages/host/rust",
   ]);
 });
 
 test("host structure audit permits only the Rust view-generation child module in H17", { timeout: 1000 }, async () => {
   const hostsSpec = await readFile(join(root, "docs/spec/hosts.md"), "utf8");
   const tracked = [
-    "packages/host/wailsv3/src/host.go",
-    "packages/host/tauriv2/src/host.rs",
-    "packages/host/tauriv2/tests/view_source_origins/view_generation_test.rs",
+    "packages/host/go/src/host.go",
+    "packages/host/rust/src/host.rs",
+    "packages/host/rust/tests/view_source_origins/view_generation_test.rs",
   ];
-  const pairs = [{ left: "packages/host/wailsv3", right: "packages/host/tauriv2", rows: ["H17"] }];
+  const pairs = [{ left: "packages/host/go", right: "packages/host/rust", table: LANGUAGE_TABLE, rows: ["H17"] }];
   assert.deepEqual(auditHostPairs(tracked, pairs, hostsSpec), []);
   assert.deepEqual(auditHostPairs([
     ...tracked,
-    "packages/host/tauriv2/tests/view_source_origins/unlisted_test.rs",
+    "packages/host/rust/tests/view_source_origins/unlisted_test.rs",
   ], pairs, hostsSpec), [
-    "packages/host/tauriv2/tests/view_source_origins/unlisted_test: no counterpart in packages/host/wailsv3",
+    "packages/host/rust/tests/view_source_origins/unlisted_test: no counterpart in packages/host/go",
   ]);
 });
 
 test("host structure audit permits only the Rust private process-wait test in C6", { timeout: 1000 }, async () => {
   const hostsSpec = await readFile(join(root, "docs/spec/hosts.md"), "utf8");
   const tracked = [
-    "packages/sok/wailsv3/src/sok.go",
-    "packages/sok/tauriv2/src/sok.rs",
-    "packages/sok/wailsv3/tests/process_wait_test.go",
-    "packages/sok/tauriv2/src/process_wait_test.rs",
+    "packages/sok/go/src/sok.go",
+    "packages/sok/rust/src/sok.rs",
+    "packages/sok/go/tests/process_wait_test.go",
+    "packages/sok/rust/src/process_wait_test.rs",
   ];
-  const pairs = [{ left: "packages/sok/wailsv3", right: "packages/sok/tauriv2", rows: ["C6"] }];
+  const pairs = [{ left: "packages/sok/go", right: "packages/sok/rust", table: LANGUAGE_TABLE, rows: ["C6"] }];
   assert.deepEqual(auditHostPairs(tracked, pairs, hostsSpec), []);
   assert.deepEqual(auditHostPairs([
     ...tracked,
-    "packages/sok/tauriv2/src/unlisted_process_wait_test.rs",
+    "packages/sok/rust/src/unlisted_process_wait_test.rs",
   ], pairs, hostsSpec), [
-    "packages/sok/tauriv2/src/unlisted_process_wait_test: no counterpart in packages/sok/wailsv3",
+    "packages/sok/rust/src/unlisted_process_wait_test: no counterpart in packages/sok/go",
   ]);
 });
 
@@ -311,9 +407,9 @@ async fn other(app: AppHandle<R, Extra>) -> Result<(), String> {}
 test("stub audit reads every product source file and reports a file it cannot read", { timeout: 1000 }, () => {
   const files = {
     "native/darwin/src/a.m": "// TODO: Implement the panel\n",
-    "packages/host/wailsv3/src/a.go": "func f() {}\n",
-    "packages/host/wailsv3/tests/a_test.go": "// TODO: Implement later\n",
-    "packages/host/wailsv3/src/platform/windows/unsupported.go": "// not yet implemented\n",
+    "packages/host/go/src/a.go": "func f() {}\n",
+    "packages/host/go/tests/a_test.go": "// TODO: Implement later\n",
+    "packages/host/go/src/platform/windows/unsupported.go": "// not yet implemented\n",
   };
   assert.deepEqual(findStubs(Object.keys(files), (file) => files[file]), ["native/darwin/src/a.m:1: TODO:\\s*Implement"]);
   assert.throws(() => findStubs(["native/darwin/src/a.m"], () => { throw new Error("EACCES: permission denied"); }),
@@ -701,9 +797,9 @@ test("platform audit permits direct runtime metadata but rejects all other selec
     `test('darwin case', { skip: process.platform !== 'darwin' });`), [
     "scripts/test/bundle-preparation.test.mjs:1: Node process.platform outside platform/<os>/",
   ]);
-  assert.deepEqual(auditPlatformSource("packages/sok/tauriv2/tests/process_wait_test.rs",
+  assert.deepEqual(auditPlatformSource("packages/sok/rust/tests/process_wait_test.rs",
     '#[cfg(target_os = "macos")]'), [
-    "packages/sok/tauriv2/tests/process_wait_test.rs:1: Rust OS cfg outside platform/<os>/",
+    "packages/sok/rust/tests/process_wait_test.rs:1: Rust OS cfg outside platform/<os>/",
   ]);
   assert.deepEqual(auditPlatformSource("scripts/test/soksak-scripts.test.mjs",
     `const example = '#[cfg(target_os = "macos")] process.platform';`), []);

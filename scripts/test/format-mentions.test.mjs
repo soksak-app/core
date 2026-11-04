@@ -7,8 +7,8 @@ import test from "node:test";
 
 const ROOT = new URL("../..", import.meta.url).pathname;
 
-const installedFormat = Number(/const InstalledFormat = (\d+)/.exec(readFileSync(join(ROOT, "packages/sok/wailsv3/src/install.go"), "utf8"))[1]);
-const installedFormatRust = Number(/pub const INSTALLED_FORMAT: u64 = (\d+)/.exec(readFileSync(join(ROOT, "packages/sok/tauriv2/src/install.rs"), "utf8"))[1]);
+const installedFormat = Number(/const InstalledFormat = (\d+)/.exec(readFileSync(join(ROOT, "packages/sok/go/src/install.go"), "utf8"))[1]);
+const installedFormatRust = Number(/pub const INSTALLED_FORMAT: u64 = (\d+)/.exec(readFileSync(join(ROOT, "packages/sok/rust/src/install.rs"), "utf8"))[1]);
 
 test("both command lines require the same installed format number", () => {
   assert.equal(installedFormatRust, installedFormat);
@@ -34,14 +34,14 @@ test("every spec mention of the installed format number matches the reader", () 
 test("the stored fixtures of the tests name the current form or the released form one below", () => {
   const findings = [];
   const files = [
-    "packages/sok/wailsv3/tests/install_test.go",
-    "packages/sok/wailsv3/tests/plugins_test.go",
-    "packages/sok/wailsv3/tests/plugin_catalog_test.go",
-    "packages/sok/wailsv3/tests/replay_test.go",
-    "packages/sok/tauriv2/tests/install_test.rs",
-    "packages/sok/tauriv2/tests/plugins_test.rs",
-    "packages/sok/tauriv2/tests/plugin_catalog_test.rs",
-    "packages/sok/tauriv2/tests/replay_test.rs",
+    "packages/sok/go/tests/install_test.go",
+    "packages/sok/go/tests/plugins_test.go",
+    "packages/sok/go/tests/plugin_catalog_test.go",
+    "packages/sok/go/tests/replay_test.go",
+    "packages/sok/rust/tests/install_test.rs",
+    "packages/sok/rust/tests/plugins_test.rs",
+    "packages/sok/rust/tests/plugin_catalog_test.rs",
+    "packages/sok/rust/tests/replay_test.rs",
   ];
   for (const file of files) {
     const text = readFileSync(join(ROOT, file), "utf8");

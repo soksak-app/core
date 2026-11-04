@@ -9,7 +9,7 @@ soksak 배치 라이브러리, 워크벤치 프런트엔드, 플러그인, 애�
 | [`packages/soksak`](packages/soksak/README.ko.md) | 헤드리스 분할 배치 라이브러리 |
 | [`packages/workbench`](docs/spec/plugins.ko.md) | 워크벤치 프런트엔드와 플러그인 로드 |
 | [`packages/plugin-api`](docs/spec/plugins.ko.md) | 플러그인과 환경 형식 |
-| [`packages/host`](docs/spec/hosts.ko.md) | Wails v3와 Tauri v2 네이티브 호스트 라이브러리 |
+| [`packages/host`](docs/spec/hosts.ko.md) | Go와 Rust language host library, Wails v3와 Tauri v2 framework adapter |
 | [`apps`](apps/README.ko.md) | 브라우저, Wails, Tauri 애플리케이션 |
 | `native/darwin` | macOS 네이티브 공용 라이브러리 |
 | `e2e` | 실행 중인 네이티브 애플리케이션의 창 검사 |

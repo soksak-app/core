@@ -13,7 +13,7 @@ const SPEC = `# Hosts
 
 | Case | Behavior | Scope |
 | --- | --- | --- |
-| \`area.shared\` | Both hosts do this. | both |
+| \`area.shared\` | Both hosts do this. | all |
 | \`area.wails-only\` | Only Wails does this. | wailsv3 only: the framework owns it |
 
 ## Next
@@ -25,7 +25,7 @@ const ONE_CASE = `# Hosts
 
 | Case | Behavior | Scope |
 | --- | --- | --- |
-| \`area.shared\` | Both hosts do this. | both |
+| \`area.shared\` | Both hosts do this. | all |
 
 ## Next
 `;
@@ -59,6 +59,21 @@ function hosts({ go = GO, rust = RUST, goRuns, rustRuns } = {}) {
     { name: 'tauriv2', language: 'rust', ...tauri, items: [], runs: rustRuns ?? [owners('.', [['shared', 'pass']])] },
   ];
 }
+
+test('the scope all covers every host, and a list of hosts names each host with its reason', { timeout: 1000 }, () => {
+  const section = (rows) => `\n## Contract cases\n\n| Case | Behavior | Scope |\n| --- | --- | --- |\n${rows}\n`;
+  const cases = parseContractCases(section([
+    '| `a.every` | Every host does this. | all |',
+    '| `a.one` | One host does this. | wailsv3 only: the framework owns it |',
+    '| `a.two` | Two hosts do this. | wailsv3, tauriv2 only: a main web view |',
+  ].join('\n')));
+  assert.deepEqual([...cases.get('a.every').hosts].sort(), ['tauriv2', 'wailsv3']);
+  assert.deepEqual(cases.get('a.one').hosts, ['wailsv3']);
+  assert.deepEqual([...cases.get('a.two').hosts].sort(), ['tauriv2', 'wailsv3']);
+  assert.throws(() => parseContractCases(section('| `a.b` | x | both |')), /scope "both"; use "all" or "<host>\[, <host>\] only: <reason>"/);
+  assert.throws(() => parseContractCases(section('| `a.b` | x | wailsv3, tauriv2 only |')), /limits its scope without a reason/);
+  assert.throws(() => parseContractCases(section('| `a.b` | x | wailsv3, other only: a reason |')), /unknown host other/);
+});
 
 test('host contract passes when each host runs a passing test for every case in its scope', () => {
   const { errors, covered } = auditHostContract(parseContractCases(SPEC), hosts());
@@ -130,10 +145,10 @@ test('rust declarations bind through attributes and match module paths in result
 });
 
 test('Rust declarations follow compiler-listed tests and reject ambiguous crate leaves', () => {
-  const owner = 'packages/host/tauriv2';
+  const owner = 'packages/host/rust';
   const root = fileURLToPath(new URL('../../', import.meta.url));
   const activeFile = `${owner}/tests/surfaces_geometry_test.rs`;
-  const inactiveFile = `${owner}/tests/project_data_order/bindings_test.rs`;
+  const inactiveFile = `${owner}/tests/project_data_order/project_data_order_test.rs`;
   const otherFile = `${owner}/tests/view_source_origins/view_generation_test.rs`;
   const files = [
     { file: activeFile, owner, source: '// contract: area.shared\n#[test]\nfn active() {}\n' },
@@ -167,8 +182,8 @@ test('Rust declarations follow compiler-listed tests and reject ambiguous crate 
 
 test('the case table rejects duplicate ids, invalid ids, and a limited scope without a reason', () => {
   const table = (rows) => `## Contract cases\n\n| Case | Behavior | Scope |\n| --- | --- | --- |\n${rows}\n`;
-  assert.throws(() => parseContractCases(`\n${table('| `a.b` | x | both |\n| `a.b` | y | both |')}`), /defined twice/);
-  assert.throws(() => parseContractCases(`\n${table('| `A.b` | x | both |')}`), /lowercase dotted/);
+  assert.throws(() => parseContractCases(`\n${table('| `a.b` | x | all |\n| `a.b` | y | all |')}`), /defined twice/);
+  assert.throws(() => parseContractCases(`\n${table('| `A.b` | x | all |')}`), /lowercase dotted/);
   assert.throws(() => parseContractCases(`\n${table('| `a.b` | x | tauriv2 only |')}`), /without a reason/);
   assert.throws(() => parseContractCases(`\n${table('| `a.b` | x | everywhere |')}`), /scope/);
   assert.throws(() => parseContractCases('# none\n'), /no "Contract cases" section/);
@@ -183,21 +198,22 @@ test('the checked-in English and Korean host contract tables contain unique case
   assert.deepEqual([...koreanCases.keys()].sort(), [...englishCases.keys()].sort());
 });
 
-test('every Go test function of the Wails host tests declares a contract case that the specification defines for wailsv3', () => {
+test('every Go test function of the tests of the Go language host library and the Wails framework adapter declares a contract case that the specification defines for wailsv3', () => {
   const cases = parseContractCases(readFileSync(new URL('../../docs/spec/host-contract.md', import.meta.url), 'utf8'));
-  const testRoot = 'packages/host/wailsv3/tests';
-  const tests = [];
-  const errors = [];
-  for (const file of readdirSync(fileURLToPath(new URL(`../../${testRoot}/`, import.meta.url)), { recursive: true })) {
-    if (!file.endsWith('_test.go')) continue;
-    const path = `${testRoot}/${file}`;
-    const parsed = parseDeclarations(readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8'), 'go', path);
-    tests.push(...parsed.tests);
-    errors.push(...parsed.errors);
+  for (const testRoot of ['packages/host/go/tests', 'packages/host/wailsv3/tests']) {
+    const tests = [];
+    const errors = [];
+    for (const file of readdirSync(fileURLToPath(new URL(`../../${testRoot}/`, import.meta.url)), { recursive: true })) {
+      if (!file.endsWith('_test.go')) continue;
+      const path = `${testRoot}/${file}`;
+      const parsed = parseDeclarations(readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8'), 'go', path);
+      tests.push(...parsed.tests);
+      errors.push(...parsed.errors);
+    }
+    const audit = auditDeclarations(cases, [{ name: 'wailsv3', language: 'go', tests, errors }]);
+    assert.ok(tests.length > 0, `no Go test function found under ${testRoot}`);
+    assert.deepEqual(audit.errors, []);
   }
-  const audit = auditDeclarations(cases, [{ name: 'wailsv3', language: 'go', tests, errors }]);
-  assert.ok(tests.length > 0, `no Go test function found under ${testRoot}`);
-  assert.deepEqual(audit.errors, []);
 });
 
 test('every contract case of each host scope has a declaring test in the current sources', () => {
@@ -216,8 +232,9 @@ test('every contract case of each host scope has a declaring test in the current
     }
     return { tests, errors };
   };
-  const wails = sourcesOf(['packages/host/wailsv3', 'packages/sok/wailsv3'], '_test.go');
-  const tauri = sourcesOf(['packages/host/tauriv2/tests', 'packages/host/tauriv2/src', 'packages/sok/tauriv2/tests', 'packages/sok/tauriv2/src'], '.rs');
+  const wails = sourcesOf(['packages/host/go', 'packages/host/wailsv3', 'packages/sok/go'], '_test.go');
+  const tauri = sourcesOf(['packages/host/rust/tests', 'packages/host/rust/src', 'packages/host/tauriv2/tests', 'packages/host/tauriv2/src',
+    'packages/sok/rust/tests', 'packages/sok/rust/src'], '.rs');
   const { declared } = auditDeclarations(cases, [
     { name: 'wailsv3', language: 'go', ...wails },
     { name: 'tauriv2', language: 'rust', ...tauri },
@@ -245,7 +262,7 @@ test('results are grouped by run and owner, and a name that one owner shares kee
 
 test('a declaration takes its result only from the items of its own owner', () => {
   const host = 'packages/host/wailsv3/tests';
-  const sok = 'packages/sok/wailsv3/tests';
+  const sok = 'packages/sok/go/tests';
   const body = 'package tests\n\n// contract: area.shared\nfunc TestShared(t *testing.T) {}\n';
   const tests = [...parseDeclarations(body, 'go', `${host}/a_test.go`).tests, ...parseDeclarations(body, 'go', `${sok}/a_test.go`).tests];
   const wails = { name: 'wailsv3', language: 'go', tests, errors: [], items: [], runs: [owners(host, [['TestShared', 'pass']])] };
@@ -256,7 +273,7 @@ test('a declaration takes its result only from the items of its own owner', () =
 
 test('owners of one run do not merge: a failing owner reports its own declaration as fail', () => {
   const host = 'packages/host/wailsv3/tests';
-  const sok = 'packages/sok/wailsv3/tests';
+  const sok = 'packages/sok/go/tests';
   const body = 'package tests\n\n// contract: area.shared\nfunc TestShared(t *testing.T) {}\n';
   const tests = [...parseDeclarations(body, 'go', `${host}/a_test.go`).tests, ...parseDeclarations(body, 'go', `${sok}/a_test.go`).tests];
   const runs = [new Map([[host, new Map([['TestShared', 'pass']])], [sok, new Map([['TestShared', 'fail']])]])];
@@ -272,7 +289,7 @@ test('two Rust tests with one leaf name in one crate and one run fail the audit'
   const duplicated = { ...tauri, items: [item('packages/host/tauriv2', 'a', 'shared'), item('packages/host/tauriv2', 'b', 'tests::shared')] };
   const { errors } = auditHostContract(parseContractCases(SPEC), [wails, duplicated]);
   assert.ok(errors.some((error) => error.includes('duplicate leaf shared')), errors.join('\n'));
-  const apart = { ...tauri, items: [item('packages/host/tauriv2', 'a', 'shared'), item('packages/sok/tauriv2', 'b', 'shared')] };
+  const apart = { ...tauri, items: [item('packages/host/tauriv2', 'a', 'shared'), item('packages/sok/rust', 'b', 'shared')] };
   const other = auditHostContract(parseContractCases(SPEC), [wails, apart]);
   assert.deepEqual(other.errors.filter((error) => error.includes('duplicate leaf')), []);
 });
@@ -318,13 +335,13 @@ test('the macOS static inventory excludes Windows-only Go tests', () => {
   const root = fileURLToPath(new URL('../../', import.meta.url));
   const files = goTestSourceFilesForRun({
     cwd: root,
-    patterns: ['./packages/sok/wailsv3/...'],
+    patterns: ['./packages/sok/go/...'],
     id: 'macOS Wails sok source inventory',
   });
-  assert.ok(files.includes('packages/sok/wailsv3/tests/platform/darwin/private_files_test.go'));
-  assert.ok(!files.includes('packages/sok/wailsv3/tests/platform/linux/process_wait_test.go'));
-  assert.ok(!files.includes('packages/sok/wailsv3/tests/platform/windows/private_files_test.go'));
-  assert.ok(!files.includes('packages/sok/wailsv3/tests/platform/windows/process_wait_test.go'));
+  assert.ok(files.includes('packages/sok/go/tests/platform/darwin/private_files_test.go'));
+  assert.ok(!files.includes('packages/sok/go/tests/platform/linux/process_wait_test.go'));
+  assert.ok(!files.includes('packages/sok/go/tests/platform/windows/private_files_test.go'));
+  assert.ok(!files.includes('packages/sok/go/tests/platform/windows/process_wait_test.go'));
 });
 
 test('Go test source inventory follows target and tag selection and reports list errors', (t) => {

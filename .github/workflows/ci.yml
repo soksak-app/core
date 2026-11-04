@@ -53,8 +53,9 @@ jobs:
         working-directory: core
         run: |
           go -C apps/wailsv3 mod download
+          go -C packages/host/go mod download
           go -C packages/host/wailsv3 mod download
-          go -C packages/sok/wailsv3 mod download
+          go -C packages/sok/go mod download
       - name: Fetch pinned native release file
         run: make -C core native-darwin-fetch
       - name: Wails host tests
@@ -205,8 +206,9 @@ jobs:
         working-directory: core
         run: |
           go -C apps/wailsv3 mod download
+          go -C packages/host/go mod download
           go -C packages/host/wailsv3 mod download
-          go -C packages/sok/wailsv3 mod download
+          go -C packages/sok/go mod download
       - name: Fetch locked Rust dependencies
         working-directory: core
         run: cargo fetch --locked

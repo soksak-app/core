@@ -15,8 +15,11 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 
-	host "github.com/soksak-app/core/packages/host/wailsv3/src"
-	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
+	host "github.com/soksak-app/core/packages/host/go/src"
+	"github.com/soksak-app/core/packages/host/go/src/platform"
+	sampler "github.com/soksak-app/core/packages/host/go/tests/platform/darwin"
+	// The framework adapter installs the main-thread functions of the framework, which the steps below run through.
+	_ "github.com/soksak-app/core/packages/host/wailsv3/src/platform/darwin"
 )
 
 // An init function runs on the main thread, and the lock keeps the main goroutine there, so TestMain runs the application on
@@ -27,7 +30,7 @@ func init() { runtime.LockOSThread() }
 // does, without a window and with the prohibited activation policy, so it takes no activation and shows no Dock icon. The tests
 // start when the application finished launching, and the process ends with their status.
 func TestMain(m *testing.M) {
-	if err := CaptureMainThread(); err != nil {
+	if err := sampler.CaptureMainThread(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -185,25 +188,25 @@ func TestTheMainThreadRunsNoCodeOutsideItsOwnStack(t *testing.T) {
 			return nil
 		}},
 	}
-	if err := StartSampler(); err != nil {
+	if err := sampler.StartSampler(); err != nil {
 		t.Fatal(err)
 	}
 	var driveErrors []string
 	for phase, entry := range entries {
-		SetPhase(phase)
+		sampler.SetPhase(phase)
 		if err := entry.drive(); err != nil {
 			driveErrors = append(driveErrors, fmt.Sprintf("%s: %v", entry.name, err))
 		}
 	}
-	SetPhase(-1)
-	counts, err := StopSampler()
+	sampler.SetPhase(-1)
+	counts, err := sampler.StopSampler()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(driveErrors) > 0 {
 		t.Fatalf("driving the entry points failed: %s", strings.Join(driveErrors, "; "))
 	}
-	low, high := StackBounds()
+	low, high := sampler.StackBounds()
 	var report []string
 	outside := false
 	for phase, entry := range entries {

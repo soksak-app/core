@@ -3,7 +3,7 @@ import test from "node:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { auditCommonOnlyKeys, auditHostParity, auditMenuTables, auditPlatformCallers, commonOnlyKeys, goMenuTables, goPlatformMethods, hostProductSources, libraryCrate, rustHandlers, rustMenuTables, rustPlatformMethods, snake, specMenuTables, withoutRustTestItems } from "../check-host-parity.mjs";
+import { allowedEndpointMethods, auditCommonOnlyKeys, auditHostParity, auditMenuTables, auditPlatformCallers, commonOnlyKeys, goMenuTables, goPlatformMethods, hostProductSources, libraryCrate, rustHandlers, rustMenuTables, rustPlatformMethods, snake, specMenuTables, withoutRustTestItems } from "../check-host-parity.mjs";
 
 // The base sources of the injection checks. Changing only one name in the real sources proves that each failure is produced mechanically.
 const sources = () => ({
@@ -94,10 +94,18 @@ const withDiagnosticRow = (endpointSpec, method) => endpointSpec.replace("\n\n##
 
 const hostsFixture = `## Allowed differences
 
-| ID | Wails | Tauri | Reason |
+### Language table
+
+| ID | Go | Rust | Reason |
 | --- | --- | --- | --- |
 | H1 | none | \`build.rs\` | file difference |
 | E1 | \`diagnostics.heap.profile\` | none | endpoint method difference |
+
+### Framework table
+
+| ID | Wails | Tauri | Reason |
+| --- | --- | --- | --- |
+| H9 | \`tests/framework_log_test.go\` | none | file difference |
 
 ## Process lifecycle`;
 
@@ -179,6 +187,15 @@ test("an endpoint method of one host passes only when the allowed differences de
     ['wailsv3 endpoint diagnostics methods has "diagnostics.heap.profile" that tauriv2 does not']);
 });
 
+test("an endpoint method of one language passes only when the language table declares it", { timeout: 1000 }, () => {
+  const tables = "## Allowed differences\n\n### Language table\n\n| ID | Go | Rust | Reason |\n| --- | --- | --- | --- |\n"
+    + "| E1 | `diagnostics.heap.profile` | none | Reason |\n\n### Framework table\n\n| ID | Wails | Tauri | Reason |\n"
+    + "| --- | --- | --- | --- |\n| H3 | `src/bridge.js` | none | Reason |\n\n## Memory pressure\n";
+  const allowed = allowedEndpointMethods(tables);
+  assert.deepEqual([...allowed.go], ["diagnostics.heap.profile"]);
+  assert.deepEqual([...allowed.rust], []);
+});
+
 test("hyphenated diagnostic endpoint methods are read from both hosts", () => {
   const changed = sources();
   changed.tauriv2EndpointSource = changed.tauriv2EndpointSource.replace(
@@ -228,8 +245,8 @@ test("the common-only keys of the hosts, the browser runtime and the workbench a
   const { readFileSync } = await import("node:fs");
   const read = (path) => readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
   const keys = commonOnlyKeys({
-    tauriv2WorkspaceSource: read("packages/host/tauriv2/src/workspace.rs"),
-    wailsv3WorkspaceSource: read("packages/host/wailsv3/src/workspace.go"),
+    tauriv2WorkspaceSource: read("packages/host/rust/src/workspace.rs"),
+    wailsv3WorkspaceSource: read("packages/host/go/src/workspace.go"),
     browserStorageSource: read("apps/browser/runtime/browser-storage.js"),
     workbenchSettingsSource: read("packages/workbench/settings.js"),
   });

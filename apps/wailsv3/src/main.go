@@ -1,7 +1,7 @@
 // A Wails v3 application that runs the soksak workbench.
 //
 // Staging places the frontend in src/frontend/, and this file embeds that directory.
-// Windows, surfaces, modals, sidecars, and the local endpoint are handled by the github.com/soksak-app/core/packages/host/wailsv3 package.
+// Windows, surfaces, modals, sidecars, and the local endpoint are handled by the Go language host library packages/host/go, and the Wails framework adapter packages/host/wailsv3 runs it.
 package main
 
 import (
@@ -9,7 +9,8 @@ import (
 	"fmt"
 	"os"
 
-	host "github.com/soksak-app/core/packages/host/wailsv3/src"
+	host "github.com/soksak-app/core/packages/host/go/src"
+	adapter "github.com/soksak-app/core/packages/host/wailsv3/src"
 )
 
 //go:embed all:frontend
@@ -25,5 +26,5 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
 	}
-	host.ExitOnFailure(host.Run(assets, options))
+	host.ExitOnFailure(adapter.Run(assets, options))
 }

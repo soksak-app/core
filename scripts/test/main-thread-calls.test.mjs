@@ -3,7 +3,7 @@ import test from "node:test";
 import { auditMainThreadCalls } from "../check-hosts.mjs";
 
 // The fixtures use the paths of the darwin layer of the Wails host and of the headers of native/darwin, which the audit selects.
-const LAYER = "packages/host/wailsv3/src/platform/darwin";
+const LAYER = "packages/host/go/src/platform/darwin";
 const HEADER = "native/darwin/src/window_facts.h";
 const header = [
   "#import <Cocoa/Cocoa.h>",
@@ -19,10 +19,10 @@ const header = [
 ].join("\n");
 // The worker functions of the framework and their macros, as main_thread.h of the darwin layer declares them.
 const mainThread = [
-  "void wailsRunOnWorker(void (^task)(void));",
-  "void wailsRunOnMain(void (^call)(void));",
-  "#define ON_MAIN(T, expression) ({ __block T onMainResult; wailsRunOnMain(^{ onMainResult = (expression); }); onMainResult; })",
-  "#define ON_WORKER(T, expression) ({ __block T onWorkerResult; wailsRunOnWorker(^{ onWorkerResult = (expression); }); onWorkerResult; })",
+  "void hostRunOnWorker(void (^task)(void));",
+  "void hostRunOnMain(void (^call)(void));",
+  "#define ON_MAIN(T, expression) ({ __block T onMainResult; hostRunOnMain(^{ onMainResult = (expression); }); onMainResult; })",
+  "#define ON_WORKER(T, expression) ({ __block T onWorkerResult; hostRunOnWorker(^{ onWorkerResult = (expression); }); onWorkerResult; })",
 ].join("\n");
 const base = { [HEADER]: header, [`${LAYER}/main_thread.h`]: mainThread };
 
@@ -40,7 +40,7 @@ test("main-thread audit accepts exported callbacks that run through the worker",
       "#include \"main_thread.h\"",
       "extern void goWindowClosed(void);",
       "extern int goWindowHit(void);",
-      "static void windowClosed(void) { wailsRunOnWorker(^{ goWindowClosed(); }); }",
+      "static void windowClosed(void) { hostRunOnWorker(^{ goWindowClosed(); }); }",
       "static int windowHit(void) { return ON_WORKER(int, goWindowHit()); }",
     ].join("\n"), `${exported}//export goWindowHit\nfunc goWindowHit() C.int { return 0 }\n`),
   };
@@ -56,7 +56,7 @@ test("main-thread audit rejects an exported callback that C calls directly", { t
     ].join("\n"), exported),
   };
   assert.deepEqual(auditMainThreadCalls(files), [
-    `${LAYER}/window.go:7: goWindowClosed is exported to C and is referenced outside wailsRunOnWorker or ON_WORKER`,
+    `${LAYER}/window.go:7: goWindowClosed is exported to C and is referenced outside hostRunOnWorker or ON_WORKER`,
   ]);
 });
 
@@ -77,7 +77,7 @@ test("main-thread audit rejects an exported callback that an Objective-C file pa
     ].join("\n"),
   };
   assert.deepEqual(auditMainThreadCalls(files), [
-    `${LAYER}/webview.m:7: goWindowClosed is exported to C and is referenced outside wailsRunOnWorker or ON_WORKER`,
+    `${LAYER}/webview.m:7: goWindowClosed is exported to C and is referenced outside hostRunOnWorker or ON_WORKER`,
   ]);
 });
 
@@ -97,7 +97,7 @@ test("main-thread audit rejects a native call that Go makes directly instead of 
     ].join("\n")),
   };
   assert.deepEqual(auditMainThreadCalls(files), [
-    `${LAYER}/window.go:14: Go calls the native function sp_window_close directly; call a main_ wrapper that runs it through wailsRunOnMain or ON_MAIN`,
+    `${LAYER}/window.go:14: Go calls the native function sp_window_close directly; call a main_ wrapper that runs it through hostRunOnMain or ON_MAIN`,
   ]);
 });
 
@@ -113,7 +113,7 @@ test("main-thread audit rejects a preamble function that Go calls and that uses 
       "static void miniaturize(void *window) { NSWindow *view = (NSWindow *)[(id)window self]; (void)view; }",
       "static bool closeWrapped(void *window) { return ON_MAIN(bool, closeOnMain(window)); }",
       "static int sum(int *values) { return values[0] + values[1]; }",
-      "static void onWorker(void *window) { wailsRunOnWorker(^{ sp_window_close(window); }); }",
+      "static void onWorker(void *window) { hostRunOnWorker(^{ sp_window_close(window); }); }",
     ].join("\n"), [
       "func calls(window unsafe.Pointer, values *C.int) {",
       "\tC.closeWindow(window)",
@@ -125,10 +125,10 @@ test("main-thread audit rejects a preamble function that Go calls and that uses 
     ].join("\n")),
   };
   assert.deepEqual(auditMainThreadCalls(files), [
-    `${LAYER}/window.go:14: sp_window_close runs on the worker inside wailsRunOnWorker or ON_WORKER; run it through wailsRunOnMain or ON_MAIN`,
-    `${LAYER}/window.go:19: Go calls closeWindow, which calls closeOnMain (line 9), which calls the native function sp_window_close (line 8) outside wailsRunOnMain or ON_MAIN`,
-    `${LAYER}/window.go:20: Go calls orderOut, which sends an Objective-C message (line 10) outside wailsRunOnMain or ON_MAIN`,
-    `${LAYER}/window.go:21: Go calls miniaturize, which sends an Objective-C message (line 11) outside wailsRunOnMain or ON_MAIN`,
+    `${LAYER}/window.go:14: sp_window_close runs on the worker inside hostRunOnWorker or ON_WORKER; run it through hostRunOnMain or ON_MAIN`,
+    `${LAYER}/window.go:19: Go calls closeWindow, which calls closeOnMain (line 9), which calls the native function sp_window_close (line 8) outside hostRunOnMain or ON_MAIN`,
+    `${LAYER}/window.go:20: Go calls orderOut, which sends an Objective-C message (line 10) outside hostRunOnMain or ON_MAIN`,
+    `${LAYER}/window.go:21: Go calls miniaturize, which sends an Objective-C message (line 11) outside hostRunOnMain or ON_MAIN`,
   ]);
 });
 
@@ -138,4 +138,27 @@ test("main-thread audit names the thread-safe native functions with a reason", {
     assert.match(name, /^sp_[a-z_*]+$/, name);
     assert.ok(reason.length > 20, `${name} has no reason`);
   }
+});
+
+test("main-thread audit reads the darwin layer of the Go language host library through hostRunOnWorker and hostRunOnMain", { timeout: 30000 }, () => {
+  const layer = "packages/host/go/src/platform/darwin";
+  const worker = [
+    "void hostRunOnWorker(void (^task)(void));",
+    "void hostRunOnMain(void (^call)(void));",
+    "#define ON_MAIN(T, expression) ({ __block T onMainResult; hostRunOnMain(^{ onMainResult = (expression); }); onMainResult; })",
+    "#define ON_WORKER(T, expression) ({ __block T onWorkerResult; hostRunOnWorker(^{ onWorkerResult = (expression); }); onWorkerResult; })",
+  ].join("\n");
+  const files = {
+    [HEADER]: header,
+    [`${layer}/main_thread.h`]: worker,
+    [`${layer}/window.go`]: goFile([
+      "#include \"main_thread.h\"",
+      "extern void goWindowClosed(void);",
+      "static void windowClosed(void) { hostRunOnWorker(^{ goWindowClosed(); }); }",
+      "static void windowClosedAtOnce(void) { goWindowClosed(); }",
+    ].join("\n"), exported),
+  };
+  assert.deepEqual(auditMainThreadCalls(files), [
+    `${layer}/window.go:9: goWindowClosed is exported to C and is referenced outside hostRunOnWorker or ON_WORKER`,
+  ]);
 });

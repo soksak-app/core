@@ -1,0 +1,6 @@
+{
+  "name": "@soksak/host-go",
+  "version": "0.0.34",
+  "private": true,
+  "description": "Go language host library: project windows, native surfaces and document regions, modals, the local endpoint, the sidecar channel, and the platform implementations."
+}

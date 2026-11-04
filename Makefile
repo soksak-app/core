@@ -211,7 +211,7 @@ benchmark-rust:
 	@$(CARGO_ENV) node scripts/benchmarks.mjs cargo event_native_benchmark --timeout $(BENCH_TIMEOUT) -- cargo bench --manifest-path $(MANIFEST) -p soksak-host-tauriv2 --bench event_native_benchmark
 
 benchmark-go:
-	@$(GO_ENV) node scripts/benchmarks.mjs go ./packages/host/wailsv3/tests 'EventLogEmit|NativePull' --timeout $(BENCH_TIMEOUT) --ldflags='$(GO_LINK)'
+	@$(GO_ENV) node scripts/benchmarks.mjs go ./packages/host/go/tests 'EventLogEmit|NativePull' --timeout $(BENCH_TIMEOUT) --ldflags='$(GO_LINK)'
 
 rust-repeat:
 	@case "$(PACKAGE)" in '') echo "rust-repeat requires PACKAGE=<cargo package> COUNT=<n> [TEST_TARGET=lib|test:<target>] [TEST=<name>] [FEATURES=<features>] [MANIFEST=<Cargo.toml>]" >&2; exit 2;; esac
@@ -253,12 +253,18 @@ platforms:
 # verifies them by compilation. Host tests run only on macOS (docs/spec/host-contract.md), so they are not compiled.
 WINDOWS_GOARCH      = arm64
 windows-build-check:
-	@echo "START: wailsv3 host go vet GOOS=windows GOARCH=$(WINDOWS_GOARCH)"
+	@echo "START: Go host library go vet GOOS=windows GOARCH=$(WINDOWS_GOARCH)"
+	@cd packages/host/go && GOOS=windows GOARCH=$(WINDOWS_GOARCH) go vet ./src/...
+	@echo "PASS: Go host library for windows/$(WINDOWS_GOARCH)"
+	@echo "START: Go host library go vet -tags diagnostics GOOS=windows GOARCH=$(WINDOWS_GOARCH)"
+	@cd packages/host/go && GOOS=windows GOARCH=$(WINDOWS_GOARCH) go vet -tags diagnostics ./src/...
+	@echo "PASS: Go diagnostics host library for windows/$(WINDOWS_GOARCH)"
+	@echo "START: Wails framework adapter go vet GOOS=windows GOARCH=$(WINDOWS_GOARCH)"
 	@cd packages/host/wailsv3 && GOOS=windows GOARCH=$(WINDOWS_GOARCH) go vet ./src/...
-	@echo "PASS: wailsv3 host for windows/$(WINDOWS_GOARCH)"
-	@echo "START: wailsv3 host go vet -tags diagnostics GOOS=windows GOARCH=$(WINDOWS_GOARCH)"
+	@echo "PASS: Wails framework adapter for windows/$(WINDOWS_GOARCH)"
+	@echo "START: Wails framework adapter go vet -tags diagnostics GOOS=windows GOARCH=$(WINDOWS_GOARCH)"
 	@cd packages/host/wailsv3 && GOOS=windows GOARCH=$(WINDOWS_GOARCH) go vet -tags diagnostics ./src/...
-	@echo "PASS: wailsv3 diagnostics host for windows/$(WINDOWS_GOARCH)"
+	@echo "PASS: Wails diagnostics framework adapter for windows/$(WINDOWS_GOARCH)"
 
 # Checks that the file structures of the two native hosts and the two native apps differ only in the allowed ways.
 hosts-check: windows-build-check
@@ -341,8 +347,8 @@ LSREGISTER = /System/Library/Frameworks/CoreServices.framework/Frameworks/Launch
 bundle-sign = codesign --sign - --force --deep $(1) && $(LSREGISTER) -f $(1)
 
 # Builds the command line sok (docs/spec/cli.md) and places it beside the executables of the bundle. The first argument is the bundle and the second is the profile.
-sok-wailsv3 = go build -C packages/sok/wailsv3 $(if $(filter release,$(2)),-trimpath -ldflags "-s -w") $(if $(filter debug,$(2)),-tags "diagnostics dev",$(if $(DIAGNOSTIC_RELEASE),-tags diagnostics)) -o ../../../$(1)/Contents/MacOS/sok ./src/cmd/sok
-sok-tauriv2 = $(CARGO_ENV) cargo build --locked -p soksak-sok-tauriv2 $(if $(filter release,$(2)),--release) $(if $(filter debug,$(2)),--features diagnostics$(COMMA)dev,$(if $(DIAGNOSTIC_RELEASE),--features diagnostics)) && cp target/$(2)/sok $(1)/Contents/MacOS/sok
+sok-wailsv3 = go build -C packages/sok/go $(if $(filter release,$(2)),-trimpath -ldflags "-s -w") $(if $(filter debug,$(2)),-tags "diagnostics dev",$(if $(DIAGNOSTIC_RELEASE),-tags diagnostics)) -o ../../../$(1)/Contents/MacOS/sok ./src/cmd/sok
+sok-tauriv2 = $(CARGO_ENV) cargo build --locked -p soksak-sok $(if $(filter release,$(2)),--release) $(if $(filter debug,$(2)),--features diagnostics$(COMMA)dev,$(if $(DIAGNOSTIC_RELEASE),--features diagnostics)) && cp target/$(2)/sok $(1)/Contents/MacOS/sok
 
 native-darwin:
 	@$(MAKE) -C native/darwin
@@ -370,7 +376,7 @@ PUBLIC_REGISTRY_INDEX = https://soksak-app.github.io/registry/index.json
 REGISTRY = $(if $(filter public,$(PLUGINS)),target/registry-public,$(WORKSPACE_REGISTRY))
 
 registry:
-	@$(CARGO_ENV) cargo build --locked -p soksak-sok-tauriv2
+	@$(CARGO_ENV) cargo build --locked -p soksak-sok
 	@node scripts/workspace-registry.mjs --sok target/debug/sok --out $(REGISTRY) $(if $(SIDECARS),--sidecars $(SIDECARS)) \
 		$(if $(PLUGINS),--plugins $(PLUGINS) --sidecar-registry $(WORKSPACE_REGISTRY) --public-index $(PUBLIC_REGISTRY_INDEX))
 

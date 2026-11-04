@@ -1,0 +1,1747 @@
+//! Project windows, the window registry, ready/close/exit, window state and window buttons.
+
+use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, PoisonError, mpsc};
+
+use crate::framework::Channel;
+use crate::framework::Color;
+use crate::framework::{
+    AppHandle, Emitter, EventTarget, LogicalSize, Manager, Webview, Window, WindowEvent,
+    WindowOptions,
+};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
+use crate::application_log::{log_error, log_failure};
+use crate::modals::Overlay;
+use crate::platform::{self, Handle};
+use crate::projects::project_folder;
+use crate::shapes::Shapes;
+use crate::sidecars::WindowSidecars;
+use crate::source_origins::{ViewSourceOrigins, view_source_origin_event};
+use crate::surfaces::{Rect, Running, SurfaceComposition, Views, Watching};
+use crate::theme::CurrentTheme;
+
+/// The state of one window.
+#[derive(Default)]
+pub struct WindowData {
+    pub(crate) overlay: Overlay,
+    pub(crate) shapes: Shapes,
+    pub(crate) theme: CurrentTheme,
+    pub(crate) views: Views,
+    /// The handle of the logical SurfaceHost. It is a native host below the main WebView and not a DOM WebView.
+    pub surface_hosts: Mutex<HashMap<String, Handle>>,
+    pub(crate) watching: Watching,
+    pub(crate) running: Running,
+    pub root: Mutex<String>,
+    pub ready: AtomicBool,
+    /// Set when the host asked the ready page to reload, until the new page starts. The page no longer
+    /// answers the calls of the surface documents in that time (docs/spec/native-host.md#page-reload).
+    pub page_reloading: AtomicBool,
+    /// The first responder that the page last received (window-responder). The lock also orders the reads and sends, so
+    /// a later change is never sent before an earlier one.
+    pub responder: Mutex<Option<serde_json::Value>>,
+    /// The windows that received a close request that was not blocked. These windows disappear from the runtime before
+    /// Destroyed, so they are not put in the list.
+    pub closing: AtomicBool,
+    /// The requests that wait for the next page to be ready.
+    pub readied: Mutex<Vec<std::sync::mpsc::Sender<()>>>,
+    /// The items (surface, kind, name) that surface pages registered. When the main page is reloaded, the new page is
+    /// notified again.
+    pub registrations: Mutex<Vec<(String, String, String)>>,
+    /// The document regions of surface pages.
+    pub documents: crate::documents::Documents,
+    /// The stream subscriptions of the document regions.
+    pub streams: crate::documents::Streams,
+    /// The image regions of surface pages.
+    pub images: crate::images::Images,
+    /// Orders the drawing messages to the suppliers of image regions (composition::send_image_drawing).
+    pub drawing: Mutex<()>,
+    /// The current view-source incarnations and the greatest generation issued in this window.
+    pub view_source_origins: ViewSourceOrigins,
+    /// The receivers of the sidecar messages of each pair of a sidecar and a session id (docs/spec/native-surfaces.md#view-surfaces).
+    pub sidecar_routes: crate::sidecar_routes::SidecarRoutes,
+    /// The ordered source events of the current main-page document.
+    pub(crate) view_source_events: ViewSourceEventStream,
+    /// The surface composition that the main page declared and that the host uses to check the authority of region
+    /// calls.
+    pub compositions: Mutex<HashMap<String, SurfaceComposition>>,
+    /// The plugin of each surface that declared its composition; its document regions serve that plugin's package.
+    pub surface_plugins: Mutex<HashMap<String, String>>,
+    /// The folder root of each project that the window holds, by project id.
+    pub projects: Mutex<HashMap<String, String>>,
+    /// Project ownership reservations that the page has not committed through `project_shown`.
+    pub staged_projects: Mutex<HashSet<String>>,
+    /// The project that the window shows, empty when it shows none. A release of the
+    /// shown project clears it, and the root, at once.
+    pub shown: Mutex<String>,
+    /// The complete composition revision applied last for each surface.
+    pub composition_revisions: Mutex<HashMap<String, u64>>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct ViewSourceEvent {
+    pub name: String,
+    pub value: Value,
+}
+
+#[derive(Default)]
+pub(crate) struct ViewSourceEventStream(Mutex<Option<Channel<ViewSourceEvent>>>);
+
+impl ViewSourceEventStream {
+    fn lock(&self) -> std::sync::MutexGuard<'_, Option<Channel<ViewSourceEvent>>> {
+        // default: the lock holds only the replaceable event sender; the panic hook records the panic.
+        self.0.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    pub(crate) fn install(&self, channel: Channel<ViewSourceEvent>) {
+        self.lock().replace(channel);
+    }
+
+    pub(crate) fn retire(&self) {
+        self.lock().take();
+    }
+
+    pub(crate) fn send(&self, name: &str, value: Value) -> Result<(), String> {
+        if !is_view_source_event(name) {
+            return Err(format!("{name} is not a view source event"));
+        }
+        let channels = self.lock();
+        let channel = channels
+            .as_ref()
+            .ok_or_else(|| "view source event channel is not registered".to_string())?;
+        channel
+            .send(ViewSourceEvent {
+                name: name.to_string(),
+                value,
+            })
+            .map_err(|error| format!("view source event {name}: {error}"))
+    }
+}
+
+fn is_view_source_event(name: &str) -> bool {
+    matches!(
+        name,
+        "view-source-registered"
+            | "view-source-ended"
+            | "view-call"
+            | "view-reply"
+            | "view-process-ended"
+            | "view-stopped"
+            | "view-responsiveness"
+    )
+}
+
+pub(crate) fn emit_view_source_event(
+    window: &Window,
+    name: &str,
+    value: Value,
+) -> Result<(), String> {
+    window_data(window)?.view_source_events.send(name, value)
+}
+
+pub fn register_view_source_event_stream(
+    webview: &Webview,
+    channel: Channel<ViewSourceEvent>,
+) -> Result<(), String> {
+    let window = webview.window();
+    crate::exposure::authorize_main_caller(
+        webview.label(),
+        window.label(),
+        "view source event stream",
+    )?;
+    window_data(&window)?.view_source_events.install(channel);
+    Ok(())
+}
+
+#[cfg(test)]
+#[path = "../tests/view_source_stream/stream_test.rs"]
+mod view_source_stream_test;
+
+/// A reload of the app DOM replaces all plugin documents but does not end the sessions: the modules of the new page reach
+/// the same session owners (docs/spec/surface-composition.md). The reload sends the sidecars only the detach of each
+/// captured image of `surface` in `targets`, without waiting for the acknowledgements, so the surface stays pending until
+/// its detaches end (docs/spec/sidecars.md).
+pub fn reload_surface_sidecars<O: crate::sidecars::Owner>(
+    sidecars: &crate::sidecars::Sidecars<O>,
+    owner: &O,
+    images: &crate::images::Images,
+    targets: Vec<crate::images::DetachTarget>,
+    ended_event: crate::sidecars::image_detach::EndedEvent,
+) -> Result<(), String> {
+    crate::sidecars::image_detach::begin_image_detaches(
+        sidecars,
+        owner,
+        images,
+        targets,
+        crate::sidecars::image_detach::IMAGE_DETACH_TIMEOUT,
+        ended_event,
+    )?;
+    Ok(())
+}
+
+/// Tauri calls this from the main-webview `PageLoadEvent::Started` callback. The cleanup here is deliberately
+/// synchronous: while the previous image handle waits for removal in the same AppKit run loop, the replacement page
+/// must not attach a new native image.
+pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
+    let data = window_data(window)?;
+    let owner = native_owner(window)?;
+    let platform = platform::current()?;
+    let window = window.clone();
+    let abandon = crate::documents::abandon_all_layout_presentation_waits(&window);
+    let cancel = platform.cancel_layout(owner);
+    match (abandon, cancel) {
+        (Ok(()), Ok(())) => {}
+        (Err(abandon), Ok(())) => return Err(abandon),
+        (Ok(()), Err(cancel)) => return Err(cancel),
+        (Err(abandon), Err(cancel)) => {
+            return Err(format!("{abandon}; cancelling layout: {cancel}"));
+        }
+    }
+    // The new main document registers its own sidecar receivers, and its views subscribe again.
+    data.sidecar_routes.clear();
+    let surfaces: Vec<_> = data
+        .surface_hosts
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the surface registrations, which are only read;
+        // the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .iter()
+        .map(|(id, handle)| (id.clone(), *handle))
+        .collect();
+    let ended_window = window.clone();
+    let ended_event: crate::sidecars::image_detach::EndedEvent = Arc::new(move |event| {
+        if let Err(error) = emit_window(&ended_window, "image-detach-ended", event) {
+            log_error("image-detach-ended", error);
+        }
+    });
+    for (surface, handle) in surfaces {
+        let surface_detachments = data.images.begin_reload(&surface);
+        platform.set_surface_hidden_handle(handle, true)?;
+        crate::exposure::surface_closed(&window, &surface);
+        let view_plugin = data.documents.views().plugin(&surface);
+        let view_generation = data.view_source_origins.current_view(&surface);
+        if let (Some(plugin), Some(generation)) = (view_plugin, view_generation)
+            && data.view_source_origins.end_view(&surface, generation)
+            && let Err(error) = emit_view_source_event(
+                &window,
+                "view-source-ended",
+                view_source_origin_event(&plugin, Some(&surface), generation),
+            )
+        {
+            log_error("view channel", error);
+        }
+        for document in
+            crate::documents::remove_surface_for_reload(&data.documents, &data.streams, &surface)
+        {
+            platform.close_document(document)?;
+        }
+        for image in data.images.remove_surface(&surface) {
+            platform.close_image(image)?;
+        }
+        reload_surface_sidecars(
+            &window.state::<WindowSidecars>(),
+            &window,
+            &data.images,
+            surface_detachments,
+            Arc::clone(&ended_event),
+        )?;
+    }
+    data.composition_revisions
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the composition revisions, which this call
+        // clears; the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .clear();
+    crate::surfaces::clear_page_compositions(&data.compositions, &data.surface_plugins);
+    crate::exposure::window_changed(&window);
+    Ok(())
+}
+
+/// The window registry and the project-owned windows of the application.
+#[derive(Default)]
+pub struct Windows {
+    pub(crate) quit: std::sync::Arc<crate::quit::Quit>,
+    /// The command of the pending application update or relaunch, which the exit starts
+    /// (docs/spec/installation.md#application-update, docs/spec/endpoint.md#diagnostic-builds).
+    pub update: Mutex<Option<crate::app_update::PendingStart>>,
+    removals: crate::project_removal::Removals,
+    next_window: AtomicU64,
+    opening: Mutex<()>,
+    windows: Mutex<HashMap<String, Arc<WindowData>>>,
+    owners: Mutex<HashMap<String, String>>,
+}
+
+/// Removes the window from the owner and window records, and returns whether no window is left while the application quits.
+fn remove_window_records(registry: &Windows, label: &str) -> bool {
+    let mut owners = registry
+        .owners
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the owner record, and the record of the destroyed window is
+        // removed from it; the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner);
+    owners.retain(|_, owner| owner != label);
+    drop(owners);
+    let mut windows = registry
+        .windows
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the window record, and the record of the destroyed window is
+        // removed from it; the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner);
+    windows.remove(label);
+    windows.is_empty() && registry.quit.active()
+}
+
+/// Returns the state of the window.
+pub fn window_data(window: &Window) -> Result<Arc<WindowData>, String> {
+    window_records_in(&window.state::<Windows>(), window.label())
+}
+
+/// Runs an action of a notification of a window. The window closes before a late notification runs, and a closed window has
+/// nothing to read or to draw, so the action does not run and no failure is reported.
+pub(crate) fn with_open_window(
+    records: &Result<Arc<WindowData>, String>,
+    action: impl FnOnce(&Arc<WindowData>) -> Result<(), String>,
+) -> Result<(), String> {
+    let Ok(data) = records else {
+        return Ok(());
+    };
+    action(data)
+}
+
+/// Returns window state when its record is still registered. A missing record means the window has been destroyed.
+pub(crate) fn window_data_if_registered(window: &Window) -> Option<Arc<WindowData>> {
+    window_records_if_registered(&window.state::<Windows>(), window.label())
+}
+
+/// Returns a registered window record without turning window destruction into an operational error.
+pub(crate) fn window_records_if_registered(
+    registry: &Windows,
+    label: &str,
+) -> Option<Arc<WindowData>> {
+    registry
+        .windows
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the window records, which are only read; the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .get(label)
+        .cloned()
+}
+
+/// Returns the state of the window of label in the registry, or the error of a window that is closed.
+pub(crate) fn window_records_in(
+    registry: &Windows,
+    label: &str,
+) -> Result<Arc<WindowData>, String> {
+    window_records_if_registered(registry, label).ok_or_else(|| "project window is closed".into())
+}
+
+/// Returns the main webview of the window.
+pub(crate) fn root_view(window: &Window) -> Option<Webview> {
+    window.get_webview(window.label())
+}
+
+/// Returns the native address of the window.
+pub(crate) fn native_owner(window: &Window) -> Result<Handle, String> {
+    platform::current()?.window_handle(window)
+}
+
+/// The failure of an operation that writes the native address of a window.
+#[derive(Debug, PartialEq)]
+pub enum NativeFailure {
+    /// The window closed before the main-thread step of the operation. The native code did not receive the window.
+    Closed,
+    /// The address could not be read or the native code failed.
+    Failed(String),
+}
+
+impl std::fmt::Display for NativeFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NativeFailure::Closed => f.write_str("project window is closed"),
+            NativeFailure::Failed(error) => f.write_str(error),
+        }
+    }
+}
+
+/// The work to run in one step of the main thread.
+pub type MainStep = Box<dyn FnOnce() + Send>;
+
+/// Reads the native address of the window with owner and runs work with that address. The read and the run are in one
+/// main-thread step that on_main runs. The close of a window is handled by the main thread, and in that handling the
+/// runtime closes and releases the NSWindow, so if the step were split, a close between the parts would pass the
+/// address of a closed window to the native code. A window that closed before the step has owner None, does not run
+/// work and returns Closed.
+pub fn use_owner<W: Send + 'static, T: Send + 'static>(
+    window: W,
+    on_main: impl FnOnce(MainStep) -> Result<(), String>,
+    owner: impl FnOnce(&W) -> Result<Option<Handle>, String> + Send + 'static,
+    work: impl FnOnce(Handle) -> Result<T, String> + Send + 'static,
+) -> Result<T, NativeFailure> {
+    let (tx, rx) = mpsc::channel();
+    on_main(Box::new(move || {
+        let result = match owner(&window) {
+            Ok(Some(handle)) => work(handle).map_err(NativeFailure::Failed),
+            Ok(None) => Err(NativeFailure::Closed),
+            Err(error) => Err(NativeFailure::Failed(error)),
+        };
+        match tx.send(result) {
+            Ok(()) => {}
+            // A failure after the request ended was not reported by that request, so it is left as an error line.
+            Err(mpsc::SendError(Err(error))) => log_error("native window work", error),
+            Err(mpsc::SendError(Ok(_))) => crate::application_log::log_info(
+                "window",
+                "native window result arrived after its request ended",
+            ),
+        }
+    }))
+    .map_err(NativeFailure::Failed)?;
+    rx.recv()
+        .map_err(|e| NativeFailure::Failed(e.to_string()))?
+}
+
+/// The native address of a window that is registered and whose close was not accepted. It is None for a window that is
+/// closing or a window whose registration Destroyed deleted. Call it on the main thread. If the close request is not
+/// blocked, the runtime sets closing in the same main-thread handling and then closes the window, so a window that is
+/// not closing on the main thread is open.
+fn open_owner(window: &Window) -> Result<Option<Handle>, String> {
+    let open = window
+        .state::<Windows>()
+        .windows
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the window records, which are only read; the panic
+        // hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .get(window.label())
+        .is_some_and(|data| !data.closing.load(Ordering::Relaxed));
+    if !open {
+        return Ok(None);
+    }
+    native_owner(window).map(Some)
+}
+
+/// Reads the native address of the window in one step of the main thread and runs work with that address. A window that
+/// closed before that step does not run work and is Closed.
+pub(crate) fn with_native_owner<T: Send + 'static>(
+    window: &Window,
+    work: impl FnOnce(Handle) -> Result<T, String> + Send + 'static,
+) -> Result<T, NativeFailure> {
+    use_owner(
+        window.clone(),
+        |step| {
+            crate::exposure::on_main(window, move || {
+                step();
+                Ok(())
+            })
+        },
+        open_owner,
+        work,
+    )
+}
+
+/// Cancels only the queued or active surface placement ticket of the window.
+pub(crate) fn cancel_window_layout_ticket(window: &Window, ticket: u64) -> Result<(), String> {
+    let platform = platform::current()?;
+    match with_native_owner(window, move |owner| {
+        platform.cancel_layout_ticket(owner, ticket)
+    }) {
+        Ok(()) | Err(NativeFailure::Closed) => Ok(()),
+        Err(NativeFailure::Failed(error)) => Err(error),
+    }
+}
+
+/// Sends an event to the webview of the window. For the main window, it is also sent to the application receiver.
+pub(crate) fn emit_window<S: Serialize + Clone>(
+    window: &Window,
+    event: &str,
+    payload: S,
+) -> crate::framework::Result<()> {
+    let labels: Vec<_> = window
+        .webviews()
+        .iter()
+        .map(|v| v.label().to_string())
+        .collect();
+    window.emit_filter(event, payload, |target| match target {
+        EventTarget::Webview { label } => labels.contains(label),
+        EventTarget::App => window.label() == "main",
+        _ => false,
+    })
+}
+
+/// Sends workspace-changed to all windows.
+pub(crate) fn notify_workspace(app: &AppHandle) {
+    for window in app.windows().values() {
+        if let Err(error) = emit_window(window, "workspace-changed", ()) {
+            log_error("workspace-changed", error);
+        }
+    }
+}
+
+/// Sends the host event `debug-log-changed` to every window and the value of the host status `host.log` to its watchers: the notice
+/// of a change of the event log (docs/spec/debug.md#following).
+pub(crate) fn notify_log_notice(app: &AppHandle, notice: &crate::debug_follow::LogNotice) {
+    for window in app.windows().values() {
+        if let Err(error) = emit_window(window, "debug-log-changed", notice.clone()) {
+            log_error("debug-log-changed", error);
+        }
+    }
+    crate::exposure::log_notice_changed(app, notice);
+}
+
+/// Sends the host event to every window; every document of a window receives it.
+pub(crate) fn notify_windows(app: &AppHandle, name: &str, payload: serde_json::Value) {
+    for window in app.windows().values() {
+        if let Err(error) = emit_window(window, name, payload.clone()) {
+            log_error(name, error);
+        }
+    }
+}
+
+/// Whether the application is quitting, which ends the WebContent process of each window on purpose.
+pub(crate) fn is_quitting(app: &AppHandle) -> bool {
+    app.state::<Windows>().quit.active()
+}
+
+/// Sends sidecars-changed to every window (docs/spec/installation.md).
+pub(crate) fn notify_sidecars(app: &AppHandle) {
+    for window in app.windows().values() {
+        if let Err(error) = emit_window(window, "sidecars-changed", ()) {
+            log_error("sidecars-changed", error);
+        }
+    }
+}
+
+/// Sends plugins-changed to all windows.
+pub(crate) fn notify_plugins(app: &AppHandle, change: crate::plugins::Changed) {
+    // The enable of a plugin clears the sidecar stops of its manifest in one step, as a surface open does.
+    if change.action == "enable" {
+        app.state::<crate::sidecars::WindowSidecars>()
+            .plugin_enabled(&change.plugin);
+    }
+    for window in app.windows().values() {
+        if let Err(error) = emit_window(window, "plugins-changed", change.clone()) {
+            log_error("plugins-changed", error);
+        }
+    }
+}
+
+/// Returns the window with the label label among the registered windows.
+pub(crate) fn find(app: &AppHandle, label: &str) -> Option<Window> {
+    let registered = app
+        .state::<Windows>()
+        .windows
+        .lock()
+        .is_ok_and(|windows| windows.contains_key(label));
+    if !registered {
+        return None;
+    }
+    app.get_window(label)
+}
+
+/// Returns the identifier, the title, the owning project ids and the key window state of the registered windows in the
+/// order of window identifiers.
+pub(crate) fn list(app: &AppHandle) -> Result<serde_json::Value, String> {
+    // The identifiers and the state are read at once. If they were read separately, Destroyed could delete the
+    // registration in between.
+    let mut registered: Vec<(String, Arc<WindowData>)> = app
+        .state::<Windows>()
+        .windows
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the window records, which are only read; the panic
+        // hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .iter()
+        .map(|(label, data)| (label.clone(), data.clone()))
+        .collect();
+    registered.sort_by(|a, b| a.0.cmp(&b.0));
+    let windows: Vec<(Window, Arc<WindowData>)> = registered
+        .into_iter()
+        .filter_map(|(label, data)| app.get_window(&label).map(|window| (window, data)))
+        .collect();
+    list_entries(
+        windows,
+        |step| crate::exposure::app_on_main(app, step),
+        |(window, data)| {
+            let root = data
+                .root
+                .lock()
+                // default: a lock that a panicking thread poisoned still holds the root webview of the window, which is
+                // only read; the panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner)
+                .clone();
+            window_entry(
+                window.label(),
+                data.closing.load(Ordering::Relaxed),
+                data.ready.load(Ordering::Relaxed),
+                root,
+                || window.title().map_err(|e| e.to_string()),
+                || window.is_focused().map_err(|e| e.to_string()),
+            )
+        },
+    )
+}
+
+/// One main-thread step of the host.windows list.
+pub type ListStep = Box<dyn FnOnce() -> Result<Vec<serde_json::Value>, String> + Send>;
+
+/// Creates the list entry with entry for each window. The entries of all windows are created in one main-thread step
+/// that on_main runs. The close of a window is handled by the main thread, so within one step the window does not leave
+/// the runtime between reading closing and the lookup. A window lookup made on the main thread is handled at once
+/// without waiting (send_user_message of tauri-runtime-wry).
+pub fn list_entries<W: Send + 'static>(
+    windows: Vec<W>,
+    on_main: impl FnOnce(ListStep) -> Result<Vec<serde_json::Value>, String>,
+    entry: impl Fn(&W) -> Result<Option<serde_json::Value>, String> + Send + 'static,
+) -> Result<serde_json::Value, String> {
+    let listed = on_main(Box::new(move || {
+        let mut listed = Vec::new();
+        for window in &windows {
+            listed.extend(entry(window)?);
+        }
+        Ok(listed)
+    }))?;
+    Ok(serde_json::Value::Array(listed))
+}
+
+/// One window of host.windows. A window whose close was accepted is not looked up and is None, because that window
+/// disappears from the runtime before Destroyed and the lookup of its title and focus fails. The lookup failure of
+/// another window is returned as an error.
+pub fn window_entry(
+    label: &str,
+    closing: bool,
+    ready: bool,
+    root: String,
+    title: impl FnOnce() -> Result<String, String>,
+    key: impl FnOnce() -> Result<bool, String>,
+) -> Result<Option<serde_json::Value>, String> {
+    if closing {
+        return Ok(None);
+    }
+    let project = if root.is_empty() { None } else { Some(root) };
+    Ok(Some(serde_json::json!({
+        "ready": ready,
+        "window": label,
+        "title": title()?,
+        "project": project,
+        "key": key()?,
+    })))
+}
+
+/// Returns the list of project ids opened in the window.
+pub(crate) fn opened(app: &AppHandle) -> Result<Vec<String>, String> {
+    Ok(app
+        .state::<Windows>()
+        .owners
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the owner record, which is only read; the panic
+        // hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .keys()
+        .cloned()
+        .collect())
+}
+
+/// The title of a window that has no project open. The configuration of the framework declares the title of the first
+/// window with the same value.
+fn window_title() -> String {
+    format!("soksak / {}", crate::framework::display_name())
+}
+
+fn new_window(app: &AppHandle, label: &str, url: &str, title: &str) -> Result<Window, String> {
+    // The window starts hidden, and register shows it once it has prepared the presentation of the first screen. A
+    // dropped file is received by the file drop view of the window (docs/spec/native-surfaces.md).
+    let window = app.window_of(
+        app.framework()
+            .new_window(WindowOptions {
+                label: label.to_string(),
+                url: url.to_string(),
+                title: title.to_string(),
+                width: 1200.0,
+                height: 760.0,
+                background: Color(16, 17, 23, 255),
+            })
+            .map_err(|e| e.to_string())?,
+    );
+    register(window.clone())?;
+    crate::exposure::windows_changed(app);
+    Ok(window)
+}
+
+/// Opens a new project window.
+pub(crate) fn window_new_on_main(app: AppHandle) -> Result<(), String> {
+    let id = app
+        .state::<Windows>()
+        .next_window
+        .fetch_add(1, Ordering::Relaxed);
+    new_window(
+        &app,
+        &format!("project-window-{id}"),
+        "index.html",
+        &window_title(),
+    )?;
+    Ok(())
+}
+
+/// Schedules the creation on the AppKit event-loop thread without blocking that thread.
+pub fn window_new(app: AppHandle) -> Result<(), String> {
+    let task = app.clone();
+    let (tx, rx) = mpsc::channel();
+    app.run_on_main_thread(move || {
+        if tx.send(window_new_on_main(task)).is_err() {
+            crate::application_log::log_info(
+                "window",
+                "window creation result arrived after its request ended",
+            );
+        }
+    })
+    .map_err(|e| e.to_string())?;
+    rx.recv().map_err(|e| e.to_string())?
+}
+
+/// Adds the window to the registry and handles the window events. The window buttons are placed when the page is ready
+/// and when the window size changes.
+pub(crate) fn register(window: Window) -> Result<(), String> {
+    let context = Arc::new(WindowData::default());
+    window
+        .state::<Windows>()
+        .windows
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the window records, which this call fills; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .insert(window.label().into(), context.clone());
+    let reading = window.clone();
+    crate::performance::window_add(
+        window.label(),
+        std::sync::Arc::new(move || crate::exposure::window_processes(&reading)),
+    );
+    let platform = platform::current()?;
+    let owner = native_owner(&window)?;
+    let main = root_view(&window).ok_or("the main webview is gone")?;
+    let main = crate::exposure::with_view(&main, move |view| platform.view_id(view))?;
+    platform.set_main_webview(owner, main)?;
+    // The window is shown after the first screen is presented (docs/spec/native-host.md#page-start). The window is
+    // created hidden, put on the screen transparent, and becomes opaque when the first screen is presented.
+    platform.reveal_after_load(owner)?;
+    window.show().map_err(|e| e.to_string())?;
+    // The native view lies over the DOM, so the page handles a dropped file relative to the DOM element at that point.
+    let dropped = window.clone();
+    // The page interprets the content and reports errors (core.drop).
+    platform.file_drop(
+        main,
+        Box::new(move |json| {
+            if let Err(error) = emit_window(&dropped, "files-dropped", json) {
+                log_error("files-dropped", error);
+            }
+        }),
+    )?;
+    // The page combines the first responder with the focus of its documents in core.focus.
+    let responding = window.clone();
+    // The close of the window ends the observation in a later main-thread step, when AppKit may have released the window, so
+    // the step ends the observation and not the window.
+    let responder_observation =
+        platform.observe_responder(owner, Box::new(move || responder_changed(&responding)))?;
+    // Notifies the connections that watch host.window of the change of the occlusion state. Tauri does not send this
+    // change as a window event.
+    let occluded = window.clone();
+    platform.observe_occlusion(
+        owner,
+        Box::new(move |on_screen| {
+            crate::window_events::record_window_event(occluded.label(), "occlusion_changed");
+            // An occluded or minimized window draws no image region (docs/spec/native-surfaces.md#image-regions).
+            if let Err(error) = with_open_window(&window_data(&occluded), |data| {
+                // The notice carries the state of its window: the handle of a closing window is no longer available.
+                data.images.set_on_screen(on_screen);
+                Ok(())
+            }) {
+                log_error("window on screen", error);
+            }
+            let drawing = occluded.clone();
+            crate::routine::spawn_named("image-drawing", move || {
+                if let Err(error) = with_open_window(&window_data(&drawing), |data| {
+                    crate::composition::send_image_drawing_of(&drawing, data)
+                }) {
+                    log_error("image drawing", error);
+                }
+            });
+            crate::exposure::window_changed(&occluded)
+        }),
+    )?;
+    // The title bar has its initial height until the page requests the height of the first row. It is set before the
+    // window is shown.
+    initial_titlebar(&window)?;
+    let host = window.clone();
+    let window_events_label = window.label().to_string();
+    let recorded = context.clone();
+    window.on_window_event(move |event| {
+        let kind = match event {
+            WindowEvent::CloseRequested { .. } if recorded.ready.load(Ordering::Relaxed) => {
+                Some("close_requested")
+            }
+            WindowEvent::CloseRequested { .. } => Some("closed"),
+            WindowEvent::Resized(_) => Some("resize"),
+            WindowEvent::Moved(_) => Some("move"),
+            WindowEvent::ScaleFactorChanged => Some("scale_factor_changed"),
+            WindowEvent::Focused(true) => Some("focus"),
+            WindowEvent::Focused(false) => Some("lost_focus"),
+            _ => None,
+        };
+        if let Some(kind) = kind {
+            crate::window_events::record_window_event(window_events_label.as_str(), kind);
+        }
+    });
+    window.on_window_event(move |event| match event {
+        WindowEvent::CloseRequested { api, .. } if context.ready.load(Ordering::Relaxed) => {
+            api.prevent_close();
+            if let Err(error) = emit_window(&host, "project-close-request", ()) {
+                log_error("project-close-request", error);
+            }
+        }
+        WindowEvent::CloseRequested { .. } => {
+            // This is a close request that was not blocked. The window will soon disappear from the runtime, so it is
+            // removed from the list.
+            context.closing.store(true, Ordering::Relaxed);
+            context.documents.views().forget_all();
+        }
+        WindowEvent::Destroyed => {
+            context.documents.views().forget_all();
+            // A window that ends keeps no tab, so a removal that asked it is allowed.
+            host.state::<Windows>().removals.abandon(host.label());
+            crate::exposure::window_closed(&host);
+            let natives = context.clone();
+            // The records of the window are removed below, before the main-thread step runs, so the step takes them now.
+            let closing = window_data(&host);
+            log_failure(
+                "window close",
+                platform.enqueue_ui(Box::new(move || {
+                    if let Ok(data) = &closing {
+                        log_failure(
+                            "surface layout cancel",
+                            data.documents.presentation().abandon_all(),
+                        );
+                    }
+                    log_failure("surface layout cancel", platform.cancel_layout(owner));
+                    platform.end_responder_observation(responder_observation);
+                    // A logical surface holds the main webview, so if it is not closed, the main webview and its web
+                    // content process remain.
+                    let surfaces = std::mem::take(
+                        &mut *natives
+                            .surface_hosts
+                            .lock()
+                            // default: a lock that a panicking thread poisoned still holds the surface registrations,
+                            // which the close of the window takes and closes; the panic hook records the panic.
+                            .unwrap_or_else(PoisonError::into_inner),
+                    );
+                    log_failure(
+                        "window close",
+                        crate::surfaces::close_window_surfaces(
+                            surfaces,
+                            &natives.documents,
+                            &natives.streams,
+                            &natives.images,
+                            &mut |native| match native {
+                                crate::surfaces::WindowNative::Document(handle) => {
+                                    platform.close_document(handle)
+                                }
+                                crate::surfaces::WindowNative::Image(handle) => {
+                                    platform.close_image(handle)
+                                }
+                                crate::surfaces::WindowNative::Surface(handle) => {
+                                    platform.close_surface(handle)
+                                }
+                            },
+                        ),
+                    );
+                })),
+            );
+            let monitor = context
+                .watching
+                .0
+                .lock()
+                // default: a lock that a panicking thread poisoned still holds the input monitor, which is taken and removed; the panic
+                // hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner)
+                .take();
+            if let Some(monitor) = monitor {
+                log_failure("surface input", platform.unwatch_input(monitor));
+            }
+            let mut shapes = context
+                .shapes
+                .0
+                .lock()
+                // default: a lock that a panicking thread poisoned still holds the shapes of the window, which are all destroyed; the
+                // panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner);
+            for (_, shape) in shapes.drain() {
+                log_failure("shape", platform.destroy_shape(shape));
+            }
+            log_failure(
+                "sidecar retain",
+                host.state::<WindowSidecars>().retain(&host, &|_| false),
+            );
+            let registry = host.state::<Windows>();
+            crate::performance::window_remove(host.label());
+            if remove_window_records(&registry, host.label()) {
+                crate::event_record::quit_with_cause("last-window-closed", || {
+                    host.app_handle().exit(0)
+                });
+            }
+            notify_workspace(host.app_handle());
+            crate::exposure::windows_changed(host.app_handle());
+        }
+        WindowEvent::Resized(_) => {
+            crate::exposure::window_changed(&host);
+        }
+        WindowEvent::Focused(focused) => {
+            if *focused {
+                crate::window_events::record_window_event(host.label(), "window-active");
+                if let Err(error) = emit_window(&host, "window-active", ()) {
+                    log_error("window-active", error);
+                }
+            }
+            crate::exposure::window_changed(&host);
+            crate::exposure::windows_changed(host.app_handle());
+        }
+        WindowEvent::Moved(_) | WindowEvent::ScaleFactorChanged => {
+            crate::exposure::window_changed(&host);
+        }
+    });
+    Ok(())
+}
+
+/// The window position and size. The position is in physical pixels and the size is in logical pixels.
+#[derive(Clone, Deserialize, Serialize)]
+pub struct Geometry {
+    x: i32,
+    y: i32,
+    width: f64,
+    height: f64,
+}
+
+#[derive(Deserialize)]
+pub struct OpenProject {
+    id: String,
+    root: String,
+    separate: bool,
+    geometry: Option<Geometry>,
+}
+
+/// The project that a page has selected after loading its project data context.
+#[derive(Clone, Debug)]
+pub struct ProjectShown {
+    project: Option<ShownProject>,
+}
+
+impl<'de> Deserialize<'de> for ProjectShown {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct ProjectShownVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for ProjectShownVisitor {
+            type Value = ProjectShown;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("a project-shown request object")
+            }
+
+            fn visit_map<M>(self, mut fields: M) -> Result<Self::Value, M::Error>
+            where
+                M: serde::de::MapAccess<'de>,
+            {
+                let mut project = None;
+                let mut has_project = false;
+                while let Some(key) = fields.next_key::<String>()? {
+                    if key == "project" {
+                        if has_project {
+                            return Err(serde::de::Error::duplicate_field("project"));
+                        }
+                        project = fields.next_value::<Option<ShownProject>>()?;
+                        has_project = true;
+                    } else {
+                        fields.next_value::<serde::de::IgnoredAny>()?;
+                    }
+                }
+                if !has_project {
+                    return Err(serde::de::Error::missing_field("project"));
+                }
+                Ok(ProjectShown { project })
+            }
+        }
+
+        deserializer.deserialize_map(ProjectShownVisitor)
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct ShownProject {
+    id: String,
+    root: String,
+    title: String,
+}
+
+/// Opens a project. An already open project activates its owning window, and a separate request creates a new window
+/// when the requesting window owns another project.
+/// The operations that bring a window in front: a project open (`show_project_owner`) and an activated notification use
+/// them. The real window implements them, and a test supplies a recorder.
+pub trait WindowFront {
+    fn show(&self) -> crate::framework::Result<()>;
+    fn set_focus(&self) -> crate::framework::Result<()>;
+    /// Whether the window is the key window of the application.
+    fn is_focused(&self) -> crate::framework::Result<bool>;
+}
+
+impl WindowFront for Window {
+    fn show(&self) -> crate::framework::Result<()> {
+        Window::show(self)
+    }
+
+    fn set_focus(&self) -> crate::framework::Result<()> {
+        Window::set_focus(self)
+    }
+
+    fn is_focused(&self) -> crate::framework::Result<bool> {
+        Window::is_focused(self)
+    }
+}
+
+/// Shows the window that owns a project opened from another window. The window comes in front of the other windows of
+/// the application as the key window; it does not activate the application, whose activation the system may refuse
+/// (docs/spec/projects.md).
+pub fn show_project_owner(owner: &impl WindowFront) -> Result<(), String> {
+    owner.show().map_err(|e| e.to_string())
+}
+
+/// Stores the front of the owner window after it is shown, with whether the window is the key window and whether the
+/// application is active (window_events::record_project_front). A read that fails is reported on the application log, and
+/// the record is not written when the key state cannot be read.
+fn record_project_front(owner: &Window, project: &str) {
+    let key = match owner.is_focused() {
+        Ok(key) => key,
+        Err(error) => {
+            log_error("project front", error);
+            return;
+        }
+    };
+    let app_active =
+        match crate::exposure::on_main(owner, || platform::current()?.application_active()) {
+            Ok(active) => Some(active),
+            Err(error) => {
+                log_error("project front", error);
+                None
+            }
+        };
+    crate::window_events::record_project_front(owner.label(), project, key, app_active);
+}
+
+/// Shows and focuses the window of a notification that the person activated.
+pub fn show_notification_owner(owner: &impl WindowFront) -> crate::framework::Result<()> {
+    owner.show().and_then(|()| owner.set_focus())
+}
+
+pub fn project_open(window: &Window, request: OpenProject) -> Result<serde_json::Value, String> {
+    let host = window.clone();
+    crate::exposure::on_main(window, move || project_open_on_main(&host, request))
+}
+
+fn project_open_on_main(
+    window: &Window,
+    request: OpenProject,
+) -> Result<serde_json::Value, String> {
+    if request.id.is_empty()
+        || !request
+            .id
+            .bytes()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-')
+    {
+        return Err("invalid project id".into());
+    }
+    let folder = project_folder(window.app_handle(), request.root)?;
+    let registry = window.state::<Windows>();
+    let _opening = registry
+        .opening
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the open flag of the project open, which this call
+        // holds again; the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner);
+    let owner = registry
+        .owners
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the owner record, which is only read; the panic
+        // hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .get(&request.id)
+        .cloned();
+    if let Some(label) = owner {
+        let owner = window
+            .get_window(&label)
+            .ok_or("project window is closed")?;
+        let data = window_data(&owner)?;
+        let staged = register_project_open(&data, &request.id, &folder.root, false);
+        if label != window.label() {
+            emit_window(&owner, "project-activate", &request.id).map_err(|e| e.to_string())?;
+            show_project_owner(&owner)?;
+            record_project_front(&owner, &request.id);
+        }
+        return Ok(serde_json::json!({
+            "local": label == window.label(),
+            "staged": staged,
+        }));
+    }
+    let occupied = registry
+        .owners
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the owner record, which is only read; the panic
+        // hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .values()
+        .any(|label| label == window.label());
+    let separate = request.separate && occupied;
+    let owner = if separate {
+        let label = format!("project-{}", request.id);
+        new_window(
+            window.app_handle(),
+            &label,
+            &format!("index.html?project={}", request.id),
+            &window_title(),
+        )?
+    } else {
+        window.clone()
+    };
+    let data = window_data(&owner)?;
+    let geometry = request
+        .geometry
+        .filter(|geometry| geometry.width > 0.0 && geometry.height > 0.0);
+    let previous_geometry = if !separate && geometry.is_some() {
+        Some((
+            owner.inner_size().map_err(|error| error.to_string())?,
+            owner.outer_position().map_err(|error| error.to_string())?,
+        ))
+    } else {
+        None
+    };
+    configure_project_window(
+        geometry,
+        separate,
+        |geometry| {
+            owner
+                .set_size(LogicalSize::new(geometry.width, geometry.height))
+                .map_err(|error| error.to_string())?;
+            owner
+                .set_position(crate::framework::LogicalPosition::new(
+                    geometry.x, geometry.y,
+                ))
+                .map_err(|error| error.to_string())
+        },
+        || {
+            let Some((size, position)) = previous_geometry else {
+                return Err("previous window geometry was not captured".into());
+            };
+            owner.set_size(size).map_err(|error| error.to_string())?;
+            owner
+                .set_position(position)
+                .map_err(|error| error.to_string())
+        },
+        || owner.close().map_err(|error| error.to_string()),
+    )?;
+    let staged = register_project_open(&data, &request.id, &folder.root, true);
+    registry
+        .owners
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the owner record, which this call fills; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .insert(request.id, owner.label().into());
+    crate::exposure::windows_changed(window.app_handle());
+    notify_workspace(window.app_handle());
+    Ok(serde_json::json!({
+        "local": owner.label() == window.label(),
+        "staged": staged,
+    }))
+}
+
+/// Registers project ownership without changing the project selected by the page.
+fn register_project_open(data: &WindowData, id: &str, root: &str, new_owner: bool) -> bool {
+    data.projects
+        .lock()
+        // default: the map stores independent project-root strings, and this insertion does not invoke user code; the
+        // panic hook records a prior panic while the map was held.
+        .unwrap_or_else(PoisonError::into_inner)
+        .insert(id.to_string(), root.to_string());
+    let mut staged = data
+        .staged_projects
+        .lock()
+        // default: staging is independent set membership; repeating insertion preserves the pending-open contract, and
+        // the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner);
+    if new_owner {
+        staged.insert(id.to_string());
+    }
+    staged.contains(id)
+}
+
+fn configure_project_window(
+    geometry: Option<Geometry>,
+    created: bool,
+    configure: impl FnOnce(&Geometry) -> Result<(), String>,
+    restore_existing: impl FnOnce() -> Result<(), String>,
+    close_created: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    if let Some(geometry) =
+        geometry.filter(|geometry| geometry.width > 0.0 && geometry.height > 0.0)
+        && let Err(error) = configure(&geometry)
+    {
+        let cleanup = if created {
+            close_created()
+        } else {
+            restore_existing()
+        };
+        return match cleanup {
+            Ok(()) => Err(error),
+            Err(cleanup_error) => Err(format!(
+                "{error}; project window cleanup failed: {cleanup_error}"
+            )),
+        };
+    }
+    Ok(())
+}
+
+fn release_project_reservation(data: &WindowData, id: &str) {
+    data.projects
+        .lock()
+        // default: removing an absent reservation is safe and repeated release is idempotent.
+        .unwrap_or_else(PoisonError::into_inner)
+        .remove(id);
+    data.staged_projects
+        .lock()
+        // default: removing an absent staged marker is safe and repeated release is idempotent.
+        .unwrap_or_else(PoisonError::into_inner)
+        .remove(id);
+}
+
+/// Commits the project selected by the page and publishes it only after the committed state is visible.
+fn commit_project_shown(
+    data: &WindowData,
+    project: Option<&ShownProject>,
+    set_title: impl FnOnce(&str) -> Result<(), String>,
+) -> Result<(), String> {
+    let title = if let Some(project) = project {
+        let root = data
+            .projects
+            .lock()
+            // default: project roots are independent strings and this call only reads the ownership record; the panic
+            // hook records a prior panic while the map was held.
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(&project.id)
+            .cloned()
+            .ok_or_else(|| format!("project {} is not owned by this window", project.id))?;
+        if root != project.root {
+            return Err(format!(
+                "project {} root does not match the root recorded by this window",
+                project.id
+            ));
+        }
+        format!("{} / {}", project.title, crate::framework::display_name())
+    } else {
+        window_title()
+    };
+    set_title(&title)?;
+    if let Some(project) = project {
+        // default: the shown project and root are plain strings replaced as whole values after title setup succeeds; the
+        // panic hook records a prior panic while either field was held.
+        *data.shown.lock().unwrap_or_else(PoisonError::into_inner) = project.id.clone();
+        // default: the shown project and root are plain strings replaced as whole values after title setup succeeds; the
+        // panic hook records a prior panic while either field was held.
+        *data.root.lock().unwrap_or_else(PoisonError::into_inner) = project.root.clone();
+        data.staged_projects
+            .lock()
+            // default: removing the staged marker is idempotent after the project becomes shown.
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(&project.id);
+    } else {
+        data.shown
+            .lock()
+            // default: clearing an already-empty shown project is idempotent.
+            .unwrap_or_else(PoisonError::into_inner)
+            .clear();
+        data.root
+            .lock()
+            // default: clearing an already-empty project root is idempotent.
+            .unwrap_or_else(PoisonError::into_inner)
+            .clear();
+    }
+    Ok(())
+}
+
+fn project_shown_on_main(window: &Window, request: ProjectShown) -> Result<(), String> {
+    if let Some(project) = request.project.as_ref() {
+        if project.id.is_empty()
+            || !project
+                .id
+                .bytes()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-')
+        {
+            return Err("invalid project id".into());
+        }
+        let owner = window
+            .state::<Windows>()
+            .owners
+            .lock()
+            // default: this lookup reads the plain project-owner map; the panic hook records a prior panic while it was
+            // held.
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(&project.id)
+            .cloned();
+        if owner.as_deref() != Some(window.label()) {
+            return Err(format!(
+                "project {} is not owned by this window",
+                project.id
+            ));
+        }
+        let canonical = project_folder(window.app_handle(), project.root.clone())?;
+        if canonical.root != project.root {
+            return Err(format!("project {} root is not canonical", project.id));
+        }
+    }
+    let data = window_data(window)?;
+    commit_project_shown(&data, request.project.as_ref(), |title| {
+        window.set_title(title).map_err(|error| error.to_string())
+    })?;
+    crate::exposure::windows_changed(window.app_handle());
+    Ok(())
+}
+
+/// Commits the page-selected project on the main thread after its data context is ready.
+pub fn project_shown(window: &Window, request: ProjectShown) -> Result<(), String> {
+    let host = window.clone();
+    crate::exposure::on_main(window, move || project_shown_on_main(&host, request))
+}
+
+/// Releases the link between a project id and a window. A window with no remaining project shows the library, so the
+/// project root and the title are cleared.
+pub fn project_release(window: &Window, id: String) -> Result<(), String> {
+    let registry = window.state::<Windows>();
+    let (released, empty) = release_owner(&registry.owners, &id);
+    if let Some(label) = released {
+        // When the window is already closed, there is no state to clear.
+        if let Some(owner) = window.app_handle().get_window(&label) {
+            let data = window_data(&owner)?;
+            release_project_reservation(&data, &id);
+            // A release of the shown project clears the shown root at once, even when another project is still held: the window
+            // shows no project until the page shows one explicitly.
+            let shown_released = clear_released_shown(
+                &mut data
+                    .shown
+                    .lock()
+                    // default: a lock that a panicking thread poisoned still holds the shown project, which this call may clear;
+                    // the panic hook records the panic.
+                    .unwrap_or_else(PoisonError::into_inner),
+                &id,
+            );
+            if empty || shown_released {
+                window_data(&owner)?
+                    .root
+                    .lock()
+                    // default: a lock that a panicking thread poisoned still holds the root webview of the window, which
+                    // this call clears; the panic hook records the panic.
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .clear();
+                owner
+                    .set_title(&window_title())
+                    .map_err(|e| e.to_string())?;
+                crate::exposure::windows_changed(window.app_handle());
+            }
+        }
+    }
+    notify_workspace(window.app_handle());
+    Ok(())
+}
+
+/// Clears the shown project of a window when it is the released project id, and reports whether it cleared it.
+/// A shown project that is still held is kept.
+pub(crate) fn clear_released_shown(shown: &mut String, id: &str) -> bool {
+    let released = *shown == id;
+    if released {
+        shown.clear();
+    }
+    released
+}
+
+/// Removes the link of the project id from the owner record, and returns the released window label and whether no other
+/// project shows that window.
+fn release_owner(owners: &Mutex<HashMap<String, String>>, id: &str) -> (Option<String>, bool) {
+    let mut owners = owners
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the owner record, which this call amends; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner);
+    let released = owners.remove(id);
+    let empty = released
+        .as_ref()
+        .is_some_and(|label| !owners.values().any(|other| other == label));
+    (released, empty)
+}
+
+/// Asks the window that shows the project whether the project may be removed and returns its answer; returns true at
+/// once when no other window shows the project (docs/spec/projects.md).
+pub fn project_remove_ask(window: &Window, id: &str) -> Result<bool, String> {
+    let registry = window.state::<Windows>();
+    let owner = registry
+        .owners
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the owner record, which is only read; the panic
+        // hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .get(id)
+        .cloned();
+    let Some(label) = owner.filter(|label| label != window.label()) else {
+        return Ok(true);
+    };
+    let asked = registry.removals.begin(id, &label)?;
+    let target = window
+        .get_window(&label)
+        .ok_or("project window is closed")?;
+    if let Err(error) = emit_window(&target, "project-remove-request", id) {
+        registry.removals.abandon(&label);
+        return Err(error.to_string());
+    }
+    asked.recv().map_err(|e| e.to_string())
+}
+
+/// Answers the removal request that `project_remove_ask` sent to this window.
+pub fn project_remove_answer(window: &Window, id: &str, allowed: bool) -> Result<(), String> {
+    window.state::<Windows>().removals.answer(id, allowed)
+}
+
+/// Returns the position and size of a window in the normal state. It is None for a maximized, full screen or minimized
+/// window.
+pub fn window_state(window: &Window) -> Result<Option<Geometry>, String> {
+    if window.is_maximized().map_err(|e| e.to_string())?
+        || window.is_fullscreen().map_err(|e| e.to_string())?
+        || window.is_minimized().map_err(|e| e.to_string())?
+    {
+        return Ok(None);
+    }
+    // The position and size are stored in window coordinates. If they were stored in physical pixels, the same number
+    // would point twice as far on a screen with scale 2, and the window would be pushed off the screen at every
+    // reopening.
+    let scale = window.scale_factor().map_err(|e| e.to_string())?;
+    let at = window
+        .outer_position()
+        .map_err(|e| e.to_string())?
+        .to_logical(scale);
+    let size = window
+        .inner_size()
+        .map_err(|e| e.to_string())?
+        .to_logical(scale);
+    Ok(Some(Geometry {
+        x: at.x.round() as i32,
+        y: at.y.round() as i32,
+        width: size.width,
+        height: size.height,
+    }))
+}
+
+/// Records that the main page started. Call it before the start document request answers. It leaves the window not
+/// ready, ends the requests sent to the previous page, and cleans up the surface documents, the image regions and the
+/// modals of the previous page.
+pub(crate) fn page_started(window: &Window) -> Result<(), String> {
+    let data = window_data(window)?;
+    let cleanup = (|| {
+        data.ready.store(false, Ordering::Relaxed);
+        // No page shows the failures of the cleared ends, so the host writes them.
+        for failure in data.images.detach_page_starting() {
+            log_error("image detach", failure);
+        }
+        crate::exposure::page_reloaded(window, &data);
+        reload_surface_documents(window)?;
+        data.overlay.discard()?;
+        Ok(())
+    })();
+    data.view_source_events.retire();
+    cleanup
+}
+
+/// Sends the first responder to the page when it changed since the last send. A page that has not reported ready receives
+/// none; its ready sends the current responder (docs/spec/exposure.md#core-focus). The native observation calls it on the
+/// main thread, and the status is read in another thread.
+fn responder_changed(window: &Window) {
+    crate::exposure::window_changed(window);
+    let window = window.clone();
+    crate::routine::spawn_named("window-responder", move || send_responder(&window, false));
+}
+
+/// Sends the current first responder to the page that reported ready.
+fn responder_page_ready(window: &Window) {
+    let window = window.clone();
+    crate::routine::spawn_named("window-responder", move || send_responder(&window, true));
+}
+
+fn send_responder(window: &Window, ready: bool) {
+    // silent: a window whose records the close removed has no page that receives the responder.
+    let Some(data) = window_data_if_registered(window) else {
+        return;
+    };
+    let result = crate::responder::send_changed_responder(
+        &data.responder,
+        ready,
+        || data.ready.load(Ordering::Relaxed),
+        || crate::exposure::window_responder(window),
+        |responder| {
+            emit_window(window, "window-responder", responder).map_err(|error| error.to_string())
+        },
+        // The close of the window removes its records; a read after that finds no window.
+        |_| window_data_if_registered(window).is_none(),
+    );
+    if let Err(error) = result {
+        log_error("window responder", error);
+    }
+}
+
+pub fn window_ready(window: &Window) -> Result<(), String> {
+    let data = window_data(window)?;
+    data.ready.store(true, Ordering::Relaxed);
+    for event in data.images.detach_page_ready() {
+        if let Err(error) = emit_window(window, "image-detach-ended", event) {
+            log_error("image-detach-ended", error);
+        }
+    }
+    responder_page_ready(window);
+    crate::exposure::replay_registrations(window);
+    crate::exposure::windows_changed(window.app_handle());
+    for ready in data
+        .readied
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the readiness senders, which the readiness drains;
+        // the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .drain(..)
+    {
+        if ready.send(()).is_err() {
+            crate::application_log::log_info(
+                "window",
+                "window readiness arrived after its request ended",
+            );
+        }
+    }
+    crate::exposure::rewatch(window);
+    crate::deep_link::ready(window.app_handle());
+    emit_window(window, "page-ready", ()).map_err(|e| e.to_string())
+}
+
+/// Closes a window.
+pub fn window_close(window: &Window) -> Result<(), String> {
+    window_data(window)?.ready.store(false, Ordering::Relaxed);
+    window.close().map_err(|e| e.to_string())
+}
+
+/// Records that the page kept a modified tab when the window was asked to close, which ends a quit that asked the
+/// window (docs/spec/hosts.md#process-lifecycle).
+pub fn window_close_kept(window: &Window) -> Result<(), String> {
+    window_data(window)?;
+    window.state::<Windows>().quit.cancel();
+    *window
+        .state::<Windows>()
+        .update
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the pending update, which the cancellation
+        // clears; the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner) = None;
+    // A request of the operating system waits for its answer; the application does not quit, so the answer is the
+    // cancellation.
+    window
+        .run_on_main_thread(|| match platform::current() {
+            Ok(platform) => platform.cancel_quit_requests(),
+            Err(error) => log_error("quit request cancel", error),
+        })
+        .map_err(|e| e.to_string())
+}
+
+/// Handles a termination request. When a ready window exists, it blocks the termination and sends a close request to
+/// each window.
+pub(crate) fn quit(app: &AppHandle, api: crate::ExitRequestApi) {
+    let registry = app.state::<Windows>();
+    let waiting: Vec<_> = registry
+        .windows
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the window registry, which is only read; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .iter()
+        .filter(|(_, context)| context.ready.load(Ordering::Relaxed))
+        .map(|(label, _)| label.clone())
+        .collect();
+    // Every termination request begins the quit state, with or without a ready window (docs/spec/hosts.md#process-lifecycle).
+    if registry.quit.begin_quit_request(waiting.len()) {
+        return;
+    }
+    api.prevent_exit();
+    for (label, window) in app.windows() {
+        let result = if waiting.contains(&label) {
+            emit_window(&window, "project-close-request", ())
+        } else {
+            window.close()
+        };
+        if let Err(error) = result {
+            log_error("window quit", error);
+        }
+    }
+}
+
+/// The title bar height (pt) that is set when a window is created. It equals the height of the first row at frame text
+/// scale 1 (--chrome-h of packages/workbench/app.css).
+const INITIAL_TITLEBAR_HEIGHT: f64 = 40.0;
+
+/// Creates the title bar of the window with its initial height. AppKit places the window buttons at the vertical center
+/// of that height.
+///
+/// AppKit places views on the main thread. The window registration also runs outside the main thread, and waiting for
+/// an answer on the main thread would stop there, so this is scheduled on the main thread. It is scheduled as soon as
+/// the window is created, so it runs before the page requests the title bar height.
+fn initial_titlebar(window: &Window) -> Result<(), String> {
+    let target = window.clone();
+    window
+        .run_on_main_thread(move || {
+            // The address is read in this step, which uses the address. A window that closed before has no title bar to
+            // set.
+            let result = open_owner(&target).and_then(|owner| match owner {
+                Some(handle) => {
+                    platform::current()?.set_titlebar_height(handle, INITIAL_TITLEBAR_HEIGHT)
+                }
+                None => Ok(()),
+            });
+            if let Err(error) = result {
+                log_error("window title bar", error);
+            }
+        })
+        .map_err(|e| e.to_string())
+}
+
+/// Checks the title bar height (pt) that a surface preparation holds. The first row is between 40 pt and 108 pt, which
+/// is frame text scale 3. AppKit uses a value of 0 or less to mean that there is no custom height, so such a value is
+/// also outside this range.
+pub fn validate_titlebar_height(height: f64) -> Result<(), String> {
+    if height.is_nan() || !(32.0..=200.0).contains(&height) {
+        return Err("title bar height must be a finite number from 32 through 200 points".into());
+    }
+    Ok(())
+}
+
+/// Creates the title bar of the window with height (pt) and returns the window button area and the title bar height
+/// after it. A surface preparation calls it on the main thread inside the placement transaction of the window, so the
+/// new height reaches the screen together with the commit of that transaction. A window in full screen does not change
+/// the height and returns row 0.
+pub(crate) fn titlebar_chrome(handle: Handle, height: f64) -> Result<TitlebarChange, String> {
+    let platform = platform::current()?;
+    let previous = platform.titlebar_height(handle)?;
+    platform.set_titlebar_height(handle, height)?;
+    let (x, y, w, h) = platform.window_controls(handle)?;
+    Ok(TitlebarChange {
+        chrome: Chrome {
+            controls: Rect { x, y, w, h },
+            row: platform.titlebar_height(handle)?,
+        },
+        previous,
+    })
+}
+
+/// The title bar that a surface preparation set. chrome is the window value after it was set and previous is the height
+/// (pt) before the preparation. It is 0 for full screen.
+pub(crate) struct TitlebarChange {
+    pub(crate) chrome: Chrome,
+    pub(crate) previous: f64,
+}
+
+/// Restores the title bar height before the preparation. When nothing was set in full screen (0), there is nothing to
+/// restore. Call it on the main thread.
+pub(crate) fn restore_titlebar(handle: Handle, previous: f64) -> Result<(), String> {
+    if previous <= 0.0 {
+        return Ok(());
+    }
+    platform::current()?.set_titlebar_height(handle, previous)
+}
+
+/// The height (pt) of the first row that the first draw of the page will show. It is round(max(40, 36 × textSize)) of
+/// the common setting textSize, and 40 when the setting is absent (docs/spec/native-surfaces.md#title-bar-height).
+/// textSize is common only, so the page draws the first row with the same value.
+pub fn start_titlebar_height(common: &serde_json::Value) -> Result<f64, String> {
+    let Some(value) = common.get("textSize") else {
+        return Ok(INITIAL_TITLEBAR_HEIGHT);
+    };
+    let Some(factor) = value.as_f64() else {
+        return Err(format!(
+            "common setting textSize must be a number, not {}",
+            crate::arguments::kind(value)
+        ));
+    };
+    if !(0.5..=3.0).contains(&factor) {
+        return Err("common setting textSize must be from 0.5 through 3".into());
+    }
+    Ok((36.0 * factor).max(INITIAL_TITLEBAR_HEIGHT).round())
+}
+
+/// Before it answers the start document, sets the title bar of the window to the first row height of the common
+/// setting. A new window that is not visible yet is set at once, and a window that shows the previous page is set
+/// inside the start transaction of a new ticket and committed together with the first presentation of the new page
+/// (docs/spec/native-surfaces.md#title-bar-height). A window in full screen does not change the height.
+pub(crate) fn start_titlebar(window: &Window, common: &serde_json::Value) -> Result<(), String> {
+    let height = start_titlebar_height(common)?;
+    let handle = native_owner(window)?;
+    let ticket = window_data(window)?
+        .running
+        .prepared
+        .fetch_add(1, Ordering::Relaxed)
+        + 1;
+    let (tx, rx) = mpsc::channel::<Result<(), String>>();
+    crate::exposure::on_main(window, move || {
+        platform::current()?.start_page_titlebar(
+            handle,
+            ticket,
+            height,
+            Box::new(move |result| {
+                if tx.send(result).is_err() {
+                    crate::application_log::log_info(
+                        "window",
+                        "the start title bar result arrived after its request ended",
+                    );
+                }
+            }),
+        )
+    })?;
+    rx.recv().map_err(|e| e.to_string())?
+}
+
+/// The values of the window that the page uses to draw the first line. controls is the window button area and row is
+/// the title bar height (pt). row is 0 when there is no title bar, as in full screen.
+#[derive(Clone, Serialize)]
+pub struct Chrome {
+    controls: Rect,
+    row: f64,
+}
+
+/// Returns the window button area and the title bar height.
+pub fn window_chrome(window: &Window) -> Result<Chrome, String> {
+    let controls = window_controls(window)?;
+    let handle = native_owner(window)?;
+    let row =
+        crate::exposure::on_main(window, move || platform::current()?.titlebar_height(handle))?;
+    Ok(Chrome { controls, row })
+}
+
+/// Returns the area that the window buttons occupy in page coordinates. The page leaves that area empty in its first
+/// line.
+pub(crate) fn window_controls(window: &Window) -> Result<Rect, String> {
+    let handle = native_owner(window)?;
+    let (x, y, w, h) = platform::current()?.window_controls(handle)?;
+    Ok(Rect { x, y, w, h })
+}
+
+#[cfg(test)]
+#[path = "windows_records_test.rs"]
+mod records_test;
+
+#[cfg(test)]
+#[path = "../tests/project_data_order/project_data_order_test.rs"]
+mod project_data_order_test;

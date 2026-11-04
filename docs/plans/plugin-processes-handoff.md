@@ -91,8 +91,8 @@ Time limits and the progress output of long runs follow the rules in [AGENTS.md]
 |---|---|
 | One Node test file | `node --test packages/<pkg>/test/<file>.test.mjs` |
 | Repeat a Node test | `make node-repeat FILE=<file> NAME=<pattern> COUNT=<n>` |
-| Go tests | `make go-repeat PACKAGE=./packages/host/wailsv3/tests COUNT=1 [TEST=<regexp>]` (also `./packages/sok/wailsv3/tests`, `./packages/host/wailsv3/src`) |
-| Rust tests | `make rust-repeat PACKAGE=soksak-host-tauriv2 COUNT=1 [TEST=<name>]`, and `PACKAGE=soksak-sok-tauriv2` |
+| Go tests | `make go-repeat PACKAGE=./packages/host/go/tests COUNT=1 [TEST=<regexp>]` (also `./packages/host/go/src`, `./packages/host/wailsv3/tests`, `./packages/sok/go/tests`) |
+| Rust tests | `make rust-repeat PACKAGE=soksak-host-tauriv2 COUNT=1 [TEST=<name>]`, and `PACKAGE=soksak-sok` |
 | Rust order dependence | `make rust-tests-alone PACKAGE=<package>` |
 | Native tests | `make -C native/darwin repeat TEST=<name>_test COUNT=<n>` |
 | Docs, links, translations, records | `make docs-check` |

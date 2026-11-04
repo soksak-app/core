@@ -1,0 +1,363 @@
+package host
+
+// Lays out all native regions of one surface and the declared DOM overlays as one complete snapshot.
+
+import (
+	"encoding/json"
+	"fmt"
+	"math"
+	"reflect"
+	"unsafe"
+
+	"github.com/soksak-app/core/packages/host/go/src/platform"
+)
+
+type CompositionPlacement struct {
+	Name    string  `json:"name"`
+	Left    float64 `json:"left"`
+	Top     float64 `json:"top"`
+	Right   float64 `json:"right"`
+	Bottom  float64 `json:"bottom"`
+	Visible bool    `json:"visible"`
+}
+
+type CompositionPlaceRequest struct {
+	Surface  string                 `json:"surface"`
+	Revision uint64                 `json:"revision"`
+	Regions  []CompositionPlacement `json:"regions"`
+	Overlays []CompositionPlacement `json:"overlays"`
+}
+
+type CompositionDeclareRequest struct {
+	Surface string `json:"surface"`
+	// Plugin is the id of the plugin whose page the surface shows; its document regions serve that plugin's package.
+	Plugin      string             `json:"plugin"`
+	Composition SurfaceComposition `json:"composition"`
+}
+
+type pendingConfigure struct {
+	key           ImageKey
+	configuration *ImageConfigure
+}
+
+func (s *Surfaces) releaseImageConfigurations(configurations []pendingConfigure) {
+	for _, pending := range configurations {
+		s.images.RetryConfigure(pending.key, pending.configuration.Generation, pending.configuration.Raster)
+	}
+}
+
+func (s *Surfaces) sendImageConfigurations(configurations []pendingConfigure) error {
+	// A supplier learns that a region draws before it receives the raster to draw (docs/spec/native-surfaces.md#image-regions).
+	if err := s.sendImageDrawing(); err != nil {
+		s.releaseImageConfigurations(configurations)
+		return err
+	}
+	for index, pending := range configurations {
+		if err := s.sendImageConfiguration(pending); err != nil {
+			s.releaseImageConfigurations(configurations[index:])
+			return err
+		}
+	}
+	return nil
+}
+
+// sendImageConfiguration sends one configure message to the supplier of its region and records the send.
+func (s *Surfaces) sendImageConfiguration(pending pendingConfigure) error {
+	configuration := pending.configuration
+	body, err := json.Marshal(map[string]any{"image": map[string]any{"configure": configuration}})
+	if err != nil {
+		return err
+	}
+	if err := s.sidecars.Send(configuration.Owner, configuration.Sidecar, pending.key.Surface, body); err != nil {
+		return err
+	}
+	s.observeRaster(pending.key, "sent", "sidecar", configuration.Width, configuration.Height, configuration.Scale)
+	return nil
+}
+
+// sendImageDrawing sends each drawing state that changed since it was last sent to the supplier of its region
+// (docs/spec/native-surfaces.md#image-regions). drawingMu keeps the messages in the order of the changes.
+func (s *Surfaces) sendImageDrawing() error {
+	s.drawingMu.Lock()
+	defer s.drawingMu.Unlock()
+	changes := s.images.DrawingChanges()
+	for index, change := range changes {
+		if err := s.sendImageDrawingChange(change); err != nil {
+			for _, unsent := range changes[index:] {
+				if unsent.Configure != nil {
+					s.images.RetryConfigure(unsent.Key, unsent.Configure.Generation, unsent.Configure.Raster)
+				}
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+// sendImageDrawingChange sends one drawing state and then the configuration that the region waited for.
+func (s *Surfaces) sendImageDrawingChange(change ImageDrawing) error {
+	body, err := json.Marshal(map[string]any{"image": map[string]any{"drawing": change}})
+	if err != nil {
+		return err
+	}
+	if err := s.sidecars.Send(change.Owner, change.Sidecar, change.Key.Surface, body); err != nil {
+		return fmt.Errorf("image %q drawing: %w", change.Name, err)
+	}
+	if change.Configure == nil {
+		return nil
+	}
+	return s.sendImageConfiguration(pendingConfigure{change.Key, change.Configure})
+}
+
+// readOnScreen records whether the window is neither occluded nor minimized. Call it on the UI thread.
+func (s *Surfaces) readOnScreen() error {
+	onScreen, err := system.WindowOnScreen(s.window.NativeWindow())
+	if err != nil {
+		return err
+	}
+	s.images.SetOnScreen(onScreen)
+	return nil
+}
+
+// rasterFacts carries the measured state (layout, size, surface scale) of a region whose raster size could not be decided in the error.
+func rasterFacts(handle unsafe.Pointer) string {
+	facts, err := system.FactsImage(handle)
+	if err != nil {
+		return err.Error()
+	}
+	return facts
+}
+
+// observeRaster records the raster decision of an image region in the performance trace. configured means the size to send to the sidecar was decided,
+// and deferred means the size could not be decided and was postponed because the surface is not laid out yet (docs/spec/performance-trace.md).
+func (s *Surfaces) observeRaster(key ImageKey, phase, from string, width, height int, scale float64) {
+	PerformanceObserve("host", func() map[string]any {
+		return map[string]any{"event": "image.raster", "surface": key.Surface, "name": key.Name, "phase": phase,
+			"from": from, "width": width, "height": height, "scale": scale}
+	})
+}
+
+// A surface return or an outer size change must update the actual native raster even when the DOM margins are the same.
+func (s *Surfaces) refreshImageRasters() error {
+	return s.refreshRastersWhere("refresh", func() map[ImageKey]unsafe.Pointer { return s.images.Visible() })
+}
+
+// RefreshSidecarRasters sends the picture configure of a persistent sidecar again
+// when the connection to that sidecar is made again (V5-106). The service of the new connection has no picture state, and even for the same size the
+// configure state ended with the connection (InvalidateSidecar), so the same size is sent again.
+func (s *Surfaces) RefreshSidecarRasters(sidecar string) error {
+	s.images.InvalidateSidecar(sidecar)
+	return s.refreshRastersWhere("reconnect", func() map[ImageKey]unsafe.Pointer {
+		return s.images.VisibleForSidecar(sidecar)
+	})
+}
+
+func (s *Surfaces) refreshRastersWhere(from string, visible func() map[ImageKey]unsafe.Pointer) error {
+	var configurations []pendingConfigure
+	var failure error
+	mainThreadStep(func() {
+		for key, handle := range visible() {
+			// The regions of a surface that is not laid out yet have no raster size. They are updated at the next preparation that lays out the surface.
+			if !system.SurfacePlacedImage(handle) {
+				s.observeRaster(key, "deferred", from, 0, 0, 0)
+				continue
+			}
+			width, height, scale, ok := system.RasterImage(handle)
+			if !ok {
+				failure = fmt.Errorf("image %q has no raster geometry: %s", key.Name, rasterFacts(handle))
+				return
+			}
+			configuration, err := s.images.ConfigureRaster(key, width, height, scale, true)
+			if err != nil {
+				failure = err
+				return
+			}
+			if configuration != nil {
+				s.observeRaster(key, "configured", from, width, height, scale)
+				configurations = append(configurations, pendingConfigure{key, configuration})
+			}
+		}
+	})
+	if failure != nil {
+		s.releaseImageConfigurations(configurations)
+		return failure
+	}
+	return s.sendImageConfigurations(configurations)
+}
+
+func validPlacement(value CompositionPlacement) bool {
+	for _, number := range []float64{value.Left, value.Top, value.Right, value.Bottom} {
+		if math.IsNaN(number) || math.IsInf(number, 0) {
+			return false
+		}
+	}
+	return true
+}
+
+// nativeSurfaceOverlays returns the DOM overlays of a surface in the order of its declaration. Each keeps the insets and the visibility of its placement.
+func nativeSurfaceOverlays(names []string, overlays map[string]CompositionPlacement) []platform.DOMOverlay {
+	native := make([]platform.DOMOverlay, 0, len(names))
+	for _, name := range names {
+		p := overlays[name]
+		native = append(native, platform.DOMOverlay{
+			Left: p.Left, Top: p.Top, Right: p.Right, Bottom: p.Bottom, Visible: p.Visible,
+		})
+	}
+	return native
+}
+
+func exactPlacements(values []CompositionPlacement, names []string, what string) (map[string]CompositionPlacement, error) {
+	if len(values) != len(names) {
+		return nil, fmt.Errorf("composition %s must exactly match its declaration", what)
+	}
+	wanted := make(map[string]bool, len(names))
+	for _, name := range names {
+		wanted[name] = true
+	}
+	got := make(map[string]CompositionPlacement, len(values))
+	for _, value := range values {
+		_, duplicate := got[value.Name]
+		if !wanted[value.Name] || duplicate || !validPlacement(value) {
+			return nil, fmt.Errorf("invalid or duplicate composition %s %q", what, value.Name)
+		}
+		got[value.Name] = value
+	}
+	return got, nil
+}
+
+// declareComposition registers the composition contract that cannot change
+// before the surface lays out its first frame.
+func (s *Surfaces) declareComposition(viewID uint64, request CompositionDeclareRequest) error {
+	if request.Surface == "" {
+		return fmt.Errorf("composition declaration requires a surface")
+	}
+	if request.Plugin == "" {
+		return fmt.Errorf("composition declaration of surface %q requires its plugin", request.Surface)
+	}
+	if err := s.authorizeSurface(viewID, request.Surface); err != nil {
+		return err
+	}
+	if err := validateComposition(request.Plugin, request.Composition); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if previous, exists := s.compositions[request.Surface]; exists {
+		if !reflect.DeepEqual(previous, request.Composition) || s.surfacePlugins[request.Surface] != request.Plugin {
+			return fmt.Errorf("surface %q changed its composition declaration", request.Surface)
+		}
+		return nil
+	}
+	s.compositions[request.Surface] = request.Composition
+	s.surfacePlugins[request.Surface] = request.Plugin
+	return nil
+}
+
+func (s *Surfaces) placeComposition(viewID uint64, request CompositionPlaceRequest) error {
+	if err := s.authorizeSurface(viewID, request.Surface); err != nil {
+		return err
+	}
+	if request.Revision == 0 {
+		return fmt.Errorf("composition revision must be positive")
+	}
+
+	s.mu.Lock()
+	declaration, ok := s.compositions[request.Surface]
+	s.mu.Unlock()
+	if !ok {
+		return fmt.Errorf("surface %q has no composition declaration", request.Surface)
+	}
+	regionNames := make([]string, len(declaration.Regions))
+	for index, region := range declaration.Regions {
+		regionNames[index] = region.Name
+	}
+	regions, err := exactPlacements(request.Regions, regionNames, "regions")
+	if err != nil {
+		return err
+	}
+	var configurations []pendingConfigure
+	overlays, err := exactPlacements(request.Overlays, declaration.Overlays, "overlays")
+	if err != nil {
+		return err
+	}
+
+	// The revision check and every native application run as one task of the UI thread. Even when the arrival
+	// order of the calling goroutines is reversed, an earlier revision is not applied after a newer snapshot.
+	mainThreadStep(func() {
+		if request.Revision <= s.compositionRevisions[request.Surface] {
+			err = fmt.Errorf("stale composition revision %d", request.Revision)
+			return
+		}
+		view := s.views[request.Surface]
+		if view == nil || view.handle == nil {
+			err = fmt.Errorf("surface %q has no view", request.Surface)
+			return
+		}
+		type nativeRegion struct {
+			declaration SurfaceRegion
+			handle      unsafe.Pointer
+		}
+		resolved := make([]nativeRegion, 0, len(declaration.Regions))
+		for _, region := range declaration.Regions {
+			var handle unsafe.Pointer
+			if region.Kind == "document" {
+				handle, err = s.documents.Get(DocumentKey{Surface: request.Surface, Name: region.Name})
+			} else {
+				handle, err = s.images.Get(ImageKey{Surface: request.Surface, Name: region.Name})
+			}
+			if err != nil {
+				return
+			}
+			resolved = append(resolved, nativeRegion{declaration: region, handle: handle})
+		}
+		for _, region := range resolved {
+			p := regions[region.declaration.Name]
+			if region.declaration.Kind == "document" {
+				system.PlaceDocument(region.handle, p.Left, p.Top, p.Right, p.Bottom, p.Visible)
+			} else {
+				system.PlaceImage(region.handle, p.Left, p.Top, p.Right, p.Bottom, p.Visible)
+				key := ImageKey{Surface: request.Surface, Name: region.declaration.Name}
+				if visibleErr := s.images.SetVisible(key, p.Visible); visibleErr != nil {
+					err = visibleErr
+					return
+				}
+				width, height, scale, ok := system.RasterImage(region.handle)
+				if !ok && p.Visible {
+					if system.SurfacePlacedImage(region.handle) {
+						err = fmt.Errorf("image %q has no raster geometry: %s", region.declaration.Name, rasterFacts(region.handle))
+						return
+					}
+					s.observeRaster(key, "deferred", "composition", 0, 0, 0)
+				}
+				if ok {
+					configuration, configureErr := s.images.ConfigureRaster(
+						key,
+						width, height, scale, p.Visible)
+					if configureErr != nil {
+						err = configureErr
+						return
+					}
+					if configuration != nil {
+						s.observeRaster(key, "configured", "composition", width, height, scale)
+						configurations = append(configurations, pendingConfigure{
+							key:           key,
+							configuration: configuration,
+						})
+					}
+				}
+			}
+		}
+		system.SetSurfaceOverlays(view.handle, nativeSurfaceOverlays(declaration.Overlays, overlays))
+		s.compositionRevisions[request.Surface] = request.Revision
+	})
+	if err != nil {
+		s.releaseImageConfigurations(configurations)
+		return err
+	}
+	if err := s.sendImageConfigurations(configurations); err != nil {
+		return err
+	}
+	s.windowChanged()
+	return nil
+}

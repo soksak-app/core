@@ -1,7 +1,9 @@
-// Checks that the file structures of the two native hosts and the two native applications are the same.
+// Checks that the file structures of the language host libraries, the framework adapters, the command lines and the native
+// applications are the same.
 //
 // .go and .rs files are compared by the path without the extension, and other files are compared by the path as it is.
-// A file that exists on only one side passes only when a row of the Allowed differences table of docs/spec/hosts.md lists it (the row IDs of PAIRS).
+// A file that exists on only one side passes only when a row of the allowed differences of docs/spec/hosts.md lists it: the rows
+// of the table of the pair whose ID starts with the letter of the pair.
 //
 //   node scripts/check-hosts.mjs
 import { execFileSync } from "node:child_process";
@@ -12,42 +14,75 @@ import { pathToFileURL } from "node:url";
 
 const ROOT = new URL("../", import.meta.url).pathname;
 
-const PAIRS = [
-  { left: "packages/host/wailsv3", right: "packages/host/tauriv2", rows: ["A4", "H1", "H3", "H4", "H5", "H6", "H7", "H8", "H9", "H10", "H12", "H13", "H14", "H15", "H16", "H17", "H18", "H19", "H20", "H21", "H22", "H23", "H24"] },
-  { left: "packages/sok/wailsv3", right: "packages/sok/tauriv2", rows: ["A4", "C1", "C2", "C3", "C4", "C5", "C6"] },
-  { left: "apps/wailsv3", right: "apps/tauriv2", rows: ["A2", "A3", "A4", "A5"] },
-];
+// The two tables of the allowed differences: the language table compares the packages of the two languages, and the framework table
+// compares the packages of the frameworks. Each names the columns of the left and the right package of its pairs.
+export const LANGUAGE_TABLE = { title: "Language table", left: "Go", right: "Rust" };
+export const FRAMEWORK_TABLE = { title: "Framework table", left: "Wails", right: "Tauri" };
 
-/** Converts the files under a directory to paths for comparison. */
-function tree(dir) {
-  const prefix = `${dir}/`;
-  return new Set(tracked
-    .filter((path) => path.startsWith(prefix))
-    .map((path) => path.slice(prefix.length).replace(/\.(go|rs)$/, "")));
-}
+// A pair reads the rows of its table whose ID starts with its letter: H for the host packages, C for the command lines and A for the
+// applications.
+const PAIRS = [
+  { left: "packages/host/go", right: "packages/host/rust", table: LANGUAGE_TABLE, letter: "H" },
+  { left: "packages/sok/go", right: "packages/sok/rust", table: LANGUAGE_TABLE, letter: "C" },
+  { left: "packages/host/wailsv3", right: "packages/host/tauriv2", table: FRAMEWORK_TABLE, letter: "H" },
+  { left: "apps/wailsv3", right: "apps/tauriv2", table: FRAMEWORK_TABLE, letter: "A" },
+];
 
 const allowed = (path, files) => files.some((key) => key.endsWith("/") ? path.startsWith(key) : path === key);
 
 /**
- * Returns the files that exist on the left host only (left) and on the right host only (right) in the rows of the Allowed differences table
- * of the host specification (docs/spec/hosts.md). The Wails cell of a row lists the left files and the Tauri cell lists the right files; each
- * file is compared without a .go or .rs extension, and a path that ends with "/" is a directory. A cell of none lists no file. A row that the
- * table lacks is an error, so a pair cannot rely on a difference that the specification does not state.
+ * Returns the rows of each table of the allowed differences of the host specification (docs/spec/hosts.md): for each table title, the
+ * cells of each row by the column names of the header. A section or a table that is missing, and a row ID that appears twice across
+ * the tables, are errors, so a pair cannot rely on a difference that the specification does not state once.
  */
-export function allowedFileDifferences(hostsMarkdown, ids) {
+export function allowedDifferenceTables(hostsMarkdown, tables = [LANGUAGE_TABLE, FRAMEWORK_TABLE]) {
   const start = hostsMarkdown.indexOf("## Allowed differences");
   if (start < 0) throw new Error("hosts spec has no Allowed differences section");
   const end = hostsMarkdown.indexOf("\n## ", start + 1);
   const section = hostsMarkdown.slice(start, end < 0 ? undefined : end);
+  const result = new Map();
+  const seen = new Map();
+  for (const table of tables) {
+    const heading = section.indexOf(`### ${table.title}\n`);
+    if (heading < 0) throw new Error(`hosts spec has no ${table.title} in the Allowed differences section`);
+    const next = section.indexOf("\n### ", heading + 1);
+    const lines = section.slice(heading, next < 0 ? undefined : next).split("\n").filter((line) => line.startsWith("|"));
+    const cellsOf = (line) => line.split("|").slice(1, -1).map((cell) => cell.trim());
+    const header = cellsOf(lines[0] ?? "");
+    const rows = new Map();
+    for (const line of lines.slice(2)) {
+      const cells = cellsOf(line);
+      const id = cells[0];
+      if (seen.has(id)) throw new Error(`hosts spec row ${id} appears in the ${seen.get(id)} and in the ${table.title}`);
+      seen.set(id, table.title);
+      rows.set(id, Object.fromEntries(header.map((name, index) => [name, cells[index]])));
+    }
+    result.set(table.title, rows);
+  }
+  return result;
+}
+
+/**
+ * Returns the files that exist on the left package only (left) and on the right package only (right) in the rows of the table of
+ * pair whose ID starts with the letter of the pair, or in the rows that pair.rows lists. The column of the left package lists the
+ * left files and the column of the right package lists the right files; each file is compared without a .go or .rs extension, and a
+ * path that ends with "/" is a directory. A cell of none lists no file, and a cell of content differs states a file that both
+ * packages have with a different content.
+ */
+export function allowedFileDifferences(hostsMarkdown, pair) {
+  const tables = [LANGUAGE_TABLE, FRAMEWORK_TABLE];
+  const rows = allowedDifferenceTables(hostsMarkdown, tables.includes(pair.table) ? tables : [...tables, pair.table]).get(pair.table.title);
+  const ids = pair.rows ?? [...rows.keys()].filter((id) => id.startsWith(pair.letter));
   const result = { left: [], right: [] };
   for (const id of ids) {
-    const line = section.split("\n").find((candidate) => candidate.split("|")[1]?.trim() === id);
-    if (line === undefined) throw new Error(`hosts spec has no allowed difference row ${id}`);
-    const cells = line.split("|").slice(1, -1).map((cell) => cell.trim());
-    for (const [side, cell] of [["left", cells[1]], ["right", cells[2]]]) {
-      if (cell === "none") continue;
+    const row = rows.get(id);
+    if (row === undefined) throw new Error(`hosts spec has no allowed difference row ${id} in the ${pair.table.title}`);
+    for (const [side, column] of [["left", pair.table.left], ["right", pair.table.right]]) {
+      const cell = row[column];
+      if (cell === undefined) throw new Error(`hosts spec ${pair.table.title} has no column ${column}`);
+      if (cell === "none" || cell === "content differs") continue;
       const paths = [...cell.matchAll(/`([^`]+)`/g)].map((match) => match[1].replace(/\.(go|rs)$/, ""));
-      if (paths.length === 0) throw new Error(`hosts spec row ${id} lists neither none nor a file in the ${side} cell: ${cell}`);
+      if (paths.length === 0) throw new Error(`hosts spec row ${id} lists neither none nor a file in the ${column} cell: ${cell}`);
       result[side].push(...paths);
     }
   }
@@ -57,7 +92,7 @@ export function allowedFileDifferences(hostsMarkdown, ids) {
 export function auditHostPairs(tracked, pairs = PAIRS, hostsMarkdown = readFileSync(`${ROOT}docs/spec/hosts.md`, "utf8")) {
   const errors = [];
   for (const pair of pairs) {
-    const only = allowedFileDifferences(hostsMarkdown, pair.rows);
+    const only = allowedFileDifferences(hostsMarkdown, pair);
     const left = new Set(tracked
       .filter((path) => path.startsWith(`${pair.left}/`))
       .map((path) => path.slice(pair.left.length + 1).replace(/\.(go|rs)$/, "")));
@@ -76,6 +111,101 @@ export function auditHostPairs(tracked, pairs = PAIRS, hostsMarkdown = readFileS
   return errors;
 }
 
+// The language host libraries name no framework (docs/spec/hosts.md#host-tree): no Go file of packages/host/go imports a package of
+// a framework module and its go.mod requires none, and no Rust source of packages/host/rust names a framework crate and its
+// Cargo.toml depends on none.
+const LIBRARIES = { go: "packages/host/go/", rust: "packages/host/rust/" };
+const FRAMEWORK_MODULES = ["github.com/wailsapp/wails/v3"];
+const FRAMEWORK_CRATE = /^tauri(?:[-_][\w-]+)?$/;
+const frameworkModule = (path) => FRAMEWORK_MODULES.find((module) => path === module || path.startsWith(`${module}/`));
+
+/** Returns the import paths of a Go file with their lines. */
+function goImports(text) {
+  const imports = [];
+  let block = false;
+  text.split("\n").forEach((line, index) => {
+    const code = line.replace(/\/\/.*$/, "").trim();
+    if (block) {
+      if (code === ")") block = false;
+      else if (code.match(/"([^"]+)"/)) imports.push({ path: code.match(/"([^"]+)"/)[1], line: index + 1 });
+      return;
+    }
+    if (/^import\s*\($/.test(code)) block = true;
+    else if (/^import\s/.test(code) && code.match(/"([^"]+)"/)) imports.push({ path: code.match(/"([^"]+)"/)[1], line: index + 1 });
+  });
+  return imports;
+}
+
+/** Returns the module paths that the require directives of a go.mod file name, with their lines. */
+function goRequires(text) {
+  const requires = [];
+  let block = false;
+  text.split("\n").forEach((line, index) => {
+    const code = line.replace(/\/\/.*$/, "").trim();
+    if (block) {
+      if (code === ")") block = false;
+      else if (code) requires.push({ path: code.split(/\s+/)[0], line: index + 1 });
+      return;
+    }
+    if (/^require\s*\($/.test(code)) block = true;
+    else if (/^require\s+\S/.test(code)) requires.push({ path: code.split(/\s+/)[1], line: index + 1 });
+  });
+  return requires;
+}
+
+/** Returns the crates of the dependency tables of a Cargo.toml file with their lines. */
+function cargoDependencies(text) {
+  const dependencies = [];
+  let table = "";
+  text.split("\n").forEach((line, index) => {
+    const code = line.replace(/#.*$/, "").trim();
+    const header = code.match(/^\[([^\]]+)\]$/);
+    if (header) {
+      table = header[1];
+      return;
+    }
+    const key = code.match(/^([A-Za-z0-9_-]+)\s*=/);
+    if (key && /(^|\.)(dependencies|dev-dependencies|build-dependencies)$/.test(table)) dependencies.push({ name: key[1], line: index + 1 });
+    const dotted = table.match(/(?:^|\.)(?:dependencies|dev-dependencies|build-dependencies)\.([A-Za-z0-9_-]+)$/);
+    if (dotted && index > 0 && !dependencies.some((entry) => entry.name === dotted[1])) dependencies.push({ name: dotted[1], line: index });
+  });
+  return dependencies;
+}
+
+/**
+ * Returns the lines of the language host libraries that name a framework. paths are repository-relative paths and read(path) is their
+ * text; the files of other packages are not read.
+ */
+export function auditLibraryImports(paths, read) {
+  const errors = [];
+  for (const path of paths) {
+    if (path.startsWith(LIBRARIES.go) && path.endsWith(".go")) {
+      for (const entry of goImports(read(path))) {
+        if (frameworkModule(entry.path)) errors.push({ path, line: entry.line, text: `the language host library imports the framework package ${entry.path}` });
+      }
+    } else if (path === `${LIBRARIES.go}go.mod`) {
+      for (const entry of goRequires(read(path))) {
+        if (frameworkModule(entry.path)) errors.push({ path, line: entry.line, text: `the language host library requires the framework ${entry.path}` });
+      }
+    } else if (path.startsWith(LIBRARIES.rust) && path.endsWith(".rs")) {
+      read(path).split("\n").forEach((line, index) => {
+        const code = line.replace(/\/\/.*$/, "");
+        for (const match of code.matchAll(/(?<![\w"'])(tauri(?:_\w+)?)\s*::/g)) {
+          errors.push({ path, line: index + 1, text: `the language host library names the framework crate ${match[1]}` });
+        }
+      });
+    } else if (path === `${LIBRARIES.rust}Cargo.toml`) {
+      for (const entry of cargoDependencies(read(path))) {
+        if (FRAMEWORK_CRATE.test(entry.name)) errors.push({ path, line: entry.line, text: `the language host library requires the framework crate ${entry.name}` });
+      }
+    }
+  }
+  const lines = errors
+    .sort((a, b) => a.path.localeCompare(b.path) || a.line - b.line)
+    .map((error) => `${error.path}:${error.line}: ${error.text}`);
+  return lines.filter((line, index) => lines.indexOf(line) === index);
+}
+
 // Checks for stub implementations (a regression guard).
 const STUB_PATTERNS = [
   /TODO:\s*Implement/,
@@ -84,6 +214,8 @@ const STUB_PATTERNS = [
   /todo!\(/,
 ];
 const PRODUCT_DIRS = [
+  "packages/host/go/src",
+  "packages/host/rust/src",
   "packages/host/wailsv3/src",
   "packages/host/tauriv2/src",
   "native/darwin/src",
@@ -148,13 +280,35 @@ export function findUndecodedCommandArguments(source, file) {
   return errors;
 }
 
-// The darwin layer of the Wails host runs no Go code on the main thread (docs/spec/hosts.md, main thread of the Wails host).
-// Its C code is the cgo preamble of each Go file and each Objective-C file of the folder; the native functions are the
-// functions that the headers of native/darwin/src declare.
-const MAIN_THREAD_LAYER = "packages/host/wailsv3/src/platform/darwin/";
+// The darwin layer of the Go language host library runs no Go code on the main thread (docs/spec/hosts.md, main thread of the
+// Wails host). Its C code is the cgo preamble of each Go file and each Objective-C file of the folder; the native functions are
+// the functions that the headers of native/darwin/src declare.
+const MAIN_THREAD_LAYER = "packages/host/go/src/platform/darwin/";
 const NATIVE_HEADERS = /^native\/darwin\/src\/[^/]+\.h$/;
-const WORKER_WRAPPERS = new Set(["wailsRunOnWorker", "ON_WORKER"]);
-const MAIN_WRAPPERS = new Set(["wailsRunOnMain", "ON_MAIN"]);
+const WORKER_WRAPPERS = new Set(["hostRunOnWorker", "ON_WORKER"]);
+const MAIN_WRAPPERS = new Set(["hostRunOnMain", "ON_MAIN"]);
+
+// The undecoded command argument audit reads the Rust sources of the Tauri framework adapter, which declares the Tauri commands.
+const COMMAND_SOURCES = "packages/host/tauriv2/src/";
+
+/**
+ * Returns an error for each prefix of an audit that selects no file of tracked, so an audit whose package moved fails instead of
+ * checking nothing.
+ */
+export function auditPrefixes(tracked) {
+  const audits = [
+    ["the main-thread audit", [MAIN_THREAD_LAYER]],
+    ["the undecoded command argument audit", [COMMAND_SOURCES]],
+    ["the stub check", PRODUCT_DIRS.map((dir) => `${dir}/`)],
+  ];
+  const errors = [];
+  for (const [audit, prefixes] of audits) {
+    for (const prefix of prefixes) {
+      if (!tracked.some((path) => path.startsWith(prefix))) errors.push(`${audit} selects no file with the prefix ${prefix}`);
+    }
+  }
+  return errors;
+}
 
 /**
  * The native functions of native/darwin that Go code calls directly because they use no AppKit, WebKit or main-thread state;
@@ -235,8 +389,8 @@ function calleeName(call) {
 }
 
 /**
- * Returns the nearest enclosing call of wailsRunOnWorker or wailsRunOnMain of a node (ON_WORKER and ON_MAIN expand to them),
- * whether any enclosing call is wailsRunOnMain, and the function definition that holds the node.
+ * Returns the nearest enclosing call of hostRunOnWorker or hostRunOnMain of a node (ON_WORKER and ON_MAIN expand to them),
+ * whether any enclosing call is hostRunOnMain, and the function definition that holds the node.
  */
 function enclosing(entry) {
   let wrapper;
@@ -247,9 +401,9 @@ function enclosing(entry) {
     const child = entry.parents[i + 1] ?? entry.node;
     if (parent.kind === "CallExpr" && parent.inner?.[0] !== child) {
       const name = calleeName(parent);
-      if (name === "wailsRunOnWorker" || name === "wailsRunOnMain") {
+      if (name === "hostRunOnWorker" || name === "hostRunOnMain") {
         wrapper ??= name;
-        if (name === "wailsRunOnMain") main = true;
+        if (name === "hostRunOnMain") main = true;
       }
     }
     if (definition === undefined && parent.kind === "FunctionDecl") definition = parent.name;
@@ -261,13 +415,13 @@ function enclosing(entry) {
  * Returns the errors of the main-thread rule of the darwin layer of the Wails host. sources maps repository paths to their
  * text; the audit reads the Go and Objective-C files of the darwin layer and the headers of native/darwin/src.
  *
- * - A function that a Go file exports to C (//export) is referenced in C only inside wailsRunOnWorker or ON_WORKER, so it runs
+ * - A function that a Go file exports to C (//export) is referenced in C only inside hostRunOnWorker or ON_WORKER, so it runs
  *   on the worker while the main thread waits in C.
  * - Go code calls a native function only when MAIN_THREAD_FREE lists it; it calls each other native function through a
- *   function of the layer (a main_ wrapper) that runs it through wailsRunOnMain or ON_MAIN.
+ *   function of the layer (a main_ wrapper) that runs it through hostRunOnMain or ON_MAIN.
  * - A function of the layer that Go code calls sends no Objective-C message and calls no native or NS function outside
- *   wailsRunOnMain or ON_MAIN, directly or through another function of the layer.
- * - No native function and no Objective-C message runs inside wailsRunOnWorker or ON_WORKER.
+ *   hostRunOnMain or ON_MAIN, directly or through another function of the layer.
+ * - No native function and no Objective-C message runs inside hostRunOnWorker or ON_WORKER.
  *
  * go/parser reads the Go files (scripts/cgo-sources.go): the preamble, the #cgo CFLAGS, the //export functions and the calls of
  * C functions. clang reads each preamble and each Objective-C file and dumps its AST as JSON, with the macros expanded and each
@@ -339,18 +493,18 @@ function auditFolder(folder, paths) {
   const isNative = (name) => native.has(name) && !mainThreadFree(name);
   const errors = [];
   for (const use of uses) {
-    if (use.kind === "reference" && exports.has(use.name) && use.wrapper !== "wailsRunOnWorker") {
-      errors.push({ path: use.path, line: use.line, text: `${use.name} is exported to C and is referenced outside wailsRunOnWorker or ON_WORKER` });
+    if (use.kind === "reference" && exports.has(use.name) && use.wrapper !== "hostRunOnWorker") {
+      errors.push({ path: use.path, line: use.line, text: `${use.name} is exported to C and is referenced outside hostRunOnWorker or ON_WORKER` });
     }
-    if (use.wrapper !== "wailsRunOnWorker") continue;
+    if (use.wrapper !== "hostRunOnWorker") continue;
     if (use.kind === "call" && isNative(use.name)) {
-      errors.push({ path: use.path, line: use.line, text: `${use.name} runs on the worker inside wailsRunOnWorker or ON_WORKER; run it through wailsRunOnMain or ON_MAIN` });
+      errors.push({ path: use.path, line: use.line, text: `${use.name} runs on the worker inside hostRunOnWorker or ON_WORKER; run it through hostRunOnMain or ON_MAIN` });
     }
     if (use.kind === "message") {
-      errors.push({ path: use.path, line: use.line, text: "an Objective-C message runs on the worker inside wailsRunOnWorker or ON_WORKER; run it through wailsRunOnMain or ON_MAIN" });
+      errors.push({ path: use.path, line: use.line, text: "an Objective-C message runs on the worker inside hostRunOnWorker or ON_WORKER; run it through hostRunOnMain or ON_MAIN" });
     }
   }
-  // Returns the chain of calls by which the function name reaches the main thread outside wailsRunOnMain or ON_MAIN, or undefined.
+  // Returns the chain of calls by which the function name reaches the main thread outside hostRunOnMain or ON_MAIN, or undefined.
   const reaches = new Map();
   const mainUse = (name, visiting = new Set()) => {
     if (reaches.has(name)) return reaches.get(name);
@@ -375,10 +529,10 @@ function auditFolder(folder, paths) {
   for (const source of goSources) {
     for (const call of source.calls) {
       if (isNative(call.name) && !definitions.has(call.name)) {
-        errors.push({ path: source.file, line: call.line, text: `Go calls the native function ${call.name} directly; call a main_ wrapper that runs it through wailsRunOnMain or ON_MAIN` });
+        errors.push({ path: source.file, line: call.line, text: `Go calls the native function ${call.name} directly; call a main_ wrapper that runs it through hostRunOnMain or ON_MAIN` });
       } else if (definitions.has(call.name)) {
         const use = mainUse(call.name);
-        if (use) errors.push({ path: source.file, line: call.line, text: `Go calls ${call.name}, which ${use} outside wailsRunOnMain or ON_MAIN` });
+        if (use) errors.push({ path: source.file, line: call.line, text: `Go calls ${call.name}, which ${use} outside hostRunOnMain or ON_MAIN` });
       }
     }
   }
@@ -391,8 +545,10 @@ function auditFolder(folder, paths) {
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
   const tracked = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
     { cwd: ROOT, encoding: "utf8" }).split("\0").filter((path) => path && existsSync(`${ROOT}${path}`));
-  const errors = auditHostPairs(tracked);
-  for (const file of tracked.filter((path) => path.startsWith("packages/host/tauriv2/src/") && path.endsWith(".rs"))) {
+  const errors = auditPrefixes(tracked);
+  errors.push(...auditHostPairs(tracked));
+  errors.push(...auditLibraryImports(tracked, (file) => readFileSync(`${ROOT}${file}`, "utf8")));
+  for (const file of tracked.filter((path) => path.startsWith(COMMAND_SOURCES) && path.endsWith(".rs"))) {
     errors.push(...findUndecodedCommandArguments(readFileSync(`${ROOT}${file}`, "utf8"), file));
   }
   errors.push(...auditMainThreadCalls(Object.fromEntries(tracked

@@ -4,8 +4,8 @@ import test from 'node:test';
 import { failureSites, failureTable, recordsMissingFromTable, trackedFailureSites } from '../check-failure-table.mjs';
 import { readFileSync } from 'node:fs';
 
-const GO = 'packages/host/wailsv3/src/example.go';
-const RUST = 'packages/host/tauriv2/src/example.rs';
+const GO = 'packages/host/go/src/example.go';
+const RUST = 'packages/host/rust/src/example.rs';
 const NATIVE = 'native/darwin/src/example.m';
 
 test('the place of an error record is the literal text of the first argument, cut at the part that the call fills in', () => {

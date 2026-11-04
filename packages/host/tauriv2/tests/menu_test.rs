@@ -4,7 +4,7 @@
 //! Here the titles by language, the order and the shortcut format of the table are checked. The window check layer
 //! compares the built menu bar itself with host.menu.
 
-use soksak_host_tauriv2::menu;
+use soksak_host::menu;
 
 /// The list of the titles of the top-level menus by language.
 fn menu_titles(language: &str) -> Vec<String> {

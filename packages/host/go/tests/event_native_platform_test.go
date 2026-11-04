@@ -1,0 +1,155 @@
+// The pull of the native ring through the platform (docs/spec/logging.md#writers): the host writer starts with the pull of
+// the platform, and an empty ring yields no record and no loss.
+package host_test
+
+import (
+	"fmt"
+	"strings"
+	"testing"
+	"time"
+
+	host "github.com/soksak-app/core/packages/host/go/src"
+	"github.com/soksak-app/core/packages/host/go/src/platform"
+)
+
+// contract: log.native.platform-pulls-the-ring
+func TestThePlatformPullsAnEmptyNativeRingAsZeroBytesAndNoLoss(t *testing.T) {
+	system, err := platform.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := system.PullNativeEvents(make([]byte, 4096))
+	if err != nil || n != 0 {
+		t.Fatalf("pull of an empty ring: %d bytes, %v", n, err)
+	}
+	for channel := uint8(0); channel < 2; channel++ {
+		events, bytes, err := system.TakeNativeEventLoss(channel)
+		if err != nil || events != 0 || bytes != 0 {
+			t.Fatalf("loss of an empty ring in the channel %d: %d events, %d bytes, %v", channel, events, bytes, err)
+		}
+	}
+	if _, err := system.PullNativeEvents(nil); err == nil {
+		t.Fatal("a pull into an empty buffer was accepted")
+	}
+}
+
+// contract: log.native.platform-takes-the-policy
+func TestThePlatformTakesThePolicyOfTheNativeLibraryAndRefusesALevelOutsideTheEnumeration(t *testing.T) {
+	system, err := platform.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = system.SetNativeEventPolicy([5]int8{4, 4, 4, 4, 4}) })
+	if err := system.SetNativeEventPolicy([5]int8{4, 3, 2, -1, 0}); err != nil {
+		t.Fatalf("a policy of levels and -1 was refused: %v", err)
+	}
+	for _, bad := range [][5]int8{{4, 4, 4, 4, 5}, {-2, 4, 4, 4, 4}} {
+		if err := system.SetNativeEventPolicy(bad); err == nil {
+			t.Fatalf("the policy %v was accepted", bad)
+		}
+	}
+}
+
+// contract: log.native.platform-reads-the-clock-and-takes-the-boot
+func TestThePlatformReadsAMonotonicClockAndTakesTheBootIdentifier(t *testing.T) {
+	system, err := platform.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := system.MonotonicNanos()
+	if err != nil || first == 0 {
+		t.Fatalf("the clock reads %d, %v", first, err)
+	}
+	time.Sleep(2 * time.Millisecond)
+	second, err := system.MonotonicNanos()
+	if err != nil || second <= first || second-first > uint64(10*time.Second) {
+		t.Fatalf("the clock moved from %d to %d, %v", first, second, err)
+	}
+	if err := system.SetEventBoot("1791-4242"); err != nil {
+		t.Fatalf("a boot identifier of digits and '-' was refused: %v", err)
+	}
+	for _, bad := range []string{"", "a,b", `a"b`, "a.b", "a b"} {
+		if err := system.SetEventBoot(bad); err == nil {
+			t.Fatalf("the boot identifier %q was accepted", bad)
+		}
+	}
+}
+
+// contract: log.native.host-writer-starts-with-the-platform-pull
+func TestTheHostWriterStartsWithThePullOfThePlatform(t *testing.T) {
+	log, err := host.StartHostEventLog(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	events := readEventLog(t, log.Path())
+	if len(events) == 0 || events[0]["event"] != "log.open" {
+		t.Fatalf("events %v", events)
+	}
+	// The activity observers that the writer installs store native events after log.open and nothing else follows.
+	for _, event := range events[1:] {
+		if event["layer"] != "native" {
+			t.Fatalf("events %v", events)
+		}
+	}
+}
+
+// contract: log.native.shutdown-flushes-the-observers-before-the-writer
+func TestTheShutdownFlushesTheNativeObserversBeforeTheWriterFlush(t *testing.T) {
+	log, err := host.StartHostEventLog(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(log.Close)
+	flushed := false
+	err = host.FlushEventLog(log, func() error {
+		flushed = true
+		// The flush of the observers stores the tail of a counted source; the writer flush that follows writes it.
+		log.Emit(host.LevelInfo, "host.test.observer_tail", map[string]any{"count": 3})
+		return nil
+	}, 5*time.Second)
+	if err != nil || !flushed {
+		t.Fatalf("the shutdown flush returned %v, observers flushed %v", err, flushed)
+	}
+	found := false
+	for _, event := range readEventLog(t, log.Path()) {
+		found = found || event["event"] == "host.test.observer_tail"
+	}
+	if !found {
+		t.Fatal("the event stored by the flush of the observers is not in the file after the shutdown flush")
+	}
+}
+
+// contract: log.native.shutdown-reports-a-failed-observer-flush
+func TestTheShutdownReportsAFailedObserverFlushAndStillFlushesTheWriter(t *testing.T) {
+	log, err := host.StartHostEventLog(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(log.Close)
+	log.Emit(host.LevelInfo, "host.test.before_failure", map[string]any{})
+	err = host.FlushEventLog(log, func() error { return fmt.Errorf("refused by the platform") }, 5*time.Second)
+	if err == nil || !strings.Contains(err.Error(), "native observers") || !strings.Contains(err.Error(), "refused by the platform") {
+		t.Fatalf("the failed flush of the observers returned %v", err)
+	}
+	found := false
+	for _, event := range readEventLog(t, log.Path()) {
+		found = found || event["event"] == "host.test.before_failure"
+	}
+	if !found {
+		t.Fatal("the writer was not flushed after the observer flush failed")
+	}
+}
+
+// contract: log.native.platform-flushes-the-observers
+func TestThePlatformFlushesTheNativeObserversWithoutAnError(t *testing.T) {
+	system, err := platform.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := system.FlushNativeObservers(); err != nil {
+		t.Fatal(err)
+	}
+}

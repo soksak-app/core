@@ -3361,13 +3361,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "soksak-host-tauriv2"
+name = "soksak-host"
 version = "0.0.34"
 dependencies = [
  "base64 0.22.1",
  "block2",
  "crc32fast",
  "flate2",
+ "http",
  "libc",
  "mach2",
  "notify",
@@ -3378,19 +3379,32 @@ dependencies = [
  "serde_json",
  "sha2",
  "signal-hook",
- "soksak-sok-tauriv2",
+ "soksak-sok",
  "tar",
- "tauri",
- "tauri-plugin-deep-link",
- "tauri-plugin-dialog",
  "tempfile",
+ "tokio",
  "url",
  "wait-timeout",
  "windows 0.61.3",
 ]
 
 [[package]]
-name = "soksak-sok-tauriv2"
+name = "soksak-host-tauriv2"
+version = "0.0.34"
+dependencies = [
+ "serde",
+ "serde_json",
+ "soksak-host",
+ "soksak-sok",
+ "tauri",
+ "tauri-plugin-deep-link",
+ "tauri-plugin-dialog",
+ "tempfile",
+ "url",
+]
+
+[[package]]
+name = "soksak-sok"
 version = "0.0.34"
 dependencies = [
  "flate2",

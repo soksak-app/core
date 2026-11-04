@@ -2,8 +2,8 @@
   "exclude": "^(e2e|packages/window-check)/",
   "entrances": {
     "go.go-statement": [
-      "^packages/host/wailsv3/src/routine/routine\\.go$",
-      "^packages/sok/wailsv3/src/routine\\.go$"
+      "^packages/host/go/src/routine/routine\\.go$",
+      "^packages/sok/go/src/routine\\.go$"
     ],
     "m.registration": [
       "^native/darwin/src/observe\\.m$"
@@ -12,12 +12,12 @@
       "^native/darwin/src/observe\\.m$"
     ],
     "go.recover": [
-      "^packages/host/wailsv3/src/routine/routine\\.go$",
-      "^packages/sok/wailsv3/src/routine\\.go$"
+      "^packages/host/go/src/routine/routine\\.go$",
+      "^packages/sok/go/src/routine\\.go$"
     ],
     "rs.thread-spawn": [
-      "^packages/host/tauriv2/src/routine/routine\\.rs$",
-      "^packages/sok/tauriv2/src/routine\\.rs$"
+      "^packages/host/rust/src/routine/routine\\.rs$",
+      "^packages/sok/rust/src/routine\\.rs$"
     ]
   },
   "emitters": {

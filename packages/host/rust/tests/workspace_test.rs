@@ -1,0 +1,811 @@
+//! Tests of the settings and project list store and the project directory check.
+
+#[path = "support/folder.rs"]
+mod folder;
+
+use std::fs;
+use std::path::Path;
+
+#[path = "support/records.rs"]
+mod records;
+
+use serde_json::{Value, json};
+use soksak_host::platform;
+use soksak_host::projects::folder;
+use soksak_host::workspace::{Workspace, prepare_config_directory};
+
+fn apply(store: &Workspace, request: Value) -> Value {
+    store
+        .apply(serde_json::from_value(request).unwrap())
+        .unwrap()
+}
+
+fn read(path: &Path) -> Value {
+    serde_json::from_slice(&fs::read(path).unwrap()).unwrap()
+}
+
+// contract: workspace.settings.project-file-holds-only-overrides, workspace.settings.persist-across-reopen, workspace.settings.reset-removes-override, workspace.settings.rejects-project-opening-override, workspace.settings.invalid-common-file-not-overwritten
+#[test]
+fn settings_use_common_and_project_files_and_reset_removes_override() {
+    let config = folder::Folder::new();
+    let root = folder::Folder::new();
+    let store = Workspace::new(config.path().into());
+    apply(
+        &store,
+        json!({"kind":"add", "project":{"id":"prj-test", "root":root.path(), "identity":"1:2"}}),
+    );
+    apply(
+        &store,
+        json!({"kind":"settings", "patch":{"mode":"light", "gap":6, "projectOpening":"windows"}}),
+    );
+    apply(
+        &store,
+        json!({"kind":"settings", "id":"prj-test", "patch":{"gap":12}}),
+    );
+    // The written file is in the current numbered form (docs/spec/installation.md#stored-data-formats).
+    assert_eq!(
+        read(&root.path().join(".soksak/settings.json")),
+        json!({"format": 1, "gap": 12})
+    );
+    let reopened = Workspace::new(config.path().into());
+    let snapshot = apply(&reopened, json!({"kind":"snapshot"}));
+    assert_eq!(snapshot["common"]["mode"], "light");
+    assert_eq!(snapshot["projects"][0]["settings"], json!({"gap":12}));
+    apply(
+        &store,
+        json!({"kind":"settings", "id":"prj-test", "remove":["gap"]}),
+    );
+    assert_eq!(
+        read(&root.path().join(".soksak/settings.json")),
+        json!({"format": 1})
+    );
+    assert!(
+        store
+            .apply(
+                serde_json::from_value(
+                    json!({"kind":"settings", "id":"prj-test", "patch":{"projectOpening":"tabs"}})
+                )
+                .unwrap()
+            )
+            .is_err()
+    );
+    fs::write(config.path().join("settings.json"), "{broken").unwrap();
+    assert!(
+        store
+            .apply(serde_json::from_value(json!({"kind":"settings", "patch":{"gap":2}})).unwrap())
+            .is_err()
+    );
+    assert_eq!(
+        fs::read_to_string(config.path().join("settings.json")).unwrap(),
+        "{broken"
+    );
+}
+
+// contract: workspace.settings.concurrent-patches-preserved, workspace.projects.move-reorders, workspace.projects.remove-keeps-remaining-order
+#[test]
+fn concurrent_updates_preserve_fields_and_saved_project_order() {
+    let config = folder::Folder::new();
+    let roots: Vec<_> = (0..3).map(|_| folder::Folder::new()).collect();
+    let store = std::sync::Arc::new(Workspace::new(config.path().into()));
+    for (i, root) in roots.iter().enumerate() {
+        apply(
+            &store,
+            json!({"kind":"add", "project":{"id":format!("p{i}"), "root":root.path(), "identity":i.to_string()}}),
+        );
+    }
+    let jobs: Vec<_> = ["mode", "theme", "rail"]
+        .iter()
+        .map(|key| {
+            let store = store.clone();
+            std::thread::spawn(move || {
+                apply(
+                    &store,
+                    json!({"kind":"settings", "patch":{key.to_string():key}}),
+                )
+            })
+        })
+        .collect();
+    for job in jobs {
+        job.join().unwrap();
+    }
+    apply(&store, json!({"kind":"move", "id":"p2", "delta":-2}));
+    let snapshot = apply(&store, json!({"kind":"snapshot"}));
+    assert_eq!(snapshot["common"].as_object().unwrap().len(), 3);
+    assert_eq!(snapshot["projects"][0]["id"], "p2");
+    apply(&store, json!({"kind":"remove", "id":"p2"}));
+    assert_eq!(
+        apply(&store, json!({"kind":"snapshot"}))["projects"][0]["id"],
+        "p0"
+    );
+}
+
+// contract: workspace.folder.aliases-share-identity, workspace.folder.rejects-file
+#[test]
+fn directory_aliases_have_one_identity() {
+    let root = folder::Folder::new();
+    let parent = folder::Folder::new();
+    let alias = parent.path().join("alias");
+    std::os::unix::fs::symlink(root.path(), &alias).unwrap();
+    let first =
+        serde_json::to_value(folder(root.path().to_str().unwrap(), root.path()).unwrap()).unwrap();
+    let second =
+        serde_json::to_value(folder(alias.to_str().unwrap(), root.path()).unwrap()).unwrap();
+    assert_eq!(first, second);
+    let file = root.path().join("file");
+    fs::write(&file, "x").unwrap();
+    assert!(folder(file.to_str().unwrap(), root.path()).is_err());
+}
+
+// contract: workspace.folder.replaced-directory-changes-identity
+#[test]
+fn a_directory_replaced_at_its_root_has_another_identity() {
+    let parent = folder::Folder::new();
+    let root = parent.path().join("project");
+    fs::create_dir(&root).unwrap();
+    let first = folder(root.to_str().unwrap(), parent.path()).unwrap();
+    let again = folder(root.to_str().unwrap(), parent.path()).unwrap();
+    assert_eq!(
+        first.identity, again.identity,
+        "an unchanged directory changed its identity"
+    );
+    // The earlier directory stays under another name, so the system cannot give its inode to the new one.
+    fs::rename(&root, parent.path().join("earlier")).unwrap();
+    fs::create_dir(&root).unwrap();
+    let replaced = folder(root.to_str().unwrap(), parent.path()).unwrap();
+    assert_eq!(replaced.root, first.root);
+    assert_ne!(
+        replaced.identity, first.identity,
+        "a copy at the same root kept the identity of the earlier directory"
+    );
+}
+
+// contract: workspace.config-dir.creates-requested-path, workspace.config-dir.rejects-empty-path, workspace.config-dir.rejects-path-under-file
+#[test]
+fn config_directory_is_created_and_canonical() {
+    let root = folder::Folder::new();
+    let path = root.path().join("new").join("configuration");
+    let prepared = prepare_config_directory(&path, create).unwrap();
+    assert_eq!(prepared, fs::canonicalize(&path).unwrap());
+    assert!(prepared.is_dir(), "configuration directory was not created");
+    assert!(
+        prepare_config_directory(Path::new(""), create).is_err(),
+        "empty path was accepted"
+    );
+    let file = root.path().join("file");
+    fs::write(&file, "unchanged").unwrap();
+    assert!(
+        prepare_config_directory(&file.join("config"), create).is_err(),
+        "a file was treated as a configuration directory"
+    );
+}
+
+/// The platform operation that creates directories for the current user only.
+fn create(path: &Path) -> Result<(), String> {
+    platform::current()?.create_private_directories(path)
+}
+
+// contract: workspace.config-dir.creates-owner-only
+#[test]
+fn a_created_config_directory_is_owner_only_and_an_existing_one_keeps_its_mode() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = folder::Folder::new();
+    let created = prepare_config_directory(&root.path().join("created"), create).unwrap();
+    assert_eq!(
+        fs::metadata(&created).unwrap().permissions().mode() & 0o777,
+        0o700
+    );
+    let existing = root.path().join("existing");
+    fs::create_dir(&existing).unwrap();
+    fs::set_permissions(&existing, fs::Permissions::from_mode(0o755)).unwrap();
+    let kept = prepare_config_directory(&existing, create).unwrap();
+    assert_eq!(
+        fs::metadata(&kept).unwrap().permissions().mode() & 0o777,
+        0o755
+    );
+}
+
+// contract: workspace.projects.plugin-data-patched
+#[test]
+fn a_project_patch_stores_plugin_data_and_rejects_unknown_fields() {
+    let config = folder::Folder::new();
+    let root = folder::Folder::new();
+    let store = Workspace::new(config.path().into());
+    apply(
+        &store,
+        json!({"kind":"add", "project":{"id":"prj-test", "root":root.path(), "identity":"1:2"}}),
+    );
+    apply(
+        &store,
+        json!({"kind":"patch", "id":"prj-test", "patch":{"plugins":{"probe":{"marks":["a.txt"]}}}}),
+    );
+    let snapshot = apply(
+        &Workspace::new(config.path().into()),
+        json!({"kind":"snapshot"}),
+    );
+    assert_eq!(
+        snapshot["projects"][0]["plugins"],
+        json!({"probe":{"marks":["a.txt"]}})
+    );
+    assert!(
+        store
+            .apply(
+                serde_json::from_value(
+                    json!({"kind":"patch", "id":"prj-test", "patch":{"other":1}})
+                )
+                .unwrap()
+            )
+            .is_err()
+    );
+}
+
+// contract: workspace.folder.messages
+#[test]
+fn folder_errors_name_the_folder_once() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = folder::Folder::new();
+    let missing = root.path().join("gone").join("child");
+    assert_eq!(
+        folder(missing.to_str().unwrap(), root.path()).unwrap_err(),
+        format!("project directory does not exist: {}", missing.display())
+    );
+    let file = root.path().join("file");
+    fs::write(&file, "x").unwrap();
+    assert_eq!(
+        folder(file.to_str().unwrap(), root.path()).unwrap_err(),
+        format!(
+            "not a project directory: {}",
+            fs::canonicalize(&file).unwrap().display()
+        )
+    );
+    let closed = root.path().join("closed");
+    fs::create_dir(&closed).unwrap();
+    fs::set_permissions(&closed, fs::Permissions::from_mode(0o0)).unwrap();
+    let inside = closed.join("child");
+    let result = folder(inside.to_str().unwrap(), root.path());
+    fs::set_permissions(&closed, fs::Permissions::from_mode(0o700)).unwrap();
+    assert_eq!(
+        result.unwrap_err(),
+        format!("project directory is not readable: {}", inside.display())
+    );
+}
+
+// contract: workspace.projects.move-requires-delta
+#[test]
+fn move_without_delta_is_refused() {
+    let config = folder::Folder::new();
+    let root = folder::Folder::new();
+    let store = Workspace::new(config.path().into());
+    apply(
+        &store,
+        json!({"kind":"add", "project":{"id":"first", "root":root.path(), "identity":"first"}}),
+    );
+    for request in [
+        json!({"kind":"move", "id":"first"}),
+        json!({"kind":"move", "id":"first", "delta":null}),
+    ] {
+        let error = store
+            .apply(serde_json::from_value(request.clone()).unwrap())
+            .unwrap_err();
+        assert_eq!(error.to_string(), "move delta is missing", "{request}");
+    }
+}
+
+// contract: workspace.settings.rejects-project-common-only-keys
+#[test]
+fn project_common_only_keys_are_rejected() {
+    let mut failures = Vec::new();
+    for (key, value) in [
+        ("projectOpening", json!("tabs")),
+        ("textSize", json!(1.5)),
+        ("memorySaver", json!(false)),
+        ("memorySaverDelay", json!(30)),
+    ] {
+        let config = folder::Folder::new();
+        let root = folder::Folder::new();
+        let store = Workspace::new(config.path().into());
+        apply(
+            &store,
+            json!({"kind":"add", "project":{"id":"prj-test", "root":root.path(), "identity":"1:2"}}),
+        );
+        let refused = store.apply(
+            serde_json::from_value(
+                json!({"kind":"settings", "id":"prj-test", "patch":{key: value}}),
+            )
+            .unwrap(),
+        );
+        if refused.as_ref().err() != Some(&format!("{key} is common-only")) {
+            failures.push(format!("a project {key} write returned {refused:?}"));
+        }
+        let path = root.path().join(".soksak/settings.json");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, json!({"format": 1, key: value}).to_string()).unwrap();
+        let snapshot = apply(&store, json!({"kind":"snapshot"}));
+        let want = json!(format!("{}: {key} is common-only", path.display()));
+        if snapshot["projects"][0]["settingsError"] != want {
+            failures.push(format!(
+                "a project settings file with {key} reported {}",
+                snapshot["projects"][0]["settingsError"]
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{failures:#?}");
+}
+
+// contract: workspace.settings.refuses-project-file-at-its-project
+#[test]
+fn a_refused_project_settings_file_is_reported_at_its_project() {
+    let config = folder::Folder::new();
+    let refused_root = folder::Folder::new();
+    let kept_root = folder::Folder::new();
+    let store = Workspace::new(config.path().into());
+    apply(
+        &store,
+        json!({"kind":"add", "project":{"id":"prj-refused", "root":refused_root.path(), "identity":"1:2"}}),
+    );
+    apply(
+        &store,
+        json!({"kind":"add", "project":{"id":"prj-kept", "root":kept_root.path(), "identity":"1:3"}}),
+    );
+    let refused = refused_root.path().join(".soksak/settings.json");
+    fs::create_dir_all(refused.parent().unwrap()).unwrap();
+    fs::write(&refused, r#"{"gap":5}"#).unwrap();
+    let kept = kept_root.path().join(".soksak/settings.json");
+    fs::create_dir_all(kept.parent().unwrap()).unwrap();
+    fs::write(&kept, r#"{"format":1,"gap":7}"#).unwrap();
+    let snapshot = apply(&store, json!({"kind":"snapshot"}));
+    let project = |id: &str| {
+        snapshot["projects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|project| project["id"] == id)
+            .unwrap()
+            .clone()
+    };
+    // The refused file is reported at its project without settings, and the other project keeps its settings.
+    assert_eq!(
+        project("prj-refused"),
+        json!({"id":"prj-refused", "root":refused_root.path(), "identity":"1:2",
+            "settingsError": format!("{}: settings.json: format must be 1", refused.display())})
+    );
+    assert_eq!(project("prj-kept")["settings"], json!({"gap":7}));
+    assert_eq!(project("prj-kept").get("settingsError"), None);
+}
+
+// contract: workspace.settings.records-each-change
+#[test]
+fn each_settings_change_is_recorded_with_its_keys() {
+    // The writer of the records belongs to the process, so the scenario runs in a child process.
+    if let Some(config) = std::env::var_os("SOKSAK_SETTINGS_CHILD") {
+        let config = std::path::PathBuf::from(config);
+        let root = folder::Folder::new();
+        let writer = records::start_writer(&config);
+        let store = Workspace::new(config.clone());
+        for request in [
+            json!({"kind":"add", "project":{"id":"prj-test", "root":root.path(), "identity":"1:2"}}),
+            json!({"kind":"settings", "patch":{"mode":"light", "gap":6}}),
+            json!({"kind":"settings", "remove":["gap", "missing"]}),
+            json!({"kind":"settings", "id":"prj-test", "patch":{"gap":12}}),
+        ] {
+            apply(&store, request);
+        }
+        writer.flush(std::time::Duration::from_secs(5)).unwrap();
+        return;
+    }
+    let config = folder::Folder::new();
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "each_settings_change_is_recorded_with_its_keys",
+            "--nocapture",
+        ])
+        .env("SOKSAK_SETTINGS_CHILD", config.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "the child check failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let seen: Vec<String> = records::read_events(&records::event_log_path(config.path()))
+        .into_iter()
+        .filter(|event| event["event"] == "host.workspace.settings")
+        .map(|event| {
+            let fields = &event["fields"];
+            format!(
+                "{} set={} removed={}",
+                fields["scope"].as_str().unwrap(),
+                fields["set"].as_str().unwrap(),
+                fields["removed"].as_str().unwrap()
+            )
+        })
+        .collect();
+    assert_eq!(
+        seen,
+        [
+            "common set=gap,mode removed=",
+            "common set= removed=gap",
+            "prj-test set=gap removed="
+        ]
+    );
+}
+
+// contract: workspace.tab-state.put-keeps-other-entries
+#[test]
+fn tab_state_put_keeps_other_entries() {
+    let config = folder::Folder::new();
+    let first = Workspace::new(config.path().into());
+    let second = Workspace::new(config.path().into());
+    assert_eq!(apply(&first, json!({"kind":"tabState"})), Value::Null);
+    let written = apply(
+        &first,
+        json!({"kind":"tabStatePut", "tab":"tab-a", "entry":{"kept":true}}),
+    );
+    assert!(written.as_u64().unwrap() > 0, "{written}");
+    apply(
+        &second,
+        json!({"kind":"tabStatePut", "tab":"tab-b", "entry":{"label":"b", "state":{"format":1, "value":{"x":1}}}}),
+    );
+    assert_eq!(
+        apply(&first, json!({"kind":"tabState"})),
+        json!({"format":1, "tabs":{"tab-a":{"kept":true}, "tab-b":{"label":"b", "state":{"format":1, "value":{"x":1}}}}})
+    );
+    let last = apply(
+        &second,
+        json!({"kind":"tabStatePut", "tab":"tab-a", "entry":null}),
+    );
+    let size = fs::metadata(config.path().join("tab-state.json"))
+        .unwrap()
+        .len();
+    assert_eq!(last.as_u64(), Some(size));
+    assert_eq!(
+        apply(&first, json!({"kind":"tabState"})),
+        json!({"format":1, "tabs":{"tab-b":{"label":"b", "state":{"format":1, "value":{"x":1}}}}})
+    );
+}
+
+// contract: workspace.tab-session.put-rewrites-own-file
+#[test]
+fn tab_session_put_rewrites_only_its_own_file() {
+    let config = tempfile::tempdir().unwrap();
+    let store = Workspace::new(config.path().into());
+    assert_eq!(
+        apply(&store, json!({"kind":"tabSession", "tab":"tab-a"})),
+        Value::Null
+    );
+    assert_eq!(apply(&store, json!({"kind":"tabSessions"})), json!([]));
+    apply(
+        &store,
+        json!({"kind":"tabStatePut", "tab":"tab-a", "entry":{"kept":true}}),
+    );
+    let state = fs::read(config.path().join("tab-state.json")).unwrap();
+    let written = apply(
+        &store,
+        json!({"kind":"tabSessionPut", "tab":"tab-a", "regions":{"page":{"session":"AAAA"}}}),
+    );
+    apply(
+        &store,
+        json!({"kind":"tabSessionPut", "tab":"tab-b", "regions":{"page":{"session":"BBBB"}}}),
+    );
+    let path = config.path().join("tab-sessions").join("tab-a.json");
+    let other = fs::read(config.path().join("tab-sessions").join("tab-b.json")).unwrap();
+    assert_eq!(written.as_u64(), Some(fs::metadata(&path).unwrap().len()));
+    apply(
+        &store,
+        json!({"kind":"tabSessionPut", "tab":"tab-a", "regions":{"page":{"session":"CCCC"}, "side":{"session":"DDDD"}}}),
+    );
+    assert_eq!(
+        apply(&store, json!({"kind":"tabSession", "tab":"tab-a"})),
+        json!({"format":1, "regions":{"page":{"session":"CCCC"}, "side":{"session":"DDDD"}}})
+    );
+    assert_eq!(
+        fs::read(config.path().join("tab-sessions").join("tab-b.json")).unwrap(),
+        other
+    );
+    assert_eq!(
+        fs::read(config.path().join("tab-state.json")).unwrap(),
+        state
+    );
+    assert_eq!(
+        apply(&store, json!({"kind":"tabSessions"})),
+        json!(["tab-a", "tab-b"])
+    );
+    assert_eq!(
+        apply(
+            &store,
+            json!({"kind":"tabSessionPut", "tab":"tab-a", "regions":null})
+        ),
+        Value::Null
+    );
+    assert!(!path.exists());
+    assert_eq!(
+        apply(
+            &store,
+            json!({"kind":"tabSessionPut", "tab":"tab-a", "regions":null})
+        ),
+        Value::Null
+    );
+    assert_eq!(
+        apply(&store, json!({"kind":"tabSessions"})),
+        json!(["tab-b"])
+    );
+}
+
+// A section surface id names its session file by the RFC 3986 percent-encoding of the id; the listing returns the id again.
+// contract: workspace.tab-session.section-surface-file
+#[test]
+fn tab_session_names_a_section_surface_file() {
+    let config = tempfile::tempdir().unwrap();
+    let store = Workspace::new(config.path().into());
+    for (tab, file) in [
+        ("tab-a", "tab-a.json"),
+        (
+            "spc-aaaaaa/left/probe.tree",
+            "spc-aaaaaa%2Fleft%2Fprobe.tree.json",
+        ),
+        (
+            "spc-aaaaaa/c3:right/probe.dom",
+            "spc-aaaaaa%2Fc3%3Aright%2Fprobe.dom.json",
+        ),
+    ] {
+        apply(
+            &store,
+            json!({"kind":"tabSessionPut", "tab":tab, "regions":{"page":{"session":"AAAA"}}}),
+        );
+        assert!(
+            config.path().join("tab-sessions").join(file).is_file(),
+            "the session file of {tab} is {file}"
+        );
+        assert_eq!(
+            apply(&store, json!({"kind":"tabSession", "tab":tab}))["regions"],
+            json!({"page":{"session":"AAAA"}})
+        );
+    }
+    assert_eq!(
+        apply(&store, json!({"kind":"tabSessions"})),
+        json!([
+            "spc-aaaaaa/c3:right/probe.dom",
+            "spc-aaaaaa/left/probe.tree",
+            "tab-a"
+        ])
+    );
+    for tab in [
+        "spc-aaaaaa/left/Probe.tree",
+        "spc-aaaaaa/probe.tree",
+        "spc-aaaaaa/left/probe.tree/x",
+        "spc-aaaaaa/c3:middle/probe.tree",
+        "left/probe.tree",
+        "c3:right/probe.dom",
+        "spc-aaaaa/left/probe.tree",
+        "spc-aaaaa1/left/probe.tree",
+        "prj-aaaaaa/left/probe.tree",
+    ] {
+        let error = store
+            .apply(serde_json::from_value(json!({"kind":"tabSession", "tab":tab})).unwrap())
+            .unwrap_err();
+        assert_eq!(error, format!("invalid tab session tab: {tab}"));
+    }
+}
+
+// A stored session file whose name is not a session id, such as a file of the earlier section id form, is refused by name.
+// contract: workspace.tab-session.list-refuses-other-name
+#[test]
+fn tab_session_list_refuses_a_file_of_another_name() {
+    let config = tempfile::tempdir().unwrap();
+    let store = Workspace::new(config.path().into());
+    let folder = config.path().join("tab-sessions");
+    fs::create_dir_all(&folder).unwrap();
+    fs::write(folder.join(".tmp123"), "{}").unwrap();
+    assert_eq!(apply(&store, json!({"kind":"tabSessions"})), json!([]));
+    fs::write(
+        folder.join("left%2Fprobe.tree.json"),
+        r#"{"format":1,"regions":{}}"#,
+    )
+    .unwrap();
+    let error = store
+        .apply(serde_json::from_value(json!({"kind":"tabSessions"})).unwrap())
+        .unwrap_err();
+    assert_eq!(
+        error,
+        "tab-sessions/left%2Fprobe.tree.json does not name a tab id or a section surface id"
+    );
+}
+
+// contract: workspace.tab-session.rejects-other-format, workspace.tab-session.rejects-invalid-request
+#[test]
+fn tab_session_rejects_other_format_and_invalid_requests() {
+    let config = tempfile::tempdir().unwrap();
+    let store = Workspace::new(config.path().into());
+    let refused = |request: Value| {
+        store
+            .apply(serde_json::from_value(request).unwrap())
+            .unwrap_err()
+    };
+    let folder = config.path().join("tab-sessions");
+    fs::create_dir_all(&folder).unwrap();
+    let path = folder.join("tab-a.json");
+    for (text, found) in [
+        (
+            r#"{"format":2,"regions":{}}"#,
+            "tab-sessions/tab-a.json: format must be 1",
+        ),
+        (
+            r#"{"regions":{}}"#,
+            "tab-sessions/tab-a.json: format must be 1",
+        ),
+        (
+            r#"{"format":1,"regions":[]}"#,
+            "tab session regions is not an object",
+        ),
+    ] {
+        fs::write(&path, text).unwrap();
+        assert_eq!(
+            refused(json!({"kind":"tabSession", "tab":"tab-a"})),
+            format!("{}: {found}", path.display())
+        );
+    }
+    for (request, want) in [
+        (json!({"kind":"tabSession"}), "tab session requires a tab"),
+        (
+            json!({"kind":"tabSession", "tab":"../tab-a"}),
+            "invalid tab session tab: ../tab-a",
+        ),
+        (
+            json!({"kind":"tabSessionPut", "tab":"tab-a", "regions":{}}),
+            "invalid tab session of tab-a: empty",
+        ),
+        (
+            json!({"kind":"tabSessionPut", "tab":"tab-a", "regions":{"page":{"session":""}}}),
+            "invalid tab session region of tab-a: page",
+        ),
+        (
+            json!({"kind":"tabSessionPut", "tab":"tab-a", "regions":{"page":{"session":"A", "other":1}}}),
+            "invalid tab session region of tab-a: page",
+        ),
+        (
+            json!({"kind":"tabSessionPut", "tab":"tab-a", "regions":{"page":"A"}}),
+            "invalid tab session region of tab-a: page",
+        ),
+    ] {
+        assert_eq!(refused(request), want);
+    }
+}
+
+// contract: workspace.tab-state.rejects-other-format, workspace.tab-state.rejects-invalid-entry
+#[test]
+fn tab_state_rejects_other_format_and_invalid_entries() {
+    let config = folder::Folder::new();
+    let store = Workspace::new(config.path().into());
+    let path = config.path().join("tab-state.json");
+    fs::write(&path, r#"{"format":2,"tabs":{}}"#).unwrap();
+    let put = |tab: &str, entry: Value| {
+        store
+            .apply(
+                serde_json::from_value(json!({"kind":"tabStatePut", "tab":tab, "entry":entry}))
+                    .unwrap(),
+            )
+            .unwrap_err()
+    };
+    assert_eq!(
+        put("tab-a", json!({"kept":true})),
+        format!("{}: tab-state.json: format must be 1", path.display())
+    );
+    assert_eq!(
+        fs::read_to_string(&path).unwrap(),
+        r#"{"format":2,"tabs":{}}"#
+    );
+    fs::remove_file(&path).unwrap();
+    for (tab, entry, want) in [
+        ("", json!({"kept":true}), "tab state put requires a tab"),
+        (
+            "tab-a",
+            json!({}),
+            "invalid tab state entry of tab-a: empty",
+        ),
+        (
+            "tab-a",
+            json!({"kept":false}),
+            "invalid tab state entry of tab-a: kept",
+        ),
+        (
+            "tab-a",
+            json!({"label":""}),
+            "invalid tab state entry of tab-a: label",
+        ),
+        (
+            "tab-a",
+            json!({"state":{"format":0, "value":1}}),
+            "invalid tab state entry of tab-a: state",
+        ),
+        (
+            "tab-a",
+            json!({"state":{"format":1}}),
+            "invalid tab state entry of tab-a: state",
+        ),
+        (
+            "tab-a",
+            json!({"other":1}),
+            "invalid tab state entry of tab-a: other",
+        ),
+    ] {
+        assert_eq!(put(tab, entry.clone()), want, "{tab} {entry}");
+    }
+}
+
+// contract: workspace.settings.write-refuses-another-form
+#[test]
+fn a_project_settings_write_refuses_another_form_and_stores_the_current_form() {
+    let config = folder::Folder::new();
+    let store = Workspace::new(config.path().into());
+    // A project whose settings file is in the earlier form (no format member).
+    let earlier = folder::Folder::new();
+    apply(
+        &store,
+        json!({"kind":"add", "project":{"id":"prj-earlier", "root":earlier.path(), "identity":"1:4"}}),
+    );
+    fs::create_dir_all(earlier.path().join(".soksak")).unwrap();
+    let file = earlier.path().join(".soksak/settings.json");
+    fs::write(&file, r#"{"gap":6}"#).unwrap();
+    let refused = store
+        .apply(
+            serde_json::from_value(
+                json!({"kind":"settings", "id":"prj-earlier", "patch":{"gap":12}}),
+            )
+            .unwrap(),
+        )
+        .unwrap_err();
+    assert_eq!(
+        refused,
+        format!("{}: settings.json: format must be 1", file.display())
+    );
+    assert_eq!(fs::read_to_string(&file).unwrap(), r#"{"gap":6}"#);
+    // A project whose settings file does not exist yet.
+    let fresh = folder::Folder::new();
+    apply(
+        &store,
+        json!({"kind":"add", "project":{"id":"prj-fresh", "root":fresh.path(), "identity":"1:5"}}),
+    );
+    apply(
+        &store,
+        json!({"kind":"settings", "id":"prj-fresh", "patch":{"gap":3}}),
+    );
+    assert_eq!(
+        read(&fresh.path().join(".soksak/settings.json")),
+        json!({"format": 1, "gap": 3})
+    );
+}
+
+// contract: install.stored.rejects-an-earlier-form, workspace.snapshot.reports-refused-stored-files
+#[test]
+fn earlier_stored_forms_are_reported_by_snapshot_and_refused_by_writes() {
+    let config = folder::Folder::new();
+    let store = Workspace::new(config.path().into());
+    let apply = |request: Value| store.apply(serde_json::from_value(request).unwrap());
+    let projects = config.path().join("projects.json");
+    let bare = r#"[{"id":"prj-a","root":"/x","identity":"1:1"}]"#;
+    fs::write(&projects, bare).unwrap();
+    let refusal = format!("{}: projects.json: format must be 1", projects.display());
+    assert_eq!(
+        apply(json!({"kind":"snapshot"})).unwrap(),
+        json!({"projects": [], "common": {}, "projectsError": refusal})
+    );
+    assert_eq!(
+        apply(json!({"kind":"add","project":{"id":"prj-b","root":"/y","identity":"1:2"}}))
+            .unwrap_err(),
+        refusal
+    );
+    assert_eq!(fs::read_to_string(&projects).unwrap(), bare);
+    fs::remove_file(&projects).unwrap();
+    let settings = config.path().join("settings.json");
+    fs::write(&settings, r#"{"gap":6}"#).unwrap();
+    let refusal = format!("{}: settings.json: format must be 1", settings.display());
+    assert_eq!(
+        apply(json!({"kind":"snapshot"})).unwrap(),
+        json!({"projects": [], "common": {}, "settingsError": refusal})
+    );
+    assert_eq!(
+        apply(json!({"kind":"settings","patch":{"gap":3}})).unwrap_err(),
+        refusal
+    );
+    assert_eq!(fs::read_to_string(&settings).unwrap(), r#"{"gap":6}"#);
+}

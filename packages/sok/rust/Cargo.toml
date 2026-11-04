@@ -1,0 +1,67 @@
+[package]
+name = "soksak-sok"
+version = "0.0.34"
+edition = "2024"
+description = "Command line sok in Rust"
+
+[features]
+# diagnostics adds the diagnostic command (capture); debug bundles and 0.0.x releases set it.
+diagnostics = []
+# dev selects the .dev identifier, so a debug bundle does not use the data of the installed application.
+dev = []
+
+[lib]
+name = "soksak_sok"
+path = "src/sok.rs"
+
+[[bin]]
+name = "sok"
+path = "src/main.rs"
+
+[[test]]
+name = "process_wait_darwin"
+path = "tests/platform/darwin/process_wait_test.rs"
+
+[[test]]
+name = "process_wait_linux"
+path = "tests/platform/linux/process_wait_test.rs"
+
+[[test]]
+name = "process_wait_windows"
+path = "tests/platform/windows/process_wait_test.rs"
+
+[[test]]
+name = "private_files_darwin"
+path = "tests/platform/darwin/private_files_test.rs"
+
+[[test]]
+name = "private_files_linux"
+path = "tests/platform/linux/private_files_test.rs"
+
+[[test]]
+name = "private_files_windows"
+path = "tests/platform/windows/private_files_test.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["raw_value"] }
+flate2 = "1"
+memchr = "2"
+sha2 = "0.10"
+semver = "1"
+tar = "0.4"
+# https 위치를 읽는다(docs/spec/installation.md#fetching). 운영체제가 신뢰하는 인증 기관을 쓰므로 platform-verifier 를
+# 켜고, gzip 은 쓰지 않는다.
+ureq = { version = "3", default-features = false, features = ["rustls", "platform-verifier"] }
+# The diagnostic build parses each --registry-ca certificate with the parser that the TLS connection of ureq uses.
+rustls-pki-types = "1"
+webpki = { package = "rustls-webpki", version = "0.103", default-features = false, features = ["std"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+signal-hook = "0.3"
+
+[dev-dependencies]
+# 검사 소유의 TLS server 의 인증서와 server 연결.
+rcgen = "0.14"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }

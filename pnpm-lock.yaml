@@ -94,6 +94,10 @@ importers:
 
   packages/client: {}
 
+  packages/host/go: {}
+
+  packages/host/rust: {}
+
   packages/host/tauriv2: {}
 
   packages/host/wailsv3: {}
