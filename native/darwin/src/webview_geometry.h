@@ -9,8 +9,13 @@ void *sp_surface_create(void *view);
 // view, the container of the surface hosts. Returns the composition that already exists, or NULL when the web view is not
 // in a window. sp_window_set_main_webview calls it.
 void *sp_webview_window_composition(void *mainWebview);
-// The window composition of the registered main web view of window. A window without a registered main web view gives NULL.
+// The view that holds the surface hosts of window: the window composition of its registered main web view, or its native view. A
+// window with neither gives NULL.
 void *sp_window_composition(void *window);
+// The native view of window, which holds the surface hosts of a window without a main web view: an empty view that the framework
+// of the window puts in its content view (docs/spec/native-surfaces.md#surface-host-container). The first call makes it, and the
+// window keeps it until it closes.
+void *sp_window_native_view(void *window);
 // Receives files dropped on the window. event receives {"urls":[file URL...],"x":..,"y":..} (page coordinates).
 // When release is not NULL, it is called once on the main thread when the drop view no longer uses context (when the next
 // registration replaces the receiver, or when the view is released together with the window). When the function returns false, release is not called and context belongs to the caller.

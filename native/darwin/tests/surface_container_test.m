@@ -179,6 +179,29 @@ static void checkCursorUpdate(void) {
     [window release];
 }
 
+// A window without a main web view has its native view as the view of its surface hosts: one view for the life of the window, and
+// a frame in the content coordinates of the window lands there.
+static void checkNativeView(void) {
+    SPScaledWindow *window = makeWindow(NSMakeRect(0, 0, 400, 300), 2);
+    check(sp_window_composition(window) == NULL, @"a window without a native view has no view for its surface hosts");
+    NSView *native = (NSView *)sp_window_native_view(window);
+    check(native != nil && sp_window_native_view(window) == native, @"a window has one native view");
+    check(native.window == nil, @"the framework puts the native view in the window");
+    [window.contentView addSubview:native];
+    native.frame = window.contentView.bounds;
+    check(sp_window_composition(window) == native, @"the native view holds the surface hosts of the window");
+    void *surface = sp_surface_create(sp_window_composition(window));
+    check(surface != NULL, @"a surface host is created in the native view");
+    webviewSetFrame(surface, 10, 20, 100, 50);
+    NSRect placed = [((NSView *)surface).superview convertRect:((NSView *)surface).frame toView:nil];
+    check(NSEqualRects(placed, NSMakeRect(10, 230, 100, 50)),
+        [NSString stringWithFormat:@"the frame is in the content coordinates of the window (%@)", NSStringFromRect(placed)]);
+    sp_surface_close(surface);
+    [native removeFromSuperview];
+    [window close];
+    [window release];
+}
+
 int main(void) { @autoreleasepool {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
@@ -186,5 +209,6 @@ int main(void) { @autoreleasepool {
     checkContentViewIsRefused();
     checkScale();
     checkCursorUpdate();
+    checkNativeView();
     return failures == 0 ? 0 : 1;
 } }
