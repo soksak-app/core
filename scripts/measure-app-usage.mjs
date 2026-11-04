@@ -25,11 +25,11 @@
 // S9, which must report occluded true. Every error is printed to stderr with the process or window it concerns, and the exit status is 1
 // when an error occurred. `make app-usage` runs it.
 //
-// --b3-out FILE writes the B3 record of a measurement of one application without an error to FILE as JSON:
-// {"measurements": {KEY: number}, "conditions": {refreshRate, backingScale, traceState, logPolicy, window: {width, height}}}. The
-// conditions are the refresh rate and the backing scale that every window reports in host.window, the trace state of the CPU interval,
-// the classes of the log policy and the content size of the window of the state, read before the first CPU reading. The keys, which
-// B3_MEASUREMENTS lists, end in their unit:
+// --b3-out FILE writes the B3 output of a measurement of one application without an error to FILE through writeB3Out of
+// scripts/b3-out.mjs: {"measurements": {KEY: number}, "conditions": {refreshRate, backingScale, traceState, logPolicy, window}}. The
+// conditions are those of b3Conditions: the refresh rate and the backing scale that every window reports in host.window, traceState, the
+// diagnostics.performance of the trace state of the CPU interval (true or false), the classes of the log policy in force, and the content
+// size of the window of the state, read before the first CPU reading. The keys, which B3_MEASUREMENTS lists, end in their unit:
 //   hostCpuSeconds, applicationCpuSeconds,       CPU seconds over the interval of the host, the application without its sidecars,
 //   sidecarCpuSeconds                            and the sidecars
 //   hostFootprintKb, applicationFootprintKb,     footprints in KB (1,024 bytes) read before the interval
@@ -47,7 +47,7 @@
 //   node scripts/measure-app-usage.mjs --sok PATH --config-dir DIR [--config-dir DIR ...] --trace 0|1 [--interval SECONDS]
 //     [--state S0|S0b|S1|S9|S11|S12|S14|S15] [--idle] [--step pointer] [--b3-out FILE] [--json]
 import { execFile } from "node:child_process";
-import { mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, realpathSync } from "node:fs";
 import { createServer } from "node:http";
 import { basename, isAbsolute, join, posix } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -59,9 +59,10 @@ import { readPolicy } from "@soksak/window-check/log-policy.mjs";
 import { launchdServices } from "@soksak/window-check/stall-sample.mjs";
 import { bringFront, post, requireTrusted } from "../e2e/real/hid.mjs";
 import { catalogOf } from "./check-events.mjs";
+import { b3Conditions, writeB3Out } from "./b3-out.mjs";
 import { readFootprint, settledFootprints } from "./footprints.mjs";
 import { percentile, requireCompleteGesture, stepTimes, U7_EVENTS } from "./frame-records.mjs";
-import { applyTrace, FRAME_RECORDS, parseTrace } from "./measure-trace.mjs";
+import { applyTrace, FRAME_RECORDS, parseTrace, traceSettings } from "./measure-trace.mjs";
 
 /** Executables of the tools that run this measurement; their command lines name the data folder, but they are not the application. */
 const TOOL_EXECUTABLES = new Set(["node", "sh", "bash", "zsh", "make", "sok"]);
@@ -687,45 +688,6 @@ export function usageMeasurements({ app, marks, faultLines, gesture }) {
   return measured;
 }
 
-/** The conditions of one window of a B3 record from its host.window value: its refresh rate, its backing scale and its content size. */
-export function windowConditions(status, window) {
-  if (!Number.isFinite(status.refreshRate) || status.refreshRate <= 0) {
-    throw new Error(`window ${window} reports refreshRate ${JSON.stringify(status.refreshRate)}, not the refresh rate of a screen`);
-  }
-  if (!Number.isFinite(status.scale) || status.scale <= 0) throw new Error(`window ${window} reports scale ${JSON.stringify(status.scale)}, not a backing scale`);
-  return { refreshRate: status.refreshRate, backingScale: status.scale, window: { width: status.content.width, height: status.content.height } };
-}
-
-/**
- * The conditions of a B3 record: the refresh rate and the backing scale that every window of the measurement shares, the trace state of
- * the CPU interval, the classes of the log policy and the content size of the first window, the window of the state.
- */
-export function b3Conditions({ windows, trace, logPolicy }) {
-  const [first] = windows;
-  if (windows.some(({ refreshRate, backingScale }) => refreshRate !== first.refreshRate || backingScale !== first.backingScale)) {
-    throw new Error(`the windows of the measurement report the refresh rates ${windows.map(({ refreshRate }) => refreshRate).join(", ")} ` +
-      `and the backing scales ${windows.map(({ backingScale }) => backingScale).join(", ")}`);
-  }
-  if (trace !== 0 && trace !== 1 && trace !== FRAME_RECORDS) {
-    throw new Error(`the trace state of a B3 record is 0, 1 or ${JSON.stringify(FRAME_RECORDS)}, not ${JSON.stringify(trace)}`);
-  }
-  return { refreshRate: first.refreshRate, backingScale: first.backingScale, traceState: trace, logPolicy, window: first.window };
-}
-
-/** The B3 record {measurements, conditions}; each measurement is a finite number, "passed" or "failed". */
-export function b3Record(measurements, conditions) {
-  for (const [key, value] of Object.entries(measurements)) {
-    if (value === "passed" || value === "failed" || (typeof value === "number" && Number.isFinite(value))) continue;
-    throw new Error(`the B3 measurement ${key} is ${typeof value === "number" ? String(value) : JSON.stringify(value)}, not a finite number, "passed" or "failed"`);
-  }
-  return { measurements, conditions };
-}
-
-/** Writes a B3 record to file as JSON. */
-export function writeB3(file, record) {
-  writeFileSync(file, `${JSON.stringify(record, null, 2)}\n`);
-}
-
 /** Reads --b3-out: an absolute path, or null without the option. */
 export function b3OutOption(value) {
   if (value === undefined) return null;
@@ -1116,14 +1078,19 @@ async function measureOptions(options) {
   }
 }
 
-/** The B3 record of a measurement of make app-usage from the marks of its application before the first cpu reading. */
-function usageRecord({ options, measurement, gesture, faultLines }) {
+/**
+ * The B3 output {measurements, conditions} of a measurement of make app-usage. The conditions come from b3Conditions of
+ * scripts/b3-out.mjs with the window marks of the application before the first CPU reading, which carry the id, the refresh rate, the
+ * scale and the content of each window, the diagnostics.performance of the trace state of the CPU interval and the classes of the policy
+ * in force before that reading.
+ */
+export function usageOutput({ options, measurement, gesture, faultLines }) {
   const [app] = measurement.apps;
   const [before] = measurement.marks.before;
   const [after] = measurement.marks.after;
   const measurements = usageMeasurements({ app, marks: { before: before.windows, after: after.windows }, faultLines, gesture });
-  const windows = before.windows.map((mark) => windowConditions(mark, mark.window));
-  return b3Record(measurements, b3Conditions({ windows, trace: options.trace, logPolicy: before.policy }));
+  const conditions = b3Conditions({ windows: before.windows, performance: traceSettings(options.trace)["diagnostics.performance"], policy: before.policy });
+  return { measurements, conditions };
 }
 
 if (import.meta.main) {
@@ -1134,7 +1101,7 @@ if (import.meta.main) {
     for (const error of result.errors) console.error(`error: ${error}`);
     if (result.errors.length > 0) process.exitCode = 1;
     // A measurement with an error records no B3 values: its figures miss a process or a window.
-    else if (options.b3Out !== null) writeB3(options.b3Out, usageRecord(result));
+    else if (options.b3Out !== null) writeB3Out(options.b3Out, usageOutput(result));
   } catch (error) {
     console.error(`error: ${error.message}`);
     process.exitCode = 1;

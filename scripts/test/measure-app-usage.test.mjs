@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+
+import { readB3Out, writeB3Out } from "../b3-out.mjs";
 
 import {
   applicationRows,
   attributeWebKit,
   B3_MEASUREMENTS,
-  b3Conditions,
-  b3Record,
   cpuPercent,
   faultErrorCount,
   gestureFigures,
@@ -26,12 +26,11 @@ import {
   sidecarProcesses,
   STATES,
   totalsOf,
+  usageOutput,
   untilFramesQuiet,
   usageMeasurements,
   waitIdle,
-  windowConditions,
   windowRows,
-  writeB3,
 } from "../measure-app-usage.mjs";
 
 const DIR = "/Users/tester/Library/Application Support/soksak-check";
@@ -738,35 +737,6 @@ test("a host whose host.window reports no frame counters has no frames and comma
   assert.throws(() => usageMeasurements({ app: measuredApp(), marks: missing }), /window w2 has no mark after the last cpu reading/);
 });
 
-test("the B3 conditions are the refresh rate and backing scale of the windows, the trace state, the log policy and the window size", () => {
-  const windows = marksOfTwo().before.map((mark) => windowConditions(mark, mark.window));
-  assert.deepEqual(b3Conditions({ windows, trace: 1, logPolicy: { call: "debug", frame: "debug" } }), {
-    refreshRate: 120, backingScale: 2, traceState: 1, logPolicy: { call: "debug", frame: "debug" }, window: { width: 1200, height: 760 },
-  });
-  assert.throws(() => windowConditions({ ...marksOfTwo().before[0], refreshRate: null }, "w1"),
-    /window w1 reports refreshRate null, not the refresh rate of a screen/);
-  assert.throws(() => windowConditions({ ...marksOfTwo().before[0], scale: undefined }, "w1"), /window w1 reports scale undefined, not a backing scale/);
-  const mixed = [windows[0], { ...windows[1], backingScale: 1 }];
-  assert.throws(() => b3Conditions({ windows: mixed, trace: 0, logPolicy: {} }),
-    /the windows of the measurement report the refresh rates 120, 120 and the backing scales 2, 1/);
-  assert.throws(() => b3Conditions({ windows, trace: "2", logPolicy: {} }), /the trace state of a B3 record is 0, 1 or "frame-records", not "2"/);
-});
-
-test("a B3 record holds numbers, passed or failed, and writeB3 writes it as JSON", () => {
-  const conditions = { refreshRate: 120, backingScale: 2, traceState: "frame-records", logPolicy: { frame: "debug" }, window: { width: 1200, height: 760 } };
-  const record = b3Record({ hostCpuSeconds: 0.12, viewDrag: "passed" }, conditions);
-  assert.deepEqual(record, { measurements: { hostCpuSeconds: 0.12, viewDrag: "passed" }, conditions });
-  assert.throws(() => b3Record({ hostCpuSeconds: null }, conditions), /the B3 measurement hostCpuSeconds is null, not a finite number, "passed" or "failed"/);
-  assert.throws(() => b3Record({ frames: Number.NaN }, conditions), /the B3 measurement frames is NaN, not a finite number/);
-  const folder = mkdtempSync(join(tmpdir(), "b3-record-"));
-  try {
-    writeB3(join(folder, "S0.json"), record);
-    assert.deepEqual(JSON.parse(readFileSync(join(folder, "S0.json"), "utf8")), record);
-  } finally {
-    rmSync(folder, { recursive: true, force: true });
-  }
-});
-
 test("the process listing of a configuration folder holds its host, its sidecars and the WebKit services of the domain of its host", async () => {
   const run = mygoProcesses({ footprints: () => [0, 0], cpu: () => [] });
   assert.deepEqual(await applicationRows({ configDir: MYGO, run, realpath: (path) => path }), [
@@ -791,4 +761,30 @@ test("the B3 keys of app-usage end in their unit, and a measurement with every f
     app: measuredApp({ after: true }), marks: marksOfTwo(), faultLines: 1, gesture: { window: "w1", frameRecords: 4, pairs: 4, p90Ms: 6, framesChange: 4 },
   });
   assert.deepEqual(Object.keys(measured).toSorted(), B3_MEASUREMENTS.toSorted());
+});
+
+/** The classes of the log policy in force of a B3 test: the default policy with the class frame at debug. */
+const POLICY = { lifecycle: "error", input: "error", call: "error", io: "error", frame: "debug" };
+
+test("the B3 output of app-usage takes its conditions from b3-out with the performance switch of the trace state", () => {
+  const measurement = {
+    apps: [measuredApp()],
+    marks: {
+      before: [{ configDir: MYGO, trace: false, policy: POLICY, windows: marksOfTwo().before }],
+      after: [{ configDir: MYGO, trace: false, policy: POLICY, windows: marksOfTwo().after }],
+    },
+  };
+  const output = usageOutput({ options: { trace: 0 }, measurement, faultLines: undefined, gesture: undefined });
+  assert.deepEqual(output.conditions, { refreshRate: 120, backingScale: 2, traceState: false, logPolicy: POLICY, window: { width: 1200, height: 760 } });
+  assert.equal(output.measurements.hostCpuSeconds, 0.12);
+  assert.equal(usageOutput({ options: { trace: 1 }, measurement }).conditions.traceState, true);
+  const folder = mkdtempSync(join(tmpdir(), "b3-usage-"));
+  try {
+    writeB3Out(join(folder, "S1.json"), output);
+    assert.deepEqual(readB3Out(join(folder, "S1.json")), output);
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
+  const mixed = { ...measurement, marks: { ...measurement.marks, before: [{ ...measurement.marks.before[0], windows: [marksOfTwo().before[0], { ...marksOfTwo().before[1], scale: 1 }] }] } };
+  assert.throws(() => usageOutput({ options: { trace: 0 }, measurement: mixed }), /window w2 reports refreshRate 120 and scale 1, not refreshRate 120 and scale 2 of window w1/);
 });
