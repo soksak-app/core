@@ -142,8 +142,9 @@ func readProject(raw json.RawMessage) (projectRecord, error) {
 
 // Shell is the workbench of one window.
 type Shell struct {
-	// cardReads holds the decoded data of the cards.
+	// cardReads holds the decoded data of the cards, and railRead the last rail outline.
 	cardReads map[string]cardRead
+	railRead  railRead
 	options   ShellOptions
 	// drawn tells that a frame of this start of the workbench drew the shell.
 	drawn    bool
