@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F435: F450 이후 view를 기록합니다. 모든 view가 양쪽 host에서 간격 기준을 충족하고 editor는 전부 통과하며, 나머지 셋은 convergence에서 실패합니다.
 - F450: view의 status watch는 run의 값을 잡아 두고 끝날 때 최신 값을 전달합니다.
 - F449: 열린 preparation 중의 release는 두 번째 synchronization 없이 그 preparation을 settled로 present합니다.
 - F435: F448 이후 browser view를 기록합니다. gesture 안 최대 간격이 Wails 33 이하와 93 ms, Tauri 35와 34 ms로 줄었고 convergence는 여전히 실패합니다.
