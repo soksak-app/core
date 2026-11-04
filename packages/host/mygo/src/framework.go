@@ -3,6 +3,7 @@ package adapter
 import (
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"unsafe"
 
 	"github.com/egoist/mygo"
@@ -15,6 +16,8 @@ import (
 // Framework is the mygo application as the Framework port of the language host library.
 type Framework struct {
 	workbench Workbench
+	// host is the prepared host, which starts each workbench.
+	host      atomic.Pointer[host.Host]
 	mu        sync.Mutex
 	frontends map[*mygo.Window]*Frontend
 	// transaction belongs to the main thread: whether a surface layout transaction is open.
@@ -24,6 +27,12 @@ type Framework struct {
 // NewFramework returns the framework that draws the windows with workbench.
 func NewFramework(workbench Workbench) *Framework {
 	return &Framework{workbench: workbench, frontends: map[*mygo.Window]*Frontend{}}
+}
+
+// Serve connects the framework to the prepared host, before the first window exists.
+func (f *Framework) Serve(h *host.Host) {
+	f.host.Store(h)
+	f.workbench.Prepared(h)
 }
 
 // ApplicationName is the application of endpoint.json.

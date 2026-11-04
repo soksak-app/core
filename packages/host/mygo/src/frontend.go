@@ -145,8 +145,15 @@ func (f *Frontend) NativeWindow() unsafe.Pointer {
 	return *(*unsafe.Pointer)(unsafe.Pointer(&handle))
 }
 
-// Emit delivers an event to the workbench of the window.
-func (f *Frontend) Emit(name string, data ...any) { f.framework.workbench.Emit(f, name, data...) }
+// Emit delivers an event to the workbench of the window. The reload request of a main page starts the workbench again, because a
+// workbench without a page has nothing to read again.
+func (f *Frontend) Emit(name string, data ...any) {
+	if name == "page-reload" {
+		routine.Go("workbench-reload", f.StartWorkbench)
+		return
+	}
+	f.framework.workbench.Emit(f, name, data...)
+}
 
 // Invalidate asks for a frame of the workbench of the window.
 func (f *Frontend) Invalidate() { f.window.Invalidate() }
@@ -160,7 +167,7 @@ func (f *Frontend) Show() {
 	ready := f.ready
 	f.mu.Unlock()
 	if first {
-		f.framework.workbench.Shown(f)
+		routine.Go("workbench-start", f.startHeld)
 	}
 	if ready {
 		f.window.Show()
@@ -289,7 +296,7 @@ func (f *Frontend) whenReleased(run func()) {
 	f.released = append(f.released, run)
 }
 
-// StartWorkbench ends the workbench of the window and builds it again.
+// StartWorkbench ends the workbench of the window and builds it again. A workbench of a window that the host holds starts at once.
 func (f *Frontend) StartWorkbench() {
 	mygo.RunOnMain(func() {
 		f.framework.workbench.Close(f)
@@ -297,6 +304,23 @@ func (f *Frontend) StartWorkbench() {
 		f.view.Store(&view)
 	})
 	f.window.Invalidate()
+	f.mu.Lock()
+	shown := f.shown
+	f.mu.Unlock()
+	if shown {
+		routine.Go("workbench-start", f.startHeld)
+	}
+}
+
+// startHeld gives the workbench that the window built its new start, and then tells it that the host answers its calls. Call it
+// outside the main thread, because the start waits for steps of the main thread.
+func (f *Frontend) startHeld() {
+	if h := f.framework.host.Load(); h != nil {
+		if err := host.StartWorkbench(h, f); err != nil {
+			host.LogError("workbench start", err)
+		}
+	}
+	f.framework.workbench.Shown(f)
 }
 
 // CallWorkbench delivers script to the workbench of the window.

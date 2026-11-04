@@ -22,8 +22,19 @@ type surfaceElements struct {
 	by    map[string]SurfaceElement
 }
 
-// Element returns the element of the surface id. Call it from a frame: it takes no step of the main thread.
-func (s *Surfaces) Element(id string) (SurfaceElement, bool) {
+// ElementOf returns the element of the surface id of window. A frame calls it, so it takes no step of the main thread. It is no method
+// of Host, because each exported method of Host is a host call of a page.
+func ElementOf(h *Host, window Frontend, id string) (SurfaceElement, bool) {
+	h.mu.Lock()
+	s := h.windows[window.ID()]
+	h.mu.Unlock()
+	if s == nil {
+		return SurfaceElement{}, false
+	}
+	return s.element(id)
+}
+
+func (s *Surfaces) element(id string) (SurfaceElement, bool) {
 	s.elements.mu.Lock()
 	defer s.elements.mu.Unlock()
 	element, ok := s.elements.by[id]
