@@ -8854,6 +8854,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F424",
+    implementation: [{ file: "scripts/check-e2e.mjs", symbol: "a skipped test; assert its precondition" }],
+    tests: [{ file: "e2e/library.test.mjs", id: "terminal source card not found" }],
+    expected: "A window check whose precondition fails reports a failure.",
+    levels: ["application"],
+  },
+  {
     id: "F404",
     implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) fn with_open_window(" }],
     tests: [{ file: "packages/host/tauriv2/src/windows_records_test.rs", id: "a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure" }],

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F424: `make e2e-check` rejects `t.skip`, and the three window checks that used it assert their precondition, because a skipped test ended as a pass of its file.
 - F423: An occlusion notice of a closing window no longer logs `window on screen: the underlying handle is not available` in the Tauri host: the native observation passes the state of the notified window.
 - F422: A page asked to reload no longer waits for a surface document that needs the page: the host ends those requests with 1003 until the new page starts, so `host.window.reload` no longer ends with 1005.
 - F421: A setting changed during the page start is drawn, because the settings listener is connected before the core commands exist; the sidebar failure of `e2e/projects.test.mjs` reports the effective and the stored setting.

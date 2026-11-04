@@ -30,6 +30,8 @@ const RULES = [
   { what: "native probe", pattern: /\bnativeProbe\b|["'`]native ["'`]\s*\+/ },
   { what: "TCP control port", pattern: /\b4973[1-3]\b|node:net/ },
   { what: "a repeating timer", pattern: /\bsetInterval\s*\(/ },
+  // A skipped test ends as a pass of its file, so a check whose precondition fails reports nothing.
+  { what: "a skipped test; assert its precondition", pattern: /\bt\.skip\s*\(/ },
   { what: "a fixed sleep", pattern: /\b(sleep|delay|pause)\s*\(|timers\/promises/, inputPacing: true },
   { what: "application activation that takes user focus", pattern: /\bactivate\s*:\s*true\b/, activationTier: true },
   // The cleanup of a window check goes into session.cleanup. When the cleanup of open fails, a t.after registered after it does not run,

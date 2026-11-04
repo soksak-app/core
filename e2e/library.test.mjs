@@ -165,7 +165,7 @@ for (const app of Object.values(APPS)) {
     let terminalCount = (await s.surfaces("terminal")).filter((surface) => surface.visible).length;
     if (terminalCount === 0) {
       const source = grid.cards.find((card) => card.id === "terminal" && card.tabs.length > 0);
-      if (!source) return t.skip("terminal source card not found");
+      assert.ok(source, "terminal source card not found");
       await s.run("core.card.split", { card: source.id, side: "right", plugin: "terminal" });
       await s.until("core.surfaces", (surfaces) => surfaces.filter((surface) =>
         surface.visible && surface.plugin === "terminal").length > terminalCount,

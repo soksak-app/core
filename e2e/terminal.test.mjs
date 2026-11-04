@@ -1041,7 +1041,7 @@ for (const app of Object.values(APPS)) {
     // Activates the terminal tab. core.grid is a status, so the card and tab come from a status read.
     const grid = await s.get("core.grid");
     const card = grid.cards.find((c) => c.tabs.some((tab) => tab.plugin === "terminal"));
-    if (!card) return t.skip("terminal tab not found");
+    assert.ok(card, "terminal tab not found");
     const terminalTab = card.tabs.find((tab) => tab.plugin === "terminal");
 
     // Runs the command that selects the terminal tab.
@@ -1814,7 +1814,7 @@ for (const app of Object.values(APPS)) {
     // Activates the terminal tab. core.grid is a status, so the card and tab come from a status read.
     const grid = await s.get("core.grid");
     const card = grid.cards.find((c) => c.tabs.some((tab) => tab.plugin === "terminal"));
-    if (!card) return t.skip("terminal tab not found");
+    assert.ok(card, "terminal tab not found");
     const terminalTab = card.tabs.find((tab) => tab.plugin === "terminal");
 
     await s.run("core.tab.select", { tab: terminalTab.id });
