@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F443: Record the Wails host path above the floor of a view drag as an open item; a one-turn response was measured and not adopted.
 - F442: The drag convergence is judged by 33 ms without a frame count, and the floor benchmark reports convergence and load. The latency targets stay, because the Tauri floor meets them. Red and Green: `packages/window-check/test/view-metrics.test.mjs`, `e2e/test/plain-view-case.test.mjs`.
 - F441: The Tauri host runs a surface layout in one main-thread turn and its ready callback, like the Wails host; no latency gain was measured. Red and Green: `e2e/surface-sync-turn.test.mjs`.
 - F440: A preparation hides a section surface whose offsets do not fit the target card instead of sending a negative size. Red and Green: `packages/workbench/test/compositor.test.mjs`.
