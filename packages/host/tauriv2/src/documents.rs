@@ -9,7 +9,7 @@
 //! thread is not awaited.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Instant;
 
 use serde::de::{self, MapAccess, Visitor};
@@ -1487,7 +1487,7 @@ pub(crate) fn sync_view(
     plugin: &str,
     page: &str,
     visible: bool,
-    start: ViewStart,
+    start: Arc<ViewStart>,
 ) -> Result<(), String> {
     let data = window_data(window)?;
     if !visible {
@@ -1572,7 +1572,7 @@ struct ViewAttachment<'a> {
     surface_handle: Handle,
     plugin: &'a str,
     page: &'a str,
-    start: ViewStart,
+    start: Arc<ViewStart>,
     origin: ViewOrigin,
 }
 

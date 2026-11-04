@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F444: Surface synchronization request는 host가 쥐고 있지 않은 view start 값만 전달하고, host는 마지막으로 받은 값을 보관한다. Page와 두 host에서 Red와 Green을 확인했다. Input tick부터 transaction까지의 시간은 Wails에서 7.2 ms에서 3.1 ms로, Tauri에서 4.6 ms에서 2.4 ms로 줄었다.
 - F443: view drag floor를 넘는 Wails host 경로를 열린 항목으로 기록한다. 한 turn 응답은 측정 결과 채택하지 않았다.
 - F442: drag convergence는 frame 수 없이 33 ms로 판정하고, floor benchmark는 convergence와 load를 보고한다. Tauri floor가 충족하므로 latency 목표는 유지한다. Red와 Green: `packages/window-check/test/view-metrics.test.mjs`, `e2e/test/plain-view-case.test.mjs`.
 - F441: Tauri host는 Wails host와 같이 surface layout을 main thread 한 turn과 ready callback에서 실행한다. 측정된 latency 개선은 없다. Red와 Green: `e2e/surface-sync-turn.test.mjs`.

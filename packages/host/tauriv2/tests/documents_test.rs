@@ -8,7 +8,6 @@ use soksak_host_tauriv2::documents::{
     parse_report, remove_surface_for_reload, remove_view_regions, stream_ack_refusal,
 };
 use soksak_host_tauriv2::images::Images;
-use soksak_host_tauriv2::surfaces::ViewStart;
 use soksak_host_tauriv2::view_lifecycle::{
     ViewLifecycle, is_queue_full, view_process_ended_event, view_stop_reason, view_stopped_event,
 };
@@ -716,7 +715,7 @@ fn view_restart_stops_at_the_fourth_failure_within_the_window() {
         "probe",
         "ui/page.html",
         true,
-        ViewStart::default(),
+        Default::default(),
     );
     assert_eq!(
         spec.surface_handle, 7,
@@ -770,7 +769,7 @@ fn view_restart_keeps_the_surface_and_plugin_of_its_record() {
         "probe",
         "ui/page.html",
         true,
-        ViewStart::default(),
+        Default::default(),
     );
     assert!(
         lifecycle.fail("probe-surface", start),
@@ -802,7 +801,7 @@ fn view_stop_event_is_sent_once_at_the_fourth_failure() {
         "probe",
         "ui/page.html",
         true,
-        ViewStart::default(),
+        Default::default(),
     );
     for offset in [0, 10, 20] {
         assert!(

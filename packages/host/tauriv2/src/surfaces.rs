@@ -17,6 +17,7 @@ use crate::images;
 use crate::platform::{self, Handle};
 use crate::presentation_wait::ViewPlacement;
 use crate::sidecars::WindowSidecars;
+use crate::view_lifecycle::ViewLifecycle;
 use crate::windows::{
     Chrome, NativeFailure, TitlebarChange, cancel_window_layout_ticket, emit_window,
     restore_titlebar, titlebar_chrome, validate_titlebar_height, window_data, with_native_owner,
@@ -57,6 +58,21 @@ pub(crate) struct Surface {
     plugin: String,
     composition: SurfaceComposition,
     start: Option<ViewStart>,
+}
+
+/// Returns the start values that the view of surface uses: those of the request or, when the request
+/// carries none, those that the host holds (docs/spec/native-surfaces.md#view-surfaces).
+pub(crate) fn view_start_of(
+    lifecycle: &ViewLifecycle,
+    surface: &Surface,
+) -> Result<Arc<ViewStart>, String> {
+    match &surface.start {
+        Some(start) => Ok(Arc::new(start.clone())),
+        None => lifecycle
+            .spec(&surface.id)
+            .map(|spec| spec.start)
+            .ok_or_else(|| format!("surface {:?}: view start is missing", surface.id)),
+    }
 }
 
 /// The project that the window shows, as the id and the canonical root of the project (docs/spec/plugins.md#tab-reports).
@@ -1268,9 +1284,9 @@ fn check_resolved_sync_request(
         if surface.plugin.is_empty() {
             return Err(format!("surface {:?} requires its plugin", surface.id));
         }
-        // default: a view without start values has no origin, which validate_view_start refuses.
-        let start = surface.start.clone().unwrap_or_default();
-        validate_view_start(&surface.id, &start)?;
+        if let Some(start) = &surface.start {
+            validate_view_start(&surface.id, start)?;
+        }
         if surface.composition.kind == "view" {
             let declared = held.get(&surface.id).ok_or_else(|| {
                 format!(
@@ -1435,9 +1451,7 @@ fn apply_surfaces(
             Ok(())
         })?;
         // The view of a view surface is created by its first sync and fills the surface (docs/spec/plugins.md#view-surfaces).
-        // default: a view surface without start values has no origin; documents::sync_view refuses it when it
-        // builds the start values script, and CheckSyncRequest refuses it first.
-        let start = s.start.clone().unwrap_or_default();
+        let start = view_start_of(context.documents.lifecycle(), s)?;
         with_registered_surface(surface_hosts, &s.id, handle, |handle| {
             documents::sync_view(
                 window,
@@ -1569,6 +1583,9 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
             // the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner),
     )?;
+    for surface in &request.surfaces {
+        view_start_of(context.documents.lifecycle(), surface)?;
+    }
 
     if !request.settled {
         announce_run(window, running, true)?;

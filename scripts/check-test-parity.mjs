@@ -8975,6 +8975,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F444",
+    implementation: [{ file: "packages/workbench/surface-sync-request.js", symbol: "export function surfaceSyncRequestWithDeclarationTable(" }],
+    tests: [{ file: "packages/workbench/test/surface-sync-request.test.mjs", id: "a sync request carries the start values of a view only while the host does not hold them" }],
+    expected: "A request leaves out start values equal to the last sent ones, carries changed ones and carries them again for a surface named again.",
+    levels: ["unit"],
+  },
+  {
     id: "F404",
     implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) fn with_open_window(" }],
     tests: [{ file: "packages/host/tauriv2/src/windows_records_test.rs", id: "a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure" }],

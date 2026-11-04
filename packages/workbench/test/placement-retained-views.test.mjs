@@ -280,6 +280,64 @@ test("surface sync traces its result only while the frame log gate is open", { t
   }
 });
 
+test("host placement sends start values until the host holds them and again after a refusal", { timeout: 5000 }, async (t) => {
+  const dom = new JSDOM('<div id="plane"></div>', { url: "https://example.test/" });
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  const syncs = [];
+  let refuse = false;
+  const view = { id: "held-start-view", plugin: "held-start-probe", dim: false, visible: true,
+    applied: { x: 0, y: 0, w: 20, h: 20 },
+    surface: { surfaceId: "held-start-view", pluginId: "held-start-probe", composition: { kind: "view", page: "ui/page.html" } },
+    start: { params: null, origin: { directory: null }, declarations: emptySurfaceDeclarations } };
+  t.mock.module("../surface-modules.js", { namedExports: {
+    mountedSurface: () => ({ mountRegistration: { attempt: 1 } }),
+    waitSurfaceCompositionDeclared: async () => {},
+  } });
+  t.mock.module("@soksak/runtime", { namedExports: { windows: {}, host: {
+    on: () => {},
+    page: (path) => path,
+    call: async (name, request) => {
+      if (name === "log") return clockAnswer(name, request);
+      if (name === "setTheme") return null;
+      if (name === "syncSurfaces") {
+        syncs.push(request);
+        if (refuse) throw new Error("surface refused");
+        return { ticket: syncs.length,
+          placements: request.surfaces.map(({ id, visible, x, y, w, h }) => ({ id, visible, x, y, w, h })),
+          chrome: { controls: { x: 0, y: 0, w: 0, h: 0 }, row: request.titlebar } };
+      }
+      if (name === "presentSurfaces") return request.placements;
+      throw new Error(`unexpected host call ${name}`);
+    },
+  } } });
+  const at = (x, params = null) => ({ surfaces: [{ ...view, applied: { ...view.applied, x },
+    start: { ...view.start, params } }], settled: true, drawn: true, titlebar: 40 });
+  try {
+    const host = await import("../host.js?held-start-values");
+    await host.surfaces.theme({ scheme: "dark", tokens: {} });
+    const startOfLast = () => syncs.at(-1).surfaces[0].start;
+    await host.surfaces.place(at(0));
+    assert.equal(startOfLast()?.declarations, 0, "the first request did not carry the start values");
+    await host.surfaces.place(at(1));
+    assert.equal(syncs.length, 2, "a changed placement sent no request");
+    assert.equal(startOfLast(), undefined, "a request carried start values that the host holds");
+    await host.surfaces.place(at(1));
+    assert.equal(syncs.length, 2, "a request with the same layout and start values was sent");
+    await host.surfaces.place(at(1, { path: "a.md" }));
+    assert.equal(syncs.length, 3, "a request with changed start values was not sent");
+    assert.deepEqual(startOfLast()?.params, { path: "a.md" }, "changed start values were not carried");
+    refuse = true;
+    await assert.rejects(host.surfaces.place(at(2, { path: "a.md" })), /surface refused/);
+    assert.equal(startOfLast(), undefined, "the fixture request before the refusal carried start values");
+    refuse = false;
+    await host.surfaces.place(at(3, { path: "a.md" }));
+    assert.deepEqual(startOfLast()?.params, { path: "a.md" }, "the request after a refusal did not carry the start values");
+  } finally {
+    dom.window.close();
+  }
+});
+
 test("host placement preserves call order across the lazy view-module import", { timeout: 5000 }, async (t) => {
   const dom = new JSDOM('<div id="plane"><div id="slot"></div></div>', { url: "https://example.test/" });
   globalThis.window = dom.window;

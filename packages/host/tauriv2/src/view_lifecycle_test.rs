@@ -23,7 +23,7 @@ fn a_view_end_stores_host_view_killed_with_its_plugin_and_surface() {
         "probe",
         "ui/page.html",
         true,
-        ViewStart::default(),
+        Default::default(),
     );
     lifecycle.record_end("end-kill");
     lifecycle.track(
@@ -32,7 +32,7 @@ fn a_view_end_stores_host_view_killed_with_its_plugin_and_surface() {
         "probe",
         "ui/page.html",
         true,
-        ViewStart::default(),
+        Default::default(),
     );
     lifecycle.record_end("end-close");
     lifecycle.forget("end-close");
@@ -70,7 +70,7 @@ fn view_restart_window_slides_past_old_failures() {
         "probe",
         "ui/page.html",
         true,
-        ViewStart::default(),
+        Default::default(),
     );
     for seconds in [0, 100, 200] {
         assert!(lifecycle.fail("probe-surface", seconds_after(start, seconds)));
@@ -100,10 +100,10 @@ fn view_restart_keeps_the_start_values_of_its_record() {
         "probe",
         "ui/page.html",
         true,
-        start.clone(),
+        std::sync::Arc::new(start.clone()),
     );
     assert_eq!(
-        lifecycle
+        *lifecycle
             .spec("probe-surface")
             .expect("the record is kept")
             .start,

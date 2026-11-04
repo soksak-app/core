@@ -396,6 +396,8 @@ const tellInTurn = (name, payload) => {
 let last = "";
 // The request of the preparation that the next drawn commit presents, kept only to name what a second request changes.
 let lastRequest = null;
+// The serialized start values that the host holds for each view surface of this page, by surface id. A refused request empties it.
+let heldStarts = new Map();
 let themeReply = null;
 // Layout preparation and display form one transaction. The native compositor has only one active ticket per window,
 // so no next preparation is sent to the host between the two calls.
@@ -608,15 +610,17 @@ export const surfaces = native ? {
           // The height (pt) of the first row that the next drawing will show. The host sets the window title bar to this height in the transaction of this preparation.
           titlebar: record.titlebar,
         };
-        const normalized = surfaceSyncRequestWithDeclarationTable(fullRequest);
+        const normalized = surfaceSyncRequestWithDeclarationTable(fullRequest, heldStarts);
         const request = normalized.request;
-        const key = JSON.stringify({ request, deferredViews });
-        if (key !== last) {
+        const key = JSON.stringify({ layout: normalized.layout, deferredViews });
+        const carriedStarts = request.surfaces.filter(({ start }) => start).map(({ id }) => `surfaces.${id}.start`);
+        if (key !== last || carriedStarts.length > 0) {
           if (record.drawn && lastRequest && !layoutPresented && logGate.enabled("frame", "debug")) {
-            trace("surface.resend", { paths: surfaceSyncRequestDifference(lastRequest, request) });
+            trace("surface.resend", { paths: [...surfaceSyncRequestDifference(lastRequest, normalized.layout), ...carriedStarts] });
           }
           last = key;
-          lastRequest = request;
+          lastRequest = normalized.layout;
+          heldStarts = normalized.starts;
           // layoutTurn is the transaction order of surface preparation and display.
           // It does not also wait for the global command turn: doing so would let an unrelated
           // host call add one frame per divider step.
@@ -635,6 +639,9 @@ export const surfaces = native ? {
               } while (reply !== themeReply);
             }
             return syncSurfaces(request, surfaceModules, normalized.declarationBytes);
+          }).catch((error) => {
+            heldStarts = new Map();
+            throw error;
           });
           layoutFrame = scheduled;
           layoutResult = scheduled.then((frame) => {

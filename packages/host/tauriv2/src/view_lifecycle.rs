@@ -5,7 +5,7 @@
 //! so the caller reads the clock and a test passes its own instants.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use serde_json::json;
@@ -30,7 +30,7 @@ pub struct ViewSpec {
     pub page: String,
     pub visible: bool,
     /// The start values of the view, which the host injects again when it creates the view again.
-    pub start: ViewStart,
+    pub start: Arc<ViewStart>,
 }
 
 #[derive(Default)]
@@ -64,7 +64,7 @@ impl ViewLifecycle {
         plugin: &str,
         page: &str,
         visible: bool,
-        start: ViewStart,
+        start: Arc<ViewStart>,
     ) -> ViewSpec {
         let spec = ViewSpec {
             surface_handle,

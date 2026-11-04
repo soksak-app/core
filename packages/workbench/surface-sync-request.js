@@ -1,12 +1,23 @@
 import { byteLength } from "@soksak/plugin-api/bounded-json.js";
 
-/** Replaces full view declarations with indexes in a request-local host wire table. */
-export function surfaceSyncRequestWithDeclarationTable(request) {
+function withoutStart(surface) {
+  const { start: _start, ...placement } = surface;
+  return placement;
+}
+
+/**
+ * Builds the host wire form of a sync request: start values that heldStarts (surface id -> serialized start values) shows
+ * the host holds are left out, and the declarations of the others become indexes in a request-local table
+ * (docs/spec/native-surfaces.md#view-surfaces). layout is the request without start values, which identifies the placement,
+ * and starts is the value of heldStarts after the host receives this request.
+ */
+export function surfaceSyncRequestWithDeclarationTable(request, heldStarts) {
   if (!request || typeof request !== "object" || !Array.isArray(request.surfaces)) {
     throw new TypeError("surface sync request requires a surfaces array");
   }
   const declarationTable = [];
   const indexes = new Map();
+  const starts = new Map();
   const surfaces = request.surfaces.map((surface) => {
     if (surface?.composition?.kind !== "view" || !surface.start
         || !Object.hasOwn(surface.start, "declarations")) return surface;
@@ -14,6 +25,9 @@ export function surfaceSyncRequestWithDeclarationTable(request) {
         || Array.isArray(surface.start.declarations)) {
       throw new TypeError(`surface ${surface.id} declarations are not an object`);
     }
+    const serializedStart = JSON.stringify(surface.start);
+    starts.set(surface.id, serializedStart);
+    if (heldStarts.get(surface.id) === serializedStart) return withoutStart(surface);
     let serialized;
     try {
       serialized = JSON.stringify(surface.start.declarations, (_key, value) => {
@@ -50,7 +64,7 @@ export function surfaceSyncRequestWithDeclarationTable(request) {
     }
     return { declarationInlineBytes, declarationTableBytes };
   };
-  return { request: normalized, declarationBytes };
+  return { request: normalized, layout: { ...request, surfaces: request.surfaces.map(withoutStart) }, starts, declarationBytes };
 }
 
 /** The differences of two surface sync requests as "path: before -> after", in the order of the first, at most limit differences. */

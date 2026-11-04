@@ -222,7 +222,6 @@ func TestSyncRequestRefusesAViewWithoutAnOriginDirectory(t *testing.T) {
 	const missing = `surface "probe": view start origin is missing`
 	const malformed = `surface "probe": view start origin is not {directory} with a path or null`
 	cases := []struct{ name, surface, want string }{
-		{"no start values", `{` + view + `}`, missing},
 		{"no origin", `{` + view + `,"start":{"params":null}}`, missing},
 		{"null origin", `{` + view + `,"start":{"origin":null}}`, malformed},
 		{"origin without directory", `{` + view + `,"start":{"origin":{}}}`, malformed},
@@ -378,5 +377,36 @@ func TestSurfaceStartScriptCarriesTheStoredLevelOfEachClass(t *testing.T) {
 	want := `,"levels":Object.freeze({"call":"error","frame":"debug","input":"error","io":"error","lifecycle":"error"})});`
 	if !strings.HasSuffix(got, want) {
 		t.Fatalf("start values script %q, want the suffix %q", got, want)
+	}
+}
+
+// contract: view.start-values.omitted-keeps-held
+func TestAViewWithoutStartKeepsTheValuesThatTheHostHolds(t *testing.T) {
+	s := &Surfaces{}
+	held := ViewStart{Params: json.RawMessage(`{"path":"/work/held"}`)}
+	s.viewRecords().track("probe", nil, "probe", "ui/page.html", true).start = held
+	got, err := s.viewStartOf(Surface{ID: "probe"})
+	if err != nil || string(got.Params) != string(held.Params) {
+		t.Fatalf("held start values: %q, %v, want %q", got.Params, err, held.Params)
+	}
+	next := ViewStart{Params: json.RawMessage(`{"path":"/work/next"}`)}
+	got, err = s.viewStartOf(Surface{ID: "probe", Start: &next})
+	if err != nil || string(got.Params) != string(next.Params) {
+		t.Fatalf("start values of the request: %q, %v, want %q", got.Params, err, next.Params)
+	}
+	_, err = s.viewStartOf(Surface{ID: "other"})
+	if want := `surface "other": view start is missing`; err == nil || err.Error() != want {
+		t.Fatalf("a view without held start values: %v, want %q", err, want)
+	}
+	decoded, err := decodeSyncRequest(json.RawMessage(`{"settled":true,"titlebar":40,"declarations":[],"surfaces":[{"id":"probe","visible":true,"dim":false,"plugin":"probe","composition":{"kind":"view","page":"ui/page.html"},"x":0,"y":0,"w":10,"h":10}]}`))
+	if err != nil {
+		t.Fatalf("a request without start values: %v", err)
+	}
+	if decoded.Surfaces[0].Start != nil {
+		t.Fatalf("decoded start values: %+v, want none", decoded.Surfaces[0].Start)
+	}
+	composition := map[string]SurfaceComposition{"probe": decoded.Surfaces[0].Composition}
+	if _, err := CheckSyncRequest(decoded, composition, map[string]string{"probe": "probe"}); err != nil {
+		t.Fatalf("the check of a request without start values: %v", err)
 	}
 }

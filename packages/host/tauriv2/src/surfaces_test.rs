@@ -16,6 +16,63 @@ use super::{
     surface_dispatch_result_with, with_registered_surface,
 };
 
+// contract: view.start-values.omitted-keeps-held
+#[test]
+fn a_view_without_start_keeps_the_values_that_the_host_holds() {
+    use super::{SyncRequest, ViewStart, check_sync_request, view_start_of};
+    use crate::view_lifecycle::ViewLifecycle;
+    let surface = |start: &str| {
+        format!(
+            r#"{{"settled":true,"titlebar":40,"declarations":[{{}}],"surfaces":[{{"id":"probe","visible":true,"dim":false,"plugin":"probe","composition":{{"kind":"view","page":"ui/page.html"}},"x":0,"y":0,"w":10,"h":10{start}}}]}}"#
+        )
+    };
+    let request = |text: String| {
+        serde_json::from_str::<SyncRequest>(&text)
+            .expect("request fixture")
+            .resolve()
+            .expect("the request resolves")
+    };
+    let lifecycle = ViewLifecycle::default();
+    let held = Arc::new(ViewStart {
+        params: Some(serde_json::json!({"path": "/work/held"})),
+        ..Default::default()
+    });
+    lifecycle.track("probe", 7, "probe", "ui/page.html", true, held.clone());
+    let omitted = request(surface("").replace(r#""declarations":[{}]"#, r#""declarations":[]"#));
+    assert_eq!(
+        view_start_of(&lifecycle, &omitted.surfaces[0]),
+        Ok(held.clone()),
+        "a view without start values uses the values that the host holds"
+    );
+    let carried = request(surface(
+        r#","start":{"params":{"path":"/work/next"},"origin":{"directory":null},"project":null,"declarations":0,"diagnostics":null,"section":null}"#,
+    ));
+    assert_eq!(
+        view_start_of(&lifecycle, &carried.surfaces[0])
+            .expect("the request carries start values")
+            .params,
+        Some(serde_json::json!({"path": "/work/next"})),
+        "the start values of the request replace the held values"
+    );
+    assert_eq!(
+        view_start_of(&ViewLifecycle::default(), &omitted.surfaces[0]),
+        Err(r#"surface "probe": view start is missing"#.to_string()),
+        "a view without held start values is refused"
+    );
+    let unresolved: SyncRequest = serde_json::from_str(
+        &surface("").replace(r#""declarations":[{}]"#, r#""declarations":[]"#),
+    )
+    .expect("request fixture");
+    let held_composition =
+        HashMap::from([("probe".to_string(), omitted.surfaces[0].composition.clone())]);
+    let plugins = HashMap::from([("probe".to_string(), "probe".to_string())]);
+    assert_eq!(
+        check_sync_request(&unresolved, &held_composition, &plugins).map(|_| ()),
+        Ok(()),
+        "the check accepts a view without start values"
+    );
+}
+
 mod declaration_table {
     use super::super::SyncRequest;
 

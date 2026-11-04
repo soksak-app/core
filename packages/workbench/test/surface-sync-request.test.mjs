@@ -23,7 +23,7 @@ test("surface sync declarations use a request-local table and preserve view star
       { id: "wire-image", composition: { kind: "image" } },
     ],
   };
-  const normalized = surfaceSyncRequestWithDeclarationTable(wireInput);
+  const normalized = surfaceSyncRequestWithDeclarationTable(wireInput, new Map());
   assert.deepEqual(normalized.request.declarations, [startDeclarationA, startDeclarationB],
     "the request table must deduplicate identical serialized declarations and retain distinct values");
   assert.deepEqual(normalized.request.surfaces.map(({ id, start }) => [id, start?.declarations]), [
@@ -52,7 +52,7 @@ test("surface sync declarations use a request-local table and preserve view star
     "normalization must not mutate the complete internal start values");
   const nextRequest = structuredClone(wireInput);
   nextRequest.surfaces[0].start.declarations.status[0].name = "core.surface.document.changed";
-  const nextNormalized = surfaceSyncRequestWithDeclarationTable(nextRequest);
+  const nextNormalized = surfaceSyncRequestWithDeclarationTable(nextRequest, new Map());
   assert.equal(nextNormalized.request.declarations[0].status[0].name, "core.surface.document.changed",
     "a later request must recompute its table from current declaration values");
   assert.deepEqual(nextNormalized.request.surfaces.slice(0, 3).map(({ start }) => start.declarations), [0, 1, 2],
@@ -62,8 +62,8 @@ test("surface sync declarations use a request-local table and preserve view star
       params: null, origin: { directory: null }, project: null,
       declarations: { status: [{ value: Number.NaN }], commands: [], dom: [] },
     } },
-  ] }), /finite/, "non-finite declaration values must not stringify as JSON null");
-  assert.deepEqual(surfaceSyncRequestWithDeclarationTable({ surfaces: [] }).request.declarations, [],
+  ] }, new Map()), /finite/, "non-finite declaration values must not stringify as JSON null");
+  assert.deepEqual(surfaceSyncRequestWithDeclarationTable({ surfaces: [] }, new Map()).request.declarations, [],
     "a request without views still carries its required empty declaration table");
 });
 
@@ -74,4 +74,27 @@ test("the difference of two surface sync requests names each changed value up to
   assert.deepEqual(surfaceSyncRequestDifference(before, after), ["surfaces.0.y: 348.4 -> 348.40625", "surfaces.1.z: undefined -> 1"]);
   assert.deepEqual(surfaceSyncRequestDifference(before, after, 1), ["surfaces.0.y: 348.4 -> 348.40625"]);
   assert.deepEqual(surfaceSyncRequestDifference({ a: [] }, { a: {} }), ["a: [] -> {}"]);
+});
+
+test("a sync request carries the start values of a view only while the host does not hold them", { timeout: 5000 }, () => {
+  const request = (params, surfaces = true) => ({
+    settled: false, overlays: [], titlebar: 40,
+    surfaces: surfaces ? [{ id: "held-view", composition: { kind: "view" }, start: {
+      params, origin: { directory: null }, project: null, declarations: { status: [], commands: [], dom: [] },
+    } }] : [],
+  });
+  const first = surfaceSyncRequestWithDeclarationTable(request(null), new Map());
+  assert.equal(first.request.surfaces[0].start?.declarations, 0, "the first request did not carry the start values");
+  const second = surfaceSyncRequestWithDeclarationTable(request(null), first.starts);
+  assert.equal(second.request.surfaces[0].start, undefined, "a request carried start values that the host holds");
+  assert.deepEqual(second.request.declarations, [], "a request without start values carried a declaration table");
+  assert.equal(second.request.surfaces[0].id, "held-view");
+  assert.deepEqual(second.layout, first.layout, "the layout of two requests with the same placement differs");
+  const changed = surfaceSyncRequestWithDeclarationTable(request({ path: "a.md" }), second.starts);
+  assert.deepEqual(changed.request.surfaces[0].start?.params, { path: "a.md" }, "changed start values were not carried");
+  assert.deepEqual(changed.layout, first.layout, "the layout contains start values");
+  const absent = surfaceSyncRequestWithDeclarationTable(request(null, false), changed.starts);
+  assert.equal(absent.starts.size, 0, "a surface absent from the request stayed held");
+  const again = surfaceSyncRequestWithDeclarationTable(request({ path: "a.md" }), absent.starts);
+  assert.equal(again.request.surfaces[0].start?.declarations, 0, "a surface named again did not carry its start values");
 });

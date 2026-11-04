@@ -170,8 +170,8 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
       const afterOpening = surfaceSyncEvents();
       assert.equal(afterOpening.length, 2,
         "a frame gate opened while sync was pending must record the completed request");
-      assert.ok(afterOpening[1].fields.declarationInlineBytes > 0 && afterOpening[1].fields.declarationTableBytes > 0,
-        "completion-time measurement omitted declaration component bytes");
+      assert.deepEqual([afterOpening[1].fields.declarationInlineBytes, afterOpening[1].fields.declarationTableBytes], [0, 2],
+        "a request with start values that the host holds did not measure an empty declaration table");
 
       const closesBeforeCompletion = holdNextSync();
       const closingPlacement = hostSurfaces.place({ ...initial, settled: true,

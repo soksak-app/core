@@ -74,6 +74,18 @@ type ViewStart struct {
 	Section json.RawMessage `json:"section,omitempty"`
 }
 
+// viewStartOf returns the start values that the view of surface uses: those of the request or, when the request carries none, those that the host holds (docs/spec/native-surfaces.md#view-surfaces). It runs on the UI thread, as the record does.
+func (s *Surfaces) viewStartOf(surface Surface) (ViewStart, error) {
+	if surface.Start != nil {
+		return *surface.Start, nil
+	}
+	spec := s.viewRecords().specs[surface.ID]
+	if spec == nil {
+		return ViewStart{}, fmt.Errorf("surface %q: view start is missing", surface.ID)
+	}
+	return spec.start, nil
+}
+
 // validateViewStart checks the start values of the view of the surface (docs/spec/native-surfaces.md#view-surfaces).
 func validateViewStart(surface string, start *ViewStart) error {
 	if start.Params != nil && !json.Valid(start.Params) {
@@ -366,10 +378,7 @@ func decodeSyncRequest(raw json.RawMessage) (SyncRequest, error) {
 			ID: item.ID, Visible: item.Visible, Dim: item.Dim, Plugin: item.Plugin,
 			Composition: item.Composition, Rect: item.Rect,
 		}
-		if item.Composition.Kind == "view" {
-			if item.Start == nil {
-				return SyncRequest{}, fmt.Errorf("surface %q: view start is missing", item.ID)
-			}
+		if item.Composition.Kind == "view" && item.Start != nil {
 			indexText := strings.TrimSpace(string(item.Start.Declarations))
 			if indexText == "" || indexText[0] < '0' || indexText[0] > '9' {
 				return SyncRequest{}, fmt.Errorf("surface %q: view start declarations must be a nonnegative integer index", item.ID)
@@ -877,13 +886,10 @@ func CheckSyncRequest(req SyncRequest, held map[string]SurfaceComposition, plugi
 		if surface.Plugin == "" {
 			return nil, fmt.Errorf("surface %q requires its plugin", surface.ID)
 		}
-		// default: a view without start values has no origin, which validateViewStart refuses.
-		start := ViewStart{}
 		if surface.Start != nil {
-			start = *surface.Start
-		}
-		if err := validateViewStart(surface.ID, &start); err != nil {
-			return nil, err
+			if err := validateViewStart(surface.ID, surface.Start); err != nil {
+				return nil, err
+			}
 		}
 		if surface.Composition.Kind == "view" {
 			declared, exists := held[surface.ID]
@@ -937,6 +943,11 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 	done := make(chan applyResult, 1)
 	var began error
 	began = runSurfaceDispatch(application.InvokeSync, win.Name(), &prepared.Ticket, "sync", "sync-layout-ui", func() error {
+		for _, surface := range req.Surfaces {
+			if _, err := s.viewStartOf(surface); err != nil {
+				return err
+			}
+		}
 		main, err := system.MainWebview(win.NativeWindow())
 		if err != nil {
 			return err
@@ -1567,10 +1578,9 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 		s.mu.Unlock()
 		s.images.SetSurfaceVisible(item.id, item.visible)
 		// The view of a view surface is created by its first sync and fills the surface (docs/spec/plugins.md#view-surfaces).
-		// default: a view without start values has no origin; the start values script refuses it (CheckSyncRequest refuses it first).
-		start := ViewStart{}
-		if item.decl.Start != nil {
-			start = *item.decl.Start
+		start, err := s.viewStartOf(item.decl)
+		if err != nil {
+			return nil, nil, err
 		}
 		if err := s.syncView(item.id, item.view.NativeView(), item.decl.Plugin, item.decl.Composition.Page, item.visible, start); err != nil {
 			return nil, nil, err

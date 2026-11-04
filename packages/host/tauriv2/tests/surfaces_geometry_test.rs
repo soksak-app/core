@@ -371,7 +371,6 @@ fn sync_request_check_refuses_a_view_origin_without_a_directory_form() {
     let missing = r#"surface "tab-1": view start origin is missing"#;
     let malformed = r#"surface "tab-1": view start origin is not {directory} with a path or null"#;
     let cases = [
-        (None, missing),
         (
             Some(serde_json::json!({"params": null, "declarations": 0})),
             missing,
