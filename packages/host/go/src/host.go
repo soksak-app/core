@@ -71,6 +71,11 @@ func Prepare(adapter Framework, assets fs.FS, options Options) (_ *Session, fail
 		return nil, err
 	}
 	system = current
+	// The darwin layer runs each native call and each callback through the main-thread functions of the framework adapter, so the
+	// start fails when one is missing instead of running them on another thread (docs/spec/hosts.md, main thread of the Wails host).
+	if err := system.RequireMainThread(); err != nil {
+		return nil, err
+	}
 	// The window zoom animation moves only the window frame, and the web document follows it. This shortens that duration before AppKit
 	// reads the default.
 	if err := system.InstantWindowResize(); err != nil {

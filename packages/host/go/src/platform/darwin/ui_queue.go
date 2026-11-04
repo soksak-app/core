@@ -16,12 +16,14 @@ static void uiEnqueueAfter(uint64_t delay, uintptr_t context) { sp_ui_enqueue_af
 static void installMainThread(void *worker, void *main) {
     hostInstallMainThread((void (*)(void (^)(void)))worker, (void (*)(void (^)(void)))main);
 }
+static void mainThreadInstalled(bool *worker, bool *main) { hostMainThreadInstalled(worker, main); }
 */
 import "C"
 
 import (
 	"fmt"
 	"runtime/cgo"
+	"strings"
 	"time"
 	"unsafe"
 )
@@ -29,6 +31,22 @@ import (
 // InstallMainThread installs the main-thread functions of the framework (main_thread.h). A framework adapter calls it before the
 // start of the library.
 func InstallMainThread(worker, main unsafe.Pointer) { C.installMainThread(worker, main) }
+
+func (implementation) RequireMainThread() error {
+	var worker, main C.bool
+	C.mainThreadInstalled(&worker, &main)
+	var missing []string
+	if !worker {
+		missing = append(missing, "hostRunOnWorker")
+	}
+	if !main {
+		missing = append(missing, "hostRunOnMain")
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	return fmt.Errorf("main-thread functions are not installed: %s; the framework adapter installs them through darwin.InstallMainThread before the start of the library", strings.Join(missing, " and "))
+}
 
 func (implementation) EnqueueUI(work func()) error {
 	handle := cgo.NewHandle(work)

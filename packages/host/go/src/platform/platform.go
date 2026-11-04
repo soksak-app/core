@@ -599,6 +599,10 @@ type Platform interface {
 	// injection of the checks. Call it on the UI thread after OnMemoryPressure.
 	InjectMemoryPressure(level string) error
 
+	// RequireMainThread fails when a main-thread function that the framework adapter installs is missing, naming each missing one
+	// (docs/spec/hosts.md, main thread of the Wails host). The start of the library calls it before any native call.
+	RequireMainThread() error
+
 	// InstantWindowResize makes the window zoom and the animated resize end within one screen update.
 	// Call it before creating a window.
 	InstantWindowResize() error
