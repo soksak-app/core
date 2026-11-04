@@ -462,3 +462,31 @@ func TestALongTabNameKeepsTheHeadOfItsCard(t *testing.T) {
 	}
 	f.box("core.card.add", "main")
 }
+
+// A status line that does not fit stays on the one line of the foot of its card.
+func TestALongStatusKeepsTheFootOfItsCard(t *testing.T) {
+	f, stored := surfaceShell(t)
+	surface := terminalSurface(t, stored)
+	viewCall(t, f, stored, surface, "tab.footer", "short")
+	short, ok := f.tester.Find("short")
+	if !ok {
+		t.Fatalf("the texts are %q", f.tester.Texts())
+	}
+	long := strings.Repeat("/private/tmp/a-long-directory", 40)
+	viewCall(t, f, stored, surface, "tab.footer", long)
+	found, ok := f.tester.Find(long)
+	if !ok {
+		t.Fatalf("the texts are %q", f.tester.Texts())
+	}
+	if found.H != short.H {
+		t.Fatalf("the long status is %v high, the short one %v", found.H, short.H)
+	}
+	for _, card := range status[gridRead](t, f, "core.grid").Cards {
+		if len(card.Tabs) == 0 || card.Tabs[0].ID != surface {
+			continue
+		}
+		if foot := f.box("core.card.status", card.ID); found.X+found.W > foot.X+foot.W {
+			t.Fatalf("the status %v leaves the foot %v", found, foot)
+		}
+	}
+}

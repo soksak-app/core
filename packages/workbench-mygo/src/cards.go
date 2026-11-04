@@ -192,7 +192,7 @@ func (s *Shell) drawStatus(c *ui.Context, id string, data *layout.CardData, fold
 			text = fold
 		}
 		if text != "" {
-			ui.Text(c, text).FontSize(10).TextColor(s.palette.Muted)
+			ui.Text(c, text).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).FontSize(10).TextColor(s.palette.Muted)
 		}
 		if active := data.ActiveTab(); active != nil {
 			if report := s.surfaces.reports[active.ID]; report != nil && report.Error != "" {
