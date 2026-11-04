@@ -28,6 +28,7 @@ func Run(assets fs.FS, options host.Options, workbench Workbench) error {
 		return err
 	}
 	defer session.End()
+	workbench.Prepared(session.Host())
 	ConfigureApplication()
 	mygo.App.OnBeforeQuit(func(event *mygo.QuitEvent) {
 		if !session.ShouldQuit() {

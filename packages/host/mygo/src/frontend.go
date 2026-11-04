@@ -97,12 +97,20 @@ func (f *Frontend) NativeWindow() unsafe.Pointer {
 // Emit delivers an event to the workbench of the window.
 func (f *Frontend) Emit(name string, data ...any) { f.framework.workbench.Emit(f, name, data...) }
 
-// Show puts the window on the screen, once the window drew its first frame.
+// Invalidate asks for a frame of the workbench of the window.
+func (f *Frontend) Invalidate() { f.window.Invalidate() }
+
+// Show puts the window on the screen, once the window drew its first frame. The host shows a window after it holds the window, so
+// the workbench starts its host calls here.
 func (f *Frontend) Show() {
 	f.mu.Lock()
+	first := !f.shown
 	f.shown = true
 	ready := f.ready
 	f.mu.Unlock()
+	if first {
+		f.framework.workbench.Shown(f)
+	}
 	if ready {
 		f.window.Show()
 	}

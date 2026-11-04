@@ -15,3 +15,4 @@ replace github.com/soksak-app/core/packages/host/go v0.0.0 => ./packages/host/go
 replace github.com/soksak-app/core/packages/host/mygo v0.0.0 => ./packages/host/mygo
 replace github.com/soksak-app/core/packages/host/wailsv3 v0.0.0 => ./packages/host/wailsv3
 replace github.com/soksak-app/core/packages/sok/go v0.0.0 => ./packages/sok/go
+replace github.com/soksak-app/core/packages/workbench-mygo v0.0.0 => ./packages/workbench-mygo

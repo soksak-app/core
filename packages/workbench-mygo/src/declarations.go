@@ -60,6 +60,17 @@ func (d *Declarations) Metric(name string) (float64, bool) {
 	return number, err == nil
 }
 
+// ExposureEntries returns a new copy of the entries of the exposure declaration by kind: status, commands and dom.
+func (d *Declarations) ExposureEntries() map[string][]map[string]any {
+	var file struct {
+		Exposes map[string][]map[string]any `json:"exposes"`
+	}
+	if err := json.Unmarshal(exposureFile, &file); err != nil {
+		panic(err) // Declared read the same embedded text.
+	}
+	return file.Exposes
+}
+
 // Palette is the colors and the shape of a theme in one mode.
 type Palette struct {
 	Bg, Card, Fg, Muted, Edge, Rule, Rail, Focus, No ui.Color

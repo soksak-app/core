@@ -5,6 +5,7 @@ go 1.27.3
 require (
 	github.com/soksak-app/core/packages/host/go v0.0.0
 	github.com/soksak-app/core/packages/host/mygo v0.0.0
+	github.com/soksak-app/core/packages/workbench-mygo v0.0.0
 )
 
 require (

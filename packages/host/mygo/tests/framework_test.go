@@ -109,6 +109,10 @@ func (w *sceneWorkbench) received() []string {
 	return slices.Clone(w.records)
 }
 
+func (w *sceneWorkbench) Prepared(*host.Host) {}
+
+func (w *sceneWorkbench) Shown(host.Frontend) {}
+
 func (w *sceneWorkbench) Build(window host.Frontend) func(c *ui.Context) {
 	w.record("build %s", window.Name())
 	return func(c *ui.Context) {
