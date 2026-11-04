@@ -1,18 +1,17 @@
 //! The record of the endpoint methods (docs/spec/logging.md#entrances): every request of a client is the event
 //! `host.endpoint.call` with the performance trace off. The same cases run in the Go host.
 
-#![cfg(target_os = "macos")]
-
 #[path = "support/folder.rs"]
 mod folder;
 
-#[path = "support/platform/darwin/endpoint_client.rs"]
+#[path = "support/platform/platform.rs"]
 mod endpoint_client;
+
+use endpoint_client::Connection;
 
 #[path = "support/records.rs"]
 mod records;
 
-use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -52,7 +51,7 @@ impl Service for Fake {
 
 /// Runs `body` with a writer attached, an endpoint with a connection, and the performance trace off; it returns the events
 /// `host.endpoint.call` that the writer stored.
-fn calls_of(body: impl FnOnce(&mut UnixStream)) -> Vec<Value> {
+fn calls_of(body: impl FnOnce(&mut Connection)) -> Vec<Value> {
     let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
     assert!(
         !soksak_host_tauriv2::performance::enabled(),
@@ -84,7 +83,7 @@ fn events_of(config: &Path) -> Vec<Value> {
         .collect()
 }
 
-fn request(connection: &mut UnixStream, id: u64, method: &str, params: Value) -> Value {
+fn request(connection: &mut Connection, id: u64, method: &str, params: Value) -> Value {
     endpoint::write_frame(
         connection,
         &json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}),

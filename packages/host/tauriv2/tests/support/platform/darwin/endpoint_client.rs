@@ -4,8 +4,11 @@
 use std::os::unix::net::UnixStream;
 use std::time::Duration;
 
+/// A connection to the endpoint.
+pub type Connection = UnixStream;
+
 /// Connects to the endpoint socket at address. A read that receives no byte within read_timeout fails.
-pub fn connect(address: &str, read_timeout: Duration) -> UnixStream {
+pub fn connect(address: &str, read_timeout: Duration) -> Connection {
     let stream = UnixStream::connect(address)
         .unwrap_or_else(|error| panic!("cannot connect to {address}: {error}"));
     stream
