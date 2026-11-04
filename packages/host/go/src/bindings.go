@@ -122,6 +122,16 @@ func (h *Host) SyncSurfaces(ctx context.Context, reqJSON json.RawMessage) (Prepa
 	return s.SyncSurfaces(req)
 }
 
+// SurfaceElement returns the views of the surface id for a frame of a window without a main page. A frame calls it, so it takes no
+// step of the main thread.
+func (h *Host) SurfaceElement(ctx context.Context, id string) (SurfaceElement, bool) {
+	s, err := h.surface(ctx)
+	if err != nil {
+		return SurfaceElement{}, false
+	}
+	return s.Element(id)
+}
+
 func (h *Host) PresentSurfaces(ctx context.Context, reqJSON json.RawMessage) ([]Placement, error) {
 	req, err := argument[PresentRequest]("request", reqJSON)
 	if err != nil {

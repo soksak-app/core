@@ -51,13 +51,25 @@ func (f *Frontend) placeNativeView() {
 
 // placeSurfaces sets the frame of each surface host that the frame shows, in the Core Animation transaction of the frame. The frame
 // is in the content coordinates of the window as on the other hosts, and native/darwin converts it into the container of the surface
-// hosts, so the elements alone place the hosts (docs/spec/hosts.md#native-views). The surface layout transaction hides and shows them.
+// hosts, so the elements alone place the hosts (docs/spec/hosts.md#native-views). A surface that the frame no longer shows hides here,
+// before the framework takes the keyboard from the views that left: native/darwin notes what held the keyboard when a surface hides,
+// and gives it back when the surface shows.
 func (f *Frontend) placeSurfaces(system platform.Platform, views []mygo.NativePlacement) {
 	placed := make(map[uintptr]mygo.RectF, len(views))
 	for _, view := range views {
 		placed[view.View] = view.Box
-		if box, ok := f.placed[view.View]; !ok || box != view.Box {
-			system.SetSurfaceBounds(*(*unsafe.Pointer)(unsafe.Pointer(&view.View)), view.Box.X, view.Box.Y, view.Box.W, view.Box.H)
+		surface := *(*unsafe.Pointer)(unsafe.Pointer(&view.View))
+		box, shown := f.placed[view.View]
+		if !shown || box != view.Box {
+			system.SetSurfaceBounds(surface, view.Box.X, view.Box.Y, view.Box.W, view.Box.H)
+		}
+		if !shown {
+			system.SetSurfaceHiddenHandle(surface, false)
+		}
+	}
+	for view := range f.placed {
+		if _, shown := placed[view]; !shown {
+			system.SetSurfaceHiddenHandle(*(*unsafe.Pointer)(unsafe.Pointer(&view)), true)
 		}
 	}
 	f.placed = placed

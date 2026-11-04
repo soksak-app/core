@@ -35,6 +35,9 @@ var (
 	_ host.Frontend  = (*adapter.Frontend)(nil)
 )
 
+// cleanup runs after the tests of the process, for what the tests share.
+var cleanup = func() {}
+
 // quitHelper names the child process of the quit test.
 const quitHelper = "SOKSAK_MYGO_QUIT_HELPER"
 
@@ -55,7 +58,13 @@ func TestMain(m *testing.M) {
 	}
 	adapter.ConfigureApplication()
 	mygo.App.SetActivationPolicy(mygo.ActivationPolicyProhibited)
-	mygo.App.WhenReady(func() { go func() { os.Exit(m.Run()) }() })
+	mygo.App.WhenReady(func() {
+		go func() {
+			status := m.Run()
+			cleanup()
+			os.Exit(status)
+		}()
+	})
 	if err := mygo.App.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "the application did not run:", err)
 		os.Exit(1)
