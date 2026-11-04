@@ -162,6 +162,27 @@ macOS 26.6.2 (arm64) 측정: 40, 45, 54, 63, 72, 90, 108pt 에서, 빈 compact �
 
 프레임워크 업데이트 후 해당 콜백이나 Dock 메뉴 API를 제공하는지 확인한다. 모든 창을 닫은 경우를 포함해 메뉴 항목과 라이브러리 창 생성을 검사한다. 이 연동은 앱 메뉴에 관한 것이며 표면 렌더링이나 웹뷰 입력에 관한 것이 아니다.
 
+## mygo host
+
+mygo host가 바꾸는 [목록](#현재-목록)의 각 행. 같은 `native/darwin` code가 call을 하므로, 나머지 모든 행은 다른 host에 적용되듯 mygo host에도 적용된다.
+
+| API | 현재 용도 | mygo host |
+| --- | --- | --- |
+| `WKWebView._doAfterNextPresentationUpdate:` | 모든 layout commit 전의 main page presentation | workbench에는 호출하지 않는다; U3가 present된 frame을 준다. View root join은 이를 유지한다 |
+| `WKPreferences` feature `PreferPageRenderingUpdatesNear60FPSEnabled` | Main page, plugin root, document region | Plugin root와 document region만 |
+| `WKWebView._setWindowOcclusionDetectionEnabled:` | main page(`sp_window_set_main_webview`); `sp_surface_place_view`를 통한 view page | view page만(`sp_surface_place_view`); mygo host는 main web view를 등록하지 않으며, U8이 가려진 window에서도 workbench가 계속 그리게 한다 |
+| `WKWebView._webProcessIdentifier` | window facts의 `pageProcess`와 각 web view 행의 process | 각 web view 행(view page와 document region)에 대해 호출한다; mygo host는 `pageProcess`를 `null`로 보고하고 이를 위해 아무것도 호출하지 않는다 |
+| `_WKNavigationActionPolicyAllowInNewProcess`, `WKWebView._clearBackForwardCache`(main page) | main page의 각 main-frame document를 새 process에서 | 호출하지 않는다; main page가 없다 |
+| `WKNavigationDelegatePrivate` `_webView:webContentProcessDidTerminateWithReason:`(main page forwarder) | main page의 forwarder | 설치하지 않는다 |
+| `WKWebView` KVC `drawsBackground` | Tauri main page와 modal, `sp_surface_place_view`, `sp_window_facts`의 각 web view 행 읽기 | `sp_surface_place_view`와 `sp_window_facts`의 각 web view 행 읽기(view page와 document region) |
+| `WKWebViewConfiguration` KVC `drawsBackground` | wry를 통한 Tauri surface와 modal | 설정하지 않는다: mygo host는 framework를 통해 web view를 만들지 않는다 |
+| `WKProcessPool._garbageCollectJavaScriptObjectsForTesting` | `diagnostics.page.collect` | 호출하지 않는다; main page가 없다 |
+| `WKWebView._setIgnoresMouseMoveEvents:` | content view의 AppKit hit-test 결과 아래에 있는 등록된 web view로의 pointer routing | hit-test 결과는 native view element가 보이는 곳에서 pointer를 window의 native view에 넘기는 mygo surface view에서 온다(U2); call은 그대로다 |
+| `WKWebView._setOverrideDeviceScaleFactor:` | main web view의 surface container의 `updateScale` | window의 native view 안에 있는 surface host들의 container가 호출한다(N1) |
+| Framework: `+[NSCursor _windowResizeNorthWestSouthEastCursor]`, `_windowResizeNorthEastSouthWestCursor` | 현재 없음 | `frameResizeCursorFromPosition:inDirections:`가 없을 때 mygo는 대각선 resize cursor에 이를 쓴다 |
+
+mygo host는 mygo web view도 page window도 만들지 않으므로 mygo web view와 page window code의 private selector에는 닿지 않는다. `dock_menu.m`의 public Dock menu integration은 mygo host에서 등록하지 않는다: mygo application delegate가 `applicationDockMenu:`에 답하므로 등록은 실패할 것이고, Dock menu는 mygo `Dock` API에서 온다.
+
 ## 네이티브 입력 주입
 
 [`input_inject.m`](../../native/darwin/src/input_inject.m)은 애플리케이션을 활성화하지 않고 창에 포인터와 키 입력을 전달한다. 스크롤을 제외하고 다음 조건으로 공개 AppKit 호출을 사용한다.

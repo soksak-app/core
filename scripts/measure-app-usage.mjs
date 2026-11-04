@@ -1,5 +1,5 @@
 // Reports the CPU and memory of the running applications of the given data folders, by process (docs/operations/examples.md), and
-// prepares the states of the three-host benchmark B3 that it measures (docs/plans/mygo-host.md).
+// prepares the states of the three-host benchmark B3 that it measures (docs/operations/examples.md).
 // The host is the process whose command line has --config-dir DIR. The sidecars are the processes whose executable is under DIR/sidecars/.
 // The page and document processes come from sok windows and from sok status host.window of each window; a window whose host.window
 // reports pageProcess null has no main page and no page row. The WebKit GPU, networking and WebContent services belong to the application
@@ -72,7 +72,7 @@ import { applyTrace, FRAME_RECORDS, parseTrace, traceSettings } from "./measure-
 /** Executables of the tools that run this measurement; their command lines name the data folder, but they are not the application. */
 const TOOL_EXECUTABLES = new Set(["node", "sh", "bash", "zsh", "make", "sok"]);
 
-/** The states of B3 that --state prepares (docs/plans/mygo-host.md, B3). */
+/** The states of B3 that --state prepares (docs/operations/examples.md, B3). */
 export const STATES = ["S0", "S0b", "S1", "S9", "S11", "S12", "S14", "S15"];
 
 /** The content size of the window of every state of B3, in points. */
@@ -254,7 +254,7 @@ export function totalsOf(rows) {
 
 /**
  * The page and document rows of one window and the errors of its host.window reply. A window whose host.window reports pageProcess
- * null has no main page, because the mygo host draws its workbench natively (docs/plans/mygo-host.md), so it has no page row.
+ * null has no main page, because the mygo host draws its workbench natively (docs/spec/hosts.md), so it has no page row.
  */
 export function windowRows(window, configDir, status) {
   const where = `page of window ${window} of ${configDir}`;
@@ -301,7 +301,7 @@ const framesText = (frames) => frames.map(String).join(" ");
 
 /**
  * Waits until frames of host.window of every window has not changed for 3 seconds; a window whose frames is null waits the 3 seconds
- * (docs/plans/mygo-host.md, G2). frames() returns the frames of each window, and sleep(ms) waits, by default on the timer that
+ * (docs/spec/hosts.md, G2). frames() returns the frames of each window, and sleep(ms) waits, by default on the timer that
  * measureApps uses, so a caller writes no timer of its own. The host notifies host.window watchers
  * when settled changes, not at each frame, and frames counts every frame, so two readings 3 seconds apart are the rule itself.
  */

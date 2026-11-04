@@ -162,6 +162,27 @@ Inventory entries describe active or explicitly conditional application paths, n
 
 After a framework update, check whether it supplies this callback or a Dock-menu API. Verify the menu item and creation of a library window, including after closing all windows. This integration concerns application menus, not surface rendering or webview input.
 
+## mygo host
+
+Each row of the [inventory](#current-inventory) that the mygo host changes. Every other row applies to the mygo host as it applies to the other hosts, because the same `native/darwin` code makes the call.
+
+| API | Use today | mygo host |
+| --- | --- | --- |
+| `WKWebView._doAfterNextPresentationUpdate:` | Presentation of the main page before every layout commit | Not called for the workbench; U3 gives the presented frame. View root joins keep it |
+| `WKPreferences` feature `PreferPageRenderingUpdatesNear60FPSEnabled` | Main page, plugin roots, document regions | Plugin roots and document regions only |
+| `WKWebView._setWindowOcclusionDetectionEnabled:` | The main page (`sp_window_set_main_webview`); view pages through `sp_surface_place_view` | View pages only (`sp_surface_place_view`); the mygo host registers no main web view, and U8 keeps the workbench drawing in an occluded window |
+| `WKWebView._webProcessIdentifier` | `pageProcess` of the window facts and the process of each web view row | Called for each web view row (view pages and document regions); the mygo host reports `pageProcess` `null` and calls nothing for it |
+| `_WKNavigationActionPolicyAllowInNewProcess`, `WKWebView._clearBackForwardCache` (main page) | Each main-frame document of the main page in a new process | Not called; no main page |
+| `WKNavigationDelegatePrivate` `_webView:webContentProcessDidTerminateWithReason:` (main page forwarder) | The forwarder of the main page | Not installed |
+| `WKWebView` KVC `drawsBackground` | Tauri main page and modals, `sp_surface_place_view`, and the read of each web view row of `sp_window_facts` | `sp_surface_place_view` and the read of each web view row of `sp_window_facts` (view pages and document regions) |
+| `WKWebViewConfiguration` KVC `drawsBackground` | Tauri surfaces and modals through wry | Not set: the mygo host creates no web view through the framework |
+| `WKProcessPool._garbageCollectJavaScriptObjectsForTesting` | `diagnostics.page.collect` | Not called; no main page |
+| `WKWebView._setIgnoresMouseMoveEvents:` | Pointer routing to the registered web view under the AppKit hit-test result of the content view | The hit-test result comes from the mygo surface view, which passes the pointer to the native view of the window where a native view element shows (U2); the call is unchanged |
+| `WKWebView._setOverrideDeviceScaleFactor:` | `updateScale` of the surface container of the main web view | Called by the container of the surface hosts in the native view of the window (N1) |
+| Framework: `+[NSCursor _windowResizeNorthWestSouthEastCursor]`, `_windowResizeNorthEastSouthWestCursor` | None today | mygo uses them for the diagonal resize cursors when `frameResizeCursorFromPosition:inDirections:` is absent |
+
+The private selectors of the mygo web view and page window code are not reached, because the mygo host makes no mygo web view and no page window. The public Dock menu integration of `dock_menu.m` is not registered on the mygo host: the mygo application delegate answers `applicationDockMenu:`, so the registration would fail, and the Dock menu comes from the mygo `Dock` API.
+
 ## Native input injection
 
 [`input_inject.m`](../../native/darwin/src/input_inject.m) delivers pointer and key input to an application window without activating the application. It uses public AppKit calls, except for scroll, with these conditions:

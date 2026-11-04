@@ -5,6 +5,7 @@
 ## 미배포
 
 - F435: load average 12~28에서 잰 F444 뒤 view benchmark를 기록하고, 1회 발생한 card 위치 실패를 재현되지 않음으로 닫는다.
+- F502-5: host 명세가 mygo host, 그 비용, tag v0.7.4 기준의 framework 사실, framework 변경, 결정을 기술하고, F502의 이후 각 item이 자기 contract를 입력, 기대, Red, Green과 함께 checklist에 기술하며, 제안서는 제거된다.
 - F520: `make -C native/darwin benchmark-site-cost [RUNS=<count>]`는 트리를 쉬지 않고 바꾸는 page를 포함한 정해진 목록의 각 사이트를 문서 영역에서 재고, 사이트별로 탭이 없는 baseline 대비 content, GPU, network process의 메모리, 쉴 때와 background일 때의 CPU, 로딩 시간, 입력 지연을 적어도 다섯 번 실행의 median과 interquartile range로 보고한다.
 - F502-4: `sp_surface_create`가 받은 `NSView`에 surface host의 container를 만들고, `sp_window_set_main_webview`가 Wails와 Tauri host가 넘기는 window composition을 반환하며, `sp_window_facts`와 `sp_window_hit`가 그 view를 받고, `surfaceLayoutObserve`가 layout transaction의 시작과 끝을 알리고, `surfaceLayoutAfterSettled`가 window와 presentation block을 받는다. U2가 남았다.
 - F508: `make docs-check`가 `scripts/check-private-apis.mjs`를 실행한다. 이 검사는 `native/darwin/src/private/`와 `launch_services.h`의 private 선언을 읽고, 선언된 API를 쓰는 소스가 없을 때, 선언된 API에 private native API inventory의 행이 없을 때, API를 쓰는 `native/darwin`이나 host의 소스를 그 API를 이름한 행이 link하지 않을 때, link된 소스가 그 행의 API를 쓰지 않을 때, 호출 위치 열이 이름한 function, method, class가 그 행이 link한 파일에 정의되지 않았을 때 실패한다. inventory는 이름하지 않던 선언 34개를 이름하고 API를 쓰는 native test와 helper를 link하며, 정의되지 않은 `sp_plugin_host_create`를 밝히던 행은 scale factor 행에 합쳤다. 쓰이지 않는 enum 값 `kWKCacheModelDocumentViewer`를 지웠고, `malloc_logger`의 선언을 test에서 private header `malloc.h`로 옮겼다.
@@ -33,7 +34,7 @@
 - F500: view page는 메인 페이지처럼 가려진 window에서도 document를 visible로 유지하고 animation frame을 계속 실행한다.
 - F505: native library가 object, test, ZXing을 arm64로 빌드하고, ZXing을 빌드할 때마다 새 build folder에서 configure한다.
 - F501: host parity 검사가 각 host의 diagnostic method를 endpoint 명세의 진단 빌드 표와 비교하고, 그 표가 이제 `diagnostics.presentation.failure`를 밝힌다.
-- F502-1: `docs/plans/mygo-host.md`가 workbench를 native UI로 그리는 framework mygo 위의 세 번째 host를 그 목표, 세 host benchmark B3, framework 변경, 결정, 구현 item F502-2부터 F502-27-1까지와 함께 제안한다.
+- F502-1: 제안서가 workbench를 native UI로 그리는 framework mygo 위의 세 번째 host를 그 목표, 세 host benchmark B3, framework 변경, 결정, 구현 item F502-2부터 F502-27-1까지와 함께 제안한다.
 - F503: native surfaces 명세의 platform scope가 Wails host가 pin하는 Wails v3 fork와 그 변경을 밝히고, `go.mod` replacement의 주석이 main thread 변경을 밝힌다.
 - F444: Surface synchronization request는 host가 쥐고 있지 않은 view start 값만 전달하고, host는 마지막으로 받은 값을 보관한다. Page와 두 host에서 Red와 Green을 확인했다. Input tick부터 transaction까지의 시간은 Wails에서 7.2 ms에서 3.1 ms로, Tauri에서 4.6 ms에서 2.4 ms로 줄었다.
 - F443: view drag floor를 넘는 Wails host 경로를 열린 항목으로 기록한다. 한 turn 응답은 측정 결과 채택하지 않았다.

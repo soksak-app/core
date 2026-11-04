@@ -28,6 +28,7 @@ Plugin view의 WebContent process는 `soksak://plugin/<plugin id>` 표시 이름
 - **view:** plugin의 모든 화면은 view다. 탭 표면 또는 section 표면이다. view는 자유 DOM, framework나 library, IME가 필요한 글 입력, canvas나 편집기, document region 또는 image region을 담는다.
 - **sidebar section:** sidebar section은 [section 표면](plugins.ko.md#섹션)이다. 사이드바가 section의 본문에 배치하는 자기 plugin의 view이며, core는 사이드바의 틀만 그린다. 자기 plugin의 탭이 하나도 열려 있지 않은 동안 값을 보여야 하는 section은 자기 view에서 그 값을 읽는다. 값은 자기 plugin의 sidecar와 프로젝트 데이터에서 온다.
 - **exposure:** 모든 view는 exposure 계약만 요구한다. 모든 조작 요소는 공유 binder로 선언된 명령에 연결되고 dom 이름을 가지며, 보이는 모든 상태는 선언된 status다([exposure](exposure.ko.md)).
+- **terminal surface:** `term` plugin은 mygo host를 포함한 모든 host에서 image region 하나(`input: "dom"`)를 가진 view composition을 유지한다. view page가 terminal의 화면 상태, 입력, exposure를 소유하기 때문이다.
 - 화면의 층은 측정으로 정하지 않는다.
 
 ## 통과값

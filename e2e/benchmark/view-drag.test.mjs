@@ -1,4 +1,4 @@
-// The view drag benchmark of B3 (docs/plans/mygo-host.md, S5 and S16; cases/view-drag.mjs holds the order of its steps). It prepares
+// The view drag benchmark of B3 (docs/operations/examples.md, S5 and S16; cases/view-drag.mjs holds the order of its steps). It prepares
 // the layout of the terminal drag on the terminal view of the fixture, or with SOKSAK_FLOOR=1 on the view of the floor page
 // (cases/floor-page.mjs), and runs under that layout a drag without capture through `diagnostics.drag` with `native: true`, the captured
 // drag, which meets the performance targets with the performance and renderer traces off, and, after `frames` of host.window has not

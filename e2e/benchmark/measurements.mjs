@@ -1,4 +1,4 @@
-// The keys of the B3 output of each e2e benchmark (docs/plans/mygo-host.md, B3), by the name of its file. A benchmark run with
+// The keys of the B3 output of each e2e benchmark (docs/operations/examples.md, B3), by the name of its file. A benchmark run with
 // SOKSAK_B3_OUT writes a subset of its keys to the output through scripts/b3-out.mjs. One output holds the keys of the interval that was
 // measured in one state, so the view drag, which measures in the trace state 0 and in the trace state of the frame records (FRAME_RECORDS
 // of scripts/measure-trace.mjs), and the resize catch-up, which measures its captured gestures in the state `captured` and its gestures

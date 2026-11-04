@@ -71,7 +71,7 @@ host-calls:
 # (scripts/measure-app-usage.mjs, docs/operations/examples.md). TRACE=0 sets the trace off under the default log policy and TRACE=1 the trace
 # on with the class frame at debug before the measurement; TRACE=frame-records, which needs STEP=pointer, sets the trace state of the frame
 # records (scripts/measure-trace.mjs) for both moves of the pointer step. STATE prepares a state of the three-host benchmark B3 in a window of 1200 by 760
-# points through declared commands (docs/plans/mygo-host.md); IDLE=1 then waits for the cursor idle timeout of every term and terminal tab
+# points through declared commands (docs/operations/examples.md); IDLE=1 then waits for the cursor idle timeout of every term and terminal tab
 # and for 3 seconds without a change of frames of host.window; STEP=pointer measures a pointer move across the window with the HID moves of
 # e2e/real/hid.mjs, which needs the Accessibility permission and brings the window to the front. B3_OUT writes the B3 record of the
 # measurement, its measurements and its conditions, to that file as JSON; one record holds the keys of one trace state, so with STEP=pointer

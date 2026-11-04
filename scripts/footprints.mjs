@@ -1,5 +1,5 @@
 // The footprint readings of the measurement targets: the phys_footprint and the phys_footprint_peak of a process that
-// `footprint -p PID -f bytes` prints, and the settle rule of G3 (docs/plans/mygo-host.md): a footprint is read after two consecutive
+// `footprint -p PID -f bytes` prints, and the settle rule of G3 (docs/spec/hosts.md): a footprint is read after two consecutive
 // readings of every process 5 seconds apart differ by less than 1,024 KB, and at least 3 seconds after the last frame of every window
 // whose host.window counts its frames. `make app-usage` and `make host-allocations` read their footprints through this module.
 

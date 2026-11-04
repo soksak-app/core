@@ -1,10 +1,10 @@
-// The reader of the U7 records of the mygo host (docs/plans/mygo-host.md, the U7 row): the frame and step records of one gesture in
+// The reader of the U7 records of the mygo host (docs/spec/hosts.md, the U7 row): the frame and step records of one gesture in
 // the event log, the check that the gesture lost none of them, and the times that G8 bounds. The times of a record are canonical decimal
 // nanoseconds of the host event clock, the clock and the units of host.frame.surface.dispatch; every time that this module returns is in
 // milliseconds. `make app-usage STEP=pointer` and the e2e benchmarks of G8 read their records through this module.
 
 /**
- * The events of the U7 records, as the U7 row of docs/plans/mygo-host.md names them, all of the class frame at the level debug:
+ * The events of the U7 records, as the U7 row of docs/spec/hosts.md names them, all of the class frame at the level debug:
  * `frame`, one for each frame {window, start_ns, request_ns (null when the frame requested no presentation), end_ns, damage, nodes,
  * drawable_wait_ns, outcome, command_buffer, asks_frame, animates, repaints, timer}; `commit`, one for each command buffer committed
  * outside a frame {window, kind, commit_ns}; and `step`, one for each step of U1 {window, kind, callback, entry_ns, return_ns, forwarded,
