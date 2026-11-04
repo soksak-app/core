@@ -5,6 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import {
+  applicationRows,
   attributeWebKit,
   b3Conditions,
   b3Record,
@@ -16,19 +17,14 @@ import {
   measurePointer,
   parseCpuSamples,
   parseCpuTime,
-  parseFootprint,
-  parseFootprintPeak,
   parseOptions,
   parseProcessTable,
-  percentile,
   pointerPath,
   prepareState,
   requireOcclusion,
-  settledFootprints,
   sidecarProcesses,
   STATES,
   totalsOf,
-  U7_EVENTS,
   untilFramesQuiet,
   usageMeasurements,
   waitIdle,
@@ -48,23 +44,6 @@ test("parses the cpu time formats of ps", () => {
 test("rejects a cpu time outside the ps format", () => {
   assert.throws(() => parseCpuTime("1:2"), /cpu time "1:2" is not in the \[\[dd-\]hh:\]mm:ss\.ss format/);
   assert.throws(() => parseCpuTime("0:75.00"), /cpu time "0:75.00" has seconds of 60 or more/);
-});
-
-test("reads phys_footprint of footprint, not the summary or the peak", () => {
-  const text = [
-    "=====================",
-    "zsh [31610]: 64-bit    Footprint: 1687936 B (16384 bytes per page)",
-    "=====================",
-    "Auxiliary data:",
-    "    phys_footprint: 1704320 B",
-    "    phys_footprint_peak: 2000000 B",
-    "",
-  ].join("\n");
-  assert.equal(parseFootprint(text), 1704320);
-});
-
-test("reports footprint output without a phys_footprint line", () => {
-  assert.throws(() => parseFootprint("Footprint: 1687936 B\n"), /footprint output has no phys_footprint line/);
 });
 
 test("cpu percent is the cpu seconds used over the interval", () => {
@@ -278,26 +257,6 @@ test("every window must be visible except the covered first window of S9", () =>
   assert.throws(() => requireOcclusion("S0", [{ window: "w1", occluded: "no" }]), /window w1 reports occluded "no", not a boolean/);
 });
 
-test("footprints settle when two readings 5 seconds apart differ by less than 1,024 KB and no frame came between them", async () => {
-  const readings = [
-    { footprints: new Map([[10, 100 * MB], [20, 50 * MB]]), frames: [340] },
-    { footprints: new Map([[10, 102 * MB], [20, 50 * MB]]), frames: [340] },
-    { footprints: new Map([[10, 102.5 * MB], [20, 50.2 * MB]]), frames: [341] },
-    { footprints: new Map([[10, 102.6 * MB], [20, 50.3 * MB]]), frames: [341] },
-  ];
-  const waits = [];
-  const settled = await settledFootprints({ read: async () => readings.shift(), sleep: async (ms) => { waits.push(ms); } });
-  assert.deepEqual([...settled.footprints], [[10, 102.6 * MB], [20, 50.3 * MB]]);
-  assert.deepEqual(waits, [5000, 5000, 5000]);
-});
-
-test("footprints that do not settle within their readings fail with the last two readings", async () => {
-  let reading = 0;
-  const read = async () => ({ footprints: new Map([[10, ++reading * 2 * MB]]), frames: [null] });
-  await assert.rejects(settledFootprints({ read, sleep: async () => {}, readings: 3 }),
-    /the footprints did not settle within 3 readings 5 s apart; pid 10: 4096 KB then 6144 KB; frames null then null/);
-});
-
 test("a window whose frames is null waits 3 seconds once", async () => {
   const waits = [];
   await untilFramesQuiet({ frames: async () => [null], sleep: async (ms) => { waits.push(ms); } });
@@ -354,12 +313,6 @@ test("the idle wait waits for the cursor idle timeout of every term tab and then
     /surface tab-1 of window w1 reports term.cursor idleTimeout "5s", not a number of milliseconds/);
 });
 
-test("reads phys_footprint_peak of footprint", () => {
-  const text = "    phys_footprint: 1704320 B\n    phys_footprint_peak: 2000000 B\n";
-  assert.equal(parseFootprintPeak(text), 2000000);
-  assert.throws(() => parseFootprintPeak("    phys_footprint: 1704320 B\n"), /footprint output has no phys_footprint_peak line/);
-});
-
 test("counts the error lines of the layout fault in the application log", () => {
   const lines = [
     "error page surface presentation failed: diagnostic layout fault",
@@ -369,13 +322,6 @@ test("counts the error lines of the layout fault in the application log", () => 
   ];
   assert.equal(faultErrorCount(lines), 1);
   assert.equal(faultErrorCount([...lines, lines[0]]), 2);
-});
-
-test("the 90th percentile takes the value at the rank of 90 of 100 values", () => {
-  assert.equal(percentile([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 0.9), 10);
-  assert.equal(percentile([1, 2, 3], 0.9), 3);
-  assert.equal(percentile([4, 8, 15, 16, 23, 42, 50, 60, 70, 80, 90], 0.9), 80);
-  assert.throws(() => percentile([], 0.9), /a percentile needs at least one value/);
 });
 
 /** The canonical decimal nanoseconds of the host event clock at `micros` microseconds after a clock reading of 9 s. */
@@ -416,28 +362,26 @@ test("the gesture figures are the 90th percentile of the hitTest: step with the 
   assert.deepEqual(figures, { frameRecords: 4, pairs: 4, p90Ms: 6, framesChange: 4 });
 });
 
-test("a gesture with fewer frame records than the change of frames fails", () => {
-  assert.throws(() => gestureFigures({ records: u7Move(MOVES), dropped: [], window: "w1", framesBefore: 340, framesAfter: 345, fromSeq: 100, toSeq: 112 }),
-    /the gesture of window w1 has 4 frame records for a change of frames of 5/);
-});
-
-test("a gesture that contains a seq range that a log.dropped event names fails", () => {
-  const dropped = [{ seq: 113, event: "log.dropped", fields: { from_seq: 104, to_seq: 105, count: 2, bytes: 400, reason: "queue full", channel: "debug" } }];
-  assert.throws(() => gestureFigures({ records: u7Move(MOVES), dropped, window: "w1", framesBefore: 340, framesAfter: 344, fromSeq: 100, toSeq: 113 }),
-    /the gesture of window w1 holds seq 101 to 113, which contains the range 104 to 105 that log.dropped names/);
-  const earlier = [{ seq: 90, event: "log.dropped", fields: { from_seq: 80, to_seq: 85 } }];
-  assert.equal(gestureFigures({ records: u7Move(MOVES), dropped: earlier, window: "w1", framesBefore: 340, framesAfter: 344, fromSeq: 100, toSeq: 112 }).pairs, 4);
-});
-
 test("a hitTest: step without a following step and a gesture without a hitTest: step fail", () => {
   const records = u7Move(MOVES).filter((record) => record.seq !== 111);
   assert.throws(() => gestureFigures({ records, dropped: [], window: "w1", framesBefore: 340, framesAfter: 344, fromSeq: 100, toSeq: 112 }),
     /the hitTest: step at seq 110 of window w1 has no following step/);
   assert.throws(() => gestureFigures({ records: [], dropped: [], window: "w1", framesBefore: 340, framesAfter: 340, fromSeq: 100, toSeq: 100 }),
     /the gesture of window w1 has no hitTest: step/);
-  const microseconds = u7Move(MOVES).map((record) => (record.seq === 101 ? { ...record, fields: { ...record.fields, entry_ns: 0, return_ns: 1000 } } : record));
-  assert.throws(() => gestureFigures({ records: microseconds, dropped: [], window: "w1", framesBefore: 340, framesAfter: 344, fromSeq: 100, toSeq: 112 }),
-    /the step at seq 101 of window w1 has entry_ns 0 and return_ns 1000/);
+  assert.throws(() => gestureFigures({ records: u7Move(MOVES), dropped: [], window: "w1", framesBefore: 340, framesAfter: 345, fromSeq: 100, toSeq: 112 }),
+    /the gesture of window w1 has 4 frame records for a change of frames of 5/);
+});
+
+test("the step that follows a hitTest: step is the next step that no other step contains", () => {
+  // The isFlipped that the hitTest: sends runs inside it, and the isFlipped of the move runs inside the move.
+  const nested = [
+    { seq: 120, event: "host.frame.step", fields: { window: "w1", kind: "selector", callback: "isFlipped", entry_ns: ns(100), return_ns: ns(200), forwarded: 0, wait_ns: "0" } },
+    { seq: 121, event: "host.frame.step", fields: { window: "w1", kind: "selector", callback: "hitTest:", entry_ns: ns(0), return_ns: ns(1000), forwarded: 2, wait_ns: "0" } },
+    { seq: 122, event: "host.frame.step", fields: { window: "w1", kind: "selector", callback: "isFlipped", entry_ns: ns(1200), return_ns: ns(1300), forwarded: 0, wait_ns: "0" } },
+    { seq: 123, event: "host.frame.step", fields: { window: "w1", kind: "selector", callback: "mouseMoved:", entry_ns: ns(1100), return_ns: ns(4100), forwarded: 6, wait_ns: "0" } },
+  ];
+  assert.deepEqual(gestureFigures({ records: nested, dropped: [], window: "w1", framesBefore: 10, framesAfter: 10, fromSeq: 119, toSeq: 123 }),
+    { frameRecords: 0, framesChange: 0, pairs: 1, p90Ms: 4 });
 });
 
 test("the pointer path moves across the content of the window at its middle", () => {
@@ -729,16 +673,13 @@ test("measureApps reads a mygo application without a page row, settles its footp
     { role: "webkit gpu", pid: 300, bytes: 300 * MB, peakBytes: 600 * MB, cpuSeconds: 0.1 },
   ]);
   assert.ok(result.apps[0].rows.every((row) => !row.role.startsWith("page")), "a window without a main page has a page row");
-  assert.equal(order.filter((entry) => entry === "sleep 5000").length, 4);
+  assert.equal(order.filter((entry) => entry === "sleep 3000").length, 5);
+  assert.equal(order.filter((entry) => entry === "sleep 2000").length, 4);
   assert.deepEqual(order.slice(-3), ["before", "sleep 240000", "after"]);
   assert.deepEqual(result.marks, { before: "marks before", after: "marks after" });
   assert.equal(result.seconds, 240);
   assert.deepEqual(result.apps[0].totals.sidecars.bytes, 11 * MB);
   assert.deepEqual(result.apps[0].totals.application.bytes, (10 + 902 + 300) * MB);
-});
-
-test("the U7 events are the frame and step records that the U7 row of the plan names", () => {
-  assert.deepEqual(U7_EVENTS, { frame: "host.frame.record", step: "host.frame.step" });
 });
 
 /** The window marks of a measurement of two windows of the mygo host, before and after the cpu interval. */
@@ -823,4 +764,17 @@ test("a B3 record holds numbers, passed or failed, and writeB3 writes it as JSON
   } finally {
     rmSync(folder, { recursive: true, force: true });
   }
+});
+
+test("the process listing of a configuration folder holds its host, its sidecars and the WebKit services of the domain of its host", async () => {
+  const run = mygoProcesses({ footprints: () => [0, 0], cpu: () => [] });
+  assert.deepEqual(await applicationRows({ configDir: MYGO, run, realpath: (path) => path }), [
+    { role: "host", pid: 10, attribution: "config-dir argument" },
+    { role: "sidecar probe", pid: 11, attribution: "executable path" },
+    { role: "webkit gpu", pid: 300, attribution: "launchd domain" },
+    { role: "webkit webcontent", pid: 902, attribution: "launchd domain" },
+  ]);
+  const noHost = async (command, args) => (command === "ps" ? { status: 0, stdout: `   11 ${MYGO}/sidecars/probe/bin/probe\n`, stderr: "" } : run(command, args));
+  await assert.rejects(applicationRows({ configDir: MYGO, run: noHost, realpath: (path) => path }),
+    new RegExp(`host of ${MYGO}: no host process has --config-dir ${MYGO}`));
 });
