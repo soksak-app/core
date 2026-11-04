@@ -336,6 +336,13 @@ test("HWP layout judges absent document text only after the full content deadlin
   assert.ok(recognized > 0, "a complete recording with absent text must reach captured-pixel OCR");
 });
 
+test("HWP first-display limit is the DOM mount baseline of the host plus the first-display margin", () => {
+  assert.equal(hwpCase.hwpFirstDisplayLimitMs("wailsv3"), 1001);
+  assert.equal(hwpCase.hwpFirstDisplayLimitMs("tauriv2"), 1113);
+  assert.equal(hwpCase.hwpFirstDisplayLimitMs("mygo"), 1001);
+  assert.throws(() => hwpCase.hwpFirstDisplayLimitMs("other"), /DOM mount baseline host: expected wailsv3, tauriv2 or mygo, found "other"/);
+});
+
 test("HWP descriptor waits for its declared document status exposure", { timeout: 5000 }, async (t) => {
   const root = mkdtempSync(join(tmpdir(), "hwp-view-readiness-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));

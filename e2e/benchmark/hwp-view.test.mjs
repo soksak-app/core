@@ -7,7 +7,7 @@ import { APPS, open } from "@soksak/window-check/app.mjs";
 import { evaluateReclaim, runViewMeasurements } from "@soksak/window-check/view-metrics.mjs";
 import { fresh } from "../fixture.mjs";
 import { openRecordedView, viewCardWithDifferentPluginTab } from "../view-metrics-collection.mjs";
-import { collectHwpReclaimAfterMotion, collectHwpViewMeasurements, hwpViewDescriptor,
+import { collectHwpReclaimAfterMotion, collectHwpViewMeasurements, hwpFirstDisplayLimitMs, hwpViewDescriptor,
   HWP_VIEW_BASELINES_MS } from "./cases/hwp.mjs";
 
 for (const app of Object.values(APPS)) {
@@ -26,7 +26,7 @@ for (const app of Object.values(APPS)) {
       const result = await runViewMeasurements(t, s, {
         plugin: "hwp",
         baselinesMs: HWP_VIEW_BASELINES_MS,
-        collect: async () => collectHwpViewMeasurements(t, s, { baselineMs: HWP_VIEW_BASELINES_MS[app.name] }),
+        collect: async () => collectHwpViewMeasurements(t, s),
       });
       const directory = join(app.configDir, "logs", "hwp-view-metrics");
       mkdirSync(directory, { recursive: true });
@@ -50,7 +50,7 @@ for (const app of Object.values(APPS)) {
         ],
       });
       const descriptor = await hwpViewDescriptor(s, (message) => t.diagnostic(message),
-        HWP_VIEW_BASELINES_MS[app.name] + 300);
+        hwpFirstDisplayLimitMs(app.name));
       const grid = await s.get("core.grid");
       const activeCard = grid.cards.find((item) => item.active);
       const card = viewCardWithDifferentPluginTab(grid, descriptor.plugin, activeCard?.id);

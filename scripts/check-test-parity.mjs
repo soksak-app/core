@@ -281,6 +281,30 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F502-2-2",
+    implementation: [
+      { file: "packages/window-check/app.mjs", symbol: "export function requiredApps(env) {" },
+      { file: "packages/window-check/app.mjs", symbol: "export function requiresBoth(env) {" },
+      { file: "packages/window-check/app.mjs", symbol: "export function windowPosition(name, area, frame) {" },
+      { file: "packages/window-check/view-metrics.mjs", symbol: "export function domMountBaselineMs(host, recordedMs) {" },
+      { file: "e2e/benchmark/cases/hwp.mjs", symbol: "export function hwpFirstDisplayLimitMs(host) {" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/required-apps.test.mjs", id: "requiredApps accepts mygo as SOKSAK_APP and keeps it out of the set without SOKSAK_APP" },
+      { file: "packages/window-check/test/required-apps.test.mjs", id: "requiresBoth is true only when the required set holds both applications" },
+      { file: "packages/window-check/test/window-position.test.mjs", id: "windowPosition gives each of the three applications its own position inside the visible area" },
+      { file: "packages/window-check/test/window-position.test.mjs", id: "windowPosition centres mygo on whole points in an area of odd remaining width" },
+      { file: "packages/window-check/test/window-position.test.mjs", id: "windowPosition rejects an application that has no window position" },
+      { file: "packages/window-check/test/view-metrics.test.mjs", id: "domMountBaselineMs gives each recorded host its value and mygo the lower of the two" },
+      { file: "packages/window-check/test/view-metrics.test.mjs", id: "domMountBaselineMs gives every host 0 for a plugin without a recorded value" },
+      { file: "packages/window-check/test/view-metrics.test.mjs", id: "domMountBaselineMs rejects an unknown host and a record that is not one value per recorded host" },
+      { file: "packages/window-check/test/view-metrics.test.mjs", id: "view metric runner evaluates the mygo host with the lower of the recorded baselines" },
+      { file: "e2e/test/hwp-view-metrics-case.test.mjs", id: "HWP first-display limit is the DOM mount baseline of the host plus the first-display margin" },
+    ],
+    expected: "SOKSAK_APP=mygo selects the mygo application while the set without SOKSAK_APP stays wailsv3 and tauriv2, requiresBoth names wailsv3 and tauriv2, the three applications have three window positions in the visible area, and one function gives the DOM mount baseline of each host, the lower recorded value for mygo.",
+    levels: ["unit"],
+  },
+  {
     id: "F511",
     implementation: [
       { file: "packages/host/tauriv2/src/documents.rs", symbol: "pub fn attach(&self, key: &Key) -> Result<Vec<StreamEffect>, String> {" },

@@ -27,23 +27,29 @@ const declared = (name) => {
   return path;
 };
 
-const APP_NAMES = ["wailsv3", "tauriv2"];
+// The applications that SOKSAK_APP may name, and the set that a session covers when SOKSAK_APP is unset. The mygo
+// application is not built yet (F502-24), so the default set holds only the Wails and the Tauri application.
+const APP_NAMES = ["wailsv3", "tauriv2", "mygo"];
+const DEFAULT_APPS = ["wailsv3", "tauriv2"];
 
 /**
- * The applications that a window session covers. SOKSAK_APP names one application; when it is unset, the session covers
- * every application. An application of the set whose executable is missing fails the check (open), and an application
- * outside the set is not opened.
+ * The applications that a window session covers. SOKSAK_APP names one application of APP_NAMES; when it is unset, the
+ * session covers DEFAULT_APPS. An application of the set whose executable is missing fails the check (open), and an
+ * application outside the set is not opened.
  */
 export function requiredApps(env) {
-  if (!env.SOKSAK_APP) return [...APP_NAMES];
+  if (!env.SOKSAK_APP) return [...DEFAULT_APPS];
   if (!APP_NAMES.includes(env.SOKSAK_APP)) throw new Error(`unknown SOKSAK_APP: ${env.SOKSAK_APP}`);
   return [env.SOKSAK_APP];
 }
 
-/** Whether the required set holds both applications, so that a check of both hosts is part of the session. */
+/**
+ * Whether the required set holds both the wailsv3 and the tauriv2 application, so that a check that compares these two
+ * hosts is part of the session.
+ */
 export function requiresBoth(env) {
   const names = requiredApps(env);
-  return APP_NAMES.every((name) => names.includes(name));
+  return names.includes("wailsv3") && names.includes("tauriv2");
 }
 
 /** The applications to check: the executable and the configuration folder. */
@@ -994,19 +1000,31 @@ export async function keepCommonSettings(s) {
 }
 
 /**
- * The window position that is fixed for each check application. The first application sits at the upper left of the
- * work area of the main screen and the second at the upper right. The window position of a check therefore does not
- * depend on the position that an earlier check moved it to. When the work area is narrower than the sum of two window
- * widths, the middle overlaps. Two windows at the same position do not hide each other completely (the shadow of the
- * window is visible, V5-86), and a window of another application can cover a check window regardless of this position.
- * Moving a window does not activate the application.
+ * The window position that is fixed for each check application, in the visible work area `area` of the main screen,
+ * for a window of the frame `frame`. All three sit at the top edge of the area: wailsv3 at the left edge, tauriv2 at the
+ * right edge and mygo horizontally centred, at `area.x + floor((area.width - frame.width) / 2)`. The centre differs from
+ * both edge positions whenever the window is narrower than the area, and it keeps the window inside the area as the two
+ * edge positions do; it is rounded down so that, like the edge positions of an area and a frame in whole points, it is
+ * a whole point. The window position of a check therefore does not depend on the position that an earlier check moved
+ * it to. When the work area is narrower than the sum of two window widths, the windows overlap. Two
+ * windows at the same position do not hide each other completely (the shadow of the window is visible, V5-86), and a
+ * window of another application can cover a check window regardless of this position.
  */
+export function windowPosition(name, area, frame) {
+  const left = {
+    wailsv3: area.x,
+    tauriv2: area.x + area.width - frame.width,
+    mygo: area.x + Math.floor((area.width - frame.width) / 2),
+  };
+  if (!Object.hasOwn(left, name)) throw new Error(`windowPosition: unknown application ${name}`);
+  return { x: left[name], y: area.y };
+}
+
+/** Moves the window of the session to its windowPosition. Moving a window does not activate the application. */
 async function place(s) {
   const [screen] = await s.get("host.screens");
-  const area = screen.visible;
   const { frame } = await s.get("host.window");
-  const x = ["wailsv3", "tauriv2"].indexOf(s.app.name) === 0 ? area.x : area.x + area.width - frame.width;
-  const y = area.y;
+  const { x, y } = windowPosition(s.app.name, screen.visible, frame);
   if (frame.x === x && frame.y === y) return;
   await s.run("host.window.move", { x, y });
   await s.until("host.window", (w) => w.frame.x === x && w.frame.y === y, `the window did not move to its check frame ${x},${y}`);

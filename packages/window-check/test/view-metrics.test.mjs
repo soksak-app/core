@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
-import { assertViewMeasurements, runViewMeasurements } from "../view-metrics.mjs";
+import { assertViewMeasurements, domMountBaselineMs, runViewMeasurements } from "../view-metrics.mjs";
 
 const options = { plugin: "fixture-view", host: "wailsv3", baselineMs: 10 };
 
@@ -798,6 +798,38 @@ test("view metric runner selects the host baseline and writes raw measurements a
   assert.deepEqual(JSON.parse(readFileSync(join(directory, "measurements.json"), "utf8")), raw);
   assert.deepEqual(JSON.parse(readFileSync(join(directory, "evaluation.json"), "utf8")), report.evaluation);
   assert.deepEqual(readdirSync(directory).sort(), ["evaluation.json", "measurements.json"]);
+});
+
+test("domMountBaselineMs gives each recorded host its value and mygo the lower of the two", () => {
+  for (const recorded of [{ wailsv3: 13, tauriv2: 22 }, { wailsv3: 35, tauriv2: 13 }, { wailsv3: 17, tauriv2: 17 }]) {
+    assert.equal(domMountBaselineMs("wailsv3", recorded), recorded.wailsv3);
+    assert.equal(domMountBaselineMs("tauriv2", recorded), recorded.tauriv2);
+    assert.equal(domMountBaselineMs("mygo", recorded), Math.min(recorded.wailsv3, recorded.tauriv2));
+  }
+});
+
+test("domMountBaselineMs gives every host 0 for a plugin without a recorded value", () => {
+  for (const host of ["wailsv3", "tauriv2", "mygo"]) assert.equal(domMountBaselineMs(host, null), 0);
+});
+
+test("domMountBaselineMs rejects an unknown host and a record that is not one value per recorded host", () => {
+  assert.throws(() => domMountBaselineMs("other", { wailsv3: 13, tauriv2: 22 }), /DOM mount baseline host: expected wailsv3, tauriv2 or mygo, found "other"/);
+  assert.throws(() => domMountBaselineMs("wailsv3", { wailsv3: 13 }), /DOM mount baseline recordedMs\.tauriv2: expected a finite number >= 0, found undefined/);
+  assert.throws(() => domMountBaselineMs("mygo", { wailsv3: 13, tauriv2: 22, mygo: 9 }),
+    /DOM mount baseline recordedMs: expected the keys wailsv3 and tauriv2, found \["wailsv3","tauriv2","mygo"\]/);
+  assert.throws(() => domMountBaselineMs("wailsv3", undefined), /DOM mount baseline recordedMs: expected an object or null, found undefined/);
+});
+
+test("view metric runner evaluates the mygo host with the lower of the recorded baselines", { timeout: 1000 }, async (t) => {
+  const report = await runViewMeasurements({ diagnostic() {} }, {
+    app: { name: "mygo", configDir: configDir(t) },
+  }, {
+    plugin: "fixture-view",
+    baselinesMs: { wailsv3: 30, tauriv2: 20 },
+    collect: async () => ({ ...metrics(), host: "mygo" }),
+  });
+  assert.equal(report.evaluation.host, "mygo");
+  assert.equal(report.evaluation.baselineMs, 20);
 });
 
 test("view metric runner retains raw measurements and an error artifact when evaluation fails", { timeout: 1000 }, async (t) => {

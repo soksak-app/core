@@ -12,7 +12,7 @@ import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { openRecordedView, viewCardWithDifferentPluginTab } from "./view-metrics-collection.mjs";
 import { openHwp, studio } from "./hwp-support.mjs";
-import { hwpViewDescriptor, HWP_VIEW_BASELINES_MS } from "./benchmark/cases/hwp.mjs";
+import { hwpFirstDisplayLimitMs, hwpViewDescriptor } from "./benchmark/cases/hwp.mjs";
 import { collectHwpStartupResourceEvidence } from "./hwp-startup.mjs";
 
 for (const app of Object.values(APPS)) {
@@ -52,7 +52,7 @@ for (const app of Object.values(APPS)) {
         ],
       });
       descriptor = await hwpViewDescriptor(s, (message) => t.diagnostic(message),
-        HWP_VIEW_BASELINES_MS[app.name] + 300);
+        hwpFirstDisplayLimitMs(app.name));
       assert.ok(descriptor.params?.path, "HWP resource timing fixture has no document path");
       const grid = await s.get("core.grid");
       const card = viewCardWithDifferentPluginTab(grid, "hwp", grid.cards.find((item) => item.active)?.id);

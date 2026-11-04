@@ -5,7 +5,7 @@ import { isAbsolute, join } from "node:path";
 const TOTAL_MARGIN_BYTES = 10_000_000;
 const RECLAIM_FRACTION = 0.9;
 const RECLAIM_LIMIT_MS = 10_000;
-const FIRST_DISPLAY_MARGIN_MS = 300;
+export const FIRST_DISPLAY_MARGIN_MS = 300;
 const PROCESS_START_SAMPLES = 5;
 const NEW_PROCESS_RUNS = 3;
 export const LAYOUT_DISPLAY_LIMIT_MS = 100;
@@ -41,6 +41,30 @@ function numberAt(value, path, { minimum = 0, integer = false } = {}) {
     fail(path, `${integer ? "a safe integer" : "a finite number"} >= ${minimum}`, value);
   }
   return value;
+}
+
+/**
+ * The DOM mount baseline of a plugin view on a host, the base of the first-display limits (iii) and (iii-b) of
+ * docs/spec/plugin-processes.md#pass-values. `recordedMs` is the median that the surface mount measurement recorded for
+ * the plugin on the Wails and on the Tauri host, `{ wailsv3, tauriv2 }`, or null for a plugin without a recorded value.
+ * The wailsv3 and the tauriv2 host take their recorded value, and the mygo host takes the lower of the two, because the
+ * surface mount was removed before the mygo host existed and the lower value keeps its limit at least as strict as the
+ * limit of either recorded host. A plugin without a recorded value has the baseline 0 on every host, so it is judged
+ * against the margin alone.
+ */
+export function domMountBaselineMs(host, recordedMs) {
+  const reject = (path, expected, found) => {
+    throw new Error(`DOM mount baseline ${path}: expected ${expected}, found ${JSON.stringify(found)}`);
+  };
+  if (!["wailsv3", "tauriv2", "mygo"].includes(host)) reject("host", "wailsv3, tauriv2 or mygo", host);
+  if (recordedMs === null) return 0;
+  if (typeof recordedMs !== "object" || Array.isArray(recordedMs)) reject("recordedMs", "an object or null", recordedMs);
+  const keys = Object.keys(recordedMs);
+  if (keys.some((key) => key !== "wailsv3" && key !== "tauriv2")) reject("recordedMs", "the keys wailsv3 and tauriv2", keys);
+  for (const key of ["wailsv3", "tauriv2"]) {
+    if (!Number.isFinite(recordedMs[key]) || recordedMs[key] < 0) reject(`recordedMs.${key}`, "a finite number >= 0", recordedMs[key]);
+  }
+  return host === "mygo" ? Math.min(recordedMs.wailsv3, recordedMs.tauriv2) : recordedMs[host];
 }
 
 function pidAt(value, path) {
@@ -832,13 +856,15 @@ function errorDocument(error) {
   return `${JSON.stringify(record(error), null, 2)}\n`;
 }
 
-/** Collects one plugin's window measurements and evaluates them with the current host's fixed baseline. */
+/**
+ * Collects one plugin's window measurements and evaluates them with the current host's DOM mount baseline, which
+ * domMountBaselineMs gives for the plugin's recorded baselines `descriptor.baselinesMs`.
+ */
 export async function runViewMeasurements(t, s, descriptor) {
   objectAt(descriptor, "descriptor");
   const plugin = textAt(descriptor.plugin, "descriptor.plugin");
-  const baselines = objectAt(descriptor.baselinesMs, "descriptor.baselinesMs");
   const host = textAt(s?.app?.name, "session.app.name");
-  const baselineMs = numberAt(baselines[host], `descriptor.baselinesMs.${host}`);
+  const baselineMs = domMountBaselineMs(host, descriptor.baselinesMs);
   if (typeof descriptor.collect !== "function") fail("descriptor.collect", "a measurement collection function", descriptor.collect);
   if (descriptor.measureEditorFootprint !== undefined && typeof descriptor.measureEditorFootprint !== "boolean") {
     fail("descriptor.measureEditorFootprint", "a boolean", descriptor.measureEditorFootprint);

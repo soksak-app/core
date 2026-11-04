@@ -27,6 +27,11 @@ test("requiredApps covers only the application that SOKSAK_APP names", () => {
   assert.deepEqual(harness.requiredApps({ SOKSAK_APP: "tauriv2" }), ["tauriv2"]);
 });
 
+test("requiredApps accepts mygo as SOKSAK_APP and keeps it out of the set without SOKSAK_APP", () => {
+  assert.deepEqual(harness.requiredApps({ SOKSAK_APP: "mygo" }), ["mygo"]);
+  assert.deepEqual(harness.requiredApps({}), ["wailsv3", "tauriv2"]);
+});
+
 test("requiredApps rejects a SOKSAK_APP that names no application", () => {
   assert.throws(() => harness.requiredApps({ SOKSAK_APP: "electron" }), /unknown SOKSAK_APP: electron/);
 });
@@ -69,4 +74,5 @@ test("requiresBoth is true only when the required set holds both applications", 
   assert.equal(harness.requiresBoth({}), true);
   assert.equal(harness.requiresBoth({ SOKSAK_APP: "wailsv3" }), false);
   assert.equal(harness.requiresBoth({ SOKSAK_APP: "tauriv2" }), false);
+  assert.equal(harness.requiresBoth({ SOKSAK_APP: "mygo" }), false);
 });
