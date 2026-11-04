@@ -813,6 +813,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F528",
+    implementation: [
+      { file: "packages/host/go/src/host.go", symbol: "<-session.started" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/termination_test.go", id: "TestATerminationSignalAfterTheStartQuitsTheFramework" },
+    ],
+    expected: "The first termination signal after the start of the application reaches the quit of the framework.",
+    levels: ["unit"],
+  },
+  {
     id: "F520",
     implementation: [
       { file: "native/darwin/tests/support/site_cost.m", symbol: "NSString *siteCostSummarize(const double *values, int count, SiteCostSummary *summary) {" },

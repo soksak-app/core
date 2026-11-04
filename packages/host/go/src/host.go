@@ -83,10 +83,9 @@ func Prepare(adapter Framework, assets fs.FS, options Options) (_ *Session, fail
 	}
 	// The termination signals are received before the endpoint is created. A normal termination is
 	// requested after the application started. A normal termination closes the endpoint after the save of the ready windows finishes.
-	started := make(chan struct{})
 	quit := &Quit{}
 	if err := OnTermination(quit, func() {
-		<-started
+		<-session.started
 		framework.Quit()
 	}); err != nil {
 		return nil, err
