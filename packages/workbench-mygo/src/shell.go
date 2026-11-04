@@ -35,6 +35,8 @@ type ShellOptions struct {
 	Report func(line string)
 	// Reload starts the workbench of the window again.
 	Reload func()
+	// Detaching returns the surfaces of the window whose image detach is pending, which a start of the workbench holds.
+	Detaching func() []string
 	// Project is the project that the address of the window names, and "" without one.
 	Project string
 	// Located names the project that the window shows from now on, and "" when it shows none.
@@ -308,6 +310,7 @@ func (s *Shell) Registry() *Registry { return s.registry }
 
 // Start tells the host that the workbench of the window starts, reads the workspace and tells the host that the window takes events.
 func (s *Shell) Start() {
+	s.surfaces.holdDetaching(s.options.Detaching())
 	s.events.Begin(func() {
 		s.calls.CallInOrder("workspace", "workspace", map[string]string{"kind": "snapshot"}, func(value any, err error) {
 			if err != nil {
@@ -463,7 +466,7 @@ func (s *Shell) newTabID() string {
 				}
 			}
 		}
-		return s.planeHasTab(id)
+		return s.planeHasTab(id) || s.surfaces.detachHeld(id)
 	})
 }
 

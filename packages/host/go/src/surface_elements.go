@@ -22,6 +22,19 @@ type surfaceElements struct {
 	by    map[string]SurfaceElement
 }
 
+// DetachingSurfaces returns the surfaces of window whose image detach is pending, which a workbench without a page reads in place of
+// pendingSurfaces of the start document. It is a function and not a method of Host, because each exported method of Host is a host
+// call of a page.
+func DetachingSurfaces(h *Host, window Frontend) []string {
+	h.mu.Lock()
+	s := h.windows[window.ID()]
+	h.mu.Unlock()
+	if s == nil {
+		return nil
+	}
+	return s.pendingImageDetachSurfaces()
+}
+
 // ElementOf returns the element of the surface id of window. A frame calls it, so it takes no step of the main thread. It is no method
 // of Host, because each exported method of Host is a host call of a page.
 func ElementOf(h *Host, window Frontend, id string) (SurfaceElement, bool) {

@@ -25,8 +25,10 @@ type storedHost struct {
 	// reloads counts the starts of the workbench that the shell asked for.
 	reloads int
 	// located is the project that the shell last named as the one that its window shows.
-	located  string
-	projects []map[string]any
+	located string
+	// detaching are the surfaces whose image detach is pending when a window starts.
+	detaching []string
+	projects  []map[string]any
 	// extra holds the host calls that the base table has not.
 	extra map[string]workbench.HostCall
 	calls []string
@@ -318,6 +320,7 @@ func newShell(t testing.TB, stored *storedHost) *shellFixture {
 	}
 	f := &shellFixture{t: t, host: stored, pending: make(steps, 256)}
 	shell, err := workbench.NewShell(workbench.ShellOptions{
+		Detaching:   func() []string { return nil },
 		Element:     func(string) (uintptr, uintptr, bool) { return 0, 0, false },
 		Declared:    declared,
 		Calls:       workbench.NewCalls(stored.table(), f.pending.post),

@@ -195,10 +195,60 @@ type surfaceState struct {
 	commits, placing []func(err error)
 	// documents holds the names of the document regions that each surface attached and has not detached.
 	documents map[string]map[string]bool
-	// detaching holds the surfaces whose image detach is pending or failed.
-	detaching map[string]bool
+	// detaching holds the surfaces whose image detach was pending when the workbench started, and detachFailed the failure of each
+	// one whose detach failed. Neither is placed nor opens a background session (docs/spec/sidecars.md).
+	detaching    map[string]bool
+	detachFailed map[string]string
 	// sessions holds the stored session that the next attaches of a tab restore.
 	sessions map[string]*storedSession
+}
+
+// holdDetaching holds the surfaces that the host names at the start of the workbench.
+func (s *surfaceState) holdDetaching(surfaces []string) {
+	for _, id := range surfaces {
+		s.detaching[id] = true
+	}
+}
+
+// detachHeld tells whether the image detach of the surface id is pending or failed.
+func (s *surfaceState) detachHeld(id string) bool {
+	_, failed := s.detachFailed[id]
+	return s.detaching[id] || failed
+}
+
+// stopped returns the reason that keeps the surface id down: its view stopped its restarts, or its image detach failed.
+func (s *surfaceState) stopped(id string) (string, bool) {
+	if reason, failed := s.failed[id]; failed {
+		return reason, true
+	}
+	reason, failed := s.detachFailed[id]
+	return reason, failed
+}
+
+// imageDetachEnded applies the event image-detach-ended. An end of a surface that the start did not hold belongs to no surface of
+// this workbench.
+func (s *Shell) imageDetachEnded(data []any) {
+	if len(data) != 1 {
+		s.fail(fmt.Errorf("invalid image-detach-ended event: %v", data))
+		return
+	}
+	ended, err := decode[struct {
+		Surface string  `json:"surface"`
+		Error   *string `json:"error"`
+	}](data[0])
+	if err != nil || ended.Surface == "" || (ended.Error != nil && *ended.Error == "") {
+		s.fail(fmt.Errorf("invalid image-detach-ended event: %v", data[0]))
+		return
+	}
+	if !s.surfaces.detaching[ended.Surface] {
+		return
+	}
+	delete(s.surfaces.detaching, ended.Surface)
+	if ended.Error != nil {
+		s.surfaces.detachFailed[ended.Surface] = *ended.Error
+	}
+	s.tabsSettled()
+	s.options.Invalidate()
 }
 
 // storedSession is the stored session of a tab while its regions attach: the interactionState of each region that has not restored it.
@@ -212,7 +262,7 @@ type storedSession struct {
 func newSurfaceState() surfaceState {
 	return surfaceState{held: map[string]*heldSurface{}, drawn: map[string]layout.Rect{}, seated: map[string]bool{}, placed: "[]",
 		views: map[string]*viewState{}, reports: map[string]*tabReport{}, failed: map[string]string{}, documents: map[string]map[string]bool{},
-		detaching: map[string]bool{}, sessions: map[string]*storedSession{}}
+		detaching: map[string]bool{}, detachFailed: map[string]string{}, sessions: map[string]*storedSession{}}
 }
 
 // drawSeat draws the slot of a card: the native view of its active tab. box is the slot in window coordinates.
@@ -226,7 +276,11 @@ func (s *Shell) drawSeat(c *ui.Context, tab layout.Tab, box layout.Rect) {
 		ui.Text(c, tab.Plugin+" 플러그인에는 화면이 없습니다.").FontSize(12).TextColor(s.palette.Muted)
 		return
 	}
-	if reason, stopped := s.surfaces.failed[tab.ID]; stopped {
+	// A surface whose image detach is pending is not placed, so the host creates no view for it.
+	if s.surfaces.detaching[tab.ID] {
+		return
+	}
+	if reason, stopped := s.surfaces.stopped(tab.ID); stopped {
 		ui.Text(c, reason).FontSize(12).TextColor(s.palette.No)
 		return
 	}
@@ -295,6 +349,7 @@ func (s *Shell) forgetSurfaces(tabs []string) {
 		delete(s.surfaces.views, id)
 		delete(s.surfaces.documents, id)
 		delete(s.surfaces.detaching, id)
+		delete(s.surfaces.detachFailed, id)
 	}
 	s.syncNotices()
 	kept := s.surfaces.order[:0]
@@ -479,7 +534,14 @@ func (s *Shell) answerCommits(commits []func(err error), err error) {
 // commitSurfaces leaves the surfaces of the unloaded tabs out of the next placement, and answers after the host replied to it. A frame
 // runs the placement.
 func (s *Shell) commitSurfaces(answer func(err error)) {
-	s.forgetSurfaces(s.tabs.saver.Place(s.surfaces.order).Unload)
+	unloaded := s.tabs.saver.Place(s.surfaces.order).Unload
+	s.forgetSurfaces(unloaded)
+	// An unloaded tab keeps its label, which the report of its view held.
+	for _, tab := range unloaded {
+		if label := s.tabs.states.Label(tab); label != nil {
+			s.report(tab).Title = *label
+		}
+	}
 	s.surfaces.commits = append(s.surfaces.commits, answer)
 	s.options.Invalidate()
 }

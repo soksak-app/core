@@ -59,6 +59,8 @@ type AppOptions struct {
 	Installed func() []byte
 	// Element returns the views of the surface id of window for its native view element.
 	Element func(window host.Frontend, id string) (surface, key uintptr, ok bool)
+	// Detaching returns the surfaces of window whose image detach is pending.
+	Detaching func(window host.Frontend) []string
 }
 
 // App is the workbench of the application.
@@ -84,6 +86,11 @@ func HostElement(h *host.Host) func(window host.Frontend, id string) (uintptr, u
 	}
 }
 
+// HostDetaching returns the surfaces of a window of h whose image detach is pending.
+func HostDetaching(h *host.Host) func(window host.Frontend) []string {
+	return func(window host.Frontend) []string { return host.DetachingSurfaces(h, window) }
+}
+
 // HostTable is the table of the calls of the host for a window of the application.
 func HostTable(h *host.Host) func(window host.Frontend) map[string]HostCall {
 	return func(window host.Frontend) map[string]HostCall {
@@ -107,10 +114,11 @@ func (a *App) Build(window host.Frontend) func(c *ui.Context) {
 	painted := window.(Painted)
 	shell, err := NewShell(ShellOptions{Declared: declared, Calls: NewCalls(a.options.Table(window), a.options.Post),
 		Environment: a.options.Environment, Installed: a.options.Installed(),
-		Reload:  func() { routine.Go("workbench-reload", window.StartWorkbench) },
-		Project: projectOfAddress(painted.Address()),
-		Located: func(project string) { painted.SetAddress(addressOfProject(project)) },
-		Element: func(id string) (uintptr, uintptr, bool) { return a.options.Element(window, id) }, Invalidate: painted.Invalidate, Elements: painted, Post: a.options.Post, Report: a.options.Report,
+		Reload:    func() { routine.Go("workbench-reload", window.StartWorkbench) },
+		Detaching: func() []string { return a.options.Detaching(window) },
+		Project:   projectOfAddress(painted.Address()),
+		Located:   func(project string) { painted.SetAddress(addressOfProject(project)) },
+		Element:   func(id string) (uintptr, uintptr, bool) { return a.options.Element(window, id) }, Invalidate: painted.Invalidate, Elements: painted, Post: a.options.Post, Report: a.options.Report,
 		Tabs: a.tabPorts})
 	if err != nil {
 		panic(err) // The environment declaration is staged with the application, and its test holds its form.
@@ -233,6 +241,8 @@ func (s *Shell) Event(name string, data []any) {
 		s.surfacePressed(data)
 	case "plugins-changed":
 		s.pluginsChanged()
+	case "image-detach-ended":
+		s.imageDetachEnded(data)
 	case "sidecars-changed":
 		s.pluginOperations.RefreshOutdated(func() {})
 	case "window-active":
@@ -294,7 +304,7 @@ func eventBody[T any](name string, data []any) (T, error) {
 // eventsLeft are the events of the host that a window of this workbench leaves, because nothing it draws reads them.
 var eventsLeft = map[string]bool{"diagnostics-tick": true, "diagnostics-unlistened": true, "document-event": true,
 	"document-message": true, "document-state": true, "document-stream": true, "exit-request": true, "exposure-registered": true,
-	"image-detach-ended": true, "image-event": true, "log-policy": true, "memory-pressure": true, "modal-content": true,
+	"image-event": true, "log-policy": true, "memory-pressure": true, "modal-content": true,
 	"modal-position": true, "modal-rendered": true, "overlay-pick": true, "page-ready": true, "plugins-changed": true, "project-activate": true,
 	"project-remove-request": true,
 	"run-began":              true, "run-ended": true, "sidecar-failure": true, "sidecar-message": true, "sidecars-changed": true, "surface-input": true,

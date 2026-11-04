@@ -47,6 +47,7 @@ func newTabApp(t *testing.T, stored *surfaceHost, document string) *tabApp {
 		return calls
 	}
 	app, err := workbench.NewApp(workbench.AppOptions{Environment: environment(t), Post: f.queue.post, Table: table,
+		Detaching: func(host.Frontend) []string { return nil },
 		Installed: func() []byte { return []byte(document) },
 		Element:   func(host.Frontend, string) (uintptr, uintptr, bool) { return 0, 0, false },
 		Report:    func(line string) { f.lines = append(f.lines, line) }})
@@ -107,6 +108,25 @@ func (f *tabApp) stateOf(tab string) string {
 	}
 	f.t.Fatalf("core.tab.memory has no tab %s: %v", tab, reply)
 	return ""
+}
+
+// An unloaded tab keeps the title that its view reported, as the label that the tab store caches.
+func TestAnUnloadedTabKeepsItsLabel(t *testing.T) {
+	stored := &surfaceHost{}
+	stored.installed = unloadDocument
+	stored.projects = []map[string]any{storedProject(tab("tab-aaaaaa", "notes"), tab("tab-bbbbbb", "notes"))}
+	f := newTabApp(t, stored, unloadDocument)
+	f.command("core.project.activate", map[string]string{"id": "prj-a"})
+	f.app.Emit(f.window, "view-call", map[string]any{"surface": "tab-aaaaaa", "plugin": "notes", "generation": 1, "id": 5, "command": "tab.title", "params": "notes.md"})
+	f.settle()
+	f.command("core.tab.select", map[string]string{"tab": "tab-bbbbbb"})
+	if !f.tester.HasText("notes.md") {
+		t.Fatalf("the tabs show %q before the unload", f.tester.Texts())
+	}
+	f.command("core.tab.unload", map[string]string{"tab": "tab-aaaaaa"})
+	if !f.tester.HasText("notes.md") {
+		t.Fatalf("the unloaded tab lost its label: %q", f.tester.Texts())
+	}
 }
 
 func TestAnUnloadedTabLeavesThePlacementAndReturnsWhenItIsShown(t *testing.T) {
