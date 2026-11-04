@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func sidebarShell(t *testing.T) *shellFixture {
@@ -35,6 +37,31 @@ func TestAProjectShowsTheFixedSidebarsOfTheEnvironment(t *testing.T) {
 	left := element(t, f.tester, "core.card", "left")
 	if left.Bounds.W != 190 {
 		t.Fatalf("the left sidebar is %+v", left.Bounds)
+	}
+}
+
+// A window sidebar ends in one status line, on the bottom edge inside its border, as the foot of a card does.
+func TestAWindowSidebarHasOneStatusLineAtItsBottom(t *testing.T) {
+	f := sidebarShell(t)
+	for side, label := range map[string]string{"left": "왼쪽 창 사이드바", "right": "오른쪽 창 사이드바"} {
+		card, status := element(t, f.tester, "core.card", side), element(t, f.tester, "core.sidebar.status", side)
+		if status.Bounds.Y+status.Bounds.H != card.Bounds.Y+card.Bounds.H-cardBorder {
+			t.Fatalf("the status line of %s is %+v in the card %+v", side, status.Bounds, card.Bounds)
+		}
+		lines := 0
+		var walk func(nodes []ui.ElementNode)
+		walk = func(nodes []ui.ElementNode) {
+			for _, node := range nodes {
+				if node.Role == ui.RoleStatus && node.Bounds.X >= card.Bounds.X && node.Bounds.X < card.Bounds.X+card.Bounds.W {
+					lines++
+				}
+				walk(node.Children)
+			}
+		}
+		walk(f.tester.ElementTree())
+		if lines != 1 || status.Label != label {
+			t.Fatalf("the sidebar %s has %d status lines, and says %q", side, lines, status.Label)
+		}
 	}
 }
 
