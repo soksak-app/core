@@ -162,8 +162,6 @@ type Shell struct {
 	library       libraryState
 	tabs          *shellTabs
 	installed     []InstalledPlugin
-	// memory holds the memory saver settings among the common settings of the last snapshot.
-	memory memorySettings
 
 	settings       *SettingsStore
 	settingsWindow settingsWindow
@@ -330,6 +328,8 @@ func (s *Shell) Start() {
 						s.startNotices(func() {
 							s.startPlugins(func(installed bool) {
 								s.started = true
+								// After the application restarts or the window fails, the sessions of surfaces in no layout end.
+								s.retainSessions()
 								if s.changed || installed {
 									s.pluginsChanged()
 								}
@@ -385,9 +385,6 @@ func (s *Shell) adopt(value any) error {
 	}
 	s.projects = projects
 	s.commonSettings = snapshot.Common
-	if s.memory, err = readMemorySettings(snapshot.Common); err != nil {
-		return err
-	}
 	return s.beginSettings()
 }
 

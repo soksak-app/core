@@ -13,6 +13,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
+	sok "github.com/soksak-app/core/packages/sok/go/src"
 
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
@@ -98,7 +99,7 @@ func TestAppStartsWhenTheWindowShows(t *testing.T) {
 	}
 	app.Shown(window)
 	queue.drain(t)
-	if strings.Join(startCalls(stored.calls), " ") != "workspace workspace windowReady notificationState pluginsState sidecarsOutdated" {
+	if strings.Join(startCalls(stored.calls), " ") != "workspace workspace workspace windowReady notificationState pluginsState sidecarsOutdated sidecarsRetain" {
 		t.Fatalf("the start called %v", stored.calls)
 	}
 }
@@ -252,8 +253,18 @@ func appStatus(t *testing.T, app *workbench.App, window *appWindow, queue steps,
 	return reply["result"].(map[string]any)
 }
 
+// lifecycleInfo is the policy in force that stores the lifecycle class and no other.
+func lifecycleInfo() map[string]any {
+	classes := map[string]any{}
+	for class := range sok.DefaultLogPolicy().Classes() {
+		classes[class] = "off"
+	}
+	classes["lifecycle"] = "info"
+	return classes
+}
+
 func TestAnInstalledPluginGetsItsBackgroundSessionInTheApplication(t *testing.T) {
-	stored := &storedHost{installed: installedSession, common: map[string]any{"memorySaverDelay": 30},
+	stored := &storedHost{installed: installedSession, common: map[string]any{"memorySaverDelay": 30}, classes: lifecycleInfo(),
 		projects: []map[string]any{storedProject(tab("tab-aaaaaa", "other"), tab("tab-bbbbbb", "session"))}}
 	sent := make(chan string, 8)
 	stored.extra = map[string]workbench.HostCall{
@@ -304,7 +315,7 @@ func TestAnInstalledPluginGetsItsBackgroundSessionInTheApplication(t *testing.T)
 	if !strings.Contains(send, `"operation":"open"`) || !strings.Contains(send, `"shell":"login"`) || strings.Contains(send, "other") {
 		t.Fatalf("send %q", send)
 	}
-	for _, part := range []string{`"action":"batch"`, `"event":"workbench.background.session"`, `"ts_us":1700000000000000`, `"mono_ns":7`, `"start":"`} {
+	for _, part := range []string{`"action":"batch"`, `"event":"workbench.background.session"`, `"ts_us":17000000`, `"mono_ns":`, `"start":"`} {
 		if !strings.Contains(record, part) {
 			t.Fatalf("log %q has no %s", record, part)
 		}

@@ -1,7 +1,6 @@
 package workbench
 
 import (
-	"encoding/json"
 	"fmt"
 	"maps"
 	"math"
@@ -28,22 +27,6 @@ type PluginManifest struct {
 	Extends     map[string]ExtensionPoint   `json:"extends"`
 	Sections    []PluginSection             `json:"sections"`
 	Sidebars    *PluginSidebars             `json:"sidebars"`
-	Surface     PluginSurface               `json:"surface"`
-	Background  *BackgroundDeclaration      `json:"background"`
-	Settings    map[string]PluginSetting    `json:"settings"`
-}
-
-// PluginSurface is the part of surface in plugin.json that the tab parts read.
-type PluginSurface struct {
-	Opens struct {
-		Extensions []string `json:"extensions"`
-	} `json:"opens"`
-	Unload json.RawMessage `json:"unload"`
-}
-
-// PluginSetting is the part of a setting of plugin.json that the tab parts read.
-type PluginSetting struct {
-	Default any `json:"default"`
 }
 
 // InstalledPlugin is an installed and enabled plugin.

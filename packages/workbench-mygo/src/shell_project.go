@@ -389,6 +389,7 @@ func (s *Shell) dropProject(id string) {
 			s.activate(s.projects[0].ID)
 		}
 	}
+	s.retainSessions()
 	s.options.Invalidate()
 }
 

@@ -1597,22 +1597,26 @@ func (b hostBackend) ObjectCounts(window string) (ObjectCounts, error) {
 	var err error
 	mainThreadStep(func() {
 		views = s.surfaceCount()
-		var main unsafe.Pointer
-		main, err = system.MainWebview(s.window.NativeWindow())
-		if err != nil {
-			return
-		}
 		attached := s.documents.Attached()
 		answers = make(chan pageAnswer, 1+len(attached))
-		counter.CountPageObjects(main, false, func(elements, documents int64, err error) {
-			answers <- pageAnswer{main: true, counts: PageObjects{Elements: elements, Documents: documents}, err: err}
-		})
+		pages = len(attached)
+		// A window without a main page has no page objects to count.
+		if framework.MainPage() {
+			var main unsafe.Pointer
+			main, err = system.MainWebview(s.window.NativeWindow())
+			if err != nil {
+				return
+			}
+			pages++
+			counter.CountPageObjects(main, false, func(elements, documents int64, err error) {
+				answers <- pageAnswer{main: true, counts: PageObjects{Elements: elements, Documents: documents}, err: err}
+			})
+		}
 		for key, handle := range attached {
 			counter.CountPageObjects(handle, true, func(elements, documents int64, err error) {
 				answers <- pageAnswer{key: key, counts: PageObjects{Elements: elements, Documents: documents}, err: err}
 			})
 		}
-		pages = 1 + len(attached)
 	})
 	if err != nil {
 		return ObjectCounts{}, err

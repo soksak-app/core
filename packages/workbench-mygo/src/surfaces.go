@@ -53,6 +53,9 @@ type installedUnit struct {
 	Data map[string]dataDeclaration
 	// Drop is the command that surface.drop names, and empty for a plugin that takes no files.
 	Drop string
+	// Opens holds the extensions of surface.opens, and Background the background declaration, or nil.
+	Opens      []string
+	Background *BackgroundDeclaration
 }
 
 // surfaceUnload is the declaration surface.unload of a plugin.
@@ -74,7 +77,11 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 					Menu        json.RawMessage `json:"menu"`
 					Unload      *surfaceUnload  `json:"unload"`
 					Drop        string          `json:"drop"`
+					Opens       struct {
+						Extensions []string `json:"extensions"`
+					} `json:"opens"`
 				} `json:"surface"`
+				Background   *BackgroundDeclaration     `json:"background"`
 				Exposes      json.RawMessage            `json:"exposes"`
 				Dependencies map[string]any             `json:"dependencies"`
 				Settings     map[string]json.RawMessage `json:"settings"`
@@ -95,6 +102,10 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 	for _, plugin := range read.Plugins {
 		unit := units[plugin.ID]
 		unit.Data = plugin.Manifest.Data
+		unit.Background = plugin.Manifest.Background
+		if plugin.Manifest.Surface != nil {
+			unit.Opens = plugin.Manifest.Surface.Opens.Extensions
+		}
 		for local := range plugin.Manifest.Settings {
 			unit.Settings = append(unit.Settings, local)
 		}
@@ -179,11 +190,28 @@ type surfaceState struct {
 	failed map[string]string
 	// command is the id of the last command request to a view.
 	command uint64
+	// commits holds the answers of the commits that wait for a placement, and placing those of the placement that runs.
+	commits, placing []func(err error)
+	// documents holds the names of the document regions that each surface attached and has not detached.
+	documents map[string]map[string]bool
+	// detaching holds the surfaces whose image detach is pending or failed.
+	detaching map[string]bool
+	// sessions holds the stored session that the next attaches of a tab restore.
+	sessions map[string]*storedSession
+}
+
+// storedSession is the stored session of a tab while its regions attach: the interactionState of each region that has not restored it.
+type storedSession struct {
+	states  map[string]string
+	history bool
+	read    bool
+	waiting []func()
 }
 
 func newSurfaceState() surfaceState {
 	return surfaceState{held: map[string]*heldSurface{}, drawn: map[string]layout.Rect{}, seated: map[string]bool{}, placed: "[]",
-		views: map[string]*viewState{}, reports: map[string]*tabReport{}, failed: map[string]string{}}
+		views: map[string]*viewState{}, reports: map[string]*tabReport{}, failed: map[string]string{}, documents: map[string]map[string]bool{},
+		detaching: map[string]bool{}, sessions: map[string]*storedSession{}}
 }
 
 // drawSeat draws the slot of a card: the native view of its active tab. box is the slot in window coordinates.
@@ -263,6 +291,8 @@ func (s *Shell) forgetSurfaces(tabs []string) {
 		delete(s.surfaces.failed, id)
 		delete(s.surfaces.reports, id)
 		delete(s.surfaces.views, id)
+		delete(s.surfaces.documents, id)
+		delete(s.surfaces.detaching, id)
 	}
 	s.syncNotices()
 	kept := s.surfaces.order[:0]
@@ -361,10 +391,13 @@ func (s *Shell) placeSurfaces() {
 		return
 	}
 	if string(encoded) == s.surfaces.placed {
+		s.answerCommits(s.surfaces.commits, nil)
+		s.surfaces.commits = nil
 		return
 	}
 	s.surfaces.placed = string(encoded)
 	s.surfaces.running = true
+	s.surfaces.placing, s.surfaces.commits = s.surfaces.commits, nil
 	for _, id := range s.surfaces.order {
 		held := s.surfaces.held[id]
 		if held.declared {
@@ -382,8 +415,7 @@ func (s *Shell) placeSurfaces() {
 	settled := request["settled"]
 	s.calls.CallInOrder(surfaceOrder, "syncSurfaces", request, func(value any, err error) {
 		if err != nil {
-			s.surfaces.running = false
-			s.fail(err)
+			s.placed(err)
 			return
 		}
 		prepared, err := decode[struct {
@@ -391,18 +423,61 @@ func (s *Shell) placeSurfaces() {
 			Placements json.RawMessage `json:"placements"`
 		}](value)
 		if err != nil {
-			s.surfaces.running = false
-			s.fail(err)
+			s.placed(err)
 			return
 		}
 		s.options.Invalidate()
 		s.calls.CallInOrder(surfaceOrder, "presentSurfaces", map[string]any{"ticket": prepared.Ticket, "placements": prepared.Placements, "settled": settled},
 			func(_ any, err error) {
-				s.surfaces.running = false
-				if err != nil {
-					s.fail(err)
-				}
+				s.placed(err)
 				s.options.Invalidate()
 			})
 	})
+}
+
+// placed ends a placement.
+func (s *Shell) placed(err error) {
+	s.surfaces.running = false
+	if err != nil {
+		s.fail(err)
+	}
+	placing := s.surfaces.placing
+	s.surfaces.placing = nil
+	s.answerCommits(placing, err)
+	if err == nil {
+		s.endRestores()
+	}
+}
+
+// endRestores ends the restore of each restoring tab whose surface the host placed.
+func (s *Shell) endRestores() {
+	if s.tabs == nil {
+		return
+	}
+	for _, id := range s.surfaces.order {
+		if s.tabs.saver.State(id) != "restoring" {
+			continue
+		}
+		s.storedSessionOf(id, func(session *storedSession) {
+			if s.tabs.saver.State(id) == "restoring" {
+				if err := s.tabs.saver.Restored(id, session.history); err != nil {
+					s.fail(err)
+				}
+			}
+		})
+	}
+}
+
+func (s *Shell) answerCommits(commits []func(err error), err error) {
+	for _, answer := range commits {
+		answer(err)
+	}
+}
+
+// commitSurfaces leaves the surfaces of the unloaded tabs out of the next placement, and answers after the host replied to it. A frame
+// runs the placement.
+func (s *Shell) commitSurfaces(answer func(err error)) {
+	s.forgetSurfaces(s.tabs.saver.Place(s.surfaces.order).Unload)
+	s.surfaces.commits = append(s.surfaces.commits, answer)
+	s.options.Invalidate()
 }

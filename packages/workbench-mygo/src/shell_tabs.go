@@ -174,10 +174,30 @@ func (s *Shell) openTabs(next func()) {
 	}, func(states *TabStates, err error) {
 		if err != nil {
 			s.fail(err)
-		} else {
-			s.tabs.states = states
+			next()
+			return
 		}
+		s.tabs.states = states
+		s.reconcileTabs(next)
+	})
+}
+
+// reconcileTabs removes the stored entries of surfaces in no layout. A stored layout that cannot be read leaves the tab ids unknown, so
+// the stores keep every entry and the error is shown.
+func (s *Shell) reconcileTabs(next func()) {
+	kept, err := s.storedSurfaceKept()
+	if err != nil {
+		s.fail(err)
 		next()
+		return
+	}
+	s.tabs.states.Reconcile(kept, func() {
+		s.tabs.sessions.Reconcile(kept, func(err error) {
+			if err != nil {
+				s.fail(err)
+			}
+			next()
+		})
 	})
 }
 
@@ -273,22 +293,25 @@ func (s *Shell) tabsSettled() {
 	}
 }
 
-// droppedTabs removes the stored state and session of tabs after the layout write that drops them is confirmed, so a refused write
-// removes none.
+// droppedTabs removes the stored state and session of tabs and ends their sidecar sessions after the layout write that drops them is
+// confirmed, so a refused write removes none.
 func (s *Shell) droppedTabs(tabs []string) func() {
 	s.forgetSurfaces(tabs)
-	if s.tabs == nil || len(tabs) == 0 {
+	if len(tabs) == 0 {
 		return func() {}
 	}
 	return func() {
-		if s.tabs.states != nil {
-			s.tabs.states.Remove(tabs, func() {})
-		}
-		s.tabs.sessions.Remove(tabs, func(err error) {
-			if err != nil {
-				s.fail(err)
+		if s.tabs != nil {
+			if s.tabs.states != nil {
+				s.tabs.states.Remove(tabs, func() {})
 			}
-		})
+			s.tabs.sessions.Remove(tabs, func(err error) {
+				if err != nil {
+					s.fail(err)
+				}
+			})
+		}
+		s.retainSessions()
 	}
 }
 
