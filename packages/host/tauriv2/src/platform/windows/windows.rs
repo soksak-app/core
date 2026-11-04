@@ -154,12 +154,6 @@ impl Platform for Windows {
     fn file_drop(&self, main: Handle, receive: Box<dyn Fn(String)>) -> Result<(), String> {
         unsupported::file_drop(main, receive)
     }
-    fn attach_surface(&self, view: &PlatformWebview, main: Handle) -> Result<(), String> {
-        unsupported::attach_surface(view, main)
-    }
-    fn detach_surface(&self, view: &PlatformWebview) -> Result<(), String> {
-        unsupported::detach_surface(view)
-    }
     fn set_surface_hidden(&self, view: &PlatformWebview, hidden: bool) -> Result<(), String> {
         unsupported::set_surface_hidden(view, hidden)
     }

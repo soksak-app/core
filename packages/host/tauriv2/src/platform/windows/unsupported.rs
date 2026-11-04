@@ -141,14 +141,6 @@ pub fn file_drop(_main: Handle, _receive: Box<dyn Fn(String)>) -> Result<(), Str
     missing("file drop")
 }
 
-pub fn attach_surface(_view: &PlatformWebview, _main: Handle) -> Result<(), String> {
-    missing("surface attachment")
-}
-
-pub fn detach_surface(_view: &PlatformWebview) -> Result<(), String> {
-    missing("surface detachment")
-}
-
 pub fn set_surface_hidden(_view: &PlatformWebview, _hidden: bool) -> Result<(), String> {
     missing("surface visibility")
 }

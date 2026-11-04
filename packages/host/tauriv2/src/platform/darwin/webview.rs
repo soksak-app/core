@@ -161,20 +161,6 @@ pub fn place(webview: &PlatformWebview, x: f64, y: f64, w: f64, h: f64) {
 }
 
 /// Registers a content webview in the common container with device pixel coordinates.
-pub fn attach_surface(webview: &PlatformWebview, main: Handle) {
-    unsafe extern "C" {
-        fn webviewAttachSurface(view: *mut c_void, main: *mut c_void);
-    }
-    unsafe { webviewAttachSurface(webview.inner().cast(), main as *mut c_void) }
-}
-
-pub fn detach_surface(webview: &PlatformWebview) {
-    unsafe extern "C" {
-        fn webviewDetachSurface(view: *mut c_void);
-    }
-    unsafe { webviewDetachSurface(webview.inner().cast()) }
-}
-
 pub fn hidden(webview: &PlatformWebview, hidden: bool) {
     unsafe extern "C" {
         fn webviewSetSurfaceHidden(view: *mut c_void, hidden: bool);

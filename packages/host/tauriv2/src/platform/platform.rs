@@ -438,10 +438,6 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// Receives the files dropped on the window of the main webview. receive receives {"urls":[...],"x":..,"y":..}
     /// (page coordinates).
     fn file_drop(&self, main: Handle, receive: Box<dyn Fn(String)>) -> Result<(), String>;
-    /// Registers a surface webview in the surface container of the main webview.
-    fn attach_surface(&self, view: &PlatformWebview, main: Handle) -> Result<(), String>;
-    /// Removes a surface webview and its SurfaceHost from the surface container.
-    fn detach_surface(&self, view: &PlatformWebview) -> Result<(), String>;
     /// Sets the visibility of the SurfaceHost and of its two planes together.
     fn set_surface_hidden(&self, view: &PlatformWebview, hidden: bool) -> Result<(), String>;
     /// Sets the declared DOM overlays that are handled before native input.

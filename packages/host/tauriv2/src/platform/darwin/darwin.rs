@@ -266,14 +266,6 @@ impl Platform for Darwin {
     fn file_drop(&self, main: Handle, receive: Box<dyn Fn(String)>) -> Result<(), String> {
         webview::file_drop(main, receive)
     }
-    fn attach_surface(&self, view: &PlatformWebview, main: Handle) -> Result<(), String> {
-        webview::attach_surface(view, main);
-        Ok(())
-    }
-    fn detach_surface(&self, view: &PlatformWebview) -> Result<(), String> {
-        webview::detach_surface(view);
-        Ok(())
-    }
     fn set_surface_hidden(&self, view: &PlatformWebview, hidden: bool) -> Result<(), String> {
         webview::hidden(view, hidden);
         Ok(())

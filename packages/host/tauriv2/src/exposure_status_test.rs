@@ -231,7 +231,13 @@ fn a_reload_asked_of_a_page_ends_the_requests_to_its_surfaces() {
         "the request to a surface of another window ended"
     );
     relay.abandon("surface-second-tab");
-    theirs.recv().expect("the abandoned request answers");
+    assert!(
+        theirs
+            .recv()
+            .expect("the abandoned request answers")
+            .is_err(),
+        "the abandoned request did not fail"
+    );
 }
 
 // contract: exposure.relay.page-reload-ends-surface-requests
