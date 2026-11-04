@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F428: A window check records a selection drag over a redrawing terminal and compares the highlight of every frame with the pointer.
 - F427: The window activation and capture stream failures of one `make e2e` run did not recur in the three runs after it.
 - F426: The unused `attach_surface` and `detach_surface` of the Tauri platform interface are removed.
 - F425: A modal request of a closed window fails with `project window is closed` in the Wails host, as it does in the Tauri host.

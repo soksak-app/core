@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F428: window check가 다시 그려지는 terminal의 선택 drag를 녹화하고 모든 frame의 강조를 pointer와 비교한다.
 - F427: `make e2e` 한 번의 window 활성과 capture stream 실패는 그 뒤 세 번의 실행에서 재발하지 않았다.
 - F426: Tauri platform interface에서 쓰지 않는 `attach_surface`와 `detach_surface`를 없앴다.
 - F425: 닫힌 window의 modal 요청은 Tauri host와 같이 Wails host에서도 `project window is closed`로 실패한다.

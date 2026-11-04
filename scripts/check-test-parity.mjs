@@ -8943,6 +8943,13 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F428",
+    implementation: [{ file: "e2e/terminal-selection-follow.test.mjs", symbol: "the selection highlight of a drag follows the pointer while a status line redraws" }],
+    tests: [{ file: "e2e/terminal-selection-follow.test.mjs", id: "the selection highlight of a drag follows the pointer while a status line redraws" }],
+    expected: "The highlight of each recorded frame stays on the dragged cells and ends under the pointer.",
+    levels: ["application"],
+  },
+  {
     id: "F404",
     implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) fn with_open_window(" }],
     tests: [{ file: "packages/host/tauriv2/src/windows_records_test.rs", id: "a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure" }],
