@@ -487,3 +487,19 @@ test("a host call that rejects with a value that is not an Error is reported wit
   await operations.refresh();
   assert.deepEqual(operations.failure(), { kind: "state", message: "installed.json is not valid JSON" });
 });
+
+test("a plugin state read that ended after a newer read does not replace its state", async () => {
+  const replies = [];
+  const host = { call: (name) => {
+    assert.equal(name, "pluginsState");
+    return new Promise((resolve) => replies.push(resolve));
+  } };
+  const operations = createPluginOperations({ host, loaded: () => [], refused: () => new Set(), changed: () => {} });
+  const older = operations.refresh();
+  const newer = operations.refresh();
+  replies[1]({ ...state, registry: "file:///newer/index.json" });
+  await newer;
+  replies[0]({ ...state, registry: "https://older.example/index.json" });
+  await older;
+  assert.equal(operations.status().registry, "file:///newer/index.json", "the older read replaced the state of the newer read");
+});

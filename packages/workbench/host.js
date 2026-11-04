@@ -620,7 +620,14 @@ export const surfaces = native ? {
         const request = normalized.request;
         const key = JSON.stringify({ layout: normalized.layout, deferredViews });
         const carriedStarts = request.surfaces.filter(({ start }) => start).map(({ id }) => `surfaces.${id}.start`);
-        if (key !== last || carriedStarts.length > 0) {
+        // A release while a preparation is open changes only settled. The host starts a run from a preparation and ends it from a
+        // presentation, so the open preparation is presented as settled and a second synchronization would only delay the next layout.
+        const released = record.drawn && !layoutPresented && record.settled !== false && carriedStarts.length === 0
+          && last === JSON.stringify({ layout: { ...normalized.layout, settled: false }, deferredViews });
+        if (released) {
+          last = key;
+          lastRequest = normalized.layout;
+        } else if (key !== last || carriedStarts.length > 0) {
           if (record.drawn && lastRequest && !layoutPresented && logGate.enabled("frame", "debug")) {
             trace("surface.resend", { paths: [...surfaceSyncRequestDifference(lastRequest, normalized.layout), ...carriedStarts] });
           }

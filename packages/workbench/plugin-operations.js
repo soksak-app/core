@@ -98,6 +98,8 @@ export function createPluginOperations({ host, loaded, refused, changed }) {
   let operation = null;
   // The outdated persistent services that the host reports: `[{sidecar, running, installed, sessions}]`.
   let outdated = [];
+  // The number of the last started read of the plugin state.
+  let lastRead = 0;
 
   /** Reads the outdated sidecars of the host again. A read that fails is reported as the error of the state. */
   async function refreshOutdated() {
@@ -123,17 +125,24 @@ export function createPluginOperations({ host, loaded, refused, changed }) {
     }
   }
 
-  /** Reads the state of the host again. If it cannot be read, that error is reported as failure. */
+  /**
+   * Reads the state of the host again. If it cannot be read, that error is reported as failure. A read over the network can end after a
+   * read that started later, and the state of the later read stands: the earlier read describes a registry that may have changed since.
+   */
   async function refresh() {
     if (!host) return;
+    const read = ++lastRead;
     try {
-      state = await host.call("pluginsState");
+      const value = await host.call("pluginsState");
+      if (read !== lastRead) return;
+      state = value;
       failure = state.index && typeof state.index.error === "string" ? { kind: "index", message: state.index.error } : null;
+      changed();
     } catch (error) {
+      if (read !== lastRead) return;
       state = null;
       // default: an error that is not an Error carries its value as the text.
       failure = { kind: "state", message: String(error?.message ?? error) };
-    } finally {
       changed();
     }
   }

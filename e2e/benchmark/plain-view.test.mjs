@@ -11,7 +11,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { APPS, drag, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets } from "@soksak/window-check/event-log.mjs";
 import { pluginEntry, pnpmPack } from "../../scripts/workspace-registry.mjs";
-import { fresh, pluginChangeApplied } from "../fixture.mjs";
+import { fresh, pluginChangeApplied, restoreRegistry, useRegistry } from "../fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { mapViewContentFramesToCapture, requireViewContentFrameCoverage, rightEdgeWidthDragPlan, withViewContentTrace } from "../view-metrics-collection.mjs";
 import { cardEdgeConvergence, cardEdgeSamples, sourceIntervalSummary } from "./cases/plain-view.mjs";
@@ -49,7 +49,6 @@ const PROBE_COLOUR = [30, 30, 30];
 
 /** Installs the probe, opens it to the right of a card and returns the session state of its drag. */
 async function openProbe(s, app, prepare) {
-  const before = await s.get("core.plugins");
   const folder = probeRegistry(join(dirname(app.binary), "sok"));
   s.cleanup(() => rmSync(folder, { recursive: true, force: true }));
   s.cleanup(async () => {
@@ -57,9 +56,9 @@ async function openProbe(s, app, prepare) {
     if ((await s.get("core.plugins")).plugins.find((row) => row.id === "probeplain")?.installed) {
       await pluginChange(s, "the removal of probeplain", () => s.run("core.plugins.remove", { plugin: "probeplain" }));
     }
-    await s.run("core.plugins.registry", { index: before.registry });
+    await restoreRegistry(s);
   });
-  await s.run("core.plugins.registry", { index: pathToFileURL(join(folder, "index.json")).href });
+  await useRegistry(s, pathToFileURL(join(folder, "index.json")).href);
   await s.until("core.plugins", (value) => value.plugins.some((row) => row.id === "probeplain"), "the registry did not list the probe");
   await pluginChange(s, "the install of probeplain", () => s.run("core.plugins.install", { plugin: "probeplain" }));
   await prepare();

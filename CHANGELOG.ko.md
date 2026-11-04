@@ -21,6 +21,22 @@
 - F527: `core.settings.change`는 설정의 type을 그 선언에서 정하므로, `applyTrace`, `make app-usage TRACE=0`, `make terminal-redraw-usage TRACE=0`이 `diagnostics.log`를 객체로 설정한다. 컨트롤의 문자열은 설정이 선언한 boolean이나 number가 되고, 다른 type의 값은 -32602와 그 설정의 검사로 실패하며, scope가 없으면 command는 common 값을 설정한다
 - F502-10: framework는 scene을 보여 주는 frame의 결과를 알리고(`Window.AfterPresent`), release build를 포함한 모든 build에서 element tree를 읽으며(`Content.ElementTree`), `WindowOptions.DrawWhileOccluded`로 화면 밖 window의 frame을 그린다. 두 language host library에서 `Frontend` port의 presentation notice는 실패를 전달하고 그 실패는 layout transaction을 취소하며, port의 settled presentation은 platform의 settled wait가 받는 block을 만들어 transaction도 wait도 main web view를 이름으로 부르지 않는다. Wails와 Tauri framework adapter는 Surface layout group의 새 operation `MainPresentation`으로 그 block을 만든다. main-thread audit은 block 호출을 native 함수 호출로 센다.
 - F502-13: exposure kind `dom`은 모든 host와 모든 plugin 선언에서 `element`가 된다: `exposes.element`, `expose.element`, `element.rect`, `element.act`, `sok element`, MCP tool `element_rect`와 `element_act`, `exposure.list`의 member `element`. `exposes.dom`을 가진 manifest는 거부된다. workbench status는 workbench에 대해 정의된다: `core.window.workbench`, `core.workbench.error`, 행이 `{role, expose, command, text}`인 `core.workbench.audit`, responder owner와 `host.hit` kind `workbench`. window check는 `core.window.workbench`의 새 `start`를 기다리고, 각각 `Object.values(APPS)` 또는 `MAIN_PAGE_APPS`를 순회하며, `scripts/check-e2e-host-parity.mjs`가 이를 검사한다.
+- F453: 지침이 최신 게시 release를 v0.0.34로 적는다.
+- F447-2: registry 복원 실패가 다음 run을 실패시키지 않습니다.
+- F447-1: plugin command가 자신이 기다리는 읽기와 download의 제한을 선언합니다.
+- F435: F450 이후 view를 기록합니다. 모든 view가 양쪽 host에서 간격 기준을 충족하고 editor는 전부 통과하며, 나머지 셋은 convergence에서 실패합니다.
+- F452: 가장 늦게 시작한 읽기가 plugin 상태와 update 상태를 정합니다.
+- F451: update check가 새 version에 실행 중인 core를 받는 범위를 줍니다.
+- F450-1: run 끝 listener가 없을 수 있는 이유를 밝힙니다.
+- F450: view의 status watch는 run의 값을 잡아 두고 끝날 때 최신 값을 전달합니다.
+- F449: 열린 preparation 중의 release는 두 번째 synchronization 없이 그 preparation을 settled로 present합니다.
+- F435: F448 이후 browser view를 기록합니다. gesture 안 최대 간격이 Wails 33 이하와 93 ms, Tauri 35와 34 ms로 줄었고 convergence는 여전히 실패합니다.
+- F448: 숨은 section surface가 있는 card의 layout을 한 번만 준비합니다. 준비가 그 surface를 drawn commit과 같게 잽니다.
+- F435: load average 5~7의 view benchmark 결과를 기록합니다. 간격 기준은 Tauri editor만 만족하고, 수렴 기준을 만족하는 view는 없습니다.
+- F447: registry command의 제한 초과와, 복원 실패가 다음 실행으로 이어지는 실패를 항목으로 엽니다.
+- F446-1: drag report가 화면 frame 간격의 median을 밝힙니다.
+- F446: worker class가 plain view latency를 바꾸지 않는다는 결과를 기록하고, 화면 frame 간격 report 항목을 엽니다.
+- F445: Wails framework의 main-thread worker를 user-interactive class로 실행합니다.
 - F435: load average 12~28에서 잰 F444 뒤 view benchmark를 기록하고, 1회 발생한 card 위치 실패를 재현되지 않음으로 닫는다.
 - F524: verification specification은 core에 더 없는 별도 registry compatibility 검사와 고정 index digest 대신, release가 registry를 읽지 않고 registry 검사가 나열한 core version마다 검사한다고 적는다.
 - F502-9: macOS에서 Go language host library의 시작은 첫 native call 전에 `main-thread functions are not installed`와 빠진 함수 각각의 이름으로 실패하고, 설치되지 않은 main-thread 함수를 부르면 block을 호출한 thread에서 실행하는 대신 프로세스가 그 이름을 내고 끝난다; framework adapter 없이 darwin layer를 실행하는 test는 자기 `TestMain`에서 test 함수를 설치한다

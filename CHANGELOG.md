@@ -21,6 +21,22 @@
 - F527: `core.settings.change` takes the type of a setting from its declaration, so `applyTrace`, `make app-usage TRACE=0` and `make terminal-redraw-usage TRACE=0` set `diagnostics.log` to an object; the string of a control becomes the boolean or the number that the setting declares, a value of another type fails with -32602 and the check of its setting, and without a scope the command sets the common value
 - F502-10: The framework reports what came of the frame that shows a scene (`Window.AfterPresent`), reads the element tree in every build (`Content.ElementTree`), the release builds included, and draws the frames of a window out of sight with `WindowOptions.DrawWhileOccluded`. In both language host libraries the presentation notice of the `Frontend` port carries a failure, which cancels the layout transaction, and the settled presentation of the port makes the block that the settled wait of the platform takes, so that neither the transaction nor the wait names a main web view; the Wails and Tauri framework adapters make that block through the new operation `MainPresentation` of the Surface layout group. The main-thread audit counts a call of a block as a call of a native function.
 - F502-13: The exposure kind `dom` becomes `element` on every host and in every plugin declaration: `exposes.element`, `expose.element`, `element.rect`, `element.act`, `sok element`, the MCP tools `element_rect` and `element_act` and the member `element` of `exposure.list`; a manifest with `exposes.dom` is refused. The workbench statuses are defined over the workbench: `core.window.workbench`, `core.workbench.error` and `core.workbench.audit`, whose rows are `{role, expose, command, text}`, and the responder owner and the `host.hit` kind `workbench`. The window checks wait for a new `start` of `core.window.workbench`, and each iterates `Object.values(APPS)` or `MAIN_PAGE_APPS`, which `scripts/check-e2e-host-parity.mjs` checks.
+- F453: The guidance states v0.0.34 as the latest published release.
+- F447-2: A failed restore of the registry does not make a later run fail.
+- F447-1: A plugin command declares the limit of the reads and downloads that it waits for.
+- F435: Record the views after F450; every view meets the interval limit on both hosts, the editor passes completely, and convergence fails on the other three.
+- F452: The newest started read decides the plugin state and the update state.
+- F451: The update check gives the new version a range that accepts the running core.
+- F450-1: The listener for the end of a run states why it may be absent.
+- F450: A status watch of a view holds the values of a run and delivers the newest at its end.
+- F449: A release during an open preparation presents that preparation as settled without a second synchronization.
+- F435: Record the browser view after F448; the largest in-gesture interval falls to 33 and 93 ms on Wails and 35 and 34 ms on Tauri, and convergence still fails.
+- F448: A layout of a card with a hidden section surface prepares once; the preparation measures that surface as its drawn commit does.
+- F435: Record the view benchmarks at load average 5 to 7; only the Tauri editor meets the interval limit and no view meets the convergence limit.
+- F447: Open the reply of the registry command over its limit and the failure that a failed restore passes to a later run.
+- F446-1: The drag report states the median interval of the shown frames.
+- F446: Record that the worker class does not change the plain view latency, and open the report of the shown-frame interval.
+- F445: Run the main-thread worker of the Wails framework at the user-interactive class.
 - F435: Record the view benchmarks after F444 at load average 12 to 28 and close the single card position failure as not reproduced.
 - F524: The verification specification states that the release reads no registry and that the registry check checks each listed core version, in place of a separate registry compatibility check and a pinned index digest that core no longer has.
 - F502-9: On macOS, the start of the Go language host library fails with `main-thread functions are not installed` and the name of each missing function before its first native call, and a call of a main-thread function that is not installed ends the process with its name instead of running the block on the calling thread; the tests that run the darwin layer without a framework adapter install a test function in their `TestMain`
