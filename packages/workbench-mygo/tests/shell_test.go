@@ -23,6 +23,11 @@ type storedHost struct {
 	failing  map[string]error
 	// installed is the document of the installed plugins, and it is empty without plugins.
 	installed string
+	// common holds the common settings, and settings each write of the settings.
+	common   map[string]any
+	settings []map[string]any
+	// theme and language hold the last theme and menu language that the shell sent.
+	theme, language json.RawMessage
 }
 
 func (h *storedHost) table() map[string]workbench.HostCall {
@@ -68,6 +73,8 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 		"projectRemoveAsk": answer("projectRemoveAsk", func(json.RawMessage) (any, error) { return true, nil }),
 		"folderChoose":     answer("folderChoose", func(json.RawMessage) (any, error) { return "/chosen", nil }),
 		"windowReady":      answer("windowReady", none),
+		"setTheme":         answer("setTheme", func(argument json.RawMessage) (any, error) { h.theme = argument; return nil, nil }),
+		"setMenuLanguage":  answer("setMenuLanguage", func(argument json.RawMessage) (any, error) { h.language = argument; return nil, nil }),
 		"windowNew":        answer("windowNew", none),
 		"windowClose":      answer("windowClose", none),
 	}
@@ -88,13 +95,17 @@ func (h *storedHost) workspace(argument json.RawMessage) (any, error) {
 		ID      string
 		Project map[string]any
 		Patch   map[string]any
+		Remove  []string
 	}
 	if err := json.Unmarshal(argument, &request); err != nil {
 		return nil, err
 	}
 	switch request.Kind {
 	case "snapshot":
-		return map[string]any{"projects": h.projects, "open": []string{}}, nil
+		return map[string]any{"projects": h.projects, "open": []string{}, "common": h.common}, nil
+	case "settings":
+		h.settings = append(h.settings, map[string]any{"id": request.ID, "patch": request.Patch, "remove": request.Remove})
+		return nil, nil
 	case "add":
 		h.projects = append(h.projects, request.Project)
 		return request.Project, nil
@@ -299,9 +310,27 @@ func TestLibraryShowsTheStartOfAnEmptyWorkspace(t *testing.T) {
 
 func TestWindowIsReadyAfterTheSnapshot(t *testing.T) {
 	f := newShell(t, &storedHost{})
-	if strings.Join(f.host.calls, " ") != "workspace windowReady" {
+	if strings.Join(startCalls(f.host.calls), " ") != "workspace windowReady" {
 		t.Fatalf("the start called %v", f.host.calls)
 	}
+}
+
+func TestStartSendsTheThemeAndTheLanguageOfTheMenu(t *testing.T) {
+	f := newShell(t, &storedHost{})
+	if f.host.theme == nil || f.host.language == nil {
+		t.Fatalf("the start called %v", f.host.calls)
+	}
+}
+
+// startCalls are the calls of the start without the appearance, which runs in its own order beside them.
+func startCalls(calls []string) []string {
+	var kept []string
+	for _, call := range calls {
+		if call != "setTheme" && call != "setMenuLanguage" {
+			kept = append(kept, call)
+		}
+	}
+	return kept
 }
 
 func TestLibraryFormOpensAProject(t *testing.T) {

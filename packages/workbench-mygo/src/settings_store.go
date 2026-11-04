@@ -32,8 +32,9 @@ type SettingDefinition struct {
 
 // CatalogFont is a font of workbench.json.
 type CatalogFont struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Stack string `json:"stack"`
 }
 
 // CatalogLanguage is a language of the application menu.
@@ -56,6 +57,7 @@ type SettingsCatalog struct {
 	Modes         []string          `json:"modes"`
 	Fonts         []CatalogFont     `json:"fonts"`
 	MenuLanguages []CatalogLanguage `json:"menuLanguages"`
+	Default       string            `json:"defaultLanguage"`
 	Settings      struct {
 		Defaults         map[string]any        `json:"defaults"`
 		LayoutRanges     map[string][2]float64 `json:"layoutRanges"`
@@ -165,6 +167,8 @@ type SettingsStore struct {
 	project                     string
 	saving                      int
 	save                        SaveSettings
+	begun                       bool
+	loaded                      map[string]bool
 }
 
 // NewSettingsStore returns the store of the catalog and the plugin settings definitions.
@@ -185,14 +189,24 @@ func NewSettingsStore(definitions []SettingDefinition, save SaveSettings) (*Sett
 		}
 		defaults[definition.Key] = definition.Default
 	}
-	return &SettingsStore{Catalog: catalog, Definitions: definitions, defaults: defaults, common: map[string]any{}, overrides: map[string]any{}, save: save}, nil
+	store := &SettingsStore{Catalog: catalog, Definitions: definitions, defaults: defaults, common: map[string]any{}, overrides: map[string]any{}, save: save, loaded: map[string]bool{}}
+	for _, definition := range definitions {
+		if err := store.validate(definition.Key, definition.Default); err != nil {
+			return nil, err
+		}
+	}
+	return store, nil
 }
+
+// Loaded records a plugin that the window loaded, whose stored settings the store checks.
+func (s *SettingsStore) Loaded(plugin string) { s.loaded[plugin] = true }
 
 // kept tells that key is a stored setting of a plugin that is not loaded, which stays in the file unapplied
 // (docs/spec/plugins.md).
 func (s *SettingsStore) kept(key string) bool {
 	_, known := s.defaults[key]
-	return !known && strings.Index(key, ".") > 0
+	plugin, _, dotted := strings.Cut(key, ".")
+	return !known && dotted && plugin != "" && !s.loaded[plugin]
 }
 
 // Begin takes the stored values of the common settings and of the overrides of project.
@@ -219,6 +233,7 @@ func (s *SettingsStore) Begin(common, overrides map[string]any, project string) 
 		return err
 	}
 	s.common, s.overrides, s.project = orEmpty(common), orEmpty(overrides), project
+	s.begun = true
 	return nil
 }
 

@@ -299,3 +299,16 @@ func TestDeletingASetRemovesTheLinksToIt(t *testing.T) {
 		t.Fatalf("unknown set: %v", err)
 	}
 }
+
+func TestAStoredSettingOfALoadedPluginMustBeDeclared(t *testing.T) {
+	var writes []saved
+	store := settingsStore(t, &writes)
+	if err := store.Begin(map[string]any{"acme.gone": 1.0}, nil, ""); err != nil {
+		t.Fatalf("the setting of a plugin that is not loaded stays in the file: %v", err)
+	}
+	store.Loaded("acme")
+	err := store.Begin(map[string]any{"acme.gone": 1.0}, nil, "")
+	if err == nil || !strings.Contains(err.Error(), "unknown setting acme.gone") {
+		t.Fatalf("the error is %v", err)
+	}
+}

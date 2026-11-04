@@ -136,6 +136,12 @@ type Shell struct {
 	held     *heldDivider
 	library  libraryState
 	tabs     *shellTabs
+
+	settings       *SettingsStore
+	settingsWindow settingsWindow
+	commonSettings map[string]any
+	menuLanguage   string
+	plugins        []LoadedPlugin
 }
 
 // NewShell returns the shell of a window, with its commands in the registry.
@@ -174,6 +180,17 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	if err != nil {
 		return nil, err
 	}
+	s.settingsWindow = newSettingsWindow()
+	var definitions []SettingDefinition
+	if s.plugins, definitions, err = readLoadedPlugins(options.Installed, options.Environment); err != nil {
+		return nil, err
+	}
+	if s.settings, err = NewSettingsStore(definitions, s.settingsSave); err != nil {
+		return nil, err
+	}
+	for _, plugin := range s.plugins {
+		s.settings.Loaded(plugin.ID)
+	}
 	s.register()
 	if options.Tabs != nil {
 		s.connectTabs(*options.Tabs)
@@ -211,6 +228,7 @@ func (s *Shell) adopt(value any) error {
 	snapshot, err := decode[struct {
 		Projects      []json.RawMessage `json:"projects"`
 		ProjectsError *string           `json:"projectsError"`
+		Common        map[string]any    `json:"common"`
 	}](value)
 	if err != nil {
 		return err
@@ -227,7 +245,8 @@ func (s *Shell) adopt(value any) error {
 		projects = append(projects, record)
 	}
 	s.projects = projects
-	return nil
+	s.commonSettings = snapshot.Common
+	return s.beginSettings()
 }
 
 // decode reads the answer of a host call, which is the value of the handler or its JSON text.
@@ -331,4 +350,5 @@ func (s *Shell) View(c *ui.Context) {
 		}
 		s.drawWork(c, width, height-s.metrics.chromeH)
 	})
+	s.drawSettings(c, width, height)
 }
