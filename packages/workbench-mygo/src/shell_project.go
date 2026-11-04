@@ -466,6 +466,7 @@ func (s *Shell) activateSpace(id string) error {
 		return err
 	}
 	s.storeSpaces(project)
+	s.tabsSettled()
 	s.options.Invalidate()
 	return nil
 }
@@ -488,6 +489,7 @@ func (s *Shell) addSpace() error {
 		return err
 	}
 	s.storeSpaces(project)
+	s.tabsSettled()
 	s.options.Invalidate()
 	return nil
 }
