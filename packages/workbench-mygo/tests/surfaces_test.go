@@ -3,6 +3,7 @@ package workbench_test
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -18,6 +19,7 @@ const installedDocument = `{"plugins": [
 			"settings": {"cursor.shape": {"type": "enum", "default": "block", "values": ["block", "beam"]}, "shell": {"type": "text", "default": ""}},
 			"surface": {"composition": {"kind": "view", "page": "ui/terminal.html", "regions": [{"name": "view", "kind": "image"}]}}}},
 	{"id": "browser", "package": "@soksak/plugin-browser", "version": "1.0.0",
+		"diagnostics": {"module": "ui/diagnostics.js", "exposes": {"status": [{"name": "plugin.browser.probe"}]}},
 		"manifest": {"id": "browser", "name": "브라우저", "mark": "www",
 			"surface": {"composition": {"kind": "view", "page": "ui/index.html"}}}}
 ]}`
@@ -33,6 +35,8 @@ type surfaceHost struct {
 	// theme is the argument of setTheme, and themeFirst tells that no placement preceded it.
 	theme      string
 	themeFirst bool
+	// elements tells that the host holds the views of the surfaces.
+	elements bool
 }
 
 func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
@@ -79,6 +83,14 @@ func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 	return table
 }
 
+// element returns the views of a surface once the host holds them.
+func (h *surfaceHost) element(id string) (uintptr, uintptr, bool) {
+	if !h.elements {
+		return 0, 0, false
+	}
+	return 1, 2, true
+}
+
 // surfaceShell opens a project in a shell with the plugins of installedDocument.
 func surfaceShell(t *testing.T) (*shellFixture, *surfaceHost) {
 	t.Helper()
@@ -96,7 +108,7 @@ func surfaceShell(t *testing.T) (*shellFixture, *surfaceHost) {
 		Invalidate:  func() {},
 		Post:        f.pending.post,
 		Report:      func(line string) { f.lines = append(f.lines, line) },
-		Element:     func(string) (uintptr, uintptr, bool) { return 0, 0, false },
+		Element:     func(id string) (uintptr, uintptr, bool) { return stored.element(id) },
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -162,6 +174,25 @@ func TestCardsPlaceTheViewsOfTheirActiveTabs(t *testing.T) {
 	}
 }
 
+// A card draws the native view element of its surface in its slot, in the frame after the host made the surface: the element paints a
+// hole over the card, and the framework places the surface host there.
+func TestACardDrawsTheNativeViewElementOfItsSurface(t *testing.T) {
+	f, stored := surfaceShell(t)
+	var surface map[string]any
+	for _, candidate := range stored.lastSurfaces(t) {
+		surface = candidate
+	}
+	x, y := int(surface["x"].(float64)+surface["w"].(float64)/2), int(surface["y"].(float64)+surface["h"].(float64)/2)
+	if f.tester.Image().RGBAAt(x, y).A == 0 {
+		t.Fatal("the slot has a hole before the host made the surface")
+	}
+	stored.elements = true
+	f.settle()
+	if f.tester.Image().RGBAAt(x, y).A != 0 {
+		t.Fatalf("the slot of the card at %d, %d shows no native view element", x, y)
+	}
+}
+
 func TestTheThemeOfTheViewsPrecedesTheirPlacement(t *testing.T) {
 	_, stored := surfaceShell(t)
 	var theme struct {
@@ -221,6 +252,33 @@ func anySurface(t *testing.T, stored *surfaceHost) string {
 	}
 	t.Fatal("no surface")
 	return ""
+}
+
+// A diagnostic build lists diagnostics.json in the installed plugins document: its declarations add to those of the surface, and the
+// view page reads the diagnostic module from its start values.
+func TestADiagnosticPluginAddsItsDeclarationsToTheSurface(t *testing.T) {
+	_, stored := surfaceShell(t)
+	request := stored.requests[0]
+	declarations := request["declarations"].([]any)
+	found := false
+	for _, item := range request["surfaces"].([]any) {
+		surface := item.(map[string]any)
+		start := surface["start"].(map[string]any)
+		declared, _ := json.Marshal(declarations[int(start["declarations"].(float64))])
+		if surface["plugin"] != "browser" {
+			if start["diagnostics"] != nil || strings.Contains(string(declared), "plugin.browser.probe") {
+				t.Fatalf("surface %v starts with %v and %s", surface["id"], start, declared)
+			}
+			continue
+		}
+		found = true
+		if start["diagnostics"].(map[string]any)["module"] != "ui/diagnostics.js" || !strings.Contains(string(declared), "plugin.browser.probe") {
+			t.Fatalf("the view starts with %v and %s", start, declared)
+		}
+	}
+	if !found {
+		t.Fatal("no surface of the browser plugin")
+	}
 }
 
 func TestViewCallDeclaresItsComposition(t *testing.T) {

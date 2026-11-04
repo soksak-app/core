@@ -146,7 +146,7 @@ plugin은 다른 plugin이 선언한 확장 지점으로 그 plugin을 확장한
 
 표면이나 section이 있는 플러그인은 검사에만 쓰는 status와 명령 항목을 plugin 루트의 `diagnostics.json` 파일에 둘 수 있다: `{ "module": "ui/<파일>.js", "exposes": { ... } }`. `module`은 plugin 안의 파일이며, `exposes`는 `plugin.json` `exposes`의 형식과 소유자 규칙을 따른다. 한 이름은 `plugin.json`과 `diagnostics.json` 중 한 곳에만 선언한다. `package.json`의 `files`는 `diagnostics.json`과 그 모듈을 나열하므로 모든 plugin release가 이를 담고, 진단 build만 이를 읽는다. 사용자 입력이나 OS가 만드는 상태를 주입하거나 검사를 위해 내부 이벤트를 기록하는 항목은 `diagnostics.json`에 속하고, 보이는 상태를 보고하거나 사용자 조작을 수행하는 항목은 `plugin.json`에 속한다.
 
-진단 빌드에서 워크벤치는 이 선언을 플러그인의 표면 선언에 더한다. 선언된 diagnostic module을 view page뿐 아니라 workbench page에서도 import하므로 diagnostic staging은 두 import map에 `@soksak/plugin-api/diagnostic-view-frames`를 포함한다. 비진단 staging은 이 mapping과 module을 제외한다. View page는 시작 값의 `diagnostics`에서 diagnostic 선언을 읽고([view 표면](native-surfaces.ko.md#view-표면)) 그 값이 `null`이 아닐 때만 선언된 module을 불러오며 `diagnostics.json`은 요청하지 않는다. 비진단 빌드에서는 그 값이 `null`이므로, release에 그 파일과 module이 있어도 view는 둘 다 요청하지 않는다. import 실패는 오류다. Plugin adapter가 해당 module을 연결하고 해제한다.
+진단 빌드에서 워크벤치는 이 선언을 플러그인의 표면 선언에 더한다. Wails와 Tauri의 workbench는 선언된 diagnostic module을 view page뿐 아니라 workbench page에서도 import하므로 diagnostic staging은 두 import map에 `@soksak/plugin-api/diagnostic-view-frames`를 포함한다. mygo workbench는 view page에서만 import한다. 비진단 staging은 이 mapping과 module을 제외한다. View page는 시작 값의 `diagnostics`에서 diagnostic 선언을 읽고([view 표면](native-surfaces.ko.md#view-표면)) 그 값이 `null`이 아닐 때만 선언된 module을 불러오며 `diagnostics.json`은 요청하지 않는다. 비진단 빌드에서는 그 값이 `null`이므로, release에 그 파일과 module이 있어도 view는 둘 다 요청하지 않는다. import 실패는 오류다. Plugin adapter가 해당 module을 연결하고 해제한다.
 
 ## Contract 사본
 
@@ -154,7 +154,7 @@ plugin은 다른 plugin이 선언한 확장 지점으로 그 plugin을 확장한
 
 ## 표면 소유권
 
-OS 창마다 앱 DOM WebView가 하나 있다. 워크벤치는 표면의 카드 요소를 소유하며, `view` 합성의 표면은 자기 view에서 페이지를 실행하고 호스트가 그 view를 카드 요소 위에 배치한다([view 표면](#view-표면)). 플러그인은 내부 WebView나 iframe을 만들지 않는다. 표면 context에서 보낸 사이드카 메시지는 보낸 순서대로 사이드카에 도착한다. 워크벤치는 같은 사이드카에 대한 이전 전송이 끝난 뒤에야 다음 전송을 시작하며, 그 사이드카의 모든 표면과 background 세션이 한 순서를 공유한다. 표면이 아닌 표면에서 보낸 전송은 거부한다.
+Wails와 Tauri host의 OS 창마다 앱 DOM WebView가 하나 있고, mygo host의 창에는 없다. 워크벤치는 표면의 카드 요소를 소유하며, `view` 합성의 표면은 자기 view에서 페이지를 실행하고 호스트가 그 view를 카드 요소 위에 배치한다([view 표면](#view-표면)). 플러그인은 내부 WebView나 iframe을 만들지 않는다. 표면 context에서 보낸 사이드카 메시지는 보낸 순서대로 사이드카에 도착한다. 워크벤치는 같은 사이드카에 대한 이전 전송이 끝난 뒤에야 다음 전송을 시작하며, 그 사이드카의 모든 표면과 background 세션이 한 순서를 공유한다. 표면이 아닌 표면에서 보낸 전송은 거부한다.
 
 `background` 선언은 두 번째 페이지나 숨은 WebView가 아니라 세션 수명을 명시하는 계약이다. 워크벤치는 선언된 `operation`을 선언된 사이드카에 사이드카 메시지 프로토콜로 보낸다. manifest에서는 읽기 쉬운 전체 필드명 `operation`을 사용한다. 워크벤치는 요청을 임의로 만들거나 누락된 동작을 대체하거나 오류를 숨기지 않는다. 표면이 마운트된 탭은 그 표면을 통해 세션을 소유한다. 같은 카드의 다른 탭이 보이는 동안에도 탭의 표면은 마운트된 채 남으므로 그런 탭에는 background 세션이 없고, 탭이 보이거나 그 표면이 마운트되면 탭의 background 세션은 끝난다. 연결 listener도 함께 멈추므로, 사이드카가 다시 연결되어도 세션을 소유한 표면에 그 동작을 보내지 않는다. 탭이 보이게 되면 그 표면이 같은 동작과 이미지 영역을 보내 기존 세션에 다시 연결한다. Page reload가 sidecar session을 유지하면서 마운트된 image region을 닫을 때는 새 page가 비마운트 표면을 background session으로 열기 전에 호스트가 supplier와 정확한 image generation의 `image.detach`/`image.detached` 교환을 완료한다. Supplier는 새 image가 붙을 때까지 표면 session을 headless로 유지한다. 탭을 제거하면 listener의 구독이 끝나지 않았어도 background 세션을 제거한다. 각 결정은 event `workbench.background.session` `{tab, plugin, sidecar, action, surface}`다. `open`과 `reopen`은 동작을 보내고, `skip`은 표면이 마운트된 비활성 탭에 아무것도 보내지 않으며, `stop`은 세션을 끝낸다. `surface`는 `mounted` 또는 `absent`다.
 

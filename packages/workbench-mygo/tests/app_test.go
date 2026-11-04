@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -19,7 +20,11 @@ type appWindow struct {
 	host.Frontend
 	mu     sync.Mutex
 	frames int
+	starts chan struct{}
 }
+
+// StartWorkbench records a start of the workbench of the window.
+func (w *appWindow) StartWorkbench() { w.starts <- struct{}{} }
 
 func (w *appWindow) ElementTree() ([]ui.ElementNode, error) { return nil, nil }
 
@@ -54,7 +59,7 @@ func fixtureApp(t *testing.T, stored *storedHost) (*workbench.App, *appWindow, s
 	if err != nil {
 		t.Fatal(err)
 	}
-	return app, &appWindow{}, queue, replies
+	return app, &appWindow{starts: make(chan struct{}, 8)}, queue, replies
 }
 
 func TestAppStartsWhenTheWindowShows(t *testing.T) {
@@ -110,5 +115,63 @@ func TestCloseRequestStoresThePlaneAndClosesTheWindow(t *testing.T) {
 	queue.drain(t)
 	if got := stored.calls[len(stored.calls)-1]; got != "windowClose" {
 		t.Fatalf("the close request called %v", stored.calls)
+	}
+}
+
+// started waits for one start of the workbench of the window.
+func (w *appWindow) started(t *testing.T, stored *storedHost) {
+	t.Helper()
+	select {
+	case <-w.starts:
+	case <-time.After(10 * time.Second):
+		t.Fatalf("the workbench did not start again; the calls are %v", stored.calls)
+	}
+}
+
+// A change of the installed plugins saves the projects and starts the workbench again, and one start covers the changes before it.
+func TestPluginsChangedStartsTheWorkbenchAgain(t *testing.T) {
+	stored := &storedHost{}
+	app, window, queue, _ := fixtureApp(t, stored)
+	app.Build(window)
+	app.Shown(window)
+	queue.drain(t)
+	app.Emit(window, "plugins-changed", map[string]any{"action": "install", "plugin": "probe"})
+	app.Emit(window, "plugins-changed", map[string]any{"action": "enable", "plugin": "probe"})
+	queue.drain(t)
+	window.started(t, stored)
+	queue.drain(t)
+	if len(window.starts) != 0 {
+		t.Fatal("two changes started the workbench twice")
+	}
+}
+
+// A change before the workbench started waits for its start, because the reload saves the projects.
+func TestPluginsChangedWaitsForTheStart(t *testing.T) {
+	stored := &storedHost{}
+	app, window, queue, _ := fixtureApp(t, stored)
+	app.Build(window)
+	app.Emit(window, "plugins-changed", map[string]any{"action": "install", "plugin": "probe"})
+	queue.drain(t)
+	if len(window.starts) != 0 || len(stored.calls) != 0 {
+		t.Fatalf("the change ran before the start: %v", stored.calls)
+	}
+	app.Shown(window)
+	queue.drain(t)
+	window.started(t, stored)
+}
+
+// core.plugins.apply starts the workbench again as a change of the plugins does.
+func TestPluginsApplyStartsTheWorkbenchAgain(t *testing.T) {
+	stored := &storedHost{}
+	app, window, queue, replies := fixtureApp(t, stored)
+	app.Build(window)
+	app.Shown(window)
+	queue.drain(t)
+	app.Emit(window, "exposure-request", map[string]any{"id": 8, "method": "command.run",
+		"params": map[string]any{"name": "core.plugins.apply", "params": map[string]any{}}})
+	queue.drain(t)
+	window.started(t, stored)
+	if len(*replies) != 1 || (*replies)[0]["result"].(map[string]any)["reloaded"] != true {
+		t.Fatalf("the replies are %v", *replies)
 	}
 }

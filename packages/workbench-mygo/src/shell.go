@@ -32,6 +32,8 @@ type ShellOptions struct {
 	Post func(task func())
 	// Report writes a failure of the event writer to the application log.
 	Report func(line string)
+	// Reload starts the workbench of the window again.
+	Reload func()
 	// Elements are the elements of the window, which the element requests answer from.
 	Elements Elements
 	// Element returns the surface host and the key view of the surface id, for its native view element.
@@ -150,6 +152,9 @@ type Shell struct {
 	contributions *Contributions
 	surfaces      surfaceState
 	page          string
+	// started is set once the host took the first state of the shell, changed once plugins changed before that, and reloading while the
+	// shell saves before a reload. They belong to the main thread.
+	started, changed, reloading bool
 }
 
 // NewShell returns the shell of a window, with its commands in the registry.
@@ -267,6 +272,10 @@ func (s *Shell) Start() {
 						s.fail(err)
 					}
 					s.options.Invalidate()
+					s.started = true
+					if s.changed {
+						s.pluginsChanged()
+					}
 				})
 			})
 		})

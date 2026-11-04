@@ -608,6 +608,10 @@ func StartTitlebarHeight(common Record) (float64, error) {
 // is set immediately, and a window that shows the previous page is set inside the start transaction of the new ticket and committed together with the first display of the new page
 // (docs/spec/native-surfaces.md#title-bar-height). A full screen window does not change the height.
 func (s *Surfaces) startTitlebar(common Record) error {
+	// A window without a main page has no first row to wait for: its workbench gives the height with its layout.
+	if s.elements.drawn {
+		return nil
+	}
 	height, err := StartTitlebarHeight(common)
 	if err != nil {
 		return err

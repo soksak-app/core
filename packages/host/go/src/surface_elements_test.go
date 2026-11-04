@@ -23,8 +23,9 @@ func (w *elementWindow) SettledPresentation() (unsafe.Pointer, error) {
 // elementPlatform records the views that it retains and releases, and holds the settled wait until the test ends it.
 type elementPlatform struct {
 	pagelessPlatform
-	held    []unsafe.Pointer
-	settled func(float64, error)
+	held     []unsafe.Pointer
+	settled  func(float64, error)
+	titlebar int
 }
 
 func (p *elementPlatform) RetainView(view unsafe.Pointer) { p.held = append(p.held, view) }
@@ -35,6 +36,12 @@ func (p *elementPlatform) ReleaseView(view unsafe.Pointer) {
 		panic("a view that is not held was released")
 	}
 	p.held = slices.Delete(p.held, index, index+1)
+}
+
+func (p *elementPlatform) StartPageTitlebar(_ unsafe.Pointer, _ uint64, _ float64, ready func(error)) error {
+	p.titlebar++
+	ready(nil)
+	return nil
 }
 
 func (p *elementPlatform) AfterSettled(_, _ unsafe.Pointer, done func(float64, error)) error {
@@ -101,5 +108,16 @@ func TestAWindowWithAMainPageHasNoElements(t *testing.T) {
 	surfaces.setElement("a", SurfaceElement{Surface: unsafe.Pointer(new(byte))})
 	if _, ok := surfaces.element("a"); ok {
 		t.Fatal("a window with a main page has an element")
+	}
+}
+
+// A window without a main page has no first row to wait for: the workbench sets its title bar with its layout.
+func TestAWindowWithoutAMainPageStartsWithoutThePageTitleBar(t *testing.T) {
+	surfaces, fake := elements(t, &elementWindow{})
+	if err := surfaces.startTitlebar(Record{}); err != nil {
+		t.Fatal(err)
+	}
+	if fake.titlebar != 0 {
+		t.Fatal("the start asked for the title bar of a main page")
 	}
 }

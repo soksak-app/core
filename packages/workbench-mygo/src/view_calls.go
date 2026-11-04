@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"slices"
 	"strings"
 )
 
@@ -946,14 +945,7 @@ func (s *Shell) runNativeCall(call viewCallEvent, view *viewState, unit *install
 
 // declaresCommand tells whether the plugin declares the command name, in plugin.json or in its diagnostic declarations.
 func (u *installedUnit) declaresCommand(name string) bool {
-	entries := slices.Clone(u.Exposes.Commands)
-	var diagnostics struct {
-		Exposes surfaceMarks `json:"exposes"`
-	}
-	if json.Unmarshal(u.Diagnostics, &diagnostics) == nil { // silent: a plugin without diagnostic declarations has no such commands.
-		entries = append(entries, diagnostics.Exposes.Commands...)
-	}
-	for _, raw := range entries {
+	for _, raw := range u.Exposes.Commands {
 		var entry struct {
 			Name string `json:"name"`
 		}
