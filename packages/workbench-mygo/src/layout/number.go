@@ -2,9 +2,7 @@ package layout
 
 import (
 	"math"
-	"math/big"
 	"strconv"
-	"strings"
 )
 
 // The arithmetic of the JavaScript layout model, where it differs from the Go library: the shared cases compare the two models
@@ -58,20 +56,12 @@ func toFixed2(x float64) string {
 		sign = "-"
 		x = -x
 	}
-	// The exact decimal expansion of x: a binary fraction ends, and 1100 places hold every float64.
-	exact := new(big.Float).SetFloat64(x).Text('f', 1100)
-	point := strings.IndexByte(exact, '.')
-	whole, fraction := exact[:point], exact[point+1:]
-	rest := strings.TrimRight(fraction[2:], "0")
-	if rest == "5" {
-		// A tie: the larger of the two neighbours.
-		// silent: the text is the decimal digits that big.Float.Text wrote, which SetString always reads.
-		cents, _ := new(big.Int).SetString(whole+fraction[:2], 10)
-		text := cents.Add(cents, big.NewInt(1)).String()
-		if len(text) < 3 {
-			text = strings.Repeat("0", 3-len(text)) + text
-		}
-		return sign + text[:len(text)-2] + "." + text[len(text)-2:]
+	// x lies midway between two hundredths only if 100x is an odd number of halves, and a binary fraction with that value is an
+	// odd number of eighths, less than 2^53 of them. A tie takes the larger neighbour, and FormatFloat takes the exact value of
+	// any other x to the nearest one.
+	if eighths := x * 8; eighths == math.Floor(eighths) && math.Mod(eighths, 2) == 1 {
+		cents := (25*uint64(eighths) + 1) / 2
+		return sign + strconv.FormatUint(cents/100, 10) + "." + strconv.FormatUint(100+cents%100, 10)[1:]
 	}
 	return sign + strconv.FormatFloat(x, 'f', 2, 64)
 }
