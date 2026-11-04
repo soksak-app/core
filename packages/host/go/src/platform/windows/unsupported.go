@@ -157,6 +157,10 @@ func (implementation) InjectMemoryPressure(string) error {
 	return unsupported("memory pressure reports")
 }
 
+func (implementation) RequireMainThread() error {
+	return unsupported("main-thread functions")
+}
+
 func (implementation) InstantWindowResize() error {
 	return unsupported("window resize animation")
 }

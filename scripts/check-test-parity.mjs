@@ -209,8 +209,8 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Wails environment declaration", "declaration", ["apps/wailsv3/environment.json"], ["apps/wailsv3/test/environment.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Go host bridge", "js-ts", ["packages/host/go/src/bridge.js"], ["apps/wailsv3/test/runtime-contract.test.mjs"], { sharedTests: true }),
   lane("Go host native webview bridge", "objective-c", ["packages/host/go/src/platform/darwin/webview.m"], ["packages/host/go/tests/documents_test.go"], { testLanguage: "go", sharedTests: true }),
-  lane("Go host main-thread interface", "native-interface", ["packages/host/go/src/platform/darwin/main_thread.h"], ["packages/host/wailsv3/tests/platform/darwin/main_thread_stack_test.go"], { testLanguage: "go", sharedTests: true }),
-  lane("Go host main-thread functions", "objective-c", ["packages/host/go/src/platform/darwin/main_thread.m"], ["packages/host/wailsv3/tests/platform/darwin/main_thread_stack_test.go"], { testLanguage: "go", sharedTests: true }),
+  lane("Go host main-thread interface", "native-interface", ["packages/host/go/src/platform/darwin/main_thread.h"], ["packages/host/wailsv3/tests/platform/darwin/main_thread_stack_test.go", "packages/host/go/tests/main_thread_test.go", "packages/host/go/src/platform/darwin/main_test.go"], { testLanguage: "go", sharedTests: true }),
+  lane("Go host main-thread functions", "objective-c", ["packages/host/go/src/platform/darwin/main_thread.m"], ["packages/host/wailsv3/tests/platform/darwin/main_thread_stack_test.go", "packages/host/go/tests/main_thread_test.go", "packages/host/go/src/platform/darwin/main_test.go"], { testLanguage: "go", sharedTests: true }),
   lane("Workbench styles", "stylesheet", ["packages/workbench/app.css", "packages/workbench/library.css"], ["packages/workbench/test/background.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Workbench declarations", "declaration", ["packages/workbench/exposure.json"], ["packages/workbench/test/exposure.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Workbench shortcuts", "declaration", ["packages/workbench/shortcuts.json"], ["scripts/test/shortcut-table.test.mjs"], { testLanguage: "js-ts" }),
@@ -680,6 +680,20 @@ const FEATURE_LINKS = [
       { file: "scripts/test/workflows.test.mjs", id: "make host-test-mygo runs the unit tests of the Go packages of the mygo host" },
     ],
     expected: "The workbench values are declared once in `packages/workbench/workbench.json`, which `settings.js` and `text-size.js` import and whose chrome metrics the workbench sets as custom properties of the document root, so no stylesheet holds a literal length, ratio or duration; the JavaScript layout model of `packages/soksak` and `packages/workbench` and the Go layout model of `packages/workbench-mygo` pass the same layout cases of `docs/spec/cases/layout`, which `make host-test-mygo` runs for the Go model. Each language host library embeds a copy of `workbench.json` and reads the common-only keys from it, and `make exposure-check` fails when a copy differs from its source.",
+    levels: ["unit"],
+  },
+  {
+    id: "F502-9",
+    implementation: [
+      { file: "packages/host/go/src/host.go", symbol: "if err := system.RequireMainThread(); err != nil {" },
+      { file: "packages/host/go/src/platform/darwin/ui_queue.go", symbol: "func (implementation) RequireMainThread() error {" },
+      { file: "packages/host/go/src/platform/darwin/main_thread.m", symbol: "static void hostAbortMissing(const char *name) {" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/main_thread_test.go", id: "TestTheStartRequiresBothMainThreadFunctions" },
+      { file: "packages/host/wailsv3/tests/platform/darwin/main_thread_stack_test.go", id: "TestTheMainThreadRunsNoCodeOutsideItsOwnStack" },
+    ],
+    expected: "On macOS, the start of the Go language host library fails before its first native call and names each main-thread function that the framework adapter did not install.",
     levels: ["unit"],
   },
   {
