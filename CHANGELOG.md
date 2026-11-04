@@ -7,6 +7,7 @@
 - F447-2: A failed restore of the registry does not make a later run fail.
 - F447-1: A plugin command declares the limit of the reads and downloads that it waits for.
 - F435: Record the views after F450; every view meets the interval limit on both hosts, the editor passes completely, and convergence fails on the other three.
+- F452: The newest started read decides the plugin state and the update state.
 - F451: The update check gives the new version a range that accepts the running core.
 - F450-1: The listener for the end of a run states why it may be absent.
 - F450: A status watch of a view holds the values of a run and delivers the newest at its end.

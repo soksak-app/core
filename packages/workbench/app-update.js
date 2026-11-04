@@ -42,17 +42,23 @@ export function createAppUpdate({ host, plugins = () => null, changed }) {
   let state = null;
   let failure = null;
   let operation = null;
+  // The number of the last started read. A read over the network can end after a read that started later, whose state stands.
+  let lastRead = 0;
 
   /** Reads the candidate of the registry index again. A read that fails is the error of the status. */
   async function refresh() {
     if (!host) return;
+    const read = ++lastRead;
     try {
-      state = await host.call("appUpdateState");
+      const value = await host.call("appUpdateState");
+      if (read !== lastRead) return;
+      state = value;
       failure = null;
+      changed();
     } catch (error) {
+      if (read !== lastRead) return;
       state = null;
       failure = error.message;
-    } finally {
       changed();
     }
   }
