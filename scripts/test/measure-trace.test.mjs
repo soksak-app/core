@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { applyTrace, parseTrace, traceSettings } from "../measure-trace.mjs";
+import { applyTrace, FRAME_RECORDS, parseTrace, traceSettings } from "../measure-trace.mjs";
 
 test("TRACE is 0 or 1, and any other value or no value is an error that names it", () => {
   assert.equal(parseTrace("0"), 0);
@@ -19,7 +19,13 @@ test("TRACE is 0 or 1, and any other value or no value is an error that names it
 test("TRACE 0 turns the trace off under the default policy, and TRACE 1 turns it on with the classes call and frame at debug", () => {
   assert.deepEqual(traceSettings(0), { "diagnostics.performance": false, "diagnostics.log": {} });
   assert.deepEqual(traceSettings(1), { "diagnostics.performance": true, "diagnostics.log": { call: "debug", frame: "debug" } });
-  assert.throws(() => traceSettings(2), new Error("TRACE must be 0 or 1, not 2"));
+  assert.throws(() => traceSettings(2), new Error('the trace state must be 0, 1 or FRAME_RECORDS ("frame-records"), not 2'));
+  assert.throws(() => traceSettings("1"), new Error('the trace state must be 0, 1 or FRAME_RECORDS ("frame-records"), not "1"'));
+});
+
+test("FRAME_RECORDS turns the trace off under the policy that stores the class frame at debug", () => {
+  assert.equal(FRAME_RECORDS, "frame-records");
+  assert.deepEqual(traceSettings(FRAME_RECORDS), { "diagnostics.log": { frame: "debug" }, "diagnostics.performance": false });
 });
 
 /** The policy file that the host writes for a value of the setting diagnostics.log (docs/spec/logging.md#policy-file). */
@@ -49,6 +55,19 @@ test("applying a trace state changes each setting through core.settings.change a
     ["core.settings.change", { key: "diagnostics.log", value: {}, scope: "common" }],
     ["core.settings.change", { key: "diagnostics.performance", value: false, scope: "common" }],
   ]);
+  calls.length = 0;
+  await applyTrace(run, FRAME_RECORDS, configDir);
+  assert.deepEqual(calls, [
+    ["core.settings.change", { key: "diagnostics.log", value: { frame: "debug" }, scope: "common" }],
+    ["core.settings.change", { key: "diagnostics.performance", value: false, scope: "common" }],
+  ]);
+});
+
+test("applying a trace state other than 0, 1 and FRAME_RECORDS fails with its value before any command", async () => {
+  const calls = [];
+  await assert.rejects(applyTrace(async (...call) => { calls.push(call); }, "frame", "/nonexistent"),
+    new Error('the trace state must be 0, 1 or FRAME_RECORDS ("frame-records"), not "frame"'));
+  assert.deepEqual(calls, []);
 });
 
 test("applying a trace state fails with the policy that the file holds when the host does not write the policy", async (t) => {
