@@ -10,7 +10,7 @@ import (
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
-func text(v string) *string { return &v }
+func stringOf(v string) *string { return &v }
 
 func hostedPlugins() workbench.PluginPage {
 	core := "0.5.0"
@@ -18,9 +18,9 @@ func hostedPlugins() workbench.PluginPage {
 		Hosted: true, Core: &core,
 		Plugins: []workbench.PluginRow{
 			{ID: "alpha", Name: "Alpha", Description: "First tool", State: "loaded",
-				Installed: &workbench.PluginInstalled{Version: "1.0.0", Enabled: true}, Latest: text("1.2.0"),
-				Sidecars: []workbench.PluginSidecar{{Name: "hello", Version: text("2.0.0")}, {Name: "other", Range: text("^1.0.0")}}},
-			{ID: "beta", Name: "Beta", Description: "Second tool", State: "available", Latest: text("3.0.0"), Sidecars: []workbench.PluginSidecar{}},
+				Installed: &workbench.PluginInstalled{Version: "1.0.0", Enabled: true}, Latest: stringOf("1.2.0"),
+				Sidecars: []workbench.PluginSidecar{{Name: "hello", Version: stringOf("2.0.0")}, {Name: "other", Range: stringOf("^1.0.0")}}},
+			{ID: "beta", Name: "Beta", Description: "Second tool", State: "available", Latest: stringOf("3.0.0"), Sidecars: []workbench.PluginSidecar{}},
 			{ID: "gamma", Name: "gamma", State: "reload", Installed: &workbench.PluginInstalled{Version: "1.0.0", Enabled: false}, Incompatible: true},
 		},
 	}
@@ -136,7 +136,7 @@ func TestTheUpdateListComesBeforeTheCards(t *testing.T) {
 	page := hostedPlugins()
 	page.Updates = []workbench.PluginUpdate{{ID: "alpha", Installed: "1.0.0", Latest: "1.2.0"}}
 	page.App = workbench.AppUpdate{Version: "0.5.0", Available: &workbench.AppVersion{Version: "0.6.0", Release: "https://example.test/r"},
-		Incompatible: []workbench.AppIncompatible{{ID: "alpha", Installed: "1.0.0", Range: "^0.5.0", Compatible: text("1.3.0")}, {ID: "beta", Installed: "1.0.0", Range: "^0.5.0"}}}
+		Incompatible: []workbench.AppIncompatible{{ID: "alpha", Installed: "1.0.0", Range: "^0.5.0", Compatible: stringOf("1.3.0")}, {ID: "beta", Installed: "1.0.0", Range: "^0.5.0"}}}
 	tt := drawPlugins(&page, noErrors(), recorder(&calls))
 	if row := element(t, tt, "core.library.plugins.updates", 0); row.Label != "alpha: 1.0.0 → 1.2.0" {
 		t.Fatalf("the row of the update says %q", row.Label)
@@ -181,7 +181,7 @@ func TestAnOutdatedServiceHasItsReplaceAction(t *testing.T) {
 	var calls []call
 	page := hostedPlugins()
 	page.Outdated = []workbench.OutdatedSidecar{
-		{Sidecar: "hello", Running: text("1.0.0"), Installed: text("2.0.0"), Sessions: 3},
+		{Sidecar: "hello", Running: stringOf("1.0.0"), Installed: stringOf("2.0.0"), Sessions: 3},
 		{Sidecar: "gone", Sessions: 1},
 	}
 	tt := drawPlugins(&page, noErrors(), recorder(&calls))
@@ -263,7 +263,7 @@ func TestVersionsCompareByNumber(t *testing.T) {
 func TestAVersionOfAnotherFormIsShownAndOffersNoUpdate(t *testing.T) {
 	errors := noErrors()
 	page := hostedPlugins()
-	page.Plugins[0].Latest = text("next")
+	page.Plugins[0].Latest = stringOf("next")
 	tt := drawPlugins(&page, errors, func(string, map[string]any) {})
 	if !tt.HasText("version next must be x.y.z with numeric parts and no leading zeros") {
 		t.Fatalf("the card shows %q", tt.Texts())

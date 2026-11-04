@@ -82,52 +82,6 @@ func TestExposureRequestRunsACommandInAStep(t *testing.T) {
 	}
 }
 
-func TestExposureRequestAnswersAFailureWithItsCode(t *testing.T) {
-	stored := &storedHost{}
-	app, window, queue, replies := fixtureApp(t, stored)
-	app.Build(window)
-	app.Shown(window)
-	queue.drain(t)
-	app.Emit(window, "exposure-request", map[string]any{"id": 8, "method": "command.run", "params": map[string]any{"name": "core.nothing"}})
-	app.Emit(window, "exposure-request", map[string]any{"id": 9, "method": "no.method"})
-	queue.drain(t)
-	if len(*replies) != 2 {
-		t.Fatalf("the replies are %v", *replies)
-	}
-	if code := (*replies)[0]["error"].(map[string]any)["code"]; code != float64(1001) {
-		t.Fatalf("an unknown name answered %v", code)
-	}
-	if code := (*replies)[1]["error"].(map[string]any)["code"]; code != float64(-32601) {
-		t.Fatalf("an unknown method answered %v", code)
-	}
-}
-
-func TestExposureListIsTheDeclaration(t *testing.T) {
-	stored := &storedHost{}
-	app, window, queue, replies := fixtureApp(t, stored)
-	app.Build(window)
-	app.Shown(window)
-	queue.drain(t)
-	app.Emit(window, "exposure-request", map[string]any{"id": 1, "method": "exposure.list"})
-	queue.drain(t)
-	result := (*replies)[0]["result"].(map[string]any)
-	declared, err := workbench.Declared()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(result["commands"].([]any)) != len(declared.Commands) || len(result["status"].([]any)) != len(declared.Statuses) {
-		t.Fatalf("the list holds %d commands and %d statuses", len(result["commands"].([]any)), len(result["status"].([]any)))
-	}
-	registered := map[string]bool{}
-	for _, entry := range result["commands"].([]any) {
-		item := entry.(map[string]any)
-		registered[item["name"].(string)] = item["registered"].(bool)
-	}
-	if !registered["core.card.split"] || registered["core.settings.open"] {
-		t.Fatalf("registered: split %v, settings %v", registered["core.card.split"], registered["core.settings.open"])
-	}
-}
-
 func TestClosedWindowTakesNoEvent(t *testing.T) {
 	stored := &storedHost{}
 	app, window, queue, _ := fixtureApp(t, stored)

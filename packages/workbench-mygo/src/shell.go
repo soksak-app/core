@@ -114,6 +114,7 @@ type Shell struct {
 	registry *Registry
 	binder   *Binder
 	calls    *Calls
+	requests *Requests
 	errors   *ShownErrors
 	grid     environmentGrid
 	focus    string
@@ -149,6 +150,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 		grid: environment.Workspace.Grid, focus: environment.Workspace.Focus, browsing: true, library: newLibraryState()}
 	s.errors = NewShownErrors(options.Report)
 	s.binder = NewBinder(s.registry, func(_ string, err error) { s.fail(err) })
+	s.requests = NewRequests(s.registry, s.calls, options.Post, options.Report)
 	s.register()
 	return s, nil
 }

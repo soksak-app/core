@@ -3,7 +3,6 @@ package workbench
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"sync"
 
 	"github.com/egoist/mygo/ui"
@@ -13,14 +12,6 @@ import (
 
 // The workbench of the mygo application: one shell for each window, connected to the host through the Workbench port of the
 // framework adapter (docs/spec/hosts.md#workbench).
-
-// The codes of an exposure reply, as EXPOSURE_ERRORS of packages/plugin-api declares them.
-const (
-	codeFailed        = -32000
-	codeUnknownMethod = -32601
-	codeUnknownName   = 1001
-	codeUnregistered  = 1002
-)
 
 // Painted is what the workbench needs of a window beyond the Frontend port: asking for a frame.
 type Painted interface {
@@ -121,112 +112,9 @@ func (a *App) Emit(window host.Frontend, name string, data ...any) {
 // Call delivers a call of the workbench call channel. The native workbench draws the state of a call as an event.
 func (a *App) Call(window host.Frontend, script string) {}
 
-// exposureRequest is the data of the event exposure-request.
-type exposureRequest struct {
-	ID     uint64 `json:"id"`
-	Method string `json:"method"`
-	Params struct {
-		Name   string          `json:"name"`
-		Params json.RawMessage `json:"params"`
-	} `json:"params"`
-}
-
 // event handles an event of the host in a step of the main thread.
 func (s *Shell) event(name string, data []any) {
-	switch name {
-	case "exposure-request":
-		if len(data) != 1 {
-			s.fail(errors.New("exposure-request carries one value"))
-			return
-		}
-		request, err := decode[exposureRequest](data[0])
-		if err != nil {
-			s.fail(err)
-			return
-		}
-		s.answerExposure(request)
+	if name == "exposure-request" {
+		s.requests.Deliver(data...)
 	}
-}
-
-// exposureFailure is an error with the code of its reply.
-type exposureFailure struct {
-	code int
-	err  error
-}
-
-func (s *Shell) answerExposure(request exposureRequest) {
-	reply := map[string]any{"id": request.ID}
-	result, failure := s.exposure(request)
-	if failure != nil {
-		reply["error"] = map[string]any{"code": failure.code, "message": failure.err.Error()}
-	} else {
-		reply["result"] = result
-	}
-	s.calls.Call("exposureReply", reply, func(_ any, err error) {
-		if err != nil {
-			s.fail(err)
-		}
-	})
-}
-
-// exposure answers a request of the endpoint from the registry of the window.
-func (s *Shell) exposure(request exposureRequest) (any, *exposureFailure) {
-	failed := func(err error) (any, *exposureFailure) { return nil, &exposureFailure{codeFailed, err} }
-	switch request.Method {
-	case "exposure.list":
-		return s.exposureList(), nil
-	case "command.run":
-		name := request.Params.Name
-		if !s.options.Declared.Commands[name] {
-			return nil, &exposureFailure{codeUnknownName, errors.New("unknown command " + name)}
-		}
-		commands, _ := s.registry.Names()
-		if !contains(commands, name) {
-			return nil, &exposureFailure{codeUnregistered, errors.New("command " + name + " is not registered")}
-		}
-		result, err := s.registry.Run(name, request.Params.Params)
-		if err != nil {
-			return failed(err)
-		}
-		return result, nil
-	case "status.get":
-		name := request.Params.Name
-		if !s.options.Declared.Statuses[name] {
-			return nil, &exposureFailure{codeUnknownName, errors.New("unknown status " + name)}
-		}
-		_, statuses := s.registry.Names()
-		if !contains(statuses, name) {
-			return nil, &exposureFailure{codeUnregistered, errors.New("status " + name + " is not registered")}
-		}
-		value, err := s.registry.Read(name)
-		if err != nil {
-			return failed(err)
-		}
-		return value, nil
-	}
-	return nil, &exposureFailure{codeUnknownMethod, errors.New("unknown method " + request.Method)}
-}
-
-func contains(names []string, name string) bool {
-	for _, known := range names {
-		if known == name {
-			return true
-		}
-	}
-	return false
-}
-
-// exposureList is the declaration with registered on each entry, the form of exposure.list.
-func (s *Shell) exposureList() map[string]any {
-	commands, statuses := s.registry.Names()
-	list := s.options.Declared.ExposureEntries()
-	mark := func(entries []map[string]any, registered []string) {
-		for _, entry := range entries {
-			name, _ := entry["name"].(string) // silent: the declaration test holds the name of every entry.
-			entry["registered"] = contains(registered, name)
-		}
-	}
-	mark(list["status"], statuses)
-	mark(list["commands"], commands)
-	return map[string]any{"status": list["status"], "commands": list["commands"], "dom": list["dom"]}
 }
