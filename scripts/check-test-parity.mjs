@@ -8956,6 +8956,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F440",
+    implementation: [{ file: "packages/workbench/compositor.js", symbol: "publishAhead" }],
+    tests: [{ file: "packages/workbench/test/compositor.test.mjs", id: "a preparation hides a section surface whose offsets do not fit the target card" }],
+    expected: "A section surface that does not fit its target card is hidden with a zero frame",
+    levels: ["unit"],
+  },
+  {
     id: "F404",
     implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) fn with_open_window(" }],
     tests: [{ file: "packages/host/tauriv2/src/windows_records_test.rs", id: "a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure" }],

@@ -280,6 +280,43 @@ test("placement results reject missing, extra, duplicate, and drawn-deferred sur
   }
 });
 
+test("a preparation hides a section surface whose offsets do not fit the target card", async (t) => {
+  const dom = new JSDOM(`<div id="plane"><div data-card-id="place"><div class="set">
+    <div data-native-surface="view" data-native-surface-id="section" data-native-plugin="small-section-probe" data-native-layer="10"
+      data-native-title="Section" data-native-dim="false"></div>
+  </div></div></div>`, { url: "https://example.test/", pretendToBeVisual: true });
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.location = dom.window.location;
+  globalThis.requestAnimationFrame = dom.window.requestAnimationFrame.bind(dom.window);
+  t.mock.module(new URL("../host.js", import.meta.url).href, {
+    namedExports: { native: true, surfaces: { kinds: ["small-section-probe"] } },
+  });
+  const place = document.querySelector("[data-card-id]");
+  const slot = document.querySelector("[data-native-surface]");
+  document.getElementById("plane").getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 600 });
+  place.getBoundingClientRect = () => ({ left: 0, top: 0, width: 196, height: 600 });
+  slot.getBoundingClientRect = () => ({ left: 1, top: 33, width: 188, height: 422 });
+  const { registerPlugin } = await import("../registry.js");
+  registerPlugin({ id: "small-section-probe", surface: () => ({ module: null, composition: { kind: "view", page: "ui/page.html" } }) });
+  const compositor = await import("../compositor.js?section-small");
+  const surface = { surfaceId: "section", pluginId: "small-section-probe", composition: { kind: "view", page: "ui/page.html" } };
+  compositor.setSlotSurface(slot, surface);
+  const records = [];
+  compositor.onCommit((record) => {
+    records.push(record);
+    return { placements: record.surfaces.map((item) => ({ id: item.id, visible: item.visible, ...item.applied })), deferred: [] };
+  });
+
+  compositor.publishAhead(new Map([["place", { x: 0, y: 0, w: 4, h: 100 }]]), new Map());
+
+  const [prepared] = records;
+  assert.deepEqual({ visible: prepared.surfaces[0].visible, declared: prepared.surfaces[0].declared },
+    { visible: false, declared: { x: 0, y: 0, w: 0, h: 0 } },
+    "a preparation sent a section surface that does not fit its target card");
+  dom.window.close();
+});
+
 test("a preparation keeps a section surface at its offsets, so the drawn commit of a width change is the same request", async (t) => {
   const dom = new JSDOM(`<div id="plane"><div data-card-id="place"><div class="set">
     <div data-native-surface="view" data-native-surface-id="section" data-native-plugin="section-probe" data-native-layer="10"

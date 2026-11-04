@@ -381,6 +381,10 @@ export function publishAhead(rects, seated, titlebar) {
       aheadComplete = false;
       const box = el.getBoundingClientRect();
       const body = slot.getBoundingClientRect();
+      const width = box.width - body.width;
+      const height = box.height - body.height;
+      // Offsets that do not fit the target card have no seat, so the surface is hidden like a card surface without a seat.
+      const fits = card.w >= width && card.h >= height;
       seats.push({
         id,
         layer: Number(slot.dataset.nativeLayer),
@@ -388,14 +392,14 @@ export function publishAhead(rects, seated, titlebar) {
         plugin: slot.dataset.nativePlugin,
         dim: slot.dataset.nativeDim === "true",
         bands: null,
-        visible: effectiveVisible(slot),
+        visible: fits && effectiveVisible(slot),
         surface: slotSurface(slot),
-        frame: {
+        frame: fits ? {
           x: card.x + body.left - box.left,
           y: card.y + body.top - box.top,
-          w: card.w - (box.width - body.width),
-          h: card.h - (box.height - body.height),
-        },
+          w: card.w - width,
+          h: card.h - height,
+        } : { x: 0, y: 0, w: 0, h: 0 },
       });
       continue;
     }
