@@ -1,0 +1,5 @@
+# The Rust toolchain of the workspace: rustup selects it for every cargo command in this repository, and the setup action
+# of the workflows installs the same version (.github/actions/setup-rust).
+[toolchain]
+channel = "1.98.0"
+components = ["clippy", "rustfmt"]

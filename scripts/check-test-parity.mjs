@@ -244,6 +244,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F515",
+    implementation: [{ file: "rust-toolchain.toml", symbol: "channel = \"1.98.0\"" }],
+    tests: [{ file: "scripts/test/workflow-setup.test.mjs", id: "setup-rust installs the repository toolchain with format and lint components" }],
+    expected: "rust-toolchain.toml declares the Rust toolchain of every cargo command of the repository, and the setup action of the workflows installs the version and the components that it declares.",
+    levels: ["unit"],
+  },
+  {
     id: "F502-6",
     implementation: [
       { file: "go.work", symbol: "go 1.27.3" },

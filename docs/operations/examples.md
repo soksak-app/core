@@ -2,7 +2,7 @@
 
 [한국어](examples.ko.md)
 
-Run commands from the repository root. Use the package-manager version in `package.json`, the Go version 1.27.3 that `go.work` and each of its modules declare, and a Rust toolchain compatible with the root `Cargo.toml` workspace. The [native host specification](../spec/hosts.md) describes the host packages, applications, and workspace files. Native validation currently runs on macOS with the Command Line Tools SDK. Tauri diagnostic capture uses the current-process ScreenCaptureKit query and does not require Screen Recording permission.
+Run commands from the repository root. Use the package-manager version in `package.json`, the Go version 1.27.3 that `go.work` and each of its modules declare, and the Rust toolchain that `rust-toolchain.toml` declares, which rustup selects for every cargo command of the repository. The [native host specification](../spec/hosts.md) describes the host packages, applications, and workspace files. Native validation currently runs on macOS with the Command Line Tools SDK. Tauri diagnostic capture uses the current-process ScreenCaptureKit query and does not require Screen Recording permission.
 
 The `rust-repeat` and `rust-tests-alone` targets apply the same declared `CARGO_ENV` as application builds to every Cargo invocation, including initial compilation, metadata and test discovery. The declared macOS deployment target takes precedence over an ambient `MACOSX_DEPLOYMENT_TARGET`; test selection and per-test limits remain unchanged.
 

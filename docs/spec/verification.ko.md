@@ -31,7 +31,7 @@ Core test 소유권은 독립적으로 선언된 core package를 따른다. Root
 
 Host-equivalence job은 비교에 필요한 모든 언어와 toolchain을 설치하고 잠긴 의존성을 직접 받으며 두 host와 그 contract 선언의 정적 비교를 실행한다. host suite를 다시 실행하지 않는다. 언어 job에 의존하지 않고 그 build output을 내려받지 않는다. Cross-toolchain JavaScript harness 검사는 이 job에 속하며 순수 JavaScript package 검사는 별도로 유지한다. 지정 scope는 필수 skip이나 누락 owner 없이 전체 test inventory를 보존한다. 각 host job은 자기 host의 coverage를 보고한다. 한 host의 contract audit은 다른 host의 결과를 읽지 않으므로, cross-host equivalence는 정적 비교와 두 host job이 함께 required 판정에서 성공하는 것이다. 두 host를 한 job에서 실행하면 같은 run 설정을 같은 flag로 build하고 host마다 같은 판정에 이른다. 그 실행은 Wails release build가 쓰지 않는 Rust deployment 변수를 Go build에 더하고, 두 suite를 한 queue에 넣어 부하만 더할 뿐 더 검사하는 것이 없다. Tauri host job은 다른 job의 Rust build처럼 `CARGO_INCREMENTAL=0`을 설정한다.
 
-의존성을 받은 뒤 build와 check stage는 offline으로 실행한다. Node와 pnpm은 정확한 선언 버전, Go는 module/workspace 선언, Rust는 정확하게 선언된 toolchain을 따른다. Frozen pnpm lock, Cargo.lock과 Go module sum을 계속 검사한다. Offline 검사는 누락된 의존성을 받거나 lock을 갱신하지 않으며 빠진 input을 밝히고 실패한다.
+의존성을 받은 뒤 build와 check stage는 offline으로 실행한다. Node와 pnpm은 정확한 선언 버전, Go는 module/workspace 선언, Rust는 `rust-toolchain.toml`이 선언하고 workflow setup이 설치하는 정확한 toolchain을 따른다. Frozen pnpm lock, Cargo.lock과 Go module sum을 계속 검사한다. Offline 검사는 누락된 의존성을 받거나 lock을 갱신하지 않으며 빠진 input을 밝히고 실패한다.
 
 Release host별 job은 자체 bundle을 build하고 audit하며 release file를 만든다. Registry compatibility는 별도 필수 검사로 유지한다. 최종 판정은 독립 equivalence를 포함한 모든 필수 job의 성공을 요구한다. Publish는 그 판정 후 audit한 host release file만 받는다. 필수 job의 실패, 취소나 skip은 publication을 막는다.
 
