@@ -16,6 +16,16 @@ test("TRACE is 0 or 1, and any other value or no value is an error that names it
   assert.throws(() => parseTrace(undefined), new Error("TRACE must be 0 or 1, not set"));
 });
 
+test("a target that also measures FRAME_RECORDS reads it from TRACE and names its three states in the error", () => {
+  const states = [0, 1, FRAME_RECORDS];
+  assert.equal(parseTrace("0", states), 0);
+  assert.equal(parseTrace("1", states), 1);
+  assert.equal(parseTrace("frame-records", states), FRAME_RECORDS);
+  assert.throws(() => parseTrace("frame-records"), new Error('TRACE must be 0 or 1, not "frame-records"'));
+  assert.throws(() => parseTrace("2", states), new Error('TRACE must be 0, 1 or frame-records, not "2"'));
+  assert.throws(() => parseTrace(undefined, states), new Error("TRACE must be 0, 1 or frame-records, not set"));
+});
+
 test("TRACE 0 turns the trace off under the default policy, and TRACE 1 turns it on with the classes call and frame at debug", () => {
   assert.deepEqual(traceSettings(0), { "diagnostics.performance": false, "diagnostics.log": {} });
   assert.deepEqual(traceSettings(1), { "diagnostics.performance": true, "diagnostics.log": { call: "debug", frame: "debug" } });

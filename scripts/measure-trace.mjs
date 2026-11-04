@@ -6,15 +6,21 @@
 // `frame` at `debug`, in which `make app-usage STEP=pointer` repeats its move to read the steps of the frame records.
 import { policyOfSetting, untilPolicy } from "@soksak/window-check/log-policy.mjs";
 
-/** Reads TRACE: the text 0 or 1. No value and any other text are an error that names it. */
-export function parseTrace(text) {
-  if (text === undefined || text === "") throw new Error("TRACE must be 0 or 1, not set");
-  if (text !== "0" && text !== "1") throw new Error(`TRACE must be 0 or 1, not ${JSON.stringify(text)}`);
-  return Number(text);
-}
-
 /** The trace state of the frame records: the trace off under the policy that stores the class `frame` at `debug`. */
 export const FRAME_RECORDS = "frame-records";
+
+/**
+ * Reads TRACE as one of the trace states that a target measures: 0 and 1, and FRAME_RECORDS for a target that lists it. No
+ * value and any other text are an error that names the states of the target.
+ */
+export function parseTrace(text, states = [0, 1]) {
+  const names = states.map(String);
+  const expected = `${names.slice(0, -1).join(", ")} or ${names.at(-1)}`;
+  if (text === undefined || text === "") throw new Error(`TRACE must be ${expected}, not set`);
+  const index = names.indexOf(text);
+  if (index === -1) throw new Error(`TRACE must be ${expected}, not ${JSON.stringify(text)}`);
+  return states[index];
+}
 
 /**
  * The settings of a trace state: 0, 1 or FRAME_RECORDS; any other value is an error that names it. The performance trace stores its events in the class `call` at the level `debug`

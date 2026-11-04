@@ -724,7 +724,7 @@ export function parseOptions(args) {
   }
   const interval = Number(values.interval);
   if (!(interval > 0)) throw new Error(`--interval must be a positive number of seconds (${values.interval})`);
-  const trace = values.trace === FRAME_RECORDS ? FRAME_RECORDS : parseTrace(values.trace);
+  const trace = parseTrace(values.trace, [0, 1, FRAME_RECORDS]);
   if (values.state !== undefined && !STATES.includes(values.state)) throw new Error(`--state must be one of ${STATES.join(", ")} (${values.state})`);
   if (values.step !== undefined && values.step !== "pointer") throw new Error(`--step must be pointer (${values.step})`);
   if (trace === FRAME_RECORDS && values.step === undefined) {
