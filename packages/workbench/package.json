@@ -119,6 +119,7 @@
     "./host-windows.js": "./host-windows.js",
     "./host-calls.js": "./host-calls.js",
     "./surface-calls.js": "./surface-calls.js",
+    "./workbench.json": "./workbench.json",
     "./package.json": "./package.json"
   },
   "scripts": {

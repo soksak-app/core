@@ -1,6 +1,8 @@
-// The common settings that a project setting cannot override, the common-only keys of the hosts and the workbench
+import declaration from "@soksak/workbench/workbench.json" with { type: "json" };
+
+// The common settings that a project setting cannot override, the common-only keys of workbench.json
 // (docs/spec/projects.md#persistence).
-const COMMON_ONLY = Object.freeze(["projectOpening", "textSize", "memorySaver", "memorySaverDelay"]);
+const COMMON_ONLY = declaration.settings.commonOnly;
 
 // IndexedDB transactions handle duplicate projects and simultaneous changes from several windows.
 export class WorkspaceStore {

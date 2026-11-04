@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { IDBFactory } from 'fake-indexeddb';
+import declaration from '@soksak/workbench/workbench.json' with { type: 'json' };
 import { WorkspaceStore } from '../runtime/browser-storage.js';
 
 test('browser persistence shares settings, serializes duplicate directories and preserves record fields', async () => {
@@ -75,8 +76,9 @@ test('a project write of each common-only key fails with the message of the host
   const store = await WorkspaceStore.open({indexedDB,channel:false});
   try {
     const project = await store.add({id:'p1',root:'/root',identity:'1',title:'p1',settings:{},spaces:[]});
-    for (const [key, value] of [['projectOpening','tabs'],['textSize',2],['memorySaver',false],['memorySaverDelay',30]]) {
-      await assert.rejects(store.settings(project.id,{[key]:value}),{message:`${key} is common-only`});
+    assert.ok(declaration.settings.commonOnly.length>0);
+    for (const key of declaration.settings.commonOnly) {
+      await assert.rejects(store.settings(project.id,{[key]:1}),{message:`${key} is common-only`});
     }
     assert.deepEqual((await store.snapshot()).projects[0].settings,{});
   } finally { store.close(); }

@@ -145,24 +145,15 @@ export function auditMenuTables(spec, rust, go) {
   return failures;
 }
 
-/** Reads the quoted names of the list that starts at declaration and ends at the first closing bracket after it. */
-function quotedList(source, declaration, close, file) {
-  const start = source.indexOf(declaration);
-  if (start < 0) throw new Error(`${file} has no ${declaration}`);
-  const body = source.slice(start + declaration.length, source.indexOf(close, start + declaration.length));
-  return [...body.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
-}
-
 /**
- * Proposition 5: reads the common-only keys of the copy of workbench.json that each language host library embeds, of the browser runtime and of the workbench declaration
+ * Proposition 5: reads the common-only keys of the copy of workbench.json that each language host library embeds and of the workbench declaration
  * (packages/workbench/workbench.json), which refuse them in project settings
  * (docs/spec/projects.md#persistence).
  */
-export function commonOnlyKeys({ tauriv2DeclarationSource, wailsv3DeclarationSource, browserStorageSource, workbenchDeclarationSource }) {
+export function commonOnlyKeys({ tauriv2DeclarationSource, wailsv3DeclarationSource, workbenchDeclarationSource }) {
   return {
     tauriv2: JSON.parse(tauriv2DeclarationSource).settings.commonOnly,
     wailsv3: JSON.parse(wailsv3DeclarationSource).settings.commonOnly,
-    browser: quotedList(browserStorageSource, 'const COMMON_ONLY = Object.freeze([', '])', 'apps/browser/runtime/browser-storage.js'),
     workbench: JSON.parse(workbenchDeclarationSource).settings.commonOnly,
   };
 }
@@ -171,7 +162,7 @@ export function commonOnlyKeys({ tauriv2DeclarationSource, wailsv3DeclarationSou
 export function auditCommonOnlyKeys(keys) {
   const failures = [];
   const expected = JSON.stringify([...keys.workbench].sort());
-  for (const host of ['tauriv2', 'wailsv3', 'browser']) {
+  for (const host of ['tauriv2', 'wailsv3']) {
     const actual = JSON.stringify([...keys[host]].sort());
     if (actual !== expected) {
       failures.push(`${host} common-only keys ${actual} differ from the common-only keys of the workbench ${expected}`);
@@ -419,7 +410,7 @@ export function hostProductSources(directory, extension) {
 export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, wailsv3Runtime, wailsv3HostSources,
   tauriv2EndpointSource, wailsv3EndpointSource, wailsv3DiagnosticsSource,
   hostContractSpec, tauriv2MenuSource, wailsv3MenuSource, hostsSpec, endpointSpec,
-  tauriv2DeclarationSource, wailsv3DeclarationSource, browserStorageSource, workbenchDeclarationSource,
+  tauriv2DeclarationSource, wailsv3DeclarationSource, workbenchDeclarationSource,
   tauriv2PlatformSource, wailsv3PlatformSource, tauriv2ProductSources, wailsv3ProductSources,
   tauriv2ApplicationSources, wailsv3ApplicationSources, tauriv2Crate, tauriv2AdapterCrate }) {
   const failures = [];
@@ -468,7 +459,7 @@ export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, wailsv3Runtim
   }
   failures.push(...auditMenuTables(specMenuTables(hostContractSpec), rustMenuTables(tauriv2MenuSource),
     goMenuTables(wailsv3MenuSource)));
-  failures.push(...auditCommonOnlyKeys(commonOnlyKeys({ tauriv2DeclarationSource, wailsv3DeclarationSource, browserStorageSource, workbenchDeclarationSource })));
+  failures.push(...auditCommonOnlyKeys(commonOnlyKeys({ tauriv2DeclarationSource, wailsv3DeclarationSource, workbenchDeclarationSource })));
   const tauriv2Callers = Object.fromEntries(Object.entries(tauriv2ProductSources)
     .map(([file, source]) => [file, withoutRustTestItems(source)]));
   failures.push(...auditPlatformCallers('tauriv2', rustPlatformMethods(tauriv2PlatformSource), tauriv2Callers,
@@ -515,7 +506,6 @@ if (process.argv[1] && process.argv[1].endsWith('check-host-parity.mjs')) {
     endpointSpec: read('docs/spec/endpoint.md'),
     tauriv2DeclarationSource: read('packages/host/rust/src/workbench.json'),
     wailsv3DeclarationSource: read('packages/host/go/src/workbench.json'),
-    browserStorageSource: read('apps/browser/runtime/browser-storage.js'),
     workbenchDeclarationSource: read('packages/workbench/workbench.json'),
     tauriv2PlatformSource: read('packages/host/rust/src/platform/platform.rs'),
     wailsv3PlatformSource: read('packages/host/go/src/platform/platform.go'),
