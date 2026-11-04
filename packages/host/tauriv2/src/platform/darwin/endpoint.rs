@@ -11,6 +11,7 @@ use std::net::Shutdown;
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use super::super::{Connection, Listener};
 
@@ -294,9 +295,12 @@ pub fn listen(directory: &Path, name: &str) -> Result<Box<dyn Listener>, String>
     Ok(Box::new(Socket { listener, path }))
 }
 
-/// Connects to the socket path address.
-pub fn connect(address: &str) -> Result<Box<dyn Connection>, String> {
+/// Connects to the socket path address. A read that receives no byte within read_timeout fails.
+pub fn connect(address: &str, read_timeout: Duration) -> Result<Box<dyn Connection>, String> {
     let stream = UnixStream::connect(address).map_err(|e| format!("{address}: {e}"))?;
+    stream
+        .set_read_timeout(Some(read_timeout))
+        .map_err(|e| format!("{address}: read timeout {read_timeout:?}: {e}"))?;
     Ok(Box::new(Stream(stream)))
 }
 

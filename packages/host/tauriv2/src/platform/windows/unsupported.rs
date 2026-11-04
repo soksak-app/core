@@ -658,7 +658,10 @@ pub fn endpoint_listen(_directory: &Path, _name: &str) -> Result<Box<dyn Listene
     missing("local endpoint")
 }
 
-pub fn endpoint_connect(_address: &str) -> Result<Box<dyn Connection>, String> {
+pub fn endpoint_connect(
+    _address: &str,
+    _read_timeout: std::time::Duration,
+) -> Result<Box<dyn Connection>, String> {
     missing("local endpoint")
 }
 

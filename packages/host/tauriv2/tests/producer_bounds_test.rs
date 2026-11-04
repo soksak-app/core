@@ -210,7 +210,7 @@ fn the_subscription_changes_of_a_topic_hold_at_most_256_and_the_rest_is_refused_
     )
     .unwrap();
     endpoint.publish("w1").unwrap();
-    let mut connection = endpoint::connect(endpoint.address()).unwrap();
+    let mut connection = endpoint::connect(endpoint.address(), Duration::from_secs(10)).unwrap();
     let topic = json!({"window": "w1", "name": "core.layout"});
     let request = |connection: &mut Box<dyn Connection>, id: u64, method: &str| {
         send(

@@ -62,7 +62,7 @@ fn calls_of(body: impl FnOnce(&mut Box<dyn Connection>)) -> Vec<Value> {
     )
     .unwrap();
     endpoint.publish("main").unwrap();
-    let mut connection = endpoint::connect(endpoint.address()).unwrap();
+    let mut connection = endpoint::connect(endpoint.address(), Duration::from_secs(5)).unwrap();
     body(&mut connection);
     endpoint.stop();
     log.flush(Duration::from_secs(5)).unwrap();

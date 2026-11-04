@@ -723,13 +723,18 @@ const FEATURE_LINKS = [
     id: "F513",
     implementation: [
       { file: "scripts/check-host-parity.mjs", symbol: "export function auditPlatformCallers(host, methods, sources) {" },
+      { file: "scripts/check-host-parity.mjs", symbol: "export function withoutRustTestItems(source) {" },
+      { file: "packages/host/tauriv2/src/platform/darwin/endpoint.rs", symbol: "pub fn connect(address: &str, read_timeout: Duration) -> Result<Box<dyn Connection>, String> {" },
     ],
     tests: [
       { file: "scripts/test/check-host-parity.test.mjs", id: "every platform method with a caller passes" },
       { file: "scripts/test/check-host-parity.test.mjs", id: "a platform method without a caller outside the platform fails" },
       { file: "scripts/test/check-host-parity.test.mjs", id: "a platform method named only in a comment has no caller" },
+      { file: "scripts/test/check-host-parity.test.mjs", id: "auditHostParity reports a platform method of either host that no source outside the platform calls" },
+      { file: "scripts/test/check-host-parity.test.mjs", id: "a platform method that only a test item of a Rust source calls has no caller" },
+      { file: "scripts/test/check-host-parity.test.mjs", id: "the product sources of a host are its source files outside the platform folder, without test files" },
     ],
-    expected: "Each platform method that no production source of its host outside src/platform calls is reported, and a method named only in a comment or a test is not called.",
+    expected: "Host parity reports each platform method that no production source of its host outside src/platform calls, and a method named only in a comment, a test file or a Rust test item is not called; the endpoint client of the integration tests takes its read timeout at the connect.",
     levels: ["unit"],
   },
   {
