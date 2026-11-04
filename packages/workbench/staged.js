@@ -53,7 +53,7 @@ export function pageReferences(html) {
 /** Returns the path in the staged frontend of a specifier of importer through the import map of its page, or undefined when the map does not hold it. */
 function stagedPath(specifier, importer, imports) {
   const mapped = Object.entries(imports).find(([name]) => name === specifier || (name.endsWith("/") && specifier.startsWith(name)));
-  const relative = specifier.startsWith("./") || specifier.startsWith("../") || specifier.startsWith("/");
+  const relative = /^\.{0,2}\//.test(specifier);
   if (!mapped && !relative) return undefined;
   const target = mapped ? `${mapped[1]}${specifier.slice(mapped[0].length)}` : specifier;
   return new URL(target, `http://stage/${importer}`).pathname.slice(1);
