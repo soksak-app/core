@@ -503,7 +503,7 @@ host-test-wailsv3: native-darwin frontend-wailsv3-core
 host-test-tauriv2: native-darwin frontend-tauriv2-core
 	@$(CARGO_ENV) node scripts/check-host-contract.mjs --host tauriv2
 
-# Release host checks build and audit only the selected application bundle. Registry verification is a separate target.
+# Release host checks build and audit only the selected application bundle; the release reads no registry (docs/spec/verification.md).
 release-check-wailsv3: wailsv3-build-release
 	@node scripts/check-release.mjs --host wailsv3 --macos-minimum $(MACOS_MINIMUM) --wailsv3-bundle "$(WAILS_RELEASE_BUNDLE)"
 

@@ -5,6 +5,7 @@
 ## 미배포
 
 - F435: load average 12~28에서 잰 F444 뒤 view benchmark를 기록하고, 1회 발생한 card 위치 실패를 재현되지 않음으로 닫는다.
+- F524: verification specification은 core에 더 없는 별도 registry compatibility 검사와 고정 index digest 대신, release가 registry를 읽지 않고 registry 검사가 나열한 core version마다 검사한다고 적는다.
 - F523: plugin release는 contract 사본을 `contract-copies.json`에 선언하고, registry 검사가 각 listed core로 실행하는 `checkPluginRepository`는 plugin API가 `contract/`에 게시하지 않는 이름의 사본이나 그 파일과 SHA-256이 다른 사본을 보고한다.
 - F502-7: host가 framework를 이름으로 부르지 않는 모든 것을 가진 language host library `packages/host/go`와 `packages/host/rust`, 그리고 `Run`과 두 language의 `Framework`·`Frontend` port를 가진 framework adapter `packages/host/wailsv3`(package `adapter`)와 `packages/host/tauriv2`(crate `soksak-host-tauriv2`)로 나뉘고, command line package는 `packages/sok/go`와 `packages/sok/rust`가 된다. Go library의 darwin layer는 Wails adapter가 Wails fork에서 설치하는 `hostRunOnWorker`와 `hostRunOnMain`을 호출하므로 library의 어떤 파일도 Wails를 import하지 않고, import하면 structure check가 실패한다. 허용 차이는 language 표와 framework 표이고, host contract scope는 `all` 또는 `<host>[, <host>] only: <reason>`이며, structure check의 각 prefix audit은 prefix가 파일을 고르지 못하면 실패한다. Wails binding service는 이름을 유지한다.
 - F502-5: host 명세가 mygo host, 그 비용, tag v0.7.4 기준의 framework 사실, framework 변경, 결정을 기술하고, F502의 이후 각 item이 자기 contract를 입력, 기대, Red, Green과 함께 checklist에 기술하며, 제안서는 제거된다.
