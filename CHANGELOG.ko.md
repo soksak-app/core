@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F449: 열린 preparation 중의 release는 두 번째 synchronization 없이 그 preparation을 settled로 present합니다.
 - F435: F448 이후 browser view를 기록합니다. gesture 안 최대 간격이 Wails 33 이하와 93 ms, Tauri 35와 34 ms로 줄었고 convergence는 여전히 실패합니다.
 - F448: 숨은 section surface가 있는 card의 layout을 한 번만 준비합니다. 준비가 그 surface를 drawn commit과 같게 잽니다.
 - F435: load average 5~7의 view benchmark 결과를 기록합니다. 간격 기준은 Tauri editor만 만족하고, 수렴 기준을 만족하는 view는 없습니다.

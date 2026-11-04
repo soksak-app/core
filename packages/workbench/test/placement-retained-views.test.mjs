@@ -146,7 +146,8 @@ test("a host placement retains mounted dormant views and excludes cold dormant v
       "the retained view did not stay hidden while it had no compositor slot");
     assert.deepEqual(beforeDraw.placements, [], "the retained-only view entered an empty compositor record");
 
-    const drawn = { surfaces: [retained], drawn: true, settled: true, titlebar: 40 };
+    // The title bar differs, so the drawn commit sends a second request: the settled value alone does not.
+    const drawn = { surfaces: [retained], drawn: true, settled: true, titlebar: 41 };
     const afterDraw = await memoryPlacement(drawn, [retained], {
       ready: Promise.resolve(), saver, observe: () => {}, start: (entries) => entries,
     });
