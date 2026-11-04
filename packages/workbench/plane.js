@@ -9,6 +9,7 @@ import { borderWidth, cardRadius, halfGap, linkedSet, pluginSettings, set as set
 import { effectiveTextScope, nextTextSize, notifyTextSize, setSurfaceTextSize, setTextScope, textScope } from "./text-size.js";
 import { applyFrameText, chromeRow, measureAt } from "./frame-text.js";
 import { CHROME, placeFocusMark } from "./chrome-metrics.js";
+import { activeTab, appendTab, cardTextSize, removeTab, settleActiveTab, tabsOf } from "./card-data.js";
 import { fitHead } from "./head-fit.js";
 import { hasPlugin, isPlace, plugin, plugins } from "./registry.js";
 import { clearSet, drawSet, restoreSidebarChoices, sidebarChoices } from "./sidebar-sections.js";
@@ -140,9 +141,6 @@ function tab(plugin, title, params) {
   issuedTabIds.add(id);
   return params === null ? { id, plugin, title } : { id, plugin, title, params };
 }
-// default: the fixed left and right sidebar cards have null data, so they have no surface tab.
-const tabsOf = (card) => card?.data?.tabs ?? [];
-const activeTab = (card) => tabsOf(card).find((t) => t.id === card.data.activeId);
 // default: when no card is focused, or the focused card is a place card without tabs, there is no focused plugin (null).
 const focusedPlugin = () => activeTab(grid.card(focusedId))?.plugin ?? null;
 /** The name shown on a tab: the title that the surface announced if there is one, otherwise the tab name. */
@@ -544,7 +542,7 @@ async function closeTab(cardId, tabId) {
   if (!tabsOf(card).some((t) => t.id === tabId)) return;
   // The surface is released by the commit of this change after its place succeeds, because the place closes the regions of
   // the surface in the host (docs/spec/native-surfaces.md#region-lifetime); the settled barrier of the command waits for that commit.
-  card.data.tabs = tabsOf(card).filter((t) => t.id !== tabId);
+  removeTab(card, tabId);
   if (card.data.tabs.length === 0) {
     // A card that cannot be closed remains, so one tab is inserted again. Its kind is what the focus was showing, or the first
     // registered plugin if there is none. If a name were written here, this file would have to change each time a plugin is added.
@@ -553,10 +551,7 @@ async function closeTab(cardId, tabId) {
     // The closed tab leaves no source tab, so the new tab records null, as the released workbench does (docs/spec/projects.md#tab-origin).
     else card.data.tabs = [newTab(focusedPlugin() ?? plugins()[0].id, null, null, "card refill")];
   }
-  if (!tabsOf(card).some((t) => t.id === card.data?.activeId)) {
-    // default: a card with no tabs left has no active tab (null).
-    if (card.data) card.data.activeId = tabsOf(card)[0]?.id ?? null;
-  }
+  settleActiveTab(card);
   // default: when only place cards remain, there is no card to focus (null).
   if (!grid.card(focusedId)) focusedId = grid.cards.find((c) => !isPlace(c.id))?.id ?? null;
   settle();
@@ -813,8 +808,7 @@ function addTab(cardId, plugin, params) {
   if (!card?.data) return;
   // default: a card without an active tab has no tab to inherit.
   const t = newTab(plugin, params, activeTab(card)?.id ?? null, "new tab");
-  card.data.tabs.push(t);
-  card.data.activeId = t.id;
+  appendTab(card, t);
   focusedId = cardId;
   settle();
   return t.id;
@@ -917,13 +911,11 @@ function dropTab(fromId, tabId, hit) {
 
   if (hit.zone === "centre") {                                  // T3
     if (target.id === fromId) { from.data.activeId = tabId; return settle(); }
-    from.data.tabs = tabsOf(from).filter((t) => t.id !== tabId);
-    target.data.tabs.push(moving);
-    target.data.activeId = tabId;
+    removeTab(from, tabId);
+    appendTab(target, moving);
     focusedId = target.id;
     if (tabsOf(from).length === 0 && grid.canClose(fromId)) grid.close(fromId);
-    // default: a card with no tabs left has no active tab (null).
-    else if (!tabsOf(from).some((t) => t.id === from.data.activeId)) from.data.activeId = tabsOf(from)[0]?.id ?? null;
+    else settleActiveTab(from);
     return settle();
   }
 
@@ -934,13 +926,12 @@ function dropTab(fromId, tabId, hit) {
     return settle();
   }
 
-  from.data.tabs = tabsOf(from).filter((t) => t.id !== tabId);   // T4 — the slot stays and only the tab moves
-  if (!tabsOf(from).some((t) => t.id === from.data.activeId)) from.data.activeId = tabsOf(from)[0].id;
+  removeTab(from, tabId);                                        // T4 — the slot stays and only the tab moves
+  settleActiveTab(from);
   const born = grid.splitToward(hit.id, hit.zone,
     { data: { tabs: [moving], activeId: moving.id } });
   if (born === null) {                                           // If there is no slot, revert
-    from.data.tabs.push(moving);
-    from.data.activeId = moving.id;
+    appendTab(from, moving);
   } else {
     focusedId = born;
   }
@@ -2106,7 +2097,6 @@ export { settle, tabsOf, activeTab, plane };
 export const currentGrid = () => grid;
 /** The text size scale of a card. It is 1 when there is no value. */
 // default: as the comment above says, a card with no text size scale is 1.
-const cardTextSize = (card) => card?.data?.textSize ?? 1;
 
 /** The current scope of the text size (docs/spec/text-size.md#scope). */
 export function currentTextScope() {

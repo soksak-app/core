@@ -1,0 +1,57 @@
+{
+"description":"The tabs of a card: each case starts from its card and runs its steps in order on the same card. The call card reads the data of the card; a step returns its value or returns no value. A stored tab keeps every member it was stored with (docs/spec/example-model.md#card-tabs).",
+"cases":[
+ {"name":"the active tab is the tab of the stored id","card":{"id":"main","data":{"tabs":[{"id":"a","plugin":"alpha","title":"A"},{"id":"b","plugin":"beta","title":"B","params":{"path":"x"}}],"activeId":"b"}},"steps":[
+  {"call":"tabsOf","returns":[{"id":"a","plugin":"alpha","title":"A"},{"id":"b","plugin":"beta","title":"B","params":{"path":"x"}}]},
+  {"call":"activeTab","returns":{"id":"b","plugin":"beta","title":"B","params":{"path":"x"}}}
+ ]},
+ {"name":"a card without data has no tab and the text size 1","card":{"id":"left","data":null},"steps":[
+  {"call":"tabsOf","returns":[]},
+  {"call":"activeTab"},
+  {"call":"cardTextSize","returns":1}
+ ]},
+ {"name":"a card keeps its text size","card":{"id":"main","data":{"tabs":[{"id":"a","plugin":"alpha","title":"A"}],"activeId":"a","textSize":1.25}},"steps":[
+  {"call":"cardTextSize","returns":1.25}
+ ]},
+ {"name":"an active id that names no tab gives no active tab","card":{"id":"main","data":{"tabs":[{"id":"a","plugin":"alpha","title":"A"}],"activeId":"z"}},"steps":[
+  {"call":"activeTab"}
+ ]},
+ {"name":"removing a tab keeps the order of the others","card":{"id":"main","data":{"tabs":[{"id":"a","plugin":"alpha","title":"A"},{"id":"b","plugin":"alpha","title":"B"},{"id":"c","plugin":"alpha","title":"C"}],"activeId":"c"}},"steps":[
+  {"call":"removeTab","args":["b"]},
+  {"call":"settleActiveTab"},
+  {"call":"card","returns":{"tabs":[{"id":"a","plugin":"alpha","title":"A"},{"id":"c","plugin":"alpha","title":"C"}],"activeId":"c"}}
+ ]},
+ {"name":"removing the active tab selects the first tab","card":{"id":"main","data":{"tabs":[{"id":"a","plugin":"alpha","title":"A"},{"id":"b","plugin":"alpha","title":"B"},{"id":"c","plugin":"alpha","title":"C"}],"activeId":"b"}},"steps":[
+  {"call":"removeTab","args":["b"]},
+  {"call":"settleActiveTab"},
+  {"call":"card","returns":{"tabs":[{"id":"a","plugin":"alpha","title":"A"},{"id":"c","plugin":"alpha","title":"C"}],"activeId":"a"}}
+ ]},
+ {"name":"removing the last tab leaves no active tab","card":{"id":"main","data":{"tabs":[{"id":"a","plugin":"alpha","title":"A"}],"activeId":"a"}},"steps":[
+  {"call":"removeTab","args":["a"]},
+  {"call":"settleActiveTab"},
+  {"call":"card","returns":{"tabs":[],"activeId":null}},
+  {"call":"activeTab"}
+ ]},
+ {"name":"an added tab comes last and becomes the active tab","card":{"id":"main","data":{"tabs":[{"id":"a","plugin":"alpha","title":"A"}],"activeId":"a"}},"steps":[
+  {"call":"appendTab","args":[{"id":"b","plugin":"beta","title":"B","params":{"path":"x"}}]},
+  {"call":"card","returns":{"tabs":[{"id":"a","plugin":"alpha","title":"A"},{"id":"b","plugin":"beta","title":"B","params":{"path":"x"}}],"activeId":"b"}}
+ ]},
+ {"name":"the card data keeps the members that the tab functions do not read","card":{"id":"main","data":{"tabs":[{"id":"a","plugin":"alpha","title":"A","origin":null,"extra":[1]},{"id":"b","plugin":"alpha","title":"B"}],"activeId":"b","textSize":0.9,"sidebars":{"left":{"size":200}},"extra":{"kept":true}}},"steps":[
+  {"call":"removeTab","args":["b"]},
+  {"call":"settleActiveTab"},
+  {"call":"card","returns":{"tabs":[{"id":"a","plugin":"alpha","title":"A","origin":null,"extra":[1]}],"activeId":"a","textSize":0.9,"sidebars":{"left":{"size":200}},"extra":{"kept":true}}}
+ ]},
+ {"name":"a card that holds only a text size stays without tabs","card":{"id":"place","data":{"textSize":1.5}},"steps":[
+  {"call":"tabsOf","returns":[]},
+  {"call":"activeTab"},
+  {"call":"cardTextSize","returns":1.5},
+  {"call":"card","returns":{"textSize":1.5}}
+ ]}
+],
+"names":[
+ {"name":"a tab without a reported title shows its stored title","tab":{"id":"a","plugin":"alpha","title":"A"},"reported":null,"modified":false,"returns":"A"},
+ {"name":"a reported title takes the place of the stored title","tab":{"id":"a","plugin":"alpha","title":"A"},"reported":"file.txt","modified":false,"returns":"file.txt"},
+ {"name":"an empty reported title is a title","tab":{"id":"a","plugin":"alpha","title":"A"},"reported":"","modified":false,"returns":""},
+ {"name":"a modified tab shows a dot before its name","tab":{"id":"a","plugin":"alpha","title":"A"},"reported":"file.txt","modified":true,"returns":"● file.txt"}
+]
+}

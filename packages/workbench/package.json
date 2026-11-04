@@ -15,6 +15,7 @@
     "app.css",
     "library.css",
     "card.js",
+    "card-data.js",
     "card-sidebars.js",
     "card-tools.js",
     "card-insets.js",

@@ -1,0 +1,109 @@
+{
+"description":"The card sidebars: each case of cases starts from its card and runs its steps in order on the same card. The call card reads the data of the card; a step returns its value, throws its message, or returns no value. Each case of present states the presentation of the requested sides in a card rectangle; each case of grid states a size on the device pixel grid (docs/spec/example-model.md).",
+"cases":[
+ {"name":"a side without a choice follows the linked set","card":{"id":"main","data":{}},"steps":[
+  {"call":"effectiveSidebar","args":["left",{"size":190,"min":120,"max":480},{"id":"first"}],"returns":{"set":"first","size":190,"collapsed":false}},
+  {"call":"effectiveSidebar","args":["right",{"size":190,"min":120,"max":480},null],"returns":null}
+ ]},
+ {"name":"the stored size and collapsed choice apply to the linked set","card":{"id":"main","data":{"sidebars":{"left":{"size":240,"collapsed":true}}}},"steps":[
+  {"call":"effectiveSidebar","args":["left",{"size":190,"min":120,"max":480},{"id":"first"}],"returns":{"set":"first","size":240,"collapsed":true}}
+ ]},
+ {"name":"off turns a side off and inherit returns it to the link","card":{"id":"main","data":{}},"sets":{"first":{"id":"first"},"second":{"id":"second"}},"steps":[
+  {"call":"setSidebar","args":["left","second"]},
+  {"call":"effectiveSidebar","args":["left",{"size":190,"min":120,"max":480},{"id":"first"}],"returns":{"set":"second","size":190,"collapsed":false}},
+  {"call":"setSidebar","args":["left","off"]},
+  {"call":"effectiveSidebar","args":["left",{"size":190,"min":120,"max":480},{"id":"first"}],"returns":null},
+  {"call":"setSidebar","args":["left","inherit"]},
+  {"call":"card","returns":{"sidebars":{"left":{}}}},
+  {"call":"effectiveSidebar","args":["left",{"size":190,"min":120,"max":480},{"id":"first"}],"returns":{"set":"first","size":190,"collapsed":false}}
+ ]},
+ {"name":"a set that does not exist is refused","card":{"id":"main","data":{}},"sets":{"first":{"id":"first"}},"steps":[
+  {"call":"setSidebar","args":["left","gone"],"throws":"unknown sidebar set gone"},
+  {"call":"card","returns":{}}
+ ]},
+ {"name":"the set of a side resolves in the set list","card":{"id":"main","data":{"sidebars":{"left":{"set":"second"},"right":{"set":"gone"}}}},"sets":{"first":{"id":"first"},"second":{"id":"second"}},"steps":[
+  {"call":"resolveSidebarSet","args":["left",{"size":190,"min":120,"max":480},null],"returns":{"id":"second"}},
+  {"call":"resolveSidebarSet","args":["top",{"size":190,"min":120,"max":480},null],"returns":null},
+  {"call":"resolveSidebarSet","args":["right",{"size":190,"min":120,"max":480},null],"throws":"unknown sidebar set gone"}
+ ]},
+ {"name":"a click inverts the shown state and keeps the stored size","card":{"id":"main","data":{"sidebars":{"left":{"size":240}}}},"steps":[
+  {"call":"toggleSidebar","args":["left",{"size":190,"min":120,"max":480},{"id":"first"},false]},
+  {"call":"card","returns":{"sidebars":{"left":{"size":240,"collapsed":true}}}},
+  {"call":"toggleSidebar","args":["left",{"size":190,"min":120,"max":480},{"id":"first"},true]},
+  {"call":"card","returns":{"sidebars":{"left":{"size":240,"collapsed":false}}}}
+ ]},
+ {"name":"a side that is off cannot be toggled or sized","card":{"id":"main","data":{}},"steps":[
+  {"call":"toggleSidebar","args":["left",{"size":190,"min":120,"max":480},null,false],"throws":"card main has no left sidebar"},
+  {"call":"sizeSidebar","args":["left",200,{"size":190,"min":120,"max":480},null],"throws":"card main has no left sidebar"}
+ ]},
+ {"name":"a drag sizes a side and opens it","card":{"id":"main","data":{"sidebars":{"left":{"collapsed":true}}}},"steps":[
+  {"call":"sizeSidebar","args":["left",200,{"size":190,"min":120,"max":480},{"id":"first"}]},
+  {"call":"card","returns":{"sidebars":{"left":{"collapsed":false,"size":200}}}},
+  {"call":"sizeSidebar","args":["left",100,{"size":190,"min":120,"max":480},{"id":"first"}],"throws":"sidebar size must be 120 to 480 points"},
+  {"call":"sizeSidebar","args":["left",481,{"size":190,"min":120,"max":480},{"id":"first"}],"throws":"sidebar size must be 120 to 480 points"}
+ ]},
+ {"name":"a stored size outside the bounds is refused","card":{"id":"main","data":{"sidebars":{"left":{"size":90}}}},"steps":[
+  {"call":"effectiveSidebar","args":["left",{"size":190,"min":120,"max":480},null],"throws":"invalid sidebar size outside 120 to 480 points"}
+ ]},
+ {"name":"a card without data has no sidebar","card":{"id":"left","data":null},"steps":[
+  {"call":"effectiveSidebar","args":["left",{"size":190,"min":120,"max":480},null],"throws":"card left has no content"}
+ ]},
+ {"name":"an unknown side is refused","card":{"id":"main","data":{}},"steps":[
+  {"call":"effectiveSidebar","args":["middle",{"size":190,"min":120,"max":480},null],"throws":"unknown sidebar side middle"}
+ ]},
+ {"name":"an earlier form of the sidebars is refused","card":{"id":"main","data":{"panels":{}}},"steps":[
+  {"call":"effectiveSidebar","args":["left",{"size":190,"min":120,"max":480},null],"throws":"obsolete card sidebar state on card main"}
+ ]},
+ {"name":"sidebars that are not an object are refused","card":{"id":"main","data":{"sidebars":[]}},"steps":[
+  {"call":"effectiveSidebar","args":["left",{"size":190,"min":120,"max":480},null],"throws":"invalid card sidebars state"}
+ ]},
+ {"name":"a stored side that is not a side is refused","card":{"id":"main","data":{"sidebars":{"middle":{}}}},"steps":[
+  {"call":"effectiveSidebar","args":["left",{"size":190,"min":120,"max":480},null],"throws":"invalid card sidebar state"}
+ ]},
+ {"name":"a stored field that does not exist is refused","card":{"id":"main","data":{"sidebars":{"left":{"width":1}}}},"steps":[
+  {"call":"effectiveSidebar","args":["left",{"size":190,"min":120,"max":480},null],"throws":"invalid sidebar field width"}
+ ]},
+ {"name":"inherit is not a stored set","card":{"id":"main","data":{"sidebars":{"left":{"set":"inherit"}}}},"steps":[
+  {"call":"effectiveSidebar","args":["left",{"size":190,"min":120,"max":480},null],"throws":"invalid sidebar set"}
+ ]},
+ {"name":"a stored size that is not a number is refused","card":{"id":"main","data":{"sidebars":{"left":{"size":"wide"}}}},"steps":[
+  {"call":"effectiveSidebar","args":["left",{"size":190,"min":120,"max":480},null],"throws":"invalid sidebar size"}
+ ]},
+ {"name":"a stored collapsed that is not a boolean is refused","card":{"id":"main","data":{"sidebars":{"left":{"collapsed":1}}}},"steps":[
+  {"call":"effectiveSidebar","args":["left",{"size":190,"min":120,"max":480},null],"throws":"invalid sidebar collapsed state"}
+ ]}
+],
+"present":[
+ {"name":"sides that fit keep their sizes","requested":{"left":{"set":"s","size":100,"collapsed":false},"right":{"set":"s","size":100,"collapsed":false}},"rect":{"w":600,"h":400},"metrics":{"header":32,"footer":22,"border":1,"divider":4,"minimum":200,"sidebarMinimum":60},"prefer":{},"returns":{
+  "left":{"set":"s","size":100,"collapsed":false,"requestedCollapsed":false,"autoCollapsed":false,"collapseReason":null,"shownSize":100},
+  "right":{"set":"s","size":100,"collapsed":false,"requestedCollapsed":false,"autoCollapsed":false,"collapseReason":null,"shownSize":100}}},
+ {"name":"sides that do not fit scale in proportion while each stays over the minimum","requested":{"left":{"size":300,"collapsed":false},"right":{"size":100,"collapsed":false}},"rect":{"w":402,"h":400},"metrics":{"header":32,"footer":22,"border":1,"divider":4,"minimum":200,"sidebarMinimum":50},"prefer":{},"returns":{
+  "left":{"size":300,"collapsed":false,"requestedCollapsed":false,"autoCollapsed":false,"collapseReason":null,"shownSize":150},
+  "right":{"size":100,"collapsed":false,"requestedCollapsed":false,"autoCollapsed":false,"collapseReason":null,"shownSize":50}}},
+ {"name":"under the minimum only the first side opens","requested":{"left":{"size":300,"collapsed":false},"right":{"size":100,"collapsed":false}},"rect":{"w":322,"h":400},"metrics":{"header":32,"footer":22,"border":1,"divider":4,"minimum":200,"sidebarMinimum":60},"prefer":{},"returns":{
+  "left":{"size":300,"collapsed":false,"requestedCollapsed":false,"autoCollapsed":false,"collapseReason":null,"shownSize":116},
+  "right":{"size":100,"collapsed":true,"requestedCollapsed":false,"autoCollapsed":true,"collapseReason":"insufficient-width","shownSize":null}}},
+ {"name":"the side operated last opens first","requested":{"left":{"size":300,"collapsed":false},"right":{"size":100,"collapsed":false}},"rect":{"w":322,"h":400},"metrics":{"header":32,"footer":22,"border":1,"divider":4,"minimum":200,"sidebarMinimum":60},"prefer":{"width":"right"},"returns":{
+  "left":{"size":300,"collapsed":true,"requestedCollapsed":false,"autoCollapsed":true,"collapseReason":"insufficient-width","shownSize":null},
+  "right":{"size":100,"collapsed":false,"requestedCollapsed":false,"autoCollapsed":false,"collapseReason":null,"shownSize":100}}},
+ {"name":"a side that was chosen folded takes a divider of the room","requested":{"left":{"size":100,"collapsed":true},"right":{"size":100,"collapsed":false}},"rect":{"w":306,"h":400},"metrics":{"header":32,"footer":22,"border":1,"divider":4,"minimum":200,"sidebarMinimum":60},"prefer":{},"returns":{
+  "left":{"size":100,"collapsed":true,"requestedCollapsed":true,"autoCollapsed":false,"collapseReason":null,"shownSize":null},
+  "right":{"size":100,"collapsed":false,"requestedCollapsed":false,"autoCollapsed":false,"collapseReason":null,"shownSize":100}}},
+ {"name":"the height axis counts the head and the foot","requested":{"top":{"size":100,"collapsed":false}},"rect":{"w":600,"h":300},"metrics":{"header":32,"footer":22,"border":1,"divider":4,"minimum":200,"sidebarMinimum":60},"prefer":{},"returns":{
+  "top":{"size":100,"collapsed":true,"requestedCollapsed":false,"autoCollapsed":true,"collapseReason":"insufficient-height","shownSize":null}}},
+ {"name":"a side with no room closes by itself","requested":{"left":{"size":100,"collapsed":false}},"rect":{"w":250,"h":400},"metrics":{"header":32,"footer":22,"border":1,"divider":4,"minimum":200,"sidebarMinimum":60},"prefer":{},"returns":{
+  "left":{"size":100,"collapsed":true,"requestedCollapsed":false,"autoCollapsed":true,"collapseReason":"insufficient-width","shownSize":null}}},
+ {"name":"no side gives no presentation","requested":{},"rect":{"w":600,"h":400},"metrics":{"header":32,"footer":22,"border":1,"divider":4,"minimum":200,"sidebarMinimum":60},"prefer":{},"returns":{}},
+ {"name":"a minimum of zero is refused","requested":{},"rect":{"w":600,"h":400},"metrics":{"header":32,"footer":22,"border":1,"divider":4,"minimum":0,"sidebarMinimum":60},"prefer":{},"throws":"invalid sidebar presentation geometry"},
+ {"name":"a negative length is refused","requested":{},"rect":{"w":-1,"h":400},"metrics":{"header":32,"footer":22,"border":1,"divider":4,"minimum":200,"sidebarMinimum":60},"prefer":{},"throws":"invalid sidebar presentation geometry"},
+ {"name":"a negative size is refused","requested":{"left":{"size":-1,"collapsed":false}},"rect":{"w":600,"h":400},"metrics":{"header":32,"footer":22,"border":1,"divider":4,"minimum":200,"sidebarMinimum":60},"prefer":{},"throws":"invalid sidebar presentation state"},
+ {"name":"an unknown side is refused","requested":{"middle":{"size":1,"collapsed":false}},"rect":{"w":600,"h":400},"metrics":{"header":32,"footer":22,"border":1,"divider":4,"minimum":200,"sidebarMinimum":60},"prefer":{},"throws":"unknown sidebar side middle"}
+],
+"grid":[
+ {"name":"a size on the grid stays","size":120.5,"ratio":2,"returns":120.5},
+ {"name":"a size off the grid moves to the nearest device pixel","size":120.3,"ratio":2,"returns":120.5},
+ {"name":"a half pixel rounds up","size":120.25,"ratio":2,"returns":120.5},
+ {"name":"a ratio of 3 gives thirds","size":100.4,"ratio":3,"returns":100.33333333333333},
+ {"name":"a ratio of zero is refused","size":120,"ratio":0,"throws":"invalid sidebar size or device pixel ratio"}
+]
+}

@@ -1,4 +1,5 @@
 import { isLocalAbsolutePath, originFault } from "@soksak/plugin-api";
+import { tabName } from "./card-data.js";
 
 // The tab title, the bottom text, and the working directory that a surface reported (docs/spec/plugins.md#tab-reports). They are not stored in the layout.
 const labels = new Map();
@@ -347,9 +348,7 @@ export const tabMemoryState = (tabId) => memoryStates.get(tabId) ?? "loaded";
  * memory saver state of `data-tab-state` (docs/spec/exposure.md#tab-memory).
  */
 export function tabButtonData(tab) {
-  // default: a tab whose surface reported no title shows the title of its layout entry.
-  const label = labels.get(tab.id) ?? tab.title;
-  return { name: `${modified.has(tab.id) ? "● " : ""}${label}`, tabState: tabMemoryState(tab.id) };
+  return { name: tabName(tab, labels.get(tab.id), modified.has(tab.id)), tabState: tabMemoryState(tab.id) };
 }
 
 /**
