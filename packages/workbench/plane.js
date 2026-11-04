@@ -8,6 +8,7 @@ import { Soksak, SoksakView, outline, sliceTree } from "soksak";
 import { borderWidth, cardRadius, halfGap, linkedSet, pluginSettings, set as setSetting, stagePad, value } from "./settings.js";
 import { effectiveTextScope, nextTextSize, notifyTextSize, setSurfaceTextSize, setTextScope, textScope } from "./text-size.js";
 import { applyFrameText, chromeRow, measureAt } from "./frame-text.js";
+import { placeFocusMark } from "./chrome-metrics.js";
 import { hasPlugin, isPlace, plugin, plugins } from "./registry.js";
 import { clearSet, drawSet, restoreSidebarChoices, sidebarChoices } from "./sidebar-sections.js";
 import { bindSidebarGrip } from "./sidebar-grip.js";
@@ -1331,8 +1332,8 @@ function centreTabs() {
  * The focus mark is placed in the body area of the focused card, outside it by the stroke width.
  *
  * If it fit the body, the mark would overlap the native surface and hide the surface content. When it is outside by the
- * stroke width, the stroke lies outside the surface boundary and does not cover the body. The stylesheet decides that
- * thickness, so it is obtained by measuring.
+ * stroke width, the stroke lies outside the surface boundary and does not cover the body. The chrome metric focus-mark-t is
+ * that width.
  *
  * It is placed in the same layer as the surface and not inside the card. A surface does not take part in the CSS stack, so a
  * mark drawn inside the card is hidden under the surface in the application.
@@ -1347,14 +1348,7 @@ function markFocus() {
     ? plane.querySelector(`[data-native-surface-id="${shown.id}"][data-native-surface]`)
     : null;
   if (!slot) { mark.hidden = true; return; }
-  const host = plane.getBoundingClientRect();
-  const r = slot.getBoundingClientRect();
-  // The mark stands outside by the stroke width. The chrome metric focus-mark-t decides that thickness, so it is obtained by measuring.
-  const out = parseFloat(getComputedStyle(mark).getPropertyValue("--focus-mark-t"));
-  mark.style.left = `${r.left - host.left - out}px`;
-  mark.style.top = `${r.top - host.top - out}px`;
-  mark.style.width = `${r.width + out * 2}px`;
-  mark.style.height = `${r.height + out * 2}px`;
+  placeFocusMark(mark, plane, slot);
   mark.hidden = false;
 }
 

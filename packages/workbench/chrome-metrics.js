@@ -24,3 +24,17 @@ export function followLibraryWidth(root, view) {
   mark();
   narrow.addEventListener("change", mark);
 }
+
+/**
+ * Places mark around slot in the coordinates of host, outside the slot on every side by the chrome metric focus-mark-t. The stroke of the
+ * mark is that metric thick (app.css), so the stroke lies outside the slot and does not cover the surface drawn in it.
+ */
+export function placeFocusMark(mark, host, slot) {
+  const out = parseFloat(CHROME["focus-mark-t"]);
+  const h = host.getBoundingClientRect();
+  const r = slot.getBoundingClientRect();
+  mark.style.left = `${r.left - h.left - out}px`;
+  mark.style.top = `${r.top - h.top - out}px`;
+  mark.style.width = `${r.width + out * 2}px`;
+  mark.style.height = `${r.height + out * 2}px`;
+}

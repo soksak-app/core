@@ -185,7 +185,7 @@ A change that leaves `sidebarMinWidth` ≤ `sidebarWidth` ≤ `sidebarMaxWidth` 
 
 The following layout constants remain in code because they are tied to the document structure rather than to a preference: the card header 32 and footer 22 points and the tab strip thresholds (`plane.js`). The left and right sidebar widths of a new space come from the `workspace.grid` cards of `environment.json`.
 
-The lengths, ratios and durations of the workbench stylesheets (`app.css`, `library.css` and `overlay.html`) are the chrome metrics of `packages/workbench/workbench.json`. The workbench sets each of them as a custom property of the document root before the page draws, and the stylesheets read the custom properties; a stylesheet holds no literal length, ratio or duration.
+The lengths, ratios and durations of the workbench stylesheets (`app.css`, `library.css` and `overlay.html`) are the chrome metrics of `packages/workbench/workbench.json`. The workbench sets each of them as a custom property of the document root before the page draws, and the stylesheets read the custom properties; a stylesheet holds no literal length, ratio or duration. A media condition cannot read a custom property, so the workbench marks the document root with `data-library-narrow` while the window is at most `library-narrow-w` wide, and `library.css` narrows the library by that mark. The focus mark stands outside the body of the focused card on every side by `focus-mark-t`, the thickness of its stroke, so the stroke does not cover the surface.
 
 ## Status
 
