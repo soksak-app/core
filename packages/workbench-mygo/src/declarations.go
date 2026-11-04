@@ -41,6 +41,7 @@ type Declarations struct {
 	// exposes holds the declarations under the keys of the declaration file, and params the parameter schema of each command.
 	exposes map[string][]map[string]any
 	params  map[string]any
+	many    map[string]bool
 	chrome  map[string]string
 	themes  []declaredTheme
 }
@@ -127,8 +128,12 @@ var Declared = sync.OnceValues(func() (*Declarations, error) {
 	for _, entry := range exposure.Exposes["commands"] {
 		params[entry["name"].(string)] = entry["params"]
 	}
+	many := map[string]bool{}
+	for _, entry := range exposure.Exposes["dom"] {
+		many[entry["name"].(string)] = entry["many"] == true
+	}
 	return &Declarations{
 		Statuses: names(exposure.Exposes["status"]), Commands: names(exposure.Exposes["commands"]), Elements: names(exposure.Exposes["dom"]),
-		Shortcuts: shortcuts.Shortcuts, exposes: exposure.Exposes, params: params, chrome: values.Chrome, themes: values.Themes,
+		Shortcuts: shortcuts.Shortcuts, exposes: exposure.Exposes, params: params, many: many, chrome: values.Chrome, themes: values.Themes,
 	}, nil
 })

@@ -10,6 +10,17 @@ type ElementName struct {
 	Index int
 }
 
+// elementName is the element name of the key of an element, or "" for a key that names none.
+func elementName(key any) string {
+	switch named := key.(type) {
+	case ElementName:
+		return named.Name
+	case Exposed:
+		return named.Name
+	}
+	return ""
+}
+
 // RunCommand runs the declared command name with params.
 type RunCommand func(name string, params map[string]any)
 

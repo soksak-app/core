@@ -31,6 +31,8 @@ type ShellOptions struct {
 	Post func(task func())
 	// Report writes a line of a shown error to the application log.
 	Report func(line string)
+	// Elements are the elements of the window, which the element requests answer from.
+	Elements Elements
 	// Seat draws what stands in the slot of a card. Without it the slot stays empty.
 	Seat Seat
 }
@@ -150,6 +152,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 		grid: environment.Workspace.Grid, focus: environment.Workspace.Focus, browsing: true, library: newLibraryState()}
 	s.errors = NewShownErrors(options.Report)
 	s.binder = NewBinder(s.registry, func(_ string, err error) { s.fail(err) })
+	s.registry.Elements(options.Elements)
 	s.requests = NewRequests(s.registry, s.calls, options.Post, options.Report)
 	s.register()
 	return s, nil

@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/egoist/mygo/ui"
+
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
@@ -278,5 +280,120 @@ func TestARequestThatCannotBeReadIsReported(t *testing.T) {
 	r.queue.run()
 	if len(r.failures) != 2 || !strings.HasPrefix(r.failures[0], "exposure request: ") || !strings.HasPrefix(r.failures[1], "exposure request: ") {
 		t.Fatalf("the failures are %v", r.failures)
+	}
+}
+
+// drawnElements are the elements of a Tester, as a window gives them to the registry.
+type drawnElements struct{ tester *ui.Tester }
+
+func (d drawnElements) ElementTree() ([]ui.ElementNode, error) { return d.tester.ElementTree(), nil }
+
+func (d drawnElements) ActElement(id uint64, action ui.Actions, text string) error {
+	return d.tester.ActElement(id, action, text)
+}
+
+// elementScene draws two cards, a name that the declaration does not mark many twice, a button that a screen named, and a text
+// field, and answers with the relay of its registry, the tester, the commands that ran and the value of the field.
+func elementScene(t *testing.T) (*relay, *ui.Tester, *[]string, *string) {
+	declared := registry(t)
+	var ran []string
+	declared.Command("core.card.focus", func(params json.RawMessage) (any, error) {
+		ran = append(ran, string(params))
+		return nil, nil
+	})
+	binder := workbench.NewBinder(declared, func(_ string, err error) { t.Error(err) })
+	value := "before"
+	tester := ui.NewTester(func(c *ui.Context) {
+		names := workbench.NewElementNames()
+		ui.Column(c).Fill().Children(func() {
+			for _, card := range []string{"c1", "c2"} {
+				binder.Press(c, "core.card", "core.card.focus", card, map[string]string{"card": card}).Role(ui.RoleGroup).Label(card).Size(100, 40)
+			}
+			ui.Button(c.Key(names.Next("core.debug.close")), "close")
+			ui.Button(c.Key(workbench.ElementName{Name: "core.library.add"}), "add one")
+			ui.Button(c.Key(workbench.ElementName{Name: "core.library.add", Index: 1}), "add two")
+			c.Key(workbench.ElementName{Name: "core.library.form.name"})
+			ui.TextInput(c, &value).Label("name")
+		})
+	}, 400, 300)
+	declared.Elements(drawnElements{tester})
+	return newRelay(t, declared), tester, &ran, &value
+}
+
+func TestAnElementRequestAnswersFromTheElementTree(t *testing.T) {
+	r, tester, _, _ := elementScene(t)
+	var second ui.ElementNode
+	for _, node := range tester.ElementTree() {
+		if node.Label == "c2" {
+			second = node
+		}
+	}
+	want := map[string]any{"x": float64(second.Bounds.X), "y": float64(second.Bounds.Y), "width": float64(second.Bounds.W),
+		"height": float64(second.Bounds.H), "zoom": float64(1), "document": map[string]any{"x": float64(0), "y": float64(0)}}
+	if reply := r.ask("dom.rect", `{"name":"core.card","index":1}`); !reflect.DeepEqual(reply["result"], want) {
+		t.Fatalf("the rectangle is %v, want %v", reply, want)
+	}
+	if reply := r.ask("dom.rect", `{"name":"core.debug.close"}`); reply["error"] != nil {
+		t.Fatalf("an element that a screen named answered %v", reply)
+	}
+	if second.Bounds.H <= 0 {
+		t.Fatalf("the card has the box %+v", second.Bounds)
+	}
+}
+
+func TestAnElementRequestIsRefusedAsThePageRefusesIt(t *testing.T) {
+	r, _, _, _ := elementScene(t)
+	for _, row := range []struct {
+		method, params string
+		code           int
+		message        string
+	}{
+		{"dom.rect", `{"name":"core.library.return"}`, 1002, "dom core.library.return has no element"},
+		{"dom.rect", `{"name":"core.library.add"}`, 1002, "dom core.library.add has 2 elements"},
+		{"dom.rect", `{"name":"core.card","index":2}`, 1002, "dom core.card has no element at index 2"},
+		{"dom.rect", `{"name":"core.card","index":-1}`, -32602, "index must be a non-negative integer"},
+		{"dom.rect", `{"name":"core.card","index":1.5}`, -32602, "index must be a non-negative integer"},
+		{"dom.rect", `{"name":"core.card","index":null}`, -32602, "index must be a non-negative integer"},
+		{"dom.act", `{"name":"core.library.form.name","action":"input"}`, -32602, "input requires a string value"},
+		{"dom.act", `{"name":"core.card","action":"dispatch","event":{"type":"click"}}`, -32000, "the mygo workbench has no DOM events"},
+		{"dom.act", `{"name":"core.card","action":"hover"}`, -32602, "unknown action hover"},
+		{"dom.act", `{"name":"core.card"}`, -32602, "unknown action undefined"},
+		{"dom.act", `{"name":"core.card","action":"input","value":"x"}`, -32000, "dom core.card takes no input"},
+	} {
+		code, message := r.refused(r.ask(row.method, row.params))
+		if code != row.code || message != row.message {
+			t.Errorf("%s %s: refused with %d %q, want %d %q", row.method, row.params, code, message, row.code, row.message)
+		}
+	}
+}
+
+func TestAnElementActionReachesTheElement(t *testing.T) {
+	r, tester, ran, value := elementScene(t)
+	if reply := r.ask("dom.act", `{"name":"core.card","index":1,"action":"click"}`); reply["error"] != nil || reply["result"] != nil {
+		t.Fatalf("the click answered %v", reply)
+	}
+	tester.Frame()
+	if !reflect.DeepEqual(*ran, []string{`{"card":"c2"}`}) {
+		t.Fatalf("the commands that ran are %v", *ran)
+	}
+	if reply := r.ask("dom.act", `{"name":"core.library.form.name","action":"input","value":"after"}`); reply["error"] != nil {
+		t.Fatalf("the input answered %v", reply)
+	}
+	tester.Frame()
+	tester.Frame()
+	if *value != "after" {
+		t.Fatalf("the field holds %q", *value)
+	}
+}
+
+func TestTheListReportsADrawnElementAsRegistered(t *testing.T) {
+	r, _, _, _ := elementScene(t)
+	list := r.ask("exposure.list", `{}`)["result"].(map[string]any)
+	registered := map[string]any{}
+	for _, entry := range list["dom"].([]any) {
+		registered[entry.(map[string]any)["name"].(string)] = entry.(map[string]any)["registered"]
+	}
+	if registered["core.card"] != true || registered["core.library.return"] != false {
+		t.Fatalf("core.card is %v and core.library.return is %v", registered["core.card"], registered["core.library.return"])
 	}
 }

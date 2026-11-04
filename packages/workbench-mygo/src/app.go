@@ -13,9 +13,10 @@ import (
 // The workbench of the mygo application: one shell for each window, connected to the host through the Workbench port of the
 // framework adapter (docs/spec/hosts.md#workbench).
 
-// Painted is what the workbench needs of a window beyond the Frontend port: asking for a frame.
+// Painted is what the workbench needs of a window beyond the Frontend port: asking for a frame and its elements.
 type Painted interface {
 	Invalidate()
+	Elements
 }
 
 // AppOptions is what the application gives the workbench.
@@ -65,8 +66,9 @@ func (a *App) Build(window host.Frontend) func(c *ui.Context) {
 	if err != nil {
 		panic(err) // NewApp read the same embedded declarations.
 	}
+	painted := window.(Painted)
 	shell, err := NewShell(ShellOptions{Declared: declared, Calls: NewCalls(a.options.Table(window), a.options.Post),
-		Environment: a.options.Environment, Invalidate: window.(Painted).Invalidate, Post: a.options.Post, Report: a.options.Report})
+		Environment: a.options.Environment, Invalidate: painted.Invalidate, Elements: painted, Post: a.options.Post, Report: a.options.Report})
 	if err != nil {
 		panic(err) // The environment declaration is staged with the application, and its test holds its form.
 	}

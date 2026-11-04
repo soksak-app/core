@@ -5,9 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math"
 	"regexp"
 	"sort"
 	"sync"
+
+	"github.com/egoist/mygo/ui"
 )
 
 // Command is the handler of a declared command. params is the JSON of its parameters, which is empty when it has none.
@@ -39,6 +42,12 @@ func Refuse(code int, format string, values ...any) *Refusal {
 	return &Refusal{Code: code, Message: fmt.Sprintf(format, values...)}
 }
 
+// Elements are the elements of a window: its element tree and the actions on it. Both run on the main thread, outside a frame.
+type Elements interface {
+	ElementTree() ([]ui.ElementNode, error)
+	ActElement(id uint64, action ui.Actions, text string) error
+}
+
 // Changed receives the value of a watched status.
 type Changed func(name string, value any)
 
@@ -57,6 +66,7 @@ type Registry struct {
 	commands map[string]Command
 	statuses map[string]Status
 	watches  map[string]*watch
+	elements Elements
 }
 
 // NewRegistry returns an empty registry of the names of declared.
@@ -140,7 +150,7 @@ var causeID = regexp.MustCompile(`^[^"\\\x00-\x1f\x7f]+$`)
 // A status that the request starts to watch sends its values to changed.
 func (r *Registry) Answer(method string, params json.RawMessage, changed Changed) (any, error) {
 	if method == "exposure.list" {
-		return r.list(), nil
+		return r.list()
 	}
 	kind, known := methodKinds[method]
 	if !known {
@@ -173,8 +183,107 @@ func (r *Registry) Answer(method string, params json.RawMessage, changed Changed
 		}
 		return nil, Refuse(InvalidParams, "dom %s takes no address", *name)
 	}
-	// The registry holds no element, so a declared name has none.
-	return nil, Refuse(Unregistered, "dom %s has no element", *name)
+	element, err := r.element(*name, fields["index"])
+	if err != nil {
+		return nil, err
+	}
+	if method == "dom.rect" {
+		return map[string]any{"x": element.Bounds.X, "y": element.Bounds.Y, "width": element.Bounds.W, "height": element.Bounds.H,
+			"zoom": 1, "document": map[string]any{"x": 0, "y": 0}}, nil
+	}
+	return nil, r.act(*name, element, fields)
+}
+
+// Elements gives the registry the elements of its window. Without them a declared element name has no element.
+func (r *Registry) Elements(elements Elements) { r.elements = elements }
+
+// drawn returns the elements of the last frame by their element names, each name in tree order.
+func (r *Registry) drawn() (map[string][]ui.ElementNode, error) {
+	named := map[string][]ui.ElementNode{}
+	if r.elements == nil {
+		return named, nil
+	}
+	tree, err := r.elements.ElementTree()
+	if err != nil {
+		return nil, Refuse(Failed, "%v", err)
+	}
+	var walk func(nodes []ui.ElementNode)
+	walk = func(nodes []ui.ElementNode) {
+		for _, node := range nodes {
+			if name := elementName(node.Key); name != "" {
+				named[name] = append(named[name], node)
+			}
+			walk(node.Children)
+		}
+	}
+	walk(tree)
+	return named, nil
+}
+
+// element returns the element that a request names.
+func (r *Registry) element(name string, index json.RawMessage) (ui.ElementNode, error) {
+	var none ui.ElementNode
+	drawn, err := r.drawn()
+	if err != nil {
+		return none, err
+	}
+	list := drawn[name]
+	if len(list) == 0 {
+		return none, Refuse(Unregistered, "dom %s has no element", name)
+	}
+	if !r.declared.many[name] && len(list) > 1 {
+		return none, Refuse(Unregistered, "dom %s has %d elements", name, len(list))
+	}
+	position := 0
+	if index != nil {
+		var number any
+		if json.Unmarshal(index, &number) != nil {
+			return none, Refuse(InvalidParams, "index must be a non-negative integer")
+		}
+		value, ok := number.(float64)
+		if !ok || value < 0 || value != math.Trunc(value) {
+			return none, Refuse(InvalidParams, "index must be a non-negative integer")
+		}
+		if value >= float64(len(list)) {
+			return none, Refuse(Unregistered, "dom %s has no element at index %v", name, value)
+		}
+		position = int(value)
+	}
+	return list[position], nil
+}
+
+// act performs the action of a request on element. The action works as assistive technology performs it, in the next frame.
+func (r *Registry) act(name string, element ui.ElementNode, fields map[string]json.RawMessage) error {
+	action := "undefined"
+	if raw, present := fields["action"]; present && json.Unmarshal(raw, &action) != nil {
+		return Refuse(InvalidParams, "unknown action %s", raw)
+	}
+	switch action {
+	case "click":
+		if element.Actions&ui.ActionPress == 0 {
+			return Refuse(Failed, "dom %s takes no click", name)
+		}
+		return r.perform(name, element, ui.ActionPress, "")
+	case "input":
+		var value *string
+		if json.Unmarshal(fields["value"], &value) != nil || value == nil {
+			return Refuse(InvalidParams, "input requires a string value")
+		}
+		if element.Actions&ui.ActionSetValue == 0 {
+			return Refuse(Failed, "dom %s takes no input", name)
+		}
+		return r.perform(name, element, ui.ActionSetValue, *value)
+	case "dispatch":
+		return Refuse(Failed, "the mygo workbench has no DOM events")
+	}
+	return Refuse(InvalidParams, "unknown action %s", action)
+}
+
+func (r *Registry) perform(name string, element ui.ElementNode, action ui.Actions, text string) error {
+	if err := r.elements.ActElement(element.ID, action, text); err != nil {
+		return Refuse(Failed, "dom %s: %v", name, err)
+	}
+	return nil
 }
 
 // runRequest runs the command of a request after the checks of the page, in their order.
@@ -214,13 +323,17 @@ func validCauses(cids json.RawMessage) bool {
 }
 
 // list gives the declarations in the format of the declaration file, each with its registration.
-func (r *Registry) list() map[string][]map[string]any {
+func (r *Registry) list() (map[string][]map[string]any, error) {
+	drawn, err := r.drawn()
+	if err != nil {
+		return nil, err
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	registered := map[string]func(name string) bool{
 		"status":   func(name string) bool { return r.statuses[name] != nil },
 		"commands": func(name string) bool { return r.commands[name] != nil },
-		"dom":      func(string) bool { return false },
+		"dom":      func(name string) bool { return len(drawn[name]) > 0 },
 	}
 	out := map[string][]map[string]any{}
 	for key, entries := range r.declared.exposes {
@@ -233,7 +346,7 @@ func (r *Registry) list() map[string][]map[string]any {
 		}
 		out[key] = listed
 	}
-	return out
+	return out, nil
 }
 
 // watch starts to send the values of the status name to changed, beginning with the current value. A status that is already

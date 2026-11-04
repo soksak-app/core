@@ -7,6 +7,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/egoist/mygo/ui"
+
 	host "github.com/soksak-app/core/packages/host/go/src"
 
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
@@ -18,6 +20,10 @@ type appWindow struct {
 	mu     sync.Mutex
 	frames int
 }
+
+func (w *appWindow) ElementTree() ([]ui.ElementNode, error) { return nil, nil }
+
+func (w *appWindow) ActElement(uint64, ui.Actions, string) error { return nil }
 
 func (w *appWindow) Invalidate() {
 	w.mu.Lock()

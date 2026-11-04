@@ -495,7 +495,7 @@ mygo는 version 0.7.4이며, tag의 이력은 2026-09-26에 시작한다[S25]. v
 
 workbench의 element tree(U4)가 binder audit, element 사각형, element action에 answer를 주므로, window check는 `endpoint.json`을 통해 세 application에 대해 실행된다. 단, 대상이 main page나 modal web view인 check는 제외한다.
 
-host는 요청을 [relay](exposure.ko.md#전달)의 event `exposure-request`로 workbench에 보내며, 이 event는 `Frontend.Emit`과 `Workbench.Emit`을 거쳐 workbench에 닿는다. `src/requests.go`의 `Requests`는 각 요청을 main thread의 한 step에서 `Registry.Answer`로 처리하고(눌린 element의 command도 이 thread에서 실행된다) 그 answer를 host call `exposureReply`로 돌려보낸다. watch 중인 status는 그 값을 `exposureChanged`로 보낸다. `Registry.Answer`는 page registry의 answer와 refusal을 같은 순서로 낸다. workbench는 첫 화면이 서면 `windowReady`를 호출하며, 그 전의 요청을 host는 준비되지 않은 main page에 대한 요청처럼 1003으로 거절한다.
+host는 요청을 [relay](exposure.ko.md#전달)의 event `exposure-request`로 workbench에 보내며, 이 event는 `Frontend.Emit`과 `Workbench.Emit`을 거쳐 workbench에 닿는다. `src/requests.go`의 `Requests`는 각 요청을 main thread의 한 step에서 `Registry.Answer`로 처리하고(눌린 element의 command도 이 thread에서 실행된다) 그 answer를 host call `exposureReply`로 돌려보낸다. watch 중인 status는 그 값을 `exposureChanged`로 보낸다. `Registry.Answer`는 page registry의 answer와 refusal을 같은 순서로 낸다. element 요청은 그 step에서 마지막 frame의 element tree를 읽는다: 사각형은 window point 단위의 element frame이고 `zoom`은 1, `document`는 `{x: 0, y: 0}`이며, `click`과 `input`은 assistive technology가 element에 주는 press와 value이고, `dispatch`는 `the mygo workbench has no DOM events`로 실패한다. workbench는 첫 화면이 서면 `windowReady`를 호출하며, 그 전의 요청을 host는 준비되지 않은 main page에 대한 요청처럼 1003으로 거절한다.
 
 ### Native view
 

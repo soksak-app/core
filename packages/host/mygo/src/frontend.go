@@ -20,6 +20,8 @@ type Frontend struct {
 	name      string
 	framework *Framework
 	window    *mygo.Window
+	// content is what the window shows, which holds its element tree.
+	content *ui.Content
 	// view is the view of the current workbench of the window.
 	view atomic.Pointer[func(c *ui.Context)]
 
@@ -35,6 +37,14 @@ type Frontend struct {
 
 // Window is the mygo window.
 func (f *Frontend) Window() *mygo.Window { return f.window }
+
+// ElementTree reads the element tree of the last frame of the window. Call it on the main thread.
+func (f *Frontend) ElementTree() ([]ui.ElementNode, error) { return f.content.ElementTree() }
+
+// ActElement performs an action on an element of the last frame of the window. Call it on the main thread.
+func (f *Frontend) ActElement(id uint64, action ui.Actions, text string) error {
+	return f.content.ActElement(id, action, text)
+}
 
 // placeNativeView puts the native view of the window under its content. Every surface of the window lies in that view, so a window
 // without it can show no surface, and each surface reports that failure. Call it on the main thread.

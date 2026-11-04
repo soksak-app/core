@@ -101,14 +101,15 @@ func (*Framework) InstallDock(newWindow func()) error {
 func (f *Framework) NewWindow(options host.WindowOptions) host.Frontend {
 	frontend := &Frontend{name: options.Name, framework: f}
 	mygo.RunOnMain(func() {
+		frontend.content = ui.View(func(c *ui.Context) {
+			if view := frontend.view.Load(); view != nil {
+				(*view)(c)
+			}
+		})
 		frontend.window = mygo.NewWindow(mygo.WindowOptions{
 			Title: options.Title, Width: Pixels(options.Width), Height: Pixels(options.Height), Hidden: true,
 			TitleBarStyle: mygo.TitleBarHidden, BackgroundColor: "#101117", DrawWhileOccluded: true,
-			Content: ui.View(func(c *ui.Context) {
-				if view := frontend.view.Load(); view != nil {
-					(*view)(c)
-				}
-			}),
+			Content: frontend.content,
 		})
 		frontend.placeNativeView()
 		frontend.started()
