@@ -1,6 +1,8 @@
 package workbench
 
 import (
+	"fmt"
+
 	"github.com/egoist/mygo/ui"
 
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
@@ -82,10 +84,17 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, width 
 	}
 	const tools = 5 // The tools of a full card head: add, split x, split y, full screen and close.
 	fit := layout.FitHead(layout.Head{Width: float64(width), PaddingLeft: float64(s.metrics.tabsPad), PaddingRight: float64(s.metrics.tabsPad),
-		Lead: 0, Gap: float64(s.metrics.tabsGap), ToolsWidth: float64(tools * s.metrics.actW), MoreWidth: float64(s.metrics.actW),
+		Lead: float64(s.metrics.actW), Gap: float64(s.metrics.tabsGap), ToolsWidth: float64(tools * s.metrics.actW), MoreWidth: float64(s.metrics.actW),
 		TabWidths: widths, TabGap: float64(s.metrics.tabsGap), ActiveWidth: activeWidth, Peek: float64(s.metrics.tabPeekW), MinTab: float64(s.metrics.tabMinW)})
 	ui.Row(c).Size(width, s.metrics.headH).PaddingX(s.metrics.tabsPad).AlignItems(ui.Center).Gap(s.metrics.tabsGap).Clip().
 		Role(ui.RoleGroup).Label("core.card.header").BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.Rule).Children(func() {
+		if fit.Fit == "ham" {
+			list := s.binder.Press(c, "core.card.tab-list", "core.card.tab-list", id, cardParam{Card: id})
+			s.anchored("core.card.tab-list/"+id, list)
+			list.Size(s.metrics.actW, s.metrics.actH).Center().Label(fmt.Sprintf("탭 %d개", len(tabs))).Children(func() {
+				ui.Text(c, "≡").FontSize(12).TextColor(s.palette.Muted)
+			})
+		}
 		ui.Row(c).Grow(1).Gap(s.metrics.tabsGap).AlignItems(ui.Center).Clip().Children(func() {
 			for _, tab := range tabs {
 				on := active != nil && tab.ID == active.ID
@@ -95,32 +104,37 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, width 
 				s.drawTab(c, tab, on)
 			}
 		})
-		if fit.Tools == "bar" {
-			s.drawTools(c, id)
-		}
+		s.drawTools(c, id, fit.Tools != "bar")
 	})
 }
 
 func (s *Shell) drawTab(c *ui.Context, tab layout.Tab, on bool) {
 	name := layout.TabName(tab, nil, false)
 	ui.Row(c.Key("tab-" + tab.ID)).AlignItems(ui.Center).Children(func() {
-		s.barText(c, s.binder.Press(c, "core.card.tab", "core.tab.select", tab.ID, tabParam{tab.ID}), name, on)
+		button := s.binder.Press(c, "core.card.tab", "core.tab.select", tab.ID, tabParam{tab.ID})
+		s.barText(c, button, name, on)
+		s.tabContextMenu(button, tab.ID)
 		s.barText(c, s.binder.Press(c, "core.card.tab-close", "core.tab.close", tab.ID, tabParam{tab.ID}), "✕", false)
 	})
 }
 
 // drawTools draws the tools of a card.
-func (s *Shell) drawTools(c *ui.Context, id string) {
+func (s *Shell) drawTools(c *ui.Context, id string, folded bool) {
 	tool := func(name, command, label string, params any) {
 		button := s.binder.Press(c, name, command, id, params)
+		s.anchored(name+"/"+id, button)
 		button.Size(s.metrics.actW, s.metrics.actH).Center().Label(label).Children(func() {
 			ui.Text(c, label).FontSize(12).TextColor(s.palette.Muted)
 		})
 	}
-	tool("core.card.add", "core.card.add-tab", "+", cardParam{Card: id})
-	tool("core.card.split-x", "core.card.split", "┃", cardParam{Card: id, Side: "right"})
-	tool("core.card.split-y", "core.card.split", "━", cardParam{Card: id, Side: "bottom"})
-	tool("core.card.close", "core.card.close", "✕", cardParam{Card: id})
+	if !folded {
+		tool("core.card.add", "core.card.menu", "+", menuParam{Card: id, Menu: "add"})
+		tool("core.card.split-x", "core.card.menu", "┃", menuParam{Card: id, Menu: "split-x"})
+		tool("core.card.split-y", "core.card.menu", "━", menuParam{Card: id, Menu: "split-y"})
+		tool("core.card.close", "core.card.close", "✕", cardParam{Card: id})
+		return
+	}
+	tool("core.card.tools", "core.card.tools", "⋯", cardParam{Card: id})
 }
 
 // drawStatus draws the status line of a card.

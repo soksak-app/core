@@ -1,0 +1,525 @@
+package workbench
+
+import (
+	"errors"
+	"fmt"
+	"slices"
+
+	"github.com/egoist/mygo/ui"
+
+	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
+)
+
+// The picker layer: the add, split, tool, tab and context menus of the workbench, as plane.js opens them and picker-layer.js fills
+// them. It is native UI, drawn over the window (docs/spec/hosts.md#native-views).
+
+// pickerAsk are the questions of the add menu by its tool.
+var pickerAsk = map[string]string{"add": "새 탭에 무엇을 띄울까", "x": "새 위치에 무엇을 띄울까", "y": "새 위치에 무엇을 띄울까"}
+
+// menuTools are the menus of the card head, with the tool of each and the side that its split takes.
+var menuTools = map[string]struct{ tool, side string }{"add": {tool: "add"}, "split-x": {"x", "right"}, "split-y": {"y", "bottom"}}
+
+// pickerItem is an item of the layer. Expose is the element name of an item that has its own, and Icon the SVG elements of a
+// 16-unit view box.
+type pickerItem struct {
+	Key, Name, Mark, Icon, Expose string
+	Active                        bool
+}
+
+// picker is the open layer. An anchored layer stands below the element of anchor, on its start with start and on its end
+// otherwise, and a layer without an anchor stands at x and y of the window.
+type picker struct {
+	open    bool
+	title   string
+	items   []pickerItem
+	anchor  string
+	start   bool
+	x, y    float32
+	pick    func(key string) error
+	dismiss func()
+	// drawn holds the anchors of the current frame.
+	drawn map[string]ui.Element
+}
+
+// pickerMetrics are the chrome metrics of the layer.
+type pickerMetrics struct {
+	minW, maxW, maxH, outerPad, pad, icon, iconH, gap, itemPadY, headTop, headX, headBottom, noteGap, shadowY, shadowBlur, shadowAlpha float32
+}
+
+func (s *Shell) readPickerMetrics() pickerMetrics {
+	metric := func(name string) float32 {
+		value, _ := s.options.Declared.Metric("picker-" + name)
+		return float32(value)
+	}
+	return pickerMetrics{minW: metric("min-w"), maxW: metric("max-w"), maxH: metric("max-h"), outerPad: metric("outer-pad"), pad: metric("pad"),
+		icon: metric("icon"), iconH: metric("icon-h"), gap: metric("gap"), itemPadY: metric("item-pad-y"), headTop: metric("head-pad-top"),
+		headX: metric("head-pad-x"), headBottom: metric("head-pad-bottom"), noteGap: metric("item-note-gap"), shadowY: metric("shadow-y"),
+		shadowBlur: metric("shadow-blur"), shadowAlpha: metric("shadow-alpha")}
+}
+
+// anchored records element as the anchor key of this frame.
+func (s *Shell) anchored(key string, element ui.Element) {
+	s.picker.drawn[key] = element
+}
+
+// toggled closes the layer of anchor when it is open.
+func (s *Shell) toggled(anchor string) bool {
+	if !s.picker.open || s.picker.anchor != anchor {
+		return false
+	}
+	s.closePicker()
+	return true
+}
+
+// openPicker replaces the layer with a new one and returns it for what the placement adds.
+func (s *Shell) openPicker(title string, items []pickerItem, pick func(key string) error) *picker {
+	s.closePicker()
+	s.picker = picker{open: true, title: title, items: items, pick: pick, drawn: s.picker.drawn}
+	s.options.Invalidate()
+	return &s.picker
+}
+
+// closePicker closes the layer. A question that waits for its answer learns that the layer closed without a pick.
+func (s *Shell) closePicker() {
+	if !s.picker.open {
+		return
+	}
+	dismiss := s.picker.dismiss
+	s.picker = picker{drawn: s.picker.drawn}
+	s.options.Invalidate()
+	if dismiss != nil {
+		dismiss()
+	}
+}
+
+// pickItem chooses one item of the open layer.
+func (s *Shell) pickItem(index int) error {
+	if !s.picker.open {
+		return errors.New("no menu is open")
+	}
+	if index < 0 || index >= len(s.picker.items) {
+		return fmt.Errorf("the menu has no item %d", index)
+	}
+	key, pick := s.picker.items[index].Key, s.picker.pick
+	s.picker.dismiss = nil
+	s.closePicker()
+	return pick(key)
+}
+
+// openAddMenu asks which plugin a new tab of the card takes, for the tool add or a split tool, under the anchor.
+func (s *Shell) openAddMenu(anchor, tool, card string) {
+	items := []pickerItem{}
+	for _, plugin := range s.plugins {
+		if plugin.Surface {
+			items = append(items, pickerItem{Key: plugin.ID, Name: plugin.Name, Mark: plugin.Mark, Icon: plugin.Icon})
+		}
+	}
+	s.openPicker(pickerAsk[tool], items, func(plugin string) error {
+		if tool == "add" {
+			_, err := s.addTab(card, plugin)
+			return err
+		}
+		side := "right"
+		if tool == "y" {
+			side = "bottom"
+		}
+		_, err := s.splitCard(card, side, plugin)
+		return err
+	}).anchor = anchor
+}
+
+// openCardMenu opens the add or split menu of a card, and closes it when it is open.
+func (s *Shell) openCardMenu(card, menu string) error {
+	if err := s.paneCard(card); err != nil {
+		return err
+	}
+	tool, known := menuTools[menu]
+	if !known {
+		return fmt.Errorf("unknown menu %s", menu)
+	}
+	anchor := "core.card." + menu + "/" + card
+	if _, drawn := s.picker.drawn[anchor]; !drawn {
+		return fmt.Errorf("card %s has no %s button", card, menu)
+	}
+	if s.toggled(anchor) {
+		return nil
+	}
+	s.focused = card
+	s.settle()
+	s.openAddMenu(anchor, tool.tool, card)
+	return nil
+}
+
+// openCardTools opens the tool menu of a card, which holds the tools that its narrow head folds, and closes it when it is open.
+func (s *Shell) openCardTools(card string) error {
+	if err := s.paneCard(card); err != nil {
+		return err
+	}
+	anchor := "core.card.tools/" + card
+	if _, drawn := s.picker.drawn[anchor]; !drawn {
+		return fmt.Errorf("card %s has no tool menu button", card)
+	}
+	if s.toggled(anchor) {
+		return nil
+	}
+	items := []pickerItem{{Key: "add", Name: "이 카드에 탭 추가", Icon: `<path d="M8 3v10M3 8h10"/>`},
+		{Key: "x", Name: "세로선으로 쪼개기", Icon: `<path d="M8 3v10M3 3h10v10H3z"/>`},
+		{Key: "y", Name: "가로선으로 쪼개기", Icon: `<path d="M3 8h10M3 3h10v10H3z"/>`}}
+	if s.plane.CanClose(card) {
+		items = append(items, pickerItem{Key: "close", Name: "이 카드를 닫는다", Icon: `<path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/>`})
+	}
+	s.focused = card
+	s.settle()
+	s.openPicker("카드 도구", items, func(key string) error {
+		if key == "close" {
+			return s.closeCard(card)
+		}
+		s.openAddMenu(anchor, key, card)
+		return nil
+	}).anchor = anchor
+	return nil
+}
+
+// openTabList opens the list of the tabs of a card, which its head folds, and closes it when it is open.
+func (s *Shell) openTabList(card string) error {
+	if err := s.paneCard(card); err != nil {
+		return err
+	}
+	anchor := "core.card.tab-list/" + card
+	if _, drawn := s.picker.drawn[anchor]; !drawn {
+		return fmt.Errorf("card %s has no tab list button", card)
+	}
+	if s.toggled(anchor) {
+		return nil
+	}
+	data, err := s.cardData(card)
+	if err != nil {
+		return err
+	}
+	tabs := data.TabList()
+	active := data.ActiveTab()
+	items := make([]pickerItem, 0, len(tabs))
+	for _, tab := range tabs {
+		item := pickerItem{Key: tab.ID, Name: layout.TabName(tab, nil, false), Mark: "?", Active: active != nil && tab.ID == active.ID}
+		if plugin := s.loadedPlugin(tab.Plugin); plugin != nil {
+			item.Mark, item.Icon = plugin.Mark, plugin.Icon
+		}
+		items = append(items, item)
+	}
+	layer := s.openPicker(fmt.Sprintf("탭 %d개", len(tabs)), items, func(tab string) error {
+		s.focused = card
+		return s.selectTab(tab)
+	})
+	layer.anchor, layer.start = anchor, true
+	return nil
+}
+
+// openSurfaceMenu opens at x and y the context menu that the plugin of a surface declares. A chosen item runs its command.
+func (s *Shell) openSurfaceMenu(surface string, x, y float64) error {
+	tab, err := s.tabOf(surface)
+	if err != nil {
+		return err
+	}
+	owner := s.loadedPlugin(tab.Plugin)
+	if owner == nil || len(owner.Menu) == 0 {
+		return fmt.Errorf("the plugin %s of surface %s declares no menu", tab.Plugin, surface)
+	}
+	items := make([]pickerItem, 0, len(owner.Menu))
+	for _, item := range owner.Menu {
+		items = append(items, pickerItem{Key: item.Command, Name: item.Title})
+	}
+	layer := s.openPicker(owner.Name, items, func(command string) error {
+		_, err := s.registry.Run(command, nil)
+		return err
+	})
+	layer.x, layer.y = float32(x), float32(y)
+	return nil
+}
+
+// tabContextMenu opens the context menu of a tab on a right click of its button, when the menu has items. Without items the press
+// does nothing, as a press outside a menu does.
+func (s *Shell) tabContextMenu(button ui.Element, tab string) {
+	if !button.RightClicked() || s.tabs == nil || !s.tabs.saver.Known(tab) {
+		return
+	}
+	reasons, err := s.tabs.saver.Reasons(tab)
+	if err != nil {
+		s.fail(err)
+		return
+	}
+	if len(tabMenuItems(reasons)) == 0 {
+		return
+	}
+	x, y, _ := button.PointerPosition() // The right click reports the pointer, which stands in the button.
+	bounds := button.Bounds()
+	s.binder.run("core.tab.menu", pointParam{Tab: tab, X: float64(bounds.X + x), Y: float64(bounds.Y + y)})
+}
+
+// tabOf returns the tab id of the shown plane.
+func (s *Shell) tabOf(id string) (layout.Tab, error) {
+	card := s.cardOfTab(id)
+	if card == "" {
+		return layout.Tab{}, fmt.Errorf("unknown tab %s", id)
+	}
+	data, err := s.cardData(card)
+	if err != nil {
+		return layout.Tab{}, err
+	}
+	for _, tab := range data.TabList() {
+		if tab.ID == id {
+			return tab, nil
+		}
+	}
+	return layout.Tab{}, fmt.Errorf("unknown tab %s", id)
+}
+
+// tabMenuItems are the items of the context menu of a tab from the reasons of the memory saver, as tab-menu.js builds them: a tab
+// that can never be unloaded has no keep item.
+func tabMenuItems(reasons []string) []pickerItem {
+	if slices.Contains(reasons, "undeclared") || slices.Contains(reasons, "background") {
+		return nil
+	}
+	return []pickerItem{{Key: "keep", Name: "메모리에 유지", Expose: "core.tab.menu-keep", Active: slices.Contains(reasons, "kept")}}
+}
+
+// openTabMenu opens at x and y the context menu of a tab.
+func (s *Shell) openTabMenu(id string, x, y float64) error {
+	if s.tabs == nil {
+		return fmt.Errorf("unknown tab %s", id)
+	}
+	if err := s.tabs.saver.Tab(id); err != nil {
+		return err
+	}
+	reasons, err := s.tabs.saver.Reasons(id)
+	if err != nil {
+		return err
+	}
+	items := tabMenuItems(reasons)
+	if len(items) == 0 {
+		return fmt.Errorf("tab %s has no menu items", id)
+	}
+	tab, err := s.tabOf(id)
+	if err != nil {
+		return err
+	}
+	kept := items[0].Active
+	layer := s.openPicker(layout.TabName(tab, nil, false), items, func(string) error {
+		return s.tabs.saver.Keep(id, !kept)
+	})
+	layer.x, layer.y = float32(x), float32(y)
+	return nil
+}
+
+// pickerStatusItem is an item of the status core.picker. An item of a menu without groups has a null group.
+type pickerStatusItem struct {
+	Key    string  `json:"key"`
+	Name   string  `json:"name"`
+	Active bool    `json:"active"`
+	Group  *string `json:"group"`
+}
+
+// pickerColumn is the x of the icon and of the name of a row, relative to the left edge of the layer.
+type pickerColumn struct {
+	Icon float32 `json:"icon"`
+	Name float32 `json:"name"`
+}
+
+// pickerColumns are the columns of the rows of the layer.
+type pickerColumns struct {
+	Groups []pickerColumn `json:"groups"`
+	Items  []pickerColumn `json:"items"`
+}
+
+// pickerGroupStatus is a group heading of the status core.picker. The menus of this host have no group yet: the space apps list
+// is the grouped one, and it needs the fullscreen card.
+type pickerGroupStatus struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Depth int    `json:"depth"`
+}
+
+// pickerStatus is the status core.picker.
+type pickerStatus struct {
+	Open    bool                `json:"open"`
+	Title   string              `json:"title"`
+	Items   []pickerStatusItem  `json:"items"`
+	Groups  []pickerGroupStatus `json:"groups"`
+	Columns pickerColumns       `json:"columns"`
+}
+
+func (s *Shell) pickerStatus() pickerStatus {
+	status := pickerStatus{Open: s.picker.open, Title: s.picker.title, Items: []pickerStatusItem{}, Groups: []pickerGroupStatus{},
+		Columns: pickerColumns{Groups: []pickerColumn{}, Items: []pickerColumn{}}}
+	metrics := s.readPickerMetrics()
+	icon := s.palette.BorderWidth + metrics.outerPad + metrics.pad
+	for _, item := range s.picker.items {
+		status.Items = append(status.Items, pickerStatusItem{Key: item.Key, Name: item.Name, Active: item.Active})
+		status.Columns.Items = append(status.Columns.Items, pickerColumn{Icon: icon, Name: icon + metrics.icon + metrics.gap})
+	}
+	return status
+}
+
+// screenStatus is the status core.screen.
+type screenStatus struct {
+	Screen string  `json:"screen"`
+	Modal  *string `json:"modal"`
+}
+
+// modalName is the open modal of the window, or nil.
+func (s *Shell) modalName() *string {
+	name := ""
+	switch {
+	case s.settingsWindow.open:
+		name = "settings"
+	case s.picker.open:
+		name = "picker"
+	default:
+		return nil
+	}
+	return &name
+}
+
+type menuParam struct {
+	Card string `json:"card"`
+	Menu string `json:"menu"`
+}
+
+type pointParam struct {
+	Surface string  `json:"surface"`
+	Tab     string  `json:"tab"`
+	X       float64 `json:"x"`
+	Y       float64 `json:"y"`
+}
+
+// registerPicker adds the commands and the statuses of the layer.
+func (s *Shell) registerPicker() {
+	s.picker.drawn = map[string]ui.Element{}
+	act(s, "core.card.menu", func(value menuParam) error {
+		if err := s.requirePlane(); err != nil {
+			return err
+		}
+		return s.openCardMenu(value.Card, value.Menu)
+	})
+	act(s, "core.card.tools", func(value cardParam) error {
+		if err := s.requirePlane(); err != nil {
+			return err
+		}
+		return s.openCardTools(value.Card)
+	})
+	act(s, "core.card.tab-list", func(value cardParam) error {
+		if err := s.requirePlane(); err != nil {
+			return err
+		}
+		return s.openTabList(value.Card)
+	})
+	act(s, "core.surface.menu", func(value pointParam) error {
+		if err := s.requirePlane(); err != nil {
+			return err
+		}
+		return s.openSurfaceMenu(value.Surface, value.X, value.Y)
+	})
+	act(s, "core.tab.menu", func(value pointParam) error {
+		if err := s.requirePlane(); err != nil {
+			return err
+		}
+		return s.openTabMenu(value.Tab, value.X, value.Y)
+	})
+	act(s, "core.picker.pick", func(value struct {
+		Index int `json:"index"`
+	}) error {
+		return s.pickItem(value.Index)
+	})
+	act(s, "core.picker.close", func(struct{}) error { s.closePicker(); return nil })
+	act(s, "core.modal.dismiss", func(struct{}) error { s.closePicker(); return nil })
+	s.registry.Status("core.picker", func() any { return s.pickerStatus() })
+	s.registry.Status("core.modal", func() any { return nil })
+	s.registry.Status("core.screen", func() any {
+		screen := "workspace"
+		if s.browsing || s.opened() == nil {
+			screen = "library"
+		}
+		return screenStatus{Screen: screen, Modal: s.modalName()}
+	})
+}
+
+// pickerIcon returns the icon of the SVG elements of an item, or nil for an item without one. An icon that does not parse shows
+// its error, since the manifest reader of the plugin holds the form of these elements.
+func (s *Shell) pickerIcon(elements string) *ui.SVG {
+	if elements == "" {
+		return nil
+	}
+	if icon, ok := s.icons[elements]; ok {
+		return icon
+	}
+	icon, err := ui.ParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round">` + elements + `</svg>`))
+	if err != nil {
+		s.fail(fmt.Errorf("icon %s: %w", elements, err))
+	}
+	s.icons[elements] = icon
+	return icon
+}
+
+// drawPicker draws the open layer over a window of width and height. A press outside it and Escape close it.
+func (s *Shell) drawPicker(c *ui.Context, width, height float32) {
+	layer := &s.picker
+	if !layer.open {
+		return
+	}
+	metrics := s.readPickerMetrics()
+	anchor, attached := layer.drawn[layer.anchor]
+	open := true
+	ui.PopoverBase(c, anchor, &open, func(panel ui.Element) {
+		switch {
+		case attached && layer.start:
+			panel.AttachTo(anchor, ui.AnchorBottomStart, ui.AnchorTopStart)
+		case attached:
+			panel.AttachTo(anchor, ui.AnchorBottomEnd, ui.AnchorTopEnd)
+		default:
+			panel.Absolute().Left(min(layer.x, max(0, width-metrics.maxW))).Top(min(layer.y, max(0, height-metrics.maxH)))
+		}
+		panel.Margin(5, 0, 0, 0).MinWidth(metrics.minW).MaxWidth(metrics.maxW).MaxHeight(metrics.maxH).Column().Padding(metrics.outerPad).
+			Background(s.palette.Card).Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.palette.Radius).Label(layer.title).
+			Shadow(0, metrics.shadowY, metrics.shadowBlur, 0, ui.RGBA(0, 0, 0, metrics.shadowAlpha)).Children(func() {
+			ui.Box(c).Padding(metrics.headTop, metrics.headX, metrics.headBottom, metrics.headX).Children(func() {
+				ui.Text(c, layer.title).FontSize(11).TextColor(s.palette.Muted)
+			})
+			ui.Scroll(c).Grow(1).Column().Children(func() {
+				for index, item := range layer.items {
+					s.drawPickerItem(c, index, item, metrics)
+				}
+			})
+		})
+	})
+	if !open {
+		s.closePicker()
+	}
+}
+
+// drawPickerItem draws an item of the layer.
+func (s *Shell) drawPickerItem(c *ui.Context, index int, item pickerItem, metrics pickerMetrics) {
+	name := item.Expose
+	if name == "" {
+		name = "core.picker.item"
+	}
+	ui.Box(c).FillWidth().Children(func() {
+		row := ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(metrics.gap).PaddingX(metrics.pad).PaddingY(metrics.itemPadY).Radius(4)
+		// The press lies over the row, since the element tree holds no element inside a button and the icon and the name are elements.
+		button := s.binder.Press(c, name, "core.picker.pick", item.Key, map[string]int{"index": index})
+		button.Absolute().Left(0).Top(0).Right(0).Bottom(0).Label(item.Name)
+		if item.Active || button.Hovered() {
+			row.Background(s.palette.Bg)
+		}
+		row.Children(func() {
+			slot := ui.Box(s.binder.Name(c, "core.picker.item-icon", item.Key)).Size(metrics.icon, metrics.iconH).Role(ui.RoleGroup).Label(item.Name)
+			slot.Children(func() {
+				if icon := s.pickerIcon(item.Icon); icon != nil {
+					ui.Icon(c, icon).Size(metrics.icon, metrics.iconH)
+				}
+			})
+			ui.Text(s.binder.Name(c, "core.picker.item-name", item.Key), item.Name).FontSize(12).NoWrap().Ellipsis("…").Grow(1)
+			if item.Mark != "" {
+				ui.Text(c, item.Mark).FontSize(11).TextColor(s.palette.Muted).MarginStart(metrics.noteGap)
+			}
+		})
+	})
+}

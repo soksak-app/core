@@ -378,9 +378,10 @@ func TestLibraryListsAndRemovesProjects(t *testing.T) {
 }
 
 func TestSplitMakesACardAndStoresIt(t *testing.T) {
-	f := openedShell(t)
+	f := projectWithPlugins(t)
 	before := f.tabbedCards()
 	f.click("core.card.split-x", before[0])
+	f.click("core.picker.item", "acme")
 	after := f.tabbedCards()
 	if len(after) != len(before)+1 {
 		t.Fatalf("the split stored %v after %v", after, before)
@@ -398,9 +399,10 @@ func TestSplitMakesACardAndStoresIt(t *testing.T) {
 }
 
 func TestTabsOfACard(t *testing.T) {
-	f := openedShell(t)
+	f := projectWithPlugins(t)
 	card := f.tabbedCards()[0]
 	f.click("core.card.add", card)
+	f.click("core.picker.item", "acme")
 	cards := f.cardsOf()
 	var tabs []any
 	for _, stored := range cards {
@@ -442,9 +444,10 @@ func TestSpacesOfAProject(t *testing.T) {
 }
 
 func TestStoredProjectOpensItsLayout(t *testing.T) {
-	first := openedShell(t)
+	first := projectWithPlugins(t)
 	card := first.tabbedCards()[0]
 	first.click("core.card.split-x", card)
+	first.click("core.picker.item", "acme")
 	cards := first.tabbedCards()
 	second := newShell(t, first.host)
 	second.click("core.library.open", first.host.projects[0]["id"].(string))

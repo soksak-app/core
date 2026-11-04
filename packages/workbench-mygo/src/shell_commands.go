@@ -64,6 +64,7 @@ func (s *Shell) requirePlane() error {
 func (s *Shell) register() {
 	s.registerLibrary()
 	s.registerSettings()
+	s.registerPicker()
 	act(s, "core.projects.browse", func(struct{}) error { s.browse(); return nil })
 	act(s, "core.project.activate", func(value idParam) error { s.activate(value.ID); return nil })
 	act(s, "core.project.close", func(value idParam) error { s.removeProject(value.ID); return nil })

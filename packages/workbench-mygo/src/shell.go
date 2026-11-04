@@ -142,6 +142,9 @@ type Shell struct {
 	commonSettings map[string]any
 	menuLanguage   string
 	plugins        []LoadedPlugin
+
+	picker picker
+	icons  map[string]*ui.SVG
 }
 
 // NewShell returns the shell of a window, with its commands in the registry.
@@ -164,7 +167,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 		return nil, fmt.Errorf("environment declaration: %w", err)
 	}
 	s := &Shell{options: options, metrics: read, palette: palette, registry: NewRegistry(options.Declared), calls: options.Calls,
-		grid: environment.Workspace.Grid, focus: environment.Workspace.Focus, browsing: true, library: newLibraryState()}
+		grid: environment.Workspace.Grid, focus: environment.Workspace.Focus, browsing: true, library: newLibraryState(), icons: map[string]*ui.SVG{}}
 	s.errors = NewShownErrors(options.Report)
 	s.binder = NewBinder(s.registry, func(_ string, err error) { s.fail(err) })
 	s.registry.Elements(options.Elements)
@@ -334,6 +337,7 @@ func baseName(root string) string { return path.Base(root) }
 // View draws the workbench of the window.
 func (s *Shell) View(c *ui.Context) {
 	s.sidebars.Begin()
+	clear(s.picker.drawn)
 	width, height := c.Size()
 	theme := *c.Theme()
 	theme.Background = s.palette.Bg
@@ -350,5 +354,6 @@ func (s *Shell) View(c *ui.Context) {
 		}
 		s.drawWork(c, width, height-s.metrics.chromeH)
 	})
+	s.drawPicker(c, width, height)
 	s.drawSettings(c, width, height)
 }

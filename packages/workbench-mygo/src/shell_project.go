@@ -298,6 +298,7 @@ func (s *Shell) settle() { s.settleThen(func() {}) }
 
 // settleThen is settle that runs stored after the plane is stored.
 func (s *Shell) settleThen(stored func()) {
+	s.closePicker()
 	s.held = nil
 	s.keepThen(stored)
 	s.tabsSettled()

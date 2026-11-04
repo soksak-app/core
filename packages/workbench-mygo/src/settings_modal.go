@@ -1083,6 +1083,7 @@ func windowAct(s *Shell, name string, run func(value windowParam) error) {
 func (s *Shell) registerSettingsWindow() {
 	w := &s.settingsWindow
 	act(s, "core.settings.open", func(struct{}) error {
+		s.closePicker()
 		w.open = true
 		s.options.Invalidate()
 		return nil
