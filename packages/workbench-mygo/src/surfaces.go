@@ -27,8 +27,8 @@ type surfaceDeclaration struct {
 	Overlays []string          `json:"overlays"`
 }
 
-// surfaceMarks are the exposure entries of a plugin by kind.
-type surfaceMarks struct {
+// Exposes are the exposure entries of a plugin by kind.
+type Exposes struct {
 	Status   []json.RawMessage `json:"status"`
 	Commands []json.RawMessage `json:"commands"`
 	Dom      []json.RawMessage `json:"dom"`
@@ -40,7 +40,7 @@ type installedUnit struct {
 	// Composition is the surface composition of plugin.json as it stands there, and nil for a plugin without a view.
 	Composition json.RawMessage
 	Declaration surfaceDeclaration
-	Exposes     surfaceMarks
+	Exposes     Exposes
 	Diagnostics json.RawMessage
 	Sidecars    []string
 	// Settings holds the local name of each setting.
@@ -109,7 +109,7 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 		}
 		if len(plugin.Diagnostics) > 0 {
 			var diagnostics struct {
-				Exposes surfaceMarks `json:"exposes"`
+				Exposes Exposes `json:"exposes"`
 			}
 			if err := json.Unmarshal(plugin.Diagnostics, &diagnostics); err != nil {
 				return nil, fmt.Errorf("plugin %s diagnostics: %w", plugin.ID, err)

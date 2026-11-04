@@ -232,8 +232,12 @@ func (s *Shell) openSurfaceMenu(surface string, x, y float64) error {
 		items = append(items, pickerItem{Key: item.Command, Name: item.Title})
 	}
 	layer := s.openPicker(owner.Name, items, func(command string) error {
-		_, err := s.registry.Run(command, nil)
-		return err
+		s.registry.RunOn(command, nil, surface, func(_ any, err error) {
+			if err != nil {
+				s.fail(err)
+			}
+		})
+		return nil
 	})
 	layer.x, layer.y = float32(x), float32(y)
 	return nil

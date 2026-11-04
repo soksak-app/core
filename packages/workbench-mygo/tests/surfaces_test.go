@@ -18,13 +18,13 @@ const installedDocument = `{"plugins": [
 	{"id": "terminal", "package": "@soksak/plugin-terminal", "version": "1.0.0", "sidecars": {"@soksak/sidecar-vt": {}},
 		"manifest": {"id": "terminal", "name": "터미널", "mark": "◊",
 			"dependencies": {"@soksak/sidecar-vt": "^1.0.0"},
-			"exposes": {"commands": [{"name": "terminal.drop"}]},
+			"exposes": {"status": [{"name": "terminal.screen"}], "commands": [{"name": "terminal.drop"}, {"name": "terminal.input"}, {"name": "terminal.close", "timeout": 40}]},
 			"data": {"notes": {"schema": {"type": "string"}, "default": "none", "format": 2},
 				"marks": {"schema": {"type": "array", "items": {"type": "string"}}, "default": ["start"]}},
 			"settings": {"cursor.shape": {"type": "enum", "default": "block", "values": ["block", "beam"]}, "shell": {"type": "text", "default": ""}},
 			"surface": {"drop": "terminal.drop", "composition": {"kind": "view", "page": "ui/terminal.html", "regions": [{"name": "view", "kind": "image"}]}}}},
 	{"id": "browser", "package": "@soksak/plugin-browser", "version": "1.0.0",
-		"diagnostics": {"module": "ui/diagnostics.js", "exposes": {"status": [{"name": "plugin.browser.probe"}]}},
+		"diagnostics": {"module": "ui/diagnostics.js", "exposes": {"status": [{"name": "browser.probe"}]}},
 		"manifest": {"id": "browser", "name": "브라우저", "mark": "www",
 			"surface": {"composition": {"kind": "view", "page": "ui/index.html"}}}}
 ]}`
@@ -44,6 +44,8 @@ type surfaceHost struct {
 	themeFirst bool
 	// elements tells that the host holds the views of the surfaces.
 	elements bool
+	// calls replaces the calls of the table.
+	calls map[string]workbench.HostCall
 }
 
 func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
@@ -100,6 +102,9 @@ func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 			return nil, nil
 		}
 	}
+	for name, call := range h.calls {
+		table[name] = call
+	}
 	return table
 }
 
@@ -120,11 +125,17 @@ func surfaceShell(t *testing.T) (*shellFixture, *surfaceHost) {
 // surfaceShellOf opens a project in a shell with the plugins of document.
 func surfaceShellOf(t *testing.T, document string) (*shellFixture, *surfaceHost) {
 	t.Helper()
+	stored := &surfaceHost{}
+	return surfaceShellOn(t, document, stored), stored
+}
+
+// surfaceShellOn is surfaceShellOf over the host stored.
+func surfaceShellOn(t *testing.T, document string, stored *surfaceHost) *shellFixture {
+	t.Helper()
 	declared, err := workbench.Declared()
 	if err != nil {
 		t.Fatal(err)
 	}
-	stored := &surfaceHost{}
 	f := &shellFixture{t: t, host: &stored.storedHost, pending: make(steps, 256)}
 	shell, err := workbench.NewShell(workbench.ShellOptions{
 		Declared:    declared,
@@ -146,7 +157,7 @@ func surfaceShellOf(t *testing.T, document string) (*shellFixture, *surfaceHost)
 	f.run("core.library.form.open", map[string]string{"mode": "open"})
 	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
 	f.run("core.library.form.submit", nil)
-	return f, stored
+	return f
 }
 
 // lastSurfaces returns the surfaces of the last request by id.
@@ -292,13 +303,13 @@ func TestADiagnosticPluginAddsItsDeclarationsToTheSurface(t *testing.T) {
 		start := surface["start"].(map[string]any)
 		declared, _ := json.Marshal(declarations[int(start["declarations"].(float64))])
 		if surface["plugin"] != "browser" {
-			if start["diagnostics"] != nil || strings.Contains(string(declared), "plugin.browser.probe") {
+			if start["diagnostics"] != nil || strings.Contains(string(declared), "browser.probe") {
 				t.Fatalf("surface %v starts with %v and %s", surface["id"], start, declared)
 			}
 			continue
 		}
 		found = true
-		if start["diagnostics"].(map[string]any)["module"] != "ui/diagnostics.js" || !strings.Contains(string(declared), "plugin.browser.probe") {
+		if start["diagnostics"].(map[string]any)["module"] != "ui/diagnostics.js" || !strings.Contains(string(declared), "browser.probe") {
 			t.Fatalf("the view starts with %v and %s", start, declared)
 		}
 	}

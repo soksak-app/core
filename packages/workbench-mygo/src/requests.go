@@ -40,9 +40,11 @@ func (q *Requests) Deliver(data ...any) {
 	})
 }
 
-// Reply answers the request id, for a request that a view runs.
-func (q *Requests) Reply(id uint64, result any, err error) {
-	q.send("exposureReply", "exposure reply", replyOf(id, result, err))
+// ReplyFor answers the request id that the host forwarded to surface.
+func (q *Requests) ReplyFor(surface string, id uint64, result any, err error) {
+	reply := replyOf(id, result, err)
+	reply["surface"] = surface
+	q.send("exposureReply", "exposure reply", reply)
 }
 
 // exposureRequest is the value of the event exposure-request.
@@ -83,6 +85,15 @@ func replyOf(id uint64, result any, failure error) map[string]any {
 // changed sends the value of a watched status to the host.
 func (q *Requests) changed(name string, value any) {
 	q.send("exposureChanged", "exposure change", map[string]any{"name": name, "value": value})
+}
+
+// surfaceChanged sends the value of a watched status of a surface to the host. surface is the surface that the watch names.
+func (q *Requests) surfaceChanged(name string, surface *string, value any) {
+	change := map[string]any{"name": name, "value": value}
+	if surface != nil {
+		change["surface"] = *surface
+	}
+	q.send("exposureChanged", "exposure change", change)
 }
 
 // send makes a host call of the answers and reports its failure under where.

@@ -243,6 +243,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	})
 	s.page = issueID("wbn-", func(string) bool { return false })
 	s.requests = NewRequests(s.registry, s.calls, options.Post, s.events.Error)
+	s.linkSurfaces()
 	s.registry.Status("core.page.error", func() any {
 		if text, ok := s.errors.Text(workbenchErrorPlace); ok {
 			return &text
