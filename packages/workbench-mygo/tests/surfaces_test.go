@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 	"testing"
@@ -455,5 +456,68 @@ func TestAPressOnAViewFocusesItsCard(t *testing.T) {
 		if card.Focused != (card.ID == cards[1]) {
 			t.Fatalf("after the press on %s the grid holds %+v", cards[1], card)
 		}
+	}
+}
+
+func TestAViewFillsTheCardBetweenItsHeadAndItsFoot(t *testing.T) {
+	f, stored := surfaceShell(t)
+	const head, foot = 32, 22 // The chrome metrics head-h and foot-h.
+	for _, card := range f.tabbedCards() {
+		box := f.box("core.card", card)
+		top := f.box("core.card.header", card)
+		status := f.box("core.card.status", card)
+		if got := top.Y + top.H - box.Y; got != cardBorder+head {
+			t.Fatalf("the head %+v of the card %+v ends %v below its top", top, box, got)
+		}
+		if got := box.Y + box.H - status.Y; got != cardBorder+foot {
+			t.Fatalf("the foot %+v of the card %+v starts %v above its bottom", status, box, got)
+		}
+		var data struct {
+			Tabs []struct {
+				ID string `json:"id"`
+			} `json:"tabs"`
+		}
+		for _, stored := range f.cardsOf() {
+			if stored["id"] == card {
+				encoded, err := json.Marshal(stored["data"])
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := json.Unmarshal(encoded, &data); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+		surface := stored.lastSurfaces(t)[data.Tabs[0].ID]
+		if got := []float64{surface["x"].(float64), surface["y"].(float64), surface["w"].(float64), surface["h"].(float64)}; !slices.Equal(got,
+			[]float64{float64(box.X) + cardBorder, float64(box.Y) + cardBorder + head, float64(box.W) - 2*cardBorder, float64(box.H) - 2*cardBorder - head - foot}) {
+			t.Fatalf("the view of the card %+v stands at %v", box, got)
+		}
+	}
+}
+
+// A web page paints whole points only, so a native view of a fractional height would show the window below its last row.
+func TestAViewStandsOnWholePoints(t *testing.T) {
+	f, stored := surfaceShell(t)
+	stored.elements = true
+	f.run("core.card.focus", map[string]string{"card": f.tabbedCards()[0]})
+	surface := stored.lastSurfaces(t)[anySurface(t, stored)]
+	height := surface["h"].(float64)
+	if height == math.Floor(height) {
+		t.Fatalf("the slot height %v is whole, so the test shows nothing", height)
+	}
+	found := false
+	var walk func(nodes []ui.ElementNode)
+	walk = func(nodes []ui.ElementNode) {
+		for _, node := range nodes {
+			if float64(node.Bounds.H) == math.Floor(height) && float64(node.Bounds.W) == surface["w"].(float64) {
+				found = true
+			}
+			walk(node.Children)
+		}
+	}
+	walk(f.tester.ElementTree())
+	if !found {
+		t.Fatalf("no native view of the height %v stands in the slot of the height %v", math.Floor(height), height)
 	}
 }
