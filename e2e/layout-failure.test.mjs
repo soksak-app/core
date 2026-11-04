@@ -16,7 +16,7 @@ for (const app of Object.values(APPS)) {
     // A resize lays the plane out again, and that draw throws.
     const { content } = await s.get("host.window");
     await s.run("host.window.resize", { width: content.width - 40, height: content.height });
-    await s.until("core.page.error", (text) => text?.includes("diagnostic layout fault"), "the failing draw was not shown");
+    await s.until("core.workbench.error", (text) => text?.includes("diagnostic layout fault"), "the failing draw was not shown");
     // The page answers each request after the failure within the time limit of the request.
     for (let round = 0; round < 5; round++) assert.ok(Array.isArray(await s.get("core.surfaces")), `round ${round}: core.surfaces did not answer`);
     await s.run("host.window.resize", { width: content.width, height: content.height });

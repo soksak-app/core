@@ -52,7 +52,7 @@ for (const app of Object.values(APPS)) {
     // Logo text color. The icon tile is the same in both modes.
     for (const [mode, letters] of [["dark", [237, 230, 216]], ["light", [22, 24, 29]]]) {
       await s.run("core.settings.change", { key: "mode", value: mode, scope: "common" });
-      await s.until("core.window.document", (document) => document?.scheme === mode, `the document did not take the ${mode} mode`);
+      await s.until("core.window.workbench", (workbench) => workbench?.scheme === mode, `the workbench did not take the ${mode} mode`);
       const logo = await s.rect("core.brand");
       await s.request("diagnostics.capture.start", {});
       const displayed = await s.presented();

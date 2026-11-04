@@ -28,10 +28,10 @@ for (const app of Object.values(APPS)) {
     const { displayed } = await s.presented();
     const recording = await s.request("diagnostics.capture.start", {});
     try {
-      const before = (await s.get("core.window.document")).timeOrigin;
+      const before = (await s.get("core.window.workbench")).start;
       await s.run("host.window.reload");
-      await s.until("core.window.document", (doc) => doc.timeOrigin !== before && doc.readyState === "complete",
-        "the main document did not reload");
+      await s.until("core.window.workbench", (workbench) => workbench.start !== before && workbench.readyState === "complete",
+        "the workbench did not start again");
       await ensureTerminals(s, 1);
       const shown = await s.presented();
       const stop = await s.request("diagnostics.capture.stop", { after: Math.max(displayed, shown.displayed) + 100 });

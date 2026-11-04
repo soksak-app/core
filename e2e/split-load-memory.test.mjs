@@ -19,6 +19,12 @@ for (const app of Object.values(APPS)) {
     const slowest = slowestPhase(ctx.phases);
     t.diagnostic(`split-load ${JSON.stringify({ app: app.name, rounds: 1, samples: ctx.samples, documents: ctx.before,
       phases: ctx.phases.length, slowest: slowest && { phase: slowest.phase, ms: Math.round(slowest.micros / 1000) } })}`);
+    // A window whose host.window reports pageProcess null has no main page (the window of the mygo host), so it has no page
+    // process to judge, before or after the stress.
+    if (ctx.initialWindow.pageProcess === null) {
+      assert.equal(settled.pageProcess, null, "the window reports a page process after the stress and none before it");
+      return;
+    }
     // A reload opens the new document in a new page process and ends the previous process (docs/spec/native-host.md#page-reload).
     assert.notEqual(settled.pageProcess, ctx.initialWindow.pageProcess, "the reloads kept the page process");
     await session.request("diagnostics.process.exit", { pid: ctx.initialWindow.pageProcess }).catch((error) => {

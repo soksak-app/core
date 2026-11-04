@@ -10,7 +10,7 @@ sidebar section은 declared UI다. plugin이 list, tree, button, status-line 요
 
 ## 규칙
 
-plugin은 자기가 가진 모든 화면을 어떤 수단으로든 그린다. 손으로 쓴 DOM, framework, library, 또는 image region에 놓인 sidecar 그림이다. core는 자리를 주고 exposure 계약만 요구한다. 모든 조작 요소는 공유 binder로 선언된 command에 연결되고 dom name을 가지며, 모든 보이는 상태는 선언된 status다([exposure](../spec/exposure.ko.md)). sidebar section도 그런 화면이다.
+plugin은 자기가 가진 모든 화면을 어떤 수단으로든 그린다. 손으로 쓴 DOM, framework, library, 또는 image region에 놓인 sidecar 그림이다. core는 자리를 주고 exposure 계약만 요구한다. 모든 조작 요소는 공유 binder로 선언된 command에 연결되고 element name을 가지며, 모든 보이는 상태는 선언된 status다([exposure](../spec/exposure.ko.md)). sidebar section도 그런 화면이다.
 
 ## 결정
 
@@ -49,9 +49,9 @@ section view 위의 입력과 focus는 tab view처럼 [네이티브 뷰 위의 �
 | Plugin host: `plugin-host.js`, `host`, `docs/spec/plugin-host.md`, `host.plugin-host.*`와 `host.trace.plugin-host.*` 기록, `core.plugin.losses`, `core.plugin.views`, `core.plugin.open-calls`의 plugin host 항목 | section view. 세 status는 view 항목을 유지한다. |
 | `plugin.json`의 `hostOperations`와 `sidecar.json`의 `hostReadOperations` | `dependencies`의 view sidecar 호출. |
 | plugin host를 통한 `data`(`plugin-data.js`, `environment.js:115`, `plugin-api/index.js:679-681`의 `host` 요구) | `runtime.data.get`과 `runtime.data.set`으로 plugin의 view가 읽고 쓰는 `data`(D13). |
-| status `core.plugin.snapshots`, `dom.rect`와 `dom.act`의 control address와 오류 1009, shortcut table의 declared tree key, view event `declared-ui.expanded`와 `declared-ui.snapshot` | 없음: section의 view가 자기 control과 key를 맡는다. |
+| status `core.plugin.snapshots`, `element.rect`와 `element.act`의 control address와 오류 1009, shortcut table의 declared tree key, view event `declared-ui.expanded`와 `declared-ui.snapshot` | 없음: section의 view가 자기 control과 key를 맡는다. |
 | host event `declared-ui-source-registered`와 `declared-ui-source-ended`, query `declaredSourceOrigins` | 모든 view source의 generation을 유지하는 `view-source-registered`, `view-source-ended`, `viewSourceOrigins`. |
-| dom name `core.sidebar.section.control`과 `core.sidebars`의 control 수 | binder audit가 다루는 plugin의 dom name. |
+| element name `core.sidebar.section.control`과 `core.sidebars`의 control 수 | binder audit가 다루는 plugin의 element name. |
 | 이 이름을 쓰는 window check(`e2e/files.test.mjs`, `e2e/editor.test.mjs`, `e2e/declared-sidebar-control.mjs`) | section view의 항목을 쓰는 check. |
 
 `docs/spec/native-surfaces.ko.md`는 section surface의 origin과 시작 값의 member `section`을 적고, host contract는 둘을 적는다. `docs/spec/plugin-processes.ko.md`의 layer rule과 rule 5, `docs/spec/plugins.ko.md`(`sections`, 높이, 84행의 plugin 요구, `dependencies`, 127-130행의 `data`), `docs/spec/native-surfaces.ko.md`의 제공되는 view call(150-160행), `packages/plugin-api/index.js:679-681`과 `:698-700`의 검사, `packages/plugin-api/terms.json`의 용어 *section surface*와 *card surface*가 같은 변경에서 바뀐다.

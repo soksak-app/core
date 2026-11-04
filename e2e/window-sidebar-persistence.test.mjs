@@ -207,7 +207,7 @@ for (const app of Object.values(APPS))
           (await s.get("core.verify")).rows.filter((row) => !row.ok),
           [],
         );
-        assert.deepEqual((await s.get("core.page.audit")).unbound, []);
+        assert.deepEqual((await s.get("core.workbench.audit")).unbound, []);
         t.diagnostic(
           `${label}: records=${JSON.stringify(savedRecords)}; native=${JSON.stringify(expected)}; internal=${inside.set}/${inside.rect.w}`,
         );
@@ -304,12 +304,12 @@ for (const app of Object.values(APPS))
       const project = (await s.get("core.project")).id;
       const reloaded = await phase("saved project reloaded", async () => {
         await s.run("core.projects.flush");
-        const origin = (await s.get("core.window.document")).timeOrigin;
+        const origin = (await s.get("core.window.workbench")).start;
         await s.run("host.window.reload");
         await s.until(
-          "core.window.document",
-          (doc) => doc.timeOrigin !== origin && doc.readyState === "complete",
-          "document did not reload",
+          "core.window.workbench",
+          (workbench) => workbench.start !== origin && workbench.readyState === "complete",
+          "the workbench did not start again",
         );
         await s.until("core.project", (value) => value?.id === project, "reload lost project");
       });

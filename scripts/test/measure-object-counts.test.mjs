@@ -236,8 +236,15 @@ test("runtime figures that are not non-negative integers are an error that names
  */
 function application() {
   const calls = [];
-  const state = { picker: false, settings: false, cards: [{ id: "main", fixed: false, c0: 1 }] };
+  // The workbench start of the window; core.plugins.apply starts the workbench again in the same page process, and the new
+  // start is reported once the next status is read after the reply.
+  const state = { picker: false, settings: false, cards: [{ id: "main", fixed: false, c0: 1 }], start: 1, restart: false, pageProcess: 70 };
   const statuses = {
+    "core.window.workbench": () => {
+      if (state.restart) { state.start += 1; state.restart = false; }
+      return { start: `start-${state.start}`, startedAt: 1000 + state.start, readyState: "complete" };
+    },
+    "host.window": () => ({ pageProcess: state.pageProcess }),
     "core.grid": () => ({ cards: state.cards }),
     "core.picker": () => ({ open: state.picker }),
     "core.settings-modal": () => ({ open: state.settings }),
@@ -252,6 +259,7 @@ function application() {
     if (name === "core.picker.close") { state.picker = false; return null; }
     if (name === "core.settings.open") { state.settings = true; return null; }
     if (name === "core.settings.close") { state.settings = false; return null; }
+    if (name === "core.plugins.apply") { state.restart = true; return { reloaded: true }; }
     throw new Error(`no command ${name}`);
   };
   const request = async (method, params) => { calls.push(`${method} ${JSON.stringify(params)}`); return { steps: 12 }; };
@@ -294,6 +302,16 @@ test("the menu and the settings window open and close through their declared com
     'until core.settings-modal {"open":true}',
     "core.settings.close --window w1",
     'until core.settings-modal {"open":false}',
+  ]);
+});
+
+test("the plugins apply waits for a new start of core.window.workbench, which comes in the same page process", async () => {
+  const { calls, steps } = application();
+  await steps()["plugins.apply"]();
+  assert.deepEqual(calls, [
+    "status core.window.workbench --window w1",
+    "core.plugins.apply --window w1",
+    'until core.window.workbench {"start":"start-2","startedAt":1002,"readyState":"complete"}',
   ]);
 });
 

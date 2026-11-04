@@ -111,15 +111,15 @@ for (const app of Object.values(APPS)) {
       s.cleanup(() => other.close());
       await other.until("core.screen", (value) => value.screen === "library", "the new window did not show the library");
       const { buttons, refreshRate } = await recordable(s);
-      const before = (await s.get("core.window.document")).timeOrigin;
+      const before = (await s.get("core.window.workbench")).start;
       // The setting of another window changes the common scale, and this window reads again before or after it draws that notification. Either way every frame must keep the
       // criterion.
       judge(t, "reload", await record(s, buttons, async (displayed) => {
         await other.run("core.settings.change", { key: "textSize", value: 2, scope: "common" });
         await other.until("core.text", (value) => value.frame === 2, "the other window did not take frame factor 2");
         await s.run("host.window.reload");
-        await s.until("core.window.document", (doc) => doc.timeOrigin !== before && doc.readyState === "complete",
-          "the main document did not reload");
+        await s.until("core.window.workbench", (workbench) => workbench.start !== before && workbench.readyState === "complete",
+          "the workbench did not start again");
         await s.until("core.text", (value) => value.frame === 2, "the reloaded page did not take frame factor 2");
         return [{ displayed, at: rowHeight(1) }, { displayed: (await s.presented()).displayed, at: rowHeight(2) }];
       }), refreshRate);

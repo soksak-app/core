@@ -86,7 +86,7 @@ export async function terminalReady(s) {
     (all) => all.some((x) => x.visible && x.plugin === "terminal" &&
       x.exposes.includes("status core.surface.document") &&
       x.exposes.includes("status terminal.session") &&
-      x.exposes.includes("dom terminal.view")),
+      x.exposes.includes("element terminal.view")),
     "no visible terminal surface registered its document, session, and view");
   // A notification that satisfies the predicate can describe the surface just before a reload replaces it.
   // The function reads the current registry before it returns the id. It does not
@@ -97,7 +97,7 @@ export async function terminalReady(s) {
   const terminals = (await s.surfaces("terminal")).filter((x) => active.has(x.surface) &&
     x.exposes.includes("status core.surface.document") &&
     x.exposes.includes("status terminal.session") &&
-    x.exposes.includes("dom terminal.view"));
+    x.exposes.includes("element terminal.view"));
   for (const terminal of terminals) {
     await s.until("core.surface.document", (doc) => doc !== null && doc.readyState === "complete" && doc.themed,
       `terminal ${terminal.surface} did not apply its theme`, { surface: terminal.surface });

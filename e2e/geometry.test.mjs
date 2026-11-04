@@ -12,8 +12,8 @@ import { documentMatchesFrame, pointerAtPrecision } from "./surface-geometry.mjs
  */
 async function geometry(s, surface, scale) {
   const content = (await s.get("host.window")).content;
-  await s.until("core.window.document", (doc) => doc.width === content.width && doc.height === content.height,
-    `the main document did not take the content size ${content.width}×${content.height}`);
+  await s.until("core.window.workbench", (workbench) => workbench.width === content.width && workbench.height === content.height,
+    `the workbench did not take the content size ${content.width}×${content.height}`);
   await s.until("core.surfaces", (list) => {
     const placed = list.find((x) => x.surface === surface);
     return placed && ["x", "y", "w", "h"].every((k) => placed.applied[k] === placed.declared[k]);
@@ -22,8 +22,8 @@ async function geometry(s, surface, scale) {
   const state = await s.get("host.window");
   const frame = state.surfaces.find((x) => x.id === surface).frame;
   assert.equal(state.scale, scale, "the window must report the expected backing scale");
-  const main = await s.until("core.window.document", (doc) => doc.scale === scale,
-    `the main document did not take scale ${scale}`);
+  const main = await s.until("core.window.workbench", (workbench) => workbench.scale === scale,
+    `the workbench did not take scale ${scale}`);
   const slot = (await s.surfaces()).find((x) => x.surface === surface).declared;
   assert.deepEqual([frame.x, frame.y, frame.width, frame.height], [slot.x, slot.y, slot.w, slot.h],
     `the native surface must fill its DOM slot at scale ${main.scale}`);

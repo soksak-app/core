@@ -741,7 +741,7 @@ for (const app of Object.values(APPS)) {
     // (docs/spec/hosts.md#application-log).
     s.expectError(/^error workbench workbench: surface presentation failed: the current image raster did not present within /);
     const { tab } = await s.run("core.card.split", { card: card.id, side: "right", plugin: "terminal" });
-    await s.until("core.page.error", (error) => /did not present/.test(error ?? ""),
+    await s.until("core.workbench.error", (error) => /did not present/.test(error ?? ""),
       "the presentation did not fail while the terminal service was stopped");
     // After the failure, a new terminal page places the region. The service stays stopped until the placement ends or the surface reports an error.
     const placed = s.until("host.window", (value) => value.regions.some((region) => region.surface === tab),
@@ -808,16 +808,16 @@ for (const app of Object.values(APPS)) {
     const shells = terminalProcessSnapshot(app.configDir).shells;
 
     const offsets = currentEventOffsets(s.app.configDir);
-    const document = (await s.get("core.window.document")).page;
+    const document = (await s.get("core.window.workbench")).start;
     await s.run("host.window.reload");
-    const reloadedDocument = await s.until("core.window.document", (value) =>
-      value.page !== document && value.readyState === "complete",
-      "the main document did not reload");
-    const currentPage = reloadedDocument.page;
+    const reloadedDocument = await s.until("core.window.workbench", (value) =>
+      value.start !== document && value.readyState === "complete",
+      "the workbench did not start again");
+    const currentPage = reloadedDocument.start;
     await untilEventLine(s.app.configDir, offsets, (line) => {
       if (!line.startsWith("info workbench workbench.start: ")) return false;
       const fields = JSON.parse(line.slice(line.indexOf("{")));
-      return fields.started_at === reloadedDocument.timeOrigin;
+      return fields.started_at === reloadedDocument.startedAt;
     }, 30000, reading(s.app, ["workbench.start"]));
     await s.until("core.surfaces", (surfaces) => surfaces.some((item) =>
       item.surface === surface && item.exposes.includes("status terminal.session")), "the terminal did not return after the reload");
@@ -826,7 +826,7 @@ for (const app of Object.values(APPS)) {
     const accepted = await untilFolderState(join(s.app.configDir, "logs"), () => {
       const events = readEvents(s.app.configDir, offsets).events;
       const starts = events.filter((event) => event.layer === "workbench" && event.event === "workbench.start" &&
-        event.start === currentPage && event.fields.started_at === reloadedDocument.timeOrigin);
+        event.start === currentPage && event.fields.started_at === reloadedDocument.startedAt);
       assert.equal(starts.length, 1,
         `the reloaded document ${currentPage} has no unique workbench.start record: ${JSON.stringify(events)}`);
       pageEvents = events.filter((event) => event.layer === "workbench" && event.start === currentPage &&

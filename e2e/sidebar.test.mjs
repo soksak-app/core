@@ -492,7 +492,7 @@ for (const app of Object.values(APPS)) {
     s.cleanup(() => s.run("core.settings.set", { patch: { left }, scope: "common" }));
     await s.run("core.settings.set", { patch: { left: true }, scope: "common" });
     await s.until("core.sidebars", (value) => value.some((item) => item.sidebar === "left"), "the left window sidebar is not shown");
-    const listed = (await s.request("exposure.list")).dom.find((entry) => entry.name === "core.sidebar.fold");
+    const listed = (await s.request("exposure.list")).element.find((entry) => entry.name === "core.sidebar.fold");
     assert.ok(listed?.registered, `the window sidebar fold control is not declared and registered: ${JSON.stringify(listed)}`);
     await s.presented();
     const fold = await s.rect("core.sidebar.fold", 0);

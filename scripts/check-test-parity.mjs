@@ -47,7 +47,7 @@ const MATRIX = [
     "scripts/check-e2e-host-parity.mjs",
     "scripts/check-exposure.mjs",
     "scripts/check-host-parity.mjs",
-  ], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/e2e-host-parity.test.mjs", "scripts/test/check-host-parity.test.mjs", "scripts/test/check-exposure.test.mjs"], { sharedTests: true }),
+  ], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/e2e-host-parity.test.mjs", "scripts/test/main-page-apps.test.mjs", "scripts/test/check-host-parity.test.mjs", "scripts/test/check-exposure.test.mjs"], { sharedTests: true }),
   lane("test inventory", "js-ts", ["scripts/check-test-parity.mjs"], ["scripts/test/test-parity.test.mjs"]),
   lane("host contract audit", "js-ts", ["scripts/check-host-contract.mjs"], ["scripts/test/check-host-contract.test.mjs", "scripts/test/view-region-calls.test.mjs", "scripts/test/plugin-host-calls.test.mjs"]),
 lane("command supervision", "js-ts", ["scripts/test-command.mjs"], ["scripts/test/test-command.test.mjs"]),
@@ -470,14 +470,14 @@ const FEATURE_LINKS = [
     id: "F502-2-2",
     implementation: [
       { file: "packages/window-check/app.mjs", symbol: "export function requiredApps(env) {" },
-      { file: "packages/window-check/app.mjs", symbol: "export function requiresBoth(env) {" },
+      { file: "packages/window-check/app.mjs", symbol: "export function requiresAll(env, defaults = DEFAULT_APPS) {" },
       { file: "packages/window-check/app.mjs", symbol: "export function windowPosition(name, area, frame) {" },
       { file: "packages/window-check/view-metrics.mjs", symbol: "export function domMountBaselineMs(host, recordedMs) {" },
       { file: "e2e/benchmark/cases/hwp.mjs", symbol: "export function hwpFirstDisplayLimitMs(host) {" },
     ],
     tests: [
       { file: "packages/window-check/test/required-apps.test.mjs", id: "requiredApps accepts mygo as SOKSAK_APP and keeps it out of the set without SOKSAK_APP" },
-      { file: "packages/window-check/test/required-apps.test.mjs", id: "requiresBoth is true only when the required set holds both applications" },
+      { file: "packages/window-check/test/required-apps.test.mjs", id: "requiresAll is true only when the required set holds every application of the default set" },
       { file: "packages/window-check/test/window-position.test.mjs", id: "windowPosition gives each of the three applications its own position inside the visible area" },
       { file: "packages/window-check/test/window-position.test.mjs", id: "windowPosition centres mygo on whole points in an area of odd remaining width" },
       { file: "packages/window-check/test/window-position.test.mjs", id: "windowPosition rejects an application that has no window position" },
@@ -487,7 +487,7 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/test/view-metrics.test.mjs", id: "view metric runner evaluates the mygo host with the lower of the recorded baselines" },
       { file: "e2e/test/hwp-view-metrics-case.test.mjs", id: "HWP first-display limit is the DOM mount baseline of the host plus the first-display margin" },
     ],
-    expected: "SOKSAK_APP=mygo selects the mygo application while the set without SOKSAK_APP stays wailsv3 and tauriv2, requiresBoth names wailsv3 and tauriv2, the three applications have three window positions in the visible area, and one function gives the DOM mount baseline of each host, the lower recorded value for mygo.",
+    expected: "SOKSAK_APP=mygo selects the mygo application while the set without SOKSAK_APP stays wailsv3 and tauriv2, requiresAll holds when the required set holds every application of that set, the three applications have three window positions in the visible area, and one function gives the DOM mount baseline of each host, the lower recorded value for mygo.",
     levels: ["unit"],
   },
   {
@@ -4083,7 +4083,7 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/plugin-api/binder.js", symbol: "parentNode" }],
     tests: [
       { file: "packages/plugin-api/test/binder.test.mjs", id: "audit recognizes delegated controls inside a shadow root" },
-      { file: "e2e/audit.test.mjs", id: "every control on every screen runs a declared command and has a dom name" },
+      { file: "e2e/audit.test.mjs", id: "every control on every screen runs a declared command and has an element name" },
     ],
     expected: "Delegated controls inside plugin ShadowRoots are recognized by the runtime audit in both rebuilt hosts.",
     levels: ["unit", "application"],
@@ -4094,8 +4094,8 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/core-exposure.js", symbol: "core.workbench.audit" },
       { file: "packages/plugin-api/surface-document.js", symbol: "unbound" },
     ],
-    tests: [{ file: "e2e/audit.test.mjs", id: "every control on every screen runs a declared command and has a dom name" }],
-    expected: "Rebuilt Tauri and Wails audit every visible control on workspace, menus, renames, settings scopes and sections, library forms/search, and the return path; every control has a declared command and DOM name.",
+    tests: [{ file: "e2e/audit.test.mjs", id: "every control on every screen runs a declared command and has an element name" }],
+    expected: "Rebuilt Tauri and Wails audit every visible control on workspace, menus, renames, settings scopes and sections, library forms/search, and the return path; every control has a declared command and element name.",
     levels: ["application"],
   },
   {
@@ -4105,7 +4105,7 @@ const FEATURE_LINKS = [
       { file: "scripts/language-test-adapters.mjs", symbol: "runLanguageCases" },
     ],
     tests: [
-      { file: "e2e/audit.test.mjs", id: "every control on every screen runs a declared command and has a dom name" },
+      { file: "e2e/audit.test.mjs", id: "every control on every screen runs a declared command and has an element name" },
       { file: "scripts/test/test-language-test-adapters.test.mjs", id: "parses each language result and rejects zero, skipped, and crashed outcomes" },
     ],
     expected: "Exposure declarations, runtime binder coverage, and every declared JS/TS, Rust, Go, and Objective-C language lane provide attributable behavior results without hidden skips or fallback success.",
@@ -9021,7 +9021,7 @@ const FEATURE_LINKS = [
   {
     id: "F351",
     implementation: [
-      { file: "packages/window-check/app.mjs", symbol: "async function documentReplies(client, window)" },
+      { file: "packages/window-check/app.mjs", symbol: "async function workbenchReplies(client, window)" },
     ],
     tests: [
       { file: "packages/window-check/test/unresponsive.test.mjs", id: "a document that does not reply to a request and to the probe after it makes the later checks of its application fail at once" },
@@ -9640,7 +9640,7 @@ const FEATURE_LINKS = [
   {
     id: "F418",
     implementation: [{ file: "e2e/hosts.test.mjs", symbol: "const byPosition" }],
-    tests: [{ file: "e2e/hosts.test.mjs", id: "both hosts answer the same page the same way" }],
+    tests: [{ file: "e2e/hosts.test.mjs", id: "every host answers the same page the same way" }],
     expected: "The settled drag check compares surface frames ordered by position.",
     levels: ["application"],
   },

@@ -18,7 +18,7 @@ const editorDocumentRegistered = (s, surface) => s.until("core.surfaces", (all) 
 
 /** Gives an inactive editor view the native first responder through its declared text element. */
 const focusEditorForKeys = async (s, surface) => {
-  const content = await s.request("dom.rect", { name: "editor.content", surface });
+  const content = await s.request("element.rect", { name: "editor.content", surface });
   assert.ok(content.width > 0 && content.height > 0, "editor.content has no area");
   await s.click(content.x + content.width / 2, content.y + content.height / 2);
   await s.until("host.window", (window) => window.responder?.surface === surface,
@@ -130,10 +130,10 @@ for (const app of Object.values(APPS)) {
     assert.equal(readFileSync(file, "utf8"), "xyalpha\r\nbeta\r\n");
 
     // The tab keeps its params after the page reloads, and the editor reads the same file again.
-    const before = (await s.get("core.window.document")).timeOrigin;
+    const before = (await s.get("core.window.workbench")).start;
     await s.run("host.window.reload");
-    await s.until("core.window.document", (doc) => doc.timeOrigin !== before && doc.readyState === "complete",
-      "the main document did not reload");
+    await s.until("core.window.workbench", (workbench) => workbench.start !== before && workbench.readyState === "complete",
+      "the workbench did not start again");
     await s.until("core.surfaces", (all) => all.some((x) => x.surface === surface && x.status.phase === "ready"),
       "the editor tab did not open again after the reload");
     await editorDocumentRegistered(s, surface);

@@ -69,10 +69,10 @@ for (const app of Object.values(APPS)) {
     assert.ok(content, "no content card");
     const card = { x: grid.plane.x + content.x + content.w / 2, y: grid.plane.y + content.y + 3 };
     const reload = undrawn(await record(s, async () => {
-      const before = (await s.get("core.window.document")).timeOrigin;
+      const before = (await s.get("core.window.workbench")).start;
       await s.run("host.window.reload");
-      await s.until("core.window.document", (doc) => doc.timeOrigin !== before && doc.readyState === "complete",
-        "the main document did not reload");
+      await s.until("core.window.workbench", (workbench) => workbench.start !== before && workbench.readyState === "complete",
+        "the workbench did not start again");
     }), logo, card);
     const library = undrawn(await record(s, async () => {
       await s.run("core.projects.browse");

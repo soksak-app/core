@@ -55,10 +55,10 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(persisted.links.filter((link) => link.plugin === "terminal" && places.includes(link.place))
       .map((link) => [link.place, link.set]), places.map((place) => [place, set]));
     await s.run("core.settings.close");
-    const before = (await s.get("core.window.document")).timeOrigin;
+    const before = (await s.get("core.window.workbench")).start;
     await s.run("host.window.reload");
-    await s.until("core.window.document", (state) => state.timeOrigin !== before && state.readyState === "complete",
-      "the main document did not reload");
+    await s.until("core.window.workbench", (workbench) => workbench.start !== before && workbench.readyState === "complete",
+      "the workbench did not start again");
     const restored = await s.until("core.settings", (state) => places.every((place) => state.values.links.some((link) =>
       link.place === place && link.plugin === "terminal" && link.set === set)), "reload lost terminal card sidebar choices");
     assert.equal(restored.saving, false);

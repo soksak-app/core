@@ -147,7 +147,7 @@ export async function observeViewDisplay(s, t, readRecording = (directory) => fr
       assert.equal(now.status.phase, "ready", `${view.id}: surface failed: ${now.status.error}`);
       assert.equal(now.composition, "view", `${view.id} reports composition ${now.composition}`);
       assert.deepEqual((await s.get("core.surface.document", tab)).unbound, [],
-        `${view.id}: ready view document controls without a command or dom name`);
+        `${view.id}: ready view document controls without a command or element name`);
       const counts = captured.map((frame) => colours(frame, now.applied));
       const first = counts.findIndex((count) => count > 1);
       if (!verifyPixels) {
@@ -164,7 +164,7 @@ export async function observeViewDisplay(s, t, readRecording = (directory) => fr
       }
     }
   }
-  assert.deepEqual((await s.get("core.page.audit")).unbound, [], "main document controls without a command or dom name");
+  assert.deepEqual((await s.get("core.workbench.audit")).unbound, [], "workbench controls without a command or element name");
 }
 
 /** Requires each installed view to have an explicit content case before accepting its display. */

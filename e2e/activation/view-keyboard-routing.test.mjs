@@ -66,7 +66,7 @@ async function focusedBrowser(s) {
   const browser = (await s.get("core.surfaces")).find((surface) => surface.plugin === "browser" && surface.visible);
   assert.ok(browser, "the fixture has no visible browser view");
   await s.until("core.surfaces", (all) => all.some((surface) => surface.surface === browser.surface
-    && surface.exposes.includes("status browser.address.text") && surface.exposes.includes("dom browser.address")),
+    && surface.exposes.includes("status browser.address.text") && surface.exposes.includes("element browser.address")),
   "the browser did not register its address field");
   const url = await serveAddressPage(s);
   await s.run("browser.navigate", { url }, browser.surface);
@@ -276,12 +276,12 @@ for (const app of Object.values(APPS)) {
       await s.until("core.focus", (focus) => focus?.name === "core.library.window" && focus.surface === null,
         `the ${page} library's new-window control did not hold main-document focus`);
       const mainWindow = await s.get("host.window");
-      assert.equal(mainWindow.responder?.owner, "page",
+      assert.equal(mainWindow.responder?.owner, "workbench",
         `the main document is not the responder before cmd+k: ${JSON.stringify(mainWindow.responder)}`);
       await s.press("k", { modifiers: ["command"] });
       await s.until("core.focus", (focus) => focus?.name === name && focus.surface === null,
         `cmd+k did not focus ${name}`);
-      assert.equal((await s.get("host.window")).responder?.owner, "page",
+      assert.equal((await s.get("host.window")).responder?.owner, "workbench",
         "cmd+k moved keyboard focus away from the main document");
       assert.equal((await s.get("core.screen")).screen, "library",
         "cmd+k changed the shown library screen");
@@ -380,7 +380,7 @@ for (const app of Object.values(APPS)) {
       "composition Escape must not forward core.picker.close");
     assert.equal(events.filter((event) => event.event === "workbench.input.shortcut.failed").length, 0,
       "composition Escape must not forward a workbench shortcut command");
-    assert.deepEqual((await s.get("core.page.audit")).unbound, []);
+    assert.deepEqual((await s.get("core.workbench.audit")).unbound, []);
     t.diagnostic(`${app.name}: captured complete g/k/s/Escape gesture in ${captured.length} frames`);
   });
 }

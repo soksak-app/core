@@ -38,10 +38,10 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(layout.sidebars.left.folded, ["files.bookmarks"]);
 
     // After the document reloads, the same choice is visible in the saved space.
-    const before = (await s.get("core.window.document")).timeOrigin;
+    const before = (await s.get("core.window.workbench")).start;
     await s.run("host.window.reload");
-    await s.until("core.window.document", (doc) => doc.timeOrigin !== before && doc.readyState === "complete",
-      "the main document did not reload");
+    await s.until("core.window.workbench", (workbench) => workbench.start !== before && workbench.readyState === "complete",
+      "the workbench did not start again");
     await s.until("core.sidebars", chosen, "the reloaded document did not show the saved tab and fold");
   });
 }

@@ -10,7 +10,7 @@ A sidebar section is declared UI: the plugin sends a status value of list, tree,
 
 ## Rule
 
-A plugin draws every screen it owns by any means: DOM written by hand, a framework, a library, or a sidecar image in an image region. Core gives the place and requires only the exposure contract: every interactive element binds a declared command through the shared binder and has a dom name, and every visible state is a declared status ([exposure](../spec/exposure.md)). A sidebar section is such a screen.
+A plugin draws every screen it owns by any means: DOM written by hand, a framework, a library, or a sidecar image in an image region. Core gives the place and requires only the exposure contract: every interactive element binds a declared command through the shared binder and has an element name, and every visible state is a declared status ([exposure](../spec/exposure.md)). A sidebar section is such a screen.
 
 ## Decisions
 
@@ -49,9 +49,9 @@ Input and focus over a section view follow [input over native views](../spec/nat
 | Plugin host: `plugin-host.js`, `host`, `docs/spec/plugin-host.md`, `host.plugin-host.*` and `host.trace.plugin-host.*` records, and the plugin host entries of `core.plugin.losses`, `core.plugin.views` and `core.plugin.open-calls` | The section views; those three statuses keep their view entries. |
 | `hostOperations` of `plugin.json` and `hostReadOperations` of `sidecar.json` | The view sidecar calls of `dependencies`. |
 | `data` through the plugin host (`plugin-data.js`, `environment.js:115`, the `host` requirement of `plugin-api/index.js:679-681`) | `data` read and written by the views of the plugin through `runtime.data.get` and `runtime.data.set` (D13). |
-| The status `core.plugin.snapshots`, the control address of `dom.rect` and `dom.act` with the error 1009, the declared tree keys of the shortcut table, and the view events `declared-ui.expanded` and `declared-ui.snapshot` | Nothing: the view of a section serves its own controls and keys. |
+| The status `core.plugin.snapshots`, the control address of `element.rect` and `element.act` with the error 1009, the declared tree keys of the shortcut table, and the view events `declared-ui.expanded` and `declared-ui.snapshot` | Nothing: the view of a section serves its own controls and keys. |
 | The host events `declared-ui-source-registered` and `declared-ui-source-ended` and the query `declaredSourceOrigins` | `view-source-registered`, `view-source-ended` and `viewSourceOrigins`, which keep the generation of every view source. |
-| dom name `core.sidebar.section.control` and the control count of `core.sidebars` | The dom names of the plugin, which the binder audit covers. |
+| element name `core.sidebar.section.control` and the control count of `core.sidebars` | The element names of the plugin, which the binder audit covers. |
 | Window checks that use these names (`e2e/files.test.mjs`, `e2e/editor.test.mjs`, `e2e/declared-sidebar-control.mjs`) | Checks that use the entries of the section views. |
 
 `docs/spec/native-surfaces.md` states the origin of a section surface and the member `section` of the start values, and the host contract states both. The layer rules and rule 5 of `docs/spec/plugin-processes.md`, `docs/spec/plugins.md` (`sections`, heights, the plugin requirement of line 84, `dependencies` and `data` with lines 127-130), the served view calls of `docs/spec/native-surfaces.md` (lines 150-160), the checks of `packages/plugin-api/index.js:679-681` and `:698-700`, and the terms *section surface* and *card surface* of `packages/plugin-api/terms.json` change in the same change.

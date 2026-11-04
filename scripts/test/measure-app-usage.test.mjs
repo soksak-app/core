@@ -338,7 +338,7 @@ test("counts the error lines of the layout fault in the application log", () => 
   const lines = [
     "error workbench surface presentation failed: diagnostic layout fault",
     "info host host run: soksak pid 10",
-    "error workbench core.page.error: another fault",
+    "error workbench core.workbench.error: another fault",
     "warn page surface presentation failed: diagnostic layout fault",
   ];
   assert.equal(faultErrorCount(lines), 1);

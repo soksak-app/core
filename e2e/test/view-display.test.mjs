@@ -33,7 +33,7 @@ function fixture({ blank = false, offset = 0, terminalOnly = false } = {}) {
         assert.equal(tab, current?.surface, "the checker read another tab's document");
         return { readyState: "complete", themed: true, unbound: [], timeOrigin: 100 };
       }
-      if (name === "core.page.audit") return { unbound: [] };
+      if (name === "core.workbench.audit") return { unbound: [] };
       if (name === "host.window") return { surfaces: current ? [{ id: current.surface,
         frame: { x: applied.x, y: applied.y, width: applied.w, height: applied.h } }] : [] };
       throw new Error(`unexpected status ${name}`);
@@ -141,7 +141,7 @@ test("view display audits controls after its declared content readiness", { time
   let ready = false;
   f.s.get = async (...args) => {
     const value = await get(...args);
-    if (args[0] === "core.surface.document" && !ready) return { ...value, unbound: [{ tag: "button" }] };
+    if (args[0] === "core.surface.document" && !ready) return { ...value, unbound: [{ role: "button" }] };
     return value;
   };
   await acceptViewDisplay(f.s, t, f.readRecording, new Map([["terminal", { ready: async () => {

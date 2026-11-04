@@ -56,11 +56,11 @@ for (const app of Object.values(APPS)) {
     const oldGeneration = hiddenRegion.presented.generation;
 
     const since = await tailOf(s);
-    const oldDocument = (await s.get("core.window.document")).page;
+    const oldDocument = (await s.get("core.window.workbench")).start;
     await s.run("host.window.reload");
-    const document = await s.until("core.window.document", (value) => value.page !== oldDocument
-      && value.readyState === "complete", "the replacement main document did not complete");
-    const replacementPage = document.page;
+    const document = await s.until("core.window.workbench", (value) => value.start !== oldDocument
+      && value.readyState === "complete", "the workbench did not start again");
+    const replacementPage = document.start;
     let rows = await waitForRows(s, since, (items) => items.some((row) => row.event.event === "workbench.start"
       && row.event.start === replacementPage), "the replacement page did not record workbench.start");
     const start = rows.find((row) => row.event.event === "workbench.start" && row.event.start === replacementPage);
@@ -109,7 +109,7 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(failedCalls, [], `reload and reveal produced failed runtime calls: ${JSON.stringify(failedCalls)}`);
     const errors = rows.filter(({ event }) => event.level === "error");
     assert.deepEqual(errors, [], `reload and reveal produced host, page, or supplier errors: ${JSON.stringify(errors)}`);
-    assert.equal(await s.get("core.page.error"), null, "the reload or reveal displayed a page error");
+    assert.equal(await s.get("core.workbench.error"), null, "the reload or reveal displayed a page error");
     t.diagnostic(`${app.name}: workbench.start ${JSON.stringify(start.event.fields.started_at)}, sidecar seq ${headlessMode.event.seq}->${reattachedMode.event.seq}, attachment generation ${oldGeneration}->${newRegion.presented.generation}, session ${beforeSession.sessionId}`);
   });
 }

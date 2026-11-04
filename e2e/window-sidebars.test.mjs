@@ -97,7 +97,7 @@ for (const app of Object.values(APPS))
         (await s.get("core.verify")).rows.filter((row) => !row.ok),
         [],
       );
-      assert.deepEqual((await s.get("core.page.audit")).unbound, []);
+      assert.deepEqual((await s.get("core.workbench.audit")).unbound, []);
       return { grid, rail, plugin: tab.plugin, card: card.id };
     }
     const recording = await s.request("diagnostics.capture.start", {});

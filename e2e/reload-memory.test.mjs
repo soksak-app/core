@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import test from "node:test";
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { MAIN_PAGE_APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 
 /** RSS (KB) of the process. */
@@ -39,7 +39,8 @@ const RELOADS = 20;
 // and the documents of the window after the reload.
 const PAGE_GROWTH = 64 * 1024 * 1024;
 
-for (const app of Object.values(APPS)) {
+// The subject is the page process of the main page, so the check runs on the applications that have one (MAIN_PAGE_APPS).
+for (const app of MAIN_PAGE_APPS) {
   test(`${app.name}: repeated reload keeps the host memory, the page memory and the window documents bounded`, { timeout: 300000 }, async (t) => {
     const session = await open(t, app);
     if (!session) return;

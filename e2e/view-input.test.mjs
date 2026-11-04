@@ -16,7 +16,7 @@ for (const app of Object.values(APPS)) {
     const browser = (await s.get("core.surfaces")).find(item => item.plugin === "browser" && item.visible);
     assert.ok(browser, "the fixture has no visible browser view");
     await s.until("core.surfaces", all => all.some(item => item.surface === browser.surface
-      && item.exposes.includes("status browser.address.text") && item.exposes.includes("dom browser.address")),
+      && item.exposes.includes("status browser.address.text") && item.exposes.includes("element browser.address")),
     "the browser did not register its address field");
     const project = await s.get("core.project");
     const space = project.spaces.find(item => item.id === project.activeSpaceId);
@@ -56,7 +56,7 @@ for (const app of Object.values(APPS)) {
     await s.click(rename.x + rename.width / 2, rename.y + rename.height / 2);
     await s.until("core.focus", focus => focus?.name === "core.rename.input",
       "native focus did not enter the main document");
-    await s.until("host.window", window => window.responder?.owner === "page",
+    await s.until("host.window", window => window.responder?.owner === "workbench",
       "the main rename field did not become the native first responder");
     await s.presented();
     await s.press("y", { text: "y" });
@@ -90,7 +90,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(stopped.limited, false, "the focus gesture exceeded its recording capacity");
     assert.ok(windows.length > 0 && windows.every(window => window.active === false),
       "the native gesture activated the application");
-    assert.deepEqual((await s.get("core.page.audit")).unbound, []);
+    assert.deepEqual((await s.get("core.workbench.audit")).unbound, []);
     t.diagnostic(`native focus round trip and picker Escape: ${captured.length} frames, gap ${stopped.longestGap}ms`);
   });
 }

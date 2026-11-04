@@ -283,7 +283,7 @@ for (const app of Object.values(APPS)) {
             `cycle ${cycleLabel}, pass ${pass}: the closed project remained shown`);
           await lifecycle.until("host.window", (host) => !host.regions.some((region) => region.surface === currentSurface),
             `cycle ${cycleLabel}, pass ${pass}: the terminal image region remained attached after project close`);
-          assert.equal(await lifecycle.get("core.page.error"), null,
+          assert.equal(await lifecycle.get("core.workbench.error"), null,
             `cycle ${cycleLabel}, pass ${pass}: project close reported an application error`);
           opened = await lifecycle.run("core.project.open", { root: projectRoot, color: "#7db4ff" });
           await lifecycle.until("core.project", (value) => value?.id === opened.id,
@@ -293,7 +293,7 @@ for (const app of Object.values(APPS)) {
           await lifecycle.until("core.surfaces", (surfaces) => surfaces.some((item) => item.surface === currentSurface && item.visible),
             `cycle ${cycleLabel}, pass ${pass}: the terminal view did not register after reopen`);
           await lifecycle.get("terminal.session", currentSurface);
-          assert.equal(await lifecycle.get("core.page.error"), null,
+          assert.equal(await lifecycle.get("core.workbench.error"), null,
             `cycle ${cycleLabel}, pass ${pass}: project reopen reported an application error`);
         }
         t.diagnostic(`${app.name}: F239-47-33 cycle ${cycleLabel}/10 completed two project close/reopen passes`);

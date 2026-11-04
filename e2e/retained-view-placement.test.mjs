@@ -31,7 +31,7 @@ for (const app of Object.values(APPS)) {
         if (project.root === root) await s.run("core.project.close", { id: project.id });
       }
       await s.run("core.projects.flush");
-      assert.equal(await s.get("core.page.error"), null, "project-view cleanup reported an application error");
+      assert.equal(await s.get("core.workbench.error"), null, "project-view cleanup reported an application error");
     });
 
     await s.run("core.settings.set", {
@@ -97,7 +97,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(terminalCard(coldGrid).tabs.length, 2, "the cold terminal card must retain both saved tabs");
     assert.equal((await child.get("host.window")).surfaces.some((item) => item.id === hiddenTab), false,
       "an unloaded tab retained a native surface");
-    assert.equal(await child.get("core.page.error"), null, "enabled memory saver reported an application error");
+    assert.equal(await child.get("core.workbench.error"), null, "enabled memory saver reported an application error");
     await child.run("core.projects.flush");
     await child.close();
     await s.windows(1, "the enabled-memory-saver project window did not close");
@@ -121,6 +121,6 @@ for (const app of Object.values(APPS)) {
       "the hidden browser document did not become ready", { surface: hiddenTab });
     await child.until("host.window", (state) => state.surfaces.some((item) => item.id === hiddenTab && !item.visible),
       "the loaded hidden browser was not submitted as an invisible native surface");
-    assert.equal(await child.get("core.page.error"), null, "disabled memory saver reported an application error");
+    assert.equal(await child.get("core.workbench.error"), null, "disabled memory saver reported an application error");
   });
 }
