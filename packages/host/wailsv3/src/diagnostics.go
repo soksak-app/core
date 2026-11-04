@@ -291,6 +291,70 @@ func parseDragCaptureOptions(params json.RawMessage) (dragCaptureOptions, error)
 	return options, nil
 }
 
+// parseDragNative reads native, which makes the host deliver the drag as native pointer input instead of the page
+// (docs/spec/endpoint.md). It is false when absent.
+func parseDragNative(params json.RawMessage) (bool, error) {
+	var request struct {
+		Native json.RawMessage `json:"native"`
+	}
+	if err := decode(params, &request); err != nil {
+		return false, err
+	}
+	if len(request.Native) == 0 {
+		return false, nil
+	}
+	var native *bool
+	if err := json.Unmarshal(request.Native, &native); err != nil || native == nil {
+		return false, rpcError(codeInvalidParams, "native must be a boolean")
+	}
+	return *native, nil
+}
+
+// nativeDrag delivers the drag of plan from the boundary point from as native input of the primary button, as a person
+// drags: for each round trip a press at from, each step as a drag of the button at from plus the offset times the
+// fraction of the step, out and back, and a release at from after the last step. deliver delivers one input without
+// activating the window or the application, and step returns at the host time of the next step. A failed input after a
+// press releases the button at the last point, so no press stays open in the window. The reply is {from, steps, took,
+// asked}: took is the time from the first press to the last release on the clock of the host and asked the time that
+// the steps ask, both in milliseconds.
+func nativeDrag(plan dragPlan, from point, deliver func(PointerInput) error, step func()) (map[string]any, error) {
+	per := plan.steps()
+	at := func(fraction float64) point {
+		return point{X: from.X + plan.DX*fraction, Y: from.Y + plan.DY*fraction}
+	}
+	input := func(phase string, p point) PointerInput {
+		return PointerInput{X: p.X, Y: p.Y, Phase: phase, Button: "left"}
+	}
+	began := time.Now()
+	for turn := 0; turn < plan.Times; turn++ {
+		if err := deliver(input("down", from)); err != nil {
+			return nil, fmt.Errorf("native drag press of round trip %d: %w", turn+1, err)
+		}
+		last := from
+		for i := 1; i <= 2*per; i++ {
+			step()
+			fraction := float64(i) / float64(per)
+			if i > per {
+				fraction = float64(2*per-i) / float64(per)
+			}
+			last = at(fraction)
+			if err := deliver(input("drag", last)); err != nil {
+				err = fmt.Errorf("native drag step %d: %w", turn*2*per+i, err)
+				if released := deliver(input("up", last)); released != nil {
+					err = fmt.Errorf("%w; release after the failed step: %v", err, released)
+				}
+				return nil, err
+			}
+		}
+		if err := deliver(input("up", from)); err != nil {
+			return nil, fmt.Errorf("native drag release of round trip %d: %w", turn+1, err)
+		}
+	}
+	steps := plan.Times * 2 * per
+	return map[string]any{"from": from, "steps": steps, "took": time.Since(began).Milliseconds(),
+		"asked": steps * int(frameStep/time.Millisecond)}, nil
+}
+
 // steps is the number of steps of a one-way move. The page counts them in the same way.
 func (p dragPlan) steps() int {
 	if n := int(math.Round(float64(p.MS) / float64(frameStep/time.Millisecond))); n > 1 {
@@ -369,7 +433,8 @@ func recorder() (platformCapture, error) {
 	return platformCapture{Capturer: capturer}, nil
 }
 
-// diagnosticDrag requests a drag from the page and sends the time of each step.
+// diagnosticDrag requests a drag from the page and sends the time of each step, or with native delivers it as native
+// pointer input at the boundary point that the page answers.
 //
 // The page finds the boundary and applies the input at each step. When the window is not in front, the browser
 // slows the clock of the document, so the host sends the time of each step as a diagnostics-tick event. When the page finishes the drag and
@@ -396,6 +461,17 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 	if plan.MS <= 0 || plan.Times < 1 {
 		return nil, rpcError(codeInvalidParams, "ms must be positive and times must be at least 1")
 	}
+	native, err := parseDragNative(params)
+	if err != nil {
+		return nil, err
+	}
+	// With native, the page answers the point of the boundary, and the host delivers the drag as native input there.
+	var from point
+	if native {
+		if from, err = dragBoundary(h, s, plan); err != nil {
+			return nil, err
+		}
+	}
 	var frames string
 	// When recording, the time at which the step was sent is recorded on the same clock as the frames. This allows measuring the delay from a step to the screen.
 	var clock func() float64
@@ -421,32 +497,20 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 	var tickMu sync.Mutex
 	sent := []float64{}
 	ticks := plan.steps() * 2 * plan.Times
-	s.note(fmt.Sprintf("diagnostics: drag %s:%d by %g,%g in %d steps, %d times", plan.Axis, plan.Line, plan.DX, plan.DY, plan.steps(), plan.Times))
-	stop := make(chan struct{})
-	// The tick starts after the request is sent so that the first tick arrives after the page received the drag request.
-	reply := h.relay.Request(relayTarget{owner: s}, time.Duration(ticks)*frameStep+pageTimeout, func(id uint64) error {
-		s.window.EmitEvent("exposure-request", map[string]any{"id": id, "method": "diagnostics.drag", "params": plan})
-		routine.Go("diagnostics-ticks", func() {
-			tick := time.NewTicker(frameStep)
-			defer tick.Stop()
-			for left := ticks; left > 0; left-- {
-				select {
-				case <-tick.C:
-					if clock != nil {
-						tickMu.Lock()
-						sent = append(sent, clock())
-						tickMu.Unlock()
-					}
-					s.window.EmitEvent("diagnostics-tick")
-				case <-stop:
-					return
-				}
-			}
-		})
-		return nil
-	})
-	close(stop)
-	result, err := dragResult(s, reply)
+	s.note(fmt.Sprintf("diagnostics: drag %s:%d by %g,%g in %d steps, %d times, native %t", plan.Axis, plan.Line, plan.DX, plan.DY, plan.steps(), plan.Times, native))
+	stepped := func() {
+		if clock != nil {
+			tickMu.Lock()
+			sent = append(sent, clock())
+			tickMu.Unlock()
+		}
+	}
+	var result map[string]any
+	if native {
+		result, err = nativeDragPresented(h, s, plan, from, stepped)
+	} else {
+		result, err = pageDrag(h, s, plan, ticks, stepped)
+	}
 	var layouts []map[string]any
 	if captureOptions.capture {
 		if capture, captureErr := recorder(); captureErr == nil {
@@ -482,6 +546,66 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 	return result, nil
 }
 
+// pageDrag requests the drag of plan from the page and sends the time of each of its ticks steps as a diagnostics-tick
+// event, calling sent at each. It answers the result of the page after the last layout is displayed.
+func pageDrag(h *Host, s *Surfaces, plan dragPlan, ticks int, sent func()) (map[string]any, error) {
+	stop := make(chan struct{})
+	// The tick starts after the request is sent so that the first tick arrives after the page received the drag request.
+	reply := h.relay.Request(relayTarget{owner: s}, time.Duration(ticks)*frameStep+pageTimeout, func(id uint64) error {
+		s.window.EmitEvent("exposure-request", map[string]any{"id": id, "method": "diagnostics.drag", "params": plan})
+		routine.Go("diagnostics-ticks", func() {
+			tick := time.NewTicker(frameStep)
+			defer tick.Stop()
+			for left := ticks; left > 0; left-- {
+				select {
+				case <-tick.C:
+					sent()
+					s.window.EmitEvent("diagnostics-tick")
+				case <-stop:
+					return
+				}
+			}
+		})
+		return nil
+	})
+	close(stop)
+	return dragResult(s, reply)
+}
+
+// dragBoundary asks the page for the point of the boundary of plan in window content coordinates.
+func dragBoundary(h *Host, s *Surfaces, plan dragPlan) (point, error) {
+	raw, err := h.ask(s, "diagnostics.drag.boundary", map[string]any{"axis": plan.Axis, "line": plan.Line}, pageTimeout)
+	if err != nil {
+		return point{}, err
+	}
+	var at struct{ X, Y *float64 }
+	if err := json.Unmarshal(raw, &at); err != nil || at.X == nil || at.Y == nil {
+		return point{}, fmt.Errorf("the page boundary of the drag is not {x, y}: %s", raw)
+	}
+	return point{X: *at.X, Y: *at.Y}, nil
+}
+
+// nativeDragPresented delivers the drag of plan from from as native input through the delivery of input.pointer, which
+// does not activate the window or the application, at the host time of each step, calling sent at each step, and
+// answers after the last release when the last layout is displayed.
+func nativeDragPresented(h *Host, s *Surfaces, plan dragPlan, from point, sent func()) (map[string]any, error) {
+	backend := hostBackend{h: h}
+	tick := time.NewTicker(frameStep)
+	defer tick.Stop()
+	result, err := nativeDrag(plan, from, func(input PointerInput) error { return backend.Pointer(s.name, input) },
+		func() {
+			<-tick.C
+			sent()
+		})
+	if err != nil {
+		return nil, err
+	}
+	if err := dragPresented(s); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 // layoutTrace converts the layout transaction record to {ticket, begun, presented, committed}. A stage that did not happen is null.
 func layoutTrace(records [][5]float64) []map[string]any {
 	layouts := make([]map[string]any, 0, len(records))
@@ -504,12 +628,9 @@ func dragResult(s *Surfaces, reply ExposureResult) (map[string]any, error) {
 	if reply.Error != nil {
 		return nil, reply.Error
 	}
-	select {
-	case <-s.whenSettled():
-	case <-time.After(pageTimeout):
-		return nil, rpcError(codeTimeout, "the drag was not presented within %s", pageTimeout)
+	if err := dragPresented(s); err != nil {
+		return nil, err
 	}
-	s.note("diagnostics: drag presented")
 	result := map[string]any{}
 	if len(reply.Result) > 0 && string(reply.Result) != "null" {
 		if err := json.Unmarshal(reply.Result, &result); err != nil {
@@ -517,6 +638,17 @@ func dragResult(s *Surfaces, reply ExposureResult) (map[string]any, error) {
 		}
 	}
 	return result, nil
+}
+
+// dragPresented waits until the last layout of a drag is displayed.
+func dragPresented(s *Surfaces) error {
+	select {
+	case <-s.whenSettled():
+	case <-time.After(pageTimeout):
+		return rpcError(codeTimeout, "the drag was not presented within %s", pageTimeout)
+	}
+	s.note("diagnostics: drag presented")
+	return nil
 }
 
 // startCapture starts the recording of window s in a new folder under the configuration directory and waits for the first frame.

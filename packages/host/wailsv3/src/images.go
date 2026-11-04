@@ -113,7 +113,10 @@ type ImageRasterState struct {
 	Visible            bool
 	PresentedRaster    uint64
 	PresentedSequence  int
-	PresentationError  string
+	// PresentedFrames counts the frames of the region that the host marked presented since the region was attached. A raster or a
+	// generation change does not reset it, because it counts the frames of the region (host.window presentedFrames).
+	PresentedFrames   uint64
+	PresentationError string
 	// Drawing is the drawing state last returned by DrawingChanges, and DrawingSent whether one was returned.
 	Drawing     bool
 	DrawingSent bool
@@ -556,6 +559,7 @@ func (i *Images) MarkPresented(key ImageKey, generation, raster uint64, sequence
 	}
 	state.PresentedRaster = raster
 	state.PresentedSequence = sequence
+	state.PresentedFrames++
 	if sequence == state.LastSequence {
 		state.PresentationError = ""
 	}
@@ -580,6 +584,17 @@ func (i *Images) PresentedFrame(key ImageKey) (PresentedFrame, bool) {
 		return PresentedFrame{}, false
 	}
 	return PresentedFrame{Generation: state.Generation, Raster: state.PresentedRaster, Sequence: state.PresentedSequence}, true
+}
+
+// PresentedFrames returns the number of frames of the image region that the host marked presented since the region was attached.
+func (i *Images) PresentedFrames(key ImageKey) (uint64, error) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	state := i.states[key]
+	if state == nil {
+		return 0, fmt.Errorf("image %q is not attached", key.Name)
+	}
+	return state.PresentedFrames, nil
 }
 
 // SentDrawing returns the drawing state last sent to the supplier of a region; it is false before one was sent.

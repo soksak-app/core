@@ -1037,11 +1037,128 @@ fn parse_drag_capture_options(
     })
 }
 
+/// Reads native, which makes the host deliver the drag as native pointer input instead of the page
+/// (docs/spec/endpoint.md), and removes it from the parameters of the page. It is false when absent.
+fn parse_drag_native(params: &mut Map<String, Value>) -> Result<bool, Failure> {
+    match params.remove("native") {
+        None => Ok(false),
+        Some(Value::Bool(native)) => Ok(native),
+        Some(_) => Err(Failure::params("native must be a boolean")),
+    }
+}
+
+/// The drag that the host delivers as native input: the offset of the boundary, the steps of a one-way move and the
+/// round trips.
+struct NativeDragPlan {
+    dx: f64,
+    dy: f64,
+    per: u64,
+    times: u64,
+}
+
+/// Delivers the drag of plan from the boundary point from as native input of the primary button, as a person drags: for
+/// each round trip a press at from, each step as a drag of the button at from plus the offset times the fraction of the
+/// step, out and back, and a release at from after the last step. deliver delivers one input without activating the
+/// window or the application, and step returns at the host time of the next step. A failed input after a press releases
+/// the button at the last point, so no press stays open in the window. The reply is {from, steps, took, asked}: took is
+/// the time from the first press to the last release on the clock of the host and asked the time that the steps ask,
+/// both in milliseconds.
+fn native_drag(
+    plan: &NativeDragPlan,
+    from: (f64, f64),
+    mut deliver: impl FnMut(platform::Pointer) -> Result<(), Failure>,
+    mut step: impl FnMut(),
+) -> Result<Value, Failure> {
+    let input = |phase: i32, (x, y): (f64, f64)| platform::Pointer {
+        x,
+        y,
+        phase,
+        button: 0,
+        delta_x: 0.0,
+        delta_y: 0.0,
+        activate: false,
+    };
+    let at = |fraction: f64| (from.0 + plan.dx * fraction, from.1 + plan.dy * fraction);
+    let began = Instant::now();
+    for turn in 0..plan.times {
+        deliver(input(1, from)).map_err(|error| {
+            Failure::new(
+                error.code,
+                format!(
+                    "native drag press of round trip {}: {}",
+                    turn + 1,
+                    error.message
+                ),
+            )
+        })?;
+        for i in 1..=2 * plan.per {
+            step();
+            let fraction = if i > plan.per {
+                (2 * plan.per - i) as f64 / plan.per as f64
+            } else {
+                i as f64 / plan.per as f64
+            };
+            let last = at(fraction);
+            if let Err(error) = deliver(input(2, last)) {
+                let mut message = format!(
+                    "native drag step {}: {}",
+                    turn * 2 * plan.per + i,
+                    error.message
+                );
+                if let Err(released) = deliver(input(3, last)) {
+                    message = format!(
+                        "{message}; release after the failed step: {}",
+                        released.message
+                    );
+                }
+                return Err(Failure::new(error.code, message));
+            }
+        }
+        deliver(input(3, from)).map_err(|error| {
+            Failure::new(
+                error.code,
+                format!(
+                    "native drag release of round trip {}: {}",
+                    turn + 1,
+                    error.message
+                ),
+            )
+        })?;
+    }
+    let steps = plan.times * 2 * plan.per;
+    Ok(json!({
+        "from": {"x": from.0, "y": from.1},
+        "steps": steps,
+        "took": began.elapsed().as_millis() as u64,
+        "asked": steps * FRAME.as_millis() as u64,
+    }))
+}
+
+/// Asks the page for the point of the boundary of the drag in window content coordinates.
+fn drag_boundary(
+    host: &Host,
+    window: &Window,
+    params: &Map<String, Value>,
+) -> Result<(f64, f64), Failure> {
+    let mut request = Map::new();
+    request.insert("axis".into(), params["axis"].clone());
+    request.insert("line".into(), params["line"].clone());
+    let answer =
+        exposure::parsed(&host.page(window, "diagnostics.drag.boundary", request, TIMEOUT)?)?;
+    match (answer["x"].as_f64(), answer["y"].as_f64()) {
+        (Some(x), Some(y)) => Ok((x, y)),
+        _ => Err(internal(format!(
+            "the page boundary of the drag is not {{x, y}}: {answer}"
+        ))),
+    }
+}
+
 fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<Value, Failure> {
     if !matches!(params.get("axis").and_then(Value::as_str), Some("x" | "y")) {
         return Err(Failure::params("axis must be x or y"));
     }
     let capture_options = parse_drag_capture_options(&mut params)?;
+    let native = parse_drag_native(&mut params)?;
     for name in ["line", "dx", "dy", "ms", "times"] {
         if !params.get(name).is_some_and(Value::is_number) {
             return Err(Failure::params(format!("{name} must be a number")));
@@ -1060,6 +1177,12 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
     }
     let per = ((ms / FRAME.as_millis() as f64).round() as u64).max(1);
     let steps = per * 2 * times;
+    // With native, the page answers the point of the boundary, and the host delivers the drag as native input there.
+    let from = if native {
+        Some(drag_boundary(host, window, &params)?)
+    } else {
+        None
+    };
 
     let frames = if capture_options.capture {
         Some(with_document_frame_identity_lifecycle(|| {
@@ -1075,7 +1198,7 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
     exposure::note(
         window,
         &format!(
-            "diagnostics: drag {}:{} by {},{} in {per} steps, {times} times",
+            "diagnostics: drag {}:{} by {},{} in {per} steps, {times} times, native {native}",
             // default: only the log text is built. The page checks the axis and answers an invalid value as an error.
             params["axis"].as_str().unwrap_or_default(),
             params["line"],
@@ -1095,14 +1218,52 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
         None
     };
     let recorded = sent.clone();
-    // The page discards the previous steps when it starts a drag, so the steps are sent after the request event.
-    let result = host.page_then(
-        window,
-        "diagnostics.drag",
-        params,
-        Some(TIMEOUT + length),
-        move || tick(app, label, steps, clock, recorded),
-    );
+    let result = match from {
+        Some(from) => {
+            let plan = NativeDragPlan {
+                dx: params["dx"]
+                    .as_f64()
+                    .ok_or_else(|| Failure::params("dx must be a number"))?,
+                dy: params["dy"]
+                    .as_f64()
+                    .ok_or_else(|| Failure::params("dy must be a number"))?,
+                per,
+                times,
+            };
+            let began = Instant::now();
+            let mut due = 0;
+            native_drag(
+                &plan,
+                from,
+                |pointer| host.input_pointer(window, pointer).map(|_| ()),
+                || {
+                    // Each step is delivered at its scheduled time relative to the start time, as tick sends the
+                    // steps of the page.
+                    due += 1;
+                    if let Some(left) = (FRAME * due).checked_sub(began.elapsed()) {
+                        std::thread::sleep(left);
+                    }
+                    if let Some(platform) = clock {
+                        match (platform.capture_clock(), recorded.lock()) {
+                            (Ok(now), Ok(mut ticks)) => ticks.push(now),
+                            (Err(error), _) => log_error("drag tick clock", error),
+                            (_, Err(error)) => log_error("drag tick clock", error),
+                        }
+                    }
+                },
+            )
+        }
+        // The page discards the previous steps when it starts a drag, so the steps are sent after the request event.
+        None => host
+            .page_then(
+                window,
+                "diagnostics.drag",
+                params,
+                Some(TIMEOUT + length),
+                move || tick(app, label, steps, clock, recorded),
+            )
+            .and_then(|result| exposure::parsed(&result)),
+    };
     // The record is stopped regardless of the success of the drag.
     let layouts = (|| -> Result<_, Failure> {
         if frames.is_some() {
@@ -1136,7 +1297,7 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
             ));
         }
         exposure::note(window, "diagnostics: drag presented");
-        let mut merged = match exposure::parsed(&result)? {
+        let mut merged = match result {
             Value::Object(fields) => fields,
             Value::Null => Map::new(),
             _ => return Err(internal("the page drag result is not an object")),

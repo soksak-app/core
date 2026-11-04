@@ -98,7 +98,7 @@ fn host_declarations() -> Value {
                     "installed": {"type": ["string", "null"]}, "sessions": {"type": "integer"}}}}}},
         }, {
             "name": "host.window",
-            "description": "Window frame and system pointer location in screen coordinates, content size, backing scale, the maximum refresh rate of its screen (null when the window is on no screen), maximized, key and application active state, whether other windows cover the whole window, child window count, the WebContent process of the app page (0 before it starts), whether the application is quitting, window buttons, webview frames, native surfaces, document regions, image regions, and the open native modal.",
+            "description": "Window frame and system pointer location in screen coordinates, content size, backing scale, the maximum refresh rate of its screen (null when the window is on no screen), maximized, key and application active state, whether other windows cover the whole window, child window count, the WebContent process of the app page (0 before it starts), whether the application is quitting, window buttons, webview frames, native surfaces, document regions, image regions with the number of frames that the host marked presented for each, the open native modal, and the frames and command buffers of the workbench and whether it settled after its last frame, null on a host whose workbench WebKit draws.",
             "schema": {"type": "object", "properties": {
                 "frame": rect,
                 "pointer": {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}}},
@@ -129,7 +129,11 @@ fn host_declarations() -> Value {
                     "presented": {"type": ["object", "null"], "properties": {
                         "sequence": {"type": "integer"}, "generation": {"type": "integer"}, "raster": {"type": "integer"},
                         "width": {"type": "integer"}, "height": {"type": "integer"}, "scale": {"type": "number"}}},
+                    "presentedFrames": {"type": "integer"},
                     "error": {"type": ["string", "null"]}}}},
+                "frames": {"type": ["integer", "null"]},
+                "commandBuffers": {"type": ["integer", "null"]},
+                "settled": {"type": ["boolean", "null"]},
                 "modal": {"type": "object", "properties": {
                     "id": {"type": "string"}, "mode": {"type": "string"},
                     "shown": {"type": "boolean"}, "frame": rect, "order": {"type": "integer"},
@@ -1790,6 +1794,50 @@ fn window_webview_row(order: usize, view: &Value) -> Result<Value, Failure> {
     )
 }
 
+/// Returns the host.window entry of the image region key from the native facts text of the region and the state that
+/// the host holds for it.
+pub(crate) fn window_region(
+    images: &crate::images::Images,
+    key: (String, String),
+    text: &str,
+) -> Result<Value, String> {
+    let presented = images.presented_frame(&key);
+    let mut region: Value = serde_json::from_str(text).map_err(|e| e.to_string())?;
+    // presented is the size of the presented image with the identity of the frame that the host marked presented;
+    // null while no frame of the current raster is presented.
+    region["presented"] = match (region["presented"].take(), presented) {
+        (Value::Object(mut size), Some(frame)) => {
+            size.insert("generation".into(), json!(frame.generation));
+            size.insert("raster".into(), json!(frame.raster));
+            size.insert("sequence".into(), json!(frame.sequence));
+            Value::Object(size)
+        }
+        _ => Value::Null,
+    };
+    // drawing is the drawing state that the host last sent the supplier
+    // (docs/spec/native-surfaces.md#image-regions).
+    region["drawing"] = Value::Bool(images.sent_drawing(&key));
+    region["presentedFrames"] = json!(
+        images
+            .presented_frames(&key)
+            .map_err(|error| format!("image {}/{}: {error}", key.0, key.1))?
+    );
+    let (surface, name) = key;
+    region["surface"] = Value::String(surface);
+    region["name"] = Value::String(name);
+    Ok(region)
+}
+
+/// The frame counters of host.window. WebKit draws the workbench of this host, and the host counts neither the frames of
+/// the workbench nor the command buffers that WebKit commits for it, so frames, commandBuffers and settled are null; the
+/// mygo host counts them through the frame reports of its workbench (U7).
+fn window_frame_counters() -> serde_json::Map<String, Value> {
+    ["frames", "commandBuffers", "settled"]
+        .into_iter()
+        .map(|name| (name.to_string(), Value::Null))
+        .collect()
+}
+
 fn window_status(window: &Window) -> Result<Value, Failure> {
     let platform = platform::current().map_err(internal)?;
     let target = window.clone();
@@ -1808,33 +1856,9 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
             .collect();
         let documents = context.documents.names();
         let mut regions = Vec::new();
-        for (handle, (surface, name)) in context.images.names() {
-            let presented = context
-                .images
-                .presented_frame(&(surface.clone(), name.clone()));
+        for (handle, key) in context.images.names() {
             let text = platform.image_facts(handle)?;
-            let mut region: Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
-            // presented is the size of the presented image with the identity of the frame that the host marked presented;
-            // null while no frame of the current raster is presented.
-            region["presented"] = match (region["presented"].take(), presented) {
-                (Value::Object(mut size), Some(frame)) => {
-                    size.insert("generation".into(), json!(frame.generation));
-                    size.insert("raster".into(), json!(frame.raster));
-                    size.insert("sequence".into(), json!(frame.sequence));
-                    Value::Object(size)
-                }
-                _ => Value::Null,
-            };
-            // drawing is the drawing state that the host last sent the supplier
-            // (docs/spec/native-surfaces.md#image-regions).
-            region["drawing"] = Value::Bool(
-                context
-                    .images
-                    .sent_drawing(&(surface.clone(), name.clone())),
-            );
-            region["surface"] = Value::String(surface);
-            region["name"] = Value::String(name);
-            regions.push(region);
+            regions.push(window_region(&context.images, key, &text)?);
         }
         Ok((context, facts, named, documents, regions))
     })
@@ -1921,7 +1945,7 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
     let responder = responder_of(
         class, owner, container, main, &named, &documents, modal_view,
     );
-    Ok(json!({
+    let mut status = json!({
         "responder": responder,
         "frame": facts["frame"],
         "pointer": facts["pointer"],
@@ -1943,7 +1967,11 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
         "documents": attached,
         "regions": regions,
         "modal": modal,
-    }))
+    });
+    for (name, value) in window_frame_counters() {
+        status[name] = value;
+    }
+    Ok(status)
 }
 
 /// Reloads the main page in the same WebContent process and waits until the new page reports that it is ready. The
@@ -2370,7 +2398,11 @@ impl Host {
     }
 
     /// Delivers pointer input on the main thread. When activate is set, the window is activated first.
-    fn input_pointer(&self, window: &Window, pointer: Pointer) -> Result<Value, Failure> {
+    pub(crate) fn input_pointer(
+        &self,
+        window: &Window,
+        pointer: Pointer,
+    ) -> Result<Value, Failure> {
         let platform = platform::current().map_err(|e| Failure::new(NO_INPUT, e))?;
         if pointer.activate {
             let (tx, rx) = mpsc::channel();

@@ -425,3 +425,76 @@ func TestPendingNewerFrameIsRequiredAfterTheWaitBegins(t *testing.T) {
 		t.Fatal("new wait omitted the already accepted second frame")
 	}
 }
+
+// contract: exposure.window.region-reports-presented-frames
+func TestWindowRegionCountsTheFramesThatTheHostMarkedPresented(t *testing.T) {
+	images := NewImages()
+	key := ImageKey{Surface: "tab-1", Name: "view"}
+	var handle int
+	attach := func() {
+		if err := images.Reserve(key, &ImageOwner{SidecarName: "sidecar-a", SidecarOwner: imageStatusTestOwner{}}); err != nil {
+			t.Fatal(err)
+		}
+		if !images.Set(key, unsafe.Pointer(&handle)) {
+			t.Fatal("image was not attached")
+		}
+	}
+	facts := `{"frame":{"x":0,"y":0,"width":400,"height":300},"visible":true,"focused":false,` +
+		`"presented":{"width":800,"height":600,"scale":2},"error":null}`
+	presentedFrames := func(want float64, after string) {
+		t.Helper()
+		region, err := windowRegion(key, facts, images)
+		if err != nil {
+			t.Fatalf("%s: window region: %v", after, err)
+		}
+		text, err := json.Marshal(region)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var entry map[string]any
+		if err := json.Unmarshal(text, &entry); err != nil {
+			t.Fatal(err)
+		}
+		if got, ok := entry["presentedFrames"]; !ok || got != want {
+			t.Fatalf("%s: host.window region entry %s has presentedFrames %v (present %t), want %v", after, text, got, ok, want)
+		}
+	}
+	present := func(config *ImageConfigure, sequence int) bool {
+		t.Helper()
+		if reason := images.AuthorizeFrame(key, "sidecar-a", config.Generation, config.Raster, config.Width, config.Height, config.Scale, sequence); reason != "" {
+			t.Fatalf("authorize frame %d: %s", sequence, reason)
+		}
+		return images.MarkPresented(key, config.Generation, config.Raster, sequence)
+	}
+
+	attach()
+	presentedFrames(0, "a new region")
+	config, err := images.ConfigureRaster(key, 800, 600, 2, true)
+	if err != nil || config == nil {
+		t.Fatalf("configure raster: %+v, %v", config, err)
+	}
+	if !present(config, 1) || !present(config, 2) {
+		t.Fatal("a current frame was not marked presented")
+	}
+	presentedFrames(2, "two presented frames")
+	// A frame that the host does not mark presented is not counted.
+	if images.MarkPresented(key, config.Generation, config.Raster, 2) {
+		t.Fatal("a frame was marked presented twice")
+	}
+	presentedFrames(2, "a refused presentation mark")
+	// A raster change does not restart the count, because the count belongs to the region.
+	config, err = images.ConfigureRaster(key, 900, 600, 2, true)
+	if err != nil || config == nil {
+		t.Fatalf("configure the new raster: %+v, %v", config, err)
+	}
+	if !present(config, 1) {
+		t.Fatal("a frame of the new raster was not marked presented")
+	}
+	presentedFrames(3, "a frame of a new raster")
+	// A region attached again under the same name is a new region and counts from 0.
+	if _, err := images.Remove(key); err != nil {
+		t.Fatal(err)
+	}
+	attach()
+	presentedFrames(0, "a region attached again")
+}

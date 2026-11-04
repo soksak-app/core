@@ -481,3 +481,108 @@ fn recording_rejects_start_while_document_identity_cleanup_is_incomplete() {
         matches!(result, Err(error) if error.contains("cleanup for surface \"surface-a\" generation 7 is incomplete"))
     );
 }
+
+// contract: diagnostics.drag.native-delivers-pointer-gesture
+#[test]
+fn native_drag_delivers_the_press_the_steps_and_the_release_of_each_round_trip() {
+    for (params, expected) in [
+        (json!({}), false),
+        (json!({"native": false}), false),
+        (json!({"native": true}), true),
+    ] {
+        let mut params = params.as_object().unwrap().clone();
+        let native = parse_drag_native(&mut params).expect("a valid native");
+        assert_eq!(native, expected, "native of {params:?}");
+        assert!(
+            !params.contains_key("native"),
+            "native is forwarded to the page"
+        );
+    }
+    for value in [json!(null), json!("true"), json!(1)] {
+        let mut params = json!({"native": value}).as_object().unwrap().clone();
+        let error = parse_drag_native(&mut params).expect_err("an invalid native");
+        assert_eq!(error.message, "native must be a boolean", "native {value}");
+    }
+
+    // Two round trips of two steps out and two steps back from the boundary at 100,50.
+    let plan = NativeDragPlan {
+        dx: 20.0,
+        dy: -8.0,
+        per: 2,
+        times: 2,
+    };
+    let delivered = RefCell::new(Vec::new());
+    let ticks = Cell::new(0);
+    let result = native_drag(
+        &plan,
+        (100.0, 50.0),
+        |pointer| {
+            assert!(
+                !pointer.activate && pointer.button == 0,
+                "native drag input {pointer:?} activates or uses another button than the primary one"
+            );
+            let phase = match pointer.phase {
+                1 => "down",
+                2 => "drag",
+                3 => "up",
+                other => panic!("native drag input of phase {other}"),
+            };
+            delivered.borrow_mut().push(format!(
+                "{phase} {},{} after {}",
+                pointer.x,
+                pointer.y,
+                ticks.get()
+            ));
+            Ok(())
+        },
+        || ticks.set(ticks.get() + 1),
+    )
+    .expect("native drag");
+    let trip = |after: u32| {
+        vec![
+            format!("down 100,50 after {after}"),
+            format!("drag 110,46 after {}", after + 1),
+            format!("drag 120,42 after {}", after + 2),
+            format!("drag 110,46 after {}", after + 3),
+            format!("drag 100,50 after {}", after + 4),
+            format!("up 100,50 after {}", after + 4),
+        ]
+    };
+    let mut want = trip(0);
+    want.extend(trip(4));
+    assert_eq!(*delivered.borrow(), want, "native drag inputs");
+    assert_eq!(result["from"], json!({"x": 100.0, "y": 50.0}));
+    assert_eq!(result["steps"], json!(8));
+    assert_eq!(result["asked"], json!(128));
+    assert!(
+        result["took"].is_u64(),
+        "native drag result took {}",
+        result["took"]
+    );
+
+    // A step that fails releases the press that is open, and the error names both.
+    let phases = RefCell::new(Vec::new());
+    let error = native_drag(
+        &NativeDragPlan {
+            dx: 20.0,
+            dy: 0.0,
+            per: 2,
+            times: 1,
+        },
+        (100.0, 50.0),
+        |pointer| {
+            phases.borrow_mut().push(pointer.phase);
+            if pointer.phase == 2 {
+                return Err(Failure::params("the window did not accept the input"));
+            }
+            Ok(())
+        },
+        || {},
+    )
+    .expect_err("a failing step");
+    assert_eq!(
+        error.message,
+        "native drag step 1: the window did not accept the input"
+    );
+    assert_eq!(*phases.borrow(), [1, 2, 3], "down, drag and the release up");
+}

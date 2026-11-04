@@ -397,6 +397,30 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F502-2-1",
+    implementation: [
+      { file: "packages/host/wailsv3/src/images.go", symbol: "func (i *Images) PresentedFrames(key ImageKey) (uint64, error) {" },
+      { file: "packages/host/tauriv2/src/images.rs", symbol: "pub fn presented_frames(&self, key: &Key) -> Result<u64, String> {" },
+      { file: "packages/host/wailsv3/src/exposure.go", symbol: "type WindowFrameCounters struct {" },
+      { file: "packages/host/tauriv2/src/exposure.rs", symbol: "fn window_frame_counters() -> serde_json::Map<String, Value> {" },
+      { file: "packages/host/wailsv3/src/diagnostics.go", symbol: "func nativeDrag(plan dragPlan, from point, deliver func(PointerInput) error, step func()) (map[string]any, error) {" },
+      { file: "packages/host/tauriv2/src/diagnostics.rs", symbol: "fn native_drag(" },
+      { file: "packages/workbench/observe.js", symbol: "function boundaryPoint(axis, line) {" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/images_test.go", id: "TestWindowRegionCountsTheFramesThatTheHostMarkedPresented" },
+      { file: "packages/host/tauriv2/src/images_test.rs", id: "window_region_counts_the_frames_that_the_host_marked_presented" },
+      { file: "packages/host/wailsv3/src/exposure_webviews_test.go", id: "TestWindowFrameCountersAreNullBecauseWebKitDrawsTheWorkbench" },
+      { file: "packages/host/tauriv2/src/exposure_webviews_test.rs", id: "window_frame_counters_are_null_because_webkit_draws_the_workbench" },
+      { file: "packages/host/wailsv3/src/diagnostics_test.go", id: "TestNativeDragDeliversThePressTheStepsAndTheReleaseOfEachRoundTrip" },
+      { file: "packages/host/tauriv2/src/diagnostics_test.rs", id: "native_drag_delivers_the_press_the_steps_and_the_release_of_each_round_trip" },
+      { file: "packages/workbench/test/observe-drag.test.mjs", id: "diagnostics.drag.boundary answers the centre of the named boundary and its absence" },
+      { file: "packages/workbench/test/observe-drag.test.mjs", id: "the page drag presses at the point that diagnostics.drag.boundary answers" },
+    ],
+    expected: "host.window of the Wails and the Tauri host reports presentedFrames of each image region and frames, commandBuffers and settled as null, and diagnostics.drag with native: true delivers the press, the steps and the release of each round trip as native input at the boundary point that the page answers, without activation.",
+    levels: ["unit"],
+  },
+  {
     id: "F502-2-2",
     implementation: [
       { file: "packages/window-check/app.mjs", symbol: "export function requiredApps(env) {" },

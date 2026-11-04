@@ -2,6 +2,7 @@
 //
 // When the host of a diagnostic build requests them with exposure-request, this document performs them: diagnostics.fixture, which returns
 // the settings and projects to the state before the check; diagnostics.drag, which drives a boundary given by name on the clock of the host;
+// diagnostics.drag.boundary, which answers the point of that boundary for a drag that the host delivers as native input;
 // diagnostics.transcript, which turns the call record on and off; and diagnostics.surface.hold and
 // diagnostics.surface.held, which hold the exposure reply of a surface until that surface is removed. The steps of a drag arrive as the host event diagnostics-tick.
 //
@@ -43,6 +44,10 @@ registry.method("diagnostics.transcript", ({ on }) => {
 });
 
 registry.method("diagnostics.drag", (plan) => shake(plan));
+
+// The host asks for the point of the boundary before it delivers a drag as native input (diagnostics.drag with native: true in
+// docs/spec/endpoint.md), so that its press lands where the drag of this page presses.
+registry.method("diagnostics.drag.boundary", ({ axis, line }) => boundaryPoint(axis, line));
 
 // The page requests a file of its application and answers the status, so a check can make the host report a file that
 // does not exist (docs/spec/diagnostics.md).
@@ -140,11 +145,7 @@ const FRAME = 16;
  * diagnostics-tick events at the FRAME interval.
  */
 async function shake({ axis, line, dx, dy, ms, times }) {
-  const divider = document.querySelector(
-    `.sp-divider[data-axis="${axis}"][data-line="${line}"]`);
-  if (!divider) throw new Error(`no ${axis} boundary at line ${line}`);
-  const box = divider.getBoundingClientRect();
-  const from = { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+  const from = boundaryPoint(axis, line);
   const steps = Math.max(1, Math.round(ms / FRAME));
 
   // It moves back and forth with one press held. If the pointer were released and pressed again, the next press would miss when the boundary stopped at the minimum card size
@@ -174,6 +175,15 @@ async function shake({ axis, line, dx, dy, ms, times }) {
     from, steps: times * 2 * steps, took: Math.round(took), asked: times * 2 * steps * FRAME,
     late, deepest, boundary, handled,
   };
+}
+
+/** The centre of the grab area of the boundary `line` on `axis` in window content coordinates, the point at which a drag presses. */
+function boundaryPoint(axis, line) {
+  const divider = document.querySelector(
+    `.sp-divider[data-axis="${axis}"][data-line="${line}"]`);
+  if (!divider) throw new Error(`no ${axis} boundary at line ${line}`);
+  const box = divider.getBoundingClientRect();
+  return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
 }
 
 /** Moves the pressed point from one fraction of the offset to another and calls moved at each step. */
