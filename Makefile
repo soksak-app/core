@@ -46,7 +46,7 @@ page-memory:
 	@node scripts/measure-page-memory.mjs --sok $(if $(filter debug,$(BUILD)),target/debug/soksak-$(APP).app,target/release/$(APP)/soksak.app)/Contents/MacOS/sok --config-dir "$(CONFIG)" --idle-minutes $(or $(MINUTES),60) --reloads $(or $(RELOADS),20)
 
 # Repeats the operations of scripts/measure-object-counts.mjs for the surface plugins PLUGINS REPETITIONS times against a running diagnostic build and prints
-# the object counts and footprints per repetition (docs/plans/document-streams-and-memory.md). The diagnostic methods exist only in diagnostic builds, so BUILD defaults to debug.
+# the object counts and footprints per repetition (docs/operations/examples.md#page-memory). The diagnostic methods exist only in diagnostic builds, so BUILD defaults to debug.
 object-counts:
 	@case "$(APP)" in wailsv3|tauriv2) ;; *) echo "object-counts requires APP=wailsv3|tauriv2 CONFIG=DIR PLUGINS='ID...' [BUILD=release|debug] [REPETITIONS=20]" >&2; exit 2;; esac
 	@case "$(CONFIG)" in '') echo "object-counts requires CONFIG=DIR" >&2; exit 2;; esac
