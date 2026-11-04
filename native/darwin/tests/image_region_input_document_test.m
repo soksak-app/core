@@ -19,12 +19,18 @@ static NSMutableArray<NSDictionary *> *events = nil;
 static OSStatus removalFailure = noErr;
 static BOOL documentVariableMissing = NO;
 static int removals = 0;
+static TSMDocumentID removedDocument = NULL;
+
+static OSStatus systemRemoval(TSMDocumentID document, OSType tag) {
+    OSStatus (*system)(TSMDocumentID, OSType) = dlsym(RTLD_NEXT, "TSMRemoveDocumentProperty");
+    return system(document, tag);
+}
 
 OSStatus TSMRemoveDocumentProperty(TSMDocumentID document, OSType tag) {
     if (tag == kTSMDocumentSupportDocumentAccessPropertyTag) removals++;
+    removedDocument = document;
     if (removalFailure != noErr) return removalFailure;
-    OSStatus (*system)(TSMDocumentID, OSType) = dlsym(RTLD_NEXT, "TSMRemoveDocumentProperty");
-    return system(document, tag);
+    return systemRemoval(document, tag);
 }
 
 Ivar class_getInstanceVariable(Class cls, const char *name) {
@@ -61,9 +67,10 @@ static NSString *failureReason(OSStatus status) {
 
 // Creates a region, asks for its input context twice and returns what the region reported. A region makes its context once, so
 // the failure is reported once and the region keeps a context.
-static NSArray<NSString *> *openRegion(void *surface, const char *name, BOOL focus, NSString *label) {
+static NSArray<NSString *> *openRegion(void *surface, const char *name, BOOL focus, NSString *label, void (^whileOpen)(void)) {
     [events removeAllObjects];
     removals = 0;
+    removedDocument = NULL;
     void *region = sp_region_create(surface, name, regionEvent, NULL);
     sp_region_place(region, 10, 10, 200, 100, true);
     if (focus) sp_region_focus(region);
@@ -72,6 +79,7 @@ static NSArray<NSString *> *openRegion(void *surface, const char *name, BOOL foc
     check(((NSView *)region).inputContext == context, [NSString stringWithFormat:@"%@: the region makes its input context once", label]);
     // An input transaction leaves the region when its scope closes, so the events are complete here.
     NSArray<NSString *> *reported = reportedFailures();
+    if (whileOpen) whileOpen();
     sp_region_close(region);
     return reported;
 }
@@ -97,23 +105,40 @@ int main(void) { @autoreleasepool {
     webviewSetSurfaceHidden(surface, false);
     events = [NSMutableArray array];
 
-    NSArray<NSString *> *reported = openRegion(surface, "removed", NO, @"removal");
+    NSArray<NSString *> *reported = openRegion(surface, "removed", NO, @"removal", ^{
+        UInt32 value = 0;
+        UInt32 size = 0;
+        check(TSMGetDocumentProperty(removedDocument, kTSMDocumentSupportDocumentAccessPropertyTag, sizeof value, &size, &value) != noErr,
+            @"removal: the document states no document access");
+        // The status of a property already absent is one that the context takes as a removal.
+        OSStatus absent = systemRemoval(removedDocument, kTSMDocumentSupportDocumentAccessPropertyTag);
+        printf("MEASURE: the system answers %d for a property already absent\n", (int)absent);
+        check(absent == noErr || absent == tsmDocPropertyNotFoundErr,
+            [NSString stringWithFormat:@"removal: a property already absent is no failure of the removal (%d)", (int)absent]);
+    });
     check(removals == 1, [NSString stringWithFormat:@"removal: the context removes document access once (%d)", removals]);
     check(reported.count == 0, [NSString stringWithFormat:@"removal: a removal that succeeds reports nothing (%@)", reported]);
 
+    // A document that never stated document access is the state the removal asks for.
+    removalFailure = tsmDocPropertyNotFoundErr;
+    reported = openRegion(surface, "absent", NO, @"absent property", nil);
+    check(removals == 1, [NSString stringWithFormat:@"absent property: the context asks once (%d)", removals]);
+    check(reported.count == 0, [NSString stringWithFormat:@"absent property: a property already absent reports nothing (%@)", reported]);
+    removalFailure = noErr;
+
     removalFailure = tsmInvalidDocIDErr;
-    reported = openRegion(surface, "refused", NO, @"refused removal");
+    reported = openRegion(surface, "refused", NO, @"refused removal", nil);
     check(removals == 1, [NSString stringWithFormat:@"refused removal: the context asks once (%d)", removals]);
     check([reported isEqual:@[failureReason(tsmInvalidDocIDErr)]],
         [NSString stringWithFormat:@"refused removal: the status reaches the host once (%@)", reported]);
 
-    reported = openRegion(surface, "refused-focused", YES, @"refused removal in focus");
+    reported = openRegion(surface, "refused-focused", YES, @"refused removal in focus", nil);
     check([reported isEqual:@[failureReason(tsmInvalidDocIDErr)]],
         [NSString stringWithFormat:@"refused removal in focus: the status reaches the host once (%@)", reported]);
     removalFailure = noErr;
 
     documentVariableMissing = YES;
-    reported = openRegion(surface, "no-variable", NO, @"missing variable");
+    reported = openRegion(surface, "no-variable", NO, @"missing variable", nil);
     check(removals == 0, [NSString stringWithFormat:@"missing variable: nothing is removed from an unknown document (%d)", removals]);
     check([reported isEqual:@[failureReason(paramErr)]],
         [NSString stringWithFormat:@"missing variable: the failure reaches the host once (%@)", reported]);

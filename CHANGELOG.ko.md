@@ -6,8 +6,7 @@
 
 - F533: 실패한 memory saver delay unload는 다음 deadline을 한 delay 뒤에 받으므로, 계속 실패하는 읽기나 commit이 매번 오류 표시와 함께 곧바로 다시 돌지 않는다.
 - F532: Rust diagnostics의 update 단계가 framework port의 `quit`으로 애플리케이션을 끝내므로, `make tauriv2-build`가 다시 컴파일된다. `make hosts-check`는 새 `make host-debug-check`를 실행하며, 이 target은 두 host와 두 앱을 debug 앱의 구성으로 컴파일한다.
-- F522: image region에서 친 한글이 첫 음절부터 조합된다. region의 input context가 만들어질 때 자기 input document에서 document access를 제거하므로, input method는 marked buffer만 가진 region에서 committed text를 다시 읽는 대신 모든 key를 marked text로 보낸다. 제거에 실패하면 input error로 보고한다.
-- F532: Rust diagnostics의 update 단계가 framework port의 `quit`으로 애플리케이션을 끝내므로, `make tauriv2-build`가 다시 컴파일된다.
+- F522: image region에서 친 한글이 첫 음절부터 조합된다. region의 input context가 만들어질 때 자기 input document에서 document access를 제거하므로, input method는 marked buffer만 가진 region에서 committed text를 다시 읽는 대신 모든 key를 marked text로 보낸다. 제거에 실패하면 input error로 보고하고, 이미 없는 property는 제거된 것으로 본다. `doCommandBySelector` record에는 도달할 수 없던 경로의 `unhandledKey` field가 더 이상 없다.
 - F531: 어떤 애플리케이션에도 속하지 않는 WebKit process가 `make app-usage`나 `make terminal-redraw-usage` 중에 끝나면 측정을 실패시키지 않고 unattributed 목록에서 빠지므로, 다른 애플리케이션의 window run이 측정을 멈추지 않는다. 실행 중인데 읽기가 없는 process와 애플리케이션의 process가 끝나는 경우는 여전히 오류다.
 - F502-11: framework가 `App.SetSelfActivation(false)`, `App.SetSignalQuit(false)`, `App.SetNotificationDelegate(false)`를 제공한다. application은 이 option으로 activation을 시스템에 맡기고 signal과 notification center delegate를 소유한다.
 - F502-3: framework fork에서 mygo host의 Go code가 worker thread에서 실행되고, main thread는 stack test의 어느 phase에서도 자기 stack 밖의 code를 실행하지 않는다. surface는 size, scale, refresh rate를 AppKit이 변경을 알릴 때까지 보관하므로 frame은 call을 최대 7개, live resize의 step은 최대 15개 forward한다. fork release와 그 pin이 남았다.

@@ -886,6 +886,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F522",
+    implementation: [
+      { file: "native/darwin/src/image_region.m", symbol: "@interface SPRegionInputContext : NSTextInputContext" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_region_input_document_test.m", id: "the region makes its input context" },
+    ],
+    expected: "The input context of an image region states no document access, so Korean composes from its first syllable.",
+    levels: ["native"],
+  },
+  {
     id: "F533",
     implementation: [
       { file: "packages/workbench/memory-saver.js", symbol: 'if (trigger === "delay") entry.unloadAt = now() + delayMs();' },

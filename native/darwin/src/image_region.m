@@ -327,7 +327,8 @@ static void spEnsurePressOriginMonitor(void) {
     OSStatus status = ivar
         ? TSMRemoveDocumentProperty(*(TSMDocumentID *)((char *)self + ivar_getOffset(ivar)), kTSMDocumentSupportDocumentAccessPropertyTag)
         : paramErr;
-    if (status != noErr) {
+    // A document that does not state document access already has what the removal asks for.
+    if (status != noErr && status != tsmDocPropertyNotFoundErr) {
         NSString *reason = [NSString stringWithFormat:@"the input document keeps document access (status %d)", (int)status];
         [(SPImageRegion *)client failInput:reason where:"input method" text:reason];
     }
