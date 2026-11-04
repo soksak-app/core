@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F502-12: A tab of the mygo workbench keeps its label through an unload, and the tab store caches the title that a view reports, so a tab that starts unloaded shows it too.
 - F502-16: The window of the mygo application shows its project with live views: a split card starts the view of its plugin, a terminal shows its shell and a browser tab its page, and the shell reports `core.grid`, `core.layout`, `core.surfaces`, `core.rail`, `core.chrome`, `core.window.workbench` and the other statuses that the Wails window reports.
 - F502-12: A surface whose image detach is pending at a start of the workbench stands and opens its session after `image-detach-ended`, so a terminal tab keeps one image owner through a reload. A failed detach shows its reason in the tab.
 - F502-12: The window of the mygo host keeps the project that it shows in its address, so a start of the workbench after a change of the plugins shows that project again, and a separate project window starts at its project.

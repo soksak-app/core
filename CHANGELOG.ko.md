@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F502-12: mygo workbench 의 tab 은 unload 뒤에도 이름을 유지한다. tab store 는 view 가 보고한 제목을 저장하므로, unload 상태로 시작한 tab 에도 그 이름이 보인다.
 - F502-16: mygo application의 창이 프로젝트를 live view로 보여 준다: 나눈 카드는 plugin의 view를 시작하고, terminal은 shell을, browser tab은 페이지를 보여 주며, shell은 `core.grid`, `core.layout`, `core.surfaces`, `core.rail`, `core.chrome`, `core.window.workbench`와 Wails 창이 보고하는 나머지 status를 보고한다.
 - F502-12: workbench 시작 때 image detach 가 끝나지 않은 surface 는 `image-detach-ended` 뒤에 서고 session 을 연다. 그래서 terminal tab 은 reload 를 지나도 image 소유자가 하나다. detach 가 실패하면 tab 에 그 이유를 보여 준다.
 - F502-12: mygo host 의 창은 보여 주는 프로젝트를 주소에 둔다. 플러그인이 바뀌어 workbench 가 다시 시작해도 그 프로젝트를 다시 보여 주고, 별도 프로젝트 창은 자기 프로젝트에서 시작한다.

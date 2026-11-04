@@ -534,7 +534,14 @@ func (s *Shell) answerCommits(commits []func(err error), err error) {
 // commitSurfaces leaves the surfaces of the unloaded tabs out of the next placement, and answers after the host replied to it. A frame
 // runs the placement.
 func (s *Shell) commitSurfaces(answer func(err error)) {
-	s.forgetSurfaces(s.tabs.saver.Place(s.surfaces.order).Unload)
+	unloaded := s.tabs.saver.Place(s.surfaces.order).Unload
+	s.forgetSurfaces(unloaded)
+	// An unloaded tab keeps its label, which the report of its view held.
+	for _, tab := range unloaded {
+		if label := s.tabs.states.Label(tab); label != nil {
+			s.report(tab).Title = *label
+		}
+	}
 	s.surfaces.commits = append(s.surfaces.commits, answer)
 	s.options.Invalidate()
 }

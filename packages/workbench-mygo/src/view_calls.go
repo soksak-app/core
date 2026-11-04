@@ -674,6 +674,9 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 		switch call.Command {
 		case "tab.title":
 			report.Title = value
+			if s.tabs != nil {
+				s.tabs.states.CacheLabel(call.Surface, call.Plugin, &value)
+			}
 		case "tab.footer":
 			report.Footer = value
 		case "tab.directory":
