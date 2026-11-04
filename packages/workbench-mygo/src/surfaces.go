@@ -3,6 +3,7 @@ package workbench
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -262,7 +263,8 @@ func (s *Shell) standSurface(c *ui.Context, surface *heldSurface, box layout.Rec
 		s.surfaces.order = append(s.surfaces.order, id)
 	}
 	if view, key, ok := s.options.Element(id); ok {
-		ui.NativeView(c, view, key).Size(float32(box.W), float32(box.H))
+		// A web page paints whole points only: past them a fractional view shows the window, and here the card shows instead.
+		ui.NativeView(c, view, key).Size(float32(math.Floor(box.W)), float32(math.Floor(box.H)))
 	}
 }
 

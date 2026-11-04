@@ -33,7 +33,9 @@ func (s *Shell) drawSidebarCard(c *ui.Context, id string, rect layout.Rect, inse
 		DrawError(c, s.errors, id)
 		return
 	}
-	box := layout.Rect{X: rect.X + float64(originX), Y: rect.Y + float64(originY), W: rect.W, H: rect.H - float64(s.metrics.footH)}
+	// The border takes its width from every edge of the card, so the set and the status line stand in what lies inside it.
+	edge := float64(s.palette.BorderWidth)
+	box := layout.Rect{X: rect.X + float64(originX) + edge, Y: rect.Y + float64(originY) + edge, W: rect.W - 2*edge, H: rect.H - 2*edge - float64(s.metrics.footH)}
 	ui.Box(s.binder.Name(c, "core.card", id)).Role(ui.RoleGroup).Label(id).Absolute().Left(float32(rect.X)+inset).Top(float32(rect.Y)+inset).
 		Size(float32(rect.W), float32(rect.H)).Background(s.palette.Card).Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.palette.Radius).
 		Clip().Column().Children(func() {

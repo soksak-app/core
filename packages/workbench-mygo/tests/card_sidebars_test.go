@@ -31,6 +31,9 @@ func (f *shellFixture) storedSides(card string) map[string]any {
 	return nil
 }
 
+// cardBorder is the chrome metric bw: the width that the border of a card takes from each of its edges.
+const cardBorder = 1
+
 func TestACardShowsItsSetBesideItsContent(t *testing.T) {
 	f, card := cardSidebar(t, "left")
 	item := card + ":left"
@@ -42,7 +45,7 @@ func TestACardShowsItsSetBesideItsContent(t *testing.T) {
 	}
 	box := f.box("core.card", card)
 	side := f.box("core.sidebar", item)
-	if side.X != box.X || side.W != 190 {
+	if side.X != box.X+cardBorder || side.W != 190 {
 		t.Fatalf("the sidebar stands at %+v in the card %+v", side, box)
 	}
 	head := f.box("core.card.header", card)
@@ -50,7 +53,7 @@ func TestACardShowsItsSetBesideItsContent(t *testing.T) {
 	if side.Y != head.Y+head.H || side.Y+side.H != status.Y+status.H {
 		t.Fatalf("the sidebar %+v does not run from below the header %+v to the end of the footer %+v", side, head, status)
 	}
-	if status.X != box.X+side.W || status.W != box.W-side.W {
+	if status.X != box.X+cardBorder+side.W || status.W != box.W-2*cardBorder-side.W {
 		t.Fatalf("the footer %+v does not span the content column of the card %+v", status, box)
 	}
 	f.audit()
@@ -93,7 +96,7 @@ func TestAFoldedSideOpensAgainFromTheHeader(t *testing.T) {
 	}
 	status := f.box("core.card.status", card)
 	box := f.box("core.card", card)
-	if status.X != box.X+6 {
+	if status.X != box.X+cardBorder+6 {
 		t.Fatalf("the folded side takes more than the divider: %+v in %+v", status, box)
 	}
 	fold := f.box("core.card.sidebar.fold", item)
@@ -207,7 +210,7 @@ func TestASectionStandsInItsSurface(t *testing.T) {
 		t.Fatalf("the composition of the section is %v", surface["composition"])
 	}
 	body := f.box("core.card", "left")
-	if surface["x"] != float64(body.X) || surface["w"] != float64(body.W) || surface["y"].(float64) <= float64(body.Y) {
+	if surface["x"] != float64(body.X+cardBorder) || surface["w"] != float64(body.W-2*cardBorder) || surface["y"].(float64) <= float64(body.Y) {
 		t.Fatalf("the surface stands at %v in the sidebar %+v", surface, body)
 	}
 	value, err := f.shell.Registry().Read("core.sidebars")

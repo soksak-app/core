@@ -296,8 +296,8 @@ func (s *Shell) focusMark() *layout.Rect {
 		return nil
 	}
 	const out = 1 // The chrome metric focus-mark-t.
-	head, foot := float64(s.metrics.headH), float64(s.metrics.footH)
-	return &layout.Rect{X: rect.X - out, Y: rect.Y + head - out, W: rect.W + 2*out, H: rect.H - head - foot + 2*out}
+	edge, head, foot := float64(s.palette.BorderWidth), float64(s.metrics.headH), float64(s.metrics.footH)
+	return &layout.Rect{X: rect.X + edge - out, Y: rect.Y + edge + head - out, W: rect.W - 2*edge + 2*out, H: rect.H - 2*edge - head - foot + 2*out}
 }
 
 // drawRail draws the rail outline and the focus corners over the cards of the stage. inset is the origin of the plane in the stage.

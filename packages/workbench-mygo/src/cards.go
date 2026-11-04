@@ -71,13 +71,16 @@ func (s *Shell) drawCard(c *ui.Context, id string, data *layout.CardData, rect l
 	card := s.binder.Press(c, "core.card", "core.card.focus", id, cardParam{Card: id})
 	card.Role(ui.RoleGroup).Label(id).Absolute().Left(float32(rect.X)+inset).Top(float32(rect.Y)+inset).Size(float32(rect.W), float32(rect.H)).
 		Background(s.palette.Card).Border(s.palette.BorderWidth, border).Radius(s.palette.Radius).Clip().Column().Children(func() {
-		s.drawHead(c, id, data, sides, float32(rect.W))
-		body := float32(rect.H) - s.metrics.headH
-		width := float32(rect.W) - sides.extent("left") - sides.extent("right")
+		// The border takes its width from every edge of the card, so the rows stand in what lies inside it.
+		edge := s.palette.BorderWidth
+		inner := float32(rect.W) - 2*edge
+		s.drawHead(c, id, data, sides, inner)
+		body := float32(rect.H) - 2*edge - s.metrics.headH
+		width := inner - sides.extent("left") - sides.extent("right")
 		slot := body - s.metrics.footH - sides.extent("top") - sides.extent("bottom")
-		x, y := float32(rect.X)+originX, float32(rect.Y)+originY+s.metrics.headH
+		x, y := float32(rect.X)+originX+edge, float32(rect.Y)+originY+edge+s.metrics.headH
 		// Left and right run from below the header to the edge of the card, and the content column lies between them.
-		ui.Row(c).Size(float32(rect.W), body).Children(func() {
+		ui.Row(c).Size(inner, body).Children(func() {
 			s.drawCardSide(c, id, sides, "left", x, y, sides.extent("left"), body)
 			ui.Column(c).Size(width, body).Children(func() {
 				s.drawCardSide(c, id, sides, "top", x+sides.extent("left"), y, width, sides.extent("top"))
