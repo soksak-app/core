@@ -13,16 +13,21 @@ export const SPLIT_LOAD_ROUNDS = 32;
 /** The limit (KB) of the host RSS growth over the rounds. */
 export const SPLIT_LOAD_GROWTH_BOUND_KB = 128 * 1024;
 
-/** The resident set size (KB) of the host process of the application, or undefined when no process of the table is that host. */
-function hostRssKb(appName) {
-  const row = processTable("pid=,rss=,command=")
+/**
+ * The resident set size (KB) of the host process in a process table, or undefined when no row is that host. The configuration folder identifies
+ * the host because the bundle path differs between build profiles.
+ */
+export function hostRssInTable(table, configDir) {
+  const row = table
     .split("\n")
     .map((line) => line.trim().match(/^(\d+)\s+(\d+)\s+(.*)$/))
     .filter(Boolean)
     .map(([, pid, rss, command]) => ({ pid: Number(pid), rss: Number(rss), command }))
-    .find((entry) => entry.command.includes(`soksak-${appName}.app/Contents/MacOS/`));
+    .find((entry) => entry.command.includes(` --config-dir ${configDir}`));
   return row?.rss;
 }
+
+const hostRssKb = (app) => hostRssInTable(processTable("pid=,rss=,command="), app.configDir);
 
 /**
  * List of the web documents that the window holds. If a split and a reload leave documents, document regions and image regions, the list grows. The memory of the page process
@@ -45,7 +50,7 @@ export async function startStress(s, app) {
   await fresh(s, { log: { call: "debug" }, reads: ["host.endpoint.call"] });
   const initialWindow = await s.get("host.window");
   const initialGrid = await s.get("core.grid");
-  const baseline = hostRssKb(app.name);
+  const baseline = hostRssKb(app);
   assert.ok(Number.isInteger(baseline), "host RSS was not measurable before stress");
   // The records of the requests before the stress are written first, so the first read starts at the stress.
   await s.flushLog();
@@ -97,13 +102,13 @@ export async function stressRound(s, ctx, round) {
     await s.run("host.window.reload");
     await s.presented();
   }
-  ctx.samples.push(hostRssKb(ctx.app.name));
+  ctx.samples.push(hostRssKb(ctx.app));
   for (const card of made.reverse()) {
     await s.run("core.card.close", { card });
     await s.until("core.grid", (grid) => !grid.cards.some((entry) => entry.id === card), `stress close did not remove ${card}`);
   }
   await s.presented();
-  ctx.samples.push(hostRssKb(ctx.app.name));
+  ctx.samples.push(hostRssKb(ctx.app));
   await recordPhases(s, ctx);
 }
 

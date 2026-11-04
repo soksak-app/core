@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F434: split load benchmark가 설정 폴더로 host를 찾아 최적화 build에서 실행된다. core 0.0.34의 benchmark로 F292-13, F292-26-1-2, F292-40, F292-41을 완료했고, 미달한 view drag 목표는 F435에 기록한다.
 - F433: 입력을 만드는 것이 없고 모든 release가 항목을 직접 올리므로 candidate registry acceptance를 제거했다.
 - F431, F432: v0.0.34가 게시되었고, registry가 이를 VT 0.0.25, sidecar alacritty 0.0.6, 이를 요구하는 plugin release와 함께 올린다.
 - F431: release 후보는 0.0.34이고 최신 게시 release는 v0.0.33이다.

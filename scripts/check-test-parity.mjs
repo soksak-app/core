@@ -8914,6 +8914,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F434",
+    implementation: [{ file: "e2e/benchmark/cases/split-load.mjs", symbol: "export function hostRssInTable" }],
+    tests: [{ file: "e2e/test/split-load-case.test.mjs", id: "the host process is found by its configuration folder in every build profile" }],
+    expected: "The benchmark finds the host in the process table by its configuration folder in every build profile.",
+    levels: ["unit"],
+  },
+  {
     id: "F404",
     implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) fn with_open_window(" }],
     tests: [{ file: "packages/host/tauriv2/src/windows_records_test.rs", id: "a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure" }],

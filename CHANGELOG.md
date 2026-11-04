@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F434: The split load benchmark identifies the host by its configuration folder, so it runs on optimized builds. The benchmarks on core 0.0.34 complete F292-13, F292-26-1-2, F292-40 and F292-41; F435 records the view drag targets that they miss.
 - F433: The candidate registry acceptance is removed, because nothing builds its input and every release lists its entries directly.
 - F431, F432: v0.0.34 is published; the registry lists it with VT 0.0.25, the sidecar alacritty 0.0.6 and the plugin releases that require them.
 - F431: The release candidate is 0.0.34, and the latest published release is v0.0.33.
