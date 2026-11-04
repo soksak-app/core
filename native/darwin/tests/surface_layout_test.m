@@ -513,8 +513,10 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
     void *compositionSurface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     check(compositionSurface != NULL, @"the first-show fixture creates the native composition");
     if (compositionSurface == NULL) { [window close]; [window release]; return; }
-    WKWebView *root = page(window, [[configuration copy] autorelease], NSMakeRect(0, 0, 180, 100),
-        @"sptest://plugin/first-show");
+    // The root starts with no size as sp_document_create makes it, so its only size change is the frame of its surface.
+    // A root loaded at its target size would shrink to the empty surface first, and a read right after the frame would
+    // reach the page before the second size does.
+    WKWebView *root = page(window, [[configuration copy] autorelease], NSZeroRect, @"sptest://plugin/first-show");
     __block BOOL markerLoaded = NO;
     [root evaluateJavaScript:@"document.documentElement.style.cssText='margin:0;width:100%;height:100%';"
         "document.body.style.cssText='margin:0;width:100%;height:100%';"
