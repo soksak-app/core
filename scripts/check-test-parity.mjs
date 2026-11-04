@@ -285,6 +285,7 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "scripts/measure-app-usage.mjs", symbol: "export async function prepareState(s, state, deps)" },
       { file: "scripts/measure-app-usage.mjs", symbol: "export async function waitIdle({ sessions, frames, sleep })" },
+      { file: "scripts/measure-app-usage.mjs", symbol: "export async function untilFramesQuiet({ frames, sleep = delay, intervals = QUIET_INTERVALS })" },
       { file: "scripts/measure-app-usage.mjs", symbol: "export async function measurePointer({ s, app, hid, measure, frameRecords, restore, tail, records })" },
       { file: "scripts/measure-app-usage.mjs", symbol: "export function gestureFigures({ records, dropped, window, framesBefore, framesAfter, fromSeq, toSeq })" },
       { file: "scripts/footprints.mjs", symbol: "export async function settledFootprints({ readFootprints, readFrames, sleep, readings = SETTLE_READINGS })" },
@@ -334,6 +335,7 @@ const FEATURE_LINKS = [
       { file: "scripts/test/footprints.test.mjs", id: "footprints settle when two readings 5 seconds apart differ by less than 1,024 KB and the reading is 3 seconds after the last frame" },
       { file: "scripts/test/footprints.test.mjs", id: "reading a footprint runs footprint -p PID -f bytes and names the process of a failure" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "the idle wait waits for the cursor idle timeout of every term tab and then for 3 seconds without a frame" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "without sleep the quiet wait waits the 3 seconds of G2 on the timer of the module" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "the gesture figures are the 90th percentile of the hitTest: step with the step that follows it" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "the pointer step reads the frames of the gesture before the flush, so a frame presented after the flush is in neither" },
       { file: "scripts/test/frame-records.test.mjs", id: "a gesture with fewer frame records than the change of frames fails and names the missing records" },
