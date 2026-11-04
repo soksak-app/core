@@ -219,6 +219,7 @@ const PRODUCT_DIRS = [
   "packages/host/wailsv3/src",
   "packages/host/tauriv2/src",
   "native/darwin/src",
+  "packages/workbench-mygo/src",
 ];
 /** Paths that are not checked. Tests and the Windows unsupported implementation legitimately hold stub wording. */
 const EXCLUDE = /(^|\/)(test|tests|windows)(\/|$)/;

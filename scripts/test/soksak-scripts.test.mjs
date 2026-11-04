@@ -242,13 +242,16 @@ test("host structure audit rejects a language host library that imports a packag
 test("a prefix audit of the host structure fails when a prefix selects no file", { timeout: 1000 }, async () => {
   const { auditPrefixes } = await import("../check-hosts.mjs");
   const tracked = ["packages/host/go/src/platform/darwin/window.go", "packages/host/tauriv2/src/host.rs", "packages/host/go/src/host.go",
-    "packages/host/rust/src/host.rs", "packages/host/wailsv3/src/host.go", "native/darwin/src/a.m"];
+    "packages/host/rust/src/host.rs", "packages/host/wailsv3/src/host.go", "native/darwin/src/a.m", "packages/workbench-mygo/src/layout/grid.go"];
   assert.deepEqual(auditPrefixes(tracked), []);
   assert.deepEqual(auditPrefixes(tracked.filter((path) => !path.includes("/platform/darwin/"))), [
     "the main-thread audit selects no file with the prefix packages/host/go/src/platform/darwin/",
   ]);
   assert.deepEqual(auditPrefixes(tracked.filter((path) => path !== "packages/host/rust/src/host.rs")), [
     "the stub check selects no file with the prefix packages/host/rust/src/",
+  ]);
+  assert.deepEqual(auditPrefixes(tracked.filter((path) => !path.startsWith("packages/workbench-mygo/"))), [
+    "the stub check selects no file with the prefix packages/workbench-mygo/src/",
   ]);
 });
 
@@ -410,8 +413,10 @@ test("stub audit reads every product source file and reports a file it cannot re
     "packages/host/go/src/a.go": "func f() {}\n",
     "packages/host/go/tests/a_test.go": "// TODO: Implement later\n",
     "packages/host/go/src/platform/windows/unsupported.go": "// not yet implemented\n",
+    "packages/workbench-mygo/src/layout/a.go": "// not yet implemented\n",
   };
-  assert.deepEqual(findStubs(Object.keys(files), (file) => files[file]), ["native/darwin/src/a.m:1: TODO:\\s*Implement"]);
+  assert.deepEqual(findStubs(Object.keys(files), (file) => files[file]), ["native/darwin/src/a.m:1: TODO:\\s*Implement",
+    "packages/workbench-mygo/src/layout/a.go:1: not yet implemented"]);
   assert.throws(() => findStubs(["native/darwin/src/a.m"], () => { throw new Error("EACCES: permission denied"); }),
     /native\/darwin\/src\/a\.m: EACCES: permission denied/);
 });

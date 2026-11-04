@@ -194,6 +194,16 @@ test('ci keeps language host checks independent and gates release on every requi
   assert.doesNotMatch(job('equivalence'), /CARGO_BUILD_JOBS/, 'equivalence limits its Rust builds to fewer jobs than the runner has processors');
 });
 
+test('make host-test-mygo runs the unit tests of the Go packages of the mygo host', { timeout: 1000 }, () => {
+  const recipe = /^host-test-mygo:[^\n]*\n((?:\t[^\n]*\n)+)/m.exec(read('Makefile'));
+  assert.ok(recipe, 'the Makefile has no host-test-mygo target');
+  // Each package of the mygo host that holds unit tests is a pattern of the Go test runner, which fails when a pattern has no test.
+  const patterns = [...recipe[1].matchAll(/node scripts\/go-tests\.mjs --package '([^']+)'/g)].map((match) => match[1]);
+  for (const folder of ['packages/workbench-mygo']) {
+    assert.ok(patterns.includes(`./${folder}/...`), `host-test-mygo runs no test of ${folder}: ${JSON.stringify(patterns)}`);
+  }
+});
+
 test('CI JavaScript scopes cover every discovered test file exactly once', { timeout: 10_000 }, async () => {
   const { discoverNodeTests, selectNodeTests } = await import('../node-tests.mjs');
   const packages = JSON.parse(execFileSync('pnpm', ['-r', 'list', '--json', '--depth', '-1'], { cwd: ROOT, encoding: 'utf8' }))

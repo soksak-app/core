@@ -1,9 +1,11 @@
-// The height of the first row that the page puts in a preparation must equal --chrome-row of app.css (docs/spec/native-surfaces.md#title-bar-height).
+// The height of the first row that the page puts in a preparation must equal --chrome-row of app.css, computed from the chrome metrics of
+// workbench.json (docs/spec/native-surfaces.md#title-bar-height).
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { TEXT_STEPS } from "../text-size.js";
+import declaration from "../workbench.json" with { type: "json" };
 
 const css = readFileSync(new URL("../app.css", import.meta.url), "utf8");
 
@@ -17,15 +19,16 @@ function declared(name) {
 /** Computes the expression of chrome-row with CSS semantics. round(nearest, x, 1px) picks the larger side at the middle value. */
 function cssRow(factor) {
   const expression = declared("--chrome-row");
-  assert.equal(expression, "round(nearest,max(var(--chrome-h),calc(var(--chrome-row-h) * var(--frame-text))),1px)",
+  assert.equal(expression, "round(nearest,max(var(--chrome-h),calc(var(--chrome-row-h) * var(--frame-text))),var(--pixel))",
     "the --chrome-row expression changed; chromeRow must follow it");
+  assert.equal(declaration.chrome.pixel, "1px", "the row rounds to whole px");
   const px = (value) => {
     const match = /^(\d+(?:\.\d+)?)px$/.exec(value);
     assert.ok(match, `${value} is not a px length`);
     return Number(match[1]);
   };
-  const scaled = px(declared("--chrome-row-h")) * factor;
-  return Math.floor(Math.max(px(declared("--chrome-h")), scaled) + 0.5);
+  const scaled = px(declaration.chrome["chrome-row-h"]) * factor;
+  return Math.floor(Math.max(px(declaration.chrome["chrome-h"]), scaled) + 0.5);
 }
 
 test("the first-row height that the page prepares equals the --chrome-row of app.css at every frame factor", async () => {

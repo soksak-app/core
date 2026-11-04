@@ -22,7 +22,7 @@ const sources = () => ({
   tauriv2WorkspaceSource: 'const COMMON_ONLY: [&str; 2] = ["projectOpening", "textSize"];',
   wailsv3WorkspaceSource: 'var commonOnly = []string{"projectOpening", "textSize"}',
   browserStorageSource: 'const COMMON_ONLY = Object.freeze(["projectOpening", "textSize"]);',
-  workbenchSettingsSource: 'const COMMON_ONLY = Object.freeze(["projectOpening", "textSize"]);',
+  workbenchDeclarationSource: '{"settings": {"commonOnly": ["projectOpening", "textSize"]}}',
   tauriv2PlatformSource: rustPlatformFixture,
   wailsv3PlatformSource: goPlatformFixture,
   tauriv2ProductSources: platformSources().tauriv2,
@@ -233,7 +233,7 @@ test("rustHandlers reads a command that is generic over the runtime", { timeout:
 });
 
 test("a common-only key that the workbench refuses and a host or the browser runtime accepts fails", { timeout: 1000 }, () => {
-  const changed = { ...sources(), workbenchSettingsSource: 'const COMMON_ONLY = Object.freeze(["projectOpening", "textSize", "memorySaver"]);' };
+  const changed = { ...sources(), workbenchDeclarationSource: '{"settings": {"commonOnly": ["projectOpening", "textSize", "memorySaver"]}}' };
   assert.deepEqual(auditHostParity(changed), [
     'tauriv2 common-only keys ["projectOpening","textSize"] differ from the common-only keys of the workbench ["memorySaver","projectOpening","textSize"]',
     'wailsv3 common-only keys ["projectOpening","textSize"] differ from the common-only keys of the workbench ["memorySaver","projectOpening","textSize"]',
@@ -248,7 +248,7 @@ test("the common-only keys of the hosts, the browser runtime and the workbench a
     tauriv2WorkspaceSource: read("packages/host/rust/src/workspace.rs"),
     wailsv3WorkspaceSource: read("packages/host/go/src/workspace.go"),
     browserStorageSource: read("apps/browser/runtime/browser-storage.js"),
-    workbenchSettingsSource: read("packages/workbench/settings.js"),
+    workbenchDeclarationSource: read("packages/workbench/workbench.json"),
   });
   assert.deepEqual(keys.workbench, ["projectOpening", "textSize", "memorySaver", "memorySaverDelay"]);
   assert.deepEqual(auditCommonOnlyKeys(keys), []);

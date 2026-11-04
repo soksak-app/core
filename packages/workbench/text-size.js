@@ -3,8 +3,10 @@
 // The scope is the place the user pressed last. Pressing a card makes it that card, and pressing the frame outside the plane makes it the
 // frame. It is null if nothing was pressed yet, and then the focused card is the scope.
 
-/** The steps of the text size scale. */
-export const TEXT_STEPS = Object.freeze([0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3]);
+import declaration from "./workbench.json" with { type: "json" };
+
+/** The steps of the text size scale, declared in workbench.json. */
+export const TEXT_STEPS = declaration.settings.textSteps;
 
 /**
  * The scale moved from value in direction. 1 is the next larger step, -1 is the next smaller step, and 0 is 1.

@@ -58,6 +58,9 @@
     "url": "https://github.com/soksak-app/core/issues"
   },
   "homepage": "https://github.com/soksak-app/core/tree/main/packages/soksak#readme",
+  "specFiles": [
+    "docs/spec/cases/layout/"
+  ],
   "devDependencies": {
     "jsdom": "^30.0.1",
     "fake-indexeddb": "^6.2.5",

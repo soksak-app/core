@@ -44,7 +44,7 @@ import { installTheme } from "soksak";
 /* Values outside the plane belong to settings. This document recreates the plane when a value changes.
    If settings called the plane directly, a function to call would have to be chosen for each added setting. */
 import {
-  halfGap, install, modeName, onSettingsChange, value, connectSettings,
+  halfGap, install, installTokens, modeName, onSettingsChange, value, connectSettings,
 } from "./settings.js";
 
 /* Simulates and reports the surfaces. The plane only records values on the slot elements, and measuring and reporting
@@ -94,6 +94,13 @@ import { checkStoredLayout } from "./stored-layout.js";
 import { onChoicesChange } from "./sidebar-sections.js";
 
 import { createLibrary } from "./library.js";
+import { followLibraryWidth, installChromeMetrics } from "./chrome-metrics.js";
+
+/* The chrome metrics and the tokens of the default theme are set on the root before anything is drawn, so the first screen and an error
+   that stops the start read every length of the stylesheets (chrome-metrics.js). */
+installChromeMetrics(document.documentElement);
+followLibraryWidth(document.documentElement, window);
+installTokens(document.documentElement);
 
 /* Error banner of the main document. An unhandled error is also shown in this banner and sent to the application log (page-layout.js). It is installed before anything else
    so that an error that stops the start is shown too. */
