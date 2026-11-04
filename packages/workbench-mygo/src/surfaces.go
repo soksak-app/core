@@ -368,10 +368,8 @@ func (s *Shell) surfaceDeclarations(unit *installedUnit) (map[string]any, error)
 	marks := map[string]any{}
 	for kind, own := range map[string][]json.RawMessage{"status": unit.Exposes.Status, "commands": unit.Exposes.Commands, "element": unit.Exposes.Element} {
 		entries := []any{}
-		for _, entry := range s.options.Declared.exposes[kind] {
-			if name, _ := entry["name"].(string); surfaceNames[name] { // silent: the declaration test holds a name on each entry.
-				entries = append(entries, entry)
-			}
+		for _, entry := range s.options.Declared.surface[kind] {
+			entries = append(entries, entry)
 		}
 		for _, entry := range own {
 			entries = append(entries, entry)

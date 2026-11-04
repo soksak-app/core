@@ -4,10 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"maps"
 	"math"
 	"regexp"
-	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -443,6 +441,10 @@ func (r *Registry) list() (map[string][]map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
+	declared, err := readExposures()
+	if err != nil {
+		return nil, err
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	registered := map[string]func(name string) bool{
@@ -452,18 +454,21 @@ func (r *Registry) list() (map[string][]map[string]any, error) {
 	}
 	out := map[string][]map[string]any{}
 	for key := range exposeKinds {
-		entries := slices.Concat(r.declared.exposes[key], r.surfaces.exposes[key])
-		listed := make([]map[string]any, 0, len(entries))
-		for _, entry := range entries {
-			row := make(map[string]any, len(entry)+1)
-			maps.Copy(row, entry)
-			name := entry["name"].(string)
+		listed := declared[key]
+		for _, raw := range r.surfaces.exposes[key] {
+			fields, err := exposureFields(raw)
+			if err != nil {
+				return nil, fmt.Errorf("%s declaration: %w", exposeKinds[key], err)
+			}
+			listed = append(listed, fields)
+		}
+		for _, row := range listed {
+			name := row["name"].(string)
 			if registeredBySurface(name) {
 				row["registered"] = len(r.surfaces.owners[declarationKey(exposeKinds[key], name)]) > 0
 			} else {
 				row["registered"] = registered[key](name)
 			}
-			listed = append(listed, row)
 		}
 		out[key] = listed
 	}

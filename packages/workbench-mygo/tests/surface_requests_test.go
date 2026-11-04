@@ -5,7 +5,9 @@ package workbench_test
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -559,5 +561,32 @@ func TestAFailedObservationIsReported(t *testing.T) {
 	f.registry.Observe("terminal.screen", nil, false, func(any) {})
 	if len(failures) != 1 || failures[0] != "terminal.screen on tab-a: no value" {
 		t.Fatalf("the failures are %v", failures)
+	}
+}
+
+// The window holds what the plugins wrote, so the registry keeps those bytes and decodes them when a listing asks.
+func TestTheRegistryHoldsNoCopyOfTheDeclarations(t *testing.T) {
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	exposes := workbench.Exposes{}
+	written := 0
+	for i := range 1000 {
+		raw := json.RawMessage(fmt.Sprintf(`{"name": "terminal.command-%d", "description": %q, "params": {"type": "object",
+			"properties": {"surface": {"type": "string"}, "text": {"type": "string"}}}}`, i, strings.Repeat("word ", 40)))
+		exposes.Commands = append(exposes.Commands, raw)
+		written += len(raw)
+	}
+	n := heldBytes(func() any {
+		registry := workbench.NewRegistry(declared)
+		if err := registry.Declare("terminal", exposes); err != nil {
+			t.Fatal(err)
+		}
+		return registry
+	})
+	runtime.KeepAlive(exposes)
+	if n > uint64(written) {
+		t.Errorf("the registry holds %d kB for %d kB of declarations", n>>10, written>>10)
 	}
 }

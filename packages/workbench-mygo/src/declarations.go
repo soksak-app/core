@@ -38,8 +38,9 @@ type Declarations struct {
 	Statuses, Commands, Elements map[string]bool
 	// Shortcuts is the shortcut table.
 	Shortcuts []Shortcut
-	// exposes holds the declarations under the keys of the declaration file, and params the parameter schema of each command.
-	exposes map[string][]map[string]any
+	// surface holds the entries of surfaceNames under the keys of the declaration file, and params the parameter schema of each
+	// command.
+	surface map[string][]map[string]any
 	params  map[string]any
 	many    map[string]bool
 	chrome  map[string]string
@@ -108,12 +109,14 @@ func (d *Declarations) DefaultPalette() (Palette, error) {
 }
 
 // Declared returns the declarations of the embedded copies.
-var Declared = sync.OnceValues(func() (*Declarations, error) {
-	var exposure struct {
-		Exposes map[string][]map[string]any `json:"exposes"`
-	}
-	if err := json.Unmarshal(exposureFile, &exposure); err != nil {
-		return nil, fmt.Errorf("exposure.json: %w", err)
+var Declared = sync.OnceValues(ReadDeclarations)
+
+// ReadDeclarations reads the embedded copies. It keeps what the workbench reads while it runs, and readExposures reads the
+// rest when a request asks for it.
+func ReadDeclarations() (*Declarations, error) {
+	exposes, err := readExposures()
+	if err != nil {
+		return nil, err
 	}
 	var shortcuts struct {
 		Shortcuts []Shortcut `json:"shortcuts"`
@@ -135,16 +138,35 @@ var Declared = sync.OnceValues(func() (*Declarations, error) {
 		}
 		return set
 	}
-	params := make(map[string]any, len(exposure.Exposes["commands"]))
-	for _, entry := range exposure.Exposes["commands"] {
+	params := make(map[string]any, len(exposes["commands"]))
+	for _, entry := range exposes["commands"] {
 		params[entry["name"].(string)] = entry["params"]
 	}
 	many := map[string]bool{}
-	for _, entry := range exposure.Exposes["element"] {
+	for _, entry := range exposes["element"] {
 		many[entry["name"].(string)] = entry["many"] == true
 	}
+	surface := map[string][]map[string]any{}
+	for key, entries := range exposes {
+		for _, entry := range entries {
+			if surfaceNames[entry["name"].(string)] {
+				surface[key] = append(surface[key], entry)
+			}
+		}
+	}
 	return &Declarations{
-		Statuses: names(exposure.Exposes["status"]), Commands: names(exposure.Exposes["commands"]), Elements: names(exposure.Exposes["element"]),
-		Shortcuts: shortcuts.Shortcuts, exposes: exposure.Exposes, params: params, many: many, chrome: values.Chrome, themes: values.Themes,
+		Statuses: names(exposes["status"]), Commands: names(exposes["commands"]), Elements: names(exposes["element"]),
+		Shortcuts: shortcuts.Shortcuts, surface: surface, params: params, many: many, chrome: values.Chrome, themes: values.Themes,
 	}, nil
-})
+}
+
+// readExposures reads the declarations under the keys of the declaration file.
+func readExposures() (map[string][]map[string]any, error) {
+	var exposure struct {
+		Exposes map[string][]map[string]any `json:"exposes"`
+	}
+	if err := json.Unmarshal(exposureFile, &exposure); err != nil {
+		return nil, fmt.Errorf("exposure.json: %w", err)
+	}
+	return exposure.Exposes, nil
+}
