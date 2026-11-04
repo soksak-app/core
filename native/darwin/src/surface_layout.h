@@ -25,10 +25,22 @@ size_t surfaceLayoutTraceStop(double *out, size_t capacity);
 void surfaceLayoutBegin(void *owner, uint64_t ticket, void (^ready)(int));
 // Checks that the single app DOM is ready to present before committing an open layout.
 void surfaceLayoutAfterPresentation(void *mainWebview, void (^done)(void));
-// Calls done on the main thread when the single app DOM finishes presenting while the window of the main document has no
-// open surface layout transaction. displayed is the time (ms, mach absolute time) at which that presentation appears on
-// the screen. When the window is not on the screen, it is the time of the call.
-void surfaceLayoutAfterSettled(void *mainWebview, void (^done)(double displayed, const char *error));
+// A block that brings the content of a window to the screen in its current state. It calls presented once on the main thread
+// with NULL, or with the failure.
+typedef void (^surfaceLayoutPresent)(void (^presented)(const char *error));
+// Makes the block of a main web view, which reads the document and waits for the presentation update after that read. The
+// result is autoreleased; surfaceLayoutAfterSettled keeps the block that it needs.
+surfaceLayoutPresent surfaceLayoutMainPresentation(void *mainWebview);
+// Calls done on the main thread when present has brought the content of window to the screen while window has no surface
+// layout transaction that is open or waiting. present is asked again when a transaction opened meanwhile. displayed is the time
+// (ms, mach absolute time) at which that presentation appears on the screen. When the window is not on the screen, it is the time
+// of the call.
+void surfaceLayoutAfterSettled(void *window, surfaceLayoutPresent present, void (^done)(double displayed, const char *error));
+// Registers the observer of the layout transactions of the process and replaces the earlier one. started(window) runs on the
+// main thread when a preparation of the window starts, before its ready. ended(window) runs on the main thread when the
+// transaction of the window ends by its commit, deferred or not, or by its cancel, after the Core Animation transaction
+// commits and before the next waiting transaction starts.
+void surfaceLayoutObserve(void (^started)(void *window), void (^ended)(void *window));
 // Injects a failure into the next settled-presentation request. Diagnostic builds only.
 void surfaceLayoutInjectSettledFailure(void);
 // Sets the title bar to height (pt) when the new page of the window owner starts (docs/spec/native-surfaces.md#title-bar-height).

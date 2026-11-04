@@ -4,6 +4,7 @@
 #import "image_region.h"
 #import "support/records.h"
 #import "webview_geometry.h"
+#import "window_facts.h"
 #import "support/surface_view.h"
 
 @interface SPControlledInputContext : NSTextInputContext
@@ -67,7 +68,7 @@ int main(void) { @autoreleasepool {
     WKWebView *main = [[[WKWebView alloc] initWithFrame:window.contentView.bounds] autorelease];
     [window.contentView addSubview:main];
     WKWebView *page = [[[WKWebView alloc] initWithFrame:NSZeroRect] autorelease];
-    void *surface = sp_surface_create(main);
+    void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     BOOL placed = surface && SPPlaceSurfaceView(surface, page);
     webviewSetFrame(surface, 0, 0, 240, 160);
     webviewSetSurfaceHidden(surface, false);

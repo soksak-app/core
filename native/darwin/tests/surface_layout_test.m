@@ -89,7 +89,7 @@ static void checkSettledWaitsForLayout(NSWindow *window, WKWebView *main) {
     __block int order = 0;
     __block int settledAt = 0;
     surfaceLayoutBegin(window, 101, ^(int allowed) {});
-    surfaceLayoutAfterSettled(main, ^(double displayed, const char *error) {
+    surfaceLayoutAfterSettled(main.window, surfaceLayoutMainPresentation(main), ^(double displayed, const char *error) {
         check(error == NULL, @"a settled layout has no DOM error");
         settledAt = ++order;
     });
@@ -120,7 +120,7 @@ static void checkSettledWaitsForModal(NSWindow *window, WKWebView *main, WKWebVi
         configuration:configuration] autorelease];
     [window.contentView addSubview:modal];
     __block BOOL settled = NO;
-    surfaceLayoutAfterSettled(main, ^(double displayed, const char *error) {
+    surfaceLayoutAfterSettled(main.window, surfaceLayoutMainPresentation(main), ^(double displayed, const char *error) {
         check(error == NULL, @"the settled wait with a shown modal has no error");
         settled = YES;
     });
@@ -133,7 +133,7 @@ static void checkSettledWaitsForModal(NSWindow *window, WKWebView *main, WKWebVi
     modal.held = nil;
     modal.hidden = YES;
     settled = NO;
-    surfaceLayoutAfterSettled(main, ^(double displayed, const char *error) {
+    surfaceLayoutAfterSettled(main.window, surfaceLayoutMainPresentation(main), ^(double displayed, const char *error) {
         check(error == NULL, @"the settled wait with a hidden modal has no error");
         settled = YES;
     });
@@ -388,7 +388,7 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration) {
     window.animationBehavior = NSWindowAnimationBehaviorNone;
     WKWebView *main = page(window, configuration, NSMakeRect(0, 0, 400, 200), @"sptest://app/composition");
     check(sp_window_set_main_webview(window, main), @"the composition fixture registers its main DOM");
-    void *surface = sp_surface_create(main);
+    void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     check(surface != NULL, @"the composition fixture creates its native surface");
     if (surface == NULL) { [window close]; [window release]; return; }
     webviewSetFrame(surface, 40, 40, 260, 120);
@@ -405,7 +405,7 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration) {
     until(^BOOL { return loaded; });
     [window orderFrontRegardless];
     __block double shown = 0;
-    surfaceLayoutAfterSettled(main, ^(double at, const char *error) {
+    surfaceLayoutAfterSettled(main.window, surfaceLayoutMainPresentation(main), ^(double at, const char *error) {
         check(error == NULL, @"the initial composition fixture is presented"); shown = at;
     });
     until(^BOOL { return shown != 0; });
@@ -443,7 +443,7 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration) {
         waitFrames(window.screen, 5);
         check(surfaceLayoutCommit(window, 107), @"the controlled composition transaction commits");
         shown = 0;
-        surfaceLayoutAfterSettled(main, ^(double at, const char *error) {
+        surfaceLayoutAfterSettled(main.window, surfaceLayoutMainPresentation(main), ^(double at, const char *error) {
             check(error == NULL, @"the final composition fixture is presented"); shown = at;
         });
         until(^BOOL { return shown != 0; });
@@ -510,7 +510,7 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
     window.animationBehavior = NSWindowAnimationBehaviorNone;
     WKWebView *main = page(window, configuration, NSMakeRect(0, 0, 400, 200), @"sptest://app/first-show");
     check(sp_window_set_main_webview(window, main), @"the first-show fixture registers its app DOM");
-    void *compositionSurface = sp_surface_create(main);
+    void *compositionSurface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     check(compositionSurface != NULL, @"the first-show fixture creates the native composition");
     if (compositionSurface == NULL) { [window close]; [window release]; return; }
     WKWebView *root = page(window, [[configuration copy] autorelease], NSMakeRect(0, 0, 180, 100),
@@ -543,7 +543,7 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
     check(window.firstResponder == main, @"the app DOM owns keyboard focus before the first show");
     [window orderFrontRegardless];
     __block double shown = 0;
-    surfaceLayoutAfterSettled(main, ^(double at, const char *error) {
+    surfaceLayoutAfterSettled(main.window, surfaceLayoutMainPresentation(main), ^(double at, const char *error) {
         check(error == NULL, @"the first-show baseline is presented"); shown = at;
     });
     until(^BOOL { return shown != 0; });
@@ -600,7 +600,7 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
         appDOMBarrierPending = NO;
         check(surfaceLayoutCommit(window, 108), @"the first-show transaction commits after both presentation barriers");
         shown = 0;
-        surfaceLayoutAfterSettled(main, ^(double at, const char *error) {
+        surfaceLayoutAfterSettled(main.window, surfaceLayoutMainPresentation(main), ^(double at, const char *error) {
             check(error == NULL, @"the first-show marker is displayed after commit"); shown = at;
         });
         until(^BOOL { return shown != 0; });
@@ -677,7 +677,7 @@ static SPWait waitWhileBusy(WKWebView *main, WKWebView *busy, SPBusySignal *sign
     __block double finished = 0;
     // The request, completion, and display times are all measured with the same clock (CACurrentMediaTime).
     double requested = CACurrentMediaTime() * 1000;
-    surfaceLayoutAfterSettled(main, ^(double at, const char *error) {
+    surfaceLayoutAfterSettled(main.window, surfaceLayoutMainPresentation(main), ^(double at, const char *error) {
         check(error == NULL, @"a displayed frame has no DOM error");
         took = -start.timeIntervalSinceNow;
         finished = CACurrentMediaTime() * 1000;

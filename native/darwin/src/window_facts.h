@@ -5,10 +5,11 @@
 // the primary display with y increasing downward, and window coordinates are relative to the top left of
 // the content area.
 
-// Registers the app DOM web view of a window explicitly. The main view is not guessed from the drawing
-// order. Returns false when the web view is not attached to the window or another main view is already
-// registered.
-bool sp_window_set_main_webview(void *window, void *main);
+// Registers the app DOM web view of a window explicitly and makes the window composition around it. The main view is
+// not guessed from the drawing order. Returns the window composition, the view that a host passes to sp_surface_create,
+// to sp_window_facts and to sp_window_hit. Returns NULL when the web view is not attached to the window, is its content view,
+// or another main view is already registered. A second call with the registered web view returns the same composition.
+void *sp_window_set_main_webview(void *window, void *main);
 
 // Returns only the registered app DOM web view. A window that is not registered gives NULL.
 void *sp_window_main_webview(void *window);
@@ -25,8 +26,8 @@ void *sp_window_main_webview(void *window);
 //   nativeSurfaces logical surface containers [{view, x, y, width, height, hidden}], window coordinates.
 //   documentWebviews   the web views of document regions
 //   appDomWebviews     every other web view: the app DOM and one web view for each view surface
-// Returns NULL when there is no window or registered main web view.
-char *sp_window_facts(void *window);
+// view is the view that holds the container of the surface hosts. Returns NULL when there is no window or view is not in it.
+char *sp_window_facts(void *window, void *view);
 
 // Returns {name, iccSHA256} for the window's current AppKit backing color space. Both values are null when
 // the window has no backing color space; iccSHA256 is null when AppKit supplies no ICC profile data.
@@ -37,8 +38,8 @@ char *sp_window_color_space_facts(void *window);
 // WKWebView that contains the point and is 0 when there is none. main tells whether that web view is the
 // main page. identifier is the identifier of the hit view. hit is {class, frame} and is null when there is
 // no leaf view. frame is in window coordinates with the top left of the content area as the origin.
-// Returns NULL when there is no window or main web view.
-char *sp_window_hit(void *window, double x, double y);
+// view is the view that holds the container of the surface hosts. Returns NULL when there is no window or view is not in it.
+char *sp_window_hit(void *window, void *view, double x, double y);
 
 // Displays [{x, y, width, height, scale}], screen coordinates.
 char *sp_screens(void);

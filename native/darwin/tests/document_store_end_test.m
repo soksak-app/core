@@ -12,6 +12,7 @@
 #import "support/temporary_folder.h"
 #import "document_view.h"
 #import "webview_geometry.h"
+#import "window_facts.h"
 
 static const int resourceCount = 40;
 static const NSTimeInterval observation = 3;
@@ -130,7 +131,7 @@ static void *prepareSurface(void) {
     WKWebView *main = [[[WKWebView alloc] initWithFrame:window.contentView.bounds] autorelease];
     [window.contentView addSubview:main];
     [window orderBack:nil];
-    void *surface = sp_surface_create(main);
+    void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     webviewSetFrame(surface, 0, 0, 500, 400);
     webviewSetSurfaceHidden(surface, false);
     return surface;

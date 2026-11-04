@@ -204,7 +204,7 @@ int main(void) { @autoreleasepool {
     [configuration setURLSchemeHandler:pages forURLScheme:@"sptitle"];
     WKWebView *webview = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 480, 240)
         configuration:configuration] autorelease];
-    window.contentView = webview;
+    [window.contentView addSubview:webview];
     check(sp_window_set_main_webview(window, webview), @"the web view is the window's registered main webview");
     check(sp_webview_replace_documents_in_new_process(webview), @"the page reloads in a new WebContent process");
     // A window that is not visible yet has no previous page, so the height is set directly without a transaction.

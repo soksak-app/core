@@ -1,8 +1,16 @@
 #include <stddef.h>
 #include <stdbool.h>
 
-// There is one app DOM per window, and a logical surface is a clipping container without a web view.
-void *sp_surface_create(void *mainWebview);
+// A logical surface is a clipping container without a web view. It is placed in the container of the surface hosts of view,
+// the NSView that holds that container and lies in a window. The function makes the container when view holds none. On the
+// hosts with a main web view, view is the window composition that sp_window_set_main_webview returns.
+void *sp_surface_create(void *view);
+// Wraps the main web view in the window composition, which holds the window overlays, the file drop view and, above the web
+// view, the container of the surface hosts. Returns the composition that already exists, or NULL when the web view is not
+// in a window. sp_window_set_main_webview calls it.
+void *sp_webview_window_composition(void *mainWebview);
+// The window composition of the registered main web view of window. A window without a registered main web view gives NULL.
+void *sp_window_composition(void *window);
 // Receives files dropped on the window. event receives {"urls":[file URL...],"x":..,"y":..} (page coordinates).
 // When release is not NULL, it is called once on the main thread when the drop view no longer uses context (when the next
 // registration replaces the receiver, or when the view is released together with the window). When the function returns false, release is not called and context belongs to the caller.

@@ -13,6 +13,7 @@
 #import "document_view.h"
 #import "private/webkit.h"
 #import "webview_geometry.h"
+#import "window_facts.h"
 
 static int failures = 0;
 
@@ -361,7 +362,7 @@ static NSArray<NSNumber *> *runScenario(NSString *name, NSArray<NSString *> *add
     main.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     [window.contentView addSubview:main];
     [window orderFrontRegardless];
-    void *surface = sp_surface_create(main);
+    void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     check(surface != NULL, @"a logical surface is created for the regions");
     webviewSetFrame(surface, 0, 0, 500, 400);
     webviewSetSurfaceHidden(surface, false);

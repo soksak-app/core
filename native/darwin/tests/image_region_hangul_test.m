@@ -6,6 +6,7 @@
 #import "event_ring.h"
 #import "image_region.h"
 #import "webview_geometry.h"
+#import "window_facts.h"
 #import "support/surface_view.h"
 
 static int failures = 0;
@@ -55,7 +56,7 @@ int main(void) { @autoreleasepool {
     [window.contentView addSubview:main];
     WKWebView *view = [[[WKWebView alloc] initWithFrame:NSZeroRect] autorelease];
     [window orderBack:nil];
-    void *surface = sp_surface_create(main);
+    void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     check(surface != NULL, @"the main webview creates the surface");
     check(SPPlaceSurfaceView(surface, view), @"the view web view is placed in the surface");
     webviewSetFrame(surface, 0, 0, 500, 400);

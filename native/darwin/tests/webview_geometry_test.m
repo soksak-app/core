@@ -16,6 +16,7 @@
 #import "private/webkit.h"
 #import "webview_input.h"
 #import "webview_geometry.h"
+#import "window_facts.h"
 #import "surface_layout.h"
 #import "support/surface_view.h"
 
@@ -420,18 +421,18 @@ static void checkHitTesting(WKWebView *main) {
     currentStep = __func__;
     double overlay[5] = {20, 20, 20, 20, 1};
     // A surface with no web view: the point under its visible overlay is not a native hit.
-    NSView *plain = (NSView *)sp_surface_create(main);
+    NSView *plain = (NSView *)sp_surface_create(sp_window_set_main_webview(main.window, main));
     plain.hidden = NO;
     webviewSetFrame(plain, 0, 0, 200, 150);
     addNativeView(plain);
     webviewSetSurfaceOverlays(plain, overlay, 1);
     check([plain hitTest:superviewPoint(plain, NSMakePoint(100, 80))] == nil,
         @"a point under the visible overlay of a surface without a web view is not a native hit");
-    NSView *initiallyHidden = (NSView *)sp_surface_create(main);
+    NSView *initiallyHidden = (NSView *)sp_surface_create(sp_window_set_main_webview(main.window, main));
     check(initiallyHidden.hidden, @"a new surface starts hidden");
     sp_surface_close(initiallyHidden);
     // The same kind of surface at a non-zero origin: a point outside its overlay is the native view of its plane.
-    NSView *moved = (NSView *)sp_surface_create(main);
+    NSView *moved = (NSView *)sp_surface_create(sp_window_set_main_webview(main.window, main));
     moved.hidden = NO;
     webviewSetFrame(moved, 300, 20, 200, 150);
     NSView *movedNative = addNativeView(moved);
@@ -449,7 +450,7 @@ static void checkHitTesting(WKWebView *main) {
     otherWindow.contentView = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 120, 100)] autorelease];
     WKWebView *otherMain = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 120, 100)] autorelease];
     [otherWindow.contentView addSubview:otherMain];
-    NSView *otherSurface = (NSView *)sp_surface_create(otherMain);
+    NSView *otherSurface = (NSView *)sp_surface_create(sp_window_set_main_webview(otherMain.window, otherMain));
     otherSurface.hidden = NO;
     webviewSetFrame(otherSurface, 0, 0, 100, 100);
     NSView *otherNative = addNativeView(otherSurface);
@@ -475,7 +476,7 @@ static void checkHitTesting(WKWebView *main) {
     sp_surface_close(otherSurface);
     // A view surface whose web view does not cover the point: the point under the overlay is not a native hit.
     WKWebView *view = [[[WKWebView alloc] initWithFrame:NSZeroRect] autorelease];
-    NSView *viewSurface = (NSView *)sp_surface_create(main);
+    NSView *viewSurface = (NSView *)sp_surface_create(sp_window_set_main_webview(main.window, main));
     check(SPPlaceSurfaceView(viewSurface, view), @"a view webview is placed in its surface");
     webviewSetFrame(viewSurface, 0, 0, 200, 150);
     webviewSetSurfaceHidden(viewSurface, false);
@@ -486,7 +487,7 @@ static void checkHitTesting(WKWebView *main) {
         @"a point under the visible overlay of a view that its web view does not cover is not a native hit");
     // A hidden view web view under a visible overlay: the point is not a native hit.
     WKWebView *hiddenView = [[[WKWebView alloc] initWithFrame:NSZeroRect] autorelease];
-    NSView *hiddenSurface = (NSView *)sp_surface_create(main);
+    NSView *hiddenSurface = (NSView *)sp_surface_create(sp_window_set_main_webview(main.window, main));
     check(SPPlaceSurfaceView(hiddenSurface, hiddenView), @"a view webview that is hidden later is placed in its surface");
     webviewSetFrame(hiddenSurface, 0, 0, 200, 150);
     webviewSetSurfaceHidden(hiddenSurface, false);
@@ -523,7 +524,7 @@ int main(void) { @autoreleasepool {
     // start state to interpret a failure.
     fprintf(stdout, "INFO: window occlusion visible at start: %d\n",
         (window.occlusionState & NSWindowOcclusionStateVisible) != 0);
-    void *surface = sp_surface_create(main);
+    void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     check(surface != NULL, @"the main webview creates the surface");
     check(SPPlaceSurfaceView(surface, page), @"the view webview is placed in the surface");
     check(main.superview == page.superview.superview.superview,

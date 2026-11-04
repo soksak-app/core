@@ -12,6 +12,7 @@
 #import "capture.h"
 #import "image_region.h"
 #import "webview_geometry.h"
+#import "window_facts.h"
 #import "support/surface_view.h"
 #import "support/capture_frame.m"
 
@@ -172,7 +173,7 @@ int main(int argc, const char **argv) { @autoreleasepool {
     window.contentView = content;
     WKWebView *main = [[WKWebView alloc] initWithFrame:content.bounds];
     [content addSubview:main];
-    void *surfaceHost = sp_surface_create(main);
+    void *surfaceHost = sp_surface_create(sp_window_set_main_webview(main.window, main));
     CGFloat backingScale = window.backingScaleFactor;
     WKWebView *page = [[WKWebView alloc] initWithFrame:NSZeroRect];
     BOOL placed = surfaceHost && SPPlaceSurfaceView(surfaceHost, page);

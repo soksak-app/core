@@ -9,7 +9,7 @@ package darwin
 #include "webview_geometry.h"
 #include "window_facts.h"
 #include "main_thread.h"
-extern void *sp_surface_create(void *mainWebview);
+extern void *sp_surface_create(void *view);
 extern void sp_surface_close(void *surface);
 extern void sp_surface_set_window_overlays(void *mainWebview, const double *rects, size_t count);
 #import <Cocoa/Cocoa.h>
@@ -19,7 +19,7 @@ extern void sp_surface_set_window_overlays(void *mainWebview, const double *rect
 static void *main_sp_window_main_webview(void *window) { return ON_MAIN(void *, sp_window_main_webview(window)); }
 static bool main_sp_webview_collect_garbage(void *view) { return ON_MAIN(bool, sp_webview_collect_garbage(view)); }
 static void main_webviewGetFrame(void *view, double *out) { wailsRunOnMain(^{ webviewGetFrame(view, out); }); }
-static void *main_sp_surface_create(void *main) { return ON_MAIN(void *, sp_surface_create(main)); }
+static void *main_sp_surface_create(void *window) { return ON_MAIN(void *, sp_surface_create(sp_window_composition(window))); }
 static void main_sp_surface_close(void *surface) { wailsRunOnMain(^{ sp_surface_close(surface); }); }
 static void main_webviewSetFrame(void *view, double x, double y, double width, double height) {
     wailsRunOnMain(^{ webviewSetFrame(view, x, y, width, height); });
@@ -247,7 +247,7 @@ func (implementation) CreateSurface(window unsafe.Pointer) (unsafe.Pointer, erro
 	if main == nil {
 		return nil, fmt.Errorf("the window has no registered app DOM webview")
 	}
-	handle := C.main_sp_surface_create(main)
+	handle := C.main_sp_surface_create(window)
 	if handle == nil {
 		return nil, fmt.Errorf("cannot create SurfaceHost")
 	}

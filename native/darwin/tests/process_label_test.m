@@ -14,6 +14,7 @@
 #import "support/temporary_folder.h"
 #import "support/view_import_map.h"
 #import "webview_geometry.h"
+#import "window_facts.h"
 
 static int failures;
 static NSString *pluginViewState;
@@ -347,7 +348,7 @@ static pid_t measureCorePluginViewLabel(NSWindow *window) {
     sp_view_import_map_set(viewImportMapFixture().UTF8String);
     WKWebView *main = [[WKWebView alloc] initWithFrame:window.contentView.bounds];
     [window.contentView addSubview:main];
-    void *surface = sp_surface_create((__bridge void *)main);
+    void *surface = sp_surface_create(sp_window_set_main_webview((__bridge void *)main.window, (__bridge void *)main));
     check(surface != NULL, @"core creates the plugin surface host");
     void *document = surface ? sp_document_create(surface, store.fileSystemRepresentation,
         folder.fileSystemRepresentation, "probe", "window.sokView = 1;", pluginStateChanged, NULL) : NULL;

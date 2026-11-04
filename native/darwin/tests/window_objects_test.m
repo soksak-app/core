@@ -78,9 +78,9 @@ int main(void) { @autoreleasepool {
         [window.contentView addSubview:main];
         check(sp_window_set_main_webview(window, main), @"the main webview is registered");
         check(webviewInputRegister(main), @"the main webview registers for input");
-        surface = sp_surface_create(main);
+        surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
         check(surface != NULL, @"a logical surface is created");
-        viewSurface = sp_surface_create(main);
+        viewSurface = sp_surface_create(sp_window_set_main_webview(main.window, main));
         check(viewSurface != NULL, @"a surface for a view is created");
         view = [[WKWebView alloc] initWithFrame:NSZeroRect];
         check(webviewInputRegister(view), @"a view webview registers for input");

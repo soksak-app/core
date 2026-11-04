@@ -423,8 +423,8 @@ pub trait Platform: CoreRootHost + Send + Sync {
         w: f64,
         h: f64,
     ) -> Result<(), String>;
-    /// Creates a logical SurfaceHost under the main DOM webview. This call does not create a DOM webview.
-    fn create_surface(&self, main: Handle) -> Result<Handle, String>;
+    /// Creates a logical SurfaceHost in the window composition of the window. This call does not create a DOM webview.
+    fn create_surface(&self, window: Handle) -> Result<Handle, String>;
     fn close_surface(&self, surface: Handle) -> Result<(), String>;
     fn place_surface(&self, surface: Handle, x: f64, y: f64, w: f64, h: f64) -> Result<(), String>;
     fn surface_frame(&self, surface: Handle) -> Result<[f64; 4], String>;

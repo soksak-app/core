@@ -407,7 +407,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         restoreFrontmost(previous, activation);
         return 1;
     }
-    void *surface = sp_surface_create(main);
+    void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     webviewSetFrame(surface, 0, 0, 500, 400);
     NSString *store = [temporary stringByAppendingPathComponent:@"store"];
 

@@ -5,6 +5,7 @@
 #import <WebKit/WebKit.h>
 #import "document_view.h"
 #import "webview_geometry.h"
+#import "window_facts.h"
 
 static int failures = 0;
 
@@ -26,7 +27,7 @@ int main(void) {
         [window setReleasedWhenClosed:NO];
         WKWebView *main = [[[WKWebView alloc] initWithFrame:window.contentView.bounds] autorelease];
         [window.contentView addSubview:main];
-        void *surface = sp_surface_create(main);
+        void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
         check(surface != NULL, @"a logical surface is created for the document");
         void *document = sp_document_create(surface, "/dev/null/soksak-store", "/tmp", "probe", "", changed, NULL);
         check(document == NULL, @"a data store under a file is not created");

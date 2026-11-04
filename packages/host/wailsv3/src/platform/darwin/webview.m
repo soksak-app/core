@@ -91,7 +91,7 @@ extern void goNativeSettledDone(uintptr_t callback, double displayed, char *erro
 static bool nativeWindowAfterSettledOnMain(void *handle, uintptr_t callback) {
     WKWebView *view = sp_window_main_webview(handle);
     if (!view) return false;
-    surfaceLayoutAfterSettled(view, ^(double displayed, const char *error) {
+    surfaceLayoutAfterSettled(handle, surfaceLayoutMainPresentation(view), ^(double displayed, const char *error) {
         char *copy = error ? strdup(error) : NULL;
         wailsRunOnWorker(^{ goNativeSettledDone(callback, displayed, copy); });
     });
@@ -126,7 +126,7 @@ static bool nativeWindowSetMainWebviewOnMain(void *handle) {
     NSWindow *window = (NSWindow *)handle;
     if (sp_window_main_webview(handle)) return true;
     WKWebView *root = mainWebview(window.contentView);
-    return root && sp_window_set_main_webview(window, root);
+    return root && sp_window_set_main_webview(window, root) != NULL;
 }
 
 static void nativeWebviewBoundsOnMain(void *handle, double x, double y, double width, double height) {

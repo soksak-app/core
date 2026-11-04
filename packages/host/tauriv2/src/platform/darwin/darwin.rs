@@ -234,8 +234,8 @@ impl Platform for Darwin {
         webview::place(view, x, y, w, h);
         Ok(())
     }
-    fn create_surface(&self, main: Handle) -> Result<Handle, String> {
-        webview::create_surface(main)
+    fn create_surface(&self, window: Handle) -> Result<Handle, String> {
+        webview::create_surface(window)
     }
     fn close_surface(&self, surface: Handle) -> Result<(), String> {
         webview::close_surface(surface);

@@ -19,6 +19,7 @@
 #import "support/ime_wire_document.h"
 #import "support/records.h"
 #import "webview_geometry.h"
+#import "window_facts.h"
 #import "support/surface_view.h"
 
 static NSString *const ABC = @"com.apple.keylayout.ABC";
@@ -616,7 +617,7 @@ static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
     WKWebView *main = [[[WKWebView alloc] initWithFrame:window.contentView.bounds] autorelease];
     [window.contentView addSubview:main];
     WKWebView *view = [[[WKWebView alloc] initWithFrame:NSZeroRect] autorelease];
-    void *surface = sp_surface_create(main);
+    void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     check(surface != NULL, @"the main webview creates the surface");
     check(surface && SPPlaceSurfaceView(surface, view), @"the view web view is placed in the surface");
     webviewSetFrame(surface, 0, 0, 500, 400);

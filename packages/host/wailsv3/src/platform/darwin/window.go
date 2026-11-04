@@ -7,6 +7,7 @@ package darwin
 #cgo LDFLAGS: -framework Cocoa -framework WebKit
 #cgo pkg-config: soksak-darwin
 #include <stdlib.h>
+#include "webview_geometry.h"
 #include "window_controls.h"
 #include "window_facts.h"
 #include "window_fullscreen.h"
@@ -29,10 +30,14 @@ static bool main_windowSetTitlebarHeight(void *window, double height, char **fai
     return ON_MAIN(bool, windowSetTitlebarHeight(window, height, failure));
 }
 static void main_windowControls(void *window, double *out) { wailsRunOnMain(^{ windowControls(window, out); }); }
-static char *main_sp_window_facts(void *window) { return ON_MAIN(char *, sp_window_facts(window)); }
+static char *main_sp_window_facts(void *window) {
+    return ON_MAIN(char *, sp_window_facts(window, sp_window_composition(window)));
+}
 static bool main_sp_window_on_screen(void *window) { return ON_MAIN(bool, sp_window_on_screen(window)); }
 static char *main_sp_window_color_space_facts(void *window) { return ON_MAIN(char *, sp_window_color_space_facts(window)); }
-static char *main_sp_window_hit(void *window, double x, double y) { return ON_MAIN(char *, sp_window_hit(window, x, y)); }
+static char *main_sp_window_hit(void *window, double x, double y) {
+    return ON_MAIN(char *, sp_window_hit(window, sp_window_composition(window), x, y));
+}
 static bool main_sp_window_move(void *window, double x, double y) { return ON_MAIN(bool, sp_window_move(window, x, y)); }
 static char *main_sp_screens(void) { return ON_MAIN(char *, sp_screens()); }
 static void main_windowResizeInstant(void) { wailsRunOnMain(^{ windowResizeInstant(); }); }

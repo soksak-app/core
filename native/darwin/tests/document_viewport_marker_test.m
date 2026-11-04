@@ -6,6 +6,7 @@
 #import "private/webkit.h"
 #import "support/temporary_folder.h"
 #import "webview_geometry.h"
+#import "window_facts.h"
 #include <stdlib.h>
 
 static int failures = 0;
@@ -127,7 +128,7 @@ int main(void) { @autoreleasepool {
     window.contentView = content;
     WKWebView *main = [[WKWebView alloc] initWithFrame:content.bounds];
     [content addSubview:main];
-    void *surface = sp_surface_create(main);
+    void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     webviewSetFrame(surface, 0, 0, 620, 480);
     webviewSetSurfaceHidden(surface, false);
     [window orderFrontRegardless];

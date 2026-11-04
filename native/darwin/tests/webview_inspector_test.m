@@ -8,6 +8,7 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "webview_geometry.h"
+#import "window_facts.h"
 #import "private/webkit.h"
 #import "support/surface_view.h"
 
@@ -65,7 +66,7 @@ int main(void) { @autoreleasepool {
     [view loadHTMLString:@"<body style='margin:0'>surface</body>" baseURL:nil];
     [window makeKeyAndOrderFront:nil];
     until(^BOOL { return !main.loading && !view.loading; });
-    void *surface = sp_surface_create(main);
+    void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     check(surface != NULL, @"the main webview creates the surface");
     check(SPPlaceSurfaceView(surface, view), @"the surface webview is placed in the surface");
     webviewSetFrame(surface, 100, 50, 600, 450);

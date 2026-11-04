@@ -129,7 +129,7 @@ int main(void) { @autoreleasepool {
         NSObject *occlusionCapture = [[NSObject new] autorelease];
         check(sp_window_observe_occlusion(window, ^(bool onScreen) { (void)onScreen; [occlusionCapture self]; }), @"the window occlusion is observed");
 
-        surface = sp_surface_create(main);
+        surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
         check(surface != NULL, @"a logical surface is created");
         webviewSetFrame(surface, 10, 10, 400, 300);
         webviewSetSurfaceHidden(surface, false);
@@ -140,7 +140,7 @@ int main(void) { @autoreleasepool {
         check(region != NULL, @"an image region is created");
         sp_region_place(region, 20, 20, 20, 20, true);
 
-        viewSurface = sp_surface_create(main);
+        viewSurface = sp_surface_create(sp_window_set_main_webview(main.window, main));
         check(viewSurface != NULL, @"a surface for a view is created");
         view = [[WKWebView alloc] initWithFrame:NSZeroRect];
         check(webviewInputRegister(view) && webviewIgnorePageFocus(view), @"a view webview registers for input");
@@ -157,7 +157,7 @@ int main(void) { @autoreleasepool {
         check(ready, @"the layout transaction opens");
         check(surfaceLayoutCommit(window, 1), @"the layout transaction commits");
         __block BOOL settled = NO;
-        surfaceLayoutAfterSettled(main, ^(double displayed, const char *failure) { settled = YES; });
+        surfaceLayoutAfterSettled(main.window, surfaceLayoutMainPresentation(main), ^(double displayed, const char *failure) { settled = YES; });
         until(@"the main page did not settle", ^BOOL { return settled; });
 
         NSView *composition = main.superview;

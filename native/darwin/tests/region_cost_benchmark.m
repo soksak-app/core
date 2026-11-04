@@ -70,6 +70,7 @@
 #import "document_view.h"
 #import "private/webkit.h"
 #import "webview_geometry.h"
+#import "window_facts.h"
 
 static const CGFloat kWindowWidth = 1200;
 static const CGFloat kWindowHeight = 760;
@@ -583,7 +584,7 @@ static OpenView openVariant(const Variant *spec, NSWindow *window, NSView *conte
         opened.mainView = [[WKWebView alloc] initWithFrame:content.bounds];
         opened.mainView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
         [content addSubview:opened.mainView];
-        opened.surface = sp_surface_create(opened.mainView);
+        opened.surface = sp_surface_create(sp_window_set_main_webview(opened.mainView.window, opened.mainView));
         if (!opened.surface) failStep(step, @"a logical surface is not created", 0);
         webviewSetFrame(opened.surface, 0, 0, kWindowWidth, kWindowHeight);
         webviewSetSurfaceHidden(opened.surface, false);
