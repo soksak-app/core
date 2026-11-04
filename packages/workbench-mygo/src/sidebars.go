@@ -162,6 +162,15 @@ func readSidebarMetrics(declared *Declarations) (SidebarMetrics, error) {
 	read("section-tab-mark", &m.SectionTabMark)
 	read("fold-button", &m.FoldButton)
 	read("card-icon", &m.FoldIcon)
+	share := func(name string, into *float32) {
+		value, ok := declared.Share(name)
+		if !ok {
+			failed = fmt.Errorf("the chrome metric %s has no share", name)
+		}
+		*into = float32(value)
+	}
+	share("section-head-mix", &m.SectionHeadMix)
+	share("section-head-hover-mix", &m.SectionHeadHoverMix)
 	return m, failed
 }
 

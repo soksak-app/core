@@ -1,6 +1,7 @@
 package workbench_test
 
 import (
+	"image/color"
 	"math"
 	"reflect"
 	"slices"
@@ -11,7 +12,7 @@ import (
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
-var sidebarMetrics = workbench.SidebarMetrics{HeadH: 32, FootH: 22, SectionMinH: 32, SectionDivider: 6, SectionHeadGap: 6, SectionHeadPad: 10, SectionHeadText: 11.5, SectionTabMark: 2, FoldButton: 18, FoldIcon: 14}
+var sidebarMetrics = workbench.SidebarMetrics{HeadH: 32, FootH: 22, SectionMinH: 32, SectionDivider: 6, SectionHeadGap: 6, SectionHeadPad: 10, SectionHeadText: 11.5, SectionTabMark: 2, FoldButton: 18, FoldIcon: 14, SectionHeadMix: 0.03, SectionHeadHoverMix: 0.07}
 
 func pixels(v int) *int { return &v }
 
@@ -278,5 +279,54 @@ func TestTheSeatOfASectionIsItsBody(t *testing.T) {
 	}
 	if second.Y != 164 || second.H != 214 {
 		t.Fatalf("the seat of the fill section is %+v", second)
+	}
+}
+
+// bandColor is the color of a band with share of the text color over body.
+func bandColor(body color.RGBA, text ui.Color, share float32) color.RGBA {
+	mix := func(from, to uint8) uint8 { return uint8(float32(from)*(1-share) + float32(to)*share + 0.5) }
+	return color.RGBA{mix(body.R, text.R), mix(body.G, text.G), mix(body.B, text.B), 255}
+}
+
+func near(a, b color.RGBA) bool {
+	off := func(x, y uint8) bool { return x+1 < y || y+1 < x }
+	return !off(a.R, b.R) && !off(a.G, b.G) && !off(a.B, b.B)
+}
+
+// The head of a section and the tab row of a set are a band of the text color over the card, and a pointer over them strengthens it.
+func TestASectionHeadIsABandOverTheCard(t *testing.T) {
+	for name, layout := range map[string]string{"core.sidebar.section.header": "list", "core.sidebar.tabs": "tabs"} {
+		t.Run(layout, func(t *testing.T) {
+			var calls []call
+			var text ui.Color
+			frame := listFrame()
+			frame.Layout, frame.Tab = layout, "files.tree"
+			binder := recorder(t, &calls, sidebarCommands...)
+			tt := ui.NewTester(func(c *ui.Context) {
+				text = c.Theme().Text
+				ui.Box(c).Size(240, 400).Background(ui.RGB(0xff, 0xff, 0xff)).Children(func() {
+					workbench.DrawSidebar(c, binder, &workbench.SectionDrag{}, frame, sidebarMetrics, 240, 400, func(*ui.Context, workbench.SidebarSeat) {})
+				})
+			}, 240, 400)
+			item := "left"
+			if layout == "list" {
+				item = "left/files.tree"
+			}
+			box := element(t, tt, name, item).Bounds
+			scale := float32(tt.Image().Bounds().Dx()) / 240
+			x, y := int((box.X+box.W-4)*scale), int((box.Y+box.H/2)*scale)
+			body := color.RGBA{0xff, 0xff, 0xff, 255}
+			if got, want := tt.Image().RGBAAt(x, y), bandColor(body, text, sidebarMetrics.SectionHeadMix); !near(got, want) {
+				t.Fatalf("the band is %v, want %v", got, want)
+			}
+			if layout != "list" {
+				return
+			}
+			tt.Move(box.X+box.W-4, box.Y+box.H/2)
+			tt.Frame()
+			if got, want := tt.Image().RGBAAt(x, y), bandColor(body, text, sidebarMetrics.SectionHeadHoverMix); !near(got, want) {
+				t.Fatalf("the band under the pointer is %v, want %v", got, want)
+			}
+		})
 	}
 }
