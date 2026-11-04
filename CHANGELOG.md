@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F448: A layout of a card with a hidden section surface prepares once; the preparation measures that surface as its drawn commit does.
 - F435: Record the view benchmarks at load average 5 to 7; only the Tauri editor meets the interval limit and no view meets the convergence limit.
 - F447: Open the reply of the registry command over its limit and the failure that a failed restore passes to a later run.
 - F446-1: The drag report states the median interval of the shown frames.

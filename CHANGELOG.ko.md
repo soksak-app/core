@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F448: 숨은 section surface가 있는 card의 layout을 한 번만 준비합니다. 준비가 그 surface를 drawn commit과 같게 잽니다.
 - F435: load average 5~7의 view benchmark 결과를 기록합니다. 간격 기준은 Tauri editor만 만족하고, 수렴 기준을 만족하는 view는 없습니다.
 - F447: registry command의 제한 초과와, 복원 실패가 다음 실행으로 이어지는 실패를 항목으로 엽니다.
 - F446-1: drag report가 화면 frame 간격의 median을 밝힙니다.

@@ -185,13 +185,14 @@ function syncNativePaintClip(rects) {
  *
  * Works only by call. It does not watch position changes; the code that decides the position calls it. The commit holds the height of the first drawn row.
  */
+const planeFrame = (rect, host) => ({ x: rect.left - host.left, y: rect.top - host.top, w: rect.width, h: rect.height });
+
 export function publish() {
   const mine = ++seq;
   const host = plane.getBoundingClientRect();
   const snapshot = [];
   for (const slot of slots()) {
-    const r = slot.getBoundingClientRect();
-    const frame = { x: r.left - host.left, y: r.top - host.top, w: r.width, h: r.height };
+    const frame = planeFrame(slot.getBoundingClientRect(), host);
     snapshot.push({
       id: slot.dataset.nativeSurfaceId,
       layer: Number(slot.dataset.nativeLayer),
@@ -385,6 +386,8 @@ export function publishAhead(rects, seated, titlebar) {
       const height = box.height - body.height;
       // Offsets that do not fit the target card have no seat, so the surface is hidden like a card surface without a seat.
       const fits = card.w >= width && card.h >= height;
+      // A hidden section has no box and no offsets from the card, so its drawn commit measures the same frame in any layout.
+      const boxless = body.width === 0 && body.height === 0;
       seats.push({
         id,
         layer: Number(slot.dataset.nativeLayer),
@@ -394,7 +397,7 @@ export function publishAhead(rects, seated, titlebar) {
         bands: null,
         visible: fits && effectiveVisible(slot),
         surface: slotSurface(slot),
-        frame: fits ? {
+        frame: boxless ? planeFrame(body, plane.getBoundingClientRect()) : fits ? {
           x: card.x + body.left - box.left,
           y: card.y + body.top - box.top,
           w: card.w - width,
