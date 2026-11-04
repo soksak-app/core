@@ -391,6 +391,14 @@ func TestSurfaceIsNamedWhenItsNativeViewIsCreated(t *testing.T) {
 }
 
 // contract: surface.sync.closed-window-creates-nothing
+func TestClosedWindowCreatesNoModalView(t *testing.T) {
+	s := &Surfaces{closed: true, invoke: func(step func()) { step() }}
+	if _, err := newNativeWebview(s, nativeWebviewOptions{Name: "modal:settings"}); err == nil || err.Error() != "project window is closed" {
+		t.Fatalf("closed window creation: err %v", err)
+	}
+}
+
+// contract: surface.sync.closed-window-creates-nothing
 func TestClosedWindowCreatesNoSurface(t *testing.T) {
 	s := &Surfaces{named: map[uintptr]string{}, closed: true}
 	created := false

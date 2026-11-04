@@ -1639,7 +1639,11 @@ func (s *Surfaces) createRegisteredSurface(run func(func()), id string, create f
 func newNativeWebview(owner *Surfaces, options nativeWebviewOptions) (*nativeWebview, error) {
 	var view *nativeWebview
 	var err error
-	application.InvokeSync(func() {
+	owner.invoke(func() {
+		if owner.closed {
+			err = errWindowClosed
+			return
+		}
 		nativeSerial++
 		var handle unsafe.Pointer
 		handle, err = system.CreateWebview(owner.window.NativeWindow(), platform.WebviewOptions{

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F425: A modal request of a closed window fails with `project window is closed` in the Wails host, as it does in the Tauri host.
 - F298-8: Two consecutive `make e2e` runs of the 0.0.33 candidate on macOS (Darwin 25.6, arm64), Wails and Tauri, pass all 88 window check files and all 13 native end-to-end tests; the failures of the earlier runs are corrected by F403 to F424.
 - F424: `make e2e-check` rejects `t.skip`, and the three window checks that used it assert their precondition, because a skipped test ended as a pass of its file.
 - F423: An occlusion notice of a closing window no longer logs `window on screen: the underlying handle is not available` in the Tauri host: the native observation passes the state of the notified window.

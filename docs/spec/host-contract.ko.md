@@ -1089,6 +1089,6 @@ fn invalid_json_closes_connection() {
 | `tauriv2.surface-placement.read-error-reaches-reply` | Tauri surface-placement의 frame-read 오류를 placement reply에 그대로 전달한다. | tauriv2 only: Rust host의 placement snapshot helper에서 오류가 전달되는지 검증한다 |
 | `tauriv2.document-callback.retirement-keeps-active-callback-alive` | Tauri document를 폐기할 때 이미 실행 중인 invocation이 반환된 뒤 ended, changed, event, responsiveness callback을 해제한다. | tauriv2 only: native document FFI 경계를 넘는 Rust callback receiver ownership을 검증한다 |
 | `exposure.surface-closed.closed-window-records-nothing` | 창이 닫힌 뒤 닫히는 surface는 아무것도 제거하지 않고 오류도 쓰지 않는다. registration은 창의 record와 함께 끝났다. | tauriv2 only: Go host는 surface 값에 registration을 두고 닫기가 그 값에 직접 닿으므로 그곳에서는 record 조회가 실패할 수 없다 |
-| `surface.sync.closed-window-creates-nothing` | 창이 닫힐 때 진행 중인 배치 요청은 표면을 만들지 않고 `project window is closed`로 실패한다. 창을 닫을 때 모든 표면을 이미 닫았으므로 그 뒤에 만든 표면은 닫는 곳이 없기 때문이다. |
+| `surface.sync.closed-window-creates-nothing` | 창이 닫힐 때 진행 중인 배치나 modal 요청은 표면이나 modal view를 만들지 않고 `project window is closed`로 실패한다. 창을 닫을 때 모든 표면을 이미 닫았으므로 그 뒤에 만든 표면은 닫는 곳이 없기 때문이다. |
 | `exposure.reply.error-member-names-code-and-message` | document reply의 `error` member에 `code`나 `message`가 없으면 `error has no code` 또는 `error has no message`로 거부하며, 기다리는 요청에 code 0이나 빈 message를 전달하지 않는다. | both |
 | `sok.endpoint.error-member-names-code-and-message` | endpoint 응답의 error member에 `code`나 `message`가 없으면 `invalid frame from endpoint: error has no code` 또는 `... error has no message`로 거부하며, code 0이나 빈 message로 대신하지 않는다. | both |

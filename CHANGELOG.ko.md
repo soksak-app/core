@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F425: 닫힌 window의 modal 요청은 Tauri host와 같이 Wails host에서도 `project window is closed`로 실패한다.
 - F298-8: macOS(Darwin 25.6, arm64)에서 0.0.33 후보의 연속 두 `make e2e` 실행이 Wails와 Tauri 모두 window check file 88개와 native end-to-end test 13개를 통과한다. 이전 실행의 실패는 F403부터 F424까지가 고쳤다.
 - F424: skip된 test는 file의 pass로 끝나므로 `make e2e-check`가 `t.skip`을 거부하고, 이를 쓰던 세 window check는 precondition을 assert한다.
 - F423: 닫히는 window의 occlusion 알림이 Tauri host에서 `window on screen: the underlying handle is not available`을 기록하지 않는다. native 관찰이 알림 대상 window의 상태를 넘긴다.
