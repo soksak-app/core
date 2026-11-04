@@ -11,7 +11,7 @@ import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
-import { fresh } from "./fixture.mjs";
+import { fresh, restoreRegistry, useRegistry } from "./fixture.mjs";
 
 const REGISTRY = fileURLToPath(new URL("../target/registry/", import.meta.url));
 
@@ -38,10 +38,10 @@ for (const app of Object.values(APPS)) {
         await s.run("core.library.page", { page: "projects" });
         await s.run("core.library.return");
       }
-      await s.run("core.plugins.registry", { index: before.registry });
+      await restoreRegistry(s);
     });
 
-    await s.run("core.plugins.registry", { index: address });
+    await useRegistry(s, address);
     const listed = await s.until("core.plugins", (value) => value.registry === address && value.error === null && value.updates.length > 0,
       "the registry with a newer version did not list an update");
     assert.deepEqual(listed.updates, [{ id: "browser", installed, latest: newer }]);
@@ -66,7 +66,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(failed.plugins.find((entry) => entry.id === "browser").installed.version, installed);
 
     // The control leaves with the last update.
-    await s.run("core.plugins.registry", { index: before.registry });
+    await restoreRegistry(s);
     await s.until("core.plugins", (value) => value.updates.length === 0, "the original registry still lists an update");
     await assert.rejects(s.rect("core.chrome.updates"), /core\.chrome\.updates/);
   });

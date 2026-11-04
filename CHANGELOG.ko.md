@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F447-2: registry 복원 실패가 다음 run을 실패시키지 않습니다.
 - F447-1: plugin command가 자신이 기다리는 읽기와 download의 제한을 선언합니다.
 - F435: F450 이후 view를 기록합니다. 모든 view가 양쪽 host에서 간격 기준을 충족하고 editor는 전부 통과하며, 나머지 셋은 convergence에서 실패합니다.
 - F450: view의 status watch는 run의 값을 잡아 두고 끝날 때 최신 값을 전달합니다.
