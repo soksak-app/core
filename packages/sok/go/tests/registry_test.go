@@ -285,6 +285,22 @@ func TestRegistryBuildListsTheCoreReleasesAfterCheckingTheirHashes(t *testing.T)
 	}
 }
 
+// contract: cli.registry.lists-core-releases
+func TestRegistryBuildListsTheCoreKeyOfEachHost(t *testing.T) {
+	for _, host := range []string{"tauriv2", "wailsv3", "mygo"} {
+		dir, _, _ := coreTree(t)
+		replaceIn(t, filepath.Join(dir, "core.json"), `darwin-arm64-wailsv3`, "darwin-arm64-"+host, 1)
+		code, _, stderr := run("registry", "build", dir)
+		if code != 0 {
+			t.Fatalf("darwin-arm64-%s: code %d stderr %q", host, code, stderr)
+		}
+		data, err := os.ReadFile(filepath.Join(dir, "index.json"))
+		if err != nil || !strings.Contains(string(data), `"darwin-arm64-`+host+`": {`) {
+			t.Fatalf("the index lists no darwin-arm64-%s release (%v): %s", host, err, data)
+		}
+	}
+}
+
 // contract: cli.registry.rejects-malformed-core-releases
 func TestRegistryBuildRejectsMalformedCoreReleasesWithoutWritingTheIndex(t *testing.T) {
 	cases := []struct {

@@ -502,7 +502,7 @@ pub struct Revoked {
 }
 
 /// The hosts of an application release.
-pub const CORE_HOSTS: [&str; 2] = ["tauriv2", "wailsv3"];
+pub const CORE_HOSTS: [&str; 3] = ["mygo", "tauriv2", "wailsv3"];
 
 /// One core release of the registry: the zip of the application bundle for each platform and host.
 #[derive(Clone, Debug, Deserialize, Serialize)]

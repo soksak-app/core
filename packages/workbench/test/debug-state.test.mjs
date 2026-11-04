@@ -20,10 +20,14 @@ test("the state files of the file list are the state-<time>.json files of logs/ 
 test("a state file that breaks the structure is refused with its name and what was found", () => {
   assert.throws(() => parseState("logs/state-1.json", "{", false), /^Error: logs\/state-1\.json: not JSON: /);
   assert.throws(() => parseState("logs/state-1.json", "[]", false), /logs\/state-1\.json: not a state object: \[\]/);
-  assert.throws(() => parseState("logs/state-1.json", state({ host: "web" }), false), /logs\/state-1\.json: host "web" is not one of wailsv3, tauriv2/);
+  assert.throws(() => parseState("logs/state-1.json", state({ host: "web" }), false), /logs\/state-1\.json: host "web" is not one of wailsv3, tauriv2, mygo$/);
   assert.throws(() => parseState("logs/state-1.json", JSON.stringify({ time: "t", host: "wailsv3" }), false), /logs\/state-1\.json: versions must be an object, found undefined/);
   assert.throws(() => parseState("logs/state-1.json", state(), true), /logs\/state-1\.json: the text was cut at the read limit/);
   assert.equal(parseState("logs/state-1.json", state(), false).host, "wailsv3");
+});
+
+test("a state file of each host is read", () => {
+  for (const host of ["wailsv3", "tauriv2", "mygo"]) assert.equal(parseState("logs/state-1.json", state({ host }), false).host, host);
 });
 
 test("the tree lines hold the depth, the key and the value of each member", () => {

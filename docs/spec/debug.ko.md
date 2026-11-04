@@ -11,7 +11,7 @@
 열기는 상태를 기록한 뒤 파일을 나열한다.
 
 1. page는 registry가 제공하는 모든 status, 곧 core status와 모든 표면의 status 값을 이름과 표면별로 모아 host 호출 `debugRecord({workbench})`로 보낸다. 읽기에 실패한 status는 그 오류와 함께 기록한다.
-2. host는 `logs/state-<time>.json`에 `{time, host, versions, windows, workbench}`를 쓴다. `host`는 `wailsv3`나 `tauriv2`다. `versions`는 core version, macOS version, `plugins/installed.json`의 내용을 담는다. `windows`는 창마다 `windows.list` 항목, `host.window`, `host.sidecars`, `host.screens`를 담는다. `workbench`는 workbench가 보낸 값이다. `<time>`은 UTC 시각 `YYYYMMDDTHHMMSSZ`다.
+2. host는 `logs/state-<time>.json`에 `{time, host, versions, windows, workbench}`를 쓴다. `host`는 `wailsv3`, `tauriv2`, `mygo` 중 하나다. `versions`는 core version, macOS version, `plugins/installed.json`의 내용을 담는다. `windows`는 창마다 `windows.list` 항목, `host.window`, `host.sidecars`, `host.screens`를 담는다. `workbench`는 workbench가 보낸 값이다. `<time>`은 UTC 시각 `YYYYMMDDTHHMMSSZ`다.
    host는 파일을 쓴 뒤 가장 새 20개를 넘는 가장 오래된 `logs/state-<time>.json` 파일을 지우므로, 폴더는 한계 있는 수만 가진다.
 3. 진단 빌드에서 host는 각 창의 정지 캡처를 `logs/captures/`에 쓴다.
 4. host 호출은 `<config-dir>`에 대한 상태 파일의 상대 경로 `{path}`로 답한다.
@@ -51,7 +51,7 @@ host 호출 `debugFiles()`는 `<config-dir>/logs/` 아래 모든 파일을 `path
 
 목록은 `logs/`의 모든 파일을 보이며 프로세스의 원본 `.stderr`와 `.crash` 파일([logging](logging.ko.md#파일))도 포함한다. `core.debug.view`는 이 파일의 글을 다른 글 파일처럼 보인다. 상태 파일 `logs/state-<time>.json`에는 상태 단추도 있어 `core.debug.state {path}`를 실행하고, 이 명령은 파일을 `debugRead`로 읽어 트리로 보인다. 목록에 있는 상태 파일이 아닌 `path`는 그 경로를 밝히는 오류로 거부한다.
 
-- 상태 파일은 문자열 `time`, `wailsv3`나 `tauriv2`인 `host`, 객체 `versions`와 `workbench`, 배열 `windows`를 가진 JSON 객체여야 한다. 이를 어기거나, 글이 읽기 한계에서 잘렸거나, 글이 아닌 파일은 파일과 찾은 값을 밝히는 오류로 거부하고, 화면은 그 오류를 보인다.
+- 상태 파일은 문자열 `time`, `wailsv3`, `tauriv2`, `mygo` 중 하나인 `host`, 객체 `versions`와 `workbench`, 배열 `windows`를 가진 JSON 객체여야 한다. 이를 어기거나, 글이 읽기 한계에서 잘렸거나, 글이 아닌 파일은 파일과 찾은 값을 밝히는 오류로 거부하고, 화면은 그 오류를 보인다.
 - 트리는 파일 순서의 key마다 한 줄이고 깊이만큼 들여 쓴다: 값은 `key: <JSON 값>`, 원소가 `n`개인 객체나 배열은 `key {n}`이나 `key [n]`, 빈 객체나 배열은 `key: {}`나 `key: []`.
 - `core.debug.state.compare {with}`는 보이는 상태 파일을 목록의 다른 상태 파일과 비교하고, 값이 다른 경로마다 `path: <보이는 파일의 값> -> <다른 파일의 값>`을 트리 위에 나열한다. 경로는 맨 위부터의 key를 `.`로 이은 것이며, 배열 원소는 `[index]`, 식별자가 아닌 key는 `["key"]`로 쓴다. 한 파일에만 있는 경로는 다른 파일 쪽에 `(없음)`을 보인다. 차이는 보이는 파일의 경로를 파일 순서로, 그다음 다른 파일에만 있는 경로 순이다. 빈 `with`는 비교를 끝내고, 목록의 다른 상태 파일이 아닌 `with`는 그 경로를 밝히는 오류로 거부한다. 화면은 다른 상태 파일의 선택 상자를 두고 이 명령을 가리키며, `core.debug.list`를 실행하는 목록 단추를 둔다.
 

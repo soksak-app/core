@@ -35,7 +35,7 @@ fn invalid_json_closes_connection() {
 
 소유자 규칙: 선언된 테스트는 자기 소유자의 항목에서만 결과를 얻는다. Go 테스트의 소유자는 패키지 디렉터리이고, Rust 테스트의 소유자는 크레이트 디렉터리(파일 위쪽에서 가장 가까운 `Cargo.toml`이 있는 폴더)다. 결과는 실행, 소유자, 테스트 이름으로 묶으며, 호스트의 결과가 sok 선언에 쓰이거나 그 반대가 되지 않는다. Rust 선언은 이름이 같은 잎 이름을 가진 테스트 하나와 일치한다.
 
-범위 열은 `all`이거나, 이름을 든 호스트에만 있는 동작이면 `<host>[, <host>] only: <이유>`다. language host library가 framework port 없이 구현하는 사례는 library의 test가 선언하고, 그 library를 link하는 범위 안의 각 호스트에 센다. 동작이 `Framework`나 `Frontend`를 거치는 사례는 범위 안의 각 framework adapter의 test가 선언한다([host tree](hosts.ko.md#호스트-트리)). Language host library가 선언하는 사례의 id는 호스트 이름으로 시작하지 않는다. 호스트는 범위가 이름으로 든다. 검사는 두 호스트가 모두 구현한 유일한 플랫폼인 macOS에서 실행한다. Windows와 Linux 진입점은 `not implemented` 오류를 반환하며 사례가 없다. 검사의 단위 테스트(`scripts/test/check-host-contract.test.mjs`)는 각 실패를 주입하며 `pnpm test`에서 실행된다.
+범위 열은 `all`이거나, 이름을 든 호스트에만 있는 동작이면 `<host>[, <host>] only: <이유>`다. 검사의 호스트는 `wailsv3`와 `tauriv2`이고, 각 호스트는 모든 `all` 사례를 실행하며, 범위는 이 호스트만 이름으로 든다. 호스트는 자기 contract run과 함께 이 목록에 들어간다. 그때부터 모든 `all` 사례가 그 호스트에도 세어지기 때문이다. language host library가 framework port 없이 구현하는 사례는 library의 test가 선언하고, 그 library를 link하는 범위 안의 각 호스트에 센다. 동작이 `Framework`나 `Frontend`를 거치는 사례는 범위 안의 각 framework adapter의 test가 선언한다([host tree](hosts.ko.md#호스트-트리)). Language host library가 선언하는 사례의 id는 호스트 이름으로 시작하지 않는다. 호스트는 범위가 이름으로 든다. 검사는 두 호스트가 모두 구현한 유일한 플랫폼인 macOS에서 실행한다. Windows와 Linux 진입점은 `not implemented` 오류를 반환하며 사례가 없다. 검사의 단위 테스트(`scripts/test/check-host-contract.test.mjs`)는 각 실패를 주입하며 `pnpm test`에서 실행된다.
 
 ## 애플리케이션 메뉴
 
@@ -863,7 +863,7 @@ fn invalid_json_closes_connection() {
 | `debug.record.writes-the-state-file` | 기록은 주어진 상태와 UTC `time` `YYYYMMDDTHHMMSSZ`를 담은 `logs/state-<time>.json`을 쓰고 그 상대 경로로 답한다. | all |
 | `debug.record.names-the-value-of-the-workbench` | 상태 파일은 요청이 member `workbench`로 준 workbench의 값을 담고, member `page`는 없다. | all |
 | `debug.record.keeps-the-newest-20-state-files` | 상태 파일을 쓴 뒤 host는 시각으로 가장 새 20개를 넘는 `logs/state-<time>.json` 파일을 지우고 `logs/`의 다른 파일은 둔다. | all |
-| `cli.identity.build-identifier` | `dev` 플래그 build는 `app.soksak.<wails 또는 tauri>.dev`를 쓰고, 진단 build를 포함한 다른 build는 `app.soksak.<wails 또는 tauri>`를 쓴다. | all |
+| `cli.identity.build-identifier` | `dev` 플래그 build는 `app.soksak.<wails, mygo 또는 tauri>.dev`를 쓰고, 진단 build를 포함한 다른 build는 `app.soksak.<wails, mygo 또는 tauri>`를 쓴다. | all |
 | `cli.command.host-command-without-page` | `host.` command는 `owner`가 `host`인 `exposure.list`로 검사되므로, main page가 노출 목록에 답하지 않는 동안에도 `command.run`으로 실행된다. | all |
 | `cli.command.flags-from-schema` | 선언된 command는 창, surface, 그리고 선언된 schema로 flag에서 바꾼 매개변수와 함께 `command.run`으로 실행된다. 텍스트, 숫자, 정수, boolean, enum 값, nullable type의 `null`, JSON 객체와 배열, `--`로 시작하며 `=` 뒤에 준 값이며, `--params`는 객체 전체를 준다. | all |
 | `cli.command.rejects-undeclared-or-invalid-values` | 선언되지 않은 flag, schema와 맞지 않는 값, 값이 없는 flag, 값이 따라오는 boolean, 매개변수 flag와 함께 쓴 `--params`, 선언되지 않은 command는 `command.run`을 보내기 전에 종료 상태 2로 끝난다. | all |

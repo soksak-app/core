@@ -21,8 +21,8 @@ func TestCaptureNeedsADiagnosticBuild(t *testing.T) {
 }
 
 // contract: cli.identity.build-identifier
-func TestTheReleaseBuildUsesTheReleaseIdentifier(t *testing.T) {
-	if identifier := sok.Identity(); identifier != "app.soksak.wails" {
-		t.Fatalf("identity = %q", identifier)
+func TestIdentityOfTheReleaseBuildIsTheReleaseIdentifier(t *testing.T) {
+	if identifier := sok.Identity(); identifier != sok.ReleaseIdentifier {
+		t.Fatalf("identity = %q, want %q", identifier, sok.ReleaseIdentifier)
 	}
 }

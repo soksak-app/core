@@ -23,9 +23,9 @@ func TestCaptureRequestIsADiagnosticCommand(t *testing.T) {
 }
 
 // contract: cli.identity.build-identifier
-func TestADiagnosticBuildWithoutTheDevTagUsesTheReleaseIdentifier(t *testing.T) {
+func TestIdentityOfADiagnosticBuildWithoutTheDevTagIsTheReleaseIdentifier(t *testing.T) {
 	// A 0.0.x release is a diagnostic build and reads the configuration folder of the installed application.
-	if identifier := Identity(); identifier != "app.soksak.wails" {
-		t.Fatalf("identity = %q", identifier)
+	if identifier := Identity(); identifier != ReleaseIdentifier {
+		t.Fatalf("identity = %q, want %q", identifier, ReleaseIdentifier)
 	}
 }

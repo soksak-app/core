@@ -2,7 +2,7 @@
 // compared with another state file.
 
 /** The hosts that a state file names. */
-const HOSTS = ["wailsv3", "tauriv2"];
+const HOSTS = ["wailsv3", "tauriv2", "mygo"];
 
 /** The text of a value in an error message. */
 const found = (value) => JSON.stringify(value);

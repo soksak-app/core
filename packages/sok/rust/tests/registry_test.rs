@@ -479,6 +479,27 @@ fn registry_build_lists_the_core_releases_after_checking_their_hashes() {
     assert!(!index.contains("\"core\""), "{index}");
 }
 
+// contract: cli.registry.lists-core-releases
+#[test]
+fn registry_build_lists_the_core_key_of_each_host() {
+    for host in ["tauriv2", "wailsv3", "mygo"] {
+        let (registry, _) = core_tree();
+        let key = format!("darwin-arm64-{host}");
+        replace_in(
+            &registry.dir.path().join("core.json"),
+            "darwin-arm64-wailsv3",
+            &key,
+        );
+        let (code, _, stderr) = run(&["registry", "build", registry.dir.text()]);
+        assert_eq!(code, 0, "{key}: {stderr}");
+        let index = std::fs::read_to_string(registry.dir.path().join("index.json")).unwrap();
+        assert!(
+            index.contains(&format!("\"{key}\": {{")),
+            "the index lists no {key} release: {index}"
+        );
+    }
+}
+
 // contract: cli.registry.rejects-malformed-core-releases
 #[test]
 fn registry_build_rejects_malformed_core_releases_without_writing_the_index() {

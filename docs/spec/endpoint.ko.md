@@ -41,7 +41,7 @@ macOS 호스트가 이 명세를 구현하며 [기능 상태](../features.ko.md)
 | `transport` | `unix` 또는 `pipe` |
 | `address` | 소켓 경로 또는 파이프 이름 |
 | `pid` | 호스트 프로세스 id |
-| `application` | `wailsv3` 또는 `tauriv2` |
+| `application` | `wailsv3`, `tauriv2` 또는 `mygo` |
 | `version` | 애플리케이션 버전 |
 | `executable` | 심볼릭 링크를 해석한 호스트 실행 파일의 절대 경로 |
 | `started` | ISO 8601 시작 시각 |
