@@ -312,6 +312,112 @@ macOS에서 각 애플리케이션은 애플리케이션 번들에서 실행된�
 
 macOS 애플리케이션 bundle build target 네 개는 `Contents`를 교체하기 전에 대상 bundle을 확인한다. 해당 bundle에서 process가 실행 중이면 preparation은 bundle을 변경하기 전에 process PID와 정확한 bundle 경로를 오류로 보고한다. 의도한 검증 checkout에서 build하고 실행 중인 애플리케이션이 사용하는 bundle을 build 대상으로 지정하지 않는다.
 
+## Performance goals
+
+목표 G1부터 G8까지는 Wails host와 Tauri host 옆에서 mygo host가 드는 비용을 정한다. three-host benchmark가 그 scenario S0부터 S16까지에서 이 목표를 측정하고, `make b3-judge`가 그 각 session을 판정한다. other host는 mygo host의 revision에서 build한 Wails host와 Tauri host이고, baseline host는 benchmark가 정하는 baseline revision에서 build한 Wails host와 Tauri host이다. `docs/spec/performance-goals.json`이 목표의 수치 한계를 가진다; 이 section의 두 표는 그 file의 사본이며 `scripts/test/performance-goals.test.mjs`가 둘을 같게 유지하고, idle tab benchmark와 split load benchmark는 `IDLE_TAB_BOUND_KB`와 `SPLIT_LOAD_GROWTH_BOUND_KB`를 그 file에서 읽는다. [plugin process](plugin-processes.ko.md#통과값)나 [native surface](native-surfaces.ko.md#인수-기준)가 정하는 값은 file에 복사하지 않는다: 그 값을 가진 benchmark가 판정하고, judge는 그 benchmark의 verdict만 읽는다.
+
+judge는 다음 규칙을 적용한다:
+
+- session은 조건 표가 정하는 수만큼 각 application의 run을 가지며, run은 그 표의 조건에서만 시작한다; `make e2e-b3`는 조건이 맞지 않는 run을 실패시킨다.
+- median으로 판정하는 값은 그 run들의 median이다; 각 run에서 판정하는 값은 run 하나가 한계를 넘으면 실패한다. 값의 spread는 그 run들의 범위다.
+- 한계는 mygo host의 값에 적용한다.
+- 각 other host와 baseline host와 비교하는 값은 mygo host의 spread가 그 host 중 하나의 같은 값의 spread보다 완전히 한계 쪽에 있을 때 실패한다: 시간, CPU 시간, footprint(`s`, `ms`, `KB`)에서는 가장 낮은 run이 그 host의 가장 높은 run보다 위에 있을 때, frame rate(`frames/s`)에서는 가장 높은 run이 그 host의 가장 낮은 run보다 아래에 있을 때다. other host의 같은 값은 그 spread가 같은 뜻으로 그 baseline host의 같은 값의 spread보다 완전히 한계 쪽에 있을 때 regression이며, regression은 session을 실패시킨다.
+- mygo host의 다른 값과 비교하는 값은 그 spread가 그 값의 spread보다 완전히 위에 있을 때 실패한다.
+- 단위 `verdict`의 값은 그 행의 benchmark가 그 run에 기록한 verdict이다.
+
+| 조건 | 값 |
+| --- | --- |
+| session에서 각 application의 run 수 | 7 |
+| display mode의 refresh rate | 120 Hz |
+| 각 window의 backing scale | 2 |
+| run 시작 시 swap 사용량 | swap 전체의 0.5 미만 |
+| run 시작 시 `fseventsd`의 CPU 비율 | core 하나의 0.1 미만 |
+
+목표의 값과, 각 값을 측정하는 scenario와 target:
+
+| 값 | 목표 | scenario | target | 단위 | 판정 대상 | 한계 | 비교 대상 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `G1-S0-webkit-processes` | G1 | S0 | `make app-usage STATE=S0` | count | 각 run | 정확히 0 | — |
+| `G1-S0b-webcontent-processes` | G1 | S0b | `make app-usage STATE=S0b` | count | 각 run | 정확히 0 | — |
+| `G2-S0-frames` | G2 | S0 | `make app-usage STATE=S0 IDLE=1 INTERVAL=240` | count | 각 run | 정확히 0 | — |
+| `G2-S0-command-buffers` | G2 | S0 | `make app-usage STATE=S0 IDLE=1 INTERVAL=240` | count | 각 run | 정확히 0 | — |
+| `G2-S0-host-cpu` | G2 | S0 | `make app-usage STATE=S0 IDLE=1 INTERVAL=240` | s | median | 0.12 s 이하 | 각 other host와 baseline host |
+| `G2-S1-frames` | G2 | S1 | `make app-usage STATE=S1 IDLE=1 INTERVAL=240` | count | 각 run | 정확히 0 | — |
+| `G2-S1-command-buffers` | G2 | S1 | `make app-usage STATE=S1 IDLE=1 INTERVAL=240` | count | 각 run | 정확히 0 | — |
+| `G2-S1-host-cpu` | G2 | S1 | `make app-usage STATE=S1 IDLE=1 INTERVAL=240` | s | median | 0.12 s 이하 | 각 other host와 baseline host |
+| `G2-S9-frames` | G2 | S9 | `make app-usage STATE=S9 IDLE=1 INTERVAL=240` | count | 각 run | 정확히 0 | — |
+| `G2-S9-command-buffers` | G2 | S9 | `make app-usage STATE=S9 IDLE=1 INTERVAL=240` | count | 각 run | 정확히 0 | — |
+| `G2-S9-host-cpu` | G2 | S9 | `make app-usage STATE=S9 IDLE=1 INTERVAL=240` | s | median | 0.12 s 이하 | 각 other host와 baseline host |
+| `G2-S12-frames` | G2 | S12 | `make app-usage STATE=S12 IDLE=1 INTERVAL=240` | count | 각 run | 정확히 0 | — |
+| `G2-S12-command-buffers` | G2 | S12 | `make app-usage STATE=S12 IDLE=1 INTERVAL=240` | count | 각 run | 정확히 0 | — |
+| `G2-S12-host-cpu` | G2 | S12 | `make app-usage STATE=S12 IDLE=1 INTERVAL=240` | s | median | 0.12 s 이하 | 각 other host와 baseline host |
+| `G2-S0-footprint-before-pointer` | G2 | S0 | `make app-usage STATE=S0 STEP=pointer` | KB | median | — | — |
+| `G2-S0-footprint-after-pointer` | G2 | S0 | `make app-usage STATE=S0 STEP=pointer` | KB | median | — | `G2-S0-footprint-before-pointer` |
+| `G2-S1-footprint-before-pointer` | G2 | S1 | `make app-usage STATE=S1 STEP=pointer` | KB | median | — | — |
+| `G2-S1-footprint-after-pointer` | G2 | S1 | `make app-usage STATE=S1 STEP=pointer` | KB | median | — | `G2-S1-footprint-before-pointer` |
+| `G2-S12-error-lines` | G2 | S12 | `make app-usage STATE=S12` | count | 각 run | 정확히 1 | — |
+| `G3-S0-footprint` | G3 | S0 | `make app-usage STATE=S0` | KB | median | — | 각 other host와 baseline host |
+| `G3-S0b-footprint` | G3 | S0b | `make app-usage STATE=S0b` | KB | median | — | 각 other host와 baseline host |
+| `G3-S1-footprint` | G3 | S1 | `make app-usage STATE=S1` | KB | median | — | 각 other host와 baseline host |
+| `G3-S1-host-footprint` | G3 | S1 | `make app-usage STATE=S1` | KB | median | — | — |
+| `G3-S5-peak-before-drag` | G3 | S5 | `make e2e-benchmark-view-drag` | KB | median | — | 각 other host와 baseline host |
+| `G3-S5-peak-after-drag` | G3 | S5 | `make e2e-benchmark-view-drag` | KB | median | — | 각 other host와 baseline host |
+| `G3-S13-peak-before-drag` | G3 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1` | KB | median | — | 각 other host와 baseline host |
+| `G3-S13-peak-after-drag` | G3 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1` | KB | median | — | 각 other host와 baseline host |
+| `G3-S11-second-window-footprint` | G3 | S11 | `make app-usage STATE=S11` | KB | median | — | 각 other host와 baseline host |
+| `G3-S15-settings-window-footprint` | G3 | S15 | `make app-usage STATE=S15` | KB | median | — | 각 other host와 baseline host |
+| `G3-S14-footprint` | G3 | S14 | `make app-usage STATE=S14` | KB | median | — | 각 other host와 baseline host |
+| `G3-S3-changed-counts` | G3 | S3 | `make object-counts BUILD=release REPETITIONS=30` | count | 각 run | 정확히 0 | — |
+| `G3-S3-growing-figures` | G3 | S3 | `make object-counts BUILD=release REPETITIONS=30` | count | 각 run | 정확히 0 | — |
+| `G3-S4-host-footprint` | G3 | S4 | `make host-allocations MINUTES=60` | KB | median | — | `G3-S1-host-footprint` |
+| `G3-S10-host-growth` | G3 | S10 | `make e2e-benchmark-split-load` | KB | median | 131072 KB 미만 (`SPLIT_LOAD_GROWTH_BOUND_KB`) | — |
+| `G4-S5-view-drag` | G4 | S5 | `make e2e-benchmark-view-drag` | verdict | 각 run | passed | — |
+| `G4-S5-resize-catch-up` | G4 | S5 | `make e2e-benchmark-resize-catch-up` | verdict | 각 run | passed | — |
+| `G4-S7-browser-view` | G4 | S7 | `e2e/benchmark/browser-view.test.mjs` | verdict | 각 run | passed | — |
+| `G4-S7-editor-view` | G4 | S7 | `e2e/benchmark/editor-view.test.mjs` | verdict | 각 run | passed | — |
+| `G4-S7-hwp-view` | G4 | S7 | `e2e/benchmark/hwp-view.test.mjs` | verdict | 각 run | passed | — |
+| `G4-S7-terminal-view` | G4 | S7 | `e2e/benchmark/terminal-view.test.mjs` | verdict | 각 run | passed | — |
+| `G4-S7-term-view` | G4 | S7 | `e2e/benchmark/term-view.test.mjs` | verdict | 각 run | passed | — |
+| `G4-S7-section-view` | G4 | S7 | `e2e/benchmark/section-view.test.mjs` | verdict | 각 run | passed | — |
+| `G4-S7-editor-footprint` | G4 | S7 | `e2e/benchmark/editor-footprint.test.mjs` | verdict | 각 run | passed | — |
+| `G5-S2-rows-1-cpu-per-frame` | G5 | S2 | `make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=1` | ms | median | 1.6 ms 이하 | 각 other host와 baseline host |
+| `G5-S2-rows-20-cpu-per-frame` | G5 | S2 | `make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=20` | ms | median | 3.1 ms 이하 | 각 other host와 baseline host |
+| `G5-S2-rows-1-frame-rate` | G5 | S2 | `make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=1` | frames/s | median | 27 frames/s 이상 | — |
+| `G5-S2-rows-20-frame-rate` | G5 | S2 | `make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=20` | frames/s | median | 27 frames/s 이상 | — |
+| `G6-S6-idle-tab-cost` | G6 | S6 | `make e2e-benchmark-idle-tab` | KB | median | 51200 KB 이하 (`IDLE_TAB_BOUND_KB`) | — |
+| `G6-S6-document-part` | G6 | S6 | `make e2e-benchmark-idle-tab` | KB | median | — | 각 other host와 baseline host |
+| `G7-S8-terminal-median` | G7 | S8 | `e2e/input-latency.test.mjs` | ms | median | — | 각 other host와 baseline host |
+| `G7-S8-terminal-p90` | G7 | S8 | `e2e/input-latency.test.mjs` | ms | median | — | 각 other host와 baseline host |
+| `G7-S8-term-median` | G7 | S8 | `e2e/input-latency.test.mjs` | ms | median | — | 각 other host와 baseline host |
+| `G7-S8-term-p90` | G7 | S8 | `e2e/input-latency.test.mjs` | ms | median | — | 각 other host와 baseline host |
+| `G8-S5-drag-cpu` | G8 | S5 | `make e2e-benchmark-view-drag` | s | median | — | 각 other host와 baseline host |
+| `G8-S13-drag-cpu` | G8 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1` | s | median | — | 각 other host와 baseline host |
+| `G8-S1-pointer-cpu` | G8 | S1 | `make app-usage STATE=S1 STEP=pointer` | s | median | — | 각 other host와 baseline host |
+| `G8-S5-drag-frame-p90` | G8 | S5 | `make e2e-benchmark-view-drag` | ms | median | 8.33 ms 이하 | — |
+| `G8-S5-drag-step-p90` | G8 | S5 | `make e2e-benchmark-view-drag` | ms | median | 8.33 ms 이하 | — |
+| `G8-S13-drag-frame-p90` | G8 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1` | ms | median | 8.33 ms 이하 | — |
+| `G8-S13-drag-step-p90` | G8 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1` | ms | median | 8.33 ms 이하 | — |
+| `G8-S16-drag-frame-p90` | G8 | S16 | `make e2e-benchmark-view-drag GC_LOOP=1` | ms | median | 8.33 ms 이하 | — |
+| `G8-S16-drag-step-p90` | G8 | S16 | `make e2e-benchmark-view-drag GC_LOOP=1` | ms | median | 8.33 ms 이하 | — |
+| `G8-S5-drag-first-frame` | G8 | S5 | `make e2e-benchmark-view-drag` | ms | median | 8.33 ms 이하 | — |
+| `G8-S13-drag-first-frame` | G8 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1` | ms | median | 8.33 ms 이하 | — |
+| `G8-S5-maximise-frame-p90` | G8 | S5 | `make e2e-benchmark-resize-catch-up` | ms | median | 8.33 ms 이하 | — |
+| `G8-S5-maximise-step-p90` | G8 | S5 | `make e2e-benchmark-resize-catch-up` | ms | median | 8.33 ms 이하 | — |
+| `G8-S1-hit-test-p90` | G8 | S1 | `make app-usage STATE=S1 STEP=pointer` | ms | median | 8.33 ms 이하 | — |
+
+각 목표의 값:
+
+- **G1 Process set.** application 시작 이후 view를 보인 적이 없는 window는 WebContent, GPU, Networking process를 실행하지 않는다. WebKit process는 첫 view page나 document region이 보일 때에만 시작한다. application의 마지막 web view가 닫힌 뒤, application이 가졌던 view page나 document region의 모든 WebContent process는 [plugin process](plugin-processes.ko.md#통과값)의 pass value (ii)의 시간 안에 종료한다; S0b는 그런 각 process의 `diagnostics.process.exit` 뒤에 남은 process를 센다. 그 뒤에 WebKit이 유지하는 GPU나 Networking process는 G3가 S0b에서 세는 비용이다.
+- **G2 Idle.** 모든 `term`과 `terminal` tab의 `cursor.idleTimeout`이 그 plugin manifest가 선언한 기본값일 때, 마지막 입력, 그런 각 tab의 cursor idle timeout, 그리고 `host.window`의 `frames`가 바뀌지 않는 3초가 지난 뒤, S0, S1, S9, S12의 모든 window는 240초 동안 frame을 present하지 않고 Metal command buffer를 commit하지 않는다: frame 값과 command buffer 값은 그 구간 동안 scenario의 window 중 `host.window`의 `frames`와 `commandBuffers`가 가장 크게 바뀐 양이고, CPU 값은 그 구간 동안 host process의 CPU 시간이다. S0과 S1에서는 real-input tool의 `bringFront`로 앞에 가져온 window에서, 그 tool의 HID move로 window를 가로지르는 pointer move 뒤의 합산 footprint를 그 move 전의 합산 footprint와 비교한다. S12에서는 실패하는 layout draw가 그 fault의 `error:` 행 하나를 application log에 쓰고, 그 뒤에 S1의 값이 성립한다.
+- **G3 Memory.** footprint는 모든 process의 reading이 안정된 뒤(5초 간격의 연속한 두 reading의 차가 1,024 KB 미만), 마지막 frame에서 3초 이상 지난 뒤 읽는다. S0과 S0b에서 값은 mygo application의 host process와 모든 WebContent, GPU, Networking process의 합산 footprint이고, other host나 baseline host에서는 host process만의 footprint이다; 모든 host에서 같은 sidecar build를 실행하는 sidecar process는 그 합과 따로 출력한다. S1에서 값은 application의 합산 footprint에서 main page process를 뺀 것이다. S5와 S13에서는 그 scenario를 위해 시작한 application에서, capture 없이 실행하는 drag의 전과 후에 읽은, application의 process에 걸친 lifetime peak footprint(`footprint`의 `phys_footprint_peak`)의 합이 값이다; drag 뒤의 peak가 drag 전의 peak보다 높으면 그 차이가 drag의 비용이다. S11과 S15에서 값은 두 번째 window나 열린 settings window가 application에 더하는 footprint이다. S14에서 값은 key 뒤 10초, caret이 깜박이는 동안 settle 규칙과 마지막 frame 규칙 없이 읽은 합산 footprint이다. S3에서 changed count는 `runtime` member 밖의 `diagnostics.objects` count 중, 두 번째부터의 repetition 뒤에 첫 repetition 뒤의 값과 다른 count의 수이며, workbench element, native view element, 등록된 framework callback이 그 count에 들어간다. growing figure는 host footprint와, system에 돌려준 memory를 세는 `heapReleasedBytes`를 뺀 Go runtime figure 중 repetition 21부터 30까지의 가장 낮은 값이 repetition 11부터 20까지의 가장 높은 값보다 위인 figure의 수이다. S4에서는 입력 없는 60분 뒤의 host footprint를 S1의 host footprint와 비교한다. S10에서 값은 split load benchmark의 round 동안 host process의 resident set size가 늘어난 양이다.
+- **G4 Views and gestures.** [plugin process](plugin-processes.ko.md#통과값)의 모든 pass value((i), (ii), (iii), (iii-b), (v), (viii))는 mygo host의 모든 plugin view에 그대로 적용한다. mygo host에서 (iii)과 (iii-b)의 DOM mount baseline은 (iii)이 정한 대로 Wails host와 Tauri host의 baseline 중 낮은 것이다; `term` view와 각 section view는 기록된 DOM mount baseline이 없으며, 기록된 값이 없는 plugin에 대해 (iii)이 정한 한계만으로 판정한다. mygo host에서 (viii)(a)는 S5의 maximise와 restore의 기록된 모든 frame에서 S5 tab의 view에 적용한다. native surface의 [성능 목표](native-surfaces.ko.md#성능-목표)와 [인수 기준](native-surfaces.ko.md#인수-기준)의 maximise와 restore catch-up 한계는 그대로 적용한다. 각 G4 행의 benchmark가 이 값을 판정하고, 그 verdict가 그 행의 값이다.
+- **G5 Terminal.** 가려지지 않은 760×614 point window의 `term` tab에서, 33 ms마다 다시 쓰는 status line 하나와 20행에 대해, CPU 값은 application CPU 시간을 같은 구간에 region이 present한 frame으로 나눈 것이고, frame rate는 region이 present하는 초당 frame이다.
+- **G6 Browser.** blank page의 idle browser tab의 비용은 그 tab의 모든 document process의 안정된 footprint에 host process의 안정된 증가를 더한 것이고, 그 document part는 document process의 안정된 footprint이다.
+- **G7 Input.** trace off와 기본 gate의 두 configuration의 24 key에 대해, 값은 주입한 key에서 shell prompt까지의 시간의, run 하나의 key에 걸친 median과 90th percentile이며, `terminal` tab과 `term` tab 각각에 대해 잰다.
+- **G8 Gesture CPU and frame time.** CPU 값은 기본 policy에서 capture 없이 실행하는 S5와 S13의 drag 동안, 그리고 S1의 `STEP=pointer` pointer move 동안 application process의 합산 CPU 시간이다; view drag benchmark는 그 drag를 모든 host에서 `native: true`의 `diagnostics.drag`와 capture한 drag의 plan으로 전달한다. class `frame`을 `debug`로 저장하는 policy에서, frame 값은 frame 시작부터 presentation request까지의 시간에서 frame이 drawable을 기다린 시간을 뺀 것의 90th percentile이고, step 값은 forwarded call을 포함한 각 pointer move step의 90th percentile이며, S5, S13, S16의 drag와 capture 없는 S5의 maximise와 restore에서 잰다. first-frame 값은 frame 없는 3초 이상 뒤에 오는 S5와 S13 drag의 첫 frame이 시작부터 presentation request까지 걸린 시간이며 drawable 대기를 포함한다. hit-test 값은 S1의 pointer move 동안 `hitTest:` step과 그 뒤를 잇는 move의 step을 합친 것의 90th percentile이다. 각 90th percentile과 각 first-frame 시간은 run 하나의 frame과 step에 걸쳐 잡으며, 그 한계는 조건 표의 refresh rate에서 display period 하나이다.
+
+값은 맞추기 어렵다는 이유로 낮추지 않는다; 측정한 floor가 값을 넘으면 그 값은 증거를 적은 adversarial review로만 바뀐다.
+
 ## 구조 검사
 
 `scripts/check-hosts.mjs`는 `packages/host/wailsv3`와 `packages/host/tauriv2`, `apps/wailsv3`와 `apps/tauriv2`를 비교한다. `.go`와 `.rs` 파일은 확장자를 제외한 상대 경로로, 그 밖의 파일은 상대 경로로 비교한다. 한쪽에만 있는 파일은 허용 차이 표의 차이 ID와 함께 목록에 있을 때만 통과한다. 검사는 Git이 추적하거나 추적할 파일만 읽으므로 생성된 `src/frontend/` 파일은 비교하지 않는다.

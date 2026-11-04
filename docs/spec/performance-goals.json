@@ -1,0 +1,706 @@
+{
+  "schema": 1,
+  "runs": 7,
+  "conditions": {
+    "refreshRate": 120,
+    "backingScale": 2,
+    "swapUseBelow": 0.5,
+    "fseventsdCoreBelow": 0.1
+  },
+  "values": [
+    {
+      "id": "G1-S0-webkit-processes",
+      "goal": "G1",
+      "scenario": "S0",
+      "target": "make app-usage STATE=S0",
+      "unit": "count",
+      "over": "each",
+      "bound": {
+        "equals": 0
+      }
+    },
+    {
+      "id": "G1-S0b-webcontent-processes",
+      "goal": "G1",
+      "scenario": "S0b",
+      "target": "make app-usage STATE=S0b",
+      "unit": "count",
+      "over": "each",
+      "bound": {
+        "equals": 0
+      }
+    },
+    {
+      "id": "G2-S0-frames",
+      "goal": "G2",
+      "scenario": "S0",
+      "target": "make app-usage STATE=S0 IDLE=1 INTERVAL=240",
+      "unit": "count",
+      "over": "each",
+      "bound": {
+        "equals": 0
+      }
+    },
+    {
+      "id": "G2-S0-command-buffers",
+      "goal": "G2",
+      "scenario": "S0",
+      "target": "make app-usage STATE=S0 IDLE=1 INTERVAL=240",
+      "unit": "count",
+      "over": "each",
+      "bound": {
+        "equals": 0
+      }
+    },
+    {
+      "id": "G2-S0-host-cpu",
+      "goal": "G2",
+      "scenario": "S0",
+      "target": "make app-usage STATE=S0 IDLE=1 INTERVAL=240",
+      "unit": "s",
+      "over": "median",
+      "bound": {
+        "atMost": 0.12
+      },
+      "relative": true
+    },
+    {
+      "id": "G2-S1-frames",
+      "goal": "G2",
+      "scenario": "S1",
+      "target": "make app-usage STATE=S1 IDLE=1 INTERVAL=240",
+      "unit": "count",
+      "over": "each",
+      "bound": {
+        "equals": 0
+      }
+    },
+    {
+      "id": "G2-S1-command-buffers",
+      "goal": "G2",
+      "scenario": "S1",
+      "target": "make app-usage STATE=S1 IDLE=1 INTERVAL=240",
+      "unit": "count",
+      "over": "each",
+      "bound": {
+        "equals": 0
+      }
+    },
+    {
+      "id": "G2-S1-host-cpu",
+      "goal": "G2",
+      "scenario": "S1",
+      "target": "make app-usage STATE=S1 IDLE=1 INTERVAL=240",
+      "unit": "s",
+      "over": "median",
+      "bound": {
+        "atMost": 0.12
+      },
+      "relative": true
+    },
+    {
+      "id": "G2-S9-frames",
+      "goal": "G2",
+      "scenario": "S9",
+      "target": "make app-usage STATE=S9 IDLE=1 INTERVAL=240",
+      "unit": "count",
+      "over": "each",
+      "bound": {
+        "equals": 0
+      }
+    },
+    {
+      "id": "G2-S9-command-buffers",
+      "goal": "G2",
+      "scenario": "S9",
+      "target": "make app-usage STATE=S9 IDLE=1 INTERVAL=240",
+      "unit": "count",
+      "over": "each",
+      "bound": {
+        "equals": 0
+      }
+    },
+    {
+      "id": "G2-S9-host-cpu",
+      "goal": "G2",
+      "scenario": "S9",
+      "target": "make app-usage STATE=S9 IDLE=1 INTERVAL=240",
+      "unit": "s",
+      "over": "median",
+      "bound": {
+        "atMost": 0.12
+      },
+      "relative": true
+    },
+    {
+      "id": "G2-S12-frames",
+      "goal": "G2",
+      "scenario": "S12",
+      "target": "make app-usage STATE=S12 IDLE=1 INTERVAL=240",
+      "unit": "count",
+      "over": "each",
+      "bound": {
+        "equals": 0
+      }
+    },
+    {
+      "id": "G2-S12-command-buffers",
+      "goal": "G2",
+      "scenario": "S12",
+      "target": "make app-usage STATE=S12 IDLE=1 INTERVAL=240",
+      "unit": "count",
+      "over": "each",
+      "bound": {
+        "equals": 0
+      }
+    },
+    {
+      "id": "G2-S12-host-cpu",
+      "goal": "G2",
+      "scenario": "S12",
+      "target": "make app-usage STATE=S12 IDLE=1 INTERVAL=240",
+      "unit": "s",
+      "over": "median",
+      "bound": {
+        "atMost": 0.12
+      },
+      "relative": true
+    },
+    {
+      "id": "G2-S0-footprint-before-pointer",
+      "goal": "G2",
+      "scenario": "S0",
+      "target": "make app-usage STATE=S0 STEP=pointer",
+      "unit": "KB",
+      "over": "median"
+    },
+    {
+      "id": "G2-S0-footprint-after-pointer",
+      "goal": "G2",
+      "scenario": "S0",
+      "target": "make app-usage STATE=S0 STEP=pointer",
+      "unit": "KB",
+      "over": "median",
+      "against": "G2-S0-footprint-before-pointer"
+    },
+    {
+      "id": "G2-S1-footprint-before-pointer",
+      "goal": "G2",
+      "scenario": "S1",
+      "target": "make app-usage STATE=S1 STEP=pointer",
+      "unit": "KB",
+      "over": "median"
+    },
+    {
+      "id": "G2-S1-footprint-after-pointer",
+      "goal": "G2",
+      "scenario": "S1",
+      "target": "make app-usage STATE=S1 STEP=pointer",
+      "unit": "KB",
+      "over": "median",
+      "against": "G2-S1-footprint-before-pointer"
+    },
+    {
+      "id": "G2-S12-error-lines",
+      "goal": "G2",
+      "scenario": "S12",
+      "target": "make app-usage STATE=S12",
+      "unit": "count",
+      "over": "each",
+      "bound": {
+        "equals": 1
+      }
+    },
+    {
+      "id": "G3-S0-footprint",
+      "goal": "G3",
+      "scenario": "S0",
+      "target": "make app-usage STATE=S0",
+      "unit": "KB",
+      "over": "median",
+      "relative": true
+    },
+    {
+      "id": "G3-S0b-footprint",
+      "goal": "G3",
+      "scenario": "S0b",
+      "target": "make app-usage STATE=S0b",
+      "unit": "KB",
+      "over": "median",
+      "relative": true
+    },
+    {
+      "id": "G3-S1-footprint",
+      "goal": "G3",
+      "scenario": "S1",
+      "target": "make app-usage STATE=S1",
+      "unit": "KB",
+      "over": "median",
+      "relative": true
+    },
+    {
+      "id": "G3-S1-host-footprint",
+      "goal": "G3",
+      "scenario": "S1",
+      "target": "make app-usage STATE=S1",
+      "unit": "KB",
+      "over": "median"
+    },
+    {
+      "id": "G3-S5-peak-before-drag",
+      "goal": "G3",
+      "scenario": "S5",
+      "target": "make e2e-benchmark-view-drag",
+      "unit": "KB",
+      "over": "median",
+      "relative": true
+    },
+    {
+      "id": "G3-S5-peak-after-drag",
+      "goal": "G3",
+      "scenario": "S5",
+      "target": "make e2e-benchmark-view-drag",
+      "unit": "KB",
+      "over": "median",
+      "relative": true
+    },
+    {
+      "id": "G3-S13-peak-before-drag",
+      "goal": "G3",
+      "scenario": "S13",
+      "target": "make e2e-benchmark-view-drag ACCESSIBILITY=1",
+      "unit": "KB",
+      "over": "median",
+      "relative": true
+    },
+    {
+      "id": "G3-S13-peak-after-drag",
+      "goal": "G3",
+      "scenario": "S13",
+      "target": "make e2e-benchmark-view-drag ACCESSIBILITY=1",
+      "unit": "KB",
+      "over": "median",
+      "relative": true
+    },
+    {
+      "id": "G3-S11-second-window-footprint",
+      "goal": "G3",
+      "scenario": "S11",
+      "target": "make app-usage STATE=S11",
+      "unit": "KB",
+      "over": "median",
+      "relative": true
+    },
+    {
+      "id": "G3-S15-settings-window-footprint",
+      "goal": "G3",
+      "scenario": "S15",
+      "target": "make app-usage STATE=S15",
+      "unit": "KB",
+      "over": "median",
+      "relative": true
+    },
+    {
+      "id": "G3-S14-footprint",
+      "goal": "G3",
+      "scenario": "S14",
+      "target": "make app-usage STATE=S14",
+      "unit": "KB",
+      "over": "median",
+      "relative": true
+    },
+    {
+      "id": "G3-S3-changed-counts",
+      "goal": "G3",
+      "scenario": "S3",
+      "target": "make object-counts BUILD=release REPETITIONS=30",
+      "unit": "count",
+      "over": "each",
+      "bound": {
+        "equals": 0
+      }
+    },
+    {
+      "id": "G3-S3-growing-figures",
+      "goal": "G3",
+      "scenario": "S3",
+      "target": "make object-counts BUILD=release REPETITIONS=30",
+      "unit": "count",
+      "over": "each",
+      "bound": {
+        "equals": 0
+      }
+    },
+    {
+      "id": "G3-S4-host-footprint",
+      "goal": "G3",
+      "scenario": "S4",
+      "target": "make host-allocations MINUTES=60",
+      "unit": "KB",
+      "over": "median",
+      "against": "G3-S1-host-footprint"
+    },
+    {
+      "id": "G3-S10-host-growth",
+      "goal": "G3",
+      "scenario": "S10",
+      "target": "make e2e-benchmark-split-load",
+      "unit": "KB",
+      "over": "median",
+      "bound": {
+        "below": 131072
+      },
+      "constant": "SPLIT_LOAD_GROWTH_BOUND_KB"
+    },
+    {
+      "id": "G4-S5-view-drag",
+      "goal": "G4",
+      "scenario": "S5",
+      "target": "make e2e-benchmark-view-drag",
+      "unit": "verdict",
+      "over": "each",
+      "bound": {
+        "equals": "passed"
+      }
+    },
+    {
+      "id": "G4-S5-resize-catch-up",
+      "goal": "G4",
+      "scenario": "S5",
+      "target": "make e2e-benchmark-resize-catch-up",
+      "unit": "verdict",
+      "over": "each",
+      "bound": {
+        "equals": "passed"
+      }
+    },
+    {
+      "id": "G4-S7-browser-view",
+      "goal": "G4",
+      "scenario": "S7",
+      "target": "e2e/benchmark/browser-view.test.mjs",
+      "unit": "verdict",
+      "over": "each",
+      "bound": {
+        "equals": "passed"
+      }
+    },
+    {
+      "id": "G4-S7-editor-view",
+      "goal": "G4",
+      "scenario": "S7",
+      "target": "e2e/benchmark/editor-view.test.mjs",
+      "unit": "verdict",
+      "over": "each",
+      "bound": {
+        "equals": "passed"
+      }
+    },
+    {
+      "id": "G4-S7-hwp-view",
+      "goal": "G4",
+      "scenario": "S7",
+      "target": "e2e/benchmark/hwp-view.test.mjs",
+      "unit": "verdict",
+      "over": "each",
+      "bound": {
+        "equals": "passed"
+      }
+    },
+    {
+      "id": "G4-S7-terminal-view",
+      "goal": "G4",
+      "scenario": "S7",
+      "target": "e2e/benchmark/terminal-view.test.mjs",
+      "unit": "verdict",
+      "over": "each",
+      "bound": {
+        "equals": "passed"
+      }
+    },
+    {
+      "id": "G4-S7-term-view",
+      "goal": "G4",
+      "scenario": "S7",
+      "target": "e2e/benchmark/term-view.test.mjs",
+      "unit": "verdict",
+      "over": "each",
+      "bound": {
+        "equals": "passed"
+      }
+    },
+    {
+      "id": "G4-S7-section-view",
+      "goal": "G4",
+      "scenario": "S7",
+      "target": "e2e/benchmark/section-view.test.mjs",
+      "unit": "verdict",
+      "over": "each",
+      "bound": {
+        "equals": "passed"
+      }
+    },
+    {
+      "id": "G4-S7-editor-footprint",
+      "goal": "G4",
+      "scenario": "S7",
+      "target": "e2e/benchmark/editor-footprint.test.mjs",
+      "unit": "verdict",
+      "over": "each",
+      "bound": {
+        "equals": "passed"
+      }
+    },
+    {
+      "id": "G5-S2-rows-1-cpu-per-frame",
+      "goal": "G5",
+      "scenario": "S2",
+      "target": "make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=1",
+      "unit": "ms",
+      "over": "median",
+      "bound": {
+        "atMost": 1.6
+      },
+      "relative": true
+    },
+    {
+      "id": "G5-S2-rows-20-cpu-per-frame",
+      "goal": "G5",
+      "scenario": "S2",
+      "target": "make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=20",
+      "unit": "ms",
+      "over": "median",
+      "bound": {
+        "atMost": 3.1
+      },
+      "relative": true
+    },
+    {
+      "id": "G5-S2-rows-1-frame-rate",
+      "goal": "G5",
+      "scenario": "S2",
+      "target": "make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=1",
+      "unit": "frames/s",
+      "over": "median",
+      "bound": {
+        "atLeast": 27
+      }
+    },
+    {
+      "id": "G5-S2-rows-20-frame-rate",
+      "goal": "G5",
+      "scenario": "S2",
+      "target": "make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=20",
+      "unit": "frames/s",
+      "over": "median",
+      "bound": {
+        "atLeast": 27
+      }
+    },
+    {
+      "id": "G6-S6-idle-tab-cost",
+      "goal": "G6",
+      "scenario": "S6",
+      "target": "make e2e-benchmark-idle-tab",
+      "unit": "KB",
+      "over": "median",
+      "bound": {
+        "atMost": 51200
+      },
+      "constant": "IDLE_TAB_BOUND_KB"
+    },
+    {
+      "id": "G6-S6-document-part",
+      "goal": "G6",
+      "scenario": "S6",
+      "target": "make e2e-benchmark-idle-tab",
+      "unit": "KB",
+      "over": "median",
+      "relative": true
+    },
+    {
+      "id": "G7-S8-terminal-median",
+      "goal": "G7",
+      "scenario": "S8",
+      "target": "e2e/input-latency.test.mjs",
+      "unit": "ms",
+      "over": "median",
+      "relative": true
+    },
+    {
+      "id": "G7-S8-terminal-p90",
+      "goal": "G7",
+      "scenario": "S8",
+      "target": "e2e/input-latency.test.mjs",
+      "unit": "ms",
+      "over": "median",
+      "relative": true
+    },
+    {
+      "id": "G7-S8-term-median",
+      "goal": "G7",
+      "scenario": "S8",
+      "target": "e2e/input-latency.test.mjs",
+      "unit": "ms",
+      "over": "median",
+      "relative": true
+    },
+    {
+      "id": "G7-S8-term-p90",
+      "goal": "G7",
+      "scenario": "S8",
+      "target": "e2e/input-latency.test.mjs",
+      "unit": "ms",
+      "over": "median",
+      "relative": true
+    },
+    {
+      "id": "G8-S5-drag-cpu",
+      "goal": "G8",
+      "scenario": "S5",
+      "target": "make e2e-benchmark-view-drag",
+      "unit": "s",
+      "over": "median",
+      "relative": true
+    },
+    {
+      "id": "G8-S13-drag-cpu",
+      "goal": "G8",
+      "scenario": "S13",
+      "target": "make e2e-benchmark-view-drag ACCESSIBILITY=1",
+      "unit": "s",
+      "over": "median",
+      "relative": true
+    },
+    {
+      "id": "G8-S1-pointer-cpu",
+      "goal": "G8",
+      "scenario": "S1",
+      "target": "make app-usage STATE=S1 STEP=pointer",
+      "unit": "s",
+      "over": "median",
+      "relative": true
+    },
+    {
+      "id": "G8-S5-drag-frame-p90",
+      "goal": "G8",
+      "scenario": "S5",
+      "target": "make e2e-benchmark-view-drag",
+      "unit": "ms",
+      "over": "median",
+      "bound": {
+        "atMost": 8.33
+      }
+    },
+    {
+      "id": "G8-S5-drag-step-p90",
+      "goal": "G8",
+      "scenario": "S5",
+      "target": "make e2e-benchmark-view-drag",
+      "unit": "ms",
+      "over": "median",
+      "bound": {
+        "atMost": 8.33
+      }
+    },
+    {
+      "id": "G8-S13-drag-frame-p90",
+      "goal": "G8",
+      "scenario": "S13",
+      "target": "make e2e-benchmark-view-drag ACCESSIBILITY=1",
+      "unit": "ms",
+      "over": "median",
+      "bound": {
+        "atMost": 8.33
+      }
+    },
+    {
+      "id": "G8-S13-drag-step-p90",
+      "goal": "G8",
+      "scenario": "S13",
+      "target": "make e2e-benchmark-view-drag ACCESSIBILITY=1",
+      "unit": "ms",
+      "over": "median",
+      "bound": {
+        "atMost": 8.33
+      }
+    },
+    {
+      "id": "G8-S16-drag-frame-p90",
+      "goal": "G8",
+      "scenario": "S16",
+      "target": "make e2e-benchmark-view-drag GC_LOOP=1",
+      "unit": "ms",
+      "over": "median",
+      "bound": {
+        "atMost": 8.33
+      }
+    },
+    {
+      "id": "G8-S16-drag-step-p90",
+      "goal": "G8",
+      "scenario": "S16",
+      "target": "make e2e-benchmark-view-drag GC_LOOP=1",
+      "unit": "ms",
+      "over": "median",
+      "bound": {
+        "atMost": 8.33
+      }
+    },
+    {
+      "id": "G8-S5-drag-first-frame",
+      "goal": "G8",
+      "scenario": "S5",
+      "target": "make e2e-benchmark-view-drag",
+      "unit": "ms",
+      "over": "median",
+      "bound": {
+        "atMost": 8.33
+      }
+    },
+    {
+      "id": "G8-S13-drag-first-frame",
+      "goal": "G8",
+      "scenario": "S13",
+      "target": "make e2e-benchmark-view-drag ACCESSIBILITY=1",
+      "unit": "ms",
+      "over": "median",
+      "bound": {
+        "atMost": 8.33
+      }
+    },
+    {
+      "id": "G8-S5-maximise-frame-p90",
+      "goal": "G8",
+      "scenario": "S5",
+      "target": "make e2e-benchmark-resize-catch-up",
+      "unit": "ms",
+      "over": "median",
+      "bound": {
+        "atMost": 8.33
+      }
+    },
+    {
+      "id": "G8-S5-maximise-step-p90",
+      "goal": "G8",
+      "scenario": "S5",
+      "target": "make e2e-benchmark-resize-catch-up",
+      "unit": "ms",
+      "over": "median",
+      "bound": {
+        "atMost": 8.33
+      }
+    },
+    {
+      "id": "G8-S1-hit-test-p90",
+      "goal": "G8",
+      "scenario": "S1",
+      "target": "make app-usage STATE=S1 STEP=pointer",
+      "unit": "ms",
+      "over": "median",
+      "bound": {
+        "atMost": 8.33
+      }
+    }
+  ]
+}

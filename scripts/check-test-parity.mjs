@@ -64,6 +64,7 @@ lane("end-to-end run", "js-ts", ["scripts/e2e-run.mjs"], ["scripts/test/e2e-run.
 lane("log command audit", "js-ts", ["scripts/audit-log.mjs"], ["scripts/test/audit-log.test.mjs"]),
 lane("temporary folder audit", "js-ts", ["scripts/temp-audit.mjs"], ["scripts/test/temp-audit.test.mjs"]),
 lane("census", "declaration", ["scripts/census.json"], ["scripts/test/census.test.mjs"], { testLanguage: "js-ts" }),
+lane("performance goals", "declaration", ["docs/spec/performance-goals.json"], ["scripts/test/performance-goals.test.mjs"], { testLanguage: "js-ts" }),
 lane("package bin audit", "js-ts", ["scripts/check-package-bins.mjs"], ["scripts/test/package-bins.test.mjs"]),
 lane("failure table", "js-ts", ["scripts/check-failure-table.mjs"], ["scripts/test/check-failure-table.test.mjs"]),
 lane("language test adapters", "js-ts", ["scripts/language-test-adapters.mjs"], ["scripts/test/test-language-test-adapters.test.mjs", "scripts/test/fixtures/node-color-count.mjs"]),
@@ -363,6 +364,20 @@ const FEATURE_LINKS = [
       { file: "e2e/test/hwp-view-metrics-case.test.mjs", id: "HWP first-display limit is the DOM mount baseline of the host plus the first-display margin" },
     ],
     expected: "SOKSAK_APP=mygo selects the mygo application while the set without SOKSAK_APP stays wailsv3 and tauriv2, requiresBoth names wailsv3 and tauriv2, the three applications have three window positions in the visible area, and one function gives the DOM mount baseline of each host, the lower recorded value for mygo.",
+    levels: ["unit"],
+  },
+  {
+    id: "F502-2-7",
+    implementation: [
+      { file: "docs/spec/performance-goals.json", symbol: "\"constant\": \"IDLE_TAB_BOUND_KB\"" },
+      { file: "docs/spec/performance-goals.json", symbol: "\"constant\": \"SPLIT_LOAD_GROWTH_BOUND_KB\"" },
+    ],
+    tests: [
+      { file: "scripts/test/performance-goals.test.mjs", id: "docs/spec/performance-goals.json names each value once and compares a value only with a value that it holds" },
+      { file: "scripts/test/performance-goals.test.mjs", id: "the tables of the section Performance goals of docs/spec/hosts.md are copies of docs/spec/performance-goals.json" },
+      { file: "scripts/test/performance-goals.test.mjs", id: "the tables of the section Performance goals of docs/spec/hosts.ko.md are copies of docs/spec/performance-goals.json" },
+    ],
+    expected: "`docs/spec/performance-goals.json` holds the numeric bounds of the goals G1 to G8 and the run conditions of the three-host benchmark, and the two tables of the section Performance goals of `docs/spec/hosts.md` and of its translation are copies of it.",
     levels: ["unit"],
   },
   {
