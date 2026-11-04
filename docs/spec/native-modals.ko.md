@@ -4,6 +4,8 @@
 
 이 명세는 `data-native-modal`을 정의한다. 구현·검증·배포 상태는 [기능 상태](../features.ko.md)에 기록한다.
 
+mygo host는 modal web view를 만들지 않는다: 그 workbench의 modal은 native UI다([native view](hosts.ko.md#native-view)). 이 명세는 Wails host와 Tauri host에 적용된다.
+
 애플리케이션이 기존 설정과 선택 메뉴 DOM을 관리한다. `overlay.show()`는 표시된 요소를 메인 OS 창 내부의 다른 네이티브 웹뷰에 렌더링한다. 요소에는 `dialog` 또는 `menu`, 고유한 `id`, `aria-label`이 필요하다.
 
 | 모드 | 웹뷰 영역 | 배경 | 닫기 |

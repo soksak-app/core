@@ -12,6 +12,8 @@ This specification defines the ownership boundary between a surface page and nat
 
 Each window has one application DOM webview. Each surface has one logical `SurfaceHost` that clips, moves, hides, dims, and closes its native content. Plugin DOM of the `dom` composition is mounted inside that window's DOM plane, and a surface of the `view` composition runs its page in a web view of its own ([plugins](plugins.md#view-surfaces)). The single-DOM implementation is in progress; [features](../features.md) records validation separately.
 
+The mygo host has no application DOM webview. The container of the surface hosts of a window lies in the native view of the window, and the workbench shows each surface through a native view element ([native views](hosts.md#native-views)).
+
 ```text
 Window compositor
 ├─ NativePlane

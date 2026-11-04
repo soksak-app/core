@@ -1,4 +1,4 @@
-// The view drag benchmark of B3 (docs/plans/mygo-host.md, S5 and S16; e2e/benchmark/view-drag.test.mjs). It runs, in order, a drag
+// The view drag benchmark of B3 (docs/operations/examples.md, S5 and S16; e2e/benchmark/view-drag.test.mjs). It runs, in order, a drag
 // without capture under the default policy through `diagnostics.drag` with `native: true` and the plan of the captured drag, the
 // captured drag under the default policy and, after `frames` of host.window has not changed for 3 seconds (3 seconds on a window whose
 // `frames` is null), a drag without capture under the policy that stores the class `frame` at `debug` (FRAME_RECORDS of

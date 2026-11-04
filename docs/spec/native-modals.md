@@ -4,6 +4,8 @@
 
 This specification defines `data-native-modal`. [Features](../features.md) records implementation, validation, and release status.
 
+The mygo host creates no modal web view: a modal of its workbench is native UI ([native views](hosts.md#native-views)). This specification applies to the Wails and the Tauri host.
+
 The application owns the existing settings and picker DOM. `overlay.show()` renders a marked element in another native webview inside the main OS window. The element requires `dialog` or `menu`, a unique `id`, and an `aria-label`.
 
 | Mode | Webview area | Background | Dismissal |

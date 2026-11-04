@@ -1,5 +1,5 @@
 // Reports the CPU time that a shown terminal costs for each frame that its image region presents while its program rewrites ROWS rows at a
-// fixed rate (docs/operations/examples.md, G5 of docs/plans/mygo-host.md). It sets the trace state TRACE (scripts/measure-trace.mjs), opens a
+// fixed rate (docs/operations/examples.md, G5 of docs/spec/hosts.md). It sets the trace state TRACE (scripts/measure-trace.mjs), opens a
 // new project window of 760 by 614 points with one tab of the terminal plugin PLUGIN through declared commands, starts
 // scripts/fixtures/status-redraw.mjs in that tab with `<plugin>.input`, waits until `<plugin>.screen` shows the start line of the fixture,
 // and ends that watch, because a watch of the screen relays every screen too. It then measures the CPU time of each process of the

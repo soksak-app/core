@@ -1,4 +1,4 @@
-// The floor of the view drag benchmark (docs/plans/mygo-host.md, F502-2 and F502-25): with FLOOR=1 the benchmark drags a card whose
+// The floor of the view drag benchmark (docs/operations/examples.md, F502-2 and F502-25): with FLOOR=1 the benchmark drags a card whose
 // view page draws one colour and runs no plugin code, so the drag measures the host and the web view alone. The page is the plugin
 // floorpage of e2e/fixtures/view-drag/floor-page; its colour is the measurement colour of the terminal geometry
 // (TERMINAL_GEOMETRY_BACKGROUND of cases/terminal.mjs), so the geometry rule of the drag reads its view as it reads a terminal view. The

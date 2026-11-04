@@ -1,5 +1,5 @@
 // The U7 records of a gesture of a benchmark on a window whose host.window reports pageProcess null, the window of the mygo host
-// (docs/plans/mygo-host.md, U7 and G8). The view drag and the resize catch-up run the gesture under the trace state of the frame records
+// (docs/spec/hosts.md, U7 and G8). The view drag and the resize catch-up run the gesture under the trace state of the frame records
 // (FRAME_RECORDS of scripts/measure-trace.mjs), read the records that the host event log gained over it and judge them through the reader
 // of scripts/frame-records.mjs: a gesture with fewer frame records than the change of `frames` of host.window over it, or with a seq
 // range that a log.dropped event names, fails.

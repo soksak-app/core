@@ -1,4 +1,4 @@
-// The trace state of a measurement (docs/plans/mygo-host.md, B3). `make app-usage`, `make terminal-redraw-usage`,
+// The trace state of a measurement (docs/operations/examples.md, B3). `make app-usage`, `make terminal-redraw-usage`,
 // `make object-counts` and `make host-allocations` take TRACE=0|1 and set its state with core.settings.change before they
 // measure: TRACE=0 is the performance trace off under the default log policy, and TRACE=1 is the trace on with the class
 // `frame` at `debug`. TRACE has no default: each run records its trace state, so a target that kept the state it found would

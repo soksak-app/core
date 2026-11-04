@@ -12,6 +12,8 @@ Continuous layout 대기는 대신 현재 generation과 raster의 완전한 snap
 
 창마다 앱 DOM 웹뷰 하나를 둔다. 표면마다 논리적 `SurfaceHost` 하나가 네이티브 콘텐츠를 클리핑하고 이동하고 숨기고 어둡게 하고 닫는다. `dom` 합성의 플러그인 DOM은 해당 창의 DOM 평면 안에 마운트하고, `view` 합성의 표면은 자기 웹뷰에서 페이지를 실행한다([plugins](plugins.ko.md#view-표면)). 단일 DOM 구현은 진행 중이며 [기능 상태](../features.ko.md)가 검증을 별도로 기록한다.
 
+mygo host에는 application DOM webview가 없다. window의 surface host container는 window의 native view 안에 있고, workbench는 각 surface를 native view element로 보여 준다([native view](hosts.ko.md#native-view)).
+
 ```text
 창 합성기
 ├─ NativePlane

@@ -1,4 +1,4 @@
-// The run of an e2e benchmark for the benchmark B3 (docs/plans/mygo-host.md, B3). `make e2e-benchmark-*` takes B3_OUT=<file> and, for
+// The run of an e2e benchmark for the benchmark B3 (docs/operations/examples.md, B3). `make e2e-benchmark-*` takes B3_OUT=<file> and, for
 // the view drag and the resize catch-up, TRACE=<state> (0|frame-records and captured|frame-records), and passes them to the benchmark as
 // SOKSAK_B3_OUT and SOKSAK_B3_TRACE. The benchmark writes the keys that e2e/benchmark/measurements.mjs declares for it, and for the state
 // of SOKSAK_B3_TRACE, with the conditions of the measured interval, through the single writer and reader of the B3 output,
