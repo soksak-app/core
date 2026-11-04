@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -72,6 +73,8 @@ type Registry struct {
 	statuses map[string]Status
 	watches  map[string]*watch
 	elements Elements
+	// recorder receives every command request that ended.
+	recorder func(name string, elapsed time.Duration, failure error)
 }
 
 // NewRegistry returns an empty registry of the names of declared.
@@ -207,6 +210,38 @@ func (r *Registry) Reply(method string, params json.RawMessage, changed Changed,
 // Answer answers one request of the relay (docs/spec/exposure.md#relay) with its result, or with a Refusal in the words of the page.
 // A status that the request starts to watch sends its values to changed.
 func (r *Registry) Answer(method string, params json.RawMessage, changed Changed) (any, error) {
+	name, command := commandOf(method, params)
+	if !command || r.recorder == nil {
+		return r.dispatch(method, params, changed)
+	}
+	started := time.Now()
+	result, err := r.dispatch(method, params, changed)
+	r.recorder(name, time.Since(started), err)
+	return result, err
+}
+
+// Record installs what receives every request command.run that names a command, when it ended
+// (docs/spec/logging.md#automatic-entrances).
+func (r *Registry) Record(recorder func(name string, elapsed time.Duration, failure error)) {
+	r.recorder = recorder
+}
+
+// commandOf returns the name of the command of a request command.run.
+func commandOf(method string, params json.RawMessage) (string, bool) {
+	if method != "command.run" {
+		return "", false
+	}
+	var request struct {
+		Name *string `json:"name"`
+	}
+	if json.Unmarshal(params, &request) != nil || request.Name == nil {
+		return "", false
+	}
+	return *request.Name, true
+}
+
+// dispatch answers a request of the method.
+func (r *Registry) dispatch(method string, params json.RawMessage, changed Changed) (any, error) {
 	if method == "exposure.list" {
 		return r.list()
 	}

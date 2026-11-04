@@ -331,10 +331,13 @@ func TestABackgroundTabOpensItsSessionWhenTheProjectIsShownAndAMessageReachesIt(
 }
 
 func TestASidecarFailureWithoutAHandlerIsShown(t *testing.T) {
-	f := newTabShell(t, &storedHost{})
+	stored := &storedHost{}
+	f := newTabShell(t, stored)
 	f.shell.Event("sidecar-failure", []any{map[string]any{"sidecar": "files", "surface": "tab-aaaaaa", "reason": "exited"}})
-	if !slices.Contains(f.lines, "workbench: sidecar files failed for surface tab-aaaaaa: exited") {
-		t.Fatalf("lines %v", f.lines)
+	f.pending.until(t, func() bool { return len(stored.written("workbench.record.error")) == 1 })
+	record := stored.written("workbench.record.error")[0]["fields"].(map[string]any)
+	if record["where"] != "workbench" || record["text"] != "sidecar files failed for surface tab-aaaaaa: exited" {
+		t.Fatalf("the record is %v", record)
 	}
 }
 

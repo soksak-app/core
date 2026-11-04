@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/src/routine"
@@ -175,7 +176,9 @@ type Calls struct {
 	table map[string]HostCall
 	ctx   context.Context
 	post  func(task func())
-	mu    sync.Mutex
+	// observer receives every call that ended, in the step of its answer.
+	observer func(name string, argument any, elapsed time.Duration, failure error)
+	mu       sync.Mutex
 	// orders holds the calls that wait for the previous call of their order, and an order exists while a call of it runs.
 	orders map[string][]func()
 }
@@ -190,6 +193,11 @@ func NewHostCalls(h *host.Host, window host.Frontend, post func(task func())) *C
 	calls := NewCalls(hostCalls(h), post)
 	calls.ctx = host.WithFrontend(context.Background(), window)
 	return calls
+}
+
+// Observe installs the observer of the calls (docs/spec/logging.md#automatic-entrances), before the first call.
+func (c *Calls) Observe(observer func(name string, argument any, elapsed time.Duration, failure error)) {
+	c.observer = observer
 }
 
 // Call runs the handler name with argument and gives answer its result in a later step.
@@ -229,9 +237,16 @@ func (c *Calls) next(order string) {
 // start runs the handler on a goroutine of its own, posts its answer and calls finished.
 func (c *Calls) start(name string, argument any, answer func(value any, err error), finished func()) {
 	routine.Go("host-call", func() {
+		started := time.Now()
 		value, err := c.invoke(name, argument)
+		elapsed := time.Since(started)
 		finished()
-		c.post(func() { answer(value, err) })
+		c.post(func() {
+			if c.observer != nil {
+				c.observer(name, argument, elapsed, err)
+			}
+			answer(value, err)
+		})
 	})
 }
 

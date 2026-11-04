@@ -35,7 +35,7 @@ event는 한 줄의 JSON 객체 하나다.
 | `layer` | `native`, `host`, `workbench`, `page`, `plugin`, `sidecar`, `sok`. layer `workbench`는 workbench가 쓰는 event를, layer `page`는 view page가 plugin API의 view writer로 쓰는 record를 담는다([View record 전달](#view-record-전달)). |
 | `event` | catalog가 선언한 `<layer>.<subsystem>.<event>`. writer 자신의 event는 `log.<event>`(`log.open`, `log.dropped`)라 부르며 `layer`는 그것을 쓰는 프로세스의 층이다. |
 | `window`, `surface`, `session` | event가 어떤 대상에 관한 것이면 그 대상의 식별자. |
-| `start` | event를 쓴 workbench의 start로, Wails와 Tauri host에서는 main page의 page identity, 곧 문서가 시작할 때 한 번 뽑는 UUID(`crypto.randomUUID()`)다. 두 문서가 `performance.timeOrigin`의 같은 millisecond에 시작할 수 있으므로 time origin은 start를 식별하지 않는다. layer `workbench`의 모든 event가 가진다(`workbench.log.clock` 포함). workbench의 event를 start 시각을 적는 그 start의 `workbench.start`와 그 start의 다른 event에 잇는다. |
+| `start` | event를 쓴 workbench의 start로, Wails와 Tauri host에서는 main page의 page identity, 곧 문서가 시작할 때 한 번 뽑는 UUID(`crypto.randomUUID()`)이고, mygo host에서는 window의 workbench가 시작할 때 한 번 뽑는 UUID다. 두 문서가 `performance.timeOrigin`의 같은 millisecond에 시작할 수 있으므로 time origin은 start를 식별하지 않는다. layer `workbench`의 모든 event가 가진다(`workbench.log.clock` 포함). workbench의 event를 start 시각을 적는 그 start의 `workbench.start`와 그 start의 다른 event에 잇는다. |
 | `page` | event를 쓴 view page의 page identity로, view 문서가 시작할 때 한 번 뽑는 UUID다. layer `page`의 모든 event가 가진다(`page.log.clock` 포함). view page의 event를 시계의 origin을 적는 그 page의 `page.start`와 그 page의 다른 event에 잇는다. layer `plugin`의 event는 자신을 쓴 문서를 `start`와 `page` 중 정확히 하나로 밝히고, 다른 layer의 event는 둘 다 갖지 않으며, 감사와 writer는 이를 어긴 줄을 거부한다. |
 | `cids` | event가 속한 입력의 상관 식별자 목록. 없으면 생략한다. |
 | `fields` | catalog가 선언한 event의 값. |

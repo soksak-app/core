@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -29,7 +30,7 @@ type ShellOptions struct {
 	Invalidate func()
 	// Post runs a task as a later step of the main thread.
 	Post func(task func())
-	// Report writes a line of a shown error to the application log.
+	// Report writes a failure of the event writer to the application log.
 	Report func(line string)
 	// Elements are the elements of the window, which the element requests answer from.
 	Elements Elements
@@ -122,6 +123,7 @@ type Shell struct {
 	requests *Requests
 	errors   *ShownErrors
 	sidebars *Sidebars
+	events   *Events
 	grid     environmentGrid
 	focus    string
 
@@ -159,7 +161,11 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	}
 	s := &Shell{options: options, metrics: read, palette: palette, registry: NewRegistry(options.Declared), calls: options.Calls,
 		grid: environment.Workspace.Grid, focus: environment.Workspace.Focus, browsing: true, library: newLibraryState()}
-	s.errors = NewShownErrors(options.Report)
+	s.events = NewEvents(EventsOptions{Calls: s.calls, Post: options.Post, Report: options.Report, Now: time.Now,
+		After: func(delay time.Duration, task func()) { time.AfterFunc(delay, task) }})
+	s.calls.Observe(s.events.Call)
+	s.registry.Record(s.events.Command)
+	s.errors = NewShownErrors(s.events.Error)
 	s.binder = NewBinder(s.registry, func(_ string, err error) { s.fail(err) })
 	s.registry.Elements(options.Elements)
 	if s.plugins, err = readSurfaceUnits(options.Installed); err != nil {
@@ -167,7 +173,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	}
 	s.surfaces = newSurfaceState()
 	s.page = issueID("wbn-", func(string) bool { return false })
-	s.requests = NewRequests(s.registry, s.calls, options.Post, options.Report)
+	s.requests = NewRequests(s.registry, s.calls, options.Post, s.events.Error)
 	s.registry.Status("core.page.error", func() any {
 		if text, ok := s.errors.Text(workbenchErrorPlace); ok {
 			return &text
@@ -202,21 +208,23 @@ func (s *Shell) Start() {
 			s.fail(err)
 		}
 	})
-	s.calls.CallInOrder("workspace", "workspace", map[string]string{"kind": "snapshot"}, func(value any, err error) {
-		if err != nil {
-			s.fail(err)
-			return
-		}
-		if err := s.adopt(value); err != nil {
-			s.fail(err)
-			return
-		}
-		s.openTabs(func() {
-			s.calls.Call("windowReady", nil, func(_ any, err error) {
-				if err != nil {
-					s.fail(err)
-				}
-				s.options.Invalidate()
+	s.events.Begin(func() {
+		s.calls.CallInOrder("workspace", "workspace", map[string]string{"kind": "snapshot"}, func(value any, err error) {
+			if err != nil {
+				s.fail(err)
+				return
+			}
+			if err := s.adopt(value); err != nil {
+				s.fail(err)
+				return
+			}
+			s.openTabs(func() {
+				s.calls.Call("windowReady", nil, func(_ any, err error) {
+					if err != nil {
+						s.fail(err)
+					}
+					s.options.Invalidate()
+				})
 			})
 		})
 	})
