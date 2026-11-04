@@ -1572,11 +1572,12 @@ func (s *Surfaces) apply(win Frontend, req SyncRequest) ([]string, []Placement, 
 		if err != nil {
 			return nil, nil, err
 		}
+		// Newly created native surfaces start hidden; existing visible surfaces remain visible through preparation. A surface hides before
+		// its view, because a surface that hides notes what held the keyboard inside it and gives it back when it shows.
+		prepareSurfaceVisibility(item.visible, item.view.SetHidden)
 		if err := s.syncView(item.id, item.view.NativeView(), item.decl.Plugin, item.decl.Composition.Page, item.visible, start); err != nil {
 			return nil, nil, err
 		}
-		// Newly created native surfaces start hidden; existing visible surfaces remain visible through preparation.
-		prepareSurfaceVisibility(item.visible, item.view.SetHidden)
 		system.SetSurfaceAlphaHandle(item.view.NativeView(), alphaFor(item.decl.Dim))
 		// A window without a main page sets the frame of a surface in the frame that draws its card, when its native view element gives
 		// its placement (docs/spec/hosts.md#operation-groups).

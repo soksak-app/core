@@ -99,6 +99,14 @@ func StartAssets(start func(window uint) ([]byte, error), windowHeader string) M
 	}
 }
 
+// StartWorkbench starts the workbench of window as a main page starts: the host leaves the previous workbench of the window and sets
+// its title bar. A workbench without a page calls it for each build, in place of the request of the start document. It is no method of
+// Host, because each exported method of Host is a host call of a page.
+func StartWorkbench(h *Host, window Frontend) error {
+	_, err := h.startPage(window.ID())
+	return err
+}
+
 // startPage starts the main page of a window and builds the start document of that window. Before it answers, it leaves the window in the not ready state,
 // ends the requests sent to the previous page, and cleans up the surface documents, the image regions and the modals of the previous page.
 func (h *Host) startPage(window uint) ([]byte, error) {

@@ -59,11 +59,11 @@ func TestAnElementHoldsItsViewsUntilTheNextFrameAfterItLeft(t *testing.T) {
 	surfaces, fake := elements(t, &elementWindow{})
 	element := SurfaceElement{Surface: unsafe.Pointer(new(byte)), Key: unsafe.Pointer(new(byte))}
 	surfaces.setElement("a", element)
-	if got, ok := surfaces.Element("a"); !ok || got != element {
+	if got, ok := surfaces.element("a"); !ok || got != element {
 		t.Fatalf("the element is %v, %v", got, ok)
 	}
 	surfaces.setElement("a", SurfaceElement{})
-	if _, ok := surfaces.Element("a"); ok {
+	if _, ok := surfaces.element("a"); ok {
 		t.Fatal("a frame still reads the element that left")
 	}
 	if len(fake.held) != 2 {
@@ -99,7 +99,7 @@ func TestAWindowWithAMainPageHasNoElements(t *testing.T) {
 	surfaces, _ := elements(t, &elementWindow{})
 	surfaces.elements.drawn = false
 	surfaces.setElement("a", SurfaceElement{Surface: unsafe.Pointer(new(byte))})
-	if _, ok := surfaces.Element("a"); ok {
+	if _, ok := surfaces.element("a"); ok {
 		t.Fatal("a window with a main page has an element")
 	}
 }

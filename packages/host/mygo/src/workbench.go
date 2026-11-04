@@ -14,7 +14,8 @@ type Workbench interface {
 	// Build builds the workbench of window and returns the view that draws it. The window asks for the view on the main thread.
 	// Build runs when the window is created and again after Close when the workbench of the window starts again.
 	Build(window host.Frontend) func(c *ui.Context)
-	// Shown tells the workbench that the host holds window, so the host answers the calls of that window. It runs once for a window.
+	// Shown tells the workbench that the host holds window and started it, so the host answers the calls of that window. It runs once
+	// for each Build of a window that the host holds.
 	Shown(window host.Frontend)
 	// Close ends the workbench of window, when the window closes or before its workbench starts again.
 	Close(window host.Frontend)

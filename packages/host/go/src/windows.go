@@ -314,6 +314,10 @@ func (s *Surfaces) reloadSurfaceDocuments() ([]imageDetachTarget, error) {
 	var detachments []imageDetachTarget
 	for id, view := range s.views {
 		hideSurface(view.handle, true)
+		// An element retains the view page, which would keep its process past the page.
+		if s.elements.drawn {
+			s.publishElement(id, SurfaceElement{})
+		}
 		s.closeSurfaceDocuments(id)
 		detachments = append(detachments, s.reloadSurfaceImages(id, closeImage)...)
 		ids = append(ids, id)

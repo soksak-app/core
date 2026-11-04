@@ -41,6 +41,37 @@ type elementWorkbench struct {
 	shown   atomic.Pointer[[]string]
 }
 
+// Shown answers as the workbench of the application does: it reports that the workbench of the window is ready.
+func (w *elementWorkbench) Shown(window host.Frontend) {
+	w.record("shown %s", window.Name())
+	if err := w.host.Load().WindowReady(*w.context.Load()); err != nil {
+		w.record("ready failed: %v", err)
+	}
+}
+
+// Emit answers each request of the host with an empty result, as a workbench that has nothing to save.
+func (w *elementWorkbench) Emit(window host.Frontend, name string, data ...any) {
+	if name != "exposure-request" {
+		return
+	}
+	encoded, err := json.Marshal(data[0])
+	if err != nil {
+		panic(err)
+	}
+	var request struct {
+		ID uint64 `json:"id"`
+	}
+	if err := json.Unmarshal(encoded, &request); err != nil {
+		panic(err)
+	}
+	go func() {
+		reply, _ := json.Marshal(map[string]any{"id": request.ID, "result": nil})
+		if err := w.host.Load().ExposureReply(*w.context.Load(), reply); err != nil {
+			w.record("reply failed: %v", err)
+		}
+	}()
+}
+
 func (w *elementWorkbench) Build(window host.Frontend) func(c *ui.Context) {
 	ctx := host.WithFrontend(context.Background(), window)
 	w.context.Store(&ctx)
@@ -51,7 +82,7 @@ func (w *elementWorkbench) Build(window host.Frontend) func(c *ui.Context) {
 			return
 		}
 		for _, id := range *shown {
-			if element, ok := w.host.Load().SurfaceElement(ctx, id); ok {
+			if element, ok := host.ElementOf(w.host.Load(), window, id); ok {
 				ui.NativeView(c, uintptr(element.Surface), uintptr(element.Key)).Absolute().Left(float32(box.X)).Top(float32(box.Y)).Size(float32(box.W), float32(box.H))
 			}
 		}
@@ -113,6 +144,7 @@ func startViewSession() (*viewSession, error) {
 		return nil, err
 	}
 	workbench.host.Store(opened.Host())
+	framework.Serve(opened.Host())
 	if err := framework.ObserveLayout(); err != nil {
 		return nil, err
 	}
@@ -123,7 +155,9 @@ func startViewSession() (*viewSession, error) {
 	if len(windows) != 1 {
 		return nil, fmt.Errorf("the session opened %d windows", len(windows))
 	}
-	return &viewSession{host: opened.Host(), workbench: workbench, window: windows[0].(*adapter.Frontend), system: system}, nil
+	window := windows[0].(*adapter.Frontend)
+	window.Show()
+	return &viewSession{host: opened.Host(), workbench: workbench, window: window, system: system}, nil
 }
 
 // viewHost returns the shared session.
@@ -203,7 +237,7 @@ type viewRow struct {
 // row returns the row of the view page of the surface id.
 func (s *viewSession) row(t *testing.T, id string) viewRow {
 	t.Helper()
-	element, ok := s.workbench.host.Load().SurfaceElement(*s.workbench.context.Load(), id)
+	element, ok := host.ElementOf(s.host, s.window, id)
 	if !ok {
 		t.Fatalf("surface %s has no element", id)
 	}
@@ -260,7 +294,7 @@ func TestE2EAViewPageHoldsTheKeyboardAgainAfterItsSurfaceHidAndShowed(t *testing
 	session := viewHost(t)
 	t.Cleanup(func() { session.layout(t) })
 	session.layout(t, viewSurface("keyboard", true))
-	element, _ := session.host.SurfaceElement(*session.workbench.context.Load(), "keyboard")
+	element, _ := host.ElementOf(session.host, session.window, "keyboard")
 	session.window.Window().Focus()
 	mygo.RunOnMain(func() { session.system.FocusModal(unsafe.Pointer(element.Key), true) })
 	wait(t, "the keyboard in the view page", func() bool { return session.row(t, "keyboard").Focused })
@@ -272,4 +306,32 @@ func TestE2EAViewPageHoldsTheKeyboardAgainAfterItsSurfaceHidAndShowed(t *testing
 	if !session.row(t, "keyboard").Focused {
 		t.Fatal("the view page did not hold the keyboard again")
 	}
+}
+
+// count returns how often the workbench received the record.
+func (w *elementWorkbench) count(record string) int {
+	return len(slices.DeleteFunc(w.received(), func(received string) bool { return received != record }))
+}
+
+// The reload request of a ready workbench starts it again with a new start of the host, and the new workbench reports that it is ready.
+// The views of the previous workbench end with it, and their surfaces wait for the layout of the new one.
+func TestE2EAReloadRequestStartsTheWorkbenchAgain(t *testing.T) {
+	session := viewHost(t)
+	t.Cleanup(func() { session.layout(t) })
+	name := session.window.Name()
+	wait(t, "the first start of the workbench", func() bool { return session.workbench.count("shown "+name) > 0 })
+	builds, starts := session.workbench.count("build "+name), session.workbench.count("shown "+name)
+	session.layout(t, viewSurface("reloaded", true))
+	process := session.row(t, "reloaded").Process
+	session.window.Emit("page-reload")
+	wait(t, "the second start of the workbench", func() bool { return session.workbench.count("shown "+name) == starts+1 })
+	if got := session.workbench.count("build " + name); got != builds+1 {
+		t.Fatalf("%d builds after the reload, want %d", got, builds+1)
+	}
+	if got := session.workbench.count("close " + name); got == 0 {
+		t.Fatal("the previous workbench did not close")
+	}
+	wait(t, "the end of the view of the previous workbench", func() bool {
+		return process == 0 || errors.Is(syscall.Kill(int(process), 0), syscall.ESRCH)
+	})
 }
