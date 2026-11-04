@@ -7,7 +7,7 @@
 // {count, baseline, values, grows}, where grows is true when the count rises in every repetition after the second. A count that grows is a
 // defect for the owning check to judge. With --b3-out FILE, which needs at least 30 repetitions, it writes the B3 output of S3
 // (scripts/b3-out.mjs) with the measurements that B3_MEASUREMENTS declares, changedCounts and growingFigures of b3Measurements, and
-// the conditions of the window.
+// the conditions of the window, whose traceState is the diagnostics.performance that TRACE set (b3Output).
 // `make object-counts` runs it.
 //
 //   node scripts/measure-object-counts.mjs --sok PATH --config-dir DIR --trace 0|1 --plugin ID [--plugin ID]... [--repetitions N] [--b3-out FILE]
@@ -22,7 +22,7 @@ import { createInterface } from "node:readline";
 import { promisify } from "node:util";
 import { parseArgs } from "node:util";
 import { hostProcess, parseProcessTable } from "./measure-app-usage.mjs";
-import { applyTrace, parseTrace } from "./measure-trace.mjs";
+import { applyTrace, parseTrace, traceSettings } from "./measure-trace.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -291,6 +291,16 @@ export function b3Measurements(entries) {
   return { changedCounts, growingFigures };
 }
 
+/**
+ * The B3 output of a run of object-counts from the repetition entries of measure, the host.window reply (status) of the measured
+ * window (window), the trace state that TRACE set (trace) and the classes of the policy in force (policy): the measurements of
+ * b3Measurements and the conditions of b3Conditions, whose traceState is the diagnostics.performance of that trace state.
+ */
+export function b3Output({ entries, window, status, trace, policy }) {
+  const conditions = b3Conditions({ windows: [{ ...status, window }], performance: traceSettings(trace)["diagnostics.performance"], policy });
+  return { measurements: b3Measurements(entries), conditions };
+}
+
 /** The command line options. */
 export function parseOptions(args) {
   const { values } = parseArgs({
@@ -423,9 +433,8 @@ if (import.meta.main) {
       },
     });
     if (options.b3Out !== null) {
-      const conditions = b3Conditions({ window: await run(["status", "host.window", "--window", window]), trace: options.trace,
-        policy: readPolicy(configDir).classes });
-      writeB3Out(options.b3Out, { measurements: b3Measurements(entries), conditions });
+      writeB3Out(options.b3Out, b3Output({ entries, window, status: await run(["status", "host.window", "--window", window]),
+        trace: options.trace, policy: readPolicy(configDir).classes }));
     }
   } finally {
     client.close();
