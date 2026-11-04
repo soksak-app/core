@@ -1,0 +1,38 @@
+// The trace state of a measurement (docs/plans/mygo-host.md, B3). `make app-usage`, `make terminal-redraw-usage`,
+// `make object-counts` and `make host-allocations` take TRACE=0|1 and set its state with core.settings.change before they
+// measure: TRACE=0 is the performance trace off under the default log policy, and TRACE=1 is the trace on with the class
+// `frame` at `debug`. TRACE has no default: each run records its trace state, so a target that kept the state it found would
+// measure a state that it did not set.
+import { policyOfSetting, untilPolicy } from "@soksak/window-check/log-policy.mjs";
+
+/** Reads TRACE: the text 0 or 1. No value and any other text are an error that names it. */
+export function parseTrace(text) {
+  if (text === undefined || text === "") throw new Error("TRACE must be 0 or 1, not set");
+  if (text !== "0" && text !== "1") throw new Error(`TRACE must be 0 or 1, not ${JSON.stringify(text)}`);
+  return Number(text);
+}
+
+/**
+ * The settings of a trace state. The performance trace stores its events in the class `call` at the level `debug`
+ * (docs/spec/events.json), so the trace on also stores that class at `debug`, as the window checks do (prepareFixture of
+ * @soksak/window-check); the value `{}` of `diagnostics.log` is the default policy (docs/spec/settings.md).
+ */
+export function traceSettings(trace) {
+  if (trace === 0) return { "diagnostics.log": {}, "diagnostics.performance": false };
+  if (trace === 1) return { "diagnostics.log": { call: "debug", frame: "debug" }, "diagnostics.performance": true };
+  throw new Error(`TRACE must be 0 or 1, not ${JSON.stringify(trace)}`);
+}
+
+/**
+ * Sets the trace state in the common scope through `run(command, params)`, which runs a declared command of the application,
+ * and resolves when the policy file of the configuration folder holds the policy of the state; a policy that the file does
+ * not hold within `limit` ms rejects with the policy that it holds. The policy is set before the trace, so the trace that
+ * turns on stores its first events under the policy of the state.
+ */
+export async function applyTrace(run, trace, configDir, limit) {
+  const settings = traceSettings(trace);
+  for (const [key, value] of Object.entries(settings)) {
+    await run("core.settings.change", { key, value, scope: "common" });
+  }
+  await untilPolicy(configDir, policyOfSetting(settings["diagnostics.log"]), limit);
+}

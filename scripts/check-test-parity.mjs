@@ -102,6 +102,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("application usage measurement", "js-ts", ["scripts/measure-app-usage.mjs"], ["scripts/test/measure-app-usage.test.mjs"]),
   lane("terminal redraw measurement", "js-ts", ["scripts/measure-terminal-redraw.mjs", "scripts/fixtures/status-redraw.mjs"], ["scripts/test/measure-terminal-redraw.test.mjs"]),
   lane("host allocation measurement", "js-ts", ["scripts/measure-host-allocations.mjs"], ["scripts/test/measure-host-allocations.test.mjs"]),
+  lane("measurement trace state", "js-ts", ["scripts/measure-trace.mjs"], ["scripts/test/measure-trace.test.mjs"]),
   lane("application update check", "js-ts", ["scripts/check-app-update.mjs"], ["scripts/test/check-app-update.test.mjs"]),
   lane("Go repeat tests", "js-ts", ["scripts/go-tests.mjs"], ["scripts/test/go-repeat.test.mjs"]),
   lane("Node repeat tests", "js-ts", ["scripts/node-repeat.mjs"], ["scripts/test/node-repeat.test.mjs"]),
