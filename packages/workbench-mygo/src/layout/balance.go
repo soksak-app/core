@@ -144,12 +144,14 @@ func balanceRegions(s *slice, reg region, gap float64, drawn func(*Card, Axis) f
 	if !*endEdge {
 		content -= half
 	}
+	// float64 rounds each product before it is added, as JavaScript does; without it Go may fuse them (number.go).
 	free := content - float64(float64(count-1)*gap)
 	total := 0.0
 	for i := range s.sides {
 		if held[i].ok {
 			free -= held[i].v
 		} else {
+			// float64 rounds each product before it is added, as JavaScript does; without it Go may fuse them (number.go).
 			free -= float64(math.Max(0, shares[i]-1) * gap)
 			total += shares[i]
 		}
@@ -161,6 +163,7 @@ func balanceRegions(s *slice, reg region, gap float64, drawn func(*Card, Axis) f
 	cursor := *from
 	for i, side := range s.sides {
 		first, last := i == 0, i == count-1
+		// float64 rounds each product before it is added, as JavaScript does; without it Go may fuse them (number.go).
 		size := float64(shares[i]*unit) + float64(math.Max(0, shares[i]-1)*gap)
 		if held[i].ok {
 			size = held[i].v

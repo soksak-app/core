@@ -263,6 +263,7 @@ func divide(p *plane, axis Axis) ([]float64, float64) {
 						first = i
 					}
 				}
+				// float64 rounds each product before it is added, as JavaScript does; without it Go may fuse them (number.go).
 				if first >= 0 && fixed+float64(spanned*each) < need-1e-9 {
 					starved = first
 					break
@@ -322,6 +323,7 @@ func divide(p *plane, axis Axis) ([]float64, float64) {
 					size[i] = corridor[i] + left/float64(heldSlots)
 				}
 			} else {
+				// float64 rounds each product before it is added, as JavaScript does; without it Go may fuse them (number.go).
 				size[i] = corridor[i] + float64((a[i+1]-a[i])*each)
 			}
 		}
@@ -329,8 +331,10 @@ func divide(p *plane, axis Axis) ([]float64, float64) {
 	}
 	for i := range held {
 		if held[i].ok {
+			// float64 rounds each product before it is added, as JavaScript does; without it Go may fuse them (number.go).
 			size[i] = float64(held[i].v*scale) + corridor[i]
 		} else {
+			// float64 rounds each product before it is added, as JavaScript does; without it Go may fuse them (number.go).
 			size[i] = corridor[i] + float64((a[i+1]-a[i])*each)
 		}
 	}

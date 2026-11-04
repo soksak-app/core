@@ -189,6 +189,7 @@ func insetLoop(loop []Point, distance float64) []Point {
 	for i, p := range loop {
 		before := normal(loop[(i-1+n)%n], p)
 		after := normal(p, loop[(i+1)%n])
+		// float64 rounds each product before it is added, as JavaScript does; without it Go may fuse them (number.go).
 		out[i] = Point{X: p.X + float64((before.X+after.X)*distance), Y: p.Y + float64((before.Y+after.Y)*distance)}
 	}
 	return out
@@ -199,6 +200,7 @@ func dropCollinear(pts []Point) []Point {
 	for i, p := range pts {
 		a := pts[(i-1+len(pts))%len(pts)]
 		b := pts[(i+1)%len(pts)]
+		// float64 rounds each product before it is added, as JavaScript does; without it Go may fuse them (number.go).
 		if math.Abs(float64((p.X-a.X)*(b.Y-p.Y))-float64((p.Y-a.Y)*(b.X-p.X))) > 1e-6 {
 			out = append(out, p)
 		}
@@ -220,6 +222,7 @@ func roundedPath(loop []Point, radius float64) (string, int, int) {
 		outX, outY := b.X-p.X, b.Y-p.Y
 		lenIn := math.Hypot(inX, inY)
 		lenOut := math.Hypot(outX, outY)
+		// float64 rounds each product before it is added, as JavaScript does; without it Go may fuse them (number.go).
 		turn := float64(inX*outY) - float64(inY*outX)
 		r := math.Min(math.Min(radius, lenIn/2), lenOut/2)
 		if i == 0 {
@@ -227,6 +230,7 @@ func roundedPath(loop []Point, radius float64) (string, int, int) {
 		} else {
 			d.WriteString("L")
 		}
+		// float64 rounds each product before it is added, as JavaScript does; without it Go may fuse them (number.go).
 		d.WriteString(toFixed2(p.X-float64((inX/lenIn)*r)) + " " + toFixed2(p.Y-float64((inY/lenIn)*r)))
 		if r > 0.5 {
 			sweep := "0"
@@ -234,6 +238,7 @@ func roundedPath(loop []Point, radius float64) (string, int, int) {
 				sweep = "1"
 			}
 			d.WriteString("A" + toFixed2(r) + " " + toFixed2(r) + " 0 0 " + sweep + " " +
+				// float64 rounds each product before it is added, as JavaScript does; without it Go may fuse them (number.go).
 				toFixed2(p.X+float64((outX/lenOut)*r)) + " " + toFixed2(p.Y+float64((outY/lenOut)*r)))
 		} else {
 			sharp++
@@ -256,6 +261,7 @@ func ComputeOutline(rects []Rect, options OutlineOptions) Outline {
 	}
 	grown := make([]Rect, len(rects))
 	for i, r := range rects {
+		// float64 rounds each product before it is added, as JavaScript does; without it Go may fuse them (number.go).
 		grown[i] = Rect{X: r.X - pad, Y: r.Y - pad, W: r.W + float64(pad*2), H: r.H + float64(pad*2)}
 	}
 	inset := 0.0

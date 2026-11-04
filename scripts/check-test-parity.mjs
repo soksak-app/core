@@ -638,6 +638,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/workbench-declaration.test.mjs", id: "no stylesheet of the workbench holds a literal length, ratio or duration" },
       { file: "packages/workbench/test/workbench-declaration.test.mjs", id: "settings.js and text-size.js take the values of workbench.json instead of defining them" },
       { file: "packages/workbench/test/workbench-declaration.test.mjs", id: "the workbench sets the chrome metrics as custom properties of the document root" },
+      { file: "packages/workbench/test/space-rename.test.mjs", id: "a space of the active project takes its new title, and an unknown space id is an error that names it" },
       { file: "packages/workbench-mygo/tests/layout/cases_test.go", id: "TestGridCases" },
       { file: "packages/workbench-mygo/tests/layout/cases_test.go", id: "TestOutlineCases" },
       { file: "packages/workbench-mygo/tests/layout/cases_test.go", id: "TestStoredCases" },
