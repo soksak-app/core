@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F447-1: A plugin command declares the limit of the reads and downloads that it waits for.
 - F435: Record the views after F450; every view meets the interval limit on both hosts, the editor passes completely, and convergence fails on the other three.
 - F450: A status watch of a view holds the values of a run and delivers the newest at its end.
 - F449: A release during an open preparation presents that preparation as settled without a second synchronization.

@@ -2822,7 +2822,8 @@
         },
         "result": {
           "type": "null"
-        }
+        },
+        "timeout": 600000
       },
       {
         "name": "core.plugins.update",
@@ -2837,7 +2838,8 @@
         },
         "result": {
           "type": "null"
-        }
+        },
+        "timeout": 600000
       },
       {
         "name": "core.plugins.remove",
@@ -2852,7 +2854,8 @@
         },
         "result": {
           "type": "null"
-        }
+        },
+        "timeout": 600000
       },
       {
         "name": "core.plugins.enable",
@@ -2867,7 +2870,8 @@
         },
         "result": {
           "type": "null"
-        }
+        },
+        "timeout": 120000
       },
       {
         "name": "core.plugins.disable",
@@ -2882,7 +2886,8 @@
         },
         "result": {
           "type": "null"
-        }
+        },
+        "timeout": 120000
       },
       {
         "name": "core.plugins.apply",
@@ -2976,7 +2981,8 @@
         },
         "result": {
           "type": "null"
-        }
+        },
+        "timeout": 180000
       },
       {
         "name": "core.plugins.browse",
