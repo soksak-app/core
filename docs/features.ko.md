@@ -157,7 +157,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [ ] F502-9 — macOS에서 Go language host library의 시작은 framework adapter가 설치하는 두 main-thread function을 요구한다.
   - [ ] F502-10 — framework의 U3, U4, U8과 `Frontend` port의 presentation notice와 settled presentation.
   - [ ] F502-11 — framework의 U5와 U6.
-  - [ ] F502-12 — mygo host 시작: `Framework`와 `Frontend`의 모든 method를 갖춘 `apps/mygo`와 `packages/host/mygo`.
+  - [ ] F502-12 — mygo host 시작: `Framework`와 `Frontend`의 모든 method를 갖춘 `apps/mygo`와 `packages/host/mygo`, 그리고 mygo host의 Makefile target이며, 그중 `mygo-build`와 `mygo-build-release`는 `make e2e-b3`가 실행한다.
   - [ ] F502-13 — Wails와 Tauri host의 D7과 workbench status.
   - [ ] F502-13-1 — F502-13을 완료하는 revision의 core release.
   - [ ] F502-14 — Wails와 Tauri host의 workbench event.
