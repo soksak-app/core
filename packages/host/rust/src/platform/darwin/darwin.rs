@@ -508,12 +508,16 @@ impl Platform for Darwin {
         layout::start_page(window, ticket, height, ready);
         Ok(())
     }
+    fn main_presentation(&self, view: &PlatformWebview) -> Result<Handle, String> {
+        Ok(layout::main_presentation(view))
+    }
     fn after_settled(
         &self,
-        view: &PlatformWebview,
+        window: Handle,
+        present: Handle,
         done: Box<dyn Fn(Result<f64, String>)>,
     ) -> Result<(), String> {
-        layout::after_settled(view, done);
+        layout::after_settled(window, present, done);
         Ok(())
     }
     fn inject_settled_failure(&self) -> Result<(), String> {

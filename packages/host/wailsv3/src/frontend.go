@@ -85,21 +85,21 @@ func (f Frontend) OnClosing(hook func() (keep bool)) {
 }
 
 // AfterPresentation is the presentation notice of the main page.
-func (f Frontend) AfterPresentation(done func()) error {
+func (f Frontend) AfterPresentation(done func(err error)) error {
 	system, err := platform.Current()
 	if err != nil {
 		return err
 	}
-	return system.AfterPresentation(f.window.NativeWindow(), done)
+	return system.AfterPresentation(f.window.NativeWindow(), func() { done(nil) })
 }
 
-// AfterSettled is the settled presentation of the main page.
-func (f Frontend) AfterSettled(done func(displayed float64, err error)) error {
+// SettledPresentation is the settled presentation of the main page: the block of its main web view.
+func (f Frontend) SettledPresentation() (unsafe.Pointer, error) {
 	system, err := platform.Current()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return system.AfterSettled(f.window.NativeWindow(), done)
+	return system.MainPresentation(f.window.NativeWindow())
 }
 
 // StartWorkbench reloads the main page.

@@ -337,8 +337,13 @@ pub fn start_page_titlebar(
     missing("start title bar")
 }
 
+pub fn main_presentation(_view: &PlatformWebview) -> Result<Handle, String> {
+    missing("native presentation")
+}
+
 pub fn after_settled(
-    _view: &PlatformWebview,
+    _window: Handle,
+    _present: Handle,
     _done: Box<dyn Fn(Result<f64, String>)>,
 ) -> Result<(), String> {
     missing("native presentation")

@@ -440,7 +440,11 @@ func (implementation) StartPageTitlebar(unsafe.Pointer, uint64, float64, func(er
 	return unsupported("start title bar")
 }
 
-func (implementation) AfterSettled(unsafe.Pointer, func(float64, error)) error {
+func (implementation) MainPresentation(unsafe.Pointer) (unsafe.Pointer, error) {
+	return nil, unsupported("native presentation")
+}
+
+func (implementation) AfterSettled(unsafe.Pointer, unsafe.Pointer, func(float64, error)) error {
 	return unsupported("native presentation")
 }
 

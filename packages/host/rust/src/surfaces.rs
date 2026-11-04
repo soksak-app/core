@@ -1772,23 +1772,56 @@ fn surface_handle_placement(
     })
 }
 
+/// Asks the presentation notice of window in a step of the main thread. ready receives the end of the notice.
+fn ask_presentation_notice(
+    window: &Window,
+    ticket: u64,
+    ready: mpsc::Sender<Result<(), String>>,
+) -> Result<(), String> {
+    let dispatch = surface_dispatch(window, Some(ticket), "present", "present-dom-register-ui");
+    let target = window.clone();
+    window
+        .post(move || {
+            surface_dispatch_result(dispatch, || {
+                let failed = ready.clone();
+                let callback_dispatch =
+                    surface_dispatch(&target, Some(ticket), "present", "present-dom-callback");
+                let outcome = target.after_presentation(move |presented| {
+                    let sent = surface_dispatch_result(callback_dispatch.clone(), || {
+                        ready.send(presented)
+                    });
+                    match sent {
+                        Ok(()) => {}
+                        // A failure after the request ended was not reported by that request, so it is left as an
+                        // error line.
+                        Err(mpsc::SendError(Err(error))) => log_error("DOM presentation", error),
+                        Err(mpsc::SendError(Ok(()))) => crate::application_log::log_info(
+                            "surface",
+                            "surface readiness arrived after its request ended",
+                        ),
+                    }
+                });
+                if let Err(error) = outcome {
+                    // A failure after the request ended was not reported by that request, so it is left as an error line.
+                    if let Err(mpsc::SendError(Err(error))) = failed.send(Err(error.to_string())) {
+                        log_error("DOM presentation", error);
+                    }
+                }
+            })
+        })
+        .map_err(|error| error.to_string())
+}
+
+/// Waits for the end of the presentation notice that [`ask_presentation_notice`] asked for.
+fn await_presentation_notice(ready: &mpsc::Receiver<Result<(), String>>) -> Result<(), String> {
+    ready
+        .recv_timeout(exposure::TIMEOUT)
+        .map_err(|error| format!("application documents did not present: {error}"))?
+}
+
 /// Checks the presentation mark of the preparation that the DOM drew. It does not block later preparations or the
 /// AppKit event loop.
 pub async fn present(window: Window, request: PresentRequest) -> Result<Vec<Placement>, String> {
-    let root_window = window.clone();
-    let root_dispatch = surface_dispatch(
-        &window,
-        Some(request.ticket),
-        "present",
-        "present-root-view-ui",
-    );
-    exposure::on_main(&window, move || {
-        surface_dispatch_result(root_dispatch, || {
-            crate::windows::root_view(&root_window)
-                .map(drop)
-                .ok_or_else(|| "the main webview is gone".into())
-        })
-    })?;
     let ticket = request.ticket;
     let finished = window.clone();
     let context = window_data(&window)?;
@@ -1807,63 +1840,8 @@ pub async fn present(window: Window, request: PresentRequest) -> Result<Vec<Plac
     let ready = blocking
         .spawn_blocking(move || -> Result<Vec<(String, u64)>, String> {
             complete_layout_presentation(
-                || {
-                    let dom_window = presentation_work_window.clone();
-                    let dom_dispatch = surface_dispatch(
-                        &dom_window,
-                        Some(ticket),
-                        "present",
-                        "present-dom-register-ui",
-                    );
-                    let callback_window = dom_window.clone();
-                    dom_window
-                        .post(move || {
-                            surface_dispatch_result(dom_dispatch, || {
-                                let ready = dom_tx.clone();
-                                let callback_dispatch = surface_dispatch(
-                                    &callback_window,
-                                    Some(ticket),
-                                    "present",
-                                    "present-dom-callback",
-                                );
-                                let outcome = callback_window.after_presentation(move |presented| {
-                                    let sent = surface_dispatch_result(
-                                        callback_dispatch.clone(),
-                                        || ready.send(presented),
-                                    );
-                                    match sent {
-                                        Ok(()) => {}
-                                        // A failure after the request ended was not reported by that request, so it is
-                                        // left as an error line.
-                                        Err(mpsc::SendError(Err(error))) => {
-                                            log_error("DOM presentation", error)
-                                        }
-                                        Err(mpsc::SendError(Ok(()))) => {
-                                            crate::application_log::log_info(
-                                                "surface",
-                                                "surface readiness arrived after its request ended",
-                                            )
-                                        }
-                                    }
-                                });
-                                if let Err(error) = outcome {
-                                    // A failure after the request ended was not reported by that request, so it is left as an error line.
-                                    if let Err(mpsc::SendError(Err(error))) =
-                                        dom_tx.send(Err(error.to_string()))
-                                    {
-                                        log_error("DOM presentation", error);
-                                    }
-                                }
-                            })
-                        })
-                        .map_err(|error| error.to_string())
-                },
-                || {
-                    dom_rx.recv_timeout(exposure::TIMEOUT).map_err(|error| {
-                        format!("application documents did not present: {error}")
-                    })??;
-                    Ok(())
-                },
+                || ask_presentation_notice(&presentation_work_window, ticket, dom_tx),
+                || await_presentation_notice(&dom_rx),
                 || {
                     crate::composition::refresh_image_rasters(&raster_window)?;
                     images

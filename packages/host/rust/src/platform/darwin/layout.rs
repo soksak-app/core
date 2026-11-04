@@ -125,11 +125,21 @@ pub fn after_presentation(view: &PlatformWebview, done: Box<dyn Fn()>) {
     unsafe { surfaceLayoutAfterPresentation(view.inner().cast(), &done) }
 }
 
-/// When the window has no open surface placement transaction, checks the render completion of the main document and the
-/// visible app document, and then calls done with the presentation time (ms) of that screen.
-pub fn after_settled(view: &PlatformWebview, done: Box<dyn Fn(Result<f64, String>)>) {
+/// Makes the block of the main web view. The block crosses main-thread steps in the hands of the caller, so it is a copy
+/// that `after_settled` releases.
+pub fn main_presentation(view: &PlatformWebview) -> Handle {
     unsafe extern "C" {
         fn surfaceLayoutMainPresentation(view: *mut c_void) -> *mut c_void;
+        fn _Block_copy(block: *const c_void) -> *mut c_void;
+    }
+    unsafe { _Block_copy(surfaceLayoutMainPresentation(view.inner().cast())) as Handle }
+}
+
+/// When the window has no open surface placement transaction, checks the render completion of the block and the visible
+/// app document, and then calls done with the presentation time (ms) of that screen.
+pub fn after_settled(window: Handle, present: Handle, done: Box<dyn Fn(Result<f64, String>)>) {
+    unsafe extern "C" {
+        fn _Block_release(block: *const c_void);
         fn surfaceLayoutAfterSettled(
             window: *mut c_void,
             present: *mut c_void,
@@ -147,8 +157,8 @@ pub fn after_settled(view: &PlatformWebview, done: Box<dyn Fn(Result<f64, String
         }
     });
     unsafe {
-        let present = surfaceLayoutMainPresentation(view.inner().cast());
-        surfaceLayoutAfterSettled(view.ns_window().cast(), present, &done)
+        surfaceLayoutAfterSettled(window as *mut c_void, present as *mut c_void, &done);
+        _Block_release(present as *const c_void);
     }
 }
 

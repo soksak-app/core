@@ -132,6 +132,43 @@ test("main-thread audit rejects a preamble function that Go calls and that uses 
   ]);
 });
 
+test("main-thread audit counts a call of a block as a call of a native function", { timeout: 30000 }, () => {
+  const files = {
+    ...base,
+    // A main-thread function that runs its block directly before an installation does not count for its callers.
+    [`${LAYER}/main_thread.m`]: [
+      "#include \"main_thread.h\"",
+      "void hostRunOnWorker(void (^task)(void)) { task(); }",
+      "void hostRunOnMain(void (^call)(void)) { call(); }",
+    ].join("\n"),
+    [`${LAYER}/layout.go`]: goFile([
+      "#include \"window_facts.h\"",
+      "#include \"main_thread.h\"",
+      "typedef void (^finished)(const char *error);",
+      "static void finishOutside(void *block) { ((finished)block)(NULL); }",
+      "static void finishNamed(finished block) { block(NULL); }",
+      "static void finishPlain(void (^block)(void)) { block(); }",
+      "static void finishOnMain(finished block) { hostRunOnMain(^{ block(NULL); }); }",
+      "static void finishOnWorker(finished block) { hostRunOnWorker(^{ block(NULL); }); }",
+      "static void finishPointer(void (*function)(void)) { function(); }",
+    ].join("\n"), [
+      "func calls(block unsafe.Pointer, function *[0]byte) {",
+      "\tC.finishOutside(block)",
+      "\tC.finishNamed(C.finished(block))",
+      "\tC.finishPlain(block)",
+      "\tC.finishOnMain(C.finished(block))",
+      "\tC.finishPointer(function)",
+      "}",
+    ].join("\n")),
+  };
+  assert.deepEqual(auditMainThreadCalls(files), [
+    `${LAYER}/layout.go:13: a block is called on the worker inside hostRunOnWorker or ON_WORKER; run it through hostRunOnMain or ON_MAIN`,
+    `${LAYER}/layout.go:19: Go calls finishOutside, which calls a block (line 9) outside hostRunOnMain or ON_MAIN`,
+    `${LAYER}/layout.go:20: Go calls finishNamed, which calls a block (line 10) outside hostRunOnMain or ON_MAIN`,
+    `${LAYER}/layout.go:21: Go calls finishPlain, which calls a block (line 11) outside hostRunOnMain or ON_MAIN`,
+  ]);
+});
+
 test("main-thread audit names the thread-safe native functions with a reason", { timeout: 30000 }, async () => {
   const { MAIN_THREAD_FREE } = await import("../check-hosts.mjs");
   for (const [name, reason] of Object.entries(MAIN_THREAD_FREE)) {

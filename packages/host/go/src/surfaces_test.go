@@ -1466,3 +1466,116 @@ func TestHybridCompositionIsRefusedWithThePluginAndTheField(t *testing.T) {
 		}
 	}
 }
+
+// noticeFrontend is the window of a layout test: it hands each presentation notice that the library asks for to the test.
+type noticeFrontend struct {
+	frontendRecord
+	notices chan func(error)
+}
+
+func (*noticeFrontend) NativeWindow() unsafe.Pointer { return unsafe.Pointer(new(int)) }
+
+func (f *noticeFrontend) AfterPresentation(done func(error)) error {
+	f.notices <- done
+	return nil
+}
+
+// stepFramework is the framework of a layout test: it runs each step at once.
+type stepFramework struct{ frameworkRecord }
+
+func (stepFramework) Step(task func()) { task() }
+
+// layoutPlatform is the platform of a layout test: it runs each task at once and records the commits and the cancels.
+type layoutPlatform struct {
+	platform.Platform
+	commits, cancels chan uint64
+}
+
+func (*layoutPlatform) EnqueueUI(task func()) error {
+	task()
+	return nil
+}
+
+func (*layoutPlatform) MonotonicNanos() (uint64, error) { return 1, nil }
+
+func (p *layoutPlatform) CommitLayout(_ unsafe.Pointer, ticket uint64) bool {
+	p.commits <- ticket
+	return true
+}
+
+func (p *layoutPlatform) CancelLayoutTicket(_ unsafe.Pointer, ticket uint64) error {
+	p.cancels <- ticket
+	return nil
+}
+
+// presentThroughFixture starts a present of ticket through a fixture Frontend and returns the notice that the library asked
+// for, the platform and the end of the present.
+func presentThroughFixture(t *testing.T, ticket uint64) (func(error), *layoutPlatform, chan error) {
+	t.Helper()
+	fake := &layoutPlatform{commits: make(chan uint64, 1), cancels: make(chan uint64, 1)}
+	saved, savedFramework := system, framework
+	system, framework = fake, stepFramework{}
+	t.Cleanup(func() { system, framework = saved, savedFramework })
+	window := &noticeFrontend{notices: make(chan func(error), 1)}
+	s := &Surfaces{window: window, images: NewImages(), documents: NewDocuments(), sourceOrigins: newSourceOrigins()}
+	finished := make(chan error, 1)
+	go func() {
+		_, err := s.PresentSurfaces(PresentRequest{Ticket: ticket})
+		finished <- err
+	}()
+	select {
+	case notice := <-window.notices:
+		return notice, fake, finished
+	case err := <-finished:
+		t.Fatalf("the present ended without the presentation notice of the Frontend: %v", err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("the present did not ask for the presentation notice of the Frontend")
+	}
+	return nil, nil, nil
+}
+
+// The layout transaction commits only after the presentation notice of the Frontend calls back.
+func TestLayoutCommitsAfterThePresentationNoticeOfTheFrontend(t *testing.T) {
+	notice, fake, finished := presentThroughFixture(t, 7)
+	select {
+	case ticket := <-fake.commits:
+		t.Fatalf("the layout committed ticket %d before the presentation notice", ticket)
+	case err := <-finished:
+		t.Fatalf("the present ended before the presentation notice: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	notice(nil)
+	select {
+	case ticket := <-fake.commits:
+		if ticket != 7 {
+			t.Fatalf("the layout committed ticket %d, want 7", ticket)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the layout did not commit after the presentation notice")
+	}
+	if err := <-finished; err != nil {
+		t.Fatalf("the present failed: %v", err)
+	}
+}
+
+// A presentation notice that fails cancels the layout transaction and ends the present with its error.
+func TestAFailedPresentationNoticeCancelsTheLayout(t *testing.T) {
+	notice, fake, finished := presentThroughFixture(t, 8)
+	notice(errors.New("the window holds its frames"))
+	select {
+	case ticket := <-fake.cancels:
+		if ticket != 8 {
+			t.Fatalf("the layout cancelled ticket %d, want 8", ticket)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the failed notice did not cancel the layout")
+	}
+	if err := <-finished; err == nil || !strings.Contains(err.Error(), "the window holds its frames") {
+		t.Fatalf("the present ended with %v, want the error of the notice", err)
+	}
+	select {
+	case ticket := <-fake.commits:
+		t.Fatalf("a failed notice committed ticket %d", ticket)
+	default:
+	}
+}

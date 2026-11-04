@@ -639,12 +639,15 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// Checks the presentation readiness of the app document before the open placement is committed.
     fn after_presentation(&self, view: &PlatformWebview, done: Box<dyn Fn()>)
     -> Result<(), String>;
-    /// When the window has no open surface placement transaction, calls done after the rendering of the main document
-    /// and the shown document ended. The argument is the time (ms, mach absolute time) at which that screen is
-    /// presented.
+    /// Makes the block of the main web view, which reads the document and waits for the presentation update after that
+    /// read. The caller owns the block until it passes the block to `after_settled`.
+    fn main_presentation(&self, view: &PlatformWebview) -> Result<Handle, String>;
+    /// Takes the block present and, when the window has no open surface placement transaction, calls done after the block
+    /// and the shown document ended. The argument is the time (ms, mach absolute time) at which that screen is presented.
     fn after_settled(
         &self,
-        view: &PlatformWebview,
+        window: Handle,
+        present: Handle,
         done: Box<dyn Fn(Result<f64, String>)>,
     ) -> Result<(), String>;
     /// Makes the next wait for a settled presentation fail once, for diagnostic purposes.

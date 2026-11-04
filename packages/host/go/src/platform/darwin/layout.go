@@ -14,7 +14,8 @@ void nativeWindowLayoutBegin(void *window, uint64_t ticket, uintptr_t callback);
 void nativeWindowStartPage(void *window, uint64_t ticket, double height, uintptr_t callback);
 bool nativeWindowAfterPresentation(void *window, uintptr_t callback);
 bool nativeWindowJoinView(void *window, uint64_t ticket, void *view, uintptr_t callback);
-bool nativeWindowAfterSettled(void *window, uintptr_t callback);
+void *nativeWindowMainPresentation(void *window);
+void nativeWindowAfterSettled(void *window, void *present, uintptr_t callback);
 
 // The native calls of this file run on the main thread (main_thread.h).
 static bool main_surfaceLayoutCommit(void *window, uint64_t ticket) { return ON_MAIN(bool, surfaceLayoutCommit(window, ticket)); }
@@ -127,12 +128,16 @@ func goNativePresentationDone(value C.uintptr_t) {
 	done()
 }
 
-func (implementation) AfterSettled(window unsafe.Pointer, done func(displayed float64, err error)) error {
-	handle := cgo.NewHandle(done)
-	if !bool(C.nativeWindowAfterSettled(window, C.uintptr_t(handle))) {
-		handle.Delete()
-		return errors.New("native presentation is unavailable")
+func (implementation) MainPresentation(window unsafe.Pointer) (unsafe.Pointer, error) {
+	present := C.nativeWindowMainPresentation(window)
+	if present == nil {
+		return nil, errors.New("native presentation is unavailable")
 	}
+	return present, nil
+}
+
+func (implementation) AfterSettled(window, present unsafe.Pointer, done func(displayed float64, err error)) error {
+	C.nativeWindowAfterSettled(window, present, C.uintptr_t(cgo.NewHandle(done)))
 	return nil
 }
 

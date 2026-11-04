@@ -1,10 +1,15 @@
-//! A framework of the tests: it names the application, runs a task at once and has no window.
+//! A framework of the tests: it names the application and runs a task at once. Its window has only the presentation notice
+//! and the settled presentation.
 
+use std::ffi::c_void;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{Arc, Mutex, PoisonError};
+use std::time::Duration;
 
 use crate::framework::{
-    AppHandle, BlockingBody, BlockingTask, Error, Framework, Frontend, Result, Window,
+    AppHandle, BlockingBody, BlockingTask, Error, Framework, Frontend, LogicalPosition,
+    LogicalSize, PlatformWebview, PresentationDone, Result, WebviewBuilder, Window, WindowEvent,
     WindowOptions,
 };
 
@@ -76,6 +81,208 @@ impl Framework for Fixture {
 
     fn get_webview(&self, _label: &str) -> Option<(Arc<dyn Frontend>, String)> {
         None
+    }
+}
+
+/// The native window handle of [`FixtureFrontend`].
+pub const WINDOW: usize = 0x10;
+
+/// A window of the tests. The test takes each presentation notice that the library asks for, and calls it back when it wants
+/// the state to present. The value of its settled presentation stands for the block; a window without one fails with the
+/// text it holds.
+pub struct FixtureFrontend {
+    notices: Sender<PresentationDone>,
+    asked: Mutex<Receiver<PresentationDone>>,
+    presentation: std::result::Result<usize, String>,
+}
+
+/// The error of a call that the window of the tests does not hold.
+fn absent() -> Error {
+    Error::from("the test window has no such state")
+}
+
+impl FixtureFrontend {
+    /// A window whose settled presentation has the value presentation.
+    pub fn new(presentation: std::result::Result<usize, String>) -> Self {
+        let (notices, asked) = mpsc::channel();
+        Self {
+            notices,
+            asked: Mutex::new(asked),
+            presentation,
+        }
+    }
+
+    /// Waits for the next presentation notice that the library asks for.
+    pub fn notice(&self) -> PresentationDone {
+        self.asked
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .recv_timeout(Duration::from_secs(5))
+            .expect("the library asks for the presentation notice of the Frontend")
+    }
+}
+
+impl Frontend for FixtureFrontend {
+    fn name(&self) -> &str {
+        "fixture"
+    }
+
+    fn title(&self) -> Result<String> {
+        Err(absent())
+    }
+
+    fn set_title(&self, _title: &str) -> Result<()> {
+        Err(absent())
+    }
+
+    fn show(&self) -> Result<()> {
+        Err(absent())
+    }
+
+    fn focus(&self) -> Result<()> {
+        Err(absent())
+    }
+
+    fn is_focused(&self) -> Result<bool> {
+        Err(absent())
+    }
+
+    fn close(&self) -> Result<()> {
+        Err(absent())
+    }
+
+    fn scale_factor(&self) -> Result<f64> {
+        Err(absent())
+    }
+
+    fn size(&self) -> Result<LogicalSize> {
+        Err(absent())
+    }
+
+    fn position(&self) -> Result<LogicalPosition> {
+        Err(absent())
+    }
+
+    fn set_size(&self, _size: LogicalSize) -> Result<()> {
+        Err(absent())
+    }
+
+    fn set_position(&self, _position: LogicalPosition) -> Result<()> {
+        Err(absent())
+    }
+
+    fn maximize(&self) -> Result<()> {
+        Err(absent())
+    }
+
+    fn unmaximize(&self) -> Result<()> {
+        Err(absent())
+    }
+
+    fn is_maximized(&self) -> Result<bool> {
+        Err(absent())
+    }
+
+    fn is_fullscreen(&self) -> Result<bool> {
+        Err(absent())
+    }
+
+    fn is_minimized(&self) -> Result<bool> {
+        Err(absent())
+    }
+
+    fn native_window(&self) -> Result<*mut c_void> {
+        Ok(WINDOW as *mut c_void)
+    }
+
+    fn webviews(&self) -> Vec<String> {
+        Vec::new()
+    }
+
+    fn emit(&self, _name: &str, _payload: serde_json::Value) -> Result<()> {
+        Err(absent())
+    }
+
+    fn emit_webviews(&self, _name: &str, _payload: serde_json::Value) -> Result<()> {
+        Err(absent())
+    }
+
+    fn on_window_event(&self, _listener: Box<dyn Fn(&WindowEvent) + Send + Sync>) {}
+
+    fn on_closing(&self, _hook: Box<dyn Fn() -> bool + Send + Sync>) {}
+
+    fn after_presentation(&self, done: PresentationDone) -> Result<()> {
+        self.notices
+            .send(done)
+            .map_err(|error| Error::from(error.to_string()))
+    }
+
+    fn settled_presentation(&self) -> Result<*mut c_void> {
+        self.presentation
+            .clone()
+            .map(|block| block as *mut c_void)
+            .map_err(Error::from)
+    }
+
+    fn start_workbench(&self) -> Result<()> {
+        Err(absent())
+    }
+
+    fn call_workbench(&self, _script: &str) -> Result<()> {
+        Err(absent())
+    }
+
+    fn add_child(
+        &self,
+        _builder: WebviewBuilder,
+        _position: LogicalPosition,
+        _size: LogicalSize,
+    ) -> Result<String> {
+        Err(absent())
+    }
+
+    fn with_webview(
+        &self,
+        _webview: &str,
+        _work: Box<dyn FnOnce(PlatformWebview) + Send>,
+    ) -> Result<()> {
+        Err(absent())
+    }
+
+    fn reload(&self, _webview: &str) -> Result<()> {
+        Err(absent())
+    }
+
+    fn eval(&self, _webview: &str, _script: &str) -> Result<()> {
+        Err(absent())
+    }
+
+    fn navigate(&self, _webview: &str, _url: url::Url) -> Result<()> {
+        Err(absent())
+    }
+
+    fn url(&self, _webview: &str) -> Result<url::Url> {
+        Err(absent())
+    }
+
+    fn close_webview(&self, _webview: &str) -> Result<()> {
+        Err(absent())
+    }
+
+    fn show_webview(&self, _webview: &str) -> Result<()> {
+        Err(absent())
+    }
+
+    fn hide_webview(&self, _webview: &str) -> Result<()> {
+        Err(absent())
+    }
+
+    fn set_webview_focus(&self, _webview: &str) -> Result<()> {
+        Err(absent())
+    }
+
+    fn set_webview_auto_resize(&self, _webview: &str, _auto_resize: bool) -> Result<()> {
+        Err(absent())
     }
 }
 

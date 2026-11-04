@@ -90,12 +90,12 @@ type Frontend interface {
 	OnWindowEvent(event WindowEvent, listener func())
 	// OnClosing runs hook when the window is asked to close. A hook that returns true keeps the window open.
 	OnClosing(hook func() (keep bool))
-	// AfterPresentation is the presentation notice: done runs after the workbench presented the state of this step. Call it on
-	// the main thread.
-	AfterPresentation(done func()) error
-	// AfterSettled is the settled presentation: done runs on the main thread after the content of the window is on the screen.
-	// Call it on the main thread.
-	AfterSettled(done func(displayed float64, err error)) error
+	// AfterPresentation is the presentation notice: done runs after the workbench presented the state of this step, with the
+	// failure when it cannot present that state. Call it on the main thread.
+	AfterPresentation(done func(err error)) error
+	// SettledPresentation is the settled presentation: it makes the block that brings the content of the window to the screen in
+	// its current state, which the caller passes to the settled wait of the platform. Call it on the main thread.
+	SettledPresentation() (unsafe.Pointer, error)
 	// StartWorkbench starts the workbench of the window again.
 	StartWorkbench()
 	// CallWorkbench is the workbench call channel: it runs script in the workbench.

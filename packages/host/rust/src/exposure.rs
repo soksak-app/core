@@ -12,7 +12,7 @@ use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::time::{Duration, Instant};
 
-use crate::framework::{AppHandle, LogicalSize, Manager, Webview, Window};
+use crate::framework::{AppHandle, Frontend, LogicalSize, Manager, Webview, Window};
 use serde::Deserialize;
 use serde_json::value::RawValue;
 use serde_json::{Map, Value, json};
@@ -1514,6 +1514,10 @@ mod webviews_test;
 #[path = "exposure_status_test.rs"]
 mod status_test;
 
+#[cfg(test)]
+#[path = "exposure_settled_test.rs"]
+mod settled_test;
+
 fn internal(error: impl ToString) -> Failure {
     Failure::new(-32603, error.to_string())
 }
@@ -2046,6 +2050,30 @@ fn fullscreen(window: &Window, on: bool) -> Result<Value, Failure> {
     }
 }
 
+/// Asks the settled wait wait of the platform for the window of frontend, with the block of the settled presentation of
+/// frontend. Call it on the main thread.
+fn settled_frame(
+    frontend: &dyn Frontend,
+    wait: impl FnOnce(
+        platform::Handle,
+        platform::Handle,
+        Box<dyn Fn(Result<f64, String>)>,
+    ) -> Result<(), String>,
+    done: Box<dyn Fn(Result<f64, String>)>,
+) -> Result<(), String> {
+    let window = frontend
+        .native_window()
+        .map_err(|error| error.to_string())?;
+    let present = frontend
+        .settled_presentation()
+        .map_err(|error| error.to_string())?;
+    wait(
+        window as platform::Handle,
+        present as platform::Handle,
+        done,
+    )
+}
+
 /// Waits until the surface placement transaction and the current image raster of the window are settled and the main
 /// document and the visible app document present that placement, and returns the presentation time of that screen (ms,
 /// mach absolute time).
@@ -2053,11 +2081,14 @@ pub fn presented(window: &Window, timeout: Duration) -> Result<f64, Failure> {
     let deadline = Instant::now() + timeout;
     let data = window_data(window).map_err(internal)?;
     let wait_frame = || -> Result<f64, Failure> {
+        let platform = platform::current().map_err(internal)?;
+        let frontend = Arc::clone(window.frontend());
         let (tx, rx) = mpsc::channel();
-        let settled = window.clone();
         on_main(window, move || {
-            settled
-                .after_settled(move |displayed| {
+            settled_frame(
+                frontend.as_ref(),
+                |window, present, done| platform.after_settled(window, present, done),
+                Box::new(move |displayed| {
                     match tx.send(displayed) {
                         Ok(()) => {}
                         // A failure after the request ended was not reported by that request, so it is left as an error
@@ -2068,8 +2099,8 @@ pub fn presented(window: &Window, timeout: Duration) -> Result<f64, Failure> {
                             "presentation completion arrived after its request ended",
                         ),
                     }
-                })
-                .map_err(|error| error.to_string())
+                }),
+            )
         })
         .map_err(internal)?;
         let remaining = deadline
