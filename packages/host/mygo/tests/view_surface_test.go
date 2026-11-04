@@ -28,6 +28,7 @@ import (
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 	adapter "github.com/soksak-app/core/packages/host/mygo/src"
+	"github.com/soksak-app/core/packages/host/mygo/tests/support"
 )
 
 // box is where a card shows the surface of a test.
@@ -232,6 +233,8 @@ type viewRow struct {
 	Hidden  bool    `json:"hidden"`
 	Focused bool    `json:"focused"`
 	Process int32   `json:"process"`
+	// Document marks the view of a document region.
+	Document bool `json:"document"`
 }
 
 // row returns the row of the view page of the surface id.
@@ -241,6 +244,17 @@ func (s *viewSession) row(t *testing.T, id string) viewRow {
 	if !ok {
 		t.Fatalf("surface %s has no element", id)
 	}
+	rows := s.rows(t)
+	index := slices.IndexFunc(rows, func(row viewRow) bool { return uintptr(row.View) == uintptr(element.Key) })
+	if index < 0 {
+		t.Fatalf("the view page of surface %s is not in the native view of the window: %+v", id, rows)
+	}
+	return rows[index]
+}
+
+// rows returns the web views in the native view of the window.
+func (s *viewSession) rows(t *testing.T) []viewRow {
+	t.Helper()
 	var text string
 	var err error
 	mygo.RunOnMain(func() { text, err = s.system.WindowFacts(s.window.NativeWindow()) })
@@ -253,11 +267,7 @@ func (s *viewSession) row(t *testing.T, id string) viewRow {
 	if err := json.Unmarshal([]byte(text), &facts); err != nil {
 		t.Fatal(err)
 	}
-	index := slices.IndexFunc(facts.Webviews, func(row viewRow) bool { return uintptr(row.View) == uintptr(element.Key) })
-	if index < 0 {
-		t.Fatalf("the view page of surface %s is not in the native view of the window: %s", id, text)
-	}
-	return facts.Webviews[index]
+	return facts.Webviews
 }
 
 // A view page shows in its surface host, in the frame of the card that shows it.
@@ -334,4 +344,119 @@ func TestE2EAReloadRequestStartsTheWorkbenchAgain(t *testing.T) {
 	wait(t, "the end of the view of the previous workbench", func() bool {
 		return process == 0 || errors.Is(syscall.Kill(int(process), 0), syscall.ESRCH)
 	})
+}
+
+// call runs a host call of the workbench with its request.
+func (s *viewSession) call(t *testing.T, call func(context.Context, json.RawMessage) error, request any) {
+	t.Helper()
+	wire, err := json.Marshal(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := call(*s.workbench.context.Load(), wire); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A document region of a view page shows at its insets in the surface host of the view, and leaves with the surface.
+func TestE2EADocumentRegionShowsInTheSurfaceHostOfItsView(t *testing.T) {
+	session := viewHost(t)
+	t.Cleanup(func() { session.layout(t) })
+	surface := viewSurface("paged", true)
+	surface.Composition.Regions = []host.SurfaceRegion{{Name: "page", Kind: "document", Input: "native"}}
+	session.layout(t, surface)
+	document := host.DocumentRequest{Surface: "paged", Document: "page"}
+	session.call(t, session.host.DocumentAttach, document)
+	session.call(t, session.host.CompositionPlace, host.CompositionPlaceRequest{Surface: "paged", Revision: 1, Overlays: []host.CompositionPlacement{},
+		Regions: []host.CompositionPlacement{{Name: "page", Left: 10, Top: 20, Right: 30, Bottom: 40, Visible: true}}})
+	document.URL = "soksak://probe/ui/page.html"
+	session.call(t, session.host.DocumentLoad, document)
+	wait(t, "the document region in the native view", func() bool {
+		return slices.ContainsFunc(session.rows(t), func(row viewRow) bool {
+			return row.Document && !row.Hidden && row.X == box.X+10 && row.Y == box.Y+20 && row.Width == box.W-40 && row.Height == box.H-60
+		})
+	})
+	session.layout(t)
+	wait(t, "the end of the document region", func() bool {
+		return !slices.ContainsFunc(session.rows(t), func(row viewRow) bool { return row.Document })
+	})
+}
+
+// A region in the lease mode presents the frame of its supplier: the window server marks the frame in use while the surface host of
+// the view shows it, the region gives each frame back when the next one replaces it, and the mark clears after that.
+func TestE2EALeasedImageRegionHoldsItsFrameWhilePresented(t *testing.T) {
+	session := viewHost(t)
+	t.Cleanup(func() { session.layout(t) })
+	session.layout(t, viewSurface("leased", true))
+	element, ok := host.ElementOf(session.host, session.window, "leased")
+	if !ok {
+		t.Fatal("the surface has no element")
+	}
+	var mu sync.Mutex
+	var released []int
+	var image unsafe.Pointer
+	var err error
+	mygo.RunOnMain(func() {
+		image, err = session.system.CreateImage(element.Surface, "leased", func(string) {}, func(_, _ uint64, sequence int) {
+			mu.Lock()
+			defer mu.Unlock()
+			released = append(released, sequence)
+		})
+		if err == nil {
+			session.system.PlaceImage(image, 10, 20, 30, 40, true)
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gone := false
+	close := func() {
+		if !gone {
+			gone = true
+			mygo.RunOnMain(func() { session.system.CloseImage(image) })
+		}
+	}
+	t.Cleanup(close)
+	var width, height int
+	var scale float64
+	wait(t, "the raster of the image region", func() bool {
+		var placed bool
+		mygo.RunOnMain(func() { width, height, scale, placed = session.system.RasterImage(image) })
+		return placed && width > 0 && height > 0
+	})
+	nonce := [16]byte{1, 2, 3}
+	frames := make([]*support.Frame, 3)
+	for index := range frames {
+		if frames[index], err = support.NewFrame(width, height, nonce); err != nil {
+			t.Fatal(err)
+		}
+		defer frames[index].Close()
+	}
+	present := func(index int) {
+		t.Helper()
+		var err error
+		mygo.RunOnMain(func() {
+			err = session.system.PresentImage(image, frames[index].ID(), nonce, float64(width), float64(height), scale, 1, 1, index+1)
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	present(0)
+	wait(t, "the mark of the presented frame", frames[0].InUse)
+	present(1)
+	wait(t, "the mark of the replacing frame", frames[1].InUse)
+	mu.Lock()
+	if !slices.Equal(released, []int{1}) {
+		t.Fatalf("the region released %v after the second frame", released)
+	}
+	mu.Unlock()
+	present(2)
+	wait(t, "the mark of the replaced frame to clear", func() bool { return !frames[0].InUse() })
+	close()
+	mu.Lock()
+	defer mu.Unlock()
+	if !slices.Equal(released, []int{1, 2, 3}) {
+		t.Fatalf("the region released %v after it closed", released)
+	}
 }
