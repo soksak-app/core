@@ -170,6 +170,7 @@ export function createViewSubscriptions({ native, sidecar, textSize, settings, d
           if (run?.active() && deliveredStatus.has(key)) {
             if (heldStatus.has(key)) cancel("status");
             heldStatus.set(key, { data: statusData(name, surface, value), owner });
+            // default: the first held value registers the listener for the end of a run, once for the subscriptions.
             offRunEnd ??= run.onEnd(() => {
               const held = [...heldStatus.values()];
               heldStatus.clear();
@@ -203,6 +204,7 @@ export function createViewSubscriptions({ native, sidecar, textSize, settings, d
     async close() {
       closed = true;
       heldStatus.clear();
+      // default: subscriptions that never held a value registered no listener for the end of a run.
       offRunEnd?.();
       const offs = [...registered.values()];
       registered.clear();
