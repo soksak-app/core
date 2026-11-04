@@ -1,8 +1,11 @@
 // The call route of a view (docs/spec/native-surfaces.md#view-surfaces). The host forwards each call request and each cancel of a view as
 // the view-call event of the main page; answerViewCall answers it with the handlers that a DOM surface context uses.
-import { base64Of, bytesFrom, causeCids, surfaceDocumentEntry } from "@soksak/plugin-api";
+import { causeCids, shellQuotePath, surfaceDocumentEntry } from "@soksak/plugin-api";
 import { runCommandCall } from "./command-route.js";
 import { setViewFocus } from "./view-focus.js";
+
+/** A binary id of the binary store of a view: 32 lowercase hexadecimal characters (docs/spec/plugin-processes.md#binary-path). */
+const BINARY_ID = /^[0-9a-f]{32}$/;
 
 /**
  * Answers one event of a view and resolves with its result. A call request {id, command, params} resolves with the result of its
@@ -26,9 +29,11 @@ import { setViewFocus } from "./view-focus.js";
  *               runtime: the handlers of the runtime entries of the DOM surface context
  *                 native.call(name, payload): the host call of the surface, as runtime.native.call
  *                 sidecar.send(id, body, cids, name): the send to the declared sidecar name, as runtime.sidecar(name).send
- *                 clipboard: the clipboard bridge of the surface context, {read(type), writeText(text), persistPNG(value)};
- *                   a png read returns the typed payload {present, type, data} with the bytes as base64, or null when the
- *                   clipboard holds none, and persistPNG takes bytes and returns {path, shellQuotedPath}
+ *                 clipboard: the clipboard of the view, {read(type), writeText(text), readPNG(), persistPNG(binary)}; read takes
+ *                   text or fileURLs as the clipboard bridge of the surface context does. A PNG travels through the binary store of
+ *                   the view (docs/spec/plugin-processes.md#binary-path): readPNG puts the PNG of the clipboard into the store and
+ *                   returns the host reply {present: true, type: "png", binary} or {present: false, type: "png"}, and persistPNG takes
+ *                   the binary id of a PNG in the store and returns the host reply {path}
  *                 links.open(url): opens a link, as runtime.links.open
  *                 report(line): writes the error line `<where>: <text>` to the application log, the record path of the error
  *                   display of the page
@@ -218,19 +223,31 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
       return runtime.sidecar.send(fields.id, fields.body, fields.cids, fields.sidecar);
     }
     case "runtime.clipboard.read":
-      // contract: docs/spec/native-surfaces.md#view-surfaces, view calls. The reply of a view call is JSON, so a png read
-      // returns the typed payload of the host with the bytes as base64, and an absent payload replies null.
+      // contract: docs/spec/native-surfaces.md#view-surfaces, view calls. A binary payload of a call uses the binary path
+      // (docs/spec/plugin-processes.md#binary-path), so a png read replies the id under which the host put the PNG into the binary
+      // store of the view, which the view downloads, and an absent payload replies null.
       if (params === "png") {
-        const png = await runtime.clipboard.read("png");
-        return png === null ? null : { present: true, type: "png", data: base64Of(png) };
+        const png = await runtime.clipboard.readPNG();
+        if (png?.type === "png" && png.present === false) return null;
+        if (png?.type !== "png" || png.present !== true || !BINARY_ID.test(png.binary)) {
+          throw new Error(`view call ${command} png: the clipboard png reply of the host is invalid: ${JSON.stringify(png)}`);
+        }
+        return { present: true, type: "png", binary: png.binary };
       }
       if (params !== "text" && params !== "fileURLs") throw new Error(`view call ${command} ${String(params)} is not served`);
       return runtime.clipboard.read(params);
     case "runtime.clipboard.persistPNG": {
-      // The payload arrives as base64, because the params of a view call are JSON.
+      // The PNG arrives as the id of an upload of the view to its binary path (docs/spec/plugin-processes.md#binary-path).
       const fields = objectOf(command, params);
-      if (typeof fields.data !== "string") throw new TypeError(`view call ${command} requires data as base64`);
-      return runtime.clipboard.persistPNG(bytesFrom(fields.data));
+      if ("data" in fields) throw new TypeError(`view call ${command} takes the binary id of an upload, not base64 data`);
+      if (!BINARY_ID.test(fields.binary)) {
+        throw new TypeError(`view call ${command} requires binary, the id of an upload to the binary path of the view`);
+      }
+      const persisted = await runtime.clipboard.persistPNG(fields.binary);
+      if (typeof persisted?.path !== "string" || persisted.path === "") {
+        throw new Error(`view call ${command}: the clipboard PNG persistence reply of the host is invalid: ${JSON.stringify(persisted)}`);
+      }
+      return { path: persisted.path, shellQuotedPath: shellQuotePath(persisted.path) };
     }
     case "runtime.clipboard.writeText":
       if (typeof params !== "string") throw new TypeError(`view call ${command} requires a string`);

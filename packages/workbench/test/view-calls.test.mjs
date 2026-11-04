@@ -16,6 +16,9 @@ const SHORTCUTS = [
 // The surfaces of the probe plugin that the window holds; a surface that is not listed belongs to no plugin of the window.
 const HELD = new Set(["probe spc-aaaaaa/left/files.tree", "probe tab-a"]);
 
+// A binary id of the binary store of the view (docs/spec/plugin-processes.md#binary-path).
+const BINARY_ID = "0123456789abcdef0123456789abcdef";
+
 function fakes({ startProject = { id: "p1", root: "/projects/p1" } } = {}) {
   const ran = { core: [], owned: [], writes: [], native: [], sidecar: [], clipboard: [], links: [], subscribed: [], declared: [],
     reports: [], log: [], textSize: [], settings: [], registered: [], changed: [], errors: [], failed: [], events: [], composition: [], data: [] };
@@ -23,8 +26,9 @@ function fakes({ startProject = { id: "p1", root: "/projects/p1" } } = {}) {
   const stored = new Map();
   const item = (plugin, index) => Object.freeze({ plugin, index, item: { name: plugin }, module: `/modules/@scope/plugin-${plugin}/ui/${plugin}.js`,
     fail: (reason) => { ran.failed.push({ plugin, index, reason }); } });
-  // The PNG payload that the clipboard of the surface holds; a case sets bytes to null for an absent payload.
-  const png = { bytes: new Uint8Array([1, 2, 3]) };
+  // The reply of the host to a PNG read of the view: the binary id under which the host put the PNG of the clipboard into the binary
+  // store of the view. A case sets reply to the absent reply or to a malformed one.
+  const png = { reply: { present: true, type: "png", binary: BINARY_ID } };
   // The menu state of the surface; a case sets declared to false or frame to null.
   const menu = { declared: true, frame: { x: 100, y: 40 } };
   const options = {
@@ -60,9 +64,10 @@ function fakes({ startProject = { id: "p1", root: "/projects/p1" } } = {}) {
       native: { call: async (name, payload) => { ran.native.push({ name, payload }); return { native: true }; } },
       sidecar: { send: async (id, body, cids, sidecar) => { ran.sidecar.push({ id, body, cids, sidecar }); return { sidecar: true }; } },
       clipboard: {
-        read: async (type) => { ran.clipboard.push({ read: type }); return type === "png" ? png.bytes : type === "fileURLs" ? null : "text value"; },
+        read: async (type) => { ran.clipboard.push({ read: type }); return type === "fileURLs" ? null : "text value"; },
         writeText: async (text) => { ran.clipboard.push({ write: text }); },
-        persistPNG: async (value) => { ran.clipboard.push({ persist: value }); return { path: "/tmp/clip.png", shellQuotedPath: "'/tmp/clip.png'" }; },
+        readPNG: async () => { ran.clipboard.push({ readPNG: true }); return png.reply; },
+        persistPNG: async (binary) => { ran.clipboard.push({ persist: binary }); return { path: "/tmp/it's.png" }; },
       },
       links: { open: async (url) => { ran.links.push(url); } },
       report: (line) => { ran.errors.push(line); },
@@ -292,29 +297,38 @@ test("runtime.clipboard.read returns the text of the clipboard and refuses an un
   assert.deepEqual(ran.clipboard, [{ read: "text" }]);
 });
 
-test("runtime.clipboard.read returns the typed png payload with base64 data, or null when the clipboard holds none", async () => {
+test("runtime.clipboard.read png returns the binary id of the PNG in the view store, or null when the clipboard holds none", async () => {
   const { ran, options, png } = fakes();
   assert.deepEqual(await answerViewCall({ id: 1, command: "runtime.clipboard.read", params: "png" }, options),
-    { present: true, type: "png", data: "AQID" });
-  png.bytes = null;
+    { present: true, type: "png", binary: BINARY_ID });
+  png.reply = { present: false, type: "png" };
   assert.equal(await answerViewCall({ id: 2, command: "runtime.clipboard.read", params: "png" }, options), null);
-  assert.deepEqual(ran.clipboard, [{ read: "png" }, { read: "png" }]);
+  assert.deepEqual(ran.clipboard, [{ readPNG: true }, { readPNG: true }]);
 });
 
-test("runtime.clipboard.persistPNG persists the base64 payload and returns the shell path", async () => {
+test("runtime.clipboard.read png refuses a host reply without a binary id", async () => {
+  const { options, png } = fakes();
+  png.reply = { present: true, type: "png", data: "AQID" };
+  await assert.rejects(answerViewCall({ id: 1, command: "runtime.clipboard.read", params: "png" }, options),
+    /clipboard png reply of the host is invalid: \{"present":true,"type":"png","data":"AQID"\}/);
+});
+
+test("runtime.clipboard.persistPNG persists the PNG of a binary id of the view store and returns the shell path", async () => {
   const { ran, options } = fakes();
-  assert.deepEqual(await answerViewCall({ id: 1, command: "runtime.clipboard.persistPNG", params: { data: "AQID" } }, options),
-    { path: "/tmp/clip.png", shellQuotedPath: "'/tmp/clip.png'" });
-  assert.equal(ran.clipboard.length, 1);
-  assert.ok(ran.clipboard[0].persist instanceof Uint8Array);
-  assert.deepEqual([...ran.clipboard[0].persist], [1, 2, 3]);
+  assert.deepEqual(await answerViewCall({ id: 1, command: "runtime.clipboard.persistPNG", params: { binary: BINARY_ID } }, options),
+    { path: "/tmp/it's.png", shellQuotedPath: "'/tmp/it'\\''s.png'" });
+  assert.deepEqual(ran.clipboard, [{ persist: BINARY_ID }]);
 });
 
-test("runtime.clipboard.persistPNG refuses params without base64 data and persists nothing", async () => {
+test("runtime.clipboard.persistPNG refuses params without a binary id, and base64 data, and persists nothing", async () => {
   const { ran, options } = fakes();
   await assert.rejects(answerViewCall({ id: 1, command: "runtime.clipboard.persistPNG", params: "AQID" }, options), /requires an object/);
-  await assert.rejects(answerViewCall({ id: 2, command: "runtime.clipboard.persistPNG", params: {} }, options), /requires data as base64/);
-  await assert.rejects(answerViewCall({ id: 3, command: "runtime.clipboard.persistPNG", params: { data: 5 } }, options), /requires data as base64/);
+  await assert.rejects(answerViewCall({ id: 2, command: "runtime.clipboard.persistPNG", params: {} }, options),
+    /requires binary, the id of an upload to the binary path of the view/);
+  await assert.rejects(answerViewCall({ id: 3, command: "runtime.clipboard.persistPNG", params: { binary: "ABC" } }, options),
+    /requires binary, the id of an upload to the binary path of the view/);
+  await assert.rejects(answerViewCall({ id: 4, command: "runtime.clipboard.persistPNG", params: { data: "AQID" } }, options),
+    /takes the binary id of an upload, not base64 data/);
   assert.deepEqual(ran.clipboard, []);
 });
 

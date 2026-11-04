@@ -291,6 +291,25 @@ static BOOL isBinaryIdentifier(NSString *text) {
     return YES;
 }
 
+// The refusal of bytes that the binary store cannot take, named by the operation that brings them (an upload or a put), or nil
+// when the store takes them. status is set to the HTTP status of the refusal of an upload.
+static NSString *binaryRefusal(SPBinaryStore *store, NSUInteger length, NSString *operation, NSInteger *status) {
+    if (!length) {
+        *status = 400;
+        return [NSString stringWithFormat:@"the %@ holds no bytes", operation];
+    }
+    if (length > kBinaryUploadLimit) {
+        *status = 413;
+        return [NSString stringWithFormat:@"the %@ is over the limit of 16777216 bytes", operation];
+    }
+    if (store.total + length > kBinaryPageLimit) {
+        *status = 413;
+        return [NSString stringWithFormat:@"the binary store of the page would hold %lu bytes, over the limit of 67108864 bytes",
+            (unsigned long)(store.total + length)];
+    }
+    return nil;
+}
+
 @interface SPDocumentScroll : NSObject <WKScriptMessageHandler>
 @property(assign) SPDocumentView *view;
 @end
@@ -750,18 +769,10 @@ static NSString *insertViewPage(NSString *html, NSString *map, NSString **reason
             [self refuseBinary:task status:400 reason:error.localizedDescription];
             return;
         }
-        if (!body.length) {
-            [self refuseBinary:task status:400 reason:@"the upload holds no bytes"];
-            return;
-        }
-        if (body.length > kBinaryUploadLimit) {
-            [self refuseBinary:task status:413 reason:@"the upload is over the limit of 16777216 bytes"];
-            return;
-        }
-        if (self.binaries.total + body.length > kBinaryPageLimit) {
-            [self refuseBinary:task status:413 reason:[NSString stringWithFormat:
-                @"the binary store of the page would hold %lu bytes, over the limit of 67108864 bytes",
-                (unsigned long)(self.binaries.total + body.length)]];
+        NSInteger status = 0;
+        NSString *refusal = binaryRefusal(self.binaries, body.length, @"upload", &status);
+        if (refusal) {
+            [self refuseBinary:task status:status reason:refusal];
             return;
         }
         NSString *type = [task.request valueForHTTPHeaderField:@"Content-Type"] ?: @"application/octet-stream";
@@ -2276,6 +2287,22 @@ const char *sp_document_binary_take(void *handle, const char *id, void **bytes, 
     *length = data.length;
     // removeId releases the entry, and with it data, so the length is read before the id is removed.
     [view.binaries removeId:identifier];
+    return NULL;
+}
+
+char *sp_document_binary_put(void *handle, const void *bytes, size_t length, const char *type, char id[33]) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    SPDocumentView *view = (SPDocumentView *)handle;
+    if (!view || view.closed) return strdup("the document region is closed");
+    if (!id) return strdup("the put has no id buffer");
+    if (!type) return strdup("the put has no content type");
+    NSString *contentType = [NSString stringWithUTF8String:type];
+    if (!contentType) return strdup("the content type of the put is not UTF-8");
+    NSInteger status = 0;
+    NSString *refusal = binaryRefusal(view.binaries, bytes ? length : 0, @"put", &status);
+    if (refusal) return strdup(refusal.UTF8String);
+    NSString *identifier = [view.binaries addData:[NSData dataWithBytes:bytes length:length] type:contentType];
+    memcpy(id, identifier.UTF8String, 33);
     return NULL;
 }
 

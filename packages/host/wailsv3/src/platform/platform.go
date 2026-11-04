@@ -428,6 +428,10 @@ type Platform interface {
 	// text of the native layer when the document is closed or the id is not stored (docs/spec/native-surfaces.md#document-regions).
 	// The caller must run this operation on the main thread.
 	TakeDocumentBinary(document unsafe.Pointer, id string) ([]byte, error)
+	// PutDocumentBinary stores bytes with their content type in the binary store of the document under an id that it mints, with the
+	// bounds of an upload, and returns the id. It returns the error text of the native layer when the document is closed or the bytes
+	// are empty or over a bound (docs/spec/native-surfaces.md#document-regions). The caller must run this operation on the main thread.
+	PutDocumentBinary(document unsafe.Pointer, bytes []byte, contentType string) (string, error)
 	SetDocumentEvent(document unsafe.Pointer, event func(value string)) error
 	// SetDocumentStream receives {"stream": "elements" or "requests", "message": {...}} for each stream message of the document.
 	SetDocumentStream(document unsafe.Pointer, stream func(value string)) error

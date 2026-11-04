@@ -205,7 +205,7 @@ status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.views`는 `p
 
 ## binary 경로
 
-plugin 문서는 `POST soksak://<plugin>/.binary`로 byte를 올리고 `GET soksak://<plugin>/.binary/<id>`로 내려받는다. id는 host가 만들고, byte는 문서 영역이 자기 binary store에 보관한다([native surfaces](native-surfaces.ko.md#문서-영역)). 소유자 검사는 영역의 `view.plugin`을 URL host와 비교하는 것이다. 한 번의 upload는 16 MiB 이하이며, 이는 두 호스트의 클립보드 상한이다(darwin 클립보드의 `MAX_BYTES`, wailsv3의 `clipboardMaxBytes`). 한 페이지는 64 MiB 이하를 가지며, 이는 가장 큰 upload 4개 분량이다. id는 download가 끝날 때, native take가 byte를 돌려줄 때, 또는 영역이 닫힐 때 해제한다. plugin release는 `.binary` 경로 부분을 거부한다. host가 파일 조회보다 먼저 그 경로에 응답하므로, 그 아래의 plugin 파일은 닿을 수 없기 때문이다. release 검사는 `@soksak/plugin-api`의 `validateReleaseFiles`이며, `sok plugin pack`도 같은 거부를 적용한다.
+plugin 문서는 `POST soksak://<plugin>/.binary`로 byte를 올리고 `GET soksak://<plugin>/.binary/<id>`로 내려받는다. id는 host가 만들고, byte는 영역이나 view인 문서가 자기 binary store에 보관한다([native surfaces](native-surfaces.ko.md#문서-영역)). 소유자 검사는 문서의 `view.plugin`을 URL host와 비교하는 것이다. 한 번의 upload는 16 MiB 이하이며, 이는 두 호스트의 클립보드 상한이다(darwin 클립보드의 `MAX_BYTES`, wailsv3의 `clipboardMaxBytes`). 한 페이지는 64 MiB 이하를 가지며, 이는 가장 큰 upload 4개 분량이다. id는 download가 끝날 때, native take가 byte를 돌려줄 때, 또는 문서가 닫힐 때 해제한다. view call의 binary payload는 두 방향 모두 이 경로로 오간다. view는 byte를 올리고 call에 그 id를 보내며, host는 view의 store에서 byte를 take한다. 응답에서는 host가 upload의 한도로 byte를 view의 store에 put하고 그 id로 답하며, view가 byte를 내려받는다. view call `runtime.clipboard.read`의 `"png"`와 `runtime.clipboard.persistPNG`는 PNG를 이렇게 나른다([native surfaces](native-surfaces.ko.md#view-표면), view call). plugin release는 `.binary` 경로 부분을 거부한다. host가 파일 조회보다 먼저 그 경로에 응답하므로, 그 아래의 plugin 파일은 닿을 수 없기 때문이다. release 검사는 `@soksak/plugin-api`의 `validateReleaseFiles`이며, `sok plugin pack`도 같은 거부를 적용한다.
 
 ## 응답성
 

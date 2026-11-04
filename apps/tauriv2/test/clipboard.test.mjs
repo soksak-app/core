@@ -26,6 +26,14 @@ test("Tauri runtime exposes the typed clipboard bridge with scoped host commands
     ["clipboard_write_text", { text: "copied" }],
     ["clipboard_persist_png", { request: { data: "AQI=" } }],
   ]);
+  const { host } = await import(`../runtime/index.js?clipboard=${Date.now()}`);
+  calls.length = 0;
+  await host.call("clipboardReadViewPNG", { surface: "view-surface", userInitiated: true });
+  await host.call("clipboardPersistViewPNG", { surface: "view-surface", binary: "0123456789abcdef0123456789abcdef" });
+  assert.deepEqual(calls, [
+    ["clipboard_read_view_png", { request: { surface: "view-surface", userInitiated: true } }],
+    ["clipboard_persist_view_png", { request: { surface: "view-surface", binary: "0123456789abcdef0123456789abcdef" } }],
+  ], "the PNG calls of a view reach the host commands of the view binary store");
   delete globalThis.window;
   delete globalThis.location;
 });

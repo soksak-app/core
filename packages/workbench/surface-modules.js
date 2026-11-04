@@ -540,7 +540,14 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
       },
       // The project data of the plugin for a project, which the data calls of the view read and write (view-calls.js).
       data: { of: viewDataOf },
-      clipboard: scoped.clipboard,
+      // The clipboard of the view (view-calls.js): text and file URLs as the surface context reads them, and a PNG through the binary
+      // store of the view.
+      clipboard: {
+        read: scoped.clipboard.read,
+        writeText: scoped.clipboard.writeText,
+        readPNG: scoped.viewClipboard.readPNG,
+        persistPNG: scoped.viewClipboard.persistPNG,
+      },
       links: scoped.links,
       // The record path of the error display: the host call report of the surface writes the error line to the application log.
       report: (line) => scoped.native.call("report", line),

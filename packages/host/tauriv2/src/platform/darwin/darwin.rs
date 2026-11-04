@@ -318,6 +318,14 @@ impl Platform for Darwin {
     fn take_document_binary(&self, document: Handle, id: &str) -> Result<Vec<u8>, String> {
         document::take_document_binary(document, id)
     }
+    fn put_document_binary(
+        &self,
+        document: Handle,
+        bytes: &[u8],
+        content_type: &str,
+    ) -> Result<String, String> {
+        document::put_document_binary(document, bytes, content_type)
+    }
     fn add_document_script(&self, document: Handle, source: &str) -> Result<(), String> {
         document::add_document_script(document, source)
     }

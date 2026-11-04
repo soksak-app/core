@@ -481,6 +481,15 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// when the document is closed or the id is not stored (docs/spec/native-surfaces.md#document-regions).
     /// The caller must run this operation on the main thread.
     fn take_document_binary(&self, document: Handle, id: &str) -> Result<Vec<u8>, String>;
+    /// Stores bytes with their content type in the binary store of the document under an id that it mints, with the bounds of an upload,
+    /// and returns the id. The error is the text of the native layer when the document is closed or the bytes are empty or over a bound
+    /// (docs/spec/native-surfaces.md#document-regions). The caller must run this operation on the main thread.
+    fn put_document_binary(
+        &self,
+        document: Handle,
+        bytes: &[u8],
+        content_type: &str,
+    ) -> Result<String, String>;
     /// Adds a user script that runs at document start in the page world, before any page script, for each load of the document from
     /// now on. The host adds the theme script of a view before it loads the page (docs/spec/native-surfaces.md#view-surfaces).
     fn add_document_script(&self, document: Handle, source: &str) -> Result<(), String>;

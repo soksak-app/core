@@ -3396,19 +3396,38 @@ pub fn record_view_call_peer_lost(plugin: &str, command: &str) {
 #[path = "view_call_peer_test.rs"]
 mod call_peer_tests;
 
-/// Takes the bytes that the binary store of the document name of surface keeps under id, through take, and releases the id. A
-/// document that is not attached gives the error `document "<name>" is not attached`, the text of the other document operations, and
-/// the error text of the native take is passed on unchanged (docs/spec/native-surfaces.md#document-regions).
-/// The caller must satisfy the thread precondition of the supplied native take operation.
-pub fn take_document_binary_of(
+/// The handle of the view of surface, or the error `surface "<surface>" has no view`: the only refusal of the lookup is a surface
+/// without a view document.
+fn view_handle_of(documents: &Documents, surface: &str) -> Result<Handle, String> {
+    documents
+        .get(&(surface.to_string(), VIEW_NAME.to_string()))
+        .map_err(|_| format!("surface {surface:?} has no view"))
+}
+
+/// Takes the bytes that the binary store of the view of surface keeps under id, through take, and releases the id. A surface without a
+/// view gives the error `surface "<surface>" has no view`, and the error text of the native take is passed on unchanged
+/// (docs/spec/native-surfaces.md#document-regions). The caller must satisfy the thread precondition of the supplied native take.
+pub fn take_view_binary_of(
     documents: &Documents,
     surface: &str,
-    name: &str,
     id: &str,
     take: impl FnOnce(Handle, &str) -> Result<Vec<u8>, String>,
 ) -> Result<Vec<u8>, String> {
-    let handle = documents.get(&(surface.to_string(), name.to_string()))?;
-    take(handle, id)
+    take(view_handle_of(documents, surface)?, id)
+}
+
+/// Stores bytes with their content type in the binary store of the view of surface through put, which mints the id, and returns the id,
+/// which the view downloads from its binary path. A surface without a view gives the error `surface "<surface>" has no view`, and the
+/// error text of the native put is passed on unchanged (docs/spec/native-surfaces.md#document-regions). The caller must satisfy the
+/// thread precondition of the supplied native put.
+pub fn put_view_binary_of(
+    documents: &Documents,
+    surface: &str,
+    bytes: &[u8],
+    content_type: &str,
+    put: impl FnOnce(Handle, &[u8], &str) -> Result<String, String>,
+) -> Result<String, String> {
+    put(view_handle_of(documents, surface)?, bytes, content_type)
 }
 
 #[cfg(test)]
@@ -3416,8 +3435,8 @@ pub fn take_document_binary_of(
 mod post_tests;
 
 #[cfg(test)]
-#[path = "document_binary_take_test.rs"]
-mod binary_take_tests;
+#[path = "view_binary_test.rs"]
+mod view_binary_tests;
 
 /// Ends the presentation wait of the view of surface with reason, and writes the failure of the end to the application log.
 /// Joins each changed visible root placement to the open layout transaction of window with ticket
