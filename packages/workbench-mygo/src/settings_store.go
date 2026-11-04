@@ -247,26 +247,37 @@ func orEmpty(values map[string]any) map[string]any {
 // effective is the settings in the order defaults, common values, project overrides. projectOpening has only a common value.
 func (s *SettingsStore) effective(common, overrides map[string]any) map[string]any {
 	values := maps.Clone(s.defaults)
-	for key, value := range common {
-		if !s.kept(key) {
-			values[key] = value
+	for _, layer := range []map[string]any{common, overrides} {
+		for key := range layer {
+			if !s.kept(key) {
+				values[key] = s.effectiveValue(common, overrides, key)
+			}
 		}
 	}
-	opening := values["projectOpening"]
-	for key, value := range overrides {
-		if !s.kept(key) {
-			values[key] = value
-		}
-	}
-	values["projectOpening"] = opening
 	return values
+}
+
+// effectiveValue is the value of key in effective, read without building the other values.
+func (s *SettingsStore) effectiveValue(common, overrides map[string]any, key string) any {
+	if s.kept(key) {
+		return nil
+	}
+	if key != "projectOpening" {
+		if value, ok := overrides[key]; ok {
+			return value
+		}
+	}
+	if value, ok := common[key]; ok {
+		return value
+	}
+	return s.defaults[key]
 }
 
 // Project returns the project that project changes apply to.
 func (s *SettingsStore) Project() string { return s.project }
 
 // Value returns the effective value of key.
-func (s *SettingsStore) Value(key string) any { return s.effective(s.common, s.overrides)[key] }
+func (s *SettingsStore) Value(key string) any { return s.effectiveValue(s.common, s.overrides, key) }
 
 // Scoped returns the value of key that the scope shows.
 func (s *SettingsStore) Scoped(key, scope string) any {
