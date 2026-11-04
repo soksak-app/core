@@ -87,6 +87,8 @@ view는 넘길 수 있는 행을 view call `runtime.shortcuts.read`로 읽는다
 | `cmd+0` | native menu | core.text.reset | view/text-default | 모든 포커스 |
 | `shift+cmd+n` | native menu | core.window.new | window/new-window | 모든 포커스 |
 | `shift+cmd+n` | workbench | core.window.new | — | host 크롬이 없음(브라우저 빌드) |
+| `cmd+d` | workbench | core.card.split-right | — | 카드에 focus가 있다 |
+| `shift+cmd+d` | workbench | core.card.split-bottom | — | 카드에 focus가 있다 |
 | `cmd+k` | workbench | core.library.search.focus | — | 라이브러리가 보임 |
 | `Enter` | workbench | core.rename.commit | — | 탭 이름 변경 필드에 포커스가 있음 |
 | `Escape` | workbench | core.rename.cancel | — | 탭 이름 변경 필드에 포커스가 있음 |
@@ -95,6 +97,8 @@ view는 넘길 수 있는 행을 view call `runtime.shortcuts.read`로 읽는다
 | `Escape` | workbench | core.modal.dismiss | — | 네이티브 modal 메뉴가 열려 있고 키보드 포커스가 있음 |
 | `Escape` | view | none | — | 플러그인 view가 키보드 포커스를 가짐. view가 키를 직접 처리하며, 넘길 때만 열린 picker의 Escape 명령을 실행한다 |
 | `text input keys` | view | none | — | 플러그인 view의 텍스트 입력에 포커스가 있음. view가 키를 직접 처리하며 기본 동작을 유지한다 |
+
+`core.card.split-right`와 `core.card.split-bottom`은 parameter 없이 focus된 card를 그 active tab의 plugin으로 만든 새 tab과 함께 나눈다. 동작은 `core.card.split`과 같다.
 
 `core.library.search.focus`는 인자 없이 현재 표시된 library page의 검색 필드에 focus한다. Projects page에서는 `core.library.search`, plugins page에서는 `core.library.plugins.search`를 선택한다. Library가 표시되지 않으면 명시적으로 거부하며 library를 열거나 page를 바꾸지 않는다. Main-page keyboard handler와 전달된 shortcut command는 같은 동작을 사용한다. `core.focus.set`은 이름으로 노출 DOM을 선택하는 일반 명령으로 유지한다.
 

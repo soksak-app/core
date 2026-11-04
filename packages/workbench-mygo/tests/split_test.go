@@ -177,20 +177,20 @@ func TestCoreCardCloseClosesASplit(t *testing.T) {
 func TestCoreBoundaryMove(t *testing.T) {
 	f, left, right := splitShell(t)
 	before := f.box("core.card", right)
-	moved, err := f.answer("core.boundary.move", map[string]any{"axis": "x", "line": 2, "position": 300})
+	moved, err := f.answer("core.boundary.move", map[string]any{"axis": "x", "line": 2, "position": 340})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if position, _ := moved["position"].(float64); math.Abs(position-300) > 0.01 {
+	if position, _ := moved["position"].(float64); math.Abs(position-340) > 0.01 {
 		t.Fatalf("the boundary answered %v", moved)
 	}
 	if now := f.box("core.card", right); now.X >= before.X || now.W <= before.W {
 		t.Fatalf("the right card stands at %+v after %+v", now, before)
 	}
-	if now := f.box("core.card", left); now.W > 300 {
+	if now := f.box("core.card", left); now.W > 340 {
 		t.Fatalf("the left card stands at %+v", now)
 	}
-	if _, err := f.answer("core.boundary.move", map[string]any{"axis": "x", "line": 99, "position": 300}); err == nil || err.Error() != "no x boundary at line 99" {
+	if _, err := f.answer("core.boundary.move", map[string]any{"axis": "x", "line": 99, "position": 340}); err == nil || err.Error() != "no x boundary at line 99" {
 		t.Fatalf("a boundary that does not exist failed with %v", err)
 	}
 	if _, err := f.answer("core.boundary.move", map[string]any{"axis": "x", "line": 1}); err == nil || err.Error() != "core.boundary.move: position is missing" {
@@ -282,7 +282,7 @@ func TestDividerTakesOnlyThePrimaryButton(t *testing.T) {
 // A double press centers the boundary.
 func TestDividerDoublePressCentersTheBoundary(t *testing.T) {
 	f, left, right := splitShell(t)
-	f.run("core.boundary.move", map[string]any{"axis": "x", "line": 2, "position": 300})
+	f.run("core.boundary.move", map[string]any{"axis": "x", "line": 2, "position": 340})
 	box, _ := f.divider(left, right)
 	x, y := box.X+box.W/2, box.Y+box.H/2
 	f.tester.ClickAt(x, y)
@@ -369,4 +369,66 @@ func dividerItems(f *shellFixture) []string {
 	}
 	walk(f.tester.ElementTree())
 	return items
+}
+
+// A window sidebar is a card of the plane with its status line, as on the page, so its column is not an empty margin.
+func TestWindowSidebarsAreDrawnAsCards(t *testing.T) {
+	f := openedShell(t)
+	for side, label := range map[string]string{"left": "왼쪽 창 사이드바", "right": "오른쪽 창 사이드바"} {
+		box := f.box("core.card", side)
+		if box.W <= 0 || box.H <= 0 {
+			t.Fatalf("the %s sidebar stands at %+v", side, box)
+		}
+		if !f.tester.HasText(label) {
+			t.Fatalf("the status line %q is not drawn; the texts are %q", label, f.tester.Texts())
+		}
+	}
+	f.audit()
+}
+
+// The plane stands as on the page: the cards are twice the gap of the theme apart, and the stage holds the gap and its border around
+// the plane.
+func TestThePlaneHasTheGapOfThePage(t *testing.T) {
+	f := openedShell(t)
+	left, terminal := f.box("core.card", "left"), f.box("core.card", "terminal")
+	if got := terminal.X - (left.X + left.W); got != 12 {
+		t.Fatalf("the cards are %v apart, want 12", got)
+	}
+	if left.X != 7 {
+		t.Fatalf("the plane starts at %v, want 7", left.X)
+	}
+}
+
+// cmd+d splits the focused card to the right, shift+cmd+d below it, and in the library neither key does anything.
+func TestShortcutsSplitTheFocusedCard(t *testing.T) {
+	f := openedShell(t)
+	source := f.tabbedCards()[0]
+	f.run("core.card.focus", map[string]string{"card": source})
+	before := len(f.tabbedCards())
+	f.tester.Key(ui.Super, ui.KeyD)
+	f.settle()
+	cards := f.tabbedCards()
+	if len(cards) != before+1 {
+		t.Fatalf("cmd+d stored %v", cards)
+	}
+	right := cards[len(cards)-1]
+	if a, b := f.box("core.card", source), f.box("core.card", right); b.X < a.X+a.W {
+		t.Fatalf("cmd+d put the card at %+v beside %+v", b, a)
+	}
+	f.tester.Key(ui.Super|ui.Shift, ui.KeyD)
+	f.settle()
+	cards = f.tabbedCards()
+	if len(cards) != before+2 {
+		t.Fatalf("shift+cmd+d stored %v", cards)
+	}
+	below := cards[len(cards)-1]
+	if a, b := f.box("core.card", right), f.box("core.card", below); b.Y < a.Y+a.H {
+		t.Fatalf("shift+cmd+d put the card at %+v beside %+v", b, a)
+	}
+	f.run("core.projects.browse", nil)
+	f.tester.Key(ui.Super, ui.KeyD)
+	f.settle()
+	if got := len(f.tabbedCards()); got != before+2 {
+		t.Fatalf("cmd+d in the library stored %d cards", got)
+	}
 }

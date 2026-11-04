@@ -9,8 +9,8 @@ import (
 // The stage of a project: the cards of the plane with their head, tab strip, slot and status line, as packages/workbench/plane.js
 // draws them.
 
-// stageInset is the space around the plane.
-func (s *Shell) stageInset() float32 { return s.palette.Gap }
+// stageInset is the space around the plane: the half gap of the theme and the border of the stage.
+func (s *Shell) stageInset() float32 { return s.palette.Gap + s.palette.BorderWidth }
 
 // drawWork draws the spaces and the stage of the shown project.
 func (s *Shell) drawWork(c *ui.Context, width, height float32) {
@@ -33,6 +33,10 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 				DrawError(c, s.errors, card.ID)
 				continue
 			}
+			if isPlace(card.ID) {
+				s.drawPlace(c, card.ID, rect, inset)
+				continue
+			}
 			if data == nil {
 				if s.sidebars.Holds(card.ID) {
 					s.drawSidebarCard(c, card.ID, rect, inset, originX, originY)
@@ -42,6 +46,23 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 			s.drawCard(c, card.ID, data, rect, inset, originX, originY)
 		}
 		s.drawDividers(c, inset)
+	})
+}
+
+// placeNames are the status lines of the window sidebars.
+var placeNames = map[string]string{"left": "왼쪽 창 사이드바", "right": "오른쪽 창 사이드바"}
+
+// drawPlace draws a window sidebar at its rectangle of the plane. A sidebar card has no head: its sections start at the top, and the
+// status line names the place.
+func (s *Shell) drawPlace(c *ui.Context, id string, rect layout.Rect, inset float32) {
+	ui.Box(c.Key(Exposed{Name: "core.card", Command: "core.card.focus", Item: id})).Role(ui.RoleGroup).Label(id).Absolute().
+		Left(float32(rect.X)+inset).Top(float32(rect.Y)+inset).Size(float32(rect.W), float32(rect.H)).
+		Background(s.palette.Card).Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.palette.Radius).Clip().Column().Children(func() {
+		ui.Box(c).FillWidth().Grow(1)
+		ui.Row(c).FillWidth().Height(s.metrics.footH).PaddingX(s.metrics.tabsPad).AlignItems(ui.Center).
+			BorderWidth(s.palette.BorderWidth, 0, 0, 0).BorderColor(s.palette.Rule).Role(ui.RoleStatus).Label("core.sidebar.status").Children(func() {
+			ui.Text(c, placeNames[id]).FontSize(10).TextColor(s.palette.Muted)
+		})
 	})
 }
 

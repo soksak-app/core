@@ -187,7 +187,7 @@ func (s *Shell) loadSpace(project *projectRecord) error {
 	if err := json.Unmarshal(space.Layout, &stored); err != nil {
 		return fmt.Errorf("space %s: %w", space.ID, err)
 	}
-	gap := float64(s.palette.Gap)
+	gap := float64(2 * s.palette.Gap) // The gap of a theme is the half width of the passage between two cards.
 	width, height := 0.0, 0.0
 	if s.plane != nil {
 		width, height = s.plane.Width(), s.plane.Height()
