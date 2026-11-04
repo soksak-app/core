@@ -734,7 +734,7 @@ export function parseOptions(args) {
 }
 
 /** Runs a command and resolves to the process result {status, stdout, stderr, error} that launchdServices reads. */
-function execute(command, args) {
+export function execute(command, args) {
   return new Promise((resolve) => {
     execFile(command, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }, (error, stdout, stderr) => {
       resolve({ status: error ? error.code : 0, stdout, stderr, error: error && typeof error.code !== "number" ? error : undefined });
@@ -748,6 +748,11 @@ async function outputOf(run, command, args) {
   if (result.error) throw new Error(`${command} ${args.join(" ")}: ${result.error.message}`);
   if (result.status !== 0) throw new Error(`${command} ${args.join(" ")} exited with ${result.status}: ${String(result.stderr).trim()}`);
   return result.stdout;
+}
+
+/** The CPU seconds of every process, as a map from pid to seconds, from ps -axo pid=,time=; run is the executor of execute. */
+export async function readCpuSeconds(run) {
+  return parseCpuSamples(await outputOf(run, "ps", ["-axo", "pid=,time="]));
 }
 
 /** The running WebKit GPU and networking processes of every application, as { pid, role }. pgrep exits with 1 when none runs. */
@@ -791,9 +796,35 @@ export async function applicationRows({ configDir, run = execute, realpath = rea
   ];
 }
 
-/** The windows of one application with the page and document rows that host.window of each window reports. */
-async function windowProcesses(configDir, sok, errors, text) {
-  const rows = [];
+/**
+ * The processes of the application of configDir with its windows: the rows of applicationRows and the page and document rows of each
+ * window (windowRows) from statuses, the host.window replies of its windows, each carrying `window`, its identifier. A page or document
+ * process that host.window reports is a row of its window, so the WebKit row of the launchd domain with the same pid is left out. The
+ * errors are those of windowRows.
+ */
+export async function windowApplicationRows({ configDir, statuses, run = execute, realpath = realpathSync }) {
+  const listed = await applicationRows({ configDir, run, realpath });
+  const shown = [];
+  const errors = [];
+  for (const status of statuses) {
+    const found = windowRows(status.window, configDir, status);
+    shown.push(...found.rows);
+    errors.push(...found.errors);
+  }
+  const webkit = ({ attribution }) => attribution === "launchd domain";
+  return {
+    rows: [
+      ...listed.filter((row) => !webkit(row)),
+      ...shown,
+      ...listed.filter((row) => webkit(row) && !shown.some(({ pid }) => pid === row.pid)),
+    ],
+    errors,
+  };
+}
+
+/** The windows of one application with the host.window reply of each window, which carries `window`, its identifier. */
+async function windowStatuses(configDir, sok, errors, text) {
+  const statuses = [];
   let windows = [];
   try {
     windows = JSON.parse(await text(sok, ["windows", "--config-dir", configDir])).map(({ window }) => window);
@@ -808,11 +839,9 @@ async function windowProcesses(configDir, sok, errors, text) {
       errors.push(`page of window ${window} of ${configDir}: ${error.message}`);
       continue;
     }
-    const found = windowRows(window, configDir, status);
-    rows.push(...found.rows);
-    errors.push(...found.errors);
+    statuses.push({ ...status, window });
   }
-  return { rows, windows };
+  return { statuses, windows };
 }
 
 /**
@@ -832,16 +861,11 @@ export async function measureApps({
   const apps = [];
   const claimed = new Set();
   for (const configDir of configDirs) {
-    const listed = await applicationRows({ configDir, run, realpath });
-    const shown = await windowProcesses(configDir, sok, errors, text);
-    const webkit = ({ attribution }) => attribution === "launchd domain";
-    for (const row of listed.filter(webkit)) claimed.add(row.pid);
-    // A page or document process that host.window reported is a row of its window, not a second WebKit row.
-    const rows = [
-      ...listed.filter((row) => !webkit(row)),
-      ...shown.rows,
-      ...listed.filter((row) => webkit(row) && !shown.rows.some(({ pid }) => pid === row.pid)),
-    ];
+    const shown = await windowStatuses(configDir, sok, errors, text);
+    const { rows, errors: rowErrors } = await windowApplicationRows({ configDir, statuses: shown.statuses, run, realpath });
+    errors.push(...rowErrors);
+    // The WebKit GPU and networking processes of the launchd domain belong to the application, so pgrep does not list them as unattributed.
+    for (const row of rows.filter(({ attribution }) => attribution === "launchd domain")) claimed.add(row.pid);
     apps.push({ configDir, rows, windows: shown.windows });
   }
   const unattributed = (await webkitPids(run))
@@ -878,7 +902,7 @@ export async function measureApps({
     : { footprints: await readFootprints() };
   for (const { row } of measured) row.bytes = first.footprints.get(row.pid) ?? null;
 
-  const readCpu = async () => parseCpuSamples(await text("ps", ["-axo", "pid=,time="]));
+  const readCpu = () => readCpuSeconds(run);
   const before = marks ? await marks.before() : undefined;
   const cpuBefore = await readCpu();
   const started = performance.now();
