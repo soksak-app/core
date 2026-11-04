@@ -5,13 +5,17 @@
 // reads no page process. The host is the process whose command line has --config-dir DIR, found as `make app-usage` finds it. The measure
 // function asserts nothing: it logs one entry per repetition, {repetition, counts, runtime, footprint}, and then one summary per count,
 // {count, baseline, values, grows}, where grows is true when the count rises in every repetition after the second. A count that grows is a
-// defect for the owning check to judge.
+// defect for the owning check to judge. With --b3-out FILE, which needs at least 30 repetitions, it writes the B3 output of S3
+// (scripts/b3-out.mjs) with the measurements that B3_MEASUREMENTS declares, changedCounts and growingFigures of b3Measurements, and
+// the conditions of the window.
 // `make object-counts` runs it.
 //
-//   node scripts/measure-object-counts.mjs --sok PATH --config-dir DIR --trace 0|1 --plugin ID [--plugin ID]... [--repetitions N]
+//   node scripts/measure-object-counts.mjs --sok PATH --config-dir DIR --trace 0|1 --plugin ID [--plugin ID]... [--repetitions N] [--b3-out FILE]
 import { spawn, execFile, execFileSync } from "node:child_process";
 import { connect } from "@soksak/client";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { readPolicy } from "@soksak/window-check/log-policy.mjs";
+import { b3Conditions, writeB3Out } from "./b3-out.mjs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
@@ -249,13 +253,51 @@ export async function measure({ objects, status, host, footprint, operate, settl
   return summary;
 }
 
+/** The keys of the B3 output of object-counts (scripts/b3-out.mjs), which b3Measurements gives. */
+export const B3_MEASUREMENTS = Object.freeze(["changedCounts", "growingFigures"]);
+
+/** The repetitions that S3 of B3 judges: every repetition from the second on against the first, and 21 to 30 against 11 to 20. */
+const B3_REPETITIONS = 30;
+
+/** The figures that S3 judges for growth: the host footprint and each Go runtime figure except heapReleasedBytes, which counts memory returned to the system. */
+function growthFigures(entry) {
+  const figures = { "footprint.host": entry.footprint.host.bytes };
+  if (entry.runtime !== null) {
+    for (const name of RUNTIME_FIGURES) if (name !== "heapReleasedBytes") figures[`runtime.${name}`] = entry.runtime[name];
+  }
+  return figures;
+}
+
+/**
+ * The B3 measurements of S3 from the repetition entries of measure (docs/spec/hosts.md, G3): changedCounts is the number of counts
+ * whose value after some repetition from the second on differs from their value after the first repetition (a count that a later
+ * repetition lacks or adds has changed), and growingFigures is the number of figures of growthFigures whose lowest value over
+ * repetitions 21 to 30 is above their highest value over repetitions 11 to 20.
+ */
+export function b3Measurements(entries) {
+  const repetitions = entries.filter((entry) => entry.repetition >= 1);
+  const last = repetitions.at(-1)?.repetition ?? 0;
+  if (last < B3_REPETITIONS) throw new Error(`the B3 measurements of object-counts need the repetitions 1 to ${B3_REPETITIONS}, not 1 to ${last}`);
+  const [first, ...later] = repetitions;
+  const names = new Set(repetitions.flatMap((entry) => Object.keys(entry.counts)));
+  const changedCounts = [...names].filter((name) => later.some((entry) => entry.counts[name] !== first.counts[name])).length;
+  const series = (from, to, name) => repetitions.filter((entry) => entry.repetition >= from && entry.repetition <= to).map((entry) => {
+    const value = growthFigures(entry)[name];
+    if (value === undefined) throw new Error(`repetition ${entry.repetition} has no figure ${name}`);
+    return value;
+  });
+  const growingFigures = Object.keys(growthFigures(first))
+    .filter((name) => Math.min(...series(21, 30, name)) > Math.max(...series(11, 20, name))).length;
+  return { changedCounts, growingFigures };
+}
+
 /** The command line options. */
 export function parseOptions(args) {
   const { values } = parseArgs({
     args, strict: true,
     options: {
       sok: { type: "string" }, "config-dir": { type: "string" }, trace: { type: "string" }, repetitions: { type: "string", default: "20" },
-      plugin: { type: "string", multiple: true, default: [] },
+      plugin: { type: "string", multiple: true, default: [] }, "b3-out": { type: "string" },
     },
   });
   const trace = parseTrace(values.trace);
@@ -266,7 +308,10 @@ export function parseOptions(args) {
   if (values.plugin.length === 0) throw new Error("required option: --plugin ID, once for each surface plugin whose tab the measurement opens");
   const empty = values.plugin.find((plugin) => plugin.trim() === "");
   if (empty !== undefined) throw new Error(`--plugin must name a plugin id (${JSON.stringify(empty)})`);
-  return { repetitions, sok: values.sok, configDir: values["config-dir"], trace, plugins: values.plugin };
+  const b3Out = values["b3-out"] ?? null;
+  if (b3Out === "") throw new Error("--b3-out must name a file");
+  if (b3Out !== null && repetitions < B3_REPETITIONS) throw new Error(`--b3-out needs at least ${B3_REPETITIONS} repetitions, not ${repetitions}`);
+  return { repetitions, sok: values.sok, configDir: values["config-dir"], trace, plugins: values.plugin, b3Out };
 }
 
 const STEP_LIMIT_MS = 60_000;
@@ -348,6 +393,7 @@ if (import.meta.main) {
     request: (method, params) => client.request(method, params),
     until: (name, predicate) => client.watch(window, name, predicate, { timeout: STEP_LIMIT_MS }),
   });
+  const entries = [];
   try {
     await measure({
       objects: () => step("diagnostics.objects", () => client.request("diagnostics.objects", { window })),
@@ -371,8 +417,16 @@ if (import.meta.main) {
       },
       repetitions: options.repetitions,
       operations: operationsFor(options.plugins),
-      log: (entry) => console.log(JSON.stringify(entry)),
+      log: (entry) => {
+        if (entry.repetition !== undefined) entries.push(entry);
+        console.log(JSON.stringify(entry));
+      },
     });
+    if (options.b3Out !== null) {
+      const conditions = b3Conditions({ window: await run(["status", "host.window", "--window", window]), trace: options.trace,
+        policy: readPolicy(configDir).classes });
+      writeB3Out(options.b3Out, { measurements: b3Measurements(entries), conditions });
+    }
   } finally {
     client.close();
     for (const child of watches) child.kill();
