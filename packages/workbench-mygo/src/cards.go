@@ -103,7 +103,7 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides 
 	activeWidth := 0.0
 	for i, tab := range tabs {
 		measured, _ := c.MeasureText(0, ui.Span{Text: s.tabName(tab), Size: 12})
-		widths[i] = float64(measured + 2*s.metrics.barTabGap + s.metrics.actW)
+		widths[i] = float64(min(measured+s.tabChrome(), s.metrics.tabMaxW))
 		if active != nil && tab.ID == active.ID {
 			activeWidth = widths[i]
 		}
@@ -141,6 +141,9 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides 
 	})
 }
 
+// tabChrome is the width of a tab outside its name: the padding of the name and the close button.
+func (s *Shell) tabChrome() float32 { return 2*s.metrics.barTabGap + s.metrics.actW }
+
 // tabName is the name that the head shows for a tab: the title its view reported, with the mark of a modified tab.
 func (s *Shell) tabName(tab layout.Tab) string {
 	report := s.surfaces.reports[tab.ID]
@@ -154,7 +157,7 @@ func (s *Shell) drawTab(c *ui.Context, tab layout.Tab, on bool) {
 	ui.Row(c.Key("tab-" + tab.ID)).AlignItems(ui.Center).Children(func() {
 		button := s.binder.Press(c, "core.card.tab", "core.tab.select", tab.ID, tabParam{tab.ID})
 		s.noticeMark(c, tab.ID)
-		s.barText(c, button, s.tabName(tab), on)
+		s.barTextWithin(c, button, s.tabName(tab), on, s.metrics.tabMaxW-s.tabChrome())
 		s.tabContextMenu(button, tab.ID)
 		s.barText(c, s.binder.Press(c, "core.card.tab-close", "core.tab.close", tab.ID, tabParam{tab.ID}), "✕", false)
 	})

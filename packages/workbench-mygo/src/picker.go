@@ -534,7 +534,7 @@ func (s *Shell) drawPickerItem(c *ui.Context, index int, item pickerItem, metric
 					ui.Icon(c, icon).Size(metrics.icon, metrics.iconH)
 				}
 			})
-			ui.Text(s.binder.Name(c, "core.picker.item-name", item.Key), item.Name).FontSize(12).NoWrap().Ellipsis("…").Grow(1)
+			ui.Text(s.binder.Name(c, "core.picker.item-name", item.Key), item.Name).FontSize(12).SingleLine().Ellipsis("…").Grow(1)
 			if item.Mark != "" {
 				ui.Text(c, item.Mark).FontSize(11).TextColor(s.palette.Muted).MarginStart(metrics.noteGap)
 			}
