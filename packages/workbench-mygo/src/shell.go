@@ -74,6 +74,8 @@ type metrics struct {
 	chromeH, headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW float32
 	// The card head (.chrome of packages/workbench/app.css).
 	cardHeadGap, cardHeadPad, cardTabsGap, cardButton, cardIcon, cardActsGap, cardActsPad, cardActHalfOpacity, tabGap, tabPadY, tabPadX, tabXPad, tabXOpacity, iconStroke, disabledOpacity, noticeDotInset, radiusSmallRatio, textSmallAtBase, textBase, chipSelMix, insetMix, tabXHoverMix float32
+	// The error line (#applicationError of packages/workbench/app.css).
+	errorPadY, errorPadX, errorBorder float32
 	// debugW is the width of the debug view, and debugH its largest share of the window height.
 	debugW, debugH float32
 }
@@ -123,6 +125,9 @@ func readMetrics(declared *Declarations) (metrics, error) {
 	read("tab-x-pad", &m.tabXPad)
 	read("tab-x-opacity", &m.tabXOpacity)
 	read("icon-stroke", &m.iconStroke)
+	read("error-pad-y", &m.errorPadY)
+	read("error-pad-x", &m.errorPadX)
+	read("error-border", &m.errorBorder)
 	read("disabled-opacity", &m.disabledOpacity)
 	read("notice-dot-inset", &m.noticeDotInset)
 	read("r-xs-ratio", &m.radiusSmallRatio)

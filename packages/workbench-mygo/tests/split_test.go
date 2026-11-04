@@ -448,6 +448,23 @@ func TestAnUnknownPluginIsRefused(t *testing.T) {
 	}
 }
 
+// An error line takes its height from the plane, so the cards keep the bottom of the window.
+func TestAnErrorLineKeepsTheCardsInTheWindow(t *testing.T) {
+	f := narrowCard(t, 1, "a")
+	before := f.box("core.card", "main")
+	f.shell.Event("surface-pressed", []any{7.0})
+	f.pending.drain(t)
+	f.tester.Frame()
+	f.tester.Frame()
+	after := f.box("core.card", "main")
+	if after.Y <= before.Y {
+		t.Fatalf("the card stands at %v under the error line, before it at %v", after.Y, before.Y)
+	}
+	if bottom, want := after.Y+after.H, before.Y+before.H; bottom != want {
+		t.Fatalf("the card ends at %v under the error line, want %v", bottom, want)
+	}
+}
+
 // narrowCard is a shell whose card main, beside the card other, holds tabs of title.
 func narrowCard(t *testing.T, tabs int, title string) *shellFixture {
 	t.Helper()

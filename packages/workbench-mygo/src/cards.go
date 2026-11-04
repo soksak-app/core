@@ -20,12 +20,12 @@ func (s *Shell) stageInset() float32 { return s.palette.Gap + s.palette.BorderWi
 func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 	s.surfaces.planeDrawn = true
 	project := s.opened()
-	DrawErrorBanner(c, s.errors)
+	banner := s.drawWorkError(c, width)
 	s.drawSpaces(c, project, width)
-	stage := height - s.metrics.spaceTabH - s.metrics.tabsGap
+	stage := height - banner - s.metrics.spaceTabH - s.metrics.tabsGap
 	inset := s.stageInset()
 	s.plane.Resize(float64(width-2*inset), float64(stage-2*inset))
-	originX, originY := inset, s.chromeHeight()+s.metrics.spaceTabH+s.metrics.tabsGap+inset
+	originX, originY := inset, s.chromeHeight()+banner+s.metrics.spaceTabH+s.metrics.tabsGap+inset
 	ui.Box(c).Size(width, stage).DrawOver(func(p *ui.Painter, r ui.Rect) { s.drawRail(p, r, inset) }).Children(func() {
 		cards := s.plane.Cards()
 		s.forgetCardReads(cards)
@@ -56,6 +56,23 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 		}
 	})
 	s.forgetStrips()
+}
+
+// drawWorkError draws the error line above the spaces, as #applicationError of packages/workbench/app.css, and returns its height, which
+// the plane gives up.
+func (s *Shell) drawWorkError(c *ui.Context, width float32) float32 {
+	text, ok := s.errors.Text(workbenchErrorPlace)
+	if !ok {
+		return 0
+	}
+	m := s.metrics
+	_, lines := c.MeasureText(width-2*m.errorPadX, ui.Span{Text: text})
+	height := lines + 2*m.errorPadY + m.errorBorder
+	ui.Column(c).Size(width, height).Padding(m.errorPadY, m.errorPadX).Background(s.palette.Bg).
+		BorderWidth(0, 0, m.errorBorder, 0).BorderColor(s.palette.Edge).Children(func() {
+		DrawErrorBanner(c, s.errors)
+	})
+	return height
 }
 
 // drawCard draws a card at its rectangle of the plane. originX and originY are the origin of the plane in the window.
