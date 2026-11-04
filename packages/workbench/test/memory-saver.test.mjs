@@ -365,6 +365,13 @@ test("a rejected interactionState read ends the attempt with a reported failure 
   assert.deepEqual(named("workbench.tab.unload.failed"),
     [{ tab: "a", plugin: "fixture", trigger: "delay", reason: "document region page is gone" }]);
   assert.deepEqual(state.failures, ["memory saver: tab a: unload failed: document region page is gone"]);
+  // A read that keeps failing runs once per delay, not again at the deadline that passed.
+  mock.timers.tick(0);
+  await settle();
+  assert.equal(state.failures.length, 1);
+  mock.timers.tick(120 * MINUTE);
+  await settle();
+  assert.equal(state.failures.length, 2);
   assert.deepEqual(state.states, []);
 });
 
