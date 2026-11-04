@@ -196,7 +196,7 @@ The identifiers in code use the names as written here.
 - Plugin repository requirement: the repository of each plugin that contributes a module or provides a shared module checks in its own tests that each such module is one self-contained ES module. A relative import inside one is a build error of that plugin.
 - Tests:
   - Core tests verify its boundary with fake plugin fixtures.
-  - Common contract cases (RPC, restart) are run by the owning package, core, and by both hosts. Core publishes the fixtures that a consumer needs. Each plugin repository tests only its own modules with those fixtures; it does not run core's cases or read core's paths.
+  - Common contract cases (RPC, restart) are run by the owning package, core, and by both hosts. Core publishes the fixtures that a consumer needs. Each plugin repository tests only its own modules with those fixtures; it does not run core's cases or read core's paths. It keeps each fixture that it replays as a byte copy that `contract-copies.json` declares, and the registry check compares the copies with the published files of each listed core ([contract copies](plugins.md#contract-copies)).
   - Measurements with real plugins and window checks are end-to-end checks of the installed environment, not package tests.
 ## Tabs and processes
 

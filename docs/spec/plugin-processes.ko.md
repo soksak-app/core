@@ -196,7 +196,7 @@ status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.views`는 `p
 - 플러그인 저장소 요구: 기여 module이나 공용 module을 제공하는 plugin의 저장소는 자기 시험에서 그 module이 각각 자체완결 ES module 하나인지 확인한다. 그 안의 상대 import는 그 plugin의 빌드 오류다.
 - 시험:
   - core 시험은 자기 경계를 fake plugin fixture로 검증한다.
-  - 공통 계약 case(RPC, 재시작)는 소유 package인 core와 두 호스트가 구현하고 실행한다. core는 소비자에게 필요한 fixture를 공개한다. 각 plugin 저장소는 그 fixture로 자기 module만 시험하며, core의 case를 실행하거나 core의 경로를 읽지 않는다.
+  - 공통 계약 case(RPC, 재시작)는 소유 package인 core와 두 호스트가 구현하고 실행한다. core는 소비자에게 필요한 fixture를 공개한다. 각 plugin 저장소는 그 fixture로 자기 module만 시험하며, core의 case를 실행하거나 core의 경로를 읽지 않는다. replay하는 각 fixture는 `contract-copies.json`이 선언하는 byte 사본으로 두고, registry 검사가 그 사본을 각 listed core의 게시된 파일과 비교한다([contract 사본](plugins.ko.md#contract-사본)).
   - 실제 plugin을 띄우는 측정과 창 검사는 설치된 환경의 end-to-end 검사이고, package 시험이 아니다.
 ## 탭과 프로세스
 

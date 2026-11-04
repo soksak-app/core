@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -75,4 +76,34 @@ test("runtime.command of an undeclared command of the plugin is still reported",
     "ui/page.js:4: probe.missing is not declared",
     "ui/page.js:4: probe.missing is run through runtime.command but is not a command of core or a declared command of the plugin",
   ]);
+});
+
+// The contract copies of a release (docs/spec/plugins.md#contract-copies): contract-copies.json names each copy with the
+// SHA-256 of its bytes, and each copy is the file of the same name in contract/ of this package.
+const published = (name) => createHash("sha256").update(readFileSync(new URL(`../contract/${name}`, import.meta.url))).digest("hex");
+const copies = (declaration) => ({ "contract-copies.json": JSON.stringify(declaration) });
+
+test("a contract copy with the SHA-256 of the published contract file passes", (t) => {
+  const root = repository(t, { id: "probe" }, copies({ "expose.json": published("expose.json") }));
+  assert.deepEqual(checkPluginRepository(root, { status: [], commands: [] }), []);
+});
+
+test("a contract copy whose SHA-256 differs from the published contract file is reported", (t) => {
+  const root = repository(t, { id: "probe" }, copies({ "expose.json": published("calls.json") }));
+  assert.deepEqual(checkPluginRepository(root, { status: [], commands: [] }), [
+    "contract copy expose.json differs from contract/expose.json",
+  ]);
+});
+
+test("a contract copy without a published contract file is reported", (t) => {
+  const root = repository(t, { id: "probe" }, copies({ "declared-ui-snapshot.json": published("expose.json"), "../package.json": published("expose.json") }));
+  assert.deepEqual(checkPluginRepository(root, { status: [], commands: [] }), [
+    "contract copy declared-ui-snapshot.json has no published contract/declared-ui-snapshot.json",
+    "contract copy ../package.json has no published contract/../package.json",
+  ]);
+});
+
+test("a release without contract-copies.json holds no contract copy", (t) => {
+  const root = repository(t, { id: "probe" }, {});
+  assert.deepEqual(checkPluginRepository(root, { status: [], commands: [] }), []);
 });
