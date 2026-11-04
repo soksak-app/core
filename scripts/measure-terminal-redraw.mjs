@@ -9,9 +9,9 @@
 // frames per second, and closes the project window afterwards. Every error is printed to stderr, and the exit status is 1 when an error
 // occurred. `make terminal-redraw-usage` runs it.
 //
-// --b3-out FILE writes the B3 record of a measurement without an error to FILE as JSON, with the conditions of the window of the
-// measurement as make app-usage writes them (b3Conditions of measure-app-usage.mjs). The keys, which B3_MEASUREMENTS lists, end in
-// their unit:
+// --b3-out FILE writes the B3 output of a measurement without an error to FILE through writeB3Out of scripts/b3-out.mjs, with the
+// conditions of b3Conditions for the window of the measurement (redrawConditions). The keys, which B3_MEASUREMENTS lists, end in their
+// unit:
 //   hostCpuPerFrameMs, applicationCpuPerFrameMs,  CPU milliseconds per presented frame of the host, the application without its
 //   sidecarCpuPerFrameMs                          sidecars, and the sidecars
 //   framesPerSecond                               the presented frames per second
@@ -27,8 +27,9 @@ import { parseArgs } from "node:util";
 import { connect } from "@soksak/client";
 import { Session } from "@soksak/window-check/app.mjs";
 import { readPolicy } from "@soksak/window-check/log-policy.mjs";
-import { b3Conditions, b3OutOption, b3Record, measureApps, newWindow, openOnlyTab, requireOcclusion, windowConditions, writeB3 } from "./measure-app-usage.mjs";
-import { applyTrace, parseTrace } from "./measure-trace.mjs";
+import { b3Conditions, writeB3Out } from "./b3-out.mjs";
+import { b3OutOption, measureApps, newWindow, openOnlyTab, requireOcclusion } from "./measure-app-usage.mjs";
+import { applyTrace, parseTrace, traceSettings } from "./measure-trace.mjs";
 
 const FIXTURE = fileURLToPath(new URL("./fixtures/status-redraw.mjs", import.meta.url));
 const START = "status-redraw start";
@@ -124,6 +125,14 @@ export function redrawMeasurements(cost) {
 }
 
 /**
+ * The conditions of the B3 output of the redraw: b3Conditions of scripts/b3-out.mjs with the host.window value of the window of the
+ * measurement before the first CPU reading, the diagnostics.performance of the trace state and the classes of the policy in force.
+ */
+export function redrawConditions({ status, window, trace, policy }) {
+  return b3Conditions({ windows: [{ ...status, window }], performance: traceSettings(trace)["diagnostics.performance"], policy });
+}
+
+/**
  * Opens a new window of the application of the session s, opens a project of the folder root in it, sets its content to 760 by 614
  * points and opens one tab of plugin in it, the only tab of its cards; waits until the tab registers `<plugin>.input` and
  * `<plugin>.screen`. Returns the session of the window, the tab and the id of the project.
@@ -209,8 +218,8 @@ async function measureRedraw({ sok, configDir, plugin, rows, rate, interval, tra
           throw error;
         }),
     });
-    // The conditions of a B3 record are read only for one: a plain measurement does not require a window on a screen.
-    const conditions = b3Out === null ? null : b3Conditions({ windows: [windowConditions(status, w.window)], trace, logPolicy: readPolicy(configDir).classes });
+    // The conditions of a B3 output are read only for one: a plain measurement does not require a window on a screen.
+    const conditions = b3Out === null ? null : redrawConditions({ status, window: w.window, trace, policy: readPolicy(configDir).classes });
     result = { plugin, rows, rate, interval, window: w.window, tab, seconds: measurement.seconds, cost, conditions, errors: measurement.errors };
   } catch (error) {
     failure = error;
@@ -254,7 +263,7 @@ if (import.meta.main) {
     for (const error of result.errors) console.error(`error: ${error}`);
     if (result.errors.length > 0) process.exitCode = 1;
     // A measurement with an error records no B3 values: its figures miss a process.
-    else if (options.b3Out !== null) writeB3(options.b3Out, b3Record(redrawMeasurements(result.cost), result.conditions));
+    else if (options.b3Out !== null) writeB3Out(options.b3Out, { measurements: redrawMeasurements(result.cost), conditions: result.conditions });
   } catch (error) {
     console.error(`error: ${error.message}`);
     process.exitCode = 1;

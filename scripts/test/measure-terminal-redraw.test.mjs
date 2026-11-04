@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
-import { B3_MEASUREMENTS, frameCost, measureRegion, parseOptions, prepareRedraw, presentedFramesOf, redrawMeasurements, requireRows, screenText } from "../measure-terminal-redraw.mjs";
+import { readB3Out, writeB3Out } from "../b3-out.mjs";
+
+import { B3_MEASUREMENTS, frameCost, redrawConditions, measureRegion, parseOptions, prepareRedraw, presentedFramesOf, redrawMeasurements, requireRows, screenText } from "../measure-terminal-redraw.mjs";
 
 test("the text of a screen joins the characters of each row and counts an empty cell as spaces of its width", () => {
   assert.equal(screenText([[{ ch: "a", width: 1 }, { width: 1 }, { ch: "b", width: 1 }], [{ ch: "한", width: 2 }, { width: 0 }]]), "a b\n한");
@@ -172,4 +177,24 @@ test("the fixture draws a start line, frames of the given rows and an end line w
   assert.match(one.stdout, /^status-redraw start rate=20 rows=1\n\n\x1b\[1A\r\x1b\[2K/);
   assert.equal(spawnSync(process.execPath, [fixture, "0", "1", "1"], { encoding: "utf8" }).status, 1, "a rate of 0 was accepted");
   assert.equal(spawnSync(process.execPath, [fixture, "20", "1", "0"], { encoding: "utf8" }).status, 1, "0 rows were accepted");
+});
+
+test("the B3 output of the redraw takes its conditions from b3-out with the performance switch of the trace state", () => {
+  const policy = { lifecycle: "error", input: "error", call: "debug", io: "error", frame: "debug" };
+  const status = redrawWindow({ scale: 2, refreshRate: 120 });
+  const conditions = redrawConditions({ status, window: "w2", trace: 1, policy });
+  assert.deepEqual(conditions, { refreshRate: 120, backingScale: 2, traceState: true, logPolicy: policy, window: { width: 760, height: 614 } });
+  assert.equal(redrawConditions({ status, window: "w2", trace: 0, policy }).traceState, false);
+  assert.throws(() => redrawConditions({ status: redrawWindow({ scale: 2, refreshRate: null }), window: "w2", trace: 0, policy }),
+    /window w2 reports the refresh rate null, so it is on no screen/);
+  const rows = [{ role: "host", pid: 10, cpuSeconds: 0.9 }];
+  const totals = { application: { cpuSeconds: 0.9 }, sidecars: { cpuSeconds: 0 }, total: { cpuSeconds: 0.9 } };
+  const output = { measurements: redrawMeasurements(frameCost({ rows, totals, presented: 300, seconds: 10 })), conditions };
+  const folder = mkdtempSync(join(tmpdir(), "b3-redraw-"));
+  try {
+    writeB3Out(join(folder, "S2.json"), output);
+    assert.deepEqual(readB3Out(join(folder, "S2.json")), output);
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
 });
