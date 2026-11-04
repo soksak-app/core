@@ -1,6 +1,6 @@
 package workbench
 
-// The text scale and the log levels that a view follows (docs/spec/native-surfaces.md#view-calls).
+// The text scale, the settings and the log levels that a view follows (docs/spec/native-surfaces.md#view-calls).
 
 // followScale sends each view that follows its text scale the scale that changed.
 func (s *Shell) followScale() {
@@ -16,6 +16,21 @@ func (s *Shell) followScale() {
 		if scale != view.scale {
 			view.scale = scale
 			s.pushView(surface, view, "textSize", scale)
+		}
+	}
+}
+
+// followSettings sends each view that follows the settings of its plugin their values after a change of one of them.
+func (s *Shell) followSettings() {
+	for surface, view := range s.surfaces.views {
+		held := s.surfaces.held[surface]
+		if !view.settings || held == nil || s.units[held.tab.Plugin] == nil {
+			continue
+		}
+		values := s.viewSettings(s.units[held.tab.Plugin])
+		if text := jsonText(values); text != view.settingValues {
+			view.settingValues = text
+			s.pushView(surface, view, "settings", values)
 		}
 	}
 }

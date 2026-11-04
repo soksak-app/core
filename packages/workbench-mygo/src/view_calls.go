@@ -40,7 +40,9 @@ type viewState struct {
 	// events holds the native events that the view subscribed to. failures holds the sessions that it follows.
 	events   map[string]bool
 	failures map[string]bool
-	settings bool
+	// settings tells that the view follows the settings of its plugin, and settingValues is the text of the last values that it holds.
+	settings      bool
+	settingValues string
 	// textSize tells that the view follows its text scale, and scale is the last scale that it received.
 	textSize bool
 	scale    float64
@@ -404,7 +406,7 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 	case "runtime.settings.read":
 		answer(s.viewSettings(unit), nil)
 	case "runtime.settings.on":
-		view.settings = true
+		view.settings, view.settingValues = true, jsonText(s.viewSettings(unit))
 		done()
 	case "runtime.data.get", "runtime.data.set", "runtime.data.on":
 		return s.runDataCall(call, unit, view, answer)
