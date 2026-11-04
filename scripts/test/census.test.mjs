@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { censusRules, parseCensusConfig } from "@soksak/kit-events/events-check";
+import { censusRules, emitFindings, parseCensusConfig } from "@soksak/kit-events/events-check";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const CONFIG = "scripts/census.json";
@@ -39,4 +39,13 @@ test("the repository census declaration is read and rejects what it does not kno
   const output = spawnSync(process.execPath, [CHECK, "--census", "scripts/test/missing-census.json"], { cwd: ROOT, encoding: "utf8" });
   assert.equal(output.status, 1);
   assert.match(output.stderr, /missing-census\.json/);
+});
+
+test("the catalog check refuses an event of a Go source of the mygo workbench that the catalog does not declare", () => {
+  const config = parseCensusConfig(CONFIG, readFileSync(join(ROOT, CONFIG), "utf8"));
+  const catalog = JSON.parse(readFileSync(join(ROOT, "docs/spec/events.json"), "utf8"));
+  const emit = (name) => new Map([["packages/workbench-mygo/src/fixture.go", `package workbench\n\nfunc f(e *Events) {\n\te.Emit(sok.LevelInfo, "${name}", map[string]any{"started_at": 1, "url": "soksak://workbench"}, nil)\n}\n`]]);
+  assert.deepEqual(emitFindings(catalog, emit("workbench.start"), "docs/spec/events.json", config).filter((line) => line.includes("fixture.go")), []);
+  const refused = emitFindings(catalog, emit("workbench.undeclared"), "docs/spec/events.json", config);
+  assert.ok(refused.some((line) => line.includes("fixture.go:4") && line.includes("workbench.undeclared")), refused.join("\n"));
 });

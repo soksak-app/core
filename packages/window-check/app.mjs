@@ -63,6 +63,9 @@ export const APPS = Object.fromEntries(requiredApps(process.env).map((name) => [
   configDir: process.env.SOKSAK_CONFIG_DIR ?? join(process.env.SOKSAK_CONFIG_ROOT ?? tmpdir(), `soksak-check-${name}`),
 }]));
 
+/** The applications with a main page: a check whose subject is the main page or a modal web view runs against them (docs/spec/host-parity.md). */
+export const MAIN_PAGE_APPS = Object.values(APPS).filter((app) => app.name !== "mygo");
+
 /** Verifies that the running endpoint is not older than the current build. */
 export function assertEndpointUsesCurrentBuild(endpoint, resolvedBinary, binaryMtimeMs) {
   if (endpoint.executable !== resolvedBinary) {

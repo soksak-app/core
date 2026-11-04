@@ -28,7 +28,7 @@
         "level": 0,
         "event": 1,
         "fields": 2,
-        "only": "^packages/sok/"
+        "only": "^packages/(sok|workbench-mygo)/"
       }
     ],
     "js": [
