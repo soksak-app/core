@@ -32,12 +32,12 @@ fn a_blocked_main_thread_is_recorded_with_its_stacks_and_its_end() {
     let stored_levels = Arc::clone(&levels);
     let stop = start_stall_watch(StallWatchOptions {
         on_main: Box::new(move |f| on_main.send(f).map_err(|e| e.to_string())),
-        sample: Box::new(move |path| {
+        sample: Arc::new(move |path| {
             samples.lock().unwrap().push(path.to_path_buf());
             Ok(())
         }),
         folder: folder.path().to_path_buf(),
-        emit_host: Box::new(move |level, event, fields| {
+        emit_host: Arc::new(move |level, event, fields| {
             stored_levels
                 .lock()
                 .unwrap()
@@ -103,9 +103,9 @@ fn first_stall(clock: Clock, wait: Wait) -> serde_json::Value {
     let folder = folder::Folder::new();
     let stop = start_stall_watch(StallWatchOptions {
         on_main: Box::new(|_task| Ok(())),
-        sample: Box::new(|_path| Ok(())),
+        sample: Arc::new(|_path| Ok(())),
         folder: folder.path().to_path_buf(),
-        emit_host: Box::new(move |_level, event, fields| {
+        emit_host: Arc::new(move |_level, event, fields| {
             let _ = sent.send((event.to_string(), fields));
         }),
         clock: Some(clock),
@@ -141,4 +141,93 @@ fn a_stall_of_a_blocked_main_thread_has_no_lateness_in_the_watch() {
     let fields = first_stall(clock, wait);
     assert_eq!(fields["late_ms"], 1000, "{fields}");
     assert_eq!(fields["watch_late_ms"], 0, "{fields}");
+}
+
+// contract: host.stall.sample-keeps-the-watch-running
+#[test]
+fn a_sample_of_the_threads_does_not_stop_the_watch() {
+    // A fake main thread and a sample that lasts until the test ends it, as a sample of a loaded system lasts for seconds.
+    let (work, queue) = mpsc::channel::<Box<dyn FnOnce() + Send>>();
+    std::thread::spawn(move || {
+        for f in queue {
+            f();
+        }
+    });
+    let events: Recorded = Arc::new(Mutex::new(Vec::new()));
+    let (release, released) = mpsc::channel::<()>();
+    let released = Mutex::new(released);
+    let folder = folder::Folder::new();
+    let on_main = work.clone();
+    let recorded = Arc::clone(&events);
+    let stop = start_stall_watch(StallWatchOptions {
+        on_main: Box::new(move |f| on_main.send(f).map_err(|e| e.to_string())),
+        sample: Arc::new(move |_path| released.lock().unwrap().recv().map_err(|e| e.to_string())),
+        folder: folder.path().to_path_buf(),
+        emit_host: Arc::new(move |_level, event, fields| {
+            recorded.lock().unwrap().push((event.to_string(), fields))
+        }),
+        clock: None,
+        wait: None,
+    });
+    let block_main = || {
+        let (hold, held) = mpsc::channel::<()>();
+        work.send(Box::new(move || {
+            let _ = held.recv();
+        }))
+        .unwrap();
+        std::thread::sleep(Duration::from_millis(1400));
+        drop(hold);
+    };
+    let wait_for = |name: &str, count: usize| {
+        let deadline = std::time::Instant::now() + Duration::from_secs(4);
+        loop {
+            let found = events
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|(event, _)| event == name)
+                .count();
+            if found >= count {
+                return;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "no {count} of {name} while the sample runs: {:?}",
+                events.lock().unwrap()
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    };
+    std::thread::sleep(Duration::from_millis(300));
+    block_main();
+    wait_for("host.stall.resumed", 1);
+    block_main();
+    wait_for("host.stall.resumed", 2);
+    release.send(()).unwrap();
+    wait_for("host.stall.sampled", 2);
+    stop();
+    let events = events.lock().unwrap();
+    let names: Vec<&str> = events.iter().map(|(event, _)| event.as_str()).collect();
+    assert_eq!(
+        names,
+        [
+            "host.stall",
+            "host.stall.resumed",
+            "host.stall",
+            "host.stall.sampled",
+            "host.stall.resumed",
+            "host.stall.sampled"
+        ],
+        "two stalls that end while the first sample runs, and the two samples"
+    );
+    for (event, fields) in events.iter() {
+        if event == "host.stall" {
+            assert!(fields["late_ms"].as_u64().unwrap() < 2000, "{fields}");
+        }
+    }
+    assert_eq!(
+        events[3].1["error"],
+        "a sample of the threads is still running"
+    );
+    assert!(events[5].1.get("error").is_none(), "{:?}", events[5]);
 }

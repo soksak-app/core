@@ -13,7 +13,7 @@
 // macro.
 #![recursion_limit = "256"]
 
-use std::sync::PoisonError;
+use std::sync::{Arc, PoisonError};
 
 use tauri::Manager;
 use tauri_plugin_deep_link::DeepLinkExt;
@@ -430,9 +430,9 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                         on_main: Box::new(move |task| {
                             main.run_on_main_thread(task).map_err(|e| e.to_string())
                         }),
-                        sample: Box::new(|path| platform::current()?.sample_threads(path)),
+                        sample: Arc::new(|path| platform::current()?.sample_threads(path)),
                         folder: directory.join("logs"),
-                        emit_host: Box::new(event_record::emit_host),
+                        emit_host: Arc::new(event_record::emit_host),
                         clock: None,
                         wait: None,
                     });

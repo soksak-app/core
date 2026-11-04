@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F454: host의 stall 감시가 thread sample 중에도 heartbeat를 보내므로, sample이 stall을 기록하지 않는다.
 - F446-2: drag report가 display가 보여 주는 frame을 읽어, 반복 frame 수가 다른 실행을 비교할 수 있다.
 - F453: 지침이 최신 게시 release를 v0.0.34로 적는다.
 - F447-2: registry 복원 실패가 다음 run을 실패시키지 않습니다.

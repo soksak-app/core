@@ -19,15 +19,17 @@ use crate::event_log::Level;
 const STALL_BEAT: Duration = Duration::from_millis(250);
 /// The lateness of a heartbeat that is a stall.
 const STALL_LATE: Duration = Duration::from_secs(1);
+/// The error of a stall during the sample of an earlier stall.
+const STALL_SAMPLE_RUNNING: &str = "a sample of the threads is still running";
 
 /// A function that runs on the watched thread.
 pub type MainTask = Box<dyn FnOnce() + Send>;
 /// Runs a task on the watched thread.
 pub type OnMain = Box<dyn Fn(MainTask) -> Result<(), String> + Send>;
 /// Writes the stacks of the threads of the process into a file.
-pub type Sample = Box<dyn Fn(&Path) -> Result<(), String> + Send>;
+pub type Sample = Arc<dyn Fn(&Path) -> Result<(), String> + Send + Sync>;
 /// Stores an event.
-pub type Emit = Box<dyn Fn(Level, &str, serde_json::Value) + Send>;
+pub type Emit = Arc<dyn Fn(Level, &str, serde_json::Value) + Send + Sync>;
 /// The time since the watch started. A test gives a clock that it controls; the host gives none.
 pub type Clock = Arc<dyn Fn() -> Duration + Send + Sync>;
 /// Waits one beat. A test gives a wait that advances its clock; the host gives none, and the watch sleeps.
@@ -60,6 +62,7 @@ pub fn start_stall_watch(options: StallWatchOptions) -> impl FnOnce() {
     let beat = Arc::new(AtomicU64::new(0));
     let stopped = Arc::new(AtomicBool::new(false));
     let stop = Arc::clone(&stopped);
+    let sampling = Arc::new(AtomicBool::new(false));
     crate::routine::spawn_named("stall watch", move || {
         let emit_host = &options.emit_host;
         let mut stalled_from: Option<u64> = None;
@@ -90,11 +93,27 @@ pub fn start_stall_watch(options: StallWatchOptions) -> impl FnOnce() {
                         json!({"late_ms": now - last, "watch_late_ms": watch_late.as_millis() as u64}),
                     );
                     let path = dump_path(&options.folder);
-                    let fields = match (options.sample)(&path) {
-                        Ok(()) => json!({"path": path}),
-                        Err(error) => json!({"path": path, "error": error}),
-                    };
-                    emit_host(Level::Warn, "host.stall.sampled", fields);
+                    if sampling.swap(true, Ordering::AcqRel) {
+                        emit_host(
+                            Level::Warn,
+                            "host.stall.sampled",
+                            json!({"path": path, "error": STALL_SAMPLE_RUNNING}),
+                        );
+                        continue;
+                    }
+                    // A sample lasts for seconds on a loaded system. The watch keeps sending heartbeats meanwhile, so that time
+                    // is not read as lateness of the main thread.
+                    let sample = Arc::clone(&options.sample);
+                    let emit = Arc::clone(&options.emit_host);
+                    let running = Arc::clone(&sampling);
+                    crate::routine::spawn_named("stall sample", move || {
+                        let fields = match sample(&path) {
+                            Ok(()) => json!({"path": path}),
+                            Err(error) => json!({"path": path, "error": error}),
+                        };
+                        emit(Level::Warn, "host.stall.sampled", fields);
+                        running.store(false, Ordering::Release);
+                    });
                 }
                 Some(from) if last > from => {
                     stalled_from = None;

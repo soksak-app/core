@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F454: The stall watch of a host keeps sending heartbeats during a sample of the threads, so a sample records no stall.
 - F446-2: A drag report reads the frames that a display shows, so runs with a different number of repeated frames compare.
 - F453: The guidance states v0.0.34 as the latest published release.
 - F447-2: A failed restore of the registry does not make a later run fail.

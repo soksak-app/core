@@ -173,3 +173,91 @@ func TestAStallOfABlockedMainThreadHasNoLatenessInTheWatch(t *testing.T) {
 		t.Fatalf("watch_late_ms %d, want 0", got)
 	}
 }
+
+// contract: host.stall.sample-keeps-the-watch-running
+func TestASampleOfTheThreadsDoesNotStopTheWatch(t *testing.T) {
+	// A fake main thread and a sample that lasts until the test ends it, as a sample of a loaded system lasts for seconds.
+	work := make(chan func(), 64)
+	go func() {
+		for f := range work {
+			f()
+		}
+	}()
+	release := make(chan struct{})
+	var mu sync.Mutex
+	var events []string
+	var fields []map[string]any
+	seen := func(want string, count int) bool {
+		mu.Lock()
+		defer mu.Unlock()
+		found := 0
+		for _, name := range events {
+			if name == want {
+				found++
+			}
+		}
+		return found >= count
+	}
+	await := func(want string, count int) {
+		t.Helper()
+		deadline := time.Now().Add(4 * time.Second)
+		for !seen(want, count) {
+			if time.Now().After(deadline) {
+				mu.Lock()
+				defer mu.Unlock()
+				t.Fatalf("no %d of %s while the sample runs: events %v", count, want, events)
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	start := time.Now()
+	clock := func() time.Duration { return time.Since(start) }
+	var answered atomic.Int64
+	stop := host.StartStallWatch(host.StallWatchOptions{
+		Heartbeat: func() (time.Duration, time.Duration) {
+			work <- func() { answered.Store(int64(clock())) }
+			return clock(), time.Duration(answered.Load())
+		},
+		Clock:  clock,
+		Sample: func(string) error { <-release; return nil },
+		Folder: t.TempDir(),
+		EmitHost: func(_ host.Level, event string, f map[string]any) {
+			mu.Lock()
+			events = append(events, event)
+			fields = append(fields, f)
+			mu.Unlock()
+		},
+	})
+	defer stop()
+	blockMain := func() {
+		hold := make(chan struct{})
+		work <- func() { <-hold }
+		time.Sleep(1400 * time.Millisecond)
+		close(hold)
+	}
+	time.Sleep(300 * time.Millisecond)
+	blockMain()
+	await("host.stall.resumed", 1)
+	blockMain()
+	await("host.stall.resumed", 2)
+	close(release)
+	await("host.stall.sampled", 2)
+	mu.Lock()
+	defer mu.Unlock()
+	if got := strings.Join(events, ","); got != "host.stall,host.stall.resumed,host.stall,host.stall.sampled,host.stall.resumed,host.stall.sampled" {
+		t.Fatalf("events %s, want two stalls that end while the first sample runs, and the two samples", got)
+	}
+	for index, name := range events {
+		if name == "host.stall" {
+			if late := int64Field(t, fields[index], "late_ms"); late >= 2000 {
+				t.Fatalf("late_ms %d of a main thread blocked for 1.4 s", late)
+			}
+		}
+	}
+	if fields[3]["error"] != "a sample of the threads is still running" {
+		t.Fatalf("the second sample reports %v", fields[3])
+	}
+	if _, failed := fields[5]["error"]; failed {
+		t.Fatalf("the first sample reports %v", fields[5])
+	}
+}
