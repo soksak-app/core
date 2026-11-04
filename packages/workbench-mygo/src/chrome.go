@@ -12,7 +12,7 @@ import (
 // barText is a text button of a bar.
 func (s *Shell) barText(c *ui.Context, button ui.Element, label string, on bool) {
 	button.Height(s.metrics.spaceTabH).PaddingX(s.metrics.barTabGap).Radius(4).AlignItems(ui.Center).Label(label).Children(func() {
-		text := ui.Text(c, label).NoWrap().Ellipsis("…").FontSize(12).MaxWidth(s.metrics.barTabMaxW)
+		text := ui.Text(c, label).NoWrap().Ellipsis("…").FontSize(s.frameFont(12)).MaxWidth(s.metrics.barTabMaxW)
 		if !on {
 			text.TextColor(s.palette.Muted)
 		}
@@ -26,10 +26,10 @@ func (s *Shell) barText(c *ui.Context, button ui.Element, label string, on bool)
 func (s *Shell) drawChrome(c *ui.Context, width float32) {
 	bar := c.TitleBar()
 	browsing := s.browsing || s.opened() == nil
-	ui.Row(c).Size(width, s.metrics.chromeH).PaddingX(s.metrics.barTabGap).AlignItems(ui.Center).Gap(s.metrics.tabsGap).DragWindow().
+	ui.Row(c).Size(width, s.chromeHeight()).PaddingX(s.metrics.barTabGap).AlignItems(ui.Center).Gap(s.metrics.tabsGap).DragWindow().
 		Role(ui.RoleGroup).Label("core.chrome.bar").Children(func() {
 		ui.Spacer(c).Width(bar.Left)
-		ui.Text(c, "soksak").Label("soksak").Bold().FontSize(13)
+		ui.Text(c, "soksak").Label("soksak").Bold().FontSize(s.frameFont(13))
 		if !browsing {
 			s.drawProjectTabs(c)
 		}

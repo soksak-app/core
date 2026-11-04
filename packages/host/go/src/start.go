@@ -99,12 +99,17 @@ func StartAssets(start func(window uint) ([]byte, error), windowHeader string) M
 	}
 }
 
-// StartWorkbench starts the workbench of window as a main page starts: the host leaves the previous workbench of the window and sets
-// its title bar. A workbench without a page calls it for each build, in place of the request of the start document. It is no method of
-// Host, because each exported method of Host is a host call of a page.
+// StartWorkbench starts the workbench of window as a main page starts: the host leaves the previous workbench of the window. A workbench
+// without a page calls it for each build, in place of the request of the start document, and draws its own title bar row. It is no method
+// of Host, because each exported method of Host is a host call of a page.
 func StartWorkbench(h *Host, window Frontend) error {
-	_, err := h.startPage(window.ID())
-	return err
+	h.mu.Lock()
+	s := h.windows[window.ID()]
+	h.mu.Unlock()
+	if s == nil {
+		return ErrNoStartWindow
+	}
+	return h.pageStarting(s)
 }
 
 // startPage starts the main page of a window and builds the start document of that window. Before it answers, it leaves the window in the not ready state,
@@ -112,31 +117,13 @@ func StartWorkbench(h *Host, window Frontend) error {
 func (h *Host) startPage(window uint) ([]byte, error) {
 	h.mu.Lock()
 	s := h.windows[window]
-	if s != nil {
-		s.ready = false
-	}
 	h.mu.Unlock()
-	if s != nil {
-		s.imageDetachPageStarting()
-	}
 	if s == nil {
 		return nil, ErrNoStartWindow
 	}
-	h.relay.Abandon(func(t relayTarget) bool { return t.owner == s && t.surface == "" })
-	s.pageStarted()
-	routine.Go("windows-changed", h.windowsChanged)
-	var detachments []imageDetachTarget
-	var reloadErr error
-	s.invoke(func() {
-		detachments, reloadErr = s.reloadSurfaceDocuments()
-	})
-	if reloadErr != nil {
-		return nil, fmt.Errorf("page reload: %w", reloadErr)
+	if err := h.pageStarting(s); err != nil {
+		return nil, err
 	}
-	if err := s.beginImageDetaches(detachments); err != nil {
-		return nil, fmt.Errorf("page reload image detach: %w", err)
-	}
-	s.discardOverlay()
 	snapshot, snapshotErr := h.runWorkspace(WorkspaceRequest{Kind: "snapshot"})
 	// The first draw of the page does not wait for the preparation, so the title bar is first set to the height of that first row and then the controls are read.
 	// (docs/spec/native-surfaces.md#title-bar-height).
@@ -146,4 +133,29 @@ func (h *Host) startPage(window uint) ([]byte, error) {
 	}
 	// The list is read after the detaches start, so a detach that ends later is told by its image-detach-ended event.
 	return StartDocument(workspace, workspaceErr, controls, s.pendingImageDetachSurfaces())
+}
+
+// pageStarting ends what the previous page of s left: the window takes the new page as not ready, and the surface documents and the
+// requests of the previous page end.
+func (h *Host) pageStarting(s *Surfaces) error {
+	h.mu.Lock()
+	s.ready = false
+	h.mu.Unlock()
+	s.imageDetachPageStarting()
+	h.relay.Abandon(func(t relayTarget) bool { return t.owner == s && t.surface == "" })
+	s.pageStarted()
+	routine.Go("windows-changed", h.windowsChanged)
+	var detachments []imageDetachTarget
+	var reloadErr error
+	s.invoke(func() {
+		detachments, reloadErr = s.reloadSurfaceDocuments()
+	})
+	if reloadErr != nil {
+		return fmt.Errorf("page reload: %w", reloadErr)
+	}
+	if err := s.beginImageDetaches(detachments); err != nil {
+		return fmt.Errorf("page reload image detach: %w", err)
+	}
+	s.discardOverlay()
+	return nil
 }

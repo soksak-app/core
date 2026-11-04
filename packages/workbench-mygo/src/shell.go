@@ -54,6 +54,8 @@ type environmentGrid struct {
 // metrics are the chrome metrics that the shell draws with.
 type metrics struct {
 	chromeH, headH, footH, spaceTabH, actW, actH, actIcon, tabsGap, tabsPad, barTabGap, barTabMaxW, tabPeekW, tabMinW float32
+	// debugW is the width of the debug view, and debugH its largest share of the window height.
+	debugW, debugH float32
 }
 
 func readMetrics(declared *Declarations) (metrics, error) {
@@ -67,6 +69,12 @@ func readMetrics(declared *Declarations) (metrics, error) {
 		*into = float32(value)
 	}
 	read("chrome-row-h", &m.chromeH)
+	read("dbg-card-w", &m.debugW)
+	share, ok := declared.HeightMetric("set-card-max-h")
+	if !ok {
+		failed = errors.New("the chrome metric set-card-max-h has no share of the height")
+	}
+	m.debugH = float32(share)
 	read("head-h", &m.headH)
 	read("foot-h", &m.footH)
 	read("space-tab-h", &m.spaceTabH)
@@ -139,6 +147,11 @@ type Shell struct {
 	plugins  map[string]*installedUnit
 	surfaces surfaceState
 	page     string
+
+	text      *TextSize
+	frameText float64
+	// debug is the open debug view, and nil while it is closed.
+	debug *debugState
 }
 
 // NewShell returns the shell of a window, with its commands in the registry.
@@ -148,6 +161,10 @@ func NewShell(options ShellOptions) (*Shell, error) {
 		return nil, err
 	}
 	palette, err := options.Declared.DefaultPalette()
+	if err != nil {
+		return nil, err
+	}
+	steps, err := TextSteps()
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +178,8 @@ func NewShell(options ShellOptions) (*Shell, error) {
 		return nil, fmt.Errorf("environment declaration: %w", err)
 	}
 	s := &Shell{options: options, metrics: read, palette: palette, registry: NewRegistry(options.Declared), calls: options.Calls,
-		grid: environment.Workspace.Grid, focus: environment.Workspace.Focus, browsing: true, library: newLibraryState()}
+		grid: environment.Workspace.Grid, focus: environment.Workspace.Focus, browsing: true, library: newLibraryState(), frameText: 1}
+	s.text = NewTextSize(shellText{s}, steps)
 	s.events = NewEvents(EventsOptions{Calls: s.calls, Post: options.Post, Report: options.Report, Now: time.Now,
 		After: func(delay time.Duration, task func()) { time.AfterFunc(delay, task) }})
 	s.calls.Observe(s.events.Call)
@@ -219,7 +237,7 @@ func (s *Shell) shortcutConditions() map[string]func() bool {
 // Registry is the registry of the window, which the exposure of the window answers from.
 func (s *Shell) Registry() *Registry { return s.registry }
 
-// Start reads the workspace and tells the host that the window takes events.
+// Start tells the host that the workbench of the window starts, reads the workspace and tells the host that the window takes events.
 func (s *Shell) Start() {
 	theme, err := s.options.Declared.PageTheme()
 	if err != nil {
@@ -259,6 +277,9 @@ func (s *Shell) adopt(value any) error {
 	snapshot, err := decode[struct {
 		Projects      []json.RawMessage `json:"projects"`
 		ProjectsError *string           `json:"projectsError"`
+		Common        struct {
+			TextSize *float64 `json:"textSize"`
+		} `json:"common"`
 	}](value)
 	if err != nil {
 		return err
@@ -275,6 +296,9 @@ func (s *Shell) adopt(value any) error {
 		projects = append(projects, record)
 	}
 	s.projects = projects
+	if snapshot.Common.TextSize != nil {
+		s.frameText = *snapshot.Common.TextSize
+	}
 	return nil
 }
 
@@ -371,15 +395,17 @@ func (s *Shell) View(c *ui.Context) {
 	theme.TextMuted = s.palette.Muted
 	theme.Border = s.palette.Edge
 	theme.Danger = s.palette.No
+	theme.FontSize = theme.Rem(1) * float32(s.text.Frame())
 	c.SetTheme(&theme)
 	s.keys.Declare(c)
 	ui.Column(c).Size(width, height).Background(s.palette.Bg).TextColor(s.palette.Fg).Clip().Children(func() {
 		s.drawChrome(c, width)
 		if s.browsing || s.opened() == nil {
-			s.drawLibrary(c, width, height-s.metrics.chromeH)
-			return
+			s.drawLibrary(c, width, height-s.chromeHeight())
+		} else {
+			s.drawWork(c, width, height-s.chromeHeight())
 		}
-		s.drawWork(c, width, height-s.metrics.chromeH)
+		s.drawDebug(c, width, height)
 	})
 	s.placeSurfaces()
 }

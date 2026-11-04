@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F502-16: mygo workbench가 `menu-command` event를 처리한다. View menu는 frame factor와 card factor를 바꾸고 frame chrome은 frame factor로 그린다. Help menu는 `logs/`의 파일을 나열하고 보여주고 저장하고 비교하는 debug view를 연다. workbench가 모르는 event는 error record로 간다. mygo workbench가 text scale, clipboard, focus, link, log level view call에 답해 terminal view가 시작된다.
 - F502-20: mygo workbench가 file command, `core.tab.memory`, `core.tab.unload`, `core.tab.keep`을 가진 memory saver, `tab-state.json`과 `tab-sessions` 저장소, background session을 가지며, 뒤의 step에서 답하는 command는 relay를 통해 답한다. 실패한 delay unload는 두 workbench에서 다음 deadline을 한 delay 뒤에 받으므로, 계속 실패하는 읽기가 곧바로 다시 돌지 않는다.
 - F502-19: `packages/workbench-mygo`가 `core.text`, `core.focus`, `core.pointer`, `core.contributions`, `core.verify`와 `core.text.larger`, `core.text.smaller`, `core.text.reset`, `core.focus.set`의 function, `shortcuts.json`의 key를 가지며, window의 shell에 연결하는 일이 남아 있다. 각 function에는 `ui.Tester` test가 있고, 검증은 layout model과 element tree에서 page workbench의 row를 만든다.
 - F502-17: mygo workbench는 화면을 값의 함수로 가진다: error display, section surface의 seat를 포함한 sidebar 틀, library의 plugin page, debug view이고, 각각 `ui.Tester` test가 있다. shell이 값을 주고 command를 연결한다.

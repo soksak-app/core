@@ -1,6 +1,7 @@
 package workbench
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -124,6 +125,17 @@ func (s *TextSize) Change(direction int) error {
 		return err
 	}
 	return s.place.SetCardTextSize(scope.Card, next)
+}
+
+// Register registers the status and the commands of the text size.
+func (s *TextSize) Register(registry *Registry) {
+	registry.Status("core.text", func() any { return s.Status() })
+	change := func(direction int) Command {
+		return func(json.RawMessage) (any, error) { return nil, s.Change(direction) }
+	}
+	registry.Command("core.text.larger", change(1))
+	registry.Command("core.text.smaller", change(-1))
+	registry.Command("core.text.reset", change(0))
 }
 
 // Status is the value of the status core.text.

@@ -25,6 +25,9 @@ type storedHost struct {
 	calls    []string
 	shown    []any
 	failing  map[string]error
+	// common is the stored common settings, and settings holds each patch of them.
+	common   map[string]any
+	settings []map[string]any
 	// installed is the document of the installed plugins, and it is empty without plugins.
 	installed string
 	// classes is the policy in force that the host call log answers; none stores the errors.
@@ -132,8 +135,28 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 		"projectRemoveAsk": answer("projectRemoveAsk", func(json.RawMessage) (any, error) { return true, nil }),
 		"folderChoose":     answer("folderChoose", func(json.RawMessage) (any, error) { return "/chosen", nil }),
 		"windowReady":      answer("windowReady", none),
-		"windowNew":        answer("windowNew", none),
-		"windowClose":      answer("windowClose", none),
+		"debugFiles": answer("debugFiles", func(json.RawMessage) (any, error) {
+			return []map[string]any{{"path": "older.log", "size": 1, "modified": 1}, {"path": "newer.log", "size": 2, "modified": 2}}, nil
+		}),
+		"debugRecord": answer("debugRecord", func(json.RawMessage) (any, error) {
+			return map[string]string{"path": "logs/state-20261104T000000Z.json"}, nil
+		}),
+		"debugSave": answer("debugSave", func(argument json.RawMessage) (any, error) {
+			var request struct{ Path string }
+			if err := json.Unmarshal(argument, &request); err != nil {
+				return nil, err
+			}
+			return map[string]string{"saved": "/saved/" + request.Path}, nil
+		}),
+		"debugRead": answer("debugRead", func(argument json.RawMessage) (any, error) {
+			var request struct{ Path string }
+			if err := json.Unmarshal(argument, &request); err != nil {
+				return nil, err
+			}
+			return map[string]any{"path": request.Path, "size": 4, "kind": "text", "text": "text of " + request.Path}, nil
+		}),
+		"windowNew":   answer("windowNew", none),
+		"windowClose": answer("windowClose", none),
 	}
 }
 
@@ -158,7 +181,10 @@ func (h *storedHost) workspace(argument json.RawMessage) (any, error) {
 	}
 	switch request.Kind {
 	case "snapshot":
-		return map[string]any{"projects": h.projects, "open": []string{}}, nil
+		return map[string]any{"projects": h.projects, "open": []string{}, "common": h.common}, nil
+	case "settings":
+		h.settings = append(h.settings, request.Patch)
+		return nil, nil
 	case "add":
 		h.projects = append(h.projects, request.Project)
 		return request.Project, nil

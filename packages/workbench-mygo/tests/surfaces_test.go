@@ -30,6 +30,8 @@ type surfaceHost struct {
 	declared []string
 	replies  []map[string]any
 	hostName []string
+	// clipboard is the text of the clipboard.
+	clipboard string
 	// theme is the argument of setTheme, and themeFirst tells that no placement preceded it.
 	theme      string
 	themeFirst bool
@@ -69,6 +71,19 @@ func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 		}
 		h.replies = append(h.replies, reply)
 		return nil, nil
+	}
+	table["clipboardRead"] = func(_ context.Context, argument json.RawMessage) (any, error) {
+		var request struct{ Type string }
+		if err := json.Unmarshal(argument, &request); err != nil {
+			return nil, err
+		}
+		if request.Type == "text" && h.clipboard != "" {
+			return map[string]any{"present": true, "type": "text", "text": h.clipboard}, nil
+		}
+		return map[string]any{"present": false, "type": request.Type}, nil
+	}
+	table["clipboardWriteText"] = func(_ context.Context, argument json.RawMessage) (any, error) {
+		return nil, json.Unmarshal(argument, &h.clipboard)
 	}
 	for _, name := range []string{"viewSidecarRoute", "sidecarListen", "viewEvent", "compositionPlace", "imageAttach", "sidecarSend", "exposureRegister"} {
 		table[name] = func(_ context.Context, argument json.RawMessage) (any, error) {

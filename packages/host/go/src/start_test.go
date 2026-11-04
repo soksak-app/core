@@ -7,6 +7,31 @@ import (
 	"unsafe"
 )
 
+// contract: exposure.relay.page-reload-ends-surface-requests
+func TestAWorkbenchStartingEndsTheReloadOfItsWindow(t *testing.T) {
+	c := sidecarSessionSurfaces(t).sidecars
+	surfaces := NewSurfaces(nil, c)
+	surfaces.invoke = func(task func()) { task() }
+	surfaces.reloadCancelLayout = func() error { return nil }
+	surfaces.reloadHideSurface = func(unsafe.Pointer, bool) {}
+	surfaces.reloadCloseImage = func(unsafe.Pointer) {}
+	surfaces.events = func(string, any) {}
+	owner := &Host{windows: map[uint]*Surfaces{1: surfaces}, workspace: NewWorkspace(t.TempDir()),
+		relay: &Relay[relayTarget]{waiting: map[uint64]*relayWaiter[relayTarget]{}}}
+	surfaces.host = owner
+	surfaces.ready = true
+	surfaces.pageReloading.Store(true)
+	if err := owner.pageStarting(surfaces); err != nil {
+		t.Fatal(err)
+	}
+	if surfaces.pageReloading.Load() {
+		t.Fatal("the window still refuses the requests to its surfaces")
+	}
+	if surfaces.ready {
+		t.Fatal("the window is ready before its workbench told so")
+	}
+}
+
 // contract: images.reload.start-sends-detach-without-waiting, surfaces.reload.sends-only-image-detaches
 func TestStartPageSendsTheReloadedImageDetachAndLeavesItsSurfacePending(t *testing.T) {
 	c := sidecarSessionSurfaces(t).sidecars

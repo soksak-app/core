@@ -39,6 +39,11 @@ type viewState struct {
 	events   map[string]bool
 	failures map[string]bool
 	settings bool
+	// textSize tells that the view follows its text scale, and scale is the last scale that it received.
+	textSize bool
+	scale    float64
+	// levels tells that the view follows the log levels.
+	levels bool
 }
 
 // tabReport holds what a view reported of its tab.
@@ -416,6 +421,9 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 		}
 		done()
 	default:
+		if s.runInputCall(call, view, answer) {
+			return nil
+		}
 		return fmt.Errorf("view call %s is not served", call.Command)
 	}
 	return nil
