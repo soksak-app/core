@@ -35,6 +35,41 @@ export function viewCardWithDifferentPluginTab(grid, plugin, preferred) {
   return card.id;
 }
 
+/**
+ * The placement of a tab view, the `placement` of its view descriptor. A placement is { card, open, close }:
+ *   card(grid, plugin, preferred)      the card that a view of `plugin` starts from, with a tab of another plugin as its anchor
+ *   open(s, { card, plugin, params })  starts one view and resolves with its surface
+ *   close(s, surface, { cleanup })     closes the view and waits until core.surfaces no longer lists it; `cleanup` names the cleanup
+ *                                      of a check in its errors
+ * The tab placement chooses the card with viewCardWithDifferentPluginTab, adds the view as a tab of the card and closes that tab.
+ */
+export const TAB_PLACEMENT = Object.freeze({
+  card: (grid, plugin, preferred) => viewCardWithDifferentPluginTab(grid, plugin, preferred),
+  async open(s, { card, plugin, params }) {
+    const { tab } = await s.run("core.card.add-tab", { card, plugin, params });
+    return tab;
+  },
+  async close(s, surface, { cleanup }) {
+    const result = await s.run("core.tab.close", { tab: surface });
+    assert.equal(result?.closed, true, `view ${surface} did not close${cleanup ? " during cleanup" : ""}`);
+    await s.until("core.surfaces", (items) => !items.some((item) => item.surface === surface),
+      `view ${surface} remained registered ${cleanup ? "during cleanup" : "after close"}`);
+  },
+});
+
+/** The placement `placement` ({ card, open, close }, TAB_PLACEMENT); another value is an error that names `owner`. */
+function requirePlacement(placement, owner) {
+  if (!["card", "open", "close"].every((name) => typeof placement?.[name] === "function")) {
+    throw new Error(`${owner} has no placement with the functions card, open and close`);
+  }
+  return placement;
+}
+
+/** The placement of the view descriptor `descriptor`; a descriptor without one is an error that names its plugin. */
+function descriptorPlacement(descriptor) {
+  return requirePlacement(descriptor?.placement, `view descriptor ${descriptor?.plugin}`);
+}
+
 /** Pairs each view's host request with its first ready event, keeping both source clocks. */
 export function processStartSamples(events, surfaces, plugin) {
   assert.ok(Array.isArray(events), "view process events must be an array");
@@ -509,8 +544,9 @@ async function presentDifferentPluginAnchor(s, { card, plugin }) {
 }
 
 /** Opens a view under a live recording and verifies pixels before return unless its caller defers analysis. */
-export async function openRecordedView(t, s, { card, plugin, params, readiness, readinessStatus, expectedContent, language,
+export async function openRecordedView(t, s, { card, plugin, placement, params, readiness, readinessStatus, expectedContent, language,
   recognizeFrame, captureObservationWindowMs, deferContentVerification = false } = {}) {
+  descriptorPlacement({ plugin, placement });
   assert.ok(typeof card === "string" && card.length > 0, "view card must be nonempty text");
   assert.ok(typeof plugin === "string" && plugin.length > 0, "view plugin must be nonempty text");
   assert.equal(typeof readiness, "function", "view readiness callback is required");
@@ -532,14 +568,11 @@ export async function openRecordedView(t, s, { card, plugin, params, readiness, 
   try {
     const anchor = await presentDifferentPluginAnchor(s, { card, plugin });
     const requestClock = await monotonicTimeMs(s);
-    const { tab } = await s.run("core.card.add-tab", { card, plugin, params });
+    const tab = await placement.open(s, { card, plugin, params });
     s.cleanup(async () => {
       const surfaces = await s.get("core.surfaces");
       if (!surfaces.some((item) => item.surface === tab)) return;
-      const result = await s.run("core.tab.close", { tab });
-      assert.equal(result?.closed, true, `view ${tab} did not close during cleanup`);
-      await s.until("core.surfaces", (items) => !items.some((item) => item.surface === tab),
-        `view ${tab} remained registered during cleanup`);
+      await placement.close(s, tab, { cleanup: true });
     });
     const readinessEvidence = await waitForViewReadiness(s, tab, { readiness, readinessStatus });
     const { displayed } = await s.presented();
@@ -702,9 +735,10 @@ export async function collectViewProcessGroups({ openView, readFootprints, diagn
 export async function collectViewStartAndMemory(t, s, descriptor, { viewCount = 3, processStartCount = 5 } = {}) {
   assert.ok(Number.isSafeInteger(viewCount) && viewCount >= 2, "view count must be at least two");
   assert.equal(processStartCount, 5, "the view-process contract requires exactly five start samples");
+  const placement = descriptorPlacement(descriptor);
   const grid = await s.get("core.grid");
   const activeCard = grid.cards.find((item) => item.active);
-  const card = viewCardWithDifferentPluginTab(grid, descriptor.plugin, activeCard?.id);
+  const card = placement.card(grid, descriptor.plugin, activeCard?.id);
 
   const groups = await collectViewProcessGroups({
     openView: () => openRecordedView(t, s, { card, ...descriptor, deferContentVerification: true }),
@@ -756,6 +790,7 @@ export async function collectViewStartAndMemory(t, s, descriptor, { viewCount = 
 /** Runs the three initial-only process-group reclamation samples for opened view surfaces. */
 export async function collectViewReclaimMeasurements(t, s, descriptor, views, evidence = { events: [], recordings: [] }) {
   assert.ok(Array.isArray(views) && views.length > 0, "reclaim requires opened view evidence");
+  const placement = descriptorPlacement(descriptor);
   const reclaim = [];
   const closeInitial = async (views) => {
     const host = await s.get("host.window");
@@ -781,13 +816,13 @@ export async function collectViewReclaimMeasurements(t, s, descriptor, views, ev
         documents: inventory.documents.map((row) => ({ document: row.document, historyEntries: document.regionHistoryEntries })),
         unstartedDocuments: inventory.unstartedDocuments });
     }
-    return closeViewGroup(t, s, { surfaces, beforeProcesses, closedViews });
+    return closeViewGroup(t, s, { placement, surfaces, beforeProcesses, closedViews });
   };
   reclaim.push(await closeInitial(views));
   for (let index = 1; index < 3; index++) {
     const grid = await s.get("core.grid");
     const activeCard = grid.cards.find((item) => item.active);
-    const card = viewCardWithDifferentPluginTab(grid, descriptor.plugin, activeCard?.id);
+    const card = placement.card(grid, descriptor.plugin, activeCard?.id);
     const view = await openRecordedView(t, s, { card, ...descriptor, deferContentVerification: true });
     evidence.events.push(...view.events);
     const sample = await closeInitial([view]);
@@ -814,7 +849,8 @@ export async function collectViewLifecycleMeasurements(t, s, descriptor) {
 }
 
 /** Closes every view in a shared process group and preserves live/dead PID rows. */
-export async function closeViewGroup(t, s, { surfaces, beforeProcesses, closedViews }) {
+export async function closeViewGroup(t, s, { placement, surfaces, beforeProcesses, closedViews }) {
+  requirePlacement(placement, "view close");
   assert.ok(Array.isArray(surfaces) && surfaces.length > 0, "view close requires nonempty surfaces");
   assert.ok(Array.isArray(beforeProcesses) && beforeProcesses.length > 0, "view close requires the complete pre-close process group");
   assert.ok(Array.isArray(closedViews) && closedViews.length === surfaces.length,
@@ -833,12 +869,7 @@ export async function closeViewGroup(t, s, { surfaces, beforeProcesses, closedVi
       `view ${view.surface} history evidence omits or adds a child document`);
   }
   const began = await monotonicTimeMs(s);
-  for (const surface of surfaces) {
-    const result = await s.run("core.tab.close", { tab: surface });
-    assert.equal(result?.closed, true, `view ${surface} did not close`);
-    await s.until("core.surfaces", (items) => !items.some((item) => item.surface === surface),
-      `view ${surface} remained registered after close`);
-  }
+  for (const surface of surfaces) await placement.close(s, surface, { cleanup: false });
   const afterProcesses = await Promise.all(beforeProcesses.map(async ({ pid }) => {
     try {
       await s.request("diagnostics.process.exit", { pid });

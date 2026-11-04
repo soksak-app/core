@@ -7,9 +7,9 @@ import test from "node:test";
 
 import { readFrame } from "@soksak/window-check/frame.mjs";
 import * as viewMetrics from "../view-metrics-collection.mjs";
-import { closeViewGroup, collectViewProcessGroups, collectViewStartAndMemory, openRecordedView, processStartSamples, viewContentFrameEvents,
-  mapViewContentFramesToCapture, viewCardWithDifferentPluginTab, viewStartClockBracket, waitForViewReadiness,
-  withViewContentTrace } from "../view-metrics-collection.mjs";
+import { closeViewGroup, collectViewProcessGroups, collectViewReclaimMeasurements, collectViewStartAndMemory, openRecordedView,
+  processStartSamples, TAB_PLACEMENT, viewContentFrameEvents, mapViewContentFramesToCapture, viewCardWithDifferentPluginTab,
+  viewStartClockBracket, waitForViewReadiness, withViewContentTrace } from "../view-metrics-collection.mjs";
 
 const event = (name, surface, ts_us, mono_ns) => ({ event: name, ts_us, mono_ns,
   fields: { plugin: "fixture", surface } });
@@ -127,7 +127,7 @@ test("the exported lifecycle collector forwards the selected card ID to its firs
     async record() { recordCalls++; throw sentinel; },
   };
   await assert.rejects(collectViewStartAndMemory(t, s, {
-    plugin: "fixture", readinessStatus: "fixture.ready", readiness: async () => {},
+    plugin: "fixture", placement: TAB_PLACEMENT, readinessStatus: "fixture.ready", readiness: async () => {},
     expectedContent: "target text", language: "en-US",
   }), (error) => error === sentinel);
   assert.equal(recordCalls, 1, "the selected card ID did not reach openRecordedView before recording");
@@ -663,7 +663,7 @@ test("anchor OCR rejects missing or unsupported host menu languages", { timeout:
       async presented() { return { displayed: 1 }; },
     };
     await assert.rejects(openRecordedView({ diagnostic() {} }, session, {
-      card: "card-1", plugin: "fixture", readinessStatus: "fixture.ready", readiness: async () => {},
+      card: "card-1", plugin: "fixture", placement: TAB_PLACEMENT, readinessStatus: "fixture.ready", readiness: async () => {},
       expectedContent: "fixture", language: "en-US",
     }), (error) => error.message.includes("host.menu reported an unsupported language for anchor OCR")
       && error.message.includes(language ?? "undefined"));
@@ -673,7 +673,7 @@ test("anchor OCR rejects missing or unsupported host menu languages", { timeout:
 test("recorded view observation window rejects nonpositive and nonfinite durations", { timeout: 5000 }, async () => {
   for (const captureObservationWindowMs of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
     await assert.rejects(openRecordedView({}, {}, {
-      card: "card-1", plugin: "fixture", readinessStatus: "fixture.ready", readiness: async () => {},
+      card: "card-1", plugin: "fixture", placement: TAB_PLACEMENT, readinessStatus: "fixture.ready", readiness: async () => {},
       expectedContent: "fixture", language: "en-US", captureObservationWindowMs,
     }), /finite positive duration/);
   }
@@ -731,7 +731,7 @@ test("direct recorded views return first-content proof before resolving", { time
     cleanup() {},
   };
   const result = await openRecordedView({ diagnostic() {} }, s, {
-    card: "card-1", plugin: "fixture", readinessStatus: "fixture.ready", readiness: async () => {},
+    card: "card-1", plugin: "fixture", placement: TAB_PLACEMENT, readinessStatus: "fixture.ready", readiness: async () => {},
     expectedContent: "target content", language: "en-US", captureObservationWindowMs: 1,
     recognizeFrame: async (frame) => { recognized.push(frame.time); return { lines: [frame.time === 5 ? "anchor" : "target content"] }; },
   });
@@ -837,7 +837,7 @@ test("one recording proves the physical anchor boundary before target content", 
     cleanup(fn) { calls.push("cleanup"); this.cleanups ??= []; this.cleanups.push(fn); },
   };
   const opening = openRecordedView({ diagnostic: () => {} }, s, {
-    card: "card-1", plugin: "fixture", params: { path: "file.txt" },
+    card: "card-1", plugin: "fixture", placement: TAB_PLACEMENT, params: { path: "file.txt" },
     readinessStatus: "fixture.ready",
     readiness: async (_session, surface) => {
       signalReadiness();
@@ -930,11 +930,11 @@ test("view process-group close records observed history and every original PID",
   };
   const beforeProcesses = [{ pid: 4101, footprintBytes: 1_000_000 }];
   const closedViews = [{ surface: "view-1", rootHistoryEntries: 1, documents: [] }];
-  const result = await closeViewGroup({ diagnostic() {} }, s, { surfaces: ["view-1"], beforeProcesses, closedViews });
+  const result = await closeViewGroup({ diagnostic() {} }, s, { placement: TAB_PLACEMENT, surfaces: ["view-1"], beforeProcesses, closedViews });
   assert.deepEqual(result, { beforeProcesses, afterProcesses: [{ pid: 4101, footprintBytes: 0 }],
     elapsedMs: 1, engineCacheHeld: false, closedViews });
   await assert.rejects(closeViewGroup({ diagnostic() {} }, s, {
-    surfaces: ["view-1"], beforeProcesses,
+    placement: TAB_PLACEMENT, surfaces: ["view-1"], beforeProcesses,
     closedViews: [{ surface: "view-1", rootHistoryEntries: 2, documents: [] }],
   }), /root session history/);
 });
@@ -960,4 +960,49 @@ test("source events inside the gesture require a recorded capture frame", { time
   const next = { sequence: 2, sourceSequence: 2, timeRange: { lowerMs: 11, upperMs: 12 }, frameIndex: 2 };
   assert.deepEqual(requireViewContentFrameCoverage([boundary, next], { gestureStartedAtMs: 9, gestureEndedAtMs: 20 }),
     [boundary, next], "a captured source row that may be inside the gesture is retained without false rejection");
+});
+
+test("a view descriptor without a placement is refused by every collector with an error that names the descriptor", { timeout: 5000 }, async (t) => {
+  const descriptor = { plugin: "fixture", readinessStatus: "fixture.ready", readiness: async () => {}, expectedContent: "fixture",
+    language: "en-US" };
+  const refused = { message: "view descriptor fixture has no placement with the functions card, open and close" };
+  const untouched = new Proxy({}, { get(_, name) { throw new Error(`the session was used for ${String(name)}`); } });
+  await assert.rejects(openRecordedView(t, untouched, { card: "card-1", ...descriptor }), refused);
+  await assert.rejects(collectViewStartAndMemory(t, untouched, descriptor), refused);
+  await assert.rejects(collectViewReclaimMeasurements(t, untouched, descriptor, [{ surface: "view-1" }]), refused);
+  await assert.rejects(openRecordedView(t, untouched, { card: "card-1", ...descriptor, placement: { card() {}, open() {} } }), refused);
+  await assert.rejects(closeViewGroup(t, untouched, { surfaces: ["view-1"], beforeProcesses: [{ pid: 1, footprintBytes: 1 }],
+    closedViews: [{ surface: "view-1", rootHistoryEntries: 1, documents: [] }] }),
+  { message: "view close has no placement with the functions card, open and close" });
+});
+
+test("the tab placement chooses a card with a tab of another plugin, adds the view as a tab and closes it as a tab", { timeout: 5000 }, async () => {
+  const grid = { cards: [{ id: "card-1", tabs: [{ id: "other", plugin: "other-fixture" }] }] };
+  assert.equal(TAB_PLACEMENT.card(grid, "fixture", "card-1"), viewCardWithDifferentPluginTab(grid, "fixture", "card-1"));
+  const calls = [];
+  let registered = true;
+  const s = {
+    async run(method, params) {
+      calls.push([method, params]);
+      if (method === "core.card.add-tab") return { tab: "view-1" };
+      registered = false;
+      return { closed: true };
+    },
+    async until(name, predicate, message) {
+      calls.push([name, message]);
+      const surfaces = registered ? [{ surface: "view-1" }] : [];
+      assert.ok(predicate(surfaces), message);
+      return surfaces;
+    },
+  };
+  assert.equal(await TAB_PLACEMENT.open(s, { card: "card-1", plugin: "fixture", params: { path: "a.txt" } }), "view-1");
+  await TAB_PLACEMENT.close(s, "view-1", { cleanup: false });
+  assert.deepEqual(calls, [
+    ["core.card.add-tab", { card: "card-1", plugin: "fixture", params: { path: "a.txt" } }],
+    ["core.tab.close", { tab: "view-1" }],
+    ["core.surfaces", "view view-1 remained registered after close"],
+  ]);
+  s.run = async () => ({ closed: false });
+  await assert.rejects(TAB_PLACEMENT.close(s, "view-1", { cleanup: true }), { message: /^view view-1 did not close during cleanup\n/ });
+  assert.ok(Object.isFrozen(TAB_PLACEMENT));
 });

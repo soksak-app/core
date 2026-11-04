@@ -8,12 +8,13 @@ import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFr
   from "../../view-frame-geometry.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, monotonicTimeMs,
   mapViewContentFramesToCapture, requireViewContentFrameCoverage, rightEdgeWidthDragPlan, rootNativePlacementBeforeCapture,
-  selectOneShotViewSourceFrame, waitForViewReadiness, withViewContentTrace }
+  selectOneShotViewSourceFrame, TAB_PLACEMENT, waitForViewReadiness, withViewContentTrace }
   from "../../view-metrics-collection.mjs";
 
 /** Browser-specific inputs for the shared view lifecycle measurement collector. */
 export const browserViewDescriptor = Object.freeze({
   plugin: "browser",
+  placement: TAB_PLACEMENT,
   params: undefined,
   expectedContent: "주소를 입력하세요",
   language: "ko-KR",

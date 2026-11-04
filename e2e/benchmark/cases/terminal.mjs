@@ -9,7 +9,7 @@ import { runViewMeasurements } from "@soksak/window-check/view-metrics.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, monotonicTimeMs,
   mapViewContentFramesToCapture, requireViewContentFrameCoverage, rightEdgeWidthDragPlan,
   rootNativePlacementBeforeCapture, selectOneShotViewSourceFrame,
-  waitForViewReadiness, withViewContentTrace } from "../../view-metrics-collection.mjs";
+  TAB_PLACEMENT, waitForViewReadiness, withViewContentTrace } from "../../view-metrics-collection.mjs";
 import { firstContentFrame } from "../../view-first-content.mjs";
 import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFrame, measureViewFrameGeometry,
   VIEW_GEOMETRY_COLOR_TOLERANCE }
@@ -49,6 +49,7 @@ export function terminalViewDescriptorOf(plugin) {
   if (!TERMINAL_PLUGINS.includes(plugin)) throw new Error(`a terminal view is a view of the terminal or the term plugin, not ${plugin}`);
   return Object.freeze({
     plugin,
+    placement: TAB_PLACEMENT,
     params: undefined,
     expectedContent: "sh-3.2$",
     language: "en-US",

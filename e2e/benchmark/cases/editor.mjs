@@ -6,7 +6,7 @@ import { firstContentFrame } from "../../view-first-content.mjs";
 import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFrame, measureViewFrameGeometry }
   from "../../view-frame-geometry.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, mapViewContentFramesToCapture, monotonicTimeMs,
-  selectOneShotViewSourceFrame, viewCardWithDifferentPluginTab, viewFootprints,
+  selectOneShotViewSourceFrame, TAB_PLACEMENT, viewCardWithDifferentPluginTab, viewFootprints,
   requireViewContentFrameCoverage, rootNativePlacementBeforeCapture,
   withViewContentTrace } from "../../view-metrics-collection.mjs";
 import { viewContentCases } from "../../view-content.mjs";
@@ -366,6 +366,7 @@ export function editorViewDescriptor(content) {
   const expectedLength = "SOKSAK EDITOR CONTENT".length + 1;
   return {
     plugin: "editor",
+    placement: TAB_PLACEMENT,
     params: content.params,
     expectedContent: "SOKSAK EDITOR CONTENT",
     language: "en-US",

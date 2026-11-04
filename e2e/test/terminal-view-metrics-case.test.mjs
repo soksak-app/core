@@ -10,6 +10,7 @@ import { terminalDragGeometryFrame, terminalFirstContentFrame, terminalSourceCon
   terminalShellSettings, terminalViewDescriptor, terminalViewDescriptorOf, writeTerminalDragLayouts, measureTerminalLayoutFrame,
   setTerminalGeometryBackground, terminalRasterTargetRectPt, TERMINAL_GEOMETRY_BACKGROUND }
   from "../benchmark/cases/terminal.mjs";
+import { TAB_PLACEMENT } from "../view-metrics-collection.mjs";
 
 function terminalTraceModeSession({ performanceTrace, logPolicy }) {
   const values = {
@@ -329,6 +330,8 @@ test("the term view descriptor reads the statuses and commands of the term plugi
   const term = terminalViewDescriptorOf("term");
   assert.equal(term.plugin, "term");
   assert.equal(term.readinessStatus, "term.session");
+  assert.equal(term.placement, TAB_PLACEMENT);
+  assert.equal(terminalViewDescriptor.placement, TAB_PLACEMENT);
   assert.equal(term.expectedContent, "sh-3.2$");
   const calls = [];
   const session = {
