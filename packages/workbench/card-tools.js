@@ -1,15 +1,14 @@
 // Manages the display and the command bindings of the card header tools.
 import { bind } from "./commands.js";
+import { declaredIcons as icons } from "./icons.js";
 
 export const CARD_TOOL_MENUS = { add: "add", x: "split-x", y: "split-y" };
-const EXPAND = '<path d="M6 2H2v4M10 2h4v4M2 10v4h4M14 10v4h-4"/>';
-const RESTORE = '<path d="M2 6h4V2M10 2v4h4M6 14v-4H2M14 10h-4v4"/>';
 const definitions = [
-  ["add", "이 카드에 탭 추가 — 무엇을 띄울지 묻는다", "core.card.add", '<path d="M8 3v10M3 8h10"/>'],
-  ["x", "세로선으로 쪼개기 — 좌우로 나뉜다", "core.card.split-x", '<rect class="half" x="2" y="3" width="6" height="10" rx="1.5"/><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M8 3v10"/>'],
-  ["y", "가로선으로 쪼개기 — 위아래로 나뉜다", "core.card.split-y", '<rect class="half" x="3" y="2" width="10" height="6" rx="1.5"/><rect x="3" y="2" width="10" height="12" rx="2"/><path d="M3 8h10"/>'],
-  ["fullscreen", "카드 전체 화면", "core.card.fullscreen", EXPAND],
-  ["close", "이 카드를 닫는다 — 안의 탭이 몇 개든 함께 간다", "core.card.close", '<path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/>'],
+  ["add", "이 카드에 탭 추가 — 무엇을 띄울지 묻는다", "core.card.add", icons["card-add"]],
+  ["x", "세로선으로 쪼개기 — 좌우로 나뉜다", "core.card.split-x", icons["card-split-x"]],
+  ["y", "가로선으로 쪼개기 — 위아래로 나뉜다", "core.card.split-y", icons["card-split-y"]],
+  ["fullscreen", "카드 전체 화면", "core.card.fullscreen", icons["card-expand"]],
+  ["close", "이 카드를 닫는다 — 안의 탭이 몇 개든 함께 간다", "core.card.close", icons["card-close"]],
 ];
 const icon = (path) => `<svg viewBox="0 0 16 16" aria-hidden="true">${path}</svg>`;
 
@@ -48,7 +47,7 @@ export function updateCardTools(toolbar, { canClose, canSplitX, canSplitY, fulls
       title = fullscreen ? "카드 배치 복원" : "카드 전체 화면";
       const pressed = String(fullscreen);
       if (button.getAttribute("aria-pressed") !== pressed) {
-        button.innerHTML = icon(fullscreen ? RESTORE : EXPAND);
+        button.innerHTML = icon(icons[fullscreen ? "card-restore" : "card-expand"]);
         button.setAttribute("aria-pressed", pressed);
       }
     }

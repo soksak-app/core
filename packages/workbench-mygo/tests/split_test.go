@@ -448,6 +448,67 @@ func TestAnUnknownPluginIsRefused(t *testing.T) {
 	}
 }
 
+// narrowCard is a shell whose card main, beside the card other, holds tabs of title.
+func narrowCard(t *testing.T, tabs int, title string) *shellFixture {
+	t.Helper()
+	list := []map[string]any{}
+	for i := range tabs {
+		list = append(list, map[string]any{"id": fmt.Sprintf("tab-%06d", i), "plugin": "notes", "title": fmt.Sprintf("%d %s", i, title)})
+	}
+	project := storedProject(list...)
+	state := project["spaces"].([]map[string]any)[0]["layout"].(map[string]any)["state"].(map[string]any)
+	state["xs"] = []float64{0, 0.5, 1}
+	state["cards"] = append(state["cards"].([]map[string]any), map[string]any{"id": "other", "c0": 1, "c1": 2, "r0": 0, "r1": 1, "data": map[string]any{
+		"tabs": []map[string]any{{"id": "tab-bbbbbb", "plugin": "notes", "title": "b"}}, "activeId": "tab-bbbbbb"}})
+	f := newShell(t, &storedHost{projects: []map[string]any{project}})
+	if _, err := f.answer("core.project.activate", map[string]string{"id": "prj-a"}); err != nil {
+		t.Fatal(err)
+	}
+	f.settle()
+	return f
+}
+
+// A card head starts with its tab list button and ends with its tools in one group. Its tabs stand between them, each with its name,
+// cut within the bound of a tab, and its close button.
+func TestACardHeadHoldsItsTabsBetweenItsListAndItsTools(t *testing.T) {
+	f := narrowCard(t, 3, strings.Repeat("max@maxs-MacBook-Pro-9:/private/tmp/", 3))
+	list, add, closing, card := f.box("core.card.tab-list", "main"), f.box("core.card.add", "main"), f.box("core.card.close", "main"), f.box("core.card", "main")
+	if list.W != 20 || add.W != 20 || closing.W != 20 {
+		t.Fatalf("the buttons of the head are %v wide, %v and %v, want the card button of 20", list.W, add.W, closing.W)
+	}
+	if closing.X+closing.W >= card.X+card.W-4 || add.X >= closing.X {
+		t.Fatalf("the tools are at %v and %v in the card %v", add, closing, card)
+	}
+	right := list.X + list.W
+	for i := range 3 {
+		id := fmt.Sprintf("tab-%06d", i)
+		tab, x := f.box("core.card.tab", id), f.box("core.card.tab-close", id)
+		if x.X+x.W-tab.X > 200 {
+			t.Fatalf("tab %d is %v wide, want at most 200", i, x.X+x.W-tab.X)
+		}
+		if tab.X < right {
+			t.Fatalf("tab %d starts at %v, over the one that ends at %v", i, tab.X, right)
+		}
+		if x.X < tab.X+tab.W {
+			t.Fatalf("the close button %v of tab %d stands over its name %v", x, i, tab)
+		}
+		right = x.X + x.W
+	}
+}
+
+// The strip scrolls to the tab that a press chose, and the tools stay in the head.
+func TestAHeadScrollsItsStripToTheActiveTab(t *testing.T) {
+	f := narrowCard(t, 8, strings.Repeat("long-title-", 3))
+	last := "tab-000007"
+	f.run("core.tab.select", map[string]string{"tab": last})
+	f.settle()
+	f.tester.Frame()
+	tab, list, add := f.box("core.card.tab", last), f.box("core.card.tab-list", "main"), f.box("core.card.add", "main")
+	if tab.X < list.X+list.W || tab.X+tab.W > add.X {
+		t.Fatalf("the active tab %v stands outside the strip between %v and %v", tab, list, add)
+	}
+}
+
 // A tab name that does not fit ends with an ellipsis inside its tab, so the head keeps its tools and the tab its close button.
 func TestALongTabNameKeepsTheHeadOfItsCard(t *testing.T) {
 	title := strings.Repeat("max@host:/private/tmp/a-long-directory/", 4)

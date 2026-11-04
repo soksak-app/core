@@ -38,6 +38,8 @@ type Declarations struct {
 	Statuses, Commands, Elements map[string]bool
 	// Shortcuts is the shortcut table.
 	Shortcuts []Shortcut
+	// Icons are the SVG elements of the icons of a card head.
+	Icons map[string]string
 	// exposes holds the declarations under the keys of the declaration file, and params the parameter schema of each command.
 	exposes map[string][]map[string]any
 	params  map[string]any
@@ -62,6 +64,17 @@ func (d *Declarations) Metric(name string) (float64, bool) {
 	}
 	number, err := strconv.ParseFloat(strings.TrimSuffix(value, "px"), 64)
 	return number, err == nil
+}
+
+// Share returns the chrome metric name, which is a percentage, as a ratio, and false when the metric does not exist or holds another
+// unit.
+func (d *Declarations) Share(name string) (float64, bool) {
+	value, ok := strings.CutSuffix(d.chrome[name], "%")
+	if !ok {
+		return 0, false
+	}
+	number, err := strconv.ParseFloat(value, 64)
+	return number / 100, err == nil
 }
 
 // HeightMetric returns the chrome metric name, which is a share of the window height in vh, as a ratio, and false when the metric does
@@ -122,6 +135,7 @@ var Declared = sync.OnceValues(func() (*Declarations, error) {
 		return nil, fmt.Errorf("shortcuts.json: %w", err)
 	}
 	var values struct {
+		Icons  map[string]string `json:"icons"`
 		Chrome map[string]string `json:"chrome"`
 		Themes []declaredTheme   `json:"themes"`
 	}
@@ -145,6 +159,6 @@ var Declared = sync.OnceValues(func() (*Declarations, error) {
 	}
 	return &Declarations{
 		Statuses: names(exposure.Exposes["status"]), Commands: names(exposure.Exposes["commands"]), Elements: names(exposure.Exposes["element"]),
-		Shortcuts: shortcuts.Shortcuts, exposes: exposure.Exposes, params: params, many: many, chrome: values.Chrome, themes: values.Themes,
+		Icons: values.Icons, Shortcuts: shortcuts.Shortcuts, exposes: exposure.Exposes, params: params, many: many, chrome: values.Chrome, themes: values.Themes,
 	}, nil
 })

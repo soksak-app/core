@@ -70,6 +70,16 @@ type SettingsCatalog struct {
 	} `json:"settings"`
 }
 
+// Stack returns the font stack of the font id, empty for an id that the catalog does not hold.
+func (c *SettingsCatalog) Stack(id string) string {
+	for _, font := range c.Fonts {
+		if font.ID == id {
+			return font.Stack
+		}
+	}
+	return ""
+}
+
 // ReadSettingsCatalog reads the embedded workbench.json.
 func ReadSettingsCatalog() (*SettingsCatalog, error) {
 	var catalog SettingsCatalog
