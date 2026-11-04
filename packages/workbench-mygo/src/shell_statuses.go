@@ -245,11 +245,6 @@ func (s *Shell) layoutState() (any, error) {
 	if err := json.Unmarshal(space.Layout, &kept); err != nil {
 		return nil, err
 	}
-	focused, err := json.Marshal(s.focused)
-	if err != nil {
-		return nil, err
-	}
-	kept["focusedId"] = focused
 	return kept, nil
 }
 
