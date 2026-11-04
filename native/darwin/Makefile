@@ -329,6 +329,7 @@ NATIVE_TESTS = observe_test \
   document_throttle_test \
   document_caches_test \
   document_backforward_test \
+  document_page_cache_test \
   document_form_state_test \
   document_report_test \
   document_cause_test \

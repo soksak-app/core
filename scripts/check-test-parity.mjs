@@ -264,6 +264,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F516",
+    implementation: [
+      { file: "native/darwin/src/document_view.m", symbol: "\"  if (resources !== null) { resources.disconnect(); resources = null; }\"" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/document_page_cache_test.m", id: "the element stream sends a snapshot of the restored page after its reset" },
+      { file: "native/darwin/tests/document_page_cache_test.m", id: "the request stream sends the navigation and style sheet entries of the restored page after its reset" },
+    ],
+    expected: "A page that a document region restores from its back-forward cache sends a snapshot and its navigation and resource entries after the reset of its streams.",
+    levels: ["unit"],
+  },
+  {
     id: "F514",
     implementation: [
       { file: "packages/host/tauriv2/src/documents.rs", symbol: "let Err(reason) = configure_steps(native, document, setup) else {" },
