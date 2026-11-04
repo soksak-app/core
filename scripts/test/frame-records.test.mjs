@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { firstFrameMs, frameTimes, percentile, requireCompleteGesture, stepTimes, U7_EVENTS } from "../frame-records.mjs";
+import { firstFrameMs, frameTimes, gestureRecords, percentile, requireCompleteGesture, stepTimes, U7_EVENTS } from "../frame-records.mjs";
 
 /** The canonical decimal nanoseconds of the host event clock at `micros` microseconds after a clock reading of 9 s. */
 const ns = (micros) => String(9_000_000_000n + BigInt(micros) * 1000n);
@@ -88,4 +88,23 @@ test("the first frame time runs from the start of the first frame of the gesture
   assert.throws(() => firstFrameMs([frame(5, { start: 0, request: null }), frame(6, { start: 10, request: 20 })]),
     /the first frame of the gesture, at seq 5, requested no presentation/);
   assert.throws(() => firstFrameMs([step(1, { callback: "x", entry: 0, back: 1 })]), /the gesture has no frame record/);
+});
+
+test("the records of a gesture in the event log are the U7 records and the log.dropped events of the host process, with its seq range", () => {
+  const host = (record) => ({ layer: "host", ...record });
+  const events = [
+    host({ seq: 101, event: "host.window.event", fields: { window: "w1", kind: "drag" } }),
+    host(step(102, { callback: "mouseDragged:", entry: 0, back: 1000 })),
+    host(frame(103, { start: 1000, request: 3000 })),
+    host({ seq: 104, event: "host.frame.commit", fields: { window: "w1", kind: "layer", commit_ns: ns(3500) } }),
+    host({ seq: 105, event: "log.dropped", fields: { from_seq: 90, to_seq: 95, count: 6, bytes: 600, reason: "queue full", channel: "debug" } }),
+    { layer: "sidecar", seq: 7, event: "host.frame.record", fields: { window: "w1" } },
+    { layer: "page", seq: 300, event: "page.start", fields: {} },
+  ];
+  const read = gestureRecords(events);
+  assert.deepEqual(read.records.map(({ seq }) => seq), [102, 103, 104]);
+  assert.deepEqual(read.dropped.map(({ seq }) => seq), [105]);
+  assert.deepEqual([read.fromSeq, read.toSeq], [100, 105]);
+  assert.equal(requireCompleteGesture({ ...read, window: "w1", framesBefore: 10, framesAfter: 11 }).length, 3);
+  assert.throws(() => gestureRecords(events.slice(5)), /the gesture has no event of the host process/);
 });

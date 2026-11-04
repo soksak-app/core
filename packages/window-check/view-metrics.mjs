@@ -428,6 +428,35 @@ function evaluateEditorFootprint(value, requested) {
   return { viewBytes, hiddenDomBytes, sidecarRequired: viewBytes > EDITOR_SIDECAR_THRESHOLD_BYTES };
 }
 
+/**
+ * The geometry rule of a view in a card (the rule of the terminal drag): in each frame `{cardRectPt, nativeRectPt, slotInsetsPt}`, the
+ * native rectangle of the view lies on the slot that its insets declare in the card, each edge within DRAG_GEOMETRY_LIMIT_PT. Returns
+ * whether every frame holds it, the greatest distance of an edge from its slot over the frames and the limit, in points. A frame whose
+ * rectangles or insets are not of that form, or whose insets leave no card slot, is an error that names it under `path`.
+ */
+export function evaluateGeometryFrames(frames, path = "geometryFrames") {
+  let maxErrorPt = 0;
+  for (const [index, frame] of frames.entries()) {
+    const at = `${path}[${index}]`;
+    const cardRect = rectAt(frame.cardRectPt, `${at}.cardRectPt`, { allowNegative: true });
+    const nativeRect = rectAt(frame.nativeRectPt, `${at}.nativeRectPt`, { allowNegative: true });
+    const slotInsets = slotInsetsAt(frame.slotInsetsPt, `${at}.slotInsetsPt`);
+    const expectedSlot = {
+      left: cardRect.left + slotInsets.left,
+      top: cardRect.top + slotInsets.top,
+      right: cardRect.right - slotInsets.right,
+      bottom: cardRect.bottom - slotInsets.bottom,
+    };
+    if (expectedSlot.right <= expectedSlot.left || expectedSlot.bottom <= expectedSlot.top) {
+      fail(`${at}.slotInsetsPt`, "insets that leave a positive card slot", slotInsets);
+    }
+    for (const edge of ["left", "top", "right", "bottom"]) {
+      maxErrorPt = Math.max(maxErrorPt, Math.abs(expectedSlot[edge] - nativeRect[edge]));
+    }
+  }
+  return { passed: maxErrorPt <= DRAG_GEOMETRY_LIMIT_PT, maxErrorPt, limitPt: DRAG_GEOMETRY_LIMIT_PT };
+}
+
 function evaluateDrag(value) {
   const criterionFailures = [];
   const drag = objectAt(value, "drag");
@@ -445,7 +474,6 @@ function evaluateDrag(value) {
     fail("drag gesture frame range", "ordered indices within the recording", { firstGestureFrameIndex, lastGestureFrameIndex, gestureEndedFrameIndex, recordedFrameCount });
   }
   const geometryFrames = arrayAt(drag.geometryFrames, "drag.geometryFrames", { length: lastGestureFrameIndex - firstGestureFrameIndex + 1 });
-  let maxGeometryErrorPt = 0;
   let previousGeometryTime = -Infinity;
   for (const [index, frame] of geometryFrames.entries()) {
     const path = `drag.geometryFrames[${index}]`;
@@ -454,27 +482,9 @@ function evaluateDrag(value) {
     if (identity.frameIndex !== expectedIndex) fail(`${path}.frameIndex`, `one geometry row for every frame; expected frameIndex ${expectedIndex}`, identity.frameIndex);
     if (identity.timeMs <= previousGeometryTime) fail(`${path}.timeMs`, "strictly increasing geometry timestamps", identity.timeMs);
     previousGeometryTime = identity.timeMs;
-    const cardRect = rectAt(frame.cardRectPt, `${path}.cardRectPt`, { allowNegative: true });
-    const nativeRect = rectAt(frame.nativeRectPt, `${path}.nativeRectPt`, { allowNegative: true });
-    const slotInsets = slotInsetsAt(frame.slotInsetsPt, `${path}.slotInsetsPt`);
-    const expectedSlot = {
-      left: cardRect.left + slotInsets.left,
-      top: cardRect.top + slotInsets.top,
-      right: cardRect.right - slotInsets.right,
-      bottom: cardRect.bottom - slotInsets.bottom,
-    };
-    if (expectedSlot.right <= expectedSlot.left || expectedSlot.bottom <= expectedSlot.top) {
-      fail(`${path}.slotInsetsPt`, "insets that leave a positive card slot", slotInsets);
-    }
-    for (const edge of ["left", "top", "right", "bottom"]) {
-      maxGeometryErrorPt = Math.max(maxGeometryErrorPt, Math.abs(expectedSlot[edge] - nativeRect[edge]));
-    }
   }
-  const geometry = {
-    passed: maxGeometryErrorPt <= DRAG_GEOMETRY_LIMIT_PT,
-    maxErrorPt: maxGeometryErrorPt,
-    limitPt: DRAG_GEOMETRY_LIMIT_PT,
-  };
+  const geometry = evaluateGeometryFrames(geometryFrames, "drag.geometryFrames");
+  const maxGeometryErrorPt = geometry.maxErrorPt;
   if (!geometry.passed) {
     criterionFailures.push({ criterion: "geometry", error: new Error(
       `view measurement drag geometry differs by ${maxGeometryErrorPt} pt, exceeding ${DRAG_GEOMETRY_LIMIT_PT} pt`) });

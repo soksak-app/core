@@ -40,6 +40,25 @@ export function percentile(sorted, share) {
 }
 
 /**
+ * The records of a gesture from the events that the event logs of the application gained over it (readEvents of
+ * @soksak/window-check/event-log.mjs, each with its layer and seq): the U7 records and the log.dropped events of the host process, and
+ * the seq range of the host process over the gesture, after fromSeq up to toSeq, the input of requireCompleteGesture. A gesture without
+ * an event of the host process is an error.
+ */
+export function gestureRecords(events) {
+  const host = events.filter((event) => event.layer === "host");
+  if (host.length === 0) throw new Error("the gesture has no event of the host process");
+  const u7 = new Set(Object.values(U7_EVENTS));
+  const seqs = host.map((event) => event.seq);
+  return {
+    records: host.filter((event) => u7.has(event.event)),
+    dropped: host.filter((event) => event.event === "log.dropped"),
+    fromSeq: Math.min(...seqs) - 1,
+    toSeq: Math.max(...seqs),
+  };
+}
+
+/**
  * Requires that the records of one gesture of window are complete and returns the U7 records of that window in the order of seq.
  * records are the U7 events of the host process after seq fromSeq up to toSeq, dropped the log.dropped events of that process, and
  * framesBefore and framesAfter the frames of host.window of the window before and after the gesture. A gesture with fewer frame records
