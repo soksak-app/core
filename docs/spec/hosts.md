@@ -312,6 +312,113 @@ On macOS each application runs from an application bundle, because the operating
 
 All four macOS application bundle build targets check the target bundle before replacing its `Contents` directory. If a process is executing from that bundle, preparation fails with the process PID and exact bundle path before it mutates the bundle. Run builds from the intended verification checkout and do not direct a build at a bundle used by a running application.
 
+## Performance goals
+
+The goals G1 to G8 state the costs of the mygo host beside the Wails and the Tauri host. The three-host benchmark measures them in its scenarios S0 to S16, and `make b3-judge` judges each session of it. The other hosts are the Wails and the Tauri host built from the revision of the mygo host, and the baseline hosts are the Wails and the Tauri host built from the baseline revision that the benchmark defines. `docs/spec/performance-goals.json` holds the numeric bounds of the goals; the two tables of this section are copies of that file, which `scripts/test/performance-goals.test.mjs` holds equal to it, and the idle tab and the split load benchmarks read `IDLE_TAB_BOUND_KB` and `SPLIT_LOAD_GROWTH_BOUND_KB` from it. A value that [plugin processes](plugin-processes.md#pass-values) or [native surfaces](native-surfaces.md#acceptance-criteria) defines is not copied into the file: the benchmark that holds it judges it, and the judge reads only the verdict of that benchmark.
+
+The judge applies these rules:
+
+- A session holds the runs of each application that the condition table states, and a run starts only under the conditions of that table; `make e2e-b3` fails a run whose conditions do not hold.
+- A value judged by its median is the median of its runs; a value judged in each run fails when one of its runs fails its bound. The spread of a value is the range of its runs.
+- A bound applies to the values of the mygo host.
+- A value compared with each other host and baseline host fails when the spread of the mygo host lies wholly on the bounded side of the spread of the same value of one of these hosts: its lowest run above the highest run of that host for a time, a CPU time or a footprint (`s`, `ms`, `KB`), and its highest run below the lowest run of that host for a frame rate (`frames/s`). The same value of an other host is a regression when its spread lies wholly on the bounded side of the spread of the same value of its baseline host in the same sense, and a regression fails the session.
+- A value compared with another value of the mygo host fails when its spread lies wholly above the spread of that value.
+- A value of the unit `verdict` is the verdict that the benchmark of its row recorded for the run.
+
+
+| Condition | Value |
+| --- | --- |
+| Runs of each application in a session | 7 |
+| Refresh rate of the display mode | 120 Hz |
+| Backing scale of each window | 2 |
+| Swap use at the start of a run | below 0.5 of the swap total |
+| CPU share of `fseventsd` at the start of a run | below 0.1 of a core |
+
+The values of the goals, each with the scenario and the target that measure it:
+
+| Value | Goal | Scenario | Target | Unit | Over | Bound | Compared with |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `G1-S0-webkit-processes` | G1 | S0 | `make app-usage STATE=S0` | count | each run | equals 0 | — |
+| `G1-S0b-webcontent-processes` | G1 | S0b | `make app-usage STATE=S0b` | count | each run | equals 0 | — |
+| `G2-S0-frames` | G2 | S0 | `make app-usage STATE=S0 IDLE=1 INTERVAL=240` | count | each run | equals 0 | — |
+| `G2-S0-command-buffers` | G2 | S0 | `make app-usage STATE=S0 IDLE=1 INTERVAL=240` | count | each run | equals 0 | — |
+| `G2-S0-host-cpu` | G2 | S0 | `make app-usage STATE=S0 IDLE=1 INTERVAL=240` | s | median | at most 0.12 s | each other host and baseline host |
+| `G2-S1-frames` | G2 | S1 | `make app-usage STATE=S1 IDLE=1 INTERVAL=240` | count | each run | equals 0 | — |
+| `G2-S1-command-buffers` | G2 | S1 | `make app-usage STATE=S1 IDLE=1 INTERVAL=240` | count | each run | equals 0 | — |
+| `G2-S1-host-cpu` | G2 | S1 | `make app-usage STATE=S1 IDLE=1 INTERVAL=240` | s | median | at most 0.12 s | each other host and baseline host |
+| `G2-S9-frames` | G2 | S9 | `make app-usage STATE=S9 IDLE=1 INTERVAL=240` | count | each run | equals 0 | — |
+| `G2-S9-command-buffers` | G2 | S9 | `make app-usage STATE=S9 IDLE=1 INTERVAL=240` | count | each run | equals 0 | — |
+| `G2-S9-host-cpu` | G2 | S9 | `make app-usage STATE=S9 IDLE=1 INTERVAL=240` | s | median | at most 0.12 s | each other host and baseline host |
+| `G2-S12-frames` | G2 | S12 | `make app-usage STATE=S12 IDLE=1 INTERVAL=240` | count | each run | equals 0 | — |
+| `G2-S12-command-buffers` | G2 | S12 | `make app-usage STATE=S12 IDLE=1 INTERVAL=240` | count | each run | equals 0 | — |
+| `G2-S12-host-cpu` | G2 | S12 | `make app-usage STATE=S12 IDLE=1 INTERVAL=240` | s | median | at most 0.12 s | each other host and baseline host |
+| `G2-S0-footprint-before-pointer` | G2 | S0 | `make app-usage STATE=S0 STEP=pointer` | KB | median | — | — |
+| `G2-S0-footprint-after-pointer` | G2 | S0 | `make app-usage STATE=S0 STEP=pointer` | KB | median | — | `G2-S0-footprint-before-pointer` |
+| `G2-S1-footprint-before-pointer` | G2 | S1 | `make app-usage STATE=S1 STEP=pointer` | KB | median | — | — |
+| `G2-S1-footprint-after-pointer` | G2 | S1 | `make app-usage STATE=S1 STEP=pointer` | KB | median | — | `G2-S1-footprint-before-pointer` |
+| `G2-S12-error-lines` | G2 | S12 | `make app-usage STATE=S12` | count | each run | equals 1 | — |
+| `G3-S0-footprint` | G3 | S0 | `make app-usage STATE=S0` | KB | median | — | each other host and baseline host |
+| `G3-S0b-footprint` | G3 | S0b | `make app-usage STATE=S0b` | KB | median | — | each other host and baseline host |
+| `G3-S1-footprint` | G3 | S1 | `make app-usage STATE=S1` | KB | median | — | each other host and baseline host |
+| `G3-S1-host-footprint` | G3 | S1 | `make app-usage STATE=S1` | KB | median | — | — |
+| `G3-S5-peak-before-drag` | G3 | S5 | `make e2e-benchmark-view-drag` | KB | median | — | each other host and baseline host |
+| `G3-S5-peak-after-drag` | G3 | S5 | `make e2e-benchmark-view-drag` | KB | median | — | each other host and baseline host |
+| `G3-S13-peak-before-drag` | G3 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1` | KB | median | — | each other host and baseline host |
+| `G3-S13-peak-after-drag` | G3 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1` | KB | median | — | each other host and baseline host |
+| `G3-S11-second-window-footprint` | G3 | S11 | `make app-usage STATE=S11` | KB | median | — | each other host and baseline host |
+| `G3-S15-settings-window-footprint` | G3 | S15 | `make app-usage STATE=S15` | KB | median | — | each other host and baseline host |
+| `G3-S14-footprint` | G3 | S14 | `make app-usage STATE=S14` | KB | median | — | each other host and baseline host |
+| `G3-S3-changed-counts` | G3 | S3 | `make object-counts BUILD=release REPETITIONS=30` | count | each run | equals 0 | — |
+| `G3-S3-growing-figures` | G3 | S3 | `make object-counts BUILD=release REPETITIONS=30` | count | each run | equals 0 | — |
+| `G3-S4-host-footprint` | G3 | S4 | `make host-allocations MINUTES=60` | KB | median | — | `G3-S1-host-footprint` |
+| `G3-S10-host-growth` | G3 | S10 | `make e2e-benchmark-split-load` | KB | median | below 131072 KB (`SPLIT_LOAD_GROWTH_BOUND_KB`) | — |
+| `G4-S5-view-drag` | G4 | S5 | `make e2e-benchmark-view-drag` | verdict | each run | passed | — |
+| `G4-S5-resize-catch-up` | G4 | S5 | `make e2e-benchmark-resize-catch-up` | verdict | each run | passed | — |
+| `G4-S7-browser-view` | G4 | S7 | `e2e/benchmark/browser-view.test.mjs` | verdict | each run | passed | — |
+| `G4-S7-editor-view` | G4 | S7 | `e2e/benchmark/editor-view.test.mjs` | verdict | each run | passed | — |
+| `G4-S7-hwp-view` | G4 | S7 | `e2e/benchmark/hwp-view.test.mjs` | verdict | each run | passed | — |
+| `G4-S7-terminal-view` | G4 | S7 | `e2e/benchmark/terminal-view.test.mjs` | verdict | each run | passed | — |
+| `G4-S7-term-view` | G4 | S7 | `e2e/benchmark/term-view.test.mjs` | verdict | each run | passed | — |
+| `G4-S7-section-view` | G4 | S7 | `e2e/benchmark/section-view.test.mjs` | verdict | each run | passed | — |
+| `G4-S7-editor-footprint` | G4 | S7 | `e2e/benchmark/editor-footprint.test.mjs` | verdict | each run | passed | — |
+| `G5-S2-rows-1-cpu-per-frame` | G5 | S2 | `make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=1` | ms | median | at most 1.6 ms | each other host and baseline host |
+| `G5-S2-rows-20-cpu-per-frame` | G5 | S2 | `make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=20` | ms | median | at most 3.1 ms | each other host and baseline host |
+| `G5-S2-rows-1-frame-rate` | G5 | S2 | `make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=1` | frames/s | median | at least 27 frames/s | — |
+| `G5-S2-rows-20-frame-rate` | G5 | S2 | `make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=20` | frames/s | median | at least 27 frames/s | — |
+| `G6-S6-idle-tab-cost` | G6 | S6 | `make e2e-benchmark-idle-tab` | KB | median | at most 51200 KB (`IDLE_TAB_BOUND_KB`) | — |
+| `G6-S6-document-part` | G6 | S6 | `make e2e-benchmark-idle-tab` | KB | median | — | each other host and baseline host |
+| `G7-S8-terminal-median` | G7 | S8 | `e2e/input-latency.test.mjs` | ms | median | — | each other host and baseline host |
+| `G7-S8-terminal-p90` | G7 | S8 | `e2e/input-latency.test.mjs` | ms | median | — | each other host and baseline host |
+| `G7-S8-term-median` | G7 | S8 | `e2e/input-latency.test.mjs` | ms | median | — | each other host and baseline host |
+| `G7-S8-term-p90` | G7 | S8 | `e2e/input-latency.test.mjs` | ms | median | — | each other host and baseline host |
+| `G8-S5-drag-cpu` | G8 | S5 | `make e2e-benchmark-view-drag` | s | median | — | each other host and baseline host |
+| `G8-S13-drag-cpu` | G8 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1` | s | median | — | each other host and baseline host |
+| `G8-S1-pointer-cpu` | G8 | S1 | `make app-usage STATE=S1 STEP=pointer` | s | median | — | each other host and baseline host |
+| `G8-S5-drag-frame-p90` | G8 | S5 | `make e2e-benchmark-view-drag` | ms | median | at most 8.33 ms | — |
+| `G8-S5-drag-step-p90` | G8 | S5 | `make e2e-benchmark-view-drag` | ms | median | at most 8.33 ms | — |
+| `G8-S13-drag-frame-p90` | G8 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1` | ms | median | at most 8.33 ms | — |
+| `G8-S13-drag-step-p90` | G8 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1` | ms | median | at most 8.33 ms | — |
+| `G8-S16-drag-frame-p90` | G8 | S16 | `make e2e-benchmark-view-drag GC_LOOP=1` | ms | median | at most 8.33 ms | — |
+| `G8-S16-drag-step-p90` | G8 | S16 | `make e2e-benchmark-view-drag GC_LOOP=1` | ms | median | at most 8.33 ms | — |
+| `G8-S5-drag-first-frame` | G8 | S5 | `make e2e-benchmark-view-drag` | ms | median | at most 8.33 ms | — |
+| `G8-S13-drag-first-frame` | G8 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1` | ms | median | at most 8.33 ms | — |
+| `G8-S5-maximise-frame-p90` | G8 | S5 | `make e2e-benchmark-resize-catch-up` | ms | median | at most 8.33 ms | — |
+| `G8-S5-maximise-step-p90` | G8 | S5 | `make e2e-benchmark-resize-catch-up` | ms | median | at most 8.33 ms | — |
+| `G8-S1-hit-test-p90` | G8 | S1 | `make app-usage STATE=S1 STEP=pointer` | ms | median | at most 8.33 ms | — |
+
+The values of each goal:
+
+- **G1 Process set.** A window that has shown no view since the start of the application runs no WebContent, GPU or Networking process. A WebKit process starts only when the first view page or document region is shown. After the last web view of the application closes, every WebContent process of a view page or a document region that the application held exits within the time of pass value (ii) of [plugin processes](plugin-processes.md#pass-values); S0b counts the processes that remain after `diagnostics.process.exit` of each such process. A GPU or Networking process that WebKit keeps after that is a cost that G3 counts in S0b.
+- **G2 Idle.** With `cursor.idleTimeout` of every `term` and `terminal` tab at the default that the manifest of its plugin declares, after the last input, the cursor idle timeout of each such tab and 3 seconds without a change of `frames` of `host.window`, every window of S0, S1, S9 and S12 presents no frame and commits no Metal command buffer during 240 seconds: the frame and command buffer values are the largest change of `frames` and of `commandBuffers` of `host.window` among the windows of the scenario over that interval, and the CPU value is the CPU time of the host process over it. In S0 and S1, in a window brought to the front by `bringFront` of the real-input tool, the summed footprint after a pointer move across the window by HID moves of that tool is compared with the summed footprint before that move. In S12 the layout draw that fails writes one `error:` line of its fault to the application log, and the values of S1 then hold.
+- **G3 Memory.** A footprint is read after the readings of every process settle (two consecutive readings 5 seconds apart differ by less than 1,024 KB) and at least 3 seconds after the last frame. In S0 and S0b the value is the summed footprint of the host process and of every WebContent, GPU and Networking process of the mygo application, and the footprint of the host process alone of an other host or a baseline host; the sidecar processes, which run the same sidecar builds on every host, are printed apart from that sum. In S1 the value is the summed footprint of the application less its main page process. In S5 and S13, on applications started for the scenario, the values are the sums over the processes of the application of the lifetime peak footprint (`phys_footprint_peak` of `footprint`), read before and after the drag that runs without capture; a peak after the drag above the peak before it is the cost of the drag. In S11 and S15 the value is the footprint that the second window or the open settings window adds to the application. In S14 the value is the summed footprint, read 10 seconds after the key while the caret blinks, without the settle rule and without the rule of the last frame. In S3 the changed counts are the counts of `diagnostics.objects` outside its `runtime` member, the workbench elements, the native view elements and the registered framework callbacks among them, that differ after a repetition from the second on from their value after the first repetition, and the growing figures are the figures among the host footprint and the Go runtime figures except `heapReleasedBytes`, which counts memory returned to the system, whose lowest value over repetitions 21 to 30 is above their highest value over repetitions 11 to 20. In S4 the host footprint after 60 minutes without input is compared with the host footprint of S1. In S10 the value is the growth of the resident set size of the host process over the rounds of the split load benchmark.
+- **G4 Views and gestures.** Every pass value of [plugin processes](plugin-processes.md#pass-values) ((i), (ii), (iii), (iii-b), (v), (viii)) applies unchanged to every plugin view on the mygo host. The DOM mount baseline of (iii) and (iii-b) on the mygo host is the lower of the baselines of the Wails and the Tauri host, as (iii) states; the `term` view and each section view have no recorded DOM mount baseline and are judged against the limit alone that (iii) states for a plugin without a recorded value. On the mygo host, (viii)(a) applies to the view of the tab of S5 in every recorded frame of its maximise and restore. The [performance targets](native-surfaces.md#performance-targets) and the catch-up limit of a maximise and restore in the [acceptance criteria](native-surfaces.md#acceptance-criteria) of native surfaces apply unchanged. The benchmark of each G4 row judges these values, and its verdict is the value of the row.
+- **G5 Terminal.** In a `term` tab in a window of 760×614 points that is not occluded, for a status line and for 20 rows rewritten every 33 ms, the CPU value is the application CPU time divided by the frames that the region presented in the same interval, and the frame rate is the frames per second that the region presents.
+- **G6 Browser.** The cost of an idle browser tab on the blank page is the settled footprint of every document process of the tab plus the settled growth of the host process, and its document part is the settled footprint of the document processes.
+- **G7 Input.** For the 24 keys of the two configurations with the trace off and the default gate, the values are the median and the 90th percentile over the keys of one run of the time from an injected key to the shell prompt, for a `terminal` tab and for a `term` tab.
+- **G8 Gesture CPU and frame time.** The CPU values are the summed CPU time of the processes of the application over the drag of S5 and of S13 that runs without capture under the default policy, which the view drag benchmark delivers on every host through `diagnostics.drag` with `native: true` and the plan of the captured drag, and over the pointer move of `STEP=pointer` in S1. Under the policy that stores the class `frame` at `debug`, the frame values are the 90th percentile of the time from the start of a frame to its presentation request less the time the frame waits for a drawable, and the step values are the 90th percentile of the step of each pointer move with its forwarded calls, over the drags of S5, S13 and S16 and over the maximise and restore of S5 without capture. The first-frame values are the time of the first frame of the drag of S5 and of S13, which follows at least 3 seconds without a frame, from its start to its presentation request with its wait for a drawable. The hit-test value is the 90th percentile of the `hitTest:` step together with the step of the move that follows it over the pointer move of S1. Each 90th percentile and each first-frame time is taken over the frames and steps of one run, and their bound is one display period at the refresh rate of the condition table.
+
+A value is never lowered because it is hard to meet; a measured floor that exceeds a value changes it only through an adversarial review that states the evidence.
+
 ## Structure checks
 
 `scripts/check-hosts.mjs` compares `packages/host/wailsv3` with `packages/host/tauriv2` and `apps/wailsv3` with `apps/tauriv2`. It compares `.go` and `.rs` files by relative path without extension and other files by relative path. A file present on one side passes only when it is listed with a difference ID from the allowed differences table. The check reads files that Git tracks or would track, so generated `src/frontend/` files are not compared.
