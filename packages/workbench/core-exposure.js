@@ -25,7 +25,7 @@ import {
   cardSidebars, resizeSidebar, settle, settleModifiedTabs, settleModifiedTabsToClose, splitCard, surfaceState, tabsOf,
 } from "./plane.js";
 import {
-  applyTheme, defaults, link, onSaved, overridden, reset, saving, scopedValue, set, setDebug, settingProject, THEMES, value,
+  applyTheme, controlValue, defaults, link, onSaved, overridden, reset, saving, scopedValue, set, setDebug, settingProject, THEMES, value,
 } from "./settings.js";
 import {
   closeSettings, editSet, moveSettings, onSettingsDrawn, openSettings, settingsModalState, searchPlugins, showPlugin, showScope, showSection,
@@ -258,15 +258,11 @@ function focusElement(name, index = 0) {
   el.focus();
 }
 
-/** Changes one setting to the input value. A control gives a string, so it is converted to the type of the current value. */
+/** Changes one setting to the input value. A control gives a string, which becomes the type that the setting declares. */
 function changeSetting(key, input, scope, actor) {
   if (!Object.hasOwn(defaults, key)) throw new Error(`Unknown setting: ${key}`);
   // default: scope is an optional parameter, and when it is omitted the global scope is used (core.settings.change in exposure.json).
-  const now = scopedValue(key, scope ?? "common");
-  const next = typeof now === "boolean" ? input === true || input === "true"
-    : typeof now === "number" ? Number(input) : String(input);
-  if (typeof now === "number" && !Number.isFinite(next)) throw new Error(`${key} requires a number`);
-  return set({ [key]: next }, scope, actor);
+  return set({ [key]: controlValue(key, input) }, scope ?? "common", actor);
 }
 
 function need(project, id) {
@@ -373,26 +369,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   status("core.chrome", chrome);
   status("core.rail", () => (currentGrid() ? railState() : null));
 
-  registry.command("core.settings.set", async ({ patch, scope }) => {
-    try {
-      await set(patch, scope, "core.settings.set");
-    } catch (error) {
-      throw new ExposureError(EXPOSURE_ERRORS.invalidParams, error.message);
-    }
-  });
-  registry.command("core.settings.reset", async ({ key }) => { await reset(key, "core.settings.reset"); });
-  registry.command("core.settings.debug", async ({ on }) => {
-    if (typeof on !== "boolean") throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "on must be a boolean");
-    await setDebug(on, "core.settings.debug");
-  });
-  registry.command("core.settings.change", async ({ key, value: input, scope }) => {
-    await changeSetting(key, input, scope, "core.settings.change");
-  });
-  registry.command("core.settings.theme", async ({ name, mode, scope }) => {
-    // default: when mode is omitted, the current mode is used, and when scope is omitted, the global scope is used (core.settings.theme in exposure.json).
-    await applyTheme(name, mode ?? scopedValue("mode", scope ?? "common"), scope, "core.settings.theme");
-  });
-  // A refusal of a sidebar selection or a set change is an invalid request argument (docs/spec/settings.md).
+  // A refusal of a settings change is an invalid request argument (docs/spec/settings.md).
   const invalid = (run) => async (params) => {
     try {
       return await run(params);
@@ -400,6 +377,21 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
       throw new ExposureError(EXPOSURE_ERRORS.invalidParams, error.message);
     }
   };
+  registry.command("core.settings.set", invalid(async ({ patch, scope }) => {
+    await set(patch, scope, "core.settings.set");
+  }));
+  registry.command("core.settings.reset", async ({ key }) => { await reset(key, "core.settings.reset"); });
+  registry.command("core.settings.debug", async ({ on }) => {
+    if (typeof on !== "boolean") throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "on must be a boolean");
+    await setDebug(on, "core.settings.debug");
+  });
+  registry.command("core.settings.change", invalid(async ({ key, value: input, scope }) => {
+    await changeSetting(key, input, scope, "core.settings.change");
+  }));
+  registry.command("core.settings.theme", async ({ name, mode, scope }) => {
+    // default: when mode is omitted, the current mode is used, and when scope is omitted, the global scope is used (core.settings.theme in exposure.json).
+    await applyTheme(name, mode ?? scopedValue("mode", scope ?? "common"), scope, "core.settings.theme");
+  });
   registry.command("core.settings.link", invalid(async ({ place, plugin = null, set: choice, scope = "common" }) => {
     if (choice !== "off" && choice !== "inherit" && !scopedValue("sets", scope).some((s) => s.id === choice)) {
       throw new Error(`unknown set ${choice}`);
