@@ -523,8 +523,8 @@ type sidebarStatus struct {
 	Sections    []sectionStatus `json:"sections"`
 }
 
-// present is nil for the empty text.
-func present(text string) *string {
+// nullable is nil for the empty text.
+func nullable(text string) *string {
 	if text == "" {
 		return nil
 	}
@@ -537,7 +537,7 @@ func (s *Sidebars) status() []sidebarStatus {
 	for _, drawn := range s.drawn {
 		frame := drawn.frame
 		sections := make([]sectionStatus, len(frame.Sections))
-		surface := present(drawn.owner.Tab)
+		surface := nullable(drawn.owner.Tab)
 		for i, section := range frame.Sections {
 			var height any = section.Height
 			if section.Fill {
@@ -547,8 +547,8 @@ func (s *Sidebars) status() []sidebarStatus {
 				SurfaceID: seatOf(frame, section).SurfaceID, Surface: surface, Height: height, Size: section.Size}
 		}
 		sidebars = append(sidebars, sidebarStatus{Sidebar: frame.Sidebar, Set: drawn.set, Layout: frame.Layout, Orientation: frame.Orientation,
-			Tab: present(frame.Tab), Card: present(drawn.owner.Card), Surface: surface, Placement: "window", Plugin: present(drawn.owner.Plugin),
-			Side: present(frame.Side), Rect: sidebarRect{drawn.rect.X, drawn.rect.Y, drawn.rect.W, drawn.rect.H}, Sections: sections})
+			Tab: nullable(frame.Tab), Card: nullable(drawn.owner.Card), Surface: surface, Placement: "window", Plugin: nullable(drawn.owner.Plugin),
+			Side: nullable(frame.Side), Rect: sidebarRect{drawn.rect.X, drawn.rect.Y, drawn.rect.W, drawn.rect.H}, Sections: sections})
 	}
 	return sidebars
 }

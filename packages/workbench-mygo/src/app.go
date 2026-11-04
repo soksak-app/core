@@ -83,8 +83,12 @@ func (a *App) Build(window host.Frontend) func(c *ui.Context) {
 // Close ends the workbench of window.
 func (a *App) Close(window host.Frontend) {
 	a.mu.Lock()
-	defer a.mu.Unlock()
+	shell := a.shells[window]
 	delete(a.shells, window)
+	a.mu.Unlock()
+	if shell != nil {
+		a.options.Post(shell.flushTabs)
+	}
 }
 
 func (a *App) shell(window host.Frontend) *Shell {
@@ -117,16 +121,22 @@ func (a *App) Emit(window host.Frontend, name string, data ...any) {
 func (a *App) Call(window host.Frontend, script string) {}
 
 // event handles an event of the host in a step of the main thread.
-func (s *Shell) event(name string, data []any) {
+func (s *Shell) event(name string, data []any) { s.Event(name, data) }
+
+// Event handles an event of the host in a step of the main thread.
+func (s *Shell) Event(name string, data []any) {
 	switch name {
 	case "exposure-request":
 		s.requests.Deliver(data...)
 	case "project-close-request":
 		s.keep()
+		s.flushTabs()
 		s.calls.CallInOrder("workspace", "windowClose", nil, func(_ any, err error) {
 			if err != nil {
 				s.fail(err)
 			}
 		})
+	default:
+		s.tabEvent(name, data)
 	}
 }

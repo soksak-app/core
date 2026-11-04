@@ -39,6 +39,8 @@ type ShellOptions struct {
 	Installed []byte
 	// SectionSeat draws what stands on the seat of a section. Without it the seat stays empty.
 	SectionSeat func(c *ui.Context, seat SidebarSeat)
+	// Tabs is what the file commands, the memory saver and the background sessions read. Without it they are not registered.
+	Tabs *TabPorts
 }
 
 // Seat draws the surface of the active tab of a card in the box of the slot, in window coordinates.
@@ -133,6 +135,7 @@ type Shell struct {
 	focused  string
 	held     *heldDivider
 	library  libraryState
+	tabs     *shellTabs
 }
 
 // NewShell returns the shell of a window, with its commands in the registry.
@@ -172,6 +175,9 @@ func NewShell(options ShellOptions) (*Shell, error) {
 		return nil, err
 	}
 	s.register()
+	if options.Tabs != nil {
+		s.connectTabs(*options.Tabs)
+	}
 	return s, nil
 }
 
@@ -189,11 +195,13 @@ func (s *Shell) Start() {
 			s.fail(err)
 			return
 		}
-		s.calls.Call("windowReady", nil, func(_ any, err error) {
-			if err != nil {
-				s.fail(err)
-			}
-			s.options.Invalidate()
+		s.openTabs(func() {
+			s.calls.Call("windowReady", nil, func(_ any, err error) {
+				if err != nil {
+					s.fail(err)
+				}
+				s.options.Invalidate()
+			})
 		})
 	})
 }

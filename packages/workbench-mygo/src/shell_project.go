@@ -171,7 +171,9 @@ func (s *Shell) show(id string) {
 			if err != nil {
 				s.fail(err)
 			}
+			s.shownProject(err)
 		})
+	s.tabsSettled()
 	s.options.Invalidate()
 }
 
@@ -221,7 +223,10 @@ func (s *Shell) firstCard(plane *layout.Grid) string {
 }
 
 // keep writes the plane into the active space and stores the spaces of the project.
-func (s *Shell) keep() {
+func (s *Shell) keep() { s.keepThen(func() {}) }
+
+// keepThen is keep that runs stored after the write is confirmed.
+func (s *Shell) keepThen(stored func()) {
 	project := s.opened()
 	if project == nil || s.plane == nil {
 		return
@@ -230,7 +235,7 @@ func (s *Shell) keep() {
 		s.fail(err)
 		return
 	}
-	s.storeSpaces(project)
+	s.storeSpacesThen(project, stored)
 }
 
 func (s *Shell) keepPlane(project *projectRecord) error {
@@ -263,22 +268,36 @@ func (s *Shell) keepPlane(project *projectRecord) error {
 }
 
 func (s *Shell) storeSpaces(project *projectRecord) {
-	s.patch(project.ID, map[string]any{"spaces": project.Spaces, "activeSpaceId": project.ActiveSpaceID, "named": project.Named})
+	s.storeSpacesThen(project, func() {})
+}
+
+// storeSpacesThen stores the spaces of project and runs stored after the write is confirmed.
+func (s *Shell) storeSpacesThen(project *projectRecord, stored func()) {
+	s.patchThen(project.ID, map[string]any{"spaces": project.Spaces, "activeSpaceId": project.ActiveSpaceID, "named": project.Named}, stored)
 }
 
 // patch writes members of the stored project id in the order of the changes.
-func (s *Shell) patch(id string, members map[string]any) {
+func (s *Shell) patch(id string, members map[string]any) { s.patchThen(id, members, func() {}) }
+
+// patchThen is patch that runs stored after the write is confirmed.
+func (s *Shell) patchThen(id string, members map[string]any, stored func()) {
 	s.calls.CallInOrder("workspace", "workspace", map[string]any{"kind": "patch", "id": id, "patch": members}, func(_ any, err error) {
 		if err != nil {
 			s.fail(err)
+			return
 		}
+		stored()
 	})
 }
 
 // settle stores the plane and asks for a frame after a change of the plane.
-func (s *Shell) settle() {
+func (s *Shell) settle() { s.settleThen(func() {}) }
+
+// settleThen is settle that runs stored after the plane is stored.
+func (s *Shell) settleThen(stored func()) {
 	s.held = nil
-	s.keep()
+	s.keepThen(stored)
+	s.tabsSettled()
 	s.options.Invalidate()
 }
 
@@ -402,7 +421,14 @@ func (s *Shell) closeSpace(id string) error {
 			return err
 		}
 	}
-	s.storeSpaces(project)
+	var dropped []string
+	var stored storedLayout
+	if err := json.Unmarshal(removed.Layout, &stored); err != nil {
+		return fmt.Errorf("space %s: %w", id, err)
+	}
+	eachTab(stored.State.Cards, func(tab layout.Tab, _ bool) { dropped = append(dropped, tab.ID) })
+	s.storeSpacesThen(project, s.droppedTabs(dropped))
+	s.tabsSettled()
 	s.options.Invalidate()
 	return nil
 }
@@ -515,6 +541,12 @@ func (s *Shell) closeCard(id string) error {
 	if err := s.paneCard(id); err != nil {
 		return err
 	}
+	var dropped []string
+	if data, err := s.cardData(id); err == nil && data != nil {
+		for _, tab := range data.TabList() {
+			dropped = append(dropped, tab.ID)
+		}
+	}
 	if !s.plane.CanClose(id) {
 		return fmt.Errorf("card %s cannot close", id)
 	}
@@ -522,12 +554,15 @@ func (s *Shell) closeCard(id string) error {
 	if s.focused == id {
 		s.focused = s.firstCard(s.plane)
 	}
-	s.settle()
+	s.settleThen(s.droppedTabs(dropped))
 	return nil
 }
 
 // addTab adds a new tab to the card id and shows it.
-func (s *Shell) addTab(id, plugin string) (string, error) {
+func (s *Shell) addTab(id, plugin string) (string, error) { return s.addTabWith(id, plugin, nil) }
+
+// addTabWith is addTab for a tab with the members rest.
+func (s *Shell) addTabWith(id, plugin string, rest map[string]json.RawMessage) (string, error) {
 	data, err := s.cardData(id)
 	if err != nil {
 		return "", err
@@ -540,6 +575,7 @@ func (s *Shell) addTab(id, plugin string) (string, error) {
 		plugin = active.Plugin
 	}
 	tab := s.newTabOf(plugin)
+	tab.Rest = rest
 	data.AppendTab(tab)
 	if err := s.storeCard(id, data); err != nil {
 		return "", err
@@ -585,6 +621,6 @@ func (s *Shell) closeTab(id string) error {
 	if err := s.storeCard(card, data); err != nil {
 		return err
 	}
-	s.settle()
+	s.settleThen(s.droppedTabs([]string{id}))
 	return nil
 }

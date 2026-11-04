@@ -16,6 +16,10 @@ import (
 // Command is the handler of a declared command. params is the JSON of its parameters, which is empty when it has none.
 type Command func(params json.RawMessage) (any, error)
 
+// LaterCommand is the handler of a declared command whose answer depends on a host call, which answers in a later step of the
+// main thread, so a step cannot wait for it. params is as for Command, and the handler calls answer once.
+type LaterCommand func(params json.RawMessage, answer func(value any, err error))
+
 // Status reads the current value of a declared status.
 type Status func() any
 
@@ -64,6 +68,7 @@ type Registry struct {
 	declared *Declarations
 	mu       sync.Mutex
 	commands map[string]Command
+	later    map[string]LaterCommand
 	statuses map[string]Status
 	watches  map[string]*watch
 	elements Elements
@@ -71,7 +76,8 @@ type Registry struct {
 
 // NewRegistry returns an empty registry of the names of declared.
 func NewRegistry(declared *Declarations) *Registry {
-	return &Registry{declared: declared, commands: map[string]Command{}, statuses: map[string]Status{}, watches: map[string]*watch{}}
+	return &Registry{declared: declared, commands: map[string]Command{}, later: map[string]LaterCommand{}, statuses: map[string]Status{},
+		watches: map[string]*watch{}}
 }
 
 // Command registers the handler of the declared command name.
@@ -81,10 +87,23 @@ func (r *Registry) Command(name string, run Command) {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.commands[name] != nil {
+	if r.commands[name] != nil || r.later[name] != nil {
 		panic(fmt.Sprintf("command %s is already registered", name))
 	}
 	r.commands[name] = run
+}
+
+// CommandLater registers the handler of the declared command name that answers in a later step.
+func (r *Registry) CommandLater(name string, run LaterCommand) {
+	if !r.declared.Commands[name] {
+		panic(fmt.Sprintf("command %s is not declared", name))
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.commands[name] != nil || r.later[name] != nil {
+		panic(fmt.Sprintf("command %s is already registered", name))
+	}
+	r.later[name] = run
 }
 
 // Status registers the reader of the declared status name.
@@ -103,12 +122,28 @@ func (r *Registry) Status(name string, read Status) {
 // Run runs the command name with params.
 func (r *Registry) Run(name string, params json.RawMessage) (any, error) {
 	r.mu.Lock()
-	run := r.commands[name]
+	run, later := r.commands[name], r.later[name]
 	r.mu.Unlock()
+	if later != nil {
+		return nil, fmt.Errorf("command %s answers in a later step", name)
+	}
 	if run == nil {
 		return nil, Refuse(Unregistered, "command %s is not registered", name)
 	}
 	return run(params)
+}
+
+// RunLater runs the command name with params and gives answer its result: at once for a command that returns, and in a later
+// step for a command that answers later.
+func (r *Registry) RunLater(name string, params json.RawMessage, answer func(value any, err error)) {
+	r.mu.Lock()
+	later := r.later[name]
+	r.mu.Unlock()
+	if later != nil {
+		later(params, answer)
+		return
+	}
+	answer(r.Run(name, params))
 }
 
 // Read returns the current value of the status name.
@@ -129,6 +164,9 @@ func (r *Registry) Names() (commands, statuses []string) {
 	for name := range r.commands {
 		commands = append(commands, name)
 	}
+	for name := range r.later {
+		commands = append(commands, name)
+	}
 	for name := range r.statuses {
 		statuses = append(statuses, name)
 	}
@@ -145,6 +183,26 @@ var methodKinds = map[string]string{
 
 // causeID is the form of a correlation identifier of the cause of a request (docs/spec/exposure.md#requests).
 var causeID = regexp.MustCompile(`^[^"\\\x00-\x1f\x7f]+$`)
+
+// Reply is Answer for a request whose command may answer in a later step. It calls answer once.
+func (r *Registry) Reply(method string, params json.RawMessage, changed Changed, answer func(result any, err error)) {
+	var fields map[string]json.RawMessage
+	var name string
+	if method == "command.run" && json.Unmarshal(params, &fields) == nil && json.Unmarshal(fields["name"], &name) == nil {
+		r.mu.Lock()
+		later := r.later[name]
+		r.mu.Unlock()
+		if later != nil {
+			if err := r.checkRequest(name, fields); err != nil {
+				answer(nil, err)
+				return
+			}
+			later(fields["params"], answer)
+			return
+		}
+	}
+	answer(r.Answer(method, params, changed))
+}
 
 // Answer answers one request of the relay (docs/spec/exposure.md#relay) with its result, or with a Refusal in the words of the page.
 // A status that the request starts to watch sends its values to changed.
@@ -294,18 +352,26 @@ func (r *Registry) runRequest(name string, fields map[string]json.RawMessage) (a
 	if !registered {
 		return nil, Refuse(Unregistered, "command %s is not registered", name)
 	}
+	if err := r.checkRequest(name, fields); err != nil {
+		return nil, err
+	}
+	return r.Run(name, fields["params"])
+}
+
+// checkRequest makes the checks of the page on the parameters of a command request, in their order.
+func (r *Registry) checkRequest(name string, fields map[string]json.RawMessage) error {
 	var input map[string]any
 	if json.Unmarshal(fields["params"], &input) != nil || input == nil {
-		return nil, Refuse(InvalidParams, "command.run for %s requires params", name)
+		return Refuse(InvalidParams, "command.run for %s requires params", name)
 	}
 	if !MatchesSchema(r.declared.params[name], input) {
-		return nil, Refuse(InvalidParams, "invalid params for %s", name)
+		return Refuse(InvalidParams, "invalid params for %s", name)
 	}
 	// The handlers of the workbench take no cause, and an invalid list is refused also for a handler that ignores it.
 	if cids, present := fields["cids"]; present && !validCauses(cids) {
-		return nil, Refuse(InvalidParams, "command.run for %s: command cids must be an array of non-empty strings without a quote, a backslash or a control character", name)
+		return Refuse(InvalidParams, "command.run for %s: command cids must be an array of non-empty strings without a quote, a backslash or a control character", name)
 	}
-	return r.Run(name, fields["params"])
+	return nil
 }
 
 // validCauses reports whether cids is a list of correlation identifiers.
@@ -332,7 +398,7 @@ func (r *Registry) list() (map[string][]map[string]any, error) {
 	defer r.mu.Unlock()
 	registered := map[string]func(name string) bool{
 		"status":   func(name string) bool { return r.statuses[name] != nil },
-		"commands": func(name string) bool { return r.commands[name] != nil },
+		"commands": func(name string) bool { return r.commands[name] != nil || r.later[name] != nil },
 		"dom":      func(name string) bool { return len(drawn[name]) > 0 },
 	}
 	out := map[string][]map[string]any{}

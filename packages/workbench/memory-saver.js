@@ -172,6 +172,8 @@ export function createMemorySaver({
    * of the attempt.
    */
   function unloadFailed(entry, trigger, error) {
+    // A read that keeps failing runs once per delay, not again at the deadline that passed.
+    if (trigger === "delay") entry.unloadAt = now() + delayMs();
     emitEvent("error", "workbench.tab.unload.failed", { tab: entry.id, plugin: entry.plugin, trigger, reason: error.message });
     failed(`memory saver: tab ${entry.id}: unload failed: ${error.message}`);
     return error;
