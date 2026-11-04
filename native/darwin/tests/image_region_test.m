@@ -1595,19 +1595,59 @@ int main(int argc, char **argv) { @autoreleasepool {
             && strcmp(snapshotNameBuffer23, "kCGColorSpaceSRGB") == 0;
         check(preservesSpace23, @"TEST 23: accepted snapshot preserves the IOSurface sRGB color-space tag");
 
-        unsigned char invalidNonce23[16];
-        IOSurfaceRef invalidSurface23 = createColoredGlobalSurface((size_t)raster23[0], (size_t)raster23[1], invalidNonce23);
-        if (invalidSurface23) IOSurfaceSetValue(invalidSurface23, kIOSurfaceColorSpace,
-            CFSTR("invalid color-space property list"));
-        BOOL invalidRejected23 = invalidSurface23 && !sp_region_present(region23, IOSurfaceGetID(invalidSurface23),
-            invalidNonce23, raster23[0], raster23[1], raster23[2], 54, 1, 2);
-        const char *facts23 = sp_region_facts(region23);
-        check(invalidRejected23 && facts23 && strstr(facts23, "\"error\":\"presentFailed\"")
-            && strstr(facts23, "\"generation\":53"),
-            @"TEST 23: invalid declared color metadata rejects the frame and preserves the prior snapshot");
-        free((void *)facts23);
+        // A declaration that names no color space rejects the frame with an error that names the property and the type of
+        // its value, and the prior snapshot stays.
+        int64_t unknownNumber23 = 987654;
+        CFNumberRef unknownNumberValue23 = CFNumberCreate(NULL, kCFNumberSInt64Type, &unknownNumber23);
+        CFArrayRef arrayValue23 = CFArrayCreate(NULL, NULL, 0, &kCFTypeArrayCallBacks);
+        struct { CFTypeRef value; const char *label; const char *type; } refused23[] = {
+            { CFSTR("invalid color-space property list"), "an unknown color-space name", "CFString" },
+            { unknownNumberValue23, "an unknown color-space number", "CFNumber" },
+            { arrayValue23, "an array", "CFArray" },
+            { kCFBooleanTrue, "a boolean", "CFBoolean" },
+        };
+        for (size_t n = 0; n < sizeof(refused23) / sizeof(refused23[0]); n++) {
+            unsigned char refusedNonce23[16];
+            IOSurfaceRef refusedSurface23 = createColoredGlobalSurface((size_t)raster23[0], (size_t)raster23[1], refusedNonce23);
+            if (refusedSurface23 && refused23[n].value)
+                IOSurfaceSetValue(refusedSurface23, kIOSurfaceColorSpace, refused23[n].value);
+            CFTypeRef refusedValue = refused23[n].value;
+            unsigned int refusedID = refusedSurface23 ? IOSurfaceGetID(refusedSurface23) : 0;
+            const unsigned char *nonce = refusedNonce23;
+            double width = raster23[0], height = raster23[1], scale = raster23[2];
+            __block BOOL rejected = NO;
+            NSString *records = capturedRecords(^{
+                rejected = refusedID && refusedValue && !sp_region_present(region23, refusedID, nonce, width, height, scale,
+                    54 + n, 1, 2 + (int)n);
+            });
+            const char *facts = sp_region_facts(region23);
+            NSString *expectedError = [NSString stringWithFormat:
+                @"error native image region: the kIOSurfaceColorSpace property of the frame is a %s", refused23[n].type];
+            check(rejected && facts && strstr(facts, "\"error\":\"presentFailed\"") && strstr(facts, "\"generation\":53")
+                && [records containsString:expectedError],
+                [NSString stringWithFormat:@"TEST 23: %s as the declared color space rejects the frame with an error naming "
+                    "the property and %s, and preserves the prior snapshot (records: %@)", refused23[n].label, refused23[n].type,
+                    records]);
+            free((void *)facts);
+            if (refusedSurface23) CFRelease(refusedSurface23);
+        }
+        if (unknownNumberValue23) CFRelease(unknownNumberValue23);
+        if (arrayValue23) CFRelease(arrayValue23);
+
+        // A color-space name string declares the named space.
+        unsigned char namedNonce23[16];
+        IOSurfaceRef namedSurface23 = createColoredGlobalSurface((size_t)raster23[0], (size_t)raster23[1], namedNonce23);
+        if (namedSurface23) IOSurfaceSetValue(namedSurface23, kIOSurfaceColorSpace, kCGColorSpaceDisplayP3);
+        BOOL namedPresented23 = namedSurface23 && sp_region_present(region23, IOSurfaceGetID(namedSurface23), namedNonce23,
+            raster23[0], raster23[1], raster23[2], 58, 1, 6);
+        CALayer *namedLayer23 = regionView23.layer.sublayers.firstObject;
+        CGColorSpaceRef namedSpace23 = namedLayer23 ? CGImageGetColorSpace(layerContentsImage(namedLayer23)) : NULL;
+        CFStringRef namedName23 = namedSpace23 ? CGColorSpaceGetName(namedSpace23) : NULL;
+        check(namedPresented23 && namedName23 && CFEqual(namedName23, kCGColorSpaceDisplayP3),
+            [NSString stringWithFormat:@"TEST 23: a DisplayP3 name string as the declared color space is accepted and the "
+                "snapshot has that space (got %@)", namedName23]);
         sp_region_close(region23);
-        if (invalidSurface23) CFRelease(invalidSurface23);
+        if (namedSurface23) CFRelease(namedSurface23);
         if (testSurface23) CFRelease(testSurface23);
     }
 

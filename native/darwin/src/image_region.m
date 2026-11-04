@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #import "application_log.h"
 #import "capture_frame_identity.h"
+#import "declared_color_space.h"
 #import "event_ring.h"
 #import "image_capture_match.h"
 #import "image_region.h"
@@ -1357,6 +1358,18 @@ static IOSurfaceRef lookupSurface(unsigned int surface_id) {
     return IOSurfaceLookup(surface_id);
 }
 
+// The color space that the kIOSurfaceColorSpace property of a frame declares, or NULL after the error that names the
+// property and the type of its value is recorded.
+static CGColorSpaceRef createDeclaredColorSpace(CFPropertyListRef properties) {
+    CFStringRef error = NULL;
+    CGColorSpaceRef colors = sp_declared_color_space_create(properties, &error);
+    if (!colors) {
+        sp_log_error("image region", ((NSString *)error).UTF8String);
+        CFRelease(error);
+    }
+    return colors;
+}
+
 // Copies the pixels and the declared color space of an accepted transfer image into a host-owned IOSurface and returns it
 // retained, or NULL when the declared color space cannot be decoded or a surface cannot be locked or created. The spare copy
 // of the region is reused when it has the same size and the compositor no longer uses it.
@@ -1365,7 +1378,7 @@ static IOSurfaceRef copyPresentation(SPImageRegion *view, IOSurfaceRef source, c
     size_t height = IOSurfaceGetHeight(source);
     CFPropertyListRef colorProperties = IOSurfaceCopyValue(source, kIOSurfaceColorSpace);
     if (colorProperties) {
-        CGColorSpaceRef colors = CGColorSpaceCreateWithPropertyList(colorProperties);
+        CGColorSpaceRef colors = createDeclaredColorSpace(colorProperties);
         if (!colors) {
             CFRelease(colorProperties);
             return NULL;
@@ -1423,7 +1436,7 @@ static IOSurfaceRef copyPresentation(SPImageRegion *view, IOSurfaceRef source, c
 static IOSurfaceRef leasePresentation(IOSurfaceRef surface, char *declaredColorSpaceName, size_t nameCapacity) {
     CFPropertyListRef colorProperties = IOSurfaceCopyValue(surface, kIOSurfaceColorSpace);
     if (colorProperties) {
-        CGColorSpaceRef colors = CGColorSpaceCreateWithPropertyList(colorProperties);
+        CGColorSpaceRef colors = createDeclaredColorSpace(colorProperties);
         CFRelease(colorProperties);
         if (!colors) return NULL;
         CFStringRef name = CGColorSpaceGetName(colors);
@@ -1446,7 +1459,7 @@ static CGImageRef copyPresentationImage(IOSurfaceRef surface) {
     IOSurfaceUnlock(surface, kIOSurfaceLockReadOnly, NULL);
     if (!data) return NULL;
     CFPropertyListRef colorProperties = IOSurfaceCopyValue(surface, kIOSurfaceColorSpace);
-    CGColorSpaceRef colors = colorProperties ? CGColorSpaceCreateWithPropertyList(colorProperties) : CGColorSpaceCreateDeviceRGB();
+    CGColorSpaceRef colors = colorProperties ? createDeclaredColorSpace(colorProperties) : CGColorSpaceCreateDeviceRGB();
     if (colorProperties) CFRelease(colorProperties);
     CGDataProviderRef provider = CGDataProviderCreateWithCFData(data);
     CGImageRef image = provider && colors ? CGImageCreate(width, height, 8, 32, bytesPerRow, colors,
