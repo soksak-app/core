@@ -292,6 +292,8 @@ type shellFixture struct {
 	pending steps
 	lines   []string
 	reloads int
+	// frames counts the frames that the shell asked for.
+	frames int
 }
 
 // installedDocument is the document of the installed plugins of the host.
@@ -329,7 +331,7 @@ func newShell(t testing.TB, stored *storedHost) *shellFixture {
 		Calls:       workbench.NewCalls(stored.table(), f.pending.post),
 		Environment: environment(t),
 		Installed:   []byte(stored.installedDocument()),
-		Invalidate:  func() {},
+		Invalidate:  func() { f.frames++ },
 		Post:        f.pending.post,
 		Report:      func(line string) { f.lines = append(f.lines, line) },
 		Reload:      func() { stored.reloads++ },

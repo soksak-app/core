@@ -500,7 +500,6 @@ func (s *Shell) placeSurfaces() {
 			s.placed(err)
 			return
 		}
-		s.options.Invalidate()
 		s.calls.CallInOrder(surfaceOrder, "presentSurfaces", map[string]any{"ticket": prepared.Ticket, "placements": prepared.Placements, "settled": settled},
 			func(_ any, err error) {
 				s.placed(err)

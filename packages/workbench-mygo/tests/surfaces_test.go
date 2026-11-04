@@ -151,7 +151,7 @@ func surfaceShellOn(t testing.TB, document string, stored *surfaceHost) *shellFi
 		Calls:       workbench.NewCalls(stored.surfaceTable(), f.pending.post),
 		Environment: environment(t),
 		Installed:   []byte(document),
-		Invalidate:  func() {},
+		Invalidate:  func() { f.frames++ },
 		Post:        f.pending.post,
 		Report:      func(line string) { f.lines = append(f.lines, line) },
 		Element:     func(id string) (uintptr, uintptr, bool) { return stored.element(id) },

@@ -661,28 +661,25 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 			return err
 		}
 		report := s.report(call.Surface)
-		switch call.Command {
-		case "tab.title":
-			report.Title = value
-			if s.tabs != nil {
-				s.tabs.states.CacheLabel(call.Surface, call.Plugin, &value)
-			}
-		case "tab.footer":
-			report.Footer = value
-		case "tab.directory":
-			report.Directory = value
-		case "tab.error":
-			report.Error = value
+		if call.Command == "tab.title" && s.tabs != nil {
+			s.tabs.states.CacheLabel(call.Surface, call.Plugin, &value)
 		}
-		s.options.Invalidate()
+		field := map[string]*string{"tab.title": &report.Title, "tab.footer": &report.Footer, "tab.directory": &report.Directory,
+			"tab.error": &report.Error}[call.Command]
+		if *field != value {
+			*field = value
+			s.options.Invalidate()
+		}
 		done()
 	case "tab.modified":
 		var modified bool
 		if err := json.Unmarshal(call.Params, &modified); err != nil {
 			return fmt.Errorf("view call %s requires a boolean", call.Command)
 		}
-		s.report(call.Surface).Modified = modified
-		s.options.Invalidate()
+		if report := s.report(call.Surface); report.Modified != modified {
+			report.Modified = modified
+			s.options.Invalidate()
+		}
 		done()
 	case "tab.keep":
 		fields, err := viewFields[struct {
