@@ -838,7 +838,7 @@ func (s *Shell) viewSettings(unit *installedUnit) map[string]any {
 
 // surfaceTextSize returns the text scale of the surface: the frame factor multiplied by the factor of its card.
 func (s *Shell) surfaceTextSize(surface string) (float64, error) {
-	if held := s.surfaces.held[surface]; held != nil && len(held.section) > 0 {
+	if held := s.surfaces.held[surface]; held != nil && held.section != nil {
 		return s.text.Frame(), nil
 	}
 	card := s.cardOfTab(surface)

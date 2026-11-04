@@ -6,6 +6,7 @@ import (
 	"math"
 	"slices"
 	"sort"
+	"strings"
 )
 
 // The sidebars of a card as packages/workbench/card-sidebars.js gives them: the stored choice of each side, its effect, and the presentation
@@ -363,4 +364,23 @@ func fitOpenSides(open []Side, requested map[Side]SidebarRequest, total, room fl
 		shown[first] = alone
 	}
 	return shown
+}
+
+// SideName is the Korean name of a side.
+func SideName(side Side) string {
+	return map[Side]string{"top": "위", "bottom": "아래", "left": "왼쪽", "right": "오른쪽"}[side]
+}
+
+// SpaceFoldText is the status line text that names the sides folded for lack of space, or "" without such a side.
+func SpaceFoldText(presented map[Side]PresentedSidebar) string {
+	var names []string
+	for _, side := range SidebarSides {
+		if shown, ok := presented[side]; ok && shown.AutoCollapsed && !shown.RequestedCollapsed {
+			names = append(names, SideName(side))
+		}
+	}
+	if len(names) == 0 {
+		return ""
+	}
+	return strings.Join(names, "·") + " 사이드바: 공간 부족으로 접힘"
 }

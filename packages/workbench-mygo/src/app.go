@@ -222,10 +222,8 @@ func (s *Shell) Event(name string, data []any) {
 		})
 	case "menu-command":
 		s.menuCommand(data)
-	case "debug-save-progress":
-		s.debugSaveProgress(data)
-	case "debug-save-done":
-		s.debugSaveDone(data)
+	case "debug-save-progress", "debug-save-done", "debug-log-changed":
+		s.debugEvent(name, data)
 	case "log-policy":
 		s.events.Follow(data...)
 		s.followLogLevels(data)
@@ -267,7 +265,7 @@ func eventBody[T any](name string, data []any) (T, error) {
 }
 
 // eventsLeft are the events of the host that a window of this workbench leaves, because nothing it draws reads them.
-var eventsLeft = map[string]bool{"debug-log-changed": true, "diagnostics-tick": true, "diagnostics-unlistened": true, "document-event": true,
+var eventsLeft = map[string]bool{"diagnostics-tick": true, "diagnostics-unlistened": true, "document-event": true,
 	"document-message": true, "document-state": true, "document-stream": true, "exit-request": true, "exposure-registered": true,
 	"image-detach-ended": true, "image-event": true, "log-policy": true, "memory-pressure": true, "modal-content": true,
 	"modal-position": true, "modal-rendered": true, "overlay-pick": true, "page-ready": true, "plugins-changed": true, "project-activate": true,

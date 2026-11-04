@@ -15,9 +15,9 @@ import (
 
 // DebugEntry is a file of the logs folder that `debugFiles` lists.
 type DebugEntry struct {
-	Path     string
-	Size     int64
-	Modified int64
+	Path     string `json:"path"`
+	Size     int64  `json:"size"`
+	Modified int64  `json:"modified"`
 }
 
 // DebugDifference is a path whose value differs between two state files. A value that a file does not have is nil.
