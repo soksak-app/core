@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F431, F432: v0.0.34가 게시되었고, registry가 이를 VT 0.0.25, sidecar alacritty 0.0.6, 이를 요구하는 plugin release와 함께 올린다.
 - F431: release 후보는 0.0.34이고 최신 게시 release는 v0.0.33이다.
 - F430: frame stream이 주기를 약속하지 않으므로 누락 상태 판정은 두 화면 frame 뒤 또는 그 이후의 첫 녹화 frame까지 읽는다. title bar check는 녹화 간격을 제한한다.
 - F429: `make boundaries`와 host contract 검사가 다시 통과한다. workbench의 `specFiles`가 `docs/spec/events.json`을 선언하고, 중복된 contract case를 없앴다.
