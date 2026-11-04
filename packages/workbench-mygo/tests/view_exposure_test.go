@@ -444,3 +444,24 @@ func TestTheSurfaceStatusListsWhatTheViewRegistered(t *testing.T) {
 		t.Fatalf("the view lists %v", listed)
 	}
 }
+
+func TestARegistrationReachesAWatchWithoutAFrame(t *testing.T) {
+	r := newViewRelay(t)
+	surface := r.surface()
+	var last string
+	watch := []byte(`{"name": "core.surfaces"}`)
+	if _, err := r.f.shell.Registry().Answer("status.watch", watch, func(_ string, value any) {
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			t.Error(err)
+		}
+		last = string(encoded)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	r.emit("exposure-registered", map[string]any{"surface": surface, "kind": "command", "name": "terminal.input"})
+	r.f.pending.drain(t)
+	if !strings.Contains(last, "command terminal.input") {
+		t.Fatalf("the watch holds %s", last)
+	}
+}
