@@ -60,6 +60,9 @@ type CardData struct {
 	Rest     map[string]json.RawMessage
 	// activeID is the stored value of activeId, a string or null, and empty without the member.
 	activeID json.RawMessage
+	// activeText is the id in activeID, and activeSet tells that activeID holds a string.
+	activeText string
+	activeSet  bool
 }
 
 // DecodeCardData reads the data of a card, which is nil for a card without data.
@@ -95,7 +98,7 @@ func (d *CardData) UnmarshalJSON(text []byte) error {
 	}
 	if raw, ok := members["activeId"]; ok {
 		delete(members, "activeId")
-		d.activeID = raw
+		d.holdActive(raw)
 	}
 	if raw, ok := members["sidebars"]; ok {
 		delete(members, "sidebars")
@@ -139,12 +142,11 @@ func (d *CardData) ActiveTab() *Tab {
 	if d == nil {
 		return nil
 	}
-	var id string
-	if jsonKind(d.activeID) != '"' || json.Unmarshal(d.activeID, &id) != nil {
+	if !d.activeSet {
 		return nil
 	}
 	for i := range d.Tabs {
-		if d.Tabs[i].ID == id {
+		if d.Tabs[i].ID == d.activeText {
 			return &d.Tabs[i]
 		}
 	}
@@ -197,7 +199,13 @@ func (d *CardData) setActive(id *string) {
 	if err != nil {
 		panic(err) // A string or a nil pointer always marshals.
 	}
-	d.activeID = raw
+	d.holdActive(raw)
+}
+
+// holdActive stores raw as the value of activeId.
+func (d *CardData) holdActive(raw json.RawMessage) {
+	d.activeID, d.activeText = raw, ""
+	d.activeSet = jsonKind(raw) == '"' && json.Unmarshal(raw, &d.activeText) == nil
 }
 
 // TabName is the name on a tab: the title that its surface reported, or the title of its layout entry when it reported none (reported nil),

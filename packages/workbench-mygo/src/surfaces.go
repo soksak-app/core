@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -182,8 +183,8 @@ type surfaceState struct {
 	// seated holds the section surfaces of the sidebars of the current frame, and planeDrawn tells that the frame drew a plane.
 	seated     map[string]bool
 	planeDrawn bool
-	// placed is the text of the last request, and running tells that a placement has not finished.
-	placed  string
+	// placed is the lines of the last request, and running tells that a placement has not finished.
+	placed  []surfaceLine
 	running bool
 	views   map[string]*viewState
 	reports map[string]*tabReport
@@ -260,7 +261,7 @@ type storedSession struct {
 }
 
 func newSurfaceState() surfaceState {
-	return surfaceState{held: map[string]*heldSurface{}, drawn: map[string]layout.Rect{}, seated: map[string]bool{}, placed: "[]",
+	return surfaceState{held: map[string]*heldSurface{}, drawn: map[string]layout.Rect{}, seated: map[string]bool{},
 		views: map[string]*viewState{}, reports: map[string]*tabReport{}, failed: map[string]string{}, documents: map[string]map[string]bool{},
 		detaching: map[string]bool{}, detachFailed: map[string]string{}, sessions: map[string]*storedSession{}}
 }
@@ -380,6 +381,29 @@ func (s *Shell) surfaceDeclarations(unit *installedUnit) (map[string]any, error)
 	return marks, nil
 }
 
+// surfaceLine is what the placement of one surface depends on: its box of the frame, and the surface and the unit of its plugin,
+// which are replaced and never changed. It compares with ==, so a value added here counts.
+type surfaceLine struct {
+	held    *heldSurface
+	unit    *installedUnit
+	visible bool
+	box     layout.Rect
+}
+
+// surfaceLines moves each surface that the frame seats to its box, and returns the lines of the surfaces.
+func (s *Shell) surfaceLines() []surfaceLine {
+	lines := make([]surfaceLine, 0, len(s.surfaces.order))
+	for _, id := range s.surfaces.order {
+		held := s.surfaces.held[id]
+		box, visible := s.surfaces.drawn[id]
+		if visible {
+			held.box = box
+		}
+		lines = append(lines, surfaceLine{held: held, unit: s.units[held.tab.Plugin], visible: visible, box: held.box})
+	}
+	return lines
+}
+
 // surfaceRequest returns the request of syncSurfaces for the surfaces that the host holds: a seated surface stands in its box
 // and the others stay hidden.
 func (s *Shell) surfaceRequest() (map[string]any, error) {
@@ -389,10 +413,7 @@ func (s *Shell) surfaceRequest() (map[string]any, error) {
 	for _, id := range s.surfaces.order {
 		held := s.surfaces.held[id]
 		unit := s.units[held.tab.Plugin]
-		box, visible := s.surfaces.drawn[id]
-		if visible {
-			held.box = box
-		}
+		_, visible := s.surfaces.drawn[id]
 		index, ok := tables[unit.ID]
 		if !ok {
 			marks, err := s.surfaceDeclarations(unit)
@@ -437,22 +458,18 @@ func (s *Shell) placeSurfaces() {
 	if s.surfaces.running {
 		return
 	}
+	lines := s.surfaceLines()
+	if slices.Equal(lines, s.surfaces.placed) {
+		s.answerCommits(s.surfaces.commits, nil)
+		s.surfaces.commits = nil
+		return
+	}
 	request, err := s.surfaceRequest()
 	if err != nil {
 		s.fail(err)
 		return
 	}
-	encoded, err := json.Marshal(request["surfaces"])
-	if err != nil {
-		s.fail(err)
-		return
-	}
-	if string(encoded) == s.surfaces.placed {
-		s.answerCommits(s.surfaces.commits, nil)
-		s.surfaces.commits = nil
-		return
-	}
-	s.surfaces.placed = string(encoded)
+	s.surfaces.placed = lines
 	s.surfaces.running = true
 	s.surfaces.placing, s.surfaces.commits = s.surfaces.commits, nil
 	for _, id := range s.surfaces.order {
@@ -483,7 +500,6 @@ func (s *Shell) placeSurfaces() {
 			s.placed(err)
 			return
 		}
-		s.options.Invalidate()
 		s.calls.CallInOrder(surfaceOrder, "presentSurfaces", map[string]any{"ticket": prepared.Ticket, "placements": prepared.Placements, "settled": settled},
 			func(_ any, err error) {
 				s.placed(err)

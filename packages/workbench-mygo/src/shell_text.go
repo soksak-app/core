@@ -37,7 +37,7 @@ func (t shellText) CardTextSizes() map[string]float64 {
 	}
 	for _, card := range t.s.plane.Cards() {
 		sizes[card.ID] = 1
-		data, err := layout.DecodeCardData(card.Data)
+		data, err := t.s.readCard(card)
 		if err != nil {
 			t.s.fail(fmt.Errorf("the data of card %s: %w", card.ID, err))
 			continue

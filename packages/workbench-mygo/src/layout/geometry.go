@@ -2,6 +2,7 @@ package layout
 
 import (
 	"math"
+	"slices"
 	"sort"
 	"strconv"
 )
@@ -18,6 +19,8 @@ type plane struct {
 	height  float64
 	gap     float64
 	minSize float64
+	// read keeps the last frame of a plane, for a plane of a grid.
+	read *frameRead
 }
 
 // opt is a number or none, the number | null of the model.
@@ -426,7 +429,71 @@ func (f *frame) of(axis Axis) *axle {
 	return &f.y
 }
 
+// frameRead is a frame with every value of the plane that it was computed from, so that the same values give the same frame
+// without knowing which change of the grid moved them.
+type frameRead struct {
+	held                        bool
+	xs, ys                      []float64
+	width, height, gap, minSize float64
+	spans                       []cardSpan
+	frame                       frame
+}
+
+// cardSpan is what a coordinate reads of a card. It compares with ==, so a value added here counts.
+type cardSpan struct {
+	c0, c1, r0, r1 int
+	width, height  opt
+	fixed          bool
+}
+
+func cardSpanOf(card *Card) cardSpan {
+	span := cardSpan{c0: card.C0, c1: card.C1, r0: card.R0, r1: card.R1, fixed: card.Fixed}
+	if card.Width != nil {
+		span.width = some(*card.Width)
+	}
+	if card.Height != nil {
+		span.height = some(*card.Height)
+	}
+	return span
+}
+
+// holds tells whether the frame of r is the frame of p.
+func (r *frameRead) holds(p *plane) bool {
+	if !r.held || r.width != p.width || r.height != p.height || r.gap != p.gap || r.minSize != p.minSize ||
+		!slices.Equal(r.xs, p.xs) || !slices.Equal(r.ys, p.ys) || len(r.spans) != len(p.cards) {
+		return false
+	}
+	for i, card := range p.cards {
+		if r.spans[i] != cardSpanOf(card) {
+			return false
+		}
+	}
+	return true
+}
+
+// take keeps f as the frame of p.
+func (r *frameRead) take(p *plane, f frame) {
+	spans := r.spans[:0]
+	for _, card := range p.cards {
+		spans = append(spans, cardSpanOf(card))
+	}
+	*r = frameRead{held: true, xs: append(r.xs[:0], p.xs...), ys: append(r.ys[:0], p.ys...), width: p.width, height: p.height,
+		gap: p.gap, minSize: p.minSize, spans: spans, frame: f}
+}
+
+// frameOf is the frame of p. A frame is read and never changed, so the callers share it.
 func frameOf(p *plane) frame {
+	if p.read != nil && p.read.holds(p) {
+		return p.read.frame
+	}
+	f := computeFrame(p)
+	if p.read != nil {
+		p.read.take(p, f)
+	}
+	return f
+}
+
+func computeFrame(p *plane) frame {
 	axleOf := func(axis Axis) axle {
 		a := p.lines(axis)
 		read := linesRead(p, axis)

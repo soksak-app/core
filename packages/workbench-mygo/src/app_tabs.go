@@ -273,8 +273,10 @@ func (f shellSurfaces) AttachedTabs() []string {
 func (f shellSurfaces) Restore(tab string) { f.shell.seedSession(tab) }
 
 func (f shellSurfaces) ReportTitle(tab, label string) {
-	f.shell.report(tab).Title = label
-	f.shell.options.Invalidate()
+	if report := f.shell.report(tab); report.Title != label {
+		report.Title = label
+		f.shell.options.Invalidate()
+	}
 }
 
 func (f shellSurfaces) ReportState(string, string) { f.shell.options.Invalidate() }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"slices"
 
 	"github.com/egoist/mygo/ui"
 
@@ -79,6 +80,16 @@ type railStatus struct {
 	Path      string       `json:"path"`
 	Groups    []railGroup  `json:"groups"`
 	FocusMark *layout.Rect `json:"focusMark"`
+}
+
+// railLine is the distances of the rail outline.
+type railLine struct{ pad, inset, radius float64 }
+
+// railRead is the rail outline with the values it was computed from.
+type railRead struct {
+	rects   []layout.Rect
+	line    railLine
+	outline layout.Outline
 }
 
 // railGroup is the outline that binds a focused card with the window sidebars of its plugin.
@@ -274,8 +285,12 @@ func (s *Shell) railGroups() []railGroup {
 	if radius != 0 {
 		radius += pad - inset
 	}
-	outline := layout.ComputeOutline(rects, layout.OutlineOptions{Pad: &pad, Inset: &inset, Radius: &radius})
-	return append(groups, railGroup{Outline: outline, Card: s.focused, Sidebars: sidebars, Rects: rects})
+	line := railLine{pad: pad, inset: inset, radius: radius}
+	if !slices.Equal(rects, s.railRead.rects) || line != s.railRead.line {
+		s.railRead = railRead{rects: rects, line: line,
+			outline: layout.ComputeOutline(rects, layout.OutlineOptions{Pad: &pad, Inset: &inset, Radius: &radius})}
+	}
+	return append(groups, railGroup{Outline: s.railRead.outline, Card: s.focused, Sidebars: sidebars, Rects: rects})
 }
 
 // focusMark returns the rectangle of the focus corners around the slot of the focused card, or nil while the setting shows no corners.
@@ -287,7 +302,7 @@ func (s *Shell) focusMark() *layout.Rect {
 	if !ok {
 		return nil
 	}
-	data, err := layout.DecodeCardData(card.Data)
+	data, err := s.readCard(card)
 	if err != nil || data == nil || data.ActiveTab() == nil {
 		return nil
 	}
