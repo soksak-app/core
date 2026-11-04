@@ -39,6 +39,7 @@ type surfaceHost struct {
 	hostName []string
 	// clipboard is the text of the clipboard.
 	clipboard string
+	debug     debugHost
 	// theme is the argument of setTheme, and themeFirst tells that no placement preceded it.
 	theme      string
 	themeFirst bool
@@ -96,6 +97,7 @@ func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 	table["clipboardWriteText"] = func(_ context.Context, argument json.RawMessage) (any, error) {
 		return nil, json.Unmarshal(argument, &h.clipboard)
 	}
+	h.debug.serve(table)
 	for _, name := range []string{"viewSidecarRoute", "sidecarListen", "viewEvent", "compositionPlace", "imageAttach", "sidecarSend", "exposureRegister", "documentAttach", "viewRequest", "notify", "notificationRemove"} {
 		table[name] = func(_ context.Context, argument json.RawMessage) (any, error) {
 			h.hostName = append(h.hostName, name+" "+string(argument))
@@ -146,6 +148,8 @@ func surfaceShellOn(t *testing.T, document string, stored *surfaceHost) *shellFi
 		Post:        f.pending.post,
 		Report:      func(line string) { f.lines = append(f.lines, line) },
 		Element:     func(id string) (uintptr, uintptr, bool) { return stored.element(id) },
+		Reload:      func() { f.reloads++ },
+		Elements:    fixtureElements{f},
 	})
 	if err != nil {
 		t.Fatal(err)

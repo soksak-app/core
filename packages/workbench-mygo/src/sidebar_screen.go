@@ -25,9 +25,12 @@ var (
 )
 
 // chevronIcon is the stroke icon of the path d, as packages/workbench/icons.js holds it.
-func chevronIcon(d string) *ui.SVG {
+func chevronIcon(d string) *ui.SVG { return strokeIcon(`<path d="` + d + `"/>`) }
+
+// strokeIcon is the stroke icon of the shapes of body.
+func strokeIcon(body string) *ui.SVG {
 	return ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#888" ` +
-		`stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="` + d + `"/></svg>`))
+		`stroke-width="2" stroke-linecap="round" stroke-linejoin="round">` + body + `</svg>`))
 }
 
 // SidebarMetrics are the chrome metrics of workbench.json that the frame reads, in points.
@@ -114,8 +117,8 @@ func seatOf(frame SidebarFrame, section SidebarSection) SidebarSeat {
 		visible = section.ID == frame.Tab
 	}
 	return SidebarSeat{
-		SurfaceID: frame.Space + "/" + frame.Sidebar + "/" + section.ID,
-		Section:   section.ID, Sidebar: frame.Sidebar, Plugin: section.Plugin, Title: section.Name, Composition: section.Composition, Visible: visible,
+		SurfaceID: frame.Space + "/" + frame.Sidebar + "/" + section.ID, Sidebar: frame.Sidebar,
+		Section: section.ID, Plugin: section.Plugin, Title: section.Name, Composition: section.Composition, Visible: visible,
 	}
 }
 

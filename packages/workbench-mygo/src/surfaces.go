@@ -3,6 +3,7 @@ package workbench
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/egoist/mygo/ui"
 
@@ -136,14 +137,22 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 
 // heldSurface is a surface that the host holds for this window.
 type heldSurface struct {
-	// tab is the tab of the surface. The surface of a section has no tab, and this value carries its id and plugin.
-	tab     layout.Tab
-	box     layout.Rect
-	project projectStart
-	// composition is the composition of the plugin, or that of the section. section is the start value of a section surface.
-	composition, section json.RawMessage
+	// tab is the tab of the surface. A section surface has a tab of its id and its plugin only.
+	tab         layout.Tab
+	composition json.RawMessage
+	box         layout.Rect
+	project     projectStart
+	// section is the start value of a section surface, and nil for the surface of a tab.
+	section *sectionStart
 	// declared tells that the host took its composition.
 	declared bool
+}
+
+// sectionStart is the start value section of a section surface. A section of a window sidebar has no card.
+type sectionStart struct {
+	ID      string  `json:"id"`
+	Sidebar string  `json:"sidebar"`
+	Card    *string `json:"card"`
 }
 
 // projectStart is the project of the start values of a view.
@@ -158,6 +167,9 @@ type surfaceState struct {
 	order []string
 	// drawn holds the tabs that the current frame seats, with their boxes in window coordinates.
 	drawn map[string]layout.Rect
+	// seated holds the section surfaces of the sidebars of the current frame, and planeDrawn tells that the frame drew a plane.
+	seated     map[string]bool
+	planeDrawn bool
 	// placed is the text of the last request, and running tells that a placement has not finished.
 	placed  string
 	running bool
@@ -170,7 +182,7 @@ type surfaceState struct {
 }
 
 func newSurfaceState() surfaceState {
-	return surfaceState{held: map[string]*heldSurface{}, drawn: map[string]layout.Rect{}, placed: "[]",
+	return surfaceState{held: map[string]*heldSurface{}, drawn: map[string]layout.Rect{}, seated: map[string]bool{}, placed: "[]",
 		views: map[string]*viewState{}, reports: map[string]*tabReport{}, failed: map[string]string{}}
 }
 
@@ -189,42 +201,56 @@ func (s *Shell) drawSeat(c *ui.Context, tab layout.Tab, box layout.Rect) {
 		ui.Text(c, reason).FontSize(12).TextColor(s.palette.No)
 		return
 	}
-	s.surfaces.drawn[tab.ID] = box
-	if s.surfaces.held[tab.ID] == nil {
-		project := s.opened()
-		s.surfaces.held[tab.ID] = &heldSurface{tab: tab, box: box, project: projectStart{ID: project.ID, Root: project.Root},
-			composition: unit.Composition}
-		s.surfaces.order = append(s.surfaces.order, tab.ID)
-	}
-	if surface, key, ok := s.options.Element(tab.ID); ok {
-		ui.NativeView(c, surface, key).Size(float32(box.W), float32(box.H))
-	}
+	s.standSurface(c, &heldSurface{tab: tab, composition: unit.Composition, box: box}, box)
 }
 
-// drawSectionSeat holds the view of a section of a window sidebar and seats it while the section is open. The view of a folded
-// section stays held and hidden, so it keeps its state.
+// drawSectionSeat draws the body of a section: the native view of its section surface. A seat that is not visible keeps its surface
+// hidden, and a section that was never visible has none.
 func (s *Shell) drawSectionSeat(c *ui.Context, seat SidebarSeat) {
-	if s.units[seat.Plugin] == nil || len(seat.Composition) == 0 {
-		return
-	}
-	if s.surfaces.held[seat.SurfaceID] == nil {
-		section, err := json.Marshal(map[string]any{"id": seat.Section, "sidebar": seat.Sidebar, "card": nil})
-		if err != nil {
-			s.fail(err)
-			return
-		}
-		project := s.opened()
-		s.surfaces.held[seat.SurfaceID] = &heldSurface{tab: layout.Tab{ID: seat.SurfaceID, Plugin: seat.Plugin}, box: seat.Box,
-			project: projectStart{ID: project.ID, Root: project.Root}, composition: seat.Composition, section: section}
-		s.surfaces.order = append(s.surfaces.order, seat.SurfaceID)
-	}
+	s.surfaces.seated[seat.SurfaceID] = true
 	if !seat.Visible {
 		return
 	}
-	s.surfaces.drawn[seat.SurfaceID] = seat.Box
-	if surface, key, ok := s.options.Element(seat.SurfaceID); ok {
-		ui.NativeView(c, surface, key).Size(float32(seat.Box.W), float32(seat.Box.H))
+	if reason, stopped := s.surfaces.failed[seat.SurfaceID]; stopped {
+		ui.Text(c, reason).FontSize(12).TextColor(s.palette.No)
+		return
 	}
+	start := &sectionStart{ID: seat.Section, Sidebar: seat.Sidebar}
+	if card, _, ok := strings.Cut(seat.Sidebar, ":"); ok {
+		start.Card = &card
+	}
+	s.standSurface(c, &heldSurface{tab: layout.Tab{ID: seat.SurfaceID, Plugin: seat.Plugin}, composition: seat.Composition, box: seat.Box, section: start}, seat.Box)
+}
+
+// standSurface seats a surface in the frame at box, in window coordinates, and draws its native view. The host holds a new surface
+// from the next placement.
+func (s *Shell) standSurface(c *ui.Context, surface *heldSurface, box layout.Rect) {
+	id := surface.tab.ID
+	s.surfaces.drawn[id] = box
+	if s.surfaces.held[id] == nil {
+		project := s.opened()
+		surface.project = projectStart{ID: project.ID, Root: project.Root}
+		s.surfaces.held[id] = surface
+		s.surfaces.order = append(s.surfaces.order, id)
+	}
+	if view, key, ok := s.options.Element(id); ok {
+		ui.NativeView(c, view, key).Size(float32(box.W), float32(box.H))
+	}
+}
+
+// forgetUnseated forgets the section surfaces that no sidebar of the frame holds: a section lives while a drawn set holds it. Only a
+// frame of a plane tells, because the library draws no sidebar and its surfaces stay hidden.
+func (s *Shell) forgetUnseated() {
+	if !s.surfaces.planeDrawn {
+		return
+	}
+	var gone []string
+	for _, id := range s.surfaces.order {
+		if s.surfaces.held[id].section != nil && !s.surfaces.seated[id] {
+			gone = append(gone, id)
+		}
+	}
+	s.forgetSurfaces(gone)
 }
 
 // forgetSurfaces removes the surfaces of closed tabs: the next placement leaves them out, and the host closes their views.
@@ -290,10 +316,10 @@ func (s *Shell) surfaceRequest() (map[string]any, error) {
 			tables[unit.ID] = index
 			table = append(table, marks)
 		}
-		surfaces = append(surfaces, map[string]any{"id": id, "visible": visible, "dim": s.surfaceDimmed(id), "plugin": unit.ID,
+		surfaces = append(surfaces, map[string]any{"id": id, "visible": visible, "dim": false, "plugin": unit.ID,
 			"composition": held.composition, "x": held.box.X, "y": held.box.Y, "w": held.box.W, "h": held.box.H,
 			"start": map[string]any{"params": tabMember(held.tab, "params", "null"), "origin": tabMember(held.tab, "origin", `{"directory":null}`),
-				"project": held.project, "declarations": index, "diagnostics": rawOrNull(unit.Diagnostics), "section": rawOrNull(held.section)}})
+				"project": held.project, "declarations": index, "diagnostics": rawOrNull(unit.Diagnostics), "section": held.section}})
 	}
 	return map[string]any{"settled": s.held == nil, "surfaces": surfaces, "titlebar": s.metrics.chromeH, "declarations": table}, nil
 }

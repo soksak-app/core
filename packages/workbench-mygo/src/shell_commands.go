@@ -63,10 +63,11 @@ func (s *Shell) requirePlane() error {
 // register adds the commands of the shell to the registry.
 func (s *Shell) register() {
 	s.registerLibrary()
-	s.registerPlugins()
 	s.registerSettings()
 	s.registerPicker()
 	s.text.Register(s.registry)
+	s.registerCardSidebars()
+	s.registerPlugins()
 	s.registerDebug()
 	act(s, "core.projects.browse", func(struct{}) error { s.browse(); return nil })
 	act(s, "core.projects.flush", func(struct{}) error { s.keep(); return nil })

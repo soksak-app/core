@@ -274,6 +274,7 @@ type shellFixture struct {
 	tester  *ui.Tester
 	pending steps
 	lines   []string
+	reloads int
 }
 
 // installedDocument is the document of the installed plugins of the host.

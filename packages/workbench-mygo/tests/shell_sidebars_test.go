@@ -9,10 +9,7 @@ import (
 
 func sidebarShell(t *testing.T) *shellFixture {
 	t.Helper()
-	f := newShell(t, &storedHost{installed: sidebarsInstalled})
-	f.run("core.library.form.open", map[string]string{"mode": "open"})
-	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
-	f.run("core.library.form.submit", nil)
+	f, _ := surfaceShellOf(t, sidebarsInstalled)
 	return f
 }
 

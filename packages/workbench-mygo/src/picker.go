@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/egoist/mygo/ui"
 
@@ -165,9 +166,13 @@ func (s *Shell) openCardTools(card string) error {
 	if s.toggled(anchor) {
 		return nil
 	}
-	items := []pickerItem{{Key: "add", Name: "이 카드에 탭 추가", Icon: `<path d="M8 3v10M3 8h10"/>`},
-		{Key: "x", Name: "세로선으로 쪼개기", Icon: `<path d="M8 3v10M3 3h10v10H3z"/>`},
-		{Key: "y", Name: "가로선으로 쪼개기", Icon: `<path d="M3 8h10M3 3h10v10H3z"/>`}}
+	items, err := s.sideItems(card)
+	if err != nil {
+		return err
+	}
+	items = append(items, pickerItem{Key: "add", Name: "이 카드에 탭 추가", Icon: `<path d="M8 3v10M3 8h10"/>`},
+		pickerItem{Key: "x", Name: "세로선으로 쪼개기", Icon: `<path d="M8 3v10M3 3h10v10H3z"/>`},
+		pickerItem{Key: "y", Name: "가로선으로 쪼개기", Icon: `<path d="M3 8h10M3 3h10v10H3z"/>`})
 	if s.plane.CanClose(card) {
 		items = append(items, pickerItem{Key: "close", Name: "이 카드를 닫는다", Icon: `<path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/>`})
 	}
@@ -176,6 +181,10 @@ func (s *Shell) openCardTools(card string) error {
 	s.openPicker("카드 도구", items, func(key string) error {
 		if key == "close" {
 			return s.closeCard(card)
+		}
+		if side, ok := strings.CutPrefix(key, "side-"); ok {
+			s.binder.run("core.card.sidebar.toggle", cardSideParam{Card: card, Side: side})
+			return nil
 		}
 		s.openAddMenu(anchor, key, card)
 		return nil
@@ -378,6 +387,8 @@ func (s *Shell) modalName() *string {
 	switch {
 	case s.settingsWindow.open:
 		name = "settings"
+	case s.debugView.open:
+		name = "debug"
 	case s.picker.open:
 		name = "picker"
 	default:

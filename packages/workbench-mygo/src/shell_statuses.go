@@ -369,7 +369,7 @@ func (s *Shell) surfacesState() []surfaceStatus {
 		if !visible {
 			entry.Applied = nil
 		}
-		if len(held.section) > 0 {
+		if held.section != nil {
 			entry.Kind = "section"
 		}
 		status = append(status, entry)

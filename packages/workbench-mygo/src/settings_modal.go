@@ -1084,6 +1084,7 @@ func (s *Shell) registerSettingsWindow() {
 	w := &s.settingsWindow
 	act(s, "core.settings.open", func(struct{}) error {
 		s.closePicker()
+		s.closeDebug()
 		w.open = true
 		s.options.Invalidate()
 		return nil

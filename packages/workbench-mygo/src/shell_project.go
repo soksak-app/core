@@ -205,6 +205,7 @@ func (s *Shell) loadSpace(project *projectRecord) error {
 		return fmt.Errorf("space %s: %w", space.ID, err)
 	}
 	s.plane, s.focused, s.fullscreen = plane, s.firstCard(plane), ""
+	s.operated = map[string]map[string]layout.Side{}
 	return nil
 }
 
@@ -441,7 +442,7 @@ func (s *Shell) closeSpace(id string) error {
 	}
 	eachTab(stored.State.Cards, func(tab layout.Tab, _ bool) { dropped = append(dropped, tab.ID) })
 	for surface, held := range s.surfaces.held {
-		if len(held.section) > 0 && strings.HasPrefix(surface, id+"/") {
+		if held.section != nil && strings.HasPrefix(surface, id+"/") {
 			dropped = append(dropped, surface)
 		}
 	}
@@ -608,6 +609,7 @@ func (s *Shell) closeCard(id string) error {
 		return fmt.Errorf("card %s cannot close", id)
 	}
 	s.plane.Close(id)
+	delete(s.operated, id)
 	if s.focused == id {
 		s.focused = s.firstCard(s.plane)
 	}

@@ -135,6 +135,9 @@ type Shell struct {
 	requests *Requests
 	errors   *ShownErrors
 	sidebars *Sidebars
+	// operated holds the side of each axis of each card that was operated last, for the time the plane stands.
+	operated map[string]map[string]layout.Side
+	grip     *heldGrip
 	events   *Events
 	grid     environmentGrid
 	focus    string
@@ -159,6 +162,7 @@ type Shell struct {
 
 	settings       *SettingsStore
 	settingsWindow settingsWindow
+	debugView      debugViewState
 	commonSettings map[string]any
 	menuLanguage   string
 	plugins        []LoadedPlugin
@@ -179,8 +183,6 @@ type Shell struct {
 	page string
 
 	text *TextSize
-	// debug is the open debug view, and nil while it is closed.
-	debug *debugState
 	// started is set once the host took the first state of the shell, changed once plugins changed before that, and reloading while the
 	// shell saves before a reload. They belong to the main thread.
 	started, changed, reloading bool
@@ -251,7 +253,8 @@ func NewShell(options ShellOptions) (*Shell, error) {
 		return (*string)(nil)
 	})
 	s.sidebars, err = NewSidebars(SidebarsOptions{Declared: options.Declared, Registry: s.registry, Binder: s.binder,
-		Environment: options.Environment, Installed: installed, Changed: s.settle, Seat: s.drawSectionSeat})
+		Environment: options.Environment, Installed: installed, Changed: s.settle, Seat: s.drawSectionSeat,
+		Mounted: func(id string) bool { return s.surfaces.held[id] != nil }})
 	if err != nil {
 		return nil, err
 	}
@@ -449,6 +452,8 @@ func (s *Shell) View(c *ui.Context) {
 	clear(s.surfaces.drawn)
 	clear(s.picker.drawn)
 	clear(s.heads)
+	clear(s.surfaces.seated)
+	s.surfaces.planeDrawn = false
 	width, height := c.Size()
 	theme := *c.Theme()
 	theme.Background = s.palette.Bg
@@ -466,10 +471,11 @@ func (s *Shell) View(c *ui.Context) {
 		} else {
 			s.drawWork(c, width, height-s.chromeHeight())
 		}
-		s.drawDebug(c, width, height)
 	})
 	s.drawPicker(c, width, height)
 	s.drawSettings(c, width, height)
+	s.drawDebug(c)
+	s.forgetUnseated()
 	s.placeSurfaces()
 	s.clearVisibleNotices()
 	s.pushStatuses()

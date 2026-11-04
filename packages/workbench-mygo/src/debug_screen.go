@@ -41,9 +41,19 @@ type DebugStateView struct {
 
 // DebugFilter is the filter of the timeline, whose members are the parameters of `core.debug.timeline.filter`.
 type DebugFilter struct {
-	Channel, Level, Layer                    string
-	Text, Class, Event, EventPrefix, Surface string
-	Session, Cid, Run, From, To              string
+	Channel     string `json:"channel"`
+	Level       string `json:"level"`
+	Layer       string `json:"layer"`
+	Text        string `json:"text"`
+	Class       string `json:"class"`
+	Event       string `json:"event"`
+	EventPrefix string `json:"event_prefix"`
+	Surface     string `json:"surface"`
+	Session     string `json:"session"`
+	Cid         string `json:"cid"`
+	Run         string `json:"run"`
+	From        string `json:"from"`
+	To          string `json:"to"`
 }
 
 // DebugRow is a row of the timeline: its text line, with two spaces before a row that is only context.
@@ -86,6 +96,8 @@ type DebugView struct {
 	State         *DebugStateView
 	Operation     *DebugOperation
 	Failure       *string
+	// Scroll receives the scroll position of the shown content.
+	Scroll *ui.ScrollState
 }
 
 func sizeText(size int64) string {
@@ -106,14 +118,18 @@ func megabytes(size int64) string { return fmt.Sprintf("%.1f", float64(size)/102
 // DrawDebugView draws the scrim and the card of the view.
 func DrawDebugView(c *ui.Context, binder *Binder, view DebugView, shown *ShownErrors) {
 	theme := c.Theme()
-	ui.Box(binder.Name(c, "core.debug.scrim", "")).Fill().Center().Role(ui.RoleGroup).Label(debugName).Children(func() {
+	ui.Box(binder.Name(c, "core.debug.scrim", "")).Absolute().Left(0).Top(0).Right(0).Bottom(0).Center().Modal().Role(ui.RoleGroup).Label(debugName).Children(func() {
 		ui.Column(binder.Name(c, "core.debug.card", "")).Width(view.CardWidth).MaxHeight(view.CardMaxHeight).Background(theme.Background).Border(1, theme.Border).
 			Role(ui.RoleDialog).Label(debugName).Children(func() {
 			ui.Row(c).FillWidth().AlignItems(ui.Center).Padding(8, 16).Children(func() {
 				ui.Text(c, debugName).Grow(1)
 				binder.Button(c, "core.debug.close", "core.debug.close", "", "닫는다", nil)
 			})
-			ui.Scroll(c).Grow(1).FillWidth().Children(func() {
+			pane := ui.Scroll(c).Grow(1).FillWidth()
+			if view.Scroll != nil {
+				pane = pane.TrackScroll(view.Scroll)
+			}
+			pane.Children(func() {
 				ui.Column(c).FillWidth().Gap(8).Padding(0, 16, 16, 16).Children(func() { drawDebugPane(c, binder, view, shown) })
 			})
 		})
@@ -325,20 +341,18 @@ func drawFilterSelect(c *ui.Context, binder *Binder, member, name, label, value 
 // drawFilterField draws a text field of a filter member. It runs the filter when the field submits or loses the focus, as
 // the change of an input does, so a query does not run for each key.
 func drawFilterField(c *ui.Context, binder *Binder, timeline DebugTimeline, member, name, label, value string) {
+	text, drafted := timeline.Drafts[member]
+	if !drafted {
+		text = value
+	}
 	run := binder.Control(c, "core.debug.timeline."+name, "core.debug.timeline.filter", "")
-	ui.Box(c).Grow(1).Role(ui.RoleGroup).Label(label).Children(func() {
-		text, drafted := timeline.Drafts[member]
-		if !drafted {
-			text = value
-		}
-		field := ui.TextInput(c, &text).Placeholder(label).Label(label).FillWidth()
-		if field.Changed() {
-			timeline.Drafts[member] = text
-			drafted = true
-		}
-		if drafted && (field.Submitted() || !field.Focused()) {
-			delete(timeline.Drafts, member)
-			run(map[string]any{member: text})
-		}
-	})
+	field := ui.TextInput(c, &text).Placeholder(label).Label(label).Grow(1)
+	if field.Changed() {
+		timeline.Drafts[member] = text
+		drafted = true
+	}
+	if drafted && (field.Submitted() || !field.Focused()) {
+		delete(timeline.Drafts, member)
+		run(map[string]any{member: text})
+	}
 }

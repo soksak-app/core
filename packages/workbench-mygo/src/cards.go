@@ -16,6 +16,7 @@ func (s *Shell) stageInset() float32 { return s.palette.Gap + s.palette.BorderWi
 
 // drawWork draws the spaces and the stage of the shown project.
 func (s *Shell) drawWork(c *ui.Context, width, height float32) {
+	s.surfaces.planeDrawn = true
 	project := s.opened()
 	DrawErrorBanner(c, s.errors)
 	s.drawSpaces(c, project, width)
@@ -57,6 +58,12 @@ var placeNames = map[string]string{"left": "왼쪽 창 사이드바", "right": "
 
 // drawCard draws a card at its rectangle of the plane. originX and originY are the origin of the plane in the window.
 func (s *Shell) drawCard(c *ui.Context, id string, data *layout.CardData, rect layout.Rect, inset, originX, originY float32) {
+	sides, err := s.cardSides(id, data, rect)
+	if err != nil {
+		s.errors.Show(id, err.Error(), "")
+		DrawError(c, s.errors, id)
+		return
+	}
 	border := s.palette.Edge
 	if id == s.focused && s.settings.Value("focusInd") != "corner" {
 		border = s.palette.Focus
@@ -64,20 +71,32 @@ func (s *Shell) drawCard(c *ui.Context, id string, data *layout.CardData, rect l
 	card := s.binder.Press(c, "core.card", "core.card.focus", id, cardParam{Card: id})
 	card.Role(ui.RoleGroup).Label(id).Absolute().Left(float32(rect.X)+inset).Top(float32(rect.Y)+inset).Size(float32(rect.W), float32(rect.H)).
 		Background(s.palette.Card).Border(s.palette.BorderWidth, border).Radius(s.palette.Radius).Clip().Column().Children(func() {
-		s.drawHead(c, id, data, float32(rect.W))
-		slot := float32(rect.H) - s.metrics.headH - s.metrics.footH
-		ui.Box(c).Size(float32(rect.W), slot).Children(func() {
-			if active := data.ActiveTab(); active != nil {
-				box := layout.Rect{X: rect.X + float64(originX), Y: rect.Y + float64(originY) + float64(s.metrics.headH), W: rect.W, H: float64(slot)}
-				s.drawSeat(c, *active, box)
-			}
+		s.drawHead(c, id, data, sides, float32(rect.W))
+		body := float32(rect.H) - s.metrics.headH
+		width := float32(rect.W) - sides.extent("left") - sides.extent("right")
+		slot := body - s.metrics.footH - sides.extent("top") - sides.extent("bottom")
+		x, y := float32(rect.X)+originX, float32(rect.Y)+originY+s.metrics.headH
+		// Left and right run from below the header to the edge of the card, and the content column lies between them.
+		ui.Row(c).Size(float32(rect.W), body).Children(func() {
+			s.drawCardSide(c, id, sides, "left", x, y, sides.extent("left"), body)
+			ui.Column(c).Size(width, body).Children(func() {
+				s.drawCardSide(c, id, sides, "top", x+sides.extent("left"), y, width, sides.extent("top"))
+				ui.Box(c).Size(width, slot).Children(func() {
+					if active := data.ActiveTab(); active != nil {
+						box := layout.Rect{X: float64(x + sides.extent("left")), Y: float64(y + sides.extent("top")), W: float64(width), H: float64(slot)}
+						s.drawSeat(c, *active, box)
+					}
+				})
+				s.drawCardSide(c, id, sides, "bottom", x+sides.extent("left"), y+sides.extent("top")+slot, width, sides.extent("bottom"))
+				s.drawStatus(c, id, data, sides.fold)
+			})
+			s.drawCardSide(c, id, sides, "right", x+sides.extent("left")+width, y, sides.extent("right"), body)
 		})
-		s.drawStatus(c, data)
 	})
 }
 
 // drawHead draws the head of a card: its tabs and its tools, folded as the width of the head allows.
-func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, width float32) {
+func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides cardSides, width float32) {
 	tabs := data.TabList()
 	active := data.ActiveTab()
 	widths := make([]float64, len(tabs))
@@ -91,10 +110,10 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, width 
 	}
 	const tools = 5 // The tools of a full card head: add, split x, split y, full screen and close.
 	fit := layout.FitHead(layout.Head{Width: float64(width), PaddingLeft: float64(s.metrics.tabsPad), PaddingRight: float64(s.metrics.tabsPad),
-		Lead: float64(s.metrics.actW), Gap: float64(s.metrics.tabsGap), ToolsWidth: float64(tools * s.metrics.actW), MoreWidth: float64(s.metrics.actW),
+		Lead: float64(s.metrics.actW), Gap: float64(s.metrics.tabsGap), ToolsWidth: float64(tools+len(sides.shown)) * float64(s.metrics.actW), MoreWidth: float64(s.metrics.actW),
 		TabWidths: widths, TabGap: float64(s.metrics.tabsGap), ActiveWidth: activeWidth, Peek: float64(s.metrics.tabPeekW), MinTab: float64(s.metrics.tabMinW)})
 	s.heads[id] = fit
-	ui.Row(c).Size(width, s.metrics.headH).PaddingX(s.metrics.tabsPad).AlignItems(ui.Center).Gap(s.metrics.tabsGap).Clip().
+	ui.Row(s.binder.Name(c, "core.card.header", id)).Size(width, s.metrics.headH).PaddingX(s.metrics.tabsPad).AlignItems(ui.Center).Gap(s.metrics.tabsGap).Clip().
 		Role(ui.RoleGroup).Label("core.card.header").BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.Rule).Children(func() {
 		if fit.Fit == "ham" {
 			list := s.binder.Press(c, "core.card.tab-list", "core.card.tab-list", id, cardParam{Card: id})
@@ -115,6 +134,9 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, width 
 				s.drawTab(c, tab, on)
 			}
 		})
+		if fit.Tools == "bar" {
+			s.drawSideToggles(c, id, sides)
+		}
 		s.drawTools(c, id, fit.Tools != "bar")
 	})
 }
@@ -158,11 +180,15 @@ func (s *Shell) drawTools(c *ui.Context, id string, folded bool) {
 	tool("core.card.tools", "core.card.tools", "⋯", cardParam{Card: id})
 }
 
-// drawStatus draws the status line of a card.
-func (s *Shell) drawStatus(c *ui.Context, data *layout.CardData) {
-	ui.Row(c).FillWidth().Height(s.metrics.footH).PaddingX(s.metrics.tabsPad).AlignItems(ui.Center).BorderWidth(s.palette.BorderWidth, 0, 0, 0).BorderColor(s.palette.Rule).
+// drawStatus draws the status line of a card, with the text of the sides folded for lack of space when there is one.
+func (s *Shell) drawStatus(c *ui.Context, id string, data *layout.CardData, fold string) {
+	ui.Row(s.binder.Name(c, "core.card.status", id)).FillWidth().Height(s.metrics.footH).PaddingX(s.metrics.tabsPad).AlignItems(ui.Center).BorderWidth(s.palette.BorderWidth, 0, 0, 0).BorderColor(s.palette.Rule).
 		Role(ui.RoleStatus).Label("core.card.status").Children(func() {
-		if text := s.cardStatusText(data); text != "" {
+		text := s.cardStatusText(data)
+		if fold != "" {
+			text = fold
+		}
+		if text != "" {
 			ui.Text(c, text).FontSize(10).TextColor(s.palette.Muted)
 		}
 		if active := data.ActiveTab(); active != nil {

@@ -70,6 +70,8 @@ type SidebarsOptions struct {
 	Changed func()
 	// Seat draws what stands on the seat of a section, whose box is in window coordinates. Without it a seat stays empty.
 	Seat func(c *ui.Context, seat SidebarSeat)
+	// Mounted tells whether the surface id stands.
+	Mounted func(id string) bool
 }
 
 // section is a section of a loaded plugin.
@@ -92,6 +94,7 @@ type drawnSidebar struct {
 type Sidebars struct {
 	options  SidebarsOptions
 	metrics  SidebarMetrics
+	divider  float64
 	sets     []SidebarSet
 	links    []SidebarLink
 	sections map[string]section
@@ -111,7 +114,11 @@ func NewSidebars(options SidebarsOptions) (*Sidebars, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Sidebars{options: options, metrics: metrics, sections: map[string]section{}, plugins: map[string]bool{},
+	divider, ok := options.Declared.Metric("divider")
+	if !ok {
+		return nil, errors.New("the chrome metric divider has no number")
+	}
+	s := &Sidebars{options: options, metrics: metrics, divider: divider, sections: map[string]section{}, plugins: map[string]bool{},
 		choices: map[string]*SidebarChoice{}, drags: map[string]*SectionDrag{}}
 	for _, plugin := range installed {
 		s.plugins[plugin.ID] = true
@@ -262,6 +269,29 @@ func (s *Sidebars) windowSet(side string, focused FocusedSurface) (*SidebarSet, 
 	return nil, ""
 }
 
+// linkedCard returns the id of the set that the link of plugin gives the side of a card, or nil without such a link.
+func (s *Sidebars) linkedCard(side, plugin string) *string {
+	for _, link := range s.links {
+		if link.Place == "card-"+side && link.Plugin != nil && *link.Plugin == plugin {
+			return &link.Set
+		}
+	}
+	return nil
+}
+
+// setDocuments returns the sets by id, as the choices of a card read them.
+func (s *Sidebars) setDocuments() (map[string]json.RawMessage, error) {
+	documents := make(map[string]json.RawMessage, len(s.sets))
+	for _, set := range s.sets {
+		encoded, err := json.Marshal(set)
+		if err != nil {
+			return nil, err
+		}
+		documents[set.ID] = encoded
+	}
+	return documents, nil
+}
+
 func (s *Sidebars) choice(sidebar string) *SidebarChoice {
 	choice := s.choices[sidebar]
 	if choice == nil {
@@ -301,6 +331,31 @@ func (s *Sidebars) Frame(place, space string, focused FocusedSurface) (SidebarFr
 	s.fill(&frame, set)
 	s.drawn = append(s.drawn, &drawnSidebar{frame: frame, set: set.ID, owner: owner})
 	return frame, nil
+}
+
+// CardFrame returns the frame of the side of a card that shows set, and records the sidebar in the build. owner is the card with
+// its active tab, the surface that the sections of the sidebar follow.
+func (s *Sidebars) CardFrame(set *SidebarSet, space, side string, owner FocusedSurface) SidebarFrame {
+	orientation := "vertical"
+	if side == "top" || side == "bottom" {
+		orientation = "horizontal"
+	}
+	frame := SidebarFrame{Sidebar: owner.Card + ":" + side, Space: space, Orientation: orientation,
+		Status: layout.SideName(side) + " 사이드바 · " + set.Title}
+	s.fill(&frame, set)
+	s.drawn = append(s.drawn, &drawnSidebar{frame: frame, set: set.ID, owner: owner})
+	return frame
+}
+
+// Hide keeps the section surfaces of a folded sidebar known, which are not visible.
+func (s *Sidebars) Hide(c *ui.Context, frame SidebarFrame) {
+	if s.options.Seat == nil {
+		return
+	}
+	for _, seat := range SidebarSeats(frame) {
+		seat.Visible = false
+		s.options.Seat(c, seat)
+	}
 }
 
 // fill gives the frame the loaded sections of set and the choices of its sidebar. The sections of a plugin that is not loaded remain
@@ -543,11 +598,16 @@ func (s *Sidebars) status() []sidebarStatus {
 			if section.Fill {
 				height = "fill"
 			}
+			id := seatOf(frame, section).SurfaceID
 			sections[i] = sectionStatus{ID: section.ID, Name: section.Name, Folded: section.Folded,
-				SurfaceID: seatOf(frame, section).SurfaceID, Surface: surface, Height: height, Size: section.Size}
+				SurfaceID: id, Surface: surface, Height: height, Size: section.Size, Mounted: s.options.Mounted != nil && s.options.Mounted(id)}
+		}
+		placement, plugin := "window", nullable(drawn.owner.Plugin)
+		if frame.Side == "" {
+			placement, plugin = "card", nil // The context of a card sidebar has no plugin and no side of a window sidebar.
 		}
 		sidebars = append(sidebars, sidebarStatus{Sidebar: frame.Sidebar, Set: drawn.set, Layout: frame.Layout, Orientation: frame.Orientation,
-			Tab: nullable(frame.Tab), Card: nullable(drawn.owner.Card), Surface: surface, Placement: "window", Plugin: nullable(drawn.owner.Plugin),
+			Tab: nullable(frame.Tab), Card: nullable(drawn.owner.Card), Surface: surface, Placement: placement, Plugin: plugin,
 			Side: nullable(frame.Side), Rect: sidebarRect{drawn.rect.X, drawn.rect.Y, drawn.rect.W, drawn.rect.H}, Sections: sections})
 	}
 	return sidebars
