@@ -396,6 +396,7 @@ Review는 glyph 획이 cell 아래쪽까지 내려올 수 있고 cursor color는
 - 연속 capture view-drag frame의 목표 최대 간격은 33 ms다. ScreenCaptureKit은 요청된 update 간격을 보장하지 않으며 측정 간격과 목표 초과 여부를 보존한다.
 - 경계를 끄는 동안 녹화된 프레임은 격자가 한 걸음의 배치를 떠난 뒤 최대 화면 네 프레임 안에 그 배치를 보여주고, 끌기 전체에서 지연의 중앙값은 2.5 프레임, 90번째 백분위수는 3 프레임 이하다(60Hz에서 66.7ms, 41.7ms, 50ms).
 - 문서 영역은 보여주는 page에 메모리도 CPU도 더하지 않는다: 다섯 번 실행에서 영역에 있는 page의 메모리와 CPU는 같은 user agent의 plain web view에 있는 같은 page의 것과 실행들의 interquartile range 안에서 같다. `make -C native/darwin benchmark-region-cost URL=<address>`는 둘의 메모리를 잰다.
+- `make -C native/darwin benchmark-site-cost [RUNS=<count>]`는 트리를 쉬지 않고 바꾸는 page를 포함한 정해진 목록의 각 사이트에 대해, element와 request stream을 구독한 문서 영역에서 탭의 비용을 보고한다. 비용은 탭이 없는 baseline 대비 content, GPU, network process의 메모리, 쉴 때와 background일 때의 CPU, 로딩 시간, 입력 지연이고, 각각 적어도 다섯 번 실행의 median과 interquartile range다. 한계는 두지 않으며, 이 repository의 몫으로 보이는 비용은 자기 unit test 아래에서 고친다.
 
 ## 플랫폼 범위
 

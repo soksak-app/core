@@ -79,6 +79,8 @@ typedef NS_ENUM(NSInteger, SPProcessTerminationReason) {
 // view; each is 0 while it does not exist.
 @property(nonatomic, readonly) pid_t _provisionalWebProcessIdentifier;
 @property(nonatomic, readonly) pid_t _networkProcessIdentifier;
+// WKWebViewPrivate.h: the GPU process of the view; 0 while it does not exist.
+@property(nonatomic, readonly) pid_t _gpuProcessIdentifier;
 // WKWebViewPrivate.h: terminates the current WebContent process so that a reload starts a new process.
 - (void)_killWebContentProcessAndResetState;
 // WKWebViewPrivate.h
