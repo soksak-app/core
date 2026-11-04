@@ -225,7 +225,8 @@ func drawSectionHeader(c *ui.Context, binder *Binder, frame SidebarFrame, sectio
 	// A list item keeps the name as an element of its own, which a button takes as its text.
 	header := binder.Press(c, "core.sidebar.section.header", "core.sidebar.section.fold", item, sectionParam{frame.Sidebar, section.ID}).
 		Role(ui.RoleListItem).Label(section.Name).Height(metrics.HeadH).FillWidth().Row().
-		AlignItems(ui.Center).Gap(metrics.SectionHeadGap).PaddingX(metrics.SectionHeadPad).Expanded(!section.Folded)
+		Justify(ui.Start).AlignItems(ui.Center).Gap(metrics.SectionHeadGap).PaddingX(metrics.SectionHeadPad).Expanded(!section.Folded).
+		BorderWidth(0, 0, 1, 0).BorderColor(theme.Border)
 	if header.Hovered() {
 		header.Background(theme.Surface)
 	}

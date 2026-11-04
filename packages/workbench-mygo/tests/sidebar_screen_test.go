@@ -72,6 +72,9 @@ func TestAListSidebarDrawsItsHeadersAndFoldsASection(t *testing.T) {
 	if name := element(t, tt, "core.sidebar.section.name", "left/git.log"); name.Label != "Log" {
 		t.Fatalf("the name of the second section is %q", name.Label)
 	}
+	if name := element(t, tt, "core.sidebar.section.name", "left/git.log"); name.Bounds.X > sidebarMetrics.SectionHeadPad+2*sidebarMetrics.SectionHeadText {
+		t.Fatalf("the header does not start with its chevron and its name: %+v", name.Bounds)
+	}
 	if header := element(t, tt, "core.sidebar.section.header", "left/git.log"); header.Actions&ui.ActionPress == 0 {
 		t.Fatalf("the header takes no press: %+v", header)
 	}
