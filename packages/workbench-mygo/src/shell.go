@@ -257,7 +257,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	})
 	s.sidebars, err = NewSidebars(SidebarsOptions{Declared: options.Declared, Registry: s.registry, Binder: s.binder,
 		Environment: options.Environment, Installed: installed, Changed: s.settle, Seat: s.drawSectionSeat,
-		Mounted: func(id string) bool { return s.surfaces.held[id] != nil }})
+		Mounted: func(id string) bool { return s.surfaces.held[id] != nil }, Rail: func() ui.Color { return s.palette.Rail }})
 	if err != nil {
 		return nil, err
 	}

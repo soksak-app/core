@@ -19,6 +19,16 @@ func TestAProjectShowsTheFixedSidebarsOfTheEnvironment(t *testing.T) {
 		t.Fatalf("the name of the section is %q", name.Label)
 	}
 	element(t, f.tester, "core.sidebar.section.name", "left/files.bookmarks")
+	// Texts lists the text of a line and its label.
+	lines := 0
+	for _, text := range f.tester.Texts() {
+		if text == "오른쪽 창 사이드바" {
+			lines++
+		}
+	}
+	if lines != 2 {
+		t.Fatalf("a window sidebar shows the status line %d times, want its text and its label: %q", lines, f.tester.Texts())
+	}
 	if status := element(t, f.tester, "core.sidebar.status", "right"); status.Label != "오른쪽 창 사이드바" {
 		t.Fatalf("the status line says %q", status.Label)
 	}

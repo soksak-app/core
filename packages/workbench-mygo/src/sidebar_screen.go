@@ -43,6 +43,11 @@ type SidebarMetrics struct {
 	SectionHeadGap  float32
 	SectionHeadPad  float32
 	SectionHeadText float32
+	// SectionTabMark is the height of the mark of the selected tab of a `tabs` set.
+	SectionTabMark float32
+	// FoldButton and FoldIcon are the sizes of the fold control of a status line and of its icon.
+	FoldButton float32
+	FoldIcon   float32
 }
 
 // SidebarSection is a section of the set that a sidebar shows.
@@ -76,6 +81,8 @@ type SidebarFrame struct {
 	Side     string
 	Status   string
 	Sections []SidebarSection
+	// Rail is the color of the mark of the selected tab.
+	Rail ui.Color
 }
 
 // SidebarSeat is the seat of a section surface. A folded section and a section of an unselected tab keep their surface,
@@ -338,32 +345,48 @@ func drawHorizontalList(c *ui.Context, binder *Binder, frame SidebarFrame, metri
 // drawSectionTabs draws the row of tabs and only the section of the selected tab.
 func drawSectionTabs(c *ui.Context, binder *Binder, frame SidebarFrame, metrics SidebarMetrics, width, room float32, seat seatDrawer) {
 	theme := c.Theme()
-	ui.ScrollHorizontal(binder.Name(c, "core.sidebar.tabs", frame.Sidebar)).Size(width, metrics.HeadH).Role(ui.RoleTabList).Children(func() {
-		ui.Row(c).FillHeight().Children(func() {
-			for _, section := range frame.Sections {
-				selected := section.ID == frame.Tab
-				color := theme.TextMuted
-				if selected {
-					color = theme.Text
+	// The set keeps the height of the room, so a section with an integer height leaves the status line at the end of the sidebar.
+	ui.Column(c).Size(width, room).Children(func() {
+		ui.ScrollHorizontal(binder.Name(c, "core.sidebar.tabs", frame.Sidebar)).Size(width, metrics.HeadH).Role(ui.RoleTabList).Children(func() {
+			ui.Row(c).FillHeight().Children(func() {
+				for _, section := range frame.Sections {
+					drawSectionTab(c, binder, frame, section, metrics, theme)
 				}
-				binder.Press(c, "core.sidebar.section.tab", "core.sidebar.section.select", sectionItem(frame, section), sectionParam{frame.Sidebar, section.ID}).
-					Role(ui.RoleTab).Selected(selected).FillHeight().Children(func() {
-					ui.Text(c, section.Name).NoWrap().FontSize(metrics.SectionHeadText).Bold().TextColor(color).Padding(0, metrics.SectionHeadPad)
-				})
-			}
+			})
 		})
-	})
-	for _, section := range frame.Sections {
-		height := room - metrics.HeadH
-		if !section.fills() {
-			height = min(height, section.points())
+		for _, section := range frame.Sections {
+			height := room - metrics.HeadH
+			if !section.fills() {
+				height = min(height, section.points())
+			}
+			ui.Column(binder.Name(c, "core.sidebar.section", sectionItem(frame, section))).Hidden(section.ID != frame.Tab).Role(ui.RoleGroup).Label(section.Name).Children(func() {
+				if section.ID == frame.Tab {
+					drawSeat(c, frame, section, layout.Rect{Y: float64(metrics.HeadH), W: float64(width), H: float64(height)}, seat)
+				}
+			})
 		}
-		ui.Column(binder.Name(c, "core.sidebar.section", sectionItem(frame, section))).Hidden(section.ID != frame.Tab).Role(ui.RoleGroup).Label(section.Name).Children(func() {
-			if section.ID == frame.Tab {
-				drawSeat(c, frame, section, layout.Rect{Y: float64(metrics.HeadH), W: float64(width), H: float64(height)}, seat)
-			}
-		})
+	})
+}
+
+// drawSectionTab draws the tab of section. Selected tells that the tab is chosen and paints the accent color, which the plain
+// background replaces: the selected tab differs in its text color and its rail mark.
+func drawSectionTab(c *ui.Context, binder *Binder, frame SidebarFrame, section SidebarSection, metrics SidebarMetrics, theme *ui.Theme) {
+	selected := section.ID == frame.Tab
+	color := theme.TextMuted
+	if selected {
+		color = theme.Text
 	}
+	tab := binder.Press(c, "core.sidebar.section.tab", "core.sidebar.section.select", sectionItem(frame, section), sectionParam{frame.Sidebar, section.ID}).
+		Role(ui.RoleTab).Selected(selected).FillHeight().Background(ui.Transparent)
+	if tab.Hovered() {
+		tab.Background(theme.Surface)
+	}
+	tab.Children(func() {
+		ui.Text(c, section.Name).NoWrap().FontSize(metrics.SectionHeadText).Bold().TextColor(color).Padding(0, metrics.SectionHeadPad)
+		if selected {
+			ui.Box(c).Absolute().Left(0).Right(0).Bottom(0).Height(metrics.SectionTabMark).Background(frame.Rail)
+		}
+	})
 }
 
 func drawSidebarStatus(c *ui.Context, binder *Binder, frame SidebarFrame, metrics SidebarMetrics) {
@@ -372,8 +395,9 @@ func drawSidebarStatus(c *ui.Context, binder *Binder, frame SidebarFrame, metric
 	if frame.Side != "" {
 		name = "core.sidebar.status"
 	}
-	ui.Row(binder.Name(c, name, frame.Sidebar)).FillWidth().Height(metrics.FootH).AlignItems(ui.Center).Gap(6).PaddingX(8).Role(ui.RoleStatus).Label(frame.Status).Children(func() {
-		ui.Text(c, frame.Status).SingleLine().Ellipsis("…").TextColor(theme.TextMuted).Grow(1)
+	ui.Row(binder.Name(c, name, frame.Sidebar)).FillWidth().Height(metrics.FootH).AlignItems(ui.Center).Gap(6).PaddingX(8).
+		BorderWidth(1, 0, 0, 0).BorderColor(theme.Border).Role(ui.RoleStatus).Label(frame.Status).Children(func() {
+		ui.Text(c, frame.Status).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).Grow(1).FontSize(10).TextColor(theme.TextMuted)
 		if frame.Side == "" {
 			return
 		}
@@ -382,8 +406,8 @@ func drawSidebarStatus(c *ui.Context, binder *Binder, frame SidebarFrame, metric
 		if frame.Side == "right" {
 			icon, title = chevronRight, "오른쪽 창 사이드바 접기"
 		}
-		binder.Press(c, "core.sidebar.fold", "core.settings.set", frame.Side, settingsPatchParam{map[string]any{frame.Side: false}}).Label(title).Size(16, 16).Children(func() {
-			ui.Icon(c, icon).Size(12, 12)
+		binder.Press(c, "core.sidebar.fold", "core.settings.set", frame.Side, settingsPatchParam{map[string]any{frame.Side: false}}).Label(title).Size(metrics.FoldButton, metrics.FoldButton).Children(func() {
+			ui.Icon(c, icon).Size(metrics.FoldIcon, metrics.FoldIcon)
 		})
 	})
 }

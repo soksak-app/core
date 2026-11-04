@@ -53,9 +53,6 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 	})
 }
 
-// placeNames are the status lines of the window sidebars.
-var placeNames = map[string]string{"left": "왼쪽 창 사이드바", "right": "오른쪽 창 사이드바"}
-
 // drawCard draws a card at its rectangle of the plane. originX and originY are the origin of the plane in the window.
 func (s *Shell) drawCard(c *ui.Context, id string, data *layout.CardData, rect layout.Rect, inset, originX, originY float32) {
 	sides, err := s.cardSides(id, data, rect)

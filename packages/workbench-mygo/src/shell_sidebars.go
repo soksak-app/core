@@ -25,7 +25,7 @@ func (s *Shell) focusedSurface() FocusedSurface {
 }
 
 // drawSidebarCard draws a fixed sidebar of the window at its rectangle of the plane. It has no head row: the sections start at the
-// top, and the status line describes the slot. originX and originY are the origin of the plane in the window.
+// top, and the frame of the sidebar ends in the status line that describes the slot. originX and originY are the origin of the plane in the window.
 func (s *Shell) drawSidebarCard(c *ui.Context, id string, rect layout.Rect, inset, originX, originY float32) {
 	frame, err := s.sidebars.Frame(id, s.opened().ActiveSpaceID, s.focusedSurface())
 	if err != nil {
@@ -33,17 +33,13 @@ func (s *Shell) drawSidebarCard(c *ui.Context, id string, rect layout.Rect, inse
 		DrawError(c, s.errors, id)
 		return
 	}
-	// The border takes its width from every edge of the card, so the set and the status line stand in what lies inside it.
+	// The border takes its width from every edge of the card, so the set with its status line stands in what lies inside it.
 	edge := float64(s.palette.BorderWidth)
-	box := layout.Rect{X: rect.X + float64(originX) + edge, Y: rect.Y + float64(originY) + edge, W: rect.W - 2*edge, H: rect.H - 2*edge - float64(s.metrics.footH)}
+	box := layout.Rect{X: rect.X + float64(originX) + edge, Y: rect.Y + float64(originY) + edge, W: rect.W - 2*edge, H: rect.H - 2*edge}
 	ui.Box(s.binder.Name(c, "core.card", id)).Role(ui.RoleGroup).Label(id).Absolute().Left(float32(rect.X)+inset).Top(float32(rect.Y)+inset).
 		Size(float32(rect.W), float32(rect.H)).Background(s.palette.Card).Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.palette.Radius).
 		Clip().Column().Children(func() {
 		ui.Box(c).Size(float32(box.W), float32(box.H)).Children(func() { s.sidebars.Draw(c, frame, box) })
-		ui.Row(c).FillWidth().Height(s.metrics.footH).PaddingX(s.metrics.tabsPad).AlignItems(ui.Center).
-			BorderWidth(s.palette.BorderWidth, 0, 0, 0).BorderColor(s.palette.Rule).Role(ui.RoleStatus).Label("core.sidebar.status").Children(func() {
-			ui.Text(c, placeNames[id]).FontSize(10).TextColor(s.palette.Muted)
-		})
 	})
 }
 

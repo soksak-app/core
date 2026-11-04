@@ -11,7 +11,7 @@ import (
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
-var sidebarMetrics = workbench.SidebarMetrics{HeadH: 32, FootH: 22, SectionMinH: 32, SectionDivider: 6, SectionHeadGap: 6, SectionHeadPad: 10, SectionHeadText: 11.5}
+var sidebarMetrics = workbench.SidebarMetrics{HeadH: 32, FootH: 22, SectionMinH: 32, SectionDivider: 6, SectionHeadGap: 6, SectionHeadPad: 10, SectionHeadText: 11.5, SectionTabMark: 2, FoldButton: 18, FoldIcon: 14}
 
 func pixels(v int) *int { return &v }
 
@@ -145,6 +145,38 @@ func TestATabsSidebarShowsTheSelectedSection(t *testing.T) {
 	want := []call{{"core.sidebar.section.select", map[string]any{"sidebar": "left", "section": "git.log"}}}
 	if !reflect.DeepEqual(calls, want) {
 		t.Fatalf("commands %+v, want %+v", calls, want)
+	}
+}
+
+// A section with an integer height leaves room in a tabs set, and the status line stays at the bottom of the sidebar.
+func TestTheStatusLineOfATabsSidebarEndsTheSidebar(t *testing.T) {
+	var calls []call
+	frame := listFrame()
+	frame.Layout, frame.Tab = "tabs", "files.tree"
+	tt := drawSidebar(&frame, recorder(t, &calls, sidebarCommands...))
+	status := element(t, tt, "core.sidebar.status", "left")
+	if bottom := status.Bounds.Y + status.Bounds.H; bottom != 400 {
+		t.Fatalf("the status line ends at %v of 400", bottom)
+	}
+}
+
+// The selected tab differs in its text and its rail mark, and keeps the background of the sidebar.
+func TestTheSelectedTabHasTheRailMarkOnItsPlainBackground(t *testing.T) {
+	var calls []call
+	frame := listFrame()
+	frame.Layout, frame.Tab, frame.Rail = "tabs", "files.tree", ui.Hex("#7279ff")
+	tt := drawSidebar(&frame, recorder(t, &calls, sidebarCommands...))
+	tab := element(t, tt, "core.sidebar.section.tab", "left/files.tree").Bounds
+	image := tt.Image()
+	rgb := func(x, y float32) [3]uint32 {
+		r, g, b, _ := image.At(int(x), int(y)).RGBA()
+		return [3]uint32{r >> 8, g >> 8, b >> 8}
+	}
+	if got, want := rgb(tab.X+2, tab.Y+tab.H-1), [3]uint32{0x72, 0x79, 0xff}; got != want {
+		t.Fatalf("the mark is %x, want %x", got, want)
+	}
+	if got, want := rgb(tab.X+2, tab.Y+2), rgb(tab.X+tab.W+2, tab.Y+2); got != want {
+		t.Fatalf("the selected tab has the background %x beside %x", got, want)
 	}
 }
 
