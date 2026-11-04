@@ -25,6 +25,8 @@ type ExtensionPoint struct {
 type PluginManifest struct {
 	Contributes map[string][]map[string]any `json:"contributes"`
 	Extends     map[string]ExtensionPoint   `json:"extends"`
+	Sections    []PluginSection             `json:"sections"`
+	Sidebars    *PluginSidebars             `json:"sidebars"`
 }
 
 // InstalledPlugin is an installed and enabled plugin.

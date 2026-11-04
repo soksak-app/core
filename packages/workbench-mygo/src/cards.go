@@ -34,6 +34,9 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 				continue
 			}
 			if data == nil {
+				if s.sidebars.Holds(card.ID) {
+					s.drawSidebarCard(c, card.ID, rect, inset, originX, originY)
+				}
 				continue
 			}
 			s.drawCard(c, card.ID, data, rect, inset, originX, originY)

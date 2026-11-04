@@ -26,10 +26,10 @@ func listFrame() workbench.SidebarFrame {
 	}
 }
 
-func drawSidebar(frame *workbench.SidebarFrame, run workbench.RunCommand) *ui.Tester {
+func drawSidebar(frame *workbench.SidebarFrame, binder *workbench.Binder) *ui.Tester {
 	var drag workbench.SectionDrag
 	return ui.NewTester(func(c *ui.Context) {
-		workbench.DrawSidebar(c, workbench.NewElementNames(), &drag, *frame, sidebarMetrics, 240, 400, run, func(*ui.Context, workbench.SidebarSeat) {})
+		workbench.DrawSidebar(c, binder, &drag, *frame, sidebarMetrics, 240, 400, func(*ui.Context, workbench.SidebarSeat) {})
 	}, 240, 400)
 }
 
@@ -66,16 +66,19 @@ func TestTheHeightsOfTheSectionsOfAList(t *testing.T) {
 func TestAListSidebarDrawsItsHeadersAndFoldsASection(t *testing.T) {
 	var calls []call
 	frame := listFrame()
-	tt := drawSidebar(&frame, recorder(&calls))
-	element(t, tt, "core.sidebar", 0)
-	element(t, tt, "core.sidebar.section", 1)
-	if name := element(t, tt, "core.sidebar.section.name", 1); name.Label != "Log" {
+	tt := drawSidebar(&frame, recorder(t, &calls, sidebarCommands...))
+	element(t, tt, "core.sidebar", "left")
+	element(t, tt, "core.sidebar.section", "left/git.log")
+	if name := element(t, tt, "core.sidebar.section.name", "left/git.log"); name.Label != "Log" {
 		t.Fatalf("the name of the second section is %q", name.Label)
 	}
-	if header := element(t, tt, "core.sidebar.section.header", 1); header.Actions&ui.ActionPress == 0 {
+	if name := element(t, tt, "core.sidebar.section.name", "left/git.log"); name.Bounds.X > sidebarMetrics.SectionHeadPad+2*sidebarMetrics.SectionHeadText {
+		t.Fatalf("the header does not start with its chevron and its name: %+v", name.Bounds)
+	}
+	if header := element(t, tt, "core.sidebar.section.header", "left/git.log"); header.Actions&ui.ActionPress == 0 {
 		t.Fatalf("the header takes no press: %+v", header)
 	}
-	press(t, tt, "core.sidebar.section.header", 1)
+	press(t, tt, "core.sidebar.section.header", "left/git.log")
 	want := []call{{"core.sidebar.section.fold", map[string]any{"sidebar": "left", "section": "git.log"}}}
 	if !reflect.DeepEqual(calls, want) {
 		t.Fatalf("commands %+v, want %+v", calls, want)
@@ -84,20 +87,21 @@ func TestAListSidebarDrawsItsHeadersAndFoldsASection(t *testing.T) {
 
 func TestAFoldedSectionKeepsOnlyItsHeader(t *testing.T) {
 	seats := map[string]bool{}
+	binder := recorder(t, new([]call), sidebarCommands...)
 	frame := listFrame()
 	frame.Sections[0].Folded = true
 	tt := ui.NewTester(func(c *ui.Context) {
-		workbench.DrawSidebar(c, workbench.NewElementNames(), &workbench.SectionDrag{}, frame, sidebarMetrics, 240, 400, func(string, map[string]any) {},
-			func(_ *ui.Context, seat workbench.SidebarSeat) { seats[seat.SurfaceID] = true })
+		workbench.DrawSidebar(c, binder, &workbench.SectionDrag{}, frame, sidebarMetrics, 240, 400,
+			func(_ *ui.Context, seat workbench.SidebarSeat) { seats[seat.SurfaceID] = seat.Visible })
 	}, 240, 400)
-	element(t, tt, "core.sidebar.section.header", 0)
-	if seats["spc-1/left/files.tree"] {
-		t.Fatal("a folded section draws its body")
+	element(t, tt, "core.sidebar.section.header", "left/files.tree")
+	if visible, ok := seats["spc-1/left/files.tree"]; !ok || visible {
+		t.Fatalf("a folded section keeps its seat without a body: %v", seats)
 	}
 	if !seats["spc-1/left/git.log"] {
 		t.Fatalf("the open section draws no body: %v", seats)
 	}
-	if _, ok := keyed(tt.ElementTree(), workbench.ElementName{Name: "core.sidebar.section.divider", Index: 0}); ok {
+	if _, ok := keyed(tt.ElementTree(), "core.sidebar.section.divider", "left/git.log"); ok {
 		t.Fatal("a divider lies next to a folded section")
 	}
 }
@@ -109,7 +113,7 @@ func TestTheSeatsOfASidebarNameEverySectionWithItsVisibility(t *testing.T) {
 		{SurfaceID: "spc-1/left/files.tree", Section: "files.tree", Plugin: "files", Title: "Files", Visible: false},
 		{SurfaceID: "spc-1/left/git.log", Section: "git.log", Plugin: "git", Title: "Log", Visible: true},
 	}
-	if got := workbench.SidebarSeats(frame); !slices.Equal(got, want) {
+	if got := workbench.SidebarSeats(frame); !reflect.DeepEqual(got, want) {
 		t.Fatalf("seats %+v, want %+v", got, want)
 	}
 	frame.Layout, frame.Tab = "tabs", "git.log"
@@ -124,16 +128,20 @@ func TestATabsSidebarShowsTheSelectedSection(t *testing.T) {
 	var bodies []string
 	frame := listFrame()
 	frame.Layout, frame.Tab = "tabs", "files.tree"
+	binder := recorder(t, &calls, sidebarCommands...)
 	tt := ui.NewTester(func(c *ui.Context) {
 		bodies = bodies[:0]
-		workbench.DrawSidebar(c, workbench.NewElementNames(), &workbench.SectionDrag{}, frame, sidebarMetrics, 240, 400, recorder(&calls),
-			func(_ *ui.Context, seat workbench.SidebarSeat) { bodies = append(bodies, seat.Section) })
+		workbench.DrawSidebar(c, binder, &workbench.SectionDrag{}, frame, sidebarMetrics, 240, 400, func(_ *ui.Context, seat workbench.SidebarSeat) {
+			if seat.Visible {
+				bodies = append(bodies, seat.Section)
+			}
+		})
 	}, 240, 400)
-	element(t, tt, "core.sidebar.tabs", 0)
+	element(t, tt, "core.sidebar.tabs", "left")
 	if !slices.Equal(bodies, []string{"files.tree"}) {
 		t.Fatalf("drawn bodies %q", bodies)
 	}
-	press(t, tt, "core.sidebar.section.tab", 1)
+	press(t, tt, "core.sidebar.section.tab", "left/git.log")
 	want := []call{{"core.sidebar.section.select", map[string]any{"sidebar": "left", "section": "git.log"}}}
 	if !reflect.DeepEqual(calls, want) {
 		t.Fatalf("commands %+v, want %+v", calls, want)
@@ -149,8 +157,8 @@ func TestDraggingADividerSizesTheSectionBelowItWithAnIntegerHeight(t *testing.T)
 			{ID: "b", Name: "B", Plugin: "p", Height: 100},
 		},
 	}
-	tt := drawSidebar(&frame, recorder(&calls))
-	divider := element(t, tt, "core.sidebar.section.divider", 0)
+	tt := drawSidebar(&frame, recorder(t, &calls, sidebarCommands...))
+	divider := element(t, tt, "core.sidebar.section.divider", "left/b")
 	x, y := divider.Bounds.X+divider.Bounds.W/2, divider.Bounds.Y+divider.Bounds.H/2
 	tt.Press(x, y)
 	tt.Move(x, y-20)
@@ -159,8 +167,8 @@ func TestDraggingADividerSizesTheSectionBelowItWithAnIntegerHeight(t *testing.T)
 	tt.Frame()
 	tt.Release(x, y-400)
 	want := []call{
-		{"core.sidebar.section.size", map[string]any{"sidebar": "left", "section": "b", "height": 120}},
-		{"core.sidebar.section.size", map[string]any{"sidebar": "left", "section": "b", "height": 168}},
+		{"core.sidebar.section.size", map[string]any{"sidebar": "left", "section": "b", "height": 120.0}},
+		{"core.sidebar.section.size", map[string]any{"sidebar": "left", "section": "b", "height": 168.0}},
 	}
 	if !reflect.DeepEqual(calls, want) {
 		t.Fatalf("commands %+v, want %+v", calls, want)
@@ -170,11 +178,11 @@ func TestDraggingADividerSizesTheSectionBelowItWithAnIntegerHeight(t *testing.T)
 func TestAWindowSidebarEndsInItsStatusLineAndFoldControl(t *testing.T) {
 	var calls []call
 	frame := listFrame()
-	tt := drawSidebar(&frame, recorder(&calls))
-	if status := element(t, tt, "core.sidebar.status", 0); status.Label != "왼쪽 창 사이드바" {
+	tt := drawSidebar(&frame, recorder(t, &calls, sidebarCommands...))
+	if status := element(t, tt, "core.sidebar.status", "left"); status.Label != "왼쪽 창 사이드바" {
 		t.Fatalf("the status line says %q", status.Label)
 	}
-	press(t, tt, "core.sidebar.fold", 0)
+	press(t, tt, "core.sidebar.fold", "left")
 	want := []call{{"core.settings.set", map[string]any{"patch": map[string]any{"left": false}}}}
 	if !reflect.DeepEqual(calls, want) {
 		t.Fatalf("commands %+v, want %+v", calls, want)
@@ -184,34 +192,34 @@ func TestAWindowSidebarEndsInItsStatusLineAndFoldControl(t *testing.T) {
 func TestACardSidebarEndsInItsOwnStatusLine(t *testing.T) {
 	frame := listFrame()
 	frame.Sidebar, frame.Side, frame.Status = "card-1:left", "", "왼쪽 사이드바 · Files"
-	tt := drawSidebar(&frame, func(string, map[string]any) {})
-	if status := element(t, tt, "core.card.sidebar.status", 0); status.Label != "왼쪽 사이드바 · Files" {
+	tt := drawSidebar(&frame, recorder(t, new([]call), sidebarCommands...))
+	if status := element(t, tt, "core.card.sidebar.status", "card-1:left"); status.Label != "왼쪽 사이드바 · Files" {
 		t.Fatalf("the status line says %q", status.Label)
 	}
-	if _, ok := keyed(tt.ElementTree(), workbench.ElementName{Name: "core.sidebar.fold", Index: 0}); ok {
+	if _, ok := keyed(tt.ElementTree(), "core.sidebar.fold", ""); ok {
 		t.Fatal("a card sidebar has the fold control of a window sidebar")
 	}
 }
 
-func TestTheNamesOfASecondSidebarContinueTheOrderOfTheDocument(t *testing.T) {
+func TestTheElementsOfTwoSidebarsAreToldApart(t *testing.T) {
 	first, second := listFrame(), listFrame()
 	second.Sidebar, second.Side = "right", "right"
+	binder := recorder(t, new([]call), sidebarCommands...)
 	tt := ui.NewTester(func(c *ui.Context) {
-		names := workbench.NewElementNames()
 		ui.Row(c).Children(func() {
 			for _, frame := range []*workbench.SidebarFrame{&first, &second} {
-				workbench.DrawSidebar(c, names, &workbench.SectionDrag{}, *frame, sidebarMetrics, 240, 400, func(string, map[string]any) {}, func(*ui.Context, workbench.SidebarSeat) {})
+				workbench.DrawSidebar(c, binder, &workbench.SectionDrag{}, *frame, sidebarMetrics, 240, 400, func(*ui.Context, workbench.SidebarSeat) {})
 			}
 		})
 	}, 480, 400)
-	element(t, tt, "core.sidebar", 1)
-	element(t, tt, "core.sidebar.section", 3)
-	element(t, tt, "core.sidebar.fold", 1)
+	element(t, tt, "core.sidebar", "right")
+	element(t, tt, "core.sidebar.section", "right/git.log")
+	element(t, tt, "core.sidebar.fold", "right")
 }
 
 func TestTheSeatOfASectionIsItsBody(t *testing.T) {
 	frame := listFrame()
-	tt := drawSidebar(&frame, func(string, map[string]any) {})
+	tt := drawSidebar(&frame, recorder(t, new([]call), sidebarCommands...))
 	seat := func(id string) ui.ElementNode {
 		t.Helper()
 		var find func(nodes []ui.ElementNode) (ui.ElementNode, bool)

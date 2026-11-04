@@ -12,7 +12,8 @@ import (
 
 // storedLayout is a stored layout: the state of the plane with the other members as they are stored.
 type storedLayout struct {
-	State layout.State `json:"state"`
+	State    layout.State    `json:"state"`
+	Sidebars json.RawMessage `json:"sidebars"`
 }
 
 // newLayout returns the layout of a new space, from the grid of the environment declaration.
@@ -193,6 +194,9 @@ func (s *Shell) loadSpace(project *projectRecord) error {
 	if err != nil {
 		return fmt.Errorf("space %s: %w", space.ID, err)
 	}
+	if err := s.sidebars.Restore(stored.Sidebars); err != nil {
+		return fmt.Errorf("space %s: %w", space.ID, err)
+	}
 	s.plane, s.focused = plane, s.firstCard(plane)
 	return nil
 }
@@ -243,6 +247,9 @@ func (s *Shell) keepPlane(project *projectRecord) error {
 		return err
 	}
 	kept["state"] = state
+	if kept["sidebars"], err = json.Marshal(s.sidebars.Stored()); err != nil {
+		return err
+	}
 	next, err := json.Marshal(kept)
 	if err != nil {
 		return err

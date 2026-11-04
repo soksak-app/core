@@ -51,7 +51,7 @@ func TestAPluginCardShowsItsStateVersionsAndSidecars(t *testing.T) {
 func TestTheActionsOfACardFollowThePlugin(t *testing.T) {
 	var calls []call
 	page := hostedPlugins()
-	tt := drawPlugins(&page, noErrors(), recorder(&calls))
+	tt := drawPlugins(&page, noErrors(), record(&calls))
 	want := []workbench.PluginAction{
 		{Plugin: "alpha", Action: "update"}, {Plugin: "alpha", Action: "disable"}, {Plugin: "alpha", Action: "remove"},
 		{Plugin: "beta", Action: "install"},
@@ -60,8 +60,8 @@ func TestTheActionsOfACardFollowThePlugin(t *testing.T) {
 	if got := workbench.PluginPageActions(page); !slices.Equal(got, want) {
 		t.Fatalf("actions %+v, want %+v", got, want)
 	}
-	press(t, tt, "core.library.plugins.action", 3)
-	press(t, tt, "core.library.plugins.action", 4)
+	pressPositional(t, tt, "core.library.plugins.action", 3)
+	pressPositional(t, tt, "core.library.plugins.action", 4)
 	wantCalls := []call{{"core.plugins.install", map[string]any{"plugin": "beta"}}, {"core.plugins.apply", map[string]any{}}}
 	if !reflect.DeepEqual(calls, wantCalls) {
 		t.Fatalf("commands %+v, want %+v", calls, wantCalls)
@@ -72,7 +72,7 @@ func TestWhileAnOperationRunsEveryActionIsDisabled(t *testing.T) {
 	var calls []call
 	page := hostedPlugins()
 	page.Operation = &workbench.PluginOperation{Action: "update", Plugin: "alpha", State: "running"}
-	tt := drawPlugins(&page, noErrors(), recorder(&calls))
+	tt := drawPlugins(&page, noErrors(), record(&calls))
 	if !tt.HasText("alpha update 진행 중") {
 		t.Fatalf("the card of the operation shows %q", tt.Texts())
 	}
@@ -81,7 +81,7 @@ func TestWhileAnOperationRunsEveryActionIsDisabled(t *testing.T) {
 			t.Fatalf("an action is enabled: %+v", action)
 		}
 	}
-	press(t, tt, "core.library.plugins.action", 3)
+	pressPositional(t, tt, "core.library.plugins.action", 3)
 	if len(calls) != 0 {
 		t.Fatalf("a disabled action ran %+v", calls)
 	}
@@ -120,7 +120,7 @@ func TestTheSearchFiltersTheCardsAndRunsItsCommand(t *testing.T) {
 	if got := workbench.ShownPlugins(page); !slices.Equal(got, []string{"beta"}) {
 		t.Fatalf("shown plugins %q", got)
 	}
-	press(t, tt, "core.library.plugins.search", 0)
+	pressPositional(t, tt, "core.library.plugins.search", 0)
 	tt.Type("x")
 	if len(calls) != 1 || calls[0].name != "core.library.plugins.search" || calls[0].params["query"] != "SECONDx" {
 		t.Fatalf("commands %+v", calls)
@@ -137,8 +137,8 @@ func TestTheUpdateListComesBeforeTheCards(t *testing.T) {
 	page.Updates = []workbench.PluginUpdate{{ID: "alpha", Installed: "1.0.0", Latest: "1.2.0"}}
 	page.App = workbench.AppUpdate{Version: "0.5.0", Available: &workbench.AppVersion{Version: "0.6.0", Release: "https://example.test/r"},
 		Incompatible: []workbench.AppIncompatible{{ID: "alpha", Installed: "1.0.0", Range: "^0.5.0", Compatible: stringOf("1.3.0")}, {ID: "beta", Installed: "1.0.0", Range: "^0.5.0"}}}
-	tt := drawPlugins(&page, noErrors(), recorder(&calls))
-	if row := element(t, tt, "core.library.plugins.updates", 0); row.Label != "alpha: 1.0.0 → 1.2.0" {
+	tt := drawPlugins(&page, noErrors(), record(&calls))
+	if row := positional(t, tt, "core.library.plugins.updates", 0); row.Label != "alpha: 1.0.0 → 1.2.0" {
 		t.Fatalf("the row of the update says %q", row.Label)
 	}
 	for _, want := range []string{"core: 0.5.0 → 0.6.0", "alpha 1.0.0 (^0.5.0): 0.6.0에 맞는 최신 버전 1.3.0", "beta 1.0.0 (^0.5.0): 0.6.0에 맞는 버전 없음"} {
@@ -146,13 +146,13 @@ func TestTheUpdateListComesBeforeTheCards(t *testing.T) {
 			t.Errorf("no text %q in %q", want, tt.Texts())
 		}
 	}
-	first, card := element(t, tt, "core.library.app.row", 0), element(t, tt, "core.library.plugins.action", 0)
+	first, card := positional(t, tt, "core.library.app.row", 0), positional(t, tt, "core.library.plugins.action", 0)
 	if first.Bounds.Y >= card.Bounds.Y {
 		t.Fatalf("the update list at %v does not come before the cards at %v", first.Bounds.Y, card.Bounds.Y)
 	}
-	press(t, tt, "core.library.plugins.update-all", 0)
-	press(t, tt, "core.library.app.release", 0)
-	press(t, tt, "core.library.app.update", 0)
+	pressPositional(t, tt, "core.library.plugins.update-all", 0)
+	pressPositional(t, tt, "core.library.app.release", 0)
+	pressPositional(t, tt, "core.library.app.update", 0)
 	want := []call{{"core.plugins.update-all", map[string]any{}}, {"core.app.release", map[string]any{}}, {"core.app.update", map[string]any{}}}
 	if !reflect.DeepEqual(calls, want) {
 		t.Fatalf("commands %+v, want %+v", calls, want)
@@ -166,7 +166,7 @@ func TestAFailedApplicationUpdateIsShownInItsRow(t *testing.T) {
 	page.App = workbench.AppUpdate{Version: "0.5.0", Available: &workbench.AppVersion{Version: "0.6.0"},
 		Operation: &workbench.AppOperation{Version: "0.6.0", State: "failed", Error: "no space"}}
 	tt := drawPlugins(&page, errors, func(string, map[string]any) {})
-	if _, ok := keyed(tt.ElementTree(), workbench.ElementName{Name: "core.library.app.release", Index: 0}); ok {
+	if _, ok := keyedAt(tt.ElementTree(), workbench.ElementName{Name: "core.library.app.release", Index: 0}); ok {
 		t.Fatal("a version without a release page shows the release button")
 	}
 	if !tt.HasText("0.6.0 업데이트하지 못했습니다: no space") {
@@ -184,14 +184,14 @@ func TestAnOutdatedServiceHasItsReplaceAction(t *testing.T) {
 		{Sidecar: "hello", Running: stringOf("1.0.0"), Installed: stringOf("2.0.0"), Sessions: 3},
 		{Sidecar: "gone", Sessions: 1},
 	}
-	tt := drawPlugins(&page, noErrors(), recorder(&calls))
+	tt := drawPlugins(&page, noErrors(), record(&calls))
 	for _, want := range []string{"hello: 1.0.0 → 2.0.0", "세션 3개를 끝내고 적용", "gone: 이전 버전 → 선언 없음", "세션 1개를 끝내고 종료"} {
 		if !tt.HasText(want) {
 			t.Errorf("no text %q in %q", want, tt.Texts())
 		}
 	}
-	element(t, tt, "core.library.plugins.outdated", 1)
-	press(t, tt, "core.library.plugins.replace", 1)
+	positional(t, tt, "core.library.plugins.outdated", 1)
+	pressPositional(t, tt, "core.library.plugins.replace", 1)
 	want := []call{{"core.plugins.replace", map[string]any{"sidecar": "gone"}}}
 	if !reflect.DeepEqual(calls, want) {
 		t.Fatalf("commands %+v, want %+v", calls, want)
@@ -219,7 +219,7 @@ func TestWithoutAHostThePageHasNoAction(t *testing.T) {
 	page := hostedPlugins()
 	page.Hosted = false
 	tt := drawPlugins(&page, noErrors(), func(string, map[string]any) {})
-	if _, ok := keyed(tt.ElementTree(), workbench.ElementName{Name: "core.library.plugins.action", Index: 0}); ok {
+	if _, ok := keyedAt(tt.ElementTree(), workbench.ElementName{Name: "core.library.plugins.action", Index: 0}); ok {
 		t.Fatal("a page without a host has an action")
 	}
 	if got := workbench.PluginPageActions(page); len(got) != 0 {

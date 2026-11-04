@@ -35,6 +35,10 @@ type ShellOptions struct {
 	Elements Elements
 	// Seat draws what stands in the slot of a card. Without it the slot stays empty.
 	Seat Seat
+	// Installed is the document of the installed plugins.
+	Installed []byte
+	// SectionSeat draws what stands on the seat of a section. Without it the seat stays empty.
+	SectionSeat func(c *ui.Context, seat SidebarSeat)
 }
 
 // Seat draws the surface of the active tab of a card in the box of the slot, in window coordinates.
@@ -118,6 +122,7 @@ type Shell struct {
 	calls    *Calls
 	requests *Requests
 	errors   *ShownErrors
+	sidebars *Sidebars
 	grid     environmentGrid
 	focus    string
 
@@ -155,6 +160,17 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.binder = NewBinder(s.registry, func(_ string, err error) { s.fail(err) })
 	s.registry.Elements(options.Elements)
 	s.requests = NewRequests(s.registry, s.calls, options.Post, options.Report)
+	s.registry.Status("core.page.error", func() any {
+		if text, ok := s.errors.Text(workbenchErrorPlace); ok {
+			return &text
+		}
+		return (*string)(nil)
+	})
+	s.sidebars, err = NewSidebars(SidebarsOptions{Declared: options.Declared, Registry: s.registry, Binder: s.binder,
+		Environment: options.Environment, Installed: options.Installed, Changed: s.settle, Seat: options.SectionSeat})
+	if err != nil {
+		return nil, err
+	}
 	s.register()
 	return s, nil
 }
@@ -290,6 +306,7 @@ func baseName(root string) string { return path.Base(root) }
 
 // View draws the workbench of the window.
 func (s *Shell) View(c *ui.Context) {
+	s.sidebars.Begin()
 	width, height := c.Size()
 	theme := *c.Theme()
 	theme.Background = s.palette.Bg

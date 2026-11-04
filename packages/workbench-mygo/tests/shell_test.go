@@ -21,6 +21,8 @@ type storedHost struct {
 	calls    []string
 	shown    []any
 	failing  map[string]error
+	// installed is the document of the installed plugins, and it is empty without plugins.
+	installed string
 }
 
 func (h *storedHost) table() map[string]workbench.HostCall {
@@ -127,6 +129,14 @@ type shellFixture struct {
 	lines   []string
 }
 
+// installedDocument is the document of the installed plugins of the host.
+func (h *storedHost) installedDocument() string {
+	if h.installed == "" {
+		return `{"plugins":[]}`
+	}
+	return h.installed
+}
+
 // environment reads the environment declaration of the application, which the shell receives from the assets of the application.
 func environment(t *testing.T) []byte {
 	t.Helper()
@@ -148,6 +158,7 @@ func newShell(t *testing.T, stored *storedHost) *shellFixture {
 		Declared:    declared,
 		Calls:       workbench.NewCalls(stored.table(), f.pending.post),
 		Environment: environment(t),
+		Installed:   []byte(stored.installedDocument()),
 		Invalidate:  func() {},
 		Post:        f.pending.post,
 		Report:      func(line string) { f.lines = append(f.lines, line) },
@@ -426,6 +437,13 @@ func TestHostFailureShowsInTheLibrary(t *testing.T) {
 	f.tester.Frame()
 	if !f.tester.HasText("project directory is gone") {
 		t.Fatalf("the library shows %q", f.tester.Texts())
+	}
+	shown, err := f.shell.Registry().Read("core.page.error")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text, ok := shown.(*string); !ok || text == nil || *text != "project directory is gone" {
+		t.Fatalf("the status core.page.error is %v", shown)
 	}
 }
 
