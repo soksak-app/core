@@ -68,6 +68,18 @@ test("boundary audit rejects a duplicate implementation and test owner", { timeo
   assert.ok(result.errors.some((error) => error.includes("test is claimed by multiple")));
 });
 
+test("inventory rejects a file that a list of one lane repeats", { timeout: 1000 }, () => {
+  const lane = (implementation, tests) => [{ capability: "unit", language: "js-ts", implementation, tests }];
+  const repeated = (result) => result.errors.filter((error) => error.includes("repeats"));
+  assert.deepEqual(repeated(auditInventory(["unit.js", "unit.test.mjs"], lane(["unit.js"], ["unit.test.mjs", "unit.test.mjs"]))), [
+    "unit.test.mjs: unit repeats this test: unit.test.mjs, unit.test.mjs",
+  ]);
+  assert.deepEqual(repeated(auditInventory(["src/unit.js", "unit.test.mjs"], lane(["src/*.js", "src/unit.js"], ["unit.test.mjs"]))), [
+    "src/unit.js: unit repeats this implementation: src/*.js, src/unit.js",
+  ]);
+  assert.deepEqual(repeated(auditInventory(["unit.js", "unit.test.mjs"], lane(["unit.js"], ["unit.test.mjs"]))), []);
+});
+
 test("inventory rejects duplicated ownership", { timeout: 1000 }, () => {
   const lane = { capability: "unit", language: "js-ts", implementation: ["unit.js"], tests: ["unit.test.mjs"] };
   const result = auditInventory(["unit.js", "unit.test.mjs"], [lane, { ...lane, capability: "other" }]);
