@@ -7,10 +7,10 @@ import { APPS, drag, keepCommonSettings, open } from "@soksak/window-check/app.m
 import { fresh, reading } from "./fixture.mjs";
 import { currentEventOffsets, readEvents, untilEventLines } from "@soksak/window-check/event-log.mjs";
 import { supplierDrawDurations } from "./supplier-draw.mjs";
-import { frames, readFrame } from "@soksak/window-check/frame.mjs";
+import { frameChange, frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { outside, terminalMarks, whitePixels } from "./outside.mjs";
 import { alignment, alignmentDelta } from "./alignment.mjs";
-import { measureDragPerformance, assertFinalContentSize, assertHeldStatesShown, assertRoundTrips, lagStages, pointerLag, transactionCadence } from "./drag-measurement.mjs";
+import { measureDragPerformance, shownTimes, assertFinalContentSize, assertHeldStatesShown, assertRoundTrips, lagStages, pointerLag, transactionCadence } from "./drag-measurement.mjs";
 
 // Vertical line 1 is the boundary between the left fixed sidebar and the terminal card. Dragging it moves the left edge of the terminal card.
 const PLAN = { axis: "x", line: 1, dx: 250, dy: 0, ms: 400, times: 2 };
@@ -28,13 +28,15 @@ function assertAligned(run, marks, refreshRate) {
   let broke = 0;
   const positions = [];
   const samples = [];
-  const times = [];
+  const shown = [];
+  let previous = null;
   const sizes = [];
   let initial = null;
   let delayed = { delta: 0, frame: -1, geometry: null };
   files.forEach((path, index) => {
     const frame = readFrame(path);
-    times.push(frame.time);
+    const repeated = previous !== null && frameChange(previous, frame) === null;
+    previous = frame;
     const at = outside(frame, marks);
     sizes.push({ time: frame.time, left: at?.left ?? null, right: at?.right ?? null });
     if (!at) return;
@@ -46,6 +48,7 @@ function assertAligned(run, marks, refreshRate) {
     read++;
     positions.push(at.card.l / at.scale);
     samples.push({ time: frame.time, position: at.card.l / at.scale });
+    if (!repeated) shown.push(samples.at(-1));
     if (at.out <= 0) return;
     broke++;
     if (at.out > worst.out) worst = { out: at.out, frame: index, at };
@@ -69,9 +72,9 @@ function assertAligned(run, marks, refreshRate) {
         `on row ${at.row}, at ${at.scale} pixels to the point` : ""));
   assertRoundTrips(positions, 2);
 
-  const lag = pointerLag(samples, run.ticks, run.boundary);
+  const lag = pointerLag(shown, run.ticks, run.boundary);
   lag.stages = lagStages(lag, run.ticks, run.layouts);
-  lag.performance = measureDragPerformance(times, lag, refreshRate);
+  lag.performance = measureDragPerformance(shownTimes(shown, run.ticks), lag, refreshRate);
 
   return lag;
 }
