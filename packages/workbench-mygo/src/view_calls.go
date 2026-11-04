@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -415,6 +416,16 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 		s.tabs.states.Write(call.Surface, state)
 		done()
 	case "tab.focus":
+		var focus *struct {
+			Name  string `json:"name"`
+			Index *int   `json:"index"`
+		}
+		if err := json.Unmarshal(call.Params, &focus); err != nil {
+			return fmt.Errorf("view call %s: %w", call.Command, err)
+		}
+		if focus != nil && (focus.Name == "" || focus.Index == nil || *focus.Index < 0) {
+			return fmt.Errorf("view call %s requires {name, index} or null", call.Command)
+		}
 		view.focus = call.Params
 		done()
 	case "tab.notify":
@@ -476,8 +487,8 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 		if err != nil {
 			return err
 		}
-		if fields.Name == "" {
-			return fmt.Errorf("view call %s requires a non-empty name", call.Command)
+		if !unit.declaresCommand(fields.Name) {
+			return fmt.Errorf("view call %s: %q is not a declared command of plugin %s", call.Command, fields.Name, unit.ID)
 		}
 		if view.commands[fields.Name] {
 			return fmt.Errorf("command %s is already registered", fields.Name)
@@ -770,7 +781,7 @@ func (s *Shell) viewSettings(unit *installedUnit) map[string]any {
 	return values
 }
 
-// surfaceTextSize returns the text scale of the surface: the factor of its card.
+// surfaceTextSize returns the text scale of the surface: the frame factor multiplied by the factor of its card.
 func (s *Shell) surfaceTextSize(surface string) (float64, error) {
 	card := s.cardOfTab(surface)
 	if card == "" {
@@ -780,7 +791,11 @@ func (s *Shell) surfaceTextSize(surface string) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return data.CardTextSize(), nil
+	frame, ok := s.settings.Value("textSize").(float64)
+	if !ok {
+		return 0, errors.New("the setting textSize has no number")
+	}
+	return frame * data.CardTextSize(), nil
 }
 
 // readTabState returns the value of the state of the tab: null without one, and a state of another format is refused.
@@ -927,6 +942,26 @@ func (s *Shell) runNativeCall(call viewCallEvent, view *viewState, unit *install
 		return fmt.Errorf("host call %s is not served to plugins", fields.Name)
 	}
 	return nil
+}
+
+// declaresCommand tells whether the plugin declares the command name, in plugin.json or in its diagnostic declarations.
+func (u *installedUnit) declaresCommand(name string) bool {
+	entries := slices.Clone(u.Exposes.Commands)
+	var diagnostics struct {
+		Exposes surfaceMarks `json:"exposes"`
+	}
+	if json.Unmarshal(u.Diagnostics, &diagnostics) == nil { // silent: a plugin without diagnostic declarations has no such commands.
+		entries = append(entries, diagnostics.Exposes.Commands...)
+	}
+	for _, raw := range entries {
+		var entry struct {
+			Name string `json:"name"`
+		}
+		if json.Unmarshal(raw, &entry) == nil && entry.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 // nonNil returns a list that encodes as an array when it is empty.
