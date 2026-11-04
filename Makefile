@@ -67,17 +67,25 @@ host-calls:
 	@node scripts/measure-host-calls.mjs --sok target/debug/soksak-$(APP).app/Contents/MacOS/sok --config-dir "$(CONFIG)" --calls $(or $(CALLS),1000) --idle-minutes $(or $(MINUTES),0) --events $(or $(EVENTS),0) --rounds $(or $(ROUNDS),5)
 
 # Reports the CPU and memory of the running application of CONFIG_DIR by process: host, sidecars, pages, documents and WebKit processes
-# (scripts/measure-app-usage.mjs, docs/operations/examples.md). SOK defaults to the sok binary of target/debug.
+# (scripts/measure-app-usage.mjs, docs/operations/examples.md). TRACE=0 sets the trace off under the default log policy and TRACE=1 the trace
+# on with the class frame at debug before the measurement. STATE prepares a state of the three-host benchmark B3 in a window of 1200 by 760
+# points through declared commands (docs/plans/mygo-host.md); IDLE=1 then waits for the cursor idle timeout of every term and terminal tab
+# and for 3 seconds without a change of frames of host.window; STEP=pointer measures a pointer move across the window with the HID moves of
+# e2e/real/hid.mjs, which needs the Accessibility permission and brings the window to the front. B3_OUT writes the B3 record of the
+# measurement, its measurements and its conditions, to that file as JSON. SOK defaults to the sok binary of target/debug.
 app-usage:
-	@case "$(CONFIG_DIR)" in '') echo "app-usage requires CONFIG_DIR=DIR [INTERVAL=10] [SOK=PATH]" >&2; exit 2;; esac
-	@node scripts/measure-app-usage.mjs --sok $(or $(SOK),target/debug/sok) --config-dir "$(CONFIG_DIR)" --interval $(or $(INTERVAL),10)
+	@case "$(CONFIG_DIR)" in '') echo "app-usage requires CONFIG_DIR=DIR TRACE=0|1 [STATE=S0|S0b|S1|S9|S11|S12|S14|S15] [IDLE=1] [STEP=pointer] [B3_OUT=FILE] [INTERVAL=10] [SOK=PATH]" >&2; exit 2;; esac
+	@case "$(IDLE)" in ''|1) ;; *) echo "app-usage takes IDLE=1, not IDLE=$(IDLE)" >&2; exit 2;; esac
+	@node scripts/measure-app-usage.mjs --sok $(or $(SOK),target/debug/sok) --config-dir "$(CONFIG_DIR)" --trace "$(TRACE)" --interval $(or $(INTERVAL),10) $(if $(STATE),--state "$(STATE)") $(if $(IDLE),--idle) $(if $(STEP),--step "$(STEP)") $(if $(B3_OUT),--b3-out "$(abspath $(B3_OUT))")
 
-# Reports the CPU of each process of the running application of CONFIG_DIR while the terminal SURFACE redraws a status block at RATE frames
-# per second (scripts/measure-terminal-redraw.mjs, docs/operations/examples.md). SOK defaults to the sok binary of target/debug.
+# Reports the CPU time of each process of the running application of CONFIG_DIR for each frame that the image region of a terminal tab
+# presents while its program rewrites ROWS rows at RATE frames per second (scripts/measure-terminal-redraw.mjs, docs/operations/examples.md):
+# after the trace state of TRACE=0|1, it opens one tab of PLUGIN, whose PLUGIN.input and PLUGIN.screen it uses, in a new project window of
+# 760 by 614 points and divides the CPU time by the change of presentedFrames of the region of that tab. B3_OUT writes the B3 record of the
+# measurement to that file as JSON. SOK defaults to the sok binary of target/debug.
 terminal-redraw-usage:
-	@case "$(CONFIG_DIR)" in '') echo "terminal-redraw-usage requires CONFIG_DIR=DIR SURFACE=TAB [RATE=20] [INTERVAL=10] [SOK=PATH]" >&2; exit 2;; esac
-	@case "$(SURFACE)" in '') echo "terminal-redraw-usage requires SURFACE=TAB" >&2; exit 2;; esac
-	@node scripts/measure-terminal-redraw.mjs --sok $(or $(SOK),target/debug/sok) --config-dir "$(CONFIG_DIR)" --surface "$(SURFACE)" --rate $(or $(RATE),20) --interval $(or $(INTERVAL),10)
+	@case "$(CONFIG_DIR)" in '') echo "terminal-redraw-usage requires CONFIG_DIR=DIR PLUGIN=ID ROWS=N TRACE=0|1 [B3_OUT=FILE] [RATE=20] [INTERVAL=10] [SOK=PATH]" >&2; exit 2;; esac
+	@node scripts/measure-terminal-redraw.mjs --sok $(or $(SOK),target/debug/sok) --config-dir "$(CONFIG_DIR)" --plugin "$(PLUGIN)" --rows "$(ROWS)" --trace "$(TRACE)" --rate $(or $(RATE),20) --interval $(or $(INTERVAL),10) $(if $(B3_OUT),--b3-out "$(abspath $(B3_OUT))")
 
 # Measures the share of the diagnostics in the memory of a running host: in the trace state TRACE=1 and then TRACE=0 it runs five repetitions of
 # object-counts and prints the entry of the last repetition, which holds the footprint of the host process (docs/operations/examples.md).
