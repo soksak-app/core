@@ -1,6 +1,7 @@
 {
   "status": [
     "core.window.document",
+    "core.window.workbench",
     "core.screen",
     "core.page.error",
     "core.page.audit",

@@ -80,6 +80,7 @@ type SidebarFrame struct {
 type SidebarSeat struct {
 	SurfaceID string
 	Section   string
+	Sidebar   string
 	Plugin    string
 	Title     string
 	// Composition is the composition that the section declares.
@@ -114,7 +115,7 @@ func seatOf(frame SidebarFrame, section SidebarSection) SidebarSeat {
 	}
 	return SidebarSeat{
 		SurfaceID: frame.Space + "/" + frame.Sidebar + "/" + section.ID,
-		Section:   section.ID, Plugin: section.Plugin, Title: section.Name, Composition: section.Composition, Visible: visible,
+		Section:   section.ID, Sidebar: frame.Sidebar, Plugin: section.Plugin, Title: section.Name, Composition: section.Composition, Visible: visible,
 	}
 }
 

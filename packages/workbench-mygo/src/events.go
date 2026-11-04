@@ -131,6 +131,9 @@ func newStart() string {
 // Start is the identity of this start of the workbench.
 func (e *Events) Start() string { return e.start }
 
+// StartedAt is the time of this start of the workbench.
+func (e *Events) StartedAt() time.Time { return e.startedAt }
+
 // Begin queues the event workbench.start, which marks this start in the timeline, reads the policy in force of the host and runs ready
 // with the policy in the gate, so the calls of the start pass the gate of the policy that stores them.
 func (e *Events) Begin(ready func()) {

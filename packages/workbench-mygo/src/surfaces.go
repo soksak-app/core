@@ -48,6 +48,8 @@ type installedUnit struct {
 	// Menu tells whether the plugin declares surface.menu, and Unload holds its surface.unload.
 	Menu   bool
 	Unload *surfaceUnload
+	// Data holds the project data keys that the plugin declares.
+	Data map[string]dataDeclaration
 }
 
 // surfaceUnload is the declaration surface.unload of a plugin.
@@ -72,6 +74,7 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 				Exposes      json.RawMessage            `json:"exposes"`
 				Dependencies map[string]any             `json:"dependencies"`
 				Settings     map[string]json.RawMessage `json:"settings"`
+				Data         map[string]dataDeclaration `json:"data"`
 			} `json:"manifest"`
 		} `json:"plugins"`
 	}
@@ -87,6 +90,7 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 	}
 	for _, plugin := range read.Plugins {
 		unit := units[plugin.ID]
+		unit.Data = plugin.Manifest.Data
 		for local := range plugin.Manifest.Settings {
 			unit.Settings = append(unit.Settings, local)
 		}
@@ -128,9 +132,12 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 
 // heldSurface is a surface that the host holds for this window.
 type heldSurface struct {
+	// tab is the tab of the surface. The surface of a section has no tab, and this value carries its id and plugin.
 	tab     layout.Tab
 	box     layout.Rect
 	project projectStart
+	// composition is the composition of the plugin, or that of the section. section is the start value of a section surface.
+	composition, section json.RawMessage
 	// declared tells that the host took its composition.
 	declared bool
 }
@@ -181,11 +188,38 @@ func (s *Shell) drawSeat(c *ui.Context, tab layout.Tab, box layout.Rect) {
 	s.surfaces.drawn[tab.ID] = box
 	if s.surfaces.held[tab.ID] == nil {
 		project := s.opened()
-		s.surfaces.held[tab.ID] = &heldSurface{tab: tab, box: box, project: projectStart{ID: project.ID, Root: project.Root}}
+		s.surfaces.held[tab.ID] = &heldSurface{tab: tab, box: box, project: projectStart{ID: project.ID, Root: project.Root},
+			composition: unit.Composition}
 		s.surfaces.order = append(s.surfaces.order, tab.ID)
 	}
 	if surface, key, ok := s.options.Element(tab.ID); ok {
 		ui.NativeView(c, surface, key).Size(float32(box.W), float32(box.H))
+	}
+}
+
+// drawSectionSeat holds the view of a section of a window sidebar and seats it while the section is open. The view of a folded
+// section stays held and hidden, so it keeps its state.
+func (s *Shell) drawSectionSeat(c *ui.Context, seat SidebarSeat) {
+	if s.units[seat.Plugin] == nil || len(seat.Composition) == 0 {
+		return
+	}
+	if s.surfaces.held[seat.SurfaceID] == nil {
+		section, err := json.Marshal(map[string]any{"id": seat.Section, "sidebar": seat.Sidebar, "card": nil})
+		if err != nil {
+			s.fail(err)
+			return
+		}
+		project := s.opened()
+		s.surfaces.held[seat.SurfaceID] = &heldSurface{tab: layout.Tab{ID: seat.SurfaceID, Plugin: seat.Plugin}, box: seat.Box,
+			project: projectStart{ID: project.ID, Root: project.Root}, composition: seat.Composition, section: section}
+		s.surfaces.order = append(s.surfaces.order, seat.SurfaceID)
+	}
+	if !seat.Visible {
+		return
+	}
+	s.surfaces.drawn[seat.SurfaceID] = seat.Box
+	if surface, key, ok := s.options.Element(seat.SurfaceID); ok {
+		ui.NativeView(c, surface, key).Size(float32(seat.Box.W), float32(seat.Box.H))
 	}
 }
 
@@ -251,12 +285,17 @@ func (s *Shell) surfaceRequest() (map[string]any, error) {
 			tables[unit.ID] = index
 			table = append(table, marks)
 		}
-		surfaces = append(surfaces, map[string]any{"id": id, "visible": visible, "dim": false, "plugin": unit.ID,
-			"composition": unit.Composition, "x": held.box.X, "y": held.box.Y, "w": held.box.W, "h": held.box.H,
+		surfaces = append(surfaces, map[string]any{"id": id, "visible": visible, "dim": s.surfaceDimmed(id), "plugin": unit.ID,
+			"composition": held.composition, "x": held.box.X, "y": held.box.Y, "w": held.box.W, "h": held.box.H,
 			"start": map[string]any{"params": tabMember(held.tab, "params", "null"), "origin": tabMember(held.tab, "origin", `{"directory":null}`),
-				"project": held.project, "declarations": index, "diagnostics": rawOrNull(unit.Diagnostics), "section": nil}})
+				"project": held.project, "declarations": index, "diagnostics": rawOrNull(unit.Diagnostics), "section": rawOrNull(held.section)}})
 	}
 	return map[string]any{"settled": s.held == nil, "surfaces": surfaces, "titlebar": s.metrics.chromeH, "declarations": table}, nil
+}
+
+// surfaceDimmed tells whether the setting dims the surface: a card has one surface shown, and the card without focus dims it.
+func (s *Shell) surfaceDimmed(id string) bool {
+	return s.settings.Value("dim") == true && s.cardOfTab(id) != s.focused
 }
 
 // tabMember returns the member name of the tab, or fallback for a tab without it, as a tab without parameters starts with null.
@@ -302,7 +341,7 @@ func (s *Shell) placeSurfaces() {
 		}
 		held.declared = true
 		unit := s.units[held.tab.Plugin]
-		s.calls.CallInOrder(surfaceOrder, "compositionDeclare", map[string]any{"surface": id, "plugin": unit.ID, "composition": unit.Composition},
+		s.calls.CallInOrder(surfaceOrder, "compositionDeclare", map[string]any{"surface": id, "plugin": unit.ID, "composition": held.composition},
 			func(_ any, err error) {
 				if err != nil {
 					s.fail(fmt.Errorf("surface %s: %w", id, err))

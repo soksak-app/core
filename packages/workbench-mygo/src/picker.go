@@ -133,6 +133,9 @@ func (s *Shell) openCardMenu(card, menu string) error {
 	if err := s.paneCard(card); err != nil {
 		return err
 	}
+	if err := s.layoutChangeable(card); err != nil {
+		return err
+	}
 	tool, known := menuTools[menu]
 	if !known {
 		return fmt.Errorf("unknown menu %s", menu)

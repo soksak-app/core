@@ -291,6 +291,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
     width: innerWidth,
     height: innerHeight,
   }));
+  status("core.window.workbench", () => ({ start: pageIdentity, started_at: performance.timeOrigin }));
   status("core.screen", () => ({
     screen: document.body.dataset.screen,
     modal: settingsModalState().open ? "settings" : debugState().open ? "debug" : pickerState().open ? "picker" : null,

@@ -40,6 +40,8 @@ type viewState struct {
 	failures map[string]bool
 	settings bool
 	textSize bool
+	// data tells that the view follows the project data of its plugin.
+	data bool
 	// commands holds the commands that the view registered, and requests the answer of each request that it has not replied.
 	commands map[string]bool
 	requests map[uint64]viewAnswer
@@ -381,6 +383,8 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 	case "runtime.settings.on":
 		view.settings = true
 		done()
+	case "runtime.data.get", "runtime.data.set", "runtime.data.on":
+		return s.runDataCall(call, unit, view, answer)
 	case "runtime.textSize.read":
 		size, err := s.surfaceTextSize(call.Surface)
 		if err != nil {
@@ -782,6 +786,13 @@ func (s *Shell) viewSettings(unit *installedUnit) map[string]any {
 
 // surfaceTextSize returns the text scale of the surface: the frame factor multiplied by the factor of its card.
 func (s *Shell) surfaceTextSize(surface string) (float64, error) {
+	frame, ok := s.settings.Value("textSize").(float64)
+	if !ok {
+		return 0, errors.New("the setting textSize has no number")
+	}
+	if held := s.surfaces.held[surface]; held != nil && len(held.section) > 0 {
+		return frame, nil
+	}
 	card := s.cardOfTab(surface)
 	if card == "" {
 		return 0, fmt.Errorf("surface %s is not in the layout", surface)
@@ -789,10 +800,6 @@ func (s *Shell) surfaceTextSize(surface string) (float64, error) {
 	data, err := s.cardData(card)
 	if err != nil {
 		return 0, err
-	}
-	frame, ok := s.settings.Value("textSize").(float64)
-	if !ok {
-		return 0, errors.New("the setting textSize has no number")
 	}
 	return frame * data.CardTextSize(), nil
 }

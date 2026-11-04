@@ -23,9 +23,12 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 	inset := s.stageInset()
 	s.plane.Resize(float64(width-2*inset), float64(stage-2*inset))
 	originX, originY := inset, s.metrics.chromeH+s.metrics.spaceTabH+s.metrics.tabsGap+inset
-	ui.Box(c).Size(width, stage).Children(func() {
+	ui.Box(c).Size(width, stage).DrawOver(func(p *ui.Painter, r ui.Rect) { s.drawRail(p, r, inset) }).Children(func() {
 		for _, card := range s.plane.Cards() {
-			rect, ok := s.plane.Rect(card.ID)
+			if s.fullscreen != "" && card.ID != s.fullscreen {
+				continue
+			}
+			rect, ok := s.cardRect(card.ID)
 			if !ok {
 				continue
 			}
@@ -43,7 +46,9 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 			}
 			s.drawCard(c, card.ID, data, rect, inset, originX, originY)
 		}
-		s.drawDividers(c, inset)
+		if s.fullscreen == "" {
+			s.drawDividers(c, inset)
+		}
 	})
 }
 
@@ -53,7 +58,7 @@ var placeNames = map[string]string{"left": "왼쪽 창 사이드바", "right": "
 // drawCard draws a card at its rectangle of the plane. originX and originY are the origin of the plane in the window.
 func (s *Shell) drawCard(c *ui.Context, id string, data *layout.CardData, rect layout.Rect, inset, originX, originY float32) {
 	border := s.palette.Edge
-	if id == s.focused {
+	if id == s.focused && s.settings.Value("focusInd") != "corner" {
 		border = s.palette.Focus
 	}
 	card := s.binder.Press(c, "core.card", "core.card.focus", id, cardParam{Card: id})
@@ -67,7 +72,7 @@ func (s *Shell) drawCard(c *ui.Context, id string, data *layout.CardData, rect l
 				s.drawSeat(c, *active, box)
 			}
 		})
-		s.drawStatus(c, id)
+		s.drawStatus(c, data)
 	})
 }
 
@@ -78,11 +83,7 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, width 
 	widths := make([]float64, len(tabs))
 	activeWidth := 0.0
 	for i, tab := range tabs {
-		name := layout.TabName(tab, nil, false)
-		if report := s.surfaces.reports[tab.ID]; report != nil && report.Title != "" {
-			name = report.Title
-		}
-		measured, _ := c.MeasureText(0, ui.Span{Text: name, Size: 12})
+		measured, _ := c.MeasureText(0, ui.Span{Text: s.tabName(tab), Size: 12})
 		widths[i] = float64(measured + 2*s.metrics.barTabGap + s.metrics.actW)
 		if active != nil && tab.ID == active.ID {
 			activeWidth = widths[i]
@@ -92,6 +93,7 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, width 
 	fit := layout.FitHead(layout.Head{Width: float64(width), PaddingLeft: float64(s.metrics.tabsPad), PaddingRight: float64(s.metrics.tabsPad),
 		Lead: float64(s.metrics.actW), Gap: float64(s.metrics.tabsGap), ToolsWidth: float64(tools * s.metrics.actW), MoreWidth: float64(s.metrics.actW),
 		TabWidths: widths, TabGap: float64(s.metrics.tabsGap), ActiveWidth: activeWidth, Peek: float64(s.metrics.tabPeekW), MinTab: float64(s.metrics.tabMinW)})
+	s.heads[id] = fit
 	ui.Row(c).Size(width, s.metrics.headH).PaddingX(s.metrics.tabsPad).AlignItems(ui.Center).Gap(s.metrics.tabsGap).Clip().
 		Role(ui.RoleGroup).Label("core.card.header").BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.Rule).Children(func() {
 		if fit.Fit == "ham" {
@@ -114,14 +116,22 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, width 
 	})
 }
 
-func (s *Shell) drawTab(c *ui.Context, tab layout.Tab, on bool) {
-	name := layout.TabName(tab, nil, false)
-	if report := s.surfaces.reports[tab.ID]; report != nil && report.Title != "" {
-		name = report.Title
+// tabName is the name that the head shows for a tab: the title its view reported, with the mark of a modified tab.
+func (s *Shell) tabName(tab layout.Tab) string {
+	report := s.surfaces.reports[tab.ID]
+	if report == nil {
+		return layout.TabName(tab, nil, false)
 	}
+	return layout.TabName(tab, optionalText(report.Title), report.Modified)
+}
+
+func (s *Shell) drawTab(c *ui.Context, tab layout.Tab, on bool) {
 	ui.Row(c.Key("tab-" + tab.ID)).AlignItems(ui.Center).Children(func() {
 		button := s.binder.Press(c, "core.card.tab", "core.tab.select", tab.ID, tabParam{tab.ID})
-		s.barText(c, button, name, on)
+		s.barText(c, button, s.tabName(tab), on)
+		if report := s.surfaces.reports[tab.ID]; report != nil && report.Notice != nil {
+			ui.Text(c, "•").FontSize(10).TextColor(s.palette.Focus).Label(report.Notice.Text)
+		}
 		s.tabContextMenu(button, tab.ID)
 		s.barText(c, s.binder.Press(c, "core.card.tab-close", "core.tab.close", tab.ID, tabParam{tab.ID}), "✕", false)
 	})
@@ -140,6 +150,7 @@ func (s *Shell) drawTools(c *ui.Context, id string, folded bool) {
 		tool("core.card.add", "core.card.menu", "+", menuParam{Card: id, Menu: "add"})
 		tool("core.card.split-x", "core.card.menu", "┃", menuParam{Card: id, Menu: "split-x"})
 		tool("core.card.split-y", "core.card.menu", "━", menuParam{Card: id, Menu: "split-y"})
+		tool("core.card.fullscreen", "core.card.fullscreen", "⤢", cardParam{Card: id})
 		tool("core.card.close", "core.card.close", "✕", cardParam{Card: id})
 		return
 	}
@@ -147,9 +158,16 @@ func (s *Shell) drawTools(c *ui.Context, id string, folded bool) {
 }
 
 // drawStatus draws the status line of a card.
-func (s *Shell) drawStatus(c *ui.Context, id string) {
+func (s *Shell) drawStatus(c *ui.Context, data *layout.CardData) {
 	ui.Row(c).FillWidth().Height(s.metrics.footH).PaddingX(s.metrics.tabsPad).AlignItems(ui.Center).BorderWidth(s.palette.BorderWidth, 0, 0, 0).BorderColor(s.palette.Rule).
 		Role(ui.RoleStatus).Label("core.card.status").Children(func() {
-		ui.Text(c, id).FontSize(10).TextColor(s.palette.Muted)
+		if text := s.cardStatusText(data); text != "" {
+			ui.Text(c, text).FontSize(10).TextColor(s.palette.Muted)
+		}
+		if active := data.ActiveTab(); active != nil {
+			if report := s.surfaces.reports[active.ID]; report != nil && report.Error != "" {
+				ui.Text(c, report.Error).FontSize(10).TextColor(s.palette.No)
+			}
+		}
 	})
 }

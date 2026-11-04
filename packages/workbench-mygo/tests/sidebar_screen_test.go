@@ -110,8 +110,8 @@ func TestTheSeatsOfASidebarNameEverySectionWithItsVisibility(t *testing.T) {
 	frame := listFrame()
 	frame.Sections[0].Folded = true
 	want := []workbench.SidebarSeat{
-		{SurfaceID: "spc-1/left/files.tree", Section: "files.tree", Plugin: "files", Title: "Files", Visible: false},
-		{SurfaceID: "spc-1/left/git.log", Section: "git.log", Plugin: "git", Title: "Log", Visible: true},
+		{SurfaceID: "spc-1/left/files.tree", Section: "files.tree", Sidebar: "left", Plugin: "files", Title: "Files", Visible: false},
+		{SurfaceID: "spc-1/left/git.log", Section: "git.log", Sidebar: "left", Plugin: "git", Title: "Log", Visible: true},
 	}
 	if got := workbench.SidebarSeats(frame); !reflect.DeepEqual(got, want) {
 		t.Fatalf("seats %+v, want %+v", got, want)

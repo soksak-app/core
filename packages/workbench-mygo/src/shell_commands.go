@@ -105,6 +105,25 @@ func (s *Shell) register() {
 			return fmt.Errorf("Unknown card: %s", value.Card)
 		}
 		s.focused = value.Card
+		if s.fullscreen != value.Card {
+			s.fullscreen = ""
+		}
+		s.options.Invalidate()
+		return nil
+	})
+	act(s, "core.card.fullscreen", func(value cardParam) error {
+		if err := s.requirePlane(); err != nil {
+			return err
+		}
+		if err := s.paneCard(value.Card); err != nil {
+			return err
+		}
+		s.focused = value.Card
+		if s.fullscreen == value.Card {
+			s.fullscreen = ""
+		} else {
+			s.fullscreen = value.Card
+		}
 		s.options.Invalidate()
 		return nil
 	})

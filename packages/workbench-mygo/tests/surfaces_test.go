@@ -16,6 +16,7 @@ const installedDocument = `{"plugins": [
 	{"id": "terminal", "package": "@soksak/plugin-terminal", "version": "1.0.0", "sidecars": {"@soksak/sidecar-vt": {}},
 		"manifest": {"id": "terminal", "name": "터미널", "mark": "◊",
 			"dependencies": {"@soksak/sidecar-vt": "^1.0.0"},
+			"data": {"notes": {"schema": {"type": "string"}, "default": "none", "format": 2}},
 			"settings": {"cursor.shape": {"type": "enum", "default": "block", "values": ["block", "beam"]}, "shell": {"type": "text", "default": ""}},
 			"surface": {"composition": {"kind": "view", "page": "ui/terminal.html", "regions": [{"name": "view", "kind": "image"}]}}}},
 	{"id": "browser", "package": "@soksak/plugin-browser", "version": "1.0.0",

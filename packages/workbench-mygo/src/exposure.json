@@ -45,6 +45,17 @@
         }
       },
       {
+        "name": "core.window.workbench",
+        "description": "The start of the workbench of the window: the identity of this start and its time in milliseconds since the epoch.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "start": { "type": "string" },
+            "started_at": { "type": "number" }
+          }
+        }
+      },
+      {
         "name": "core.screen",
         "description": "The shown screen and the open modal of the main document.",
         "schema": {

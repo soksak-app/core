@@ -3,6 +3,8 @@ package workbench
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
+	"strings"
 	"time"
 
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
@@ -202,7 +204,7 @@ func (s *Shell) loadSpace(project *projectRecord) error {
 	if err := s.sidebars.Restore(stored.Sidebars); err != nil {
 		return fmt.Errorf("space %s: %w", space.ID, err)
 	}
-	s.plane, s.focused = plane, s.firstCard(plane)
+	s.plane, s.focused, s.fullscreen = plane, s.firstCard(plane), ""
 	return nil
 }
 
@@ -362,7 +364,7 @@ func (s *Shell) dropProject(id string) {
 		}
 	}
 	if s.active == id {
-		s.active, s.plane, s.browsing = "", nil, true
+		s.active, s.plane, s.browsing, s.fullscreen = "", nil, true, ""
 		if len(s.projects) > 0 {
 			s.activate(s.projects[0].ID)
 		}
@@ -438,6 +440,11 @@ func (s *Shell) closeSpace(id string) error {
 		return fmt.Errorf("space %s: %w", id, err)
 	}
 	eachTab(stored.State.Cards, func(tab layout.Tab, _ bool) { dropped = append(dropped, tab.ID) })
+	for surface, held := range s.surfaces.held {
+		if len(held.section) > 0 && strings.HasPrefix(surface, id+"/") {
+			dropped = append(dropped, surface)
+		}
+	}
 	s.storeSpacesThen(project, s.droppedTabs(dropped))
 	s.tabsSettled()
 	s.options.Invalidate()
@@ -496,14 +503,32 @@ func (s *Shell) storeCard(id string, data *layout.CardData) error {
 }
 
 // newTabOf returns a new tab of the plugin, named by the counter of the project as newTab of plane.js names it.
-func (s *Shell) newTabOf(plugin string) layout.Tab {
-	return layout.Tab{ID: s.newTabID(), Plugin: plugin, Title: plugin}
+func (s *Shell) newTabOf(plugin string, from *layout.Tab) (layout.Tab, error) {
+	var directory *string
+	if from != nil {
+		if report := s.surfaces.reports[from.ID]; report != nil {
+			directory = optionalText(report.Directory)
+		}
+	}
+	origin, err := json.Marshal(map[string]*string{"directory": directory})
+	if err != nil {
+		return layout.Tab{}, err
+	}
+	return layout.Tab{ID: s.newTabID(), Plugin: plugin, Title: plugin, Rest: map[string]json.RawMessage{"origin": origin}}, nil
 }
 
 // paneCard refuses an id that is no card of the plane or that is a window sidebar.
 func (s *Shell) paneCard(id string) error {
 	if _, ok := s.plane.Card(id); !ok || isPlace(id) {
 		return fmt.Errorf("no card %s", id)
+	}
+	return nil
+}
+
+// layoutChangeable refuses a change of the layout while a card covers the plane (docs/spec/example-model.md#card-fullscreen).
+func (s *Shell) layoutChangeable(id string) error {
+	if s.fullscreen != "" {
+		return fmt.Errorf("card %s: the layout does not change while card %s is fullscreen; restore the arrangement first", id, s.fullscreen)
 	}
 	return nil
 }
@@ -517,6 +542,9 @@ func splitSide(side string) bool {
 // a plugin the new tab has the plugin of the active tab, as the split tools of the card head ask.
 func (s *Shell) splitCard(id, side, plugin string) (map[string]string, error) {
 	if err := s.paneCard(id); err != nil {
+		return nil, err
+	}
+	if err := s.layoutChangeable(id); err != nil {
 		return nil, err
 	}
 	if !splitSide(side) {
@@ -533,7 +561,10 @@ func (s *Shell) splitCard(id, side, plugin string) (map[string]string, error) {
 		}
 		plugin = active.Plugin
 	}
-	tab := s.newTabOf(plugin)
+	tab, err := s.newTabOf(plugin, data.ActiveTab())
+	if err != nil {
+		return nil, err
+	}
 	encoded, err := json.Marshal(tabData([]layout.Tab{tab}, tab.ID))
 	if err != nil {
 		return nil, err
@@ -550,6 +581,9 @@ func (s *Shell) splitCard(id, side, plugin string) (map[string]string, error) {
 // closeCard closes the card id with its tabs.
 func (s *Shell) closeCard(id string) error {
 	if err := s.paneCard(id); err != nil {
+		return err
+	}
+	if err := s.layoutChangeable(id); err != nil {
 		return err
 	}
 	var dropped []string
@@ -570,7 +604,12 @@ func (s *Shell) closeCard(id string) error {
 }
 
 // addTab adds a new tab to the card id and shows it.
-func (s *Shell) addTab(id, plugin string) (string, error) { return s.addTabWith(id, plugin, nil) }
+func (s *Shell) addTab(id, plugin string) (string, error) {
+	if err := s.layoutChangeable(id); err != nil {
+		return "", err
+	}
+	return s.addTabWith(id, plugin, nil)
+}
 
 // addTabWith is addTab for a tab with the members rest.
 func (s *Shell) addTabWith(id, plugin string, rest map[string]json.RawMessage) (string, error) {
@@ -585,8 +624,11 @@ func (s *Shell) addTabWith(id, plugin string, rest map[string]json.RawMessage) (
 		}
 		plugin = active.Plugin
 	}
-	tab := s.newTabOf(plugin)
-	tab.Rest = rest
+	tab, err := s.newTabOf(plugin, data.ActiveTab())
+	if err != nil {
+		return "", err
+	}
+	maps.Copy(tab.Rest, rest)
 	data.AppendTab(tab)
 	if err := s.storeCard(id, data); err != nil {
 		return "", err

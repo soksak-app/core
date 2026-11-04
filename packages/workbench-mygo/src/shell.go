@@ -40,8 +40,6 @@ type ShellOptions struct {
 	Element func(id string) (surface, key uintptr, ok bool)
 	// Installed is the document of the installed plugins.
 	Installed []byte
-	// SectionSeat draws what stands on the seat of a section. Without it the seat stays empty.
-	SectionSeat func(c *ui.Context, seat SidebarSeat)
 	// Tabs is what the file commands, the memory saver and the background sessions read. Without it they are not registered.
 	Tabs *TabPorts
 }
@@ -135,9 +133,15 @@ type Shell struct {
 	active   string
 	plane    *layout.Grid
 	focused  string
-	held     *heldDivider
-	library  libraryState
-	tabs     *shellTabs
+	// fullscreen is the card that covers the plane, or "" while the cards stand in their arrangement.
+	fullscreen string
+	// heads holds the fit of the head that the last frame drew for each card.
+	heads map[string]layout.HeadFit
+	// controlsWidth is the width that the window keeps for its own buttons.
+	controlsWidth float32
+	held          *heldDivider
+	library       libraryState
+	tabs          *shellTabs
 
 	settings       *SettingsStore
 	settingsWindow settingsWindow
@@ -177,7 +181,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 		return nil, fmt.Errorf("environment declaration: %w", err)
 	}
 	s := &Shell{options: options, metrics: read, palette: palette, registry: NewRegistry(options.Declared), calls: options.Calls,
-		grid: environment.Workspace.Grid, focus: environment.Workspace.Focus, browsing: true, library: newLibraryState(), icons: map[string]*ui.SVG{}}
+		grid: environment.Workspace.Grid, focus: environment.Workspace.Focus, browsing: true, library: newLibraryState(), icons: map[string]*ui.SVG{}, heads: map[string]layout.HeadFit{}}
 	s.events = NewEvents(EventsOptions{Calls: s.calls, Post: options.Post, Report: options.Report, Now: time.Now,
 		After: func(delay time.Duration, task func()) { time.AfterFunc(delay, task) }})
 	s.calls.Observe(s.events.Call)
@@ -206,7 +210,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 		return (*string)(nil)
 	})
 	s.sidebars, err = NewSidebars(SidebarsOptions{Declared: options.Declared, Registry: s.registry, Binder: s.binder,
-		Environment: options.Environment, Installed: options.Installed, Changed: s.settle, Seat: options.SectionSeat})
+		Environment: options.Environment, Installed: options.Installed, Changed: s.settle, Seat: s.drawSectionSeat})
 	if err != nil {
 		return nil, err
 	}
@@ -222,6 +226,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 		s.settings.Loaded(plugin.ID)
 	}
 	s.register()
+	s.registerStatuses()
 	if options.Tabs != nil {
 		s.connectTabs(*options.Tabs)
 	}
@@ -395,6 +400,7 @@ func (s *Shell) View(c *ui.Context) {
 	s.sidebars.Begin()
 	clear(s.surfaces.drawn)
 	clear(s.picker.drawn)
+	clear(s.heads)
 	width, height := c.Size()
 	theme := *c.Theme()
 	theme.Background = s.palette.Bg

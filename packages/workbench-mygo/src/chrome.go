@@ -25,6 +25,7 @@ func (s *Shell) barText(c *ui.Context, button ui.Element, label string, on bool)
 // drawChrome draws the chrome bar of the window.
 func (s *Shell) drawChrome(c *ui.Context, width float32) {
 	bar := c.TitleBar()
+	s.controlsWidth = bar.Left
 	browsing := s.browsing || s.opened() == nil
 	ui.Row(c).Size(width, s.metrics.chromeH).PaddingX(s.metrics.barTabGap).AlignItems(ui.Center).Gap(s.metrics.tabsGap).DragWindow().
 		Role(ui.RoleGroup).Label("core.chrome.bar").Children(func() {
