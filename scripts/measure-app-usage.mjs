@@ -28,19 +28,21 @@
 // --b3-out FILE writes the B3 record of a measurement of one application without an error to FILE as JSON:
 // {"measurements": {KEY: number}, "conditions": {refreshRate, backingScale, traceState, logPolicy, window: {width, height}}}. The
 // conditions are the refresh rate and the backing scale that every window reports in host.window, the trace state of the CPU interval,
-// the classes of the log policy and the content size of the window of the state, read before the first CPU reading. The keys:
-//   hostCpu, applicationCpu, sidecarCpu                   CPU seconds over the interval of the host, the application without its
-//                                                         sidecars, and the sidecars
-//   hostFootprint, applicationFootprint, sidecarFootprint  footprints in KB (1,024 bytes) read before the interval
-//   applicationFootprintAfter                             the application footprint in KB after the pointer move (--step pointer)
-//   applicationPeakFootprint                              the sum of the peak footprints in KB after the last CPU reading
-//   webkitProcesses, webContentProcesses                  the WebKit processes of the application, and its WebContent processes
-//                                                         (page, document and WebContent service rows)
-//   frames, commandBuffers                                the change of frames and commandBuffers of host.window over the interval,
-//                                                         summed over the windows; absent on a host that reports them null
-//   errorLines                                            the error lines of the layout fault (S12)
-//   hitTestP90                                            the 90th percentile in ms of the hitTest: step with its following step
-//                                                         (--step pointer on a window without a main page)
+// the classes of the log policy and the content size of the window of the state, read before the first CPU reading. The keys, which
+// B3_MEASUREMENTS lists, end in their unit:
+//   hostCpuSeconds, applicationCpuSeconds,       CPU seconds over the interval of the host, the application without its sidecars,
+//   sidecarCpuSeconds                            and the sidecars
+//   hostFootprintKb, applicationFootprintKb,     footprints in KB (1,024 bytes) read before the interval
+//   sidecarFootprintKb
+//   applicationFootprintAfterKb                  the application footprint in KB after the pointer move (--step pointer)
+//   applicationPeakFootprintKb                   the sum of the peak footprints in KB after the last CPU reading
+//   webKitProcesses, webContentProcesses         the WebKit processes of the application, and its WebContent processes (page,
+//                                                document and WebContent service rows)
+//   frames, commandBuffers                       the change of frames and commandBuffers of host.window over the interval, summed
+//                                                over the windows; absent on a host that reports them null
+//   errorLines                                   the error lines of the layout fault (S12)
+//   hitTestP90Ms                                 the 90th percentile in ms of the hitTest: step with its following step (--step
+//                                                pointer on a window without a main page)
 //
 //   node scripts/measure-app-usage.mjs --sok PATH --config-dir DIR [--config-dir DIR ...] --trace 0|1 [--interval SECONDS]
 //     [--state S0|S0b|S1|S9|S11|S12|S14|S15] [--idle] [--step pointer] [--b3-out FILE] [--json]
@@ -623,6 +625,13 @@ function formatReport({ options, context, measurement, gesture, faultLines }) {
   return sections.join("\n\n");
 }
 
+/** The keys of the measurements of a B3 record of make app-usage; a record holds a subset of them (the header states when each is present). */
+export const B3_MEASUREMENTS = Object.freeze([
+  "hostCpuSeconds", "applicationCpuSeconds", "sidecarCpuSeconds", "hostFootprintKb", "applicationFootprintKb", "sidecarFootprintKb",
+  "applicationFootprintAfterKb", "applicationPeakFootprintKb", "webKitProcesses", "webContentProcesses", "frames", "commandBuffers",
+  "errorLines", "hitTestP90Ms",
+]);
+
 /** The bytes of a KB, the unit of the footprints of a B3 record. */
 const KB = 1024;
 
@@ -658,23 +667,23 @@ export function usageMeasurements({ app, marks, faultLines, gesture }) {
   if (host === undefined) throw new Error(`${app.configDir} has no host row`);
   const { application, sidecars } = app.totals;
   const measured = {
-    hostCpu: host.cpuSeconds,
-    applicationCpu: application.cpuSeconds,
-    sidecarCpu: sidecars.cpuSeconds,
-    hostFootprint: host.bytes / KB,
-    applicationFootprint: application.bytes / KB,
-    sidecarFootprint: sidecars.bytes / KB,
-    applicationPeakFootprint: application.peakBytes / KB,
-    webkitProcesses: app.rows.filter((row) => webContentRow(row) || row.role.startsWith("webkit ")).length,
+    hostCpuSeconds: host.cpuSeconds,
+    applicationCpuSeconds: application.cpuSeconds,
+    sidecarCpuSeconds: sidecars.cpuSeconds,
+    hostFootprintKb: host.bytes / KB,
+    applicationFootprintKb: application.bytes / KB,
+    sidecarFootprintKb: sidecars.bytes / KB,
+    applicationPeakFootprintKb: application.peakBytes / KB,
+    webKitProcesses: app.rows.filter((row) => webContentRow(row) || row.role.startsWith("webkit ")).length,
     webContentProcesses: app.rows.filter(webContentRow).length,
   };
-  if ("bytesAfter" in application) measured.applicationFootprintAfter = application.bytesAfter / KB;
+  if ("bytesAfter" in application) measured.applicationFootprintAfterKb = application.bytesAfter / KB;
   for (const name of ["frames", "commandBuffers"]) {
     const change = counterChange(name, marks);
     if (change !== undefined) measured[name] = change;
   }
   if (faultLines !== undefined) measured.errorLines = faultLines;
-  if (gesture) measured.hitTestP90 = gesture.p90Ms;
+  if (gesture) measured.hitTestP90Ms = gesture.p90Ms;
   return measured;
 }
 
