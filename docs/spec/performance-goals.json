@@ -5,7 +5,17 @@
     "refreshRate": 120,
     "backingScale": 2,
     "swapUseBelow": 0.5,
-    "fseventsdCoreBelow": 0.1
+    "fseventsdCoreBelow": 0.1,
+    "window": {
+      "width": 1200,
+      "height": 760
+    },
+    "scenarioWindows": {
+      "S2": {
+        "width": 760,
+        "height": 614
+      }
+    }
   },
   "values": [
     {
@@ -13,6 +23,7 @@
       "goal": "G1",
       "scenario": "S0",
       "target": "make app-usage STATE=S0",
+      "measurement": "webKitProcesses",
       "unit": "count",
       "over": "each",
       "bound": {
@@ -24,6 +35,7 @@
       "goal": "G1",
       "scenario": "S0b",
       "target": "make app-usage STATE=S0b",
+      "measurement": "webContentProcesses",
       "unit": "count",
       "over": "each",
       "bound": {
@@ -35,6 +47,7 @@
       "goal": "G2",
       "scenario": "S0",
       "target": "make app-usage STATE=S0 IDLE=1 INTERVAL=240",
+      "measurement": "frames",
       "unit": "count",
       "over": "each",
       "bound": {
@@ -46,6 +59,7 @@
       "goal": "G2",
       "scenario": "S0",
       "target": "make app-usage STATE=S0 IDLE=1 INTERVAL=240",
+      "measurement": "commandBuffers",
       "unit": "count",
       "over": "each",
       "bound": {
@@ -57,6 +71,7 @@
       "goal": "G2",
       "scenario": "S0",
       "target": "make app-usage STATE=S0 IDLE=1 INTERVAL=240",
+      "measurement": "hostCpuSeconds",
       "unit": "s",
       "over": "median",
       "bound": {
@@ -69,6 +84,7 @@
       "goal": "G2",
       "scenario": "S1",
       "target": "make app-usage STATE=S1 IDLE=1 INTERVAL=240",
+      "measurement": "frames",
       "unit": "count",
       "over": "each",
       "bound": {
@@ -80,6 +96,7 @@
       "goal": "G2",
       "scenario": "S1",
       "target": "make app-usage STATE=S1 IDLE=1 INTERVAL=240",
+      "measurement": "commandBuffers",
       "unit": "count",
       "over": "each",
       "bound": {
@@ -91,6 +108,7 @@
       "goal": "G2",
       "scenario": "S1",
       "target": "make app-usage STATE=S1 IDLE=1 INTERVAL=240",
+      "measurement": "hostCpuSeconds",
       "unit": "s",
       "over": "median",
       "bound": {
@@ -103,6 +121,7 @@
       "goal": "G2",
       "scenario": "S9",
       "target": "make app-usage STATE=S9 IDLE=1 INTERVAL=240",
+      "measurement": "frames",
       "unit": "count",
       "over": "each",
       "bound": {
@@ -114,6 +133,7 @@
       "goal": "G2",
       "scenario": "S9",
       "target": "make app-usage STATE=S9 IDLE=1 INTERVAL=240",
+      "measurement": "commandBuffers",
       "unit": "count",
       "over": "each",
       "bound": {
@@ -125,6 +145,7 @@
       "goal": "G2",
       "scenario": "S9",
       "target": "make app-usage STATE=S9 IDLE=1 INTERVAL=240",
+      "measurement": "hostCpuSeconds",
       "unit": "s",
       "over": "median",
       "bound": {
@@ -137,6 +158,7 @@
       "goal": "G2",
       "scenario": "S12",
       "target": "make app-usage STATE=S12 IDLE=1 INTERVAL=240",
+      "measurement": "frames",
       "unit": "count",
       "over": "each",
       "bound": {
@@ -148,6 +170,7 @@
       "goal": "G2",
       "scenario": "S12",
       "target": "make app-usage STATE=S12 IDLE=1 INTERVAL=240",
+      "measurement": "commandBuffers",
       "unit": "count",
       "over": "each",
       "bound": {
@@ -159,6 +182,7 @@
       "goal": "G2",
       "scenario": "S12",
       "target": "make app-usage STATE=S12 IDLE=1 INTERVAL=240",
+      "measurement": "hostCpuSeconds",
       "unit": "s",
       "over": "median",
       "bound": {
@@ -171,6 +195,7 @@
       "goal": "G2",
       "scenario": "S0",
       "target": "make app-usage STATE=S0 STEP=pointer",
+      "measurement": "applicationFootprintKb",
       "unit": "KB",
       "over": "median"
     },
@@ -179,6 +204,7 @@
       "goal": "G2",
       "scenario": "S0",
       "target": "make app-usage STATE=S0 STEP=pointer",
+      "measurement": "applicationFootprintAfterKb",
       "unit": "KB",
       "over": "median",
       "against": "G2-S0-footprint-before-pointer"
@@ -188,6 +214,7 @@
       "goal": "G2",
       "scenario": "S1",
       "target": "make app-usage STATE=S1 STEP=pointer",
+      "measurement": "applicationFootprintKb",
       "unit": "KB",
       "over": "median"
     },
@@ -196,6 +223,7 @@
       "goal": "G2",
       "scenario": "S1",
       "target": "make app-usage STATE=S1 STEP=pointer",
+      "measurement": "applicationFootprintAfterKb",
       "unit": "KB",
       "over": "median",
       "against": "G2-S1-footprint-before-pointer"
@@ -205,6 +233,7 @@
       "goal": "G2",
       "scenario": "S12",
       "target": "make app-usage STATE=S12",
+      "measurement": "errorLines",
       "unit": "count",
       "over": "each",
       "bound": {
@@ -216,6 +245,7 @@
       "goal": "G3",
       "scenario": "S0",
       "target": "make app-usage STATE=S0",
+      "measurement": "applicationFootprintKb",
       "unit": "KB",
       "over": "median",
       "relative": true
@@ -225,6 +255,7 @@
       "goal": "G3",
       "scenario": "S0b",
       "target": "make app-usage STATE=S0b",
+      "measurement": "applicationFootprintKb",
       "unit": "KB",
       "over": "median",
       "relative": true
@@ -234,6 +265,7 @@
       "goal": "G3",
       "scenario": "S1",
       "target": "make app-usage STATE=S1",
+      "measurement": "applicationFootprintKb",
       "unit": "KB",
       "over": "median",
       "relative": true
@@ -243,6 +275,7 @@
       "goal": "G3",
       "scenario": "S1",
       "target": "make app-usage STATE=S1",
+      "measurement": "hostFootprintKb",
       "unit": "KB",
       "over": "median"
     },
@@ -250,7 +283,8 @@
       "id": "G3-S5-peak-before-drag",
       "goal": "G3",
       "scenario": "S5",
-      "target": "make e2e-benchmark-view-drag",
+      "target": "make e2e-benchmark-view-drag TRACE=0",
+      "measurement": "peakBeforeDragKb",
       "unit": "KB",
       "over": "median",
       "relative": true
@@ -259,7 +293,8 @@
       "id": "G3-S5-peak-after-drag",
       "goal": "G3",
       "scenario": "S5",
-      "target": "make e2e-benchmark-view-drag",
+      "target": "make e2e-benchmark-view-drag TRACE=0",
+      "measurement": "peakAfterDragKb",
       "unit": "KB",
       "over": "median",
       "relative": true
@@ -268,7 +303,8 @@
       "id": "G3-S13-peak-before-drag",
       "goal": "G3",
       "scenario": "S13",
-      "target": "make e2e-benchmark-view-drag ACCESSIBILITY=1",
+      "target": "make e2e-benchmark-view-drag ACCESSIBILITY=1 TRACE=0",
+      "measurement": "peakBeforeDragKb",
       "unit": "KB",
       "over": "median",
       "relative": true
@@ -277,7 +313,8 @@
       "id": "G3-S13-peak-after-drag",
       "goal": "G3",
       "scenario": "S13",
-      "target": "make e2e-benchmark-view-drag ACCESSIBILITY=1",
+      "target": "make e2e-benchmark-view-drag ACCESSIBILITY=1 TRACE=0",
+      "measurement": "peakAfterDragKb",
       "unit": "KB",
       "over": "median",
       "relative": true
@@ -287,6 +324,7 @@
       "goal": "G3",
       "scenario": "S11",
       "target": "make app-usage STATE=S11",
+      "measurement": "applicationFootprintKb",
       "unit": "KB",
       "over": "median",
       "relative": true
@@ -296,6 +334,7 @@
       "goal": "G3",
       "scenario": "S15",
       "target": "make app-usage STATE=S15",
+      "measurement": "applicationFootprintKb",
       "unit": "KB",
       "over": "median",
       "relative": true
@@ -305,6 +344,7 @@
       "goal": "G3",
       "scenario": "S14",
       "target": "make app-usage STATE=S14",
+      "measurement": "applicationFootprintKb",
       "unit": "KB",
       "over": "median",
       "relative": true
@@ -314,6 +354,7 @@
       "goal": "G3",
       "scenario": "S3",
       "target": "make object-counts BUILD=release REPETITIONS=30",
+      "measurement": "changedCounts",
       "unit": "count",
       "over": "each",
       "bound": {
@@ -325,6 +366,7 @@
       "goal": "G3",
       "scenario": "S3",
       "target": "make object-counts BUILD=release REPETITIONS=30",
+      "measurement": "growingFigures",
       "unit": "count",
       "over": "each",
       "bound": {
@@ -336,6 +378,7 @@
       "goal": "G3",
       "scenario": "S4",
       "target": "make host-allocations MINUTES=60",
+      "measurement": "hostFootprintKb",
       "unit": "KB",
       "over": "median",
       "against": "G3-S1-host-footprint"
@@ -345,6 +388,7 @@
       "goal": "G3",
       "scenario": "S10",
       "target": "make e2e-benchmark-split-load",
+      "measurement": "hostGrowthKb",
       "unit": "KB",
       "over": "median",
       "bound": {
@@ -356,7 +400,8 @@
       "id": "G4-S5-view-drag",
       "goal": "G4",
       "scenario": "S5",
-      "target": "make e2e-benchmark-view-drag",
+      "target": "make e2e-benchmark-view-drag TRACE=0",
+      "measurement": "verdict",
       "unit": "verdict",
       "over": "each",
       "bound": {
@@ -367,7 +412,8 @@
       "id": "G4-S5-resize-catch-up",
       "goal": "G4",
       "scenario": "S5",
-      "target": "make e2e-benchmark-resize-catch-up",
+      "target": "make e2e-benchmark-resize-catch-up TRACE=captured",
+      "measurement": "verdict",
       "unit": "verdict",
       "over": "each",
       "bound": {
@@ -379,6 +425,7 @@
       "goal": "G4",
       "scenario": "S7",
       "target": "e2e/benchmark/browser-view.test.mjs",
+      "measurement": "verdict",
       "unit": "verdict",
       "over": "each",
       "bound": {
@@ -390,6 +437,7 @@
       "goal": "G4",
       "scenario": "S7",
       "target": "e2e/benchmark/editor-view.test.mjs",
+      "measurement": "verdict",
       "unit": "verdict",
       "over": "each",
       "bound": {
@@ -401,6 +449,7 @@
       "goal": "G4",
       "scenario": "S7",
       "target": "e2e/benchmark/hwp-view.test.mjs",
+      "measurement": "verdict",
       "unit": "verdict",
       "over": "each",
       "bound": {
@@ -412,6 +461,7 @@
       "goal": "G4",
       "scenario": "S7",
       "target": "e2e/benchmark/terminal-view.test.mjs",
+      "measurement": "verdict",
       "unit": "verdict",
       "over": "each",
       "bound": {
@@ -423,6 +473,7 @@
       "goal": "G4",
       "scenario": "S7",
       "target": "e2e/benchmark/term-view.test.mjs",
+      "measurement": "verdict",
       "unit": "verdict",
       "over": "each",
       "bound": {
@@ -434,6 +485,7 @@
       "goal": "G4",
       "scenario": "S7",
       "target": "e2e/benchmark/section-view.test.mjs",
+      "measurement": "verdict",
       "unit": "verdict",
       "over": "each",
       "bound": {
@@ -445,6 +497,7 @@
       "goal": "G4",
       "scenario": "S7",
       "target": "e2e/benchmark/editor-footprint.test.mjs",
+      "measurement": "verdict",
       "unit": "verdict",
       "over": "each",
       "bound": {
@@ -456,6 +509,7 @@
       "goal": "G5",
       "scenario": "S2",
       "target": "make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=1",
+      "measurement": "applicationCpuPerFrameMs",
       "unit": "ms",
       "over": "median",
       "bound": {
@@ -468,6 +522,7 @@
       "goal": "G5",
       "scenario": "S2",
       "target": "make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=20",
+      "measurement": "applicationCpuPerFrameMs",
       "unit": "ms",
       "over": "median",
       "bound": {
@@ -480,6 +535,7 @@
       "goal": "G5",
       "scenario": "S2",
       "target": "make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=1",
+      "measurement": "framesPerSecond",
       "unit": "frames/s",
       "over": "median",
       "bound": {
@@ -491,6 +547,7 @@
       "goal": "G5",
       "scenario": "S2",
       "target": "make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=20",
+      "measurement": "framesPerSecond",
       "unit": "frames/s",
       "over": "median",
       "bound": {
@@ -502,6 +559,7 @@
       "goal": "G6",
       "scenario": "S6",
       "target": "make e2e-benchmark-idle-tab",
+      "measurement": "idleTabCostKb",
       "unit": "KB",
       "over": "median",
       "bound": {
@@ -514,6 +572,7 @@
       "goal": "G6",
       "scenario": "S6",
       "target": "make e2e-benchmark-idle-tab",
+      "measurement": "documentPartKb",
       "unit": "KB",
       "over": "median",
       "relative": true
@@ -523,6 +582,7 @@
       "goal": "G7",
       "scenario": "S8",
       "target": "e2e/input-latency.test.mjs",
+      "measurement": "terminalMedianMs",
       "unit": "ms",
       "over": "median",
       "relative": true
@@ -532,6 +592,7 @@
       "goal": "G7",
       "scenario": "S8",
       "target": "e2e/input-latency.test.mjs",
+      "measurement": "terminalP90Ms",
       "unit": "ms",
       "over": "median",
       "relative": true
@@ -541,6 +602,7 @@
       "goal": "G7",
       "scenario": "S8",
       "target": "e2e/input-latency.test.mjs",
+      "measurement": "termMedianMs",
       "unit": "ms",
       "over": "median",
       "relative": true
@@ -550,6 +612,7 @@
       "goal": "G7",
       "scenario": "S8",
       "target": "e2e/input-latency.test.mjs",
+      "measurement": "termP90Ms",
       "unit": "ms",
       "over": "median",
       "relative": true
@@ -558,7 +621,8 @@
       "id": "G8-S5-drag-cpu",
       "goal": "G8",
       "scenario": "S5",
-      "target": "make e2e-benchmark-view-drag",
+      "target": "make e2e-benchmark-view-drag TRACE=0",
+      "measurement": "dragCpuSeconds",
       "unit": "s",
       "over": "median",
       "relative": true
@@ -567,7 +631,8 @@
       "id": "G8-S13-drag-cpu",
       "goal": "G8",
       "scenario": "S13",
-      "target": "make e2e-benchmark-view-drag ACCESSIBILITY=1",
+      "target": "make e2e-benchmark-view-drag ACCESSIBILITY=1 TRACE=0",
+      "measurement": "dragCpuSeconds",
       "unit": "s",
       "over": "median",
       "relative": true
@@ -577,6 +642,7 @@
       "goal": "G8",
       "scenario": "S1",
       "target": "make app-usage STATE=S1 STEP=pointer",
+      "measurement": "applicationCpuSeconds",
       "unit": "s",
       "over": "median",
       "relative": true
@@ -585,7 +651,8 @@
       "id": "G8-S5-drag-frame-p90",
       "goal": "G8",
       "scenario": "S5",
-      "target": "make e2e-benchmark-view-drag",
+      "target": "make e2e-benchmark-view-drag TRACE=frame-records",
+      "measurement": "dragFrameP90Ms",
       "unit": "ms",
       "over": "median",
       "bound": {
@@ -596,7 +663,8 @@
       "id": "G8-S5-drag-step-p90",
       "goal": "G8",
       "scenario": "S5",
-      "target": "make e2e-benchmark-view-drag",
+      "target": "make e2e-benchmark-view-drag TRACE=frame-records",
+      "measurement": "dragStepP90Ms",
       "unit": "ms",
       "over": "median",
       "bound": {
@@ -607,7 +675,8 @@
       "id": "G8-S13-drag-frame-p90",
       "goal": "G8",
       "scenario": "S13",
-      "target": "make e2e-benchmark-view-drag ACCESSIBILITY=1",
+      "target": "make e2e-benchmark-view-drag ACCESSIBILITY=1 TRACE=frame-records",
+      "measurement": "dragFrameP90Ms",
       "unit": "ms",
       "over": "median",
       "bound": {
@@ -618,7 +687,8 @@
       "id": "G8-S13-drag-step-p90",
       "goal": "G8",
       "scenario": "S13",
-      "target": "make e2e-benchmark-view-drag ACCESSIBILITY=1",
+      "target": "make e2e-benchmark-view-drag ACCESSIBILITY=1 TRACE=frame-records",
+      "measurement": "dragStepP90Ms",
       "unit": "ms",
       "over": "median",
       "bound": {
@@ -629,7 +699,8 @@
       "id": "G8-S16-drag-frame-p90",
       "goal": "G8",
       "scenario": "S16",
-      "target": "make e2e-benchmark-view-drag GC_LOOP=1",
+      "target": "make e2e-benchmark-view-drag GC_LOOP=1 TRACE=frame-records",
+      "measurement": "dragFrameP90Ms",
       "unit": "ms",
       "over": "median",
       "bound": {
@@ -640,7 +711,8 @@
       "id": "G8-S16-drag-step-p90",
       "goal": "G8",
       "scenario": "S16",
-      "target": "make e2e-benchmark-view-drag GC_LOOP=1",
+      "target": "make e2e-benchmark-view-drag GC_LOOP=1 TRACE=frame-records",
+      "measurement": "dragStepP90Ms",
       "unit": "ms",
       "over": "median",
       "bound": {
@@ -651,7 +723,8 @@
       "id": "G8-S5-drag-first-frame",
       "goal": "G8",
       "scenario": "S5",
-      "target": "make e2e-benchmark-view-drag",
+      "target": "make e2e-benchmark-view-drag TRACE=frame-records",
+      "measurement": "dragFirstFrameMs",
       "unit": "ms",
       "over": "median",
       "bound": {
@@ -662,7 +735,8 @@
       "id": "G8-S13-drag-first-frame",
       "goal": "G8",
       "scenario": "S13",
-      "target": "make e2e-benchmark-view-drag ACCESSIBILITY=1",
+      "target": "make e2e-benchmark-view-drag ACCESSIBILITY=1 TRACE=frame-records",
+      "measurement": "dragFirstFrameMs",
       "unit": "ms",
       "over": "median",
       "bound": {
@@ -673,7 +747,8 @@
       "id": "G8-S5-maximise-frame-p90",
       "goal": "G8",
       "scenario": "S5",
-      "target": "make e2e-benchmark-resize-catch-up",
+      "target": "make e2e-benchmark-resize-catch-up TRACE=frame-records",
+      "measurement": "maximiseFrameP90Ms",
       "unit": "ms",
       "over": "median",
       "bound": {
@@ -684,7 +759,8 @@
       "id": "G8-S5-maximise-step-p90",
       "goal": "G8",
       "scenario": "S5",
-      "target": "make e2e-benchmark-resize-catch-up",
+      "target": "make e2e-benchmark-resize-catch-up TRACE=frame-records",
+      "measurement": "maximiseStepP90Ms",
       "unit": "ms",
       "over": "median",
       "bound": {
@@ -695,7 +771,8 @@
       "id": "G8-S1-hit-test-p90",
       "goal": "G8",
       "scenario": "S1",
-      "target": "make app-usage STATE=S1 STEP=pointer",
+      "target": "make app-usage STATE=S1 STEP=pointer TRACE=frame-records",
+      "measurement": "hitTestP90Ms",
       "unit": "ms",
       "over": "median",
       "bound": {

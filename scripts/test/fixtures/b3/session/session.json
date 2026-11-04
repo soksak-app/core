@@ -1,0 +1,75 @@
+{
+  "schema": 1,
+  "phase": "final",
+  "runs": 3,
+  "applications": [
+    {
+      "name": "mygo",
+      "host": "mygo",
+      "build": "current"
+    },
+    {
+      "name": "wailsv3",
+      "host": "wailsv3",
+      "build": "current"
+    },
+    {
+      "name": "tauriv2",
+      "host": "tauriv2",
+      "build": "current"
+    },
+    {
+      "name": "baseline-wailsv3",
+      "host": "wailsv3",
+      "build": "baseline"
+    },
+    {
+      "name": "baseline-tauriv2",
+      "host": "tauriv2",
+      "build": "baseline"
+    }
+  ],
+  "builds": {
+    "mygo": {
+      "revision": "0000000000000000000000000000000000000000",
+      "executable": "1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "wailsv3": {
+      "revision": "0000000000000000000000000000000000000000",
+      "executable": "1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "tauriv2": {
+      "revision": "0000000000000000000000000000000000000000",
+      "executable": "1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "baseline-wailsv3": {
+      "revision": "0000000000000000000000000000000000000000",
+      "executable": "1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "baseline-tauriv2": {
+      "revision": "0000000000000000000000000000000000000000",
+      "executable": "1111111111111111111111111111111111111111111111111111111111111111"
+    }
+  },
+  "toolchains": {
+    "go": "go1.27.3",
+    "rust": "1.91.0"
+  },
+  "baseline": {
+    "heads": [
+      "0000000000000000000000000000000000000000"
+    ],
+    "sidecars": [],
+    "plugins": []
+  },
+  "sidecars": {
+    "sidecars": []
+  },
+  "installed": {
+    "mygo": [],
+    "wailsv3": [],
+    "tauriv2": [],
+    "baseline-wailsv3": [],
+    "baseline-tauriv2": []
+  }
+}

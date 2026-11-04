@@ -2,7 +2,7 @@
 // with `e2e` runs end-to-end checks, and every other target runs unit tests only. A workflow runs no `e2e` target.
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, posix } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -56,13 +56,43 @@ test("a native unit test records no window of the screen", { timeout: 1000 }, ()
   assert.ok(end.includes("capture_resize_test"), `NATIVE_E2E_TESTS is read as ${end.join(", ")}`);
 });
 
+/**
+ * Whether a script of the checkout starts an application through the `start` step of runPlan: it imports runPlan from
+ * scripts/e2e-run.mjs and declares a step of the kind `start`.
+ */
+function startsApplications(path, readScript) {
+  const source = readScript(path);
+  const folder = posix.dirname(path);
+  const imports = [...source.matchAll(/import\s*\{([^}]*)\}\s*from\s*["']([^"']+)["']/g)]
+    .some(([, names, from]) => /\brunPlan\b/.test(names) && posix.normalize(posix.join(folder, from)) === "scripts/e2e-run.mjs");
+  return imports && /\bkind:\s*["']start["']/.test(source);
+}
+
+/**
+ * The targets of a root Makefile that run end-to-end checks without the e2e prefix: a recipe that runs a window-check script, the
+ * native end-to-end target or scripts/e2e-run.mjs, or that runs a script that starts an application through the `start` step of
+ * runPlan. `readScript(path)` reads a file of the checkout.
+ */
+function misnamedRootTargets(makefile, readScript) {
+  const endToEnd = (recipe) => /run verify|--script verify|make -C native\/darwin e2e|e2e-run\.mjs/.test(recipe)
+    || [...recipe.matchAll(/\bnode\s+(scripts\/[\w./-]+\.mjs)\b/g)].some(([, path]) => startsApplications(path, readScript));
+  return rules(makefile).filter((rule) => endToEnd(rule.recipe) && !rule.target.startsWith("e2e")).map((rule) => rule.target);
+}
+
+test("a root target that starts an application through the start step of runPlan without the e2e prefix is reported", { timeout: 1000 }, () => {
+  const makefile = "b3:\n\t@node scripts/fixture-b3.mjs --runs 1\n\ne2e-fixture:\n\t@node scripts/fixture-b3.mjs\n\nbuilds:\n\t@node scripts/fixture-builds.mjs\n";
+  const scripts = {
+    "scripts/fixture-b3.mjs": "import { runPlan } from './e2e-run.mjs';\nawait runPlan([{ name: 'start app', phase: 'prepare', kind: 'start', app: 'app', argv: [] }], { write: console.log });\n",
+    "scripts/fixture-builds.mjs": "import { runPlan } from './e2e-run.mjs';\nawait runPlan([{ name: 'build', phase: 'prepare', kind: 'run', argv: ['make'] }], { write: console.log });\n",
+  };
+  assert.deepEqual(misnamedRootTargets(makefile, (path) => scripts[path]), ["b3"]);
+});
+
 test("the root make targets are the only entry points of the window checks", { timeout: 1000 }, () => {
   const root = rules(read("Makefile"));
-  for (const target of ["e2e", "e2e-activation", "e2e-real", "e2e-person"]) assert.ok(root.some((rule) => rule.target === target), `the Makefile has no target ${target}`);
+  for (const target of ["e2e", "e2e-activation", "e2e-real", "e2e-person", "e2e-b3"]) assert.ok(root.some((rule) => rule.target === target), `the Makefile has no target ${target}`);
   assert.match(root.find((rule) => rule.target === "e2e").recipe, /node scripts\/e2e-run\.mjs/, "make e2e does not run scripts/e2e-run.mjs");
-  const misnamed = root.filter((rule) => /run verify|--script verify|make -C native\/darwin e2e|e2e-run\.mjs/.test(rule.recipe) && !rule.target.startsWith("e2e"))
-    .map((rule) => rule.target);
-  assert.deepEqual(misnamed, [], "a root target runs end-to-end checks without the e2e prefix");
+  assert.deepEqual(misnamedRootTargets(read("Makefile"), read), [], "a root target runs end-to-end checks without the e2e prefix");
   const scripts = Object.keys(JSON.parse(read("package.json")).scripts ?? {}).filter((name) => name.startsWith("verify"));
   assert.deepEqual(scripts, [], "the root package declares a window-check entry point");
 });

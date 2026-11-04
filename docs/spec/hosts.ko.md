@@ -314,7 +314,7 @@ macOS 애플리케이션 bundle build target 네 개는 `Contents`를 교체하�
 
 ## Performance goals
 
-목표 G1부터 G8까지는 Wails host와 Tauri host 옆에서 mygo host가 드는 비용을 정한다. three-host benchmark가 그 scenario S0부터 S16까지에서 이 목표를 측정하고, `make b3-judge`가 그 각 session을 판정한다. other host는 mygo host의 revision에서 build한 Wails host와 Tauri host이고, baseline host는 benchmark가 정하는 baseline revision에서 build한 Wails host와 Tauri host이다. `docs/spec/performance-goals.json`이 목표의 수치 한계를 가진다; 이 section의 두 표는 그 file의 사본이며 `scripts/test/performance-goals.test.mjs`가 둘을 같게 유지하고, idle tab benchmark와 split load benchmark는 `IDLE_TAB_BOUND_KB`와 `SPLIT_LOAD_GROWTH_BOUND_KB`를 그 file에서 읽는다. [plugin process](plugin-processes.ko.md#통과값)나 [native surface](native-surfaces.ko.md#인수-기준)가 정하는 값은 file에 복사하지 않는다: 그 값을 가진 benchmark가 판정하고, judge는 그 benchmark의 verdict만 읽는다.
+목표 G1부터 G8까지는 Wails host와 Tauri host 옆에서 mygo host가 드는 비용을 정한다. [three-host benchmark](../operations/examples.ko.md#three-host-benchmark)가 그 scenario S0부터 S16까지에서 이 목표를 측정하고, `make b3-judge`가 그 각 session을 판정한다. other host는 mygo host의 revision에서 build한 Wails host와 Tauri host이고, baseline host는 benchmark가 정하는 baseline revision에서 build한 Wails host와 Tauri host이다. `docs/spec/performance-goals.json`이 목표의 수치 한계를 가진다; 이 section의 두 표는 그 file의 사본이며 `scripts/test/performance-goals.test.mjs`가 둘을 같게 유지하고, idle tab benchmark와 split load benchmark는 `IDLE_TAB_BOUND_KB`와 `SPLIT_LOAD_GROWTH_BOUND_KB`를 그 file에서 읽는다. [plugin process](plugin-processes.ko.md#통과값)나 [native surface](native-surfaces.ko.md#인수-기준)가 정하는 값은 file에 복사하지 않는다: 그 값을 가진 benchmark가 판정하고, judge는 그 benchmark의 verdict만 읽는다.
 
 judge는 다음 규칙을 적용한다:
 
@@ -332,78 +332,80 @@ judge는 다음 규칙을 적용한다:
 | 각 window의 backing scale | 2 |
 | run 시작 시 swap 사용량 | swap 전체의 0.5 미만 |
 | run 시작 시 `fseventsd`의 CPU 비율 | core 하나의 0.1 미만 |
+| 각 scenario의 window content 크기 | 1200×760 point |
+| S2의 window content 크기 | 760×614 point |
 
-목표의 값과, 각 값을 측정하는 scenario와 target:
+목표의 값과, 각 값을 측정하는 scenario와 target, 그리고 그 target의 출력에서 값을 그 단위로 담는 key인 measurement:
 
-| 값 | 목표 | scenario | target | 단위 | 판정 대상 | 한계 | 비교 대상 |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `G1-S0-webkit-processes` | G1 | S0 | `make app-usage STATE=S0` | count | 각 run | 정확히 0 | — |
-| `G1-S0b-webcontent-processes` | G1 | S0b | `make app-usage STATE=S0b` | count | 각 run | 정확히 0 | — |
-| `G2-S0-frames` | G2 | S0 | `make app-usage STATE=S0 IDLE=1 INTERVAL=240` | count | 각 run | 정확히 0 | — |
-| `G2-S0-command-buffers` | G2 | S0 | `make app-usage STATE=S0 IDLE=1 INTERVAL=240` | count | 각 run | 정확히 0 | — |
-| `G2-S0-host-cpu` | G2 | S0 | `make app-usage STATE=S0 IDLE=1 INTERVAL=240` | s | median | 0.12 s 이하 | 각 other host와 baseline host |
-| `G2-S1-frames` | G2 | S1 | `make app-usage STATE=S1 IDLE=1 INTERVAL=240` | count | 각 run | 정확히 0 | — |
-| `G2-S1-command-buffers` | G2 | S1 | `make app-usage STATE=S1 IDLE=1 INTERVAL=240` | count | 각 run | 정확히 0 | — |
-| `G2-S1-host-cpu` | G2 | S1 | `make app-usage STATE=S1 IDLE=1 INTERVAL=240` | s | median | 0.12 s 이하 | 각 other host와 baseline host |
-| `G2-S9-frames` | G2 | S9 | `make app-usage STATE=S9 IDLE=1 INTERVAL=240` | count | 각 run | 정확히 0 | — |
-| `G2-S9-command-buffers` | G2 | S9 | `make app-usage STATE=S9 IDLE=1 INTERVAL=240` | count | 각 run | 정확히 0 | — |
-| `G2-S9-host-cpu` | G2 | S9 | `make app-usage STATE=S9 IDLE=1 INTERVAL=240` | s | median | 0.12 s 이하 | 각 other host와 baseline host |
-| `G2-S12-frames` | G2 | S12 | `make app-usage STATE=S12 IDLE=1 INTERVAL=240` | count | 각 run | 정확히 0 | — |
-| `G2-S12-command-buffers` | G2 | S12 | `make app-usage STATE=S12 IDLE=1 INTERVAL=240` | count | 각 run | 정확히 0 | — |
-| `G2-S12-host-cpu` | G2 | S12 | `make app-usage STATE=S12 IDLE=1 INTERVAL=240` | s | median | 0.12 s 이하 | 각 other host와 baseline host |
-| `G2-S0-footprint-before-pointer` | G2 | S0 | `make app-usage STATE=S0 STEP=pointer` | KB | median | — | — |
-| `G2-S0-footprint-after-pointer` | G2 | S0 | `make app-usage STATE=S0 STEP=pointer` | KB | median | — | `G2-S0-footprint-before-pointer` |
-| `G2-S1-footprint-before-pointer` | G2 | S1 | `make app-usage STATE=S1 STEP=pointer` | KB | median | — | — |
-| `G2-S1-footprint-after-pointer` | G2 | S1 | `make app-usage STATE=S1 STEP=pointer` | KB | median | — | `G2-S1-footprint-before-pointer` |
-| `G2-S12-error-lines` | G2 | S12 | `make app-usage STATE=S12` | count | 각 run | 정확히 1 | — |
-| `G3-S0-footprint` | G3 | S0 | `make app-usage STATE=S0` | KB | median | — | 각 other host와 baseline host |
-| `G3-S0b-footprint` | G3 | S0b | `make app-usage STATE=S0b` | KB | median | — | 각 other host와 baseline host |
-| `G3-S1-footprint` | G3 | S1 | `make app-usage STATE=S1` | KB | median | — | 각 other host와 baseline host |
-| `G3-S1-host-footprint` | G3 | S1 | `make app-usage STATE=S1` | KB | median | — | — |
-| `G3-S5-peak-before-drag` | G3 | S5 | `make e2e-benchmark-view-drag` | KB | median | — | 각 other host와 baseline host |
-| `G3-S5-peak-after-drag` | G3 | S5 | `make e2e-benchmark-view-drag` | KB | median | — | 각 other host와 baseline host |
-| `G3-S13-peak-before-drag` | G3 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1` | KB | median | — | 각 other host와 baseline host |
-| `G3-S13-peak-after-drag` | G3 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1` | KB | median | — | 각 other host와 baseline host |
-| `G3-S11-second-window-footprint` | G3 | S11 | `make app-usage STATE=S11` | KB | median | — | 각 other host와 baseline host |
-| `G3-S15-settings-window-footprint` | G3 | S15 | `make app-usage STATE=S15` | KB | median | — | 각 other host와 baseline host |
-| `G3-S14-footprint` | G3 | S14 | `make app-usage STATE=S14` | KB | median | — | 각 other host와 baseline host |
-| `G3-S3-changed-counts` | G3 | S3 | `make object-counts BUILD=release REPETITIONS=30` | count | 각 run | 정확히 0 | — |
-| `G3-S3-growing-figures` | G3 | S3 | `make object-counts BUILD=release REPETITIONS=30` | count | 각 run | 정확히 0 | — |
-| `G3-S4-host-footprint` | G3 | S4 | `make host-allocations MINUTES=60` | KB | median | — | `G3-S1-host-footprint` |
-| `G3-S10-host-growth` | G3 | S10 | `make e2e-benchmark-split-load` | KB | median | 131072 KB 미만 (`SPLIT_LOAD_GROWTH_BOUND_KB`) | — |
-| `G4-S5-view-drag` | G4 | S5 | `make e2e-benchmark-view-drag` | verdict | 각 run | passed | — |
-| `G4-S5-resize-catch-up` | G4 | S5 | `make e2e-benchmark-resize-catch-up` | verdict | 각 run | passed | — |
-| `G4-S7-browser-view` | G4 | S7 | `e2e/benchmark/browser-view.test.mjs` | verdict | 각 run | passed | — |
-| `G4-S7-editor-view` | G4 | S7 | `e2e/benchmark/editor-view.test.mjs` | verdict | 각 run | passed | — |
-| `G4-S7-hwp-view` | G4 | S7 | `e2e/benchmark/hwp-view.test.mjs` | verdict | 각 run | passed | — |
-| `G4-S7-terminal-view` | G4 | S7 | `e2e/benchmark/terminal-view.test.mjs` | verdict | 각 run | passed | — |
-| `G4-S7-term-view` | G4 | S7 | `e2e/benchmark/term-view.test.mjs` | verdict | 각 run | passed | — |
-| `G4-S7-section-view` | G4 | S7 | `e2e/benchmark/section-view.test.mjs` | verdict | 각 run | passed | — |
-| `G4-S7-editor-footprint` | G4 | S7 | `e2e/benchmark/editor-footprint.test.mjs` | verdict | 각 run | passed | — |
-| `G5-S2-rows-1-cpu-per-frame` | G5 | S2 | `make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=1` | ms | median | 1.6 ms 이하 | 각 other host와 baseline host |
-| `G5-S2-rows-20-cpu-per-frame` | G5 | S2 | `make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=20` | ms | median | 3.1 ms 이하 | 각 other host와 baseline host |
-| `G5-S2-rows-1-frame-rate` | G5 | S2 | `make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=1` | frames/s | median | 27 frames/s 이상 | — |
-| `G5-S2-rows-20-frame-rate` | G5 | S2 | `make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=20` | frames/s | median | 27 frames/s 이상 | — |
-| `G6-S6-idle-tab-cost` | G6 | S6 | `make e2e-benchmark-idle-tab` | KB | median | 51200 KB 이하 (`IDLE_TAB_BOUND_KB`) | — |
-| `G6-S6-document-part` | G6 | S6 | `make e2e-benchmark-idle-tab` | KB | median | — | 각 other host와 baseline host |
-| `G7-S8-terminal-median` | G7 | S8 | `e2e/input-latency.test.mjs` | ms | median | — | 각 other host와 baseline host |
-| `G7-S8-terminal-p90` | G7 | S8 | `e2e/input-latency.test.mjs` | ms | median | — | 각 other host와 baseline host |
-| `G7-S8-term-median` | G7 | S8 | `e2e/input-latency.test.mjs` | ms | median | — | 각 other host와 baseline host |
-| `G7-S8-term-p90` | G7 | S8 | `e2e/input-latency.test.mjs` | ms | median | — | 각 other host와 baseline host |
-| `G8-S5-drag-cpu` | G8 | S5 | `make e2e-benchmark-view-drag` | s | median | — | 각 other host와 baseline host |
-| `G8-S13-drag-cpu` | G8 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1` | s | median | — | 각 other host와 baseline host |
-| `G8-S1-pointer-cpu` | G8 | S1 | `make app-usage STATE=S1 STEP=pointer` | s | median | — | 각 other host와 baseline host |
-| `G8-S5-drag-frame-p90` | G8 | S5 | `make e2e-benchmark-view-drag` | ms | median | 8.33 ms 이하 | — |
-| `G8-S5-drag-step-p90` | G8 | S5 | `make e2e-benchmark-view-drag` | ms | median | 8.33 ms 이하 | — |
-| `G8-S13-drag-frame-p90` | G8 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1` | ms | median | 8.33 ms 이하 | — |
-| `G8-S13-drag-step-p90` | G8 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1` | ms | median | 8.33 ms 이하 | — |
-| `G8-S16-drag-frame-p90` | G8 | S16 | `make e2e-benchmark-view-drag GC_LOOP=1` | ms | median | 8.33 ms 이하 | — |
-| `G8-S16-drag-step-p90` | G8 | S16 | `make e2e-benchmark-view-drag GC_LOOP=1` | ms | median | 8.33 ms 이하 | — |
-| `G8-S5-drag-first-frame` | G8 | S5 | `make e2e-benchmark-view-drag` | ms | median | 8.33 ms 이하 | — |
-| `G8-S13-drag-first-frame` | G8 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1` | ms | median | 8.33 ms 이하 | — |
-| `G8-S5-maximise-frame-p90` | G8 | S5 | `make e2e-benchmark-resize-catch-up` | ms | median | 8.33 ms 이하 | — |
-| `G8-S5-maximise-step-p90` | G8 | S5 | `make e2e-benchmark-resize-catch-up` | ms | median | 8.33 ms 이하 | — |
-| `G8-S1-hit-test-p90` | G8 | S1 | `make app-usage STATE=S1 STEP=pointer` | ms | median | 8.33 ms 이하 | — |
+| 값 | 목표 | scenario | target | measurement | 단위 | 판정 대상 | 한계 | 비교 대상 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `G1-S0-webkit-processes` | G1 | S0 | `make app-usage STATE=S0` | `webKitProcesses` | count | 각 run | 정확히 0 | — |
+| `G1-S0b-webcontent-processes` | G1 | S0b | `make app-usage STATE=S0b` | `webContentProcesses` | count | 각 run | 정확히 0 | — |
+| `G2-S0-frames` | G2 | S0 | `make app-usage STATE=S0 IDLE=1 INTERVAL=240` | `frames` | count | 각 run | 정확히 0 | — |
+| `G2-S0-command-buffers` | G2 | S0 | `make app-usage STATE=S0 IDLE=1 INTERVAL=240` | `commandBuffers` | count | 각 run | 정확히 0 | — |
+| `G2-S0-host-cpu` | G2 | S0 | `make app-usage STATE=S0 IDLE=1 INTERVAL=240` | `hostCpuSeconds` | s | median | 0.12 s 이하 | 각 other host와 baseline host |
+| `G2-S1-frames` | G2 | S1 | `make app-usage STATE=S1 IDLE=1 INTERVAL=240` | `frames` | count | 각 run | 정확히 0 | — |
+| `G2-S1-command-buffers` | G2 | S1 | `make app-usage STATE=S1 IDLE=1 INTERVAL=240` | `commandBuffers` | count | 각 run | 정확히 0 | — |
+| `G2-S1-host-cpu` | G2 | S1 | `make app-usage STATE=S1 IDLE=1 INTERVAL=240` | `hostCpuSeconds` | s | median | 0.12 s 이하 | 각 other host와 baseline host |
+| `G2-S9-frames` | G2 | S9 | `make app-usage STATE=S9 IDLE=1 INTERVAL=240` | `frames` | count | 각 run | 정확히 0 | — |
+| `G2-S9-command-buffers` | G2 | S9 | `make app-usage STATE=S9 IDLE=1 INTERVAL=240` | `commandBuffers` | count | 각 run | 정확히 0 | — |
+| `G2-S9-host-cpu` | G2 | S9 | `make app-usage STATE=S9 IDLE=1 INTERVAL=240` | `hostCpuSeconds` | s | median | 0.12 s 이하 | 각 other host와 baseline host |
+| `G2-S12-frames` | G2 | S12 | `make app-usage STATE=S12 IDLE=1 INTERVAL=240` | `frames` | count | 각 run | 정확히 0 | — |
+| `G2-S12-command-buffers` | G2 | S12 | `make app-usage STATE=S12 IDLE=1 INTERVAL=240` | `commandBuffers` | count | 각 run | 정확히 0 | — |
+| `G2-S12-host-cpu` | G2 | S12 | `make app-usage STATE=S12 IDLE=1 INTERVAL=240` | `hostCpuSeconds` | s | median | 0.12 s 이하 | 각 other host와 baseline host |
+| `G2-S0-footprint-before-pointer` | G2 | S0 | `make app-usage STATE=S0 STEP=pointer` | `applicationFootprintKb` | KB | median | — | — |
+| `G2-S0-footprint-after-pointer` | G2 | S0 | `make app-usage STATE=S0 STEP=pointer` | `applicationFootprintAfterKb` | KB | median | — | `G2-S0-footprint-before-pointer` |
+| `G2-S1-footprint-before-pointer` | G2 | S1 | `make app-usage STATE=S1 STEP=pointer` | `applicationFootprintKb` | KB | median | — | — |
+| `G2-S1-footprint-after-pointer` | G2 | S1 | `make app-usage STATE=S1 STEP=pointer` | `applicationFootprintAfterKb` | KB | median | — | `G2-S1-footprint-before-pointer` |
+| `G2-S12-error-lines` | G2 | S12 | `make app-usage STATE=S12` | `errorLines` | count | 각 run | 정확히 1 | — |
+| `G3-S0-footprint` | G3 | S0 | `make app-usage STATE=S0` | `applicationFootprintKb` | KB | median | — | 각 other host와 baseline host |
+| `G3-S0b-footprint` | G3 | S0b | `make app-usage STATE=S0b` | `applicationFootprintKb` | KB | median | — | 각 other host와 baseline host |
+| `G3-S1-footprint` | G3 | S1 | `make app-usage STATE=S1` | `applicationFootprintKb` | KB | median | — | 각 other host와 baseline host |
+| `G3-S1-host-footprint` | G3 | S1 | `make app-usage STATE=S1` | `hostFootprintKb` | KB | median | — | — |
+| `G3-S5-peak-before-drag` | G3 | S5 | `make e2e-benchmark-view-drag TRACE=0` | `peakBeforeDragKb` | KB | median | — | 각 other host와 baseline host |
+| `G3-S5-peak-after-drag` | G3 | S5 | `make e2e-benchmark-view-drag TRACE=0` | `peakAfterDragKb` | KB | median | — | 각 other host와 baseline host |
+| `G3-S13-peak-before-drag` | G3 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1 TRACE=0` | `peakBeforeDragKb` | KB | median | — | 각 other host와 baseline host |
+| `G3-S13-peak-after-drag` | G3 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1 TRACE=0` | `peakAfterDragKb` | KB | median | — | 각 other host와 baseline host |
+| `G3-S11-second-window-footprint` | G3 | S11 | `make app-usage STATE=S11` | `applicationFootprintKb` | KB | median | — | 각 other host와 baseline host |
+| `G3-S15-settings-window-footprint` | G3 | S15 | `make app-usage STATE=S15` | `applicationFootprintKb` | KB | median | — | 각 other host와 baseline host |
+| `G3-S14-footprint` | G3 | S14 | `make app-usage STATE=S14` | `applicationFootprintKb` | KB | median | — | 각 other host와 baseline host |
+| `G3-S3-changed-counts` | G3 | S3 | `make object-counts BUILD=release REPETITIONS=30` | `changedCounts` | count | 각 run | 정확히 0 | — |
+| `G3-S3-growing-figures` | G3 | S3 | `make object-counts BUILD=release REPETITIONS=30` | `growingFigures` | count | 각 run | 정확히 0 | — |
+| `G3-S4-host-footprint` | G3 | S4 | `make host-allocations MINUTES=60` | `hostFootprintKb` | KB | median | — | `G3-S1-host-footprint` |
+| `G3-S10-host-growth` | G3 | S10 | `make e2e-benchmark-split-load` | `hostGrowthKb` | KB | median | 131072 KB 미만 (`SPLIT_LOAD_GROWTH_BOUND_KB`) | — |
+| `G4-S5-view-drag` | G4 | S5 | `make e2e-benchmark-view-drag TRACE=0` | `verdict` | verdict | 각 run | passed | — |
+| `G4-S5-resize-catch-up` | G4 | S5 | `make e2e-benchmark-resize-catch-up TRACE=captured` | `verdict` | verdict | 각 run | passed | — |
+| `G4-S7-browser-view` | G4 | S7 | `e2e/benchmark/browser-view.test.mjs` | `verdict` | verdict | 각 run | passed | — |
+| `G4-S7-editor-view` | G4 | S7 | `e2e/benchmark/editor-view.test.mjs` | `verdict` | verdict | 각 run | passed | — |
+| `G4-S7-hwp-view` | G4 | S7 | `e2e/benchmark/hwp-view.test.mjs` | `verdict` | verdict | 각 run | passed | — |
+| `G4-S7-terminal-view` | G4 | S7 | `e2e/benchmark/terminal-view.test.mjs` | `verdict` | verdict | 각 run | passed | — |
+| `G4-S7-term-view` | G4 | S7 | `e2e/benchmark/term-view.test.mjs` | `verdict` | verdict | 각 run | passed | — |
+| `G4-S7-section-view` | G4 | S7 | `e2e/benchmark/section-view.test.mjs` | `verdict` | verdict | 각 run | passed | — |
+| `G4-S7-editor-footprint` | G4 | S7 | `e2e/benchmark/editor-footprint.test.mjs` | `verdict` | verdict | 각 run | passed | — |
+| `G5-S2-rows-1-cpu-per-frame` | G5 | S2 | `make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=1` | `applicationCpuPerFrameMs` | ms | median | 1.6 ms 이하 | 각 other host와 baseline host |
+| `G5-S2-rows-20-cpu-per-frame` | G5 | S2 | `make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=20` | `applicationCpuPerFrameMs` | ms | median | 3.1 ms 이하 | 각 other host와 baseline host |
+| `G5-S2-rows-1-frame-rate` | G5 | S2 | `make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=1` | `framesPerSecond` | frames/s | median | 27 frames/s 이상 | — |
+| `G5-S2-rows-20-frame-rate` | G5 | S2 | `make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=20` | `framesPerSecond` | frames/s | median | 27 frames/s 이상 | — |
+| `G6-S6-idle-tab-cost` | G6 | S6 | `make e2e-benchmark-idle-tab` | `idleTabCostKb` | KB | median | 51200 KB 이하 (`IDLE_TAB_BOUND_KB`) | — |
+| `G6-S6-document-part` | G6 | S6 | `make e2e-benchmark-idle-tab` | `documentPartKb` | KB | median | — | 각 other host와 baseline host |
+| `G7-S8-terminal-median` | G7 | S8 | `e2e/input-latency.test.mjs` | `terminalMedianMs` | ms | median | — | 각 other host와 baseline host |
+| `G7-S8-terminal-p90` | G7 | S8 | `e2e/input-latency.test.mjs` | `terminalP90Ms` | ms | median | — | 각 other host와 baseline host |
+| `G7-S8-term-median` | G7 | S8 | `e2e/input-latency.test.mjs` | `termMedianMs` | ms | median | — | 각 other host와 baseline host |
+| `G7-S8-term-p90` | G7 | S8 | `e2e/input-latency.test.mjs` | `termP90Ms` | ms | median | — | 각 other host와 baseline host |
+| `G8-S5-drag-cpu` | G8 | S5 | `make e2e-benchmark-view-drag TRACE=0` | `dragCpuSeconds` | s | median | — | 각 other host와 baseline host |
+| `G8-S13-drag-cpu` | G8 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1 TRACE=0` | `dragCpuSeconds` | s | median | — | 각 other host와 baseline host |
+| `G8-S1-pointer-cpu` | G8 | S1 | `make app-usage STATE=S1 STEP=pointer` | `applicationCpuSeconds` | s | median | — | 각 other host와 baseline host |
+| `G8-S5-drag-frame-p90` | G8 | S5 | `make e2e-benchmark-view-drag TRACE=frame-records` | `dragFrameP90Ms` | ms | median | 8.33 ms 이하 | — |
+| `G8-S5-drag-step-p90` | G8 | S5 | `make e2e-benchmark-view-drag TRACE=frame-records` | `dragStepP90Ms` | ms | median | 8.33 ms 이하 | — |
+| `G8-S13-drag-frame-p90` | G8 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1 TRACE=frame-records` | `dragFrameP90Ms` | ms | median | 8.33 ms 이하 | — |
+| `G8-S13-drag-step-p90` | G8 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1 TRACE=frame-records` | `dragStepP90Ms` | ms | median | 8.33 ms 이하 | — |
+| `G8-S16-drag-frame-p90` | G8 | S16 | `make e2e-benchmark-view-drag GC_LOOP=1 TRACE=frame-records` | `dragFrameP90Ms` | ms | median | 8.33 ms 이하 | — |
+| `G8-S16-drag-step-p90` | G8 | S16 | `make e2e-benchmark-view-drag GC_LOOP=1 TRACE=frame-records` | `dragStepP90Ms` | ms | median | 8.33 ms 이하 | — |
+| `G8-S5-drag-first-frame` | G8 | S5 | `make e2e-benchmark-view-drag TRACE=frame-records` | `dragFirstFrameMs` | ms | median | 8.33 ms 이하 | — |
+| `G8-S13-drag-first-frame` | G8 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1 TRACE=frame-records` | `dragFirstFrameMs` | ms | median | 8.33 ms 이하 | — |
+| `G8-S5-maximise-frame-p90` | G8 | S5 | `make e2e-benchmark-resize-catch-up TRACE=frame-records` | `maximiseFrameP90Ms` | ms | median | 8.33 ms 이하 | — |
+| `G8-S5-maximise-step-p90` | G8 | S5 | `make e2e-benchmark-resize-catch-up TRACE=frame-records` | `maximiseStepP90Ms` | ms | median | 8.33 ms 이하 | — |
+| `G8-S1-hit-test-p90` | G8 | S1 | `make app-usage STATE=S1 STEP=pointer TRACE=frame-records` | `hitTestP90Ms` | ms | median | 8.33 ms 이하 | — |
 
 각 목표의 값:
 
