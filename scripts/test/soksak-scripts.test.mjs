@@ -239,6 +239,28 @@ test("host structure audit rejects a language host library that imports a packag
   ]);
 });
 
+test("host structure audit rejects a language host library whose code or contract declaration names a framework", { timeout: 1000 }, async () => {
+  const { auditLibraryNames } = await import("../check-hosts.mjs");
+  const files = {
+    "packages/host/rust/src/start.rs": 'pub const PAGE_ORIGIN: &str = "tauri://localhost";\n// The Tauri page origin is a word of this comment.\n',
+    "packages/host/rust/src/raw.rs": 'let a = r#"// "#; let b = TauriWindow::new(); /* Tauri /* nested */ still a comment */\nlet c = \'"\'; // tauri\n',
+    "packages/host/go/src/windows.go": "package host\n\nconst application = \"wailsv3\" // Wails\nvar text = `/* not a comment */ wry`\n",
+    "packages/host/go/tests/assets_test.go": "package host_test\n\n// contract: wailsv3.assets.missing\nfunc TestMuda(t *testing.T) {}\n",
+    "packages/host/go/src/platform/darwin/webview.m": "// mygo\nstatic NSString *name = @\"tao\"; /* tao */ int datao = 1;\n",
+    "packages/host/rust/src/images_test.rs": "// contract: images.presentation.runs-after-framework-event\nfn stable() {}\n",
+    "packages/host/tauriv2/src/host.rs": 'const PAGE_ORIGIN: &str = "tauri://localhost";\n',
+  };
+  assert.deepEqual(auditLibraryNames(Object.keys(files), (file) => files[file]), [
+    "packages/host/rust/src/start.rs:1: the language host library names the framework tauri",
+    "packages/host/rust/src/raw.rs:1: the language host library names the framework Tauri",
+    "packages/host/go/src/windows.go:3: the language host library names the framework wailsv3",
+    "packages/host/go/src/windows.go:4: the language host library names the framework wry",
+    "packages/host/go/tests/assets_test.go:4: the language host library names the framework Muda",
+    "packages/host/go/tests/assets_test.go:3: the contract case wailsv3.assets.missing of the language host library names the framework wailsv3",
+    "packages/host/go/src/platform/darwin/webview.m:2: the language host library names the framework tao",
+  ]);
+});
+
 test("a prefix audit of the host structure fails when a prefix selects no file", { timeout: 1000 }, async () => {
   const { auditPrefixes } = await import("../check-hosts.mjs");
   const tracked = ["packages/host/go/src/platform/darwin/window.go", "packages/host/tauriv2/src/host.rs", "packages/host/go/src/host.go",

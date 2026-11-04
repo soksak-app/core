@@ -9,6 +9,7 @@ mod menu;
 mod platform;
 
 use std::borrow::Cow;
+use std::cell::RefCell;
 use std::sync::{Arc, OnceLock};
 
 use soksak_host::application_log::log_error;
@@ -19,6 +20,10 @@ use tauri_plugin_deep_link::DeepLinkExt;
 
 pub use framework::Framework;
 pub use frontend::{Frontend, window_event};
+pub use menu::accelerator;
+
+/// The origin of the main page, which the start document answers with CORS.
+pub const PAGE_ORIGIN: &str = "tauri://localhost";
 
 /// The frontend of the context while run replaces it: no page file.
 struct NoAssets;
@@ -46,15 +51,79 @@ impl soksak_host::assets::Assets for BundledAssets {
     }
 }
 
+/// The key of the start document, which the asset resolver of Tauri serves for a path that names no file.
+const START: &str = "/index.html";
+
+thread_local! {
+    /// The path that the page files did not hold in the lookup that the current thread runs, and whether it names a file,
+    /// which a file extension shows.
+    static MISSING: RefCell<Option<(String, bool)>> = const { RefCell::new(None) };
+}
+
+/// What a lookup of the asset resolver of Tauri is.
+enum Lookup {
+    /// The lookup of a path of the page.
+    Request,
+    /// `<path>.html` or `<path>/index.html` after a missing path.
+    Candidate,
+    /// The fallback to the start document after a missing path.
+    Start,
+}
+
+/// The page files of the library behind the asset resolver of Tauri, which looks up `<path>`, `<path>.html` and
+/// `<path>/index.html` of a request and then falls back to the start document. Only the first lookup is a request of the
+/// page, and the start document does not answer a missing path with a file extension, so Tauri answers its asset error.
+pub struct PageLookups {
+    page: soksak_host::assets::ReportingAssets,
+}
+
+impl PageLookups {
+    pub fn new(page: soksak_host::assets::ReportingAssets) -> Self {
+        Self { page }
+    }
+
+    /// The bytes of the file of a lookup of the asset resolver.
+    pub fn get(&self, key: &str) -> Option<Cow<'_, [u8]>> {
+        let lookup = MISSING.with(|missing| {
+            let mut missing = missing.borrow_mut();
+            let lookup = match missing.as_ref() {
+                Some((base, _))
+                    if key == format!("{base}.html") || key == format!("{base}/index.html") =>
+                {
+                    Lookup::Candidate
+                }
+                Some((_, true)) if key == START => Lookup::Start,
+                _ => Lookup::Request,
+            };
+            if !matches!(lookup, Lookup::Candidate) {
+                *missing = None;
+            }
+            lookup
+        });
+        match lookup {
+            Lookup::Start => None,
+            Lookup::Candidate => self.page.held(key),
+            Lookup::Request => {
+                let found = soksak_host::assets::Assets::get(&self.page, key);
+                if found.is_none() {
+                    let file = std::path::Path::new(key).extension().is_some();
+                    MISSING.with(|missing| *missing.borrow_mut() = Some((key.to_string(), file)));
+                }
+                found
+            }
+        }
+    }
+}
+
 /// The page files of the library as the assets of the context. The bundled frontend lists the files and their hashes.
 struct PageAssets {
-    page: soksak_host::assets::ReportingAssets,
+    page: PageLookups,
     frontend: Arc<dyn tauri::Assets<tauri::Wry>>,
 }
 
 impl tauri::Assets<tauri::Wry> for PageAssets {
     fn get(&self, key: &AssetKey) -> Option<Cow<'_, [u8]>> {
-        soksak_host::assets::Assets::get(&self.page, key.as_ref())
+        self.page.get(key.as_ref())
     }
 
     fn iter(&self) -> Box<AssetsIter<'_>> {
@@ -101,7 +170,10 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
     let bundled: Arc<dyn soksak_host::assets::Assets> =
         Arc::new(BundledAssets(Arc::clone(&frontend)));
     context.set_assets(Box::new(PageAssets {
-        page: soksak_host::page_assets(Arc::clone(&bundled), installed_directory.clone()),
+        page: PageLookups::new(soksak_host::page_assets(
+            Arc::clone(&bundled),
+            installed_directory.clone(),
+        )),
         frontend,
     }));
     soksak_host::prepare_platform();
@@ -136,6 +208,7 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
         // (docs/spec/native-host.md#page-start).
         .register_uri_scheme_protocol(soksak_host::start::SCHEME, move |context, request| {
             soksak_host::start::serve(
+                PAGE_ORIGIN,
                 // default: a request without a host names no owner, so serve answers it not found.
                 request.uri().host().unwrap_or_default(),
                 request.uri().path(),

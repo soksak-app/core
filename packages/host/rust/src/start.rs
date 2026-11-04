@@ -18,9 +18,6 @@ pub const CORE: &str = "core";
 /// The path through which the main page fetches the start document.
 pub const START_DOCUMENT_PATH: &str = "/start.json";
 
-/// The origin of the main page. The page fetches documents of other schemes with CORS.
-pub const PAGE_ORIGIN: &str = "tauri://localhost";
-
 /// The error when the requesting webview is not the main webview of any window.
 pub const NO_WINDOW: &str = "the start document request names no window";
 
@@ -94,8 +91,10 @@ pub(crate) fn after_page_started(
 }
 
 /// Passes a start document request to start with the label of the requesting webview. Another owner or path is not
-/// found. When no window is found, it starts no page and answers 400; another failure answers 500.
+/// found. When no window is found, it starts no page and answers 400; another failure answers 500. page_origin is the
+/// origin of the main page, which the framework adapter gives: the page fetches documents of other schemes with CORS.
 pub fn serve(
+    page_origin: &str,
     owner: &str,
     path: &str,
     webview: &str,
@@ -105,7 +104,7 @@ pub fn serve(
         Response::builder()
             .status(status)
             .header("Content-Type", "text/plain; charset=utf-8")
-            .header("Access-Control-Allow-Origin", PAGE_ORIGIN)
+            .header("Access-Control-Allow-Origin", page_origin)
             .body(format!("{text}\n").into_bytes())
             // default: a response built from a fixed state and fixed headers does not fail, and when it fails, an empty
             // 500 response is used.
@@ -119,7 +118,7 @@ pub fn serve(
             .status(200)
             .header("Content-Type", "application/json")
             .header("Cache-Control", "no-store")
-            .header("Access-Control-Allow-Origin", PAGE_ORIGIN)
+            .header("Access-Control-Allow-Origin", page_origin)
             .body(data)
             // default: a start document whose response could not be built records that error and answers with 500.
             .unwrap_or_else(|error| {

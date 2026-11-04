@@ -127,12 +127,12 @@ fn debug_write_state_writes_the_state_file() {
     // 2026-10-09T01:02:03Z.
     let at = UNIX_EPOCH + Duration::from_secs(1_791_507_723);
     let path =
-        debug::write_state(config.path(), at, serde_json::json!({"host": "tauriv2"})).unwrap();
+        debug::write_state(config.path(), at, serde_json::json!({"host": "fixture"})).unwrap();
     assert_eq!(path, "logs/state-20261009T010203Z.json");
     let state: serde_json::Value =
         serde_json::from_slice(&std::fs::read(Path::new(config.path()).join(&path)).unwrap())
             .unwrap();
-    assert_eq!(state["host"], "tauriv2");
+    assert_eq!(state["host"], "fixture");
     assert_eq!(state["time"], "20261009T010203Z");
 }
 
@@ -144,7 +144,7 @@ fn debug_state_names_the_value_of_the_workbench() {
         serde_json::from_value(serde_json::json!({"workbench": {"core.layout": {"tabs": 1}}}))
             .unwrap();
     let document = debug::state_document(
-        "tauriv2",
+        "fixture",
         serde_json::json!({"core": "1"}),
         Vec::new(),
         request,
@@ -294,7 +294,7 @@ fn debug_write_state_keeps_the_newest_20_state_files() {
         std::fs::write(config.path().join("logs").join(name), "{}").unwrap();
     }
     let at = UNIX_EPOCH + Duration::from_secs(1_791_507_723 + 3600 * 24);
-    debug::write_state(config.path(), at, serde_json::json!({"host": "tauriv2"})).unwrap();
+    debug::write_state(config.path(), at, serde_json::json!({"host": "fixture"})).unwrap();
     let mut states: Vec<String> = std::fs::read_dir(config.path().join("logs"))
         .unwrap()
         .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())

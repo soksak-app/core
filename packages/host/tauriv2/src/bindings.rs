@@ -914,7 +914,7 @@ async fn app_update_apply(
             command,
             relaunch: false,
         });
-        soksak_host::event_record::quit_with_cause("update", || window.app_handle().exit(0));
+        soksak_host::event_record::quit_with_cause("update", || window.app_handle().quit());
         Ok(())
     })
     .await

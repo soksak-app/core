@@ -898,9 +898,9 @@ func (b hostBackend) HostCommand(window, name string, params json.RawMessage) (a
 			return nil, rpcError(codeInvalidParams, "%v", err)
 		}
 		if p.On == nil || *p.On {
-			s.window.Maximise()
+			s.window.Maximize()
 		} else {
-			s.window.UnMaximise()
+			s.window.Unmaximize()
 		}
 	case "host.window.fullscreen":
 		var p struct {
@@ -920,7 +920,7 @@ func (b hostBackend) HostCommand(window, name string, params json.RawMessage) (a
 		if p.Width == nil || p.Height == nil || *p.Width < 1 || *p.Height < 1 {
 			return nil, rpcError(codeInvalidParams, "width and height must be positive numbers")
 		}
-		s.window.SetSize(int(*p.Width), int(*p.Height))
+		s.window.SetSize(*p.Width, *p.Height)
 	case "host.window.move":
 		var p struct {
 			X, Y *float64

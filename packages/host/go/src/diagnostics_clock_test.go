@@ -97,7 +97,7 @@ func TestDiagnosticClockMatchesBuildConfiguration(t *testing.T) {
 	}
 	endpoint := NewEndpoint(diagnosticsClockBackend{})
 	config := t.TempDir()
-	info := EndpointInfo{Transport: "tcp", Address: listener.Addr().String(), PID: 1, Application: "wailsv3", Version: "0.0.1"}
+	info := EndpointInfo{Transport: "tcp", Address: listener.Addr().String(), PID: 1, Application: "fixture", Version: "0.0.1"}
 	if err := endpoint.Serve(listener, info, config); err != nil {
 		if closeErr := listener.Close(); closeErr != nil {
 			t.Fatalf("serve endpoint: %v; close listener: %v", err, closeErr)

@@ -231,7 +231,7 @@ pub fn start_endpoint(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>>
     // stopped. When a save stalls, the next signal ends the process with the default action (docs/spec/hosts.md).
     let quit = app.clone();
     let state = std::sync::Arc::clone(&app.state::<windows::Windows>().quit);
-    termination::on_termination(state, Box::new(move || quit.exit(0)))?;
+    termination::on_termination(state, Box::new(move || quit.quit()))?;
     let directory = config_directory(app)?;
     exposure::start(app, &directory)?;
     // The event log and the stderr file are opened after the endpoint holds the process lock, so no other run writes the same
@@ -307,7 +307,7 @@ pub fn setup(app: &AppHandle, setup: Setup) -> Result<(), Box<dyn std::error::Er
     // the exit has finished the save (docs/spec/hosts.md#process-lifecycle).
     let quit = app.clone();
     platform::current()?.on_quit_request(Box::new(move || {
-        event_record::quit_with_cause("quit-request", || quit.exit(0))
+        event_record::quit_with_cause("quit-request", || quit.quit())
     }))?;
     // The one memory pressure source of the process starts with the host, and each report goes to every window
     // (docs/spec/hosts.md#memory-pressure).
@@ -317,11 +317,11 @@ pub fn setup(app: &AppHandle, setup: Setup) -> Result<(), Box<dyn std::error::Er
         move |name, payload| windows::notify_windows(&pressure, name, payload),
     )?;
     let dock = app.clone();
-    platform::current()?.install_dock_menu(Box::new(move || {
+    app.install_dock(move || {
         if let Err(error) = windows::window_new_on_main(dock.clone()) {
             log_error("window new", error);
         }
-    }))?;
+    })?;
     // Before the page sends the setting language, the menu is built in the system language. The language state
     // is shared by set_menu_language and the host.menu report (docs/spec/host-contract.md).
     let language = menu::initial_language()?;
@@ -365,7 +365,7 @@ pub fn setup(app: &AppHandle, setup: Setup) -> Result<(), Box<dyn std::error::Er
     // watch runs until the process ends.
     let main = app.clone();
     let _runs_until_exit = stall_watch::start_stall_watch(stall_watch::StallWatchOptions {
-        on_main: Box::new(move |task| main.run_on_main_thread(task).map_err(|e| e.to_string())),
+        on_main: Box::new(move |task| main.post(task).map_err(|e| e.to_string())),
         sample: Box::new(|path| platform::current()?.sample_threads(path)),
         folder: directory.join("logs"),
         emit_host: Box::new(event_record::emit_host),

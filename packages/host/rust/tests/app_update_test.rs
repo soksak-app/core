@@ -12,6 +12,7 @@ mod records;
 
 use soksak_host::app_update::{prepare_start, read_state, stage, start_update};
 use soksak_sok::fetch::Fetcher;
+use soksak_sok::install::CORE_HOSTS;
 use soksak_sok::plugins::use_registry;
 
 /// Writes the zip of a bundle of version 0.0.9, a registry index that lists it for the key and a configuration folder
@@ -61,10 +62,10 @@ fn update_registry(work: &Path, key: &str) -> PathBuf {
 // contract: app-update.host.stages-only-the-candidate
 #[test]
 fn the_host_stages_the_candidate_and_no_other_version() {
-    const KEY: &str = "darwin-arm64-tauriv2";
+    let key = format!("darwin-arm64-{}", CORE_HOSTS[0]);
     let work = folder::Folder::new();
-    let config = update_registry(work.path(), KEY);
-    let state = read_state(&config, "0.0.8", KEY).unwrap();
+    let config = update_registry(work.path(), &key);
+    let state = read_state(&config, "0.0.8", &key).unwrap();
     assert_eq!(state.version, "0.0.8");
     assert_eq!(
         state
@@ -73,12 +74,12 @@ fn the_host_stages_the_candidate_and_no_other_version() {
             .map(|update| update.version.as_str()),
         Some("0.0.9")
     );
-    let error = stage(&config, "0.0.8", KEY, "0.0.10").unwrap_err();
+    let error = stage(&config, "0.0.8", &key, "0.0.10").unwrap_err();
     assert!(error.contains("0.0.10 is not the candidate"), "{error}");
-    let bundle = stage(&config, "0.0.8", KEY, "0.0.9").unwrap();
+    let bundle = stage(&config, "0.0.8", &key, "0.0.9").unwrap();
     assert_eq!(bundle, config.join("updates/0.0.9/soksak.app"));
     // The running version has no candidate, so nothing is staged for it.
-    let error = stage(&config, "0.0.9", KEY, "0.0.9").unwrap_err();
+    let error = stage(&config, "0.0.9", &key, "0.0.9").unwrap_err();
     assert!(error.contains("0.0.9 is not the candidate"), "{error}");
 }
 
@@ -89,7 +90,7 @@ fn the_update_starts_sok_from_a_copy_beside_the_updates_and_checks_the_staged_bu
     let running_parent = folder::Folder::new();
     let running = running_parent.path().join("soksak.app");
     std::fs::create_dir_all(running.join("Contents/MacOS")).unwrap();
-    let executable = running.join("Contents/MacOS/soksak-tauriv2");
+    let executable = running.join("Contents/MacOS/soksak-fixture");
     std::fs::write(running.join("Contents/MacOS/sok"), "#!/bin/sh\nexit 0\n").unwrap();
     let staged = config.path().join("updates/0.0.9/soksak.app");
     std::fs::create_dir_all(staged.join("Contents")).unwrap();
@@ -130,7 +131,7 @@ fn the_update_starts_sok_from_a_copy_beside_the_updates_and_checks_the_staged_bu
     );
     // A bundle outside the updates folder, a bundle without Info.plist and an application outside a bundle are refused.
     let other = running_parent.path().join("other.app");
-    let outside = running_parent.path().join("soksak-tauriv2");
+    let outside = running_parent.path().join("soksak-fixture");
     let cases: [(&str, &Path, &Path); 3] = [
         ("a bundle outside updates", &executable, &other),
         (
@@ -156,7 +157,7 @@ fn the_detached_update_command_keeps_its_errors_and_is_recorded_when_it_starts()
         let config = PathBuf::from(config);
         let running = config.join("running/soksak.app");
         std::fs::create_dir_all(running.join("Contents/MacOS")).unwrap();
-        let executable = running.join("Contents/MacOS/soksak-tauriv2");
+        let executable = running.join("Contents/MacOS/soksak-fixture");
         std::fs::write(
             running.join("Contents/MacOS/sok"),
             "#!/bin/sh\necho 'sok: the bundle is not an application bundle' >&2\nexit 1\n",

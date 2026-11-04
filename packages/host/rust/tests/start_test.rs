@@ -3,6 +3,9 @@
 use serde_json::json;
 use soksak_host::start;
 
+/// The origin of the main page that the fixture adapter gives.
+const PAGE_ORIGIN: &str = "fixture://localhost";
+
 // contract: page.start.document
 #[test]
 fn start_document_carries_the_workspace_and_the_window_controls() {
@@ -37,22 +40,34 @@ fn start_requests_start_the_requesting_main_webview_only() {
             Ok(br#"{"workspace":{},"controls":null}"#.to_vec())
         }
     };
-    let response = start::serve(start::CORE, start::START_DOCUMENT_PATH, "main", &mut start);
+    let response = start::serve(
+        PAGE_ORIGIN,
+        start::CORE,
+        start::START_DOCUMENT_PATH,
+        "main",
+        &mut start,
+    );
     assert_eq!(response.status(), 200);
     assert_eq!(response.body(), br#"{"workspace":{},"controls":null}"#);
     assert_eq!(response.headers()["Content-Type"], "application/json");
     assert_eq!(response.headers()["Cache-Control"], "no-store");
     assert_eq!(
         response.headers()["Access-Control-Allow-Origin"],
-        start::PAGE_ORIGIN
+        PAGE_ORIGIN
     );
-    let response = start::serve(start::CORE, start::START_DOCUMENT_PATH, "gone", &mut start);
+    let response = start::serve(
+        PAGE_ORIGIN,
+        start::CORE,
+        start::START_DOCUMENT_PATH,
+        "gone",
+        &mut start,
+    );
     assert_eq!(response.status(), 400);
     assert_eq!(
         response.body(),
         b"the start document request names no window\n"
     );
-    let response = start::serve(start::CORE, "/index.html", "main", &mut start);
+    let response = start::serve(PAGE_ORIGIN, start::CORE, "/index.html", "main", &mut start);
     assert_eq!(response.status(), 404);
     assert_eq!(response.body(), b"soksak://core/index.html not found\n");
     assert_eq!(started, vec!["main".to_string(), "gone".to_string()]);
@@ -70,7 +85,13 @@ fn start_document_is_served_at_the_core_owner_of_soksak() {
         started.push(webview.to_string());
         Ok(b"{}".to_vec())
     };
-    let response = start::serve("probe", start::START_DOCUMENT_PATH, "main", &mut start);
+    let response = start::serve(
+        PAGE_ORIGIN,
+        "probe",
+        start::START_DOCUMENT_PATH,
+        "main",
+        &mut start,
+    );
     assert_eq!(response.status(), 404);
     assert_eq!(response.body(), b"soksak://probe/start.json not found\n");
     assert!(started.is_empty());

@@ -1782,9 +1782,11 @@ pub async fn present(window: Window, request: PresentRequest) -> Result<Vec<Plac
         "present",
         "present-root-view-ui",
     );
-    let main = exposure::on_main(&window, move || {
+    exposure::on_main(&window, move || {
         surface_dispatch_result(root_dispatch, || {
-            crate::windows::root_view(&root_window).ok_or_else(|| "the main webview is gone".into())
+            crate::windows::root_view(&root_window)
+                .map(drop)
+                .ok_or_else(|| "the main webview is gone".into())
         })
     })?;
     let ticket = request.ticket;
@@ -1800,7 +1802,6 @@ pub async fn present(window: Window, request: PresentRequest) -> Result<Vec<Plac
     let preparation_window = presentation_window.clone();
     let preparation_context = context.clone();
     let preparation_placements = placements.clone();
-    let dom_main = main.clone();
     let raster_window = window.clone();
     let blocking = window.app_handle().clone();
     let ready = blocking
@@ -1815,36 +1816,41 @@ pub async fn present(window: Window, request: PresentRequest) -> Result<Vec<Plac
                         "present-dom-register-ui",
                     );
                     let callback_window = dom_window.clone();
-                    dom_main
-                        .with_webview(move |view| {
+                    dom_window
+                        .post(move || {
                             surface_dispatch_result(dom_dispatch, || {
-                                let outcome = platform::current().and_then(|platform| {
-                                    let ready = dom_tx.clone();
-                                    let callback_dispatch = surface_dispatch(
-                                        &callback_window,
-                                        Some(ticket),
-                                        "present",
-                                        "present-dom-callback",
+                                let ready = dom_tx.clone();
+                                let callback_dispatch = surface_dispatch(
+                                    &callback_window,
+                                    Some(ticket),
+                                    "present",
+                                    "present-dom-callback",
+                                );
+                                let outcome = callback_window.after_presentation(move |presented| {
+                                    let sent = surface_dispatch_result(
+                                        callback_dispatch.clone(),
+                                        || ready.send(presented),
                                     );
-                                    platform.after_presentation(
-                                        &view,
-                                        Box::new(move || {
-                                            let sent = surface_dispatch_result(
-                                                callback_dispatch.clone(),
-                                                || ready.send(Ok(())),
-                                            );
-                                            if sent.is_err() {
-                                                crate::application_log::log_info(
-                                                    "surface",
-                                                    "surface readiness arrived after its request ended",
-                                                );
-                                            }
-                                        }),
-                                    )
+                                    match sent {
+                                        Ok(()) => {}
+                                        // A failure after the request ended was not reported by that request, so it is
+                                        // left as an error line.
+                                        Err(mpsc::SendError(Err(error))) => {
+                                            log_error("DOM presentation", error)
+                                        }
+                                        Err(mpsc::SendError(Ok(()))) => {
+                                            crate::application_log::log_info(
+                                                "surface",
+                                                "surface readiness arrived after its request ended",
+                                            )
+                                        }
+                                    }
                                 });
                                 if let Err(error) = outcome {
                                     // A failure after the request ended was not reported by that request, so it is left as an error line.
-                                    if let Err(mpsc::SendError(Err(error))) = dom_tx.send(Err(error)) {
+                                    if let Err(mpsc::SendError(Err(error))) =
+                                        dom_tx.send(Err(error.to_string()))
+                                    {
                                         log_error("DOM presentation", error);
                                     }
                                 }

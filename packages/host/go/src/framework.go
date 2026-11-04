@@ -40,7 +40,8 @@ type Framework interface {
 // first screen is displayed (docs/spec/native-host.md#page-start).
 type WindowOptions struct {
 	Name, Title, URL string
-	Width, Height    int
+	// Width and Height are logical pixels.
+	Width, Height float64
 }
 
 // WindowEvent is a change of a window that a Frontend reports.
@@ -75,15 +76,16 @@ type Frontend interface {
 	// IsFocused reports whether the window is the key window of the application.
 	IsFocused() bool
 	Close()
-	SetSize(width, height int)
-	SetPosition(x, y int)
-	Size() (width, height int)
-	Position() (x, y int)
-	Maximise()
-	UnMaximise()
-	IsMaximised() bool
+	// SetSize, SetPosition, Size and Position take and give logical pixels.
+	SetSize(width, height float64)
+	SetPosition(x, y float64)
+	Size() (width, height float64)
+	Position() (x, y float64)
+	Maximize()
+	Unmaximize()
+	IsMaximized() bool
 	IsFullscreen() bool
-	IsMinimised() bool
+	IsMinimized() bool
 	// OnWindowEvent runs listener for each occurrence of event.
 	OnWindowEvent(event WindowEvent, listener func())
 	// OnClosing runs hook when the window is asked to close. A hook that returns true keeps the window open.

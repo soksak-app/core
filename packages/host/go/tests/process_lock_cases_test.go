@@ -79,7 +79,7 @@ func TestTheHostRefusesAHeldLockOfEachCaseWithItsText(t *testing.T) {
 			defer listener.Close()
 			endpoint := host.NewEndpoint(newFakeBackend())
 			info := host.EndpointInfo{Transport: "tcp", Address: listener.Addr().String(), PID: os.Getpid(),
-				Application: "wailsv3", Version: "0.0.8", Started: time.Now()}
+				Application: "fixture", Version: "0.0.8", Started: time.Now()}
 			err = endpoint.Serve(listener, info, config)
 			owned := fmt.Sprintf("configuration directory %s is already owned", config)
 			var want string

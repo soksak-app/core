@@ -7,8 +7,7 @@ use std::sync::{Arc, Mutex, PoisonError, mpsc};
 use crate::framework::Channel;
 use crate::framework::Color;
 use crate::framework::{
-    AppHandle, Emitter, EventTarget, LogicalSize, Manager, Webview, Window, WindowEvent,
-    WindowOptions,
+    AppHandle, LogicalPosition, LogicalSize, Manager, Webview, Window, WindowEvent, WindowOptions,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -451,22 +450,13 @@ pub(crate) fn cancel_window_layout_ticket(window: &Window, ticket: u64) -> Resul
     }
 }
 
-/// Sends an event to the webview of the window. For the main window, it is also sent to the application receiver.
+/// Sends an event to the web views of the window.
 pub(crate) fn emit_window<S: Serialize + Clone>(
     window: &Window,
     event: &str,
     payload: S,
 ) -> crate::framework::Result<()> {
-    let labels: Vec<_> = window
-        .webviews()
-        .iter()
-        .map(|v| v.label().to_string())
-        .collect();
-    window.emit_filter(event, payload, |target| match target {
-        EventTarget::Webview { label } => labels.contains(label),
-        EventTarget::App => window.label() == "main",
-        _ => false,
-    })
+    window.emit_webviews(event, payload)
 }
 
 /// Sends workspace-changed to all windows.
@@ -687,7 +677,7 @@ pub(crate) fn window_new_on_main(app: AppHandle) -> Result<(), String> {
 pub fn window_new(app: AppHandle) -> Result<(), String> {
     let task = app.clone();
     let (tx, rx) = mpsc::channel();
-    app.run_on_main_thread(move || {
+    app.post(move || {
         if tx.send(window_new_on_main(task)).is_err() {
             crate::application_log::log_info(
                 "window",
@@ -773,15 +763,10 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
     initial_titlebar(&window)?;
     let host = window.clone();
     let window_events_label = window.label().to_string();
-    let recorded = context.clone();
     window.on_window_event(move |event| {
         let kind = match event {
-            WindowEvent::CloseRequested { .. } if recorded.ready.load(Ordering::Relaxed) => {
-                Some("close_requested")
-            }
-            WindowEvent::CloseRequested { .. } => Some("closed"),
-            WindowEvent::Resized(_) => Some("resize"),
-            WindowEvent::Moved(_) => Some("move"),
+            WindowEvent::Resized => Some("resize"),
+            WindowEvent::Moved => Some("move"),
             WindowEvent::ScaleFactorChanged => Some("scale_factor_changed"),
             WindowEvent::Focused(true) => Some("focus"),
             WindowEvent::Focused(false) => Some("lost_focus"),
@@ -791,19 +776,27 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             crate::window_events::record_window_event(window_events_label.as_str(), kind);
         }
     });
-    window.on_window_event(move |event| match event {
-        WindowEvent::CloseRequested { api, .. } if context.ready.load(Ordering::Relaxed) => {
-            api.prevent_close();
-            if let Err(error) = emit_window(&host, "project-close-request", ()) {
+    let closing_host = window.clone();
+    let closing_context = context.clone();
+    window.on_closing(move || {
+        let ready = closing_context.ready.load(Ordering::Relaxed);
+        crate::window_events::record_window_event(
+            closing_host.label(),
+            if ready { "close_requested" } else { "closed" },
+        );
+        if ready {
+            if let Err(error) = emit_window(&closing_host, "project-close-request", ()) {
                 log_error("project-close-request", error);
             }
+            return true;
         }
-        WindowEvent::CloseRequested { .. } => {
-            // This is a close request that was not blocked. The window will soon disappear from the runtime, so it is
-            // removed from the list.
-            context.closing.store(true, Ordering::Relaxed);
-            context.documents.views().forget_all();
-        }
+        // This is a close request that was not blocked. The window will soon disappear from the runtime, so it is
+        // removed from the list.
+        closing_context.closing.store(true, Ordering::Relaxed);
+        closing_context.documents.views().forget_all();
+        false
+    });
+    window.on_window_event(move |event| match event {
         WindowEvent::Destroyed => {
             context.documents.views().forget_all();
             // A window that ends keeps no tab, so a removal that asked it is allowed.
@@ -884,13 +877,13 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             crate::performance::window_remove(host.label());
             if remove_window_records(&registry, host.label()) {
                 crate::event_record::quit_with_cause("last-window-closed", || {
-                    host.app_handle().exit(0)
+                    host.app_handle().quit()
                 });
             }
             notify_workspace(host.app_handle());
             crate::exposure::windows_changed(host.app_handle());
         }
-        WindowEvent::Resized(_) => {
+        WindowEvent::Resized => {
             crate::exposure::window_changed(&host);
         }
         WindowEvent::Focused(focused) => {
@@ -903,7 +896,7 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             crate::exposure::window_changed(&host);
             crate::exposure::windows_changed(host.app_handle());
         }
-        WindowEvent::Moved(_) | WindowEvent::ScaleFactorChanged => {
+        WindowEvent::Moved | WindowEvent::ScaleFactorChanged => {
             crate::exposure::window_changed(&host);
         }
     });
@@ -988,7 +981,7 @@ struct ShownProject {
 /// them. The real window implements them, and a test supplies a recorder.
 pub trait WindowFront {
     fn show(&self) -> crate::framework::Result<()>;
-    fn set_focus(&self) -> crate::framework::Result<()>;
+    fn focus(&self) -> crate::framework::Result<()>;
     /// Whether the window is the key window of the application.
     fn is_focused(&self) -> crate::framework::Result<bool>;
 }
@@ -998,8 +991,8 @@ impl WindowFront for Window {
         Window::show(self)
     }
 
-    fn set_focus(&self) -> crate::framework::Result<()> {
-        Window::set_focus(self)
+    fn focus(&self) -> crate::framework::Result<()> {
+        Window::focus(self)
     }
 
     fn is_focused(&self) -> crate::framework::Result<bool> {
@@ -1038,7 +1031,7 @@ fn record_project_front(owner: &Window, project: &str) {
 
 /// Shows and focuses the window of a notification that the person activated.
 pub fn show_notification_owner(owner: &impl WindowFront) -> crate::framework::Result<()> {
-    owner.show().and_then(|()| owner.set_focus())
+    owner.show().and_then(|()| owner.focus())
 }
 
 pub fn project_open(window: &Window, request: OpenProject) -> Result<serde_json::Value, String> {
@@ -1116,8 +1109,8 @@ fn project_open_on_main(
         .filter(|geometry| geometry.width > 0.0 && geometry.height > 0.0);
     let previous_geometry = if !separate && geometry.is_some() {
         Some((
-            owner.inner_size().map_err(|error| error.to_string())?,
-            owner.outer_position().map_err(|error| error.to_string())?,
+            owner.size().map_err(|error| error.to_string())?,
+            owner.position().map_err(|error| error.to_string())?,
         ))
     } else {
         None
@@ -1130,9 +1123,7 @@ fn project_open_on_main(
                 .set_size(LogicalSize::new(geometry.width, geometry.height))
                 .map_err(|error| error.to_string())?;
             owner
-                .set_position(crate::framework::LogicalPosition::new(
-                    geometry.x, geometry.y,
-                ))
+                .set_position(LogicalPosition::new(geometry.x, geometry.y))
                 .map_err(|error| error.to_string())
         },
         || {
@@ -1427,15 +1418,8 @@ pub fn window_state(window: &Window) -> Result<Option<Geometry>, String> {
     // The position and size are stored in window coordinates. If they were stored in physical pixels, the same number
     // would point twice as far on a screen with scale 2, and the window would be pushed off the screen at every
     // reopening.
-    let scale = window.scale_factor().map_err(|e| e.to_string())?;
-    let at = window
-        .outer_position()
-        .map_err(|e| e.to_string())?
-        .to_logical(scale);
-    let size = window
-        .inner_size()
-        .map_err(|e| e.to_string())?
-        .to_logical(scale);
+    let at = window.position().map_err(|e| e.to_string())?;
+    let size = window.size().map_err(|e| e.to_string())?;
     Ok(Some(Geometry {
         x: at.x.round() as i32,
         y: at.y.round() as i32,
@@ -1552,7 +1536,7 @@ pub fn window_close_kept(window: &Window) -> Result<(), String> {
     // A request of the operating system waits for its answer; the application does not quit, so the answer is the
     // cancellation.
     window
-        .run_on_main_thread(|| match platform::current() {
+        .post(|| match platform::current() {
             Ok(platform) => platform.cancel_quit_requests(),
             Err(error) => log_error("quit request cancel", error),
         })
@@ -1603,7 +1587,7 @@ const INITIAL_TITLEBAR_HEIGHT: f64 = 40.0;
 fn initial_titlebar(window: &Window) -> Result<(), String> {
     let target = window.clone();
     window
-        .run_on_main_thread(move || {
+        .post(move || {
             // The address is read in this step, which uses the address. A window that closed before has no title bar to
             // set.
             let result = open_owner(&target).and_then(|owner| match owner {

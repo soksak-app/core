@@ -138,7 +138,7 @@ func TestDebugWriteLogsTarReportsProgressEachMebibyteAndAtTheEnd(t *testing.T) {
 func TestDebugWriteStateWritesTheStateFile(t *testing.T) {
 	config := debugConfig(t)
 	at := time.Date(2026, 10, 9, 1, 2, 3, 0, time.UTC)
-	path, err := host.DebugWriteState(config, at, map[string]any{"host": "wailsv3"})
+	path, err := host.DebugWriteState(config, at, map[string]any{"host": "fixture"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +150,7 @@ func TestDebugWriteStateWritesTheStateFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	var state map[string]any
-	if err := json.Unmarshal(data, &state); err != nil || state["host"] != "wailsv3" || state["time"] != "20261009T010203Z" {
+	if err := json.Unmarshal(data, &state); err != nil || state["host"] != "fixture" || state["time"] != "20261009T010203Z" {
 		t.Fatalf("state %s: %v", data, err)
 	}
 }
@@ -162,7 +162,7 @@ func TestDebugStateNamesTheValueOfTheWorkbench(t *testing.T) {
 	if err := json.Unmarshal([]byte(`{"workbench":{"core.layout":{"tabs":1}}}`), &request); err != nil {
 		t.Fatal(err)
 	}
-	document := host.DebugStateDocument("wailsv3", map[string]any{"core": "1"}, []map[string]any{}, request)
+	document := host.DebugStateDocument("fixture", map[string]any{"core": "1"}, []map[string]any{}, request)
 	path, err := host.DebugWriteState(config, time.Date(2026, 10, 9, 1, 2, 3, 0, time.UTC), document)
 	if err != nil {
 		t.Fatal(err)
@@ -175,7 +175,7 @@ func TestDebugStateNamesTheValueOfTheWorkbench(t *testing.T) {
 	if err := json.Unmarshal(data, &state); err != nil {
 		t.Fatal(err)
 	}
-	if _, has := state["page"]; has || fmt.Sprint(state["workbench"]) != "map[core.layout:map[tabs:1]]" || state["host"] != "wailsv3" {
+	if _, has := state["page"]; has || fmt.Sprint(state["workbench"]) != "map[core.layout:map[tabs:1]]" || state["host"] != "fixture" {
 		t.Fatalf("state %s", data)
 	}
 }
@@ -271,7 +271,7 @@ func TestDebugWriteStateKeepsTheNewest20StateFiles(t *testing.T) {
 		}
 	}
 	at := time.Date(2026, 10, 9, 1, 0, 0, 0, time.UTC)
-	if _, err := host.DebugWriteState(config, at, map[string]any{"host": "wailsv3"}); err != nil {
+	if _, err := host.DebugWriteState(config, at, map[string]any{"host": "fixture"}); err != nil {
 		t.Fatal(err)
 	}
 	entries, err := os.ReadDir(filepath.Join(config, "logs"))

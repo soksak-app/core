@@ -101,7 +101,7 @@ fn a_poisoned_owner_lock_releases_the_project_of_a_poisoned_lock() {
     );
 }
 
-// contract: tauriv2.window-notification.closed-window-reports-no-failure
+// contract: window-notification.closed-window-reports-no-failure
 #[test]
 fn a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure() {
     let closed: Result<Arc<WindowData>, String> = Err("project window is closed".to_string());
@@ -118,7 +118,7 @@ fn a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure() 
     assert!(!ran);
 }
 
-// contract: tauriv2.window-notification.open-window-reports-its-failure
+// contract: window-notification.open-window-reports-its-failure
 #[test]
 fn a_notification_of_an_open_window_runs_and_reports_its_failure() {
     let open: Result<Arc<WindowData>, String> = Ok(Arc::new(WindowData::default()));

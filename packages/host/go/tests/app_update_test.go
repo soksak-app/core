@@ -62,7 +62,7 @@ func updateRegistry(t *testing.T, key string) string {
 
 // contract: app-update.host.stages-only-the-candidate
 func TestTheHostStagesTheCandidateAndNoOtherVersion(t *testing.T) {
-	const key = "darwin-arm64-wailsv3"
+	key := "darwin-arm64-" + sok.CoreHosts[0]
 	config := updateRegistry(t, key)
 	state, err := host.ReadAppUpdateState(config, "0.0.8", key)
 	if err != nil {
@@ -94,7 +94,7 @@ func TestTheUpdateStartsSokFromACopyBesideTheUpdatesAndChecksTheStagedBundle(t *
 	if err := os.MkdirAll(filepath.Join(running, "Contents", "MacOS"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	executable := filepath.Join(running, "Contents", "MacOS", "soksak-wailsv3")
+	executable := filepath.Join(running, "Contents", "MacOS", "soksak-fixture")
 	if err := os.WriteFile(filepath.Join(running, "Contents", "MacOS", "sok"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +122,7 @@ func TestTheUpdateStartsSokFromACopyBesideTheUpdatesAndChecksTheStagedBundle(t *
 	for name, args := range map[string][3]string{
 		"a bundle outside updates":             {config, executable, other},
 		"a staged folder that is not a bundle": {config, executable, filepath.Join(config, "updates", "0.0.9")},
-		"an application outside a bundle":      {config, filepath.Join(t.TempDir(), "soksak-wailsv3"), staged},
+		"an application outside a bundle":      {config, filepath.Join(t.TempDir(), "soksak-fixture"), staged},
 	} {
 		if _, err := host.PrepareAppUpdateStart(args[0], args[1], args[2], 4321, nil); err == nil {
 			t.Fatalf("%s was accepted", name)
@@ -137,7 +137,7 @@ func TestTheDetachedUpdateCommandKeepsItsErrorsAndIsRecordedWhenItStarts(t *test
 	if err := os.MkdirAll(filepath.Join(running, "Contents", "MacOS"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	executable := filepath.Join(running, "Contents", "MacOS", "soksak-wailsv3")
+	executable := filepath.Join(running, "Contents", "MacOS", "soksak-fixture")
 	if err := os.WriteFile(filepath.Join(running, "Contents", "MacOS", "sok"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}

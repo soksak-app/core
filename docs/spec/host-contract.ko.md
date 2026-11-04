@@ -35,7 +35,7 @@ fn invalid_json_closes_connection() {
 
 소유자 규칙: 선언된 테스트는 자기 소유자의 항목에서만 결과를 얻는다. Go 테스트의 소유자는 패키지 디렉터리이고, Rust 테스트의 소유자는 크레이트 디렉터리(파일 위쪽에서 가장 가까운 `Cargo.toml`이 있는 폴더)다. 결과는 실행, 소유자, 테스트 이름으로 묶으며, 호스트의 결과가 sok 선언에 쓰이거나 그 반대가 되지 않는다. Rust 선언은 이름이 같은 잎 이름을 가진 테스트 하나와 일치한다.
 
-범위 열은 `all`이거나, 이름을 든 호스트에만 있는 동작이면 `<host>[, <host>] only: <이유>`다. language host library가 framework port 없이 구현하는 사례는 library의 test가 선언하고, 그 library를 link하는 범위 안의 각 호스트에 센다. 동작이 `Framework`나 `Frontend`를 거치는 사례는 범위 안의 각 framework adapter의 test가 선언한다([host tree](hosts.ko.md#호스트-트리)). 검사는 두 호스트가 모두 구현한 유일한 플랫폼인 macOS에서 실행한다. Windows와 Linux 진입점은 `not implemented` 오류를 반환하며 사례가 없다. 검사의 단위 테스트(`scripts/test/check-host-contract.test.mjs`)는 각 실패를 주입하며 `pnpm test`에서 실행된다.
+범위 열은 `all`이거나, 이름을 든 호스트에만 있는 동작이면 `<host>[, <host>] only: <이유>`다. language host library가 framework port 없이 구현하는 사례는 library의 test가 선언하고, 그 library를 link하는 범위 안의 각 호스트에 센다. 동작이 `Framework`나 `Frontend`를 거치는 사례는 범위 안의 각 framework adapter의 test가 선언한다([host tree](hosts.ko.md#호스트-트리)). Language host library가 선언하는 사례의 id는 호스트 이름으로 시작하지 않는다. 호스트는 범위가 이름으로 든다. 검사는 두 호스트가 모두 구현한 유일한 플랫폼인 macOS에서 실행한다. Windows와 Linux 진입점은 `not implemented` 오류를 반환하며 사례가 없다. 검사의 단위 테스트(`scripts/test/check-host-contract.test.mjs`)는 각 실패를 주입하며 `pnpm test`에서 실행된다.
 
 ## 애플리케이션 메뉴
 
@@ -293,8 +293,8 @@ fn invalid_json_closes_connection() {
 | `view.origin.retired-callback-is-cancelled` | 종료된 view origin의 callback은 dispatch 전에 취소되고 교체 view에는 도달하지 않는다. | all |
 | `view.origin.retired-producer-error-is-preserved` | 종료된 view origin의 producer 오류는 원래 이유와 view 식별자를 보존해 기록하며 현재 channel에는 들어가지 않는다. | all |
 | `view.origin.retired-channel-errors-are-reported` | 종료된 view origin에서 발생한 잘못된 JSON과 transport 오류는 원래 이유를 보존한 channel 오류로 보고된다. | all |
-| `tauriv2.view.dispatch.decodes-envelope-once` | Tauri view dispatcher는 현재 message envelope를 한 번만 decode하고 decode한 값에서 reply, call, snapshot, ready message를 분기한다. | tauriv2 only: Rust dispatcher의 decoded-value ownership 경로를 검증한다 |
-| `tauriv2.view.dispatch.preserves-precedence-and-errors` | Tauri view dispatcher는 field를 검증하기 전에 reply, cancel, ready 우선순위를 적용하고 잘못된 reply와 malformed JSON의 명시적 오류를 보존한다. | tauriv2 only: Rust dispatcher의 message-kind 선택과 decoder 오류를 검증한다 |
+| `view.dispatch.decodes-envelope-once` | Tauri view dispatcher는 현재 message envelope를 한 번만 decode하고 decode한 값에서 reply, call, snapshot, ready message를 분기한다. | tauriv2 only: Rust dispatcher의 decoded-value ownership 경로를 검증한다 |
+| `view.dispatch.preserves-precedence-and-errors` | Tauri view dispatcher는 field를 검증하기 전에 reply, cancel, ready 우선순위를 적용하고 잘못된 reply와 malformed JSON의 명시적 오류를 보존한다. | tauriv2 only: Rust dispatcher의 message-kind 선택과 decoder 오류를 검증한다 |
 | `view.origin.retired-malformed-envelope-is-reported` | 종료된 view origin의 잘못된 message envelope는 원래 이유를 보존한 channel 오류로 보고된다. | all |
 | `view.call.reply-generation-scoped-cleanup` | 이전 view generation의 늦은 reply는 같은 call id를 가진 교체 generation의 pending-call 기록을 제거하지 않는다. | all |
 | `sidecars.stop.stdin-eof-cancels-late-image` | stdio sidecar의 입력이 닫힌 뒤 이를 중지하면 늦은 image transfer를 닫힌 surface에 전달하지 않고 취소한다. | all |
@@ -467,7 +467,7 @@ fn invalid_json_closes_connection() {
 | `log.record.one-line` | 기록은 한 줄이다. 본문의 줄바꿈은 두 글자 `\n`으로 쓰고, 시각을 뺀 항목은 `<level> <layer> <where>: <text>`다. | all |
 | `sidecars.disconnect.record-end` | 영속 서비스 연결의 `host.sidecar.disconnect` 기록은 연결이 어떻게 끝났는지(`end`: `eof`, `unfinished line`, `read error: <text>`, `violation`)와 그 연결을 기다리던 요청 수(`waiting`)를 담는다. 서비스의 종료 상태는 기록하지 않는다. 호스트가 그 프로세스를 소유하지 않기 때문이다. | all |
 | `sidecars.trace.relay-records-every-message-with-its-body` | performance trace가 켜진 동안 host가 sidecar로 보내는 각 요청은 event log의 event `host.trace.sidecar.send`, 받는 각 메시지는 `host.trace.sidecar.receive`이며, field에 `sidecar`, `surface`, 본문 전체를 담는다. | all |
-| `tauriv2.sidecars.receive-trace.records-before-dispatch` | Tauri sidecar receive trace callback은 처리되는 message와 일반 message에서 각각 한 번 실행되며 native image dispatch보다 먼저 실행된다. 일반 message는 page 전달에 계속 사용할 수 있다. | tauriv2 only: Rust receive hook의 trace 관찰과 native dispatch 순서를 검증한다 |
+| `sidecars.receive-trace.records-before-dispatch` | Tauri sidecar receive trace callback은 처리되는 message와 일반 message에서 각각 한 번 실행되며 native image dispatch보다 먼저 실행된다. 일반 message는 page 전달에 계속 사용할 수 있다. | tauriv2 only: Rust receive hook의 trace 관찰과 native dispatch 순서를 검증한다 |
 | `sidecars.trace.first-answer-after-spawn-is-recorded` | host가 spawn한 sidecar마다 event `host.trace.sidecar.ready`(level `debug`)를 남기며, 필드 `sidecar`, `pid`, `ms`를 담는다. `ms`는 spawn부터 그 프로세스가 보낸 첫 메시지 줄까지의 밀리초다. spawn마다 한 번 남기며, 다른 host가 시작한 프로세스는 아무것도 남기지 않는다. | all |
 | `sidecars.lifetime.start-and-exit-events` | 호스트가 시작하는 표준 입출력 사이드카 프로세스마다 `name`과 `pid`를 가진 event `host.sidecar.start`가 있고, 그 종료는 `name`, `pid`, `status`(`exit status <code>` 또는 `signal <number>`), 호스트가 멈추는 중이었는지 알려 주는 `stopping`을 가진 event `host.sidecar.exit`다. | all |
 | `sidecars.display-name.requires-canonical-component` | 사이드카 선언에는 `displayName`이 필요하며 `soksak://sidecar/<lowercase-id>` 형식의 component 하나여야 한다. 누락, 문자열이 아닌 값, 잘못된 scheme 또는 role, 추가 path component, 대문자 id는 거부된다. 없거나 null인 값은 `displayName is required`로, 다른 값은 `displayName must be soksak://sidecar/ followed by one lowercase identifier`로 거부된다. 그 sidecar는 선언되지 않고 생성은 성공하며, 그 sidecar에 대한 요청은 `sidecar <name>: <sidecar.json 경로>: <reason>`으로 실패한다. | all |
@@ -478,6 +478,7 @@ fn invalid_json_closes_connection() {
 | `application.launch.system-decides-activation` | host는 다른 애플리케이션이 active인 동안 실행을 마칠 때 스스로 activate하지 않으므로 Launch Services가 실행의 activation을 결정한다([launch activation](hosts.md#launch-activation)). | all |
 | `application.framework.names-the-application` | framework adapter는 `endpoint.json`, endpoint socket의 이름, application update의 release key, debug view의 state file이 담는 application을 정한다. Wails host는 `wailsv3`이고 Tauri host는 `tauriv2`다([host tree](hosts.md#host-tree)). | all |
 | `application.framework.window-events-are-port-events` | framework adapter는 language host library가 관찰하는 framework의 각 window event를 `Frontend` port의 window event로 알린다([host tree](hosts.md#host-tree)). | all |
+| `application.framework.lengths-are-logical-pixels` | `Frontend` port는 크기와 위치를 logical pixel로 받고 주며, Wails framework adapter는 각 길이의 가장 가까운 정수를 Wails에 준다([host tree](hosts.ko.md#호스트-트리)). | wailsv3 only: Wails는 길이를 정수로 가지고, Tauri는 logical 길이를 부동소수점 수로 가진다. |
 | `sidecars.protocol.request-line-carries-cids` | 입력을 이어받는 페이지 요청은 `root`와 `body` 사이에 필드 `cids`(상관 식별자, 순서대로)를 가진 요청 줄로 사이드카에 가고, 입력을 이어받지 않는 요청에는 `cids` 필드가 없다. | all |
 | `sidecars.protocol.request-with-cids-is-recorded` | `cids`를 가진 페이지 요청은 그 `cids`, 사이드카의 `name`, `surface`, body 크기 `bytes`를 가진 level `info`의 event `host.sidecar.request`가 되고, `cids`가 없는 요청은 이 event를 저장하지 않는다. | all |
 | `sidecars.protocol.reply-with-cids-is-recorded` | 줄이 `cids`를 밝히거나 body가 `error` member를 가진 객체인 sidecar의 메시지는 event `host.sidecar.reply`이다. `name`, `surface`, body 크기 `bytes`, `ok`(`error`이면 false), 줄의 `cids`, 그 첫 번째 요청을 host가 기억하면 `micros`, 오류이면 `error` `-32603: <text>`(문자열 오류는 그 글, 다른 값은 JSON 글)를 level `warn`(오류가 없는 reply는 `info`)으로 가진다. 둘 다 없는 메시지는 이 event를 저장하지 않는다. | all |
@@ -541,7 +542,7 @@ fn invalid_json_closes_connection() {
 | `images.wait.successful-handle-replies-consumed` | 주 스레드 표시에 성공한 봉투를 처리하면 consumed로 응답한다. | all |
 | `images.wait.newer-sequence-rearms-wait` | 같은 raster의 새 sequence를 결정하면 settled presentation wait가 다시 대기한다. | all |
 | `images.wait.continuous-raster-snapshot` | Continuous layout 대기는 후속 같은 raster sequence가 수락되더라도 현재 generation과 raster에 positive presented sequence가 설치되면 완료된다. Generation 또는 raster 변경은 설치된 snapshot을 지우고, presentation error는 대기를 실패시키며, 숨긴 영역은 대기를 막지 않는다. Settled 대기는 최신 accepted sequence를 계속 요구한다. | all |
-| `tauriv2.images.presentation.runs-after-framework-event` | Tauri image presentation은 framework event가 lock을 놓은 뒤 commit하며, queue enqueue와 native presentation 오류를 frame handler에 그대로 전달한다. | tauriv2 only: Tauri UI callback adapter의 lock 및 오류 경계를 검증한다 |
+| `images.presentation.runs-after-framework-event` | Tauri image presentation은 framework event가 lock을 놓은 뒤 commit하며, queue enqueue와 native presentation 오류를 frame handler에 그대로 전달한다. | tauriv2 only: Tauri UI callback adapter의 lock 및 오류 경계를 검증한다 |
 | `images.wait.reconfigure-clears-presented` | raster를 다시 구성하면 표시 상태를 지운다. | all |
 | `images.wait.hidden-image-does-not-block` | 숨긴 이미지는 표시 대기를 막지 않고, 다시 보이면 다시 막는다. | all |
 | `images.wait.hidden-surface-does-not-block` | 숨긴 표면은 표시 대기를 막지 않고, 다시 보이면 다시 막는다. | all |
@@ -1093,14 +1094,14 @@ fn invalid_json_closes_connection() {
 | `view-source-stream.send-failure-is-returned` | Tauri channel로 view-source event를 보내지 못하면 source handler에 오류를 반환한다. | tauriv2 only: Tauri `Channel` send operation은 결과를 반환한다 |
 | `view-source-stream.rejects-unlisted-events` | view-source channel은 allowlist 밖의 event 이름을 거부한다. | tauriv2 only: host가 Tauri channel allowlist를 소유한다 |
 | `view.placement.geometry-failure-is-reported` | Tauri native geometry operation이 반환한 placement 실패를 호출자에게 전달한다. | tauriv2 only: Tauri platform geometry method는 결과를 반환한다 |
-| `tauriv2.surface-close.closed-window-reports-no-failure` | window가 닫힌 뒤 실행되는 surface close는 close가 가져간 window record에서 view source를 끝내고, 알림을 보내지 않으며, 실패를 보고하지 않는다. | tauriv2 only: Tauri close는 가져간 record로 main thread에서 queue되어 실행되고, 그곳에서 window가 열려 있는지 판단한다. Wails close는 자기 window의 state에서 실행된다(docs/spec/hosts.md H21) |
-| `tauriv2.surface-close.open-window-ends-view-source-for-page` | 열린 window의 surface close는 view source를 끝내고, page가 끝났다고 알게 되는 plugin과 generation을 준다. | tauriv2 only: Tauri close는 가져간 record로 main thread에서 queue되어 실행되고, 그곳에서 window가 열려 있는지 판단한다. Wails close는 자기 window의 state에서 실행된다(docs/spec/hosts.md H21) |
-| `tauriv2.presentation-end.closed-window-ends-nothing` | 실행 전에 window가 닫힌 presentation wait의 지연된 종료는 wait를 끝내지 않고 실패를 보고하지 않는다. | tauriv2 only: Tauri 종료는 main thread에서 queue되어 실행되고 label로 window를 찾는다. Wails 종료는 자기 window의 record에서 실행된다(docs/spec/hosts.md H22) |
-| `tauriv2.presentation-end.open-window-ends-join` | 열린 window의 presentation wait의 지연된 종료는 그 surface, generation, ticket의 join을 끝낸다. | tauriv2 only: Tauri 종료는 main thread에서 queue되어 실행되고 label로 window를 찾는다. Wails 종료는 자기 window의 record에서 실행된다(docs/spec/hosts.md H22) |
-| `tauriv2.window-notification.closed-window-reports-no-failure` | window가 닫힌 뒤 실행되는 window 알림은 단계를 실행하지 않고 실패를 보고하지 않는다. | tauriv2 only: 알림은 host의 window record를 따른다. |
-| `tauriv2.window-notification.open-window-reports-its-failure` | 열린 window의 알림은 단계를 실행하고 단계의 실패를 보고한다. | tauriv2 only: 알림은 host의 window record를 따른다. |
-| `tauriv2.surface-sync.closed-handle-is-not-used` | surface가 닫힌 뒤 실행되는 surface sync의 main-thread 단계는 sync가 읽은 handle을 쓰지 않는다. close가 먼저 registration을 잊기 때문이다. | tauriv2 only: Tauri sync는 main thread 밖에서 handle을 읽고 그 handle을 쓰는 단계를 queue한다. Wails layout은 한 main-thread 단계에서 handle을 읽고 쓴다 |
-| `tauriv2.document-callback.retirement-keeps-active-callback-alive` | Tauri document를 폐기할 때 이미 실행 중인 invocation이 반환된 뒤 ended, changed, event, responsiveness callback을 해제한다. | tauriv2 only: native document FFI 경계를 넘는 Rust callback receiver ownership을 검증한다 |
+| `surface-close.closed-window-reports-no-failure` | window가 닫힌 뒤 실행되는 surface close는 close가 가져간 window record에서 view source를 끝내고, 알림을 보내지 않으며, 실패를 보고하지 않는다. | tauriv2 only: Tauri close는 가져간 record로 main thread에서 queue되어 실행되고, 그곳에서 window가 열려 있는지 판단한다. Wails close는 자기 window의 state에서 실행된다(docs/spec/hosts.md H21) |
+| `surface-close.open-window-ends-view-source-for-page` | 열린 window의 surface close는 view source를 끝내고, page가 끝났다고 알게 되는 plugin과 generation을 준다. | tauriv2 only: Tauri close는 가져간 record로 main thread에서 queue되어 실행되고, 그곳에서 window가 열려 있는지 판단한다. Wails close는 자기 window의 state에서 실행된다(docs/spec/hosts.md H21) |
+| `presentation-end.closed-window-ends-nothing` | 실행 전에 window가 닫힌 presentation wait의 지연된 종료는 wait를 끝내지 않고 실패를 보고하지 않는다. | tauriv2 only: Tauri 종료는 main thread에서 queue되어 실행되고 label로 window를 찾는다. Wails 종료는 자기 window의 record에서 실행된다(docs/spec/hosts.md H22) |
+| `presentation-end.open-window-ends-join` | 열린 window의 presentation wait의 지연된 종료는 그 surface, generation, ticket의 join을 끝낸다. | tauriv2 only: Tauri 종료는 main thread에서 queue되어 실행되고 label로 window를 찾는다. Wails 종료는 자기 window의 record에서 실행된다(docs/spec/hosts.md H22) |
+| `window-notification.closed-window-reports-no-failure` | window가 닫힌 뒤 실행되는 window 알림은 단계를 실행하지 않고 실패를 보고하지 않는다. | tauriv2 only: 알림은 host의 window record를 따른다. |
+| `window-notification.open-window-reports-its-failure` | 열린 window의 알림은 단계를 실행하고 단계의 실패를 보고한다. | tauriv2 only: 알림은 host의 window record를 따른다. |
+| `surface-sync.closed-handle-is-not-used` | surface가 닫힌 뒤 실행되는 surface sync의 main-thread 단계는 sync가 읽은 handle을 쓰지 않는다. close가 먼저 registration을 잊기 때문이다. | tauriv2 only: Tauri sync는 main thread 밖에서 handle을 읽고 그 handle을 쓰는 단계를 queue한다. Wails layout은 한 main-thread 단계에서 handle을 읽고 쓴다 |
+| `document-callback.retirement-keeps-active-callback-alive` | Tauri document를 폐기할 때 이미 실행 중인 invocation이 반환된 뒤 ended, changed, event, responsiveness callback을 해제한다. | tauriv2 only: native document FFI 경계를 넘는 Rust callback receiver ownership을 검증한다 |
 | `exposure.surface-closed.closed-window-records-nothing` | 창이 닫힌 뒤 닫히는 surface는 아무것도 제거하지 않고 오류도 쓰지 않는다. registration은 창의 record와 함께 끝났다. | tauriv2 only: Go host는 surface 값에 registration을 두고 닫기가 그 값에 직접 닿으므로 그곳에서는 record 조회가 실패할 수 없다 |
 | `surface.sync.closed-window-creates-nothing` | 창이 닫힐 때 진행 중인 배치나 modal 요청은 표면이나 modal view를 만들지 않고 `project window is closed`로 실패한다. 창을 닫을 때 모든 표면을 이미 닫았으므로 그 뒤에 만든 표면은 닫는 곳이 없기 때문이다. | all |
 | `exposure.reply.error-member-names-code-and-message` | document reply의 `error` member에 `code`나 `message`가 없으면 `error has no code` 또는 `error has no message`로 거부하며, 기다리는 요청에 code 0이나 빈 message를 전달하지 않는다. | all |

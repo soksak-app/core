@@ -10,7 +10,6 @@ use std::collections::HashMap;
 use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, PoisonError, RwLock};
 
 use serde::Serialize;
@@ -56,13 +55,14 @@ pub trait Framework: Send + Sync {
     fn application_name(&self) -> &'static str;
     /// The end of a window title, as "Tauri v2".
     fn display_name(&self) -> &'static str;
-    /// Runs task as a step of the main thread.
-    fn run_on_main_thread(&self, task: Box<dyn FnOnce() + Send>) -> Result<()>;
+    /// Runs task as a step of the main thread and returns without waiting for it from another thread. On the main thread
+    /// a framework may run it before it returns.
+    fn post(&self, task: Box<dyn FnOnce() + Send>) -> Result<()>;
     /// Runs task on the blocking threads of the asynchronous runtime of the framework. The future ends with the value of
     /// the task when the task ended; dropping it leaves the task running and drops its value.
     fn spawn_blocking(&self, task: BlockingBody) -> BlockingTask;
-    /// Ends the application with code through the exit of the framework.
-    fn exit(&self, code: i32);
+    /// Ends the application through the quit of the framework.
+    fn quit(&self);
     /// The user configuration directory of the operating system.
     fn config_dir(&self) -> Result<PathBuf>;
     /// The home directory of the user.
@@ -79,51 +79,61 @@ pub trait Framework: Send + Sync {
     ) -> Result<Option<PathBuf>>;
     /// Installs the application menu.
     fn set_menu(&self, menus: Vec<crate::menu::Menu>) -> Result<()>;
+    /// Installs the Dock menu, whose new window item runs new_window. Call it on the main thread.
+    fn install_dock(&self, new_window: Box<dyn Fn()>) -> Result<()>;
     /// Creates a window with its title bar.
     fn new_window(&self, options: WindowOptions) -> Result<Arc<dyn Frontend>>;
     /// The windows that are open.
     fn windows(&self) -> Vec<Arc<dyn Frontend>>;
-    /// The window with label, when it is open.
-    fn get_window(&self, label: &str) -> Option<Arc<dyn Frontend>>;
     /// The window of the web view with label, when the web view is open.
     fn get_webview(&self, label: &str) -> Option<(Arc<dyn Frontend>, String)>;
-    /// Delivers an event to each target that filter accepts.
-    fn emit_filter(
-        &self,
-        event: &str,
-        payload: Value,
-        filter: &dyn Fn(&EventTarget) -> bool,
-    ) -> Result<()>;
-    /// Delivers an event to target.
-    fn emit_to(&self, target: EventTarget, event: &str, payload: Value) -> Result<()>;
 }
 
 /// One window of a framework, its main web view (the workbench) and its child web views. A method that names a web view
-/// takes its label.
+/// takes its label. Sizes and positions are logical pixels.
 pub trait Frontend: Send + Sync {
-    fn label(&self) -> &str;
+    /// The window identifier of the endpoint, which is the label of the main web view.
+    fn name(&self) -> &str;
     fn title(&self) -> Result<String>;
     fn set_title(&self, title: &str) -> Result<()>;
     fn show(&self) -> Result<()>;
-    fn set_focus(&self) -> Result<()>;
+    fn focus(&self) -> Result<()>;
     fn is_focused(&self) -> Result<bool>;
     fn close(&self) -> Result<()>;
+    /// The physical pixels of a logical pixel of the window.
     fn scale_factor(&self) -> Result<f64>;
-    fn inner_size(&self) -> Result<PhysicalSize>;
-    fn outer_position(&self) -> Result<PhysicalPosition>;
-    fn set_size(&self, size: Size) -> Result<()>;
-    fn set_position(&self, position: Position) -> Result<()>;
+    /// The size of the content of the window.
+    fn size(&self) -> Result<LogicalSize>;
+    fn position(&self) -> Result<LogicalPosition>;
+    fn set_size(&self, size: LogicalSize) -> Result<()>;
+    fn set_position(&self, position: LogicalPosition) -> Result<()>;
     fn maximize(&self) -> Result<()>;
     fn unmaximize(&self) -> Result<()>;
     fn is_maximized(&self) -> Result<bool>;
     fn is_fullscreen(&self) -> Result<bool>;
     fn is_minimized(&self) -> Result<bool>;
     /// The native window handle.
-    fn ns_window(&self) -> Result<*mut c_void>;
+    fn native_window(&self) -> Result<*mut c_void>;
     /// The labels of the web views of the window.
     fn webviews(&self) -> Vec<String>;
+    /// Delivers an event to the workbench of the window.
+    fn emit(&self, name: &str, payload: Value) -> Result<()>;
+    /// Delivers an event to each web view of the window.
+    fn emit_webviews(&self, name: &str, payload: Value) -> Result<()>;
     /// Runs listener for each event of the window.
     fn on_window_event(&self, listener: Box<dyn Fn(&WindowEvent) + Send + Sync>);
+    /// Runs hook when the window is asked to close. A hook that returns true keeps the window open.
+    fn on_closing(&self, hook: Box<dyn Fn() -> bool + Send + Sync>);
+    /// The presentation notice: done runs on the main thread after the workbench presented the state of this step, or with
+    /// the failure of the wait. Call it on the main thread.
+    fn after_presentation(&self, done: PresentationDone) -> Result<()>;
+    /// The settled presentation: done runs on the main thread after the content of the window is on the screen, with the
+    /// time of that screen in milliseconds, or with the failure of the wait. Call it on the main thread.
+    fn after_settled(&self, done: SettledDone) -> Result<()>;
+    /// The workbench start: starts the workbench of the window again.
+    fn start_workbench(&self) -> Result<()>;
+    /// The workbench call channel: runs script in the workbench.
+    fn call_workbench(&self, script: &str) -> Result<()>;
     /// Adds a child web view at position with size and returns its label.
     fn add_child(
         &self,
@@ -137,9 +147,9 @@ pub trait Frontend: Send + Sync {
         webview: &str,
         work: Box<dyn FnOnce(PlatformWebview) + Send>,
     ) -> Result<()>;
-    /// The workbench start: loads the page of the web view again.
+    /// Loads the page of the web view again.
     fn reload(&self, webview: &str) -> Result<()>;
-    /// The workbench call channel: runs script in the web view.
+    /// Runs script in the web view.
     fn eval(&self, webview: &str, script: &str) -> Result<()>;
     fn navigate(&self, webview: &str, url: url::Url) -> Result<()>;
     fn url(&self, webview: &str) -> Result<url::Url>;
@@ -147,10 +157,14 @@ pub trait Frontend: Send + Sync {
     fn show_webview(&self, webview: &str) -> Result<()>;
     fn hide_webview(&self, webview: &str) -> Result<()>;
     fn set_webview_focus(&self, webview: &str) -> Result<()>;
-    fn set_webview_position(&self, webview: &str, position: Position) -> Result<()>;
-    fn set_webview_size(&self, webview: &str, size: Size) -> Result<()>;
     fn set_webview_auto_resize(&self, webview: &str, auto_resize: bool) -> Result<()>;
 }
+
+/// The end of the wait of [`Frontend::after_presentation`].
+pub type PresentationDone = Box<dyn Fn(std::result::Result<(), String>) + Send + Sync>;
+
+/// The end of the wait of [`Frontend::after_settled`].
+pub type SettledDone = Box<dyn Fn(std::result::Result<f64, String>) + Send + Sync>;
 
 /// A task that [`Framework::spawn_blocking`] runs, which returns its value.
 pub type BlockingBody = Box<dyn FnOnce() -> Box<dyn Any + Send> + Send>;
@@ -171,52 +185,13 @@ pub struct WindowOptions {
 }
 
 /// A change of a window that a Frontend reports.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WindowEvent {
-    Resized(PhysicalSize),
-    Moved(PhysicalPosition),
+    Resized,
+    Moved,
     ScaleFactorChanged,
     Focused(bool),
-    /// The window is asked to close; [`CloseRequestApi::prevent_close`] keeps it open.
-    CloseRequested {
-        api: CloseRequestApi,
-    },
     Destroyed,
-}
-
-/// The answer to a close request of a window.
-#[derive(Clone, Debug, Default)]
-pub struct CloseRequestApi(Arc<AtomicBool>);
-
-impl CloseRequestApi {
-    /// Keeps the window open.
-    pub fn prevent_close(&self) {
-        self.0.store(true, Ordering::Relaxed);
-    }
-
-    /// Whether a listener kept the window open.
-    pub fn prevented(&self) -> bool {
-        self.0.load(Ordering::Relaxed)
-    }
-}
-
-/// The receiver of an event.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum EventTarget {
-    Any,
-    AnyLabel { label: String },
-    App,
-    Window { label: String },
-    Webview { label: String },
-    WebviewWindow { label: String },
-}
-
-impl EventTarget {
-    pub fn webview(label: impl Into<String>) -> Self {
-        Self::Webview {
-            label: label.into(),
-        }
-    }
 }
 
 /// A color with red, green, blue and alpha.
@@ -247,84 +222,6 @@ impl LogicalPosition {
             x: x.into(),
             y: y.into(),
         }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct PhysicalSize {
-    pub width: u32,
-    pub height: u32,
-}
-
-impl PhysicalSize {
-    pub fn new(width: u32, height: u32) -> Self {
-        Self { width, height }
-    }
-
-    /// The size in logical pixels at scale_factor.
-    pub fn to_logical(&self, scale_factor: f64) -> LogicalSize {
-        LogicalSize::new(
-            f64::from(self.width) / scale_factor,
-            f64::from(self.height) / scale_factor,
-        )
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct PhysicalPosition {
-    pub x: i32,
-    pub y: i32,
-}
-
-impl PhysicalPosition {
-    pub fn new(x: i32, y: i32) -> Self {
-        Self { x, y }
-    }
-
-    /// The position in logical pixels at scale_factor.
-    pub fn to_logical(&self, scale_factor: f64) -> LogicalPosition {
-        LogicalPosition::new(
-            f64::from(self.x) / scale_factor,
-            f64::from(self.y) / scale_factor,
-        )
-    }
-}
-
-/// A size in logical or physical pixels.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Size {
-    Logical(LogicalSize),
-    Physical(PhysicalSize),
-}
-
-impl From<LogicalSize> for Size {
-    fn from(size: LogicalSize) -> Self {
-        Self::Logical(size)
-    }
-}
-
-impl From<PhysicalSize> for Size {
-    fn from(size: PhysicalSize) -> Self {
-        Self::Physical(size)
-    }
-}
-
-/// A position in logical or physical pixels.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Position {
-    Logical(LogicalPosition),
-    Physical(PhysicalPosition),
-}
-
-impl From<LogicalPosition> for Position {
-    fn from(position: LogicalPosition) -> Self {
-        Self::Logical(position)
-    }
-}
-
-impl From<PhysicalPosition> for Position {
-    fn from(position: PhysicalPosition) -> Self {
-        Self::Physical(position)
     }
 }
 
@@ -530,8 +427,8 @@ impl AppHandle {
         })));
     }
 
-    pub fn exit(&self, code: i32) {
-        self.framework.exit(code)
+    pub fn quit(&self) {
+        self.framework.quit()
     }
 
     pub fn path(&self) -> PathResolver<'_> {
@@ -540,6 +437,11 @@ impl AppHandle {
 
     pub fn set_menu(&self, menus: Vec<crate::menu::Menu>) -> Result<()> {
         self.framework.set_menu(menus)
+    }
+
+    /// Installs the Dock menu, whose new window item runs new_window. Call it on the main thread.
+    pub fn install_dock(&self, new_window: impl Fn() + 'static) -> Result<()> {
+        self.framework.install_dock(Box::new(new_window))
     }
 }
 
@@ -601,10 +503,8 @@ pub trait Manager {
     }
 
     /// Runs task as a step of the main thread.
-    fn run_on_main_thread(&self, task: impl FnOnce() + Send + 'static) -> Result<()> {
-        self.app_handle()
-            .framework
-            .run_on_main_thread(Box::new(task))
+    fn post(&self, task: impl FnOnce() + Send + 'static) -> Result<()> {
+        self.app_handle().framework.post(Box::new(task))
     }
 
     /// The windows that are open, by label.
@@ -623,7 +523,9 @@ pub trait Manager {
     fn get_window(&self, label: &str) -> Option<Window> {
         let app = self.app_handle();
         app.framework
-            .get_window(label)
+            .windows()
+            .into_iter()
+            .find(|frontend| frontend.name() == label)
             .map(|frontend| app.window_of(frontend))
     }
 
@@ -641,32 +543,6 @@ impl Manager for AppHandle {
     }
 }
 
-/// The delivery of events to the pages.
-pub trait Emitter: Manager {
-    fn emit<S: Serialize>(&self, event: &str, payload: S) -> Result<()> {
-        self.emit_filter(event, payload, |_| true)
-    }
-
-    fn emit_to<S: Serialize>(&self, target: EventTarget, event: &str, payload: S) -> Result<()> {
-        self.app_handle()
-            .framework
-            .emit_to(target, event, serde_json::to_value(payload)?)
-    }
-
-    fn emit_filter<S: Serialize>(
-        &self,
-        event: &str,
-        payload: S,
-        filter: impl Fn(&EventTarget) -> bool,
-    ) -> Result<()> {
-        self.app_handle()
-            .framework
-            .emit_filter(event, serde_json::to_value(payload)?, &filter)
-    }
-}
-
-impl Emitter for AppHandle {}
-
 /// A window of the application.
 #[derive(Clone)]
 pub struct Window {
@@ -680,15 +556,14 @@ impl Manager for Window {
     }
 }
 
-impl Emitter for Window {}
-
 impl Window {
     pub fn frontend(&self) -> &Arc<dyn Frontend> {
         &self.frontend
     }
 
+    /// The name of the window, which is the label of its main web view.
     pub fn label(&self) -> &str {
-        self.frontend.label()
+        self.frontend.name()
     }
 
     pub fn title(&self) -> Result<String> {
@@ -703,8 +578,8 @@ impl Window {
         self.frontend.show()
     }
 
-    pub fn set_focus(&self) -> Result<()> {
-        self.frontend.set_focus()
+    pub fn focus(&self) -> Result<()> {
+        self.frontend.focus()
     }
 
     pub fn is_focused(&self) -> Result<bool> {
@@ -719,20 +594,20 @@ impl Window {
         self.frontend.scale_factor()
     }
 
-    pub fn inner_size(&self) -> Result<PhysicalSize> {
-        self.frontend.inner_size()
+    pub fn size(&self) -> Result<LogicalSize> {
+        self.frontend.size()
     }
 
-    pub fn outer_position(&self) -> Result<PhysicalPosition> {
-        self.frontend.outer_position()
+    pub fn position(&self) -> Result<LogicalPosition> {
+        self.frontend.position()
     }
 
-    pub fn set_size(&self, size: impl Into<Size>) -> Result<()> {
-        self.frontend.set_size(size.into())
+    pub fn set_size(&self, size: LogicalSize) -> Result<()> {
+        self.frontend.set_size(size)
     }
 
-    pub fn set_position(&self, position: impl Into<Position>) -> Result<()> {
-        self.frontend.set_position(position.into())
+    pub fn set_position(&self, position: LogicalPosition) -> Result<()> {
+        self.frontend.set_position(position)
     }
 
     pub fn maximize(&self) -> Result<()> {
@@ -755,8 +630,8 @@ impl Window {
         self.frontend.is_minimized()
     }
 
-    pub fn ns_window(&self) -> Result<*mut c_void> {
-        self.frontend.ns_window()
+    pub fn native_window(&self) -> Result<*mut c_void> {
+        self.frontend.native_window()
     }
 
     pub fn webviews(&self) -> Vec<Webview> {
@@ -770,8 +645,50 @@ impl Window {
             .collect()
     }
 
+    /// Delivers an event to the workbench of the window.
+    pub fn emit<S: Serialize>(&self, name: &str, payload: S) -> Result<()> {
+        self.frontend.emit(name, serde_json::to_value(payload)?)
+    }
+
+    /// Delivers an event to each web view of the window.
+    pub fn emit_webviews<S: Serialize>(&self, name: &str, payload: S) -> Result<()> {
+        self.frontend
+            .emit_webviews(name, serde_json::to_value(payload)?)
+    }
+
     pub fn on_window_event(&self, listener: impl Fn(&WindowEvent) + Send + Sync + 'static) {
         self.frontend.on_window_event(Box::new(listener))
+    }
+
+    /// Runs hook when the window is asked to close. A hook that returns true keeps the window open.
+    pub fn on_closing(&self, hook: impl Fn() -> bool + Send + Sync + 'static) {
+        self.frontend.on_closing(Box::new(hook))
+    }
+
+    /// The presentation notice (see [`Frontend::after_presentation`]).
+    pub fn after_presentation(
+        &self,
+        done: impl Fn(std::result::Result<(), String>) + Send + Sync + 'static,
+    ) -> Result<()> {
+        self.frontend.after_presentation(Box::new(done))
+    }
+
+    /// The settled presentation (see [`Frontend::after_settled`]).
+    pub fn after_settled(
+        &self,
+        done: impl Fn(std::result::Result<f64, String>) + Send + Sync + 'static,
+    ) -> Result<()> {
+        self.frontend.after_settled(Box::new(done))
+    }
+
+    /// The workbench start (see [`Frontend::start_workbench`]).
+    pub fn start_workbench(&self) -> Result<()> {
+        self.frontend.start_workbench()
+    }
+
+    /// The workbench call channel (see [`Frontend::call_workbench`]).
+    pub fn call_workbench(&self, script: impl AsRef<str>) -> Result<()> {
+        self.frontend.call_workbench(script.as_ref())
     }
 
     pub fn add_child(
@@ -800,8 +717,6 @@ impl Manager for Webview {
         &self.window.app
     }
 }
-
-impl Emitter for Webview {}
 
 impl Webview {
     pub fn label(&self) -> &str {
@@ -848,18 +763,6 @@ impl Webview {
 
     pub fn set_focus(&self) -> Result<()> {
         self.window.frontend.set_webview_focus(&self.label)
-    }
-
-    pub fn set_position(&self, position: impl Into<Position>) -> Result<()> {
-        self.window
-            .frontend
-            .set_webview_position(&self.label, position.into())
-    }
-
-    pub fn set_size(&self, size: impl Into<Size>) -> Result<()> {
-        self.window
-            .frontend
-            .set_webview_size(&self.label, size.into())
     }
 
     pub fn set_auto_resize(&self, auto_resize: bool) -> Result<()> {

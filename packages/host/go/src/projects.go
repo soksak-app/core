@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -176,9 +175,8 @@ func (h *Host) ProjectOpen(ctx context.Context, reqJSON json.RawMessage) (Projec
 	h.mu.Unlock()
 	if req.Geometry != nil && req.Geometry.Width > 0 && req.Geometry.Height > 0 {
 		mainThreadStep(func() {
-			// A Wails window size is in integer logical pixels, so the stored size is set to the nearest integer.
-			owner.window.SetSize(int(math.Round(req.Geometry.Width)), int(math.Round(req.Geometry.Height)))
-			owner.window.SetPosition(int(req.Geometry.X), int(req.Geometry.Y))
+			owner.window.SetSize(req.Geometry.Width, req.Geometry.Height)
+			owner.window.SetPosition(float64(req.Geometry.X), float64(req.Geometry.Y))
 			prepareWindow(owner.window)
 		})
 	}

@@ -28,11 +28,11 @@ pub enum MenuItem {
         title: Option<String>,
         with_app_name: bool,
     },
-    /// An item that runs the menu event of id, with the shortcut in the format of [`accelerator`].
+    /// An item that runs the menu event of id, with the key of the contract table as its shortcut.
     Command {
         id: &'static str,
         title: String,
-        accelerator: Option<String>,
+        key: Option<&'static str>,
     },
     Separator,
 }
@@ -121,30 +121,6 @@ pub fn menu_title(id: &str, language: &str) -> Result<String, String> {
 pub fn item_title(menu: &str, id: &str, language: &str) -> Result<String, String> {
     let column = language_column(language)?;
     item_row(menu, id).and_then(|row| column_title(&[row.3, row.4], column))
-}
-
-/// Converts the key format of the contract table (the host.menu report format) into the shortcut format of the menu
-/// library. The modifier keys are joined with + in the order cmd, shift, ctrl, opt, and the last cell is the key.
-pub fn accelerator(key: &str) -> Result<String, String> {
-    let parts: Vec<&str> = key.split('+').collect();
-    let Some((last, modifiers)) = parts.split_last() else {
-        return Err(format!("menu key {key:?} has no key"));
-    };
-    if last.is_empty() {
-        return Err(format!("menu key {key:?} has no key"));
-    }
-    let mut out: Vec<&str> = Vec::new();
-    for modifier in modifiers {
-        out.push(match *modifier {
-            "cmd" => "CmdOrCtrl",
-            "shift" => "Shift",
-            "ctrl" => "Control",
-            "opt" => "Option",
-            unknown => return Err(format!("menu key {key:?} has unknown modifier {unknown:?}")),
-        });
-    }
-    out.push(last);
-    Ok(out.join("+"))
 }
 
 /// The page command that the item of table id runs, or `None` when the item runs none.
@@ -298,7 +274,7 @@ fn view_submenu(language: &str) -> Result<Menu, String> {
         items.push(MenuItem::Command {
             id: command,
             title: item_title("view", row, language)?,
-            accelerator: Some(accelerator(item_key("view", row)?)?),
+            key: Some(item_key("view", row)?),
         });
     }
     // The full screen item uses the title and shortcut that the framework provides. The system does not add its own
@@ -320,7 +296,7 @@ fn help_submenu(language: &str) -> Result<Menu, String> {
         items: vec![MenuItem::Command {
             id: "core.debug.open",
             title: item_title("help", "debug", language)?,
-            accelerator: None,
+            key: None,
         }],
     })
 }
@@ -334,7 +310,7 @@ fn window_submenu(language: &str) -> Result<Menu, String> {
             MenuItem::Command {
                 id: "new-window",
                 title: item_title("window", "new-window", language)?,
-                accelerator: Some(accelerator(item_key("window", "new-window")?)?),
+                key: Some(item_key("window", "new-window")?),
             },
             system("bring-all-to-front"),
         ],

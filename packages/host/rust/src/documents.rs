@@ -2207,7 +2207,7 @@ pub(crate) fn post_sidecar_message(
     log_failure(
         "view sidecar route",
         window
-            .run_on_main_thread(move || {
+            .post(move || {
                 // A window that closed has no view to post to.
                 let Ok(data) = window_data(&task_window) else {
                     return;
@@ -2826,7 +2826,7 @@ pub(crate) fn close_surface(window: &Window, surface: &str) {
     log_failure(
         "document close",
         window
-            .run_on_main_thread(move || {
+            .post(move || {
                 let close = end_closed_surface(&data, &window_data(&host), &surface);
                 for error in close.errors {
                     log_error("view channel", error);
@@ -2864,7 +2864,7 @@ pub(crate) fn set_background(window: &Window, enabled: bool) {
     log_failure(
         "document background",
         window
-            .run_on_main_thread(move || {
+            .post(move || {
                 for handle in data.documents.all() {
                     log_failure(
                         "document background",

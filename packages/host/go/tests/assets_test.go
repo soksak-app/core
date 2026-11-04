@@ -19,7 +19,7 @@ func TestMissingAssetsReportEachPathOnce(t *testing.T) {
 		}
 		http.NotFound(w, r)
 	})
-	handler := host.MissingAssets(served, "/wails/custom.js", func(path string) { reported = append(reported, path) })
+	handler := host.MissingAssets(served, "/fixture/custom.js", func(path string) { reported = append(reported, path) })
 	for _, path := range []string{"/present.js", "/missing.js", "/missing.js", "/other.css", "/", "/no-extension"} {
 		handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, path, nil))
 	}
@@ -31,8 +31,8 @@ func TestMissingAssetsReportEachPathOnce(t *testing.T) {
 // contract: assets.missing.runtime-optional-file-is-not-reported
 func TestMissingAssetsDoNotReportTheOptionalFileOfTheRuntime(t *testing.T) {
 	var reported []string
-	handler := host.MissingAssets(http.NotFoundHandler(), "/wails/custom.js", func(path string) { reported = append(reported, path) })
-	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/wails/custom.js", nil))
+	handler := host.MissingAssets(http.NotFoundHandler(), "/fixture/custom.js", func(path string) { reported = append(reported, path) })
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/fixture/custom.js", nil))
 	if len(reported) != 0 {
 		t.Fatalf("reported %v", reported)
 	}

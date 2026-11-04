@@ -132,7 +132,7 @@ func serve(t *testing.T, backend host.Backend) (*host.Endpoint, string, string) 
 	config := t.TempDir()
 	endpoint := host.NewEndpoint(backend)
 	info := host.EndpointInfo{Transport: "unix", Address: listener.Addr().String(), PID: os.Getpid(),
-		Application: "wailsv3", Version: "0.0.2", Started: time.Now()}
+		Application: "fixture", Version: "0.0.2", Started: time.Now()}
 	if err := endpoint.Serve(listener, info, config); err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +154,7 @@ func TestEndpointAllowsOneProcessPerConfigurationDirectory(t *testing.T) {
 	}
 	second := host.NewEndpoint(newFakeBackend())
 	info := host.EndpointInfo{Transport: "tcp", Address: listener.Addr().String(), PID: os.Getpid(),
-		Application: "wailsv3", Version: "0.0.2", Started: time.Now()}
+		Application: "fixture", Version: "0.0.2", Started: time.Now()}
 	err = second.Serve(listener, info, config)
 	_ = listener.Close()
 	if err == nil || !strings.Contains(err.Error(), "already owned by process") {
@@ -572,7 +572,7 @@ func TestEndpointFileIsWrittenAndRemoved(t *testing.T) {
 		t.Fatal(err)
 	}
 	if info["transport"] != "unix" || info["address"] != address || info["pid"] != float64(os.Getpid()) ||
-		info["application"] != "wailsv3" || info["version"] != "0.0.2" {
+		info["application"] != "fixture" || info["version"] != "0.0.2" {
 		t.Fatalf("endpoint.json: %v", info)
 	}
 	executable, _ := os.Executable()
@@ -600,7 +600,7 @@ func TestEndpointCloseDoesNotRemoveReplacement(t *testing.T) {
 	path := filepath.Join(config, "endpoint.json")
 	replacement := map[string]any{
 		"transport": "unix", "address": "replacement.sock", "pid": os.Getpid() + 1,
-		"application": "wailsv3", "version": "0.0.2", "executable": "/replacement",
+		"application": "fixture", "version": "0.0.2", "executable": "/replacement",
 		"started": time.Now().UTC().Format(time.RFC3339),
 	}
 	data, err := json.Marshal(replacement)
@@ -841,7 +841,7 @@ func TestEndpointSocketIsRemovedOnClose(t *testing.T) {
 	}
 	endpoint := host.NewEndpoint(newFakeBackend())
 	info := host.EndpointInfo{Transport: address.Transport, Address: address.Address, PID: os.Getpid(),
-		Application: "wailsv3", Version: "0.0.2", Started: time.Now()}
+		Application: "fixture", Version: "0.0.2", Started: time.Now()}
 	if err := endpoint.Serve(listener, info, t.TempDir()); err != nil {
 		_ = listener.Close()
 		t.Fatal(err)
@@ -1050,7 +1050,7 @@ func TestEndpointRefusesAHeldLockWithAnotherForm(t *testing.T) {
 		}
 		endpoint := host.NewEndpoint(newFakeBackend())
 		info := host.EndpointInfo{Transport: "tcp", Address: listener.Addr().String(), PID: os.Getpid(),
-			Application: "wailsv3", Version: "0.0.8", Started: time.Now()}
+			Application: "fixture", Version: "0.0.8", Started: time.Now()}
 		err = endpoint.Serve(listener, info, config)
 		_ = listener.Close()
 		want := fmt.Sprintf("configuration directory %s is already owned by a live process", config)
@@ -1077,7 +1077,7 @@ func TestStaleLockOfAnotherFormIsTakenOverAndReported(t *testing.T) {
 		}
 		endpoint := host.NewEndpoint(newFakeBackend())
 		info := host.EndpointInfo{Transport: "tcp", Address: listener.Addr().String(), PID: os.Getpid(),
-			Application: "wailsv3", Version: "0.0.20", Started: time.Now()}
+			Application: "fixture", Version: "0.0.20", Started: time.Now()}
 		if err := endpoint.Serve(listener, info, config); err != nil {
 			_ = listener.Close()
 			t.Fatalf("a stale lock %q was refused: %v", contents, err)
@@ -1146,7 +1146,7 @@ func startBesideStaleLock(t *testing.T, config, stale string) (bool, error, erro
 		}
 		second = host.NewEndpoint(newFakeBackend())
 		info := host.EndpointInfo{Transport: "tcp", Address: listener.Addr().String(), PID: os.Getpid(),
-			Application: "wailsv3", Version: "0.0.20", Started: time.Now()}
+			Application: "fixture", Version: "0.0.20", Started: time.Now()}
 		secondErr = second.Serve(listener, info, config)
 		ran = true
 		if secondErr != nil {
@@ -1160,7 +1160,7 @@ func startBesideStaleLock(t *testing.T, config, stale string) (bool, error, erro
 		t.Fatal(err)
 	}
 	info := host.EndpointInfo{Transport: "tcp", Address: listener.Addr().String(), PID: os.Getpid(),
-		Application: "wailsv3", Version: "0.0.20", Started: time.Now()}
+		Application: "fixture", Version: "0.0.20", Started: time.Now()}
 	firstErr := first.Serve(listener, info, config)
 	if firstErr == nil {
 		t.Cleanup(func() { _ = first.Close() })
@@ -1186,7 +1186,7 @@ func TestAnEmptyLockFileIsTakenOverWithoutAReport(t *testing.T) {
 	}
 	endpoint := host.NewEndpoint(newFakeBackend())
 	info := host.EndpointInfo{Transport: "tcp", Address: listener.Addr().String(), PID: os.Getpid(),
-		Application: "wailsv3", Version: "0.0.20", Started: time.Now()}
+		Application: "fixture", Version: "0.0.20", Started: time.Now()}
 	if err := endpoint.Serve(listener, info, config); err != nil {
 		_ = listener.Close()
 		t.Fatalf("an empty lock file was refused: %v", err)
@@ -1213,7 +1213,7 @@ func TestStaleLockIsTakenOverAndNamesThePreviousRun(t *testing.T) {
 	}
 	endpoint := host.NewEndpoint(newFakeBackend())
 	info := host.EndpointInfo{Transport: "tcp", Address: listener.Addr().String(), PID: os.Getpid(),
-		Application: "wailsv3", Version: "0.0.20", Started: time.Now()}
+		Application: "fixture", Version: "0.0.20", Started: time.Now()}
 	if err := endpoint.Serve(listener, info, config); err != nil {
 		_ = listener.Close()
 		t.Fatalf("a stale lock was refused: %v", err)
@@ -1388,7 +1388,7 @@ func TestEndpointRecordsAWriteThatThePeerClosedAsNotSent(t *testing.T) {
 	}
 	endpoint := host.NewEndpoint(newFakeBackend())
 	info := host.EndpointInfo{Transport: "unix", Address: listener.Addr().String(), PID: os.Getpid(),
-		Application: "wailsv3", Version: "0.0.2", Started: time.Now()}
+		Application: "fixture", Version: "0.0.2", Started: time.Now()}
 	if err := endpoint.Serve(brokenPipeListener{listener}, info, t.TempDir()); err != nil {
 		t.Fatal(err)
 	}
@@ -1420,7 +1420,7 @@ func TestEndpointRecordsAnAcceptError(t *testing.T) {
 	}
 	endpoint := host.NewEndpoint(newFakeBackend())
 	info := host.EndpointInfo{Transport: "unix", Address: listener.Addr().String(), PID: os.Getpid(),
-		Application: "wailsv3", Version: "0.0.2", Started: time.Now()}
+		Application: "fixture", Version: "0.0.2", Started: time.Now()}
 	if err := endpoint.Serve(acceptFault{Listener: listener, err: errors.New("accept fault")}, info, t.TempDir()); err != nil {
 		t.Fatal(err)
 	}

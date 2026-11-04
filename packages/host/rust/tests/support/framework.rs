@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::framework::{
-    AppHandle, BlockingBody, BlockingTask, Error, EventTarget, Framework, Frontend, Result, Window,
+    AppHandle, BlockingBody, BlockingTask, Error, Framework, Frontend, Result, Window,
     WindowOptions,
 };
 
@@ -23,7 +23,7 @@ impl Framework for Fixture {
         DISPLAY_NAME
     }
 
-    fn run_on_main_thread(&self, task: Box<dyn FnOnce() + Send>) -> Result<()> {
+    fn post(&self, task: Box<dyn FnOnce() + Send>) -> Result<()> {
         task();
         Ok(())
     }
@@ -33,7 +33,7 @@ impl Framework for Fixture {
         Box::pin(async { Ok(value) })
     }
 
-    fn exit(&self, _code: i32) {}
+    fn quit(&self) {}
 
     fn config_dir(&self) -> Result<PathBuf> {
         Err(Error::from(
@@ -62,6 +62,10 @@ impl Framework for Fixture {
         Ok(())
     }
 
+    fn install_dock(&self, _new_window: Box<dyn Fn()>) -> Result<()> {
+        Ok(())
+    }
+
     fn new_window(&self, _options: WindowOptions) -> Result<Arc<dyn Frontend>> {
         Err(Error::from("the test framework has no window"))
     }
@@ -70,30 +74,8 @@ impl Framework for Fixture {
         Vec::new()
     }
 
-    fn get_window(&self, _label: &str) -> Option<Arc<dyn Frontend>> {
-        None
-    }
-
     fn get_webview(&self, _label: &str) -> Option<(Arc<dyn Frontend>, String)> {
         None
-    }
-
-    fn emit_filter(
-        &self,
-        _event: &str,
-        _payload: serde_json::Value,
-        _filter: &dyn Fn(&EventTarget) -> bool,
-    ) -> Result<()> {
-        Ok(())
-    }
-
-    fn emit_to(
-        &self,
-        _target: EventTarget,
-        _event: &str,
-        _payload: serde_json::Value,
-    ) -> Result<()> {
-        Ok(())
     }
 }
 

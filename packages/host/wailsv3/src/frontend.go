@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"math"
 	"unsafe"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -23,15 +24,34 @@ func (f Frontend) Show()                        { f.window.Show() }
 func (f Frontend) Focus()                       { f.window.Focus() }
 func (f Frontend) IsFocused() bool              { return f.window.IsFocused() }
 func (f Frontend) Close()                       { f.window.Close() }
-func (f Frontend) SetSize(width, height int)    { f.window.SetSize(width, height) }
-func (f Frontend) SetPosition(x, y int)         { f.window.SetPosition(x, y) }
-func (f Frontend) Size() (width, height int)    { return f.window.Size() }
-func (f Frontend) Position() (x, y int)         { return f.window.Position() }
-func (f Frontend) Maximise()                    { f.window.Maximise() }
-func (f Frontend) UnMaximise()                  { f.window.UnMaximise() }
-func (f Frontend) IsMaximised() bool            { return f.window.IsMaximised() }
+func (f Frontend) Maximize()                    { f.window.Maximise() }
+func (f Frontend) Unmaximize()                  { f.window.UnMaximise() }
+func (f Frontend) IsMaximized() bool            { return f.window.IsMaximised() }
 func (f Frontend) IsFullscreen() bool           { return f.window.IsFullscreen() }
-func (f Frontend) IsMinimised() bool            { return f.window.IsMinimised() }
+func (f Frontend) IsMinimized() bool            { return f.window.IsMinimised() }
+
+// WailsPixels is the nearest integer of a logical length of the port, which Wails holds as an integer.
+func WailsPixels(length float64) int { return int(math.Round(length)) }
+
+// SetSize sets the size in logical pixels.
+func (f Frontend) SetSize(width, height float64) {
+	f.window.SetSize(WailsPixels(width), WailsPixels(height))
+}
+
+// SetPosition sets the position in logical pixels.
+func (f Frontend) SetPosition(x, y float64) { f.window.SetPosition(WailsPixels(x), WailsPixels(y)) }
+
+// Size is the size in logical pixels.
+func (f Frontend) Size() (width, height float64) {
+	w, h := f.window.Size()
+	return float64(w), float64(h)
+}
+
+// Position is the position in logical pixels.
+func (f Frontend) Position() (x, y float64) {
+	left, top := f.window.Position()
+	return float64(left), float64(top)
+}
 
 // Emit delivers an event to the page of the window.
 func (f Frontend) Emit(name string, data ...any) { f.window.EmitEvent(name, data...) }

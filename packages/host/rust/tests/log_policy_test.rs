@@ -245,7 +245,7 @@ fn the_start_of_the_workbench_passes_a_gate_that_turns_the_lifecycle_off() {
         r#"{"schema":1,"classes":{"lifecycle":"off","input":"trace","call":"off","io":"trace","frame":"trace"}}"#,
     );
     let start = json!({"ts_us": 1_791_000_000_000_001u64, "mono_ns": 5_000_000_001u64, "level": "info", "event": "workbench.start",
-        "start": "1791948729050", "fields": {"started_at": 1_791_948_729_050u64, "url": "tauri://localhost"}});
+        "start": "1791948729050", "fields": {"started_at": 1_791_948_729_050u64, "url": "fixture://localhost"}});
     log_command(&log, json!({"action": "batch", "events": [start]})).unwrap();
     log.flush(Duration::from_secs(5)).unwrap();
     let names: Vec<String> = read(log.path())

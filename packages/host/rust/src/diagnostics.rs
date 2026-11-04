@@ -15,7 +15,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use crate::framework::{Emitter, EventTarget, Manager, Window};
+use crate::framework::{Manager, Window};
 use serde_json::{Map, Value, json};
 
 use crate::application_log::log_error;
@@ -628,11 +628,9 @@ fn host_events(window: &Window, params: &Map<String, Value>) -> Result<Value, Fa
                 "diagnostics.host.events requires a count from 1 to {MAX_HOST_EVENTS}"
             ))
         })?;
-    let label = window.label().to_string();
     for _ in 0..count {
         window
-            .app_handle()
-            .emit_to(EventTarget::webview(&label), "diagnostics-unlistened", ())
+            .emit("diagnostics-unlistened", ())
             .map_err(internal)?;
     }
     Ok(json!({"count": count}))
@@ -1206,8 +1204,7 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
             params["dy"]
         ),
     );
-    let app = window.app_handle().clone();
-    let label = window.label().to_string();
+    let ticking = window.clone();
     let length = FRAME * steps as u32;
     // When recording, the time at which the step was sent is kept on the same clock as the frames, so that the delay
     // from the step to the screen can be measured.
@@ -1260,7 +1257,7 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
                 "diagnostics.drag",
                 params,
                 Some(TIMEOUT + length),
-                move || tick(app, label, steps, clock, recorded),
+                move || tick(ticking, steps, clock, recorded),
             )
             .and_then(|result| exposure::parsed(&result)),
     };
@@ -1342,8 +1339,7 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
 /// Sends the drag step time to the page steps times. Each step is sent at its scheduled time relative to the start
 /// time. If each step slept in turn, the execution time of each step would accumulate into the later steps.
 fn tick(
-    app: crate::framework::AppHandle,
-    label: String,
+    window: Window,
     steps: u64,
     clock: Option<&'static dyn platform::Platform>,
     sent: std::sync::Arc<std::sync::Mutex<Vec<f64>>>,
@@ -1362,7 +1358,7 @@ fn tick(
                     (_, Err(error)) => log_error("drag tick clock", error),
                 }
             }
-            if let Err(error) = app.emit_to(EventTarget::webview(&label), "diagnostics-tick", ()) {
+            if let Err(error) = window.emit("diagnostics-tick", ()) {
                 log_error("diagnostics-tick", error);
                 return;
             }

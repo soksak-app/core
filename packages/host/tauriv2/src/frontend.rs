@@ -1,12 +1,13 @@
 //! A Tauri window as the Frontend port of the language host library.
 
 use std::ffi::c_void;
+use std::sync::Arc;
 
 use soksak_host::framework::{
-    self as port, CloseRequestApi, LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize,
-    PlatformWebview, Position, Size, WebviewBuilder, WebviewUrl, WindowEvent,
+    self as port, LogicalPosition, LogicalSize, PlatformWebview, PresentationDone, SettledDone,
+    WebviewBuilder, WebviewUrl, WindowEvent,
 };
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 use crate::framework::error;
 
@@ -29,46 +30,20 @@ impl Frontend {
     }
 }
 
-/// The library event of a Tauri window event, or None for an event that the library does not handle. A close request
-/// carries an answer that is not yet given; the window listener passes it to the Tauri answer.
+/// The library event of a Tauri window event, or None for an event that the library does not handle.
 pub fn window_event(event: &tauri::WindowEvent) -> Option<WindowEvent> {
     Some(match event {
-        tauri::WindowEvent::Resized(size) => {
-            WindowEvent::Resized(PhysicalSize::new(size.width, size.height))
-        }
-        tauri::WindowEvent::Moved(position) => {
-            WindowEvent::Moved(PhysicalPosition::new(position.x, position.y))
-        }
+        tauri::WindowEvent::Resized(_) => WindowEvent::Resized,
+        tauri::WindowEvent::Moved(_) => WindowEvent::Moved,
         tauri::WindowEvent::ScaleFactorChanged { .. } => WindowEvent::ScaleFactorChanged,
         tauri::WindowEvent::Focused(focused) => WindowEvent::Focused(*focused),
-        tauri::WindowEvent::CloseRequested { .. } => WindowEvent::CloseRequested {
-            api: CloseRequestApi::default(),
-        },
         tauri::WindowEvent::Destroyed => WindowEvent::Destroyed,
         _ => return None,
     })
 }
 
-fn tauri_size(size: Size) -> tauri::Size {
-    match size {
-        Size::Logical(LogicalSize { width, height }) => {
-            tauri::LogicalSize::new(width, height).into()
-        }
-        Size::Physical(PhysicalSize { width, height }) => {
-            tauri::PhysicalSize::new(width, height).into()
-        }
-    }
-}
-
-fn tauri_position(position: Position) -> tauri::Position {
-    match position {
-        Position::Logical(LogicalPosition { x, y }) => tauri::LogicalPosition::new(x, y).into(),
-        Position::Physical(PhysicalPosition { x, y }) => tauri::PhysicalPosition::new(x, y).into(),
-    }
-}
-
 impl port::Frontend for Frontend {
-    fn label(&self) -> &str {
+    fn name(&self) -> &str {
         self.window.label()
     }
 
@@ -84,7 +59,7 @@ impl port::Frontend for Frontend {
         self.window.show().map_err(error)
     }
 
-    fn set_focus(&self) -> port::Result<()> {
+    fn focus(&self) -> port::Result<()> {
         self.window.set_focus().map_err(error)
     }
 
@@ -100,27 +75,37 @@ impl port::Frontend for Frontend {
         self.window.scale_factor().map_err(error)
     }
 
-    fn inner_size(&self) -> port::Result<PhysicalSize> {
-        self.window
+    /// Tauri gives the size of the content in physical pixels.
+    fn size(&self) -> port::Result<LogicalSize> {
+        let scale = self.window.scale_factor().map_err(error)?;
+        let size = self
+            .window
             .inner_size()
-            .map(|size| PhysicalSize::new(size.width, size.height))
-            .map_err(error)
+            .map_err(error)?
+            .to_logical::<f64>(scale);
+        Ok(LogicalSize::new(size.width, size.height))
     }
 
-    fn outer_position(&self) -> port::Result<PhysicalPosition> {
-        self.window
+    /// Tauri gives the position in physical pixels.
+    fn position(&self) -> port::Result<LogicalPosition> {
+        let scale = self.window.scale_factor().map_err(error)?;
+        let position = self
+            .window
             .outer_position()
-            .map(|position| PhysicalPosition::new(position.x, position.y))
+            .map_err(error)?
+            .to_logical::<f64>(scale);
+        Ok(LogicalPosition::new(position.x, position.y))
+    }
+
+    fn set_size(&self, size: LogicalSize) -> port::Result<()> {
+        self.window
+            .set_size(tauri::LogicalSize::new(size.width, size.height))
             .map_err(error)
     }
 
-    fn set_size(&self, size: Size) -> port::Result<()> {
-        self.window.set_size(tauri_size(size)).map_err(error)
-    }
-
-    fn set_position(&self, position: Position) -> port::Result<()> {
+    fn set_position(&self, position: LogicalPosition) -> port::Result<()> {
         self.window
-            .set_position(tauri_position(position))
+            .set_position(tauri::LogicalPosition::new(position.x, position.y))
             .map_err(error)
     }
 
@@ -144,7 +129,7 @@ impl port::Frontend for Frontend {
         self.window.is_minimized().map_err(error)
     }
 
-    fn ns_window(&self) -> port::Result<*mut c_void> {
+    fn native_window(&self) -> port::Result<*mut c_void> {
         crate::platform::ns_window(&self.window)
     }
 
@@ -156,21 +141,85 @@ impl port::Frontend for Frontend {
             .collect()
     }
 
+    /// Each page listens with the target of its own web view.
+    fn emit(&self, name: &str, payload: serde_json::Value) -> port::Result<()> {
+        let target = tauri::EventTarget::webview(self.window.label());
+        self.window.emit_to(target, name, payload).map_err(error)
+    }
+
+    fn emit_webviews(&self, name: &str, payload: serde_json::Value) -> port::Result<()> {
+        let labels = self.webviews();
+        self.window
+            .emit_filter(name, payload, |target| {
+                matches!(target, tauri::EventTarget::Webview { label } if labels.contains(label))
+            })
+            .map_err(error)
+    }
+
     fn on_window_event(&self, listener: Box<dyn Fn(&WindowEvent) + Send + Sync>) {
         self.window.on_window_event(move |event| {
-            let Some(host_event) = window_event(event) else {
-                return;
-            };
-            listener(&host_event);
-            if let (
-                tauri::WindowEvent::CloseRequested { api, .. },
-                WindowEvent::CloseRequested { api: host_api },
-            ) = (event, &host_event)
-                && host_api.prevented()
+            if let Some(event) = window_event(event) {
+                listener(&event);
+            }
+        });
+    }
+
+    fn on_closing(&self, hook: Box<dyn Fn() -> bool + Send + Sync>) {
+        self.window.on_window_event(move |event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event
+                && hook()
             {
                 api.prevent_close();
             }
         });
+    }
+
+    /// The presentation notice of the main page.
+    fn after_presentation(&self, done: PresentationDone) -> port::Result<()> {
+        let done: Arc<dyn Fn(Result<(), String>) + Send + Sync> = Arc::from(done);
+        self.webview(self.window.label())?
+            .with_webview(move |view| {
+                let presented = Arc::clone(&done);
+                let outcome = soksak_host::platform::current().and_then(|platform| {
+                    platform.after_presentation(
+                        &crate::platform::platform_webview(&view),
+                        Box::new(move || presented(Ok(()))),
+                    )
+                });
+                if let Err(failure) = outcome {
+                    done(Err(failure));
+                }
+            })
+            .map_err(error)
+    }
+
+    /// The settled presentation of the main page.
+    fn after_settled(&self, done: SettledDone) -> port::Result<()> {
+        let done: Arc<dyn Fn(Result<f64, String>) + Send + Sync> = Arc::from(done);
+        self.webview(self.window.label())?
+            .with_webview(move |view| {
+                let settled = Arc::clone(&done);
+                let outcome = soksak_host::platform::current().and_then(|platform| {
+                    platform.after_settled(
+                        &crate::platform::platform_webview(&view),
+                        Box::new(move |displayed| settled(displayed)),
+                    )
+                });
+                if let Err(failure) = outcome {
+                    done(Err(failure));
+                }
+            })
+            .map_err(error)
+    }
+
+    /// Reloads the main page.
+    fn start_workbench(&self) -> port::Result<()> {
+        self.reload(self.window.label())
+    }
+
+    /// Runs script in the main page.
+    fn call_workbench(&self, script: &str) -> port::Result<()> {
+        self.eval(self.window.label(), script)
     }
 
     fn add_child(
@@ -236,18 +285,6 @@ impl port::Frontend for Frontend {
 
     fn set_webview_focus(&self, webview: &str) -> port::Result<()> {
         self.webview(webview)?.set_focus().map_err(error)
-    }
-
-    fn set_webview_position(&self, webview: &str, position: Position) -> port::Result<()> {
-        self.webview(webview)?
-            .set_position(tauri_position(position))
-            .map_err(error)
-    }
-
-    fn set_webview_size(&self, webview: &str, size: Size) -> port::Result<()> {
-        self.webview(webview)?
-            .set_size(tauri_size(size))
-            .map_err(error)
     }
 
     fn set_webview_auto_resize(&self, webview: &str, auto_resize: bool) -> port::Result<()> {

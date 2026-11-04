@@ -176,9 +176,11 @@ struct Picked {
 pub(crate) fn set_background(window: &Window, enabled: bool) -> Result<(), String> {
     documents::set_background(window, enabled);
     for view in window.webviews() {
-        if view.label() == window.label() || view.label().starts_with("surface-") {
-            view.eval(format!("window.__soksakBackground = {enabled}"))
-                .map_err(|e| e.to_string())?;
+        let script = format!("window.__soksakBackground = {enabled}");
+        if view.label() == window.label() {
+            window.call_workbench(script).map_err(|e| e.to_string())?;
+        } else if view.label().starts_with("surface-") {
+            view.eval(script).map_err(|e| e.to_string())?;
         }
     }
     Ok(())

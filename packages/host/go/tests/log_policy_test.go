@@ -181,7 +181,7 @@ func TestTheEventsOfTheWriterItselfPassAGateThatTurnsTheLifecycleOff(t *testing.
 func TestTheStartOfTheWorkbenchPassesAGateThatTurnsTheLifecycleOff(t *testing.T) {
 	log := startPolicyLog(t, `{"schema":1,"classes":{"lifecycle":"off","input":"trace","call":"off","io":"trace","frame":"trace"}}`)
 	start := map[string]any{"ts_us": float64(1_791_000_000_000_001), "mono_ns": float64(5_000_000_001), "level": "info", "event": "workbench.start",
-		"start": "1791948729050", "fields": map[string]any{"started_at": float64(1791948729050), "url": "wails://localhost/"}}
+		"start": "1791948729050", "fields": map[string]any{"started_at": float64(1791948729050), "url": "fixture://localhost/"}}
 	if _, err := host.LogCommand(log, map[string]any{"action": "batch", "events": []any{start}}); err != nil {
 		t.Fatal(err)
 	}

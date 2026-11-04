@@ -42,12 +42,7 @@ pub fn set(window: &Window, request: ShapeRequest) -> Result<(), String> {
 
     // A shape is added directly to the content view, so its coordinates are AppKit coordinates with the origin at the
     // lower left. Tauri converts the coordinates of a child webview, but a shape is converted here.
-    let scale = window.scale_factor().map_err(|e| e.to_string())?;
-    let content = window
-        .inner_size()
-        .map_err(|e| e.to_string())?
-        .to_logical(scale)
-        .height;
+    let content = window.size().map_err(|e| e.to_string())?.height;
     let h = request.rect.h.max(1.0);
     let frame = (
         request.rect.x,
