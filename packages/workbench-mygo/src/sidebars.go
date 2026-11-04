@@ -274,6 +274,11 @@ func (s *Sidebars) windowSet(side string, focused FocusedSurface) (*SidebarSet, 
 	return nil, ""
 }
 
+// Placed tells whether a link gives the window sidebar side a set.
+func (s *Sidebars) Placed(side string) bool {
+	return slices.ContainsFunc(s.links, func(link SidebarLink) bool { return link.Place == side || link.Place == "window-"+side })
+}
+
 // linkedCard returns the id of the set that the link of plugin gives the side of a card, or nil without such a link.
 func (s *Sidebars) linkedCard(side, plugin string) *string {
 	for _, link := range s.links {

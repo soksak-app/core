@@ -43,6 +43,52 @@ func (s *Shell) drawSidebarCard(c *ui.Context, id string, rect layout.Rect, inse
 	})
 }
 
+// sidebarShown tells whether the window sidebar side stands: a link gives it a set, and its setting shows it.
+func (s *Shell) sidebarShown(side string) bool {
+	shown, _ := s.settings.Value(side).(bool) // silent: the settings store checks the type of the value.
+	return shown && s.sidebars.Placed(side)
+}
+
+// arrangeWindowSidebars matches the columns of the window sidebars to what is shown, and tells whether a column changed. A column
+// leaves its width in the records and stands at the edge of its side again with that width. The first column of a side without a
+// record has the width of the setting.
+func (s *Shell) arrangeWindowSidebars() (bool, error) {
+	changed := false
+	for _, side := range []string{"left", "right"} {
+		card, stands := s.plane.Card(side)
+		if stands && card.Width != nil {
+			s.windowSidebars[side] = layout.WindowSidebar{Width: *card.Width}
+		}
+		shown := s.sidebarShown(side)
+		switch {
+		case stands && !shown:
+			s.plane.SetFixed(side, false)
+			if !s.plane.Close(side) {
+				s.plane.SetFixed(side, true)
+				return changed, fmt.Errorf("cannot remove window sidebar %s", side)
+			}
+			s.plane.Tidy()
+			changed = true
+		case !stands && shown:
+			width := s.sidebarSizes().Size
+			if record, kept := s.windowSidebars[side]; kept {
+				width = record.Width
+			}
+			line := 0
+			if side == "right" {
+				line = len(s.plane.Lines("x")) - 1
+			}
+			id := side
+			if _, placed := s.plane.InsertAt("x", line, layout.InsertInit{ID: &id, Size: &width}); !placed {
+				return changed, fmt.Errorf("cannot place window sidebar %s", side)
+			}
+			s.plane.SetFixed(side, true)
+			changed = true
+		}
+	}
+	return changed, nil
+}
+
 // gripThreshold is the movement in points that tells a drag from a press.
 const gripThreshold = 3
 

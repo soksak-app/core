@@ -17,9 +17,10 @@ import (
 
 // storedLayout is a stored layout: the state of the plane with the other members as they are stored.
 type storedLayout struct {
-	State     layout.State    `json:"state"`
-	FocusedID string          `json:"focusedId"`
-	Sidebars  json.RawMessage `json:"sidebars"`
+	State          layout.State    `json:"state"`
+	FocusedID      string          `json:"focusedId"`
+	WindowSidebars json.RawMessage `json:"windowSidebars"`
+	Sidebars       json.RawMessage `json:"sidebars"`
 }
 
 // newLayout returns the layout of a new space, from the grid of the environment declaration.
@@ -270,6 +271,12 @@ func (s *Shell) loadSpace(project *projectRecord) error {
 	if err := s.sidebars.Restore(stored.Sidebars); err != nil {
 		return fmt.Errorf("space %s: %w", space.ID, err)
 	}
+	s.windowSidebars = map[string]layout.WindowSidebar{}
+	if len(stored.WindowSidebars) > 0 {
+		if s.windowSidebars, err = layout.RestoreWindowSidebars(stored.WindowSidebars); err != nil {
+			return fmt.Errorf("space %s: %w", space.ID, err)
+		}
+	}
 	s.plane, s.fullscreen = plane, ""
 	// A new space stores no focus, and the stored focus of a card that left the layout names no card.
 	s.focused = stored.FocusedID
@@ -330,6 +337,9 @@ func (s *Shell) keepPlane(project *projectRecord) error {
 	}
 	kept["state"] = state
 	if kept["focusedId"], err = json.Marshal(s.focused); err != nil {
+		return err
+	}
+	if kept["windowSidebars"], err = json.Marshal(s.windowSidebars); err != nil {
 		return err
 	}
 	if kept["sidebars"], err = json.Marshal(s.sidebars.Stored()); err != nil {
