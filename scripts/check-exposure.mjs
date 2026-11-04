@@ -46,6 +46,32 @@ export function auditDeclarationCopies(copies, read) {
     .map(({ source, copy }) => `${copy} differs from ${source}; run node scripts/check-exposure.mjs --write`);
 }
 
+// The registrations and the bindings of the Go sources of the mygo workbench, with the kind of each quoted name.
+const WORKBENCH_NAME_USES = [
+  { pattern: /\.Status\(\s*"([^"]+)"/g, kinds: [["status", "status"]] },
+  { pattern: /\.Command\(\s*"([^"]+)"/g, kinds: [["commands", "command"]] },
+  { pattern: /\.(?:Press|Control)\(\s*\w+,\s*"([^"]+)",\s*"([^"]+)"/g, kinds: [["dom", "element name"], ["commands", "command"]] },
+];
+
+/** Names each status, command and element name that a Go source of the mygo workbench passes and that exposes does not declare. */
+export function auditWorkbenchNames(exposes, sources) {
+  const declared = (kind) => new Set(exposes[kind].map((entry) => entry.name));
+  const errors = [];
+  for (const { path, text } of sources) {
+    text.split("\n").forEach((line, index) => {
+      for (const { pattern, kinds } of WORKBENCH_NAME_USES) {
+        for (const match of line.matchAll(pattern)) {
+          kinds.forEach(([kind, label], position) => {
+            const name = match[position + 1];
+            if (!declared(kind).has(name)) errors.push(`${path}:${index + 1}: ${label} ${name} is not declared`);
+          });
+        }
+      }
+    });
+  }
+  return errors;
+}
+
 if (process.argv[1]?.endsWith("check-exposure.mjs")) {
   const coreExposes = readJson(join(WORKBENCH, "exposure.json")).exposes;
   const names = `${JSON.stringify(coreExposureNames(coreExposes), null, 2)}\n`;
@@ -68,6 +94,10 @@ if (process.argv[1]?.endsWith("check-exposure.mjs")) {
     // The core document entries are registered by the view bridge in the actual surface document.
     registrations: [readFileSync(join(ROOT, "packages/plugin-api/view.js"), "utf8")],
   }));
+
+  const goSources = [...sourceFiles(join(ROOT, "packages/workbench-mygo/src"), (name) => name.endsWith(".go"))]
+    .map((path) => ({ path: relative(ROOT, path), text: readFileSync(path, "utf8") }));
+  errors.push(...auditWorkbenchNames(coreExposes, goSources));
 
   // The declarations of a plugin are checked by each plugin repository with soksak-exposure of plugin-api (docs/spec/plugins.md#repositories).
   if (errors.length) {
