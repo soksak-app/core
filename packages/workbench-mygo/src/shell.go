@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"slices"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -53,7 +54,7 @@ type environmentGrid struct {
 
 // metrics are the chrome metrics that the shell draws with.
 type metrics struct {
-	chromeH, headH, footH, spaceTabH, actW, actH, actIcon, tabsGap, tabsPad, barTabGap, barTabMaxW, tabPeekW, tabMinW float32
+	chromeH, headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, tabsGap, tabsPad, barTabGap, barTabMaxW, tabPeekW, tabMinW float32
 }
 
 func readMetrics(declared *Declarations) (metrics, error) {
@@ -71,6 +72,7 @@ func readMetrics(declared *Declarations) (metrics, error) {
 	read("foot-h", &m.footH)
 	read("space-tab-h", &m.spaceTabH)
 	read("act-w", &m.actW)
+	read("notice-dot", &m.noticeDot)
 	read("act-h", &m.actH)
 	read("act-icon", &m.actIcon)
 	read("tabs-gap", &m.tabsGap)
@@ -154,8 +156,11 @@ type Shell struct {
 
 	units         map[string]*installedUnit
 	contributions *Contributions
-	surfaces      surfaceState
-	page          string
+	// lastDrop is the status core.drop, and notices the state of the notification center.
+	lastDrop *dropRecord
+	notices  *systemNotices
+	surfaces surfaceState
+	page     string
 	// started is set once the host took the first state of the shell, changed once plugins changed before that, and reloading while the
 	// shell saves before a reload. They belong to the main thread.
 	started, changed, reloading bool
@@ -201,6 +206,11 @@ func NewShell(options ShellOptions) (*Shell, error) {
 		return nil, err
 	}
 	s.surfaces = newSurfaceState()
+	s.notices = newSystemNotices()
+	s.registry.Status("core.drop", func() any { return s.lastDrop })
+	s.registry.Status("core.notifications", func() any {
+		return notificationStatus{Authorization: s.notices.authorization, Error: s.notices.failure, Posted: slices.Clone(s.notices.accepted)}
+	})
 	s.page = issueID("wbn-", func(string) bool { return false })
 	s.requests = NewRequests(s.registry, s.calls, options.Post, s.events.Error)
 	s.registry.Status("core.page.error", func() any {
@@ -276,6 +286,7 @@ func (s *Shell) Start() {
 					if err != nil {
 						s.fail(err)
 					}
+					s.startNotices()
 					s.options.Invalidate()
 					s.started = true
 					if s.changed {
@@ -421,5 +432,6 @@ func (s *Shell) View(c *ui.Context) {
 	s.drawPicker(c, width, height)
 	s.drawSettings(c, width, height)
 	s.placeSurfaces()
+	s.clearVisibleNotices()
 	s.pushStatuses()
 }

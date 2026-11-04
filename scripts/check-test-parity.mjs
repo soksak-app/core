@@ -644,6 +644,22 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F502-22-1",
+    implementation: [
+      { file: "packages/workbench-mygo/src/file_drop.go", symbol: "func (s *Shell) filesDropped(data []any) {" },
+      { file: "packages/workbench-mygo/src/tab_notifications.go", symbol: "func (s *Shell) reportNotice(tab string, notice tabNotice) error {" },
+      { file: "packages/workbench-mygo/src/project_data.go", symbol: "func (s *Shell) workspaceChanged() {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/plugin_services_test.go", id: "TestAFileDroppedOnAViewRunsTheDropCommandOfItsPlugin" },
+      { file: "packages/workbench-mygo/tests/plugin_services_test.go", id: "TestANoticeOfASystemPolicyIsPostedAndLeavesWhenItsTabIsShown" },
+      { file: "packages/workbench-mygo/tests/plugin_services_test.go", id: "TestTwoWritesInARowKeepBothKeys" },
+      { file: "packages/workbench-mygo/tests/plugin_services_test.go", id: "TestAWriteOfAnotherWindowReachesTheViewsThatFollowTheData" },
+    ],
+    expected: "The mygo workbench runs the drop command of the view under a dropped file, follows the visible tab with its notices and the notification center, and keeps each write of project data.",
+    levels: ["unit"],
+  },
+  {
     id: "F502-18",
     implementation: [
       { file: "packages/host/go/src/surface_elements.go", symbol: "func ElementOf(h *Host, window Frontend, id string) (SurfaceElement, bool) {" },

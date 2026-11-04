@@ -50,6 +50,8 @@ type installedUnit struct {
 	Unload *surfaceUnload
 	// Data holds the project data keys that the plugin declares.
 	Data map[string]dataDeclaration
+	// Drop is the command that surface.drop names, and empty for a plugin that takes no files.
+	Drop string
 }
 
 // surfaceUnload is the declaration surface.unload of a plugin.
@@ -70,6 +72,7 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 					Composition json.RawMessage `json:"composition"`
 					Menu        json.RawMessage `json:"menu"`
 					Unload      *surfaceUnload  `json:"unload"`
+					Drop        string          `json:"drop"`
 				} `json:"surface"`
 				Exposes      json.RawMessage            `json:"exposes"`
 				Dependencies map[string]any             `json:"dependencies"`
@@ -126,6 +129,7 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 		}
 		unit.Menu = len(plugin.Manifest.Surface.Menu) > 0
 		unit.Unload = plugin.Manifest.Surface.Unload
+		unit.Drop = plugin.Manifest.Surface.Drop
 	}
 	return units, nil
 }
@@ -234,6 +238,7 @@ func (s *Shell) forgetSurfaces(tabs []string) {
 		delete(s.surfaces.reports, id)
 		delete(s.surfaces.views, id)
 	}
+	s.syncNotices()
 	kept := s.surfaces.order[:0]
 	for _, id := range s.surfaces.order {
 		if s.surfaces.held[id] != nil {

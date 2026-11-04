@@ -65,6 +65,8 @@ type tabReport struct {
 	Modified                        bool
 	Keeps                           map[string]bool
 	Notice                          *tabNotice
+	// noticePolicy is the checked policy of Notice.
+	noticePolicy string
 }
 
 // tabNotice is the last notification of a view.
@@ -436,8 +438,9 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 		if err != nil {
 			return err
 		}
-		s.report(call.Surface).Notice = &notice
-		s.options.Invalidate()
+		if err := s.reportNotice(call.Surface, notice); err != nil {
+			return err
+		}
 		done()
 	case "runtime.links.open":
 		url, err := text()

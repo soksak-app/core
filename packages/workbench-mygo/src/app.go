@@ -195,7 +195,13 @@ func (s *Shell) Event(name string, data []any) {
 		})
 	case "log-policy":
 		s.events.Follow(data...)
+	case "workspace-changed":
+		s.workspaceChanged()
+	case "files-dropped":
+		s.filesDropped(data)
 	default:
-		s.tabEvent(name, data)
+		if !s.noticeEvent(name, data) {
+			s.tabEvent(name, data)
+		}
 	}
 }

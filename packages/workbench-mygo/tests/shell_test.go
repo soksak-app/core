@@ -104,7 +104,10 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 	}
 	none := func(json.RawMessage) (any, error) { return nil, nil }
 	return map[string]workbench.HostCall{
-		"log":       h.log,
+		"log": h.log,
+		"notificationState": answer("notificationState", func(json.RawMessage) (any, error) {
+			return map[string]string{"authorization": "notDetermined"}, nil
+		}),
 		"workspace": answer("workspace", h.workspace),
 		"projectFolder": answer("projectFolder", func(argument json.RawMessage) (any, error) {
 			var root string
@@ -382,7 +385,7 @@ func TestLibraryShowsTheStartOfAnEmptyWorkspace(t *testing.T) {
 
 func TestWindowIsReadyAfterTheSnapshot(t *testing.T) {
 	f := newShell(t, &storedHost{})
-	if strings.Join(startCalls(f.host.calls), " ") != "workspace windowReady" {
+	if strings.Join(startCalls(f.host.calls), " ") != "workspace windowReady notificationState" {
 		t.Fatalf("the start called %v", f.host.calls)
 	}
 }

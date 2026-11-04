@@ -48,14 +48,14 @@ type gridCardStatus struct {
 
 // gridTabStatus is a tab of a card of core.grid.
 type gridTabStatus struct {
-	ID       string     `json:"id"`
-	Plugin   string     `json:"plugin"`
-	Title    string     `json:"title"`
-	Label    *string    `json:"label"`
-	Notice   *tabNotice `json:"notice"`
-	Footer   *string    `json:"footer"`
-	Modified bool       `json:"modified"`
-	Error    *string    `json:"error"`
+	ID       string  `json:"id"`
+	Plugin   string  `json:"plugin"`
+	Title    string  `json:"title"`
+	Label    *string `json:"label"`
+	Notice   *string `json:"notice"`
+	Footer   *string `json:"footer"`
+	Modified bool    `json:"modified"`
+	Error    *string `json:"error"`
 }
 
 // cardTool is a tool of a card head of core.grid.
@@ -212,7 +212,7 @@ func (s *Shell) gridTab(tab layout.Tab) gridTabStatus {
 	entry := gridTabStatus{ID: tab.ID, Plugin: tab.Plugin, Title: tab.Title}
 	if report := s.surfaces.reports[tab.ID]; report != nil {
 		entry.Label, entry.Footer, entry.Error = optionalText(report.Title), optionalText(report.Footer), optionalText(report.Error)
-		entry.Notice, entry.Modified = report.Notice, report.Modified
+		entry.Notice, entry.Modified = optionalText(s.tabNoticeText(tab.ID)), report.Modified
 	}
 	return entry
 }
