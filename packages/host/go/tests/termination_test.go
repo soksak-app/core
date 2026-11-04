@@ -153,6 +153,7 @@ type quitFramework struct {
 }
 
 func (quitFramework) ApplicationName() string   { return "termination-test" }
+func (quitFramework) MainPage() bool            { return true }
 func (quitFramework) DisplayName() string       { return "Test" }
 func (quitFramework) Step(func())               {}
 func (quitFramework) Post(func())               {}
