@@ -266,7 +266,8 @@ func TestTheMemorySaverReadsTheTabsOfThePlaneAndAShowRestoresAnUnloadedTab(t *te
 		t.Fatal(err)
 	}
 	f.settle()
-	equal(t, memoryTabs(t, f)["tab-bbbbbb"]["state"], "restoring")
+	// The restore ends when the placement holds the surface of the tab.
+	equal(t, memoryTabs(t, f)["tab-bbbbbb"]["state"], "loaded")
 	equal(t, f.surfaces.restored, []string{"tab-bbbbbb"})
 	// The first tab is hidden now, and the delay unloads it.
 	f.timers.tick(120 * minute)

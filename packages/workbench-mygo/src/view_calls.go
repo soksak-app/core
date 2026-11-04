@@ -239,14 +239,7 @@ func (s *Shell) runRegion(call viewCallEvent, answer viewAnswer) error {
 	}
 	switch call.Command {
 	case "document.attach":
-		// The workbench gives no region a stored session history here, so the region starts empty.
-		s.surfaceCall(call, "documentAttach", map[string]any{"document": fields.Name}, func(_ any, err error) {
-			if err != nil {
-				answer(nil, err)
-				return
-			}
-			answer(map[string]any{"history": false}, nil)
-		})
+		s.attachDocument(call, fields.Name, answer)
 	case "document.load":
 		document("documentLoad", map[string]any{"url": fields.URL})
 	case "document.zoom":
@@ -281,6 +274,7 @@ func (s *Shell) runRegion(call viewCallEvent, answer viewAnswer) error {
 	case "document.unsubscribe":
 		document("documentUnsubscribe", map[string]any{"handle": fields.Handle})
 	case "document.detach":
+		delete(s.surfaces.documents[call.Surface], fields.Name)
 		document("documentDetach", map[string]any{})
 	case "image.attach":
 		image("imageAttach", map[string]any{"sidecar": fields.Sidecar})
@@ -291,6 +285,14 @@ func (s *Shell) runRegion(call viewCallEvent, answer viewAnswer) error {
 	case "image.text":
 		image("imageText", map[string]any{"text": fields.Text})
 	case "image.detach":
+		s.surfaces.detaching[call.Surface] = true
+		detached := answer
+		answer = func(value any, err error) {
+			if err == nil {
+				delete(s.surfaces.detaching, call.Surface)
+			}
+			detached(value, err)
+		}
 		image("imageDetach", map[string]any{})
 	}
 	return nil
@@ -1127,6 +1129,7 @@ func (s *Shell) viewEnded(data []any) {
 	}
 	view.end()
 	delete(s.surfaces.views, event.Surface)
+	delete(s.surfaces.documents, event.Surface)
 }
 
 // viewStopped shows the reason of a view that stopped its restarts as the error of its surface.

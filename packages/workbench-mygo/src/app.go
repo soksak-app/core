@@ -223,6 +223,9 @@ func (s *Shell) Event(name string, data []any) {
 	case "view-stopped":
 		s.viewStopped(data)
 	case "document-stream", "document-state", "document-message", "image-event":
+		if name == "document-state" {
+			s.documentState(data)
+		}
 		s.viewEvent(name, data)
 	case "sidecar-failure":
 		s.sidecarFailed(data)
