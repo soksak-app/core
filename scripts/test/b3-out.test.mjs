@@ -5,27 +5,38 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { b3Conditions, readB3Out, writeB3Out } from "../b3-out.mjs";
-import { FRAME_RECORDS } from "../measure-trace.mjs";
 
 const POLICY = { lifecycle: "error", input: "error", call: "debug", io: "error", frame: "debug" };
 
-/** The members of host.window that the conditions read. */
-const WINDOW = { refreshRate: 120, scale: 2, content: { width: 1200, height: 760 }, pageProcess: null };
+/** A host.window reply of the window `window` with the members that the conditions read; the caller adds the window id it read the reply for. */
+const reply = (window, members = {}) => ({ window, refreshRate: 120, scale: 2, content: { width: 1200, height: 760 }, pageProcess: null, ...members });
 
-test("the conditions of a run are the refresh rate, the backing scale and the content size of host.window, the trace state and the policy", () => {
-  assert.deepEqual(b3Conditions({ window: WINDOW, trace: 1, policy: POLICY }),
-    { refreshRate: 120, backingScale: 2, traceState: 1, logPolicy: POLICY, window: { width: 1200, height: 760 } });
-  assert.equal(b3Conditions({ window: WINDOW, trace: FRAME_RECORDS, policy: POLICY }).traceState, "frame-records");
-  assert.throws(() => b3Conditions({ window: { ...WINDOW, refreshRate: null }, trace: 0, policy: POLICY }),
-    /host\.window reports the refresh rate null, so the window is on no screen/);
-  assert.throws(() => b3Conditions({ window: WINDOW, trace: 2, policy: POLICY }), /the trace state must be 0, 1 or FRAME_RECORDS/);
+test("the conditions of a run are the refresh rate and the backing scale that every window shares, the content size of the first window, the performance switch and the policy", () => {
+  assert.deepEqual(b3Conditions({ windows: [reply("w1")], performance: true, policy: POLICY }),
+    { refreshRate: 120, backingScale: 2, traceState: true, logPolicy: POLICY, window: { width: 1200, height: 760 } });
+  const two = b3Conditions({ windows: [reply("w1"), reply("w2", { content: { width: 600, height: 400 } })], performance: false, policy: POLICY });
+  assert.equal(two.traceState, false);
+  assert.deepEqual(two.window, { width: 1200, height: 760 }, "the window of the conditions is the first window, the window of the state");
+  assert.throws(() => b3Conditions({ windows: [reply("w1"), reply("w2", { scale: 1 })], performance: false, policy: POLICY }),
+    /window w2 reports refreshRate 120 and scale 1, not refreshRate 120 and scale 2 of window w1/);
+  assert.throws(() => b3Conditions({ windows: [reply("w1"), reply("w2", { refreshRate: 60 })], performance: false, policy: POLICY }),
+    /window w2 reports refreshRate 60 and scale 2, not refreshRate 120 and scale 2 of window w1/);
+  assert.throws(() => b3Conditions({ windows: [reply("w1", { refreshRate: null })], performance: false, policy: POLICY }),
+    /window w1 reports the refresh rate null, so it is on no screen/);
+  assert.throws(() => b3Conditions({ windows: [reply("w1", { scale: 0 })], performance: false, policy: POLICY }),
+    /window w1 reports scale 0, not a backing scale/);
+  assert.throws(() => b3Conditions({ windows: [{ refreshRate: 120, scale: 2, content: { width: 1200, height: 760 } }], performance: false, policy: POLICY }),
+    /a host\.window reply of b3Conditions names its window, not undefined/);
+  assert.throws(() => b3Conditions({ windows: [], performance: false, policy: POLICY }), /b3Conditions needs one or more host\.window replies, not \[\]/);
+  assert.throws(() => b3Conditions({ windows: [reply("w1")], performance: 1, policy: POLICY }),
+    /the performance switch of a B3 run is true or false, not 1/);
 });
 
 test("the B3 output holds the measurements and the conditions, and refuses a value that is not a number, passed or failed", (t) => {
   const folder = mkdtempSync(join(tmpdir(), "b3-out-"));
   t.after(() => rmSync(folder, { recursive: true, force: true }));
   const file = join(folder, "object-counts.json");
-  const conditions = b3Conditions({ window: WINDOW, trace: 0, policy: POLICY });
+  const conditions = b3Conditions({ windows: [reply("w1")], performance: false, policy: POLICY });
   writeB3Out(file, { measurements: { changedCounts: 0, growingFigures: 1, verdict: "passed" }, conditions });
   assert.deepEqual(JSON.parse(readFileSync(file, "utf8")),
     { measurements: { changedCounts: 0, growingFigures: 1, verdict: "passed" }, conditions });
@@ -34,8 +45,10 @@ test("the B3 output holds the measurements and the conditions, and refuses a val
   assert.throws(() => writeB3Out(file, { measurements: { verdict: "ok" }, conditions }),
     /B3 measurement verdict must be a finite number, "passed" or "failed", not "ok"/);
   assert.throws(() => writeB3Out(file, { measurements: {}, conditions }), /the B3 output has no measurement/);
-  assert.throws(() => writeB3Out(file, { measurements: { a: 1 }, conditions: { ...conditions, traceState: "on" } }),
-    /B3 condition traceState must be 0, 1 or "frame-records", not "on"/);
+  assert.throws(() => writeB3Out(file, { measurements: { a: 1 }, conditions: { ...conditions, traceState: "frame-records" } }),
+    /B3 condition traceState must be true or false, not "frame-records"/);
+  assert.throws(() => writeB3Out(file, { measurements: { a: 1 }, conditions: { ...conditions, traceState: 1 } }),
+    /B3 condition traceState must be true or false, not 1/);
   assert.throws(() => writeB3Out(file, { measurements: { a: 1 }, conditions: { ...conditions, window: { width: 1200 } } }),
     /B3 condition window must be \{width, height\} of positive numbers, not \{"width":1200\}/);
 });
@@ -44,7 +57,7 @@ test("the reader returns what the writer wrote and refuses a file outside the fo
   const folder = mkdtempSync(join(tmpdir(), "b3-out-"));
   t.after(() => rmSync(folder, { recursive: true, force: true }));
   const file = join(folder, "run.json");
-  const conditions = b3Conditions({ window: WINDOW, trace: FRAME_RECORDS, policy: POLICY });
+  const conditions = b3Conditions({ windows: [reply("w1")], performance: true, policy: POLICY });
   writeB3Out(file, { measurements: { changedCounts: 2, verdict: "failed" }, conditions });
   assert.deepEqual(readB3Out(file), { measurements: { changedCounts: 2, verdict: "failed" }, conditions });
   const refused = (output, pattern) => {
@@ -55,6 +68,7 @@ test("the reader returns what the writer wrote and refuses a file outside the fo
   refused({ measurements: { a: 1 } }, /the B3 output must have the members measurements and conditions, not measurements/);
   refused({ measurements: { a: 1 }, conditions, extra: 1 }, /the B3 output must have the members measurements and conditions, not measurements, conditions, extra/);
   refused({ measurements: { a: "1" }, conditions }, /B3 measurement a must be a finite number, "passed" or "failed", not "1"/);
+  refused({ measurements: { a: 1 }, conditions: { ...conditions, traceState: 0 } }, /B3 condition traceState must be true or false, not 0/);
   refused({ measurements: { a: 1 }, conditions: { ...conditions, backingScale: 0 } }, /B3 condition backingScale must be a positive number, not 0/);
   refused({ measurements: { a: 1 }, conditions: { ...conditions, screen: 1 } },
     /B3 conditions must be refreshRate, backingScale, traceState, logPolicy, window, not refreshRate, backingScale, traceState, logPolicy, window, screen/);

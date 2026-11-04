@@ -349,6 +349,7 @@ const FEATURE_LINKS = [
       { file: "scripts/b3-out.mjs", symbol: "export function writeB3Out" },
       { file: "scripts/b3-out.mjs", symbol: "export function readB3Out" },
       { file: "scripts/measure-object-counts.mjs", symbol: "export function b3Measurements" },
+      { file: "scripts/measure-object-counts.mjs", symbol: "export function b3Output" },
     ],
     tests: [
       { file: "scripts/test/measure-trace.test.mjs", id: "TRACE 0 turns the trace off under the default policy, and TRACE 1 turns it on with the classes call and frame at debug" },
@@ -363,6 +364,8 @@ const FEATURE_LINKS = [
       { file: "scripts/test/b3-out.test.mjs", id: "the B3 output holds the measurements and the conditions, and refuses a value that is not a number, passed or failed" },
       { file: "scripts/test/b3-out.test.mjs", id: "the reader returns what the writer wrote and refuses a file outside the form with the file and the bad key" },
       { file: "scripts/test/measure-object-counts.test.mjs", id: "B3_MEASUREMENTS declares the keys of the B3 output of object-counts, which b3Measurements gives" },
+      { file: "scripts/test/measure-object-counts.test.mjs", id: "the B3 output of object-counts states the performance switch that TRACE set, the policy and the window it measured" },
+      { file: "scripts/test/b3-out.test.mjs", id: "the conditions of a run are the refresh rate and the backing scale that every window shares, the content size of the first window, the performance switch and the policy" },
       { file: "scripts/test/measure-object-counts.test.mjs", id: "the B3 measurements count the counts that change after the first repetition and the figures that grow from repetitions 11-20 to 21-30" },
     ],
     expected: "The measurement targets take the mygo host: object-counts and host-allocations set the trace state of TRACE, host-allocations finds the host by its --config-dir, object-counts adds a divider drag, a menu and the settings window and reads the runtime figures, the added counts and the host footprint without a page process, and the main page targets fail with the error of the mygo host; with B3_OUT, object-counts writes the S3 measurements with the conditions of the run through the single writer and reader of the B3 output.",
