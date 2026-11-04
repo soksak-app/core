@@ -31,7 +31,7 @@ The browser application simulates native surfaces. Browser checks do not verify 
 
 ## Card tabs
 
-A tab of a card header shows the plugin's tab name or the title that its surface reports. A tab is at most 200 points wide, so one long title leaves the width of the tab strip to the other tabs: a name that does not fit is cut at the end with an ellipsis, and the tooltip of the tab shows the whole name. The tab list button (DOM name `core.card.tab-list`, ≡) stands at the start of every card header and lists all tabs of the card; a fullscreen card shows the space apps button in its place. When the header narrows, it first shows only the active tab and then no tab, and the button stays.
+A tab of a card header shows the plugin's tab name or the title that its surface reports. A tab is at most 200 points wide, so one long title leaves the width of the tab strip to the other tabs: a name that does not fit is cut at the end with an ellipsis, and the tooltip of the tab shows the whole name. The tab list button (DOM name `core.card.tab-list`, ≡) stands at the start of every card header and lists all tabs of the card; a fullscreen card shows the space apps button in its place. When the header narrows, it first shows only the active tab and then no tab, and the button stays. The card tools fold into the ⋯ menu when the active tab no longer fits beside them; the header keeps every tab while every tab, or the active tab and `tab-peek-w`, fit beside the tools, and drops the active tab when the room beside the menu is less than the active tab and less than `tab-min-w`. The layout cases of `docs/spec/cases/layout/head.json` state these stages from the measured widths of the header.
 
 ## Card fullscreen
 

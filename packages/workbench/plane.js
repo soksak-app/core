@@ -9,6 +9,7 @@ import { borderWidth, cardRadius, halfGap, linkedSet, pluginSettings, set as set
 import { effectiveTextScope, nextTextSize, notifyTextSize, setSurfaceTextSize, setTextScope, textScope } from "./text-size.js";
 import { applyFrameText, chromeRow, measureAt } from "./frame-text.js";
 import { CHROME, placeFocusMark } from "./chrome-metrics.js";
+import { fitHead } from "./head-fit.js";
 import { hasPlugin, isPlace, plugin, plugins } from "./registry.js";
 import { clearSet, drawSet, restoreSidebarChoices, sidebarChoices } from "./sidebar-sections.js";
 import { bindSidebarGrip } from "./sidebar-grip.js";
@@ -1265,7 +1266,7 @@ function centreTab(strip, activeId) {
  * return even after it widened. No rendering happens between the two writes, so nothing appears on the screen.
  *
  * If the tools do not fit with the current tab title, the tool row folds into the ⋯ menu (F81). The title stays longer
- * than the tools.
+ * than the tools. fitHead decides the stage from the measured widths.
  */
 // PEEK    the spare width other than the active tab that is needed to keep the strip stage: the chrome metric tab-peek-w
 // MIN_TAB the minimum width of an active tab that is truncated with an ellipsis. Narrower than this, it drops to the ham stage: the chrome
@@ -1288,31 +1289,22 @@ function fitChrome(chrome, strip) {
   // of that button.
   const apps = chrome.querySelector(".chrome__apps");
   const lead = parseFloat(getComputedStyle(chrome.closest(".card")?.dataset.fullscreen === "true" && apps
-    ? apps : chrome.querySelector(".chrome__ham")).width) + gap;
-  const inner = chrome.clientWidth
-    - parseFloat(head.paddingLeft) - parseFloat(head.paddingRight) - lead;
-  // ⋯ is not drawn in the bar stage, so the declared width is read and not the rect.
-  const more = parseFloat(getComputedStyle(chrome.querySelector(".chrome__more")).width);
-  const tools = acts.getBoundingClientRect().width;
-
-  const tabs = [...strip.querySelectorAll(".tab")];
+    ? apps : chrome.querySelector(".chrome__ham")).width);
   const active = strip.querySelector(".tab[data-active=true]");
-  const activeW = active ? active.getBoundingClientRect().width : 0;
-  // The gap between tabs is a value that the tab list holds.
-  // default: the computed value normal of columnGap is not a number and is 0 in flex.
-  const between = parseFloat(getComputedStyle(strip).columnGap) || 0;
-  const whole = tabs.reduce((n, t) => n + t.getBoundingClientRect().width, 0)
-    + Math.max(0, tabs.length - 1) * between;
-  // The head folds in this order: the other tabs, the tools (into a menu) down to the minimum width of the title, then the title. The first stage whose preceding stage fits is used.
-  const withTools = inner - tools - gap;
-  const withMenu = inner - more - gap;
-  const [fit, folded] =
-    withTools >= Math.min(whole, activeW + PEEK) ? ["strip", "bar"]
-    : withTools >= activeW ? ["one", "bar"]
-    : withMenu >= Math.min(activeW, MIN_TAB) ? ["one", "menu"]
-    : ["ham", "menu"];
+  const { fit, tools } = fitHead({
+    width: chrome.clientWidth, paddingLeft: parseFloat(head.paddingLeft), paddingRight: parseFloat(head.paddingRight), lead, gap,
+    toolsWidth: acts.getBoundingClientRect().width,
+    // ⋯ is not drawn in the bar stage, so the declared width is read and not the rect.
+    moreWidth: parseFloat(getComputedStyle(chrome.querySelector(".chrome__more")).width),
+    tabWidths: [...strip.querySelectorAll(".tab")].map((tab) => tab.getBoundingClientRect().width),
+    // The gap between tabs is a value that the tab list holds.
+    // default: the computed value normal of columnGap is not a number and is 0 in flex.
+    tabGap: parseFloat(getComputedStyle(strip).columnGap) || 0,
+    activeWidth: active ? active.getBoundingClientRect().width : 0,
+    peek: PEEK, minTab: MIN_TAB,
+  });
   chrome.dataset.fit = fit;
-  chrome.dataset.tools = folded;
+  chrome.dataset.tools = tools;
 }
 
 /* It measures after the render completes. Measuring before the width is updated computes a wrong position.

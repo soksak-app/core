@@ -621,6 +621,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F502-16",
+    implementation: [
+      { file: "packages/workbench/workbench.json", symbol: "\"tab-peek-w\": \"56px\"" },
+      { file: "packages/workbench/plane.js", symbol: "const HEADER = parseFloat(CHROME[\"head-h\"]), FOOTER = parseFloat(CHROME[\"foot-h\"]);" },
+      { file: "packages/workbench/head-fit.js", symbol: "export function fitHead(head)" },
+      { file: "packages/workbench-mygo/src/layout/head.go", symbol: "func FitHead(head Head) HeadFit {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/workbench-declaration.test.mjs", id: "the layout values that the plane reads are chrome metrics of workbench.json" },
+      { file: "packages/workbench-mygo/tests/layout/cases_test.go", id: "TestHeadCases" },
+    ],
+    expected: "The layout values that both workbenches read, the card head and foot and the tab strip thresholds, are chrome metrics of `packages/workbench/workbench.json`; the fold stage of a card head is a function of its measured widths that `packages/workbench` and the Go layout model of `packages/workbench-mygo` compute alike on the layout cases of `docs/spec/cases/layout/head.json`.",
+    levels: ["unit"],
+  },
+  {
     id: "F502-15",
     implementation: [
       { file: "packages/workbench/settings.js", symbol: "import declaration from \"./workbench.json\" with { type: \"json\" };" },

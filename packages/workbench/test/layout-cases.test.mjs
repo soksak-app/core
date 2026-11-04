@@ -1,4 +1,4 @@
-// The shared layout cases of the stored spaces and their tabs (docs/spec/cases/layout). The Go layout model of
+// The shared layout cases of the stored spaces and their tabs and of the fold stage of a card head (docs/spec/cases/layout). The Go layout model of
 // packages/workbench-mygo runs the same files, so a case is one statement of the stored format that both implementations meet.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -38,6 +38,7 @@ assert.deepEqual(installErrors, [], "the plugins of the cases are not loaded");
 const { checkStoredLayout } = await import("../stored-layout.js");
 const { restoreWindowSidebars } = await import("../window-sidebars.js");
 const spaces = await import("../spaces.js");
+const { fitHead } = await import("../head-fit.js");
 
 const CHECKS = {
   storedLayout: (kase) => checkStoredLayout(kase.layout),
@@ -57,4 +58,8 @@ for (const kase of read("spaces.json").cases) {
     kase.steps.forEach((step, i) => check(() => (step.call === "project" ? structuredClone(project)
       : spaces[step.call](project, ...(step.args ?? []))), step, `step ${i + 1} ${step.call}`));
   });
+}
+
+for (const kase of read("head.json").cases) {
+  test(`head: ${kase.name}`, () => check(() => fitHead(kase.head), kase, "fitHead"));
 }
