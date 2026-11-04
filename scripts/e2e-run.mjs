@@ -118,7 +118,8 @@ async function runCommand(item, interrupted) {
 /**
  * Starts an application and resolves when its configuration folder holds endpoint.json. The folder is read once its change watch is
  * active and again at each change (untilFolderState), so a file written before the watch became active is found too. The wait ends
- * with an error when the application cannot start or exits first.
+ * with an error when the application cannot start or exits first; a start that fails ends the process that it started and leaves
+ * no started application, so the quit step of that application is skipped.
  */
 async function startApplication(item, children) {
   mkdirSync(item.configDir, { recursive: true });
@@ -129,8 +130,19 @@ async function startApplication(item, children) {
   const ended = new AbortController();
   child.once('error', (error) => ended.abort(new Error(`cannot start ${item.argv[0]}: ${error.message}`)));
   exited(child).then((end) => ended.abort(new Error(`the application exited with ${describeExit(end)} before it wrote endpoint.json`)));
-  await untilFolderState(item.configDir, () => (existsSync(endpoint) ? true : undefined), START_LIMIT_MS,
-    () => new Error(`the application wrote no endpoint.json in ${START_LIMIT_MS / 1000}s`), ended.signal);
+  try {
+    await untilFolderState(item.configDir, () => (existsSync(endpoint) ? true : undefined), START_LIMIT_MS,
+      () => new Error(`the application wrote no endpoint.json in ${START_LIMIT_MS / 1000}s`), ended.signal);
+  } catch (error) {
+    // An application that did not start has no endpoint for a quit step: the start ends a process that still runs, and the quit
+    // step of the application is skipped as for an application that was not started.
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill('SIGKILL');
+      await exited(child);
+    }
+    children.delete(item.app);
+    throw error;
+  }
 }
 
 /** The crash reports of the application that the system wrote since `since` (ms), each with the fault that names its address. */

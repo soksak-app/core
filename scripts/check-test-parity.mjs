@@ -485,11 +485,13 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "docs/spec/performance-goals.json", symbol: "\"constant\": \"IDLE_TAB_BOUND_KB\"" },
       { file: "docs/spec/performance-goals.json", symbol: "\"constant\": \"SPLIT_LOAD_GROWTH_BOUND_KB\"" },
+      { file: "scripts/e2e-run.mjs", symbol: "async function startApplication(item, children) {" },
     ],
     tests: [
       { file: "scripts/test/performance-goals.test.mjs", id: "docs/spec/performance-goals.json names each value once and compares a value only with a value that it holds" },
       { file: "scripts/test/performance-goals.test.mjs", id: "the tables of the section Performance goals of docs/spec/hosts.md are copies of docs/spec/performance-goals.json" },
       { file: "scripts/test/performance-goals.test.mjs", id: "the tables of the section Performance goals of docs/spec/hosts.ko.md are copies of docs/spec/performance-goals.json" },
+      { file: "scripts/test/e2e-run.test.mjs", id: "a failed start skips the quit of its application, so the run reports the start as its one failure" },
     ],
     expected: "`docs/spec/performance-goals.json` holds the numeric bounds of the goals G1 to G8 and the run conditions of the three-host benchmark, and the two tables of the section Performance goals of `docs/spec/hosts.md` and of its translation are copies of it.",
     levels: ["unit"],
