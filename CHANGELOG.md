@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F427: The window activation and capture stream failures of one `make e2e` run did not recur in the three runs after it.
 - F426: The unused `attach_surface` and `detach_surface` of the Tauri platform interface are removed.
 - F425: A modal request of a closed window fails with `project window is closed` in the Wails host, as it does in the Tauri host.
 - F298-8: Two consecutive `make e2e` runs of the 0.0.33 candidate on macOS (Darwin 25.6, arm64), Wails and Tauri, pass all 88 window check files and all 13 native end-to-end tests; the failures of the earlier runs are corrected by F403 to F424.

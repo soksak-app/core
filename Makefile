@@ -278,7 +278,7 @@ DIAGNOSTIC_RELEASE := $(filter 0.0.%,$(shell sed -n 's/^export const RELEASE = "
 .PHONY: native-darwin native-darwin-fetch registry registry-install install-plugins browser-frontend browser-example frontend-wailsv3 frontend-tauriv2 frontend-wailsv3-core frontend-tauriv2-core host-test-wailsv3 host-test-tauriv2 host-contract-check release-check-wailsv3 release-check-tauriv2 rust-format-check rust-clippy-check go-format-check \
         tauriv2 tauriv2-release tauriv2-build tauriv2-build-release \
         wailsv3 wailsv3-release wailsv3-build wailsv3-build-release \
-        e2e e2e-activation e2e-real e2e-person examples-size
+        e2e e2e-activation e2e-real e2e-person e2e-section-design examples-size
 
 # rustup installs cargo here and adds the path to the shell profile. The shell of make
 # does not read the profile.
@@ -497,6 +497,10 @@ e2e-person: $(E2E_BUILD)
 	@node scripts/e2e-run.mjs --script verify:person
 
 # These targets run one observation, benchmark or repeat against applications that already run; they build and start nothing.
+# Leaves stills of the sections in target/section-design for inspection at original resolution.
+e2e-section-design: $(E2E_BUILD)
+	@node scripts/e2e-run.mjs --script verify:section-design
+
 e2e-terminal-sidebar-current:
 	@pnpm -F @soksak/e2e run verify:terminal-sidebar-current
 

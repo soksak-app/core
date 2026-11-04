@@ -11,6 +11,7 @@
     "verify:real": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs 'real/*.test.mjs'",
     "repeat": "soksak-window-repeat --setup ./setup.mjs",
     "test": "node --test test/",
+    "verify:section-design": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs observation/section-design.test.mjs",
     "verify:terminal-sidebar-current": "node ./run.mjs --test --test-global-setup=./setup.mjs observation/terminal-sidebar-current.test.mjs",
     "verify:shutdown": "node normal-shutdown.mjs",
     "verify:terminal-focus-current": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs observation/terminal-focus-current.test.mjs",

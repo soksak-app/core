@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F427: `make e2e` 한 번의 window 활성과 capture stream 실패는 그 뒤 세 번의 실행에서 재발하지 않았다.
 - F426: Tauri platform interface에서 쓰지 않는 `attach_surface`와 `detach_surface`를 없앴다.
 - F425: 닫힌 window의 modal 요청은 Tauri host와 같이 Wails host에서도 `project window is closed`로 실패한다.
 - F298-8: macOS(Darwin 25.6, arm64)에서 0.0.33 후보의 연속 두 `make e2e` 실행이 Wails와 Tauri 모두 window check file 88개와 native end-to-end test 13개를 통과한다. 이전 실행의 실패는 F403부터 F424까지가 고쳤다.

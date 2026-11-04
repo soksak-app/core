@@ -8936,6 +8936,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F332-7",
+    implementation: [{ file: "e2e/observation/section-design.test.mjs", symbol: "stills of the files and browser sections in each mode" }],
+    tests: [{ file: "e2e/observation/section-design.test.mjs", id: "stills of the files and browser sections in each mode" }],
+    expected: "Stills of both applications in each mode show the sections for inspection.",
+    levels: ["application"],
+  },
+  {
     id: "F404",
     implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) fn with_open_window(" }],
     tests: [{ file: "packages/host/tauriv2/src/windows_records_test.rs", id: "a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure" }],
