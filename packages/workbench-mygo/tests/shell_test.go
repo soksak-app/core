@@ -28,9 +28,11 @@ type storedHost struct {
 	located  string
 	projects []map[string]any
 	// extra holds the host calls that the base table has not.
-	extra   map[string]workbench.HostCall
-	calls   []string
-	shown   []any
+	extra map[string]workbench.HostCall
+	calls []string
+	shown []any
+	// retains holds the argument of each sidecarsRetain call.
+	retains []json.RawMessage
 	failing map[string]error
 	// installed is the document of the installed plugins, and it is empty without plugins.
 	installed string
@@ -142,10 +144,16 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 			h.shown = append(h.shown, shown)
 			return nil, nil
 		}),
-		"projectRelease":     answer("projectRelease", none),
-		"projectRemoveAsk":   answer("projectRemoveAsk", func(json.RawMessage) (any, error) { return true, nil }),
-		"folderChoose":       answer("folderChoose", func(json.RawMessage) (any, error) { return "/chosen", nil }),
-		"windowReady":        answer("windowReady", none),
+		"projectRelease":   answer("projectRelease", none),
+		"projectRemoveAsk": answer("projectRemoveAsk", func(json.RawMessage) (any, error) { return true, nil }),
+		"folderChoose":     answer("folderChoose", func(json.RawMessage) (any, error) { return "/chosen", nil }),
+		"windowReady":      answer("windowReady", none),
+		"sidecarsRetain": answer("sidecarsRetain", func(argument json.RawMessage) (any, error) {
+			h.mu.Lock()
+			defer h.mu.Unlock()
+			h.retains = append(h.retains, argument)
+			return nil, nil
+		}),
 		"setTheme":           answer("setTheme", func(argument json.RawMessage) (any, error) { h.theme = argument; return nil, nil }),
 		"compositionDeclare": answer("compositionDeclare", none),
 		"syncSurfaces": answer("syncSurfaces", func(json.RawMessage) (any, error) {
@@ -471,7 +479,7 @@ func TestTheWindowNamesTheProjectThatItShows(t *testing.T) {
 
 func TestWindowIsReadyAfterTheSnapshot(t *testing.T) {
 	f := newShell(t, &storedHost{})
-	if strings.Join(startCalls(f.host.calls), " ") != "workspace windowReady notificationState pluginsState sidecarsOutdated" {
+	if strings.Join(startCalls(f.host.calls), " ") != "workspace windowReady notificationState pluginsState sidecarsOutdated sidecarsRetain" {
 		t.Fatalf("the start called %v", f.host.calls)
 	}
 }

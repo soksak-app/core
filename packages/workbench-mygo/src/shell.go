@@ -328,6 +328,8 @@ func (s *Shell) Start() {
 						s.startNotices(func() {
 							s.startPlugins(func(installed bool) {
 								s.started = true
+								// After the application restarts or the window fails, the sessions of surfaces in no layout end.
+								s.retainSessions()
 								if s.changed || installed {
 									s.pluginsChanged()
 								}

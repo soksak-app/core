@@ -358,6 +358,25 @@ func (s *Sidebars) Hide(c *ui.Context, frame SidebarFrame) {
 	}
 }
 
+// Surfaces returns the ids of the section surfaces of the fixed sidebars in the space.
+func (s *Sidebars) Surfaces(space string, focused FocusedSurface) []string {
+	var surfaces []string
+	for _, place := range []string{"left", "right"} {
+		set, _ := s.windowSet(place, focused)
+		if set == nil {
+			continue
+		}
+		frame := SidebarFrame{Sidebar: place, Space: space}
+		s.fill(&frame, set)
+		for _, seat := range SidebarSeats(frame) {
+			if len(seat.Composition) > 0 {
+				surfaces = append(surfaces, seat.SurfaceID)
+			}
+		}
+	}
+	return surfaces
+}
+
 // fill gives the frame the loaded sections of set and the choices of its sidebar. The sections of a plugin that is not loaded remain
 // in the set but are not drawn (docs/spec/plugins.md).
 func (s *Sidebars) fill(frame *SidebarFrame, set *SidebarSet) {
