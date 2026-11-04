@@ -2,6 +2,7 @@ package workbench
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -26,6 +27,8 @@ type SurfaceLinks struct {
 	Forward func(request map[string]any, answer func(value any, err error))
 	// Changed sends the value of a watched status to the host. surface is the surface that the watch names, and nil for none.
 	Changed func(name string, surface *string, value any)
+	// Failed receives the failure of an observation.
+	Failed func(err error)
 }
 
 // SurfaceRegistered is the value of the event exposure-registered: an entry that a surface registered, or the end of the surface.
@@ -44,13 +47,27 @@ type SurfaceChange struct {
 	Version int64           `json:"version"`
 }
 
-// surfaceWatch is one watch of a status of a surface: the surface that it follows, the surface that the request named and the last
-// delivered version.
+// surfaceWatch is one watch of a status of a surface: the surface that it follows, the surface that the request named, the last
+// delivered version, whether a request of the host holds it and the observers of this window that follow it.
 type surfaceWatch struct {
 	surface   string
 	requested *string
 	name      string
 	version   int64
+	external  bool
+	local     []*surfaceObserver
+}
+
+// surfaceObserver follows a status inside this window. It moves with the registrations: wanted is the surface that it wants, exact
+// tells that it follows no other, and surface is the surface that it follows, or nil.
+type surfaceObserver struct {
+	name    string
+	wanted  *string
+	exact   bool
+	fn      func(value any)
+	placed  bool
+	surface *string
+	watch   *surfaceWatch
 }
 
 // surfaceTable holds what the registry knows of the plugins and the surfaces of its window.
@@ -63,9 +80,10 @@ type surfaceTable struct {
 	timeouts map[string]int64
 	// owners holds the surfaces that registered each declaration key, in registration order.
 	owners map[string][]string
-	// watches holds the watches by watchKey.
-	watches  map[string]*surfaceWatch
-	forwards uint64
+	// watches holds the watches by watchKey, and observers the observers of this window.
+	watches   map[string]*surfaceWatch
+	observers []*surfaceObserver
+	forwards  uint64
 }
 
 func newSurfaceTable() surfaceTable {
@@ -176,6 +194,19 @@ func (r *Registry) isDeclared(kind, name string) bool {
 // Registered applies a registration or the end of a surface. A registration that does not match the declaration is not applied and
 // is an error. A surface that the window no longer holds registers nothing, and its end follows.
 func (r *Registry) Registered(event SurfaceRegistered) error {
+	if err := r.applyRegistration(event); err != nil {
+		return err
+	}
+	r.mu.Lock()
+	observers := slices.Clone(r.surfaces.observers)
+	r.mu.Unlock()
+	for _, observer := range observers {
+		r.reattach(observer)
+	}
+	return nil
+}
+
+func (r *Registry) applyRegistration(event SurfaceRegistered) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	table := &r.surfaces
@@ -266,12 +297,18 @@ func (r *Registry) replySurface(method string, params json.RawMessage, answer fu
 	key := watchKey(*name, requested)
 	r.mu.Lock()
 	current := r.surfaces.watches[key]
-	if method == "status.unwatch" {
+	observed := current != nil && len(current.local) > 0
+	switch {
+	case method == "status.unwatch" && observed:
+		current.external = false
+	case method == "status.unwatch":
 		delete(r.surfaces.watches, key)
+	case method == "status.watch" && current != nil:
+		current.external = true
 	}
 	r.mu.Unlock()
 	switch {
-	case method == "status.unwatch" && current != nil:
+	case method == "status.unwatch" && current != nil && !observed:
 		r.release(current, answer)
 		return true
 	case method == "status.unwatch", method == "status.watch" && current != nil:
@@ -288,7 +325,7 @@ func (r *Registry) replySurface(method string, params json.RawMessage, answer fu
 		return true
 	}
 	// The watch exists before the surface answers, because the surface sends the current value as it starts the watch.
-	watched := &surfaceWatch{surface: surface, name: *name}
+	watched := &surfaceWatch{surface: surface, name: *name, external: true}
 	if requested != nil {
 		watched.requested = &surface
 	}
@@ -404,7 +441,147 @@ func (r *Registry) Deliver(change SurfaceChange) {
 	}
 	r.mu.Unlock()
 	for _, watched := range following {
-		r.surfaces.links.Changed(change.Name, watched.requested, change.Value)
+		if watched.external {
+			r.surfaces.links.Changed(change.Name, watched.requested, change.Value)
+		}
+		for _, observer := range watched.local {
+			observer.fn(change.Value)
+		}
+	}
+}
+
+// Observe follows a status that surfaces register: fn receives its value and each change, and nil when no surface holds it. wanted
+// is the surface to follow, and nil for the preferred one; exact follows no other surface than wanted. The returned function ends it.
+func (r *Registry) Observe(name string, wanted *string, exact bool, fn func(value any)) (stop func()) {
+	observer := &surfaceObserver{name: name, wanted: wanted, exact: exact, fn: fn}
+	r.mu.Lock()
+	r.surfaces.observers = append(r.surfaces.observers, observer)
+	r.mu.Unlock()
+	r.reattach(observer)
+	return func() {
+		r.mu.Lock()
+		r.surfaces.observers = slices.DeleteFunc(r.surfaces.observers, func(other *surfaceObserver) bool { return other == observer })
+		r.mu.Unlock()
+		r.detach(observer)
+	}
+}
+
+// target returns the surface that an observer follows among the surfaces that registered its status.
+func (r *Registry) target(observer *surfaceObserver) *string {
+	owners := r.ownersOf("status", observer.name)
+	if observer.wanted != nil && slices.Contains(owners, *observer.wanted) {
+		return observer.wanted
+	}
+	if observer.exact {
+		return nil
+	}
+	choices := slices.DeleteFunc(owners, sectionSurface)
+	if len(choices) == 0 {
+		return nil
+	}
+	for _, surface := range r.surfaces.links.Preferred() {
+		if slices.Contains(choices, surface) {
+			return &surface
+		}
+	}
+	return &choices[len(choices)-1]
+}
+
+// observeKey is the key of the watch of an observer, which is the key of a request that names the same surface.
+func observeKey(name, surface string) string {
+	return watchKey(name, nameText(surface))
+}
+
+// nameText is the JSON of a surface id.
+func nameText(surface string) json.RawMessage {
+	encoded, err := json.Marshal(surface)
+	if err != nil {
+		panic(err) // A string has a JSON form.
+	}
+	return encoded
+}
+
+// observeFailed reports the failure of an observation with its name and its surface. A surface that ended is no failure: its end
+// decides the observer again.
+func (r *Registry) observeFailed(name, surface string, err error) {
+	var refusal *Refusal
+	if errors.As(err, &refusal) && refusal.Code == Gone {
+		return
+	}
+	r.surfaces.links.Failed(fmt.Errorf("%s on %s: %w", name, surface, err))
+}
+
+// reattach decides again which surface an observer follows. When the surface changes, the watch moves.
+func (r *Registry) reattach(observer *surfaceObserver) {
+	surface := r.target(observer)
+	r.mu.Lock()
+	live := surface != nil && observer.watch != nil && r.surfaces.watches[observeKey(observer.name, *surface)] == observer.watch
+	r.mu.Unlock()
+	same := observer.placed && (surface == nil) == (observer.surface == nil) && (surface == nil || *surface == *observer.surface)
+	if same && (surface == nil || live) {
+		return
+	}
+	r.detach(observer)
+	observer.placed, observer.surface = true, surface
+	if surface == nil {
+		observer.fn(nil)
+		return
+	}
+	id, name, key := *surface, observer.name, observeKey(observer.name, *surface)
+	r.mu.Lock()
+	watched := r.surfaces.watches[key]
+	if watched != nil {
+		watched.local = append(watched.local, observer)
+		observer.watch = watched
+		r.mu.Unlock()
+		r.forward(id, "status.get", nameOnly(name), func(value any, err error) {
+			switch {
+			case err != nil:
+				r.observeFailed(name, id, err)
+			case observer.watch == watched:
+				observer.fn(value)
+			}
+		})
+		return
+	}
+	watched = &surfaceWatch{surface: id, requested: &id, name: name, local: []*surfaceObserver{observer}}
+	r.surfaces.watches[key] = watched
+	observer.watch = watched
+	r.mu.Unlock()
+	r.forward(id, "status.watch", nameOnly(name), func(_ any, err error) {
+		if err == nil {
+			return
+		}
+		r.mu.Lock()
+		if r.surfaces.watches[key] == watched {
+			delete(r.surfaces.watches, key)
+		}
+		r.mu.Unlock()
+		r.observeFailed(name, id, err)
+	})
+}
+
+// detach ends the watch of an observer. When no other observer or request holds the watch, the watch of the surface ends too.
+func (r *Registry) detach(observer *surfaceObserver) {
+	watched := observer.watch
+	observer.watch = nil
+	if watched == nil {
+		return
+	}
+	r.mu.Lock()
+	watched.local = slices.DeleteFunc(watched.local, func(other *surfaceObserver) bool { return other == observer })
+	key := observeKey(observer.name, watched.surface)
+	ended := len(watched.local) == 0 && !watched.external && r.surfaces.watches[key] == watched
+	if ended {
+		delete(r.surfaces.watches, key)
+	}
+	r.mu.Unlock()
+	if ended {
+		r.release(watched, func(_ any, err error) {
+			if err != nil {
+				r.observeFailed(watched.name, watched.surface, err)
+			}
+		})
 	}
 }
 

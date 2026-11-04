@@ -47,14 +47,20 @@ type viewState struct {
 	// commands holds the commands that the view registered, and requests the answer of each request that it has not replied.
 	commands map[string]bool
 	requests map[uint64]viewAnswer
-	// statuses holds the text of the last value of each status that the view watches.
+	// statuses holds the text of the last value of each core status that the view watches, and observed the end of each watch of a
+	// status of a surface.
 	statuses map[string]string
+	observed map[string]func()
 	// focus is the value of the last call tab.focus.
 	focus json.RawMessage
 }
 
 // end ends the calls of the page to a view whose document ended.
 func (v *viewState) end() {
+	for key, stop := range v.observed {
+		delete(v.observed, key)
+		stop()
+	}
 	for id, answer := range v.requests {
 		delete(v.requests, id)
 		answer(nil, errors.New("surface-closed"))
@@ -102,7 +108,7 @@ func (s *Shell) view(surface string) *viewState {
 	view := s.surfaces.views[surface]
 	if view == nil {
 		view = &viewState{pending: map[uint64]*viewPending{}, events: map[string]bool{}, failures: map[string]bool{}, commands: map[string]bool{},
-			requests: map[uint64]viewAnswer{}, statuses: map[string]string{}}
+			requests: map[uint64]viewAnswer{}, statuses: map[string]string{}, observed: map[string]func(){}}
 		s.surfaces.views[surface] = view
 	}
 	return view
@@ -543,11 +549,14 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 		if err != nil {
 			return err
 		}
-		if owner, _, _ := strings.Cut(fields.Name, "."); owner != "core" {
-			return fmt.Errorf("view call %s %s is not a core status", call.Command, fields.Name)
+		if fields.Name == "" {
+			return fmt.Errorf("view call %s requires a non-empty name", call.Command)
 		}
-		if fields.Surface != nil {
-			return fmt.Errorf("view call %s %s: a status of a surface is not served", call.Command, fields.Name)
+		if owner := ownerOf(fields.Name); owner != "core" && owner != call.Plugin {
+			return fmt.Errorf("view call %s %s is neither a core status nor a status of %s", call.Command, fields.Name, call.Plugin)
+		}
+		if fields.Surface != nil || registeredBySurface(fields.Name) {
+			return s.observeForView(call, view, fields.Name, fields.Surface, answer)
 		}
 		if call.Command == "runtime.status.unwatch" {
 			delete(view.statuses, fields.Name)
@@ -923,6 +932,41 @@ func viewContributions(items []ConnectedItem) []map[string]any {
 		listed[i] = map[string]any{"plugin": item.Plugin, "index": item.Index, "item": item.Item, "module": coreRoot + item.Module}
 	}
 	return listed
+}
+
+// observeForView starts or ends the watch of a view on a status that surfaces hold. An unwatch ends only a watch of this view, so its
+// surface is not checked: the surface can close before the view unwatches it. The status event carries the surface only when the
+// watch names one.
+func (s *Shell) observeForView(call viewCallEvent, view *viewState, name string, surface *string, answer viewAnswer) error {
+	key := name
+	if surface != nil {
+		key = observeKey(name, *surface)
+	}
+	if call.Command == "runtime.status.unwatch" {
+		if stop := view.observed[key]; stop != nil {
+			delete(view.observed, key)
+			stop()
+		}
+		answer(nil, nil)
+		return nil
+	}
+	if surface != nil && (*surface == "" || s.surfacePlugin(*surface) != call.Plugin) {
+		return fmt.Errorf("view call %s surface %s is not a surface of %s", call.Command, *surface, call.Plugin)
+	}
+	if !s.registry.isDeclared("status", name) {
+		return fmt.Errorf("view call %s %s is not a declared status", call.Command, name)
+	}
+	if view.observed[key] == nil {
+		view.observed[key] = s.registry.Observe(name, surface, surface != nil, func(value any) {
+			data := map[string]any{"name": name, "value": value}
+			if surface != nil {
+				data["surface"] = *surface
+			}
+			s.pushView(call.Surface, view, "status", data)
+		})
+	}
+	answer(nil, nil)
+	return nil
 }
 
 // pushStatuses sends each watched status of a view whose value changed.

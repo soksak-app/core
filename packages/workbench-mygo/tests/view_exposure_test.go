@@ -347,3 +347,53 @@ func TestAClosedSurfaceLeavesTheChoice(t *testing.T) {
 		t.Fatalf("the reply is %v", failure)
 	}
 }
+
+func TestAViewFollowsAStatusOfItsPlugin(t *testing.T) {
+	r := newViewRelay(t)
+	surface := r.surface()
+	r.call(surface, "runtime.native.on", map[string]any{"name": "exposure-request"})
+	r.call(surface, "runtime.native.call", map[string]any{"name": "registered", "payload": map[string]any{"kind": "status", "name": "terminal.screen"}})
+	reply := viewCall(t, r.f, r.stored, surface, "runtime.status.watch", map[string]any{"name": "browser.page"})
+	if failure, _ := reply["error"].(map[string]any); failure == nil || failure["message"] != "view call runtime.status.watch browser.page is neither a core status nor a status of terminal" {
+		t.Fatalf("the reply is %v", reply)
+	}
+	reply = viewCall(t, r.f, r.stored, surface, "runtime.status.watch", map[string]any{"name": "terminal.screen", "surface": "tab-none"})
+	if failure, _ := reply["error"].(map[string]any); failure == nil || failure["message"] != "view call runtime.status.watch surface tab-none is not a surface of terminal" {
+		t.Fatalf("the reply is %v", reply)
+	}
+	r.call(surface, "runtime.status.watch", map[string]any{"name": "terminal.screen", "surface": surface})
+	var id any
+	r.f.pending.until(t, func() bool {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		if len(r.pushed) == 0 {
+			return false
+		}
+		id = r.pushed[0]["data"].(map[string]any)["id"]
+		return true
+	})
+	r.call(surface, "runtime.native.call", map[string]any{"name": "exposureReply", "payload": map[string]any{"id": id}})
+	r.call(surface, "runtime.native.call", map[string]any{"name": "changed", "payload": map[string]any{"name": "terminal.screen", "value": "one", "version": 1}})
+	var status map[string]any
+	r.f.pending.until(t, func() bool {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		for _, pushed := range r.pushed {
+			if pushed["event"] == "status" {
+				status = pushed["data"].(map[string]any)
+				return true
+			}
+		}
+		return false
+	})
+	if !reflect.DeepEqual(status, map[string]any{"name": "terminal.screen", "surface": surface, "value": "one"}) {
+		t.Fatalf("the view received %v", status)
+	}
+	r.call(surface, "runtime.status.unwatch", map[string]any{"name": "terminal.screen", "surface": surface})
+	r.f.pending.until(t, func() bool {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		last := r.pushed[len(r.pushed)-1]
+		return last["data"].(map[string]any)["method"] == "status.unwatch"
+	})
+}

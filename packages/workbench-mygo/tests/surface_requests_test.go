@@ -32,6 +32,7 @@ type surfaceRequests struct {
 	preferred []string
 	frames    map[string][2]float64
 	unloaded  map[string]bool
+	links     workbench.SurfaceLinks
 }
 
 func newSurfaceRequests(t *testing.T) *surfaceRequests {
@@ -47,7 +48,7 @@ func newSurfaceRequests(t *testing.T) *surfaceRequests {
 	if err := f.registry.Declare("terminal", terminalExposes()); err != nil {
 		t.Fatal(err)
 	}
-	f.registry.Link(workbench.SurfaceLinks{
+	f.links = workbench.SurfaceLinks{
 		Plugin:    func(surface string) string { return f.plugins[surface] },
 		Preferred: func() []string { return f.preferred },
 		Unloaded:  func(surface string) bool { return f.unloaded[surface] },
@@ -78,7 +79,9 @@ func newSurfaceRequests(t *testing.T) *surfaceRequests {
 			}
 			f.changes <- string(encoded)
 		},
-	})
+		Failed: func(err error) { t.Error(err) },
+	}
+	f.registry.Link(f.links)
 	return f
 }
 
@@ -467,5 +470,94 @@ func TestAViewRunsTheCommandsOfItsPlugin(t *testing.T) {
 	f.plugins = map[string]string{"tab-a": "browser", "tab-b": "browser"}
 	if _, err := run("", ""); err == nil || err.Error() != "owner terminal has not registered command terminal.input" {
 		t.Fatalf("no surface of the owner gave %v", err)
+	}
+}
+
+func TestAnObserverFollowsTheSurfaceThatHoldsTheStatus(t *testing.T) {
+	f := newSurfaceRequests(t)
+	f.reply = func(map[string]any) (any, error) { return map[string]any{}, nil }
+	var values []any
+	stop := f.registry.Observe("terminal.screen", nil, false, func(value any) { values = append(values, value) })
+	if len(values) != 1 || values[0] != nil {
+		t.Fatalf("an observer without a surface received %v", values)
+	}
+	f.register("tab-a", "status", "terminal.screen")
+	if last := f.last(); last["method"] != "status.watch" || last["surface"] != "tab-a" {
+		t.Fatalf("the forward is %v", last)
+	}
+	f.deliver("tab-a", "terminal.screen", `"one"`, 1)
+	if len(values) != 2 || string(values[1].(json.RawMessage)) != `"one"` {
+		t.Fatalf("the observer received %v", values)
+	}
+	select {
+	case got := <-f.changes:
+		t.Fatalf("a value that only this window watches reached the host: %s", got)
+	default:
+	}
+	// A request of the host that names the surface shares the watch and stays after an unwatch of nothing else.
+	f.ask("status.watch", `{"name": "terminal.screen", "surface": "tab-a"}`)
+	if len(f.forwards) != 1 {
+		t.Fatalf("the shared watch forwarded %v", f.forwards)
+	}
+	f.ask("status.unwatch", `{"name": "terminal.screen", "surface": "tab-a"}`)
+	if len(f.forwards) != 1 {
+		t.Fatalf("the unwatch ended the watch of the observer: %v", f.forwards)
+	}
+	f.register("tab-b", "status", "terminal.screen")
+	if len(f.forwards) != 3 || f.forwards[1]["method"] != "status.unwatch" || f.forwards[1]["surface"] != "tab-a" ||
+		f.forwards[2]["method"] != "status.watch" || f.forwards[2]["surface"] != "tab-b" {
+		t.Fatalf("the watch did not move: %v", f.forwards)
+	}
+	if err := f.registry.Registered(workbench.SurfaceRegistered{Surface: "tab-b", Closed: true}); err != nil {
+		t.Fatal(err)
+	}
+	if last := f.last(); last["surface"] != "tab-a" || last["method"] != "status.watch" {
+		t.Fatalf("the observer stayed on a closed surface: %v", last)
+	}
+	stop()
+	if last := f.last(); last["surface"] != "tab-a" || last["method"] != "status.unwatch" {
+		t.Fatalf("the end of the observer forwarded %v", last)
+	}
+	count := len(values)
+	f.deliver("tab-a", "terminal.screen", `"late"`, 9)
+	if len(values) != count {
+		t.Fatalf("an ended observer received %v", values)
+	}
+}
+
+func TestAnExactObserverFollowsOnlyItsSurface(t *testing.T) {
+	f := newSurfaceRequests(t)
+	f.reply = func(map[string]any) (any, error) { return map[string]any{}, nil }
+	wanted := "tab-b"
+	var values []any
+	f.register("tab-a", "status", "terminal.screen")
+	f.registry.Observe("terminal.screen", &wanted, true, func(value any) { values = append(values, value) })
+	if len(f.forwards) != 0 || len(values) != 1 || values[0] != nil {
+		t.Fatalf("the observer followed another surface: %v %v", f.forwards, values)
+	}
+	f.register("tab-b", "status", "terminal.screen")
+	if last := f.last(); last["surface"] != "tab-b" {
+		t.Fatalf("the forward is %v", last)
+	}
+}
+
+func TestAFailedObservationIsReported(t *testing.T) {
+	f := newSurfaceRequests(t)
+	var failures []string
+	links := f.links
+	links.Failed = func(err error) { failures = append(failures, err.Error()) }
+	f.registry.Link(links)
+	f.register("tab-a", "status", "terminal.screen")
+	f.reply = func(map[string]any) (any, error) {
+		return map[string]any{"error": map[string]any{"code": workbench.Gone, "message": "ended"}}, nil
+	}
+	stop := f.registry.Observe("terminal.screen", nil, false, func(any) {})
+	stop()
+	f.reply = func(map[string]any) (any, error) {
+		return map[string]any{"error": map[string]any{"code": workbench.Failed, "message": "no value"}}, nil
+	}
+	f.registry.Observe("terminal.screen", nil, false, func(any) {})
+	if len(failures) != 1 || failures[0] != "terminal.screen on tab-a: no value" {
+		t.Fatalf("the failures are %v", failures)
 	}
 }

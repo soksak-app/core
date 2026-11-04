@@ -38,6 +38,7 @@ func (s *Shell) linkSurfaces() {
 			s.calls.Call("exposureForward", request, answer)
 		},
 		Changed: s.requests.surfaceChanged,
+		Failed:  s.fail,
 	})
 }
 
