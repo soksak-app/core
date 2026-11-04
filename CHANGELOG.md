@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F502-22: The mygo framework adapter opens deep links through `App.OnOpenURL` and gives the workbench of a window `files-dropped` with the JSON text of the file drop view; a child process with a fixture workbench checks deep links, the events of the notification center and the quit of an application update, and `make app-update-check` takes `HOST=mygo`.
 - F502-20: The mygo workbench holds the file commands, the memory saver with `core.tab.memory`, `core.tab.unload` and `core.tab.keep`, the stores `tab-state.json` and `tab-sessions`, and the background sessions, and a command that answers in a later step replies through the relay. A delay unload that fails gets its next deadline one delay later in both workbenches, so a read that keeps failing no longer runs again at once.
 - F502-19: `packages/workbench-mygo` holds the functions of `core.text`, `core.focus`, `core.pointer`, `core.contributions` and `core.verify`, with `core.text.larger`, `core.text.smaller`, `core.text.reset` and `core.focus.set`, and the keys of `shortcuts.json`; connecting them to the shell of a window is open. Each function has a `ui.Tester` test, and the verification states the rows of the page workbench from the layout model and the element tree.
 - F502-17: The mygo workbench has its screens as functions of values: the error display, the sidebar frame with the seats of its section surfaces, the plugin page of the library and the debug view, each with `ui.Tester` tests; the shell gives them their values and connects their commands.

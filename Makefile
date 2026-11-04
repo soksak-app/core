@@ -38,7 +38,7 @@ release-check: wailsv3-build-release tauriv2-build-release
 # mygo host has no main page, and the measurement fails with "the mygo host has no main page".
 # HOST is wailsv3 or tauriv2. Checks with a copy of the built debug bundle that an application update replaces the bundle.
 app-update-check:
-	@case "$(HOST)" in wailsv3|tauriv2) ;; *) echo "app-update-check requires HOST=wailsv3|tauriv2" >&2; exit 2;; esac
+	@case "$(HOST)" in wailsv3|tauriv2|mygo) ;; *) echo "app-update-check requires HOST=wailsv3|tauriv2|mygo" >&2; exit 2;; esac
 	@node scripts/check-app-update.mjs --host $(HOST) --bundle target/debug/soksak-$(HOST).app --registry target/registry/index.json
 
 page-memory:

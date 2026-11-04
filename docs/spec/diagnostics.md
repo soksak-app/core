@@ -167,6 +167,7 @@ A row shows a record without its time, as `<level> <layer> <where>: <text>`.
 | an image region event carries `cids` that are not a list of identifiers, or no `type`, and the host cannot record its relay | `error host input relay: <reason>` |
 | a deep link is refused: its URL does not parse or breaks the [deep link](native-host.md#deep-links) form, no window is open, or the command it names fails | `error host deep link: <url>: <reason>`, once for each URL |
 | the Tauri host cannot read the launch URL of a deep link | `error host deep link: launch URL: <reason>` |
+| a path of a drop on a mygo window no longer resolves ([native surfaces](native-surfaces.md)) | `error host file drop: <reason>` |
 | the Tauri host cannot deliver the progress or the end of a save of the logs folder to the window that asked | `error host debug save: debug-save-progress: <reason>` or `error host debug save: debug-save-done: <reason>` |
 | a startup step of the host fails | `error host startup: <reason>`, and the process ends with the status 1 |
 

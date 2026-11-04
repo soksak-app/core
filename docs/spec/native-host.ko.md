@@ -27,9 +27,9 @@
 
 딥링크는 애플리케이션 밖에서 열리는 주소 `soksak://<owner>/<command>?<params>`다. owner는 `core` 또는 plugin id다. 선언된 command 이름은 `<owner>.<command>`이며, `<command>`는 owner 뒤의 경로이고, 그 owner의 command로 실행된다([exposure](exposure.ko.md)). owner 뒤의 경로는 한 조각이며, 그 안의 `/`는 거부한다. 쿼리의 각 매개변수는 문자열 매개변수 하나다. 이름과 값은 percent 디코딩하며, 쿼리의 `+`는 공백이다. 매개변수는 문자열 객체를 이룬다. `%` 뒤에 16진수 두 자리가 오지 않으면 거부하며, 같은 이름의 매개변수가 되풀이되면 거부한다.
 
-Wails host는 macOS URL 처리기의 프레임워크 이벤트 `ApplicationLaunchedWithUrl`(`pkg/application/application_darwin.go`, `HandleOpenURL`)로 URL을 받는다. Tauri host는 공식 plugin `tauri-plugin-deep-link`(`on_open_url`과 `get_current`)로 URL을 받으며, `soksak` scheme은 번들 `Info.plist`의 `CFBundleURLTypes`에서 등록한다. 두 host는 파싱한 링크를 host가 고른 창의 `command.run`으로 실행한다. 창은 key 창이며, key 창이 없으면 `windows.list` 순서의 첫 창이다. 첫 창이 준비되기 전에 도착한 링크는 보관했다가 첫 창이 준비되면 실행한다. Wails host는 `Host.WindowReady`에서, Tauri host는 `window_ready`에서 보관한 링크를 실행하며, 이것이 창의 첫 준비 알림이다. 보관한 링크는 도착한 순서대로 실행하고, 첫 창이 준비된 뒤에 도착한 링크는 바로 실행한다. 첫 창이 준비된 뒤 열린 창이 없을 때 도착한 링크는 거부한다.
+Wails host는 macOS URL 처리기의 프레임워크 이벤트 `ApplicationLaunchedWithUrl`(`pkg/application/application_darwin.go`, `HandleOpenURL`)로 URL을 받는다. Tauri host는 공식 plugin `tauri-plugin-deep-link`(`on_open_url`과 `get_current`)로 URL을 받으며, `soksak` scheme은 번들 `Info.plist`의 `CFBundleURLTypes`에서 등록한다. mygo host는 macOS 메시지 `application:openURLs:`의 listener인 `App.OnOpenURL`로 URL을 받는다. framework adapter가 애플리케이션 실행 전에 이 listener를 추가하므로 애플리케이션을 여는 링크도 도착한다. 각 host는 파싱한 링크를 host가 고른 창의 `command.run`으로 실행한다. 창은 key 창이며, key 창이 없으면 `windows.list` 순서의 첫 창이다. 첫 창이 준비되기 전에 도착한 링크는 보관했다가 첫 창이 준비되면 실행한다. Wails host와 mygo host는 `Host.WindowReady`에서, Tauri host는 `window_ready`에서 보관한 링크를 실행하며, 이것이 창의 첫 준비 알림이다. mygo 창의 workbench는 command를 선언한 뒤 `Host.WindowReady`를 호출한다. 보관한 링크는 도착한 순서대로 실행하고, 첫 창이 준비된 뒤에 도착한 링크는 바로 실행한다. 첫 창이 준비된 뒤 열린 창이 없을 때 도착한 링크는 거부한다.
 
-거부할 때마다 오류 기록 `error host deep link: <url>: <reason>`을 한 번 쓴다. `<url>`은 받은 그대로의 URL이다. 두 host의 이유는 같다.
+거부할 때마다 오류 기록 `error host deep link: <url>: <reason>`을 한 번 쓴다. `<url>`은 받은 그대로의 URL이다. 모든 host의 이유는 같다.
 
 | 조건 | 이유 |
 | --- | --- |
