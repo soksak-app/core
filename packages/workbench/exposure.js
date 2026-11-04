@@ -26,7 +26,7 @@ const commandRequest = (name, params, surface, cids) => ({
   ...(cids === undefined ? {} : { cids }),
 });
 
-/** Elements of a core dom entry. They are found in the main document by the data-expose attribute. */
+/** Elements of a core element entry. They are found in the main document by the data-expose attribute. */
 const byAttribute = (name) => () => [...document.querySelectorAll(`[data-expose="${name}"]`)];
 
 const ownerOf = (name) => name.slice(0, name.indexOf("."));
@@ -135,7 +135,7 @@ export function createRegistry({ call = null, report = null } = {}) {
     if (timeout !== undefined) request.timeout = timeout;
     const reply = await call("exposureForward", request);
     if (reply.error) throw new ExposureError(reply.error.code, reply.error.message);
-    if (method === "dom.rect" && reply.result && viewSurfaces.has(surface)) {
+    if (method === "element.rect" && reply.result && viewSurfaces.has(surface)) {
       const frame = options.surfaceFrame(surface);
       if (!frame || ![frame.x, frame.y].every(Number.isFinite)) {
         throw new ExposureError(EXPOSURE_ERRORS.failed, `surface ${surface} has no valid applied frame`);
@@ -284,7 +284,7 @@ export function createRegistry({ call = null, report = null } = {}) {
 
   /** List in the declaration format. registered is added to each entry. */
   function list() {
-    const out = { status: [], commands: [], dom: [] };
+    const out = { status: [], commands: [], element: [] };
     const keyOf = Object.fromEntries(Object.entries(EXPOSE_KINDS).map(([key, kind]) => [kind, key]));
     for (const [key, { kind, declaration }] of declared) {
       out[keyOf[kind]].push({
@@ -426,8 +426,8 @@ export function createRegistry({ call = null, report = null } = {}) {
       }
       return result;
     }),
-    /** Registers a core dom entry. The elements are found by the data-expose attribute when requested. resolve answers an address (plugin-api dom). */
-    dom: (name, provide = byAttribute(name), resolve = undefined) => core.dom(name, provide, resolve),
+    /** Registers a core element entry. The elements are found by the data-expose attribute when requested. resolve answers an address (plugin-api element). */
+    element: (name, provide = byAttribute(name), resolve = undefined) => core.element(name, provide, resolve),
 
     /**
      * Runs one core command of this document. It is validated by the params schema of the declaration. The UI of the document performs operations through this path, so a human operation and an external request go through the same command. cids are the correlation identifiers of the operation that causes the run; a command of a view receives them (docs/spec/native-surfaces.md#view-surfaces).
@@ -616,7 +616,7 @@ export function createRegistry({ call = null, report = null } = {}) {
       // Records the time of every core and plugin command in the performance trace (V5-104).
       const result = await answer(method, params);
       // The core and the mounted plugins share the application document. An origin that a separate document specified is kept.
-      if (method === "dom.rect" && result && result.document === undefined) return { ...result, document: { x: 0, y: 0 } };
+      if (method === "element.rect" && result && result.document === undefined) return { ...result, document: { x: 0, y: 0 } };
       return result;
     }),
 
@@ -629,7 +629,7 @@ export function createRegistry({ call = null, report = null } = {}) {
       return {
         status: listed.status.filter(onlySurface),
         commands: listed.commands.filter(onlySurface),
-        dom: listed.dom.filter(onlySurface),
+        element: listed.element.filter(onlySurface),
       };
     },
   };

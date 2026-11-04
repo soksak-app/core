@@ -8,7 +8,7 @@
 // The binder records the connected elements and the delegated roots, so audit finds the operable elements that are not connected to a command
 // in the running document. The rules are "User interface" in docs/spec/exposure.md.
 
-/** An operable element. For each such element, audit requires a command and a dom name. */
+/** An operable element. For each such element, audit requires a command and an element name. */
 export const INTERACTIVE = 'button, input, select, textarea, [role="button"], [contenteditable]:not([contenteditable="false"])';
 
 // Actual connections across binders of one document. Weak keys do not retain detached elements or documents.
@@ -36,8 +36,42 @@ export function documentRoots(root) {
   return roots;
 }
 
+// The implicit ARIA role of an input of each type (HTML-AAM). A type that HTML-AAM maps to no role has none here, and the row
+// reports null for it.
+const INPUT_ROLES = Object.freeze({
+  button: "button", image: "button", reset: "button", submit: "button", checkbox: "checkbox", radio: "radio", range: "slider",
+  number: "spinbutton", search: "searchbox", email: "textbox", tel: "textbox", text: "textbox", url: "textbox",
+});
+// The input types whose implicit role is combobox when the input names a list of suggestions (HTML-AAM).
+const LIST_INPUTS = new Set(["email", "search", "tel", "text", "url"]);
+
+/**
+ * The ARIA role of an interactive element: the first token of its role attribute, else the implicit role of its tag and input
+ * type, else textbox for a contenteditable element (docs/spec/exposure.md#user-interface). The audit examines only the elements
+ * of INTERACTIVE, and their implicit roles are the rows of this function; a library of the whole role computation is not a
+ * dependency of the served page modules of this package.
+ */
+export function roleOf(element) {
+  const explicit = element.getAttribute("role")?.trim().split(/\s+/)[0];
+  if (explicit) return explicit;
+  const tag = element.tagName.toLowerCase();
+  if (tag === "button") return "button";
+  if (tag === "textarea") return "textbox";
+  if (tag === "select") return element.multiple || element.size > 1 ? "listbox" : "combobox";
+  if (tag === "input") {
+    // default: an input without a known type attribute is a text input (HTML type attribute, missing and invalid value default).
+    const type = element.type;
+    if (element.hasAttribute("list") && LIST_INPUTS.has(type)) return "combobox";
+    if (Object.hasOwn(INPUT_ROLES, type)) return INPUT_ROLES[type];
+    // An input type that no ARIA role maps (hidden, file, color, date and the other pickers) has no role.
+    return null;
+  }
+  if (element.matches('[contenteditable]:not([contenteditable="false"])')) return "textbox";
+  return null;
+}
+
 const auditRow = (element, connected) => ({
-  tag: element.tagName.toLowerCase(),
+  role: roleOf(element),
   // default: an absent exposure or command is reported as null.
   expose: element.dataset.expose ?? null,
   command: connected ? element.dataset.command ?? null : null, // default: an absent command is reported as null in the audit row.
@@ -170,21 +204,13 @@ export function createBinder(run, { check, changed = () => {} }) {
   }
 
   /**
-   * The operable elements in root that are not connected to a command or have no dom name.
-   * Each element is {tag, expose, command, text}.
+   * The operable elements in root that are not connected to a command or have no element name.
+   * Each element is {role, expose, command, text}.
    */
   function audit(root) {
     return [...root.querySelectorAll(INTERACTIVE)]
       .filter((el) => !connected(el) || !el.dataset.expose)
-      .map((el) => ({
-        tag: el.tagName.toLowerCase(),
-        // default: an audit row writes a missing dom name and command as null.
-        expose: el.dataset.expose ?? null,
-        // default: an audit row writes a missing dom name and command as null.
-        command: connected(el) ? el.dataset.command ?? null : null,
-        // default: the text that identifies an element is the accessible name, then the title, then the text content; an element with none of the three has empty text.
-        text: (el.getAttribute("aria-label") || el.title || el.textContent || "").trim().slice(0, 40),
-      }));
+      .map((el) => auditRow(el, connected(el)));
   }
 
   /** Runs a declared command. It is used by user operations that are not element events, such as the result of a continuous gesture or a native action. */

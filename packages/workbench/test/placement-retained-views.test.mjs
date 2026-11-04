@@ -8,7 +8,7 @@ import { setSurfaceTextSize } from "../text-size.js";
 import { logGate } from "../log-gate.js";
 import { byteLength } from "@soksak/plugin-api/bounded-json.js";
 import { pageIdentity } from "../page-identity.js";
-const emptySurfaceDeclarations = { status: [], commands: [], dom: [] };
+const emptySurfaceDeclarations = { status: [], commands: [], element: [] };
 
 setSurfaceTextSize(() => 1);
 

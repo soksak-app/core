@@ -595,11 +595,11 @@ test("a registration call without a name is refused and declares nothing", async
   assert.deepEqual(ran.declared, []);
 });
 
-test("a registered call of the view records the status or dom of its surface", async () => {
+test("a registered call of the view records the status or element of its surface", async () => {
   const { ran, options } = fakes();
   assert.equal(await answerViewCall({ id: 1, command: "runtime.native.call", params: { name: "registered", payload: { kind: "status", name: "probe.state" } } }, options), null);
-  assert.equal(await answerViewCall({ id: 2, command: "runtime.native.call", params: { name: "registered", payload: { kind: "dom", name: "probe.view" } } }, options), null);
-  assert.deepEqual(ran.registered, [{ kind: "status", name: "probe.state" }, { kind: "dom", name: "probe.view" }]);
+  assert.equal(await answerViewCall({ id: 2, command: "runtime.native.call", params: { name: "registered", payload: { kind: "element", name: "probe.view" } } }, options), null);
+  assert.deepEqual(ran.registered, [{ kind: "status", name: "probe.state" }, { kind: "element", name: "probe.view" }]);
   assert.deepEqual(ran.native.filter(({ name }) => name === "registered"), [], "the registration was forwarded to the host call route");
 });
 

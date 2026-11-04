@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { JSDOM } from "jsdom";
 import { clockAnswer } from "./support/records.mjs";
-const emptySurfaceDeclarations = { status: [], commands: [], dom: [] };
+const emptySurfaceDeclarations = { status: [], commands: [], element: [] };
 
 test("a view surface carries its start values in the preparation and a surface without them carries none", async (t) => {
   const dom = new JSDOM('<div id="plane"></div>');

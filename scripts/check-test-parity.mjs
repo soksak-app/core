@@ -4091,7 +4091,7 @@ const FEATURE_LINKS = [
   {
     id: "F11-1",
     implementation: [
-      { file: "packages/workbench/core-exposure.js", symbol: "core.page.audit" },
+      { file: "packages/workbench/core-exposure.js", symbol: "core.workbench.audit" },
       { file: "packages/plugin-api/surface-document.js", symbol: "unbound" },
     ],
     tests: [{ file: "e2e/audit.test.mjs", id: "every control on every screen runs a declared command and has a dom name" }],
@@ -4101,7 +4101,7 @@ const FEATURE_LINKS = [
   {
     id: "F11",
     implementation: [
-      { file: "packages/workbench/core-exposure.js", symbol: "core.page.audit" },
+      { file: "packages/workbench/core-exposure.js", symbol: "core.workbench.audit" },
       { file: "scripts/language-test-adapters.mjs", symbol: "runLanguageCases" },
     ],
     tests: [
@@ -5447,7 +5447,7 @@ const FEATURE_LINKS = [
       { file: "scripts/check-app-update.mjs", symbol: "export function endpointOf" },
     ],
     tests: [
-      { file: "packages/plugin-api/test/exposure.test.mjs", id: "a dom request refuses an index that is not a non-negative integer instead of reading it as the first element" },
+      { file: "packages/plugin-api/test/exposure.test.mjs", id: "an element request refuses an index that is not a non-negative integer instead of reading it as the first element" },
       { file: "packages/plugin-api/test/exposure.test.mjs", id: "an undefined status value or command result is refused with an error that names it, and null is the no-value" },
       { file: "packages/workbench/test/surface-view.test.mjs", id: "a view reply the host refuses is reported through the page error path" },
       { file: "packages/workbench/test/exposure.test.mjs", id: "an observation whose watch the surface refuses reports the error with its surface" },
@@ -7089,7 +7089,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/workbench/test/picker-layer.test.mjs", id: "a grouped picker draws headings that take no press and counts only the items" },
-      { file: "packages/workbench/test/picker-layer.test.mjs", id: "the icon and the name of a heading and of an item carry declared dom names and the headings are reported" },
+      { file: "packages/workbench/test/picker-layer.test.mjs", id: "the icon and the name of a heading and of an item carry declared element names and the headings are reported" },
       { file: "packages/workbench/test/picker-columns.test.mjs", id: "the icon and the name of a heading and of its items share one column at every depth" },
       { file: "e2e/space-apps.test.mjs", id: "a fullscreen card lists the apps of the space by card and switches to a picked one" },
     ],

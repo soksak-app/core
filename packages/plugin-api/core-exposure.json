@@ -1,9 +1,9 @@
 {
   "status": [
-    "core.window.document",
+    "core.window.workbench",
     "core.screen",
-    "core.page.error",
-    "core.page.audit",
+    "core.workbench.error",
+    "core.workbench.audit",
     "core.projects",
     "core.project",
     "core.layout",

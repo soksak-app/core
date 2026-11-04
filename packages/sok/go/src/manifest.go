@@ -435,6 +435,12 @@ func ValidateManifest(value any) error {
 		if !hasSurface && !hasSections {
 			return fmt.Errorf("%s: exposes require a surface or sections", where)
 		}
+		// The member dom is removed: an exposed element is declared in exposes.element (docs/spec/exposure.md#declarations).
+		if exposes, isObject := raw.(map[string]any); isObject {
+			if _, has := exposes["dom"]; has {
+				return fmt.Errorf("%s: exposes.dom is removed; an exposed element is declared in exposes.element", where)
+			}
+		}
 		if err := checkExposes(id, raw); err != nil {
 			return err
 		}
@@ -1065,18 +1071,18 @@ func isList(value any) bool {
 }
 
 // checkExposes checks the exposes declaration of the plugin owner (validateExposes of the reader): the kinds status,
-// commands and dom, and for each entry a name `<owner>.<name>`, a description, the schemas of its fields, an object params
-// schema of a command, a boolean many of a dom entry and a timeout of a command. A name is declared once per kind.
+// commands and element, and for each entry a name `<owner>.<name>`, a description, the schemas of its fields, an object
+// params schema of a command, a boolean many of an element entry and a timeout of a command. A name is declared once per kind.
 func checkExposes(owner string, raw any) error {
 	where := owner + " exposes"
 	exposes, ok := raw.(map[string]any)
 	if !ok {
 		return fmt.Errorf("%s: expected an object", where)
 	}
-	if err := only(where, exposes, "status", "commands", "dom"); err != nil {
+	if err := only(where, exposes, "status", "commands", "element"); err != nil {
 		return err
 	}
-	fields := map[string][]string{"status": {"schema"}, "commands": {"params", "result"}, "dom": nil}
+	fields := map[string][]string{"status": {"schema"}, "commands": {"params", "result"}, "element": nil}
 	seen := map[string]bool{}
 	for _, kind := range sortedKeys(exposes) {
 		entries, ok := exposes[kind].([]any)
@@ -1098,7 +1104,7 @@ func checkExposes(owner string, raw any) error {
 			seen[kind+" "+name] = true
 			at := where + " " + name
 			allowed := append([]string{"name", "description"}, fields[kind]...)
-			if kind == "dom" {
+			if kind == "element" {
 				allowed = append(allowed, "many")
 			}
 			if kind == "commands" {

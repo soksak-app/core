@@ -95,7 +95,7 @@ test("a remount waiting for dispose is visible to composition waits", { timeout:
   slot.dataset.nativeSurfaceId = id;
   const surface = {
     module: null, surfaceId: id, pluginId,
-    declarations: { status: [], commands: [], dom: [] }, sidecars: [],
+    declarations: { status: [], commands: [], element: [] }, sidecars: [],
     composition: { kind: "view", page: "ui/page.html" },
   };
 
@@ -200,7 +200,7 @@ test("a mount failure before registration reaches composition wait and releases 
   slot.dataset.nativeSurfaceId = id;
   const surface = {
     module: null, surfaceId: id, pluginId,
-    declarations: { status: [], commands: [], dom: [] }, sidecars: [],
+    declarations: { status: [], commands: [], element: [] }, sidecars: [],
     composition: { kind: "view", page: "ui/page.html" },
   };
 
@@ -256,7 +256,7 @@ test("same-slot and moved-slot mounts preserve the entry while authorization is 
   const second = document.querySelector("#second");
   const surface = {
     module: null, surfaceId: id, pluginId,
-    declarations: { status: [], commands: [], dom: [] }, sidecars: [],
+    declarations: { status: [], commands: [], element: [] }, sidecars: [],
     composition: { kind: "view", page: "ui/page.html" },
   };
 
@@ -313,7 +313,7 @@ test("a rejected view listener registration releases successful listeners and re
   slot.dataset.nativeSurfaceId = id;
   const surface = {
     module: null, surfaceId: id, pluginId,
-    declarations: { status: [], commands: [], dom: [] }, sidecars: [],
+    declarations: { status: [], commands: [], element: [] }, sidecars: [],
     composition: { kind: "view", page: "ui/page.html" },
   };
 
@@ -384,7 +384,7 @@ test("disposing a mount releases resolved listeners before pending registration 
   slot.dataset.nativeSurfaceId = id;
   const surface = {
     module: null, surfaceId: id, pluginId: id,
-    declarations: { status: [], commands: [], dom: [] }, sidecars: [],
+    declarations: { status: [], commands: [], element: [] }, sidecars: [],
     composition: { kind: "view", page: "ui/page.html" },
   };
 
@@ -451,7 +451,7 @@ test("a listener failure before readiness reports an error and releases the view
   slot.dataset.nativeSurfaceId = id;
   const surface = {
     module: null, surfaceId: id, pluginId: id,
-    declarations: { status: [], commands: [], dom: [] }, sidecars: [],
+    declarations: { status: [], commands: [], element: [] }, sidecars: [],
     composition: { kind: "view", page: "ui/page.html" },
   };
 
@@ -510,7 +510,7 @@ test("disposing a surface ends its already-waiting composition declaration", { t
   slot.dataset.nativeSurfaceId = id;
   const surface = {
     module: null, surfaceId: id, pluginId: id,
-    declarations: { status: [], commands: [], dom: [] }, sidecars: [],
+    declarations: { status: [], commands: [], element: [] }, sidecars: [],
     composition: { kind: "view", page: "ui/page.html" },
   };
 
@@ -587,7 +587,7 @@ test("a drawn wait records a listener failure before the native view is declared
   slot.dataset.nativeSurfaceId = id;
   const surface = {
     module: null, surfaceId: id, pluginId: id,
-    declarations: { status: [], commands: [], dom: [] }, sidecars: [],
+    declarations: { status: [], commands: [], element: [] }, sidecars: [],
     composition: { kind: "view", page: "ui/page.html" },
   };
   const page = createPageLayout({
@@ -663,7 +663,7 @@ test("removing a pre-readiness listener failure from the desired plane clears it
   slot.dataset.nativeSurfaceId = id;
   const surface = {
     module: null, surfaceId: id, pluginId: id,
-    declarations: { status: [], commands: [], dom: [] }, sidecars: [],
+    declarations: { status: [], commands: [], element: [] }, sidecars: [],
     composition: { kind: "view", page: "ui/page.html" },
   };
   const page = createPageLayout({
@@ -735,7 +735,7 @@ test("a disposed pending listener setup cannot replace a newer attempt", { timeo
   slot.dataset.nativeSurfaceId = id;
   const surface = {
     module: null, surfaceId: id, pluginId: id,
-    declarations: { status: [], commands: [], dom: [] }, sidecars: [],
+    declarations: { status: [], commands: [], element: [] }, sidecars: [],
     composition: { kind: "view", page: "ui/page.html" },
   };
   const page = createPageLayout({
@@ -808,7 +808,7 @@ test("a disposing surface leaves the tabs with attached regions before its expos
   slot.dataset.nativeSurfaceId = id;
   const surface = {
     module: null, surfaceId: id, pluginId: id,
-    declarations: { status: [], commands: [], dom: [] }, sidecars: [],
+    declarations: { status: [], commands: [], element: [] }, sidecars: [],
     composition: { kind: "view", page: "ui/page.html" },
   };
   try {

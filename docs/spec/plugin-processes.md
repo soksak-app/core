@@ -27,7 +27,7 @@ A plugin view's WebContent process uses the display label `soksak://plugin/<plug
 
 - **View:** every screen of a plugin is a view: a tab surface or a section surface. A view holds free DOM, a framework or a library, text input that needs IME, a canvas or an editor, and a document region or an image region.
 - **Sidebar section:** a sidebar section is a [section surface](plugins.md#sections), a view of its plugin that the sidebar places in the body of the section; core draws the frame of the sidebar only. A section that shows values while no tab of its plugin is open reads them in its own view, from the sidecars of its plugin and from its project data.
-- **Exposure:** every view requires only the exposure contract: every interactive element binds a declared command through the shared binder and has a dom name, and every visible state is a declared status ([exposure](exposure.md)).
+- **Exposure:** every view requires only the exposure contract: every interactive element binds a declared command through the shared binder and has an element name, and every visible state is a declared status ([exposure](exposure.md)).
 - **Terminal surface:** the `term` plugin keeps its view composition with one image region (`input: "dom"`) on every host, the mygo host among them: the view page owns the screen state, the input and the exposure of the terminal.
 - The layer of a screen is not chosen by measurement.
 

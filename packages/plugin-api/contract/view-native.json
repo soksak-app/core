@@ -80,11 +80,11 @@
           }
         },
         {
-          "exposureRegister": { "kind": "dom", "name": "demo.button" },
-          "answer": { "error": { "code": -32000, "message": "dom name refused" } },
+          "exposureRegister": { "kind": "element", "name": "demo.button" },
+          "answer": { "error": { "code": -32000, "message": "element name refused" } },
           "output": {
-            "posted": [{ "sok": 1, "id": 2, "command": "runtime.native.call", "params": { "name": "registered", "payload": { "kind": "dom", "name": "demo.button" } } }],
-            "delivered": [], "result": null, "throws": "dom name refused"
+            "posted": [{ "sok": 1, "id": 2, "command": "runtime.native.call", "params": { "name": "registered", "payload": { "kind": "element", "name": "demo.button" } } }],
+            "delivered": [], "result": null, "throws": "element name refused"
           }
         },
         {

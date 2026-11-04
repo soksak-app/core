@@ -119,7 +119,7 @@ test("surface exposure replies retain the logical surface scope", async () => {
   const declarations = {
     status: [],
     commands: [{ name: `${plugin}.ping`, description: "Replies.", params: { type: "object" }, result: { type: "string" } }],
-    dom: [],
+    element: [],
   };
   registry.declare(plugin, declarations);
   registry.configure({ surfacePlugin: (id) => id === surface ? plugin : null });
@@ -147,7 +147,7 @@ test("an installed reply gate decides when a surface exposure reply is sent", as
   const declarations = {
     status: [],
     commands: [{ name: `${plugin}.ping`, description: "Replies.", params: { type: "object" }, result: { type: "string" } }],
-    dom: [],
+    element: [],
   };
   registry.declare(plugin, declarations);
   registry.configure({ surfacePlugin: (id) => id === surface ? plugin : null });

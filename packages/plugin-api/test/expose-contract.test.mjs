@@ -1,5 +1,5 @@
 // Runs the published exposure cases (packages/plugin-api/contract/expose.json) against createExpose of core. Each case registers
-// statuses and dom names on a page, forwards host requests, and compares the registrations, replies, element effects, results and
+// statuses and element names on a page, forwards host requests, and compares the registrations, replies, element effects, results and
 // errors of each step with the published output.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -11,7 +11,7 @@ const CONTRACT = JSON.parse(readFileSync(new URL("../contract/expose.json", impo
 const EXPECTED_IDS = [
   "expose.status.get-watch-and-changes-in-order",
   "expose.status.refuses-undeclared-and-duplicate",
-  "expose.dom.act-rect-and-refusals",
+  "expose.element.act-rect-and-refusals",
   "expose.dispose.ends-registrations-and-requests",
   "expose.dispose.refuses-a-registration-after-dispose",
   "expose.dispose.removes-bindings",
@@ -78,8 +78,8 @@ async function runCase(testCase) {
             subscribers.add(listener);
             return () => subscribers.delete(listener);
           });
-        } else if ("dom" in step) {
-          result = await expose.dom(step.dom.name, document.querySelector(step.dom.selector));
+        } else if ("element" in step) {
+          result = await expose.element(step.element.name, document.querySelector(step.element.selector));
         } else if ("request" in step) {
           // A request after the listener is removed is not dispatched, so no reply is sent.
           request?.(step.request);

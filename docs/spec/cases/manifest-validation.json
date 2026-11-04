@@ -4199,6 +4199,66 @@
       ]
     },
     {
+      "id": "exposes.element-accepted",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "element": [
+            {
+              "name": "probe.row",
+              "description": "A row.",
+              "many": true
+            }
+          ]
+        }
+      },
+      "accepted": true,
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.dom-removed",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "dom": [
+            {
+              "name": "probe.row",
+              "description": "A row."
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: exposes.dom is removed; an exposed element is declared in exposes.element",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
       "id": "exposes.unknown-kind",
       "manifest": {
         "id": "probe",
@@ -4828,7 +4888,7 @@
       ]
     },
     {
-      "id": "exposes.dom-many-not-boolean",
+      "id": "exposes.element-many-not-boolean",
       "manifest": {
         "id": "probe",
         "name": "Probe",
@@ -4842,7 +4902,7 @@
         "mark": "P",
         "icon": "<svg></svg>",
         "exposes": {
-          "dom": [
+          "element": [
             {
               "name": "probe.d",
               "description": "D.",
@@ -4859,7 +4919,7 @@
       ]
     },
     {
-      "id": "exposes.dom-unknown-field",
+      "id": "exposes.element-unknown-field",
       "manifest": {
         "id": "probe",
         "name": "Probe",
@@ -4873,7 +4933,7 @@
         "mark": "P",
         "icon": "<svg></svg>",
         "exposes": {
-          "dom": [
+          "element": [
             {
               "name": "probe.d",
               "description": "D.",
@@ -4951,7 +5011,7 @@
               }
             }
           ],
-          "dom": [
+          "element": [
             {
               "name": "probe.d",
               "description": "D.",

@@ -1,4 +1,4 @@
-// Exposed entries of the core. Registers the status, command and dom entries that exposure.json declares in the registry.
+// Exposed entries of the core. Registers the status, command and element entries that exposure.json declares in the registry.
 //
 // Values are read from the state that modules hold and from the elements of the document. No entry runs arbitrary code.
 //
@@ -250,11 +250,11 @@ function surfacesState() {
 
 const withOpen = (project) => ({ ...project, open: projects.isOpen(project.id) });
 
-/** Gives keyboard focus to the element of a dom name. */
+/** Gives keyboard focus to the element of an element name. */
 function focusElement(name, index = 0) {
-  if (!registry.list().dom.some((entry) => entry.name === name)) throw new Error(`unknown dom ${name}`);
+  if (!registry.list().element.some((entry) => entry.name === name)) throw new Error(`unknown element ${name}`);
   const el = document.querySelectorAll(`[data-expose="${name}"]`)[index];
-  if (!el) throw new Error(`dom ${name} has no element at index ${index}`);
+  if (!el) throw new Error(`element ${name} has no element at index ${index}`);
   el.focus();
 }
 
@@ -280,9 +280,10 @@ function need(project, id) {
  */
 export async function installCoreExposure({ library, renames, chrome, drawn, memorySaver }) {
   memory = memorySaver;
-  status("core.window.document", () => ({
-    page: pageIdentity,
-    timeOrigin: performance.timeOrigin,
+  // On this host the workbench is the main page: a start is its page identity, and it started at its time origin.
+  status("core.window.workbench", () => ({
+    start: pageIdentity,
+    startedAt: performance.timeOrigin,
     readyState: document.readyState,
     visibility: document.visibilityState,
     scheme: document.documentElement.style.colorScheme,
@@ -295,12 +296,12 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
     screen: document.body.dataset.screen,
     modal: settingsModalState().open ? "settings" : debugState().open ? "debug" : pickerState().open ? "picker" : null,
   }));
-  status("core.page.audit", () => ({ unbound: audit(document.body) }));
+  status("core.workbench.audit", () => ({ unbound: audit(document.body) }));
   // WebKit stops animation frames when it hides the document, so a change of the visibility state is announced.
   document.addEventListener("visibilitychange", coreChanged);
   onBinding(coreChanged);
-  // default: core.page.error of a document that shows no error is null (exposure.json).
-  status("core.page.error", () => document.getElementById("applicationError")?.textContent ?? null);
+  // default: core.workbench.error of a workbench that shows no error is null (exposure.json).
+  status("core.workbench.error", () => document.getElementById("applicationError")?.textContent ?? null);
   status("core.projects", () => projects.all().map(withOpen));
   status("core.project", () => {
     const project = projects.active();
@@ -618,8 +619,8 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
     settle();
   });
 
-  for (const { name } of registry.list().dom) {
-    if (name.startsWith("core.")) registry.dom(name);
+  for (const { name } of registry.list().element) {
+    if (name.startsWith("core.")) registry.element(name);
   }
 
   onPicker(coreChanged);

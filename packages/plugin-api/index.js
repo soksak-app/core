@@ -596,7 +596,7 @@ function checkContributes(where, id, contributes) {
  *     sections  sections that the sidebar can show, each a view with composition and height. The id has the form `<plugin id>.<name>`
  *     preview   colors of the library preview. `ink` is a theme token name (`--rail` and others). surface must exist
  *   dependencies  the version range of each sidecar that a view of the plugin uses and of each plugin that it contributes to
- *     exposes   status, command and dom entries that the views register. A surface or sections must exist
+ *     exposes   status, command and element entries that the views register. A surface or sections must exist
  */
 // The path segment that the binary store of a document region answers before it looks up a file
 // (docs/spec/native-surfaces.md#document-regions), so a plugin file under it could not be served.
@@ -780,9 +780,13 @@ export function validateManifest(manifest) {
     }
   }
   if (manifest.exposes !== undefined) {
-    // The exposes of a plugin declare its statuses and commands (docs/spec/exposure.md).
+    // The exposes of a plugin declare its statuses, commands and elements (docs/spec/exposure.md).
     if (manifest.surface === undefined && manifest.sections === undefined) {
       throw new Error(`${where}: exposes require a surface or sections`);
+    }
+    // The member dom is removed: an exposed element is declared in exposes.element (docs/spec/exposure.md#declarations).
+    if (isObject(manifest.exposes) && manifest.exposes.dom !== undefined) {
+      throw new Error(`${where}: exposes.dom is removed; an exposed element is declared in exposes.element`);
     }
     validateExposes(id, manifest.exposes);
   }
@@ -1118,12 +1122,12 @@ export function checkSidebarReferences(sidebars, manifests, where) {
 }
 
 /* ── Exposure ─────────────────────────────────────────────────────────
-   The declaration format of the status, command and dom entries that the core and plugins expose to
+   The declaration format of the status, command and element entries that the core and plugins expose to
    external clients, and the functions that apply a request to the entries registered in a
    document. The specification is docs/spec/exposure.md. */
 
 /** The keys of the declaration file and the registration kinds. A declaration is written as commands; registration and listing are written as command. */
-export const EXPOSE_KINDS = Object.freeze({ status: "status", commands: "command", dom: "dom" });
+export const EXPOSE_KINDS = Object.freeze({ status: "status", commands: "command", element: "element" });
 
 /** The codes of request failures. */
 export const EXPOSURE_ERRORS = Object.freeze({
@@ -1193,7 +1197,7 @@ export function matchesSchema(schema, value) {
  *   status  {name, description, schema}
  *     commands {name, description, params, result, timeout?}. params is a schema of type object.
  *                     timeout is the time (ms, 1–600000) that the host waits for the answer of the surface
- *   dom     {name, description, many?}
+ *   element {name, description, many?}
  *
  * A name is `<owner>.<name>` and consists of lowercase letters, digits, dots and hyphens. A name is declared
  * only once within one kind. The same name can be used in different kinds.
@@ -1207,7 +1211,7 @@ export function validateExposes(owner, exposes) {
   if (!isObject(exposes)) throw new Error(`${where}: expected an object`);
   only(where, exposes, Object.keys(EXPOSE_KINDS));
   const seen = new Set();
-  const fields = { status: ["schema"], commands: ["params", "result"], dom: [] };
+  const fields = { status: ["schema"], commands: ["params", "result"], element: [] };
   for (const [key, entries] of sortedEntries(exposes)) {
     if (!Array.isArray(entries)) throw new Error(`${where}: ${key} must be an array`);
     for (const entry of entries) {
@@ -1219,7 +1223,7 @@ export function validateExposes(owner, exposes) {
       if (seen.has(`${key} ${name}`)) throw new Error(`${where}: duplicate ${key} ${name}`);
       seen.add(`${key} ${name}`);
       const at = `${where} ${name}`;
-      only(at, entry, ["name", "description", ...fields[key], ...(key === "dom" ? ["many"] : []),
+      only(at, entry, ["name", "description", ...fields[key], ...(key === "element" ? ["many"] : []),
         ...(key === "commands" ? ["timeout"] : [])]);
       if (!isText(entry.description)) throw new Error(`${at}: description is required`);
       for (const field of fields[key]) {
@@ -1376,7 +1380,7 @@ export function validateExposureFile(file) {
 /** The entry kinds that the request methods handle. */
 export const METHOD_KINDS = Object.freeze({
   "status.get": "status", "status.watch": "status", "status.unwatch": "status",
-  "command.run": "command", "dom.rect": "dom", "dom.act": "dom",
+  "command.run": "command", "element.rect": "element", "element.act": "element",
 });
 
 /** The key of a declaration Map: the pair of kind and name. */
@@ -1528,10 +1532,10 @@ export function actOn(element, { action, value, event }) {
 export function exposureEntries(declared) {
   const statuses = new Map();
   const commands = new Map();
-  const doms = new Map();
-  // The resolver of each dom entry that accepts an address (docs/spec/exposure.md, requests): resolve(address, elements) returns the element.
+  const elementEntries = new Map();
+  // The resolver of each element entry that accepts an address (docs/spec/exposure.md, requests): resolve(address, elements) returns the element.
   const resolvers = new Map();
-  const tables = { status: statuses, command: commands, dom: doms };
+  const tables = { status: statuses, command: commands, element: elementEntries };
 
   const declaration = (kind, name) => {
     const found = declared.get(declarationKey(kind, name));
@@ -1539,8 +1543,8 @@ export function exposureEntries(declared) {
     return found.declaration;
   };
 
-  // default: an unregistered dom name has no element, and the caller reports that case as an unregistered error.
-  const elements = (name) => (doms.get(name) ?? []).flatMap((provide) => provide()).filter((el) => el.isConnected !== false);
+  // default: an unregistered element name has no element, and the caller reports that case as an unregistered error.
+  const elements = (name) => (elementEntries.get(name) ?? []).flatMap((provide) => provide()).filter((el) => el.isConnected !== false);
 
   // A status value is JSON, and null is its no-value (docs/spec/declared-ui.md). undefined is not a JSON value, so it is refused.
   function jsonStatusValue(name, value) {
@@ -1599,9 +1603,9 @@ export function exposureEntries(declared) {
       };
     },
 
-    /** Whether the name is registered in this document. A dom name is registered when an element is connected. */
+    /** Whether the name is registered in this document. An element name is registered when an element is connected. */
     registered(kind, name) {
-      return kind === "dom" ? elements(name).length > 0 : tables[kind].has(name);
+      return kind === "element" ? elements(name).length > 0 : tables[kind].has(name);
     },
 
     status(name, read, subscribe) {
@@ -1621,16 +1625,16 @@ export function exposureEntries(declared) {
     },
 
     /** provide is a function that returns an array of elements. Unless many is set, it registers only once. */
-    dom(name, provide, resolve) {
-      const { many } = declaration("dom", name);
-      if (!many && doms.has(name)) throw new Error(`dom ${name} is already registered`);
+    element(name, provide, resolve) {
+      const { many } = declaration("element", name);
+      if (!many && elementEntries.has(name)) throw new Error(`element ${name} is already registered`);
       if (resolve !== undefined) {
-        if (typeof resolve !== "function") throw new Error(`dom ${name} resolver must be a function`);
-        if (resolvers.has(name)) throw new Error(`dom ${name} resolver is already registered`);
+        if (typeof resolve !== "function") throw new Error(`element ${name} resolver must be a function`);
+        if (resolvers.has(name)) throw new Error(`element ${name} resolver is already registered`);
         resolvers.set(name, resolve);
       }
       // default: for the first registration of this name, there is no earlier provider.
-      doms.set(name, [...(doms.get(name) ?? []), provide]);
+      elementEntries.set(name, [...(elementEntries.get(name) ?? []), provide]);
     },
 
     /** Releases every registration of this document. It also ends the watches. */
@@ -1638,7 +1642,7 @@ export function exposureEntries(declared) {
       for (const entry of statuses.values()) stop(entry);
       statuses.clear();
       commands.clear();
-      doms.clear();
+      elementEntries.clear();
     },
 
     /**
@@ -1703,23 +1707,23 @@ export function exposureEntries(declared) {
       if (params.address !== undefined) {
         if (params.index !== undefined) throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "a request gives index or address, not both");
         const resolve = resolvers.get(name);
-        if (!resolve) throw new ExposureError(EXPOSURE_ERRORS.invalidParams, `dom ${name} takes no address`);
+        if (!resolve) throw new ExposureError(EXPOSURE_ERRORS.invalidParams, `element ${name} takes no address`);
         const element = resolve(params.address, elements(name));
-        if (!element) throw new ExposureError(EXPOSURE_ERRORS.noControl, `dom ${name} has no element at the address`);
-        if (method === "dom.rect") return elementRect(element);
+        if (!element) throw new ExposureError(EXPOSURE_ERRORS.noControl, `element ${name} has no element at the address`);
+        if (method === "element.rect") return elementRect(element);
         return actOn(element, params);
       }
       const list = elements(name);
-      if (list.length === 0) throw new ExposureError(EXPOSURE_ERRORS.unregistered, `dom ${name} has no element`);
+      if (list.length === 0) throw new ExposureError(EXPOSURE_ERRORS.unregistered, `element ${name} has no element`);
       if (!found.declaration.many && list.length > 1) {
-        throw new ExposureError(EXPOSURE_ERRORS.unregistered, `dom ${name} has ${list.length} elements`);
+        throw new ExposureError(EXPOSURE_ERRORS.unregistered, `element ${name} has ${list.length} elements`);
       }
       // An absent index is the first element. A present index of another type, including null, is refused by the check below.
       const index = params.index === undefined ? 0 : params.index;
       if (!Number.isInteger(index) || index < 0) throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "index must be a non-negative integer");
       const element = list[index];
-      if (!element) throw new ExposureError(EXPOSURE_ERRORS.unregistered, `dom ${name} has no element at index ${index}`);
-      if (method === "dom.rect") return elementRect(element);
+      if (!element) throw new ExposureError(EXPOSURE_ERRORS.unregistered, `element ${name} has no element at index ${index}`);
+      if (method === "element.rect") return elementRect(element);
       return actOn(element, params);
     },
   };
@@ -1841,7 +1845,7 @@ export function createExpose(port, load) {
     delegate: binding(binder.delegate),
     /** Runs a command declared in this document through the registry. */
     run: binding(binder.run),
-    /** The operable elements in root that have neither a command nor a dom name. */
+    /** The operable elements in root that have neither a command nor an element name. */
     audit: (root) => binder.audit(root),
     /** Calls fn when the connections change. Returns the release function. */
     onBinding(fn) {
@@ -1850,16 +1854,16 @@ export function createExpose(port, load) {
     },
     status: (name, read, subscribe) => register("status", name, (e) => e.status(name, read, subscribe)),
     command: (name, run) => register("command", name, (e) => e.command(name, run)),
-    // target is one element, which the exposure marks with the name, or a function that returns the current elements of a dom entry
-    // of many, which each request reads again, so a list that replaces its row elements keeps no element it removed. The page marks
-    // each element that such a function returns with the name (dataset.expose) when it draws it (docs/spec/exposure.md).
-    dom: (name, target) => {
-      if (typeof target === "function") return register("dom", name, (e) => e.dom(name, target));
+    // target is one element, which the exposure marks with the name, or a function that returns the current elements of an element
+    // entry of many, which each request reads again, so a list that replaces its row elements keeps no element it removed. The page
+    // marks each element that such a function returns with the name (dataset.expose) when it draws it (docs/spec/exposure.md).
+    element: (name, target) => {
+      if (typeof target === "function") return register("element", name, (e) => e.element(name, target));
       if (typeof target?.dataset !== "object") {
-        return Promise.reject(new TypeError(`dom ${name} takes an element or a function that returns the current elements`));
+        return Promise.reject(new TypeError(`element ${name} takes an element or a function that returns the current elements`));
       }
-      return register("dom", name, (e) => {
-        e.dom(name, () => [target]);
+      return register("element", name, (e) => {
+        e.element(name, () => [target]);
         target.dataset.expose = name;
       });
     },

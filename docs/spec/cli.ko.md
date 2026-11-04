@@ -17,9 +17,9 @@
 | `sok <command> [window] [--surface <id>] [--<parameter> <value>]... [--params <json>]` | 실행 중인 애플리케이션에서 core나 plugin이 선언한 command를 [endpoint](endpoint.ko.md) method `command.run`으로 실행한다 |
 | `sok commands [window]` | `exposure.list`의 `commands` 목록을 출력한다. 선언된 command마다 설명, 매개변수 schema, 결과 schema다 |
 | `sok windows` | 실행 중인 애플리케이션의 창을 나열한다 |
-| `sok exposures [window]` | 선언된 모든 status, command, DOM 항목을 나열한다 |
+| `sok exposures [window]` | 선언된 모든 status, command, element 항목을 나열한다 |
 | `sok status <name> [window] [--surface <id>] [--watch]` | Status 값을 출력한다. `--watch`는 값과 이후 바뀔 때마다 JSON 한 줄씩 출력한다 |
-| `sok dom rect\|click\|input\|dispatch <name> [window] [--surface <id>] [--index <n>] [--value <text>] [--event <json>]` | 선언된 DOM 항목에 동작한다 |
+| `sok element rect\|click\|input\|dispatch <name> [window] [--surface <id>] [--index <n>] [--value <text>] [--event <json>]` | 선언된 element 항목에 동작한다 |
 | `sok input pointer [window] --x <x> --y <y> --phase move\|down\|drag\|up\|scroll [--button left\|right] [--delta-x <n>] [--delta-y <n>] [--activate]` | Native pointer 입력을 보낸다 |
 | `sok input key [window] --key <key> --phase down\|up [--text <text>] [--modifiers shift,control,option,command]` | Native key 입력을 보낸다 |
 | `sok debug query [--channel <channel>] [--level <level>] [--class <class>] [--layer <layer>] [--event <name>] [--event-prefix <prefix>] [--surface <id>] [--session <id>] [--cid <id>] [--run <id>] [--text <text>] [--from <time>] [--to <time>] [--order asc\|desc] [--limit <n>] [--after <cursor>] [--around <cursor> [--earlier <n>] [--later <n>]]` | 설정 폴더의 event 파일에서 filter를 통과한 event의 page 하나를 파일의 색인으로 찾아 한 행에 한 줄의 글로 출력한다([logging](logging.ko.md#질의), [debug](debug.ko.md#타임라인)). 실행 중인 애플리케이션이 필요 없다 |

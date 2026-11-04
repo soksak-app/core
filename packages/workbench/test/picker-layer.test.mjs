@@ -28,7 +28,7 @@ test("a grouped picker draws headings that take no press and counts only the ite
   ]);
 });
 
-test("an item that gives its own dom name carries it instead of core.picker.item", () => {
+test("an item that gives its own element name carries it instead of core.picker.item", () => {
   const { document } = new JSDOM("<div id=picker></div>").window;
   const el = document.getElementById("picker");
   fillPicker(el, "탭", [{ heading: null, items: [
@@ -49,8 +49,8 @@ test("an ungrouped picker draws its items with no heading and no group", () => {
   assert.deepEqual(pickerItems(el), [{ key: "t1", name: "터미널", active: false, group: null }]);
 });
 
-// So that a window check can measure the x of the columns, the icon and name of a title and an item carry declared dom names, and the title is reported as groups of core.picker.
-test("the icon and the name of a heading and of an item carry declared dom names and the headings are reported", () => {
+// So that a window check can measure the x of the columns, the icon and name of a title and an item carry declared element names, and the title is reported as groups of core.picker.
+test("the icon and the name of a heading and of an item carry declared element names and the headings are reported", () => {
   const { document } = new JSDOM("<div id=picker></div>").window;
   const el = document.getElementById("picker");
   fillPicker(el, "스페이스 앱 3개", [

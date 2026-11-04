@@ -20,7 +20,7 @@ function repository(t, manifest, files) {
 
 const manifest = {
   id: "probe",
-  exposes: { status: [{ name: "probe.state" }], commands: [{ name: "probe.open" }], dom: [{ name: "probe.view" }] },
+  exposes: { status: [{ name: "probe.state" }], commands: [{ name: "probe.open" }], element: [{ name: "probe.view" }] },
   sections: [{ id: "probe.declared", name: "Declared", composition: { kind: "view", page: "ui/section.html" }, height: "fill" }],
 };
 
@@ -39,13 +39,43 @@ test("an undeclared name, an unregistered entry and an unknown core name are rep
     "ui/page.js:2: probe.close is not declared",
     "ui/page.js:2: probe.close is run but is not a declared command",
     "plugin probe: command probe.open is declared but not registered",
-    "plugin probe: dom probe.view is declared but no element carries it",
+    "plugin probe: element probe.view is declared but no element carries it",
   ]);
 });
 
 test("the core names hold statuses and commands", () => {
   const core = coreExposure();
   assert.ok(core.status.includes("core.grid") && core.commands.length > 0);
+});
+
+test("the core names hold the workbench statuses and no page status", () => {
+  const core = coreExposure();
+  for (const name of ["core.window.workbench", "core.workbench.error", "core.workbench.audit"]) {
+    assert.ok(core.status.includes(name), `core exposure lacks ${name}`);
+  }
+  assert.deepEqual(core.status.filter((name) => /^core\.(page\.|window\.document$)/.test(name)), []);
+});
+
+test("a name registered with expose.element is an element name and must be declared", (t) => {
+  const root = repository(t, manifest, {
+    "ui/page.js": 'expose.status("probe.state", read);\nexpose.command("probe.open", open);\nawait expose.element("probe.view", el);\n'
+      + 'await context.exposure.element("probe.missing", other);\n',
+  });
+  assert.deepEqual(checkPluginRepository(root, { status: [], commands: [] }), [
+    "ui/page.js:4: probe.missing is not declared",
+    "ui/page.js:4: data-expose probe.missing is not a declared element entry",
+  ]);
+});
+
+test("a data-expose name that no element entry declares is reported", (t) => {
+  const root = repository(t, manifest, {
+    "ui/page.js": 'expose.status("probe.state", read);\nexpose.command("probe.open", open);\nel.dataset.expose = "probe.view";\n',
+    "ui/page.html": '<button data-expose="probe.other">x</button>\n',
+  });
+  assert.deepEqual(checkPluginRepository(root, { status: [], commands: [] }), [
+    "ui/page.html:1: probe.other is not declared",
+    "ui/page.html:1: data-expose probe.other is not a declared element entry",
+  ]);
 });
 
 test("a surface module runs a command of core through runtime.command, and an unknown core command is reported", (t) => {

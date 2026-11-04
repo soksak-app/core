@@ -330,12 +330,12 @@ export function surfaceContextRuntime(surface, declarations = {}) {
     exposure: createExpose(port, async () => {
       const core = registry.surfaceDeclarations();
       return {
-        // default: a kind that the declaration file lacks (status, commands, dom) means the plugin adds no entries of that kind.
+        // default: a kind that the declaration file lacks (status, commands, element) means the plugin adds no entries of that kind.
         status: [...core.status, ...(declarations.status ?? [])],
         // default: a kind that the declaration file lacks means the plugin adds no entries of that kind.
         commands: [...core.commands, ...(declarations.commands ?? [])],
         // default: a kind that the declaration file lacks means the plugin adds no entries of that kind.
-        dom: [...core.dom, ...(declarations.dom ?? [])],
+        element: [...core.element, ...(declarations.element ?? [])],
       };
     }),
     // The clipboard bridge payload follows the host contract, which is already typed. In particular,

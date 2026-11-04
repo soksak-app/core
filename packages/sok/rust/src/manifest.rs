@@ -48,7 +48,7 @@ const SCHEMA_TYPES: [&str; 7] = [
 ];
 
 /// The kinds of an exposes declaration (EXPOSE_KINDS of packages/plugin-api).
-const EXPOSE_KINDS: [&str; 3] = ["status", "commands", "dom"];
+const EXPOSE_KINDS: [&str; 3] = ["status", "commands", "element"];
 
 /// The sorted keys of an object: the order in which the checks read the members.
 fn sorted_keys(map: &Map<String, Value>) -> Vec<&String> {
@@ -378,8 +378,8 @@ fn value_text(value: &Value) -> String {
 }
 
 /// Checks the exposes declaration of the plugin `owner` (validateExposes of the reader): the kinds status, commands and
-/// dom, and for each entry a name `<owner>.<name>`, a description, the schemas of its fields, an object params schema of
-/// a command, a boolean many of a dom entry and a timeout of a command. A name is declared once per kind.
+/// element, and for each entry a name `<owner>.<name>`, a description, the schemas of its fields, an object params schema
+/// of a command, a boolean many of an element entry and a timeout of a command. A name is declared once per kind.
 fn check_exposes(owner: &str, exposes: &Value) -> Result<(), String> {
     let at = format!("{owner} exposes");
     let declared = exposes
@@ -416,7 +416,7 @@ fn check_exposes(owner: &str, exposes: &Value) -> Result<(), String> {
             let at_entry = format!("{at} {name}");
             let mut allowed = vec!["name", "description"];
             allowed.extend_from_slice(fields);
-            if kind == "dom" {
+            if kind == "element" {
                 allowed.push("many");
             }
             if kind == "commands" {
@@ -1476,6 +1476,12 @@ pub fn validate_manifest(value: &Value) -> Result<(), String> {
     if let Some(raw) = manifest.get("exposes") {
         if !has("surface") && !has("sections") {
             return Err(format!("{where_}: exposes require a surface or sections"));
+        }
+        // The member dom is removed: an exposed element is declared in exposes.element (docs/spec/exposure.md#declarations).
+        if raw.get("dom").is_some() {
+            return Err(format!(
+                "{where_}: exposes.dom is removed; an exposed element is declared in exposes.element"
+            ));
         }
         check_exposes(id, raw)?;
     }

@@ -132,7 +132,7 @@ test("commandOf reads the element's command and adds the value under its paramet
   assert.equal(commandOf(element("span")), null);
 });
 
-test("audit lists interactive elements without a command binding or a dom name", () => {
+test("audit lists interactive elements without a command binding or an element name", () => {
   const b = binder();
   const root = element("div");
   const delegated = element("div");
@@ -154,10 +154,10 @@ test("audit lists interactive elements without a command binding or a dom name",
   inert.setAttribute("contenteditable", "false");
   root.append(good[0], markedOutside, unnamed, plain, editable, inert);
   assert.deepEqual(b.audit(root), [
-    { tag: "button", expose: "x.outside", command: null, text: "" },
-    { tag: "textarea", expose: null, command: "fixture.put", text: "" },
-    { tag: "span", expose: "x.role", command: null, text: "Go" },
-    { tag: "div", expose: "x.edit", command: null, text: "" },
+    { role: "button", expose: "x.outside", command: null, text: "" },
+    { role: "textbox", expose: null, command: "fixture.put", text: "" },
+    { role: "button", expose: "x.role", command: null, text: "Go" },
+    { role: "textbox", expose: "x.edit", command: null, text: "" },
   ]);
 });
 
@@ -171,7 +171,7 @@ test("the page expose binds only commands declared for the page and runs registe
   const declared = declarationMap({
     status: [],
     commands: [{ name: "fixture.press", description: "Press.", params: { type: "object", properties: { id: { type: "string" } } }, result: { type: "null" } }],
-    dom: [],
+    element: [],
   });
   const expose = createExpose(port, async () => declared);
   const ran = [];

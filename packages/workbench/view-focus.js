@@ -4,8 +4,8 @@
 
 const viewFocus = new Map();
 const listeners = new Set();
-// default: before the host sends the first responder, and in a runtime without a host, the main page holds the focus.
-let responder = { owner: "page", surface: null, document: null };
+// default: before the host sends the first responder, and in a runtime without a host, the workbench holds the focus.
+let responder = { owner: "workbench", surface: null, document: null };
 
 const changed = () => {
   for (const listener of listeners) listener();

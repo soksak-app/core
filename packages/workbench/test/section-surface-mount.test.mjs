@@ -29,7 +29,7 @@ test("a section surface mounts with an origin that records no directory", { time
   const pluginId = "fixture-section-plugin";
   const surfaceId = "spc-aaaaaa/left/fixture-section-plugin.tree";
   registerPlugin({ id: pluginId, surface: () => null });
-  const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [],
+  const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], element: [] }, sidecars: [],
     composition: { kind: "view", page: "ui/tree.html" }, params: null, diagnostics: null, unload: false,
     section: { id: "fixture-section-plugin.tree", sidebar: "left", card: null } };
   try {
@@ -62,7 +62,7 @@ test("a surface that a new drawing mounts again reports its state to the new dra
   const pluginId = "fixture-redrawn-plugin";
   const surfaceId = "spc-aaaaaa/right/fixture-redrawn-plugin.tabs";
   registerPlugin({ id: pluginId, surface: () => null });
-  const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [],
+  const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], element: [] }, sidecars: [],
     composition: { kind: "view", page: "ui/tabs.html" }, params: null, diagnostics: null, unload: false,
     section: { id: "fixture-redrawn-plugin.tabs", sidebar: "right", card: null } };
   const earlier = [];

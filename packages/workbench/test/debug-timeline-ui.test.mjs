@@ -219,13 +219,13 @@ test("a query that fails when the timeline is shown leaves no timeline and shows
   assert.equal(ui.debugState().timeline, null);
 });
 
-test("every interactive element of the timeline points to a declared command and has a dom name", async (t) => {
+test("every interactive element of the timeline points to a declared command and has an element name", async (t) => {
   const { ui } = await openView(t, { query: served(SMALL) });
   await ui.showDebugTimeline();
   const controls = [...document.querySelectorAll(".dbg-card button, .dbg-card input, .dbg-card select")];
   for (const el of controls) {
     assert.ok(el.dataset.command, `${el.outerHTML} has no command`);
-    assert.ok(el.dataset.expose, `${el.outerHTML} has no dom name`);
+    assert.ok(el.dataset.expose, `${el.outerHTML} has no element name`);
   }
   assert.equal(document.querySelector('[data-expose="core.debug.timeline.older"]').dataset.command, "core.debug.timeline.older");
   const filters = [...document.querySelectorAll(".dbg-card__timeline [data-set]")];

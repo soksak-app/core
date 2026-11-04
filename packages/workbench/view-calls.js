@@ -51,7 +51,7 @@ const BINARY_ID = /^[0-9a-f]{32}$/;
  *                   statusNameOf, the surface by holdsSurface, and the declaration is checked by the page subscription
  *                 command.register(name): declares the command of the view on the page through the exposure registry, so a command of
  *                   another plugin or an undeclared name is refused (view-commands.js)
- *                 exposure.registered({kind, name}): applies the status or dom registration of the view through the exposure registry
+ *                 exposure.registered({kind, name}): applies the status or element registration of the view through the exposure registry
  *                   and relays it to the host (surface-modules.js)
  *               composition: the page operations of the surface view (surface-modules.js)
  *                 declaration(): the declared {kind, regions, overlays} of the surface
@@ -191,7 +191,7 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
     case "runtime.native.call": {
       const fields = objectOf(command, params);
       if (typeof fields.name !== "string" || fields.name === "") throw new TypeError(`view call ${command} requires a non-empty name`);
-      // The status and dom registration of the view page (docs/spec/native-surfaces.md#view-surfaces, view exposure).
+      // The status and element registration of the view page (docs/spec/native-surfaces.md#view-surfaces, view exposure).
       if (fields.name === "registered") {
         const payload = objectOf(fields.name, fields.payload);
         if (typeof payload.kind !== "string" || payload.kind === "") throw new TypeError(`view call ${fields.name} requires a non-empty kind`);

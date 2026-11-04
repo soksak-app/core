@@ -310,3 +310,19 @@ test("an unwatch refused with another code fails the connection", async (t) => {
   await assert.rejects(client.watch("main", "core.screen", (value) => value === "home"), /internal error/);
   await assert.rejects(client.request("status.get", { window: "main", name: "core.screen" }), /status.unwatch failed: internal error/);
 });
+
+// The sample endpoint answers the element methods of the host: exposure.list lists the element entries in `element`, and
+// element.rect and element.act address an element entry by name (docs/spec/exposure.md).
+test("the sample endpoint lists element entries and answers element.rect and element.act", async (t) => {
+  const sample = sampleHandlers();
+  const server = await startFakeEndpoint(sample.handlers);
+  t.after(() => server.close());
+  const client = await connect({ configDir: server.configDir });
+  t.after(() => client.close());
+  const listed = await client.request("exposure.list", { window: "main" });
+  assert.deepEqual(Object.keys(listed), ["status", "commands", "element"]);
+  assert.deepEqual(listed.element.map((entry) => entry.name), ["core.tab"]);
+  assert.deepEqual(await client.request("element.rect", { window: "main", name: "core.tab", index: 1 }),
+    { x: 10, y: 20, width: 30, height: 40, index: 1, document: { x: 0, y: 0 } });
+  assert.equal(await client.request("element.act", { window: "main", name: "core.tab", action: "click" }), null);
+});

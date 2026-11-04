@@ -18,7 +18,7 @@ function registry() {
       { name: "core.fixture.hang", description: "Never replies.", params: { type: "object" }, result: { type: "null" } },
       { name: "core.fixture.quick", description: "Replies.", params: { type: "object" }, result: { type: "integer" } },
     ],
-    dom: [],
+    element: [],
   });
   const never = () => new Promise(() => {});
   made.command("core.fixture.slow", never);
@@ -59,7 +59,7 @@ test("a command bound covers its handler and not the presentation it waits for a
     status: [],
     commands: [{ name: "core.fixture.drawn", description: "Replies after its layout presents.", params: { type: "object" },
       result: { type: "integer" }, timeout: 50 }],
-    dom: [],
+    element: [],
   });
   made.command("core.fixture.drawn", () => 9);
   assert.equal(await made.run("core.fixture.drawn", {}), 9);
@@ -77,7 +77,7 @@ test("a handler that throws fails its command and leaves no reply timer behind",
     status: [],
     commands: [{ name: "core.fixture.throws", description: "Throws in its handler.", params: { type: "object" },
       result: { type: "null" } }],
-    dom: [],
+    element: [],
   });
   made.command("core.fixture.throws", () => { throw new Error("fixture handler failed"); });
   await assert.rejects(made.run("core.fixture.throws", {}), /fixture handler failed/);

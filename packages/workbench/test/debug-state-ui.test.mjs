@@ -102,13 +102,13 @@ test("a state file that is not a state or a comparison without a shown state is 
   await assert.rejects(ui.compareDebugState("logs/state-9.json"), /logs\/state-9\.json is not a state file/);
 });
 
-test("every interactive element of the state view points to a declared command and has a dom name", async (t) => {
+test("every interactive element of the state view points to a declared command and has an element name", async (t) => {
   const { ui } = await openView(t);
   await ui.showDebugState("logs/state-1.json");
   const controls = [...document.querySelectorAll(".dbg-card button, .dbg-card input, .dbg-card select")];
   assert.ok(controls.some((el) => el.dataset.command === "core.debug.state.compare"));
   for (const el of controls) {
     assert.ok(el.dataset.command, `${el.outerHTML} has no command`);
-    assert.ok(el.dataset.expose, `${el.outerHTML} has no dom name`);
+    assert.ok(el.dataset.expose, `${el.outerHTML} has no element name`);
   }
 });

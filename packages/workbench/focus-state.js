@@ -15,7 +15,7 @@ function surfaceOf(element) {
 
 /**
  * The name of the exposed element that has keyboard focus, its index inside its document (or shadow root), and the surface id. The first responder
- * of the window selects the document: the main page reads its own focused element, a view surface the element that its view reported, and every
+ * of the window selects the document: the workbench reads its own focused element, a view surface the element that its view reported, and every
  * other owner has no exposed focus. It is null when the focus is outside an exposed element.
  */
 export function focusState(document) {
@@ -24,7 +24,7 @@ export function focusState(document) {
     const reported = viewFocusOf(responder.surface);
     return reported === null ? null : { ...reported, surface: responder.surface };
   }
-  if (responder.owner !== "page") return null;
+  if (responder.owner !== "workbench") return null;
   const element = focusedExposedElement(document);
   if (element === null) return null;
   return { ...focusedExposure(document), surface: surfaceOf(element) };

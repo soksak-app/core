@@ -12,7 +12,7 @@ const exposes = () => ({
     name: "probe.send", description: "Sends.",
     params: { type: "object", properties: { data: { type: "string" } } }, result: { type: "null" },
   }],
-  dom: [
+  element: [
     { name: "probe.input", description: "Input." },
     { name: "probe.row", description: "Rows.", many: true },
   ],
@@ -24,11 +24,11 @@ const page = {
 };
 
 test("exposes with the three kinds are accepted in a manifest and in a core file", () => {
-  assert.equal(validateManifest({ ...page, exposes: exposes() }).exposes.dom[1].many, true);
+  assert.equal(validateManifest({ ...page, exposes: exposes() }).exposes.element[1].many, true);
   assert.deepEqual(validateExposes("probe", {}), {});
   const shared = exposes();
-  shared.dom[0].name = "probe.lines";
-  assert.equal(validateExposes("probe", shared), shared, "a status and a dom entry may share a name");
+  shared.element[0].name = "probe.lines";
+  assert.equal(validateExposes("probe", shared), shared, "a status and an element entry may share a name");
   const slow = exposes();
   slow.commands[0].timeout = 600000;
   assert.equal(validateExposes("probe", slow).commands[0].timeout, 600000, "a command may declare how long its reply takes");
@@ -42,7 +42,7 @@ test("exposes are rejected for each invalid field", () => {
     [(e) => { e.status[0].name = "probe.Lines"; }, /lowercase/],
     [(e) => { e.status[0].name = "probe."; }, /lowercase/],
     [(e) => { e.status[0].name = "probe.a_b"; }, /lowercase/],
-    [(e) => { e.dom[0].name = "probe.row"; }, /duplicate dom probe.row/],
+    [(e) => { e.element[0].name = "probe.row"; }, /duplicate element probe.row/],
     [(e) => { e.status[0].description = ""; }, /description is required/],
     [(e) => { delete e.status[0].schema; }, /schema is required/],
     [(e) => { e.status[0].schema.minItems = 1; }, /unknown field minItems/],
@@ -50,14 +50,14 @@ test("exposes are rejected for each invalid field", () => {
     [(e) => { e.status[0].schema = { enum: [] }; }, /non-empty array/],
     [(e) => { delete e.commands[0].result; }, /result is required/],
     [(e) => { e.commands[0].params = { type: "string" }; }, /params must be an object schema/],
-    [(e) => { e.dom[0].many = "yes"; }, /many must be a boolean/],
+    [(e) => { e.element[0].many = "yes"; }, /many must be a boolean/],
     [(e) => { e.commands[0].timeout = 0; }, /timeout must be an integer from 1 to 600000/],
     [(e) => { e.commands[0].timeout = 600001; }, /timeout must be an integer/],
     [(e) => { e.commands[0].timeout = 1.5; }, /timeout must be an integer/],
     [(e) => { e.status[0].timeout = 10; }, /unknown field timeout/],
-    [(e) => { e.dom[0].schema = {}; }, /unknown field schema/],
+    [(e) => { e.element[0].schema = {}; }, /unknown field schema/],
     [(e) => { e.events = []; }, /unknown field events/],
-    [(e) => { e.dom = {}; }, /dom must be an array/],
+    [(e) => { e.element = {}; }, /element must be an array/],
   ];
   for (const [change, message] of cases) {
     const value = exposes();
@@ -152,8 +152,8 @@ test("registered entries answer requests and reject undeclared or unregistered n
   assert.equal(await code(() => entries.answer("status.get", { name: "probe.lines" })), EXPOSURE_ERRORS.unregistered);
   assert.equal(await code(() => entries.answer("status.get", { name: "probe.none" })), EXPOSURE_ERRORS.unknownName);
   assert.equal(await code(() => entries.answer("command.run", { name: "probe.lines" })), EXPOSURE_ERRORS.unknownName);
-  assert.equal(await code(() => entries.answer("dom.rect", { name: "probe.input" })), EXPOSURE_ERRORS.unregistered);
-  assert.equal(await code(() => entries.answer("dom.move", { name: "probe.input" })), EXPOSURE_ERRORS.unknownMethod);
+  assert.equal(await code(() => entries.answer("element.rect", { name: "probe.input" })), EXPOSURE_ERRORS.unregistered);
+  assert.equal(await code(() => entries.answer("element.move", { name: "probe.input" })), EXPOSURE_ERRORS.unknownMethod);
   assert.equal(await code(() => entries.answer("status.get", {})), EXPOSURE_ERRORS.invalidParams);
 
   const sent = [];
@@ -174,26 +174,26 @@ test("registered entries answer requests and reject undeclared or unregistered n
   assert.throws(() => entries.command("probe.send", () => {}), /already registered/);
 });
 
-test("a dom entry resolves one element, or one of many by index, and acts on it", async () => {
+test("an element entry resolves one element, or one of many by index, and acts on it", async () => {
   const entries = exposureEntries(declarationMap(exposes()));
   const input = element();
   const rows = [element({ left: 0, top: 0, width: 1, height: 1 }), element({ left: 0, top: 5, width: 1, height: 1 })];
-  entries.dom("probe.input", () => [input]);
-  assert.throws(() => entries.dom("probe.input", () => [input]), /already registered/);
-  entries.dom("probe.row", () => [rows[0]]);
-  entries.dom("probe.row", () => [rows[1]]);
-  assert.equal(entries.registered("dom", "probe.row"), true);
-  assert.deepEqual(await entries.answer("dom.rect", { name: "probe.input" }),
+  entries.element("probe.input", () => [input]);
+  assert.throws(() => entries.element("probe.input", () => [input]), /already registered/);
+  entries.element("probe.row", () => [rows[0]]);
+  entries.element("probe.row", () => [rows[1]]);
+  assert.equal(entries.registered("element", "probe.row"), true);
+  assert.deepEqual(await entries.answer("element.rect", { name: "probe.input" }),
     { x: 1, y: 2, width: 3, height: 4, zoom: 1 });
-  assert.equal((await entries.answer("dom.rect", { name: "probe.row", index: 1 })).y, 5);
-  await assert.rejects(entries.answer("dom.rect", { name: "probe.row", index: 2 }), /no element at index 2/);
+  assert.equal((await entries.answer("element.rect", { name: "probe.row", index: 1 })).y, 5);
+  await assert.rejects(entries.answer("element.rect", { name: "probe.row", index: 2 }), /no element at index 2/);
 
-  await entries.answer("dom.act", { name: "probe.input", action: "click" });
+  await entries.answer("element.act", { name: "probe.input", action: "click" });
   assert.equal(input.clicks, 1);
-  await entries.answer("dom.act", { name: "probe.input", action: "input", value: "typed" });
+  await entries.answer("element.act", { name: "probe.input", action: "input", value: "typed" });
   assert.equal(input.value, "typed");
   assert.deepEqual(input.events.map((e) => [e.type, e.init.bubbles]), [["input", true], ["change", true]]);
-  await entries.answer("dom.act", { name: "probe.input", action: "dispatch", event: { type: "keydown", key: "Enter" } });
+  await entries.answer("element.act", { name: "probe.input", action: "dispatch", event: { type: "keydown", key: "Enter" } });
   const key = input.events.at(-1);
   assert.equal(key.constructor.name, "KeyboardEvent");
   assert.equal(key.init.key, "Enter");
@@ -202,7 +202,7 @@ test("a dom entry resolves one element, or one of many by index, and acts on it"
   assert.equal(input.events.at(-1).init.bubbles, false);
   assert.throws(() => actOn(input, { action: "hover" }), /unknown action/);
   input.isConnected = false;
-  assert.equal(entries.registered("dom", "probe.input"), false, "a removed element is no longer registered");
+  assert.equal(entries.registered("element", "probe.input"), false, "a removed element is no longer registered");
 });
 
 test("a watched status sends its current value and each change with its version and ends with unwatch", async () => {
@@ -243,22 +243,22 @@ test("a surface page registers declared names once through its port and answers 
   };
   let loads = 0;
   const declared = exposes();
-  declared.dom[0].name = "probe.lines";
+  declared.element[0].name = "probe.lines";
   const expose = createExpose(port, async () => { loads++; return declared; });
   await expose.command("probe.send", ({ data }) => data.length);
   const rows = [element(), element()];
-  await expose.dom("probe.row", rows[0]);
-  await expose.dom("probe.row", rows[1]);
+  await expose.element("probe.row", rows[0]);
+  await expose.element("probe.row", rows[1]);
   await assert.rejects(expose.status("probe.unknown", () => 1, () => {}), /not declared/);
   await expose.status("probe.lines", () => [], () => () => {});
-  await expose.dom("probe.lines", element());
+  await expose.element("probe.lines", element());
   assert.equal(loads, 1);
-  assert.deepEqual(registered, [["command", "probe.send"], ["dom", "probe.row"], ["status", "probe.lines"], ["dom", "probe.lines"]],
+  assert.deepEqual(registered, [["command", "probe.send"], ["element", "probe.row"], ["status", "probe.lines"], ["element", "probe.lines"]],
     "the same name registers once per kind");
   assert.equal(rows[1].dataset.expose, "probe.row");
 
   request({ id: 7, method: "command.run", params: { name: "probe.send", params: { data: "abc" } } });
-  request({ id: 8, method: "dom.rect", params: { name: "probe.row", index: 1 } });
+  request({ id: 8, method: "element.rect", params: { name: "probe.row", index: 1 } });
   request({ id: 9, method: "status.get", params: { name: "probe.missing" } });
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(replies.sort((a, b) => a[0] - b[0]), [
@@ -268,7 +268,7 @@ test("a surface page registers declared names once through its port and answers 
   ]);
 });
 
-test("a dom entry of many elements takes a provider of the current elements, which each request reads again", async () => {
+test("an element entry of many elements takes a provider of the current elements, which each request reads again", async () => {
   const registered = [];
   const replies = [];
   let request = null;
@@ -282,35 +282,35 @@ test("a dom entry of many elements takes a provider of the current elements, whi
   const expose = createExpose(port, async () => exposes());
   // A list that draws only its visible rows replaces its row elements; the provider returns the rows drawn now.
   let rows = [element({ left: 0, top: 0, width: 10, height: 10 }), element({ left: 0, top: 10, width: 10, height: 10 })];
-  await expose.dom("probe.row", () => rows);
-  assert.deepEqual(registered, [["dom", "probe.row"]]);
-  request({ id: 1, method: "dom.rect", params: { name: "probe.row", index: 1 } });
+  await expose.element("probe.row", () => rows);
+  assert.deepEqual(registered, [["element", "probe.row"]]);
+  request({ id: 1, method: "element.rect", params: { name: "probe.row", index: 1 } });
   await new Promise((resolve) => setImmediate(resolve));
   rows = [element({ left: 0, top: 40, width: 10, height: 10 })];
-  request({ id: 2, method: "dom.rect", params: { name: "probe.row", index: 0 } });
-  request({ id: 3, method: "dom.rect", params: { name: "probe.row", index: 1 } });
+  request({ id: 2, method: "element.rect", params: { name: "probe.row", index: 0 } });
+  request({ id: 3, method: "element.rect", params: { name: "probe.row", index: 1 } });
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(replies.sort((x, y) => x[0] - y[0]), [
     [1, { result: { x: 0, y: 10, width: 10, height: 10, zoom: 1 } }],
     [2, { result: { x: 0, y: 40, width: 10, height: 10, zoom: 1 } }],
-    [3, { error: { code: EXPOSURE_ERRORS.unregistered, message: "dom probe.row has no element at index 1" } }],
+    [3, { error: { code: EXPOSURE_ERRORS.unregistered, message: "element probe.row has no element at index 1" } }],
   ], "a request reads the rows that the provider returns at that request, so a replaced row is not kept");
-  await assert.rejects(expose.dom("probe.row", 5), /dom probe.row takes an element or a function that returns the current elements/);
+  await assert.rejects(expose.element("probe.row", 5), /element probe.row takes an element or a function that returns the current elements/);
 });
 
-// dom.rect reports the effective CSS zoom of the element from the computed zoom of the element and of its flat-tree ancestors,
+// element.rect reports the effective CSS zoom of the element from the computed zoom of the element and of its flat-tree ancestors,
 // which every engine reports, so a reply is read the same way on an engine without currentCSSZoom.
-test("dom.rect reports the effective CSS zoom from the computed zoom of the element and its flat-tree ancestors", async () => {
+test("element.rect reports the effective CSS zoom from the computed zoom of the element and its flat-tree ancestors", async () => {
   const entries = exposureEntries(declarationMap(exposes()));
   const root = element(undefined, { zoom: "1" });
   const strip = element(undefined, { zoom: "1.5", parent: root });
   const tab = element({ left: 1, top: 2, width: 61, height: 26 }, { parent: strip });
   const host = element(undefined, { zoom: "2", parent: strip });
   const content = element({ left: 4, top: 5, width: 6, height: 7 }, { root: { host } });
-  entries.dom("probe.input", () => [tab]);
-  entries.dom("probe.row", () => [content]);
-  assert.deepEqual(await entries.answer("dom.rect", { name: "probe.input" }), { x: 1, y: 2, width: 61, height: 26, zoom: 1.5 });
-  assert.deepEqual(await entries.answer("dom.rect", { name: "probe.row" }), { x: 4, y: 5, width: 6, height: 7, zoom: 3 });
+  entries.element("probe.input", () => [tab]);
+  entries.element("probe.row", () => [content]);
+  assert.deepEqual(await entries.answer("element.rect", { name: "probe.input" }), { x: 1, y: 2, width: 61, height: 26, zoom: 1.5 });
+  assert.deepEqual(await entries.answer("element.rect", { name: "probe.row" }), { x: 4, y: 5, width: 6, height: 7, zoom: 3 });
 });
 
 test("a rejected stale exposure reply is reported instead of becoming an unhandled promise", async () => {
@@ -472,27 +472,27 @@ test("a rejected installed manifest names the plugin, its version and package", 
     /^Error: installed plugin alpha 0\.0\.3 \(plugin-alpha\): plugin\.json: unknown field sidecars$/);
 });
 
-// The address form of a dom request (docs/spec/exposure.md, requests): an entry that resolves addresses answers the address through its resolver.
-test("a dom request gives an index or an address, never both, and an address resolves through the entry's resolver", async () => {
+// The address form of an element request (docs/spec/exposure.md, requests): an entry that resolves addresses answers the address through its resolver.
+test("an element request gives an index or an address, never both, and an address resolves through the entry's resolver", async () => {
   const entries = exposureEntries(declarationMap(exposes()));
   const input = element();
   const found = element({ left: 9, top: 9, width: 1, height: 1 });
   const seen = [];
-  entries.dom("probe.input", () => [input]);
+  entries.element("probe.input", () => [input]);
   const code = async (work) => (await replyPayload(work)).error?.code;
   // index and address together are refused.
-  assert.equal(await code(() => entries.answer("dom.rect", { name: "probe.input", index: 0, address: {} })), EXPOSURE_ERRORS.invalidParams);
+  assert.equal(await code(() => entries.answer("element.rect", { name: "probe.input", index: 0, address: {} })), EXPOSURE_ERRORS.invalidParams);
   // An entry without a resolver takes no address.
-  assert.equal(await code(() => entries.answer("dom.rect", { name: "probe.input", address: {} })), EXPOSURE_ERRORS.invalidParams);
-  entries.dom("probe.row", () => [element()], (address, elements) => {
+  assert.equal(await code(() => entries.answer("element.rect", { name: "probe.input", address: {} })), EXPOSURE_ERRORS.invalidParams);
+  entries.element("probe.row", () => [element()], (address, elements) => {
     seen.push({ address, count: elements.length });
     if (address.key === "none") throw new ExposureError(1009, "no control matches");
     return found;
   });
-  assert.deepEqual(await entries.answer("dom.rect", { name: "probe.row", address: { key: "go" } }),
+  assert.deepEqual(await entries.answer("element.rect", { name: "probe.row", address: { key: "go" } }),
     { x: 9, y: 9, width: 1, height: 1, zoom: 1 });
   assert.deepEqual(seen, [{ address: { key: "go" }, count: 1 }], "the resolver did not receive the address and the elements");
-  assert.equal(await code(() => entries.answer("dom.rect", { name: "probe.row", address: { key: "none" } })), 1009);
+  assert.equal(await code(() => entries.answer("element.rect", { name: "probe.row", address: { key: "none" } })), 1009);
 });
 
 test("a command run hands the cids of its cause to the handler as its context, and refuses a list a line cannot hold", async () => {
@@ -508,17 +508,17 @@ test("a command run hands the cids of its cause to the handler as its context, a
   assert.equal(contexts.length, 2, "a refused list reaches no handler");
 });
 
-test("a dom request refuses an index that is not a non-negative integer instead of reading it as the first element", async () => {
+test("an element request refuses an index that is not a non-negative integer instead of reading it as the first element", async () => {
   const entries = exposureEntries(declarationMap(exposes()));
   const input = element();
-  entries.dom("probe.input", () => [input]);
+  entries.element("probe.input", () => [input]);
   const code = async (work) => (await replyPayload(work)).error?.code;
-  // null is a value of the wrong type. It is refused with -32602 for dom.rect and dom.act alike.
-  assert.equal(await code(() => entries.answer("dom.rect", { name: "probe.input", index: null })), EXPOSURE_ERRORS.invalidParams);
-  assert.equal(await code(() => entries.answer("dom.act", { name: "probe.input", index: null, action: "click" })), EXPOSURE_ERRORS.invalidParams);
-  assert.equal(await code(() => entries.answer("dom.rect", { name: "probe.input", index: "0" })), EXPOSURE_ERRORS.invalidParams);
-  assert.equal(await code(() => entries.answer("dom.rect", { name: "probe.input", index: -1 })), EXPOSURE_ERRORS.invalidParams);
-  assert.equal(input.clicks ?? 0, 0, "a refused dom.act does not reach the element");
+  // null is a value of the wrong type. It is refused with -32602 for element.rect and element.act alike.
+  assert.equal(await code(() => entries.answer("element.rect", { name: "probe.input", index: null })), EXPOSURE_ERRORS.invalidParams);
+  assert.equal(await code(() => entries.answer("element.act", { name: "probe.input", index: null, action: "click" })), EXPOSURE_ERRORS.invalidParams);
+  assert.equal(await code(() => entries.answer("element.rect", { name: "probe.input", index: "0" })), EXPOSURE_ERRORS.invalidParams);
+  assert.equal(await code(() => entries.answer("element.rect", { name: "probe.input", index: -1 })), EXPOSURE_ERRORS.invalidParams);
+  assert.equal(input.clicks ?? 0, 0, "a refused element.act does not reach the element");
 });
 
 test("an undefined status value or command result is refused with an error that names it, and null is the no-value", async () => {

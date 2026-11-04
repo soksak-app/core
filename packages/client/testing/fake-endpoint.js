@@ -124,9 +124,9 @@ export function sampleHandlers() {
         result: { type: "null" },
         registered: true,
       },
-      { name: "host.window.reload", description: "Reloads the main page.", params: { type: "object" }, result: { type: "null" }, registered: true },
+      { name: "host.window.reload", description: "Starts the workbench of the window again.", params: { type: "object" }, result: { type: "null" }, registered: true },
     ],
-    dom: [{ name: "core.tab", description: "A tab.", many: true, registered: true }],
+    element: [{ name: "core.tab", description: "A tab.", many: true, registered: true }],
   };
   const window = (params) => {
     if (params?.window !== "main") throw rpcError(1003, `window ${params?.window} does not exist`);
@@ -159,8 +159,8 @@ export function sampleHandlers() {
       if (params.name === "host.window.reload") return null;
       throw rpcError(1001, `unknown name ${params.name}`);
     },
-    "dom.rect": (params) => (window(params), { x: 10, y: 20, width: 30, height: 40, index: params.index ?? 0, document: { x: 0, y: 0 } }),
-    "dom.act": (params) => (window(params), null),
+    "element.rect": (params) => (window(params), { x: 10, y: 20, width: 30, height: 40, index: params.index ?? 0, document: { x: 0, y: 0 } }),
+    "element.act": (params) => (window(params), null),
     "input.pointer": (params) => {
       window(params);
       if (params.phase === "move" && !state.key && params.activate !== true) {
