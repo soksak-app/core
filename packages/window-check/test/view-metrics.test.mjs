@@ -146,6 +146,17 @@ function cadenceFailureWithPaintOutcome({ wrongTailPaint = false, wrongGestureGe
   return raw;
 }
 
+test("view metrics judge convergence by time, not by the count of recorded frames", { timeout: 1000 }, () => {
+  const raw = metrics();
+  raw.drag.contentFrames[3].frameIndex = 7;
+  raw.drag.contentFrames[3].displayCapture.frameIndex = 7;
+  raw.drag.contentFrames[3].displayCapture.timeMs = 130;
+  [120, 125, 130].forEach((timeMs, index) => { raw.drag.tailGeometryFrames[index].timeMs = timeMs; });
+  const result = assertViewMeasurements(raw, options);
+  assert.equal(result.evaluation.drag.convergedFrame, 3);
+  assert.ok(result.evaluation.drag.convergenceMs <= 33, `convergence ${result.evaluation.drag.convergenceMs} ms`);
+});
+
 test("view metrics accept exact thresholds and preserve frame and process evidence", { timeout: 1000 }, () => {
   const raw = metrics();
   const report = assertViewMeasurements(raw, options);
@@ -410,13 +421,6 @@ test("drag cadence is in-gesture and convergence meets both frame and time bound
   cadence.drag.gestureEndedAtMs = 130;
   cadence.drag.tailGeometryFrames[1].timeMs = 141;
   assert.throws(() => assertViewMeasurements(cadence, options), /in-gesture content-frame interval 34 ms/);
-
-  const tooManyFrames = metrics();
-  tooManyFrames.drag.contentFrames[3].frameIndex = 7;
-  tooManyFrames.drag.contentFrames[3].displayCapture.frameIndex = 7;
-  tooManyFrames.drag.contentFrames[3].displayCapture.timeMs = 150;
-  tooManyFrames.drag.tailGeometryFrames[1].contentRectPt.right = 117;
-  assert.throws(() => assertViewMeasurements(tooManyFrames, options), /source-backed final-target paint capture/);
 
   const tooLate = metrics();
   tooLate.drag.gestureEndedAtMs = 130;

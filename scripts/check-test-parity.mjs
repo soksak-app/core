@@ -8968,6 +8968,13 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F442",
+    implementation: [{ file: "packages/window-check/view-metrics.mjs", symbol: "convergenceMs = capture.timeMs - gestureEndedAtMs" }],
+    tests: [{ file: "packages/window-check/test/view-metrics.test.mjs", id: "view metrics judge convergence by time, not by the count of recorded frames" }],
+    expected: "A paint capture within 33 ms converges at any count of recorded frames",
+    levels: ["unit"],
+  },
+  {
     id: "F404",
     implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) fn with_open_window(" }],
     tests: [{ file: "packages/host/tauriv2/src/windows_records_test.rs", id: "a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure" }],

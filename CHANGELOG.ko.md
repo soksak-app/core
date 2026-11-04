@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F442: drag convergence는 frame 수 없이 33 ms로 판정하고, floor benchmark는 convergence와 load를 보고한다. Tauri floor가 충족하므로 latency 목표는 유지한다. Red와 Green: `packages/window-check/test/view-metrics.test.mjs`, `e2e/test/plain-view-case.test.mjs`.
 - F441: Tauri host는 Wails host와 같이 surface layout을 main thread 한 turn과 ready callback에서 실행한다. 측정된 latency 개선은 없다. Red와 Green: `e2e/surface-sync-turn.test.mjs`.
 - F440: 준비 단계는 여백이 대상 card에 맞지 않는 section surface를 음수 크기로 보내지 않고 숨긴다. Red와 Green: `packages/workbench/test/compositor.test.mjs`.
 - F439: image region은 직전에 받아들여진 값과 같은 caret을 보내지 않고, 거부된 caret은 다시 보낸다. Red와 Green: `packages/plugin-api/test/image-region.test.mjs`.

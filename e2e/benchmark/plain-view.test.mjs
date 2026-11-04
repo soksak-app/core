@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { loadavg, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -14,7 +14,7 @@ import { pluginEntry, pnpmPack } from "../../scripts/workspace-registry.mjs";
 import { fresh, pluginChangeApplied } from "../fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { mapViewContentFramesToCapture, requireViewContentFrameCoverage, rightEdgeWidthDragPlan, withViewContentTrace } from "../view-metrics-collection.mjs";
-import { cardEdgeSamples, sourceIntervalSummary } from "./cases/plain-view.mjs";
+import { cardEdgeConvergence, cardEdgeSamples, sourceIntervalSummary } from "./cases/plain-view.mjs";
 import { outside } from "../outside.mjs";
 import { assertRoundTrips, measureDragPerformance, pointerLag, transactionCadence } from "../drag-measurement.mjs";
 
@@ -90,7 +90,8 @@ for (const app of Object.values(APPS)) {
     assertRoundTrips(samples.map((sample) => sample.position), 2);
     const lag = pointerLag(samples, run.ticks, run.boundary);
     const performance = measureDragPerformance(captured.map((item) => item.time), lag, (await s.get("host.window")).refreshRate);
-    const report = { performance, transactionCadence: transactionCadence(run.layouts), samples, ticks: run.ticks, boundary: run.boundary, layouts: run.layouts, times: captured.map((item) => item.time), unmeasured };
+    const convergence = cardEdgeConvergence(samples, run.ticks.at(-1));
+    const report = { load: loadavg(), performance, convergence, transactionCadence: transactionCadence(run.layouts), samples, ticks: run.ticks, boundary: run.boundary, layouts: run.layouts, times: captured.map((item) => item.time), unmeasured };
     const directory = join(app.configDir, "logs", "plain-view-latency");
     mkdirSync(directory, { recursive: true });
     writeFileSync(join(directory, `${process.pid}.json`), `${JSON.stringify(report)}\n`);

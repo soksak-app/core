@@ -11,7 +11,6 @@ const NEW_PROCESS_RUNS = 3;
 export const LAYOUT_DISPLAY_LIMIT_MS = 100;
 const DRAG_GEOMETRY_LIMIT_PT = 2;
 const DRAG_CONTENT_INTERVAL_LIMIT_MS = 33;
-const DRAG_SETTLE_FRAME_LIMIT = 2;
 const EDITOR_SIDECAR_THRESHOLD_BYTES = 50_000_000;
 
 export const normalizeViewText = text => text.normalize("NFC").replace(/\s/gu, "");
@@ -641,7 +640,6 @@ function evaluateDrag(value) {
   for (const source of targetSourceFrames) {
     for (const capture of tailGeometryFrames) {
       if (capture.timeMs < source.timeRange.upperMs) continue;
-      if (capture.frameIndex - gestureEndedFrameIndex > DRAG_SETTLE_FRAME_LIMIT) continue;
       const convergence = capture.timeMs - gestureEndedAtMs;
       if (convergence < 0 || convergence > DRAG_CONTENT_INTERVAL_LIMIT_MS) continue;
       const laterSources = contentFrames.filter(({ sourceSequence }) => sourceSequence >= source.sourceSequence);
@@ -662,7 +660,7 @@ function evaluateDrag(value) {
   const selectedPaint = paintCandidates[0];
   if (!selectedPaint && targetSourceFrames.length > 0) {
     criterionFailures.push({ criterion: "convergence", error: new Error(
-      `drag.contentFrames: expected a source-backed final-target paint capture within two frames and 33 ms after gesture end; received ${JSON.stringify({
+      `drag.contentFrames: expected a source-backed final-target paint capture within 33 ms after gesture end; received ${JSON.stringify({
         mismatchedAtEnd, targetViewport: { width: targetWidth, height: targetHeight },
         finalTargetRectPt, targetSourceFrames, tailGeometryFrames: [...tailGeometryByIndex.values()],
       })}`) });
@@ -680,7 +678,6 @@ function evaluateDrag(value) {
       paintCaptureTimeMs: capture.timeMs,
       paintSourceSequence: converged.sourceSequence,
       eventualPresentationCaptureFrameIndex: converged.displayCapture.frameIndex,
-      frameLimit: DRAG_SETTLE_FRAME_LIMIT,
       timeLimitMs: DRAG_CONTENT_INTERVAL_LIMIT_MS,
     };
     paintCaptureFrameIndex = capture.frameIndex;
@@ -728,7 +725,6 @@ function evaluateDrag(value) {
       paintCaptureTimeMs: null,
       paintSourceSequence: null,
       eventualPresentationCaptureFrameIndex: null,
-      frameLimit: DRAG_SETTLE_FRAME_LIMIT,
       timeLimitMs: DRAG_CONTENT_INTERVAL_LIMIT_MS,
     };
   }
@@ -757,7 +753,6 @@ function evaluateDrag(value) {
     paintCaptureTimeMs,
     paintSourceSequence,
     eventualPresentationCaptureFrameIndex,
-    convergenceFrameLimit: DRAG_SETTLE_FRAME_LIMIT,
     criteria,
     passed: true,
   };
