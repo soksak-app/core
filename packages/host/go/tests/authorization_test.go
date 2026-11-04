@@ -1,0 +1,32 @@
+package host_test
+
+import (
+	"strings"
+	"testing"
+
+	host "github.com/soksak-app/core/packages/host/go/src"
+)
+
+// contract: authorization.surface.cross-surface-rejected, authorization.surface.own-surface-accepted, authorization.main.known-main-caller-accepted, authorization.main.unknown-main-caller-rejected
+func TestAuthorizeSurfaceCallerIdentities(t *testing.T) {
+	if err := host.AuthorizeSurfaceCaller("", "tab-1", 42, 42); err != nil {
+		t.Fatalf("known main caller rejected: %v", err)
+	}
+	if err := host.AuthorizeSurfaceCaller("", "tab-1", 41, 42); err == nil {
+		t.Fatal("unknown caller accepted as main")
+	}
+	if err := host.AuthorizeSurfaceCaller("tab-2", "tab-1", 7, 42); err == nil {
+		t.Fatal("cross-surface caller accepted")
+	}
+	if err := host.AuthorizeSurfaceCaller("tab-1", "tab-1", 7, 42); err != nil {
+		t.Fatalf("own surface caller rejected: %v", err)
+	}
+}
+
+// contract: authorization.surface.unscoped-caller-rejected-for-document
+func TestDocumentCheckStillRejectsUnknownCaller(t *testing.T) {
+	_, err := host.CheckDocument("", host.DocumentRequest{Surface: "tab-1", Document: "page"})
+	if err == nil || !strings.Contains(err.Error(), "not surface") {
+		t.Fatalf("unknown caller accepted: %v", err)
+	}
+}

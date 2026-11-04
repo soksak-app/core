@@ -8,6 +8,7 @@
 // application source or another counting call reaches that function, so a function that only tests call does not keep a
 // platform method called. The comparison of the actual menu bar belongs to the window check layer, and propositions 4 and 5 are the next
 // extension.
+import { LANGUAGE_TABLE, allowedDifferenceTables } from './check-hosts.mjs';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -158,8 +159,8 @@ function quotedList(source, declaration, close, file) {
  */
 export function commonOnlyKeys({ tauriv2WorkspaceSource, wailsv3WorkspaceSource, browserStorageSource, workbenchSettingsSource }) {
   return {
-    tauriv2: quotedList(tauriv2WorkspaceSource, 'const COMMON_ONLY: [&str;', '];', 'packages/host/tauriv2/src/workspace.rs'),
-    wailsv3: quotedList(wailsv3WorkspaceSource, 'var commonOnly = []string{', '}', 'packages/host/wailsv3/src/workspace.go'),
+    tauriv2: quotedList(tauriv2WorkspaceSource, 'const COMMON_ONLY: [&str;', '];', 'packages/host/rust/src/workspace.rs'),
+    wailsv3: quotedList(wailsv3WorkspaceSource, 'var commonOnly = []string{', '}', 'packages/host/go/src/workspace.go'),
     browser: quotedList(browserStorageSource, 'const COMMON_ONLY = Object.freeze([', '])', 'apps/browser/runtime/browser-storage.js'),
     workbench: quotedList(workbenchSettingsSource, 'const COMMON_ONLY = Object.freeze([', '])', 'packages/workbench/settings.js'),
   };
@@ -179,24 +180,20 @@ export function auditCommonOnlyKeys(keys) {
 }
 
 /**
- * Reads the endpoint methods that exist on one host only from the allowed differences table of the host specification
- * (docs/spec/hosts.md). A row whose ID is E<number> declares endpoint methods; its Wails and Tauri cells list method names
- * in backticks or `none`.
+ * Reads the endpoint methods that exist in one language only from the language table of the allowed differences of the host
+ * specification (docs/spec/hosts.md). A row whose ID is E<number> declares endpoint methods; its Go and Rust cells list method
+ * names in backticks or `none`.
  */
 export function allowedEndpointMethods(hostsMarkdown) {
-  const start = hostsMarkdown.indexOf('## Allowed differences');
-  if (start < 0) throw new Error('hosts spec has no Allowed differences section');
-  const end = hostsMarkdown.indexOf('\n## ', start + 1);
-  const section = hostsMarkdown.slice(start, end < 0 ? undefined : end);
-  const allowed = { wailsv3: new Set(), tauriv2: new Set() };
-  for (const line of section.split('\n')) {
-    const cells = line.split('|').slice(1, -1).map((cell) => cell.trim());
-    if (!/^E\d+$/.test(cells[0] ?? '')) continue;
-    for (const [host, cell] of [['wailsv3', cells[1]], ['tauriv2', cells[2]]]) {
+  const rows = allowedDifferenceTables(hostsMarkdown).get(LANGUAGE_TABLE.title);
+  const allowed = { go: new Set(), rust: new Set() };
+  for (const [id, row] of rows) {
+    if (!/^E\d+$/.test(id)) continue;
+    for (const [language, cell] of [['go', row[LANGUAGE_TABLE.left]], ['rust', row[LANGUAGE_TABLE.right]]]) {
       if (cell === 'none') continue;
-      const names = [...cell.matchAll(/`([a-z][a-z0-9_.]*)`/g)].map((match) => match[1]);
-      if (names.length === 0) throw new Error(`hosts spec row ${cells[0]} has no method name or none in the ${host} cell: ${cell}`);
-      for (const name of names) allowed[host].add(name);
+      const names = [...(cell ?? '').matchAll(/`([a-z][a-z0-9_.]*)`/g)].map((match) => match[1]);
+      if (names.length === 0) throw new Error(`hosts spec row ${id} has no method name or none in the ${language} cell: ${cell}`);
+      for (const name of names) allowed[language].add(name);
     }
   }
   return allowed;
@@ -285,7 +282,6 @@ function callerGraph(language, sources, scope) {
   const packages = {};
   if (language === 'go') {
     for (const [file, source] of Object.entries(sources)) {
-      if (file.startsWith(APPLICATION)) continue;
       const declared = source.match(/^package (\w+)/m);
       if (!declared) throw new Error(`${file} declares no package`);
       packages[directoryOf(file)] = declared[1];
@@ -298,11 +294,12 @@ function callerGraph(language, sources, scope) {
     const sites = [];
     const pattern = new RegExp(`(?:(\\w+)(?:::|\\.)|(\\.)|\\b)${escapeRegExp(name)}\\b`, 'g');
     const module = file.split('/').at(-1).replace(/\.rs$/, '');
-    const qualifiers = new Set([module, 'crate', 'self', 'super', ...(file === scope.crate?.root ? [scope.crate.name] : [])]);
+    const roots = [scope.crate, ...(scope.adapterCrates ?? []).map((crate) => ({ root: `${APPLICATION}${crate.root}`, name: crate.name }))];
+    const qualifiers = new Set([module, 'crate', 'self', 'super', ...roots.filter((crate) => file === crate?.root).map((crate) => crate.name)]);
     for (const [other, text] of Object.entries(lines)) {
       const imported = language === 'rust' && (other === file || [...sources[other].matchAll(/^\s*(?:pub(?:\([^)]*\))? )?use [^;]*;/gm)]
         .some((use) => use[0].includes(`${module}::`) && new RegExp(`\\b${escapeRegExp(name)}\\b`).test(use[0])));
-      const samePackage = language === 'go' && !other.startsWith(APPLICATION) && directoryOf(other) === directoryOf(file);
+      const samePackage = language === 'go' && directoryOf(other) === directoryOf(file);
       text.forEach((line, index) => {
         if (language === 'rust' && RUST_USE.test(line)) return;
         const definition = language === 'rust' ? line.match(RUST_FREE_FUNCTION) : line.match(GO_FUNCTION);
@@ -352,8 +349,9 @@ function callerGraph(language, sources, scope) {
  * Returns a failure for each platform method that no host source outside src/platform calls. A Rust method is called as
  * `.name(` or `::name(`; a Go method is called as `.Name(` or passed as the method value `.Name`. A call counts only when its site
  * counts by the rules of `callerGraph`, so a call in a free function that only tests reach is not a caller. The sources are the
- * production sources of the host outside src/platform, without test files; scope names the language, the applications that link
- * the host ({path: source}) and, for Rust, the crate ({root, name}).
+ * production sources of the language host library outside src/platform, without test files; scope names the language, the
+ * framework adapter and the applications that link the library ({path: source}) and, for Rust, the library crate ({root, name})
+ * and the crates of the framework adapters (adapterCrates, each {root, name} with the root by its path in the repository).
  */
 export function auditPlatformCallers(host, methods, sources, scope) {
   const all = Object.fromEntries([
@@ -422,7 +420,7 @@ export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, wailsv3Runtim
   hostContractSpec, tauriv2MenuSource, wailsv3MenuSource, hostsSpec, endpointSpec,
   tauriv2WorkspaceSource, wailsv3WorkspaceSource, browserStorageSource, workbenchSettingsSource,
   tauriv2PlatformSource, wailsv3PlatformSource, tauriv2ProductSources, wailsv3ProductSources,
-  tauriv2ApplicationSources, wailsv3ApplicationSources, tauriv2Crate }) {
+  tauriv2ApplicationSources, wailsv3ApplicationSources, tauriv2Crate, tauriv2AdapterCrate }) {
   const failures = [];
   const tauriv2 = {
     calls: runtimeCalls(tauriv2Runtime, 'const COMMAND = {', 'tauriv2 runtime'),
@@ -451,10 +449,10 @@ export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, wailsv3Runtim
     ['endpoint base methods', endpointT.base, endpointW.base],
     ['endpoint diagnostics methods', endpointT.diagnostics, endpointW.diagnostics],
   ]) {
-    for (const method of [...left].filter((item) => !right.has(item) && !allowed.tauriv2.has(item)).sort()) {
+    for (const method of [...left].filter((item) => !right.has(item) && !allowed.rust.has(item)).sort()) {
       failures.push(`tauriv2 ${name} has "${method}" that wailsv3 does not`);
     }
-    for (const method of [...right].filter((item) => !left.has(item) && !allowed.wailsv3.has(item)).sort()) {
+    for (const method of [...right].filter((item) => !left.has(item) && !allowed.go.has(item)).sort()) {
       failures.push(`wailsv3 ${name} has "${method}" that tauriv2 does not`);
     }
   }
@@ -473,7 +471,7 @@ export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, wailsv3Runtim
   const tauriv2Callers = Object.fromEntries(Object.entries(tauriv2ProductSources)
     .map(([file, source]) => [file, withoutRustTestItems(source)]));
   failures.push(...auditPlatformCallers('tauriv2', rustPlatformMethods(tauriv2PlatformSource), tauriv2Callers,
-    { language: 'rust', crate: tauriv2Crate, applications: tauriv2ApplicationSources }));
+    { language: 'rust', crate: tauriv2Crate, adapterCrates: tauriv2AdapterCrate ? [tauriv2AdapterCrate] : [], applications: tauriv2ApplicationSources }));
   failures.push(...auditPlatformCallers('wailsv3', goPlatformMethods(wailsv3PlatformSource), wailsv3ProductSources,
     { language: 'go', applications: wailsv3ApplicationSources }));
   return failures;
@@ -496,9 +494,9 @@ if (process.argv[1] && process.argv[1].endsWith('check-host-parity.mjs')) {
   const applicationSources = (directory, extension) => Object.fromEntries(
     Object.entries(hostProductSources(join(ROOT, directory), extension)).map(([file, source]) => [`${directory}/${file}`, source]));
   const wailsv3Sources = {};
-  for (const file of readdirSync(join(ROOT, 'packages/host/wailsv3/src'))) {
+  for (const file of readdirSync(join(ROOT, 'packages/host/go/src'))) {
     if (file.endsWith('.go') && !file.endsWith('_test.go')) {
-      wailsv3Sources[file] = read(join('packages/host/wailsv3/src', file));
+      wailsv3Sources[file] = read(join('packages/host/go/src', file));
     }
   }
   const failures = auditHostParity({
@@ -506,25 +504,27 @@ if (process.argv[1] && process.argv[1].endsWith('check-host-parity.mjs')) {
     tauriv2Bindings: read('packages/host/tauriv2/src/bindings.rs'),
     wailsv3Runtime: read('apps/wailsv3/runtime/index.js'),
     wailsv3HostSources: wailsv3Sources,
-    tauriv2EndpointSource: read('packages/host/tauriv2/src/endpoint.rs'),
-    wailsv3EndpointSource: read('packages/host/wailsv3/src/endpoint.go'),
-    wailsv3DiagnosticsSource: read('packages/host/wailsv3/src/diagnostics.go'),
+    tauriv2EndpointSource: read('packages/host/rust/src/endpoint.rs'),
+    wailsv3EndpointSource: read('packages/host/go/src/endpoint.go'),
+    wailsv3DiagnosticsSource: read('packages/host/go/src/diagnostics.go'),
     hostContractSpec: read('docs/spec/host-contract.md'),
-    tauriv2MenuSource: read('packages/host/tauriv2/src/menu.rs'),
-    wailsv3MenuSource: read('packages/host/wailsv3/src/menu.go'),
+    tauriv2MenuSource: read('packages/host/rust/src/menu.rs'),
+    wailsv3MenuSource: read('packages/host/go/src/menu.go'),
     hostsSpec: read('docs/spec/hosts.md'),
     endpointSpec: read('docs/spec/endpoint.md'),
-    tauriv2WorkspaceSource: read('packages/host/tauriv2/src/workspace.rs'),
-    wailsv3WorkspaceSource: read('packages/host/wailsv3/src/workspace.go'),
+    tauriv2WorkspaceSource: read('packages/host/rust/src/workspace.rs'),
+    wailsv3WorkspaceSource: read('packages/host/go/src/workspace.go'),
     browserStorageSource: read('apps/browser/runtime/browser-storage.js'),
     workbenchSettingsSource: read('packages/workbench/settings.js'),
-    tauriv2PlatformSource: read('packages/host/tauriv2/src/platform/platform.rs'),
-    wailsv3PlatformSource: read('packages/host/wailsv3/src/platform/platform.go'),
-    tauriv2ProductSources: hostProductSources(join(ROOT, 'packages/host/tauriv2/src'), '.rs'),
-    wailsv3ProductSources: hostProductSources(join(ROOT, 'packages/host/wailsv3/src'), '.go'),
-    tauriv2ApplicationSources: applicationSources('apps/tauriv2/src', '.rs'),
-    wailsv3ApplicationSources: applicationSources('apps/wailsv3/src', '.go'),
-    tauriv2Crate: libraryCrate(read('packages/host/tauriv2/Cargo.toml'), 'packages/host/tauriv2/Cargo.toml'),
+    tauriv2PlatformSource: read('packages/host/rust/src/platform/platform.rs'),
+    wailsv3PlatformSource: read('packages/host/go/src/platform/platform.go'),
+    tauriv2ProductSources: hostProductSources(join(ROOT, 'packages/host/rust/src'), '.rs'),
+    wailsv3ProductSources: hostProductSources(join(ROOT, 'packages/host/go/src'), '.go'),
+    tauriv2ApplicationSources: { ...applicationSources('packages/host/tauriv2/src', '.rs'), ...applicationSources('apps/tauriv2/src', '.rs') },
+    wailsv3ApplicationSources: { ...applicationSources('packages/host/wailsv3/src', '.go'), ...applicationSources('apps/wailsv3/src', '.go') },
+    tauriv2Crate: libraryCrate(read('packages/host/rust/Cargo.toml'), 'packages/host/rust/Cargo.toml'),
+    tauriv2AdapterCrate: ((crate) => ({ ...crate, root: `packages/host/tauriv2/src/${crate.root}` }))(
+      libraryCrate(read('packages/host/tauriv2/Cargo.toml'), 'packages/host/tauriv2/Cargo.toml')),
   });
   for (const failure of failures) console.error(`FAIL: ${failure}`);
   if (failures.length > 0) {

@@ -2,7 +2,7 @@
 name = "soksak-host-tauriv2"
 version = "0.0.34"
 edition = "2024"
-description = "soksak native host for Tauri v2"
+description = "Tauri v2 framework adapter of the soksak host"
 
 [lib]
 path = "src/host.rs"
@@ -10,54 +10,20 @@ path = "src/host.rs"
 # diagnostics adds the diagnostic endpoint methods and the diagnostic command line; debug builds and 0.0.x releases
 # set it. dev selects the .dev identifier of a debug build.
 [features]
-diagnostics = ["soksak-sok-tauriv2/diagnostics"]
-dev = ["soksak-sok-tauriv2/dev"]
-
-# A measurement prints numbers and asserts nothing (docs/spec/logging.md#writers).
-[[bench]]
-name = "event_log_benchmark"
-harness = false
-
-[[bench]]
-name = "event_native_benchmark"
-harness = false
-
-[build-dependencies]
-pkg-config = "0.3"
+diagnostics = ["soksak-host/diagnostics"]
+dev = ["soksak-host/dev"]
 
 [dependencies]
 # compression 은 애플리케이션 크레이트가 끈다. 기본 기능을 켜면 기능 통합으로 다시 켜지므로 끈다.
 tauri = { version = "2", default-features = false, features = ["wry", "common-controls-v6", "dynamic-acl", "x11", "dbus", "unstable"] }
 serde = { version = "1", features = ["derive"] }
-# 설치 형식과 설치 배치는 command line sok 의 구현을 쓴다(docs/spec/installation.md).
-soksak-sok-tauriv2 = { path = "../../sok/tauriv2" }
+soksak-host = { path = "../rust" }
+soksak-sok = { path = "../../sok/rust" }
 serde_json = { version = "1", features = ["raw_value"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-deep-link = "2"
-tempfile = "3"
-flate2 = "1"
-tar = "0.4"
-wait-timeout = "0.2"
-base64 = "0.22"
-crc32fast = "1"
 url = "2"
-# The session file name is the RFC 3986 percent-encoding of the session id (workspace.rs tab_session_name).
-percent-encoding = "2"
-
-[target.'cfg(target_os = "macos")'.dependencies]
-libc = "0.2"
-mach2 = "0.7"
-objc2 = "0.6"
-block2 = "0.6"
-signal-hook = "0.3"
-
-[target.'cfg(windows)'.dependencies]
-windows = { version = "0.61", features = [
-  "Win32_Foundation",
-  "Win32_Storage_FileSystem",
-] }
 
 [dev-dependencies]
 tauri = { version = "2", default-features = false, features = ["test"] }
-notify = "8.2"
-sha2 = "0.10"
+tempfile = "3"

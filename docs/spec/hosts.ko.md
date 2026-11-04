@@ -2,25 +2,33 @@
 
 [English](hosts.md)
 
-코어의 네이티브 쪽은 같은 구조를 가진 두 라이브러리 패키지에 있다. [네이티브 호스트 인터페이스](native-host.ko.md)가 워크벤치 페이지가 사용하는 연산을 정의한다. [호스트 계약 사례](host-contract.ko.md)는 두 호스트의 테스트가 실행하는 동작을 나열한다.
+코어의 네이티브 쪽은 같은 구조를 가진 두 language host library와 framework마다 하나인 framework adapter에 있다. [네이티브 호스트 인터페이스](native-host.ko.md)가 워크벤치 페이지가 사용하는 연산을 정의한다. [호스트 계약 사례](host-contract.ko.md)는 호스트들의 테스트가 실행하는 동작을 나열한다.
 
 | 패키지 | 언어 | 식별 |
 | --- | --- | --- |
-| `packages/host/wailsv3` | Go | 모듈 `github.com/soksak-app/core/packages/host/wailsv3`. `src/`의 패키지 `host`이며 `github.com/soksak-app/core/packages/host/wailsv3/src`로 가져온다 |
-| `packages/host/tauriv2` | Rust | 크레이트 `soksak-host-tauriv2`, `[lib] path = "src/host.rs"` |
+| `packages/host/go` | Go | Go language host library. 모듈 `github.com/soksak-app/core/packages/host/go`. `src/`의 패키지 `host`이며 `github.com/soksak-app/core/packages/host/go/src`로 가져온다 |
+| `packages/host/rust` | Rust | Rust language host library. 크레이트 `soksak-host`, `[lib] path = "src/host.rs"` |
+| `packages/host/wailsv3` | Go | Wails framework adapter. 모듈 `github.com/soksak-app/core/packages/host/wailsv3`. `src/`의 패키지 `adapter`이며 `github.com/soksak-app/core/packages/host/wailsv3/src`로 가져온다 |
+| `packages/host/tauriv2` | Rust | Tauri framework adapter. 크레이트 `soksak-host-tauriv2`, `[lib] path = "src/host.rs"` |
 
-애플리케이션 `apps/wailsv3`와 `apps/tauriv2`는 `src/main.*`, `environment.json`, `runtime/index.js`, 테스트, 매니페스트, 프레임워크 설정만 가진다. `apps/wailsv3/src/main.go`는 명령행 플래그를 `host.Options`로 읽고 `host.Run(assets, options)`를 호출한다. `apps/tauriv2/src/main.rs`는 `soksak_host_tauriv2::run(tauri::generate_context!(), BACKGROUND)`를 호출하며, `BACKGROUND`는 스테이징된 `frontend/background.js`다.
+Language host library는 framework를 이름으로 부르지 않는 모든 것을 가진다: 바인딩, 창, 작업 공간, 표면, 문서, 이미지, 사이드카, 노출, 엔드포인트, 이벤트 로그, 진단, darwin platform layer. Library는 framework port로만 framework에 닿는다. Port는 두 interface `Framework`(애플리케이션 이름, main-thread step, 종료, 대화상자, 메뉴, Dock, 제목 표시줄을 포함한 창 생성)와 `Frontend`(이벤트 emit, 창 제목, 표시, 초점, 창 이벤트, presentation notice, settled presentation, workbench 시작, workbench 호출 통로)이며, 두 언어에서 이름이 같다(`src/framework.*`). `packages/host/go`의 어떤 파일도 Wails의 패키지를 가져오지 않고, `packages/host/rust`의 어떤 파일도 Tauri의 크레이트를 이름으로 부르지 않는다([구조 검사](#구조-검사)). Framework adapter는 `Run`과 framework port의 구현을 가진다. 한 언어만 필요로 하는 파일은 그 language host library에 남고, 한 framework만 필요로 하는 파일은 그 framework adapter에 있다. Framework adapter의 애플리케이션 이름(`wailsv3`, `tauriv2`)은 `endpoint.json`의 `application`, 엔드포인트 소켓의 이름, 애플리케이션 업데이트 릴리스 키의 호스트, debug view 상태 파일의 `host`다.
+
+애플리케이션 `apps/wailsv3`와 `apps/tauriv2`는 `src/main.*`, `environment.json`, `runtime/index.js`, 테스트, 매니페스트, 프레임워크 설정만 가진다. `apps/wailsv3/src/main.go`는 명령행 플래그를 Go language host library의 `host.Options`로 읽고 Wails framework adapter의 `adapter.Run(assets, options)`를 호출한다. `apps/tauriv2/src/main.rs`는 Tauri framework adapter의 `soksak_host_tauriv2::run(tauri::generate_context!(), BACKGROUND)`를 호출하며, `BACKGROUND`는 스테이징된 `frontend/background.js`다.
 
 ## 호스트 트리
 
+Language host library:
+
 ```
-packages/host/wailsv3/                     packages/host/tauriv2/
+packages/host/go/                          packages/host/rust/
   package.json                               package.json
-  go.mod, go.sum                             Cargo.toml            차이 A4
+  go.mod, go.sum                             Cargo.toml            차이 H26
   (없음: cgo 지시문이 pkg-config 사용)          build.rs              차이 H1
   src/                                       src/
-    host.go        패키지 문서, Run                   host.rs
-    bindings.go    페이지 호출 등록                   bindings.rs
+    host.go        패키지 문서, Session               host.rs
+    framework.go   framework port                     framework.rs
+    bindings.go    Host의 페이지 호출 메서드          차이 H27
+    menu.go        애플리케이션 메뉴 표               menu.rs
     windows.go     창, 준비, 닫기, 종료               windows.rs
     source_origins.go 선언된 source generation       source_origins.rs
     projects.go    폴더 확인, 선택, 생성              projects.rs
@@ -44,6 +52,7 @@ packages/host/wailsv3/                     packages/host/tauriv2/
       platform.go  인터페이스와 선택             platform.rs
       darwin/                                    darwin/
         darwin.go    패키지 문서, 등록                darwin.rs
+        main_thread.h, main_thread.m  main-thread 함수  차이 H20
         window.go    창 준비, 창 단추                 window.rs
         webview.go   웹뷰 생성, 배치                  webview.rs
         webview.m    WKWebView 생성                   차이 H4
@@ -69,11 +78,40 @@ packages/host/wailsv3/                     packages/host/tauriv2/
     exposure_test.go                           exposure_test.rs
     documents_test.go                          documents_test.rs
     termination_test.go                        termination_test.rs
+    (없음)                                     support/framework.rs   차이 H28
+    platform/darwin/stack_sampler.go           차이 H25
+```
+
+Framework adapter:
+
+```
+packages/host/wailsv3/                     packages/host/tauriv2/
+  package.json                               package.json
+  go.mod, go.sum                             Cargo.toml            차이 H29
+  src/                                       src/
+    host.go        패키지 문서, Run                   host.rs (run)
+    framework.go   framework port의 Framework         framework.rs
+    frontend.go    framework port의 Frontend          frontend.rs
+    menu.go        framework의 메뉴                   menu.rs
+    bindings.go    바인딩 타입 Bindings               bindings.rs (Tauri 명령)
+    (없음)                                     plugins_starter_test.rs   차이 H30
+    (없음)                                     platform/platform.rs   차이 H31
+    platform/darwin/                           platform/darwin/
+      darwin.go      패키지 문서                  darwin.rs (macOS의 창, 웹 뷰, 실행 함수)
+      main_thread.go main-thread 함수 설치   차이 H31
+    (없음)                                     platform/windows/windows.rs   차이 H31
+  tests/                                     tests/
+    framework_test.go                          framework_test.rs
+    menu_test.go                               menu_test.rs
+    launch_activation_test.go                  launch_activation_test.rs
+    framework_log_test.go                      차이 H9
+    (없음)                                     project_data_order/, surface_layout/, view_source_stream/ bindings_test.rs   차이 H30
+    platform/darwin/main_thread_stack_test.go  차이 H19
 ```
 
 ## 규칙
 
-- 코드는 `src/`에 둔다. 테스트는 `tests/`에 두며, 두 언어 모두 테스트 파일 이름은 `_test`로 끝난다. `tests/`의 Go 테스트는 호스트 패키지를 가져온다. Cargo는 각 `tests/*_test.rs` 파일을 크레이트의 통합 테스트로 빌드한다.
+- 코드는 `src/`에 둔다. 테스트는 `tests/`에 두며, 두 언어 모두 테스트 파일 이름은 `_test`로 끝난다. `tests/`의 Go 테스트는 자기 language host library나 framework adapter의 패키지를 가져온다. Cargo는 각 `tests/*_test.rs` 파일을 크레이트의 통합 테스트로 빌드한다.
 - 각 디렉터리의 대표 파일은 디렉터리 이름과 같다: `host.*`, `platform/platform.*`, `darwin/darwin.*`, `windows/windows.*`.
 - Rust 모듈은 `#[path = "..."]` 속성을 사용하므로 크레이트에 `lib.rs`와 `mod.rs`가 없다.
 - 플랫폼 코드는 `src/platform/<os>/` 아래에만 있으며 `os`는 `darwin`, `windows`, `linux` 중 하나다.
@@ -84,7 +122,7 @@ packages/host/wailsv3/                     packages/host/tauriv2/
 
 ## 플랫폼 선택
 
-Go: 각 `src/platform/<os>/` 디렉터리는 Go 패키지다. 대표 파일(`darwin.go`, `windows.go`)은 빌드 태그가 없고 패키지 문서만 가진다. 나머지 파일은 `//go:build <os>` 태그를 가지며, 그중 한 파일이 `init`에서 `platform.Register`를 호출한다. `host.go`는 모든 운영체제 패키지를 빈 식별자로 가져오므로 빌드는 대상 운영체제의 구현만 등록한다. `host.Run`은 `platform.Current()`로 구현을 얻고, 등록된 구현이 없으면 실패한다.
+Go: 각 `src/platform/<os>/` 디렉터리는 Go 패키지다. 대표 파일(`darwin.go`, `windows.go`)은 빌드 태그가 없고 패키지 문서만 가진다. 나머지 파일은 `//go:build <os>` 태그를 가지며, 그중 한 파일이 `init`에서 `platform.Register`를 호출한다. Go language host library의 `host.go`는 모든 운영체제 패키지를 빈 식별자로 가져오므로 빌드는 대상 운영체제의 구현만 등록한다. `Prepare`는 `platform.Current()`로 구현을 얻고, 등록된 구현이 없으면 실패한다. Wails framework adapter도 같은 방식으로 자기 `src/platform/darwin` 패키지를 가져온다([Framework 표](#framework-표)의 H31 행).
 
 Rust: `src/platform/platform.rs`는 각 운영체제 모듈을 `#[cfg(target_os = "macos")]` 또는 `#[cfg(windows)]`와 `#[path = "<os>/<os>.rs"]`로 선언한다. `platform::current()`는 대상 운영체제의 구현을 반환하고, 다른 대상에서는 오류를 반환한다. 각 운영체제 모듈은 자신의 파일을 `#[path]`로 선언한다.
 
@@ -144,7 +182,7 @@ AppKit 이 창 자신의 단추를 소유한다. 제목줄 높이가 AppKit 이 
 
 Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`)만 구현한다. `platform/windows/unsupported.*`의 나머지 연산은 `<operation> is not implemented on windows` 형식의 오류를 반환한다. Windows에서는 애플리케이션 시작이 첫 platform 연산에서 실패한다. Wails의 `Run`과 Tauri의 `run`은 창을 열기 전에 `window resize animation is not implemented on windows`와 상태 1로 끝난다. Linux 구현은 없으며, 그곳에서 `platform.Current()`와 `platform::current()`는 오류를 반환한다.
 
-`make hosts-check`는 `make windows-build-check`를 실행하며, 이 target은 Wails host source를 기본 build와 diagnostics build에서 `windows/arm64`용으로 vet한다.
+`make hosts-check`는 `make windows-build-check`를 실행하며, 이 target은 Go language host library와 Wails framework adapter의 source를 기본 build와 diagnostics build에서 `windows/arm64`용으로 vet한다.
 
 ## Wails host의 main thread
 
@@ -152,7 +190,9 @@ Wails host의 main thread에서는 host에서도 framework에서도 Go code가 �
 
 host는 `application.Run` 바로 앞에서 framework가 init에서 main thread에 고정한 main goroutine으로 platform의 `BlockAsyncSignals`를 불러 signal을 막는다. 막는 signal은 동기 fault인 SIGILL, SIGTRAP, SIGABRT, SIGEMT, SIGFPE, SIGBUS, SIGSEGV, SIGSYS를 뺀 모든 signal이다. kernel은 SIGCHLD, SIGINT, SIGTERM, SIGPROF처럼 프로세스에 보낸 signal을 그것을 막지 않는 thread에 전달하고, Go runtime이 만드는 각 thread는 runtime이 프로세스 시작 때 기록한 mask(`initSigmask`)로 시작하므로 `signal.Notify`와 profiling은 자기 thread를 유지한다. Go runtime은 실행 중인 goroutine을 비동기로 선점하려고 그 thread에 SIGURG를 보낸다(`preemptM`). 애플리케이션이 실행되는 동안 main thread에서는 goroutine이 실행되지 않으며, run loop 전후에 그곳에서 실행되는 main goroutine은 여전히 함수 호출 지점에서 선점된다. main thread가 시작한 프로세스는 이 mask를 물려받는다. host는 자식 프로세스를 다른 thread에서 실행되는 goroutine에서 시작한다.
 
-`make hosts-check`는 Wails host darwin layer의 C code, 즉 `src/platform/darwin`의 각 Go 파일의 cgo preamble과 각 Objective-C 파일에서 이 규칙을 검사한다(`scripts/check-hosts.mjs`의 `auditMainThreadCalls`. 이 함수는 `scripts/cgo-sources.go`를 통해 `go/parser`로 Go 파일을 읽고, macro를 펼치고 호출한 각 함수를 그것을 선언한 header로 해석한 clang의 JSON AST로 C code를 읽는다). C code가 Go 파일이 export(`//export`)한 함수를 `wailsRunOnWorker`나 `ON_WORKER` 밖에서 참조하면 실패한다. Go code가 `native/darwin/src`의 header가 선언한 함수를 `main_` wrapper 대신 직접 부르면 실패한다. 단 thread가 필요 없는 함수(`MAIN_THREAD_FREE`, 각각 이유를 가진다: event ring과 그 clock, `sp_observe_flush`, `sp_phys_footprint`, `sp_diagnostic_reports_directory`, `sp_capture_clock`, `sp_capture_error`, `sp_facts_free`, `sp_ui_enqueue`, `sp_ui_enqueue_after`)는 예외다. Go code가 부르는 layer의 C 함수가 `wailsRunOnMain`이나 `ON_MAIN` 밖에서 Objective-C message를 보내거나, native 함수나 `NS` 함수를 부르거나, 그렇게 하는 layer의 다른 함수를 부르면 실패한다. native 함수나 Objective-C message가 `wailsRunOnWorker`나 `ON_WORKER` 안에서 실행되어도 실패한다.
+Go language host library의 header `src/platform/darwin/main_thread.h`는 두 main-thread 함수 `hostRunOnWorker`와 `hostRunOnMain`, 그리고 이 함수로 식을 평가하는 macro `ON_WORKER`와 `ON_MAIN`을 선언한다. `main_thread.m`은 framework adapter가 설치한 함수를 가진다. Wails framework adapter는 library 시작 전에 자기 darwin 패키지의 `init`에서 Wails fork의 함수(`wailsRunOnWorker`와 `wailsRunOnMain`)를 이 함수로 설치하므로, library의 어떤 파일도 Wails를 이름으로 부르지 않는다. 설치 전에는 각 함수가 block을 바로 실행한다.
+
+`make hosts-check`는 Go language host library darwin layer의 C code, 즉 `packages/host/go/src/platform/darwin/`의 각 Go 파일의 cgo preamble과 각 Objective-C 파일에서 이 규칙을 검사한다(`scripts/check-hosts.mjs`의 `auditMainThreadCalls`. 이 함수는 `scripts/cgo-sources.go`를 통해 `go/parser`로 Go 파일을 읽고, macro를 펼치고 호출한 각 함수를 그것을 선언한 header로 해석한 clang의 JSON AST로 C code를 읽는다). C code가 Go 파일이 export(`//export`)한 함수를 `hostRunOnWorker`나 `ON_WORKER` 밖에서 참조하면 실패한다. Go code가 `native/darwin/src`의 header가 선언한 함수를 `main_` wrapper 대신 직접 부르면 실패한다. 단 thread가 필요 없는 함수(`MAIN_THREAD_FREE`, 각각 이유를 가진다: event ring과 그 clock, `sp_observe_flush`, `sp_phys_footprint`, `sp_diagnostic_reports_directory`, `sp_capture_clock`, `sp_capture_error`, `sp_facts_free`, `sp_ui_enqueue`, `sp_ui_enqueue_after`)는 예외다. Go code가 부르는 layer의 C 함수가 `hostRunOnMain`이나 `ON_MAIN` 밖에서 Objective-C message를 보내거나, native 함수나 `NS` 함수를 부르거나, 그렇게 하는 layer의 다른 함수를 부르면 실패한다. native 함수나 Objective-C message가 `hostRunOnWorker`나 `ON_WORKER` 안에서 실행되어도 실패한다.
 
 이유: 애플리케이션 프로세스는 WebKit과 다른 in-process client가 만든 JavaScriptCore VM을 가지며, VM의 lock은 그것을 잡은 thread를, main thread를 포함해, collector가 suspend하고 scan하는 thread에 더한다. collector는 각 thread의 stack을 stack pointer부터 그 thread stack의 origin까지 복사하고, 합한 크기의 두 배인 buffer를 할당한다. main thread의 Go code는 Go heap이 main thread의 stack 밖에 둔 goroutine stack에서 실행되므로, 그때의 scan에서 크기 `origin − sp`가 wrap되고 buffer 할당이 실패하며, JavaScriptCore는 `pas_panic_on_out_of_memory_error`에서 프로세스를 끝낸다. Tauri host에는 이 규칙이 필요 없다. 그 main thread는 main thread의 stack에서 Rust를 실행한다.
 
@@ -160,42 +200,58 @@ host는 `application.Run` 바로 앞에서 framework가 init에서 main thread�
 
 ## 허용 차이
 
-| ID | Wails | Tauri | 이유 |
+허용 차이는 두 표이며, 행 ID는 두 표를 통틀어 하나다. 언어 표는 `packages/host/go`와 `packages/host/rust`(H 행), `packages/sok/go`와 `packages/sok/rust`(C 행), 두 언어의 endpoint method(E 행)를 비교한다. Framework 표는 `packages/host/wailsv3`와 `packages/host/tauriv2`(H 행), `apps/wailsv3`와 `apps/tauriv2`(A 행)를 비교한다. `scripts/check-hosts.mjs`는 각 쌍의 표에서 ID가 그 쌍의 글자로 시작하는 행을 읽는다.
+
+### 언어 표
+
+| ID | Go | Rust | 이유 |
 | --- | --- | --- | --- |
 | H1 | 없음 | `build.rs` | Rust는 macOS 대상에서 빌드 스크립트로 pkg-config(`soksak-darwin`)를 통해 `native/darwin`을 찾고, Go는 `#cgo pkg-config` 지시문을 사용한다 |
-| H3 | `src/bridge.js` | 없음 | Wails는 애플리케이션이 생성한 웹뷰에 호출 통로를 제공하지 않는다 |
-| H4 | `src/platform/darwin/webview.m` | 없음 | Wails에 자식 웹뷰 API가 없어 호스트가 Objective-C로 웹뷰를 생성하며, Tauri는 `add_child`를 사용한다 |
+| H3 | `src/bridge.js` | 없음 | Go language host library는 자기 표면의 웹뷰를 darwin layer에서 만들고, Wails는 애플리케이션이 만든 웹뷰에 호출 통로를 제공하지 않는다. Rust language host library는 그 웹뷰를 Tauri의 자식 웹뷰로 만들며, 그 호출 통로는 Tauri framework adapter가 제공한다 |
+| H4 | `src/platform/darwin/webview.m` | 없음 | Wails에 자식 웹뷰 API가 없어 Go language host library가 Objective-C로 웹뷰를 생성한다. Rust language host library는 Tauri framework adapter의 `add_child`로 생성한다 |
 | H5 | `src/diagnostics_test.go`, `src/diagnostics_clock_test.go` | 없음 | `diagnostics_test.go`는 비공개 capture payload helper를 검사한다. `diagnostics_clock_test.go`는 진단/release 두 build에서 compile되어야 하므로 비공개 진단 등록 build bit를 확인한다. 기존 `tests` package의 test가 존재하지 않는 `Surfaces.RegisterView`를 호출해 이 package는 compile되지 않는다. Rust 진단 범위는 호스트 통합 테스트에 있다 |
-| H6 | `src/menu.go`, `tests/menu_test.go` | 없음 | Wails 기본 애플리케이션 메뉴는 View 메뉴에서 메인 웹뷰 전체를 확대하고 다시 읽으므로 Wails 호스트가 애플리케이션 메뉴를 정한다. Tauri 호스트는 View 메뉴에 전체 화면만 있는 Tauri 기본 메뉴를 쓴다 |
 | H7 | 없음 | `tests/panic_hook_test.rs`, `tests/fatal_signal_test.rs` | Go runtime은 fatal signal의 보고를 표준 오류에 쓰며 표준 오류가 애플리케이션 로그다. fatal signal은 native 라이브러리의 handler가 있어야 오류 줄을 쓴다. Rust panic은 panic한 스레드에서 `application_log.rs`의 hook이 실행되므로 hook 시험이 hook이 writer를 기다리지 않는지 확인한다. goroutine의 panic은 `routine.Go`가 recover하며 hook이 없다 |
 | H8 | `tests/event_log_benchmark_test.go`, `tests/event_native_benchmark_test.go` | `benches/event_log_benchmark.rs`, `benches/event_native_benchmark.rs` | 측정은 Go에서 test 파일의 `Benchmark` 함수이고 Rust에서 `cargo bench`의 `harness = false` target이다. 둘 다 숫자를 출력하고 단언하지 않으며 `make benchmark-go`와 `make benchmark-rust`가 실행한다. |
-| H9 | `tests/framework_log_test.go` | 없음 | 프레임워크 logger의 level(`FrameworkLogLevel`)은 Wails host에만 있다. Wails asset server는 요청한 파일마다 level `info`로 한 줄을 쓰고, Tauri host는 표준 오류에 그런 줄을 쓰지 않는다 |
 | H10 | 없음 | `src/platform/darwin/file_watch.rs` | Wails host는 library `fsnotify`로 정책 파일을 감시한다. 정책 파일 감시를 충족하는 Rust library가 없으므로(`notify` 8.2의 FSEvents watcher는 writer가 하위 폴더에 덧붙이는 동안 폴더의 event를 전달하지 않았고, kqueue watcher는 rename을 다음 kernel event까지 전달하지 않았으며, `kqueue` crate 1.2에는 막힌 대기를 끝낼 user event가 없다) Tauri host는 macOS에서 kqueue로 감시한다 |
-| H12 | none | `tests/support/folder.rs` | Rust 시험은 실패한 assertion이 unwind하는 동안에도 폴더를 지우고 지우기 실패를 보고하는 guard가 필요하다. `tempfile::TempDir`는 실패를 보고하지 않고 drop한다. Go 시험은 시험 뒤 폴더를 지우고 지우기가 실패하면 시험을 실패시키는 `testing.T.TempDir`를 쓰므로 Wails 호스트에는 별도 파일이 없다 |
+| H12 | none | `tests/support/folder.rs` | Rust 시험은 실패한 assertion이 unwind하는 동안에도 폴더를 지우고 지우기 실패를 보고하는 guard가 필요하다. `tempfile::TempDir`는 실패를 보고하지 않고 drop한다. Go 시험은 시험 뒤 폴더를 지우고 지우기가 실패하면 시험을 실패시키는 `testing.T.TempDir`를 쓰므로 Go host에는 별도 파일이 없다 |
 | H13 | none | `src/notifications_test.rs`, `src/project_removal_test.rs`, `src/exposure_status_test.rs`, `src/endpoint_lock_test.rs`, `src/surfaces_test.rs`, `src/windows_records_test.rs`, `src/sidecars_lock_test.rs`, `src/performance_lock_test.rs`, `src/workspace_lock_test.rs`, `src/debug_follow_lock_test.rs`, `src/log_query_lock_test.rs`, `src/deep_link_lock_test.rs`, `src/assets_lock_test.rs`, `src/process_lock_hook_lock_test.rs`, `src/log_policy_watch_hook_lock_test.rs`, `src/diagnostics_lock_test.rs` | Rust host는 panic한 thread가 poison한 lock을 복구하며, 이 in-crate 시험은 권한 상태, 제거 요청, 문서 요청 relay, endpoint 연결과 구독, surface 등록부, window 기록, sidecar 전송 상태, trace switch, sampler와 그 등록부, workspace 쓰기, log notice, log index의 대기 경로, deep link queue, 보고된 asset 경로, process lock hook, policy watch hook, 보류된 modal 응답의 lock을 poison시킨다. Go mutex는 poison되지 않으므로 Go host에는 시험할 lock 상태가 없다 |
-| H14 | `src/projects_test.go` | `tests/project_data_order/` | Go test는 export되지 않은 service state와 function에 접근하기 위해 `package host`를 사용한다. Tauri test는 private state와 handler를 public으로 만들지 않고 검사하도록 `windows.rs` 및 `bindings.rs`의 child module이다. 두 owner의 project-data-order suite는 각 host의 `projectShown` 및 ready catch-up 경계를 검증한다. Rust test 파일은 owner module별로 묶여 있으며 물리 디렉터리는 compiler가 요구하지 않는다. |
-| H15 | 없음 | `tests/view_source_stream/bindings_test.rs`, `tests/view_source_stream/stream_test.rs` | Tauri는 framework IPC로 `Channel<ViewSourceEvent>`를 받으므로 channel 등록과 전송 수명주기만 해당 adapter test를 가진다. Wails에는 typed channel object나 전송 결과 API가 없다. 공통 등록 순서, 폐기된 owner 차단, listener 정리는 Wails owner test에서 계속 확인한다. 두 suite 모두 fake를 사용하며 live framework IPC 전달은 검증하지 않는다. 경로는 정확한 두 파일로 제한하고 나머지 view-generation test는 포함하지 않는다. |
+| H14 | `src/projects_test.go` | `tests/project_data_order/project_data_order_test.rs` | Go test는 export되지 않은 service state와 function에 접근하기 위해 `package host`를 사용한다. Rust test는 private state를 public으로 만들지 않고 검사하도록 `windows.rs`의 child module이다. 두 owner의 project-data-order suite는 각 language host library의 `projectShown` 및 ready catch-up 경계를 검증한다. Tauri framework adapter 명령의 child test는 H30 행이다. Rust test 파일은 owner module별로 묶여 있으며 물리 디렉터리는 compiler가 요구하지 않는다. |
+| H15 | 없음 | `tests/view_source_stream/stream_test.rs` | Tauri는 framework IPC로 `Channel<ViewSourceEvent>`를 받으므로 그 channel의 전송 수명주기와 이 test는 Rust language host library에만 있다. 명령의 등록 test는 H30 행이다. Wails에는 typed channel object나 전송 결과 API가 없다. 공통 등록 순서, 폐기된 owner 차단, listener 정리는 Wails owner test에서 계속 확인한다. 이 suite는 fake를 사용하며 live framework IPC 전달은 검증하지 않는다. 경로는 정확한 한 파일로 제한하고 나머지 view-generation test는 포함하지 않는다. |
 | H16 | `src/view_call_record_test.go`, `src/view_error_test.go` | `tests/view_call_record_test.rs`, `tests/view_error_test.rs` | 이 Go test는 공개 `ViewMessage`를 호출하기 전에 export되지 않은 `Surfaces` field와 helper에 접근하므로 `package host`를 사용한다. Rust test는 public `ViewChannels` method를 호출하며 private module 접근이 필요하지 않고 `tests/` 위치도 compiler 요구사항이 아니다. 양쪽은 같은 view.call/view.reply 기록과 수락된 view.error 기록을 확인한다. 이 예외는 정확한 test 배치 차이만 기록하며 제거된 RegisterView API를 되살리거나 동작 차이를 주장하지 않는다. |
 | H17 | 없음 | `tests/view_source_origins/view_generation_test.rs` | 이 Rust test 파일은 private view-origin 및 reply-dispatch helper를 검사하도록 `documents.rs`의 child module로 포함된다. 공통 generation, stale-pull, page-identity, reply-order assertion은 Wails `src/surfaces_test.go`와 짝인 Tauri owner case에 남고, stale reply settlement 경계는 `TestViewReplyRetainsOpenCallWhenGenerationRetiresBeforePost`, `TestViewReplyPostRefusalLeavesCallOpenForProcessEnd`가 검사한다. Go는 private `Surfaces` fixture에 `package host`가 필요하며 Rust는 private document state를 위해 `documents.rs` child module이 필요하다. 이 정확한 경로만 배치 차이로 허용하며 공통 동작 검사는 면제하지 않는다. |
 | H18 | `src/platform/darwin/document_viewport_marker.go` | 없음 | 이 diagnostic bridge는 `//go:build darwin && diagnostics`와 cgo Objective-C preamble이 필요한 Go 파일에 둔다. Rust는 같은 native operation을 `src/platform/darwin/document.rs`에서 item 단위 `#[cfg(feature = "diagnostics")]`로 연결한다. 이 행은 정확한 파일 배치 차이만 허용하며 두 host의 endpoint와 native marker 동작은 동일하게 유지한다. |
-| H19 | `tests/platform/darwin/main_thread_stack_test.go`, `tests/platform/darwin/stack_sampler.go` | 없음 | 이 test는 Wails host가 main-thread 단계를 실행하는 동안 main thread의 stack pointer를 표본하고, main thread의 stack 밖에 있는 표본에서 실패한다([Wails host의 main thread](#wails-host의-main-thread)). Go heap이 가진 goroutine stack에서는 Go code만 실행된다. Tauri host의 main thread는 main thread의 stack에서 Rust를 실행하므로 test할 그런 상태가 없다. Go는 test 파일에서 cgo를 허용하지 않으므로 sampler는 따로 파일을 둔다. |
-| H20 | `src/platform/darwin/main_thread.h` | 없음 | 이 header는 Wails framework의 main-thread worker 함수(`wailsRunOnWorker`, `wailsRunOnMain`)를 선언한다. darwin layer의 각 callback은 이 함수로 Go 함수를 worker에서 실행하고, 각 native call은 그 본문을 main thread에서 실행한다([Wails host의 main thread](#wails-host의-main-thread)). Tauri host는 main thread에서 Rust를 실행하므로 worker가 필요 없다 |
+| H20 | `src/platform/darwin/main_thread.h`, `src/platform/darwin/main_thread.m` | 없음 | 이 header는 `hostRunOnWorker`와 `hostRunOnMain`을 선언한다. darwin layer의 각 callback은 이 함수로 Go 함수를 worker에서 실행하고, 각 native call은 그 본문을 main thread에서 실행하며, framework adapter가 library 시작 전에 이 함수를 설치한다. `main_thread.m`은 설치된 함수를 가진다([Wails host의 main thread](#wails-host의-main-thread)). Rust language host library는 Tauri host의 main thread에서 실행되므로 worker가 필요 없다 |
 | H21 | 없음 | `src/surface_close_test.rs` | Tauri의 surface close는 `close_surface`가 잡은 창 기록으로 main thread에 넣어져 실행되므로, 실행될 때 창이 아직 열려 있는지 판정한다. 이 `documents.rs`의 자식 테스트는 그 private view-origin 등록에 닿는다. Wails의 surface close(`closeSurfaceDocuments`)는 자기 창의 `Surfaces` 상태에서 실행되고 창을 label로 찾지 않으므로 그런 경우가 없다 |
 | H22 | 없음 | `src/presentation_end_test.rs` | presentation이나 presentation 한도 뒤에 Tauri가 presentation 대기를 끝내는 일은 main thread에 넣어져 실행되고 자기 창의 기록을 label로 찾으므로, 실행될 때 창이 아직 열려 있는지 판정한다. 이 `documents.rs`의 자식 테스트는 창의 private 기록에 닿는다. Wails의 종료(`endPresentationWaitFor`)는 넣어진 호출이 잡은 자기 창의 `Surfaces` 상태에서 실행되고 창을 label로 찾지 않으므로 그런 경우가 없다 |
-| H23 | 없음 | `src/sidecars_route_test.rs` | Tauri의 사이드카 메시지 경로는 창이 닫히면 제거되는 창 record를 조회하므로 창이 열려 있는지 판단한다. Wails 경로는 살아 있는 surfaces의 route를 읽으므로 그 조회가 없다. |
-| H24 | none | `tests/support/platform/platform.rs`, `tests/support/platform/darwin/endpoint_client.rs`, `tests/support/platform/windows/unsupported.rs` | Rust integration test는 서로 다른 crate여서 endpoint socket의 이 client를 함께 쓰고, client가 Unix socket API를 담으므로 운영체제마다 파일을 둔다. Go test는 모든 platform에서 compile되는 `net`으로 연결하므로 Wails 호스트에는 이 파일이 없다 |
-| E1 | `diagnostics.heap.profile` | 없음 | 이 endpoint method는 Go runtime의 heap profile(`runtime/pprof`)을 쓴다. Rust host에는 profile할 garbage-collected heap이 없다. ID가 E로 시작하는 행은 endpoint method를 나열하고 `make host-parity-check`가 그 행을 읽는다 |
-| A1 | 내용만 다름 | 내용만 다름 | `runtime/index.js`가 각 프레임워크의 호출 방식을 사용한다 |
-| A2 | 없음 | `build.rs` | Tauri는 `tauri_build::build()`를 요구한다 |
-| A3 | 없음 | `tauri.conf.json`, `capabilities/`, `icons/`, `gen/` | Tauri 설정 |
-| A4 | `go.mod`, `go.sum` | `Cargo.toml`, `Cargo.lock` | 언어마다 매니페스트와 잠금 파일이 다르며, 호스트 패키지에도 같은 차이가 있다 |
-| A5 | `test/support/wails-runtime-loader.mjs` | 없음 | Wails page는 runtime module을 asset server(`/wails/runtime.js`)에서 import하는데 시험 실행에는 그 파일이 없으므로, loader가 그 specifier에 시험이 제공하는 module을 준다. Tauri page는 `window.__TAURI__`를 읽으며 시험이 직접 정한다 |
+| H23 | 없음 | `src/sidecars_route_test.rs` | Tauri의 사이드카 메시지 경로는 창이 닫히면 제거되는 창 record를 조회하므로 창이 열려 있는지 판단한다. Go 경로는 살아 있는 surfaces의 route를 읽으므로 그 조회가 없다. |
+| H24 | 없음 | `tests/support/platform/platform.rs`, `tests/support/platform/darwin/endpoint_client.rs`, `tests/support/platform/windows/unsupported.rs` | Rust 통합 test는 엔드포인트 소켓의 이 client를 공유하는 별개의 crate이며, client가 Unix socket API를 가지므로 운영체제마다 파일이 있다. Go test는 모든 platform이 compile하는 `net`으로 연결하므로 Go language host library에는 그런 파일이 없다 |
+| H25 | `tests/platform/darwin/stack_sampler.go` | 없음 | 이 package는 Go framework adapter의 test를 위해 main thread의 stack pointer를 표본한다(H19 행). Go는 test 파일에서 cgo를 허용하지 않으므로 sampler는 따로 package를 둔다. Tauri host의 main thread는 main thread의 stack에서 Rust를 실행하므로 그런 test가 없다 |
+| H26 | `go.mod`, `go.sum` | `Cargo.toml` | 언어마다 매니페스트와 잠금 파일이 다르다. Rust 패키지의 잠금 파일은 워크스페이스의 `Cargo.lock`이다 |
+| H27 | `src/bindings.go`, `src/plugins_starter_test.go` | 없음 | Go page의 host 호출은 `bindings.go`에 있는 `Host`의 메서드이며, Wails framework adapter의 바인딩 타입이 `Bindings`를 통해 닿는다. `plugins_starter_test.go`는 그 진입점으로 그중 하나를 호출한다. Rust page의 host 호출은 Tauri 명령이며, Tauri framework adapter가 자기 `src/bindings.rs`에 그 test와 함께 선언한다(H30 행) |
+| H28 | 없음 | `tests/support/framework.rs` | Rust 통합 test는 framework port의 이 fixture로 library의 창과 웹뷰 handle을 만든다. framework가 필요한 Go test는 `package host`의 test이며, 그 fixture는 `src/projects_test.go`에 있다 |
+| E1 | `diagnostics.heap.profile` | 없음 | 이 endpoint method는 Go runtime의 heap profile(`runtime/pprof`)을 쓴다. Rust language host library에는 profile할 garbage-collected heap이 없다. ID가 E로 시작하는 행은 endpoint method를 나열하고 `make host-parity-check`가 그 행을 읽는다 |
 | C1 | `src/cmd/sok/main.go` | `src/main.rs` | Go 명령은 자기 `main` package 폴더가 필요하고, Rust binary target은 library root 옆의 `src/main.rs`다 |
 | C2 | `src/diagnostics_test.go`, `src/dev_test.go`, `tests/build_test.go` | 없음 | Go 파일은 build 제약으로 한 build에만 속하므로, `sok`의 진단 build는 `diagnostics && !dev` 단위 test에서 `capture` 요청과 release 식별자를, `dev` build는 `dev` 단위 test에서 `.dev` 식별자를, 다른 build는 `!diagnostics` test에서 사용법 오류와 release 식별자를 검사한다. Rust는 `tests/sok_test.rs`에서 `cfg(feature = "diagnostics")`와 `cfg(feature = "dev")`로 build를 검사한다 |
 | C3 | `src/dev.go` | 없음 | Go는 `dev` build 태그만 컴파일하는 파일의 `init`으로 `.dev` 식별자를 고르고, Rust는 `src/identity.rs` 안의 `cfg!(feature = "dev")`로 고르므로 따로 파일이 없다 |
 | C4 | none | `tests/support/folder.rs` | `sok` 시험을 위한 H12와 같은 guard다. `sok`의 Go 시험은 `testing.T.TempDir`를 쓴다. 시험은 다른 패키지의 경로를 읽지 않으므로 호스트와 `sok` 시험 crate가 각자 파일을 둔다 |
 | C5 | none | `src/event_log_lock_test.rs` | `sok`의 Rust writer는 panic한 thread가 poison한 lock을 복구하며, 이 in-crate 시험은 write observer의 lock을 poison시킨다. Go mutex는 poison되지 않으므로 Go writer에는 시험할 lock 상태가 없다 |
 | C6 | `tests/process_wait_test.go` | `src/process_wait_test.rs` | Rust test는 비공개 injected `run_with_process_wait` 경계를 public으로 만들지 않고 호출하도록 `sok.rs`의 child module로 둔다. Go test는 external test package에서 공개 `sok.Run`을 호출한다. 양쪽은 공유 `cli.process-wait.platform-error-is-reported` 결과를 검사한다. 이 정확한 두 경로는 비공개 test 배치 차이만 기록하며 공통 동작 검사를 면제하지 않는다 |
+| C8 | `go.mod`, `go.sum` | `Cargo.toml` | 언어마다 매니페스트와 잠금 파일이 다르다. Rust 패키지의 잠금 파일은 워크스페이스의 `Cargo.lock`이다 |
+
+### Framework 표
+
+| ID | Wails | Tauri | 이유 |
+| --- | --- | --- | --- |
+| H9 | `tests/framework_log_test.go` | 없음 | 프레임워크 logger의 level(`FrameworkLogLevel`)은 Wails framework adapter에만 있다. Wails asset server는 요청한 파일마다 level `info`로 한 줄을 쓰고, Tauri framework는 표준 오류에 그런 줄을 쓰지 않는다 |
+| H19 | `tests/platform/darwin/main_thread_stack_test.go` | 없음 | 이 test는 Wails host가 Wails framework adapter가 설치한 함수로 main-thread 단계를 실행하는 동안 main thread의 stack pointer를 표본하고, main thread의 stack 밖에 있는 표본에서 실패한다([Wails host의 main thread](#wails-host의-main-thread)). sampler는 H25 행이다. Go heap이 가진 goroutine stack에서는 Go code만 실행된다. Tauri host의 main thread는 main thread의 stack에서 Rust를 실행하므로 test할 그런 상태가 없다. |
+| H29 | `go.mod`, `go.sum` | `Cargo.toml` | 언어마다 매니페스트와 잠금 파일이 다르다. Rust 패키지의 잠금 파일은 워크스페이스의 `Cargo.lock`이다 |
+| H30 | 없음 | `src/plugins_starter_test.rs`, `tests/project_data_order/bindings_test.rs`, `tests/surface_layout/bindings_test.rs`, `tests/view_source_stream/bindings_test.rs` | Rust page의 host 호출은 `src/bindings.rs`의 Tauri 명령이고 이 test는 그 child module이므로, private 명령과 그 등록을 public으로 만들지 않고 닿는다. Wails framework adapter의 바인딩 타입은 메서드가 하나이며, 각 호출을 Go language host library로 넘긴다(H27 행) |
+| H31 | `src/platform/darwin/main_thread.go` | `src/platform/platform.rs`, `src/platform/windows/windows.rs` | Wails framework adapter는 darwin build만 compile하는 자기 darwin package의 `init`에서 Wails fork의 main-thread 함수(`wailsRunOnWorker`, `wailsRunOnMain`)를 Go language host library의 `hostRunOnWorker`와 `hostRunOnMain`으로 설치한다(H20 행). `darwin.go`는 모든 build가 이 package를 가져오도록 패키지 문서를 가진다. Tauri host는 main thread에서 Rust를 실행하므로 worker가 필요 없다. Tauri framework adapter는 macOS에만 있는 Tauri 함수(창의 title bar, 웹 뷰와 창의 native handle, 실행 시 활성화)를 호출한다. Rust는 운영체제의 구현을 `cfg`로 고르므로, `platform.rs`가 이 함수들을 `darwin/darwin.rs`와 `windows/windows.rs`에서 고른다. `windows/windows.rs`의 함수는 "not implemented on windows" 오류를 돌려준다 |
+| A1 | 내용만 다름 | 내용만 다름 | `runtime/index.js`가 각 프레임워크의 호출 방식을 사용한다 |
+| A2 | 없음 | `build.rs` | Tauri는 `tauri_build::build()`를 요구한다 |
+| A3 | 없음 | `tauri.conf.json`, `capabilities/`, `icons/`, `gen/` | Tauri 설정 |
+| A4 | `go.mod`, `go.sum` | `Cargo.toml`, `Cargo.lock` | 언어마다 매니페스트와 잠금 파일이 다르다 |
+| A5 | `test/support/wails-runtime-loader.mjs` | 없음 | Wails page는 runtime module을 asset server(`/wails/runtime.js`)에서 import하는데 시험 실행에는 그 파일이 없으므로, loader가 그 specifier에 시험이 제공하는 module을 준다. Tauri page는 `window.__TAURI__`를 읽으며 시험이 직접 정한다 |
 
 ## Memory pressure
 
@@ -260,19 +316,19 @@ apps/wailsv3/                  apps/tauriv2/
   (없음)                         tauri.conf.json, capabilities/, icons/, gen/   차이 A3
 ```
 
-`apps/wailsv3/go.mod`는 호스트 모듈을 요구한다. `apps/tauriv2/Cargo.toml`은 경로로 지정한 `soksak-host-tauriv2`와 `tauri`에 의존한다. `apps/tauriv2/build.rs`는 `tauri_build::build()`만 호출한다.
+`apps/wailsv3/go.mod`는 Go language host library의 모듈과 Wails framework adapter의 모듈을 요구한다. `apps/tauriv2/Cargo.toml`은 경로로 지정한 `soksak-host-tauriv2`와 `tauri`에 의존한다. `apps/tauriv2/build.rs`는 `tauri_build::build()`만 호출한다.
 
-Wails 바인딩 서비스 이름은 `github.com/soksak-app/core/packages/host/wailsv3/src.Bindings`다. Wails가 Go 패키지 경로와 타입 이름으로 이 이름을 만들고, `apps/wailsv3/runtime/index.js`가 이를 사용한다. 이 서비스의 바인딩 메서드는 `Call(method, args)` 하나이며, host의 내보낸 메서드 `method`를 이름으로 찾아 실행한다(`binding_record.go`). 그래서 main page의 모든 호출은 event `host.binding.call`을 저장하는 한 곳을 지나고, 선택적 context 뒤에 `json.RawMessage`가 아닌 매개변수를 가지거나 선택적 값과 선택적 오류가 아닌 결과를 가진 host 메서드는 그 메서드의 이름을 말하는 오류로 host 시작을 멈춘다. Tauri host는 모든 command를 `bindings!` 매크로(`bindings.rs`) 안에서 정의한다. 매크로는 각 command에 첫 인자로 `BindingCall`을 주고, command의 결과로 그것을 끝내며, 등록을 생성하므로 등록된 command가 곧 기록되는 command다. Tauri는 command의 invoke 결과를 프레임워크의 resolver에만 넘기고 host가 그것을 감쌀 수 없으므로, 매크로는 resolver가 아니라 command 함수를 감싼다.
+Wails 바인딩 서비스 이름은 `github.com/soksak-app/core/packages/host/wailsv3/src.Bindings`다. Wails가 Wails framework adapter의 바인딩 타입 `Bindings`의 Go 패키지 경로와 타입 이름으로 이 이름을 만들고, `apps/wailsv3/runtime/index.js`가 이를 사용한다. 이 서비스의 바인딩 메서드는 `Call(method, args)` 하나이며, 각 호출을 Go language host library의 바인딩으로 넘긴다. 바인딩은 `Host`의 내보낸 메서드 `method`를 이름으로 찾아 실행한다(`binding_record.go`). 그래서 main page의 모든 호출은 event `host.binding.call`을 저장하는 한 곳을 지나고, 선택적 context 뒤에 `json.RawMessage`가 아닌 매개변수를 가지거나 선택적 값과 선택적 오류가 아닌 결과를 가진 host 메서드는 그 메서드의 이름을 말하는 오류로 host 시작을 멈춘다. Tauri framework adapter는 모든 command를 `bindings!` 매크로(`bindings.rs`) 안에서 정의한다. 매크로는 각 command에 첫 인자로 `BindingCall`을 주고, command의 결과로 그것을 끝내며, 등록을 생성하므로 등록된 command가 곧 기록되는 command다. Tauri는 command의 invoke 결과를 프레임워크의 resolver에만 넘기고 host가 그것을 감쌀 수 없으므로, 매크로는 resolver가 아니라 command 함수를 감싼다.
 
 ## Command line 트리
 
 ```
-packages/sok/wailsv3/          packages/sok/tauriv2/
+packages/sok/go/          packages/sok/rust/
   src/sok.go  (package sok)      src/sok.rs  (library root)
   src/<role>.go                  src/<role>.rs
   src/cmd/sok/main.go            src/main.rs           차이 C1
   tests/<role>_test.go           tests/<role>_test.rs
-  go.mod, go.sum                 Cargo.toml            차이 A4
+  go.mod, go.sum                 Cargo.toml            차이 C8
 ```
 
 이 쌍은 호스트 패키지와 같은 파일 이름 규칙과 구조 검사를 따른다. 그 contract case는 [호스트 계약](host-contract.ko.md)에 `cli.`로 나열한다.
@@ -285,7 +341,7 @@ packages/sok/wailsv3/          packages/sok/tauriv2/
 
 ## 프런트엔드와 실행 파일
 
-`soksak-stage`는 프런트엔드를 `apps/<app>/src/frontend/`에 배치하며, 각 애플리케이션의 `.gitignore`가 이 디렉터리를 제외한다. `go:embed`는 포함하는 패키지 디렉터리 아래의 파일만 포함할 수 있으므로 Wails는 `src/main.go`의 `//go:embed all:frontend`로 이 디렉터리를 포함한다. `host.Run`은 `frontend/`를 자산 루트로 사용한다. Tauri는 `tauri.conf.json`의 `"frontendDist": "src/frontend"`로 이 디렉터리를 읽고, `src/main.rs`는 `frontend/background.js`를 포함한다.
+`soksak-stage`는 프런트엔드를 `apps/<app>/src/frontend/`에 배치하며, 각 애플리케이션의 `.gitignore`가 이 디렉터리를 제외한다. `go:embed`는 포함하는 패키지 디렉터리 아래의 파일만 포함할 수 있으므로 Wails는 `src/main.go`의 `//go:embed all:frontend`로 이 디렉터리를 포함한다. Go language host library의 `Prepare`는 `frontend/`를 자산 루트로 사용한다. Tauri는 `tauri.conf.json`의 `"frontendDist": "src/frontend"`로 이 디렉터리를 읽고, `src/main.rs`는 `frontend/background.js`를 포함한다.
 
 macOS에서 각 애플리케이션은 애플리케이션 번들에서 실행된다. 운영체제의 알림 센터가 번들에서 실행된 프로세스만 받기 때문이다([플러그인](plugins.ko.md#탭-알림)). 두 release 애플리케이션은 표시 이름 `soksak`의 `soksak.app`이다. release 번들은 `target/release/wailsv3/soksak.app`과 `target/release/tauriv2/soksak.app`이고, 번들 식별자는 설정 디렉터리의 식별자인 `app.soksak.wails`와 `app.soksak.tauri`다([projects](projects.ko.md#저장)). 디버그 번들은 release 애플리케이션 옆에서 함께 실행되도록 이름을 유지한다. `target/debug/soksak-wailsv3.app/Contents/MacOS/soksak-wailsv3`와 `target/debug/soksak-tauriv2.app/Contents/MacOS/soksak-tauriv2`이며, 번들 이름은 실행 파일 이름이고 식별자는 `app.soksak.wails.dev`와 `app.soksak.tauri.dev`다. 각 번들 안의 실행 파일은 `soksak-wailsv3` 또는 `soksak-tauriv2`다. 빌드는 각 번들의 `Contents/Info.plist`를 release 값을 선언한 `apps/<app>/platform/darwin/Info.plist`에서 쓰고, 디버그 빌드는 번들 식별자와 번들 이름을 바꾼다. Dock이 보이는 soksak 아이콘 `apps/<app>/platform/darwin/AppIcon.icns`를 `Contents/Resources/`에 복사하며, 번들에 ad hoc 서명을 하고 LaunchServices에 다시 등록한다. Dock은 등록된 번들의 아이콘을 보이며, 번들 안의 파일만 바뀌면 LaunchServices는 번들을 다시 읽지 않는다. 번들에는 플러그인도 사이드카도 없다. 호스트는 설정 디렉터리에 설치된 플러그인을 제공하고 사이드카를 시작하며, `plugins/installed.json`이 기록한 폴더를 쓴다([설치](installation.ko.md#설치된-plugin-제공)).
 
@@ -293,9 +349,9 @@ macOS에서 각 애플리케이션은 애플리케이션 번들에서 실행된�
 
 | 파일 | 내용 |
 | --- | --- |
-| `go.work` | `apps/wailsv3`, `packages/host/wailsv3`, `packages/sok/wailsv3`을 사용하고, 호스트 모듈과 command line 모듈 `v0.0.0`을 `./packages/host/wailsv3`와 `./packages/sok/wailsv3`로 대체한다 |
-| `Cargo.toml` | 멤버 `apps/tauriv2`, `packages/host/tauriv2`, `packages/sok/tauriv2`, Tauri 크레이트에 대한 공용 `[patch.crates-io]`, `dev` 프로필을 가진 워크스페이스 |
-| `Cargo.lock` | 두 크레이트가 공유하는 하나의 잠금 파일 |
+| `go.work` | `apps/wailsv3`, `packages/host/go`, `packages/host/wailsv3`, `packages/sok/go`를 사용하고, Go language host library, Wails framework adapter, command line의 모듈 `v0.0.0`을 `./packages/host/go`, `./packages/host/wailsv3`, `./packages/sok/go`로 대체한다 |
+| `Cargo.toml` | 멤버 `apps/tauriv2`, `packages/host/rust`, `packages/host/tauriv2`, `packages/sok/rust`, Tauri 크레이트에 대한 공용 `[patch.crates-io]`, `dev` 프로필을 가진 워크스페이스 |
+| `Cargo.lock` | 워크스페이스의 크레이트가 공유하는 하나의 잠금 파일 |
 | `target/` | Cargo 출력과 두 애플리케이션 실행 파일. `.gitignore`가 제외한다 |
 
 ## 명령
@@ -307,7 +363,7 @@ macOS에서 각 애플리케이션은 애플리케이션 번들에서 실행된�
 | `make wailsv3`, `make tauriv2` | 디버그 실행 파일을 빌드하고 실행한다 |
 | `make registry`, `make install-plugins CONFIG=DIR` | `scripts/workspace-registry.json`이 선언한 plugin·sidecar repository로 `target/registry`에 workspace registry를 만들고([Repository](plugins.ko.md#repository)), 그 플러그인을 설정 디렉터리에 설치한다 |
 | `make rust-clippy-check` | Rust workspace의 모든 package와 test를 진단 feature가 있을 때와 없을 때 `-D warnings`로 clippy 검사한다. `make native-test`가 실행한다 |
-| `make native-test` | `make -C native/darwin test`, `packages/host/wailsv3`의 `go test`, `cargo test -p soksak-host-tauriv2`를 실행한다. 호스트 검사는 진단 빌드와 일반 빌드로 각각 실행한다. 각 sidecar repository는 자기 test를 실행한다 |
+| `make native-test` | `make -C native/darwin test`, `packages/host/go`와 `packages/host/wailsv3`의 `go test`, `cargo test -p soksak-host -p soksak-host-tauriv2`를 실행한다. 호스트 검사는 진단 빌드와 일반 빌드로 각각 실행한다. 각 sidecar repository는 자기 test를 실행한다 |
 | `make platforms` | `scripts/check-platforms.mjs`를 실행한다 |
 | `make hosts-check` | `scripts/check-hosts.mjs`를 실행한다 |
 
@@ -442,7 +498,7 @@ N1은 `native/darwin`의 변경이다: `sp_surface_create`는 main web view 대�
 
 ### Operation group
 
-Go host의 darwin platform layer에는 operation이 170개 있다: `Platform` interface(`packages/host/wailsv3/src/platform/platform.go`)의 method 145개와, 그 optional interface와 diagnostic build의 method 25개다. Surface layout group은 main web view의 block, caller의 Go function으로 만드는 block, 그리고 caller의 Go function으로 하는 N1 layout observer 등록을 추가하며, 그런 function은 각각 `hostRunOnWorker`를 통해 worker에서 실행되고, 이 group의 settled wait는 block을 받는다. 표는 operation을 파일별로 묶고 mygo host가 각 group을 어떻게 제공하는지 적는다.
+Go host의 darwin platform layer에는 operation이 170개 있다: `Platform` interface(`packages/host/go/src/platform/platform.go`)의 method 145개와, 그 optional interface와 diagnostic build의 method 25개다. Surface layout group은 main web view의 block, caller의 Go function으로 만드는 block, 그리고 caller의 Go function으로 하는 N1 layout observer 등록을 추가하며, 그런 function은 각각 `hostRunOnWorker`를 통해 worker에서 실행되고, 이 group의 settled wait는 block을 받는다. 표는 operation을 파일별로 묶고 mygo host가 각 group을 어떻게 제공하는지 적는다.
 
 | Group(`src/platform/darwin`의 파일) | Operation | mygo host |
 | --- | --- | --- |
@@ -621,7 +677,9 @@ judge는 다음 규칙을 적용한다:
 
 ## 구조 검사
 
-`scripts/check-hosts.mjs`는 `packages/host/wailsv3`와 `packages/host/tauriv2`, `apps/wailsv3`와 `apps/tauriv2`를 비교한다. `.go`와 `.rs` 파일은 확장자를 제외한 상대 경로로, 그 밖의 파일은 상대 경로로 비교한다. 한쪽에만 있는 파일은 허용 차이 표의 차이 ID와 함께 목록에 있을 때만 통과한다. 검사는 Git이 추적하거나 추적할 파일만 읽으므로 생성된 `src/frontend/` 파일은 비교하지 않는다.
+`scripts/check-hosts.mjs`는 네 쌍을 비교한다: [언어 표](#언어-표)로 `packages/host/go`와 `packages/host/rust`, `packages/sok/go`와 `packages/sok/rust`를, [Framework 표](#framework-표)로 `packages/host/wailsv3`와 `packages/host/tauriv2`, `apps/wailsv3`와 `apps/tauriv2`를 비교한다. `.go`와 `.rs` 파일은 확장자를 제외한 상대 경로로, 그 밖의 파일은 상대 경로로 비교한다. 한쪽에만 있는 파일은 그 쌍의 표에서 ID가 그 쌍의 글자(호스트 패키지는 H, command line은 C, 애플리케이션은 A)로 시작하는 행이 그 파일을 나열할 때만 통과한다. 검사는 Git이 추적하거나 추적할 파일만 읽으므로 생성된 `src/frontend/` 파일은 비교하지 않는다.
+
+경로 prefix로 파일을 고르는 검사의 audit은 prefix 하나라도 파일을 고르지 못하면 실패한다. main-thread audit은 `packages/host/go/src/platform/darwin/`을, 해석하지 않은 명령 인자 audit은 `packages/host/tauriv2/src/`의 Rust source를, stub 검사는 language host library, framework adapter, `native/darwin`의 `src` 폴더를 쓴다. Library import audit은 `packages/host/go`의 Go 파일이 Wails의 패키지를 가져오거나 그 `go.mod`가 Wails를 요구할 때, 그리고 `packages/host/rust`의 Rust 파일이 Tauri의 크레이트를 이름으로 부르거나 그 `Cargo.toml`이 그런 크레이트에 의존할 때 실패한다.
 
 `scripts/check-platforms.mjs`는 `platform/<os>/` 밖에서 `_darwin`, `_windows` 등의 운영체제 접미사가 붙은 파일 이름과 Go 파일의 `runtime.GOOS` 및 운영체제 build tag, Rust 파일의 운영체제 `cfg`, JavaScript 파일의 실행 가능한 Node `process.platform` member expression을 보고한다. JavaScript는 syntax로 분석하므로 string과 comment는 selector가 아니다. 유일한 metadata 예외는 `environment()` 함수가 반환하는 object의 `platform` property에 쓰는 `process.platform`, 그리고 test 경로의 `assert.equal(result.environment.platform, process.platform)` 또는 `assert.strictEqual`이다. test 경로 안의 selector를 포함해 다른 모든 실행 가능한 사용은 finding이다. `native/<os>/`, `scripts/check-build-environment.sh`, `platform/platform.{go,rs,js}`, 검사 파일 자신은 건너뛴다. `Cargo.toml`은 읽지 않으므로 대상별 의존성 표는 허용된다.
 

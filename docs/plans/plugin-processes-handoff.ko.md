@@ -91,8 +91,8 @@ view branch `feat/view-kind-F212.7`은 2026-10-21에 main에 합쳐지고 지워
 |---|---|
 | Node 시험 파일 하나 | `node --test packages/<pkg>/test/<file>.test.mjs` |
 | Node 시험 반복 | `make node-repeat FILE=<file> NAME=<pattern> COUNT=<n>` |
-| Go 시험 | `make go-repeat PACKAGE=./packages/host/wailsv3/tests COUNT=1 [TEST=<regexp>]` (`./packages/sok/wailsv3/tests`, `./packages/host/wailsv3/src`도) |
-| Rust 시험 | `make rust-repeat PACKAGE=soksak-host-tauriv2 COUNT=1 [TEST=<name>]`, `PACKAGE=soksak-sok-tauriv2` |
+| Go 시험 | `make go-repeat PACKAGE=./packages/host/go/tests COUNT=1 [TEST=<regexp>]` (`./packages/host/go/src`, `./packages/host/wailsv3/tests`, `./packages/sok/go/tests`도) |
+| Rust 시험 | `make rust-repeat PACKAGE=soksak-host-tauriv2 COUNT=1 [TEST=<name>]`, `PACKAGE=soksak-sok` |
 | Rust 순서 의존 | `make rust-tests-alone PACKAGE=<package>` |
 | Native 시험 | `make -C native/darwin repeat TEST=<name>_test COUNT=<n>` |
 | 문서, link, 번역, 기록 | `make docs-check` |

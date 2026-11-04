@@ -49,29 +49,29 @@
 라운드 4 기록의 D8.2~D8.5 부모 확인:
 
 - D8.1 가림: `groupResults`(`check-host-contract.mjs:91-100`)는 실행과 이름으로만 묶고, `statusOf`(`:103-114`)는 `host.runs`의 모든 일치를 취한다. `host.runs`에는 wailsv3의 sok 실행이 든다(`GO_RUNS`, `:173-179`). 확인됨: 호스트의 통과가 sok 선언을 덮는다.
-- D8.2: `packages/host/tauriv2`(테스트 601개)와 `packages/sok/tauriv2`(테스트 139개)의 `#[test]` 잎 이름을 훑어 두 크레이트 모두 중복 잎이 없었다. 새 규칙은 현재 트리를 깨지 않는다. `discoverRust`가 실행 파일마다 목록을 내므로(`test-discovery.mjs:79-84`) 합산 검사가 모든 타겟을 덮는다.
+- D8.2: 지금의 `packages/host/rust`와 `packages/host/tauriv2`인 Rust host 코드(테스트 601개)와 `packages/sok/rust`(테스트 139개)의 `#[test]` 잎 이름을 훑어 어느 크레이트에도 중복 잎이 없었다. 새 규칙은 현재 트리를 깨지 않는다. `discoverRust`가 실행 파일마다 목록을 내므로(`test-discovery.mjs:79-84`) 합산 검사가 모든 타겟을 덮는다.
 - D8.3: `parseDeclarations`는 모든 `#[` 줄에서 반환한다(`check-host-contract.mjs:78`). 그래서 선언 위나 선언과 `fn` 사이의 `#[should_panic]`과 `#[ignore]`는 조용히 통과한다. Rust 선언 752개를 훑어 허용 집합 밖의 속성이 없었다. `endpoint_test.rs:176-178`과 `sok_test.rs:333-334`의 `cfg(feature)`와 `cfg(not(feature))` 줄이 Green 사례다.
 - D8.4: `docs/spec/host-contract.md:22`은 `packages/host/...` 경로만 나열하므로 sok 경로가 빠져 있다고 한 말이 맞다.
 - D8.5: `scripts/test/check-host-contract.test.mjs`는 있으나 소유자 규칙, 잎 규칙, 속성 규칙의 사례가 없다. 사례는 새 작업이다.
 
-결정: 호스트 계약 검사는 sok 선언(`packages/sok/wailsv3/tests`, `packages/sok/wailsv3/src/*_test.go`, `packages/sok/tauriv2/tests`, `packages/sok/tauriv2/src`)을 계속 읽고, 선언을 결과와 맞추는 방식을 바꾼다. F218-2.4-1 변경은 이미 `origin/main`에 있으며 수정(amend)하지 않는다. 수정은 새 변경이다.
+결정: 호스트 계약 검사는 sok 선언(`packages/sok/go/tests`, `packages/sok/go/src/*_test.go`, `packages/sok/rust/tests`, `packages/sok/rust/src`)을 계속 읽고, 선언을 결과와 맞추는 방식을 바꾼다. F218-2.4-1 변경은 이미 `origin/main`에 있으며 수정(amend)하지 않는다. 수정은 새 변경이다.
 
 근거:
 
 - `scripts/check-host-contract.mjs:166-167`은 각 호스트 선언을 위해 sok 테스트 폴더와 소스 폴더를 읽는다.
-- 같은 테스트 이름이 두 패키지에 있다: `packages/host/wailsv3/tests/plugins_test.go:92-93`은 `TestPluginsStateReportsTheRegistryAndTheInstallation`에 `plugins.state.reports-registry-and-installed`를 선언하고, `packages/sok/wailsv3/tests/plugins_test.go:296-297`은 같은 이름에 `cli.plugin.state-reads-registry-and-installed`를 선언한다.
+- 같은 테스트 이름이 두 패키지에 있다: `packages/host/go/tests/plugins_test.go:92-93`은 `TestPluginsStateReportsTheRegistryAndTheInstallation`에 `plugins.state.reports-registry-and-installed`를 선언하고, `packages/sok/go/tests/plugins_test.go:296-297`은 같은 이름에 `cli.plugin.state-reads-registry-and-installed`를 선언한다.
 - 가려짐: `groupResults`(`check-host-contract.mjs:91-100`)는 결과를 실행(run)과 테스트 이름으로만 묶는다. `statusOf`(`:103-114`)는 호스트의 모든 실행에서 이름이 같은 모든 결과를 가져간다. `wailsv3`에서는 호스트 실행과 sok 실행이 모두 `host.runs`에 들어간다(`:173-179`). 그래서 호스트 통과가 sok 선언의 통과로 계산되고, `auditHostContract`(`:132-138`)는 sok 사례를 충족으로 센다. 이 기록의 검증 실행에서 재현했다.
 - Rust: `statusOf` 107행은 `name.endsWith('::' + test.name)`로 맞춘다. 같은 크레이트의 서로 다른 모듈에 같은 잎 이름의 테스트 함수가 둘 있으면 한 선언이 둘 다에 맞는다. libtest `--list` 이름은 모듈 경로다(`test-discovery.mjs:83`).
-- 속성: `parseDeclarations`(`:78`)는 모든 `#[` 줄을 건너뛴다. `packages/host/tauriv2/tests/endpoint_test.rs:176-178`은 선언과 `#[test]` 사이에 `#[cfg(feature = "diagnostics")]`를 둔다. 이 사례는 검사가 요구하는 diagnostics 구성에서 실행된다. 같은 자리의 `#[should_panic]`이나 `#[ignore]`는 보고되는 결과를 바꾸는데도 보고 없이 통과한다.
+- 속성: `parseDeclarations`(`:78`)는 모든 `#[` 줄을 건너뛴다. `packages/host/rust/tests/endpoint_test.rs:176-178`은 선언과 `#[test]` 사이에 `#[cfg(feature = "diagnostics")]`를 둔다. 이 사례는 검사가 요구하는 diagnostics 구성에서 실행된다. 같은 자리의 `#[should_panic]`이나 `#[ignore]`는 보고되는 결과를 바꾸는데도 보고 없이 통과한다.
 - `docs/spec/host-contract.md:22`는 호스트 경로만 적는다.
-- sok lock 테스트는 sok 크레이트에 컴파일된다: `packages/sok/tauriv2/src/event_log.rs:1307-1309`는 `#[cfg(test)] #[path = "event_log_lock_test.rs"] mod lock_test;`를 선언하고, `packages/sok/tauriv2/src/sok.rs:19`는 `pub mod event_log`를 선언한다.
+- sok lock 테스트는 sok 크레이트에 컴파일된다: `packages/sok/rust/src/event_log.rs:1307-1309`는 `#[cfg(test)] #[path = "event_log_lock_test.rs"] mod lock_test;`를 선언하고, `packages/sok/rust/src/sok.rs:19`는 `pub mod event_log`를 선언한다.
 
 결정 본문:
 
 - D8.1 소유자 대응: 선언된 테스트는 자신의 소유자 항목에서만 결과를 얻는다. 소유자는 Go에서 패키지 디렉터리(발견된 패키지의 `pkg.dir`, 즉 테스트 파일의 디렉터리)이고, Rust에서는 크레이트 디렉터리(빌드 메시지의 `dirname(manifest_path)`)다. 발견된 항목은 소유자를 가진다. `groupResults`는 결과를 실행, 소유자, 테스트 이름으로 묶고, `statusOf`는 선언의 소유자를 받아 그 소유자의 항목만 본다. 호스트와 sok 결과는 합치지 않는다.
 - D8.2 Rust 잎 이름: 선언은 잎 함수 이름을 적는다. 한 크레이트에 대해 `--list`가 보고한 테스트(선언 여부와 무관) 중 같은 잎 이름이 두 번 나오면 검사는 실패한다. 선언은 마지막 경로 세그먼트가 잎과 같은 단 하나의 항목에 맞는다. 검사는 모듈 경로를 풀지 않는다. `mod` 사슬과 `#[path]`를 풀려면 검사가 구현하지 않는 해석이 필요하다.
 - D8.3 속성: `// contract:` 선언과 `fn` 사이에 허용되는 속성 줄은 `#[test]`, `#[tokio::test]`, `#[cfg(feature = "...")]`다. `cfg` 줄은 테스트가 컴파일되는 구성을 고르며 보고되는 결과를 바꾸지 않는다. 그 밖의 `#[` 줄은 파일, 줄, 속성 이름을 적은 오류다(예: `#[should_panic]`, `#[ignore]`).
-- D8.4 스펙: `docs/spec/host-contract.md:22`(`.ko.md:22`도 동일)는 모든 선언 경로를 적는다: `packages/host/wailsv3/tests/`, `packages/host/wailsv3/src/*_test.go`, `packages/sok/wailsv3/tests/`, `packages/sok/wailsv3/src/*_test.go`, `packages/host/tauriv2/tests/`, `packages/host/tauriv2/src/`, `packages/sok/tauriv2/tests/`, `packages/sok/tauriv2/src/`. "Check" 절은 D8.1의 소유자 규칙과 D8.3의 속성 규칙을 적는다.
+- D8.4 스펙: `docs/spec/host-contract.md:22`(`.ko.md:22`도 동일)는 모든 선언 경로를 적는다: `packages/host/go/tests/`, `packages/host/go/src/*_test.go`, `packages/host/wailsv3/tests/`, `packages/host/wailsv3/src/*_test.go`, `packages/sok/go/tests/`, `packages/sok/go/src/*_test.go`, `packages/host/rust/tests/`, `packages/host/rust/src/`, `packages/host/tauriv2/tests/`, `packages/host/tauriv2/src/`, `packages/sok/rust/tests/`, `packages/sok/rust/src/`. "Check" 절은 D8.1의 소유자 규칙과 D8.3의 속성 규칙을 적는다.
 - D8.5 Red와 Green: 소유 모듈인 `scripts/test/check-host-contract.test.mjs`에 합성 입력으로 `auditHostContract`를 호출하는 사례를 추가한다.
   1. 한 소유자에 호스트 통과가 있고 같은 이름의 sok 소유자 결과가 없으면, sok 선언은 `did not run`을 보고한다. 변경 전 코드에서는 오류가 없어 Red이고, D8.1 후 Green이다.
   2. 같은 실행에서 같은 이름이 두 소유자에 있고 하나는 실패, 하나는 통과하면, 각 선언은 자기 상태를 보고하며 실패한 소유자의 선언은 `fail`을 보고한다. 변경 전 코드에서는 통과로 합쳐져 Red이고, D8.1 후 Green이다.
@@ -140,8 +140,8 @@
 
 ## 검증 실행 (부모, 이 worktree)
 
-- `/tmp/d8-probe.mjs`(임시 probe이며 수락 근거가 아니다)는 `auditHostContract`를 호출한다. 입력은 `wailsv3` 선언 하나(`TestPluginsStateReportsTheRegistryAndTheInstallation`, 파일 `packages/sok/wailsv3/tests/plugins_test.go`, 사례 `cli.plugin.state-reads-registry-and-installed`)와, 같은 이름이 통과했고 sok 실행이 없는 호스트 실행 하나다. 출력: `errors: []`, `covered: ["cli.plugin.state-reads-registry-and-installed"]`, 종료 코드 0. 이것이 D8의 가려짐이다.
-- 초안이나 감사자의 문장이 아니라 파일에서 확인한 사실: `scripts/workspace-registry.json`, `scripts/check-boundaries.mjs:27-42`, `Makefile:374-388`, `.github/workflows/ci.yml:19-46,73`, `apps/wailsv3/environment.json:47,60,110,115`, `scripts/check-host-contract.mjs:91-114`, `packages/host/tauriv2/tests/endpoint_test.rs:176-178`, `docs/spec/declared-ui.md:17-22,56,111-117,145,171`, `docs/spec/plugin-processes.md:24-28`, `docs/spec/sidecars.md:46`, `packages/sok/tauriv2/src/event_log.rs:1307-1309`, `packages/sok/tauriv2/src/sok.rs:19`, `plugins/files/plugin.json`, `plugins/files/ui/sections/tree.js:82-124`, `plugins/files/ui/sections/tree-horizontal.js:15-65`, `plugins/shell/plugin.json`, `plugins/shell/ui/shell.js:6,31-71,119,146-154`.
+- `/tmp/d8-probe.mjs`(임시 probe이며 수락 근거가 아니다)는 `auditHostContract`를 호출한다. 입력은 `wailsv3` 선언 하나(`TestPluginsStateReportsTheRegistryAndTheInstallation`, 파일 `packages/sok/go/tests/plugins_test.go`, 사례 `cli.plugin.state-reads-registry-and-installed`)와, 같은 이름이 통과했고 sok 실행이 없는 호스트 실행 하나다. 출력: `errors: []`, `covered: ["cli.plugin.state-reads-registry-and-installed"]`, 종료 코드 0. 이것이 D8의 가려짐이다.
+- 초안이나 감사자의 문장이 아니라 파일에서 확인한 사실: `scripts/workspace-registry.json`, `scripts/check-boundaries.mjs:27-42`, `Makefile:374-388`, `.github/workflows/ci.yml:19-46,73`, `apps/wailsv3/environment.json:47,60,110,115`, `scripts/check-host-contract.mjs:91-114`, `packages/host/rust/tests/endpoint_test.rs:176-178`, `docs/spec/declared-ui.md:17-22,56,111-117,145,171`, `docs/spec/plugin-processes.md:24-28`, `docs/spec/sidecars.md:46`, `packages/sok/rust/src/event_log.rs:1307-1309`, `packages/sok/rust/src/sok.rs:19`, `plugins/files/plugin.json`, `plugins/files/ui/sections/tree.js:82-124`, `plugins/files/ui/sections/tree-horizontal.js:15-65`, `plugins/shell/plugin.json`, `plugins/shell/ui/shell.js:6,31-71,119,146-154`.
 
 ## 라운드 1
 
@@ -172,7 +172,7 @@
 ### 답변
 
 - C-D2-1, `environment.json`의 settings: 수락. 확인: `apps/wailsv3/environment.json`에 플러그인 `terminal`을 이름으로 가리키는 `settings` 키가 있다. R2.3 문장은 이제 "`environment.json` names plugins as tab references (`workspace`), sidebar link references (`sidebars`) and per-plugin settings keys (`settings`); it does not install them."이다.
-- C-D8-2, `#[cfg(not(feature))]`: 수락. 확인: `packages/sok/tauriv2/tests/sok_test.rs:333-334`에 선언과 `#[test]` 사이 `#[cfg(not(feature = "diagnostics"))]`가 있다. D8.3 참고.
+- C-D8-2, `#[cfg(not(feature))]`: 수락. 확인: `packages/sok/rust/tests/sok_test.rs:333-334`에 선언과 `#[test]` 사이 `#[cfg(not(feature = "diagnostics"))]`가 있다. D8.3 참고.
 - C-D8-3, 선언 위의 속성: 수락. 확인: `scripts/check-host-contract.mjs:78`은 모든 `#[` 줄에서 반환하고, 선언은 나중에 보일 때만 붙으므로 선언 위의 `#[should_panic]`이 조용히 통과한다. D8.3 참고.
 - D-D9-1과 C-D9-5, 호스트의 사이드카 경로: 수락. 확인: `sidecars.md:41`은 각 요청에 `{surface, root}`를 요구하고, `:46`은 표면에 처음 보낸 창에만 메시지를 전달하며, `:65`는 `sidecar-failure`를 소유 창에 보낸다. 표면이 없는 호스트에는 경로가 없으므로 스펙에 경로를 추가해야 한다. D9.2 참고.
 - D-D9-2와 C-D9-4, 항목별 검토: 수락. 각 항목을 아래 본문에서 검토했고, 사이드카 대안에는 그 결과로 답했다.

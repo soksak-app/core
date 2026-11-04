@@ -7,8 +7,10 @@ const root=resolve(import.meta.dirname,'../..');
 test('the Windows build check compiles the Go host source in the default and diagnostics builds',{timeout:600000},()=>{
  const result=spawnSync('make',['windows-build-check'],{cwd:root,encoding:'utf8',timeout:590000});
  assert.equal(result.status,0,result.stdout+result.stderr);
- assert.match(result.stdout,/PASS: wailsv3 host for windows\/arm64/);
- assert.match(result.stdout,/PASS: wailsv3 diagnostics host for windows\/arm64/);
+ assert.match(result.stdout,/PASS: Go host library for windows\/arm64/);
+ assert.match(result.stdout,/PASS: Go diagnostics host library for windows\/arm64/);
+ assert.match(result.stdout,/PASS: Wails framework adapter for windows\/arm64/);
+ assert.match(result.stdout,/PASS: Wails diagnostics framework adapter for windows\/arm64/);
 });
 test('hosts-check runs the Windows build check',{timeout:30000},()=>{
  const result=spawnSync('make',['-n','hosts-check'],{cwd:root,encoding:'utf8',timeout:20000});

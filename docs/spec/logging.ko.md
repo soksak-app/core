@@ -208,7 +208,7 @@ Bloom filter는 `8 × 바이트` 비트를 가진다. 항목의 hash는 UTF-8 �
 
 ## 질의
 
-언어마다 질의 구현이 하나씩 있고(Go는 module `sok`, Rust는 crate `soksak-sok-tauriv2`) `<config-dir>/logs/`의 event 파일을 색인으로 읽어 page 하나를 답한다. 두 구현은 같은 파일과 같은 매개변수에 같은 page, 같은 cursor, 같은 오류 문구를 주며 golden fixture가 이를 확인한다.
+언어마다 질의 구현이 하나씩 있고(Go는 module `sok`, Rust는 crate `soksak-sok`) `<config-dir>/logs/`의 event 파일을 색인으로 읽어 page 하나를 답한다. 두 구현은 같은 파일과 같은 매개변수에 같은 page, 같은 cursor, 같은 오류 문구를 주며 golden fixture가 이를 확인한다.
 
 **파일.** 질의의 event 파일은 `logs/`에서 이름이 `<role>-<boot>.jsonl`, `<role>-<boot>.jsonl.<n>`(`n`은 앞에 0이 없는 양수), `<role>-<boot>.debug.jsonl`, `<role>-<boot>.debug.jsonl.<n>`인 파일이다. `role`은 소문자 단어이고 `boot`은 이름의 나머지다. `.stderr`, `.crash`, `.idx` 파일, 상태 파일, capture는 event 파일이 아니다. *프로세스*는 role과 boot의 쌍(`host-1791500000-4242`)이고, 한 프로세스의 파일(파일, 그 세대, 그 debug 파일)은 하나의 `seq` 공간을 공유한다([event](#event)). *channel*은 파일의 집합이다: `other`는 debug 파일이 아닌 파일, `debug`는 debug 파일, `all`은 둘 다다. writer는 `error`, `warn`, `info`를 파일에, `debug`와 `trace`를 debug 파일에 저장한다([파일](#파일)). channel `debug`의 event를 저장하지 않은 실행에는 debug 파일이 없으며 질의는 있는 파일을 읽는다.
 

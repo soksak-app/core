@@ -1,0 +1,62 @@
+[package]
+name = "soksak-host"
+version = "0.0.34"
+edition = "2024"
+description = "soksak Rust language host library"
+
+[lib]
+path = "src/host.rs"
+
+# diagnostics adds the diagnostic endpoint methods and the diagnostic command line; debug builds and 0.0.x releases
+# set it. dev selects the .dev identifier of a debug build.
+[features]
+diagnostics = ["soksak-sok/diagnostics"]
+dev = ["soksak-sok/dev"]
+
+# A measurement prints numbers and asserts nothing (docs/spec/logging.md#writers).
+[[bench]]
+name = "event_log_benchmark"
+harness = false
+
+[[bench]]
+name = "event_native_benchmark"
+harness = false
+
+[build-dependencies]
+pkg-config = "0.3"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+# 설치 형식과 설치 배치는 command line sok 의 구현을 쓴다(docs/spec/installation.md).
+soksak-sok = { path = "../../sok/rust" }
+serde_json = { version = "1", features = ["raw_value"] }
+tempfile = "3"
+flate2 = "1"
+tar = "0.4"
+wait-timeout = "0.2"
+base64 = "0.22"
+crc32fast = "1"
+url = "2"
+# The start document answers the request of the scheme handler of the framework as an HTTP response.
+http = "1"
+# The surface presentation waits for its main-thread step on a channel of the asynchronous runtime.
+tokio = { version = "1", features = ["sync"] }
+# The session file name is the RFC 3986 percent-encoding of the session id (workspace.rs tab_session_name).
+percent-encoding = "2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2"
+mach2 = "0.7"
+objc2 = "0.6"
+block2 = "0.6"
+signal-hook = "0.3"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_Storage_FileSystem",
+] }
+
+[dev-dependencies]
+notify = "8.2"
+sha2 = "0.10"

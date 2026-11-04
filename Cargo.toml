@@ -1,14 +1,14 @@
 # The Rust workspace. Its crates share one Cargo.lock and one target/ folder.
 [workspace]
 resolver = "2"
-members = ["apps/tauriv2", "packages/host/tauriv2", "packages/sok/tauriv2"]
+members = ["apps/tauriv2", "packages/host/rust", "packages/host/tauriv2", "packages/sok/rust"]
 
 [profile.dev]
 incremental = true
 
 # The index and the query read every line of an event file ([logging](docs/spec/logging.md#query)); the test of 1,000,000 events measures
 # the optimization level that ships, because an unoptimized parser is more than twenty times slower.
-[profile.dev.package.soksak-sok-tauriv2]
+[profile.dev.package.soksak-sok]
 opt-level = 3
 
 [profile.dev.package.serde_json]

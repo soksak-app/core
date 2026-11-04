@@ -404,7 +404,7 @@ Review는 glyph 획이 cell 아래쪽까지 내려올 수 있고 cursor color는
 
 플랫폼의 결함은 필요한 경우 이 저장소 내부의 호스트 네이티브 코어에서 수정하고, 프레임워크의 interface로 호스트가 고칠 수 없는 프레임워크 결함은 호스트가 pin하는 프레임워크 fork에서 수정한다. 공개 API로 필요한 동작을 정확히 구현할 수 없으면 비공개 API를 사용할 수 있다. 각 수정은 원인을 확인하고, API의 실제 동작으로 사용 이유를 설명하며, 요구사항을 충족하는 최소 구현을 사용하고, 해당 플랫폼에서 좌표·렌더링·입력·생명주기를 검증해야 한다. 해롭거나 불필요한 수정은 제거한다. 테스트 통과는 검사한 동작의 근거이며, 구현 검토에서 필요성과 올바른 API 사용도 확인해야 한다. API 가용성과 유지보수 위험은 수정의 기술적 타당성과 구분해 기록한다. 호스트 간 차이는 프레임워크 연동과 네이티브 동작을 진단해야 하며, 차이 자체로 원인을 확정하지 않는다.
 
-현재 네이티브 표시 검증 대상은 macOS다. Windows와 Linux 동작은 검증하지 않았다. Wails 호스트는 `packages/host/wailsv3`와 `apps/wailsv3`의 `go.mod`에 있는 `replace`로 Wails v3의 fork를 pin한다. 이 fork는 main thread에서 Go 코드를 실행하지 않고([Wails host의 main thread](hosts.ko.md#wails-host의-main-thread)), page에 돌려주는 transport 오류를 log에 쓰지 않으며, window의 event routing을 유지한 채 은퇴한 window의 callback을 거부한다. Tauri 호스트는 fork 없이 Tauri v2를 사용한다.
+현재 네이티브 표시 검증 대상은 macOS다. Windows와 Linux 동작은 검증하지 않았다. Wails 호스트는 Wails framework adapter `packages/host/wailsv3`와 `apps/wailsv3`의 `go.mod`에 있는 `replace`로 Wails v3의 fork를 pin한다. 이 fork는 main thread에서 Go 코드를 실행하지 않고([Wails host의 main thread](hosts.ko.md#wails-host의-main-thread)), page에 돌려주는 transport 오류를 log에 쓰지 않으며, window의 event routing을 유지한 채 은퇴한 window의 callback을 거부한다. Tauri 호스트는 fork 없이 Tauri v2를 사용한다.
 
 ### darwin
 

@@ -4,7 +4,7 @@
 
 상태: 체크리스트 항목 R2-7 의 미결 제안([기능](../features.ko.md)의 R2-7-3). 이 제안의 어떤 내용도 구현되지 않았다. 승인된 내용은 구현 항목을 시작하기 전에 명세([호스트](../spec/hosts.ko.md), [네이티브 표면](../spec/native-surfaces.ko.md), [표면 합성](../spec/surface-composition.ko.md), [사이드카](../spec/sidecars.ko.md), [영속 서비스](../spec/persistent-services.ko.md))로 옮기고, 그 뒤 이 파일을 제거한다.
 
-framework, toolkit, 시스템 인터페이스에 관한 모든 진술은 [출처](#출처)의 출처를 `[Sn]` 으로 인용한다. **unverified** 로 표시한 진술은 그것을 입증하는 출처가 없으며, 그 진술에 의존하는 항목이 측정해야 한다. macOS 메커니즘은 [`platform.go`](../../packages/host/wailsv3/src/platform/platform.go), [`platform.rs`](../../packages/host/tauriv2/src/platform/platform.rs), [`native/darwin/src`](../../native/darwin/src/)와 [비공개 네이티브 API 목록](../operations/private-native-apis.ko.md)에서 읽었다.
+framework, toolkit, 시스템 인터페이스에 관한 모든 진술은 [출처](#출처)의 출처를 `[Sn]` 으로 인용한다. **unverified** 로 표시한 진술은 그것을 입증하는 출처가 없으며, 그 진술에 의존하는 항목이 측정해야 한다. macOS 메커니즘은 [`platform.go`](../../packages/host/go/src/platform/platform.go), [`platform.rs`](../../packages/host/rust/src/platform/platform.rs), [`native/darwin/src`](../../native/darwin/src/)와 [비공개 네이티브 API 목록](../operations/private-native-apis.ko.md)에서 읽었다.
 
 ## Linux 의 프레임워크 사실
 

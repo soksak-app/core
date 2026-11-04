@@ -1,0 +1,1052 @@
+//! Checks that a window status read during the creation and the close of a surface finds the registered surface.
+
+use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, PoisonError, mpsc};
+use std::thread;
+use std::time::Duration;
+
+use super::{
+    Running, SurfaceComposition, SurfaceDispatchMode, abandon_waits_then_cancel_layout,
+    cancel_layout_after_setup_error, clear_page_compositions, close_registered_surface,
+    commit_layout_after_root_joins, committed_view_updates, complete_layout_presentation,
+    create_in_open_window, create_registered_surface, mark_first_commit,
+    prepare_surface_visibility, pressed_surface, read_press_then_deliver, removed_surfaces,
+    surface_dispatch_clock_from, surface_dispatch_context_with, surface_dispatch_fields,
+    surface_dispatch_result_with, with_registered_surface,
+};
+
+// contract: view.start-values.omitted-keeps-held
+#[test]
+fn a_view_without_start_keeps_the_values_that_the_host_holds() {
+    use super::{SyncRequest, ViewStart, check_sync_request, view_start_of};
+    use crate::view_lifecycle::ViewLifecycle;
+    let surface = |start: &str| {
+        format!(
+            r#"{{"settled":true,"titlebar":40,"declarations":[{{}}],"surfaces":[{{"id":"probe","visible":true,"dim":false,"plugin":"probe","composition":{{"kind":"view","page":"ui/page.html"}},"x":0,"y":0,"w":10,"h":10{start}}}]}}"#
+        )
+    };
+    let request = |text: String| {
+        serde_json::from_str::<SyncRequest>(&text)
+            .expect("request fixture")
+            .resolve()
+            .expect("the request resolves")
+    };
+    let lifecycle = ViewLifecycle::default();
+    let held = Arc::new(ViewStart {
+        params: Some(serde_json::json!({"path": "/work/held"})),
+        ..Default::default()
+    });
+    lifecycle.track("probe", 7, "probe", "ui/page.html", true, held.clone());
+    let omitted = request(surface("").replace(r#""declarations":[{}]"#, r#""declarations":[]"#));
+    assert_eq!(
+        view_start_of(&lifecycle, &omitted.surfaces[0]),
+        Ok(held.clone()),
+        "a view without start values uses the values that the host holds"
+    );
+    let carried = request(surface(
+        r#","start":{"params":{"path":"/work/next"},"origin":{"directory":null},"project":null,"declarations":0,"diagnostics":null,"section":null}"#,
+    ));
+    assert_eq!(
+        view_start_of(&lifecycle, &carried.surfaces[0])
+            .expect("the request carries start values")
+            .params,
+        Some(serde_json::json!({"path": "/work/next"})),
+        "the start values of the request replace the held values"
+    );
+    assert_eq!(
+        view_start_of(&ViewLifecycle::default(), &omitted.surfaces[0]),
+        Err(r#"surface "probe": view start is missing"#.to_string()),
+        "a view without held start values is refused"
+    );
+    let unresolved: SyncRequest = serde_json::from_str(
+        &surface("").replace(r#""declarations":[{}]"#, r#""declarations":[]"#),
+    )
+    .expect("request fixture");
+    let held_composition =
+        HashMap::from([("probe".to_string(), omitted.surfaces[0].composition.clone())]);
+    let plugins = HashMap::from([("probe".to_string(), "probe".to_string())]);
+    assert_eq!(
+        check_sync_request(&unresolved, &held_composition, &plugins).map(|_| ()),
+        Ok(()),
+        "the check accepts a view without start values"
+    );
+}
+
+mod declaration_table {
+    use super::super::SyncRequest;
+
+    // The page sends the start values of a view through the host call decoder, which skips a null member of a struct as the
+    // Wails host leaves a typed field unchanged; the Wails host keeps the null of its raw start values, so this decoder keeps it.
+    // contract: view.start-values.keeps-null-members
+    #[test]
+    fn the_host_call_decoder_keeps_the_null_start_values_of_a_view() {
+        let request: SyncRequest = crate::arguments::decode("request", &serde_json::json!({
+            "settled": true,
+            "titlebar": 40.0,
+            "declarations": [{"commands": []}],
+            "surfaces": [{"id":"spc-aaaaaa/left/probe.tree","x":0.0,"y":0.0,"w":10.0,"h":10.0,"visible":true,"dim":false,
+                          "plugin":"probe","composition":{"kind":"view","page":"tree.html"},
+                          "start":{"params":null,"origin":{"directory":null},"project":null,"declarations":0,
+                                   "diagnostics":null,"section":null}}]
+        }))
+        .expect("the page request decodes");
+        let resolved = request.resolve().expect("the declaration index resolves");
+        let start = resolved.surfaces[0]
+            .start
+            .as_ref()
+            .expect("view start values");
+        assert_eq!(start.diagnostics, Some(serde_json::Value::Null));
+        assert_eq!(start.section, Some(serde_json::Value::Null));
+        assert_eq!(start.origin, Some(serde_json::json!({"directory": null})));
+    }
+
+    // contract: view.start-values.declaration-table
+    #[test]
+    fn resolving_declaration_indices_preserves_each_complete_start_and_is_request_local() {
+        let first: SyncRequest = serde_json::from_value(serde_json::json!({
+            "settled": true,
+            "titlebar": 40.0,
+            "declarations": [{"commands": ["open"], "dom": ["alpha"], "nested": {"keep": true}}],
+            "surfaces": [
+                {"id":"one","x":0.0,"y":0.0,"w":10.0,"h":10.0,"visible":true,"dim":false,
+                 "plugin":"page","composition":{"kind":"view","page":"one.html"},
+                 "start":{"params":{"path":"one.md"},"origin":{"directory":"/work/one"},
+                          "project":{"id":"project-one","root":"/work/one"},"declarations":0,"diagnostics":null,"section":null}},
+                {"id":"two","x":0.0,"y":0.0,"w":10.0,"h":10.0,"visible":true,"dim":false,
+                 "plugin":"page","composition":{"kind":"view","page":"two.html"},
+                 "start":{"params":null,"origin":{"directory":null},"project":null,"declarations":0,"diagnostics":null,"section":null}}
+            ]
+        }))
+        .expect("the indexed wire request is valid");
+        let resolved = first.resolve().expect("the declaration index resolves");
+        let one = resolved.surfaces[0]
+            .start
+            .as_ref()
+            .expect("view start values");
+        assert_eq!(one.params, Some(serde_json::json!({"path":"one.md"})));
+        assert_eq!(
+            one.origin,
+            Some(serde_json::json!({"directory":"/work/one"}))
+        );
+        assert_eq!(
+            one.project.as_ref().map(|project| project.id.as_str()),
+            Some("project-one")
+        );
+        assert_eq!(
+            one.declarations,
+            Some(serde_json::json!({"commands":["open"],"dom":["alpha"],"nested":{"keep":true}}))
+        );
+        let two = resolved.surfaces[1]
+            .start
+            .as_ref()
+            .expect("view start values");
+        assert_eq!(two.params, None);
+        assert_eq!(two.origin, Some(serde_json::json!({"directory":null})));
+        assert_eq!(two.project, None);
+        assert_eq!(two.declarations, one.declarations);
+        assert_eq!(
+            crate::documents::surface_start_script(
+                "two",
+                two,
+                &soksak_sok::log_policy::LogPolicy::default().classes()
+            )
+            .expect("the resolved start values form a valid script"),
+            r##"window.sokSurface = Object.freeze({"surface":"two","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({"commands":["open"],"dom":["alpha"],"nested":{"keep":true}}),"diagnostics":null,"section":null,"levels":Object.freeze({"call":"error","frame":"error","input":"error","io":"error","lifecycle":"error"})});"##
+        );
+
+        let next: SyncRequest = serde_json::from_value(serde_json::json!({
+            "settled": true,
+            "titlebar": 40.0,
+            "declarations": [{"commands": ["save"]}],
+            "surfaces": [{"id":"three","x":0.0,"y":0.0,"w":10.0,"h":10.0,"visible":true,"dim":false,
+                          "plugin":"page","composition":{"kind":"view","page":"three.html"},
+                          "start":{"origin":{"directory":null},"project":null,"params":null,"declarations":0}}]
+        }))
+        .expect("the next request has its own declaration table");
+        let next = next
+            .resolve()
+            .expect("the next request resolves independently");
+        assert_eq!(
+            next.surfaces[0].start.as_ref().unwrap().declarations,
+            Some(serde_json::json!({"commands":["save"]}))
+        );
+    }
+}
+
+// contract: performance.surface.dispatch-records-existing-boundaries
+#[test]
+fn surface_dispatch_wrapper_records_queue_entry_and_return_boundaries() {
+    let mut clock_values = [Some(120), Some(140)].into_iter();
+    let mut observed = Vec::new();
+    let mut phases = Vec::new();
+    let fake_ui_dispatch = |work: Box<dyn FnOnce() + '_>| work();
+    let dispatch = surface_dispatch_context_with(
+        || Some((100, SurfaceDispatchMode::Performance)),
+        || "main".to_owned(),
+        Some(41),
+        "present",
+        "present-prepare-ui",
+    )
+    .expect("enabled trace captures its dispatch context");
+    let dispatch_for_run = dispatch.clone();
+    fake_ui_dispatch(Box::new(|| {
+        let result = surface_dispatch_result_with(
+            Some(dispatch_for_run.clone()),
+            || clock_values.next().flatten(),
+            |dispatch, entered, returned| {
+                assert_eq!(dispatch.mode, SurfaceDispatchMode::Performance);
+                observed.push(surface_dispatch_fields(
+                    &dispatch.window,
+                    dispatch.ticket,
+                    dispatch.operation,
+                    dispatch.stage,
+                    dispatch.queued,
+                    entered,
+                    returned,
+                ));
+            },
+            || {
+                phases.push("work");
+                7
+            },
+        );
+        assert_eq!(result, 7);
+    }));
+    assert_eq!(phases, ["work"]);
+    assert_eq!(
+        observed,
+        [serde_json::json!({
+            "event": "surface.dispatch",
+            "window": "main",
+            "ticket": 41,
+            "operation": "present",
+            "stage": "present-prepare-ui",
+            "queued_ns": "100",
+            "entered_ns": "120",
+            "returned_ns": "140"
+        })],
+    );
+
+    let mut off_label_reads = 0;
+    let mut off_clock_reads = 0;
+    let mut off_observations = 0;
+    let off_dispatch = surface_dispatch_context_with(
+        || None,
+        || {
+            off_label_reads += 1;
+            "main".to_owned()
+        },
+        None,
+        "sync",
+        "sync-layout-ui",
+    );
+    assert!(off_dispatch.is_none());
+    let value = surface_dispatch_result_with(
+        off_dispatch,
+        || {
+            off_clock_reads += 1;
+            Some(1)
+        },
+        |_, _, _| off_observations += 1,
+        || 9,
+    );
+    assert_eq!(value, 9);
+    assert_eq!(off_label_reads, 0, "disabled trace built a window label");
+    assert_eq!(off_clock_reads, 0, "disabled trace read the host clock");
+    assert_eq!(
+        off_observations, 0,
+        "disabled trace emitted a dispatch record"
+    );
+    let mut monotonic_reads = 0;
+    assert_eq!(
+        surface_dispatch_clock_from(
+            false,
+            || false,
+            || false,
+            || {
+                monotonic_reads += 1;
+                1
+            }
+        ),
+        None
+    );
+    assert_eq!(monotonic_reads, 0, "disabled trace read the event clock");
+}
+
+// contract: performance.surface.dispatch-records-frame-only-boundaries
+#[test]
+fn surface_dispatch_records_frame_boundaries_when_performance_trace_is_off() {
+    let _switch = crate::performance::TEST_SWITCH
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let was_on = crate::performance::enabled();
+    crate::performance::command(serde_json::json!({"action": "off"})).unwrap();
+    let dispatch = surface_dispatch_context_with(
+        || Some((400, SurfaceDispatchMode::Frame)),
+        || "main".to_owned(),
+        None,
+        "present",
+        "present-prepare-ui",
+    )
+    .expect("frame-only trace captures its dispatch context");
+    let mut clock_values = [Some(420), Some(440)].into_iter();
+    surface_dispatch_result_with(
+        Some(dispatch),
+        || clock_values.next().flatten(),
+        super::record_surface_dispatch,
+        || (),
+    );
+    let got = crate::event_record::buffered_fields("host.frame.surface.dispatch");
+    assert_eq!(
+        got.last(),
+        Some(&serde_json::json!({
+            "window": "main",
+            "operation": "present",
+            "stage": "present-prepare-ui",
+            "queued_ns": "400",
+            "entered_ns": "420",
+            "returned_ns": "440"
+        })),
+        "frame-only dispatch must store the same clock boundaries"
+    );
+    assert!(
+        crate::event_record::buffered_fields("host.trace.surface.dispatch").is_empty(),
+        "frame-only dispatch must not duplicate the performance event"
+    );
+    if was_on {
+        crate::performance::command(serde_json::json!({"action": "on"})).unwrap();
+    }
+}
+
+// contract: performance.surface.dispatch-frame-fallback-is-exclusive
+#[test]
+fn surface_dispatch_frame_fallback_selection_and_disabled_clock() {
+    assert_eq!(
+        surface_dispatch_clock_from(true, || true, || true, || 1),
+        Some((1, SurfaceDispatchMode::Performance)),
+        "performance trace wins when both gates are open"
+    );
+    assert_eq!(
+        surface_dispatch_clock_from(true, || false, || true, || 2),
+        Some((2, SurfaceDispatchMode::Frame)),
+        "frame trace is the fallback when call trace is gated"
+    );
+    assert_eq!(
+        surface_dispatch_clock_from(false, || false, || true, || 3),
+        Some((3, SurfaceDispatchMode::Frame)),
+        "frame trace records when performance trace is off"
+    );
+    let mut reads = 0;
+    assert_eq!(
+        surface_dispatch_clock_from(
+            false,
+            || false,
+            || false,
+            || {
+                reads += 1;
+                4
+            }
+        ),
+        None,
+        "closed gates disable dispatch records"
+    );
+    assert_eq!(reads, 0, "closed gates must not read the clock");
+}
+
+// contract: surface-layout.setup-failure-cancels-open-transaction
+#[test]
+fn webview_presentation_registration_failure_cancels_open_layout() {
+    let mut cancelled = false;
+    let error = cancel_layout_after_setup_error("webview callback setup failed".into(), || {
+        cancelled = true;
+        Ok(())
+    });
+    assert!(
+        cancelled,
+        "layout transaction remained open after callback setup failed"
+    );
+    assert_eq!(error, "webview callback setup failed");
+
+    let error = cancel_layout_after_setup_error("webview callback setup failed".into(), || {
+        Err("layout cancellation enqueue failed".into())
+    });
+    assert_eq!(
+        error,
+        "webview callback setup failed; cancelling layout: layout cancellation enqueue failed"
+    );
+}
+
+// contract: surface-layout.prepare-visible-surfaces
+#[test]
+fn prepare_preserves_requested_visible_state_and_hides_requested_invisible_surfaces() {
+    for initially_hidden in [false, true] {
+        let mut hidden = initially_hidden;
+        let mut calls = Vec::new();
+        prepare_surface_visibility(true, |value| {
+            calls.push(value);
+            hidden = value;
+            Ok(())
+        })
+        .expect("visible prepare succeeds");
+        assert_eq!(
+            hidden, initially_hidden,
+            "visible prepare changed the prior hidden state"
+        );
+        assert!(
+            calls.is_empty(),
+            "visible prepare called the native visibility setter"
+        );
+    }
+
+    let mut hidden = false;
+    let mut calls = Vec::new();
+    prepare_surface_visibility(false, |value| {
+        calls.push(value);
+        hidden = value;
+        Ok(())
+    })
+    .expect("invisible prepare succeeds");
+    assert!(hidden, "an invisible prepare left the surface shown");
+    assert_eq!(
+        calls,
+        vec![true],
+        "an invisible prepare did not hide immediately"
+    );
+}
+
+// contract: surface-layout.joins-root-views-before-awaiting-app-dom
+#[test]
+fn root_view_join_is_registered_before_dom_presentation_wait() {
+    let (phase_tx, phase_rx) = mpsc::channel();
+    let (dom_release, dom_wait) = mpsc::channel();
+    let presented = Arc::new(AtomicBool::new(false));
+    let pending_join = Arc::new(Mutex::new(None::<Box<dyn FnOnce() + Send>>));
+    let view_presented = Arc::clone(&presented);
+    let registered_join = Arc::clone(&pending_join);
+    let joined_slot = Arc::clone(&pending_join);
+    let worker = thread::spawn(move || {
+        let ready = complete_layout_presentation(
+            || {
+                assert!(
+                    registered_join.lock().unwrap().is_some(),
+                    "DOM presentation was registered before the fake platform join"
+                );
+                assert!(
+                    !view_presented.load(Ordering::SeqCst),
+                    "the fake platform presented the root view before the DOM wait"
+                );
+                phase_tx.send("register-dom").unwrap();
+                Ok(())
+            },
+            || {
+                phase_tx.send("dom").unwrap();
+                dom_wait.recv().unwrap();
+                Ok(())
+            },
+            || {
+                phase_tx.send("raster").unwrap();
+                Ok(())
+            },
+            || {
+                phase_tx.send("root-join").unwrap();
+                let view_presented = Arc::clone(&view_presented);
+                *joined_slot.lock().unwrap() = Some(Box::new(move || {
+                    view_presented.store(true, Ordering::SeqCst);
+                }));
+                Ok(())
+            },
+        );
+        if ready.is_ok() {
+            phase_tx.send("commit").unwrap();
+        }
+    });
+    let first = phase_rx
+        .recv_timeout(Duration::from_secs(1))
+        .expect("layout did not register its first presentation stage");
+    dom_release.send(()).unwrap();
+    let mut phases = vec![first];
+    while phases.last() != Some(&"commit") {
+        phases.push(
+            phase_rx
+                .recv_timeout(Duration::from_secs(1))
+                .expect("layout did not finish its presentation stages"),
+        );
+    }
+    worker.join().unwrap();
+    assert!(
+        !presented.load(Ordering::SeqCst),
+        "the fake platform join was released before the root view presented"
+    );
+    pending_join
+        .lock()
+        .unwrap()
+        .take()
+        .expect("the root-view presentation callback was not retained")();
+    assert!(presented.load(Ordering::SeqCst));
+    assert_eq!(
+        phases,
+        ["root-join", "register-dom", "dom", "raster", "commit"],
+        "layout did not register changed root-view joins before the DOM wait, then wait for DOM and rasters before commit"
+    );
+}
+
+// contract: surface-layout.joins-root-views-before-awaiting-app-dom
+#[test]
+fn a_replacement_generation_is_not_committed_without_its_own_join() {
+    let joined_generation = 12;
+    let current_generation = 13;
+    let placed = [super::Placement {
+        id: "tab-recreated".into(),
+        x: 30.0,
+        y: 20.0,
+        w: 300.0,
+        h: 200.0,
+        visible: true,
+    }];
+    let stages = Arc::new(Mutex::new(Vec::new()));
+    let join_stages = Arc::clone(&stages);
+    let commit_stages = Arc::clone(&stages);
+
+    let result = commit_layout_after_root_joins(
+        &placed,
+        vec![("tab-recreated".into(), joined_generation)],
+        41,
+        |_| Some(current_generation),
+        |_, _, _| true,
+        |missing| {
+            assert_eq!(missing.len(), 1);
+            assert_eq!(missing[0].id, "tab-recreated");
+            join_stages.lock().unwrap().push("join-generation-13");
+            Ok(super::documents::ViewJoinOutcome {
+                required: vec![("tab-recreated".into(), current_generation)],
+                joined: vec![("tab-recreated".into(), current_generation)],
+            })
+        },
+        || {
+            commit_stages.lock().unwrap().push("native-commit");
+            Ok(true)
+        },
+    )
+    .expect("replacement view generation joins before commit");
+
+    assert!(
+        result
+            .1
+            .contains(&("tab-recreated".into(), current_generation)),
+        "the replacement generation was not retained as joined"
+    );
+    assert_eq!(
+        *stages.lock().unwrap(),
+        ["join-generation-13", "native-commit"],
+        "the native commit ran before the replacement generation joined"
+    );
+}
+
+// contract: surface-layout.joins-root-views-before-awaiting-app-dom
+#[test]
+fn presentation_state_does_not_commit_an_unjoined_visible_generation() {
+    let visible = [super::Placement {
+        id: "tab-recreated".into(),
+        x: 30.0,
+        y: 20.0,
+        w: 300.0,
+        h: 200.0,
+        visible: true,
+    }];
+    let prior_join = [("tab-recreated".to_string(), 12)];
+
+    let updates = committed_view_updates(&visible, &prior_join, |_| Some(13));
+    assert!(
+        updates.is_empty(),
+        "an unjoined replacement generation was marked committed"
+    );
+
+    let hidden = [super::Placement {
+        visible: false,
+        ..visible[0].clone()
+    }];
+    let hidden_updates = committed_view_updates(&hidden, &prior_join, |_| Some(13));
+    assert_eq!(
+        hidden_updates.len(),
+        1,
+        "hiding a view lost its committed hidden placement"
+    );
+    assert_eq!(hidden_updates[0].1, 13);
+    assert!(!hidden_updates[0].2.visible);
+}
+
+// contract: surface-layout.joins-root-views-before-awaiting-app-dom
+#[test]
+fn a_required_replacement_join_failure_stops_before_native_commit() {
+    let placed = [super::Placement {
+        id: "tab-recreated".into(),
+        x: 30.0,
+        y: 20.0,
+        w: 300.0,
+        h: 200.0,
+        visible: true,
+    }];
+    let mut commit_called = false;
+
+    let error = commit_layout_after_root_joins(
+        &placed,
+        vec![("tab-recreated".into(), 12)],
+        41,
+        |_| Some(13),
+        |_, _, _| true,
+        |_| {
+            Ok(super::documents::ViewJoinOutcome {
+                required: vec![("tab-recreated".into(), 13)],
+                joined: Vec::new(),
+            })
+        },
+        || {
+            commit_called = true;
+            Ok(true)
+        },
+    )
+    .expect_err("an unjoined replacement generation cannot be committed");
+
+    assert_eq!(
+        error,
+        "view tab-recreated generation 13 could not join layout ticket 41"
+    );
+    assert!(
+        !commit_called,
+        "native commit ran after a required root-view join failed"
+    );
+}
+
+// contract: surface-layout.joins-root-views-before-awaiting-app-dom
+#[test]
+fn an_unchanged_committed_root_does_not_join_again() {
+    let placed = [super::Placement {
+        id: "tab-stable".into(),
+        x: 30.0,
+        y: 20.0,
+        w: 300.0,
+        h: 200.0,
+        visible: true,
+    }];
+    let mut join_called = false;
+    let (committed, joined) = commit_layout_after_root_joins(
+        &placed,
+        Vec::new(),
+        42,
+        |_| Some(13),
+        |_, _, placement| placement.frame != [30.0, 20.0, 300.0, 200.0],
+        |_| {
+            join_called = true;
+            Ok(super::documents::ViewJoinOutcome::default())
+        },
+        || Ok(true),
+    )
+    .expect("an unchanged committed root remains settled");
+
+    assert!(committed);
+    assert!(joined.is_empty());
+    assert!(
+        !join_called,
+        "an unchanged committed root was probed for another join"
+    );
+}
+
+// contract: surface-layout.presentation-failure-stops-before-commit
+#[test]
+fn dom_failure_skips_raster_and_dom_and_raster_errors_are_preserved() {
+    let mut raster_called = false;
+    let mut roots_prepared = false;
+    let ready = complete_layout_presentation(
+        || Ok(()),
+        || Err("application DOM failed".to_string()),
+        || {
+            raster_called = true;
+            Ok(())
+        },
+        || {
+            roots_prepared = true;
+            Ok(())
+        },
+    );
+    assert_eq!(ready, Err("application DOM failed".to_string()));
+    assert!(
+        roots_prepared,
+        "root views were not prepared before DOM presentation"
+    );
+    assert!(!raster_called, "raster ran after DOM presentation failed");
+
+    roots_prepared = false;
+    let ready = complete_layout_presentation(
+        || Ok(()),
+        || Ok(()),
+        || Err("image raster failed".to_string()),
+        || {
+            roots_prepared = true;
+            Ok(())
+        },
+    );
+    assert_eq!(ready, Err("image raster failed".to_string()));
+    assert!(
+        roots_prepared,
+        "root views were not prepared before raster wait"
+    );
+}
+
+// contract: surface.sync.closed-window-creates-nothing
+#[test]
+fn a_closed_window_creates_no_surface() {
+    let mut created = false;
+    let result = create_in_open_window(&Err("project window is closed".to_string()), || {
+        created = true;
+        Ok(7usize)
+    });
+    assert!(!created, "a closed window created a native surface");
+    assert_eq!(result, Err("project window is closed".to_string()));
+}
+
+// contract: exposure.host-window.reads-during-surface-creation
+#[test]
+fn a_status_read_during_surface_creation_finds_the_registered_surface() {
+    // The window status reads the surface ids of the native views from the surface_hosts registry. Creation names the
+    // native view and registers it in one step, so a reading never sees a native view without its registration.
+    let named = Mutex::new(HashMap::new());
+    let surface_hosts: Mutex<HashMap<String, usize>> = Mutex::new(HashMap::new());
+    create_registered_surface(&named, &surface_hosts, "tab-4leevm", || Ok(7)).unwrap();
+    let status_names: HashMap<usize, String> = surface_hosts
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|(id, handle)| (*handle, id.clone()))
+        .collect();
+    assert_eq!(
+        status_names.get(&7),
+        Some(&"tab-4leevm".to_string()),
+        "the native view of tab-4leevm has no registered surface after creation"
+    );
+    // A failed creation registers nothing.
+    let failed = create_registered_surface(&named, &surface_hosts, "tab-6", || {
+        Err("no window".to_string())
+    });
+    assert!(failed.is_err());
+    assert_eq!(surface_hosts.lock().unwrap().len(), 1);
+}
+
+// contract: view.placement.retires-declarations-on-page-reload
+#[test]
+fn clearing_page_compositions_retires_the_previous_generation() {
+    let composition = SurfaceComposition {
+        kind: "view".into(),
+        page: "ui/page.html".into(),
+        regions: Vec::new(),
+        overlays: Some(Vec::new()),
+    };
+    let compositions = Mutex::new(HashMap::from([("tab-old".into(), composition)]));
+    let plugins = Mutex::new(HashMap::from([("tab-old".into(), "probe".into())]));
+
+    clear_page_compositions(&compositions, &plugins);
+
+    assert!(compositions.lock().unwrap().is_empty());
+    assert!(plugins.lock().unwrap().is_empty());
+}
+
+// contract: exposure.host-window.reads-during-surface-close
+#[test]
+fn a_status_read_during_surface_close_finds_the_registered_surface() {
+    // The sync takes the removed surfaces in one step and closes each native surface in a later main-thread step. A
+    // window status read between the two steps sees the native surface, so the surface stays registered until the
+    // close step.
+    let named = Mutex::new(HashMap::from([(7usize, "tab-2".to_string())]));
+    let surface_hosts = Mutex::new(HashMap::from([("tab-2".to_string(), 7usize)]));
+    let alive = HashSet::new();
+    let removed = removed_surfaces(&surface_hosts, &alive).unwrap();
+    assert_eq!(removed, vec![("tab-2".to_string(), 7)]);
+    let status_names: HashMap<usize, String> = surface_hosts
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|(id, handle)| (*handle, id.clone()))
+        .collect();
+    assert_eq!(
+        status_names.get(&7),
+        Some(&"tab-2".to_string()),
+        "the native surface of tab-2 has no registered surface before its close"
+    );
+    assert!(named.lock().unwrap().contains_key(&7));
+}
+
+// contract: tauriv2.surface-sync.closed-handle-is-not-used
+#[test]
+fn a_sync_step_that_runs_after_the_close_of_its_surface_does_not_use_the_closed_handle() {
+    // The sync reads the handle of tab-2 and queues a main-thread step with it; a window close queued before that step closes the
+    // native surface and forgets its registration, so the handle no longer names a view when the step runs.
+    let named = Mutex::new(HashMap::new());
+    let surface_hosts = Mutex::new(HashMap::new());
+    let handle = create_registered_surface(&named, &surface_hosts, "tab-2", || Ok(7usize)).unwrap();
+    assert_eq!(
+        close_registered_surface(&named, &surface_hosts, "tab-2", handle, |_| Ok(())),
+        Ok(true)
+    );
+    let mut used = Vec::new();
+    let applied = with_registered_surface(&surface_hosts, "tab-2", handle, |handle| {
+        used.push(handle);
+        Ok(())
+    });
+    assert_eq!(
+        used,
+        Vec::<usize>::new(),
+        "the step used the handle of a closed surface"
+    );
+    assert_eq!(
+        applied,
+        Ok(None),
+        "a step of a closed surface applies nothing"
+    );
+}
+
+// contract: view.composition.page-and-regions
+#[test]
+fn a_view_composition_declares_its_page_with_optional_regions() {
+    use super::{SurfaceComposition, validate_composition};
+    let composition = |value: serde_json::Value| -> SurfaceComposition {
+        serde_json::from_value(value).expect("the composition fixture is valid")
+    };
+    let region = serde_json::json!({"name": "page", "kind": "document", "input": "native"});
+    assert!(
+        validate_composition(
+            "probe",
+            &composition(serde_json::json!({"kind": "view", "page": "ui/page.html"}))
+        )
+        .is_ok()
+    );
+    assert!(
+        validate_composition("probe", &composition(serde_json::json!({"kind": "view", "page": "ui/page.html", "regions": [region], "overlays": []}))).is_ok()
+    );
+    for value in [
+        serde_json::json!({"kind": "view"}),
+        serde_json::json!({"kind": "view", "page": "../page.html"}),
+        serde_json::json!({"kind": "view", "page": "ui/page.js"}),
+        serde_json::json!({"kind": "view", "page": "ui/.binary/page.html"}),
+        serde_json::json!({"kind": "hybrid", "page": "ui/page.html", "regions": [region], "overlays": []}),
+    ] {
+        assert!(
+            validate_composition("probe", &composition(value.clone())).is_err(),
+            "composition {value} is accepted"
+        );
+    }
+}
+
+// contract: view.composition.dom-removed
+#[test]
+fn a_hybrid_composition_is_refused_with_the_plugin_and_the_field() {
+    use super::{SurfaceComposition, validate_composition};
+    let region = serde_json::json!({"name": "page", "kind": "document", "input": "native"});
+    for value in [
+        serde_json::json!({"kind": "hybrid", "regions": [region], "overlays": []}),
+        serde_json::json!({"kind": "hybrid", "page": "ui/page.html", "regions": [region], "overlays": []}),
+    ] {
+        let composition: SurfaceComposition =
+            serde_json::from_value(value.clone()).expect("the fixture is valid");
+        let error =
+            validate_composition("probe", &composition).expect_err("the hybrid kind is removed");
+        assert_eq!(
+            error,
+            "plugin probe surface composition: kind hybrid is removed; the composition takes kind view",
+            "composition {value}"
+        );
+    }
+}
+
+// contract: view.composition.dom-removed
+#[test]
+fn a_dom_composition_is_refused_with_the_plugin_and_the_field() {
+    use super::{SurfaceComposition, validate_composition};
+    let composition: SurfaceComposition =
+        serde_json::from_value(serde_json::json!({"kind": "dom"})).expect("the fixture is valid");
+    let error = validate_composition("probe", &composition).expect_err("the dom kind is removed");
+    assert_eq!(
+        error,
+        "plugin probe surface composition: kind dom is removed; the composition takes kind view"
+    );
+}
+
+/// Poisons the lock by panicking while its guard is held.
+fn poison<T>(lock: &Mutex<T>) {
+    assert!(
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = lock.lock().unwrap();
+            panic!("the test poisons the lock");
+        }))
+        .is_err(),
+        "the closure must panic"
+    );
+    assert!(lock.is_poisoned(), "the lock was not poisoned");
+}
+
+// contract: host.locks.poisoned-state-is-recovered
+#[test]
+fn a_press_of_a_surface_view_is_found_when_the_surface_lock_is_poisoned() {
+    let named = Mutex::new(HashMap::from([(7usize, "surf".to_string())]));
+    poison(&named);
+    let found = pressed_surface(&named, &[7], |_| None);
+    assert_eq!(
+        found.as_deref(),
+        Some("surf"),
+        "a press of a surface view returned no surface while the surface lock was poisoned"
+    );
+}
+
+// contract: host.locks.poisoned-state-is-recovered
+#[test]
+fn the_first_commit_of_a_page_is_marked_when_the_running_lock_is_poisoned() {
+    let running = Running::default();
+    poison(&running.first);
+    assert!(
+        mark_first_commit(&running),
+        "the first commit of a page was not marked while the running lock was poisoned"
+    );
+    assert!(
+        !mark_first_commit(&running),
+        "a second commit of a page was marked as the first"
+    );
+}
+
+// contract: host.locks.poisoned-state-is-recovered
+#[test]
+fn a_poisoned_surface_lock_still_creates_and_closes_a_surface() {
+    let named = Mutex::new(HashMap::new());
+    let surface_hosts: Mutex<HashMap<String, usize>> = Mutex::new(HashMap::new());
+    poison(&named);
+    poison(&surface_hosts);
+    let created = create_registered_surface(&named, &surface_hosts, "tab-poison", || Ok(9));
+    assert_eq!(
+        created.ok(),
+        Some(9),
+        "a creation failed while the surface locks were poisoned"
+    );
+    let removed = removed_surfaces(&surface_hosts, &HashSet::new())
+        .ok()
+        .unwrap();
+    assert_eq!(
+        removed,
+        vec![("tab-poison".to_string(), 9)],
+        "a removal found no surface while the surface lock was poisoned"
+    );
+    let closed = close_registered_surface(&named, &surface_hosts, "tab-poison", 9, |_| Ok(()));
+    assert_eq!(
+        closed.ok(),
+        Some(true),
+        "a close found no registration while the surface locks were poisoned"
+    );
+    assert!(
+        named
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .is_empty()
+            && surface_hosts
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .is_empty(),
+        "a close of a poisoned lock kept the surface registration or its name"
+    );
+}
+
+// contract: view.composition.image-region-declares-present
+#[test]
+fn an_image_region_declares_its_presentation_mode() {
+    use super::{SurfaceComposition, validate_composition};
+    let compose = |region: serde_json::Value| {
+        let composition: SurfaceComposition = serde_json::from_value(
+            serde_json::json!({"kind": "view", "page": "ui/page.html", "regions": [region], "overlays": []}),
+        )
+        .expect("the composition fixture is valid");
+        validate_composition("probe", &composition)
+    };
+    for present in ["copy", "lease"] {
+        assert_eq!(
+            compose(
+                serde_json::json!({"name": "view", "kind": "image", "sidecar": "probe", "present": present, "input": "dom"})
+            ),
+            Ok(()),
+            "image region with present {present}"
+        );
+    }
+    for region in [
+        serde_json::json!({"name": "view", "kind": "image", "sidecar": "probe", "input": "dom"}),
+        serde_json::json!({"name": "view", "kind": "image", "sidecar": "probe", "present": "move", "input": "dom"}),
+    ] {
+        assert_eq!(
+            compose(region),
+            Err(r#"image region "view" declares present copy or lease"#.to_string())
+        );
+    }
+    assert_eq!(
+        compose(
+            serde_json::json!({"name": "page", "kind": "document", "present": "lease", "input": "native"})
+        ),
+        Err(r#"document region "page" must own native input"#.to_string())
+    );
+}
+
+// contract: surface-layout.page-cancels-preparation
+#[test]
+fn the_page_can_cancel_a_preparation() {
+    let request: super::CancelRequest = serde_json::from_str(r#"{"ticket":42}"#).unwrap();
+    assert_eq!(request.ticket, 42);
+}
+
+// contract: surface-layout.page-cancels-preparation
+#[test]
+fn a_cancelled_preparation_abandons_its_waits_and_then_cancels_its_layout() {
+    let steps = Mutex::new(Vec::new());
+    let result = abandon_waits_then_cancel_layout(
+        || {
+            steps.lock().unwrap().push("abandon");
+            Err("abandon failed".to_string())
+        },
+        || {
+            steps.lock().unwrap().push("cancel");
+            Err("cancel failed".to_string())
+        },
+    );
+    assert_eq!(*steps.lock().unwrap(), ["abandon", "cancel"]);
+    assert_eq!(
+        result,
+        Err("abandon failed; cancelling layout: cancel failed".to_string())
+    );
+}
+
+// contract: input.pointer.reads-the-press-target-before-delivery
+#[test]
+fn a_press_reads_its_target_before_its_delivery() {
+    let steps = std::cell::RefCell::new(Vec::new());
+    let read = read_press_then_deliver(
+        || {
+            steps.borrow_mut().push("read");
+            Ok(7)
+        },
+        || {
+            steps.borrow_mut().push("deliver");
+            Ok(())
+        },
+    );
+    assert_eq!(read, Ok(7));
+    assert_eq!(
+        *steps.borrow(),
+        vec!["read", "deliver"],
+        "a layout between the delivery and the read names another view as the target of the press"
+    );
+    let delivered = std::cell::Cell::new(false);
+    let failed: Result<u8, String> = read_press_then_deliver(
+        || Err("no window".to_string()),
+        || {
+            delivered.set(true);
+            Ok(())
+        },
+    );
+    assert_eq!(failed, Err("no window".to_string()));
+    assert!(
+        !delivered.get(),
+        "a press whose target cannot be read was delivered"
+    );
+}

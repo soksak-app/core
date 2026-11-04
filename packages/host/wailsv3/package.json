@@ -2,5 +2,5 @@
   "name": "@soksak/host-wailsv3",
   "version": "0.0.34",
   "private": true,
-  "description": "Wails v3 native host: project windows, native surfaces and document regions, modals, the local endpoint, the sidecar channel, and platform implementations."
+  "description": "Wails v3 framework adapter: the run of the Wails application and the framework port of the Go language host library."
 }

@@ -136,12 +136,14 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Tauri runtime", "js-ts", ["apps/tauriv2/runtime/**/*.js"], ["apps/tauriv2/test/**/*.mjs"], { sharedTests: true }),
   lane("Wails runtime", "js-ts", ["apps/wailsv3/runtime/**/*.js"], ["apps/wailsv3/test/**/*.mjs"], { sharedTests: true }),
 
-  lane("Tauri host", "rust", ["packages/host/tauriv2/src/**/*.rs", "packages/host/tauriv2/build.rs"], ["packages/host/tauriv2/tests/**/*.rs", "packages/host/tauriv2/src/documents_test.rs", "packages/host/tauriv2/src/windows_front_test.rs", "packages/host/tauriv2/src/sidecars_route_test.rs", "packages/host/tauriv2/src/document_post_test.rs", "packages/host/tauriv2/src/images_test.rs", "packages/host/tauriv2/src/images_relay_test.rs", "packages/host/tauriv2/src/object_counts_test.rs", "packages/host/tauriv2/src/composition_overlay_test.rs", "packages/host/tauriv2/src/platform/darwin/webview_overlay_test.rs", "packages/host/tauriv2/src/platform/darwin/document_test.rs", "packages/host/tauriv2/src/sidecar_reply_test.rs", "packages/host/tauriv2/src/surfaces_test.rs", "packages/host/tauriv2/src/modals_readiness_test.rs", "packages/host/tauriv2/src/exposure_webviews_test.rs", "packages/host/tauriv2/src/exposure_status_test.rs", "packages/host/tauriv2/src/notifications_test.rs", "packages/host/tauriv2/src/project_removal_test.rs", "packages/host/tauriv2/src/endpoint_lock_test.rs", "packages/host/tauriv2/src/windows_records_test.rs", "packages/host/tauriv2/src/responder_test.rs", "packages/host/tauriv2/src/sidecars_lock_test.rs", "packages/host/tauriv2/src/image_detach_test.rs", "packages/host/tauriv2/src/start_test.rs", "packages/host/tauriv2/src/performance_lock_test.rs", "packages/host/tauriv2/src/workspace_lock_test.rs", "packages/host/tauriv2/src/view_lifecycle_test.rs", "packages/host/tauriv2/src/view_origin_test.rs", "packages/host/tauriv2/src/view_responsiveness_test.rs", "packages/host/tauriv2/src/view_theme_test.rs", "packages/host/tauriv2/src/surface_close_test.rs", "packages/host/tauriv2/src/presentation_end_test.rs", "packages/host/tauriv2/src/view_start_test.rs", "packages/host/tauriv2/src/log_policy_levels_test.rs", "packages/host/tauriv2/src/view_call_peer_test.rs", "packages/host/tauriv2/src/view_binary_test.rs", "packages/host/tauriv2/src/presentation_wait_test.rs", "packages/host/tauriv2/src/view_join_test.rs", "packages/host/tauriv2/benches/**/*.rs", "packages/host/tauriv2/tests/fixtures/**/*.json", "packages/host/tauriv2/src/diagnostics_lock_test.rs", "packages/host/tauriv2/src/diagnostics_input_reference_test.rs", "packages/host/tauriv2/src/diagnostics_test.rs", "packages/host/tauriv2/src/plugins_starter_test.rs", "packages/host/tauriv2/src/platform/darwin/input_reference_test.rs", "packages/host/tauriv2/src/log_policy_watch_hook_lock_test.rs", "packages/host/tauriv2/src/process_lock_hook_lock_test.rs", "packages/host/tauriv2/src/assets_lock_test.rs", "packages/host/tauriv2/src/deep_link_lock_test.rs", "packages/host/tauriv2/src/log_query_lock_test.rs", "packages/host/tauriv2/src/debug_follow_lock_test.rs", "packages/host/tauriv2/src/source_origins_test.rs", "packages/host/tauriv2/src/sidecar_routes_test.rs", "packages/host/tauriv2/src/sidecars_session_retention_test.rs"], { testExtensions: new Set([".rs", ".json"]) }),
+  lane("Rust language host library", "rust", ["packages/host/rust/src/**/*.rs", "packages/host/rust/build.rs"], ["packages/host/rust/tests/**/*.rs", "packages/host/rust/src/documents_test.rs", "packages/host/rust/src/windows_front_test.rs", "packages/host/rust/src/sidecars_route_test.rs", "packages/host/rust/src/document_post_test.rs", "packages/host/rust/src/images_test.rs", "packages/host/rust/src/images_relay_test.rs", "packages/host/rust/src/object_counts_test.rs", "packages/host/rust/src/composition_overlay_test.rs", "packages/host/rust/src/platform/darwin/webview_overlay_test.rs", "packages/host/rust/src/platform/darwin/document_test.rs", "packages/host/rust/src/sidecar_reply_test.rs", "packages/host/rust/src/surfaces_test.rs", "packages/host/rust/src/modals_readiness_test.rs", "packages/host/rust/src/exposure_webviews_test.rs", "packages/host/rust/src/exposure_status_test.rs", "packages/host/rust/src/notifications_test.rs", "packages/host/rust/src/project_removal_test.rs", "packages/host/rust/src/endpoint_lock_test.rs", "packages/host/rust/src/windows_records_test.rs", "packages/host/rust/src/responder_test.rs", "packages/host/rust/src/sidecars_lock_test.rs", "packages/host/rust/src/image_detach_test.rs", "packages/host/rust/src/start_test.rs", "packages/host/rust/src/performance_lock_test.rs", "packages/host/rust/src/workspace_lock_test.rs", "packages/host/rust/src/view_lifecycle_test.rs", "packages/host/rust/src/view_origin_test.rs", "packages/host/rust/src/view_responsiveness_test.rs", "packages/host/rust/src/view_theme_test.rs", "packages/host/rust/src/surface_close_test.rs", "packages/host/rust/src/presentation_end_test.rs", "packages/host/rust/src/view_start_test.rs", "packages/host/rust/src/log_policy_levels_test.rs", "packages/host/rust/src/view_call_peer_test.rs", "packages/host/rust/src/view_binary_test.rs", "packages/host/rust/src/presentation_wait_test.rs", "packages/host/rust/src/view_join_test.rs", "packages/host/rust/benches/**/*.rs", "packages/host/rust/tests/fixtures/**/*.json", "packages/host/rust/src/diagnostics_lock_test.rs", "packages/host/rust/src/diagnostics_input_reference_test.rs", "packages/host/rust/src/diagnostics_test.rs", "packages/host/rust/src/platform/darwin/input_reference_test.rs", "packages/host/rust/src/log_policy_watch_hook_lock_test.rs", "packages/host/rust/src/process_lock_hook_lock_test.rs", "packages/host/rust/src/assets_lock_test.rs", "packages/host/rust/src/deep_link_lock_test.rs", "packages/host/rust/src/log_query_lock_test.rs", "packages/host/rust/src/debug_follow_lock_test.rs", "packages/host/rust/src/source_origins_test.rs", "packages/host/rust/src/sidecar_routes_test.rs", "packages/host/rust/src/sidecars_session_retention_test.rs"], { testExtensions: new Set([".rs", ".json"]) }),
+  lane("Tauri framework adapter", "rust", ["packages/host/tauriv2/src/**/*.rs"], ["packages/host/tauriv2/tests/**/*.rs", "packages/host/tauriv2/src/plugins_starter_test.rs"]),
   lane("Tauri application bootstrap", "rust", ["apps/tauriv2/src/main.rs", "apps/tauriv2/build.rs"], ["e2e/**/*.mjs", "e2e/platform/platform.js", "e2e/platform/darwin/darwin.js", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js", "e2e/fixtures/*/*/ui/*.html"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
 
-  lane("Wails host", "go", ["packages/host/wailsv3/src/**/*.go"], ["packages/host/wailsv3/tests/**/*.go", "packages/host/wailsv3/tests/fixtures/**/*.json", "packages/host/wailsv3/src/projects_test.go", "packages/host/wailsv3/src/document_post_test.go", "packages/host/wailsv3/src/images_relay_test.go", "packages/host/wailsv3/src/image_detach_test.go", "packages/host/wailsv3/src/responder_test.go", "packages/host/wailsv3/src/start_test.go", "packages/host/wailsv3/src/diagnostics_test.go", "packages/host/wailsv3/src/diagnostics_input_reference_test.go", "packages/host/wailsv3/src/diagnostics_clock_test.go", "packages/host/wailsv3/src/composition_overlay_test.go", "packages/host/wailsv3/src/platform/darwin/webview_overlay_test.go", "packages/host/wailsv3/src/platform/darwin/document_test.go", "packages/host/wailsv3/src/platform/darwin/input_reference_test.go", "packages/host/wailsv3/src/exposure_status_test.go", "packages/host/wailsv3/src/exposure_webviews_test.go", "packages/host/wailsv3/src/modals_readiness_test.go", "packages/host/wailsv3/src/object_counts_test.go", "packages/host/wailsv3/src/view_lifecycle_test.go", "packages/host/wailsv3/src/view_responsiveness_test.go", "packages/host/wailsv3/src/view_theme_test.go", "packages/host/wailsv3/src/view_start_test.go", "packages/host/wailsv3/src/log_policy_levels_test.go", "packages/host/wailsv3/src/view_call_peer_test.go", "packages/host/wailsv3/src/view_call_record_test.go", "packages/host/wailsv3/src/view_error_test.go", "packages/host/wailsv3/src/view_binary_test.go", "packages/host/wailsv3/src/documents_test.go", "packages/host/wailsv3/src/presentation_wait_test.go", "packages/host/wailsv3/src/view_join_test.go", "packages/host/wailsv3/src/sidecar_reply_test.go", "packages/host/wailsv3/src/surfaces_test.go", "packages/host/wailsv3/src/view_origin_test.go", "packages/host/wailsv3/src/source_origins_test.go", "packages/host/wailsv3/src/sidecar_routes_test.go", "packages/host/wailsv3/src/sidecars_session_retention_test.go", "packages/host/wailsv3/src/plugins_starter_test.go", "packages/host/wailsv3/src/images_test.go", "packages/host/wailsv3/src/windows_front_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
-  lane("Wails command line", "go", ["packages/sok/wailsv3/src/**/*.go"], ["packages/sok/wailsv3/tests/**/*.go", "packages/sok/wailsv3/src/diagnostics_test.go", "packages/sok/wailsv3/src/dev_test.go", "packages/sok/wailsv3/src/debug_test.go", "packages/sok/wailsv3/src/event_log_loss_test.go"]),
-  lane("Tauri command line", "rust", ["packages/sok/tauriv2/src/**/*.rs"], ["packages/sok/tauriv2/tests/**/*.rs", "packages/sok/tauriv2/src/event_log_lock_test.rs", "packages/sok/tauriv2/src/debug_test.rs", "packages/sok/tauriv2/src/event_log_loss_test.rs", "packages/sok/tauriv2/src/process_wait_test.rs"]),
+  lane("Go language host library", "go", ["packages/host/go/src/**/*.go"], ["packages/host/go/tests/**/*.go", "packages/host/go/tests/fixtures/**/*.json", "packages/host/go/src/projects_test.go", "packages/host/go/src/document_post_test.go", "packages/host/go/src/images_relay_test.go", "packages/host/go/src/image_detach_test.go", "packages/host/go/src/responder_test.go", "packages/host/go/src/start_test.go", "packages/host/go/src/diagnostics_test.go", "packages/host/go/src/diagnostics_input_reference_test.go", "packages/host/go/src/diagnostics_clock_test.go", "packages/host/go/src/composition_overlay_test.go", "packages/host/go/src/platform/darwin/webview_overlay_test.go", "packages/host/go/src/platform/darwin/document_test.go", "packages/host/go/src/platform/darwin/input_reference_test.go", "packages/host/go/src/exposure_status_test.go", "packages/host/go/src/exposure_webviews_test.go", "packages/host/go/src/modals_readiness_test.go", "packages/host/go/src/object_counts_test.go", "packages/host/go/src/view_lifecycle_test.go", "packages/host/go/src/view_responsiveness_test.go", "packages/host/go/src/view_theme_test.go", "packages/host/go/src/view_start_test.go", "packages/host/go/src/log_policy_levels_test.go", "packages/host/go/src/view_call_peer_test.go", "packages/host/go/src/view_call_record_test.go", "packages/host/go/src/view_error_test.go", "packages/host/go/src/view_binary_test.go", "packages/host/go/src/documents_test.go", "packages/host/go/src/presentation_wait_test.go", "packages/host/go/src/view_join_test.go", "packages/host/go/src/sidecar_reply_test.go", "packages/host/go/src/surfaces_test.go", "packages/host/go/src/view_origin_test.go", "packages/host/go/src/source_origins_test.go", "packages/host/go/src/sidecar_routes_test.go", "packages/host/go/src/sidecars_session_retention_test.go", "packages/host/go/src/plugins_starter_test.go", "packages/host/go/src/images_test.go", "packages/host/go/src/windows_front_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
+  lane("Wails framework adapter", "go", ["packages/host/wailsv3/src/**/*.go"], ["packages/host/wailsv3/tests/**/*.go"], { sharedTests: true }),
+  lane("Wails command line", "go", ["packages/sok/go/src/**/*.go"], ["packages/sok/go/tests/**/*.go", "packages/sok/go/src/diagnostics_test.go", "packages/sok/go/src/dev_test.go", "packages/sok/go/src/debug_test.go", "packages/sok/go/src/event_log_loss_test.go"]),
+  lane("Tauri command line", "rust", ["packages/sok/rust/src/**/*.rs"], ["packages/sok/rust/tests/**/*.rs", "packages/sok/rust/src/event_log_lock_test.rs", "packages/sok/rust/src/debug_test.rs", "packages/sok/rust/src/event_log_loss_test.rs", "packages/sok/rust/src/process_wait_test.rs"]),
   lane("Wails application bootstrap", "go", ["apps/wailsv3/src/main.go"], ["e2e/**/*.mjs", "e2e/platform/platform.js", "e2e/platform/darwin/darwin.js", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js", "e2e/fixtures/*/*/ui/*.html"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
 
   lane("Darwin clipboard", "objective-c", ["native/darwin/src/clipboard.m"], ["native/darwin/tests/clipboard_test.m"], { sharedTests: true }),
@@ -204,9 +206,10 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("browser environment declaration", "declaration", ["apps/browser/environment.json"], ["apps/browser/test/environment.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Tauri environment declaration", "declaration", ["apps/tauriv2/environment.json"], ["apps/tauriv2/test/environment.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Wails environment declaration", "declaration", ["apps/wailsv3/environment.json"], ["apps/wailsv3/test/environment.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
-  lane("Wails bridge", "js-ts", ["packages/host/wailsv3/src/bridge.js"], ["apps/wailsv3/test/runtime-contract.test.mjs"], { sharedTests: true }),
-  lane("Wails native webview bridge", "objective-c", ["packages/host/wailsv3/src/platform/darwin/webview.m"], ["packages/host/wailsv3/tests/documents_test.go"], { testLanguage: "go", sharedTests: true }),
-  lane("Wails main-thread worker interface", "native-interface", ["packages/host/wailsv3/src/platform/darwin/main_thread.h"], ["packages/host/wailsv3/tests/platform/darwin/main_thread_stack_test.go"], { testLanguage: "go", sharedTests: true }),
+  lane("Go host bridge", "js-ts", ["packages/host/go/src/bridge.js"], ["apps/wailsv3/test/runtime-contract.test.mjs"], { sharedTests: true }),
+  lane("Go host native webview bridge", "objective-c", ["packages/host/go/src/platform/darwin/webview.m"], ["packages/host/go/tests/documents_test.go"], { testLanguage: "go", sharedTests: true }),
+  lane("Go host main-thread interface", "native-interface", ["packages/host/go/src/platform/darwin/main_thread.h"], ["packages/host/wailsv3/tests/platform/darwin/main_thread_stack_test.go"], { testLanguage: "go", sharedTests: true }),
+  lane("Go host main-thread functions", "objective-c", ["packages/host/go/src/platform/darwin/main_thread.m"], ["packages/host/wailsv3/tests/platform/darwin/main_thread_stack_test.go"], { testLanguage: "go", sharedTests: true }),
   lane("Workbench styles", "stylesheet", ["packages/workbench/app.css", "packages/workbench/library.css"], ["packages/workbench/test/background.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Workbench declarations", "declaration", ["packages/workbench/exposure.json"], ["packages/workbench/test/exposure.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Workbench shortcuts", "declaration", ["packages/workbench/shortcuts.json"], ["scripts/test/shortcut-table.test.mjs"], { testLanguage: "js-ts" }),
@@ -220,12 +223,12 @@ const FEATURE_LINKS = [
   {
     id: "F397",
     implementation: [
-      { file: "packages/host/tauriv2/src/event_record.rs", symbol: "pub fn quit_with_cause(cause: &str, quit: impl FnOnce()) {" },
-      { file: "packages/host/wailsv3/src/event_record.go", symbol: "func QuitWithCause(cause string, quit func()) {" },
+      { file: "packages/host/rust/src/event_record.rs", symbol: "pub fn quit_with_cause(cause: &str, quit: impl FnOnce()) {" },
+      { file: "packages/host/go/src/event_record.go", symbol: "func QuitWithCause(cause string, quit func()) {" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/termination_test.rs", id: "a_quit_stores_its_cause_before_it_runs" },
-      { file: "packages/host/wailsv3/tests/termination_test.go", id: "TestAQuitStoresItsCauseBeforeItRuns" },
+      { file: "packages/host/rust/tests/termination_test.rs", id: "a_quit_stores_its_cause_before_it_runs" },
+      { file: "packages/host/go/tests/termination_test.go", id: "TestAQuitStoresItsCauseBeforeItRuns" },
     ],
     expected: "A request to end the process stores log.closed with its cause before quit runs.",
     levels: ["unit"],
@@ -233,12 +236,12 @@ const FEATURE_LINKS = [
   {
     id: "F398",
     implementation: [
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "format!(\"close {}: {error}\", answer.surface)," },
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "if failure != nil && (pending || stopped) {" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "format!(\"close {}: {error}\", answer.surface)," },
+      { file: "packages/host/go/src/sidecars.go", symbol: "if failure != nil && (pending || stopped) {" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "failed_close_answer_is_logged_before_the_closing_entry_ends" },
-      { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestFailedCloseAnswerIsLoggedBeforeTheClosingEntryEnds" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "failed_close_answer_is_logged_before_the_closing_entry_ends" },
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestFailedCloseAnswerIsLoggedBeforeTheClosingEntryEnds" },
     ],
     expected: "The failure of a close answer is written to the log before the closing entry ends.",
     levels: ["unit"],
@@ -399,8 +402,9 @@ const FEATURE_LINKS = [
     id: "F502-6",
     implementation: [
       { file: "go.work", symbol: "go 1.27.3" },
+      { file: "packages/host/go/go.mod", symbol: "go 1.27.3" },
       { file: "packages/host/wailsv3/go.mod", symbol: "go 1.27.3" },
-      { file: "packages/sok/wailsv3/go.mod", symbol: "go 1.27.3" },
+      { file: "packages/sok/go/go.mod", symbol: "go 1.27.3" },
       { file: "apps/wailsv3/go.mod", symbol: "go 1.27.3" },
     ],
     tests: [{ file: "scripts/test/workflow-setup.test.mjs", id: "go.work and every module that it uses declare Go 1.27.3" }],
@@ -422,17 +426,17 @@ const FEATURE_LINKS = [
   {
     id: "F514",
     implementation: [
-      { file: "packages/host/tauriv2/src/documents.rs", symbol: "let Err(reason) = configure_steps(native, document, setup) else {" },
-      { file: "packages/host/tauriv2/src/documents.rs", symbol: "let reason = match configure(handle).and_then(|()| load(handle, &address)) {" },
-      { file: "packages/host/wailsv3/src/documents.go", symbol: "func configureDocument(document unsafe.Pointer, setup documentSetup) error {" },
+      { file: "packages/host/rust/src/documents.rs", symbol: "let Err(reason) = configure_steps(native, document, setup) else {" },
+      { file: "packages/host/rust/src/documents.rs", symbol: "let reason = match configure(handle).and_then(|()| load(handle, &address)) {" },
+      { file: "packages/host/go/src/documents.go", symbol: "func configureDocument(document unsafe.Pointer, setup documentSetup) error {" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/src/documents_test.rs", id: "a_failed_step_of_the_creation_closes_the_document" },
-      { file: "packages/host/tauriv2/src/documents_test.rs", id: "a_creation_without_failure_keeps_the_document_and_a_failed_close_is_reported" },
-      { file: "packages/host/tauriv2/tests/documents_test.rs", id: "a_failed_configuration_or_load_of_a_view_closes_the_view" },
-      { file: "packages/host/wailsv3/src/documents_test.go", id: "TestAFailedStepOfTheCreationClosesTheDocument" },
-      { file: "packages/host/wailsv3/src/documents_test.go", id: "TestACreationWithoutFailureKeepsTheDocument" },
-      { file: "packages/host/wailsv3/src/surfaces_test.go", id: "TestAFailedConfigurationOrLoadOfAViewClosesTheView" },
+      { file: "packages/host/rust/src/documents_test.rs", id: "a_failed_step_of_the_creation_closes_the_document" },
+      { file: "packages/host/rust/src/documents_test.rs", id: "a_creation_without_failure_keeps_the_document_and_a_failed_close_is_reported" },
+      { file: "packages/host/rust/tests/documents_test.rs", id: "a_failed_configuration_or_load_of_a_view_closes_the_view" },
+      { file: "packages/host/go/src/documents_test.go", id: "TestAFailedStepOfTheCreationClosesTheDocument" },
+      { file: "packages/host/go/src/documents_test.go", id: "TestACreationWithoutFailureKeepsTheDocument" },
+      { file: "packages/host/go/src/surfaces_test.go", id: "TestAFailedConfigurationOrLoadOfAViewClosesTheView" },
     ],
     expected: "Every failure after the native document of a document region or of a view exists closes the document before the error returns, in both hosts, and a failed close is reported with the failure.",
     levels: ["unit"],
@@ -440,21 +444,21 @@ const FEATURE_LINKS = [
   {
     id: "F502-2-1",
     implementation: [
-      { file: "packages/host/wailsv3/src/images.go", symbol: "func (i *Images) PresentedFrames(key ImageKey) (uint64, error) {" },
-      { file: "packages/host/tauriv2/src/images.rs", symbol: "pub fn presented_frames(&self, key: &Key) -> Result<u64, String> {" },
-      { file: "packages/host/wailsv3/src/exposure.go", symbol: "type WindowFrameCounters struct {" },
-      { file: "packages/host/tauriv2/src/exposure.rs", symbol: "fn window_frame_counters() -> serde_json::Map<String, Value> {" },
-      { file: "packages/host/wailsv3/src/diagnostics.go", symbol: "func nativeDrag(plan dragPlan, from point, deliver func(PointerInput) error, step func()) (map[string]any, error) {" },
-      { file: "packages/host/tauriv2/src/diagnostics.rs", symbol: "fn native_drag(" },
+      { file: "packages/host/go/src/images.go", symbol: "func (i *Images) PresentedFrames(key ImageKey) (uint64, error) {" },
+      { file: "packages/host/rust/src/images.rs", symbol: "pub fn presented_frames(&self, key: &Key) -> Result<u64, String> {" },
+      { file: "packages/host/go/src/exposure.go", symbol: "type WindowFrameCounters struct {" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "fn window_frame_counters() -> serde_json::Map<String, Value> {" },
+      { file: "packages/host/go/src/diagnostics.go", symbol: "func nativeDrag(plan dragPlan, from point, deliver func(PointerInput) error, step func()) (map[string]any, error) {" },
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn native_drag(" },
       { file: "packages/workbench/observe.js", symbol: "function boundaryPoint(axis, line) {" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/images_test.go", id: "TestWindowRegionCountsTheFramesThatTheHostMarkedPresented" },
-      { file: "packages/host/tauriv2/src/images_test.rs", id: "window_region_counts_the_frames_that_the_host_marked_presented" },
-      { file: "packages/host/wailsv3/src/exposure_webviews_test.go", id: "TestWindowFrameCountersAreNullBecauseWebKitDrawsTheWorkbench" },
-      { file: "packages/host/tauriv2/src/exposure_webviews_test.rs", id: "window_frame_counters_are_null_because_webkit_draws_the_workbench" },
-      { file: "packages/host/wailsv3/src/diagnostics_test.go", id: "TestNativeDragDeliversThePressTheStepsAndTheReleaseOfEachRoundTrip" },
-      { file: "packages/host/tauriv2/src/diagnostics_test.rs", id: "native_drag_delivers_the_press_the_steps_and_the_release_of_each_round_trip" },
+      { file: "packages/host/go/src/images_test.go", id: "TestWindowRegionCountsTheFramesThatTheHostMarkedPresented" },
+      { file: "packages/host/rust/src/images_test.rs", id: "window_region_counts_the_frames_that_the_host_marked_presented" },
+      { file: "packages/host/go/src/exposure_webviews_test.go", id: "TestWindowFrameCountersAreNullBecauseWebKitDrawsTheWorkbench" },
+      { file: "packages/host/rust/src/exposure_webviews_test.rs", id: "window_frame_counters_are_null_because_webkit_draws_the_workbench" },
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestNativeDragDeliversThePressTheStepsAndTheReleaseOfEachRoundTrip" },
+      { file: "packages/host/rust/src/diagnostics_test.rs", id: "native_drag_delivers_the_press_the_steps_and_the_release_of_each_round_trip" },
       { file: "packages/workbench/test/observe-drag.test.mjs", id: "diagnostics.drag.boundary answers the centre of the named boundary and its absence" },
       { file: "packages/workbench/test/observe-drag.test.mjs", id: "the page drag presses at the point that diagnostics.drag.boundary answers" },
     ],
@@ -618,29 +622,29 @@ const FEATURE_LINKS = [
   {
     id: "F502-14",
     implementation: [
-      { file: "packages/sok/wailsv3/src/event_log.go", symbol: "var layers = []string{\"native\", \"host\", \"workbench\", \"page\", \"plugin\", \"sidecar\"}" },
-      { file: "packages/sok/wailsv3/src/event_log.go", symbol: "func checkWriter(e RelayedEvent) error {" },
-      { file: "packages/sok/tauriv2/src/event_log.rs", symbol: "fn check_writer(" },
-      { file: "packages/sok/tauriv2/src/log_index.rs", symbol: "pub(crate) const LAYERS: [&str; 7] = [" },
+      { file: "packages/sok/go/src/event_log.go", symbol: "var layers = []string{\"native\", \"host\", \"workbench\", \"page\", \"plugin\", \"sidecar\"}" },
+      { file: "packages/sok/go/src/event_log.go", symbol: "func checkWriter(e RelayedEvent) error {" },
+      { file: "packages/sok/rust/src/event_log.rs", symbol: "fn check_writer(" },
+      { file: "packages/sok/rust/src/log_index.rs", symbol: "pub(crate) const LAYERS: [&str; 7] = [" },
       { file: "packages/log-contract/index.js", symbol: "const PAGE_LAYERS = new Map([[\"workbench\", [\"start\"]], [\"page\", [\"page\"]], [\"plugin\", [\"page\", \"start\"]]]);" },
-      { file: "packages/host/wailsv3/src/debug.go", symbol: "Workbench json.RawMessage `json:\"workbench\"`" },
-      { file: "packages/host/tauriv2/src/debug.rs", symbol: "pub workbench: Value," },
+      { file: "packages/host/go/src/debug.go", symbol: "Workbench json.RawMessage `json:\"workbench\"`" },
+      { file: "packages/host/rust/src/debug.rs", symbol: "pub workbench: Value," },
       { file: "packages/workbench/page-log.js", symbol: "export function recordWorkbenchStart" },
     ],
     tests: [
       { file: "scripts/test/check-events.test.mjs", id: "the catalog puts the events that the workbench writes in the layer workbench and keeps the records of a view page in the layer page" },
       { file: "packages/log-contract/test/audit.test.mjs", id: "an event of the layer workbench names the start of the workbench in start, and a plugin event names its page or its workbench start" },
       { file: "packages/log-contract/test/audit.test.mjs", id: "a file of the event schema 2 is rejected with the file name and the number" },
-      { file: "packages/sok/wailsv3/tests/debug_test.go", id: "TestQueryRefusesWhatBreaksTheContract" },
-      { file: "packages/sok/tauriv2/tests/debug_test.rs", id: "query_refuses_what_breaks_the_contract" },
-      { file: "packages/sok/wailsv3/tests/log_query_test.go", id: "TestLogQueryRefusesInvalidParameters" },
-      { file: "packages/sok/tauriv2/tests/log_query_test.rs", id: "query_refuses_invalid_parameters" },
-      { file: "packages/host/wailsv3/tests/event_log_test.go", id: "TestARelayedEventNamesTheDocumentThatWroteItInTheMemberOfItsLayer" },
-      { file: "packages/host/tauriv2/tests/event_log_test.rs", id: "a_relayed_event_names_the_document_that_wrote_it_in_the_member_of_its_layer" },
-      { file: "packages/host/wailsv3/tests/event_relay_test.go", id: "TestARelayedBatchIsStoredInOrderInTheLayerWorkbench" },
-      { file: "packages/host/tauriv2/tests/event_relay_test.rs", id: "a_relayed_batch_is_stored_in_order_in_the_layer_workbench" },
-      { file: "packages/host/wailsv3/tests/debug_test.go", id: "TestDebugStateNamesTheValueOfTheWorkbench" },
-      { file: "packages/host/tauriv2/tests/debug_test.rs", id: "debug_state_names_the_value_of_the_workbench" },
+      { file: "packages/sok/go/tests/debug_test.go", id: "TestQueryRefusesWhatBreaksTheContract" },
+      { file: "packages/sok/rust/tests/debug_test.rs", id: "query_refuses_what_breaks_the_contract" },
+      { file: "packages/sok/go/tests/log_query_test.go", id: "TestLogQueryRefusesInvalidParameters" },
+      { file: "packages/sok/rust/tests/log_query_test.rs", id: "query_refuses_invalid_parameters" },
+      { file: "packages/host/go/tests/event_log_test.go", id: "TestARelayedEventNamesTheDocumentThatWroteItInTheMemberOfItsLayer" },
+      { file: "packages/host/rust/tests/event_log_test.rs", id: "a_relayed_event_names_the_document_that_wrote_it_in_the_member_of_its_layer" },
+      { file: "packages/host/go/tests/event_relay_test.go", id: "TestARelayedBatchIsStoredInOrderInTheLayerWorkbench" },
+      { file: "packages/host/rust/tests/event_relay_test.rs", id: "a_relayed_batch_is_stored_in_order_in_the_layer_workbench" },
+      { file: "packages/host/go/tests/debug_test.go", id: "TestDebugStateNamesTheValueOfTheWorkbench" },
+      { file: "packages/host/rust/tests/debug_test.rs", id: "debug_state_names_the_value_of_the_workbench" },
       { file: "packages/window-check/test/event-log.test.mjs", id: "a record of the workbench reads as a line of the layer workbench, and the trace of the workbench as rows of the layer workbench" },
       { file: "packages/plugin-api/test/log-batch.test.mjs", id: "a writer of the layer workbench names each event by its start, and the batcher writes its own records and its ungated events in that layer" },
       { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "the layer choices of the timeline are every layer of the event contract, the workbench included, and the declarations list the same" },
@@ -652,22 +656,22 @@ const FEATURE_LINKS = [
   {
     id: "F511",
     implementation: [
-      { file: "packages/host/tauriv2/src/documents.rs", symbol: "pub fn attach(&self, key: &Key) -> Result<Vec<StreamEffect>, String> {" },
-      { file: "packages/host/wailsv3/src/documents.go", symbol: "func (d *DocumentStreams) Attach(key DocumentKey) ([]StreamEffect, error) {" },
+      { file: "packages/host/rust/src/documents.rs", symbol: "pub fn attach(&self, key: &Key) -> Result<Vec<StreamEffect>, String> {" },
+      { file: "packages/host/go/src/documents.go", symbol: "func (d *DocumentStreams) Attach(key DocumentKey) ([]StreamEffect, error) {" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/documents_test.rs", id: "stream_attach_creates_the_request_log_and_turns_its_collection_on" },
-      { file: "packages/host/tauriv2/tests/documents_test.rs", id: "stream_request_log_outlives_the_subscriptions_of_the_region" },
-      { file: "packages/host/tauriv2/tests/documents_test.rs", id: "stream_request_log_keeps_the_entries_that_arrive_without_a_subscription" },
-      { file: "packages/host/tauriv2/tests/documents_test.rs", id: "stream_requests_subscription_of_a_region_with_elements_subscription_posts_no_entry_again" },
-      { file: "packages/host/tauriv2/tests/documents_test.rs", id: "stream_removal_ends_subscriptions_and_releases_the_log" },
-      { file: "packages/host/tauriv2/tests/documents_test.rs", id: "a_page_process_end_removes_every_subscription_of_the_page" },
-      { file: "packages/host/wailsv3/tests/documents_test.go", id: "TestDocumentStreamAttachCreatesTheRequestLogAndTurnsItsCollectionOn" },
-      { file: "packages/host/wailsv3/tests/documents_test.go", id: "TestDocumentRequestLogOutlivesTheSubscriptionsOfTheRegion" },
-      { file: "packages/host/wailsv3/tests/documents_test.go", id: "TestDocumentRequestLogKeepsTheEntriesThatArriveWithoutASubscription" },
-      { file: "packages/host/wailsv3/tests/documents_test.go", id: "TestDocumentRequestsSubscriptionOfARegionWithElementsSubscriptionPostsNoEntryAgain" },
-      { file: "packages/host/wailsv3/tests/documents_test.go", id: "TestDocumentStreamRemovalEndsSubscriptionsAndReleasesTheLog" },
-      { file: "packages/host/wailsv3/tests/documents_test.go", id: "TestDocumentStreamEndedPageProcessKeepsTheRegionsOfItsSurface" },
+      { file: "packages/host/rust/tests/documents_test.rs", id: "stream_attach_creates_the_request_log_and_turns_its_collection_on" },
+      { file: "packages/host/rust/tests/documents_test.rs", id: "stream_request_log_outlives_the_subscriptions_of_the_region" },
+      { file: "packages/host/rust/tests/documents_test.rs", id: "stream_request_log_keeps_the_entries_that_arrive_without_a_subscription" },
+      { file: "packages/host/rust/tests/documents_test.rs", id: "stream_requests_subscription_of_a_region_with_elements_subscription_posts_no_entry_again" },
+      { file: "packages/host/rust/tests/documents_test.rs", id: "stream_removal_ends_subscriptions_and_releases_the_log" },
+      { file: "packages/host/rust/tests/documents_test.rs", id: "a_page_process_end_removes_every_subscription_of_the_page" },
+      { file: "packages/host/go/tests/documents_test.go", id: "TestDocumentStreamAttachCreatesTheRequestLogAndTurnsItsCollectionOn" },
+      { file: "packages/host/go/tests/documents_test.go", id: "TestDocumentRequestLogOutlivesTheSubscriptionsOfTheRegion" },
+      { file: "packages/host/go/tests/documents_test.go", id: "TestDocumentRequestLogKeepsTheEntriesThatArriveWithoutASubscription" },
+      { file: "packages/host/go/tests/documents_test.go", id: "TestDocumentRequestsSubscriptionOfARegionWithElementsSubscriptionPostsNoEntryAgain" },
+      { file: "packages/host/go/tests/documents_test.go", id: "TestDocumentStreamRemovalEndsSubscriptionsAndReleasesTheLog" },
+      { file: "packages/host/go/tests/documents_test.go", id: "TestDocumentStreamEndedPageProcessKeepsTheRegionsOfItsSurface" },
     ],
     expected: "A document region collects its requests and keeps a request log of at most 200 entries from its attach to its removal, a requests subscription and its end change no collection, and the end of the subscriptions of a page keeps the logs of its regions.",
     levels: ["unit"],
@@ -675,15 +679,15 @@ const FEATURE_LINKS = [
   {
     id: "F504",
     implementation: [
-      { file: "packages/host/wailsv3/src/workspace.go", symbol: "var commonOnly = []string{\"projectOpening\", \"textSize\", \"memorySaver\", \"memorySaverDelay\"}" },
-      { file: "packages/host/tauriv2/src/workspace.rs", symbol: "const COMMON_ONLY: [&str; 4] = [" },
+      { file: "packages/host/go/src/workspace.go", symbol: "var commonOnly = []string{\"projectOpening\", \"textSize\", \"memorySaver\", \"memorySaverDelay\"}" },
+      { file: "packages/host/rust/src/workspace.rs", symbol: "const COMMON_ONLY: [&str; 4] = [" },
       { file: "apps/browser/runtime/browser-storage.js", symbol: "const COMMON_ONLY = Object.freeze([\"projectOpening\", \"textSize\", \"memorySaver\", \"memorySaverDelay\"]);" },
       { file: "packages/workbench/settings.js", symbol: "for (const key of COMMON_ONLY) if (id && Object.hasOwn(patch, key)) throw new Error(`${key} is common-only`);" },
       { file: "scripts/check-host-parity.mjs", symbol: "export function auditCommonOnlyKeys(keys) {" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/workspace_test.go", id: "TestProjectCommonOnlyKeysAreRejected" },
-      { file: "packages/host/tauriv2/tests/workspace_test.rs", id: "project_common_only_keys_are_rejected" },
+      { file: "packages/host/go/tests/workspace_test.go", id: "TestProjectCommonOnlyKeysAreRejected" },
+      { file: "packages/host/rust/tests/workspace_test.rs", id: "project_common_only_keys_are_rejected" },
       { file: "apps/browser/test/browser-storage.test.mjs", id: "a project write of each common-only key fails with the message of the hosts" },
       { file: "packages/workbench/test/settings.test.mjs", id: "a project write of each common-only key fails with the message of the hosts" },
       { file: "scripts/test/check-host-parity.test.mjs", id: "a common-only key that the workbench refuses and a host or the browser runtime accepts fails" },
@@ -716,18 +720,18 @@ const FEATURE_LINKS = [
     id: "F518",
     implementation: [
       { file: "native/darwin/src/document_view.m", symbol: "char *sp_document_binary_put(void *handle, const void *bytes, size_t length, const char *type, char id[33]) {" },
-      { file: "packages/host/wailsv3/src/clipboard.go", symbol: "func (s *Surfaces) readViewPNG(surface string) (ClipboardViewReadResponse, error) {" },
-      { file: "packages/host/tauriv2/src/clipboard.rs", symbol: "pub(crate) fn read_view_png_with(" },
+      { file: "packages/host/go/src/clipboard.go", symbol: "func (s *Surfaces) readViewPNG(surface string) (ClipboardViewReadResponse, error) {" },
+      { file: "packages/host/rust/src/clipboard.rs", symbol: "pub(crate) fn read_view_png_with(" },
       { file: "packages/workbench/view-calls.js", symbol: "const persisted = await runtime.clipboard.persistPNG(fields.binary);" },
       { file: "packages/plugin-api/view.js", symbol: "const uploadBinary = async (bytes, type) => {" },
     ],
     tests: [
       { file: "native/darwin/tests/document_binary_test.m", id: "a native put stores the bytes under a new id" },
       { file: "native/darwin/tests/document_binary_test.m", id: "a put over the page limit of 64 MiB is refused and stores nothing" },
-      { file: "packages/host/wailsv3/src/view_binary_test.go", id: "TestViewPNGReadPutsTheClipboardPNGIntoTheViewStore" },
-      { file: "packages/host/wailsv3/src/view_binary_test.go", id: "TestViewPNGPersistTakesTheIdAndSavesItsBytes" },
-      { file: "packages/host/tauriv2/src/view_binary_test.rs", id: "a_view_png_read_puts_the_clipboard_png_into_the_view_store" },
-      { file: "packages/host/tauriv2/src/view_binary_test.rs", id: "a_view_png_persist_takes_the_id_and_saves_its_bytes" },
+      { file: "packages/host/go/src/view_binary_test.go", id: "TestViewPNGReadPutsTheClipboardPNGIntoTheViewStore" },
+      { file: "packages/host/go/src/view_binary_test.go", id: "TestViewPNGPersistTakesTheIdAndSavesItsBytes" },
+      { file: "packages/host/rust/src/view_binary_test.rs", id: "a_view_png_read_puts_the_clipboard_png_into_the_view_store" },
+      { file: "packages/host/rust/src/view_binary_test.rs", id: "a_view_png_persist_takes_the_id_and_saves_its_bytes" },
       { file: "packages/workbench/test/view-calls.test.mjs", id: "runtime.clipboard.persistPNG refuses params without a binary id, and base64 data, and persists nothing" },
       { file: "packages/plugin-api/test/view-clipboard.test.mjs", id: "a png read downloads the bytes of the binary id that the reply names" },
       { file: "packages/plugin-api/test/view-clipboard.test.mjs", id: "persistPNG uploads the bytes as image/png and sends the binary id of the upload" },
@@ -757,8 +761,8 @@ const FEATURE_LINKS = [
       { file: "native/darwin/src/window_facts.m", symbol: "char *sp_window_hit(void *handle, void *surfaceView, double x, double y) {" },
       { file: "native/darwin/src/surface_layout.m", symbol: "void surfaceLayoutObserve(void (^started)(void *), void (^ended)(void *)) {" },
       { file: "native/darwin/src/surface_layout.m", symbol: "surfaceLayoutPresent surfaceLayoutMainPresentation(void *handle) {" },
-      { file: "packages/host/wailsv3/src/platform/darwin/webview.m", symbol: "surfaceLayoutAfterSettled(handle, surfaceLayoutMainPresentation(view), " },
-      { file: "packages/host/tauriv2/src/platform/darwin/layout.rs", symbol: "surfaceLayoutAfterSettled(view.ns_window().cast(), present, &done)" },
+      { file: "packages/host/go/src/platform/darwin/webview.m", symbol: "surfaceLayoutAfterSettled(handle, surfaceLayoutMainPresentation(view), " },
+      { file: "packages/host/rust/src/platform/darwin/layout.rs", symbol: "surfaceLayoutAfterSettled(view.ns_window().cast(), present, &done)" },
     ],
     tests: [
       { file: "native/darwin/tests/surface_container_test.m", id: "a surface host is created in an NSView that is not a web view" },
@@ -802,7 +806,7 @@ const FEATURE_LINKS = [
       { file: "scripts/check-host-parity.mjs", symbol: "function callerGraph(language, sources, scope) {" },
       { file: "scripts/check-host-parity.mjs", symbol: "export function withoutRustTestItems(source) {" },
       { file: "scripts/check-host-parity.mjs", symbol: "export function libraryCrate(manifest, file) {" },
-      { file: "packages/host/tauriv2/tests/support/platform/darwin/endpoint_client.rs", symbol: "pub fn connect(address: &str, read_timeout: Duration) -> Connection {" },
+      { file: "packages/host/rust/tests/support/platform/darwin/endpoint_client.rs", symbol: "pub fn connect(address: &str, read_timeout: Duration) -> Connection {" },
     ],
     tests: [
       { file: "scripts/test/check-host-parity.test.mjs", id: "every platform method with a caller passes" },
@@ -842,13 +846,13 @@ const FEATURE_LINKS = [
     id: "F506",
     implementation: [
       { file: "native/darwin/src/document_view.m", symbol: "static void *documentCreationFails(NSString *cause) {" },
-      { file: "packages/host/wailsv3/src/platform/darwin/document.go", symbol: "const missingNativeCause = \"the native layer stated no cause\"" },
-      { file: "packages/host/tauriv2/src/platform/darwin/document.rs", symbol: "const MISSING_NATIVE_CAUSE: &str = \"the native layer stated no cause\";" },
+      { file: "packages/host/go/src/platform/darwin/document.go", symbol: "const missingNativeCause = \"the native layer stated no cause\"" },
+      { file: "packages/host/rust/src/platform/darwin/document.rs", symbol: "const MISSING_NATIVE_CAUSE: &str = \"the native layer stated no cause\";" },
     ],
     tests: [
       { file: "native/darwin/tests/document_cause_test.m", id: "the surface has no native plane" },
-      { file: "packages/host/wailsv3/src/platform/darwin/document_test.go", id: "TestCreateDocumentReportsAMissingNativeCause" },
-      { file: "packages/host/tauriv2/src/platform/darwin/document_test.rs", id: "create_reports_a_missing_native_cause" },
+      { file: "packages/host/go/src/platform/darwin/document_test.go", id: "TestCreateDocumentReportsAMissingNativeCause" },
+      { file: "packages/host/rust/src/platform/darwin/document_test.rs", id: "create_reports_a_missing_native_cause" },
     ],
     expected: "Every failed creation of a document region or view page states the condition that failed, and both hosts report an empty native cause as a missing cause.",
     levels: ["native", "unit"],
@@ -904,21 +908,21 @@ const FEATURE_LINKS = [
   {
     id: "F395",
     implementation: [
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "format!(\"close {surface}: outbox full, buffered\")," },
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "LogInfo(\"sidecar \"+process.name, fmt.Sprintf(\"close %s: outbox full, buffered\", surface))" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "format!(\"close {surface}: outbox full, buffered\")," },
+      { file: "packages/host/go/src/sidecars.go", symbol: "LogInfo(\"sidecar \"+process.name, fmt.Sprintf(\"close %s: outbox full, buffered\", surface))" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/flush_test.rs", id: "a_close_that_finds_room_writes_no_buffered_record" },
-      { file: "packages/host/wailsv3/tests/flush_test.go", id: "TestACloseThatFindsRoomWritesNoBufferedRecord" },
+      { file: "packages/host/rust/tests/flush_test.rs", id: "a_close_that_finds_room_writes_no_buffered_record" },
+      { file: "packages/host/go/tests/flush_test.go", id: "TestACloseThatFindsRoomWritesNoBufferedRecord" },
     ],
     expected: "A closed notice that finds room in the queue of a sidecar is sent at once and writes no buffered record.",
     levels: ["unit"],
   },
   {
     id: "F239-295-1",
-    implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub fn reload_surface_sidecars<" }],
+    implementation: [{ file: "packages/host/rust/src/windows.rs", symbol: "pub fn reload_surface_sidecars<" }],
     tests: [
-      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "a_page_reload_returns_before_the_image_detach_acknowledgement" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "a_page_reload_returns_before_the_image_detach_acknowledgement" },
     ],
     expected: "A Tauri page reload returns before the image detach acknowledgement.",
     levels: ["unit"],
@@ -1073,27 +1077,27 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/plugin-api/view-start.js", symbol: "const page = crypto.randomUUID();" },
       { file: "packages/workbench/page-identity.js", symbol: "export const pageIdentity = crypto.randomUUID();" },
-      { file: "packages/host/wailsv3/src/event_relay.go", symbol: "func validViewTimeOrigin(value float64) bool" },
-      { file: "packages/host/tauriv2/src/documents.rs", symbol: "time_origin: Option<Value>," },
+      { file: "packages/host/go/src/event_relay.go", symbol: "func validViewTimeOrigin(value float64) bool" },
+      { file: "packages/host/rust/src/documents.rs", symbol: "time_origin: Option<Value>," },
     ],
     tests: [
       { file: "packages/plugin-api/test/view.test.mjs", id: "two documents that start in the same millisecond have different page identities" },
-      { file: "packages/host/wailsv3/src/view_call_record_test.go", id: "TestViewReadyRequiresDocumentAndPositiveTimeOrigin" },
-      { file: "packages/host/tauriv2/src/view_origin_test.rs", id: "view_ready_requires_a_document_and_a_positive_time_origin" },
+      { file: "packages/host/go/src/view_call_record_test.go", id: "TestViewReadyRequiresDocumentAndPositiveTimeOrigin" },
+      { file: "packages/host/rust/src/view_origin_test.rs", id: "view_ready_requires_a_document_and_a_positive_time_origin" },
     ],
     expected: "Every document has a UUID page identity, and both hosts require a document and a positive finite time origin in view.ready.",
     id: "F239-297",
     implementation: [
       { file: "native/darwin/src/window_facts.m", symbol: "void *sp_window_observe_responder(" },
-      { file: "packages/host/wailsv3/src/responder.go", symbol: "func (r *responderState) send(" },
-      { file: "packages/host/tauriv2/src/responder.rs", symbol: "pub fn send_changed_responder(" },
+      { file: "packages/host/go/src/responder.go", symbol: "func (r *responderState) send(" },
+      { file: "packages/host/rust/src/responder.rs", symbol: "pub fn send_changed_responder(" },
       { file: "packages/plugin-api/view.js", symbol: "calls.request(\"tab.focus\", value)" },
       { file: "packages/workbench/focus-state.js", symbol: "export function focusState(" },
     ],
     tests: [
       { file: "native/darwin/tests/window_responder_test.m", id: "an ended observation calls back no more" },
-      { file: "packages/host/wailsv3/src/responder_test.go", id: "TestTheResponderEventFollowsTheFirstResponderAfterThePageIsReady" },
-      { file: "packages/host/tauriv2/src/responder_test.rs", id: "the_responder_event_follows_the_first_responder_after_the_page_is_ready" },
+      { file: "packages/host/go/src/responder_test.go", id: "TestTheResponderEventFollowsTheFirstResponderAfterThePageIsReady" },
+      { file: "packages/host/rust/src/responder_test.rs", id: "the_responder_event_follows_the_first_responder_after_the_page_is_ready" },
       { file: "packages/plugin-api/test/view-document.test.mjs", id: "the bridge reports each change of the focused exposed element of the view with tab.focus" },
       { file: "packages/workbench/test/view-focus.test.mjs", id: "core.focus follows the first responder to the element that a view reports" },
     ],
@@ -1116,23 +1120,23 @@ const FEATURE_LINKS = [
   {
     id: "F239-301",
     implementation: [
-      { file: "packages/host/wailsv3/src/image_detach.go", symbol: "func parseImageDetachAck(" },
-      { file: "packages/host/tauriv2/src/image_detach.rs", symbol: "pub(super) fn acknowledge_image_detach(" },
+      { file: "packages/host/go/src/image_detach.go", symbol: "func parseImageDetachAck(" },
+      { file: "packages/host/rust/src/image_detach.rs", symbol: "pub(super) fn acknowledge_image_detach(" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/image_detach_test.go", id: "TestAMalformedImageDetachAcknowledgementNamesItsMember" },
-      { file: "packages/host/tauriv2/src/image_detach_test.rs", id: "a_malformed_detach_acknowledgement_names_its_member" },
+      { file: "packages/host/go/src/image_detach_test.go", id: "TestAMalformedImageDetachAcknowledgementNamesItsMember" },
+      { file: "packages/host/rust/src/image_detach_test.rs", id: "a_malformed_detach_acknowledgement_names_its_member" },
     ],
     expected: "Both hosts refuse a malformed image detach acknowledgement with the same text that names its member and keep the pending detach.",
     levels: ["unit"],
   },
   {
     id: "F239-300",
-    implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub fn reload_surface_sidecars<" }],
+    implementation: [{ file: "packages/host/rust/src/windows.rs", symbol: "pub fn reload_surface_sidecars<" }],
     tests: [
-      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "a_page_reload_sends_no_message_to_a_persistent_sidecar_of_the_surface" },
-      { file: "packages/host/wailsv3/src/start_test.go", id: "TestStartPageSendsTheReloadedImageDetachAndLeavesItsSurfacePending" },
-      { file: "packages/host/tauriv2/tests/object_counts_test.rs", id: "sidecar_sessions_list_only_the_surfaces_that_sent" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "a_page_reload_sends_no_message_to_a_persistent_sidecar_of_the_surface" },
+      { file: "packages/host/go/src/start_test.go", id: "TestStartPageSendsTheReloadedImageDetachAndLeavesItsSurfacePending" },
+      { file: "packages/host/rust/tests/object_counts_test.rs", id: "sidecar_sessions_list_only_the_surfaces_that_sent" },
     ],
     expected: "A page reload sends a sidecar only the detach of each captured image on both hosts.",
     levels: ["unit"],
@@ -1140,14 +1144,14 @@ const FEATURE_LINKS = [
   {
     id: "F239-295",
     implementation: [
-      { file: "packages/host/wailsv3/src/image_detach.go", symbol: "func (s *Surfaces) beginImageDetaches(" },
-      { file: "packages/host/tauriv2/src/image_detach.rs", symbol: "pub(crate) fn begin_image_detaches<" },
+      { file: "packages/host/go/src/image_detach.go", symbol: "func (s *Surfaces) beginImageDetaches(" },
+      { file: "packages/host/rust/src/image_detach.rs", symbol: "pub(crate) fn begin_image_detaches<" },
       { file: "packages/workbench/image-detach-waits.js", symbol: "export function imageDetachHold(" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/image_detach_test.go", id: "TestAnUnacknowledgedImageDetachKeepsOnlyItsSurfacePending" },
-      { file: "packages/host/wailsv3/src/image_detach_test.go", id: "TestASurfaceEndsItsDetachesOnlyAfterTheAcknowledgementOfEachOfItsImages" },
-      { file: "packages/host/tauriv2/src/image_detach_test.rs", id: "a_surface_ends_its_detaches_only_after_the_acknowledgement_of_each_of_its_images" },
+      { file: "packages/host/go/src/image_detach_test.go", id: "TestAnUnacknowledgedImageDetachKeepsOnlyItsSurfacePending" },
+      { file: "packages/host/go/src/image_detach_test.go", id: "TestASurfaceEndsItsDetachesOnlyAfterTheAcknowledgementOfEachOfItsImages" },
+      { file: "packages/host/rust/src/image_detach_test.rs", id: "a_surface_ends_its_detaches_only_after_the_acknowledgement_of_each_of_its_images" },
       { file: "packages/workbench/test/image-detach-waits.test.mjs", id: "a held tab is neither mounted nor given a background session until its detach ends" },
     ],
     expected: "A pending image detach holds only its surface: the page start returns at once, the host refuses that surface until the ended event, and the page mounts the surface only after the event.",
@@ -1163,13 +1167,13 @@ const FEATURE_LINKS = [
   {
     id: "F239-298",
     implementation: [
-      { file: "packages/host/wailsv3/src/endpoint.go", symbol: "func (c *endpointConn) unsent(" },
-      { file: "packages/host/tauriv2/src/endpoint.rs", symbol: "fn write_to_peer<" },
+      { file: "packages/host/go/src/endpoint.go", symbol: "func (c *endpointConn) unsent(" },
+      { file: "packages/host/rust/src/endpoint.rs", symbol: "fn write_to_peer<" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/endpoint_test.go", id: "TestEndpointRecordsAReplyToAClosedConnectionAsNotSent" },
-      { file: "packages/host/wailsv3/tests/endpoint_test.go", id: "TestEndpointRecordsAWriteThatThePeerClosedAsNotSent" },
-      { file: "packages/host/tauriv2/tests/endpoint_test.rs", id: "a_reply_to_a_connection_that_the_peer_closed_is_recorded_as_not_sent" },
+      { file: "packages/host/go/tests/endpoint_test.go", id: "TestEndpointRecordsAReplyToAClosedConnectionAsNotSent" },
+      { file: "packages/host/go/tests/endpoint_test.go", id: "TestEndpointRecordsAWriteThatThePeerClosedAsNotSent" },
+      { file: "packages/host/rust/tests/endpoint_test.rs", id: "a_reply_to_a_connection_that_the_peer_closed_is_recorded_as_not_sent" },
     ],
     expected: "Both hosts record a reply or a notification that meets a connection that the peer closed as not sent, and neither records an error.",
     levels: ["unit"],
@@ -1209,12 +1213,12 @@ const FEATURE_LINKS = [
   {
     id: "F239-291",
     implementation: [
-      { file: "packages/host/wailsv3/src/projects.go", symbol: "func (h *Host) ProjectOpen(" },
-      { file: "packages/host/tauriv2/src/windows.rs", symbol: "pub fn show_project_owner(" },
+      { file: "packages/host/go/src/projects.go", symbol: "func (h *Host) ProjectOpen(" },
+      { file: "packages/host/rust/src/windows.rs", symbol: "pub fn show_project_owner(" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/windows_front_test.go", id: "TestProjectOpenShowsTheOtherOwnerWithoutActivation" },
-      { file: "packages/host/tauriv2/src/windows_front_test.rs", id: "project_open_shows_the_other_owner_without_activation" },
+      { file: "packages/host/go/src/windows_front_test.go", id: "TestProjectOpenShowsTheOtherOwnerWithoutActivation" },
+      { file: "packages/host/rust/src/windows_front_test.rs", id: "project_open_shows_the_other_owner_without_activation" },
     ],
     expected: "Both hosts show the window that owns a project opened from another window without requesting the activation of the application.",
     levels: ["unit"],
@@ -1222,12 +1226,12 @@ const FEATURE_LINKS = [
   {
     id: "F239-290",
     implementation: [
-      { file: "packages/host/wailsv3/src/images.go", symbol: "func (i *Images) SetSurfaceVisible(" },
-      { file: "packages/host/tauriv2/src/images.rs", symbol: "pub fn set_surface_visible(" },
+      { file: "packages/host/go/src/images.go", symbol: "func (i *Images) SetSurfaceVisible(" },
+      { file: "packages/host/rust/src/images.rs", symbol: "pub fn set_surface_visible(" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/images_test.go", id: "TestShownSurfacePresentsFromItsNewRaster" },
-      { file: "packages/host/tauriv2/tests/images_test.rs", id: "shown_surface_presents_from_its_new_raster" },
+      { file: "packages/host/go/tests/images_test.go", id: "TestShownSurfacePresentsFromItsNewRaster" },
+      { file: "packages/host/rust/tests/images_test.rs", id: "shown_surface_presents_from_its_new_raster" },
     ],
     expected: "Both hosts count the presented frames of a surface shown again from its new raster, so the first frame of that raster completes the presentation barrier.",
     levels: ["unit"],
@@ -1282,11 +1286,11 @@ const FEATURE_LINKS = [
       "symbol": "bool sp_document_frame_identity_remove("
     },
     {
-      "file": "packages/host/wailsv3/src/diagnostics.go",
+      "file": "packages/host/go/src/diagnostics.go",
       "symbol": "func diagnosticCaptureDocumentIdentityStart("
     },
     {
-      "file": "packages/host/tauriv2/src/diagnostics.rs",
+      "file": "packages/host/rust/src/diagnostics.rs",
       "symbol": "fn capture_document_identity_start("
     },
     {
@@ -1316,19 +1320,19 @@ const FEATURE_LINKS = [
       "id": "freeze reports the bounded count of distinct atlas cells drawn"
     },
     {
-      "file": "packages/host/wailsv3/src/diagnostics_test.go",
+      "file": "packages/host/go/src/diagnostics_test.go",
       "id": "TestCaptureDocumentIdentityStartIsRegistered"
     },
     {
-      "file": "packages/host/wailsv3/src/diagnostics_test.go",
+      "file": "packages/host/go/src/diagnostics_test.go",
       "id": "TestCaptureStopPreservesCaptureModesWithoutDocumentSource"
     },
     {
-      "file": "packages/host/tauriv2/src/endpoint.rs",
+      "file": "packages/host/rust/src/endpoint.rs",
       "id": "document_frame_identity_start_method_is_declared"
     },
     {
-      "file": "packages/host/tauriv2/src/diagnostics_test.rs",
+      "file": "packages/host/rust/src/diagnostics_test.rs",
       "id": "capture_stop_continues_cleanup_after_freeze_failure_without_issued_count"
     },
     {
@@ -1356,19 +1360,19 @@ const FEATURE_LINKS = [
       "id": "a repeated removal confirms the already removed generation"
     },
     {
-      "file": "packages/host/wailsv3/src/diagnostics_test.go",
+      "file": "packages/host/go/src/diagnostics_test.go",
       "id": "TestCaptureStartWaitsForPriorIdentityRemoval"
     },
     {
-      "file": "packages/host/tauriv2/src/diagnostics_test.rs",
+      "file": "packages/host/rust/src/diagnostics_test.rs",
       "id": "capture_start_waits_for_prior_identity_removal"
     },
     {
-      "file": "packages/host/tauriv2/src/diagnostics_test.rs",
+      "file": "packages/host/rust/src/diagnostics_test.rs",
       "id": "document_frame_identity_callback_wait_is_bounded"
     },
     {
-      "file": "packages/host/tauriv2/src/diagnostics_test.rs",
+      "file": "packages/host/rust/src/diagnostics_test.rs",
       "id": "late_document_frame_identity_callback_errors_are_logged_as_errors"
     },
     {
@@ -1738,21 +1742,21 @@ const FEATURE_LINKS = [
   "id": "F239-223-1",
   "implementation": [
     {
-      "file": "packages/host/wailsv3/src/surfaces.go",
+      "file": "packages/host/go/src/surfaces.go",
       "symbol": "func runSurfaceDispatch("
     },
     {
-      "file": "packages/host/tauriv2/src/surfaces.rs",
+      "file": "packages/host/rust/src/surfaces.rs",
       "symbol": "fn surface_dispatch_result_with<T>("
     }
   ],
   "tests": [
     {
-      "file": "packages/host/wailsv3/src/surfaces_test.go",
+      "file": "packages/host/go/src/surfaces_test.go",
       "id": "TestSurfaceDispatchRecordKeepsTicketAndClockBoundaries"
     },
     {
-      "file": "packages/host/tauriv2/src/surfaces_test.rs",
+      "file": "packages/host/rust/src/surfaces_test.rs",
       "id": "surface_dispatch_wrapper_records_queue_entry_and_return_boundaries"
     }
   ],
@@ -1764,23 +1768,23 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "native/darwin/src/input_reference.m", symbol: "void sp_input_reference(" },
       { file: "e2e/activation/ime-reference-steps.mjs", symbol: "export async function compareAppKitReference(" },
-      { file: "packages/host/wailsv3/src/diagnostics.go", symbol: "func parseInputReference(" },
-      { file: "packages/host/tauriv2/src/diagnostics.rs", symbol: "fn parse_input_reference(" },
+      { file: "packages/host/go/src/diagnostics.go", symbol: "func parseInputReference(" },
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn parse_input_reference(" },
     ],
     tests: [
       { file: "native/darwin/tests/input_reference_test.m", id: "wait-document completes at the expected document while marked text remains" },
       { file: "native/darwin/tests/input_reference_test.m", id: "the ready AppKit reference composes ㅎ" },
       { file: "e2e/test/activation/ime-reference-steps.test.mjs", id: "reference keys wait for selected-source readiness on the newly focused client" },
       { file: "e2e/test/activation/ime-reference-steps.test.mjs", id: "reference steps await a delayed document update while marked text remains" },
-      { file: "packages/host/wailsv3/src/diagnostics_input_reference_test.go", id: "TestInputReferenceValidatesDocument" },
-      { file: "packages/host/wailsv3/src/diagnostics_input_reference_test.go", id: "TestInputReferenceWaitDocumentAcceptsExpectedDocument" },
-      { file: "packages/host/wailsv3/src/diagnostics_input_reference_test.go", id: "TestInputReferenceWaitDocumentRequiresAString" },
-      { file: "packages/host/wailsv3/src/diagnostics_input_reference_test.go", id: "TestInputReferenceWaitDocumentActionErrorNamesAction" },
-      { file: "packages/host/wailsv3/src/diagnostics_input_reference_test.go", id: "TestInputReferenceDocumentErrorNamesBothWaitActions" },
-      { file: "packages/host/tauriv2/src/diagnostics_input_reference_test.rs", id: "input_reference_validates_document" },
-      { file: "packages/host/tauriv2/src/diagnostics_input_reference_test.rs", id: "input_reference_wait_document_accepts_expected_document" },
-      { file: "packages/host/tauriv2/src/diagnostics_input_reference_test.rs", id: "input_reference_wait_document_requires_a_string" },
-      { file: "packages/host/tauriv2/src/diagnostics_input_reference_test.rs", id: "input_reference_wait_document_boundary_errors_name_both_actions" },
+      { file: "packages/host/go/src/diagnostics_input_reference_test.go", id: "TestInputReferenceValidatesDocument" },
+      { file: "packages/host/go/src/diagnostics_input_reference_test.go", id: "TestInputReferenceWaitDocumentAcceptsExpectedDocument" },
+      { file: "packages/host/go/src/diagnostics_input_reference_test.go", id: "TestInputReferenceWaitDocumentRequiresAString" },
+      { file: "packages/host/go/src/diagnostics_input_reference_test.go", id: "TestInputReferenceWaitDocumentActionErrorNamesAction" },
+      { file: "packages/host/go/src/diagnostics_input_reference_test.go", id: "TestInputReferenceDocumentErrorNamesBothWaitActions" },
+      { file: "packages/host/rust/src/diagnostics_input_reference_test.rs", id: "input_reference_validates_document" },
+      { file: "packages/host/rust/src/diagnostics_input_reference_test.rs", id: "input_reference_wait_document_accepts_expected_document" },
+      { file: "packages/host/rust/src/diagnostics_input_reference_test.rs", id: "input_reference_wait_document_requires_a_string" },
+      { file: "packages/host/rust/src/diagnostics_input_reference_test.rs", id: "input_reference_wait_document_boundary_errors_name_both_actions" },
     ],
     expected: "Reference input-source readiness is checked after focus; each dispatched key waits for matching document text while composition may remain marked, and final completion still requires unmarked text.",
     levels: ["native", "unit"],
@@ -2192,16 +2196,16 @@ const FEATURE_LINKS = [
   {
     id: "F239-171",
     implementation: [
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) closingChanged()" },
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn publish_status<O>" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) closingChanged()" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn publish_status<O>" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/sidecars_session_retention_test.go", id: "TestFastCloseAnswerPreservesBothClosingTransitions" },
-      { file: "packages/host/tauriv2/src/sidecars_lock_test.rs", id: "fast_close_answer_preserves_both_closing_transitions" },
-      { file: "packages/host/wailsv3/src/sidecars_session_retention_test.go", id: "TestDeclarationNotifiesEachOutdatedVersionChange" },
-      { file: "packages/host/tauriv2/src/sidecars_lock_test.rs", id: "disconnect_notifies_outdated_removal_without_pending_closes" },
-      { file: "packages/host/wailsv3/src/sidecars_session_retention_test.go", id: "TestRetainNotifiesOutdatedSessionCounts" },
-      { file: "packages/host/tauriv2/src/sidecars_lock_test.rs", id: "detach_notifies_outdated_removal_without_pending_closes" },
+      { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestFastCloseAnswerPreservesBothClosingTransitions" },
+      { file: "packages/host/rust/src/sidecars_lock_test.rs", id: "fast_close_answer_preserves_both_closing_transitions" },
+      { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestDeclarationNotifiesEachOutdatedVersionChange" },
+      { file: "packages/host/rust/src/sidecars_lock_test.rs", id: "disconnect_notifies_outdated_removal_without_pending_closes" },
+      { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestRetainNotifiesOutdatedSessionCounts" },
+      { file: "packages/host/rust/src/sidecars_lock_test.rs", id: "detach_notifies_outdated_removal_without_pending_closes" },
     ],
     expected: "Both hosts preserve ordered immutable closing and outdated status transitions independently of UI invalidation across close, declaration, disconnect, stop and retention.",
     levels: ["unit"],
@@ -2209,16 +2213,16 @@ const FEATURE_LINKS = [
   {
     id: "F239-171-4",
     implementation: [
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) retainLayoutOwners(" },
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn retain_layout_owners<O>" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) retainLayoutOwners(" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn retain_layout_owners<O>" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/sidecars_session_retention_test.go", id: "TestDetachNotifiesOutdatedRemovalWithoutPendingCloses" },
-      { file: "packages/host/wailsv3/src/sidecars_session_retention_test.go", id: "TestRetainNotifiesOutdatedSessionCounts" },
-      { file: "packages/host/wailsv3/src/sidecars_session_retention_test.go", id: "TestReusedRetainedSurfaceNotifiesOutdatedSessionCount" },
-      { file: "packages/host/tauriv2/src/sidecars_lock_test.rs", id: "detach_notifies_outdated_removal_without_pending_closes" },
-      { file: "packages/host/tauriv2/src/sidecars_lock_test.rs", id: "retain_notifies_outdated_session_counts" },
-      { file: "packages/host/tauriv2/src/sidecars_lock_test.rs", id: "reused_retained_surface_notifies_outdated_session_count" },
+      { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestDetachNotifiesOutdatedRemovalWithoutPendingCloses" },
+      { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestRetainNotifiesOutdatedSessionCounts" },
+      { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestReusedRetainedSurfaceNotifiesOutdatedSessionCount" },
+      { file: "packages/host/rust/src/sidecars_lock_test.rs", id: "detach_notifies_outdated_removal_without_pending_closes" },
+      { file: "packages/host/rust/src/sidecars_lock_test.rs", id: "retain_notifies_outdated_session_counts" },
+      { file: "packages/host/rust/src/sidecars_lock_test.rs", id: "reused_retained_surface_notifies_outdated_session_count" },
     ],
     expected: "Shared stop state cleanup and retained owner removal notify outdated changes without pending closes; reused owners restore counts and idempotent operations stay silent.",
     levels: ["unit"],
@@ -2226,14 +2230,14 @@ const FEATURE_LINKS = [
   {
     id: "F239-171-3",
     implementation: [
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) persistentConnectionEnded(" },
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn persistent_connection_ended<O: Owner>(" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) persistentConnectionEnded(" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn persistent_connection_ended<O: Owner>(" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/sidecars_session_retention_test.go", id: "TestDeclarationNotifiesEachOutdatedVersionChange" },
-      { file: "packages/host/wailsv3/src/sidecars_session_retention_test.go", id: "TestDisconnectNotifiesOutdatedRemovalWithoutPendingCloses" },
-      { file: "packages/host/tauriv2/src/sidecars_lock_test.rs", id: "declaration_notifies_each_outdated_version_change" },
-      { file: "packages/host/tauriv2/src/sidecars_lock_test.rs", id: "disconnect_notifies_outdated_removal_without_pending_closes" },
+      { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestDeclarationNotifiesEachOutdatedVersionChange" },
+      { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestDisconnectNotifiesOutdatedRemovalWithoutPendingCloses" },
+      { file: "packages/host/rust/src/sidecars_lock_test.rs", id: "declaration_notifies_each_outdated_version_change" },
+      { file: "packages/host/rust/src/sidecars_lock_test.rs", id: "disconnect_notifies_outdated_removal_without_pending_closes" },
     ],
     expected: "Version-only declaration changes and current persistent connection loss notify the complete outdated status without pending closes; rejected declarations, unchanged versions and stale connections do not announce changes.",
     levels: ["unit"],
@@ -2241,7 +2245,7 @@ const FEATURE_LINKS = [
   {
     id: "F239-163",
     implementation: [
-      { file: "packages/host/tauriv2/src/surfaces.rs", symbol: "fn apply_surfaces(" },
+      { file: "packages/host/rust/src/surfaces.rs", symbol: "fn apply_surfaces(" },
     ],
     tests: [
       { file: "e2e/surface-sync-turn.test.mjs", id: "a surface layout enters the main thread once and its ready callback once" },
@@ -2252,12 +2256,12 @@ const FEATURE_LINKS = [
   {
     id: "F239-164",
     implementation: [
-      { file: "packages/host/tauriv2/src/images.rs", symbol: "pub(crate) fn present_on_ui(" },
+      { file: "packages/host/rust/src/images.rs", symbol: "pub(crate) fn present_on_ui(" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/src/images_test.rs", id: "image_commit_runs_after_the_framework_event_releases_its_lock" },
-      { file: "packages/host/tauriv2/src/images_test.rs", id: "image_enqueue_failure_reaches_the_frame_handler" },
-      { file: "packages/host/tauriv2/src/images_test.rs", id: "native_image_failure_reaches_the_frame_handler" },
+      { file: "packages/host/rust/src/images_test.rs", id: "image_commit_runs_after_the_framework_event_releases_its_lock" },
+      { file: "packages/host/rust/src/images_test.rs", id: "image_enqueue_failure_reaches_the_frame_handler" },
+      { file: "packages/host/rust/src/images_test.rs", id: "native_image_failure_reaches_the_frame_handler" },
     ],
     expected: "Image commits leave the framework event lock and preserve enqueue and native presentation failures.",
     levels: ["unit"],
@@ -2265,12 +2269,12 @@ const FEATURE_LINKS = [
   {
     id: "F239-165",
     implementation: [
-      { file: "packages/host/tauriv2/src/images.rs", symbol: "pub fn current_presented(" },
-      { file: "packages/host/wailsv3/src/images.go", symbol: "waitCurrentObserved" },
+      { file: "packages/host/rust/src/images.rs", symbol: "pub fn current_presented(" },
+      { file: "packages/host/go/src/images.go", symbol: "waitCurrentObserved" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/src/images_test.rs", id: "a_pending_newer_frame_is_required_after_the_wait_begins" },
-      { file: "packages/host/wailsv3/src/images_test.go", id: "TestPendingNewerFrameIsRequiredAfterTheWaitBegins" },
+      { file: "packages/host/rust/src/images_test.rs", id: "a_pending_newer_frame_is_required_after_the_wait_begins" },
+      { file: "packages/host/go/src/images_test.go", id: "TestPendingNewerFrameIsRequiredAfterTheWaitBegins" },
     ],
     expected: "Both image waiters require a newer accepted frame to present before completing.",
     levels: ["unit"],
@@ -2289,14 +2293,14 @@ const FEATURE_LINKS = [
   {
     id: "F239-167",
     implementation: [
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "pub fn receive_sidecar_message(" },
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func ReceiveSidecarMessage(" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "pub fn receive_sidecar_message(" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "func ReceiveSidecarMessage(" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/sidecars_receive_trace_test.rs", id: "a_handled_image_records_its_receipt_once" },
-      { file: "packages/host/tauriv2/tests/sidecars_receive_trace_test.rs", id: "receipt_precedes_native_dispatch" },
-      { file: "packages/host/wailsv3/tests/sidecars_receive_trace_test.go", id: "TestHandledImageRecordsItsReceiptOnce" },
-      { file: "packages/host/wailsv3/tests/sidecars_receive_trace_test.go", id: "TestReceiptPrecedesNativeDispatch" },
+      { file: "packages/host/rust/tests/sidecars_receive_trace_test.rs", id: "a_handled_image_records_its_receipt_once" },
+      { file: "packages/host/rust/tests/sidecars_receive_trace_test.rs", id: "receipt_precedes_native_dispatch" },
+      { file: "packages/host/go/tests/sidecars_receive_trace_test.go", id: "TestHandledImageRecordsItsReceiptOnce" },
+      { file: "packages/host/go/tests/sidecars_receive_trace_test.go", id: "TestReceiptPrecedesNativeDispatch" },
     ],
     expected: "Both host transports record image receipt before native handling without losing ordinary page delivery.",
     levels: ["unit"],
@@ -2395,11 +2399,11 @@ const FEATURE_LINKS = [
   {
     id: "F239-183",
     implementation: [
-      { file: "packages/host/wailsv3/src/documents.go", symbol: "func (s *Surfaces) replyView(" },
+      { file: "packages/host/go/src/documents.go", symbol: "func (s *Surfaces) replyView(" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/view_call_peer_test.go", id: "TestSuccessfulViewDeliveryKeepsTheViewAlive" },
-      { file: "packages/host/wailsv3/src/view_lifecycle_test.go", id: "TestAViewEndStoresHostViewKilledWithItsPluginAndSurface" },
+      { file: "packages/host/go/src/view_call_peer_test.go", id: "TestSuccessfulViewDeliveryKeepsTheViewAlive" },
+      { file: "packages/host/go/src/view_lifecycle_test.go", id: "TestAViewEndStoresHostViewKilledWithItsPluginAndSurface" },
     ],
     expected: "Successful reply, event and request delivery preserves the live view while actual termination records its end.",
     levels: ["unit"],
@@ -2439,10 +2443,10 @@ const FEATURE_LINKS = [
   {
     id: "F239-184",
     implementation: [
-      { file: "packages/host/wailsv3/src/image_detach.go", symbol: "rand.Text()" },
+      { file: "packages/host/go/src/image_detach.go", symbol: "rand.Text()" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/image_detach_test.go", id: "TestImageDetachRequestIdentityDoesNotRestartWithTheApplication" },
+      { file: "packages/host/go/src/image_detach_test.go", id: "TestImageDetachRequestIdentityDoesNotRestartWithTheApplication" },
       { file: "e2e/outside.test.mjs", id: "native content, cards, and the sidebar rail stay aligned" },
     ],
     expected: "Detach request identity does not restart with the application and reload reaches recorded divider-drag geometry acceptance.",
@@ -2511,13 +2515,13 @@ const FEATURE_LINKS = [
   {
     id: "F239-277",
     implementation: [
-      { file: "packages/sok/wailsv3/src/install.go", symbol: "func ParseVersion(text string)" },
+      { file: "packages/sok/go/src/install.go", symbol: "func ParseVersion(text string)" },
       { file: "go.work.sum", symbol: "github.com/Masterminds/semver/v3 v3.5.0 h1:" },
-      { file: "packages/sok/wailsv3/go.sum", symbol: "github.com/Masterminds/semver/v3 v3.5.0 h1:" },
+      { file: "packages/sok/go/go.sum", symbol: "github.com/Masterminds/semver/v3 v3.5.0 h1:" },
     ],
     tests: [
-      { file: "packages/sok/wailsv3/tests/install_test.go", id: "TestVersionRangesAcceptExactCaretTildeAndBoundedForms" },
-      { file: "packages/sok/wailsv3/tests/install_test.go", id: "TestVersionsAndRangesRefuseTheFormsThatTheLibraryAccepts" },
+      { file: "packages/sok/go/tests/install_test.go", id: "TestVersionRangesAcceptExactCaretTildeAndBoundedForms" },
+      { file: "packages/sok/go/tests/install_test.go", id: "TestVersionsAndRangesRefuseTheFormsThatTheLibraryAccepts" },
     ],
     expected: "The Sok installer parses and orders the declared semantic version forms, rejects unsupported forms, and both workspace and standalone module graphs retain the checksums needed to resolve that parser offline.",
     levels: ["unit"],
@@ -2553,12 +2557,12 @@ const FEATURE_LINKS = [
   {
     id: "F266.4",
     implementation: [
-      { file: "packages/host/tauriv2/tests/flush_test.rs", symbol: "fn finish_drain_scenario(" },
+      { file: "packages/host/rust/tests/flush_test.rs", symbol: "fn finish_drain_scenario(" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/flush_test.rs", id: "the_drain_fixture_receives_pending_child_output_before_cleanup" },
-      { file: "packages/host/tauriv2/tests/flush_test.rs", id: "every_pending_reply_is_flushed_after_the_queue_drains" },
-      { file: "packages/host/tauriv2/tests/flush_test.rs", id: "order_is_correct_when_stop_flushes_buffered_messages" },
+      { file: "packages/host/rust/tests/flush_test.rs", id: "the_drain_fixture_receives_pending_child_output_before_cleanup" },
+      { file: "packages/host/rust/tests/flush_test.rs", id: "every_pending_reply_is_flushed_after_the_queue_drains" },
+      { file: "packages/host/rust/tests/flush_test.rs", id: "order_is_correct_when_stop_flushes_buffered_messages" },
     ],
     expected: "The drain fixture observes pending child output before cleanup, while the separate shutdown scenario still verifies stop flushing.",
     levels: ["unit"],
@@ -2578,13 +2582,13 @@ const FEATURE_LINKS = [
     id: "F239-210",
     implementation: [
       { file: "packages/workbench/event-classes.js", symbol: "export function classOf(" },
-      { file: "packages/sok/wailsv3/src/event_classes.go", symbol: "func EventClassOf(" },
-      { file: "packages/sok/tauriv2/src/event_classes.rs", symbol: "pub fn class_of(" },
+      { file: "packages/sok/go/src/event_classes.go", symbol: "func EventClassOf(" },
+      { file: "packages/sok/rust/src/event_classes.rs", symbol: "pub fn class_of(" },
     ],
     tests: [
       { file: "scripts/test/event-classes.test.mjs", id: "the committed class tables equal what the catalog gives" },
-      { file: "packages/sok/wailsv3/tests/event_class_test.go", id: "TestTheClassTableGivesTheCatalogClassOfEventsAndFamilies" },
-      { file: "packages/sok/tauriv2/tests/event_class_test.rs", id: "the_class_table_gives_the_catalog_class_of_events_and_families" },
+      { file: "packages/sok/go/tests/event_class_test.go", id: "TestTheClassTableGivesTheCatalogClassOfEventsAndFamilies" },
+      { file: "packages/sok/rust/tests/event_class_test.rs", id: "the_class_table_gives_the_catalog_class_of_events_and_families" },
     ],
     expected: "The root-view presentation join event has the declared call class in generated and runtime tables.",
     levels: ["unit"],
@@ -2606,12 +2610,12 @@ const FEATURE_LINKS = [
   {
     id: "F239-207",
     implementation: [
-      { file: "packages/host/wailsv3/src/presentation_wait.go", symbol: "func tracePresentationJoin(" },
-      { file: "packages/host/tauriv2/src/presentation_wait.rs", symbol: "pub(crate) fn trace_presentation_join(" },
+      { file: "packages/host/go/src/presentation_wait.go", symbol: "func tracePresentationJoin(" },
+      { file: "packages/host/rust/src/presentation_wait.rs", symbol: "pub(crate) fn trace_presentation_join(" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/view_join_test.go", id: "TestPresentationJoinTraceKeepsExactIdentityAcrossCallbackAndAbandonment" },
-      { file: "packages/host/tauriv2/src/view_join_test.rs", id: "held_and_late_native_callbacks_keep_their_exact_join_identity" },
+      { file: "packages/host/go/src/view_join_test.go", id: "TestPresentationJoinTraceKeepsExactIdentityAcrossCallbackAndAbandonment" },
+      { file: "packages/host/rust/src/view_join_test.rs", id: "held_and_late_native_callbacks_keep_their_exact_join_identity" },
     ],
     expected: "Root join phases preserve exact layout and view identity, including synchronous and late native callbacks, without claiming pixel presentation.",
     levels: ["unit"],
@@ -2666,11 +2670,11 @@ const FEATURE_LINKS = [
   {
     id: "F212.12-1-15",
     implementation: [
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "revivePersistent" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "revivePersistent" },
       { file: "e2e/view-display.mjs", symbol: "core.tab.close" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentTransportWritesAnErrorLineForALostConnection" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentTransportWritesAnErrorLineForALostConnection" },
       { file: "e2e/projects.test.mjs", id: "project windows persist files, inherit settings, and isolate native state" },
       { file: "e2e/view-display.test.mjs", id: "each installed view plugin requires an explicit content case in a card" },
     ],
@@ -2729,7 +2733,7 @@ const FEATURE_LINKS = [
     id: "F212.7",
     implementation: [
       { file: "packages/plugin-api/view-start.js", symbol: "window.sokView = Object.freeze(" },
-      { file: "packages/host/wailsv3/src/documents.go", symbol: "const viewChannelPath =" },
+      { file: "packages/host/go/src/documents.go", symbol: "const viewChannelPath =" },
     ],
     tests: [
       { file: "packages/plugin-api/test/view.test.mjs", id: "the injected script posts the ready message with a document identifier at document start" },
@@ -2744,7 +2748,7 @@ const FEATURE_LINKS = [
     id: "F212.7-14",
     implementation: [
       { file: "packages/plugin-api/view-start.js", symbol: "window.sokView = Object.freeze(" },
-      { file: "packages/host/wailsv3/src/documents.go", symbol: "const viewChannelPath =" },
+      { file: "packages/host/go/src/documents.go", symbol: "const viewChannelPath =" },
     ],
     tests: [
       { file: "packages/plugin-api/test/view.test.mjs", id: "the injected script posts the ready message with a document identifier at document start" },
@@ -2782,12 +2786,12 @@ const FEATURE_LINKS = [
   {
     id: "F212.14-4",
     implementation: [
-      { file: "packages/host/wailsv3/src/surfaces.go", symbol: "func PrepareRasterUpdate(" },
+      { file: "packages/host/go/src/surfaces.go", symbol: "func PrepareRasterUpdate(" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/surface_layout_order_test.go", id: "TestContinuousPreparationStartsRasterBeforeReply" },
-      { file: "packages/host/wailsv3/tests/surface_layout_order_test.go", id: "TestRasterPreparationFailureCancelsBeforeReply" },
-      { file: "packages/host/wailsv3/tests/surface_layout_order_test.go", id: "TestRasterPreparationRetainsCancellationSchedulingError" },
+      { file: "packages/host/go/tests/surface_layout_order_test.go", id: "TestContinuousPreparationStartsRasterBeforeReply" },
+      { file: "packages/host/go/tests/surface_layout_order_test.go", id: "TestRasterPreparationFailureCancelsBeforeReply" },
+      { file: "packages/host/go/tests/surface_layout_order_test.go", id: "TestRasterPreparationRetainsCancellationSchedulingError" },
       { file: "e2e/outside.test.mjs", id: "native content, cards, and the sidebar rail stay aligned" },
     ],
     expected: "Every Wails layout preparation starts raster configuration before replying and preserves cancellation failures and geometry acceptance.",
@@ -2834,14 +2838,14 @@ const FEATURE_LINKS = [
   {
     id: "F239-171-2",
     implementation: [
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) closingChanged()" },
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn publish_status<O>" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) closingChanged()" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn publish_status<O>" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/sidecars_session_retention_test.go", id: "TestFastCloseAnswerPreservesBothClosingTransitions" },
-      { file: "packages/host/tauriv2/src/sidecars_lock_test.rs", id: "fast_close_answer_preserves_both_closing_transitions" },
-      { file: "packages/host/tauriv2/src/sidecars_lock_test.rs", id: "status_only_consumer_receives_stop_closing_removal" },
-      { file: "packages/host/tauriv2/src/sidecars_lock_test.rs", id: "detach_notification_contains_the_complete_final_status" },
+      { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestFastCloseAnswerPreservesBothClosingTransitions" },
+      { file: "packages/host/rust/src/sidecars_lock_test.rs", id: "fast_close_answer_preserves_both_closing_transitions" },
+      { file: "packages/host/rust/src/sidecars_lock_test.rs", id: "status_only_consumer_receives_stop_closing_removal" },
+      { file: "packages/host/rust/src/sidecars_lock_test.rs", id: "detach_notification_contains_the_complete_final_status" },
     ],
     expected: "Fast close answers preserve pending and answered status transitions in order, and removal notifications contain the complete final status without requiring UI subscribers.",
     levels: ["unit"],
@@ -2866,23 +2870,23 @@ const FEATURE_LINKS = [
   {
     id: "F239-85",
     implementation: [
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) NativeViewRemoved" },
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) Retain" },
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "pub fn native_views_removed" },
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "pub fn retain_sessions" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) NativeViewRemoved" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) Retain" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "pub fn native_views_removed" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "pub fn retain_sessions" },
       { file: "packages/workbench/projects.js", symbol: "export function keep" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentRetainSendsOnlyLayoutSurfaces" },
-      { file: "packages/host/wailsv3/src/sidecars_session_retention_test.go", id: "TestNativeViewRemovalStillClosesAStandardIOSession" },
-      { file: "packages/host/wailsv3/src/sidecars_session_retention_test.go", id: "TestNativeViewRemovalRetainsPersistentSession" },
-      { file: "packages/host/wailsv3/src/sidecars_session_retention_test.go", id: "TestRetainClosesPersistentSessionAbsentFromTheLayout" },
-      { file: "packages/host/wailsv3/src/sidecars_session_retention_test.go", id: "TestRetainKeepsAnOrdinarySurfaceFirstSentDuringTheStart" },
-      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent_retain_sends_only_layout_surfaces" },
-      { file: "packages/host/tauriv2/src/sidecars_session_retention_test.rs", id: "native_view_removal_still_closes_a_standard_io_session" },
-      { file: "packages/host/tauriv2/src/sidecars_session_retention_test.rs", id: "native_view_removal_does_not_close_a_persistent_layout_session" },
-      { file: "packages/host/tauriv2/src/sidecars_session_retention_test.rs", id: "logical_retain_closes_a_persistent_session_absent_from_the_layout" },
-      { file: "packages/host/tauriv2/src/sidecars_session_retention_test.rs", id: "a_retain_keeps_an_ordinary_surface_first_sent_during_its_start" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentRetainSendsOnlyLayoutSurfaces" },
+      { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestNativeViewRemovalStillClosesAStandardIOSession" },
+      { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestNativeViewRemovalRetainsPersistentSession" },
+      { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestRetainClosesPersistentSessionAbsentFromTheLayout" },
+      { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestRetainKeepsAnOrdinarySurfaceFirstSentDuringTheStart" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_retain_sends_only_layout_surfaces" },
+      { file: "packages/host/rust/src/sidecars_session_retention_test.rs", id: "native_view_removal_still_closes_a_standard_io_session" },
+      { file: "packages/host/rust/src/sidecars_session_retention_test.rs", id: "native_view_removal_does_not_close_a_persistent_layout_session" },
+      { file: "packages/host/rust/src/sidecars_session_retention_test.rs", id: "logical_retain_closes_a_persistent_session_absent_from_the_layout" },
+      { file: "packages/host/rust/src/sidecars_session_retention_test.rs", id: "a_retain_keeps_an_ordinary_surface_first_sent_during_its_start" },
       { file: "packages/workbench/test/projects-switch.test.mjs", id: "closing a tab removes its session file after the layout write, and the start removes the files of tabs in no layout" },
     ],
     expected: "Native-view removal keeps a persistent session for a surface still held by a layout while closing stdio sessions; authoritative retain removes surface owners absent from every layout after the final tab occurrence leaves.",
@@ -2891,12 +2895,12 @@ const FEATURE_LINKS = [
   {
     id: "F239-90",
     implementation: [
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn try_handle_image_envelope" },
-      { file: "packages/host/tauriv2/src/windows.rs", symbol: "window_data_if_registered" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn try_handle_image_envelope" },
+      { file: "packages/host/rust/src/windows.rs", symbol: "window_data_if_registered" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/src/sidecars_session_retention_test.rs", id: "an_image_routed_to_an_owner_retired_after_lookup_receives_the_closed_answer" },
-      { file: "packages/host/tauriv2/src/sidecars_session_retention_test.rs", id: "current_and_retired_owner_paths_keep_their_existing_dispositions" },
+      { file: "packages/host/rust/src/sidecars_session_retention_test.rs", id: "an_image_routed_to_an_owner_retired_after_lookup_receives_the_closed_answer" },
+      { file: "packages/host/rust/src/sidecars_session_retention_test.rs", id: "current_and_retired_owner_paths_keep_their_existing_dispositions" },
     ],
     expected: "A sidecar image routed to an owner whose window record was retired receives the existing closed-image answer; current-owner messages and malformed or non-image bodies retain their existing disposition.",
     levels: ["unit"],
@@ -2930,16 +2934,16 @@ const FEATURE_LINKS = [
   {
     id: "F260-1",
     implementation: [
-      { file: "packages/sok/wailsv3/src/ownership.go", symbol: "func ownConfiguration" },
-      { file: "packages/sok/tauriv2/src/ownership.rs", symbol: "fn own_configuration" },
-      { file: "packages/sok/wailsv3/src/platform/darwin/process.go", symbol: "func (darwin) TryLockFile" },
-      { file: "packages/sok/wailsv3/src/platform/linux/process.go", symbol: "func (linux) TryLockFile" },
+      { file: "packages/sok/go/src/ownership.go", symbol: "func ownConfiguration" },
+      { file: "packages/sok/rust/src/ownership.rs", symbol: "fn own_configuration" },
+      { file: "packages/sok/go/src/platform/darwin/process.go", symbol: "func (darwin) TryLockFile" },
+      { file: "packages/sok/go/src/platform/linux/process.go", symbol: "func (linux) TryLockFile" },
     ],
     tests: [
-      { file: "packages/sok/wailsv3/tests/process_lock_cases_test.go", id: "TestAWritingCommandReadsTheProcessLockCaseTable" },
-      { file: "packages/sok/tauriv2/tests/process_lock_cases_test.rs", id: "a_writing_command_reads_the_process_lock_case_table" },
-      { file: "packages/host/wailsv3/tests/process_lock_cases_test.go", id: "TestTheHostRefusesAHeldLockOfEachCaseWithItsText" },
-      { file: "packages/host/tauriv2/tests/process_lock_cases_test.rs", id: "the_host_refuses_a_held_lock_of_each_case_with_its_text" },
+      { file: "packages/sok/go/tests/process_lock_cases_test.go", id: "TestAWritingCommandReadsTheProcessLockCaseTable" },
+      { file: "packages/sok/rust/tests/process_lock_cases_test.rs", id: "a_writing_command_reads_the_process_lock_case_table" },
+      { file: "packages/host/go/tests/process_lock_cases_test.go", id: "TestTheHostRefusesAHeldLockOfEachCaseWithItsText" },
+      { file: "packages/host/rust/tests/process_lock_cases_test.rs", id: "the_host_refuses_a_held_lock_of_each_case_with_its_text" },
     ],
     expected: "A writing command of sok holds the advisory lock on process.lock for the whole command, refuses a held lock with the host text of its case, and takes over a free lock file, in both sok implementations; the host refuses the same held cases with the same texts.",
     levels: ["unit"],
@@ -2947,12 +2951,12 @@ const FEATURE_LINKS = [
   {
     id: "F260",
     implementation: [
-      { file: "packages/sok/wailsv3/src/ownership.go", symbol: "func parseLockOwner" },
-      { file: "packages/sok/tauriv2/src/ownership.rs", symbol: "fn parse_lock_owner" },
+      { file: "packages/sok/go/src/ownership.go", symbol: "func parseLockOwner" },
+      { file: "packages/sok/rust/src/ownership.rs", symbol: "fn parse_lock_owner" },
     ],
     tests: [
-      { file: "packages/sok/wailsv3/tests/process_lock_cases_test.go", id: "TestAWritingCommandReadsTheProcessLockCaseTable" },
-      { file: "packages/sok/tauriv2/tests/process_lock_cases_test.rs", id: "a_writing_command_reads_the_process_lock_case_table" },
+      { file: "packages/sok/go/tests/process_lock_cases_test.go", id: "TestAWritingCommandReadsTheProcessLockCaseTable" },
+      { file: "packages/sok/rust/tests/process_lock_cases_test.rs", id: "a_writing_command_reads_the_process_lock_case_table" },
     ],
     expected: "A writing command of sok reads process.lock in the form of the host: a live owner is refused with its pid, an ended owner is taken over, and a lock in another form is refused with its content named and kept, in both implementations.",
     levels: ["unit"],
@@ -2960,14 +2964,14 @@ const FEATURE_LINKS = [
   {
     id: "F212.6a-1-3-2-3",
     implementation: [
-      { file: "packages/host/tauriv2/src/stall_watch.rs", symbol: "pub fn start_stall_watch" },
-      { file: "packages/host/wailsv3/src/stall_watch.go", symbol: "func StartStallWatch" },
+      { file: "packages/host/rust/src/stall_watch.rs", symbol: "pub fn start_stall_watch" },
+      { file: "packages/host/go/src/stall_watch.go", symbol: "func StartStallWatch" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/stall_watch_test.rs", id: "a_stall_of_an_unscheduled_process_carries_its_lateness_in_the_watch" },
-      { file: "packages/host/tauriv2/tests/stall_watch_test.rs", id: "a_stall_of_a_blocked_main_thread_has_no_lateness_in_the_watch" },
-      { file: "packages/host/wailsv3/tests/stall_watch_test.go", id: "TestAStallOfAnUnscheduledProcessCarriesItsLatenessInTheWatch" },
-      { file: "packages/host/wailsv3/tests/stall_watch_test.go", id: "TestAStallOfABlockedMainThreadHasNoLatenessInTheWatch" },
+      { file: "packages/host/rust/tests/stall_watch_test.rs", id: "a_stall_of_an_unscheduled_process_carries_its_lateness_in_the_watch" },
+      { file: "packages/host/rust/tests/stall_watch_test.rs", id: "a_stall_of_a_blocked_main_thread_has_no_lateness_in_the_watch" },
+      { file: "packages/host/go/tests/stall_watch_test.go", id: "TestAStallOfAnUnscheduledProcessCarriesItsLatenessInTheWatch" },
+      { file: "packages/host/go/tests/stall_watch_test.go", id: "TestAStallOfABlockedMainThreadHasNoLatenessInTheWatch" },
     ],
     expected: "Both hosts record host.stall with watch_late_ms, the lateness of the watch's own wake, so that a stall of an unscheduled process has a watch lateness of at least half its lateness and a blocked main thread has none.",
     levels: ["unit"],
@@ -2983,8 +2987,8 @@ const FEATURE_LINKS = [
     id: "F258-3",
     implementation: [{ file: "scripts/audit-log.mjs", symbol: "auditLog" }],
     tests: [
-      { file: "packages/host/wailsv3/tests/event_log_test.go", id: "TestTheEventLogPassesTheAuditOfTheContractPackage" },
-      { file: "packages/host/tauriv2/tests/event_log_test.rs", id: "the_file_passes_the_audit_of_the_contract_package" },
+      { file: "packages/host/go/tests/event_log_test.go", id: "TestTheEventLogPassesTheAuditOfTheContractPackage" },
+      { file: "packages/host/rust/tests/event_log_test.rs", id: "the_file_passes_the_audit_of_the_contract_package" },
     ],
     expected: "The host tests audit their logs through the repository command, the log-contract fixtures are read from docs/spec/cases, and no test of a core package reads the fixtures or the audit module of another package by path.",
     levels: ["unit"],
@@ -2992,35 +2996,35 @@ const FEATURE_LINKS = [
   {
     id: "F258-1",
     implementation: [
-      { file: "packages/sok/wailsv3/src/manifest.go", symbol: "func ValidateManifest" },
-      { file: "packages/sok/tauriv2/src/manifest.rs", symbol: "pub fn validate_manifest" },
+      { file: "packages/sok/go/src/manifest.go", symbol: "func ValidateManifest" },
+      { file: "packages/sok/rust/src/manifest.rs", symbol: "pub fn validate_manifest" },
       { file: "packages/plugin-api/index.js", symbol: "function sortedEntries" },
     ],
     tests: [
       { file: "packages/plugin-api/test/manifest-validation.test.mjs", id: "manifest validation" },
-      { file: "packages/sok/wailsv3/tests/manifest_cases_test.go", id: "TestPluginInstallReplaysTheManifestCases" },
-      { file: "packages/sok/tauriv2/tests/manifest_cases_test.rs", id: "plugin_install_replays_the_manifest_cases" },
+      { file: "packages/sok/go/tests/manifest_cases_test.go", id: "TestPluginInstallReplaysTheManifestCases" },
+      { file: "packages/sok/rust/tests/manifest_cases_test.rs", id: "plugin_install_replays_the_manifest_cases" },
     ],
     expected: "The reader and both sok implementations give every case of docs/spec/cases/manifest-validation.json the same result: a refused manifest fails with the reader's text, members are read in sorted key order, and a schema type that is not a type name is refused.",
     levels: ["unit"],
   },
   {
     id: "F258",
-    implementation: [{ file: "packages/sok/wailsv3/src/manifest.go", symbol: "func ValidateManifest" }],
+    implementation: [{ file: "packages/sok/go/src/manifest.go", symbol: "func ValidateManifest" }],
     tests: [
-      { file: "packages/sok/wailsv3/tests/plugins_test.go", id: "TestPluginInstallRefusesAManifestWithASchemaOutsideTheSubset" },
-      { file: "packages/sok/tauriv2/tests/plugins_test.rs", id: "plugin_install_refuses_a_manifest_with_a_schema_outside_the_subset" },
+      { file: "packages/sok/go/tests/plugins_test.go", id: "TestPluginInstallRefusesAManifestWithASchemaOutsideTheSubset" },
+      { file: "packages/sok/rust/tests/plugins_test.rs", id: "plugin_install_refuses_a_manifest_with_a_schema_outside_the_subset" },
     ],
     expected: "The install of sok refuses a plugin.json whose exposes declaration or surface params schema the reader refuses, with the reader's error text, in both the Go and the Rust implementation.",
     levels: ["unit"],
   },
   {
     id: "F252-2",
-    implementation: [{ file: "packages/host/wailsv3/src/endpoint.go", symbol: "func (e *Endpoint) accept" }],
+    implementation: [{ file: "packages/host/go/src/endpoint.go", symbol: "func (e *Endpoint) accept" }],
     tests: [
-      { file: "packages/host/wailsv3/tests/endpoint_test.go", id: "TestEndpointRecordsAnAcceptError" },
-      { file: "packages/host/wailsv3/tests/endpoint_test.go", id: "TestEndpointRecordsAReadErrorInsideAFrame" },
-      { file: "packages/host/tauriv2/tests/endpoint_test.rs", id: "the_endpoint_records_an_accept_error" },
+      { file: "packages/host/go/tests/endpoint_test.go", id: "TestEndpointRecordsAnAcceptError" },
+      { file: "packages/host/go/tests/endpoint_test.go", id: "TestEndpointRecordsAReadErrorInsideAFrame" },
+      { file: "packages/host/rust/tests/endpoint_test.rs", id: "the_endpoint_records_an_accept_error" },
     ],
     expected: "Both hosts record an endpoint accept error and the I/O reason of a read error instead of hiding them, each checked by a Go and a Rust test; the other host and native error paths of F252-2 are recorded in the item with their tests.",
     levels: ["unit"],
@@ -3054,8 +3058,8 @@ const FEATURE_LINKS = [
   },
   {
     id: "F255",
-    implementation: [{ file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", symbol: "fn a_replaced_service_starts_after_the_end_of_its_process" }],
-    tests: [{ file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "a_replaced_service_starts_after_the_end_of_its_process" }],
+    implementation: [{ file: "packages/host/rust/tests/sidecars_transport_test.rs", symbol: "fn a_replaced_service_starts_after_the_end_of_its_process" }],
+    tests: [{ file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "a_replaced_service_starts_after_the_end_of_its_process" }],
     expected: "The replace service fixture waits for the installed service process to end before its drop returns, so the test that reads the process state after drop passes in every repeat run.",
     levels: ["unit"],
   },
@@ -3208,10 +3212,10 @@ const FEATURE_LINKS = [
   {
     id: "F0.4-1.1",
     implementation: [
-      { file: "packages/host/wailsv3/src/surfaces.go", symbol: "CreateLogicalSurfaceHandle" },
-      { file: "packages/host/wailsv3/src/modals.go", symbol: "alignErr" },
+      { file: "packages/host/go/src/surfaces.go", symbol: "CreateLogicalSurfaceHandle" },
+      { file: "packages/host/go/src/modals.go", symbol: "alignErr" },
     ],
-    tests: [{ file: "packages/host/wailsv3/tests/surface_activation_test.go", id: "TestLogicalSurfaceCreationPropagatesNativeFailure" }],
+    tests: [{ file: "packages/host/go/tests/surface_activation_test.go", id: "TestLogicalSurfaceCreationPropagatesNativeFailure" }],
     expected: "Wails surface creation and alignment failures return attributable errors, reject nil native handles, cancel the pending layout, and do not continue as a successful partial surface update.",
     levels: ["native"],
   },
@@ -3331,10 +3335,10 @@ const FEATURE_LINKS = [
   {
     id: "F2.12",
     implementation: [
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "service_process_exists" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "service_process_exists" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent_transport_replaces_endpoint_left_by_a_dead_service" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_transport_replaces_endpoint_left_by_a_dead_service" },
     ],
     expected: "Application-process loss reconnects to a surviving service, while service failure remains an explicit failure or declared replacement and never becomes a new shell.",
     levels: ["native", "application"],
@@ -3371,7 +3375,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F0.5.8",
-    implementation: [{ file: "packages/host/tauriv2/src/surfaces.rs", symbol: "sync" }],
+    implementation: [{ file: "packages/host/rust/src/surfaces.rs", symbol: "sync" }],
     tests: [{ file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" }],
     expected: "Split-surface synchronization reads the AppKit scale factor on the main thread; a rebuilt Tauri host presents four split terminals without a foreign-exception crash.",
     levels: ["native", "application"],
@@ -3379,9 +3383,9 @@ const FEATURE_LINKS = [
   {
     id: "F0.5.9",
     implementation: [
-      { file: "packages/host/tauriv2/src/exposure.rs", symbol: "root_view_on_main" },
-      { file: "packages/host/tauriv2/src/windows.rs", symbol: "with_native_owner" },
-      { file: "packages/host/tauriv2/src/surfaces.rs", symbol: "sync" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "root_view_on_main" },
+      { file: "packages/host/rust/src/windows.rs", symbol: "with_native_owner" },
+      { file: "packages/host/rust/src/surfaces.rs", symbol: "sync" },
     ],
     tests: [
       { file: "e2e/terminal.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
@@ -3393,7 +3397,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F0.5.9-2",
-    implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "reload_surface_documents" }],
+    implementation: [{ file: "packages/host/rust/src/windows.rs", symbol: "reload_surface_documents" }],
     tests: [
       { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
       { file: "e2e/terminal.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
@@ -3416,7 +3420,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F0.5.9-4",
-    implementation: [{ file: "packages/host/wailsv3/src/windows.go", symbol: "reloadSurfaceDocuments" }],
+    implementation: [{ file: "packages/host/go/src/windows.go", symbol: "reloadSurfaceDocuments" }],
     tests: [
       { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
       { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
@@ -3430,7 +3434,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F0.5.9-5",
-    implementation: [{ file: "packages/host/wailsv3/src/windows.go", symbol: "reloadSurfaceDocuments" }],
+    implementation: [{ file: "packages/host/go/src/windows.go", symbol: "reloadSurfaceDocuments" }],
     tests: [
       { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
       { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
@@ -3446,8 +3450,8 @@ const FEATURE_LINKS = [
     id: "F4",
     implementation: [
       { file: "native/darwin/src/window_facts.m", symbol: "focused" },
-      { file: "packages/host/tauriv2/src/exposure.rs", symbol: "documents" },
-      { file: "packages/host/wailsv3/src/exposure.go", symbol: "WindowDocument" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "documents" },
+      { file: "packages/host/go/src/exposure.go", symbol: "WindowDocument" },
     ],
     tests: [
       { file: "native/darwin/tests/window_facts_test.m", id: "document webview focus is reported" },
@@ -3472,13 +3476,13 @@ const FEATURE_LINKS = [
   {
     id: "R1",
     implementation: [
-      { file: "packages/sok/tauriv2/src/plugins.rs", symbol: "pub fn read_plugins_state" },
-      { file: "packages/sok/wailsv3/src/plugins.go", symbol: "func ReadPluginsState" },
+      { file: "packages/sok/rust/src/plugins.rs", symbol: "pub fn read_plugins_state" },
+      { file: "packages/sok/go/src/plugins.go", symbol: "func ReadPluginsState" },
       { file: "packages/workbench/plugin-operations.js", symbol: "async function installStarter" },
     ],
     tests: [
-      { file: "packages/sok/tauriv2/tests/plugins_test.rs", id: "plugins_state_reports_the_registry_and_the_installation" },
-      { file: "packages/sok/wailsv3/tests/plugins_test.go", id: "TestPluginsStateReportsTheRegistryAndTheInstallation" },
+      { file: "packages/sok/rust/tests/plugins_test.rs", id: "plugins_state_reports_the_registry_and_the_installation" },
+      { file: "packages/sok/go/tests/plugins_test.go", id: "TestPluginsStateReportsTheRegistryAndTheInstallation" },
       { file: "packages/workbench/test/plugin-operations.test.mjs", id: "the first run installs the starter pack in its order and asks for a reload" },
     ],
     expected: "A registry index lists plugins, sidecars and the starter pack; the installer library of both command lines reports the registry, the index, the installation and the first run, installs selected versions with their sidecars, and the workbench installs the starter pack on the first run before it builds a space.",
@@ -3521,7 +3525,7 @@ const FEATURE_LINKS = [
     id: "F0.1",
     implementation: [
       { file: "native/darwin/src/input_inject.m", symbol: "sp_input_pointer" },
-      { file: "packages/host/tauriv2/src/platform/darwin/input.rs", symbol: "pointer" },
+      { file: "packages/host/rust/src/platform/darwin/input.rs", symbol: "pointer" },
     ],
     tests: [
       { file: "e2e/terminal.test.mjs", id: "three terminal" },
@@ -3556,7 +3560,7 @@ const FEATURE_LINKS = [
     id: "F0.2",
     implementation: [
       { file: "native/darwin/src/appearance.m", symbol: "sp_webview_set_appearance" },
-      { file: "packages/host/tauriv2/src/platform/darwin/webview.rs", symbol: "sp_webview_set_appearance" },
+      { file: "packages/host/rust/src/platform/darwin/webview.rs", symbol: "sp_webview_set_appearance" },
     ],
     tests: [
       { file: "native/darwin/tests/appearance_test.m", id: "dark appearance is applied" },
@@ -3571,7 +3575,7 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "native/darwin/src/input_inject.m", symbol: "webviewInputSendThen" },
       { file: "native/darwin/src/webview_input.m", symbol: "webviewInputSendThen" },
-      { file: "packages/host/wailsv3/src/platform/darwin/input.go", symbol: "pointerSequence" },
+      { file: "packages/host/go/src/platform/darwin/input.go", symbol: "pointerSequence" },
     ],
     tests: [
       { file: "native/darwin/tests/input_inject_test.m", id: "a click after keyboard input synthesizes one DOM click" },
@@ -3611,14 +3615,14 @@ const FEATURE_LINKS = [
   {
     id: "F0.4-1.3.2",
     implementation: [
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "PersistentConnection" },
-      { file: "packages/host/tauriv2/src/recording.rs", symbol: "abort" },
-      { file: "packages/host/tauriv2/src/exposure.rs", symbol: "on_main" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "PersistentConnection" },
+      { file: "packages/host/rust/src/recording.rs", symbol: "abort" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "on_main" },
       { file: "scripts/check-test-parity.mjs", symbol: "auditRustFailurePropagation" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent_transport_reconnects_after_connection_loss_and_preserves_owner" },
-      { file: "packages/host/tauriv2/tests/recording_test.rs", id: "an_aborted_recording_is_stopped_and_removed_and_allows_the_next" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_transport_reconnects_after_connection_loss_and_preserves_owner" },
+      { file: "packages/host/rust/tests/recording_test.rs", id: "an_aborted_recording_is_stopped_and_removed_and_allows_the_next" },
       { file: "scripts/test/test-parity.test.mjs", id: "Rust failure audit rejects ignored outcomes in the scoped production lane" },
     ],
     expected: "The Tauri host does not discard production Result or callback and cleanup outcomes; transport, delivery, recording, and shutdown failures remain observable through returned errors or explicit reports.",
@@ -3628,11 +3632,11 @@ const FEATURE_LINKS = [
     id: "F0.4-1.3.3",
     implementation: [
       { file: "scripts/check-test-parity.mjs", symbol: "auditRustFailurePropagation" },
-      { file: "packages/host/tauriv2/src/platform/windows/unsupported.rs", symbol: "missing" },
+      { file: "packages/host/rust/src/platform/windows/unsupported.rs", symbol: "missing" },
     ],
     tests: [
       { file: "scripts/test/test-parity.test.mjs", id: "Rust failure audit covers every production lane" },
-      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent_transport_rejects_unsupported_hello_protocol_without_replacing_endpoint" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_transport_rejects_unsupported_hello_protocol_without_replacing_endpoint" },
     ],
     expected: "Every Rust production lane is included in the ignored-outcome audit, and unsupported host operations return explicit errors instead of successful no-op results.",
     levels: ["unit", "native"],
@@ -3641,7 +3645,7 @@ const FEATURE_LINKS = [
     id: "F0.4-1.4",
     implementation: [
       { file: "native/darwin/src/capture.m", symbol: "sp_capture_error" },
-      { file: "packages/host/tauriv2/src/platform/darwin/capture.rs", symbol: "last_error" },
+      { file: "packages/host/rust/src/platform/darwin/capture.rs", symbol: "last_error" },
       { file: "scripts/check-test-parity.mjs", symbol: "auditNativeFailurePropagation" },
     ],
     tests: [
@@ -3655,63 +3659,63 @@ const FEATURE_LINKS = [
     id: "F0.4-1.5",
     implementation: [
       { file: "scripts/check-test-parity.mjs", symbol: "auditFailureMatrix" },
-      { file: "packages/host/wailsv3/src/recording.go", symbol: "func (r *Recording) Abort" },
+      { file: "packages/host/go/src/recording.go", symbol: "func (r *Recording) Abort" },
     ],
     tests: [
       { file: "scripts/test/test-parity.test.mjs", id: "Go failure audit rejects ignored results in every Go production lane" },
-      { file: "packages/host/wailsv3/tests/recording_test.go", id: "TestAbortRetiredStopFailureRemovesFolderAndReportsStopError" },
+      { file: "packages/host/go/tests/recording_test.go", id: "TestAbortRetiredStopFailureRemovesFolderAndReportsStopError" },
     ],
     expected: "The JS/TS, Rust, Go, and Objective-C failure lanes run as one machine-audited matrix; each lane rejects ignored outcomes, and Wails capture, recording cleanup, and shell close failures remain attributable.",
     levels: ["unit", "native"],
   },  {
     id: "F0.4-1-1",
     implementation: [
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: 'Emit("sidecar-failure"' },
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn fail<O: Owner>" },
+      { file: "packages/host/go/src/sidecars.go", symbol: 'Emit("sidecar-failure"' },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn fail<O: Owner>" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestOversizeSidecarMessageTerminatesAndNotifies" },
-      { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestSidecarOutputCloseNotifiesEachSurface" },
-      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "an_oversize_message_terminates_and_notifies" },
-      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "an_output_close_notifies_each_surface" },
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestOversizeSidecarMessageTerminatesAndNotifies" },
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestSidecarOutputCloseNotifiesEachSurface" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "an_oversize_message_terminates_and_notifies" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "an_output_close_notifies_each_surface" },
     ],
     expected: "An oversize, invalid or unreadable sidecar output, or an output end outside stop, terminates the sidecar process and delivers sidecar-failure to each owning window on both hosts.",
     levels: ["native"],
   },  {
     id: "F0.4-1-1-1",
     implementation: [
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "addressed := process.surfaces[event.Surface]" },
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "unknown surface {}" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "addressed := process.surfaces[event.Surface]" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "unknown surface {}" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestClosedSurfaceMessagesAreDiscardedAndUnknownOnesFail" },
-      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "closed_surface_messages_are_discarded_and_unknown_ones_fail" },
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestClosedSurfaceMessagesAreDiscardedAndUnknownOnesFail" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "closed_surface_messages_are_discarded_and_unknown_ones_fail" },
     ],
     expected: "A stdio sidecar message for a surface the host closed is discarded, and a message for a surface the host never sent to that process fails the sidecar with unknown surface on both hosts.",
     levels: ["native"],
   },  {
     id: "F0.4-1-1-2",
     implementation: [
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) readPersistentLines(" },
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn reply_of(" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) readPersistentLines(" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn reply_of(" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentTransportFailsTheConnectionOnAnInvalidEvent" },
-      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentTransportFailsTheConnectionOnAnOversizeLine" },
-      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent_transport_fails_the_connection_on_an_invalid_event" },
-      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent_transport_fails_the_connection_on_an_oversize_line" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentTransportFailsTheConnectionOnAnInvalidEvent" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentTransportFailsTheConnectionOnAnOversizeLine" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_transport_fails_the_connection_on_an_invalid_event" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_transport_fails_the_connection_on_an_oversize_line" },
     ],
     expected: "Both hosts read the persistent service connection with the 64 MiB message limit and end it with sidecar-failure to each surface that has sent on an oversize or invalid line, without reconnecting at once.",
     levels: ["native"],
   },  {
     id: "F0.4-1-1-3",
     implementation: [
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "const sidecarMessageLimit = 64 << 20" },
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "const MESSAGE_LIMIT: usize = 64 << 20;" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "const sidecarMessageLimit = 64 << 20" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "const MESSAGE_LIMIT: usize = 64 << 20;" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestSidecarMessageAtTheLimitIsDelivered" },
-      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "a_message_at_the_limit_is_delivered" },
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestSidecarMessageAtTheLimitIsDelivered" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "a_message_at_the_limit_is_delivered" },
     ],
     expected: "A sidecar message at the 64 MiB limit reaches the owning window on both hosts at any load; the tests wait for the event, and the 6-19 s delivery at load average 31-33 is not judged by a timer.",
     levels: ["native"],
@@ -3729,8 +3733,8 @@ const FEATURE_LINKS = [
   {
     id: "F2.2",
     implementation: [
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "shutdown_waiters" },
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "CloseOwner" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "shutdown_waiters" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "CloseOwner" },
     ],
     tests: [{ file: "e2e/test/terminal-processes.test.mjs", id: "process measurement preserves identities" }],
     expected: "Normal application quit acknowledges owned-session closure, stops the service, and removes its endpoint.",
@@ -3739,7 +3743,7 @@ const FEATURE_LINKS = [
   {
     id: "F2.3",
     implementation: [
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "Close" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "Close" },
     ],
     tests: [{ file: "e2e/test/terminal-processes.test.mjs", id: "process measurement preserves identities" }],
     expected: "Closing terminal tabs reaps their PTY children while retaining the shared terminal service.",
@@ -3751,12 +3755,12 @@ const FEATURE_LINKS = [
   {
     id: "F2.6",
     implementation: [
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "service_process_exists" },
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "NewSidecars" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "service_process_exists" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "NewSidecars" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent_transport_replaces_endpoint_left_by_a_dead_service" },
-      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentTransportReplacesEndpointLeftByDeadService" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_transport_replaces_endpoint_left_by_a_dead_service" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentTransportReplacesEndpointLeftByDeadService" },
     ],
     expected: "A dead service endpoint is replaced through authenticated bootstrap and routes requests to the new service.",
     levels: ["native"],
@@ -3764,12 +3768,12 @@ const FEATURE_LINKS = [
   {
     id: "F2.7",
     implementation: [
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: ".map_err(|e| format!(\"sidecar {name}: connect authenticated service: {e}\"))?;" },
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "return nil, fmt.Errorf(\"sidecar %s: connect authenticated service: %w\", name, err)" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: ".map_err(|e| format!(\"sidecar {name}: connect authenticated service: {e}\"))?;" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "return nil, fmt.Errorf(\"sidecar %s: connect authenticated service: %w\", name, err)" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent_transport_reports_live_but_unreachable_endpoint_without_replacement" },
-      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentTransportReportsLiveButUnreachableEndpointWithoutReplacement" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_transport_reports_live_but_unreachable_endpoint_without_replacement" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentTransportReportsLiveButUnreachableEndpointWithoutReplacement" },
     ],
     expected: "A live but unreachable endpoint returns an explicit connection error and its endpoint record remains byte-for-byte unchanged.",
     levels: ["native"],
@@ -3780,12 +3784,12 @@ const FEATURE_LINKS = [
   {
     id: "F2.11",
     implementation: [
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "protocol mismatch" },
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "protocol mismatch" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "protocol mismatch" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "protocol mismatch" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent_transport_rejects_unsupported_hello_protocol_without_replacing_endpoint" },
-      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentTransportRejectsUnsupportedHelloProtocolWithoutReplacingEndpoint" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_transport_rejects_unsupported_hello_protocol_without_replacing_endpoint" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentTransportRejectsUnsupportedHelloProtocolWithoutReplacingEndpoint" },
     ],
     expected: "An unsupported service protocol is rejected explicitly and does not replace the endpoint record.",
     levels: ["native"],
@@ -3820,8 +3824,8 @@ const FEATURE_LINKS = [
     id: "G2.4",
     implementation: [
       { file: "packages/host/tauriv2/src/bindings.rs", symbol: "project_open" },
-      { file: "packages/host/wailsv3/src/projects.go", symbol: "ProjectOpen" },
-      { file: "packages/host/wailsv3/src/platform/darwin/webview.m", symbol: "nativeWindowPrepare" },
+      { file: "packages/host/go/src/projects.go", symbol: "ProjectOpen" },
+      { file: "packages/host/go/src/platform/darwin/webview.m", symbol: "nativeWindowPrepare" },
     ],
     tests: [
       { file: "e2e/projects.test.mjs", id: "project windows persist files, inherit settings, and isolate native state" },
@@ -3918,12 +3922,12 @@ const FEATURE_LINKS = [
   {
     id: "F17",
     implementation: [
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "the service did not print its endpoint within" },
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "the service did not print its endpoint within" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "the service did not print its endpoint within" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "the service did not print its endpoint within" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentStartFailsWhenTheServicePrintsNoEndpoint" },
-      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent_start_fails_when_the_service_prints_no_endpoint" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentStartFailsWhenTheServicePrintsNoEndpoint" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_start_fails_when_the_service_prints_no_endpoint" },
     ],
     expected: "A persistent service that prints no endpoint fails the start after the ready limit, and the host ends it, whenever the service starts.",
     levels: ["unit"],
@@ -3931,12 +3935,12 @@ const FEATURE_LINKS = [
   {
     id: "F20",
     implementation: [
-      { file: "packages/host/wailsv3/src/command_line.go", symbol: "ParseArguments" },
-      { file: "packages/host/tauriv2/src/command_line.rs", symbol: "parse_arguments" },
+      { file: "packages/host/go/src/command_line.go", symbol: "ParseArguments" },
+      { file: "packages/host/rust/src/command_line.rs", symbol: "parse_arguments" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/command_line_test.go", id: "TestApplicationArgumentsAreDeclaredOnly" },
-      { file: "packages/host/tauriv2/tests/command_line_test.rs", id: "application_arguments_are_declared_only" },
+      { file: "packages/host/go/tests/command_line_test.go", id: "TestApplicationArgumentsAreDeclaredOnly" },
+      { file: "packages/host/rust/tests/command_line_test.rs", id: "application_arguments_are_declared_only" },
     ],
     expected: "Both applications reject an undeclared argument, a flag without a value and a repeated flag with the same text and status 2.",
     levels: ["unit", "application"],
@@ -3945,13 +3949,13 @@ const FEATURE_LINKS = [
     id: "F26",
     implementation: [
       { file: "packages/plugin-api/index.js", symbol: "function checkDependencies" },
-      { file: "packages/sok/wailsv3/src/install.go", symbol: "func ManifestDependencies" },
-      { file: "packages/sok/tauriv2/src/install.rs", symbol: "pub fn manifest_dependencies" },
+      { file: "packages/sok/go/src/install.go", symbol: "func ManifestDependencies" },
+      { file: "packages/sok/rust/src/install.rs", symbol: "pub fn manifest_dependencies" },
     ],
     tests: [
       { file: "packages/plugin-api/test/validate.test.mjs", id: "a manifest is rejected for each invalid field" },
-      { file: "packages/sok/wailsv3/tests/install_test.go", id: "TestPackageJSONDeclaresVersionCoreRangeAndFilesAndTheManifestDeclaresSidecarRanges" },
-      { file: "packages/sok/tauriv2/tests/install_test.rs", id: "package_json_declares_version_core_range_and_files_and_the_manifest_declares_sidecar_ranges" },
+      { file: "packages/sok/go/tests/install_test.go", id: "TestPackageJSONDeclaresVersionCoreRangeAndFilesAndTheManifestDeclaresSidecarRanges" },
+      { file: "packages/sok/rust/tests/install_test.rs", id: "package_json_declares_version_core_range_and_files_and_the_manifest_declares_sidecar_ranges" },
     ],
     expected: "A plugin declares its sidecars and their version ranges only as the dependencies of plugin.json, and a package.json with soksak is refused.",
     levels: ["unit"],
@@ -3974,12 +3978,12 @@ const FEATURE_LINKS = [
     id: "F127",
     implementation: [
       { file: "packages/workbench/observe.js", symbol: "diagnostics.page.request" },
-      { file: "packages/host/wailsv3/src/assets.go", symbol: "func MissingAssets" },
-      { file: "packages/host/tauriv2/src/assets.rs", symbol: "pub struct ReportingAssets" },
+      { file: "packages/host/go/src/assets.go", symbol: "func MissingAssets" },
+      { file: "packages/host/rust/src/assets.rs", symbol: "pub struct ReportingAssets" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/assets_test.go", id: "TestMissingAssetsReportEachPathOnce" },
-      { file: "packages/host/tauriv2/tests/assets_test.rs", id: "missing_assets_report_each_path_once" },
+      { file: "packages/host/go/tests/assets_test.go", id: "TestMissingAssetsReportEachPathOnce" },
+      { file: "packages/host/rust/tests/assets_test.rs", id: "missing_assets_report_each_path_once" },
     ],
     expected: "A request for a page file that does not exist writes error: page asset: <path>: not found once for the path in both hosts.",
     levels: ["unit"],
@@ -3987,10 +3991,10 @@ const FEATURE_LINKS = [
   {
     id: "F132",
     implementation: [
-      { file: "packages/host/tauriv2/src/assets.rs", symbol: "Step::Start => None" },
+      { file: "packages/host/rust/src/assets.rs", symbol: "Step::Start => None" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/assets_test.rs", id: "a_missing_file_is_not_answered_with_the_start_document" },
+      { file: "packages/host/rust/tests/assets_test.rs", id: "a_missing_file_is_not_answered_with_the_start_document" },
     ],
     expected: "The Tauri host does not answer a path with a file extension that names no file with the start document.",
     levels: ["unit"],
@@ -4009,21 +4013,21 @@ const FEATURE_LINKS = [
   {
     id: "F128",
     implementation: [
-      { file: "packages/host/wailsv3/src/page_process.go", symbol: "func PageProcessEnded" },
-      { file: "packages/host/tauriv2/src/page_process.rs", symbol: "pub fn page_process_ended" },
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "pub fn connection_loss_report" },
-      { file: "packages/host/tauriv2/src/application_log.rs", symbol: "pub fn install_panic_hook" },
+      { file: "packages/host/go/src/page_process.go", symbol: "func PageProcessEnded" },
+      { file: "packages/host/rust/src/page_process.rs", symbol: "pub fn page_process_ended" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "pub fn connection_loss_report" },
+      { file: "packages/host/rust/src/application_log.rs", symbol: "pub fn install_panic_hook" },
       { file: "native/darwin/src/application_log.m", symbol: "void sp_log_install_fatal_handlers" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/page_process_test.go", id: "TestThePageProcessEndIsAnErrorLine" },
-      { file: "packages/host/tauriv2/tests/page_process_test.rs", id: "the_page_process_end_is_an_error_line" },
-      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentTransportWritesAnErrorLineForALostConnection" },
-      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "a_lost_connection_is_reported_as_an_error_line" },
-      { file: "packages/host/tauriv2/tests/panic_hook_test.rs", id: "the_panic_hook_does_not_wait_for_the_writer_and_the_record_is_stored_before_the_process_ends" },
-      { file: "packages/host/wailsv3/tests/routine_test.go", id: "TestAPanicOfAGoroutineIsRecordedAsAnEventBeforeTheProcessEnds" },
-      { file: "packages/host/tauriv2/tests/routine_test.rs", id: "a_panic_of_a_thread_is_recorded_as_an_event_before_the_process_ends" },
-      { file: "packages/host/tauriv2/tests/fatal_signal_test.rs", id: "a_fatal_signal_writes_an_error_line_to_the_standard_error_file" },
+      { file: "packages/host/go/tests/page_process_test.go", id: "TestThePageProcessEndIsAnErrorLine" },
+      { file: "packages/host/rust/tests/page_process_test.rs", id: "the_page_process_end_is_an_error_line" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentTransportWritesAnErrorLineForALostConnection" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "a_lost_connection_is_reported_as_an_error_line" },
+      { file: "packages/host/rust/tests/panic_hook_test.rs", id: "the_panic_hook_does_not_wait_for_the_writer_and_the_record_is_stored_before_the_process_ends" },
+      { file: "packages/host/go/tests/routine_test.go", id: "TestAPanicOfAGoroutineIsRecordedAsAnEventBeforeTheProcessEnds" },
+      { file: "packages/host/rust/tests/routine_test.rs", id: "a_panic_of_a_thread_is_recorded_as_an_event_before_the_process_ends" },
+      { file: "packages/host/rust/tests/fatal_signal_test.rs", id: "a_fatal_signal_writes_an_error_line_to_the_standard_error_file" },
     ],
     expected: "The end of a page process, a lost connection to a persistent service, a fatal signal each write one error line to the application log, and a panic of a goroutine or a thread is the event `host.panic`.",
     levels: ["unit", "application"],
@@ -4031,12 +4035,12 @@ const FEATURE_LINKS = [
   {
     id: "F120",
     implementation: [
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) processPersistent" },
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn start_persistent" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) processPersistent" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn start_persistent" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestTheHelloCarriesTheConfigurationDirectoryAsClient" },
-      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "the_hello_carries_the_configuration_directory_as_client" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestTheHelloCarriesTheConfigurationDirectoryAsClient" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "the_hello_carries_the_configuration_directory_as_client" },
     ],
     expected: "The hello that either host sends to a persistent service carries the configuration directory of the application as client.",
     levels: ["unit"],
@@ -4044,12 +4048,12 @@ const FEATURE_LINKS = [
   {
     id: "F130",
     implementation: [
-      { file: "packages/host/wailsv3/src/debug.go", symbol: "func debugPruneStates" },
-      { file: "packages/host/tauriv2/src/debug.rs", symbol: "fn prune_states" },
+      { file: "packages/host/go/src/debug.go", symbol: "func debugPruneStates" },
+      { file: "packages/host/rust/src/debug.rs", symbol: "fn prune_states" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/debug_test.go", id: "TestDebugWriteStateKeepsTheNewest20StateFiles" },
-      { file: "packages/host/tauriv2/tests/debug_test.rs", id: "debug_write_state_keeps_the_newest_20_state_files" },
+      { file: "packages/host/go/tests/debug_test.go", id: "TestDebugWriteStateKeepsTheNewest20StateFiles" },
+      { file: "packages/host/rust/tests/debug_test.rs", id: "debug_write_state_keeps_the_newest_20_state_files" },
     ],
     expected: "The host keeps the newest 20 state files of logs/ after it writes one.",
     levels: ["unit"],
@@ -4060,10 +4064,10 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/projects.js", symbol: "async function closeWindow" },
       { file: "packages/workbench/projects.js", symbol: "async function answerRemoval" },
       { file: "packages/workbench/core-exposure.js", symbol: "registry.command(\"core.space.close\"" },
-      { file: "packages/host/wailsv3/src/quit.go", symbol: "type Quit struct" },
-      { file: "packages/host/tauriv2/src/quit.rs", symbol: "pub struct Quit" },
-      { file: "packages/host/wailsv3/src/project_removal.go", symbol: "type Removals struct" },
-      { file: "packages/host/tauriv2/src/project_removal.rs", symbol: "pub struct Removals" },
+      { file: "packages/host/go/src/quit.go", symbol: "type Quit struct" },
+      { file: "packages/host/rust/src/quit.rs", symbol: "pub struct Quit" },
+      { file: "packages/host/go/src/project_removal.go", symbol: "type Removals struct" },
+      { file: "packages/host/rust/src/project_removal.rs", symbol: "pub struct Removals" },
     ],
     tests: [
       { file: "packages/workbench/test/projects-close-window.test.mjs", id: "a window close request asks about modified tabs before it saves and closes" },
@@ -4071,10 +4075,10 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/projects-close-window.test.mjs", id: "removing the project shown in the window asks about modified tabs before it removes the project" },
       { file: "packages/workbench/test/projects-close-window.test.mjs", id: "removing a project that another window shows asks that window and keeps the project when it refuses" },
       { file: "packages/workbench/test/space-close-asks.test.mjs", id: "core.space.close asks about modified tabs before it removes the active space" },
-      { file: "packages/host/wailsv3/tests/quit_test.go", id: "TestACancelledQuitEndsTheQuitState" },
-      { file: "packages/host/tauriv2/tests/quit_test.rs", id: "a_cancelled_quit_ends_the_quit_state" },
-      { file: "packages/host/wailsv3/tests/project_removal_test.go", id: "TestAProjectRemovalRequestResolvesWithTheOwnerAnswer" },
-      { file: "packages/host/tauriv2/tests/project_removal_test.rs", id: "a_project_removal_request_resolves_with_the_owner_answer" },
+      { file: "packages/host/go/tests/quit_test.go", id: "TestACancelledQuitEndsTheQuitState" },
+      { file: "packages/host/rust/tests/quit_test.rs", id: "a_cancelled_quit_ends_the_quit_state" },
+      { file: "packages/host/go/tests/project_removal_test.go", id: "TestAProjectRemovalRequestResolvesWithTheOwnerAnswer" },
+      { file: "packages/host/rust/tests/project_removal_test.rs", id: "a_project_removal_request_resolves_with_the_owner_answer" },
     ],
     expected: "A window close, a quit, the removal of the active space and the removal of a project ask for each modified tab, and a kept tab keeps the window, the space or the project and ends the quit.",
     levels: ["unit"],
@@ -4082,12 +4086,12 @@ const FEATURE_LINKS = [
   {
     id: "F133",
     implementation: [
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) closeOwnerAndShutdown" },
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn send_close_owner_and_shutdown" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) closeOwnerAndShutdown" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn send_close_owner_and_shutdown" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestAStopLeavesTheCloseOfAReplacementToTheReplacement" },
-      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "stop_does_not_close_the_owner_again_while_a_replacement_closes_it" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestAStopLeavesTheCloseOfAReplacementToTheReplacement" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "stop_does_not_close_the_owner_again_while_a_replacement_closes_it" },
     ],
     expected: "The close of the owner of a persistent service runs once for its connection, whether a replacement or a stop begins it.",
     levels: ["unit"],
@@ -4095,12 +4099,12 @@ const FEATURE_LINKS = [
   {
     id: "F117",
     implementation: [
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) Replace" },
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "pub fn replace" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) Replace" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "pub fn replace" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestAnOutdatedServiceIsReplaced" },
-      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "an_outdated_service_is_replaced" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestAnOutdatedServiceIsReplaced" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "an_outdated_service_is_replaced" },
     ],
     expected: "A persistent service that runs another version than the installed one is replaced after its sessions end.",
     levels: ["unit"],
@@ -4108,17 +4112,17 @@ const FEATURE_LINKS = [
   {
     id: "F121",
     implementation: [
-      { file: "packages/sok/wailsv3/src/appupdate.go", symbol: "func ReplaceApp" },
-      { file: "packages/sok/tauriv2/src/appupdate.rs", symbol: "pub fn replace_app" },
-      { file: "packages/host/wailsv3/src/app_update.go", symbol: "func PrepareAppUpdateStart" },
-      { file: "packages/host/tauriv2/src/app_update.rs", symbol: "pub fn prepare_start" },
+      { file: "packages/sok/go/src/appupdate.go", symbol: "func ReplaceApp" },
+      { file: "packages/sok/rust/src/appupdate.rs", symbol: "pub fn replace_app" },
+      { file: "packages/host/go/src/app_update.go", symbol: "func PrepareAppUpdateStart" },
+      { file: "packages/host/rust/src/app_update.rs", symbol: "pub fn prepare_start" },
       { file: "packages/workbench/app-update.js", symbol: "export function createAppUpdate" },
     ],
     tests: [
-      { file: "packages/sok/wailsv3/tests/appupdate_test.go", id: "TestTheBundleIsReplacedAfterTheProcessEndedAndTheApplicationStarts" },
-      { file: "packages/sok/tauriv2/tests/appupdate_test.rs", id: "the_bundle_is_replaced_after_the_process_ended_and_the_application_starts" },
-      { file: "packages/host/wailsv3/tests/app_update_test.go", id: "TestTheUpdateStartsSokFromACopyBesideTheUpdatesAndChecksTheStagedBundle" },
-      { file: "packages/host/tauriv2/tests/app_update_test.rs", id: "the_update_starts_sok_from_a_copy_beside_the_updates_and_checks_the_staged_bundle" },
+      { file: "packages/sok/go/tests/appupdate_test.go", id: "TestTheBundleIsReplacedAfterTheProcessEndedAndTheApplicationStarts" },
+      { file: "packages/sok/rust/tests/appupdate_test.rs", id: "the_bundle_is_replaced_after_the_process_ended_and_the_application_starts" },
+      { file: "packages/host/go/tests/app_update_test.go", id: "TestTheUpdateStartsSokFromACopyBesideTheUpdatesAndChecksTheStagedBundle" },
+      { file: "packages/host/rust/tests/app_update_test.rs", id: "the_update_starts_sok_from_a_copy_beside_the_updates_and_checks_the_staged_bundle" },
       { file: "packages/workbench/test/app-update.test.mjs", id: "updating stages the candidate, then applies the staged bundle, and reports each step" },
     ],
     expected: "The application stages the release of a newer core, replaces its bundle after it quits and starts again.",
@@ -4138,14 +4142,14 @@ const FEATURE_LINKS = [
   {
     id: "F138",
     implementation: [
-      { file: "packages/host/wailsv3/src/event_relay.go", symbol: "func LogCommand" },
-      { file: "packages/host/tauriv2/src/event_relay.rs", symbol: "pub fn log_command" },
+      { file: "packages/host/go/src/event_relay.go", symbol: "func LogCommand" },
+      { file: "packages/host/rust/src/event_relay.rs", symbol: "pub fn log_command" },
       { file: "packages/window-check/event-log.mjs", symbol: "export function eventLine" },
       { file: "native/darwin/src/application_log.m", symbol: "void sp_log_info" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/event_relay_test.go", id: "TestARelayedBatchReturnsTheTranscriptLinesOfItsWorkbenchRecords" },
-      { file: "packages/host/tauriv2/tests/event_relay_test.rs", id: "a_relayed_batch_returns_the_transcript_lines_of_its_workbench_records" },
+      { file: "packages/host/go/tests/event_relay_test.go", id: "TestARelayedBatchReturnsTheTranscriptLinesOfItsWorkbenchRecords" },
+      { file: "packages/host/rust/tests/event_relay_test.rs", id: "a_relayed_batch_returns_the_transcript_lines_of_its_workbench_records" },
       { file: "packages/window-check/test/event-log.test.mjs", id: "a record event reads as the line of the text form, and another event as its name and fields" },
       { file: "packages/workbench/test/report-record.test.mjs", id: "a line `<where>: <text>` is split at its first `: `" },
     ],
@@ -4172,8 +4176,8 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/plugin-api/test/surface.test.mjs", id: "surface context logs an event of the plugin at each level with the surface in its fields" },
       { file: "packages/workbench/test/page-log.test.mjs", id: "captureConsole records what the page writes to its console and keeps the console working" },
-      { file: "packages/host/wailsv3/tests/event_relay_test.go", id: "TestARelayedBatchStoresAPluginEventInTheLayerPlugin" },
-      { file: "packages/host/tauriv2/tests/event_relay_test.rs", id: "a_relayed_batch_stores_a_plugin_event_in_the_layer_plugin" },
+      { file: "packages/host/go/tests/event_relay_test.go", id: "TestARelayedBatchStoresAPluginEventInTheLayerPlugin" },
+      { file: "packages/host/rust/tests/event_relay_test.rs", id: "a_relayed_batch_stores_a_plugin_event_in_the_layer_plugin" },
     ],
     expected: "A plugin stores events plugin.<plugin>.<event> through its context, the page stores its console output as events, and the host stores each in the layer of its prefix.",
     levels: ["unit"],
@@ -4196,13 +4200,13 @@ const FEATURE_LINKS = [
   {
     id: "F150.3.6",
     implementation: [
-      { file: "packages/host/tauriv2/src/application_log.rs", symbol: "pub struct Entry" },
-      { file: "packages/host/wailsv3/src/application_log.go", symbol: "type Entry struct" },
+      { file: "packages/host/rust/src/application_log.rs", symbol: "pub struct Entry" },
+      { file: "packages/host/go/src/application_log.go", symbol: "type Entry struct" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/application_log_test.rs", id: "a_record_is_one_line_and_escapes_a_line_feed" },
-      { file: "packages/host/tauriv2/tests/images_test.rs", id: "presentation_outcome_names_the_current_frame_of_a_failure" },
-      { file: "packages/host/wailsv3/tests/event_relay_test.go", id: "TestARelayedBatchReturnsTheTranscriptLinesOfItsWorkbenchRecords" },
+      { file: "packages/host/rust/tests/application_log_test.rs", id: "a_record_is_one_line_and_escapes_a_line_feed" },
+      { file: "packages/host/rust/tests/images_test.rs", id: "presentation_outcome_names_the_current_frame_of_a_failure" },
+      { file: "packages/host/go/tests/event_relay_test.go", id: "TestARelayedBatchReturnsTheTranscriptLinesOfItsWorkbenchRecords" },
     ],
     expected: "A record travels as a structured entry that is stored as an event and shown as its line, in both hosts.",
     levels: ["unit"],
@@ -4210,12 +4214,12 @@ const FEATURE_LINKS = [
   {
     id: "F150.3.5.2",
     implementation: [
-      { file: "packages/host/wailsv3/src/event_record.go", symbol: "func emitTrace" },
-      { file: "packages/host/tauriv2/src/event_record.rs", symbol: "pub fn emit_trace" },
+      { file: "packages/host/go/src/event_record.go", symbol: "func emitTrace" },
+      { file: "packages/host/rust/src/event_record.rs", symbol: "pub fn emit_trace" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/event_record_test.go", id: "TestAHostObservationOfTheTraceIsAnEvent" },
-      { file: "packages/host/tauriv2/tests/event_record_test.rs", id: "a_host_observation_of_the_trace_is_an_event" },
+      { file: "packages/host/go/tests/event_record_test.go", id: "TestAHostObservationOfTheTraceIsAnEvent" },
+      { file: "packages/host/rust/tests/event_record_test.rs", id: "a_host_observation_of_the_trace_is_an_event" },
     ],
     expected: "An observation of the host or the sampler is stored as an event of the event log without the name in its fields, and an observation without a name is reported.",
     levels: ["unit"],
@@ -4228,8 +4232,8 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/workbench/test/performance.test.mjs", id: "an enabled trace relays its events of one turn in one log call, and the line has no timestamp of its own" },
-      { file: "packages/host/wailsv3/tests/performance_test.go", id: "TestTheSwitchAcceptsOnAndOffOnly" },
-      { file: "packages/host/tauriv2/tests/performance_test.rs", id: "the_switch_accepts_on_and_off_only" },
+      { file: "packages/host/go/tests/performance_test.go", id: "TestTheSwitchAcceptsOnAndOffOnly" },
+      { file: "packages/host/rust/tests/performance_test.rs", id: "the_switch_accepts_on_and_off_only" },
       { file: "e2e/settings.test.mjs", id: "performance tracing records enabled card focus and stops while disabled" },
     ],
     expected: "The trace of the page leaves as events of one batch through the call log, the switch accepts on and off only, and the events are in the event log.",
@@ -4250,12 +4254,12 @@ const FEATURE_LINKS = [
   {
     id: "F150.3.2",
     implementation: [
-      { file: "packages/host/wailsv3/src/event_record.go", symbol: "func emitRecord" },
-      { file: "packages/host/tauriv2/src/event_record.rs", symbol: "pub fn emit_record" },
+      { file: "packages/host/go/src/event_record.go", symbol: "func emitRecord" },
+      { file: "packages/host/rust/src/event_record.rs", symbol: "pub fn emit_record" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/event_record_test.go", id: "TestAnErrorAndAnObservationAreEventsWithWhereAndText" },
-      { file: "packages/host/tauriv2/tests/event_record_test.rs", id: "an_error_and_an_observation_are_events_with_where_and_text" },
+      { file: "packages/host/go/tests/event_record_test.go", id: "TestAnErrorAndAnObservationAreEventsWithWhereAndText" },
+      { file: "packages/host/rust/tests/event_record_test.rs", id: "an_error_and_an_observation_are_events_with_where_and_text" },
       { file: "e2e/host-records.test.mjs", id: "the event log holds the run record and the records the page reports" },
       { file: "e2e/page-process.test.mjs", id: "the end of the web content process is written to the event log" },
     ],
@@ -4277,16 +4281,16 @@ const FEATURE_LINKS = [
   {
     id: "F150.2.6.2",
     implementation: [
-      { file: "packages/host/wailsv3/src/event_log.go", symbol: "func nativeEventOf" },
-      { file: "packages/host/wailsv3/src/platform/darwin/events.go", symbol: "PullNativeEvents" },
-      { file: "packages/host/tauriv2/src/event_log.rs", symbol: "fn native_event_of" },
-      { file: "packages/host/tauriv2/src/platform/darwin/events.rs", symbol: "pub fn pull" },
+      { file: "packages/host/go/src/event_log.go", symbol: "func nativeEventOf" },
+      { file: "packages/host/go/src/platform/darwin/events.go", symbol: "PullNativeEvents" },
+      { file: "packages/host/rust/src/event_log.rs", symbol: "fn native_event_of" },
+      { file: "packages/host/rust/src/platform/darwin/events.rs", symbol: "pub fn pull" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/event_native_test.go", id: "TestARefusedNativeRecordAndTheLossOfTheRingAreCountedAsDropped" },
-      { file: "packages/host/wailsv3/tests/event_native_platform_test.go", id: "TestThePlatformPullsAnEmptyNativeRingAsZeroBytesAndNoLoss" },
-      { file: "packages/host/tauriv2/tests/event_native_test.rs", id: "a_refused_native_record_and_the_loss_of_the_ring_are_counted_as_dropped" },
-      { file: "packages/host/tauriv2/tests/event_native_platform_test.rs", id: "the_platform_pulls_an_empty_native_ring_as_zero_bytes_and_no_loss" },
+      { file: "packages/host/go/tests/event_native_test.go", id: "TestARefusedNativeRecordAndTheLossOfTheRingAreCountedAsDropped" },
+      { file: "packages/host/go/tests/event_native_platform_test.go", id: "TestThePlatformPullsAnEmptyNativeRingAsZeroBytesAndNoLoss" },
+      { file: "packages/host/rust/tests/event_native_test.rs", id: "a_refused_native_record_and_the_loss_of_the_ring_are_counted_as_dropped" },
+      { file: "packages/host/rust/tests/event_native_platform_test.rs", id: "the_platform_pulls_an_empty_native_ring_as_zero_bytes_and_no_loss" },
     ],
     expected: "The writer of each host pulls the native ring through the platform, stores the records in the layer native, and counts the records it refuses and the events the ring refused.",
     levels: ["unit"],
@@ -4306,12 +4310,12 @@ const FEATURE_LINKS = [
   {
     id: "F150.2.5",
     implementation: [
-      { file: "packages/sok/wailsv3/src/event_log.go", symbol: "func (l *EventLog) rotate" },
-      { file: "packages/sok/tauriv2/src/event_log.rs", symbol: "fn rotate" },
+      { file: "packages/sok/go/src/event_log.go", symbol: "func (l *EventLog) rotate" },
+      { file: "packages/sok/rust/src/event_log.rs", symbol: "fn rotate" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/event_log_test.go", id: "TestTheEventLogRotatesAtTheBoundAndKeepsEveryGeneration" },
-      { file: "packages/host/tauriv2/tests/event_log_test.rs", id: "the_log_rotates_at_the_bound_and_keeps_every_generation" },
+      { file: "packages/host/go/tests/event_log_test.go", id: "TestTheEventLogRotatesAtTheBoundAndKeepsEveryGeneration" },
+      { file: "packages/host/rust/tests/event_log_test.rs", id: "the_log_rotates_at_the_bound_and_keeps_every_generation" },
     ],
     expected: "A writer closes its file before the line that would pass the bound, keeps every generation under its number, opens the new file with log.open and log.rotated, and continues seq.",
     levels: ["unit"],
@@ -4330,8 +4334,8 @@ const FEATURE_LINKS = [
   {
     id: "F150.2.4.4",
     implementation: [
-      { file: "packages/host/wailsv3/src/event_log.go", symbol: "func StartHostEventLog" },
-      { file: "packages/host/tauriv2/src/event_log.rs", symbol: "pub fn start_host" },
+      { file: "packages/host/go/src/event_log.go", symbol: "func StartHostEventLog" },
+      { file: "packages/host/rust/src/event_log.rs", symbol: "pub fn start_host" },
     ],
     tests: [
       { file: "e2e/event-log.test.mjs", id: "the host writes its event log from the start of the process" },
@@ -4344,12 +4348,12 @@ const FEATURE_LINKS = [
   {
     id: "F150.2.4.3",
     implementation: [
-      { file: "packages/host/wailsv3/src/event_relay.go", symbol: "func LogCommand" },
-      { file: "packages/host/tauriv2/src/event_relay.rs", symbol: "pub fn log_command" },
+      { file: "packages/host/go/src/event_relay.go", symbol: "func LogCommand" },
+      { file: "packages/host/rust/src/event_relay.rs", symbol: "pub fn log_command" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/event_relay_test.go", id: "TestAnInvalidRelayedBatchWritesNothingAndNamesTheEvent" },
-      { file: "packages/host/tauriv2/tests/event_relay_test.rs", id: "an_invalid_relayed_batch_writes_nothing_and_names_the_event" },
+      { file: "packages/host/go/tests/event_relay_test.go", id: "TestAnInvalidRelayedBatchWritesNothingAndNamesTheEvent" },
+      { file: "packages/host/rust/tests/event_relay_test.rs", id: "an_invalid_relayed_batch_writes_nothing_and_names_the_event" },
     ],
     expected: "A batch of page events is validated as a whole before any event is written, and every valid event is stored in the layer page with the time the page gave it.",
     levels: ["unit"],
@@ -4357,12 +4361,12 @@ const FEATURE_LINKS = [
   {
     id: "F150.2.4.2",
     implementation: [
-      { file: "packages/sok/wailsv3/src/event_log.go", symbol: "func (l *EventLog) EmitRelayed" },
-      { file: "packages/sok/tauriv2/src/event_log.rs", symbol: "pub fn emit_relayed" },
+      { file: "packages/sok/go/src/event_log.go", symbol: "func (l *EventLog) EmitRelayed" },
+      { file: "packages/sok/rust/src/event_log.rs", symbol: "pub fn emit_relayed" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/event_log_test.go", id: "TestARelayedEventKeepsItsLayerAndTimeAndGetsTheSeqOfTheWriter" },
-      { file: "packages/host/tauriv2/tests/event_log_test.rs", id: "a_relayed_event_keeps_its_layer_and_time_and_gets_the_seq_of_the_writer" },
+      { file: "packages/host/go/tests/event_log_test.go", id: "TestARelayedEventKeepsItsLayerAndTimeAndGetsTheSeqOfTheWriter" },
+      { file: "packages/host/rust/tests/event_log_test.rs", id: "a_relayed_event_keeps_its_layer_and_time_and_gets_the_seq_of_the_writer" },
     ],
     expected: "A writer stores a relayed event with the layer and the time it carries and the seq of the writer, and refuses a name outside its layer and a layer outside the contract.",
     levels: ["unit"],
@@ -4382,11 +4386,11 @@ const FEATURE_LINKS = [
   {
     id: "F150.2.2",
     implementation: [
-      { file: "packages/sok/tauriv2/src/event_log.rs", symbol: "pub fn emit" },
+      { file: "packages/sok/rust/src/event_log.rs", symbol: "pub fn emit" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/event_log_test.rs", id: "a_full_queue_returns_false_and_the_writer_records_the_range_as_dropped" },
-      { file: "packages/host/tauriv2/tests/event_log_test.rs", id: "the_file_passes_the_audit_of_the_contract_package" },
+      { file: "packages/host/rust/tests/event_log_test.rs", id: "a_full_queue_returns_false_and_the_writer_records_the_range_as_dropped" },
+      { file: "packages/host/rust/tests/event_log_test.rs", id: "the_file_passes_the_audit_of_the_contract_package" },
     ],
     expected: "The Rust writer never blocks a producer, assigns consecutive seq, counts every refused event in log.dropped and writes a file that the audit of the contract accepts.",
     levels: ["unit"],
@@ -4394,11 +4398,11 @@ const FEATURE_LINKS = [
   {
     id: "F150.2.3",
     implementation: [
-      { file: "packages/sok/wailsv3/src/event_log.go", symbol: "func (l *EventLog) Emit" },
+      { file: "packages/sok/go/src/event_log.go", symbol: "func (l *EventLog) Emit" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/event_log_test.go", id: "TestAFullEventQueueReturnsFalseAndTheWriterRecordsTheRangeAsDropped" },
-      { file: "packages/host/wailsv3/tests/event_log_test.go", id: "TestTheEventLogPassesTheAuditOfTheContractPackage" },
+      { file: "packages/host/go/tests/event_log_test.go", id: "TestAFullEventQueueReturnsFalseAndTheWriterRecordsTheRangeAsDropped" },
+      { file: "packages/host/go/tests/event_log_test.go", id: "TestTheEventLogPassesTheAuditOfTheContractPackage" },
     ],
     expected: "The Go writer never blocks a producer, assigns consecutive seq, counts every refused event in log.dropped and writes a file that the audit of the contract accepts.",
     levels: ["unit"],
@@ -4457,28 +4461,28 @@ const FEATURE_LINKS = [
   {
     id: "F160.30",
     implementation: [
-      { file: "packages/sok/wailsv3/src/logged.go", symbol: "func Logged" },
-      { file: "packages/sok/wailsv3/src/routine.go", symbol: "func Go" },
-      { file: "packages/sok/tauriv2/src/logged.rs", symbol: "pub fn logged" },
-      { file: "packages/sok/tauriv2/src/routine.rs", symbol: "pub fn spawn_named" },
+      { file: "packages/sok/go/src/logged.go", symbol: "func Logged" },
+      { file: "packages/sok/go/src/routine.go", symbol: "func Go" },
+      { file: "packages/sok/rust/src/logged.rs", symbol: "pub fn logged" },
+      { file: "packages/sok/rust/src/routine.rs", symbol: "pub fn spawn_named" },
     ],
     tests: [
-      { file: "packages/sok/wailsv3/tests/event_log_test.go", id: "TestEachCommandIsRecordedWithItsResult" },
-      { file: "packages/sok/wailsv3/tests/event_log_test.go", id: "TestAPanicOfACommandIsRecordedWithItsStack" },
-      { file: "packages/sok/wailsv3/tests/event_log_test.go", id: "TestAPanicOfARoutineIsRecordedAndEndsTheProcess" },
-      { file: "packages/sok/wailsv3/tests/event_log_test.go", id: "TestAFolderThatCannotBeWrittenIsReportedAndTheCommandRuns" },
-      { file: "packages/sok/tauriv2/tests/event_log_test.rs", id: "each_command_is_recorded_with_its_result" },
-      { file: "packages/sok/tauriv2/tests/event_log_test.rs", id: "a_panic_of_a_command_is_recorded_with_its_stack" },
-      { file: "packages/sok/tauriv2/tests/event_log_test.rs", id: "a_panic_of_a_routine_is_recorded_and_ends_the_process" },
-      { file: "packages/sok/tauriv2/tests/event_log_test.rs", id: "a_folder_that_cannot_be_written_is_reported_and_the_command_runs" },
-      { file: "packages/sok/wailsv3/tests/event_log_fixture_test.go", id: "TestLinesFollowTheGoldenFixtures" },
-      { file: "packages/sok/wailsv3/tests/event_log_fixture_test.go", id: "TestFieldsAreEscapedAndAnOversizeEventIsCut" },
-      { file: "packages/sok/wailsv3/tests/event_log_fixture_test.go", id: "TestARefusedEventIsCountedAndExplainedByLogDropped" },
-      { file: "packages/sok/wailsv3/tests/event_log_fixture_test.go", id: "TestARunStoresOnlyTheEventsThatTheSpecificationNames" },
-      { file: "packages/sok/tauriv2/tests/event_log_fixture_test.rs", id: "lines_follow_the_golden_fixtures" },
-      { file: "packages/sok/tauriv2/tests/event_log_fixture_test.rs", id: "fields_are_escaped_and_an_oversize_event_is_cut" },
-      { file: "packages/sok/tauriv2/tests/event_log_fixture_test.rs", id: "a_refused_event_is_counted_and_explained_by_log_dropped" },
-      { file: "packages/sok/tauriv2/tests/event_log_fixture_test.rs", id: "a_run_stores_only_the_events_that_the_specification_names" },
+      { file: "packages/sok/go/tests/event_log_test.go", id: "TestEachCommandIsRecordedWithItsResult" },
+      { file: "packages/sok/go/tests/event_log_test.go", id: "TestAPanicOfACommandIsRecordedWithItsStack" },
+      { file: "packages/sok/go/tests/event_log_test.go", id: "TestAPanicOfARoutineIsRecordedAndEndsTheProcess" },
+      { file: "packages/sok/go/tests/event_log_test.go", id: "TestAFolderThatCannotBeWrittenIsReportedAndTheCommandRuns" },
+      { file: "packages/sok/rust/tests/event_log_test.rs", id: "each_command_is_recorded_with_its_result" },
+      { file: "packages/sok/rust/tests/event_log_test.rs", id: "a_panic_of_a_command_is_recorded_with_its_stack" },
+      { file: "packages/sok/rust/tests/event_log_test.rs", id: "a_panic_of_a_routine_is_recorded_and_ends_the_process" },
+      { file: "packages/sok/rust/tests/event_log_test.rs", id: "a_folder_that_cannot_be_written_is_reported_and_the_command_runs" },
+      { file: "packages/sok/go/tests/event_log_fixture_test.go", id: "TestLinesFollowTheGoldenFixtures" },
+      { file: "packages/sok/go/tests/event_log_fixture_test.go", id: "TestFieldsAreEscapedAndAnOversizeEventIsCut" },
+      { file: "packages/sok/go/tests/event_log_fixture_test.go", id: "TestARefusedEventIsCountedAndExplainedByLogDropped" },
+      { file: "packages/sok/go/tests/event_log_fixture_test.go", id: "TestARunStoresOnlyTheEventsThatTheSpecificationNames" },
+      { file: "packages/sok/rust/tests/event_log_fixture_test.rs", id: "lines_follow_the_golden_fixtures" },
+      { file: "packages/sok/rust/tests/event_log_fixture_test.rs", id: "fields_are_escaped_and_an_oversize_event_is_cut" },
+      { file: "packages/sok/rust/tests/event_log_fixture_test.rs", id: "a_refused_event_is_counted_and_explained_by_log_dropped" },
+      { file: "packages/sok/rust/tests/event_log_fixture_test.rs", id: "a_run_stores_only_the_events_that_the_specification_names" },
     ],
     expected: "Each run of the command line tool stores the command with its result in its own event file of the targeted configuration directory, and a panic of the command or of a goroutine or thread is stored with its stack and ends the tool with the status 4, in both languages.",
     levels: ["unit"],
@@ -4510,12 +4514,12 @@ const FEATURE_LINKS = [
   {
     id: "F145.12",
     implementation: [
-      { file: "packages/host/wailsv3/src/endpoint.go", symbol: "endpoint timeout" },
-      { file: "packages/host/tauriv2/src/endpoint.rs", symbol: "endpoint timeout" },
+      { file: "packages/host/go/src/endpoint.go", symbol: "endpoint timeout" },
+      { file: "packages/host/rust/src/endpoint.rs", symbol: "endpoint timeout" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/endpoint_test.go", id: "TestEndpointRecordsATimeoutOfARequest" },
-      { file: "packages/host/tauriv2/tests/endpoint_test.rs", id: "the_endpoint_records_a_timeout_of_a_request" },
+      { file: "packages/host/go/tests/endpoint_test.go", id: "TestEndpointRecordsATimeoutOfARequest" },
+      { file: "packages/host/rust/tests/endpoint_test.rs", id: "the_endpoint_records_a_timeout_of_a_request" },
     ],
     expected: "Both hosts write the method and the reason of an endpoint request that ends with a timeout.",
     levels: ["unit"],
@@ -4523,12 +4527,12 @@ const FEATURE_LINKS = [
   {
     id: "F145.13",
     implementation: [
-      { file: "packages/host/wailsv3/src/app_update.go", symbol: "StartAppUpdate" },
-      { file: "packages/host/tauriv2/src/app_update.rs", symbol: "start_update" },
+      { file: "packages/host/go/src/app_update.go", symbol: "StartAppUpdate" },
+      { file: "packages/host/rust/src/app_update.rs", symbol: "start_update" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/app_update_test.go", id: "TestTheDetachedUpdateCommandKeepsItsErrorsAndIsRecordedWhenItStarts" },
-      { file: "packages/host/tauriv2/tests/app_update_test.rs", id: "the_detached_update_command_keeps_its_errors_and_is_recorded_when_it_starts" },
+      { file: "packages/host/go/tests/app_update_test.go", id: "TestTheDetachedUpdateCommandKeepsItsErrorsAndIsRecordedWhenItStarts" },
+      { file: "packages/host/rust/tests/app_update_test.rs", id: "the_detached_update_command_keeps_its_errors_and_is_recorded_when_it_starts" },
     ],
     expected: "The detached update command keeps the standard error of the host, and both hosts store host.update.start with the pid and the command line before the final flush.",
     levels: ["unit"],
@@ -4536,37 +4540,37 @@ const FEATURE_LINKS = [
   {
     id: "F145.14",
     implementation: [
-      { file: "packages/host/wailsv3/src/project_removal.go", symbol: "host.project.removal_allowed" },
-      { file: "packages/host/tauriv2/src/project_removal.rs", symbol: "host.project.removal_allowed" },
-      { file: "packages/host/wailsv3/src/workspace.go", symbol: "host.workspace.settings" },
-      { file: "packages/host/tauriv2/src/workspace.rs", symbol: "host.workspace.settings" },
-      { file: "packages/host/wailsv3/src/notifications.go", symbol: "host.notification.event" },
-      { file: "packages/host/tauriv2/src/notifications.rs", symbol: "host.notification.event" },
+      { file: "packages/host/go/src/project_removal.go", symbol: "host.project.removal_allowed" },
+      { file: "packages/host/rust/src/project_removal.rs", symbol: "host.project.removal_allowed" },
+      { file: "packages/host/go/src/workspace.go", symbol: "host.workspace.settings" },
+      { file: "packages/host/rust/src/workspace.rs", symbol: "host.workspace.settings" },
+      { file: "packages/host/go/src/notifications.go", symbol: "host.notification.event" },
+      { file: "packages/host/rust/src/notifications.rs", symbol: "host.notification.event" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/project_removal_test.go", id: "TestTheEndOfAWindowRecordsEachRemovalItAllows" },
-      { file: "packages/host/tauriv2/tests/project_removal_test.rs", id: "the_end_of_a_window_records_each_removal_it_allows" },
-      { file: "packages/host/wailsv3/tests/workspace_test.go", id: "TestEachSettingsChangeIsRecordedWithItsKeys" },
-      { file: "packages/host/tauriv2/tests/workspace_test.rs", id: "each_settings_change_is_recorded_with_its_keys" },
-      { file: "packages/host/wailsv3/tests/notifications_test.go", id: "TestEachNotificationEventAndFailureIsRecorded" },
-      { file: "packages/host/tauriv2/tests/notifications_test.rs", id: "each_notification_event_and_failure_is_recorded" },
+      { file: "packages/host/go/tests/project_removal_test.go", id: "TestTheEndOfAWindowRecordsEachRemovalItAllows" },
+      { file: "packages/host/rust/tests/project_removal_test.rs", id: "the_end_of_a_window_records_each_removal_it_allows" },
+      { file: "packages/host/go/tests/workspace_test.go", id: "TestEachSettingsChangeIsRecordedWithItsKeys" },
+      { file: "packages/host/rust/tests/workspace_test.rs", id: "each_settings_change_is_recorded_with_its_keys" },
+      { file: "packages/host/go/tests/notifications_test.go", id: "TestEachNotificationEventAndFailureIsRecorded" },
+      { file: "packages/host/rust/tests/notifications_test.rs", id: "each_notification_event_and_failure_is_recorded" },
     ],
     expected: "Both hosts store an event for each removal that the end of a window allows, each settings change and each event of the notification center, record the failures of the notification center.",
     id: "F145.15",
     implementation: [
-      { file: "packages/host/wailsv3/src/performance.go", symbol: "func PerformanceProcessAdd" },
-      { file: "packages/host/wailsv3/src/performance.go", symbol: "func PerformanceSurface" },
-      { file: "packages/host/tauriv2/src/performance.rs", symbol: "pub fn process_add" },
-      { file: "packages/host/tauriv2/src/performance.rs", symbol: "pub fn surface" },
+      { file: "packages/host/go/src/performance.go", symbol: "func PerformanceProcessAdd" },
+      { file: "packages/host/go/src/performance.go", symbol: "func PerformanceSurface" },
+      { file: "packages/host/rust/src/performance.rs", symbol: "pub fn process_add" },
+      { file: "packages/host/rust/src/performance.rs", symbol: "pub fn surface" },
       { file: "packages/workbench/page-log.js", symbol: "export function recordWorkbenchStart" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/performance_test.go", id: "TestTheSamplerReadsEveryRegisteredProcess" },
-      { file: "packages/host/wailsv3/tests/performance_test.go", id: "TestSurfaceLifecycleEventsHoldTheGeometry" },
-      { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestTheSamplerNamesARunningSidecarUntilItEnds" },
-      { file: "packages/host/tauriv2/tests/performance_test.rs", id: "the_sampler_reads_every_registered_process" },
-      { file: "packages/host/tauriv2/tests/performance_test.rs", id: "surface_lifecycle_events_hold_the_geometry" },
-      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "the_sampler_names_a_running_sidecar_until_it_ends" },
+      { file: "packages/host/go/tests/performance_test.go", id: "TestTheSamplerReadsEveryRegisteredProcess" },
+      { file: "packages/host/go/tests/performance_test.go", id: "TestSurfaceLifecycleEventsHoldTheGeometry" },
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestTheSamplerNamesARunningSidecarUntilItEnds" },
+      { file: "packages/host/rust/tests/performance_test.rs", id: "the_sampler_reads_every_registered_process" },
+      { file: "packages/host/rust/tests/performance_test.rs", id: "surface_lifecycle_events_hold_the_geometry" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "the_sampler_names_a_running_sidecar_until_it_ends" },
       { file: "packages/workbench/test/page-log.test.mjs", id: "the start of a document of the workbench is the event workbench.start with the origin of the document clock and its address" },
     ],
     expected: "The sampler of both hosts reads the host and every registered sidecar process, the surface lifecycle of the trace holds the geometry, and a document of the main page marks its start.",
@@ -4599,12 +4603,12 @@ const FEATURE_LINKS = [
   {
     id: "F145.11",
     implementation: [
-      { file: "packages/host/wailsv3/src/application_log.go", symbol: "func TranscriptEntry" },
-      { file: "packages/host/tauriv2/src/application_log.rs", symbol: "pub fn transcript_entry" },
+      { file: "packages/host/go/src/application_log.go", symbol: "func TranscriptEntry" },
+      { file: "packages/host/rust/src/application_log.rs", symbol: "pub fn transcript_entry" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/application_log_test.go", id: "TestTranscriptLinesReachTheApplicationLog" },
-      { file: "packages/host/tauriv2/tests/application_log_test.rs", id: "transcript_lines_reach_the_application_log" },
+      { file: "packages/host/go/tests/application_log_test.go", id: "TestTranscriptLinesReachTheApplicationLog" },
+      { file: "packages/host/rust/tests/application_log_test.rs", id: "transcript_lines_reach_the_application_log" },
     ],
     expected: "Both hosts write the lines of the diagnostic transcript of a window to the application log.",
     levels: ["unit"],
@@ -4658,8 +4662,8 @@ const FEATURE_LINKS = [
     id: "F386-4",
     implementation: [
       { file: "packages/plugin-api/index.js", symbol: "image present must be copy or lease" },
-      { file: "packages/sok/wailsv3/src/manifest.go", symbol: "image present must be copy or lease" },
-      { file: "packages/sok/tauriv2/src/manifest.rs", symbol: "image present must be copy or lease" },
+      { file: "packages/sok/go/src/manifest.go", symbol: "image present must be copy or lease" },
+      { file: "packages/sok/rust/src/manifest.rs", symbol: "image present must be copy or lease" },
     ],
     tests: [
       { file: "packages/plugin-api/test/validate.test.mjs", id: "surface composition declarations are complete and fail closed" },
@@ -4671,12 +4675,12 @@ const FEATURE_LINKS = [
   {
     id: "F386-3",
     implementation: [
-      { file: "packages/host/wailsv3/src/images.go", symbol: "func LeasedReply(name string, generation, raster uint64, sequence int) map[string]interface{} {" },
-      { file: "packages/host/tauriv2/src/images.rs", symbol: "pub fn leased_reply(name: &str, generation: u64, raster: u64, sequence: i32) -> serde_json::Value {" },
+      { file: "packages/host/go/src/images.go", symbol: "func LeasedReply(name string, generation, raster uint64, sequence int) map[string]interface{} {" },
+      { file: "packages/host/rust/src/images.rs", symbol: "pub fn leased_reply(name: &str, generation: u64, raster: u64, sequence: i32) -> serde_json::Value {" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/surfaces_test.go", id: "TestImageRegionDeclaresItsPresentationMode" },
-      { file: "packages/host/tauriv2/src/surfaces_test.rs", id: "an_image_region_declares_its_presentation_mode" },
+      { file: "packages/host/go/src/surfaces_test.go", id: "TestImageRegionDeclaresItsPresentationMode" },
+      { file: "packages/host/rust/src/surfaces_test.rs", id: "an_image_region_declares_its_presentation_mode" },
     ],
     expected: "Both hosts require present on an image region, answer leased in the lease mode, and send released when a region stops holding a surface.",
     levels: ["unit"],
@@ -4717,8 +4721,8 @@ const FEATURE_LINKS = [
   {
     id: "F335-8",
     implementation: [
-      { file: "packages/host/wailsv3/src/host.go", symbol: "OnShutdown: func() {" },
-      { file: "packages/host/tauriv2/src/windows.rs", symbol: "tauri::WindowEvent::CloseRequested { .. } =>" },
+      { file: "packages/host/go/src/host.go", symbol: "func (s *Session) Shutdown() {" },
+      { file: "packages/host/rust/src/windows.rs", symbol: "WindowEvent::CloseRequested { .. } =>" },
     ],
     tests: [
       { file: "native/darwin/tests/application_end_processes_test.m", id: "the native library offers no operation that kills a WebContent process" },
@@ -4731,7 +4735,7 @@ const FEATURE_LINKS = [
     id: "F145.10.2",
     implementation: [
       { file: "native/darwin/src/webview_geometry.m", symbol: "void sp_webview_log_process_end" },
-      { file: "packages/host/wailsv3/src/platform/darwin/webview.m", symbol: "webViewWebContentProcessDidTerminate" },
+      { file: "packages/host/go/src/platform/darwin/webview.m", symbol: "webViewWebContentProcessDidTerminate" },
     ],
     tests: [
       { file: "native/darwin/tests/webview_process_test.m", id: "the end of the WebContent process is recorded with the address" },
@@ -4753,14 +4757,14 @@ const FEATURE_LINKS = [
   {
     id: "F145.9",
     implementation: [
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) dropMessage" },
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn drop_message" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) dropMessage" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn drop_message" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestClosedSurfaceMessagesAreDiscardedAndUnknownOnesFail" },
-      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "a_dropped_sidecar_message_is_recorded" },
-      { file: "packages/host/wailsv3/tests/flush_test.go", id: "TestEveryPendingReplyIsFlushedAfterTheQueueDrains" },
-      { file: "packages/host/tauriv2/tests/flush_test.rs", id: "a_buffered_close_is_recorded" },
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestClosedSurfaceMessagesAreDiscardedAndUnknownOnesFail" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "a_dropped_sidecar_message_is_recorded" },
+      { file: "packages/host/go/tests/flush_test.go", id: "TestEveryPendingReplyIsFlushedAfterTheQueueDrains" },
+      { file: "packages/host/rust/tests/flush_test.rs", id: "a_buffered_close_is_recorded" },
     ],
     expected: "Both hosts record a sidecar message that no window owns and a closed notice that waits for a full queue.",
     levels: ["unit"],
@@ -4768,12 +4772,12 @@ const FEATURE_LINKS = [
   {
     id: "F145.8",
     implementation: [
-      { file: "packages/host/wailsv3/src/images.go", symbol: "func logRefusedFrame" },
-      { file: "packages/host/tauriv2/src/images.rs", symbol: "fn log_refused_frame" },
+      { file: "packages/host/go/src/images.go", symbol: "func logRefusedFrame" },
+      { file: "packages/host/rust/src/images.rs", symbol: "fn log_refused_frame" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/images_test.go", id: "TestImageFrameRefusalsAreRecorded" },
-      { file: "packages/host/tauriv2/tests/images_test.rs", id: "image_frame_refusals_are_recorded" },
+      { file: "packages/host/go/tests/images_test.go", id: "TestImageFrameRefusalsAreRecorded" },
+      { file: "packages/host/rust/tests/images_test.rs", id: "image_frame_refusals_are_recorded" },
     ],
     expected: "Both hosts record each refused frame of an image region and each image field that is not an envelope.",
     levels: ["unit"],
@@ -4852,12 +4856,12 @@ const FEATURE_LINKS = [
   {
     id: "F145.1",
     implementation: [
-      { file: "packages/host/wailsv3/src/endpoint.go", symbol: "connection closed: " },
-      { file: "packages/host/tauriv2/src/endpoint.rs", symbol: "connection closed: {reason}" },
+      { file: "packages/host/go/src/endpoint.go", symbol: "connection closed: " },
+      { file: "packages/host/rust/src/endpoint.rs", symbol: "connection closed: {reason}" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/endpoint_test.go", id: "TestEndpointRecordsWhyAConnectionCloses" },
-      { file: "packages/host/tauriv2/tests/endpoint_test.rs", id: "the_endpoint_records_why_a_connection_closes" },
+      { file: "packages/host/go/tests/endpoint_test.go", id: "TestEndpointRecordsWhyAConnectionCloses" },
+      { file: "packages/host/rust/tests/endpoint_test.rs", id: "the_endpoint_records_why_a_connection_closes" },
     ],
     expected: "A connection of the endpoint that closes writes the reason of the close as an info record before the socket closes.",
     levels: ["unit"],
@@ -4949,14 +4953,14 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/workbench/debug-ui.js", symbol: "export async function showDebugState" },
       { file: "packages/workbench/debug-timeline.js", symbol: "export function queryOf" },
-      { file: "packages/sok/wailsv3/src/debug.go", symbol: "func runDebug" },
-      { file: "packages/sok/tauriv2/src/debug.rs", symbol: "pub(crate) fn run_debug" },
+      { file: "packages/sok/go/src/debug.go", symbol: "func runDebug" },
+      { file: "packages/sok/rust/src/debug.rs", symbol: "pub(crate) fn run_debug" },
     ],
     tests: [
       { file: "packages/workbench/test/debug-timeline.test.mjs", id: "the text line of each golden page is the line that the implementations of sok print" },
       { file: "packages/workbench/test/debug-state.test.mjs", id: "a comparison lists the paths whose values differ, including paths present in one file" },
-      { file: "packages/sok/wailsv3/tests/debug_test.go", id: "TestQueryPrintsTheGoldenLinesOfEveryCase" },
-      { file: "packages/sok/tauriv2/tests/debug_test.rs", id: "query_prints_the_golden_lines_of_every_case" },
+      { file: "packages/sok/go/tests/debug_test.go", id: "TestQueryPrintsTheGoldenLinesOfEveryCase" },
+      { file: "packages/sok/rust/tests/debug_test.rs", id: "query_prints_the_golden_lines_of_every_case" },
     ],
     expected: "The debug view shows the event files as a filtered, followed and saved timeline and the state files as a tree, and the command line prints the same timeline rows.",
     levels: ["unit"],
@@ -4964,23 +4968,23 @@ const FEATURE_LINKS = [
   {
     id: "R5.4",
     implementation: [
-      { file: "packages/sok/wailsv3/src/plugins.go", symbol: "func InstalledName" },
-      { file: "packages/sok/tauriv2/src/plugins.rs", symbol: "pub fn installed_name" },
-      { file: "packages/sok/wailsv3/src/install.go", symbol: "func ValidateInstalled" },
-      { file: "packages/sok/tauriv2/src/install.rs", symbol: "pub fn validate_installed" },
-      { file: "packages/host/wailsv3/src/installed.go", symbol: "func enabledPlugins" },
-      { file: "packages/host/tauriv2/src/installed.rs", symbol: "fn enabled_plugins" },
+      { file: "packages/sok/go/src/plugins.go", symbol: "func InstalledName" },
+      { file: "packages/sok/rust/src/plugins.rs", symbol: "pub fn installed_name" },
+      { file: "packages/sok/go/src/install.go", symbol: "func ValidateInstalled" },
+      { file: "packages/sok/rust/src/install.rs", symbol: "pub fn validate_installed" },
+      { file: "packages/host/go/src/installed.go", symbol: "func enabledPlugins" },
+      { file: "packages/host/rust/src/installed.rs", symbol: "fn enabled_plugins" },
       { file: "packages/workbench/stage.mjs", symbol: "function enabledInstalledPlugins" },
     ],
     tests: [
-      { file: "packages/sok/wailsv3/tests/plugins_test.go", id: "TestPluginDependentsReadTheNameFromThePackageJSONOfTheInstalledPlugin" },
-      { file: "packages/sok/wailsv3/tests/plugins_test.go", id: "TestReadInstalledRefusesAPackageField" },
-      { file: "packages/sok/tauriv2/tests/plugins_test.rs", id: "plugin_dependents_read_the_name_from_the_package_json_of_the_installed_plugin" },
-      { file: "packages/sok/tauriv2/tests/plugins_test.rs", id: "read_installed_refuses_a_package_field" },
-      { file: "packages/host/wailsv3/tests/installed_test.go", id: "TestInstalledPluginsDocumentReadsTheNameFromThePackageJSON" },
-      { file: "packages/host/wailsv3/tests/installed_test.go", id: "TestInstalledPluginsDocumentRefusesAPackageField" },
-      { file: "packages/host/tauriv2/tests/installed_test.rs", id: "installed_plugins_document_reads_the_name_from_the_package_json" },
-      { file: "packages/host/tauriv2/tests/installed_test.rs", id: "installed_plugins_document_refuses_a_package_field" },
+      { file: "packages/sok/go/tests/plugins_test.go", id: "TestPluginDependentsReadTheNameFromThePackageJSONOfTheInstalledPlugin" },
+      { file: "packages/sok/go/tests/plugins_test.go", id: "TestReadInstalledRefusesAPackageField" },
+      { file: "packages/sok/rust/tests/plugins_test.rs", id: "plugin_dependents_read_the_name_from_the_package_json_of_the_installed_plugin" },
+      { file: "packages/sok/rust/tests/plugins_test.rs", id: "read_installed_refuses_a_package_field" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestInstalledPluginsDocumentReadsTheNameFromThePackageJSON" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestInstalledPluginsDocumentRefusesAPackageField" },
+      { file: "packages/host/rust/tests/installed_test.rs", id: "installed_plugins_document_reads_the_name_from_the_package_json" },
+      { file: "packages/host/rust/tests/installed_test.rs", id: "installed_plugins_document_refuses_a_package_field" },
       { file: "packages/workbench/test/stage.test.mjs", id: "staging refuses an installed.json entry that holds package" },
     ],
     expected: "installed.json holds no package; the hosts, sok and the staging read the name of an installed plugin from its package.json and refuse an installed.json that holds package with an error that names the file and the field.",
@@ -5008,12 +5012,12 @@ const FEATURE_LINKS = [
   {
     id: "F112",
     implementation: [
-      { file: "packages/host/wailsv3/src/deep_link.go", symbol: "func ParseDeepLink" },
-      { file: "packages/host/tauriv2/src/deep_link.rs", symbol: "pub fn parse_deep_link" },
+      { file: "packages/host/go/src/deep_link.go", symbol: "func ParseDeepLink" },
+      { file: "packages/host/rust/src/deep_link.rs", symbol: "pub fn parse_deep_link" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/deep_link_test.go", id: "TestDeepLinkParseAcceptsCoreAndPluginOwners" },
-      { file: "packages/host/tauriv2/tests/deep_link_test.rs", id: "deep_link_parse_accepts_core_and_plugin_owners" },
+      { file: "packages/host/go/tests/deep_link_test.go", id: "TestDeepLinkParseAcceptsCoreAndPluginOwners" },
+      { file: "packages/host/rust/tests/deep_link_test.rs", id: "deep_link_parse_accepts_core_and_plugin_owners" },
     ],
     expected: "A deep link soksak://<owner>/<command>?<params> parses to the declared command of its owner in both hosts, and a refused link names its reason.",
     levels: ["unit"],
@@ -5021,22 +5025,22 @@ const FEATURE_LINKS = [
   {
     id: "F172",
     implementation: [
-      { file: "packages/host/wailsv3/src/deep_link.go", symbol: "func (q *DeepLinkQueue) Ready" },
-      { file: "packages/host/tauriv2/src/deep_link.rs", symbol: "pub fn ready(&self" },
+      { file: "packages/host/go/src/deep_link.go", symbol: "func (q *DeepLinkQueue) Ready" },
+      { file: "packages/host/rust/src/deep_link.rs", symbol: "pub fn ready(&self" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/deep_link_test.go", id: "TestDeepLinkQueueRunsKeptLinksInOrderWhenWindowIsReady" },
-      { file: "packages/host/tauriv2/tests/deep_link_test.rs", id: "deep_link_queue_runs_kept_links_in_order_when_window_is_ready" },
+      { file: "packages/host/go/tests/deep_link_test.go", id: "TestDeepLinkQueueRunsKeptLinksInOrderWhenWindowIsReady" },
+      { file: "packages/host/rust/tests/deep_link_test.rs", id: "deep_link_queue_runs_kept_links_in_order_when_window_is_ready" },
     ],
     expected: "A deep link that arrives before the first window is ready runs in arrival order when the window becomes ready, and a link that arrives later runs at once.",
     levels: ["unit"],
   },
   {
     id: "F123",
-    implementation: [{ file: "packages/host/wailsv3/src/surfaces.go", symbol: "func FrameAnswerEvent" }],
+    implementation: [{ file: "packages/host/go/src/surfaces.go", symbol: "func FrameAnswerEvent" }],
     tests: [
-      { file: "packages/host/wailsv3/tests/images_test.go", id: "TestFrameAnswerEventRecordsConsumedAndRefusedAnswers" },
-      { file: "packages/host/tauriv2/tests/images_test.rs", id: "frame_answer_event_records_consumed_and_refused_answers" },
+      { file: "packages/host/go/tests/images_test.go", id: "TestFrameAnswerEventRecordsConsumedAndRefusedAnswers" },
+      { file: "packages/host/rust/tests/images_test.rs", id: "frame_answer_event_records_consumed_and_refused_answers" },
     ],
     expected: "Every answer to a frame is a trace event, so a terminal that holds typed text is located by the records; the terminal plugin sends its queued input when a session reattaches.",
     levels: ["unit"],
@@ -5044,7 +5048,7 @@ const FEATURE_LINKS = [
   {
     id: "F124",
     implementation: [{ file: "packages/workbench/core-exposure.js", symbol: 'registry.command("core.debug.save"' }],
-    tests: [{ file: "packages/host/tauriv2/tests/debug_test.rs", id: "debug_copy_copies_a_file_of_the_logs_folder_only" }],
+    tests: [{ file: "packages/host/rust/tests/debug_test.rs", id: "debug_copy_copies_a_file_of_the_logs_folder_only" }],
     expected: "Every 0.0.x release is a diagnostic build, and the debug view lists and saves every diagnostic file.",
     levels: ["unit"],
   },
@@ -5052,8 +5056,8 @@ const FEATURE_LINKS = [
     id: "F162",
     implementation: [{ file: "packages/workbench/core-exposure.js", symbol: 'registry.command("core.file.place"' }],
     tests: [
-      { file: "packages/host/wailsv3/tests/file_place_test.go", id: "TestAPlaceInsideTheProjectIsAnsweredRelativeToTheRoot" },
-      { file: "packages/host/tauriv2/tests/file_place_test.rs", id: "a_place_inside_the_project_is_answered_relative_to_the_root" },
+      { file: "packages/host/go/tests/file_place_test.go", id: "TestAPlaceInsideTheProjectIsAnsweredRelativeToTheRoot" },
+      { file: "packages/host/rust/tests/file_place_test.rs", id: "a_place_inside_the_project_is_answered_relative_to_the_root" },
     ],
     expected: "A blank document opens from the new-tab control and its first save asks for the file inside the project.",
     levels: ["unit"],
@@ -5067,8 +5071,8 @@ const FEATURE_LINKS = [
   },
   {
     id: "F160.24",
-    implementation: [{ file: "packages/sok/wailsv3/src/log_query.go", symbol: "func ParseLogQuery" }],
-    tests: [{ file: "packages/sok/wailsv3/tests/debug_test.go", id: "TestQueryPrintsTheGoldenLinesOfEveryCase" }],
+    implementation: [{ file: "packages/sok/go/src/log_query.go", symbol: "func ParseLogQuery" }],
+    tests: [{ file: "packages/sok/go/tests/debug_test.go", id: "TestQueryPrintsTheGoldenLinesOfEveryCase" }],
     expected: "One query that the host answers searches the logs.",
     levels: ["unit"],
   },
@@ -5136,17 +5140,17 @@ const FEATURE_LINKS = [
   },
   {
     id: "F166",
-    implementation: [{ file: "packages/host/wailsv3/src/log_policy.go", symbol: "func watchPolicyFile" }],
-    tests: [{ file: "packages/host/wailsv3/tests/log_policy_test.go", id: "TestThePolicyFileIsWatchedAndEveryChangeIsAppliedOnce" }],
+    implementation: [{ file: "packages/host/go/src/log_policy.go", symbol: "func watchPolicyFile" }],
+    tests: [{ file: "packages/host/go/tests/log_policy_test.go", id: "TestThePolicyFileIsWatchedAndEveryChangeIsAppliedOnce" }],
     expected: "A function that a maintained library provides uses that library, and code of its own states which requirement the libraries do not meet.",
     levels: ["unit"],
   },
   {
     id: "F187",
-    implementation: [{ file: "packages/host/wailsv3/tests/event_channels_test.go", symbol: "func TestALossNamesTheChannelOfTheRefusedEvents" }],
+    implementation: [{ file: "packages/host/go/tests/event_channels_test.go", symbol: "func TestALossNamesTheChannelOfTheRefusedEvents" }],
     tests: [
-      { file: "packages/host/wailsv3/tests/event_channels_test.go", id: "TestALossNamesTheChannelOfTheRefusedEvents" },
-      { file: "packages/host/tauriv2/tests/event_channels_test.rs", id: "a_loss_names_the_channel_of_the_refused_events" },
+      { file: "packages/host/go/tests/event_channels_test.go", id: "TestALossNamesTheChannelOfTheRefusedEvents" },
+      { file: "packages/host/rust/tests/event_channels_test.rs", id: "a_loss_names_the_channel_of_the_refused_events" },
     ],
     expected: "The loss tests of both hosts add events until both channels are refused, and every contract comment is above its test.",
     levels: ["unit"],
@@ -5176,13 +5180,13 @@ const FEATURE_LINKS = [
     id: "F199",
     implementation: [
       { file: "packages/workbench/tab-session.js", symbol: "export function createTabSessions" },
-      { file: "packages/host/wailsv3/src/workspace.go", symbol: "func putTabSession" },
-      { file: "packages/host/tauriv2/src/workspace.rs", symbol: "fn put_tab_session" },
+      { file: "packages/host/go/src/workspace.go", symbol: "func putTabSession" },
+      { file: "packages/host/rust/src/workspace.rs", symbol: "fn put_tab_session" },
     ],
     tests: [
       { file: "packages/workbench/test/tab-session.test.mjs", id: "a session stored before a restart is passed to the first attach after it and to the attach after a restore" },
-      { file: "packages/host/wailsv3/tests/workspace_test.go", id: "TestTabSessionPutRewritesOnlyItsOwnFile" },
-      { file: "packages/host/tauriv2/tests/workspace_test.rs", id: "tab_session_put_rewrites_only_its_own_file" },
+      { file: "packages/host/go/tests/workspace_test.go", id: "TestTabSessionPutRewritesOnlyItsOwnFile" },
+      { file: "packages/host/rust/tests/workspace_test.rs", id: "tab_session_put_rewrites_only_its_own_file" },
     ],
     expected: "A browser tab keeps the session history of its document regions across a restart in tab-sessions/<tab>.json.",
     levels: ["unit"],
@@ -5190,12 +5194,12 @@ const FEATURE_LINKS = [
   {
     id: "F193",
     implementation: [
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "\"--service-dir\", serviceDir, \"--log-dir\"" },
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: ".arg(\"--service-dir\")" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "\"--service-dir\", serviceDir, \"--log-dir\"" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: ".arg(\"--service-dir\")" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestSidecarReceivesTheLogDirectory" },
-      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "a_sidecar_receives_the_log_directory" },
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestSidecarReceivesTheLogDirectory" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "a_sidecar_receives_the_log_directory" },
     ],
     expected: "A sidecar service starts with the arguments that the parser of its release accepts.",
     levels: ["unit"],
@@ -5217,7 +5221,7 @@ const FEATURE_LINKS = [
   {
     id: "F204",
     implementation: [{ file: "packages/host/wailsv3/go.mod", symbol: "replace github.com/wailsapp/wails/v3 => github.com/min-0-max/wails/v3" }],
-    tests: [{ file: "packages/host/wailsv3/tests/application_log_test.go", id: "TestTheTransportReturnsAFailedCallWithoutLoggingIt" }],
+    tests: [{ file: "packages/host/wailsv3/tests/framework_log_test.go", id: "TestTheTransportReturnsAFailedCallWithoutLoggingIt" }],
     expected: "The Wails host builds against the fork under its renamed account.",
     levels: ["unit"],
   },
@@ -5275,16 +5279,16 @@ const FEATURE_LINKS = [
   {
     id: "F218",
     implementation: [
-      { file: "packages/host/tauriv2/src/routine/routine.rs", symbol: "pub fn record_panic(" },
-      { file: "packages/host/tauriv2/src/buttons.rs", symbol: "pub fn report(&self, mask: u64)" },
-      { file: "packages/host/wailsv3/src/event_record.go", symbol: "func recordPanic(name, text, stack string)" },
+      { file: "packages/host/rust/src/routine/routine.rs", symbol: "pub fn record_panic(" },
+      { file: "packages/host/rust/src/buttons.rs", symbol: "pub fn report(&self, mask: u64)" },
+      { file: "packages/host/go/src/event_record.go", symbol: "func recordPanic(name, text, stack string)" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/panic_hook_test.rs", id: "a_panic_before_the_writer_exists_is_stored_when_the_writer_opens" },
-      { file: "packages/host/tauriv2/tests/panic_hook_test.rs", id: "a_panic_that_no_writer_stores_is_written_to_the_standard_error_in_full" },
-      { file: "packages/host/tauriv2/tests/buttons_test.rs", id: "a_poisoned_button_state_is_recovered_and_the_next_report_is_announced" },
-      { file: "packages/host/wailsv3/tests/routine_test.go", id: "TestAPanicBeforeTheWriterExistsIsRecordedWhenTheWriterOpens" },
-      { file: "packages/host/wailsv3/tests/routine_test.go", id: "TestAPanicThatNoWriterStoresIsWrittenToTheStandardErrorInFull" },
+      { file: "packages/host/rust/tests/panic_hook_test.rs", id: "a_panic_before_the_writer_exists_is_stored_when_the_writer_opens" },
+      { file: "packages/host/rust/tests/panic_hook_test.rs", id: "a_panic_that_no_writer_stores_is_written_to_the_standard_error_in_full" },
+      { file: "packages/host/rust/tests/buttons_test.rs", id: "a_poisoned_button_state_is_recovered_and_the_next_report_is_announced" },
+      { file: "packages/host/go/tests/routine_test.go", id: "TestAPanicBeforeTheWriterExistsIsRecordedWhenTheWriterOpens" },
+      { file: "packages/host/go/tests/routine_test.go", id: "TestAPanicThatNoWriterStoresIsWrittenToTheStandardErrorInFull" },
     ],
     expected: "A panic before the writer exists is stored when the writer opens, a panic that no writer stores is written to the standard error in full, and a poisoned button state is recovered by the next report.",
     levels: ["unit"],
@@ -5343,8 +5347,8 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/view-events.test.mjs", id: "a status watch that the page refuses registers nothing and rejects with the refusal" },
       { file: "packages/workbench/test/surface-view.test.mjs", id: "a view watch of a status that the exposure does not declare is refused with its name" },
       { file: "packages/plugin-api/test/view-status-contract.test.mjs", id: "view status contract publishes the required cases in order" },
-      { file: "packages/host/wailsv3/src/surfaces_test.go", id: "TestViewStatusWatchIsForwardedAndStatusValueIsPosted" },
-      { file: "packages/host/tauriv2/tests/documents_test.rs", id: "view_status_watch_is_forwarded_and_a_status_value_is_posted" },
+      { file: "packages/host/go/src/surfaces_test.go", id: "TestViewStatusWatchIsForwardedAndStatusValueIsPosted" },
+      { file: "packages/host/rust/tests/documents_test.rs", id: "view_status_watch_is_forwarded_and_a_status_value_is_posted" },
     ],
     expected: "A view watches a core status or a status of its plugin with runtime.status.watch and runtime.status.unwatch, receives each value as the view event status, and a name with another owner or an undeclared plugin status is refused and runs nothing; both hosts relay the calls and the event unchanged.",
     levels: ["unit"],
@@ -5364,8 +5368,8 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/plugin-api/view.js", symbol: "const writeLog = (level, event, fields, cids) =>" }],
     tests: [
       { file: "packages/plugin-api/test/view.test.mjs", id: "the view bridge keeps the public log API and batches source-clocked records through the direct writer" },
-      { file: "packages/host/tauriv2/tests/event_relay_test.rs", id: "a_relayed_batch_stores_the_clock_and_the_cids_that_the_workbench_gave" },
-      { file: "packages/host/wailsv3/src/view_call_record_test.go", id: "TestViewRuntimeLogClockRepliesWithoutWorkbenchRelay" },
+      { file: "packages/host/rust/tests/event_relay_test.rs", id: "a_relayed_batch_stores_the_clock_and_the_cids_that_the_workbench_gave" },
+      { file: "packages/host/go/src/view_call_record_test.go", id: "TestViewRuntimeLogClockRepliesWithoutWorkbenchRelay" },
     ],
     expected: "The public runtime.log API carries its cids through the SDK direct writer, and host relays retain the supplied cids while storing page events.",
     levels: ["unit"],
@@ -5381,14 +5385,14 @@ const FEATURE_LINKS = [
     id: "F239-240",
     implementation: [
       { file: "packages/plugin-api/view.js", symbol: "const writeLog = (level, event, fields, cids) =>" },
-      { file: "packages/host/wailsv3/src/event_relay.go", symbol: "func viewLogCommand(" },
-      { file: "packages/host/tauriv2/src/event_relay.rs", symbol: "pub fn view_log_command(" },
+      { file: "packages/host/go/src/event_relay.go", symbol: "func viewLogCommand(" },
+      { file: "packages/host/rust/src/event_relay.rs", symbol: "pub fn view_log_command(" },
     ],
     tests: [
       { file: "packages/plugin-api/test/view.test.mjs", id: "the view bridge keeps the public log API and batches source-clocked records through the direct writer" },
-      { file: "packages/host/wailsv3/src/view_call_record_test.go", id: "TestViewRuntimeLogReplyDoesNotReachANavigatedDocument" },
-      { file: "packages/host/tauriv2/tests/event_relay_test.rs", id: "a_view_batch_rejects_a_foreign_source_without_writing_earlier_events" },
-      { file: "packages/host/tauriv2/tests/event_relay_test.rs", id: "a_view_log_rejects_unknown_clock_and_batch_request_fields" },
+      { file: "packages/host/go/src/view_call_record_test.go", id: "TestViewRuntimeLogReplyDoesNotReachANavigatedDocument" },
+      { file: "packages/host/rust/tests/event_relay_test.rs", id: "a_view_batch_rejects_a_foreign_source_without_writing_earlier_events" },
+      { file: "packages/host/rust/tests/event_relay_test.rs", id: "a_view_log_rejects_unknown_clock_and_batch_request_fields" },
     ],
     expected: "View records use the bounded direct writer with source clock, page and surface identity; malformed batches write no events and replies cannot reach a replacement document.",
     levels: ["unit"],
@@ -5485,36 +5489,36 @@ const FEATURE_LINKS = [
   {
     id: "F239-48-3-9",
     implementation: [
-      { file: "packages/host/wailsv3/src/documents.go", symbol: "func (s *Surfaces) viewReceived(" },
-      { file: "packages/host/tauriv2/src/documents.rs", symbol: "fn accept_view_message(" },
+      { file: "packages/host/go/src/documents.go", symbol: "func (s *Surfaces) viewReceived(" },
+      { file: "packages/host/rust/src/documents.rs", symbol: "fn accept_view_message(" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/view_origin_test.go", id: "TestCurrentViewCallbackEntersDispatch" },
-      { file: "packages/host/wailsv3/src/view_origin_test.go", id: "TestRetiredViewCallbackDoesNotReachDispatch" },
-      { file: "packages/host/wailsv3/src/view_origin_test.go", id: "TestRetiredViewCallbackPreservesItsProducerError" },
-      { file: "packages/host/wailsv3/src/view_origin_test.go", id: "TestRetiredViewCallbackPreservesMalformedAndTransportErrors" },
-      { file: "packages/host/wailsv3/src/view_origin_test.go", id: "TestViewChannelOverflowClosesTheViewAndCreatesItAgain" },
-      { file: "packages/host/tauriv2/src/view_origin_test.rs", id: "a_current_view_callback_enters_dispatch" },
-      { file: "packages/host/tauriv2/src/view_origin_test.rs", id: "a_retired_view_callback_is_cancelled_before_dispatch" },
-      { file: "packages/host/tauriv2/src/view_origin_test.rs", id: "a_retired_view_error_keeps_its_producer_reason" },
-      { file: "packages/host/tauriv2/src/view_origin_test.rs", id: "a_retired_malformed_message_keeps_its_channel_error" },
-      { file: "packages/host/tauriv2/src/view_origin_test.rs", id: "a_retired_transport_error_keeps_its_channel_error" },
-      { file: "packages/host/tauriv2/src/view_origin_test.rs", id: "a_retired_queue_overflow_does_not_fail_the_current_view" },
+      { file: "packages/host/go/src/view_origin_test.go", id: "TestCurrentViewCallbackEntersDispatch" },
+      { file: "packages/host/go/src/view_origin_test.go", id: "TestRetiredViewCallbackDoesNotReachDispatch" },
+      { file: "packages/host/go/src/view_origin_test.go", id: "TestRetiredViewCallbackPreservesItsProducerError" },
+      { file: "packages/host/go/src/view_origin_test.go", id: "TestRetiredViewCallbackPreservesMalformedAndTransportErrors" },
+      { file: "packages/host/go/src/view_origin_test.go", id: "TestViewChannelOverflowClosesTheViewAndCreatesItAgain" },
+      { file: "packages/host/rust/src/view_origin_test.rs", id: "a_current_view_callback_enters_dispatch" },
+      { file: "packages/host/rust/src/view_origin_test.rs", id: "a_retired_view_callback_is_cancelled_before_dispatch" },
+      { file: "packages/host/rust/src/view_origin_test.rs", id: "a_retired_view_error_keeps_its_producer_reason" },
+      { file: "packages/host/rust/src/view_origin_test.rs", id: "a_retired_malformed_message_keeps_its_channel_error" },
+      { file: "packages/host/rust/src/view_origin_test.rs", id: "a_retired_transport_error_keeps_its_channel_error" },
+      { file: "packages/host/rust/src/view_origin_test.rs", id: "a_retired_queue_overflow_does_not_fail_the_current_view" },
     ],
     expected: "Current view callbacks reach dispatch; callbacks from a retired view are canceled, and explicit producer, malformed-message, and transport errors retain their recorded reasons without reaching the replacement view.",
     levels: ["unit"],
   },
   {
     id: "F239-48-3-15",
-    implementation: [{ file: "packages/host/wailsv3/src/documents.go", symbol: "func (s *Surfaces) replyView(" }],
+    implementation: [{ file: "packages/host/go/src/documents.go", symbol: "func (s *Surfaces) replyView(" }],
     tests: [
-      { file: "packages/host/wailsv3/src/surfaces_test.go", id: "TestViewReplyRetainsOpenCallWhenGenerationRetiresBeforePost" },
-      { file: "packages/host/wailsv3/src/surfaces_test.go", id: "TestViewReplyPostRefusalLeavesCallOpenForProcessEnd" },
-      { file: "packages/host/wailsv3/src/surfaces_test.go", id: "TestViewReplyRecordsTheNativePostResultAfterPosting" },
-      { file: "packages/host/wailsv3/src/surfaces_test.go", id: "TestStaleViewReplyRecordsDiscardWithoutPosting" },
-      { file: "packages/host/wailsv3/src/surfaces_test.go", id: "TestViewReplyPostRefusalReturnsErrorWithoutPostedRecord" },
-      { file: "packages/host/wailsv3/src/view_call_peer_test.go", id: "TestViewCallAnsweredBeforeTheProcessEndWritesNoPeerLost" },
-      { file: "packages/host/wailsv3/src/view_call_peer_test.go", id: "TestViewProcessEndWritesPeerLostForEachOpenViewCall" },
+      { file: "packages/host/go/src/surfaces_test.go", id: "TestViewReplyRetainsOpenCallWhenGenerationRetiresBeforePost" },
+      { file: "packages/host/go/src/surfaces_test.go", id: "TestViewReplyPostRefusalLeavesCallOpenForProcessEnd" },
+      { file: "packages/host/go/src/surfaces_test.go", id: "TestViewReplyRecordsTheNativePostResultAfterPosting" },
+      { file: "packages/host/go/src/surfaces_test.go", id: "TestStaleViewReplyRecordsDiscardWithoutPosting" },
+      { file: "packages/host/go/src/surfaces_test.go", id: "TestViewReplyPostRefusalReturnsErrorWithoutPostedRecord" },
+      { file: "packages/host/go/src/view_call_peer_test.go", id: "TestViewCallAnsweredBeforeTheProcessEndWritesNoPeerLost" },
+      { file: "packages/host/go/src/view_call_peer_test.go", id: "TestViewProcessEndWritesPeerLostForEachOpenViewCall" },
     ],
     expected: "Wails settles a view call only after posting its reply to the same current generation; stale, refused, or unready replies leave the call available for process-ended settlement.",
     levels: ["unit"],
@@ -5549,14 +5553,14 @@ const FEATURE_LINKS = [
   {
     id: "F239-46.1",
     implementation: [
-      { file: "packages/host/wailsv3/src/source_origins.go", symbol: "func (o *sourceOrigins) create(" },
-      { file: "packages/host/wailsv3/src/source_origins.go", symbol: "func (o *sourceOrigins) snapshot()" },
-      { file: "packages/host/tauriv2/src/source_origins.rs", symbol: "pub(crate) struct ViewSourceOrigins" },
-      { file: "packages/host/tauriv2/src/source_origins.rs", symbol: "pub(crate) fn validate_view_source_generation_limit(" },
+      { file: "packages/host/go/src/source_origins.go", symbol: "func (o *sourceOrigins) create(" },
+      { file: "packages/host/go/src/source_origins.go", symbol: "func (o *sourceOrigins) snapshot()" },
+      { file: "packages/host/rust/src/source_origins.rs", symbol: "pub struct ViewSourceOrigins" },
+      { file: "packages/host/rust/src/source_origins.rs", symbol: "pub(crate) fn validate_view_source_generation_limit(" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/source_origins_test.go", id: "TestSourceOriginsDoesNotIssueAnUnsafeGeneration" },
-      { file: "packages/host/tauriv2/src/source_origins_test.rs", id: "issuing_a_generation_past_the_javascript_safe_integer_limit_changes_no_state" },
+      { file: "packages/host/go/src/source_origins_test.go", id: "TestSourceOriginsDoesNotIssueAnUnsafeGeneration" },
+      { file: "packages/host/rust/src/source_origins_test.rs", id: "issuing_a_generation_past_the_javascript_safe_integer_limit_changes_no_state" },
     ],
     expected: "Both hosts assign unique per-window source generations, preserve the greatest issued generation in an atomic snapshot, and reject unsafe generation values without changing source state; plugin-host channel events carry the issued generation.",
     levels: ["unit"],
@@ -5583,10 +5587,10 @@ const FEATURE_LINKS = [
 
   {
     id: "F219",
-    implementation: [{ file: "packages/host/tauriv2/tests/sidecars_test.rs", symbol: "static SERIAL: Mutex<()>" }],
+    implementation: [{ file: "packages/host/rust/tests/sidecars_test.rs", symbol: "static SERIAL: Mutex<()>" }],
     tests: [
-      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "stops_at_the_fourth_failure_within_the_window" },
-      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "surface_open_clears_the_restart_limit" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "stops_at_the_fourth_failure_within_the_window" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "surface_open_clears_the_restart_limit" },
     ],
     expected: "The tests of the sidecar suite that attach the process-wide writer of the records run one at a time, so the records of each test stay in its own event log whichever test attaches first.",
     levels: ["unit"],
@@ -5668,12 +5672,12 @@ const FEATURE_LINKS = [
   {
     id: "F190",
     implementation: [
-      { file: "packages/sok/wailsv3/src/ownership.go", symbol: "func ownConfiguration" },
-      { file: "packages/sok/tauriv2/src/ownership.rs", symbol: "pub(crate) fn own_configuration" },
+      { file: "packages/sok/go/src/ownership.go", symbol: "func ownConfiguration" },
+      { file: "packages/sok/rust/src/ownership.rs", symbol: "pub(crate) fn own_configuration" },
     ],
     tests: [
-      { file: "packages/sok/wailsv3/tests/ownership_test.go", id: "TestAPluginCommandRefusesWhileAnotherProcessOwnsTheConfiguration" },
-      { file: "packages/sok/tauriv2/tests/ownership_test.rs", id: "a_plugin_command_refuses_while_another_process_owns_the_configuration" },
+      { file: "packages/sok/go/tests/ownership_test.go", id: "TestAPluginCommandRefusesWhileAnotherProcessOwnsTheConfiguration" },
+      { file: "packages/sok/rust/tests/ownership_test.rs", id: "a_plugin_command_refuses_while_another_process_owns_the_configuration" },
     ],
     expected: "A writing sok plugin command owns the configuration directory for the duration of its write.",
     levels: ["unit"],
@@ -5681,13 +5685,13 @@ const FEATURE_LINKS = [
   {
     id: "F296",
     implementation: [
-      { file: "packages/host/wailsv3/src/workspace.go", symbol: "func readStored" },
-      { file: "packages/host/tauriv2/src/workspace.rs", symbol: "fn read_stored" },
+      { file: "packages/host/go/src/workspace.go", symbol: "func readStored" },
+      { file: "packages/host/rust/src/workspace.rs", symbol: "fn read_stored" },
       { file: "packages/workbench/plugin-data.js", symbol: "function checkStored" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/workspace_test.go", id: "TestEarlierStoredFormsAreReportedBySnapshotAndRefusedByWrites" },
-      { file: "packages/host/tauriv2/tests/workspace_test.rs", id: "earlier_stored_forms_are_reported_by_snapshot_and_refused_by_writes" },
+      { file: "packages/host/go/tests/workspace_test.go", id: "TestEarlierStoredFormsAreReportedBySnapshotAndRefusedByWrites" },
+      { file: "packages/host/rust/tests/workspace_test.rs", id: "earlier_stored_forms_are_reported_by_snapshot_and_refused_by_writes" },
       { file: "packages/workbench/test/plugin-data.test.mjs", id: "a value stored without a format entry is refused by the read and is not changed" },
       { file: "scripts/test/workflows.test.mjs", id: "the release workflow runs no stored data migration step and no release step script" },
     ],
@@ -5697,12 +5701,12 @@ const FEATURE_LINKS = [
   {
     id: "F188",
     implementation: [
-      { file: "packages/sok/wailsv3/src/plugins.go", symbol: "func ReadInstalledManifests" },
-      { file: "packages/sok/tauriv2/src/plugins.rs", symbol: "pub fn read_installed_manifests" },
+      { file: "packages/sok/go/src/plugins.go", symbol: "func ReadInstalledManifests" },
+      { file: "packages/sok/rust/src/plugins.rs", symbol: "pub fn read_installed_manifests" },
     ],
     tests: [
-      { file: "packages/sok/wailsv3/tests/install_test.go", id: "TestInstalledFileOfTheReleasedFormat2IsRejected" },
-      { file: "packages/sok/tauriv2/tests/plugins_test.rs", id: "an_installed_file_of_the_released_format_2_is_rejected" },
+      { file: "packages/sok/go/tests/install_test.go", id: "TestInstalledFileOfTheReleasedFormat2IsRejected" },
+      { file: "packages/sok/rust/tests/plugins_test.rs", id: "an_installed_file_of_the_released_format_2_is_rejected" },
     ],
     expected: "The command lines of both hosts read installed.json only in its current format; the migration of F188 is removed by F296.",
     levels: ["unit"],
@@ -5710,14 +5714,14 @@ const FEATURE_LINKS = [
   {
     id: "F188.3",
     implementation: [
-      { file: "packages/sok/wailsv3/src/plugins.go", symbol: "func ReadInstalledManifests" },
-      { file: "packages/sok/tauriv2/src/plugins.rs", symbol: "pub fn read_installed_manifests" },
+      { file: "packages/sok/go/src/plugins.go", symbol: "func ReadInstalledManifests" },
+      { file: "packages/sok/rust/src/plugins.rs", symbol: "pub fn read_installed_manifests" },
     ],
     tests: [
-      { file: "packages/sok/wailsv3/tests/install_test.go", id: "TestInstalledFileOfAnotherFormatIsRejected" },
-      { file: "packages/sok/wailsv3/tests/install_test.go", id: "TestInstalledFileOfTheReleasedFormat2IsRejected" },
-      { file: "packages/sok/tauriv2/tests/plugins_test.rs", id: "an_installed_file_of_another_format_is_rejected" },
-      { file: "packages/sok/tauriv2/tests/plugins_test.rs", id: "an_installed_file_of_the_released_format_2_is_rejected" },
+      { file: "packages/sok/go/tests/install_test.go", id: "TestInstalledFileOfAnotherFormatIsRejected" },
+      { file: "packages/sok/go/tests/install_test.go", id: "TestInstalledFileOfTheReleasedFormat2IsRejected" },
+      { file: "packages/sok/rust/tests/plugins_test.rs", id: "an_installed_file_of_another_format_is_rejected" },
+      { file: "packages/sok/rust/tests/plugins_test.rs", id: "an_installed_file_of_the_released_format_2_is_rejected" },
     ],
     expected: "The shared reader of installed.json refuses every format other than the current one before it reads, in every process.",
     levels: ["unit"],
@@ -5731,8 +5735,8 @@ const FEATURE_LINKS = [
   },
   {
     id: "F185",
-    implementation: [{ file: "packages/host/tauriv2/tests/event_native_platform_test.rs", symbol: "static SERIAL: Mutex<()>" }],
-    tests: [{ file: "packages/host/tauriv2/tests/event_native_platform_test.rs", id: "the_platform_pulls_an_empty_native_ring_as_zero_bytes_and_no_loss" }],
+    implementation: [{ file: "packages/host/rust/tests/event_native_platform_test.rs", symbol: "static SERIAL: Mutex<()>" }],
+    tests: [{ file: "packages/host/rust/tests/event_native_platform_test.rs", id: "the_platform_pulls_an_empty_native_ring_as_zero_bytes_and_no_loss" }],
     expected: "The native platform tests of the Tauri host run one at a time and read an emptied ring.",
     levels: ["unit"],
   },
@@ -5740,14 +5744,14 @@ const FEATURE_LINKS = [
     id: "F184",
     implementation: [
       { file: "packages/plugin-api/log-batch.js", symbol: "createEventBatcher requires the writer {layer, member, identity} of the document" },
-      { file: "packages/host/wailsv3/src/running_calls.go", symbol: "func ReloadTimeoutText" },
-      { file: "packages/host/tauriv2/src/running_calls.rs", symbol: "pub fn reload_timeout_text" },
+      { file: "packages/host/go/src/running_calls.go", symbol: "func ReloadTimeoutText" },
+      { file: "packages/host/rust/src/running_calls.rs", symbol: "pub fn reload_timeout_text" },
     ],
     tests: [
       { file: "packages/log-contract/test/audit.test.mjs", id: "an event of the layer page or plugin names the page that wrote it, and an event of another layer names none" },
       { file: "packages/plugin-api/test/log-batch.test.mjs", id: "every event of a batch names the page that wrote it by its page identity, the anchor of its clock included" },
-      { file: "packages/host/wailsv3/tests/running_calls_test.go", id: "TestAReloadThatTimesOutNamesTheHostCallsOfItsWindowThatStillRun" },
-      { file: "packages/host/tauriv2/tests/running_calls_test.rs", id: "a_reload_that_times_out_names_the_host_calls_of_its_window_that_still_run" },
+      { file: "packages/host/go/tests/running_calls_test.go", id: "TestAReloadThatTimesOutNamesTheHostCallsOfItsWindowThatStillRun" },
+      { file: "packages/host/rust/tests/running_calls_test.rs", id: "a_reload_that_times_out_names_the_host_calls_of_its_window_that_still_run" },
     ],
     expected: "Every page and plugin event names the page that wrote it, and a reload that times out names the host calls it waited for.",
     levels: ["unit"],
@@ -5755,16 +5759,16 @@ const FEATURE_LINKS = [
   {
     id: "F181",
     implementation: [
-      { file: "packages/host/tauriv2/src/debug.rs", symbol: "pub(crate) fn save_all(window: &Window) -> Result<SaveAllStarted, String>" },
-      { file: "packages/host/wailsv3/src/debug.go", symbol: "func (h *Host) DebugSaveAll(ctx context.Context) (DebugSaveAllStarted, error)" },
+      { file: "packages/host/rust/src/debug.rs", symbol: "pub fn save_all(window: &Window) -> Result<SaveAllStarted, String>" },
+      { file: "packages/host/go/src/debug.go", symbol: "func (h *Host) DebugSaveAll(ctx context.Context) (DebugSaveAllStarted, error)" },
       { file: "packages/workbench/debug-ui.js", symbol: "export async function saveDebugFiles()" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/debug_test.rs", id: "debug_write_logs_tar_reports_progress_each_mebibyte_and_at_the_end" },
-      { file: "packages/host/wailsv3/tests/debug_test.go", id: "TestDebugWriteLogsTarReportsProgressEachMebibyteAndAtTheEnd" },
+      { file: "packages/host/rust/tests/debug_test.rs", id: "debug_write_logs_tar_reports_progress_each_mebibyte_and_at_the_end" },
+      { file: "packages/host/go/tests/debug_test.go", id: "TestDebugWriteLogsTarReportsProgressEachMebibyteAndAtTheEnd" },
       { file: "packages/workbench/test/debug-save-ui.test.mjs", id: "a save while one writes is refused and shown, and a failure of the write is shown" },
-      { file: "packages/host/tauriv2/tests/modals_test.rs", id: "a_reply_of_a_modal_that_is_not_open_is_dropped_with_the_fields_of_its_record" },
-      { file: "packages/host/wailsv3/tests/modals_test.go", id: "TestAReplyOfAModalThatIsNotOpenIsDroppedWithTheFieldsOfItsRecord" },
+      { file: "packages/host/rust/tests/modals_test.rs", id: "a_reply_of_a_modal_that_is_not_open_is_dropped_with_the_fields_of_its_record" },
+      { file: "packages/host/go/tests/modals_test.go", id: "TestAReplyOfAModalThatIsNotOpenIsDroppedWithTheFieldsOfItsRecord" },
       { file: "packages/workbench/test/overlay-pick.test.mjs", id: "a reply of a modal that the page does not show is recorded as workbench.overlay.dropped" },
     ],
     expected: "A save of the logs folder shows its progress, refuses a second save while it writes, and every dropped modal reply is recorded.",
@@ -5783,14 +5787,14 @@ const FEATURE_LINKS = [
   {
     id: "F179",
     implementation: [
-      { file: "packages/sok/tauriv2/src/event_log.rs", symbol: "const GATED_REPORT_INTERVAL" },
-      { file: "packages/sok/wailsv3/src/event_log.go", symbol: "const gatedReportInterval" },
+      { file: "packages/sok/rust/src/event_log.rs", symbol: "const GATED_REPORT_INTERVAL" },
+      { file: "packages/sok/go/src/event_log.go", symbol: "const gatedReportInterval" },
       { file: "packages/plugin-api/log-batch.js", symbol: "const GATED_REPORT_MS" },
       { file: "native/darwin/src/event_ring.m", symbol: "static const uint64_t GATED_REPORT_NS" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/producer_gate_test.rs", id: "the_counts_of_a_closed_gate_are_reported_each_second_and_at_a_flush" },
-      { file: "packages/host/wailsv3/tests/producer_gate_test.go", id: "TestTheCountsOfAClosedGateAreReportedEachSecondAndAtAFlush" },
+      { file: "packages/host/rust/tests/producer_gate_test.rs", id: "the_counts_of_a_closed_gate_are_reported_each_second_and_at_a_flush" },
+      { file: "packages/host/go/tests/producer_gate_test.go", id: "TestTheCountsOfAClosedGateAreReportedEachSecondAndAtAFlush" },
       { file: "packages/workbench/test/log-gate.test.mjs", id: "the counts of a closed gate leave each second and at a flush, not with each batch" },
       { file: "native/darwin/tests/event_ring_test.m", id: "a drain within a second of the earlier report reports no count" },
     ],
@@ -5799,10 +5803,10 @@ const FEATURE_LINKS = [
   },
   {
     id: "F178",
-    implementation: [{ file: "packages/sok/tauriv2/src/event_log.rs", symbol: "let mut due = Instant::now() + interval;" }],
+    implementation: [{ file: "packages/sok/rust/src/event_log.rs", symbol: "let mut due = Instant::now() + interval;" }],
     tests: [
-      { file: "packages/host/tauriv2/tests/event_log_test.rs", id: "a_steady_stream_of_events_is_written_at_each_batch_interval" },
-      { file: "packages/host/wailsv3/tests/event_log_test.go", id: "TestASteadyStreamOfEventsIsWrittenAtEachBatchInterval" },
+      { file: "packages/host/rust/tests/event_log_test.rs", id: "a_steady_stream_of_events_is_written_at_each_batch_interval" },
+      { file: "packages/host/go/tests/event_log_test.go", id: "TestASteadyStreamOfEventsIsWrittenAtEachBatchInterval" },
     ],
     expected: "The event writer of each host writes its batch at each interval while events keep arriving.",
     levels: ["unit"],
@@ -5847,8 +5851,8 @@ const FEATURE_LINKS = [
   },
   {
     id: "F171",
-    implementation: [{ file: "packages/host/wailsv3/src/stall_watch.go", symbol: "func StartStallWatch" }],
-    tests: [{ file: "packages/host/wailsv3/tests/stall_watch_test.go", id: "TestABlockedMainThreadIsRecordedWithItsStacksAndItsEnd" }],
+    implementation: [{ file: "packages/host/go/src/stall_watch.go", symbol: "func StartStallWatch" }],
+    tests: [{ file: "packages/host/go/tests/stall_watch_test.go", id: "TestABlockedMainThreadIsRecordedWithItsStacksAndItsEnd" }],
     expected: "A stall of the main thread is recorded with its stacks, which show where AppKit waits.",
     levels: ["unit"],
   },
@@ -5868,20 +5872,20 @@ const FEATURE_LINKS = [
   },
   {
     id: "F168",
-    implementation: [{ file: "packages/sok/tauriv2/Cargo.toml", symbol: 'edition = "2024"' }],
-    tests: [{ file: "packages/sok/tauriv2/tests/sok_test.rs", id: "the_default_configuration_directory_is_the_applications" }],
+    implementation: [{ file: "packages/sok/rust/Cargo.toml", symbol: 'edition = "2024"' }],
+    tests: [{ file: "packages/sok/rust/tests/sok_test.rs", id: "the_default_configuration_directory_is_the_applications" }],
     expected: "The Rust packages build with edition 2024, and no test changes the environment of its process.",
     levels: ["unit"],
   },
   {
     id: "F165",
     implementation: [
-      { file: "packages/host/wailsv3/src/images.go", symbol: "func imageReply" },
-      { file: "packages/host/tauriv2/src/images.rs", symbol: "fn image_reply" },
+      { file: "packages/host/go/src/images.go", symbol: "func imageReply" },
+      { file: "packages/host/rust/src/images.rs", symbol: "fn image_reply" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/images_test.go", id: "TestFailedPresentIsReported" },
-      { file: "packages/host/tauriv2/tests/images_test.rs", id: "failed_present_is_reported" },
+      { file: "packages/host/go/tests/images_test.go", id: "TestFailedPresentIsReported" },
+      { file: "packages/host/rust/tests/images_test.rs", id: "failed_present_is_reported" },
     ],
     expected: "Every error answer of an image envelope carries the name, generation, raster and sequence of its frame.",
     levels: ["unit"],
@@ -5889,12 +5893,12 @@ const FEATURE_LINKS = [
   {
     id: "F164",
     implementation: [
-      { file: "packages/host/wailsv3/src/stall_watch.go", symbol: "func StartStallWatch" },
-      { file: "packages/host/tauriv2/src/stall_watch.rs", symbol: "pub fn start_stall_watch" },
+      { file: "packages/host/go/src/stall_watch.go", symbol: "func StartStallWatch" },
+      { file: "packages/host/rust/src/stall_watch.rs", symbol: "pub fn start_stall_watch" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/stall_watch_test.go", id: "TestABlockedMainThreadIsRecordedWithItsStacksAndItsEnd" },
-      { file: "packages/host/tauriv2/tests/stall_watch_test.rs", id: "a_blocked_main_thread_is_recorded_with_its_stacks_and_its_end" },
+      { file: "packages/host/go/tests/stall_watch_test.go", id: "TestABlockedMainThreadIsRecordedWithItsStacksAndItsEnd" },
+      { file: "packages/host/rust/tests/stall_watch_test.rs", id: "a_blocked_main_thread_is_recorded_with_its_stacks_and_its_end" },
     ],
     expected: "A stall of the main thread of either host of 1 s or more is recorded with the stacks of the threads and its end, without a window check.",
     levels: ["unit"],
@@ -5915,7 +5919,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F145",
-    implementation: [{ file: "packages/host/wailsv3/src/endpoint.go", symbol: "func (c *endpointConn) close(reason string)" }],
+    implementation: [{ file: "packages/host/go/src/endpoint.go", symbol: "func (c *endpointConn) close(reason string)" }],
     tests: [{ file: "e2e/input-records.test.mjs", id: "a typed key leaves a record in every layer of the input path" }],
     expected: "The gaps of the records that the audit of 2026-10-09 listed are closed by their children, each with its own tests.",
     levels: ["unit", "application"],
@@ -5923,12 +5927,12 @@ const FEATURE_LINKS = [
   {
     id: "F160.25",
     implementation: [
-      { file: "packages/sok/wailsv3/src/replay.go", symbol: "func ReplayLogs" },
+      { file: "packages/sok/go/src/replay.go", symbol: "func ReplayLogs" },
       { file: "packages/plugin-api/screen-hash.js", symbol: "export async function screenHash" },
     ],
     tests: [
-      { file: "packages/sok/wailsv3/tests/replay_test.go", id: "TestReplayComparesEachSegmentOfASessionWhoseSequenceRestarts" },
-      { file: "packages/sok/tauriv2/tests/replay_test.rs", id: "replay_compares_each_segment_of_a_session_whose_sequence_restarts" },
+      { file: "packages/sok/go/tests/replay_test.go", id: "TestReplayComparesEachSegmentOfASessionWhoseSequenceRestarts" },
+      { file: "packages/sok/rust/tests/replay_test.rs", id: "replay_compares_each_segment_of_a_session_whose_sequence_restarts" },
       { file: "e2e/terminal-replay.test.mjs", id: "a session with output, a resize, a scroll, a selection, a theme and input replays with every hash equal" },
       { file: "e2e/terminal-replay.test.mjs", id: "a stored input that was changed is a divergence of the layer sidecar" },
     ],
@@ -5938,14 +5942,14 @@ const FEATURE_LINKS = [
   {
     id: "F160.34",
     implementation: [
-      { file: "packages/sok/wailsv3/src/replay_inputs.go", symbol: "func ReplaySessionProblem" },
-      { file: "packages/sok/tauriv2/src/replay_inputs.rs", symbol: "pub fn replay_session_problem" },
+      { file: "packages/sok/go/src/replay_inputs.go", symbol: "func ReplaySessionProblem" },
+      { file: "packages/sok/rust/src/replay_inputs.rs", symbol: "pub fn replay_session_problem" },
     ],
     tests: [
-      { file: "packages/sok/wailsv3/tests/replay_inputs_test.go", id: "TestTheReplayInputRulesReproduceTheGoldenCases" },
-      { file: "packages/sok/tauriv2/tests/replay_inputs_test.rs", id: "the_replay_input_rules_reproduce_the_golden_cases" },
-      { file: "packages/sok/wailsv3/tests/log_policy_test.go", id: "TestThePolicyReaderRefusesEveryInvalidGoldenCaseWithItsText" },
-      { file: "packages/sok/tauriv2/tests/log_policy_test.rs", id: "the_policy_reader_refuses_every_invalid_golden_case_with_its_text" },
+      { file: "packages/sok/go/tests/replay_inputs_test.go", id: "TestTheReplayInputRulesReproduceTheGoldenCases" },
+      { file: "packages/sok/rust/tests/replay_inputs_test.rs", id: "the_replay_input_rules_reproduce_the_golden_cases" },
+      { file: "packages/sok/go/tests/log_policy_test.go", id: "TestThePolicyReaderRefusesEveryInvalidGoldenCaseWithItsText" },
+      { file: "packages/sok/rust/tests/log_policy_test.rs", id: "the_policy_reader_refuses_every_invalid_golden_case_with_its_text" },
     ],
     expected: "The catalog check finds the emit sites of a Rust sidecar through its declared emitters, the readers of the policy file reproduce its golden cases, and the replay checks the view-state inputs of a session with the rules of a session before it applies them.",
     levels: ["unit"],
@@ -5961,13 +5965,13 @@ const FEATURE_LINKS = [
     id: "F160.35",
     implementation: [
       { file: "packages/plugin-api/screen-hash.js", symbol: "export function applyScreenMessage" },
-      { file: "packages/sok/wailsv3/src/replay.go", symbol: "func ReplayLogs" },
+      { file: "packages/sok/go/src/replay.go", symbol: "func ReplayLogs" },
     ],
     tests: [
       { file: "packages/log-contract/test/screen-message.test.mjs", id: "is refused with the error of the fixture" },
       { file: "packages/plugin-api/test/screen-hash.test.mjs", id: "a screen message without a segment is refused with the member named" },
-      { file: "packages/sok/wailsv3/tests/replay_test.go", id: "TestReplayRefusesAPageFrameThatNamesNoSegmentOfTheSession" },
-      { file: "packages/sok/tauriv2/tests/replay_test.rs", id: "replay_refuses_a_page_frame_that_names_no_segment_of_the_session" },
+      { file: "packages/sok/go/tests/replay_test.go", id: "TestReplayRefusesAPageFrameThatNamesNoSegmentOfTheSession" },
+      { file: "packages/sok/rust/tests/replay_test.rs", id: "replay_refuses_a_page_frame_that_names_no_segment_of_the_session" },
       { file: "e2e/terminal-replay.test.mjs", id: "a terminal session replays with the sidecar and page hashes equal" },
       { file: "e2e/terminal-replay.test.mjs", id: "a screen message changed on the way is a divergence of the layer plugin" },
     ],
@@ -5977,14 +5981,14 @@ const FEATURE_LINKS = [
   {
     id: "F160.36",
     implementation: [
-      { file: "packages/sok/wailsv3/src/plugin_catalog.go", symbol: "func PluginCatalogs" },
-      { file: "packages/sok/tauriv2/src/plugin_catalog.rs", symbol: "pub fn plugin_catalogs" },
+      { file: "packages/sok/go/src/plugin_catalog.go", symbol: "func PluginCatalogs" },
+      { file: "packages/sok/rust/src/plugin_catalog.rs", symbol: "pub fn plugin_catalogs" },
     ],
     tests: [
-      { file: "packages/sok/wailsv3/tests/plugin_catalog_test.go", id: "TestAPluginEventHasTheClassThatTheCatalogOfItsPluginDeclares" },
-      { file: "packages/sok/tauriv2/tests/plugin_catalog_test.rs", id: "a_plugin_event_has_the_class_that_the_catalog_of_its_plugin_declares" },
-      { file: "packages/host/wailsv3/tests/plugin_catalog_test.go", id: "TestTheHostClassifiesPluginEventsByTheInstalledCatalogsAndRecordsACatalogItCannotUse" },
-      { file: "packages/host/tauriv2/tests/plugin_catalog_test.rs", id: "the_host_classifies_plugin_events_by_the_installed_catalogs_and_records_a_catalog_it_cannot_use" },
+      { file: "packages/sok/go/tests/plugin_catalog_test.go", id: "TestAPluginEventHasTheClassThatTheCatalogOfItsPluginDeclares" },
+      { file: "packages/sok/rust/tests/plugin_catalog_test.rs", id: "a_plugin_event_has_the_class_that_the_catalog_of_its_plugin_declares" },
+      { file: "packages/host/go/tests/plugin_catalog_test.go", id: "TestTheHostClassifiesPluginEventsByTheInstalledCatalogsAndRecordsACatalogItCannotUse" },
+      { file: "packages/host/rust/tests/plugin_catalog_test.rs", id: "the_host_classifies_plugin_events_by_the_installed_catalogs_and_records_a_catalog_it_cannot_use" },
       { file: "e2e/terminal-replay.test.mjs", id: "a terminal session replays with the sidecar and page hashes equal" },
     ],
     expected: "The writer of each host stores a plugin event with the class that the catalog of its enabled installed plugin declares, and records a catalog it cannot use as an error that names the file.",
@@ -5999,8 +6003,8 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "the view holds at most 2000 rows and refuses an older page beyond them with an error" },
       { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "the rows beyond the hold limit leave the view from the old end and are counted" },
       { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "the timeline asks at each notice without a pause of its own and loses no row" },
-      { file: "packages/sok/wailsv3/tests/debug_test.go", id: "TestQueryRefusesWhatBreaksTheContract" },
-      { file: "packages/sok/tauriv2/tests/debug_test.rs", id: "query_refuses_what_breaks_the_contract" },
+      { file: "packages/sok/go/tests/debug_test.go", id: "TestQueryRefusesWhatBreaksTheContract" },
+      { file: "packages/sok/rust/tests/debug_test.rs", id: "query_refuses_what_breaks_the_contract" },
     ],
     expected: "The page of the debug view keeps answering when an event file is large and grows: the timeline holds and draws a bounded number of rows, answers each notice of the host without a timer of its own, and reads a file without a line as no row.",
     levels: ["unit"],
@@ -6008,12 +6012,12 @@ const FEATURE_LINKS = [
   {
     id: "F155",
     implementation: [
-      { file: "packages/host/tauriv2/src/startup.rs", symbol: "pub fn exit_on_failure_with" },
-      { file: "packages/host/wailsv3/src/startup.go", symbol: "func ExitOnFailureWith" },
+      { file: "packages/host/rust/src/startup.rs", symbol: "pub fn exit_on_failure_with" },
+      { file: "packages/host/go/src/startup.go", symbol: "func ExitOnFailureWith" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/startup_test.rs", id: "a_failed_setup_step_writes_its_message_and_exits_with_status_one" },
-      { file: "packages/host/wailsv3/tests/startup_test.go", id: "TestAFailedStartupStepWritesItsMessageAndExitsWithStatusOne" },
+      { file: "packages/host/rust/tests/startup_test.rs", id: "a_failed_setup_step_writes_its_message_and_exits_with_status_one" },
+      { file: "packages/host/go/tests/startup_test.go", id: "TestAFailedStartupStepWritesItsMessageAndExitsWithStatusOne" },
     ],
     expected: "A failure of a startup step of the Tauri host writes its message and ends the process with the status 1 instead of aborting it.",
     levels: ["unit", "application"],
@@ -6028,12 +6032,12 @@ const FEATURE_LINKS = [
   {
     id: "F160.31",
     implementation: [
-      { file: "packages/sok/wailsv3/src/event_log.go", symbol: "func StartEventLog" },
-      { file: "packages/sok/tauriv2/src/event_log.rs", symbol: "pub fn start" },
+      { file: "packages/sok/go/src/event_log.go", symbol: "func StartEventLog" },
+      { file: "packages/sok/rust/src/event_log.rs", symbol: "pub fn start" },
     ],
     tests: [
-      { file: "packages/sok/wailsv3/tests/event_log_options_test.go", id: "TestAWriterRotatesAtItsBoundAndTheNewFileStartsWithLogOpenAndLogRotated" },
-      { file: "packages/sok/tauriv2/tests/event_log_options_test.rs", id: "a_writer_rotates_at_its_bound_and_the_new_file_starts_with_log_open_and_log_rotated" },
+      { file: "packages/sok/go/tests/event_log_options_test.go", id: "TestAWriterRotatesAtItsBoundAndTheNewFileStartsWithLogOpenAndLogRotated" },
+      { file: "packages/sok/rust/tests/event_log_options_test.rs", id: "a_writer_rotates_at_its_bound_and_the_new_file_starts_with_log_open_and_log_rotated" },
     ],
     expected: "The hosts and the tool start one event writer per language, which lives in the tool packages and takes the layer, the clock, the thread entrance, the rotation and a pull as options.",
     levels: ["unit"],
@@ -6041,10 +6045,10 @@ const FEATURE_LINKS = [
   {
     id: "F160.27",
     implementation: [
-      { file: "packages/host/tauriv2/src/recording.rs", symbol: "pub fn running" },
+      { file: "packages/host/rust/src/recording.rs", symbol: "pub fn running" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/recording_test.rs", id: "a_poisoned_recording_state_is_recovered_when_it_ends" },
+      { file: "packages/host/rust/tests/recording_test.rs", id: "a_poisoned_recording_state_is_recovered_when_it_ends" },
     ],
     expected: "A discarded Rust result is either reported as a record or carries a stated reason: a poisoned lock is a record.",
     levels: ["unit"],
@@ -6052,12 +6056,12 @@ const FEATURE_LINKS = [
   {
     id: "F160.5.2",
     implementation: [
-      { file: "packages/host/tauriv2/src/binding_record.rs", symbol: "pub fn finish" },
-      { file: "packages/host/wailsv3/src/binding_record.go", symbol: "func (b *Bindings) Call" },
+      { file: "packages/host/rust/src/binding_record.rs", symbol: "pub fn finish" },
+      { file: "packages/host/go/src/binding_record.go", symbol: "func (b *Bindings) Call" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/binding_record_test.rs", id: "a_binding_call_is_an_event_while_the_trace_is_off" },
-      { file: "packages/host/wailsv3/tests/binding_record_test.go", id: "TestABindingCallIsAnEventWhileTheTraceIsOff" },
+      { file: "packages/host/rust/tests/binding_record_test.rs", id: "a_binding_call_is_an_event_while_the_trace_is_off" },
+      { file: "packages/host/go/tests/binding_record_test.go", id: "TestABindingCallIsAnEventWhileTheTraceIsOff" },
     ],
     expected: "Every host call of a page is stored by the host as the event host.binding.call with its name, bounded arguments, result and microseconds.",
     levels: ["unit"],
@@ -6065,13 +6069,13 @@ const FEATURE_LINKS = [
   {
     id: "F160.6.4",
     implementation: [
-      { file: "packages/sok/tauriv2/src/event_bounds.rs", symbol: "pub fn bounded_serialize" },
-      { file: "packages/sok/wailsv3/src/event_bounds.go", symbol: "func BoundedMarshal" },
+      { file: "packages/sok/rust/src/event_bounds.rs", symbol: "pub fn bounded_serialize" },
+      { file: "packages/sok/go/src/event_bounds.go", symbol: "func BoundedMarshal" },
       { file: "packages/plugin-api/log-batch.js", symbol: "export function createEventBatcher" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/producer_bounds_test.rs", id: "the_fields_of_a_host_event_are_cut_while_they_are_serialized" },
-      { file: "packages/host/wailsv3/tests/producer_bounds_test.go", id: "TestTheFieldsOfAHostEventAreCutWhileTheyAreSerialized" },
+      { file: "packages/host/rust/tests/producer_bounds_test.rs", id: "the_fields_of_a_host_event_are_cut_while_they_are_serialized" },
+      { file: "packages/host/go/tests/producer_bounds_test.go", id: "TestTheFieldsOfAHostEventAreCutWhileTheyAreSerialized" },
       { file: "packages/workbench/test/page-bounds.test.mjs", id: "the fields of an event of a plugin over 65536 bytes are replaced by their head while they are serialized" },
     ],
     expected: "A producer cuts the fields, the records and the queues to their bounds while it serializes them, and every cut or refusal is stored.",
@@ -6182,17 +6186,17 @@ const FEATURE_LINKS = [
   {
     id: "F151.6",
     implementation: [
-      { file: "packages/sok/tauriv2/src/debug.rs", symbol: "pub(crate) fn run_debug" },
-      { file: "packages/sok/wailsv3/src/debug.go", symbol: "func runDebug" },
+      { file: "packages/sok/rust/src/debug.rs", symbol: "pub(crate) fn run_debug" },
+      { file: "packages/sok/go/src/debug.go", symbol: "func runDebug" },
       { file: "packages/workbench/debug-timeline.js", symbol: "export function eventLine" },
     ],
     tests: [
-      { file: "packages/sok/tauriv2/tests/debug_test.rs", id: "query_prints_the_golden_lines_of_every_case" },
-      { file: "packages/sok/tauriv2/tests/debug_test.rs", id: "query_refuses_what_breaks_the_contract" },
-      { file: "packages/sok/tauriv2/tests/debug_test.rs", id: "query_refuses_an_invalid_flag_value_as_a_usage_error" },
-      { file: "packages/sok/wailsv3/tests/debug_test.go", id: "TestQueryPrintsTheGoldenLinesOfEveryCase" },
-      { file: "packages/sok/wailsv3/tests/debug_test.go", id: "TestQueryRefusesWhatBreaksTheContract" },
-      { file: "packages/sok/wailsv3/tests/debug_test.go", id: "TestQueryRefusesAnInvalidFlagValueAsAUsageError" },
+      { file: "packages/sok/rust/tests/debug_test.rs", id: "query_prints_the_golden_lines_of_every_case" },
+      { file: "packages/sok/rust/tests/debug_test.rs", id: "query_refuses_what_breaks_the_contract" },
+      { file: "packages/sok/rust/tests/debug_test.rs", id: "query_refuses_an_invalid_flag_value_as_a_usage_error" },
+      { file: "packages/sok/go/tests/debug_test.go", id: "TestQueryPrintsTheGoldenLinesOfEveryCase" },
+      { file: "packages/sok/go/tests/debug_test.go", id: "TestQueryRefusesWhatBreaksTheContract" },
+      { file: "packages/sok/go/tests/debug_test.go", id: "TestQueryRefusesAnInvalidFlagValueAsAUsageError" },
       { file: "packages/workbench/test/debug-timeline.test.mjs", id: "the text line of each golden page is the line that the implementations of sok print" },
     ],
     expected: "The command sok debug query prints the text lines of one page of the query over the event files of a configuration directory with the same filter and order as the debug view, and both implementations print the same lines for the golden files.",
@@ -6271,13 +6275,13 @@ const FEATURE_LINKS = [
   {
     id: "F137",
     implementation: [
-      { file: "packages/sok/tauriv2/src/appupdate.rs", symbol: "pub type OpenApplication" },
-      { file: "packages/sok/wailsv3/tests/appupdate_test.go", symbol: "func requireBundles" },
-      { file: "packages/sok/tauriv2/tests/appupdate_test.rs", symbol: "fn bundles_supported" },
+      { file: "packages/sok/rust/src/appupdate.rs", symbol: "pub type OpenApplication" },
+      { file: "packages/sok/go/tests/appupdate_test.go", symbol: "func requireBundles" },
+      { file: "packages/sok/rust/tests/appupdate_test.rs", symbol: "fn bundles_supported" },
     ],
     tests: [
-      { file: "packages/sok/wailsv3/tests/appupdate_test.go", id: "TestTheBundleIsReplacedAfterTheProcessEndedAndTheApplicationStarts" },
-      { file: "packages/sok/tauriv2/tests/appupdate_test.rs", id: "the_bundle_is_replaced_after_the_process_ended_and_the_application_starts" },
+      { file: "packages/sok/go/tests/appupdate_test.go", id: "TestTheBundleIsReplacedAfterTheProcessEndedAndTheApplicationStarts" },
+      { file: "packages/sok/rust/tests/appupdate_test.rs", id: "the_bundle_is_replaced_after_the_process_ended_and_the_application_starts" },
     ],
     expected: "The Rust sok passes clippy, and the tests that stage and replace an application bundle end at once on a platform that does not implement those operations.",
     levels: ["unit"],
@@ -6296,14 +6300,14 @@ const FEATURE_LINKS = [
   {
     id: "F30",
     implementation: [
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "is not keeping up" },
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "is not keeping up" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "is not keeping up" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "is not keeping up" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestSlowSidecarDoesNotBlockOtherSends" },
-      { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestStopForcedKill" },
-      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "slow_sidecar_does_not_block_other_sends" },
-      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "stop_forced_kill" },
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestSlowSidecarDoesNotBlockOtherSends" },
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestStopForcedKill" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "slow_sidecar_does_not_block_other_sends" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "stop_forced_kill" },
     ],
     expected: "A sidecar that does not read its input fills its channel and is killed after the stop deadline on any machine.",
     levels: ["unit"],
@@ -6430,12 +6434,12 @@ const FEATURE_LINKS = [
   {
     id: "F37",
     implementation: [
-      { file: "packages/host/wailsv3/src/exposure.go", symbol: "ButtonHeldMessage" },
-      { file: "packages/host/tauriv2/src/exposure.rs", symbol: "button_held_message" },
+      { file: "packages/host/go/src/exposure.go", symbol: "ButtonHeldMessage" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "button_held_message" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/endpoint_test.go", id: "TestButtonHeldMessage" },
-      { file: "packages/host/tauriv2/tests/exposure_test.rs", id: "button_held_message_reports_mask_and_frontmost_application" },
+      { file: "packages/host/go/tests/endpoint_test.go", id: "TestButtonHeldMessage" },
+      { file: "packages/host/rust/tests/exposure_test.rs", id: "button_held_message_reports_mask_and_frontmost_application" },
     ],
     expected: "A 1007 refusal names the held button mask and the frontmost application in the same text on both hosts.",
     levels: ["unit", "application"],
@@ -6459,8 +6463,8 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/frame-text.js", symbol: "frameLayout" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/window_titlebar_test.go", id: "TestStartTitlebarFollowsFrameFactor" },
-      { file: "packages/host/tauriv2/tests/window_titlebar_test.rs", id: "the_start_titlebar_follows_the_frame_factor" },
+      { file: "packages/host/go/tests/window_titlebar_test.go", id: "TestStartTitlebarFollowsFrameFactor" },
+      { file: "packages/host/rust/tests/window_titlebar_test.rs", id: "the_start_titlebar_follows_the_frame_factor" },
       { file: "e2e/titlebar-recording.test.mjs", id: "every recorded frame of a reload after another window changed the frame factor keeps the window buttons centred" },
     ],
     expected: "The title bar height is presented in the layout transaction of the frame that draws the first row, at start, on a reload and at every factor step.",
@@ -6480,12 +6484,12 @@ const FEATURE_LINKS = [
   {
     id: "F47",
     implementation: [
-      { file: "packages/host/wailsv3/src/application_log.go", symbol: "ErrorLine" },
-      { file: "packages/host/tauriv2/src/application_log.rs", symbol: "error_line" },
+      { file: "packages/host/go/src/application_log.go", symbol: "ErrorLine" },
+      { file: "packages/host/rust/src/application_log.rs", symbol: "error_line" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/application_log_test.go", id: "TestLogErrorWritesAnErrorEventToTheEventLog" },
-      { file: "packages/host/tauriv2/tests/application_log_test.rs", id: "log_error_writes_an_error_event_to_the_event_log" },
+      { file: "packages/host/go/tests/application_log_test.go", id: "TestLogErrorWritesAnErrorEventToTheEventLog" },
+      { file: "packages/host/rust/tests/application_log_test.rs", id: "log_error_writes_an_error_event_to_the_event_log" },
     ],
     expected: "Every host failure is written to the application log as an error line that window checks read.",
     levels: ["unit", "application"],
@@ -6493,10 +6497,10 @@ const FEATURE_LINKS = [
   {
     id: "F48",
     implementation: [
-      { file: "packages/host/tauriv2/src/windows.rs", symbol: "list_entries" },
+      { file: "packages/host/rust/src/windows.rs", symbol: "list_entries" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/exposure_test.rs", id: "a_close_during_the_list_does_not_fail_the_list" },
+      { file: "packages/host/rust/tests/exposure_test.rs", id: "a_close_during_the_list_does_not_fail_the_list" },
     ],
     expected: "The Tauri window list reads each window's closing state and queries it in one main-thread step.",
     levels: ["unit", "application"],
@@ -6528,12 +6532,12 @@ const FEATURE_LINKS = [
   {
     id: "F51",
     implementation: [
-      { file: "packages/host/tauriv2/src/windows.rs", symbol: "with_native_owner" },
-      { file: "packages/host/wailsv3/src/windows.go", symbol: "UseNativeWindow" },
+      { file: "packages/host/rust/src/windows.rs", symbol: "with_native_owner" },
+      { file: "packages/host/go/src/windows.go", symbol: "UseNativeWindow" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/window_close_test.rs", id: "a_close_after_the_handle_read_does_not_reach_native_code" },
-      { file: "packages/host/wailsv3/tests/window_close_test.go", id: "TestACloseBeforeTheNativeStepDoesNotReachNativeCode" },
+      { file: "packages/host/rust/tests/window_close_test.rs", id: "a_close_after_the_handle_read_does_not_reach_native_code" },
+      { file: "packages/host/go/tests/window_close_test.go", id: "TestACloseBeforeTheNativeStepDoesNotReachNativeCode" },
     ],
     expected: "A native window handle is used only in the main-thread step that reads it.",
     levels: ["unit", "application"],
@@ -6541,14 +6545,14 @@ const FEATURE_LINKS = [
   {
     id: "F56",
     implementation: [
-      { file: "packages/host/tauriv2/src/images.rs", symbol: "wait_current" },
-      { file: "packages/host/wailsv3/src/images.go", symbol: "WaitCurrentError" },
+      { file: "packages/host/rust/src/images.rs", symbol: "wait_current" },
+      { file: "packages/host/go/src/images.go", symbol: "WaitCurrentError" },
       { file: "packages/workbench/host.js", symbol: "layoutStepEnd" },
       { file: "packages/workbench/layout-queue.js", symbol: "async wait()" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/images_test.rs", id: "presentation_wait_timeout_returns_its_failure_and_writes_no_log_line" },
-      { file: "packages/host/wailsv3/tests/images_test.go", id: "TestPresentationWaitTimeoutReturnsItsFailureAndWritesNoLogLine" },
+      { file: "packages/host/rust/tests/images_test.rs", id: "presentation_wait_timeout_returns_its_failure_and_writes_no_log_line" },
+      { file: "packages/host/go/tests/images_test.go", id: "TestPresentationWaitTimeoutReturnsItsFailureAndWritesNoLogLine" },
       { file: "packages/workbench/test/presentation-failure-lines.test.mjs", id: "one presentation timeout writes one workbench error line" },
     ],
     expected: "One image presentation timeout writes one application log line, the page display line, on both hosts.",
@@ -6558,14 +6562,14 @@ const FEATURE_LINKS = [
     id: "F52",
     implementation: [
       { file: "Makefile", symbol: "windows-build-check:" },
-      { file: "packages/host/wailsv3/src/platform/darwin/endpoint.go", symbol: "err != syscall.EPERM" },
-      { file: "packages/host/tauriv2/src/platform/darwin/endpoint.rs", symbol: "Some(EPERM) => {}" },
+      { file: "packages/host/go/src/platform/darwin/endpoint.go", symbol: "err != syscall.EPERM" },
+      { file: "packages/host/rust/src/platform/darwin/endpoint.rs", symbol: "Some(EPERM) => {}" },
     ],
     tests: [
       { file: "scripts/test/windows-build-check.test.mjs", id: "the Windows build check compiles the Go host source in the default and diagnostics builds" },
       { file: "scripts/test/windows-build-check.test.mjs", id: "hosts-check runs the Windows build check" },
-      { file: "packages/host/wailsv3/tests/service_process_test.go", id: "TestAServiceProcessOfAnotherUserExists" },
-      { file: "packages/host/tauriv2/tests/service_process_test.rs", id: "a_service_process_of_another_user_exists" },
+      { file: "packages/host/go/tests/service_process_test.go", id: "TestAServiceProcessOfAnotherUserExists" },
+      { file: "packages/host/rust/tests/service_process_test.rs", id: "a_service_process_of_another_user_exists" },
     ],
     expected: "Both hosts compile for Windows in the checks, every unsupported Windows operation returns its error, and a service pid of another user exists.",
     levels: ["unit"],
@@ -6573,12 +6577,12 @@ const FEATURE_LINKS = [
   {
     id: "F53",
     implementation: [
-      { file: "packages/host/wailsv3/src/platform/darwin/endpoint.go", symbol: "func (implementation) NewSession" },
-      { file: "packages/host/tauriv2/src/platform/darwin/endpoint.rs", symbol: "pub fn new_session" },
+      { file: "packages/host/go/src/platform/darwin/endpoint.go", symbol: "func (implementation) NewSession" },
+      { file: "packages/host/rust/src/platform/darwin/endpoint.rs", symbol: "pub fn new_session" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentServiceStartsInANewSession" },
-      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent_service_starts_in_a_new_session" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentServiceStartsInANewSession" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_service_starts_in_a_new_session" },
     ],
     expected: "Both hosts start a persistent service as the leader of a new session.",
     levels: ["unit"],
@@ -6586,22 +6590,22 @@ const FEATURE_LINKS = [
   {
     id: "F59",
     implementation: [
-      { file: "packages/host/wailsv3/src/platform/darwin/private_files.go", symbol: "func (implementation) CreatePrivateFile" },
-      { file: "packages/host/wailsv3/src/platform/windows/unsupported.go", symbol: "unsupported(\"private directory creation\")" },
-      { file: "packages/host/tauriv2/src/platform/darwin/private_files.rs", symbol: "pub fn create_private_file" },
-      { file: "packages/host/tauriv2/src/endpoint.rs", symbol: "platform.create_private_file(&path)" },
+      { file: "packages/host/go/src/platform/darwin/private_files.go", symbol: "func (implementation) CreatePrivateFile" },
+      { file: "packages/host/go/src/platform/windows/unsupported.go", symbol: "unsupported(\"private directory creation\")" },
+      { file: "packages/host/rust/src/platform/darwin/private_files.rs", symbol: "pub fn create_private_file" },
+      { file: "packages/host/rust/src/endpoint.rs", symbol: "platform.create_private_file(&path)" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/private_files_test.go", id: "TestCreatePrivateDirectoriesMakesMissingDirectoriesOwnerOnly" },
-      { file: "packages/host/wailsv3/tests/private_files_test.go", id: "TestAppendPrivateFileCreatesAnOwnerOnlyFileAndAppends" },
-      { file: "packages/host/wailsv3/tests/private_files_test.go", id: "TestCreatePrivateFileCreatesANewOwnerOnlyFileOnly" },
-      { file: "packages/host/wailsv3/tests/endpoint_test.go", id: "TestProcessLockIsOwnerOnly" },
-      { file: "packages/host/tauriv2/tests/private_files_test.rs", id: "create_private_directories_makes_missing_directories_owner_only" },
-      { file: "packages/host/tauriv2/tests/private_files_test.rs", id: "append_private_file_creates_an_owner_only_file_and_appends" },
-      { file: "packages/host/tauriv2/tests/private_files_test.rs", id: "create_private_file_creates_a_new_owner_only_file_only" },
-      { file: "packages/host/tauriv2/tests/endpoint_test.rs", id: "the_process_lock_is_owner_only" },
-      { file: "packages/host/wailsv3/tests/private_files_test.go", id: "TestWritePrivateFileCreatesAnOwnerOnlyFileAndReplacesItsContents" },
-      { file: "packages/host/tauriv2/tests/private_files_test.rs", id: "write_private_file_creates_an_owner_only_file_and_replaces_its_contents" },
+      { file: "packages/host/go/tests/private_files_test.go", id: "TestCreatePrivateDirectoriesMakesMissingDirectoriesOwnerOnly" },
+      { file: "packages/host/go/tests/private_files_test.go", id: "TestAppendPrivateFileCreatesAnOwnerOnlyFileAndAppends" },
+      { file: "packages/host/go/tests/private_files_test.go", id: "TestCreatePrivateFileCreatesANewOwnerOnlyFileOnly" },
+      { file: "packages/host/go/tests/endpoint_test.go", id: "TestProcessLockIsOwnerOnly" },
+      { file: "packages/host/rust/tests/private_files_test.rs", id: "create_private_directories_makes_missing_directories_owner_only" },
+      { file: "packages/host/rust/tests/private_files_test.rs", id: "append_private_file_creates_an_owner_only_file_and_appends" },
+      { file: "packages/host/rust/tests/private_files_test.rs", id: "create_private_file_creates_a_new_owner_only_file_only" },
+      { file: "packages/host/rust/tests/endpoint_test.rs", id: "the_process_lock_is_owner_only" },
+      { file: "packages/host/go/tests/private_files_test.go", id: "TestWritePrivateFileCreatesAnOwnerOnlyFileAndReplacesItsContents" },
+      { file: "packages/host/rust/tests/private_files_test.rs", id: "write_private_file_creates_an_owner_only_file_and_replaces_its_contents" },
       { file: "scripts/test/windows-build-check.test.mjs", id: "the Windows build check compiles the Go host source in the default and diagnostics builds" },
     ],
     expected: "Both hosts create owner-only files and directories only through the platform operations, Darwin gives them modes 0700 and 0600, the process lock has mode 0600 in both hosts, and the Windows implementation compiles and returns its not-implemented errors.",
@@ -6659,8 +6663,8 @@ const FEATURE_LINKS = [
   {
     id: "F61",
     implementation: [
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn close_answer" },
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) closeAnswered" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn close_answer" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) closeAnswered" },
     ],
     tests: [
       { file: "e2e/terminal.test.mjs", id: "closing terminal tabs reaps every PTY child without killing the shared service" },
@@ -6744,12 +6748,12 @@ const FEATURE_LINKS = [
   {
     id: "F64",
     implementation: [
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "stopClosing map[string]int" },
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "struct Stopping" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "stopClosing map[string]int" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "struct Stopping" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestStopReadsOutputToItsEnd" },
-      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "stop_reads_output_to_its_end" },
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestStopReadsOutputToItsEnd" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "stop_reads_output_to_its_end" },
     ],
     expected: "A stopping sidecar's output is read to its end on both hosts, so the sidecar completes its writes.",
     levels: ["unit", "application"],
@@ -6779,12 +6783,12 @@ const FEATURE_LINKS = [
   {
     id: "F75",
     implementation: [
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) Declare(" },
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "pub fn declare(" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) Declare(" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "pub fn declare(" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestDeclaringAddsSidecarsInstalledAfterTheStart" },
-      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "declaring_adds_sidecars_installed_after_the_start" },
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestDeclaringAddsSidecarsInstalledAfterTheStart" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "declaring_adds_sidecars_installed_after_the_start" },
     ],
     expected: "A plugin that the first run installs starts its sidecars without a restart in both hosts.",
     levels: ["unit", "application"],
@@ -6795,7 +6799,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/wailsv3/go.mod", symbol: "replace github.com/wailsapp/wails/v3 => github.com/min-0-max/wails/v3" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/application_log_test.go", id: "TestTheTransportReturnsAFailedCallWithoutLoggingIt" },
+      { file: "packages/host/wailsv3/tests/framework_log_test.go", id: "TestTheTransportReturnsAFailedCallWithoutLoggingIt" },
     ],
     expected: "A failed binding call of the Wails host is written once, by the page.",
     levels: ["unit", "application"],
@@ -6803,12 +6807,12 @@ const FEATURE_LINKS = [
   {
     id: "F79",
     implementation: [
-      { file: "packages/host/wailsv3/src/exposure.go", symbol: "relayExpiredLimit" },
-      { file: "packages/host/tauriv2/src/exposure.rs", symbol: "EXPIRED_LIMIT" },
+      { file: "packages/host/go/src/exposure.go", symbol: "relayExpiredLimit" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "EXPIRED_LIMIT" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/exposure_test.go", id: "TestRelayLateReplyStatesItsDelay" },
-      { file: "packages/host/tauriv2/tests/exposure_test.rs", id: "late_reply_states_its_delay" },
+      { file: "packages/host/go/tests/exposure_test.go", id: "TestRelayLateReplyStatesItsDelay" },
+      { file: "packages/host/rust/tests/exposure_test.rs", id: "late_reply_states_its_delay" },
     ],
     expected: "Both hosts report a timed-out relayed request and its late reply with the same texts and the delay.",
     levels: ["unit"],
@@ -6901,11 +6905,11 @@ const FEATURE_LINKS = [
   {
     id: "F82",
     implementation: [
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "!errors.Is(err, net.ErrClosed)" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "!errors.Is(err, net.ErrClosed)" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentStopDoesNotLogItsOwnCloseAsAReadError" },
-      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent_stop_does_not_log_its_own_close_as_a_read_error" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentStopDoesNotLogItsOwnCloseAsAReadError" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_stop_does_not_log_its_own_close_as_a_read_error" },
     ],
     expected: "A stop that closes a persistent service connection writes no read error on either host.",
     levels: ["unit"],
@@ -7009,13 +7013,13 @@ const FEATURE_LINKS = [
   {
     id: "F96.1",
     implementation: [
-      { file: "packages/sok/wailsv3/src/install.go", symbol: "func ParseRange" },
-      { file: "packages/sok/tauriv2/src/install.rs", symbol: "pub fn parse_range" },
+      { file: "packages/sok/go/src/install.go", symbol: "func ParseRange" },
+      { file: "packages/sok/rust/src/install.rs", symbol: "pub fn parse_range" },
       { file: "packages/plugin-api/engines-check.js", symbol: "export function enginesErrors" },
     ],
     tests: [
-      { file: "packages/sok/wailsv3/tests/install_test.go", id: "TestVersionRangesAcceptExactCaretTildeAndBoundedForms" },
-      { file: "packages/sok/tauriv2/tests/install_test.rs", id: "version_ranges_accept_exact_caret_tilde_and_bounded_forms" },
+      { file: "packages/sok/go/tests/install_test.go", id: "TestVersionRangesAcceptExactCaretTildeAndBoundedForms" },
+      { file: "packages/sok/rust/tests/install_test.rs", id: "version_ranges_accept_exact_caret_tilde_and_bounded_forms" },
       { file: "packages/plugin-api/test/engines-check.test.mjs", id: "a plugin declares the core release of its plugin API" },
     ],
     expected: "The range * is >=0.0.0 without an upper bound in both installers, and soksak-engines accepts it.",
@@ -7061,12 +7065,12 @@ const FEATURE_LINKS = [
   {
     id: "F119",
     implementation: [
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func take(counts map[string]int, key string) bool" },
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn take(counts: &mut std::collections::BTreeMap<String, usize>, key: &str) -> bool" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "func take(counts map[string]int, key string) bool" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn take(counts: &mut std::collections::BTreeMap<String, usize>, key: &str) -> bool" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestRepeatedCloseAwaitsEachAnswer" },
-      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "repeated_close_awaits_each_answer" },
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestRepeatedCloseAwaitsEachAnswer" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "repeated_close_awaits_each_answer" },
     ],
     expected: "A surface closed again before the sidecar answered stays closing until each close is answered, and no answer fails the sidecar.",
     levels: ["unit"],
@@ -7165,10 +7169,10 @@ const FEATURE_LINKS = [
   {
     id: "F62",
     implementation: [
-      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", symbol: "func serveHarnessConnections" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", symbol: "func serveHarnessConnections" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "second opens after the first reconnected" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "second opens after the first reconnected" },
     ],
     expected: "The Wails persistent transport harness receives a connection event for each host when one host's revived connection reaches the service before the other host's first connection.",
     levels: ["unit"],
@@ -7209,11 +7213,11 @@ const FEATURE_LINKS = [
   {
     id: "F23",
     implementation: [
-      { file: "packages/sok/wailsv3/src/plugins.go", symbol: "file.Chmod(mode)" },
+      { file: "packages/sok/go/src/plugins.go", symbol: "file.Chmod(mode)" },
     ],
     tests: [
-      { file: "packages/sok/wailsv3/tests/plugins_test.go", id: "TestPluginInstallSetsTheModesWhateverTheUmask" },
-      { file: "packages/sok/tauriv2/tests/plugins_test.rs", id: "plugin_install_sets_the_modes_whatever_the_umask" },
+      { file: "packages/sok/go/tests/plugins_test.go", id: "TestPluginInstallSetsTheModesWhateverTheUmask" },
+      { file: "packages/sok/rust/tests/plugins_test.rs", id: "plugin_install_sets_the_modes_whatever_the_umask" },
     ],
     expected: "Both sok implementations write extracted files at mode 0755 or 0644 under any umask.",
     levels: ["unit"],
@@ -7222,8 +7226,8 @@ const FEATURE_LINKS = [
     id: "F14",
     implementation: [
       { file: "native/darwin/src/quit_request.m", symbol: "sp_quit_request_install" },
-      { file: "packages/host/wailsv3/src/platform/darwin/termination.go", symbol: "OnQuitRequest" },
-      { file: "packages/host/tauriv2/src/platform/darwin/termination.rs", symbol: "on_quit_request" },
+      { file: "packages/host/go/src/platform/darwin/termination.go", symbol: "OnQuitRequest" },
+      { file: "packages/host/rust/src/platform/darwin/termination.rs", symbol: "on_quit_request" },
     ],
     tests: [
       { file: "native/darwin/tests/quit_request_test.m", id: "the quit event does not reach applicationShouldTerminate:" },
@@ -7234,12 +7238,12 @@ const FEATURE_LINKS = [
   {
     id: "F21",
     implementation: [
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) Stop()" },
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "pub fn stop(&self)" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) Stop()" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "pub fn stop(&self)" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentStopAcceptsTheAnswerToACloseSentBeforeTheStop" },
-      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent_stop_accepts_the_answer_to_a_close_sent_before_the_stop" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentStopAcceptsTheAnswerToACloseSentBeforeTheStop" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_stop_accepts_the_answer_to_a_close_sent_before_the_stop" },
     ],
     expected: "A persistent service's answer to a close sent before the stop is accepted, and the stop sends close-owner and then shutdown.",
     levels: ["unit"],
@@ -7258,12 +7262,12 @@ const FEATURE_LINKS = [
   {
     id: "F15",
     implementation: [
-      { file: "packages/host/wailsv3/src/endpoint.go", symbol: "already owned by a live process" },
-      { file: "packages/host/tauriv2/src/endpoint.rs", symbol: "already owned by a live process" },
+      { file: "packages/host/go/src/endpoint.go", symbol: "already owned by a live process" },
+      { file: "packages/host/rust/src/endpoint.rs", symbol: "already owned by a live process" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/endpoint_test.go", id: "TestEndpointRefusesAHeldLockWithAnotherForm" },
-      { file: "packages/host/tauriv2/tests/endpoint_test.rs", id: "a_held_lock_with_another_form_is_refused_and_kept" },
+      { file: "packages/host/go/tests/endpoint_test.go", id: "TestEndpointRefusesAHeldLockWithAnotherForm" },
+      { file: "packages/host/rust/tests/endpoint_test.rs", id: "a_held_lock_with_another_form_is_refused_and_kept" },
     ],
     expected: "Both hosts refuse a held process.lock whose contents are not the current form, with the same text.",
     levels: ["unit"],
@@ -7416,7 +7420,7 @@ const FEATURE_LINKS = [
   {
     id: "F1.1",
     implementation: [
-      { file: "packages/host/tauriv2/src/surfaces.rs", symbol: "pub(crate) fn aligned" },
+      { file: "packages/host/rust/src/surfaces.rs", symbol: "pub(crate) fn aligned" },
       { file: "e2e/drag-measurement.mjs", symbol: "assertRoundTrips" },
     ],
     tests: [
@@ -7429,8 +7433,8 @@ const FEATURE_LINKS = [
   {
     id: "F3.3",
     implementation: [
-      { file: "packages/host/tauriv2/src/documents.rs", symbol: "set_document_appearance" },
-      { file: "packages/host/wailsv3/src/documents.go", symbol: "SetDocumentAppearance" },
+      { file: "packages/host/rust/src/documents.rs", symbol: "set_document_appearance" },
+      { file: "packages/host/go/src/documents.go", symbol: "SetDocumentAppearance" },
     ],
     tests: [{ file: "e2e/browser.test.mjs", id: "browser documents follow host theme pixels for existing, new, and reloaded documents" }],
     expected: "Existing, newly split, and reloaded browser documents apply the current host theme before presentation and retain their explicit HTTP(S) location.",
@@ -7439,8 +7443,8 @@ const FEATURE_LINKS = [
   {
     id: "F3.4",
     implementation: [
-      { file: "packages/host/tauriv2/src/theme.rs", symbol: "set" },
-      { file: "packages/host/wailsv3/src/theme.go", symbol: "SetTheme" },
+      { file: "packages/host/rust/src/theme.rs", symbol: "set" },
+      { file: "packages/host/go/src/theme.go", symbol: "SetTheme" },
     ],
     tests: [{ file: "e2e/browser.test.mjs", id: "a site's appearance remains independent of the host theme" }],
     expected: "A local document that fixes its own colour keeps that colour when the host switches light to dark, the region receives the host color scheme, and its URL remains unchanged.",
@@ -7450,8 +7454,8 @@ const FEATURE_LINKS = [
     id: "F3.1",
     implementation: [
       { file: "native/darwin/src/document_view.m", symbol: "sp_document_appearance" },
-      { file: "packages/host/tauriv2/src/theme.rs", symbol: "set" },
-      { file: "packages/host/wailsv3/src/theme.go", symbol: "SetTheme" },
+      { file: "packages/host/rust/src/theme.rs", symbol: "set" },
+      { file: "packages/host/go/src/theme.go", symbol: "SetTheme" },
     ],
     tests: [{ file: "native/darwin/tests/document_view_test.m", id: "the document renderer follows the owner's light appearance change" }],
     expected: "Existing native browser documents follow explicit host dark/light appearance changes on both hosts.",
@@ -7460,10 +7464,10 @@ const FEATURE_LINKS = [
   {
     id: "F3.2",
     implementation: [
-      { file: "packages/host/tauriv2/src/windows.rs", symbol: "reload_surface_documents" },
-      { file: "packages/host/wailsv3/src/windows.go", symbol: "reloadSurfaceDocuments" },
+      { file: "packages/host/rust/src/windows.rs", symbol: "reload_surface_documents" },
+      { file: "packages/host/go/src/windows.go", symbol: "reloadSurfaceDocuments" },
     ],
-    tests: [{ file: "packages/host/tauriv2/tests/documents_test.rs", id: "documents_reserve_names_and_close_with_their_surface" }],
+    tests: [{ file: "packages/host/rust/tests/documents_test.rs", id: "documents_reserve_names_and_close_with_their_surface" }],
     expected: "Restoring a native surface makes its document visible only after the authoritative surface host is ready.",
     levels: ["unit", "native", "application"],
   },
@@ -7523,8 +7527,8 @@ const FEATURE_LINKS = [
   {
     id: "F6.4",
     implementation: [
-      { file: "packages/host/tauriv2/src/clipboard.rs", symbol: "pub(crate) fn read" },
-      { file: "packages/host/wailsv3/src/clipboard.go", symbol: "func (h *Host) ClipboardRead" },
+      { file: "packages/host/rust/src/clipboard.rs", symbol: "pub(crate) fn read" },
+      { file: "packages/host/go/src/clipboard.go", symbol: "func (h *Host) ClipboardRead" },
     ],
     tests: [
       { file: "e2e/terminal.test.mjs", id: "native terminal selection renders and copies through one explicit paste" },
@@ -7536,8 +7540,8 @@ const FEATURE_LINKS = [
     id: "F6.3-2",
     implementation: [
       { file: "native/darwin/src/surface_layout.m", symbol: "surfaceLayoutAfterSettled" },
-      { file: "packages/host/tauriv2/src/exposure.rs", symbol: "pub(crate) fn presented" },
-      { file: "packages/host/wailsv3/src/exposure.go", symbol: "func (s *Surfaces) presented" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "pub fn presented" },
+      { file: "packages/host/go/src/exposure.go", symbol: "func (s *Surfaces) presented" },
     ],
     tests: [
       { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
@@ -7550,7 +7554,7 @@ const FEATURE_LINKS = [
   {
     id: "F6.3-3",
     implementation: [
-      { file: "packages/host/tauriv2/src/surfaces.rs", symbol: "pub(crate) async fn present" },
+      { file: "packages/host/rust/src/surfaces.rs", symbol: "pub async fn present" },
       { file: "native/darwin/src/surface_layout.m", symbol: "surfaceLayoutCancel" },
     ],
     tests: [
@@ -7562,12 +7566,12 @@ const FEATURE_LINKS = [
   {
     id: "F6.3-8",
     implementation: [
-      { file: "packages/host/tauriv2/src/images.rs", symbol: "pub fn handle_envelope_with_recovery" },
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn decide_image_envelope" },
+      { file: "packages/host/rust/src/images.rs", symbol: "pub fn handle_envelope_with_recovery" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn decide_image_envelope" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/images_test.rs", id: "missing_native_surface_requests_a_fresh_raster_configuration" },
-      { file: "packages/host/tauriv2/tests/images_test.rs", id: "frame_detached_before_main_thread_presentation_is_reported_as_stale" },
+      { file: "packages/host/rust/tests/images_test.rs", id: "missing_native_surface_requests_a_fresh_raster_configuration" },
+      { file: "packages/host/rust/tests/images_test.rs", id: "frame_detached_before_main_thread_presentation_is_reported_as_stale" },
       { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
       { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
       { file: "e2e/terminal.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
@@ -7610,8 +7614,8 @@ const FEATURE_LINKS = [
   {
     id: "F10",
     implementation: [
-      { file: "packages/host/tauriv2/src/modals.rs", symbol: "pub(crate) fn show" },
-      { file: "packages/host/wailsv3/src/modals.go", symbol: "OverlayShow" },
+      { file: "packages/host/rust/src/modals.rs", symbol: "pub fn show" },
+      { file: "packages/host/go/src/modals.go", symbol: "OverlayShow" },
       { file: "packages/workbench/compositor.js", symbol: "placementPending" },
     ],
     tests: [
@@ -7624,21 +7628,21 @@ const FEATURE_LINKS = [
   },
   {
     id: "F10.1",
-    implementation: [{ file: "packages/host/tauriv2/src/modals.rs", symbol: "pub(crate) fn show" }],
+    implementation: [{ file: "packages/host/rust/src/modals.rs", symbol: "pub fn show" }],
     tests: [{ file: "e2e/modal.test.mjs", id: "settings blocks background input and closes only through its close button" }],
     expected: "Tauri picker and settings modals preserve transparent picker paint, semi-transparent settings coverage, input blocking, focus, resize, and cleanup.",
     levels: ["application"],
   },
   {
     id: "F10.2",
-    implementation: [{ file: "packages/host/wailsv3/src/modals.go", symbol: "OverlayShow" }],
+    implementation: [{ file: "packages/host/go/src/modals.go", symbol: "OverlayShow" }],
     tests: [{ file: "e2e/modal.test.mjs", id: "add and split menus are transparent and have no backdrop" }],
     expected: "Wails uses the same hidden transparent child-webview modal contract and reports ready, focus, coverage, resize, and cleanup.",
     levels: ["application"],
   },
   {
     id: "F10.3",
-    implementation: [{ file: "packages/host/tauriv2/src/modals.rs", symbol: "pub(crate) fn hide" }],
+    implementation: [{ file: "packages/host/rust/src/modals.rs", symbol: "pub fn hide" }],
     tests: [
       { file: "e2e/modal.test.mjs", id: "add and split menus are transparent and have no backdrop" },
       { file: "e2e/modal.test.mjs", id: "settings blocks background input and closes only through its close button" },
@@ -7649,7 +7653,7 @@ const FEATURE_LINKS = [
   {
     id: "F10.4",
     implementation: [
-      { file: "packages/host/wailsv3/src/modals.go", symbol: "OverlayShow" },
+      { file: "packages/host/go/src/modals.go", symbol: "OverlayShow" },
       { file: "packages/workbench/compositor.js", symbol: "placementPending" },
       { file: "packages/workbench/verify.js", symbol: "placementPending" },
     ],
@@ -7667,8 +7671,8 @@ const FEATURE_LINKS = [
       { file: "packages/plugin-api/view.js", symbol: "beginOperation" },
       { file: "packages/workbench/view-calls.js", symbol: "export async function answerViewCall" },
       { file: "packages/workbench/exposure.js", symbol: "const commandRequest" },
-      { file: "packages/host/wailsv3/src/documents.go", symbol: "func ViewCallEvent" },
-      { file: "packages/host/tauriv2/src/documents.rs", symbol: "fn cause_cids_of" },
+      { file: "packages/host/go/src/documents.go", symbol: "func ViewCallEvent" },
+      { file: "packages/host/rust/src/documents.rs", symbol: "fn cause_cids_of" },
     ],
     tests: [
       { file: "packages/plugin-api/test/view-operations-contract.test.mjs", id: "view.operation.begin-logs-first-event-and-carries-cids" },
@@ -7677,8 +7681,8 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/view-calls.test.mjs", id: "a call that carries the cids of its cause hands them to the command of its plugin" },
       { file: "packages/workbench/test/view-calls.test.mjs", id: "a core command call that carries the cids of its cause hands them to runCore" },
       { file: "packages/workbench/test/app-update.test.mjs", id: "the release page of a command that carries the cids of its cause opens it with those cids" },
-      { file: "packages/host/wailsv3/src/surfaces_test.go", id: "TestViewCallCarriesTheCidsOfItsCause" },
-      { file: "packages/host/tauriv2/tests/documents_test.rs", id: "view_call_request_carries_the_cids_of_its_cause_and_refuses_invalid_ones" },
+      { file: "packages/host/go/src/surfaces_test.go", id: "TestViewCallCarriesTheCidsOfItsCause" },
+      { file: "packages/host/rust/tests/documents_test.rs", id: "view_call_request_carries_the_cids_of_its_cause_and_refuses_invalid_ones" },
     ],
     expected: "A view starts an operation whose identifiers are in the page form and whose first event carries them, and a command call of the view reaches its plugin command or its core command with those identifiers, which the core command passes to its host call; both hosts forward the cids of a view call and refuse a list that a log line cannot hold.",
     levels: ["unit"],
@@ -7693,24 +7697,24 @@ const FEATURE_LINKS = [
   {
     id: "F239-38",
     implementation: [
-      { file: "packages/sok/wailsv3/src/log_policy.go", symbol: '"host.test.start", "host.test.end"' },
-      { file: "packages/sok/tauriv2/src/event_log.rs", symbol: '"host.test.start"' },
-      { file: "packages/host/wailsv3/src/test_mark.go", symbol: "func EmitTestMark" },
-      { file: "packages/host/tauriv2/src/test_mark.rs", symbol: "pub fn emit_test_mark" },
+      { file: "packages/sok/go/src/log_policy.go", symbol: '"host.test.start", "host.test.end"' },
+      { file: "packages/sok/rust/src/event_log.rs", symbol: '"host.test.start"' },
+      { file: "packages/host/go/src/test_mark.go", symbol: "func EmitTestMark" },
+      { file: "packages/host/rust/src/test_mark.rs", symbol: "pub fn emit_test_mark" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/test_mark_test.go", id: "TestATestMarkIsAnEventAndTheReplyNamesItsPosition" },
-      { file: "packages/host/wailsv3/tests/test_mark_test.go", id: "TestATestMarkIsStoredWhenLifecycleIsOff" },
-      { file: "packages/host/tauriv2/tests/test_mark_test.rs", id: "a_test_mark_is_an_event_and_the_reply_names_its_position" },
-      { file: "packages/host/tauriv2/tests/test_mark_test.rs", id: "a_test_mark_is_stored_when_lifecycle_is_off" },
+      { file: "packages/host/go/tests/test_mark_test.go", id: "TestATestMarkIsAnEventAndTheReplyNamesItsPosition" },
+      { file: "packages/host/go/tests/test_mark_test.go", id: "TestATestMarkIsStoredWhenLifecycleIsOff" },
+      { file: "packages/host/rust/tests/test_mark_test.rs", id: "a_test_mark_is_an_event_and_the_reply_names_its_position" },
+      { file: "packages/host/rust/tests/test_mark_test.rs", id: "a_test_mark_is_stored_when_lifecycle_is_off" },
     ],
     expected: "Both hosts store and flush host.test.start and host.test.end at info under lifecycle=error and lifecycle=off, return their event positions, and still gate ordinary lifecycle/info records.",
     levels: ["unit"],
   },
   {
     id: "F239-40-1",
-    implementation: [{ file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) processPersistent" }],
-    tests: [{ file: "packages/host/wailsv3/src/sidecar_reply_test.go", id: "TestAZeroHelloTimeoutIsRefusedBeforeAServiceStarts" }],
+    implementation: [{ file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) processPersistent" }],
+    tests: [{ file: "packages/host/go/src/sidecar_reply_test.go", id: "TestAZeroHelloTimeoutIsRefusedBeforeAServiceStarts" }],
     expected: "The Wails persistent-service start refuses a zero HelloTimeout before starting a service, and its owning test calls the current processPersistent function signature and checks that error.",
     levels: ["unit"],
   },
@@ -7923,13 +7927,13 @@ const FEATURE_LINKS = [
     id: "F239-47-30-1",
     implementation: [
       { file: "native/darwin/src/window_facts.m", symbol: "sp_window_color_space_facts(void *handle)" },
-      { file: "packages/host/wailsv3/src/diagnostics.go", symbol: "diagnostics.native.window-color-space" },
-      { file: "packages/host/tauriv2/src/diagnostics.rs", symbol: "native_window_color_space(window)" },
+      { file: "packages/host/go/src/diagnostics.go", symbol: "diagnostics.native.window-color-space" },
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "native_window_color_space(window)" },
     ],
     tests: [
       { file: "native/darwin/tests/window_facts_test.m", id: "the one-shot facts report the actual AppKit color space and ICC digest without changing it" },
-      { file: "packages/host/wailsv3/src/diagnostics_test.go", id: "TestNativeWindowColorSpaceMethodIsDeclared" },
-      { file: "packages/host/tauriv2/src/endpoint.rs", id: "diagnostics.native-window-color-space.reports-appkit-profile" },
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestNativeWindowColorSpaceMethodIsDeclared" },
+      { file: "packages/host/rust/src/endpoint.rs", id: "diagnostics.native-window-color-space.reports-appkit-profile" },
     ],
     expected: "The diagnostic query reports the actual AppKit color-space name and ICC fingerprint without changing the host window's color policy.",
     levels: ["native", "unit"],
@@ -7955,13 +7959,13 @@ const FEATURE_LINKS = [
     id: "F239-47-40-3",
     implementation: [
       { file: "native/darwin/src/capture.m", symbol: "bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut)" },
-      { file: "packages/host/wailsv3/src/diagnostics.go", symbol: "func parseCaptureStartOptions(params json.RawMessage)" },
-      { file: "packages/host/tauriv2/src/diagnostics.rs", symbol: "frame_identity = match params.get(\"frameIdentity\")" },
+      { file: "packages/host/go/src/diagnostics.go", symbol: "func parseCaptureStartOptions(params json.RawMessage)" },
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "frame_identity = match params.get(\"frameIdentity\")" },
     ],
     tests: [
       { file: "native/darwin/tests/support/capture_boundary.m", id: "identity capture without a prepared target is rejected" },
-      { file: "packages/host/wailsv3/src/diagnostics_test.go", id: "TestCaptureStartOptionsParseFrameIdentity" },
-      { file: "packages/host/tauriv2/tests/recording_test.rs", id: "recording_start_forwards_frame_identity" },
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestCaptureStartOptionsParseFrameIdentity" },
+      { file: "packages/host/rust/tests/recording_test.rs", id: "recording_start_forwards_frame_identity" },
     ],
     expected: "The diagnostic start option is strictly boolean and defaults off; both hosts pass it through, and native capture rejects identity mode until its implementation is available.",
     levels: ["native", "unit"],
@@ -7979,8 +7983,8 @@ const FEATURE_LINKS = [
       { file: "native/darwin/src/capture.m", symbol: "- (void)startDisplayLinkObservationForWindowNumber:(long)windowNumber" },
       { file: "native/darwin/src/capture.m", symbol: "- (void)recordDisplayLinkTimestamp:(double)timestamp targetTimestamp:(double)targetTimestamp duration:(double)duration" },
       { file: "native/darwin/src/capture.m", symbol: "static bool finalizeCaptureArtifacts(SPCapture *sink)" },
-      { file: "packages/host/wailsv3/src/diagnostics.go", symbol: "func captureStopPayload(" },
-      { file: "packages/host/tauriv2/src/recording.rs", symbol: "pub fn stop_payload(" },
+      { file: "packages/host/go/src/diagnostics.go", symbol: "func captureStopPayload(" },
+      { file: "packages/host/rust/src/recording.rs", symbol: "pub fn stop_payload(" },
     ],
     tests: [
       { file: "native/darwin/tests/capture_metadata_test.m", id: "finalization reports an explicit unavailable display-link trace when no observation was recorded" },
@@ -7988,8 +7992,8 @@ const FEATURE_LINKS = [
       { file: "native/darwin/tests/capture_metadata_test.m", id: "hidden and off-display observations remain recorded but cannot claim available refresh coverage" },
       { file: "native/darwin/tests/capture_metadata_test.m", id: "the display-link trace records its 4096 bound, omitted count, incomplete state, and explicit error" },
       { file: "native/darwin/tests/capture_resize_test.m", id: "stopping the capture invalidates its retained display link" },
-      { file: "packages/host/wailsv3/src/diagnostics_test.go", id: "TestCaptureStopPayloadReportsNormalFrameLimit" },
-      { file: "packages/host/tauriv2/tests/recording_test.rs", id: "the_stop_payload_reports_a_normal_frame_limit" },
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestCaptureStopPayloadReportsNormalFrameLimit" },
+      { file: "packages/host/rust/tests/recording_test.rs", id: "the_stop_payload_reports_a_normal_frame_limit" },
     ],
     expected: "A capture records bounded, validated AppKit display-link observations separately from ScreenCaptureKit callbacks and publishes the artifact path in both host stop payloads; hidden or missing observations are unavailable, overflow is explicitly incomplete, and the trace does not identify or prove presentation of a source frame.",
     levels: ["native", "unit"],
@@ -8033,10 +8037,10 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-47-40-5",
-    implementation: [{ file: "packages/host/wailsv3/src/documents.go", symbol: "func (s *Surfaces) ViewMessage" }],
+    implementation: [{ file: "packages/host/go/src/documents.go", symbol: "func (s *Surfaces) ViewMessage" }],
     tests: [
-      { file: "packages/host/wailsv3/src/view_call_record_test.go", id: "TestViewCallAndReplyAreRecordedAtDebugWithTheirIdentifier" },
-      { file: "packages/host/wailsv3/src/view_error_test.go", id: "TestViewErrorMessageIsWrittenOnTheErrorDisplayPathWithItsView" },
+      { file: "packages/host/go/src/view_call_record_test.go", id: "TestViewCallAndReplyAreRecordedAtDebugWithTheirIdentifier" },
+      { file: "packages/host/go/src/view_error_test.go", id: "TestViewErrorMessageIsWrittenOnTheErrorDisplayPathWithItsView" },
     ],
     expected: "Wails view call, reply and view.error records use the current declared-view generation and are observed through ViewMessage.",
     levels: ["unit"],
@@ -8044,12 +8048,12 @@ const FEATURE_LINKS = [
   {
     id: "F239-47-40-6",
     implementation: [
-      { file: "packages/host/wailsv3/src/projects.go", symbol: "func (h *Host) ProjectShown(" },
-      { file: "packages/host/wailsv3/src/projects.go", symbol: "type ProjectShown struct" },
+      { file: "packages/host/go/src/projects.go", symbol: "func (h *Host) ProjectShown(" },
+      { file: "packages/host/go/src/projects.go", symbol: "type ProjectShown struct" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/projects_test.go", id: "TestProjectShownDecodesStandardArguments" },
-      { file: "packages/host/wailsv3/tests/arguments_test.go", id: "TestEveryBindingDecodesItsArgumentsFirst" },
+      { file: "packages/host/go/src/projects_test.go", id: "TestProjectShownDecodesStandardArguments" },
+      { file: "packages/host/go/tests/arguments_test.go", id: "TestEveryBindingDecodesItsArgumentsFirst" },
     ],
     expected: "Wails ProjectShown arguments use the standard host decoder, keep explicit null projects, and ignore undeclared fields.",
     levels: ["unit"],
@@ -8057,12 +8061,12 @@ const FEATURE_LINKS = [
   {
     id: "F239-47-40-7",
     implementation: [
-      { file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) struct ProjectShown" },
-      { file: "packages/host/tauriv2/src/windows.rs", symbol: "struct ShownProject" },
+      { file: "packages/host/rust/src/windows.rs", symbol: "pub struct ProjectShown" },
+      { file: "packages/host/rust/src/windows.rs", symbol: "struct ShownProject" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/project_data_order/project_data_order_test.rs", id: "project_shown_ignores_unknown_outer_fields" },
-      { file: "packages/host/tauriv2/tests/project_data_order/project_data_order_test.rs", id: "shown_project_ignores_unknown_nested_fields" },
+      { file: "packages/host/rust/tests/project_data_order/project_data_order_test.rs", id: "project_shown_ignores_unknown_outer_fields" },
+      { file: "packages/host/rust/tests/project_data_order/project_data_order_test.rs", id: "shown_project_ignores_unknown_nested_fields" },
     ],
     expected: "Tauri ProjectShown and ShownProject ignore undeclared fields as required by the shared host-call contract.",
     levels: ["unit"],
@@ -8101,27 +8105,27 @@ const FEATURE_LINKS = [
   {
     id: "F239-48-3-13",
     implementation: [
-      { file: "packages/sok/wailsv3/src/platform/platform.go", symbol: "type Platform interface" },
-      { file: "packages/sok/wailsv3/src/platform/darwin/process.go", symbol: "func (darwin) PrepareLogDirectory" },
-      { file: "packages/sok/wailsv3/src/platform/linux/process.go", symbol: "func (linux) PrepareLogDirectory" },
-      { file: "packages/sok/wailsv3/src/platform/windows/unsupported.go", symbol: "func (windows) PrepareLogDirectory" },
-      { file: "packages/sok/wailsv3/src/event_log.go", symbol: "func StartEventLog" },
-      { file: "packages/sok/wailsv3/src/ownership.go", symbol: "func ownConfiguration" },
+      { file: "packages/sok/go/src/platform/platform.go", symbol: "type Platform interface" },
+      { file: "packages/sok/go/src/platform/darwin/process.go", symbol: "func (darwin) PrepareLogDirectory" },
+      { file: "packages/sok/go/src/platform/linux/process.go", symbol: "func (linux) PrepareLogDirectory" },
+      { file: "packages/sok/go/src/platform/windows/unsupported.go", symbol: "func (windows) PrepareLogDirectory" },
+      { file: "packages/sok/go/src/event_log.go", symbol: "func StartEventLog" },
+      { file: "packages/sok/go/src/ownership.go", symbol: "func ownConfiguration" },
     ],
     tests: [
-      { file: "packages/sok/wailsv3/tests/event_log_test.go", id: "TestEventLogUsesRegisteredPlatformFileOperations" },
-      { file: "packages/sok/wailsv3/tests/event_log_test.go", id: "TestEventLogStartupReportsRegisteredPlatformPrepareError" },
-      { file: "packages/sok/wailsv3/tests/ownership_test.go", id: "TestConfigurationOwnershipUsesPrivateProcessLockOperation" },
-      { file: "packages/sok/wailsv3/tests/ownership_test.go", id: "TestConfigurationOwnershipReportsPrivateProcessLockFailure" },
-      { file: "packages/sok/wailsv3/tests/platform/darwin/private_files_test.go", id: "TestPrepareLogDirectoryCreatesAndRestrictsDirectory" },
-      { file: "packages/sok/wailsv3/tests/platform/darwin/private_files_test.go", id: "TestCreateLogFileIsNewAndOwnerOnly" },
-      { file: "packages/sok/wailsv3/tests/platform/darwin/private_files_test.go", id: "TestAppendLogFileCreatesOwnerOnlyAndPreservesExistingMode" },
-      { file: "packages/sok/wailsv3/tests/platform/darwin/private_files_test.go", id: "TestOpenProcessLockFileCreatesOwnerOnlyAndPreservesExistingMode" },
-      { file: "packages/sok/wailsv3/tests/platform/linux/private_files_test.go", id: "TestPrepareLogDirectoryCreatesAndRestrictsDirectory" },
-      { file: "packages/sok/wailsv3/tests/platform/linux/private_files_test.go", id: "TestCreateLogFileIsNewAndOwnerOnly" },
-      { file: "packages/sok/wailsv3/tests/platform/linux/private_files_test.go", id: "TestAppendLogFileCreatesOwnerOnlyAndPreservesExistingMode" },
-      { file: "packages/sok/wailsv3/tests/platform/linux/private_files_test.go", id: "TestOpenProcessLockFileCreatesOwnerOnlyAndPreservesExistingMode" },
-      { file: "packages/sok/wailsv3/tests/platform/windows/private_files_test.go", id: "TestPrivateFileOperationsFailExplicitlyWithoutCreatingFiles" },
+      { file: "packages/sok/go/tests/event_log_test.go", id: "TestEventLogUsesRegisteredPlatformFileOperations" },
+      { file: "packages/sok/go/tests/event_log_test.go", id: "TestEventLogStartupReportsRegisteredPlatformPrepareError" },
+      { file: "packages/sok/go/tests/ownership_test.go", id: "TestConfigurationOwnershipUsesPrivateProcessLockOperation" },
+      { file: "packages/sok/go/tests/ownership_test.go", id: "TestConfigurationOwnershipReportsPrivateProcessLockFailure" },
+      { file: "packages/sok/go/tests/platform/darwin/private_files_test.go", id: "TestPrepareLogDirectoryCreatesAndRestrictsDirectory" },
+      { file: "packages/sok/go/tests/platform/darwin/private_files_test.go", id: "TestCreateLogFileIsNewAndOwnerOnly" },
+      { file: "packages/sok/go/tests/platform/darwin/private_files_test.go", id: "TestAppendLogFileCreatesOwnerOnlyAndPreservesExistingMode" },
+      { file: "packages/sok/go/tests/platform/darwin/private_files_test.go", id: "TestOpenProcessLockFileCreatesOwnerOnlyAndPreservesExistingMode" },
+      { file: "packages/sok/go/tests/platform/linux/private_files_test.go", id: "TestPrepareLogDirectoryCreatesAndRestrictsDirectory" },
+      { file: "packages/sok/go/tests/platform/linux/private_files_test.go", id: "TestCreateLogFileIsNewAndOwnerOnly" },
+      { file: "packages/sok/go/tests/platform/linux/private_files_test.go", id: "TestAppendLogFileCreatesOwnerOnlyAndPreservesExistingMode" },
+      { file: "packages/sok/go/tests/platform/linux/private_files_test.go", id: "TestOpenProcessLockFileCreatesOwnerOnlyAndPreservesExistingMode" },
+      { file: "packages/sok/go/tests/platform/windows/private_files_test.go", id: "TestPrivateFileOperationsFailExplicitlyWithoutCreatingFiles" },
     ],
     expected: "The Wails CLI routes event-log directory/file and process-lock creation through its platform interface; Darwin and Linux enforce the Unix private modes, and Windows rejects these operations before creating their paths.",
     levels: ["unit"],
@@ -8136,10 +8140,10 @@ const FEATURE_LINKS = [
   {
     id: "F239-61",
     implementation: [
-      { file: "packages/host/tauriv2/src/platform/platform.rs", symbol: "pub struct ImagePresentation" },
-      { file: "packages/host/tauriv2/src/documents.rs", symbol: "struct ViewAttachment" },
+      { file: "packages/host/rust/src/platform/platform.rs", symbol: "pub struct ImagePresentation" },
+      { file: "packages/host/rust/src/documents.rs", symbol: "struct ViewAttachment" },
     ],
-    tests: [{ file: "packages/host/tauriv2/src/images_test.rs", id: "presenting_a_frame_notifies_after_its_identity_is_current" }],
+    tests: [{ file: "packages/host/rust/src/images_test.rs", id: "presenting_a_frame_notifies_after_its_identity_is_current" }],
     expected: "Image presentation and view attachment use named Rust contract types, and frame notification follows current identity registration.",
     levels: ["unit"],
   },
@@ -8258,8 +8262,8 @@ const FEATURE_LINKS = [
   },
   {
     id: "F285-2",
-    implementation: [{ file: "packages/host/tauriv2/src/performance.rs", symbol: "pub(crate) static TEST_SWITCH: Mutex<()>" }],
-    tests: [{ file: "packages/host/tauriv2/src/view_join_test.rs", id: "presentation_join_trace_records_exact_wait_identity_and_nonpresentation_end" }],
+    implementation: [{ file: "packages/host/rust/src/performance.rs", symbol: "pub(crate) static TEST_SWITCH: Mutex<()>" }],
+    tests: [{ file: "packages/host/rust/src/view_join_test.rs", id: "presentation_join_trace_records_exact_wait_identity_and_nonpresentation_end" }],
     expected: "A Tauri host test that switches the performance trace or reads its records runs alone among those tests.",
     levels: ["unit"],
   },
@@ -8305,12 +8309,12 @@ const FEATURE_LINKS = [
   {
     id: "F292-12",
     implementation: [
-      { file: "packages/host/wailsv3/src/exposure.go", symbol: "func windowDocument(key DocumentKey, order int, view windowWebviewFacts) WindowDocument {" },
-      { file: "packages/host/tauriv2/src/exposure.rs", symbol: "fn window_document(" },
+      { file: "packages/host/go/src/exposure.go", symbol: "func windowDocument(key DocumentKey, order int, view windowWebviewFacts) WindowDocument {" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "fn window_document(" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/exposure_webviews_test.go", id: "TestWindowDocumentReportsItsNativeBlur" },
-      { file: "packages/host/tauriv2/src/exposure_webviews_test.rs", id: "window_document_reports_its_native_blur" },
+      { file: "packages/host/go/src/exposure_webviews_test.go", id: "TestWindowDocumentReportsItsNativeBlur" },
+      { file: "packages/host/rust/src/exposure_webviews_test.rs", id: "window_document_reports_its_native_blur" },
     ],
     expected: "host.window reports whether each document web view carries the native blur filter on both hosts.",
     levels: ["unit"],
@@ -8318,12 +8322,12 @@ const FEATURE_LINKS = [
   {
     id: "F292-25",
     implementation: [
-      { file: "packages/host/wailsv3/src/exposure.go", symbol: "func modalOrder(nativeSurfaces, webviews int) int {" },
-      { file: "packages/host/tauriv2/src/exposure.rs", symbol: "fn modal_order(native_surfaces: usize, webviews: usize) -> usize {" },
+      { file: "packages/host/go/src/exposure.go", symbol: "func modalOrder(nativeSurfaces, webviews int) int {" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "fn modal_order(native_surfaces: usize, webviews: usize) -> usize {" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/exposure_webviews_test.go", id: "TestModalOrderIsAboveEveryNativeSurfaceAndWebview" },
-      { file: "packages/host/tauriv2/src/exposure_webviews_test.rs", id: "modal_order_is_above_every_native_surface_and_webview" },
+      { file: "packages/host/go/src/exposure_webviews_test.go", id: "TestModalOrderIsAboveEveryNativeSurfaceAndWebview" },
+      { file: "packages/host/rust/src/exposure_webviews_test.rs", id: "modal_order_is_above_every_native_surface_and_webview" },
     ],
     expected: "host.window reports the order of an open modal above every native surface order and every web view order on both hosts.",
     levels: ["unit"],
@@ -8331,12 +8335,12 @@ const FEATURE_LINKS = [
   {
     id: "F292-26-2",
     implementation: [
-      { file: "packages/host/wailsv3/src/exposure.go", symbol: "func modalOrder(nativeSurfaces, webviews int) int {" },
-      { file: "packages/host/tauriv2/src/exposure.rs", symbol: "fn modal_order(native_surfaces: usize, webviews: usize) -> usize {" },
+      { file: "packages/host/go/src/exposure.go", symbol: "func modalOrder(nativeSurfaces, webviews int) int {" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "fn modal_order(native_surfaces: usize, webviews: usize) -> usize {" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/exposure_webviews_test.go", id: "TestModalOrderIsAboveTheFirstWebviewWithoutNativeSurfaces" },
-      { file: "packages/host/tauriv2/src/exposure_webviews_test.rs", id: "modal_order_is_above_the_first_webview_without_native_surfaces" },
+      { file: "packages/host/go/src/exposure_webviews_test.go", id: "TestModalOrderIsAboveTheFirstWebviewWithoutNativeSurfaces" },
+      { file: "packages/host/rust/src/exposure_webviews_test.rs", id: "modal_order_is_above_the_first_webview_without_native_surfaces" },
     ],
     expected: "host.window reports the order of an open modal above the order of the first web view of a window without native surfaces, on both hosts.",
     levels: ["unit"],
@@ -8358,12 +8362,12 @@ const FEATURE_LINKS = [
   {
     id: "F295",
     implementation: [
-      { file: "packages/host/wailsv3/src/event_record.go", symbol: "strings.HasPrefix(event, \"host.trace.\") && !performanceOn.Load()" },
-      { file: "packages/host/tauriv2/src/event_record.rs", symbol: "event.starts_with(\"host.trace.\") && !crate::performance::enabled()" },
+      { file: "packages/host/go/src/event_record.go", symbol: "strings.HasPrefix(event, \"host.trace.\") && !performanceOn.Load()" },
+      { file: "packages/host/rust/src/event_record.rs", symbol: "event.starts_with(\"host.trace.\") && !crate::performance::enabled()" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/performance_test.go", id: "TestTheSwitchGatesEveryHostTraceEvent" },
-      { file: "packages/host/tauriv2/tests/performance_test.rs", id: "the_switch_gates_every_host_trace_event" },
+      { file: "packages/host/go/tests/performance_test.go", id: "TestTheSwitchGatesEveryHostTraceEvent" },
+      { file: "packages/host/rust/tests/performance_test.rs", id: "the_switch_gates_every_host_trace_event" },
     ],
     expected: "Both hosts store no event host.trace.<event> while the switch of the performance trace is off.",
     levels: ["unit"],
@@ -8378,12 +8382,12 @@ const FEATURE_LINKS = [
   {
     id: "F293",
     implementation: [
-      { file: "packages/host/wailsv3/src/endpoint.go", symbol: "func windowParam(params json.RawMessage) (string, error)" },
-      { file: "packages/host/tauriv2/src/endpoint.rs", symbol: "window must be a non-empty string" },
+      { file: "packages/host/go/src/endpoint.go", symbol: "func windowParam(params json.RawMessage) (string, error)" },
+      { file: "packages/host/rust/src/endpoint.rs", symbol: "window must be a non-empty string" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/endpoint_test.go", id: "TestEndpointTargetParamsOrder" },
-      { file: "packages/host/tauriv2/tests/endpoint_test.rs", id: "target_params_are_checked_in_order" },
+      { file: "packages/host/go/tests/endpoint_test.go", id: "TestEndpointTargetParamsOrder" },
+      { file: "packages/host/rust/tests/endpoint_test.rs", id: "target_params_are_checked_in_order" },
     ],
     expected: "Both hosts check the window, then the name, then the existence of the window of an endpoint request with one error text.",
     levels: ["unit"],
@@ -8405,12 +8409,12 @@ const FEATURE_LINKS = [
   {
     id: "F281-1",
     implementation: [
-      { file: "packages/host/wailsv3/src/responder.go", symbol: "closed func(error) bool" },
-      { file: "packages/host/tauriv2/src/responder.rs", symbol: "closed: impl FnOnce(&str) -> bool" },
+      { file: "packages/host/go/src/responder.go", symbol: "closed func(error) bool" },
+      { file: "packages/host/rust/src/responder.rs", symbol: "closed: impl FnOnce(&str) -> bool" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/responder_test.go", id: "TestAResponderChangeOfAClosedWindowSendsNothing" },
-      { file: "packages/host/tauriv2/src/responder_test.rs", id: "a_responder_change_of_a_closed_window_sends_nothing" },
+      { file: "packages/host/go/src/responder_test.go", id: "TestAResponderChangeOfAClosedWindowSendsNothing" },
+      { file: "packages/host/rust/src/responder_test.rs", id: "a_responder_change_of_a_closed_window_sends_nothing" },
     ],
     expected: "A first responder change of a closed window sends nothing and returns no error, and a failed read of an open window is an error.",
     levels: ["unit"],
@@ -8425,12 +8429,12 @@ const FEATURE_LINKS = [
   {
     id: "F282",
     implementation: [
-      { file: "packages/host/wailsv3/src/exposure.go", symbol: "func windowResponder(" },
-      { file: "packages/host/tauriv2/src/exposure.rs", symbol: "fn responder_of(" },
+      { file: "packages/host/go/src/exposure.go", symbol: "func windowResponder(" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "fn responder_of(" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/responder_test.go", id: "TestTheFirstResponderInTheViewOfAViewSurfaceIsOwnerSurface" },
-      { file: "packages/host/tauriv2/src/exposure_status_test.rs", id: "the_first_responder_in_the_view_of_a_view_surface_is_owner_surface" },
+      { file: "packages/host/go/src/responder_test.go", id: "TestTheFirstResponderInTheViewOfAViewSurfaceIsOwnerSurface" },
+      { file: "packages/host/rust/src/exposure_status_test.rs", id: "the_first_responder_in_the_view_of_a_view_surface_is_owner_surface" },
     ],
     expected: "Both hosts report a first responder in the view of a view surface as the owner surface with no document.",
     levels: ["unit"],
@@ -8438,12 +8442,12 @@ const FEATURE_LINKS = [
   {
     id: "F279-2",
     implementation: [
-      { file: "packages/sok/wailsv3/src/diagnostics.go", symbol: "certificate %d does not parse" },
-      { file: "packages/sok/tauriv2/src/fetch.rs", symbol: "webpki::anchor_from_trusted_cert" },
+      { file: "packages/sok/go/src/diagnostics.go", symbol: "certificate %d does not parse" },
+      { file: "packages/sok/rust/src/fetch.rs", symbol: "webpki::anchor_from_trusted_cert" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/registry_ca_test.go", id: "TestADiagnosticBuildTrustsTheRegistryAuthority" },
-      { file: "packages/host/tauriv2/tests/registry_ca_test.rs", id: "a_diagnostic_build_reads_the_registry_authority" },
+      { file: "packages/host/go/tests/registry_ca_test.go", id: "TestADiagnosticBuildTrustsTheRegistryAuthority" },
+      { file: "packages/host/rust/tests/registry_ca_test.rs", id: "a_diagnostic_build_reads_the_registry_authority" },
     ],
     expected: "Both hosts parse each --registry-ca certificate when the flag is applied and report the parser reason of a certificate that does not parse.",
     levels: ["unit"],
@@ -8535,13 +8539,13 @@ const FEATURE_LINKS = [
   {
     id: "F322",
     implementation: [
-      { file: "packages/host/wailsv3/src/start.go", symbol: "func startParts(" },
-      { file: "packages/host/tauriv2/src/start.rs", symbol: "pub(crate) fn start_parts(" },
+      { file: "packages/host/go/src/start.go", symbol: "func startParts(" },
+      { file: "packages/host/rust/src/start.rs", symbol: "pub(crate) fn start_parts(" },
       { file: "packages/workbench/index.html", symbol: "if (start.error !== undefined) {" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/start_test.go", id: "TestAFailedWorkspaceSnapshotStillReadsTheControlsAndCarriesTheError" },
-      { file: "packages/host/tauriv2/src/start_test.rs", id: "a_failed_workspace_snapshot_still_reads_the_controls_and_carries_the_error" },
+      { file: "packages/host/go/src/start_test.go", id: "TestAFailedWorkspaceSnapshotStillReadsTheControlsAndCarriesTheError" },
+      { file: "packages/host/rust/src/start_test.rs", id: "a_failed_workspace_snapshot_still_reads_the_controls_and_carries_the_error" },
     ],
     expected: "On a failed workspace snapshot both hosts set the title bar for absent settings, read the controls and answer the start document with the error, and the page reserves the window button area before it shows the error and stops.",
     levels: ["native"],
@@ -8549,16 +8553,16 @@ const FEATURE_LINKS = [
   {
     id: "F322-1",
     implementation: [
-      { file: "packages/host/wailsv3/src/endpoint.go", symbol: "exposure.list owner must be host" },
-      { file: "packages/host/tauriv2/src/exposure.rs", symbol: "pub fn exposure_list(" },
-      { file: "packages/sok/wailsv3/src/command.go", symbol: "list[\"owner\"] = \"host\"" },
-      { file: "packages/sok/tauriv2/src/command.rs", symbol: "serde_json::json!({\"window\": window, \"owner\": \"host\"})" },
+      { file: "packages/host/go/src/endpoint.go", symbol: "exposure.list owner must be host" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "pub fn exposure_list(" },
+      { file: "packages/sok/go/src/command.go", symbol: "list[\"owner\"] = \"host\"" },
+      { file: "packages/sok/rust/src/command.rs", symbol: "serde_json::json!({\"window\": window, \"owner\": \"host\"})" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/exposure_test.go", id: "TestExposureListOfTheHostOwnerDoesNotAskThePage" },
-      { file: "packages/host/tauriv2/tests/exposure_test.rs", id: "the_exposure_list_of_the_host_owner_does_not_ask_the_page" },
-      { file: "packages/sok/wailsv3/tests/sok_test.go", id: "TestAHostCommandIsCheckedAgainstTheHostEntriesWithoutThePage" },
-      { file: "packages/sok/tauriv2/tests/sok_test.rs", id: "a_host_command_is_checked_against_the_host_entries_without_the_page" },
+      { file: "packages/host/go/tests/exposure_test.go", id: "TestExposureListOfTheHostOwnerDoesNotAskThePage" },
+      { file: "packages/host/rust/tests/exposure_test.rs", id: "the_exposure_list_of_the_host_owner_does_not_ask_the_page" },
+      { file: "packages/sok/go/tests/sok_test.go", id: "TestAHostCommandIsCheckedAgainstTheHostEntriesWithoutThePage" },
+      { file: "packages/sok/rust/tests/sok_test.rs", id: "a_host_command_is_checked_against_the_host_entries_without_the_page" },
     ],
     expected: "exposure.list with owner host answers the host entries without the main page on both hosts, and sok checks a host command against them, so host.quit runs whatever the state of the page.",
     levels: ["native"],
@@ -8566,13 +8570,13 @@ const FEATURE_LINKS = [
   {
     id: "F321-8",
     implementation: [
-      { file: "packages/host/wailsv3/src/workspace.go", symbol: "func snapshot(" },
-      { file: "packages/host/tauriv2/src/workspace.rs", symbol: "fn snapshot(" },
+      { file: "packages/host/go/src/workspace.go", symbol: "func snapshot(" },
+      { file: "packages/host/rust/src/workspace.rs", symbol: "fn snapshot(" },
       { file: "packages/workbench/host-store.js", symbol: "export function storedFileErrors(" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/workspace_test.go", id: "TestEarlierStoredFormsAreReportedBySnapshotAndRefusedByWrites" },
-      { file: "packages/host/tauriv2/tests/workspace_test.rs", id: "earlier_stored_forms_are_reported_by_snapshot_and_refused_by_writes" },
+      { file: "packages/host/go/tests/workspace_test.go", id: "TestEarlierStoredFormsAreReportedBySnapshotAndRefusedByWrites" },
+      { file: "packages/host/rust/tests/workspace_test.rs", id: "earlier_stored_forms_are_reported_by_snapshot_and_refused_by_writes" },
       { file: "packages/workbench/test/stored-file-errors.test.mjs", id: "a snapshot lists the error of a refused projects.json and of a refused settings.json" },
       { file: "packages/workbench/test/stored-file-errors.test.mjs", id: "the start document shows the errors of the refused stored files before the page draws" },
       { file: "e2e/start-failure.test.mjs", id: "a refused projects.json is shown and logged and the page starts without it" },
@@ -8619,12 +8623,12 @@ const FEATURE_LINKS = [
   {
     id: "F321-7",
     implementation: [
-      { file: "packages/host/wailsv3/src/installed.go", symbol: "func InstalledModule(" },
-      { file: "packages/host/tauriv2/src/installed.rs", symbol: "let Ok((plugins, _)) = enabled_plugins(config_dir) else {" },
+      { file: "packages/host/go/src/installed.go", symbol: "func InstalledModule(" },
+      { file: "packages/host/rust/src/installed.rs", symbol: "let Ok((plugins, _)) = enabled_plugins(config_dir) else {" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/installed_test.go", id: "TestAnUnreadableInstallationServesTheFrontendModules" },
-      { file: "packages/host/tauriv2/tests/installed_test.rs", id: "an_unreadable_installation_serves_the_frontend_modules" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestAnUnreadableInstallationServesTheFrontendModules" },
+      { file: "packages/host/rust/tests/installed_test.rs", id: "an_unreadable_installation_serves_the_frontend_modules" },
     ],
     expected: "With an installation that cannot be read, both hosts serve the paths under /modules/ from the bundled frontend, so the core modules load.",
     levels: ["native"],
@@ -8653,8 +8657,8 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/workbench/file-open.js", symbol: "const openers = extension === null ? [] : plugins.filter((plugin) => plugin.opens?.includes(extension));" },
       { file: "packages/plugin-api/index.js", symbol: "surface opens extension ${extension} must be lowercase letters and digits" },
-      { file: "packages/sok/wailsv3/src/manifest.go", symbol: "surface opens extension %s must be lowercase letters and digits" },
-      { file: "packages/sok/tauriv2/src/manifest.rs", symbol: "surface opens extension {} must be lowercase letters and digits" },
+      { file: "packages/sok/go/src/manifest.go", symbol: "surface opens extension %s must be lowercase letters and digits" },
+      { file: "packages/sok/rust/src/manifest.rs", symbol: "surface opens extension {} must be lowercase letters and digits" },
     ],
     tests: [
       { file: "packages/workbench/test/file-open.test.mjs", id: "the plugin that declares the extension opens a file, and a file whose extension no plugin declares has no opener" },
@@ -8667,13 +8671,13 @@ const FEATURE_LINKS = [
     id: "F330",
     implementation: [
       { file: "packages/workbench/surface-modules.js", symbol: "diagnostics: surface.diagnostics," },
-      { file: "packages/host/wailsv3/src/surfaces.go", symbol: "func checkViewDiagnostics(surface string, diagnostics json.RawMessage) error" },
-      { file: "packages/host/tauriv2/src/surfaces.rs", symbol: "pub(crate) fn check_view_diagnostics(" },
+      { file: "packages/host/go/src/surfaces.go", symbol: "func checkViewDiagnostics(surface string, diagnostics json.RawMessage) error" },
+      { file: "packages/host/rust/src/surfaces.rs", symbol: "pub(crate) fn check_view_diagnostics(" },
     ],
     tests: [
       { file: "packages/workbench/test/surface-view.test.mjs", id: "the start values of a view carry its params, origin, project, declarations and diagnostic declaration" },
-      { file: "packages/host/wailsv3/src/view_start_test.go", id: "TestSyncRequestValidatesTheStartValuesOfAView" },
-      { file: "packages/host/tauriv2/tests/surfaces_geometry_test.rs", id: "sync_request_check_validates_the_start_values_of_a_view" },
+      { file: "packages/host/go/src/view_start_test.go", id: "TestSyncRequestValidatesTheStartValuesOfAView" },
+      { file: "packages/host/rust/tests/surfaces_geometry_test.rs", id: "sync_request_check_validates_the_start_values_of_a_view" },
     ],
     expected: "The view start values carry the diagnostic declaration of the plugin or null, which both hosts require and inject.",
     levels: ["unit"],
@@ -8683,14 +8687,14 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/workbench/plugin-operations.js", symbol: "const selected = entry?.versions.filter((item) => satisfies(item.engines.soksak, state.core))" },
       { file: "packages/workbench/library.js", symbol: "에 맞는 버전 없음" },
-      { file: "packages/host/wailsv3/src/plugins.go", symbol: "return sok.ReadPluginsState(p.configDir, p.core)" },
-      { file: "packages/host/tauriv2/src/plugins.rs", symbol: "plugins::read_plugins_state(&self.config_dir, &self.core)" },
+      { file: "packages/host/go/src/plugins.go", symbol: "return sok.ReadPluginsState(p.configDir, p.core)" },
+      { file: "packages/host/rust/src/plugins.rs", symbol: "plugins::read_plugins_state(&self.config_dir, &self.core)" },
     ],
     tests: [
       { file: "packages/workbench/test/plugin-operations.test.mjs", id: "the latest version of a row is the newest version whose range contains the running core, and a plugin without one is incompatible" },
       { file: "packages/workbench/test/library-plugins.test.mjs", id: "the plugin page of the library lists each plugin with its description, versions, sidecars and actions" },
-      { file: "packages/host/wailsv3/tests/plugins_test.go", id: "TestPluginsStateReportsTheRegistryAndTheInstallation" },
-      { file: "packages/host/tauriv2/tests/plugins_test.rs", id: "plugins_state_reports_the_registry_and_the_installation" },
+      { file: "packages/host/go/tests/plugins_test.go", id: "TestPluginsStateReportsTheRegistryAndTheInstallation" },
+      { file: "packages/host/rust/tests/plugins_test.rs", id: "plugins_state_reports_the_registry_and_the_installation" },
     ],
     expected: "The latest version of a plugin is the version that installation selects for the running core, which pluginsState reports.",
     levels: ["unit"],
@@ -8745,13 +8749,13 @@ const FEATURE_LINKS = [
   {
     id: "F355-5",
     implementation: [
-      { file: "packages/sok/tauriv2/src/registry.rs", symbol: "pub(crate) fn check_sidecar_release" },
-      { file: "packages/sok/wailsv3/src/registry.go", symbol: "func checkSidecarRelease" },
+      { file: "packages/sok/rust/src/registry.rs", symbol: "pub(crate) fn check_sidecar_release" },
+      { file: "packages/sok/go/src/registry.go", symbol: "func checkSidecarRelease" },
       { file: "scripts/workspace-registry.mjs", symbol: "export function releaseSidecar(" },
     ],
     tests: [
-      { file: "packages/sok/tauriv2/tests/plugins_test.rs", id: "plugin_install_refuses_a_sidecar_release_without_its_executable" },
-      { file: "packages/sok/wailsv3/tests/plugins_test.go", id: "TestPluginInstallRefusesASidecarReleaseWithoutItsExecutable" },
+      { file: "packages/sok/rust/tests/plugins_test.rs", id: "plugin_install_refuses_a_sidecar_release_without_its_executable" },
+      { file: "packages/sok/go/tests/plugins_test.go", id: "TestPluginInstallRefusesASidecarReleaseWithoutItsExecutable" },
       { file: "scripts/test/workspace-registry.test.mjs", id: "a sidecar is released by the make release target of its repository, which receives only the output folder" },
     ],
     expected: "sok plugin install extracts a sidecar release from package/ and refuses one without the executable of its sidecar.json; the workspace registry runs make release of a sidecar repository.",
@@ -8760,17 +8764,17 @@ const FEATURE_LINKS = [
   {
     id: "F355-2",
     implementation: [
-      { file: "packages/sok/tauriv2/src/registry.rs", symbol: "pub(crate) fn check_release_modules" },
-      { file: "packages/sok/wailsv3/src/registry.go", symbol: "func checkReleaseModules" },
+      { file: "packages/sok/rust/src/registry.rs", symbol: "pub(crate) fn check_release_modules" },
+      { file: "packages/sok/go/src/registry.go", symbol: "func checkReleaseModules" },
       { file: "scripts/workspace-registry.mjs", symbol: "export function pnpmPack(" },
     ],
     tests: [
-      { file: "packages/sok/tauriv2/tests/plugins_test.rs", id: "plugin_install_refuses_a_release_entry_outside_package" },
-      { file: "packages/sok/tauriv2/tests/plugins_test.rs", id: "plugin_install_refuses_a_release_without_the_view_page" },
-      { file: "packages/sok/tauriv2/tests/plugins_test.rs", id: "plugin_install_refuses_a_release_with_a_binary_path" },
-      { file: "packages/sok/wailsv3/tests/plugins_test.go", id: "TestPluginInstallRefusesAReleaseEntryOutsidePackage" },
-      { file: "packages/sok/wailsv3/tests/plugins_test.go", id: "TestPluginInstallRefusesAReleaseWithoutTheViewPage" },
-      { file: "packages/sok/wailsv3/tests/plugins_test.go", id: "TestPluginInstallRefusesAReleaseWithABinaryPath" },
+      { file: "packages/sok/rust/tests/plugins_test.rs", id: "plugin_install_refuses_a_release_entry_outside_package" },
+      { file: "packages/sok/rust/tests/plugins_test.rs", id: "plugin_install_refuses_a_release_without_the_view_page" },
+      { file: "packages/sok/rust/tests/plugins_test.rs", id: "plugin_install_refuses_a_release_with_a_binary_path" },
+      { file: "packages/sok/go/tests/plugins_test.go", id: "TestPluginInstallRefusesAReleaseEntryOutsidePackage" },
+      { file: "packages/sok/go/tests/plugins_test.go", id: "TestPluginInstallRefusesAReleaseWithoutTheViewPage" },
+      { file: "packages/sok/go/tests/plugins_test.go", id: "TestPluginInstallRefusesAReleaseWithABinaryPath" },
       { file: "scripts/test/workspace-registry.test.mjs", id: "a plugin is packed by the make pack target of its repository, which receives only the output folder" },
     ],
     expected: "sok plugin install reads the pnpm pack layout of a plugin release and refuses an entry outside package/, a release without the modules that plugin.json loads and a file under .binary; the workspace registry passes only the output folder to make pack.",
@@ -8868,13 +8872,13 @@ const FEATURE_LINKS = [
   {
     id: "F375",
     implementation: [
-      { file: "packages/host/wailsv3/src/documents.go", symbol: "func validateViewGeneration(where string, generation uint64) error" },
-      { file: "packages/host/wailsv3/src/source_origins.go", symbol: "func (o *sourceOrigins) create(surface string) (uint64, error)" },
+      { file: "packages/host/go/src/documents.go", symbol: "func validateViewGeneration(where string, generation uint64) error" },
+      { file: "packages/host/go/src/source_origins.go", symbol: "func (o *sourceOrigins) create(surface string) (uint64, error)" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/source_origins_test.go", id: "TestSourceOriginsDoesNotIssueAnUnsafeGeneration" },
-      { file: "packages/host/wailsv3/src/source_origins_test.go", id: "TestAViewMessageAboveTheSafeIntegerLimitIsRefused" },
-      { file: "packages/host/tauriv2/src/source_origins_test.rs", id: "issuing_a_generation_past_the_javascript_safe_integer_limit_changes_no_state" },
+      { file: "packages/host/go/src/source_origins_test.go", id: "TestSourceOriginsDoesNotIssueAnUnsafeGeneration" },
+      { file: "packages/host/go/src/source_origins_test.go", id: "TestAViewMessageAboveTheSafeIntegerLimitIsRefused" },
+      { file: "packages/host/rust/src/source_origins_test.rs", id: "issuing_a_generation_past_the_javascript_safe_integer_limit_changes_no_state" },
     ],
     expected: "Both hosts refuse a view generation above the JavaScript safe integer limit with the text that the host contract states.",
     levels: ["unit"],
@@ -8882,13 +8886,13 @@ const FEATURE_LINKS = [
   {
     id: "F374-4",
     implementation: [
-      { file: "packages/host/tauriv2/src/sidecar_routes.rs", symbol: "pub(crate) struct SidecarRoutes" },
-      { file: "packages/host/wailsv3/src/sidecar_routes.go", symbol: "type sidecarRoutes struct" },
+      { file: "packages/host/rust/src/sidecar_routes.rs", symbol: "pub struct SidecarRoutes" },
+      { file: "packages/host/go/src/sidecar_routes.go", symbol: "type sidecarRoutes struct" },
       { file: "packages/workbench/host.js", symbol: "function onSidecarMessage(name, id, fn)" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/src/sidecar_routes_test.rs", id: "a_message_reaches_the_page_only_while_it_listens_and_each_routed_view" },
-      { file: "packages/host/wailsv3/src/sidecar_routes_test.go", id: "TestAMessageReachesThePageOnlyWhileItListensAndEachRoutedView" },
+      { file: "packages/host/rust/src/sidecar_routes_test.rs", id: "a_message_reaches_the_page_only_while_it_listens_and_each_routed_view" },
+      { file: "packages/host/go/src/sidecar_routes_test.go", id: "TestAMessageReachesThePageOnlyWhileItListensAndEachRoutedView" },
       { file: "packages/workbench/test/window-sidecar-listen.test.mjs", id: "the first listener of a pair registers the page, on resolves after the host applied it, and the last listener removes it" },
       { file: "packages/workbench/test/view-events.test.mjs", id: "a sidecar message subscription adds the host route of the view once, a restart removes it, and a failure is pushed" },
     ],
@@ -9020,14 +9024,14 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/workbench/sidebar-sections.js", symbol: "export const sectionSurfaceId = (space, sidebar, sectionId) =>" },
       { file: "packages/workbench/section-surfaces.js", symbol: "export function storedSurfaceKept(tabIds, spaceCards)" },
-      { file: "packages/host/wailsv3/src/workspace.go", symbol: "func listTabSessions(directory string) (any, error)" },
-      { file: "packages/host/tauriv2/src/workspace.rs", symbol: "fn valid_section_surface(id: &str) -> bool" },
+      { file: "packages/host/go/src/workspace.go", symbol: "func listTabSessions(directory string) (any, error)" },
+      { file: "packages/host/rust/src/workspace.rs", symbol: "fn valid_section_surface(id: &str) -> bool" },
     ],
     tests: [
       { file: "packages/workbench/test/sidebar-section-surfaces.test.mjs", id: "the same window sidebar section of two spaces gives two section surfaces with their own ids" },
       { file: "packages/workbench/test/section-surfaces.test.mjs", id: "a load keeps the entries of layout tabs and of the sections of a space of a layout, keyed by that space" },
-      { file: "packages/host/wailsv3/tests/workspace_test.go", id: "TestTabSessionListRefusesAFileOfAnotherName" },
-      { file: "packages/host/tauriv2/tests/workspace_test.rs", id: "tab_session_list_refuses_a_file_of_another_name" },
+      { file: "packages/host/go/tests/workspace_test.go", id: "TestTabSessionListRefusesAFileOfAnotherName" },
+      { file: "packages/host/rust/tests/workspace_test.rs", id: "tab_session_list_refuses_a_file_of_another_name" },
     ],
     expected: "A section surface id is <space>/<sidebar>/<section>, so it names one surface of the host, and a stored session file of another name is refused by name.",
     levels: ["unit"],
@@ -9081,13 +9085,13 @@ const FEATURE_LINKS = [
     id: "F342",
     implementation: [
       { file: "packages/workbench/exposure.js", symbol: "function deliver({ surface, name, value, version })" },
-      { file: "packages/host/wailsv3/src/exposure.go", symbol: "func ForwardTimeout(timeout json.RawMessage)" },
-      { file: "packages/host/tauriv2/src/exposure.rs", symbol: "pub fn forward_timeout(timeout: &Value)" },
+      { file: "packages/host/go/src/exposure.go", symbol: "func ForwardTimeout(timeout json.RawMessage)" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "pub fn forward_timeout(timeout: &Value)" },
     ],
     tests: [
       { file: "packages/workbench/test/exposure.test.mjs", id: "a watched surface status receives the values that the surface sends, and no forward waits for a change" },
-      { file: "packages/host/wailsv3/tests/exposure_test.go", id: "TestForwardedRequestsUseTheDeclaredTimeout" },
-      { file: "packages/host/tauriv2/tests/exposure_test.rs", id: "forwarded_requests_use_the_declared_timeout" },
+      { file: "packages/host/go/tests/exposure_test.go", id: "TestForwardedRequestsUseTheDeclaredTimeout" },
+      { file: "packages/host/rust/tests/exposure_test.rs", id: "forwarded_requests_use_the_declared_timeout" },
     ],
     expected: "A surface status watch is an event subscription and no forward waits without a time limit, so a ready main page reloads after its calls are answered.",
     levels: ["unit"],
@@ -9095,12 +9099,12 @@ const FEATURE_LINKS = [
   {
     id: "F342-2",
     implementation: [
-      { file: "packages/host/wailsv3/src/exposure.go", symbol: "func ForwardTimeout(timeout json.RawMessage)" },
-      { file: "packages/host/tauriv2/src/exposure.rs", symbol: "pub fn forward_timeout(timeout: &Value)" },
+      { file: "packages/host/go/src/exposure.go", symbol: "func ForwardTimeout(timeout json.RawMessage)" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "pub fn forward_timeout(timeout: &Value)" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/exposure_test.go", id: "TestForwardedRequestsUseTheDeclaredTimeout" },
-      { file: "packages/host/tauriv2/tests/exposure_test.rs", id: "forwarded_requests_use_the_declared_timeout" },
+      { file: "packages/host/go/tests/exposure_test.go", id: "TestForwardedRequestsUseTheDeclaredTimeout" },
+      { file: "packages/host/rust/tests/exposure_test.rs", id: "forwarded_requests_use_the_declared_timeout" },
     ],
     expected: "Every forwarded request has a time limit, 10 s or its declared timeout, whatever its method.",
     levels: ["unit"],
@@ -9114,10 +9118,10 @@ const FEATURE_LINKS = [
   },
   {
     id: "F340",
-    implementation: [{ file: "packages/host/tauriv2/src/surfaces.rs", symbol: "impl<'de> Deserialize<'de> for ViewStartRequest" }],
+    implementation: [{ file: "packages/host/rust/src/surfaces.rs", symbol: "impl<'de> Deserialize<'de> for ViewStartRequest" }],
     tests: [
-      { file: "packages/host/tauriv2/src/surfaces_test.rs", id: "the_host_call_decoder_keeps_the_null_start_values_of_a_view" },
-      { file: "packages/host/wailsv3/src/view_start_test.go", id: "TestSyncRequestDecoderKeepsTheNullStartValues" },
+      { file: "packages/host/rust/src/surfaces_test.rs", id: "the_host_call_decoder_keeps_the_null_start_values_of_a_view" },
+      { file: "packages/host/go/src/view_start_test.go", id: "TestSyncRequestDecoderKeepsTheNullStartValues" },
     ],
     expected: "Both hosts decode a null diagnostics and section of the view start values as present values.",
     levels: ["unit"],
@@ -9191,12 +9195,12 @@ const FEATURE_LINKS = [
   {
     id: "F321-5",
     implementation: [
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) checkDeclaration(" },
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn check_declaration(" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) checkDeclaration(" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn check_declaration(" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/sidecars_session_retention_test.go", id: "TestDeclarationNotifiesEachOutdatedVersionChange" },
-      { file: "packages/host/tauriv2/src/sidecars_lock_test.rs", id: "declaration_notifies_each_outdated_version_change" },
+      { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestDeclarationNotifiesEachOutdatedVersionChange" },
+      { file: "packages/host/rust/src/sidecars_lock_test.rs", id: "declaration_notifies_each_outdated_version_change" },
     ],
     expected: "A declaration whose sidecar.json does not parse succeeds on both hosts, notifies host.sidecars once and leaves the running service reported with a null installed version.",
     levels: ["native"],
@@ -9216,13 +9220,13 @@ const FEATURE_LINKS = [
     id: "F381",
     implementation: [
       { file: "native/darwin/src/window_facts.m", symbol: "bool sp_window_on_screen(void *handle) {" },
-      { file: "packages/host/wailsv3/src/images.go", symbol: "func (i *Images) DrawingChanges() []ImageDrawing {" },
-      { file: "packages/host/tauriv2/src/images.rs", symbol: "pub fn drawing_changes(&self) -> Vec<Drawing> {" },
+      { file: "packages/host/go/src/images.go", symbol: "func (i *Images) DrawingChanges() []ImageDrawing {" },
+      { file: "packages/host/rust/src/images.rs", symbol: "pub fn drawing_changes(&self) -> Vec<Drawing> {" },
     ],
     tests: [
       { file: "native/darwin/tests/window_occlusion_test.m", id: "the covered window is not on screen" },
-      { file: "packages/host/wailsv3/tests/images_test.go", id: "TestDrawingStateIsSentAtAttachAndOnChange" },
-      { file: "packages/host/tauriv2/tests/images_test.rs", id: "drawing_state_is_sent_at_attach_and_on_change" },
+      { file: "packages/host/go/tests/images_test.go", id: "TestDrawingStateIsSentAtAttachAndOnChange" },
+      { file: "packages/host/rust/tests/images_test.rs", id: "drawing_state_is_sent_at_attach_and_on_change" },
     ],
     expected: "The host reads whether a window is on screen from AppKit, sends the supplier of each image region its drawing state at the attachment and at each change, and configures and waits only for regions that draw.",
     levels: ["native", "unit"],
@@ -9230,13 +9234,13 @@ const FEATURE_LINKS = [
   {
     id: "F321-4",
     implementation: [
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) endUndeclaredReplacement(" },
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn end_undeclared_replacement<" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) endUndeclaredReplacement(" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn end_undeclared_replacement<" },
       { file: "packages/workbench/library.js", symbol: "const declared = item.installed !== null;" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestAServiceOfAnUndeclaredSidecarIsEnded" },
-      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "a_service_of_an_undeclared_sidecar_is_ended" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestAServiceOfAnUndeclaredSidecarIsEnded" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "a_service_of_an_undeclared_sidecar_is_ended" },
       { file: "packages/workbench/test/library-plugins.test.mjs", id: "the plugin page of the library lists each plugin with its description, versions, sidecars and actions" },
     ],
     expected: "A running persistent service whose sidecar is no longer declared is reported with a null installed version, its replacement ends it without a start and tells its surfaces the undeclared error, and the plugin screen shows it as 선언 없음 with the action that ends it.",
@@ -9245,14 +9249,14 @@ const FEATURE_LINKS = [
   {
     id: "F321-2",
     implementation: [
-      { file: "packages/host/wailsv3/src/workspace.go", symbol: "func projectSettings(" },
-      { file: "packages/host/tauriv2/src/workspace.rs", symbol: "fn project_settings(" },
+      { file: "packages/host/go/src/workspace.go", symbol: "func projectSettings(" },
+      { file: "packages/host/rust/src/workspace.rs", symbol: "fn project_settings(" },
       { file: "packages/workbench/projects.js", symbol: "if (project.settingsError) throw new Error(project.settingsError);" },
       { file: "packages/workbench/settings.js", symbol: "if (project?.settingsError) throw new Error(project.settingsError);" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/workspace_test.go", id: "TestARefusedProjectSettingsFileIsReportedAtItsProject" },
-      { file: "packages/host/tauriv2/tests/workspace_test.rs", id: "a_refused_project_settings_file_is_reported_at_its_project" },
+      { file: "packages/host/go/tests/workspace_test.go", id: "TestARefusedProjectSettingsFileIsReportedAtItsProject" },
+      { file: "packages/host/rust/tests/workspace_test.rs", id: "a_refused_project_settings_file_is_reported_at_its_project" },
       { file: "packages/workbench/test/projects-switch.test.mjs", id: "a project whose settings file the host refused is not opened, and the start shows the library with the error" },
       { file: "packages/workbench/test/settings.test.mjs", id: "a settings file of the shown project that the host refuses is reported and the applied settings stay" },
     ],
@@ -9262,12 +9266,12 @@ const FEATURE_LINKS = [
   {
     id: "F321-1",
     implementation: [
-      { file: "packages/host/wailsv3/src/installed.go", symbol: "func NewInstalledSidecars(" },
-      { file: "packages/host/tauriv2/src/installed.rs", symbol: "pub fn new_installed_sidecars<" },
+      { file: "packages/host/go/src/installed.go", symbol: "func NewInstalledSidecars(" },
+      { file: "packages/host/rust/src/installed.rs", symbol: "pub fn new_installed_sidecars<" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/installed_test.go", id: "TestAnUnreadableInstallationStartsTheSidecarsWithoutDeclarations" },
-      { file: "packages/host/tauriv2/tests/installed_test.rs", id: "an_unreadable_installation_starts_the_sidecars_without_declarations" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestAnUnreadableInstallationStartsTheSidecarsWithoutDeclarations" },
+      { file: "packages/host/rust/tests/installed_test.rs", id: "an_unreadable_installation_starts_the_sidecars_without_declarations" },
     ],
     expected: "A host start whose installed.json or plugin.json cannot be read records the error and creates its sidecar channel without declarations on both hosts.",
     levels: ["native"],
@@ -9275,18 +9279,18 @@ const FEATURE_LINKS = [
   {
     id: "F321",
     implementation: [
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) checkDeclaration(" },
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn check_declaration(" },
-      { file: "packages/host/wailsv3/src/installed.go", symbol: "SidecarDeclaration{Name: name, Error:" },
-      { file: "packages/host/tauriv2/src/installed.rs", symbol: "let refused = |error: String| SidecarDeclaration {" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) checkDeclaration(" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn check_declaration(" },
+      { file: "packages/host/go/src/installed.go", symbol: "SidecarDeclaration{Name: name, Error:" },
+      { file: "packages/host/rust/src/installed.rs", symbol: "let refused = |error: String| SidecarDeclaration {" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestAnInvalidDeclarationLeavesTheOtherSidecarsDeclared" },
-      { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestInvalidSidecarDeclarationsAreNotDeclared" },
-      { file: "packages/host/wailsv3/tests/installed_test.go", id: "TestInstalledSidecarsResolveTheInstalledVersionFolders" },
-      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "an_invalid_declaration_leaves_the_other_sidecars_declared" },
-      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "sidecar_declaration_requires_one_display_name_component" },
-      { file: "packages/host/tauriv2/tests/installed_test.rs", id: "installed_sidecars_resolve_the_installed_version_folders" },
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestAnInvalidDeclarationLeavesTheOtherSidecarsDeclared" },
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestInvalidSidecarDeclarationsAreNotDeclared" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestInstalledSidecarsResolveTheInstalledVersionFolders" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "an_invalid_declaration_leaves_the_other_sidecars_declared" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "sidecar_declaration_requires_one_display_name_component" },
+      { file: "packages/host/rust/tests/installed_test.rs", id: "installed_sidecars_resolve_the_installed_version_folders" },
     ],
     expected: "An installed sidecar whose declaration cannot be read or checked is refused alone on both hosts: the construction succeeds, the other sidecars are declared, and a send to the refused one fails with sidecar <name>: <path>: <reason>.",
     levels: ["native"],
@@ -9332,12 +9336,12 @@ const FEATURE_LINKS = [
   {
     id: "F313",
     implementation: [
-      { file: "packages/host/tauriv2/tests/support/crash_reports.rs", symbol: "pub fn watch_in(directory: PathBuf, application: &str) -> Self" },
-      { file: "packages/host/wailsv3/tests/support/crash_reports.go", symbol: "func WatchCrashReportsIn(" },
+      { file: "packages/host/rust/tests/support/crash_reports.rs", symbol: "pub fn watch_in(directory: PathBuf, application: &str) -> Self" },
+      { file: "packages/host/go/tests/support/crash_reports.go", symbol: "func WatchCrashReportsIn(" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/crash_reports_test.rs", id: "the_watch_removes_the_saved_report_and_not_the_hidden_file_that_the_system_renames" },
-      { file: "packages/host/wailsv3/tests/crash_reports_test.go", id: "TestTheWatchRemovesTheSavedReportAndNotTheHiddenFileThatTheSystemRenames" },
+      { file: "packages/host/rust/tests/crash_reports_test.rs", id: "the_watch_removes_the_saved_report_and_not_the_hidden_file_that_the_system_renames" },
+      { file: "packages/host/go/tests/crash_reports_test.go", id: "TestTheWatchRemovesTheSavedReportAndNotTheHiddenFileThatTheSystemRenames" },
     ],
     expected: "The crash report watch of both host tests removes the saved report of its process and not the hidden file that the system renames.",
     levels: ["unit"],
@@ -9386,8 +9390,8 @@ const FEATURE_LINKS = [
   },
   {
     id: "F412",
-    implementation: [{ file: "packages/host/wailsv3/src/images.go", symbol: "func (i *Images) DrawingChanges" }],
-    tests: [{ file: "packages/host/wailsv3/tests/images_test.go", id: "TestARasterThatChangedWhileNotDrawingIsConfiguredWhenDrawingReturns" }],
+    implementation: [{ file: "packages/host/go/src/images.go", symbol: "func (i *Images) DrawingChanges" }],
+    tests: [{ file: "packages/host/go/tests/images_test.go", id: "TestARasterThatChangedWhileNotDrawingIsConfiguredWhenDrawingReturns" }],
     expected: "A raster that changed while the window was off screen is configured when its region draws again.",
     levels: ["unit"],
   },
@@ -9400,8 +9404,8 @@ const FEATURE_LINKS = [
   },
   {
     id: "F414",
-    implementation: [{ file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn route_message" }],
-    tests: [{ file: "packages/host/tauriv2/src/sidecars_route_test.rs", id: "a_message_after_its_window_closed_posts_nothing_and_reports_no_failure" }],
+    implementation: [{ file: "packages/host/rust/src/sidecars.rs", symbol: "fn route_message" }],
+    tests: [{ file: "packages/host/rust/src/sidecars_route_test.rs", id: "a_message_after_its_window_closed_posts_nothing_and_reports_no_failure" }],
     expected: "A message after its window closed posts nothing and reports no failure.",
     levels: ["unit"],
   },
@@ -9414,15 +9418,15 @@ const FEATURE_LINKS = [
   },
   {
     id: "F416",
-    implementation: [{ file: "packages/host/tauriv2/src/exposure.rs", symbol: "fn remove_surface_registrations" }],
-    tests: [{ file: "packages/host/tauriv2/src/exposure.rs", id: "a_surface_that_closes_after_its_window_closed_records_nothing" }],
+    implementation: [{ file: "packages/host/rust/src/exposure.rs", symbol: "fn remove_surface_registrations" }],
+    tests: [{ file: "packages/host/rust/src/exposure.rs", id: "a_surface_that_closes_after_its_window_closed_records_nothing" }],
     expected: "A notice that runs after its window closed reports no failure.",
     levels: ["unit"],
   },
   {
     id: "F417",
-    implementation: [{ file: "packages/host/wailsv3/src/surfaces.go", symbol: "func readPressThenDeliver" }],
-    tests: [{ file: "packages/host/wailsv3/src/surfaces_test.go", id: "TestAPressReadsItsTargetBeforeItsDelivery" }],
+    implementation: [{ file: "packages/host/go/src/surfaces.go", symbol: "func readPressThenDeliver" }],
+    tests: [{ file: "packages/host/go/src/surfaces_test.go", id: "TestAPressReadsItsTargetBeforeItsDelivery" }],
     expected: "An injected press reads its target before its delivery.",
     levels: ["unit"],
   },
@@ -9442,8 +9446,8 @@ const FEATURE_LINKS = [
   },
   {
     id: "F420",
-    implementation: [{ file: "packages/host/wailsv3/src/surfaces.go", symbol: "err = errWindowClosed" }],
-    tests: [{ file: "packages/host/wailsv3/src/surfaces_test.go", id: "TestClosedWindowCreatesNoSurface" }],
+    implementation: [{ file: "packages/host/go/src/surfaces.go", symbol: "err = errWindowClosed" }],
+    tests: [{ file: "packages/host/go/src/surfaces_test.go", id: "TestClosedWindowCreatesNoSurface" }],
     expected: "A layout request of a closed window creates no surface and fails with the closed window error.",
     levels: ["unit"],
   },
@@ -9456,8 +9460,8 @@ const FEATURE_LINKS = [
   },
   {
     id: "F422",
-    implementation: [{ file: "packages/host/tauriv2/src/exposure.rs", symbol: "fn ask_page_to_reload(" }],
-    tests: [{ file: "packages/host/tauriv2/src/exposure_status_test.rs", id: "a_reload_asked_of_a_page_ends_the_requests_to_its_surfaces" }],
+    implementation: [{ file: "packages/host/rust/src/exposure.rs", symbol: "fn ask_page_to_reload(" }],
+    tests: [{ file: "packages/host/rust/src/exposure_status_test.rs", id: "a_reload_asked_of_a_page_ends_the_requests_to_its_surfaces" }],
     expected: "A reload asked of a page ends the requests to its surface documents.",
     levels: ["unit"],
   },
@@ -9512,22 +9516,22 @@ const FEATURE_LINKS = [
   },
   {
     id: "F411",
-    implementation: [{ file: "packages/host/wailsv3/src/surfaces.go", symbol: "err = errWindowClosed" }],
-    tests: [{ file: "packages/host/wailsv3/src/surfaces_test.go", id: "TestClosedWindowCreatesNoSurface" }],
+    implementation: [{ file: "packages/host/go/src/surfaces.go", symbol: "err = errWindowClosed" }],
+    tests: [{ file: "packages/host/go/src/surfaces_test.go", id: "TestClosedWindowCreatesNoSurface" }],
     expected: "A closed window creates no surface.",
     levels: ["unit"],
   },
   {
     id: "F425",
-    implementation: [{ file: "packages/host/wailsv3/src/surfaces.go", symbol: "func newNativeWebview(owner *Surfaces" }],
-    tests: [{ file: "packages/host/wailsv3/src/surfaces_test.go", id: "TestClosedWindowCreatesNoModalView" }],
+    implementation: [{ file: "packages/host/go/src/surfaces.go", symbol: "func newNativeWebview(owner *Surfaces" }],
+    tests: [{ file: "packages/host/go/src/surfaces_test.go", id: "TestClosedWindowCreatesNoModalView" }],
     expected: "A modal request of a closed window creates no view.",
     levels: ["unit"],
   },
   {
     id: "F426",
-    implementation: [{ file: "packages/host/tauriv2/src/platform/platform.rs", symbol: "pub trait Platform: CoreRootHost + Send + Sync {" }],
-    tests: [{ file: "packages/host/tauriv2/src/exposure_status_test.rs", id: "a_reload_asked_of_a_page_ends_the_requests_to_its_surfaces" }],
+    implementation: [{ file: "packages/host/rust/src/platform/platform.rs", symbol: "pub trait Platform: CoreRootHost + Send + Sync {" }],
+    tests: [{ file: "packages/host/rust/src/exposure_status_test.rs", id: "a_reload_asked_of_a_page_ends_the_requests_to_its_surfaces" }],
     expected: "The platform interface declares only operations that the host calls.",
     levels: ["unit"],
   },
@@ -9610,7 +9614,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F441",
-    implementation: [{ file: "packages/host/tauriv2/src/surfaces.rs", symbol: "fn apply_surfaces(" }],
+    implementation: [{ file: "packages/host/rust/src/surfaces.rs", symbol: "fn apply_surfaces(" }],
     tests: [{ file: "e2e/surface-sync-turn.test.mjs", id: "a surface layout enters the main thread once and its ready callback once" }],
     expected: "One main-thread entry and one ready callback per layout on both hosts",
     levels: ["application"],
@@ -9631,17 +9635,17 @@ const FEATURE_LINKS = [
   },
   {
     id: "F404",
-    implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) fn with_open_window(" }],
-    tests: [{ file: "packages/host/tauriv2/src/windows_records_test.rs", id: "a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure" }],
+    implementation: [{ file: "packages/host/rust/src/windows.rs", symbol: "pub(crate) fn with_open_window(" }],
+    tests: [{ file: "packages/host/rust/src/windows_records_test.rs", id: "a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure" }],
     expected: "A notification of a Tauri window that closed runs no step and reports no failure.",
     levels: ["unit"],
   },
   {
     id: "F312",
-    implementation: [{ file: "packages/host/tauriv2/src/documents.rs", symbol: "pub(crate) fn end_ticket_waits(" }],
+    implementation: [{ file: "packages/host/rust/src/documents.rs", symbol: "pub(crate) fn end_ticket_waits(" }],
     tests: [
-      { file: "packages/host/tauriv2/src/presentation_end_test.rs", id: "a_deferred_end_in_an_open_window_ends_its_join" },
-      { file: "packages/host/tauriv2/src/surface_close_test.rs", id: "a_surface_that_closes_in_an_open_window_ends_its_view_source_for_the_page" },
+      { file: "packages/host/rust/src/presentation_end_test.rs", id: "a_deferred_end_in_an_open_window_ends_its_join" },
+      { file: "packages/host/rust/src/surface_close_test.rs", id: "a_surface_that_closes_in_an_open_window_ends_its_view_source_for_the_page" },
     ],
     expected: "Each Tauri host test of the closed-window corrections declares a tauriv2 only contract case.",
     levels: ["unit"],
@@ -9661,8 +9665,8 @@ const FEATURE_LINKS = [
   },
   {
     id: "F311",
-    implementation: [{ file: "packages/host/wailsv3/src/application_log.go", symbol: "func StartStandardError(" }],
-    tests: [{ file: "packages/host/wailsv3/tests/application_log_test.go", id: "TestStartStandardErrorWritesAFatalErrorToTheCrashFileAndEndsTheProcessWithTheSystemCrash" }],
+    implementation: [{ file: "packages/host/go/src/application_log.go", symbol: "func StartStandardError(" }],
+    tests: [{ file: "packages/host/go/tests/application_log_test.go", id: "TestStartStandardErrorWritesAFatalErrorToTheCrashFileAndEndsTheProcessWithTheSystemCrash" }],
     expected: "The child of the crash file test ends only through its crash, so the test checks the crash file and the signal SIGABRT.",
     levels: ["unit"],
   },
@@ -9676,12 +9680,12 @@ const FEATURE_LINKS = [
   {
     id: "F307",
     implementation: [
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (p *lineProgress) describe(" },
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn describe(&self, now: Instant, last_read: Instant)" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (p *lineProgress) describe(" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn describe(&self, now: Instant, last_read: Instant)" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentRetainTimeoutNamesHowFarTheRequestWent" },
-      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "a_retain_timeout_names_how_far_the_request_went" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentRetainTimeoutNamesHowFarTheRequestWent" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "a_retain_timeout_names_how_far_the_request_went" },
     ],
     expected: "A retain that the service does not answer fails with the stage of its request line and the time since the last line from the service.",
     levels: ["unit"],
@@ -9696,14 +9700,14 @@ const FEATURE_LINKS = [
   {
     id: "F305",
     implementation: [
-      { file: "packages/host/tauriv2/src/event_record.rs", symbol: "fn record_site(" },
-      { file: "packages/host/wailsv3/src/application_log.go", symbol: "func logHost(" },
-      { file: "packages/host/tauriv2/src/documents.rs", symbol: "pub(crate) fn end_ticket_waits(" },
+      { file: "packages/host/rust/src/event_record.rs", symbol: "fn record_site(" },
+      { file: "packages/host/go/src/application_log.go", symbol: "func logHost(" },
+      { file: "packages/host/rust/src/documents.rs", symbol: "pub(crate) fn end_ticket_waits(" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/event_record_test.rs", id: "a_record_of_a_helper_names_the_file_and_line_of_its_call" },
-      { file: "packages/host/wailsv3/tests/event_record_test.go", id: "TestARecordOfAHelperNamesTheFileAndLineOfItsCall" },
-      { file: "packages/host/tauriv2/src/presentation_end_test.rs", id: "a_deferred_end_after_its_window_closed_ends_nothing_and_reports_no_failure" },
+      { file: "packages/host/rust/tests/event_record_test.rs", id: "a_record_of_a_helper_names_the_file_and_line_of_its_call" },
+      { file: "packages/host/go/tests/event_record_test.go", id: "TestARecordOfAHelperNamesTheFileAndLineOfItsCall" },
+      { file: "packages/host/rust/src/presentation_end_test.rs", id: "a_deferred_end_after_its_window_closed_ends_nothing_and_reports_no_failure" },
     ],
     expected: "A host record names the call that wrote it, and the error that the records traced to a deferred presentation end of a closed window is removed.",
     levels: ["unit"],
@@ -9711,29 +9715,29 @@ const FEATURE_LINKS = [
   {
     id: "F305-1",
     implementation: [
-      { file: "packages/host/tauriv2/src/event_record.rs", symbol: "fn record_site(" },
-      { file: "packages/host/wailsv3/src/application_log.go", symbol: "func logHost(" },
+      { file: "packages/host/rust/src/event_record.rs", symbol: "fn record_site(" },
+      { file: "packages/host/go/src/application_log.go", symbol: "func logHost(" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/event_record_test.rs", id: "a_record_of_a_helper_names_the_file_and_line_of_its_call" },
-      { file: "packages/host/wailsv3/tests/event_record_test.go", id: "TestARecordOfAHelperNamesTheFileAndLineOfItsCall" },
+      { file: "packages/host/rust/tests/event_record_test.rs", id: "a_record_of_a_helper_names_the_file_and_line_of_its_call" },
+      { file: "packages/host/go/tests/event_record_test.go", id: "TestARecordOfAHelperNamesTheFileAndLineOfItsCall" },
     ],
     expected: "A record that a record helper of a host writes names the file and line of its call.",
     levels: ["unit"],
   },
   {
     id: "F303",
-    implementation: [{ file: "packages/host/tauriv2/src/surfaces.rs", symbol: "pub fn with_registered_surface<T>(" }],
-    tests: [{ file: "packages/host/tauriv2/src/surfaces_test.rs", id: "a_sync_step_that_runs_after_the_close_of_its_surface_does_not_use_the_closed_handle" }],
+    implementation: [{ file: "packages/host/rust/src/surfaces.rs", symbol: "pub fn with_registered_surface<T>(" }],
+    tests: [{ file: "packages/host/rust/src/surfaces_test.rs", id: "a_sync_step_that_runs_after_the_close_of_its_surface_does_not_use_the_closed_handle" }],
     expected: "A layout step of the Tauri host uses a surface handle only while its registration still holds it.",
     levels: ["unit"],
   },
   {
     id: "F305-2",
-    implementation: [{ file: "packages/host/tauriv2/src/documents.rs", symbol: "pub(crate) fn end_ticket_waits(" }],
+    implementation: [{ file: "packages/host/rust/src/documents.rs", symbol: "pub(crate) fn end_ticket_waits(" }],
     tests: [
-      { file: "packages/host/tauriv2/src/presentation_end_test.rs", id: "a_deferred_end_after_its_window_closed_ends_nothing_and_reports_no_failure" },
-      { file: "packages/host/tauriv2/src/presentation_end_test.rs", id: "a_deferred_end_in_an_open_window_ends_its_join" },
+      { file: "packages/host/rust/src/presentation_end_test.rs", id: "a_deferred_end_after_its_window_closed_ends_nothing_and_reports_no_failure" },
+      { file: "packages/host/rust/src/presentation_end_test.rs", id: "a_deferred_end_in_an_open_window_ends_its_join" },
     ],
     expected: "A deferred end of a presentation wait ends its join in an open window and reports no failure for a window that closed before it ran.",
     levels: ["unit"],
@@ -9741,11 +9745,11 @@ const FEATURE_LINKS = [
   {
     id: "F300",
     implementation: [
-      { file: "packages/host/wailsv3/src/application_log.go", symbol: "func StartStandardError(" },
+      { file: "packages/host/go/src/application_log.go", symbol: "func StartStandardError(" },
       { file: "native/darwin/src/document_view.m", symbol: "@property(retain) NSView *webSurface;" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/application_log_test.go", id: "TestStartStandardErrorWritesAFatalErrorToTheCrashFileAndEndsTheProcessWithTheSystemCrash" },
+      { file: "packages/host/go/tests/application_log_test.go", id: "TestStartStandardErrorWritesAFatalErrorToTheCrashFileAndEndsTheProcessWithTheSystemCrash" },
       { file: "native/darwin/tests/document_surface_lifetime_test.m", id: "a surface that closes before its document stays alive while the document observes it" },
     ],
     expected: "A fatal error of the Wails host writes the crash file and the system crash report, and a document region keeps its surface until it closes.",
@@ -9754,22 +9758,22 @@ const FEATURE_LINKS = [
   {
     id: "F301",
     implementation: [
-      { file: "packages/host/tauriv2/src/documents.rs", symbol: "pub(crate) fn end_closed_surface(" },
-      { file: "packages/host/tauriv2/src/documents.rs", symbol: "pub(crate) fn end_ticket_waits(" },
+      { file: "packages/host/rust/src/documents.rs", symbol: "pub(crate) fn end_closed_surface(" },
+      { file: "packages/host/rust/src/documents.rs", symbol: "pub(crate) fn end_ticket_waits(" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/src/surface_close_test.rs", id: "a_surface_that_closes_after_its_window_closed_reports_no_failure_and_ends_its_view_source" },
-      { file: "packages/host/tauriv2/src/presentation_end_test.rs", id: "a_deferred_end_after_its_window_closed_ends_nothing_and_reports_no_failure" },
+      { file: "packages/host/rust/src/surface_close_test.rs", id: "a_surface_that_closes_after_its_window_closed_reports_no_failure_and_ends_its_view_source" },
+      { file: "packages/host/rust/src/presentation_end_test.rs", id: "a_deferred_end_after_its_window_closed_ends_nothing_and_reports_no_failure" },
     ],
     expected: "The close of a surface and a deferred presentation end of a window that closed report no failure.",
     levels: ["unit"],
   },
   {
     id: "F301-1",
-    implementation: [{ file: "packages/host/tauriv2/src/documents.rs", symbol: "pub(crate) fn end_closed_surface(" }],
+    implementation: [{ file: "packages/host/rust/src/documents.rs", symbol: "pub(crate) fn end_closed_surface(" }],
     tests: [
-      { file: "packages/host/tauriv2/src/surface_close_test.rs", id: "a_surface_that_closes_after_its_window_closed_reports_no_failure_and_ends_its_view_source" },
-      { file: "packages/host/tauriv2/src/surface_close_test.rs", id: "a_surface_that_closes_in_an_open_window_ends_its_view_source_for_the_page" },
+      { file: "packages/host/rust/src/surface_close_test.rs", id: "a_surface_that_closes_after_its_window_closed_reports_no_failure_and_ends_its_view_source" },
+      { file: "packages/host/rust/src/surface_close_test.rs", id: "a_surface_that_closes_in_an_open_window_ends_its_view_source_for_the_page" },
     ],
     expected: "The close of a surface ends its presentation waits and view source in the records that it took, tells the page only while the window is open, and reports no failure for a window that closed.",
     levels: ["unit"],
@@ -9949,12 +9953,12 @@ const FEATURE_LINKS = [
   {
     id: "F239-106",
     implementation: [
-      { file: "packages/host/wailsv3/src/documents.go", symbol: "func validateViewMessageEnvelope(" },
-      { file: "packages/host/tauriv2/src/documents.rs", symbol: "fn retired_view_error(" },
+      { file: "packages/host/go/src/documents.go", symbol: "func validateViewMessageEnvelope(" },
+      { file: "packages/host/rust/src/documents.rs", symbol: "fn retired_view_error(" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/view_origin_test.go", id: "TestRetiredGenerationMalformedInnerEnvelopeKeepsItsChannelError" },
-      { file: "packages/host/tauriv2/src/view_origin_test.rs", id: "a_retired_malformed_envelope_keeps_its_channel_error" },
+      { file: "packages/host/go/src/view_origin_test.go", id: "TestRetiredGenerationMalformedInnerEnvelopeKeepsItsChannelError" },
+      { file: "packages/host/rust/src/view_origin_test.rs", id: "a_retired_malformed_envelope_keeps_its_channel_error" },
     ],
     expected: "Malformed view-message envelopes retain their channel errors before stale-generation cancellation, while valid stale calls remain canceled.",
     levels: ["unit"],
@@ -9962,12 +9966,12 @@ const FEATURE_LINKS = [
   {
     id: "F239-107",
     implementation: [
-      { file: "packages/host/wailsv3/src/documents.go", symbol: "func (s *Surfaces) viewFailed(" },
-      { file: "packages/host/tauriv2/src/documents.rs", symbol: "fn retire_view_before_replacement(" },
+      { file: "packages/host/go/src/documents.go", symbol: "func (s *Surfaces) viewFailed(" },
+      { file: "packages/host/rust/src/documents.rs", symbol: "fn retire_view_before_replacement(" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/view_lifecycle_test.go", id: "TestViewProcessEndNotifiesThePageBeforeRegisteringTheReplacement" },
-      { file: "packages/host/tauriv2/src/view_origin_test.rs", id: "a_view_process_end_retires_its_origin_before_replacement_registration" },
+      { file: "packages/host/go/src/view_lifecycle_test.go", id: "TestViewProcessEndNotifiesThePageBeforeRegisteringTheReplacement" },
+      { file: "packages/host/rust/src/view_origin_test.rs", id: "a_view_process_end_retires_its_origin_before_replacement_registration" },
     ],
     expected: "Provider creation follows successful source-generation allocation, and view-process-ended precedes replacement source registration.",
     levels: ["unit"],
@@ -9975,12 +9979,12 @@ const FEATURE_LINKS = [
   {
     id: "F239-107-2",
     implementation: [
-      { file: "packages/host/wailsv3/src/documents.go", symbol: "func (s *Surfaces) viewFailed(" },
-      { file: "packages/host/tauriv2/src/documents.rs", symbol: "fn retire_view_before_replacement(" },
+      { file: "packages/host/go/src/documents.go", symbol: "func (s *Surfaces) viewFailed(" },
+      { file: "packages/host/rust/src/documents.rs", symbol: "fn retire_view_before_replacement(" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/view_lifecycle_test.go", id: "TestViewProcessEndNotifiesThePageBeforeRegisteringTheReplacement" },
-      { file: "packages/host/tauriv2/src/view_origin_test.rs", id: "a_view_process_end_retires_its_origin_before_replacement_registration" },
+      { file: "packages/host/go/src/view_lifecycle_test.go", id: "TestViewProcessEndNotifiesThePageBeforeRegisteringTheReplacement" },
+      { file: "packages/host/rust/src/view_origin_test.rs", id: "a_view_process_end_retires_its_origin_before_replacement_registration" },
     ],
     expected: "A failed view retires its old origin and sends view-process-ended before replacement source registration.",
     levels: ["unit"],
@@ -10011,15 +10015,15 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-114-2",
-    implementation: [{ file: "packages/sok/tauriv2/src/process.rs", symbol: "fn run_wait(" }],
-    tests: [{ file: "packages/sok/tauriv2/tests/process_wait_test.rs", id: "process_wait_rejects_invalid_inputs_before_waiting" }],
+    implementation: [{ file: "packages/sok/rust/src/process.rs", symbol: "fn run_wait(" }],
+    tests: [{ file: "packages/sok/rust/tests/process_wait_test.rs", id: "process_wait_rejects_invalid_inputs_before_waiting" }],
     expected: "The Rust process wait command rejects invalid arguments before waiting.",
     levels: ["unit"],
   },
   {
     id: "F239-127",
-    implementation: [{ file: "packages/host/tauriv2/src/image_detach.rs", symbol: "pub(super) fn detach_acknowledgement_body(" }],
-    tests: [{ file: "packages/host/tauriv2/src/image_detach_test.rs", id: "a_deep_unrelated_member_does_not_hide_a_detach_acknowledgement" }],
+    implementation: [{ file: "packages/host/rust/src/image_detach.rs", symbol: "pub(super) fn detach_acknowledgement_body(" }],
+    tests: [{ file: "packages/host/rust/src/image_detach_test.rs", id: "a_deep_unrelated_member_does_not_hide_a_detach_acknowledgement" }],
     expected: "Typed acknowledgement parsing ignores deep unrelated members without materializing them.",
     levels: ["unit"],
   },
@@ -10033,14 +10037,14 @@ const FEATURE_LINKS = [
   {
     id: "F239-132",
     implementation: [
-      { file: "packages/host/tauriv2/src/diagnostics.rs", symbol: "fn finish_capture_stop(" },
-      { file: "packages/host/wailsv3/src/diagnostics.go", symbol: "func finishCaptureStop(" },
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn finish_capture_stop(" },
+      { file: "packages/host/go/src/diagnostics.go", symbol: "func finishCaptureStop(" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/src/diagnostics_test.rs", id: "a_layout_trace_failure_keeps_the_started_capture_folder" },
-      { file: "packages/host/tauriv2/tests/recording_test.rs", id: "a_stop_failure_keeps_the_folder_returned_by_start" },
-      { file: "packages/host/wailsv3/src/diagnostics_test.go", id: "TestCaptureStopLayoutFailurePreservesStartedFolder" },
-      { file: "packages/host/wailsv3/src/diagnostics_test.go", id: "TestRecordingFinishStopFailurePreservesFolder" },
+      { file: "packages/host/rust/src/diagnostics_test.rs", id: "a_layout_trace_failure_keeps_the_started_capture_folder" },
+      { file: "packages/host/rust/tests/recording_test.rs", id: "a_stop_failure_keeps_the_folder_returned_by_start" },
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestCaptureStopLayoutFailurePreservesStartedFolder" },
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestRecordingFinishStopFailurePreservesFolder" },
     ],
     expected: "Capture stop and layout failures preserve and report the folder returned by capture start.",
     levels: ["unit"],
@@ -10172,11 +10176,11 @@ const FEATURE_LINKS = [
     id: "F212.12-4",
     implementation: [
       { file: "packages/workbench/surface-modules.js", symbol: "const registeredViewCommands = new Map();" },
-      { file: "packages/host/tauriv2/src/platform/darwin/document.rs", symbol: "struct EndedReceiver(Rc<dyn Fn() + Send>);" },
+      { file: "packages/host/rust/src/platform/darwin/document.rs", symbol: "struct EndedReceiver(Rc<dyn Fn() + Send>);" },
     ],
     tests: [
       { file: "packages/workbench/test/surface-view-path.test.mjs", id: "a replacement view registers its command once in its own source generation" },
-      { file: "packages/host/tauriv2/src/platform/darwin/document_test.rs", id: "callback_lifetime_ended_survives_document_retirement" },
+      { file: "packages/host/rust/src/platform/darwin/document_test.rs", id: "callback_lifetime_ended_survives_document_retirement" },
       { file: "e2e/view-restart.test.mjs", id: "a view restores state, stops after four failures and reopens after unload" },
     ],
     expected: "Replacement view generations register their commands without duplicates and active callbacks survive document retirement; restart, stop and reopen are measured through the application.",
@@ -10219,8 +10223,8 @@ const FEATURE_LINKS = [
   },
   {
     id: "F212.17-2",
-    implementation: [{ file: "packages/host/tauriv2/src/modals.rs", symbol: 'let errors: Vec<_> = buffered_fields("host.record.error")' }],
-    tests: [{ file: "packages/host/tauriv2/src/modals.rs", id: "a_poisoned_modal_record_is_recovered_when_it_is_read" }],
+    implementation: [{ file: "packages/host/rust/src/modals.rs", symbol: 'let errors: Vec<_> = buffered_fields("host.record.error")' }],
+    tests: [{ file: "packages/host/rust/src/modals.rs", id: "a_poisoned_modal_record_is_recovered_when_it_is_read" }],
     expected: "Modal recovery preserves unrelated lifecycle records without replacing the shared event writer.",
     levels: ["unit"],
   },
@@ -10311,23 +10315,23 @@ const FEATURE_LINKS = [
     id: "F212.14-5-30",
     implementation: [
       { file: "native/darwin/src/document_view.m", symbol: "bool sp_document_viewport_marker(" },
-      { file: "packages/host/wailsv3/src/diagnostics.go", symbol: "func diagnosticDocumentViewportMarker(" },
-      { file: "packages/host/tauriv2/src/diagnostics.rs", symbol: "fn document_viewport_marker(" },
+      { file: "packages/host/go/src/diagnostics.go", symbol: "func diagnosticDocumentViewportMarker(" },
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn document_viewport_marker(" },
       { file: "e2e/benchmark/cases/hwp.mjs", symbol: "export function measureHwpNativeMarkerFrame(" },
     ],
     tests: [
       { file: "native/darwin/tests/document_viewport_marker_test.m", id: "the enabled marker reports cyan RGB and a 2-point border" },
-      { file: "packages/host/wailsv3/src/diagnostics_test.go", id: "TestDiagnosticViewportMarkerValidatesAndRunsOnUI" },
-      { file: "packages/host/wailsv3/src/diagnostics_test.go", id: "TestDiagnosticViewportMarkerIsDeclared" },
-      { file: "packages/host/wailsv3/src/diagnostics_test.go", id: "TestDiagnosticViewportMarkerRejectsInvalidAndUnownedTargets" },
-      { file: "packages/host/wailsv3/src/diagnostics_test.go", id: "TestDiagnosticViewportMarkerStartRequiresAttachedRegion" },
-      { file: "packages/host/wailsv3/src/diagnostics_test.go", id: "TestDiagnosticViewportMarkerStopAfterRegionRemoval" },
-      { file: "packages/host/wailsv3/src/diagnostics_test.go", id: "TestDiagnosticViewportMarkerPropagatesNativeFailure" },
-      { file: "packages/host/tauriv2/src/endpoint.rs", id: "document_viewport_marker_method_is_declared" },
-      { file: "packages/host/tauriv2/src/diagnostics.rs", id: "document_viewport_marker_requires_nonempty_names_and_a_boolean" },
-      { file: "packages/host/tauriv2/src/diagnostics.rs", id: "document_viewport_marker_resolves_only_attached_documents_in_the_window" },
-      { file: "packages/host/tauriv2/src/diagnostics.rs", id: "document_viewport_marker_runs_through_ui_dispatch_and_preserves_native_result" },
-      { file: "packages/host/tauriv2/src/diagnostics.rs", id: "document_viewport_marker_returns_native_errors" },
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestDiagnosticViewportMarkerValidatesAndRunsOnUI" },
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestDiagnosticViewportMarkerIsDeclared" },
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestDiagnosticViewportMarkerRejectsInvalidAndUnownedTargets" },
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestDiagnosticViewportMarkerStartRequiresAttachedRegion" },
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestDiagnosticViewportMarkerStopAfterRegionRemoval" },
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestDiagnosticViewportMarkerPropagatesNativeFailure" },
+      { file: "packages/host/rust/src/endpoint.rs", id: "document_viewport_marker_method_is_declared" },
+      { file: "packages/host/rust/src/diagnostics.rs", id: "document_viewport_marker_requires_nonempty_names_and_a_boolean" },
+      { file: "packages/host/rust/src/diagnostics.rs", id: "document_viewport_marker_resolves_only_attached_documents_in_the_window" },
+      { file: "packages/host/rust/src/diagnostics.rs", id: "document_viewport_marker_runs_through_ui_dispatch_and_preserves_native_result" },
+      { file: "packages/host/rust/src/diagnostics.rs", id: "document_viewport_marker_returns_native_errors" },
       { file: "e2e/test/hwp-view-metrics-case.test.mjs", id: "HWP native viewport marker measures native studio bounds at fixed and fractional capture scales" },
       { file: "e2e/test/hwp-view-metrics-case.test.mjs", id: "HWP native marker starts before capture and is removed after capture failures" },
       { file: "e2e/test/hwp-view-metrics-case.test.mjs", id: "HWP native marker cleanup runs after an invalid successful start reply" },
@@ -10359,14 +10363,14 @@ const FEATURE_LINKS = [
   {
     id: "F212.14-5-24",
     implementation: [
-      { file: "packages/host/wailsv3/src/surfaces.go", symbol: "func (s *Surfaces) ensureCurrentPresentationJoins(" },
-      { file: "packages/host/tauriv2/src/surfaces.rs", symbol: "fn commit_layout_after_root_joins(" },
+      { file: "packages/host/go/src/surfaces.go", symbol: "func (s *Surfaces) ensureCurrentPresentationJoins(" },
+      { file: "packages/host/rust/src/surfaces.rs", symbol: "fn commit_layout_after_root_joins(" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/view_join_test.go", id: "TestProcessEndedRootIsRejoinedOnItsOpenTicketBeforeCommit" },
-      { file: "packages/host/wailsv3/src/view_join_test.go", id: "TestRestartLimitInvalidatesPlacementAfterItsJoinPresented" },
-      { file: "packages/host/tauriv2/src/surfaces_test.rs", id: "a_replacement_generation_is_not_committed_without_its_own_join" },
-      { file: "packages/host/tauriv2/src/surfaces_test.rs", id: "an_unchanged_committed_root_does_not_join_again" },
+      { file: "packages/host/go/src/view_join_test.go", id: "TestProcessEndedRootIsRejoinedOnItsOpenTicketBeforeCommit" },
+      { file: "packages/host/go/src/view_join_test.go", id: "TestRestartLimitInvalidatesPlacementAfterItsJoinPresented" },
+      { file: "packages/host/rust/src/surfaces_test.rs", id: "a_replacement_generation_is_not_committed_without_its_own_join" },
+      { file: "packages/host/rust/src/surfaces_test.rs", id: "an_unchanged_committed_root_does_not_join_again" },
     ],
     expected: "Root joins precede independent waits; replacement generations join the same ticket before commit while unchanged roots and lifecycle stop states remain valid.",
     levels: ["unit"],
@@ -10374,13 +10378,13 @@ const FEATURE_LINKS = [
   {
     id: "F212.14-5-14",
     implementation: [
-      { file: "packages/host/wailsv3/src/surfaces.go", symbol: "func completeLayoutPresentation(" },
-      { file: "packages/host/tauriv2/src/surfaces.rs", symbol: "fn complete_layout_presentation<T>(" },
+      { file: "packages/host/go/src/surfaces.go", symbol: "func completeLayoutPresentation(" },
+      { file: "packages/host/rust/src/surfaces.rs", symbol: "fn complete_layout_presentation<T>(" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/surfaces_test.go", id: "TestContinuousLayoutWaitsForApplicationDOMBeforeRasterAndCommit" },
-      { file: "packages/host/tauriv2/src/surfaces_test.rs", id: "root_view_join_is_registered_before_dom_presentation_wait" },
-      { file: "packages/host/tauriv2/src/surfaces_test.rs", id: "webview_presentation_registration_failure_cancels_open_layout" },
+      { file: "packages/host/go/src/surfaces_test.go", id: "TestContinuousLayoutWaitsForApplicationDOMBeforeRasterAndCommit" },
+      { file: "packages/host/rust/src/surfaces_test.rs", id: "root_view_join_is_registered_before_dom_presentation_wait" },
+      { file: "packages/host/rust/src/surfaces_test.rs", id: "webview_presentation_registration_failure_cancels_open_layout" },
     ],
     expected: "Continuous layouts wait for app DOM presentation before raster readiness and commit; callback setup failure queues cancellation and preserves errors.",
     levels: ["unit"],
@@ -10460,8 +10464,8 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-188",
-    implementation: [{ file: "packages/host/wailsv3/src/documents.go", symbol: "func (s *Surfaces) postViewGeneration(" }],
-    tests: [{ file: "packages/host/wailsv3/src/view_lifecycle_test.go", id: "TestReadyViewDeliveryDoesNotEndTheView" }],
+    implementation: [{ file: "packages/host/go/src/documents.go", symbol: "func (s *Surfaces) postViewGeneration(" }],
+    tests: [{ file: "packages/host/go/src/view_lifecycle_test.go", id: "TestReadyViewDeliveryDoesNotEndTheView" }],
     expected: "Successful generation-qualified delivery leaves the view live and writes no false end record.",
     levels: ["unit"],
   },
@@ -10474,17 +10478,17 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-186",
-    implementation: [{ file: "packages/host/tauriv2/src/documents.rs", symbol: 'payload["params"] = message' }],
-    tests: [{ file: "packages/host/tauriv2/src/view_origin_test.rs", id: "a_view_call_transfers_the_owned_params_tree_without_copying_it" }],
+    implementation: [{ file: "packages/host/rust/src/documents.rs", symbol: 'payload["params"] = message' }],
+    tests: [{ file: "packages/host/rust/src/view_origin_test.rs", id: "a_view_call_transfers_the_owned_params_tree_without_copying_it" }],
     expected: "View-call forwarding transfers the decoded params tree without copying nested values.",
     levels: ["unit"],
   },
   {
     id: "F239-161",
-    implementation: [{ file: "packages/host/tauriv2/src/documents.rs", symbol: "fn dispatch_with_decoder(" }],
+    implementation: [{ file: "packages/host/rust/src/documents.rs", symbol: "fn dispatch_with_decoder(" }],
     tests: [
-      { file: "packages/host/tauriv2/src/view_origin_test.rs", id: "a_current_view_envelope_is_decoded_once_for_every_dispatch_kind" },
-      { file: "packages/host/tauriv2/src/view_origin_test.rs", id: "view_dispatch_preserves_precedence_and_invalid_field_errors" },
+      { file: "packages/host/rust/src/view_origin_test.rs", id: "a_current_view_envelope_is_decoded_once_for_every_dispatch_kind" },
+      { file: "packages/host/rust/src/view_origin_test.rs", id: "view_dispatch_preserves_precedence_and_invalid_field_errors" },
     ],
     expected: "Current view dispatch decodes once while preserving handler precedence, payloads and field errors.",
     levels: ["unit"],
@@ -10511,8 +10515,8 @@ const FEATURE_LINKS = [
     id: "F212.7b",
     implementation: [
       { file: "native/darwin/src/surface_layout.m", symbol: "surfaceLayoutJoinView" },
-      { file: "packages/host/wailsv3/src/presentation_wait.go", symbol: "joinShownViews" },
-      { file: "packages/host/tauriv2/src/presentation_wait.rs", symbol: "PresentationWait" },
+      { file: "packages/host/go/src/presentation_wait.go", symbol: "joinShownViews" },
+      { file: "packages/host/rust/src/presentation_wait.rs", symbol: "PresentationWait" },
     ],
     tests: [
       { file: "e2e/card-fullscreen.test.mjs", id: "card fullscreen fills the work area and restores live surfaces" },
@@ -10525,8 +10529,8 @@ const FEATURE_LINKS = [
     id: "F212.7b-1",
     implementation: [
       { file: "native/darwin/src/surface_layout.m", symbol: "surfaceLayoutJoinView" },
-      { file: "packages/host/wailsv3/src/presentation_wait.go", symbol: "joinShownViews" },
-      { file: "packages/host/tauriv2/src/presentation_wait.rs", symbol: "PresentationWait" },
+      { file: "packages/host/go/src/presentation_wait.go", symbol: "joinShownViews" },
+      { file: "packages/host/rust/src/presentation_wait.rs", symbol: "PresentationWait" },
     ],
     tests: [
       { file: "e2e/card-fullscreen.test.mjs", id: "card fullscreen fills the work area and restores live surfaces" },
@@ -10651,8 +10655,8 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-112",
-    implementation: [{ file: "packages/sok/tauriv2/src/plugin_catalog.rs", symbol: "pub fn plugin_catalogs(" }],
-    tests: [{ file: "packages/sok/tauriv2/tests/plugin_catalog_test.rs", id: "a_plugin_event_has_the_class_that_the_catalog_of_its_plugin_declares" }],
+    implementation: [{ file: "packages/sok/rust/src/plugin_catalog.rs", symbol: "pub fn plugin_catalogs(" }],
+    tests: [{ file: "packages/sok/rust/tests/plugin_catalog_test.rs", id: "a_plugin_event_has_the_class_that_the_catalog_of_its_plugin_declares" }],
     expected: "The plugin catalog continues to return the class declared for each enabled plugin event after formatting-only changes.",
     levels: ["unit"],
   },
@@ -10660,8 +10664,8 @@ const FEATURE_LINKS = [
     id: "F239-113-1",
     implementation: [{ file: "packages/log-contract/index.js", symbol: "export function validateCatalog(" }],
     tests: [
-      { file: "packages/host/wailsv3/tests/event_log_test.go", id: "TestTheEventLogPassesTheAuditOfTheContractPackage" },
-      { file: "packages/host/tauriv2/tests/event_log_test.rs", id: "the_file_passes_the_audit_of_the_contract_package" },
+      { file: "packages/host/go/tests/event_log_test.go", id: "TestTheEventLogPassesTheAuditOfTheContractPackage" },
+      { file: "packages/host/rust/tests/event_log_test.rs", id: "the_file_passes_the_audit_of_the_contract_package" },
     ],
     expected: "Host audit fixtures use catalog schema 3 and Draft 2020-12 field schemas while raw log records retain schema 2.",
     levels: ["unit"],
@@ -10683,51 +10687,51 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-121",
-    implementation: [{ file: "packages/host/wailsv3/tests/buffer_bounds_test.go", symbol: "func useRoomyEventLog(" }],
-    tests: [{ file: "packages/host/wailsv3/tests/buffer_bounds_test.go", id: "TestTheRelayRemembersAtMost256ExpiredRequestsAndCountsTheOnesItForgets" }],
+    implementation: [{ file: "packages/host/go/tests/buffer_bounds_test.go", symbol: "func useRoomyEventLog(" }],
+    tests: [{ file: "packages/host/go/tests/buffer_bounds_test.go", id: "TestTheRelayRemembersAtMost256ExpiredRequestsAndCountsTheOnesItForgets" }],
     expected: "The buffer-bound owner fixture closes its event writer before its temporary directory is removed.",
     levels: ["unit"],
   },
   {
     id: "F239-122",
     implementation: [
-      { file: "packages/host/tauriv2/src/arguments.rs", symbol: "pub fn decode<" },
-      { file: "packages/host/tauriv2/src/start.rs", symbol: "pub fn serve(" },
+      { file: "packages/host/rust/src/arguments.rs", symbol: "pub fn decode<" },
+      { file: "packages/host/rust/src/start.rs", symbol: "pub fn serve(" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/arguments_test.rs", id: "a_view_reply_keeps_a_null_result_as_the_result_of_a_command_without_a_value" },
-      { file: "packages/host/tauriv2/tests/arguments_test.rs", id: "a_view_event_keeps_a_null_data_as_its_value" },
-      { file: "packages/host/tauriv2/tests/start_test.rs", id: "start_document_is_served_at_the_core_owner_of_soksak" },
+      { file: "packages/host/rust/tests/arguments_test.rs", id: "a_view_reply_keeps_a_null_result_as_the_result_of_a_command_without_a_value" },
+      { file: "packages/host/rust/tests/arguments_test.rs", id: "a_view_event_keeps_a_null_data_as_its_value" },
+      { file: "packages/host/rust/tests/start_test.rs", id: "start_document_is_served_at_the_core_owner_of_soksak" },
     ],
     expected: "Tauri host-contract fixtures provide required request identities while preserving explicit null values and the current application address.",
     levels: ["unit"],
   },
   {
     id: "F239-123",
-    implementation: [{ file: "packages/host/wailsv3/src/recording.go", symbol: "func (r *Recording) begin(" }],
-    tests: [{ file: "packages/host/wailsv3/tests/recording_test.go", id: "TestFinishedRecordingKeepsItsFolderAndReportsFrames" }],
+    implementation: [{ file: "packages/host/go/src/recording.go", symbol: "func (r *Recording) begin(" }],
+    tests: [{ file: "packages/host/go/tests/recording_test.go", id: "TestFinishedRecordingKeepsItsFolderAndReportsFrames" }],
     expected: "The finished-recording fixture expects the frame-identity option forwarded at capture start and retained at finish.",
     levels: ["unit"],
   },
   {
     id: "F239-124",
     implementation: [
-      { file: "packages/sok/wailsv3/src/event_log.go", symbol: "func (l *EventLog) rotate(" },
-      { file: "packages/sok/tauriv2/src/event_log.rs", symbol: "fn rotate(&mut self, channel: Channel)" },
+      { file: "packages/sok/go/src/event_log.go", symbol: "func (l *EventLog) rotate(" },
+      { file: "packages/sok/rust/src/event_log.rs", symbol: "fn rotate(&mut self, channel: Channel)" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/event_log_test.go", id: "TestTheEventLogRotatesAtTheBoundAndKeepsEveryGeneration" },
-      { file: "packages/host/tauriv2/tests/event_log_test.rs", id: "the_log_rotates_at_the_bound_and_keeps_every_generation" },
+      { file: "packages/host/go/tests/event_log_test.go", id: "TestTheEventLogRotatesAtTheBoundAndKeepsEveryGeneration" },
+      { file: "packages/host/rust/tests/event_log_test.rs", id: "the_log_rotates_at_the_bound_and_keeps_every_generation" },
     ],
     expected: "Rotation tests compare the reported byte count with the archived generation that emitted the rotation record.",
     levels: ["unit"],
   },
   {
     id: "F239-125",
-    implementation: [{ file: "packages/sok/wailsv3/src/event_log.go", symbol: "func StartEventLog(" }],
+    implementation: [{ file: "packages/sok/go/src/event_log.go", symbol: "func StartEventLog(" }],
     tests: [
-      { file: "packages/sok/wailsv3/src/event_log_loss_test.go", id: "TestAnUnserializableLineIsReportedAsDropped" },
-      { file: "packages/sok/wailsv3/src/event_log_loss_test.go", id: "TestAnUnwritableLineIsReportedAsDropped" },
+      { file: "packages/sok/go/src/event_log_loss_test.go", id: "TestAnUnserializableLineIsReportedAsDropped" },
+      { file: "packages/sok/go/src/event_log_loss_test.go", id: "TestAnUnwritableLineIsReportedAsDropped" },
     ],
     expected: "Go CLI event-log loss tests register a test-owned filesystem platform and restore the prior registration during cleanup.",
     levels: ["unit"],
@@ -10735,16 +10739,16 @@ const FEATURE_LINKS = [
   {
     id: "F239-118",
     implementation: [
-      { file: "packages/host/wailsv3/src/projects.go", symbol: "func (h *Host) ProjectShown(" },
-      { file: "packages/host/wailsv3/src/plugins.go", symbol: "func (p *Plugins) SetStarter(" },
-      { file: "packages/host/tauriv2/src/documents.rs", symbol: "fn view_failed(" },
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "pub fn closed_image_answer(" },
+      { file: "packages/host/go/src/projects.go", symbol: "func (h *Host) ProjectShown(" },
+      { file: "packages/host/go/src/plugins.go", symbol: "func (p *Plugins) SetStarter(" },
+      { file: "packages/host/rust/src/documents.rs", symbol: "fn view_failed(" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "pub fn closed_image_answer(" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/projects_test.go", id: "TestProjectShownRootMismatchDoesNotMutateProjectState" },
-      { file: "packages/host/wailsv3/tests/plugins_test.go", id: "TestPluginsStarterPendingAndCompletedStatesSurviveManagerRecreation" },
-      { file: "packages/host/tauriv2/src/view_origin_test.rs", id: "a_view_process_end_retires_its_origin_before_replacement_registration" },
-      { file: "packages/host/tauriv2/src/sidecars_session_retention_test.rs", id: "an_image_routed_to_an_owner_retired_after_lookup_receives_the_closed_answer" },
+      { file: "packages/host/go/src/projects_test.go", id: "TestProjectShownRootMismatchDoesNotMutateProjectState" },
+      { file: "packages/host/go/tests/plugins_test.go", id: "TestPluginsStarterPendingAndCompletedStatesSurviveManagerRecreation" },
+      { file: "packages/host/rust/src/view_origin_test.rs", id: "a_view_process_end_retires_its_origin_before_replacement_registration" },
+      { file: "packages/host/rust/src/sidecars_session_retention_test.rs", id: "an_image_routed_to_an_owner_retired_after_lookup_receives_the_closed_answer" },
     ],
     expected: "Project and starter tests remain in their existing Go owner files, while view failure-order and retired-image tests remain in existing Rust owner modules with their assertions and host-contract markers preserved.",
     levels: ["unit"],
@@ -10752,12 +10756,12 @@ const FEATURE_LINKS = [
   {
     id: "F239-119",
     implementation: [
-      { file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) struct ProjectShown" },
+      { file: "packages/host/rust/src/windows.rs", symbol: "pub struct ProjectShown" },
       { file: "packages/host/tauriv2/src/bindings.rs", symbol: "request: Argument<ProjectShown>" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/project_data_order/project_data_order_test.rs", id: "malformed_project_shown_arguments_are_rejected_before_committing_project_state" },
-      { file: "packages/host/tauriv2/tests/project_data_order/project_data_order_test.rs", id: "showing_no_project_clears_committed_state_and_preserves_other_staged_owners" },
+      { file: "packages/host/rust/tests/project_data_order/project_data_order_test.rs", id: "malformed_project_shown_arguments_are_rejected_before_committing_project_state" },
+      { file: "packages/host/rust/tests/project_data_order/project_data_order_test.rs", id: "showing_no_project_clears_committed_state_and_preserves_other_staged_owners" },
     ],
     expected: "The registered ProjectShown binding rejects an omitted project member but accepts explicit null and clears the committed project.",
     levels: ["unit"],
@@ -10778,13 +10782,13 @@ const FEATURE_LINKS = [
   {
     id: "F239-245",
     implementation: [
-      { file: "packages/host/tauriv2/src/diagnostics.rs", symbol: "fn lifecycle_lock" },
-      { file: "packages/host/tauriv2/src/diagnostics.rs", symbol: "fn pending_frame_identity_lock" },
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn lifecycle_lock" },
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn pending_frame_identity_lock" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/src/diagnostics_lock_test.rs", id: "a_poisoned_lifecycle_lock_is_reported_before_the_operation_runs" },
-      { file: "packages/host/tauriv2/src/diagnostics_lock_test.rs", id: "a_poisoned_pending_lock_is_reported_without_consuming_the_receiver" },
-      { file: "packages/host/tauriv2/src/diagnostics_lock_test.rs", id: "a_pending_start_probe_releases_the_lock_before_receive" },
+      { file: "packages/host/rust/src/diagnostics_lock_test.rs", id: "a_poisoned_lifecycle_lock_is_reported_before_the_operation_runs" },
+      { file: "packages/host/rust/src/diagnostics_lock_test.rs", id: "a_poisoned_pending_lock_is_reported_without_consuming_the_receiver" },
+      { file: "packages/host/rust/src/diagnostics_lock_test.rs", id: "a_pending_start_probe_releases_the_lock_before_receive" },
     ],
     expected: "The lock census accepts explicit error propagation while preserving findings for discarded errors and unapproved recovery defaults; poisoned identity lifecycle and pending-start locks return explicit errors, and the pending probe releases its guard before the receiving helper reacquires it.",
     levels: ["unit"],
@@ -10793,14 +10797,14 @@ const FEATURE_LINKS = [
     id: "F239-252",
     implementation: [
       { file: "native/darwin/src/capture.m", symbol: "bool sp_capture_has_stream(void)" },
-      { file: "packages/host/wailsv3/src/recording.go", symbol: "func (r *Recording) Finish" },
-      { file: "packages/host/tauriv2/src/recording.rs", symbol: "pub fn finish" },
+      { file: "packages/host/go/src/recording.go", symbol: "func (r *Recording) Finish" },
+      { file: "packages/host/rust/src/recording.rs", symbol: "pub fn finish" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/recording_test.go", id: "TestFinishRetiredStopFailureReleasesOwnerAndPreservesFolder" },
-      { file: "packages/host/wailsv3/tests/recording_test.go", id: "TestAbortStopOwnershipQueryFailurePreservesOwner" },
-      { file: "packages/host/tauriv2/tests/recording_test.rs", id: "a_retired_stop_failure_preserves_folder_and_releases_owner" },
-      { file: "packages/host/tauriv2/tests/recording_test.rs", id: "an_abort_retries_retired_folder_cleanup_without_repeating_stop" },
+      { file: "packages/host/go/tests/recording_test.go", id: "TestFinishRetiredStopFailureReleasesOwnerAndPreservesFolder" },
+      { file: "packages/host/go/tests/recording_test.go", id: "TestAbortStopOwnershipQueryFailurePreservesOwner" },
+      { file: "packages/host/rust/tests/recording_test.rs", id: "a_retired_stop_failure_preserves_folder_and_releases_owner" },
+      { file: "packages/host/rust/tests/recording_test.rs", id: "an_abort_retries_retired_folder_cleanup_without_repeating_stop" },
       { file: "native/darwin/tests/capture_pressure_test.m", id: "a stop error retires the current native stream" },
     ],
     expected: "Stop errors remain observable while native ownership decides whether cleanup is retained or released; retired recordings permit another start and removal retries do not repeat stop.",
@@ -10809,14 +10813,14 @@ const FEATURE_LINKS = [
   {
     id: "F239-255",
     implementation: [
-      { file: "packages/host/wailsv3/src/surfaces.go", symbol: "func surfaceDispatchClockFrom" },
-      { file: "packages/host/tauriv2/src/surfaces.rs", symbol: "fn surface_dispatch_clock_from" },
+      { file: "packages/host/go/src/surfaces.go", symbol: "func surfaceDispatchClockFrom" },
+      { file: "packages/host/rust/src/surfaces.rs", symbol: "fn surface_dispatch_clock_from" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/surfaces_test.go", id: "TestSurfaceDispatchRecordsFrameBoundariesWhenPerformanceTraceIsOff" },
-      { file: "packages/host/wailsv3/src/surfaces_test.go", id: "TestSurfaceDispatchFrameFallbackSelectionAndDisabledClock" },
-      { file: "packages/host/tauriv2/src/surfaces_test.rs", id: "surface_dispatch_records_frame_boundaries_when_performance_trace_is_off" },
-      { file: "packages/host/tauriv2/src/surfaces_test.rs", id: "surface_dispatch_frame_fallback_selection_and_disabled_clock" },
+      { file: "packages/host/go/src/surfaces_test.go", id: "TestSurfaceDispatchRecordsFrameBoundariesWhenPerformanceTraceIsOff" },
+      { file: "packages/host/go/src/surfaces_test.go", id: "TestSurfaceDispatchFrameFallbackSelectionAndDisabledClock" },
+      { file: "packages/host/rust/src/surfaces_test.rs", id: "surface_dispatch_records_frame_boundaries_when_performance_trace_is_off" },
+      { file: "packages/host/rust/src/surfaces_test.rs", id: "surface_dispatch_frame_fallback_selection_and_disabled_clock" },
     ],
     expected: "Frame tracing records existing dispatch boundaries when the performance path is ineligible, without duplicate events or clock reads when both gates are closed.",
     levels: ["unit"],
@@ -10834,13 +10838,13 @@ const FEATURE_LINKS = [
   {
     id: "F239-259",
     implementation: [
-      { file: "packages/host/wailsv3/src/diagnostics.go", symbol: "func awaitDocumentFrameIdentity" },
-      { file: "packages/host/tauriv2/src/diagnostics.rs", symbol: "fn await_document_frame_identity_schedule_result" },
+      { file: "packages/host/go/src/diagnostics.go", symbol: "func awaitDocumentFrameIdentity" },
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn await_document_frame_identity_schedule_result" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/diagnostics_test.go", id: "TestAwaitDocumentFrameIdentityReportsLateErrorAfterTimeout" },
-      { file: "packages/host/wailsv3/src/diagnostics_test.go", id: "TestAwaitDocumentFrameIdentityPreservesCallbackErrorWhenScheduleFails" },
-      { file: "packages/host/tauriv2/src/diagnostics_test.rs", id: "document_frame_identity_preserves_synchronous_callback_error_when_scheduling_fails" },
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestAwaitDocumentFrameIdentityReportsLateErrorAfterTimeout" },
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestAwaitDocumentFrameIdentityPreservesCallbackErrorWhenScheduleFails" },
+      { file: "packages/host/rust/src/diagnostics_test.rs", id: "document_frame_identity_preserves_synchronous_callback_error_when_scheduling_fails" },
     ],
     expected: "Bounded identity waits report late callback errors and preserve a synchronous callback failure together with a scheduling failure.",
     levels: ["unit"],
@@ -10858,12 +10862,12 @@ const FEATURE_LINKS = [
   {
     id: "F239-262",
     implementation: [
-      { file: "packages/sok/wailsv3/src/log_policy.go", symbol: "func PassesEveryGate" },
-      { file: "packages/sok/tauriv2/src/event_log.rs", symbol: "pub fn passes_every_gate" },
+      { file: "packages/sok/go/src/log_policy.go", symbol: "func PassesEveryGate" },
+      { file: "packages/sok/rust/src/event_log.rs", symbol: "pub fn passes_every_gate" },
     ],
     tests: [
-      { file: "packages/sok/wailsv3/tests/log_policy_test.go", id: "TestPageClockAnchorPassesTheDefaultLifecyclePolicy" },
-      { file: "packages/sok/tauriv2/tests/log_policy_test.rs", id: "page_clock_anchor_passes_the_default_lifecycle_policy" },
+      { file: "packages/sok/go/tests/log_policy_test.go", id: "TestPageClockAnchorPassesTheDefaultLifecyclePolicy" },
+      { file: "packages/sok/rust/tests/log_policy_test.rs", id: "page_clock_anchor_passes_the_default_lifecycle_policy" },
     ],
     expected: "The existing page clock anchor survives the default writer policy while ordinary lifecycle info remains gated.",
     levels: ["unit"],
@@ -10872,14 +10876,14 @@ const FEATURE_LINKS = [
     id: "F239-263",
     implementation: [
       { file: "packages/workbench/surface-sync-request.js", symbol: "export function surfaceSyncRequestWithDeclarationTable" },
-      { file: "packages/host/wailsv3/src/surfaces.go", symbol: "func decodeSyncRequest" },
-      { file: "packages/host/tauriv2/src/surfaces.rs", symbol: "fn resolve(self)" },
+      { file: "packages/host/go/src/surfaces.go", symbol: "func decodeSyncRequest" },
+      { file: "packages/host/rust/src/surfaces.rs", symbol: "fn resolve(self)" },
     ],
     tests: [
       { file: "packages/workbench/test/surface-sync-request.test.mjs", id: "surface sync declarations use a request-local table and preserve view start context" },
       { file: "packages/workbench/test/view-start-handoff.test.mjs", id: "core.file.open parameters reach the host placement request" },
-      { file: "packages/host/wailsv3/src/view_start_test.go", id: "TestSyncRequestRequiresAndResolvesItsDeclarationTable" },
-      { file: "packages/host/tauriv2/tests/surfaces_geometry_test.rs", id: "sync_request_resolves_request_local_view_declaration_indices" },
+      { file: "packages/host/go/src/view_start_test.go", id: "TestSyncRequestRequiresAndResolvesItsDeclarationTable" },
+      { file: "packages/host/rust/tests/surfaces_geometry_test.rs", id: "sync_request_resolves_request_local_view_declaration_indices" },
     ],
     expected: "Each request shares identical declarations while preserving complete view start values and rejecting invalid tables and indices before surface mutation.",
     levels: ["unit"],
@@ -10927,14 +10931,14 @@ const FEATURE_LINKS = [
   {
     id: "F239-271",
     implementation: [
-      { file: "packages/host/wailsv3/src/images.go", symbol: "func (i *Images) MarkPresented" },
-      { file: "packages/host/tauriv2/src/images.rs", symbol: "fn mark_presented" },
+      { file: "packages/host/go/src/images.go", symbol: "func (i *Images) MarkPresented" },
+      { file: "packages/host/rust/src/images.rs", symbol: "fn mark_presented" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/images_test.go", id: "TestInFlightFramePresentationIsRecordedAfterANewerFrameIsAccepted" },
-      { file: "packages/host/wailsv3/src/images_test.go", id: "TestOlderInFlightPresentationDoesNotClearANewerFrameFailure" },
-      { file: "packages/host/tauriv2/src/images_test.rs", id: "an_in_flight_frame_presentation_is_recorded_after_a_newer_frame_is_accepted" },
-      { file: "packages/host/tauriv2/src/images_test.rs", id: "an_older_in_flight_presentation_does_not_clear_a_newer_frame_failure" },
+      { file: "packages/host/go/src/images_test.go", id: "TestInFlightFramePresentationIsRecordedAfterANewerFrameIsAccepted" },
+      { file: "packages/host/go/src/images_test.go", id: "TestOlderInFlightPresentationDoesNotClearANewerFrameFailure" },
+      { file: "packages/host/rust/src/images_test.rs", id: "an_in_flight_frame_presentation_is_recorded_after_a_newer_frame_is_accepted" },
+      { file: "packages/host/rust/src/images_test.rs", id: "an_older_in_flight_presentation_does_not_clear_a_newer_frame_failure" },
     ],
     expected: "Successful acknowledgments advance presentation state for the current generation and raster when their sequence is positive, no newer than the accepted sequence, and newer than the presented sequence; only a latest-sequence acknowledgment clears a presentation error, and freshness checks and current-frame waits remain latest-sequence strict.",
     levels: ["unit"],
@@ -10942,18 +10946,18 @@ const FEATURE_LINKS = [
   {
     id: "F239-272",
     implementation: [
-      { file: "packages/host/wailsv3/src/images.go", symbol: "func (i *Images) WaitLayoutRasters" },
-      { file: "packages/host/wailsv3/src/surfaces.go", symbol: "s.images.WaitLayoutRasters(pageTimeout, req.Settled)" },
-      { file: "packages/host/tauriv2/src/images.rs", symbol: "pub(crate) fn wait_layout_rasters" },
-      { file: "packages/host/tauriv2/src/surfaces.rs", symbol: ".wait_layout_rasters(exposure::TIMEOUT, presentation_settled)" },
+      { file: "packages/host/go/src/images.go", symbol: "func (i *Images) WaitLayoutRasters" },
+      { file: "packages/host/go/src/surfaces.go", symbol: "s.images.WaitLayoutRasters(pageTimeout, req.Settled)" },
+      { file: "packages/host/rust/src/images.rs", symbol: "pub(crate) fn wait_layout_rasters" },
+      { file: "packages/host/rust/src/surfaces.rs", symbol: ".wait_layout_rasters(exposure::TIMEOUT, presentation_settled)" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/images_test.go", id: "TestContinuousImageWaitUsesInstalledSnapshotAndBlocksAfterGenerationOrRasterChange" },
-      { file: "packages/host/wailsv3/src/images_test.go", id: "TestBeginningNewGenerationClearsThePresentedImageSnapshot" },
-      { file: "packages/host/wailsv3/src/images_test.go", id: "TestContinuousImageWaitIgnoresHiddenRegionsAndFailsOnPresentationError" },
-      { file: "packages/host/tauriv2/src/images_test.rs", id: "continuous_image_wait_uses_the_installed_snapshot_and_blocks_after_generation_or_raster_change" },
-      { file: "packages/host/tauriv2/src/images_test.rs", id: "beginning_new_generation_clears_the_presented_image_snapshot" },
-      { file: "packages/host/tauriv2/src/images_test.rs", id: "continuous_image_wait_ignores_hidden_regions_and_fails_on_presentation_error" },
+      { file: "packages/host/go/src/images_test.go", id: "TestContinuousImageWaitUsesInstalledSnapshotAndBlocksAfterGenerationOrRasterChange" },
+      { file: "packages/host/go/src/images_test.go", id: "TestBeginningNewGenerationClearsThePresentedImageSnapshot" },
+      { file: "packages/host/go/src/images_test.go", id: "TestContinuousImageWaitIgnoresHiddenRegionsAndFailsOnPresentationError" },
+      { file: "packages/host/rust/src/images_test.rs", id: "continuous_image_wait_uses_the_installed_snapshot_and_blocks_after_generation_or_raster_change" },
+      { file: "packages/host/rust/src/images_test.rs", id: "beginning_new_generation_clears_the_presented_image_snapshot" },
+      { file: "packages/host/rust/src/images_test.rs", id: "continuous_image_wait_ignores_hidden_regions_and_fails_on_presentation_error" },
     ],
     expected: "Continuous requests complete from a positive presented snapshot of the current raster while settled requests remain latest-sequence strict; generation and raster changes invalidate the snapshot, hidden regions do not block, and presentation errors still fail closed.",
     levels: ["unit"],
@@ -11186,7 +11190,7 @@ export function auditRustFailurePropagation(files, readSource, scope) {
 export function auditNativeFailurePropagation(files, readSource = (file) => readFileSync(`${ROOT}${file}`, "utf8")) {
   const errors = [];
   const header = "native/darwin/src/capture.h";
-  const bridge = "packages/host/tauriv2/src/platform/darwin/capture.rs";
+  const bridge = "packages/host/rust/src/platform/darwin/capture.rs";
   const implementation = "native/darwin/src/capture.m";
   if (!files.includes(header) || !files.includes(bridge) || !files.includes(implementation)) return errors;
   let headerSource, bridgeSource, implementationSource;
@@ -11241,8 +11245,9 @@ export function auditFailureMatrix(files, readSource = (file) => readFileSync(`$
   const lanes = [
     ["js-ts", auditJsFailurePropagation(files, readSource)],
     ["rust", [
+      "packages/host/rust/src/",
       "packages/host/tauriv2/src/",
-      "packages/sok/tauriv2/src/",
+      "packages/sok/rust/src/",
       "apps/tauriv2/src/",
     ].flatMap((scope) => auditRustFailurePropagation(files, readSource, scope))],
     ["go", auditGoFailurePropagation(files, readSource)],

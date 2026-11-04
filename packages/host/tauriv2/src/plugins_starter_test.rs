@@ -9,15 +9,17 @@ use tauri::{
 #[test]
 fn plugins_starter_rejects_an_invalid_request_through_the_registered_handler() {
     let config = tempfile::tempdir().unwrap();
-    let plugins = crate::plugins::Plugins::new(
+    let plugins = soksak_host::plugins::Plugins::new(
         config.path().to_path_buf(),
         Box::new(|| Ok(())),
         Box::new(|_| {}),
     )
     .unwrap();
     assert!(super::command_names().contains(&"plugins_starter"));
+    let host = soksak_host::framework::AppHandle::new(std::sync::Arc::new(crate::Framework));
+    soksak_host::framework::Manager::manage(&host, plugins);
     let app = mock_builder()
-        .manage(plugins)
+        .manage(host)
         .invoke_handler(tauri::generate_handler![super::plugins_starter])
         .build(mock_context(noop_assets()))
         .unwrap();

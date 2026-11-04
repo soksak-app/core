@@ -1,165 +1,74 @@
-//! The Tauri v2 native host that runs the soksak workbench.
-//!
-//! The application passes the Tauri context and the initialization script of the surface webviews to [`run`]. The host
-//! provides the project windows, native surfaces, native modals, shapes, the theme, the sidecar channel and the local
-//! endpoint. Diagnostic methods are included only by the cargo feature `diagnostics`.
-//!
-//! At every commit the page declares the area that each surface occupies. The surface synchronization fits the child
-//! webviews of the window to those areas. A webview is created for an area that is declared for the first time, an
-//! existing webview is moved and resized, and a webview that left the declaration is closed. The child webviews use the
-//! `unstable` feature of the tauri crate.
+//! The Tauri v2 framework adapter of the Rust language host library: `run`, and the Framework and Frontend of the
+//! library port on Tauri (docs/spec/hosts.md#mygo-host).
 
-// A large json! expression such as the host.window schema exceeds the default recursion limit (128) of the serde_json
-// macro.
-#![recursion_limit = "256"]
+mod bindings;
+mod framework;
+mod frontend;
+mod menu;
+#[path = "platform/platform.rs"]
+mod platform;
 
-use std::sync::PoisonError;
+use std::borrow::Cow;
+use std::sync::{Arc, OnceLock};
 
-use tauri::Manager;
+use soksak_host::application_log::log_error;
+use soksak_host::framework::AppHandle;
+use soksak_host::{ExitRequestApi, RunEvent};
+use tauri::utils::assets::{AssetKey, AssetsIter, CspHash};
 use tauri_plugin_deep_link::DeepLinkExt;
 
-#[cfg(test)]
-#[path = "../tests/support/folder.rs"]
-mod test_folder;
+pub use framework::Framework;
+pub use frontend::{Frontend, window_event};
 
-pub mod app_events;
-pub mod app_update;
-pub mod application_log;
-pub mod arguments;
-pub mod assets;
-pub mod binding_record;
-mod bindings;
-pub mod bounds;
-mod buffer_bounds;
-pub mod buttons;
-pub mod clipboard;
-pub mod command_line;
-mod composition;
-pub mod crash_report;
-pub mod debug;
-pub mod debug_follow;
-pub mod deep_link;
-#[cfg(feature = "diagnostics")]
-mod diagnostics;
-pub mod documents;
-pub mod endpoint;
-mod endpoint_record;
-pub mod event_log;
-pub mod event_record;
-pub mod event_relay;
-pub mod exposure;
-pub mod file_place;
-pub mod images;
-pub mod installed;
-pub mod link;
-pub mod log_policy;
-#[cfg(feature = "diagnostics")]
-pub mod log_policy_watch_hook;
-pub mod log_query;
-pub mod log_retention;
-pub mod memory_pressure;
-pub mod menu;
-pub mod modals;
-pub mod notifications;
-#[cfg(feature = "diagnostics")]
-pub mod object_counts;
-pub mod page_process;
-pub mod performance;
-#[path = "platform/platform.rs"]
-pub mod platform;
-pub mod plugins;
-pub mod presentation_wait;
-#[cfg(feature = "diagnostics")]
-pub mod process_lock_hook;
-pub mod project_removal;
-pub mod projects;
-pub mod quit;
-#[cfg(feature = "diagnostics")]
-pub mod recording;
-pub mod responder;
-#[path = "routine/routine.rs"]
-pub mod routine;
-pub mod running_calls;
-mod shapes;
-mod sidecar_reply;
-pub(crate) mod sidecar_routes;
-pub mod sidecars;
-pub(crate) mod source_origins;
-#[cfg(feature = "diagnostics")]
-pub mod stall_dump;
-pub mod stall_watch;
-pub mod start;
-pub mod surfaces;
-#[cfg(feature = "diagnostics")]
-pub mod test_mark;
-pub mod view_lifecycle;
-pub mod window_events;
-pub use surfaces::surface_owner_id;
-pub mod startup;
-pub mod termination;
-mod theme;
-pub mod windows;
-#[cfg(test)]
-#[path = "windows_front_test.rs"]
-mod windows_front_test;
-pub mod workspace;
+/// The frontend of the context while run replaces it: no page file.
+struct NoAssets;
 
-use application_log::{log_error, log_failure};
-use sidecars::WindowSidecars;
-
-/// The publisher of the notices of changes of the event log (docs/spec/debug.md#following). It is the value of the host status
-/// `host.log`, and the application stops its thread at exit.
-pub(crate) struct LogNoticeState(pub(crate) std::sync::Arc<debug_follow::LogNotices>);
-
-/// The stop of the thread that brings the index of the event files up to date after the writer wrote.
-struct LogIndexStop(std::sync::Mutex<Option<Box<dyn FnOnce() + Send>>>);
-
-/// The watch of the policy file of the event log, which ends with the application.
-struct LogPolicyStop(std::sync::Mutex<Option<log_policy::LogPolicyWatch>>);
-
-/// The application arguments that were read at startup (docs/spec/hosts.md#application-arguments).
-static ARGUMENTS: std::sync::OnceLock<command_line::Arguments> = std::sync::OnceLock::new();
-
-/// The application arguments. run sets them before it opens a window.
-fn arguments() -> &'static command_line::Arguments {
-    ARGUMENTS
-        .get()
-        .expect("run reads the application arguments before any window opens")
-}
-
-/// The configuration directory. Without `--config-dir`, it is the identifier directory of this build under the user
-/// configuration directory (docs/spec/projects.md#persistence). It creates the directory and returns the canonical
-/// path.
-pub(crate) fn config_directory(app: &tauri::AppHandle) -> tauri::Result<std::path::PathBuf> {
-    let directory = match &arguments().config_dir {
-        Some(directory) => std::path::PathBuf::from(directory),
-        None => app
-            .path()
-            .config_dir()?
-            .join(soksak_sok::identity::identity()),
-    };
-    workspace::prepare_config_directory(&directory, |path| {
-        platform::current()?.create_private_directories(path)
-    })
-    .map_err(|error| tauri::Error::Io(std::io::Error::other(error)))
-}
-
-/// Requests the main page of the main application window to run a command. Menu events are handled on the main thread.
-/// When there is no main window, the frontmost visible window is the target, and it is an error when there is none.
-fn run_menu_command(app: &tauri::AppHandle, command: &str) -> Result<(), String> {
-    let platform = platform::current()?;
-    let main = platform.main_window()?;
-    for window in app.windows().into_values() {
-        if main != 0 && platform.window_handle(&window)? == main {
-            return windows::emit_window(
-                &window,
-                "menu-command",
-                serde_json::json!({ "name": command }),
-            )
-            .map_err(|e| e.to_string());
-        }
+impl tauri::Assets<tauri::Wry> for NoAssets {
+    fn get(&self, _key: &AssetKey) -> Option<Cow<'_, [u8]>> {
+        None
     }
-    Err("no main window".into())
+
+    fn iter(&self) -> Box<AssetsIter<'_>> {
+        Box::new(std::iter::empty())
+    }
+
+    fn csp_hashes(&self, _html_path: &AssetKey) -> Box<dyn Iterator<Item = CspHash<'_>> + '_> {
+        Box::new(std::iter::empty())
+    }
+}
+
+/// The bundled frontend as the page files of the library.
+struct BundledAssets(Arc<dyn tauri::Assets<tauri::Wry>>);
+
+impl soksak_host::assets::Assets for BundledAssets {
+    fn get(&self, key: &str) -> Option<Cow<'_, [u8]>> {
+        self.0.get(&AssetKey::from(key))
+    }
+}
+
+/// The page files of the library as the assets of the context. The bundled frontend lists the files and their hashes.
+struct PageAssets {
+    page: soksak_host::assets::ReportingAssets,
+    frontend: Arc<dyn tauri::Assets<tauri::Wry>>,
+}
+
+impl tauri::Assets<tauri::Wry> for PageAssets {
+    fn get(&self, key: &AssetKey) -> Option<Cow<'_, [u8]>> {
+        soksak_host::assets::Assets::get(&self.page, key.as_ref())
+    }
+
+    fn iter(&self) -> Box<AssetsIter<'_>> {
+        self.frontend.iter()
+    }
+
+    fn csp_hashes(&self, html_path: &AssetKey) -> Box<dyn Iterator<Item = CspHash<'_>> + '_> {
+        self.frontend.csp_hashes(html_path)
+    }
+}
+
+/// The web view handle of a Tauri web view.
+fn webview_of(app: &AppHandle, webview: &tauri::Webview) -> soksak_host::framework::Webview {
+    app.webview_of(Arc::new(Frontend::new(webview.window())), webview.label())
 }
 
 /// Whether the application activates itself at launch while another application is active. Launch Services activates an
@@ -170,409 +79,127 @@ pub fn launch_activates_ignoring_other_apps() -> bool {
     false
 }
 
+/// Activates the application at launch as the host decides (docs/spec/hosts.md#launch-activation).
+fn launch_activation(
+    builder: tauri::Builder<tauri::Wry>,
+) -> Result<tauri::Builder<tauri::Wry>, String> {
+    soksak_host::platform::current()?;
+    platform::launch_activation(builder, launch_activates_ignoring_other_apps())
+}
+
 /// Creates the application and runs it until it exits.
 ///
 /// context is the `tauri::generate_context!()` of the application. background is the script that the surface webviews
 /// run before the document, and the application passes it including the `background.js` of the frontend.
 pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
-    // The panic hook is the first action of the process, so a panic before the writer exists is recorded in the start buffer
-    // and stored when the writer opens (docs/spec/hosts.md#process-lifecycle).
-    application_log::install_panic_hook();
-    // The arguments are read before a window opens. An invalid argument ends with status 2
-    // (docs/spec/hosts.md#application-arguments).
-    match command_line::parse_arguments(std::env::args().skip(1))
-        .and_then(|parsed| command_line::apply_arguments(&parsed).map(|()| parsed))
-    {
-        Ok(parsed) => {
-            ARGUMENTS
-                .set(parsed)
-                .expect("run reads the application arguments once");
-        }
-        Err(error) => {
-            eprintln!("{error}");
-            std::process::exit(2);
-        }
-    }
+    soksak_host::start_process();
     // Installed plugins are provided from the configuration folder (docs/spec/installation.md). setup decides the
     // configuration folder.
-    let installed_directory = std::sync::Arc::new(std::sync::OnceLock::new());
-    let frontend: std::sync::Arc<dyn tauri::Assets<tauri::Wry>> =
-        std::sync::Arc::from(context.set_assets(Box::new(installed::NoAssets)));
-    let core_frontend = std::sync::Arc::clone(&frontend);
-    let installed_assets = installed::InstalledAssets {
+    let installed_directory = Arc::new(OnceLock::new());
+    let frontend: Arc<dyn tauri::Assets<tauri::Wry>> =
+        Arc::from(context.set_assets(Box::new(NoAssets)));
+    let bundled: Arc<dyn soksak_host::assets::Assets> =
+        Arc::new(BundledAssets(Arc::clone(&frontend)));
+    context.set_assets(Box::new(PageAssets {
+        page: soksak_host::page_assets(Arc::clone(&bundled), installed_directory.clone()),
         frontend,
-        config_dir: installed_directory.clone(),
-        diagnostics: cfg!(feature = "diagnostics"),
-    };
-    // A page file that neither the application nor an installed plugin holds is an error line (docs/spec/diagnostics.md).
-    context.set_assets(Box::new(assets::ReportingAssets::new(
-        Box::new(installed_assets),
-        Box::new(|path| application_log::log_error("page asset", format!("{path}: not found"))),
-    )));
-    // The window zoom animation moves only the window frame, and the web document follows it. This shortens its
-    // duration before AppKit reads the default. A platform that cannot provide this step ends with status 1 before it
-    // opens a window (docs/spec/hosts.md#windows-state).
-    if let Err(error) = platform::current().and_then(|platform| platform.instant_window_resize()) {
-        eprintln!("{error}");
-        std::process::exit(1);
-    }
+    }));
+    soksak_host::prepare_platform();
+    let app = AppHandle::new(Arc::new(Framework));
+    soksak_host::manage_start_state(&app);
     // The plugin setup runs before the window of the settings file is created, so the endpoint is opened here.
+    let endpoint_app = app.clone();
     let endpoint = tauri::plugin::Builder::<tauri::Wry>::new("endpoint")
-        .setup(|app, _api| {
-            startup::exit_on_failure((|| -> Result<(), Box<dyn std::error::Error>> {
-                // Termination signals are received from before the endpoint opens. The first one requests the normal quit
-                // that host.quit requests; the event loop runs it and ends after the ready windows saved and the sidecars
-                // stopped. When a save stalls, the next signal ends the process with the default action (docs/spec/hosts.md).
-                let quit = app.clone();
-                let state = std::sync::Arc::clone(&app.state::<windows::Windows>().quit);
-                termination::on_termination(state, Box::new(move || quit.exit(0)))?;
-                let directory = config_directory(app)?;
-                exposure::start(app, &directory)?;
-                // The event log and the stderr file are opened after the endpoint holds the process lock, so no other run writes
-                // the same files (docs/spec/hosts.md#application-log). The run record waits in the start buffer until the writer
-                // exists.
-                let events = std::sync::Arc::new(event_log::start_host(&directory)?);
-                event_record::use_host_event_log(Some(std::sync::Arc::clone(&events)));
-                // An owner that an earlier run left in process.lock marks an end of that run without its exit path
-                // (docs/spec/endpoint.md#discovery). The event is stored once the writer exists.
-                if let Some(end) = exposure::unrecorded_end(app) {
-                    endpoint::report_unrecorded_end(&end);
-                }
-                // The policy of the event log is the file log-policy.json, which the host and every process watch
-                // (docs/spec/logging.md#classes-and-policy).
-                let policy_app = app.clone();
-                let policy_watch = log_policy::start_log_policy(
-                    &events,
-                    Some(log_policy::log_policy_announcer(
-                        &events,
-                        move |name, payload| windows::notify_windows(&policy_app, name, payload),
-                    )),
-                )
-                .map_err(|error| format!("log policy: {error}"))?;
-                tauri::Manager::manage(
-                    app,
-                    LogPolicyStop(std::sync::Mutex::new(Some(policy_watch))),
-                );
-                // The debug view follows the event files: every window and every watcher of host.log learns that a line announced
-                // a change (docs/spec/debug.md#following). The index covers the lines before the notice, so the notice follows
-                // the indexer and the queries that update an index, and not the writer.
-                let notices_app = app.clone();
-                let notices = std::sync::Arc::new(debug_follow::LogNotices::start(
-                    debug_follow::LOG_NOTICE_INTERVAL,
-                    move |notice| windows::notify_log_notice(&notices_app, &notice),
-                ));
-                debug_follow::use_log_notices(Some(std::sync::Arc::clone(&notices)));
-                // The index of each event file follows the writer (docs/spec/logging.md#index).
-                let (index_writes, stop_indexer) =
-                    log_query::start_log_indexer(log_query::index_reporter());
-                events.set_on_write(Box::new(move |path: &std::path::Path, size: u64| {
-                    index_writes(path, size);
-                }));
-                installed::apply_plugin_event_classes(&events, &directory);
-                tauri::Manager::manage(
-                    app,
-                    LogIndexStop(std::sync::Mutex::new(Some(stop_indexer))),
-                );
-                tauri::Manager::manage(app, LogNoticeState(notices));
-                tauri::Manager::manage(app, events);
-                application_log::start_standard_error(
-                    &directory,
-                    soksak_sok::identity::identity(),
-                )?;
-                // The crash reports of the earlier runs are announced once, after the writer exists
-                // (docs/spec/logging.md#automatic-entrances).
-                if let Err(error) = crash_report::announce_crash_reports_at_start(&directory) {
-                    application_log::log_error("crash reports", error);
-                }
-                Ok(())
-            })())
+        .setup(move |tauri_app, _api| {
+            framework::bind(tauri_app);
+            soksak_host::startup::exit_on_failure(soksak_host::start_endpoint(&endpoint_app))
         })
         .build();
     // A platform that cannot provide this step ends with status 1 before it opens a window.
-    let builder = match platform::current().and_then(|platform| {
-        platform.launch_activation(
-            tauri::Builder::default(),
-            launch_activates_ignoring_other_apps(),
-        )
-    }) {
+    let builder = match launch_activation(tauri::Builder::default()) {
         Ok(builder) => builder,
         Err(error) => {
             eprintln!("{error}");
             std::process::exit(1);
         }
     };
+    let scheme_app = app.clone();
+    let terminated_app = app.clone();
+    let setup_app = app.clone();
+    let menu_app = app.clone();
     builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_deep_link::init())
-        .manage(windows::Windows::default())
-        .manage(exposure::Exposure::default())
+        .manage(app.clone())
         .plugin(endpoint)
-        .manage(surfaces::Background)
         // The main page is fetched with a scheme that knows the webview that requested the start document
         // (docs/spec/native-host.md#page-start).
-        .register_uri_scheme_protocol(start::SCHEME, |context, request| {
-            let app = context.app_handle().clone();
-            start::serve(
+        .register_uri_scheme_protocol(soksak_host::start::SCHEME, move |context, request| {
+            soksak_host::start::serve(
                 // default: a request without a host names no owner, so serve answers it not found.
                 request.uri().host().unwrap_or_default(),
                 request.uri().path(),
                 context.webview_label(),
-                &mut |webview| start::start_page(&app, webview),
+                &mut |webview| soksak_host::start::start_page(&scheme_app, webview),
             )
         })
-        // The end of the WebContent process leaves the web view without a page. The host writes the end as an error
-        // line (docs/spec/diagnostics.md) and loads the page again, as the Wails host does through its framework.
-        .on_web_content_process_terminate(|webview| {
-            let quitting = windows::is_quitting(webview.app_handle());
-            let Some((place, text)) = page_process::page_process_ended(webview.label(), quitting)
-            else {
-                return;
-            };
-            log_error(&place, text);
-            // Only the main webview holds the subscriptions of document streams (docs/spec/native-surfaces.md#document-streams).
-            // A window that the application did not register has no streams.
-            let window = webview.window();
-            if webview.label() == window.label() && windows::window_data(&window).is_ok() {
-                log_failure("page process", documents::main_page_process_ended(&window));
-            }
-            if let Err(error) = webview.reload() {
-                log_error(&place, format!("{}: reload: {error}", webview.label()));
-            }
+        .on_web_content_process_terminate(move |webview| {
+            soksak_host::web_content_process_terminated(&webview_of(&terminated_app, webview))
         })
-        .setup(move |app| {
-            startup::exit_on_failure((|| -> Result<(), Box<dyn std::error::Error>> {
-                // When the notification center cannot be used, the application does not start (docs/spec/hosts.md).
-                notifications::start(app.handle())?;
-                // A deep link arrives through the plugin while the application runs, and a link that launched the application
-                // is read here (docs/spec/native-host.md#deep-links).
-                let deep = app.handle().clone();
-                app.deep_link().on_open_url(move |event| {
-                    for url in event.urls() {
-                        deep_link::open(&deep, url.to_string());
-                    }
-                });
-                match app.deep_link().get_current() {
-                    Ok(Some(urls)) => {
-                        for url in urls {
-                            deep_link::open(app.handle(), url.to_string());
+        .setup(move |tauri_app| {
+            let deep = tauri_app.handle().clone();
+            soksak_host::startup::exit_on_failure(soksak_host::setup(
+                &setup_app,
+                soksak_host::Setup {
+                    frontend: bundled,
+                    installed_directory,
+                    deep_links: Box::new(move |host| {
+                        let opened = host.clone();
+                        deep.deep_link().on_open_url(move |event| {
+                            for url in event.urls() {
+                                soksak_host::deep_link::open(&opened, url.to_string());
+                            }
+                        });
+                        match deep.deep_link().get_current() {
+                            Ok(Some(urls)) => {
+                                for url in urls {
+                                    soksak_host::deep_link::open(host, url.to_string());
+                                }
+                            }
+                            Ok(None) => {}
+                            Err(error) => log_error("deep link", format!("launch URL: {error}")),
                         }
-                    }
-                    Ok(None) => {}
-                    Err(error) => log_error("deep link", format!("launch URL: {error}")),
-                }
-                // A termination request of the operating system runs the same termination as host.quit and answers after
-                // RunEvent::Exit has finished the save (docs/spec/hosts.md#process-lifecycle).
-                let quit = app.handle().clone();
-                platform::current()?.on_quit_request(Box::new(move || {
-                    event_record::quit_with_cause("quit-request", || quit.exit(0))
-                }))?;
-                // The one memory pressure source of the process starts with the host, and each report goes to every window
-                // (docs/spec/hosts.md#memory-pressure).
-                let pressure = app.handle().clone();
-                memory_pressure::start(
-                    |report| platform::current()?.on_memory_pressure(report),
-                    move |name, payload| windows::notify_windows(&pressure, name, payload),
-                )?;
-                let dock = app.handle().clone();
-                platform::current()?.install_dock_menu(Box::new(move || {
-                    if let Err(error) = windows::window_new_on_main(dock.clone()) {
-                        log_error("window new", error);
-                    }
-                }))?;
-                // Before the page sends the setting language, the menu is built in the system language. The language state
-                // is shared by set_menu_language and the host.menu report (docs/spec/host-contract.md).
-                let language = menu::initial_language()?;
-                let menu = menu::build(app.handle(), &language)?;
-                app.manage(menu::MenuLanguage(std::sync::Mutex::new(language)));
-                app.set_menu(menu)?;
-                let directory = config_directory(app.handle())?;
-                installed_directory.set(directory.clone()).map_err(
-                    |_| "the configuration directory of installed plugins is already set",
-                )?;
-                // The core root of a view serves the core files from the bundled frontend, which the page reads too
-                // (docs/spec/plugin-processes.md, rule 4).
-                let core_root_frontend = std::sync::Arc::clone(&core_frontend);
-                // Each view configuration runs the view channel script of the bundled frontend before its page
-                // (docs/spec/native-surfaces.md#view-surfaces).
-                let channel = core_frontend
-                    .get(&tauri::utils::assets::AssetKey::from(
-                        "modules/@soksak/plugin-api/view-start.js",
-                    ))
-                    .ok_or("modules/@soksak/plugin-api/view-start.js is missing from the bundled frontend")?;
-                let channel = String::from_utf8(channel.into_owned())
-                    .map_err(|error| format!("view channel script is not UTF-8: {error}"))?;
-                documents::set_view_channel(&channel)?;
-                installed::register_core_root(
-                    platform::current()?,
-                    directory.clone(),
-                    std::sync::Arc::new(move |name: &str| {
-                        core_root_frontend
-                            .get(&tauri::utils::assets::AssetKey::from(name))
-                            .map(|bytes| bytes.into_owned())
                     }),
-                )?;
-                // The view import map is inserted into each view page, so the application does not start when the platform cannot set it.
-                let view_import_frontend = std::sync::Arc::clone(&core_frontend);
-                installed::register_view_import_map(
-                    platform::current()?,
-                    std::sync::Arc::new(move |name: &str| {
-                        view_import_frontend
-                            .get(&tauri::utils::assets::AssetKey::from(name))
-                            .map(|bytes| bytes.into_owned())
-                    }),
-                )?;
-                app.manage(workspace::Workspace::new(directory.clone()));
-                // A stall of the main thread is recorded without a window check (docs/spec/logging.md, stalls). The
-                // watch runs until the process ends.
-                let main = app.handle().clone();
-                let _runs_until_exit =
-                    stall_watch::start_stall_watch(stall_watch::StallWatchOptions {
-                        on_main: Box::new(move |task| {
-                            main.run_on_main_thread(task).map_err(|e| e.to_string())
-                        }),
-                        sample: Box::new(|path| platform::current()?.sample_threads(path)),
-                        folder: directory.join("logs"),
-                        emit_host: Box::new(event_record::emit_host),
-                        clock: None,
-                        wait: None,
-                    });
-                let handle = app.handle().clone();
-                // Applies an operation to the sidecars: a changed sidecar is replaced and a removed one stopped, so a page
-                // that reloads uses the installed executables (docs/spec/installation.md#applying-a-change).
-                let applying = app.handle().clone();
-                let installed = directory.clone();
-                app.manage(plugins::Plugins::new(
-                    directory.clone(),
-                    Box::new(move || {
-                        installed::apply_plugin_event_classes(
-                            &applying.state::<std::sync::Arc<event_log::EventLog>>(),
-                            &installed,
-                        );
-                        let declarations = installed::installed_sidecars(&installed)
-                            .map_err(|error| format!("installed plugins: {error}"))?;
-                        applying.state::<WindowSidecars>().declare(&declarations)
-                    }),
-                    Box::new(move |change| windows::notify_plugins(&handle, change)),
-                )?);
-                let sidecars: WindowSidecars = installed::new_installed_sidecars(directory)?;
-                let reporting = app.handle().clone();
-                sidecars.on_status_changed(move |value| crate::exposure::sidecars_status_changed(&reporting, value));
-                let changed = app.handle().clone();
-                sidecars.on_closing_changed(move || crate::exposure::sidecars_changed(&changed));
-                app.manage(sidecars);
-                let main = app
-                    .get_webview_window("main")
-                    .ok_or("the configuration has no main window")?;
-                windows::register(main.as_ref().window())?;
-                // host.buttons holds the value of the operating system before endpoint.json is written. When it cannot be
-                // watched, the application does not start.
-                exposure::watch_buttons(app.handle())?;
-                // A client sends a request to the first window as soon as it reads endpoint.json, so the file is written
-                // after the window is registered.
-                exposure::publish(app.handle(), "main")?;
-                Ok(())
-            })())
+                },
+            ))
         })
-        .on_menu_event(|app, event| {
-            let id = event.id().as_ref();
-            if id == "new-window" {
-                if let Err(error) = windows::window_new_on_main(app.clone()) {
-                    log_error("window new", error);
-                }
-            } else if menu::runs_page_command(id)
-                && let Err(error) = run_menu_command(app, id)
-            {
-                log_error(&format!("menu command {id}"), error);
-            }
+        .on_menu_event(move |_tauri_app, event| {
+            soksak_host::menu_event(&menu_app, event.id().as_ref())
         })
         .invoke_handler(bindings::handler())
         .build(context)
         .expect("failed to build the tauri application")
-        .run(|app, event| {
-            match &event {
-                tauri::RunEvent::Ready => app_events::record_app_event("started"),
-                tauri::RunEvent::ExitRequested { .. } => {
-                    app_events::record_app_event("exit_requested");
-                    event_record::emit_closed("exit-request", None);
+        .run(move |_tauri_app, event| {
+            let (host_event, exit) = match &event {
+                tauri::RunEvent::Ready => (RunEvent::Ready, None),
+                tauri::RunEvent::ExitRequested { code, api, .. } => {
+                    let answer = ExitRequestApi::default();
+                    (
+                        RunEvent::ExitRequested {
+                            code: *code,
+                            api: answer.clone(),
+                        },
+                        Some((api, answer)),
+                    )
                 }
-                tauri::RunEvent::Exit => {
-                    app_events::record_app_event("exit");
-                    event_record::emit_closed("exit", None);
-                }
-                _ => {}
-            }
-            if let tauri::RunEvent::ExitRequested {
-                code: None,
-                ref api,
-                ..
-            } = event
+                tauri::RunEvent::Exit => (RunEvent::Exit, None),
+                _ => return,
+            };
+            soksak_host::run_event(&app, host_event);
+            if let Some((api, answer)) = exit
+                && answer.prevented()
             {
-                let stays =
-                    platform::current().is_ok_and(|platform| platform.stays_open_without_windows());
-                if stays && app.windows().is_empty() {
-                    api.prevent_exit();
-                    return;
-                }
-            }
-            if let tauri::RunEvent::Exit = event {
-                // An application update or a relaunch keeps the persistent services running for the application that starts
-                // next.
-                let update = app
-                    .state::<windows::Windows>()
-                    .update
-                    .lock()
-                    // default: a lock that a panicking thread poisoned still holds the pending update, which the exit
-                    // takes; the panic hook records the panic.
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .take();
-                if let Some(pending) = update {
-                    // The command waits for the end of this process, so it starts here, before the flush that stores its event
-                    // and the error of a start that fails.
-                    pending.start();
-                    app.state::<WindowSidecars>().detach();
-                } else {
-                    app.state::<WindowSidecars>().stop();
-                }
-                exposure::stop(app);
-                if let Some(stop) = app
-                    .state::<LogIndexStop>()
-                    .0
-                    .lock()
-                    // default: a lock that a panicking thread poisoned still holds the stop of the log index, which the
-                    // exit takes; the panic hook records the panic.
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .take()
-                {
-                    stop();
-                }
-                debug_follow::use_log_notices(None);
-                app.state::<LogNoticeState>().0.stop();
-                // Dropping the watch stops it and waits until its thread ended.
-                drop(
-                    app.state::<LogPolicyStop>()
-                        .0
-                        .lock()
-                        // default: a lock that a panicking thread poisoned still holds the stop of the policy watch,
-                        // which the exit takes; the panic hook records the panic.
-                        .unwrap_or_else(PoisonError::into_inner)
-                        .take(),
-                );
-                if let Err(error) = event_log::flush_event_log(
-                    &app.state::<std::sync::Arc<event_log::EventLog>>(),
-                    || platform::current()?.flush_native_observers(),
-                    std::time::Duration::from_secs(2),
-                ) {
-                    log_error("event log flush", error);
-                }
-                // The save and cleanup are finished, so the termination request of the operating system that was
-                // received is answered.
-                match platform::current() {
-                    Ok(platform) => platform.answer_quit_requests(),
-                    Err(error) => log_error("quit request answer", error),
-                }
-            }
-            if let tauri::RunEvent::ExitRequested { api, .. } = event {
-                windows::quit(app, api);
+                api.prevent_exit();
             }
         });
 }

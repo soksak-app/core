@@ -2,25 +2,33 @@
 
 [한국어](hosts.ko.md)
 
-Core's native side lives in two library packages with the same structure. [Native host interfaces](native-host.md) defines the operations the workbench page uses. [Host contract cases](host-contract.md) lists the behaviors that the tests of both hosts execute.
+Core's native side lives in two language host libraries with the same structure and in one framework adapter per framework. [Native host interfaces](native-host.md) defines the operations the workbench page uses. [Host contract cases](host-contract.md) lists the behaviors that the tests of the hosts execute.
 
 | Package | Language | Identity |
 | --- | --- | --- |
-| `packages/host/wailsv3` | Go | Module `github.com/soksak-app/core/packages/host/wailsv3`; package `host` in `src/`, imported as `github.com/soksak-app/core/packages/host/wailsv3/src` |
-| `packages/host/tauriv2` | Rust | Crate `soksak-host-tauriv2`, `[lib] path = "src/host.rs"` |
+| `packages/host/go` | Go | Go language host library. Module `github.com/soksak-app/core/packages/host/go`; package `host` in `src/`, imported as `github.com/soksak-app/core/packages/host/go/src` |
+| `packages/host/rust` | Rust | Rust language host library. Crate `soksak-host`, `[lib] path = "src/host.rs"` |
+| `packages/host/wailsv3` | Go | Wails framework adapter. Module `github.com/soksak-app/core/packages/host/wailsv3`; package `adapter` in `src/`, imported as `github.com/soksak-app/core/packages/host/wailsv3/src` |
+| `packages/host/tauriv2` | Rust | Tauri framework adapter. Crate `soksak-host-tauriv2`, `[lib] path = "src/host.rs"` |
 
-The applications `apps/wailsv3` and `apps/tauriv2` contain only `src/main.*`, `environment.json`, `runtime/index.js`, tests, manifests, and framework configuration. `apps/wailsv3/src/main.go` reads the command-line flags into `host.Options` and calls `host.Run(assets, options)`. `apps/tauriv2/src/main.rs` calls `soksak_host_tauriv2::run(tauri::generate_context!(), BACKGROUND)`, where `BACKGROUND` is the staged `frontend/background.js`.
+A language host library holds everything that does not name a framework: bindings, windows, workspace, surfaces, documents, images, sidecars, exposure, endpoint, event log, diagnostics and the darwin platform layer. It reaches the framework only through its framework port, the two interfaces `Framework` (application name, main-thread step, quit, dialogs, menus, Dock, and window creation with its title bar) and `Frontend` (event emit, window title, show, focus, the window events, the presentation notice, the settled presentation, the workbench start and the workbench call channel), which have the same names in both languages (`src/framework.*`). No file of `packages/host/go` imports a package of Wails, and no file of `packages/host/rust` names a crate of Tauri ([structure checks](#structure-checks)). A framework adapter holds `Run` and the implementations of the framework port. A file that only one language needs stays in its language host library; a file that only one framework needs is in its framework adapter. The application name of a framework adapter (`wailsv3`, `tauriv2`) is the `application` of `endpoint.json`, the name of the endpoint socket, the host of the release key of the application update and the `host` of the state file of the debug view.
+
+The applications `apps/wailsv3` and `apps/tauriv2` contain only `src/main.*`, `environment.json`, `runtime/index.js`, tests, manifests, and framework configuration. `apps/wailsv3/src/main.go` reads the command-line flags into `host.Options` of the Go language host library and calls `adapter.Run(assets, options)` of the Wails framework adapter. `apps/tauriv2/src/main.rs` calls `soksak_host_tauriv2::run(tauri::generate_context!(), BACKGROUND)` of the Tauri framework adapter, where `BACKGROUND` is the staged `frontend/background.js`.
 
 ## Host tree
 
+The language host libraries:
+
 ```
-packages/host/wailsv3/                     packages/host/tauriv2/
+packages/host/go/                          packages/host/rust/
   package.json                               package.json
-  go.mod, go.sum                             Cargo.toml            difference A4
+  go.mod, go.sum                             Cargo.toml            difference H26
   (none: cgo directives use pkg-config)      build.rs              difference H1
   src/                                       src/
-    host.go        package documentation, Run         host.rs
-    bindings.go    page call registration             bindings.rs
+    host.go        package documentation, Session     host.rs
+    framework.go   framework port                     framework.rs
+    bindings.go    page call methods of Host          difference H27
+    menu.go        application menu table             menu.rs
     windows.go     windows, readiness, close, exit    windows.rs
     source_origins.go view-source generations      source_origins.rs
     projects.go    folder check, choice, creation     projects.rs
@@ -44,6 +52,7 @@ packages/host/wailsv3/                     packages/host/tauriv2/
       platform.go  interface and selection       platform.rs
       darwin/                                    darwin/
         darwin.go    package documentation, registration  darwin.rs
+        main_thread.h, main_thread.m  main-thread functions  difference H20
         window.go    window preparation, buttons      window.rs
         webview.go   webview creation, placement      webview.rs
         webview.m    WKWebView creation               difference H4
@@ -70,11 +79,40 @@ packages/host/wailsv3/                     packages/host/tauriv2/
     exposure_test.go                           exposure_test.rs
     documents_test.go                          documents_test.rs
     termination_test.go                        termination_test.rs
+    (none)                                     support/framework.rs   difference H28
+    platform/darwin/stack_sampler.go           difference H25
+```
+
+The framework adapters:
+
+```
+packages/host/wailsv3/                     packages/host/tauriv2/
+  package.json                               package.json
+  go.mod, go.sum                             Cargo.toml            difference H29
+  src/                                       src/
+    host.go        package documentation, Run         host.rs (run)
+    framework.go   Framework of the framework port    framework.rs
+    frontend.go    Frontend of the framework port     frontend.rs
+    menu.go        menu of the framework              menu.rs
+    bindings.go    bound type Bindings                bindings.rs (Tauri commands)
+    (none)                                     plugins_starter_test.rs   difference H30
+    (none)                                     platform/platform.rs   difference H31
+    platform/darwin/                           platform/darwin/
+      darwin.go      package documentation       darwin.rs (window, web view and launch functions of macOS)
+      main_thread.go installation of the main-thread functions   difference H31
+    (none)                                     platform/windows/windows.rs   difference H31
+  tests/                                     tests/
+    framework_test.go                          framework_test.rs
+    menu_test.go                               menu_test.rs
+    launch_activation_test.go                  launch_activation_test.rs
+    framework_log_test.go                      difference H9
+    (none)                                     project_data_order/, surface_layout/, view_source_stream/ bindings_test.rs   difference H30
+    platform/darwin/main_thread_stack_test.go  difference H19
 ```
 
 ## Rules
 
-- Code is in `src/`. Tests are in `tests/`, and test file names end with `_test` in both languages. Go tests in `tests/` import the host package; Cargo builds each `tests/*_test.rs` file as an integration test of the crate.
+- Code is in `src/`. Tests are in `tests/`, and test file names end with `_test` in both languages. Go tests in `tests/` import the package of their language host library or framework adapter; Cargo builds each `tests/*_test.rs` file as an integration test of the crate.
 - The primary file of each directory has the directory's name: `host.*`, `platform/platform.*`, `darwin/darwin.*`, `windows/windows.*`.
 - Rust modules use `#[path = "..."]` attributes, so the crate has no `lib.rs` or `mod.rs`.
 - Platform code exists only under `src/platform/<os>/`, where `os` is `darwin`, `windows`, or `linux`.
@@ -83,7 +121,7 @@ packages/host/wailsv3/                     packages/host/tauriv2/
 
 ## Platform selection
 
-Go: each `src/platform/<os>/` directory is a Go package. Its primary file (`darwin.go`, `windows.go`) has no build tag and contains only the package documentation; the other files have a `//go:build <os>` tag, and one of them calls `platform.Register` from `init`. `host.go` imports every OS package with a blank import, so a build registers only the implementation for its target OS. `host.Run` obtains it with `platform.Current()` and fails when no implementation is registered.
+Go: each `src/platform/<os>/` directory is a Go package. Its primary file (`darwin.go`, `windows.go`) has no build tag and contains only the package documentation; the other files have a `//go:build <os>` tag, and one of them calls `platform.Register` from `init`. `host.go` of the Go language host library imports every OS package with a blank import, so a build registers only the implementation for its target OS. `Prepare` obtains it with `platform.Current()` and fails when no implementation is registered. The Wails framework adapter imports its own `src/platform/darwin` package in the same way (row H31 of the [framework table](#framework-table)).
 
 Rust: `src/platform/platform.rs` declares each OS module with `#[cfg(target_os = "macos")]` or `#[cfg(windows)]` and `#[path = "<os>/<os>.rs"]`. `platform::current()` returns the implementation for the target OS and returns an error on other targets. Each OS module declares its own files with `#[path]`.
 
@@ -144,7 +182,7 @@ Moving the buttons into the page's own view is what made AppKit take them back o
 
 On Windows both hosts implement only directory identity (`platform/windows/identity.*`). Every other operation in `platform/windows/unsupported.*` returns an error of the form `<operation> is not implemented on windows`. Application startup fails on Windows at its first platform operation: Wails `Run` and Tauri `run` end with `window resize animation is not implemented on windows` and status 1 before any window opens. Linux has no implementation; `platform.Current()` and `platform::current()` return an error there.
 
-`make hosts-check` runs `make windows-build-check`, which vets the Wails host source for `windows/arm64` in the default and the diagnostics build.
+`make hosts-check` runs `make windows-build-check`, which vets the sources of the Go language host library and of the Wails framework adapter for `windows/arm64` in the default and the diagnostics build.
 
 ## Main thread of the Wails host
 
@@ -152,7 +190,9 @@ No Go code runs on the main thread of the Wails host, in the host or in its fram
 
 The host blocks the signals through `BlockAsyncSignals` of the platform right before `application.Run`, on the main goroutine, which the framework locks to the main thread in its init: every signal except the synchronous faults SIGILL, SIGTRAP, SIGABRT, SIGEMT, SIGFPE, SIGBUS, SIGSEGV and SIGSYS. The kernel delivers a signal that is sent to the process, such as SIGCHLD, SIGINT, SIGTERM or SIGPROF, to a thread that does not block it, and each thread that the Go runtime creates starts with the mask that the runtime recorded when the process started (`initSigmask`), so `signal.Notify` and profiling keep their threads. The Go runtime sends SIGURG to the thread of a running goroutine to preempt it asynchronously (`preemptM`); while the application runs, no goroutine runs on the main thread, and the main goroutine, which runs there before and after the run loop, is still preempted at function calls. A process that the main thread starts inherits the mask; the host starts its child processes from goroutines, which run on other threads.
 
-`make hosts-check` checks the rule in the C code of the darwin layer of the Wails host, the cgo preamble of each Go file and each Objective-C file of `src/platform/darwin` (`auditMainThreadCalls` of `scripts/check-hosts.mjs`, which reads the Go files with `go/parser` through `scripts/cgo-sources.go` and the C code from the JSON AST of clang, with the macros expanded and each called function resolved to the header that declares it). It fails when C code references a function that a Go file exports (`//export`) other than inside `wailsRunOnWorker` or `ON_WORKER`; when Go code calls a function that a header of `native/darwin/src` declares, other than one of the functions that need no thread (`MAIN_THREAD_FREE`, each with its reason: the event ring and its clock, `sp_observe_flush`, `sp_phys_footprint`, `sp_diagnostic_reports_directory`, `sp_capture_clock`, `sp_capture_error`, `sp_facts_free`, `sp_ui_enqueue` and `sp_ui_enqueue_after`), instead of a `main_` wrapper; when a C function of the layer that Go code calls sends an Objective-C message, calls a native function or an `NS` function, or calls another function of the layer that does, outside `wailsRunOnMain` or `ON_MAIN`; and when a native function or an Objective-C message runs inside `wailsRunOnWorker` or `ON_WORKER`.
+The header `src/platform/darwin/main_thread.h` of the Go language host library declares the two main-thread functions `hostRunOnWorker` and `hostRunOnMain` and the macros `ON_WORKER` and `ON_MAIN` that evaluate an expression through them; `main_thread.m` holds the functions that a framework adapter installed. The Wails framework adapter installs the functions of the Wails fork (`wailsRunOnWorker` and `wailsRunOnMain`) as these functions in an `init` of its darwin package, before the start of the library, so no file of the library names Wails. Before an installation each function runs its block directly.
+
+`make hosts-check` checks the rule in the C code of the darwin layer of the Go language host library, the cgo preamble of each Go file and each Objective-C file of `packages/host/go/src/platform/darwin/` (`auditMainThreadCalls` of `scripts/check-hosts.mjs`, which reads the Go files with `go/parser` through `scripts/cgo-sources.go` and the C code from the JSON AST of clang, with the macros expanded and each called function resolved to the header that declares it). It fails when C code references a function that a Go file exports (`//export`) other than inside `hostRunOnWorker` or `ON_WORKER`; when Go code calls a function that a header of `native/darwin/src` declares, other than one of the functions that need no thread (`MAIN_THREAD_FREE`, each with its reason: the event ring and its clock, `sp_observe_flush`, `sp_phys_footprint`, `sp_diagnostic_reports_directory`, `sp_capture_clock`, `sp_capture_error`, `sp_facts_free`, `sp_ui_enqueue` and `sp_ui_enqueue_after`), instead of a `main_` wrapper; when a C function of the layer that Go code calls sends an Objective-C message, calls a native function or an `NS` function, or calls another function of the layer that does, outside `hostRunOnMain` or `ON_MAIN`; and when a native function or an Objective-C message runs inside `hostRunOnWorker` or `ON_WORKER`.
 
 Reason: the application process holds JavaScriptCore VMs that WebKit and other in-process clients create, and the lock of a VM adds the thread that takes it, the main thread among them, to the threads that its collector suspends and scans. The collector copies the stack of each such thread from its stack pointer to the origin of the thread's stack and allocates a buffer of twice the summed size. Go code on the main thread runs on a goroutine stack that the Go heap holds outside the stack of the main thread, so the size `origin − sp` of a scan at that moment wraps, the allocation of the buffer fails, and JavaScriptCore ends the process in `pas_panic_on_out_of_memory_error`. The Tauri host needs no such rule: its main thread runs Rust on the stack of the main thread.
 
@@ -160,42 +200,58 @@ Rejected options: carrying script messages and script results through the scheme
 
 ## Allowed differences
 
-| ID | Wails | Tauri | Reason |
+The allowed differences are two tables, and a row ID is unique across both. The language table compares `packages/host/go` with `packages/host/rust` (rows H), `packages/sok/go` with `packages/sok/rust` (rows C), and the endpoint methods of the two languages (rows E). The framework table compares `packages/host/wailsv3` with `packages/host/tauriv2` (rows H) and `apps/wailsv3` with `apps/tauriv2` (rows A). `scripts/check-hosts.mjs` reads the rows of the table of each pair whose ID starts with the letter of the pair.
+
+### Language table
+
+| ID | Go | Rust | Reason |
 | --- | --- | --- | --- |
 | H1 | none | `build.rs` | Rust locates `native/darwin` through pkg-config (`soksak-darwin`) in a build script on macOS targets; Go uses the `#cgo pkg-config` directive |
-| H3 | `src/bridge.js` | none | Wails provides no call channel to webviews that the application creates |
-| H4 | `src/platform/darwin/webview.m` | none | Wails has no child-webview API, so the host creates the webview in Objective-C; Tauri uses `add_child` |
+| H3 | `src/bridge.js` | none | The Go language host library creates the web views of its surfaces in its darwin layer, and Wails provides no call channel to a web view that the application creates; the Rust language host library creates them as child web views of Tauri, whose call channel the Tauri framework adapter provides |
+| H4 | `src/platform/darwin/webview.m` | none | Wails has no child-webview API, so the Go language host library creates the webview in Objective-C; the Rust language host library creates it through `add_child` of the Tauri framework adapter |
 | H5 | `src/diagnostics_test.go`, `src/diagnostics_clock_test.go` | none | `diagnostics_test.go` tests the unexported capture payload helper. `diagnostics_clock_test.go` checks the unexported diagnostic-registration build bit in both build variants because its file must compile in diagnostic and release builds; the paired `tests` package cannot compile while its existing tests call missing `Surfaces.RegisterView`. Rust diagnostic coverage is in the host's integration tests |
-| H6 | `src/menu.go`, `tests/menu_test.go` | none | The Wails default application menu zooms and reloads the whole main webview from its View menu, so the Wails host defines its application menu; the Tauri host uses Tauri's default menu, whose View menu has only full screen |
 | H7 | none | `tests/panic_hook_test.rs`, `tests/fatal_signal_test.rs` | The Go runtime writes the report of a fatal signal to the standard error, which is the application log; a fatal signal needs the handlers of the native library to write its error line. A Rust panic runs the hook of `application_log.rs` on the panicking thread, so the hook test checks that it does not wait for the writer; a goroutine panic is recovered by `routine.Go` and has no hook |
 | H8 | `tests/event_log_benchmark_test.go`, `tests/event_native_benchmark_test.go` | `benches/event_log_benchmark.rs`, `benches/event_native_benchmark.rs` | A measurement is a `Benchmark` function of a Go test file and a `harness = false` target of `cargo bench` in Rust; both print numbers and assert nothing, and `make benchmark-go` and `make benchmark-rust` run them. |
-| H9 | `tests/framework_log_test.go` | none | The level of the logger of the framework (`FrameworkLogLevel`) exists only in the Wails host: the Wails asset server writes a line at the level `info` for every requested file, and the Tauri host writes no such line to the standard error |
 | H10 | none | `src/platform/darwin/file_watch.rs` | The Wails host watches the policy file through the library `fsnotify`; no Rust library meets the watch of the policy file (the FSEvents watcher of `notify` 8.2 delivered no event of a folder while a writer appended to its subfolder, its kqueue watcher left a rename undelivered until a later kernel event, and the `kqueue` crate 1.2 has no user event that ends a blocked wait), so the Tauri host watches it through kqueue on macOS |
 | H12 | none | `tests/support/folder.rs` | A Rust test needs a guard that removes its folder while a failed assertion unwinds and reports a removal failure; `tempfile::TempDir` drops without reporting one. A Go test uses `testing.T.TempDir`, which removes the folder after the test and fails the test when the removal fails, so the Go host has no file of its own |
 | H13 | none | `src/notifications_test.rs`, `src/project_removal_test.rs`, `src/exposure_status_test.rs`, `src/endpoint_lock_test.rs`, `src/surfaces_test.rs`, `src/windows_records_test.rs`, `src/sidecars_lock_test.rs`, `src/performance_lock_test.rs`, `src/workspace_lock_test.rs`, `src/debug_follow_lock_test.rs`, `src/log_query_lock_test.rs`, `src/deep_link_lock_test.rs`, `src/assets_lock_test.rs`, `src/process_lock_hook_lock_test.rs`, `src/log_policy_watch_hook_lock_test.rs`, `src/diagnostics_lock_test.rs` | The Rust host recovers a lock that a panicking thread poisoned, and these in-crate tests poison the locks of the permission state, the removal requests, the document request relay, the endpoint connections and subscriptions, the surface registry, the window records, the sidecar transport state, the trace switch, the sampler and its registries, the workspace write, the log notices, the pending paths of the log index, the deep link queue, the reported asset paths, the process lock hook, the policy watch hook and the held modal replies; a Go mutex does not poison, so the Go host has no such lock state to test |
-| H14 | `src/projects_test.go` | `tests/project_data_order/` | Go tests use `package host` to access unexported service state and functions. Tauri tests are child modules of `windows.rs` and `bindings.rs` so they can test private state and handlers without making them public. These owning project-data-order suites verify each host's projectShown and ready catch-up boundary. The Rust test files are grouped by owning module; their physical directory is not required by the compiler. |
-| H15 | none | `tests/view_source_stream/bindings_test.rs`, `tests/view_source_stream/stream_test.rs` | Tauri receives `Channel<ViewSourceEvent>` through framework IPC, so only its channel registration and send lifecycle have these adapter tests. Wails has no typed channel object or send-result API; shared registration order, disposed-owner fencing and listener cleanup remain covered by its owner tests. Both suites use fakes and neither verifies live framework IPC delivery. The paths are exact; the remaining view-generation test is not included. |
+| H14 | `src/projects_test.go` | `tests/project_data_order/project_data_order_test.rs` | Go tests use `package host` to access unexported service state and functions. The Rust test is a child module of `windows.rs` so it can test private state without making it public. These owning project-data-order suites verify the projectShown and ready catch-up boundary of each language host library; the child test of the command of the Tauri framework adapter is row H30. The Rust test file is grouped by owning module; its physical directory is not required by the compiler. |
+| H15 | none | `tests/view_source_stream/stream_test.rs` | Tauri receives `Channel<ViewSourceEvent>` through framework IPC, so only the Rust language host library has the send lifecycle of that channel and this test; the registration test of the command is row H30. Wails has no typed channel object or send-result API; shared registration order, disposed-owner fencing and listener cleanup remain covered by its owner tests. The suite uses fakes and does not verify live framework IPC delivery. The path is exact; the remaining view-generation test is not included. |
 | H16 | `src/view_call_record_test.go`, `src/view_error_test.go` | `tests/view_call_record_test.rs`, `tests/view_error_test.rs` | These Go tests use `package host` because their fixtures access unexported `Surfaces` fields and helpers before calling public `ViewMessage`. The Rust tests call public `ViewChannels` methods and do not require private-module access; their `tests/` location is not a compiler requirement. Both sides assert the same view.call/view.reply records and accepted view.error record. The allowance records only this test placement difference; it does not restore the removed RegisterView API or claim a behavior gap. |
 | H17 | none | `tests/view_source_origins/view_generation_test.rs` | This Rust test file is included as a child of `documents.rs` so its cases can exercise private view-origin and reply-dispatch helpers. The shared generation, stale-pull, page-identity, and reply-order assertions remain in Wails `src/surfaces_test.go` and its paired Tauri owner cases; the stale reply settlement boundary is covered by `TestViewReplyRetainsOpenCallWhenGenerationRetiresBeforePost` and `TestViewReplyPostRefusalLeavesCallOpenForProcessEnd`. Go needs `package host` for its private `Surfaces` fixtures; Rust needs the `documents.rs` child module for private document state. This exact path is the only placement difference, and the row waives no shared behavior. |
 | H18 | `src/platform/darwin/document_viewport_marker.go` | none | Go requires a file with `//go:build darwin && diagnostics` and the cgo Objective-C preamble for this diagnostic bridge; Rust binds the same native operation in `src/platform/darwin/document.rs` with an item-level `#[cfg(feature = "diagnostics")]`. This allows only the exact file-placement difference; both hosts retain the same endpoint and native marker behavior. |
-| H19 | `tests/platform/darwin/main_thread_stack_test.go`, `tests/platform/darwin/stack_sampler.go` | none | The test samples the stack pointer of the main thread while the Wails host runs its main-thread steps and fails on a sample outside the stack of the main thread ([main thread of the Wails host](#main-thread-of-the-wails-host)). Only Go code runs on a goroutine stack that the Go heap holds; the main thread of the Tauri host runs Rust on the stack of the main thread, so it has no such state to test. Go allows no cgo in a test file, so the sampler is a file of its own. |
-| H20 | `src/platform/darwin/main_thread.h` | none | The header declares the functions of the main-thread worker of the Wails framework (`wailsRunOnWorker`, `wailsRunOnMain`), which each callback of the darwin layer uses to run its Go function on the worker and each native call uses to run its body on the main thread ([main thread of the Wails host](#main-thread-of-the-wails-host)); the Tauri host runs Rust on the main thread and needs no worker |
+| H20 | `src/platform/darwin/main_thread.h`, `src/platform/darwin/main_thread.m` | none | The header declares `hostRunOnWorker` and `hostRunOnMain`, which each callback of the darwin layer uses to run its Go function on the worker and each native call uses to run its body on the main thread, and which the framework adapter installs before the start of the library; `main_thread.m` holds the installed functions ([main thread of the Wails host](#main-thread-of-the-wails-host)). The Rust language host library runs on the main thread of the Tauri host and needs no worker |
 | H21 | none | `src/surface_close_test.rs` | The Tauri close of a surface runs queued on the main thread with the window records that `close_surface` took, so it decides whether the window is still open when it runs; this child test of `documents.rs` reaches its private view-origin registration. The Wails close of a surface (`closeSurfaceDocuments`) runs on the `Surfaces` state of its window and looks up no window by label, so it has no such case |
 | H22 | none | `src/presentation_end_test.rs` | The Tauri end of a presentation wait after the presentation or the presentation limit runs queued on the main thread and looks up the records of its window by label, so it decides whether the window is still open when it runs; this child test of `documents.rs` reaches the private records of the window. The Wails end (`endPresentationWaitFor`) runs on the `Surfaces` state of its window, which the queued call holds, and looks up no window by label, so it has no such case |
-| H23 | none | `src/sidecars_route_test.rs` | The Tauri route of a sidecar message looks up the window records that the closure of its window removes, so it decides whether the window is open; the Wails route reads the routes of its live surfaces and has no such lookup. |
-| H24 | none | `tests/support/platform/platform.rs`, `tests/support/platform/darwin/endpoint_client.rs`, `tests/support/platform/windows/unsupported.rs` | The Rust integration tests are separate crates that share this client of the endpoint socket, and each operating system has its file because the client holds the Unix socket API. The Go tests dial with `net`, which every platform compiles, so the Wails host has no such file |
-| E1 | `diagnostics.heap.profile` | none | The endpoint method writes a heap profile of the Go runtime (`runtime/pprof`); the Rust host has no garbage-collected heap to profile. A row whose ID starts with E lists endpoint methods, and `make host-parity-check` reads it |
-| A1 | content differs | content differs | `runtime/index.js` uses each framework's call mechanism |
-| A2 | none | `build.rs` | Tauri requires `tauri_build::build()` |
-| A3 | none | `tauri.conf.json`, `capabilities/`, `icons/`, `gen/` | Tauri configuration |
-| A4 | `go.mod`, `go.sum` | `Cargo.toml`, `Cargo.lock` | Each language has its own manifest and lock file; the host packages have the same difference |
-| A5 | `test/support/wails-runtime-loader.mjs` | none | The Wails page imports its runtime module from the asset server (`/wails/runtime.js`), which a test run has no file for, so the loader gives the specifier a module that the test supplies; the Tauri page reads `window.__TAURI__`, which a test sets directly |
+| H23 | none | `src/sidecars_route_test.rs` | The Tauri route of a sidecar message looks up the window records that the closure of its window removes, so it decides whether the window is open; the Go route reads the routes of its live surfaces and has no such lookup. |
+| H24 | none | `tests/support/platform/platform.rs`, `tests/support/platform/darwin/endpoint_client.rs`, `tests/support/platform/windows/unsupported.rs` | The Rust integration tests are separate crates that share this client of the endpoint socket, and each operating system has its file because the client holds the Unix socket API. The Go tests dial with `net`, which every platform compiles, so the Go language host library has no such file |
+| H25 | `tests/platform/darwin/stack_sampler.go` | none | The package samples the stack pointer of the main thread for the tests of the Go framework adapters (row H19). Go allows no cgo in a test file, so the sampler is a package of its own; the main thread of the Tauri host runs Rust on the stack of the main thread and has no such test |
+| H26 | `go.mod`, `go.sum` | `Cargo.toml` | Each language has its own manifest and lock file; the lock file of the Rust packages is the `Cargo.lock` of the workspace |
+| H27 | `src/bindings.go`, `src/plugins_starter_test.go` | none | The host calls of a Go page are the methods of `Host` in `bindings.go`, which the bound type of the Wails framework adapter reaches through `Bindings`, and `plugins_starter_test.go` calls one of them through that entrance. The host calls of a Rust page are Tauri commands, which the Tauri framework adapter declares in its `src/bindings.rs` with their tests (row H30) |
+| H28 | none | `tests/support/framework.rs` | The Rust integration tests build the window and webview handles of the library from this fixture of the framework port. The Go tests that need a framework are tests of `package host`, whose fixture is in `src/projects_test.go` |
+| E1 | `diagnostics.heap.profile` | none | The endpoint method writes a heap profile of the Go runtime (`runtime/pprof`); the Rust language host library has no garbage-collected heap to profile. A row whose ID starts with E lists endpoint methods, and `make host-parity-check` reads it |
 | C1 | `src/cmd/sok/main.go` | `src/main.rs` | A Go command needs its own `main` package directory; a Rust binary target is `src/main.rs` beside the library root |
 | C2 | `src/diagnostics_test.go`, `src/dev_test.go`, `tests/build_test.go` | none | A Go file belongs to one build by its build constraint, so the diagnostic build of `sok` tests its `capture` request and the release identifier in a `diagnostics && !dev` unit test, the build with `dev` tests the `.dev` identifier in a `dev` unit test, and the other build tests the usage error and the release identifier in a `!diagnostics` test; Rust tests the builds with `cfg(feature = "diagnostics")` and `cfg(feature = "dev")` in `tests/sok_test.rs` |
 | C3 | `src/dev.go` | none | Go selects the `.dev` identifier by an `init` in a file that only the `dev` build tag compiles; Rust selects it with `cfg!(feature = "dev")` inside `src/identity.rs`, so it has no file of its own |
 | C4 | none | `tests/support/folder.rs` | The same guard as H12 for the tests of `sok`; the Go tests of `sok` use `testing.T.TempDir`. The host and `sok` test crates each keep their own file, because a test does not read the paths of another package |
 | C5 | none | `src/event_log_lock_test.rs` | The Rust writer of `sok` recovers a lock that a panicking thread poisoned, and this in-crate test poisons the lock of the write observer; a Go mutex does not poison, so the Go writer has no such lock state to test |
 | C6 | `tests/process_wait_test.go` | `src/process_wait_test.rs` | The Rust test is a child of `sok.rs` so it can call the private injected `run_with_process_wait` boundary without making it public. The Go test calls public `sok.Run` through its external test package. Both assert the shared `cli.process-wait.platform-error-is-reported` result; these exact paths record only the private-test placement difference and waive no shared behavior |
+| C8 | `go.mod`, `go.sum` | `Cargo.toml` | Each language has its own manifest and lock file; the lock file of the Rust packages is the `Cargo.lock` of the workspace |
+
+### Framework table
+
+| ID | Wails | Tauri | Reason |
+| --- | --- | --- | --- |
+| H9 | `tests/framework_log_test.go` | none | The level of the logger of the framework (`FrameworkLogLevel`) exists only in the Wails framework adapter: the Wails asset server writes a line at the level `info` for every requested file, and the Tauri framework writes no such line to the standard error |
+| H19 | `tests/platform/darwin/main_thread_stack_test.go` | none | The test samples the stack pointer of the main thread while the Wails host runs its main-thread steps through the functions that the Wails framework adapter installs, and fails on a sample outside the stack of the main thread ([main thread of the Wails host](#main-thread-of-the-wails-host)); its sampler is row H25. Only Go code runs on a goroutine stack that the Go heap holds; the main thread of the Tauri host runs Rust on the stack of the main thread, so it has no such state to test. |
+| H29 | `go.mod`, `go.sum` | `Cargo.toml` | Each language has its own manifest and lock file; the lock file of the Rust packages is the `Cargo.lock` of the workspace |
+| H30 | none | `src/plugins_starter_test.rs`, `tests/project_data_order/bindings_test.rs`, `tests/surface_layout/bindings_test.rs`, `tests/view_source_stream/bindings_test.rs` | The host calls of a Rust page are the Tauri commands of `src/bindings.rs`, and these tests are its child modules, so they reach the private commands and their registration without making them public. The bound type of the Wails framework adapter has one method, which passes each call to the Go language host library (row H27) |
+| H31 | `src/platform/darwin/main_thread.go` | `src/platform/platform.rs`, `src/platform/windows/windows.rs` | The Wails framework adapter installs the main-thread functions of the Wails fork (`wailsRunOnWorker`, `wailsRunOnMain`) as `hostRunOnWorker` and `hostRunOnMain` of the Go language host library (row H20) in the `init` of its darwin package, which only a darwin build compiles; `darwin.go` holds the package documentation so every build imports it. The Tauri host runs Rust on the main thread and needs no worker. The Tauri framework adapter calls Tauri functions that exist only on macOS (the title bar of a window, the native handles of a web view and a window, the activation at launch); `platform.rs` selects them from `darwin/darwin.rs` and from `windows/windows.rs`, whose functions return a "not implemented on windows" error, as Rust selects an implementation of the operating system by `cfg` |
+| A1 | content differs | content differs | `runtime/index.js` uses each framework's call mechanism |
+| A2 | none | `build.rs` | Tauri requires `tauri_build::build()` |
+| A3 | none | `tauri.conf.json`, `capabilities/`, `icons/`, `gen/` | Tauri configuration |
+| A4 | `go.mod`, `go.sum` | `Cargo.toml`, `Cargo.lock` | Each language has its own manifest and lock file |
+| A5 | `test/support/wails-runtime-loader.mjs` | none | The Wails page imports its runtime module from the asset server (`/wails/runtime.js`), which a test run has no file for, so the loader gives the specifier a module that the test supplies; the Tauri page reads `window.__TAURI__`, which a test sets directly |
 
 ## Memory pressure
 
@@ -260,19 +316,19 @@ apps/wailsv3/                  apps/tauriv2/
   (none)                         tauri.conf.json, capabilities/, icons/, gen/   difference A3
 ```
 
-`apps/wailsv3/go.mod` requires the host module. `apps/tauriv2/Cargo.toml` depends on `soksak-host-tauriv2` by path and on `tauri`. `apps/tauriv2/build.rs` calls only `tauri_build::build()`.
+`apps/wailsv3/go.mod` requires the module of the Go language host library and the module of the Wails framework adapter. `apps/tauriv2/Cargo.toml` depends on `soksak-host-tauriv2` by path and on `tauri`. `apps/tauriv2/build.rs` calls only `tauri_build::build()`.
 
-The Wails binding service name is `github.com/soksak-app/core/packages/host/wailsv3/src.Bindings`. Wails derives it from the Go package path and type name, and `apps/wailsv3/runtime/index.js` uses it. The service has one bound method, `Call(method, args)`, which looks up the exported method `method` of the host by name and runs it (`binding_record.go`), so every call of the main page passes through one place that stores the event `host.binding.call`; a method of the host with a parameter other than `json.RawMessage` after the optional context, or with a result other than an optional value and an optional error, stops the start of the host with an error that names the method. The Tauri host defines every command inside the `bindings!` macro (`bindings.rs`), which gives each command a `BindingCall` as its first argument, finishes it with the result of the command and generates the registration, so the commands that are registered are the commands that are recorded. Tauri passes the invoke result of a command only to the resolver of the framework, which a host cannot wrap, so the macro wraps the function of the command and not the resolver.
+The Wails binding service name is `github.com/soksak-app/core/packages/host/wailsv3/src.Bindings`. Wails derives it from the Go package path and type name of the bound type `Bindings` of the Wails framework adapter, and `apps/wailsv3/runtime/index.js` uses it. The service has one bound method, `Call(method, args)`, which passes each call to the bindings of the Go language host library; they look up the exported method `method` of `Host` by name and run it (`binding_record.go`), so every call of the main page passes through one place that stores the event `host.binding.call`; a method of the host with a parameter other than `json.RawMessage` after the optional context, or with a result other than an optional value and an optional error, stops the start of the host with an error that names the method. The Tauri framework adapter defines every command inside the `bindings!` macro (`bindings.rs`), which gives each command a `BindingCall` as its first argument, finishes it with the result of the command and generates the registration, so the commands that are registered are the commands that are recorded. Tauri passes the invoke result of a command only to the resolver of the framework, which a host cannot wrap, so the macro wraps the function of the command and not the resolver.
 
 ## Command line tree
 
 ```
-packages/sok/wailsv3/          packages/sok/tauriv2/
+packages/sok/go/          packages/sok/rust/
   src/sok.go  (package sok)      src/sok.rs  (library root)
   src/<role>.go                  src/<role>.rs
   src/cmd/sok/main.go            src/main.rs           difference C1
   tests/<role>_test.go           tests/<role>_test.rs
-  go.mod, go.sum                 Cargo.toml            difference A4
+  go.mod, go.sum                 Cargo.toml            difference C8
 ```
 
 The pair follows the same file-name rule and structure check as the host packages. Its contract cases are listed in [host contract](host-contract.md) under `cli.`.
@@ -285,7 +341,7 @@ A diagnostic build also accepts `--registry-ca PATH`: a PEM file whose certifica
 
 ## Frontend and executables
 
-`soksak-stage` places the frontend in `apps/<app>/src/frontend/`, which each application's `.gitignore` excludes. Wails embeds it with `//go:embed all:frontend` in `src/main.go` because `go:embed` reaches only files below the embedding package's directory; `host.Run` uses `frontend/` as the asset root. Tauri reads it through `"frontendDist": "src/frontend"` in `tauri.conf.json`, and `src/main.rs` includes `frontend/background.js`.
+`soksak-stage` places the frontend in `apps/<app>/src/frontend/`, which each application's `.gitignore` excludes. Wails embeds it with `//go:embed all:frontend` in `src/main.go` because `go:embed` reaches only files below the embedding package's directory; `Prepare` of the Go language host library uses `frontend/` as the asset root. Tauri reads it through `"frontendDist": "src/frontend"` in `tauri.conf.json`, and `src/main.rs` includes `frontend/background.js`.
 
 On macOS each application runs from an application bundle, because the operating system's notification center serves only bundled processes ([plugins](plugins.md#tab-reports)). Both release applications are `soksak.app` with the display name `soksak`: the release bundles are `target/release/wailsv3/soksak.app` and `target/release/tauriv2/soksak.app`, and their bundle identifiers are `app.soksak.wails` and `app.soksak.tauri`, the identifiers of the configuration directories ([projects](projects.md#persistence)). The debug bundles keep the names that let both run beside a release application: `target/debug/soksak-wailsv3.app/Contents/MacOS/soksak-wailsv3` and `target/debug/soksak-tauriv2.app/Contents/MacOS/soksak-tauriv2`, with the bundle name of the executable and the identifiers `app.soksak.wails.dev` and `app.soksak.tauri.dev`. The executable inside each bundle is `soksak-wailsv3` or `soksak-tauriv2`. The build writes each bundle's `Contents/Info.plist` from `apps/<app>/platform/darwin/Info.plist`, which declares the release values, and the debug build replaces the bundle identifier and the bundle name; it copies `apps/<app>/platform/darwin/AppIcon.icns`, the soksak icon that the Dock shows, to `Contents/Resources/`, signs the bundle with an ad hoc signature, and registers it again with LaunchServices, because the Dock shows the icon of the registered bundle and LaunchServices does not reread a bundle when only files inside it change. The bundle holds no plugin and no sidecar; the hosts serve the plugins and start the sidecars that are installed in the configuration directory, from the folders that `plugins/installed.json` records ([installation](installation.md#serving-installed-plugins)).
 
@@ -293,9 +349,9 @@ On macOS each application runs from an application bundle, because the operating
 
 | File | Contents |
 | --- | --- |
-| `go.work` | Uses `apps/wailsv3`, `packages/host/wailsv3` and `packages/sok/wailsv3`; replaces the host module and the command-line module `v0.0.0` with `./packages/host/wailsv3` and `./packages/sok/wailsv3` |
-| `Cargo.toml` | Workspace with members `apps/tauriv2`, `packages/host/tauriv2` and `packages/sok/tauriv2`, the shared `[patch.crates-io]` for the Tauri crates, and the `dev` profile |
-| `Cargo.lock` | The single lock file for both crates |
+| `go.work` | Uses `apps/wailsv3`, `packages/host/go`, `packages/host/wailsv3` and `packages/sok/go`; replaces the modules of the Go language host library, the Wails framework adapter and the command line `v0.0.0` with `./packages/host/go`, `./packages/host/wailsv3` and `./packages/sok/go` |
+| `Cargo.toml` | Workspace with members `apps/tauriv2`, `packages/host/rust`, `packages/host/tauriv2` and `packages/sok/rust`, the shared `[patch.crates-io]` for the Tauri crates, and the `dev` profile |
+| `Cargo.lock` | The single lock file for the crates of the workspace |
 | `target/` | Cargo output and both application executables; excluded by `.gitignore` |
 
 ## Commands
@@ -307,7 +363,7 @@ On macOS each application runs from an application bundle, because the operating
 | `make wailsv3`, `make tauriv2` | Build and run the debug executable |
 | `make registry`, `make install-plugins CONFIG=DIR` | Build the workspace registry in `target/registry` from the plugin and sidecar repositories that `scripts/workspace-registry.json` declares ([repositories](plugins.md#repositories)), and install its plugins into a configuration directory |
 | `make rust-clippy-check` | Run clippy with `-D warnings` on every package and test of the Rust workspace, with and without the diagnostics feature; `make native-test` runs it |
-| `make native-test` | Run `make -C native/darwin test`, `go test` for `packages/host/wailsv3`, and `cargo test -p soksak-host-tauriv2`, the host tests with and without diagnostics; each sidecar repository runs its own tests |
+| `make native-test` | Run `make -C native/darwin test`, `go test` for `packages/host/go` and `packages/host/wailsv3`, and `cargo test -p soksak-host -p soksak-host-tauriv2`, the host tests with and without diagnostics; each sidecar repository runs its own tests |
 | `make platforms` | Run `scripts/check-platforms.mjs` |
 | `make hosts-check` | Run `scripts/check-hosts.mjs` |
 
@@ -442,7 +498,7 @@ These facts complete U1:
 
 ### Operation groups
 
-The darwin platform layer of the Go host has 170 operations: the 145 methods of the `Platform` interface (`packages/host/wailsv3/src/platform/platform.go`) and 25 methods of its optional interfaces and of the diagnostic build. The Surface layout group adds the block of a main web view, the block of a Go function of its caller and the registration of the layout observer of N1 with Go functions of its caller, each such function run on the worker through `hostRunOnWorker`, and its settled wait takes a block. The table groups them by file and states how the mygo host provides each group.
+The darwin platform layer of the Go host has 170 operations: the 145 methods of the `Platform` interface (`packages/host/go/src/platform/platform.go`) and 25 methods of its optional interfaces and of the diagnostic build. The Surface layout group adds the block of a main web view, the block of a Go function of its caller and the registration of the layout observer of N1 with Go functions of its caller, each such function run on the worker through `hostRunOnWorker`, and its settled wait takes a block. The table groups them by file and states how the mygo host provides each group.
 
 | Group (file of `src/platform/darwin`) | Operations | mygo host |
 | --- | --- | --- |
@@ -622,7 +678,9 @@ A value is never lowered because it is hard to meet; a measured floor that excee
 
 ## Structure checks
 
-`scripts/check-hosts.mjs` compares `packages/host/wailsv3` with `packages/host/tauriv2` and `apps/wailsv3` with `apps/tauriv2`. It compares `.go` and `.rs` files by relative path without extension and other files by relative path. A file present on one side passes only when it is listed with a difference ID from the allowed differences table. The check reads files that Git tracks or would track, so generated `src/frontend/` files are not compared.
+`scripts/check-hosts.mjs` compares four pairs: `packages/host/go` with `packages/host/rust` and `packages/sok/go` with `packages/sok/rust` by the [language table](#language-table), and `packages/host/wailsv3` with `packages/host/tauriv2` and `apps/wailsv3` with `apps/tauriv2` by the [framework table](#framework-table). It compares `.go` and `.rs` files by relative path without extension and other files by relative path. A file present on one side passes only when a row of the table of its pair lists it, a row whose ID starts with the letter of the pair (H for the host packages, C for the command lines, A for the applications). The check reads files that Git tracks or would track, so generated `src/frontend/` files are not compared.
+
+The audits of the check that select files by a path prefix fail when one of their prefixes selects no file: the main-thread audit takes `packages/host/go/src/platform/darwin/`, the undecoded command argument audit takes the Rust sources of `packages/host/tauriv2/src/`, and the stub check takes the `src` folders of the language host libraries, of the framework adapters and of `native/darwin`. The library import audit fails when a Go file of `packages/host/go` imports a package of Wails or its `go.mod` requires Wails, and when a Rust file of `packages/host/rust` names a crate of Tauri or its `Cargo.toml` depends on one.
 
 `scripts/check-platforms.mjs` reports these outside `platform/<os>/`: file names with an OS suffix (`_darwin`, `_windows`, and others), Go `runtime.GOOS` and OS build tags in Go files, Rust OS `cfg` attributes in Rust files, and executable Node `process.platform` member expressions in JavaScript files. JavaScript is parsed as syntax, so strings and comments are not selectors. The only metadata exceptions are `process.platform` as the `platform` property returned by the `environment()` function and the test assertion `assert.equal(result.environment.platform, process.platform)` (or `assert.strictEqual`); all other executable occurrences remain findings, including selectors inside test paths. It skips `native/<os>/`, `scripts/check-build-environment.sh`, `platform/platform.{go,rs,js}`, and itself. It does not read `Cargo.toml`, so target-specific dependency tables are allowed.
 

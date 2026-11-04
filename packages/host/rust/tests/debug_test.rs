@@ -1,0 +1,359 @@
+//! The files, copies, tar and state file of the debug view (docs/spec/debug.md).
+
+#[path = "support/folder.rs"]
+mod folder;
+
+use std::io::Read;
+use std::path::{Path, PathBuf};
+use std::time::{Duration, UNIX_EPOCH};
+
+use soksak_host::debug;
+
+/// A configuration folder with an application log and a capture under logs/ and a file outside it.
+fn debug_config() -> folder::Folder {
+    let config = folder::Folder::new();
+    let write = |path: &str, text: &str| {
+        let full = config.path().join(path);
+        std::fs::create_dir_all(full.parent().unwrap()).unwrap();
+        std::fs::write(full, text).unwrap();
+    };
+    write("logs/application.log", "started\n");
+    write("logs/captures/still-1/window.png", "png");
+    write("plugins/installed.json", "{}");
+    config
+}
+
+// contract: debug.files.lists-the-logs-folder
+#[test]
+fn debug_files_list_the_logs_folder() {
+    let config = debug_config();
+    let files = debug::list(config.path()).unwrap();
+    let listed: Vec<(String, u64)> = files
+        .iter()
+        .map(|file| (file.path.clone(), file.size))
+        .collect();
+    assert_eq!(
+        listed,
+        [
+            ("logs/application.log".to_string(), 8),
+            ("logs/captures/still-1/window.png".to_string(), 3)
+        ]
+    );
+    assert!(
+        files.iter().all(|file| file.modified > 0),
+        "a file has no modification time"
+    );
+}
+
+// contract: debug.save.copies-a-file-of-the-logs-folder-only
+#[test]
+fn debug_copy_copies_a_file_of_the_logs_folder_only() {
+    let config = debug_config();
+    let target = folder::Folder::new();
+    let destination: PathBuf = target.path().join("application.log");
+    debug::copy(config.path(), "logs/application.log", &destination).unwrap();
+    assert_eq!(std::fs::read_to_string(&destination).unwrap(), "started\n");
+    for path in [
+        "plugins/installed.json",
+        "logs/../plugins/installed.json",
+        "logs/missing.log",
+        "logs/captures",
+    ] {
+        assert_eq!(
+            debug::copy(config.path(), path, &target.path().join("copy")),
+            Err(format!("debug: {path} is not a file under logs/")),
+            "copy {path}"
+        );
+    }
+}
+
+// contract: debug.save-all.writes-the-logs-folder-as-tar
+#[test]
+fn debug_write_logs_tar_writes_the_logs_folder() {
+    let config = debug_config();
+    let target = folder::Folder::new();
+    let destination = target.path().join("debug.tar.gz");
+    debug::write_logs_tar(config.path(), &destination, &mut |_, _| {}).unwrap();
+    let file = std::fs::File::open(&destination).unwrap();
+    let mut reader = tar::Archive::new(flate2::read::GzDecoder::new(file));
+    let mut entries = Vec::new();
+    for entry in reader.entries().unwrap() {
+        let mut entry = entry.unwrap();
+        let mut text = String::new();
+        entry.read_to_string(&mut text).unwrap();
+        entries.push(format!("{}={text}", entry.path().unwrap().display()));
+    }
+    assert_eq!(
+        entries,
+        [
+            "logs/application.log=started\n",
+            "logs/captures/still-1/window.png=png"
+        ]
+    );
+}
+
+// contract: debug.save-all.reports-progress
+#[test]
+fn debug_write_logs_tar_reports_progress_each_mebibyte_and_at_the_end() {
+    let config = debug_config();
+    let big = 3 * 1024 * 1024 + 512 * 1024;
+    std::fs::write(config.path().join("logs/host-1-2.jsonl"), "x".repeat(big)).unwrap();
+    let out = folder::Folder::new();
+    let destination = out.path().join("debug.tar.gz");
+    let mut reports: Vec<(u64, u64)> = Vec::new();
+    debug::write_logs_tar(config.path(), &destination, &mut |written, total| {
+        reports.push((written, total))
+    })
+    .unwrap();
+    let total = big as u64 + "started\n".len() as u64 + "png".len() as u64;
+    assert!(
+        reports.len() >= 4 && reports.last() == Some(&(total, total)),
+        "reports {reports:?}, want at least one for each MiB and a last report of {total} of {total}"
+    );
+    for (index, (written, reported_total)) in reports.iter().enumerate() {
+        let step =
+            index + 1 < reports.len() && index > 0 && *written < reports[index - 1].0 + 1024 * 1024;
+        assert!(
+            *reported_total == total && !step,
+            "report {index} of {reports:?} is not a MiB after the one before it or names another total"
+        );
+    }
+}
+
+// contract: debug.record.writes-the-state-file
+#[test]
+fn debug_write_state_writes_the_state_file() {
+    let config = debug_config();
+    // 2026-10-09T01:02:03Z.
+    let at = UNIX_EPOCH + Duration::from_secs(1_791_507_723);
+    let path =
+        debug::write_state(config.path(), at, serde_json::json!({"host": "tauriv2"})).unwrap();
+    assert_eq!(path, "logs/state-20261009T010203Z.json");
+    let state: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(Path::new(config.path()).join(&path)).unwrap())
+            .unwrap();
+    assert_eq!(state["host"], "tauriv2");
+    assert_eq!(state["time"], "20261009T010203Z");
+}
+
+// contract: debug.record.names-the-value-of-the-workbench
+#[test]
+fn debug_state_names_the_value_of_the_workbench() {
+    let config = debug_config();
+    let request: debug::RecordRequest =
+        serde_json::from_value(serde_json::json!({"workbench": {"core.layout": {"tabs": 1}}}))
+            .unwrap();
+    let document = debug::state_document(
+        "tauriv2",
+        serde_json::json!({"core": "1"}),
+        Vec::new(),
+        request,
+    );
+    let path = debug::write_state(
+        config.path(),
+        UNIX_EPOCH + Duration::from_secs(1_791_507_723),
+        document,
+    )
+    .unwrap();
+    let state: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(Path::new(config.path()).join(&path)).unwrap())
+            .unwrap();
+    assert_eq!(
+        state["workbench"],
+        serde_json::json!({"core.layout": {"tabs": 1}})
+    );
+    assert!(state.get("page").is_none(), "{state}");
+    let refused = serde_json::from_value::<debug::RecordRequest>(serde_json::json!({"page": {}}))
+        .unwrap_err()
+        .to_string();
+    assert!(refused.contains("missing field `workbench`"), "{refused}");
+}
+
+// contract: debug.read.returns-the-end-of-a-text-file
+#[test]
+fn debug_read_returns_the_end_of_a_text_file() {
+    let config = debug_config();
+    let read = debug::read(config.path(), "logs/application.log").unwrap();
+    assert_eq!(
+        (
+            read.path.as_str(),
+            read.kind,
+            read.size,
+            read.truncated,
+            read.text.as_str()
+        ),
+        ("logs/application.log", "text", 8, false, "started\n")
+    );
+    // 100000 characters of three bytes: the last 262144 bytes start inside a character.
+    let big = "끝".repeat(100_000);
+    std::fs::write(config.path().join("logs/big.log"), &big).unwrap();
+    let read = debug::read(config.path(), "logs/big.log").unwrap();
+    assert!(read.truncated);
+    assert_eq!(read.size, big.len() as u64);
+    assert!(read.text.ends_with('끝'));
+    assert!(
+        (262_142..=262_144).contains(&read.text.len()),
+        "length {}",
+        read.text.len()
+    );
+}
+
+// contract: debug.read.refuses-a-path-outside-logs-and-a-file-that-is-not-text
+#[test]
+fn debug_read_refuses_a_path_outside_logs_and_a_file_that_is_not_text() {
+    let config = debug_config();
+    std::fs::write(
+        config.path().join("logs/binary.bin"),
+        [0xff, 0xfe, 0x00, 0x01],
+    )
+    .unwrap();
+    for (path, want) in [
+        (
+            "plugins/installed.json",
+            "debug: plugins/installed.json is not a file under logs/",
+        ),
+        (
+            "logs/../plugins/installed.json",
+            "debug: logs/../plugins/installed.json is not a file under logs/",
+        ),
+        (
+            "logs/missing.log",
+            "debug: logs/missing.log is not a file under logs/",
+        ),
+        ("logs/binary.bin", "debug: logs/binary.bin is not text"),
+    ] {
+        assert_eq!(
+            debug::read(config.path(), path).err().as_deref(),
+            Some(want),
+            "read {path}"
+        );
+    }
+}
+
+// contract: debug.read.returns-a-png-file-as-an-image
+#[test]
+fn debug_read_returns_a_png_file_as_an_image() {
+    let config = debug_config();
+    let folder = config.path().join("logs/captures/still-1");
+    let png = [&b"\x89PNG\r\n\x1a\n"[..], &b"data"[..]].concat();
+    std::fs::write(folder.join("window.png"), &png).unwrap();
+    let read = debug::read(config.path(), "logs/captures/still-1/window.png").unwrap();
+    assert_eq!(read.kind, "image");
+    assert_eq!(
+        read.image.as_deref(),
+        Some(format!("data:image/png;base64,{}", base64_of(&png)).as_str())
+    );
+    assert_eq!(
+        (read.size, read.truncated, read.text.as_str()),
+        (png.len() as u64, false, "")
+    );
+    std::fs::write(folder.join("fake.png"), "not a png").unwrap();
+    assert_eq!(
+        debug::read(config.path(), "logs/captures/still-1/fake.png")
+            .err()
+            .as_deref(),
+        Some("debug: logs/captures/still-1/fake.png is not a PNG file")
+    );
+    let large = [&b"\x89PNG\r\n\x1a\n"[..], &vec![0u8; 16 * 1024 * 1024][..]].concat();
+    std::fs::write(folder.join("large.png"), large).unwrap();
+    assert_eq!(
+        debug::read(config.path(), "logs/captures/still-1/large.png")
+            .err()
+            .as_deref(),
+        Some("debug: logs/captures/still-1/large.png is larger than 16 MB")
+    );
+}
+
+/// The standard base64 text of bytes, computed here without the code under test.
+fn base64_of(bytes: &[u8]) -> String {
+    const TABLE: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::new();
+    for chunk in bytes.chunks(3) {
+        let n = chunk
+            .iter()
+            .enumerate()
+            .fold(0u32, |acc, (i, b)| acc | (*b as u32) << (16 - 8 * i));
+        for i in 0..4 {
+            if i <= chunk.len() {
+                out.push(TABLE[((n >> (18 - 6 * i)) & 63) as usize] as char);
+            } else {
+                out.push('=');
+            }
+        }
+    }
+    out
+}
+
+// contract: debug.record.keeps-the-newest-20-state-files
+#[test]
+fn debug_write_state_keeps_the_newest_20_state_files() {
+    let config = debug_config();
+    // 22 earlier state files, one for each minute of the hour 00 of 2026-10-09.
+    for minute in 0..22 {
+        let name = format!("state-20261009T00{minute:02}00Z.json");
+        std::fs::write(config.path().join("logs").join(name), "{}").unwrap();
+    }
+    let at = UNIX_EPOCH + Duration::from_secs(1_791_507_723 + 3600 * 24);
+    debug::write_state(config.path(), at, serde_json::json!({"host": "tauriv2"})).unwrap();
+    let mut states: Vec<String> = std::fs::read_dir(config.path().join("logs"))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|name| name.starts_with("state-"))
+        .collect();
+    states.sort();
+    assert_eq!(states.len(), 20, "{states:?}");
+    assert_eq!(states[0], "state-20261009T000300Z.json");
+    assert!(states[19].starts_with("state-20261010T"), "{states:?}");
+    assert!(config.path().join("logs/application.log").exists());
+}
+
+// contract: debug.save-text.writes-the-text-to-the-destination
+#[test]
+fn debug_write_text_writes_the_text_of_the_request() {
+    let target = folder::Folder::new();
+    let destination = target.path().join("rows.txt");
+    let request = debug::TextRequest {
+        name: "rows.txt".into(),
+        text: "first\nsecond 한글\n".into(),
+    };
+    debug::write_text(&destination, &request).unwrap();
+    assert_eq!(std::fs::read_to_string(&destination).unwrap(), request.text);
+}
+
+// contract: debug.save-text.refuses-a-name-that-is-not-a-file-name-and-text-that-is-empty-or-too-large
+#[test]
+fn debug_text_request_refuses_what_is_not_a_file_name_and_text_of_no_use() {
+    let request = |name: &str, text: String| debug::TextRequest {
+        name: name.into(),
+        text,
+    };
+    for (given, want) in [
+        (
+            request("", "x".into()),
+            r#"debug: name "" is not a file name"#.to_string(),
+        ),
+        (
+            request("../rows.txt", "x".into()),
+            r#"debug: name "../rows.txt" is not a file name"#.to_string(),
+        ),
+        (
+            request("logs/rows.txt", "x".into()),
+            r#"debug: name "logs/rows.txt" is not a file name"#.to_string(),
+        ),
+        (
+            request("..", "x".into()),
+            r#"debug: name ".." is not a file name"#.to_string(),
+        ),
+        (
+            request("rows.txt", String::new()),
+            "debug: text is empty".to_string(),
+        ),
+        (
+            request("rows.txt", "x".repeat((16 << 20) + 1)),
+            "debug: text is 16777217 bytes, over the limit of 16777216".to_string(),
+        ),
+    ] {
+        assert_eq!(given.validate(), Err(want), "validate {:?}", given.name);
+    }
+    assert_eq!(request("rows.txt", "x".into()).validate(), Ok(()));
+}

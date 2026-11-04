@@ -1,0 +1,2769 @@
+// The sidecar channels.
+//
+// Starts a sidecar that a plugin declared as a dependency in plugin.json on its first use and
+// passes one-line JSON messages between the surface pages and the sidecar. The message body is not
+// interpreted. The forms are defined in docs/spec/sidecars.md.
+//
+// A sidecar is found only through the staged configuration files.
+//
+//	environment.json                  plugins: plugins
+//	modules/<plugin>/plugin.json     sidecars: sidecars
+//	modules/<sidecar>/sidecar.json   executable: path of the executable inside the sidecar folder
+//
+// The executable is placed in the same directory as the application executable, with the same file name.
+
+package host
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net"
+	"os"
+	"os/exec"
+	"path"
+	"path/filepath"
+	"reflect"
+	"slices"
+	"sort"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/soksak-app/core/packages/host/go/src/platform"
+	"github.com/soksak-app/core/packages/host/go/src/routine"
+)
+
+// SidecarMessage is the event value that passes a message sent by a sidecar to the page.
+type SidecarMessage struct {
+	Sidecar string          `json:"sidecar"`
+	Surface string          `json:"surface"`
+	Body    json.RawMessage `json:"body"`
+}
+
+// SidecarFailure is the event value that tells the page of the surface that was sent to a sidecar about the failure of that sidecar
+// (docs/spec/sidecars.md#failure).
+type SidecarFailure struct {
+	Sidecar string `json:"sidecar"`
+	Surface string `json:"surface"`
+	Reason  string `json:"reason"`
+}
+
+// sidecarMessageLimit is the maximum number of bytes before the line break in one line of a sidecar message (docs/spec/sidecars.md#messages).
+// It holds a schema snapshot of several MB with a margin of ten times or more, and it limits the memory reserved for one message to this size.
+const sidecarMessageLimit = 64 << 20
+
+type sidecarRequest struct {
+	Surface string `json:"surface"`
+	Root    string `json:"root,omitempty"`
+	Closed  bool   `json:"closed,omitempty"`
+	// Cids are the correlation identifiers of the inputs that this request continues (docs/spec/sidecars.md#protocol).
+	Cids []string        `json:"cids,omitempty"`
+	Body json.RawMessage `json:"body,omitempty"`
+}
+
+type sidecarEvent struct {
+	Surface string          `json:"surface"`
+	Body    json.RawMessage `json:"body"`
+}
+
+// sidecarOutput is the declared form of a standard output message. It distinguishes a missing surface from an empty string. When closed exists, it is
+// the reply to closed, and error is the reason it could not be closed (docs/spec/sidecars.md#messages).
+type sidecarOutput struct {
+	Surface *string         `json:"surface"`
+	Body    json.RawMessage `json:"body"`
+	Closed  *bool           `json:"closed"`
+	Error   *string         `json:"error"`
+	// Cids are the correlation identifiers of the requests that this message answers (docs/spec/sidecars.md#protocol).
+	Cids []string `json:"cids"`
+}
+
+// ClosingSurface is a surface for which the host sent closed and the sidecar has not replied yet (host.sidecars).
+type ClosingSurface struct {
+	Sidecar string `json:"sidecar"`
+	Surface string `json:"surface"`
+}
+
+type sidecar struct {
+	name string
+	// endReason is how the persistent connection ended when no protocol violation ended it: eof, unfinished line or read error.
+	endReason string
+	// version is the version that a persistent service sent in its hello reply, or nil when the reply had none.
+	version    *string
+	cmd        *exec.Cmd
+	stdin      io.WriteCloser
+	conn       net.Conn
+	persistent bool
+	// servicePID is the process of the service endpoint that a persistent connection reached.
+	servicePID int
+	// spawnedAt is the time before the host started the process, or the zero time when the host did not start it.
+	spawnedAt time.Time
+	// readyRecorded is true once the first message line after the spawn is recorded (recordReady).
+	readyRecorded bool
+	outbox        chan queuedLine
+	// writing is the size in bytes of the line that the writer is writing, and 0 between lines.
+	writing atomic.Int64
+	// lastRead is the monotonic time at which the host read the last line from a persistent service, 0 before the first.
+	lastRead      atomic.Uint64
+	exited        chan struct{}
+	muClosed      sync.Mutex
+	pendingCloses pendingLines // The pending closed messages, in the order of sending
+	// pendingReplies buffers the immutable image acks when the channel is full.
+	// Each item is kept so that a reply with a different sequence does not overwrite another.
+	pendingReplies pendingLines
+	closeWaiters   map[string]chan error
+	// ownerMutex serializes the close of the owner of a persistent service, and transportClosed is true once it closed the
+	// transport, so the close of a replacement and the close of a stop run once between them.
+	ownerMutex sync.Mutex
+	// responseMutex serializes persistent response enqueue with closing the connection and outbox.
+	responseMutex   sync.Mutex
+	transportClosed bool
+	// retained is the number of sessions that the service closed for each retain request.
+	retained map[string]int
+	// surfaces are the surfaces that sent requests to this process. They are the surfaces to tell about a failure. c.mu protects it.
+	surfaces map[string]bool
+	// closedSurfaces marks sessions this process must no longer deliver after native-view removal. c.mu protects it.
+	closedSurfaces map[string]bool
+	// stopClosing is a close of this process that Stop removed from the closing list. A sidecar on standard input and output replies to this close while it ends,
+	// so that reply is not a failure (docs/spec/sidecars.md#messages). c.mu protects it.
+	stopClosing map[string]int
+	// read records violated and waitErr while stopping and closes exited. Stop reads them after exited.
+	// violated means that reading stopped because of a protocol violation, and waitErr is the result of waiting for the process.
+	violated bool
+	waitErr  error
+	// begin starts the write and read goroutines of a registered process.
+	begin func()
+}
+
+// SidecarOwner is the window that owns a surface. It provides the root of sidecar messages and receives events.
+type SidecarOwner interface {
+	ProjectRoot() string
+	Emit(name string, data ...any)
+	// DeliverSidecarMessage passes a message that a sidecar sent to the receivers that the page of the window routed for it
+	// (docs/spec/native-surfaces.md#view-surfaces).
+	DeliverSidecarMessage(message SidecarMessage)
+}
+
+// Sidecars manages the sidecar processes of one application and the windows that own surfaces.
+type Sidecars struct {
+	mu                  sync.Mutex
+	imageDetachRequests map[string]*imageDetachWaiter
+	imageDetachTimeout  time.Duration
+	// requests remembers the requests with correlation identifiers that wait for a reply (sidecar_reply.go).
+	requests requestLedger
+	// declarations protects declared, displayNames, persistent, basenames and refused.
+	// An installation adds declarations while the application runs and a start
+	// reads the executable outside c.mu, so it is separate from c.mu.
+	declarations sync.RWMutex
+	declared     map[string]string
+	displayNames map[string]string
+	// refused holds the installed sidecars that are not declared because their declaration cannot be read or checked, with
+	// the error.
+	refused map[string]string
+	// versions holds the version that installed.json records for each declared sidecar.
+	versions   map[string]string
+	persistent map[string]bool
+	// persistentSurfaces records, for each layout surface session owned by a persistent service, the persistent sidecars
+	// that the surface sent to, including while a service is disconnected; a connection notice reaches only those surfaces.
+	persistentSurfaces map[string]map[string]bool
+	running            map[string]*sidecar
+	// starting is a sidecar that is starting. The start happens outside the lock, and when it ends, the channel is closed.
+	starting map[string]chan struct{}
+	// closing holds, for each sidecar, the surfaces whose closed was sent and not answered, with the number of those
+	// closes. A surface closed again before the answer receives one answer per close.
+	closing map[string]map[string]int
+	// ClosingChanged enqueues an immutable status under the state lock in mutation order.
+	// It must not block or read sidecar state. ClosingInvalidated refreshes UI outside the lock.
+	ClosingChanged     func(SidecarStatus)
+	ClosingInvalidated func()
+	owners             map[string]SidecarOwner
+	// roots are the project directories at the time a surface first sent. A sidecar finds a session by root and surface,
+	// so even after the project of the window changed, the requests and closes of an already open surface are sent with this root.
+	roots   map[string]string
+	stopped bool
+	// unannouncedLoss is a persistent sidecar whose connection was lost and whose owning surfaces have not been told yet (V5-106).
+	// The start that announces the loss consumes this record; the first start has no announcement.
+	unannouncedLoss map[string]bool
+	// replacing holds the persistent services that Replace closes: the running and the installed version, which the
+	// reconnection after the close writes to the log.
+	replacing map[string]replacement
+	// basenames are the basenames of the persistent sidecar executables and their sidecar names.
+	basenames   map[string]string
+	StopTimeout time.Duration // The deadline of Stop() that a test can inject. Default: 5 seconds.
+	// ReadyTimeout is the upper bound of the time until a newly started persistent service prints its endpoint. Default: 30 seconds. A test injects it.
+	ReadyTimeout time.Duration
+	// HelloTimeout is the upper bound of the time until a persistent service answers hello (docs/spec/terminal-runtime.md). Default: 5 seconds. A test injects it.
+	HelloTimeout time.Duration
+	// Now is the clock of the restart limit of the sidecars of either transport (docs/spec/sidecars.md#failure). A test injects it; nil uses time.Now.
+	Now func() time.Time
+	// restarts holds the restart-limit record of each sidecar that has a counted failure. c.mu protects it.
+	restarts map[string]*restartRecord
+	// dependents are the plugins that list each sidecar in dependencies. declarations protects it.
+	dependents map[string][]string
+	// RetainSending is called with the service name after Retain prepared the service and before it sends retain. It is the point at which a check inserts
+	// other work in between, and it is not called when nil.
+	RetainSending func(name string)
+	configDir     string
+	nextRequest   uint64
+}
+
+// restartWindow and restartLimit are the sliding window and the number of counted failures of the restart limit of a sidecar of either
+// transport (docs/spec/sidecars.md#failure).
+const (
+	restartWindow = 300 * time.Second
+	restartLimit  = 4
+)
+
+// restartRecord is the restart-limit record of one sidecar. failures are the times of the counted failures, oldest first. When the
+// limit stops the restarts, stopped is true.
+type restartRecord struct {
+	failures []time.Time
+	stopped  bool
+}
+
+// errRestartLimit is the reason of the connection notice of a persistent service whose restarts the restart limit stopped
+// (docs/spec/persistent-services.md#service-transport).
+var errRestartLimit = errors.New("restart limit")
+
+// revival is the revival of one lost persistent connection. counted is true once a failure of that disconnect is counted, because one
+// disconnect counts at most one failure (docs/spec/persistent-services.md#service-transport).
+type revival struct{ counted bool }
+
+// serviceStartFailure is a start failure of the creation path of a persistent service that the restart limit counts: the service printed
+// no endpoint within the ready bound, ended before its endpoint, or did not answer hello within HelloTimeout.
+type serviceStartFailure struct{ text string }
+
+func (e serviceStartFailure) Error() string { return e.text }
+
+// now is the time of the restart limit: the injected Now, or time.Now when no test injects one.
+func (c *Sidecars) now() time.Time {
+	if c.Now != nil {
+		return c.Now()
+	}
+	return time.Now()
+}
+
+// countFailure counts a failure of the sidecar name at the current time among the failures within restartWindow.
+// It reports true when this failure is the restartLimit-th counted one, which stops the restarts. It is called holding c.mu.
+func (c *Sidecars) countFailure(name string) bool {
+	record := c.restarts[name]
+	if record == nil {
+		record = &restartRecord{}
+		c.restarts[name] = record
+	}
+	return record.count(c.now())
+}
+
+// count counts a failure at now among the failures within restartWindow, which the record keeps. It reports true when
+// this failure is the restartLimit-th counted one, which stops the restarts.
+func (r *restartRecord) count(now time.Time) bool {
+	kept := r.failures[:0]
+	for _, at := range r.failures {
+		if now.Sub(at) <= restartWindow {
+			kept = append(kept, at)
+		}
+	}
+	r.failures = append(kept, now)
+	if len(r.failures) < restartLimit {
+		return false
+	}
+	r.stopped = true
+	return true
+}
+
+// reportRestartLimit writes the stop of the restarts of the sidecar name by the restart limit to the log and as an event.
+func reportRestartLimit(name string) {
+	LogError("sidecar "+name, fmt.Sprintf("restart limit: %d failures within %d s", restartLimit, int(restartWindow/time.Second)))
+	EmitHost(LevelError, "host.sidecar.restart-limit", map[string]any{"sidecar": name})
+}
+
+// countServiceFailure counts a failure of the persistent service name while the host is neither stopping its sidecars nor replacing the
+// sidecar, and reports the stop when it is the restartLimit-th one. lost is the revival of the disconnect that the failure belongs to, nil
+// for a start that a send or a retain runs; a disconnect whose failure is already counted counts nothing more. It returns true when the
+// restarts are stopped by this failure. It is called holding c.mu.
+func (c *Sidecars) countServiceFailure(name string, lost *revival) bool {
+	if _, replacing := c.replacing[name]; c.stopped || replacing || (lost != nil && lost.counted) {
+		return false
+	}
+	if lost != nil {
+		lost.counted = true
+	}
+	if !c.countFailure(name) {
+		return false
+	}
+	reportRestartLimit(name)
+	return true
+}
+
+// restartStopped reports whether the restart limit stops the restarts of the sidecar name. It is called holding c.mu.
+func (c *Sidecars) restartStopped(name string) bool {
+	record := c.restarts[name]
+	return record != nil && record.stopped
+}
+
+// SurfaceOpened is called when the host creates a surface of plugin. It clears the restart limit of each stopped sidecar that the plugin
+// lists in dependencies, so the next request starts the sidecar (docs/spec/sidecars.md#failure). It is called
+// holding no lock; it takes c.mu.
+func (c *Sidecars) SurfaceOpened(plugin, surface string) {
+	c.clearDependencyStops(plugin, "surface", surface)
+}
+
+// PluginEnabled is called when the person enables plugin. It clears the restart limit of each stopped sidecar that the plugin
+// lists in dependencies (docs/spec/sidecars.md#failure). It is called
+// holding no lock; it takes c.mu.
+func (c *Sidecars) PluginEnabled(plugin string) {
+	c.clearDependencyStops(plugin, "plugin", plugin)
+}
+
+// clearDependencyStops clears the restart limit of each stopped sidecar that plugin lists in dependencies and writes the trace
+// with origin, the field that names the surface or the plugin of the clear. It is called holding no lock; it takes c.mu.
+func (c *Sidecars) clearDependencyStops(plugin, origin, value string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.declarations.RLock()
+	defer c.declarations.RUnlock()
+	for name, record := range c.restarts {
+		if !record.stopped || !slices.Contains(c.dependents[name], plugin) {
+			continue
+		}
+		delete(c.restarts, name)
+		EmitHost(LevelDebug, "host.trace.sidecar.restart-reset", map[string]any{"sidecar": name, origin: value})
+	}
+}
+
+// restartRefused applies the restart limit to a request from surface to the sidecar name, which has no running process. It returns true when
+// the sidecar is stopped, and then the request is refused, whichever surface sent it; the stop is cleared only by SurfaceOpened. It is called
+// holding c.mu.
+func (c *Sidecars) restartRefused(name, surface string) bool {
+	if !c.restartStopped(name) {
+		return false
+	}
+	LogError("sidecar "+name, fmt.Sprintf("restart limit: request for %s refused", surface))
+	return true
+}
+
+// SidecarDeclaration is one installed sidecar. Data is the content of its sidecar.json and Folder is the folder that holds it.
+type SidecarDeclaration struct {
+	Name   string
+	Folder string
+	Data   []byte
+	// Error is the error that kept the installation from reading the sidecar, such as a missing sidecar.json; a declaration
+	// with an error is refused with it, and its Folder, Data and Version are empty.
+	Error string
+	// Version is the version that installed.json records for the sidecar.
+	Version string
+	// Dependents are the ids of the plugins whose plugin.json lists the sidecar in dependencies (docs/spec/sidecars.md#failure).
+	Dependents []string
+}
+
+// OutdatedSidecar is a persistent sidecar whose running service has another version than the installed one
+// (docs/spec/persistent-services.md#updates). Running is nil when the service sent no version; Sessions counts the open
+// surfaces of the application that have sent to the service. Installed is nil when the sidecar is no longer declared.
+type OutdatedSidecar struct {
+	Sidecar   string  `json:"sidecar"`
+	Running   *string `json:"running"`
+	Installed *string `json:"installed"`
+	Sessions  int     `json:"sessions"`
+}
+
+// NewSidecars creates the channels from the declared sidecars. The executable is the executable path inside each Folder. It fails when the form of a declaration
+// is wrong.
+func NewSidecars(declarations []SidecarDeclaration, configDirectory string) (*Sidecars, error) {
+	c := &Sidecars{
+		imageDetachRequests: map[string]*imageDetachWaiter{},
+		imageDetachTimeout:  imageDetachTimeout,
+		declared:            map[string]string{},
+		displayNames:        map[string]string{},
+		versions:            map[string]string{},
+		persistent:          map[string]bool{},
+		persistentSurfaces:  map[string]map[string]bool{},
+		running:             map[string]*sidecar{},
+		starting:            map[string]chan struct{}{},
+		closing:             map[string]map[string]int{},
+		owners:              map[string]SidecarOwner{},
+		roots:               map[string]string{},
+		unannouncedLoss:     map[string]bool{},
+		restarts:            map[string]*restartRecord{},
+		replacing:           map[string]replacement{},
+		basenames:           map[string]string{},
+		StopTimeout:         5 * time.Second,
+		ReadyTimeout:        30 * time.Second,
+		HelloTimeout:        5 * time.Second,
+	}
+	configDirectoryProvided := strings.TrimSpace(configDirectory) != ""
+	if configDirectoryProvided {
+		config, err := filepath.Abs(configDirectory)
+		if err != nil {
+			return nil, fmt.Errorf("config directory: %w", err)
+		}
+		config, err = filepath.EvalSymlinks(config)
+		if err != nil {
+			return nil, fmt.Errorf("config directory: %w", err)
+		}
+		c.configDir = config
+	}
+	if err := c.Declare(declarations); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+// Declare declares the installed sidecars (docs/spec/installation.md#applying-a-change). The running process of a
+// standard input and output sidecar whose executable changed or that is no longer declared stops by the stop rules, so
+// the next Send starts the new executable. A persistent service uses the new executable from its next start. An
+// invalid declaration fails without a change.
+func (c *Sidecars) Declare(declarations []SidecarDeclaration) error {
+	c.mu.Lock()
+	before := c.statusLocked()
+	changed, err := c.declare(declarations)
+	if err != nil {
+		c.mu.Unlock()
+		return err
+	}
+	declarationChanged := !reflect.DeepEqual(before, c.statusLocked())
+	if declarationChanged {
+		c.closingChanged()
+	}
+	// A sidecar that is starting registers when its start ends, so the start is awaited before the running list is
+	// read.
+	for {
+		var wait chan struct{}
+		for _, name := range changed {
+			if starting := c.starting[name]; starting != nil {
+				wait = starting
+				break
+			}
+		}
+		if wait == nil {
+			break
+		}
+		c.mu.Unlock()
+		<-wait
+		c.mu.Lock()
+	}
+	processes := make([]*sidecar, 0, len(changed))
+	forgot := false
+	for _, name := range changed {
+		if process := c.running[name]; process != nil && !process.persistent {
+			forgot = c.detach(name, process) || forgot
+			processes = append(processes, process)
+		}
+	}
+	if forgot {
+		c.closingChanged()
+	}
+	c.mu.Unlock()
+	if forgot || declarationChanged {
+		c.closingInvalidated()
+	}
+	c.stopProcesses(processes, false)
+	return nil
+}
+
+// errNoConfigDirectory is the error of a persistent sidecar of a host without a configuration directory. It is an error of
+// the host and not of the installed sidecar, so it fails the declaration.
+var errNoConfigDirectory = errors.New("persistent transport requires a config directory")
+
+// declare replaces the declarations with declarations and returns the declared sidecars whose executable changed or
+// that are no longer declared. A sidecar whose declaration cannot be read or checked is refused and not declared, so the
+// other installed sidecars and the host start (docs/spec/sidecars.md#declaration-and-startup). Nothing changes when the
+// host has no configuration directory for a persistent sidecar.
+func (c *Sidecars) declare(declarations []SidecarDeclaration) ([]string, error) {
+	c.declarations.Lock()
+	defer c.declarations.Unlock()
+	declared := map[string]string{}
+	displayNames := map[string]string{}
+	versions := map[string]string{}
+	persistent := map[string]bool{}
+	basenames := map[string]string{}
+	dependents := map[string][]string{}
+	refused := map[string]string{}
+	for _, item := range declarations {
+		name := item.Name
+		var checked checkedDeclaration
+		err := errors.New(item.Error)
+		if item.Error == "" {
+			checked, err = c.checkDeclaration(item, basenames)
+		}
+		if errors.Is(err, errNoConfigDirectory) {
+			return nil, err
+		}
+		if err != nil {
+			LogError("sidecar declaration", fmt.Sprintf("sidecar %s: %v", name, err))
+			refused[name] = err.Error()
+			continue
+		}
+		if checked.persistent {
+			basenames[checked.basename] = name
+			persistent[name] = true
+		}
+		declared[name] = checked.program
+		displayNames[name] = checked.displayName
+		versions[name] = item.Version
+		dependents[name] = item.Dependents
+	}
+	changed := []string{}
+	for name, program := range c.declared {
+		if declared[name] != program || displayNames[name] != c.displayNames[name] {
+			changed = append(changed, name)
+		}
+	}
+	c.declared, c.displayNames, c.versions, c.persistent, c.basenames, c.dependents, c.refused = declared, displayNames, versions, persistent, basenames, dependents, refused
+	return changed, nil
+}
+
+// checkedDeclaration holds the facts of a sidecar.json that passed its check.
+type checkedDeclaration struct {
+	program     string
+	displayName string
+	persistent  bool
+	basename    string
+}
+
+// checkDeclaration checks the sidecar.json of one installed sidecar against the declarations read before it, whose
+// persistent executables hold basenames. The error names the path of the sidecar.json.
+func (c *Sidecars) checkDeclaration(item SidecarDeclaration, basenames map[string]string) (checkedDeclaration, error) {
+	file := filepath.Join(item.Folder, "sidecar.json")
+	var sidecar struct {
+		Executable  string `json:"executable"`
+		DisplayName any    `json:"displayName"`
+		Protocol    int    `json:"protocol"`
+		Transport   string `json:"transport"`
+		// HostReadOperations is decoded only to refuse it: the removed plugin host read it, so a declaration that still carries it
+		// is of an earlier form.
+		HostReadOperations json.RawMessage `json:"hostReadOperations"`
+	}
+	if err := json.Unmarshal(item.Data, &sidecar); err != nil {
+		return checkedDeclaration{}, fmt.Errorf("%s: %w", file, err)
+	}
+	if sidecar.HostReadOperations != nil {
+		return checkedDeclaration{}, fmt.Errorf("%s: hostReadOperations is removed", file)
+	}
+	if sidecar.Protocol != 1 {
+		return checkedDeclaration{}, fmt.Errorf("%s: protocol %d is not supported", file, sidecar.Protocol)
+	}
+	if sidecar.DisplayName == nil {
+		return checkedDeclaration{}, fmt.Errorf("%s: displayName is required", file)
+	}
+	displayName, ok := sidecar.DisplayName.(string)
+	if !ok || !validSidecarDisplayName(displayName) {
+		return checkedDeclaration{}, fmt.Errorf("%s: displayName must be soksak://sidecar/ followed by one lowercase identifier", file)
+	}
+	if sidecar.Transport != "" && sidecar.Transport != "persistent" {
+		return checkedDeclaration{}, fmt.Errorf("%s: transport %s is not supported", file, sidecar.Transport)
+	}
+	if sidecar.Executable == "" || path.IsAbs(sidecar.Executable) || strings.Contains("/"+sidecar.Executable+"/", "/../") {
+		return checkedDeclaration{}, fmt.Errorf("%s: executable %s is not a path inside the package", file, sidecar.Executable)
+	}
+	isPersistent := sidecar.Transport == "persistent"
+	base := path.Base(sidecar.Executable)
+	if isPersistent && c.configDir == "" {
+		return checkedDeclaration{}, fmt.Errorf("%s: %w", file, errNoConfigDirectory)
+	}
+	if other, exists := basenames[base]; isPersistent && exists {
+		return checkedDeclaration{}, fmt.Errorf("%s: executable basename %s is already used by %s", file, base, other)
+	}
+	return checkedDeclaration{program: filepath.Join(item.Folder, filepath.FromSlash(sidecar.Executable)), displayName: displayName, persistent: isPersistent, basename: base}, nil
+}
+
+// undeclared is the error of a request for the sidecar name that is not declared: the error of its refused declaration,
+// or that no plugin declares it.
+func (c *Sidecars) undeclared(name string) error {
+	c.declarations.RLock()
+	defer c.declarations.RUnlock()
+	if refusal, ok := c.refused[name]; ok {
+		return fmt.Errorf("sidecar %s: %s", name, refusal)
+	}
+	return fmt.Errorf("sidecar %s is not declared by any plugin", name)
+}
+
+func validSidecarDisplayName(value string) bool {
+	if !strings.HasPrefix(value, "soksak://sidecar/") {
+		return false
+	}
+	component := strings.TrimPrefix(value, "soksak://sidecar/")
+	if len(component) == 0 || component[0] < 'a' || component[0] > 'z' {
+		return false
+	}
+	for _, char := range component[1:] {
+		if (char < 'a' || char > 'z') && (char < '0' || char > '9') && char != '-' {
+			return false
+		}
+	}
+	return true
+}
+
+// declaration returns the executable and the persistence of the declared sidecar name. It can be called independently of c.mu.
+func (c *Sidecars) declaration(name string) (program string, persistent, ok bool) {
+	c.declarations.RLock()
+	defer c.declarations.RUnlock()
+	program, ok = c.declared[name]
+	return program, c.persistent[name], ok
+}
+
+// Send passes body that came from the surface surface of the owner window to the sidecar name.
+// It serializes outside the mutex and sends through a non-blocking channel, so a slow sidecar does not block other sends.
+func (c *Sidecars) Send(owner SidecarOwner, name, surface string, body json.RawMessage) error {
+	return c.SendWithCids(owner, name, surface, body, nil)
+}
+
+// SendWithCids sends a page request that continues the inputs named by cids; the request line carries them as the field
+// `cids`, and no field when cids is empty.
+func (c *Sidecars) SendWithCids(owner SidecarOwner, name, surface string, body json.RawMessage, cids []string) error {
+	return c.send(owner, name, surface, body, cids)
+}
+
+// send is the send of SendWithCids.
+func (c *Sidecars) send(owner SidecarOwner, name, surface string, body json.RawMessage, cids []string) error {
+	c.mu.Lock()
+	root, known := c.roots[surface]
+	c.mu.Unlock()
+	if !known {
+		root = owner.ProjectRoot()
+	}
+	// The JSON serialization is done outside the mutex.
+	line, err := json.Marshal(sidecarRequest{Surface: surface, Root: root, Cids: cids, Body: body})
+	if err != nil {
+		return fmt.Errorf("sidecar %s: %w", name, err)
+	}
+	line = append(line, '\n')
+	c.traceMessage("sidecar.send", name, surface, body)
+
+	// When this send is the first start after a connection loss, the connection notification is sent after the unlock (V5-106).
+	// The notification calls back the picture reconstruction of the owner, so it cannot run inside the mutex.
+	var reconnected bool
+	defer func() {
+		if reconnected {
+			c.notifyConnection(name, nil)
+		}
+	}()
+	// Outdated UI invalidation runs after unlock; its status value is enqueued with the locked mutation.
+	var outdatedChanged bool
+	defer func() {
+		if outdatedChanged {
+			c.closingInvalidated()
+		}
+	}()
+	// A refusal by the restart limit is reported to the owner after the unlock: as the failure event of a standard input and output sidecar,
+	// and as the connection notice of a persistent service (docs/spec/sidecars.md#failure).
+	var refusal *SidecarFailure
+	var refusalNotice bool
+	defer func() {
+		if refusal != nil {
+			owner.Emit("sidecar-failure", *refusal)
+		}
+		if refusalNotice {
+			if body, err := connectionNotice(errRestartLimit); err != nil {
+				LogError("sidecar "+name, fmt.Sprintf("connection notice serialization: %v", err))
+			} else {
+				owner.DeliverSidecarMessage(SidecarMessage{Sidecar: name, Surface: surface, Body: body})
+			}
+		}
+	}()
+	c.mu.Lock()
+	defer func() {
+		if outdatedChanged {
+			c.closingChanged()
+		}
+		c.mu.Unlock()
+	}()
+	if c.stopped {
+		return fmt.Errorf("sidecars are stopped")
+	}
+	if _, _, ok := c.declaration(name); !ok {
+		return c.undeclared(name)
+	}
+	if other, ok := c.owners[surface]; ok && other != owner {
+		return fmt.Errorf("surface %s belongs to another window", surface)
+	}
+	if c.restartRefused(name, surface) {
+		// default: the declaration was read above, so only its transport decides the report of the refusal.
+		if _, persistent, _ := c.declaration(name); persistent {
+			refusalNotice = true
+		} else {
+			refusal = &SidecarFailure{Sidecar: name, Surface: surface, Reason: "restart limit"}
+		}
+		return fmt.Errorf("sidecar %s: restart limit", name)
+	}
+	process, started, err := c.process(name, nil)
+	if err != nil {
+		return err
+	}
+	if started {
+		reconnected = c.unannouncedLoss[name]
+		delete(c.unannouncedLoss, name)
+	}
+	// The lock was released while starting, so the owner of the surface is checked again.
+	if other, ok := c.owners[surface]; ok && other != owner {
+		return fmt.Errorf("surface %s belongs to another window", surface)
+	}
+	outdatedChanged = (started || !process.surfaces[surface] || c.owners[surface] == nil) && c.outdated(process)
+	process.surfaces[surface] = true
+	c.owners[surface] = owner
+	if _, ok := c.roots[surface]; !ok {
+		c.roots[surface] = root
+	}
+
+	// Sends to the channel without blocking. When the channel is full, it returns the "is not keeping up" error.
+	select {
+	case process.outbox <- queue(line):
+		if process.closedSurfaces != nil {
+			delete(process.closedSurfaces, surface)
+		}
+		if process.persistent {
+			if c.persistentSurfaces == nil {
+				c.persistentSurfaces = map[string]map[string]bool{}
+			}
+			if c.persistentSurfaces[surface] == nil {
+				c.persistentSurfaces[surface] = map[string]bool{}
+			}
+			c.persistentSurfaces[surface][name] = true
+		}
+		if len(cids) > 0 {
+			for range c.requests.add(name, surface, cids, monotonicNanos()) {
+				recordBufferDrop("sidecar reply ledger", 0, fmt.Sprintf("%d requests", pendingRequestLimit))
+			}
+			EmitHostCids(LevelInfo, "host.sidecar.request", cids, map[string]any{"name": name, "surface": surface, "bytes": len(body)})
+		}
+		return nil
+	default:
+		return fmt.Errorf("sidecar %s is not keeping up", name)
+	}
+}
+
+// Writing returns the size in bytes of the line that the writer of the running sidecar name is writing, and 0 between lines; a
+// sidecar that reads nothing keeps its writer inside one line once its input is full.
+func (c *Sidecars) Writing(name string) (int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	process, ok := c.running[name]
+	if !ok {
+		return 0, fmt.Errorf("sidecar %s is not running", name)
+	}
+	return int(process.writing.Load()), nil
+}
+
+// SendResponse passes a reply (such as an image return) to the sidecar.
+// When the channel is full, it buffers the immutable replies in order and the write goroutine sends them.
+func (c *Sidecars) SendResponse(name, surface, image string, body json.RawMessage) error {
+	return c.sendResponse(nil, name, surface, image, body)
+}
+
+// sendResponse passes a reply to the sidecar process that produced it. A response to a discarded image may arrive after
+// stop removed that process from the running list. A stdio process is ending and releases the image at process exit; a
+// persistent service remains connected through close-owner and must receive the reply before shutdown.
+func (c *Sidecars) sendResponse(source *sidecar, name, surface, image string, body json.RawMessage) error {
+	// First serializes the JSON outside the mutex.
+	type response struct {
+		Surface string          `json:"surface"`
+		Body    json.RawMessage `json:"body"`
+	}
+	line, err := json.Marshal(response{Surface: surface, Body: body})
+	if err != nil {
+		return fmt.Errorf("sidecar %s: response serialize: %w", name, err)
+	}
+	line = append(line, '\n')
+
+	c.mu.Lock()
+	if c.stopped {
+		if source == nil {
+			c.mu.Unlock()
+			return fmt.Errorf("sidecars are stopped")
+		}
+		if !source.persistent {
+			c.mu.Unlock()
+			LogInfo("sidecar "+name, fmt.Sprintf("canceled transfer image of closed surface %s while stopping; process exit releases transfer image", surface))
+			return nil
+		}
+		source.responseMutex.Lock()
+		if source.transportClosed {
+			source.responseMutex.Unlock()
+			c.mu.Unlock()
+			return fmt.Errorf("sidecar %s response channel is disconnected", name)
+		}
+		defer source.responseMutex.Unlock()
+		defer c.mu.Unlock()
+		return c.queueResponse(source, name, surface, image, body, line)
+	}
+	defer c.mu.Unlock()
+	process, ok := c.running[name]
+	if source != nil {
+		if !ok || process != source {
+			return sidecarEnded{name}
+		}
+	} else if !ok {
+		return sidecarEnded{name}
+	}
+	select {
+	case <-process.exited:
+		return fmt.Errorf("sidecar %s response channel is disconnected", name)
+	default:
+	}
+	if process.persistent {
+		process.responseMutex.Lock()
+		if process.transportClosed {
+			process.responseMutex.Unlock()
+			return fmt.Errorf("sidecar %s response channel is disconnected", name)
+		}
+		defer process.responseMutex.Unlock()
+	}
+	return c.queueResponse(process, name, surface, image, body, line)
+}
+
+// queueResponse writes a response without blocking, or buffers the immutable line when the outbox is full. It is called
+// with c.mu held so stop cannot retire the process between validation and enqueue.
+func (c *Sidecars) queueResponse(process *sidecar, name, surface, image string, body json.RawMessage, line []byte) error {
+	// Sends to the channel without blocking. When the channel is full, it buffers.
+	select {
+	case process.outbox <- queue(line):
+		return nil
+	default:
+		// The channel is full, so the immutable replies are kept in order.
+		responseKey := surface + ":" + image + ":" + string(body)
+		process.muClosed.Lock()
+		limit := process.pendingReplies.add(line)
+		process.muClosed.Unlock()
+		if limit != "" {
+			recordBufferDrop("sidecar "+name+" pending replies", len(line), limit)
+			return fmt.Errorf("sidecar %s: the pending replies reached %s, so a reply of surface %s is dropped", name, limit, surface)
+		}
+		LogInfo("sidecar "+name, fmt.Sprintf("response queue full, buffering %s", responseKey))
+		return nil
+	}
+}
+
+// Close notifies all running sidecars of the removed surface.
+func (c *Sidecars) Close(surface string) {
+	c.closeObserved(surface, false, func() {})
+}
+
+// NativeViewRemoved closes stdio sessions of a removed native view while keeping a persistent session whose surface remains in its layout.
+func (c *Sidecars) NativeViewRemoved(surface string) {
+	c.closeObserved(surface, true, func() {})
+}
+
+// closeObserved exposes the queued-close boundary for controlled answer interleavings.
+// queued runs without the state lock, after the close is queued and before idle replacement.
+func (c *Sidecars) closeObserved(surface string, nativeView bool, queued func()) {
+	changed := c.closeSurfaceMode(surface, nativeView)
+	queued()
+	if changed {
+		c.closingInvalidated()
+	}
+	c.replaceIdle()
+}
+
+// closeSurface sends closed for surface to the running sidecars that received a request for it, and returns true when it recorded a
+// surface that waits for a reply. A sidecar that never received the surface holds no session of it and gets no closed notice.
+func (c *Sidecars) closeSurface(surface string) bool {
+	return c.closeSurfaceMode(surface, false)
+}
+
+func (c *Sidecars) closeSurfaceMode(surface string, nativeView bool) bool {
+	addressed := false
+	c.mu.Lock()
+	defer func() {
+		if addressed {
+			c.closingChanged()
+		}
+		c.mu.Unlock()
+	}()
+	if _, ok := c.owners[surface]; !ok {
+		return false
+	}
+	root := c.roots[surface]
+	keepPersistent := nativeView && len(c.persistentSurfaces[surface]) > 0
+	if !keepPersistent {
+		delete(c.owners, surface)
+		delete(c.roots, surface)
+		delete(c.persistentSurfaces, surface)
+		// The session of the surface ends, which ends its pending image detaches.
+		c.releaseImageDetachesLocked(releasedBySession, func(target imageDetachTarget) bool { return target.Surface == surface })
+	}
+
+	line, err := json.Marshal(sidecarRequest{Surface: surface, Root: root, Closed: true})
+	if err != nil {
+		LogError("sidecar close "+surface, fmt.Sprintf("marshal: %v", err))
+		return false
+	}
+	line = append(line, '\n')
+
+	for _, process := range c.running {
+		if !process.surfaces[surface] {
+			continue
+		}
+		if keepPersistent && process.persistent {
+			continue
+		}
+		addressed = true
+		if keepPersistent {
+			if process.closedSurfaces == nil {
+				process.closedSurfaces = map[string]bool{}
+			}
+			process.closedSurfaces[surface] = true
+		}
+		if c.closing[process.name] == nil {
+			c.closing[process.name] = map[string]int{}
+		}
+		c.closing[process.name][surface]++
+		// Sends to the channel without blocking. When the channel is full, it stores it in pendingCloses.
+		select {
+		case process.outbox <- queue(line):
+		default:
+			// The channel is full, so the closed messages are kept in the order of sending.
+			process.muClosed.Lock()
+			limit := process.pendingCloses.add(line)
+			process.muClosed.Unlock()
+			if limit != "" {
+				// The close is not sent, so no reply to it comes: the surface is not waited for. The sidecar keeps its session
+				// until it ends.
+				recordBufferDrop("sidecar "+process.name+" pending closes", len(line), limit)
+				if c.closing[process.name][surface]--; c.closing[process.name][surface] == 0 {
+					delete(c.closing[process.name], surface)
+				}
+				continue
+			}
+			LogInfo("sidecar "+process.name, fmt.Sprintf("close %s: outbox full, buffered", surface))
+		}
+	}
+	return addressed
+}
+
+// Closing returns the surfaces for which closed was sent and no reply was received, in the order of sidecar and surface (host.sidecars).
+func (c *Sidecars) Closing() []ClosingSurface {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.closingLocked()
+}
+
+func (c *Sidecars) closingLocked() []ClosingSurface {
+	list := []ClosingSurface{}
+	for sidecar, surfaces := range c.closing {
+		for surface := range surfaces {
+			list = append(list, ClosingSurface{Sidecar: sidecar, Surface: surface})
+		}
+	}
+	sort.Slice(list, func(i, j int) bool {
+		if list[i].Sidecar != list[j].Sidecar {
+			return list[i].Sidecar < list[j].Sidecar
+		}
+		return list[i].Surface < list[j].Surface
+	})
+	return list
+}
+
+// Outdated returns the persistent sidecars whose running service has another version than the installed one, sorted by
+// sidecar (host.sidecars, docs/spec/persistent-services.md#updates).
+func (c *Sidecars) Outdated() []OutdatedSidecar {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.outdatedLocked()
+}
+
+// SidecarStatus is one atomic value of the application-wide host.sidecars status.
+type SidecarStatus struct {
+	Closing  []ClosingSurface  `json:"closing"`
+	Outdated []OutdatedSidecar `json:"outdated"`
+}
+
+// Status returns closing and outdated from the same state-lock observation.
+func (c *Sidecars) Status() SidecarStatus {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.statusLocked()
+}
+
+func (c *Sidecars) statusLocked() SidecarStatus {
+	return SidecarStatus{Closing: c.closingLocked(), Outdated: c.outdatedLocked()}
+}
+
+func (c *Sidecars) outdatedLocked() []OutdatedSidecar {
+	c.declarations.RLock()
+	defer c.declarations.RUnlock()
+	list := []OutdatedSidecar{}
+	for name, process := range c.running {
+		installed := c.installedLocked(name)
+		if !process.persistent || (process.version != nil && installed != nil && *process.version == *installed) {
+			continue
+		}
+		sessions := 0
+		for surface := range process.surfaces {
+			if c.owners[surface] != nil {
+				sessions++
+			}
+		}
+		var running *string
+		if process.version != nil {
+			version := *process.version
+			running = &version
+		}
+		list = append(list, OutdatedSidecar{Sidecar: name, Running: running, Installed: installed, Sessions: sessions})
+	}
+	sort.Slice(list, func(i, j int) bool { return list[i].Sidecar < list[j].Sidecar })
+	return list
+}
+
+// outdated reports whether process is a persistent service whose version differs from the installed version of its
+// sidecar. A service that sent no version is of an earlier version. It is called with c.mu held.
+func (c *Sidecars) outdated(process *sidecar) bool {
+	if !process.persistent {
+		return false
+	}
+	c.declarations.RLock()
+	installed := c.installedLocked(process.name)
+	c.declarations.RUnlock()
+	return process.version == nil || installed == nil || *process.version != *installed
+}
+
+// installedLocked is the version that installed.json records for the declared sidecar name, or nil when the sidecar
+// is not declared. Call it with c.declarations held.
+func (c *Sidecars) installedLocked(name string) *string {
+	if _, declared := c.declared[name]; !declared {
+		return nil
+	}
+	version := c.versions[name]
+	return &version
+}
+
+// replacement is the versions of a persistent service that is being replaced.
+type replacement struct {
+	running *string
+	// installed is nil when the sidecar is not declared: the replacement ends the service and starts nothing.
+	installed *string
+	// pid is the process of the service endpoint, which ends before the installed service starts.
+	pid int
+}
+
+// Replace replaces the persistent service of the sidecar name, whose `hello` version differs from the installed
+// version: it sends close-owner and shutdown, closes the connection, and the reconnection that follows starts the
+// installed executable through the creation path and notifies the surfaces that sent to the sidecar
+// (docs/spec/persistent-services.md#updates). A sidecar without a running service of another version is refused.
+func (c *Sidecars) Replace(ctx context.Context, name string) error {
+	c.mu.Lock()
+	process, running := c.running[name]
+	if c.stopped || !running || !c.outdated(process) {
+		c.mu.Unlock()
+		return fmt.Errorf("sidecar %s: no running service of another version than the installed one", name)
+	}
+	if _, replacing := c.replacing[name]; replacing {
+		c.mu.Unlock()
+		return fmt.Errorf("sidecar %s: a replacement is running", name)
+	}
+	c.declarations.RLock()
+	installed := c.installedLocked(name)
+	c.declarations.RUnlock()
+	c.replacing[name] = replacement{running: process.version, installed: installed, pid: process.servicePID}
+	c.mu.Unlock()
+	if err := c.closePersistentOwner(process, ctx); err != nil {
+		c.mu.Lock()
+		delete(c.replacing, name)
+		c.mu.Unlock()
+		return fmt.Errorf("sidecar %s: replace: %w", name, err)
+	}
+	return nil
+}
+
+// replaceIdle replaces each outdated service that has no open surface of this application.
+func (c *Sidecars) replaceIdle() {
+	for _, item := range c.Outdated() {
+		c.mu.Lock()
+		_, busy := c.replacing[item.Sidecar]
+		c.mu.Unlock()
+		if item.Sessions != 0 || busy {
+			continue
+		}
+		name := item.Sidecar
+		routine.Go("sidecar-replace", func() {
+			ctx, cancel := context.WithTimeout(context.Background(), c.StopTimeout)
+			defer cancel()
+			if err := c.Replace(ctx, name); err != nil {
+				LogError("replace", err)
+			}
+		})
+	}
+}
+
+// closingInvalidated refreshes sidecar UI outside the state lock.
+func (c *Sidecars) closingInvalidated() {
+	if c.ClosingInvalidated != nil {
+		c.ClosingInvalidated()
+	}
+}
+
+// closingChanged enqueues the current immutable status. Call with c.mu held.
+func (c *Sidecars) closingChanged() {
+	if c.ClosingChanged != nil {
+		c.ClosingChanged(c.statusLocked())
+	}
+}
+
+// closeAnswered records that the sidecar process answered the closed of surface. When it was not closing that surface and it is not a close that Stop removed from
+// the list, it returns the reason of a protocol violation. The reason it could not close is written to the log. Call it outside the lock.
+func (c *Sidecars) closeAnswered(process *sidecar, surface string, closed bool, failure *string) string {
+	if !closed {
+		return "invalid message: closed is not true"
+	}
+	name := process.name
+	c.mu.Lock()
+	pending := take(c.closing[name], surface)
+	if len(c.closing[name]) == 0 {
+		delete(c.closing, name)
+	}
+	stopped := !pending && take(process.stopClosing, surface)
+	// The failure is written before the status change, so a reader of the log after that status finds it.
+	if failure != nil && (pending || stopped) {
+		LogError("sidecar "+name, fmt.Sprintf("close %s: %s", surface, *failure))
+	}
+	if pending {
+		c.closingChanged()
+	}
+	c.mu.Unlock()
+	if !pending && !stopped {
+		return "unexpected close answer for " + surface
+	}
+	if pending {
+		c.closingInvalidated()
+	}
+	return ""
+}
+
+// take lowers the count of key in counts by one and returns true when it did; a key whose count reaches 0 is removed.
+func take(counts map[string]int, key string) bool {
+	if counts[key] == 0 {
+		return false
+	}
+	counts[key]--
+	if counts[key] == 0 {
+		delete(counts, key)
+	}
+	return true
+}
+
+// forgetClosing deletes the closes that the sidecar name did not answer for an ended process or a lost connection. Call it while holding c.mu;
+// it returns true when it deleted something.
+func (c *Sidecars) forgetClosing(name string) bool {
+	if len(c.closing[name]) == 0 {
+		return false
+	}
+	delete(c.closing, name)
+	return true
+}
+
+// CloseOwner notifies the sidecars of all surfaces of the owner window. Call it when the window closes.
+func (c *Sidecars) CloseOwner(owner SidecarOwner) {
+	c.mu.Lock()
+	surfaces := make([]string, 0)
+	for surface, current := range c.owners {
+		if current == owner {
+			surfaces = append(surfaces, surface)
+		}
+	}
+	c.mu.Unlock()
+	for _, surface := range surfaces {
+		c.Close(surface)
+	}
+}
+
+// Stop ends all sidecars. It closes the channels to send an EOF signal to the write goroutines,
+// waits for the process exit for at most stopTimeout, and forces termination when a process does not respond.
+func (c *Sidecars) Stop() { c.stop(false) }
+
+// Detach stops the sidecars as Stop does, except that a persistent service gets no close-owner and no shutdown: its
+// connection ends and its sessions stay, for the application that starts after an application update
+// (docs/spec/installation.md#application-update).
+func (c *Sidecars) Detach() { c.stop(true) }
+
+// stop stops the sidecars; with detach a persistent service only loses its connection.
+func (c *Sidecars) stop(detach bool) {
+	c.mu.Lock()
+	c.stopped = true
+	// A sidecar that is starting is registered when it ends, so the running list is read after waiting for that start.
+	for len(c.starting) > 0 {
+		var wait chan struct{}
+		for _, starting := range c.starting {
+			wait = starting
+			break
+		}
+		c.mu.Unlock()
+		<-wait
+		c.mu.Lock()
+	}
+	// A send to outbox happens inside the lock and only to a sidecar in the running list. It is removed from the list before the channel is closed,
+	// so the surface close of a window that closes during the termination sends nothing. A sidecar on standard input and output ends, so it does not reply
+	// to the close. A persistent service replies to a close sent before the stop ahead of the close-owner reply, so that surface is kept until the reply or the end of
+	// the connection (docs/spec/sidecars.md#messages).
+	before := c.statusLocked()
+	processes := make([]*sidecar, 0, len(c.running))
+	forgot := false
+	for name, process := range c.running {
+		processes = append(processes, process)
+		forgot = c.detach(name, process) || forgot
+	}
+	changed := forgot || !reflect.DeepEqual(before, c.statusLocked())
+	if changed {
+		c.closingChanged()
+	}
+	c.mu.Unlock()
+	c.failImageDetaches("")
+	if changed {
+		c.closingInvalidated()
+	}
+	c.stopProcesses(processes, detach)
+}
+
+// detach removes a process that stops from the running list. A standard input and output sidecar ends, so its
+// unanswered closes move to stopClosing. It is called with c.mu held and returns true when closing changed.
+func (c *Sidecars) detach(name string, process *sidecar) bool {
+	delete(c.running, name)
+	if process.persistent {
+		return false
+	}
+	process.stopClosing = c.closing[name]
+	return c.forgetClosing(name)
+}
+
+// stopProcesses stops processes, which are out of the running list, by the stop rules and waits until they end
+// (docs/spec/sidecars.md#declaration-and-startup).
+func (c *Sidecars) stopProcesses(processes []*sidecar, detach bool) {
+	// Closes the channels of all sidecars to send an EOF signal.
+	// The write goroutine detects the closed channel and closes stdin.
+	for _, process := range processes {
+		if !process.persistent {
+			close(process.outbox)
+		}
+	}
+
+	// Waits for all processes in parallel. When the deadline passes, it kills and waits for the exited channel.
+	ctx, cancel := context.WithTimeout(context.Background(), c.StopTimeout)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	for _, process := range processes {
+		wg.Add(1)
+		p := process
+		routine.Go("sidecar-close", func() {
+			defer wg.Done()
+			if p.persistent && detach {
+				p.ownerMutex.Lock()
+				defer p.ownerMutex.Unlock()
+				if !p.transportClosed {
+					p.closeTransport()
+				}
+				return
+			}
+			if p.persistent {
+				if err := c.closePersistentOwner(p, ctx); err != nil {
+					LogError("sidecar "+p.name, fmt.Sprintf("close owner: %v", err))
+				}
+				return
+			}
+			// When the read() goroutine reads the output to the end and waits for the process, the process.exited channel closes.
+			killed := false
+			select {
+			case <-p.exited:
+			case <-ctx.Done():
+				// The deadline passed. Forces termination.
+				err := p.cmd.Process.Kill()
+				killed = err == nil
+				if err != nil && !errors.Is(err, os.ErrProcessDone) {
+					LogError("sidecar "+p.name, fmt.Sprintf("kill: %v", err))
+				}
+				// Waits until the read() goroutine ends.
+				<-p.exited
+			}
+			// An exit caused by a pipe closed after a forced termination or a violation is not reported (docs/spec/sidecars.md#declaration-and-startup).
+			switch {
+			case killed:
+				LogError("sidecar "+p.name, "did not end within the stop timeout and was killed")
+			case p.violated:
+			case p.waitErr != nil:
+				LogError("sidecar "+p.name, "exited while stopping: "+exitStatus(p.cmd, p.waitErr))
+			}
+		})
+	}
+	wg.Wait()
+}
+
+// RetainedSurface is a surface sent with retain and the project root that opened that surface.
+type RetainedSurface struct {
+	Surface string `json:"surface"`
+	Root    string `json:"root"`
+}
+
+// retainLayoutOwners removes layout owners omitted from an authoritative snapshot.
+// The caller holds c.mu.
+func (c *Sidecars) retainLayoutOwners(listed map[string]bool) bool {
+	before := c.statusLocked()
+	for surface := range c.roots {
+		if listed[surface] {
+			continue
+		}
+		delete(c.roots, surface)
+		delete(c.owners, surface)
+		delete(c.persistentSurfaces, surface)
+	}
+	changed := !reflect.DeepEqual(before, c.statusLocked())
+	if changed {
+		c.closingChanged()
+	}
+	return changed
+}
+
+// retainTimeout is the time to wait for the service to answer retain. It includes the time to close the sessions.
+const retainTimeout = 10 * time.Second
+
+// Retain closes, in each persistent service, the sessions of this application that are not in surfaces, and returns the number of closed sessions.
+// It removes previously known omitted layout surfaces before starting the service; a session newly accepted while preparing the retain request is
+// included in that request. When the service is not running and there is no endpoint, there are no sessions, so it skips the service.
+func (c *Sidecars) Retain(surfaces []RetainedSurface) (int, error) {
+	if surfaces == nil {
+		return 0, errors.New("retain requires a surfaces list")
+	}
+	listed := make(map[string]bool, len(surfaces))
+	for _, item := range surfaces {
+		if item.Surface == "" || item.Root == "" {
+			return 0, fmt.Errorf("retain surface entry is invalid: %+v", item)
+		}
+		listed[item.Surface] = true
+	}
+	// The supplied list is the complete set of layout surface sessions. Retire stale owners before building each service's keep list;
+	//
+	c.mu.Lock()
+	changed := c.retainLayoutOwners(listed)
+	c.mu.Unlock()
+	if changed {
+		c.closingInvalidated()
+	}
+	c.declarations.RLock()
+	names := make([]string, 0, len(c.persistent))
+	for name, persistent := range c.persistent {
+		if persistent {
+			names = append(names, name)
+		}
+	}
+	c.declarations.RUnlock()
+	total := 0
+	for _, name := range names {
+		request := fmt.Sprintf("%d", atomic.AddUint64(&c.nextRequest, 1))
+		waiter := make(chan error, 1)
+		c.mu.Lock()
+		if c.stopped {
+			c.mu.Unlock()
+			return total, errors.New("sidecars are stopped")
+		}
+		if _, running := c.running[name]; !running {
+			program, _, ok := c.declaration(name)
+			if !ok {
+				c.mu.Unlock()
+				return total, fmt.Errorf("sidecar %s is not declared by any plugin", name)
+			}
+			endpoint := filepath.Join(c.configDir, "services", filepath.Base(program), "endpoint.json")
+			if _, err := os.Stat(endpoint); errors.Is(err, os.ErrNotExist) {
+				c.mu.Unlock()
+				continue
+			} else if err != nil {
+				c.mu.Unlock()
+				return total, fmt.Errorf("sidecar %s: read endpoint: %w", name, err)
+			}
+		}
+		if _, _, err := c.process(name, nil); err != nil {
+			c.mu.Unlock()
+			return total, err
+		}
+		c.mu.Unlock()
+		if c.RetainSending != nil {
+			c.RetainSending(name)
+		}
+		// A send to outbox happens inside the lock and only to a sidecar in the running list. Stop may have closed that outbox while the service was being prepared,
+		// so it checks again and sends without blocking.
+		c.mu.Lock()
+		if c.stopped {
+			c.mu.Unlock()
+			return total, errors.New("sidecars are stopped")
+		}
+		process, ok := c.running[name]
+		if !ok {
+			c.mu.Unlock()
+			return total, fmt.Errorf("sidecar %s is not running", name)
+		}
+		// The keep list is built here, after the service started, so a session first sent during the start is kept (F229-7).
+		// Starts from a non-nil slice so that an empty list is also sent as a JSON array.
+		keep := append(make([]RetainedSurface, 0, len(surfaces)+len(c.roots)), surfaces...)
+		for surface, root := range c.roots {
+			if listed[surface] {
+				continue
+			}
+			keep = append(keep, RetainedSurface{Surface: surface, Root: root})
+		}
+		for _, item := range keep {
+			if item.Surface == "" || item.Root == "" {
+				c.mu.Unlock()
+				return total, fmt.Errorf("retain surface entry is invalid: %+v", item)
+			}
+		}
+		line, err := json.Marshal(map[string]any{"operation": "retain", "request": request, "surfaces": keep})
+		if err != nil {
+			c.mu.Unlock()
+			return total, err
+		}
+		line = append(line, '\n')
+		process.closeWaiters[request] = waiter
+		queued := queue(line)
+		queued.progress = &lineProgress{}
+		select {
+		case process.outbox <- queued:
+		default:
+			delete(process.closeWaiters, request)
+			c.mu.Unlock()
+			return total, fmt.Errorf("sidecar %s is not keeping up", name)
+		}
+		c.mu.Unlock()
+		timer := time.NewTimer(retainTimeout)
+		select {
+		case err := <-waiter:
+			timer.Stop()
+			if err != nil {
+				return total, fmt.Errorf("sidecar %s: retain: %w", name, err)
+			}
+		case <-timer.C:
+			return total, fmt.Errorf("sidecar %s: retain was not answered within %s: %s", name, retainTimeout,
+				queued.progress.describe(monotonicNanos(), process.lastRead.Load()))
+		}
+		c.mu.Lock()
+		total += process.retained[request]
+		delete(process.retained, request)
+		c.mu.Unlock()
+	}
+	return total, nil
+}
+
+func (c *Sidecars) closePersistentOwner(process *sidecar, ctx context.Context) error {
+	process.ownerMutex.Lock()
+	defer process.ownerMutex.Unlock()
+	if process.transportClosed {
+		// Another caller closed the owner and the transport.
+		return nil
+	}
+	return c.closeOwnerAndShutdown(process, ctx)
+}
+
+// closeOwnerAndShutdown sends close-owner and shutdown, waits for each answer and closes the transport. It is called
+// with process.ownerMutex held.
+func (c *Sidecars) closeOwnerAndShutdown(process *sidecar, ctx context.Context) error {
+	request := fmt.Sprintf("%d", atomic.AddUint64(&c.nextRequest, 1))
+	waiter := make(chan error, 1)
+	defer func() {
+		c.mu.Lock()
+		delete(process.closeWaiters, request)
+		c.mu.Unlock()
+	}()
+	c.mu.Lock()
+	process.closeWaiters[request] = waiter
+	c.mu.Unlock()
+	line, err := json.Marshal(map[string]string{"operation": "close-owner", "request": request})
+	if err != nil {
+		return err
+	}
+	line = append(line, '\n')
+	select {
+	case process.outbox <- queue(line):
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	select {
+	case err := <-waiter:
+		if err != nil {
+			process.closeTransport()
+			return err
+		}
+		shutdown := fmt.Sprintf("%d", atomic.AddUint64(&c.nextRequest, 1))
+		shutdownWaiter := make(chan error, 1)
+		c.mu.Lock()
+		process.closeWaiters[shutdown] = shutdownWaiter
+		c.mu.Unlock()
+		shutdownLine, marshalErr := json.Marshal(map[string]string{"operation": "shutdown", "request": shutdown})
+		if marshalErr != nil {
+			return marshalErr
+		}
+		shutdownLine = append(shutdownLine, '\n')
+		select {
+		case process.outbox <- queue(shutdownLine):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		select {
+		case shutdownErr := <-shutdownWaiter:
+			process.closeTransport()
+			return shutdownErr
+		case <-ctx.Done():
+			process.closeTransport()
+			return ctx.Err()
+		}
+	case <-ctx.Done():
+		process.closeTransport()
+		return ctx.Err()
+	}
+}
+
+// process returns the running sidecar, and when there is none, starts and registers it. It is called holding c.mu and returns holding it. The start
+// waits for the process launch and for the connection and the authentication of a persistent service, so it happens with the lock released. Meanwhile the requests of other sidecars
+// do not wait, and the requests of the same sidecar wait for that start to end. started tells whether this call started it. lost is the revival
+// of a lost persistent connection that runs this start, nil for a send or a retain. While the restart limit stops the sidecar, it starts nothing;
+// a counted start failure of a persistent service can stop it (docs/spec/persistent-services.md#service-transport).
+func (c *Sidecars) process(name string, lost *revival) (process *sidecar, started bool, err error) {
+	for {
+		if process, ok := c.running[name]; ok {
+			return process, false, nil
+		}
+		if c.stopped {
+			return nil, false, errors.New("sidecars are stopped")
+		}
+		wait, ok := c.starting[name]
+		if !ok {
+			break
+		}
+		c.mu.Unlock()
+		<-wait
+		c.mu.Lock()
+	}
+	if c.restartStopped(name) {
+		return nil, false, fmt.Errorf("sidecar %s: restart limit", name)
+	}
+	done := make(chan struct{})
+	c.starting[name] = done
+	c.mu.Unlock()
+	process, err = c.launch(name, lost)
+	c.mu.Lock()
+	delete(c.starting, name)
+	close(done)
+	if failure := (serviceStartFailure{}); errors.As(err, &failure) {
+		c.countServiceFailure(name, lost)
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	// Stop reads the running list after waiting for the starts to end, so a start that ended while stopping is also registered and Stop cleans it up.
+	c.running[name] = process
+	process.begin()
+	if c.stopped {
+		return nil, false, errors.New("sidecars are stopped")
+	}
+	return process, true, nil
+}
+
+// launch starts the sidecar name; lost is the revival that runs the start of a persistent service, or nil. Call it without the lock; it does
+// not register.
+func (c *Sidecars) launch(name string, lost *revival) (*sidecar, error) {
+	program, persistent, ok := c.declaration(name)
+	if !ok {
+		return nil, c.undeclared(name)
+	}
+	if persistent {
+		return c.processPersistent(name, program, lost)
+	}
+	// A host with a configuration directory has the folder `logs`, where a sidecar writes its event file (docs/spec/sidecars.md#log).
+	arguments := []string{}
+	if c.configDir != "" {
+		arguments = append(arguments, "--log-dir", filepath.Join(c.configDir, "logs"))
+	}
+	cmd := exec.Command(program, arguments...)
+	// The host reads the standard error line by line and writes each line as a record (docs/spec/sidecars.md#log).
+	cmd.Stderr = &recordWriter{layer: "sidecar", where: name}
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, err
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		stdin.Close()
+		return nil, err
+	}
+	spawnedAt := time.Now()
+	if err := cmd.Start(); err != nil {
+		stdin.Close()
+		stdout.Close()
+		return nil, fmt.Errorf("sidecar %s: %w", name, err)
+	}
+	EmitHost(LevelInfo, "host.sidecar.start", map[string]any{"name": name, "pid": cmd.Process.Pid})
+	PerformanceProcessAdd("sidecar", name, cmd.Process.Pid)
+	process := &sidecar{
+		name: name, cmd: cmd, stdin: stdin, spawnedAt: spawnedAt,
+		outbox:       make(chan queuedLine, 256),
+		exited:       make(chan struct{}),
+		closeWaiters: make(map[string]chan error),
+		surfaces:     make(map[string]bool),
+	}
+	process.begin = func() {
+		routine.Go("sidecar-write", func() { c.write(process) })       // write goroutine: reads from the outbox channel and writes to stdin.
+		routine.Go("sidecar-read", func() { c.read(process, stdout) }) // read goroutine: reads from stdout and passes events.
+	}
+	return process, nil
+}
+
+type persistentEndpoint struct {
+	Protocol uint64 `json:"protocol"`
+	PID      int    `json:"pid"`
+	Socket   string `json:"socket"`
+	Token    string `json:"token"`
+}
+
+// serviceEndpointLine reads the first line that a newly started service prints to stdout. When no line arrives within limit, it ends that service,
+// reaps it, returns true as timedOut, and returns the failure of that cleanup as err.
+func serviceEndpointLine(cmd *exec.Cmd, stdout io.Reader, limit time.Duration) (line []byte, timedOut bool, err error) {
+	type result struct {
+		line []byte
+		err  error
+	}
+	read := make(chan result, 1)
+	routine.Go("sidecar-read-line", func() {
+		line, err := bufio.NewReader(stdout).ReadBytes('\n')
+		read <- result{line, err}
+	})
+	timer := time.NewTimer(limit)
+	defer timer.Stop()
+	select {
+	case got := <-read:
+		return got.line, false, got.err
+	case <-timer.C:
+	}
+	// When the service ends, stdout closes and the read goroutine also ends.
+	if err := cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+		return nil, true, fmt.Errorf("ending the service failed: %w", err)
+	}
+	<-read
+	var exit *exec.ExitError
+	if err := cmd.Wait(); err != nil && !errors.As(err, &exit) {
+		return nil, true, fmt.Errorf("reaping the service failed: %w", err)
+	}
+	return nil, true, nil
+}
+
+// processPersistent connects to the persistent service name, and starts it when no live service has an endpoint. lost is the revival that runs
+// it, or nil: a revival that finds no live service counts the end of the service process before it spawns, and the restart limit can stop it
+// there (docs/spec/persistent-services.md#service-transport).
+func (c *Sidecars) processPersistent(name, program string, lost *revival) (*sidecar, error) {
+	// A zero HelloTimeout is a value that NewSidecars never gives. It would fail the hello of every service at once, so the start refuses it
+	// before anything is spawned.
+	if c.HelloTimeout <= 0 {
+		return nil, fmt.Errorf("sidecar %s: HelloTimeout is not set; build Sidecars with NewSidecars", name)
+	}
+	serviceDir := filepath.Join(c.configDir, "services", filepath.Base(program))
+	current, err := platform.Current()
+	if err != nil {
+		return nil, err
+	}
+	if err := current.CreatePrivateDirectories(serviceDir); err != nil {
+		return nil, fmt.Errorf("sidecar %s: create service directory: %w", name, err)
+	}
+	if err := current.SecureServiceDirectory(serviceDir); err != nil {
+		return nil, fmt.Errorf("sidecar %s: secure service directory: %w", name, err)
+	}
+	endpointPath := filepath.Join(serviceDir, "endpoint.json")
+	var endpoint persistentEndpoint
+	var cmd *exec.Cmd
+	var spawnedAt time.Time
+	if data, err := os.ReadFile(endpointPath); err == nil {
+		if err := json.Unmarshal(data, &endpoint); err != nil {
+			return nil, fmt.Errorf("sidecar %s: invalid endpoint: %w", name, err)
+		}
+	} else if errors.Is(err, os.ErrNotExist) {
+		if lost != nil {
+			c.mu.Lock()
+			stopped := c.countServiceFailure(name, lost)
+			c.mu.Unlock()
+			if stopped {
+				return nil, errRestartLimit
+			}
+		}
+		cmd = exec.Command(program, "--service-dir", serviceDir, "--log-dir", filepath.Join(c.configDir, "logs"))
+		// A persistent service belongs to the lifetime of the configuration
+		// directory and not of this application process. A new session is started so that the recovery service does not
+		// end together with the application when it exits abnormally.
+		if err := current.NewSession(cmd); err != nil {
+			return nil, fmt.Errorf("sidecar %s: new session: %w", name, err)
+		}
+		cmd.Stdin = nil
+		// The service lives longer than this host, so it writes to its own log file and not to the standard error of the host
+		// (docs/spec/hosts.md#application-log). There is no endpoint, so no service writes to that file.
+		serviceLog, err := OpenLog(ServiceLogPath(c.configDir, program))
+		if err != nil {
+			return nil, fmt.Errorf("sidecar %s: service log: %w", name, err)
+		}
+		cmd.Stderr = serviceLog
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			return nil, errors.Join(fmt.Errorf("sidecar %s: service stdout: %w", name, err), serviceLog.Close())
+		}
+		spawnedAt = time.Now()
+		startErr := cmd.Start()
+		// The service has a duplicated descriptor, so the file that the host opened is closed.
+		if err := errors.Join(startErr, serviceLog.Close()); err != nil {
+			return nil, fmt.Errorf("sidecar %s: %w", name, err)
+		}
+		line, timedOut, err := serviceEndpointLine(cmd, stdout, c.ReadyTimeout)
+		if timedOut {
+			message := fmt.Sprintf("sidecar %s: the service did not print its endpoint within %v", name, c.ReadyTimeout)
+			if err != nil {
+				return nil, serviceStartFailure{fmt.Sprintf("%s; %v", message, err)}
+			}
+			return nil, serviceStartFailure{message}
+		}
+		// When stdout closes without a line, the service ended before it printed the endpoint.
+		if errors.Is(err, io.EOF) && len(line) == 0 {
+			return nil, serviceStartFailure{fmt.Sprintf("sidecar %s: service exited before endpoint", name)}
+		}
+		if err != nil {
+			return nil, fmt.Errorf("sidecar %s: service startup: %w", name, err)
+		}
+		if err := json.Unmarshal(line, &endpoint); err != nil || endpoint.Protocol == 0 {
+			var failure struct {
+				Error    string              `json:"error"`
+				Endpoint *persistentEndpoint `json:"endpoint"`
+			}
+			if json.Unmarshal(line, &failure) == nil && failure.Error != "" && failure.Endpoint != nil {
+				endpoint = *failure.Endpoint
+			} else {
+				if err == nil {
+					err = errors.New("endpoint is incomplete")
+				}
+				return nil, fmt.Errorf("sidecar %s: service endpoint: %w", name, err)
+			}
+		}
+	} else {
+		return nil, fmt.Errorf("sidecar %s: read endpoint: %w", name, err)
+	}
+	exists, err := current.ServiceProcessExists(endpoint.PID)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		if err := os.Remove(endpointPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("sidecar %s: remove stale endpoint: %w", name, err)
+		}
+		// This endpoint was left by a service that ended abnormally. Only this record, which was confirmed to be stale, is removed,
+		// and the common single creation path is entered.
+		return c.processPersistent(name, program, lost)
+	}
+	if endpoint.Protocol != 1 {
+		return nil, fmt.Errorf("sidecar %s: service protocol %d is not supported", name, endpoint.Protocol)
+	}
+	if endpoint.PID == 0 || endpoint.Socket == "" || endpoint.Token == "" {
+		return nil, fmt.Errorf("sidecar %s: service endpoint is incomplete", name)
+	}
+	conn, err := net.Dial("unix", endpoint.Socket)
+	if err != nil {
+		return nil, fmt.Errorf("sidecar %s: connect authenticated service: %w", name, err)
+	}
+	reader := bufio.NewReader(conn)
+	hello, err := json.Marshal(map[string]any{"operation": "hello", "protocol": 1, "token": endpoint.Token, "client": c.configDir})
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("sidecar %s: encode hello: %w", name, err)
+	}
+	hello = append(hello, '\n')
+	if _, err := conn.Write(hello); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("sidecar %s: hello: %w", name, err)
+	}
+	// The hello reply has a deadline so that a service that does not answer does not make the requests and Stop of this sidecar wait forever.
+	if err := conn.SetReadDeadline(time.Now().Add(c.HelloTimeout)); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("sidecar %s: hello deadline: %w", name, err)
+	}
+	responseLine, err := reader.ReadBytes('\n')
+	helloRead := monotonicNanos()
+	if errors.Is(err, os.ErrDeadlineExceeded) {
+		conn.Close()
+		return nil, serviceStartFailure{fmt.Sprintf("sidecar %s: the service did not answer hello within %v", name, c.HelloTimeout)}
+	}
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("sidecar %s: hello response: %w", name, err)
+	}
+	if err := conn.SetReadDeadline(time.Time{}); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("sidecar %s: hello deadline: %w", name, err)
+	}
+	var response struct {
+		Operation string  `json:"operation"`
+		Protocol  *uint64 `json:"protocol"`
+		Version   *string `json:"version"`
+		OK        bool    `json:"ok"`
+		Error     string  `json:"error"`
+	}
+	if err := json.Unmarshal(responseLine, &response); err != nil || response.Operation != "hello" {
+		conn.Close()
+		return nil, fmt.Errorf("sidecar %s: authentication handshake failed: invalid hello response", name)
+	}
+	if !response.OK {
+		conn.Close()
+		if response.Error == "" {
+			response.Error = "authentication failed"
+		}
+		return nil, fmt.Errorf("sidecar %s: authentication handshake failed: %s", name, response.Error)
+	}
+	if response.Protocol == nil || *response.Protocol != 1 {
+		conn.Close()
+		return nil, fmt.Errorf("sidecar %s: service protocol mismatch in hello response", name)
+	}
+	EmitHost(LevelInfo, "host.sidecar.connect", map[string]any{"name": name, "pid": endpoint.PID, "spawned": cmd != nil})
+	PerformanceProcessAdd("sidecar", name, endpoint.PID)
+	process := &sidecar{
+		name: name, cmd: cmd, conn: conn, persistent: true, version: response.Version, servicePID: endpoint.PID, spawnedAt: spawnedAt,
+		outbox: make(chan queuedLine, 256), exited: make(chan struct{}),
+		closeWaiters: make(map[string]chan error), surfaces: make(map[string]bool),
+	}
+	process.lastRead.Store(helloRead)
+	process.begin = func() {
+		routine.Go("sidecar-write-persistent", func() { c.writePersistent(process) })
+		routine.Go("sidecar-read-persistent", func() { c.readPersistent(process, reader) })
+	}
+	return process, nil
+}
+
+// write first empties the queue, writes the held messages when the queue is empty, and then waits for the queue.
+// The held messages arise after the queue became full, so they must go out after the messages that entered the queue first.
+// When the queue closes, it writes up to the held messages and then closes stdin.
+func (c *Sidecars) write(process *sidecar) {
+	defer func() {
+		if err := process.stdin.Close(); err != nil {
+			LogError("sidecar "+process.name, fmt.Sprintf("close stdin: %v", err))
+		}
+	}()
+	for {
+		// 1. Writes all messages in the channel without blocking (a select with default).
+		for drained := false; !drained; {
+			select {
+			case line, ok := <-process.outbox:
+				if !ok {
+					// The channel closed. Ends after writing all held messages.
+					c.writePending(process)
+					return
+				}
+				if !c.writeLine(process, line) {
+					return
+				}
+			default:
+				drained = true
+			}
+		}
+
+		// 2. When the queue is empty, writes all held messages.
+		if !c.writePending(process) {
+			return
+		}
+
+		// 3. Now waits for the next item from the channel (blocking).
+		line, ok := <-process.outbox
+		if !ok {
+			// The channel closed. Ends after writing all held messages.
+			c.writePending(process)
+			return
+		}
+		if !c.writeLine(process, line) {
+			return
+		}
+	}
+}
+
+func (c *Sidecars) writePersistent(process *sidecar) {
+	for {
+		for drained := false; !drained; {
+			select {
+			case line, ok := <-process.outbox:
+				if !ok {
+					c.writePersistentPending(process)
+					return
+				}
+				if !c.writePersistentLine(process, line) {
+					return
+				}
+			default:
+				drained = true
+			}
+		}
+		if !c.writePersistentPending(process) {
+			return
+		}
+		line, ok := <-process.outbox
+		if !ok {
+			c.writePersistentPending(process)
+			return
+		}
+		if !c.writePersistentLine(process, line) {
+			return
+		}
+	}
+}
+
+func (c *Sidecars) writePersistentLine(process *sidecar, line queuedLine) bool {
+	started := monotonicNanos()
+	if line.progress != nil {
+		line.progress.started.Store(started)
+	}
+	process.writing.Store(int64(len(line.bytes)))
+	defer process.writing.Store(0)
+	if _, err := process.conn.Write(line.bytes); err != nil {
+		LogError("sidecar "+process.name, fmt.Sprintf("write: %v", err))
+		return false
+	}
+	ended := monotonicNanos()
+	if line.progress != nil {
+		line.progress.ended.Store(ended)
+	}
+	recordWriteWait(process.name, line, started, ended)
+	return true
+}
+
+func (c *Sidecars) writePersistentPending(process *sidecar) bool {
+	process.muClosed.Lock()
+	replies, closes := process.pendingReplies.take(), process.pendingCloses.take()
+	process.muClosed.Unlock()
+	for _, line := range replies {
+		if !c.writePersistentLine(process, line) {
+			return false
+		}
+	}
+	for _, line := range closes {
+		if !c.writePersistentLine(process, line) {
+			return false
+		}
+	}
+	return true
+}
+
+func (c *Sidecars) writeLine(process *sidecar, line queuedLine) bool {
+	started := monotonicNanos()
+	process.writing.Store(int64(len(line.bytes)))
+	defer process.writing.Store(0)
+	if _, err := process.stdin.Write(line.bytes); err != nil {
+		LogError("sidecar "+process.name, fmt.Sprintf("write: %v", err))
+		return false
+	}
+	recordWriteWait(process.name, line, started, monotonicNanos())
+	return true
+}
+
+// writePending takes the held messages at once and writes the returns first and the closes last.
+func (c *Sidecars) writePending(process *sidecar) bool {
+	process.muClosed.Lock()
+	replies, closes := process.pendingReplies.take(), process.pendingCloses.take()
+	process.muClosed.Unlock()
+	for _, line := range replies {
+		if !c.writeLine(process, line) {
+			return false
+		}
+	}
+	for _, line := range closes {
+		if !c.writeLine(process, line) {
+			return false
+		}
+	}
+	return true
+}
+
+// read passes the output of the sidecar to the window that owns the surface. When the output ends or the protocol is violated, and the process is not ending,
+// it ends that process and tells each surface that was sent to that process about the failure (docs/spec/sidecars.md#failure).
+// ownedSurface is a surface to tell about a failure and its owner window.
+type ownedSurface struct {
+	surface string
+	owner   SidecarOwner
+}
+
+func (c *Sidecars) read(process *sidecar, stdout io.ReadCloser) {
+	violation := c.relay(process, stdout)
+	// Closes the read end so that a process that is still writing is not blocked in a write. If it blocks, it does not end until the forced termination after the deadline of Stop.
+	if err := stdout.Close(); err != nil {
+		LogError("sidecar "+process.name, fmt.Sprintf("close output: %v", err))
+	}
+	c.mu.Lock()
+	failed := !c.stopped && c.running[process.name] == process
+	owned := make([]ownedSurface, 0, len(process.surfaces))
+	forgot := false
+	if c.running[process.name] == process {
+		delete(c.running, process.name)
+		forgot = c.forgetClosing(process.name)
+	}
+	stop := false
+	if failed {
+		stop = c.countFailure(process.name)
+		// While ending, Stop closes the outbox. Otherwise it is closed here to end the write goroutine.
+		// Every send to outbox happens inside c.mu and only to a process that is in running.
+		close(process.outbox)
+		for surface := range process.surfaces {
+			if owner := c.owners[surface]; owner != nil {
+				owned = append(owned, ownedSurface{surface, owner})
+			}
+		}
+	}
+	if forgot {
+		c.closingChanged()
+	}
+	c.mu.Unlock()
+	if forgot {
+		c.closingInvalidated()
+	}
+	if !failed {
+		// It is stopping. A violation is written to the log and no failure event is sent. Stop decides the report of the exit.
+		c.failStoppedRequests(process.name)
+		if violation != "" {
+			LogError("sidecar "+process.name, "failed: "+violation)
+		}
+		process.violated = violation != ""
+		process.waitErr = process.cmd.Wait()
+		flushStderr(process.cmd)
+		EmitHost(LevelInfo, "host.sidecar.exit", map[string]any{"name": process.name, "pid": process.cmd.Process.Pid,
+			"status": exitStatus(process.cmd, process.waitErr), "stopping": true})
+		PerformanceProcessRemove(process.cmd.Process.Pid)
+		close(process.exited)
+		return
+	}
+	// The protocol state after a failure is undefined, so the process is ended.
+	reason := violation
+	if err := process.cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+		reason = fmt.Sprintf("%s; kill: %v", reason, err)
+	}
+	exit := exitStatus(process.cmd, process.cmd.Wait())
+	flushStderr(process.cmd)
+	if violation == "" {
+		reason = "output closed: " + exit
+	}
+	EmitHost(LevelInfo, "host.sidecar.exit", map[string]any{"name": process.name, "pid": process.cmd.Process.Pid,
+		"status": exit, "stopping": false})
+	PerformanceProcessRemove(process.cmd.Process.Pid)
+	close(process.exited)
+	LogError("sidecar "+process.name, "failed: "+reason)
+	if stop {
+		reportRestartLimit(process.name)
+	}
+	c.failRequests(process.name, reason)
+	for _, item := range owned {
+		item.owner.Emit("sidecar-failure", SidecarFailure{Sidecar: process.name, Surface: item.surface, Reason: reason})
+	}
+}
+
+// exitStatus writes the exit of the ended process cmd as `exit status <code>` or `signal <number>`
+// (docs/spec/sidecars.md#declaration-and-startup). waitErr is the result of cmd.Wait. For an error of waiting that is not an exit status,
+// it writes that error.
+func exitStatus(cmd *exec.Cmd, waitErr error) string {
+	var exit *exec.ExitError
+	if waitErr != nil && !errors.As(waitErr, &exit) {
+		return fmt.Sprintf("wait: %v", waitErr)
+	}
+	current, err := platform.Current()
+	if err != nil {
+		return fmt.Sprintf("exit status of process %d: %v", cmd.ProcessState.Pid(), err)
+	}
+	text, err := current.ExitStatus(cmd.ProcessState)
+	if err != nil {
+		return fmt.Sprintf("exit status of process %d: %v", cmd.ProcessState.Pid(), err)
+	}
+	return text
+}
+
+// relay passes the messages of the output to the owner window. It returns an empty string when the output ends, and the reason when the protocol is violated or the read
+// fails. When the part of a line before the line break exceeds sidecarMessageLimit bytes, it does not buffer more and fails.
+func (c *Sidecars) relay(process *sidecar, stdout io.Reader) string {
+	scanner := bufio.NewScanner(stdout)
+	// The buffer holds the limit and one line break. A longer line is bufio.ErrTooLong.
+	scanner.Buffer(make([]byte, 0, 64*1024), sidecarMessageLimit+1)
+	unfinished := 0
+	scanner.Split(MessageLines(&unfinished))
+	for scanner.Scan() {
+		recordReady(process)
+		var output sidecarOutput
+		if err := json.Unmarshal(scanner.Bytes(), &output); err != nil {
+			return fmt.Sprintf("invalid message: %v", err)
+		}
+		if output.Surface == nil {
+			return "invalid message: surface is missing"
+		}
+		if output.Closed != nil {
+			if violation := c.closeAnswered(process, *output.Surface, *output.Closed, output.Error); violation != "" {
+				return violation
+			}
+			continue
+		}
+		if output.Body == nil {
+			return "invalid message: body is missing"
+		}
+		event := sidecarEvent{Surface: *output.Surface, Body: output.Body}
+		c.recordReply(process.name, event.Surface, output.Cids, event.Body)
+		c.mu.Lock()
+		owner := c.owners[event.Surface]
+		addressed := process.surfaces[event.Surface]
+		if process.closedSurfaces[event.Surface] {
+			owner = nil
+		}
+		c.mu.Unlock()
+		// A message of a surface that was never sent to this process is a protocol violation. When it was sent and there is no owner window, the message was sent by the sidecar
+		// after the surface closed, so it is discarded (docs/spec/sidecars.md#messages).
+		if !addressed {
+			return "unknown surface " + event.Surface
+		}
+		if owner != nil {
+			// Checks whether it is an image envelope
+			if ReceiveSidecarMessage(
+				func() { c.traceMessage("sidecar.receive", process.name, event.Surface, event.Body) },
+				func() bool { return c.tryHandleImageEnvelope(owner, process.name, event.Surface, event.Body) },
+			) {
+				continue
+			}
+			owner.DeliverSidecarMessage(SidecarMessage{Sidecar: process.name, Surface: event.Surface, Body: event.Body})
+		} else {
+			c.dropMessage(process, event)
+		}
+	}
+	if err := scanner.Err(); errors.Is(err, bufio.ErrTooLong) {
+		return fmt.Sprintf("message exceeds %d bytes", sidecarMessageLimit)
+	} else if err != nil {
+		return fmt.Sprintf("read: %v", err)
+	}
+	logUnfinishedLine(process.name, unfinished)
+	return ""
+}
+
+func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
+	process.endReason = "eof"
+	violation := c.readPersistentLines(process, reader)
+	process.conn.Close()
+	wasCurrent := false
+	var owned []ownedSurface
+	c.mu.Lock()
+	stopping := c.stopped
+	// A connection that ends for a protocol violation while the host is not stopping is a failure of the service, which the restart limit
+	// counts here; the service keeps running (docs/spec/persistent-services.md#service-transport).
+	stop := violation != "" && !stopping && c.countFailure(process.name)
+	// The requests that wait for this connection when it ends (docs/spec/events.json, host.sidecar.disconnect).
+	waiting := c.requests.waiting(process.name)
+	end := process.endReason
+	if violation != "" {
+		end = "violation"
+	}
+	waiters := make([]chan error, 0, len(process.closeWaiters))
+	for request, waiter := range process.closeWaiters {
+		delete(process.closeWaiters, request)
+		waiters = append(waiters, waiter)
+	}
+	wasCurrent, forgot, owned := c.persistentConnectionEnded(process, violation != "")
+	c.mu.Unlock()
+	if forgot {
+		c.closingInvalidated()
+	}
+	for _, waiter := range waiters {
+		waiter <- errors.New("persistent service disconnected before close-owner ack")
+	}
+	close(process.exited)
+	EmitHost(LevelInfo, "host.sidecar.disconnect", disconnectFields(process.name, process.servicePID, stopping, violation, end, waiting))
+	PerformanceProcessRemove(process.servicePID)
+	if stopping {
+		c.failStoppedRequests(process.name)
+	}
+	if violation != "" {
+		// The service violated the protocol. The same message would end the next connection too, so it is not connected again immediately, and the next send
+		// connects again through the creation path (docs/spec/persistent-services.md#service-transport).
+		LogError("sidecar "+process.name, "failed: "+violation)
+		if stop {
+			reportRestartLimit(process.name)
+		}
+		c.failRequests(process.name, violation)
+		for _, item := range owned {
+			item.owner.Emit("sidecar-failure", SidecarFailure{Sidecar: process.name, Surface: item.surface, Reason: violation})
+		}
+		return
+	}
+	// The connection was lost. It connects again immediately without waiting for the next send; if the service is alive, it
+	// attaches again, and if it died, the stale endpoint cleanup of processPersistent respawns it (V5-106).
+	if wasCurrent {
+		c.failRequests(process.name, "connection lost")
+		c.revivePersistent(process.name, fmt.Sprintf("end: %s, waiting: %d", end, waiting))
+	}
+}
+
+// persistentConnectionEnded retires one connection under c.mu. It exposes the
+// complete state transition independently of socket I/O and reconnection.
+func (c *Sidecars) persistentConnectionEnded(process *sidecar, violated bool) (bool, bool, []ownedSurface) {
+	before := c.statusLocked()
+	wasCurrent := false
+	var owned []ownedSurface
+	if c.running[process.name] == process {
+		delete(c.running, process.name)
+		c.unannouncedLoss[process.name] = true
+		wasCurrent = true
+		c.forgetClosing(process.name)
+		if violated {
+			for surface := range process.surfaces {
+				if owner := c.owners[surface]; owner != nil {
+					owned = append(owned, ownedSurface{surface, owner})
+				}
+			}
+		}
+	} else if c.stopped {
+		// This is a connection that the stop removed from the running list. The service finishes the closes that were not answered by itself.
+		c.forgetClosing(process.name)
+	}
+	changed := !reflect.DeepEqual(before, c.statusLocked())
+	if changed {
+		c.closingChanged()
+	}
+	return wasCurrent, changed, owned
+}
+
+// disconnectFields returns the fields of the host.sidecar.disconnect record of the end of a persistent service connection (docs/spec/events.json).
+func disconnectFields(name string, pid int, stopping bool, violation, end string, waiting int) map[string]any {
+	return map[string]any{"name": name, "pid": pid, "stopping": stopping, "violation": violation, "end": end, "waiting": waiting}
+}
+
+// recordReady writes the event host.trace.sidecar.ready for the first message line that a process spawned by the host sends. Its ms is the time from
+// the spawn to that line, and it is written once for each spawn. A process that another host started has no spawn time, so it writes nothing.
+func recordReady(process *sidecar) {
+	if process.spawnedAt.IsZero() || process.readyRecorded {
+		return
+	}
+	process.readyRecorded = true
+	pid := process.servicePID
+	if !process.persistent {
+		pid = process.cmd.Process.Pid
+	}
+	EmitHost(LevelDebug, "host.trace.sidecar.ready", map[string]any{
+		"sidecar": process.name, "pid": pid, "ms": float64(time.Since(process.spawnedAt)) / float64(time.Millisecond),
+	})
+}
+
+// readPersistentLines reads the lines of a persistent connection and passes replies and events. It returns an empty string when the connection ends and the reason when the protocol is
+// violated. When the part of a line before the line break exceeds sidecarMessageLimit bytes, it does not buffer more and
+// fails (docs/spec/persistent-services.md#service-transport).
+func (c *Sidecars) readPersistentLines(process *sidecar, reader *bufio.Reader) string {
+	scanner := bufio.NewScanner(reader)
+	// The buffer holds the limit and one line break. A longer line is bufio.ErrTooLong.
+	scanner.Buffer(make([]byte, 0, 64*1024), sidecarMessageLimit+1)
+	unfinished := 0
+	scanner.Split(MessageLines(&unfinished))
+	for scanner.Scan() {
+		process.lastRead.Store(monotonicNanos())
+		recordReady(process)
+		line := scanner.Bytes()
+		var value map[string]json.RawMessage
+		if err := json.Unmarshal(line, &value); err != nil {
+			return fmt.Sprintf("invalid message: %v", err)
+		}
+		var operation string
+		if raw, present := value["operation"]; present {
+			if err := json.Unmarshal(raw, &operation); err != nil {
+				return fmt.Sprintf("invalid message: operation: %v", err)
+			}
+		}
+		if operation == "closed-owner" || operation == "shutdown" || operation == "retained" {
+			var request string
+			if err := json.Unmarshal(value["request"], &request); err != nil || request == "" {
+				return fmt.Sprintf("invalid message: %s request is not a non-empty string", operation)
+			}
+			var ok bool
+			if err := json.Unmarshal(value["ok"], &ok); err != nil {
+				return fmt.Sprintf("invalid message: %s ok: %v", operation, err)
+			}
+			var reason string
+			if raw, present := value["error"]; present {
+				if err := json.Unmarshal(raw, &reason); err != nil {
+					return fmt.Sprintf("invalid message: %s error: %v", operation, err)
+				}
+			}
+			var closed int
+			if operation == "retained" && ok {
+				if err := json.Unmarshal(value["closed"], &closed); err != nil {
+					return fmt.Sprintf("invalid message: retained closed: %v", err)
+				}
+			}
+			c.mu.Lock()
+			waiter := process.closeWaiters[request]
+			delete(process.closeWaiters, request)
+			if operation == "retained" && waiter != nil {
+				if process.retained == nil {
+					process.retained = map[string]int{}
+				}
+				process.retained[request] = closed
+			}
+			c.mu.Unlock()
+			if waiter != nil {
+				if ok {
+					waiter <- nil
+				} else if reason == "" {
+					waiter <- fmt.Errorf("%s failed", operation)
+				} else {
+					waiter <- errors.New(reason)
+				}
+			}
+			continue
+		}
+		var output sidecarOutput
+		if err := json.Unmarshal(line, &output); err != nil {
+			return fmt.Sprintf("invalid message: %v", err)
+		}
+		if output.Surface == nil {
+			return "invalid message: surface is missing"
+		}
+		if output.Closed != nil {
+			if violation := c.closeAnswered(process, *output.Surface, *output.Closed, output.Error); violation != "" {
+				return violation
+			}
+			continue
+		}
+		if output.Body == nil {
+			return "invalid message: body is missing"
+		}
+		event := sidecarEvent{Surface: *output.Surface, Body: output.Body}
+		c.recordReply(process.name, event.Surface, output.Cids, event.Body)
+		c.mu.Lock()
+		owner := c.owners[event.Surface]
+		c.mu.Unlock()
+		if owner != nil {
+			if ReceiveSidecarMessage(
+				func() { c.traceMessage("sidecar.receive", process.name, event.Surface, event.Body) },
+				func() bool { return c.tryHandleImageEnvelope(owner, process.name, event.Surface, event.Body) },
+			) {
+				continue
+			}
+			owner.DeliverSidecarMessage(SidecarMessage{Sidecar: process.name, Surface: event.Surface, Body: event.Body})
+		} else {
+			c.dropMessage(process, event)
+		}
+	}
+	// net.ErrClosed means that this host closed the connection (cleanup after termination or failure). When the peer closes, it is EOF and there is no error.
+	if err := scanner.Err(); errors.Is(err, bufio.ErrTooLong) {
+		return fmt.Sprintf("message exceeds %d bytes", sidecarMessageLimit)
+	} else if err != nil {
+		process.endReason = fmt.Sprintf("read error: %v", err)
+		if !errors.Is(err, net.ErrClosed) {
+			LogError("sidecar "+process.name, fmt.Sprintf("persistent read: %v", err))
+		}
+	}
+	if unfinished > 0 {
+		process.endReason = "unfinished line"
+	}
+	logUnfinishedLine(process.name, unfinished)
+	return ""
+}
+
+// MessageLines splits the output of a sidecar into its lines without the line break and a carriage return before it. The
+// output of a process that ended while it wrote a line ends with a line without a line break: that line is not a message,
+// so it is left out and its size is counted in unfinished, and the end of the output is the end of the connection
+// (docs/spec/sidecars.md#messages).
+func MessageLines(unfinished *int) bufio.SplitFunc {
+	return func(data []byte, atEOF bool) (int, []byte, error) {
+		if index := bytes.IndexByte(data, '\n'); index >= 0 {
+			return index + 1, bytes.TrimSuffix(data[:index], []byte{'\r'}), nil
+		}
+		if atEOF && len(data) > 0 {
+			*unfinished = len(data)
+			return len(data), nil, nil
+		}
+		return 0, nil, nil
+	}
+}
+
+// logUnfinishedLine records the line that a sidecar did not finish before its output ended.
+func logUnfinishedLine(sidecar string, unfinished int) {
+	if unfinished > 0 {
+		LogInfo("sidecar "+sidecar, fmt.Sprintf("the output ended in a line of %d bytes without a line break, which is not a message", unfinished))
+	}
+}
+
+// revivePersistent connects a lost persistent connection again and tells the owning surfaces the result (V5-106). When
+// another path already restarted it or it is ending, it does nothing. It tries once for one connection loss;
+// a failure is reported by a notification, and the next send passes through the same path again.
+func (c *Sidecars) revivePersistent(name, loss string) {
+	c.awaitReplacedService(name)
+	if c.endUndeclaredReplacement(name) {
+		return
+	}
+	// One disconnect counts at most one failure of the restart limit, whichever attempt below finds it.
+	lost := &revival{}
+	announced, failure := c.reviveAttempt(name, lost)
+	// The first attempt in which the connection is refused is evidence that the endpoint no longer listens; even if a recycled pid
+	// passes kill(pid, 0), the socket is dead. Only in a restart that has a loss record, it discards the endpoint
+	// and tries once more (V5-106). The contract of the send path is unchanged: the
+	// live-unreachable report of a cold send does not change the endpoint.
+	if failure != nil && refusedConnect(failure, name) {
+		if program, _, ok := c.declaration(name); ok {
+			endpoint := filepath.Join(c.configDir, "services", filepath.Base(program), "endpoint.json")
+			if err := os.Remove(endpoint); err != nil && !errors.Is(err, os.ErrNotExist) {
+				LogError("sidecar "+name, fmt.Sprintf("remove refused endpoint: %v", err))
+			}
+		}
+		announced, failure = c.reviveAttempt(name, lost)
+	}
+	c.mu.Lock()
+	replaced, replacing := c.replacing[name]
+	delete(c.replacing, name)
+	c.mu.Unlock()
+	switch {
+	case failure != nil:
+		// The start failed. The loss record is kept so that the next start announces it.
+		LogError("sidecar "+name, fmt.Sprintf("connection lost; restart failed: %v (%s)", failure, loss))
+		c.notifyConnection(name, failure)
+	case announced && replacing:
+		// The replacement closed the connection on purpose and the installed service started: an expected state.
+		running := "none"
+		if replaced.running != nil {
+			running = *replaced.running
+		}
+		LogInfo("sidecar "+name, fmt.Sprintf("service %s replaced by %s", running, *replaced.installed))
+		c.notifyConnection(name, nil)
+		c.mu.Lock()
+		c.closingChanged()
+		c.mu.Unlock()
+		c.closingInvalidated()
+	case announced:
+		// When another path (a send) already restarted it, that call also sent the notification.
+		LogError("sidecar "+name, "connection lost; restarted ("+loss+")")
+		c.notifyConnection(name, nil)
+	}
+}
+
+// endUndeclaredReplacement ends the replacement of the service of a sidecar that is not declared: it starts no
+// executable, tells the surfaces that sent to the sidecar the error of a send to it, and reports true
+// (docs/spec/persistent-services.md#updates). It reports false for any other loss.
+func (c *Sidecars) endUndeclaredReplacement(name string) bool {
+	c.mu.Lock()
+	replaced, replacing := c.replacing[name]
+	if !replacing || replaced.installed != nil {
+		c.mu.Unlock()
+		return false
+	}
+	delete(c.replacing, name)
+	c.closingChanged()
+	c.mu.Unlock()
+	running := "none"
+	if replaced.running != nil {
+		running = *replaced.running
+	}
+	LogInfo("sidecar "+name, fmt.Sprintf("service %s ended; the sidecar is not declared", running))
+	c.notifyConnection(name, c.undeclared(name))
+	c.closingInvalidated()
+	return true
+}
+
+// awaitReplacedService waits until the process of the service that Replace closed has ended, so the installed service
+// starts after it (docs/spec/persistent-services.md#updates). A process that does not end within the stop timeout fails
+// the replacement: the error line names the sidecar, and the reconnection that follows reaches the service that still
+// runs, so the sidecar stays outdated.
+func (c *Sidecars) awaitReplacedService(name string) {
+	c.mu.Lock()
+	replaced, replacing := c.replacing[name]
+	c.mu.Unlock()
+	if !replacing || replaced.pid <= 0 {
+		return
+	}
+	failed := func(reason string) {
+		LogError("sidecar "+name, "replace: "+reason)
+		c.mu.Lock()
+		delete(c.replacing, name)
+		c.mu.Unlock()
+	}
+	current, err := platform.Current()
+	if err != nil {
+		failed(err.Error())
+		return
+	}
+	ended, err := current.WaitServiceProcessEnd(replaced.pid, c.StopTimeout)
+	switch {
+	case err != nil:
+		failed(err.Error())
+	case !ended:
+		failed(fmt.Sprintf("the service process %d did not end within %v", replaced.pid, c.StopTimeout))
+	}
+}
+
+// reviveAttempt is one restart of the disconnect lost. When another path already restarted it, or the restart limit stops the sidecar, it
+// returns announced=false, and when the start fails, it returns failure.
+func (c *Sidecars) reviveAttempt(name string, lost *revival) (announced bool, failure error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.stopped || c.restartStopped(name) {
+		return false, nil
+	}
+	if _, running := c.running[name]; running {
+		return false, nil
+	}
+	_, started, err := c.process(name, lost)
+	if err != nil {
+		return false, err
+	}
+	if !started {
+		return false, nil
+	}
+	announced = c.unannouncedLoss[name]
+	delete(c.unannouncedLoss, name)
+	return announced, nil
+}
+
+// refusedConnect tells whether the sentence is the connection failure sentence of processPersistent.
+func refusedConnect(failure error, name string) bool {
+	return failure != nil && strings.HasPrefix(failure.Error(), fmt.Sprintf("sidecar %s: connect authenticated service:", name))
+}
+
+// notifyConnection tells the surfaces that sent to the persistent sidecar name about its connection that was connected again
+// (V5-106); a surface that sent only to other sidecars receives nothing (docs/spec/persistent-services.md#service-transport).
+// The window sends the picture configure of that sidecar again (SidecarReconnected), and the surface receives the connection
+// event and reopens its session. When the start failed, it announces the connection loss and its reason.
+func (c *Sidecars) notifyConnection(name string, failure error) {
+	type ownerSurface struct {
+		surface string
+		owner   SidecarOwner
+	}
+	c.mu.Lock()
+	var entries []ownerSurface
+	for surface, sidecars := range c.persistentSurfaces {
+		if owner := c.owners[surface]; owner != nil && sidecars[name] {
+			entries = append(entries, ownerSurface{surface, owner})
+		}
+	}
+	c.mu.Unlock()
+	raw, err := connectionNotice(failure)
+	if err != nil {
+		LogError("sidecar "+name, fmt.Sprintf("connection notice serialization: %v", err))
+		return
+	}
+	reconfigured := map[SidecarOwner]bool{}
+	for _, item := range entries {
+		if failure == nil && !reconfigured[item.owner] {
+			reconfigured[item.owner] = true
+			if window, ok := item.owner.(interface{ SidecarReconnected(sidecar string) }); ok {
+				window.SidecarReconnected(name)
+			}
+		}
+		item.owner.DeliverSidecarMessage(SidecarMessage{Sidecar: name, Surface: item.surface, Body: raw})
+	}
+}
+
+// connectionNotice is the sidecar-message body of a persistent connection: connected, or not connected with the reason failure.
+func connectionNotice(failure error) (json.RawMessage, error) {
+	body := map[string]any{"event": "connection", "connected": failure == nil}
+	if failure != nil {
+		body["reason"] = failure.Error()
+	}
+	return json.Marshal(body)
+}
+
+// Declared reports whether a plugin declares the sidecar name; a sidecar that no plugin declares any more ended with the
+// removal of its plugin.
+// dependsOn reports whether the plugin lists the sidecar name in dependencies.
+func (c *Sidecars) dependsOn(plugin, name string) bool {
+	c.declarations.RLock()
+	defer c.declarations.RUnlock()
+	return slices.Contains(c.dependents[name], plugin)
+}
+
+func (c *Sidecars) Declared(name string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	_, _, ok := c.declaration(name)
+	return ok
+}
+
+// ErrSidecarEnded is the error of a message to a sidecar whose process is not running: the sidecar ended, or never
+// started, so nothing receives the message.
+var ErrSidecarEnded = errors.New("the sidecar is not running")
+
+// sidecarEnded is the error of a message to the sidecar name that is not running.
+type sidecarEnded struct{ name string }
+
+func (e sidecarEnded) Error() string { return fmt.Sprintf("sidecar %s is not running", e.name) }
+
+func (e sidecarEnded) Is(target error) bool { return target == ErrSidecarEnded }
+
+// dropMessage records, with its body, a sidecar message that is discarded because there is no owner window, and answers a
+// transfer image among them with the error closed, because the supplier keeps a transfer image until the host answers it
+// (docs/spec/native-surfaces.md#image-regions).
+func (c *Sidecars) dropMessage(process *sidecar, event sidecarEvent) {
+	LogWarn("sidecar "+process.name, fmt.Sprintf("message for surface %s dropped: no window owns the surface: %s", event.Surface, event.Body))
+	name, answer, ok := ClosedImageAnswer(event.Body)
+	if !ok {
+		return
+	}
+	err := c.sendResponse(process, process.name, event.Surface, name, answer)
+	switch {
+	case errors.Is(err, ErrSidecarEnded):
+		// The frames of a sidecar end with its process, so an ended sidecar needs no answer.
+		LogInfo("sidecar "+process.name, fmt.Sprintf("answer of the image of closed surface %s not sent: %v", event.Surface, err))
+	case err != nil:
+		LogError("sidecar "+process.name, fmt.Sprintf("answer of the image of closed surface %s: %v", event.Surface, err))
+	}
+}
+
+// ClosedImageAnswer returns, for a transfer image envelope, its region name and the answer {image: {error: "closed", name,
+// generation, raster, sequence}}, and false for any other message.
+func ClosedImageAnswer(body json.RawMessage) (string, json.RawMessage, bool) {
+	var envelope struct {
+		Image *struct {
+			Name       string  `json:"name"`
+			Generation *uint64 `json:"generation"`
+			Raster     *uint64 `json:"raster"`
+			Sequence   *uint64 `json:"sequence"`
+			Token      any     `json:"token"`
+		} `json:"image"`
+	}
+	if json.Unmarshal(body, &envelope) != nil || envelope.Image == nil || envelope.Image.Token == nil || envelope.Image.Name == "" ||
+		envelope.Image.Generation == nil || envelope.Image.Raster == nil || envelope.Image.Sequence == nil {
+		return "", nil, false
+	}
+	image := envelope.Image
+	// silent: a map of a string and integers always marshals, so the error is never set.
+	answer, _ := json.Marshal(map[string]any{"image": map[string]any{
+		"error": "closed", "name": image.Name, "generation": *image.Generation, "raster": *image.Raster, "sequence": *image.Sequence}})
+	return image.Name, answer, true
+}
+
+// tryHandleImageEnvelope checks whether the event is an image envelope and handles it. It returns true for an envelope.
+
+func (c *Sidecars) tryHandleImageEnvelope(owner SidecarOwner, sidecarName, surface string, body json.RawMessage) bool {
+	var envelope struct {
+		Image *struct {
+			Detached json.RawMessage `json:"detached"`
+		} `json:"image"`
+	}
+	if err := json.Unmarshal(body, &envelope); err == nil && envelope.Image != nil && envelope.Image.Detached != nil {
+		ack, err := parseImageDetachAck(envelope.Image.Detached)
+		if err != nil {
+			LogError("sidecar "+sidecarName, err.Error())
+			return true
+		}
+		return c.handleImageDetachAck(owner, sidecarName, surface, ack)
+	}
+	// Checks whether the owner has the image envelope decision handler
+	if decider, ok := owner.(interface {
+		DecideImageEnvelope(sidecarName, surface string, body json.RawMessage) bool
+	}); ok {
+		return decider.DecideImageEnvelope(sidecarName, surface, body)
+	}
+
+	return false
+}
+
+// closeTransport closes the connection and the outbox of a persistent service. It is called with ownerMutex held.
+func (s *sidecar) closeTransport() {
+	s.responseMutex.Lock()
+	defer s.responseMutex.Unlock()
+	if s.transportClosed {
+		return
+	}
+	s.transportClosed = true
+	s.conn.Close()
+	close(s.outbox)
+}
+
+// flushStderr writes the last text of the standard error that ended without a line break, after the process ended, to the record.
+func flushStderr(cmd *exec.Cmd) {
+	if w, ok := cmd.Stderr.(*recordWriter); ok {
+		w.Flush()
+	}
+}
+
+// recordWriter reads the standard error of a non-persistent sidecar line by line and writes it as text records of level info
+// (docs/spec/sidecars.md#log). Text before a line break arrives is held until Flush.
+type recordWriter struct {
+	layer, where string
+	mu           sync.Mutex
+	partial      []byte
+}
+
+func (w *recordWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.partial = append(w.partial, p...)
+	for {
+		end := bytes.IndexByte(w.partial, '\n')
+		if end < 0 {
+			return len(p), nil
+		}
+		line := bytes.TrimSuffix(w.partial[:end], []byte("\r"))
+		Log(Entry{"info", w.layer, w.where, string(line)})
+		w.partial = w.partial[end+1:]
+	}
+}
+
+// Flush writes the last text that ended without a line break to the record.
+func (w *recordWriter) Flush() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if len(w.partial) > 0 {
+		Log(Entry{"info", w.layer, w.where, string(w.partial)})
+		w.partial = nil
+	}
+}
+
+// traceMessage writes a request sent to a sidecar or a message received from a sidecar, with the whole body, as an event of the performance trace
+// (docs/spec/diagnostics.md). When this trace is off, it creates nothing.
+func (c *Sidecars) traceMessage(event, sidecar, surface string, body json.RawMessage) {
+	if c.configDir == "" {
+		return
+	}
+	PerformanceObserve("host", func() map[string]any {
+		return map[string]any{"event": event, "sidecar": sidecar, "surface": surface, "body": body}
+	})
+}
+
+// queuedLine is a line for a sidecar with the moment it was queued or held, on the monotonic clock in nanoseconds.
+type queuedLine struct {
+	bytes  []byte
+	queued uint64
+	// progress is the write progress of a request line whose timeout names it, and nil for other lines.
+	progress *lineProgress
+}
+
+// lineProgress is the write progress of a request line: the monotonic times at which its write started and ended, 0 before.
+type lineProgress struct {
+	started atomic.Uint64
+	ended   atomic.Uint64
+}
+
+// describe states how far the request line went at now, given the monotonic time of the last line that the host read from the
+// service, 0 when none arrived.
+func (p *lineProgress) describe(now, lastRead uint64) string {
+	if ended := p.ended.Load(); ended != 0 {
+		read := "no line from the service arrived"
+		if lastRead != 0 {
+			read = fmt.Sprintf("the last line from the service arrived %d ms ago", (now-lastRead)/uint64(time.Millisecond))
+		}
+		return fmt.Sprintf("the request line was written %d ms ago, and %s", (now-ended)/uint64(time.Millisecond), read)
+	}
+	if p.started.Load() != 0 {
+		return "the request line is being written"
+	}
+	return "the request line is queued"
+}
+
+// queue stamps line with the moment it enters the write queue of a sidecar.
+func queue(line []byte) queuedLine {
+	return queuedLine{bytes: line, queued: monotonicNanos()}
+}
+
+// The waits of a line for a sidecar that the writer records (docs/spec/logging.md#entrances): a second in the queue
+// or 10 ms in the write.
+const (
+	writeQueuedLimit  = uint64(time.Second)
+	writeBlockedLimit = uint64(10 * time.Millisecond)
+)
+
+// recordWriteWait stores the event `host.sidecar.write_wait` when line waited writeQueuedLimit or more between its queueing
+// and the start of its write, or when the write from started to ended took writeBlockedLimit or more.
+func recordWriteWait(name string, line queuedLine, started, ended uint64) {
+	queued, written := started-line.queued, ended-started
+	if queued < writeQueuedLimit && written < writeBlockedLimit {
+		return
+	}
+	EmitHost(LevelInfo, "host.sidecar.write_wait", map[string]any{
+		"name": name, "bytes": len(line.bytes), "queued_us": queued / 1000, "write_us": written / 1000,
+	})
+}
+
+// ReceiveSidecarMessage records a received body and returns whether native image dispatch consumes it.
+func ReceiveSidecarMessage(trace func(), handleImage func() bool) bool {
+	trace()
+	return handleImage()
+}

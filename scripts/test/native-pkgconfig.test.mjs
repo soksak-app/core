@@ -45,10 +45,10 @@ test("Tauri app and bundled CLI Cargo commands use the declared deployment targe
       encoding: "utf8",
       env: { ...process.env, MACOSX_DEPLOYMENT_TARGET: "13.0" },
     });
-    const cargo = output.split(/\r?\n/).filter((line) => /\bcargo build\b.*-p soksak-(?:tauriv2|sok-tauriv2)(?:\s|$)/.test(line));
+    const cargo = output.split(/\r?\n/).filter((line) => /\bcargo build\b.*-p soksak-(?:tauriv2|sok)(?:\s|$)/.test(line));
     assert.equal(cargo.length, 2, `${target} must expand to one app build and one bundled CLI build:\n${output}`);
     assert.match(cargo[0], /^MACOSX_DEPLOYMENT_TARGET=14\.4 cargo build\b.*-p soksak-tauriv2(?:\s|$)/, `${target} app build: ${cargo[0]}`);
-    assert.match(cargo[1], /^MACOSX_DEPLOYMENT_TARGET=14\.4 cargo build\b.*-p soksak-sok-tauriv2(?:\s|$)/, `${target} bundled CLI build: ${cargo[1]}`);
+    assert.match(cargo[1], /^MACOSX_DEPLOYMENT_TARGET=14\.4 cargo build\b.*-p soksak-sok(?:\s|$)/, `${target} bundled CLI build: ${cargo[1]}`);
     for (const command of cargo) assert.match(command, /--locked/, `${target} does not preserve the Cargo.lock: ${command}`);
   }
 });
@@ -57,7 +57,7 @@ test("registry and workspace lint targets use the tracked Cargo lockfile", { tim
   const registry = execFileSync("make", ["-n", "-o", "native-darwin", "registry"], {
     cwd: workspace, encoding: "utf8",
   });
-  assert.match(registry, /cargo build --locked -p soksak-sok-tauriv2/, registry);
+  assert.match(registry, /cargo build --locked -p soksak-sok/, registry);
   const clippy = execFileSync("make", ["-n", "-o", "native-darwin", "-o", "build", "-o", "registry", "-o", "frontend-tauriv2", "rust-clippy-check"], {
     cwd: workspace, encoding: "utf8",
   });

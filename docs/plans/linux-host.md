@@ -4,7 +4,7 @@
 
 Status: pending proposal for checklist item R2-7 (R2-7-3 in [features](../features.md)). Nothing in this proposal is implemented. Approved content moves into the specifications ([hosts](../spec/hosts.md), [native surfaces](../spec/native-surfaces.md), [surface composition](../spec/surface-composition.md), [sidecars](../spec/sidecars.md), [persistent services](../spec/persistent-services.md)) before any implementation item starts, and this file is then removed.
 
-Every statement about a framework, toolkit, or system interface cites a source in [Sources](#sources) as `[Sn]`. A statement marked **unverified** has no source that establishes it and must be measured by the item that depends on it. The macOS mechanisms are read from [`platform.go`](../../packages/host/wailsv3/src/platform/platform.go), [`platform.rs`](../../packages/host/tauriv2/src/platform/platform.rs), [`native/darwin/src`](../../native/darwin/src/) and the [private native API inventory](../operations/private-native-apis.md).
+Every statement about a framework, toolkit, or system interface cites a source in [Sources](#sources) as `[Sn]`. A statement marked **unverified** has no source that establishes it and must be measured by the item that depends on it. The macOS mechanisms are read from [`platform.go`](../../packages/host/go/src/platform/platform.go), [`platform.rs`](../../packages/host/rust/src/platform/platform.rs), [`native/darwin/src`](../../native/darwin/src/) and the [private native API inventory](../operations/private-native-apis.md).
 
 ## Framework facts on Linux
 

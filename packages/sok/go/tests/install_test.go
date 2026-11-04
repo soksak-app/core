@@ -1,0 +1,564 @@
+package tests
+
+// Checks the validation of the installation format (docs/spec/installation.md) and the version selection.
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/soksak-app/core/packages/sok/go/src"
+)
+
+const sha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+func release(name string) string {
+	return `{"url": "file:///releases/` + name + `", "sha256": "` + sha + `"}`
+}
+
+func pluginJSON() string {
+	return `{"id": "probe", "package": "@scope/plugin-probe", "name": "Probe", "description": "검사용 plugin.", "license": "MIT",
+		"repository": "https://example.invalid/probe", "versions": [
+		{"version": "0.1.0", "release": ` + release("probe-0.1.0.tgz") + `, "engines": {"soksak": "^0.0.1"}, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
+		{"version": "0.2.0", "release": ` + release("probe-0.2.0.tgz") + `, "engines": {"soksak": "^0.0.2"}, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
+		{"version": "0.3.0", "release": ` + release("probe-0.3.0.tgz") + `, "engines": {"soksak": "^0.0.2"}, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}}]}`
+}
+
+func sidecarJSON() string {
+	return `{"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker", "versions": [
+		{"version": "0.1.0", "protocol": 1, "releases": {"darwin-arm64": ` + release("a") + `, "darwin-x64": ` + release("b") + `}},
+		{"version": "0.1.1", "protocol": 1, "releases": {"darwin-arm64": ` + release("c") + `}}]}`
+}
+
+func indexJSON() string {
+	return `{"format": 1, "plugins": [` + pluginJSON() + `], "sidecars": [` + sidecarJSON() + `],
+		"packs": [{"name": "starter", "description": "처음 설치하는 plugin.", "plugins": ["probe"]}],
+		"revoked": {"plugins": [{"id": "probe", "version": "0.3.0", "reason": "breaks saved spaces"}], "sidecars": []}}`
+}
+
+func decode(t *testing.T, text string) any {
+	t.Helper()
+	value, err := sok.DecodeJSON([]byte(text))
+	if err != nil {
+		t.Fatalf("fixture: %v", err)
+	}
+	return value
+}
+
+// at finds an object or an array element inside the fixture by path.
+func at(value any, path ...any) any {
+	for _, step := range path {
+		switch key := step.(type) {
+		case string:
+			value = value.(map[string]any)[key]
+		case int:
+			value = value.([]any)[key]
+		}
+	}
+	return value
+}
+
+func rejects(t *testing.T, err error, want string) {
+	t.Helper()
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("error %v, want %q", err, want)
+	}
+}
+
+// contract: install.version.ranges-and-order
+func TestVersionRangesAcceptExactCaretTildeAndBoundedForms(t *testing.T) {
+	for text, want := range map[string][2]string{
+		"0.0.2": {"0.0.2", "0.0.3"}, "^0.0.2": {"0.0.2", "0.0.3"}, "^0.2.3": {"0.2.3", "0.3.0"},
+		"^1.2.3": {"1.2.3", "2.0.0"}, "~1.2.3": {"1.2.3", "1.3.0"}, ">=0.0.2 <0.1.0": {"0.0.2", "0.1.0"},
+	} {
+		r, err := sok.ParseRange(text)
+		if err != nil || r.Min.String() != want[0] || r.Below == nil || r.Below.String() != want[1] {
+			t.Fatalf("%s: %v %v", text, r, err)
+		}
+	}
+	if !sok.Satisfies("0.0.9", ">=0.0.2 <0.1.0") || sok.Satisfies("0.1.0", ">=0.0.2 <0.1.0") {
+		t.Fatal("bounded range bounds")
+	}
+	// is >=0.0.0, that is, every version without an upper bound.
+	if r, err := sok.ParseRange("*"); err != nil || r.Min.String() != "0.0.0" || r.Below != nil {
+		t.Fatalf("*: %v %v", r, err)
+	}
+	for _, version := range []string{"0.0.0", "0.0.4", "1.2.3", "4294967295.4294967295.4294967295"} {
+		if !sok.Satisfies(version, "*") {
+			t.Fatalf("* does not contain %s", version)
+		}
+	}
+	// >=x.y.z has only a lower bound and no upper bound.
+	if r, err := sok.ParseRange(">=0.0.6"); err != nil || r.Min.String() != "0.0.6" || r.Below != nil {
+		t.Fatalf(">=0.0.6: %v %v", r, err)
+	}
+	if !sok.Satisfies("0.0.6", ">=0.0.6") || !sok.Satisfies("0.1.0", ">=0.0.6") || sok.Satisfies("0.0.5", ">=0.0.6") {
+		t.Fatal(">=0.0.6 bounds")
+	}
+	a, _ := sok.ParseVersion("0.10.0")
+	b, _ := sok.ParseVersion("0.9.9")
+	if a.Compare(b) <= 0 {
+		t.Fatal("versions compare by number, not text")
+	}
+	for _, bad := range []string{"**", "latest", "0.0", "01.0.0", ">=0.1.0 <0.1.0", "^0.0.2-beta", "4294967296.0.0", ">=", ">=0.0", ">= 0.0.6", ">=0.0.6 <"} {
+		if _, err := sok.ParseRange(bad); err == nil || !strings.Contains(err.Error(), "invalid version") {
+			t.Fatalf("%s: %v", bad, err)
+		}
+	}
+}
+
+// contract: install.version.ranges-and-order
+func TestVersionsAndRangesRefuseTheFormsThatTheLibraryAccepts(t *testing.T) {
+	for _, good := range []string{"0.0.0", "4294967295.4294967295.4294967295"} {
+		if _, err := sok.ParseVersion(good); err != nil {
+			t.Fatalf("version %s: %v", good, err)
+		}
+	}
+	for _, bad := range []string{"1.2.3-beta", "1.2.3+build", "v1.2.3", "1.2", "1.2.3.4", "01.2.3", "1.02.3", "1.2.x", "1.2.3 ", "4294967296.0.0"} {
+		if _, err := sok.ParseVersion(bad); err == nil || !strings.Contains(err.Error(), "invalid version") {
+			t.Fatalf("version %q: %v", bad, err)
+		}
+	}
+	for _, bad := range []string{"1.x", "~>1.2", "1.2.3 - 2.3.4", ">1.2.3", "<2.0.0", "!=1.2.3", "=1.2.3", "1.2.3, 1.2.4", "^1.2.3 || ^2.0.0", "*.*.*", "x", "~1.2.3-beta", ">=4294967296.0.0", "^4294967296.0.0", ">=1.0.0<2.0.0"} {
+		if _, err := sok.ParseRange(bad); err == nil || !strings.Contains(err.Error(), "invalid version") {
+			t.Fatalf("range %q: %v", bad, err)
+		}
+	}
+	if sok.Satisfies("1.2.3-beta", "*") || sok.Satisfies("1.2.3", "1.x") {
+		t.Fatal("a refused version or range is satisfied")
+	}
+}
+
+// contract: install.package-json.fields-and-manifest
+func TestPackageJSONDeclaresVersionCoreRangeAndFilesAndTheManifestDeclaresSidecarRanges(t *testing.T) {
+	text := `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
+		"files": ["plugin.json", "ui"], "private": true}`
+	pkg := decode(t, text)
+	if err := sok.ValidatePackageJSON(pkg); err != nil {
+		t.Fatal(err)
+	}
+	ranges, err := sok.ManifestDependencies(decode(t, `{"dependencies": {"@scope/sidecar-worker": "^0.1.0"}}`).(map[string]any))
+	if err != nil || len(ranges) != 1 || ranges["@scope/sidecar-worker"] != "^0.1.0" {
+		t.Fatalf("ranges %v %v", ranges, err)
+	}
+	if ranges, err := sok.ManifestDependencies(map[string]any{}); err != nil || len(ranges) != 0 {
+		t.Fatalf("a manifest without dependencies: %v %v", ranges, err)
+	}
+	_, err = sok.ManifestDependencies(decode(t, `{"dependencies": {"@scope/sidecar-worker": "latest"}}`).(map[string]any))
+	rejects(t, err, "plugin.json dependencies @scope/sidecar-worker: invalid version range")
+	_, err = sok.ManifestDependencies(decode(t, `{"dependencies": ["@scope/sidecar-worker"]}`).(map[string]any))
+	rejects(t, err, "plugin.json dependencies: expected an object")
+	for change, want := range map[string]string{
+		`"engines": {}`:                     "package.json engines.soksak: invalid version range null",
+		`"files": ["ui"]`:                   "package.json files: plugin.json is not listed",
+		`"files": ["plugin.json", "../ui"]`: "package.json files: expected paths inside the package",
+		`"soksak": {"sidecars": {}}`:        "package.json soksak: the sidecars of a plugin and their ranges are the dependencies of plugin.json",
+		`"version": "0.2"`:                  `package.json version: invalid version "0.2": expected x.y.z`,
+		`"name": "Plugin"`:                  "package.json name: expected a package.json name",
+	} {
+		field := change[:strings.Index(change, ":")]
+		changed := decode(t, text).(map[string]any)
+		changed[strings.Trim(field, `"`)] = at(decode(t, "{"+change+"}"), strings.Trim(field, `"`))
+		rejects(t, sok.ValidatePackageJSON(changed), want)
+	}
+}
+
+// contract: install.registry.entries
+func TestRegistryEntriesRejectUnknownFieldsBadReleasesAndRepeatedVersions(t *testing.T) {
+	if err := sok.ValidateRegistryPlugin(decode(t, pluginJSON())); err != nil {
+		t.Fatal(err)
+	}
+	if err := sok.ValidateRegistrySidecar(decode(t, sidecarJSON())); err != nil {
+		t.Fatal(err)
+	}
+	extra := decode(t, pluginJSON())
+	extra.(map[string]any)["homepage"] = "x"
+	rejects(t, sok.ValidateRegistryPlugin(extra), "registry plugin probe: unknown field homepage")
+	for url, want := range map[string]string{
+		"ftp://example.invalid/probe.tgz": "ftp://example.invalid/probe.tgz: the URL must be https: or an absolute file: URL",
+		"https:probe.tgz":                 "https:probe.tgz: the URL must be https: or an absolute file: URL",
+		"file:releases/probe.tgz":         "file:releases/probe.tgz: url must be an absolute file: URL",
+		"file:///releases/probe.tgz?x=1":  "file:///releases/probe.tgz?x=1: url must be an absolute file: URL without a query or fragment",
+		"file:///releases/%zz.tgz":        "file:///releases/%zz.tgz: url has an invalid escape",
+	} {
+		changed := decode(t, pluginJSON())
+		at(changed, "versions", 0, "release").(map[string]any)["url"] = url
+		rejects(t, sok.ValidateRegistryPlugin(changed), "registry plugin probe 0.1.0 release: "+want)
+	}
+	if path, err := sok.FilePath("file:///Users/a%20b/probe.tgz"); err != nil || path != "/Users/a b/probe.tgz" {
+		t.Fatalf("escaped path %q %v", path, err)
+	}
+	hash := decode(t, pluginJSON())
+	at(hash, "versions", 0, "release").(map[string]any)["sha256"] = "ABC"
+	rejects(t, sok.ValidateRegistryPlugin(hash), "sha256 must be 64 lowercase hexadecimal digits")
+	twice := decode(t, pluginJSON())
+	twice.(map[string]any)["versions"] = append(at(twice, "versions").([]any), at(twice, "versions", 0))
+	rejects(t, sok.ValidateRegistryPlugin(twice), "registry plugin probe: version 0.1.0 appears twice")
+	long := decode(t, pluginJSON())
+	long.(map[string]any)["description"] = strings.Repeat("가", 201)
+	rejects(t, sok.ValidateRegistryPlugin(long), "description must be 1 to 200 characters")
+	long.(map[string]any)["description"] = strings.Repeat("가", 200)
+	if err := sok.ValidateRegistryPlugin(long); err != nil {
+		t.Fatalf("200 characters: %v", err)
+	}
+	platform := decode(t, sidecarJSON())
+	at(platform, "versions", 0, "releases").(map[string]any)["darwin-ppc"] = decode(t, release("x"))
+	rejects(t, sok.ValidateRegistrySidecar(platform), "registry sidecar @scope/sidecar-worker 0.1.0: unknown platform darwin-ppc")
+	protocol := decode(t, sidecarJSON())
+	at(protocol, "versions", 0).(map[string]any)["protocol"] = json.Number("1.0")
+	rejects(t, sok.ValidateRegistrySidecar(protocol), "registry sidecar @scope/sidecar-worker 0.1.0: protocol must be 1")
+	rejects(t, sok.ValidateRegistryPack(decode(t, `{"name": "starter", "description": "x", "plugins": []}`)),
+		"registry pack starter: plugins must be plugin ids")
+	rejects(t, sok.ValidateRevoked(decode(t, `{"plugins": [{"id": "probe", "version": "0.1.0"}], "sidecars": []}`)),
+		"registry revoked plugins probe: reason is required")
+}
+
+// contract: install.registry.index-cross-checks
+func TestRegistryIndexChecksNamesPacksSidecarRangesAndRevokedVersions(t *testing.T) {
+	if _, err := sok.ValidateRegistryIndex(decode(t, indexJSON())); err != nil {
+		t.Fatal(err)
+	}
+	pack := decode(t, indexJSON())
+	at(pack, "packs", 0).(map[string]any)["plugins"] = append(at(pack, "packs", 0, "plugins").([]any), "missing")
+	_, err := sok.ValidateRegistryIndex(pack)
+	rejects(t, err, "registry index: pack starter names unknown plugin missing")
+	rng := decode(t, indexJSON())
+	at(rng, "plugins", 0, "versions", 0, "sidecars").(map[string]any)["@scope/sidecar-worker"] = "^0.2.0"
+	_, err = sok.ValidateRegistryIndex(rng)
+	rejects(t, err, "registry index: plugin probe 0.1.0 needs @scope/sidecar-worker ^0.2.0, which no version satisfies")
+	unknown := decode(t, indexJSON())
+	at(unknown, "plugins", 0, "versions", 0).(map[string]any)["sidecars"] = map[string]any{"@scope/sidecar-gone": "^0.1.0"}
+	_, err = sok.ValidateRegistryIndex(unknown)
+	rejects(t, err, "registry index: plugin probe 0.1.0 needs unknown sidecar @scope/sidecar-gone")
+	revoked := decode(t, indexJSON())
+	at(revoked, "revoked", "plugins", 0).(map[string]any)["version"] = "9.9.9"
+	_, err = sok.ValidateRegistryIndex(revoked)
+	rejects(t, err, "registry index: revoked plugin probe 9.9.9 is not listed")
+	duplicate := decode(t, indexJSON())
+	other := decode(t, pluginJSON())
+	other.(map[string]any)["id"] = "other"
+	duplicate.(map[string]any)["plugins"] = append(at(duplicate, "plugins").([]any), other)
+	_, err = sok.ValidateRegistryIndex(duplicate)
+	rejects(t, err, "registry index: package @scope/plugin-probe appears twice")
+	format := decode(t, indexJSON())
+	format.(map[string]any)["format"] = json.Number("2")
+	_, err = sok.ValidateRegistryIndex(format)
+	rejects(t, err, "registry index: format must be 1")
+}
+
+func versions(selection *sok.Selection) []string {
+	out := []string{}
+	for _, item := range selection.Sidecars {
+		out = append(out, item.Name+" "+item.Version)
+	}
+	return out
+}
+
+func emptyInstalled() *sok.InstalledState {
+	return &sok.InstalledState{Format: 1, Plugins: map[string]sok.InstalledPlugin{}, Sidecars: map[string]sok.InstalledSidecar{}}
+}
+
+// contract: install.select.newest-usable
+func TestInstallationResolvesNewestUsablePluginAndSidecarVersions(t *testing.T) {
+	index, err := sok.ValidateRegistryIndex(decode(t, indexJSON()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 0.3.0 is revoked, so 0.2.0 is chosen, and for the sidecar the newest 0.1.1 that has a darwin-arm64 asset is chosen.
+	arm, err := sok.ResolveInstall(index, "probe", "0.0.2", "darwin-arm64", emptyInstalled(), nil)
+	if err != nil || arm.Version.Version != "0.2.0" || strings.Join(versions(arm), ",") != "@scope/sidecar-worker 0.1.1" {
+		t.Fatalf("darwin-arm64: %v %v", arm, err)
+	}
+	if arm.Sidecars[0].Release.URL != "file:///releases/c" {
+		t.Fatalf("release %v", arm.Sidecars[0].Release)
+	}
+	// The darwin-x64 asset exists only for 0.1.0.
+	x64, err := sok.ResolveInstall(index, "probe", "0.0.2", "darwin-x64", emptyInstalled(), nil)
+	if err != nil || strings.Join(versions(x64), ",") != "@scope/sidecar-worker 0.1.0" {
+		t.Fatalf("darwin-x64: %v %v", x64, err)
+	}
+	old, err := sok.ResolveInstall(index, "probe", "0.0.1", "darwin-arm64", emptyInstalled(), nil)
+	if err != nil || old.Version.Version != "0.1.0" {
+		t.Fatalf("core 0.0.1: %v %v", old, err)
+	}
+	_, err = sok.ResolveInstall(index, "probe", "0.1.0", "darwin-arm64", emptyInstalled(), nil)
+	rejects(t, err, "plugin probe has no version for core 0.1.0")
+	_, err = sok.ResolveInstall(index, "probe", "0.0.2", "linux-x64", emptyInstalled(), nil)
+	rejects(t, err, "sidecar @scope/sidecar-worker has no version for linux-x64 that satisfies every installed plugin: probe 0.2.0 needs ^0.1.0")
+	_, err = sok.ResolveInstall(index, "gone", "0.0.2", "darwin-arm64", emptyInstalled(), nil)
+	rejects(t, err, "plugin gone is not in the registry")
+	// A version that does not satisfy the range of an installed plugin that names the plugin is not selected.
+	_, err = sok.ResolveInstall(index, "probe", "0.0.2", "darwin-arm64", emptyInstalled(), []sok.Need{{Who: "ext 1.0.0", Range: "^0.3.0"}})
+	rejects(t, err, "plugin probe has no version for core 0.0.2 that satisfies every installed plugin: ext 1.0.0 needs ^0.3.0")
+}
+
+// contract: install.select.shared-sidecar
+func TestInstallationKeepsOneSidecarVersionThatSatisfiesEveryInstalledPlugin(t *testing.T) {
+	index, err := sok.ValidateRegistryIndex(decode(t, indexJSON()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	other := func(rng, version string) *sok.InstalledState {
+		state := emptyInstalled()
+		state.Plugins["other"] = sok.InstalledPlugin{Version: "1.0.0", Path: "/config/plugins/other/1.0.0", Enabled: true, Sidecars: map[string]string{"@scope/sidecar-worker": rng}}
+		state.Sidecars["@scope/sidecar-worker"] = sok.InstalledSidecar{Version: version, Path: "/config/sidecars/scope-sidecar-worker/" + version + "/darwin-arm64"}
+		return state
+	}
+	// Another plugin uses 0.1.0 and that version satisfies both ranges, so 0.1.0 stays instead of the newer 0.1.1.
+	kept, err := sok.ResolveInstall(index, "probe", "0.0.2", "darwin-arm64", other("^0.1.0", "0.1.0"), nil)
+	if err != nil || strings.Join(versions(kept), ",") != "@scope/sidecar-worker 0.1.0" {
+		t.Fatalf("kept: %v %v", kept, err)
+	}
+	// When the range of another plugin allows only 0.1.0, 0.1.0, which satisfies both ranges, is chosen.
+	exact, err := sok.ResolveInstall(index, "probe", "0.0.2", "darwin-arm64", other("0.1.0", "0.1.0"), nil)
+	if err != nil || strings.Join(versions(exact), ",") != "@scope/sidecar-worker 0.1.0" {
+		t.Fatalf("exact: %v %v", exact, err)
+	}
+	// When no version satisfies the ranges together, the installation fails and names each plugin and range.
+	_, err = sok.ResolveInstall(index, "probe", "0.0.2", "darwin-arm64", other("^0.2.0", "0.2.0"), nil)
+	rejects(t, err, "sidecar @scope/sidecar-worker has no version for darwin-arm64 that satisfies every installed plugin: probe 0.2.0 needs ^0.1.0, other 1.0.0 needs ^0.2.0")
+	// The range of an earlier version of the same plugin does not block the new version.
+	self := emptyInstalled()
+	self.Plugins["probe"] = sok.InstalledPlugin{Version: "0.1.0", Path: "/config/plugins/probe/0.1.0", Enabled: true, Sidecars: map[string]string{"@scope/sidecar-worker": "0.1.0"}}
+	self.Sidecars["@scope/sidecar-worker"] = sok.InstalledSidecar{Version: "0.1.0", Path: "/config/sidecars/scope-sidecar-worker/0.1.0/darwin-arm64"}
+	again, err := sok.ResolveInstall(index, "probe", "0.0.2", "darwin-arm64", self, nil)
+	if err != nil || strings.Join(versions(again), ",") != "@scope/sidecar-worker 0.1.0" {
+		t.Fatalf("self: %v %v", again, err)
+	}
+}
+
+// contract: install.names.releases-and-paths
+func TestReleasesAndInstallationPathsFollowTheDeclaredNames(t *testing.T) {
+	if path, err := sok.PluginInstallPath("probe", "0.2.0"); err != nil || path != "plugins/probe/0.2.0" {
+		t.Fatal(path, err)
+	}
+	if path, err := sok.SidecarInstallPath("@scope/sidecar-worker", "0.1.1", "darwin-arm64"); err != nil || path != "sidecars/scope-sidecar-worker/0.1.1/darwin-arm64" {
+		t.Fatal(path, err)
+	}
+	_, err := sok.SidecarInstallPath("@scope/sidecar-worker", "0.1.1", "solaris-sparc")
+	rejects(t, err, "unknown platform solaris-sparc")
+	_, err = sok.PluginInstallPath("../x", "0.2.0")
+	rejects(t, err, "invalid plugin id ../x")
+	if len(sok.Platforms) != 6 {
+		t.Fatal(sok.Platforms)
+	}
+}
+
+// contract: install.plugin-id.core-reserved
+func TestPluginIDCoreIsReservedForTheCoreRoot(t *testing.T) {
+	_, err := sok.PluginInstallPath("core", "0.2.0")
+	rejects(t, err, "plugin id core is reserved for the core root")
+}
+
+// contract: install.installed.consistency
+func TestInstalledStateNamesOneVersionOfEachPluginAndSidecar(t *testing.T) {
+	text := `{"format": 3, "plugins": {
+		"probe": {"version": "0.2.0", "path": "plugins/probe/0.2.0", "enabled": true, "previous": "0.1.0", "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
+		"side": {"version": "1.0.0", "path": "plugins/side/1.0.0", "enabled": false, "sidecars": {}}},
+		"sidecars": {"@scope/sidecar-worker": {"version": "0.1.1", "path": "sidecars/scope-sidecar-worker/0.1.1/darwin-arm64"}}}`
+	state, err := sok.ValidateInstalled(decode(t, text))
+	if err != nil || state.Plugins["probe"].Previous != "0.1.0" || state.Sidecars["@scope/sidecar-worker"].Version != "0.1.1" ||
+		state.Plugins["probe"].Path != "plugins/probe/0.2.0" {
+		t.Fatalf("%v %v", state, err)
+	}
+	cases := []struct {
+		change func(any)
+		want   string
+	}{
+		{func(v any) { delete(at(v, "plugins", "probe").(map[string]any), "enabled") }, "plugins/installed.json probe: enabled must be true or false"},
+		{func(v any) { at(v, "plugins", "side").(map[string]any)["package"] = "plugin-side" }, "plugins/installed.json side: unknown field package"},
+		{func(v any) { delete(v.(map[string]any), "sidecars") }, "plugins/installed.json sidecars: expected an object"},
+		{func(v any) { delete(at(v, "plugins", "side").(map[string]any), "sidecars") }, "plugins/installed.json side sidecars: expected an object"},
+		{func(v any) { v.(map[string]any)["sidecars"] = map[string]any{} }, "plugins/installed.json probe: sidecar @scope/sidecar-worker has no version in use"},
+		{func(v any) {
+			sidecar := at(v, "sidecars", "@scope/sidecar-worker").(map[string]any)
+			sidecar["version"], sidecar["path"] = "0.2.0", "sidecars/scope-sidecar-worker/0.2.0/darwin-arm64"
+		}, "plugins/installed.json probe: sidecar @scope/sidecar-worker 0.2.0 does not satisfy ^0.1.0"},
+		{func(v any) {
+			at(v, "sidecars").(map[string]any)["unused"] = map[string]any{"version": "1.0.0", "path": "sidecars/unused/1.0.0/darwin-arm64"}
+		}, "plugins/installed.json: sidecar unused is named by no installed plugin"},
+		{func(v any) { v.(map[string]any)["format"] = 1.0 }, "plugins/installed.json: format must be 3"},
+		{func(v any) { at(v, "plugins", "probe").(map[string]any)["path"] = "/config/plugins/probe/0.2.0" }, "plugins/installed.json probe: path must be plugins/probe/0.2.0"},
+		{func(v any) { at(v, "plugins", "probe").(map[string]any)["path"] = "plugins/probe/../side/1.0.0" }, "plugins/installed.json probe: path must be plugins/probe/0.2.0"},
+		{func(v any) {
+			at(v, "sidecars", "@scope/sidecar-worker").(map[string]any)["path"] = "sidecars/scope-sidecar-worker/0.1.0/darwin-arm64"
+		}, "plugins/installed.json sidecar @scope/sidecar-worker: path must be sidecars/scope-sidecar-worker/0.1.1/<platform>"},
+		{func(v any) {
+			at(v, "sidecars", "@scope/sidecar-worker").(map[string]any)["path"] = "sidecars/scope-sidecar-worker/0.1.1/plan9-arm64"
+		}, "plugins/installed.json sidecar @scope/sidecar-worker: path must be sidecars/scope-sidecar-worker/0.1.1/<platform>"},
+		{func(v any) { delete(at(v, "sidecars", "@scope/sidecar-worker").(map[string]any), "path") }, "plugins/installed.json sidecar @scope/sidecar-worker: path must be sidecars/scope-sidecar-worker/0.1.1/<platform>"},
+		{func(v any) { at(v, "sidecars").(map[string]any)["@scope/sidecar-worker"] = "0.1.1" }, "plugins/installed.json sidecar @scope/sidecar-worker: expected an object"},
+	}
+	for _, c := range cases {
+		value := decode(t, text)
+		c.change(value)
+		_, err := sok.ValidateInstalled(value)
+		rejects(t, err, c.want)
+	}
+}
+
+// contract: install.installed.rejects-another-format
+func TestInstalledFileOfAnotherFormatIsRejected(t *testing.T) {
+	config := t.TempDir()
+	file := filepath.Join(config, "plugins/installed.json")
+	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	former := `{"format": 1, "plugins": {}, "sidecars": {}}`
+	if err := os.WriteFile(file, []byte(former), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, _, stderr := run("plugin", "list", "--config-dir", config)
+	// A file of another format is refused and stays unchanged (docs/spec/installation.md#stored-data-formats).
+	want := "sok: " + file + ": plugins/installed.json: format must be 3\n"
+	if code != 1 || stderr != want || readText(t, file) != former {
+		t.Fatalf("code %d stderr %q want %q", code, stderr, want)
+	}
+}
+
+// contract: install.installed.rejects-another-format
+func TestInstalledFileOfTheReleasedFormat2IsRejected(t *testing.T) {
+	config := t.TempDir()
+	file := filepath.Join(config, "plugins/installed.json")
+	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	released := `{"format": 2, "plugins": {}, "sidecars": {}}`
+	if err := os.WriteFile(file, []byte(released), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, _, stderr := run("plugin", "list", "--config-dir", config)
+	want := "sok: " + file + ": plugins/installed.json: format must be 3\n"
+	if code != 1 || stderr != want || readText(t, file) != released {
+		t.Fatalf("code %d stderr %q want %q", code, stderr, want)
+	}
+}
+
+// grantedState holds the installed plugins of the granted item fixtures. probe is the requester of the first case,
+// view contributes to probe, lib provides a point to probe and contributes to probe, and old is disabled.
+const grantedState = `{"format": 3, "plugins": {
+	"lib": {"version": "1.2.0", "path": "plugins/lib/1.2.0", "enabled": true, "sidecars": {}},
+	"old": {"version": "1.0.0", "path": "plugins/old/1.0.0", "enabled": false, "sidecars": {}},
+	"probe": {"version": "0.2.0", "path": "plugins/probe/0.2.0", "enabled": true, "sidecars": {}},
+	"view": {"version": "1.0.0", "path": "plugins/view/1.0.0", "enabled": true, "sidecars": {}}},
+	"sidecars": {}}`
+
+const grantedProbe = `{"id": "probe",
+	"extends": {
+		"list": {"version": "1.1.0", "schema": {}, "modules": {"format": "shared/format.js", "table": "shared/table.js"}},
+		"bare": {"schema": {}, "modules": {"x": "shared/x.js"}}},
+	"contributes": {
+		"lib.panel": [{"range": "^1.0.0", "module": "ui/probe-panel.js"}],
+		"lib.panel2": [{"range": "^2.0.0", "module": "ui/probe-panel2.js"}],
+		"lib.gone": [{"range": "*", "module": "ui/probe-gone.js"}]}}`
+
+const grantedView = `{"id": "view",
+	"contributes": {
+		"probe.list": [{"range": "^1.0.0", "module": "ui/view-list.js"}, {"range": "^2.0.0", "module": "ui/view-old.js"}],
+		"probe.bare": [{"range": "*", "module": "ui/view-bare.js"}],
+		"probe.nope": [{"range": "*", "module": "ui/view-nope.js"}],
+		"gone.point": [{"range": "*", "module": "ui/view-gone.js"}],
+		"old.panel": [{"range": "*", "module": "ui/view-disabled.js"}]}}`
+
+const grantedLib = `{"id": "lib",
+	"extends": {
+		"panel": {"version": "1.4.0", "schema": {}, "modules": {"util": "shared/util.js"}},
+		"panel2": {"version": "1.4.0", "schema": {}, "modules": {"m2": "shared/m2.js"}}},
+	"contributes": {"probe.list": [{"range": "1.1.0", "module": "ui/lib-list.js"}]}}`
+
+const grantedOld = `{"id": "old",
+	"extends": {"panel": {"version": "1.0.0", "schema": {}, "modules": {"m": "shared/m.js"}}},
+	"contributes": {"probe.list": [{"range": "*", "module": "ui/old-list.js"}]}}`
+
+// grantedFiles returns the package names and manifests of the granted item fixtures, with the manifest of plugin id
+// replaced by replacement when it is not empty.
+func grantedFiles(t *testing.T, id, replacement string) map[string]sok.PluginFiles {
+	t.Helper()
+	manifests := map[string]string{"probe": grantedProbe, "view": grantedView, "lib": grantedLib, "old": grantedOld}
+	if replacement != "" {
+		manifests[id] = replacement
+	}
+	files := map[string]sok.PluginFiles{}
+	for name, text := range manifests {
+		files[name] = sok.PluginFiles{Package: "plugin-" + name, Manifest: decode(t, text)}
+	}
+	return files
+}
+
+// contract: install.granted-items
+func TestGrantedItemsListTheModulesAndSharedTargetsOfEachRequester(t *testing.T) {
+	state, err := sok.ValidateInstalled(decode(t, grantedState))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := map[string][]string{
+		// The items of view and lib to the points of probe with a granted range, and the shared targets of probe.list.
+		"probe": {"/modules/plugin-lib/ui/lib-list.js", "/modules/plugin-view/ui/view-list.js", "/shared/lib.panel/util.js",
+			"/shared/probe.bare/x.js", "/shared/probe.list/format.js", "/shared/probe.list/table.js"},
+		// The shared targets of probe.list, to which view contributes a granted item.
+		"view": {"/shared/probe.list/format.js", "/shared/probe.list/table.js"},
+		// The module of probe to the point panel of lib, the shared targets of panel and of list, to which lib contributes.
+		"lib": {"/modules/plugin-probe/ui/probe-panel.js", "/shared/lib.panel/util.js", "/shared/lib.panel2/m2.js",
+			"/shared/probe.list/format.js", "/shared/probe.list/table.js"},
+	}
+	for requester, want := range cases {
+		got, err := sok.GrantedFiles(state, grantedFiles(t, "", ""), requester)
+		if err != nil || strings.Join(got, "\n") != strings.Join(want, "\n") {
+			t.Fatalf("%s: granted %q, want %q (%v)", requester, got, want, err)
+		}
+	}
+}
+
+// contract: install.granted-items
+func TestGrantedProviderReadsItsOwnSharedModulesWithoutContributors(t *testing.T) {
+	state, err := sok.ValidateInstalled(decode(t, `{"format":3,"plugins":{"probe":{"version":"0.2.0","path":"plugins/probe/0.2.0","enabled":true,"sidecars":{}}},"sidecars":{}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]sok.PluginFiles{
+		"probe": {Package: "plugin-probe", Manifest: decode(t, grantedProbe)},
+	}
+	got, err := sok.GrantedFiles(state, files, "probe")
+	want := []string{"/shared/probe.bare/x.js", "/shared/probe.list/format.js", "/shared/probe.list/table.js"}
+	if err != nil || strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("provider shared modules: got %q, want %q (%v)", got, want, err)
+	}
+	state, err = sok.ValidateInstalled(decode(t, `{"format":3,"plugins":{"probe":{"version":"0.2.0","path":"plugins/probe/0.2.0","enabled":true,"sidecars":{}},"view":{"version":"1.0.0","path":"plugins/view/1.0.0","enabled":true,"sidecars":{}}},"sidecars":{}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	files = grantedFiles(t, "view", `{"id":"view"}`)
+	got, err = sok.GrantedFiles(state, files, "view")
+	if err != nil || len(got) != 0 {
+		t.Fatalf("unconnected plugin can read provider modules: got %q (%v)", got, err)
+	}
+}
+
+// contract: install.granted-items
+func TestGrantedItemsRejectMalformedDeclarationsAndUnknownRequesters(t *testing.T) {
+	state, err := sok.ValidateInstalled(decode(t, grantedState))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = sok.GrantedFiles(state, grantedFiles(t, "", ""), "missing")
+	rejects(t, err, "plugin missing is not installed")
+	files := grantedFiles(t, "", "")
+	delete(files, "lib")
+	_, err = sok.GrantedFiles(state, files, "probe")
+	rejects(t, err, "installed plugin lib has no package.json and plugin.json")
+	cases := []struct {
+		id, manifest, want string
+	}{
+		{"probe", strings.Replace(grantedProbe, `"version": "1.1.0"`, `"version": "1.x"`, 1), `invalid version "1.x"`},
+		{"view", strings.Replace(grantedView, `"range": "^1.0.0"`, `"range": "^x"`, 1), `invalid version range "^x"`},
+		{"view", strings.Replace(grantedView, `"module": "ui/view-list.js"`, `"module": "../view-list.js"`, 1), "module must be a relative path"},
+		{"probe", strings.Replace(grantedProbe, `"lib.gone"`, `"lib"`, 1), "contributes lib: the key must be <plugin id>.<point>"},
+		{"probe", strings.Replace(grantedProbe, `"shared/x.js"`, `3`, 1), "module must be a relative path"},
+	}
+	for _, c := range cases {
+		_, err := sok.GrantedFiles(state, grantedFiles(t, c.id, c.manifest), "probe")
+		rejects(t, err, c.want)
+	}
+}

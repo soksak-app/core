@@ -3,32 +3,34 @@
 //! Each command calls a function of the module of its role. The command names and the argument names must match the
 //! calls of the page runtime (`apps/tauriv2/runtime/index.js`).
 
-use std::sync::PoisonError;
+use std::ops::Deref;
+use std::sync::{Arc, PoisonError};
 
+use serde::de::DeserializeOwned;
 use serde_json::value::RawValue;
+use soksak_host::framework::{self as port, Manager};
+use tauri::Manager as _;
+use tauri::ipc::{CommandArg, CommandItem, Invoke, InvokeError};
 
-use crate::arguments::Argument;
-use crate::binding_record::BindingCall;
-use tauri::ipc::Invoke;
-use tauri::{AppHandle, Manager, Webview, Window};
+use crate::frontend::Frontend;
 
-use crate::clipboard;
-use crate::composition;
-use crate::documents;
-use crate::exposure::{self, Changed, Forward, Register};
-use crate::images;
-use crate::link;
-use crate::menu;
-use crate::modals::{self, OverlayRequest, PlaceRequest, RevisedContent, UpdateRequest};
-use crate::projects::{self, CreateProject, Folder};
-use crate::shapes::{self, ShapeRequest};
-use crate::sidecars::WindowSidecars;
-use crate::surfaces::{
+use soksak_host::clipboard;
+use soksak_host::composition;
+use soksak_host::documents;
+use soksak_host::exposure::{self, Changed, Forward, Register};
+use soksak_host::images;
+use soksak_host::link;
+use soksak_host::menu;
+use soksak_host::modals::{self, OverlayRequest, PlaceRequest, RevisedContent, UpdateRequest};
+use soksak_host::projects::{self, CreateProject, Folder};
+use soksak_host::shapes::{self, ShapeRequest};
+use soksak_host::sidecars::WindowSidecars;
+use soksak_host::surfaces::{
     self, CancelRequest, Placement, PreparedSurfaces, PresentRequest, Rect, SyncRequest,
 };
-use crate::theme::{self, Theme};
-use crate::windows::{self, Geometry, OpenProject, ProjectShown};
-use crate::workspace;
+use soksak_host::theme::{self, Theme};
+use soksak_host::windows::{self, Geometry, OpenProject, ProjectShown};
+use soksak_host::workspace;
 
 /// Defines the commands that the page calls and generates their registration. Every command takes a [`BindingCall`] as its
 /// first argument and finishes it with its result, so each call is the event `host.binding.call`
@@ -56,19 +58,6 @@ macro_rules! bindings {
         async fn $name(call: BindingCall, $($param: $ty),*) -> $ret {
             async fn run($($param: $ty),*) -> $ret $body
             let result = run($($param),*).await;
-            call.finish(&[$(stringify!($param)),*], &result);
-            result
-        }
-        bindings!(@commands [$($registered,)* $name,] $($rest)*);
-    };
-    (@commands [$($registered:ident,)*]
-        $(#[$meta:meta])* async fn $name:ident<R: tauri::Runtime>($($param:ident: $ty:ty),* $(,)?) -> $ret:ty $body:block
-        $($rest:tt)*
-    ) => {
-        $(#[$meta])*
-        async fn $name<R: tauri::Runtime>(call: BindingCall, $($param: $ty),*) -> $ret {
-            async fn run<R: tauri::Runtime>($($param: $ty),*) -> $ret $body
-            let result = run::<R>($($param),*).await;
             call.finish(&[$(stringify!($param)),*], &result);
             result
         }
@@ -181,7 +170,7 @@ async fn performance(
 ) -> Result<serde_json::Value, String> {
     let Argument(request) = request;
     blocking(move || {
-        crate::performance::command(serde_json::Value::Object(request))
+        soksak_host::performance::command(serde_json::Value::Object(request))
     })
     .await
 }
@@ -196,8 +185,8 @@ async fn log(
 ) -> Result<serde_json::Value, String> {
     let Argument(request) = request;
     blocking(move || {
-        let reply = crate::event_relay::log_command(
-            &window.state::<std::sync::Arc<crate::event_log::EventLog>>(),
+        let reply = soksak_host::event_relay::log_command(
+            &window.state::<std::sync::Arc<soksak_host::event_log::EventLog>>(),
             serde_json::Value::Object(request),
         )?;
         for line in reply.lines {
@@ -239,7 +228,7 @@ fn window_close_kept(window: Window) -> Result<(), String> {
 #[tauri::command]
 async fn window_new(app: AppHandle) -> Result<(), String> {
     blocking(move || {
-        windows::window_new(app)
+        windows::window_new(app.0)
     })
     .await
 }
@@ -296,7 +285,7 @@ async fn present_surfaces(
     request: Argument<PresentRequest>,
 ) -> Result<Vec<Placement>, String> {
     let Argument(request) = request;
-    surfaces::present(window, request).await
+    surfaces::present(window.0, request).await
 }
 
 /// Ends a preparation that the page does not present, so the windows that wait for its transaction continue.
@@ -416,7 +405,7 @@ fn sidecar_send(
     let Argument(surface) = surface;
     let Argument(body) = body;
     let Argument(cids) = cids;
-    crate::windows::window_data(&window)?
+    soksak_host::windows::window_data(&window)?
         .images
         .pending_detach_error(&surface)?;
     window
@@ -439,7 +428,7 @@ struct RetainRequest {
 
 /// The outdated persistent services (docs/spec/installation.md).
 #[tauri::command]
-async fn sidecars_outdated(window: Window) -> Result<Vec<crate::sidecars::OutdatedSidecar>, String> {
+async fn sidecars_outdated(window: Window) -> Result<Vec<soksak_host::sidecars::OutdatedSidecar>, String> {
     blocking(move || {
         Ok(window.state::<WindowSidecars>().outdated())
     })
@@ -626,14 +615,14 @@ async fn view_event(webview: Webview, request: Argument<documents::ViewEventRequ
 #[tauri::command]
 async fn sidecar_listen(
     webview: Webview,
-    request: Argument<crate::sidecar_routes::SidecarListenRequest>,
+    request: Argument<soksak_host::sidecar_routes::SidecarListenRequest>,
 ) -> Result<(), String> {
     let Argument(request) = request;
     blocking(move || {
         let window = webview.window();
-        crate::exposure::authorize_main_caller(webview.label(), window.label(), "sidecar listen")?;
+        soksak_host::exposure::authorize_main_caller(webview.label(), window.label(), "sidecar listen")?;
         let request = request.check()?;
-        crate::windows::window_data(&window)?
+        soksak_host::windows::window_data(&window)?
             .sidecar_routes
             .listen(&request.sidecar, &request.id, request.on);
         Ok(())
@@ -646,14 +635,14 @@ async fn sidecar_listen(
 #[tauri::command]
 async fn view_sidecar_route(
     webview: Webview,
-    request: Argument<crate::sidecar_routes::ViewSidecarRouteRequest>,
+    request: Argument<soksak_host::sidecar_routes::ViewSidecarRouteRequest>,
 ) -> Result<(), String> {
     let Argument(request) = request;
     blocking(move || {
         let window = webview.window();
-        crate::exposure::authorize_main_caller(webview.label(), window.label(), "view sidecar route")?;
+        soksak_host::exposure::authorize_main_caller(webview.label(), window.label(), "view sidecar route")?;
         let request = request.check()?;
-        crate::windows::window_data(&window)?.sidecar_routes.route_view(
+        soksak_host::windows::window_data(&window)?.sidecar_routes.route_view(
             &request.surface,
             request.generation,
             &request.sidecar,
@@ -679,13 +668,13 @@ async fn view_reply(webview: Webview, request: Argument<documents::ViewReply>) -
 #[tauri::command]
 async fn view_source_origins(
     webview: Webview,
-) -> Result<crate::source_origins::ViewSourceOriginsSnapshot, String> {
+) -> Result<soksak_host::source_origins::ViewSourceOriginsSnapshot, String> {
     blocking(move || {
         let window = webview.window();
-        crate::exposure::authorize_main_caller(webview.label(), window.label(), "view source origins")?;
+        soksak_host::exposure::authorize_main_caller(webview.label(), window.label(), "view source origins")?;
         let task_window = window.clone();
-        crate::exposure::on_main(&window, move || {
-            Ok(crate::windows::window_data(&task_window)?.view_source_origins.snapshot())
+        soksak_host::exposure::on_main(&window, move || {
+            Ok(soksak_host::windows::window_data(&task_window)?.view_source_origins.snapshot())
         })
     })
     .await
@@ -695,8 +684,16 @@ async fn view_source_origins(
 #[tauri::command]
 async fn view_source_event_stream(
     webview: Webview,
-    on_message: tauri::ipc::Channel<windows::ViewSourceEvent>,
+    on_message: tauri::ipc::Channel<tauri::ipc::InvokeResponseBody>,
 ) -> Result<(), String> {
+    let on_message = port::Channel::<windows::ViewSourceEvent>::new(move |body| {
+        on_message
+            .send(match body {
+                port::InvokeResponseBody::Json(text) => tauri::ipc::InvokeResponseBody::Json(text),
+                port::InvokeResponseBody::Raw(bytes) => tauri::ipc::InvokeResponseBody::Raw(bytes),
+            })
+            .map_err(crate::framework::error)
+    });
     blocking(move || {
         windows::register_view_source_event_stream(&webview, on_message)
     })
@@ -869,10 +866,10 @@ async fn link_open(window: Window, request: Argument<link::OpenRequest>) -> Resu
 async fn app_update_state(window: Window) -> Result<soksak_sok::appupdate::AppUpdateState, String> {
     blocking(move || {
         let directory = window
-            .state::<crate::workspace::Workspace>()
+            .state::<soksak_host::workspace::Workspace>()
             .directory()
             .to_path_buf();
-        crate::app_update::state(&directory)
+        soksak_host::app_update::state(&directory)
     })
     .await
 }
@@ -881,15 +878,15 @@ async fn app_update_state(window: Window) -> Result<soksak_sok::appupdate::AppUp
 #[tauri::command]
 async fn app_update_stage(
     window: Window,
-    request: Argument<crate::app_update::StageRequest>,
-) -> Result<crate::app_update::Staged, String> {
+    request: Argument<soksak_host::app_update::StageRequest>,
+) -> Result<soksak_host::app_update::Staged, String> {
     let Argument(request) = request;
     blocking(move || {
         let directory = window
-            .state::<crate::workspace::Workspace>()
+            .state::<soksak_host::workspace::Workspace>()
             .directory()
             .to_path_buf();
-        crate::app_update::stage_call(&directory, request)
+        soksak_host::app_update::stage_call(&directory, request)
     })
     .await
 }
@@ -898,26 +895,26 @@ async fn app_update_stage(
 #[tauri::command]
 async fn app_update_apply(
     window: Window,
-    request: Argument<crate::app_update::ApplyRequest>,
+    request: Argument<soksak_host::app_update::ApplyRequest>,
 ) -> Result<(), String> {
     let Argument(request) = request;
     blocking(move || {
         let directory = window
-            .state::<crate::workspace::Workspace>()
+            .state::<soksak_host::workspace::Workspace>()
             .directory()
             .to_path_buf();
-        let command = crate::app_update::apply_call(&directory, request)?;
+        let command = soksak_host::app_update::apply_call(&directory, request)?;
         *window
-            .state::<crate::windows::Windows>()
+            .state::<soksak_host::windows::Windows>()
             .update
             .lock()
             // default: a lock that a panicking thread poisoned still holds the pending update, which the call replaces; the
             // panic hook records the panic.
-            .unwrap_or_else(PoisonError::into_inner) = Some(crate::app_update::PendingStart {
+            .unwrap_or_else(PoisonError::into_inner) = Some(soksak_host::app_update::PendingStart {
             command,
             relaunch: false,
         });
-        crate::event_record::quit_with_cause("update", || window.app_handle().exit(0));
+        soksak_host::event_record::quit_with_cause("update", || window.app_handle().exit(0));
         Ok(())
     })
     .await
@@ -925,13 +922,13 @@ async fn app_update_apply(
 
 /// The files of the logs folder (docs/spec/debug.md).
 #[tauri::command]
-async fn debug_files(window: Window) -> Result<Vec<crate::debug::DebugFile>, String> {
+async fn debug_files(window: Window) -> Result<Vec<soksak_host::debug::DebugFile>, String> {
     blocking(move || {
         let directory = window
-            .state::<crate::workspace::Workspace>()
+            .state::<soksak_host::workspace::Workspace>()
             .directory()
             .to_path_buf();
-        crate::debug::list(&directory)
+        soksak_host::debug::list(&directory)
     })
     .await
 }
@@ -940,11 +937,11 @@ async fn debug_files(window: Window) -> Result<Vec<crate::debug::DebugFile>, Str
 #[tauri::command]
 async fn debug_read(
     window: Window,
-    request: Argument<crate::debug::SaveRequest>,
-) -> Result<crate::debug::ReadResult, String> {
+    request: Argument<soksak_host::debug::SaveRequest>,
+) -> Result<soksak_host::debug::ReadResult, String> {
     let Argument(request) = request;
     blocking(move || {
-        crate::debug::read_file(&window, request)
+        soksak_host::debug::read_file(&window, request)
     })
     .await
 }
@@ -953,11 +950,11 @@ async fn debug_read(
 #[tauri::command]
 async fn debug_record(
     window: Window,
-    request: Argument<crate::debug::RecordRequest>,
+    request: Argument<soksak_host::debug::RecordRequest>,
 ) -> Result<serde_json::Value, String> {
     let Argument(request) = request;
     blocking(move || {
-        crate::debug::record(window.app_handle(), request)
+        soksak_host::debug::record(window.app_handle(), request)
     })
     .await
 }
@@ -966,11 +963,11 @@ async fn debug_record(
 #[tauri::command]
 async fn debug_save(
     window: Window,
-    request: Argument<crate::debug::SaveRequest>,
-) -> Result<crate::debug::Saved, String> {
+    request: Argument<soksak_host::debug::SaveRequest>,
+) -> Result<soksak_host::debug::Saved, String> {
     let Argument(request) = request;
     blocking(move || {
-        crate::debug::save(&window, request)
+        soksak_host::debug::save(&window, request)
     })
     .await
 }
@@ -983,7 +980,7 @@ async fn log_query(
 ) -> Result<soksak_sok::log_query::LogPage, String> {
     let Argument(request) = request;
     blocking(move || {
-        crate::debug::log_query(window.app_handle(), request)
+        soksak_host::debug::log_query(window.app_handle(), request)
     })
     .await
 }
@@ -992,11 +989,11 @@ async fn log_query(
 #[tauri::command]
 async fn debug_save_text(
     window: Window,
-    request: Argument<crate::debug::TextRequest>,
-) -> Result<crate::debug::Saved, String> {
+    request: Argument<soksak_host::debug::TextRequest>,
+) -> Result<soksak_host::debug::Saved, String> {
     let Argument(request) = request;
     blocking(move || {
-        crate::debug::save_text(&window, request)
+        soksak_host::debug::save_text(&window, request)
     })
     .await
 }
@@ -1005,31 +1002,31 @@ async fn debug_save_text(
 #[tauri::command]
 async fn file_place(
     window: Window,
-    request: Argument<crate::file_place::FilePlaceRequest>,
-) -> Result<crate::file_place::FilePlaced, String> {
+    request: Argument<soksak_host::file_place::FilePlaceRequest>,
+) -> Result<soksak_host::file_place::FilePlaced, String> {
     let Argument(request) = request;
     blocking(move || {
-        crate::file_place::place(&window, request)
+        soksak_host::file_place::place(&window, request)
     })
     .await
 }
 
 /// Saves the logs folder as one gzip-compressed tar file through the save panel.
 #[tauri::command]
-async fn debug_save_all(window: Window) -> Result<crate::debug::SaveAllStarted, String> {
+async fn debug_save_all(window: Window) -> Result<soksak_host::debug::SaveAllStarted, String> {
     blocking(move || {
-        crate::debug::save_all(&window)
+        soksak_host::debug::save_all(&window)
     })
     .await
 }
 
 /// Returns the registry address, the checked index and the installation state.
 #[tauri::command]
-async fn plugins_state<R: tauri::Runtime>(
-    app: AppHandle<R>,
+async fn plugins_state(
+    app: AppHandle,
 ) -> Result<soksak_sok::plugins::PluginsState, String> {
     blocking(move || {
-        let plugins = app.state::<crate::plugins::Plugins>();
+        let plugins = app.state::<soksak_host::plugins::Plugins>();
         plugins.state()
     })
     .await
@@ -1037,13 +1034,13 @@ async fn plugins_state<R: tauri::Runtime>(
 
 /// Runs a plugin action, the same as sok plugin <action> <plugin>.
 #[tauri::command]
-async fn plugins_run<R: tauri::Runtime>(
-    app: AppHandle<R>,
-    request: Argument<crate::plugins::RunRequest>,
+async fn plugins_run(
+    app: AppHandle,
+    request: Argument<soksak_host::plugins::RunRequest>,
 ) -> Result<soksak_sok::plugins::PluginActionResult, String> {
     let Argument(request) = request;
     blocking(move || {
-        let plugins = app.state::<crate::plugins::Plugins>();
+        let plugins = app.state::<soksak_host::plugins::Plugins>();
         plugins.run(request)
     })
     .await
@@ -1051,13 +1048,13 @@ async fn plugins_run<R: tauri::Runtime>(
 
 /// Sets the registry index, the same as sok registry use <index>.
 #[tauri::command]
-async fn plugins_use_registry<R: tauri::Runtime>(
-    app: AppHandle<R>,
-    request: Argument<crate::plugins::RegistryRequest>,
+async fn plugins_use_registry(
+    app: AppHandle,
+    request: Argument<soksak_host::plugins::RegistryRequest>,
 ) -> Result<serde_json::Value, String> {
     let Argument(request) = request;
     blocking(move || {
-        let plugins = app.state::<crate::plugins::Plugins>();
+        let plugins = app.state::<soksak_host::plugins::Plugins>();
         plugins.use_registry(request)
     })
     .await
@@ -1065,13 +1062,13 @@ async fn plugins_use_registry<R: tauri::Runtime>(
 
 /// Records or completes the durable starter installation job.
 #[tauri::command]
-async fn plugins_starter<R: tauri::Runtime>(
-    app: AppHandle<R>,
-    request: Argument<crate::plugins::StarterRequest>,
+async fn plugins_starter(
+    app: AppHandle,
+    request: Argument<soksak_host::plugins::StarterRequest>,
 ) -> Result<soksak_sok::plugins::StarterJob, String> {
     let Argument(request) = request;
     blocking(move || {
-        let plugins = app.state::<crate::plugins::Plugins>();
+        let plugins = app.state::<soksak_host::plugins::Plugins>();
         plugins.set_starter(request)
     })
     .await
@@ -1081,11 +1078,11 @@ async fn plugins_starter<R: tauri::Runtime>(
 #[tauri::command]
 async fn notify(
     window: Window,
-    request: Argument<crate::notifications::NotificationRequest>,
+    request: Argument<soksak_host::notifications::NotificationRequest>,
 ) -> Result<(), String> {
     let Argument(request) = request;
     blocking(move || {
-        crate::notifications::notify(&window, request)
+        soksak_host::notifications::notify(&window, request)
     })
     .await
 }
@@ -1094,20 +1091,20 @@ async fn notify(
 #[tauri::command]
 async fn notification_remove(
     window: Window,
-    request: Argument<crate::notifications::NotificationRequest>,
+    request: Argument<soksak_host::notifications::NotificationRequest>,
 ) -> Result<(), String> {
     let Argument(request) = request;
     blocking(move || {
-        crate::notifications::remove(&window, request)
+        soksak_host::notifications::remove(&window, request)
     })
     .await
 }
 
 /// Returns the permission state that the notification center reported last.
 #[tauri::command]
-async fn notification_state() -> Result<crate::notifications::NotificationState, String> {
+async fn notification_state() -> Result<soksak_host::notifications::NotificationState, String> {
     blocking(move || {
-        crate::notifications::state()
+        soksak_host::notifications::state()
     })
     .await
 }
@@ -1159,6 +1156,113 @@ async fn clipboard_persist_png(
 }
 }
 
+/// The host library application that the commands reach: the application that run gave Tauri as its state.
+fn host_application<R: tauri::Runtime>(
+    command: &CommandItem<'_, R>,
+) -> Result<port::AppHandle, InvokeError> {
+    command
+        .message
+        .webview()
+        .try_state::<port::AppHandle>()
+        .map(|app| app.inner().clone())
+        .ok_or_else(|| InvokeError::from("the host application is not managed"))
+}
+
+/// The body of a command as the body of the host library.
+fn payload<'a, R: tauri::Runtime>(command: &CommandItem<'a, R>) -> port::InvokeBody<'a> {
+    match command.message.payload() {
+        tauri::ipc::InvokeBody::Json(value) => port::InvokeBody::Json(value),
+        tauri::ipc::InvokeBody::Raw(bytes) => port::InvokeBody::Raw(bytes),
+    }
+}
+
+/// The host library application as a command argument.
+struct AppHandle(port::AppHandle);
+
+impl Deref for AppHandle {
+    type Target = port::AppHandle;
+    fn deref(&self) -> &port::AppHandle {
+        &self.0
+    }
+}
+
+impl<'a, R: tauri::Runtime> CommandArg<'a, R> for AppHandle {
+    fn from_command(command: CommandItem<'a, R>) -> Result<Self, InvokeError> {
+        host_application(&command).map(AppHandle)
+    }
+}
+
+/// The window of the calling web view as a command argument.
+struct Window(port::Window);
+
+impl Deref for Window {
+    type Target = port::Window;
+    fn deref(&self) -> &port::Window {
+        &self.0
+    }
+}
+
+impl<'a> CommandArg<'a, tauri::Wry> for Window {
+    fn from_command(command: CommandItem<'a, tauri::Wry>) -> Result<Self, InvokeError> {
+        let app = host_application(&command)?;
+        let window = command.message.webview().window();
+        Ok(Window(app.window_of(Arc::new(Frontend::new(window)))))
+    }
+}
+
+/// The calling web view as a command argument.
+struct Webview(port::Webview);
+
+impl Deref for Webview {
+    type Target = port::Webview;
+    fn deref(&self) -> &port::Webview {
+        &self.0
+    }
+}
+
+impl<'a> CommandArg<'a, tauri::Wry> for Webview {
+    fn from_command(command: CommandItem<'a, tauri::Wry>) -> Result<Self, InvokeError> {
+        let app = host_application(&command)?;
+        let webview = command.message.webview();
+        Ok(Webview(app.webview_of(
+            Arc::new(Frontend::new(webview.window())),
+            webview.label(),
+        )))
+    }
+}
+
+/// One command argument, which the host library decodes.
+struct Argument<T>(T);
+
+impl<'a, R: tauri::Runtime, T: DeserializeOwned> CommandArg<'a, R> for Argument<T> {
+    fn from_command(command: CommandItem<'a, R>) -> Result<Self, InvokeError> {
+        soksak_host::arguments::Argument::from_body(command.name, command.key, &payload(&command))
+            .map(|soksak_host::arguments::Argument(value)| Argument(value))
+            .map_err(InvokeError::from)
+    }
+}
+
+/// The record of the command being handled as a command argument.
+struct BindingCall(soksak_host::binding_record::BindingCall);
+
+impl BindingCall {
+    fn finish<T, E: std::fmt::Display>(self, names: &[&str], result: &Result<T, E>) {
+        self.0.finish(names, result)
+    }
+}
+
+impl<'a, R: tauri::Runtime> CommandArg<'a, R> for BindingCall {
+    fn from_command(command: CommandItem<'a, R>) -> Result<Self, InvokeError> {
+        soksak_host::binding_record::BindingCall::from_command(
+            command.name,
+            command.message.webview().window().label(),
+            &payload(&command),
+        )
+        .map(BindingCall)
+        .map_err(InvokeError::from)
+    }
+}
+
 #[cfg(test)]
 #[path = "../tests/view_source_stream/bindings_test.rs"]
 mod view_source_stream_tests;
@@ -1166,6 +1270,10 @@ mod view_source_stream_tests;
 #[cfg(test)]
 #[path = "../tests/project_data_order/bindings_test.rs"]
 mod project_data_order_tests;
+
+#[cfg(test)]
+#[path = "../tests/surface_layout/bindings_test.rs"]
+mod surface_layout_tests;
 
 #[cfg(test)]
 #[path = "plugins_starter_test.rs"]

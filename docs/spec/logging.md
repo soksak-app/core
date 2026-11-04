@@ -210,7 +210,7 @@ A Bloom filter has `8 × bytes` bits. The hash of an item is FNV-1a 64 over its 
 
 ## Query
 
-One implementation of the query for each language (the module `sok` for Go, the crate `soksak-sok-tauriv2` for Rust) reads the event files of `<config-dir>/logs/` through their indexes and answers one page. The two implementations give the same page, the same cursor and the same error text for the same files and the same parameters, and the golden fixtures check it.
+One implementation of the query for each language (the module `sok` for Go, the crate `soksak-sok` for Rust) reads the event files of `<config-dir>/logs/` through their indexes and answers one page. The two implementations give the same page, the same cursor and the same error text for the same files and the same parameters, and the golden fixtures check it.
 
 **Files.** The event files of the query are the files of `logs/` named `<role>-<boot>.jsonl`, `<role>-<boot>.jsonl.<n>` (`n` a positive number without a leading zero), `<role>-<boot>.debug.jsonl` and `<role>-<boot>.debug.jsonl.<n>`, with `role` a lowercase word and `boot` the rest of the name; the files `.stderr`, `.crash` and `.idx`, the state files and the captures are not event files. A *process* is a role with a boot (`host-1791500000-4242`), and the files of one process (the file, its generations and its debug file) share one `seq` space ([Event](#event)). A *channel* is a set of files: `other` the files that are not debug files, `debug` the debug files, `all` both. The writers store `error`, `warn` and `info` in the file and `debug` and `trace` in the debug file ([Files](#files)); a run that stored no event of the channel `debug` has no debug file, and the query reads the files that exist.
 

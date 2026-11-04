@@ -225,16 +225,16 @@ byte가 바뀌면 magic이 바뀌므로 새 contract tag다. plugin과 sidecar�
 | S8 | `scripts/check-test-parity.mjs`의 항목 F160.35(2649~2663줄: 구현, 단위 시험, e2e 시험, expected 문구) | 파서와 함께 contract repository 또는 terminal plugin으로 옮긴다. 시험을 가진 쪽으로 | G1 |
 | S9 | sidecar `../sidecars/vt/vt-core/src/screen_hash.rs`: hash 소유자를 뺀다. `message_cells`는 sidecar 모듈로 옮기고, message의 cell과 cursor 형식은 crate에서 온다. 호출자: `vt-core/src/protocol.rs` 1276줄과 1333줄; `vt-alacritty/src/replay.rs` 18줄과 309줄; `vt-core/tests/screen_hash_test.rs` 8줄; `vt-core/tests/screen_message_test.rs` 6줄과 `screen-message.json` 읽기 | sidecar repository, crate를 통해 | G1(crate에 의존하는 sidecar 출시) |
 | S10 | sidecar 사본 `vt-core/tests/fixtures/log-contract/screen-hash.json`, `screen-message.json`과 README 8~11줄("Core owns all three") | sidecar repository가 제거 | G1(S9와 같은 sidecar 출시) |
-| S11 | `scripts/check-test-parity.mjs`의 항목 F160.25(2617~2630줄): 구현 `screenHash`(`screen-hash.js`)가 contract repository로 옮기고, `sok` 시험 `replay_test.go`와 `replay_test.rs`, e2e 시험은 core에 남아 남은 소유자로 항목을 재배정한다. `packages/sok/tauriv2/tests/replay_test.rs`(590줄)와 `packages/sok/wailsv3/tests/replay_test.go`(340줄)의 screen message를 인용한 주석도 재배정한다 | contract repository(구현), core(시험, 재배정) | G1 |
+| S11 | `scripts/check-test-parity.mjs`의 항목 F160.25(2617~2630줄): 구현 `screenHash`(`screen-hash.js`)가 contract repository로 옮기고, `sok` 시험 `replay_test.go`와 `replay_test.rs`, e2e 시험은 core에 남아 남은 소유자로 항목을 재배정한다. `packages/sok/rust/tests/replay_test.rs`(590줄)와 `packages/sok/go/tests/replay_test.go`(340줄)의 screen message를 인용한 주석도 재배정한다 | contract repository(구현), core(시험, 재배정) | G1 |
 | S12 | `docs/spec/events.json` 190줄(처음 분기의 설명): page frame의 layer를 `page`로 적고 있다. `replay.md` 22줄에 따라 `plugin`으로 바꾼다(감독자 결정). `page.*` 이벤트의 layer `page`는 남는다 | core | F236-9-3, gate 없음: 이름 정정만 하며 저장된 기록은 이미 `plugin`을 쓴다 |
 | S13 | `packages/plugin-api/terms.json`: 용어 "replay"(150줄과 151줄)이 terminal 세션을 말한다 | core | F236-9-3, gate 없음: "세션"으로 |
 | S14 | terminal page `../plugins/terminal/ui/terminal.js`: `screenFromMessage`와 `screenHash`를 import하는 2줄과 호출 1209줄과 1218줄은 (b)의 복사본을 쓴다. plugin의 `Makefile`에 `make pack` 전 복사 단계를 넣는다 | terminal plugin repository | G1 (b) |
-| S15 | 복원 입력 검증기(gate V2): `docs/spec/replay.md` 72, 87, 109줄; `docs/spec/host-contract.md` 696줄과 `docs/spec/host-contract.ko.md` 697줄(명령 `cli.debug.replay-input-cases`); `packages/log-contract/test/replay-inputs.test.mjs`(7, 17, 23, 29줄); `packages/sok/tauriv2/tests/replay_inputs_test.rs`와 `packages/sok/wailsv3/tests/replay_inputs_test.go`; `scripts/check-test-parity.mjs`의 항목 F160.34(2633~2648줄) | V2가 성립할 때까지 core. 그 뒤 sidecar repository가 검증기 시험을 가지고 항목도 함께 온다. `replay.md`와 `host-contract.md`는 명령 문구를 남긴다 | V2 |
+| S15 | 복원 입력 검증기(gate V2): `docs/spec/replay.md` 72, 87, 109줄; `docs/spec/host-contract.md` 696줄과 `docs/spec/host-contract.ko.md` 697줄(명령 `cli.debug.replay-input-cases`); `packages/log-contract/test/replay-inputs.test.mjs`(7, 17, 23, 29줄); `packages/sok/rust/tests/replay_inputs_test.rs`와 `packages/sok/go/tests/replay_inputs_test.go`; `scripts/check-test-parity.mjs`의 항목 F160.34(2633~2648줄) | V2가 성립할 때까지 core. 그 뒤 sidecar repository가 검증기 시험을 가지고 항목도 함께 온다. `replay.md`와 `host-contract.md`는 명령 문구를 남긴다 | V2 |
 | S16 | `CHANGELOG.md`와 `CHANGELOG.ko.md`의 F160.25, F160.34, F160.35 항목, 그리고 `docs/features.md`와 `docs/features.ko.md`의 F236-9 항목은 기록으로 남고 바뀌지 않는다. G1 (e)는 사용자에게 미치는 결과를 담은 changelog 항목을 새로 추가한다 | core(새 changelog 항목만) | G1 (e) |
 
 유지되는 일반 문구는 `docs/spec/replay.md` 5줄("각 화면의 hash"와 입력 종류 표)이며, terminal을 이름 부르지 않는다.
 
-변경 뒤 core는 행 F160.25(`screenHash`)를 `screenHash`를 가지는 동안만 두고, S1과 같은 변경에서 contract repository로 재배정한다. `sok` 형식 검사는 core에 남는다. 문자열 형식만 검사하고 아무것도 계산하지 않기 때문이다: `packages/sok/tauriv2/src/replay.rs` 100줄의 `is_screen_hash`와 `packages/sok/wailsv3/src/replay.go` 26줄의 `screenHashText`. 설치 기반 창 검사 `e2e/terminal-replay.test.mjs`는 `AGENTS.md` 33줄의 예외로 core에 남고, G1 (d)의 관찰 동작 검사다.
+변경 뒤 core는 행 F160.25(`screenHash`)를 `screenHash`를 가지는 동안만 두고, S1과 같은 변경에서 contract repository로 재배정한다. `sok` 형식 검사는 core에 남는다. 문자열 형식만 검사하고 아무것도 계산하지 않기 때문이다: `packages/sok/rust/src/replay.rs` 100줄의 `is_screen_hash`와 `packages/sok/go/src/replay.go` 26줄의 `screenHashText`. 설치 기반 창 검사 `e2e/terminal-replay.test.mjs`는 `AGENTS.md` 33줄의 예외로 core에 남고, G1 (d)의 관찰 동작 검사다.
 
 ### View state의 producer 규칙(gate V1)
 
@@ -246,7 +246,7 @@ byte가 바뀌면 magic이 바뀌므로 새 contract tag다. plugin과 sidecar�
 
 - core: `packages/log-contract/index.js`의 `replayInputProblem`과 `replaySessionProblem`, fixture `packages/log-contract/fixtures/replay/inputs.json`, 그리고 명령이 `replaySessionProblem`을 부르는 곳(`replay.md` 85줄)은 V2가 성립할 때까지 남는다.
 - sidecar 사본: sidecar fixture(`vt-core/tests/fixtures/log-contract/`)의 `replay-inputs.json`.
-- `sok` 사본: `packages/sok/tauriv2/src/replay_inputs.rs`와 `packages/sok/wailsv3/src/replay_inputs.go`.
+- `sok` 사본: `packages/sok/rust/src/replay_inputs.rs`와 `packages/sok/go/src/replay_inputs.go`.
 - 계약 변경이 먼저다: `replay.md`의 "Replay executable"에 요구가 들어간다. 실행 파일은 검증기가 거부하는 `inputs.json`의 모든 입력을 같은 오류 문구로 거부한다. 요구는 그것을 담은 sidecar 출시에 적용된다.
 - gate V2: 설치된 sidecar 출시가 `inputs.json`의 잘못된 경우를 자기 실행 파일로 end-to-end 창 검사에서 통과시킨다. 그다음 core는 검증기, `sok` 사본, sidecar 사본을 한 변경에서 제거하고, 명령은 더 이상 `replaySessionProblem`을 부르지 않는다.
 

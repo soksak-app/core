@@ -39,7 +39,7 @@ F238-a-2는 `runtime.native.on`으로 view가 구독할 수 있는 event를 네 
 - E3(플러그인 쪽 경로). `host.js:251-252`는 `native: { call: invoke, on }`을 노출하고, `call(name)`(`host.js:257-261`)은 점이 없는 이름을 `invoke`로 보낸다. `surface-modules.js:462`는 원시 `scoped.native`를 `runtime.native`로 준다. 따라서 플러그인 코드는 두 핸들로 거부를 우회할 수 있고, 리터럴 스캔은 변수로 전달된 이름을 보지 못한다. 결정 항목 3의 게이트 래퍼가 맡는다.
 - E4(hit test, fix 브랜치). `fix/view-region-close-F228-5:native/darwin/src/webview_geometry.m:283-300`. 보이는 오버레이 사각형 안의 점에 대해, `self.webview`가 보이고 그 DOM 히트가 nil이 아니면 반환한다(`:292-293`). `self.mainWebview`가 설정되면 nil을 반환한다(`:296`). 그 밖에는 루프가 `continue`하고(`:287`) 점이 `self.nativePlane`으로 떨어진다(`:298-300`). 따라서 `webview`와 `mainWebview`가 없는 DOM 전용 surface에서 보이는 오버레이의 점은 네이티브 콘텐츠가 받는다. 명세(`surface-composition.md:28`)가 금지하는 상태다. fix 브랜치 주석(`:289-290`)은 하이브리드 앱 DOM이 "오버레이 아래 입력을 유지한다"고 쓰는데, 네이티브 평면이 그 입력을 받는 것이 결함이다.
 - E5(hit test, feat 브랜치). `feat/view-region-F228:webview_geometry.m:283-303`은 `mainWebview`가 설정되면 보이는 오버레이 아래에서 nil을 반환하고(`:287`), `webview`가 nil이거나 그 DOM 히트가 nil이면 네이티브 평면으로 떨어진다(`:288-299`). 이 버전은 E4의 브랜치로 대체된다(결정 항목 7).
-- E6(마스크 경로). `packages/host/tauriv2/src/composition.rs:315-325` → `platform/darwin/webview.rs:196-208` → `webview_geometry.m:761-771`(feat) / `:783-793`(fix) → `domOverlays` setter → `applyOverlayMask`. 마스크 경로는 존재한다. 통과 전에 뷰 오버레이가 마스크에 도달함을 단위 테스트로 증명해야 한다.
+- E6(마스크 경로). `packages/host/rust/src/composition.rs:315-325` → `platform/darwin/webview.rs:196-208` → `webview_geometry.m:761-771`(feat) / `:783-793`(fix) → `domOverlays` setter → `applyOverlayMask`. 마스크 경로는 존재한다. 통과 전에 뷰 오버레이가 마스크에 도달함을 단위 테스트로 증명해야 한다.
 - E7(재적용). `image_region.m`의 `applyInsetsNow`는 `:363-368`에 있으며 `CATransaction`(`:371-372`) 안에서 실행되고 `:1244-1249`에서 호출된다. `document_view.m:1068`(feat)과 `:1076`(fix)은 문서 영역을 네이티브 평면에 붙이고, `:1266`(feat)과 `:1275`(fix)은 배치 시점에 insets를 적용하며, `:898-938`은 프레임 변경 관찰자에서 다시 적용한다. 문서 경로를 감싸는 `CATransaction`은 없다.
 - E8(명세). main `docs/spec/native-surfaces.md:178`은 모든 구성에 대해 바깥 surface가 바뀔 때 insets를 다시 적용한다고 쓰며, 그 가운데 "같은 네이티브 트랜잭션에서"라고 쓰며, 이는 이미지 영역에만 참이다(E7).
 
@@ -126,8 +126,8 @@ origin을 탭 세션이 아니라 레이아웃에 저장하는 이유는 E4에 �
 
 ### 근거
 
-- E1(호스트, fix). `fix/view-origin-F237:packages/host/tauriv2/src/surfaces.rs:58-61`은 `origin`을 원시 값(`Option<Value>`, `present_value`)으로 보관한다. `view_origin_directory`(`:76-94`)는 부재(`:78`), 객체가 아니거나 멤버가 둘 이상인 값(`:82-86`), `directory`의 누락이나 잘못된 타입, 빈 경로를 거부한다. 절대 경로 검사는 없다.
-- E2(호스트, fix). `fix/view-origin-F237:packages/host/wailsv3/src/surfaces.go:62-112`: `viewOriginDirectory`는 nil origin(`:70`), 맵이 아닌 값(`:76`), `directory` 누락(`:81`), 빈 경로(`:91`)를 거부한다. 절대 경로 검사는 없다.
+- E1(호스트, fix). `fix/view-origin-F237`의 `surfaces.rs`(지금 `packages/host/rust/src/surfaces.rs`) 58-61줄은 `origin`을 원시 값(`Option<Value>`, `present_value`)으로 보관한다. `view_origin_directory`(`:76-94`)는 부재(`:78`), 객체가 아니거나 멤버가 둘 이상인 값(`:82-86`), `directory`의 누락이나 잘못된 타입, 빈 경로를 거부한다. 절대 경로 검사는 없다.
+- E2(호스트, fix). `fix/view-origin-F237`의 `surfaces.go`(지금 `packages/host/go/src/surfaces.go`) 62-112줄: `viewOriginDirectory`는 nil origin(`:70`), 맵이 아닌 값(`:76`), `directory` 누락(`:81`), 빈 경로(`:91`)를 거부한다. 절대 경로 검사는 없다.
 - E3(페이지, main). `packages/plugin-api/surface.js:12`는 origin 기본값을 `{directory: null}`로 둔다. `:72`는 `origin.directory ?? null`로 강제 변환한다.
 - E4(저장, main). `packages/workbench/tab-session.js`의 `put(tab, regions)`(`:33`)과 `:55`, `:65`의 호출(`put(tab, null)`)은 문서 영역이 없는 탭의 세션 파일을 지운다. `capture`는 상호작용 상태가 없으면 일찍 반환한다. 저장 형식(`docs/spec/plugins.md:142`)과 `host-store.js:16`(`tabSessionPut(tab, regions)`)에는 origin 필드가 없다.
 - E5(워크벤치 규칙, main). `packages/workbench/tab-reports.js:125`는 `startsWith("/")`가 아닌 모든 디렉터리를 거부한다. origin은 같은 맵에서 복사된다(`:137`).

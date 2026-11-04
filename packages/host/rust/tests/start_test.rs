@@ -1,0 +1,77 @@
+//! Checks the start document of the main page (docs/spec/native-host.md#page-start).
+
+use serde_json::json;
+use soksak_host::start;
+
+// contract: page.start.document
+#[test]
+fn start_document_carries_the_workspace_and_the_window_controls() {
+    let data = start::start_document(
+        &Ok(json!({"common": {}, "projects": []})),
+        &json!({"controls": {"x": 7.0, "y": 8.0, "w": 52.0, "h": 14.0}, "row": 32.0}),
+        &["tab-a".to_string()],
+    )
+    .unwrap();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&data).unwrap(),
+        json!({"workspace": {"common": {}, "projects": []},
+            "controls": {"controls": {"x": 7.0, "y": 8.0, "w": 52.0, "h": 14.0}, "row": 32.0},
+            "pendingSurfaces": ["tab-a"]})
+    );
+    assert!(
+        String::from_utf8(data)
+            .unwrap()
+            .starts_with(r#"{"workspace":"#)
+    );
+}
+
+// contract: page.start.requires-window
+#[test]
+fn start_requests_start_the_requesting_main_webview_only() {
+    let mut started = vec![];
+    let mut start = |webview: &str| {
+        started.push(webview.to_string());
+        if webview == "gone" {
+            Err(start::NO_WINDOW.to_string())
+        } else {
+            Ok(br#"{"workspace":{},"controls":null}"#.to_vec())
+        }
+    };
+    let response = start::serve(start::CORE, start::START_DOCUMENT_PATH, "main", &mut start);
+    assert_eq!(response.status(), 200);
+    assert_eq!(response.body(), br#"{"workspace":{},"controls":null}"#);
+    assert_eq!(response.headers()["Content-Type"], "application/json");
+    assert_eq!(response.headers()["Cache-Control"], "no-store");
+    assert_eq!(
+        response.headers()["Access-Control-Allow-Origin"],
+        start::PAGE_ORIGIN
+    );
+    let response = start::serve(start::CORE, start::START_DOCUMENT_PATH, "gone", &mut start);
+    assert_eq!(response.status(), 400);
+    assert_eq!(
+        response.body(),
+        b"the start document request names no window\n"
+    );
+    let response = start::serve(start::CORE, "/index.html", "main", &mut start);
+    assert_eq!(response.status(), 404);
+    assert_eq!(response.body(), b"soksak://core/index.html not found\n");
+    assert_eq!(started, vec!["main".to_string(), "gone".to_string()]);
+}
+
+// contract: page.start.sok-core-owner
+/// Tauri serves the start document at soksak://core/start.json (docs/spec/native-host.md#application-addresses); an
+/// address of another owner answers not found without starting a window.
+#[test]
+fn start_document_is_served_at_the_core_owner_of_soksak() {
+    assert_eq!(start::SCHEME, "soksak");
+    assert_eq!(start::CORE, "core");
+    let mut started = vec![];
+    let mut start = |webview: &str| {
+        started.push(webview.to_string());
+        Ok(b"{}".to_vec())
+    };
+    let response = start::serve("probe", start::START_DOCUMENT_PATH, "main", &mut start);
+    assert_eq!(response.status(), 404);
+    assert_eq!(response.body(), b"soksak://probe/start.json not found\n");
+    assert!(started.is_empty());
+}
