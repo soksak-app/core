@@ -9,7 +9,6 @@
 - F502-11: framework가 `App.SetSelfActivation(false)`, `App.SetSignalQuit(false)`, `App.SetNotificationDelegate(false)`를 제공한다. application은 이 option으로 activation을 시스템에 맡기고 signal과 notification center delegate를 소유한다.
 - F502-3: framework fork에서 mygo host의 Go code가 worker thread에서 실행되고, main thread는 stack test의 어느 phase에서도 자기 stack 밖의 code를 실행하지 않는다. surface는 size, scale, refresh rate를 AppKit이 변경을 알릴 때까지 보관하므로 frame은 call을 최대 7개, live resize의 step은 최대 15개 forward한다. fork release와 그 pin이 남았다.
 - F502-11: framework fork에서 `SetSelfActivation(false)`는 launch, show, activation policy 변경 때 app이 스스로 activate하지 않게 하고, `App.SetSignalQuit(false)`와 `App.SetNotificationDelegate(false)`는 signal과 notification delegate를 application에 맡긴다. fork release와 그 pin이 남았다.
-- F530: `soksak-stage`가 `head-fit.js`를 복사한다. 이 파일이 없어서 page가 `/head-fit.js: not found`로 멈췄다. staging test가 두 build에서 `index.html`과 `overlay.html`의 script, style, import를 따라가 staged되지 않은 참조에서 실패한다
 - F528: application 시작 뒤의 termination signal이 Go host를 quit한다. F502-7 이후 signal의 quit가 아무도 닫지 않는 channel을 기다렸으므로, `log.closed`만 쓰이고 process, sidecar, `endpoint.json`이 남았다.
 - F526: 자기 exit에 이르지 못한 stall sample의 process는 `Command failed` 문구 대신 signal, 그 process를 끝낸 limit, standard error로 실패한다.
 - F530: `soksak-stage`가 `head-fit.js`를 복사한다. 이 파일이 없어서 page가 `/head-fit.js: not found`로 멈췄다. `soksak-stage`는 `index.html`과 `overlay.html`의 script, style, import를 따라가 staged되지 않은 참조에서 실패하므로 모든 build가 거기서 멈춘다
