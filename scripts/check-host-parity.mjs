@@ -4,7 +4,9 @@
 // to the implementation of each host. Proposition 2 (endpoint methods) compares the set of endpoint methods that each host declares
 // per build flavor, and the diagnostic methods of each host with the diagnostic builds table of the endpoint specification. Proposition 3 (menu contract table) checks that the menu table of the host contract specification and the menu builder tables of both hosts are the same.
 // Proposition 6 (platform callers) checks that a production source of each host outside src/platform calls every method of its
-// platform interface. The comparison of the actual menu bar belongs to the window check layer, and propositions 4 and 5 are the next
+// platform interface from code that the product runs: a call inside a free function counts only when an entry point, an
+// application source or another counting call reaches that function, so a function that only tests call does not keep a
+// platform method called. The comparison of the actual menu bar belongs to the window check layer, and propositions 4 and 5 are the next
 // extension.
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
@@ -236,18 +238,135 @@ export function goPlatformMethods(source) {
   return methods;
 }
 
-// A line whose first text is a line comment calls nothing.
-const withoutCommentLines = (source) => source.split("\n").filter((line) => !line.trimStart().startsWith("//")).join("\n");
+// A line whose first text is a line comment calls nothing; it becomes empty, so the lines keep their positions. A cgo `//export` line
+// is a directive that makes C a caller of the function below it, and it stays.
+const withoutCommentLines = (source) => source.split('\n')
+  .map((line) => (line.trimStart().startsWith('//') && !line.startsWith('//export ') ? '' : line)).join('\n');
+
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const RUST_FREE_FUNCTION = /^(?:pub(?:\([^)]*\))? )?(?:const )?(?:async )?(?:unsafe )?(?:extern "C" )?fn ([a-z_][a-z0-9_]*)/;
+const GO_FUNCTION = /^func (\([^)]*\) )?([A-Za-z_]\w*)/;
+const RUST_USE = /^\s*(?:pub(?:\([^)]*\))? )?use /;
+const APPLICATION = 'application:';
+
+/**
+ * Returns the free function at the top level of a source that encloses line `at`, as {name, start, end, attributes}, or null when
+ * the line lies in another context: a method, an impl, a module, a static or a package-level value. The sources are formatted by
+ * rustfmt and gofmt, so a top-level item starts at the first column, a signature continues on lines that start with `)`, `where` or
+ * `{`, and a function ends at the line `}`.
+ */
+function enclosingFreeFunction(language, lines, at) {
+  for (let index = at; index >= 0; index -= 1) {
+    const line = lines[index];
+    if (line === '' || /^\s/.test(line) || /^(#\[|\)|where\b|\{|\/\/)/.test(line)) continue;
+    if (line.startsWith('}')) return null;
+    const match = language === 'rust' ? line.match(RUST_FREE_FUNCTION) : line.match(GO_FUNCTION);
+    if (!match || (language === 'go' && match[1])) return null;
+    const end = lines.findIndex((text, position) => position > index && text === '}');
+    if (end >= 0 && end < at) return null;
+    const attributes = [];
+    for (let back = index - 1; back >= 0 && /^(#\[|\/\/export )/.test(lines[back]); back -= 1) attributes.push(lines[back]);
+    return { name: language === 'rust' ? match[1] : match[2], start: index, end: end < 0 ? lines.length : end, attributes };
+  }
+  return null;
+}
+
+const directoryOf = (file) => (file.includes('/') ? file.slice(0, file.lastIndexOf('/')) : '');
+
+/**
+ * Judges the callers of the free functions of one host. A site that calls a function counts when it lies outside a free function
+ * (in a method, an impl or a package-level value, which this audit does not resolve) or inside a live free function. A free function
+ * is live when it is an entry point, `main`, Go `init`, a Rust `#[tauri::command]` or a cgo `//export` function, or when a counting
+ * site outside its own body names it: in Rust as `<module>::name`, with `crate`, `self`, `super` or the crate name at the crate root,
+ * or unqualified in its own file or a file whose `use` names it; in Go unqualified in its own package or as `<package>.Name`.
+ */
+function callerGraph(language, sources, scope) {
+  const lines = Object.fromEntries(Object.entries(sources).map(([file, source]) => [file, source.split('\n')]));
+  const packages = {};
+  if (language === 'go') {
+    for (const [file, source] of Object.entries(sources)) {
+      if (file.startsWith(APPLICATION)) continue;
+      const declared = source.match(/^package (\w+)/m);
+      if (!declared) throw new Error(`${file} declares no package`);
+      packages[directoryOf(file)] = declared[1];
+    }
+  }
+  const references = new Map();
+  const referencesOf = (file, name) => {
+    const key = `${file}\n${name}`;
+    if (references.has(key)) return references.get(key);
+    const sites = [];
+    const pattern = new RegExp(`(?:(\\w+)(?:::|\\.)|(\\.)|\\b)${escapeRegExp(name)}\\b`, 'g');
+    const module = file.split('/').at(-1).replace(/\.rs$/, '');
+    const qualifiers = new Set([module, 'crate', 'self', 'super', ...(file === scope.crate?.root ? [scope.crate.name] : [])]);
+    for (const [other, text] of Object.entries(lines)) {
+      const imported = language === 'rust' && (other === file || [...sources[other].matchAll(/^\s*(?:pub(?:\([^)]*\))? )?use [^;]*;/gm)]
+        .some((use) => use[0].includes(`${module}::`) && new RegExp(`\\b${escapeRegExp(name)}\\b`).test(use[0])));
+      const samePackage = language === 'go' && !other.startsWith(APPLICATION) && directoryOf(other) === directoryOf(file);
+      text.forEach((line, index) => {
+        if (language === 'rust' && RUST_USE.test(line)) return;
+        const definition = language === 'rust' ? line.match(RUST_FREE_FUNCTION) : line.match(GO_FUNCTION);
+        for (const match of line.matchAll(pattern)) {
+          if (other === file && definition && definition.at(-1) === name && !(language === 'go' && definition[1])) continue;
+          if (match[2]) continue;
+          const qualifier = match[1];
+          const separator = qualifier ? line.slice(match.index + qualifier.length, match.index + qualifier.length + 2) : '';
+          if (language === 'rust' ? (qualifier ? separator === '::' && qualifiers.has(qualifier) : imported)
+            : (qualifier ? separator.startsWith('.') && qualifier === packages[directoryOf(file)] : samePackage)) {
+            sites.push({ file: other, index });
+          }
+        }
+      });
+    }
+    references.set(key, sites);
+    return sites;
+  };
+  const live = new Map();
+  const isLive = (file, fn, visiting) => {
+    const key = `${file}\n${fn.name}`;
+    if (live.has(key)) return live.get(key);
+    if (fn.name === 'main' || (language === 'go' && fn.name === 'init')
+      || fn.attributes.some((attribute) => attribute.startsWith('#[tauri::command') || attribute.startsWith('//export '))) {
+      live.set(key, true);
+      return true;
+    }
+    if (visiting.has(key)) return false;
+    visiting.add(key);
+    const result = referencesOf(file, fn.name)
+      .filter((site) => site.file !== file || site.index < fn.start || site.index > fn.end)
+      .some((site) => counts(site, visiting));
+    visiting.delete(key);
+    // A negative result computed while another function is in progress can depend on that function, so only a result that
+    // depends on no function in progress is kept.
+    if (result || visiting.size === 0) live.set(key, result);
+    return result;
+  };
+  const counts = (site, visiting = new Set()) => {
+    const fn = enclosingFreeFunction(language, lines[site.file], site.index);
+    return !fn || isLive(site.file, fn, visiting);
+  };
+  return { lines, counts };
+}
 
 /**
  * Returns a failure for each platform method that no host source outside src/platform calls. A Rust method is called as
- * `.name(` or `::name(`; a Go method is called as `.Name(` or passed as the method value `.Name`. The sources are the production
- * sources of the host outside src/platform, without test files.
+ * `.name(` or `::name(`; a Go method is called as `.Name(` or passed as the method value `.Name`. A call counts only when its site
+ * counts by the rules of `callerGraph`, so a call in a free function that only tests reach is not a caller. The sources are the
+ * production sources of the host outside src/platform, without test files; scope names the language, the applications that link
+ * the host ({path: source}) and, for Rust, the crate ({root, name}).
  */
-export function auditPlatformCallers(host, methods, sources) {
-  const text = Object.values(sources).map(withoutCommentLines).join("\n");
+export function auditPlatformCallers(host, methods, sources, scope) {
+  const all = Object.fromEntries([
+    ...Object.entries(sources),
+    ...Object.entries(scope.applications).map(([file, source]) => [`${APPLICATION}${file}`, source]),
+  ].map(([file, source]) => [file, withoutCommentLines(source)]));
+  const graph = callerGraph(scope.language, all, scope);
   return methods
-    .filter((name) => !new RegExp(`(\\.|::)${name}\\b`).test(text))
+    .filter((name) => {
+      const pattern = new RegExp(`(\\.|::)${escapeRegExp(name)}\\b`);
+      return !Object.entries(graph.lines).some(([file, lines]) =>
+        lines.some((line, index) => pattern.test(line) && graph.counts({ file, index })));
+    })
     .sort()
     .map((name) => `${host} platform method ${name} has no caller outside src/platform`);
 }
@@ -302,7 +421,8 @@ export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, wailsv3Runtim
   tauriv2EndpointSource, wailsv3EndpointSource, wailsv3DiagnosticsSource,
   hostContractSpec, tauriv2MenuSource, wailsv3MenuSource, hostsSpec, endpointSpec,
   tauriv2WorkspaceSource, wailsv3WorkspaceSource, browserStorageSource, workbenchSettingsSource,
-  tauriv2PlatformSource, wailsv3PlatformSource, tauriv2ProductSources, wailsv3ProductSources }) {
+  tauriv2PlatformSource, wailsv3PlatformSource, tauriv2ProductSources, wailsv3ProductSources,
+  tauriv2ApplicationSources, wailsv3ApplicationSources, tauriv2Crate }) {
   const failures = [];
   const tauriv2 = {
     calls: runtimeCalls(tauriv2Runtime, 'const COMMAND = {', 'tauriv2 runtime'),
@@ -352,13 +472,29 @@ export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, wailsv3Runtim
   failures.push(...auditCommonOnlyKeys(commonOnlyKeys({ tauriv2WorkspaceSource, wailsv3WorkspaceSource, browserStorageSource, workbenchSettingsSource })));
   const tauriv2Callers = Object.fromEntries(Object.entries(tauriv2ProductSources)
     .map(([file, source]) => [file, withoutRustTestItems(source)]));
-  failures.push(...auditPlatformCallers('tauriv2', rustPlatformMethods(tauriv2PlatformSource), tauriv2Callers));
-  failures.push(...auditPlatformCallers('wailsv3', goPlatformMethods(wailsv3PlatformSource), wailsv3ProductSources));
+  failures.push(...auditPlatformCallers('tauriv2', rustPlatformMethods(tauriv2PlatformSource), tauriv2Callers,
+    { language: 'rust', crate: tauriv2Crate, applications: tauriv2ApplicationSources }));
+  failures.push(...auditPlatformCallers('wailsv3', goPlatformMethods(wailsv3PlatformSource), wailsv3ProductSources,
+    { language: 'go', applications: wailsv3ApplicationSources }));
   return failures;
+}
+
+/**
+ * Reads the library crate of a Cargo manifest: the source path of `[lib]` relative to `src/` and the crate name, which is the
+ * package name with `-` replaced by `_`.
+ */
+export function libraryCrate(manifest, file) {
+  const name = manifest.match(/^\[package\]\n(?:[^\[][^\n]*\n)*?name = "([^"]+)"/m)?.[1];
+  const path = manifest.match(/^\[lib\]\n(?:[^\[][^\n]*\n)*?path = "src\/([^"]+)"/m)?.[1];
+  if (!name || !path) throw new Error(`${file} declares no package name or no [lib] path under src/`);
+  return { root: path, name: name.replaceAll('-', '_') };
 }
 
 if (process.argv[1] && process.argv[1].endsWith('check-host-parity.mjs')) {
   const read = (path) => readFileSync(join(ROOT, path), 'utf8');
+  // The sources of an application that links a host, by their path in the repository.
+  const applicationSources = (directory, extension) => Object.fromEntries(
+    Object.entries(hostProductSources(join(ROOT, directory), extension)).map(([file, source]) => [`${directory}/${file}`, source]));
   const wailsv3Sources = {};
   for (const file of readdirSync(join(ROOT, 'packages/host/wailsv3/src'))) {
     if (file.endsWith('.go') && !file.endsWith('_test.go')) {
@@ -386,6 +522,9 @@ if (process.argv[1] && process.argv[1].endsWith('check-host-parity.mjs')) {
     wailsv3PlatformSource: read('packages/host/wailsv3/src/platform/platform.go'),
     tauriv2ProductSources: hostProductSources(join(ROOT, 'packages/host/tauriv2/src'), '.rs'),
     wailsv3ProductSources: hostProductSources(join(ROOT, 'packages/host/wailsv3/src'), '.go'),
+    tauriv2ApplicationSources: applicationSources('apps/tauriv2/src', '.rs'),
+    wailsv3ApplicationSources: applicationSources('apps/wailsv3/src', '.go'),
+    tauriv2Crate: libraryCrate(read('packages/host/tauriv2/Cargo.toml'), 'packages/host/tauriv2/Cargo.toml'),
   });
   for (const failure of failures) console.error(`FAIL: ${failure}`);
   if (failures.length > 0) {

@@ -1,9 +1,15 @@
 //! Tests of the value of host.buttons and its notifications. A fake service replaces the window and the page of the
 //! endpoint.
 
+#![cfg(target_os = "macos")]
+
 #[path = "support/folder.rs"]
 mod folder;
 
+#[path = "support/platform/darwin/endpoint_client.rs"]
+mod endpoint_client;
+
+use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -11,7 +17,7 @@ use std::time::Duration;
 
 use serde_json::{Map, Value, json};
 use soksak_host_tauriv2::buttons::Buttons;
-use soksak_host_tauriv2::endpoint::{self, Connection, Endpoint, Failure, Service, raw};
+use soksak_host_tauriv2::endpoint::{self, Endpoint, Failure, Service, raw};
 
 /// A service that has only the window w1 and answers host.buttons with the value of buttons.
 struct Fake {
@@ -49,7 +55,7 @@ fn start(config: &Path, service: Arc<Fake>) -> Endpoint {
     endpoint
 }
 
-fn request(connection: &mut Box<dyn Connection>, id: u64, method: &str, params: Value) -> Value {
+fn request(connection: &mut UnixStream, id: u64, method: &str, params: Value) -> Value {
     endpoint::write_frame(
         connection,
         &json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}),
@@ -66,7 +72,7 @@ fn request(connection: &mut Box<dyn Connection>, id: u64, method: &str, params: 
 }
 
 /// The mask of the next notification of host.buttons.
-fn next_mask(connection: &mut Box<dyn Connection>) -> Value {
+fn next_mask(connection: &mut UnixStream) -> Value {
     let got = endpoint::read_frame(connection)
         .unwrap()
         .expect("no host.buttons notification");
@@ -89,7 +95,7 @@ fn buttons_notify_each_mask_change() {
         notifier.notify_watchers("host.buttons", &raw(&value).unwrap())
     }));
     assert!(fake.buttons.set(buttons.clone()).is_ok());
-    let mut connection = endpoint::connect(endpoint.address(), Duration::from_secs(5)).unwrap();
+    let mut connection = endpoint_client::connect(endpoint.address(), Duration::from_secs(5));
     let watch = json!({"window": "w1", "name": "host.buttons"});
     assert_eq!(
         request(&mut connection, 1, "status.watch", watch.clone())["result"],

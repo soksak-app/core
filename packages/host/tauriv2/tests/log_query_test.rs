@@ -2,12 +2,18 @@
 //! `log.query`, the host call `logQuery`, the index that follows the writer, and the event of an index that is built from the file. The
 //! same cases run in the Go host.
 
+#![cfg(target_os = "macos")]
+
 #[path = "support/folder.rs"]
 mod folder;
+
+#[path = "support/platform/darwin/endpoint_client.rs"]
+mod endpoint_client;
 
 #[path = "support/records.rs"]
 mod records;
 
+use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
@@ -15,7 +21,7 @@ use std::time::Duration;
 
 use serde_json::value::RawValue;
 use serde_json::{Map, Value, json};
-use soksak_host_tauriv2::endpoint::{self, Connection, Endpoint, Failure, Service, raw};
+use soksak_host_tauriv2::endpoint::{self, Endpoint, Failure, Service, raw};
 use soksak_host_tauriv2::event_log::{self, EventLog, Level, Options};
 use soksak_host_tauriv2::event_record::use_host_event_log;
 use soksak_host_tauriv2::log_query::{
@@ -72,7 +78,7 @@ fn write_event_file(config: &Path, name: &str, text: &str) -> PathBuf {
     path
 }
 
-fn request(connection: &mut Box<dyn Connection>, id: u64, method: &str, params: Value) -> Value {
+fn request(connection: &mut UnixStream, id: u64, method: &str, params: Value) -> Value {
     endpoint::write_frame(
         connection,
         &json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}),
@@ -84,7 +90,7 @@ fn request(connection: &mut Box<dyn Connection>, id: u64, method: &str, params: 
 }
 
 /// Runs `body` with an endpoint on `config` and a connection to it.
-fn with_endpoint<T>(config: &Path, body: impl FnOnce(&mut Box<dyn Connection>) -> T) -> T {
+fn with_endpoint<T>(config: &Path, body: impl FnOnce(&mut UnixStream) -> T) -> T {
     let endpoint = Endpoint::start(
         &config.join("sockets"),
         config,
@@ -93,7 +99,7 @@ fn with_endpoint<T>(config: &Path, body: impl FnOnce(&mut Box<dyn Connection>) -
     )
     .unwrap();
     endpoint.publish("main").unwrap();
-    let mut connection = endpoint::connect(endpoint.address(), Duration::from_secs(5)).unwrap();
+    let mut connection = endpoint_client::connect(endpoint.address(), Duration::from_secs(5));
     let result = body(&mut connection);
     endpoint.stop();
     result
