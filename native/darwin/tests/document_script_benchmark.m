@@ -1,7 +1,7 @@
 // The cost of the document script (docs/spec/native-surfaces.md#document-regions): the physical footprint of the WebContent
 // process of a document region and the state reports that the host receives while the page changes a tree of 2000
-// elements without pause. The page changes one element in each task, and each change runs the script's element walk.
-// The benchmark prints the numbers and asserts nothing (docs/plans/document-streams-and-memory.md#verification).
+// elements without pause. The page changes one element in each task. No stream is subscribed, so the region posts no
+// element data (docs/spec/native-surfaces.md#document-streams). The benchmark prints the numbers and asserts nothing.
 #import <Cocoa/Cocoa.h>
 #import <Network/Network.h>
 #import <WebKit/WebKit.h>
@@ -207,7 +207,7 @@ int main(void) { @autoreleasepool {
     })) {
         failStep(@"load", @"the benchmark page did not load within 120 seconds", view);
     }
-    // The first run of the element walk and the state reports of the load arrive after the title.
+    // The state reports of the load arrive after the title.
     pumpUntil(0.5, ^BOOL { return NO; });
     fprintf(stdout, "end load elapsed %.3f s\n", nowSeconds() - loadStarted);
     fflush(stdout);

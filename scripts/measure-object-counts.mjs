@@ -1,5 +1,5 @@
-// Measures the object counts of a window of a running application before and after repeated operations (docs/plans/document-streams-and-memory.md,
-// Main application). It reads diagnostics.objects of the window after the counts settle, runs the list of operations N times, settles after
+// Measures the object counts of a window of a running application before and after repeated operations (docs/operations/examples.md#page-memory).
+// It reads diagnostics.objects of the window after the counts settle, runs the list of operations N times, settles after
 // each operation, and reads the counts and the footprint of each process again. The measure function asserts nothing: it logs one entry per
 // repetition, {repetition, counts, footprint}, and then one summary per count, {count, baseline, values, grows}, where grows is true when the count
 // rises in every repetition after the second. A count that grows is a defect for the owning check to judge.
