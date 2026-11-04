@@ -153,7 +153,7 @@ func TestAWindowWithoutAMainPageCountsItsHostObjects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if counts.Page != (PageObjects{}) || len(counts.Sessions) != 0 {
-		t.Fatalf("the counts are %+v", counts)
+	if counts.Payload()["page"] != nil || len(counts.Sessions) != 0 {
+		t.Fatalf("the counts are %+v", counts.Payload())
 	}
 }

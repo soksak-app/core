@@ -259,7 +259,7 @@ func (b *objectsBackend) ObjectCounts(window string) (host.ObjectCounts, error) 
 	b.windows = append(b.windows, window)
 	return host.ObjectCounts{
 		Host: host.HostObjects{Surfaces: 2, Regions: 1, Documents: 2, SidecarSessions: 1, PendingReplies: 0, EventSubscribers: 3},
-		Page: host.PageObjects{Elements: 40, Documents: 1},
+		Page: &host.PageObjects{Elements: 40, Documents: 1},
 		Documents: []host.DocumentObjects{
 			{Key: host.DocumentKey{Surface: "tab-2", Name: "page"}, Counts: host.PageObjects{Elements: 5, Documents: 2}},
 			{Key: host.DocumentKey{Surface: "tab-1", Name: "page"}, Counts: host.PageObjects{Elements: 3, Documents: 1}},
