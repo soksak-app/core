@@ -317,7 +317,7 @@ fn diagnostics_objects_reply_and_params() {
     )
     .unwrap();
     endpoint.publish("main").unwrap();
-    let mut connection = endpoint::connect(endpoint.address()).unwrap();
+    let mut connection = endpoint::connect(endpoint.address(), Duration::from_secs(5)).unwrap();
     let missing = request(&mut connection, 1, json!({}));
     assert_eq!(missing["error"]["code"], json!(-32602), "{missing}");
     let unknown = request(&mut connection, 2, json!({"window": "other"}));

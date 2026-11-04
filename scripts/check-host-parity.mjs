@@ -3,9 +3,11 @@
 // Proposition 1 (public bindings) checks the set of host.call names that each frontend runtime accepts and whether each name is actually connected
 // to the implementation of each host. Proposition 2 (endpoint methods) compares the set of endpoint methods that each host declares
 // per build flavor, and the diagnostic methods of each host with the diagnostic builds table of the endpoint specification. Proposition 3 (menu contract table) checks that the menu table of the host contract specification and the menu builder tables of both hosts are the same.
-// The comparison of the actual menu bar belongs to the window check layer, and propositions 4 and 5 are the next extension.
+// Proposition 6 (platform callers) checks that a production source of each host outside src/platform calls every method of its
+// platform interface. The comparison of the actual menu bar belongs to the window check layer, and propositions 4 and 5 are the next
+// extension.
 import { readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
@@ -250,11 +252,57 @@ export function auditPlatformCallers(host, methods, sources) {
     .map((name) => `${host} platform method ${name} has no caller outside src/platform`);
 }
 
-/** Judges propositions 1, 2, and 3 on the injected sources and returns the list of failures. */
+// The configuration predicate of an item that only test builds compile: `test`, or `all(...)` with `test` as one of its terms.
+const testOnlyConfiguration = (predicate) => predicate === 'test'
+  || /^all\((.*)\)$/.test(predicate) && predicate.slice(4, -1).split(',').map((term) => term.trim()).includes('test');
+
+/**
+ * Removes each item of a Rust source that only test builds compile: the `#[cfg(test)]` or `#[cfg(all(test, ...))]` line, the
+ * attributes that follow it and the item. The sources are formatted by rustfmt, so an item whose first line ends with `;` is that
+ * line, and any other item ends at the line `}` or `};` at the indentation of its attribute.
+ */
+export function withoutRustTestItems(source) {
+  const lines = source.split('\n');
+  const kept = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const configuration = lines[index].match(/^(\s*)#\[cfg\((.*)\)\]\s*$/);
+    if (!configuration || !testOnlyConfiguration(configuration[2].trim())) {
+      kept.push(lines[index]);
+      continue;
+    }
+    const [, indent] = configuration;
+    let first = index + 1;
+    while (first < lines.length && lines[first].trimStart().startsWith('#[')) first += 1;
+    let last = first;
+    if (!(lines[first] ?? '').trimEnd().endsWith(';')) {
+      last = lines.findIndex((line, at) => at > first && (line === `${indent}}` || line === `${indent}};`));
+      if (last < 0) throw new Error(`the ${lines[index].trim()} item at line ${index + 1} has no closing line at its indentation`);
+    }
+    index = last;
+  }
+  return kept.join('\n');
+}
+
+/**
+ * Reads the product sources of a host: every file with the extension under directory, outside the platform folder, without test
+ * files (names that end in `_test` before the extension). Returns the text of each file by its path relative to directory.
+ */
+export function hostProductSources(directory, extension) {
+  const sources = {};
+  for (const entry of readdirSync(directory, { recursive: true, withFileTypes: true })) {
+    const file = relative(directory, join(entry.parentPath, entry.name)).split(sep).join('/');
+    if (!entry.isFile() || !file.endsWith(extension) || file.endsWith(`_test${extension}`) || file.startsWith('platform/')) continue;
+    sources[file] = readFileSync(join(directory, file), 'utf8');
+  }
+  return Object.fromEntries(Object.entries(sources).sort(([left], [right]) => left.localeCompare(right)));
+}
+
+/** Judges propositions 1, 2, 3 and 6 on the injected sources and returns the list of failures. */
 export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, wailsv3Runtime, wailsv3HostSources,
   tauriv2EndpointSource, wailsv3EndpointSource, wailsv3DiagnosticsSource,
   hostContractSpec, tauriv2MenuSource, wailsv3MenuSource, hostsSpec, endpointSpec,
-  tauriv2WorkspaceSource, wailsv3WorkspaceSource, browserStorageSource, workbenchSettingsSource }) {
+  tauriv2WorkspaceSource, wailsv3WorkspaceSource, browserStorageSource, workbenchSettingsSource,
+  tauriv2PlatformSource, wailsv3PlatformSource, tauriv2ProductSources, wailsv3ProductSources }) {
   const failures = [];
   const tauriv2 = {
     calls: runtimeCalls(tauriv2Runtime, 'const COMMAND = {', 'tauriv2 runtime'),
@@ -302,6 +350,10 @@ export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, wailsv3Runtim
   failures.push(...auditMenuTables(specMenuTables(hostContractSpec), rustMenuTables(tauriv2MenuSource),
     goMenuTables(wailsv3MenuSource)));
   failures.push(...auditCommonOnlyKeys(commonOnlyKeys({ tauriv2WorkspaceSource, wailsv3WorkspaceSource, browserStorageSource, workbenchSettingsSource })));
+  const tauriv2Callers = Object.fromEntries(Object.entries(tauriv2ProductSources)
+    .map(([file, source]) => [file, withoutRustTestItems(source)]));
+  failures.push(...auditPlatformCallers('tauriv2', rustPlatformMethods(tauriv2PlatformSource), tauriv2Callers));
+  failures.push(...auditPlatformCallers('wailsv3', goPlatformMethods(wailsv3PlatformSource), wailsv3ProductSources));
   return failures;
 }
 
@@ -330,11 +382,15 @@ if (process.argv[1] && process.argv[1].endsWith('check-host-parity.mjs')) {
     wailsv3WorkspaceSource: read('packages/host/wailsv3/src/workspace.go'),
     browserStorageSource: read('apps/browser/runtime/browser-storage.js'),
     workbenchSettingsSource: read('packages/workbench/settings.js'),
+    tauriv2PlatformSource: read('packages/host/tauriv2/src/platform/platform.rs'),
+    wailsv3PlatformSource: read('packages/host/wailsv3/src/platform/platform.go'),
+    tauriv2ProductSources: hostProductSources(join(ROOT, 'packages/host/tauriv2/src'), '.rs'),
+    wailsv3ProductSources: hostProductSources(join(ROOT, 'packages/host/wailsv3/src'), '.go'),
   });
   for (const failure of failures) console.error(`FAIL: ${failure}`);
   if (failures.length > 0) {
     console.error(`host parity: ${failures.length} difference(s)`);
     process.exit(1);
   }
-  console.log('Host parity passed: host.call names, handler wiring, endpoint method sets, the diagnostic builds table, menu tables and common-only keys are equal');
+  console.log('Host parity passed: host.call names, handler wiring, endpoint method sets, the diagnostic builds table, menu tables and common-only keys are equal, and every platform method has a caller');
 }

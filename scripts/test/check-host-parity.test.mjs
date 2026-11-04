@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { auditCommonOnlyKeys, auditHostParity, auditMenuTables, auditPlatformCallers, commonOnlyKeys, goMenuTables, goPlatformMethods, rustHandlers, rustMenuTables, rustPlatformMethods, snake, specMenuTables } from "../check-host-parity.mjs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { auditCommonOnlyKeys, auditHostParity, auditMenuTables, auditPlatformCallers, commonOnlyKeys, goMenuTables, goPlatformMethods, hostProductSources, rustHandlers, rustMenuTables, rustPlatformMethods, snake, specMenuTables, withoutRustTestItems } from "../check-host-parity.mjs";
 
 // The base sources of the injection checks. Changing only one name in the real sources proves that each failure is produced mechanically.
 const sources = () => ({
@@ -20,6 +23,10 @@ const sources = () => ({
   wailsv3WorkspaceSource: 'var commonOnly = []string{"projectOpening", "textSize"}',
   browserStorageSource: 'const COMMON_ONLY = Object.freeze(["projectOpening", "textSize"]);',
   workbenchSettingsSource: 'const COMMON_ONLY = Object.freeze(["projectOpening", "textSize"]);',
+  tauriv2PlatformSource: rustPlatformFixture,
+  wailsv3PlatformSource: goPlatformFixture,
+  tauriv2ProductSources: platformSources().tauriv2,
+  wailsv3ProductSources: platformSources().wailsv3,
 });
 
 // The platform interfaces of the two hosts and host sources outside the platform folder that call each method; in Go one method is passed
@@ -240,4 +247,45 @@ test("a platform method named only in a comment has no caller", { timeout: 1000 
     "tauriv2 platform method place_webview has no caller outside src/platform",
     "wailsv3 platform method CreateSurface has no caller outside src/platform",
   ]);
+});
+
+test("auditHostParity reports a platform method of either host that no source outside the platform calls", { timeout: 1000 }, () => {
+  const changed = sources();
+  changed.tauriv2ProductSources = { "surfaces.rs": changed.tauriv2ProductSources["surfaces.rs"].replace("    let surface = p.create_surface(main)?;\n", "    let surface = 0;\n") };
+  changed.wailsv3ProductSources = { "host.go": changed.wailsv3ProductSources["host.go"].replace("\tsystem.SetCoreRoot(resolve)\n", "") };
+  assert.deepEqual(auditHostParity(changed), [
+    "tauriv2 platform method create_surface has no caller outside src/platform",
+    "wailsv3 platform method SetCoreRoot has no caller outside src/platform",
+  ]);
+});
+
+test("a platform method that only a test item of a Rust source calls has no caller", { timeout: 1000 }, () => {
+  const changed = sources();
+  const surfaces = changed.tauriv2ProductSources["surfaces.rs"];
+  changed.tauriv2ProductSources = {
+    "surfaces.rs": surfaces.replace("    p.place_webview(&view, frame)?;\n", "")
+      + "\n#[cfg(test)]\n#[path = \"surfaces_test.rs\"]\nmod surfaces_test;\n"
+      + "\n#[cfg(test)]\nmod tests {\n    fn probe(p: &dyn Platform) {\n        p.place_webview(&view, frame).unwrap();\n    }\n}\n"
+      + "\nfn after() {}\n",
+    "diagnostics.rs": "#[cfg(all(test, feature = \"diagnostics\"))]\npub(crate) fn probe(p: &dyn Platform) {\n    p.place_webview(&view, frame).unwrap();\n}\n",
+  };
+  assert.deepEqual(auditHostParity(changed), ["tauriv2 platform method place_webview has no caller outside src/platform"]);
+  assert.equal(withoutRustTestItems(changed.tauriv2ProductSources["surfaces.rs"]),
+    surfaces.replace("    p.place_webview(&view, frame)?;\n", "") + "\n\n\nfn after() {}\n");
+});
+
+test("a test item without its closing line is an error", { timeout: 1000 }, () => {
+  assert.throws(() => withoutRustTestItems("#[cfg(test)]\nmod tests {\n    fn probe() {}\n"),
+    /the #\[cfg\(test\)\] item at line 1 has no closing line at its indentation/);
+});
+
+test("the product sources of a host are its source files outside the platform folder, without test files", { timeout: 1000 }, (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "host-parity-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  for (const [file, text] of [["surfaces.rs", "a"], ["routine/routine.rs", "b"], ["platform/darwin/darwin.rs", "c"],
+    ["surfaces_test.rs", "d"], ["bridge.js", "e"], ["routine/routine_test.rs", "f"]]) {
+    mkdirSync(dirname(join(directory, file)), { recursive: true });
+    writeFileSync(join(directory, file), text);
+  }
+  assert.deepEqual(hostProductSources(directory, ".rs"), { "routine/routine.rs": "b", "surfaces.rs": "a" });
 });

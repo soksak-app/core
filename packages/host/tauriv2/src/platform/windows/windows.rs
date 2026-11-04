@@ -719,8 +719,12 @@ impl Platform for Windows {
     fn endpoint_listen(&self, directory: &Path, name: &str) -> Result<Box<dyn Listener>, String> {
         unsupported::endpoint_listen(directory, name)
     }
-    fn endpoint_connect(&self, address: &str) -> Result<Box<dyn Connection>, String> {
-        unsupported::endpoint_connect(address)
+    fn endpoint_connect(
+        &self,
+        address: &str,
+        read_timeout: std::time::Duration,
+    ) -> Result<Box<dyn Connection>, String> {
+        unsupported::endpoint_connect(address, read_timeout)
     }
     fn connect_service(&self, address: &str) -> Result<Box<dyn PersistentStream>, String> {
         unsupported::connect_service(address)

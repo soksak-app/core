@@ -922,9 +922,12 @@ pub fn socket_directory() -> std::path::PathBuf {
     std::env::temp_dir().join("soksak")
 }
 
-/// Connects to the endpoint address address.
-pub fn connect(address: &str) -> Result<Box<dyn Connection>, String> {
-    platform::current()?.endpoint_connect(address)
+/// Connects to the endpoint address address. A read of the connection that receives no byte within read_timeout fails.
+pub fn connect(
+    address: &str,
+    read_timeout: std::time::Duration,
+) -> Result<Box<dyn Connection>, String> {
+    platform::current()?.endpoint_connect(address, read_timeout)
 }
 
 /// Writes one message with its length.

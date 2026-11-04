@@ -873,8 +873,12 @@ impl Platform for Darwin {
     fn endpoint_listen(&self, directory: &Path, name: &str) -> Result<Box<dyn Listener>, String> {
         endpoint::listen(directory, name)
     }
-    fn endpoint_connect(&self, address: &str) -> Result<Box<dyn Connection>, String> {
-        endpoint::connect(address)
+    fn endpoint_connect(
+        &self,
+        address: &str,
+        read_timeout: Duration,
+    ) -> Result<Box<dyn Connection>, String> {
+        endpoint::connect(address, read_timeout)
     }
     fn connect_service(&self, address: &str) -> Result<Box<dyn PersistentStream>, String> {
         connect_service(address)
