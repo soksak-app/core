@@ -1,12 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
+import { pathToFileURL } from "node:url";
 
-import { checkDeclaration, checkPluginId, installFolders, packPlugin, pluginEntry, releaseSidecar, repositoryFolder, repositoryText, sidecarEntry, sidecarReleases } from "../workspace-registry.mjs";
+import { buildPublicRegistry, buildWorkspaceRegistry, checkDeclaration, checkOptions, checkPluginId, installFolders, packPlugin, pluginEntry, publicRegistryEntries, readIndex,
+  releaseSidecar, repositoryFolder, repositoryText, sidecarEntry, sidecarReleases, sourceRevision } from "../workspace-registry.mjs";
 
 const SHA = "a".repeat(64);
 
@@ -131,4 +135,218 @@ test("a plugin.json that names another id than its declaration fails the registr
   assert.equal(checkPluginId({ repository: "../plugins/a", id: "a" }, { id: "a" }, "/work/plugins/a/plugin.json"), undefined);
   assert.throws(() => checkPluginId({ repository: "../plugins/a", id: "a" }, { id: "b" }, "/work/plugins/a/plugin.json"),
     /^Error: \/work\/plugins\/a\/plugin\.json: id is "b", but scripts\/workspace-registry\.json declares "a"$/);
+});
+
+const GIT = ["-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null"];
+
+/** Creates a git repository at dir with the files, all committed, and returns its HEAD. */
+function gitRepository(dir, files) {
+  for (const [name, text] of Object.entries(files)) {
+    mkdirSync(dirname(join(dir, name)), { recursive: true });
+    writeFileSync(join(dir, name), text);
+  }
+  execFileSync("git", ["init", "-q", dir]);
+  execFileSync("git", [...GIT, "-C", dir, "add", "."]);
+  execFileSync("git", [...GIT, "-C", dir, "commit", "-q", "-m", "fixture"]);
+  return execFileSync("git", ["-C", dir, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+}
+
+/** Writes into dir an executable that stands for sok: it answers `registry build <folder>` with the counts of the entry files of the folder. */
+function fakeSok(dir) {
+  const sok = join(dir, "sok");
+  writeFileSync(sok, '#!/bin/sh\nprintf \'{"index":"%s/index.json","plugins":%s,"sidecars":%s,"packs":%s}\' "$3" '
+    + '"$(ls "$3/plugins" | wc -l | tr -d " ")" "$(ls "$3/sidecars" | wc -l | tr -d " ")" "$(ls "$3/packs" | wc -l | tr -d " ")"\n');
+  chmodSync(sok, 0o755);
+  return sok;
+}
+
+/**
+ * A workspace of a core checkout, one plugin repository and two sidecar repositories, and an executable that stands for sok.
+ * The sidecar repository `rust` records in its release the PROFILE and FEATURES that its make release receives; the sidecar
+ * repository `go` builds the same release whatever it receives. `rust` holds only an ignored file outside its revision and `go`
+ * an untracked file.
+ */
+function workspaceFixture(t) {
+  const work = mkdtempSync(join(tmpdir(), "workspace-registry-"));
+  t.after(() => rmSync(work, { recursive: true, force: true }));
+  const core = join(work, "core");
+  gitRepository(core, { "scripts/workspace-registry.json": JSON.stringify({
+    plugins: [{ repository: "../plugins/probe", id: "probe" }],
+    sidecars: [{ repository: "../sidecars/rust", folder: "engine" }, { repository: "../sidecars/go", folder: "." }],
+    packs: [{ name: "starter", description: "Probe.", plugins: ["probe"] }],
+  }) });
+  gitRepository(join(work, "plugins/probe"), {
+    "Makefile": 'pack:\n\t@printf "pack" > "$(OUT)/probe-0.0.1.tgz"\n',
+    "plugin.json": JSON.stringify({ id: "probe", name: "검사", dependencies: { "@scope/sidecar-engine": "^0.0.2" } }),
+    "package.json": JSON.stringify({ name: "@scope/plugin-probe", version: "0.0.1", description: "Probe plugin.", license: "MIT",
+      repository: "https://example.invalid/probe", engines: { soksak: "^0.0.1" } }),
+  });
+  const rust = gitRepository(join(work, "sidecars/rust"), {
+    ".gitignore": "build/\n",
+    "Makefile": 'release:\n\t@printf "%s|%s" "$(PROFILE)" "$(FEATURES)" > "$(OUT)/scope-sidecar-engine-0.0.2-linux-x64.tgz"\n',
+    "engine/package.json": JSON.stringify({ name: "@scope/sidecar-engine", version: "0.0.2", repository: "https://example.invalid/engine" }),
+    "engine/sidecar.json": JSON.stringify({ executable: "build/engine", protocol: 1 }),
+  });
+  mkdirSync(join(work, "sidecars/rust/build"));
+  writeFileSync(join(work, "sidecars/rust/build/engine"), "built");
+  const go = gitRepository(join(work, "sidecars/go"), {
+    "Makefile": 'release:\n\t@printf "built" > "$(OUT)/scope-sidecar-files-0.0.3-linux-x64.tgz"\n',
+    "package.json": JSON.stringify({ name: "@scope/sidecar-files", version: "0.0.3", repository: "https://example.invalid/files" }),
+    "sidecar.json": JSON.stringify({ executable: "build/files", protocol: 1 }),
+  });
+  writeFileSync(join(work, "sidecars/go/notes.txt"), "not committed");
+  return { work, root: pathToFileURL(`${core}/`), sok: fakeSok(work), out: join(work, "registry"), revisions: { rust, go } };
+}
+
+const releaseText = (out, name) => readFileSync(join(out, "releases", name), "utf8");
+
+test("SIDECARS=diagnostic releases each sidecar with PROFILE=release FEATURES=diagnostics and records the revision of each sidecar repository", { timeout: 30000 }, (t) => {
+  const fixture = workspaceFixture(t);
+  const result = buildWorkspaceRegistry(fixture.sok, fixture.out, { sidecars: "diagnostic", root: fixture.root });
+  assert.deepEqual(result, { index: join(fixture.out, "index.json"), plugins: 1, sidecars: 2, packs: 1 });
+  assert.equal(releaseText(fixture.out, "scope-sidecar-engine-0.0.2-linux-x64.tgz"), "release|diagnostics");
+  assert.equal(releaseText(fixture.out, "scope-sidecar-files-0.0.3-linux-x64.tgz"), "built");
+  assert.equal(releaseText(fixture.out, "probe-0.0.1.tgz"), "pack");
+  assert.deepEqual(JSON.parse(readFileSync(join(fixture.out, "sidecar-revisions.json"), "utf8")), { sidecars: [
+    { repository: "../sidecars/rust", revision: fixture.revisions.rust, changes: false },
+    { repository: "../sidecars/go", revision: fixture.revisions.go, changes: true },
+  ] });
+});
+
+test("the default registry releases each sidecar as its make release builds it and removes the revision record of an earlier diagnostic run", { timeout: 30000 }, (t) => {
+  const fixture = workspaceFixture(t);
+  mkdirSync(fixture.out);
+  writeFileSync(join(fixture.out, "sidecar-revisions.json"), JSON.stringify({ sidecars: [] }));
+  buildWorkspaceRegistry(fixture.sok, fixture.out, { root: fixture.root });
+  assert.equal(releaseText(fixture.out, "scope-sidecar-engine-0.0.2-linux-x64.tgz"), "|");
+  assert.equal(releaseText(fixture.out, "scope-sidecar-files-0.0.3-linux-x64.tgz"), "built");
+  assert.equal(existsSync(join(fixture.out, "sidecar-revisions.json")), false);
+});
+
+test("the revision of a sidecar repository counts a tracked modification as a change and fails for a folder without a repository", { timeout: 30000 }, (t) => {
+  const work = mkdtempSync(join(tmpdir(), "workspace-revision-"));
+  t.after(() => rmSync(work, { recursive: true, force: true }));
+  const repository = join(work, "sidecar");
+  const revision = gitRepository(repository, { "Makefile": "release:\n" });
+  assert.deepEqual(sourceRevision(repository), { revision, changes: false });
+  writeFileSync(join(repository, "Makefile"), "release: build\n");
+  assert.deepEqual(sourceRevision(repository), { revision, changes: true });
+  mkdirSync(join(work, "plain"));
+  assert.throws(() => sourceRevision(join(work, "plain")), /plain: the revision of the sidecar repository cannot be read: .*not a git repository/s);
+});
+
+test("the registry options take SIDECARS=diagnostic and PLUGINS=public, and PLUGINS=public only with SIDECARS=diagnostic", { timeout: 1000 }, () => {
+  assert.equal(checkOptions({}), undefined);
+  assert.equal(checkOptions({ sidecars: "diagnostic" }), undefined);
+  assert.equal(checkOptions({ sidecars: "diagnostic", plugins: "public" }), undefined);
+  assert.throws(() => checkOptions({ sidecars: "debug" }), /^Error: --sidecars must be diagnostic \(make registry SIDECARS=diagnostic\), not "debug"$/);
+  assert.throws(() => checkOptions({ sidecars: "diagnostic", plugins: "all" }), /^Error: --plugins must be public \(make registry PLUGINS=public\), not "all"$/);
+  assert.throws(() => checkOptions({ plugins: "public" }),
+    /^Error: --plugins public lists the sidecar releases of --sidecars diagnostic: make registry SIDECARS=diagnostic PLUGINS=public$/);
+});
+
+const ENGINE = "@scope/sidecar-engine";
+const publicVersion = (version, sidecars) => ({ version,
+  release: { url: `https://github.com/scope/probe/releases/download/v${version}/scope-plugin-probe-${version}.tgz`, sha256: SHA },
+  engines: { soksak: "^0.0.1" }, sidecars });
+const publicPlugin = (id, versions) => ({ id, package: `@scope/plugin-${id}`, name: id, description: "Probe plugin.", license: "MIT",
+  repository: `https://github.com/scope/${id}`, versions });
+/** An index of the public registry: its old plugin versions need sidecar versions that the diagnostic sidecar release is not. */
+const publicIndex = (probe, revoked = []) => ({
+  format: 1,
+  plugins: [publicPlugin("probe", probe), publicPlugin("plain", [publicVersion("0.0.4", {})])],
+  sidecars: [{ name: ENGINE, repository: "https://github.com/scope/engine", versions: ["0.0.1", "0.0.2"].map((version) => ({ version, protocol: 1,
+    releases: { "linux-x64": { url: `https://github.com/scope/engine/releases/download/v${version}/scope-sidecar-engine-${version}-linux-x64.tgz`, sha256: SHA } } })) }],
+  core: { versions: [{ version: "0.0.1", releases: { "linux-x64-tauriv2": { url: "https://github.com/soksak-app/core/releases/download/v0.0.1/soksak-0.0.1-linux-x64-tauriv2.zip", sha256: SHA } } }] },
+  packs: [{ name: "starter", description: "Probe.", plugins: ["plain", "probe"] }],
+  revoked: { plugins: [...revoked, { id: "plain", version: "0.0.4", reason: "Probe." }],
+    sidecars: [{ name: ENGINE, version: "0.0.1", reason: "Probe." }], core: [] },
+});
+/** The sidecar entries that make registry SIDECARS=diagnostic wrote: one release of version 0.0.2. */
+const diagnosticSidecars = (url = "file:///registry/releases/scope-sidecar-engine-0.0.2-linux-x64.tgz") => [{ name: ENGINE,
+  repository: "https://github.com/scope/engine", versions: [{ version: "0.0.2", protocol: 1, releases: { "linux-x64": { url, sha256: SHA } } }] }];
+
+test("PLUGINS=public lists the plugin versions of the public registry whose sidecar ranges the diagnostic sidecar releases satisfy", { timeout: 1000 }, () => {
+  const index = publicIndex([publicVersion("0.0.1", { [ENGINE]: "^0.0.1" }), publicVersion("0.0.2", { [ENGINE]: "^0.0.2" })],
+    [{ id: "probe", version: "0.0.1", reason: "Probe." }]);
+  assert.deepEqual(publicRegistryEntries(index, diagnosticSidecars()), {
+    plugins: [publicPlugin("probe", [publicVersion("0.0.2", { [ENGINE]: "^0.0.2" })]), publicPlugin("plain", [publicVersion("0.0.4", {})])],
+    packs: index.packs,
+    // The public sidecars and the core releases are not listed, so the index withdraws none of them.
+    revoked: { plugins: [{ id: "plain", version: "0.0.4", reason: "Probe." }], sidecars: [] },
+    dropped: [{ id: "probe", version: "0.0.1", sidecar: ENGINE, range: "^0.0.1" }],
+  });
+  // A revoked version is not selected, so a newer revoked version that the diagnostic sidecars do not satisfy is left out.
+  const revoked = publicIndex([publicVersion("0.0.2", { [ENGINE]: "^0.0.2" }), publicVersion("0.0.3", { [ENGINE]: "^0.0.3" })],
+    [{ id: "probe", version: "0.0.3", reason: "Probe." }]);
+  assert.deepEqual(publicRegistryEntries(revoked, diagnosticSidecars()).dropped, [{ id: "probe", version: "0.0.3", sidecar: ENGINE, range: "^0.0.3" }]);
+});
+
+test("PLUGINS=public fails when leaving out a version would make an installation select an older version or no version", { timeout: 1000 }, () => {
+  const newer = publicIndex([publicVersion("0.0.2", { [ENGINE]: "^0.0.2" }), publicVersion("0.0.3", { [ENGINE]: "^0.0.3" })]);
+  assert.throws(() => publicRegistryEntries(newer, diagnosticSidecars()),
+    /^Error: public registry: plugin probe 0\.0\.3 needs @scope\/sidecar-engine \^0\.0\.3, which no sidecar release of make registry SIDECARS=diagnostic satisfies, and its older version 0\.0\.2 is listed, so an installation would select 0\.0\.2 where the public registry selects 0\.0\.3$/);
+  const none = publicIndex([publicVersion("0.0.1", { [ENGINE]: "^0.0.1" })]);
+  assert.throws(() => publicRegistryEntries(none, diagnosticSidecars()),
+    /^Error: public registry: plugin probe has no version whose sidecar ranges the sidecar releases of make registry SIDECARS=diagnostic satisfy$/);
+  const unknown = publicIndex([publicVersion("0.0.2", { "@scope/sidecar-other": "^0.0.1" })]);
+  assert.throws(() => publicRegistryEntries(unknown, diagnosticSidecars()), /plugin probe has no version whose sidecar ranges/);
+});
+
+/** A registry folder as make registry SIDECARS=diagnostic leaves it: the revision record, the sidecar entries and their releases. */
+function diagnosticRegistry(t) {
+  const work = mkdtempSync(join(tmpdir(), "workspace-public-"));
+  t.after(() => rmSync(work, { recursive: true, force: true }));
+  const registry = join(work, "registry");
+  const release = join(registry, "releases", "scope-sidecar-engine-0.0.2-linux-x64.tgz");
+  mkdirSync(dirname(release), { recursive: true });
+  writeFileSync(release, "diagnostic");
+  mkdirSync(join(registry, "sidecars"));
+  writeFileSync(join(registry, "sidecars", "scope-sidecar-engine.json"), JSON.stringify(diagnosticSidecars(pathToFileURL(release).href)[0]));
+  writeFileSync(join(registry, "sidecar-revisions.json"), JSON.stringify({ sidecars: [{ repository: "../sidecars/engine", revision: "b".repeat(40), changes: false }] }));
+  return { work, registry, release, sok: fakeSok(work), out: join(work, "registry-public") };
+}
+
+test("PLUGINS=public writes the public plugin entries beside the sidecar entries of make registry SIDECARS=diagnostic and builds no release", { timeout: 30000 }, (t) => {
+  const fixture = diagnosticRegistry(t);
+  mkdirSync(join(fixture.out, "plugins"), { recursive: true });
+  writeFileSync(join(fixture.out, "plugins", "earlier.json"), "{}");
+  const index = publicIndex([publicVersion("0.0.1", { [ENGINE]: "^0.0.1" }), publicVersion("0.0.2", { [ENGINE]: "^0.0.2" })]);
+  const result = buildPublicRegistry(fixture.sok, fixture.out, fixture.registry, index);
+  assert.deepEqual(result, { index: join(fixture.out, "index.json"), plugins: 2, sidecars: 1, packs: 1,
+    dropped: [{ id: "probe", version: "0.0.1", sidecar: ENGINE, range: "^0.0.1" }] });
+  const file = (...path) => JSON.parse(readFileSync(join(fixture.out, ...path), "utf8"));
+  assert.deepEqual(file("plugins", "probe.json"), publicPlugin("probe", [publicVersion("0.0.2", { [ENGINE]: "^0.0.2" })]));
+  assert.deepEqual(file("plugins", "plain.json"), index.plugins[1]);
+  assert.deepEqual(file("sidecars", "scope-sidecar-engine.json"), diagnosticSidecars(pathToFileURL(fixture.release).href)[0]);
+  assert.deepEqual(file("packs", "starter.json"), index.packs[0]);
+  assert.deepEqual(file("revoked.json"), { plugins: [{ id: "plain", version: "0.0.4", reason: "Probe." }], sidecars: [] });
+  assert.equal(existsSync(join(fixture.out, "releases")), false);
+  assert.equal(existsSync(join(fixture.out, "core.json")), false);
+});
+
+test("PLUGINS=public fails when the checkout holds no sidecar releases of make registry SIDECARS=diagnostic", { timeout: 30000 }, (t) => {
+  const index = publicIndex([publicVersion("0.0.2", { [ENGINE]: "^0.0.2" })]);
+  const fixture = diagnosticRegistry(t);
+  rmSync(fixture.release);
+  assert.throws(() => buildPublicRegistry(fixture.sok, fixture.out, fixture.registry, index),
+    /sidecars\/scope-sidecar-engine\.json: release .*scope-sidecar-engine-0\.0\.2-linux-x64\.tgz of linux-x64 is missing; run make registry SIDECARS=diagnostic first$/);
+  rmSync(join(fixture.registry, "sidecar-revisions.json"));
+  assert.throws(() => buildPublicRegistry(fixture.sok, fixture.out, fixture.registry, index),
+    /registry\/sidecar-revisions\.json is missing: --plugins public lists the sidecar releases that make registry SIDECARS=diagnostic writes; run make registry SIDECARS=diagnostic first$/);
+  assert.throws(() => buildPublicRegistry(fixture.sok, fixture.registry, fixture.registry, index),
+    /^Error: --out .*registry is the folder of the sidecar releases; PLUGINS=public writes another folder$/);
+});
+
+test("the index of the public registry is read from its address, and an answer other than 200 is an error", { timeout: 10000 }, async (t) => {
+  const index = publicIndex([publicVersion("0.0.2", { [ENGINE]: "^0.0.2" })]);
+  const server = createServer((request, response) => {
+    if (request.url !== "/index.json") return response.writeHead(404).end();
+    response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(index));
+  });
+  await new Promise((done) => server.listen(0, "127.0.0.1", done));
+  t.after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  assert.deepEqual(await readIndex(`${base}/index.json`), index);
+  await assert.rejects(readIndex(`${base}/missing.json`), new RegExp(`^Error: ${base}/missing\\.json: HTTP 404$`));
 });

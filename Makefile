@@ -339,11 +339,24 @@ native-darwin-fetch:
 # builds every declared sidecar from its repository and releases them for the current platform, and then
 # creates index.json in target/registry (docs/spec/plugins.md#repositories).
 # Diagnostic builds and window checks install from here.
-REGISTRY = target/registry
+# SIDECARS=diagnostic runs `make release PROFILE=release FEATURES=diagnostics` of each sidecar repository, so a Rust sidecar builds the
+# release profile with its feature diagnostics and a sidecar whose make release takes neither variable builds as it always does, and
+# writes beside index.json sidecar-revisions.json, the revision of each sidecar repository that it built and whether its working tree
+# held changes outside that revision.
+# SIDECARS=diagnostic PLUGINS=public packs no plugin and builds no sidecar: it writes into target/registry-public an index of the plugins
+# of the index of the public registry beside the sidecar releases that make registry SIDECARS=diagnostic wrote into target/registry,
+# and fails when they are missing.
+# PLUGINS also names the surface plugin ids of make object-counts and make trace-share (PLUGINS='ID...'), which do not depend on
+# registry; a recipe that sets PLUGINS for those targets and also runs registry passes PLUGINS explicitly to each sub-make.
+WORKSPACE_REGISTRY = target/registry
+# The index of the public registry (docs/spec/registry.md).
+PUBLIC_REGISTRY_INDEX = https://soksak-app.github.io/registry/index.json
+REGISTRY = $(if $(filter public,$(PLUGINS)),target/registry-public,$(WORKSPACE_REGISTRY))
 
 registry:
 	@$(CARGO_ENV) cargo build --locked -p soksak-sok-tauriv2
-	@node scripts/workspace-registry.mjs --sok target/debug/sok --out $(REGISTRY)
+	@node scripts/workspace-registry.mjs --sok target/debug/sok --out $(REGISTRY) $(if $(SIDECARS),--sidecars $(SIDECARS)) \
+		$(if $(PLUGINS),--plugins $(PLUGINS) --sidecar-registry $(WORKSPACE_REGISTRY) --public-index $(PUBLIC_REGISTRY_INDEX))
 
 # The installation stage of the workspace: `make install` of every plugin and sidecar repository that scripts/workspace-registry.json
 # declares. A fresh checkout runs it once before make registry builds and packs those repositories.
