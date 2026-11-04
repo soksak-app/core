@@ -856,11 +856,12 @@ static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
             committed, preedit, events]);
     typeKey(window, @"Enter", regionAnswered);
 
-    // Also checks the callback in which the last syllable and Space remain in a single insert, as observed in Tauri.
+    // Also checks the callback in which the last syllable and Space remain in a single insert, as observed in Tauri. The region
+    // holds only its marked buffer, so the insert replaces the marked syllable through the range the region answers.
     [events removeAllObjects];
-    NSUInteger batchStart = ((NSTextView *)region).textStorage.length;
-    [(id<NSTextInputClient>)region insertText:@"은" replacementRange:NSMakeRange(NSNotFound, 0)];
-    [(id<NSTextInputClient>)region insertText:@"은 " replacementRange:NSMakeRange(batchStart, 1)];
+    id<NSTextInputClient> client = (id<NSTextInputClient>)region;
+    [client setMarkedText:@"은" selectedRange:NSMakeRange(1, 0) replacementRange:NSMakeRange(NSNotFound, 0)];
+    [client insertText:@"은 " replacementRange:client.markedRange];
     committed = [valuesOfType(@"insert", 0) componentsJoinedByString:@""];
     preedit = [valuesOfType(@"compose", 0) lastObject] ?: @"";
     check([committed isEqual:@"은 "] && [preedit isEqual:@""],
