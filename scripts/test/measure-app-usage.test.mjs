@@ -739,6 +739,56 @@ function marksOfTwo({ frames = [[340, 340], [512, 513]], commandBuffers = [[338,
   return { before: mark(0), after: mark(1) };
 }
 
+/** The process outputs of mygoProcesses with 700, a WebKit networking process of another application. */
+function foreignProcesses({ footprintFails = () => false, foreignCpu, appCpu = () => [[10, "0:01.00"], [11, "0:00.50"], [902, "0:02.00"], [300, "0:00.10"]] }) {
+  let cpuReads = 0;
+  const run = mygoProcesses({
+    footprints: (pid) => [pid * MB, pid * MB * 2],
+    cpu: () => { cpuReads += 1; return [...appCpu(cpuReads), ...(foreignCpu(cpuReads) ? [[700, "0:00.10"]] : [])]; },
+  });
+  return async (command, args) => {
+    if (command === "pgrep" && args[1] === "com.apple.WebKit.Networking") return { status: 0, stdout: "700\n", stderr: "" };
+    if (command === "footprint" && args[1] === "700" && footprintFails()) return { status: 66, stdout: "", stderr: "footprint: Unable to find pid" };
+    return run(command, args);
+  };
+}
+
+const measureForeign = (run) => measureApps({
+  sok: "/b/sok", configDirs: [MYGO], interval: 10, footprints: "at-once", run, realpath: (path) => path, sleep: async () => {},
+});
+
+test("measureApps leaves out a process of no application that ends between the cpu reads", async () => {
+  let gone = false;
+  const result = await measureForeign(foreignProcesses({
+    footprintFails: () => gone,
+    foreignCpu: (read) => { gone = read > 1; return !gone; },
+  }));
+  assert.deepEqual(result.errors, []);
+  assert.deepEqual(result.unattributed.rows, []);
+  assert.deepEqual(result.apps[0].rows.map(({ pid }) => pid), [10, 11, 902, 300]);
+});
+
+test("measureApps leaves out a process of no application that ended before its first footprint", async () => {
+  const result = await measureForeign(foreignProcesses({ footprintFails: () => true, foreignCpu: () => false }));
+  assert.deepEqual(result.errors, []);
+  assert.deepEqual(result.unattributed.rows, []);
+});
+
+test("measureApps reports a process of no application that runs and has no footprint", async () => {
+  const result = await measureForeign(foreignProcesses({ footprintFails: () => true, foreignCpu: () => true }));
+  assert.equal(result.errors.length, 1);
+  assert.match(result.errors[0], /unattributed webkit networking \(pid 700\): footprint -p 700 exited with 66/);
+  assert.deepEqual(result.unattributed.rows.map(({ pid }) => pid), [700]);
+});
+
+test("measureApps reports a process of the application that ends between the cpu reads", async () => {
+  const result = await measureForeign(foreignProcesses({
+    foreignCpu: () => true,
+    appCpu: (read) => [[10, "0:01.00"], ...(read === 1 ? [[11, "0:00.50"]] : []), [902, "0:02.00"], [300, "0:00.10"]],
+  }));
+  assert.deepEqual(result.errors, [`${MYGO} sidecar probe (pid 11): pid is not in the process table at both cpu reads`]);
+});
+
 /** One application of measureApps of the mygo host: the host, a sidecar, a document process and the WebKit GPU and networking services. */
 function measuredApp({ after = false } = {}) {
   const rows = [

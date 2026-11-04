@@ -4,7 +4,7 @@
 // The page and document processes come from sok windows and from sok status host.window of each window; a window whose host.window
 // reports pageProcess null has no main page and no page row. The WebKit GPU, networking and WebContent services belong to the application
 // whose host lists them in its launchd domain (launchctl print pid/<host>). A WebKit GPU or networking process (pgrep -f
-// com.apple.WebKit.GPU|Networking) that no application claims is printed as unattributed. The memory of a process is its phys_footprint
+// com.apple.WebKit.GPU|Networking) that no application claims is printed as unattributed, and one that ends during the measurement leaves that list without an error. The memory of a process is its phys_footprint
 // and its phys_footprint_peak (footprint -p PID -f bytes); each footprint is read after the readings of every process settle by the rule of
 // G3 that scripts/footprints.mjs reads: two consecutive readings 5 seconds apart differ by less than 1,024 KB, and the reading is at least
 // 3 seconds after the last frame. The U7 records of the pointer step are read through scripts/frame-records.mjs. The CPU time of a
@@ -889,13 +889,19 @@ export async function measureApps({
 
   const groups = [...apps.map((app) => ({ name: app.configDir, rows: app.rows })), { name: "unattributed", rows: unattributed }];
   const measured = groups.flatMap(({ name, rows }) => rows.map((row) => ({ row, where: `${name} ${row.role} (pid ${row.pid})` })));
+  const readCpu = () => readCpuSeconds(run);
+  // A process of no application that ends during the measurement is no failure of the application and leaves the list.
+  const foreign = new Set(unattributed.map(({ pid }) => pid));
+  const ended = new Set();
   // A process whose footprint cannot be read is reported once, whatever the number of readings.
   const failures = new Set();
   const footprintOf = async ({ row, where }) => {
+    if (ended.has(row.pid)) return null;
     try {
       return await readFootprint(row.pid, run);
     } catch (error) {
-      failures.add(`${where}: ${error.message}`);
+      if (foreign.has(row.pid) && !(await readCpu()).has(row.pid)) ended.add(row.pid);
+      else failures.add(`${where}: ${error.message}`);
       return null;
     }
   };
@@ -917,7 +923,6 @@ export async function measureApps({
     : { footprints: await readFootprints() };
   for (const { row } of measured) row.bytes = first.footprints.get(row.pid) ?? null;
 
-  const readCpu = () => readCpuSeconds(run);
   const before = marks ? await marks.before() : undefined;
   const cpuBefore = await readCpu();
   const started = performance.now();
@@ -929,6 +934,10 @@ export async function measureApps({
   const after = marks ? await marks.after() : undefined;
   for (const { row, where } of measured) {
     if (!cpuBefore.has(row.pid) || !cpuAfter.has(row.pid)) {
+      if (foreign.has(row.pid)) {
+        ended.add(row.pid);
+        continue;
+      }
       errors.push(`${where}: pid is not in the process table at both cpu reads`);
       row.cpuSeconds = null;
       row.cpuPercent = null;
@@ -951,11 +960,12 @@ export async function measureApps({
     entry.row.peakBytes = (await footprintOf(entry))?.peakBytes ?? null;
   }
   errors.push(...failures);
+  const remaining = unattributed.filter(({ pid }) => !ended.has(pid));
 
   return {
     seconds: elapsed,
     apps: apps.map((app) => ({ configDir: app.configDir, windows: app.windows, rows: app.rows, totals: totalsOf(app.rows) })),
-    unattributed: { rows: unattributed, totals: totalsOf(unattributed) },
+    unattributed: { rows: remaining, totals: totalsOf(remaining) },
     marks: { before, after },
     errors,
   };

@@ -5,6 +5,7 @@
 ## Unreleased
 
 - F532: The update step of the Rust diagnostics ends the application through `quit` of the framework port, so `make tauriv2-build` compiles again.
+- F531: A WebKit process of no application that ends during `make app-usage` or `make terminal-redraw-usage` leaves the unattributed list instead of failing the measurement, so a window run of another application no longer stops it; such a process that runs without a reading and a process of the application that ends stay errors.
 - F530: `soksak-stage` copies `head-fit.js`, whose absence stopped the page with `/head-fit.js: not found`, and a staging test walks the scripts, styles and imports of `index.html` and `overlay.html` in both builds and fails on a reference that is not staged
 - F528: A termination signal after the start of the application quits the Go host; since F502-7 the quit of a signal waited for a channel that nothing closed, so `log.closed` was written and the process, its sidecars and `endpoint.json` remained.
 - F526: A process of the stall sample that does not reach its own exit fails with its signal, the limit that ended it and its standard error, in place of the text `Command failed`.

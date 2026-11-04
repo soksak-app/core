@@ -842,6 +842,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F531",
+    implementation: [
+      { file: "scripts/measure-app-usage.mjs", symbol: "const remaining = unattributed.filter(({ pid }) => !ended.has(pid));" },
+    ],
+    tests: [
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "measureApps leaves out a process of no application that ends between the cpu reads" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "measureApps reports a process of the application that ends between the cpu reads" },
+    ],
+    expected: "A process of no application that ends during a measurement leaves the measurement, and a process of the application that ends fails it.",
+    levels: ["unit"],
+  },
+  {
     id: "F520",
     implementation: [
       { file: "native/darwin/tests/support/site_cost.m", symbol: "NSString *siteCostSummarize(const double *values, int count, SiteCostSummary *summary) {" },
