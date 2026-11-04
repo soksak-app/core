@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F447: Open the reply of the registry command over its limit and the failure that a failed restore passes to a later run.
 - F446-1: The drag report states the median interval of the shown frames.
 - F446: Record that the worker class does not change the plain view latency, and open the report of the shown-frame interval.
 - F445: Run the main-thread worker of the Wails framework at the user-interactive class.

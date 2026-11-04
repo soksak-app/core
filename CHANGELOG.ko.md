@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F447: registry command의 제한 초과와, 복원 실패가 다음 실행으로 이어지는 실패를 항목으로 엽니다.
 - F446-1: drag report가 화면 frame 간격의 median을 밝힙니다.
 - F446: worker class가 plain view latency를 바꾸지 않는다는 결과를 기록하고, 화면 frame 간격 report 항목을 엽니다.
 - F445: Wails framework의 main-thread worker를 user-interactive class로 실행합니다.
