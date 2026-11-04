@@ -126,14 +126,14 @@ func surfaceShell(t *testing.T) (*shellFixture, *surfaceHost) {
 }
 
 // surfaceShellOf opens a project in a shell with the plugins of document.
-func surfaceShellOf(t *testing.T, document string) (*shellFixture, *surfaceHost) {
+func surfaceShellOf(t testing.TB, document string) (*shellFixture, *surfaceHost) {
 	t.Helper()
 	stored := &surfaceHost{}
 	return surfaceShellOn(t, document, stored), stored
 }
 
 // surfaceShellOn is surfaceShellOf over the host stored.
-func surfaceShellOn(t *testing.T, document string, stored *surfaceHost) *shellFixture {
+func surfaceShellOn(t testing.TB, document string, stored *surfaceHost) *shellFixture {
 	t.Helper()
 	declared, err := workbench.Declared()
 	if err != nil {

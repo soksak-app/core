@@ -283,7 +283,7 @@ func (h *storedHost) workspace(argument json.RawMessage) (any, error) {
 
 // shellFixture is a shell over storedHost, whose later steps run when the test asks.
 type shellFixture struct {
-	t       *testing.T
+	t       testing.TB
 	host    *storedHost
 	shell   *workbench.Shell
 	tester  *ui.Tester
@@ -301,7 +301,7 @@ func (h *storedHost) installedDocument() string {
 }
 
 // environment reads the environment declaration of the application, which the shell receives from the assets of the application.
-func environment(t *testing.T) []byte {
+func environment(t testing.TB) []byte {
 	t.Helper()
 	text, err := os.ReadFile(filepath.Join("..", "..", "..", "apps", "mygo", "environment.json"))
 	if err != nil {
@@ -310,7 +310,7 @@ func environment(t *testing.T) []byte {
 	return text
 }
 
-func newShell(t *testing.T, stored *storedHost) *shellFixture {
+func newShell(t testing.TB, stored *storedHost) *shellFixture {
 	t.Helper()
 	declared, err := workbench.Declared()
 	if err != nil {
@@ -655,7 +655,7 @@ func TestHostFailureShowsInTheLibrary(t *testing.T) {
 
 // drain runs the later steps until no call of the host is answering. The handlers of storedHost answer at once.
 // until runs the steps until done reports true.
-func (s steps) until(t *testing.T, done func() bool) {
+func (s steps) until(t testing.TB, done func() bool) {
 	t.Helper()
 	limit := time.After(5 * time.Second)
 	for !done() {
@@ -670,7 +670,7 @@ func (s steps) until(t *testing.T, done func() bool) {
 	}
 }
 
-func (s steps) drain(t *testing.T) {
+func (s steps) drain(t testing.TB) {
 	t.Helper()
 	for {
 		select {
