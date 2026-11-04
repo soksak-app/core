@@ -52,8 +52,9 @@ type DocumentObjects struct {
 
 // ObjectCounts are the object counts of one window that diagnostics.objects replies.
 type ObjectCounts struct {
-	Host      HostObjects
-	Page      PageObjects
+	Host HostObjects
+	// Page is nil for a window without a main page.
+	Page      *PageObjects
 	Documents []DocumentObjects
 	Sessions  []SidecarSession
 }
@@ -85,7 +86,11 @@ func (c ObjectCounts) Payload() map[string]any {
 	if sessions == nil {
 		sessions = []SidecarSession{}
 	}
-	return map[string]any{"host": c.Host.Payload(), "page": c.Page.Payload(), "documents": list, "sessions": sessions}
+	var page any
+	if c.Page != nil {
+		page = c.Page.Payload()
+	}
+	return map[string]any{"host": c.Host.Payload(), "page": page, "documents": list, "sessions": sessions}
 }
 
 // surfaceCount returns the number of surfaces of the window, which is the number of their native views. It runs on the UI thread, which

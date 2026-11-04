@@ -1630,7 +1630,7 @@ func (b hostBackend) ObjectCounts(window string) (ObjectCounts, error) {
 			if answer.err != nil {
 				failure = errors.Join(failure, answer.err)
 			} else if answer.main {
-				counts.Page = answer.counts
+				counts.Page = &answer.counts
 			} else {
 				counts.Documents = append(counts.Documents, DocumentObjects{Key: answer.key, Counts: answer.counts})
 			}
