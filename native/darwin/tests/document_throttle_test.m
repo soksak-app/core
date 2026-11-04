@@ -8,6 +8,7 @@
 #import "support/temporary_folder.h"
 #import "document_view.h"
 #import "webview_geometry.h"
+#import "window_facts.h"
 
 static int failures = 0;
 
@@ -139,7 +140,7 @@ int main(void) { @autoreleasepool {
     main.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     [window.contentView addSubview:main];
     [window orderFrontRegardless];
-    void *surface = sp_surface_create(main);
+    void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     check(surface != NULL, @"a logical surface is created for the document");
     webviewSetFrame(surface, 0, 0, 500, 400);
     webviewSetSurfaceHidden(surface, false);

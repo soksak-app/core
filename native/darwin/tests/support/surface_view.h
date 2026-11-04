@@ -1,4 +1,4 @@
-// Places a view web view in a surface as the hosts do. A host makes the surface from the main web view with
+// Places a view web view in a surface as the hosts do. A host makes the surface in the window composition with
 // sp_surface_create, and sp_document_create places the view in it with sp_surface_place_view and then sets the page
 // zoom and the device scale of the view. The caller sets the frame of the surface with webviewSetFrame and shows it with
 // webviewSetSurfaceHidden, as the hosts do.

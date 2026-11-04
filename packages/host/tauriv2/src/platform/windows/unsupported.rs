@@ -109,7 +109,7 @@ pub fn place_webview(
     missing("webview placement")
 }
 
-pub fn create_surface(_main: Handle) -> Result<Handle, String> {
+pub fn create_surface(_window: Handle) -> Result<Handle, String> {
     missing("surface host")
 }
 pub fn close_surface(_surface: Handle) -> Result<(), String> {

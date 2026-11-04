@@ -4,6 +4,7 @@
 #import <CoreVideo/CoreVideo.h>
 #import "image_region.h"
 #import "webview_geometry.h"
+#import "window_facts.h"
 #import "support/surface_view.h"
 
 static void receive(void *context, const char *event) { (void)context; (void)event; }
@@ -18,7 +19,7 @@ int main(void) { @autoreleasepool {
     WKWebView *main = [[WKWebView alloc] initWithFrame:window.contentView.bounds];
     WKWebView *view = [[WKWebView alloc] initWithFrame:NSZeroRect];
     [window.contentView addSubview:main];
-    void *surface = sp_surface_create(main);
+    void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     BOOL placed = surface && SPPlaceSurfaceView(surface, view);
     webviewSetFrame(surface, 0, 0, 100, 100);
     webviewSetSurfaceHidden(surface, false);

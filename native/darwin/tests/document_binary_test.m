@@ -11,6 +11,7 @@
 #import "document_upload_body.h"
 #import "document_view.h"
 #import "webview_geometry.h"
+#import "window_facts.h"
 
 static int failures = 0;
 
@@ -244,7 +245,7 @@ int main(void) { @autoreleasepool {
     WKWebView *main = [[[WKWebView alloc] initWithFrame:window.contentView.bounds] autorelease];
     [window.contentView addSubview:main];
     [window orderBack:nil];
-    void *surface = sp_surface_create(main);
+    void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     webviewSetFrame(surface, 0, 0, 500, 400);
     webviewSetSurfaceHidden(surface, false);
     NSString *store = [temporary stringByAppendingPathComponent:@"store"];

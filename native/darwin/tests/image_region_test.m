@@ -13,6 +13,7 @@
 #import "observe.h"
 #import "support/records.h"
 #import "webview_geometry.h"
+#import "window_facts.h"
 #import "webview_input.h"
 #import "support/surface_view.h"
 
@@ -269,7 +270,7 @@ int main(int argc, char **argv) { @autoreleasepool {
     [window.contentView addSubview:main];
     WKWebView *page = [[[WKWebView alloc] initWithFrame:NSZeroRect] autorelease];
     [window orderBack:nil];
-    void *surface = sp_surface_create(main);
+    void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     check(surface != NULL, @"the main webview creates the surface");
     check(SPPlaceSurfaceView(surface, page), @"the view webview is placed in the surface");
     webviewSetFrame(surface, 0, 0, 500, 400);
@@ -1706,7 +1707,7 @@ int main(int argc, char **argv) { @autoreleasepool {
     // When the surface is placed, both values appear together.
     {
         WKWebView *unplacedPage = [[[WKWebView alloc] initWithFrame:NSZeroRect] autorelease];
-        void *unplaced = sp_surface_create(main);
+        void *unplaced = sp_surface_create(sp_window_set_main_webview(main.window, main));
         check(unplaced && SPPlaceSurfaceView(unplaced, unplacedPage),
             @"unplaced surface: the view webview is placed in a surface that has no frame yet");
         webviewSetSurfaceHidden(unplaced, false);

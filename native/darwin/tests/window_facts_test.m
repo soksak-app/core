@@ -2,6 +2,7 @@
 // movement correctly. The check does not activate the application.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
+#import "webview_geometry.h"
 #import "window_facts.h"
 #import <CommonCrypto/CommonDigest.h>
 
@@ -40,12 +41,10 @@ int main(void) { @autoreleasepool {
     [window setReleasedWhenClosed:NO];
     WKWebView *main = [[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)];
     WKWebView *top = [[WKWebView alloc] initWithFrame:NSMakeRect(100, 50, 200, 100)];
-    window.contentView = main;
+    [window.contentView addSubview:main];
     check(sp_window_set_main_webview(window, main), @"the app DOM is explicitly registered");
     [main addSubview:top];
     check(!sp_window_set_main_webview(window, top), @"another webview cannot replace the registered app DOM");
-    [top setValue:@NO forKey:@"drawsBackground"];
-    top.underPageBackgroundColor = NSColor.clearColor;
 
     window.colorSpace = NSColorSpace.sRGBColorSpace;
     NSColorSpace *queriedColorSpace = window.colorSpace;
@@ -67,11 +66,11 @@ int main(void) { @autoreleasepool {
     }
 
     [window makeFirstResponder:top];
-    NSDictionary *responderFacts = parse(sp_window_facts(window));
+    NSDictionary *responderFacts = parse(sp_window_facts(window, sp_window_composition(window)));
     check([responderFacts[@"responder"][@"webview"] unsignedLongLongValue] == (uintptr_t)top,
         [NSString stringWithFormat:@"the first responder's webview is reported: %@", responderFacts[@"responder"]]);
     [window makeFirstResponder:main];
-    responderFacts = parse(sp_window_facts(window));
+    responderFacts = parse(sp_window_facts(window, sp_window_composition(window)));
     check([responderFacts[@"responder"][@"webview"] unsignedLongLongValue] == (uintptr_t)main
         && [responderFacts[@"responder"][@"class"] length] > 0
         && responderFacts[@"responder"][@"main"] == (id)kCFBooleanTrue,
@@ -102,7 +101,7 @@ int main(void) { @autoreleasepool {
     check(!sp_menu_select("View", "Missing") && !sp_menu_select("Missing", "Zoom In"), @"an unknown menu item is rejected");
 
     check(sp_window_move(window, 120, 80), @"move accepted");
-    NSDictionary *facts = parse(sp_window_facts(window));
+    NSDictionary *facts = parse(sp_window_facts(window, sp_window_composition(window)));
     CGFloat primary = NSMaxY(NSScreen.screens.firstObject.frame);
     check([facts[@"frame"][@"x"] doubleValue] == 120 && [facts[@"frame"][@"y"] doubleValue] == 80,
         [NSString stringWithFormat:@"the frame is reported at the moved top-left screen point: %@", facts[@"frame"]]);
@@ -121,7 +120,7 @@ int main(void) { @autoreleasepool {
     NSDate *loadDeadline = [NSDate dateWithTimeIntervalSinceNow:10];
     while (!pageLoaded && loadDeadline.timeIntervalSinceNow > 0)
         [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    NSDictionary *pageFacts = parse(sp_window_facts(window));
+    NSDictionary *pageFacts = parse(sp_window_facts(window, sp_window_composition(window)));
     pid_t pageProcess = [[main valueForKey:@"_webProcessIdentifier"] intValue];
     check(pageProcess > 0 && [pageFacts[@"pageProcess"] intValue] == pageProcess,
         [NSString stringWithFormat:@"the app page's WebContent process is reported: %@ for %d", pageFacts[@"pageProcess"], pageProcess]);
@@ -151,17 +150,18 @@ int main(void) { @autoreleasepool {
     check(main.isFlipped, @"the main webview is a flipped view");
     check([upper[@"x"] doubleValue] == 100 && [upper[@"y"] doubleValue] == 50 && [upper[@"width"] doubleValue] == 200
         && [upper[@"height"] doubleValue] == 100, [NSString stringWithFormat:@"child webview frame in window coordinates: %@", upper]);
-    check(![upper[@"draws"] boolValue] && [upper[@"alpha"] doubleValue] == 0 && [views[0][@"draws"] boolValue],
+    // The registration makes the main web view transparent, because the composition places native content below it.
+    check([upper[@"draws"] boolValue] && [upper[@"alpha"] doubleValue] > 0 && ![views[0][@"draws"] boolValue] && [views[0][@"alpha"] doubleValue] == 0,
         @"background drawing and under-page alpha are reported per webview");
     check([views[0][@"near60fps"] isEqual:@NO] && [views[1][@"near60fps"] isEqual:@YES],
         [NSString stringWithFormat:@"registration lets only the app DOM render at the display rate: main %@, other %@",
             views[0][@"near60fps"], views[1][@"near60fps"]]);
     check(upper[@"focused"] != nil, @"document webview focus is reported");
 
-    char *raw = sp_window_hit(window, 10, 10);
+    char *raw = sp_window_hit(window, sp_window_composition(window), 10, 10);
     check(strstr(raw, "\"main\":true") != NULL, [NSString stringWithFormat:@"main is a JSON boolean: %s", raw]);
     sp_facts_free(raw);
-    NSDictionary *hit = parse(sp_window_hit(window, 150, 100));
+    NSDictionary *hit = parse(sp_window_hit(window, sp_window_composition(window), 150, 100));
     check([hit[@"view"] unsignedLongLongValue] == (uintptr_t)top && ![hit[@"main"] boolValue], @"a point inside the child webview hits it");
     NSDictionary *hitView = hit[@"hit"];
     NSDictionary *hitFrame = hitView[@"frame"];
@@ -169,7 +169,7 @@ int main(void) { @autoreleasepool {
         && [hitFrame[@"x"] doubleValue] <= 150 && [hitFrame[@"x"] doubleValue] + [hitFrame[@"width"] doubleValue] > 150
         && [hitFrame[@"y"] doubleValue] <= 100 && [hitFrame[@"y"] doubleValue] + [hitFrame[@"height"] doubleValue] > 100,
         [NSString stringWithFormat:@"the hit result reports the actual leaf view class and containing frame: %@", hitView]);
-    hit = parse(sp_window_hit(window, 150, 200));
+    hit = parse(sp_window_hit(window, sp_window_composition(window), 150, 200));
     hitView = hit[@"hit"];
     hitFrame = hitView[@"frame"];
     check([hit[@"view"] unsignedLongLongValue] == (uintptr_t)main && [hit[@"main"] boolValue]

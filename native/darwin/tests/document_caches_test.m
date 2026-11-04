@@ -11,6 +11,7 @@
 #import "document_view.h"
 #import "private/webkit.h"
 #import "webview_geometry.h"
+#import "window_facts.h"
 
 static const int pageCount = 60;
 static const int rowsPerPage = 22500;
@@ -219,7 +220,7 @@ int main(void) { @autoreleasepool {
     main.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     [window.contentView addSubview:main];
     [window orderFrontRegardless];
-    surface = sp_surface_create(main);
+    surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     if (!surface) {
         fprintf(stderr, "FAIL: a logical surface is not created\n");
         return 1;

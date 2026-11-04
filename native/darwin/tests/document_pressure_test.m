@@ -22,6 +22,7 @@
 #import "document_view.h"
 #import "private/webkit.h"
 #import "webview_geometry.h"
+#import "window_facts.h"
 
 static const int objectCount = 1800000;
 static const int elementCount = 50000;
@@ -373,7 +374,7 @@ int main(void) { @autoreleasepool {
     Drop region;
     @autoreleasepool {
     WKWebView *main = makeWindow();
-    surface = sp_surface_create(main);
+    surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     if (!surface) fail(@"surface", @"a logical surface is not created for the document");
     webviewSetFrame(surface, 0, 0, 500, 400);
     webviewSetSurfaceHidden(surface, false);

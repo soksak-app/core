@@ -19,7 +19,7 @@ use crate::presentation_wait::ViewPlacement;
 use crate::sidecars::WindowSidecars;
 use crate::view_lifecycle::ViewLifecycle;
 use crate::windows::{
-    Chrome, NativeFailure, TitlebarChange, cancel_window_layout_ticket, emit_window,
+    Chrome, NativeFailure, TitlebarChange, cancel_window_layout_ticket, emit_window, native_owner,
     restore_titlebar, titlebar_chrome, validate_titlebar_height, window_data, with_native_owner,
 };
 
@@ -1376,7 +1376,6 @@ struct LayoutTurn {
     window: Window,
     context: Arc<crate::windows::WindowData>,
     platform: &'static dyn platform::Platform,
-    main_handle: Handle,
     scale: f64,
     ticket: u64,
 }
@@ -1393,11 +1392,10 @@ fn apply_surfaces(
         window,
         context,
         platform,
-        main_handle,
         scale,
         ..
     } = turn;
-    let (platform, main_handle, scale) = (*platform, *main_handle, *scale);
+    let (platform, scale) = (*platform, *scale);
     let surface_hosts = &context.surface_hosts;
     let mut targets = Vec::with_capacity(request.surfaces.len());
     for s in &request.surfaces {
@@ -1433,7 +1431,7 @@ fn apply_surfaces(
             opened.push((s.plugin.clone(), s.id.clone()));
             let handle = create_in_open_window(&window_data(window), || {
                 create_registered_surface(&context.views.0, surface_hosts, &s.id, || {
-                    platform.create_surface(main_handle)
+                    platform.create_surface(native_owner(window)?)
                 })
             })?;
             crate::performance::surface("created", &s.id, None);
@@ -1649,7 +1647,6 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                                     window,
                                     context,
                                     platform,
-                                    main_handle,
                                     scale,
                                     ticket,
                                 };

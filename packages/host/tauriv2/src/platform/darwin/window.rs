@@ -33,12 +33,12 @@ pub fn handle(window: &Window) -> Result<Handle, String> {
 
 pub fn set_main_webview(window: Handle, main: Handle) -> Result<(), String> {
     unsafe extern "C" {
-        fn sp_window_set_main_webview(window: *mut c_void, main: *mut c_void) -> bool;
+        fn sp_window_set_main_webview(window: *mut c_void, main: *mut c_void) -> *mut c_void;
     }
-    if unsafe { sp_window_set_main_webview(window as *mut c_void, main as *mut c_void) } {
-        Ok(())
-    } else {
+    if unsafe { sp_window_set_main_webview(window as *mut c_void, main as *mut c_void) }.is_null() {
         Err("the main webview is not in the window hierarchy".into())
+    } else {
+        Ok(())
     }
 }
 
@@ -213,10 +213,14 @@ pub(super) fn facts_value(text: *mut c_char, what: &str) -> Result<Value, String
 /// The frame, the active state, the window buttons and the webviews of the window.
 pub fn facts(window: Handle) -> Result<Value, String> {
     unsafe extern "C" {
-        fn sp_window_facts(window: *mut c_void) -> *mut c_char;
+        fn sp_window_composition(window: *mut c_void) -> *mut c_void;
+        fn sp_window_facts(window: *mut c_void, view: *mut c_void) -> *mut c_char;
     }
     facts_value(
-        unsafe { sp_window_facts(window as *mut c_void) },
+        unsafe {
+            let window = window as *mut c_void;
+            sp_window_facts(window, sp_window_composition(window))
+        },
         "window state",
     )
 }

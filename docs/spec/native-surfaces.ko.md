@@ -215,6 +215,18 @@ Tauri host는 현재 view-message envelope를 한 번 decode하고 reply, call �
 
 컴포지터는 그려진 사이드바의 각 섹션 본문을 그 [section](plugins.ko.md#섹션) surface의 자리로 잰다. 이 자리는 section surface id로 구분하며, 카드 자리와 나란히 두고 카드 사이드바와 창 사이드바 모두에 적용한다. 모든 section 자리를 잰 뒤에만 배치가 완전하다. 숨겨진 섹션, 접힌 섹션, 선택되지 않은 탭의 섹션, 꺼진 사이드바나 표시되지 않는 공간의 섹션은 측정되지 않은 탭 surface와 같이 `visible`이 false이고 frame이 0인 자리를 가진다. 따라서 모든 section surface는 배치마다 자리를 가진다. Section view는 탭 view와 같은 배치 순서로 놓이고, 잘리고, 보인다.
 
+## Surface host container
+
+window의 surface host는 container(`SPSurfaceCoordinates`) 안에 있고, `sp_surface_create`는 그 container를 담는 `NSView`를 받는다. 그 view에 container가 없으면 만들고, 없는 view와 window 밖의 view는 거부한다. container는 surface host를 담고, 그 web view에 backing scale을 적용하며(`updateScale`), 그 web view에서 올라온 `cursorUpdate:`에 대해 현재 위치의 pointer move를 그 web view의 tracking area owner에게 보낸다. 이는 모든 host에서 같다. pointer가 어느 view 위에 있는지는 container를 담는 view의 hit test가 정한다.
+
+`sp_window_set_main_webview`는 main web view를 등록할 때 그 둘레에 window composition(`SPWindowComposition`)을 만들어 반환한다. 등록된 web view로 다시 부르면 같은 composition을 반환하고, window의 content view인 web view는 composition이 감쌀 수 없으므로 거부한다. composition은 window overlay, file drop view, 그리고 web view 위에 surface host의 container를 담는다. Wails와 Tauri host는 그 composition을 넘기며, 등록된 window에 대해 `sp_window_composition`이 이를 반환한다. mygo host는 Metal surface 아래에서 window의 content를 채우는 window의 native view를 넘긴다. `sp_window_facts`와 `sp_window_hit`는 등록된 main web view를 요구하는 대신 window와 그 view를 받는다.
+
+`surfaceLayoutObserve(started, ended)`는 layout transaction의 observer를 등록한다. `started(window)`는 window의 preparation이 시작될 때 그 `ready` 전에 main thread에서 실행되고, `ended(window)`는 window의 transaction이 deferred 여부와 상관없이 commit이나 cancel로 끝날 때, Core Animation transaction이 commit된 뒤 다음 대기 transaction이 시작되기 전에 main thread에서 실행된다.
+
+`surfaceLayoutAfterSettled`는 window와, window의 내용을 현재 상태로 화면에 올리고 callback하는 block을 받는다. `surfaceLayoutMainPresentation`은 document 읽기와 `_doAfterNextPresentationUpdate:`로 main web view의 그 block을 만든다. 대기는 window의 transaction이 열려 있지도 대기 중이지도 않을 때 block을 부르고, 그사이 transaction이 열렸으면 다시 부르며, block이 callback하고 다음 display refresh가 지난 뒤 callback한다. language host library는 `Frontend` port의 settled presentation에서 block을 받는다. Wails와 Tauri framework adapter는 main web view의 block으로 이를 구현하고, mygo framework adapter는 Surface layout group이 adapter의 Go 함수로 만든 block으로 구현한다. 그 Go 함수는 workbench에 hold 없는 frame을 요청하고 framework의 presentation notice에서 callback한다. scene이 damage가 없어 아무것도 present하지 않았다는 notice는 곧바로 callback하고, frame이 drawable을 찾지 못했다는 notice는 frame을 다시 요청하며, window가 frame을 hold한다는 notice는 adapter가 그 hold를 풀 때 frame을 다시 요청한다.
+
+language host library의 darwin platform layer는 Surface layout group의 operation으로 이 함수들을 부르고, mygo framework adapter도 이를 통해 observer를 등록하고 block을 만든다. layer는 그런 observer나 block의 각 Go 함수를 `hostRunOnWorker`로 worker에서 실행하고, 어떤 framework adapter도 `native/darwin`의 함수를 부르지 않는다. block의 Go 함수는 block의 completion을 `hostRunOnMain`으로 main thread에서 실행하는 layer의 함수를 통해 callback하고, main-thread audit은 block 호출을 native 함수 호출로 센다. mygo host는 `sp_surface_set_window_overlays`와 `sp_window_file_drop`을 부르지 않는다. workbench는 framework의 cover로 native view 위에 그리고, mygo surface view는 drop된 파일을 workbench event로 받는다.
+
 ## 영역
 
 영역은 표면에서 네이티브 콘텐츠를 표시하는 장소다. 소유권, 계층, 완전한 스냅샷 위치, 쌓임, 입력, 세대, 래스터 규칙은 [표면 합성](surface-composition.ko.md)이 정의한다. 이 문서는 문서·그림 공급자에만 해당하는 동작을 정의한다.

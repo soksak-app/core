@@ -15,41 +15,44 @@
 
 static const char mainWebviewKey;
 
-bool sp_window_set_main_webview(void *handle, void *mainHandle) {
+void *sp_window_set_main_webview(void *handle, void *mainHandle) {
     NSCAssert(NSThread.isMainThread, @"window registration requires the UI thread");
     NSWindow *window = (NSWindow *)handle;
     WKWebView *main = (WKWebView *)mainHandle;
     if (!window || ![main isKindOfClass:WKWebView.class] || main.window != window) {
         sp_log_error("window facts", "the main web view to register is missing or belongs to another window");
-        return false;
+        return NULL;
     }
     NSValue *registered = objc_getAssociatedObject(window, &mainWebviewKey);
     if (registered && registered.nonretainedObjectValue != main) {
         sp_log_error("window facts", "the window already has another main web view");
-        return false;
+        return NULL;
     }
+    if (registered) return sp_webview_window_composition(main);
     // The layout indicator waits for the next presentation of this web view, so this web view must
     // render at the display refresh rate.
-    if (!registered && !surfaceLayoutRenderAtDisplayRate(main)) {
+    if (!surfaceLayoutRenderAtDisplayRate(main)) {
         sp_log_error("window facts", "the main web view cannot render at the display rate");
-        return false;
+        return NULL;
     }
     // For the same reason the document is not hidden when the window is occluded. WebKit hides the document
     // of an occluded window and stops animation frames, so the layout indicator of an occluded window and
     // the commands that wait for it would not finish.
     if (![main respondsToSelector:@selector(_setWindowOcclusionDetectionEnabled:)]) {
         sp_log_error("window facts", "_setWindowOcclusionDetectionEnabled: is unavailable");
-        return false;
+        return NULL;
     }
     main._windowOcclusionDetectionEnabled = NO;
     // Open the new document of the main frame in a new process so that a reload and a page change do
     // not keep the previous document.
     if (!sp_webview_replace_documents_in_new_process(main)) {
         sp_log_error("window facts", "the main web view cannot open its documents in a new process");
-        return false;
+        return NULL;
     }
+    void *composition = sp_webview_window_composition(main);
+    if (!composition) return NULL;
     objc_setAssociatedObject(window, &mainWebviewKey, [NSValue valueWithNonretainedObject:main], OBJC_ASSOCIATION_RETAIN);
-    return true;
+    return composition;
 }
 
 void *sp_window_main_webview(void *handle) {
@@ -113,10 +116,10 @@ static void collectSurfaces(NSWindow *window, NSView *view, NSMutableArray *foun
     for (NSView *child in view.subviews) collectSurfaces(window, child, found);
 }
 
-char *sp_window_facts(void *handle) {
+char *sp_window_facts(void *handle, void *surfaceView) {
     NSWindow *window = (NSWindow *)handle;
-    if (!window || !window.contentView || !mainWebview(window)) {
-        sp_log_error("window facts", "the window has no content view or no registered main web view");
+    if (!window || !window.contentView || ((NSView *)surfaceView).window != window) {
+        sp_log_error("window facts", "the window has no content view or the view that holds its surfaces is not in it");
         return NULL;
     }
     NSView *content = window.contentView;
@@ -237,11 +240,11 @@ char *sp_window_color_space_facts(void *handle) {
     return copyJSON(@{ @"name": name, @"iccSHA256": digestValue });
 }
 
-char *sp_window_hit(void *handle, double x, double y) {
+char *sp_window_hit(void *handle, void *surfaceView, double x, double y) {
     NSWindow *window = (NSWindow *)handle;
     NSView *content = window.contentView;
-    if (!window || !content || !mainWebview(window)) {
-        sp_log_error("window facts", "the window has no content view or no registered main web view for a hit test");
+    if (!window || !content || ((NSView *)surfaceView).window != window) {
+        sp_log_error("window facts", "the window has no content view or the view that holds its surfaces is not in it for a hit test");
         return NULL;
     }
     NSPoint base = NSMakePoint(x, content.frame.size.height - y);

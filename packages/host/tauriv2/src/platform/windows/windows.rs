@@ -127,8 +127,8 @@ impl Platform for Windows {
     ) -> Result<(), String> {
         unsupported::place_webview(view, x, y, w, h)
     }
-    fn create_surface(&self, main: Handle) -> Result<Handle, String> {
-        unsupported::create_surface(main)
+    fn create_surface(&self, window: Handle) -> Result<Handle, String> {
+        unsupported::create_surface(window)
     }
     fn close_surface(&self, surface: Handle) -> Result<(), String> {
         unsupported::close_surface(surface)

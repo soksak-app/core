@@ -129,7 +129,12 @@ pub fn after_presentation(view: &PlatformWebview, done: Box<dyn Fn()>) {
 /// visible app document, and then calls done with the presentation time (ms) of that screen.
 pub fn after_settled(view: &PlatformWebview, done: Box<dyn Fn(Result<f64, String>)>) {
     unsafe extern "C" {
-        fn surfaceLayoutAfterSettled(view: *mut c_void, done: &Block<dyn Fn(f64, *const c_char)>);
+        fn surfaceLayoutMainPresentation(view: *mut c_void) -> *mut c_void;
+        fn surfaceLayoutAfterSettled(
+            window: *mut c_void,
+            present: *mut c_void,
+            done: &Block<dyn Fn(f64, *const c_char)>,
+        );
     }
     let done = RcBlock::new(move |displayed: f64, error: *const c_char| {
         if error.is_null() {
@@ -141,7 +146,10 @@ pub fn after_settled(view: &PlatformWebview, done: Box<dyn Fn(Result<f64, String
             done(Err(message));
         }
     });
-    unsafe { surfaceLayoutAfterSettled(view.inner().cast(), &done) }
+    unsafe {
+        let present = surfaceLayoutMainPresentation(view.inner().cast());
+        surfaceLayoutAfterSettled(view.ns_window().cast(), present, &done)
+    }
 }
 
 pub fn inject_settled_failure() {

@@ -5,12 +5,12 @@
 #import "webview_geometry.h"
 #import "surface_layout.h"
 #import "window_objects.h"
+#import "window_facts.h"
 #import "private/webkit.h"
 
 
 @interface SPSurfaceCoordinates : NSView
 @property CGFloat scale;
-@property(nonatomic, retain) WKWebView *mainView;
 @end
 
 static void normalizeCoordinateBounds(SPSurfaceCoordinates *coordinates) {
@@ -23,6 +23,32 @@ static void normalizeCoordinateBounds(SPSurfaceCoordinates *coordinates) {
 static NSView *domHit(WKWebView *web, NSView *from, NSPoint point) {
     if (!web || web.hidden) return nil;
     return [web hitTest:[web.superview convertPoint:point fromView:from]];
+}
+
+// When the view layout of a window changes, AppKit asks the view under the pointer with cursorUpdate: to set the
+// cursor for the current position. WKWebView does not handle this message, so the default behavior of the window sets the
+// arrow and overwrites the cursor that the page set (the resize cursor of a divider, the hand of an icon). WebKit
+// receives the pointer position as mouseMoved: of the tracking area owner and computes the page cursor, and after layout
+// it recomputes with a move at the same position by itself. Therefore the real pointer position is passed to that entry
+// of the document under the pointer in root. It is not passed while a button is pressed, because that is a drag.
+static void sendPointerMove(NSView *root) {
+    NSWindow *window = root.window;
+    if (!window || NSEvent.pressedMouseButtons != 0) return;
+    NSPoint location = window.mouseLocationOutsideOfEventStream;
+    NSView *hit = [root hitTest:[root.superview convertPoint:location fromView:nil]];
+    while (hit && ![hit isKindOfClass:WKWebView.class]) hit = hit.superview;
+    if (!hit) return;
+    NSEvent *moved = [NSEvent mouseEventWithType:NSEventTypeMouseMoved location:location
+        modifierFlags:NSEvent.modifierFlags timestamp:NSProcessInfo.processInfo.systemUptime
+        windowNumber:window.windowNumber context:nil eventNumber:0 clickCount:0 pressure:0];
+    for (NSTrackingArea *area in hit.trackingAreas) {
+        // The tracking area of WebKit is the whole visible rect (NSTrackingInVisibleRect), so the rect is not compared. The view was already chosen
+        // by the hit test at the pointer position.
+        if ((area.options & NSTrackingMouseMoved) && [area.owner respondsToSelector:@selector(mouseMoved:)]) {
+            [area.owner mouseMoved:moved];
+            return;
+        }
+    }
 }
 
 // Native-owned boundary, one per surface. Only this view has the outer surface frame, and it clips and moves
@@ -153,31 +179,7 @@ static void configureWebViewTransparency(WKWebView *view) {
         [self.fileDrop release];
     }
 }
-// When the view layout of a window changes, AppKit asks the view under the pointer with cursorUpdate: to set the
-// cursor for the current position. WKWebView does not handle this message, so the default behavior of the window sets the
-// arrow and overwrites the cursor that the page set (the resize cursor of a divider, the hand of an icon). WebKit
-// receives the pointer position as mouseMoved: of the tracking area owner and computes the page cursor, and after layout
-// it recomputes with a move at the same position by itself. Therefore the real pointer position is passed to that entry
-// of the document under the pointer. It is not passed while a button is pressed, because that is a drag.
-- (void)cursorUpdate:(NSEvent *)event {
-    NSWindow *window = self.window;
-    if (!window || NSEvent.pressedMouseButtons != 0) return;
-    NSPoint location = window.mouseLocationOutsideOfEventStream;
-    NSView *hit = [self hitTest:[self.superview convertPoint:location fromView:nil]];
-    while (hit && ![hit isKindOfClass:WKWebView.class]) hit = hit.superview;
-    if (!hit) return;
-    NSEvent *moved = [NSEvent mouseEventWithType:NSEventTypeMouseMoved location:location
-        modifierFlags:NSEvent.modifierFlags timestamp:NSProcessInfo.processInfo.systemUptime
-        windowNumber:window.windowNumber context:nil eventNumber:0 clickCount:0 pressure:0];
-    for (NSTrackingArea *area in hit.trackingAreas) {
-        // The tracking area of WebKit is the whole visible rect (NSTrackingInVisibleRect), so the rect is not compared. The view was already chosen
-        // by the hit test at the pointer position.
-        if ((area.options & NSTrackingMouseMoved) && [area.owner respondsToSelector:@selector(mouseMoved:)]) {
-            [area.owner mouseMoved:moved];
-            return;
-        }
-    }
-}
+- (void)cursorUpdate:(NSEvent *)event { sendPointerMove(self); }
 - (NSView *)hitTest:(NSPoint)point {
     if (self.hidden || self.alphaValue <= 0) return nil;
     NSPoint local = [self convertPoint:point fromView:self.superview];
@@ -349,11 +351,11 @@ static void notifyScale(NSView *view) {
     self.bounds = NSMakeRect(0, 0, size.width, size.height);
     [CATransaction commit];
 }
+// A web view of a surface host passes cursorUpdate: up its superviews to this container, and the view that holds the
+// container decides by its hit test which view the pointer is over.
+- (void)cursorUpdate:(NSEvent *)event { sendPointerMove(self.superview); }
 - (void)updateScale {
     if (!self.window) return;
-    if (self.mainView.superview == self.superview && ![self.superview isKindOfClass:SPWindowComposition.class]) {
-        [self.superview addSubview:self positioned:NSWindowAbove relativeTo:self.mainView];
-    }
     CGFloat scale = self.window.backingScaleFactor;
     // A bounds change raises the backing property notification again, so the same scale is not updated.
     if (scale == self.scale) return;
@@ -370,10 +372,6 @@ static void notifyScale(NSView *view) {
 }
 - (void)viewDidMoveToWindow { [super viewDidMoveToWindow]; [self updateScale]; }
 - (void)viewDidChangeBackingProperties { [super viewDidChangeBackingProperties]; [self updateScale]; }
-- (void)dealloc {
-    [_mainView release];
-    [super dealloc];
-}
 @end
 
 static SPSurfaceHost *surfaceHost(NSView *view) {
@@ -384,47 +382,62 @@ static SPSurfaceHost *surfaceHost(NSView *view) {
     return nil;
 }
 
-// Window composite view that holds the main web view. Created when it does not exist.
-static SPWindowComposition *windowComposition(WKWebView *main) {
-    if (![main isKindOfClass:WKWebView.class] || !main.window || !main.superview) return nil;
-    configureWebViewTransparency(main);
-    SPWindowComposition *composition;
-    if ([main.superview isKindOfClass:SPWindowComposition.class]) {
-        composition = (SPWindowComposition *)main.superview;
-    } else {
-        NSView *parent = main.superview;
-        composition = [[[SPWindowComposition alloc] initWithFrame:main.frame] autorelease];
-        // The platform host can resize the app WebView directly without depending on AppKit autoresizing. The compositor wraps
-        // that WebView and must still fill its parent so that native hit testing covers the whole window content area.
-        composition.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
-        composition.mainWebview = main;
-        [main retain];
-        [parent replaceSubview:main with:composition];
-        main.frame = composition.bounds;
-        main.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
-        [composition addSubview:main];
-        [main release];
-        SPSurfaceCoordinates *coordinates = [[[SPSurfaceCoordinates alloc] initWithFrame:composition.bounds] autorelease];
-        coordinates.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
-        coordinates.autoresizesSubviews = NO;
-        coordinates.mainView = main;
-        composition.coordinates = coordinates;
-        [composition addSubview:coordinates positioned:NSWindowAbove relativeTo:main];
-        // The window cursor is set by WebKit, which draws the page, through its tracking areas. When the window content view has cursor rects
-        // (tao of Tauri places an arrow rect on the whole content), AppKit overwrites the cursor that the page set with the arrow each time it reapplies the rects
-        // (docs/features.md F95). This window does not use cursor rects, so that management is turned off.
-        [main.window disableCursorRects];
+// The container of the surface hosts in view. Created above the other subviews when view holds none.
+static SPSurfaceCoordinates *surfaceContainer(NSView *view) {
+    for (NSView *child in view.subviews) {
+        if ([child isKindOfClass:SPSurfaceCoordinates.class]) return (SPSurfaceCoordinates *)child;
     }
+    SPSurfaceCoordinates *coordinates = [[[SPSurfaceCoordinates alloc] initWithFrame:view.bounds] autorelease];
+    coordinates.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+    coordinates.autoresizesSubviews = NO;
+    [view addSubview:coordinates positioned:NSWindowAbove relativeTo:nil];
+    return coordinates;
+}
+
+void *sp_webview_window_composition(void *mainHandle) {
+    NSCAssert(NSThread.isMainThread, @"window composition requires the UI thread");
+    WKWebView *main = (WKWebView *)mainHandle;
+    if (![main isKindOfClass:WKWebView.class] || !main.window || !main.superview) return NULL;
+    if ([main.superview isKindOfClass:SPWindowComposition.class]) return main.superview;
+    if (main == main.window.contentView) {
+        sp_log_error("surface", "the main web view is the content view of its window, so no composition can wrap it");
+        return NULL;
+    }
+    configureWebViewTransparency(main);
+    NSView *parent = main.superview;
+    SPWindowComposition *composition = [[[SPWindowComposition alloc] initWithFrame:main.frame] autorelease];
+    // The platform host can resize the app WebView directly without depending on AppKit autoresizing. The compositor wraps
+    // that WebView and must still fill its parent so that native hit testing covers the whole window content area.
+    composition.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+    composition.mainWebview = main;
+    [main retain];
+    [parent replaceSubview:main with:composition];
+    main.frame = composition.bounds;
+    main.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+    [composition addSubview:main];
+    [main release];
+    composition.coordinates = surfaceContainer(composition);
+    // The window cursor is set by WebKit, which draws the page, through its tracking areas. When the window content view has cursor rects
+    // (tao of Tauri places an arrow rect on the whole content), AppKit overwrites the cursor that the page set with the arrow each time it reapplies the rects
+    // (docs/features.md F95). This window does not use cursor rects, so that management is turned off.
+    [main.window disableCursorRects];
     return composition;
+}
+
+void *sp_window_composition(void *window) {
+    NSCAssert(NSThread.isMainThread, @"window composition requires the UI thread");
+    NSView *parent = ((WKWebView *)sp_window_main_webview(window)).superview;
+    return [parent isKindOfClass:SPWindowComposition.class] ? parent : NULL;
 }
 
 bool sp_window_file_drop(void *mainHandle, sp_file_drop_event event, sp_file_drop_release release, void *context) {
     NSCAssert(NSThread.isMainThread, @"file drop requires the UI thread");
-    SPWindowComposition *composition = windowComposition((WKWebView *)mainHandle);
-    if (!composition || !event) {
+    NSView *parent = ((WKWebView *)mainHandle).superview;
+    if (![parent isKindOfClass:SPWindowComposition.class] || !event) {
         sp_log_error("file drop", "the window has no composition or the receiver is missing");
         return false;
     }
+    SPWindowComposition *composition = (SPWindowComposition *)parent;
     SPFileDropView *view = composition.fileDrop;
     if (!view) {
         view = [[[SPFileDropView alloc] initWithFrame:composition.bounds] autorelease];
@@ -437,17 +450,16 @@ bool sp_window_file_drop(void *mainHandle, sp_file_drop_event event, sp_file_dro
     return true;
 }
 
-void *sp_surface_create(void *mainHandle) {
+void *sp_surface_create(void *handle) {
     NSCAssert(NSThread.isMainThread, @"surface creation requires the UI thread");
-    WKWebView *main = (WKWebView *)mainHandle;
-    SPWindowComposition *composition = windowComposition(main);
-    if (!composition) {
-        sp_log_error("surface", "the main web view has no window composition to create a surface in");
+    NSView *view = (NSView *)handle;
+    if (![view isKindOfClass:NSView.class] || !view.window) {
+        sp_log_error("surface", "the view that holds the surface container is missing or is not in a window");
         return NULL;
     }
     SPSurfaceHost *surface = [[SPSurfaceHost alloc] initWithFrame:NSZeroRect];
     surface.hidden = YES;
-    [composition.coordinates addSubview:surface];
+    [surfaceContainer(view) addSubview:surface];
     return surface;
 }
 

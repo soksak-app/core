@@ -8,6 +8,7 @@
 #import "image_region.h"
 #import "support/records.h"
 #import "webview_geometry.h"
+#import "window_facts.h"
 #import "webview_input.h"
 
 static int failures;
@@ -42,7 +43,7 @@ int main(void) { @autoreleasepool {
     WKWebView *page = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 500, 400)] autorelease];
     [window.contentView addSubview:page];
     [window orderBack:nil];
-    void *surface = sp_surface_create(main);
+    void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     check(surface != NULL, @"the main webview creates the composition");
     check(webviewInputRegister(page), @"the page registers the pointer receipt path");
     check(sp_surface_place_view(surface, page), @"the page is placed in its surface");

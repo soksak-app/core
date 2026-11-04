@@ -14,6 +14,7 @@
 #import "document_view.h"
 #import "private/webkit.h"
 #import "webview_geometry.h"
+#import "window_facts.h"
 
 extern char **environ;
 
@@ -67,7 +68,7 @@ static int runApplication(NSString *folder) {
         fprintf(stderr, "FAIL: the main page did not load within 30 seconds\n");
         return 1;
     }
-    void *surface = sp_surface_create(main);
+    void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     if (!surface) {
         fprintf(stderr, "FAIL: a logical surface is not created\n");
         return 1;

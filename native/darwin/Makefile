@@ -293,6 +293,8 @@ NATIVE_TESTS = observe_test \
   application_log_fatal_test \
   event_ring_test \
   surface_host_test \
+  surface_container_test \
+  surface_layout_observe_test \
   ui_queue_test \
   window_motion_test \
   input_inject_test \

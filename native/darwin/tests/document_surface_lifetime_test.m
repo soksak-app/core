@@ -8,6 +8,7 @@
 #import "support/temporary_folder.h"
 #import "document_view.h"
 #import "webview_geometry.h"
+#import "window_facts.h"
 
 static int failures = 0;
 
@@ -74,7 +75,7 @@ int main(void) { @autoreleasepool {
     void *document = NULL;
     // Every autoreleased reference of the creation ends with this pool, so only the owners keep the surface.
     @autoreleasepool {
-        surface = sp_surface_create(main);
+        surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
         webviewSetFrame(surface, 0, 0, 500, 400);
         webviewSetSurfaceHidden(surface, false);
         SurfaceReleaseMarker *marker = [SurfaceReleaseMarker new];

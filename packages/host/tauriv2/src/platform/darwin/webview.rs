@@ -24,14 +24,20 @@ unsafe extern "C" {
     ) -> bool;
     fn sp_webview_set_appearance(view: *mut c_void, dark: bool) -> bool;
     fn sp_webview_collect_garbage(view: *mut c_void) -> bool;
-    fn sp_surface_create(main_webview: *mut c_void) -> *mut c_void;
+    fn sp_window_composition(window: *mut c_void) -> *mut c_void;
+    fn sp_surface_create(view: *mut c_void) -> *mut c_void;
     fn sp_surface_close(surface: *mut c_void);
     fn webviewSetFrame(view: *mut c_void, x: f64, y: f64, width: f64, height: f64);
     fn sp_surface_set_window_overlays(main: *mut c_void, rects: *const f64, count: usize);
 }
 
-pub fn create_surface(main: Handle) -> Result<Handle, String> {
-    let surface = unsafe { sp_surface_create(main as *mut c_void) } as Handle;
+/// Creates a surface in the window composition of the window.
+pub fn create_surface(window: Handle) -> Result<Handle, String> {
+    let composition = unsafe { sp_window_composition(window as *mut c_void) };
+    if composition.is_null() {
+        return Err("the window has no registered main webview".into());
+    }
+    let surface = unsafe { sp_surface_create(composition) } as Handle;
     if surface == 0 {
         Err("cannot create SurfaceHost".into())
     } else {

@@ -7,6 +7,7 @@
 #import "image_capture_match.h"
 #import "image_region.h"
 #import "webview_geometry.h"
+#import "window_facts.h"
 #import "support/surface_view.h"
 #import "support/capture_frame.m"
 
@@ -163,7 +164,7 @@ int main(void) { @autoreleasepool {
         WKWebView *main = [[[WKWebView alloc] initWithFrame:window.contentView.bounds] autorelease];
         main.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
         [window.contentView addSubview:main positioned:NSWindowBelow relativeTo:nil];
-        void *surfaceHost = sp_surface_create(main);
+        void *surfaceHost = sp_surface_create(sp_window_set_main_webview(main.window, main));
         WKWebView *page = [[[WKWebView alloc] initWithFrame:NSZeroRect] autorelease];
         BOOL placed = surfaceHost && SPPlaceSurfaceView(surfaceHost, page);
         webviewSetFrame(surfaceHost, 0, 0, NSWidth(window.contentView.bounds), NSHeight(window.contentView.bounds));

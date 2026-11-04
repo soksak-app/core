@@ -18,11 +18,12 @@
 
 // SPSettleRequest is a presentation wait for every layout transaction of the window to be settled.
 @interface SPSettleRequest : NSObject
-@property(nonatomic, retain) WKWebView *main;
+@property(nonatomic, retain) NSWindow *window;
+@property(nonatomic, copy) surfaceLayoutPresent present;
 @property(nonatomic, copy) void (^done)(double, const char *);
 @end
 @implementation SPSettleRequest
-- (void)dealloc { [_main release]; [_done release]; [super dealloc]; }
+- (void)dealloc { [_window release]; [_present release]; [_done release]; [super dealloc]; }
 @end
 
 // SPViewJoin is a view that the open layout transaction waits for. It ends once: by its presentation or by an abandon.
@@ -43,6 +44,8 @@ static void *activeOwner;
 static NSMutableArray<SPLayoutRequest *> *waiting;
 static NSMutableArray<SPSettleRequest *> *settling;
 static bool injectSettledFailure;
+static void (^layoutStarted)(void *);
+static void (^layoutEnded)(void *);
 
 static void releaseSettled(void);
 
@@ -92,6 +95,7 @@ static void startLayout(SPLayoutRequest *request) {
     }
     preparation = request.ticket;
     traceMark(request.ticket, 1);
+    if (layoutStarted) layoutStarted(request.owner);
     request.ready(true);
 }
 
@@ -105,6 +109,14 @@ static void nextLayout(void) {
 }
 
 // CATransaction is per UI thread, so the preparation and presentation of several windows are serialized.
+void surfaceLayoutObserve(void (^started)(void *), void (^ended)(void *)) {
+    NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
+    [layoutStarted release];
+    [layoutEnded release];
+    layoutStarted = [started copy];
+    layoutEnded = [ended copy];
+}
+
 void surfaceLayoutBegin(void *owner, uint64_t ticket, void (^ready)(int)) {
     NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
     SPLayoutRequest *request = [[[SPLayoutRequest alloc] init] autorelease];
@@ -119,10 +131,12 @@ void surfaceLayoutBegin(void *owner, uint64_t ticket, void (^ready)(int)) {
 // Ends the open transaction: the CATransaction commits, and the next waiting layout starts.
 static void finishTransaction(void) {
     uint64_t ticket = preparation;
+    void *owner = activeOwner;
     committing = NO;
     activeOwner = NULL;
     [CATransaction commit];
     traceMark(ticket, 3);
+    if (layoutEnded) layoutEnded(owner);
     nextLayout();
     releaseSettled();
 }
@@ -273,12 +287,12 @@ static bool layoutOpen(void *owner) {
 
 // Runs done after every shown modal has presented. A modal is the only web view placed directly in the content view
 // beside the composition; a surface's web views live inside it and render independently of this wait. A shown modal
-// starts drawing when it becomes visible, and the presentation of the main page says nothing about it.
-static void afterModalsPresented(WKWebView *main, void (^done)(void)) {
+// starts drawing when it becomes visible, and the presentation of the content of the window says nothing about it.
+static void afterModalsPresented(NSWindow *window, void (^done)(void)) {
     dispatch_group_t group = dispatch_group_create();
     BOOL waiting = NO;
-    for (NSView *view in main.window.contentView.subviews) {
-        if (view == main || ![view isKindOfClass:WKWebView.class] || view.isHiddenOrHasHiddenAncestor) continue;
+    for (NSView *view in window.contentView.subviews) {
+        if (![view isKindOfClass:WKWebView.class] || view.isHiddenOrHasHiddenAncestor) continue;
         waiting = YES;
         dispatch_group_enter(group);
         [(WKWebView *)view _doAfterNextPresentationUpdate:^{ dispatch_group_leave(group); }];
@@ -288,54 +302,74 @@ static void afterModalsPresented(WKWebView *main, void (^done)(void)) {
     dispatch_release(group);
 }
 
-static void settle(WKWebView *main, void (^done)(double, const char *)) {
-    void *owner = main.window;
-    if (layoutOpen(owner)) {
+static void settle(NSWindow *window, surfaceLayoutPresent present, void (^done)(double, const char *)) {
+    if (layoutOpen(window)) {
         SPSettleRequest *request = [[SPSettleRequest new] autorelease];
-        request.main = main;
+        request.window = window;
+        request.present = present;
         request.done = done;
         if (!settling) settling = [[NSMutableArray alloc] init];
         [settling addObject:request];
         return;
     }
-        void (^finish)(double, const char *) = [[done copy] autorelease];
-    [main retain];
-    [main evaluateJavaScript:@"void document.documentElement.offsetWidth" completionHandler:^(id value, NSError *error) {
+    surfaceLayoutPresent again = [[present copy] autorelease];
+    void (^finish)(double, const char *) = [[done copy] autorelease];
+    [window retain];
+    present(^(const char *error) {
         if (error) {
-            sp_log_error("surface settle", [NSString stringWithFormat:@"DOM completion failed: %@", error.localizedDescription].UTF8String);
-            done(0, error.localizedDescription.UTF8String);
-            [main release];
+            finish(0, error);
+            [window release];
             return;
         }
-        // DOM evaluation only finishes layout. The web content process must commit the rendering of that DOM before it appears on the screen.
-        [main _doAfterNextPresentationUpdate:^{
-            afterModalsPresented(main, ^{
-                // When a new transaction opened while waiting for presentation, the wait starts again from the settlement of that transaction.
-                if (layoutOpen(main.window)) settle(main, finish);
-                else afterNextFrame(main.window.screen, finish);
-                [main release];
-            });
-        }];
-    }];
+        afterModalsPresented(window, ^{
+            // When a new transaction opened while waiting for presentation, the wait starts again from the settlement of that transaction.
+            if (layoutOpen(window)) settle(window, again, finish);
+            else afterNextFrame(window.screen, finish);
+            [window release];
+        });
+    });
 }
 
 static void releaseSettled(void) {
     for (SPSettleRequest *request in [[settling copy] autorelease]) {
-        if (layoutOpen(request.main.window)) continue;
+        if (layoutOpen(request.window)) continue;
         [[request retain] autorelease];
         [settling removeObjectIdenticalTo:request];
-        settle(request.main, request.done);
+        settle(request.window, request.present, request.done);
     }
 }
 
-void surfaceLayoutAfterSettled(void *handle, void (^done)(double, const char *)) {
+surfaceLayoutPresent surfaceLayoutMainPresentation(void *handle) {
+    WKWebView *main = (WKWebView *)handle;
+    return [[^(void (^presented)(const char *)) {
+        [main evaluateJavaScript:@"void document.documentElement.offsetWidth" completionHandler:^(id value, NSError *error) {
+            if (error) {
+                sp_log_error("surface settle", [NSString stringWithFormat:@"DOM completion failed: %@", error.localizedDescription].UTF8String);
+                presented(error.localizedDescription.UTF8String);
+                return;
+            }
+            // DOM evaluation only finishes layout. The web content process must commit the rendering of that DOM before it appears on the screen.
+            [main _doAfterNextPresentationUpdate:^{ presented(NULL); }];
+        }];
+    } copy] autorelease];
+}
+
+void surfaceLayoutAfterSettled(void *window, surfaceLayoutPresent present, void (^done)(double, const char *)) {
     NSCAssert(NSThread.isMainThread, @"surface presentation requires the UI thread");
     if (injectSettledFailure) {
         injectSettledFailure = false;
         done(0, "injected native presentation failure");
         return;
     }
-    settle((WKWebView *)handle, done);
+    if (!window) {
+        done(0, "the settled wait has no window");
+        return;
+    }
+    if (!present) {
+        done(0, "the settled wait has no presentation block");
+        return;
+    }
+    settle((NSWindow *)window, present, done);
 }
 
 void surfaceLayoutInjectSettledFailure(void) {

@@ -81,7 +81,7 @@ int main(void) { @autoreleasepool {
     WKWebView *main = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)] autorelease];
     window.contentView = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)] autorelease];
     [window.contentView addSubview:main];
-    void *surface = sp_surface_create(main);
+    void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     check(surface != NULL, @"the main webview creates a surface");
     check(sp_window_set_main_webview(window, main), @"the main webview is registered");
     WKWebView *page = [[[WKWebView alloc] initWithFrame:NSZeroRect] autorelease];

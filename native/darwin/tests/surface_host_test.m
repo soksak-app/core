@@ -29,11 +29,14 @@ int main(void) { @autoreleasepool {
     // wraps it.
     main.autoresizingMask = NSViewNotSizable;
     [host addSubview:main];
-    check(sp_window_set_main_webview(window, main), "the window registers its app DOM identity");
+    void *registered = sp_window_set_main_webview(window, main);
+    check(registered != NULL && registered == main.superview, "the registration returns the window composition around the main web view");
+    check(sp_window_composition(window) == registered, "the window composition of the window is the composition of the registration");
+    check(sp_window_set_main_webview(window, main) == registered, "a second registration returns the same composition");
     check(sp_surface_create(window) == NULL, "a window is rejected instead of being treated as a webview");
     void *surfaces[3];
     for (int i = 0; i < 3; i++) {
-        surfaces[i] = sp_surface_create(main);
+        surfaces[i] = sp_surface_create(registered);
         check(surfaces[i] != NULL, "a logical surface is created");
         webviewSetFrame(surfaces[i], 20 + i * 240, 50, 220, 300.5);
         webviewSetSurfaceHidden(surfaces[i], false);
@@ -61,7 +64,7 @@ int main(void) { @autoreleasepool {
     sp_surface_unplace_view(placed);
     [placed removeFromSuperview];
     [placed release];
-    char *factsJSON = sp_window_facts(window);
+    char *factsJSON = sp_window_facts(window, sp_window_composition(window));
     NSDictionary *facts = [NSJSONSerialization JSONObjectWithData:
         [NSData dataWithBytes:factsJSON length:strlen(factsJSON)] options:0 error:nil];
     sp_facts_free(factsJSON);
@@ -73,7 +76,7 @@ int main(void) { @autoreleasepool {
         documents[i] = [[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 100, 40)];
         [(NSView *)sp_surface_native_plane(surfaces[i + 1]) addSubview:documents[i]];
     }
-    factsJSON = sp_window_facts(window);
+    factsJSON = sp_window_facts(window, sp_window_composition(window));
     facts = [NSJSONSerialization JSONObjectWithData:
         [NSData dataWithBytes:factsJSON length:strlen(factsJSON)] options:0 error:nil];
     sp_facts_free(factsJSON);
@@ -85,7 +88,7 @@ int main(void) { @autoreleasepool {
     }
     check(hasExternalWebview, "the app DOM identity is not inferred from drawing order");
     check(sp_window_main_webview(window) == main, "registered app DOM identity survives native document creation");
-    char *hitJSON = sp_window_hit(window, 790, 490);
+    char *hitJSON = sp_window_hit(window, sp_window_composition(window), 790, 490);
     NSDictionary *mainHit = [NSJSONSerialization JSONObjectWithData:
         [NSData dataWithBytes:hitJSON length:strlen(hitJSON)] options:0 error:nil];
     sp_facts_free(hitJSON);

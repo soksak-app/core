@@ -3,6 +3,7 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "document_view.h"
+#import "webview_geometry.h"
 #import "window_facts.h"
 
 static int failures = 0;
@@ -14,7 +15,7 @@ static void check(BOOL condition, NSString *message) {
 
 /** The value of `blurred` in the window facts row of view, as JSON parses it. */
 static id blurredOf(NSWindow *window, WKWebView *view) {
-    char *json = sp_window_facts(window);
+    char *json = sp_window_facts(window, sp_window_composition(window));
     NSDictionary *facts = json ? [NSJSONSerialization JSONObjectWithData:[NSData dataWithBytes:json length:strlen(json)]
         options:0 error:nil] : nil;
     free(json);

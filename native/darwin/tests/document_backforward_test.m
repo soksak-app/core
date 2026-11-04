@@ -17,6 +17,7 @@
 #import "private/webkit.h"
 #import "support/records.h"
 #import "webview_geometry.h"
+#import "window_facts.h"
 
 static const NSTimeInterval stepLimit = 20;
 static const double hiddenDelay = 0.5;
@@ -172,7 +173,7 @@ int main(void) { @autoreleasepool {
     WKWebView *main = [[[WKWebView alloc] initWithFrame:window.contentView.bounds] autorelease];
     [window.contentView addSubview:main];
     [window orderFrontRegardless];
-    void *surface = sp_surface_create(main);
+    void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     if (!surface) failStep(@"surface", @"a logical surface is not created");
     webviewSetFrame(surface, 0, 0, 500, 400);
     webviewSetSurfaceHidden(surface, false);

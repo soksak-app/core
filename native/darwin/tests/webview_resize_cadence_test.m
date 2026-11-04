@@ -9,6 +9,7 @@
 #import "surface_layout.h"
 #import "support/temporary_folder.h"
 #import "webview_geometry.h"
+#import "window_facts.h"
 
 static int failures;
 static const NSUInteger resizeSteps = 48;
@@ -411,7 +412,7 @@ int main(void) { @autoreleasepool {
     WKWebView *main = [[[WKWebView alloc] initWithFrame:window.contentView.bounds] autorelease];
     window.contentView = [[[NSView alloc] initWithFrame:window.contentView.bounds] autorelease];
     [window.contentView addSubview:main];
-    void *surface = sp_surface_create(main);
+    void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     check(surface != NULL, @"the root view fixture has a logical surface");
     if (!surface) { [window close]; return 1; }
     webviewSetFrame(surface, 0, 0, resizeBaseWidth, resizeBaseHeight);

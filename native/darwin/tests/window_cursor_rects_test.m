@@ -4,6 +4,7 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "webview_geometry.h"
+#import "window_facts.h"
 
 static int failures;
 static void check(BOOL condition, NSString *message) {
@@ -45,7 +46,7 @@ int main(void) { @autoreleasepool {
     spin(0.2);
     check(window.areCursorRectsEnabled, @"a new window manages cursor rectangles");
 
-    void *surface = sp_surface_create(main);
+    void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     check(surface != NULL, @"the window composition is created");
     check(!window.areCursorRectsEnabled, @"the window composition turns cursor rectangles off");
 
