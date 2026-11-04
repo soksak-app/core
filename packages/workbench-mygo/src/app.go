@@ -186,6 +186,8 @@ func (s *Shell) Event(name string, data []any) {
 		if !s.viewExposure(data) {
 			s.requests.Deliver(data...)
 		}
+	case "exposure-registered":
+		s.surfaceRegistered(data)
 	case "view-call":
 		s.viewCall(data)
 	case "view-reply":

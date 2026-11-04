@@ -7,6 +7,7 @@ import (
 	"maps"
 	"math"
 	"regexp"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -73,6 +74,7 @@ type Registry struct {
 	statuses map[string]Status
 	watches  map[string]*watch
 	elements Elements
+	surfaces surfaceTable
 	// recorder receives every command request that ended.
 	recorder func(name string, elapsed time.Duration, failure error)
 }
@@ -80,7 +82,7 @@ type Registry struct {
 // NewRegistry returns an empty registry of the names of declared.
 func NewRegistry(declared *Declarations) *Registry {
 	return &Registry{declared: declared, commands: map[string]Command{}, later: map[string]LaterCommand{}, statuses: map[string]Status{},
-		watches: map[string]*watch{}}
+		watches: map[string]*watch{}, surfaces: newSurfaceTable()}
 }
 
 // Command registers the handler of the declared command name.
@@ -187,8 +189,19 @@ var methodKinds = map[string]string{
 // causeID is the form of a correlation identifier of the cause of a request (docs/spec/exposure.md#requests).
 var causeID = regexp.MustCompile(`^[^"\\\x00-\x1f\x7f]+$`)
 
-// Reply is Answer for a request whose command may answer in a later step. It calls answer once.
+// Reply is Answer for a request that may answer in a later step: a command that answers later and a request that a surface answers.
+// It calls answer once, and a command request is recorded when it ended.
 func (r *Registry) Reply(method string, params json.RawMessage, changed Changed, answer func(result any, err error)) {
+	if name, command := commandOf(method, params); command && r.recorder != nil {
+		started, answered := time.Now(), answer
+		answer = func(result any, err error) {
+			r.recorder(name, time.Since(started), err)
+			answered(result, err)
+		}
+	}
+	if r.replySurface(method, params, answer) {
+		return
+	}
 	var fields map[string]json.RawMessage
 	var name string
 	if method == "command.run" && json.Unmarshal(params, &fields) == nil && json.Unmarshal(fields["name"], &name) == nil {
@@ -204,7 +217,7 @@ func (r *Registry) Reply(method string, params json.RawMessage, changed Changed,
 			return
 		}
 	}
-	answer(r.Answer(method, params, changed))
+	answer(r.dispatch(method, params, changed))
 }
 
 // Answer answers one request of the relay (docs/spec/exposure.md#relay) with its result, or with a Refusal in the words of the page.
@@ -254,7 +267,7 @@ func (r *Registry) dispatch(method string, params json.RawMessage, changed Chang
 	if json.Unmarshal(params, &fields) != nil || json.Unmarshal(fields["name"], &name) != nil || name == nil {
 		return nil, Refuse(InvalidParams, "%s requires name", method)
 	}
-	if !map[string]map[string]bool{"status": r.declared.Statuses, "command": r.declared.Commands, "dom": r.declared.Elements}[kind][*name] {
+	if !r.isDeclared(kind, *name) {
 		return nil, Refuse(UnknownName, "unknown %s %s", kind, *name)
 	}
 	switch method {
@@ -437,12 +450,18 @@ func (r *Registry) list() (map[string][]map[string]any, error) {
 		"dom":      func(name string) bool { return len(drawn[name]) > 0 },
 	}
 	out := map[string][]map[string]any{}
-	for key, entries := range r.declared.exposes {
+	for key := range exposeKinds {
+		entries := slices.Concat(r.declared.exposes[key], r.surfaces.exposes[key])
 		listed := make([]map[string]any, 0, len(entries))
 		for _, entry := range entries {
 			row := make(map[string]any, len(entry)+1)
 			maps.Copy(row, entry)
-			row["registered"] = registered[key](entry["name"].(string))
+			name := entry["name"].(string)
+			if registeredBySurface(name) {
+				row["registered"] = len(r.surfaces.owners[declarationKey(exposeKinds[key], name)]) > 0
+			} else {
+				row["registered"] = registered[key](name)
+			}
 			listed = append(listed, row)
 		}
 		out[key] = listed

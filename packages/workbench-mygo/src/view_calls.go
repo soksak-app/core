@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"strings"
 )
@@ -949,9 +950,18 @@ func (s *Shell) runNativeCall(call viewCallEvent, view *viewState, unit *install
 		if kind == "command" && !surfaceNames[name] {
 			return fmt.Errorf("view call %s: command %s is registered through runtime.command.register", fields.Name, name)
 		}
+		// The registry applies the registration, then the host records it, as the page does.
+		if err := s.registry.Registered(SurfaceRegistered{Surface: call.Surface, Kind: kind, Name: name}); err != nil {
+			return err
+		}
 		s.surfaceCall(call, "exposureRegister", map[string]any{"kind": kind, "name": name}, func(_ any, err error) { answer(nil, err) })
 	case "changed":
-		s.surfaceCall(call, "exposureChanged", payload, func(_ any, err error) { answer(nil, err) })
+		change, err := changeOf(call.Surface, fields.Payload)
+		if err != nil {
+			return err
+		}
+		s.registry.Deliver(change)
+		answer(nil, nil)
 	case "exposureReply":
 		s.surfaceCall(call, "exposureReply", payload, func(_ any, err error) { answer(nil, err) })
 	default:
@@ -971,6 +981,26 @@ func (u *installedUnit) declaresCommand(name string) bool {
 		}
 	}
 	return false
+}
+
+// changeOf reads the value of a watched status of the view of surface (docs/spec/exposure.md#relay).
+func changeOf(surface string, payload json.RawMessage) (SurfaceChange, error) {
+	refused := errors.New("view call changed requires a non-empty name, a value and a positive integer version")
+	var fields struct {
+		Name    string          `json:"name"`
+		Value   json.RawMessage `json:"value"`
+		Version *float64        `json:"version"`
+	}
+	if err := json.Unmarshal(payload, &fields); err != nil {
+		return SurfaceChange{}, fmt.Errorf("%w: %v", refused, err)
+	}
+	// The largest safe integer of the page, which a version does not pass.
+	const maxVersion = 1<<53 - 1
+	if fields.Name == "" || fields.Value == nil || fields.Version == nil || *fields.Version < 1 || *fields.Version > maxVersion ||
+		*fields.Version != math.Trunc(*fields.Version) {
+		return SurfaceChange{}, refused
+	}
+	return SurfaceChange{Surface: surface, Name: fields.Name, Value: fields.Value, Version: int64(*fields.Version)}, nil
 }
 
 // nonNil returns a list that encodes as an array when it is empty.

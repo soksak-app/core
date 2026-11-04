@@ -85,6 +85,15 @@ func (q *Requests) changed(name string, value any) {
 	q.send("exposureChanged", "exposure change", map[string]any{"name": name, "value": value})
 }
 
+// surfaceChanged sends the value of a watched status of a surface to the host. surface is the surface that the watch names.
+func (q *Requests) surfaceChanged(name string, surface *string, value any) {
+	change := map[string]any{"name": name, "value": value}
+	if surface != nil {
+		change["surface"] = *surface
+	}
+	q.send("exposureChanged", "exposure change", change)
+}
+
 // send makes a host call of the answers and reports its failure under where.
 func (q *Requests) send(call, where string, argument any) {
 	q.calls.CallInOrder(exposureOrder, call, argument, func(_ any, err error) {
