@@ -32,6 +32,8 @@ type LoadedPlugin struct {
 	Menu       []PluginMenuItem
 	Sections   []LoadedSection
 	Surface    bool
+	// Params is surface.params, the schema of the parameters of a tab, and nil for a plugin that opens tabs without them.
+	Params any
 }
 
 // settingsSections are the sections of the window in order, with their labels.

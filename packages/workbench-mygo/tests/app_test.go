@@ -245,7 +245,7 @@ func TestPluginsApplyStartsTheWorkbenchAgain(t *testing.T) {
 const installedSession = `{"plugins": [{"id": "session", "package": "@scope/plugin-session", "version": "1.0.0", "manifest": {
 	"background": {"sidecar": "@scope/sidecar-session", "operation": "open", "settings": {"shell": "shell"}},
 	"settings": {"shell": {"type": "text", "default": "login"}, "other": {"type": "text", "default": "x"}},
-	"surface": {"opens": {"extensions": ["log"]}}}}]}`
+	"surface": {"opens": {"extensions": ["log"]}, "params": {"type": "object", "properties": {"path": {"type": "string"}}}}}}]}`
 
 // appStatus reads the status name of the window through its exposure request.
 func appStatus(t *testing.T, app *workbench.App, window *appWindow, queue steps, replies *[]map[string]any, name string) map[string]any {

@@ -443,5 +443,5 @@ func (f shellFiles) AddTab(card, plugin, file string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return f.shell.addTabWith(card, plugin, map[string]json.RawMessage{"params": params})
+	return f.shell.addTab(card, plugin, params)
 }

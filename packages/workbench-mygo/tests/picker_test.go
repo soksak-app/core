@@ -2,6 +2,7 @@ package workbench_test
 
 import (
 	"encoding/json"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -313,5 +314,58 @@ func TestATabThatCanNeverUnloadHasNoMenu(t *testing.T) {
 	_, err := f.shell.Registry().Run("core.tab.menu", json.RawMessage(`{"tab":"tab-aaaaaa","x":1,"y":1}`))
 	if err == nil || !strings.Contains(err.Error(), "no menu items") {
 		t.Fatalf("the menu answered %v", err)
+	}
+}
+
+// A tab takes the params of core.card.add-tab, the card takes the focus, and params that the plugin does not declare are refused.
+func TestAddTabStoresTheDeclaredParamsAndFocusesTheCard(t *testing.T) {
+	f := projectWithPlugins(t)
+	first := f.tabbedCards()[0]
+	split, err := f.answer("core.card.split", map[string]string{"card": first, "side": "right", "plugin": "acme"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.run("core.card.focus", map[string]string{"card": split["card"].(string)})
+
+	answer, err := f.answer("core.card.add-tab", map[string]any{"card": first, "plugin": "acme", "params": map[string]any{"path": "a.txt"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tabs := f.tabsOf(first)
+	added := tabs[len(tabs)-1].(map[string]any)
+	if added["id"] != answer["tab"] || !reflect.DeepEqual(added["params"], map[string]any{"path": "a.txt"}) {
+		t.Fatalf("the stored tab is %v", added)
+	}
+	for _, card := range status[gridRead](t, f, "core.grid").Cards {
+		if card.Focused != (card.ID == first) {
+			t.Fatalf("the focus is %+v after a tab was added to %s", card, first)
+		}
+	}
+
+	before := len(f.tabsOf(first))
+	if _, err := f.answer("core.card.add-tab", map[string]any{"card": first, "plugin": "acme", "params": map[string]any{"path": 7}}); err == nil || err.Error() != "params do not match acme surface.params" {
+		t.Fatalf("the refusal is %v", err)
+	}
+	if got := len(f.tabsOf(first)); got != before {
+		t.Fatalf("a refused tab was added: %d tabs, was %d", got, before)
+	}
+	// A null is no params.
+	if _, err := f.answer("core.card.add-tab", map[string]any{"card": first, "plugin": "acme", "params": nil}); err != nil {
+		t.Fatal(err)
+	}
+	tabs = f.tabsOf(first)
+	if _, stored := tabs[len(tabs)-1].(map[string]any)["params"]; stored {
+		t.Fatalf("a null is stored: %v", tabs[len(tabs)-1])
+	}
+}
+
+func TestAPluginWithoutDeclaredParamsRefusesThem(t *testing.T) {
+	f := newShell(t, &storedHost{installed: `{"plugins":[{"id":"plain","package":"plain","version":"1.0.0","manifest":{"id":"plain","name":"Plain","mark":"Pl",
+		"surface":{"composition":{"kind":"view","page":"a.html"}}}}]}`})
+	f.run("core.library.form.open", map[string]string{"mode": "open"})
+	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
+	f.run("core.library.form.submit", nil)
+	if _, err := f.answer("core.card.add-tab", map[string]any{"card": f.tabbedCards()[0], "plugin": "plain", "params": map[string]any{"path": "a"}}); err == nil || err.Error() != "plugin plain declares no tab params" {
+		t.Fatalf("the refusal is %v", err)
 	}
 }

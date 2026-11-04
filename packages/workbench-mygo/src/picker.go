@@ -117,7 +117,7 @@ func (s *Shell) openAddMenu(anchor, tool, card string) {
 	}
 	s.openPicker(pickerAsk[tool], items, func(plugin string) error {
 		if tool == "add" {
-			_, err := s.addTab(card, plugin)
+			_, err := s.addTab(card, plugin, nil)
 			return err
 		}
 		side := "right"

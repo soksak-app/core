@@ -137,7 +137,7 @@ func newTabShellWithState(t *testing.T, stored *storedHost, refused error) *tabS
 		Calls:       workbench.NewCalls(table, f.pending.post),
 		Environment: environment(t),
 		Installed: []byte(`{"plugins": [{"id": "notes", "manifest": {"id": "notes", "mark": "n",
-			"surface": {"composition": {"kind": "view", "page": "ui/index.html"}}}}]}`),
+			"surface": {"composition": {"kind": "view", "page": "ui/index.html"}, "params": {"type": "object", "properties": {"path": {"type": "string"}}}}}}]}`),
 		Invalidate: func() {},
 		Post:       f.pending.post,
 		Report:     func(line string) { f.lines = append(f.lines, line) },
