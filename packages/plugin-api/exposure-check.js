@@ -12,6 +12,7 @@
 import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { createHash } from "node:crypto";
 
 /* A dotted name in quotes that is not an exposed name. It is a file name. */
 const FILE = /\.(html|js|mjs|json|css)$/;
@@ -115,7 +116,7 @@ export function auditExposure({ owner, where, exposes, sources, registrations = 
 
 /**
  * Checks one plugin repository. It merges plugin.json and diagnostics.json (the declarations of the diagnostic build) and compares them with the sources of ui/.
- * Paths are reported relative to the repository.
+ * Paths are reported relative to the repository. It also checks the contract copies that the repository declares.
  */
 export function checkPluginRepository(root, core = coreExposure()) {
   const manifest = readJson(join(root, "plugin.json"));
@@ -133,7 +134,29 @@ export function checkPluginRepository(root, core = coreExposure()) {
     sections: (manifest.sections ?? []).map((section) => section.id),
     sources: paths.map((path) => ({ path: relative(root, path), text: readFileSync(path, "utf8") })),
     core,
-  });
+  }).concat(checkContractCopies(root));
+}
+
+/**
+ * The errors of the contract copies that contract-copies.json at root declares, { "<name>": "<sha256 hex>" }
+ * (docs/spec/plugins.md#contract-copies): each name is a file of contract/ of this package, and its value is the SHA-256 of
+ * that file.
+ */
+export function checkContractCopies(root) {
+  const declarationPath = join(root, "contract-copies.json");
+  // default: a plugin without contract-copies.json holds no contract copy.
+  if (!existsSync(declarationPath)) return [];
+  const contract = new URL("./contract/", import.meta.url);
+  const names = new Set(readdirSync(contract));
+  const errors = [];
+  for (const [name, digest] of Object.entries(readJson(declarationPath))) {
+    if (!names.has(name)) {
+      errors.push(`contract copy ${name} has no published contract/${name}`);
+    } else if (createHash("sha256").update(readFileSync(new URL(name, contract))).digest("hex") !== digest) {
+      errors.push(`contract copy ${name} differs from contract/${name}`);
+    }
+  }
+  return errors;
 }
 
 // A package manager places a package as a link, so the started path is resolved before it is compared with this module.

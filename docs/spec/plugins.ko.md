@@ -148,6 +148,10 @@ plugin은 다른 plugin이 선언한 확장 지점으로 그 plugin을 확장한
 
 진단 빌드에서 워크벤치는 이 선언을 플러그인의 표면 선언에 더한다. 선언된 diagnostic module을 view page뿐 아니라 workbench page에서도 import하므로 diagnostic staging은 두 import map에 `@soksak/plugin-api/diagnostic-view-frames`를 포함한다. 비진단 staging은 이 mapping과 module을 제외한다. View page는 시작 값의 `diagnostics`에서 diagnostic 선언을 읽고([view 표면](native-surfaces.ko.md#view-표면)) 그 값이 `null`이 아닐 때만 선언된 module을 불러오며 `diagnostics.json`은 요청하지 않는다. 비진단 빌드에서는 그 값이 `null`이므로, release에 그 파일과 module이 있어도 view는 둘 다 요청하지 않는다. import 실패는 오류다. Plugin adapter가 해당 module을 연결하고 해제한다.
 
+## Contract 사본
+
+게시된 contract case를 replay하는 plugin 저장소([경계](plugin-processes.ko.md#경계-결합-금지))는 replay하는 각 case 파일을 `test/fixtures/contract/<name>`에 둔다. 그 파일은 `engines.soksak` 범위가 포함하는 각 core version의 `@soksak/plugin-api` release의 `contract/`에 있는 같은 이름 파일의 byte 사본이다. 그런 release가 게시하지 않는 파일의 사본은 두지 않는다. plugin 루트의 `contract-copies.json`은 사본을 `{ "<name>": "<sha256>" }`로 선언한다. 사본마다 member 하나를 두고, 그 값은 사본의 소문자 16진 SHA-256이다. `package.json`의 `files`는 `contract-copies.json`을 나열하므로 모든 plugin release가 이를 담는다. 사본은 test 파일이며 release에 들어가지 않는다. plugin 저장소의 시험은 `test/fixtures/contract/`의 파일과 `contract-copies.json`의 member가 같은 이름이고 각 값이 그 사본의 SHA-256인지 확인하며, core release를 읽지 않는다. plugin API의 `checkPluginRepository`는 이름이 자기 `contract/`의 파일이 아닌 member를 `contract copy <name> has no published contract/<name>`로, 값이 그 파일의 SHA-256이 아닌 member를 `contract copy <name> differs from contract/<name>`로 보고한다. [registry 검사](registry.ko.md#검사)가 각 listed core의 plugin API release로 이를 실행하므로, 사본은 그 core가 올라갈 때 게시된 파일과 비교된다. `contract-copies.json`이 없는 plugin은 contract 사본을 담지 않는다.
+
 ## 표면 소유권
 
 OS 창마다 앱 DOM WebView가 하나 있다. 워크벤치는 표면의 카드 요소를 소유하며, `view` 합성의 표면은 자기 view에서 페이지를 실행하고 호스트가 그 view를 카드 요소 위에 배치한다([view 표면](#view-표면)). 플러그인은 내부 WebView나 iframe을 만들지 않는다. 표면 context에서 보낸 사이드카 메시지는 보낸 순서대로 사이드카에 도착한다. 워크벤치는 같은 사이드카에 대한 이전 전송이 끝난 뒤에야 다음 전송을 시작하며, 그 사이드카의 모든 표면과 background 세션이 한 순서를 공유한다. 표면이 아닌 표면에서 보낸 전송은 거부한다.
@@ -301,7 +305,7 @@ plugin 저장소의 catalog 검사(`soksak-events`)는 `runtime.log.<level>(`와
 
 게시된 파일이 import하는 모든 파일은 그 `package.json`의 `files` 배열에 나열되어야 하며, `packages/workbench/test/published-imports.test.mjs`가 이를 검증한다.
 
-`@soksak/plugin-api` package는 설치된 consumer가 현재 공개 API contract를 읽고 replay할 수 있도록 `contract/` directory의 모든 파일을 게시한다.
+`@soksak/plugin-api` package는 설치된 consumer가 현재 공개 API contract를 읽고 replay할 수 있도록 `contract/` directory의 모든 파일을 게시한다. plugin 저장소는 replay하는 파일을 [contract 사본](#contract-사본)으로 둔다.
 
 디버그 스테이징 대상 `frontend-wailsv3`, `frontend-tauriv2`는 `--diagnostics`를 더한다. 릴리스 빌드에는 페이지 진단 코드가 없고, 릴리스 빌드는 plugin release가 담은 [진단 선언](#진단-선언)을 읽지 않는다. `make release-check`는 스테이징된 릴리스 프런트엔드에 `/transcript.js`나 페이지 진단 모듈이 있으면 실패한다.
 

@@ -696,6 +696,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F523",
+    implementation: [
+      { file: "packages/plugin-api/exposure-check.js", symbol: "export function checkContractCopies(root) {" },
+      { file: "packages/plugin-api/exposure-check.js", symbol: "}).concat(checkContractCopies(root));" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/exposure-check.test.mjs", id: "a contract copy with the SHA-256 of the published contract file passes" },
+      { file: "packages/plugin-api/test/exposure-check.test.mjs", id: "a contract copy whose SHA-256 differs from the published contract file is reported" },
+      { file: "packages/plugin-api/test/exposure-check.test.mjs", id: "a contract copy without a published contract file is reported" },
+      { file: "packages/plugin-api/test/exposure-check.test.mjs", id: "a release without contract-copies.json holds no contract copy" },
+    ],
+    expected: "checkPluginRepository compares each member of contract-copies.json with the SHA-256 of the file of the same name in contract/ of its package and reports a name that contract/ does not hold or a digest that differs.",
+    levels: ["unit"],
+  },
+  {
     id: "F520",
     implementation: [
       { file: "native/darwin/tests/support/site_cost.m", symbol: "NSString *siteCostSummarize(const double *values, int count, SiteCostSummary *summary) {" },
