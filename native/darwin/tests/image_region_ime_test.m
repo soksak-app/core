@@ -26,6 +26,7 @@
 static NSString *const ABC = @"com.apple.keylayout.ABC";
 static NSString *const KOREAN_2SET = @"com.apple.inputmethod.Korean.2SetKorean";
 static NSDate *traceDeadline = nil;
+static NSString *runSource = nil;  // The input source to return to when a run ends early.
 static BOOL focusedSourceTrace = NO;
 
 static int failures = 0;
@@ -337,6 +338,21 @@ static BOOL activeDocumentStatesDocumentAccess(void) {
         == noErr;
 }
 
+// The input method answers only the key window of the active application.
+static BOOL holdsFront(NSWindow *window) {
+    return NSApp.isActive && window.isKeyWindow;
+}
+
+// Another application took the front, so no later key of the run can be answered. The run ends with that failure and returns
+// the input source, and it leaves the front with the application that took it.
+static void abandonRun(NSString *key) {
+    NSRunningApplication *frontmost = NSWorkspace.sharedWorkspace.frontmostApplication;
+    check(NO, [NSString stringWithFormat:@"the test window keeps the front through %@ (frontmost %@, pid %d)",
+        key, frontmost.localizedName ?: @"unknown", frontmost.processIdentifier]);
+    check(selectAndAwaitInputSource(runSource, [NSDate dateWithTimeIntervalSinceNow:2]), @"the previous input source is restored");
+    exit(1);
+}
+
 static void typeKey(NSWindow *window, NSString *key, NSUInteger (^answered)(void)) {
     NSUInteger before = answered();
     BOOL sent = (sp_input_key(window, key.UTF8String, NULL, 0, true) == SP_INPUT_DELIVERED) && (sp_input_key(window, key.UTF8String, NULL, 0, false) == SP_INPUT_DELIVERED);
@@ -344,7 +360,9 @@ static void typeKey(NSWindow *window, NSString *key, NSUInteger (^answered)(void
         check(NO, [NSString stringWithFormat:@"the injector sends %@", key]);
         return;
     }
-    check(pump(^BOOL { return answered() > before; }), [NSString stringWithFormat:@"the client answers %@", key]);
+    pump(^BOOL { return answered() > before || !holdsFront(window); });
+    if (!holdsFront(window)) abandonRun(key);
+    check(answered() > before, [NSString stringWithFormat:@"the client answers %@", key]);
 }
 
 static void selectSource(NSString *source, NSTextInputContext *context) {
@@ -392,7 +410,9 @@ static BOOL typeKeyUntil(NSWindow *window, NSString *key, NSUInteger (^answered)
             @(down), @(up)]);
         return NO;
     }
-    BOOL received = pumpUntil(^BOOL { return answered() > before; }, deadline);
+    pumpUntil(^BOOL { return answered() > before || !holdsFront(window); }, deadline);
+    BOOL received = answered() > before;
+    check(holdsFront(window), [NSString stringWithFormat:@"the test window keeps the front through %@", key]);
     check(received, [NSString stringWithFormat:@"the bounded trace receives %@ before its shared deadline", key]);
     return received;
 }
@@ -573,6 +593,7 @@ static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
     focusedSourceTrace = focusedTrace;
     if (focusedTrace) traceDeadline = [NSDate dateWithTimeIntervalSinceNow:55];
     NSString *previousSource = currentSourceID();
+    runSource = previousSource;
     NSRunningApplication *previousApp = [[NSWorkspace.sharedWorkspace.frontmostApplication retain] autorelease];
     sp_test_declare_activation();
     [NSApplication sharedApplication];
