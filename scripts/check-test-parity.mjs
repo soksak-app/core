@@ -349,6 +349,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F513",
+    implementation: [
+      { file: "scripts/check-host-parity.mjs", symbol: "export function auditPlatformCallers(host, methods, sources) {" },
+    ],
+    tests: [
+      { file: "scripts/test/check-host-parity.test.mjs", id: "every platform method with a caller passes" },
+      { file: "scripts/test/check-host-parity.test.mjs", id: "a platform method without a caller outside the platform fails" },
+      { file: "scripts/test/check-host-parity.test.mjs", id: "a platform method named only in a comment has no caller" },
+    ],
+    expected: "Each platform method that no production source of its host outside src/platform calls is reported, and a method named only in a comment or a test is not called.",
+    levels: ["unit"],
+  },
+  {
     id: "F507",
     implementation: [
       { file: "native/darwin/src/webview_geometry.m", symbol: "bool sp_surface_place_view(void *surfaceHandle, void *viewHandle) {" },
@@ -9055,7 +9068,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F426",
-    implementation: [{ file: "packages/host/tauriv2/src/platform/platform.rs", symbol: "fn set_surface_hidden(" }],
+    implementation: [{ file: "packages/host/tauriv2/src/platform/platform.rs", symbol: "pub trait Platform: CoreRootHost + Send + Sync {" }],
     tests: [{ file: "packages/host/tauriv2/src/exposure_status_test.rs", id: "a_reload_asked_of_a_page_ends_the_requests_to_its_surfaces" }],
     expected: "The platform interface declares only operations that the host calls.",
     levels: ["unit"],

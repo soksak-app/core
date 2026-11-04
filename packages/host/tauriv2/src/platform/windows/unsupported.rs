@@ -71,9 +71,6 @@ pub fn clipboard_read(_kind: &str) -> Result<ClipboardValue, String> {
 pub fn clipboard_write_text(_text: &str) -> Result<(), String> {
     missing("clipboard text write")
 }
-pub fn clipboard_write_png(_bytes: &[u8]) -> Result<(), String> {
-    missing("clipboard PNG write")
-}
 pub fn open_link(_url: &str) -> Result<(), String> {
     missing("link open")
 }
@@ -112,9 +109,6 @@ pub fn place_webview(
     missing("webview placement")
 }
 
-pub fn webview_frame(_view: &PlatformWebview) -> Result<[f64; 4], String> {
-    missing("webview frame")
-}
 pub fn create_surface(_main: Handle) -> Result<Handle, String> {
     missing("surface host")
 }
@@ -141,16 +135,8 @@ pub fn file_drop(_main: Handle, _receive: Box<dyn Fn(String)>) -> Result<(), Str
     missing("file drop")
 }
 
-pub fn set_surface_hidden(_view: &PlatformWebview, _hidden: bool) -> Result<(), String> {
-    missing("surface visibility")
-}
-
 pub fn set_surface_overlays(_surface: Handle, _overlays: &[DOMOverlay]) -> Result<(), String> {
     missing("surface DOM overlays")
-}
-
-pub fn set_alpha(_view: &PlatformWebview, _alpha: f64) -> Result<(), String> {
-    missing("webview alpha")
 }
 
 pub fn sample_threads(_path: &std::path::Path) -> Result<(), String> {
@@ -159,10 +145,6 @@ pub fn sample_threads(_path: &std::path::Path) -> Result<(), String> {
 
 pub fn collect_garbage(_view: &PlatformWebview) -> Result<(), String> {
     missing("JavaScript garbage collection")
-}
-
-pub fn set_live_resize(_view: &PlatformWebview, _live: bool) -> Result<(), String> {
-    missing("webview live resize")
 }
 
 pub fn raise_webview(_view: &PlatformWebview) -> Result<(), String> {

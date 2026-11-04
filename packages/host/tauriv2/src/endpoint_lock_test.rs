@@ -35,10 +35,6 @@ impl Connection for Sink {
         Ok(Box::new(self.clone()))
     }
 
-    fn set_read_timeout(&self, _timeout: Option<Duration>) -> Result<(), String> {
-        Ok(())
-    }
-
     fn close(&self) -> Result<(), String> {
         Ok(())
     }

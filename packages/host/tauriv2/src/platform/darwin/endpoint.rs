@@ -260,10 +260,6 @@ impl Connection for Stream {
         )))
     }
 
-    fn set_read_timeout(&self, timeout: Option<Duration>) -> Result<(), String> {
-        self.0.set_read_timeout(timeout).map_err(|e| e.to_string())
-    }
-
     fn close(&self) -> Result<(), String> {
         match self.0.shutdown(Shutdown::Both) {
             // A connection that the peer closed first or that was already closed is in the closed state, so it is not a

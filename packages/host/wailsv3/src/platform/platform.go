@@ -356,7 +356,6 @@ type Platform interface {
 	ConfigureMainWindow(window unsafe.Pointer, dark bool) error
 	ClipboardRead(kind string) (ClipboardValue, error)
 	ClipboardWriteText(text string) error
-	ClipboardWritePNG(bytes []byte) error
 	// OpenLink opens a URL with the default application of the user for its scheme. Call it on the UI thread.
 	OpenLink(url string) error
 	// DiagnosticReportsDirectory is the folder in which the operating system writes the crash reports of the current user, as the
@@ -389,8 +388,6 @@ type Platform interface {
 	EvaluateScript(view unsafe.Pointer, script string)
 	// CloseWebview removes the web view and releases the handle.
 	CloseWebview(view unsafe.Pointer)
-	// WebviewFrame returns the current region of the view in page coordinates.
-	WebviewFrame(view unsafe.Pointer) Rect
 	// CreateSurface creates a logical SurfaceHost below the main DOM web view.
 	CreateSurface(main unsafe.Pointer) (unsafe.Pointer, error)
 	CloseSurface(surface unsafe.Pointer)
@@ -399,12 +396,8 @@ type Platform interface {
 	SetSurfaceHiddenHandle(surface unsafe.Pointer, hidden bool)
 	SetSurfaceAlphaHandle(surface unsafe.Pointer, alpha float64)
 	SetWindowOverlays(main unsafe.Pointer, overlays []WindowOverlay) error
-	// SetWebviewAlpha sets the opacity of the view.
-	SetWebviewAlpha(view unsafe.Pointer, alpha float64)
 	// SetSurfaceOverlays sets the declared DOM overlays to process before the native input.
 	SetSurfaceOverlays(view unsafe.Pointer, overlays []DOMOverlay)
-	// SetWebviewResizing passes the start and the end of a continuous resize to the view.
-	SetWebviewResizing(view unsafe.Pointer, live bool)
 	// ConfigureModal sets the accessibility name and the corner radius of a modal web view.
 	ConfigureModal(view unsafe.Pointer, title string, radius float64)
 	// FocusModal moves the keyboard focus to the modal web view or returns it to the main web view.

@@ -11,11 +11,6 @@ unsafe extern "C" {
     fn sp_clipboard_read_text(clipboard: *mut c_void) -> *mut c_char;
     fn sp_clipboard_write_text(clipboard: *mut c_void, text: *const c_char) -> *mut c_char;
     fn sp_clipboard_read_png(clipboard: *mut c_void) -> *mut c_char;
-    fn sp_clipboard_write_png(
-        clipboard: *mut c_void,
-        bytes: *const u8,
-        length: usize,
-    ) -> *mut c_char;
     fn sp_clipboard_read_file_urls(clipboard: *mut c_void) -> *mut c_char;
     fn free(pointer: *mut c_void);
 }
@@ -122,14 +117,5 @@ pub fn write_text(text: &str) -> Result<(), String> {
     let text = CString::new(text).map_err(|_| "clipboard text contains NUL".to_string())?;
     with_clipboard(|clipboard| {
         write_response(unsafe { sp_clipboard_write_text(clipboard, text.as_ptr()) })
-    })
-}
-
-pub fn write_png(bytes: &[u8]) -> Result<(), String> {
-    if bytes.len() > 16 * 1024 * 1024 {
-        return Err("clipboard PNG exceeds 16 MiB".into());
-    }
-    with_clipboard(|clipboard| {
-        write_response(unsafe { sp_clipboard_write_png(clipboard, bytes.as_ptr(), bytes.len()) })
     })
 }
