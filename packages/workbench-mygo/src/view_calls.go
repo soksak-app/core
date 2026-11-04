@@ -1080,7 +1080,7 @@ func (s *Shell) surfacePressed(data []any) {
 	if len(data) != 1 || s.plane == nil {
 		return
 	}
-	event, err := decode[surfaceEvent](data[0])
+	surface, err := decode[string](data[0])
 	if err != nil {
 		s.fail(fmt.Errorf("surface pressed: %w", err))
 		return
@@ -1088,7 +1088,7 @@ func (s *Shell) surfacePressed(data []any) {
 	for _, card := range s.plane.Cards() {
 		if held, err := s.cardData(card.ID); err == nil && held != nil {
 			for _, tab := range held.TabList() {
-				if tab.ID == event.Surface && s.focused != card.ID {
+				if tab.ID == surface && s.focused != card.ID {
 					s.focused = card.ID
 					s.options.Invalidate()
 				}

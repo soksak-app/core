@@ -343,3 +343,14 @@ func TestATabNoticeMarksItsTabUntilItIsShown(t *testing.T) {
 		t.Fatal("the mark stays on a tab that is shown")
 	}
 }
+
+func TestAPressOnAViewFocusesItsCard(t *testing.T) {
+	f, stored := surfaceShell(t)
+	surface := otherCard(t, f, stored)
+	f.shell.Event("surface-pressed", []any{surface})
+	f.settle()
+	reply := viewCall(t, f, stored, surface, "tab.notify", map[string]any{"text": "seen", "policy": "system"})
+	if reply["error"] != nil || len(hostCalls(stored, "notify")) != 0 {
+		t.Fatalf("the pressed view is not the visible tab: %v %v", reply, hostCalls(stored, "notify"))
+	}
+}
