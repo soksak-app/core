@@ -287,7 +287,7 @@ func (s *Shell) focusMark() *layout.Rect {
 	if !ok {
 		return nil
 	}
-	data, err := layout.DecodeCardData(card.Data)
+	data, err := s.readCard(card)
 	if err != nil || data == nil || data.ActiveTab() == nil {
 		return nil
 	}

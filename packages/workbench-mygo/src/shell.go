@@ -142,7 +142,9 @@ func readProject(raw json.RawMessage) (projectRecord, error) {
 
 // Shell is the workbench of one window.
 type Shell struct {
-	options ShellOptions
+	// cardReads holds the decoded data of the cards.
+	cardReads map[string]cardRead
+	options   ShellOptions
 	// drawn tells that a frame of this start of the workbench drew the shell.
 	drawn    bool
 	metrics  metrics
@@ -231,7 +233,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	if err := json.Unmarshal(options.Environment, &environment); err != nil {
 		return nil, fmt.Errorf("environment declaration: %w", err)
 	}
-	s := &Shell{options: options, metrics: read, palette: palette, registry: NewRegistry(options.Declared), calls: options.Calls,
+	s := &Shell{cardReads: map[string]cardRead{}, options: options, metrics: read, palette: palette, registry: NewRegistry(options.Declared), calls: options.Calls,
 		grid: environment.Workspace.Grid, focus: environment.Workspace.Focus, browsing: true, library: newLibraryState(), icons: map[string]*ui.SVG{}, heads: map[string]layout.HeadFit{}}
 	s.text = NewTextSize(shellText{s}, steps)
 	s.keyboard = NewFocus(options.Declared, func() { s.options.Invalidate() })

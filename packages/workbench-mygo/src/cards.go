@@ -25,7 +25,9 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 	s.plane.Resize(float64(width-2*inset), float64(stage-2*inset))
 	originX, originY := inset, s.chromeHeight()+s.metrics.spaceTabH+s.metrics.tabsGap+inset
 	ui.Box(c).Size(width, stage).DrawOver(func(p *ui.Painter, r ui.Rect) { s.drawRail(p, r, inset) }).Children(func() {
-		for _, card := range s.plane.Cards() {
+		cards := s.plane.Cards()
+		s.forgetCardReads(cards)
+		for _, card := range cards {
 			if s.fullscreen != "" && card.ID != s.fullscreen {
 				continue
 			}
@@ -33,7 +35,7 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 			if !ok {
 				continue
 			}
-			data, err := layout.DecodeCardData(card.Data)
+			data, err := s.readCard(card)
 			if err != nil {
 				s.errors.Show(card.ID, err.Error(), "")
 				DrawError(c, s.errors, card.ID)

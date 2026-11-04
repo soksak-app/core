@@ -16,7 +16,7 @@ func (s *Shell) focusedSurface() FocusedSurface {
 		return FocusedSurface{}
 	}
 	// silent: a card whose data cannot be read shows its error in its place, and has no tab to follow.
-	data, _ := layout.DecodeCardData(card.Data)
+	data, _ := s.readCard(card)
 	if data == nil || data.ActiveTab() == nil {
 		return FocusedSurface{}
 	}

@@ -1,10 +1,12 @@
 package workbench
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -539,6 +541,34 @@ func (s *Shell) cardOfTab(id string) string {
 		}
 	}
 	return ""
+}
+
+// cardRead is the data of a card, kept while the text of the card stays the same.
+type cardRead struct {
+	text json.RawMessage
+	data *layout.CardData
+	err  error
+}
+
+// readCard returns the data of card for reading. The reads of a text share the data, so that a frame does not decode the cards
+// again: a change takes its own copy from DecodeCardData.
+func (s *Shell) readCard(card layout.Card) (*layout.CardData, error) {
+	read, ok := s.cardReads[card.ID]
+	if !ok || !bytes.Equal(read.text, card.Data) {
+		data, err := layout.DecodeCardData(card.Data)
+		read = cardRead{text: card.Data, data: data, err: err}
+		s.cardReads[card.ID] = read
+	}
+	return read.data, read.err
+}
+
+// forgetCardReads lets the reads of the cards that left the layout go.
+func (s *Shell) forgetCardReads(cards []layout.Card) {
+	if len(s.cardReads) > len(cards) {
+		maps.DeleteFunc(s.cardReads, func(id string, _ cardRead) bool {
+			return !slices.ContainsFunc(cards, func(card layout.Card) bool { return card.ID == id })
+		})
+	}
 }
 
 // cardData reads the data of the card id.
