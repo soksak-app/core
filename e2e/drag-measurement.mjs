@@ -217,7 +217,10 @@ export function measureDragPerformance(times, lag, refreshRate) {
   const targets = { median: 2.5 * period, p90: 3 * period, worst: 4 * period };
   const exceeded = longest > 33 ? ["cadence"] : [];
   for (const key of Object.keys(targets)) if (latency[key] > targets[key]) exceeded.push(key);
-  return { cadence: { measured: longest, target: 33 }, latency, targets, refreshRate,
+  // The display can show frames below its refresh rate, which adds to the latency of every host, so a report states the interval.
+  const intervals = times.slice(1).map((time, index) => time - times[index]).sort((a, b) => a - b);
+  const frameInterval = intervals[Math.floor(intervals.length / 2)];
+  return { cadence: { measured: longest, target: 33 }, frameInterval, latency, targets, refreshRate,
     exceeded, targetsMet: exceeded.length === 0 };
 }
 

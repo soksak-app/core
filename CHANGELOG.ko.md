@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F446-1: drag report가 화면 frame 간격의 median을 밝힙니다.
 - F446: worker class가 plain view latency를 바꾸지 않는다는 결과를 기록하고, 화면 frame 간격 report 항목을 엽니다.
 - F445: Wails framework의 main-thread worker를 user-interactive class로 실행합니다.
 - F435: load average 12~28에서 잰 F444 뒤 view benchmark를 기록하고, 1회 발생한 card 위치 실패를 재현되지 않음으로 닫는다.

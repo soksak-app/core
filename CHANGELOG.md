@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F446-1: The drag report states the median interval of the shown frames.
 - F446: Record that the worker class does not change the plain view latency, and open the report of the shown-frame interval.
 - F445: Run the main-thread worker of the Wails framework at the user-interactive class.
 - F435: Record the view benchmarks after F444 at load average 12 to 28 and close the single card position failure as not reproduced.

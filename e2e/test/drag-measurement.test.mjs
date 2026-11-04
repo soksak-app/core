@@ -97,6 +97,12 @@ test("drag performance keeps existing targets separate from valid measurements",
   assert.throws(() => measurement.measureDragPerformance([0, 16], { lag: 1, median: 1, p90: 1 }, 0), /refresh/);
 });
 
+test("drag performance states the median interval of the shown frames", { timeout: 1000 }, () => {
+  const lag = { lag: 20, median: 10, p90: 15 };
+  assert.equal(measurement.measureDragPerformance([0, 8, 16, 24], lag, 120).frameInterval, 8);
+  assert.equal(measurement.measureDragPerformance([0, 17, 33, 50, 67], lag, 120).frameInterval, 17);
+});
+
 test("transaction cadence includes commit waiting and total transaction duration", { timeout: 1000 }, () => {
   const report = transactionCadence([
     { begun: 0, requested: 14, presented: 30, committed: 65 },
