@@ -3,6 +3,8 @@ package workbench_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -77,7 +79,7 @@ func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 		h.replies = append(h.replies, reply)
 		return nil, nil
 	}
-	for _, name := range []string{"viewSidecarRoute", "sidecarListen", "viewEvent", "compositionPlace", "imageAttach", "sidecarSend", "exposureRegister", "viewRequest", "notify", "notificationRemove"} {
+	for _, name := range []string{"viewSidecarRoute", "sidecarListen", "viewEvent", "compositionPlace", "imageAttach", "sidecarSend", "exposureRegister", "documentAttach", "viewRequest", "notify", "notificationRemove"} {
 		table[name] = func(_ context.Context, argument json.RawMessage) (any, error) {
 			h.hostName = append(h.hostName, name+" "+string(argument))
 			return nil, nil
@@ -377,5 +379,50 @@ func TestViewCallReportsItsFocus(t *testing.T) {
 	}
 	if reply := viewCall(t, f, stored, surface, "tab.focus", map[string]any{"name": ""}); reply["error"] == nil {
 		t.Fatalf("the reply is %v", reply)
+	}
+}
+
+func TestViewCallAttachesARegionWithoutAHistory(t *testing.T) {
+	f, stored := surfaceShell(t)
+	surface := anySurface(t, stored)
+	reply := viewCall(t, f, stored, surface, "document.attach", map[string]any{"name": "page"})
+	result, ok := reply["result"].(map[string]any)
+	if reply["error"] != nil || !ok || result["history"] != false {
+		t.Fatalf("the reply is %v", reply)
+	}
+	if !slices.Contains(stored.hostName, fmt.Sprintf(`documentAttach {"document":"page","surface":%q}`, surface)) {
+		t.Fatalf("the host calls are %v", stored.hostName)
+	}
+}
+
+func TestAPressOnAViewFocusesItsCard(t *testing.T) {
+	f, _ := surfaceShell(t)
+	row := func(id string) float64 {
+		for _, card := range f.cardsOf() {
+			if card["id"] == id {
+				return card["r0"].(float64)
+			}
+		}
+		t.Fatalf("no card %s", id)
+		return 0
+	}
+	cards := f.tabbedCards()
+	if len(cards) != 2 || row(cards[0]) == row(cards[1]) {
+		t.Fatalf("the views stand in the cards %v", f.cardsOf())
+	}
+	var surface string
+	for _, card := range f.cardsOf() {
+		if card["id"] == cards[1] {
+			tabs := card["data"].(map[string]any)["tabs"].([]any)
+			surface = tabs[0].(map[string]any)["id"].(string)
+		}
+	}
+	f.run("core.card.focus", map[string]string{"card": cards[0]})
+	f.shell.Event("surface-pressed", []any{surface})
+	f.settle()
+	for _, card := range status[gridRead](t, f, "core.grid").Cards {
+		if card.Focused != (card.ID == cards[1]) {
+			t.Fatalf("after the press on %s the grid holds %+v", cards[1], card)
+		}
 	}
 }
