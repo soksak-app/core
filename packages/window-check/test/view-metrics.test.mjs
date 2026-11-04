@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
-import { assertViewMeasurements, domMountBaselineMs, runViewMeasurements } from "../view-metrics.mjs";
+import { assertViewMeasurements, domMountBaselineMs, evaluateGeometryFrames, runViewMeasurements } from "../view-metrics.mjs";
 
 const options = { plugin: "fixture-view", host: "wailsv3", baselineMs: 10 };
 
@@ -404,6 +404,18 @@ test("drag geometry compares the native rectangle with its declared card slot", 
   const collapsedSlot = structuredClone(chrome);
   collapsedSlot.drag.geometryFrames[0].slotInsetsPt.left = 95;
   assert.throws(() => assertViewMeasurements(collapsedSlot, options), /positive card slot/);
+});
+
+test("the geometry rule takes the greatest distance of a native rectangle from its declared card slot over the frames", { timeout: 1000 }, () => {
+  const frame = (right, nativeRight) => ({ frameIndex: 0, timeMs: 0, cardRectPt: { left: 0, top: 0, right, bottom: 80 },
+    nativeRectPt: { left: 5, top: 10, right: nativeRight, bottom: 70 }, slotInsetsPt: { left: 5, top: 10, right: 5, bottom: 10 } });
+  assert.deepEqual(evaluateGeometryFrames([frame(100, 95), frame(120, 115)]), { passed: true, maxErrorPt: 0, limitPt: 2 });
+  assert.deepEqual(evaluateGeometryFrames([frame(100, 95), frame(120, 118)]), { passed: false, maxErrorPt: 3, limitPt: 2 });
+  assert.deepEqual(evaluateGeometryFrames([frame(100, 97)]), { passed: true, maxErrorPt: 2, limitPt: 2 });
+  assert.throws(() => evaluateGeometryFrames([{ ...frame(100, 95), slotInsetsPt: { left: 95, top: 10, right: 5, bottom: 10 } }]),
+    /view measurement geometryFrames\[0\]\.slotInsetsPt: expected insets that leave a positive card slot/);
+  assert.throws(() => evaluateGeometryFrames([{ ...frame(100, 95), nativeRectPt: undefined }]),
+    /view measurement geometryFrames\[0\]\.nativeRectPt: expected an object/);
 });
 
 test("drag cadence is in-gesture and convergence meets both frame and time bounds", { timeout: 1000 }, () => {
