@@ -569,7 +569,7 @@ E2E_BUILD = wailsv3-build tauriv2-build registry
 # or the activation of a process, and their names start with TestE2E.
 E2E_GO_PACKAGES = packages/host/go packages/host/wailsv3 packages/host/mygo
 e2e-host-go: native-darwin
-	@for package in $(E2E_GO_PACKAGES); do $(GO_ENV) go -C $$package test -tags e2e -run '^TestE2E' -ldflags "$(GO_LINK)" ./tests/... || exit 1; done
+	@for package in $(E2E_GO_PACKAGES); do $(GO_ENV) go -C $$package test -tags e2e,diagnostics -run '^TestE2E' -ldflags "$(GO_LINK)" ./tests/... || exit 1; done
 
 e2e: docs-check e2e-check exposure-check $(E2E_BUILD)
 	@node scripts/e2e-run.mjs --script verify --native e2e $(if $(WHEN_IDLE),--when-idle $(WHEN_IDLE))
