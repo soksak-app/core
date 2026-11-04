@@ -1,10 +1,16 @@
 //! Tests of the transport, the frames, the JSON-RPC handling and the watch list of the local endpoint. A fake service
 //! replaces the window and the page.
 
+#![cfg(target_os = "macos")]
+
 #[path = "support/folder.rs"]
 mod folder;
 
+#[path = "support/platform/darwin/endpoint_client.rs"]
+mod endpoint_client;
+
 use std::io::Write;
+use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
@@ -15,9 +21,7 @@ mod records;
 
 use serde_json::value::RawValue;
 use serde_json::{Map, Value, json};
-use soksak_host_tauriv2::endpoint::{
-    self, Connection, Endpoint, Failure, Service, UnrecordedEnd, Watch, raw,
-};
+use soksak_host_tauriv2::endpoint::{self, Endpoint, Failure, Service, UnrecordedEnd, Watch, raw};
 
 /// A service that records requests and has only the window w1.
 struct Fake {
@@ -322,19 +326,19 @@ fn mode(path: &Path) -> u32 {
     std::fs::metadata(path).unwrap().permissions().mode() & 0o777
 }
 
-fn open(endpoint: &Endpoint) -> Box<dyn Connection> {
-    endpoint::connect(endpoint.address(), Duration::from_secs(5)).unwrap()
+fn open(endpoint: &Endpoint) -> UnixStream {
+    endpoint_client::connect(endpoint.address(), Duration::from_secs(5))
 }
 
-fn send(connection: &mut Box<dyn Connection>, message: Value) {
+fn send(connection: &mut UnixStream, message: Value) {
     endpoint::write_frame(connection, &message).unwrap();
 }
 
-fn receive(connection: &mut Box<dyn Connection>) -> Option<Value> {
+fn receive(connection: &mut UnixStream) -> Option<Value> {
     endpoint::read_frame(connection).unwrap()
 }
 
-fn request(connection: &mut Box<dyn Connection>, id: u64, method: &str, params: Value) -> Value {
+fn request(connection: &mut UnixStream, id: u64, method: &str, params: Value) -> Value {
     send(
         connection,
         json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}),
@@ -1085,22 +1089,6 @@ fn endpoint_file_is_written_only_after_the_first_window_exists() {
     assert_eq!(reply["result"], "answered", "{reply}");
     endpoint.stop();
     assert!(!file.exists());
-}
-
-// contract: endpoint.transport.closing-a-disconnected-connection-succeeds
-#[test]
-fn closing_an_already_disconnected_connection_succeeds() {
-    let config = folder::Folder::new();
-    let (service, _) = Fake::new();
-    let endpoint = start(config.path(), "test-close", service);
-    let connection = open(&endpoint);
-    assert_eq!(connection.close(), Ok(()));
-    // Closing an already closed connection again is not a failure. A socket whose shutdown is done returns ENOTCONN.
-    assert_eq!(
-        connection.close(),
-        Ok(()),
-        "closing a disconnected connection reported an error"
-    );
 }
 
 const CLOSE_CHILD: &str = "SOKSAK_ENDPOINT_CLOSE_CHILD";

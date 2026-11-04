@@ -20,9 +20,9 @@ use std::time::Duration;
 #[cfg(feature = "diagnostics")]
 use super::DocumentViewportMarker;
 use super::{
-    Connection, CoreRootHost, CoreRootResolver, DOMOverlay, Delivery, Frame, Handle, Hit,
-    ImagePresentation, ImageReleased, Insets, Key, Listener, PersistentStream, Platform, Pointer,
-    ProcessFootprint, Raster, WindowBuilder, WindowOverlay,
+    CoreRootHost, CoreRootResolver, DOMOverlay, Delivery, Frame, Handle, Hit, ImagePresentation,
+    ImageReleased, Insets, Key, Listener, PersistentStream, Platform, Pointer, ProcessFootprint,
+    Raster, WindowBuilder, WindowOverlay,
 };
 
 #[cfg(feature = "diagnostics")]
@@ -872,13 +872,6 @@ impl Platform for Darwin {
 
     fn endpoint_listen(&self, directory: &Path, name: &str) -> Result<Box<dyn Listener>, String> {
         endpoint::listen(directory, name)
-    }
-    fn endpoint_connect(
-        &self,
-        address: &str,
-        read_timeout: Duration,
-    ) -> Result<Box<dyn Connection>, String> {
-        endpoint::connect(address, read_timeout)
     }
     fn connect_service(&self, address: &str) -> Result<Box<dyn PersistentStream>, String> {
         connect_service(address)

@@ -2,13 +2,19 @@
 //! serializes it, the start buffer and the lists of the endpoint have bounds, and every loss is counted. The same cases run
 //! in the Go host.
 
+#![cfg(target_os = "macos")]
+
 #[path = "support/folder.rs"]
 mod folder;
+
+#[path = "support/platform/darwin/endpoint_client.rs"]
+mod endpoint_client;
 
 #[path = "support/records.rs"]
 mod records;
 
 use std::collections::HashSet;
+use std::os::unix::net::UnixStream;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -17,7 +23,7 @@ use serde_json::value::RawValue;
 use serde_json::{Map, Value, json};
 use soksak_host_tauriv2::application_log::{log_error, log_info};
 use soksak_host_tauriv2::bounds::{EVENT_FIELDS_LIMIT_BYTES, EVENT_HEAD_BYTES};
-use soksak_host_tauriv2::endpoint::{self, Connection, Endpoint, Failure, Service, raw};
+use soksak_host_tauriv2::endpoint::{self, Endpoint, Failure, Service, raw};
 use soksak_host_tauriv2::event_log::{Level, Options};
 use soksak_host_tauriv2::event_record::{
     START_BUFFER_BYTES, START_BUFFER_RECORDS, emit_host, use_host_event_log,
@@ -180,11 +186,11 @@ impl Service for GatedPage {
     }
 }
 
-fn send(connection: &mut Box<dyn Connection>, message: Value) {
+fn send(connection: &mut UnixStream, message: Value) {
     endpoint::write_frame(connection, &message).unwrap();
 }
 
-fn receive(connection: &mut Box<dyn Connection>) -> Value {
+fn receive(connection: &mut UnixStream) -> Value {
     endpoint::read_frame(connection)
         .unwrap()
         .expect("the endpoint closed the connection")
@@ -210,9 +216,9 @@ fn the_subscription_changes_of_a_topic_hold_at_most_256_and_the_rest_is_refused_
     )
     .unwrap();
     endpoint.publish("w1").unwrap();
-    let mut connection = endpoint::connect(endpoint.address(), Duration::from_secs(10)).unwrap();
+    let mut connection = endpoint_client::connect(endpoint.address(), Duration::from_secs(10));
     let topic = json!({"window": "w1", "name": "core.layout"});
-    let request = |connection: &mut Box<dyn Connection>, id: u64, method: &str| {
+    let request = |connection: &mut UnixStream, id: u64, method: &str| {
         send(
             connection,
             json!({"jsonrpc": "2.0", "id": id, "method": method, "params": topic}),

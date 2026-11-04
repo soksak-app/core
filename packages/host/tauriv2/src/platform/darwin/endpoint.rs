@@ -11,7 +11,6 @@ use std::net::Shutdown;
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 use super::super::{Connection, Listener};
 
@@ -295,18 +294,28 @@ pub fn listen(directory: &Path, name: &str) -> Result<Box<dyn Listener>, String>
     Ok(Box::new(Socket { listener, path }))
 }
 
-/// Connects to the socket path address. A read that receives no byte within read_timeout fails.
-pub fn connect(address: &str, read_timeout: Duration) -> Result<Box<dyn Connection>, String> {
-    let stream = UnixStream::connect(address).map_err(|e| format!("{address}: {e}"))?;
-    stream
-        .set_read_timeout(Some(read_timeout))
-        .map_err(|e| format!("{address}: read timeout {read_timeout:?}: {e}"))?;
-    Ok(Box::new(Stream(stream)))
-}
-
 #[cfg(test)]
 mod tests {
-    use super::listed_as_alive;
+    use std::os::unix::net::UnixStream;
+
+    use super::{listed_as_alive, listen};
+
+    // contract: endpoint.transport.closing-a-disconnected-connection-succeeds
+    #[test]
+    fn closing_an_already_disconnected_connection_succeeds() {
+        let folder = crate::test_folder::Folder::new();
+        let listener = listen(&folder.path().join("sockets"), "test-close").unwrap();
+        let _peer = UnixStream::connect(listener.address()).unwrap();
+        let connection = listener.accept().unwrap();
+        assert_eq!(connection.close(), Ok(()));
+        // Closing an already closed connection again is not a failure. A socket whose shutdown is done returns ENOTCONN.
+        assert_eq!(
+            connection.close(),
+            Ok(()),
+            "closing a disconnected connection reported an error"
+        );
+        listener.remove();
+    }
 
     // contract: sidecars-transport.replace.waits-for-the-end-of-the-service-process
     #[test]

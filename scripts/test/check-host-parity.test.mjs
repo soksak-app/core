@@ -3,7 +3,7 @@ import test from "node:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { auditCommonOnlyKeys, auditHostParity, auditMenuTables, auditPlatformCallers, commonOnlyKeys, goMenuTables, goPlatformMethods, hostProductSources, rustHandlers, rustMenuTables, rustPlatformMethods, snake, specMenuTables, withoutRustTestItems } from "../check-host-parity.mjs";
+import { auditCommonOnlyKeys, auditHostParity, auditMenuTables, auditPlatformCallers, commonOnlyKeys, goMenuTables, goPlatformMethods, hostProductSources, libraryCrate, rustHandlers, rustMenuTables, rustPlatformMethods, snake, specMenuTables, withoutRustTestItems } from "../check-host-parity.mjs";
 
 // The base sources of the injection checks. Changing only one name in the real sources proves that each failure is produced mechanically.
 const sources = () => ({
@@ -27,19 +27,33 @@ const sources = () => ({
   wailsv3PlatformSource: goPlatformFixture,
   tauriv2ProductSources: platformSources().tauriv2,
   wailsv3ProductSources: platformSources().wailsv3,
+  tauriv2ApplicationSources: applicationSources().tauriv2,
+  wailsv3ApplicationSources: applicationSources().wailsv3,
+  tauriv2Crate: tauriv2Crate,
 });
 
 // The platform interfaces of the two hosts and host sources outside the platform folder that call each method; in Go one method is passed
 // as a method value.
 const platformSources = () => ({
-  tauriv2: { "surfaces.rs": "fn sync(p: &dyn Platform) {\n    p.set_core_root(resolve)?;\n    let surface = p.create_surface(main)?;\n    p.place_webview(&view, frame)?;\n}" },
-  wailsv3: { "host.go": "func run() {\n\tsystem.SetCoreRoot(resolve)\n\tsurface, err := system.CreateSurface(window)\n\tapplication.InvokeSync(system.AnswerQuitRequests)\n}" },
+  tauriv2: { "surfaces.rs": "pub fn sync(p: &dyn Platform) {\n    p.set_core_root(resolve)?;\n    let surface = p.create_surface(main)?;\n    p.place_webview(&view, frame)?;\n}" },
+  wailsv3: { "host.go": "package host\n\nfunc Run() {\n\tsystem.SetCoreRoot(resolve)\n\tsurface, err := system.CreateSurface(window)\n\tapplication.InvokeSync(system.AnswerQuitRequests)\n}" },
 });
 
+// The applications that link each host: their main functions call the host functions of the platform sources.
+const applicationSources = () => ({
+  tauriv2: { "apps/tauriv2/src/main.rs": "fn main() {\n    soksak_host_tauriv2::surfaces::sync(platform);\n}" },
+  wailsv3: { "apps/wailsv3/src/main.go": "package main\n\nfunc main() {\n\thost.Run()\n}" },
+});
+
+// The library crate of the Tauri host: its root source and the name that applications use.
+const tauriv2Crate = { root: "host.rs", name: "soksak_host_tauriv2" };
+
 // Audits the platform callers of both hosts.
-const platformFailures = (sources) => [
-  ...auditPlatformCallers("tauriv2", rustPlatformMethods(rustPlatformFixture), sources.tauriv2),
-  ...auditPlatformCallers("wailsv3", goPlatformMethods(goPlatformFixture), sources.wailsv3),
+const platformFailures = (sources, applications = applicationSources()) => [
+  ...auditPlatformCallers("tauriv2", rustPlatformMethods(rustPlatformFixture), sources.tauriv2,
+    { language: "rust", crate: tauriv2Crate, applications: applications.tauriv2 }),
+  ...auditPlatformCallers("wailsv3", goPlatformMethods(goPlatformFixture), sources.wailsv3,
+    { language: "go", applications: applications.wailsv3 }),
 ];
 
 const rustPlatformFixture = `pub trait CoreRootHost {
@@ -288,4 +302,51 @@ test("the product sources of a host are its source files outside the platform fo
     writeFileSync(join(directory, file), text);
   }
   assert.deepEqual(hostProductSources(directory, ".rs"), { "routine/routine.rs": "b", "surfaces.rs": "a" });
+});
+
+test("a platform method whose only callers are free functions that no live function calls has no caller", { timeout: 1000 }, () => {
+  const changed = platformSources();
+  changed.tauriv2["surfaces.rs"] = changed.tauriv2["surfaces.rs"].replace("    p.place_webview(&view, frame)?;\n", "");
+  changed.tauriv2["layout.rs"] = "pub fn place_all(p: &dyn Platform) {\n    p.place_webview(&view, frame)?;\n}\n\npub fn place_twice(p: &dyn Platform) {\n    place_all(p);\n    place_all(p);\n}\n";
+  changed.wailsv3["host.go"] = changed.wailsv3["host.go"].replace("\tsurface, err := system.CreateSurface(window)\n", "");
+  changed.wailsv3["surfaces.go"] = "package host\n\nfunc createAll() {\n\tsurface, err := system.CreateSurface(window)\n}\n";
+  assert.deepEqual(platformFailures(changed), [
+    "tauriv2 platform method place_webview has no caller outside src/platform",
+    "wailsv3 platform method CreateSurface has no caller outside src/platform",
+  ]);
+});
+
+test("a free function that a live function, an application or a command calls keeps its platform method called", { timeout: 1000 }, () => {
+  const changed = platformSources();
+  changed.tauriv2["surfaces.rs"] = changed.tauriv2["surfaces.rs"]
+    .replace("    p.place_webview(&view, frame)?;\n", "    crate::layout::place_twice(p);\n")
+    .replace("    let surface = p.create_surface(main)?;\n", "");
+  changed.tauriv2["layout.rs"] = "pub fn place_all(p: &dyn Platform) {\n    p.place_webview(&view, frame)?;\n}\n\npub fn place_twice(p: &dyn Platform) {\n    place_all(p);\n    place_all(p);\n}\n";
+  changed.tauriv2["bindings.rs"] = "bindings! {\n#[tauri::command]\nfn window_new(p: &dyn Platform) {\n    let surface = p.create_surface(main)?;\n}\n}\n";
+  changed.wailsv3["host.go"] = changed.wailsv3["host.go"]
+    .replace("\tsurface, err := system.CreateSurface(window)\n", "\tcreateAll()\n")
+    .replace("\tapplication.InvokeSync(system.AnswerQuitRequests)\n", "");
+  changed.wailsv3["surfaces.go"] = "package host\n\nfunc createAll() {\n\tsurface, err := system.CreateSurface(window)\n}\n\nfunc (h *Host) Quit() {\n\tapplication.InvokeSync(system.AnswerQuitRequests)\n}\n";
+  assert.deepEqual(platformFailures(changed), []);
+});
+
+test("free functions that only call each other have no caller", { timeout: 1000 }, () => {
+  const changed = platformSources();
+  changed.tauriv2["surfaces.rs"] = changed.tauriv2["surfaces.rs"].replace("    p.place_webview(&view, frame)?;\n", "");
+  changed.tauriv2["layout.rs"] = "fn ping(p: &dyn Platform) {\n    pong(p);\n    p.place_webview(&view, frame)?;\n}\n\nfn pong(p: &dyn Platform) {\n    ping(p);\n}\n";
+  changed.wailsv3["host.go"] = changed.wailsv3["host.go"].replace("\tsurface, err := system.CreateSurface(window)\n", "");
+  changed.wailsv3["surfaces.go"] = "package host\n\nfunc ping() {\n\tpong()\n\tsurface, err := system.CreateSurface(window)\n}\n\nfunc pong() {\n\tping()\n}\n";
+  assert.deepEqual(platformFailures(changed), [
+    "tauriv2 platform method place_webview has no caller outside src/platform",
+    "wailsv3 platform method CreateSurface has no caller outside src/platform",
+  ]);
+});
+
+test("the library crate of a host is the package name in Rust form and its root file under src", { timeout: 1000 }, () => {
+  const manifest = '[package]\nname = "soksak-host-tauriv2"\nedition = "2024"\n\n[lib]\npath = "src/host.rs"\n';
+  assert.deepEqual(libraryCrate(manifest, "Cargo.toml"), { root: "host.rs", name: "soksak_host_tauriv2" });
+  assert.throws(() => libraryCrate('[package]\nname = "soksak-host-tauriv2"\n', "Cargo.toml"),
+    /Cargo.toml declares no package name or no \[lib\] path under src\//);
+  assert.throws(() => libraryCrate('[lib]\npath = "src/host.rs"\n', "Cargo.toml"),
+    /Cargo.toml declares no package name or no \[lib\] path under src\//);
 });

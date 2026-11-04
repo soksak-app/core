@@ -798,9 +798,11 @@ const FEATURE_LINKS = [
   {
     id: "F513",
     implementation: [
-      { file: "scripts/check-host-parity.mjs", symbol: "export function auditPlatformCallers(host, methods, sources) {" },
+      { file: "scripts/check-host-parity.mjs", symbol: "export function auditPlatformCallers(host, methods, sources, scope) {" },
+      { file: "scripts/check-host-parity.mjs", symbol: "function callerGraph(language, sources, scope) {" },
       { file: "scripts/check-host-parity.mjs", symbol: "export function withoutRustTestItems(source) {" },
-      { file: "packages/host/tauriv2/src/platform/darwin/endpoint.rs", symbol: "pub fn connect(address: &str, read_timeout: Duration) -> Result<Box<dyn Connection>, String> {" },
+      { file: "scripts/check-host-parity.mjs", symbol: "export function libraryCrate(manifest, file) {" },
+      { file: "packages/host/tauriv2/tests/support/platform/darwin/endpoint_client.rs", symbol: "pub fn connect(address: &str, read_timeout: Duration) -> UnixStream {" },
     ],
     tests: [
       { file: "scripts/test/check-host-parity.test.mjs", id: "every platform method with a caller passes" },
@@ -809,8 +811,12 @@ const FEATURE_LINKS = [
       { file: "scripts/test/check-host-parity.test.mjs", id: "auditHostParity reports a platform method of either host that no source outside the platform calls" },
       { file: "scripts/test/check-host-parity.test.mjs", id: "a platform method that only a test item of a Rust source calls has no caller" },
       { file: "scripts/test/check-host-parity.test.mjs", id: "the product sources of a host are its source files outside the platform folder, without test files" },
+      { file: "scripts/test/check-host-parity.test.mjs", id: "a platform method whose only callers are free functions that no live function calls has no caller" },
+      { file: "scripts/test/check-host-parity.test.mjs", id: "a free function that a live function, an application or a command calls keeps its platform method called" },
+      { file: "scripts/test/check-host-parity.test.mjs", id: "free functions that only call each other have no caller" },
+      { file: "scripts/test/check-host-parity.test.mjs", id: "the library crate of a host is the package name in Rust form and its root file under src" },
     ],
-    expected: "Host parity reports each platform method that no production source of its host outside src/platform calls, and a method named only in a comment, a test file or a Rust test item is not called; the endpoint client of the integration tests takes its read timeout at the connect.",
+    expected: "Host parity reports each platform method that no production source of its host outside src/platform calls; a method named only in a comment, a test file or a Rust test item is not called, and a call inside a free function counts only when an entry point, an application source or another counting call reaches that function. The integration tests connect to the endpoint through a macOS test client whose reads have a time limit.",
     levels: ["unit"],
   },
   {
@@ -3758,8 +3764,8 @@ const FEATURE_LINKS = [
   {
     id: "F2.7",
     implementation: [
-      { file: "packages/host/tauriv2/src/endpoint.rs", symbol: "pub fn connect" },
-      { file: "packages/host/wailsv3/src/endpoint.go", symbol: "NewEndpoint" },
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: ".map_err(|e| format!(\"sidecar {name}: connect authenticated service: {e}\"))?;" },
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "return nil, fmt.Errorf(\"sidecar %s: connect authenticated service: %w\", name, err)" },
     ],
     tests: [
       { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent_transport_reports_live_but_unreachable_endpoint_without_replacement" },

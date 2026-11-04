@@ -1,19 +1,25 @@
 //! The record of the endpoint methods (docs/spec/logging.md#entrances): every request of a client is the event
 //! `host.endpoint.call` with the performance trace off. The same cases run in the Go host.
 
+#![cfg(target_os = "macos")]
+
 #[path = "support/folder.rs"]
 mod folder;
+
+#[path = "support/platform/darwin/endpoint_client.rs"]
+mod endpoint_client;
 
 #[path = "support/records.rs"]
 mod records;
 
+use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde_json::value::RawValue;
 use serde_json::{Map, Value, json};
-use soksak_host_tauriv2::endpoint::{self, Connection, Endpoint, Failure, Service, raw};
+use soksak_host_tauriv2::endpoint::{self, Endpoint, Failure, Service, raw};
 use soksak_host_tauriv2::event_log::EventLog;
 use soksak_host_tauriv2::event_record::use_host_event_log;
 
@@ -46,7 +52,7 @@ impl Service for Fake {
 
 /// Runs `body` with a writer attached, an endpoint with a connection, and the performance trace off; it returns the events
 /// `host.endpoint.call` that the writer stored.
-fn calls_of(body: impl FnOnce(&mut Box<dyn Connection>)) -> Vec<Value> {
+fn calls_of(body: impl FnOnce(&mut UnixStream)) -> Vec<Value> {
     let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
     assert!(
         !soksak_host_tauriv2::performance::enabled(),
@@ -62,7 +68,7 @@ fn calls_of(body: impl FnOnce(&mut Box<dyn Connection>)) -> Vec<Value> {
     )
     .unwrap();
     endpoint.publish("main").unwrap();
-    let mut connection = endpoint::connect(endpoint.address(), Duration::from_secs(5)).unwrap();
+    let mut connection = endpoint_client::connect(endpoint.address(), Duration::from_secs(5));
     body(&mut connection);
     endpoint.stop();
     log.flush(Duration::from_secs(5)).unwrap();
@@ -78,7 +84,7 @@ fn events_of(config: &Path) -> Vec<Value> {
         .collect()
 }
 
-fn request(connection: &mut Box<dyn Connection>, id: u64, method: &str, params: Value) -> Value {
+fn request(connection: &mut UnixStream, id: u64, method: &str, params: Value) -> Value {
     endpoint::write_frame(
         connection,
         &json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}),

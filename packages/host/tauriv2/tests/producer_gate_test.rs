@@ -2,8 +2,13 @@
 //! into an event, and the writer counts it; a failed call is a warning and still passes a policy that stores the class from warn on.
 //! The same cases run in the Go host.
 
+#![cfg(target_os = "macos")]
+
 #[path = "support/folder.rs"]
 mod folder;
+
+#[path = "support/platform/darwin/endpoint_client.rs"]
+mod endpoint_client;
 
 #[path = "support/records.rs"]
 mod records;
@@ -119,7 +124,7 @@ fn an_endpoint_request_that_the_policy_does_not_store_is_counted() {
     )
     .unwrap();
     endpoint.publish("main").unwrap();
-    let mut connection = endpoint::connect(endpoint.address(), Duration::from_secs(5)).unwrap();
+    let mut connection = endpoint_client::connect(endpoint.address(), Duration::from_secs(5));
     for id in 1..=2u64 {
         endpoint::write_frame(
             &mut connection,

@@ -8,9 +8,9 @@ use tauri::Window;
 use tauri::webview::PlatformWebview;
 
 use super::super::{
-    ClipboardValue, Connection, CoreRootResolver, DOMOverlay, Delivery, Frame, Handle, Hit,
-    ImagePresentation, ImageReleased, Insets, Key, Listener, PersistentStream, Pointer,
-    ProcessFootprint, Raster, WindowBuilder, WindowOverlay,
+    ClipboardValue, CoreRootResolver, DOMOverlay, Delivery, Frame, Handle, Hit, ImagePresentation,
+    ImageReleased, Insets, Key, Listener, PersistentStream, Pointer, ProcessFootprint, Raster,
+    WindowBuilder, WindowOverlay,
 };
 
 /// Returns an error that contains operation in its name.
@@ -655,13 +655,6 @@ pub fn private_directory(_path: &std::path::Path) -> Result<(), String> {
 }
 
 pub fn endpoint_listen(_directory: &Path, _name: &str) -> Result<Box<dyn Listener>, String> {
-    missing("local endpoint")
-}
-
-pub fn endpoint_connect(
-    _address: &str,
-    _read_timeout: std::time::Duration,
-) -> Result<Box<dyn Connection>, String> {
     missing("local endpoint")
 }
 

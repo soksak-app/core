@@ -2,18 +2,23 @@
 //! window, so each test changes a registry and checks its count, and checks that the count falls back when the object is
 //! removed. They are compiled only in diagnostic builds. The same cases run in the Go host.
 #![cfg(feature = "diagnostics")]
+#![cfg(target_os = "macos")]
 
 #[path = "support/folder.rs"]
 mod folder;
 
+#[path = "support/platform/darwin/endpoint_client.rs"]
+mod endpoint_client;
+
 use std::os::unix::fs::PermissionsExt;
+use std::os::unix::net::UnixStream;
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 
 use serde_json::value::RawValue;
 use serde_json::{Map, Value, json};
 use soksak_host_tauriv2::documents::Documents;
-use soksak_host_tauriv2::endpoint::{self, Connection, Endpoint, Service};
+use soksak_host_tauriv2::endpoint::{self, Endpoint, Service};
 use soksak_host_tauriv2::exposure::Relay;
 use soksak_host_tauriv2::images::Images;
 use soksak_host_tauriv2::object_counts::{
@@ -290,7 +295,7 @@ impl Service for ObjectsService {
     }
 }
 
-fn request(connection: &mut Box<dyn Connection>, id: u64, params: Value) -> Value {
+fn request(connection: &mut UnixStream, id: u64, params: Value) -> Value {
     endpoint::write_frame(
         connection,
         &json!({"jsonrpc": "2.0", "id": id, "method": "diagnostics.objects", "params": params}),
@@ -317,7 +322,7 @@ fn diagnostics_objects_reply_and_params() {
     )
     .unwrap();
     endpoint.publish("main").unwrap();
-    let mut connection = endpoint::connect(endpoint.address(), Duration::from_secs(5)).unwrap();
+    let mut connection = endpoint_client::connect(endpoint.address(), Duration::from_secs(5));
     let missing = request(&mut connection, 1, json!({}));
     assert_eq!(missing["error"]["code"], json!(-32602), "{missing}");
     let unknown = request(&mut connection, 2, json!({"window": "other"}));

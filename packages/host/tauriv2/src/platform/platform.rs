@@ -991,12 +991,6 @@ pub trait Platform: CoreRootHost + Send + Sync {
 
     /// Opens the local endpoint address with the name name in directory. directory must be for the current user only.
     fn endpoint_listen(&self, directory: &Path, name: &str) -> Result<Box<dyn Listener>, String>;
-    /// Connects to a local endpoint address. A read of the connection that receives no byte within read_timeout fails.
-    fn endpoint_connect(
-        &self,
-        address: &str,
-        read_timeout: Duration,
-    ) -> Result<Box<dyn Connection>, String>;
     /// Connects to the persistent sidecar service socket.
     fn connect_service(&self, address: &str) -> Result<Box<dyn PersistentStream>, String>;
     /// Makes the service directory for the current user only.
