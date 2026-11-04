@@ -323,11 +323,7 @@ fn mode(path: &Path) -> u32 {
 }
 
 fn open(endpoint: &Endpoint) -> Box<dyn Connection> {
-    let connection = endpoint::connect(endpoint.address()).unwrap();
-    connection
-        .set_read_timeout(Some(Duration::from_secs(5)))
-        .unwrap();
-    connection
+    endpoint::connect(endpoint.address()).unwrap()
 }
 
 fn send(connection: &mut Box<dyn Connection>, message: Value) {

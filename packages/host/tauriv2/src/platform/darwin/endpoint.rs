@@ -11,7 +11,6 @@ use std::net::Shutdown;
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 use super::super::{Connection, Listener};
 

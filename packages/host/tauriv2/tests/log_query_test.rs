@@ -94,9 +94,6 @@ fn with_endpoint<T>(config: &Path, body: impl FnOnce(&mut Box<dyn Connection>) -
     .unwrap();
     endpoint.publish("main").unwrap();
     let mut connection = endpoint::connect(endpoint.address()).unwrap();
-    connection
-        .set_read_timeout(Some(Duration::from_secs(5)))
-        .unwrap();
     let result = body(&mut connection);
     endpoint.stop();
     result
