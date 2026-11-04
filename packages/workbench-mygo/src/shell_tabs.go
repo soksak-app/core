@@ -72,7 +72,9 @@ type shellTabs struct {
 	sessions   *TabSessions
 	background *BackgroundSessions
 	sidecars   *HostSidecars
+	after      func(milliseconds int64, run func()) (cancel func())
 	started    bool
+	closed     bool
 	// shown tells that the host took the first shown project, and failed that it refused it.
 	shown, failed bool
 	waiting       func(err error)
@@ -92,6 +94,14 @@ func (s *Shell) connectTabs(ports TabPorts) {
 	tabs := &shellTabs{ports: ports, sidecars: NewHostSidecars(s.calls, s.options.Report)}
 	s.tabs = tabs
 	failed := func(text string) { s.fail(errors.New(text)) }
+	// A timer of these parts does not outlive the window, whose host calls end with it.
+	tabs.after = func(milliseconds int64, run func()) (cancel func()) {
+		return ports.After(milliseconds, func() {
+			if !tabs.closed {
+				run()
+			}
+		})
+	}
 	tabs.saver = NewMemorySaver(MemorySaverPorts{
 		Now: ports.Now, Enabled: ports.Enabled, Delay: ports.Delay,
 		Declaration: func(surface MemorySurface) string {
@@ -119,10 +129,10 @@ func (s *Shell) connectTabs(ports TabPorts) {
 		Failed:       failed,
 		StateChanged: ports.Surfaces.ReportState,
 		Emit:         ports.Emit,
-		After:        ports.After,
+		After:        tabs.after,
 	})
 	tabs.sessions = NewTabSessions(TabSessionPorts{Store: HostTabStore{s.calls}, Interaction: ports.Surfaces.Interaction, Tabs: ports.Surfaces.AttachedTabs,
-		Failed: failed, Emit: ports.Emit, After: ports.After})
+		Failed: failed, Emit: ports.Emit, After: tabs.after})
 	tabs.background = NewBackgroundSessions(BackgroundPorts{
 		Ready:  func() bool { return tabs.shown },
 		Failed: func() bool { return tabs.failed },
@@ -160,7 +170,7 @@ func (s *Shell) openTabs(next func()) {
 			return plugin != nil && plugin.Unload
 		},
 		Emit:  s.tabs.ports.Emit,
-		After: s.tabs.ports.After,
+		After: s.tabs.after,
 	}, func(states *TabStates, err error) {
 		if err != nil {
 			s.fail(err)
@@ -290,6 +300,14 @@ func (s *Shell) flushTabs() {
 	s.tabs.sessions.Flush(func() {})
 	if s.tabs.states != nil {
 		s.tabs.states.Flush(func() {})
+	}
+}
+
+// Closed ends these parts of a window that closed: it writes what is pending, and no timer of them runs after it.
+func (s *Shell) Closed() {
+	s.flushTabs()
+	if s.tabs != nil {
+		s.tabs.closed = true
 	}
 }
 

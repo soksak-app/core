@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"sync"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -83,7 +84,8 @@ func (a *App) Build(window host.Frontend) func(c *ui.Context) {
 	shell, err := NewShell(ShellOptions{Declared: declared, Calls: NewCalls(a.options.Table(window), a.options.Post),
 		Environment: a.options.Environment, Installed: a.options.Installed(),
 		Reload:  func() { routine.Go("workbench-reload", window.StartWorkbench) },
-		Element: func(id string) (uintptr, uintptr, bool) { return a.options.Element(window, id) }, Invalidate: painted.Invalidate, Elements: painted, Post: a.options.Post, Report: a.options.Report})
+		Element: func(id string) (uintptr, uintptr, bool) { return a.options.Element(window, id) }, Invalidate: painted.Invalidate, Elements: painted, Post: a.options.Post, Report: a.options.Report,
+		Tabs: a.tabPorts})
 	if err != nil {
 		panic(err) // The environment declaration is staged with the application, and its test holds its form.
 	}
@@ -91,6 +93,23 @@ func (a *App) Build(window host.Frontend) func(c *ui.Context) {
 	a.shells[window] = shell
 	a.mu.Unlock()
 	return shell.View
+}
+
+// After runs run once in a step of the main thread after milliseconds, and returns what cancels it. The cancel runs on the main
+// thread too, so a timer that fired and waits for its step does not run after it.
+func (a *App) After(milliseconds int64, run func()) (cancel func()) {
+	cancelled := false
+	timer := time.AfterFunc(time.Duration(milliseconds)*time.Millisecond, func() {
+		a.options.Post(func() {
+			if !cancelled {
+				run()
+			}
+		})
+	})
+	return func() {
+		cancelled = true
+		timer.Stop()
+	}
 }
 
 // Close ends the workbench of window.
@@ -101,7 +120,7 @@ func (a *App) Close(window host.Frontend) {
 	a.mu.Unlock()
 	if shell != nil {
 		shell.events.End()
-		a.options.Post(shell.flushTabs)
+		a.options.Post(shell.Closed)
 	}
 }
 
