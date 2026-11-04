@@ -38,8 +38,11 @@ type Declarations struct {
 	Statuses, Commands, Elements map[string]bool
 	// Shortcuts is the shortcut table.
 	Shortcuts []Shortcut
-	chrome    map[string]string
-	themes    []declaredTheme
+	// exposes holds the declarations under the keys of the declaration file, and params the parameter schema of each command.
+	exposes map[string][]map[string]any
+	params  map[string]any
+	chrome  map[string]string
+	themes  []declaredTheme
 }
 
 // declaredTheme is a theme of workbench.json.
@@ -106,11 +109,7 @@ func (d *Declarations) DefaultPalette() (Palette, error) {
 // Declared returns the declarations of the embedded copies.
 var Declared = sync.OnceValues(func() (*Declarations, error) {
 	var exposure struct {
-		Exposes struct {
-			Status   []struct{ Name string } `json:"status"`
-			Commands []struct{ Name string } `json:"commands"`
-			Dom      []struct{ Name string } `json:"dom"`
-		} `json:"exposes"`
+		Exposes map[string][]map[string]any `json:"exposes"`
 	}
 	if err := json.Unmarshal(exposureFile, &exposure); err != nil {
 		return nil, fmt.Errorf("exposure.json: %w", err)
@@ -128,15 +127,19 @@ var Declared = sync.OnceValues(func() (*Declarations, error) {
 	if err := json.Unmarshal(workbenchFile, &values); err != nil {
 		return nil, fmt.Errorf("workbench.json: %w", err)
 	}
-	names := func(entries []struct{ Name string }) map[string]bool {
+	names := func(entries []map[string]any) map[string]bool {
 		set := make(map[string]bool, len(entries))
 		for _, entry := range entries {
-			set[entry.Name] = true
+			set[entry["name"].(string)] = true
 		}
 		return set
 	}
+	params := make(map[string]any, len(exposure.Exposes["commands"]))
+	for _, entry := range exposure.Exposes["commands"] {
+		params[entry["name"].(string)] = entry["params"]
+	}
 	return &Declarations{
-		Statuses: names(exposure.Exposes.Status), Commands: names(exposure.Exposes.Commands), Elements: names(exposure.Exposes.Dom),
-		Shortcuts: shortcuts.Shortcuts, chrome: values.Chrome, themes: values.Themes,
+		Statuses: names(exposure.Exposes["status"]), Commands: names(exposure.Exposes["commands"]), Elements: names(exposure.Exposes["dom"]),
+		Shortcuts: shortcuts.Shortcuts, exposes: exposure.Exposes, params: params, chrome: values.Chrome, themes: values.Themes,
 	}, nil
 })

@@ -495,6 +495,8 @@ mygo는 version 0.7.4이며, tag의 이력은 2026-09-26에 시작한다[S25]. v
 
 workbench의 element tree(U4)가 binder audit, element 사각형, element action에 answer를 주므로, window check는 `endpoint.json`을 통해 세 application에 대해 실행된다. 단, 대상이 main page나 modal web view인 check는 제외한다.
 
+host는 요청을 [relay](exposure.ko.md#전달)의 event `exposure-request`로 workbench에 보내며, 이 event는 `Frontend.Emit`과 `Workbench.Emit`을 거쳐 workbench에 닿는다. `src/requests.go`의 `Requests`는 각 요청을 main thread의 한 step에서 `Registry.Answer`로 처리하고(눌린 element의 command도 이 thread에서 실행된다) 그 answer를 host call `exposureReply`로 돌려보낸다. watch 중인 status는 그 값을 `exposureChanged`로 보낸다. `Registry.Answer`는 page registry의 answer와 refusal을 같은 순서로 낸다. workbench는 첫 화면이 서면 `windowReady`를 호출하며, 그 전의 요청을 host는 준비되지 않은 main page에 대한 요청처럼 1003으로 거절한다.
+
 ### Native view
 
 - **View page와 document region**은 `native/darwin`(`sp_document_create`, document region)과 view contract를 바꾸지 않고 유지한다. window의 surface host들의 container는 window의 native view(U2) 안에 있으며, 이 native view는 Metal surface 아래에서 window의 content를 채운다; workbench는 각 surface를 native view element(U2)를 통해 보여주는데, 이 element는 surface 위에 구멍을 칠하고 workbench가 그 위에 그리는 곳의 cover를 계산하며, layout transaction은 surface host들의 frame을, 다른 host에서처럼 window의 content 좌표로, card를 그리는 frame의 Core Animation transaction 안에서 설정한다. plugin page는, library로 만든 page와 WebAssembly를 load하는 page를 포함해, view page 안에서 그대로 실행되는데, view page, 그 channel, view contract가 바뀌지 않기 때문이다. mygo host는 `ui.WebView`로 web view를 만들지 않는다: mygo는 각 web view를 자체 configuration과 delegate로 만들며 [S10][S14], view page에는 soksak scheme handler와 view channel의 script message handler를 갖춘 `native/darwin`의 configuration이 필요하다([`document_view.m`](../../native/darwin/src/document_view.m)).
