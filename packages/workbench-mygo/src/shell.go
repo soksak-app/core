@@ -124,6 +124,7 @@ type Shell struct {
 	active   string
 	plane    *layout.Grid
 	focused  string
+	held     *heldDivider
 	library  libraryState
 }
 

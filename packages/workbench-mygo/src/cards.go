@@ -38,6 +38,7 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 			}
 			s.drawCard(c, card.ID, data, rect, inset, originX, originY)
 		}
+		s.drawDividers(c, inset)
 	})
 }
 
