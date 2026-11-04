@@ -77,10 +77,22 @@ Native region bounds alignment는 명시적으로 시작한 `diagnostics.documen
 
 Drag evaluator는 공통 recording 증거를 검증한 뒤 geometry, source cadence 및 final-paint convergence를 독립적으로 판정한다. 한 criterion의 실패가 다른 criterion 평가를 중단하지 않는다. 성공 결과와 직렬화한 오류 모두 개별 결과와 측정값을 보존한다. 유효하지 않은 공통 증거는 통과 criterion 없이 명시적으로 실패한다. 이 보고 규칙은 geometry, cadence 또는 convergence 기준을 변경하지 않는다.
 
+### Section view
+
+view benchmark `e2e/benchmark/section-view.test.mjs`는 활성화되어 설치된 plugin의 각 section에 대해 (i), (ii), (iii), (iii-b), (v), (viii)을 plugin id 순서와 plugin의 `sections` 순서로 잰다. section view는 그 section만 담은 set을 보이는 terminal 카드의 card-left sidebar에서 잰다. view 시작 한 번은 `core.card.split`과 새 terminal tab으로 가장 높은 terminal 카드를 아래쪽으로 나누어 새 카드의 card-left sidebar가 그 section을 보이게 하는 일이고, view N개는 그런 카드 N개다. (ii)의 회수는 그 카드를 닫고 section view의 process group만 잰다. 회수 뒤에 section 카드 하나를 더 나눈다. (v)는 `core.grid.size`로 y 축에서 그 카드를 80 pt 높이고, (viii)은 그 카드의 위쪽 경계를 80 pt 아래로 drag했다가 되돌리므로, section view는 자기 카드의 높이를 따른다.
+
+section view의 plugin은 `diagnostics.json`([plugins](plugins.md#view-surfaces))에 세 항목을 선언하고, plugin의 모든 section view가 자기 표면에서 이를 제공한다:
+
+- command `<plugin>.view.frames {action}`. `start`는 section view에서 `@soksak/plugin-api/diagnostic-view-frames`의 `observeViewDocumentFrames`를 시작하고(그 frame은 이 module의 event `view.content_frame`이다), `{enabled: true, sourceClock, markerColor}`를 답한다. `sourceClock`은 [source-frame 시계 상관](#source-frame-시계-상관)의 anchor이고, `markerColor`는 0부터 255까지의 정수 세 개로 된 RGB 색 `[r, g, b]`이며 활성 theme의 card, background, border 색과 적어도 한 channel에서 4보다 크게 다르다. 그 답부터 `stop`까지 section view는 자기 document root를 `markerColor`로 칠하므로, benchmark는 캡처한 각 frame에서 view의 영역을 찾는다. `stop`은 observer를 멈추고 root를 `start` 전처럼 칠한 뒤 `{enabled: false}`를 답한다.
+- command `<plugin>.view.history`. section view의 session history 항목 수 `{length}`를 답한다. section view는 document region을 갖지 않으므로 benchmark는 그 region history를 세지 않으며, document region을 시작한 section view는 (ii)의 회수에서 `view <surface> has <n> started documents but reports 0 region history entries`로 실패한다.
+- status `<plugin>.view.ready {ready, content, language}`. `ready`는 section view가 처음 내용을 보이면 true다. `content`는 그 내용의 text이고 `language`는 `en-US`나 `ko-KR` 같은 그 text의 인식 언어이며, benchmark는 recording에서 그 text를 알아본다. status의 schema는 `content`와 `language`를 각각 `const` 문자열로 선언하므로, plugin의 모든 section view는 같은 text를 보인다. benchmark는 section view를 시작하기 전에 선언에서 두 값을 읽고, status가 이 두 값과 함께 `{ready: true}`이고 `<plugin>.view.history`가 `{length: 1}`을 답하면 section view가 준비된 것이다.
+
+benchmark는 모든 section view를 잰다. plugin이 세 항목을 선언하지 않은 section view는 `<plugin> section view <id> does not declare <plugin>.view.frames, <plugin>.view.history and <plugin>.view.ready in its diagnostics declaration`으로 실패한다. status schema에 `content`나 `language`, 또는 둘 다의 `const` 문자열이 없는 section view는 `<plugin> section view <id> declares <plugin>.view.ready without a const <field>`로 실패하며, `<field>`는 `content`, `language` 또는 `content and language`다. 올바른 `markerColor`가 없는 `start` 답은 observer를 멈추고 `<plugin> section view <id> trace start must declare a three-channel RGB paint marker color`로 실패한다.
+
 ## 규칙
 
 1. workbench 페이지에서는 plugin 코드를 실행하지 않는다.
-2. **Sidebar sections.** section 표면은 모든 view의 규칙을 따르는 view 표면이다. 규칙 4의 view channel, 규칙 5의 재시작, 규칙 6의 표시, 규칙 7의 입력, 규칙 10의 unload가 그것이다. section이 보여 주는 값은 탭 view가 받는 것과 같이 view call과 view event로 자기 view에 닿으며, section의 어떤 값도 그리기 위해 workbench를 거치지 않는다.
+2. **Sidebar sections.** section 표면은 모든 view의 규칙을 따르는 view 표면이다. 규칙 4의 view channel, 규칙 5의 재시작, 규칙 6의 표시, 규칙 7의 입력, 규칙 10의 unload가 그것이다. section이 보여 주는 값은 탭 view가 받는 것과 같이 view call과 view event로 자기 view에 닿으며, section의 어떤 값도 그리기 위해 workbench를 거치지 않는다. section view는 탭 view와 같이 통과값을 만족하며, [section view](#section-view)의 선언으로 잰다.
 3. **경계를 넘는 호출.**
    - 명령은 [exposure](exposure.ko.md)에 적힌 대로 `timeout`을 선언한다(최대 600000 ms, 없으면 10초). timer는 살아 있는 상대가 명령에 답하지 않는 경우에만 남긴다. 느린 명령 답을 알려 주는 event가 없기 때문이다. `host.trace.view.unresponsive`는 WebKit의 응답성 검사에 답하지 않는 view 프로세스를 알리며, 명령 답이 아니므로 timer를 대신하지 않는다. 기한을 넘기면 호출을 -32000과 `command <name> did not reply within <ms>ms`로 거부한다. 이 오류는 [exposure](exposure.ko.md)의 명령 `timeout` 항목이 적는 것이며, 이 설계는 메시지를 바꾸지 않는다. `host.call.timeout {plugin, command}`를 쓰고 `losses.timeouts`를 센다.
    - view는 메인 page의 요청에 자기 command로 답할 때 `{sok: 1, reply: id, result}` 또는 `{sok: 1, reply: id, error}`를 보내며, 호스트는 이를 `view-reply`로 전달한다([native surface](native-surfaces.ko.md#view-표면), view command). 메인 page는 그 요청에 command가 선언한 제한 시간을 적용하며, 제한 시간 뒤의 응답은 늦은 응답으로 버린다.
