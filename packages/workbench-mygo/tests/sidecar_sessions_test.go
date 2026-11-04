@@ -3,6 +3,7 @@ package workbench_test
 import (
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -100,6 +101,33 @@ func TestAFailedRetainIsShown(t *testing.T) {
 		t.Fatal(err)
 	}
 	if text, ok := shown.(*string); !ok || text == nil || !strings.Contains(*text, "retain was not answered") {
+		t.Fatalf("the status core.page.error is %v", shown)
+	}
+}
+
+func TestTheStartRemovesTheStoredEntriesOfSurfacesInNoLayout(t *testing.T) {
+	stored := &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"))},
+		sessionTabs: []string{"spc-aaaaaa/left/files.tree", "spc-gone/left/files.tree", "tab-aaaaaa", "tab-gone"},
+		tabState:    map[string]any{"format": 1, "tabs": map[string]any{"tab-aaaaaa": map[string]any{"kept": true}, "tab-gone": map[string]any{"kept": true}}}}
+	f := newTabShell(t, stored)
+	slices.Sort(f.sessionPuts)
+	equal(t, f.sessionPuts, []string{"spc-gone/left/files.tree", "tab-gone"})
+	f.timers.tick(1000)
+	f.settle()
+	equal(t, f.keptPuts, []string{`{"entry":null,"kind":"tabStatePut","tab":"tab-gone"}`})
+}
+
+func TestAStoredLayoutThatCannotBeReadKeepsTheStoredEntries(t *testing.T) {
+	broken := storedProject(tab("tab-aaaaaa", "notes"))
+	broken["spaces"].([]map[string]any)[0]["layout"] = map[string]any{"state": 5}
+	stored := &storedHost{projects: []map[string]any{broken}, sessionTabs: []string{"tab-gone"}, startFails: true}
+	f := newTabShell(t, stored)
+	equal(t, f.sessionPuts, []string(nil))
+	shown, err := f.shell.Registry().Read("core.page.error")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text, ok := shown.(*string); !ok || text == nil || !strings.Contains(*text, "space spc-aaaaaa") {
 		t.Fatalf("the status core.page.error is %v", shown)
 	}
 }

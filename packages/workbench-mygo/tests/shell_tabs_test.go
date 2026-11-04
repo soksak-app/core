@@ -75,6 +75,8 @@ type tabShell struct {
 	events   *stateEvents
 	failed   []string
 	keptPuts []string
+	// sessionPuts holds the tab of each write of the stored sessions.
+	sessionPuts []string
 }
 
 func newTabShell(t *testing.T, stored *storedHost) *tabShell {
@@ -102,15 +104,16 @@ func newTabShellWithState(t *testing.T, stored *storedHost, refused error) *tabS
 		}
 		switch request.Kind {
 		case "tabState":
-			return nil, refused
+			return stored.tabState, refused
 		case "tabSession":
 			return nil, nil
 		case "tabSessions":
-			return []string{}, nil
+			return append([]string{}, stored.sessionTabs...), nil
 		case "tabStatePut":
 			f.keptPuts = append(f.keptPuts, string(argument))
 			return 1, nil
 		case "tabSessionPut":
+			f.sessionPuts = append(f.sessionPuts, request.Tab)
 			return 1, nil
 		}
 		return base(ctx, argument)
@@ -160,7 +163,7 @@ func newTabShellWithState(t *testing.T, stored *storedHost, refused error) *tabS
 	f.shell = shell
 	f.tester = ui.NewTester(shell.View, 1200, 800)
 	shell.Start()
-	if refused != nil {
+	if refused != nil || stored.startFails {
 		f.pending.drain(t)
 		f.tester.Frame()
 		return f

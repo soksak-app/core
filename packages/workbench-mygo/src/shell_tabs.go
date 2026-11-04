@@ -174,10 +174,30 @@ func (s *Shell) openTabs(next func()) {
 	}, func(states *TabStates, err error) {
 		if err != nil {
 			s.fail(err)
-		} else {
-			s.tabs.states = states
+			next()
+			return
 		}
+		s.tabs.states = states
+		s.reconcileTabs(next)
+	})
+}
+
+// reconcileTabs removes the stored entries of surfaces in no layout. A stored layout that cannot be read leaves the tab ids unknown, so
+// the stores keep every entry and the error is shown.
+func (s *Shell) reconcileTabs(next func()) {
+	kept, err := s.storedSurfaceKept()
+	if err != nil {
+		s.fail(err)
 		next()
+		return
+	}
+	s.tabs.states.Reconcile(kept, func() {
+		s.tabs.sessions.Reconcile(kept, func(err error) {
+			if err != nil {
+				s.fail(err)
+			}
+			next()
+		})
 	})
 }
 

@@ -3,6 +3,7 @@ package workbench
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
@@ -45,6 +46,49 @@ func (s *Shell) layoutSurfaces() ([]retainedSurface, error) {
 		}
 	}
 	return surfaces, nil
+}
+
+// storedSurfaceKept returns whether a stored entry belongs to a surface that a layout holds: a tab of a layout, a section of a fixed
+// sidebar of a space, or a section of a card of a space, whose sidebar is `<card>:<side>`.
+func (s *Shell) storedSurfaceKept() (func(id string) bool, error) {
+	surfaces, err := s.layoutSurfaces()
+	if err != nil {
+		return nil, err
+	}
+	tabs := map[string]bool{}
+	for _, item := range surfaces {
+		tabs[item.Surface] = true
+	}
+	spaces := map[string]map[string]bool{}
+	for i := range s.projects {
+		for _, space := range s.projects[i].Spaces {
+			var stored storedLayout
+			if err := json.Unmarshal(space.Layout, &stored); err != nil {
+				return nil, fmt.Errorf("space %s: %w", space.ID, err)
+			}
+			cards := map[string]bool{}
+			for _, card := range stored.State.Cards {
+				cards[card.ID] = true
+			}
+			spaces[space.ID] = cards
+		}
+	}
+	return func(id string) bool {
+		if tabs[id] {
+			return true
+		}
+		parts := strings.Split(id, "/")
+		cards, known := spaces[parts[0]]
+		if !known || len(parts) < 2 {
+			return false
+		}
+		sidebar := parts[1]
+		if sidebar == "left" || sidebar == "right" {
+			return true
+		}
+		colon := strings.LastIndex(sidebar, ":")
+		return colon > 0 && cards[sidebar[:colon]]
+	}, nil
 }
 
 // retainSessions makes the persistent sidecar services close the sessions of surfaces that no layout holds. A layout that does not

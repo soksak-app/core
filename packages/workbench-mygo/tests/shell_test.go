@@ -31,6 +31,11 @@ type storedHost struct {
 	extra map[string]workbench.HostCall
 	calls []string
 	shown []any
+	// tabState is the document of the tab state store, and sessionTabs the tabs with a stored session.
+	tabState    any
+	sessionTabs []string
+	// startFails tells that the start of the shell shows an error, so the fixture does not audit it.
+	startFails bool
 	// retains holds the argument of each sidecarsRetain call.
 	retains []json.RawMessage
 	failing map[string]error
