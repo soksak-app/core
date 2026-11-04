@@ -570,6 +570,9 @@ static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
     [NSApp finishLaunching];
     events = [NSMutableArray new];
+    // The host gives the boot identifier of its run. Without it a region assigns no correlation identifier, opens no input
+    // transaction and reports each callback alone, so the checks below would read no committed text.
+    check(sp_event_set_boot("native-ime"), @"the boot identifier of the run is accepted");
 
     if (!previousSource) {
         fprintf(stderr, "FAIL: the selected input source could not be read\n");
