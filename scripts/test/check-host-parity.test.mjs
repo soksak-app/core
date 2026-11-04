@@ -21,7 +21,6 @@ const sources = () => ({
   endpointSpec: endpointFixture,
   tauriv2DeclarationSource: '{"settings": {"commonOnly": ["projectOpening", "textSize"]}}',
   wailsv3DeclarationSource: '{"settings": {"commonOnly": ["projectOpening", "textSize"]}}',
-  browserStorageSource: 'const COMMON_ONLY = Object.freeze(["projectOpening", "textSize"]);',
   workbenchDeclarationSource: '{"settings": {"commonOnly": ["projectOpening", "textSize"]}}',
   tauriv2PlatformSource: rustPlatformFixture,
   wailsv3PlatformSource: goPlatformFixture,
@@ -232,22 +231,20 @@ test("rustHandlers reads a command that is generic over the runtime", { timeout:
   assert.deepEqual([...rustHandlers(bindings)], ["plugins_run", "release"]);
 });
 
-test("a common-only key that the workbench refuses and a host or the browser runtime accepts fails", { timeout: 1000 }, () => {
+test("a common-only key that the workbench refuses and a host accepts fails", { timeout: 1000 }, () => {
   const changed = { ...sources(), workbenchDeclarationSource: '{"settings": {"commonOnly": ["projectOpening", "textSize", "memorySaver"]}}' };
   assert.deepEqual(auditHostParity(changed), [
     'tauriv2 common-only keys ["projectOpening","textSize"] differ from the common-only keys of the workbench ["memorySaver","projectOpening","textSize"]',
     'wailsv3 common-only keys ["projectOpening","textSize"] differ from the common-only keys of the workbench ["memorySaver","projectOpening","textSize"]',
-    'browser common-only keys ["projectOpening","textSize"] differ from the common-only keys of the workbench ["memorySaver","projectOpening","textSize"]',
   ]);
 });
 
-test("the common-only keys of the hosts, the browser runtime and the workbench are read from their sources", { timeout: 1000 }, async () => {
+test("the common-only keys of the hosts and the workbench are read from their sources", { timeout: 1000 }, async () => {
   const { readFileSync } = await import("node:fs");
   const read = (path) => readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
   const keys = commonOnlyKeys({
     tauriv2DeclarationSource: read("packages/host/rust/src/workbench.json"),
     wailsv3DeclarationSource: read("packages/host/go/src/workbench.json"),
-    browserStorageSource: read("apps/browser/runtime/browser-storage.js"),
     workbenchDeclarationSource: read("packages/workbench/workbench.json"),
   });
   assert.deepEqual(keys.workbench, ["projectOpening", "textSize", "memorySaver", "memorySaverDelay"]);
