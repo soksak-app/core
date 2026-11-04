@@ -32,7 +32,8 @@
 // diagnostics.performance of the trace state of the CPU interval (true or false), the classes of the log policy in force, and the content
 // size of the window of the state, read before the first CPU reading. One output holds the keys of one trace state, the state of its
 // measured interval: under --step pointer, --trace 0|1 writes the keys of the first move except hitTestP90Ms, and --trace frame-records
-// writes hitTestP90Ms alone, from the repeated move in that state. The keys, which B3_MEASUREMENTS lists, end in their unit:
+// writes hitTestP90Ms alone, from the repeated move in that state. The keys, which B3_MEASUREMENTS lists for each trace state, end in
+// their unit:
 //   hostCpuSeconds, applicationCpuSeconds,       CPU seconds over the interval of the host, the application without its sidecars,
 //   sidecarCpuSeconds                            and the sidecars
 //   hostFootprintKb, applicationFootprintKb,     footprints in KB (1,024 bytes) read before the interval
@@ -632,12 +633,18 @@ function formatReport({ options, context, measurement, gesture, faultLines }) {
   return sections.join("\n\n");
 }
 
-/** The keys of the measurements of a B3 record of make app-usage; a record holds a subset of them (the header states when each is present). */
-export const B3_MEASUREMENTS = Object.freeze([
+/** The keys of the B3 output of the trace states 0 and 1; an output holds a subset of them (the header states when each is present). */
+const RUN_MEASUREMENTS = Object.freeze([
   "hostCpuSeconds", "applicationCpuSeconds", "sidecarCpuSeconds", "hostFootprintKb", "applicationFootprintKb", "sidecarFootprintKb",
   "applicationFootprintAfterKb", "applicationPeakFootprintKb", "webKitProcesses", "webContentProcesses", "frames", "commandBuffers",
-  "errorLines", "hitTestP90Ms",
+  "errorLines",
 ]);
+
+/**
+ * The keys of the B3 output of make app-usage for each trace state that TRACE takes: one output holds the keys of one trace state, and
+ * the trace state of the frame records (FRAME_RECORDS, with --step pointer) gives hitTestP90Ms alone.
+ */
+export const B3_MEASUREMENTS = Object.freeze({ 0: RUN_MEASUREMENTS, 1: RUN_MEASUREMENTS, [FRAME_RECORDS]: Object.freeze(["hitTestP90Ms"]) });
 
 /** The bytes of a KB, the unit of the footprints of a B3 record. */
 const KB = 1024;

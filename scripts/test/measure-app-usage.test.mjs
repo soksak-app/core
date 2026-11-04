@@ -830,17 +830,16 @@ test("the processes of the windows of an application are its listing with the pa
   });
 });
 
-test("the B3 keys of app-usage end in their unit, and a measurement with every figure holds every key", () => {
-  assert.deepEqual(B3_MEASUREMENTS, [
+test("the B3 keys of app-usage end in their unit, are listed for each trace state, and a measurement with every figure holds every key of TRACE 0 and 1", () => {
+  const RUN = [
     "hostCpuSeconds", "applicationCpuSeconds", "sidecarCpuSeconds", "hostFootprintKb", "applicationFootprintKb", "sidecarFootprintKb",
     "applicationFootprintAfterKb", "applicationPeakFootprintKb", "webKitProcesses", "webContentProcesses", "frames", "commandBuffers",
-    "errorLines", "hitTestP90Ms",
-  ]);
-  assert.ok(Object.isFrozen(B3_MEASUREMENTS));
-  const measured = usageMeasurements({
-    app: measuredApp({ after: true }), marks: marksOfTwo(), faultLines: 1, gesture: { window: "w1", frameRecords: 4, pairs: 4, p90Ms: 6, framesChange: 4 },
-  });
-  assert.deepEqual(Object.keys(measured).toSorted(), B3_MEASUREMENTS.toSorted());
+    "errorLines",
+  ];
+  assert.deepEqual(B3_MEASUREMENTS, { 0: RUN, 1: RUN, "frame-records": ["hitTestP90Ms"] });
+  assert.ok(Object.isFrozen(B3_MEASUREMENTS) && Object.values(B3_MEASUREMENTS).every(Object.isFrozen));
+  const measured = usageMeasurements({ app: measuredApp({ after: true }), marks: marksOfTwo(), faultLines: 1, gesture: null });
+  assert.deepEqual(Object.keys(measured).toSorted(), B3_MEASUREMENTS[0].toSorted());
 });
 
 /** The classes of the log policy in force of a B3 test: the default policy with the class frame at debug. */
@@ -858,10 +857,12 @@ test("a pointer output holds the keys of one trace state: the cpu and footprint 
   for (const trace of [0, 1]) {
     const output = usageOutput({ options: { trace, step: "pointer" }, measurement, gesture });
     assert.equal("hitTestP90Ms" in output.measurements, false);
+    assert.deepEqual(Object.keys(output.measurements).filter((key) => !B3_MEASUREMENTS[trace].includes(key)), []);
     assert.equal(output.measurements.applicationFootprintAfterKb, 152 * 1024);
     assert.equal(output.conditions.traceState, trace === 1);
   }
   const records = usageOutput({ options: { trace: "frame-records", step: "pointer" }, measurement, gesture });
+  assert.deepEqual(Object.keys(records.measurements), B3_MEASUREMENTS["frame-records"]);
   assert.deepEqual(records, {
     measurements: { hitTestP90Ms: 6 },
     conditions: { refreshRate: 120, backingScale: 2, traceState: false, logPolicy: POLICY, window: { width: 1200, height: 760 } },
