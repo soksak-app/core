@@ -232,7 +232,7 @@ func (s *Shell) showThen(id string, done func()) {
 	s.active, s.browsing = id, false
 	s.options.Located(id)
 	s.errors.Hide(workbenchErrorPlace)
-	if err := s.beginSettings(); err != nil {
+	if err := s.beginSettings(s.settings.Common()); err != nil {
 		s.fail(err)
 	}
 	s.calls.Call("projectShown", map[string]any{"project": map[string]string{"id": id, "root": project.Root, "title": project.Title}},

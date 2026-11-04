@@ -532,3 +532,29 @@ func TestOpeningTheCardTwiceKeepsOneCard(t *testing.T) {
 		t.Fatalf("nav %q", f.modal().keys("core.settings-modal.nav"))
 	}
 }
+
+func TestACommonSettingOutlivesTheOpenOfAProject(t *testing.T) {
+	f := newShell(t, acme())
+	f.run("core.settings.set", map[string]any{"patch": map[string]any{"memorySaverDelay": 7}, "scope": "common"})
+	f.run("core.library.form.open", map[string]string{"mode": "open"})
+	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
+	f.run("core.library.form.submit", nil)
+	f.settle()
+	value, err := f.shell.Registry().Read("core.settings")
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var status struct {
+		Values map[string]any `json:"values"`
+	}
+	if err := json.Unmarshal(encoded, &status); err != nil {
+		t.Fatal(err)
+	}
+	if status.Values["memorySaverDelay"] != float64(7) {
+		t.Fatalf("the setting is %v", status.Values["memorySaverDelay"])
+	}
+}

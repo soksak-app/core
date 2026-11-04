@@ -276,6 +276,9 @@ func (s *SettingsStore) effectiveValue(common, overrides map[string]any, key str
 // Project returns the project that project changes apply to.
 func (s *SettingsStore) Project() string { return s.project }
 
+// Common returns the common settings as they stand now.
+func (s *SettingsStore) Common() map[string]any { return s.common }
+
 // Value returns the effective value of key.
 func (s *SettingsStore) Value(key string) any { return s.effectiveValue(s.common, s.overrides, key) }
 

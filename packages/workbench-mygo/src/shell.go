@@ -183,7 +183,6 @@ type Shell struct {
 	settings       *SettingsStore
 	settingsWindow settingsWindow
 	debugView      debugViewState
-	commonSettings map[string]any
 	menuLanguage   string
 	plugins        []LoadedPlugin
 
@@ -407,8 +406,7 @@ func (s *Shell) adopt(value any) error {
 		projects = append(projects, record)
 	}
 	s.projects = projects
-	s.commonSettings = snapshot.Common
-	return s.beginSettings()
+	return s.beginSettings(snapshot.Common)
 }
 
 // decode reads the answer of a host call, which is the value of the handler or its JSON text.
