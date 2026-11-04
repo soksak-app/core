@@ -187,6 +187,8 @@ Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`
 
 `make hosts-check`는 `make windows-build-check`를 실행하며, 이 target은 Go language host library와 Wails framework adapter의 source를 기본 build와 diagnostics build에서 `windows/arm64`용으로 vet한다.
 
+`make hosts-check`는 `make host-debug-check`도 실행하며, 이 target은 두 host와 두 앱의 source와 test를 debug 앱의 feature와 tag로 macOS용으로 컴파일한다. `make tauriv2-build`, `make wailsv3-build`, 이 check는 그 구성을 Makefile의 정의 하나에서 읽는다.
+
 ## Wails host의 main thread
 
 Wails host의 main thread에서는 host에서도 framework에서도 Go code가 실행되지 않는다. Go code는 main thread가 아닌 thread에 고정된 worker goroutine에서 실행된다. native code가 Go를 부르는 각 callback(delegate method, script message, menu action, main-thread task)은 C 함수다. callback은 인자의 record를 쓰고 worker를 깨운 뒤 C에서 기다린다. 기다리는 동안 main thread는 worker가 그 단계를 위해 전달한 C 호출만 실행하고, callback은 worker가 쓴 답을 돌려준다. Go code가 시작하는 단계(`application.InvokeSync`, `EnqueueUI`)는 같은 방식으로 기다리는 C 함수를 main thread에 dispatch하고, 단계를 시작한 goroutine이 그 단계의 C 호출을 전달한다. 따라서 Wails host의 main-thread 단계는 main thread가 callback 하나 또는 시작된 단계 하나를 위해 C에서 기다리는 구간이다. host의 registry 상태를 읽고 native code를 부르는 단계는 한 main-thread 단계로 남고, 각 delegate 답은 동기로 남는다. nested run loop에 들어가는 전달 호출(modal dialog, menu, drag)은 다른 callback을 전달할 수 있다. worker는 전달 호출을 기다리는 동안 그 record를 받으므로, nested 단계는 바깥 단계 안에서 끝난다. script message나 commit 알림처럼 답이 필요 없는 callback은 record를 쓴 뒤 돌아가고, worker는 그 record를 그 webview의 goroutine에 넘긴다. 한 webview의 record는 main thread가 전달한 순서대로 처리되고, 다른 webview의 record는 그것을 기다리지 않는다. stall heartbeat에는 main thread의 C 함수가 답하므로, stall 측정은 계속 main thread를 측정한다. main thread는 application run loop가 시작되기 전에 비동기 signal을 막으므로, Go signal handler와 그 signal stack은 main thread에서 실행되지 않는다. main thread의 동기 fault는 막을 수 없고 프로세스를 끝낸다.
@@ -376,7 +378,7 @@ macOS에서 각 애플리케이션은 애플리케이션 번들에서 실행된�
 | `make rust-clippy-check` | Rust workspace의 모든 package와 test를 진단 feature가 있을 때와 없을 때 `-D warnings`로 clippy 검사한다. `make native-test`가 실행한다 |
 | `make native-test` | `make -C native/darwin test`, `packages/host/go`와 `packages/host/wailsv3`의 `go test`, `cargo test -p soksak-host -p soksak-host-tauriv2`를 실행한다. 호스트 검사는 진단 빌드와 일반 빌드로 각각 실행한다. 각 sidecar repository는 자기 test를 실행한다 |
 | `make platforms` | `scripts/check-platforms.mjs`를 실행한다 |
-| `make hosts-check` | `scripts/check-hosts.mjs`를 실행한다 |
+| `make hosts-check` | `make windows-build-check`, `make host-debug-check`, `scripts/check-hosts.mjs`를 실행한다 |
 
 macOS 애플리케이션 bundle build target 네 개는 `Contents`를 교체하기 전에 대상 bundle을 확인한다. 해당 bundle에서 process가 실행 중이면 preparation은 bundle을 변경하기 전에 process PID와 정확한 bundle 경로를 오류로 보고한다. 의도한 검증 checkout에서 build하고 실행 중인 애플리케이션이 사용하는 bundle을 build 대상으로 지정하지 않는다.
 

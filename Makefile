@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: push-check events-check census-check failures-check benchmark-rust benchmark-go preflight prepare build verify browser-example-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls e2e-terminal-sidebar-current e2e-terminal-focus-current e2e-shutdown e2e-benchmark-view-drag e2e-benchmark-resize-catch-up e2e-benchmark-idle-tab e2e-benchmark-split-load e2e-repeat e2e-b3 b3-judge exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat temp-audit page-memory object-counts host-calls app-usage terminal-redraw-usage trace-share host-allocations app-update-check
+.PHONY: push-check events-check census-check failures-check benchmark-rust benchmark-go preflight prepare build verify browser-example-check docs-check records-check commits-check hooks boundaries platforms windows-build-check host-debug-check hosts-check e2e-check e2e-registry-tls e2e-terminal-sidebar-current e2e-terminal-focus-current e2e-shutdown e2e-benchmark-view-drag e2e-benchmark-resize-catch-up e2e-benchmark-idle-tab e2e-benchmark-split-load e2e-repeat e2e-b3 b3-judge exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat temp-audit page-memory object-counts host-calls app-usage terminal-redraw-usage trace-share host-allocations app-update-check
 
 docs-check:
 	@node scripts/check-docs.mjs
@@ -266,8 +266,22 @@ windows-build-check:
 	@cd packages/host/wailsv3 && GOOS=windows GOARCH=$(WINDOWS_GOARCH) go vet -tags diagnostics ./src/...
 	@echo "PASS: Wails diagnostics framework adapter for windows/$(WINDOWS_GOARCH)"
 
+# Compiles the sources and the tests of the two native hosts and the two native apps for macOS in the configuration of the debug apps.
+# A source behind a diagnostic feature or tag fails here and not in the build of an app. The core frontend is staged because the apps
+# include it at compile time.
+host-debug-check: native-darwin frontend-wailsv3-core frontend-tauriv2-core
+	@echo "START: Rust hosts cargo check --tests --features $(TAURI_DEBUG_FEATURES)"
+	@$(CARGO_ENV) cargo check --locked --tests -p soksak-sok -p soksak-host -p soksak-host-tauriv2 -p soksak-tauriv2 --features $(TAURI_DEBUG_FEATURES)
+	@echo "PASS: Rust hosts in the debug configuration"
+	@echo "START: Go hosts go vet -tags \"$(WAILS_DEBUG_TAGS)\""
+	@$(GO_ENV) go vet -C apps/wailsv3 -tags "$(WAILS_DEBUG_TAGS)" ./src/...
+	@$(GO_ENV) go vet -C packages/host/go -tags "$(WAILS_DEBUG_TAGS)" ./src/...
+	@$(GO_ENV) go vet -C packages/host/wailsv3 -tags "$(WAILS_DEBUG_TAGS)" ./src/...
+	@$(GO_ENV) go vet -C packages/sok/go -tags "$(WAILS_DEBUG_TAGS)" ./src/...
+	@echo "PASS: Go hosts in the debug configuration"
+
 # Checks that the file structures of the two native hosts and the two native apps differ only in the allowed ways.
-hosts-check: windows-build-check
+hosts-check: windows-build-check host-debug-check
 	@node scripts/check-hosts.mjs
 
 preflight:
@@ -295,6 +309,9 @@ verify: prepare docs-check exposure-check parity-check host-parity-check
 # feature diagnostics). While the declared release version is 0.0.x, release is a diagnostic build too, so a defect on a
 # user's machine is recorded when it appears (AGENTS.md); a later version series builds release without diagnostics.
 COMMA := ,
+# The build configuration of the debug apps. host-debug-check compiles the same configuration.
+TAURI_DEBUG_FEATURES = diagnostics,dev
+WAILS_DEBUG_TAGS     = diagnostics dev
 # The declared core release candidate is the RELEASE constant of scripts/check-versions.mjs.
 DIAGNOSTIC_RELEASE := $(filter 0.0.%,$(shell sed -n 's/^export const RELEASE = "\(.*\)";$$/\1/p' scripts/check-versions.mjs))
 .PHONY: native-darwin native-darwin-fetch registry registry-install install-plugins browser-frontend browser-example frontend-wailsv3 frontend-tauriv2 frontend-wailsv3-core frontend-tauriv2-core host-test-wailsv3 host-test-tauriv2 host-test-mygo host-contract-check release-check-wailsv3 release-check-tauriv2 rust-format-check rust-clippy-check go-format-check \
@@ -347,8 +364,8 @@ LSREGISTER = /System/Library/Frameworks/CoreServices.framework/Frameworks/Launch
 bundle-sign = codesign --sign - --force --deep $(1) && $(LSREGISTER) -f $(1)
 
 # Builds the command line sok (docs/spec/cli.md) and places it beside the executables of the bundle. The first argument is the bundle and the second is the profile.
-sok-wailsv3 = go build -C packages/sok/go $(if $(filter release,$(2)),-trimpath -ldflags "-s -w") $(if $(filter debug,$(2)),-tags "diagnostics dev",$(if $(DIAGNOSTIC_RELEASE),-tags diagnostics)) -o ../../../$(1)/Contents/MacOS/sok ./src/cmd/sok
-sok-tauriv2 = $(CARGO_ENV) cargo build --locked -p soksak-sok $(if $(filter release,$(2)),--release) $(if $(filter debug,$(2)),--features diagnostics$(COMMA)dev,$(if $(DIAGNOSTIC_RELEASE),--features diagnostics)) && cp target/$(2)/sok $(1)/Contents/MacOS/sok
+sok-wailsv3 = go build -C packages/sok/go $(if $(filter release,$(2)),-trimpath -ldflags "-s -w") $(if $(filter debug,$(2)),-tags "$(WAILS_DEBUG_TAGS)",$(if $(DIAGNOSTIC_RELEASE),-tags diagnostics)) -o ../../../$(1)/Contents/MacOS/sok ./src/cmd/sok
+sok-tauriv2 = $(CARGO_ENV) cargo build --locked -p soksak-sok $(if $(filter release,$(2)),--release) $(if $(filter debug,$(2)),--features $(TAURI_DEBUG_FEATURES),$(if $(DIAGNOSTIC_RELEASE),--features diagnostics)) && cp target/$(2)/sok $(1)/Contents/MacOS/sok
 
 native-darwin:
 	@$(MAKE) -C native/darwin
@@ -422,7 +439,7 @@ tauriv2-build: native-darwin frontend-tauriv2
 	@$(call bundle-info,$(TAURI_DEBUG_BUNDLE),tauriv2)
 	@$(call bundle-dev,$(TAURI_DEBUG_BUNDLE),tauriv2)
 	@touch apps/tauriv2/src/main.rs
-	@$(CARGO_ENV) cargo build --locked -p soksak-tauriv2 --features diagnostics,dev
+	@$(CARGO_ENV) cargo build --locked -p soksak-tauriv2 --features $(TAURI_DEBUG_FEATURES)
 	@cp target/debug/soksak-tauriv2 $(TAURI_DEBUG)
 	@$(call sok-tauriv2,$(TAURI_DEBUG_BUNDLE),debug)
 	@$(call bundle-sign,$(TAURI_DEBUG_BUNDLE))
@@ -439,7 +456,7 @@ tauriv2-build-release: native-darwin build
 wailsv3-build: native-darwin frontend-wailsv3
 	@$(call bundle-info,$(WAILS_DEBUG_BUNDLE),wailsv3)
 	@$(call bundle-dev,$(WAILS_DEBUG_BUNDLE),wailsv3)
-	@$(GO_ENV) go build -C apps/wailsv3 -tags "diagnostics dev" -ldflags "$(GO_LINK)" -o ../../$(WAILS_DEBUG) ./src
+	@$(GO_ENV) go build -C apps/wailsv3 -tags "$(WAILS_DEBUG_TAGS)" -ldflags "$(GO_LINK)" -o ../../$(WAILS_DEBUG) ./src
 	@$(call sok-wailsv3,$(WAILS_DEBUG_BUNDLE),debug)
 	@$(call bundle-sign,$(WAILS_DEBUG_BUNDLE))
 

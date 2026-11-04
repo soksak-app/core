@@ -36,7 +36,7 @@ const lane = (capability, language, implementation, tests, options = {}) => ({
 
 // The connections of existing components are also kept as a file list. They are not interpreted as behavior evidence.
 const MATRIX = [
-  lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/rust-repeat.test.mjs", "scripts/test/windows-build-check.test.mjs", "scripts/test/e2e-registry-tls.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/rust-repeat.test.mjs", "scripts/test/windows-build-check.test.mjs", "scripts/test/host-debug-check.test.mjs", "scripts/test/e2e-registry-tls.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("macOS application bundle preparation", "js-ts", ["scripts/platform/darwin/prepare-app-bundle.mjs"], ["scripts/test/platform/darwin/bundle-preparation.test.mjs"], { sharedTests: true }),
   lane("CI workflows", "workflow", [".github/workflows/*.yml"], ["scripts/test/workflows.test.mjs", "scripts/test/test-kinds.test.mjs"], { testLanguage: "js-ts" }),
   lane("CI toolchain setup actions", "workflow", [".github/actions/setup-*/action.yml"], ["scripts/test/workflow-setup.test.mjs"], { testLanguage: "js-ts" }),
@@ -694,6 +694,19 @@ const FEATURE_LINKS = [
       { file: "packages/host/wailsv3/tests/platform/darwin/main_thread_stack_test.go", id: "TestTheMainThreadRunsNoCodeOutsideItsOwnStack" },
     ],
     expected: "On macOS, the start of the Go language host library fails before its first native call and names each main-thread function that the framework adapter did not install.",
+    levels: ["unit"],
+  },
+  {
+    id: "F532",
+    implementation: [
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "crate::event_record::quit_with_cause(\"update\", || host.0.quit());" },
+      { file: "Makefile", symbol: "hosts-check: windows-build-check host-debug-check" },
+    ],
+    tests: [
+      { file: "scripts/test/host-debug-check.test.mjs", id: "the debug check compiles the features and tags of the debug apps" },
+      { file: "scripts/test/host-debug-check.test.mjs", id: "hosts-check runs the debug check" },
+    ],
+    expected: "make hosts-check compiles the sources and the tests of the two hosts and the two apps with the features and the tags of the debug apps, and the update step of the Rust diagnostics ends the application through quit.",
     levels: ["unit"],
   },
   {
