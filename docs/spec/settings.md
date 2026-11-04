@@ -108,7 +108,7 @@ The workbench defines this control set instead of rendering the window with the 
 
 ## Values
 
-Each core setting accepts one form. Reading the settings files and every change check each value against it; a value of another form fails with `Invalid setting <key>: <value>` and the reason. A load reports the error and replaces nothing, and a change fails with -32602 (invalid params) and changes nothing. The controls of 일반 offer the same choices and ranges.
+Each core setting accepts one form. Reading the settings files and every change check each value against it; a value of another form fails with `Invalid setting <key>: <value>` and the reason. A load reports the error and replaces nothing, and a change fails with -32602 (invalid params) and changes nothing. `core.settings.change` takes a value of the form of its setting, or the string of a control, which becomes the boolean or the number that the setting declares; it converts no other input, so a value of another type is refused. The controls of 일반 offer the same choices and ranges.
 
 | Key | Form |
 |---|---|

@@ -133,6 +133,9 @@ const RANGES = { ...LAYOUT_RANGES, ...SHAPE_RANGES };
 /* The core settings that take a boolean. */
 const SWITCHES = declaration.settings.switches;
 
+/* The core settings that hold an object or a list: the log policy, and the sets and links that checkSidebars validates. */
+const STRUCTURED = ["diagnostics.log", "sets", "links"];
+
 /** Validates the effective settings: the sidebar sets and links, and whether the initial width of a sidebar inside a card is between the minimum and the maximum. */
 function checkValues(values) {
   checkSidebars(values);
@@ -207,6 +210,31 @@ function validateValue(key, value) {
   if (definition.type === "address" && !isSettingAddress(value)) {
     throw new Error(`Invalid setting ${key}: address value must be empty or an http or https address`);
   }
+}
+
+/** The JavaScript type of the values of a setting, which its declaration decides. */
+export function settingType(key) {
+  if (SWITCHES.includes(key)) return "boolean";
+  if (STRUCTURED.includes(key)) return "object";
+  if (Object.hasOwn(RANGES, key) || key === "memorySaverDelay") return "number";
+  if (CHOICES[key]) return typeof CHOICES[key][0];
+  const definition = pluginDefinitions.get(key);
+  if (!definition) throw new Error(`Unknown setting: ${key}`);
+  if (definition.type === "integer") return "number";
+  if (definition.type === "enum") return typeof definition.values[0];
+  return "string";
+}
+
+/**
+ * The value of a setting from the input of a control. A control gives a string, so a string becomes the boolean or the number that the
+ * setting declares; every other input stays as it is, and validateValue refuses a value of another type with its cause.
+ */
+export function controlValue(key, input) {
+  if (typeof input !== "string") return input;
+  const type = settingType(key);
+  if (type === "boolean" && (input === "true" || input === "false")) return input === "true";
+  if (type === "number" && input.trim() !== "" && Number.isFinite(Number(input))) return Number(input);
+  return input;
 }
 
 /**

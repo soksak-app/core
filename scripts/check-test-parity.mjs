@@ -697,6 +697,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F527",
+    implementation: [
+      { file: "packages/workbench/settings.js", symbol: "export function settingType(key) {" },
+      { file: "packages/workbench/settings.js", symbol: "export function controlValue(key, input) {" },
+      { file: "packages/workbench/core-exposure.js", symbol: "return set({ [key]: controlValue(key, input) }, scope ?? \"common\", actor);" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/settings-change-types.test.mjs", id: "core.settings.change gives each setting a value of its declared type" },
+    ],
+    expected: "core.settings.change takes the type of a setting from its declaration, converts only the string of a control, and refuses a value of another type with invalid params and the check of its setting.",
+    levels: ["unit"],
+  },
+  {
     id: "F502-14",
     implementation: [
       { file: "packages/sok/go/src/event_log.go", symbol: "var layers = []string{\"native\", \"host\", \"workbench\", \"page\", \"plugin\", \"sidecar\"}" },
