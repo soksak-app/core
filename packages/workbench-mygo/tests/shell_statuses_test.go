@@ -46,7 +46,7 @@ type gridRead struct {
 func TestGridStatusShowsTheCardsOfTheSplit(t *testing.T) {
 	f, _ := surfaceShell(t)
 	before := status[gridRead](t, f, "core.grid")
-	f.run("core.card.split", map[string]string{"card": f.tabbedCards()[0], "side": "right"})
+	f.run("core.card.split", map[string]string{"card": f.tabbedCards()[0], "side": "right", "plugin": "terminal"})
 	grid := status[gridRead](t, f, "core.grid")
 	if len(grid.Cards) != len(before.Cards)+1 {
 		t.Fatalf("the grid holds %d cards after %d", len(grid.Cards), len(before.Cards))
@@ -71,7 +71,7 @@ func TestGridStatusShowsTheCardsOfTheSplit(t *testing.T) {
 
 func TestFullscreenCoversThePlaneAndKeepsTheLayout(t *testing.T) {
 	f, _ := surfaceShell(t)
-	f.run("core.card.split", map[string]string{"card": f.tabbedCards()[0], "side": "right"})
+	f.run("core.card.split", map[string]string{"card": f.tabbedCards()[0], "side": "right", "plugin": "terminal"})
 	cards := f.tabbedCards()
 	f.click("core.card.fullscreen", cards[0])
 	grid := status[gridRead](t, f, "core.grid")
@@ -86,7 +86,7 @@ func TestFullscreenCoversThePlaneAndKeepsTheLayout(t *testing.T) {
 	if f.has("core.card.close", cards[1]) {
 		t.Fatal("a card stays drawn under the fullscreen card")
 	}
-	if _, err := f.answer("core.card.split", map[string]string{"card": cards[0], "side": "right"}); err == nil || !strings.Contains(err.Error(), "fullscreen") {
+	if _, err := f.answer("core.card.split", map[string]string{"card": cards[0], "side": "right", "plugin": "terminal"}); err == nil || !strings.Contains(err.Error(), "fullscreen") {
 		t.Fatalf("a split under the fullscreen card answers %v", err)
 	}
 	f.run("core.card.focus", map[string]string{"card": cards[1]})

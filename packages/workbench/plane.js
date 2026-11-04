@@ -1850,15 +1850,6 @@ export function splitCard(id, side, kind) {
   return made;
 }
 
-/** Splits the focused card toward side with a new tab of the plugin of its active tab, which the shortcuts of a split ask for. */
-export function splitFocusedCard(side) {
-  const card = grid?.card(focusedId);
-  if (!card) throw new Error("no card has the focus");
-  const active = activeTab(card);
-  if (!active) throw new Error(`card ${focusedId} has no active tab to split`);
-  return splitCard(focusedId, side, active.plugin);
-}
-
 export function closeCard(id) {
   paneCard(id);
   layoutChangeable(id);

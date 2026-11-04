@@ -211,7 +211,7 @@ func TestTheThemeOfTheViewsPrecedesTheirPlacement(t *testing.T) {
 func TestSplitPlacesTheViewOfTheNewCard(t *testing.T) {
 	f, stored := surfaceShell(t)
 	before := len(stored.lastSurfaces(t))
-	f.run("core.card.split", map[string]string{"card": f.tabbedCards()[0], "side": "right"})
+	f.run("core.card.split", map[string]string{"card": f.tabbedCards()[0], "side": "right", "plugin": "terminal"})
 	if got := len(stored.lastSurfaces(t)); got != before+1 {
 		t.Fatalf("the split placed %d surfaces after %d", got, before)
 	}

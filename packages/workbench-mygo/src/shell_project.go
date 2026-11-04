@@ -502,8 +502,9 @@ func (s *Shell) storeCard(id string, data *layout.CardData) error {
 	return nil
 }
 
-// newTabOf returns a new tab of the plugin, named by the counter of the project as newTab of plane.js names it.
-func (s *Shell) newTabOf(plugin string, from *layout.Tab) (layout.Tab, error) {
+// newTabOf returns a new tab of the known plugin, named by its mark and the counter of the project as newTab of plane.js names it. from
+// is the source tab, whose reported directory the new tab keeps as its origin, or nil (docs/spec/projects.md#tab-origin).
+func (s *Shell) newTabOf(plugin *LoadedPlugin, from *layout.Tab) (layout.Tab, error) {
 	var directory *string
 	if from != nil {
 		if report := s.surfaces.reports[from.ID]; report != nil {
@@ -514,7 +515,21 @@ func (s *Shell) newTabOf(plugin string, from *layout.Tab) (layout.Tab, error) {
 	if err != nil {
 		return layout.Tab{}, err
 	}
-	return layout.Tab{ID: s.newTabID(), Plugin: plugin, Title: plugin, Rest: map[string]json.RawMessage{"origin": origin}}, nil
+	project := s.opened()
+	project.Named++
+	return layout.Tab{ID: s.newTabID(), Plugin: plugin.ID, Title: fmt.Sprintf("%s 탭 %d", plugin.Mark, project.Named),
+		Rest: map[string]json.RawMessage{"origin": origin}}, nil
+}
+
+// knownPlugin returns the loaded plugin with a surface, or the refusal of the page.
+func (s *Shell) knownPlugin(id string) (*LoadedPlugin, error) {
+	if id == "" {
+		id = "undefined"
+	}
+	if plugin := s.loadedPlugin(id); plugin != nil && plugin.Surface {
+		return plugin, nil
+	}
+	return nil, fmt.Errorf("unknown plugin %s", id)
 }
 
 // paneCard refuses an id that is no card of the plane or that is a window sidebar.
@@ -547,6 +562,10 @@ func (s *Shell) splitCard(id, side, plugin string) (map[string]string, error) {
 	if err := s.layoutChangeable(id); err != nil {
 		return nil, err
 	}
+	known, err := s.knownPlugin(plugin)
+	if err != nil {
+		return nil, err
+	}
 	if !splitSide(side) {
 		return nil, fmt.Errorf("unknown side %s; use left, right, top or bottom", side)
 	}
@@ -554,14 +573,7 @@ func (s *Shell) splitCard(id, side, plugin string) (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	if plugin == "" {
-		active := data.ActiveTab()
-		if active == nil {
-			return nil, fmt.Errorf("card %s has no active tab to split", id)
-		}
-		plugin = active.Plugin
-	}
-	tab, err := s.newTabOf(plugin, data.ActiveTab())
+	tab, err := s.newTabOf(known, data.ActiveTab())
 	if err != nil {
 		return nil, err
 	}
@@ -617,14 +629,11 @@ func (s *Shell) addTabWith(id, plugin string, rest map[string]json.RawMessage) (
 	if err != nil {
 		return "", err
 	}
-	if plugin == "" {
-		active := data.ActiveTab()
-		if active == nil {
-			return "", fmt.Errorf("card %s has no active tab", id)
-		}
-		plugin = active.Plugin
+	known, err := s.knownPlugin(plugin)
+	if err != nil {
+		return "", err
 	}
-	tab, err := s.newTabOf(plugin, data.ActiveTab())
+	tab, err := s.newTabOf(known, data.ActiveTab())
 	if err != nil {
 		return "", err
 	}

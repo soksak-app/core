@@ -40,8 +40,9 @@ type ShellOptions struct {
 	Element func(id string) (surface, key uintptr, ok bool)
 	// Installed is the document of the installed plugins.
 	Installed []byte
-	// Tabs is what the file commands, the memory saver and the background sessions read. Without it they are not registered.
-	Tabs *TabPorts
+	// Tabs returns the ports of the file commands, the memory saver, the tab stores and the background sessions of the shell. Without it
+	// they are not registered.
+	Tabs func(shell *Shell) TabPorts
 }
 
 // environmentGrid is the grid of a new space of the environment declaration.
@@ -142,6 +143,9 @@ type Shell struct {
 	held          *heldDivider
 	library       libraryState
 	tabs          *shellTabs
+	installed     []InstalledPlugin
+	// memory holds the memory saver settings among the common settings of the last snapshot.
+	memory memorySettings
 
 	settings       *SettingsStore
 	settingsWindow settingsWindow
@@ -189,15 +193,17 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.errors = NewShownErrors(s.events.Error)
 	s.binder = NewBinder(s.registry, func(_ string, err error) { s.fail(err) })
 	s.registry.Elements(options.Elements)
-	if s.units, err = readSurfaceUnits(options.Installed); err != nil {
-		return nil, err
+	// An installation that cannot be read has no installed plugin, and the window shows why (docs/spec/installation.md#serving-installed-plugins).
+	installed := options.Installed
+	if s.installed, err = readInstalled(installed); err != nil {
+		s.fail(err)
+		installed = []byte(`{"plugins":[]}`)
 	}
-	installed, err := readInstalled(options.Installed)
-	if err != nil {
+	if s.units, err = readSurfaceUnits(installed); err != nil {
 		return nil, err
 	}
 	s.contributions = NewContributions()
-	if err := s.contributions.Install(installed); err != nil {
+	if err := s.contributions.Install(s.installed); err != nil {
 		return nil, err
 	}
 	s.surfaces = newSurfaceState()
@@ -210,13 +216,13 @@ func NewShell(options ShellOptions) (*Shell, error) {
 		return (*string)(nil)
 	})
 	s.sidebars, err = NewSidebars(SidebarsOptions{Declared: options.Declared, Registry: s.registry, Binder: s.binder,
-		Environment: options.Environment, Installed: options.Installed, Changed: s.settle, Seat: s.drawSectionSeat})
+		Environment: options.Environment, Installed: installed, Changed: s.settle, Seat: s.drawSectionSeat})
 	if err != nil {
 		return nil, err
 	}
 	s.settingsWindow = newSettingsWindow()
 	var definitions []SettingDefinition
-	if s.plugins, definitions, err = readLoadedPlugins(options.Installed, options.Environment); err != nil {
+	if s.plugins, definitions, err = readLoadedPlugins(installed, options.Environment); err != nil {
 		return nil, err
 	}
 	if s.settings, err = NewSettingsStore(definitions, s.settingsSave); err != nil {
@@ -228,7 +234,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.register()
 	s.registerStatuses()
 	if options.Tabs != nil {
-		s.connectTabs(*options.Tabs)
+		s.connectTabs(options.Tabs(s))
 	}
 	s.keys, err = NewShortcuts(options.Declared.Shortcuts, s.shortcutConditions(), func(command string) error {
 		_, err := s.registry.Run(command, nil)
@@ -310,6 +316,9 @@ func (s *Shell) adopt(value any) error {
 	}
 	s.projects = projects
 	s.commonSettings = snapshot.Common
+	if s.memory, err = readMemorySettings(snapshot.Common); err != nil {
+		return err
+	}
 	return s.beginSettings()
 }
 

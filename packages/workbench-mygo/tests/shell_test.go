@@ -22,9 +22,11 @@ import (
 // storedHost answers the host calls of the shell from memory, as the workspace store of the language host library does.
 type storedHost struct {
 	projects []map[string]any
-	calls    []string
-	shown    []any
-	failing  map[string]error
+	// extra holds the host calls that the base table has not.
+	extra   map[string]workbench.HostCall
+	calls   []string
+	shown   []any
+	failing map[string]error
 	// installed is the document of the installed plugins, and it is empty without plugins.
 	installed string
 	// classes is the policy in force that the host call log answers; none stores the errors.
@@ -174,6 +176,12 @@ func (h *storedHost) workspace(argument json.RawMessage) (any, error) {
 	case "settings":
 		h.settings = append(h.settings, map[string]any{"id": request.ID, "patch": request.Patch, "remove": request.Remove})
 		return nil, nil
+	case "tabState", "tabSession":
+		return nil, nil
+	case "tabSessions":
+		return []string{}, nil
+	case "tabStatePut", "tabSessionPut":
+		return 1, nil
 	case "add":
 		h.projects = append(h.projects, request.Project)
 		return request.Project, nil

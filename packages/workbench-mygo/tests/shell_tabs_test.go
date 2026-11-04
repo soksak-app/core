@@ -128,28 +128,29 @@ func newTabShellWithState(t *testing.T, stored *storedHost, refused error) *tabS
 		Declared:    declared,
 		Calls:       workbench.NewCalls(table, f.pending.post),
 		Environment: environment(t),
-		Installed:   []byte(`{"plugins": []}`),
-		Invalidate:  func() {},
-		Post:        f.pending.post,
-		Report:      func(line string) { f.lines = append(f.lines, line) },
-		Tabs: &workbench.TabPorts{
-			Plugins: func() []workbench.ShellPlugin {
+		Installed: []byte(`{"plugins": [{"id": "notes", "manifest": {"id": "notes", "mark": "n",
+			"surface": {"composition": {"kind": "view", "page": "ui/index.html"}}}}]}`),
+		Invalidate: func() {},
+		Post:       f.pending.post,
+		Report:     func(line string) { f.lines = append(f.lines, line) },
+		Tabs: func(*workbench.Shell) workbench.TabPorts {
+			return workbench.TabPorts{Plugins: func() []workbench.ShellPlugin {
 				return []workbench.ShellPlugin{
 					{ID: "notes", Opens: []string{"md"}, Unload: true},
 					{ID: "session", Background: &workbench.BackgroundDeclaration{Sidecar: backgroundSidecar, Operation: "open"}},
 				}
 			},
-			Surfaces:       f.surfaces,
-			Enabled:        func() bool { return true },
-			Delay:          func() int { return 120 },
-			PluginSettings: func(string) map[string]any { return nil },
-			Commit: func(answer func(error)) {
-				f.commits++
-				answer(nil)
-			},
-			Emit:  f.events.emit,
-			Now:   func() int64 { return f.timers.now },
-			After: f.timers.after,
+				Surfaces:       f.surfaces,
+				Enabled:        func() bool { return true },
+				Delay:          func() int { return 120 },
+				PluginSettings: func(string) map[string]any { return nil },
+				Commit: func(answer func(error)) {
+					f.commits++
+					answer(nil)
+				},
+				Emit:  f.events.emit,
+				Now:   func() int64 { return f.timers.now },
+				After: f.timers.after}
 		},
 	})
 	if err != nil {
@@ -351,4 +352,18 @@ func TestAFailedOpenOfTheTabStateStoreIsShown(t *testing.T) {
 	if !slices.Contains(stored.calls, "windowReady") {
 		t.Fatalf("the window stayed unready: %v", stored.calls)
 	}
+}
+
+func TestATimerOfTheTabPartsDoesNotRunAfterTheWindowClosed(t *testing.T) {
+	f := newTabShell(t, &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"), tab("tab-bbbbbb", "notes"))}})
+	f.open(t)
+	if _, err := f.shell.Registry().Run("core.tab.select", json.RawMessage(`{"tab":"tab-bbbbbb"}`)); err != nil {
+		t.Fatal(err)
+	}
+	f.settle()
+	f.shell.Closed()
+	commits := f.commits
+	f.timers.tick(120 * 60 * 1000)
+	f.settle()
+	equal(t, f.commits, commits)
 }

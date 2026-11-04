@@ -60,17 +60,6 @@ func (s *Shell) requirePlane() error {
 	return nil
 }
 
-// splitFocused splits the focused card toward side with a new tab of the plugin of its active tab.
-func (s *Shell) splitFocused(side string) (any, error) {
-	if err := s.requirePlane(); err != nil {
-		return nil, err
-	}
-	if s.focused == "" {
-		return nil, fmt.Errorf("no card has the focus")
-	}
-	return s.splitCard(s.focused, side, "")
-}
-
 // register adds the commands of the shell to the registry.
 func (s *Shell) register() {
 	s.registerLibrary()
@@ -133,8 +122,6 @@ func (s *Shell) register() {
 		}
 		return s.splitCard(value.Card, value.Side, value.Plugin)
 	})
-	command(s, "core.card.split-right", func(struct{}) (any, error) { return s.splitFocused("right") })
-	command(s, "core.card.split-bottom", func(struct{}) (any, error) { return s.splitFocused("bottom") })
 	command(s, "core.card.close", func(value cardParam) (any, error) {
 		if err := s.requirePlane(); err != nil {
 			return nil, err
