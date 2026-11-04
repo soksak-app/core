@@ -7,6 +7,7 @@
 // the correct document through this path, records the callbacks of a minimal input client without a document as measured values,
 // and then checks that the image region commits exactly the order reported by the user (Hangul after ddd).
 #import <Cocoa/Cocoa.h>
+#import <Carbon/Carbon.h>
 #import <WebKit/WebKit.h>
 #include <unistd.h>
 #import "event_ring.h"
@@ -328,8 +329,14 @@ static NSUInteger indexOfInputAction(NSString *type, NSString *field, NSString *
     }];
 }
 
-// Types the order reported by the user. Types ddd with the English input source, switches to Korean 2-set, and types Hangul (g k s r m f) and
-// Space. For each key it waits until answered increases.
+// Whether the active input document states document access, which the input method reads when it activates.
+static BOOL activeDocumentStatesDocumentAccess(void) {
+    UInt32 value = 0;
+    UInt32 size = 0;
+    return TSMGetDocumentProperty(TSMGetActiveDocument(), kTSMDocumentSupportDocumentAccessPropertyTag, sizeof value, &size, &value)
+        == noErr;
+}
+
 static void typeKey(NSWindow *window, NSString *key, NSUInteger (^answered)(void)) {
     NSUInteger before = answered();
     BOOL sent = (sp_input_key(window, key.UTF8String, NULL, 0, true) == SP_INPUT_DELIVERED) && (sp_input_key(window, key.UTF8String, NULL, 0, false) == SP_INPUT_DELIVERED);
@@ -353,6 +360,8 @@ static void typeSwitchedSyllable(NSWindow *window, NSTextInputContext *context, 
     for (NSString *key in @[@"g", @"k", @"s", @"Space"]) typeKey(window, key, answered);
 }
 
+// Types the order reported by the user. Types ddd with the English input source, switches to Korean 2-set, and types Hangul (g k s r m f) and
+// Space. For each key it waits until answered increases.
 static void typeDddHangul(NSWindow *window, NSTextInputContext *context, NSUInteger (^answered)(void)) {
     selectSource(ABC, context);
     for (NSString *key in @[@"d", @"d", @"d"]) typeKey(window, key, answered);
@@ -750,6 +759,7 @@ static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
         }].count;
     };
     typeDddHangul(window, control.inputContext, controlAnswered);
+    check(activeDocumentStatesDocumentAccess(), @"control: the document of an AppKit text view states document access");
     typeKey(window, @"Enter", controlAnswered);
     check([control.string isEqual:@"ddd한글 \n"],
         [NSString stringWithFormat:@"control: an AppKit text view receives ddd한글 through the injected keys (text %@, calls %@)",
@@ -828,6 +838,7 @@ static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
     [events removeAllObjects];
     NSUInteger (^regionAnswered)(void) = ^NSUInteger { return events.count; };
     typeDddHangul(window, context, regionAnswered);
+    check(!activeDocumentStatesDocumentAccess(), @"image region: the document of the region states no document access");
     // F8-16: When Space ends the composition, the space is committed without a next key, and the composition string must be empty.
     NSString *committed = [valuesOfType(@"insert", 0) componentsJoinedByString:@""];
     NSString *preedit = [valuesOfType(@"compose", 0) lastObject] ?: @"";
@@ -836,7 +847,7 @@ static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
             committed, preedit, events]);
     typeKey(window, @"Enter", regionAnswered);
     committed = [valuesOfType(@"insert", 0) componentsJoinedByString:@""];
-    NSDictionary *last = events.lastObject;
+    NSDictionary *last = inputActionsFrom(0).lastObject;
     check([committed isEqual:@"ddd한글 "] && [last[@"type"] isEqual:@"key"] && [last[@"key"] isEqual:@"Enter"],
         [NSString stringWithFormat:@"image region: ddd한글 and a space are committed exactly once before Enter (committed %@, events %@)",
             committed, events]);
@@ -901,16 +912,22 @@ static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
             return [action[@"type"] isEqual:@"key"] && [action[@"key"] isEqual:name];
         }].count;
     };
+    NSUInteger (^commandCount)(NSString *) = ^NSUInteger(NSString *selector) {
+        return [inputActionsFrom(0) indexesOfObjectsPassingTest:^BOOL(NSDictionary *action, NSUInteger index, BOOL *stop) {
+            return [action[@"type"] isEqual:@"command"] && [action[@"selector"] isEqual:selector];
+        }].count;
+    };
     committed = [valuesOfType(@"insert", 0) componentsJoinedByString:@""];
     preedit = [valuesOfType(@"compose", 0) lastObject] ?: @"";
     check([preedit isEqual:@"하"] && committed.length == 0 && keyCount(@"Backspace") == 0,
         [NSString stringWithFormat:@"image region: Backspace during a composition edits it to 하 without PTY input (preedit '%@', committed '%@', events %@)",
             preedit, committed, events]);
+    // The input method commits a marked composition and answers Enter with its command, which the action list carries in order.
     typeKey(window, @"Enter", regionAnswered);
     committed = [valuesOfType(@"insert", 0) componentsJoinedByString:@""];
     NSDictionary *enter = inputActionsFrom(0).lastObject;
-    check([committed isEqual:@"하"] && [enter[@"type"] isEqual:@"key"]
-            && [enter[@"key"] isEqual:@"Enter"] && keyCount(@"Enter") == 1,
+    check([committed isEqual:@"하"] && [enter[@"type"] isEqual:@"command"]
+            && [enter[@"selector"] isEqual:@"insertNewline:"] && commandCount(@"insertNewline:") == 1,
         [NSString stringWithFormat:@"image region: Enter commits the edited syllable once and is reported after it (committed '%@', events %@)", committed, events]);
     // Without composition, Backspace is reported as a key.
     [events removeAllObjects];
@@ -924,10 +941,28 @@ static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
     for (NSString *key in @[@"g", @"k", @"s", @"Escape"]) typeKey(window, key, regionAnswered);
     committed = [valuesOfType(@"insert", 0) componentsJoinedByString:@""];
     NSUInteger inserted = indexOfInputAction(@"insert", @"text", @"한", 0);
-    NSUInteger escaped = indexOfInputAction(@"key", @"key", @"Escape", 0);
-    check([committed isEqual:@"한"] && keyCount(@"Escape") == 1 && inserted < escaped,
+    NSUInteger escaped = indexOfInputAction(@"command", @"selector", @"cancelOperation:", 0);
+    check([committed isEqual:@"한"] && commandCount(@"cancelOperation:") == 1 && inserted < escaped,
         [NSString stringWithFormat:@"image region: Escape during a composition commits it once and is reported after it (committed '%@', events %@)",
             committed, events]);
+
+    // F522: The input method activates for a region that takes its first focus while Korean is selected, so the region states
+    // no document access before the input method reads it, and the first key composes.
+    [events removeAllObjects];
+    void *first = sp_region_create(surface, "ime-first-focus", regionEvent, NULL);
+    sp_region_place(first, 10, 60, 10, 10, true);
+    sp_region_focus(first);
+    NSTextInputContext *firstContext = ((NSView *)first).inputContext;
+    check(pump(^BOOL { return NSTextInputContext.currentInputContext == firstContext; }),
+        @"the input context of a region focused with Korean selected is current");
+    check(!activeDocumentStatesDocumentAccess(), @"image region: first focus: the document states no document access");
+    for (NSString *key in @[@"g", @"k", @"s", @"Space"]) typeKey(window, key, regionAnswered);
+    committed = [valuesOfType(@"insert", 0) componentsJoinedByString:@""];
+    preedit = [valuesOfType(@"compose", 0) lastObject] ?: @"";
+    check([committed isEqual:@"한 "] && [preedit isEqual:@""],
+        [NSString stringWithFormat:@"image region: first focus with Korean selected composes the first syllable (committed %@, preedit '%@', events %@)",
+            committed, preedit, events]);
+    sp_region_close(first);
 
     check(selectAndAwaitInputSource(previousSource, [NSDate dateWithTimeIntervalSinceNow:2]),
         @"the previous input source is restored");

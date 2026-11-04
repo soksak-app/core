@@ -5,6 +5,7 @@
 // the layer scale is the number of device pixels that one unit covers. The pointer passes through (hitTest → nil).
 
 #import <Carbon/Carbon.h>
+#import <objc/runtime.h>
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import <IOSurface/IOSurface.h>
@@ -64,6 +65,7 @@ static void failFrameIdentitySession(NSString *message) {
 @property int presentedSequence;
 @property(copy) NSString *presentationError;
 @property(retain) NSTextInputContext *givenInputContext;  // The context of sp_region_set_input_context, or nil.
+@property(retain) NSTextInputContext *regionInputContext;  // The context of the region, made when it is first asked for.
 @property(assign) NSView *webSurface;  // The logical surface view. Not owned by this object.
 @property NSEdgeInsets insets;
 @property NSPoint caretPos;
@@ -309,6 +311,32 @@ static void spEnsurePressOriginMonitor(void) {
         });
 }
 
+// The context of an image region. A client whose document states document access receives each key as committed text, which
+// the input method reads back to compose it. The region holds only its marked buffer, so the input method would lose the first
+// syllable. The input method reads the property when the document first activates, so the property leaves the document at its
+// creation, and every key then arrives as marked text. AppKit gives no public access to the document of a context that is not
+// active.
+@interface SPRegionInputContext : NSTextInputContext
+@end
+
+@implementation SPRegionInputContext
+
+- (instancetype)initWithClient:(id<NSTextInputClient>)client {
+    self = [super initWithClient:client];
+    if (!self) return nil;
+    Ivar ivar = class_getInstanceVariable(NSTextInputContext.class, "_documentID");
+    OSStatus status = ivar
+        ? TSMRemoveDocumentProperty(*(TSMDocumentID *)((char *)self + ivar_getOffset(ivar)), kTSMDocumentSupportDocumentAccessPropertyTag)
+        : paramErr;
+    if (status != noErr) {
+        NSString *reason = [NSString stringWithFormat:@"the input document keeps document access (status %d)", (int)status];
+        [(SPImageRegion *)client failInput:reason where:"input method" text:reason];
+    }
+    return self;
+}
+
+@end
+
 @implementation SPImageRegion
 
 - (void)drawRect:(NSRect)dirtyRect {
@@ -358,13 +386,15 @@ static void spEnsurePressOriginMonitor(void) {
     [_presentationError release];
     [_accessibilityText release];
     [_givenInputContext release];
+    [_regionInputContext release];
     [super dealloc];
 }
 
-// The keys of the region go to the supplied diagnostic context when present, and otherwise to AppKit's context.
+// The keys of the region go to the supplied diagnostic context when present, and otherwise to the context of the region.
 - (NSTextInputContext *)inputContext {
     if (self.givenInputContext) return self.givenInputContext;
-    return [super inputContext];
+    if (!self.regionInputContext) self.regionInputContext = [[[SPRegionInputContext alloc] initWithClient:self] autorelease];
+    return self.regionInputContext;
 }
 
 - (BOOL)acceptsFirstResponder {
