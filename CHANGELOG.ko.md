@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F502-12: mygo host 의 창은 보여 주는 프로젝트를 주소에 둔다. 플러그인이 바뀌어 workbench 가 다시 시작해도 그 프로젝트를 다시 보여 주고, 별도 프로젝트 창은 자기 프로젝트에서 시작한다.
 - F502-12: mygo workbench 의 library 가 `pluginsState` 로 플러그인 화면을 그린다. 카드는 `pluginsRun` 으로 설치, 업데이트, 제거, 사용, 사용 안 함을 실행하고, `core.plugins` 와 `core.library` 는 page 와 같은 값을 답한다. 첫 실행은 시작 플러그인 묶음을 설치하고, 창 컨트롤 업데이트 N 이 플러그인 화면을 열며, 불러오지 않은 플러그인의 탭은 설치나 사용을 제안한다.
 - F502-22: mygo framework adapter가 `App.OnOpenURL`로 deep link를 열고, 창의 workbench에 파일 놓기 뷰의 JSON 문자열을 `files-dropped`로 준다. fixture workbench를 쓰는 자식 프로세스가 deep link, 알림 센터의 event, application update의 종료를 검사하고, `make app-update-check`가 `HOST=mygo`를 받는다.
 - F502-22-1: mygo workbench가 창에 놓인 파일을 그 지점의 view가 선언한 `surface.drop` command로 넘기고 `core.drop`을 보고한다. tab notice가 보이는 tab을 따르고, tab에 표시되며, policy가 `system`이면 알림 센터에 올라 `core.notifications`로 보고된다. `core.grid`는 notice의 문자열을 보고한다. project data 쓰기는 앞선 쓰기 위에서 시작하고, store가 거부하면 view가 응답을 받으며, `workspace-changed`가 다른 창의 쓰기를 data를 따르는 view로 가져온다.

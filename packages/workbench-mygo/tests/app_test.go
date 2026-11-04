@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -24,7 +25,15 @@ type appWindow struct {
 	starts chan struct{}
 	// restarts counts the starts of the workbench of the window.
 	restarts int
+	// address is the address of the window, which names the project that it shows.
+	address string
 }
+
+// Address returns the address of the window.
+func (w *appWindow) Address() string { return w.address }
+
+// SetAddress records the address of the window.
+func (w *appWindow) SetAddress(address string) { w.address = address }
 
 // StartWorkbench records a start of the workbench of the window.
 func (w *appWindow) StartWorkbench() {
@@ -91,6 +100,40 @@ func TestAppStartsWhenTheWindowShows(t *testing.T) {
 	queue.drain(t)
 	if strings.Join(startCalls(stored.calls), " ") != "workspace workspace windowReady notificationState pluginsState sidecarsOutdated" {
 		t.Fatalf("the start called %v", stored.calls)
+	}
+}
+
+// A reload builds a new workbench, which shows the project that the address of the window names before the window is ready.
+func TestAStartShowsTheProjectOfTheAddress(t *testing.T) {
+	opened := openedShell(t)
+	stored := opened.host
+	id := stored.projects[0]["id"].(string)
+	app, window, queue, _ := fixtureApp(t, stored)
+	window.address = "/?project=" + id
+	stored.calls = nil
+	app.Build(window)
+	app.Shown(window)
+	queue.drain(t)
+	calls := startCalls(stored.calls)
+	shown, ready := slices.Index(stored.calls, "projectShown"), slices.Index(stored.calls, "windowReady")
+	if shown < 0 || ready < shown {
+		t.Fatalf("the start called %v, %v", calls, stored.calls)
+	}
+	if window.address != "/?project="+id {
+		t.Fatalf("the address is %s", window.address)
+	}
+}
+
+// A window that names a project that is gone starts at the library, without an address that names it.
+func TestAStartLeavesAnAddressOfAnUnknownProject(t *testing.T) {
+	stored := &storedHost{}
+	app, window, queue, _ := fixtureApp(t, stored)
+	window.address = "/?project=prj-gone"
+	app.Build(window)
+	app.Shown(window)
+	queue.drain(t)
+	if window.address != "/" || stored.called("projectOpen") {
+		t.Fatalf("the address is %s and the calls %v", window.address, stored.calls)
 	}
 }
 

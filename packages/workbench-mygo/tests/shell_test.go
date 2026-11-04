@@ -23,7 +23,9 @@ import (
 type storedHost struct {
 	plugins *pluginsHost
 	// reloads counts the starts of the workbench that the shell asked for.
-	reloads  int
+	reloads int
+	// located is the project that the shell last named as the one that its window shows.
+	located  string
 	projects []map[string]any
 	// extra holds the host calls that the base table has not.
 	extra   map[string]workbench.HostCall
@@ -311,6 +313,7 @@ func newShell(t *testing.T, stored *storedHost) *shellFixture {
 		Post:        f.pending.post,
 		Report:      func(line string) { f.lines = append(f.lines, line) },
 		Reload:      func() { stored.reloads++ },
+		Located:     func(project string) { stored.located = project },
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -447,6 +450,22 @@ func TestLibraryShowsTheStartOfAnEmptyWorkspace(t *testing.T) {
 		t.Fatal("the chrome of the library has the settings button and not the project buttons")
 	}
 	f.audit()
+}
+
+func TestTheWindowNamesTheProjectThatItShows(t *testing.T) {
+	f := openedShell(t)
+	id := f.host.projects[0]["id"].(string)
+	if f.host.located != id {
+		t.Fatalf("the window names %q, not %s", f.host.located, id)
+	}
+	f.run("core.projects.browse", nil)
+	if f.host.located != id {
+		t.Fatal("the library over an open project gave up the project of the window")
+	}
+	f.run("core.project.close", map[string]string{"id": id})
+	if f.host.located != "" {
+		t.Fatalf("the window still names %q", f.host.located)
+	}
 }
 
 func TestWindowIsReadyAfterTheSnapshot(t *testing.T) {

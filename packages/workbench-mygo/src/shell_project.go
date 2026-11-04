@@ -114,10 +114,14 @@ func (s *Shell) freeTint() string {
 }
 
 // activate shows the project id in the window, as projects.activate does.
-func (s *Shell) activate(id string) {
+func (s *Shell) activate(id string) { s.activateThen(id, func() {}) }
+
+// activateThen is activate that runs done after the project is shown or after it failed.
+func (s *Shell) activateThen(id string, done func()) {
 	project := s.project(id)
 	if project == nil {
 		s.fail(fmt.Errorf("Unknown project: %s", id))
+		done()
 		return
 	}
 	s.keep()
@@ -125,20 +129,24 @@ func (s *Shell) activate(id string) {
 	s.calls.Call("projectFolder", root, func(value any, err error) {
 		if err != nil {
 			s.fail(err)
+			done()
 			return
 		}
 		folder, err := decode[ProjectFolderValue](value)
 		if err != nil {
 			s.fail(err)
+			done()
 			return
 		}
 		if folder.Identity != identity {
 			s.fail(fmt.Errorf("Project directory has changed: %s", root))
+			done()
 			return
 		}
 		s.calls.Call("projectOpen", map[string]any{"id": id, "root": root, "separate": false, "geometry": nil}, func(value any, err error) {
 			if err != nil {
 				s.fail(err)
+				done()
 				return
 			}
 			opened, err := decode[struct {
@@ -146,27 +154,36 @@ func (s *Shell) activate(id string) {
 			}](value)
 			if err != nil {
 				s.fail(err)
+				done()
 				return
 			}
-			if opened.Local {
-				s.show(id)
-			}
 			s.patch(id, map[string]any{"lastOpened": time.Now().UnixMilli()})
+			if opened.Local {
+				s.showThen(id, done)
+				return
+			}
+			done()
 		})
 	})
 }
 
 // show puts the project id on the screen.
-func (s *Shell) show(id string) {
+func (s *Shell) show(id string) { s.showThen(id, func() {}) }
+
+// showThen is show that runs done after the host took the project, or after it failed.
+func (s *Shell) showThen(id string, done func()) {
 	project := s.project(id)
 	if project == nil {
+		done()
 		return
 	}
 	if err := s.loadSpace(project); err != nil {
 		s.fail(err)
+		done()
 		return
 	}
 	s.active, s.browsing = id, false
+	s.options.Located(id)
 	s.errors.Hide(workbenchErrorPlace)
 	if err := s.beginSettings(); err != nil {
 		s.fail(err)
@@ -177,6 +194,7 @@ func (s *Shell) show(id string) {
 				s.fail(err)
 			}
 			s.shownProject(err)
+			done()
 		})
 	s.tabsSettled()
 	s.options.Invalidate()
@@ -365,6 +383,7 @@ func (s *Shell) dropProject(id string) {
 	}
 	if s.active == id {
 		s.active, s.plane, s.browsing, s.fullscreen = "", nil, true, ""
+		s.options.Located("")
 		if len(s.projects) > 0 {
 			s.activate(s.projects[0].ID)
 		}

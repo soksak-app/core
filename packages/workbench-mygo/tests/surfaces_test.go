@@ -138,6 +138,7 @@ func surfaceShellOn(t *testing.T, document string, stored *surfaceHost) *shellFi
 	}
 	f := &shellFixture{t: t, host: &stored.storedHost, pending: make(steps, 256)}
 	shell, err := workbench.NewShell(workbench.ShellOptions{
+		Located:     func(string) {},
 		Declared:    declared,
 		Calls:       workbench.NewCalls(stored.surfaceTable(), f.pending.post),
 		Environment: environment(t),

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F502-12: The window of the mygo host keeps the project that it shows in its address, so a start of the workbench after a change of the plugins shows that project again, and a separate project window starts at its project.
 - F502-12: The library of the mygo workbench draws the plugin page from `pluginsState`. Its cards install, update, remove, enable and disable through `pluginsRun`, `core.plugins` and `core.library` answer as on the page, the first run installs the starter pack, the window control 업데이트 N opens the page, and a tab of a plugin that is not loaded offers its install or enable.
 - F502-22: The mygo framework adapter opens deep links through `App.OnOpenURL` and gives the workbench of a window `files-dropped` with the JSON text of the file drop view; a child process with a fixture workbench checks deep links, the events of the notification center and the quit of an application update, and `make app-update-check` takes `HOST=mygo`.
 - F502-22-1: The mygo workbench takes the files dropped on a window to the `surface.drop` command of the view under the point and reports `core.drop`. A tab notice follows the visible tab, marks its tab, and with the policy `system` stands in the notification center with `core.notifications`. `core.grid` reports the text of a notice. A write of project data starts from the write before it, a store that refuses it answers the view, and `workspace-changed` brings the writes of another window to the views that follow the data.

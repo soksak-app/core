@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -21,6 +22,27 @@ import (
 type Painted interface {
 	Invalidate()
 	Elements
+	// Address returns the address of the window, which keeps the project that it shows over a start of the workbench.
+	Address() string
+	// SetAddress sets the address of the window.
+	SetAddress(address string)
+}
+
+// projectOfAddress returns the project that a window address names, and "" without one.
+func projectOfAddress(address string) string {
+	parsed, err := url.Parse(address)
+	if err != nil {
+		return "" // silent: the host writes the address, and a window without a readable one starts at the library.
+	}
+	return parsed.Query().Get("project")
+}
+
+// addressOfProject returns the address of a window that shows project, and of a window that shows none when it is "".
+func addressOfProject(project string) string {
+	if project == "" {
+		return "/"
+	}
+	return "/?project=" + url.QueryEscape(project)
 }
 
 // AppOptions is what the application gives the workbench.
@@ -86,6 +108,8 @@ func (a *App) Build(window host.Frontend) func(c *ui.Context) {
 	shell, err := NewShell(ShellOptions{Declared: declared, Calls: NewCalls(a.options.Table(window), a.options.Post),
 		Environment: a.options.Environment, Installed: a.options.Installed(),
 		Reload:  func() { routine.Go("workbench-reload", window.StartWorkbench) },
+		Project: projectOfAddress(painted.Address()),
+		Located: func(project string) { painted.SetAddress(addressOfProject(project)) },
 		Element: func(id string) (uintptr, uintptr, bool) { return a.options.Element(window, id) }, Invalidate: painted.Invalidate, Elements: painted, Post: a.options.Post, Report: a.options.Report,
 		Tabs: a.tabPorts})
 	if err != nil {
