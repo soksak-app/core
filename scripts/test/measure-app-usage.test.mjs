@@ -11,6 +11,7 @@ import {
   attributeWebKit,
   B3_MEASUREMENTS,
   cpuPercent,
+  execute,
   faultErrorCount,
   gestureFigures,
   hostProcess,
@@ -22,6 +23,7 @@ import {
   parseProcessTable,
   pointerPath,
   prepareState,
+  readCpuSeconds,
   requireOcclusion,
   sidecarProcesses,
   STATES,
@@ -30,6 +32,7 @@ import {
   untilFramesQuiet,
   usageMeasurements,
   waitIdle,
+  windowApplicationRows,
   windowRows,
 } from "../measure-app-usage.mjs";
 
@@ -775,6 +778,38 @@ test("the process listing of a configuration folder holds its host, its sidecars
   const noHost = async (command, args) => (command === "ps" ? { status: 0, stdout: `   11 ${MYGO}/sidecars/probe/bin/probe\n`, stderr: "" } : run(command, args));
   await assert.rejects(applicationRows({ configDir: MYGO, run: noHost, realpath: (path) => path }),
     new RegExp(`host of ${MYGO}: no host process has --config-dir ${MYGO}`));
+});
+
+test("the executor resolves to the status and the output of a command, and to the error of a command that does not start", async () => {
+  const done = await execute(process.execPath, ["-e", "process.stdout.write('out'); process.stderr.write('err'); process.exit(3)"]);
+  assert.deepEqual([done.status, done.stdout, done.stderr, done.error], [3, "out", "err", undefined]);
+  const absent = await execute("/var/tester/no-such-command", []);
+  assert.equal(absent.error.code, "ENOENT");
+});
+
+test("the cpu reading runs ps -axo pid=,time= and names the command of a failure", async () => {
+  const run = mygoProcesses({ footprints: () => [0, 0], cpu: () => [[10, "0:01.25"], [902, "1:00.50"]] });
+  assert.deepEqual(await readCpuSeconds(run), new Map([[10, 1.25], [902, 60.5]]));
+  const failing = async () => ({ status: 1, stdout: "", stderr: "ps: no table" });
+  await assert.rejects(readCpuSeconds(failing), /ps -axo pid=,time= exited with 1: ps: no table/);
+});
+
+test("the processes of the windows of an application are its listing with the page and document rows of each window, one row per pid", async () => {
+  const run = mygoProcesses({ footprints: () => [0, 0], cpu: () => [] });
+  const statuses = [
+    { ...mygoWindow({ pageProcess: 902, documents: [] }), window: "w1" },
+    { ...mygoWindow({ documents: [{ surface: "tab-2", document: "doc-1", process: 903 }, { surface: "tab-3", document: "doc-2", process: 0 }] }), window: "w2" },
+  ];
+  assert.deepEqual(await windowApplicationRows({ configDir: MYGO, statuses, run, realpath: (path) => path }), {
+    rows: [
+      { role: "host", pid: 10, attribution: "config-dir argument" },
+      { role: "sidecar probe", pid: 11, attribution: "executable path" },
+      { role: "page w1", pid: 902, attribution: "host.window" },
+      { role: "document tab-2/doc-1", pid: 903, attribution: "host.window" },
+      { role: "webkit gpu", pid: 300, attribution: "launchd domain" },
+    ],
+    errors: [`document tab-3/doc-2 of window w2 of ${MYGO}: no process (0)`],
+  });
 });
 
 test("the B3 keys of app-usage end in their unit, and a measurement with every figure holds every key", () => {
