@@ -23,13 +23,38 @@ type OutlineOptions struct {
 	Inset  *float64 `json:"inset"`
 }
 
+// PathOp is the command of a PathStep.
+type PathOp byte
+
+const (
+	// PathMove starts a loop at the end of the step.
+	PathMove PathOp = 'M'
+	// PathLine draws a line to the end of the step.
+	PathLine PathOp = 'L'
+	// PathArc draws a quarter circle to the end of the step.
+	PathArc PathOp = 'A'
+	// PathClose ends a loop. It has no end.
+	PathClose PathOp = 'Z'
+)
+
+// PathStep is one command of the path of a loop, as the path data writes it. R and Sweep are those of an arc: Sweep is the SVG sweep flag,
+// true when the arc turns clockwise on the screen.
+type PathStep struct {
+	Op    PathOp
+	X     float64
+	Y     float64
+	R     float64
+	Sweep bool
+}
+
 // Outline is the SVG path data of every loop, the closed rectilinear loops before rounding, and the corner count with the number too
-// tight to round.
+// tight to round. Steps are the commands of the path data before their numbers are written; the shared layout cases state the data.
 type Outline struct {
-	Path    string    `json:"path"`
-	Loops   [][]Point `json:"loops"`
-	Corners int       `json:"corners"`
-	Sharp   int       `json:"sharp"`
+	Path    string     `json:"path"`
+	Steps   []PathStep `json:"-"`
+	Loops   [][]Point  `json:"loops"`
+	Corners int        `json:"corners"`
+	Sharp   int        `json:"sharp"`
 }
 
 func snapTo(v float64) float64 { return jsRound(v*100) / 100 }
@@ -208,11 +233,11 @@ func dropCollinear(pts []Point) []Point {
 	return out
 }
 
-// roundedPath converts one closed loop to an SVG path, replacing each right angle with an arc. A corner with less than half a px
-// left is drawn square and counted in sharp.
-func roundedPath(loop []Point, radius float64) (string, int, int) {
+// roundedPath converts one closed loop to path steps, replacing each right angle with an arc. A corner with less than half a px left is
+// drawn square and counted in sharp.
+func roundedPath(loop []Point, radius float64) ([]PathStep, int, int) {
 	n := len(loop)
-	var d strings.Builder
+	steps := make([]PathStep, 0, 2*n+1)
 	sharp := 0
 	for i := 0; i < n; i++ {
 		p := loop[i]
@@ -225,27 +250,40 @@ func roundedPath(loop []Point, radius float64) (string, int, int) {
 		// float64 rounds each product before it is added, as JavaScript does; without it Go may fuse them (number.go).
 		turn := float64(inX*outY) - float64(inY*outX)
 		r := math.Min(math.Min(radius, lenIn/2), lenOut/2)
+		op := PathLine
 		if i == 0 {
-			d.WriteString("M")
-		} else {
-			d.WriteString("L")
+			op = PathMove
 		}
 		// float64 rounds each product before it is added, as JavaScript does; without it Go may fuse them (number.go).
-		d.WriteString(toFixed2(p.X-float64((inX/lenIn)*r)) + " " + toFixed2(p.Y-float64((inY/lenIn)*r)))
+		steps = append(steps, PathStep{Op: op, X: p.X - float64((inX/lenIn)*r), Y: p.Y - float64((inY/lenIn)*r)})
 		if r > 0.5 {
-			sweep := "0"
-			if turn > 0 {
-				sweep = "1"
-			}
-			d.WriteString("A" + toFixed2(r) + " " + toFixed2(r) + " 0 0 " + sweep + " " +
-				// float64 rounds each product before it is added, as JavaScript does; without it Go may fuse them (number.go).
-				toFixed2(p.X+float64((outX/lenOut)*r)) + " " + toFixed2(p.Y+float64((outY/lenOut)*r)))
+			// float64 rounds each product before it is added, as JavaScript does; without it Go may fuse them (number.go).
+			steps = append(steps, PathStep{Op: PathArc, X: p.X + float64((outX/lenOut)*r), Y: p.Y + float64((outY/lenOut)*r), R: r, Sweep: turn > 0})
 		} else {
 			sharp++
 		}
 	}
-	d.WriteString("Z")
-	return d.String(), n, sharp
+	return append(steps, PathStep{Op: PathClose}), n, sharp
+}
+
+// pathData writes path steps as SVG path data.
+func pathData(steps []PathStep) string {
+	var d strings.Builder
+	for _, step := range steps {
+		switch step.Op {
+		case PathMove, PathLine:
+			d.WriteString(string(rune(step.Op)) + toFixed2(step.X) + " " + toFixed2(step.Y))
+		case PathArc:
+			sweep := "0"
+			if step.Sweep {
+				sweep = "1"
+			}
+			d.WriteString("A" + toFixed2(step.R) + " " + toFixed2(step.R) + " 0 0 " + sweep + " " + toFixed2(step.X) + " " + toFixed2(step.Y))
+		case PathClose:
+			d.WriteString("Z")
+		}
+	}
+	return d.String()
 }
 
 // ComputeOutline is the outline binding a set of rects into one shape. With pad at half the corridor the rects meet exactly and the
@@ -277,8 +315,9 @@ func ComputeOutline(rects []Rect, options OutlineOptions) Outline {
 	paths := make([]string, len(loops))
 	out := Outline{Loops: loops}
 	for i, loop := range loops {
-		path, corners, sharp := roundedPath(loop, radius)
-		paths[i] = path
+		steps, corners, sharp := roundedPath(loop, radius)
+		paths[i] = pathData(steps)
+		out.Steps = append(out.Steps, steps...)
 		out.Corners += corners
 		out.Sharp += sharp
 	}
