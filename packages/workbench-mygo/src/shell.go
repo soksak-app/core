@@ -55,7 +55,7 @@ type environmentGrid struct {
 
 // metrics are the chrome metrics that the shell draws with.
 type metrics struct {
-	chromeH, headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, tabsGap, tabsPad, barTabGap, barTabMaxW, tabPeekW, tabMinW float32
+	chromeH, headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW float32
 	// debugW is the width of the debug view, and debugH its largest share of the window height.
 	debugW, debugH float32
 }
@@ -88,6 +88,7 @@ func readMetrics(declared *Declarations) (metrics, error) {
 	read("tabs-pad", &m.tabsPad)
 	read("bar-tab-gap", &m.barTabGap)
 	read("bar-tab-max-w", &m.barTabMaxW)
+	read("tab-max-w", &m.tabMaxW)
 	read("tab-peek-w", &m.tabPeekW)
 	read("tab-min-w", &m.tabMinW)
 	return m, failed

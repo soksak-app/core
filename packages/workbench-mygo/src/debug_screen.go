@@ -164,7 +164,7 @@ func drawDebugList(c *ui.Context, binder *Binder, entries []DebugEntry) {
 	states := DebugStateFiles(entries)
 	for _, file := range entries {
 		ui.Row(binder.Name(c, "core.debug.file", file.Path)).FillWidth().Gap(8).AlignItems(ui.Center).Role(ui.RoleRow).Label(file.Path).Children(func() {
-			ui.Text(c, file.Path).Grow(1).NoWrap().Ellipsis("…")
+			ui.Text(c, file.Path).Grow(1).SingleLine().Ellipsis("…")
 			ui.Text(c, sizeText(file.Size)+" · "+timeText(file.Modified)).TextColor(theme.TextMuted)
 			params := map[string]any{"path": file.Path}
 			if slices.Contains(states, file.Path) {
@@ -180,7 +180,7 @@ func drawDebugFile(c *ui.Context, binder *Binder, file DebugShown) {
 	theme := c.Theme()
 	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
 		binder.Button(c, "core.debug.list", "core.debug.list", "", "목록", nil)
-		ui.Text(c, file.Path+" · "+sizeText(file.Size)).Grow(1).NoWrap().Ellipsis("…")
+		ui.Text(c, file.Path+" · "+sizeText(file.Size)).Grow(1).SingleLine().Ellipsis("…")
 		if file.Truncated {
 			ui.Text(c, "앞부분 생략").TextColor(theme.TextMuted)
 		}
@@ -199,7 +199,7 @@ func drawDebugLine(c *ui.Context, line string) {
 func drawDebugState(c *ui.Context, binder *Binder, state DebugStateView) {
 	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
 		binder.Button(c, "core.debug.state.list", "core.debug.list", "", "목록", nil)
-		ui.Text(c, state.Path).Grow(1).NoWrap().Ellipsis("…")
+		ui.Text(c, state.Path).Grow(1).SingleLine().Ellipsis("…")
 	})
 	const without = "비교 안 함"
 	with := state.With

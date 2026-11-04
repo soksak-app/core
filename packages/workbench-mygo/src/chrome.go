@@ -13,8 +13,13 @@ import (
 
 // barText is a text button of a bar.
 func (s *Shell) barText(c *ui.Context, button ui.Element, label string, on bool) {
+	s.barTextWithin(c, button, label, on, s.metrics.barTabMaxW)
+}
+
+// barTextWithin is barText with a text of at most width.
+func (s *Shell) barTextWithin(c *ui.Context, button ui.Element, label string, on bool, width float32) {
 	button.Height(s.metrics.spaceTabH).PaddingX(s.metrics.barTabGap).Radius(4).AlignItems(ui.Center).Label(label).Children(func() {
-		text := ui.Text(c, label).NoWrap().Ellipsis("…").FontSize(s.frameFont(12)).MaxWidth(s.metrics.barTabMaxW)
+		text := ui.Text(c, label).SingleLine().Ellipsis("…").FontSize(s.frameFont(12)).MaxWidth(width)
 		if !on {
 			text.TextColor(s.palette.Muted)
 		}

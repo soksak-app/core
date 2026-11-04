@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -445,4 +446,19 @@ func TestAnUnknownPluginIsRefused(t *testing.T) {
 	if got := len(f.tabbedCards()); got != before {
 		t.Fatalf("the refusals left %d cards", got)
 	}
+}
+
+// A tab name that does not fit ends with an ellipsis inside its tab, so the head keeps its tools and the tab its close button.
+func TestALongTabNameKeepsTheHeadOfItsCard(t *testing.T) {
+	title := strings.Repeat("max@host:/private/tmp/a-long-directory/", 4)
+	f := newShell(t, &storedHost{projects: []map[string]any{storedProject(map[string]any{"id": "tab-aaaaaa", "plugin": "notes", "title": title})}})
+	if _, err := f.answer("core.project.activate", map[string]string{"id": "prj-a"}); err != nil {
+		t.Fatal(err)
+	}
+	f.settle()
+	tab, closing := f.box("core.card.tab", "tab-aaaaaa"), f.box("core.card.tab-close", "tab-aaaaaa")
+	if width := closing.X + closing.W - tab.X; width > 200 {
+		t.Fatalf("the tab is %v wide, want at most 200", width)
+	}
+	f.box("core.card.add", "main")
 }

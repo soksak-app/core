@@ -237,7 +237,7 @@ func drawSectionHeader(c *ui.Context, binder *Binder, frame SidebarFrame, sectio
 			icon = chevronRight
 		}
 		ui.Icon(c, icon).Size(metrics.SectionHeadText, metrics.SectionHeadText)
-		ui.Text(binder.Name(c, "core.sidebar.section.name", item), section.Name).Label(section.Name).NoWrap().Ellipsis("…").FontSize(metrics.SectionHeadText).Bold().TextColor(theme.Text)
+		ui.Text(binder.Name(c, "core.sidebar.section.name", item), section.Name).Label(section.Name).SingleLine().Ellipsis("…").FontSize(metrics.SectionHeadText).Bold().TextColor(theme.Text)
 	})
 }
 
@@ -370,7 +370,7 @@ func drawSidebarStatus(c *ui.Context, binder *Binder, frame SidebarFrame, metric
 		name = "core.sidebar.status"
 	}
 	ui.Row(binder.Name(c, name, frame.Sidebar)).FillWidth().Height(metrics.FootH).AlignItems(ui.Center).Gap(6).PaddingX(8).Role(ui.RoleStatus).Label(frame.Status).Children(func() {
-		ui.Text(c, frame.Status).NoWrap().Ellipsis("…").TextColor(theme.TextMuted).Grow(1)
+		ui.Text(c, frame.Status).SingleLine().Ellipsis("…").TextColor(theme.TextMuted).Grow(1)
 		if frame.Side == "" {
 			return
 		}
