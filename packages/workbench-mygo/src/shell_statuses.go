@@ -379,7 +379,7 @@ func (s *Shell) surfacesState() []surfaceStatus {
 		if !visible {
 			box = held.box
 		}
-		entry := surfaceStatus{Surface: id, Plugin: unit.ID, Visible: visible, Dim: s.surfaceDimmed(id), Declared: &box, Applied: &box, Exposes: unit.exposedNames(),
+		entry := surfaceStatus{Surface: id, Plugin: unit.ID, Visible: visible, Dim: s.surfaceDimmed(id), Declared: &box, Applied: &box, Exposes: s.registry.EntriesOf(id),
 			Status: s.surfacePhase(id), Composition: held.composition, Kind: "tab", State: "loaded"}
 		if !visible {
 			entry.Applied = nil
@@ -390,22 +390,6 @@ func (s *Shell) surfacesState() []surfaceStatus {
 		status = append(status, entry)
 	}
 	return status
-}
-
-// exposedNames lists what the plugin of a surface registers, as "<kind> <name>".
-func (u *installedUnit) exposedNames() []string {
-	names := []string{}
-	for kind, entries := range map[string][]json.RawMessage{"status": u.Exposes.Status, "command": u.Exposes.Commands, "element": u.Exposes.Element} {
-		for _, raw := range entries {
-			var entry struct {
-				Name string `json:"name"`
-			}
-			if json.Unmarshal(raw, &entry) == nil { // silent: readSurfaceUnits holds a manifest whose entries are objects.
-				names = append(names, kind+" "+entry.Name)
-			}
-		}
-	}
-	return names
 }
 
 // surfacePhase is the page status of a surface: its reported failure, or ready once the document of the view answered.

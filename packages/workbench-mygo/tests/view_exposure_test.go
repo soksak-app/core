@@ -410,3 +410,37 @@ func TestARightClickInAViewOpensTheMenuOfItsPlugin(t *testing.T) {
 		t.Fatalf("the menu is %+v", menu)
 	}
 }
+
+func TestTheSurfaceStatusListsWhatTheViewRegistered(t *testing.T) {
+	r := newViewRelay(t)
+	surface := r.surface()
+	exposes := func() []any {
+		value, err := r.f.shell.Registry().Read("core.surfaces")
+		if err != nil {
+			t.Fatal(err)
+		}
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var surfaces []map[string]any
+		if err := json.Unmarshal(encoded, &surfaces); err != nil {
+			t.Fatal(err)
+		}
+		for _, entry := range surfaces {
+			if entry["surface"] == surface {
+				return entry["exposes"].([]any)
+			}
+		}
+		t.Fatalf("no surface %s in %v", surface, surfaces)
+		return nil
+	}
+	if listed := exposes(); len(listed) != 0 {
+		t.Fatalf("a view that registered nothing lists %v", listed)
+	}
+	r.call(surface, "runtime.command.register", map[string]any{"name": "terminal.input"})
+	r.f.pending.until(r.t, func() bool { return len(exposes()) == 1 })
+	if listed := exposes(); !reflect.DeepEqual(listed, []any{"command terminal.input"}) {
+		t.Fatalf("the view lists %v", listed)
+	}
+}
