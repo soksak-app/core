@@ -43,10 +43,17 @@ type installedUnit struct {
 	Exposes     surfaceMarks
 	Diagnostics json.RawMessage
 	Sidecars    []string
-	// Settings holds the default of each setting by its local name.
-	Settings map[string]any
-	// Menu tells whether the plugin declares surface.menu.
-	Menu bool
+	// Settings holds the local name of each setting.
+	Settings []string
+	// Menu tells whether the plugin declares surface.menu, and Unload holds its surface.unload.
+	Menu   bool
+	Unload *surfaceUnload
+}
+
+// surfaceUnload is the declaration surface.unload of a plugin.
+type surfaceUnload struct {
+	Format   json.RawMessage `json:"format"`
+	MaxBytes int             `json:"maxBytes"`
 }
 
 // readSurfaceUnits reads the plugins of the document of the installed plugins.
@@ -60,12 +67,11 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 				Surface *struct {
 					Composition json.RawMessage `json:"composition"`
 					Menu        json.RawMessage `json:"menu"`
+					Unload      *surfaceUnload  `json:"unload"`
 				} `json:"surface"`
-				Exposes      json.RawMessage `json:"exposes"`
-				Dependencies map[string]any  `json:"dependencies"`
-				Settings     map[string]struct {
-					Default any `json:"default"`
-				} `json:"settings"`
+				Exposes      json.RawMessage            `json:"exposes"`
+				Dependencies map[string]any             `json:"dependencies"`
+				Settings     map[string]json.RawMessage `json:"settings"`
 			} `json:"manifest"`
 		} `json:"plugins"`
 	}
@@ -77,12 +83,12 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 	}
 	units := make(map[string]*installedUnit, len(read.Plugins))
 	for _, plugin := range read.Plugins {
-		units[plugin.ID] = &installedUnit{ID: plugin.ID, Diagnostics: plugin.Diagnostics, Settings: map[string]any{}}
+		units[plugin.ID] = &installedUnit{ID: plugin.ID, Diagnostics: plugin.Diagnostics}
 	}
 	for _, plugin := range read.Plugins {
 		unit := units[plugin.ID]
-		for local, setting := range plugin.Manifest.Settings {
-			unit.Settings[local] = setting.Default
+		for local := range plugin.Manifest.Settings {
+			unit.Settings = append(unit.Settings, local)
 		}
 		for name := range plugin.Manifest.Dependencies {
 			if units[name] == nil {
@@ -104,6 +110,7 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 			unit.Composition = plugin.Manifest.Surface.Composition
 		}
 		unit.Menu = len(plugin.Manifest.Surface.Menu) > 0
+		unit.Unload = plugin.Manifest.Surface.Unload
 	}
 	return units, nil
 }
@@ -134,8 +141,10 @@ type surfaceState struct {
 	running bool
 	views   map[string]*viewState
 	reports map[string]*tabReport
-	// directories holds the working directory that each view reported.
+	// failed holds the reason of each view that stopped its restarts.
 	failed map[string]string
+	// command is the id of the last command request to a view.
+	command uint64
 }
 
 func newSurfaceState() surfaceState {
@@ -145,7 +154,7 @@ func newSurfaceState() surfaceState {
 
 // drawSeat draws the slot of a card: the native view of its active tab. box is the slot in window coordinates.
 func (s *Shell) drawSeat(c *ui.Context, tab layout.Tab, box layout.Rect) {
-	unit := s.plugins[tab.Plugin]
+	unit := s.units[tab.Plugin]
 	switch {
 	case unit == nil:
 		ui.Text(c, tab.Plugin+" 플러그인이 설치되어 있지 않습니다.").FontSize(12).TextColor(s.palette.Muted)
@@ -172,6 +181,9 @@ func (s *Shell) drawSeat(c *ui.Context, tab layout.Tab, box layout.Rect) {
 // forgetSurfaces removes the surfaces of closed tabs: the next placement leaves them out, and the host closes their views.
 func (s *Shell) forgetSurfaces(tabs []string) {
 	for _, id := range tabs {
+		if view := s.surfaces.views[id]; view != nil {
+			view.end()
+		}
 		delete(s.surfaces.held, id)
 		delete(s.surfaces.failed, id)
 		delete(s.surfaces.reports, id)
@@ -213,7 +225,7 @@ func (s *Shell) surfaceRequest() (map[string]any, error) {
 	tables := map[string]int{}
 	for _, id := range s.surfaces.order {
 		held := s.surfaces.held[id]
-		unit := s.plugins[held.tab.Plugin]
+		unit := s.units[held.tab.Plugin]
 		box, visible := s.surfaces.drawn[id]
 		if visible {
 			held.box = box
@@ -278,7 +290,7 @@ func (s *Shell) placeSurfaces() {
 			continue
 		}
 		held.declared = true
-		unit := s.plugins[held.tab.Plugin]
+		unit := s.units[held.tab.Plugin]
 		s.calls.CallInOrder(surfaceOrder, "compositionDeclare", map[string]any{"surface": id, "plugin": unit.ID, "composition": unit.Composition},
 			func(_ any, err error) {
 				if err != nil {

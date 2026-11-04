@@ -166,6 +166,9 @@ func (s *Shell) show(id string) {
 	}
 	s.active, s.browsing = id, false
 	s.errors.Hide(workbenchErrorPlace)
+	if err := s.beginSettings(); err != nil {
+		s.fail(err)
+	}
 	s.calls.Call("projectShown", map[string]any{"project": map[string]string{"id": id, "root": project.Root, "title": project.Title}},
 		func(_ any, err error) {
 			if err != nil {
@@ -295,6 +298,7 @@ func (s *Shell) settle() { s.settleThen(func() {}) }
 
 // settleThen is settle that runs stored after the plane is stored.
 func (s *Shell) settleThen(stored func()) {
+	s.closePicker()
 	s.held = nil
 	s.keepThen(stored)
 	s.tabsSettled()

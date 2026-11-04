@@ -40,6 +40,11 @@ func (q *Requests) Deliver(data ...any) {
 	})
 }
 
+// Reply answers the request id, for a request that a view runs.
+func (q *Requests) Reply(id uint64, result any, err error) {
+	q.send("exposureReply", "exposure reply", replyOf(id, result, err))
+}
+
 // exposureRequest is the value of the event exposure-request.
 type exposureRequest struct {
 	ID     uint64          `json:"id"`

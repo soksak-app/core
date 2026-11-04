@@ -780,7 +780,7 @@ func TestTheShellWritesItsEventsThroughTheHostCallLog(t *testing.T) {
 	for _, event := range stored.written("workbench.call") {
 		called = append(called, event["fields"].(map[string]any)["name"].(string))
 	}
-	if strings.Join(called, " ") != "workspace windowReady" {
+	if strings.Join(startCalls(called), " ") != "workspace windowReady" {
 		t.Fatalf("the shell recorded the calls %v", called)
 	}
 	if _, err := f.shell.Registry().Answer("command.run", json.RawMessage(`{"name":"core.unknown","params":{}}`), nil); err == nil {

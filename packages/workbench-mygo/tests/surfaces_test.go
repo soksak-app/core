@@ -15,7 +15,7 @@ const installedDocument = `{"plugins": [
 	{"id": "terminal", "package": "@soksak/plugin-terminal", "version": "1.0.0", "sidecars": {"@soksak/sidecar-vt": {}},
 		"manifest": {"id": "terminal", "name": "터미널", "mark": "◊",
 			"dependencies": {"@soksak/sidecar-vt": "^1.0.0"},
-			"settings": {"cursor.shape": {"type": "enum", "default": "block"}, "shell": {"type": "text", "default": ""}},
+			"settings": {"cursor.shape": {"type": "enum", "default": "block", "values": ["block", "beam"]}, "shell": {"type": "text", "default": ""}},
 			"surface": {"composition": {"kind": "view", "page": "ui/terminal.html", "regions": [{"name": "view", "kind": "image"}]}}}},
 	{"id": "browser", "package": "@soksak/plugin-browser", "version": "1.0.0",
 		"manifest": {"id": "browser", "name": "브라우저", "mark": "www",
@@ -179,7 +179,7 @@ func TestTheThemeOfTheViewsPrecedesTheirPlacement(t *testing.T) {
 func TestSplitPlacesTheViewOfTheNewCard(t *testing.T) {
 	f, stored := surfaceShell(t)
 	before := len(stored.lastSurfaces(t))
-	f.click("core.card.split-x", f.tabbedCards()[0])
+	f.run("core.card.split", map[string]string{"card": f.tabbedCards()[0], "side": "right"})
 	if got := len(stored.lastSurfaces(t)); got != before+1 {
 		t.Fatalf("the split placed %d surfaces after %d", got, before)
 	}

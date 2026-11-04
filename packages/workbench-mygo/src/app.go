@@ -53,7 +53,7 @@ func NewApp(options AppOptions) (*App, error) {
 // HostElement returns the views of a surface of a window of h for its native view element.
 func HostElement(h *host.Host) func(window host.Frontend, id string) (uintptr, uintptr, bool) {
 	return func(window host.Frontend, id string) (uintptr, uintptr, bool) {
-		element, ok := h.SurfaceElement(host.WithFrontend(context.Background(), window), id)
+		element, ok := host.ElementOf(h, window, id)
 		return uintptr(element.Surface), uintptr(element.Key), ok
 	}
 }
@@ -136,11 +136,13 @@ func (a *App) Call(window host.Frontend, script string) {}
 func (s *Shell) Event(name string, data []any) {
 	switch name {
 	case "exposure-request":
-		if !s.viewEvent(name, data) {
+		if !s.viewExposure(data) {
 			s.requests.Deliver(data...)
 		}
 	case "view-call":
 		s.viewCall(data)
+	case "view-reply":
+		s.viewReplied(data)
 	case "view-process-ended":
 		s.viewEnded(data)
 	case "view-stopped":

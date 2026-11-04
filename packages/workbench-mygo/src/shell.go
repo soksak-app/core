@@ -136,9 +136,20 @@ type Shell struct {
 	held     *heldDivider
 	library  libraryState
 	tabs     *shellTabs
-	plugins  map[string]*installedUnit
-	surfaces surfaceState
-	page     string
+
+	settings       *SettingsStore
+	settingsWindow settingsWindow
+	commonSettings map[string]any
+	menuLanguage   string
+	plugins        []LoadedPlugin
+
+	picker picker
+	icons  map[string]*ui.SVG
+
+	units         map[string]*installedUnit
+	contributions *Contributions
+	surfaces      surfaceState
+	page          string
 }
 
 // NewShell returns the shell of a window, with its commands in the registry.
@@ -161,7 +172,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 		return nil, fmt.Errorf("environment declaration: %w", err)
 	}
 	s := &Shell{options: options, metrics: read, palette: palette, registry: NewRegistry(options.Declared), calls: options.Calls,
-		grid: environment.Workspace.Grid, focus: environment.Workspace.Focus, browsing: true, library: newLibraryState()}
+		grid: environment.Workspace.Grid, focus: environment.Workspace.Focus, browsing: true, library: newLibraryState(), icons: map[string]*ui.SVG{}}
 	s.events = NewEvents(EventsOptions{Calls: s.calls, Post: options.Post, Report: options.Report, Now: time.Now,
 		After: func(delay time.Duration, task func()) { time.AfterFunc(delay, task) }})
 	s.calls.Observe(s.events.Call)
@@ -169,7 +180,15 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.errors = NewShownErrors(s.events.Error)
 	s.binder = NewBinder(s.registry, func(_ string, err error) { s.fail(err) })
 	s.registry.Elements(options.Elements)
-	if s.plugins, err = readSurfaceUnits(options.Installed); err != nil {
+	if s.units, err = readSurfaceUnits(options.Installed); err != nil {
+		return nil, err
+	}
+	installed, err := readInstalled(options.Installed)
+	if err != nil {
+		return nil, err
+	}
+	s.contributions = NewContributions()
+	if err := s.contributions.Install(installed); err != nil {
 		return nil, err
 	}
 	s.surfaces = newSurfaceState()
@@ -185,6 +204,17 @@ func NewShell(options ShellOptions) (*Shell, error) {
 		Environment: options.Environment, Installed: options.Installed, Changed: s.settle, Seat: options.SectionSeat})
 	if err != nil {
 		return nil, err
+	}
+	s.settingsWindow = newSettingsWindow()
+	var definitions []SettingDefinition
+	if s.plugins, definitions, err = readLoadedPlugins(options.Installed, options.Environment); err != nil {
+		return nil, err
+	}
+	if s.settings, err = NewSettingsStore(definitions, s.settingsSave); err != nil {
+		return nil, err
+	}
+	for _, plugin := range s.plugins {
+		s.settings.Loaded(plugin.ID)
 	}
 	s.register()
 	if options.Tabs != nil {
@@ -221,17 +251,6 @@ func (s *Shell) Registry() *Registry { return s.registry }
 
 // Start reads the workspace and tells the host that the window takes events.
 func (s *Shell) Start() {
-	theme, err := s.options.Declared.PageTheme()
-	if err != nil {
-		s.fail(err)
-		return
-	}
-	// A view reads the theme when it starts, so the theme precedes the snapshot and with it the first placement.
-	s.calls.CallInOrder("workspace", "setTheme", theme, func(_ any, err error) {
-		if err != nil {
-			s.fail(err)
-		}
-	})
 	s.events.Begin(func() {
 		s.calls.CallInOrder("workspace", "workspace", map[string]string{"kind": "snapshot"}, func(value any, err error) {
 			if err != nil {
@@ -259,6 +278,7 @@ func (s *Shell) adopt(value any) error {
 	snapshot, err := decode[struct {
 		Projects      []json.RawMessage `json:"projects"`
 		ProjectsError *string           `json:"projectsError"`
+		Common        map[string]any    `json:"common"`
 	}](value)
 	if err != nil {
 		return err
@@ -275,7 +295,8 @@ func (s *Shell) adopt(value any) error {
 		projects = append(projects, record)
 	}
 	s.projects = projects
-	return nil
+	s.commonSettings = snapshot.Common
+	return s.beginSettings()
 }
 
 // decode reads the answer of a host call, which is the value of the handler or its JSON text.
@@ -364,6 +385,7 @@ func baseName(root string) string { return path.Base(root) }
 func (s *Shell) View(c *ui.Context) {
 	s.sidebars.Begin()
 	clear(s.surfaces.drawn)
+	clear(s.picker.drawn)
 	width, height := c.Size()
 	theme := *c.Theme()
 	theme.Background = s.palette.Bg
@@ -381,5 +403,8 @@ func (s *Shell) View(c *ui.Context) {
 		}
 		s.drawWork(c, width, height-s.metrics.chromeH)
 	})
+	s.drawPicker(c, width, height)
+	s.drawSettings(c, width, height)
 	s.placeSurfaces()
+	s.pushStatuses()
 }

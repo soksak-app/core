@@ -89,7 +89,8 @@ func Audit(tree []ui.ElementNode) []Unbound {
 	walk = func(nodes []ui.ElementNode) {
 		for _, node := range nodes {
 			exposed, _ := node.Key.(Exposed) // silent: an element without this key is unbound, which the zero value reports.
-			if node.Actions&interactive != 0 && (exposed.Name == "" || exposed.Command == "") {
+			// The panel of a popup catches the presses on it, and it is no control.
+			if node.Actions&interactive != 0 && node.Role != ui.RolePopup && (exposed.Name == "" || exposed.Command == "") {
 				unbound = append(unbound, Unbound{Role: AriaRole(node.Role), Expose: exposed.Name, Command: exposed.Command, Text: node.Label})
 			}
 			walk(node.Children)

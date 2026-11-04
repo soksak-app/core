@@ -39,6 +39,22 @@ type viewState struct {
 	events   map[string]bool
 	failures map[string]bool
 	settings bool
+	textSize bool
+	// commands holds the commands that the view registered, and requests the answer of each request that it has not replied.
+	commands map[string]bool
+	requests map[uint64]viewAnswer
+	// statuses holds the text of the last value of each status that the view watches.
+	statuses map[string]string
+	// focus is the value of the last call tab.focus.
+	focus json.RawMessage
+}
+
+// end ends the calls of the page to a view whose document ended.
+func (v *viewState) end() {
+	for id, answer := range v.requests {
+		delete(v.requests, id)
+		answer(nil, errors.New("surface-closed"))
+	}
 }
 
 // tabReport holds what a view reported of its tab.
@@ -46,6 +62,13 @@ type tabReport struct {
 	Title, Footer, Directory, Error string
 	Modified                        bool
 	Keeps                           map[string]bool
+	Notice                          *tabNotice
+}
+
+// tabNotice is the last notification of a view.
+type tabNotice struct {
+	Text   string          `json:"text"`
+	Policy json.RawMessage `json:"policy"`
 }
 
 // viewAnswer receives the result of a view call.
@@ -60,13 +83,20 @@ var regionCalls = map[string]bool{"compositionDeclare": true, "compositionPlace"
 	"documentPost": true, "documentQuery": true, "documentInteractionState": true, "imageAttach": true, "imageFocus": true,
 	"imageCaret": true, "imageText": true, "imageDetach": true}
 
+// binaryID is a binary id of the binary store of a view.
+var binaryID = regexp.MustCompile(`^[0-9a-f]{32}$`)
+
+// coreRoot is the core root of a view, from which it imports the module of a contribution item.
+const coreRoot = "soksak://core"
+
 // errorPlace is the rule of the place of an error line: the record splits a line at its first ": ".
 var errorPlace = regexp.MustCompile(`^[^\x00-\x1f\x7f]+$`)
 
 func (s *Shell) view(surface string) *viewState {
 	view := s.surfaces.views[surface]
 	if view == nil {
-		view = &viewState{pending: map[uint64]*viewPending{}, events: map[string]bool{}, failures: map[string]bool{}}
+		view = &viewState{pending: map[uint64]*viewPending{}, events: map[string]bool{}, failures: map[string]bool{}, commands: map[string]bool{},
+			requests: map[uint64]viewAnswer{}, statuses: map[string]string{}}
 		s.surfaces.views[surface] = view
 	}
 	return view
@@ -245,7 +275,7 @@ func (s *Shell) runRegion(call viewCallEvent, answer viewAnswer) error {
 
 // runViewCall runs the call and gives answer its result. A returned error is a refusal of the call.
 func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnswer) error {
-	unit := s.plugins[call.Plugin]
+	unit := s.units[call.Plugin]
 	if unit == nil {
 		return fmt.Errorf("view call %s: plugin %s is not installed", call.Command, call.Plugin)
 	}
@@ -347,10 +377,212 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 		view.failures[fields.ID] = true
 		done()
 	case "runtime.settings.read":
-		answer(unit.Settings, nil)
+		answer(s.viewSettings(unit), nil)
 	case "runtime.settings.on":
 		view.settings = true
 		done()
+	case "runtime.textSize.read":
+		size, err := s.surfaceTextSize(call.Surface)
+		if err != nil {
+			return err
+		}
+		answer(size, nil)
+	case "runtime.textSize.on":
+		view.textSize = true
+		done()
+	case "runtime.log.levels.on":
+		done()
+	case "tab.state.read":
+		if unit.Unload == nil || s.tabs == nil || s.tabs.states == nil {
+			return fmt.Errorf("view call %s: the tab state is not declared", call.Command)
+		}
+		value, err := readTabState(call.Surface, unit, s.tabs.states)
+		if err != nil {
+			return err
+		}
+		answer(value, nil)
+	case "tab.state.write":
+		if unit.Unload == nil || s.tabs == nil || s.tabs.states == nil {
+			return fmt.Errorf("view call %s: the tab state is not declared", call.Command)
+		}
+		if len(call.Params) > unit.Unload.MaxBytes {
+			return fmt.Errorf("tab %s state of %d bytes exceeds %d", call.Surface, len(call.Params), unit.Unload.MaxBytes)
+		}
+		state, err := json.Marshal(map[string]json.RawMessage{"format": unit.Unload.Format, "value": call.Params})
+		if err != nil {
+			return err
+		}
+		s.tabs.states.Write(call.Surface, state)
+		done()
+	case "tab.focus":
+		view.focus = call.Params
+		done()
+	case "tab.notify":
+		notice, err := viewFields[tabNotice](call)
+		if err != nil {
+			return err
+		}
+		s.report(call.Surface).Notice = &notice
+		s.options.Invalidate()
+		done()
+	case "runtime.links.open":
+		url, err := text()
+		if err != nil {
+			return err
+		}
+		if url == "" {
+			return fmt.Errorf("view call %s requires a non-empty URL", call.Command)
+		}
+		s.calls.Call("linkOpen", map[string]string{"url": url}, func(_ any, err error) { answer(nil, err) })
+	case "runtime.clipboard.read":
+		return s.readClipboard(call, text, answer)
+	case "runtime.clipboard.writeText":
+		value, err := text()
+		if err != nil {
+			return err
+		}
+		s.calls.Call("clipboardWriteText", value, func(_ any, err error) { answer(nil, err) })
+	case "runtime.clipboard.persistPNG":
+		fields, err := viewFields[struct {
+			Binary string `json:"binary"`
+		}](call)
+		if err != nil {
+			return err
+		}
+		if !binaryID.MatchString(fields.Binary) {
+			return fmt.Errorf("view call %s requires binary, the id of an upload to the binary path of the view", call.Command)
+		}
+		s.surfaceCall(call, "clipboardPersistViewPNG", map[string]any{"binary": fields.Binary}, func(value any, err error) {
+			if err != nil {
+				answer(nil, err)
+				return
+			}
+			persisted, err := decode[struct {
+				Path string `json:"path"`
+			}](value)
+			if err == nil && persisted.Path == "" {
+				err = fmt.Errorf("view call %s: the clipboard PNG persistence reply of the host is invalid", call.Command)
+			}
+			if err != nil {
+				answer(nil, err)
+				return
+			}
+			answer(map[string]string{"path": persisted.Path, "shellQuotedPath": "'" + strings.ReplaceAll(persisted.Path, "'", `'\''`) + "'"}, nil)
+		})
+	case "runtime.command.register":
+		fields, err := viewFields[struct {
+			Name string `json:"name"`
+		}](call)
+		if err != nil {
+			return err
+		}
+		if fields.Name == "" {
+			return fmt.Errorf("view call %s requires a non-empty name", call.Command)
+		}
+		if view.commands[fields.Name] {
+			return fmt.Errorf("command %s is already registered", fields.Name)
+		}
+		view.commands[fields.Name] = true
+		done()
+	case "runtime.command.run":
+		fields, err := viewFields[struct {
+			Name    string          `json:"name"`
+			Surface string          `json:"surface"`
+			Params  json.RawMessage `json:"params"`
+		}](call)
+		if err != nil {
+			return err
+		}
+		if owner, _, _ := strings.Cut(fields.Name, "."); owner != call.Plugin {
+			return fmt.Errorf("view call %s %s is not a command of %s", call.Command, fields.Name, call.Plugin)
+		}
+		if held := s.surfaces.held[fields.Surface]; held == nil || held.tab.Plugin != call.Plugin {
+			return fmt.Errorf("view call %s surface %s is not a surface of %s", call.Command, fields.Surface, call.Plugin)
+		}
+		return s.runViewCommand(fields.Surface, fields.Name, fields.Params, call.Cids, answer)
+	case "runtime.status.watch", "runtime.status.unwatch":
+		fields, err := viewFields[struct {
+			Name    string  `json:"name"`
+			Surface *string `json:"surface"`
+		}](call)
+		if err != nil {
+			return err
+		}
+		if owner, _, _ := strings.Cut(fields.Name, "."); owner != "core" {
+			return fmt.Errorf("view call %s %s is not a core status", call.Command, fields.Name)
+		}
+		if fields.Surface != nil {
+			return fmt.Errorf("view call %s %s: a status of a surface is not served", call.Command, fields.Name)
+		}
+		if call.Command == "runtime.status.unwatch" {
+			delete(view.statuses, fields.Name)
+			done()
+			return nil
+		}
+		if !s.options.Declared.Statuses[fields.Name] {
+			return fmt.Errorf("view call %s %s is not a declared status", call.Command, fields.Name)
+		}
+		view.statuses[fields.Name] = ""
+		done()
+		s.pushStatuses()
+	case "runtime.contributions":
+		fields, err := viewFields[struct {
+			Point string `json:"point"`
+		}](call)
+		if err != nil {
+			return err
+		}
+		items, err := s.contributions.Of(call.Plugin, fields.Point)
+		if err != nil {
+			return err
+		}
+		answer(viewContributions(items), nil)
+	case "runtime.contributions.fail":
+		fields, err := viewFields[struct {
+			Point  string `json:"point"`
+			Plugin string `json:"plugin"`
+			Index  int    `json:"index"`
+			Reason string `json:"reason"`
+		}](call)
+		if err != nil {
+			return err
+		}
+		if fields.Reason == "" {
+			return fmt.Errorf("view call %s requires a non-empty reason", call.Command)
+		}
+		items, err := s.contributions.Of(call.Plugin, fields.Point)
+		if err != nil {
+			return err
+		}
+		for _, item := range items {
+			if item.Plugin == fields.Plugin && item.Index == fields.Index {
+				item.Fail(errors.New(fields.Reason))
+				done()
+				return nil
+			}
+		}
+		return fmt.Errorf("view call %s: %s has no connected item %d of %s", call.Command, fields.Point, fields.Index, fields.Plugin)
+	case "surface.menu":
+		fields, err := viewFields[struct {
+			X *float64 `json:"x"`
+			Y *float64 `json:"y"`
+		}](call)
+		if err != nil {
+			return err
+		}
+		if fields.X == nil || fields.Y == nil {
+			return fmt.Errorf("view call %s requires x and y as finite numbers", call.Command)
+		}
+		held := s.surfaces.held[call.Surface]
+		if !unit.Menu || held == nil {
+			answer(false, nil)
+			return nil
+		}
+		params, err := json.Marshal(map[string]any{"surface": call.Surface, "x": held.box.X + *fields.X, "y": held.box.Y + *fields.Y})
+		if err != nil {
+			return err
+		}
+		s.registry.RunLater("core.surface.menu", params, func(_ any, err error) { answer(true, err) })
 	case "runtime.shortcuts.read":
 		rows := []map[string]string{}
 		for _, row := range s.options.Declared.Shortcuts {
@@ -416,9 +648,245 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 		}
 		done()
 	default:
-		return fmt.Errorf("view call %s is not served", call.Command)
+		return s.runCommandCall(call, answer)
 	}
 	return nil
+}
+
+// runCommandCall runs the command that names a call: a core command, or a command that the view registered. Any other name is
+// refused as runCommandCall of packages/workbench/command-route.js refuses it.
+func (s *Shell) runCommandCall(call viewCallEvent, answer viewAnswer) error {
+	owner, _, dotted := strings.Cut(call.Command, ".")
+	switch {
+	case !dotted:
+		return fmt.Errorf("view call %s names no owner", call.Command)
+	case owner == "core":
+		s.registry.RunLater(call.Command, call.Params, answer)
+		return nil
+	case owner == call.Plugin:
+		return s.runViewCommand(call.Surface, call.Command, call.Params, call.Cids, answer)
+	case owner == "tab" || owner == "runtime":
+		return fmt.Errorf("view call %s is not served", call.Command)
+	}
+	return fmt.Errorf("command %s belongs to %s, not %s", call.Command, owner, call.Plugin)
+}
+
+// runViewCommand sends a command that the view of surface registered to that view. The reply arrives as the event view-reply.
+func (s *Shell) runViewCommand(surface, name string, params, cids json.RawMessage, answer viewAnswer) error {
+	view := s.surfaces.views[surface]
+	if view == nil || !view.commands[name] {
+		return fmt.Errorf("command %s is not registered on surface %s", name, surface)
+	}
+	s.surfaces.command++
+	id := s.surfaces.command
+	view.requests[id] = answer
+	request := map[string]any{"surface": surface, "generation": view.generation, "id": id, "command": name, "params": rawOrNull(params)}
+	if len(cids) > 0 {
+		request["cids"] = cids
+	}
+	s.calls.CallInOrder("view:"+surface, "viewRequest", request, func(_ any, err error) {
+		if err != nil && view.requests[id] != nil {
+			delete(view.requests, id)
+			answer(nil, err)
+		}
+	})
+	return nil
+}
+
+// viewReplied receives the reply of a view to a command, the event view-reply.
+func (s *Shell) viewReplied(data []any) {
+	if len(data) != 1 {
+		return
+	}
+	reply, err := decode[struct {
+		Surface string          `json:"surface"`
+		ID      uint64          `json:"id"`
+		Result  json.RawMessage `json:"result"`
+		Error   *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}](data[0])
+	if err != nil {
+		s.fail(fmt.Errorf("view reply: %w", err))
+		return
+	}
+	view := s.surfaces.views[reply.Surface]
+	if view == nil || view.requests[reply.ID] == nil {
+		return
+	}
+	answer := view.requests[reply.ID]
+	delete(view.requests, reply.ID)
+	if reply.Error != nil {
+		answer(nil, errors.New(reply.Error.Message))
+		return
+	}
+	answer(reply.Result, nil)
+}
+
+// viewExposure answers a request of the relay that belongs to a view, and tells whether it did. A command that a view registered
+// runs in that view, and any other request of a surface goes to the view that subscribed to the requests.
+func (s *Shell) viewExposure(data []any) bool {
+	if len(data) != 1 {
+		return false
+	}
+	request, err := decode[struct {
+		ID      uint64 `json:"id"`
+		Method  string `json:"method"`
+		Surface string `json:"surface"`
+		Params  struct {
+			Name    string          `json:"name"`
+			Surface string          `json:"surface"`
+			Params  json.RawMessage `json:"params"`
+			Cids    json.RawMessage `json:"cids"`
+		} `json:"params"`
+	}](data[0])
+	if err != nil || request.Method != "command.run" {
+		return s.viewEvent("exposure-request", data)
+	}
+	surface := request.Params.Surface
+	if surface == "" {
+		surface = request.Surface
+	}
+	for _, id := range append([]string{surface}, s.surfaces.order...) {
+		view := s.surfaces.views[id]
+		if view == nil || !view.commands[request.Params.Name] {
+			continue
+		}
+		answer := func(result any, err error) { s.requests.Reply(request.ID, result, err) }
+		if err := s.runViewCommand(id, request.Params.Name, request.Params.Params, request.Params.Cids, answer); err != nil {
+			answer(nil, err)
+		}
+		return true
+	}
+	return s.viewEvent("exposure-request", data)
+}
+
+// viewSettings returns the values of the settings of a plugin.
+func (s *Shell) viewSettings(unit *installedUnit) map[string]any {
+	values := make(map[string]any, len(unit.Settings))
+	for _, local := range unit.Settings {
+		values[local] = s.settings.Value(unit.ID + "." + local)
+	}
+	return values
+}
+
+// surfaceTextSize returns the text scale of the surface: the factor of its card.
+func (s *Shell) surfaceTextSize(surface string) (float64, error) {
+	card := s.cardOfTab(surface)
+	if card == "" {
+		return 0, fmt.Errorf("surface %s is not in the layout", surface)
+	}
+	data, err := s.cardData(card)
+	if err != nil {
+		return 0, err
+	}
+	return data.CardTextSize(), nil
+}
+
+// readTabState returns the value of the state of the tab: null without one, and a state of another format is refused.
+func readTabState(tab string, unit *installedUnit, states *TabStates) (any, error) {
+	entry, _ := states.Entry(tab) // silent: a tab without an entry reads null, as a tab without a state.
+	if len(entry.State) == 0 {
+		return nil, nil
+	}
+	var stored struct {
+		Format json.RawMessage `json:"format"`
+		Value  json.RawMessage `json:"value"`
+	}
+	if err := json.Unmarshal(entry.State, &stored); err != nil {
+		return nil, fmt.Errorf("tab %s state: %w", tab, err)
+	}
+	if string(stored.Format) != string(unit.Unload.Format) {
+		return nil, fmt.Errorf("tab %s state format %s is not %s", tab, stored.Format, unit.Unload.Format)
+	}
+	return stored.Value, nil
+}
+
+// readClipboard answers the call runtime.clipboard.read. A PNG travels through the binary store of the view.
+func (s *Shell) readClipboard(call viewCallEvent, text func() (string, error), answer viewAnswer) error {
+	kind, err := text()
+	if err != nil {
+		return err
+	}
+	switch kind {
+	case "png":
+		s.surfaceCall(call, "clipboardReadViewPNG", map[string]any{"userInitiated": true}, func(value any, err error) {
+			if err != nil {
+				answer(nil, err)
+				return
+			}
+			png, err := decode[struct {
+				Present bool   `json:"present"`
+				Type    string `json:"type"`
+				Binary  string `json:"binary"`
+			}](value)
+			switch {
+			case err != nil:
+				answer(nil, err)
+			case png.Type == "png" && !png.Present:
+				answer(nil, nil)
+			case png.Type != "png" || !binaryID.MatchString(png.Binary):
+				answer(nil, fmt.Errorf("view call %s png: the clipboard png reply of the host is invalid", call.Command))
+			default:
+				answer(png, nil)
+			}
+		})
+	case "text", "fileURLs":
+		s.calls.Call("clipboardRead", map[string]any{"type": kind, "userInitiated": true}, func(value any, err error) {
+			if err != nil {
+				answer(nil, err)
+				return
+			}
+			read, err := decode[struct {
+				Present bool            `json:"present"`
+				Type    string          `json:"type"`
+				Text    json.RawMessage `json:"text"`
+				URLs    json.RawMessage `json:"urls"`
+			}](value)
+			switch {
+			case err != nil:
+				answer(nil, err)
+			case read.Type != kind:
+				answer(nil, fmt.Errorf("clipboard response type mismatch for %s", kind))
+			case !read.Present:
+				answer(nil, nil)
+			case kind == "text":
+				answer(read.Text, nil)
+			default:
+				answer(read.URLs, nil)
+			}
+		})
+	default:
+		return fmt.Errorf("view call %s %s is not served", call.Command, kind)
+	}
+	return nil
+}
+
+// viewContributions returns the connected items as a view reads them: the module of an item comes from the core root.
+func viewContributions(items []ConnectedItem) []map[string]any {
+	listed := make([]map[string]any, len(items))
+	for i, item := range items {
+		listed[i] = map[string]any{"plugin": item.Plugin, "index": item.Index, "item": item.Item, "module": coreRoot + item.Module}
+	}
+	return listed
+}
+
+// pushStatuses sends each watched status of a view whose value changed.
+func (s *Shell) pushStatuses() {
+	for surface, view := range s.surfaces.views {
+		for name, last := range view.statuses {
+			value, err := s.registry.Read(name)
+			if err != nil {
+				continue // A status that cannot be read now has no new value.
+			}
+			text, err := json.Marshal(value)
+			if err != nil || string(text) == last {
+				continue
+			}
+			view.statuses[name] = string(text)
+			s.pushView(surface, view, "status", map[string]any{"name": name, "value": value})
+		}
+	}
 }
 
 // runNativeCall runs the call runtime.native.call: the registrations of the view and the one host call that reaches a plugin.
@@ -528,6 +996,7 @@ func (s *Shell) viewEnded(data []any) {
 	if view == nil || view.generation != event.Generation {
 		return
 	}
+	view.end()
 	delete(s.surfaces.views, event.Surface)
 }
 

@@ -33,6 +33,11 @@ type storedHost struct {
 	batchCalls bool
 	mu         sync.Mutex
 	batches    []map[string]any
+	// common holds the common settings, and settings each write of the settings.
+	common   map[string]any
+	settings []map[string]any
+	// theme and language hold the last theme and menu language that the shell sent.
+	theme, language json.RawMessage
 }
 
 // log answers the host call log and keeps the events of its batches.
@@ -101,7 +106,6 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 	return map[string]workbench.HostCall{
 		"log":       h.log,
 		"workspace": answer("workspace", h.workspace),
-		"setTheme":  answer("setTheme", none),
 		"projectFolder": answer("projectFolder", func(argument json.RawMessage) (any, error) {
 			var root string
 			if err := json.Unmarshal(argument, &root); err != nil {
@@ -128,12 +132,19 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 			h.shown = append(h.shown, shown)
 			return nil, nil
 		}),
-		"projectRelease":   answer("projectRelease", none),
-		"projectRemoveAsk": answer("projectRemoveAsk", func(json.RawMessage) (any, error) { return true, nil }),
-		"folderChoose":     answer("folderChoose", func(json.RawMessage) (any, error) { return "/chosen", nil }),
-		"windowReady":      answer("windowReady", none),
-		"windowNew":        answer("windowNew", none),
-		"windowClose":      answer("windowClose", none),
+		"projectRelease":     answer("projectRelease", none),
+		"projectRemoveAsk":   answer("projectRemoveAsk", func(json.RawMessage) (any, error) { return true, nil }),
+		"folderChoose":       answer("folderChoose", func(json.RawMessage) (any, error) { return "/chosen", nil }),
+		"windowReady":        answer("windowReady", none),
+		"setTheme":           answer("setTheme", func(argument json.RawMessage) (any, error) { h.theme = argument; return nil, nil }),
+		"compositionDeclare": answer("compositionDeclare", none),
+		"syncSurfaces": answer("syncSurfaces", func(json.RawMessage) (any, error) {
+			return map[string]any{"ticket": 1, "placements": []any{}, "chrome": map[string]any{}}, nil
+		}),
+		"presentSurfaces": answer("presentSurfaces", none),
+		"setMenuLanguage": answer("setMenuLanguage", func(argument json.RawMessage) (any, error) { h.language = argument; return nil, nil }),
+		"windowNew":       answer("windowNew", none),
+		"windowClose":     answer("windowClose", none),
 	}
 }
 
@@ -152,13 +163,17 @@ func (h *storedHost) workspace(argument json.RawMessage) (any, error) {
 		ID      string
 		Project map[string]any
 		Patch   map[string]any
+		Remove  []string
 	}
 	if err := json.Unmarshal(argument, &request); err != nil {
 		return nil, err
 	}
 	switch request.Kind {
 	case "snapshot":
-		return map[string]any{"projects": h.projects, "open": []string{}}, nil
+		return map[string]any{"projects": h.projects, "open": []string{}, "common": h.common}, nil
+	case "settings":
+		h.settings = append(h.settings, map[string]any{"id": request.ID, "patch": request.Patch, "remove": request.Remove})
+		return nil, nil
 	case "add":
 		h.projects = append(h.projects, request.Project)
 		return request.Project, nil
@@ -219,6 +234,7 @@ func newShell(t *testing.T, stored *storedHost) *shellFixture {
 	}
 	f := &shellFixture{t: t, host: stored, pending: make(steps, 256)}
 	shell, err := workbench.NewShell(workbench.ShellOptions{
+		Element:     func(string) (uintptr, uintptr, bool) { return 0, 0, false },
 		Declared:    declared,
 		Calls:       workbench.NewCalls(stored.table(), f.pending.post),
 		Environment: environment(t),
@@ -366,9 +382,27 @@ func TestLibraryShowsTheStartOfAnEmptyWorkspace(t *testing.T) {
 
 func TestWindowIsReadyAfterTheSnapshot(t *testing.T) {
 	f := newShell(t, &storedHost{})
-	if strings.Join(f.host.calls, " ") != "setTheme workspace windowReady" {
+	if strings.Join(startCalls(f.host.calls), " ") != "workspace windowReady" {
 		t.Fatalf("the start called %v", f.host.calls)
 	}
+}
+
+func TestStartSendsTheThemeAndTheLanguageOfTheMenu(t *testing.T) {
+	f := newShell(t, &storedHost{})
+	if f.host.theme == nil || f.host.language == nil {
+		t.Fatalf("the start called %v", f.host.calls)
+	}
+}
+
+// startCalls are the calls of the start without the appearance, which runs in its own order beside them.
+func startCalls(calls []string) []string {
+	var kept []string
+	for _, call := range calls {
+		if call != "setTheme" && call != "setMenuLanguage" {
+			kept = append(kept, call)
+		}
+	}
+	return kept
 }
 
 func TestLibraryFormOpensAProject(t *testing.T) {
@@ -416,9 +450,10 @@ func TestLibraryListsAndRemovesProjects(t *testing.T) {
 }
 
 func TestSplitMakesACardAndStoresIt(t *testing.T) {
-	f := openedShell(t)
+	f := projectWithPlugins(t)
 	before := f.tabbedCards()
 	f.click("core.card.split-x", before[0])
+	f.click("core.picker.item", "acme")
 	after := f.tabbedCards()
 	if len(after) != len(before)+1 {
 		t.Fatalf("the split stored %v after %v", after, before)
@@ -436,9 +471,10 @@ func TestSplitMakesACardAndStoresIt(t *testing.T) {
 }
 
 func TestTabsOfACard(t *testing.T) {
-	f := openedShell(t)
+	f := projectWithPlugins(t)
 	card := f.tabbedCards()[0]
 	f.click("core.card.add", card)
+	f.click("core.picker.item", "acme")
 	cards := f.cardsOf()
 	var tabs []any
 	for _, stored := range cards {
@@ -480,9 +516,10 @@ func TestSpacesOfAProject(t *testing.T) {
 }
 
 func TestStoredProjectOpensItsLayout(t *testing.T) {
-	first := openedShell(t)
+	first := projectWithPlugins(t)
 	card := first.tabbedCards()[0]
 	first.click("core.card.split-x", card)
+	first.click("core.picker.item", "acme")
 	cards := first.tabbedCards()
 	second := newShell(t, first.host)
 	second.click("core.library.open", first.host.projects[0]["id"].(string))
