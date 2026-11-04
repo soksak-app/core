@@ -545,3 +545,194 @@ func TestHeadCases(t *testing.T) {
 		})
 	}
 }
+
+func TestTabCases(t *testing.T) {
+	var file struct {
+		Description string `json:"description"`
+		Cases       []struct {
+			Name string `json:"name"`
+			Card struct {
+				ID   string          `json:"id"`
+				Data json.RawMessage `json:"data"`
+			} `json:"card"`
+			Steps []step `json:"steps"`
+		} `json:"cases"`
+		Names []struct {
+			Name     string          `json:"name"`
+			Tab      layout.Tab      `json:"tab"`
+			Reported *string         `json:"reported"`
+			Modified bool            `json:"modified"`
+			Returns  json.RawMessage `json:"returns"`
+		} `json:"names"`
+	}
+	caseFile(t, "tabs.json", &file)
+	for _, kase := range file.Cases {
+		t.Run(kase.Name, func(t *testing.T) {
+			data, err := layout.DecodeCardData(kase.Card.Data)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for i, s := range kase.Steps {
+				checkStep(t, s, fmt.Sprintf("step %d %s", i+1, s.Call), func() (any, bool, error) { return tabCall(t, data, s) })
+			}
+		})
+	}
+	for _, kase := range file.Names {
+		t.Run("name "+kase.Name, func(t *testing.T) {
+			checkStep(t, step{Call: "tabName", Returns: kase.Returns}, "tabName", func() (any, bool, error) {
+				return layout.TabName(kase.Tab, kase.Reported, kase.Modified), true, nil
+			})
+		})
+	}
+}
+
+// tabCall runs one step on the card data: card reads the data, any other call is the tab function of that name.
+func tabCall(t *testing.T, data *layout.CardData, s step) (any, bool, error) {
+	t.Helper()
+	switch s.Call {
+	case "card":
+		return data, true, nil
+	case "tabsOf":
+		return data.TabList(), true, nil
+	case "activeTab":
+		tab := data.ActiveTab()
+		return tab, tab != nil, nil
+	case "cardTextSize":
+		return data.CardTextSize(), true, nil
+	case "removeTab":
+		var id string
+		arg(t, s, 0, &id)
+		data.RemoveTab(id)
+		return nil, false, nil
+	case "appendTab":
+		var tab layout.Tab
+		arg(t, s, 0, &tab)
+		data.AppendTab(tab)
+		return nil, false, nil
+	case "settleActiveTab":
+		data.SettleActiveTab()
+		return nil, false, nil
+	}
+	t.Fatalf("no tab call %s", s.Call)
+	return nil, false, nil
+}
+
+func TestSidebarCases(t *testing.T) {
+	var file struct {
+		Description string `json:"description"`
+		Cases       []struct {
+			Name string `json:"name"`
+			Card struct {
+				ID   string          `json:"id"`
+				Data json.RawMessage `json:"data"`
+			} `json:"card"`
+			Sets  map[string]json.RawMessage `json:"sets"`
+			Steps []step                     `json:"steps"`
+		} `json:"cases"`
+		Present []struct {
+			Name      string                           `json:"name"`
+			Requested map[string]layout.SidebarRequest `json:"requested"`
+			Rect      layout.Rect                      `json:"rect"`
+			Metrics   layout.SidebarMetrics            `json:"metrics"`
+			Prefer    map[string]string                `json:"prefer"`
+			Returns   json.RawMessage                  `json:"returns"`
+			Throws    *string                          `json:"throws"`
+		} `json:"present"`
+		Grid []struct {
+			Name    string          `json:"name"`
+			Size    float64         `json:"size"`
+			Ratio   float64         `json:"ratio"`
+			Returns json.RawMessage `json:"returns"`
+			Throws  *string         `json:"throws"`
+		} `json:"grid"`
+	}
+	caseFile(t, "sidebars.json", &file)
+	for _, kase := range file.Cases {
+		t.Run(kase.Name, func(t *testing.T) {
+			data, err := layout.DecodeCardData(kase.Card.Data)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for i, s := range kase.Steps {
+				checkStep(t, s, fmt.Sprintf("step %d %s", i+1, s.Call), func() (any, bool, error) {
+					return sidebarCall(t, kase.Card.ID, data, kase.Sets, s)
+				})
+			}
+		})
+	}
+	for _, kase := range file.Present {
+		t.Run("present "+kase.Name, func(t *testing.T) {
+			checkStep(t, step{Call: "presentSidebars", Returns: kase.Returns, Throws: kase.Throws}, "presentSidebars", func() (any, bool, error) {
+				shown, err := layout.PresentSidebars(kase.Requested, kase.Rect, kase.Metrics, kase.Prefer)
+				return shown, err == nil, err
+			})
+		})
+	}
+	for _, kase := range file.Grid {
+		t.Run("grid "+kase.Name, func(t *testing.T) {
+			checkStep(t, step{Call: "deviceGridSize", Returns: kase.Returns, Throws: kase.Throws}, "deviceGridSize", func() (any, bool, error) {
+				size, err := layout.DeviceGridSize(kase.Size, kase.Ratio)
+				return size, err == nil, err
+			})
+		})
+	}
+}
+
+// sidebarCall runs one step on the card data: card reads the data, any other call is the sidebar function of that name.
+func sidebarCall(t *testing.T, id string, data *layout.CardData, sets map[string]json.RawMessage, s step) (any, bool, error) {
+	t.Helper()
+	var side string
+	var defaults layout.SidebarDefaults
+	var linked *struct {
+		ID string `json:"id"`
+	}
+	linkedID := func() *string {
+		if linked == nil {
+			return nil
+		}
+		return &linked.ID
+	}
+	switch s.Call {
+	case "card":
+		return data, true, nil
+	case "effectiveSidebar":
+		arg(t, s, 0, &side)
+		arg(t, s, 1, &defaults)
+		arg(t, s, 2, &linked)
+		effective, err := layout.EffectiveSidebar(id, data, side, defaults, linkedID())
+		return effective, err == nil, err
+	case "resolveSidebarSet":
+		arg(t, s, 0, &side)
+		arg(t, s, 1, &defaults)
+		arg(t, s, 2, &linked)
+		set, err := layout.ResolveSidebarSet(id, data, side, sets, defaults, linkedID())
+		if err != nil {
+			return nil, false, err
+		}
+		if set == nil {
+			return nil, true, nil
+		}
+		return set, true, nil
+	case "setSidebar":
+		var choice string
+		arg(t, s, 0, &side)
+		arg(t, s, 1, &choice)
+		return nil, false, layout.SetSidebar(id, data, side, choice, sets)
+	case "toggleSidebar":
+		var shownCollapsed bool
+		arg(t, s, 0, &side)
+		arg(t, s, 1, &defaults)
+		arg(t, s, 2, &linked)
+		arg(t, s, 3, &shownCollapsed)
+		return nil, false, layout.ToggleSidebar(id, data, side, defaults, linkedID(), shownCollapsed)
+	case "sizeSidebar":
+		var size float64
+		arg(t, s, 0, &side)
+		arg(t, s, 1, &size)
+		arg(t, s, 2, &defaults)
+		arg(t, s, 3, &linked)
+		return nil, false, layout.SizeSidebar(id, data, side, size, defaults, linkedID())
+	}
+	t.Fatalf("no sidebar call %s", s.Call)
+	return nil, false, nil
+}
