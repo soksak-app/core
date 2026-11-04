@@ -57,6 +57,30 @@ export function pixel(frame, x, y) {
   return [frame.data[i + 2], frame.data[i + 1], frame.data[i]];
 }
 
+/**
+ * The rectangle (points) and the number of the pixels that differ between two frames of one size, or null for equal frames.
+ * A capture delivers a frame for any change in the window, so this states what a frame shows that the frame before it does not.
+ */
+export function frameChange(before, after) {
+  if (before.width !== after.width || before.height !== after.height) {
+    throw new Error(`frameChange compares frames of one size, got frames of ${before.width}x${before.height} and ${after.width}x${after.height}`);
+  }
+  let left = Infinity, top = Infinity, right = -1, bottom = -1, pixels = 0;
+  for (let y = 0; y < after.height; y++) {
+    const start = y * before.stride, end = y * after.stride;
+    if (before.data.compare(after.data, end, end + after.width * 4, start, start + before.width * 4) === 0) continue;
+    for (let x = 0; x < after.width; x++) {
+      const a = start + x * 4, b = end + x * 4;
+      if (before.data[a] === after.data[b] && before.data[a + 1] === after.data[b + 1] && before.data[a + 2] === after.data[b + 2]) continue;
+      pixels++;
+      left = Math.min(left, x); right = Math.max(right, x); top = Math.min(top, y); bottom = y;
+    }
+  }
+  if (pixels === 0) return null;
+  const scale = after.scale;
+  return { x: left / scale, y: top / scale, width: (right - left + 1) / scale, height: (bottom - top + 1) / scale, pixels };
+}
+
 /** Measures reported and decoded capture intervals independently of functional proof. */
 export function captureCadence(reported, times) {
   if (!Number.isFinite(reported) || reported < 0) throw new Error("capture reported frame gap is invalid");

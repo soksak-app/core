@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F446-2: A drag report reads the frames that a display shows, so runs with a different number of repeated frames compare.
 - F453: The guidance states v0.0.34 as the latest published release.
 - F447-2: A failed restore of the registry does not make a later run fail.
 - F447-1: A plugin command declares the limit of the reads and downloads that it waits for.

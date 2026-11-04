@@ -4,7 +4,7 @@ import { availableParallelism, loadavg } from "node:os";
 import { join } from "node:path";
 
 import { drag, keepCommonSettings } from "@soksak/window-check/app.mjs";
-import { frames, readFrame } from "@soksak/window-check/frame.mjs";
+import { frameChange, frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, monotonicTimeMs,
   mapViewContentFramesToCapture, requireViewContentFrameCoverage, rightEdgeWidthDragPlan,
   rootNativePlacementBeforeCapture, selectOneShotViewSourceFrame,
@@ -16,7 +16,7 @@ import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFr
 import { outside, terminalMarks } from "../../outside.mjs";
 import { readScreenUntil } from "../../terminal-screen.mjs";
 import { assertDragPerformance, assertHeldStatesShown, assertRoundTrips, measureDragPerformance,
-  pointerLag, transactionCadence } from "../../drag-measurement.mjs";
+  pointerLag, shownTimes, transactionCadence } from "../../drag-measurement.mjs";
 
 
 /** Uses the fixed check-shell prompt as pixel evidence for the initial terminal content. */
@@ -475,13 +475,17 @@ export async function collectTerminalDrag(t, s, terminal, configDir) {
   assert.ok(files.length > 30, "the benchmark has too few captured frames");
 
   const samples = [];
-  const times = [];
+  const shown = [];
+  let previous = null;
+  let repeatedFrames = 0;
   const unmeasured = [];
   const geometryFrames = [];
   const geometryUnmeasured = [];
   for (const [frameIndex, file] of files.entries()) {
     const frame = readFrame(file);
-    times.push(frame.time);
+    const repeated = previous !== null && frameChange(previous, frame) === null;
+    previous = frame;
+    if (repeated) repeatedFrames++;
     try {
       const geometry = measureViewFrameGeometry(frame, { ...TERMINAL_GEOMETRY,
         colorTolerance: VIEW_GEOMETRY_COLOR_TOLERANCE, cornerRadiusPt, targetRect });
@@ -495,17 +499,20 @@ export async function collectTerminalDrag(t, s, terminal, configDir) {
       continue;
     }
     samples.push({ time: frame.time, position: at.card.l / at.scale });
+    if (!repeated) shown.push(samples.at(-1));
   }
   assert.ok(samples.length > files.length * 0.5,
     `only ${samples.length}/${files.length} frames have measured geometry`);
   assertRoundTrips(samples.map((sample) => sample.position), 2);
   assertHeldStatesShown(samples, run.ticks, run.boundary);
-  const lag = pointerLag(samples, run.ticks, run.boundary);
+  const lag = pointerLag(shown, run.ticks, run.boundary);
   const refreshRate = (await s.get("host.window")).refreshRate;
+  const times = shownTimes(shown, run.ticks);
   const performance = measureDragPerformance(times, lag, refreshRate);
   const report = {
     host: s.app.name,
     performance,
+    repeatedFrames,
     mode: { performanceTrace: false, rendererTrace: false, logPolicy: {}, recording: true },
     load: loadavg(),
     processors: availableParallelism(),

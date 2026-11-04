@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F446-2: drag report가 display가 보여 주는 frame을 읽어, 반복 frame 수가 다른 실행을 비교할 수 있다.
 - F453: 지침이 최신 게시 release를 v0.0.34로 적는다.
 - F447-2: registry 복원 실패가 다음 run을 실패시키지 않습니다.
 - F447-1: plugin command가 자신이 기다리는 읽기와 download의 제한을 선언합니다.
