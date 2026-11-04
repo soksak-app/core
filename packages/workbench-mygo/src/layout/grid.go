@@ -1712,11 +1712,13 @@ func (g *Grid) openSlot(axis Axis, line int, spanned float64) string {
 		gave = "lo"
 	default:
 		keep := 1 - spanned
+		// float64 rounds each product before it is added, as JavaScript does; without it Go may fuse them (number.go).
 		at := float64(a[line]*keep) + spanned
 		for k := range a {
 			if k <= line {
 				a[k] = a[k] * keep
 			} else {
+				// float64 rounds each product before it is added, as JavaScript does; without it Go may fuse them (number.go).
 				a[k] = float64(a[k]*keep) + spanned
 			}
 		}
