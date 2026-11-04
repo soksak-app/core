@@ -855,6 +855,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F533",
+    implementation: [
+      { file: "packages/workbench/memory-saver.js", symbol: 'if (trigger === "delay") entry.unloadAt = now() + delayMs();' },
+    ],
+    tests: [
+      { file: "packages/workbench/test/memory-saver.test.mjs", id: "a failed ${step} at the deadline runs again one delay later, not at the deadline that passed" },
+    ],
+    expected: "A delay unload that fails runs again one delay later.",
+    levels: ["unit"],
+  },
+  {
     id: "F531",
     implementation: [
       { file: "scripts/measure-app-usage.mjs", symbol: "const remaining = unattributed.filter(({ pid }) => !ended.has(pid));" },
