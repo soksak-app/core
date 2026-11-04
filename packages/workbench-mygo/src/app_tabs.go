@@ -49,6 +49,7 @@ func (s *Shell) memoryEnabled() bool {
 
 // emitTabEvent writes an event of the tab parts to the event writer of the window.
 func (s *Shell) emitTabEvent(level, name string, fields map[string]any) {
+	// events: forwarded
 	s.events.Emit(sok.Level(level), name, func() map[string]any { return fields }, nil)
 }
 
