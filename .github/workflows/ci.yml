@@ -122,6 +122,48 @@ jobs:
         if: always()
         run: git -C core diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
 
+  macos-mygo:
+    runs-on: macos-15
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: core
+      - uses: ./core/.github/actions/setup-node
+        with:
+          root: core
+      - uses: ./core/.github/actions/setup-go
+        with:
+          root: core
+          module: packages/host/mygo
+      - uses: ./core/.github/actions/setup-native
+        with:
+          root: core
+      - name: Fetch locked Node dependencies
+        run: pnpm -C core install --frozen-lockfile
+      - name: Fetch Go modules
+        working-directory: core
+        run: |
+          go -C apps/mygo mod download
+          go -C packages/host/go mod download
+          go -C packages/host/mygo mod download
+          go -C packages/sok/go mod download
+      - name: Fetch pinned native release file
+        run: make -C core native-darwin-fetch
+      - name: mygo host tests
+        env:
+          npm_config_offline: 'true'
+          GOPROXY: 'off'
+          GOSUMDB: 'off'
+          GOFLAGS: -mod=readonly
+          CARGO_NET_OFFLINE: 'true'
+          OFFLINE: '1'
+        run: make -C core host-test-mygo
+      - name: Reject lockfile changes
+        if: always()
+        run: git -C core diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
+
   native-darwin:
     runs-on: macos-15
     steps:
@@ -247,6 +289,7 @@ jobs:
       - core-node
       - macos-wailsv3
       - macos-tauriv2
+      - macos-mygo
       - native-darwin
       - equivalence
     runs-on: ubuntu-26.04-arm
@@ -256,9 +299,10 @@ jobs:
           CORE_NODE: ${{ needs.core-node.result }}
           WAILS: ${{ needs.macos-wailsv3.result }}
           TAURI: ${{ needs.macos-tauriv2.result }}
+          MYGO: ${{ needs.macos-mygo.result }}
           NATIVE: ${{ needs.native-darwin.result }}
           EQUIVALENCE: ${{ needs.equivalence.result }}
         run: |
-          for result in "$CORE_NODE" "$WAILS" "$TAURI" "$NATIVE" "$EQUIVALENCE"; do
+          for result in "$CORE_NODE" "$WAILS" "$TAURI" "$MYGO" "$NATIVE" "$EQUIVALENCE"; do
             test "$result" = success || exit 1
           done

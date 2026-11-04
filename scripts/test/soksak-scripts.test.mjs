@@ -189,10 +189,11 @@ const TWO_TABLES = `## Allowed differences
 
 ### Framework table
 
-| ID | Wails | Tauri | Reason |
-| --- | --- | --- | --- |
-| H3 | \`src/bridge.js\` | none | Call channel |
-| A2 | none | \`build.rs\` | Build script |
+| ID | Wails | Tauri | mygo | Reason |
+| --- | --- | --- | --- | --- |
+| H3 | \`src/bridge.js\` | none | \`src/workbench.go\` | Call channel |
+| A2 | none | \`build.rs\` | none | Build script |
+| A6 | \`runtime/\` | content differs | none | Main page runtime |
 
 ## Memory pressure
 `;
@@ -205,17 +206,29 @@ test("host structure audit compares the language host libraries, the framework a
     "packages/host/tauriv2/src/host.rs",
     "packages/sok/go/go.mod", "packages/sok/go/src/sok.go", "packages/sok/go/src/cmd/sok/main.go",
     "packages/sok/rust/Cargo.toml", "packages/sok/rust/src/sok.rs", "packages/sok/rust/src/main.rs",
-    "apps/wailsv3/src/main.go", "apps/tauriv2/src/main.rs", "apps/tauriv2/build.rs",
+    "apps/wailsv3/src/main.go", "apps/wailsv3/runtime/index.js", "apps/tauriv2/src/main.rs", "apps/tauriv2/runtime/index.js", "apps/tauriv2/build.rs",
+    "packages/host/mygo/src/host.go", "packages/host/mygo/src/workbench.go", "apps/mygo/src/main.go",
   ];
   assert.deepEqual(auditHostPairs(tracked, undefined, TWO_TABLES), []);
   assert.deepEqual(auditHostPairs([...tracked, "packages/host/go/src/extra.go"], undefined, TWO_TABLES),
     ["packages/host/go/src/extra: no counterpart in packages/host/rust"]);
   assert.deepEqual(auditHostPairs([...tracked, "packages/host/wailsv3/src/extra.go"], undefined, TWO_TABLES),
-    ["packages/host/wailsv3/src/extra: no counterpart in packages/host/tauriv2"]);
+    ["packages/host/wailsv3/src/extra: no counterpart in packages/host/tauriv2", "packages/host/wailsv3/src/extra: no counterpart in packages/host/mygo"]);
   assert.deepEqual(auditHostPairs([...tracked, "packages/host/tauriv2/build.rs"], undefined, TWO_TABLES),
     ["packages/host/tauriv2/build: no counterpart in packages/host/wailsv3"]);
   assert.throws(() => auditHostPairs(tracked, undefined, TWO_TABLES.replace("| A2 |", "| H1 |")),
     /row H1 appears in the Language table and in the Framework table/);
+  assert.deepEqual(auditHostPairs([...tracked, "packages/host/mygo/src/extra.go"], undefined, TWO_TABLES),
+    ["packages/host/mygo/src/extra: no counterpart in packages/host/wailsv3"]);
+  assert.deepEqual(auditHostPairs([...tracked, "apps/mygo/src/extra.js"], undefined, TWO_TABLES),
+    ["apps/mygo/src/extra.js: no counterpart in apps/wailsv3"]);
+  assert.deepEqual(auditHostPairs(tracked.filter((path) => !path.startsWith("apps/mygo/")), undefined, TWO_TABLES),
+    ["apps/mygo: no files", "apps/wailsv3/src/main: no counterpart in apps/mygo"]);
+  // A row of content differs in one column lists files for the other pair only: the runtime of the Wails application still needs the Tauri counterpart.
+  assert.deepEqual(auditHostPairs(tracked.filter((path) => path !== "apps/tauriv2/runtime/index.js"), undefined, TWO_TABLES),
+    ["apps/wailsv3/runtime/index.js: no counterpart in apps/tauriv2"]);
+  assert.throws(() => auditHostPairs(tracked, undefined, TWO_TABLES.replaceAll(" | mygo |", " |").replace("| none | \\`src/workbench.go\\` |", "| none |")),
+    /has no column mygo/);
 });
 
 test("host structure audit rejects a language host library that imports a package of a framework", { timeout: 1000 }, async () => {
@@ -228,11 +241,14 @@ test("host structure audit rejects a language host library that imports a packag
     "packages/host/rust/src/windows.rs": "use tauri::Manager;\n",
     "packages/host/rust/Cargo.toml": '[dependencies]\ntauri = "2"\n',
     "packages/host/rust/src/quit.rs": "// tauri is a word of this comment.\n",
+    "packages/host/go/src/view.go": 'package host\n\nimport "github.com/egoist/mygo/ui"\n',
     "packages/host/wailsv3/src/windows.go": 'package adapter\n\nimport "github.com/wailsapp/wails/v3/pkg/application"\n',
+    "packages/host/mygo/src/windows.go": 'package adapter\n\nimport "github.com/egoist/mygo"\n',
   };
   assert.deepEqual(auditLibraryImports(Object.keys(files), (file) => files[file]), [
     "packages/host/go/go.mod:3: the language host library requires the framework github.com/wailsapp/wails/v3",
     "packages/host/go/src/platform/darwin/window.go:3: the language host library imports the framework package github.com/wailsapp/wails/v3/pkg/events",
+    "packages/host/go/src/view.go:3: the language host library imports the framework package github.com/egoist/mygo/ui",
     "packages/host/go/src/windows.go:4: the language host library imports the framework package github.com/wailsapp/wails/v3/pkg/application",
     "packages/host/rust/Cargo.toml:2: the language host library requires the framework crate tauri",
     "packages/host/rust/src/windows.rs:1: the language host library names the framework crate tauri",
@@ -264,7 +280,7 @@ test("host structure audit rejects a language host library whose code or contrac
 test("a prefix audit of the host structure fails when a prefix selects no file", { timeout: 1000 }, async () => {
   const { auditPrefixes } = await import("../check-hosts.mjs");
   const tracked = ["packages/host/go/src/platform/darwin/window.go", "packages/host/tauriv2/src/host.rs", "packages/host/go/src/host.go",
-    "packages/host/rust/src/host.rs", "packages/host/wailsv3/src/host.go", "native/darwin/src/a.m", "packages/workbench-mygo/src/layout/grid.go"];
+    "packages/host/rust/src/host.rs", "packages/host/wailsv3/src/host.go", "packages/host/mygo/src/host.go", "native/darwin/src/a.m", "packages/workbench-mygo/src/layout/grid.go"];
   assert.deepEqual(auditPrefixes(tracked), []);
   assert.deepEqual(auditPrefixes(tracked.filter((path) => !path.includes("/platform/darwin/"))), [
     "the main-thread audit selects no file with the prefix packages/host/go/src/platform/darwin/",

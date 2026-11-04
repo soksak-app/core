@@ -251,7 +251,7 @@ The browser back, forward, and reload buttons draw `chevron-left`, `chevron-righ
 
 | Field | Meaning |
 | --- | --- |
-| `runtime` | Directory inside the application that contains the runtime module `index.js` |
+| `runtime` | Optional. Directory inside the application that contains the runtime module `index.js`. Staging a main page requires it; an application whose host has no main page has none ([staged layout](#staged-layout)) |
 | `workspace.grid` | Grid lines and cards of a new space. A card with `tabs` lists `{ plugin, title }` entries. An optional card `width` is a finite positive number of points; the left and right fixed sidebar cards start at that width and use `sidebarWidth` when it is omitted |
 | `workspace.focus` | Card focused in a new space; it must have tabs |
 | `sidebars.sets` | Optional explicit override of plugin defaults: section sets `{id, title, sections, layout}`; `layout` is `list` or `tabs` |
@@ -287,7 +287,7 @@ A plugin that becomes loaded after a restart uses the kept tabs, links, sections
 
 ## Staged layout
 
-`soksak-stage <output> [--diagnostics] [--installed <configuration directory>] [--registry-index <absolute index path>]` runs in an application directory and resolves packages through Node module resolution. `--registry-index` converts the absolute index path to a file URL with Node's `pathToFileURL` and replaces `environment.json`'s registry only in the staged environment. The debug staging targets pass the absolute path of the generated workspace registry, after `make registry` builds it. Release staging does not pass `--registry-index`, so the declared HTTPS registry remains the release default. The source `environment.json` is unchanged. The staged frontend contains:
+`soksak-stage <output> [--diagnostics] [--no-main-page] [--installed <configuration directory>] [--registry-index <absolute index path>]` runs in an application directory and resolves packages through Node module resolution. Without `--no-main-page` it stages a main page and fails when `environment.json` names no `runtime`. With `--no-main-page` it stages only the view root for a host that draws the workbench itself, `/modules/<package>/`, `/environment.json`, `/core-root.json` and `/view-imports.json`, and fails when `environment.json` names a `runtime`; `--diagnostics` then keeps the diagnostic view observer and adds no page file. `--registry-index` converts the absolute index path to a file URL with Node's `pathToFileURL` and replaces `environment.json`'s registry only in the staged environment. The debug staging targets pass the absolute path of the generated workspace registry, after `make registry` builds it. Release staging does not pass `--registry-index`, so the declared HTTPS registry remains the release default. The source `environment.json` is unchanged. The staged frontend contains:
 
 | Path | Source |
 | --- | --- |
@@ -306,7 +306,7 @@ Every file imported by published files must be listed in the `files` array of it
 
 The `@soksak/plugin-api` package publishes every file under its `contract/` directory so installed consumers can read and replay the current public API contracts. A plugin repository keeps the files that it replays as [contract copies](#contract-copies).
 
-The debug staging targets `frontend-wailsv3` and `frontend-tauriv2` add `--diagnostics`; release builds contain no page diagnostic code, and a release build does not read the [diagnostic declarations](#diagnostic-declarations) that a plugin release holds. `make release-check` fails when a staged release frontend contains `/transcript.js` or a page diagnostic module.
+The debug staging targets `frontend-wailsv3`, `frontend-tauriv2` and `frontend-mygo` add `--diagnostics`; release builds contain no page diagnostic code, and a release build does not read the [diagnostic declarations](#diagnostic-declarations) that a plugin release holds. `make release-check` fails when a staged release frontend contains `/transcript.js` or a page diagnostic module.
 
 Every workbench page declares one import map equal to `PAGE_IMPORTS`: `soksak`, `@soksak/plugin-api`, `@soksak/plugin-api/page`, `@soksak/plugin-api/screen-hash` (the [screen hash](replay.md#screen-hash) of a screen message), `@soksak/runtime`, `@soksak/shared/` and `@soksak/workbench/`. A view page holds no import map of its own; the host inserts `VIEW_IMPORTS` into it ([plugin processes](plugin-processes.md), rule 4).
 

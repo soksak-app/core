@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
-const APPLICATIONS = new Set(["tauriv2", "wailsv3"]);
+const APPLICATIONS = new Set(["mygo", "tauriv2", "wailsv3"]);
 
 /** Parses the process table format used by `ps -axww -o pid=,command=`. */
 function parseProcessTable(text) {

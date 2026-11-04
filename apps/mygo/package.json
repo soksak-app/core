@@ -1,0 +1,16 @@
+{
+  "name": "@soksak/mygo",
+  "version": "0.0.34",
+  "private": true,
+  "type": "module",
+  "description": "mygo application hosting the workbench with native UI and native webview surfaces.",
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "@soksak/workbench": "workspace:*"
+  },
+  "devDependencies": {
+    "@soksak/plugin-api": "workspace:*"
+  }
+}

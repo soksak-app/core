@@ -22,6 +22,7 @@ func (f startFramework) reached(method string) {
 
 func (f startFramework) ApplicationName() string { f.reached("ApplicationName"); return "fixture" }
 func (f startFramework) DisplayName() string     { f.reached("DisplayName"); return "Fixture" }
+func (f startFramework) MainPage() bool          { f.reached("MainPage"); return true }
 func (f startFramework) Step(func())             { f.reached("Step") }
 func (f startFramework) Post(func())             { f.reached("Post") }
 func (f startFramework) Quit()                   { f.reached("Quit") }

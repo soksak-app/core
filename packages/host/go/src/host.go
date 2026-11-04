@@ -83,10 +83,9 @@ func Prepare(adapter Framework, assets fs.FS, options Options) (_ *Session, fail
 	}
 	// The termination signals are received before the endpoint is created. A normal termination is
 	// requested after the application started. A normal termination closes the endpoint after the save of the ready windows finishes.
-	started := make(chan struct{})
 	quit := &Quit{}
 	if err := OnTermination(quit, func() {
-		<-started
+		<-session.started
 		framework.Quit()
 	}); err != nil {
 		return nil, err
@@ -95,11 +94,9 @@ func Prepare(adapter Framework, assets fs.FS, options Options) (_ *Session, fail
 	if err != nil {
 		return nil, err
 	}
-	background, err := fs.ReadFile(frontend, "background.js")
-	if err != nil {
+	if err := readBackgroundScript(frontend); err != nil {
 		return nil, err
 	}
-	backgroundScript = string(background)
 	// Each view configuration runs the view channel script of the bundled frontend before its page (docs/spec/native-surfaces.md#view-surfaces).
 	viewChannel, err := fs.ReadFile(frontend, viewChannelPath)
 	if err != nil {
@@ -244,6 +241,20 @@ func (s *Session) Shutdown() {
 	}
 	// The save and the cleanup are finished, so the termination request of the operating system that was received is answered.
 	mainThreadStep(system.AnswerQuitRequests)
+}
+
+// readBackgroundScript reads the background script of the modal web views from the staged frontend. An application without a main
+// page has neither, and its staging holds no such file (docs/spec/plugins.md#environmentjson).
+func readBackgroundScript(frontend fs.FS) error {
+	if !framework.MainPage() {
+		return nil
+	}
+	background, err := fs.ReadFile(frontend, "background.js")
+	if err != nil {
+		return err
+	}
+	backgroundScript = string(background)
+	return nil
 }
 
 // Open installs the application menu and creates the first window. Call it after the framework was created.

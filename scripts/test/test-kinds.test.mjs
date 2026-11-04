@@ -74,7 +74,7 @@ function startsApplications(path, readScript) {
  * runPlan. `readScript(path)` reads a file of the checkout.
  */
 function misnamedRootTargets(makefile, readScript) {
-  const endToEnd = (recipe) => /run verify|--script verify|make -C native\/darwin e2e|e2e-run\.mjs/.test(recipe)
+  const endToEnd = (recipe) => /run verify|--script verify|make -C native\/darwin e2e|e2e-run\.mjs|\bgo\b.*\btest\b.*-tags[ =]"?(?:[\w ]* )?e2e\b/.test(recipe)
     || [...recipe.matchAll(/\bnode\s+(scripts\/[\w./-]+\.mjs)\b/g)].some(([, path]) => startsApplications(path, readScript));
   return rules(makefile).filter((rule) => endToEnd(rule.recipe) && !rule.target.startsWith("e2e")).map((rule) => rule.target);
 }
@@ -86,6 +86,17 @@ test("a root target that starts an application through the start step of runPlan
     "scripts/fixture-builds.mjs": "import { runPlan } from './e2e-run.mjs';\nawait runPlan([{ name: 'build', phase: 'prepare', kind: 'run', argv: ['make'] }], { write: console.log });\n",
   };
   assert.deepEqual(misnamedRootTargets(makefile, (path) => scripts[path]), ["b3"]);
+});
+
+test("a root target that runs go test with the tag e2e without the e2e prefix is reported", { timeout: 1000 }, () => {
+  const makefile = 'host-go:\n\t@go -C packages/host/mygo test -tags e2e ./tests/...\n\ne2e-host-go:\n\t@go -C packages/host/mygo test -tags e2e ./tests/...\n\nunit:\n\t@go -C packages/host/mygo test -tags diagnostics ./tests/...\n';
+  assert.deepEqual(misnamedRootTargets(makefile, () => ""), ["host-go"]);
+});
+
+test("the root target e2e-host-go runs the tests with the build constraint e2e of the Go library and adapters", { timeout: 1000 }, () => {
+  const recipe = rules(read("Makefile")).find((rule) => rule.target === "e2e-host-go")?.recipe ?? "";
+  assert.match(recipe, /-tags e2e/, "make e2e-host-go does not run the tag e2e");
+  for (const library of ["packages/host/go", "packages/host/wailsv3", "packages/host/mygo"]) assert.ok(read("Makefile").includes(library), library);
 });
 
 test("the root make targets are the only entry points of the window checks", { timeout: 1000 }, () => {

@@ -58,6 +58,16 @@ importers:
         specifier: ^6.2.5
         version: 6.2.5
 
+  apps/mygo:
+    dependencies:
+      '@soksak/workbench':
+        specifier: workspace:*
+        version: link:../../packages/workbench
+    devDependencies:
+      '@soksak/plugin-api':
+        specifier: workspace:*
+        version: link:../../packages/plugin-api
+
   apps/tauriv2:
     dependencies:
       '@soksak/workbench':
@@ -97,6 +107,8 @@ importers:
   packages/host/go: {}
 
   packages/host/rust: {}
+
+  packages/host/mygo: {}
 
   packages/host/tauriv2: {}
 

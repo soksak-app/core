@@ -32,10 +32,12 @@ func (s *Surfaces) SetTheme(theme Theme) error {
 	s.mu.Lock()
 	s.theme = theme
 	s.mu.Unlock()
-	var err error
-	mainThreadStep(func() { err = system.ConfigureMainWindow(s.window.NativeWindow(), theme.Scheme == "dark") })
-	if err != nil {
-		return err
+	if framework.MainPage() {
+		var err error
+		mainThreadStep(func() { err = system.ConfigureMainWindow(s.window.NativeWindow(), theme.Scheme == "dark") })
+		if err != nil {
+			return err
+		}
 	}
 	mainThreadStep(func() {
 		for _, document := range s.documents.All() {

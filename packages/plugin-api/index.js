@@ -913,7 +913,9 @@ export function validateEnvironment(environment) {
     && !(isText(environment.registry) && /^(https:\/\/[^/?#]+|file:\/\/\/)/.test(environment.registry))) {
     throw new Error("environment.json: registry must be an https: or absolute file: URL");
   }
-  if (!isText(environment.runtime) || environment.runtime.startsWith("/") || environment.runtime.split("/").includes("..")) {
+  // An application whose host has no main page has no runtime module; staging requires one for a main page (docs/spec/plugins.md#staged-layout).
+  if (environment.runtime !== undefined
+    && (!isText(environment.runtime) || environment.runtime.startsWith("/") || environment.runtime.split("/").includes(".."))) {
     throw new Error("environment.json: runtime must be a directory inside the application");
   }
   if (environment.settings !== undefined && !isObject(environment.settings)) {

@@ -18,6 +18,9 @@ func (Framework) ApplicationName() string { return "wailsv3" }
 // DisplayName is the end of a window title.
 func (Framework) DisplayName() string { return "Wails v3" }
 
+// MainPage is true: a window shows the workbench in a main page.
+func (Framework) MainPage() bool { return true }
+
 // Step runs task as one step of the main thread and returns when it returned.
 func (Framework) Step(task func()) { application.InvokeSync(task) }
 

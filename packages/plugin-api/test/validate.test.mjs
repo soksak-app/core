@@ -170,9 +170,17 @@ test("an environment is accepted and its references are checked against manifest
   checkReferences(value, [card, side]);
 });
 
+test("an environment without a runtime is accepted: a host without a main page has no runtime module", () => {
+  const value = environment();
+  delete value.runtime;
+  assert.equal(validateEnvironment(value), value);
+});
+
 test("an environment is rejected for each invalid field", () => {
   const cases = [
     [(e) => { e.runtime = "../runtime"; }, /runtime must be a directory/],
+    [(e) => { e.runtime = ""; }, /runtime must be a directory/],
+    [(e) => { e.runtime = null; }, /runtime must be a directory/],
     [(e) => { e.plugins = ["@scope/plugin-probe"]; }, /unknown field plugins/],
     [(e) => { e.workspace.focus = "left"; }, /focus must name a card with tabs/],
     [(e) => { e.workspace.grid.cards[1].tabs = []; }, /non-empty array/],

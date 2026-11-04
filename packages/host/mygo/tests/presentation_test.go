@@ -1,0 +1,284 @@
+//go:build e2e
+
+package adapter_test
+
+// Checks the frames of a window of the mygo framework adapter. A frame presents only on a display, so these tests are end-to-end
+// checks (docs/operations/examples.md#test-kinds).
+
+import (
+	"slices"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/egoist/mygo"
+
+	host "github.com/soksak-app/core/packages/host/go/src"
+	"github.com/soksak-app/core/packages/host/go/src/platform"
+	adapter "github.com/soksak-app/core/packages/host/mygo/src"
+)
+
+func TestE2EShowWaitsForTheFirstFrame(t *testing.T) {
+	_, workbench, window := open(t, "show")
+	shown := make(chan struct{}, 1)
+	window.OnWindowEvent(host.WindowShow, func() { shown <- struct{}{} })
+	window.Show()
+	wait(t, "the show", window.Window().IsVisible)
+	<-shown
+	if !slices.Contains(workbench.received(), "draw show") {
+		t.Fatalf("the window showed before it drew: %v", workbench.received())
+	}
+}
+
+// presentation runs the presentation notice as a step of the main thread and returns its result.
+func presentation(t *testing.T, window *adapter.Frontend) error {
+	t.Helper()
+	result := make(chan error, 1)
+	var failed error
+	mygo.RunOnMain(func() { failed = window.AfterPresentation(func(err error) { result <- err }) })
+	if failed != nil {
+		return failed
+	}
+	return <-result
+}
+
+func TestE2EThePresentationNoticeCallsBackAfterTheFrame(t *testing.T) {
+	_, _, window := open(t, "presentation")
+	if err := presentation(t, window); err != nil {
+		t.Fatalf("the presentation notice failed: %v", err)
+	}
+	// A frame of an unchanged scene presents nothing, and the content is on the screen.
+	if err := presentation(t, window); err != nil {
+		t.Fatalf("the notice of an unchanged scene failed: %v", err)
+	}
+}
+
+func TestE2EThePresentationNoticeReportsAWindowThatClosed(t *testing.T) {
+	_, _, window := open(t, "presentation-closed")
+	result := make(chan error, 1)
+	var failed error
+	mygo.RunOnMain(func() {
+		failed = window.AfterPresentation(func(err error) { result <- err })
+		window.Window().Destroy()
+	})
+	if failed != nil {
+		t.Fatal(failed)
+	}
+	if err := <-result; err == nil || !strings.Contains(err.Error(), "did not present") {
+		t.Fatalf("the notice of a closed window reported %v", err)
+	}
+}
+
+// settle runs the settled wait of the platform over the settled presentation of window. Call it on the main thread.
+func settle(window *adapter.Frontend, done func(displayed float64, err error)) error {
+	system, err := platform.Current()
+	if err != nil {
+		return err
+	}
+	present, err := window.SettledPresentation()
+	if err != nil {
+		return err
+	}
+	return system.AfterSettled(window.NativeWindow(), present, done)
+}
+
+func TestE2ETheSettledPresentationCallsBackOnTheMainThread(t *testing.T) {
+	_, workbench, window := open(t, "settled")
+	type settled struct {
+		displayed float64
+		err       error
+	}
+	result := make(chan settled, 1)
+	var failed error
+	mygo.RunOnMain(func() {
+		failed = settle(window, func(displayed float64, err error) { result <- settled{displayed, err} })
+	})
+	if failed != nil {
+		t.Fatal(failed)
+	}
+	if got := <-result; got.err != nil || got.displayed <= 0 {
+		t.Fatalf("the settled presentation reported %+v", got)
+	}
+	if !slices.Contains(workbench.received(), "draw settled") {
+		t.Fatalf("the window settled without a frame of its workbench: %v", workbench.received())
+	}
+}
+
+// quiet is the time in which a window that does not hold its frames draws a requested frame.
+const quiet = 250 * time.Millisecond
+
+// held opens a window of a framework whose surface layout transactions hold frames.
+func held(t *testing.T, name string) (*adapter.Framework, *sceneWorkbench, *adapter.Frontend) {
+	t.Helper()
+	framework, workbench, window := open(t, name)
+	if err := framework.ObserveLayout(); err != nil {
+		t.Fatal(err)
+	}
+	if err := presentation(t, window); err != nil {
+		t.Fatal(err)
+	}
+	return framework, workbench, window
+}
+
+// begin starts a surface layout transaction of window and returns the commit of it.
+func begin(t *testing.T, window *adapter.Frontend, ticket uint64) (commit func()) {
+	t.Helper()
+	system, err := platform.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ready := make(chan bool, 1)
+	mygo.RunOnMain(func() {
+		err = system.BeginLayout(window.NativeWindow(), ticket, func(allowed bool) { ready <- allowed })
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !<-ready {
+		t.Fatal("the transaction did not start")
+	}
+	return func() {
+		t.Helper()
+		var committed bool
+		mygo.RunOnMain(func() { committed = system.CommitLayout(window.NativeWindow(), ticket) })
+		if !committed {
+			t.Fatal("the transaction did not commit")
+		}
+	}
+}
+
+// draws returns how many frames the workbench drew in window.
+func draws(workbench *sceneWorkbench, name string) int {
+	count := 0
+	for _, record := range workbench.received() {
+		if record == "draw "+name {
+			count++
+		}
+	}
+	return count
+}
+
+// drawsNothing fails when the window draws within quiet.
+func drawsNothing(t *testing.T, workbench *sceneWorkbench, name string) {
+	t.Helper()
+	before := draws(workbench, name)
+	time.Sleep(quiet)
+	if after := draws(workbench, name); after != before {
+		t.Fatalf("window %s drew %d frames while it holds its frames", name, after-before)
+	}
+}
+
+func TestE2ETheNoticeHoldsTheFramesOfTheWindowUntilTheTransactionEnds(t *testing.T) {
+	_, workbench, window := held(t, "hold")
+	commit := begin(t, window, 1)
+	result := make(chan error, 1)
+	var failed error
+	// The request in the callback runs in the step of the notice, after its hold.
+	mygo.RunOnMain(func() {
+		failed = window.AfterPresentation(func(err error) {
+			result <- err
+			window.Window().Invalidate()
+		})
+	})
+	if failed != nil {
+		t.Fatal(failed)
+	}
+	if err := <-result; err != nil {
+		t.Fatalf("the notice failed: %v", err)
+	}
+	drawsNothing(t, workbench, "hold")
+	before := draws(workbench, "hold")
+	window.Window().Invalidate()
+	drawsNothing(t, workbench, "hold")
+	commit()
+	wait(t, "the frame after the transaction", func() bool { return draws(workbench, "hold") > before })
+	time.Sleep(quiet)
+	if count := draws(workbench, "hold") - before; count != 1 {
+		t.Fatalf("the window drew %d frames after the transaction, want one", count)
+	}
+}
+
+func TestE2EAResizeAndAZoomInATransactionDrawOneFrameAtTheEnd(t *testing.T) {
+	_, workbench, window := held(t, "resize")
+	commit := begin(t, window, 1)
+	if err := presentation(t, window); err != nil {
+		t.Fatal(err)
+	}
+	before := draws(workbench, "resize")
+	window.Window().SetSize(520, 410)
+	drawsNothing(t, workbench, "resize")
+	window.Window().Maximize()
+	drawsNothing(t, workbench, "resize")
+	commit()
+	wait(t, "the frame after the transaction", func() bool { return draws(workbench, "resize") > before })
+	time.Sleep(quiet)
+	if count := draws(workbench, "resize") - before; count != 1 {
+		t.Fatalf("the window drew %d frames after the transaction, want one", count)
+	}
+}
+
+func TestE2EATransactionHoldsTheOtherWindowsAndTheWindowsOpenedMeanwhile(t *testing.T) {
+	framework, workbench, first := held(t, "first")
+	second := framework.NewWindow(host.WindowOptions{Name: "second", Title: "soksak", Width: 400, Height: 300}).(*adapter.Frontend)
+	t.Cleanup(second.Window().Destroy)
+	if err := presentation(t, second); err != nil {
+		t.Fatal(err)
+	}
+	before := draws(workbench, "second")
+	commit := begin(t, first, 1)
+	second.Window().Invalidate()
+	third := framework.NewWindow(host.WindowOptions{Name: "third", Title: "soksak", Width: 400, Height: 300}).(*adapter.Frontend)
+	t.Cleanup(third.Window().Destroy)
+	drawsNothing(t, workbench, "second")
+	if count := draws(workbench, "third"); count != 0 {
+		t.Fatalf("the window opened meanwhile drew %d frames", count)
+	}
+	commit()
+	wait(t, "the frame of the other window", func() bool { return draws(workbench, "second") > before })
+	wait(t, "the first frame of the window opened meanwhile", func() bool { return draws(workbench, "third") > 0 })
+}
+
+func TestE2EANewerPreparationReleasesTheHoldOfItsWindow(t *testing.T) {
+	_, _, window := held(t, "newer")
+	begin(t, window, 1)
+	if err := presentation(t, window); err != nil {
+		t.Fatal(err)
+	}
+	commit := begin(t, window, 2)
+	if err := presentation(t, window); err != nil {
+		t.Fatalf("the notice of the newer preparation failed: %v", err)
+	}
+	commit()
+}
+
+func TestE2ETheSettledPresentationWaitsForTheTransactionOfAnotherWindow(t *testing.T) {
+	framework, workbench, first := held(t, "owner")
+	other := framework.NewWindow(host.WindowOptions{Name: "other", Title: "soksak", Width: 400, Height: 300}).(*adapter.Frontend)
+	t.Cleanup(other.Window().Destroy)
+	if err := presentation(t, other); err != nil {
+		t.Fatal(err)
+	}
+	commit := begin(t, first, 1)
+	result := make(chan error, 1)
+	var failed error
+	mygo.RunOnMain(func() {
+		failed = settle(other, func(_ float64, err error) { result <- err })
+		other.Window().Invalidate()
+	})
+	if failed != nil {
+		t.Fatal(failed)
+	}
+	before := draws(workbench, "other")
+	select {
+	case err := <-result:
+		t.Fatalf("the settled presentation answered %v during the transaction of the other window", err)
+	case <-time.After(quiet):
+	}
+	commit()
+	if err := <-result; err != nil {
+		t.Fatalf("the settled presentation failed: %v", err)
+	}
+	if draws(workbench, "other") == before {
+		t.Fatal("the settled presentation answered before the window drew")
+	}
+}

@@ -252,7 +252,7 @@ plugin 저장소의 catalog 검사(`soksak-events`)는 `runtime.log.<level>(`와
 
 | 필드 | 의미 |
 | --- | --- |
-| `runtime` | 런타임 모듈 `index.js`를 포함한 애플리케이션 안의 디렉터리 |
+| `runtime` | 선택. 런타임 모듈 `index.js`를 포함한 애플리케이션 안의 디렉터리. Main page를 stage하려면 필요하고, host에 main page가 없는 애플리케이션에는 없다([스테이징 배치](#스테이징-배치)) |
 | `workspace.grid` | 새 스페이스의 격자선과 카드. `tabs`가 있는 카드는 `{ plugin, title }` 항목을 나열한다. 선택 필드인 card `width`는 point 단위의 유한한 양수이며, 왼쪽·오른쪽 고정 sidebar card는 그 너비로 시작하고 생략하면 `sidebarWidth`를 쓴다 |
 | `workspace.focus` | 새 스페이스에서 포커스할 카드. 탭이 있어야 한다 |
 | `sidebars.sets` | 플러그인 기본값의 선택적 명시적 덮어쓰기: 섹션 세트 `{id, title, sections, layout}`. `layout`은 `list` 또는 `tabs`다 |
@@ -288,7 +288,7 @@ plugin 저장소의 catalog 검사(`soksak-events`)는 `runtime.log.<level>(`와
 
 ## 스테이징 배치
 
-`soksak-stage <출력> [--diagnostics] [--installed <설정 디렉터리>] [--registry-index <절대 index 경로>]`는 애플리케이션 디렉터리에서 실행하고 Node 모듈 해석으로 패키지를 찾는다. `--registry-index`는 절대 index 경로를 Node의 `pathToFileURL`로 file URL로 바꾸고, staged 환경에서만 `environment.json`의 registry를 교체한다. Debug staging target은 `make registry`가 생성한 workspace registry의 절대 경로를 전달한다. Release staging은 `--registry-index`를 전달하지 않으므로 선언된 HTTPS registry가 기본값으로 남는다. 원본 `environment.json`은 바뀌지 않는다. 스테이징된 프런트엔드는 다음을 포함한다:
+`soksak-stage <출력> [--diagnostics] [--no-main-page] [--installed <설정 디렉터리>] [--registry-index <절대 index 경로>]`는 애플리케이션 디렉터리에서 실행하고 Node 모듈 해석으로 패키지를 찾는다. `--no-main-page`가 없으면 main page를 stage하며 `environment.json`에 `runtime`이 없으면 실패한다. `--no-main-page`가 있으면 workbench를 직접 그리는 host를 위해 view root인 `/modules/<package>/`, `/environment.json`, `/core-root.json`, `/view-imports.json`만 stage하고, `environment.json`에 `runtime`이 있으면 실패한다. 이때 `--diagnostics`는 diagnostic view observer를 남기고 page 파일을 더하지 않는다. `--registry-index`는 절대 index 경로를 Node의 `pathToFileURL`로 file URL로 바꾸고, staged 환경에서만 `environment.json`의 registry를 교체한다. Debug staging target은 `make registry`가 생성한 workspace registry의 절대 경로를 전달한다. Release staging은 `--registry-index`를 전달하지 않으므로 선언된 HTTPS registry가 기본값으로 남는다. 원본 `environment.json`은 바뀌지 않는다. 스테이징된 프런트엔드는 다음을 포함한다:
 
 | 경로 | 원본 |
 | --- | --- |

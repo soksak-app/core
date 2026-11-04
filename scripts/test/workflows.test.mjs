@@ -120,7 +120,7 @@ test('ci keeps language host checks independent and gates release on every requi
   const ci = read('.github/workflows/ci.yml');
   const jobsText = /^jobs:\n([\s\S]*)$/m.exec(ci)?.[1] ?? '';
   const jobNames = [...jobsText.matchAll(/^  ([a-z][a-z0-9-]+):\s*$/gm)].map((match) => match[1]);
-  const required = ['core-node', 'macos-wailsv3', 'macos-tauriv2', 'native-darwin', 'equivalence', 'required'];
+  const required = ['core-node', 'macos-wailsv3', 'macos-tauriv2', 'macos-mygo', 'native-darwin', 'equivalence', 'required'];
   for (const name of required) assert.ok(jobNames.includes(name), `ci.yml has no required job ${name}`);
   // Linux and Windows are not verified platforms, so CI runs no product check on them; the Sok CLI tests run in the macOS host jobs.
   assert.deepEqual(jobNames.filter((name) => !required.includes(name)), [], 'ci.yml has a job outside the verified macOS scope');
@@ -132,6 +132,8 @@ test('ci keeps language host checks independent and gates release on every requi
   };
   assert.match(job('macos-wailsv3'), /host-test-wailsv3/);
   assert.match(job('macos-tauriv2'), /host-test-tauriv2/);
+  assert.match(steps(job('macos-mygo')).find((step) => step.name === 'mygo host tests')?.text ?? '', /make -C core host-test-mygo/);
+  assert.doesNotMatch(job('macos-mygo'), /check-host-contract/, 'the mygo job runs no contract run');
   assert.match(job('core-node'), /node core\/scripts\/node-tests\.mjs --exclude scripts\/ --exclude native\//);
   assert.match(job('equivalence'), /node core\/scripts\/node-tests\.mjs --only scripts\//);
   assert.doesNotMatch(job('equivalence'), /needs:/, 'equivalence installs and builds its own inputs');
@@ -156,7 +158,7 @@ test('ci keeps language host checks independent and gates release on every requi
     'equivalence fetches sidecar build dependencies that host contract tests do not use');
   const gate = job('required');
   for (const [name, variable] of [
-    ['core-node', 'CORE_NODE'], ['macos-wailsv3', 'WAILS'], ['macos-tauriv2', 'TAURI'],
+    ['core-node', 'CORE_NODE'], ['macos-wailsv3', 'WAILS'], ['macos-tauriv2', 'TAURI'], ['macos-mygo', 'MYGO'],
     ['native-darwin', 'NATIVE'], ['equivalence', 'EQUIVALENCE'],
   ]) {
     assert.match(gate, new RegExp(`${variable}: \\$\\{\\{ needs\\.${name}\\.result \\}\\}`), `required gate does not read ${name}`);
@@ -165,9 +167,9 @@ test('ci keeps language host checks independent and gates release on every requi
   const gateLoop = /for result in ([^;]+); do/.exec(gate);
   assert.ok(gateLoop, 'required gate does not loop over its job results');
   assert.deepEqual(gateLoop[1].match(/"\$([A-Z_]+)"/g),
-    ['"$CORE_NODE"', '"$WAILS"', '"$TAURI"', '"$NATIVE"', '"$EQUIVALENCE"']);
+    ['"$CORE_NODE"', '"$WAILS"', '"$TAURI"', '"$MYGO"', '"$NATIVE"', '"$EQUIVALENCE"']);
   for (const [host, jobName, testName] of [
-    ['wailsv3', 'macos-wailsv3', 'Wails host tests'], ['tauriv2', 'macos-tauriv2', 'Tauri host tests'],
+    ['wailsv3', 'macos-wailsv3', 'Wails host tests'], ['tauriv2', 'macos-tauriv2', 'Tauri host tests'], ['mygo', 'macos-mygo', 'mygo host tests'],
   ]) {
     const list = steps(job(jobName));
     const fetch = list.findIndex((step) => step.name === 'Fetch pinned native release file');
@@ -202,6 +204,13 @@ test('make host-test-mygo runs the unit tests of the Go packages of the mygo hos
   for (const folder of ['packages/workbench-mygo']) {
     assert.ok(patterns.includes(`./${folder}/...`), `host-test-mygo runs no test of ${folder}: ${JSON.stringify(patterns)}`);
   }
+});
+
+test('make host-test-mygo runs the unit tests of the mygo framework adapter and the mygo application', { timeout: 10_000 }, () => {
+  const output = execFileSync('make', ['-n', '-o', 'native-darwin', '-o', 'build', 'host-test-mygo'], { cwd: ROOT, encoding: 'utf8' });
+  assert.match(output, /go -C packages\/host\/mygo test /, output);
+  assert.match(output, /pnpm -F @soksak\/mygo test/, output);
+  assert.doesNotMatch(output, /check-host-contract/, output);
 });
 
 test('CI JavaScript scopes cover every discovered test file exactly once', { timeout: 10_000 }, async () => {

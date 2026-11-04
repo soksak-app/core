@@ -1,17 +1,20 @@
 #!/usr/bin/env node
 // Places the frontend of the application in one directory (staging layout in docs/spec/plugins.md).
 //
-//   soksak-stage <output directory> [--diagnostics] [--installed <configuration directory>] [--registry-index <absolute index path>]
+//   soksak-stage <output directory> [--diagnostics] [--no-main-page] [--installed <configuration directory>] [--registry-index <absolute index path>]
 //
 // Reads environment.json from the application package in the current directory. The package location is found
 // by Node module resolution. The staged registry changes only when --registry-index is given.
 //
+// With --no-main-page the host draws the workbench itself and no page runs it: the output is the view root, the paths
+// marked (view root) below, and environment.json names no runtime.
+//
 //   <output>/                        files of the workbench package
-//   <output>/modules/<package.json name>/   the files of soksak and plugin-api
+//   <output>/modules/<package.json name>/   the files of soksak and plugin-api (view root)
 //   <output>/runtime/                 runtime directory of environment.json
-//   <output>/environment.json         environment.json of the application
-//   <output>/core-root.json           the core targets of the view import map, computed from the staged files by viewCoreTargets
-//   <output>/view-imports.json        the JSON text of VIEW_IMPORTS, which each host passes to the native view handler
+//   <output>/environment.json         environment.json of the application (view root)
+//   <output>/core-root.json           the core targets of the view import map, computed from the staged files by viewCoreTargets (view root)
+//   <output>/view-imports.json        the JSON text of VIEW_IMPORTS, which each host passes to the native view handler (view root)
 //   <output>/diagnostics.js           observe.js of the workbench (page diagnostic methods) with --diagnostics,
 //   otherwise release-diagnostics.js (an empty module). Diagnostic code
 //   goes only into diagnostic builds
@@ -36,11 +39,14 @@ import {
   modulePath, pageImports, pageImportsForBuild, validateEnvironment, validateInstalledPlugins, viewCoreTargets, viewImports,
 } from "@soksak/plugin-api";
 
-const USAGE = "usage: soksak-stage <output directory> [--diagnostics] [--installed <configuration directory>] [--registry-index <absolute index path>]";
+const USAGE = "usage: soksak-stage <output directory> [--diagnostics] [--no-main-page] [--installed <configuration directory>] [--registry-index <absolute index path>]";
 let parsed;
 try {
   parsed = parseArgs({
-    options: { diagnostics: { type: "boolean", default: false }, installed: { type: "string" }, "registry-index": { type: "string" } },
+    options: {
+      diagnostics: { type: "boolean", default: false }, "no-main-page": { type: "boolean", default: false },
+      installed: { type: "string" }, "registry-index": { type: "string" },
+    },
     allowPositionals: true, strict: true, tokens: true,
   });
   // parseArgs keeps the last value of a repeated option, so a repeated option is found from the tokens and refused.
@@ -56,7 +62,7 @@ if (parsed.positionals.length !== 1) {
   process.exit(2);
 }
 const [out] = parsed.positionals;
-const { diagnostics, installed: installedDirectory, "registry-index": registryIndex } = parsed.values;
+const { diagnostics, "no-main-page": noMainPage, installed: installedDirectory, "registry-index": registryIndex } = parsed.values;
 
 const app = process.cwd();
 const target = resolve(app, out);
@@ -113,23 +119,26 @@ if (registryIndex !== undefined) {
   environmentInput.registry = pathToFileURL(registryIndex).href;
 }
 const environment = validateEnvironment(environmentInput);
-const runtime = join(app, environment.runtime);
-if (!existsSync(join(runtime, "index.js"))) throw new Error(`${environment.runtime}/index.js is missing`);
+if (noMainPage && environment.runtime !== undefined) throw new Error("--no-main-page refuses the runtime of environment.json");
+if (!noMainPage && environment.runtime === undefined) throw new Error("a main page requires runtime in environment.json");
+if (!noMainPage && !existsSync(join(app, environment.runtime, "index.js"))) throw new Error(`${environment.runtime}/index.js is missing`);
 
 rmSync(target, { recursive: true, force: true });
 mkdirSync(target, { recursive: true });
 
-copyPackage(workbench, target);
-const pagePath = join(target, "index.html");
-const page = readFileSync(pagePath, "utf8");
-const declaredPageImports = pageImports(page);
-if (JSON.stringify(declaredPageImports) !== JSON.stringify(PAGE_IMPORTS)) {
-  throw new Error(`${pagePath}: the workbench import map differs from PAGE_IMPORTS`);
+if (!noMainPage) {
+  copyPackage(workbench, target);
+  const pagePath = join(target, "index.html");
+  const page = readFileSync(pagePath, "utf8");
+  const declaredPageImports = pageImports(page);
+  if (JSON.stringify(declaredPageImports) !== JSON.stringify(PAGE_IMPORTS)) {
+    throw new Error(`${pagePath}: the workbench import map differs from PAGE_IMPORTS`);
+  }
+  const pageImportMap = JSON.stringify({ imports: pageImportsForBuild({ diagnostics }) }, null, 2);
+  const stagedPage = page.replace(/<script type="importmap">[\s\S]*?<\/script>/,
+    `<script type="importmap">\n${pageImportMap}\n</script>`);
+  writeFileSync(pagePath, stagedPage);
 }
-const pageImportMap = JSON.stringify({ imports: pageImportsForBuild({ diagnostics }) }, null, 2);
-const stagedPage = page.replace(/<script type="importmap">[\s\S]*?<\/script>/,
-  `<script type="importmap">\n${pageImportMap}\n</script>`);
-writeFileSync(pagePath, stagedPage);
 for (const name of ["soksak", "@soksak/plugin-api"]) {
   copyPackage(packageDir(workbench, name), join(target, modulePath(name, "")));
 }
@@ -138,10 +147,12 @@ for (const { package: name, file } of STAGED.viewDiagnostics) {
   if (diagnostics && !existsSync(path)) throw new Error(`declared diagnostic view module is missing: ${modulePath(name, file)}`);
   if (!diagnostics) rmSync(path, { force: true });
 }
-cpSync(runtime, join(target, RUNTIME), { recursive: true });
-copyFileSync(join(workbench, diagnostics ? "observe.js" : "release-diagnostics.js"), join(target, "diagnostics.js"));
-if (diagnostics) {
-  for (const file of STAGED.diagnostics) copyFileSync(join(workbench, file), join(target, file));
+if (!noMainPage) {
+  cpSync(join(app, environment.runtime), join(target, RUNTIME), { recursive: true });
+  copyFileSync(join(workbench, diagnostics ? "observe.js" : "release-diagnostics.js"), join(target, "diagnostics.js"));
+  if (diagnostics) {
+    for (const file of STAGED.diagnostics) copyFileSync(join(workbench, file), join(target, file));
+  }
 }
 writeFileSync(join(target, ENVIRONMENT), `${JSON.stringify(environment, null, 2)}\n`);
 // The core targets are computed from the staged files, so the list names only files that the staged frontend holds.
@@ -184,13 +195,13 @@ if (installedDirectory) {
 
 // Verifies that the files of the STAGED list were actually created,
 // so the declaration and the result do not diverge.
-for (const stagedFile of STAGED.always) {
+for (const stagedFile of noMainPage ? STAGED.view : STAGED.always) {
   if (!existsSync(join(target, stagedFile))) throw new Error(`declared always-staged file not created: ${stagedFile}`);
 }
-if (diagnostics) {
+if (diagnostics && !noMainPage) {
   for (const stagedFile of STAGED.diagnostics) {
     if (!existsSync(join(target, stagedFile))) throw new Error(`declared diagnostics-staged file not created: ${stagedFile}`);
   }
 }
-console.log(`staged the workbench into ${target}${installedDirectory ? ` with ${plugins.length} installed plugins` : ""}` +
+console.log(`staged ${noMainPage ? "the view root" : "the workbench"} into ${target}${installedDirectory ? ` with ${plugins.length} installed plugins` : ""}` +
   (diagnostics ? " with diagnostics" : ""));

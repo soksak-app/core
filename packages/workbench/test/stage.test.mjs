@@ -1,7 +1,7 @@
 // Checks that staging puts the diagnostics module only in the diagnostic build, and that an application without a host uses the installed plugins as the host.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -62,6 +62,50 @@ test("a staged frontend with --diagnostics has the page diagnostic methods", (t)
     .filter(([name]) => name !== "@soksak/plugin-api/diagnostic-view-frames"));
   assert.deepEqual(releaseImports,
     { ...PAGE_IMPORTS }, "diagnostic staging adds only the helper required by installed diagnostic modules");
+});
+
+/** A fake application of a host that stages no main page: it has no runtime directory and its environment names none. */
+function viewRootApp(t) {
+  const app = fixtureApp(t);
+  rmSync(join(app, "runtime"), { recursive: true });
+  const environment = JSON.parse(readFileSync(join(app, "environment.json"), "utf8"));
+  delete environment.runtime;
+  writeFileSync(join(app, "environment.json"), JSON.stringify(environment));
+  return app;
+}
+
+test("an application without a main page stages the view root and no page file", (t) => {
+  const app = viewRootApp(t);
+  assert.match(stage(app, "--no-main-page"), /view root/);
+  assert.deepEqual(readdirSync(join(app, "out")).sort(),
+    ["core-root.json", "environment.json", "modules", "view-imports.json"]);
+  for (const target of JSON.parse(readFileSync(join(app, "out/core-root.json"), "utf8"))) {
+    assert.equal(existsSync(join(app, "out", target)), true, `${target} is a staged core target`);
+  }
+  assert.deepEqual(JSON.parse(readFileSync(join(app, "out/view-imports.json"), "utf8")), { imports: VIEW_IMPORTS });
+  assert.equal(existsSync(join(app, "out/modules/@soksak/plugin-api/diagnostic-view-frames.js")), false,
+    "the diagnostic view observer is absent from a release view root");
+});
+
+test("an application without a main page keeps the diagnostic view observer with --diagnostics", (t) => {
+  const app = viewRootApp(t);
+  stage(app, "--no-main-page", "--diagnostics");
+  assert.equal(existsSync(join(app, "out/diagnostics.js")), false, "the page diagnostic module has no page to run in");
+  assert.ok(JSON.parse(readFileSync(join(app, "out/core-root.json"), "utf8"))
+    .includes("/modules/@soksak/plugin-api/diagnostic-view-frames.js"));
+  assert.ok("@soksak/plugin-api/diagnostic-view-frames" in JSON.parse(readFileSync(join(app, "out/view-imports.json"), "utf8")).imports);
+});
+
+test("staging a main page requires the runtime of the application", (t) => {
+  const app = viewRootApp(t);
+  assert.throws(() => execFileSync(process.execPath, [STAGE, "out"], { cwd: app, stdio: "pipe" }),
+    (error) => /a main page requires runtime in environment.json/.test(error.stderr.toString()));
+});
+
+test("an application that names a runtime stages a main page", (t) => {
+  const app = fixtureApp(t);
+  assert.throws(() => execFileSync(process.execPath, [STAGE, "out", "--no-main-page"], { cwd: app, stdio: "pipe" }),
+    (error) => /--no-main-page refuses the runtime of environment.json/.test(error.stderr.toString()));
 });
 
 test("unknown staging arguments are rejected", (t) => {

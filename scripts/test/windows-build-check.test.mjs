@@ -10,7 +10,9 @@ test('the Windows build check compiles the Go host source in the default and dia
  assert.match(result.stdout,/PASS: Go host library for windows\/arm64/);
  assert.match(result.stdout,/PASS: Go diagnostics host library for windows\/arm64/);
  assert.match(result.stdout,/PASS: Wails framework adapter for windows\/arm64/);
+ assert.match(result.stdout,/PASS: mygo framework adapter for windows\/arm64/);
  assert.match(result.stdout,/PASS: Wails diagnostics framework adapter for windows\/arm64/);
+ assert.match(result.stdout,/PASS: mygo diagnostics framework adapter for windows\/arm64/);
 });
 test('hosts-check runs the Windows build check',{timeout:30000},()=>{
  const result=spawnSync('make',['-n','hosts-check'],{cwd:root,encoding:'utf8',timeout:20000});

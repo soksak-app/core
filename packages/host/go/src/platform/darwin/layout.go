@@ -16,6 +16,9 @@ bool nativeWindowAfterPresentation(void *window, uintptr_t callback);
 bool nativeWindowJoinView(void *window, uint64_t ticket, void *view, uintptr_t callback);
 void *nativeWindowMainPresentation(void *window);
 void nativeWindowAfterSettled(void *window, void *present, uintptr_t callback);
+void *nativeFunctionPresentation(uintptr_t present);
+void nativeWindowPresented(void *presented, const char *error);
+void nativeLayoutObserve(void);
 
 // The native calls of this file run on the main thread (main_thread.h).
 static bool main_surfaceLayoutCommit(void *window, uint64_t ticket) { return ON_MAIN(bool, surfaceLayoutCommit(window, ticket)); }
@@ -33,6 +36,7 @@ import "C"
 import (
 	"errors"
 	"runtime/cgo"
+	"sync"
 	"unsafe"
 )
 
@@ -140,6 +144,47 @@ func (implementation) AfterSettled(window, present unsafe.Pointer, done func(dis
 	C.nativeWindowAfterSettled(window, present, C.uintptr_t(cgo.NewHandle(done)))
 	return nil
 }
+
+func (implementation) FunctionPresentation(present func(func(error)) error) (unsafe.Pointer, error) {
+	return C.nativeFunctionPresentation(C.uintptr_t(cgo.NewHandle(present))), nil
+}
+
+//export goNativeSettledPresent
+func goNativeSettledPresent(value C.uintptr_t, presented unsafe.Pointer) {
+	present := cgo.Handle(value).Value().(func(func(error)) error)
+	var once sync.Once
+	finish := func(err error) {
+		once.Do(func() {
+			var text *C.char
+			if err != nil {
+				text = C.CString(err.Error())
+				defer C.free(unsafe.Pointer(text))
+			}
+			C.nativeWindowPresented(presented, text)
+		})
+	}
+	if err := present(finish); err != nil {
+		finish(err)
+	}
+}
+
+//export goNativeSettledPresentEnded
+func goNativeSettledPresentEnded(value C.uintptr_t) { cgo.Handle(value).Delete() }
+
+// layoutStarted and layoutEnded are the functions of the observer that ObserveLayout registered.
+var layoutStarted, layoutEnded func(window unsafe.Pointer)
+
+func (implementation) ObserveLayout(started, ended func(unsafe.Pointer)) error {
+	layoutStarted, layoutEnded = started, ended
+	C.nativeLayoutObserve()
+	return nil
+}
+
+//export goNativeLayoutStarted
+func goNativeLayoutStarted(window unsafe.Pointer) { layoutStarted(window) }
+
+//export goNativeLayoutEnded
+func goNativeLayoutEnded(window unsafe.Pointer) { layoutEnded(window) }
 
 func (implementation) InjectSettledFailure(_ unsafe.Pointer) error {
 	C.main_surfaceLayoutInjectSettledFailure()

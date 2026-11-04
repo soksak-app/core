@@ -16,6 +16,9 @@ type Framework interface {
 	ApplicationName() string
 	// DisplayName is the end of a window title, as "Wails v3".
 	DisplayName() string
+	// MainPage reports whether a window shows the workbench in a main page. A framework that draws the workbench in native UI has
+	// no main web view, and the library calls no operation of a main web view on its windows.
+	MainPage() bool
 	// Step runs task as one step of the main thread and returns when it returned.
 	Step(task func())
 	// Post runs task as a later step of the main thread and returns at once.

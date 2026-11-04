@@ -37,6 +37,17 @@ test('the place of an error record is the literal text of the first argument, cu
   ]);
 });
 
+test('a Go framework adapter writes its error records in the layer of the host', () => {
+  const sources = new Map([
+    ['packages/host/wailsv3/src/frontend.go', 'LogError("window present", err)'],
+    ['packages/host/mygo/src/frontend.go', 'LogError("window frame", err)'],
+  ]);
+  assert.deepEqual(failureSites(sources).map(({ layer, place, filled }) => [layer, place, filled]), [
+    ['host', 'window present', false],
+    ['host', 'window frame', false],
+  ]);
+});
+
 test('a record is missing from the table when the table does not write it with its layer and place', () => {
   const sites = failureSites(new Map([
     [GO, 'LogError("endpoint", a)\nLogError("endpoint timeout", b)\nLogError("sidecar "+name, c)\nLogError("image frame", d)'],

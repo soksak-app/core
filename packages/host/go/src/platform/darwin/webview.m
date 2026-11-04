@@ -103,6 +103,39 @@ static void nativeWindowAfterSettledOnMain(void *handle, void *present, uintptr_
     Block_release(present);
 }
 
+extern void goNativeSettledPresent(uintptr_t present, void *presented);
+extern void goNativeSettledPresentEnded(uintptr_t present);
+
+// Holds the Go function of a presentation block: the block retains this object, so the function ends with the last copy of the block.
+@interface SPFunctionPresentation : NSObject
+@property uintptr_t present;
+@end
+
+@implementation SPFunctionPresentation
+- (void)dealloc {
+    uintptr_t present = self.present;
+    hostRunOnWorker(^{ goNativeSettledPresentEnded(present); });
+    [super dealloc];
+}
+@end
+
+// The wait copies its block and asks it from the main thread, so the block hands the Go function a copy of its completion.
+static void *nativeFunctionPresentationOnMain(uintptr_t present) {
+    SPFunctionPresentation *function = [[SPFunctionPresentation alloc] init];
+    function.present = present;
+    surfaceLayoutPresent block = ^(void (^presented)(const char *error)) {
+        void *kept = Block_copy(presented);
+        uintptr_t value = function.present;
+        hostRunOnWorker(^{ goNativeSettledPresent(value, kept); });
+    };
+    void *copy = Block_copy(block);
+    [function release];
+    return copy;
+}
+
+extern void goNativeLayoutStarted(void *window);
+extern void goNativeLayoutEnded(void *window);
+
 static void nativeWindowPrepareOnMain(void *handle) {
     NSWindow *window = (NSWindow *)handle;
     WKWebView *root = sp_window_main_webview(handle);
@@ -246,6 +279,22 @@ void *nativeWindowMainPresentation(void *handle) {
 }
 void nativeWindowAfterSettled(void *handle, void *present, uintptr_t callback) {
     hostRunOnMain(^{ nativeWindowAfterSettledOnMain(handle, present, callback); });
+}
+void *nativeFunctionPresentation(uintptr_t present) {
+    return ON_MAIN(void *, nativeFunctionPresentationOnMain(present));
+}
+void nativeWindowPresented(void *presented, const char *error) {
+    hostRunOnMain(^{
+        void (^completion)(const char *) = presented;
+        completion(error);
+        Block_release(completion);
+    });
+}
+void nativeLayoutObserve(void) {
+    hostRunOnMain(^{
+        surfaceLayoutObserve(^(void *window) { hostRunOnWorker(^{ goNativeLayoutStarted(window); }); },
+            ^(void *window) { hostRunOnWorker(^{ goNativeLayoutEnded(window); }); });
+    });
 }
 void nativeWindowPrepare(void *handle) {
     hostRunOnMain(^{ nativeWindowPrepareOnMain(handle); });

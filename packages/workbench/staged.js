@@ -2,7 +2,8 @@
 // stage.mjs imports this list and verifies it so that the declaration and the actual files match.
 //
 // Publish root files (modules can import them directly):
-// - always: created in every build
+// - always: created in every build that stages a main page
+// - view: created in a build without a main page (--no-main-page)
 // - diagnostics: created only with the --diagnostics flag
 // - served: documents that the host provides. Staging writes them only with --installed
 //
@@ -13,6 +14,11 @@ export const STAGED = Object.freeze({
     "diagnostics.js", // a copy of observe.js with diagnostics, otherwise a copy of release-diagnostics.js
     "environment.json", // application settings
     "runtime/start.js", // the start document module of the application runtime
+  ]),
+  view: Object.freeze([
+    "core-root.json", // the core targets of the view import map
+    "environment.json", // application settings
+    "view-imports.json", // the view import map
   ]),
   diagnostics: Object.freeze([
     "transcript.js", // the call recorder that the diagnostics module uses

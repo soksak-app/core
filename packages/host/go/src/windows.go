@@ -350,6 +350,9 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	// The native view is placed over the DOM, so the page handles a dropped file based on the DOM element at that point.
 	var dropOnce sync.Once
 	place := func() {
+		if !framework.MainPage() {
+			return
+		}
 		mainThreadStep(func() {
 			if err := system.SetMainWebview(win.NativeWindow()); err != nil {
 				fatalError("main webview identity", err)
@@ -398,10 +401,12 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 			if observed != nil {
 				fatalError("window responder", observed)
 			}
-			var failed error
-			mainThreadStep(func() { failed = system.RevealAfterLoad(win.NativeWindow()) })
-			if failed != nil {
-				fatalError("window reveal", failed)
+			if framework.MainPage() {
+				var failed error
+				mainThreadStep(func() { failed = system.RevealAfterLoad(win.NativeWindow()) })
+				if failed != nil {
+					fatalError("window reveal", failed)
+				}
 			}
 			win.Show()
 		})

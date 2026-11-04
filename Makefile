@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: push-check events-check census-check failures-check benchmark-rust benchmark-go preflight prepare build verify browser-example-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls e2e-terminal-sidebar-current e2e-terminal-focus-current e2e-shutdown e2e-benchmark-view-drag e2e-benchmark-resize-catch-up e2e-benchmark-idle-tab e2e-benchmark-split-load e2e-repeat e2e-b3 b3-judge exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat temp-audit page-memory object-counts host-calls app-usage terminal-redraw-usage trace-share host-allocations app-update-check
+.PHONY: push-check events-check census-check failures-check benchmark-rust benchmark-go preflight prepare build verify browser-example-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls e2e-terminal-sidebar-current e2e-terminal-focus-current e2e-shutdown e2e-benchmark-view-drag e2e-benchmark-resize-catch-up e2e-benchmark-empty-window e2e-benchmark-idle-tab e2e-benchmark-split-load e2e-repeat e2e-b3 b3-judge exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat temp-audit page-memory object-counts host-calls app-usage terminal-redraw-usage trace-share host-allocations app-update-check
 
 docs-check:
 	@node scripts/check-docs.mjs
@@ -265,6 +265,12 @@ windows-build-check:
 	@echo "START: Wails framework adapter go vet -tags diagnostics GOOS=windows GOARCH=$(WINDOWS_GOARCH)"
 	@cd packages/host/wailsv3 && GOOS=windows GOARCH=$(WINDOWS_GOARCH) go vet -tags diagnostics ./src/...
 	@echo "PASS: Wails diagnostics framework adapter for windows/$(WINDOWS_GOARCH)"
+	@echo "START: mygo framework adapter go vet GOOS=windows GOARCH=$(WINDOWS_GOARCH)"
+	@cd packages/host/mygo && GOOS=windows GOARCH=$(WINDOWS_GOARCH) go vet ./src/...
+	@echo "PASS: mygo framework adapter for windows/$(WINDOWS_GOARCH)"
+	@echo "START: mygo framework adapter go vet -tags diagnostics GOOS=windows GOARCH=$(WINDOWS_GOARCH)"
+	@cd packages/host/mygo && GOOS=windows GOARCH=$(WINDOWS_GOARCH) go vet -tags diagnostics ./src/...
+	@echo "PASS: mygo diagnostics framework adapter for windows/$(WINDOWS_GOARCH)"
 
 # Checks that the file structures of the two native hosts and the two native apps differ only in the allowed ways.
 hosts-check: windows-build-check
@@ -297,10 +303,11 @@ verify: prepare docs-check exposure-check parity-check host-parity-check
 COMMA := ,
 # The declared core release candidate is the RELEASE constant of scripts/check-versions.mjs.
 DIAGNOSTIC_RELEASE := $(filter 0.0.%,$(shell sed -n 's/^export const RELEASE = "\(.*\)";$$/\1/p' scripts/check-versions.mjs))
-.PHONY: native-darwin native-darwin-fetch registry registry-install install-plugins browser-frontend browser-example frontend-wailsv3 frontend-tauriv2 frontend-wailsv3-core frontend-tauriv2-core host-test-wailsv3 host-test-tauriv2 host-test-mygo host-contract-check release-check-wailsv3 release-check-tauriv2 rust-format-check rust-clippy-check go-format-check \
+.PHONY: native-darwin native-darwin-fetch registry registry-install install-plugins browser-frontend browser-example frontend-wailsv3 frontend-tauriv2 frontend-mygo frontend-wailsv3-core frontend-tauriv2-core frontend-mygo-core host-test-wailsv3 host-test-tauriv2 host-test-mygo host-contract-check release-check-wailsv3 release-check-tauriv2 rust-format-check rust-clippy-check go-format-check \
         tauriv2 tauriv2-release tauriv2-build tauriv2-build-release \
         wailsv3 wailsv3-release wailsv3-build wailsv3-build-release \
-        e2e e2e-activation e2e-real e2e-person e2e-section-design examples-size
+        mygo mygo-release mygo-build mygo-build-release \
+        e2e e2e-host-go e2e-activation e2e-real e2e-person e2e-section-design examples-size
 
 # rustup installs cargo here and adds the path to the shell profile. The shell of make
 # does not read the profile.
@@ -325,10 +332,14 @@ TAURI_DEBUG_BUNDLE   = target/debug/soksak-tauriv2.app
 TAURI_RELEASE_BUNDLE = target/release/tauriv2/soksak.app
 WAILS_DEBUG_BUNDLE   = target/debug/soksak-wailsv3.app
 WAILS_RELEASE_BUNDLE = target/release/wailsv3/soksak.app
+MYGO_DEBUG_BUNDLE    = target/debug/soksak-mygo.app
+MYGO_RELEASE_BUNDLE  = target/release/mygo/soksak.app
 TAURI_DEBUG   = $(TAURI_DEBUG_BUNDLE)/Contents/MacOS/soksak-tauriv2
 TAURI_RELEASE = $(TAURI_RELEASE_BUNDLE)/Contents/MacOS/soksak-tauriv2
 WAILS_DEBUG   = $(WAILS_DEBUG_BUNDLE)/Contents/MacOS/soksak-wailsv3
 WAILS_RELEASE = $(WAILS_RELEASE_BUNDLE)/Contents/MacOS/soksak-wailsv3
+MYGO_DEBUG    = $(MYGO_DEBUG_BUNDLE)/Contents/MacOS/soksak-mygo
+MYGO_RELEASE  = $(MYGO_RELEASE_BUNDLE)/Contents/MacOS/soksak-mygo
 
 # Writes the Info.plist and the Dock icon of the bundle. The first argument is the bundle and the second is the application. The app name
 # is set by CFBundleDisplayName of Info.plist (the supported languages are declared in CFBundleLocalizations of the same plist).
@@ -348,6 +359,7 @@ bundle-sign = codesign --sign - --force --deep $(1) && $(LSREGISTER) -f $(1)
 
 # Builds the command line sok (docs/spec/cli.md) and places it beside the executables of the bundle. The first argument is the bundle and the second is the profile.
 sok-wailsv3 = go build -C packages/sok/go $(if $(filter release,$(2)),-trimpath -ldflags "-s -w") $(if $(filter debug,$(2)),-tags "diagnostics dev",$(if $(DIAGNOSTIC_RELEASE),-tags diagnostics)) -o ../../../$(1)/Contents/MacOS/sok ./src/cmd/sok
+sok-mygo = go build -C packages/sok/go $(if $(filter release,$(2)),-trimpath -ldflags "-s -w") $(if $(filter debug,$(2)),-tags "diagnostics dev mygo",-tags "$(if $(DIAGNOSTIC_RELEASE),diagnostics )mygo") -o ../../../$(1)/Contents/MacOS/sok ./src/cmd
 sok-tauriv2 = $(CARGO_ENV) cargo build --locked -p soksak-sok $(if $(filter release,$(2)),--release) $(if $(filter debug,$(2)),--features diagnostics$(COMMA)dev,$(if $(DIAGNOSTIC_RELEASE),--features diagnostics)) && cp target/$(2)/sok $(1)/Contents/MacOS/sok
 
 native-darwin:
@@ -401,6 +413,8 @@ install-plugins: registry
 # include it. Plugins and sidecars are not put in the bundle; they are installed into the configuration folder (make install-plugins).
 stage-wailsv3 = pnpm -F @soksak/wailsv3 exec soksak-stage src/frontend $(1)
 stage-tauriv2 = pnpm -F @soksak/tauriv2 exec soksak-stage src/frontend $(1)
+# No page runs the workbench on the mygo host, so its staging is the view root.
+stage-mygo = pnpm -F @soksak/mygo exec soksak-stage src/frontend --no-main-page $(1)
 
 # Staging does not touch the bundle. The bundle is rebuilt only by the build targets. This keeps the executable of the debug app that checks use
 # from being removed by the staging of a check target such as native-test.
@@ -410,12 +424,18 @@ frontend-wailsv3: build registry
 frontend-tauriv2: build registry
 	@$(call stage-tauriv2,--diagnostics --registry-index "$(abspath $(REGISTRY)/index.json)")
 
+frontend-mygo: build registry
+	@$(call stage-mygo,--diagnostics --registry-index "$(abspath $(REGISTRY)/index.json)")
+
 # Stages only the core frontend for independent host language checks. Registry builds belong to full host and release checks.
 frontend-wailsv3-core: build
 	@$(call stage-wailsv3,--diagnostics)
 
 frontend-tauriv2-core: build
 	@$(call stage-tauriv2,--diagnostics)
+
+frontend-mygo-core: build
+	@$(call stage-mygo,--diagnostics)
 
 # generate_context! includes the frontend, so this rebuilds the crate.
 tauriv2-build: native-darwin frontend-tauriv2
@@ -450,6 +470,20 @@ wailsv3-build-release: native-darwin build
 	@$(call sok-wailsv3,$(WAILS_RELEASE_BUNDLE),release)
 	@$(call bundle-sign,$(WAILS_RELEASE_BUNDLE))
 
+mygo-build: native-darwin frontend-mygo
+	@$(call bundle-info,$(MYGO_DEBUG_BUNDLE),mygo)
+	@$(call bundle-dev,$(MYGO_DEBUG_BUNDLE),mygo)
+	@$(GO_ENV) go build -C apps/mygo -tags "diagnostics dev" -ldflags "$(GO_LINK)" -o ../../$(MYGO_DEBUG) ./src
+	@$(call sok-mygo,$(MYGO_DEBUG_BUNDLE),debug)
+	@$(call bundle-sign,$(MYGO_DEBUG_BUNDLE))
+
+mygo-build-release: native-darwin build
+	@$(call bundle-info,$(MYGO_RELEASE_BUNDLE),mygo)
+	@$(call stage-mygo,$(if $(DIAGNOSTIC_RELEASE),--diagnostics))
+	@$(GO_ENV) go build -C apps/mygo -trimpath $(if $(DIAGNOSTIC_RELEASE),-tags diagnostics) -ldflags "-s -w $(GO_LINK)" -o ../../$(MYGO_RELEASE) ./src
+	@$(call sok-mygo,$(MYGO_RELEASE_BUNDLE),release)
+	@$(call bundle-sign,$(MYGO_RELEASE_BUNDLE))
+
 tauriv2: tauriv2-build
 	@./$(TAURI_DEBUG)
 
@@ -461,6 +495,12 @@ wailsv3: wailsv3-build
 
 wailsv3-release: wailsv3-build-release
 	@./$(WAILS_RELEASE)
+
+mygo: mygo-build
+	@./$(MYGO_DEBUG)
+
+mygo-release: mygo-build-release
+	@./$(MYGO_RELEASE)
 
 # Unit checks of native code. Runs the shared input check and the host contract check, which runs the tests of the two hosts.
 # The checks of a sidecar run in each sidecar repository.
@@ -503,9 +543,11 @@ host-test-wailsv3: native-darwin frontend-wailsv3-core
 host-test-tauriv2: native-darwin frontend-tauriv2-core
 	@$(CARGO_ENV) node scripts/check-host-contract.mjs --host tauriv2
 
-# The unit tests of the Go packages of the mygo host. They are headless and build no native code or frontend.
-host-test-mygo:
+# The mygo host has no contract run yet: this target runs the unit tests of its Go packages, of its framework adapter and of its application.
+host-test-mygo: native-darwin frontend-mygo-core
 	@node scripts/go-tests.mjs --package './packages/workbench-mygo/...' --count 1 --timeout $(TEST_TIMEOUT)
+	@$(GO_ENV) go -C packages/host/mygo test -ldflags "$(GO_LINK)" ./...
+	@pnpm -F @soksak/mygo test
 
 # Release host checks build and audit only the selected application bundle; the release reads no registry (docs/spec/verification.md).
 release-check-wailsv3: wailsv3-build-release
@@ -523,6 +565,12 @@ release-check-tauriv2: tauriv2-build-release
 # and the native end-to-end target of its tier in a new configuration root under target/e2e: it starts the applications, runs the
 # checks and quits the applications.
 E2E_BUILD = wailsv3-build tauriv2-build registry
+# The tests of the Go language host library and of the Go framework adapters that carry the build constraint e2e: they need a display
+# or the activation of a process, and their names start with TestE2E.
+E2E_GO_PACKAGES = packages/host/go packages/host/wailsv3 packages/host/mygo
+e2e-host-go: native-darwin
+	@for package in $(E2E_GO_PACKAGES); do $(GO_ENV) go -C $$package test -tags e2e -run '^TestE2E' -ldflags "$(GO_LINK)" ./tests/... || exit 1; done
+
 e2e: docs-check e2e-check exposure-check $(E2E_BUILD)
 	@node scripts/e2e-run.mjs --script verify --native e2e $(if $(WHEN_IDLE),--when-idle $(WHEN_IDLE))
 
@@ -561,6 +609,11 @@ e2e-benchmark-view-drag:
 
 e2e-benchmark-resize-catch-up:
 	@$(B3_BENCHMARK_ENV) pnpm -F @soksak/e2e run benchmark:resize-catch-up
+
+# The benchmark of an empty mygo window (docs/operations/examples.md#empty-window-benchmark): it opens a window of the framework without
+# the mygo framework adapter. SECONDS is the time over which it reads the CPU.
+e2e-benchmark-empty-window:
+	@go -C packages/host/mygo run ./benchmark/cmd $(if $(SECONDS),--seconds $(SECONDS))
 
 e2e-benchmark-idle-tab:
 	@$(B3_BENCHMARK_ENV) pnpm -F @soksak/e2e run benchmark:idle-tab

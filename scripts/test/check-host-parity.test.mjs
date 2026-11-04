@@ -27,7 +27,7 @@ const sources = () => ({
   tauriv2ProductSources: platformSources().tauriv2,
   wailsv3ProductSources: platformSources().wailsv3,
   tauriv2ApplicationSources: applicationSources().tauriv2,
-  wailsv3ApplicationSources: applicationSources().wailsv3,
+  goApplicationSources: applicationSources().wailsv3,
   tauriv2Crate: tauriv2Crate,
   tauriv2PortSource: rustPortFixture,
   wailsv3PortSource: goPortFixture,
@@ -313,6 +313,15 @@ test("a platform method without a caller outside the platform fails", { timeout:
     "tauriv2 platform method place_webview has no caller outside src/platform",
     "wailsv3 platform method AnswerQuitRequests has no caller outside src/platform",
   ]);
+});
+
+test("a platform method that only a Go framework adapter calls has a caller", { timeout: 1000 }, () => {
+  const changed = platformSources();
+  changed.wailsv3["host.go"] = changed.wailsv3["host.go"].replace("\tapplication.InvokeSync(system.AnswerQuitRequests)\n", "");
+  const applications = applicationSources();
+  applications.wailsv3["packages/host/mygo/src/framework.go"] = "package host\n\nfunc (f *Framework) Quit() {\n\tsystem.AnswerQuitRequests()\n}";
+  applications.wailsv3["apps/wailsv3/src/main.go"] = "package main\n\nfunc main() {\n\thost.Run()\n\tframework.Quit()\n}";
+  assert.deepEqual(platformFailures(changed, applications), []);
 });
 
 test("a platform method named only in a comment has no caller", { timeout: 1000 }, () => {

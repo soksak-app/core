@@ -386,6 +386,8 @@ type frameworkRecord struct{ Framework }
 
 func (frameworkRecord) DisplayName() string { return "Test" }
 
+func (frameworkRecord) MainPage() bool { return true }
+
 // frontendRecord is the window of a test: it has no native window, and a call that needs one panics.
 type frontendRecord struct{ Frontend }
 

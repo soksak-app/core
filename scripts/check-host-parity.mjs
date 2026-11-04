@@ -494,7 +494,7 @@ export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, wailsv3Runtim
   hostContractSpec, tauriv2MenuSource, wailsv3MenuSource, hostsSpec, endpointSpec,
   tauriv2DeclarationSource, wailsv3DeclarationSource, workbenchDeclarationSource,
   tauriv2PlatformSource, wailsv3PlatformSource, tauriv2ProductSources, wailsv3ProductSources,
-  tauriv2ApplicationSources, wailsv3ApplicationSources, tauriv2Crate, tauriv2AdapterCrate, tauriv2PortSource, wailsv3PortSource }) {
+  tauriv2ApplicationSources, goApplicationSources, tauriv2Crate, tauriv2AdapterCrate, tauriv2PortSource, wailsv3PortSource }) {
   const failures = [];
   const tauriv2 = {
     calls: runtimeCalls(tauriv2Runtime, 'const COMMAND = {', 'tauriv2 runtime'),
@@ -547,7 +547,7 @@ export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, wailsv3Runtim
   failures.push(...auditPlatformCallers('tauriv2', rustPlatformMethods(tauriv2PlatformSource), tauriv2Callers,
     { language: 'rust', crate: tauriv2Crate, adapterCrates: tauriv2AdapterCrate ? [tauriv2AdapterCrate] : [], applications: tauriv2ApplicationSources }));
   failures.push(...auditPlatformCallers('wailsv3', goPlatformMethods(wailsv3PlatformSource), wailsv3ProductSources,
-    { language: 'go', applications: wailsv3ApplicationSources }));
+    { language: 'go', applications: goApplicationSources }));
   failures.push(...auditPortMethods(goPortMethods(wailsv3PortSource), rustPortMethods(tauriv2PortSource), allowedPortMethods(hostsSpec)));
   return failures;
 }
@@ -595,7 +595,10 @@ if (process.argv[1] && process.argv[1].endsWith('check-host-parity.mjs')) {
     tauriv2ProductSources: hostProductSources(join(ROOT, 'packages/host/rust/src'), '.rs'),
     wailsv3ProductSources: hostProductSources(join(ROOT, 'packages/host/go/src'), '.go'),
     tauriv2ApplicationSources: { ...applicationSources('packages/host/tauriv2/src', '.rs'), ...applicationSources('apps/tauriv2/src', '.rs') },
-    wailsv3ApplicationSources: { ...applicationSources('packages/host/wailsv3/src', '.go'), ...applicationSources('apps/wailsv3/src', '.go') },
+    goApplicationSources: {
+      ...applicationSources('packages/host/wailsv3/src', '.go'), ...applicationSources('apps/wailsv3/src', '.go'),
+      ...applicationSources('packages/host/mygo/src', '.go'), ...applicationSources('apps/mygo/src', '.go'),
+    },
     tauriv2Crate: libraryCrate(read('packages/host/rust/Cargo.toml'), 'packages/host/rust/Cargo.toml'),
     tauriv2PortSource: read('packages/host/rust/src/framework.rs'),
     wailsv3PortSource: read('packages/host/go/src/framework.go'),

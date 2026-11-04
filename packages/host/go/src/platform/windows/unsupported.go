@@ -448,6 +448,14 @@ func (implementation) AfterSettled(unsafe.Pointer, unsafe.Pointer, func(float64,
 	return unsupported("native presentation")
 }
 
+func (implementation) FunctionPresentation(func(func(error)) error) (unsafe.Pointer, error) {
+	return nil, unsupported("native presentation")
+}
+
+func (implementation) ObserveLayout(_, _ func(unsafe.Pointer)) error {
+	return unsupported("native presentation")
+}
+
 func (implementation) InjectSettledFailure(unsafe.Pointer) error {
 	return unsupported("native presentation")
 }

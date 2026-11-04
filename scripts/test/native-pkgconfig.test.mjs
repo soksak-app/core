@@ -78,6 +78,19 @@ test("per-host checks build only the selected host and core frontend", { timeout
   }
 });
 
+test("the mygo application stages its view root, not a main page", { timeout: 10000 }, () => {
+  for (const [target, flags] of [["frontend-mygo-core", /soksak-stage src\/frontend --no-main-page --diagnostics/], ["mygo-build", /soksak-stage src\/frontend --no-main-page --diagnostics --registry-index/], ["mygo-build-release", /soksak-stage src\/frontend --no-main-page/]]) {
+    const output = execFileSync("make", ["-n", "-o", "native-darwin", "-o", "build", "-o", "registry", target], { cwd: workspace, encoding: "utf8" });
+    assert.match(output, flags, output);
+  }
+  const build = execFileSync("make", ["-n", "-o", "native-darwin", "-o", "build", "-o", "registry", "mygo-build"], { cwd: workspace, encoding: "utf8" });
+  assert.match(build, /go build -C apps\/mygo -tags "diagnostics dev"/, build);
+  assert.match(build, /go build -C packages\/sok\/go\s+-tags "diagnostics dev mygo"/, build);
+  const release = execFileSync("make", ["-n", "-o", "native-darwin", "-o", "build", "-o", "registry", "mygo-build-release"], { cwd: workspace, encoding: "utf8" });
+  assert.match(release, /go build -C apps\/mygo -trimpath/, release);
+  assert.match(release, /go build -C packages\/sok\/go -trimpath -ldflags "-s -w" -tags "(?:diagnostics )?mygo"/, release);
+});
+
 test("Rust clippy stages only the core frontend and avoids the workspace registry", { timeout: 10000 }, () => {
   const output = execFileSync("make", ["-n", "-o", "native-darwin", "-o", "build", "rust-clippy-check"], {
     cwd: workspace, encoding: "utf8",

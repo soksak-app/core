@@ -18,6 +18,8 @@ const ROOT = new URL("../", import.meta.url).pathname;
 // compares the packages of the frameworks. Each names the columns of the left and the right package of its pairs.
 export const LANGUAGE_TABLE = { title: "Language table", left: "Go", right: "Rust" };
 export const FRAMEWORK_TABLE = { title: "Framework table", left: "Wails", right: "Tauri" };
+// The mygo pairs read the same table with the column of mygo as their right column.
+export const MYGO_TABLE = { ...FRAMEWORK_TABLE, right: "mygo" };
 
 // A pair reads the rows of its table whose ID starts with its letter: H for the host packages, C for the command lines and A for the
 // applications.
@@ -26,6 +28,8 @@ const PAIRS = [
   { left: "packages/sok/go", right: "packages/sok/rust", table: LANGUAGE_TABLE, letter: "C" },
   { left: "packages/host/wailsv3", right: "packages/host/tauriv2", table: FRAMEWORK_TABLE, letter: "H" },
   { left: "apps/wailsv3", right: "apps/tauriv2", table: FRAMEWORK_TABLE, letter: "A" },
+  { left: "packages/host/wailsv3", right: "packages/host/mygo", table: MYGO_TABLE, letter: "H" },
+  { left: "apps/wailsv3", right: "apps/mygo", table: MYGO_TABLE, letter: "A" },
 ];
 
 const allowed = (path, files) => files.some((key) => key.endsWith("/") ? path.startsWith(key) : path === key);
@@ -67,20 +71,24 @@ export function allowedDifferenceTables(hostsMarkdown, tables = [LANGUAGE_TABLE,
  * pair whose ID starts with the letter of the pair, or in the rows that pair.rows lists. The column of the left package lists the
  * left files and the column of the right package lists the right files; each file is compared without a .go or .rs extension, and a
  * path that ends with "/" is a directory. A cell of none lists no file, and a cell of content differs states a file that both
- * packages have with a different content.
+ * packages have with a different content, so a row with such a cell lists no file for that pair.
  */
 export function allowedFileDifferences(hostsMarkdown, pair) {
   const tables = [LANGUAGE_TABLE, FRAMEWORK_TABLE];
-  const rows = allowedDifferenceTables(hostsMarkdown, tables.includes(pair.table) ? tables : [...tables, pair.table]).get(pair.table.title);
+  const rows = allowedDifferenceTables(hostsMarkdown, tables.some((table) => table.title === pair.table.title) ? tables : [...tables, pair.table]).get(pair.table.title);
   const ids = pair.rows ?? [...rows.keys()].filter((id) => id.startsWith(pair.letter));
   const result = { left: [], right: [] };
   for (const id of ids) {
     const row = rows.get(id);
     if (row === undefined) throw new Error(`hosts spec has no allowed difference row ${id} in the ${pair.table.title}`);
-    for (const [side, column] of [["left", pair.table.left], ["right", pair.table.right]]) {
+    const sides = [["left", pair.table.left], ["right", pair.table.right]];
+    for (const [, column] of sides) {
+      if (row[column] === undefined) throw new Error(`hosts spec ${pair.table.title} has no column ${column}`);
+    }
+    if (sides.some(([, column]) => row[column] === "content differs")) continue;
+    for (const [side, column] of sides) {
       const cell = row[column];
-      if (cell === undefined) throw new Error(`hosts spec ${pair.table.title} has no column ${column}`);
-      if (cell === "none" || cell === "content differs") continue;
+      if (cell === "none") continue;
       const paths = [...cell.matchAll(/`([^`]+)`/g)].map((match) => match[1].replace(/\.(go|rs)$/, ""));
       if (paths.length === 0) throw new Error(`hosts spec row ${id} lists neither none nor a file in the ${column} cell: ${cell}`);
       result[side].push(...paths);
@@ -115,7 +123,7 @@ export function auditHostPairs(tracked, pairs = PAIRS, hostsMarkdown = readFileS
 // a framework module and its go.mod requires none, and no Rust source of packages/host/rust names a framework crate and its
 // Cargo.toml depends on none.
 const LIBRARIES = { go: "packages/host/go/", rust: "packages/host/rust/" };
-const FRAMEWORK_MODULES = ["github.com/wailsapp/wails/v3"];
+const FRAMEWORK_MODULES = ["github.com/wailsapp/wails/v3", "github.com/egoist/mygo"];
 const FRAMEWORK_CRATE = /^tauri(?:[-_][\w-]+)?$/;
 const frameworkModule = (path) => FRAMEWORK_MODULES.find((module) => path === module || path.startsWith(`${module}/`));
 
@@ -300,6 +308,7 @@ const PRODUCT_DIRS = [
   "packages/host/go/src",
   "packages/host/rust/src",
   "packages/host/wailsv3/src",
+  "packages/host/mygo/src",
   "packages/host/tauriv2/src",
   "native/darwin/src",
   "packages/workbench-mygo/src",

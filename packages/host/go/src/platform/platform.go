@@ -517,10 +517,17 @@ type Platform interface {
 	// MainPresentation makes the block of the main web view of window, which reads the document and waits for the presentation
 	// update after that read. The caller owns the block until it passes the block to AfterSettled.
 	MainPresentation(window unsafe.Pointer) (unsafe.Pointer, error)
+	// FunctionPresentation makes the block of a window without a main web view: the settled wait calls present on the worker to bring
+	// the content of the window to the screen, each time that it asks for it. present calls back through its argument, and it returns
+	// an error when it cannot. The caller owns the block until it passes the block to AfterSettled. Call it on the UI thread.
+	FunctionPresentation(present func(presented func(err error)) error) (unsafe.Pointer, error)
 	// AfterSettled takes the block present and calls done on the UI thread after the block and the visible app document displayed
 	// the screen, in a state in which the window has no open surface layout transaction. displayed is the time (ms, mach absolute
 	// time) at which that screen is displayed.
 	AfterSettled(window, present unsafe.Pointer, done func(displayed float64, err error)) error
+	// ObserveLayout registers the observer of the layout transactions of the process, in place of the earlier one: started runs on
+	// the worker when a preparation of the window starts, and ended when the transaction of the window ends. Call it on the UI thread.
+	ObserveLayout(started, ended func(window unsafe.Pointer)) error
 	// InjectSettledFailure makes the next settled wait fail in a diagnostic build.
 	InjectSettledFailure(window unsafe.Pointer) error
 

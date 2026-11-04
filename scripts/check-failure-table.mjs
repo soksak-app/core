@@ -16,7 +16,7 @@ const LITERAL = '"((?:[^"\\\\]|\\\\.)*)"';
 
 // What each language writes before the literal, where its call fills in the place, and the host or library that it belongs to.
 const LANGUAGES = [
-  { layer: 'host', path: /^packages\/host\/(?:go|wailsv3)\/src\/.*\.go$/, call: new RegExp(`\\bLogError\\(\\s*(?:fmt\\.Sprintf\\()?${LITERAL}(\\s*\\+)?`, 'g'), fills: /%/ },
+  { layer: 'host', path: /^packages\/host\/(?:go|wailsv3|mygo)\/src\/.*\.go$/, call: new RegExp(`\\bLogError\\(\\s*(?:fmt\\.Sprintf\\()?${LITERAL}(\\s*\\+)?`, 'g'), fills: /%/ },
   { layer: 'host', path: /^packages\/host\/(?:rust|tauriv2)\/src\/.*\.rs$/, call: new RegExp(`\\b(?:log_error|log_failure)\\(\\s*(?:&format!\\()?${LITERAL}`, 'g'), fills: /\{/ },
   { layer: 'native', path: /^native\/darwin\/src\/.*\.m$/, call: new RegExp(`\\bsp_log_error\\(\\s*@?${LITERAL}`, 'g'), fills: /(?!)/ },
 ];
