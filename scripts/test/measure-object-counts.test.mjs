@@ -41,6 +41,11 @@ test("the measurement requires at least one --plugin and the trace state", () =>
   assert.equal(counts.parseOptions(["--sok", "s", "--config-dir", "d", "--trace", "1", "--plugin", "probe"]).trace, 1);
   assert.throws(() => counts.parseOptions(["--sok", "s", "--config-dir", "d", "--plugin", "probe"]), /TRACE must be 0 or 1, not set/);
   assert.throws(() => counts.parseOptions(["--sok", "s", "--config-dir", "d", "--trace", "on", "--plugin", "probe"]), /TRACE must be 0 or 1, not "on"/);
+  assert.equal(counts.parseOptions(["--sok", "s", "--config-dir", "d", "--trace", "0", "--plugin", "probe"]).b3Out, null);
+  assert.equal(counts.parseOptions(["--sok", "s", "--config-dir", "d", "--trace", "0", "--plugin", "probe", "--repetitions", "30", "--b3-out", "/o/s3.json"]).b3Out,
+    "/o/s3.json");
+  assert.throws(() => counts.parseOptions(["--sok", "s", "--config-dir", "d", "--trace", "0", "--plugin", "probe", "--b3-out", "/o/s3.json"]),
+    /--b3-out needs at least 30 repetitions, not 20/);
 });
 
 test("constant counts are not reported as growing", async () => {
@@ -312,4 +317,45 @@ test("every count of every object member of the reply outside runtime, documents
   assert.throws(() => countsOf({ ...snapshot(2), added: { first: -1 } }), /object count added\.first is not a non-negative integer \(-1\)/);
   assert.throws(() => countsOf({ ...snapshot(2), added: 3 }), /diagnostics\.objects member added is not an object of counts \(3\)/);
   assert.throws(() => countsOf({ ...snapshot(2), host: { ...snapshot(2).host, more: "6" } }), /object count host\.more is not a non-negative integer \("6"\)/);
+});
+
+/** The repetition entries 0 to 30 of a run: counts and figures as countOf and figureOf give them for each repetition. */
+function run30(countOf, figureOf) {
+  return Array.from({ length: 31 }, (_, repetition) => ({
+    repetition,
+    counts: { "host.surfaces": countOf(repetition, "host.surfaces"), "page.elements": countOf(repetition, "page.elements") },
+    runtime: { ...runtime(100), heapObjectsBytes: figureOf(repetition, "heapObjectsBytes"), heapReleasedBytes: 50 + repetition },
+    footprint: { host: { pid: 41, bytes: figureOf(repetition, "host") }, page: null, documents: [] },
+  }));
+}
+
+test("the B3 measurements count the counts that change after the first repetition and the figures that grow from repetitions 11-20 to 21-30", () => {
+  const steady = run30(() => 5, () => 1000);
+  assert.deepEqual(counts.b3Measurements(steady), { changedCounts: 0, growingFigures: 0 });
+  // A count that differs from its first repetition in one later repetition, and a baseline that differs, which is not judged.
+  const changed = run30((repetition, name) => (name === "page.elements" && repetition === 17 ? 6 : repetition === 0 ? 1 : 5), () => 1000);
+  assert.equal(counts.b3Measurements(changed).changedCounts, 1);
+  // The host footprint and one runtime figure rise in every repetition; heapReleasedBytes rises too but is not judged.
+  const growing = run30(() => 5, (repetition, name) => (name === "host" ? 1000 + repetition : 100 + repetition));
+  assert.equal(counts.b3Measurements(growing).growingFigures, 2);
+  // A figure whose lowest value over 21-30 equals its highest over 11-20 does not grow.
+  const touching = run30(() => 5, (repetition) => (repetition <= 20 ? (repetition === 15 ? 1010 : 1000) : 1010));
+  assert.equal(counts.b3Measurements(touching).growingFigures, 0);
+  // A host without runtime figures judges the host footprint alone.
+  const tauri = run30(() => 5, (repetition) => 1000 + repetition).map((entry) => ({ ...entry, runtime: null }));
+  assert.equal(counts.b3Measurements(tauri).growingFigures, 1);
+});
+
+test("the B3 measurements need repetitions 0 to 30 and a count of the first repetition in every later one", () => {
+  assert.throws(() => counts.b3Measurements(run30(() => 5, () => 1).slice(0, 30)),
+    /the B3 measurements of object-counts need the repetitions 1 to 30, not 1 to 29/);
+  const missing = run30(() => 5, () => 1);
+  delete missing[12].counts["page.elements"];
+  assert.equal(counts.b3Measurements(missing).changedCounts, 1, "a count that a later repetition lacks has changed");
+});
+
+test("B3_MEASUREMENTS declares the keys of the B3 output of object-counts, which b3Measurements gives", () => {
+  assert.deepEqual(counts.B3_MEASUREMENTS, ["changedCounts", "growingFigures"]);
+  assert.ok(Object.isFrozen(counts.B3_MEASUREMENTS));
+  assert.deepEqual(Object.keys(counts.b3Measurements(run30(() => 5, () => 1))), counts.B3_MEASUREMENTS);
 });

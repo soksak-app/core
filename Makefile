@@ -49,13 +49,13 @@ page-memory:
 # Sets the trace state TRACE, repeats the operations of scripts/measure-object-counts.mjs for the surface plugins PLUGINS REPETITIONS times against a
 # running diagnostic build and prints the object counts, the Go runtime figures and the footprints of the host, page and document processes per
 # repetition (docs/operations/examples.md#page-memory); a window of the mygo host has no page process. The diagnostic methods exist only in
-# diagnostic builds, so BUILD defaults to debug.
+# diagnostic builds, so BUILD defaults to debug. B3_OUT=FILE, with at least 30 repetitions, writes the B3 output of S3 to FILE.
 object-counts:
-	@case "$(APP)" in wailsv3|tauriv2|mygo) ;; *) echo "object-counts requires APP=wailsv3|tauriv2|mygo CONFIG=DIR PLUGINS='ID...' TRACE=0|1 [BUILD=release|debug] [REPETITIONS=20]" >&2; exit 2;; esac
+	@case "$(APP)" in wailsv3|tauriv2|mygo) ;; *) echo "object-counts requires APP=wailsv3|tauriv2|mygo CONFIG=DIR PLUGINS='ID...' TRACE=0|1 [BUILD=release|debug] [REPETITIONS=20] [B3_OUT=FILE]" >&2; exit 2;; esac
 	@case "$(CONFIG)" in '') echo "object-counts requires CONFIG=DIR" >&2; exit 2;; esac
 	@case "$(strip $(PLUGINS))" in '') echo "object-counts requires PLUGINS='ID...', the surface plugins whose tabs it opens" >&2; exit 2;; esac
 	@case "$(BUILD)" in ''|debug|release) ;; *) echo "object-counts requires BUILD=release|debug" >&2; exit 2;; esac
-	@node scripts/measure-object-counts.mjs --sok $(if $(filter release,$(BUILD)),target/release/$(APP)/soksak.app,target/debug/soksak-$(APP).app)/Contents/MacOS/sok --config-dir "$(CONFIG)" --trace "$(TRACE)" $(foreach plugin,$(PLUGINS),--plugin $(plugin)) --repetitions $(or $(REPETITIONS),20)
+	@node scripts/measure-object-counts.mjs --sok $(if $(filter release,$(BUILD)),target/release/$(APP)/soksak.app,target/debug/soksak-$(APP).app)/Contents/MacOS/sok --config-dir "$(CONFIG)" --trace "$(TRACE)" $(foreach plugin,$(PLUGINS),--plugin $(plugin)) --repetitions $(or $(REPETITIONS),20) $(if $(B3_OUT),--b3-out "$(B3_OUT)")
 
 # Has the main page of a running diagnostic build send CALLS host calls ROUNDS times and prints the footprint of its page process before the calls, after
 # them and after a collection (scripts/measure-host-calls.mjs); MINUTES=M waits M minutes without input instead of the calls;
