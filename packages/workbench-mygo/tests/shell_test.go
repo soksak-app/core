@@ -67,6 +67,7 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 		"folderChoose":     answer("folderChoose", func(json.RawMessage) (any, error) { return "/chosen", nil }),
 		"windowReady":      answer("windowReady", none),
 		"windowNew":        answer("windowNew", none),
+		"windowClose":      answer("windowClose", none),
 	}
 }
 

@@ -93,3 +93,16 @@ func TestClosedWindowTakesNoEvent(t *testing.T) {
 		t.Fatalf("a closed window called %v", stored.calls)
 	}
 }
+
+func TestCloseRequestStoresThePlaneAndClosesTheWindow(t *testing.T) {
+	stored := &storedHost{}
+	app, window, queue, _ := fixtureApp(t, stored)
+	app.Build(window)
+	app.Shown(window)
+	queue.drain(t)
+	app.Emit(window, "project-close-request")
+	queue.drain(t)
+	if got := stored.calls[len(stored.calls)-1]; got != "windowClose" {
+		t.Fatalf("the close request called %v", stored.calls)
+	}
+}
