@@ -210,6 +210,9 @@ func NewPluginOperations(calls *Calls, loaded func() []LoadedPlugin, changed fun
 	return &PluginOperations{calls: calls, loaded: loaded, changed: changed, outdated: []OutdatedSidecar{}}
 }
 
+// State returns the plugin state of the host, and nil before it was read.
+func (p *PluginOperations) State() *PluginsState { return p.state }
+
 // Failure returns why the state or the index could not be read, and nil when it could.
 func (p *PluginOperations) Failure() *PluginFailure { return p.failure }
 

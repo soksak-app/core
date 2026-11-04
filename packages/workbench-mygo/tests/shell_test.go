@@ -29,6 +29,9 @@ type storedHost struct {
 	// detaching are the surfaces whose image detach is pending when a window starts.
 	detaching []string
 	projects  []map[string]any
+	// appUpdate is the answer of appUpdateState, and opened holds the arguments of linkOpen.
+	appUpdate any
+	opened    []json.RawMessage
 	// extra holds the host calls that the base table has not.
 	extra map[string]workbench.HostCall
 	calls []string
@@ -195,6 +198,10 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 			plugins.starter = map[string]any{"format": 1, "state": request.State, "pack": request.Pack, "registry": request.Registry, "plugins": request.Plugins}
 			return nil, nil
 		}),
+		"linkOpen":         answer("linkOpen", func(argument json.RawMessage) (any, error) { h.opened = append(h.opened, argument); return nil, nil }),
+		"appUpdateState":   answer("appUpdateState", func(json.RawMessage) (any, error) { return h.appUpdate, nil }),
+		"appUpdateStage":   answer("appUpdateStage", func(json.RawMessage) (any, error) { return map[string]string{"bundle": "/staged/soksak.app"}, nil }),
+		"appUpdateApply":   answer("appUpdateApply", none),
 		"sidecarsOutdated": answer("sidecarsOutdated", func(json.RawMessage) (any, error) { return h.pluginHost().outdated, nil }),
 		"debugFiles": answer("debugFiles", func(json.RawMessage) (any, error) {
 			return []map[string]any{{"path": "older.log", "size": 1, "modified": 1}, {"path": "newer.log", "size": 2, "modified": 2}}, nil
