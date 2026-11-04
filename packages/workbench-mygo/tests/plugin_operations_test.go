@@ -288,6 +288,30 @@ func TestAFailedPluginOperationIsTheStateOfItsCard(t *testing.T) {
 	}
 }
 
+// The update button of the chrome shows the update list at the top of a page that was scrolled away from it.
+func TestShowUpdatesBringsTheUpdateListIntoView(t *testing.T) {
+	versions := map[string][]string{"alpha": {"1.0.0", "1.2.0"}}
+	for i := range 30 {
+		versions[fmt.Sprintf("plugin-%02d", i)] = []string{"1.0.0"}
+	}
+	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(versions), plugins: map[string]map[string]any{
+		"alpha": {"version": "1.0.0", "enabled": true, "sidecars": map[string]string{}}}}
+	f := pluginShell(t, plugins, `{"plugins":[]}`)
+	f.run("core.library.page", map[string]string{"page": "plugins"})
+	f.settle()
+	top := positional(t, f.tester, "core.library.plugins.updates", 0).Bounds.Y
+	f.tester.Scroll(600, 600, 0, 1500)
+	f.tester.Frame()
+	if scrolled := positional(t, f.tester, "core.library.plugins.updates", 0).Bounds.Y; scrolled >= 0 {
+		t.Fatalf("the list stands at %v after the scroll, from %v", scrolled, top)
+	}
+	f.run("core.plugins.show-updates", nil)
+	f.settle()
+	if shown := positional(t, f.tester, "core.library.plugins.updates", 0).Bounds.Y; shown < 0 {
+		t.Fatalf("the list stands at %v", shown)
+	}
+}
+
 func TestAPluginCommandRefusesAnEmptyPlugin(t *testing.T) {
 	f := pluginShell(t, &pluginsHost{}, `{"plugins":[]}`)
 	if err := f.finish("core.plugins.install", map[string]string{"plugin": ""}); err == nil {

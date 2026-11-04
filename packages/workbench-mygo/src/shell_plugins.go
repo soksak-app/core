@@ -66,6 +66,13 @@ func (s *Shell) pluginPage() PluginPage {
 	return page
 }
 
+// drawPlugins draws the plugin page, which brings the update list into view once after core.plugins.show-updates.
+func (s *Shell) drawPlugins(c *ui.Context) {
+	page := s.pluginPage()
+	page.Reveal, s.library.revealUpdates = s.library.revealUpdates, false
+	DrawPluginPage(c, s.binder, page, s.errors)
+}
+
 func (s *Shell) libraryStatus() libraryStatus {
 	page := s.pluginPage()
 	shown, pinned := []string{}, []string{}
@@ -196,7 +203,10 @@ func (s *Shell) registerPlugins() {
 		return nil
 	})
 	act(s, "core.plugins.browse", func(struct{}) error { return s.browsePlugins() })
-	act(s, "core.plugins.show-updates", func(struct{}) error { return s.browsePlugins() })
+	act(s, "core.plugins.show-updates", func(struct{}) error {
+		s.library.revealUpdates = true
+		return s.browsePlugins()
+	})
 	act(s, "core.library.plugins.search", func(value struct {
 		Query string `json:"query"`
 	}) error {

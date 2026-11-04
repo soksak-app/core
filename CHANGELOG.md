@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F502-12: `core.plugins.show-updates` of the mygo workbench brings the update list into view on the plugin page.
 - F502-12: The mygo workbench answers the status `core.app` and the commands `core.app.update` and `core.app.release`, and the plugin page lists the core update first with its operation and the plugins that do not fit the candidate.
 - F502-12: A tab of the mygo workbench keeps its label through an unload, and the tab store caches the title that a view reports, so a tab that starts unloaded shows it too.
 - F502-16: `core.focus` of the mygo workbench follows the first responder of the window and the focus that a view reports.
