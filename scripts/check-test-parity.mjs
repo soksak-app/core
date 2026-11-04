@@ -75,7 +75,6 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
   lane("native test target audit", "js-ts", ["scripts/check-native-test-targets.mjs"], ["scripts/test/native-test-targets.test.mjs"]),
   lane("comment language audit", "js-ts", ["scripts/check-comment-language.mjs"], ["scripts/test/comment-language.test.mjs"]),
 lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-range.test.mjs"]),
-  lane("candidate registry proof check", "js-ts", ["scripts/check-candidate-registry.mjs"], ["scripts/test/candidate-registry.test.mjs"]),
   lane("documentation and checklist checks", "js-ts", ["scripts/check-docs.mjs", "scripts/checklist.mjs"], ["scripts/test/checklist.test.mjs"]),
   lane("release notes", "js-ts", ["scripts/release-notes.mjs", "scripts/markdown-links.mjs"], ["scripts/test/release-notes.test.mjs"]),
   lane("soksak layout", "js-ts", ["packages/soksak/src/**/*.ts"], ["packages/soksak/test/**/*.mjs"]),
@@ -3348,55 +3347,6 @@ const FEATURE_LINKS = [
       { file: "packages/host/tauriv2/tests/assets_test.rs", id: "a_missing_file_is_not_answered_with_the_start_document" },
     ],
     expected: "The Tauri host does not answer a path with a file extension that names no file with the start document.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-273",
-    implementation: [
-      { file: "scripts/check-candidate-registry.mjs", symbol: "export function verifyCandidateRegistry" },
-      { file: "scripts/check-candidate-registry.mjs", symbol: "export function readCurrentIdentity(root = ROOT)" },
-    ],
-    tests: [
-      { file: "scripts/test/candidate-registry.test.mjs", id: "candidate proof and index pass when SDK and all declared projections match" },
-      { file: "scripts/test/candidate-registry.test.mjs", id: "both raw digests are checked before parsing either JSON document" },
-      { file: "scripts/test/candidate-registry.test.mjs", id: "the proof index digest binds the exact candidate index bytes" },
-      { file: "scripts/test/candidate-registry.test.mjs", id: "the candidate index and proof reject unknown wire formats" },
-      { file: "scripts/test/candidate-registry.test.mjs", id: "the proof must match the current SDK version and HEAD API tree" },
-      { file: "scripts/test/candidate-registry.test.mjs", id: "the candidate core and preserved core projection must match the index" },
-      { file: "scripts/test/candidate-registry.test.mjs", id: "replacement identities and versions must be present in the candidate index" },
-      { file: "scripts/test/candidate-registry.test.mjs", id: "a candidate with no sidecar replacements still requires a nonempty plugin manifest check" },
-      { file: "scripts/test/candidate-registry.test.mjs", id: "revocation projection and exact manifest count must agree" },
-      { file: "scripts/test/candidate-registry.test.mjs", id: "an absent or empty core revocation list is equivalent and nonempty entries must match" },
-      { file: "scripts/test/candidate-registry.test.mjs", id: "the CLI requires explicit index and proof URLs with SHA-256 pins" },
-    ],
-    expected: "A candidate index and proof are fetched only from explicit URLs with pinned SHA-256 values and verified before JSON parsing. The proof must bind the exact index bytes, current SDK version and API tree, preserved core version set, component replacements, revocation projection and nonempty exact manifest-check count. The existing public-index release check is unchanged.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-273-1",
-    implementation: [
-      { file: "scripts/check-candidate-registry.mjs", symbol: "export function readCurrentIdentity(root = ROOT)" },
-      { file: "scripts/check-candidate-registry.mjs", symbol: "typeof proof.registrySourceRevision !== \"string\"" },
-      { file: "scripts/check-candidate-registry.mjs", symbol: "producer-reported manifest count" },
-    ],
-    tests: [
-      { file: "scripts/test/candidate-registry.test.mjs", id: "the current SDK identity requires a nonempty version" },
-      { file: "scripts/test/candidate-registry.test.mjs", id: "proof revision and digest metadata must be strings" },
-      { file: "scripts/test/candidate-registry.test.mjs", id: "the SDK identity reader rejects tracked edits and untracked source files" },
-      { file: "scripts/test/candidate-registry.test.mjs", id: "the CLI requires explicit index and proof URLs with SHA-256 pins" },
-    ],
-    expected: "Reject non-string identity metadata and a missing current SDK version, reject tracked and untracked SDK package changes before trusting the HEAD tree, and label the candidate proof result and producer-reported manifest count without claiming that this check ran plugin release-manifest validation.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-273-2",
-    implementation: [
-      { file: "scripts/check-candidate-registry.mjs", symbol: "[...coreVersions].sort()" },
-    ],
-    tests: [
-      { file: "scripts/test/candidate-registry.test.mjs", id: "the preserved core version projection matches the producer-sorted index set" },
-    ],
-    expected: "Compare the candidate index and preserved core version projection as exact sets so producer sorting does not reject the same declared versions. Preserve duplicate and membership rejection.",
     levels: ["unit"],
   },
   {
@@ -10855,9 +10805,11 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // F292-70-5 declares the contract tests of the cancellation that F292-70-4 added; it changes no runtime capability.
 // F401 names the release candidate 0.0.33; it changes no runtime capability.
 // F402 records the plugin releases and the registry entry for core 0.0.33; it changes no runtime capability of core.
+// F239-273, F239-273-1 and F239-273-2 verified a candidate registry proof; F433 removed that check.
+// F433 removes a check; it adds no capability.
 // F431 names the release candidate 0.0.34; it changes no runtime capability.
 // F432 records the plugin releases and the registry entry for core 0.0.34; it changes no runtime capability of core.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
+const NON_CAPABILITY_COMPLETIONS = new Set(["F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66), the window checks of plugins (F110) and the registry listing of the hwp plugin (F141, registry items G37 and G38). Core cannot read
