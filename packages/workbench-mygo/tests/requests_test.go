@@ -396,3 +396,30 @@ func TestTheListReportsADrawnElementAsRegistered(t *testing.T) {
 		t.Fatalf("core.card is %v and core.library.return is %v", registered["core.card"], registered["core.library.return"])
 	}
 }
+
+func TestAFrameSendsTheChangedStatusesOfTheShell(t *testing.T) {
+	f := projectWithPlugins(t)
+	var last any
+	watch, err := json.Marshal(map[string]string{"name": "core.grid"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.shell.Registry().Answer("status.watch", watch, func(_ string, value any) { last = value }); err != nil {
+		t.Fatal(err)
+	}
+	before, err := json.Marshal(last)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.answer("core.card.add-tab", map[string]string{"card": f.tabbedCards()[0], "plugin": "acme"}); err != nil {
+		t.Fatal(err)
+	}
+	f.settle()
+	after, err := json.Marshal(last)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) == string(before) {
+		t.Fatalf("the watch kept the value %s", after)
+	}
+}

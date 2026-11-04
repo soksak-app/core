@@ -965,8 +965,11 @@ func (s *Shell) observeForView(call viewCallEvent, view *viewState, name string,
 	return nil
 }
 
-// pushStatuses sends each watched status of a view whose value changed.
+// pushStatuses sends each watched status of a view and of the endpoint whose value changed.
 func (s *Shell) pushStatuses() {
+	if err := s.registry.Changed(); err != nil {
+		s.fail(err)
+	}
 	for surface, view := range s.surfaces.views {
 		for name, last := range view.statuses {
 			value, err := s.registry.Read(name)
