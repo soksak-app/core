@@ -208,8 +208,8 @@ export function verify(controls = null) {
   }
 
   // V7c — is the place published in advance before drawing the same as the drawn place. The margin is measured against the drawn
-  // rectangle, so there is no place for an error to remain. The prediction holds the card surfaces; a section surface that the drawing
-  // adds is measured by the commit that follows, which V7a checks.
+  // rectangle, so there is no place for an error to remain. The check runs only when the prediction holds exactly the card surfaces; a
+  // section surface is measured by the commit that follows, which V7a checks.
   const guess = ahead();
   if (!guess) add("V7c 미리 게시한 자리 == 그려진 자리", true, "이번 렌더는 미리 게시하지 않았다");
   else if (pendingPlacement) add("V7c 미리 게시한 자리 == 그려진 자리", true, "host placement pending");

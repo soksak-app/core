@@ -375,6 +375,30 @@ export function publishAhead(rects, seated, titlebar) {
     const id = slot.dataset.nativeSurfaceId;
     const el = cardEl(slot);
     const card = el && rects.get(el.dataset.cardId);
+    if (card && slot.parentElement !== el) {
+      // A section surface has no seat of its card. It keeps its measured offsets from the card, so the drawn commit of a
+      // layout that keeps them is the same request and the layout prepares once. The prediction holds only card surfaces.
+      aheadComplete = false;
+      const box = el.getBoundingClientRect();
+      const body = slot.getBoundingClientRect();
+      seats.push({
+        id,
+        layer: Number(slot.dataset.nativeLayer),
+        title: slot.dataset.nativeTitle,
+        plugin: slot.dataset.nativePlugin,
+        dim: slot.dataset.nativeDim === "true",
+        bands: null,
+        visible: effectiveVisible(slot),
+        surface: slotSurface(slot),
+        frame: {
+          x: card.x + body.left - box.left,
+          y: card.y + body.top - box.top,
+          w: card.w - (box.width - body.width),
+          h: card.h - (box.height - body.height),
+        },
+      });
+      continue;
+    }
     const seat = el && seated.get(el.dataset.cardId);
     const inset = seat ? seat.inset : null;
     if (seat && inset !== null && (!inset || ["left", "top", "width", "height"].some(

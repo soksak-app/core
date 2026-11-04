@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F436: A layout with section surfaces prepares once instead of twice, because the preparation keeps the measured offsets of each section surface from its card. `page.trace.surface.resend` records the values of any second request.
 - F212.14-6: `make e2e-benchmark-plain-view` measures the floor of a view drag on a fixture view without plugin code; the 33 ms criterion stays.
 - F434: The split load benchmark identifies the host by its configuration folder, so it runs on optimized builds. The benchmarks on core 0.0.34 complete F292-13, F292-26-1-2, F292-40 and F292-41; F435 records the view drag targets that they miss.
 - F433: The candidate registry acceptance is removed, because nothing builds its input and every release lists its entries directly.

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F436: section surface가 있는 layout이 준비를 두 번이 아니라 한 번 한다. 준비가 각 section surface의 측정한 카드 기준 여백을 유지하기 때문이다. `page.trace.surface.resend`는 두 번째 요청의 값을 기록한다.
 - F212.14-6: `make e2e-benchmark-plain-view`가 plugin 코드 없는 fixture view로 view drag의 floor를 측정한다. 33 ms 기준은 유지한다.
 - F434: split load benchmark가 설정 폴더로 host를 찾아 최적화 build에서 실행된다. core 0.0.34의 benchmark로 F292-13, F292-26-1-2, F292-40, F292-41을 완료했고, 미달한 view drag 목표는 F435에 기록한다.
 - F433: 입력을 만드는 것이 없고 모든 release가 항목을 직접 올리므로 candidate registry acceptance를 제거했다.

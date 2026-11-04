@@ -8928,6 +8928,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F436",
+    implementation: [{ file: "packages/workbench/compositor.js", symbol: "publishAhead" }],
+    tests: [{ file: "packages/workbench/test/compositor.test.mjs", id: "a preparation keeps a section surface at its offsets, so the drawn commit of a width change is the same request" }],
+    expected: "the preparation of a section surface equals its drawn commit",
+    levels: ["unit"],
+  },
+  {
     id: "F404",
     implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) fn with_open_window(" }],
     tests: [{ file: "packages/host/tauriv2/src/windows_records_test.rs", id: "a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure" }],

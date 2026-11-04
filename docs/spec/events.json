@@ -601,6 +601,21 @@
       },
       "description": "The outcome of a complete surface synchronization request, recorded only if the frame log gate is open when the host call settles, independently of the performance trace switch. The declaration byte counters compare only the UTF-8 JSON values of declarations repeated inline across view starts with the UTF-8 JSON encoding of the request-local declaration table; they exclude the rest of the request and transport overhead. Normalization retains each serialized value and its request-local reference count; byte lengths are computed once per distinct value at completion only when the gate is open. A closed completion gate creates no fields, reads no mount metadata, and computes no byte lengths. `views` names the exact view surfaces and their page-local mount attempts."
     },
+    "page.trace.surface.resend": {
+      "layer": "page",
+      "class": "frame",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "paths": { "type": "array", "items": { "type": "string" } },
+          "jsHeapMB": { "type": "integer", "minimum": 0 }
+        },
+        "required": ["paths"]
+      },
+      "description": "The drawn commit of a layout sent a second surface synchronization request instead of presenting its preparation. The field paths lists the values of the request that differ from the request of that preparation as `path: before -> after`, up to 16 values."
+    },
     "page.trace.modal.answer": {
       "layer": "page",
       "class": "call",

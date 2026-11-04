@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { byteLength } from "@soksak/plugin-api/bounded-json.js";
-import { surfaceSyncRequestWithDeclarationTable } from "../surface-sync-request.js";
+import { surfaceSyncRequestDifference, surfaceSyncRequestWithDeclarationTable } from "../surface-sync-request.js";
 
 test("surface sync declarations use a request-local table and preserve view start context", { timeout: 5000 }, () => {
   const startDeclarationA = { status: [{ name: "core.surface.document" }], commands: [], dom: [] };
@@ -65,4 +65,13 @@ test("surface sync declarations use a request-local table and preserve view star
   ] }), /finite/, "non-finite declaration values must not stringify as JSON null");
   assert.deepEqual(surfaceSyncRequestWithDeclarationTable({ surfaces: [] }).request.declarations, [],
     "a request without views still carries its required empty declaration table");
+});
+
+test("the difference of two surface sync requests names each changed value up to its limit", { timeout: 5000 }, () => {
+  const before = { settled: false, titlebar: 40, surfaces: [{ id: "a", x: 1, y: 348.4 }, { id: "b", x: 2, y: 3 }] };
+  const after = { settled: false, titlebar: 40, surfaces: [{ id: "a", x: 1, y: 348.40625 }, { id: "b", x: 2, y: 3, z: 1 }] };
+  assert.deepEqual(surfaceSyncRequestDifference(before, before), []);
+  assert.deepEqual(surfaceSyncRequestDifference(before, after), ["surfaces.0.y: 348.4 -> 348.40625", "surfaces.1.z: undefined -> 1"]);
+  assert.deepEqual(surfaceSyncRequestDifference(before, after, 1), ["surfaces.0.y: 348.4 -> 348.40625"]);
+  assert.deepEqual(surfaceSyncRequestDifference({ a: [] }, { a: {} }), ["a: [] -> {}"]);
 });

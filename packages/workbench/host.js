@@ -14,7 +14,7 @@ import { createClipboardBridge, createExpose, createLinkBridge, orderedSidecar }
 import { gatedExposureReply, registerSurfacePort, registry } from "./exposure.js";
 import { logGate } from "./log-gate.js";
 import { pageIdentity } from "./page-identity.js";
-import { surfaceSyncRequestWithDeclarationTable } from "./surface-sync-request.js";
+import { surfaceSyncRequestDifference, surfaceSyncRequestWithDeclarationTable } from "./surface-sync-request.js";
 
 /**
  * Returns the computed CSS color as [r, g, b, a]. The alpha is 1 when the color has none.
@@ -394,6 +394,8 @@ const tellInTurn = (name, payload) => {
 };
 
 let last = "";
+// The request of the preparation that the next drawn commit presents, kept only to name what a second request changes.
+let lastRequest = null;
 let themeReply = null;
 // Layout preparation and display form one transaction. The native compositor has only one active ticket per window,
 // so no next preparation is sent to the host between the two calls.
@@ -610,7 +612,11 @@ export const surfaces = native ? {
         const request = normalized.request;
         const key = JSON.stringify({ request, deferredViews });
         if (key !== last) {
+          if (record.drawn && lastRequest && !layoutPresented && logGate.enabled("frame", "debug")) {
+            trace("surface.resend", { paths: surfaceSyncRequestDifference(lastRequest, request) });
+          }
           last = key;
+          lastRequest = request;
           // layoutTurn is the transaction order of surface preparation and display.
           // It does not also wait for the global command turn: doing so would let an unrelated
           // host call add one frame per divider step.
@@ -661,7 +667,7 @@ export const surfaces = native ? {
           placements: placed.map((p) => ({ id: p.id, visible: p.visible, ...toPlane(p) })),
           deferred: deferredViews,
         })).catch((error) => {
-          if (result === layoutResult) { last = ""; layoutPresented = false; }
+          if (result === layoutResult) { last = ""; lastRequest = null; layoutPresented = false; }
           throw error;
         });
       });
@@ -672,7 +678,7 @@ export const surfaces = native ? {
         if (layoutPresented || layoutFrame === layoutTurnStart) return;
         const frame = await layoutFrame;
         layoutPresented = true;
-        last = "";
+        last = ""; lastRequest = null;
         await tell("cancelSurfaces", { ticket: frame.ticket });
       });
     },
@@ -683,7 +689,7 @@ export const surfaces = native ? {
      * (when AppKit restored the title bar of a window that left full screen).
      */
     forget() {
-      last = "";
+      last = ""; lastRequest = null;
     },
 } : {
   kinds: [],

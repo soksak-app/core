@@ -279,3 +279,45 @@ test("placement results reject missing, extra, duplicate, and drawn-deferred sur
     dom.window.close();
   }
 });
+
+test("a preparation keeps a section surface at its offsets, so the drawn commit of a width change is the same request", async (t) => {
+  const dom = new JSDOM(`<div id="plane"><div data-card-id="place"><div class="set">
+    <div data-native-surface="view" data-native-surface-id="section" data-native-plugin="section-probe" data-native-layer="10"
+      data-native-title="Section" data-native-dim="false"></div>
+  </div></div></div>`, { url: "https://example.test/", pretendToBeVisual: true });
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.location = dom.window.location;
+  globalThis.requestAnimationFrame = dom.window.requestAnimationFrame.bind(dom.window);
+  t.mock.module(new URL("../host.js", import.meta.url).href, {
+    namedExports: { native: true, surfaces: { kinds: ["section-probe"] } },
+  });
+  const place = document.querySelector("[data-card-id]");
+  const slot = document.querySelector("[data-native-surface]");
+  let width = 196;
+  document.getElementById("plane").getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 600 });
+  place.getBoundingClientRect = () => ({ left: 0, top: 0, width, height: 600 });
+  slot.getBoundingClientRect = () => ({ left: 1, top: 33, width: width - 8, height: 422 });
+  const { registerPlugin } = await import("../registry.js");
+  registerPlugin({ id: "section-probe", surface: () => ({ module: null, composition: { kind: "view", page: "ui/page.html" } }) });
+  const compositor = await import("../compositor.js?section-seat");
+  const surface = { surfaceId: "section", pluginId: "section-probe", composition: { kind: "view", page: "ui/page.html" } };
+  compositor.setSlotSurface(slot, surface);
+  const records = [];
+  compositor.onCommit((record) => {
+    records.push(record);
+    return { placements: record.surfaces.map((item) => ({ id: item.id, visible: item.visible, ...item.applied })), deferred: [] };
+  });
+
+  compositor.publishAhead(new Map([["place", { x: 0, y: 0, w: 206, h: 600 }]]), new Map());
+  width = 206;
+  compositor.publish();
+
+  const [prepared, drawn] = records;
+  const placed = ({ visible, declared }) => ({ visible, declared });
+  assert.deepEqual(placed(prepared.surfaces[0]), { visible: true, declared: { x: 1, y: 33, w: 198, h: 422 } },
+    "the preparation did not keep the section surface at its offsets");
+  assert.deepEqual(placed(prepared.surfaces[0]), placed(drawn.surfaces[0]),
+    "the drawn commit differs from the preparation, so the layout prepares twice");
+  dom.window.close();
+});

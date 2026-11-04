@@ -52,3 +52,18 @@ export function surfaceSyncRequestWithDeclarationTable(request) {
   };
   return { request: normalized, declarationBytes };
 }
+
+/** The differences of two surface sync requests as "path: before -> after", in the order of the first, at most limit differences. */
+export function surfaceSyncRequestDifference(before, after, limit = 16) {
+  const paths = [];
+  const visit = (a, b, path) => {
+    if (paths.length >= limit || a === b) return;
+    if (a === null || b === null || typeof a !== "object" || typeof b !== "object" || Array.isArray(a) !== Array.isArray(b)) {
+      paths.push(`${path}: ${JSON.stringify(a)} -> ${JSON.stringify(b)}`);
+      return;
+    }
+    for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) visit(a[key], b[key], path ? `${path}.${key}` : key);
+  };
+  visit(before, after, "");
+  return paths;
+}
