@@ -72,6 +72,7 @@ type Registry struct {
 	mu       sync.Mutex
 	commands map[string]Command
 	later    map[string]LaterCommand
+	methods  map[string]LaterCommand
 	statuses map[string]Status
 	watches  map[string]*watch
 	elements Elements
@@ -82,7 +83,7 @@ type Registry struct {
 
 // NewRegistry returns an empty registry of the names of declared.
 func NewRegistry(declared *Declarations) *Registry {
-	return &Registry{declared: declared, commands: map[string]Command{}, later: map[string]LaterCommand{}, statuses: map[string]Status{},
+	return &Registry{declared: declared, commands: map[string]Command{}, later: map[string]LaterCommand{}, methods: map[string]LaterCommand{}, statuses: map[string]Status{},
 		watches: map[string]*watch{}, surfaces: newSurfaceTable()}
 }
 
@@ -110,6 +111,16 @@ func (r *Registry) CommandLater(name string, run LaterCommand) {
 		panic(fmt.Sprintf("command %s is already registered", name))
 	}
 	r.later[name] = run
+}
+
+// Method registers the handler of a request method that names no status, command or element.
+func (r *Registry) Method(method string, run LaterCommand) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.methods[method] != nil {
+		panic(fmt.Sprintf("method %s is already registered", method))
+	}
+	r.methods[method] = run
 }
 
 // Status registers the reader of the declared status name.
@@ -201,6 +212,13 @@ func (r *Registry) Reply(method string, params json.RawMessage, changed Changed,
 		}
 	}
 	if r.replySurface(method, params, answer) {
+		return
+	}
+	r.mu.Lock()
+	run := r.methods[method]
+	r.mu.Unlock()
+	if run != nil {
+		run(params, answer)
 		return
 	}
 	var fields map[string]json.RawMessage

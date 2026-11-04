@@ -408,6 +408,7 @@ func (s *Shell) surfacePhase(id string) map[string]any {
 
 // registerStatuses adds the statuses of the shell.
 func (s *Shell) registerStatuses() {
+	s.registry.Status("core.verify", func() any { return s.verification.Status() })
 	s.registry.Status("core.projects", func() any {
 		status := make([]map[string]any, 0, len(s.projects))
 		for _, project := range s.projects {

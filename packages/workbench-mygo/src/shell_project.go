@@ -119,24 +119,29 @@ func (s *Shell) registerProjectOpen() {
 		if color == "" {
 			color = projectOpenColor
 		}
-		s.calls.Call("projectFolder", value.Root, func(reply any, err error) {
+		s.openRoot(value.Root, color, func(project json.RawMessage, err error) {
 			if err != nil {
 				answer(nil, err)
 				return
 			}
-			folder, err := decode[ProjectFolderValue](reply)
-			if err != nil {
-				answer(nil, err)
-				return
-			}
-			s.openFolder(folder, color, func(project json.RawMessage, err error) {
-				if err != nil {
-					answer(nil, err)
-					return
-				}
-				answer(project, nil)
-			})
+			answer(project, nil)
 		})
+	})
+}
+
+// openRoot opens the folder of root as a project on a fresh layout.
+func (s *Shell) openRoot(root, color string, done func(project json.RawMessage, err error)) {
+	s.calls.Call("projectFolder", root, func(reply any, err error) {
+		if err != nil {
+			done(nil, err)
+			return
+		}
+		folder, err := decode[ProjectFolderValue](reply)
+		if err != nil {
+			done(nil, err)
+			return
+		}
+		s.openFolder(folder, color, done)
 	})
 }
 
@@ -382,17 +387,27 @@ func (s *Shell) browse() {
 
 // removeProject removes the project id, as projects.close does.
 func (s *Shell) removeProject(id string) {
-	s.calls.Call("projectRemoveAsk", id, func(value any, err error) {
+	s.removeProjectThen(id, func(_ bool, err error) {
 		if err != nil {
 			s.fail(err)
+		}
+	})
+}
+
+// removeProjectThen is removeProject that tells whether the project was removed: a kept tab of the project keeps it.
+func (s *Shell) removeProjectThen(id string, done func(removed bool, err error)) {
+	s.calls.Call("projectRemoveAsk", id, func(value any, err error) {
+		if err != nil {
+			done(false, err)
 			return
 		}
 		allowed, err := decode[bool](value)
 		if err != nil {
-			s.fail(err)
+			done(false, err)
 			return
 		}
 		if !allowed {
+			done(false, nil)
 			return
 		}
 		if id != s.active {
@@ -400,15 +415,16 @@ func (s *Shell) removeProject(id string) {
 		}
 		s.calls.Call("projectRelease", id, func(_ any, err error) {
 			if err != nil {
-				s.fail(err)
+				done(false, err)
 				return
 			}
 			s.calls.CallInOrder("workspace", "workspace", map[string]any{"kind": "remove", "id": id}, func(_ any, err error) {
 				if err != nil {
-					s.fail(err)
+					done(false, err)
 					return
 				}
 				s.dropProject(id)
+				done(true, nil)
 			})
 		})
 	})

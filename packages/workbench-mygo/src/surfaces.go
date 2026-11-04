@@ -511,7 +511,14 @@ func (s *Shell) placeSurfaces() {
 // placed ends a placement.
 func (s *Shell) placed(err error) {
 	s.surfaces.running = false
+	var failure *string
 	if err != nil {
+		s.fail(err)
+		text := err.Error()
+		failure = &text
+	}
+	// Nothing reads the drawn plane here, so the update takes no rows and it cannot fail.
+	if err := s.verification.Update(false, nil, failure); err != nil {
 		s.fail(err)
 	}
 	placing := s.surfaces.placing

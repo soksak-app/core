@@ -276,6 +276,9 @@ func (s *SettingsStore) effectiveValue(common, overrides map[string]any, key str
 // Project returns the project that project changes apply to.
 func (s *SettingsStore) Project() string { return s.project }
 
+// Defaults returns the default value of each setting.
+func (s *SettingsStore) Defaults() map[string]any { return maps.Clone(s.defaults) }
+
 // Common returns the common settings as they stand now.
 func (s *SettingsStore) Common() map[string]any { return s.common }
 
