@@ -176,6 +176,9 @@ func (d *CardData) AppendTab(tab Tab) {
 	d.setActive(&tab.ID)
 }
 
+// SelectTab makes the tab id the active tab.
+func (d *CardData) SelectTab(id string) { d.setActive(&id) }
+
 // SettleActiveTab selects the first tab when the active tab has left the card. A card with no tabs left has no active tab.
 func (d *CardData) SettleActiveTab() {
 	if d == nil || d.ActiveTab() != nil {
