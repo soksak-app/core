@@ -396,12 +396,15 @@ fn undeclared_method_closes_connection() {
     let config = folder::Folder::new();
     let (fake, _) = Fake::new();
     let endpoint = start(config.path(), "test-undeclared", fake.clone());
-    let mut connection = open(&endpoint);
-    send(
-        &mut connection,
-        json!({"jsonrpc": "2.0", "id": 1, "method": "page.eval", "params": {"window": "w1"}}),
-    );
-    assert_eq!(receive(&mut connection), None);
+    // dom.rect and dom.act are removed: an element is measured with element.rect and acted on with element.act.
+    for method in ["page.eval", "dom.rect", "dom.act"] {
+        let mut connection = open(&endpoint);
+        send(
+            &mut connection,
+            json!({"jsonrpc": "2.0", "id": 1, "method": method, "params": {"window": "w1", "name": "core.card"}}),
+        );
+        assert_eq!(receive(&mut connection), None, "{method}");
+    }
     assert!(fake.calls().is_empty());
     endpoint.stop();
 }
@@ -531,21 +534,26 @@ fn target_params_are_checked_in_order() {
         (json!({"window": "gone", "name": 3}), name),
         (json!({"window": "gone", "name": "layout"}), name),
     ];
-    for (id, (params, message)) in cases.into_iter().enumerate() {
-        let reply = request(
-            &mut connection,
-            30 + id as u64,
-            "status.get",
-            params.clone(),
-        );
-        assert_eq!(
-            (
-                reply["error"]["code"].clone(),
-                reply["error"]["message"].clone()
-            ),
-            (json!(-32602), json!(message)),
-            "status.get {params}"
-        );
+    for (m, method) in ["status.get", "element.rect", "element.act"]
+        .into_iter()
+        .enumerate()
+    {
+        for (id, (params, message)) in cases.iter().enumerate() {
+            let reply = request(
+                &mut connection,
+                30 + 100 * m as u64 + id as u64,
+                method,
+                params.clone(),
+            );
+            assert_eq!(
+                (
+                    reply["error"]["code"].clone(),
+                    reply["error"]["message"].clone()
+                ),
+                (json!(-32602), json!(message)),
+                "{method} {params}"
+            );
+        }
     }
     assert!(fake.calls().is_empty());
     endpoint.stop();

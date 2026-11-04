@@ -140,7 +140,8 @@ fn the_pending_count_is_read_when_the_pending_lock_is_poisoned() {
 }
 
 /// The view of a view surface is registered as the document "" of its surface, and a first responder in it is the owner
-/// surface with that surface and no document; a first responder in a document region is the owner document.
+/// surface with that surface and no document; a first responder in a document region is the owner document, and a first
+/// responder in the main web view, which draws the workbench, is the owner workbench.
 // contract: window.responder.view-is-owner-surface
 #[test]
 fn the_first_responder_in_the_view_of_a_view_surface_is_owner_surface() {
@@ -162,6 +163,10 @@ fn the_first_responder_in_the_view_of_a_view_surface_is_owner_surface() {
     assert_eq!(
         responder_of("WKWebView", 30, 10, false, &named, &documents, None),
         json!({"class": "WKWebView", "owner": "document", "surface": "tab-view", "document": "page"})
+    );
+    assert_eq!(
+        responder_of("WKWebView", 40, 0, true, &named, &documents, None),
+        json!({"class": "WKWebView", "owner": "workbench", "surface": null, "document": null})
     );
 }
 

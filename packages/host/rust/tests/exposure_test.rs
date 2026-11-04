@@ -242,6 +242,10 @@ fn the_exposure_list_of_the_host_owner_does_not_ask_the_page() {
         );
     }
     assert!(entries.iter().any(|entry| entry["name"] == "host.quit"));
+    // The host declares no element entry, so the host list holds an empty element.
+    let members: Vec<&String> = listed.as_object().unwrap().keys().collect();
+    assert_eq!(members, ["commands", "element", "status"], "{listed}");
+    assert_eq!(listed["element"], json!([]));
     let other = json!({"window": "main", "owner": "core"});
     let failure = exposure::exposure_list(other.as_object().unwrap(), not_ready).unwrap_err();
     assert_eq!(failure.message, "exposure.list owner must be host");
@@ -254,10 +258,14 @@ fn host_entries_are_appended_as_registered() {
         &exposure::with_host_entries(&text(json!({
             "status": [{"name": "core.layout", "description": "Layout.", "schema": {}, "registered": true}],
             "commands": [],
-            "dom": [],
+            "element": [],
         })))
         .unwrap(),
     );
+    // The list keeps the members of the page's list: status, commands and element.
+    let members: Vec<&String> = listed.as_object().unwrap().keys().collect();
+    assert_eq!(members, ["commands", "element", "status"], "{listed}");
+    assert_eq!(listed["element"], json!([]));
     let status: Vec<&str> = listed["status"]
         .as_array()
         .unwrap()
@@ -318,12 +326,32 @@ fn host_entries_are_appended_as_registered() {
     assert_eq!(quit["result"], json!({"type": "null"}));
     assert!(exposure::with_host_entries(&text(json!([]))).is_err());
     // The page entries remain as the received text.
-    let kept = exposure::with_host_entries(&text_of(r#"{"dom":[],"commands":[],"status":[{"name":"core.layout","schema":{},"description":"Layout."}]}"#)).unwrap();
+    let kept = exposure::with_host_entries(&text_of(r#"{"element":[],"commands":[],"status":[{"name":"core.layout","schema":{},"description":"Layout."}]}"#)).unwrap();
     assert!(
         kept.get()
             .contains(r#"{"name":"core.layout","schema":{},"description":"Layout."}"#),
         "{}",
         kept.get()
+    );
+}
+
+// contract: exposure.list.host-hit-kinds
+#[test]
+fn host_hit_declares_the_workbench_document_and_native_kinds() {
+    let not_ready = || -> Result<Box<RawValue>, soksak_host::endpoint::Failure> {
+        panic!("the exposure list of the host owner asked the page")
+    };
+    let params = json!({"window": "main", "owner": "host"});
+    let listed = value(&exposure::exposure_list(params.as_object().unwrap(), not_ready).unwrap());
+    let hit = listed["commands"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["name"] == "host.hit")
+        .expect("host.hit is listed");
+    assert_eq!(
+        hit["result"]["properties"]["kind"]["enum"],
+        json!(["workbench", "document", "native"])
     );
 }
 
@@ -517,6 +545,9 @@ fn undeclared_host_names_are_unknown() {
         ("command.run", "host.nope"),
         ("status.get", "host.nope"),
         ("command.run", "host.window"),
+        // The host declares no element entry, so an element request for a host name is an unknown name.
+        ("element.rect", "host.buttons"),
+        ("element.act", "host.window"),
     ] {
         let failure = exposure::check_host_name(method, name).unwrap_err();
         assert_eq!(failure.code, 1001, "{method} {name}: {}", failure.message);
@@ -840,4 +871,19 @@ fn a_registration_caller_is_the_surface_page_or_the_main_page_of_a_view() {
         exposure::check_registration_caller("unknown", "surface-main-a", "a", false, true),
         Err("unknown cannot register for surface a".to_string())
     );
+}
+
+// contract: view.exposure.register
+// A relayed registration takes the kind status, command or element; the removed kind dom and any other kind are refused.
+#[test]
+fn a_registration_kind_is_status_command_or_element() {
+    for kind in ["status", "command", "element"] {
+        assert_eq!(exposure::check_registration_kind(kind), Ok(()), "{kind}");
+    }
+    for kind in ["dom", "entry"] {
+        assert_eq!(
+            exposure::check_registration_kind(kind),
+            Err(format!("unknown exposure kind {kind}"))
+        );
+    }
 }

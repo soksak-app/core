@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"reflect"
 	"regexp"
 	"slices"
@@ -20,6 +21,14 @@ func TestExposureListAppendsHostEntries(t *testing.T) {
 	_, address, _ := serve(t, newFakeBackend())
 	conn := dial(t, address)
 	got := call(t, conn, 1, "exposure.list", map[string]any{"window": "main"})
+	// The list keeps the members of the page's list: status, commands and element.
+	var members map[string]json.RawMessage
+	if err := json.Unmarshal(got.Result, &members); err != nil {
+		t.Fatal(err)
+	}
+	if keys := slices.Sorted(maps.Keys(members)); !slices.Equal(keys, []string{"commands", "element", "status"}) || string(members["element"]) != "[]" {
+		t.Fatalf("exposure.list members %v, element %s, want commands, element [] and status", keys, members["element"])
+	}
 	var list struct {
 		Status []struct {
 			Name       string
@@ -53,6 +62,14 @@ func TestExposureListOfTheHostOwnerDoesNotAskThePage(t *testing.T) {
 	got := call(t, conn, 1, "exposure.list", map[string]any{"window": "main", "owner": "host"})
 	if got.Error != nil {
 		t.Fatalf("exposure.list of the host owner failed: %+v", got.Error)
+	}
+	// The host declares no element entry, so the host list holds an empty element.
+	var members map[string]json.RawMessage
+	if err := json.Unmarshal(got.Result, &members); err != nil {
+		t.Fatal(err)
+	}
+	if keys := slices.Sorted(maps.Keys(members)); !slices.Equal(keys, []string{"commands", "element", "status"}) || string(members["element"]) != "[]" {
+		t.Fatalf("host exposure.list members %v, element %s, want commands, element [] and status", keys, members["element"])
 	}
 	var list struct {
 		Status, Commands []struct {
@@ -136,6 +153,30 @@ func TestExposureListHostEntriesAreSortedAndDescribed(t *testing.T) {
 	quit := list.Commands[slices.IndexFunc(list.Commands, func(e entry) bool { return e.Name == "host.quit" })]
 	if string(quit.Result) != `{"type":"null"}` {
 		t.Fatalf("host.quit result %s", quit.Result)
+	}
+}
+
+// contract: exposure.list.host-hit-kinds
+func TestHostHitDeclaresTheWorkbenchDocumentAndNativeKinds(t *testing.T) {
+	_, address, _ := serve(t, newFakeBackend())
+	conn := dial(t, address)
+	got := call(t, conn, 1, "exposure.list", map[string]any{"window": "main", "owner": "host"})
+	type command struct {
+		Name   string
+		Result struct {
+			Properties struct{ Kind struct{ Enum []string } }
+		}
+	}
+	var list struct{ Commands []command }
+	if err := json.Unmarshal(got.Result, &list); err != nil {
+		t.Fatal(err)
+	}
+	at := slices.IndexFunc(list.Commands, func(e command) bool { return e.Name == "host.hit" })
+	if at < 0 {
+		t.Fatalf("host.hit is missing from %s", got.Result)
+	}
+	if kinds := list.Commands[at].Result.Properties.Kind.Enum; !slices.Equal(kinds, []string{"workbench", "document", "native"}) {
+		t.Fatalf("host.hit kinds %v, want workbench, document and native", kinds)
 	}
 }
 

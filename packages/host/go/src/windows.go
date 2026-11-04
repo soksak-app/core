@@ -225,7 +225,7 @@ func (h *Host) WindowReady(ctx context.Context) error {
 	h.mu.Unlock()
 	s.first.Do(func() { s.Emit("page-ready") })
 	s.imageDetachPageReady()
-	s.responderPageReady()
+	s.responderWorkbenchReady()
 	s.replayRegistrations()
 	routine.Go("windows-changed", h.windowsChanged)
 	routine.Go("deep-link-ready", func() { h.deepLinks.Ready(h.runDeepLink) })
@@ -390,7 +390,7 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 			if titled != nil {
 				LogError("window title bar", titled)
 			}
-			// The page combines the first responder with the focus of its documents in core.focus.
+			// The workbench combines the first responder with the focus of its documents in core.focus.
 			var observed error
 			mainThreadStep(func() {
 				s.responderObservation, observed = system.ObserveResponder(win.NativeWindow(), s.responderChanged)

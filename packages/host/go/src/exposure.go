@@ -174,13 +174,13 @@ var hostCommands = map[string]hostEntry{
 			"menu": map[string]any{"type": "string"}, "title": map[string]any{"type": "string"}}}},
 	"host.dock.select": {Description: "Performs the Dock menu item with the title.", Result: nullSchema,
 		Params: map[string]any{"type": "object", "properties": map[string]any{"title": map[string]any{"type": "string"}}}},
-	"host.window.reload":    {Description: "Reloads the main page.", Params: emptyObject, Result: nullSchema},
+	"host.window.reload":    {Description: "Starts the workbench of the window again.", Params: emptyObject, Result: nullSchema},
 	"host.window.presented": {Description: "Resolves after the main page, visible application documents, and visible image regions have presented their current geometry and raster, with the display time of that frame.", Params: emptyObject, Result: presentedSchema},
 	"host.hit": {Description: "Returns the owner and native hit-view class and frame of a point in window coordinates.",
 		Params: map[string]any{"type": "object", "properties": map[string]any{
 			"x": map[string]any{"type": "number"}, "y": map[string]any{"type": "number"}}},
 		Result: map[string]any{"type": "object", "properties": map[string]any{
-			"kind":       map[string]any{"type": "string", "enum": []string{"page", "document", "native"}},
+			"kind":       map[string]any{"type": "string", "enum": []string{"workbench", "document", "native"}},
 			"surface":    map[string]any{"type": "string"},
 			"document":   map[string]any{"type": "string"},
 			"identifier": map[string]any{"type": "string"},
@@ -701,7 +701,7 @@ func (h *Host) ExposureRegister(ctx context.Context, reqJSON json.RawMessage) er
 
 // recordRegistration validates the entry, records it with the window and announces it to the main page.
 func (s *Surfaces) recordRegistration(req SurfaceRegistration) error {
-	if req.Kind != "status" && req.Kind != "command" && req.Kind != "dom" {
+	if req.Kind != "status" && req.Kind != "command" && req.Kind != "element" {
 		return fmt.Errorf("unknown exposure kind %q", req.Kind)
 	}
 	// The only core names that a surface registers are core.surface.* (docs/spec/exposure.md).
@@ -1323,7 +1323,7 @@ func windowRegion(key ImageKey, text string, images *Images) (WindowRegion, erro
 	return region, nil
 }
 
-// WindowResponder is the first responder of the window. Owner is the kind of web view that contains it, one of page, surface,
+// WindowResponder is the first responder of the window. Owner is the kind of web view that contains it, one of workbench, surface,
 // document, modal, webview, and native. webview is a web view that is not registered, and native is a view outside
 // the web views (for example an image region). Surface is the surface that contains the first responder.
 type WindowResponder struct {
@@ -1355,7 +1355,7 @@ func windowResponder(class string, view, surface uint64, main bool, named map[ui
 		case modalHandle != 0 && modalHandle == view:
 			out.Owner = "modal"
 		case main:
-			out.Owner = "page"
+			out.Owner = "workbench"
 		default:
 			out.Owner = "webview"
 		}
@@ -1601,7 +1601,7 @@ func (s *Surfaces) hit(x, y float64) (map[string]any, error) {
 		key := documents[got.View]
 		return map[string]any{"kind": "document", "surface": key.Surface, "document": key.Name}, nil
 	case got.Main:
-		return map[string]any{"kind": "page"}, nil
+		return map[string]any{"kind": "workbench"}, nil
 	default:
 		return map[string]any{"kind": "native", "identifier": got.Identifier, "view": got.Hit}, nil
 	}

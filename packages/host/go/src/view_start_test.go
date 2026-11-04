@@ -193,7 +193,7 @@ func TestSyncRequestRequiresAndResolvesItsDeclarationTable(t *testing.T) {
 		{"negative index", `[{"commands":[]}]`, `-1`, "declarations must be a nonnegative integer index"},
 		{"fractional index", `[{"commands":[]}]`, `0.5`, "declarations must be a nonnegative integer index"},
 		{"out-of-range index", `[{"commands":[]}]`, `1`, "declarations index 1 is out of range"},
-		{"unused entry", `[{"commands":[]},{"dom":[]}]`, `0`, "request.declarations[1] is unused"},
+		{"unused entry", `[{"commands":[]},{"element":[]}]`, `0`, "request.declarations[1] is unused"},
 	}
 	if _, err := (&Host{}).SyncSurfaces(context.Background(), missingTable); err == nil || !strings.Contains(err.Error(), "declarations") {
 		t.Fatalf("sync request without its declaration table returned %v, want a declaration-table error before window lookup", err)

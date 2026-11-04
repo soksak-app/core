@@ -110,9 +110,9 @@ fn invalid_json_closes_connection() {
 | `deep-link.parse.rejects-long-url` | 8192자보다 긴 URL은 `URL is longer than 8192 characters`로 거부한다. | all |
 | `deep-link.launch.kept-links-run-in-order-when-window-ready` | 첫 창이 준비되기 전에 도착한 링크는 준비되면 도착한 순서대로 실행하며, 그 전에는 어느 링크도 실행하지 않는다. | all |
 | `deep-link.launch.later-link-runs-at-once` | 첫 창이 준비된 뒤 도착한 링크는 바로 실행하며, 두 번째 준비 알림은 보관한 링크를 다시 실행하지 않는다. | all |
-| `window.responder.sent-at-ready-and-on-each-change` | 호스트는 창의 first responder를 page가 ready를 알릴 때와 그 뒤 바뀔 때마다 창 event `window-responder {owner, surface, document}`로 보내고, ready가 아닌 page에는 보내지 않으며, 바뀌지 않은 값은 한 번만 보내고, 읽기 실패를 돌려준다. | all |
+| `window.responder.sent-at-ready-and-on-each-change` | 호스트는 창의 first responder를 워크벤치가 ready를 알릴 때와 그 뒤 바뀔 때마다 창 event `window-responder {owner, surface, document}`로 보내고, ready가 아닌 워크벤치에는 보내지 않으며, 바뀌지 않은 값은 한 번만 보내고, 읽기 실패를 돌려준다. | all |
 | `window.responder.view-is-owner-surface` | host가 surface의 document `""`로 등록하는 view surface의 view에 first responder가 있으면 `{owner: "surface", surface, document: null}`로 보고한다. document region에 first responder가 있으면 `{owner: "document", surface, document}`다. | all |
-| `window.responder.closed-window-sends-nothing` | close가 window를 지운 뒤 그 window에 닿은 first responder 변경은 받을 page가 없으므로 `window-responder` event를 보내지 않고 오류도 저장하지 않는다. window가 열려 있는 동안 실패한 responder 읽기는 오류로 보고한다. | all |
+| `window.responder.closed-window-sends-nothing` | close가 window를 지운 뒤 그 window에 닿은 first responder 변경은 받을 워크벤치가 없으므로 `window-responder` event를 보내지 않고 오류도 저장하지 않는다. window가 열려 있는 동안 실패한 responder 읽기는 오류로 보고한다. | all |
 | `window.facts.modal-order-is-above-every-webview` | `host.window`은 열린 modal의 `order`를 창의 native surface 수와 web view 수의 합으로 보고한다. native surface의 order와 web view의 order는 두 목록의 index이고 modal은 둘 위에 붙으므로, 이 값은 모든 native surface, 모든 web view와 document region의 `order`보다 크다. | all |
 | `window.facts.document-reports-its-blur` | `host.window`은 dialog 배경의 native blur filter를 가진 각 document web view(view 표면의 page와 document region)에 `blurred: true`를, filter가 없는 것에 `blurred: false`를 보고한다. | all |
 | `links.open.accepts-web-and-mail-schemes` | 절대 `http`, `https`, `mailto` URL은 열기를 받아들인다. | all |
@@ -313,7 +313,7 @@ fn invalid_json_closes_connection() {
 | `view.status.relay` | `sok-view`로 view가 보낸 status watch `{sok: 1, id, command: "runtime.status.watch", params: {name}}`는 call request와 같이 command와 params를 바꾸지 않고 `view-call {surface, plugin, id, command, params}` event가 된다. 메인 페이지의 `viewEvent {surface, generation, event: "status", data: {name, value}}`는 ready document에 `{sok: 1, event: "status", data: {name, value}}`로 게시된다. Host는 current view generation을 검사하고 command와 status 이름은 읽지 않으며, 어느 owner의 status든 전달한다. | all |
 | `view.command.request` | 메인 page의 `viewRequest {surface, id, command, params}`는 view의 ready 문서에 `{sok: 1, id, command, params}`로 post된다. `viewRequest`가 `cids`를 가지면 메시지에 멤버 `cids`로 실어 보내고, `cids`가 없는 요청은 멤버를 싣지 않는다. 한 줄에 담을 수 없는 식별자(빈 식별자, 또는 따옴표, 역슬래시, 제어 문자가 있는 식별자)가 있는 `cids`는 요청을 이름 붙인 오류로 거부하며 어떤 view에도 post하지 않는다. view가 `sok-view`로 보낸 응답 `{sok: 1, reply: id, result}` 또는 `{sok: 1, reply: id, error: {code, message}}`는 `view-reply {surface, plugin, id, result}` 또는 `view-reply {surface, plugin, id, error}` event가 된다. `id`가 정수가 아니거나, `result`와 `error` 중 하나만 없거나, error에 message가 없는 응답은 application log에 쓰고 어떤 page에도 전달하지 않는다. | all |
 | `view.message.unknown-event` | view가 `sok-view`로 보낸 message의 `event`가 `view.ready`도 `view.error`도 아니면 `<surface>: view event "<event>" is unknown`으로 application log에 기록되고 어떤 page에도 전달되지 않는다. 지워진 `declared-ui.snapshot`도 그런 event다. | all |
-| `view.exposure.register` | 메인 페이지는 view 페이지의 status·dom 등록을 `{surface, kind, name}`을 담은 `exposureRegister` 호출로 전달한다. 호스트는 이를 기록하고 메인 페이지에 event `exposure-registered {surface, kind, name}`를 보내며, 다시 읽은 메인 페이지는 replay를 통해 살아 있는 모든 등록을 다시 받는다. view가 없는 surface에 대한 전달, `status`·`command`·`dom` 이외의 `kind`, surface가 등록할 수 없는 이름은 오류로 거부되며 아무것도 기록하거나 알리지 않는다. | all |
+| `view.exposure.register` | 메인 페이지는 view 페이지의 status·element 등록을 `{surface, kind, name}`을 담은 `exposureRegister` 호출로 전달한다. 호스트는 이를 기록하고 메인 페이지에 event `exposure-registered {surface, kind, name}`를 보내며, 다시 읽은 메인 페이지는 replay를 통해 살아 있는 모든 등록을 다시 받는다. view가 없는 surface에 대한 전달, `status`·`command`·`element` 이외의 `kind`, surface가 등록할 수 없는 이름은 오류로 거부되며 아무것도 기록하거나 알리지 않는다. | all |
 | `view.regions.close-with-process` | view의 process가 끝나면 호스트는 view를 다시 만들기 전에 그 표면의 document·image 영역을 닫으므로, 새 view는 선언된 영역 이름을 다시 붙인다. view 자체는 재시작 한도 안에서 다시 만들어진다. | all |
 | `view.process-ended.forgets-regions` | view의 process가 끝나면 호스트는 그 표면의 영역을 닫은 뒤 window event `view-process-ended {surface}`를 보내므로, 페이지는 새 view가 영역을 다시 붙일 때까지 그 표면의 영역을 잊는다. | all |
 | `view.create-loads-page` | view surface는 첫 sync에서 view 구성(`isView` 설정)으로 web view를 folder와 plugin을 surface의 것으로 하여 만들고, `soksak://<plugin>/<page>`를 load한다. | all |
@@ -344,7 +344,7 @@ fn invalid_json_closes_connection() {
 | `endpoint.rpc.page-params-omit-window` | 페이지는 window 필드를 뺀 전달 매개변수를 받는다. | all |
 | `endpoint.rpc.unknown-window-1003` | 존재하지 않는 창에 대한 선언된 메서드는 페이지에 닿지 않고 오류 1003을 반환한다. | all |
 | `endpoint.rpc.missing-window-param-invalid` | window 매개변수가 없는 status.get은 -32602를 반환한다. | all |
-| `endpoint.rpc.target-params-are-checked-in-order` | window를 지정하는 요청은 params를 한 순서로 검사한다. window가 없거나, null이거나, 문자열이 아니거나, 비어 있으면 -32602 `window must be a non-empty string`으로 실패한다. 그다음 `status.get`, `status.watch`, `status.unwatch`, `command.run`, `dom.rect`, `dom.act`에서 name이 없거나, 문자열이 아니거나, `<owner>.<name>` 형식이 아니면 -32602 `name is required and must have the form <owner>.<name>`으로 실패한다. 그다음 없는 window는 1003으로 실패한다. 이런 요청은 page에 닿지 않는다. | all |
+| `endpoint.rpc.target-params-are-checked-in-order` | window를 지정하는 요청은 params를 한 순서로 검사한다. window가 없거나, null이거나, 문자열이 아니거나, 비어 있으면 -32602 `window must be a non-empty string`으로 실패한다. 그다음 `status.get`, `status.watch`, `status.unwatch`, `command.run`, `element.rect`, `element.act`에서 name이 없거나, 문자열이 아니거나, `<owner>.<name>` 형식이 아니면 -32602 `name is required and must have the form <owner>.<name>`으로 실패한다. 그다음 없는 window는 1003으로 실패한다. 이런 요청은 page에 닿지 않는다. | all |
 | `endpoint.names.unknown-host-name-1001` | 알 수 없는 host 이름의 command.run은 오류 1001을 반환한다. | all |
 | `endpoint.names.missing-name-invalid` | name이 없는 status.get은 -32602를 반환한다. | all |
 | `endpoint.names.owner-form-required` | owner.name 형식이 아닌 이름과 문자열이 아닌 이름은 -32602를 반환한다. | all |
@@ -400,6 +400,7 @@ fn invalid_json_closes_connection() {
 | `exposure.list.host-entries-exact-sorted-set` | 호스트 상태와 명령 이름은 정해진 정렬 목록과 같다. | all |
 | `exposure.list.host-entries-described` | 모든 호스트 항목은 비어 있지 않은 설명을 가진다. | all |
 | `exposure.list.host-quit-result-null` | host.quit은 null 결과 스키마를 선언한다. | all |
+| `exposure.list.host-hit-kinds` | host.hit은 결과 kind `workbench`, `document`, `native`를 선언한다. | all |
 | `exposure.list.non-object-list-rejected` | 객체가 아닌 페이지 노출 목록은 오류다. | all |
 | `exposure.host-window.reads-during-surface-creation` | 네이티브 surface view는 생성하는 같은 단계에서 surface id로 이름이 붙으므로, window status 읽기는 surface id가 없는 네이티브 view를 만나지 않는다. | all |
 | `exposure.host-window.reads-during-surface-close` | 네이티브 surface view는 닫는 단계가 id를 잊을 때까지 surface id를 유지하므로, view가 열려 있는 동안 window status 읽기는 surface id가 없는 네이티브 view를 만나지 않는다. | all |
@@ -791,7 +792,7 @@ fn invalid_json_closes_connection() {
 | `cli.window.single-window-is-default` | `--window`나 `--project`가 없으면 명령은 애플리케이션의 하나뿐인 창을 쓴다. | all |
 | `cli.window.several-windows-need-selection` | 창이 여럿인데 선택이 없거나 `--window`와 `--project`를 함께 주면, 명령은 종료 상태 2로 끝나며 창 목록이나 충돌을 밝힌다. | all |
 | `cli.window.project-selects-by-canonical-folder` | `--project`는 둘을 canonical 경로로 바꾼 뒤 열린 project 폴더가 주어진 폴더와 같은 창을 고른다. | all |
-| `cli.requests.carry-command-parameters` | `status`, `exposures`, `capture`, `dom`, `input`은 spec이 정한 endpoint method와 매개변수를 보내며, 숫자는 JSON 숫자로, 주지 않은 option은 빼고 보낸다. | all |
+| `cli.requests.carry-command-parameters` | `status`, `exposures`, `capture`, `element`, `input`은 spec이 정한 endpoint method와 매개변수를 보내며, 숫자는 JSON 숫자로, 주지 않은 option은 빼고 보낸다. | all |
 | `cli.error.reports-endpoint-code` | Endpoint 오류는 종료 상태 1로 끝나며 `sok: <message> (<code>)`를 출력한다. | all |
 | `cli.error.unwritable-stderr-exits-3` | sok이 오류를 표준 오류에 쓰지 못하면 1이나 2 대신 종료 상태 3으로 끝난다. | all |
 | `cli.diagnostics.capture-only-in-diagnostic-builds` | 진단 build의 sok은 `capture`를 고른 창과 함께 `diagnostics.capture.still`로 보내고, 다른 build는 `capture`를 사용법 오류 `capture needs a diagnostic build of sok`로 거부하며 진단 method를 담지 않는다. | all |

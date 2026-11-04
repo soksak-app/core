@@ -60,8 +60,8 @@ const METHODS: &[&str] = &[
     "status.watch",
     "status.unwatch",
     "command.run",
-    "dom.rect",
-    "dom.act",
+    "element.rect",
+    "element.act",
     "input.pointer",
     "input.key",
 ];
@@ -1214,7 +1214,12 @@ fn target(
     };
     if matches!(
         method,
-        "status.get" | "status.watch" | "status.unwatch" | "command.run" | "dom.rect" | "dom.act"
+        "status.get"
+            | "status.watch"
+            | "status.unwatch"
+            | "command.run"
+            | "element.rect"
+            | "element.act"
     ) {
         name(&params)?;
     }

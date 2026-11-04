@@ -11,7 +11,7 @@ use super::*;
 #[test]
 fn the_responder_event_follows_the_first_responder_after_the_page_is_ready() {
     let state = Mutex::new(None);
-    let current = RefCell::new(json!({"owner": "page", "surface": null, "document": null}));
+    let current = RefCell::new(json!({"owner": "workbench", "surface": null, "document": null}));
     let sent = RefCell::new(Vec::new());
     let send = |force: bool, ready: bool| {
         send_changed_responder(
@@ -42,7 +42,7 @@ fn the_responder_event_follows_the_first_responder_after_the_page_is_ready() {
     assert_eq!(
         *sent.borrow(),
         vec![
-            json!({"owner": "page", "surface": null, "document": null}),
+            json!({"owner": "workbench", "surface": null, "document": null}),
             view.clone(),
             view
         ],
