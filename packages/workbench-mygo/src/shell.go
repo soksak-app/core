@@ -33,8 +33,8 @@ type ShellOptions struct {
 	Report func(line string)
 	// Elements are the elements of the window, which the element requests answer from.
 	Elements Elements
-	// Seat draws what stands in the slot of a card. Without it the slot stays empty.
-	Seat Seat
+	// Element returns the surface host and the key view of the surface id, for its native view element.
+	Element func(id string) (surface, key uintptr, ok bool)
 	// Installed is the document of the installed plugins.
 	Installed []byte
 	// SectionSeat draws what stands on the seat of a section. Without it the seat stays empty.
@@ -42,9 +42,6 @@ type ShellOptions struct {
 	// Tabs is what the file commands, the memory saver and the background sessions read. Without it they are not registered.
 	Tabs *TabPorts
 }
-
-// Seat draws the surface of the active tab of a card in the box of the slot, in window coordinates.
-type Seat func(c *ui.Context, card string, tab layout.Tab, box layout.Rect)
 
 // environmentGrid is the grid of a new space of the environment declaration.
 type environmentGrid struct {
@@ -136,6 +133,9 @@ type Shell struct {
 	held     *heldDivider
 	library  libraryState
 	tabs     *shellTabs
+	plugins  map[string]*installedUnit
+	surfaces surfaceState
+	page     string
 }
 
 // NewShell returns the shell of a window, with its commands in the registry.
@@ -162,6 +162,11 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.errors = NewShownErrors(options.Report)
 	s.binder = NewBinder(s.registry, func(_ string, err error) { s.fail(err) })
 	s.registry.Elements(options.Elements)
+	if s.plugins, err = readSurfaceUnits(options.Installed); err != nil {
+		return nil, err
+	}
+	s.surfaces = newSurfaceState()
+	s.page = issueID("wbn-", func(string) bool { return false })
 	s.requests = NewRequests(s.registry, s.calls, options.Post, options.Report)
 	s.registry.Status("core.page.error", func() any {
 		if text, ok := s.errors.Text(workbenchErrorPlace); ok {
@@ -186,6 +191,17 @@ func (s *Shell) Registry() *Registry { return s.registry }
 
 // Start reads the workspace and tells the host that the window takes events.
 func (s *Shell) Start() {
+	theme, err := s.options.Declared.PageTheme()
+	if err != nil {
+		s.fail(err)
+		return
+	}
+	// A view reads the theme when it starts, so the theme precedes the snapshot and with it the first placement.
+	s.calls.CallInOrder("workspace", "setTheme", theme, func(_ any, err error) {
+		if err != nil {
+			s.fail(err)
+		}
+	})
 	s.calls.CallInOrder("workspace", "workspace", map[string]string{"kind": "snapshot"}, func(value any, err error) {
 		if err != nil {
 			s.fail(err)
@@ -315,6 +331,7 @@ func baseName(root string) string { return path.Base(root) }
 // View draws the workbench of the window.
 func (s *Shell) View(c *ui.Context) {
 	s.sidebars.Begin()
+	clear(s.surfaces.drawn)
 	width, height := c.Size()
 	theme := *c.Theme()
 	theme.Background = s.palette.Bg
@@ -331,4 +348,5 @@ func (s *Shell) View(c *ui.Context) {
 		}
 		s.drawWork(c, width, height-s.metrics.chromeH)
 	})
+	s.placeSurfaces()
 }

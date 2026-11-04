@@ -69,7 +69,7 @@ func TestAppStartsWhenTheWindowShows(t *testing.T) {
 	}
 	app.Shown(window)
 	queue.drain(t)
-	if strings.Join(stored.calls, " ") != "workspace windowReady" {
+	if strings.Join(stored.calls, " ") != "setTheme workspace windowReady" {
 		t.Fatalf("the start called %v", stored.calls)
 	}
 }

@@ -57,9 +57,9 @@ func (s *Shell) drawCard(c *ui.Context, id string, data *layout.CardData, rect l
 		s.drawHead(c, id, data, float32(rect.W))
 		slot := float32(rect.H) - s.metrics.headH - s.metrics.footH
 		ui.Box(c).Size(float32(rect.W), slot).Children(func() {
-			if active := data.ActiveTab(); active != nil && s.options.Seat != nil {
-				s.options.Seat(c, id, *active, layout.Rect{X: rect.X + float64(originX), Y: rect.Y + float64(originY) + float64(s.metrics.headH),
-					W: rect.W, H: float64(slot)})
+			if active := data.ActiveTab(); active != nil {
+				box := layout.Rect{X: rect.X + float64(originX), Y: rect.Y + float64(originY) + float64(s.metrics.headH), W: rect.W, H: float64(slot)}
+				s.drawSeat(c, *active, box)
 			}
 		})
 		s.drawStatus(c, id)
@@ -74,6 +74,9 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, width 
 	activeWidth := 0.0
 	for i, tab := range tabs {
 		name := layout.TabName(tab, nil, false)
+		if report := s.surfaces.reports[tab.ID]; report != nil && report.Title != "" {
+			name = report.Title
+		}
 		measured, _ := c.MeasureText(0, ui.Span{Text: name, Size: 12})
 		widths[i] = float64(measured + 2*s.metrics.barTabGap + s.metrics.actW)
 		if active != nil && tab.ID == active.ID {
@@ -103,6 +106,9 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, width 
 
 func (s *Shell) drawTab(c *ui.Context, tab layout.Tab, on bool) {
 	name := layout.TabName(tab, nil, false)
+	if report := s.surfaces.reports[tab.ID]; report != nil && report.Title != "" {
+		name = report.Title
+	}
 	ui.Row(c.Key("tab-" + tab.ID)).AlignItems(ui.Center).Children(func() {
 		s.barText(c, s.binder.Press(c, "core.card.tab", "core.tab.select", tab.ID, tabParam{tab.ID}), name, on)
 		s.barText(c, s.binder.Press(c, "core.card.tab-close", "core.tab.close", tab.ID, tabParam{tab.ID}), "✕", false)

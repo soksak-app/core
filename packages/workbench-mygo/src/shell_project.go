@@ -344,6 +344,13 @@ func (s *Shell) removeProject(id string) {
 
 // dropProject takes the removed project out of the window. The window shows the next project, or the library without one.
 func (s *Shell) dropProject(id string) {
+	var tabs []string
+	for tab, held := range s.surfaces.held {
+		if held.project.ID == id {
+			tabs = append(tabs, tab)
+		}
+	}
+	s.forgetSurfaces(tabs)
 	for i := range s.projects {
 		if s.projects[i].ID == id {
 			s.projects = append(s.projects[:i:i], s.projects[i+1:]...)

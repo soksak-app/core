@@ -61,6 +61,7 @@ func (p *workbenchPort) Prepared(h *host.Host) {
 		Table:       workbench.HostTable(h),
 		Report:      func(line string) { host.LogError("workbench", errors.New(line)) },
 		Installed:   h.InstalledPlugins,
+		Element:     workbench.HostElement(h),
 	})
 	if err != nil {
 		host.ExitOnFailure(err)

@@ -31,6 +31,8 @@ type AppOptions struct {
 	Report func(line string)
 	// Installed reads the document of the installed plugins.
 	Installed func() []byte
+	// Element returns the views of the surface id of window for its native view element.
+	Element func(window host.Frontend, id string) (surface, key uintptr, ok bool)
 }
 
 // App is the workbench of the application.
@@ -46,6 +48,14 @@ func NewApp(options AppOptions) (*App, error) {
 		return nil, err
 	}
 	return &App{options: options, shells: map[host.Frontend]*Shell{}}, nil
+}
+
+// HostElement returns the views of a surface of a window of h for its native view element.
+func HostElement(h *host.Host) func(window host.Frontend, id string) (uintptr, uintptr, bool) {
+	return func(window host.Frontend, id string) (uintptr, uintptr, bool) {
+		element, ok := h.SurfaceElement(host.WithFrontend(context.Background(), window), id)
+		return uintptr(element.Surface), uintptr(element.Key), ok
+	}
 }
 
 // HostTable is the table of the calls of the host for a window of the application.
@@ -70,7 +80,8 @@ func (a *App) Build(window host.Frontend) func(c *ui.Context) {
 	}
 	painted := window.(Painted)
 	shell, err := NewShell(ShellOptions{Declared: declared, Calls: NewCalls(a.options.Table(window), a.options.Post),
-		Environment: a.options.Environment, Installed: a.options.Installed(), Invalidate: painted.Invalidate, Elements: painted, Post: a.options.Post, Report: a.options.Report})
+		Environment: a.options.Environment, Installed: a.options.Installed(),
+		Element: func(id string) (uintptr, uintptr, bool) { return a.options.Element(window, id) }, Invalidate: painted.Invalidate, Elements: painted, Post: a.options.Post, Report: a.options.Report})
 	if err != nil {
 		panic(err) // The environment declaration is staged with the application, and its test holds its form.
 	}
@@ -113,21 +124,32 @@ func (a *App) Emit(window host.Frontend, name string, data ...any) {
 		if shell == nil {
 			return
 		}
-		shell.event(name, data)
+		shell.Event(name, data)
 	})
 }
 
 // Call delivers a call of the workbench call channel. The native workbench draws the state of a call as an event.
 func (a *App) Call(window host.Frontend, script string) {}
 
-// event handles an event of the host in a step of the main thread.
-func (s *Shell) event(name string, data []any) { s.Event(name, data) }
-
 // Event handles an event of the host in a step of the main thread.
 func (s *Shell) Event(name string, data []any) {
 	switch name {
 	case "exposure-request":
-		s.requests.Deliver(data...)
+		if !s.viewEvent(name, data) {
+			s.requests.Deliver(data...)
+		}
+	case "view-call":
+		s.viewCall(data)
+	case "view-process-ended":
+		s.viewEnded(data)
+	case "view-stopped":
+		s.viewStopped(data)
+	case "document-stream", "document-state", "document-message", "image-event":
+		s.viewEvent(name, data)
+	case "sidecar-failure":
+		s.sidecarFailed(data)
+	case "surface-pressed":
+		s.surfacePressed(data)
 	case "project-close-request":
 		s.keep()
 		s.flushTabs()

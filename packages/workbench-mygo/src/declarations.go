@@ -44,6 +44,7 @@ type Declarations struct {
 	many    map[string]bool
 	chrome  map[string]string
 	themes  []declaredTheme
+	fonts   map[string]string
 }
 
 // declaredTheme is a theme of workbench.json.
@@ -96,6 +97,44 @@ func (d *Declarations) DefaultPalette() (Palette, error) {
 		Rail: color("rail"), Focus: color("focus"), No: color("no"), Radius: length("r"), Gap: length("gap"), BorderWidth: length("bw")}, failed
 }
 
+// PageTheme returns the theme that a view reads: the scheme and the token values of the first declared theme, as pageTheme of
+// packages/workbench/settings.js builds them.
+func (d *Declarations) PageTheme() (map[string]any, error) {
+	if len(d.themes) == 0 {
+		return nil, errors.New("workbench.json declares no theme")
+	}
+	theme := d.themes[0]
+	number := func(name string) (float64, error) {
+		value, err := strconv.ParseFloat(strings.TrimSuffix(theme.Shape[name], "px"), 64)
+		if err != nil {
+			return 0, fmt.Errorf("theme %s: shape %s: %w", theme.Name, name, err)
+		}
+		return value, nil
+	}
+	gap, err := number("gap")
+	if err != nil {
+		return nil, err
+	}
+	if gap == 0 {
+		// A theme without a gap has the half of a border between its cards, as halfGap of settings.js takes.
+		width, err := number("bw")
+		if err != nil {
+			return nil, err
+		}
+		gap = width / 2
+	}
+	font, ok := d.fonts[theme.Shape["font"]]
+	if !ok {
+		return nil, fmt.Errorf("theme %s: unknown font %s", theme.Name, theme.Shape["font"])
+	}
+	tokens := map[string]string{"--r": theme.Shape["r"], "--half-gap": strconv.FormatFloat(gap, 'f', -1, 64) + "px", "--bw": theme.Shape["bw"],
+		"--font": font, "--size": theme.Shape["size"]}
+	for name, value := range theme.Dark {
+		tokens["--"+name] = value
+	}
+	return map[string]any{"scheme": "dark", "tokens": tokens}, nil
+}
+
 // Declared returns the declarations of the embedded copies.
 var Declared = sync.OnceValues(func() (*Declarations, error) {
 	var exposure struct {
@@ -113,6 +152,10 @@ var Declared = sync.OnceValues(func() (*Declarations, error) {
 	var values struct {
 		Chrome map[string]string `json:"chrome"`
 		Themes []declaredTheme   `json:"themes"`
+		Fonts  []struct {
+			ID    string `json:"id"`
+			Stack string `json:"stack"`
+		} `json:"fonts"`
 	}
 	if err := json.Unmarshal(workbenchFile, &values); err != nil {
 		return nil, fmt.Errorf("workbench.json: %w", err)
@@ -132,8 +175,12 @@ var Declared = sync.OnceValues(func() (*Declarations, error) {
 	for _, entry := range exposure.Exposes["dom"] {
 		many[entry["name"].(string)] = entry["many"] == true
 	}
+	fonts := make(map[string]string, len(values.Fonts))
+	for _, font := range values.Fonts {
+		fonts[font.ID] = font.Stack
+	}
 	return &Declarations{
 		Statuses: names(exposure.Exposes["status"]), Commands: names(exposure.Exposes["commands"]), Elements: names(exposure.Exposes["dom"]),
-		Shortcuts: shortcuts.Shortcuts, exposes: exposure.Exposes, params: params, many: many, chrome: values.Chrome, themes: values.Themes,
+		fonts: fonts, Shortcuts: shortcuts.Shortcuts, exposes: exposure.Exposes, params: params, many: many, chrome: values.Chrome, themes: values.Themes,
 	}, nil
 })

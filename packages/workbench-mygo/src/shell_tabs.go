@@ -266,6 +266,7 @@ func (s *Shell) tabsSettled() {
 // droppedTabs removes the stored state and session of tabs after the layout write that drops them is confirmed, so a refused write
 // removes none.
 func (s *Shell) droppedTabs(tabs []string) func() {
+	s.forgetSurfaces(tabs)
 	if s.tabs == nil || len(tabs) == 0 {
 		return func() {}
 	}
