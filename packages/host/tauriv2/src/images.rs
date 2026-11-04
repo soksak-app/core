@@ -185,6 +185,9 @@ struct RasterState {
     visible: bool,
     presented_raster: u64,
     presented_sequence: i32,
+    /// The frames of the region that the host marked presented since the region was attached. A raster or a generation
+    /// change does not reset it, because it counts the frames of the region (host.window presentedFrames).
+    presented_frames: u64,
     presentation_error: Option<String>,
     /// The drawing state last returned by drawing_changes, or None before one was returned.
     drawing_sent: Option<bool>,
@@ -910,6 +913,7 @@ impl Images {
         }
         state.presented_raster = raster;
         state.presented_sequence = sequence;
+        state.presented_frames += 1;
         if sequence == state.last_sequence {
             state.presentation_error = None;
         }
@@ -1015,6 +1019,15 @@ impl Images {
                 sequence: state.presented_sequence,
             },
         )
+    }
+
+    /// Returns the number of frames of the image region that the host marked presented since the region was attached.
+    pub fn presented_frames(&self, key: &Key) -> Result<u64, String> {
+        self.lock()
+            .states
+            .get(key)
+            .map(|state| state.presented_frames)
+            .ok_or_else(|| format!("image {:?} is not attached", key.1))
     }
 
     /// Returns the drawing state last sent to the supplier of a region; it is false before one was sent.

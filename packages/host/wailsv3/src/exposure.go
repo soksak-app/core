@@ -49,7 +49,7 @@ var presentedSchema = map[string]any{"type": "object", "properties": map[string]
 
 var hostStatus = map[string]hostEntry{
 	"host.window": {
-		Description: "Window frame and system pointer location in screen coordinates, content size, backing scale, the maximum refresh rate of its screen (null when the window is on no screen), maximized, key and application active state, whether other windows cover the whole window, child window count, the WebContent process of the app page (0 before it starts), whether the application is quitting, window buttons, webview frames, native surfaces, document regions, image regions, and the open native modal.",
+		Description: "Window frame and system pointer location in screen coordinates, content size, backing scale, the maximum refresh rate of its screen (null when the window is on no screen), maximized, key and application active state, whether other windows cover the whole window, child window count, the WebContent process of the app page (0 before it starts), whether the application is quitting, window buttons, webview frames, native surfaces, document regions, image regions with the number of frames that the host marked presented for each, the open native modal, and the frames and command buffers of the workbench and whether it settled after its last frame, null on a host whose workbench WebKit draws.",
 		Schema: map[string]any{"type": "object", "properties": map[string]any{
 			"frame":       rectSchema,
 			"pointer":     map[string]any{"type": "object", "properties": map[string]any{"x": map[string]any{"type": "number"}, "y": map[string]any{"type": "number"}}},
@@ -85,8 +85,12 @@ var hostStatus = map[string]hostEntry{
 					"sequence": map[string]any{"type": "integer"}, "generation": map[string]any{"type": "integer"}, "raster": map[string]any{"type": "integer"},
 					"width": map[string]any{"type": "integer"}, "height": map[string]any{"type": "integer"}, "scale": map[string]any{"type": "number"},
 				}},
-				"error": map[string]any{"type": []any{"string", "null"}},
+				"presentedFrames": map[string]any{"type": "integer"},
+				"error":           map[string]any{"type": []any{"string", "null"}},
 			}}},
+			"frames":         map[string]any{"type": []any{"integer", "null"}},
+			"commandBuffers": map[string]any{"type": []any{"integer", "null"}},
+			"settled":        map[string]any{"type": []any{"boolean", "null"}},
 			"modal": map[string]any{"type": "object", "properties": map[string]any{
 				"id": map[string]any{"type": "string"}, "mode": map[string]any{"type": "string"},
 				"shown": map[string]any{"type": "boolean"}, "frame": rectSchema, "order": map[string]any{"type": "integer"},
@@ -1287,11 +1291,38 @@ type WindowRegion struct {
 		Raster     uint64  `json:"raster"`
 		Sequence   int     `json:"sequence"`
 	} `json:"presented"`
-	Layer struct {
+	// PresentedFrames is the number of frames of the region that the host marked presented since the region was attached.
+	PresentedFrames uint64 `json:"presentedFrames"`
+	Layer           struct {
 		Bounds        frame   `json:"bounds"`
 		ContentsScale float64 `json:"contentsScale"`
 	} `json:"layer"`
 	Error *string `json:"error"`
+}
+
+// windowRegion returns the host.window entry of the image region key from the native facts text of the region and the
+// state that the host holds for it.
+func windowRegion(key ImageKey, text string, images *Images) (WindowRegion, error) {
+	region := WindowRegion{Surface: key.Surface, Name: key.Name}
+	if err := json.Unmarshal([]byte(text), &region); err != nil {
+		return WindowRegion{}, fmt.Errorf("image %s/%s facts: %w", key.Surface, key.Name, err)
+	}
+	// presented is the size of the presented image with the identity of the frame that the host marked presented; null while no frame of the current raster is presented.
+	if presented, ok := images.PresentedFrame(key); ok && region.Presented != nil {
+		region.Presented.Generation = presented.Generation
+		region.Presented.Raster = presented.Raster
+		region.Presented.Sequence = presented.Sequence
+	} else {
+		region.Presented = nil
+	}
+	// drawing is the drawing state that the host last sent the supplier (docs/spec/native-surfaces.md#image-regions).
+	region.Drawing = images.SentDrawing(key)
+	presentedFrames, err := images.PresentedFrames(key)
+	if err != nil {
+		return WindowRegion{}, fmt.Errorf("image %s/%s: %w", key.Surface, key.Name, err)
+	}
+	region.PresentedFrames = presentedFrames
+	return region, nil
 }
 
 // WindowResponder is the first responder of the window. Owner is the kind of web view that contains it, one of page, surface,
@@ -1334,8 +1365,18 @@ func windowResponder(class string, view, surface uint64, main bool, named map[ui
 	return out
 }
 
+// WindowFrameCounters are the frame counters of host.window. WebKit draws the workbench of this host, and the host
+// counts neither the frames of the workbench nor the command buffers that WebKit commits for it, so frames,
+// commandBuffers and settled are null; the mygo host counts them through the frame reports of its workbench (U7).
+type WindowFrameCounters struct {
+	Frames         *uint64 `json:"frames"`
+	CommandBuffers *uint64 `json:"commandBuffers"`
+	Settled        *bool   `json:"settled"`
+}
+
 // WindowStatus is the value of host.window.
 type WindowStatus struct {
+	WindowFrameCounters
 	Responder        WindowResponder  `json:"responder"`
 	Frame            frame            `json:"frame"`
 	Pointer          point            `json:"pointer"`
@@ -1431,20 +1472,10 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 			if err != nil {
 				return "", fmt.Errorf("image %s/%s: %w", key.Surface, key.Name, err)
 			}
-			region := WindowRegion{Surface: key.Surface, Name: key.Name}
-			if err := json.Unmarshal([]byte(text), &region); err != nil {
-				return "", fmt.Errorf("image %s/%s facts: %w", key.Surface, key.Name, err)
+			region, err := windowRegion(key, text, s.images)
+			if err != nil {
+				return "", err
 			}
-			// presented is the size of the presented image with the identity of the frame that the host marked presented; null while no frame of the current raster is presented.
-			if presented, ok := s.images.PresentedFrame(key); ok && region.Presented != nil {
-				region.Presented.Generation = presented.Generation
-				region.Presented.Raster = presented.Raster
-				region.Presented.Sequence = presented.Sequence
-			} else {
-				region.Presented = nil
-			}
-			// drawing is the drawing state that the host last sent the supplier (docs/spec/native-surfaces.md#image-regions).
-			region.Drawing = s.images.SentDrawing(key)
 			regions = append(regions, region)
 		}
 		return system.WindowFacts(window)

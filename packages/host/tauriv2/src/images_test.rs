@@ -816,3 +816,73 @@ fn failed_or_retired_frame_does_not_notify_the_window() {
     ));
     assert_eq!(images.presented_frame(&key), None);
 }
+
+// contract: exposure.window.region-reports-presented-frames
+#[test]
+fn window_region_counts_the_frames_that_the_host_marked_presented() {
+    let images = super::Images::default();
+    let key = ("tab-1".to_string(), "view".to_string());
+    let attach = || {
+        images.reserve(&key, "owner", "sidecar-a").unwrap();
+        assert!(images.set(&key, 100));
+    };
+    let facts = r#"{"frame":{"x":0,"y":0,"width":400,"height":300},"visible":true,"focused":false,"presented":{"width":800,"height":600,"scale":2},"error":null}"#;
+    let presented_frames = |want: u64, after: &str| {
+        let region = crate::exposure::window_region(&images, key.clone(), facts)
+            .unwrap_or_else(|error| panic!("{after}: window region: {error}"));
+        assert_eq!(
+            region["presentedFrames"],
+            serde_json::json!(want),
+            "{after}: host.window region entry {region}"
+        );
+    };
+    let present = |config: &super::Configure, sequence: i32| {
+        images
+            .authorize_frame(
+                &key,
+                "sidecar-a",
+                super::FrameIdentity {
+                    generation: config.generation,
+                    raster: config.raster,
+                    width: config.width,
+                    height: config.height,
+                    scale: config.scale,
+                    sequence,
+                },
+            )
+            .unwrap_or_else(|reason| panic!("authorize frame {sequence}: {reason}"));
+        images.mark_presented(&key, config.generation, config.raster, sequence)
+    };
+
+    attach();
+    presented_frames(0, "a new region");
+    let config = images
+        .configure_raster(&key, 800, 600, 2.0, true)
+        .unwrap()
+        .unwrap();
+    assert!(
+        present(&config, 1) && present(&config, 2),
+        "a current frame was not marked presented"
+    );
+    presented_frames(2, "two presented frames");
+    // A frame that the host does not mark presented is not counted.
+    assert!(
+        !images.mark_presented(&key, config.generation, config.raster, 2),
+        "a frame was marked presented twice"
+    );
+    presented_frames(2, "a refused presentation mark");
+    // A raster change does not restart the count, because the count belongs to the region.
+    let config = images
+        .configure_raster(&key, 900, 600, 2.0, true)
+        .unwrap()
+        .unwrap();
+    assert!(
+        present(&config, 1),
+        "a frame of the new raster was not marked presented"
+    );
+    presented_frames(3, "a frame of a new raster");
+    // A region attached again under the same name is a new region and counts from 0.
+    images.remove(&key).unwrap();
+    attach();
+    presented_frames(0, "a region attached again");
+}

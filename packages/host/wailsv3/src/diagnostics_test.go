@@ -5,6 +5,7 @@ package host
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -833,5 +834,71 @@ func TestDiagnosticViewportMarkerPropagatesNativeFailure(t *testing.T) {
 	_, err := runViewportMarker(t, e, `{"window":"window-a","surface":"surface-a","document":"document-a","enabled":true}`)
 	if err == nil || err.Error() != "native marker failed" {
 		t.Fatalf("native error = %v", err)
+	}
+}
+
+// contract: diagnostics.drag.native-delivers-pointer-gesture
+func TestNativeDragDeliversThePressTheStepsAndTheReleaseOfEachRoundTrip(t *testing.T) {
+	for _, test := range []struct {
+		params string
+		want   bool
+	}{{`{}`, false}, {`{"native":false}`, false}, {`{"native":true}`, true}} {
+		if got, err := parseDragNative(json.RawMessage(test.params)); err != nil || got != test.want {
+			t.Fatalf("parseDragNative(%s) = %t, %v; want %t", test.params, got, err, test.want)
+		}
+	}
+	for _, value := range []string{`null`, `"true"`, `1`} {
+		if _, err := parseDragNative(json.RawMessage(`{"native":` + value + `}`)); err == nil || !strings.Contains(err.Error(), "native must be a boolean") {
+			t.Fatalf("parseDragNative with native %s: error %v, want native must be a boolean", value, err)
+		}
+	}
+
+	// Two round trips of two steps out and two steps back from the boundary at 100,50.
+	plan := dragPlan{Axis: "x", Line: 3, DX: 20, DY: -8, MS: 32, Times: 2}
+	from := point{X: 100, Y: 50}
+	var delivered []string
+	ticks := 0
+	result, err := nativeDrag(plan, from, func(input PointerInput) error {
+		if input.Activate || input.Button != "left" {
+			t.Fatalf("native drag input %+v activates or uses another button than the primary one", input)
+		}
+		delivered = append(delivered, fmt.Sprintf("%s %g,%g after %d", input.Phase, input.X, input.Y, ticks))
+		return nil
+	}, func() { ticks++ })
+	if err != nil {
+		t.Fatalf("native drag: %v", err)
+	}
+	trip := func(after int) []string {
+		return []string{
+			fmt.Sprintf("down 100,50 after %d", after),
+			fmt.Sprintf("drag 110,46 after %d", after+1), fmt.Sprintf("drag 120,42 after %d", after+2),
+			fmt.Sprintf("drag 110,46 after %d", after+3), fmt.Sprintf("drag 100,50 after %d", after+4),
+			fmt.Sprintf("up 100,50 after %d", after+4),
+		}
+	}
+	if want := append(trip(0), trip(4)...); !reflect.DeepEqual(delivered, want) {
+		t.Fatalf("native drag delivered\n%s\nwant\n%s", strings.Join(delivered, "\n"), strings.Join(want, "\n"))
+	}
+	if result["from"] != from || result["steps"] != 8 || result["asked"] != 128 {
+		t.Fatalf("native drag result %v, want from %v, steps 8 and asked 128", result, from)
+	}
+	if took, ok := result["took"].(int64); !ok || took < 0 {
+		t.Fatalf("native drag result took %#v, want a non-negative number of milliseconds", result["took"])
+	}
+
+	// A step that fails releases the press that is open, and the error names both.
+	delivered = nil
+	_, err = nativeDrag(dragPlan{Axis: "x", Line: 3, DX: 20, MS: 32, Times: 1}, from, func(input PointerInput) error {
+		delivered = append(delivered, input.Phase)
+		if input.Phase == "drag" {
+			return errors.New("the window did not accept the input")
+		}
+		return nil
+	}, func() {})
+	if err == nil || err.Error() != "native drag step 1: the window did not accept the input" {
+		t.Fatalf("native drag with a failing step: error %v", err)
+	}
+	if !reflect.DeepEqual(delivered, []string{"down", "drag", "up"}) {
+		t.Fatalf("native drag with a failing step delivered %v, want down, drag and the release up", delivered)
 	}
 }

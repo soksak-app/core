@@ -1,6 +1,10 @@
 package host
 
-import "testing"
+import (
+	"encoding/json"
+	"reflect"
+	"testing"
+)
 
 // contract: window.facts.modal-order-is-above-every-webview
 func TestModalOrderIsAboveEveryNativeSurfaceAndWebview(t *testing.T) {
@@ -30,5 +34,33 @@ func TestWindowDocumentReportsItsNativeBlur(t *testing.T) {
 	}
 	if entry := windowDocument(key, 2, windowWebviewFacts{View: 7}); entry.Blurred {
 		t.Fatalf("document entry %#v of a web view without a filter, want blurred false", entry)
+	}
+}
+
+// contract: exposure.window.frame-counters-are-null
+func TestWindowFrameCountersAreNullBecauseWebKitDrawsTheWorkbench(t *testing.T) {
+	text, err := json.Marshal(WindowStatus{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var status map[string]any
+	if err := json.Unmarshal(text, &status); err != nil {
+		t.Fatal(err)
+	}
+	properties := hostStatus["host.window"].Schema["properties"].(map[string]any)
+	for name, schema := range map[string]any{
+		"frames": []any{"integer", "null"}, "commandBuffers": []any{"integer", "null"}, "settled": []any{"boolean", "null"},
+	} {
+		if got, ok := status[name]; !ok || got != nil {
+			t.Fatalf("host.window %s is %v (present %t), want null", name, got, ok)
+		}
+		declared, _ := properties[name].(map[string]any)
+		if !reflect.DeepEqual(declared["type"], schema) {
+			t.Fatalf("host.window declares %s as %v, want the type %v", name, declared, schema)
+		}
+	}
+	regions := properties["regions"].(map[string]any)["items"].(map[string]any)["properties"].(map[string]any)
+	if declared, _ := regions["presentedFrames"].(map[string]any); declared["type"] != "integer" {
+		t.Fatalf("host.window declares the region member presentedFrames as %v, want an integer", declared)
 	}
 }
