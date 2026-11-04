@@ -255,19 +255,15 @@ func CoreRoot(configDir, plugin, urlPath string, frontend fs.FS) (file CoreRootF
 	if err != nil {
 		return CoreRootFile{}, false, err
 	}
+	if targets[urlPath] {
+		return coreTarget(configDir, plugin, urlPath, frontend)
+	}
 	plugins, state, err := enabledPlugins(configDir)
 	if err != nil {
 		return CoreRootFile{}, false, err
 	}
 	if !slices.ContainsFunc(plugins, func(entry installedPlugin) bool { return entry.id == plugin }) {
 		return refuseCoreRoot(urlPath, plugin)
-	}
-	if targets[urlPath] {
-		data, err := fs.ReadFile(frontend, strings.TrimPrefix(urlPath, "/"))
-		if err != nil {
-			return CoreRootFile{}, false, fmt.Errorf("%s: the core file is missing from the bundled frontend: %w", urlPath, err)
-		}
-		return CoreRootFile{Data: data, ContentType: coreContentType(urlPath)}, true, nil
 	}
 	files := map[string]sok.PluginFiles{}
 	for _, entry := range plugins {
@@ -303,6 +299,27 @@ func CoreRoot(configDir, plugin, urlPath string, frontend fs.FS) (file CoreRootF
 	data, err := os.ReadFile(target)
 	if err != nil {
 		return CoreRootFile{}, false, err
+	}
+	return CoreRootFile{Data: data, ContentType: coreContentType(urlPath)}, true, nil
+}
+
+// coreTarget serves a core target of the view import map to a view of plugin. A page asks for each of its modules while it
+// starts, so the request reads the installation record and the manifest of plugin and no manifest of another plugin.
+func coreTarget(configDir, plugin, urlPath string, frontend fs.FS) (CoreRootFile, bool, error) {
+	state, err := sok.ReadInstalledRecord(configDir)
+	if err != nil {
+		return CoreRootFile{}, false, err
+	}
+	entry, installed := state.Plugins[plugin]
+	if !installed || !entry.Enabled {
+		return refuseCoreRoot(urlPath, plugin)
+	}
+	if _, err := sok.ReadInstalledManifest(configDir, plugin, entry); err != nil {
+		return CoreRootFile{}, false, err
+	}
+	data, err := fs.ReadFile(frontend, strings.TrimPrefix(urlPath, "/"))
+	if err != nil {
+		return CoreRootFile{}, false, fmt.Errorf("%s: the core file is missing from the bundled frontend: %w", urlPath, err)
 	}
 	return CoreRootFile{Data: data, ContentType: coreContentType(urlPath)}, true, nil
 }

@@ -294,3 +294,15 @@ func TestViewImportMapFailsWithoutTheStagedFile(t *testing.T) {
 		t.Fatal("a bundled frontend without view-imports.json sets no view import map")
 	}
 }
+
+// contract: document.core-root.grant
+func TestCoreRootServesACoreTargetBesideAMalformedPlugin(t *testing.T) {
+	config := coreRootFixture(t)
+	manifest := filepath.Join(config, "plugins", "other", "1.0.0", "plugin.json")
+	if err := os.WriteFile(manifest, []byte("not json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, found, err := host.CoreRoot(config, "provider", "/modules/@soksak/plugin-api/index.js", coreFrontend()); err != nil || !found {
+		t.Fatalf("the core target of a sound plugin answered found %v, error %v", found, err)
+	}
+}
