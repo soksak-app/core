@@ -72,6 +72,8 @@ type SidebarsOptions struct {
 	Seat func(c *ui.Context, seat SidebarSeat)
 	// Mounted tells whether the surface id stands.
 	Mounted func(id string) bool
+	// Rail returns the rail color of the current theme.
+	Rail func() ui.Color
 }
 
 // section is a section of a loaded plugin.
@@ -157,6 +159,9 @@ func readSidebarMetrics(declared *Declarations) (SidebarMetrics, error) {
 	read("section-head-gap", &m.SectionHeadGap)
 	read("section-head-pad", &m.SectionHeadPad)
 	read("section-head-text", &m.SectionHeadText)
+	read("section-tab-mark", &m.SectionTabMark)
+	read("fold-button", &m.FoldButton)
+	read("card-icon", &m.FoldIcon)
 	return m, failed
 }
 
@@ -421,6 +426,9 @@ func (s *Sidebars) Draw(c *ui.Context, frame SidebarFrame, box layout.Rect) {
 	if drag == nil {
 		drag = &SectionDrag{}
 		s.drags[frame.Sidebar] = drag
+	}
+	if s.options.Rail != nil {
+		frame.Rail = s.options.Rail()
 	}
 	DrawSidebar(c, s.options.Binder, drag, frame, s.metrics, float32(box.W), float32(box.H), func(c *ui.Context, seat SidebarSeat) {
 		if s.options.Seat == nil {
