@@ -48,6 +48,8 @@ func (w *appWindow) ElementTree() ([]ui.ElementNode, error) { return nil, nil }
 
 func (w *appWindow) Visible() bool { return true }
 
+func (w *appWindow) SetBackdrop(string) error { return nil }
+
 func (w *appWindow) ContentSize() (width, height float64) { return 1200, 800 }
 
 func (w *appWindow) Scale() (float64, error) { return 2, nil }

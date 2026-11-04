@@ -350,6 +350,19 @@ func TestAModeOfTheThemeRepaintsTheWorkbench(t *testing.T) {
 	}
 }
 
+// A view without a background of its own shows the window through the hole of its element, so the window takes the color of the cards.
+func TestTheWindowBehindTheSurfacesTakesTheCardColorOfTheTheme(t *testing.T) {
+	f := opened(t)
+	if got := f.host.backdrops; len(got) == 0 || got[len(got)-1] != "#191b24" {
+		t.Fatalf("the backdrops are %q", got)
+	}
+	f.run("core.settings.theme", map[string]any{"name": "paper", "mode": "light"})
+	f.run("core.settings.close", map[string]any{})
+	if got := f.host.backdrops; got[len(got)-1] != "#fbfbfb" {
+		t.Fatalf("the backdrops are %q", got)
+	}
+}
+
 func TestThePluginListFiltersByNameIdAndDescription(t *testing.T) {
 	f := opened(t)
 	f.run("core.settings-modal.nav", map[string]any{"section": "plugins"})

@@ -229,6 +229,10 @@ func (f *Frontend) Emit(name string, data ...any) {
 // Invalidate asks for a frame of the workbench of the window.
 func (f *Frontend) Invalidate() { f.window.Invalidate() }
 
+// SetBackdrop sets the color of the window behind its content. Every surface lies under the content, in a hole of it, so a page without
+// a background of its own shows this color.
+func (f *Frontend) SetBackdrop(color string) error { return f.window.SetBackgroundColor(color) }
+
 // Show puts the window on the screen, once the window drew its first frame. The host shows a window after it holds the window, so
 // the workbench starts its host calls here.
 func (f *Frontend) Show() {

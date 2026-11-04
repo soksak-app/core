@@ -26,6 +26,8 @@ type storedHost struct {
 	reloads int
 	// located is the project that the shell last named as the one that its window shows.
 	located string
+	// backdrops are the colors that the shell gave the window behind its surfaces.
+	backdrops []string
 	// detaching are the surfaces whose image detach is pending when a window starts.
 	detaching []string
 	projects  []map[string]any
@@ -343,6 +345,7 @@ func newShell(t testing.TB, stored *storedHost) *shellFixture {
 		Report:      func(line string) { f.lines = append(f.lines, line) },
 		Reload:      func() { stored.reloads++ },
 		Located:     func(project string) { stored.located = project },
+		Backdrop:    func(color string) error { stored.backdrops = append(stored.backdrops, color); return nil },
 	})
 	if err != nil {
 		t.Fatal(err)

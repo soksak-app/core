@@ -132,6 +132,7 @@ func newTabShellWithState(t *testing.T, stored *storedHost, refused error) *tabS
 			return workbench.WindowView{Visible: true, Scale: 2, Width: 1200, Height: 800}, nil
 		},
 		Located:     func(string) {},
+		Backdrop:    func(string) error { return nil },
 		Element:     func(string) (uintptr, uintptr, bool) { return 0, 0, false },
 		Declared:    declared,
 		Calls:       workbench.NewCalls(table, f.pending.post),

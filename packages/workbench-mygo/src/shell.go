@@ -29,6 +29,8 @@ type ShellOptions struct {
 	Environment []byte
 	// Invalidate asks for a frame.
 	Invalidate func()
+	// Backdrop sets the color of the window behind its content, which a surface without a background of its own shows.
+	Backdrop func(color string) error
 	// Post runs a task as a later step of the main thread.
 	Post func(task func())
 	// Report writes a failure of the event writer to the application log.

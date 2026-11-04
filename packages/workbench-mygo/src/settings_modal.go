@@ -848,6 +848,10 @@ func (s *Shell) tellTheme() {
 		s.fail(err)
 		return
 	}
+	if err := s.options.Backdrop(theme["tokens"].(map[string]string)["--card"]); err != nil {
+		s.fail(fmt.Errorf("window backdrop: %w", err))
+		return
+	}
 	// A view reads the theme when it starts, so the theme keeps its place among the placements of the surfaces.
 	s.calls.CallInOrder(surfaceOrder, "setTheme", theme, func(_ any, err error) {
 		if err != nil {

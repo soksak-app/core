@@ -147,6 +147,7 @@ func surfaceShellOn(t testing.TB, document string, stored *surfaceHost) *shellFi
 	shell, err := workbench.NewShell(workbench.ShellOptions{
 		Detaching:   func() []string { return nil },
 		Located:     func(string) {},
+		Backdrop:    func(string) error { return nil },
 		Declared:    declared,
 		Calls:       workbench.NewCalls(stored.surfaceTable(), f.pending.post),
 		Environment: environment(t),
