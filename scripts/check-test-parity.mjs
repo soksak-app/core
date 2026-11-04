@@ -666,6 +666,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/src/start.go", symbol: "func StartWorkbench(h *Host, window Frontend) error {" },
       { file: "packages/host/mygo/src/frontend.go", symbol: "func (f *Frontend) StartWorkbench() {" },
       { file: "packages/workbench-mygo/src/app.go", symbol: "func (s *Shell) pluginsChanged() {" },
+      { file: "packages/workbench-mygo/src/view_input.go", symbol: "func (s *Shell) followSettings() {" },
       { file: "packages/workbench-mygo/src/surfaces.go", symbol: "func (s *Shell) drawSeat(c *ui.Context, tab layout.Tab, box layout.Rect) {" },
     ],
     tests: [
@@ -677,6 +678,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/src/surface_elements_test.go", id: "TestAWindowWithoutAMainPageCountsItsHostObjects" },
       { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestACardDrawsTheNativeViewElementOfItsSurface" },
       { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestADiagnosticPluginAddsItsDeclarationsToTheSurface" },
+      { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestAViewFollowsTheSettingsOfItsPlugin" },
       { file: "packages/workbench-mygo/tests/app_test.go", id: "TestPluginsChangedStartsTheWorkbenchAgain" },
       { file: "packages/workbench-mygo/tests/app_test.go", id: "TestPluginsChangedWaitsForTheStart" },
       { file: "packages/workbench-mygo/tests/app_test.go", id: "TestPluginsApplyStartsTheWorkbenchAgain" },

@@ -521,3 +521,35 @@ func TestAViewStandsOnWholePoints(t *testing.T) {
 		t.Fatalf("no native view of the height %v stands in the slot of the height %v", math.Floor(height), height)
 	}
 }
+
+// A view that follows the settings of its plugin hears a change of them, and no change of another setting.
+func TestAViewFollowsTheSettingsOfItsPlugin(t *testing.T) {
+	f, stored := surfaceShell(t)
+	surface := terminalSurface(t, stored)
+	if reply := viewCall(t, f, stored, surface, "runtime.settings.on", nil); reply["error"] != nil {
+		t.Fatalf("the reply is %v", reply)
+	}
+	pushed := func() []map[string]any {
+		var values []map[string]any
+		for _, line := range stored.hostName {
+			var event struct {
+				Event string
+				Data  map[string]any
+			}
+			if text, found := strings.CutPrefix(line, "viewEvent "); found && json.Unmarshal([]byte(text), &event) == nil && event.Event == "settings" {
+				values = append(values, event.Data)
+			}
+		}
+		return values
+	}
+	f.run("core.settings.change", map[string]any{"key": "gap", "value": 2.0})
+	f.settle()
+	if got := pushed(); len(got) != 0 {
+		t.Fatalf("a change of another setting reached the view: %v", got)
+	}
+	f.run("core.settings.change", map[string]any{"key": "terminal.cursor.shape", "value": "beam"})
+	f.settle()
+	if got := pushed(); len(got) != 1 || got[0]["cursor.shape"] != "beam" {
+		t.Fatalf("the view received %v", got)
+	}
+}
