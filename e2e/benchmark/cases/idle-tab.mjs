@@ -1,16 +1,21 @@
 // The cost of an idle browser tab on a blank page, shared by the idle tab window check (e2e/idle-tab-memory.test.mjs) and its benchmark
 // (e2e/benchmark/idle-tab.test.mjs). The cost is the footprints of the web content processes of its documents, the page of its view
-// and its document region, plus the increase of the main web view, read from the sampler of the trace (`host.sampler.memory`,
-// docs/spec/performance-trace.md) through `log.query`. The page is a blank local page, so the cost covers the tab and not the content of a site.
+// and its document region, plus the growth of the process that draws the window: the main web view of a window with a page process,
+// and the host process of a window whose host.window reports pageProcess null, which the mygo host draws in its own process. Both
+// are read from the sampler of the trace (`host.sampler.memory`, docs/spec/performance-trace.md) through `log.query`. The page is a
+// blank local page, so the cost covers the tab and not the content of a site.
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 
 import { within } from "@soksak/window-check/app.mjs";
 import { allRows, tailOf } from "../../chains.mjs";
 import { fresh } from "../../fixture.mjs";
+import { b3Conditions, fixtureSettings } from "./b3-run.mjs";
+import { B3_SETTINGS } from "../measurements.mjs";
+import { performanceGoalBound } from "./performance-goals.mjs";
 
-/** The limit (KB) of the cost of an idle tab: the footprint of its documents plus the growth of the main web view. */
-export const IDLE_TAB_BOUND_KB = 50 * 1024;
+/** The limit (KB) of the cost of an idle tab: the footprint of its documents plus the growth of the process that draws the window. */
+export const IDLE_TAB_BOUND_KB = performanceGoalBound("IDLE_TAB_BOUND_KB", "atMost");
 /** Two consecutive readings of the document process that differ by less than this are a settled footprint. */
 const SETTLED_KB = 1024;
 /** The upper bound of the wait for settled readings; the sampler reads every five seconds. */
@@ -63,6 +68,21 @@ const settledOf = (name, match) => (rows) => {
   return { value: settledFootprint(footprints), state: `readings of ${name}: ${footprints.join(" ")} KB` };
 };
 
+/**
+ * The process whose growth the idle tab counts for the window `window` whose host.window reports `pageProcess`: `of` names it, and
+ * `settled(rows)` picks its settled footprint from the sampler rows. A window without a page process (null) counts the reading of
+ * the host process, the row that holds `rss_host_kb`; a window with one counts the `page` row of the window.
+ */
+export function idleTabGrowth({ window, pageProcess }) {
+  if (pageProcess === null) {
+    return { of: "host process", settled: settledOf("the host process", (fields) => Number.isInteger(fields.rss_host_kb)) };
+  }
+  if (!Number.isSafeInteger(pageProcess) || pageProcess <= 0) {
+    throw new Error(`host.window of ${window} reports pageProcess ${pageProcess}, neither a process id nor null`);
+  }
+  return { of: "main web view", settled: settledOf(`the main web view of ${window}`, (fields) => fields.role === "page" && fields.window === window) };
+}
+
 /** The sum of the footprints of the documents that `match` selects once the footprint of each document is settled. */
 export const settledDocumentsOf = (name, match) => (rows) => {
   const documents = new Map();
@@ -79,12 +99,14 @@ export const settledDocumentsOf = (name, match) => (rows) => {
 };
 
 /**
- * Opens a browser tab on the blank page in the active card and returns the settled documents of the tab, the main web view before
- * and after the tab, the growth of the main web view and the cost (documents plus growth), all in KB.
- * The tab must load the page and every reading must settle, or the recording fails.
+ * Opens a browser tab on the blank page in the active card and returns the settled documents of the tab, the process whose growth
+ * counts (`growthOf`, idleTabGrowth), its footprint before and after the tab, its growth and the cost (documents plus growth), the
+ * footprints in KB, and the B3 conditions of the prepared window. The tab must load the page and every reading must settle, or the
+ * recording fails.
  */
 export async function recordIdleTab(s) {
-  await fresh(s, { performanceTrace: true, log: { call: "debug" }, reads: ["host.sampler.memory"] });
+  await fresh(s, { ...fixtureSettings(B3_SETTINGS["idle-tab"]), reads: ["host.sampler.memory"] });
+  const conditions = await b3Conditions(s, B3_SETTINGS["idle-tab"]);
   const url = await serve(s);
   await s.until("core.surfaces",
     (list) => list.some((x) => x.visible && x.plugin === "browser" && x.exposes.includes("status browser.location")),
@@ -93,8 +115,8 @@ export async function recordIdleTab(s) {
   const card = grid.cards.find((c) => c.active);
   assert.ok(card, "the grid has no active card");
 
-  const main = settledOf(`the main web view of ${s.window}`, (fields) => fields.role === "page" && fields.window === s.window);
-  const mainBefore = await readings(s, await tailOf(s), main, "the settled main web view before the tab");
+  const growthOf = idleTabGrowth({ window: s.window, pageProcess: (await s.get("host.window")).pageProcess });
+  const growthBefore = await readings(s, await tailOf(s), growthOf.settled, `the settled ${growthOf.of} before the tab`);
   const { tab } = await s.run("core.card.split", { card: card.id, side: "right", plugin: "browser" });
   s.cleanup(() => s.run("core.tab.close", { tab }));
   await s.until("core.surfaces", (list) => list.some((x) => x.surface === tab && x.exposes.includes("status browser.location")),
@@ -106,17 +128,22 @@ export async function recordIdleTab(s) {
   const settled = await readings(s, loaded,
     settledDocumentsOf(`the documents of ${tab}`, (fields) => fields.role === "document" && fields.surface === tab),
     "the settled documents of the tab");
-  const mainAfter = await readings(s, loaded, main, "the settled main web view after the tab");
-  const growth = mainAfter - mainBefore;
-  return { settled, mainBefore, mainAfter, growth, cost: settled + growth };
+  const growthAfter = await readings(s, loaded, growthOf.settled, `the settled ${growthOf.of} after the tab`);
+  const growth = growthAfter - growthBefore;
+  return { settled, growthOf: growthOf.of, growthBefore, growthAfter, growth, cost: settled + growth, conditions };
 }
 
 /**
  * Fails when the cost of the idle tab is over IDLE_TAB_BOUND_KB. A cost that is not a finite number is rejected rather than compared.
  */
-export function assertIdleTabWithinBound({ settled, growth, cost }) {
+export function assertIdleTabWithinBound({ settled, growthOf, growth, cost }) {
   if (!Number.isFinite(cost)) throw new TypeError(`the idle tab cost must be a finite number of KB, found ${cost}`);
   if (cost > IDLE_TAB_BOUND_KB) {
-    throw new Error(`the idle tab costs ${cost} KB: documents ${settled} KB plus main web view growth ${growth} KB is over ${IDLE_TAB_BOUND_KB} KB`);
+    throw new Error(`the idle tab costs ${cost} KB: documents ${settled} KB plus ${growthOf} growth ${growth} KB is over ${IDLE_TAB_BOUND_KB} KB`);
   }
+}
+
+/** The B3 values of a recorded idle tab (e2e/benchmark/idle-tab.test.mjs): the cost and its document part, in KB. */
+export function idleTabB3Values({ settled, cost }) {
+  return { idleTabCostKb: cost, documentPartKb: settled };
 }

@@ -245,6 +245,36 @@ export function appPid(app) {
   return JSON.parse(readFileSync(join(app.configDir, "endpoint.json"), "utf8")).pid;
 }
 
+const windowRoles = jxa(`
+const found = Application("System Events").processes.whose({ unixId: input.pid });
+if (found.length === 0) return JSON.stringify(null);
+const windows = found[0].windows();
+const roles = [];
+for (const window of windows) {
+  roles.push(window.role());
+  for (const element of window.entireContents()) roles.push(element.role());
+}
+return JSON.stringify({ windows: windows.length, roles });`);
+
+/**
+ * The accessibility elements of the windows of an application as the accessibility API reads them (`read` is the reply of System
+ * Events: the number of windows and the role of each window and of each element in it): { windows, elements, roles }, where roles counts
+ * the elements of each role. `name` names the application in the errors.
+ */
+export function windowElementsOf(read, name) {
+  if (read === null) throw new Error(`System Events has no process with the pid of ${name}`);
+  if (read.windows === 0) throw new Error(`${name} has no window that the accessibility API reads`);
+  const roles = {};
+  for (const role of read.roles) roles[role] = (roles[role] ?? 0) + 1;
+  return { windows: read.windows, elements: read.roles.length, roles };
+}
+
+/** The accessibility elements of the windows of the application `app` (windowElementsOf). The terminal needs the Accessibility permission. */
+export function readWindowElements(app) {
+  requireTrusted();
+  return windowElementsOf(windowRoles({ pid: appPid(app) }), app.name);
+}
+
 /** Converts the center of a rect in the window (the result of s.rect) to screen coordinates. */
 export async function screenCenter(s, rect) {
   const { frame, content } = await s.get("host.window");

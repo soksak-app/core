@@ -7,10 +7,10 @@ import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
 import { tailOf } from "../chains.mjs";
-import { closeAddedMainPageWindows, readMainPageFootprint } from "./cases/main-page-footprint.mjs";
+import { closeAddedMainPageWindows, mainPageProcess, readMainPageFootprint } from "./cases/main-page-footprint.mjs";
 
 async function mainPageFact(session) {
-  const status = await session.until("host.window", (value) => Number.isSafeInteger(value.pageProcess) && value.pageProcess > 0,
+  const status = await session.until("host.window", (value) => mainPageProcess(value) !== undefined,
     `${session.window}: the main page has no WebContent process`);
   return { window: session.window, pageProcess: status.pageProcess };
 }
@@ -18,6 +18,8 @@ async function mainPageFact(session) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: one and two main-page process footprints are measured`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
+    // The mygo host has no main page; the benchmark fails before its first request that changes the window.
+    mainPageProcess(await s.get("host.window"));
     await fresh(s, { performanceTrace: true, log: { call: "debug" }, reads: ["host.sampler.memory"] });
     await s.windows(1, "the benchmark did not start with one window");
     const baselineWindows = await s.get("host.windows");

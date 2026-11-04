@@ -23,7 +23,8 @@
   },
   "specFiles": [
     "docs/spec/events.json",
-    "docs/spec/host-contract.md"
+    "docs/spec/host-contract.md",
+    "docs/spec/performance-goals.json"
   ],
   "dependencies": {
     "@soksak/client": "workspace:*",

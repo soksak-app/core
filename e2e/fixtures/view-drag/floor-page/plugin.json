@@ -1,0 +1,13 @@
+{
+  "id": "floorpage",
+  "name": "Floor page",
+  "description": "Benchmark fixture whose view page draws one colour and declares its composition without regions, the floor of the view drag benchmark.",
+  "surface": {
+    "composition": {
+      "kind": "view",
+      "page": "ui/page.html"
+    }
+  },
+  "mark": "F",
+  "icon": "<rect x=\"3\" y=\"3\" width=\"10\" height=\"10\" rx=\"2\"/>"
+}

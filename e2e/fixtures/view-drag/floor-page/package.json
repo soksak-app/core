@@ -1,0 +1,11 @@
+{
+  "name": "@soksak-check/floor-page",
+  "version": "0.0.34",
+  "private": true,
+  "type": "module",
+  "description": "Benchmark fixture: a view whose page draws one colour and runs no code but the declaration of its composition.",
+  "license": "MIT",
+  "repository": "git+https://github.com/soksak-app/core.git",
+  "engines": { "soksak": "*" },
+  "files": ["plugin.json", "ui"]
+}

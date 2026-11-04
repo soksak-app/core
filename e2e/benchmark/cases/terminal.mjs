@@ -3,8 +3,9 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { availableParallelism, loadavg } from "node:os";
 import { join } from "node:path";
 
-import { drag, keepCommonSettings } from "@soksak/window-check/app.mjs";
+import { drag, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
+import { runViewMeasurements } from "@soksak/window-check/view-metrics.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, monotonicTimeMs,
   mapViewContentFramesToCapture, requireViewContentFrameCoverage, rightEdgeWidthDragPlan,
   rootNativePlacementBeforeCapture, selectOneShotViewSourceFrame,
@@ -14,7 +15,10 @@ import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFr
   VIEW_GEOMETRY_COLOR_TOLERANCE }
   from "../../view-frame-geometry.mjs";
 import { outside, terminalMarks } from "../../outside.mjs";
-import { readScreenUntil } from "../../terminal-screen.mjs";
+import { readScreenUntil, textLines } from "../../terminal-screen.mjs";
+import { fresh, terminalCheckShell } from "../../fixture.mjs";
+import { b3Conditions, b3Target, fixtureSettings, withB3Out } from "./b3-run.mjs";
+import { B3_MEASUREMENTS, B3_SETTINGS } from "../measurements.mjs";
 import { assertDragPerformance, assertHeldStatesShown, assertRoundTrips, measureDragPerformance,
   pointerLag, transactionCadence } from "../../drag-measurement.mjs";
 
@@ -24,39 +28,70 @@ export async function terminalFirstContentFrame({ captured, rect, directory, rec
   return firstContentFrame({ captured, rect, expected: "sh-3.2$", language: "en-US", directory, recognizeFrame });
 }
 
-/** Terminal content proof uses the initial fixture-shell prompt without adding a command or waiting on readiness as proof. */
-export const terminalViewDescriptor = Object.freeze({
-  plugin: "terminal",
-  params: undefined,
-  expectedContent: "sh-3.2$",
-  language: "en-US",
-  readinessStatus: "terminal.session",
-  readiness: async (s, surface) => {
-    const session = await s.until("terminal.session", (value) => value?.sessionId && value.cols > 0 && value.rows > 0,
-      `terminal view ${surface} did not open its session`, { surface });
-    const lines = await readScreenUntil(s, surface, (rows) => rows.some((line) => line.startsWith("sh-3.2$")),
-      `terminal view ${surface} did not display its initial shell prompt`);
-    const rect = await s.rect("terminal.view", undefined, surface);
-    assert.ok(rect.width > 0 && rect.height > 0, `terminal view ${surface} has no visible content region`);
-    const history = await s.run("terminal.view.history", {}, surface);
-    assert.deepEqual(history, { length: 1 }, `terminal view ${surface} did not begin with one root history entry`);
-    return { sessionId: session.sessionId, promptLines: lines, historyEntries: history.length, regionHistoryEntries: 0 };
-  },
-  readDocument: async (s, surface) => {
-    const history = await s.run("terminal.view.history", {}, surface);
-    return { historyEntries: history.length, regionHistoryEntries: 0 };
-  },
-  startContentTrace: async (s, surface) => {
-    const result = await s.run("terminal.view.frames", { action: "start" }, surface);
-    assert.equal(result?.enabled, true, `terminal view ${surface} content-frame observer did not start`);
-    return result;
-  },
-  stopContentTrace: async (s, surface) => {
-    const result = await s.run("terminal.view.frames", { action: "stop" }, surface);
-    assert.deepEqual(result, { enabled: false }, `terminal view ${surface} content-frame observer did not stop`);
-    return result;
-  },
-});
+/** The plugins whose tab is a terminal view: `terminal` and `term` declare the same statuses and commands under their own id. */
+const TERMINAL_PLUGINS = ["terminal", "term"];
+
+/**
+ * Reads the screen of the terminal view `surface` of `plugin` once (`<plugin>.screen.read`) and waits by notification until `predicate`
+ * holds for its lines (`<plugin>.screen`). A resize is also reflected in this read.
+ */
+export async function readTabScreenUntil(s, plugin, surface, predicate, message) {
+  await s.run(`${plugin}.screen.read`, {}, surface);
+  const screen = await s.until(`${plugin}.screen`, (lines) => predicate(textLines({ lines })), message, { surface });
+  return textLines({ lines: screen });
+}
+
+/**
+ * The view descriptor of a terminal view of `plugin` (`terminal` or `term`). Terminal content proof uses the initial fixture-shell
+ * prompt without adding a command or waiting on readiness as proof.
+ */
+export function terminalViewDescriptorOf(plugin) {
+  if (!TERMINAL_PLUGINS.includes(plugin)) throw new Error(`a terminal view is a view of the terminal or the term plugin, not ${plugin}`);
+  return Object.freeze({
+    plugin,
+    params: undefined,
+    expectedContent: "sh-3.2$",
+    language: "en-US",
+    readinessStatus: `${plugin}.session`,
+    readiness: async (s, surface) => {
+      const session = await s.until(`${plugin}.session`, (value) => value?.sessionId && value.cols > 0 && value.rows > 0,
+        `${plugin} view ${surface} did not open its session`, { surface });
+      const lines = await readTabScreenUntil(s, plugin, surface, (rows) => rows.some((line) => line.startsWith("sh-3.2$")),
+        `${plugin} view ${surface} did not display its initial shell prompt`);
+      const rect = await s.rect(`${plugin}.view`, undefined, surface);
+      assert.ok(rect.width > 0 && rect.height > 0, `${plugin} view ${surface} has no visible content region`);
+      const history = await s.run(`${plugin}.view.history`, {}, surface);
+      assert.deepEqual(history, { length: 1 }, `${plugin} view ${surface} did not begin with one root history entry`);
+      return { sessionId: session.sessionId, promptLines: lines, historyEntries: history.length, regionHistoryEntries: 0 };
+    },
+    readDocument: async (s, surface) => {
+      const history = await s.run(`${plugin}.view.history`, {}, surface);
+      return { historyEntries: history.length, regionHistoryEntries: 0 };
+    },
+    startContentTrace: async (s, surface) => {
+      const result = await s.run(`${plugin}.view.frames`, { action: "start" }, surface);
+      assert.equal(result?.enabled, true, `${plugin} view ${surface} content-frame observer did not start`);
+      return result;
+    },
+    stopContentTrace: async (s, surface) => {
+      const result = await s.run(`${plugin}.view.frames`, { action: "stop" }, surface);
+      assert.deepEqual(result, { enabled: false }, `${plugin} view ${surface} content-frame observer did not stop`);
+      return result;
+    },
+  });
+}
+
+/** The view descriptor of the terminal plugin. */
+export const terminalViewDescriptor = terminalViewDescriptorOf("terminal");
+
+/**
+ * The settings that give a terminal view of `plugin` the check shell, whose prompt does not depend on the profile of the login shell.
+ * The fixture of the window checks sets it for the `terminal` plugin (fresh), so only `term` adds its own.
+ */
+export function terminalShellSettings(plugin) {
+  if (!TERMINAL_PLUGINS.includes(plugin)) throw new Error(`a terminal view is a view of the terminal or the term plugin, not ${plugin}`);
+  return plugin === "term" ? { "term.shell": terminalCheckShell("check") } : {};
+}
 
 /** Persists the original drag transaction rows before any frame analysis can fail. */
 export function writeTerminalDragLayouts(directory, layouts) {
@@ -210,12 +245,13 @@ export const TERMINAL_GEOMETRY_BACKGROUND = Object.freeze([0, 80, 180]);
 const TERMINAL_GEOMETRY = Object.freeze({ contentColor: TERMINAL_GEOMETRY_BACKGROUND, cardColor: [25, 27, 36],
   planeColor: [16, 17, 23], borderColors: [[43, 46, 61], [34, 36, 47], [255, 179, 107]], colorTolerance: 3 });
 
-/** Applies the terminal measurement color through OSC 11 and waits for its output marker in the rendered screen. */
-export async function setTerminalGeometryBackground(session, surface) {
+/** Applies the terminal measurement color to the terminal view `surface` of `plugin` through OSC 11 and waits for its output marker. */
+export async function setTerminalGeometryBackground(session, surface, plugin) {
+  if (!TERMINAL_PLUGINS.includes(plugin)) throw new Error(`a terminal view is a view of the terminal or the term plugin, not ${plugin}`);
   const hex = TERMINAL_GEOMETRY_BACKGROUND.map((value) => value.toString(16).padStart(2, "0")).join("/");
   const marker = `TERMINAL-GEOMETRY-${surface}`;
-  await session.run("terminal.input", { bytes: `printf '\\033]11;rgb:${hex}\\007${marker}\\n'\r` }, surface);
-  await readScreenUntil(session, surface, (lines) => lines.some((line) => line.startsWith(marker)),
+  await session.run(`${plugin}.input`, { bytes: `printf '\\033]11;rgb:${hex}\\007${marker}\\n'\r` }, surface);
+  await readTabScreenUntil(session, plugin, surface, (lines) => lines.some((line) => line.startsWith(marker)),
     `${surface} did not finish the terminal geometry background change`);
 }
 
@@ -227,7 +263,7 @@ export function measureTerminalLayoutFrame(frame, { cornerRadiusPt, targetRect }
 function terminalDocument(host, surface) {
   const row = host.documents.find((document) => document.surface === surface && document.document === "");
   assert.ok(row?.visible && row.frame.width > 0 && row.frame.height > 0,
-    `terminal view ${surface} has no visible root document frame`);
+    `view ${surface} has no visible root document frame`);
   return row;
 }
 
@@ -243,9 +279,10 @@ export function terminalRasterTargetRectPt(host, surface) {
   return { left: frame.x, top: frame.y, right: frame.x + frame.width, bottom: frame.y + frame.height };
 }
 
-async function terminalSlotInsets(s, card, surface) {
+/** The insets of the slot of the terminal view `surface` of `plugin` in its card `card`, in points, as the layout declares them. */
+export async function terminalSlotInsets(s, plugin, card, surface) {
   const [grid, surfaces, rect] = await Promise.all([
-    s.get("core.grid"), s.get("core.surfaces"), s.rect("terminal.view", undefined, surface),
+    s.get("core.grid"), s.get("core.surfaces"), s.rect(`${plugin}.view`, undefined, surface),
   ]);
   return declaredSlotInsets({ grid, surfaces, card, surface,
     regionRect: { x: rect.x, y: rect.y, w: rect.width, h: rect.height } });
@@ -287,7 +324,7 @@ async function terminalLayoutObservation(t, s, descriptor, surface, card, direct
     { requestAtMs: beforeChangeTimeMs, nativePlacement });
   const source = sourceSelection.frame;
   assert.ok(source, `terminal observer has no source frame matching its final post-request native placement projection: ${JSON.stringify(sourceSelection.failure)}`);
-  const slotInsetsPt = await terminalSlotInsets(s, card, surface);
+  const slotInsetsPt = await terminalSlotInsets(s, descriptor.plugin, card, surface);
   const targetRect = { x: root.frame.x, y: root.frame.y,
     width: root.frame.width, height: root.frame.height };
   const measured = decoded.map((frame) => measureTerminalLayoutFrame(frame, { cornerRadiusPt, targetRect }));
@@ -341,7 +378,7 @@ async function terminalDragObservation(t, s, descriptor, surface, card, configDi
   const gestureEndedFrameIndex = frameAtOrAfter(captured, run.ticks.at(-1), "terminal drag end");
   assert.ok(gestureEndedFrameIndex >= firstGestureFrameIndex,
     "terminal drag recording does not cover the complete requested gesture");
-  const slotInsetsPt = await terminalSlotInsets(s, card, surface);
+  const slotInsetsPt = await terminalSlotInsets(s, descriptor.plugin, card, surface);
   const grid = await s.get("core.grid");
   const surfaces = await s.get("core.surfaces");
   const rootSlotInsetsPt = declaredSlotInsets({ grid, surfaces, card, surface });
@@ -414,7 +451,7 @@ export async function collectTerminalViewMeasurements(t, s, descriptor, configDi
   });
   const readinessEvidence = await waitForViewReadiness(s, surface, descriptor);
   assert.equal(readinessEvidence.historyEntries, 1, `terminal view ${surface} did not begin at initial history`);
-  await setTerminalGeometryBackground(s, surface);
+  await setTerminalGeometryBackground(s, surface, descriptor.plugin);
   mkdirSync(join(configDir, "logs"), { recursive: true });
   const directory = mkdtempSync(join(configDir, "logs", "terminal-view-layout-"));
   const layout = await terminalLayoutObservation(t, s, descriptor, surface, card, directory, cornerRadiusPt);
@@ -439,34 +476,70 @@ export async function collectTerminalViewMeasurements(t, s, descriptor, configDi
   };
 }
 
-/** Runs the existing untraced terminal drag capture and returns its exact pixel and transaction evidence. */
-export async function collectTerminalDrag(t, s, terminal, configDir) {
-  assert.equal(process.env.SOKSAK_PERFORMANCE_TRACE, undefined,
-    "the benchmark requires performance tracing to be unset");
+/** The plan of the terminal drag of the view drag benchmark: the first boundary on the x axis, 250 pt out and back over 400 ms, twice. */
+export const TERMINAL_DRAG_PLAN = Object.freeze({ axis: "x", line: 1, dx: 250, dy: 0, ms: 400, times: 2 });
+
+/**
+ * Prepares the untraced drag capture of the terminal view of the fixture `terminal` (prepareViewDrag) and returns { capture }, whose
+ * capture() runs the drag and returns its exact pixel and transaction evidence.
+ */
+export async function prepareTerminalDrag(t, s, terminal, configDir) {
   assert.equal(process.env.SOKSAK_VT_TRACE_DIR, undefined,
     "the benchmark requires renderer tracing to be unset");
+  assert.equal((await s.get("terminal.cursor", terminal.surface)).render, null,
+    "the renderer trace is enabled in the application");
+  return prepareViewDrag(t, s, terminal.surface, configDir, async (card) => {
+    await readScreenUntil(s, terminal.surface, (lines) => lines.some((line) => line.includes("$")),
+      `${terminal.surface} did not show a shell prompt before the geometry measurement`);
+    await setTerminalGeometryBackground(s, terminal.surface, "terminal");
+    await s.presented();
+    return terminalSlotInsets(s, "terminal", card, terminal.surface);
+  });
+}
+
+/**
+ * Prepares the drag capture of prepareTerminalDrag on the floor page view `surface` (FLOOR_PAGE of cases/floor-page.mjs), the active tab
+ * of the terminal card, whose page draws the measurement colour over its whole frame, so its slot insets are those of the view itself.
+ */
+export async function prepareFloorDrag(t, s, surface, configDir) {
+  return prepareViewDrag(t, s, surface, configDir, async (card) => {
+    await s.presented();
+    const [grid, surfaces] = await Promise.all([s.get("core.grid"), s.get("core.surfaces")]);
+    return declaredSlotInsets({ grid, surfaces, card, surface });
+  });
+}
+
+/**
+ * Prepares the untraced drag capture of the view `surface`, the active tab of the terminal card: it requires the trace off and the
+ * default policy, sets the layout of the terminal drag and the measurement colour, and reads the marks and the rectangle that the capture
+ * measures. `prepare(card)` gives the view the measurement colour and returns the insets of its measured rectangle in its card slot.
+ * Returns { capture }: capture() runs TERMINAL_DRAG_PLAN with capture and returns its evidence. The drags of the view drag benchmark run
+ * between the preparation and the capture under this layout; a drag goes out and back, so the card returns to the prepared rectangle.
+ */
+async function prepareViewDrag(t, s, surface, configDir, prepare) {
+  assert.equal(process.env.SOKSAK_PERFORMANCE_TRACE, undefined,
+    "the benchmark requires performance tracing to be unset");
   const { values } = await s.get("core.settings");
   const cornerRadiusPt = effectiveCardCornerRadiusPt(values);
   assert.equal(values["diagnostics.performance"], false, "the application performance trace is enabled");
   assert.deepEqual(values["diagnostics.log"], {}, "the application is not using its default error-only log policy");
-  assert.equal((await s.get("terminal.cursor", terminal.surface)).render, null,
-    "the renderer trace is enabled in the application");
   await keepCommonSettings(s);
   await s.run("core.settings.link", { place: "window-right", plugin: "terminal", set: "set-install", scope: "common" });
   await s.until("core.rail", (rail) => rail.groups.length === 1, "the terminal override drew no rail");
   const marks = { ...await terminalMarks(s), colour: TERMINAL_GEOMETRY_BACKGROUND };
-  await readScreenUntil(s, terminal.surface, (lines) => lines.some((line) => line.includes("$")),
-    `${terminal.surface} did not show a shell prompt before the geometry measurement`);
-  await setTerminalGeometryBackground(s, terminal.surface);
-  await s.presented();
   const grid = await s.get("core.grid");
-  const card = grid.cards.find((item) => item.active);
-  assert.ok(card?.id, "terminal drag benchmark has no active card");
-  const slotInsetsPt = await terminalSlotInsets(s, card.id, terminal.surface);
-  const root = terminalDocument(await s.get("host.window"), terminal.surface);
+  const card = grid.cards.find((item) => item.id === "terminal");
+  assert.equal(card?.active, surface, `the dragged view ${surface} is not the active tab of the terminal card`);
+  const slotInsetsPt = await prepare(card.id);
+  const root = terminalDocument(await s.get("host.window"), surface);
   const targetRect = { x: root.frame.x, y: root.frame.y,
     width: root.frame.width, height: root.frame.height };
-  const run = await drag(t, s, { axis: "x", line: 1, dx: 250, dy: 0, ms: 400, times: 2 }, { capture: true });
+  return { capture: () => captureViewDrag(t, s, configDir, { marks, cornerRadiusPt, slotInsetsPt, targetRect }) };
+}
+
+/** Runs the captured drag that prepareViewDrag prepared and returns its evidence. */
+async function captureViewDrag(t, s, configDir, { marks, cornerRadiusPt, slotInsetsPt, targetRect }) {
+  const run = await drag(t, s, TERMINAL_DRAG_PLAN, { capture: true });
   mkdirSync(join(configDir, "logs"), { recursive: true });
   const directory = mkdtempSync(join(configDir, "logs", "view-drag-benchmark-"));
   writeTerminalDragLayouts(directory, run.layouts);
@@ -530,4 +603,35 @@ export async function collectTerminalDrag(t, s, terminal, configDir) {
     },
     assertPerformance: () => assertDragPerformance(times, lag, refreshRate),
   };
+}
+
+/**
+ * The view benchmark of the terminal views of `plugin` (e2e/benchmark/terminal-view.test.mjs, e2e/benchmark/term-view.test.mjs): it
+ * collects the measurements of the pass values (i), (ii), (iii), (iii-b), (v) and (viii) and judges them with the DOM mount baseline that
+ * domMountBaselineMs gives for `baselinesMs` (null for a plugin without a recorded value). B3 output (SOKSAK_B3_OUT, b3-run.mjs): the
+ * keys of `<plugin>-view` in B3_MEASUREMENTS of measurements.mjs.
+ */
+export async function runTerminalViewBenchmark(t, app, plugin, baselinesMs) {
+  const descriptor = terminalViewDescriptorOf(plugin);
+  const s = await open(t, app);
+  await withB3Out(b3Target(process.env, B3_MEASUREMENTS[`${plugin}-view`]), async (run) => {
+    await fresh(s, { ...fixtureSettings(B3_SETTINGS[`${plugin}-view`]), settings: terminalShellSettings(plugin), reads: [
+      "host.trace.view.process-request",
+      "host.trace.view.process-ready",
+      `plugin.${plugin}.view.content_frame`,
+    ] });
+    run.conditions = await b3Conditions(s, B3_SETTINGS[`${plugin}-view`]);
+    const result = await runViewMeasurements(t, s, {
+      plugin,
+      baselinesMs,
+      collect: () => collectTerminalViewMeasurements(t, s, descriptor, app.configDir),
+    });
+    const directory = join(app.configDir, "logs", `${plugin}-view-metrics`);
+    mkdirSync(directory, { recursive: true });
+    const path = join(directory, `${process.pid}.json`);
+    writeFileSync(path, `${JSON.stringify(result, null, 2)}\n`);
+    t.diagnostic(`${plugin} view measurement evidence ${path}`);
+    assert.equal(result.evaluation.plugin, plugin);
+    assert.equal(result.evaluation.host, app.name);
+  });
 }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { closeAddedMainPageWindows, readMainPageFootprint, reduceMainPageFootprint }
+import { closeAddedMainPageWindows, mainPageProcess, readMainPageFootprint, reduceMainPageFootprint }
   from "../benchmark/cases/main-page-footprint.mjs";
 
 const TEST_TIMEOUT = 5000;
@@ -196,4 +196,12 @@ test("main-page footprint cleanup attempts every added window and preserves clos
     (error) => error instanceof AggregateError && /could not close every added window/.test(error.message));
   assert.deepEqual(attempted, ["added-a", "added-b"]);
   assert.ok(windows.includes("main"), "cleanup closed the baseline window");
+});
+
+test("the main page footprint fails for a window without a page process, which the mygo host reports",
+  { timeout: TEST_TIMEOUT }, () => {
+  assert.throws(() => mainPageProcess({ pageProcess: null, frames: 12, commandBuffers: 12, settled: true }),
+    new Error("the mygo host has no main page"));
+  assert.equal(mainPageProcess({ pageProcess: 401 }), 401);
+  assert.equal(mainPageProcess({ pageProcess: 0 }), undefined);
 });

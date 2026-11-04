@@ -7,7 +7,7 @@ import test from "node:test";
 import { findFirstChangedSlotFrame } from "../view-frame-geometry.mjs";
 import * as terminalCase from "../benchmark/cases/terminal.mjs";
 import { terminalDragGeometryFrame, terminalFirstContentFrame, terminalSourceContentFrame,
-  terminalViewDescriptor, writeTerminalDragLayouts, measureTerminalLayoutFrame,
+  terminalShellSettings, terminalViewDescriptor, terminalViewDescriptorOf, writeTerminalDragLayouts, measureTerminalLayoutFrame,
   setTerminalGeometryBackground, terminalRasterTargetRectPt, TERMINAL_GEOMETRY_BACKGROUND }
   from "../benchmark/cases/terminal.mjs";
 
@@ -206,14 +206,17 @@ test("terminal geometry background uses one distinctive OSC 11 color and waits f
       return lines;
     },
   };
-  await setTerminalGeometryBackground(session, surface);
-  const hex = TERMINAL_GEOMETRY_BACKGROUND.map((value) => value.toString(16).padStart(2, "0")).join("/");
-  assert.deepEqual(calls, [
-    { name: "terminal.input", params: { bytes: `printf '\\033]11;rgb:${hex}\\007${marker}\\n'\r` }, surface },
-    { name: "terminal.screen.read", params: {}, surface },
-    { name: "terminal.screen", message: `${surface} did not finish the terminal geometry background change`,
-      options: { surface } },
-  ]);
+  for (const plugin of ["terminal", "term"]) {
+    calls.length = 0;
+    await setTerminalGeometryBackground(session, surface, plugin);
+    const hex = TERMINAL_GEOMETRY_BACKGROUND.map((value) => value.toString(16).padStart(2, "0")).join("/");
+    assert.deepEqual(calls, [
+      { name: `${plugin}.input`, params: { bytes: `printf '\\033]11;rgb:${hex}\\007${marker}\\n'\r` }, surface },
+      { name: `${plugin}.screen.read`, params: {}, surface },
+      { name: `${plugin}.screen`, message: `${surface} did not finish the terminal geometry background change`,
+        options: { surface } },
+    ]);
+  }
 });
 
 test("terminal drag layout evidence is written before frame analysis", { timeout: 5000 }, () => {
@@ -320,4 +323,34 @@ test("terminal first-content evidence requires the fixed initial shell prompt in
     timeMs: 10,
     proof: { expected: "sh-3.2$", actual: "sh-3.2$", lines: ["sh-3.2$"] },
   });
+});
+
+test("the term view descriptor reads the statuses and commands of the term plugin", { timeout: 5000 }, async () => {
+  const term = terminalViewDescriptorOf("term");
+  assert.equal(term.plugin, "term");
+  assert.equal(term.readinessStatus, "term.session");
+  assert.equal(term.expectedContent, "sh-3.2$");
+  const calls = [];
+  const session = {
+    async run(name, params, surface) {
+      calls.push({ name, params, surface });
+      if (name === "term.view.history") return { length: 1 };
+      if (name === "term.view.frames") return params.action === "start"
+        ? { enabled: true, sourceClock: { documentTimeOriginMs: 1000, sourceNowMs: 20, sourceResolutionMs: 1 } }
+        : { enabled: false };
+      throw new Error(`unexpected command ${name}`);
+    },
+  };
+  assert.deepEqual(await term.readDocument(session, "surface-a"), { historyEntries: 1, regionHistoryEntries: 0 });
+  await term.startContentTrace(session, "surface-a");
+  await term.stopContentTrace(session, "surface-a");
+  assert.deepEqual(calls.map(({ name }) => name), ["term.view.history", "term.view.frames", "term.view.frames"]);
+  assert.equal(terminalViewDescriptorOf("terminal").readinessStatus, terminalViewDescriptor.readinessStatus);
+  assert.throws(() => terminalViewDescriptorOf("browser"), new Error("a terminal view is a view of the terminal or the term plugin, not browser"));
+});
+
+test("the shell of a terminal view is the check shell of its plugin", { timeout: 5000 }, () => {
+  assert.deepEqual(Object.keys(terminalShellSettings("term")), ["term.shell"]);
+  assert.deepEqual(terminalShellSettings("terminal"), {});
+  assert.throws(() => terminalShellSettings("browser"), new Error("a terminal view is a view of the terminal or the term plugin, not browser"));
 });
