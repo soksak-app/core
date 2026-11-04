@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -13,7 +14,7 @@ import (
 
 // The Go resolution gives the items of each published contribution case.
 func TestContributionCases(t *testing.T) {
-	text, err := os.ReadFile("../../plugin-api/contract/contributions.json")
+	text, err := os.ReadFile(filepath.Join("testdata", "contributions.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

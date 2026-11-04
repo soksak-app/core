@@ -15,6 +15,8 @@ test('each language host library and the mygo workbench hold their copies of the
   {source:'packages/workbench/exposure.json',copy:'packages/workbench-mygo/src/exposure.json'},
   {source:'packages/workbench/shortcuts.json',copy:'packages/workbench-mygo/src/shortcuts.json'},
   {source:'packages/workbench/workbench.json',copy:'packages/workbench-mygo/src/workbench.json'},
+  {source:'packages/plugin-api/contract/contributions.json',copy:'packages/workbench-mygo/tests/testdata/contributions.json'},
+  {source:'apps/mygo/environment.json',copy:'packages/workbench-mygo/tests/testdata/application-environment.json'},
  ]);
 });
 

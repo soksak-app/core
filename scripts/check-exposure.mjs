@@ -20,13 +20,15 @@ const WORKBENCH = join(ROOT, "packages/workbench");
 // A plugin repository reads the names of the core declarations from this file of plugin-api. It is created from the workbench declarations.
 const CORE_EXPOSURE = join(ROOT, "packages/plugin-api/core-exposure.json");
 
-// The copies of the workbench declarations, each embedded by the package that reads it.
+// The copies of the declarations of another package, each held by the package that reads it.
 export const DECLARATION_COPIES = Object.freeze([
   { source: "packages/workbench/workbench.json", copy: "packages/host/go/src/workbench.json" },
   { source: "packages/workbench/workbench.json", copy: "packages/host/rust/src/workbench.json" },
   { source: "packages/workbench/exposure.json", copy: "packages/workbench-mygo/src/exposure.json" },
   { source: "packages/workbench/shortcuts.json", copy: "packages/workbench-mygo/src/shortcuts.json" },
   { source: "packages/workbench/workbench.json", copy: "packages/workbench-mygo/src/workbench.json" },
+  { source: "packages/plugin-api/contract/contributions.json", copy: "packages/workbench-mygo/tests/testdata/contributions.json" },
+  { source: "apps/mygo/environment.json", copy: "packages/workbench-mygo/tests/testdata/application-environment.json" },
 ]);
 
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));

@@ -110,7 +110,7 @@ func TestTheFirstResponderOutsideTheWebViewsFollowsTheMainPage(t *testing.T) {
 	named := map[uint64]string{10: "tab-view"}
 	surface := "tab-view"
 	framework = pagelessFramework{}
-	if content, want := windowResponder("MygoView", 0, 0, false, named, nil, 0), (WindowResponder{Class: "MygoView", Owner: "workbench"}); !reflect.DeepEqual(content, want) {
+	if content, want := windowResponder("ContentView", 0, 0, false, named, nil, 0), (WindowResponder{Class: "ContentView", Owner: "workbench"}); !reflect.DeepEqual(content, want) {
 		t.Fatalf("content view responder %+v, want %+v", content, want)
 	}
 	if view, want := windowResponder("NativeRegion", 0, 10, false, named, nil, 0), (WindowResponder{Class: "NativeRegion", Owner: "native", Surface: &surface}); !reflect.DeepEqual(view, want) {

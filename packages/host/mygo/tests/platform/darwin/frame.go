@@ -1,7 +1,7 @@
 //go:build darwin
 
-// Package support holds what the tests of the mygo host cannot write in a test file, which takes no cgo.
-package support
+// Package darwin holds what the tests of the mygo host cannot write in a test file, which takes no cgo.
+package darwin
 
 /*
 #cgo LDFLAGS: -framework CoreFoundation -framework IOSurface

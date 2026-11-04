@@ -16,15 +16,15 @@ import (
 
 // installedDocument is the document of the installed plugins with one plugin of a view and one without a surface.
 const installedDocument = `{"plugins": [
-	{"id": "terminal", "package": "@soksak/plugin-terminal", "version": "1.0.0", "sidecars": {"@soksak/sidecar-vt": {}},
+	{"id": "terminal", "package": "@scope/plugin-terminal", "version": "1.0.0", "sidecars": {"@scope/sidecar-vt": {}},
 		"manifest": {"id": "terminal", "name": "터미널", "mark": "◊",
-			"dependencies": {"@soksak/sidecar-vt": "^1.0.0"},
+			"dependencies": {"@scope/sidecar-vt": "^1.0.0"},
 			"exposes": {"status": [{"name": "terminal.screen"}], "commands": [{"name": "terminal.drop"}, {"name": "terminal.input"}, {"name": "terminal.close", "timeout": 40}]},
 			"data": {"notes": {"schema": {"type": "string"}, "default": "none", "format": 2},
 				"marks": {"schema": {"type": "array", "items": {"type": "string"}}, "default": ["start"]}},
 			"settings": {"cursor.shape": {"type": "enum", "default": "block", "values": ["block", "beam"]}, "shell": {"type": "text", "default": ""}},
 			"surface": {"menu": [{"title": "닫기", "command": "terminal.close"}], "drop": "terminal.drop", "composition": {"kind": "view", "page": "ui/terminal.html", "regions": [{"name": "view", "kind": "image"}]}}}},
-	{"id": "browser", "package": "@soksak/plugin-browser", "version": "1.0.0",
+	{"id": "browser", "package": "@scope/plugin-browser", "version": "1.0.0",
 		"diagnostics": {"module": "ui/diagnostics.js", "exposes": {"status": [{"name": "browser.probe"}]}},
 		"manifest": {"id": "browser", "name": "브라우저", "mark": "www",
 			"surface": {"composition": {"kind": "view", "page": "ui/index.html"}}}}
@@ -368,7 +368,7 @@ func TestViewCallOfAnUnservedCommandFails(t *testing.T) {
 func TestViewCallSubscribesItsSidecar(t *testing.T) {
 	f, stored := surfaceShell(t)
 	surface := anySurface(t, stored)
-	reply := viewCall(t, f, stored, surface, "runtime.sidecar.on", map[string]any{"id": surface, "sidecar": "@soksak/sidecar-vt"})
+	reply := viewCall(t, f, stored, surface, "runtime.sidecar.on", map[string]any{"id": surface, "sidecar": "@scope/sidecar-vt"})
 	if reply["error"] != nil {
 		t.Fatalf("the reply is %v", reply)
 	}

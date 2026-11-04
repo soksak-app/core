@@ -832,7 +832,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/package.json", symbol: "\"head-fit.js\"," },
       { file: "packages/plugin-api/index.js", symbol: "export function importSpecifiers(source) {" },
       { file: "packages/workbench/staged.js", symbol: "export function missingPageReferences(out, page) {" },
-      { file: "packages/workbench/stage.mjs", symbol: "const missing = STAGED.pages.flatMap((page) => missingPageReferences(target, page));" },
+      { file: "packages/workbench/stage.mjs", symbol: "const missing = noMainPage ? [] : STAGED.pages.flatMap((page) => missingPageReferences(target, page));" },
     ],
     tests: [
       { file: "packages/workbench/test/stage.test.mjs", id: "staging holds every file that a staged page reaches, in a release and in a diagnostic build" },

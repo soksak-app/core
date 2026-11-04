@@ -28,7 +28,7 @@ import (
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 	adapter "github.com/soksak-app/core/packages/host/mygo/src"
-	"github.com/soksak-app/core/packages/host/mygo/tests/support"
+	"github.com/soksak-app/core/packages/host/mygo/tests/platform/darwin"
 )
 
 // box is where a card shows the surface of a test.
@@ -115,7 +115,7 @@ func startViewSession() (*viewSession, error) {
 	files := map[string]string{
 		filepath.Join(config, "plugins", "installed.json"): `{"format": 3, "plugins": {"probe": {"version": "0.2.0", "path": "plugins/probe/0.2.0",
 			"enabled": true, "sidecars": {}}}, "sidecars": {}}`,
-		filepath.Join(folder, "package.json"): `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "*"}, "files": ["plugin.json", "ui"]}`,
+		filepath.Join(folder, "package.json"): `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "*"}}`,
 		filepath.Join(folder, "plugin.json"):  `{"id": "probe", "name": "Probe", "description": "Sample."}`,
 		filepath.Join(folder, "ui/page.html"): `<!doctype html><title>view</title><body style="background: #204080"><input autofocus>`,
 	}
@@ -425,9 +425,9 @@ func TestE2EALeasedImageRegionHoldsItsFrameWhilePresented(t *testing.T) {
 		return placed && width > 0 && height > 0
 	})
 	nonce := [16]byte{1, 2, 3}
-	frames := make([]*support.Frame, 3)
+	frames := make([]*darwin.Frame, 3)
 	for index := range frames {
-		if frames[index], err = support.NewFrame(width, height, nonce); err != nil {
+		if frames[index], err = darwin.NewFrame(width, height, nonce); err != nil {
 			t.Fatal(err)
 		}
 		defer frames[index].Close()

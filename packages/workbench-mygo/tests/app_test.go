@@ -242,8 +242,8 @@ func TestPluginsApplyStartsTheWorkbenchAgain(t *testing.T) {
 }
 
 // installedSession is the document of the installed plugins with a plugin that keeps a background session.
-const installedSession = `{"plugins": [{"id": "session", "package": "@soksak/plugin-session", "version": "1.0.0", "manifest": {
-	"background": {"sidecar": "@soksak/sidecar-session", "operation": "open", "settings": {"shell": "shell"}},
+const installedSession = `{"plugins": [{"id": "session", "package": "@scope/plugin-session", "version": "1.0.0", "manifest": {
+	"background": {"sidecar": "@scope/sidecar-session", "operation": "open", "settings": {"shell": "shell"}},
 	"settings": {"shell": {"type": "text", "default": "login"}, "other": {"type": "text", "default": "x"}},
 	"surface": {"opens": {"extensions": ["log"]}}}}]}`
 
@@ -389,8 +389,8 @@ func TestAShownTabShowsTheFailureOfItsImageDetach(t *testing.T) {
 }
 
 // installedSessionView is installedSession with a plugin that stands in a view of its tab.
-const installedSessionView = `{"plugins": [{"id": "session", "package": "@soksak/plugin-session", "version": "1.0.0", "manifest": {
-	"background": {"sidecar": "@soksak/sidecar-session", "operation": "open"},
+const installedSessionView = `{"plugins": [{"id": "session", "package": "@scope/plugin-session", "version": "1.0.0", "manifest": {
+	"background": {"sidecar": "@scope/sidecar-session", "operation": "open"},
 	"surface": {"composition": {"kind": "view", "page": "ui/index.html"}}}}]}`
 
 // A tab whose view stays hidden behind the shown tab of its card owns its session through that view, so a background session would be
@@ -479,7 +479,7 @@ func TestAnInstalledPluginGetsItsBackgroundSessionInTheApplication(t *testing.T)
 			record = line
 		}
 	}
-	if !strings.Contains(listen, `"tab-bbbbbb"`) || !strings.Contains(listen, "@soksak/sidecar-session") {
+	if !strings.Contains(listen, `"tab-bbbbbb"`) || !strings.Contains(listen, "@scope/sidecar-session") {
 		t.Fatalf("listen %q", listen)
 	}
 	if !strings.Contains(send, `"operation":"open"`) || !strings.Contains(send, `"shell":"login"`) || strings.Contains(send, "other") {

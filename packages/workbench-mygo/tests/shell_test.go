@@ -305,7 +305,7 @@ func (h *storedHost) installedDocument() string {
 // environment reads the environment declaration of the application, which the shell receives from the assets of the application.
 func environment(t testing.TB) []byte {
 	t.Helper()
-	text, err := os.ReadFile(filepath.Join("..", "..", "..", "apps", "mygo", "environment.json"))
+	text, err := os.ReadFile(filepath.Join("testdata", "application-environment.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
