@@ -1175,9 +1175,9 @@ func (s *Shell) surfacePressed(data []any) {
 	if len(data) != 1 || s.plane == nil {
 		return
 	}
-	surface, ok := data[0].(string)
-	if !ok {
-		s.fail(fmt.Errorf("surface pressed: the event names no surface: %v", data[0]))
+	surface, err := decode[string](data[0])
+	if err != nil {
+		s.fail(fmt.Errorf("surface pressed: %w", err))
 		return
 	}
 	for _, card := range s.plane.Cards() {
