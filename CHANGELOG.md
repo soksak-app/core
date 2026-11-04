@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F453: The guidance states v0.0.34 as the latest published release.
 - F447-2: A failed restore of the registry does not make a later run fail.
 - F447-1: A plugin command declares the limit of the reads and downloads that it waits for.
 - F435: Record the views after F450; every view meets the interval limit on both hosts, the editor passes completely, and convergence fails on the other three.
