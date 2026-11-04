@@ -1,0 +1,11 @@
+{
+  "name": "@soksak-check/probe-plain",
+  "version": "0.0.34",
+  "private": true,
+  "type": "module",
+  "description": "Benchmark fixture: a view whose page has no content beyond the observer of its document size, the floor of a view drag.",
+  "license": "MIT",
+  "repository": "git+https://github.com/soksak-app/core.git",
+  "engines": { "soksak": "*" },
+  "files": ["plugin.json", "events.json", "ui"]
+}

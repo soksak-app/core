@@ -8921,6 +8921,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F212.14-6",
+    implementation: [{ file: "e2e/benchmark/cases/plain-view.mjs", symbol: "export function sourceIntervalSummary" }],
+    tests: [{ file: "e2e/test/plain-view-case.test.mjs", id: "the plain view summary reads only the source frames that meet the gesture" }],
+    expected: "The plain view benchmark summarizes the in-gesture source intervals of a view without plugin code.",
+    levels: ["unit"],
+  },
+  {
     id: "F404",
     implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) fn with_open_window(" }],
     tests: [{ file: "packages/host/tauriv2/src/windows_records_test.rs", id: "a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure" }],

@@ -1,0 +1,55 @@
+{
+  "schema": 3,
+  "layers": [
+    "plugin"
+  ],
+  "events": {
+    "plugin.probeplain.view.content_frame": {
+      "layer": "plugin",
+      "class": "frame",
+      "level": "trace",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "sequence": {
+            "type": "integer"
+          },
+          "documentTimeOriginMs": {
+            "type": "number"
+          },
+          "firstResizeAtMs": {
+            "type": "number"
+          },
+          "resizeAtMs": {
+            "type": "number"
+          },
+          "resizeCount": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "frameTimeMs": {
+            "type": "number"
+          },
+          "width": {
+            "type": "number"
+          },
+          "height": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "sequence",
+          "documentTimeOriginMs",
+          "firstResizeAtMs",
+          "resizeAtMs",
+          "resizeCount",
+          "frameTimeMs",
+          "width",
+          "height"
+        ]
+      },
+      "description": "The document root size of the plain view was read at the next animation frame after ResizeObserver."
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "id": "probeplain",
+  "name": "Plain view probe",
+  "description": "Benchmark fixture that shows a view with an empty document region and observes the size of its document, the floor of a view drag.",
+  "events": "events.json",
+  "surface": {
+    "composition": { "kind": "view", "page": "ui/page.html", "regions": [{ "name": "page", "kind": "document", "input": "native" }], "overlays": [] }
+  },
+  "mark": "P",
+  "icon": "<rect x=\"3\" y=\"3\" width=\"10\" height=\"10\" rx=\"2\"/>",
+  "exposes": {
+    "status": [],
+    "commands": [
+      {
+        "name": "probeplain.measure",
+        "description": "Starts or stops the observation of the document size and returns the source clock at its start.",
+        "params": { "type": "object", "properties": { "action": { "type": "string" } } },
+        "result": { "type": "object" }
+      }
+    ],
+    "dom": []
+  }
+}

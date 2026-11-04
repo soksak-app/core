@@ -522,6 +522,9 @@ e2e-benchmark-idle-tab:
 e2e-benchmark-split-load:
 	@pnpm -F @soksak/e2e run benchmark:split-load
 
+e2e-benchmark-plain-view:
+	@pnpm -F @soksak/e2e run benchmark:plain-view
+
 e2e-repeat:
 	@case "$(FILE)" in '') echo "e2e-repeat requires FILE=<test file> NAME=<test name pattern> COUNT=<n>" >&2; exit 2;; esac
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "e2e-repeat requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
