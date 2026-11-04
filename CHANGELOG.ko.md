@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F532: Rust diagnostics의 update 단계가 framework port의 `quit`으로 애플리케이션을 끝내므로, `make tauriv2-build`가 다시 컴파일된다.
 - F530: `soksak-stage`가 `head-fit.js`를 복사한다. 이 파일이 없어서 page가 `/head-fit.js: not found`로 멈췄다. staging test가 두 build에서 `index.html`과 `overlay.html`의 script, style, import를 따라가 staged되지 않은 참조에서 실패한다
 - F528: application 시작 뒤의 termination signal이 Go host를 quit한다. F502-7 이후 signal의 quit가 아무도 닫지 않는 channel을 기다렸으므로, `log.closed`만 쓰이고 process, sidecar, `endpoint.json`이 남았다.
 - F526: 자기 exit에 이르지 못한 stall sample의 process는 `Command failed` 문구 대신 signal, 그 process를 끝낸 limit, standard error로 실패한다.
