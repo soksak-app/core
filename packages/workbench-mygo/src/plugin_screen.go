@@ -280,24 +280,25 @@ func versionLine(page PluginPage, row PluginRow) string {
 
 // DrawPluginPage draws the plugin page: the search, the reason of a failure, the update list, the outdated services and one
 // card for each shown plugin.
-func DrawPluginPage(c *ui.Context, names *ElementNames, page PluginPage, shown *ShownErrors, run RunCommand) {
+func DrawPluginPage(c *ui.Context, binder *Binder, page PluginPage, shown *ShownErrors) {
 	ui.Scroll(c).Fill().Children(func() {
 		ui.Column(c).FillWidth().Gap(12).Padding(16).Children(func() {
 			// The group holds the element name, because the field gives its key to an outer element that the element tree leaves out.
-			ui.Box(c.Key(names.Next("core.library.plugins.search"))).FillWidth().Role(ui.RoleGroup).Label("플러그인 검색").Children(func() {
+			search := binder.Control(c, "core.library.plugins.search", "core.library.plugins.search", "")
+			ui.Box(c).FillWidth().Role(ui.RoleGroup).Label("플러그인 검색").Children(func() {
 				query := page.Query
 				if ui.SearchField(c, &query).Label("플러그인 검색").FillWidth().Changed() {
-					run("core.library.plugins.search", map[string]any{"query": query})
+					search(map[string]any{"query": query})
 				}
 			})
 			drawPluginFailure(c, page, shown)
 			if page.Hosted {
-				drawUpdateList(c, names, page, shown, run)
-				drawOutdatedSidecars(c, names, page, run)
+				drawUpdateList(c, binder, page, shown)
+				drawOutdatedSidecars(c, binder, page)
 			}
 			rows := shownRows(page)
 			for _, row := range rows {
-				drawPluginCard(c, names, page, row, shown, run)
+				drawPluginCard(c, binder, page, row, shown)
 			}
 			if len(rows) == 0 && (page.Failure == nil || page.Failure.Kind != "state") {
 				ui.Text(c, "찾는 플러그인이 없습니다.").TextColor(c.Theme().TextMuted)
@@ -320,7 +321,7 @@ func drawPluginFailure(c *ui.Context, page PluginPage, shown *ShownErrors) {
 	DrawError(c, shown, where)
 }
 
-func drawUpdateList(c *ui.Context, names *ElementNames, page PluginPage, shown *ShownErrors, run RunCommand) {
+func drawUpdateList(c *ui.Context, binder *Binder, page PluginPage, shown *ShownErrors) {
 	if page.App.Operation == nil || page.App.Operation.State != "failed" {
 		shown.Hide("library app update")
 	}
@@ -329,28 +330,26 @@ func drawUpdateList(c *ui.Context, names *ElementNames, page PluginPage, shown *
 	}
 	ui.Column(c).FillWidth().Gap(8).Children(func() {
 		if page.App.Available != nil {
-			drawAppUpdateRow(c, names, page.App, shown, run)
+			drawAppUpdateRow(c, binder, page.App, shown)
 		}
 		for _, update := range page.Updates {
 			line := fmt.Sprintf("%s: %s → %s", update.ID, update.Installed, update.Latest)
-			ui.Text(c, line).Key(names.Next("core.library.plugins.updates")).Label(line)
+			ui.Text(binder.Name(c, "core.library.plugins.updates", update.ID), line).Label(line)
 		}
-		if len(page.Updates) > 0 && ui.Button(c.Key(names.Next("core.library.plugins.update-all")), "모두 업데이트").Clicked() {
-			run("core.plugins.update-all", map[string]any{})
+		if len(page.Updates) > 0 {
+			binder.Button(c, "core.library.plugins.update-all", "core.plugins.update-all", "", "모두 업데이트", nil)
 		}
 	})
 }
 
-func drawAppUpdateRow(c *ui.Context, names *ElementNames, app AppUpdate, shown *ShownErrors, run RunCommand) {
-	ui.Column(c.Key(names.Next("core.library.app.row"))).FillWidth().Gap(4).Role(ui.RoleGroup).Label("core").Children(func() {
+func drawAppUpdateRow(c *ui.Context, binder *Binder, app AppUpdate, shown *ShownErrors) {
+	ui.Column(binder.Name(c, "core.library.app.row", "")).FillWidth().Gap(4).Role(ui.RoleGroup).Label("core").Children(func() {
 		ui.Text(c, fmt.Sprintf("core: %s → %s", app.Version, app.Available.Version))
 		ui.Row(c).Gap(8).Children(func() {
-			if app.Available.Release != "" && ui.Button(c.Key(names.Next("core.library.app.release")), "릴리스 페이지").Clicked() {
-				run("core.app.release", map[string]any{})
+			if app.Available.Release != "" {
+				binder.Button(c, "core.library.app.release", "core.app.release", "", "릴리스 페이지", nil)
 			}
-			if ui.Button(c.Key(names.Next("core.library.app.update")), "업데이트").Clicked() {
-				run("core.app.update", map[string]any{})
-			}
+			binder.Button(c, "core.library.app.update", "core.app.update", "", "업데이트", nil)
 		})
 		for _, item := range app.Incompatible {
 			version := "버전 없음"
@@ -358,22 +357,22 @@ func drawAppUpdateRow(c *ui.Context, names *ElementNames, app AppUpdate, shown *
 				version = "최신 버전 " + *item.Compatible
 			}
 			line := fmt.Sprintf("%s %s (%s): %s에 맞는 %s", item.ID, item.Installed, item.Range, app.Available.Version, version)
-			ui.Text(c, line).Key(names.Next("core.library.app.incompatible")).Label(line)
+			ui.Text(binder.Name(c, "core.library.app.incompatible", item.ID), line).Label(line)
 		}
-		drawAppOperation(c, names, app, shown)
+		drawAppOperation(c, binder, app, shown)
 	})
 }
 
-func drawAppOperation(c *ui.Context, names *ElementNames, app AppUpdate, shown *ShownErrors) {
+func drawAppOperation(c *ui.Context, binder *Binder, app AppUpdate, shown *ShownErrors) {
 	operation := app.Operation
 	if operation == nil {
 		return
 	}
-	name := names.Next("core.library.app.operation")
+	const name = "core.library.app.operation"
 	if operation.State == "failed" {
 		const where = "library app update"
 		shown.Show(where, operation.Version+" 업데이트하지 못했습니다: "+operation.Error, "")
-		ui.Box(c.Key(name)).Role(ui.RoleGroup).Children(func() { DrawError(c, shown, where) })
+		ui.Box(binder.Name(c, name, "")).Role(ui.RoleGroup).Children(func() { DrawError(c, shown, where) })
 		return
 	}
 	step := "적용하는 중"
@@ -381,10 +380,10 @@ func drawAppOperation(c *ui.Context, names *ElementNames, app AppUpdate, shown *
 		step = "받는 중"
 	}
 	line := operation.Version + " " + step
-	ui.Text(c, line).Key(name).Label(line)
+	ui.Text(binder.Name(c, name, ""), line).Label(line)
 }
 
-func drawOutdatedSidecars(c *ui.Context, names *ElementNames, page PluginPage, run RunCommand) {
+func drawOutdatedSidecars(c *ui.Context, binder *Binder, page PluginPage) {
 	for _, item := range page.Outdated {
 		running, declared, verb := "이전 버전", "선언 없음", "종료"
 		if item.Running != nil {
@@ -394,17 +393,15 @@ func drawOutdatedSidecars(c *ui.Context, names *ElementNames, page PluginPage, r
 			declared, verb = *item.Installed, "적용"
 		}
 		line := fmt.Sprintf("%s: %s → %s", item.Sidecar, running, declared)
-		ui.Row(c.Key(names.Next("core.library.plugins.outdated"))).FillWidth().Gap(8).AlignItems(ui.Center).Role(ui.RoleGroup).Label(line).Children(func() {
+		ui.Row(binder.Name(c, "core.library.plugins.outdated", item.Sidecar)).FillWidth().Gap(8).AlignItems(ui.Center).Role(ui.RoleGroup).Label(line).Children(func() {
 			ui.Text(c, line).Grow(1)
-			replace := ui.Button(c.Key(names.Next("core.library.plugins.replace")), fmt.Sprintf("세션 %d개를 끝내고 %s", item.Sessions, verb))
-			if replace.Clicked() {
-				run("core.plugins.replace", map[string]any{"sidecar": item.Sidecar})
-			}
+			binder.Button(c, "core.library.plugins.replace", "core.plugins.replace", item.Sidecar, fmt.Sprintf("세션 %d개를 끝내고 %s", item.Sessions, verb),
+				map[string]any{"sidecar": item.Sidecar})
 		})
 	}
 }
 
-func drawPluginCard(c *ui.Context, names *ElementNames, page PluginPage, row PluginRow, shown *ShownErrors, run RunCommand) {
+func drawPluginCard(c *ui.Context, binder *Binder, page PluginPage, row PluginRow, shown *ShownErrors) {
 	theme := c.Theme()
 	where := "library plugin " + row.ID
 	ui.Column(c).FillWidth().Gap(4).Padding(12).Border(1, theme.Border).Role(ui.RoleListItem).Label(row.Name).Children(func() {
@@ -429,7 +426,7 @@ func drawPluginCard(c *ui.Context, names *ElementNames, page PluginPage, row Plu
 			ui.Text(c, sidecarLine(row.Sidecars)).TextColor(theme.TextMuted)
 		}
 		drawPluginContributions(c, page, row, shown)
-		drawCardActions(c, names, page, row, run)
+		drawCardActions(c, binder, page, row)
 		drawCardOperation(c, page, row, shown)
 	})
 }
@@ -451,21 +448,21 @@ func drawPluginContributions(c *ui.Context, page PluginPage, row PluginRow, show
 	}
 }
 
-func drawCardActions(c *ui.Context, names *ElementNames, page PluginPage, row PluginRow, run RunCommand) {
+func drawCardActions(c *ui.Context, binder *Binder, page PluginPage, row PluginRow) {
 	actions := cardActions(page, row)
 	if len(actions) == 0 {
 		return
 	}
 	ui.Row(c).Gap(8).Children(func() {
 		for _, action := range actions {
-			button := ui.Button(c.Key(names.Next("core.library.plugins.action")), actionLabel(action.Action)).Disabled(action.Disabled)
-			if button.Clicked() {
+			run := binder.Control(c, "core.library.plugins.action", "core.plugins."+action.Action, row.ID+"/"+action.Action)
+			if ui.Button(c, actionLabel(action.Action)).Disabled(action.Disabled).Clicked() {
 				// core.plugins.apply reloads the window for every changed plugin, so it takes no plugin.
 				params := map[string]any{"plugin": row.ID}
 				if action.Action == "apply" {
-					params = map[string]any{}
+					params = nil
 				}
-				run("core.plugins."+action.Action, params)
+				run(params)
 			}
 		}
 	})

@@ -157,6 +157,7 @@ Matching용 image source를 보존하는 동안 diagnostic capture는 snapshot�
 | 문서 영역의 stream 메시지가 잘못되었거나 전달할 수 없거나, snapshot 확인이 거부된다 | `error host document stream <name>: <reason>`. 이름 `<name>`의 문서에서 실패한 stream 메시지마다 쓰며, 잘못된 메시지, 알 수 없는 stream이나 메시지 type, 거부된 `on`이나 확인, 없는 문서가 해당한다 |
 | 모달을 놓거나 모서리를 둥글게 하거나 위로 올리거나 포커스를 돌려줄 수 없거나, 모달 문서를 그리지 못한다 | `error host modal place`, `error host modal corners`, `error host modal raise`, `error host modal focus restoration`, `error host modal <id>`. 각각 뒤에 `: <reason>`이 붙는다 |
 | 사이드카를 멈추거나 교체하거나 창을 위해 유지할 수 없거나, 표면이 닫혔음을 알릴 수 없거나, Wails host의 native view 다리가 실패한다 | `error host sidecar stop`, `error host replace`, `error host sidecar retain`, `error host sidecar close <surface>`, `error host native message`, `error host native reply`. 각각 뒤에 `: <reason>`이 붙는다 |
+| mygo host가 window의 native view를 만들 수 없거나, view element를 놓으려고 다음 frame을 기다릴 수 없다 | `error host window native view: <reason>`, `error host surface element: <reason>` |
 | recording start의 panic 뒤 cleanup이 capture를 멈추거나 소유한 directory를 삭제하지 못한다 | `error host recording: <reason>`; 원래 panic은 별도의 `host.panic` record로 유지한다 |
 | input reference의 reply가 요청 종료 후 도착한다 | `error host input reference: <reason>` |
 | 알림 센터가 실패를 알리거나, 이벤트를 읽지 못하거나, 알림의 종류를 모르거나, 창과 표면이 없거나, 닫힌 창을 가리킨다 | `error host notification: <reason>` |

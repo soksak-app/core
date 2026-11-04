@@ -51,9 +51,11 @@ func recorder(t *testing.T, calls *[]call, commands ...string) *workbench.Binder
 	r := registry(t)
 	for _, name := range commands {
 		r.Command(name, func(raw json.RawMessage) (any, error) {
-			var params map[string]any
-			if err := json.Unmarshal(raw, &params); err != nil {
-				return nil, err
+			params := map[string]any{}
+			if len(raw) > 0 && string(raw) != "null" {
+				if err := json.Unmarshal(raw, &params); err != nil {
+					return nil, err
+				}
 			}
 			*calls = append(*calls, call{name, params})
 			return nil, nil
@@ -65,26 +67,36 @@ func recorder(t *testing.T, calls *[]call, commands ...string) *workbench.Binder
 // sidebarCommands are the commands that the frame of a sidebar runs.
 var sidebarCommands = []string{"core.sidebar.section.fold", "core.sidebar.section.select", "core.sidebar.section.size", "core.settings.set"}
 
-// keyedAt returns the element of the frame with the positional name of a screen that has no binder yet.
-func keyedAt(nodes []ui.ElementNode, name workbench.ElementName) (ui.ElementNode, bool) {
+// positional returns the element with the name at the position index in document order.
+func positional(t *testing.T, tt *ui.Tester, name string, index int) ui.ElementNode {
+	t.Helper()
+	node, ok := atPosition(tt.ElementTree(), name, &index)
+	if !ok {
+		t.Fatalf("no element %s; the texts are %q", name, tt.Texts())
+	}
+	return node
+}
+
+func atPosition(nodes []ui.ElementNode, name string, left *int) (ui.ElementNode, bool) {
 	for _, node := range nodes {
-		if node.Key == name {
-			return node, true
+		if exposed, ok := node.Key.(workbench.Exposed); ok && exposed.Name == name {
+			if *left == 0 {
+				return node, true
+			}
+			*left--
 		}
-		if found, ok := keyedAt(node.Children, name); ok {
+		if found, ok := atPosition(node.Children, name, left); ok {
 			return found, true
 		}
 	}
 	return ui.ElementNode{}, false
 }
 
-func positional(t *testing.T, tt *ui.Tester, name string, index int) ui.ElementNode {
-	t.Helper()
-	node, ok := keyedAt(tt.ElementTree(), workbench.ElementName{Name: name, Index: index})
-	if !ok {
-		t.Fatalf("no element %s %d; the texts are %q", name, index, tt.Texts())
-	}
-	return node
+// absent reports that the frame has no element with the name.
+func absent(tt *ui.Tester, name string) bool {
+	index := 0
+	_, ok := atPosition(tt.ElementTree(), name, &index)
+	return !ok
 }
 
 func pressPositional(t *testing.T, tt *ui.Tester, name string, index int) {
@@ -93,6 +105,9 @@ func pressPositional(t *testing.T, tt *ui.Tester, name string, index int) {
 	tt.ClickAt(node.Bounds.X+node.Bounds.W/2, node.Bounds.Y+node.Bounds.H/2)
 }
 
-func record(calls *[]call) workbench.RunCommand {
-	return func(name string, params map[string]any) { *calls = append(*calls, call{name, params}) }
-}
+// screenCommands are the commands that the plugin page and the debug view run.
+var screenCommands = []string{"core.library.plugins.search", "core.plugins.install", "core.plugins.update", "core.plugins.remove", "core.plugins.enable",
+	"core.plugins.disable", "core.plugins.apply", "core.plugins.update-all", "core.plugins.replace", "core.app.release", "core.app.update",
+	"core.debug.close", "core.debug.save-all", "core.debug.timeline", "core.debug.state", "core.debug.view", "core.debug.save", "core.debug.list",
+	"core.debug.state.compare", "core.debug.timeline.follow", "core.debug.timeline.older", "core.debug.timeline.save", "core.debug.timeline.select",
+	"core.debug.timeline.context", "core.debug.timeline.filter"}

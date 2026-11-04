@@ -3,6 +3,7 @@ package workbench
 import (
 	"fmt"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -103,27 +104,25 @@ func timeText(modified int64) string { return time.UnixMilli(modified).Format(ti
 func megabytes(size int64) string { return fmt.Sprintf("%.1f", float64(size)/1024/1024) }
 
 // DrawDebugView draws the scrim and the card of the view.
-func DrawDebugView(c *ui.Context, names *ElementNames, view DebugView, shown *ShownErrors, run RunCommand) {
+func DrawDebugView(c *ui.Context, binder *Binder, view DebugView, shown *ShownErrors) {
 	theme := c.Theme()
-	ui.Box(c.Key(names.Next("core.debug.scrim"))).Fill().Center().Role(ui.RoleGroup).Label(debugName).Children(func() {
-		ui.Column(c.Key(names.Next("core.debug.card"))).Width(view.CardWidth).MaxHeight(view.CardMaxHeight).Background(theme.Background).Border(1, theme.Border).
+	ui.Box(binder.Name(c, "core.debug.scrim", "")).Fill().Center().Role(ui.RoleGroup).Label(debugName).Children(func() {
+		ui.Column(binder.Name(c, "core.debug.card", "")).Width(view.CardWidth).MaxHeight(view.CardMaxHeight).Background(theme.Background).Border(1, theme.Border).
 			Role(ui.RoleDialog).Label(debugName).Children(func() {
 			ui.Row(c).FillWidth().AlignItems(ui.Center).Padding(8, 16).Children(func() {
 				ui.Text(c, debugName).Grow(1)
-				if ui.Button(c.Key(names.Next("core.debug.close")), "닫는다").Clicked() {
-					run("core.debug.close", map[string]any{})
-				}
+				binder.Button(c, "core.debug.close", "core.debug.close", "", "닫는다", nil)
 			})
 			ui.Scroll(c).Grow(1).FillWidth().Children(func() {
-				ui.Column(c).FillWidth().Gap(8).Padding(0, 16, 16, 16).Children(func() { drawDebugPane(c, names, view, shown, run) })
+				ui.Column(c).FillWidth().Gap(8).Padding(0, 16, 16, 16).Children(func() { drawDebugPane(c, binder, view, shown) })
 			})
 		})
 	})
 }
 
-func drawDebugPane(c *ui.Context, names *ElementNames, view DebugView, shown *ShownErrors, run RunCommand) {
+func drawDebugPane(c *ui.Context, binder *Binder, view DebugView, shown *ShownErrors) {
 	ui.Text(c, "애플리케이션의 모든 진단 파일이다. 결함을 알릴 때 모두 저장한 파일을 함께 보낸다.").Wrap().TextColor(c.Theme().TextMuted)
-	drawDebugActions(c, names, view, run)
+	drawDebugActions(c, binder, view)
 	if view.Failure != nil {
 		shown.Show(debugErrorPlace, *view.Failure, "")
 		DrawError(c, shown, debugErrorPlace)
@@ -132,83 +131,74 @@ func drawDebugPane(c *ui.Context, names *ElementNames, view DebugView, shown *Sh
 	}
 	switch {
 	case view.Viewing != nil:
-		drawDebugFile(c, names, *view.Viewing, run)
+		drawDebugFile(c, binder, *view.Viewing)
 	case view.Timeline != nil:
-		drawDebugTimeline(c, names, *view.Timeline, run)
+		drawDebugTimeline(c, binder, *view.Timeline)
 	case view.State != nil:
-		drawDebugState(c, names, *view.State, run)
+		drawDebugState(c, binder, *view.State)
 	default:
-		drawDebugList(c, names, view.Entries, run)
+		drawDebugList(c, binder, view.Entries)
 	}
 }
 
-func drawDebugActions(c *ui.Context, names *ElementNames, view DebugView, run RunCommand) {
+func drawDebugActions(c *ui.Context, binder *Binder, view DebugView) {
 	operation := view.Operation
 	saving := operation != nil && operation.Action == "save-all" && operation.State == "running"
 	ui.Row(c).Gap(8).Children(func() {
-		if ui.Button(c.Key(names.Next("core.debug.save-all")), "모두 저장").Disabled(saving).Clicked() {
-			run("core.debug.save-all", map[string]any{})
+		saveAll := binder.Control(c, "core.debug.save-all", "core.debug.save-all", "")
+		if ui.Button(c, "모두 저장").Disabled(saving).Clicked() {
+			saveAll(nil)
 		}
-		if ui.Button(c.Key(names.Next("core.debug.timeline")), "타임라인").Clicked() {
-			run("core.debug.timeline", map[string]any{})
-		}
+		binder.Button(c, "core.debug.timeline", "core.debug.timeline", "", "타임라인", nil)
 	})
 	if saving && operation.Writing {
 		ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Progress(c.Key(names.Next("core.debug.progress")), float64(operation.Written)/float64(max(1, operation.Total))).Grow(1)
+			ui.Progress(binder.Name(c, "core.debug.progress", ""), float64(operation.Written)/float64(max(1, operation.Total))).Grow(1)
 			ui.Text(c, megabytes(operation.Written)+" / "+megabytes(operation.Total)+" MB")
 		})
 	}
 }
 
-func drawDebugList(c *ui.Context, names *ElementNames, entries []DebugEntry, run RunCommand) {
+func drawDebugList(c *ui.Context, binder *Binder, entries []DebugEntry) {
 	theme := c.Theme()
 	states := DebugStateFiles(entries)
-	command := func(element ui.Element, name, path string) {
-		if element.Clicked() {
-			run(name, map[string]any{"path": path})
-		}
-	}
 	for _, file := range entries {
-		ui.Row(c.Key(names.Next("core.debug.file"))).FillWidth().Gap(8).AlignItems(ui.Center).Role(ui.RoleRow).Label(file.Path).Children(func() {
+		ui.Row(binder.Name(c, "core.debug.file", file.Path)).FillWidth().Gap(8).AlignItems(ui.Center).Role(ui.RoleRow).Label(file.Path).Children(func() {
 			ui.Text(c, file.Path).Grow(1).NoWrap().Ellipsis("…")
 			ui.Text(c, sizeText(file.Size)+" · "+timeText(file.Modified)).TextColor(theme.TextMuted)
+			params := map[string]any{"path": file.Path}
 			if slices.Contains(states, file.Path) {
-				command(ui.Button(c.Key(names.Next("core.debug.state")), "상태"), "core.debug.state", file.Path)
+				binder.Button(c, "core.debug.state", "core.debug.state", file.Path, "상태", params)
 			}
-			command(ui.Button(c.Key(names.Next("core.debug.view")), "보기"), "core.debug.view", file.Path)
-			command(ui.Button(c.Key(names.Next("core.debug.save")), "저장"), "core.debug.save", file.Path)
+			binder.Button(c, "core.debug.view", "core.debug.view", file.Path, "보기", params)
+			binder.Button(c, "core.debug.save", "core.debug.save", file.Path, "저장", params)
 		})
 	}
 }
 
-func drawDebugFile(c *ui.Context, names *ElementNames, file DebugShown, run RunCommand) {
+func drawDebugFile(c *ui.Context, binder *Binder, file DebugShown) {
 	theme := c.Theme()
 	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
-		if ui.Button(c.Key(names.Next("core.debug.list")), "목록").Clicked() {
-			run("core.debug.list", map[string]any{})
-		}
+		binder.Button(c, "core.debug.list", "core.debug.list", "", "목록", nil)
 		ui.Text(c, file.Path+" · "+sizeText(file.Size)).Grow(1).NoWrap().Ellipsis("…")
 		if file.Truncated {
 			ui.Text(c, "앞부분 생략").TextColor(theme.TextMuted)
 		}
 	})
 	if file.Kind == "image" {
-		ui.Image(c.Key(names.Next("core.debug.image")), file.Image).Role(ui.RoleImage).Label(file.Path)
+		ui.Image(binder.Name(c, "core.debug.image", ""), file.Image).Role(ui.RoleImage).Label(file.Path)
 		return
 	}
-	ui.Text(c, file.Text).Key(names.Next("core.debug.text")).Label(file.Text).Wrap().Selectable().Font(debugMonoFont)
+	ui.Text(binder.Name(c, "core.debug.text", ""), file.Text).Label(file.Text).Wrap().Selectable().Font(debugMonoFont)
 }
 
-func drawDebugLine(c *ui.Context, name ElementName, line string) {
-	ui.Text(c, line).Key(name).Label(line).Wrap().Selectable().Font(debugMonoFont)
+func drawDebugLine(c *ui.Context, line string) {
+	ui.Text(c, line).Label(line).Wrap().Selectable().Font(debugMonoFont)
 }
 
-func drawDebugState(c *ui.Context, names *ElementNames, state DebugStateView, run RunCommand) {
+func drawDebugState(c *ui.Context, binder *Binder, state DebugStateView) {
 	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
-		if ui.Button(c.Key(names.Next("core.debug.state.list")), "목록").Clicked() {
-			run("core.debug.list", map[string]any{})
-		}
+		binder.Button(c, "core.debug.state.list", "core.debug.list", "", "목록", nil)
 		ui.Text(c, state.Path).Grow(1).NoWrap().Ellipsis("…")
 	})
 	const without = "비교 안 함"
@@ -216,23 +206,26 @@ func drawDebugState(c *ui.Context, names *ElementNames, state DebugStateView, ru
 	if with == "" {
 		with = without
 	}
-	ui.Box(c.Key(names.Next("core.debug.state.with"))).Role(ui.RoleGroup).Label("비교할 상태 파일").Children(func() {
+	compare := binder.Control(c, "core.debug.state.with", "core.debug.state.compare", "")
+	ui.Box(c).Role(ui.RoleGroup).Label("비교할 상태 파일").Children(func() {
 		if ui.Select(c, &with, append([]string{without}, state.Compare...)).Label("비교할 상태 파일").Changed() {
 			chosen := with
 			if chosen == without {
 				chosen = ""
 			}
-			run("core.debug.state.compare", map[string]any{"with": chosen})
+			compare(map[string]any{"with": chosen})
 		}
 	})
-	ui.Column(c.Key(names.Next("core.debug.state.differences"))).FillWidth().Role(ui.RoleGroup).Label("차이").Children(func() {
-		for _, difference := range state.Differences {
-			drawDebugLine(c, names.Next("core.debug.state.difference"), differenceLine(difference))
+	ui.Column(binder.Name(c, "core.debug.state.differences", "")).FillWidth().Role(ui.RoleGroup).Label("차이").Children(func() {
+		for i, difference := range state.Differences {
+			binder.Name(c, "core.debug.state.difference", strconv.Itoa(i))
+			drawDebugLine(c, differenceLine(difference))
 		}
 	})
-	ui.Column(c.Key(names.Next("core.debug.state.tree"))).FillWidth().Role(ui.RoleGroup).Label("상태").Children(func() {
-		for _, line := range state.Lines {
-			drawDebugLine(c, names.Next("core.debug.state.line"), line)
+	ui.Column(binder.Name(c, "core.debug.state.tree", "")).FillWidth().Role(ui.RoleGroup).Label("상태").Children(func() {
+		for i, line := range state.Lines {
+			binder.Name(c, "core.debug.state.line", strconv.Itoa(i))
+			drawDebugLine(c, line)
 		}
 	})
 }
@@ -247,55 +240,46 @@ func differenceLine(difference DebugDifference) string {
 	return fmt.Sprintf("%s: %s -> %s", difference.Path, value(difference.A), value(difference.B))
 }
 
-func drawDebugTimeline(c *ui.Context, names *ElementNames, timeline DebugTimeline, run RunCommand) {
+func drawDebugTimeline(c *ui.Context, binder *Binder, timeline DebugTimeline) {
 	theme := c.Theme()
 	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
-		if ui.Button(c.Key(names.Next("core.debug.timeline.list")), "목록").Clicked() {
-			run("core.debug.list", map[string]any{})
-		}
+		binder.Button(c, "core.debug.timeline.list", "core.debug.list", "", "목록", nil)
 		label := "따라가기 다시 시작"
 		if timeline.Following {
 			label = "따라가기 멈춤"
 		}
-		if ui.Button(c.Key(names.Next("core.debug.timeline.follow")), label).Clicked() {
-			run("core.debug.timeline.follow", map[string]any{"on": !timeline.Following})
-		}
-		if timeline.Older && ui.Button(c.Key(names.Next("core.debug.timeline.older")), "이전 행").Clicked() {
-			run("core.debug.timeline.older", map[string]any{})
+		binder.Button(c, "core.debug.timeline.follow", "core.debug.timeline.follow", "", label, map[string]any{"on": !timeline.Following})
+		if timeline.Older {
+			binder.Button(c, "core.debug.timeline.older", "core.debug.timeline.older", "", "이전 행", nil)
 		}
 		if timeline.Omitted > 0 {
 			line := fmt.Sprintf("앞쪽 %d행은 보관하지 않음", timeline.Omitted)
-			ui.Text(c, line).Key(names.Next("core.debug.timeline.omitted")).Label(line).TextColor(theme.TextMuted)
+			ui.Text(binder.Name(c, "core.debug.timeline.omitted", ""), line).Label(line).TextColor(theme.TextMuted)
 		}
 	})
-	drawTimelineFilters(c, names, timeline, run)
+	drawTimelineFilters(c, binder, timeline)
 	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
-		if ui.Button(c.Key(names.Next("core.debug.timeline.save")), "선택한 행 저장").Clicked() {
-			run("core.debug.timeline.save", map[string]any{})
-		}
-		ui.Text(c, selectionWarning).Key(names.Next("core.debug.timeline.warning")).Label(selectionWarning).TextColor(theme.TextMuted)
+		binder.Button(c, "core.debug.timeline.save", "core.debug.timeline.save", "", "선택한 행 저장", nil)
+		ui.Text(binder.Name(c, "core.debug.timeline.warning", ""), selectionWarning).Label(selectionWarning).TextColor(theme.TextMuted)
 	})
-	ui.Column(c.Key(names.Next("core.debug.timeline.rows"))).FillWidth().Role(ui.RoleGroup).Label("타임라인").Children(func() {
+	ui.Column(binder.Name(c, "core.debug.timeline.rows", "")).FillWidth().Role(ui.RoleGroup).Label("타임라인").Children(func() {
 		for index, row := range timeline.Rows {
-			drawTimelineRow(c, names, index, row, run)
+			drawTimelineRow(c, binder, index, row)
 		}
 	})
 }
 
-func drawTimelineRow(c *ui.Context, names *ElementNames, index int, row DebugRow, run RunCommand) {
+func drawTimelineRow(c *ui.Context, binder *Binder, index int, row DebugRow) {
 	theme := c.Theme()
 	ui.Row(c).FillWidth().Gap(8).Children(func() {
 		mark, label := "○", "행 선택"
 		if row.Selected {
 			mark, label = "●", "행 선택 해제"
 		}
-		if ui.Button(c.Key(names.Next("core.debug.timeline.select")), mark).Label(label).Clicked() {
-			run("core.debug.timeline.select", map[string]any{"row": index, "selected": !row.Selected})
-		}
-		if ui.Button(c.Key(names.Next("core.debug.timeline.context")), "주변").Label("행 주변 보기").Clicked() {
-			run("core.debug.timeline.context", map[string]any{"row": index})
-		}
-		line := ui.Text(c, row.Line).Key(names.Next("core.debug.timeline.row")).Label(row.Line).Grow(1).Wrap().Selectable().Font(debugMonoFont)
+		item := strconv.Itoa(index)
+		binder.Button(c, "core.debug.timeline.select", "core.debug.timeline.select", item, mark, map[string]any{"row": index, "selected": !row.Selected}).Label(label)
+		binder.Button(c, "core.debug.timeline.context", "core.debug.timeline.context", item, "주변", map[string]any{"row": index}).Label("행 주변 보기")
+		line := ui.Text(binder.Name(c, "core.debug.timeline.row", item), row.Line).Label(row.Line).Grow(1).Wrap().Selectable().Font(debugMonoFont)
 		if row.Context {
 			line.TextColor(theme.TextMuted)
 		}
@@ -305,13 +289,13 @@ func drawTimelineRow(c *ui.Context, names *ElementNames, index int, row DebugRow
 	})
 }
 
-func drawTimelineFilters(c *ui.Context, names *ElementNames, timeline DebugTimeline, run RunCommand) {
+func drawTimelineFilters(c *ui.Context, binder *Binder, timeline DebugTimeline) {
 	filter := timeline.Filter
 	ui.Row(c).FillWidth().Gap(8).Wrap().Children(func() {
-		drawFilterSelect(c, names, "channel", "channel", "channel", filter.Channel, []string{"other", "debug", "all"}, run)
-		drawFilterSelect(c, names, "level", "level", "가장 낮은 level", filter.Level, []string{"error", "warn", "info", "debug", "trace"}, run)
-		drawFilterSelect(c, names, "layer", "layer", "layer", filter.Layer,
-			[]string{"all", "native", "host", "workbench", "page", "plugin", "sidecar", "sok"}, run)
+		drawFilterSelect(c, binder, "channel", "channel", "channel", filter.Channel, []string{"other", "debug", "all"})
+		drawFilterSelect(c, binder, "level", "level", "가장 낮은 level", filter.Level, []string{"error", "warn", "info", "debug", "trace"})
+		drawFilterSelect(c, binder, "layer", "layer", "layer", filter.Layer,
+			[]string{"all", "native", "host", "workbench", "page", "plugin", "sidecar", "sok"})
 		for _, field := range []struct{ member, name, label, value string }{
 			{"text", "text", "찾을 글자", filter.Text},
 			{"class", "class", "class", filter.Class},
@@ -324,23 +308,25 @@ func drawTimelineFilters(c *ui.Context, names *ElementNames, timeline DebugTimel
 			{"from", "from", "시작 시각 (UTC)", filter.From},
 			{"to", "to", "끝 시각 (UTC)", filter.To},
 		} {
-			drawFilterField(c, names, timeline, field.member, field.name, field.label, field.value, run)
+			drawFilterField(c, binder, timeline, field.member, field.name, field.label, field.value)
 		}
 	})
 }
 
-func drawFilterSelect(c *ui.Context, names *ElementNames, member, name, label, value string, options []string, run RunCommand) {
-	ui.Box(c.Key(names.Next("core.debug.timeline." + name))).Role(ui.RoleGroup).Label(label).Children(func() {
+func drawFilterSelect(c *ui.Context, binder *Binder, member, name, label, value string, options []string) {
+	run := binder.Control(c, "core.debug.timeline."+name, "core.debug.timeline.filter", "")
+	ui.Box(c).Role(ui.RoleGroup).Label(label).Children(func() {
 		if ui.Select(c, &value, options).Label(label).Changed() {
-			run("core.debug.timeline.filter", map[string]any{member: value})
+			run(map[string]any{member: value})
 		}
 	})
 }
 
 // drawFilterField draws a text field of a filter member. It runs the filter when the field submits or loses the focus, as
 // the change of an input does, so a query does not run for each key.
-func drawFilterField(c *ui.Context, names *ElementNames, timeline DebugTimeline, member, name, label, value string, run RunCommand) {
-	ui.Box(c.Key(names.Next("core.debug.timeline." + name))).Grow(1).Role(ui.RoleGroup).Label(label).Children(func() {
+func drawFilterField(c *ui.Context, binder *Binder, timeline DebugTimeline, member, name, label, value string) {
+	run := binder.Control(c, "core.debug.timeline."+name, "core.debug.timeline.filter", "")
+	ui.Box(c).Grow(1).Role(ui.RoleGroup).Label(label).Children(func() {
 		text, drafted := timeline.Drafts[member]
 		if !drafted {
 			text = value
@@ -352,7 +338,7 @@ func drawFilterField(c *ui.Context, names *ElementNames, timeline DebugTimeline,
 		}
 		if drafted && (field.Submitted() || !field.Focused()) {
 			delete(timeline.Drafts, member)
-			run("core.debug.timeline.filter", map[string]any{member: text})
+			run(map[string]any{member: text})
 		}
 	})
 }
