@@ -96,8 +96,13 @@ test('setup-rust installs the repository toolchain with format and lint componen
   const rust = steps.find((step) => step.uses?.startsWith('dtolnay/rust-toolchain@'));
   assert.ok(rust, 'setup-rust does not install Rust');
   assert.match(rust.uses, /@[0-9a-f]{40}$/i, 'setup-rust must use an immutable action revision');
-  assert.equal(rust.with.toolchain, '1.98.0');
-  assert.deepEqual(rust.with.components.split(',').map((component) => component.trim()).sort(), ['clippy', 'rustfmt']);
+  const declared = read('rust-toolchain.toml');
+  const channel = declared.match(/^channel\s*=\s*"([^"]+)"$/m)?.[1];
+  assert.equal(channel, '1.98.0', 'rust-toolchain.toml declares no exact Rust version');
+  assert.equal(rust.with.toolchain, channel, 'setup-rust installs another toolchain than rust-toolchain.toml declares');
+  const components = JSON.parse(declared.match(/^components\s*=\s*(\[.*\])$/m)?.[1] ?? 'null');
+  assert.deepEqual(components?.sort(), ['clippy', 'rustfmt'], 'rust-toolchain.toml declares other components than clippy and rustfmt');
+  assert.deepEqual(rust.with.components.split(',').map((component) => component.trim()).sort(), components);
   assert.doesNotMatch(JSON.stringify(steps), /cargo fetch/, 'setup-rust must not fetch Rust dependencies');
   const cache = steps.find((step) => step.uses?.startsWith('Swatinem/rust-cache@'));
   assert.ok(cache, 'setup-rust does not restore the Rust dependency cache');

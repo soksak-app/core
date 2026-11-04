@@ -2,7 +2,7 @@
 
 [English](examples.md)
 
-저장소 루트에서 명령을 실행한다. `package.json`의 패키지 관리자 버전, `go.work`와 그 각 모듈이 선언한 Go 1.27.3, 루트 `Cargo.toml` 워크스페이스와 호환되는 Rust 도구 체인을 사용한다. [네이티브 호스트 명세](../spec/hosts.ko.md)가 호스트 패키지, 애플리케이션, 워크스페이스 파일을 설명한다. 현재 네이티브 검증은 macOS에서 Command Line Tools SDK를 사용한다. Tauri 진단 캡처는 현재 프로세스 전용 ScreenCaptureKit 조회를 사용하므로 화면 기록 권한이 필요하지 않다.
+저장소 루트에서 명령을 실행한다. `package.json`의 패키지 관리자 버전, `go.work`와 그 각 모듈이 선언한 Go 1.27.3, `rust-toolchain.toml`이 선언하고 rustup이 저장소의 모든 cargo 명령에 고르는 Rust 도구 체인을 사용한다. [네이티브 호스트 명세](../spec/hosts.ko.md)가 호스트 패키지, 애플리케이션, 워크스페이스 파일을 설명한다. 현재 네이티브 검증은 macOS에서 Command Line Tools SDK를 사용한다. Tauri 진단 캡처는 현재 프로세스 전용 ScreenCaptureKit 조회를 사용하므로 화면 기록 권한이 필요하지 않다.
 
 `rust-repeat` 및 `rust-tests-alone` target은 최초 compile, metadata 및 test discovery를 포함한 모든 Cargo 호출에 application build와 동일한 선언된 `CARGO_ENV`를 적용한다. 선언된 macOS deployment target이 외부 `MACOSX_DEPLOYMENT_TARGET`보다 우선하며 test 선택 및 test별 제한은 유지한다.
 
