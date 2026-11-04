@@ -5,8 +5,9 @@
 // reports pageProcess null has no main page and no page row. The WebKit GPU, networking and WebContent services belong to the application
 // whose host lists them in its launchd domain (launchctl print pid/<host>). A WebKit GPU or networking process (pgrep -f
 // com.apple.WebKit.GPU|Networking) that no application claims is printed as unattributed. The memory of a process is its phys_footprint
-// and its phys_footprint_peak (footprint -p PID -f bytes); each footprint is read after the readings of every process settle (two
-// consecutive readings 5 seconds apart differ by less than 1,024 KB and no window presented a frame between them). The CPU time of a
+// and its phys_footprint_peak (footprint -p PID -f bytes); each footprint is read after the readings of every process settle by the rule of
+// G3 that scripts/footprints.mjs reads: two consecutive readings 5 seconds apart differ by less than 1,024 KB, and the reading is at least
+// 3 seconds after the last frame. The U7 records of the pointer step are read through scripts/frame-records.mjs. The CPU time of a
 // process is the CPU time that ps reports, read at two points INTERVAL seconds apart. The sidecars are summed apart from the application.
 //
 // --trace 0|1 sets the trace state with core.settings.change before the measurement (scripts/measure-trace.mjs). --state prepares a state of
@@ -56,6 +57,8 @@ import { readPolicy } from "@soksak/window-check/log-policy.mjs";
 import { launchdServices } from "@soksak/window-check/stall-sample.mjs";
 import { bringFront, post, requireTrusted } from "../e2e/real/hid.mjs";
 import { catalogOf } from "./check-events.mjs";
+import { readFootprint, settledFootprints } from "./footprints.mjs";
+import { percentile, requireCompleteGesture, stepTimes, U7_EVENTS } from "./frame-records.mjs";
 import { applyTrace, FRAME_RECORDS, parseTrace } from "./measure-trace.mjs";
 
 /** Executables of the tools that run this measurement; their command lines name the data folder, but they are not the application. */
@@ -67,11 +70,6 @@ export const STATES = ["S0", "S0b", "S1", "S9", "S11", "S12", "S14", "S15"];
 /** The content size of the window of every state of B3, in points. */
 export const WINDOW_SIZE = Object.freeze({ width: 1200, height: 760 });
 
-/** Two consecutive footprint readings of a process this far apart and closer than SETTLED_BYTES are settled (G3, the idle tab case). */
-const SETTLE_INTERVAL_MS = 5000;
-const SETTLED_BYTES = 1024 * 1024;
-/** The readings after which footprints that keep changing fail: two minutes, the bound of the idle tab case. */
-const SETTLE_READINGS = 24;
 /** The time without a change of frames after which a window is quiet, and the intervals after which frames that keep changing fail. */
 const QUIET_MS = 3000;
 const QUIET_INTERVALS = 40;
@@ -87,13 +85,6 @@ const LAYOUT_FAULT = "diagnostic layout fault";
 const FAULT_LINE_LIMIT = 30000;
 /** The HID moves of the pointer step across the window. */
 const POINTER_MOVES = 60;
-/**
- * The events of the U7 records of the mygo host that the pointer step reads, as the U7 row of docs/plans/mygo-host.md names them:
- * `frame`, one for each frame ({window, start_ns, request_ns, end_ns, damage, nodes, drawable_wait_ns, outcome, command_buffer,
- * asks_frame, animates, repaints, timer}), and `step`, one for each step of U1 ({window, kind, callback, entry_ns, return_ns, forwarded,
- * wait_ns}), of the class frame at debug, with the times in the canonical decimal nanoseconds of host.frame.surface.dispatch.
- */
-export const U7_EVENTS = Object.freeze({ frame: "host.frame.record", step: "host.frame.step" });
 /** The plugins of the tabs of S1. */
 const S1_TERMINAL = "term";
 const S1_BROWSER = "browser";
@@ -109,20 +100,6 @@ export function parseCpuTime(text) {
   if (hours !== undefined && Number(minutes) >= 60) throw new Error(`cpu time "${text}" has minutes of 60 or more`);
   if (days !== undefined && Number(hours) >= 24) throw new Error(`cpu time "${text}" has hours of 24 or more`);
   return Number(days ?? 0) * 86400 + Number(hours ?? 0) * 3600 + Number(minutes) * 60 + Number(seconds);
-}
-
-/** Reads the phys_footprint of the output of footprint -f bytes, in bytes. The peak and the summary line are not the footprint. */
-export function parseFootprint(text) {
-  const match = /^\s*phys_footprint: (\d+) B$/m.exec(text);
-  if (!match) throw new Error("footprint output has no phys_footprint line");
-  return Number(match[1]);
-}
-
-/** Reads the lifetime peak of the footprint of the output of footprint -f bytes, in bytes. */
-export function parseFootprintPeak(text) {
-  const match = /^\s*phys_footprint_peak: (\d+) B$/m.exec(text);
-  if (!match) throw new Error("footprint output has no phys_footprint_peak line");
-  return Number(match[1]);
 }
 
 /** The CPU share of a process over an interval: the CPU seconds it used divided by the interval, in percent. */
@@ -313,39 +290,6 @@ export function requireOcclusion(state, readings) {
 /** Whether two lists of frames of the windows are equal; a window whose frames is null counts no frame. */
 const sameFrames = (a, b) => a.length === b.length && a.every((value, index) => value === b[index]);
 const framesText = (frames) => frames.map(String).join(" ");
-const kilobytes = (bytes) => Math.round(bytes / 1024);
-
-/** Whether two footprint readings are settled: the same processes, each closer than SETTLED_BYTES, and no frame between them. */
-function settledBetween(previous, current) {
-  if (previous.footprints.size !== current.footprints.size) return false;
-  for (const [pid, bytes] of current.footprints) {
-    if (!previous.footprints.has(pid) || Math.abs(bytes - previous.footprints.get(pid)) >= SETTLED_BYTES) return false;
-  }
-  return sameFrames(previous.frames, current.frames);
-}
-
-/**
- * Reads until two consecutive readings 5 seconds apart differ by less than 1,024 KB for every process and no window presented a frame
- * between them, so the last reading is also at least 3 seconds after the last frame (G3), and returns that reading. read() returns
- * { footprints: Map pid -> bytes, frames: [frames of each window] }, and sleep(ms) waits. The 5 seconds between the readings are the
- * rule itself; no status announces a settled footprint.
- */
-export async function settledFootprints({ read, sleep, readings = SETTLE_READINGS }) {
-  let previous = await read();
-  for (let reading = 2; reading <= readings; reading++) {
-    await sleep(SETTLE_INTERVAL_MS);
-    const current = await read();
-    if (settledBetween(previous, current)) return current;
-    if (reading === readings) {
-      const changes = [...current.footprints].map(([pid, bytes]) =>
-        `pid ${pid}: ${previous.footprints.has(pid) ? kilobytes(previous.footprints.get(pid)) : "no"} KB then ${kilobytes(bytes)} KB`);
-      throw new Error(`the footprints did not settle within ${readings} readings 5 s apart; ${changes.join(", ")}; ` +
-        `frames ${framesText(previous.frames)} then ${framesText(current.frames)}`);
-    }
-    previous = current;
-  }
-  throw new Error(`settledFootprints needs at least 2 readings, not ${readings}`);
-}
 
 /**
  * Waits until frames of host.window of every window has not changed for 3 seconds; a window whose frames is null waits the 3 seconds
@@ -398,57 +342,32 @@ export function faultErrorCount(lines) {
   return lines.filter((line) => line.startsWith("error ") && line.includes(LAYOUT_FAULT)).length;
 }
 
-/** The value at the rank `share` of the sorted values, the rank of the input latency check. */
-export function percentile(sorted, share) {
-  if (sorted.length === 0) throw new Error("a percentile needs at least one value");
-  return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * share))];
-}
-
-/** The canonical decimal nanoseconds of the host event clock, the unit of the U7 times. */
-const NANOSECONDS = /^[1-9][0-9]*$/;
-
-/** The main-thread time of a U7 step, from entry_ns to return_ns, in nanoseconds. */
-function stepNanos(step, window) {
-  const { entry_ns: entry, return_ns: back } = step.fields;
-  if (!NANOSECONDS.test(entry ?? "") || !NANOSECONDS.test(back ?? "") || BigInt(back) < BigInt(entry)) {
-    throw new Error(`the step at seq ${step.seq} of window ${window} has entry_ns ${JSON.stringify(entry)} and return_ns ${JSON.stringify(back)}`);
-  }
-  return BigInt(back) - BigInt(entry);
-}
-
 /**
  * The figures of the U7 records of one pointer move over a window without a main page: the frame records, the change of frames of
  * host.window, and the 90th percentile of the `hitTest:` step together with the step of the move that follows it (G8), in milliseconds.
- * records are the U7 events of the host process after seq fromSeq up to toSeq, dropped its log.dropped events. A gesture with fewer frame
- * records than the change of frames, or one whose seq range contains a range that log.dropped names, lost records and fails.
+ * The records must be complete (requireCompleteGesture). A nested step, such as the isFlipped that a hitTest: sends, runs inside the step
+ * that sends it and is part of its time, so the step that follows a hitTest: step is the next step by entry that no other step contains.
  */
 export function gestureFigures({ records, dropped, window, framesBefore, framesAfter, fromSeq, toSeq }) {
-  if (!Number.isInteger(framesBefore) || !Number.isInteger(framesAfter) || framesAfter < framesBefore) {
-    throw new Error(`window ${window} reports frames ${JSON.stringify(framesBefore)} before the gesture and ${JSON.stringify(framesAfter)} after it`);
-  }
-  const own = records.filter((record) => record.fields?.window === window).toSorted((a, b) => a.seq - b.seq);
-  const frameRecords = own.filter((record) => record.event === U7_EVENTS.frame).length;
-  const framesChange = framesAfter - framesBefore;
-  if (frameRecords < framesChange) {
-    throw new Error(`the gesture of window ${window} has ${frameRecords} frame records for a change of frames of ${framesChange}`);
-  }
-  for (const { fields } of dropped) {
-    if (!Number.isInteger(fields?.from_seq) || !Number.isInteger(fields?.to_seq)) throw new Error(`a log.dropped event has no seq range: ${JSON.stringify(fields)}`);
-    if (fields.from_seq <= toSeq && fields.to_seq > fromSeq) {
-      throw new Error(`the gesture of window ${window} holds seq ${fromSeq + 1} to ${toSeq}, ` +
-        `which contains the range ${fields.from_seq} to ${fields.to_seq} that log.dropped names`);
-    }
-  }
-  const steps = own.filter((record) => record.event === U7_EVENTS.step);
+  const own = requireCompleteGesture({ records, dropped, window, framesBefore, framesAfter, fromSeq, toSeq });
+  const steps = stepTimes(own);
+  const contains = (outer, inner) => outer !== inner && outer.entryNs <= inner.entryNs && inner.returnNs <= outer.returnNs &&
+    (outer.entryNs !== inner.entryNs || outer.returnNs !== inner.returnNs);
+  const outermost = steps.filter((step) => !steps.some((other) => contains(other, step))).toSorted((a, b) => (a.entryNs < b.entryNs ? -1 : a.entryNs > b.entryNs ? 1 : 0));
   const pairs = [];
-  steps.forEach((step, index) => {
-    if (step.fields.callback !== "hitTest:") return;
-    const next = steps[index + 1];
-    if (next === undefined || next.fields.callback === "hitTest:") throw new Error(`the hitTest: step at seq ${step.seq} of window ${window} has no following step`);
-    pairs.push(Number(stepNanos(step, window) + stepNanos(next, window)) / 1e6);
+  outermost.forEach((step, index) => {
+    if (step.callback !== "hitTest:") return;
+    const next = outermost[index + 1];
+    if (next === undefined || next.callback === "hitTest:") throw new Error(`the hitTest: step at seq ${step.seq} of window ${window} has no following step`);
+    pairs.push(step.ms + next.ms);
   });
   if (pairs.length === 0) throw new Error(`the gesture of window ${window} has no hitTest: step`);
-  return { frameRecords, framesChange, pairs: pairs.length, p90Ms: percentile(pairs.toSorted((a, b) => a - b), 0.9) };
+  return {
+    frameRecords: own.filter((record) => record.event === U7_EVENTS.frame).length,
+    framesChange: framesAfter - framesBefore,
+    pairs: pairs.length,
+    p90Ms: percentile(pairs.toSorted((a, b) => a - b), 0.9),
+  };
 }
 
 /** The HID moves of the pointer step: across the content of the window, from its left edge to its right edge at its middle, in screen points. */
@@ -876,17 +795,33 @@ async function windowStatus(text, sok, configDir, window) {
   return JSON.parse(await text(sok, ["status", "host.window", "--window", window, "--config-dir", configDir]));
 }
 
-/** The windows of one application with its host, sidecar, page and document rows. */
-async function applicationRows(configDir, sok, table, errors, text, realpath) {
-  const rows = [];
+/**
+ * The processes of the application of the configuration folder configDir, each as { role, pid, attribution }: its host, the process whose
+ * command line has --config-dir configDir, its sidecars, the processes whose executable is under configDir/sidecars/, and the WebKit
+ * GPU, networking and WebContent services of the launchd domain of its host. A missing or duplicate host and a launchd domain that
+ * cannot be read are errors. run(command, args) resolves to {status, stdout, stderr, error}, and realpath(path) is the real path.
+ */
+export async function applicationRows({ configDir, run = execute, realpath = realpathSync }) {
+  const table = parseProcessTable(await outputOf(run, "ps", ["-axww", "-o", "pid=,command="]));
   const realPath = realpath(configDir);
+  let host;
   try {
-    const { pid } = hostProcess(table, configDir, realPath);
-    rows.push({ role: "host", pid, attribution: "config-dir argument" });
+    host = hostProcess(table, configDir, realPath);
   } catch (error) {
-    errors.push(`host of ${configDir}: ${error.message}`);
+    throw new Error(`host of ${configDir}: ${error.message}`);
   }
-  rows.push(...sidecarProcesses(table, configDir, realPath));
+  const webkit = await attributeWebKit([{ configDir, pid: host.pid }], run);
+  if (webkit.errors.length > 0) throw new Error(webkit.errors.join("; "));
+  return [
+    { role: "host", pid: host.pid, attribution: "config-dir argument" },
+    ...sidecarProcesses(table, configDir, realPath),
+    ...webkit.attributed.map(({ role, pid, attribution }) => ({ role, pid, attribution })),
+  ];
+}
+
+/** The windows of one application with the page and document rows that host.window of each window reports. */
+async function windowProcesses(configDir, sok, errors, text) {
+  const rows = [];
   let windows = [];
   try {
     windows = JSON.parse(await text(sok, ["windows", "--config-dir", configDir])).map(({ window }) => window);
@@ -922,19 +857,21 @@ export async function measureApps({
   if (footprints !== "settled" && footprints !== "at-once") throw new Error(`footprints must be settled or at-once, not ${JSON.stringify(footprints)}`);
   const errors = [];
   const text = (command, args) => outputOf(run, command, args);
-  const table = parseProcessTable(await text("ps", ["-axww", "-o", "pid=,command="]));
   const apps = [];
-  for (const configDir of configDirs) apps.push({ configDir, ...(await applicationRows(configDir, sok, table, errors, text, realpath)) });
-  const hosts = apps.flatMap(({ configDir, rows }) => rows.filter(({ role }) => role === "host").map(({ pid }) => ({ configDir, pid })));
-  const webkit = await attributeWebKit(hosts, run);
-  errors.push(...webkit.errors);
-  for (const row of webkit.attributed) {
-    const app = apps.find((candidate) => candidate.configDir === row.configDir);
-    // A page or document process that host.window reported is already a row of the application.
-    if (app.rows.some(({ pid }) => pid === row.pid)) continue;
-    app.rows.push({ role: row.role, pid: row.pid, attribution: row.attribution });
+  const claimed = new Set();
+  for (const configDir of configDirs) {
+    const listed = await applicationRows({ configDir, run, realpath });
+    const shown = await windowProcesses(configDir, sok, errors, text);
+    const webkit = ({ attribution }) => attribution === "launchd domain";
+    for (const row of listed.filter(webkit)) claimed.add(row.pid);
+    // A page or document process that host.window reported is a row of its window, not a second WebKit row.
+    const rows = [
+      ...listed.filter((row) => !webkit(row)),
+      ...shown.rows,
+      ...listed.filter((row) => webkit(row) && !shown.rows.some(({ pid }) => pid === row.pid)),
+    ];
+    apps.push({ configDir, rows, windows: shown.windows });
   }
-  const claimed = new Set(webkit.attributed.map(({ pid }) => pid));
   const unattributed = (await webkitPids(run))
     .filter(({ pid }) => !claimed.has(pid))
     .map(({ pid, role }) => ({ role, pid, attribution: "unattributed" }));
@@ -945,23 +882,28 @@ export async function measureApps({
   const failures = new Set();
   const footprintOf = async ({ row, where }) => {
     try {
-      return await text("footprint", ["-p", String(row.pid), "-f", "bytes"]);
+      return await readFootprint(row.pid, run);
     } catch (error) {
       failures.add(`${where}: ${error.message}`);
       return null;
     }
   };
-  const read = async () => {
+  const readFootprints = async () => {
     const values = new Map();
     for (const entry of measured) {
-      const output = await footprintOf(entry);
-      if (output !== null) values.set(entry.row.pid, parseFootprint(output));
+      const reading = await footprintOf(entry);
+      if (reading !== null) values.set(entry.row.pid, reading.bytes);
     }
+    return values;
+  };
+  const readFrames = async () => {
     const frames = [];
     for (const app of apps) for (const window of app.windows) frames.push((await windowStatus(text, sok, app.configDir, window)).frames);
-    return { footprints: values, frames };
+    return frames;
   };
-  const first = footprints === "settled" ? await settledFootprints({ read, sleep }) : await read();
+  const first = footprints === "settled"
+    ? await settledFootprints({ readFootprints, readFrames, sleep })
+    : { footprints: await readFootprints() };
   for (const { row } of measured) row.bytes = first.footprints.get(row.pid) ?? null;
 
   const readCpu = async () => parseCpuSamples(await text("ps", ["-axo", "pid=,time="]));
@@ -991,12 +933,11 @@ export async function measureApps({
     }
   }
   if (settleAfter) {
-    const later = await settledFootprints({ read, sleep });
+    const later = await settledFootprints({ readFootprints, readFrames, sleep });
     for (const { row } of measured) row.bytesAfter = later.footprints.get(row.pid) ?? null;
   }
   for (const entry of measured) {
-    const output = await footprintOf(entry);
-    entry.row.peakBytes = output === null ? null : parseFootprintPeak(output);
+    entry.row.peakBytes = (await footprintOf(entry))?.peakBytes ?? null;
   }
   errors.push(...failures);
 
@@ -1089,11 +1030,9 @@ async function measureOptions(options) {
         untilFaultLine: (position) => untilEventLine(configDir, position, (line) => faultErrorCount([line]) === 1, FAULT_LINE_LIMIT,
           { catalog, records: ["page.record.error", "host.record.error"] }),
         remainingWebKit: async () => {
-          const { attributed, errors: failed } = await attributeWebKit([{ configDir, pid: client.endpoint.pid }], execute);
-          if (failed.length > 0) throw new Error(failed.join("; "));
           const remaining = [];
-          for (const { role, pid } of attributed) {
-            remaining.push({ role, pid, bytes: parseFootprint(await outputOf(execute, "footprint", ["-p", String(pid), "-f", "bytes"])) });
+          for (const { role, pid } of (await applicationRows({ configDir })).filter(({ attribution }) => attribution === "launchd domain")) {
+            remaining.push({ role, pid, bytes: (await readFootprint(pid, execute)).bytes });
           }
           return remaining;
         },
