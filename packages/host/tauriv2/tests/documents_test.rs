@@ -809,47 +809,58 @@ fn a_view_surface_creates_a_view_configuration_and_loads_its_page() {
     assert!(closed.borrow().is_empty(), "a loaded view is not closed");
 }
 
+/// One failure of the view creation: the results of the configuration, the load and the close, and the error that
+/// create_view returns.
+struct ViewFailure {
+    step: &'static str,
+    configured: Result<(), String>,
+    load: Result<bool, String>,
+    closing: Result<(), String>,
+    want: &'static str,
+}
+
 // contract: documents.create.failure-closes-document
 #[test]
 fn a_failed_configuration_or_load_of_a_view_closes_the_view() {
     // Every failure after the view exists closes it before the error returns, and a failed close is reported with the failure.
-    let failures: [(
-        &str,
-        Result<(), String>,
-        Result<bool, String>,
-        Result<(), String>,
-        &str,
-    ); 4] = [
-        (
-            "configure",
-            Err("message failed".into()),
-            Ok(true),
-            Ok(()),
-            "message failed",
-        ),
-        (
-            "load error",
-            Ok(()),
-            Err("load failed".into()),
-            Ok(()),
-            "load failed",
-        ),
-        (
-            "load refusal",
-            Ok(()),
-            Ok(false),
-            Ok(()),
-            "view cannot load soksak://probe/ui/page.html",
-        ),
-        (
-            "close",
-            Err("message failed".into()),
-            Ok(true),
-            Err("the view is gone".into()),
-            "message failed; closing the view: the view is gone",
-        ),
+    let failures = [
+        ViewFailure {
+            step: "configure",
+            configured: Err("message failed".into()),
+            load: Ok(true),
+            closing: Ok(()),
+            want: "message failed",
+        },
+        ViewFailure {
+            step: "load error",
+            configured: Ok(()),
+            load: Err("load failed".into()),
+            closing: Ok(()),
+            want: "load failed",
+        },
+        ViewFailure {
+            step: "load refusal",
+            configured: Ok(()),
+            load: Ok(false),
+            closing: Ok(()),
+            want: "view cannot load soksak://probe/ui/page.html",
+        },
+        ViewFailure {
+            step: "close",
+            configured: Err("message failed".into()),
+            load: Ok(true),
+            closing: Err("the view is gone".into()),
+            want: "message failed; closing the view: the view is gone",
+        },
     ];
-    for (step, configured, load, closing, want) in failures {
+    for ViewFailure {
+        step,
+        configured,
+        load,
+        closing,
+        want,
+    } in failures
+    {
         let closed = RefCell::new(Vec::new());
         let loaded = RefCell::new(Vec::new());
         let configure_failed = configured.is_err();
