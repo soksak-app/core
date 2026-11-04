@@ -29,6 +29,7 @@
     "command-route.js",
     "shortcuts.json",
     "view-events.js",
+    "run-state.js",
     "view-commands.js",
     "commands.js",
     "compositor.js",

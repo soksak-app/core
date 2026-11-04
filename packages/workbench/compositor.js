@@ -7,6 +7,7 @@
 // into data attributes of the slot element, and this module reads those attributes to measure and report.
 import { native, surfaces as app } from "./host.js";
 import { chromeRow, drawnFrameText } from "./frame-text.js";
+import { setRunActive } from "./run-state.js";
 
 const plane = document.getElementById("plane");
 
@@ -212,6 +213,7 @@ function deliver(mine, snapshot, titlebar) {
   const running = !settled();
   if (running !== going) {
     going = running;
+    setRunActive(going);
     // default: the run-edge listener exists only when one was registered.
     edge?.(going);
   }

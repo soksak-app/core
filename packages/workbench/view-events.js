@@ -27,6 +27,9 @@ const statusData = (name, surface, value) => (surface === undefined ? { name, va
  *     status      status(name, surface, fn): follows the value of the status name on the surface, as the registry observe does, and on the
  *                 workbench when surface is undefined; fn(value) receives each value and the function returns the unsubscribe function,
  *                 which it calls at the end of the watch
+ *     run         {active(), onEnd(fn)}: whether a run continues, and fn for each end of a run; onEnd returns its off function. A status watch
+ *                 that has delivered a value holds the values of a run and delivers the newest at its end, because every layout of a run
+ *                 changes the core statuses and a view has its own geometry from its placement. A replaced value is recorded through cancel.
  *     push        push(event, data): posts {event, data} to the view through viewEvent; rejects when the host refuses it
  *     closing     optional AbortSignal of the surface lifetime; a refusal after abort cancels delivery
  *     leftOut     leftOut(): whether a drawing or a place left the surface out; an event that is delivered while it is cancels, because
@@ -41,13 +44,17 @@ const statusData = (name, surface, value) => (surface === undefined ? { name, va
  * of a name that is not watched ends nothing and resolves with null. A refusal after document or surface end is canceled; a refusal while
  * the current document remains open is reported.
  */
-export function createViewSubscriptions({ native, sidecar, textSize, settings, data, logLevels, status, push, report, closing, leftOut = () => false, cancel = () => {} }) {
+export function createViewSubscriptions({ native, sidecar, textSize, settings, data, logLevels, status, run, push, report, closing, leftOut = () => false, cancel = () => {} }) {
   if (typeof push !== "function" || typeof report !== "function") {
     throw new TypeError("createViewSubscriptions requires the push and report functions");
   }
   // The registration of each key and its off function, by key. A key is native:<name>, sidecar.message:<id>, sidecar.failure:<id>,
   // or a status key (statusKey).
   const registered = new Map();
+  // The newest value of a run for each status key, and the status keys that have delivered a value.
+  const heldStatus = new Map();
+  const deliveredStatus = new Set();
+  let offRunEnd = null;
   // A restarted host process is a new document even though its surface stays mounted.
   let generation = 0;
   // Set by close: an event that arrives after the surface closed is canceled without a host send.
@@ -158,7 +165,21 @@ export function createViewSubscriptions({ native, sidecar, textSize, settings, d
       // A refusal of the page is a rejection, so the executor carries a synchronous throw of the observation into it.
       return subscribe(statusKey(name, surface), () => new Promise((resolve) => {
         const owner = generation;
-        resolve(status(name, surface, (value) => forward("status", statusData(name, surface, value), owner)));
+        const key = statusKey(name, surface);
+        resolve(status(name, surface, (value) => {
+          if (run?.active() && deliveredStatus.has(key)) {
+            if (heldStatus.has(key)) cancel("status");
+            heldStatus.set(key, { data: statusData(name, surface, value), owner });
+            offRunEnd ??= run.onEnd(() => {
+              const held = [...heldStatus.values()];
+              heldStatus.clear();
+              for (const entry of held) forward("status", entry.data, entry.owner);
+            });
+            return;
+          }
+          deliveredStatus.add(key);
+          forward("status", statusData(name, surface, value), owner);
+        }));
       }));
     },
     statusUnwatch(name, surface) {
@@ -166,17 +187,23 @@ export function createViewSubscriptions({ native, sidecar, textSize, settings, d
       const off = registered.get(key);
       if (off === undefined) return Promise.resolve(null);
       registered.delete(key);
+      heldStatus.delete(key);
+      deliveredStatus.delete(key);
       return Promise.resolve(off()).then(() => null);
     },
     async restart() {
       if (closed) throw new Error("view subscriptions are closed");
       generation += 1;
+      heldStatus.clear();
+      deliveredStatus.clear();
       const offs = [...registered.values()];
       registered.clear();
       for (const off of offs) await off();
     },
     async close() {
       closed = true;
+      heldStatus.clear();
+      offRunEnd?.();
       const offs = [...registered.values()];
       registered.clear();
       for (const off of offs) await off();

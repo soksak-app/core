@@ -26,6 +26,7 @@ import shortcutTable from "./shortcuts.json" with { type: "json" };
 import { documentRegions } from "./document-regions.js";
 import { forgetViewFocus } from "./view-focus.js";
 import { trace, traceEnabled } from "./performance.js";
+import { onRunEnd, runActive } from "./run-state.js";
 const mounted = new Map();
 let placementTail = Promise.resolve();
 const mounting = new Map();
@@ -460,6 +461,7 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
       read: () => logGate.classes(),
       on: (listener) => Promise.resolve(logGate.onChange(listener)),
     },
+    run: { active: runActive, onEnd: onRunEnd },
     push: (event, data) => scoped.native.call("viewEvent", { generation: viewGeneration, event, data }),
     closing,
     leftOut: () => surfaceLeftOut(surface.surfaceId),
