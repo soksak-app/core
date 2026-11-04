@@ -89,6 +89,115 @@ pub(crate) struct ReadResponse {
     pub urls: Option<Vec<String>>,
 }
 
+/// A PNG read for the view of a surface, which the main page makes for a view call.
+#[derive(Debug, Deserialize)]
+pub(crate) struct ViewReadRequest {
+    pub surface: String,
+    #[serde(rename = "userInitiated")]
+    pub user_initiated: bool,
+}
+
+/// A persist of the PNG that the binary store of the view of a surface keeps under the id `binary`.
+#[derive(Debug, Deserialize)]
+pub(crate) struct ViewPersistRequest {
+    pub surface: String,
+    pub binary: String,
+}
+
+/// The answer of a PNG read for a view: `binary` is the id of the PNG in the binary store of the view, and an absent PNG has no id.
+#[derive(Debug, PartialEq, Serialize)]
+pub(crate) struct ViewReadResponse {
+    pub present: bool,
+    #[serde(rename = "type")]
+    pub kind: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub binary: Option<String>,
+}
+
+/// Reads the PNG of the clipboard through read and puts it as image/png through put, which answers its id in the binary store of the
+/// view, so the reply of the view call carries the id (docs/spec/plugin-processes.md#binary-path). A clipboard without a PNG answers an
+/// absent PNG and puts nothing.
+pub(crate) fn read_view_png_with(
+    read: impl FnOnce() -> Result<ClipboardValue, String>,
+    put: impl FnOnce(&[u8]) -> Result<String, String>,
+) -> Result<ViewReadResponse, String> {
+    match read()? {
+        ClipboardValue::Absent => Ok(ViewReadResponse {
+            present: false,
+            kind: "png",
+            binary: None,
+        }),
+        ClipboardValue::Png(bytes) => {
+            if bytes.len() > MAX_BYTES {
+                return Err("clipboard PNG exceeds 16 MiB".into());
+            }
+            Ok(ViewReadResponse {
+                present: true,
+                kind: "png",
+                binary: Some(put(&bytes)?),
+            })
+        }
+        other => Err(format!("the clipboard PNG read returned {other:?}")),
+    }
+}
+
+/// Takes the bytes of the PNG of a view through take and persists them under root, and returns the path of the file.
+pub(crate) fn persist_view_png_at(
+    root: &Path,
+    take: impl FnOnce() -> Result<Vec<u8>, String>,
+) -> Result<String, String> {
+    persist_png_at(root, &take()?)
+}
+
+/// Answers the PNG read of a view call: the host puts the PNG of the clipboard into the binary store of the view of the request and
+/// answers its id (docs/spec/native-surfaces.md#view-surfaces, view calls).
+pub(crate) fn read_view_png(
+    window: &Window,
+    request: ViewReadRequest,
+) -> Result<ViewReadResponse, String> {
+    validate_read_request("png", request.user_initiated)?;
+    let data = crate::windows::window_data(window)?;
+    let surface = request.surface;
+    exposure::on_main(window, move || {
+        let platform = platform::current()?;
+        read_view_png_with(
+            || platform.clipboard_read("png"),
+            |bytes| {
+                crate::documents::put_view_binary_of(
+                    &data.documents,
+                    &surface,
+                    bytes,
+                    "image/png",
+                    |handle, bytes, kind| platform.put_document_binary(handle, bytes, kind),
+                )
+            },
+        )
+    })
+}
+
+/// Answers the persistPNG of a view call: the host takes the PNG from the binary store of the view of the request on the main thread and
+/// persists it (docs/spec/native-surfaces.md#view-surfaces, view calls).
+pub(crate) fn persist_view_png(
+    app: &AppHandle,
+    window: &Window,
+    request: ViewPersistRequest,
+) -> Result<String, String> {
+    let root = crate::config_directory(app).map_err(|e| e.to_string())?;
+    let data = crate::windows::window_data(window)?;
+    let ViewPersistRequest { surface, binary } = request;
+    persist_view_png_at(&root, || {
+        exposure::on_main(window, move || {
+            let platform = platform::current()?;
+            crate::documents::take_view_binary_of(
+                &data.documents,
+                &surface,
+                &binary,
+                |handle, id| platform.take_document_binary(handle, id),
+            )
+        })
+    })
+}
+
 fn response(value: ClipboardValue, kind: &str) -> ReadResponse {
     match value {
         ClipboardValue::Absent => ReadResponse {

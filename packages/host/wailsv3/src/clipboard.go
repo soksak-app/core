@@ -39,6 +39,101 @@ type ClipboardPersistRequest struct {
 	Data string `json:"data"`
 }
 
+// ClipboardViewReadRequest is a PNG read for the view of a surface, which the main page makes for a view call.
+type ClipboardViewReadRequest struct {
+	Surface       string `json:"surface"`
+	UserInitiated bool   `json:"userInitiated"`
+}
+
+// ClipboardViewReadResponse answers a PNG read for a view: Binary is the id of the PNG in the binary store of the view, and an absent PNG
+// has no id.
+type ClipboardViewReadResponse struct {
+	Present bool   `json:"present"`
+	Type    string `json:"type"`
+	Binary  string `json:"binary,omitempty"`
+}
+
+// ClipboardViewPersistRequest persists the PNG that the binary store of the view of a surface keeps under the id Binary.
+type ClipboardViewPersistRequest struct {
+	Surface string `json:"surface"`
+	Binary  string `json:"binary"`
+}
+
+// readViewPNG reads the PNG of the clipboard and puts it into the binary store of the view of surface as image/png, so the reply of
+// the view call carries its id (docs/spec/plugin-processes.md#binary-path). A clipboard without a PNG answers an absent PNG and puts
+// nothing. The caller must run this operation on the main thread.
+func (s *Surfaces) readViewPNG(surface string) (ClipboardViewReadResponse, error) {
+	value, err := system.ClipboardRead("png")
+	if err != nil {
+		return ClipboardViewReadResponse{}, err
+	}
+	if !value.Present {
+		return ClipboardViewReadResponse{Present: false, Type: "png"}, nil
+	}
+	if len(value.PNG) > clipboardMaxBytes {
+		return ClipboardViewReadResponse{}, fmt.Errorf("clipboard PNG exceeds 16 MiB")
+	}
+	id, err := s.putViewBinary(surface, value.PNG, "image/png")
+	if err != nil {
+		return ClipboardViewReadResponse{}, err
+	}
+	return ClipboardViewReadResponse{Present: true, Type: "png", Binary: id}, nil
+}
+
+// persistViewPNG takes the bytes that the binary store of the view of surface keeps under id and persists them as a clipboard PNG under
+// root, and returns the path of the file. The caller must run the take on the main thread, so it runs this operation there.
+func (s *Surfaces) persistViewPNG(root, surface, id string) (string, error) {
+	bytes, err := s.takeViewBinary(surface, id)
+	if err != nil {
+		return "", err
+	}
+	return PersistClipboardPNG(root, bytes)
+}
+
+// ClipboardReadViewPNG answers the PNG read of a view call: the host puts the PNG of the clipboard into the binary store of the view of
+// the request and answers its id (docs/spec/native-surfaces.md#view-surfaces, view calls).
+func (h *Host) ClipboardReadViewPNG(ctx context.Context, requestJSON json.RawMessage) (ClipboardViewReadResponse, error) {
+	request, err := argument[ClipboardViewReadRequest]("request", requestJSON)
+	if err != nil {
+		return ClipboardViewReadResponse{}, err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return ClipboardViewReadResponse{}, err
+	}
+	if err := ValidateClipboardRead("png", request.UserInitiated); err != nil {
+		return ClipboardViewReadResponse{}, err
+	}
+	var response ClipboardViewReadResponse
+	var callErr error
+	application.InvokeSync(func() {
+		response, callErr = s.readViewPNG(request.Surface)
+	})
+	return response, callErr
+}
+
+// ClipboardPersistViewPNG answers the persistPNG of a view call: the host takes the PNG from the binary store of the view of the request
+// and persists it (docs/spec/native-surfaces.md#view-surfaces, view calls).
+func (h *Host) ClipboardPersistViewPNG(ctx context.Context, requestJSON json.RawMessage) (map[string]string, error) {
+	request, err := argument[ClipboardViewPersistRequest]("request", requestJSON)
+	if err != nil {
+		return nil, err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var path string
+	var callErr error
+	application.InvokeSync(func() {
+		path, callErr = s.persistViewPNG(h.configDir, request.Surface, request.Binary)
+	})
+	if callErr != nil {
+		return nil, callErr
+	}
+	return map[string]string{"path": path}, nil
+}
+
 // ValidateClipboardRead allows only a request that reads a supported format in an explicit user paste.
 func ValidateClipboardRead(kind string, userInitiated bool) error {
 	if !userInitiated {

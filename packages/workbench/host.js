@@ -341,6 +341,12 @@ export function surfaceContextRuntime(surface, declarations = {}) {
     // The clipboard bridge payload follows the host contract, which is already typed. In particular,
     // writeText carries a string, not a surface-scoped object.
     clipboard: createClipboardBridge((name, payload) => bridge.call(name, payload), { allowPersist: true }),
+    // The PNG calls of the view of the surface, whose binary store holds the PNG (docs/spec/plugin-processes.md#binary-path): readPNG puts
+    // the PNG of the clipboard into the store and answers its id, and persistPNG persists the PNG of an id of the store.
+    viewClipboard: {
+      readPNG: () => call("clipboardReadViewPNG", { userInitiated: true }),
+      persistPNG: (binary) => call("clipboardPersistViewPNG", { binary }),
+    },
     // Opening a link notifies the call observer (watchCalls) like other host requests.
     links: createLinkBridge((name, payload) => tell(name, payload)),
   };

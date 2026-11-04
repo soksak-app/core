@@ -97,6 +97,18 @@ test("surface clipboard preserves typed payloads instead of adding surface field
   assert.deepEqual(calls, [["clipboardWriteText", "copied"]]);
 });
 
+test("the PNG calls of a view name the surface of the view, whose binary store holds the PNG", async () => {
+  const { surfaceContextRuntime } = await import("../host.js");
+  calls.length = 0;
+  const runtime = surfaceContextRuntime({ surfaceId: "view-surface" });
+  await runtime.viewClipboard.readPNG();
+  await runtime.viewClipboard.persistPNG("0123456789abcdef0123456789abcdef");
+  assert.deepEqual(calls, [
+    ["clipboardReadViewPNG", { userInitiated: true, surface: "view-surface" }],
+    ["clipboardPersistViewPNG", { binary: "0123456789abcdef0123456789abcdef", surface: "view-surface" }],
+  ]);
+});
+
 test("surface exposure replies retain the logical surface scope", async () => {
   const dom = new JSDOM("<body></body>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;

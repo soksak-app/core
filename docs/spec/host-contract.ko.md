@@ -99,6 +99,8 @@ fn invalid_json_closes_connection() {
 | `clipboard.read.requires-user-initiated` | 사용자의 명시적 붙여넣기가 아닌 클립보드 읽기를 거부한다. | both |
 | `clipboard.read.rejects-unknown-type` | 사용자가 시작했더라도 알 수 없는 형식의 클립보드 읽기를 거부한다. | both |
 | `clipboard.read.accepts-known-types` | 사용자가 시작한 텍스트와 파일 URL 읽기를 받아들인다. | both |
+| `clipboard.view.read-png-puts-binary` | view를 위한 PNG 읽기는 클립보드의 PNG를 `image/png`로 view의 binary store에 put하고 put의 id와 함께 `{present: true, type: "png", binary}`로 답한다. PNG가 없는 클립보드는 `{present: false, type: "png"}`로 답하고 아무것도 put하지 않는다. | both |
+| `clipboard.view.persist-png-takes-binary` | view의 PNG 저장은 view의 binary store에서 binary id의 byte를 take해 클립보드 PNG로 저장한다. 저장되지 않은 id는 native take 오류로 실패한다. | both |
 | `deep-link.parse.accepts-core-and-plugin-owners` | `soksak://core/<command>`와 `soksak://<plugin>/<command>`는 owner, command 이름 `<owner>.<command>`, 쿼리의 매개변수로 해석된다. | both |
 | `deep-link.parse.decodes-percent-encoded-params` | 쿼리의 percent 인코딩된 이름과 값은 원래 텍스트로 디코딩되며, `+`는 공백으로 디코딩된다. | both |
 | `deep-link.parse.rejects-other-scheme` | scheme이 `soksak`이 아닌 URL은 `scheme "<scheme>" is not soksak`으로 거부한다. | both |
@@ -240,8 +242,9 @@ fn invalid_json_closes_connection() {
 | `document.core-root.grant` | core root(`soksak://core`)는 view import map의 core target을 bundled frontend에서 제공하고 그 목록은 bundled frontend의 `core-root.json`에서 읽으며(없거나 잘못된 파일은 error이다), `install.granted-items`가 요청 plugin에 허용한 설치 plugin 파일만 제공한다. 그 밖의 경로, enabled가 아닌 요청 plugin, grant가 이름 붙이지 않은 다른 plugin의 경로는 not found가 되며 `error: core root: <path> is not granted to <plugin>`을 기록한다. 허용되었으나 없는 파일은 거부가 아니라 error이다. | both |
 | `document.core-root.native` | host는 core root resolver를 platform에 등록하며, resolver는 view의 요청을 `CoreRoot`로 답한다. 허용된 module, shared target, core 파일은 확장자의 content type으로 내보내고, 거부된 path나 설치되지 않은 요청자는 not found가 되며 `error: core root: <path> is not granted to <plugin>`을 기록한다. `CoreRoot`의 error는 application log에 기록되고 요청은 not found가 된다. | both |
 | `document.view-import-map.native` | host는 view import map을 platform에 설정하며, 그 값은 bundled frontend의 `view-imports.json`에서 읽고, 파일이 없으면 host는 시작하지 않는다. | both |
-| `documents.binary.take-releases-id` | document 영역의 binary id를 take하면 저장된 byte를 돌려주고 id를 놓으므로, 같은 id의 두 번째 take는 native 오류 문구 `the binary id is not stored`로 실패한다. | both |
-| `documents.binary.take-errors` | 연결되지 않은 document의 take는 다른 document 작업의 문구인 `document "<name>" is not attached`로 실패한다. | both |
+| `documents.binary.view-take-releases-id` | surface의 view에서 binary id를 take하면 저장된 byte를 돌려주고 id를 놓으므로, 같은 id의 두 번째 take는 native 오류 문구 `the binary id is not stored`로 실패한다. | both |
+| `documents.binary.view-put-mints-id` | put은 byte를 content type과 함께 surface의 view의 binary store에 저장하고 native put이 만든 id를 돌려준다. native put의 거부는 그 문구 그대로 전달된다. | both |
+| `documents.binary.view-errors` | view가 없는 surface의 take나 put은 `surface "<surface>" has no view`로 실패하고 어떤 store도 바꾸지 않는다. | both |
 | `view.presentation-wait.ends` | view는 변경마다 한 번 presentation wait에 참여한다. presentation 없는 끝(process-ended, hidden, unresponsive, timeout)은 wait를 한 번 끝내고 `host.trace.view.presentation-abandoned {surface, reason}`을 쓴다. presentation은 그 event 없이 wait를 끝낸다. end가 아닌 reason은 거부된다. | both |
 | `view.presentation-wait.ends-at-the-presentation-limit` | 참여한 view가 10초의 presentation limit까지 presentation도 끝도 없으면 wait는 reason `timeout`으로 끝난다. native join은 중단되고 `host.trace.view.presentation-abandoned {surface, reason: timeout}`을 쓰며, 그 view generation은 이후 wait에 참여하지 않고 새 generation은 다시 참여한다. 이미 presentation했거나 끝난 join의 limit은 아무것도 바꾸지 않으며, 그 generation은 다음 transaction에 참여한다. | both |
 | `view.presentation-wait.join-trace` | performance trace가 켜져 있으면 presentation join은 정확한 surface, generation, ticket을 담은 `host.trace.view.presentation-join`의 요청, native 결과, presentation, abandonment phase를 기록한다. 동기 callback은 native join 결과보다 먼저 기록되며 abandonment 뒤의 늦은 callback도 원래 join identity를 유지한다. | both |

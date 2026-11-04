@@ -1122,6 +1122,31 @@ async fn clipboard_write_text(window: Window, text: Argument<String>) -> Result<
 }
 
 #[tauri::command]
+async fn clipboard_read_view_png(
+    window: Window,
+    request: Argument<clipboard::ViewReadRequest>,
+) -> Result<clipboard::ViewReadResponse, String> {
+    let Argument(request) = request;
+    blocking(move || {
+        clipboard::read_view_png(&window, request)
+    })
+    .await
+}
+
+#[tauri::command]
+async fn clipboard_persist_view_png(
+    app: AppHandle,
+    window: Window,
+    request: Argument<clipboard::ViewPersistRequest>,
+) -> Result<serde_json::Value, String> {
+    let Argument(request) = request;
+    blocking(move || {
+        Ok(serde_json::json!({ "path": clipboard::persist_view_png(&app, &window, request)? }))
+    })
+    .await
+}
+
+#[tauri::command]
 async fn clipboard_persist_png(
     app: AppHandle,
     request: Argument<clipboard::PersistRequest>,

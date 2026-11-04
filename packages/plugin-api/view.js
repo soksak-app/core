@@ -17,6 +17,8 @@ import { observeSurfaceDocument, surfaceDocumentEntry } from "./surface-document
 import { focusedExposure } from "./focus.js";
 
 const PLUGIN = /^[a-z][a-z0-9-]*$/;
+/** A binary id of the binary store of a document: 32 lowercase hexadecimal characters (docs/spec/plugin-processes.md#binary-path). */
+const BINARY_ID = /^[0-9a-f]{32}$/;
 /** The code of a command that the view did not register: EXPOSURE_ERRORS.unregistered of index.js, which this module does not import. */
 const UNREGISTERED_COMMAND = 1002;
 /** The code of a command that failed: EXPOSURE_ERRORS.failed of index.js. */
@@ -114,7 +116,7 @@ function requireDataKey(command, key) {
  *     report    report(event) receives the counts and losses of the calls, as createCalls reports them; a view page passes createViewReporter()
  *
  * Returns {calls, runtime, commands, exposure, contributions, composition}. runtime serves the context entries of the view page: native.on, sidecar(name).on, .onFailure and .send,
- * theme, status.watch, data.get and data.set, and textSize and settings with read and on each. composition.create({regions, overlays})
+ * theme, status.watch, data.get and data.set, textSize and settings with read and on each, and clipboard with read, writeText and persistPNG. composition.create({regions, overlays})
  * creates the composition of the declared regions of the view (docs/spec/native-surfaces.md#view-surfaces, regions).
  */
 export function createViewBridge({ handler, report }) {
@@ -224,6 +226,20 @@ export function createViewBridge({ handler, report }) {
   const { log } = createPluginRuntime({ pluginId: plugin, hooks: {
     log: (level, event, fields, cids) => writeLog(level, event, fields, cids),
   } });
+  // The binary path of the view (docs/spec/plugin-processes.md#binary-path): an upload stores bytes in the binary store of the view
+  // document and answers their id, and a download returns the bytes of an id and releases it. A refusal answers {error}.
+  const uploadBinary = async (bytes, type) => {
+    const response = await window.fetch(`soksak://${plugin}/.binary`, { method: "POST", headers: { "Content-Type": type }, body: bytes });
+    const answer = await response.json();
+    if (!response.ok) throw new Error(`binary upload failed with ${response.status}: ${answer.error}`);
+    if (!BINARY_ID.test(answer.id)) throw new Error(`binary upload answered no binary id: ${JSON.stringify(answer)}`);
+    return answer.id;
+  };
+  const downloadBinary = async (id) => {
+    const response = await window.fetch(`soksak://${plugin}/.binary/${id}`);
+    if (!response.ok) throw new Error(`binary download of ${id} failed with ${response.status}: ${(await response.json()).error}`);
+    return new Uint8Array(await response.arrayBuffer());
+  };
   const runtime = {
     native: {
       on: (name, listener) => {
@@ -272,6 +288,32 @@ export function createViewBridge({ handler, report }) {
       read: () => calls.request("runtime.settings.read", null),
       on: (listener) => listen("settings", () => calls.request("runtime.settings.on", null), listener),
     },
+    // The clipboard of the view page (docs/spec/native-surfaces.md#view-surfaces, view calls). read returns what the clipboard bridge of
+    // a surface context returns: the text, the file URLs or the PNG bytes, or null when the clipboard holds no payload of the type. A PNG
+    // travels through the binary path: a png read downloads the bytes of the id that the reply names, and persistPNG uploads the bytes
+    // and sends their id.
+    clipboard: Object.freeze({
+      read: async (type) => {
+        const reply = await calls.request("runtime.clipboard.read", type);
+        if (type !== "png" || reply === null) return reply;
+        if (reply?.present !== true || reply.type !== "png" || !BINARY_ID.test(reply.binary)) {
+          throw new Error(`clipboard png reply is invalid: ${JSON.stringify(reply)}`);
+        }
+        return downloadBinary(reply.binary);
+      },
+      writeText: (text) => calls.request("runtime.clipboard.writeText", text).then(() => undefined),
+      persistPNG: async (value) => {
+        if (!(value instanceof Uint8Array) && !(value instanceof ArrayBuffer)) {
+          throw new TypeError("persistPNG requires the PNG bytes as a Uint8Array or an ArrayBuffer");
+        }
+        const binary = await uploadBinary(value instanceof ArrayBuffer ? new Uint8Array(value) : value, "image/png");
+        const persisted = await calls.request("runtime.clipboard.persistPNG", { binary });
+        if (typeof persisted?.path !== "string" || typeof persisted.shellQuotedPath !== "string") {
+          throw new Error(`clipboard PNG persistence reply is invalid: ${JSON.stringify(persisted)}`);
+        }
+        return { path: persisted.path, shellQuotedPath: persisted.shellQuotedPath };
+      },
+    }),
     // The event log of the page: log.<level>(event, fields, {cids}), as runtime.log of the surface context. levels() returns the stored
     // level of each class, the start value levels until the first notice log.levels and the levels of the last notice after it; the
     // page reads it only to skip building data that the writer would not store (docs/spec/native-surfaces.md#view-surfaces). The first

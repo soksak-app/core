@@ -79,6 +79,9 @@ static void viewResponsivenessBridge(void *context, bool responsive) {
 static const char *documentBinaryTake(void *document, const char *id, void **bytes, size_t *length) {
     return ON_MAIN(const char *, sp_document_binary_take(document, id, bytes, length));
 }
+static char *documentBinaryPut(void *document, const void *bytes, size_t length, const char *type, char *id) {
+    return ON_MAIN(char *, sp_document_binary_put(document, bytes, length, type, id));
+}
 static void documentAddScript(void *document, const char *source) {
     wailsRunOnMain(^{ sp_document_add_user_script(document, source); });
 }
@@ -321,6 +324,23 @@ func (implementation) TakeDocumentBinary(document unsafe.Pointer, id string) ([]
 	}
 	defer C.free(bytes)
 	return C.GoBytes(bytes, C.int(length)), nil
+}
+
+func (implementation) PutDocumentBinary(document unsafe.Pointer, bytes []byte, contentType string) (string, error) {
+	cType := C.CString(contentType)
+	defer C.free(unsafe.Pointer(cType))
+	var cBytes unsafe.Pointer
+	if len(bytes) > 0 {
+		cBytes = C.CBytes(bytes)
+		defer C.free(cBytes)
+	}
+	id := (*C.char)(C.calloc(33, 1))
+	defer C.free(unsafe.Pointer(id))
+	if text := C.documentBinaryPut(document, cBytes, C.size_t(len(bytes)), cType, id); text != nil {
+		defer C.free(unsafe.Pointer(text))
+		return "", errors.New(C.GoString(text))
+	}
+	return C.GoString(id), nil
 }
 
 func (implementation) AddDocumentScript(document unsafe.Pointer, source string) error {

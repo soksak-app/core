@@ -218,6 +218,14 @@ void sp_document_close(void *document);
 // returns NULL. It returns a static error text and sets nothing when the region is closed or the id is not stored.
 const char *sp_document_binary_take(void *document, const char *id, void **bytes, size_t *length);
 
+// Stores length bytes with their content type in the binary store of the document, a region or a view, under a new id
+// (docs/spec/native-surfaces.md#document-regions), with the bounds of an upload: the bytes are not empty, at most 16 MiB,
+// and the store holds at most 64 MiB with them. The id is released as an uploaded id is: by a download, by a take or when
+// the document closes. On success it writes the 32-character id and its terminating NUL into id and returns NULL. It
+// returns an error text that the caller releases with free, and stores nothing, when the document is closed, the bytes are
+// empty or over a bound, or the type is not given.
+char *sp_document_binary_put(void *document, const void *bytes, size_t length, const char *type, char id[33]);
+
 // Returns the number of ids that the binary store of the region holds. A closed region holds none, so it returns 0.
 size_t sp_document_binary_count(void *document);
 

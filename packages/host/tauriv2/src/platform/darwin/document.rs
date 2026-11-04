@@ -62,6 +62,13 @@ unsafe extern "C" {
         bytes: *mut *mut c_void,
         length: *mut usize,
     ) -> *const c_char;
+    fn sp_document_binary_put(
+        document: *mut c_void,
+        bytes: *const c_void,
+        length: usize,
+        content_type: *const c_char,
+        id: *mut c_char,
+    ) -> *mut c_char;
     fn sp_document_set_stream(document: *mut c_void, stream: Event, context: *mut c_void);
     fn sp_document_stream_on(document: *mut c_void, stream: *const c_char, on: bool) -> bool;
     fn sp_document_stream_ack(document: *mut c_void, seq: u64) -> bool;
@@ -481,6 +488,37 @@ pub fn take_document_binary(document: Handle, id: &str) -> Result<Vec<u8>, Strin
     let data = unsafe { std::slice::from_raw_parts(bytes as *const u8, length) }.to_vec();
     unsafe { free(bytes) };
     Ok(data)
+}
+
+/// Stores bytes with their content type in the binary store of the document under an id that the native layer mints, and returns the
+/// id. The error is the text of the native layer, whose copy is released here.
+pub fn put_document_binary(
+    document: Handle,
+    bytes: &[u8],
+    content_type: &str,
+) -> Result<String, String> {
+    let content_type = CString::new(content_type)
+        .map_err(|error| format!("the content type contains a NUL byte: {error}"))?;
+    let mut id = [0 as c_char; 33];
+    let text = unsafe {
+        sp_document_binary_put(
+            document as *mut c_void,
+            bytes.as_ptr() as *const c_void,
+            bytes.len(),
+            content_type.as_ptr(),
+            id.as_mut_ptr(),
+        )
+    };
+    if !text.is_null() {
+        let error = unsafe { CStr::from_ptr(text) }
+            .to_string_lossy()
+            .into_owned();
+        unsafe { free(text as *mut c_void) };
+        return Err(error);
+    }
+    Ok(unsafe { CStr::from_ptr(id.as_ptr()) }
+        .to_string_lossy()
+        .into_owned())
 }
 
 /// Adds a document-start user script to the document. The source is copied by the native layer. Call it on the main thread before the

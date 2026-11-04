@@ -2306,14 +2306,34 @@ func ViewReplyEvent(surface, plugin string, message json.RawMessage) (map[string
 	return map[string]any{"surface": surface, "plugin": plugin, "id": id, "result": reply.Result}, true, nil
 }
 
-// takeDocumentBinary takes the bytes that the binary store of the document name of surface keeps under id, and releases the id. A
-// document that is not attached gives the error `document "<name>" is not attached`, and a closed document or an unstored id gives the
-// native error text (docs/spec/native-surfaces.md#document-regions).
-// The caller must run this operation on the main thread.
-func (s *Surfaces) takeDocumentBinary(surface, name, id string) ([]byte, error) {
-	handle, err := s.documents.Get(DocumentKey{Surface: surface, Name: name})
+// viewHandle returns the native handle of the view of surface, or the error `surface "<surface>" has no view`.
+func (s *Surfaces) viewHandle(surface string) (unsafe.Pointer, error) {
+	view, ok := s.documents.view(surface)
+	if !ok {
+		return nil, fmt.Errorf("surface %q has no view", surface)
+	}
+	return view.handle, nil
+}
+
+// takeViewBinary takes the bytes that the binary store of the view of surface keeps under id, and releases the id. A surface without a
+// view gives the error `surface "<surface>" has no view`, and a closed view or an unstored id gives the native error text
+// (docs/spec/native-surfaces.md#document-regions). The caller must run this operation on the main thread.
+func (s *Surfaces) takeViewBinary(surface, id string) ([]byte, error) {
+	handle, err := s.viewHandle(surface)
 	if err != nil {
 		return nil, err
 	}
 	return system.TakeDocumentBinary(handle, id)
+}
+
+// putViewBinary stores bytes with their content type in the binary store of the view of surface under the id that the native put mints,
+// and returns the id, which the view downloads from its binary path. A surface without a view gives the error
+// `surface "<surface>" has no view`, and a refusal of the native put gives its error text (docs/spec/native-surfaces.md#document-regions).
+// The caller must run this operation on the main thread.
+func (s *Surfaces) putViewBinary(surface string, bytes []byte, contentType string) (string, error) {
+	handle, err := s.viewHandle(surface)
+	if err != nil {
+		return "", err
+	}
+	return system.PutDocumentBinary(handle, bytes, contentType)
 }

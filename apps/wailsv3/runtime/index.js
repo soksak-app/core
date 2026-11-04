@@ -105,6 +105,8 @@ const METHOD = {
   notificationState: "NotificationState",
   clipboardWriteText: "ClipboardWriteText",
   clipboardPersistPNG: "ClipboardPersistPNG",
+  clipboardReadViewPNG: "ClipboardReadViewPNG",
+  clipboardPersistViewPNG: "ClipboardPersistViewPNG",
   pluginsState: "PluginsState",
   debugFiles: "DebugFiles",
   debugRecord: "DebugRecord",

@@ -1,7 +1,8 @@
 // Checks the binary store of a document region (docs/spec/native-surfaces.md#document-regions): a plugin page uploads bytes
 // by POST to soksak://<plugin>/.binary and downloads them by GET to soksak://<plugin>/.binary/<id>, the host refuses an upload
 // over 16 MiB, a page over 64 MiB, an upload for another plugin's origin and an id that is not stored, a download releases
-// its id, a native take returns the bytes and releases the id, closing the region releases every id it holds, and the
+// its id, a native take returns the bytes and releases the id, a native put stores bytes under a new id with the bounds of
+// an upload, closing the region releases every id it holds, and the
 // upload body reader reads a streamed body, refuses one over the limit after one chunk past it, reports a read failure,
 // and refuses a request with neither body form.
 #import <Cocoa/Cocoa.h>
@@ -289,6 +290,38 @@ int main(void) { @autoreleasepool {
         check(again_take != NULL, @"a native take releases the id, so a second take of it fails");
         check(sp_document_binary_count(document) == 0, [NSString stringWithFormat:@"the take leaves no id: %zu", sp_document_binary_count(document)]);
 
+        // A native put stores bytes under a new id with the bounds of an upload, and the page downloads them once.
+        NSMutableData *pattern = [NSMutableData dataWithLength:kMiB];
+        for (size_t i = 0; i < kMiB; i++) ((unsigned char *)pattern.mutableBytes)[i] = (unsigned char)(i & 255);
+        char putId[33] = {0};
+        char *putError = sp_document_binary_put(document, pattern.bytes, pattern.length, "image/png", putId);
+        NSString *put = @(putId);
+        check(putError == NULL && isBinaryId(put),
+            [NSString stringWithFormat:@"a native put stores the bytes under a new id: %s (%@)", putError ?: "ok", put]);
+        free(putError);
+        check(sp_document_binary_count(document) == 1, [NSString stringWithFormat:@"the put holds one id: %zu", sp_document_binary_count(document)]);
+        NSDictionary *putDownload = ask(document, @{ @"run": @"download", @"id": put });
+        check([putDownload[@"status"] isEqual:@200] && [putDownload[@"equal"] isEqual:@YES] && [putDownload[@"size"] isEqual:@(kMiB)]
+            && [putDownload[@"type"] isEqual:@"image/png"],
+            [NSString stringWithFormat:@"the page downloads the put bytes with their type: %@", putDownload]);
+        NSDictionary *putAgain = ask(document, @{ @"run": @"download", @"id": put });
+        check([putAgain[@"status"] isEqual:@404] && sp_document_binary_count(document) == 0,
+            [NSString stringWithFormat:@"the download releases the put id: %@", putAgain]);
+        char refusedId[33] = {0};
+        char *emptyPut = sp_document_binary_put(document, pattern.bytes, 0, "image/png", refusedId);
+        check(emptyPut && strcmp(emptyPut, "the put holds no bytes") == 0 && sp_document_binary_count(document) == 0,
+            [NSString stringWithFormat:@"a put of no bytes is refused and stores nothing: %s", emptyPut ?: "stored"]);
+        free(emptyPut);
+        NSMutableData *oversized = [NSMutableData dataWithLength:16 * kMiB + 1];
+        char *bigPut = sp_document_binary_put(document, oversized.bytes, oversized.length, "image/png", refusedId);
+        check(bigPut && strcmp(bigPut, "the put is over the limit of 16777216 bytes") == 0 && sp_document_binary_count(document) == 0,
+            [NSString stringWithFormat:@"a put over 16 MiB is refused and stores nothing: %s", bigPut ?: "stored"]);
+        free(bigPut);
+        char *untypedPut = sp_document_binary_put(document, pattern.bytes, pattern.length, NULL, refusedId);
+        check(untypedPut && strcmp(untypedPut, "the put has no content type") == 0 && sp_document_binary_count(document) == 0,
+            [NSString stringWithFormat:@"a put without a content type is refused and stores nothing: %s", untypedPut ?: "stored"]);
+        free(untypedPut);
+
         // An upload over 16 MiB is refused with 413 and stores nothing.
         NSDictionary *big = ask(document, @{ @"run": @"upload", @"size": @(17 * kMiB) });
         check([big[@"status"] isEqual:@413], [NSString stringWithFormat:@"a 17 MiB upload is refused with 413: %@", big]);
@@ -307,6 +340,12 @@ int main(void) { @autoreleasepool {
         NSDictionary *over = ask(document, @{ @"run": @"upload", @"size": @1 });
         check([over[@"status"] isEqual:@413], [NSString stringWithFormat:@"an upload over the page limit of 64 MiB is refused with 413: %@", over]);
         check(sp_document_binary_count(document) == 4, [NSString stringWithFormat:@"the region holds the four uploads: %zu", sp_document_binary_count(document)]);
+        char pageId[33] = {0};
+        char *pagePut = sp_document_binary_put(document, pattern.bytes, 1, "image/png", pageId);
+        check(pagePut && strcmp(pagePut, "the binary store of the page would hold 67108865 bytes, over the limit of 67108864 bytes") == 0
+            && sp_document_binary_count(document) == 4,
+            [NSString stringWithFormat:@"a put over the page limit of 64 MiB is refused and stores nothing: %s", pagePut ?: "stored"]);
+        free(pagePut);
 
         // Closing the region releases every id it holds. The count reads the region after it closes, so the test keeps
         // the region alive until the count is read.
@@ -315,6 +354,11 @@ int main(void) { @autoreleasepool {
         sp_document_close(document);
         check(sp_document_binary_count((void *)region) == 0,
             [NSString stringWithFormat:@"closing the region releases its ids: %zu", sp_document_binary_count((void *)region)]);
+        char closedId[33] = {0};
+        char *closedPut = sp_document_binary_put((void *)region, pattern.bytes, pattern.length, "image/png", closedId);
+        check(closedPut && strcmp(closedPut, "the document region is closed") == 0 && sp_document_binary_count((void *)region) == 0,
+            [NSString stringWithFormat:@"a put into a closed region is refused: %s", closedPut ?: "stored"]);
+        free(closedPut);
         [region release];
     }
     // The store ends before the check removes its folder, so the network process writes nothing into it afterward.

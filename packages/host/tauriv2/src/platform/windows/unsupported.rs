@@ -193,6 +193,14 @@ pub fn take_document_binary(_document: Handle, _id: &str) -> Result<Vec<u8>, Str
     missing("document region")
 }
 
+pub fn put_document_binary(
+    _document: Handle,
+    _bytes: &[u8],
+    _content_type: &str,
+) -> Result<String, String> {
+    missing("document region")
+}
+
 pub fn add_document_script(_document: Handle, _source: &str) -> Result<(), String> {
     missing("view channel")
 }
