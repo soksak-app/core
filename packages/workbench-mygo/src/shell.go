@@ -159,7 +159,11 @@ type Shell struct {
 	units         map[string]*installedUnit
 	contributions *Contributions
 	surfaces      surfaceState
-	page          string
+
+	pluginOperations *PluginOperations
+	starter          pluginStarter
+
+	page string
 	// started is set once the host took the first state of the shell, changed once plugins changed before that, and reloading while the
 	// shell saves before a reload. They belong to the main thread.
 	started, changed, reloading bool
@@ -176,6 +180,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 		return nil, err
 	}
 	var environment struct {
+		pluginStarter
 		Workspace struct {
 			Focus string          `json:"focus"`
 			Grid  environmentGrid `json:"grid"`
@@ -192,6 +197,8 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.registry.Record(s.events.Command)
 	s.errors = NewShownErrors(s.events.Error)
 	s.binder = NewBinder(s.registry, func(_ string, err error) { s.fail(err) })
+	s.starter = environment.pluginStarter
+	s.pluginOperations = NewPluginOperations(s.calls, func() []LoadedPlugin { return s.plugins }, options.Invalidate)
 	s.registry.Elements(options.Elements)
 	// An installation that cannot be read has no installed plugin, and the window shows why (docs/spec/installation.md#serving-installed-plugins).
 	installed := options.Installed
@@ -283,10 +290,12 @@ func (s *Shell) Start() {
 						s.fail(err)
 					}
 					s.options.Invalidate()
-					s.started = true
-					if s.changed {
-						s.pluginsChanged()
-					}
+					s.startPlugins(func(installed bool) {
+						s.started = true
+						if s.changed || installed {
+							s.pluginsChanged()
+						}
+					})
 				})
 			})
 		})

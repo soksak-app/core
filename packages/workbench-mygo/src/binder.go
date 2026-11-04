@@ -60,9 +60,11 @@ func (b *Binder) run(command string, params any) {
 		}
 		raw = encoded
 	}
-	if _, err := b.registry.Run(command, raw); err != nil {
-		b.fail(command, err)
-	}
+	b.registry.RunLater(command, raw, func(_ any, err error) {
+		if err != nil {
+			b.fail(command, err)
+		}
+	})
 }
 
 func (b *Binder) fail(command string, err error) {

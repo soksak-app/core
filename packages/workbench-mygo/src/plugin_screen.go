@@ -16,28 +16,30 @@ import (
 
 // PluginInstalled is what installed.json records of a plugin.
 type PluginInstalled struct {
-	Version string
-	Enabled bool
+	Version string `json:"version"`
+	Enabled bool   `json:"enabled"`
 }
 
 // PluginSidecar is a sidecar that a plugin names. Version and Range are nil when they are unknown.
 type PluginSidecar struct {
-	Name    string
-	Range   *string
-	Version *string
+	Name    string  `json:"name"`
+	Range   *string `json:"range"`
+	Version *string `json:"version"`
 }
 
 // PluginRow is an entry of `plugins` of `core.plugins`. Sidecars is nil for an incompatible plugin that is neither installed
 // nor loaded.
 type PluginRow struct {
-	ID           string
-	Name         string
-	Description  string
-	State        string
-	Installed    *PluginInstalled
-	Latest       *string
-	Incompatible bool
-	Sidecars     []PluginSidecar
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	State       string `json:"state"`
+	// Composition is the kind of the surface composition of a loaded plugin, and nil without one.
+	Composition  *string          `json:"composition"`
+	Installed    *PluginInstalled `json:"installed"`
+	Latest       *string          `json:"latest"`
+	Incompatible bool             `json:"incompatible"`
+	Sidecars     []PluginSidecar  `json:"sidecars"`
 }
 
 // PluginOperation is `operation` of `core.plugins`.
@@ -50,18 +52,18 @@ type PluginOperation struct {
 
 // PluginUpdate is an entry of `updates` of `core.plugins`.
 type PluginUpdate struct {
-	ID        string
-	Installed string
-	Latest    string
+	ID        string `json:"id"`
+	Installed string `json:"installed"`
+	Latest    string `json:"latest"`
 }
 
 // OutdatedSidecar is an entry of `outdated` of `core.plugins`. Running is nil for a service that sent no version, and
 // Installed is nil for a sidecar that is no longer declared.
 type OutdatedSidecar struct {
-	Sidecar   string
-	Running   *string
-	Installed *string
-	Sessions  int
+	Sidecar   string  `json:"sidecar"`
+	Running   *string `json:"running"`
+	Installed *string `json:"installed"`
+	Sessions  int     `json:"sessions"`
 }
 
 // PluginFailure is why the plugin state or the registry index could not be read. Kind is `state` or `index`.
@@ -125,9 +127,9 @@ type PluginPage struct {
 
 // PluginAction is an action button of a card, in the position of its element name: an entry of `actions` of `core.library`.
 type PluginAction struct {
-	Plugin   string
-	Action   string
-	Disabled bool
+	Plugin   string `json:"plugin"`
+	Action   string `json:"action"`
+	Disabled bool   `json:"disabled"`
 }
 
 var pluginStates = map[string]string{
@@ -283,14 +285,12 @@ func versionLine(page PluginPage, row PluginRow) string {
 func DrawPluginPage(c *ui.Context, binder *Binder, page PluginPage, shown *ShownErrors) {
 	ui.Scroll(c).Fill().Children(func() {
 		ui.Column(c).FillWidth().Gap(12).Padding(16).Children(func() {
-			// The group holds the element name, because the field gives its key to an outer element that the element tree leaves out.
 			search := binder.Control(c, "core.library.plugins.search", "core.library.plugins.search", "")
-			ui.Box(c).FillWidth().Role(ui.RoleGroup).Label("플러그인 검색").Children(func() {
-				query := page.Query
-				if ui.SearchField(c, &query).Label("플러그인 검색").FillWidth().Changed() {
-					search(map[string]any{"query": query})
-				}
-			})
+			query := page.Query
+			ui.TextInput(c, &query).Label("플러그인 검색").Placeholder("플러그인 검색").FillWidth()
+			if query != page.Query {
+				search(map[string]any{"query": query})
+			}
 			drawPluginFailure(c, page, shown)
 			if page.Hosted {
 				drawUpdateList(c, binder, page, shown)

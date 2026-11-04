@@ -38,7 +38,7 @@ func (f *shellFixture) answer(name string, params any) (map[string]any, error) {
 // splitShell is a shown project whose first card is split to the right. It returns the two cards.
 func splitShell(t *testing.T) (*shellFixture, string, string) {
 	t.Helper()
-	f := pluginShell(t)
+	f := viewShell(t)
 	left := f.tabbedCards()[0]
 	made, err := f.answer("core.card.split", map[string]string{"card": left, "side": "right", "plugin": "terminal"})
 	if err != nil {
@@ -86,7 +86,7 @@ func (f *shellFixture) divider(left, right string) (ui.Rect, string) {
 func TestCoreCardSplitAnswersTheCardAndTheTab(t *testing.T) {
 	for _, side := range []string{"right", "left", "top", "bottom"} {
 		t.Run(side, func(t *testing.T) {
-			f := pluginShell(t)
+			f := viewShell(t)
 			source := f.tabbedCards()[0]
 			before := len(f.tabbedCards())
 			made, err := f.answer("core.card.split", map[string]string{"card": source, "side": side, "plugin": "terminal"})
@@ -115,7 +115,7 @@ func TestCoreCardSplitAnswersTheCardAndTheTab(t *testing.T) {
 }
 
 func TestCoreCardSplitRefuses(t *testing.T) {
-	f := pluginShell(t)
+	f := viewShell(t)
 	source := f.tabbedCards()[0]
 	for _, c := range []struct {
 		card, side, want string
@@ -400,8 +400,8 @@ func TestThePlaneHasTheGapOfThePage(t *testing.T) {
 	}
 }
 
-// pluginShell is a shell with a project and the plugins of a view.
-func pluginShell(t *testing.T) *shellFixture {
+// viewShell is a shell with a project and the plugins of a view.
+func viewShell(t *testing.T) *shellFixture {
 	t.Helper()
 	f := newShell(t, &storedHost{installed: installedDocument})
 	f.run("core.library.form.open", map[string]string{"mode": "open"})
@@ -412,7 +412,7 @@ func pluginShell(t *testing.T) *shellFixture {
 
 // A new tab is named by the mark of its plugin and the counter of the project, which is stored with the project.
 func TestANewTabCarriesTheMarkOfItsPlugin(t *testing.T) {
-	f := pluginShell(t)
+	f := viewShell(t)
 	card := f.tabbedCards()[0]
 	f.run("core.card.add-tab", map[string]string{"card": card, "plugin": "browser"})
 	f.settle()
@@ -431,7 +431,7 @@ func TestANewTabCarriesTheMarkOfItsPlugin(t *testing.T) {
 
 // A tab or a split of a plugin that is not loaded is refused, with the words of the page.
 func TestAnUnknownPluginIsRefused(t *testing.T) {
-	f := pluginShell(t)
+	f := viewShell(t)
 	card := f.tabbedCards()[0]
 	before := len(f.tabbedCards())
 	for name, params := range map[string]map[string]string{

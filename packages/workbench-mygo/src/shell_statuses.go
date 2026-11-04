@@ -407,26 +407,6 @@ func (s *Shell) surfacePhase(id string) map[string]any {
 	return map[string]any{"phase": "loading"}
 }
 
-// libraryStatus returns the value of core.library.
-func (s *Shell) libraryStatus() map[string]any {
-	shown, pinned := []string{}, []string{}
-	for _, project := range s.shownProjects() {
-		shown = append(shown, project.ID)
-		if project.Pinned {
-			pinned = append(pinned, project.ID)
-		}
-	}
-	var form any
-	if s.library.formMode != "" {
-		form = map[string]any{"mode": s.library.formMode, "name": s.library.name, "parent": s.library.parent}
-	}
-	return map[string]any{"page": s.library.page, "plugins": map[string]any{"query": "", "shown": []string{}, "actions": []any{}},
-		"shown": shown, "pinned": pinned, "count": fmt.Sprintf("%d", len(shown)), "query": s.library.query, "sort": s.library.order,
-		"form": s.library.formMode != "", "formState": form, "returnVisible": s.opened() != nil, "pending": false,
-		"empty": len(s.projects) == 0, "noResults": len(s.projects) > 0 && len(shown) == 0, "error": nil, "previews": map[string]any{},
-		"previewErrors": map[string]any{}, "folderErrors": map[string]any{}}
-}
-
 // registerStatuses adds the statuses of the shell.
 func (s *Shell) registerStatuses() {
 	s.registry.Status("core.projects", func() any {
@@ -470,7 +450,6 @@ func (s *Shell) registerStatuses() {
 		return value
 	})
 	s.registry.Status("core.surfaces", func() any { return s.surfacesState() })
-	s.registry.Status("core.library", func() any { return s.libraryStatus() })
 	s.registry.Status("core.chrome", func() any {
 		tabs, ok := s.settings.Value("projectTabs").(string)
 		if !ok {

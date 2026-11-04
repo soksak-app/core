@@ -21,6 +21,9 @@ import (
 
 // storedHost answers the host calls of the shell from memory, as the workspace store of the language host library does.
 type storedHost struct {
+	plugins *pluginsHost
+	// reloads counts the starts of the workbench that the shell asked for.
+	reloads  int
 	projects []map[string]any
 	// extra holds the host calls that the base table has not.
 	extra   map[string]workbench.HostCall
@@ -147,7 +150,41 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 		"setMenuLanguage": answer("setMenuLanguage", func(argument json.RawMessage) (any, error) { h.language = argument; return nil, nil }),
 		"windowNew":       answer("windowNew", none),
 		"windowClose":     answer("windowClose", none),
+		"pluginsState":    answer("pluginsState", h.pluginHost().state),
+		"pluginsRun":      answer("pluginsRun", h.pluginHost().run),
+		"pluginsUseRegistry": answer("pluginsUseRegistry", func(argument json.RawMessage) (any, error) {
+			var request struct{ Index string }
+			if err := json.Unmarshal(argument, &request); err != nil {
+				return nil, err
+			}
+			plugins := h.pluginHost()
+			plugins.used = append(plugins.used, request.Index)
+			plugins.registry = request.Index
+			return nil, nil
+		}),
+		"pluginsStarter": answer("pluginsStarter", func(argument json.RawMessage) (any, error) {
+			var request struct {
+				State, Pack, Registry string
+				Plugins               []string
+			}
+			if err := json.Unmarshal(argument, &request); err != nil {
+				return nil, err
+			}
+			plugins := h.pluginHost()
+			plugins.jobs = append(plugins.jobs, request.State+" "+request.Pack)
+			plugins.starter = map[string]any{"format": 1, "state": request.State, "pack": request.Pack, "registry": request.Registry, "plugins": request.Plugins}
+			return nil, nil
+		}),
+		"sidecarsOutdated": answer("sidecarsOutdated", func(json.RawMessage) (any, error) { return h.pluginHost().outdated, nil }),
 	}
+}
+
+// pluginHost returns the plugin state of the host, which has no plugin and a registry that the test did not set by default.
+func (h *storedHost) pluginHost() *pluginsHost {
+	if h.plugins == nil {
+		h.plugins = &pluginsHost{core: "1.0.0", plugins: map[string]map[string]any{}}
+	}
+	return h.plugins
 }
 
 func (h *storedHost) project(id string) map[string]any {
@@ -250,6 +287,7 @@ func newShell(t *testing.T, stored *storedHost) *shellFixture {
 		Invalidate:  func() {},
 		Post:        f.pending.post,
 		Report:      func(line string) { f.lines = append(f.lines, line) },
+		Reload:      func() { stored.reloads++ },
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -390,7 +428,7 @@ func TestLibraryShowsTheStartOfAnEmptyWorkspace(t *testing.T) {
 
 func TestWindowIsReadyAfterTheSnapshot(t *testing.T) {
 	f := newShell(t, &storedHost{})
-	if strings.Join(startCalls(f.host.calls), " ") != "workspace windowReady" {
+	if strings.Join(startCalls(f.host.calls), " ") != "workspace windowReady pluginsState sidecarsOutdated" {
 		t.Fatalf("the start called %v", f.host.calls)
 	}
 }

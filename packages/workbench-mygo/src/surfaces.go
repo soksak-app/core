@@ -175,7 +175,7 @@ func (s *Shell) drawSeat(c *ui.Context, tab layout.Tab, box layout.Rect) {
 	unit := s.units[tab.Plugin]
 	switch {
 	case unit == nil:
-		ui.Text(c, tab.Plugin+" 플러그인이 설치되어 있지 않습니다.").FontSize(12).TextColor(s.palette.Muted)
+		s.drawPluginPlaceholder(c, tab.Plugin)
 		return
 	case unit.Composition == nil:
 		ui.Text(c, tab.Plugin+" 플러그인에는 화면이 없습니다.").FontSize(12).TextColor(s.palette.Muted)

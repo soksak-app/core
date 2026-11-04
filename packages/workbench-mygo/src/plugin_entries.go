@@ -59,15 +59,20 @@ func readLoadedPlugins(installed, environment []byte) ([]LoadedPlugin, []Setting
 	var document struct {
 		Plugins []struct {
 			ID       string `json:"id"`
+			Version  string `json:"version"`
 			Manifest struct {
 				Name        string `json:"name"`
 				Description string `json:"description"`
 				Mark        string `json:"mark"`
 				Icon        string `json:"icon"`
 				Surface     *struct {
+					Composition *struct {
+						Kind string `json:"kind"`
+					} `json:"composition"`
 					Menu []PluginMenuItem `json:"menu"`
 				} `json:"surface"`
-				Sections []struct {
+				Dependencies map[string]string `json:"dependencies"`
+				Sections     []struct {
 					ID   string `json:"id"`
 					Name string `json:"name"`
 				} `json:"sections"`
@@ -88,9 +93,12 @@ func readLoadedPlugins(installed, environment []byte) ([]LoadedPlugin, []Setting
 	var definitions []SettingDefinition
 	for _, entry := range document.Plugins {
 		plugin := LoadedPlugin{ID: entry.ID, Name: entry.Manifest.Name, Description: entry.Manifest.Description, Mark: entry.Manifest.Mark,
-			Icon: entry.Manifest.Icon, Surface: entry.Manifest.Surface != nil}
+			Icon: entry.Manifest.Icon, Surface: entry.Manifest.Surface != nil, Version: entry.Version, Dependencies: entry.Manifest.Dependencies}
 		if entry.Manifest.Surface != nil {
 			plugin.Menu = entry.Manifest.Surface.Menu
+			if composition := entry.Manifest.Surface.Composition; composition != nil {
+				plugin.Composition = &composition.Kind
+			}
 		}
 		for _, section := range entry.Manifest.Sections {
 			plugin.Sections = append(plugin.Sections, LoadedSection{ID: section.ID, Name: section.Name})
