@@ -526,3 +526,22 @@ func spaceCall(t *testing.T, project *layout.Project, s step) (any, bool, error)
 	t.Fatalf("no space function %s", s.Call)
 	return nil, false, nil
 }
+
+func TestHeadCases(t *testing.T) {
+	var file struct {
+		Description string `json:"description"`
+		Cases       []struct {
+			Name    string          `json:"name"`
+			Head    layout.Head     `json:"head"`
+			Returns json.RawMessage `json:"returns"`
+		} `json:"cases"`
+	}
+	caseFile(t, "head.json", &file)
+	for _, kase := range file.Cases {
+		t.Run(kase.Name, func(t *testing.T) {
+			checkStep(t, step{Call: "fitHead", Returns: kase.Returns}, "fitHead", func() (any, bool, error) {
+				return layout.FitHead(kase.Head), true, nil
+			})
+		})
+	}
+}
