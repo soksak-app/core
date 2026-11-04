@@ -10,8 +10,9 @@
 // 3 seconds after the last frame. The U7 records of the pointer step are read through scripts/frame-records.mjs. The CPU time of a
 // process is the CPU time that ps reports, read at two points INTERVAL seconds apart. The sidecars are summed apart from the application.
 //
-// --trace 0|1 sets the trace state with core.settings.change before the measurement (scripts/measure-trace.mjs). --state prepares a state of
-// B3 through declared commands in a window of 1200 by 760 points: S0 (the library screen without a plugin view), S0b (the window after its
+// --trace 0|1 sets the trace state with core.settings.change before the measurement (scripts/measure-trace.mjs); --trace frame-records,
+// which needs --step pointer, sets the trace state of the frame records (FRAME_RECORDS) for both moves of the pointer step. --state
+// prepares a state of B3 through declared commands in a window of 1200 by 760 points: S0 (the library screen without a plugin view), S0b (the window after its
 // project closed, each WebContent process of a view page or a document region read before the close exited), S1 (one term tab and one
 // browser tab on a blank page of a loopback server that ends with the measurement), S9 (S1 under a second library window that covers it),
 // S11 (S1 with a second project window beside it), S12 (S1 after one layout draw that fails), S14 (S0 10 seconds after one character in the
@@ -29,12 +30,15 @@
 // scripts/b3-out.mjs: {"measurements": {KEY: number}, "conditions": {refreshRate, backingScale, traceState, logPolicy, window}}. The
 // conditions are those of b3Conditions: the refresh rate and the backing scale that every window reports in host.window, traceState, the
 // diagnostics.performance of the trace state of the CPU interval (true or false), the classes of the log policy in force, and the content
-// size of the window of the state, read before the first CPU reading. The keys, which B3_MEASUREMENTS lists, end in their unit:
+// size of the window of the state, read before the first CPU reading. One output holds the keys of one trace state, the state of its
+// measured interval: under --step pointer, --trace 0|1 writes the keys of the first move except hitTestP90Ms, and --trace frame-records
+// writes hitTestP90Ms alone, from the repeated move in that state. The keys, which B3_MEASUREMENTS lists, end in their unit:
 //   hostCpuSeconds, applicationCpuSeconds,       CPU seconds over the interval of the host, the application without its sidecars,
 //   sidecarCpuSeconds                            and the sidecars
 //   hostFootprintKb, applicationFootprintKb,     footprints in KB (1,024 bytes) read before the interval
 //   sidecarFootprintKb
-//   applicationFootprintAfterKb                  the application footprint in KB after the pointer move (--step pointer)
+//   applicationFootprintAfterKb                  the application footprint in KB after the pointer move (--step pointer
+//                                                --trace 0|1)
 //   applicationPeakFootprintKb                   the sum of the peak footprints in KB after the last CPU reading
 //   webKitProcesses, webContentProcesses         the WebKit processes of the application, and its WebContent processes (page,
 //                                                document and WebContent service rows)
@@ -42,9 +46,9 @@
 //                                                over the windows; absent on a host that reports them null
 //   errorLines                                   the error lines of the layout fault (S12)
 //   hitTestP90Ms                                 the 90th percentile in ms of the hitTest: step with its following step (--step
-//                                                pointer on a window without a main page)
+//                                                pointer --trace frame-records on a window without a main page)
 //
-//   node scripts/measure-app-usage.mjs --sok PATH --config-dir DIR [--config-dir DIR ...] --trace 0|1 [--interval SECONDS]
+//   node scripts/measure-app-usage.mjs --sok PATH --config-dir DIR [--config-dir DIR ...] --trace 0|1|frame-records [--interval SECONDS]
 //     [--state S0|S0b|S1|S9|S11|S12|S14|S15] [--idle] [--step pointer] [--b3-out FILE] [--json]
 import { execFile } from "node:child_process";
 import { mkdirSync, readFileSync, realpathSync } from "node:fs";
@@ -713,15 +717,18 @@ export function parseOptions(args) {
       json: { type: "boolean", default: false },
     },
   });
-  if (!values.sok || !values["config-dir"]) throw new Error("required options: --sok PATH --config-dir DIR [--config-dir DIR ...] --trace 0|1");
+  if (!values.sok || !values["config-dir"]) throw new Error("required options: --sok PATH --config-dir DIR [--config-dir DIR ...] --trace 0|1|frame-records");
   for (const configDir of values["config-dir"]) {
     if (!isAbsolute(configDir)) throw new Error(`--config-dir must be an absolute path (${configDir})`);
   }
   const interval = Number(values.interval);
   if (!(interval > 0)) throw new Error(`--interval must be a positive number of seconds (${values.interval})`);
-  const trace = parseTrace(values.trace);
+  const trace = values.trace === FRAME_RECORDS ? FRAME_RECORDS : parseTrace(values.trace);
   if (values.state !== undefined && !STATES.includes(values.state)) throw new Error(`--state must be one of ${STATES.join(", ")} (${values.state})`);
   if (values.step !== undefined && values.step !== "pointer") throw new Error(`--step must be pointer (${values.step})`);
+  if (trace === FRAME_RECORDS && values.step === undefined) {
+    throw new Error(`TRACE ${FRAME_RECORDS} is the trace state of the U7 records of --step pointer, which was not given`);
+  }
   if ((values.state !== undefined || values.idle || values.step !== undefined) && values["config-dir"].length !== 1) {
     throw new Error(`--state, --idle and --step prepare and measure one application; ${values["config-dir"].length} --config-dir were given`);
   }
@@ -1104,16 +1111,26 @@ async function measureOptions(options) {
 }
 
 /**
- * The B3 output {measurements, conditions} of a measurement of make app-usage. The conditions come from b3Conditions of
+ * The B3 output {measurements, conditions} of a measurement of make app-usage. One output holds the keys of one trace state, the state of
+ * its measured interval: with --step pointer, the trace state 0 or 1 gives the keys of the first move without hitTestP90Ms, and the trace
+ * state FRAME_RECORDS gives hitTestP90Ms alone, from the repeated move in that state. The conditions come from b3Conditions of
  * scripts/b3-out.mjs with the window marks of the application before the first CPU reading, which carry the id, the refresh rate, the
- * scale and the content of each window, the diagnostics.performance of the trace state of the CPU interval and the classes of the policy
- * in force before that reading.
+ * scale and the content of each window, the diagnostics.performance of the trace state and the classes of the policy in force before
+ * that reading.
  */
 export function usageOutput({ options, measurement, gesture, faultLines }) {
   const [app] = measurement.apps;
   const [before] = measurement.marks.before;
   const [after] = measurement.marks.after;
-  const measurements = usageMeasurements({ app, marks: { before: before.windows, after: after.windows }, faultLines, gesture });
+  let measurements;
+  if (options.trace === FRAME_RECORDS) {
+    if (gesture === null || gesture === undefined) {
+      throw new Error(`the pointer output under the trace state ${FRAME_RECORDS} is hitTestP90Ms, which a window with a main page has not`);
+    }
+    measurements = { hitTestP90Ms: gesture.p90Ms };
+  } else {
+    measurements = usageMeasurements({ app, marks: { before: before.windows, after: after.windows }, faultLines, gesture: null });
+  }
   const conditions = b3Conditions({ windows: before.windows, performance: traceSettings(options.trace)["diagnostics.performance"], policy: before.policy });
   return { measurements, conditions };
 }

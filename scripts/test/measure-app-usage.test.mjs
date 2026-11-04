@@ -828,6 +828,36 @@ test("the B3 keys of app-usage end in their unit, and a measurement with every f
 /** The classes of the log policy in force of a B3 test: the default policy with the class frame at debug. */
 const POLICY = { lifecycle: "error", input: "error", call: "error", io: "error", frame: "debug" };
 
+test("a pointer output holds the keys of one trace state: the cpu and footprint keys under TRACE 0 or 1, hitTestP90Ms alone under frame-records", () => {
+  const measurement = {
+    apps: [measuredApp({ after: true })],
+    marks: {
+      before: [{ configDir: MYGO, trace: false, policy: POLICY, windows: marksOfTwo().before }],
+      after: [{ configDir: MYGO, trace: false, policy: POLICY, windows: marksOfTwo().after }],
+    },
+  };
+  const gesture = { window: "w1", frameRecords: 4, pairs: 4, p90Ms: 6, framesChange: 4 };
+  for (const trace of [0, 1]) {
+    const output = usageOutput({ options: { trace, step: "pointer" }, measurement, gesture });
+    assert.equal("hitTestP90Ms" in output.measurements, false);
+    assert.equal(output.measurements.applicationFootprintAfterKb, 152 * 1024);
+    assert.equal(output.conditions.traceState, trace === 1);
+  }
+  const records = usageOutput({ options: { trace: "frame-records", step: "pointer" }, measurement, gesture });
+  assert.deepEqual(records, {
+    measurements: { hitTestP90Ms: 6 },
+    conditions: { refreshRate: 120, backingScale: 2, traceState: false, logPolicy: POLICY, window: { width: 1200, height: 760 } },
+  });
+  assert.throws(() => usageOutput({ options: { trace: "frame-records", step: "pointer" }, measurement, gesture: null }),
+    /the pointer output under the trace state frame-records is hitTestP90Ms, which a window with a main page has not/);
+});
+
+test("TRACE frame-records is the trace state of the pointer step and needs --step pointer", () => {
+  const base = ["--sok", "/b/sok", "--config-dir", MYGO, "--trace", "frame-records"];
+  assert.equal(parseOptions([...base, "--step", "pointer"]).trace, "frame-records");
+  assert.throws(() => parseOptions(base), /TRACE frame-records is the trace state of the U7 records of --step pointer, which was not given/);
+});
+
 test("the B3 output of app-usage takes its conditions from b3-out with the performance switch of the trace state", () => {
   const measurement = {
     apps: [measuredApp()],

@@ -315,6 +315,8 @@ const FEATURE_LINKS = [
       { file: "scripts/test/measure-app-usage.test.mjs", id: "the B3 measurements add the footprint after the pointer move, the error lines of the fault and the hit-test p90" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "a host whose host.window reports no frame counters has no frames and commandBuffers measurements, and a partial counter fails" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "the B3 output of app-usage takes its conditions from b3-out with the performance switch of the trace state" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "a pointer output holds the keys of one trace state: the cpu and footprint keys under TRACE 0 or 1, hitTestP90Ms alone under frame-records" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "TRACE frame-records is the trace state of the pointer step and needs --step pointer" },
       { file: "scripts/test/measure-terminal-redraw.test.mjs", id: "the B3 output of the redraw takes its conditions from b3-out with the performance switch of the trace state" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "the B3 keys of app-usage end in their unit, and a measurement with every figure holds every key" },
       { file: "scripts/test/frame-records.test.mjs", id: "the U7 events are the frame, commit and step records that the U7 row of the plan names" },
