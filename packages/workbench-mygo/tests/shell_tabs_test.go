@@ -136,7 +136,7 @@ func newTabShellWithState(t *testing.T, stored *storedHost, refused error) *tabS
 		Declared:    declared,
 		Calls:       workbench.NewCalls(table, f.pending.post),
 		Environment: environment(t),
-		Installed: []byte(`{"plugins": [{"id": "notes", "manifest": {"id": "notes", "mark": "n",
+		Installed: []byte(`{"plugins": [{"id": "notes", "package": "@scope/plugin-notes", "version": "1.0.0", "manifest": {"id": "notes", "name": "노트", "description": "notes", "mark": "n", "icon": "<path d=\"M1 1h14\"/>",
 			"surface": {"composition": {"kind": "view", "page": "ui/index.html"}}}}]}`),
 		Invalidate: func() {},
 		Post:       f.pending.post,

@@ -323,6 +323,14 @@ func environment(t testing.TB) []byte {
 
 func newShell(t testing.TB, stored *storedHost) *shellFixture {
 	t.Helper()
+	f := startedShell(t, stored)
+	f.settle()
+	return f
+}
+
+// startedShell is newShell without its settle, for a start whose failure the test expects.
+func startedShell(t testing.TB, stored *storedHost) *shellFixture {
+	t.Helper()
 	declared, err := workbench.Declared()
 	if err != nil {
 		t.Fatal(err)
@@ -350,7 +358,6 @@ func newShell(t testing.TB, stored *storedHost) *shellFixture {
 	f.shell = shell
 	f.tester = ui.NewTester(shell.View, 1200, 800)
 	shell.Start()
-	f.settle()
 	return f
 }
 

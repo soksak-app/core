@@ -243,9 +243,10 @@ func TestPluginsApplyStartsTheWorkbenchAgain(t *testing.T) {
 
 // installedSession is the document of the installed plugins with a plugin that keeps a background session.
 const installedSession = `{"plugins": [{"id": "session", "package": "@scope/plugin-session", "version": "1.0.0", "manifest": {
+	"id": "session", "name": "세션", "description": "session", "mark": "s", "icon": "<path d=\"M1 1h14\"/>", "dependencies": {"@scope/sidecar-session": "^1.0.0"},
 	"background": {"sidecar": "@scope/sidecar-session", "operation": "open", "settings": {"shell": "shell"}},
-	"settings": {"shell": {"type": "text", "default": "login"}, "other": {"type": "text", "default": "x"}},
-	"surface": {"opens": {"extensions": ["log"]}}}}]}`
+	"settings": {"shell": {"type": "string", "label": "셸", "default": "login", "maxLength": 64}, "other": {"type": "string", "label": "다른 값", "default": "x", "maxLength": 64}},
+	"surface": {"opens": {"extensions": ["log"]}, "params": {"type": "object", "properties": {"path": {"type": "string"}}}, "composition": {"kind": "view", "page": "ui/index.html"}}}}]}`
 
 // appStatus reads the status name of the window through its exposure request.
 func appStatus(t *testing.T, app *workbench.App, window *appWindow, queue steps, replies *[]map[string]any, name string) map[string]any {
@@ -390,6 +391,7 @@ func TestAShownTabShowsTheFailureOfItsImageDetach(t *testing.T) {
 
 // installedSessionView is installedSession with a plugin that stands in a view of its tab.
 const installedSessionView = `{"plugins": [{"id": "session", "package": "@scope/plugin-session", "version": "1.0.0", "manifest": {
+	"id": "session", "name": "세션", "description": "session", "mark": "s", "icon": "<path d=\"M1 1h14\"/>", "dependencies": {"@scope/sidecar-session": "^1.0.0"},
 	"background": {"sidecar": "@scope/sidecar-session", "operation": "open"},
 	"surface": {"composition": {"kind": "view", "page": "ui/index.html"}}}}]}`
 

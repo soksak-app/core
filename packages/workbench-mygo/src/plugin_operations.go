@@ -44,6 +44,32 @@ type PluginsStatus struct {
 	Outdated  []OutdatedSidecar `json:"outdated"`
 }
 
+// acceptInstalled checks the document of the installed plugins as the page does, and returns the document of the plugins that the
+// window accepts and the ids of those it refused (docs/spec/installation.md#serving-installed-plugins). The error names every refusal.
+func acceptInstalled(document []byte) ([]byte, map[string]bool, error) {
+	none := []byte(`{"plugins":[]}`)
+	value, err := sok.DecodeJSON(document)
+	if err != nil {
+		return none, nil, fmt.Errorf("installed plugins: %w", err)
+	}
+	accepted, err := sok.AcceptInstalledPlugins(value)
+	if err != nil {
+		return none, nil, err
+	}
+	encoded, err := json.Marshal(map[string]any{"plugins": accepted.Plugins})
+	if err != nil {
+		return none, nil, err
+	}
+	refused := map[string]bool{}
+	for _, id := range accepted.Refused {
+		refused[id] = true
+	}
+	if len(accepted.Errors) > 0 {
+		return encoded, refused, errors.New(strings.Join(accepted.Errors, "\n"))
+	}
+	return encoded, refused, nil
+}
+
 // listedVersions returns the plugins of the index by id, each with the versions that are not revoked
 // (docs/spec/installation.md#version-selection).
 func listedVersions(index *PluginIndex) map[string]sok.RegistryPlugin {
@@ -197,6 +223,7 @@ func pluginRow(id string, unit *LoadedPlugin, state *PluginsState, listed map[st
 type PluginOperations struct {
 	calls   *Calls
 	loaded  func() []LoadedPlugin
+	refused func() map[string]bool
 	changed func()
 
 	state     *PluginsState
@@ -206,8 +233,8 @@ type PluginOperations struct {
 }
 
 // NewPluginOperations returns the operations of a window over its host calls.
-func NewPluginOperations(calls *Calls, loaded func() []LoadedPlugin, changed func()) *PluginOperations {
-	return &PluginOperations{calls: calls, loaded: loaded, changed: changed, outdated: []OutdatedSidecar{}}
+func NewPluginOperations(calls *Calls, loaded func() []LoadedPlugin, refused func() map[string]bool, changed func()) *PluginOperations {
+	return &PluginOperations{calls: calls, loaded: loaded, refused: refused, changed: changed, outdated: []OutdatedSidecar{}}
 }
 
 // State returns the plugin state of the host, and nil before it was read.
@@ -315,7 +342,7 @@ func (p *PluginOperations) Status() PluginsStatus {
 		return status
 	}
 	status.Core, status.Registry = &p.state.Core, p.state.Registry
-	rows, err := PluginRows(p.loaded(), p.state, nil)
+	rows, err := PluginRows(p.loaded(), p.state, p.refused())
 	if err != nil {
 		message := err.Error()
 		status.Error = &message

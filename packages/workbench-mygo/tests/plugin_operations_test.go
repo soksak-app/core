@@ -125,7 +125,7 @@ func (f *shellFixture) pluginStatus() pluginsStatus {
 }
 
 const loadedAlpha = `{"plugins":[{"id":"alpha","package":"alpha","version":"1.0.0","manifest":{"id":"alpha","name":"Alpha","description":"Loaded alpha",
-	"surface":{"composition":{"kind":"view"}},"dependencies":{"hello":"^2.0.0"}}}]}`
+	"mark":"a","icon":"<path d=\"M1 1h14\"/>","surface":{"composition":{"kind":"view","page":"ui/index.html"}},"dependencies":{"hello":"^2.0.0"}}}]}`
 
 func TestPluginRowsFollowTheStateOfThePage(t *testing.T) {
 	version := func(v string) *string { return &v }
@@ -309,6 +309,35 @@ func TestShowUpdatesBringsTheUpdateListIntoView(t *testing.T) {
 	f.settle()
 	if shown := positional(t, f.tester, "core.library.plugins.updates", 0).Bounds.Y; shown < 0 {
 		t.Fatalf("the list stands at %v", shown)
+	}
+}
+
+// A plugin whose manifest the window refuses is left out with its error, its row says so, and the other plugins load.
+func TestAnInstalledPluginWithARefusedManifestIsRefused(t *testing.T) {
+	record := func() map[string]any {
+		return map[string]any{"version": "1.0.0", "enabled": true, "sidecars": map[string]string{}}
+	}
+	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(map[string][]string{"alpha": {"1.0.0"}, "beta": {"1.0.0"}}),
+		plugins: map[string]map[string]any{"alpha": record(), "beta": record()}}
+	plugins.core = "1.0.0"
+	stored := &storedHost{plugins: plugins, installed: `{"plugins":[
+		{"id":"alpha","package":"@scope/plugin-alpha","version":"1.0.0","manifest":{"id":"alpha","name":"알파","description":"alpha","contributes":{}}},
+		{"id":"beta","package":"@scope/plugin-beta","version":"1.0.0","manifest":{"id":"beta","name":"베타","description":"beta","contributes":{},"state":{}}}]}`}
+	f := startedShell(t, stored)
+	f.pending.drain(t)
+	f.tester.Frame()
+	f.pending.drain(t)
+	status := f.pluginStatus()
+	states := map[string]string{}
+	for _, row := range status.Plugins {
+		states[row.ID] = row.State
+	}
+	if states["alpha"] != "loaded" || states["beta"] != "refused" {
+		t.Fatalf("the states are %v", states)
+	}
+	written := f.host.written("workbench.record.error")
+	if len(written) != 1 || !strings.Contains(fmt.Sprint(written[0]), "installed plugin beta 1.0.0 (@scope/plugin-beta): ") {
+		t.Fatalf("the shell recorded %v", written)
 	}
 }
 
