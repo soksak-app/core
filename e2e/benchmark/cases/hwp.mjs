@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 
 import { drag } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
-import { LAYOUT_DISPLAY_LIMIT_MS } from "@soksak/window-check/view-metrics.mjs";
+import { domMountBaselineMs, FIRST_DISPLAY_MARGIN_MS, LAYOUT_DISPLAY_LIMIT_MS } from "@soksak/window-check/view-metrics.mjs";
 import { firstContentFrame } from "../../view-first-content.mjs";
 import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFrame, measureViewFrameGeometry,
   VIEW_GEOMETRY_COLOR_TOLERANCE } from "../../view-frame-geometry.mjs";
@@ -14,6 +14,7 @@ import { collectViewReclaimMeasurements, collectViewStartAndMemory, mapViewConte
 import { viewContentCases } from "../../view-content.mjs";
 
 const HWP_CONTENT = "속삭한글문서확인";
+// The DOM mount medians recorded for the HWP view on the Wails and the Tauri host (docs/spec/plugin-processes.md#pass-values).
 export const HWP_VIEW_BASELINES_MS = Object.freeze({ wailsv3: 701, tauriv2: 813 });
 const GEOMETRY_LIMIT_PT = 2;
 const NATIVE_MARKER_COLOR = [0, 255, 255];
@@ -548,12 +549,18 @@ async function dragObservation(t, s, descriptor, surface, card, theme, cornerRad
   };
 }
 
+/**
+ * The first-display limit of the HWP view on a host: the DOM mount baseline that domMountBaselineMs gives the host for
+ * the recorded HWP medians, plus the first-display margin. The HWP checks observe a recording for this long after the
+ * view displays.
+ */
+export function hwpFirstDisplayLimitMs(host) {
+  return domMountBaselineMs(host, HWP_VIEW_BASELINES_MS) + FIRST_DISPLAY_MARGIN_MS;
+}
+
 /** Collects the HWP lifecycle, source content, layout and full-gesture measurements. */
-export async function collectHwpViewMeasurements(t, s, { baselineMs } = {}) {
-  if (!Number.isFinite(baselineMs) || baselineMs <= 0) {
-    throw new Error(`HWP first-display baseline must be finite and positive, found ${JSON.stringify(baselineMs)}`);
-  }
-  const descriptor = await hwpViewDescriptor(s, (message) => t.diagnostic(message), baselineMs + 300);
+export async function collectHwpViewMeasurements(t, s) {
+  const descriptor = await hwpViewDescriptor(s, (message) => t.diagnostic(message), hwpFirstDisplayLimitMs(s.app.name));
   const start = await collectViewStartAndMemory(t, s, descriptor, { viewCount: 3 });
   const openingGrid = await s.get("core.grid");
   const openingCard = openingGrid?.cards?.find((item) => item.id === start.card);

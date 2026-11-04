@@ -5,6 +5,7 @@
 ## Unreleased
 
 - F435: Record the view benchmarks after F444 at load average 12 to 28 and close the single card position failure as not reproduced.
+- F502-2-2: The window checks accept `mygo` as `SOKSAK_APP` while the set without `SOKSAK_APP` stays `wailsv3` and `tauriv2`, `requiresBoth` names `wailsv3` and `tauriv2`, and `windowPosition` places wailsv3 at the left edge, tauriv2 at the right edge and mygo horizontally centred at the top of the visible area. `domMountBaselineMs` of `@soksak/window-check` gives each host its DOM mount baseline, the lower recorded value for mygo; the view benchmarks and the hwp window check take the baseline from it, and (iii) of plugin processes states the rule for mygo.
 - F514: A failed creation of a document region or a view closes its native document in both hosts before the error returns, so no document web view and no web content process remains without a region.
 - F515: `rust-toolchain.toml` declares Rust 1.98.0 with clippy and rustfmt, so every local cargo command uses the toolchain that CI installs, and the workflow setup test requires the setup action to install the declared version.
 - F502-6: `go.work` and every module that it uses declare Go 1.27.3, the version that the mygo host requires, so every Go build of core runs on Go 1.27.3.

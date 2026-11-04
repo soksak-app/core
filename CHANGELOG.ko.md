@@ -5,6 +5,7 @@
 ## 미배포
 
 - F435: load average 12~28에서 잰 F444 뒤 view benchmark를 기록하고, 1회 발생한 card 위치 실패를 재현되지 않음으로 닫는다.
+- F502-2-2: window check가 `mygo`를 `SOKSAK_APP`으로 받고 `SOKSAK_APP`이 없을 때의 집합은 `wailsv3`와 `tauriv2`로 남으며, `requiresBoth`가 `wailsv3`와 `tauriv2`를 이름 짓고, `windowPosition`이 visible 영역 위쪽에 wailsv3를 왼쪽 가장자리, tauriv2를 오른쪽 가장자리, mygo를 가로 가운데에 둔다. `@soksak/window-check`의 `domMountBaselineMs`가 각 host의 DOM mount baseline을 주고 mygo에는 기록된 값 중 낮은 값을 주며, view benchmark와 hwp window check가 baseline을 이 함수에서 받고, plugin process의 (iii)이 mygo 규칙을 적는다.
 - F514: 두 host에서 문서 영역이나 view의 생성이 실패하면 오류를 돌려주기 전에 native 문서를 닫으므로, 영역 없이 남는 문서 web view와 web content process가 없다.
 - F515: `rust-toolchain.toml`이 clippy와 rustfmt를 포함한 Rust 1.98.0을 선언하므로 로컬 cargo 명령이 CI가 설치하는 toolchain을 쓰고, workflow setup test는 setup action이 선언된 version을 설치하도록 요구한다.
 - F502-6: `go.work`와 그것이 사용하는 모든 module이 mygo host가 요구하는 Go 1.27.3을 선언하므로, core의 모든 Go build가 Go 1.27.3에서 실행된다.
