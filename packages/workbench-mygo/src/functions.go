@@ -22,6 +22,24 @@ func TextSteps() ([]float64, error) {
 	return values.Settings.TextSteps, nil
 }
 
+// DefaultTextSize returns the declared default of the common setting textSize.
+func DefaultTextSize() (float64, error) {
+	var values struct {
+		Settings struct {
+			Defaults struct {
+				TextSize *float64 `json:"textSize"`
+			} `json:"defaults"`
+		} `json:"settings"`
+	}
+	if err := json.Unmarshal(workbenchFile, &values); err != nil {
+		return 0, fmt.Errorf("workbench.json: %w", err)
+	}
+	if values.Settings.Defaults.TextSize == nil {
+		return 0, errors.New("workbench.json: settings.defaults.textSize is missing")
+	}
+	return *values.Settings.Defaults.TextSize, nil
+}
+
 // Functions are the workbench functions of a window.
 type Functions struct {
 	Text          *TextSize

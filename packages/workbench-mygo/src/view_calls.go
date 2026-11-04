@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -39,6 +40,12 @@ type viewState struct {
 	events   map[string]bool
 	failures map[string]bool
 	settings bool
+	// textSize and levels tell that the view follows the text scale of its surface and the log levels.
+	textSize bool
+	levels   bool
+	// commands holds the commands that the view registered, and watches the text of the last value of each status it follows.
+	commands map[string]bool
+	watches  map[string]string
 }
 
 // tabReport holds what a view reported of its tab.
@@ -66,7 +73,8 @@ var errorPlace = regexp.MustCompile(`^[^\x00-\x1f\x7f]+$`)
 func (s *Shell) view(surface string) *viewState {
 	view := s.surfaces.views[surface]
 	if view == nil {
-		view = &viewState{pending: map[uint64]*viewPending{}, events: map[string]bool{}, failures: map[string]bool{}}
+		view = &viewState{pending: map[uint64]*viewPending{}, events: map[string]bool{}, failures: map[string]bool{},
+			commands: map[string]bool{}, watches: map[string]string{}}
 		s.surfaces.views[surface] = view
 	}
 	return view
@@ -351,6 +359,44 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 	case "runtime.settings.on":
 		view.settings = true
 		done()
+	case "runtime.textSize.read":
+		factor, err := s.surfaceTextSize(call.Surface)
+		if err != nil {
+			return err
+		}
+		answer(factor, nil)
+	case "runtime.textSize.on":
+		view.textSize = true
+		done()
+	case "runtime.log.levels.on":
+		view.levels = true
+		done()
+	case "runtime.status.watch", "runtime.status.unwatch":
+		return s.runStatusWatch(call, view, answer)
+	case "runtime.command.register":
+		fields, err := viewFields[struct {
+			Name string `json:"name"`
+		}](call)
+		if err != nil {
+			return err
+		}
+		if !unit.declaresCommand(fields.Name) {
+			return fmt.Errorf("view call %s: %q is not a declared command of plugin %s", call.Command, fields.Name, unit.ID)
+		}
+		view.commands[fields.Name] = true
+		done()
+	case "tab.focus":
+		var focus *struct {
+			Name  string `json:"name"`
+			Index *int   `json:"index"`
+		}
+		if err := json.Unmarshal(call.Params, &focus); err != nil {
+			return fmt.Errorf("view call %s: %w", call.Command, err)
+		}
+		if focus != nil && (focus.Name == "" || focus.Index == nil || *focus.Index < 0) {
+			return fmt.Errorf("view call %s requires {name, index} or null", call.Command)
+		}
+		done()
 	case "runtime.shortcuts.read":
 		rows := []map[string]string{}
 		for _, row := range s.options.Declared.Shortcuts {
@@ -459,6 +505,98 @@ func (s *Shell) runNativeCall(call viewCallEvent, view *viewState, unit *install
 		return fmt.Errorf("host call %s is not served to plugins", fields.Name)
 	}
 	return nil
+}
+
+// runStatusWatch starts or ends the watch of a status of the workbench. The value follows at once as the event status, as the
+// value of each later change does. The status of another surface stands in the document of that surface, and no view of this
+// window follows one.
+func (s *Shell) runStatusWatch(call viewCallEvent, view *viewState, answer viewAnswer) error {
+	fields, err := viewFields[struct {
+		Name    string `json:"name"`
+		Surface string `json:"surface"`
+	}](call)
+	if err != nil {
+		return err
+	}
+	if fields.Name == "" {
+		return fmt.Errorf("view call %s requires a non-empty name", call.Command)
+	}
+	if fields.Surface != "" {
+		return fmt.Errorf("view call %s of surface %s is not served", call.Command, fields.Surface)
+	}
+	if call.Command == "runtime.status.unwatch" {
+		delete(view.watches, fields.Name)
+		answer(nil, nil)
+		return nil
+	}
+	value, err := s.registry.Read(fields.Name)
+	if err != nil {
+		return err
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return fmt.Errorf("status %s: %w", fields.Name, err)
+	}
+	view.watches[fields.Name] = string(encoded)
+	answer(nil, nil)
+	s.pushView(call.Surface, view, "status", map[string]any{"name": fields.Name, "value": value})
+	return nil
+}
+
+// pushWatches sends each view the statuses it follows whose value changed.
+func (s *Shell) pushWatches() {
+	for surface, view := range s.surfaces.views {
+		for name, last := range view.watches {
+			value, err := s.registry.Read(name)
+			if err != nil {
+				s.fail(fmt.Errorf("status %s of surface %s: %w", name, surface, err))
+				continue
+			}
+			encoded, err := json.Marshal(value)
+			if err != nil {
+				s.fail(fmt.Errorf("status %s of surface %s: %w", name, surface, err))
+				continue
+			}
+			if string(encoded) == last {
+				continue
+			}
+			view.watches[name] = string(encoded)
+			s.pushView(surface, view, "status", map[string]any{"name": name, "value": value})
+		}
+	}
+}
+
+// surfaceTextSize is the text scale of the tab surface: the frame factor multiplied by the factor of its card.
+func (s *Shell) surfaceTextSize(surface string) (float64, error) {
+	card := s.cardOfTab(surface)
+	if card == "" {
+		return 0, fmt.Errorf("surface %s is not in the layout", surface)
+	}
+	data, err := s.cardData(card)
+	if err != nil {
+		return 0, err
+	}
+	return s.frameText * data.CardTextSize(), nil
+}
+
+// declaresCommand tells whether the plugin declares the command name, in plugin.json or in its diagnostic declarations.
+func (u *installedUnit) declaresCommand(name string) bool {
+	entries := slices.Clone(u.Exposes.Commands)
+	var diagnostics struct {
+		Exposes surfaceMarks `json:"exposes"`
+	}
+	if json.Unmarshal(u.Diagnostics, &diagnostics) == nil { // silent: a plugin without diagnostic declarations has no such commands.
+		entries = append(entries, diagnostics.Exposes.Commands...)
+	}
+	for _, raw := range entries {
+		var entry struct {
+			Name string `json:"name"`
+		}
+		if json.Unmarshal(raw, &entry) == nil && entry.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 // nonNil returns a list that encodes as an array when it is empty.

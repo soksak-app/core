@@ -268,3 +268,47 @@ func TestViewCallSubscribesItsSidecar(t *testing.T) {
 		t.Fatal("the subscription reached no host call")
 	}
 }
+
+func TestViewCallReadsTheTextScaleOfItsCard(t *testing.T) {
+	f, stored := surfaceShell(t)
+	reply := viewCall(t, f, stored, anySurface(t, stored), "runtime.textSize.read", nil)
+	if reply["error"] != nil || reply["result"] != float64(1) {
+		t.Fatalf("the reply is %v", reply)
+	}
+	if reply := viewCall(t, f, stored, anySurface(t, stored), "runtime.textSize.on", nil); reply["error"] != nil {
+		t.Fatalf("the reply is %v", reply)
+	}
+}
+
+func TestViewCallRegistersOnlyADeclaredCommand(t *testing.T) {
+	f, stored := surfaceShell(t)
+	surface := anySurface(t, stored)
+	if reply := viewCall(t, f, stored, surface, "runtime.command.register", map[string]any{"name": "other.thing"}); reply["error"] == nil {
+		t.Fatalf("the reply is %v", reply)
+	}
+}
+
+func TestViewCallFollowsAStatusOfTheWorkbench(t *testing.T) {
+	f, stored := surfaceShell(t)
+	surface := anySurface(t, stored)
+	if reply := viewCall(t, f, stored, surface, "runtime.status.watch", map[string]any{"name": "core.sidebars"}); reply["error"] != nil {
+		t.Fatalf("the reply is %v", reply)
+	}
+	if reply := viewCall(t, f, stored, surface, "runtime.status.watch", map[string]any{"name": "core.nothing"}); reply["error"] == nil {
+		t.Fatalf("the reply is %v", reply)
+	}
+	if reply := viewCall(t, f, stored, surface, "runtime.status.unwatch", map[string]any{"name": "core.sidebars"}); reply["error"] != nil {
+		t.Fatalf("the reply is %v", reply)
+	}
+}
+
+func TestViewCallReportsItsFocus(t *testing.T) {
+	f, stored := surfaceShell(t)
+	surface := anySurface(t, stored)
+	if reply := viewCall(t, f, stored, surface, "tab.focus", map[string]any{"name": "browser.address", "index": 0}); reply["error"] != nil {
+		t.Fatalf("the reply is %v", reply)
+	}
+	if reply := viewCall(t, f, stored, surface, "tab.focus", map[string]any{"name": ""}); reply["error"] == nil {
+		t.Fatalf("the reply is %v", reply)
+	}
+}

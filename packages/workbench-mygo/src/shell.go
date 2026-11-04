@@ -133,12 +133,14 @@ type Shell struct {
 	active   string
 	plane    *layout.Grid
 	focused  string
-	held     *heldDivider
-	library  libraryState
-	tabs     *shellTabs
-	plugins  map[string]*installedUnit
-	surfaces surfaceState
-	page     string
+	// frameText is the textSize of the common settings, the frame factor of the text size.
+	frameText float64
+	held      *heldDivider
+	library   libraryState
+	tabs      *shellTabs
+	plugins   map[string]*installedUnit
+	surfaces  surfaceState
+	page      string
 }
 
 // NewShell returns the shell of a window, with its commands in the registry.
@@ -259,6 +261,9 @@ func (s *Shell) adopt(value any) error {
 	snapshot, err := decode[struct {
 		Projects      []json.RawMessage `json:"projects"`
 		ProjectsError *string           `json:"projectsError"`
+		Common        struct {
+			TextSize *float64 `json:"textSize"`
+		} `json:"common"`
 	}](value)
 	if err != nil {
 		return err
@@ -275,6 +280,13 @@ func (s *Shell) adopt(value any) error {
 		projects = append(projects, record)
 	}
 	s.projects = projects
+	s.frameText, err = DefaultTextSize()
+	if err != nil {
+		return err
+	}
+	if snapshot.Common.TextSize != nil {
+		s.frameText = *snapshot.Common.TextSize
+	}
 	return nil
 }
 
@@ -382,4 +394,5 @@ func (s *Shell) View(c *ui.Context) {
 		s.drawWork(c, width, height-s.metrics.chromeH)
 	})
 	s.placeSurfaces()
+	s.pushWatches()
 }
