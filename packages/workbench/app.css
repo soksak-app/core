@@ -13,20 +13,17 @@
   --edge:#2b2e3d;--rule:#22242f;--rail:#7279ff;--focus:#ffb36b;
   --no:#ff7c7c;
 
-  /* Shape. Independent of the mode. */
-  --r:10px;--half-gap:6px;--bw:1px;
-  --font:ui-monospace,SFMono-Regular,Menlo,monospace;--size:13px;
-  /* Width in which the boundary line of a sidebar inside a card is pressed and dragged. It is also the width that remains of a collapsed sidebar. */
-  --divider:6px;
+  /* Shape. Independent of the mode. The settings set --r, --half-gap, --bw, --font and --size from the theme (settings.js). --divider, the
+     width in which the boundary line of a sidebar inside a card is pressed and dragged and the width that remains of a collapsed sidebar, is a
+     chrome metric of workbench.json, as is every other length, ratio and duration that this stylesheet reads. */
   /* Korean UI font for sidebar section names and empty-state text. */
   --ui-font:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",system-ui,sans-serif;
 
   /* Font size and spacing of every screen. The font size is proportional to the default size of the settings. */
-  --text-control:calc(var(--size) * 12 / 13);
-  --text-small:calc(var(--size) * 11 / 13);
-  --text-caption:calc(var(--size) * 10 / 13);
-  --line-height:1.45;--letter-spacing:0;--section-tracking:.04em;
-  --space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;
+  --text-control:calc(var(--size) * var(--text-control-at-base) / var(--text-base));
+  --text-small:calc(var(--size) * var(--text-small-at-base) / var(--text-base));
+  --text-caption:calc(var(--size) * var(--text-caption-at-base) / var(--text-base));
+  --letter-spacing:0;
 
 
   /* Radius scale. There are five rounded boxes and three values. The card is the base and the others derive
@@ -38,28 +35,28 @@
 
      Multiplying by the ratios produces fractions. With --r of 10px the results are 7.5px and 5px, and 7.5px
      falls between pixels at a scale of 1. The values are rounded to whole pixels. */
-  --r-sm:round(calc(var(--r) * .75),1px);
-  --r-xs:round(calc(var(--r) * .5),1px);
+  --r-sm:round(calc(var(--r) * var(--r-sm-ratio)),var(--pixel));
+  --r-xs:round(calc(var(--r) * var(--r-xs-ratio)),var(--pixel));
   --r-rail:calc(var(--r) + var(--half-gap));
 
   /* Background of a chip. A literal gray would be the same color in every theme. */
-  --chip:color-mix(in srgb,var(--fg) 7%,transparent);
-  --chip-hover:color-mix(in srgb,var(--fg) 12%,transparent);
-  --chip-on:color-mix(in srgb,var(--rail) 22%,transparent);
-  --chip-sel:color-mix(in srgb,var(--fg) 15%,transparent);
-  --inset:color-mix(in srgb,var(--fg) 10%,transparent);
+  --chip:color-mix(in srgb,var(--fg) var(--chip-mix),transparent);
+  --chip-hover:color-mix(in srgb,var(--fg) var(--chip-hover-mix),transparent);
+  --chip-on:color-mix(in srgb,var(--rail) var(--chip-on-mix),transparent);
+  --chip-sel:color-mix(in srgb,var(--fg) var(--chip-sel-mix),transparent);
+  --inset:color-mix(in srgb,var(--fg) var(--inset-mix),transparent);
 
   /* The view draws the line and the divider. This document specifies only the color; the view owns the shape and the cursor. */
   --sp-line:var(--rule);
-  --sp-line-crossing:color-mix(in srgb,var(--rule) 45%,transparent);
-  --sp-grip:color-mix(in srgb,var(--muted) 70%,transparent);
+  --sp-line-crossing:color-mix(in srgb,var(--rule) var(--sp-line-crossing-mix),transparent);
+  --sp-grip:color-mix(in srgb,var(--muted) var(--sp-grip-mix),transparent);
   --sp-grip-active:var(--focus);
 }
 *{box-sizing:border-box}
 /* The plane takes the remaining space. In the document flow, the position of the plane would move whenever an
    element above it grows, and the native surface would not receive that change. Here only the size changes,
    not the position. */
-html,body{height:100%}
+html,body{height:var(--fill)}
 /* Korean text breaks lines at word spaces, not between syllables. */
 body{margin:0;background:transparent;color:var(--fg);word-break:keep-all;
   font:var(--size)/var(--line-height) var(--font);letter-spacing:var(--letter-spacing);
@@ -73,32 +70,29 @@ body::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none
   background:var(--bg)}
 
 button,input,select,textarea{font:inherit;letter-spacing:inherit}
-button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-offset:calc(0px - var(--focus-outline))}
 
 /* Window chrome
    One row holds the brand, the project tabs and the icon switches. The page sets the height of the row, the layout preparation
    carries that height, and the host sets the window title bar in the same transaction (chromeRow in frame-text.js
    computes the same value as --chrome-row). The window centers its own buttons in that height, so the two values do not diverge.
    The space tabs are a separate row directly above the plane.                                    */
-:root{--chrome-row-h:36px}
 
 /* Smallest height of the first row. It equals the title bar height that the host sets when it creates the window. It is not read from the
    window reply. If it were read, the row would not shrink when the row follows the title bar and the title bar follows the row in scale. */
-:root{--chrome-h:40px}
 
 /* Width that the buttons drawn by the window occupy. It is 0 when the window draws no buttons, and 0 in a browser
    because there is no window. */
 :root{--controls-w:0px}
 /* Frame text scale (docs/spec/text-size.md). The first row never becomes smaller than --chrome-h, and when the enlarged tab row
    is higher, the row follows that height. */
-:root{--frame-text:1}
 :root[data-frame-text] .chrome-bar > .brand,:root[data-frame-text] .chrome-bar > .tabs--project,
 :root[data-frame-text] .chrome-bar__acts,:root[data-frame-text] .tabs--space,
 :root[data-frame-text] .workarea > .tabs--project{zoom:var(--frame-text)}
 /* The lines above and to the left of the plane round the scaled size to whole pixels. A fractional size places the origin of the plane between device pixels, so the
    native surface that the host seats on the grid and the DOM differ by half a pixel and the card border blurs (F36). A zoom element draws the
    specified size multiplied by the scale, so the rounded size is divided by the scale before it is specified. */
-.chrome-bar{--chrome-row:round(nearest,max(var(--chrome-h),calc(var(--chrome-row-h) * var(--frame-text))),1px)}
+.chrome-bar{--chrome-row:round(nearest,max(var(--chrome-h),calc(var(--chrome-row-h) * var(--frame-text))),var(--pixel))}
 .chrome-bar{position:relative;flex:0 0 var(--chrome-row);height:var(--chrome-row);display:flex;align-items:center;
   gap:var(--space-2);padding:0 var(--space-3) 0 calc(var(--space-3) + var(--controls-w));
   border-bottom:var(--bw) solid var(--edge);background:var(--card);user-select:none}
@@ -112,65 +106,65 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .chrome-bar .tabs > *{pointer-events:auto}
 /* This text does not receive presses. A press reaches the drag area below. */
 /* The letters of the soksak logo are light in dark mode and dark in light mode. The color of the icon tile is fixed to the logo. */
-.brand{flex:0 0 auto;color:#EDE6D8;margin-right:2px;pointer-events:none;display:flex;align-items:center}
+.brand{flex:0 0 auto;color:#EDE6D8;margin-right:var(--brand-gap);pointer-events:none;display:flex;align-items:center}
 :root[data-mode=light] .brand{color:#16181D}
-.brand__logo{display:block;height:calc(var(--size) * 20 / 13);width:auto}
+.brand__logo{display:block;height:calc(var(--size) * var(--brand-logo-at-base) / var(--text-base));width:auto}
 
 
-.chrome-bar__acts{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+.chrome-bar__acts{display:flex;align-items:center;gap:var(--chrome-acts-gap);flex:0 0 auto}
 
 /* Project tab row. Its height is set by --chrome-row-h. */
-.tabs{display:flex;align-items:stretch;gap:4px;flex:1 1 auto;min-width:0;
-  height:var(--chrome-row-h);padding-block:5px;overflow:hidden}
+.tabs{display:flex;align-items:stretch;gap:var(--tabs-gap);flex:1 1 auto;min-width:0;
+  height:var(--chrome-row-h);padding-block:var(--tabs-pad);overflow:hidden}
 .tabs--project{align-self:center}
 
 /* Space tab row. It sits directly above the plane, so the bottom of a tab continues into the plane. */
-.tabs--space{flex:0 0 auto;gap:2px;height:calc(round(nearest,calc(var(--chrome-row-h) * var(--frame-text)),1px) / var(--frame-text));
-  padding:5px var(--space-3);
+.tabs--space{flex:0 0 auto;gap:var(--space-tabs-gap);height:calc(round(nearest,calc(var(--chrome-row-h) * var(--frame-text)),var(--pixel)) / var(--frame-text));
+  padding:var(--tabs-pad) var(--space-3);
   align-items:center;background:var(--card);border-bottom:var(--bw) solid var(--edge)}
-.tabs--space .bar-tab{height:26px;border-radius:var(--r-xs) var(--r-xs) 0 0}
+.tabs--space .bar-tab{height:var(--space-tab-h);border-radius:var(--r-xs) var(--r-xs) 0 0}
 
-.bar-tab{display:flex;align-items:center;gap:6px;padding:0 var(--space-2);border:0;
+.bar-tab{display:flex;align-items:center;gap:var(--bar-tab-gap);padding:0 var(--space-2);border:0;
   border-radius:var(--r-xs);background:var(--chip);color:var(--muted);
-  font:inherit;font-size:var(--text-control);cursor:pointer;max-width:220px;white-space:nowrap}
+  font:inherit;font-size:var(--text-control);cursor:pointer;max-width:var(--bar-tab-max-w);white-space:nowrap}
 .bar-tab:hover{background:var(--chip-hover)}
 .bar-tab[data-on=true]{background:var(--chip-on);color:var(--fg)}
 .bar-tab__name{overflow:hidden;text-overflow:ellipsis}
-.bar-tab__x{opacity:.5;padding:0 1px;flex:0 0 auto;cursor:pointer}
-.bar-tab__x:hover{opacity:1}
-.bar-tab--add{background:transparent;color:var(--muted);font-size:15px;line-height:1;padding:0 7px}
+.bar-tab__x{opacity:var(--bar-tab-x-opacity);padding:0 var(--bar-tab-x-pad);flex:0 0 auto;cursor:pointer}
+.bar-tab__x:hover{opacity:var(--opaque)}
+.bar-tab--add{background:transparent;color:var(--muted);font-size:var(--bar-tab-add-text);line-height:var(--line-height-tight);padding:0 var(--bar-tab-add-pad)}
 .bar-tab--add:hover{background:var(--chip-hover)}
-.bar-tab__root{padding:0 8px;border:var(--bw) solid var(--focus);border-radius:var(--r-xs);
-  background:var(--bg);color:var(--fg);font:inherit;font-size:var(--text-control);width:180px}
+.bar-tab__root{padding:0 var(--bar-tab-root-pad);border:var(--bw) solid var(--focus);border-radius:var(--r-xs);
+  background:var(--bg);color:var(--fg);font:inherit;font-size:var(--text-control);width:var(--bar-tab-root-w)}
 
 /* Icon switches. */
-.act{display:inline-flex;align-items:center;justify-content:center;width:24px;height:22px;
+.act{display:inline-flex;align-items:center;justify-content:center;width:var(--act-w);height:var(--act-h);
   flex:0 0 auto;padding:0;border:0;border-radius:var(--r-xs);background:transparent;
   color:var(--muted);cursor:pointer}
 .act--text{width:auto;padding:0 var(--space-2);font-size:var(--text-control)}
 .act:hover{color:var(--fg);background:var(--inset)}
 .act[data-on=true]{color:var(--focus)}
-.act svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;
+.act svg{width:var(--act-icon);height:var(--act-icon);fill:none;stroke:currentColor;stroke-width:var(--act-stroke);
   stroke-linecap:round;stroke-linejoin:round}
 
 /* When the project tabs are placed on the left. They start above the space row and continue to the bottom. */
 .workarea{display:flex;flex:1 1 auto;min-height:0}
 .work{display:flex;flex-direction:column;flex:1 1 auto;min-width:0;min-height:0}
-.project-column{display:flex;flex-direction:column;gap:4px;width:calc(round(nearest,calc(64px * var(--frame-text)),1px) / var(--frame-text));flex:0 0 auto;
-  padding:5px;background:var(--card);border-right:var(--bw) solid var(--edge)}
-.project-column .bar-tab{position:relative;width:100%;height:36px;justify-content:center;padding:0 4px}
-.project-column .bar-tab__name{max-width:100%;text-align:center}
+.project-column{display:flex;flex-direction:column;gap:var(--project-column-gap);width:calc(round(nearest,calc(var(--project-column-w) * var(--frame-text)),var(--pixel)) / var(--frame-text));flex:0 0 auto;
+  padding:var(--project-column-pad);background:var(--card);border-right:var(--bw) solid var(--edge)}
+.project-column .bar-tab{position:relative;width:var(--fill);height:var(--project-tab-h);justify-content:center;padding:0 var(--project-tab-pad)}
+.project-column .bar-tab__name{max-width:var(--fill);text-align:center}
 /* A vertical rail is wide enough only for the name, so the close button does not fit. It is not shown only when
    pressed; it is placed over the name. */
-.project-column .bar-tab__x{position:absolute;top:2px;right:2px;opacity:0}
+.project-column .bar-tab__x{position:absolute;top:var(--project-tab-x-inset);right:var(--project-tab-x-inset);opacity:0}
 .project-column .bar-tab:hover .bar-tab__x,
-.project-column .bar-tab:focus-within .bar-tab__x{opacity:1}
-.project-column .bar-tab--add{width:100%;height:24px;justify-content:center}
+.project-column .bar-tab:focus-within .bar-tab__x{opacity:var(--opaque)}
+.project-column .bar-tab--add{width:var(--fill);height:var(--project-tab-add-h);justify-content:center}
 
 /* Plane */
 .stage{position:relative;flex:1 1 auto;min-height:0;padding:var(--half-gap);
   border:var(--bw) solid var(--rule);border-radius:var(--r-rail)}
-.plane{position:relative;width:100%;height:100%}
+.plane{position:relative;width:var(--fill);height:var(--fill)}
 
 /* There is one kind of card and only the roles differ: whether it takes a ratio or px, and whether it can be moved.
    The z order is set by composition, not by CSS. A native surface is an OS view and does not
@@ -200,17 +194,16 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 /* The focus mark is shown only at the four corners of the body. A native surface is outside the CSS stack, so a mark drawn inside the
    card would be hidden under the surface; it is placed on the same layer as the surface. */
 .focus-mark{position:absolute;z-index:80;pointer-events:none;
-  --len:14px;--t:1px;
   background-image:
     linear-gradient(var(--focus),var(--focus)),linear-gradient(var(--focus),var(--focus)),
     linear-gradient(var(--focus),var(--focus)),linear-gradient(var(--focus),var(--focus)),
     linear-gradient(var(--focus),var(--focus)),linear-gradient(var(--focus),var(--focus)),
     linear-gradient(var(--focus),var(--focus)),linear-gradient(var(--focus),var(--focus));
   background-size:
-    var(--len) var(--t),var(--t) var(--len),
-    var(--len) var(--t),var(--t) var(--len),
-    var(--len) var(--t),var(--t) var(--len),
-    var(--len) var(--t),var(--t) var(--len);
+    var(--focus-mark-len) var(--focus-mark-t),var(--focus-mark-t) var(--focus-mark-len),
+    var(--focus-mark-len) var(--focus-mark-t),var(--focus-mark-t) var(--focus-mark-len),
+    var(--focus-mark-len) var(--focus-mark-t),var(--focus-mark-t) var(--focus-mark-len),
+    var(--focus-mark-len) var(--focus-mark-t),var(--focus-mark-t) var(--focus-mark-len);
   background-position:
     left top,left top, right top,right top,
     left bottom,left bottom, right bottom,right bottom;
@@ -236,11 +229,11 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 :root[data-seam=line] .drop{border-radius:0}
 
 /* Card head */
-.chrome{display:flex;align-items:center;gap:4px;padding:0 4px;overflow:hidden;
+.chrome{display:flex;align-items:center;gap:var(--card-head-gap);padding:0 var(--card-head-pad);overflow:hidden;
   border-bottom:var(--bw) solid var(--edge)}
 /* The tab list scrolls horizontally when it overflows. Tabs are not removed or shrunk. The header height is
    32px, so a scrollbar would be thicker than the tabs and is not shown. */
-.chrome__tabs{display:flex;align-items:center;gap:3px;flex:1 1 auto;min-width:0;
+.chrome__tabs{display:flex;align-items:center;gap:var(--card-tabs-gap);flex:1 1 auto;min-width:0;
   overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
 .chrome__tabs::-webkit-scrollbar{display:none}
 /* ≡ stands at the start of every head and lists all tabs; a full-screen card shows the space app button in its place.
@@ -249,56 +242,56 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
      one    shows the one active tab
      ham    shows no tab
    Tabs are not removed when the level goes down. */
-.chrome__ham{display:grid;place-items:center;width:20px;height:20px;padding:0;border:0;
+.chrome__ham{display:grid;place-items:center;width:var(--card-button);height:var(--card-button);padding:0;border:0;
   flex:0 0 auto;background:transparent;color:var(--muted);border-radius:var(--r-xs);
   cursor:pointer}
-.chrome__ham svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.3;stroke-linecap:round}
+.chrome__ham svg{width:var(--card-icon);height:var(--card-icon);fill:none;stroke:currentColor;stroke-width:var(--icon-stroke);stroke-linecap:round}
 .chrome__ham:hover{background:var(--inset);color:var(--fg)}
 .chrome[data-fit=one] .chrome__tabs .tab:not([data-active=true]){display:none}
 /* A full-screen card shows the space app button at the start of the head and does not show its own tab list button. The space list holds those tabs. */
-.chrome__apps{display:none;place-items:center;width:20px;height:20px;padding:0;border:0;flex:0 0 auto;
+.chrome__apps{display:none;place-items:center;width:var(--card-button);height:var(--card-button);padding:0;border:0;flex:0 0 auto;
   background:transparent;color:var(--muted);border-radius:var(--r-xs);cursor:pointer}
-.chrome__apps svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.3;stroke-linecap:round}
+.chrome__apps svg{width:var(--card-icon);height:var(--card-icon);fill:none;stroke:currentColor;stroke-width:var(--icon-stroke);stroke-linecap:round}
 .chrome__apps:hover{background:var(--inset);color:var(--fg)}
 .card[data-fullscreen=true] .chrome__apps{display:grid}
 .card[data-fullscreen=true] .chrome__ham{display:none}
 /* When the tools do not fit in one line, ⋯ is shown instead of the tool row. The menu lists the same buttons and commands. */
-.chrome__more{display:none;place-items:center;width:20px;height:20px;padding:0;border:0;margin-left:auto;
+.chrome__more{display:none;place-items:center;width:var(--card-button);height:var(--card-button);padding:0;border:0;margin-left:auto;
   flex:0 0 auto;background:transparent;color:var(--muted);border-radius:var(--r-xs);cursor:pointer}
-.chrome__more svg{width:14px;height:14px;fill:currentColor;stroke:none}
+.chrome__more svg{width:var(--card-icon);height:var(--card-icon);fill:currentColor;stroke:none}
 .chrome__more:hover{background:var(--inset);color:var(--fg)}
 .chrome[data-tools=menu] .chrome__more{display:grid}
 .chrome[data-tools=menu] .chrome__acts{display:none}
 .chrome[data-fit=ham] .chrome__tabs{display:none}
 /* A tab is at most 200 points wide, so one long title leaves the width of the strip to the other tabs; the name is cut with
    an ellipsis inside that bound, and the tab shows the whole name as its tooltip (docs/spec/example-model.md#card-tabs). */
-.tab{display:flex;align-items:center;gap:4px;padding:3px 7px;border-radius:var(--r-xs);
+.tab{display:flex;align-items:center;gap:var(--tab-gap);padding:var(--tab-pad-y) var(--tab-pad-x);border-radius:var(--r-xs);
   font-size:var(--text-small);color:var(--muted);cursor:grab;user-select:none;white-space:nowrap;
-  flex:0 0 auto;max-width:200px}
+  flex:0 0 auto;max-width:var(--tab-max-w)}
 .tab:hover{color:var(--fg)}
 .tab[data-active=true]{color:var(--fg);background:var(--chip-sel)}
-.tab[data-dragging=true]{opacity:.4}
+.tab[data-dragging=true]{opacity:var(--tab-dragging-opacity)}
 .tab__name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 /* A tab with a notification reported by a surface and the tab list button of its card show a dot. */
 .tab[data-notice=true]::before,.chrome__ham[data-notice=true]::after,.picker__item[data-notice=true]::before{
-  content:"";width:6px;height:6px;border-radius:50%;background:var(--focus);flex:0 0 auto}
+  content:"";width:var(--notice-dot);height:var(--notice-dot);border-radius:var(--circle);background:var(--focus);flex:0 0 auto}
 .chrome__ham{position:relative}
-.chrome__ham[data-notice=true]::after{position:absolute;top:2px;right:2px}
+.chrome__ham[data-notice=true]::after{position:absolute;top:var(--notice-dot-inset);right:var(--notice-dot-inset)}
 /* At the one level, the active tab uses only the remaining width and truncates the title with an ellipsis.
    Showing it only when the whole title fits would hide the tab unnecessarily. */
 .chrome[data-fit=one] .tab[data-active=true]{flex:0 1 auto;min-width:0}
-.tab__x{border:0;background:transparent;color:inherit;padding:0 2px;line-height:1;
-  font-size:var(--text-small);border-radius:var(--r-xs);opacity:.6;cursor:pointer}
-.tab__x:hover{opacity:1;background:color-mix(in srgb,var(--no) 40%,transparent)}
-.chrome__acts{margin-left:auto;display:flex;gap:1px;padding:1px;border-radius:var(--r-xs);
+.tab__x{border:0;background:transparent;color:inherit;padding:0 var(--tab-x-pad);line-height:var(--line-height-tight);
+  font-size:var(--text-small);border-radius:var(--r-xs);opacity:var(--tab-x-opacity);cursor:pointer}
+.tab__x:hover{opacity:var(--opaque);background:color-mix(in srgb,var(--no) var(--tab-x-hover-mix),transparent)}
+.chrome__acts{margin-left:auto;display:flex;gap:var(--card-acts-gap);padding:var(--card-acts-pad);border-radius:var(--r-xs);
   flex:0 0 auto;border:var(--bw) solid var(--edge)}
-.chrome__act{display:grid;place-items:center;width:20px;height:20px;padding:0;border:0;
+.chrome__act{display:grid;place-items:center;width:var(--card-button);height:var(--card-button);padding:0;border:0;
   background:transparent;color:var(--muted);border-radius:var(--r-xs);cursor:pointer}
-.chrome__act svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.3;
+.chrome__act svg{width:var(--card-icon);height:var(--card-icon);fill:none;stroke:currentColor;stroke-width:var(--icon-stroke);
   stroke-linecap:round;stroke-linejoin:round}
-.chrome__act .half{fill:currentColor;stroke:none;opacity:.28}
+.chrome__act .half{fill:currentColor;stroke:none;opacity:var(--card-act-half-opacity)}
 .chrome__act:hover:not(:disabled){background:var(--inset);color:var(--fg)}
-.chrome__act:disabled{opacity:.25;cursor:not-allowed}
+.chrome__act:disabled{opacity:var(--disabled-opacity);cursor:not-allowed}
 /* A pressed toggle (full screen) is drawn in the focus color, like the toggle in the window head (.act[data-on=true]). */
 .chrome__act[aria-pressed=true],.chrome__act[aria-pressed=true]:hover{color:var(--focus)}
 /* `[hidden]` does not override display:grid, so it is stated explicitly here. */
@@ -355,12 +348,12 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .card[data-sidebar-bottom=folded] > .card-sidebar > .card-sidebar__grip[data-side-of=bottom]::after,
 .card[data-sidebar-left=folded] > .card-sidebar > .card-sidebar__grip[data-side-of=left]::after,
 .card[data-sidebar-right=folded] > .card-sidebar > .card-sidebar__grip[data-side-of=right]::after{content:"";
-  position:absolute;inset:0;margin:auto;width:3px;height:3px;border-radius:50%;color:var(--sp-grip);background:currentColor;
-  transition:color .12s}
+  position:absolute;inset:0;margin:auto;width:var(--grip-dot);height:var(--grip-dot);border-radius:var(--circle);color:var(--sp-grip);background:currentColor;
+  transition:color var(--grip-transition)}
 .card-sidebar__grip[data-side-of=top]::after,.card-sidebar__grip[data-side-of=bottom]::after{
-  box-shadow:-6px 0 currentColor,6px 0 currentColor}
+  box-shadow:calc(0px - var(--grip-dot-spacing)) 0 currentColor,var(--grip-dot-spacing) 0 currentColor}
 .card-sidebar__grip[data-side-of=left]::after,.card-sidebar__grip[data-side-of=right]::after{
-  box-shadow:0 -6px currentColor,0 6px currentColor}
+  box-shadow:0 calc(0px - var(--grip-dot-spacing)) currentColor,0 var(--grip-dot-spacing) currentColor}
 .card-sidebar__grip:hover::after,.card-sidebar__grip:active::after{color:var(--sp-grip-active)}
 /* The status line stays on one line when the card becomes narrow. If it wrapped, it would be cut off within 22px,
    the second line would disappear, and the vertical alignment of the first line would also shift. */
@@ -368,9 +361,9 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
   border-top:var(--bw) solid var(--edge);color:var(--muted);
   overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .status__text{min-width:0;overflow:hidden;text-overflow:ellipsis}
-.surface-status{display:inline-flex;align-items:center;gap:4px;flex:0 0 auto;margin-right:6px;color:var(--muted)}
-.surface-status::before{content:"";width:8px;height:8px;border:1px solid currentColor;border-top-color:transparent;
-  border-radius:50%;animation:surface-status-spin .8s linear infinite}
+.surface-status{display:inline-flex;align-items:center;gap:var(--surface-status-gap);flex:0 0 auto;margin-right:var(--surface-status-margin);color:var(--muted)}
+.surface-status::before{content:"";width:var(--spinner);height:var(--spinner);border:var(--spinner-border) solid currentColor;border-top-color:transparent;
+  border-radius:var(--circle);animation:surface-status-spin var(--spinner-turn) linear infinite}
 .surface-status[data-surface-status=error]::before{border:0;background:currentColor;animation:none}
 .surface-status[hidden]{display:none}
 @keyframes surface-status-spin{to{transform:rotate(360deg)}}
@@ -396,50 +389,50 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
    Simulated native surface. The compositor places it at the applied frame. The card clips it,
    so no separate corners are set.                                                  */
 .surface{position:absolute;z-index:50;background:var(--card);color:var(--fg);
-  font-size:var(--text-small);padding:6px 9px;overflow:hidden;pointer-events:none}
+  font-size:var(--text-small);padding:var(--surface-pad-y) var(--surface-pad-x);overflow:hidden;pointer-events:none}
 .surface[data-hidden=true]{display:none}
 /* A surface that lost focus. The application lowers the alpha of the view to the same value. */
-.surface[data-dim=true]{opacity:.45}
+.surface[data-dim=true]{opacity:var(--dim-opacity)}
 .surface b{color:var(--fg)}
 
 /* `.standin` must look the same as the surface, so it uses the same values as `.surface`.
    With different values the screen would change at the moment the surface is hidden. */
 .standin{position:absolute;inset:0;background:var(--card);color:var(--fg);
-  font-size:var(--text-small);padding:6px 9px;overflow:hidden}
+  font-size:var(--text-small);padding:var(--surface-pad-y) var(--surface-pad-x);overflow:hidden}
 .standin b{color:var(--fg)}
 /* The drop zone is DOM, so it is visible only while the surface is hidden. Its z is lower than the surface.
    A higher z would differ from the behavior of the application. */
 .drop{position:absolute;z-index:40;pointer-events:none;border-radius:var(--r);
-  background:color-mix(in srgb,var(--focus) 18%,transparent);
-  border:2px solid var(--focus)}
+  background:color-mix(in srgb,var(--focus) var(--drop-mix),transparent);
+  border:var(--drop-border) solid var(--focus)}
 .drop[hidden]{display:none}
 
 /* The picker layer is a DOM element. Its z is lower than the surface and only the overlapping surface is hidden.
    A higher z would be hidden by the surface in the application. */
-.picker{position:absolute;z-index:41;min-width:170px;max-width:260px;max-height:238px;
-  overflow-y:auto;scrollbar-width:thin;padding:4px;
+.picker{position:absolute;z-index:41;min-width:var(--picker-min-w);max-width:var(--picker-max-w);max-height:var(--picker-max-h);
+  overflow-y:auto;scrollbar-width:thin;padding:var(--picker-outer-pad);
   background:var(--card);border-radius:var(--r-sm);
-  border:var(--bw) solid var(--edge);box-shadow:0 12px 28px rgb(0 0 0 / .34);
-  --picker-pad:8px;--picker-icon:14px;--picker-gap:8px;--picker-indent:12px}
+  border:var(--bw) solid var(--edge);box-shadow:0 var(--picker-shadow-y) var(--picker-shadow-blur) rgb(0 0 0 / var(--picker-shadow-alpha))}
 .picker[hidden]{display:none}
-.picker__head{padding:4px 8px 6px;font-size:var(--text-caption);color:var(--muted);letter-spacing:var(--section-tracking)}
+.picker__head{padding:var(--picker-head-pad-top) var(--picker-head-pad-x) var(--picker-head-pad-bottom);font-size:var(--text-caption);color:var(--muted);letter-spacing:var(--section-tracking)}
 /* The group list (space app) has many items, so its height limit is raised. A group title is a plane map and a name, indented by the tree depth. */
-.picker--grouped{max-width:300px;max-height:min(480px,calc(100vh - 24px));--picker-icon:22px}
-/* A title and an item at the same depth have the same x for the icon cell and the same x for the name. The cell width, inner padding, gap and indentation are each set by one variable of .picker. */
+.picker--grouped{max-width:var(--picker-grouped-max-w);max-height:min(var(--picker-grouped-max-h),calc(var(--viewport-h) - var(--picker-grouped-margin)))}
+.picker--grouped .picker__group svg,.picker--grouped .picker__item svg{width:var(--picker-grouped-icon)}
+/* A title and an item at the same depth have the same x for the icon cell and the same x for the name. The cell width, inner padding, gap and indentation are each one chrome metric. */
 .picker__group{display:flex;align-items:center;gap:var(--picker-gap);
-  padding:6px var(--picker-pad) 3px calc(var(--picker-pad) + var(--depth,0) * var(--picker-indent));
+  padding:var(--picker-group-pad-top) var(--picker-pad) var(--picker-group-pad-bottom) calc(var(--picker-pad) + var(--depth,0) * var(--picker-indent));
   font-size:var(--text-caption);color:var(--muted)}
-.picker__group svg{width:var(--picker-icon);height:14px;flex:0 0 auto}
-.picker__group rect{fill:none;stroke:currentColor;stroke-width:.6}
+.picker__group svg{width:var(--picker-icon);height:var(--picker-icon-h);flex:0 0 auto}
+.picker__group rect{fill:none;stroke:currentColor;stroke-width:var(--picker-group-stroke)}
 .picker__group rect[data-own=true]{fill:currentColor}
-.picker__item{display:flex;align-items:center;gap:var(--picker-gap);width:100%;
-  padding:5px var(--picker-pad) 5px calc(var(--picker-pad) + var(--depth,0) * var(--picker-indent));
+.picker__item{display:flex;align-items:center;gap:var(--picker-gap);width:var(--fill);
+  padding:var(--picker-item-pad-y) var(--picker-pad) var(--picker-item-pad-y) calc(var(--picker-pad) + var(--depth,0) * var(--picker-indent));
   border:0;border-radius:var(--r-xs);background:transparent;color:var(--fg);
   font:inherit;font-size:var(--text-control);text-align:left;cursor:pointer}
-.picker__item svg{width:var(--picker-icon);height:14px;flex:0 0 auto;fill:none;stroke:currentColor;
-  stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round}
+.picker__item svg{width:var(--picker-icon);height:var(--picker-icon-h);flex:0 0 auto;fill:none;stroke:currentColor;
+  stroke-width:var(--icon-stroke);stroke-linecap:round;stroke-linejoin:round}
 .picker__name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.picker__item small{margin-left:auto;padding-left:8px;color:var(--muted);font-size:var(--text-caption);flex:0 0 auto}
+.picker__item small{margin-left:auto;padding-left:var(--picker-item-note-gap);color:var(--muted);font-size:var(--text-caption);flex:0 0 auto}
 .picker__item[data-active=true]{color:var(--fg);background:var(--chip-sel)}
 .picker__item:hover,.picker__item:focus-visible{outline:0;color:var(--fg);
   background:var(--chip-hover)}
@@ -452,42 +445,42 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
    Controls do not use the default browser appearance. The default select and checkbox do not follow the theme colors,
    so only they would stay unchanged when the theme changes.                                */
 .set-scrim{position:fixed;inset:0;z-index:200}
-.set-card{position:absolute;left:50%;top:72px;transform:translateX(-50%);
-  width:560px;max-height:74vh;display:flex;flex-direction:column;
+.set-card{position:absolute;left:var(--center);top:var(--set-card-top);transform:translateX(calc(0% - var(--center)));
+  width:var(--set-card-w);max-height:var(--set-card-max-h);display:flex;flex-direction:column;
   border:var(--bw) solid var(--edge);border-radius:var(--r-sm);background:var(--card);
-  box-shadow:0 20px 56px rgb(0 0 0 / .42)}
-.set-card__head{display:flex;align-items:center;gap:8px;height:44px;flex:0 0 44px;
-  padding:0 8px 0 16px;border-bottom:var(--bw) solid var(--edge);cursor:grab}
+  box-shadow:0 var(--set-card-shadow-y) var(--set-card-shadow-blur) rgb(0 0 0 / var(--set-card-shadow-alpha))}
+.set-card__head{display:flex;align-items:center;gap:var(--set-card-head-gap);height:var(--set-card-head-h);flex:0 0 var(--set-card-head-h);
+  padding:0 var(--set-card-head-pad-end) 0 var(--set-card-head-pad-start);border-bottom:var(--bw) solid var(--edge);cursor:grab}
 .set-card__head:active{cursor:grabbing}
 .set-card__title{font-size:var(--text-control);letter-spacing:var(--letter-spacing);color:var(--fg)}
 .set-card__head .act{margin-left:auto}
 .set-card__body{display:flex;min-height:0}
 
-.set-card__nav{display:flex;flex-direction:column;gap:2px;width:136px;flex:0 0 auto;
-  padding:10px 8px;border-right:var(--bw) solid var(--edge)}
+.set-card__nav{display:flex;flex-direction:column;gap:var(--set-nav-gap);width:var(--set-nav-w);flex:0 0 auto;
+  padding:var(--set-nav-pad-y) var(--set-nav-pad-x);border-right:var(--bw) solid var(--edge)}
 /* The current section has a mark on the left in the same color as the rail. It has the same
    meaning as the line that joins a sidebar to a card. */
-.set-nav{position:relative;text-align:left;padding:7px 10px;border:0;
+.set-nav{position:relative;text-align:left;padding:var(--set-nav-item-pad-y) var(--set-nav-item-pad-x);border:0;
   border-radius:var(--r-xs);background:transparent;color:var(--muted);
   font:inherit;font-size:var(--text-control);cursor:pointer}
 .set-nav:hover{color:var(--fg);background:var(--inset)}
 .set-nav[data-on=true]{background:var(--chip-sel);color:var(--fg)}
-.set-nav[data-on=true]::before{content:"";position:absolute;left:0;top:6px;bottom:6px;
-  width:2px;border-radius:2px;background:var(--rail)}
+.set-nav[data-on=true]::before{content:"";position:absolute;left:0;top:var(--set-nav-mark-inset);bottom:var(--set-nav-mark-inset);
+  width:var(--set-nav-mark-w);border-radius:var(--set-nav-mark-r);background:var(--rail)}
 
-.set-card__pane{flex:1 1 auto;min-width:0;padding:14px 18px 18px;overflow:auto}
+.set-card__pane{flex:1 1 auto;min-width:0;padding:var(--set-pane-pad-top) var(--set-pane-pad-x) var(--set-pane-pad-bottom);overflow:auto}
 .set-scope-tabs{display:flex;gap:var(--space-4);margin-bottom:var(--space-4);border-bottom:var(--bw) solid var(--edge)}
-.set-scope-tabs button{padding:var(--space-2) var(--space-1);margin-bottom:calc(0px - var(--bw));border:0;border-bottom:2px solid transparent;
+.set-scope-tabs button{padding:var(--space-2) var(--space-1);margin-bottom:calc(0px - var(--bw));border:0;border-bottom:var(--scope-tab-mark) solid transparent;
   background:transparent;color:var(--muted);font:inherit;font-size:var(--text-control);cursor:pointer}
 .set-scope-tabs button:hover{color:var(--fg)}
 .set-scope-tabs button[aria-pressed=true]{color:var(--fg);border-bottom-color:var(--rail)}
-.set-group{margin:0 0 20px}
+.set-group{margin:0 0 var(--set-group-gap)}
 .set-group:last-child{margin-bottom:0}
 .set-group__name{margin:0 0 var(--space-1);font-size:var(--text-caption);letter-spacing:var(--section-tracking);color:var(--rail)}
-.set-caption{margin:0 0 10px;font-size:var(--text-small);line-height:var(--line-height);color:var(--muted)}
-.set-actions{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 10px}
-.set-row{display:grid;grid-template-columns:124px 1fr;align-items:center;gap:12px;
-  min-height:30px}
+.set-caption{margin:0 0 var(--set-caption-gap);font-size:var(--text-small);line-height:var(--line-height);color:var(--muted)}
+.set-actions{display:flex;flex-wrap:wrap;gap:var(--set-actions-gap);margin:0 0 var(--set-actions-margin)}
+.set-row{display:grid;grid-template-columns:var(--set-row-name-w) 1fr;align-items:center;gap:var(--set-row-gap);
+  min-height:var(--set-row-h)}
 .set-row__name{font-size:var(--text-control);color:var(--muted)}
 /* In a set row, the set line uses the remaining width instead of a name cell, and the buttons attach to the right of the line. */
 .set-row:has(> .set-caption){grid-template-columns:1fr auto}
@@ -495,20 +488,20 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 
 /* The debug view lists the files of the logs folder: the path takes the free width and the size, time and save button
    follow it on the same line. */
-.dbg-card{width:640px}
+.dbg-card{width:var(--dbg-card-w)}
 /* The pane has no padding above, so the sticky bar of a shown file stays at its top edge. */
-.dbg-card__pane{flex:1 1 auto;min-height:0;padding:0 18px 18px;overflow:auto}
-.dbg-card__pane > :first-child{margin-top:14px}
-.dbg-card__error{margin:0 0 10px;font-size:var(--text-small)}
-.dbg-row{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:12px;min-height:30px}
+.dbg-card__pane{flex:1 1 auto;min-height:0;padding:0 var(--dbg-pane-pad-x) var(--dbg-pane-pad-bottom);overflow:auto}
+.dbg-card__pane > :first-child{margin-top:var(--dbg-pane-pad-top)}
+.dbg-card__error{margin:0 0 var(--dbg-error-gap);font-size:var(--text-small)}
+.dbg-row{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:var(--dbg-row-gap);min-height:var(--dbg-row-h)}
 .dbg-row__path{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--text-control);color:var(--fg)}
-.dbg-row__acts{display:grid;grid-template-columns:repeat(3,56px);gap:var(--space-2)}
-.dbg-row__acts .ui-button{width:100%}
+.dbg-row__acts{display:grid;grid-template-columns:repeat(3,var(--dbg-act-w));gap:var(--space-2)}
+.dbg-row__acts .ui-button{width:var(--fill)}
 /* The bar of a shown file stays at the top of the scrolling pane, so the list button is in view at the end of a long text. */
-.dbg-card__bar{position:sticky;top:0;z-index:1;display:flex;align-items:center;gap:12px;margin:0 0 var(--space-3);padding:var(--space-1) 0;min-height:30px;background:var(--card)}
+.dbg-card__bar{position:sticky;top:0;z-index:1;display:flex;align-items:center;gap:var(--dbg-bar-gap);margin:0 0 var(--space-3);padding:var(--space-1) 0;min-height:var(--dbg-row-h);background:var(--card)}
 .dbg-card__path{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--text-control);color:var(--fg)}
 .dbg-card__cut{font-size:var(--text-small);color:var(--muted)}
-.dbg-card__image{display:block;max-width:100%;height:auto;border:var(--bw) solid var(--edge);border-radius:var(--r-xs)}
+.dbg-card__image{display:block;max-width:var(--fill);height:auto;border:var(--bw) solid var(--edge);border-radius:var(--r-xs)}
 .dbg-card__text{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font-family:var(--font-mono,ui-monospace,monospace);font-size:var(--text-small);line-height:var(--line-height);color:var(--fg)}
 .dbg-card__filters,.dbg-card__choice{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2);margin:0 0 var(--space-3)}
 .dbg-card__filters .set-text{flex:1 1 auto;min-width:0}
@@ -525,42 +518,42 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 
 /* select. The wrapping element draws the arrow, and the select itself does not use the default appearance. */
 .select-field{position:relative;display:block}
-.select-field::after{content:"▾";position:absolute;right:10px;top:50%;translate:0 -50%;
+.select-field::after{content:"▾";position:absolute;right:var(--select-arrow-inset);top:var(--center);translate:0 calc(0% - var(--center));
   font-size:var(--text-caption);color:var(--muted);pointer-events:none}
-.select-field select,.text-field{width:100%;min-width:0;padding:5px var(--space-2);
+.select-field select,.text-field{width:var(--fill);min-width:0;padding:var(--field-pad-y) var(--space-2);
   border:var(--bw) solid var(--edge);border-radius:var(--r-xs);
   background:var(--bg);color:var(--fg);font:inherit;font-size:var(--text-control)}
-.select-field select{appearance:none;padding-right:26px;cursor:pointer}
+.select-field select{appearance:none;padding-right:var(--select-arrow-room);cursor:pointer}
 .select-field select:hover,.text-field:hover{border-color:var(--rail)}
 .select-field select:focus-visible,.text-field:focus-visible{outline:0;border-color:var(--focus)}
 
 /* A setting with two or three values is laid out in one row instead of a list. */
-.set-seg{justify-self:start;display:inline-flex;gap:2px;padding:2px;border:var(--bw) solid var(--edge);
+.set-seg{justify-self:start;display:inline-flex;gap:var(--seg-gap);padding:var(--seg-pad);border:var(--bw) solid var(--edge);
   border-radius:var(--r-xs);background:var(--bg)}
-.set-seg button{padding:3px 11px;border:0;border-radius:var(--r-xs);background:transparent;
+.set-seg button{padding:var(--seg-button-pad-y) var(--seg-button-pad-x);border:0;border-radius:var(--r-xs);background:transparent;
   color:var(--muted);font:inherit;font-size:var(--text-small);cursor:pointer;white-space:nowrap}
 .set-seg button:hover{color:var(--fg)}
 .set-seg button[data-on=true]{background:var(--chip-sel);color:var(--fg)}
 
 /* On/off value. */
-.set-switch{justify-self:start;appearance:none;position:relative;width:34px;height:19px;flex:0 0 auto;
-  margin:0;border:0;border-radius:19px;background:var(--inset);cursor:pointer}
-.set-switch::after{content:"";position:absolute;left:3px;top:3px;width:13px;height:13px;
-  border-radius:50%;background:var(--muted)}
-.set-switch:checked{background:color-mix(in srgb,var(--focus) 40%,transparent)}
-.set-switch:checked::after{left:18px;background:var(--focus)}
-.set-switch:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.set-switch{justify-self:start;appearance:none;position:relative;width:var(--switch-w);height:var(--switch-h);flex:0 0 auto;
+  margin:0;border:0;border-radius:var(--switch-h);background:var(--inset);cursor:pointer}
+.set-switch::after{content:"";position:absolute;left:var(--switch-knob-inset);top:var(--switch-knob-inset);width:var(--switch-knob);height:var(--switch-knob);
+  border-radius:var(--circle);background:var(--muted)}
+.set-switch:checked{background:color-mix(in srgb,var(--focus) var(--switch-on-mix),transparent)}
+.set-switch:checked::after{left:var(--switch-knob-on);background:var(--focus)}
+.set-switch:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-offset:var(--switch-focus-offset)}
 
-.set-slide{display:flex;align-items:center;gap:10px}
-.set-slide input[type=range]{appearance:none;flex:1 1 auto;min-width:0;height:3px;margin:0;
-  border-radius:3px;background:var(--inset);cursor:pointer}
-.set-slide input[type=range]::-webkit-slider-thumb{appearance:none;width:13px;height:13px;
-  border-radius:50%;background:var(--focus)}
-.set-slide input[type=range]::-moz-range-thumb{width:13px;height:13px;border:0;
-  border-radius:50%;background:var(--focus)}
-.set-slide output{flex:0 0 auto;width:6ch;text-align:right;font-size:var(--text-small);color:var(--muted)}
+.set-slide{display:flex;align-items:center;gap:var(--slide-gap)}
+.set-slide input[type=range]{appearance:none;flex:1 1 auto;min-width:0;height:var(--slide-track-h);margin:0;
+  border-radius:var(--slide-track-h);background:var(--inset);cursor:pointer}
+.set-slide input[type=range]::-webkit-slider-thumb{appearance:none;width:var(--slide-thumb);height:var(--slide-thumb);
+  border-radius:var(--circle);background:var(--focus)}
+.set-slide input[type=range]::-moz-range-thumb{width:var(--slide-thumb);height:var(--slide-thumb);border:0;
+  border-radius:var(--circle);background:var(--focus)}
+.set-slide output{flex:0 0 auto;width:var(--slide-value-w);text-align:right;font-size:var(--text-small);color:var(--muted)}
 
-.ui-button{justify-self:start;padding:5px var(--space-3);border:var(--bw) solid var(--edge);border-radius:var(--r-xs);
+.ui-button{justify-self:start;padding:var(--field-pad-y) var(--space-3);border:var(--bw) solid var(--edge);border-radius:var(--r-xs);
   background:var(--bg);color:var(--fg);font:inherit;font-size:var(--text-control);cursor:pointer}
 .ui-button:hover{border-color:var(--rail)}
 
@@ -571,31 +564,31 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
      left band        --rail        between them  --rule (theme with passage 0)
      right dot        --focus       corners       radius of that theme
      gap between      passage of that theme                                              */
-.th-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px;
-  margin:0 0 14px}
-.th{display:flex;flex-direction:column;align-items:stretch;gap:5px;padding:3px;
+.th-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--theme-swatch-min-w),1fr));gap:var(--theme-grid-gap);
+  margin:0 0 var(--theme-grid-margin)}
+.th{display:flex;flex-direction:column;align-items:stretch;gap:var(--theme-swatch-gap);padding:var(--theme-swatch-pad);
   border:var(--bw) solid transparent;border-radius:var(--r-xs);background:transparent;
   color:var(--muted);font:inherit;font-size:var(--text-caption);cursor:pointer}
 .th:hover{color:var(--fg)}
 .th[data-on=true]{border-color:var(--focus);color:var(--fg)}
-.th__box{position:relative;display:block;height:42px;overflow:hidden;
-  border:1px solid;border-radius:var(--r-xs)}
-.th__rail{position:absolute;left:0;top:0;bottom:0;width:4px}
-.th__pair{position:absolute;left:10px;top:6px;right:6px;bottom:6px;display:flex}
-.th__card{position:relative;flex:1 1 0;min-width:0;border:1px solid}
-.th__dot{position:absolute;right:3px;bottom:3px;width:6px;height:6px;border-radius:50%}
+.th__box{position:relative;display:block;height:var(--theme-box-h);overflow:hidden;
+  border:var(--theme-box-border) solid;border-radius:var(--r-xs)}
+.th__rail{position:absolute;left:0;top:0;bottom:0;width:var(--theme-rail-w)}
+.th__pair{position:absolute;left:var(--theme-pair-left);top:var(--theme-pair-inset);right:var(--theme-pair-inset);bottom:var(--theme-pair-inset);display:flex}
+.th__card{position:relative;flex:1 1 0;min-width:0;border:var(--theme-box-border) solid}
+.th__dot{position:absolute;right:var(--theme-dot-inset);bottom:var(--theme-dot-inset);width:var(--theme-dot);height:var(--theme-dot);border-radius:var(--circle)}
 .th__name{text-align:center}
 
 /* The error color is used only on a data-error element that the error display path (shown-errors.js) attaches (AGENTS.md). */
 [data-error] { color: var(--no); }
 #applicationError {
-  padding: 8px 12px;
+  padding: var(--error-pad-y) var(--error-pad-x);
   background: var(--bg);
   font: var(--text-control)/var(--line-height) var(--font);
   user-select: text;
 }
 #applicationError[data-error], .library-error[data-error] { border-color: var(--no); }
-#applicationError { border-bottom: 1px solid var(--edge); }
+#applicationError { border-bottom: var(--error-border) solid var(--edge); }
 .set-reset { font-size: var(--text-caption); }
 .set-row:has(.set-reset) { flex-wrap: wrap; }
 
@@ -611,36 +604,36 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .card[data-place] > .status{grid-row:3}
 .set{flex:1 1 auto;min-height:0;overflow:auto;display:flex;flex-direction:column}
 /* The status line has the same height and text as the card foot, so the bottom lines of the sidebar and the neighboring card lie in one line. */
-.sidebar-status__fold{display:grid;place-items:center;margin-left:auto;width:18px;height:18px;padding:0;border:0;border-radius:var(--r-xs);
+.sidebar-status__fold{display:grid;place-items:center;margin-left:auto;width:var(--fold-button);height:var(--fold-button);padding:0;border:0;border-radius:var(--r-xs);
   background:transparent;color:var(--muted);cursor:pointer}
 .sidebar-status__fold:hover{background:var(--inset);color:var(--fg)}
-.sidebar-status__fold svg{width:14px;height:14px}
-.sidebar-status,.card-sidebar__status{display:flex;align-items:center;gap:6px;height:var(--foot);flex:0 0 var(--foot);box-sizing:border-box;
+.sidebar-status__fold svg{width:var(--card-icon);height:var(--card-icon)}
+.sidebar-status,.card-sidebar__status{display:flex;align-items:center;gap:var(--sidebar-status-gap);height:var(--foot);flex:0 0 var(--foot);box-sizing:border-box;
   padding:0 var(--space-2);border-top:var(--bw) solid var(--edge);font-size:var(--text-caption);color:var(--muted);
   white-space:nowrap;overflow:hidden}
 /* The head has the height of the card head, so the bottom line of the first sidebar head and the bottom line of the neighboring card head lie in one line. */
-.set__head,.set__tab{display:flex;align-items:center;gap:6px;height:var(--head);flex:0 0 var(--head);box-sizing:border-box;padding:0 10px;
-  border:0;background:color-mix(in srgb,var(--fg) 3%,var(--card));color:var(--fg);
-  font:600 11.5px var(--ui-font);letter-spacing:0;text-align:left;cursor:pointer}
+.set__head,.set__tab{display:flex;align-items:center;gap:var(--section-head-gap);height:var(--head);flex:0 0 var(--head);box-sizing:border-box;padding:0 var(--section-head-pad);
+  border:0;background:color-mix(in srgb,var(--fg) var(--section-head-mix),var(--card));color:var(--fg);
+  font:600 var(--section-head-text) var(--ui-font);letter-spacing:0;text-align:left;cursor:pointer}
 /* The head line is an inner shadow, so the content box of the head is the same in every state and the name does not move. The bottom line is always present,
    and the top line is drawn only where the body ends because the previous section is expanded. When the previous section is collapsed, the bottom line of its head is the boundary. */
-.set__head{width:100%;box-shadow:inset 0 calc(0px - var(--bw)) 0 var(--edge)}
+.set__head{width:var(--fill);box-shadow:inset 0 calc(0px - var(--bw)) 0 var(--edge)}
 .set__section:not([data-folded=true]) + .set__divider + .set__section .set__head{
   box-shadow:inset 0 var(--bw) 0 var(--edge),inset 0 calc(0px - var(--bw)) 0 var(--edge)}
-.set__head:hover,.set__tab:hover{background:color-mix(in srgb,var(--fg) 7%,var(--card))}
+.set__head:hover,.set__tab:hover{background:color-mix(in srgb,var(--fg) var(--section-head-hover-mix),var(--card))}
 /* The collapse indicator is the stroke icon of the core (chevron-down) at the head text size. It is rotated to point right when collapsed. */
-.set__chevron{display:flex;flex:0 0 1em;width:1em;height:1em;color:var(--muted)}
-.set__chevron svg{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.set__chevron{display:flex;flex:0 0 var(--chevron);width:var(--chevron);height:var(--chevron);color:var(--muted)}
+.set__chevron svg{width:var(--fill);height:var(--fill);fill:none;stroke:currentColor;stroke-width:var(--chevron-stroke);stroke-linecap:round;stroke-linejoin:round}
 .set__head[aria-expanded=false] .set__chevron{transform:rotate(-90deg)}
 .set__name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .set__section[data-folded=true] .set__body{display:none}
 /* The tab strip scrolls horizontally when it overflows, like the card tab strip, and tabs neither wrap nor shrink. The bottom line is a shadow, so
    the tabs fill the full height of the strip. */
 .set__tabs{display:flex;flex:0 0 var(--head);height:var(--head);overflow-x:auto;overflow-y:hidden;scrollbar-width:none;
-  box-shadow:inset 0 calc(0px - var(--bw)) 0 var(--edge);background:color-mix(in srgb,var(--fg) 3%,var(--card))}
+  box-shadow:inset 0 calc(0px - var(--bw)) 0 var(--edge);background:color-mix(in srgb,var(--fg) var(--section-head-mix),var(--card))}
 .set__tabs::-webkit-scrollbar{display:none}
-.set__tab{flex:0 0 auto;height:100%;white-space:nowrap;color:var(--muted);background:transparent}
-.set__tab[aria-selected=true]{color:var(--fg);box-shadow:inset 0 -2px 0 var(--rail)}
+.set__tab{flex:0 0 auto;height:var(--fill);white-space:nowrap;color:var(--muted);background:transparent}
+.set__tab[aria-selected=true]{color:var(--fg);box-shadow:inset 0 calc(0px - var(--section-tab-mark)) 0 var(--rail)}
 /* The body of a section is the slot of its section surface: the view of the plugin is placed over it and draws its content
    (docs/spec/plugins.md#sections). */
 .set__body{position:relative;min-width:0;min-height:0}
@@ -650,7 +643,7 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .set__section:not([data-height=fill]):not([data-folded=true]):not([hidden]){flex:0 1 auto;min-height:0;display:flex;flex-direction:column}
 .set__section:not([data-height=fill]):not([data-folded=true]) > .set__body{flex:0 1 var(--section-height);height:var(--section-height)}
 /* Fill sections share the height that the other sections leave, and keep their head and the minimum section height. When collapsed, only the head remains. */
-.set__section[data-height=fill]:not([data-folded=true]):not([hidden]){flex:1 1 0;min-height:calc(var(--head) + 32px);display:flex;flex-direction:column}
+.set__section[data-height=fill]:not([data-folded=true]):not([hidden]){flex:1 1 0;min-height:calc(var(--head) + var(--section-min-h));display:flex;flex-direction:column}
 .set__section[data-height=fill]:not([data-folded=true]) > .set__body{flex:1 1 auto}
 /* A horizontal list divides the section width within the same height and scrolls each body. */
 .set[data-orientation=horizontal][data-layout=list]{flex-direction:row;min-width:0}
@@ -659,5 +652,5 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .set[data-orientation=horizontal][data-layout=list] > .set__divider + .set__section{border-left:var(--bw) solid var(--edge)}
 /* The divider between two open sections of a vertical list lies over the top of the head below it, which the page draws, so a view
    never covers it; dragging it sizes a section (docs/spec/plugins.md#sections). */
-.set__divider{position:relative;z-index:1;flex:0 0 auto;height:6px;margin-bottom:-6px;cursor:row-resize;touch-action:none}
+.set__divider{position:relative;z-index:1;flex:0 0 auto;height:var(--section-divider);margin-bottom:calc(0px - var(--section-divider));cursor:row-resize;touch-action:none}
 .set__divider[hidden]{display:none}

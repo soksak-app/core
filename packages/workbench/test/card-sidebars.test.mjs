@@ -223,7 +223,9 @@ test("a section with an integer height gives way when the sidebar is short, and 
     assert.equal(of(`[data-height="160"]`).getPropertyValue("flex"), "0 1 auto", "the section of an integer height shrinks");
     assert.equal(of(`[data-height="160"]`).getPropertyValue("min-height"), "0px");
     assert.equal(of(`[data-height="160"] > .set__body`).getPropertyValue("flex"), "0 1 var(--section-height)", "its body shrinks");
-    assert.equal(of(`[data-height="fill"]`).getPropertyValue("min-height"), "calc(var(--head) + 32px)", "a fill section keeps its head and the minimum height");
+    assert.equal(of(`[data-height="fill"]`).getPropertyValue("min-height"), "calc(var(--head) + var(--section-min-h))", "a fill section keeps its head and the minimum height");
+    const { default: declaration } = await import("../workbench.json", { with: { type: "json" } });
+    assert.equal(declaration.chrome["section-min-h"], "32px", "the minimum height of a fill section below its head");
   } finally {
     dom.window.close();
   }

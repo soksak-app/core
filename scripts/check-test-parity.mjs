@@ -129,6 +129,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
     "packages/client/bench/**/*.mjs",
   ], ["packages/client/test/**/*.mjs"]),
   lane("MCP client", "js-ts", ["packages/mcp/**/*.js"], ["packages/mcp/test/**/*.mjs"]),
+  lane("mygo workbench layout", "go", ["packages/workbench-mygo/src/**/*.go"], ["packages/workbench-mygo/tests/**/*.go"]),
   // The C file is the fault injection library that test/folder-wait-stream-start.test.mjs compiles and loads into its child process.
   lane("window check harness", "js-ts", ["packages/window-check/*.mjs"], ["packages/window-check/test/**/*.mjs", "packages/window-check/test/platform/darwin/*.c"], { testExtensions: new Set([".mjs", ".c"]) }),
   lane("audit of the running documents", "js-ts", ["e2e/audit-surfaces.mjs"], ["scripts/test/audit-surfaces.test.mjs"]),
@@ -617,6 +618,34 @@ const FEATURE_LINKS = [
       { file: "scripts/test/e2e-run.test.mjs", id: "a failed start skips the quit of its application, so the run reports the start as its one failure" },
     ],
     expected: "`make e2e-b3` runs the three-host benchmark on five applications into a session folder and fails on a baseline checkout, a sidecar revision, a baseline plugin release, a run condition or a display that differs from its record or condition; `make b3-judge` judges that folder against `docs/spec/performance-goals.json`, whose values the two tables of the section Performance goals of `docs/spec/hosts.md` and of its translation copy.",
+    levels: ["unit"],
+  },
+  {
+    id: "F502-15",
+    implementation: [
+      { file: "packages/workbench/settings.js", symbol: "import declaration from \"./workbench.json\" with { type: \"json\" };" },
+      { file: "packages/workbench/text-size.js", symbol: "TEXT_STEPS = declaration.settings.textSteps" },
+      { file: "packages/workbench/chrome-metrics.js", symbol: "export function installChromeMetrics(root)" },
+      { file: "packages/workbench/spaces.js", symbol: "export function closingSpace(project, id)" },
+      { file: "packages/workbench-mygo/src/layout/grid.go", symbol: "func New(state *State, options Options) (*Grid, error) {" },
+      { file: "packages/workbench-mygo/src/layout/outline.go", symbol: "func ComputeOutline(rects []Rect, options OutlineOptions) Outline {" },
+      { file: "packages/workbench-mygo/src/layout/stored.go", symbol: "func CheckStoredLayout(layout json.RawMessage, units []PluginUnit) error {" },
+      { file: "packages/workbench-mygo/src/layout/spaces.go", symbol: "func ClosingSpace(p *Project, id string) (*Closing, error) {" },
+      { file: "scripts/check-host-parity.mjs", symbol: "workbenchDeclarationSource" },
+      { file: "Makefile", symbol: "host-test-mygo:" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/workbench-declaration.test.mjs", id: "no stylesheet of the workbench holds a literal length, ratio or duration" },
+      { file: "packages/workbench/test/workbench-declaration.test.mjs", id: "settings.js and text-size.js take the values of workbench.json instead of defining them" },
+      { file: "packages/workbench/test/workbench-declaration.test.mjs", id: "the workbench sets the chrome metrics as custom properties of the document root" },
+      { file: "packages/workbench-mygo/tests/layout/cases_test.go", id: "TestGridCases" },
+      { file: "packages/workbench-mygo/tests/layout/cases_test.go", id: "TestOutlineCases" },
+      { file: "packages/workbench-mygo/tests/layout/cases_test.go", id: "TestStoredCases" },
+      { file: "packages/workbench-mygo/tests/layout/cases_test.go", id: "TestSpaceCases" },
+      { file: "scripts/test/check-host-parity.test.mjs", id: "the common-only keys of the hosts, the browser runtime and the workbench are read from their sources" },
+      { file: "scripts/test/workflows.test.mjs", id: "make host-test-mygo runs the unit tests of the Go packages of the mygo host" },
+    ],
+    expected: "The workbench values are declared once in `packages/workbench/workbench.json`, which `settings.js` and `text-size.js` import and whose chrome metrics the workbench sets as custom properties of the document root, so no stylesheet holds a literal length, ratio or duration; the JavaScript layout model of `packages/soksak` and `packages/workbench` and the Go layout model of `packages/workbench-mygo` pass the same layout cases of `docs/spec/cases/layout`, which `make host-test-mygo` runs for the Go model.",
     levels: ["unit"],
   },
   {
@@ -6367,7 +6396,7 @@ const FEATURE_LINKS = [
   {
     id: "F36",
     implementation: [
-      { file: "packages/workbench/app.css", symbol: "round(nearest,calc(var(--chrome-row-h) * var(--frame-text)),1px)" },
+      { file: "packages/workbench/app.css", symbol: "round(nearest,calc(var(--chrome-row-h) * var(--frame-text)),var(--pixel))" },
     ],
     tests: [
       { file: "e2e/text-size.test.mjs", id: "text size commands enlarge the pressed card or the frame and keep the plane in the window" },
@@ -9391,7 +9420,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F408",
-    implementation: [{ file: "packages/workbench/app.css", symbol: "min-height:calc(var(--head) + 32px)" }],
+    implementation: [{ file: "packages/workbench/app.css", symbol: "min-height:calc(var(--head) + var(--section-min-h))" }],
     tests: [{ file: "packages/workbench/test/card-sidebars.test.mjs", id: "a section with an integer height gives way when the sidebar is short, and a fill section keeps its head and minimum height" }],
     expected: "A section with an integer height gives way when the sidebar is shorter.",
     levels: ["unit"],

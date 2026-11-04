@@ -35,208 +35,95 @@ import { setLogPolicy } from "./log-policy.js";
 import { logPolicyOf } from "./log-gate.js";
 import { CLASSES } from "./event-classes.js";
 import { beginOperation } from "./operations.js";
+import declaration from "./workbench.json" with { type: "json" };
+
+/* The theme catalog, the fonts, the menu languages and the setting definitions are the declaration file workbench.json, which every host
+   library embeds as it is (docs/spec/settings.md#values). This module reads them from it and holds no copy. */
 
 /* The selectable fonts. A theme designates one of them as its default, and the settings change it.
    A name that is not installed falls through to the next name of the list. */
-export const FONTS = [
-  { id: "mono-system", name: "시스템 고정폭",
-    stack: "ui-monospace,SFMono-Regular,Menlo,monospace" },
-  { id: "mono-sf", name: "SF Mono / Menlo",
-    stack: "'SF Mono',Menlo,'DejaVu Sans Mono',ui-monospace,monospace" },
-  { id: "mono-jet", name: "JetBrains Mono",
-    stack: "'JetBrains Mono','Fira Code',ui-monospace,monospace" },
-  { id: "sans-system", name: "시스템 비례",
-    stack: "ui-sans-serif,-apple-system,'Segoe UI',sans-serif" },
-  { id: "sans-inter", name: "Inter",
-    stack: "Inter,ui-sans-serif,-apple-system,'Segoe UI',sans-serif" },
-];
+export const FONTS = declaration.fonts;
 
-export const THEMES = [
-  { name: "midnight", shape: { r: "10px", gap: "6px", bw: "1px", font: "mono-system", size: "13px" },
-    dark: { bg: "#101117", card: "#191b24", fg: "#ececf5", muted: "#8f92a4",
-            edge: "#2b2e3d", rule: "#22242f", rail: "#7279ff", focus: "#ffb36b",
-            no: "#ff7c7c" },
-    light: { bg: "#eef0f4", card: "#ffffff", fg: "#252735", muted: "#6c6f7e",
-             edge: "#d8dbe4", rule: "#e3e6ec", rail: "#5962e8", focus: "#c06a1f",
-             no: "#c62c2c" } },
+/* The themes: the shape (r, gap, bw, font, size) and the dark and light colors. A theme whose gap is 0 makes the cards touch and share
+   one boundary line. */
+export const THEMES = declaration.themes;
 
-  { name: "nord", shape: { r: "8px", gap: "5px", bw: "1px", font: "mono-sf", size: "13px" },
-    dark: { bg: "#2e3440", card: "#353c4a", fg: "#eceff4", muted: "#8b93a5",
-            edge: "#454d5e", rule: "#3a4150", rail: "#81a1c1", focus: "#ebcb8b",
-            no: "#bf616a" },
-    light: { bg: "#eceff4", card: "#ffffff", fg: "#2e3440", muted: "#6d7789",
-             edge: "#d8dee9", rule: "#e3e8ef", rail: "#5e81ac", focus: "#b48a2f",
-             no: "#a3454e" } },
+export const MODES = declaration.modes;
 
-  { name: "solar", shape: { r: "6px", gap: "7px", bw: "2px", font: "mono-system", size: "13px" },
-    dark: { bg: "#002b36", card: "#05323d", fg: "#eee8d5", muted: "#8b9ea0",
-            edge: "#0f4451", rule: "#073642", rail: "#268bd2", focus: "#cb4b16",
-            no: "#dc322f" },
-    light: { bg: "#fdf6e3", card: "#fffdf6", fg: "#3b4a4f", muted: "#8a9599",
-             edge: "#e8dfc4", rule: "#f0e7d0", rail: "#268bd2", focus: "#cb4b16",
-             no: "#dc322f" } },
-
-  { name: "forest", shape: { r: "14px", gap: "6px", bw: "1px", font: "sans-system", size: "13px" },
-    dark: { bg: "#0e1512", card: "#141d19", fg: "#dfeee6", muted: "#7d9389",
-            edge: "#22302a", rule: "#1a241f", rail: "#3f8f6b", focus: "#d9a441",
-            no: "#e0736d" },
-    light: { bg: "#eef4f0", card: "#ffffff", fg: "#1f3129", muted: "#6b8378",
-             edge: "#d4e2da", rule: "#e2ebe6", rail: "#2f7a58", focus: "#a8761f",
-             no: "#b1453f" } },
-
-  { name: "ember", shape: { r: "4px", gap: "4px", bw: "2px", font: "mono-jet", size: "13px" },
-    dark: { bg: "#17100e", card: "#201714", fg: "#f3e4de", muted: "#a1877e",
-            edge: "#33241f", rule: "#271c18", rail: "#c4603a", focus: "#e8a33d",
-            no: "#e05252" },
-    light: { bg: "#faf0ea", card: "#fffaf6", fg: "#3a2822", muted: "#8d7268",
-             edge: "#ecd9cd", rule: "#f3e6dd", rail: "#b1552f", focus: "#a56a17",
-             no: "#b23a3a" } },
-
-  /* Gap 0. The cards touch and share one boundary line. */
-  { name: "slate", shape: { r: "0px", gap: "0px", bw: "1px", font: "sans-inter", size: "13px" },
-    dark: { bg: "#15171a", card: "#1c1f23", fg: "#e6e9ee", muted: "#8d939d",
-            edge: "#2c3036", rule: "#2c3036", rail: "#6b7480", focus: "#c7ced8",
-            no: "#d97070" },
-    light: { bg: "#f1f3f5", card: "#ffffff", fg: "#23282e", muted: "#6f7781",
-             edge: "#dcdfe4", rule: "#dcdfe4", rail: "#7b8593", focus: "#3d4854",
-             no: "#b1453f" } },
-
-  { name: "mist", shape: { r: "12px", gap: "6px", bw: "1px", font: "mono-system", size: "13px" },
-    dark: { bg: "#121821", card: "#18202a", fg: "#e2eaf2", muted: "#7f8fa1",
-            edge: "#283344", rule: "#1d2531", rail: "#4c6c88", focus: "#8ec5ea",
-            no: "#dd7a74" },
-    light: { bg: "#eef2f5", card: "#f9fbfc", fg: "#2b3440", muted: "#71808f",
-             edge: "#d5dee6", rule: "#e3eaf0", rail: "#6f92ad", focus: "#2f6f9f",
-             no: "#b8453f" } },
-
-  { name: "grape", shape: { r: "16px", gap: "5px", bw: "1px", font: "sans-inter", size: "13px" },
-    dark: { bg: "#150f1c", card: "#1d1626", fg: "#ece2f6", muted: "#9b8bad",
-            edge: "#2e2340", rule: "#221a2e", rail: "#8a5cd6", focus: "#e07bd0",
-            no: "#e4707f" },
-    light: { bg: "#f4eefb", card: "#fdfaff", fg: "#2f2438", muted: "#7d6e8c",
-             edge: "#e0d3ee", rule: "#ebe2f5", rail: "#7a4fc0", focus: "#a8459a",
-             no: "#b6455a" } },
-
-  { name: "sand", shape: { r: "2px", gap: "4px", bw: "1px", font: "mono-sf", size: "13px" },
-    dark: { bg: "#191712", card: "#221f19", fg: "#efe9dd", muted: "#9d9384",
-            edge: "#342f25", rule: "#26221c", rail: "#8a7752", focus: "#d7b46a",
-            no: "#cf6f62" },
-    light: { bg: "#f2ede4", card: "#fbf8f2", fg: "#3a352c", muted: "#8a8172",
-             edge: "#e0d8c8", rule: "#eae3d7", rail: "#a8926b", focus: "#7a5c2e",
-             no: "#a8443c" } },
-
-  /* Gap 0. */
-  { name: "paper", shape: { r: "0px", gap: "0px", bw: "1px", font: "sans-system", size: "13px" },
-    dark: { bg: "#0d0d0e", card: "#151517", fg: "#e9e9ea", muted: "#8f8f93",
-            edge: "#26262a", rule: "#26262a", rail: "#6a6a70", focus: "#e0e0e2",
-            no: "#c96a6a" },
-    light: { bg: "#ffffff", card: "#fbfbfb", fg: "#1a1a1c", muted: "#6e6e73",
-             edge: "#e2e2e5", rule: "#e2e2e5", rail: "#a0a0a6", focus: "#1a1a1c",
-             no: "#b53a3a" } },
-];
-
-export const MODES = ["dark", "light"];
+/* The theme of the defaults. Its shape gives the defaults of the four shape settings. */
+const defaultTheme = THEMES.find((theme) => theme.name === declaration.settings.defaults.theme);
+if (!defaultTheme) throw new Error(`the default theme ${declaration.settings.defaults.theme} is not a theme of workbench.json`);
 
 /**
  * The current settings. A single object that is the JSON storage format as it is.
  *
  * With a variable per value, the list of stored values would need separate management and would have to
  * be edited whenever a value is added.
+ *
+ *   projectOpening   how a project opens: tabs or windows
+ *   theme, mode      the theme and its dark or light variant
+ *   language         the language of the application menu. auto = the system language (the default language if it is not supported)
+ *   diagnostics.performance
+ *                    the performance trace, present in every build. When it is on, the layers store the events of the trace in the event
+ *                    files under <config-dir>/logs; when it is off, no layer builds or stores one. It is off by default and the debug switch
+ *                    turns it on (docs/spec/settings.md, the section of core.settings.debug)
+ *   diagnostics.log  the policy of the event log (docs/spec/logging.md#classes-and-policy): the least severe level that is stored for the
+ *                    classes that the object names, one of off, error, warn, info, debug and trace; a class it does not name stores the level
+ *                    error. The default stores only the errors of every class, and the debug switch sets every class to trace
+ *   projectTabs      the position of the project tabs. top = the chrome row, left = the vertical list on the left
+ *   left, right      whether the left and right regions are shown. links decides what they show
+ *   dim              whether a surface that lost focus is dimmed
+ *   focusInd         how the focused card is shown. border = a border, corner = marks at the four corners
+ *   fullRule         where the boundary line of the section that a card crosses is drawn. over = over the surface, under = under the card,
+ *                    none = not drawn
+ *   gap, radius, font, size
+ *                    the half width (px) of the gap (0 = the cards share one line), the corner radius (px) of a card (--r-sm and --r-xs are
+ *                    derived from it), the font (an id of FONTS) and the font size (px). They start at the shape of the default theme, and
+ *                    from then on the value the user specified is used. Choosing the theme again returns them to the values of that theme
+ *   textSize         the scale of the text size applied to the frame chrome and every card: a value of TEXT_STEPS (docs/spec/text-size.md)
+ *   sets, links      a sidebar is made by combining sets. A set holds sections in order, and links connects a set to a position. A link
+ *                    uses the id, not the title. The defaults are decided by the sidebars of environment.json (setSidebarDefaults)
+ *   sidebarMinWidth, sidebarMaxWidth, sidebarWidth
+ *                    layout values (pt): the minimum and maximum width of a card sidebar and the initial width of a new sidebar
+ *                    (docs/spec/settings.md)
+ *   memorySaver, memorySaverDelay
+ *                    the memory saver (docs/spec/plugins.md#memory-saver): whether hidden tabs are unloaded, and the minutes a tab stays
+ *                    hidden before it is unloaded. Both are common-only
  */
 export const defaults = {
-  projectOpening: "windows",
-  theme: THEMES[0].name,
-  mode: "dark",
-  /* The language of the application menu. auto = the system language (en if it is not supported). */
-  language: "auto",
-
-  /* The performance trace, present in every build. When it is on, the layers store the events of the trace in the event files under
-     <config-dir>/logs; when it is off, no layer builds or stores one. It is off by default and the debug switch turns it on (docs/spec/settings.md, the section of core.settings.debug). */
-  "diagnostics.performance": false,
-
-  /* The policy of the event log (docs/spec/logging.md#classes-and-policy): the least severe level that is stored for the classes that the
-     object names, one of off, error, warn, info, debug and trace; a class it does not name stores the level error. The default stores only
-     the errors of every class, and the debug switch sets every class to trace. */
-  "diagnostics.log": {},
-
-  /* The position of the project tabs. top = the chrome row, left = the vertical list on the left. */
-  projectTabs: "top",
-  /* Whether the left and right regions are shown. links decides what they show. */
-  left: true,
-  right: true,
-  /* Whether a surface that lost focus is dimmed. */
-  dim: false,
-  /* How the focused card is shown. border = a border, corner = marks at the four corners. */
-  focusInd: "border",
-  /* Where the boundary line of the section that a card crosses is drawn.
-     over = over the surface, under = under the card, none = not drawn. */
-  fullRule: "under",
-  /* The next four are given defaults by the theme, and from then on the value the user specified is used.
-     Choosing the theme again returns them to the values of that theme. */
-  /* The half width (px) of the gap. When it is 0 the cards share one line. */
-  gap: parseFloat(THEMES[0].shape.gap),
-  /* The corner radius (px) of a card. --r-sm and --r-xs are derived from it. */
-  radius: parseFloat(THEMES[0].shape.r),
-  /* The font: an id of FONTS. */
-  font: THEMES[0].shape.font,
-  /* The font size (px). */
-  size: parseFloat(THEMES[0].shape.size),
-  /* The scale of the text size applied to the frame chrome and every card: a value of TEXT_STEPS (docs/spec/text-size.md). */
-  textSize: 1,
-
-  /* A sidebar is made by combining sets. A set holds sections in order, and links connects
-     a set to a position. A link uses the id, not the title. The defaults are decided by the
-     sidebars of environment.json (setSidebarDefaults). */
-  sets: [],
-  links: [],
-
-  /* Layout values (pt): the minimum and maximum width of a card sidebar and the initial width of a new sidebar (docs/spec/settings.md). */
-  sidebarMinWidth: 120,
-  sidebarMaxWidth: 480,
-  sidebarWidth: 190,
-
-  /* The memory saver (docs/spec/plugins.md#memory-saver): whether hidden tabs are unloaded, and the minutes a tab stays hidden
-     before it is unloaded. Both are common-only. */
-  memorySaver: true,
-  memorySaverDelay: 120,
+  ...declaration.settings.defaults,
+  gap: parseFloat(defaultTheme.shape.gap),
+  radius: parseFloat(defaultTheme.shape.r),
+  font: defaultTheme.shape.font,
+  size: parseFloat(defaultTheme.shape.size),
 };
 
 /* The range of memorySaverDelay in minutes (docs/spec/settings.md#values). */
-export const MEMORY_SAVER_DELAY = Object.freeze([5, 720]);
+export const MEMORY_SAVER_DELAY = declaration.settings.memorySaverDelay;
 
 /* The range of the layout values. Only integers are accepted. The three values share one range so that the same value is at the same slider position. */
-const WIDTH_RANGE = [60, 800];
-export const LAYOUT_RANGES = {
-  sidebarMinWidth: WIDTH_RANGE,
-  sidebarMaxWidth: WIDTH_RANGE,
-  sidebarWidth: WIDTH_RANGE,
-};
+export const LAYOUT_RANGES = declaration.settings.layoutRanges;
 
 /* The languages that the application menu supports. A new language is added to this declaration and to the menu table of the host contract together. */
-export const MENU_LANGUAGES = [
-  { id: "ko", label: "한국어" },
-  { id: "en", label: "English" },
-];
+export const MENU_LANGUAGES = declaration.menuLanguages;
 /* The default language used when the system language is not in the table. */
-const DEFAULT_LANGUAGE = "en";
+const DEFAULT_LANGUAGE = declaration.defaultLanguage;
 
 /* The range (px) of the shape values. Only integers are accepted, and the slider of the settings window uses the same range. */
-export const SHAPE_RANGES = {
-  gap: [0, 24],
-  radius: [0, 24],
-  size: [10, 18],
-};
+export const SHAPE_RANGES = declaration.settings.shapeRanges;
 
-/* The core settings that take one choice. The select control of the settings window shows the choices in this order (docs/spec/settings.md#values). */
+/* The core settings that take one choice. The select control of the settings window shows the choices in this order (docs/spec/settings.md#values).
+   workbench.json states the fixed lists; the theme, mode, font, text size and language choices are the catalogs above. */
+const { projectOpening, projectTabs, focusInd, fullRule } = declaration.settings.choices;
 export const CHOICES = {
-  projectOpening: ["tabs", "windows"],
+  projectOpening,
   theme: THEMES.map((theme) => theme.name),
   mode: MODES,
   font: FONTS.map((font) => font.id),
   textSize: TEXT_STEPS,
-  projectTabs: ["top", "left"],
-  focusInd: ["border", "corner"],
-  fullRule: ["under", "over", "none"],
+  projectTabs,
+  focusInd,
+  fullRule,
   language: ["auto", ...MENU_LANGUAGES.map((language) => language.id)],
 };
 
@@ -244,7 +131,7 @@ export const CHOICES = {
 const RANGES = { ...LAYOUT_RANGES, ...SHAPE_RANGES };
 
 /* The core settings that take a boolean. */
-const SWITCHES = ["left", "right", "dim", "diagnostics.performance", "memorySaver"];
+const SWITCHES = declaration.settings.switches;
 
 /** Validates the effective settings: the sidebar sets and links, and whether the initial width of a sidebar inside a card is between the minimum and the maximum. */
 function checkValues(values) {
@@ -341,7 +228,7 @@ function applied(values) {
  * textSize of the common settings before the page starts, so the frame scale is common-only (docs/spec/native-surfaces.md#title-bar-height).
  * The memory saver settings are common-only because the memory of the application is shared by its projects (docs/spec/settings.md#values).
  */
-const COMMON_ONLY = Object.freeze(["projectOpening", "textSize", "memorySaver", "memorySaverDelay"]);
+export const COMMON_ONLY = declaration.settings.commonOnly;
 
 /** It is an error when a project setting holds a common-only key. */
 function checkCommonOnly(values) {
@@ -626,14 +513,22 @@ export function install() {
   // The frame text scale that the CSS zoom of the frame chrome reads is not written here. The drawing of the prepared layout uses it (frame-text.js).
   // A surface reads its actual scale again.
   notifyTextSize();
-  for (const [token, value] of Object.entries(themeTokens())) {
-    root.style.setProperty(token, value);
-  }
+  installTokens(root);
   // A page that the host serves does not inherit the style sheet of this document, so the values are
   // sent separately.
   host.theme(pageTheme());
   // The language of the application menu. The host recreates the menu only when the effective language changes.
   host.menuLanguage(menuLanguage());
+}
+
+/**
+ * Sets the theme tokens of the current settings on root. Before the settings connect they are the tokens of the default theme, so the page
+ * sets them first and an error that stops the start is shown in the shape of the default theme.
+ */
+export function installTokens(root) {
+  for (const [token, value] of Object.entries(themeTokens())) {
+    root.style.setProperty(token, value);
+  }
 }
 
 /** The effective language of the application menu. When the setting is auto, the primary tag of the system language is looked up in the table, and the default language is used if it is not found. */

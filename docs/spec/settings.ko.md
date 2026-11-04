@@ -130,6 +130,8 @@ core 설정은 저마다 한 형식을 받는다. 설정 파일을 읽을 때와
 | `memorySaverDelay` | 5부터 720까지의 정수(분), 전역 범위, 기본값 120: 메모리 절약이 탭을 unload하기 전에 탭이 숨겨져 있는 시간. 다른 값은 `Invalid setting memorySaverDelay: <value>`로 거부하고, 변경은 scheduler를 다시 맞춘다 |
 | `sets`, `links` | [저장되는 세트와 연결](#저장되는-세트와-연결) |
 
+theme catalog와 mode, font, menu 언어와 기본 언어, 그리고 이 설정들의 기본값, 범위, 선택지, switch와 common 전용 key는 `packages/workbench/workbench.json`의 settings에 한 번 선언된다. `settings.js`와 `text-size.js`는 그 파일을 JSON module로 import하고 그중 어느 값도 정의하지 않는다.
+
 플러그인 설정은 그 선언의 형식을 따른다([플러그인](plugins.ko.md)).
 
 ## 이전 형식
@@ -182,6 +184,8 @@ core 설정은 저마다 한 형식을 받는다. 설정 파일을 읽을 때와
 `sidebarMinWidth` ≤ `sidebarWidth` ≤ `sidebarMaxWidth`를 깨는 변경은 -32602(invalid params)로 실패하고 아무것도 바꾸지 않는다. 현재 범위를 벗어난 저장된 카드 폭은 손잡이로 바꿀 때까지 저장된 대로 그린다.
 
 다음 배치 상수는 취향이 아니라 문서 구조에 묶여 있으므로 코드에 남는다. 카드 머리 32포인트와 바닥 22포인트, 탭 줄의 기준 폭(`plane.js`)이다. 새 스페이스의 왼쪽과 오른쪽 사이드바 폭은 `environment.json`의 `workspace.grid` 카드에서 온다.
+
+워크벤치 stylesheet(`app.css`, `library.css`, `overlay.html`)의 길이, 비율, 지속 시간은 `packages/workbench/workbench.json`의 chrome metric이다. 워크벤치는 page가 그리기 전에 그 각각을 document root의 custom property로 정하고, stylesheet는 그 custom property를 읽는다. stylesheet는 literal 길이, 비율, 지속 시간을 담지 않는다.
 
 ## 상태
 

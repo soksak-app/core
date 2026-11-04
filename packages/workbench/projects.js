@@ -1,5 +1,6 @@
 // The project list is stored in the shared store; the active project and the window ownership are stored in the running window.
 import { issueId } from "./ids.js";
+import { appendSpace, closingSpace, removeSpace, renameSpace as renameSpaceOf, spaceIn, spaceTabIds } from "./spaces.js";
 import { forgetTabsLeft } from "./tab-reports.js";
 import { recordStoredOrigins } from "./stored-layout.js";
 import { beginOperation } from "./operations.js";
@@ -88,10 +89,7 @@ const spaceTaken = (id) => projects.some((project) => project.spaces.some((space
 export const storedTabTaken = (id) => projects.some((project) => projectTabs(project).has(id));
 
 /** The tab ids of the layouts of all spaces of project. */
-function projectTabs(project) {
-  // default: a seat card has null data, so it has no tabs.
-  return new Set(project.spaces.flatMap((space) => space.layout.state.cards.flatMap((card) => (card.data?.tabs ?? []).map((tab) => tab.id))));
-}
+const projectTabs = (project) => new Set(spaceTabIds(project));
 
 /**
  * Returns the tabs of the layouts of all spaces of all projects as surfaces with the root of their project, and the section
@@ -472,7 +470,7 @@ function checkProject(project) {
 /** Checks that the plane can open the stored layout of a space; the error names projects.json and the space. */
 function checkSpace(project, id) {
   try {
-    listener.check(project.spaces.find((s) => s.id === id).layout);
+    listener.check(spaceIn(project, id).layout);
   } catch (error) {
     throw new Error(`projects.json: project ${project.root} space ${id}: ${error.message}`);
   }
@@ -558,9 +556,7 @@ function restore(path) {
 export function addSpace(layout) {
   const project = active();
   keep("add space");
-  const space = { id: issueId("space", spaceTaken), title: `SPACE${++project.named}`, layout };
-  project.spaces.push(space);
-  project.activeSpaceId = space.id;
+  const space = appendSpace(project, issueId("space", spaceTaken), layout);
   restore("add space");
   return space;
 }
@@ -568,8 +564,7 @@ export function addSpace(layout) {
 export function activateSpace(id) {
   const project = active();
   if (id === project.activeSpaceId) return;
-  const space = project.spaces.find((s) => s.id === id);
-  if (!space) throw new Error(`Unknown space: ${id}`);
+  const space = spaceIn(project, id);
   // If the plane cannot open the layout, it fails before the active space is changed.
   checkSpace(project, space.id);
   keep("saved layout");
@@ -579,25 +574,21 @@ export function activateSpace(id) {
 
 export function closeSpace(id) {
   const project = active();
-  if (project.spaces.length === 1) return;
-  const at = project.spaces.findIndex((s) => s.id === id);
-  if (at < 0) throw new Error(`Unknown space: ${id}`);
+  const closing = closingSpace(project, id);
+  if (!closing) return;
   // Closing the active space opens the next space. If the plane cannot open that layout, it fails before anything is removed.
-  const rest = project.spaces.filter((s) => s.id !== id);
-  const next = id === project.activeSpaceId ? rest[Math.min(at, rest.length - 1)] : null;
-  if (next) checkSpace(project, next.id);
+  if (closing.next) checkSpace(project, closing.next.id);
   keep("saved layout");
-  const [removed] = project.spaces.splice(at, 1);
+  const removed = removeSpace(project, id);
   // The tabs of the removed space leave its stored layout, so their origins end (docs/spec/projects.md#tab-origin).
   forgetTabsLeft(removed.layout.state.cards, [], `close space ${removed.id}, project ${project.id}`);
-  if (next) project.activeSpaceId = next.id;
   restore("saved layout");
   // The tabs of the closed space are in no layout, so their sidecar sessions end.
   retainSidecarSessions(layoutSurfaces()).catch(failed);
 }
 
 export function renameSpace(id, title) {
-  active().spaces.find((s) => s.id === id).title = title;
+  renameSpaceOf(active(), id, title);
   keep("saved layout");
 }
 

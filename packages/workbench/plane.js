@@ -1349,8 +1349,8 @@ function markFocus() {
   if (!slot) { mark.hidden = true; return; }
   const host = plane.getBoundingClientRect();
   const r = slot.getBoundingClientRect();
-  // The mark stands outside by the stroke width. The stylesheet decides that thickness, so it is obtained by measuring.
-  const out = parseFloat(getComputedStyle(mark).getPropertyValue("--t"));
+  // The mark stands outside by the stroke width. The chrome metric focus-mark-t decides that thickness, so it is obtained by measuring.
+  const out = parseFloat(getComputedStyle(mark).getPropertyValue("--focus-mark-t"));
   mark.style.left = `${r.left - host.left - out}px`;
   mark.style.top = `${r.top - host.top - out}px`;
   mark.style.width = `${r.width + out * 2}px`;

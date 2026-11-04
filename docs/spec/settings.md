@@ -130,6 +130,8 @@ Each core setting accepts one form. Reading the settings files and every change 
 | `memorySaverDelay` | An integer from 5 to 720 (minutes), common scope, default 120: the time a tab stays hidden before the memory saver unloads it; another value is refused with `Invalid setting memorySaverDelay: <value>`, and a change re-arms the scheduler |
 | `sets`, `links` | [Stored sets and links](#stored-sets-and-links) |
 
+The theme catalog with the modes, the fonts, the menu languages with the default language, and the defaults, ranges, choices, switches and common-only keys of these settings are declared once, in the settings of `packages/workbench/workbench.json`; `settings.js` and `text-size.js` import that file as a JSON module and define none of them.
+
 Plugin settings take the form of their declaration ([plugins](plugins.md)).
 
 ## Earlier formats
@@ -182,6 +184,8 @@ The three values share one range, 60 to 800 points, and their sliders use that r
 A change that leaves `sidebarMinWidth` ≤ `sidebarWidth` ≤ `sidebarMaxWidth` false fails with -32602 (invalid params) and changes nothing. A stored card width outside the current range is drawn as stored until the grip changes it.
 
 The following layout constants remain in code because they are tied to the document structure rather than to a preference: the card header 32 and footer 22 points and the tab strip thresholds (`plane.js`). The left and right sidebar widths of a new space come from the `workspace.grid` cards of `environment.json`.
+
+The lengths, ratios and durations of the workbench stylesheets (`app.css`, `library.css` and `overlay.html`) are the chrome metrics of `packages/workbench/workbench.json`. The workbench sets each of them as a custom property of the document root before the page draws, and the stylesheets read the custom properties; a stylesheet holds no literal length, ratio or duration.
 
 ## Status
 

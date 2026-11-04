@@ -6,8 +6,10 @@ import { JSDOM } from "jsdom";
 import { fillPicker } from "../picker-layer.js";
 
 // In the title and the items of a grouped list (the space app), the x of the icon column equals the x of the name (docs/spec/example-model.md).
-// jsdom does not compute var(), so the test reads the declarations of app.css and computes the x of the column itself.
+// jsdom does not compute var(), so the test reads the declarations of app.css and the chrome metrics of workbench.json, which the page sets on
+// the root, and computes the x of the column itself.
 const css = readFileSync(new URL("../app.css", import.meta.url), "utf8");
+const chrome = JSON.parse(readFileSync(new URL("../workbench.json", import.meta.url), "utf8")).chrome;
 
 function declarations(selector) {
   const out = new Map();
@@ -48,7 +50,8 @@ function columns(depth) {
   fillPicker(el, "스페이스 앱 2개", [{ heading: { id: "a", name: "카드 1", depth, map: "" },
     items: [{ key: "a:t1", name: "터미널", mark: ">", svg: "<path/>" }, { key: "a:t2", name: "없는 플러그인", mark: "?", svg: "" }] }],
   () => {});
-  const vars = new Map([...declarations(".picker"), ...declarations(".picker--grouped")].filter(([k]) => k.startsWith("--")));
+  const vars = new Map([...Object.entries(chrome).map(([name, value]) => [`--${name}`, value]),
+    ...[...declarations(".picker"), ...declarations(".picker--grouped")].filter(([k]) => k.startsWith("--"))]);
   const x = (node, rule, iconRule, override) => {
     const own = declarations(rule);
     const box = sides(own.get("padding"));
@@ -59,9 +62,9 @@ function columns(depth) {
     return { icon: left, name: left + icon + gap };
   };
   return {
-    heading: x(el.querySelector(".picker__group"), ".picker__group", ".picker__group svg", ".picker__group"),
+    heading: x(el.querySelector(".picker__group"), ".picker__group", ".picker--grouped .picker__group svg", ".picker__group"),
     items: [...el.querySelectorAll(".picker__item")].map((b) => ({
-      ...x(b, ".picker__item", ".picker__item svg", ".picker--grouped .picker__item[data-group]"), slots: b.querySelectorAll("svg").length })),
+      ...x(b, ".picker__item", ".picker--grouped .picker__item svg", ".picker--grouped .picker__item[data-group]"), slots: b.querySelectorAll("svg").length })),
   };
 }
 

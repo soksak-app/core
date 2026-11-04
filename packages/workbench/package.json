@@ -71,6 +71,7 @@
     "plane.js",
     "picker-layer.js",
     "projects.js",
+    "spaces.js",
     "plugin-data.js",
     "registry.js",
     "event-classes.js",
@@ -97,6 +98,8 @@
     "memory-placement.js",
     "text-size.js",
     "frame-text.js",
+    "chrome-metrics.js",
+    "workbench.json",
     "verify.js",
     "verify-checks.js",
     "exposure.json",
@@ -122,6 +125,7 @@
     "test": "node --test --experimental-test-module-mocks test/"
   },
   "specFiles": [
+    "docs/spec/cases/layout/",
     "docs/spec/cases/log-contract/query/",
     "docs/spec/events.json"
   ],

@@ -3,13 +3,15 @@
 // The scale is written to the document in the drawing of the prepared layout, not when the setting changes. The preparation holds the first row height of that drawing, and the host
 // sets the window title bar to that height in the same transaction, so the row and the window buttons change in the same frame.
 
-/** The smallest height of the first row (px). It is --chrome-h of app.css. */
-const CHROME_H = 40;
-/** The row height at scale 1 (px). It is --chrome-row-h of app.css. */
-const CHROME_ROW_H = 36;
+import { CHROME } from "./chrome-metrics.js";
 
-/** The scale written to the document. Before it is written, it is 1, the :root value of app.css. */
-let drawn = 1;
+/** The smallest height of the first row (px). It is the chrome metric chrome-h. */
+const CHROME_H = parseFloat(CHROME["chrome-h"]);
+/** The row height at scale 1 (px). It is the chrome metric chrome-row-h. */
+const CHROME_ROW_H = parseFloat(CHROME["chrome-row-h"]);
+
+/** The scale written to the document. Before it is written, it is the chrome metric frame-text that the page sets on the root. */
+let drawn = Number(CHROME["frame-text"]);
 
 function checked(factor) {
   if (typeof factor !== "number" || !Number.isFinite(factor) || factor <= 0) {

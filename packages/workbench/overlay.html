@@ -14,7 +14,7 @@
 <style>
   /* 스크립트보다 먼저 적용되도록 마크업에 둔다. 웹뷰는 자기 문서를 그리기 전까지
      흰색을 표시한다. */
-  html, body { margin: 0; padding: 0; height: 100%; background: transparent }
+  html, body { margin: 0; padding: 0; height: var(--fill); background: transparent }
   html { overflow: hidden }
 </style>
 <script type="importmap">
@@ -36,6 +36,10 @@
   import { modalOrder } from "./modal-order.js";
   import { restoreScroll, scrollPositions } from "./scroll-keep.js";
   import { updateContent } from "./overlay-content.js";
+  import { installChromeMetrics } from "./chrome-metrics.js";
+
+  // The copied stylesheet reads the chrome metrics from the root, as the main document does.
+  installChromeMetrics(document.documentElement);
 
   followTheme().then(report);
 
@@ -80,7 +84,7 @@
       // The stylesheet of the page arrives whole, including the body rules. This block is put after it
       // so that it takes precedence.
       document.head.insertAdjacentHTML("beforeend", `<style>
-        html, body { margin: 0; padding: 0; height: 100%; background: transparent !important }
+        html, body { margin: 0; padding: 0; height: var(--fill); background: transparent !important }
         /* 복사한 workbench 시트의 body::before 배경은 메인 문서 전용이다. 네이티브
            모달 문서에서는 backing을 가리지 않도록 제거한다. 메인 문서의 native paint clip 은
            메인 문서가 복사에서 뺀다(docs/spec/native-modals.md). */
@@ -89,7 +93,7 @@
         }
         body[data-mode="dialog"]::before {
           content: ""; position: fixed; inset: 0; z-index: 0;
-          background: rgb(0 0 0 / .5) !important; pointer-events: auto
+          background: rgb(0 0 0 / var(--scrim-alpha)) !important; pointer-events: auto
         }
         body > [data-native-modal] { position: absolute; transform: none !important;
           z-index: 1; margin: 0 !important; max-height: none !important }

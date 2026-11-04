@@ -3,7 +3,7 @@
 #library[hidden],body[data-screen=workspace] #library,body[data-screen=library] #workarea,
 body[data-screen=library] #projectBar,body[data-screen=library] #chromeActs .act[title="좌측 사이드바 위치"],
 body[data-screen=library] #chromeActs .act[title="우측 사이드바 위치"]{display:none}
-#library{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) 22px;flex:1;min-height:0;background:var(--bg);font-size:var(--text-control)}
+#library{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) var(--library-footer-h);flex:1;min-height:0;background:var(--bg);font-size:var(--text-control)}
 #library button{cursor:pointer}
 #library button:disabled{cursor:wait}
 .library-add:hover{color:var(--fg);background:var(--chip-hover)}
@@ -13,24 +13,24 @@ body[data-screen=library] #chromeActs .act[title="우측 사이드바 위치"]{d
 .library-page{border:0;background:transparent;color:var(--muted);padding:0 var(--space-1);font-size:var(--size);font-weight:600}
 .library-page[data-on=true]{color:var(--fg)}
 .library-heading [hidden],.library-grid[hidden],.library-plugins[hidden]{display:none}
-.library-sort{width:120px}
+.library-sort{width:var(--library-sort-w)}
 .library-search{margin-left:auto;min-width:0}
-.library-search input{width:205px;max-width:100%}
-.library-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:calc(var(--half-gap) * 2);align-content:start}
+.library-search input{width:var(--library-search-w);max-width:var(--fill)}
+.library-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--library-card-min-w),1fr));gap:calc(var(--half-gap) + var(--half-gap));align-content:start}
 .library-project{position:relative;min-width:0;border:var(--bw) solid var(--edge);border-radius:var(--r);overflow:hidden;background:var(--card)}
 .library-project[data-open=true]{border-color:var(--rail)}
 .library-project:hover:not([data-folder-error]){border-color:var(--focus)}
 .library-project__open:disabled{cursor:default}
-.library-project__open{display:block;width:100%;height:100%;text-align:left;padding:0;border:0;background:transparent;color:var(--fg)}
-.library-preview{display:grid;gap:var(--space-2);height:145px;margin:var(--half-gap);padding:var(--space-4) calc(var(--space-4) * 2);border-radius:var(--r-xs);overflow:hidden;background:var(--bg)}
-.library-preview__pane{--preview-ink:var(--muted);min-width:0;min-height:0;overflow:hidden;padding:var(--space-2);border:var(--bw) solid color-mix(in srgb,var(--preview-ink) 24%,var(--card));border-radius:var(--r-xs);background:color-mix(in srgb,var(--preview-ink) 10%,var(--card));color:color-mix(in srgb,var(--preview-ink) 65%,var(--card))}
-.library-preview__mark{display:block;width:14px;height:14px;max-width:100%}
+.library-project__open{display:block;width:var(--fill);height:var(--fill);text-align:left;padding:0;border:0;background:transparent;color:var(--fg)}
+.library-preview{display:grid;gap:var(--space-2);height:var(--library-preview-h);margin:var(--half-gap);padding:var(--space-4) calc(var(--space-4) + var(--space-4));border-radius:var(--r-xs);overflow:hidden;background:var(--bg)}
+.library-preview__pane{--preview-ink:var(--muted);min-width:0;min-height:0;overflow:hidden;padding:var(--space-2);border:var(--bw) solid color-mix(in srgb,var(--preview-ink) var(--preview-border-mix),var(--card));border-radius:var(--r-xs);background:color-mix(in srgb,var(--preview-ink) var(--preview-fill-mix),var(--card));color:color-mix(in srgb,var(--preview-ink) var(--preview-ink-mix),var(--card))}
+.library-preview__mark{display:block;width:var(--library-mark);height:var(--library-mark);max-width:var(--fill)}
 .library-preview__error{grid-column:1/-1;align-self:center;margin:0;font-size:var(--text-caption);white-space:pre-wrap;overflow-wrap:anywhere}
 .library-project__missing{margin:0;font-size:var(--text-caption);overflow-wrap:anywhere}
-.library-preview__mark svg{display:block;width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:1.25;stroke-linecap:round;stroke-linejoin:round}
-.library-preview__pane::after{content:"";display:block;width:60%;height:3px;margin-top:var(--space-2);border-radius:var(--r-xs);background:currentColor;box-shadow:0 7px 0 currentColor;opacity:.35}
+.library-preview__mark svg{display:block;width:var(--fill);height:var(--fill);fill:none;stroke:currentColor;stroke-width:var(--library-mark-stroke);stroke-linecap:round;stroke-linejoin:round}
+.library-preview__pane::after{content:"";display:block;width:var(--preview-line-w);height:var(--preview-line-h);margin-top:var(--space-2);border-radius:var(--r-xs);background:currentColor;box-shadow:0 var(--preview-line-step) 0 currentColor;opacity:var(--preview-line-opacity)}
 .library-preview__pane[data-plugin=sidebar]{padding:var(--space-1)}
-.library-preview__pane[data-plugin=sidebar]::before{content:"";display:block;height:var(--space-1);margin-top:var(--space-1);border-radius:var(--r-xs);background:currentColor;opacity:.45}
+.library-preview__pane[data-plugin=sidebar]::before{content:"";display:block;height:var(--space-1);margin-top:var(--space-1);border-radius:var(--r-xs);background:currentColor;opacity:var(--preview-sidebar-opacity)}
 .library-project__text{padding:var(--space-2) var(--space-3);border-top:var(--bw) solid var(--edge)}
 .library-project h2{margin:0 0 var(--space-1);font-size:var(--text-control);font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .library-project__path{font-size:var(--text-small);color:var(--muted);margin:0 0 var(--space-2);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
@@ -39,12 +39,12 @@ body[data-screen=library] #chromeActs .act[title="우측 사이드바 위치"]{d
 .library-project__actions{position:absolute;right:var(--space-2);top:var(--space-2);display:flex;gap:var(--space-1)}
 .library-project__actions .act{background:var(--card)}
 .library-project__pin[aria-pressed=true]{color:var(--focus)}
-.library-add{min-height:220px;border:var(--bw) dashed var(--edge);border-radius:var(--r);background:transparent;color:var(--muted);padding:var(--space-3)}
+.library-add{min-height:var(--library-add-h);border:var(--bw) dashed var(--edge);border-radius:var(--r);background:transparent;color:var(--muted);padding:var(--space-3)}
 .library-empty{text-align:center;padding:var(--space-4) 0;color:var(--muted)}
 .library-empty[hidden]{display:none}
 .library-empty h2{color:var(--fg);font-size:var(--size);font-weight:600}
 .library-no-results{grid-column:1/-1;color:var(--muted)}
-.library-plugins{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:calc(var(--half-gap) * 2);align-content:start}
+.library-plugins{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--library-card-min-w),1fr));gap:calc(var(--half-gap) + var(--half-gap));align-content:start}
 .library-plugin{display:flex;flex-direction:column;gap:var(--space-1);min-width:0;padding:var(--space-2) var(--space-3);border:var(--bw) solid var(--edge);border-radius:var(--r);background:var(--card)}
 .library-plugin[data-state=loaded]{border-color:var(--rail)}
 .library-plugin__head{display:flex;align-items:baseline;gap:var(--space-2)}
@@ -60,8 +60,8 @@ body[data-screen=library] #chromeActs .act[title="우측 사이드바 위치"]{d
 .library-outdated{grid-column:1/-1;display:flex;align-items:center;gap:var(--space-3);padding:var(--space-2) 0}
 .library-updates{grid-column:1/-1;display:flex;flex-direction:column;align-items:flex-start;gap:var(--space-2);padding:var(--space-2) 0}
 .library-app-update{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2)}
-.library-app-update__incompatible{flex-basis:100%;margin:0;font-size:var(--text-control);color:var(--fg)}
-.library-app-update__operation{flex-basis:100%;margin:0;font-size:var(--text-control);color:var(--fg)}
+.library-app-update__incompatible{flex-basis:var(--fill);margin:0;font-size:var(--text-control);color:var(--fg)}
+.library-app-update__operation{flex-basis:var(--fill);margin:0;font-size:var(--text-control);color:var(--fg)}
 .library-updates__row{margin:0;font-size:var(--text-control);color:var(--fg);overflow-wrap:anywhere}
 .library-outdated__text{flex:1 1 auto;min-width:0;margin:0;font-size:var(--text-control);color:var(--fg);overflow-wrap:anywhere}
 .library-plugins-error,.library-plugins-none{grid-column:1/-1;margin:0}
@@ -71,13 +71,13 @@ body[data-screen=library] #chromeActs .act[title="우측 사이드바 위치"]{d
 .library-footer button:last-child{margin-left:auto}
 .library-error{padding:var(--space-3);border:var(--bw) solid var(--edge);border-radius:var(--r-sm);margin-bottom:var(--space-3);white-space:pre-wrap}
 .library-error[hidden],.library-form[hidden],.library-return[hidden]{display:none}
-.library-form{max-width:560px;border:var(--bw) solid var(--edge);border-radius:var(--r-sm);padding:var(--space-4);margin:0 0 var(--space-3);background:var(--card)}
+.library-form{max-width:var(--library-form-w);border:var(--bw) solid var(--edge);border-radius:var(--r-sm);padding:var(--space-4);margin:0 0 var(--space-3);background:var(--card)}
 .library-form h2{margin:0 0 var(--space-3);font-size:var(--text-control);font-weight:600}
 .library-fields{display:grid;gap:var(--space-3)}
 .library-fields label{display:flex;gap:var(--space-2);flex-wrap:wrap;color:var(--muted)}
-.library-fields label input{flex:1 1 100%}
+.library-fields label input{flex:1 1 var(--fill)}
 .library-form__actions{display:flex;justify-content:flex-end;gap:var(--space-2)}
 .library-primary{background:var(--chip-on);border-color:var(--rail)}
-.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-@media(max-width:780px){.library-heading{flex-wrap:wrap;gap:var(--space-2)}.library-search{flex:1 1 100%;margin:0}.library-search input{width:100%}.library-grid{grid-template-columns:repeat(auto-fill,minmax(215px,1fr))}}
+.sr-only{position:absolute;width:var(--pixel);height:var(--pixel);overflow:hidden;clip-path:inset(var(--clip-all));white-space:nowrap}
+:root[data-library-narrow] .library-heading{flex-wrap:wrap;gap:var(--space-2)}:root[data-library-narrow] .library-search{flex:1 1 var(--fill);margin:0}:root[data-library-narrow] .library-search input{width:var(--fill)}:root[data-library-narrow] .library-grid{grid-template-columns:repeat(auto-fill,minmax(var(--library-card-min-w-narrow),1fr))}
 body[data-screen=library] .chrome-bar__acts{margin-left:auto}

@@ -15,7 +15,7 @@ The window starts with the focused card as the scope. A window without a focused
 
 ## Steps and values
 
-A text size is a factor. The steps are 0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, and 3. Enlarging moves to the next larger step, reducing to the next smaller step, and restoring sets 1. Enlarging at 3 and reducing at 0.5 leave the value unchanged.
+A text size is a factor. The steps are 0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, and 3, the text size steps of `packages/workbench/workbench.json` ([settings window](settings.md#values)). Enlarging moves to the next larger step, reducing to the next smaller step, and restoring sets 1. Enlarging at 3 and reducing at 0.5 leave the value unchanged.
 
 - The frame factor applies to the frame chrome and to every card.
 - A card factor applies to that card only.
@@ -26,7 +26,7 @@ The frame factor is the common setting `textSize`. A card factor is stored in th
 ## Rendering
 
 - The frame chrome (project bar and space bar) uses CSS `zoom` with the frame factor, so its rows grow with the text and the plane receives the remaining height.
-- The first row is `round(max(40px, 36px × frame factor))` high, and the window title bar takes the same height in the presented frame that draws the row, so the window buttons stay centred in the row ([window buttons](hosts.md#window-buttons)). A change of the frame factor is drawn by a prepared layout ([title bar height](native-surfaces.md#title-bar-height)).
+- The first row is `round(max(40px, 36px × frame factor))` high, where 40px and 36px are the chrome metrics `chrome-h` and `chrome-row-h` ([layout values](settings.md#layout-values)), and the window title bar takes the same height in the presented frame that draws the row, so the window buttons stay centred in the row ([window buttons](hosts.md#window-buttons)). A change of the frame factor is drawn by a prepared layout ([title bar height](native-surfaces.md#title-bar-height)).
 - A DOM card's content uses CSS `zoom` with the card's effective factor inside its slot; the slot rectangle, and therefore native placement, does not change.
 - No layout or placement reads a rectangle of an element inside these zoom subtrees: the first row height comes from the factor, and native placement reads the slot. WebKit before 7624 reports the rectangle of such an element divided by its zoom and WebKit 7624 and later report it with the zoom applied, so a reading inside the subtrees would differ between the supported macOS versions.
 - A view first mounted as a retained tab outside the current plane starts with the current frame factor multiplied by its stored owning-card factor. A view already mounted outside the plane keeps its last scale; when it enters the current plane, the live card scale takes over.
