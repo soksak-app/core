@@ -8,35 +8,19 @@
 //    a normal report stops the unloading;
 // 4. a kept tab (core.tab.keep) and a modified tab are not unloaded.
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { createServer } from "node:http";
-import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets } from "@soksak/window-check/event-log.mjs";
-import { pluginEntry, pnpmPack } from "../scripts/workspace-registry.mjs";
 import { allRows, tailOf } from "./chains.mjs";
 import { fresh, pluginChangeApplied } from "./fixture.mjs";
+import { fixtureRegistry } from "./benchmark/cases/floor-page.mjs";
 
-const REGISTRY = fileURLToPath(new URL("../target/registry/", import.meta.url));
 const PROBE = fileURLToPath(new URL("./fixtures/memory-saver/unload-probe/", import.meta.url));
-
-/** A registry folder with the entries of the workspace registry and the unload probe, and its built index. */
-function probeRegistry(sok) {
-  const folder = mkdtempSync(join(tmpdir(), "soksak-unload-registry-"));
-  for (const name of ["plugins", "sidecars", "packs", "revoked.json"]) cpSync(join(REGISTRY, name), join(folder, name), { recursive: true });
-  const sidecars = new Set(readdirSync(join(folder, "sidecars")).map((file) => JSON.parse(readFileSync(join(folder, "sidecars", file), "utf8")).name));
-  const pack = pnpmPack(PROBE, join(folder, "releases"));
-  const manifest = JSON.parse(readFileSync(join(PROBE, "plugin.json"), "utf8"));
-  const pkg = JSON.parse(readFileSync(join(PROBE, "package.json"), "utf8"));
-  writeFileSync(join(folder, "plugins", `${manifest.id}.json`), JSON.stringify(pluginEntry(manifest, pkg, pack, sidecars), null, 2));
-  execFileSync(sok, ["registry", "build", folder], { encoding: "utf8" });
-  return folder;
-}
 
 /** A loopback server of three small pages, /a, /b and /c. It is closed when the check ends. */
 async function serve(s) {
@@ -93,7 +77,7 @@ for (const app of Object.values(APPS)) {
       log: { lifecycle: "info" }, reads: ["page.tab.restored", "page.tab.unloaded", "page.tab.unload.skipped"] }));
     const pages = await serve(s);
     const before = await s.get("core.plugins");
-    const folder = probeRegistry(join(dirname(app.binary), "sok"));
+    const folder = fixtureRegistry({ sok: join(dirname(app.binary), "sok"), plugin: PROBE });
     s.cleanup(() => rmSync(folder, { recursive: true, force: true }));
     s.cleanup(async () => {
       await s.windows(1, "the page was not ready for the cleanup");

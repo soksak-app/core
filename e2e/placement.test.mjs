@@ -1,11 +1,12 @@
-// Position of the check windows and the report of covering: fresh puts the two check applications at fixed positions, and a covered window tells the observer its covered state.
+// Position of the check windows and the report of covering: fresh puts each check application at its windowPosition of
+// @soksak/window-check, and a covered window tells the observer its covered state.
 import assert from "node:assert/strict";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { APPS, keepCommonSettings, open, requiresBoth } from "@soksak/window-check/app.mjs";
+import { APPS, keepCommonSettings, open, requiresBoth, windowPosition } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 
 // The check places two windows, so it is registered only when the required set holds both applications.
@@ -23,13 +24,17 @@ if (requiresBoth(process.env)) test("fresh places the two check windows at their
   for (const s of sessions) await fresh(s);
   const [screen] = await sessions[0].get("host.screens");
   const area = screen.visible;
-  const [left, right] = await Promise.all(sessions.map(async (s) => (await s.get("host.window")).frame));
-  assert.deepEqual([left.x, left.y], [area.x, area.y], `${sessions[0].app.name} is not at the top left of the visible area`);
-  assert.deepEqual([right.x + right.width, right.y], [area.x + area.width, area.y],
-    `${sessions[1].app.name} is not at the top right of the visible area`);
+  const frames = await Promise.all(sessions.map(async (s) => (await s.get("host.window")).frame));
+  // The rule of the positions is windowPosition of @soksak/window-check, which place() of fresh applies; the check reads it and
+  // does not state it again.
+  for (const [index, s] of sessions.entries()) {
+    const frame = frames[index];
+    const position = windowPosition(s.app.name, area, frame);
+    assert.deepEqual([frame.x, frame.y], [position.x, position.y], `${s.app.name} is not at its window position in the visible area`);
+  }
   // The two windows do not cover each other's position completely.
   const contains = (a, b) => a.x <= b.x && a.y <= b.y && a.x + a.width >= b.x + b.width && a.y + a.height >= b.y + b.height;
-  assert.ok(!contains(left, right) && !contains(right, left), `one check window covers the other: ${JSON.stringify([left, right])}`);
+  assert.ok(!contains(frames[0], frames[1]) && !contains(frames[1], frames[0]), `one check window covers the other: ${JSON.stringify(frames)}`);
 });
 
 // The front-to-back order cannot be changed without activation, so the window of each application is covered by the project window that the application newly opened. The new window becomes the front window of that application.

@@ -1,3 +1,5 @@
+// The benchmark of the editor view. B3 output (SOKSAK_B3_OUT, cases/b3-run.mjs): the keys of
+// editor-view in B3_MEASUREMENTS of measurements.mjs.
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -6,6 +8,8 @@ import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { runViewMeasurements } from "@soksak/window-check/view-metrics.mjs";
 import { fresh } from "../fixture.mjs";
+import { b3Conditions, b3Target, fixtureSettings, withB3Out } from "./cases/b3-run.mjs";
+import { B3_MEASUREMENTS, B3_SETTINGS } from "./measurements.mjs";
 import { collectEditorMotionMeasurements, finishEditorMeasurements, prepareEditorMeasurements }
   from "./cases/editor.mjs";
 
@@ -13,27 +17,30 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: editor process, footprint, layout, and drag measurements meet the declared contract`,
     { timeout: 240000 }, async (t) => {
       const s = await open(t, app);
-      await fresh(s, { performanceTrace: true, log: { frame: "trace" }, reads: [
-        "host.trace.view.process-request",
-        "host.trace.view.process-ready",
-        "plugin.editor.view.content_frame",
-      ] });
-      const result = await runViewMeasurements(t, s, {
-        plugin: "editor",
-        baselinesMs: { wailsv3: 13, tauriv2: 35 },
-        measureEditorFootprint: true,
-        collect: async () => {
-          const prepared = await prepareEditorMeasurements(t, s);
-          const motion = await collectEditorMotionMeasurements(t, s, prepared);
-          return finishEditorMeasurements(t, s, prepared, motion);
-        },
+      await withB3Out(b3Target(process.env, B3_MEASUREMENTS["editor-view"]), async (run) => {
+        await fresh(s, { ...fixtureSettings(B3_SETTINGS["editor-view"]), reads: [
+          "host.trace.view.process-request",
+          "host.trace.view.process-ready",
+          "plugin.editor.view.content_frame",
+        ] });
+        run.conditions = await b3Conditions(s, B3_SETTINGS["editor-view"]);
+        const result = await runViewMeasurements(t, s, {
+          plugin: "editor",
+          baselinesMs: { wailsv3: 13, tauriv2: 35 },
+          measureEditorFootprint: true,
+          collect: async () => {
+            const prepared = await prepareEditorMeasurements(t, s);
+            const motion = await collectEditorMotionMeasurements(t, s, prepared);
+            return finishEditorMeasurements(t, s, prepared, motion);
+          },
+        });
+        const directory = join(app.configDir, "logs", "editor-view-metrics");
+        mkdirSync(directory, { recursive: true });
+        const path = join(directory, `${process.pid}.json`);
+        writeFileSync(path, `${JSON.stringify(result, null, 2)}\n`);
+        t.diagnostic(`editor view measurement evidence ${path}`);
+        assert.equal(result.evaluation.plugin, "editor");
+        assert.equal(result.evaluation.host, app.name);
       });
-      const directory = join(app.configDir, "logs", "editor-view-metrics");
-      mkdirSync(directory, { recursive: true });
-      const path = join(directory, `${process.pid}.json`);
-      writeFileSync(path, `${JSON.stringify(result, null, 2)}\n`);
-      t.diagnostic(`editor view measurement evidence ${path}`);
-      assert.equal(result.evaluation.plugin, "editor");
-      assert.equal(result.evaluation.host, app.name);
     });
 }

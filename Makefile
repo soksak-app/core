@@ -538,17 +538,24 @@ e2e-terminal-focus-current:
 e2e-shutdown:
 	@pnpm -F @soksak/e2e run verify:shutdown
 
+# B3_OUT=FILE writes the B3 output of the benchmark to FILE (e2e/benchmark/cases/b3-run.mjs). The view drag and the resize catch-up
+# measure in two states and take with B3_OUT the state TRACE, one of the state names of the benchmark in B3_MEASUREMENTS of
+# e2e/benchmark/measurements.mjs: TRACE=0|frame-records for the view drag and TRACE=captured|frame-records for the resize catch-up; the
+# view drag takes ACCESSIBILITY=1, FLOOR=1 and GC_LOOP=1 (e2e/benchmark/cases/view-drag.mjs). The benchmark refuses a value that it does
+# not take.
+B3_BENCHMARK_ENV = $(if $(B3_OUT),SOKSAK_B3_OUT="$(abspath $(B3_OUT))") $(if $(TRACE),SOKSAK_B3_TRACE="$(TRACE)")
 e2e-benchmark-view-drag:
-	@pnpm -F @soksak/e2e run benchmark:view-drag
+	@$(B3_BENCHMARK_ENV) $(if $(ACCESSIBILITY),SOKSAK_ACCESSIBILITY="$(ACCESSIBILITY)") $(if $(FLOOR),SOKSAK_FLOOR="$(FLOOR)") \
+	  $(if $(GC_LOOP),SOKSAK_GC_LOOP="$(GC_LOOP)") pnpm -F @soksak/e2e run benchmark:view-drag
 
 e2e-benchmark-resize-catch-up:
-	@pnpm -F @soksak/e2e run benchmark:resize-catch-up
+	@$(B3_BENCHMARK_ENV) pnpm -F @soksak/e2e run benchmark:resize-catch-up
 
 e2e-benchmark-idle-tab:
-	@pnpm -F @soksak/e2e run benchmark:idle-tab
+	@$(B3_BENCHMARK_ENV) pnpm -F @soksak/e2e run benchmark:idle-tab
 
 e2e-benchmark-split-load:
-	@pnpm -F @soksak/e2e run benchmark:split-load
+	@$(B3_BENCHMARK_ENV) pnpm -F @soksak/e2e run benchmark:split-load
 
 e2e-benchmark-plain-view:
 	@pnpm -F @soksak/e2e run benchmark:plain-view

@@ -2,32 +2,42 @@
 // judges only the behaviour, and its benchmark e2e/benchmark/split-load.test.mjs, which runs SPLIT_LOAD_ROUNDS rounds and judges the host
 // RSS growth against SPLIT_LOAD_GROWTH_BOUND_KB. Each round samples the resident set size of the host process from the process table.
 import assert from "node:assert/strict";
+import { realpathSync } from "node:fs";
 
 import { currentEventOffsets } from "@soksak/window-check/event-log.mjs";
+import { hostProcess } from "../../../scripts/measure-app-usage.mjs";
 import { fresh } from "../../fixture.mjs";
 import { processTable } from "../../process-table.mjs";
 import { failureWithSlowestPhase, readPhases } from "../../reload-phases.mjs";
+import { b3Conditions, fixtureSettings } from "./b3-run.mjs";
+import { B3_SETTINGS } from "../measurements.mjs";
+import { performanceGoalBound } from "./performance-goals.mjs";
 
 /** The number of rounds of the benchmark. */
 export const SPLIT_LOAD_ROUNDS = 32;
-/** The limit (KB) of the host RSS growth over the rounds. */
-export const SPLIT_LOAD_GROWTH_BOUND_KB = 128 * 1024;
+/** The limit (KB) of the host RSS growth over the rounds; a growth at the limit fails. */
+export const SPLIT_LOAD_GROWTH_BOUND_KB = performanceGoalBound("SPLIT_LOAD_GROWTH_BOUND_KB", "below");
 
 /**
- * The resident set size (KB) of the host process in a process table, or undefined when no row is that host. The configuration folder identifies
- * the host because the bundle path differs between build profiles.
+ * The resident set size (KB) of the host process of the configuration folder `configDir` in `table`, the output of
+ * `ps -ax -o pid=,rss=,command=`: the one process whose command line has `--config-dir` of the folder (hostProcess of
+ * scripts/measure-app-usage.mjs), so the host of a release bundle and of a debug build of any application is found alike. realPath is
+ * the real path of the folder. A row without a pid and a size, no such host and two such hosts are errors.
  */
-export function hostRssInTable(table, configDir) {
-  const row = table
-    .split("\n")
-    .map((line) => line.trim().match(/^(\d+)\s+(\d+)\s+(.*)$/))
-    .filter(Boolean)
-    .map(([, pid, rss, command]) => ({ pid: Number(pid), rss: Number(rss), command }))
-    .find((entry) => entry.command.includes(` --config-dir ${configDir}`));
-  return row?.rss;
+export function hostRssKbOf(table, configDir, realPath) {
+  const rows = table.split("\n").filter((line) => line.trim() !== "").map((line) => {
+    const match = /^\s*(\d+)\s+(\d+)\s+(.*)$/.exec(line);
+    if (!match) throw new Error(`process row "${line}" has no pid and resident size`);
+    return { pid: Number(match[1]), rss: Number(match[2]), command: match[3] };
+  });
+  const { pid } = hostProcess(rows, configDir, realPath);
+  return rows.find((row) => row.pid === pid).rss;
 }
 
-const hostRssKb = (app) => hostRssInTable(processTable("pid=,rss=,command="), app.configDir);
+/** The resident set size (KB) of the host process of the configuration folder of the application now. */
+function hostRssKb(configDir) {
+  return hostRssKbOf(processTable("pid=,rss=,command="), configDir, realpathSync(configDir));
+}
 
 /**
  * List of the web documents that the window holds. If a split and a reload leave documents, document regions and image regions, the list grows. The memory of the page process
@@ -43,19 +53,27 @@ function gridCards(grid) {
 }
 
 /**
+ * The fixture options (fresh of e2e/fixture.mjs) of the stress: the settings of split-load in B3_SETTINGS, whose performance trace is off
+ * whatever SOKSAK_PERFORMANCE_TRACE holds, and the endpoint call records that the phases of each round are read from.
+ */
+export const STRESS_FIXTURE = Object.freeze({ ...fixtureSettings(B3_SETTINGS["split-load"]), reads: Object.freeze(["host.endpoint.call"]) });
+
+/**
  * Resets the fixture and reads the start state of the stress: the window, the card grid, the document inventory, the host RSS before the stress,
- * and the position of the event log from which the phases of each round are read.
+ * the position of the event log from which the phases of each round are read, and the B3 conditions of the prepared window.
  */
 export async function startStress(s, app) {
-  await fresh(s, { log: { call: "debug" }, reads: ["host.endpoint.call"] });
+  await fresh(s, STRESS_FIXTURE);
+  const conditions = await b3Conditions(s, B3_SETTINGS["split-load"]);
   const initialWindow = await s.get("host.window");
   const initialGrid = await s.get("core.grid");
-  const baseline = hostRssKb(app);
+  const baseline = hostRssKb(app.configDir);
   assert.ok(Number.isInteger(baseline), "host RSS was not measurable before stress");
   // The records of the requests before the stress are written first, so the first read starts at the stress.
   await s.flushLog();
   return {
     app,
+    conditions,
     initialWindow,
     initialGrid,
     before: inventory(initialWindow),
@@ -102,13 +120,13 @@ export async function stressRound(s, ctx, round) {
     await s.run("host.window.reload");
     await s.presented();
   }
-  ctx.samples.push(hostRssKb(ctx.app));
+  ctx.samples.push(hostRssKb(ctx.app.configDir));
   for (const card of made.reverse()) {
     await s.run("core.card.close", { card });
     await s.until("core.grid", (grid) => !grid.cards.some((entry) => entry.id === card), `stress close did not remove ${card}`);
   }
   await s.presented();
-  ctx.samples.push(hostRssKb(ctx.app));
+  ctx.samples.push(hostRssKb(ctx.app.configDir));
   await recordPhases(s, ctx);
 }
 
@@ -167,4 +185,9 @@ export function assertSplitLoadWithinBound(growth) {
   if (growth >= SPLIT_LOAD_GROWTH_BOUND_KB) {
     throw new Error(`host RSS grew ${growth} KB during split/WebView stress; the bound is ${SPLIT_LOAD_GROWTH_BOUND_KB} KB`);
   }
+}
+
+/** The B3 value of the split load (e2e/benchmark/split-load.test.mjs): the host RSS growth over the rounds in KB (hostGrowthKb). */
+export function splitLoadB3Values(samples) {
+  return { hostGrowthKb: hostGrowthKb(samples) };
 }

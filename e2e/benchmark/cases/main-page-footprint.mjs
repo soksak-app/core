@@ -115,6 +115,16 @@ export function reduceMainPageFootprint({ windows, rows, loadAverage, baselineWi
   };
 }
 
+/**
+ * The main page process of a window from its host.window status `status`: the process id once it is a positive integer, and
+ * undefined before. A window whose host.window reports pageProcess null has no main page, which is the window of the mygo host,
+ * so the measurement fails with "the mygo host has no main page" instead of waiting for a process that never starts.
+ */
+export function mainPageProcess(status) {
+  if (status.pageProcess === null) throw new Error("the mygo host has no main page");
+  return Number.isSafeInteger(status.pageProcess) && status.pageProcess > 0 ? status.pageProcess : undefined;
+}
+
 /** Waits for a sampler reading for each exact page process, using host.log notifications instead of polling. */
 export async function readMainPageFootprint(session, windows, since, loadavg, baselineWindows) {
   let last = "no page-process sampler rows were read";

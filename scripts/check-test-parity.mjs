@@ -2529,7 +2529,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "e2e/test/drag-measurement.test.mjs", id: "drag performance keeps existing targets separate from valid measurements" },
-      { file: "e2e/benchmark/view-drag.test.mjs", id: "terminal view drag meets performance targets with performance and renderer traces disabled" },
+      { file: "e2e/benchmark/view-drag.test.mjs", id: "the view drag runs the drags of B3 in order, and its captured drag meets the performance targets with the traces off" },
     ],
     expected: "The dedicated benchmark validates untraced application settings, preserves complete measured frames and writes results before enforcing unchanged cadence and latency limits.",
     levels: ["unit", "application"],
@@ -2540,7 +2540,7 @@ const FEATURE_LINKS = [
       { file: "e2e/benchmark/view-drag.test.mjs", symbol: "const report =" },
     ],
     tests: [
-      { file: "e2e/benchmark/view-drag.test.mjs", id: "terminal view drag meets performance targets with performance and renderer traces disabled" },
+      { file: "e2e/benchmark/view-drag.test.mjs", id: "the view drag runs the drags of B3 in order, and its captured drag meets the performance targets with the traces off" },
     ],
     expected: "A declared candidate build profile produces complete measured drag reports with unchanged targets and explicit performance failure rather than inferred optimization acceptance.",
     levels: ["application"],
@@ -2568,7 +2568,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "e2e/test/drag-measurement.test.mjs", id: "transaction cadence includes commit waiting and total transaction duration" },
       { file: "e2e/test/drag-measurement.test.mjs", id: "transaction cadence rejects invalid or reversed stage timestamps" },
-      { file: "e2e/benchmark/view-drag.test.mjs", id: "terminal view drag meets performance targets with performance and renderer traces disabled" },
+      { file: "e2e/benchmark/view-drag.test.mjs", id: "the view drag runs the drags of B3 in order, and its captured drag meets the performance targets with the traces off" },
     ],
     expected: "Native transaction metrics include commit wait and total duration, reject invalid timing and preserve raw rows before unchanged performance judgments.",
     levels: ["unit", "application"],
@@ -9327,7 +9327,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F434",
-    implementation: [{ file: "e2e/benchmark/cases/split-load.mjs", symbol: "export function hostRssInTable" }],
+    implementation: [{ file: "e2e/benchmark/cases/split-load.mjs", symbol: "export function hostRssKbOf" }],
     tests: [{ file: "e2e/test/split-load-case.test.mjs", id: "the host process is found by its configuration folder in every build profile" }],
     expected: "The benchmark finds the host in the process table by its configuration folder in every build profile.",
     levels: ["unit"],
@@ -10728,26 +10728,26 @@ const FEATURE_LINKS = [
     id: "F297",
     implementation: [
       { file: "e2e/benchmark/cases/resize.mjs", symbol: "export const CATCH_UP_LIMIT_MS = 150;" },
-      { file: "e2e/benchmark/cases/idle-tab.mjs", symbol: "export const IDLE_TAB_BOUND_KB = 50 * 1024;" },
+      { file: "e2e/benchmark/cases/idle-tab.mjs", symbol: "export const IDLE_TAB_BOUND_KB = performanceGoalBound(\"IDLE_TAB_BOUND_KB\", \"atMost\");" },
     ],
     tests: [
       { file: "e2e/test/resize-case.test.mjs", id: "the catch-up limit of a maximise or restore is 150 ms, and a measured time above it fails the benchmark" },
-      { file: "e2e/test/idle-tab-case.test.mjs", id: "the idle tab limit is 50 MB, and a measured cost above it fails the benchmark" },
+      { file: "e2e/test/idle-tab-case.test.mjs", id: "the idle tab limit is the bound of IDLE_TAB_BOUND_KB in the performance goals, and a measured cost above it fails the benchmark" },
       { file: "e2e/test/idle-tab-case.test.mjs", id: "the documents of a tab are counted once each footprint is settled" },
     ],
-    expected: "The catch-up limit of 150 ms and the idle tab limit of 51200 KB are judged by the benchmark cases, and the settled documents of a tab are counted; the window checks keep the behavior and the measured values, and their window run is pending the release candidate.",
+    expected: "The catch-up limit of 150 ms and the idle tab limit, which the idle tab case reads from IDLE_TAB_BOUND_KB of docs/spec/performance-goals.json, are judged by the benchmark cases, and the settled documents of a tab are counted; the window checks keep the behavior and the measured values, and their window run is pending the release candidate.",
     levels: ["unit"],
   },
   {
     id: "F297-1",
     implementation: [
-      { file: "e2e/benchmark/cases/split-load.mjs", symbol: "export const SPLIT_LOAD_GROWTH_BOUND_KB = 128 * 1024;" },
+      { file: "e2e/benchmark/cases/split-load.mjs", symbol: "export const SPLIT_LOAD_GROWTH_BOUND_KB = performanceGoalBound(\"SPLIT_LOAD_GROWTH_BOUND_KB\", \"below\");" },
       { file: "e2e/benchmark/cases/split-load.mjs", symbol: "export function assertSplitLoadWithinBound(growth)" },
     ],
     tests: [
-      { file: "e2e/test/split-load-case.test.mjs", id: "the split load limit is 128 MB, and a measured growth at or above it fails the benchmark" },
+      { file: "e2e/test/split-load-case.test.mjs", id: "the split load limit is the bound of SPLIT_LOAD_GROWTH_BOUND_KB in the performance goals, and a growth at or above it fails the benchmark" },
     ],
-    expected: "The host RSS growth limit of 128 MB over the split, resize, reload and WebView churn rounds is judged by the benchmark case; the window check runs one round and judges only the behavior.",
+    expected: "The host RSS growth limit over the split, resize, reload and WebView churn rounds, which the split load case reads from SPLIT_LOAD_GROWTH_BOUND_KB of docs/spec/performance-goals.json, is judged by the benchmark case; the window check runs one round and judges only the behavior.",
     levels: ["unit"],
   },
 ];
