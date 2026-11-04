@@ -304,15 +304,14 @@ func elementScene(t *testing.T) (*relay, *ui.Tester, *[]string, *string) {
 	binder := workbench.NewBinder(declared, func(_ string, err error) { t.Error(err) })
 	value := "before"
 	tester := ui.NewTester(func(c *ui.Context) {
-		names := workbench.NewElementNames()
 		ui.Column(c).Fill().Children(func() {
 			for _, card := range []string{"c1", "c2"} {
 				binder.Press(c, "core.card", "core.card.focus", card, map[string]string{"card": card}).Role(ui.RoleGroup).Label(card).Size(100, 40)
 			}
-			ui.Button(c.Key(names.Next("core.debug.close")), "close")
-			ui.Button(c.Key(workbench.ElementName{Name: "core.library.add"}), "add one")
-			ui.Button(c.Key(workbench.ElementName{Name: "core.library.add", Index: 1}), "add two")
-			c.Key(workbench.ElementName{Name: "core.library.form.name"})
+			ui.Button(c.Key(workbench.Exposed{Name: "core.debug.close"}), "close")
+			ui.Button(c.Key(workbench.Exposed{Name: "core.library.add", Item: "one"}), "add one")
+			ui.Button(c.Key(workbench.Exposed{Name: "core.library.add", Item: "two"}), "add two")
+			c.Key(workbench.Exposed{Name: "core.library.form.name"})
 			ui.TextInput(c, &value).Label("name")
 		})
 	}, 400, 300)

@@ -26,9 +26,9 @@ func hostedPlugins() workbench.PluginPage {
 	}
 }
 
-func drawPlugins(page *workbench.PluginPage, errors *workbench.ShownErrors, run workbench.RunCommand) *ui.Tester {
+func drawPlugins(page *workbench.PluginPage, errors *workbench.ShownErrors, binder *workbench.Binder) *ui.Tester {
 	return ui.NewTester(func(c *ui.Context) {
-		workbench.DrawPluginPage(c, workbench.NewElementNames(), *page, errors, run)
+		workbench.DrawPluginPage(c, binder, *page, errors)
 	}, 640, 900)
 }
 
@@ -36,7 +36,7 @@ func noErrors() *workbench.ShownErrors { return workbench.NewShownErrors(func(st
 
 func TestAPluginCardShowsItsStateVersionsAndSidecars(t *testing.T) {
 	page := hostedPlugins()
-	tt := drawPlugins(&page, noErrors(), func(string, map[string]any) {})
+	tt := drawPlugins(&page, noErrors(), recorder(t, new([]call), screenCommands...))
 	for _, want := range []string{
 		"Alpha", "alpha", "사용 중", "First tool", "설치된 버전 1.0.0 · 최신 버전 1.2.0", "사이드카 hello 2.0.0, other ^1.0.0",
 		"Beta", "설치 안 됨", "최신 버전 3.0.0", "사이드카 없음",
@@ -51,7 +51,7 @@ func TestAPluginCardShowsItsStateVersionsAndSidecars(t *testing.T) {
 func TestTheActionsOfACardFollowThePlugin(t *testing.T) {
 	var calls []call
 	page := hostedPlugins()
-	tt := drawPlugins(&page, noErrors(), record(&calls))
+	tt := drawPlugins(&page, noErrors(), recorder(t, &calls, screenCommands...))
 	want := []workbench.PluginAction{
 		{Plugin: "alpha", Action: "update"}, {Plugin: "alpha", Action: "disable"}, {Plugin: "alpha", Action: "remove"},
 		{Plugin: "beta", Action: "install"},
@@ -72,7 +72,7 @@ func TestWhileAnOperationRunsEveryActionIsDisabled(t *testing.T) {
 	var calls []call
 	page := hostedPlugins()
 	page.Operation = &workbench.PluginOperation{Action: "update", Plugin: "alpha", State: "running"}
-	tt := drawPlugins(&page, noErrors(), record(&calls))
+	tt := drawPlugins(&page, noErrors(), recorder(t, &calls, screenCommands...))
 	if !tt.HasText("alpha update 진행 중") {
 		t.Fatalf("the card of the operation shows %q", tt.Texts())
 	}
@@ -92,7 +92,7 @@ func TestAFailedOperationShowsItsErrorOnItsCard(t *testing.T) {
 	errors := workbench.NewShownErrors(func(line string) { lines = append(lines, line) })
 	page := hostedPlugins()
 	page.Operation = &workbench.PluginOperation{Action: "update", Plugin: "alpha", State: "failed", Error: "no network"}
-	tt := drawPlugins(&page, errors, func(string, map[string]any) {})
+	tt := drawPlugins(&page, errors, recorder(t, new([]call), screenCommands...))
 	if !tt.HasText("no network") {
 		t.Fatalf("the card shows %q", tt.Texts())
 	}
@@ -110,10 +110,7 @@ func TestTheSearchFiltersTheCardsAndRunsItsCommand(t *testing.T) {
 	var calls []call
 	page := hostedPlugins()
 	page.Query = "SECOND"
-	tt := drawPlugins(&page, noErrors(), func(name string, params map[string]any) {
-		calls = append(calls, call{name, params})
-		page.Query = params["query"].(string)
-	})
+	tt := drawPlugins(&page, noErrors(), recorder(t, &calls, screenCommands...))
 	if tt.HasText("Alpha") || !tt.HasText("Beta") {
 		t.Fatalf("the query shows %q", tt.Texts())
 	}
@@ -125,6 +122,7 @@ func TestTheSearchFiltersTheCardsAndRunsItsCommand(t *testing.T) {
 	if len(calls) != 1 || calls[0].name != "core.library.plugins.search" || calls[0].params["query"] != "SECONDx" {
 		t.Fatalf("commands %+v", calls)
 	}
+	page.Query = calls[0].params["query"].(string)
 	tt.Frame()
 	if !tt.HasText("찾는 플러그인이 없습니다.") {
 		t.Fatalf("a query without a match shows %q", tt.Texts())
@@ -137,7 +135,7 @@ func TestTheUpdateListComesBeforeTheCards(t *testing.T) {
 	page.Updates = []workbench.PluginUpdate{{ID: "alpha", Installed: "1.0.0", Latest: "1.2.0"}}
 	page.App = workbench.AppUpdate{Version: "0.5.0", Available: &workbench.AppVersion{Version: "0.6.0", Release: "https://example.test/r"},
 		Incompatible: []workbench.AppIncompatible{{ID: "alpha", Installed: "1.0.0", Range: "^0.5.0", Compatible: stringOf("1.3.0")}, {ID: "beta", Installed: "1.0.0", Range: "^0.5.0"}}}
-	tt := drawPlugins(&page, noErrors(), record(&calls))
+	tt := drawPlugins(&page, noErrors(), recorder(t, &calls, screenCommands...))
 	if row := positional(t, tt, "core.library.plugins.updates", 0); row.Label != "alpha: 1.0.0 → 1.2.0" {
 		t.Fatalf("the row of the update says %q", row.Label)
 	}
@@ -165,8 +163,8 @@ func TestAFailedApplicationUpdateIsShownInItsRow(t *testing.T) {
 	page := hostedPlugins()
 	page.App = workbench.AppUpdate{Version: "0.5.0", Available: &workbench.AppVersion{Version: "0.6.0"},
 		Operation: &workbench.AppOperation{Version: "0.6.0", State: "failed", Error: "no space"}}
-	tt := drawPlugins(&page, errors, func(string, map[string]any) {})
-	if _, ok := keyedAt(tt.ElementTree(), workbench.ElementName{Name: "core.library.app.release", Index: 0}); ok {
+	tt := drawPlugins(&page, errors, recorder(t, new([]call), screenCommands...))
+	if !absent(tt, "core.library.app.release") {
 		t.Fatal("a version without a release page shows the release button")
 	}
 	if !tt.HasText("0.6.0 업데이트하지 못했습니다: no space") {
@@ -184,7 +182,7 @@ func TestAnOutdatedServiceHasItsReplaceAction(t *testing.T) {
 		{Sidecar: "hello", Running: stringOf("1.0.0"), Installed: stringOf("2.0.0"), Sessions: 3},
 		{Sidecar: "gone", Sessions: 1},
 	}
-	tt := drawPlugins(&page, noErrors(), record(&calls))
+	tt := drawPlugins(&page, noErrors(), recorder(t, &calls, screenCommands...))
 	for _, want := range []string{"hello: 1.0.0 → 2.0.0", "세션 3개를 끝내고 적용", "gone: 이전 버전 → 선언 없음", "세션 1개를 끝내고 종료"} {
 		if !tt.HasText(want) {
 			t.Errorf("no text %q in %q", want, tt.Texts())
@@ -200,7 +198,7 @@ func TestAnOutdatedServiceHasItsReplaceAction(t *testing.T) {
 
 func TestAPluginStateThatCannotBeReadShowsItsReasonAndNoCards(t *testing.T) {
 	page := workbench.PluginPage{Hosted: true, Failure: &workbench.PluginFailure{Kind: "state", Message: "bad file"}}
-	tt := drawPlugins(&page, noErrors(), func(string, map[string]any) {})
+	tt := drawPlugins(&page, noErrors(), recorder(t, new([]call), screenCommands...))
 	if !tt.HasText("플러그인 상태를 읽지 못했습니다: bad file") || tt.HasText("찾는 플러그인이 없습니다.") {
 		t.Fatalf("the page shows %q", tt.Texts())
 	}
@@ -209,7 +207,7 @@ func TestAPluginStateThatCannotBeReadShowsItsReasonAndNoCards(t *testing.T) {
 func TestARegistryThatCannotBeReadKeepsTheCards(t *testing.T) {
 	page := hostedPlugins()
 	page.Failure = &workbench.PluginFailure{Kind: "index", Message: "offline"}
-	tt := drawPlugins(&page, noErrors(), func(string, map[string]any) {})
+	tt := drawPlugins(&page, noErrors(), recorder(t, new([]call), screenCommands...))
 	if !tt.HasText("레지스트리를 읽지 못했습니다: offline") || !tt.HasText("Alpha") {
 		t.Fatalf("the page shows %q", tt.Texts())
 	}
@@ -218,8 +216,8 @@ func TestARegistryThatCannotBeReadKeepsTheCards(t *testing.T) {
 func TestWithoutAHostThePageHasNoAction(t *testing.T) {
 	page := hostedPlugins()
 	page.Hosted = false
-	tt := drawPlugins(&page, noErrors(), func(string, map[string]any) {})
-	if _, ok := keyedAt(tt.ElementTree(), workbench.ElementName{Name: "core.library.plugins.action", Index: 0}); ok {
+	tt := drawPlugins(&page, noErrors(), recorder(t, new([]call), screenCommands...))
+	if !absent(tt, "core.library.plugins.action") {
 		t.Fatal("a page without a host has an action")
 	}
 	if got := workbench.PluginPageActions(page); len(got) != 0 {
@@ -235,7 +233,7 @@ func TestAContributionShowsItsStateAndAnInvalidOneItsError(t *testing.T) {
 		{Plugin: "alpha", Point: "git.panel", Index: 0, State: "connected"},
 		{Plugin: "alpha", Point: "git.panel", Index: 1, State: "invalid", Reason: "no id"},
 	}
-	tt := drawPlugins(&page, errors, func(string, map[string]any) {})
+	tt := drawPlugins(&page, errors, recorder(t, new([]call), screenCommands...))
 	if !tt.HasText("git.panel 기여 1: 연결됨") || !tt.HasText("git.panel 기여 2: no id") {
 		t.Fatalf("the card shows %q", tt.Texts())
 	}
@@ -264,7 +262,7 @@ func TestAVersionOfAnotherFormIsShownAndOffersNoUpdate(t *testing.T) {
 	errors := noErrors()
 	page := hostedPlugins()
 	page.Plugins[0].Latest = stringOf("next")
-	tt := drawPlugins(&page, errors, func(string, map[string]any) {})
+	tt := drawPlugins(&page, errors, recorder(t, new([]call), screenCommands...))
 	if !tt.HasText("version next must be x.y.z with numeric parts and no leading zeros") {
 		t.Fatalf("the card shows %q", tt.Texts())
 	}

@@ -548,7 +548,11 @@ func (s *SettingsStore) Theme(name, mode, scope string) error {
 		scope = "common"
 	}
 	if mode == "" {
-		mode, _ = s.Scoped("mode", scope).(string)
+		scoped, ok := s.Scoped("mode", scope).(string)
+		if !ok {
+			return errors.New("the setting mode has no text")
+		}
+		mode = scoped
 	}
 	if !slices.Contains(s.Catalog.Modes, mode) {
 		return fmt.Errorf("unknown mode: %s", mode)

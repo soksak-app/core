@@ -22,10 +22,10 @@ func debugEntries() []workbench.DebugEntry {
 	}
 }
 
-func drawDebug(view *workbench.DebugView, errors *workbench.ShownErrors, run workbench.RunCommand) *ui.Tester {
+func drawDebug(view *workbench.DebugView, errors *workbench.ShownErrors, binder *workbench.Binder) *ui.Tester {
 	view.CardWidth, view.CardMaxHeight = 640, 880
 	return ui.NewTester(func(c *ui.Context) {
-		workbench.DrawDebugView(c, workbench.NewElementNames(), *view, errors, run)
+		workbench.DrawDebugView(c, binder, *view, errors)
 	}, 1000, 900)
 }
 
@@ -44,7 +44,7 @@ func TestTheDebugFilesAreNewestFirstAndThenByPath(t *testing.T) {
 func TestTheDebugViewListsEachFileWithItsActions(t *testing.T) {
 	var calls []call
 	view := workbench.DebugView{Entries: debugEntries()}
-	tt := drawDebug(&view, noErrors(), record(&calls))
+	tt := drawDebug(&view, noErrors(), recorder(t, &calls, screenCommands...))
 	positional(t, tt, "core.debug.card", 0)
 	positional(t, tt, "core.debug.scrim", 0)
 	positional(t, tt, "core.debug.file", 2)
@@ -81,7 +81,7 @@ func TestAFailedStepShowsItsErrorInTheView(t *testing.T) {
 	errors := workbench.NewShownErrors(func(line string) { lines = append(lines, line) })
 	failure := "list: no folder"
 	view := workbench.DebugView{Failure: &failure}
-	tt := drawDebug(&view, errors, func(string, map[string]any) {})
+	tt := drawDebug(&view, errors, recorder(t, new([]call), screenCommands...))
 	if !tt.HasText(failure) || !slices.Equal(lines, []string{"debug: list: no folder"}) {
 		t.Fatalf("texts %q, written %q", tt.Texts(), lines)
 	}
@@ -95,7 +95,7 @@ func TestAFailedStepShowsItsErrorInTheView(t *testing.T) {
 func TestASaveOfTheLogsFolderShowsItsProgressAndDisablesItsButton(t *testing.T) {
 	var calls []call
 	view := workbench.DebugView{Operation: &workbench.DebugOperation{Action: "save-all", State: "running", Written: 1024 * 1024, Total: 4 * 1024 * 1024, Writing: true}}
-	tt := drawDebug(&view, noErrors(), record(&calls))
+	tt := drawDebug(&view, noErrors(), recorder(t, &calls, screenCommands...))
 	positional(t, tt, "core.debug.progress", 0)
 	if !hasPart(tt, "1.0 / 4.0 MB") {
 		t.Fatalf("the progress shows %q", tt.Texts())
@@ -109,7 +109,7 @@ func TestASaveOfTheLogsFolderShowsItsProgressAndDisablesItsButton(t *testing.T) 
 func TestAShownTextFileHasItsPathTextAndCut(t *testing.T) {
 	var calls []call
 	view := workbench.DebugView{Viewing: &workbench.DebugShown{Path: "logs/app.log", Size: 512, Truncated: true, Kind: "text", Text: "line one"}}
-	tt := drawDebug(&view, noErrors(), record(&calls))
+	tt := drawDebug(&view, noErrors(), recorder(t, &calls, screenCommands...))
 	if node := positional(t, tt, "core.debug.text", 0); node.Label != "line one" {
 		t.Fatalf("the text is %q", node.Label)
 	}
@@ -122,7 +122,7 @@ func TestAShownTextFileHasItsPathTextAndCut(t *testing.T) {
 	if want := []call{{"core.debug.list", map[string]any{}}}; !reflect.DeepEqual(calls, want) {
 		t.Fatalf("commands %+v", calls)
 	}
-	if _, ok := keyedAt(tt.ElementTree(), workbench.ElementName{Name: "core.debug.file", Index: 0}); ok {
+	if !absent(tt, "core.debug.file") {
 		t.Fatal("the list shows beside a shown file")
 	}
 }
@@ -134,7 +134,7 @@ func TestAShownStateFileHasItsTreeAndDifferences(t *testing.T) {
 		Path: "logs/state-a.json", Lines: []string{"time: \"x\"", "windows [1]", "  [0]: 1"}, With: "logs/state-b.json",
 		Differences: []workbench.DebugDifference{{Path: "time", A: &a}}, Compare: []string{"logs/state-b.json"},
 	}}
-	tt := drawDebug(&view, noErrors(), record(&calls))
+	tt := drawDebug(&view, noErrors(), recorder(t, &calls, screenCommands...))
 	positional(t, tt, "core.debug.state.tree", 0)
 	positional(t, tt, "core.debug.state.differences", 0)
 	if node := positional(t, tt, "core.debug.state.line", 2); node.Label != "  [0]: 1" {
@@ -160,7 +160,7 @@ func timelineView() workbench.DebugView {
 func TestTheTimelineHasItsRowsAndTheirButtons(t *testing.T) {
 	var calls []call
 	view := timelineView()
-	tt := drawDebug(&view, noErrors(), record(&calls))
+	tt := drawDebug(&view, noErrors(), recorder(t, &calls, screenCommands...))
 	if node := positional(t, tt, "core.debug.timeline.row", 1); node.Label != "  t2 info host b" {
 		t.Fatalf("the row is %q", node.Label)
 	}
@@ -177,9 +177,9 @@ func TestTheTimelineHasItsRowsAndTheirButtons(t *testing.T) {
 	pressPositional(t, tt, "core.debug.timeline.save", 0)
 	pressPositional(t, tt, "core.debug.timeline.list", 0)
 	want := []call{
-		{"core.debug.timeline.select", map[string]any{"row": 0, "selected": true}},
-		{"core.debug.timeline.select", map[string]any{"row": 2, "selected": false}},
-		{"core.debug.timeline.context", map[string]any{"row": 1}},
+		{"core.debug.timeline.select", map[string]any{"row": float64(0), "selected": true}},
+		{"core.debug.timeline.select", map[string]any{"row": float64(2), "selected": false}},
+		{"core.debug.timeline.context", map[string]any{"row": float64(1)}},
 		{"core.debug.timeline.follow", map[string]any{"on": false}},
 		{"core.debug.timeline.older", map[string]any{}},
 		{"core.debug.timeline.save", map[string]any{}},
@@ -194,8 +194,8 @@ func TestATimelineWithoutOlderRowsAndNotFollowing(t *testing.T) {
 	var calls []call
 	view := timelineView()
 	view.Timeline.Older, view.Timeline.Following, view.Timeline.Omitted = false, false, 0
-	tt := drawDebug(&view, noErrors(), record(&calls))
-	if _, ok := keyedAt(tt.ElementTree(), workbench.ElementName{Name: "core.debug.timeline.older", Index: 0}); ok {
+	tt := drawDebug(&view, noErrors(), recorder(t, &calls, screenCommands...))
+	if !absent(tt, "core.debug.timeline.older") {
 		t.Fatal("a timeline without older rows has the older button")
 	}
 	if hasPart(tt, "보관하지 않음") {
@@ -210,7 +210,7 @@ func TestATimelineWithoutOlderRowsAndNotFollowing(t *testing.T) {
 func TestATimelineFilterRunsItsCommandWhenTheFieldSubmits(t *testing.T) {
 	var calls []call
 	view := timelineView()
-	tt := drawDebug(&view, noErrors(), record(&calls))
+	tt := drawDebug(&view, noErrors(), recorder(t, &calls, screenCommands...))
 	pressPositional(t, tt, "core.debug.timeline.event", 0)
 	tt.Type("host.start")
 	tt.Key(0, ui.KeyEnter)
@@ -226,7 +226,7 @@ func TestAShownImageHasItsElement(t *testing.T) {
 		t.Fatal(err)
 	}
 	view := workbench.DebugView{Viewing: &workbench.DebugShown{Path: "logs/captures/a.png", Size: 70, Kind: "image", Image: source}}
-	tt := drawDebug(&view, noErrors(), func(string, map[string]any) {})
+	tt := drawDebug(&view, noErrors(), recorder(t, new([]call), screenCommands...))
 	positional(t, tt, "core.debug.image", 0)
 }
 
@@ -241,7 +241,7 @@ func onePixel(t *testing.T) []byte {
 
 func TestEveryFilterControlOfTheTimelineHasItsName(t *testing.T) {
 	view := timelineView()
-	tt := drawDebug(&view, noErrors(), func(string, map[string]any) {})
+	tt := drawDebug(&view, noErrors(), recorder(t, new([]call), screenCommands...))
 	for _, name := range []string{"channel", "level", "layer", "class", "text", "event", "event-prefix", "surface", "session", "cid", "run", "from", "to"} {
 		positional(t, tt, "core.debug.timeline."+name, 0)
 	}
@@ -325,7 +325,7 @@ func TestTheStateFilesOfTheListAreInPathOrder(t *testing.T) {
 func TestChoosingAStateFileRunsTheComparison(t *testing.T) {
 	var calls []call
 	view := workbench.DebugView{State: &workbench.DebugStateView{Path: "logs/state-a.json", Compare: []string{"logs/state-b.json"}}}
-	tt := drawDebug(&view, noErrors(), record(&calls))
+	tt := drawDebug(&view, noErrors(), recorder(t, &calls, screenCommands...))
 	pressPositional(t, tt, "core.debug.state.with", 0)
 	if err := tt.Click("logs/state-b.json"); err != nil {
 		t.Fatal(err)
@@ -339,7 +339,7 @@ func TestChoosingAStateFileRunsTheComparison(t *testing.T) {
 func TestChoosingALevelRunsTheFilter(t *testing.T) {
 	var calls []call
 	view := timelineView()
-	tt := drawDebug(&view, noErrors(), record(&calls))
+	tt := drawDebug(&view, noErrors(), recorder(t, &calls, screenCommands...))
 	pressPositional(t, tt, "core.debug.timeline.level", 0)
 	if err := tt.Click("warn"); err != nil {
 		t.Fatal(err)
@@ -353,7 +353,7 @@ func TestChoosingALevelRunsTheFilter(t *testing.T) {
 func TestALeftFilterFieldRunsTheFilter(t *testing.T) {
 	var calls []call
 	view := timelineView()
-	tt := drawDebug(&view, noErrors(), record(&calls))
+	tt := drawDebug(&view, noErrors(), recorder(t, &calls, screenCommands...))
 	pressPositional(t, tt, "core.debug.timeline.session", 0)
 	tt.Type("s-1")
 	if len(calls) != 0 {
