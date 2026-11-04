@@ -429,10 +429,37 @@ test("the pointer step measures the move in the front window and repeats it in t
     `bringFront mygo ${JSON.stringify({ document: { x: 0, y: 0 }, x: 0, y: 0, width: 1200, height: 760 })}`,
     "measure", "post 61", "measured",
     "frameRecords",
-    "get host.window", "tail", "post 61", "request diagnostics.log.flush", "get host.window",
+    "get host.window", "tail", "post 61", "get host.window", "request diagnostics.log.flush",
     'records {"host-1-10":100}',
     "restore",
   ]);
+  assert.deepEqual(result.gesture, { window: "w1", frameRecords: 4, pairs: 4, p90Ms: 6, framesChange: 4 });
+});
+
+test("the pointer step reads the frames of the gesture before the flush, so a frame presented after the flush is in neither", async () => {
+  // The host writes the U7 record of a presented frame to the files at the flush; a frame presents right after the flush.
+  let frames = 340;
+  let flushedFrames = 340;
+  const s = fakeSession((kind, window, name) => {
+    if (name === "host.window") return mygoWindow({ frames });
+    if (name === "diagnostics.log.flush") {
+      flushedFrames = frames;
+      frames += 1;
+    }
+    return null;
+  });
+  const hid = { requireTrusted: () => {}, bringFront: async () => {}, post: () => { frames += 4; } };
+  const result = await measurePointer({
+    s, app: { name: "mygo", configDir: MYGO }, hid,
+    measure: async ({ span }) => { await span(); return { apps: [] }; },
+    frameRecords: async () => {},
+    restore: async () => {},
+    tail: async () => ({ "host-1-10": 100 }),
+    records: async () => {
+      const moves = MOVES.slice(0, flushedFrames - 344);
+      return { records: u7Move(moves), dropped: [], fromSeq: 100, toSeq: 100 + moves.length * 3 };
+    },
+  });
   assert.deepEqual(result.gesture, { window: "w1", frameRecords: 4, pairs: 4, p90Ms: 6, framesChange: 4 });
 });
 

@@ -327,6 +327,7 @@ const FEATURE_LINKS = [
       { file: "scripts/test/footprints.test.mjs", id: "reading a footprint runs footprint -p PID -f bytes and names the process of a failure" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "the idle wait waits for the cursor idle timeout of every term tab and then for 3 seconds without a frame" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "the gesture figures are the 90th percentile of the hitTest: step with the step that follows it" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the pointer step reads the frames of the gesture before the flush, so a frame presented after the flush is in neither" },
       { file: "scripts/test/frame-records.test.mjs", id: "a gesture with fewer frame records than the change of frames fails and names the missing records" },
       { file: "scripts/test/frame-records.test.mjs", id: "a gesture that contains a seq range that a log.dropped event names fails" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "the pointer step measures the move in the front window and repeats it in the trace state of the frame records to read the U7 records" },

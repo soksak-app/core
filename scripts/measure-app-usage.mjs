@@ -386,7 +386,8 @@ export function pointerPath({ frame, content }) {
  * brings the window to the front (hid.bringFront), and measures the HID move across the window (hid.post) with measure({ span }), which reads
  * the settled footprints before and after the span and the CPU time over it. It then sets the trace state of the frame records
  * (frameRecords; FRAME_RECORDS of scripts/measure-trace.mjs), repeats the move and, for a window whose host.window reports pageProcess null, reads its U7 records (tail, records) into
- * gestureFigures, and sets the trace state of the measurement again (restore), also when the step fails.
+ * gestureFigures, and sets the trace state of the measurement again (restore), also when the step fails. It reads frames after the move
+ * before diagnostics.log.flush, so the record of every frame that the change of frames counts is in the files that records reads.
  */
 export async function measurePointer({ s, app, hid, measure, frameRecords, restore, tail, records }) {
   hid.requireTrusted();
@@ -401,8 +402,8 @@ export async function measurePointer({ s, app, hid, measure, frameRecords, resto
       const { frames: framesBefore } = await s.get("host.window");
       const since = await tail();
       hid.post(path);
-      await s.request("diagnostics.log.flush");
       const { frames: framesAfter } = await s.get("host.window");
+      await s.request("diagnostics.log.flush");
       const read = await records(since);
       gesture = { window: s.window, ...gestureFigures({ ...read, window: s.window, framesBefore, framesAfter }) };
     } else {
