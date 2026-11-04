@@ -87,6 +87,8 @@ The view reads the rows that it may forward with the view call `runtime.shortcut
 | `cmd+0` | native menu | core.text.reset | view/text-default | Any focus |
 | `shift+cmd+n` | native menu | core.window.new | window/new-window | Any focus |
 | `shift+cmd+n` | workbench | core.window.new | — | No host chrome (browser build) |
+| `cmd+d` | workbench | core.card.split-right | — | A card has the focus |
+| `shift+cmd+d` | workbench | core.card.split-bottom | — | A card has the focus |
 | `cmd+k` | workbench | core.library.search.focus | — | The library is shown |
 | `Enter` | workbench | core.rename.commit | — | The tab rename field has focus |
 | `Escape` | workbench | core.rename.cancel | — | The tab rename field has focus |
@@ -95,6 +97,8 @@ The view reads the rows that it may forward with the view call `runtime.shortcut
 | `Escape` | workbench | core.modal.dismiss | — | A native modal menu is open and has keyboard focus |
 | `Escape` | view | none | — | A plugin view has keyboard focus; the view handles the key itself, and runs the Escape command of an open picker only when it forwards the key |
 | `text input keys` | view | none | — | A plugin view has a text input focused; the view handles the key itself and it keeps its default action |
+
+`core.card.split-right` and `core.card.split-bottom` take no parameters and split the focused card, with a new tab of the plugin of its active tab, as `core.card.split` does.
 
 `core.library.search.focus` takes no parameters and focuses the search field of the currently shown library page: `core.library.search` for projects or `core.library.plugins.search` for plugins. It rejects a hidden library explicitly without opening it or changing its page. The main-page keyboard handler and a forwarded shortcut command use this same operation. `core.focus.set` remains the generic command for focusing a named exposed DOM element.
 

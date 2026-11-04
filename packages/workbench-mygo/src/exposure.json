@@ -3393,6 +3393,44 @@
         }
       },
       {
+        "name": "core.card.split-right",
+        "description": "Splits the focused card and puts a new tab of the plugin of its active tab in a new card on its right.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            },
+            "tab": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "core.card.split-bottom",
+        "description": "Splits the focused card and puts a new tab of the plugin of its active tab in a new card below it.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            },
+            "tab": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
         "name": "core.card.split",
         "description": "Splits a card and puts a new tab of a plugin in a new card on the named side of it: left, right, top, or bottom.",
         "params": {

@@ -15,6 +15,8 @@
     { "key": "cmd+0", "owner": "native menu", "command": "core.text.reset", "menu": "view/text-default", "when": "Any focus" },
     { "key": "shift+cmd+n", "owner": "native menu", "command": "core.window.new", "menu": "window/new-window", "when": "Any focus" },
     { "key": "shift+cmd+n", "owner": "workbench", "command": "core.window.new", "menu": null, "when": "No host chrome (browser build)" },
+    { "key": "cmd+d", "owner": "workbench", "command": "core.card.split-right", "menu": null, "when": "A card has the focus" },
+    { "key": "shift+cmd+d", "owner": "workbench", "command": "core.card.split-bottom", "menu": null, "when": "A card has the focus" },
     { "key": "cmd+k", "owner": "workbench", "command": "core.library.search.focus", "menu": null, "when": "The library is shown" },
     { "key": "Enter", "owner": "workbench", "command": "core.rename.commit", "menu": null, "when": "The tab rename field has focus" },
     { "key": "Escape", "owner": "workbench", "command": "core.rename.cancel", "menu": null, "when": "The tab rename field has focus" },

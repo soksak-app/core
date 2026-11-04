@@ -398,3 +398,37 @@ func TestThePlaneHasTheGapOfThePage(t *testing.T) {
 		t.Fatalf("the plane starts at %v, want 7", left.X)
 	}
 }
+
+// cmd+d splits the focused card to the right, shift+cmd+d below it, and in the library neither key does anything.
+func TestShortcutsSplitTheFocusedCard(t *testing.T) {
+	f := openedShell(t)
+	source := f.tabbedCards()[0]
+	f.run("core.card.focus", map[string]string{"card": source})
+	before := len(f.tabbedCards())
+	f.tester.Key(ui.Super, ui.KeyD)
+	f.settle()
+	cards := f.tabbedCards()
+	if len(cards) != before+1 {
+		t.Fatalf("cmd+d stored %v", cards)
+	}
+	right := cards[len(cards)-1]
+	if a, b := f.box("core.card", source), f.box("core.card", right); b.X < a.X+a.W {
+		t.Fatalf("cmd+d put the card at %+v beside %+v", b, a)
+	}
+	f.tester.Key(ui.Super|ui.Shift, ui.KeyD)
+	f.settle()
+	cards = f.tabbedCards()
+	if len(cards) != before+2 {
+		t.Fatalf("shift+cmd+d stored %v", cards)
+	}
+	below := cards[len(cards)-1]
+	if a, b := f.box("core.card", right), f.box("core.card", below); b.Y < a.Y+a.H {
+		t.Fatalf("shift+cmd+d put the card at %+v beside %+v", b, a)
+	}
+	f.run("core.projects.browse", nil)
+	f.tester.Key(ui.Super, ui.KeyD)
+	f.settle()
+	if got := len(f.tabbedCards()); got != before+2 {
+		t.Fatalf("cmd+d in the library stored %d cards", got)
+	}
+}

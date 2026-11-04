@@ -121,6 +121,7 @@ type Shell struct {
 	palette  Palette
 	registry *Registry
 	binder   *Binder
+	keys     *Shortcuts
 	calls    *Calls
 	requests *Requests
 	errors   *ShownErrors
@@ -178,7 +179,30 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	if options.Tabs != nil {
 		s.connectTabs(*options.Tabs)
 	}
+	s.keys, err = NewShortcuts(options.Declared.Shortcuts, s.shortcutConditions(), func(command string) error {
+		_, err := s.registry.Run(command, nil)
+		return err
+	}, func(_ string, err error) { s.fail(err) })
+	if err != nil {
+		return nil, err
+	}
 	return s, nil
+}
+
+// shortcutConditions holds the condition of each workbench row of the shortcut table, by the text of its when. A place that the shell
+// does not draw yet never holds.
+func (s *Shell) shortcutConditions() map[string]func() bool {
+	never := func() bool { return false }
+	library := func() bool { return s.browsing || s.opened() == nil }
+	return map[string]func() bool{
+		"No host chrome (browser build)":                     never,
+		"A card has the focus":                               func() bool { return !library() && s.focused != "" },
+		"The library is shown":                               library,
+		"The tab rename field has focus":                     never,
+		"A library form field has focus":                     func() bool { return library() && s.library.formMode != "" },
+		"A picker layer is open":                             never,
+		"A native modal menu is open and has keyboard focus": never,
+	}
 }
 
 // Registry is the registry of the window, which the exposure of the window answers from.
@@ -323,6 +347,7 @@ func (s *Shell) View(c *ui.Context) {
 	theme.Border = s.palette.Edge
 	theme.Danger = s.palette.No
 	c.SetTheme(&theme)
+	s.keys.Declare(c)
 	ui.Column(c).Size(width, height).Background(s.palette.Bg).TextColor(s.palette.Fg).Clip().Children(func() {
 		s.drawChrome(c, width)
 		if s.browsing || s.opened() == nil {
