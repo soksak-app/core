@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F502-16: mygo workbench의 `core.focus`는 창의 first responder와 view가 보고한 focus를 따른다.
 - F502-16: mygo application의 창이 프로젝트를 live view로 보여 준다: 나눈 카드는 plugin의 view를 시작하고, terminal은 shell을, browser tab은 페이지를 보여 주며, shell은 `core.grid`, `core.layout`, `core.surfaces`, `core.rail`, `core.chrome`, `core.window.workbench`와 Wails 창이 보고하는 나머지 status를 보고한다.
 - F502-12: mygo host 의 창은 보여 주는 프로젝트를 주소에 둔다. 플러그인이 바뀌어 workbench 가 다시 시작해도 그 프로젝트를 다시 보여 주고, 별도 프로젝트 창은 자기 프로젝트에서 시작한다.
 - F502-12: mygo workbench 의 library 가 `pluginsState` 로 플러그인 화면을 그린다. 카드는 `pluginsRun` 으로 설치, 업데이트, 제거, 사용, 사용 안 함을 실행하고, `core.plugins` 와 `core.library` 는 page 와 같은 값을 답한다. 첫 실행은 시작 플러그인 묶음을 설치하고, 창 컨트롤 업데이트 N 이 플러그인 화면을 열며, 불러오지 않은 플러그인의 탭은 설치나 사용을 제안한다.

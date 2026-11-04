@@ -1,6 +1,7 @@
 package workbench_test
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -50,6 +51,25 @@ func TestViewCallRecordsItsFocus(t *testing.T) {
 	}
 	if reply := viewCall(t, f, stored, surface, "tab.focus", "input"); reply["error"] == nil {
 		t.Fatalf("a focus of another form answered %v", reply)
+	}
+}
+
+func TestTheFocusOfAViewIsTheKeyboardFocusOfItsWindow(t *testing.T) {
+	f, stored := surfaceShell(t)
+	surface := anySurface(t, stored)
+	viewCall(t, f, stored, surface, "tab.focus", map[string]any{"name": "input", "index": 0})
+	f.shell.Event("window-responder", []any{map[string]any{"owner": "surface", "surface": surface, "document": nil}})
+	f.settle()
+	value, err := f.shell.Registry().Read("core.focus")
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text := string(encoded); !strings.Contains(text, `"name":"input"`) || !strings.Contains(text, surface) {
+		t.Fatalf("core.focus is %s", text)
 	}
 }
 
