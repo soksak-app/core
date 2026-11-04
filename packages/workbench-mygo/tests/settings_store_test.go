@@ -37,6 +37,11 @@ func TestTheSettingsAreTheDefaultsTheCommonValuesAndTheProjectOverrides(t *testi
 	if values["theme"] != "midnight" || values["mode"] != "light" || values["gap"] != 12.0 || values["font"] != "mono-system" {
 		t.Fatalf("effective values %v", values)
 	}
+	for key, value := range values {
+		if !reflect.DeepEqual(store.Value(key), value) {
+			t.Fatalf("value of %s %v, want %v", key, store.Value(key), value)
+		}
+	}
 	if store.Scoped("gap", "common") != 8.0 || store.Scoped("gap", "project") != 12.0 {
 		t.Fatalf("the scoped gap is %v and %v", store.Scoped("gap", "common"), store.Scoped("gap", "project"))
 	}
