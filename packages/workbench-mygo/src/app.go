@@ -264,8 +264,10 @@ func (s *Shell) Event(name string, data []any) {
 	case "project-close-request":
 		s.keep()
 		s.flushTabs()
+		// The call ends the workbench of the window, so its first event leaves before the call.
+		cids := s.events.BeginOperation("workbench.window.operation", map[string]any{"action": "close"})
 		s.events.Flush(func() {
-			s.calls.CallInOrder("workspace", "windowClose", nil, func(_ any, err error) {
+			s.calls.Caused(cids).CallInOrder("workspace", "windowClose", nil, func(_ any, err error) {
 				if err != nil {
 					s.fail(err)
 				}

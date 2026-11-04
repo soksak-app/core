@@ -222,6 +222,7 @@ func pluginRow(id string, unit *LoadedPlugin, state *PluginsState, listed map[st
 // thread, and changed runs each time the state changes.
 type PluginOperations struct {
 	calls   *Calls
+	begin   BeginOperation
 	loaded  func() []LoadedPlugin
 	refused func() map[string]bool
 	changed func()
@@ -233,8 +234,8 @@ type PluginOperations struct {
 }
 
 // NewPluginOperations returns the operations of a window over its host calls.
-func NewPluginOperations(calls *Calls, loaded func() []LoadedPlugin, refused func() map[string]bool, changed func()) *PluginOperations {
-	return &PluginOperations{calls: calls, loaded: loaded, refused: refused, changed: changed, outdated: []OutdatedSidecar{}}
+func NewPluginOperations(calls *Calls, begin BeginOperation, loaded func() []LoadedPlugin, refused func() map[string]bool, changed func()) *PluginOperations {
+	return &PluginOperations{calls: calls, begin: begin, loaded: loaded, refused: refused, changed: changed, outdated: []OutdatedSidecar{}}
 }
 
 // State returns the plugin state of the host, and nil before it was read.
@@ -286,7 +287,8 @@ func (p *PluginOperations) RefreshOutdated(done func()) {
 func (p *PluginOperations) Run(action, plugin string, answer func(err error)) {
 	p.operation = &PluginOperation{Action: action, Plugin: plugin, State: "running"}
 	p.changed()
-	p.calls.Call("pluginsRun", map[string]string{"action": action, "plugin": plugin}, func(_ any, err error) {
+	cids := p.begin("workbench.plugin.operation", map[string]any{"action": action, "plugin": plugin})
+	p.calls.Caused(cids).Call("pluginsRun", map[string]string{"action": action, "plugin": plugin}, func(_ any, err error) {
 		p.operation = &PluginOperation{Action: action, Plugin: plugin, State: "done"}
 		if err != nil {
 			p.operation.State, p.operation.Error = "failed", err.Error()

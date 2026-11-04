@@ -64,12 +64,17 @@ func NewBindings(target any, service string) (*Bindings, error) {
 	return b, nil
 }
 
-// Call runs the method `method` of the target with args and returns its value, and stores the event `host.binding.call`
-// for the call with the correlation identifiers cids of the operation that the call carries out
-// (docs/spec/logging.md#operation-chains). A call that names no method, or passes another number of arguments than the method
-// takes, or carries an identifier that a line cannot hold, is an error. A method that panics is stored as a call that ended
-// without a result, and the panic goes on to the caller.
-func (b *Bindings) Call(ctx context.Context, method string, args []json.RawMessage, cids []string) (result any, err error) {
+// Call runs the method `method` of the target with args and returns its value, and stores the event of the call (RecordedCall). A
+// call that names no method or passes another number of arguments than the method takes is an error.
+func (b *Bindings) Call(ctx context.Context, method string, args []json.RawMessage, cids []string) (any, error) {
+	return RecordedCall(ctx, method, args, cids, func() (any, error) { return b.run(ctx, method, args) })
+}
+
+// RecordedCall runs one host call of a window, whatever carries it, and stores the event `host.binding.call` for the call with the
+// correlation identifiers cids of the operation that the call carries out (docs/spec/logging.md#operation-chains). A call that
+// carries an identifier that a line cannot hold is an error. A call that panics is stored as a call that ended without a result, and
+// the panic goes on to the caller.
+func RecordedCall(ctx context.Context, method string, args []json.RawMessage, cids []string, run func() (any, error)) (result any, err error) {
 	started := time.Now()
 	returned := false
 	defer func() { recordBindingCall(snakeName(method), args, started, err, returned, cids) }()
@@ -84,7 +89,7 @@ func (b *Bindings) Call(ctx context.Context, method string, args []json.RawMessa
 		returned = true
 		return nil, fmt.Errorf("cids of the call %s: %w", method, err)
 	}
-	result, err = b.run(ctx, method, args)
+	result, err = run()
 	returned = true
 	return result, err
 }

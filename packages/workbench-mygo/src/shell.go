@@ -188,6 +188,8 @@ type Shell struct {
 	plugins        []LoadedPlugin
 	// refused holds the ids of the installed plugins whose manifest the window refused.
 	refused map[string]bool
+	// settingsActor is the command of the settings change that runs.
+	settingsActor string
 
 	picker picker
 	icons  map[string]*ui.SVG
@@ -248,8 +250,8 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.errors = NewShownErrors(s.events.Error)
 	s.binder = NewBinder(s.registry, func(_ string, err error) { s.fail(err) })
 	s.starter = environment.pluginStarter
-	s.pluginOperations = NewPluginOperations(s.calls, func() []LoadedPlugin { return s.plugins }, func() map[string]bool { return s.refused }, options.Invalidate)
-	s.appUpdates = NewAppUpdates(s.calls, s.pluginOperations.State, options.Invalidate)
+	s.pluginOperations = NewPluginOperations(s.calls, s.events.BeginOperation, func() []LoadedPlugin { return s.plugins }, func() map[string]bool { return s.refused }, options.Invalidate)
+	s.appUpdates = NewAppUpdates(s.calls, s.events.BeginOperation, s.pluginOperations.State, options.Invalidate)
 	s.registry.Elements(options.Elements)
 	// An installation that cannot be read has no installed plugin, and the window shows why (docs/spec/installation.md#serving-installed-plugins).
 	installed, refused, err := acceptInstalled(options.Installed)

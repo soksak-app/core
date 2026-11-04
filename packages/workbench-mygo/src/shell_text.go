@@ -21,8 +21,8 @@ func (t shellText) FocusedCard() string {
 
 func (t shellText) FrameTextSize() float64 { return t.s.settings.Value("textSize").(float64) }
 
-func (t shellText) SetFrameTextSize(size float64) error {
-	if err := t.s.settings.Set(map[string]any{"textSize": size}, "common"); err != nil {
+func (t shellText) SetFrameTextSize(size float64, actor string) error {
+	if err := t.s.settingsChange(actor, func() error { return t.s.settings.Set(map[string]any{"textSize": size}, "common") }); err != nil {
 		return err
 	}
 	t.s.followScale()

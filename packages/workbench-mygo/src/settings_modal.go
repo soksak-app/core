@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -768,8 +769,14 @@ func (s *Shell) settingsSave(project string, patch map[string]any, remove []stri
 	if project != "" {
 		id = project
 	}
+	scope := "common"
+	if project != "" {
+		scope = "project"
+	}
+	keys := slices.Concat(slices.Sorted(maps.Keys(patch)), remove)
+	cids := s.events.BeginOperation("workbench.settings.change", map[string]any{"scope": scope, "actor": s.settingsActor, "keys": strings.Join(keys, ",")})
 	s.settings.BeginSave()
-	s.calls.CallInOrder("workspace", "workspace", map[string]any{"kind": "settings", "id": id, "patch": patch, "remove": remove}, func(_ any, err error) {
+	s.calls.Caused(cids).CallInOrder("workspace", "workspace", map[string]any{"kind": "settings", "id": id, "patch": patch, "remove": remove}, func(_ any, err error) {
 		s.settings.EndSave()
 		if err != nil {
 			s.fail(err)
@@ -945,12 +952,18 @@ func inScope(scope string) string {
 	return scope
 }
 
-// changing runs a change of the settings and applies its result.
-func (s *Shell) changing(change func() error) error {
-	if err := change(); err != nil {
+// changing runs a change of the settings that actor makes and applies its result.
+func (s *Shell) changing(actor string, change func() error) error {
+	if err := s.settingsChange(actor, change); err != nil {
 		return err
 	}
 	return s.settingsChanged()
+}
+
+// settingsChange runs a change of the settings that actor, the command that asks for it, makes (docs/spec/logging.md#operation-chains).
+func (s *Shell) settingsChange(actor string, change func() error) error {
+	s.settingsActor = actor
+	return change()
 }
 
 // registerSettings adds the commands and the statuses of the settings.
@@ -971,23 +984,23 @@ func (s *Shell) registerSettings() {
 
 func (s *Shell) registerSettingsValues() {
 	act(s, "core.settings.set", func(value settingsParam) error {
-		return s.changing(func() error { return s.settings.Set(value.Patch, value.Scope) })
+		return s.changing("core.settings.set", func() error { return s.settings.Set(value.Patch, value.Scope) })
 	})
 	act(s, "core.settings.reset", func(value settingsParam) error {
-		return s.changing(func() error { return s.settings.Reset(value.Key) })
+		return s.changing("core.settings.reset", func() error { return s.settings.Reset(value.Key) })
 	})
 	act(s, "core.settings.debug", func(value settingsParam) error {
-		return s.changing(func() error { return s.settings.Debug(value.On) })
+		return s.changing("core.settings.debug", func() error { return s.settings.Debug(value.On) })
 	})
 	act(s, "core.settings.change", func(value settingsParam) error {
 		var input any
 		if err := json.Unmarshal(value.Value, &input); err != nil {
 			return fmt.Errorf("core.settings.change: %w", err)
 		}
-		return s.changing(func() error { return s.settings.Change(value.Key, input, value.Scope) })
+		return s.changing("core.settings.change", func() error { return s.settings.Change(value.Key, input, value.Scope) })
 	})
 	act(s, "core.settings.theme", func(value settingsParam) error {
-		return s.changing(func() error { return s.settings.Theme(value.Name, value.Mode, value.Scope) })
+		return s.changing("core.settings.theme", func() error { return s.settings.Theme(value.Name, value.Mode, value.Scope) })
 	})
 	act(s, "core.settings.link", func(value settingsParam) error {
 		scope := inScope(value.Scope)
@@ -1003,7 +1016,7 @@ func (s *Shell) registerSettingsValues() {
 		if err != nil {
 			return err
 		}
-		return s.changing(func() error { return s.settings.Set(map[string]any{"links": next}, scope) })
+		return s.changing("core.settings.link", func() error { return s.settings.Set(map[string]any{"links": next}, scope) })
 	})
 }
 
@@ -1016,7 +1029,7 @@ func (s *Shell) registerSettingsSets() {
 		}
 		next := CreateSet(sets)
 		id := next[len(next)-1].ID
-		if err := s.changing(func() error { return s.settings.Set(map[string]any{"sets": next}, scope) }); err != nil {
+		if err := s.changing("core.settings.link", func() error { return s.settings.Set(map[string]any{"sets": next}, scope) }); err != nil {
 			return nil, err
 		}
 		if s.settingsWindow.open {
@@ -1034,7 +1047,7 @@ func (s *Shell) registerSettingsSets() {
 		if err != nil {
 			return err
 		}
-		return s.changing(func() error { return s.settings.Set(map[string]any{"sets": next}, scope) })
+		return s.changing("core.settings.link", func() error { return s.settings.Set(map[string]any{"sets": next}, scope) })
 	}
 	act(s, "core.settings.sets.update", func(value settingsParam) error {
 		return change(value, func(sets []StoredSet) ([]StoredSet, error) {
@@ -1060,7 +1073,7 @@ func (s *Shell) registerSettingsSets() {
 		if err != nil {
 			return err
 		}
-		return s.changing(func() error { return s.settings.Set(map[string]any{"sets": remaining, "links": kept}, scope) })
+		return s.changing("core.settings.sets.delete", func() error { return s.settings.Set(map[string]any{"sets": remaining, "links": kept}, scope) })
 	})
 }
 

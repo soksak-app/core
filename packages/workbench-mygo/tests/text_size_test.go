@@ -16,10 +16,10 @@ type textPlace struct {
 	cards   map[string]float64
 }
 
-func (p *textPlace) FocusedCard() string                 { return p.focused }
-func (p *textPlace) FrameTextSize() float64              { return p.frame }
-func (p *textPlace) CardTextSizes() map[string]float64   { return maps.Clone(p.cards) }
-func (p *textPlace) SetFrameTextSize(size float64) error { p.frame = size; return nil }
+func (p *textPlace) FocusedCard() string                           { return p.focused }
+func (p *textPlace) FrameTextSize() float64                        { return p.frame }
+func (p *textPlace) CardTextSizes() map[string]float64             { return maps.Clone(p.cards) }
+func (p *textPlace) SetFrameTextSize(size float64, _ string) error { p.frame = size; return nil }
 func (p *textPlace) SetCardTextSize(card string, size float64) error {
 	p.cards[card] = size
 	return nil
@@ -65,7 +65,7 @@ func TestTextSizeChangesThePlacePressedLast(t *testing.T) {
 	tester.Frame()
 	card, other := height(t, tester, "card a"), height(t, tester, "card b")
 
-	if err := sizes.Change(1); err != nil {
+	if err := sizes.Change(1, "core.text.larger"); err != nil {
 		t.Fatal(err)
 	}
 	tester.Frame()
@@ -82,7 +82,7 @@ func TestTextSizeChangesThePlacePressedLast(t *testing.T) {
 	if err := tester.Click("card b"); err != nil {
 		t.Fatal(err)
 	}
-	if err := sizes.Change(1); err != nil {
+	if err := sizes.Change(1, "core.text.larger"); err != nil {
 		t.Fatal(err)
 	}
 	if place.cards["b"] != 1.5 || place.cards["a"] != 1.5 {
@@ -92,7 +92,7 @@ func TestTextSizeChangesThePlacePressedLast(t *testing.T) {
 	if err := tester.Click("frame"); err != nil {
 		t.Fatal(err)
 	}
-	if err := sizes.Change(1); err != nil {
+	if err := sizes.Change(1, "core.text.larger"); err != nil {
 		t.Fatal(err)
 	}
 	tester.Frame()
@@ -104,7 +104,7 @@ func TestTextSizeChangesThePlacePressedLast(t *testing.T) {
 		t.Fatalf("the effective factor of card a is %v, want 2.25", got)
 	}
 
-	if err := sizes.Change(0); err != nil {
+	if err := sizes.Change(0, "core.text.larger"); err != nil {
 		t.Fatal(err)
 	}
 	if place.frame != 1 {
@@ -178,7 +178,7 @@ func TestTextChangeOfACardOutsideTheLayoutFails(t *testing.T) {
 	if err := sizes.Press(workbench.CardScope("gone")); err != nil {
 		t.Fatal(err)
 	}
-	if err := sizes.Change(1); err == nil || err.Error() != "text size card gone is not in the layout" {
+	if err := sizes.Change(1, "core.text.larger"); err == nil || err.Error() != "text size card gone is not in the layout" {
 		t.Fatalf("the change failed with %v", err)
 	}
 	if len(place.cards) != 1 {
