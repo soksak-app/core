@@ -158,20 +158,13 @@ func middle(surface map[string]any) (float64, float64) {
 }
 
 func TestAFileDroppedOnAViewRunsTheDropCommandOfItsPlugin(t *testing.T) {
-	f, stored := surfaceShell(t)
+	r := newViewRelay(t)
+	f, stored := r.f, r.stored
 	surface := terminalSurface(t, stored)
-	viewCall(t, f, stored, surface, "runtime.command.register", map[string]any{"name": "terminal.drop"})
+	r.call(surface, "runtime.command.register", map[string]any{"name": "terminal.drop"})
 	x, y := middle(stored.lastSurfaces(t)[surface])
 	f.shell.Event("files-dropped", []any{dropText(t, x, y)})
-	f.settle()
-	var request map[string]any
-	for _, line := range stored.hostName {
-		if text, found := strings.CutPrefix(line, "viewRequest "); found {
-			if err := json.Unmarshal([]byte(text), &request); err != nil {
-				t.Fatal(err)
-			}
-		}
-	}
+	request := r.request(0)
 	if request["surface"] != surface || request["command"] != "terminal.drop" {
 		t.Fatalf("the view took %v", request)
 	}
@@ -179,8 +172,11 @@ func TestAFileDroppedOnAViewRunsTheDropCommandOfItsPlugin(t *testing.T) {
 		t.Fatalf("the command took %s", text)
 	}
 	f.shell.Event("view-reply", []any{map[string]any{"surface": surface, "id": request["id"], "result": nil}})
-	f.settle()
-	status := dropStatus(t, f)
+	var status map[string]any
+	f.pending.until(t, func() bool {
+		status = dropStatus(t, f)
+		return status["command"] != nil
+	})
 	if status["surface"] != surface || status["command"] != "terminal.drop" || status["error"] != nil || status["x"] != x {
 		t.Fatalf("core.drop is %v", status)
 	}

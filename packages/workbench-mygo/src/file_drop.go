@@ -69,7 +69,8 @@ func (s *Shell) runDrop(data []any, record *dropRecord) error {
 	if err != nil {
 		return err
 	}
-	return s.runViewCommand(surface, command, params, nil, func(_ any, err error) { s.dropEnded(record, err) })
+	s.registry.RunOn(command, params, surface, func(_ any, err error) { s.dropEnded(record, err) })
+	return nil
 }
 
 // surfaceAt returns the view that the point of the window shows. A layer of the window covers the views under it.
