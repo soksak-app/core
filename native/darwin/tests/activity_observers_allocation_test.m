@@ -10,10 +10,8 @@
 #include <stdint.h>
 #import "activity_observers.h"
 #import "application_log.h"
+#import "private/malloc.h"
 #import "support/records.h"
-
-typedef void(malloc_logger_t)(uint32_t type, uintptr_t arg1, uintptr_t arg2, uintptr_t arg3, uintptr_t result, uint32_t skip);
-extern malloc_logger_t *malloc_logger;
 
 static const uint32_t typeAllocate = 2;
 static const uint32_t typeDeallocate = 4;

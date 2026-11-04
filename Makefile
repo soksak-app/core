@@ -5,6 +5,7 @@ SHELL := /bin/sh
 docs-check:
 	@node scripts/check-docs.mjs
 	@node scripts/check-failure-table.mjs
+	@node scripts/check-private-apis.mjs
 	@pnpm exec soksak-records
 
 # Checks that the documents and configuration comments state only facts about the repository (AGENTS.md Documentation).
