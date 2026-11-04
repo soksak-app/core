@@ -100,6 +100,17 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 				return nil, fmt.Errorf("plugin %s exposes: %w", plugin.ID, err)
 			}
 		}
+		if len(plugin.Diagnostics) > 0 {
+			var diagnostics struct {
+				Exposes surfaceMarks `json:"exposes"`
+			}
+			if err := json.Unmarshal(plugin.Diagnostics, &diagnostics); err != nil {
+				return nil, fmt.Errorf("plugin %s diagnostics: %w", plugin.ID, err)
+			}
+			unit.Exposes.Status = append(unit.Exposes.Status, diagnostics.Exposes.Status...)
+			unit.Exposes.Commands = append(unit.Exposes.Commands, diagnostics.Exposes.Commands...)
+			unit.Exposes.Dom = append(unit.Exposes.Dom, diagnostics.Exposes.Dom...)
+		}
 		if plugin.Manifest.Surface == nil || len(plugin.Manifest.Surface.Composition) == 0 {
 			continue
 		}

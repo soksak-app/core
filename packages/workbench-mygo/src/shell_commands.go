@@ -77,6 +77,11 @@ func (s *Shell) register() {
 	s.registerSettings()
 	s.registerPicker()
 	act(s, "core.projects.browse", func(struct{}) error { s.browse(); return nil })
+	act(s, "core.projects.flush", func(struct{}) error { s.keep(); return nil })
+	command(s, "core.plugins.apply", func(struct{}) (any, error) {
+		s.pluginsChanged()
+		return map[string]bool{"reloaded": true}, nil
+	})
 	act(s, "core.project.activate", func(value idParam) error { s.activate(value.ID); return nil })
 	act(s, "core.project.close", func(value idParam) error { s.removeProject(value.ID); return nil })
 	act(s, "core.space.activate", func(value idParam) error { return s.activateSpace(value.ID) })
