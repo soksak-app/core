@@ -7,6 +7,7 @@ import (
 	"math"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // The calls of the views of a window (docs/spec/native-surfaces.md#view-surfaces). The host forwards each call request of a view
@@ -501,14 +502,23 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 		if err != nil {
 			return err
 		}
-		if !unit.declaresCommand(fields.Name) {
-			return fmt.Errorf("view call %s: %q is not a declared command of plugin %s", call.Command, fields.Name, unit.ID)
+		if fields.Name == "" {
+			return fmt.Errorf("view call %s requires a non-empty name", call.Command)
 		}
 		if view.commands[fields.Name] {
 			return fmt.Errorf("command %s is already registered", fields.Name)
 		}
+		// The registry checks the declaration and the owner, then the host records the registration.
+		if err := s.registry.Registered(SurfaceRegistered{Surface: call.Surface, Kind: "command", Name: fields.Name}); err != nil {
+			return err
+		}
 		view.commands[fields.Name] = true
-		done()
+		s.surfaceCall(call, "exposureRegister", map[string]any{"kind": "command", "name": fields.Name}, func(_ any, err error) {
+			if err != nil {
+				delete(view.commands, fields.Name)
+			}
+			answer(nil, err)
+		})
 	case "runtime.command.run":
 		fields, err := viewFields[struct {
 			Name    string          `json:"name"`
@@ -524,7 +534,7 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 		if held := s.surfaces.held[fields.Surface]; held == nil || held.tab.Plugin != call.Plugin {
 			return fmt.Errorf("view call %s surface %s is not a surface of %s", call.Command, fields.Surface, call.Plugin)
 		}
-		return s.runViewCommand(fields.Surface, fields.Name, fields.Params, call.Cids, answer)
+		s.registry.RunOwned(fields.Name, fields.Params, call.Cids, call.Plugin, fields.Surface, "", answer)
 	case "runtime.status.watch", "runtime.status.unwatch":
 		fields, err := viewFields[struct {
 			Name    string  `json:"name"`
@@ -689,33 +699,57 @@ func (s *Shell) runCommandCall(call viewCallEvent, answer viewAnswer) error {
 		s.registry.RunLater(call.Command, call.Params, answer)
 		return nil
 	case owner == call.Plugin:
-		return s.runViewCommand(call.Surface, call.Command, call.Params, call.Cids, answer)
+		s.registry.RunOwned(call.Command, call.Params, call.Cids, call.Plugin, "", call.Surface, answer)
+		return nil
 	case owner == "tab" || owner == "runtime":
 		return fmt.Errorf("view call %s is not served", call.Command)
 	}
 	return fmt.Errorf("command %s belongs to %s, not %s", call.Command, owner, call.Plugin)
 }
 
-// runViewCommand sends a command that the view of surface registered to that view. The reply arrives as the event view-reply.
-func (s *Shell) runViewCommand(surface, name string, params, cids json.RawMessage, answer viewAnswer) error {
-	view := s.surfaces.views[surface]
-	if view == nil || !view.commands[name] {
-		return fmt.Errorf("command %s is not registered on surface %s", name, surface)
-	}
+// runViewCommand sends a command that the view of surface registered to that view. The reply arrives as the event view-reply, and
+// the post may instead settle the command, for a view whose source was replaced. A view that does not reply within the declared
+// limit of the command ends it.
+func (s *Shell) runViewCommand(surface string, view *viewState, name string, params, cids json.RawMessage, answer viewAnswer) {
 	s.surfaces.command++
 	id := s.surfaces.command
-	view.requests[id] = answer
+	limit := s.registry.CommandTimeout(name)
+	var timer *time.Timer
+	ended := false
+	settle := func(result any, err error) {
+		if ended {
+			return
+		}
+		ended = true
+		timer.Stop()
+		delete(view.requests, id)
+		answer(result, err)
+	}
+	timer = time.AfterFunc(limit, func() {
+		s.options.Post(func() { settle(nil, fmt.Errorf("command %s did not reply within %dms", name, limit.Milliseconds())) })
+	})
+	view.requests[id] = settle
 	request := map[string]any{"surface": surface, "generation": view.generation, "id": id, "command": name, "params": rawOrNull(params)}
 	if len(cids) > 0 {
 		request["cids"] = cids
 	}
-	s.calls.CallInOrder("view:"+surface, "viewRequest", request, func(_ any, err error) {
-		if err != nil && view.requests[id] != nil {
-			delete(view.requests, id)
-			answer(nil, err)
+	s.calls.CallInOrder("view:"+surface, "viewRequest", request, func(value any, err error) {
+		if err != nil {
+			settle(nil, err)
+			return
+		}
+		disposition, err := decode[*struct {
+			Cancelled        bool     `json:"cancelled"`
+			SourceGeneration *float64 `json:"sourceGeneration"`
+		}](value)
+		switch {
+		case err == nil && disposition == nil:
+		case err == nil && disposition.Cancelled && disposition.SourceGeneration != nil && *disposition.SourceGeneration >= 1:
+			settle(value, nil)
+		default:
+			settle(nil, errors.New("native command post returned an invalid disposition"))
 		}
 	})
-	return nil
 }
 
 // viewReplied receives the reply of a view to a command, the event view-reply.
@@ -727,9 +761,7 @@ func (s *Shell) viewReplied(data []any) {
 		Surface string          `json:"surface"`
 		ID      uint64          `json:"id"`
 		Result  json.RawMessage `json:"result"`
-		Error   *struct {
-			Message string `json:"message"`
-		} `json:"error"`
+		Error   *Refusal        `json:"error"`
 	}](data[0])
 	if err != nil {
 		s.fail(fmt.Errorf("view reply: %w", err))
@@ -739,17 +771,15 @@ func (s *Shell) viewReplied(data []any) {
 	if view == nil || view.requests[reply.ID] == nil {
 		return
 	}
-	answer := view.requests[reply.ID]
-	delete(view.requests, reply.ID)
 	if reply.Error != nil {
-		answer(nil, errors.New(reply.Error.Message))
+		view.requests[reply.ID](nil, reply.Error)
 		return
 	}
-	answer(reply.Result, nil)
+	view.requests[reply.ID](reply.Result, nil)
 }
 
-// viewExposure answers a request of the relay that belongs to a view, and tells whether it did. A command that a view registered
-// runs in that view, and any other request of a surface goes to the view that subscribed to the requests.
+// viewExposure answers a request that the host forwarded to a surface, and tells whether the request is one. A command that the view
+// registered runs in the view, and any other request goes to the view that subscribed to the requests.
 func (s *Shell) viewExposure(data []any) bool {
 	if len(data) != 1 {
 		return false
@@ -759,31 +789,23 @@ func (s *Shell) viewExposure(data []any) bool {
 		Method  string `json:"method"`
 		Surface string `json:"surface"`
 		Params  struct {
-			Name    string          `json:"name"`
-			Surface string          `json:"surface"`
-			Params  json.RawMessage `json:"params"`
-			Cids    json.RawMessage `json:"cids"`
+			Name   string          `json:"name"`
+			Params json.RawMessage `json:"params"`
+			Cids   json.RawMessage `json:"cids"`
 		} `json:"params"`
 	}](data[0])
-	if err != nil || request.Method != "command.run" {
-		return s.viewEvent("exposure-request", data)
+	if err != nil || request.Surface == "" {
+		return false
 	}
-	surface := request.Params.Surface
-	if surface == "" {
-		surface = request.Surface
-	}
-	for _, id := range append([]string{surface}, s.surfaces.order...) {
-		view := s.surfaces.views[id]
-		if view == nil || !view.commands[request.Params.Name] {
-			continue
-		}
-		answer := func(result any, err error) { s.requests.Reply(request.ID, result, err) }
-		if err := s.runViewCommand(id, request.Params.Name, request.Params.Params, request.Params.Cids, answer); err != nil {
-			answer(nil, err)
-		}
+	answer := func(result any, err error) { s.requests.ReplyFor(request.Surface, request.ID, result, err) }
+	if view := s.surfaces.views[request.Surface]; view != nil && request.Method == "command.run" && view.commands[request.Params.Name] {
+		s.runViewCommand(request.Surface, view, request.Params.Name, request.Params.Params, request.Params.Cids, answer)
 		return true
 	}
-	return s.viewEvent("exposure-request", data)
+	if !s.viewEvent("exposure-request", data) {
+		answer(nil, Refuse(Gone, "surface %s does not answer %s", request.Surface, request.Method))
+	}
+	return true
 }
 
 // viewSettings returns the values of the settings of a plugin.
@@ -968,19 +990,6 @@ func (s *Shell) runNativeCall(call viewCallEvent, view *viewState, unit *install
 		return fmt.Errorf("host call %s is not served to plugins", fields.Name)
 	}
 	return nil
-}
-
-// declaresCommand tells whether the plugin declares the command name, in plugin.json or in its diagnostic declarations.
-func (u *installedUnit) declaresCommand(name string) bool {
-	for _, raw := range u.Exposes.Commands {
-		var entry struct {
-			Name string `json:"name"`
-		}
-		if json.Unmarshal(raw, &entry) == nil && entry.Name == name {
-			return true
-		}
-	}
-	return false
 }
 
 // changeOf reads the value of a watched status of the view of surface (docs/spec/exposure.md#relay).

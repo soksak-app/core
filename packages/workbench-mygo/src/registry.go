@@ -32,6 +32,7 @@ const (
 	InvalidParams = -32602
 	UnknownName   = 1001
 	Unregistered  = 1002
+	Gone          = 1003
 )
 
 // Refusal is the failure of a request with its code. A command returns one to choose the code of its failure; any other error of

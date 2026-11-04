@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 )
 
 // The requests for the names that surfaces register (docs/spec/exposure.md#relay). The registry of the page holds the declarations
@@ -59,7 +60,7 @@ type surfaceTable struct {
 	// the declared time limit of each command that has one.
 	declared map[string]bool
 	exposes  map[string][]map[string]any
-	timeouts map[string]json.Number
+	timeouts map[string]int64
 	// owners holds the surfaces that registered each declaration key, in registration order.
 	owners map[string][]string
 	// watches holds the watches by watchKey.
@@ -68,9 +69,16 @@ type surfaceTable struct {
 }
 
 func newSurfaceTable() surfaceTable {
-	return surfaceTable{declared: map[string]bool{}, exposes: map[string][]map[string]any{}, timeouts: map[string]json.Number{},
+	return surfaceTable{declared: map[string]bool{}, exposes: map[string][]map[string]any{}, timeouts: map[string]int64{},
 		owners: map[string][]string{}, watches: map[string]*surfaceWatch{}}
 }
+
+// The time limits of a command in milliseconds: the limit of one that declares none, and the largest declared limit
+// (docs/spec/exposure.md, command timeout).
+const (
+	defaultCommandTimeout = 10000
+	maxCommandTimeout     = 600000
+)
 
 // exposeKinds gives the entry kind of each key of the declaration file.
 var exposeKinds = map[string]string{"status": "status", "commands": "command", "dom": "dom"}
@@ -97,7 +105,7 @@ func (r *Registry) Declare(owner string, exposes Exposes) error {
 	type entry struct {
 		key, kind string
 		fields    map[string]any
-		timeout   *json.Number
+		timeout   int64
 	}
 	var read []entry
 	seen := map[string]bool{}
@@ -126,8 +134,13 @@ func (r *Registry) Declare(owner string, exposes Exposes) error {
 			}
 			seen[key] = true
 			each := entry{key: key, kind: list.key, fields: fields}
-			if timeout, ok := fields["timeout"].(json.Number); ok {
-				each.timeout = &timeout
+			if number, present := fields["timeout"]; present {
+				text, _ := number.(json.Number) // silent: a value of another form is refused below.
+				timeout, err := text.Int64()
+				if err != nil || timeout < 1 || timeout > maxCommandTimeout {
+					return fmt.Errorf("%s timeout must be an integer from 1 to %d ms", key, maxCommandTimeout)
+				}
+				each.timeout = timeout
 			}
 			read = append(read, each)
 		}
@@ -137,11 +150,21 @@ func (r *Registry) Declare(owner string, exposes Exposes) error {
 	for _, each := range read {
 		r.surfaces.declared[each.key] = true
 		r.surfaces.exposes[each.kind] = append(r.surfaces.exposes[each.kind], each.fields)
-		if each.timeout != nil {
-			r.surfaces.timeouts[each.fields["name"].(string)] = *each.timeout
+		if each.timeout != 0 {
+			r.surfaces.timeouts[each.fields["name"].(string)] = each.timeout
 		}
 	}
 	return nil
+}
+
+// CommandTimeout returns the time limit of the plugin command name.
+func (r *Registry) CommandTimeout(name string) time.Duration {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if timeout, declared := r.surfaces.timeouts[name]; declared {
+		return time.Duration(timeout) * time.Millisecond
+	}
+	return defaultCommandTimeout * time.Millisecond
 }
 
 // isDeclared tells whether the core or a plugin declares the name of kind.

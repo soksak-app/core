@@ -32,13 +32,13 @@ func (u *installedUnit) declaredExposes() (Exposes, error) {
 // linkSurfaces gives the registry the declarations of the plugins and the surfaces of the window. A plugin whose declarations are
 // refused is shown, and its names stay unknown.
 func (s *Shell) linkSurfaces() {
-	ids := make([]string, 0, len(s.plugins))
-	for id := range s.plugins {
+	ids := make([]string, 0, len(s.units))
+	for id := range s.units {
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)
 	for _, id := range ids {
-		exposes, err := s.plugins[id].declaredExposes()
+		exposes, err := s.units[id].declaredExposes()
 		if err == nil {
 			err = s.registry.Declare(id, exposes)
 		}

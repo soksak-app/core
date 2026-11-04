@@ -40,9 +40,11 @@ func (q *Requests) Deliver(data ...any) {
 	})
 }
 
-// Reply answers the request id, for a request that a view runs.
-func (q *Requests) Reply(id uint64, result any, err error) {
-	q.send("exposureReply", "exposure reply", replyOf(id, result, err))
+// ReplyFor answers the request id that the host forwarded to surface.
+func (q *Requests) ReplyFor(surface string, id uint64, result any, err error) {
+	reply := replyOf(id, result, err)
+	reply["surface"] = surface
+	q.send("exposureReply", "exposure reply", reply)
 }
 
 // exposureRequest is the value of the event exposure-request.
