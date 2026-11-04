@@ -1,4 +1,4 @@
-// The host calls of a surface document (docs/spec/logging.md#automatic-entrances): every call is the event `page.call`, the
+// The host calls of a surface document (docs/spec/logging.md#automatic-entrances): every call is the event `workbench.call`, the
 // events of one turn travel in one `log` request, and the records of the document keep their order among the calls.
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -32,28 +32,28 @@ test("a document applies the policy that the host reads at its load, and each la
   const { calls, emit, events } = setup(async () => "answer", ERRORS);
   await settled();
   await calls.call("documentAttach", { document: "d" });
-  await calls.record("error", "page.record.error", { where: "page", text: "first" });
-  assert.deepEqual(events().map((event) => event.event), ["page.record.error"], "the default policy stores no page.call of level debug");
+  await calls.record("error", "workbench.record.error", { where: "workbench", text: "first" });
+  assert.deepEqual(events().map((event) => event.event), ["workbench.record.error"], "the default policy stores no workbench.call of level debug");
   emit("log-policy", { classes: TRACE });
   await calls.call("documentAttach", { document: "d" });
-  await calls.record("info", "page.record.info", { where: "page", text: "second" });
+  await calls.record("info", "workbench.record.info", { where: "workbench", text: "second" });
   assert.deepEqual(events().map((event) => [event.event, event.fields.name ?? event.fields.text]).slice(1),
-    [["page.call", "documentAttach"], ["page.record.info", "second"]]);
+    [["workbench.call", "documentAttach"], ["workbench.record.info", "second"]]);
 });
 
 test("the policy that the host reads at the load is in force before the first call", async () => {
   const { calls, events } = setup(async () => "answer");
   await settled();
   await calls.call("documentLoad", { document: "d" });
-  await calls.record("info", "page.record.info", {});
-  assert.deepEqual(events().map((event) => event.event), ["page.call", "page.record.info"]);
+  await calls.record("info", "workbench.record.info", {});
+  assert.deepEqual(events().map((event) => event.event), ["workbench.call", "workbench.record.info"]);
 });
 
 test("a call returns its answer and is recorded after it ended, with the duration and the outcome", async () => {
   const { calls, events } = setup(async (name, value) => ({ echoed: value }));
   assert.deepEqual(await calls.call("documentAttach", { document: "d" }), { echoed: { document: "d" } });
-  await calls.record("info", "page.record.info", { where: "page", text: "after" });
-  assert.deepEqual(events().map((event) => [event.event, event.level]), [["page.call", "debug"], ["page.record.info", "info"]]);
+  await calls.record("info", "workbench.record.info", { where: "workbench", text: "after" });
+  assert.deepEqual(events().map((event) => [event.event, event.level]), [["workbench.call", "debug"], ["workbench.record.info", "info"]]);
   const { fields } = events()[0];
   assert.equal(fields.name, "documentAttach");
   assert.equal(fields.args, '[{"document":"d"}]');
@@ -69,7 +69,7 @@ test("a rejected call and a call that throws before sending are warn events, and
   });
   await assert.rejects(calls.call("rejects"), (error) => error === failure);
   await assert.rejects(calls.call("throws"), (error) => error === failure);
-  await calls.record("info", "page.record.info", {});
+  await calls.record("info", "workbench.record.info", {});
   assert.deepEqual(events().slice(0, 2).map((event) => [event.level, event.fields.name, event.fields.ok, event.fields.error]), [
     ["warn", "rejects", false, "-32603: refused by the host"],
     ["warn", "throws", false, "-32603: refused by the host"],

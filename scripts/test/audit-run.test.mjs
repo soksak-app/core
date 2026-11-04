@@ -34,7 +34,7 @@ const catalog = {
 const BOOT = '1-2';
 const US = 1_791_000_000_000_000;
 const event = (seq, name, fields, extra = {}) => JSON.stringify({ ts_us: US + seq * 1000, mono_ns: 7_000_000_000 + seq * 1_000_000, seq, level: 'info', class: 'lifecycle', layer: 'host', event: name, fields, ...extra });
-const open = (role, boot, seq = 1) => event(seq, 'log.open', { schema: 2, pid: 3, role, boot }, { layer: role === 'host' ? 'host' : 'sidecar' });
+const open = (role, boot, seq = 1) => event(seq, 'log.open', { schema: 3, pid: 3, role, boot }, { layer: role === 'host' ? 'host' : 'sidecar' });
 const start = (seq, name) => event(seq, 'host.test.start', { name, run: 'run-1' });
 const end = (seq, name, result = 'pass') => event(seq, 'host.test.end', { name, run: 'run-1', result });
 const failure = (seq, text) => event(seq, 'host.record.error', { where: 'place', text }, { level: 'error' });

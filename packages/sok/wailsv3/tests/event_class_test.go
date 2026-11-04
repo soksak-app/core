@@ -35,14 +35,14 @@ func TestEveryLineOfTheToolStoresTheClassOfItsCatalogEntry(t *testing.T) {
 func TestTheClassTableGivesTheCatalogClassOfEventsAndFamilies(t *testing.T) {
 	for name, want := range map[string]sok.Class{
 		"log.open": sok.ClassLifecycle, "host.binding.call": sok.ClassCall, "host.input.relay": sok.ClassInput, "host.sidecar.request": sok.ClassIo,
-		"native.observe.counted": sok.ClassFrame, "page.console.warn": sok.ClassLifecycle, "host.trace.mark": sok.ClassCall,
-		"host.trace.view.presentation-join": sok.ClassCall, "page.trace.layout": sok.ClassFrame,
+		"native.observe.counted": sok.ClassFrame, "workbench.console.warn": sok.ClassLifecycle, "host.trace.mark": sok.ClassCall,
+		"host.trace.view.presentation-join": sok.ClassCall, "workbench.trace.layout": sok.ClassFrame,
 	} {
 		if got, declared := sok.EventClassOf(name); !declared || got != want {
 			t.Fatalf("%s: %q declared %v, want %q", name, got, declared, want)
 		}
 	}
-	for _, name := range []string{"host.nothing", "page.console.", "page.console.WARN", "plugin.editor.opened", ""} {
+	for _, name := range []string{"host.nothing", "workbench.console.", "workbench.console.WARN", "plugin.editor.opened", ""} {
 		if got, declared := sok.EventClassOf(name); declared {
 			t.Fatalf("%q is declared with the class %q", name, got)
 		}

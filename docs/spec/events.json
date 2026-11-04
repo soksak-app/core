@@ -3,6 +3,7 @@
   "layers": [
     "native",
     "host",
+    "workbench",
     "page",
     "sidecar",
     "sok"
@@ -305,8 +306,8 @@
       },
       "description": "A record of the native library."
     },
-    "page.record.<level>": {
-      "layer": "page",
+    "workbench.record.<level>": {
+      "layer": "workbench",
       "class": "lifecycle",
       "level": [
         "error",
@@ -331,7 +332,7 @@
           "text"
         ]
       },
-      "description": "A record of the page, including the errors that a person sees."
+      "description": "A record of the workbench, including the errors that a person sees."
     },
     "sidecar.record.<level>": {
       "layer": "sidecar",
@@ -493,8 +494,8 @@
       },
       "description": "A record of the command line tool, such as a refused policy file of the place log policy."
     },
-    "page.console.<method>": {
-      "layer": "page",
+    "workbench.console.<method>": {
+      "layer": "workbench",
       "class": "lifecycle",
       "level": [
         "debug",
@@ -516,10 +517,10 @@
           "text"
         ]
       },
-      "description": "What the page writes to its console; the text is cut to 8192 bytes while it is built and `truncated` is true when it was cut."
+      "description": "What a document of the workbench writes to its console; the text is cut to 8192 bytes while it is built and `truncated` is true when it was cut."
     },
-    "page.trace.<event>": {
-      "layer": "page",
+    "workbench.trace.<event>": {
+      "layer": "workbench",
       "class": "call",
       "level": "debug",
       "fields": {
@@ -528,10 +529,10 @@
         "properties": {},
         "required": []
       },
-      "description": "The performance trace of the page, while it is on."
+      "description": "The performance trace of the workbench, while it is on."
     },
-    "page.trace.layout": {
-      "layer": "page",
+    "workbench.trace.layout": {
+      "layer": "workbench",
       "class": "frame",
       "level": "debug",
       "fields": {
@@ -569,40 +570,77 @@
           "t"
         ]
       },
-      "description": "A phase of the page layout pipeline, while the frame log gate stores it: `phase` is one of `queued`, `prepare`, `prepared`, `draw`, `drawn`, `frame`, or `presented`; `id` identifies the layout; and `t` is the page `performance.now()` reading in milliseconds. `jsHeapMB` is present when the engine exposes the heap reading. This event uses class `frame` and is independent of the performance trace switch."
+      "description": "A phase of the workbench layout pipeline, while the frame log gate stores it: `phase` is one of `queued`, `prepare`, `prepared`, `draw`, `drawn`, `frame`, or `presented`; `id` identifies the layout; and `t` is the `performance.now()` reading of the workbench document in milliseconds. `jsHeapMB` is present when the engine exposes the heap reading. This event uses class `frame` and is independent of the performance trace switch."
     },
-    "page.trace.surface.sync": {
-      "layer": "page",
+    "workbench.trace.surface.sync": {
+      "layer": "workbench",
       "class": "frame",
       "level": "debug",
       "fields": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
-          "page": { "type": "string" },
-          "requestId": { "type": "integer", "minimum": 1 },
+          "page": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "integer",
+            "minimum": 1
+          },
           "views": {
             "type": "array",
             "items": {
               "type": "object",
               "properties": {
-                "surface": { "type": "string" },
-                "attempt": { "type": ["integer", "null"], "minimum": 1 }
+                "surface": {
+                  "type": "string"
+                },
+                "attempt": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 1
+                }
               },
-              "required": ["surface", "attempt"]
+              "required": [
+                "surface",
+                "attempt"
+              ]
             }
           },
-          "outcome": { "enum": ["accepted", "rejected"] },
-          "declarationInlineBytes": { "type": "integer", "minimum": 0 },
-          "declarationTableBytes": { "type": "integer", "minimum": 0 },
-          "jsHeapMB": { "type": "integer", "minimum": 0 }
+          "outcome": {
+            "enum": [
+              "accepted",
+              "rejected"
+            ]
+          },
+          "declarationInlineBytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "declarationTableBytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "jsHeapMB": {
+            "type": "integer",
+            "minimum": 0
+          }
         },
-        "required": ["page", "requestId", "views", "outcome", "declarationInlineBytes", "declarationTableBytes"]
+        "required": [
+          "page",
+          "requestId",
+          "views",
+          "outcome",
+          "declarationInlineBytes",
+          "declarationTableBytes"
+        ]
       },
       "description": "The outcome of a complete surface synchronization request, recorded only if the frame log gate is open when the host call settles, independently of the performance trace switch. The declaration byte counters compare only the UTF-8 JSON values of declarations repeated inline across view starts with the UTF-8 JSON encoding of the request-local declaration table; they exclude the rest of the request and transport overhead. Normalization retains each serialized value and its request-local reference count; byte lengths are computed once per distinct value at completion only when the gate is open. A closed completion gate creates no fields, reads no mount metadata, and computes no byte lengths. `views` names the exact view surfaces and their page-local mount attempts."
     },
-    "page.trace.surface.resend": {
-      "layer": "page",
+    "workbench.trace.surface.resend": {
+      "layer": "workbench",
       "class": "frame",
       "level": "debug",
       "fields": {
@@ -616,8 +654,8 @@
       },
       "description": "The drawn commit of a layout sent a second surface synchronization request instead of presenting its preparation. The field paths lists the values of the request that differ from the request of that preparation as `path: before -> after`, up to 16 values."
     },
-    "page.trace.modal.answer": {
-      "layer": "page",
+    "workbench.trace.modal.answer": {
+      "layer": "workbench",
       "class": "call",
       "level": "debug",
       "fields": {
@@ -632,10 +670,10 @@
           "key"
         ]
       },
-      "description": "An answer of the open native modal that the page receives, while the trace is on: key is the answered key, and the event is written at the receipt of the answer by the page, because the overlay document has no trace switch. A state report of the modal document is not an answer and writes no event."
+      "description": "An answer of the open native modal that the workbench receives, while the trace is on: key is the answered key, and the event is written at the receipt of the answer by the page, because the overlay document has no trace switch. A state report of the modal document is not an answer and writes no event."
     },
-    "page.trace.picker.close": {
-      "layer": "page",
+    "workbench.trace.picker.close": {
+      "layer": "workbench",
       "class": "call",
       "level": "debug",
       "fields": {
@@ -650,7 +688,7 @@
           "reason"
         ]
       },
-      "description": "The close of the native picker layer, while the trace is on: reason is the reason of the close, one of `replaced` (another layer opened), `settled` (the layout settled), `fullscreen` (a card entered or left fullscreen), `toggle` (its button closed it), `pick` (an item was picked), `dismiss` (core.modal.dismiss), and `command` (core.picker.close, which the page runs for Escape and for a press outside the layer)."
+      "description": "The close of the native picker layer, while the trace is on: reason is the reason of the close, one of `replaced` (another layer opened), `settled` (the layout settled), `fullscreen` (a card entered or left fullscreen), `toggle` (its button closed it), `pick` (an item was picked), `dismiss` (core.modal.dismiss), and `command` (core.picker.close, which the workbench runs for Escape and for a press outside the layer)."
     },
     "host.call.timeout": {
       "layer": "host",
@@ -827,7 +865,12 @@
         "type": "object",
         "properties": {
           "phase": {
-            "enum": ["requested", "result", "presented", "abandoned"]
+            "enum": [
+              "requested",
+              "result",
+              "presented",
+              "abandoned"
+            ]
           },
           "surface": {
             "type": "string",
@@ -845,7 +888,11 @@
             "type": "boolean"
           },
           "reason": {
-            "enum": ["process-ended", "hidden", "unresponsive"]
+            "enum": [
+              "process-ended",
+              "hidden",
+              "unresponsive"
+            ]
           }
         },
         "required": [
@@ -856,12 +903,38 @@
         ],
         "allOf": [
           {
-            "if": {"properties": {"phase": {"const": "result"}}, "required": ["phase"]},
-            "then": {"required": ["joined"]}
+            "if": {
+              "properties": {
+                "phase": {
+                  "const": "result"
+                }
+              },
+              "required": [
+                "phase"
+              ]
+            },
+            "then": {
+              "required": [
+                "joined"
+              ]
+            }
           },
           {
-            "if": {"properties": {"phase": {"const": "abandoned"}}, "required": ["phase"]},
-            "then": {"required": ["reason"]}
+            "if": {
+              "properties": {
+                "phase": {
+                  "const": "abandoned"
+                }
+              },
+              "required": [
+                "phase"
+              ]
+            },
+            "then": {
+              "required": [
+                "reason"
+              ]
+            }
           }
         ],
         "additionalProperties": false
@@ -876,15 +949,45 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
-          "window": {"type": "string", "minLength": 1},
-          "ticket": {"type": "integer", "minimum": 1},
-          "operation": {"enum": ["sync", "present"]},
-          "stage": {"type": "string", "minLength": 1},
-          "queued_ns": {"type": "string", "pattern": "^[1-9][0-9]*$"},
-          "entered_ns": {"type": "string", "pattern": "^[1-9][0-9]*$"},
-          "returned_ns": {"type": "string", "pattern": "^[1-9][0-9]*$"}
+          "window": {
+            "type": "string",
+            "minLength": 1
+          },
+          "ticket": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "operation": {
+            "enum": [
+              "sync",
+              "present"
+            ]
+          },
+          "stage": {
+            "type": "string",
+            "minLength": 1
+          },
+          "queued_ns": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "entered_ns": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "returned_ns": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          }
         },
-        "required": ["window", "operation", "stage", "queued_ns", "entered_ns", "returned_ns"],
+        "required": [
+          "window",
+          "operation",
+          "stage",
+          "queued_ns",
+          "entered_ns",
+          "returned_ns"
+        ],
         "additionalProperties": false
       },
       "description": "The performance trace of an existing surface-layout UI admission or native callback. queued_ns is sampled immediately before the existing dispatch or callback registration, entered_ns at the UI closure or callback entry, and returned_ns at that closure or callback's end. All three are canonical decimal nanoseconds from the host event clock (CLOCK_UPTIME_RAW on macOS). ticket is omitted until the sync request has assigned one. The record does not include the caller's resume time after a synchronous dispatch."
@@ -897,15 +1000,45 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
-          "window": {"type": "string", "minLength": 1},
-          "ticket": {"type": "integer", "minimum": 1},
-          "operation": {"enum": ["sync", "present"]},
-          "stage": {"type": "string", "minLength": 1},
-          "queued_ns": {"type": "string", "pattern": "^[1-9][0-9]*$"},
-          "entered_ns": {"type": "string", "pattern": "^[1-9][0-9]*$"},
-          "returned_ns": {"type": "string", "pattern": "^[1-9][0-9]*$"}
+          "window": {
+            "type": "string",
+            "minLength": 1
+          },
+          "ticket": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "operation": {
+            "enum": [
+              "sync",
+              "present"
+            ]
+          },
+          "stage": {
+            "type": "string",
+            "minLength": 1
+          },
+          "queued_ns": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "entered_ns": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "returned_ns": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          }
         },
-        "required": ["window", "operation", "stage", "queued_ns", "entered_ns", "returned_ns"],
+        "required": [
+          "window",
+          "operation",
+          "stage",
+          "queued_ns",
+          "entered_ns",
+          "returned_ns"
+        ],
         "additionalProperties": false
       },
       "description": "The frame trace of an existing surface-layout UI admission or native callback when the performance trace's call/debug path is not eligible. queued_ns is sampled immediately before the existing dispatch or callback registration, entered_ns at the UI closure or callback entry, and returned_ns at that closure or callback's end. All three are canonical decimal nanoseconds from the host event clock (CLOCK_UPTIME_RAW on macOS). ticket is omitted until the sync request has assigned one. The record does not include the caller's resume time after a synchronous dispatch."
@@ -1949,6 +2082,32 @@
       },
       "description": "The page queue was full or reached its byte bound and refused events; the page stores the count and the bytes in front of the events that follow."
     },
+    "workbench.log.dropped": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": "warn",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "number"
+          },
+          "bytes": {
+            "type": "number"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "count",
+          "bytes",
+          "reason"
+        ]
+      },
+      "description": "The workbench queue was full or reached its byte bound and refused events; the workbench stores the count and the bytes in front of the events that follow."
+    },
     "page.log.clock": {
       "layer": "page",
       "class": "lifecycle",
@@ -1970,6 +2129,28 @@
         ]
       },
       "description": "The round trip in microseconds of the clock request that anchors the clock of the page to the clocks of the host and the resolution in microseconds of the clock of the page; a time of the page differs from the clock of the host by at most half of the round trip plus the resolution. The first batch of a page holds them."
+    },
+    "workbench.log.clock": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "trip_us": {
+            "type": "number"
+          },
+          "resolution_us": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "trip_us",
+          "resolution_us"
+        ]
+      },
+      "description": "The round trip in microseconds of the clock request that anchors the clock of the workbench to the clocks of the host and the resolution in microseconds of the clock of the workbench; a time of the workbench differs from the clock of the host by at most half of the round trip plus the resolution. The first batch of a start of the workbench holds them."
     },
     "page.log.gated": {
       "layer": "page",
@@ -1997,6 +2178,32 @@
       },
       "description": "The number of events of the class and the level that the gate of the page refused since the earlier report."
     },
+    "workbench.log.gated": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "class": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          },
+          "count": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "class",
+          "level",
+          "count"
+        ]
+      },
+      "description": "The number of events of the class and the level that the gate of the workbench refused since the earlier report."
+    },
     "page.start": {
       "layer": "page",
       "class": "lifecycle",
@@ -2017,10 +2224,32 @@
           "url"
         ]
       },
-      "description": "A document of the main page started; a reload starts a new document with a new clock."
+      "description": "A view page started; a reload starts a new document with a new clock."
     },
-    "page.fixture.step": {
-      "layer": "page",
+    "workbench.start": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "started_at": {
+            "type": "number"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "started_at",
+          "url"
+        ]
+      },
+      "description": "The workbench started: on the Wails and Tauri hosts a document of the main page, so a reload starts it again with a new clock; started_at is its start time in milliseconds since the epoch, the time origin of the document."
+    },
+    "workbench.fixture.step": {
+      "layer": "workbench",
       "class": "lifecycle",
       "level": "info",
       "fields": {
@@ -2051,10 +2280,10 @@
           "phase"
         ]
       },
-      "description": "A step of the page that diagnostics.fixture awaits, at its start and at its end; the end has the elapsed milliseconds of the step and its error text, or null when the step succeeded."
+      "description": "A step of the workbench that diagnostics.fixture awaits, at its start and at its end; the end has the elapsed milliseconds of the step and its error text, or null when the step succeeded."
     },
-    "page.call": {
-      "layer": "page",
+    "workbench.call": {
+      "layer": "workbench",
       "class": "call",
       "level": [
         "debug",
@@ -2092,7 +2321,7 @@
           "truncated"
         ]
       },
-      "description": "A host call of a page; `error` names a refused call."
+      "description": "A host call of a document of the workbench; `error` names a refused call."
     },
     "host.endpoint.call": {
       "layer": "host",
@@ -2176,8 +2405,8 @@
       },
       "description": "A host call that the main page or a document of a surface sent; `name` is the snake case name of the call, `args` is the JSON array of the arguments in call order cut to 1024 bytes, `error` is the text that the page received or `the call ended without a result`."
     },
-    "page.command": {
-      "layer": "page",
+    "workbench.command": {
+      "layer": "workbench",
       "class": "call",
       "level": [
         "debug",
@@ -2207,10 +2436,10 @@
           "ok"
         ]
       },
-      "description": "A command request that the page answered; `error` names a failed command."
+      "description": "A command request that the workbench answered; `error` names a failed command."
     },
-    "page.background.session": {
-      "layer": "page",
+    "workbench.background.session": {
+      "layer": "workbench",
       "class": "lifecycle",
       "level": "info",
       "fields": {
@@ -2243,8 +2472,8 @@
       },
       "description": "A decision of the background session of a tab: open and reopen send the declared operation, skip sends nothing for a tab whose surface is mounted, stop ends the session of a tab that is shown or whose surface mounted. surface is mounted or absent."
     },
-    "page.plugin.operation": {
-      "layer": "page",
+    "workbench.plugin.operation": {
+      "layer": "workbench",
       "class": "call",
       "level": "info",
       "cids": "required",
@@ -2264,10 +2493,10 @@
           "plugin"
         ]
       },
-      "description": "The page started an install, update, remove, enable or disable of a plugin; its host call carries the same cids."
+      "description": "The workbench started an install, update, remove, enable or disable of a plugin; its host call carries the same cids."
     },
-    "page.window.active": {
-      "layer": "page",
+    "workbench.window.active": {
+      "layer": "workbench",
       "class": "lifecycle",
       "level": "info",
       "fields": {
@@ -2276,10 +2505,10 @@
         "properties": {},
         "required": []
       },
-      "description": "The page received the host event window-active, so it reads the plugin state and the application update again (docs/spec/installation.md)."
+      "description": "The workbench received the host event window-active, so it reads the plugin state and the application update again (docs/spec/installation.md)."
     },
-    "page.plugins.reread": {
-      "layer": "page",
+    "workbench.plugins.reread": {
+      "layer": "workbench",
       "class": "lifecycle",
       "level": "info",
       "fields": {
@@ -2294,10 +2523,10 @@
           "updates"
         ]
       },
-      "description": "The page read the plugin state again after window-active; updates is the number of installed plugins that the registry lists in a newer version (docs/spec/installation.md)."
+      "description": "The workbench read the plugin state again after window-active; updates is the number of installed plugins that the registry lists in a newer version (docs/spec/installation.md)."
     },
-    "page.project.operation": {
-      "layer": "page",
+    "workbench.project.operation": {
+      "layer": "workbench",
       "class": "call",
       "level": "info",
       "cids": "required",
@@ -2317,10 +2546,10 @@
           "project"
         ]
       },
-      "description": "The page started the open or the removal of a project; its host calls carry the same cids."
+      "description": "The workbench started the open or the removal of a project; its host calls carry the same cids."
     },
-    "page.tab.state.stored": {
-      "layer": "page",
+    "workbench.tab.state.stored": {
+      "layer": "workbench",
       "class": "lifecycle",
       "level": "debug",
       "fields": {
@@ -2341,8 +2570,8 @@
       },
       "description": "The tab state store wrote the entry of a tab, its state, mark and label included; bytes is the size of the written store."
     },
-    "page.tab.state.orphan": {
-      "layer": "page",
+    "workbench.tab.state.orphan": {
+      "layer": "workbench",
       "class": "lifecycle",
       "level": "info",
       "fields": {
@@ -2359,8 +2588,8 @@
       },
       "description": "The reconciliation at load removed the entry of a tab that no layout of projects.json holds."
     },
-    "page.tab.session.stored": {
-      "layer": "page",
+    "workbench.tab.session.stored": {
+      "layer": "workbench",
       "class": "lifecycle",
       "level": "debug",
       "fields": {
@@ -2381,8 +2610,8 @@
       },
       "description": "Core wrote the session history of the document regions of a tab to tab-sessions/<tab>.json; bytes is the size of the written file."
     },
-    "page.tab.session.dropped": {
-      "layer": "page",
+    "workbench.tab.session.dropped": {
+      "layer": "workbench",
       "class": "lifecycle",
       "level": "warn",
       "fields": {
@@ -2407,8 +2636,8 @@
       },
       "description": "The session history of a document region exceeded 1 MiB decoded and was not stored; bytes is its decoded size."
     },
-    "page.tab.session.orphan": {
-      "layer": "page",
+    "workbench.tab.session.orphan": {
+      "layer": "workbench",
       "class": "lifecycle",
       "level": "info",
       "fields": {
@@ -2425,8 +2654,8 @@
       },
       "description": "The reconciliation at load removed the session file of a tab that no layout of projects.json holds."
     },
-    "page.surface.mount.failed": {
-      "layer": "page",
+    "workbench.surface.mount.failed": {
+      "layer": "workbench",
       "class": "lifecycle",
       "level": "error",
       "fields": {
@@ -2459,8 +2688,8 @@
       },
       "description": "A new surface mount entry failed. attempt increases in the main-page document for each new entry. phase is mount when failure prevents composition readiness, including a listener-registration failure before readiness, and listener-registration when native listener registration fails after readiness. reason is the original failure text. The workbench records this event before releasing the entry; it does not display the event."
     },
-    "page.tab.keep.changed": {
-      "layer": "page",
+    "workbench.tab.keep.changed": {
+      "layer": "workbench",
       "class": "lifecycle",
       "level": "info",
       "fields": {
@@ -2481,8 +2710,8 @@
       },
       "description": "core.tab.keep set or cleared the mark kept of a tab."
     },
-    "page.tab.unloaded": {
-      "layer": "page",
+    "workbench.tab.unloaded": {
+      "layer": "workbench",
       "class": "lifecycle",
       "level": "info",
       "fields": {
@@ -2507,8 +2736,8 @@
       },
       "description": "The memory saver unloaded a hidden tab after host.place replied; trigger is delay, pressure or command."
     },
-    "page.tab.restored": {
-      "layer": "page",
+    "workbench.tab.restored": {
+      "layer": "workbench",
       "class": "lifecycle",
       "level": "info",
       "fields": {
@@ -2533,8 +2762,8 @@
       },
       "description": "The memory saver restored an unloaded tab that was shown; history is false when no session history was captured."
     },
-    "page.tab.restore.failed": {
-      "layer": "page",
+    "workbench.tab.restore.failed": {
+      "layer": "workbench",
       "class": "lifecycle",
       "level": "error",
       "fields": {
@@ -2557,10 +2786,10 @@
           "reason"
         ]
       },
-      "description": "The restore of a shown unloaded tab failed, or a document region refused its session history at that restore or at the first show of the tab after a restart; the error display of the page shows it."
+      "description": "The restore of a shown unloaded tab failed, or a document region refused its session history at that restore or at the first show of the tab after a restart; the error display of the workbench shows it."
     },
-    "page.tab.unload.failed": {
-      "layer": "page",
+    "workbench.tab.unload.failed": {
+      "layer": "workbench",
       "class": "lifecycle",
       "level": "error",
       "fields": {
@@ -2587,10 +2816,10 @@
           "reason"
         ]
       },
-      "description": "An unload attempt ended because a read of the document regions of the tab failed; the tab stays loaded and the error display of the page shows it."
+      "description": "An unload attempt ended because a read of the document regions of the tab failed; the tab stays loaded and the error display of the workbench shows it."
     },
-    "page.tab.unload.skipped": {
-      "layer": "page",
+    "workbench.tab.unload.skipped": {
+      "layer": "workbench",
       "class": "lifecycle",
       "level": "info",
       "fields": {
@@ -2615,8 +2844,8 @@
       },
       "description": "A pressure report found no candidate, or an unload attempt ended because a protection appeared or the tab was shown; seq is the number of the last pressure report, 0 before the first."
     },
-    "page.view.call": {
-      "layer": "page",
+    "workbench.view.call": {
+      "layer": "workbench",
       "class": "call",
       "level": "debug",
       "fields": {
@@ -2647,10 +2876,10 @@
           "command"
         ]
       },
-      "description": "The workbench received a call request of a view (docs/spec/native-surfaces.md#view-surfaces, view call). generation is the accepted native view source incarnation. A call with this record and no page.view.reply or page.view.call.cancel of the same page, plugin, surface, generation and id has not replied."
+      "description": "The workbench received a call request of a view (docs/spec/native-surfaces.md#view-surfaces, view call). generation is the accepted native view source incarnation. A call with this record and no workbench.view.reply or workbench.view.call.cancel of the same start, plugin, surface, generation and id has not replied."
     },
-    "page.view.reply": {
-      "layer": "page",
+    "workbench.view.reply": {
+      "layer": "workbench",
       "class": "call",
       "level": "debug",
       "fields": {
@@ -2681,10 +2910,10 @@
           "outcome"
         ]
       },
-      "description": "The workbench sent the reply of a view call to the view; generation is the source incarnation and outcome is result or error. The reply carries the same page, plugin, surface, generation and id as its page.view.call."
+      "description": "The workbench sent the reply of a view call to the view; generation is the source incarnation and outcome is result or error. The reply carries the same start, plugin, surface, generation and id as its workbench.view.call."
     },
-    "page.view.call.cancel": {
-      "layer": "page",
+    "workbench.view.call.cancel": {
+      "layer": "workbench",
       "class": "call",
       "level": "debug",
       "fields": {
@@ -2716,8 +2945,8 @@
       },
       "description": "The workbench canceled this view call without sending a reply. generation is the captured source incarnation when the canceled event carried a valid generation; an invalid or absent generation remains absent."
     },
-    "page.view.event.cancel": {
-      "layer": "page",
+    "workbench.view.event.cancel": {
+      "layer": "workbench",
       "class": "call",
       "level": "debug",
       "fields": {
@@ -2742,8 +2971,8 @@
       },
       "description": "Closing the surface canceled delivery of this view event after the host refused it because the view had ended."
     },
-    "page.input.shortcut.failed": {
-      "layer": "page",
+    "workbench.input.shortcut.failed": {
+      "layer": "workbench",
       "class": "input",
       "level": "error",
       "fields": {
@@ -2764,8 +2993,8 @@
       },
       "description": "A command that a view ran through runtime.command failed, and the command is the command of a workbench shortcut row (packages/workbench/shortcuts.json); the view ran it for its own forwarded key."
     },
-    "page.window.operation": {
-      "layer": "page",
+    "workbench.window.operation": {
+      "layer": "workbench",
       "class": "call",
       "level": "info",
       "cids": "required",
@@ -2781,10 +3010,10 @@
           "action"
         ]
       },
-      "description": "The page started a new window, the close of its window, or the report that the window stays open; its host call carries the same cids."
+      "description": "The workbench started a new window, the close of its window, or the report that the window stays open; its host call carries the same cids."
     },
-    "page.overlay.dropped": {
-      "layer": "page",
+    "workbench.overlay.dropped": {
+      "layer": "workbench",
       "class": "input",
       "level": "info",
       "fields": {
@@ -2807,10 +3036,10 @@
           "key"
         ]
       },
-      "description": "The page dropped the reply of a modal that the host relayed: `id` names the modal of the reply, `key` its control, and `shown` the id of the modal that the page shows or the empty text when it shows none or has no receiver for it."
+      "description": "The workbench dropped the reply of a modal that the host relayed: `id` names the modal of the reply, `key` its control, and `shown` the id of the modal that the page shows or the empty text when it shows none or has no receiver for it."
     },
-    "page.settings.change": {
-      "layer": "page",
+    "workbench.settings.change": {
+      "layer": "workbench",
       "class": "call",
       "level": "info",
       "cids": "required",
@@ -2836,8 +3065,8 @@
       },
       "description": "A change of the settings by the command or the surface named in actor; keys lists the changed keys and never their values; the write to the host carries the same cids."
     },
-    "page.update.operation": {
-      "layer": "page",
+    "workbench.update.operation": {
+      "layer": "workbench",
       "class": "call",
       "level": "info",
       "cids": "required",
@@ -2857,7 +3086,7 @@
           "version"
         ]
       },
-      "description": "The page started the application update to the version; its stage and apply calls carry the same cids."
+      "description": "The workbench started the application update to the version; its stage and apply calls carry the same cids."
     },
     "host.input.relay": {
       "layer": "host",
@@ -3259,7 +3488,10 @@
             "type": "boolean"
           },
           "app_active": {
-            "type": ["boolean", "null"]
+            "type": [
+              "boolean",
+              "null"
+            ]
           }
         },
         "required": [
@@ -3810,10 +4042,23 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
-          "frontmost_pid": { "type": ["integer", "null"] },
-          "frontmost_bundle": { "type": ["string", "null"] }
+          "frontmost_pid": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "frontmost_bundle": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
         },
-        "required": ["frontmost_pid", "frontmost_bundle"]
+        "required": [
+          "frontmost_pid",
+          "frontmost_bundle"
+        ]
       },
       "description": "The application resigned active. The frontmost process snapshot names the app that receives key events at the native deactivation callback, when available; it does not establish why focus changed."
     },
@@ -4204,28 +4449,46 @@
             "type": "boolean"
           },
           "stopAfterMilliseconds": {
-            "type": ["number", "null"]
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "stopTargetMachTicks": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "stopRegistrationMachTicks": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "latestSampleCallbackMachTicks": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "latestSampleStatusPresent": {
             "type": "boolean"
           },
           "latestSampleStatus": {
-            "type": ["number", "null"]
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "latestSampleDisplayTimePresent": {
             "type": "boolean"
           },
           "latestSampleDisplayTimeMachTicks": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -4631,31 +4894,31 @@
     "input": [
       "native.input.key_down",
       "host.input.relay",
-      "page.call",
+      "workbench.call",
       "host.sidecar.request"
     ],
     "plugin": [
-      "page.plugin.operation",
-      "page.call",
+      "workbench.plugin.operation",
+      "workbench.call",
       "host.binding.call"
     ],
     "project": [
-      "page.project.operation",
-      "page.call",
+      "workbench.project.operation",
+      "workbench.call",
       "host.binding.call"
     ],
     "window": [
-      "page.window.operation",
+      "workbench.window.operation",
       "host.binding.call"
     ],
     "settings": [
-      "page.settings.change",
-      "page.call",
+      "workbench.settings.change",
+      "workbench.call",
       "host.binding.call"
     ],
     "update": [
-      "page.update.operation",
-      "page.call",
+      "workbench.update.operation",
+      "workbench.call",
       "host.binding.call"
     ]
   }

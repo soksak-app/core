@@ -10,9 +10,9 @@ const literal = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const observation = (surface) =>
   new RegExp(`^info host exposure: exposure reply \\d+ of removed surface ${literal(JSON.stringify(surface))} arrived after its request ended$`);
 
-/** The line that the page writes when it sent the held reply after the surface was removed (diagnostics.surface.hold in docs/spec/endpoint.md). */
+/** The line that the workbench writes when it sent the held reply after the surface was removed (diagnostics.surface.hold in docs/spec/endpoint.md). */
 export const heldRepliesSent = (surface, count) =>
-  `info page page: held exposure replies of surface ${JSON.stringify(surface)} were sent after the surface closed (${count})`;
+  `info workbench workbench: held exposure replies of surface ${JSON.stringify(surface)} were sent after the surface closed (${count})`;
 
 /** The observation of the late reply of surface and the error lines among the log lines. */
 export function lateReplyFindings(lines, surface) {

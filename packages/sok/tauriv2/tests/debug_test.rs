@@ -86,16 +86,16 @@ fn query_refuses_what_breaks_the_contract() {
 
     let broken = temp_dir("cli-broken");
     let logs = broken.join("logs");
-    let open = "{\"ts_us\":1,\"mono_ns\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"host\",\"event\":\"log.open\",\"fields\":{\"schema\":2}}\n";
+    let open = "{\"ts_us\":1,\"mono_ns\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"host\",\"event\":\"log.open\",\"fields\":{\"schema\":3}}\n";
     let line = |extra: &str| format!("{open}{extra}\n");
     let cases: Vec<(&str, String, &str)> = vec![
         ("first line", "{\"ts_us\":1,\"mono_ns\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"host\",\"event\":\"host.x\"}\n".into(), "logs/host-b1.jsonl: the first line is not log.open: \"host.x\""),
-        ("schema", "{\"ts_us\":1,\"mono_ns\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"host\",\"event\":\"log.open\",\"fields\":{\"schema\":1}}\n".into(), "logs/host-b1.jsonl: schema 1 is not 2"),
+        ("schema", "{\"ts_us\":1,\"mono_ns\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"host\",\"event\":\"log.open\",\"fields\":{\"schema\":2}}\n".into(), "logs/host-b1.jsonl: schema 2 is not 3"),
         ("not json", line("not json"), "logs/host-b1.jsonl:2: not JSON: not json"),
         ("not object", line("[1]"), "logs/host-b1.jsonl:2: not an event object: [1]"),
         ("seq", line("{\"ts_us\":1,\"seq\":\"x\",\"level\":\"info\",\"layer\":\"host\",\"event\":\"a\"}"), "logs/host-b1.jsonl:2: seq must be an integer, found \"x\""),
         ("level", line("{\"ts_us\":1,\"seq\":1,\"level\":\"loud\",\"layer\":\"host\",\"event\":\"a\"}"), "logs/host-b1.jsonl:2: level \"loud\" is not one of error, warn, info, debug, trace"),
-        ("layer", line("{\"ts_us\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"x\",\"event\":\"a\"}"), "logs/host-b1.jsonl:2: layer \"x\" is not one of native, host, page, plugin, sidecar, sok"),
+        ("layer", line("{\"ts_us\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"x\",\"event\":\"a\"}"), "logs/host-b1.jsonl:2: layer \"x\" is not one of native, host, workbench, page, plugin, sidecar, sok"),
         ("event", line("{\"ts_us\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"host\",\"event\":3}"), "logs/host-b1.jsonl:2: event must be a string, found 3"),
         ("fields", line("{\"ts_us\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"host\",\"event\":\"a\",\"fields\":[1]}"), "logs/host-b1.jsonl:2: fields must be an object, found [1]"),
         ("cids", line("{\"ts_us\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"host\",\"event\":\"a\",\"cids\":[1]}"), "logs/host-b1.jsonl:2: cids must be an array of strings, found [1]"),
@@ -150,7 +150,7 @@ fn query_refuses_an_invalid_flag_value_as_a_usage_error() {
         ),
         (
             vec!["--layer", "x"],
-            "log query layer \"x\" is not one of native, host, page, plugin, sidecar, sok",
+            "log query layer \"x\" is not one of native, host, workbench, page, plugin, sidecar, sok",
         ),
         (
             vec!["--event", ""],

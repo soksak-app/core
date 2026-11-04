@@ -15,7 +15,7 @@ const settle = () => new Promise((resolve) => setImmediate(resolve));
 test("a batch carries at most 256 queued events, and the rest is sent in the next call, in order", async () => {
   const sizes = [];
   const indexes = [];
-  const batcher = createEventBatcher({ page: PAGE,
+  const batcher = createEventBatcher({ writer: { layer: "page", member: "page", identity: PAGE },
     call: answering(async (request) => { sizes.push(request.events.length); indexes.push(...request.events.map((e) => e.fields.index)); }),
     report: assert.ifError,
   });
@@ -30,7 +30,7 @@ test("each emitAndWait ends with the batch that carries its record, across a spl
   let release;
   const held = new Promise((resolve) => { release = resolve; });
   let calls = 0;
-  const batcher = createEventBatcher({ page: PAGE,
+  const batcher = createEventBatcher({ writer: { layer: "page", member: "page", identity: PAGE },
     call: answering(async () => { calls += 1; if (calls === 2) await held; }),
     report: assert.ifError,
   });

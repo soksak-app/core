@@ -1,4 +1,4 @@
-// Closing the native picker writes the page trace event `page.trace.picker.close` with the reason of the close
+// Closing the native picker writes the page trace event `workbench.trace.picker.close` with the reason of the close
 // (docs/spec/performance-trace.md#producers).
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";

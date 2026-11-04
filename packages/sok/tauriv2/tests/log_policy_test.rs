@@ -198,6 +198,7 @@ fn page_clock_anchor_passes_the_default_lifecycle_policy() {
             mono_ns: 9,
             layer: "page".into(),
             page: Some("page-origin".into()),
+            start: None,
             level: Level::Info,
             event: "page.log.clock".into(),
             cids: Vec::new(),
@@ -214,10 +215,30 @@ fn page_clock_anchor_passes_the_default_lifecycle_policy() {
         log.emit_relayed(RelayedEvent {
             ts_us: 2,
             mono_ns: 10,
-            layer: "page".into(),
-            page: Some("page-origin".into()),
+            layer: "workbench".into(),
+            page: None,
+            start: Some("workbench-start".into()),
             level: Level::Info,
-            event: "page.background.session".into(),
+            event: "workbench.log.clock".into(),
+            cids: Vec::new(),
+            fields: Fields::of(&serde_json::json!({
+                "trip_us": 100,
+                "resolution_us": 1
+            }))
+            .unwrap(),
+        }),
+        Ok(true),
+        "the clock anchor of the workbench is required under the default policy"
+    );
+    assert_eq!(
+        log.emit_relayed(RelayedEvent {
+            ts_us: 3,
+            mono_ns: 11,
+            layer: "workbench".into(),
+            page: None,
+            start: Some("workbench-start".into()),
+            level: Level::Info,
+            event: "workbench.background.session".into(),
             cids: Vec::new(),
             fields: Fields::of(&serde_json::json!({})).unwrap(),
         }),
@@ -233,30 +254,34 @@ fn page_clock_anchor_passes_the_default_lifecycle_policy() {
         .map(|line| serde_json::from_str(line).unwrap())
         .collect();
     assert!(
-        lines.iter().any(|line| line["event"] == "page.log.clock"),
+        lines.iter().any(|line| line["event"] == "page.log.clock")
+            && lines
+                .iter()
+                .any(|line| line["event"] == "workbench.log.clock"),
         "the first batch's anchor metadata was not written: {lines:?}"
     );
     assert!(
         lines
             .iter()
-            .all(|line| line["event"] != "page.background.session"),
+            .all(|line| line["event"] != "workbench.background.session"),
         "ordinary lifecycle info bypassed the default policy: {lines:?}"
     );
 }
 
-// contract: log.page.fixture-step-passes-default-policy
+// contract: log.workbench.fixture-step-passes-default-policy
 #[test]
-fn page_fixture_step_passes_the_default_lifecycle_policy() {
-    let config = Folder::new("page-fixture-step");
+fn workbench_fixture_step_passes_the_default_lifecycle_policy() {
+    let config = Folder::new("workbench-fixture-step");
     let log = soksak_sok::start_tool_event_log(config.path()).unwrap();
     assert_eq!(
         log.emit_relayed(RelayedEvent {
             ts_us: 1,
             mono_ns: 9,
-            layer: "page".into(),
-            page: Some("page-origin".into()),
+            layer: "workbench".into(),
+            page: None,
+            start: Some("workbench-start".into()),
             level: Level::Info,
-            event: "page.fixture.step".into(),
+            event: "workbench.fixture.step".into(),
             cids: Vec::new(),
             fields: Fields::of(&serde_json::json!({
                 "step": "settings.set",
@@ -278,8 +303,8 @@ fn page_fixture_step_passes_the_default_lifecycle_policy() {
     assert!(
         lines
             .iter()
-            .any(|line| line["event"] == "page.fixture.step"),
-        "the default policy stored no page.fixture.step: {lines:?}"
+            .any(|line| line["event"] == "workbench.fixture.step"),
+        "the default policy stored no workbench.fixture.step: {lines:?}"
     );
 }
 

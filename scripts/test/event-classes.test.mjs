@@ -18,10 +18,10 @@ test('the page table gives every declared event and family member its catalog cl
     const probe = name.replace(/<[a-z_]+>$/, 'x1_y.z');
     assert.equal(classOf(probe), declared.class, name);
   }
-  assert.equal(classOf('page.call'), 'call');
-  assert.equal(classOf('page.console.warn'), 'lifecycle');
-  assert.equal(classOf('page.console.'), undefined);
-  assert.equal(classOf('page.console.WARN'), undefined);
+  assert.equal(classOf('workbench.call'), 'call');
+  assert.equal(classOf('workbench.console.warn'), 'lifecycle');
+  assert.equal(classOf('workbench.console.'), undefined);
+  assert.equal(classOf('workbench.console.WARN'), undefined);
   assert.equal(classOf('plugin.probe.opened'), undefined);
 });
 

@@ -67,8 +67,8 @@ export async function followPluginChanges(apply) {
 export function followActivation() {
   if (host) {
     host.on("window-active", () => {
-      emitEvent("info", "page.window.active", {});
-      pluginOperations.refresh().then(() => emitEvent("info", "page.plugins.reread", { updates: pluginOperations.status().updates.length }));
+      emitEvent("info", "workbench.window.active", {});
+      pluginOperations.refresh().then(() => emitEvent("info", "workbench.plugins.reread", { updates: pluginOperations.status().updates.length }));
       appUpdate.refresh();
     });
   }

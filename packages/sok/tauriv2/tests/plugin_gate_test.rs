@@ -24,6 +24,7 @@ fn relay(event: &str, level: Level) -> RelayedEvent {
         mono_ns: 1,
         layer: "plugin".into(),
         page: Some("page-1".into()),
+        start: None,
         level,
         event: event.into(),
         cids: vec![],

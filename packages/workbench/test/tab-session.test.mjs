@@ -69,7 +69,7 @@ test("a session stored before a restart is passed to the first attach after it a
   first.regions.attached("tab-a", "side");
   await first.sessions.capture("tab-a");
   assert.deepEqual(files.sessions.get("tab-a"), { format: 1, regions: { page: { session: "AAAA" } } });
-  assert.deepEqual(emitted, [{ level: "debug", event: "page.tab.session.stored", fields: { tab: "tab-a", bytes: 50 } }]);
+  assert.deepEqual(emitted, [{ level: "debug", event: "workbench.tab.session.stored", fields: { tab: "tab-a", bytes: 50 } }]);
   // The restart: a new page over the same files.
   const second = start(files);
   assert.deepEqual(await second.regions.attachRequest("tab-a", "page"), { document: "page", interactionState: "AAAA" });
@@ -147,7 +147,7 @@ test("a region session over 1 MiB decoded is dropped with a warn event and the o
   regions.attached("tab-a", "side");
   await sessions.capture("tab-a");
   assert.deepEqual(files.sessions.get("tab-a"), { format: 1, regions: { side: { session: "AAAA" } } });
-  assert.deepEqual(emitted[0], { level: "warn", event: "page.tab.session.dropped",
+  assert.deepEqual(emitted[0], { level: "warn", event: "workbench.tab.session.dropped",
     fields: { tab: "tab-a", region: "page", bytes: SESSION_LIMIT + 2 } });
   // A tab whose every region is over the limit keeps no file.
   answers.documentInteractionState = async () => large;
@@ -174,7 +174,7 @@ test("closing a tab removes its file after the layout write, and the reconcile r
   emitted.length = 0;
   await sessions.reconcile((tab) => tab === "tab-b");
   assert.deepEqual([...files.sessions.keys()], ["tab-b"]);
-  assert.deepEqual(emitted, [{ level: "info", event: "page.tab.session.orphan", fields: { tab: "tab-c" } }]);
+  assert.deepEqual(emitted, [{ level: "info", event: "workbench.tab.session.orphan", fields: { tab: "tab-c" } }]);
 });
 
 test("a failed coalesced write is shown through the error display", async (t) => {

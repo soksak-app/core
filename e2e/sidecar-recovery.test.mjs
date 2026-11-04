@@ -50,7 +50,7 @@ for (const app of Object.values(APPS)) {
     session.expectError(new RegExp(`^error host image present: surface=${surface} name=view .* reason=notFound`));
     session.expectError(/^error native image region: notFound /);
     session.expectError(new RegExp(`^error plugin plugin\\.terminal\\.error: .*"native image: notFound".*"surface":"${surface}"`));
-    session.expectError(new RegExp(`^error page surface status terminal ${surface}: .*native image: notFound$`));
+    session.expectError(new RegExp(`^error workbench surface status terminal ${surface}: .*native image: notFound$`));
     session.expectError(/^error host sidecar @soksak\/sidecar-vt-alacritty: write: Broken pipe \(os error 32\)$/);
     process.kill(killed.pid, "SIGKILL");
 

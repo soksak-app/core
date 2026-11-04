@@ -1,4 +1,4 @@
-// The chains of the operations of the page in the event log (docs/spec/logging.md#operation-chains): the declared chains of the
+// The chains of the operations of the workbench in the event log (docs/spec/logging.md#operation-chains): the declared chains of the
 // catalog, and the search of one chain in the log of a running application through `log.query`.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -49,8 +49,8 @@ export async function chainOf(s, chains, name, since, fields) {
   const [first, ...rest] = chains[name];
   let last = `no ${first} with ${JSON.stringify(fields)} was read`;
   const find = async () => {
-    // A project that opens in its own window makes the new page start its own open of the project, so more than one page can
-    // start the operation; the first in the order of the log is the operation of the page that the check drove.
+    // A project that opens in its own window makes the new workbench start its own open of the project, so more than one workbench can
+    // start the operation; the first in the order of the log is the operation of the workbench that the check drove.
     const starts = (await allRows(s, { channel: "all", event: first, since }))
       .filter((row) => Object.entries(fields).every(([key, value]) => row.event.fields?.[key] === value));
     if (starts.length === 0) return null;

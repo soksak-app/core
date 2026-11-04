@@ -295,6 +295,8 @@ testWithTimeout("indexes an accepted screen frame from its exact TRACE body and 
       fields: { class: "frame", count: 2, level: "debug" } },
     { seq: 16, level: "info", class: "lifecycle", layer: "native", event: "native.log.gated",
       fields: { class: "frame", count: 1, level: "debug" } },
+    { seq: 17, level: "info", class: "lifecycle", layer: "workbench", event: "workbench.log.gated",
+      fields: { class: "call", count: 3, level: "debug" } },
   ];
   const states = indexAcceptedFrameTrace(events, { row: 0, col: 0, text: "$" }, "tab-a", "session-a");
   assert.equal(states.get("1/2/3")?.semantic.document, "ㅏ");
@@ -323,6 +325,14 @@ testWithTimeout("indexes an accepted screen frame from its exact TRACE body and 
     ...events, { seq: 15, level: "info", class: "lifecycle", layer: "page", event: "page.log.gated",
       fields: { class: "frame", count: 1, level: "debug" } },
   ], { row: 0, col: 0, text: "$" }, "tab-a", "session-a"), /reports log loss/);
+  assert.throws(() => indexAcceptedFrameTrace([
+    ...events, { seq: 18, level: "info", class: "lifecycle", layer: "workbench", event: "workbench.log.gated",
+      fields: { class: "frame", count: 1, level: "debug" } },
+  ], { row: 0, col: 0, text: "$" }, "tab-a", "session-a"), /reports log loss/);
+  assert.throws(() => indexAcceptedFrameTrace([
+    ...events, { seq: 18, level: "info", class: "lifecycle", layer: "page", event: "workbench.log.gated",
+      fields: { class: "call", count: 1, level: "debug" } },
+  ], { row: 0, col: 0, text: "$" }, "tab-a", "session-a"), /mismatched producer layer/);
   assert.throws(() => indexAcceptedFrameTrace([
     ...events, { seq: 17, level: "info", class: "lifecycle", layer: "host", event: "log.gated",
       fields: { class: "frame", count: 1, level: "debug" } },

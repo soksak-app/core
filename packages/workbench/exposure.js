@@ -212,18 +212,18 @@ export function createRegistry({ call = null, report = null } = {}) {
     return Promise.race([running, expired]).finally(() => clearTimeout(timer));
   }
 
-  // Every command request is the event `page.command` (docs/spec/logging.md#automatic-entrances), whether or not the
+  // Every command request is the event `workbench.command` (docs/spec/logging.md#automatic-entrances), whether or not the
   // trace is on.
   async function recorded(name, run) {
     const started = performance.now();
     const micros = () => Math.round((performance.now() - started) * 1000);
     try {
       const result = await run();
-      emitEvent("debug", "page.command", { name, micros: micros(), ok: true });
+      emitEvent("debug", "workbench.command", { name, micros: micros(), ok: true });
       return result;
     } catch (error) {
       // The code is the one that the endpoint answers for the failure (replyPayload of the plugin API).
-      emitEvent("warn", "page.command", { name, micros: micros(), ok: false,
+      emitEvent("warn", "workbench.command", { name, micros: micros(), ok: false,
         // default: a thrown value that is not an Error is recorded as its own text.
         error: `${error instanceof ExposureError ? error.code : EXPOSURE_ERRORS.failed}: ${errorText(error)}` });
       throw error;

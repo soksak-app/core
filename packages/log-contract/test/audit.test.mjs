@@ -26,12 +26,14 @@ const catalog = {
 };
 
 // The class of a line is the class that the catalog declares for its event; a test passes `class: undefined` to omit it.
-// A line of the layer page or plugin names its page unless the test gives page itself, also to leave it out.
+// A line of the layer page or plugin names its page and a line of the layer workbench its start unless the test gives the
+// member itself, also to leave it out.
 const line = (seq, event, fields = {}, extra = {}) => JSON.stringify({
   ts_us: 1000 + seq, mono_ns: 5_000_000 + seq, seq, level: "info", class: catalog.events[event]?.class, layer: "host", event, fields,
-  ...(["page", "plugin"].includes(extra.layer) && !("page" in extra) ? { page: "1791948729050" } : {}), ...extra,
+  ...(["page", "plugin"].includes(extra.layer) && !("page" in extra) ? { page: "1791948729050" } : {}),
+  ...(extra.layer === "workbench" && !("start" in extra) ? { start: "1791948729050" } : {}), ...extra,
 });
-const open = line(1, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" });
+const open = line(1, "log.open", { schema: 3, pid: 7, role: "host", boot: "b1" });
 // The policy that stores every level, as the debug switch sets it; without it the default policy, which stores only
 // error, is in force.
 const debugOn = (seq) => line(seq, "log.policy", { source: "file", classes: { lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" } });
@@ -76,7 +78,7 @@ test("an undeclared event is accepted only when the line says undeclared and has
 
 test("the main file holds error, warn and info, and the debug file holds debug and trace", () => {
   const debugLine = (seq, level) => line(seq, "native.input.key_down", { keyCode: 1 }, { level });
-  const debugOpen = line(1, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" });
+  const debugOpen = line(1, "log.open", { schema: 3, pid: 7, role: "host", boot: "b1" });
   assert.deepEqual(auditLog("host-b1.jsonl", [open, debugLine(2, "warn"), debugLine(3, "error")].join("\n"), catalog), []);
   assert.deepEqual(auditLog("host-b1.debug.jsonl.2", [debugOpen, debugLine(2, "debug"), debugLine(3, "trace")].join("\n"), catalog), []);
   assert.deepEqual(auditLog("host-b1.jsonl.1", [open, debugLine(2, "debug"), debugLine(3, "trace")].join("\n"), catalog), [
@@ -233,16 +235,16 @@ test("the policy that a change of diagnostics.log brings is in force from the ch
     ...catalog,
     events: {
       ...catalog.events,
-      "page.settings.change": { layer: "page", class: "input", level: "info", fields: objectFields({ actor: { type: "string" }, keys: { type: "string" } }) },
+      "workbench.settings.change": { layer: "workbench", class: "input", level: "info", fields: objectFields({ actor: { type: "string" }, keys: { type: "string" } }) },
       "page.terminal.send": { layer: "page", class: "input", level: "debug", fields: objectFields() },
       "log.policy": { layer: "host", class: "lifecycle", level: "info", fields: objectFields({ source: { type: "string" }, classes: { type: "object" } }) },
     },
-    chains: { settings: ["page.settings.change", "page.terminal.send"] },
+    chains: { settings: ["workbench.settings.change", "page.terminal.send"] },
   };
   const info = { lifecycle: "info", input: "info", call: "info", io: "info", frame: "info" };
   const text = [
     open,
-    line(2, "page.settings.change", { actor: "core.settings.set", keys: "mode,diagnostics.log" }, { cids: ["p1.1"], layer: "page", class: "input" }),
+    line(2, "workbench.settings.change", { actor: "core.settings.set", keys: "mode,diagnostics.log" }, { cids: ["p1.1"], layer: "workbench", class: "input" }),
     line(3, "log.policy", { source: "file", classes: info }, { class: "lifecycle", cids: ["p1.1"] }),
   ].join("\n");
   assert.deepEqual(auditLogs([{ file: "host-b1.jsonl", text }], gated), []);
@@ -253,22 +255,22 @@ test("a policy is in force from the change of a rotated file whose cids it carri
     ...catalog,
     events: {
       ...catalog.events,
-      "page.settings.change": { layer: "page", class: "call", level: "info", fields: objectFields({ actor: { type: "string" }, keys: { type: "string" } }) },
-      "page.call": { layer: "page", class: "call", level: ["debug", "warn"], fields: objectFields() },
+      "workbench.settings.change": { layer: "workbench", class: "call", level: "info", fields: objectFields({ actor: { type: "string" }, keys: { type: "string" } }) },
+      "workbench.call": { layer: "workbench", class: "call", level: ["debug", "warn"], fields: objectFields() },
       "host.binding.call": { layer: "host", class: "call", level: ["debug", "warn"], fields: objectFields() },
       "log.policy": catalog.events["log.policy"],
     },
-    chains: { settings: ["page.settings.change", "page.call", "host.binding.call"] },
+    chains: { settings: ["workbench.settings.change", "workbench.call", "host.binding.call"] },
   };
   const debug = { lifecycle: "info", input: "error", call: "debug", io: "error", frame: "error" };
   const error = { lifecycle: "info", input: "error", call: "error", io: "error", frame: "error" };
   const firstGeneration = lines(
-    line(1, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" }, { ts_us: 1001 }),
+    line(1, "log.open", { schema: 3, pid: 7, role: "host", boot: "b1" }, { ts_us: 1001 }),
     line(2, "log.policy", { source: "file", classes: debug }, { ts_us: 2000 }),
-    line(3, "page.settings.change", { actor: "core.settings.set", keys: "diagnostics.log" }, { layer: "page", class: "call", cids: ["p1.1"], ts_us: 5000 }),
+    line(3, "workbench.settings.change", { actor: "core.settings.set", keys: "diagnostics.log" }, { layer: "workbench", class: "call", cids: ["p1.1"], ts_us: 5000 }),
   );
   const currentGeneration = lines(
-    line(4, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" }, { ts_us: 3000 }),
+    line(4, "log.open", { schema: 3, pid: 7, role: "host", boot: "b1" }, { ts_us: 3000 }),
     line(5, "log.policy", { source: "file", classes: error }, { ts_us: 4000, cids: ["p1.1"] }),
     line(6, "log.policy", { source: "file", classes: debug }, { ts_us: 6000 }),
   );
@@ -278,34 +280,34 @@ test("a policy is in force from the change of a rotated file whose cids it carri
   ], callChain), []);
 });
 
-test("same seq in another process cannot hide a missing page.call", () => {
+test("same seq in another process cannot hide a missing workbench.call", () => {
   const callChain = {
     ...catalog,
     events: {
       ...catalog.events,
-      "page.settings.change": { layer: "page", class: "call", level: "info", fields: objectFields({ actor: { type: "string" }, keys: { type: "string" } }) },
-      "page.call": { layer: "page", class: "call", level: "debug", fields: objectFields() },
+      "workbench.settings.change": { layer: "workbench", class: "call", level: "info", fields: objectFields({ actor: { type: "string" }, keys: { type: "string" } }) },
+      "workbench.call": { layer: "workbench", class: "call", level: "debug", fields: objectFields() },
       "host.binding.call": { layer: "host", class: "call", level: "debug", fields: objectFields() },
       "log.policy": catalog.events["log.policy"],
     },
-    chains: { settings: ["page.settings.change", "page.call", "host.binding.call"] },
+    chains: { settings: ["workbench.settings.change", "workbench.call", "host.binding.call"] },
   };
   const debug = { lifecycle: "info", input: "error", call: "debug", io: "error", frame: "error" };
   const error = { lifecycle: "info", input: "error", call: "error", io: "error", frame: "error" };
   const host = lines(
-    line(1, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" }),
+    line(1, "log.open", { schema: 3, pid: 7, role: "host", boot: "b1" }),
     line(2, "log.policy", { source: "file", classes: debug }),
-    line(3, "page.settings.change", { actor: "core.settings.set", keys: "diagnostics.log" }, { layer: "page", class: "call", cids: ["p1.1"] }),
+    line(3, "workbench.settings.change", { actor: "core.settings.set", keys: "diagnostics.log" }, { layer: "workbench", class: "call", cids: ["p1.1"] }),
   );
   const other = lines(
-    line(1, "log.open", { schema: 2, pid: 8, role: "host", boot: "b2" }, { ts_us: 1001 }),
+    line(1, "log.open", { schema: 3, pid: 8, role: "host", boot: "b2" }, { ts_us: 1001 }),
     line(2, "native.input.key_down", { keyCode: 1 }),
     line(3, "log.policy", { source: "file", classes: error }, { ts_us: 1003 }),
   );
   assert.deepEqual(auditLogs([
     { file: "host-7-b1.jsonl", text: host },
     { file: "host-8-b2.jsonl", text: other },
-  ], callChain).map(({ line, message }) => [line, message]), [[3, "chain settings of p1.1 lacks page.call"]]);
+  ], callChain).map(({ line, message }) => [line, message]), [[3, "chain settings of p1.1 lacks workbench.call"]]);
 });
 
 test("a missing call remains a finding when the policy that the change brings stores it", () => {
@@ -313,24 +315,24 @@ test("a missing call remains a finding when the policy that the change brings st
     ...catalog,
     events: {
       ...catalog.events,
-      "page.settings.change": { layer: "page", class: "call", level: "info", fields: objectFields({ actor: { type: "string" }, keys: { type: "string" } }) },
-      "page.call": { layer: "page", class: "call", level: "debug", fields: objectFields() },
+      "workbench.settings.change": { layer: "workbench", class: "call", level: "info", fields: objectFields({ actor: { type: "string" }, keys: { type: "string" } }) },
+      "workbench.call": { layer: "workbench", class: "call", level: "debug", fields: objectFields() },
       "host.binding.call": { layer: "host", class: "call", level: "debug", fields: objectFields() },
       "log.policy": catalog.events["log.policy"],
     },
-    chains: { settings: ["page.settings.change", "page.call", "host.binding.call"] },
+    chains: { settings: ["workbench.settings.change", "workbench.call", "host.binding.call"] },
   };
   const debug = { lifecycle: "info", input: "error", call: "debug", io: "error", frame: "error" };
   const error = { lifecycle: "info", input: "error", call: "error", io: "error", frame: "error" };
   const text = lines(
-    line(1, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" }, { ts_us: 1001 }),
+    line(1, "log.open", { schema: 3, pid: 7, role: "host", boot: "b1" }, { ts_us: 1001 }),
     line(2, "log.policy", { source: "file", classes: error }, { ts_us: 2000 }),
-    line(3, "page.settings.change", { actor: "core.settings.set", keys: "diagnostics.log" }, { layer: "page", class: "call", cids: ["p1.1"], ts_us: 5000 }),
+    line(3, "workbench.settings.change", { actor: "core.settings.set", keys: "diagnostics.log" }, { layer: "workbench", class: "call", cids: ["p1.1"], ts_us: 5000 }),
     line(4, "log.policy", { source: "file", classes: debug }, { ts_us: 4000, cids: ["p1.1"] }),
     line(5, "log.policy", { source: "file", classes: error }, { ts_us: 6000 }),
   );
   assert.deepEqual(auditLogs([{ file: "host-7-b1.jsonl", text }], callChain).map(({ line, message }) => [line, message]), [
-    [3, "chain settings of p1.1 lacks page.call"],
+    [3, "chain settings of p1.1 lacks workbench.call"],
   ]);
 });
 
@@ -339,23 +341,23 @@ test("a policy is placed at the change whose cids it carries, so changes without
     ...catalog,
     events: {
       ...catalog.events,
-      "page.settings.change": { layer: "page", class: "call", level: "info", fields: objectFields({ actor: { type: "string" }, keys: { type: "string" } }) },
-      "page.call": { layer: "page", class: "call", level: ["debug", "warn"], fields: objectFields() },
+      "workbench.settings.change": { layer: "workbench", class: "call", level: "info", fields: objectFields({ actor: { type: "string" }, keys: { type: "string" } }) },
+      "workbench.call": { layer: "workbench", class: "call", level: ["debug", "warn"], fields: objectFields() },
       "host.binding.call": { layer: "host", class: "call", level: ["debug", "warn"], fields: objectFields() },
       "log.policy": catalog.events["log.policy"],
     },
-    chains: { settings: ["page.settings.change", "page.call", "host.binding.call"] },
+    chains: { settings: ["workbench.settings.change", "workbench.call", "host.binding.call"] },
   };
   const debug = { lifecycle: "debug", input: "error", call: "debug", io: "error", frame: "error" };
   const error = { lifecycle: "error", input: "error", call: "error", io: "error", frame: "error" };
   const change = (seq, actor, cid, ts_us) =>
-    line(seq, "page.settings.change", { actor, keys: "diagnostics.log,terminal.shell" }, { layer: "page", class: "call", cids: [cid], ts_us });
+    line(seq, "workbench.settings.change", { actor, keys: "diagnostics.log,terminal.shell" }, { layer: "workbench", class: "call", cids: [cid], ts_us });
   const call = (seq, cid, ts_us) => [
-    line(seq, "page.call", {}, { layer: "page", class: "call", level: "warn", cids: [cid], ts_us }),
+    line(seq, "workbench.call", {}, { layer: "workbench", class: "call", level: "warn", cids: [cid], ts_us }),
     line(seq + 1, "host.binding.call", {}, { class: "call", level: "warn", cids: [cid], ts_us: ts_us + 1 }),
   ];
   const text = lines(
-    line(1, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" }, { ts_us: 1001 }),
+    line(1, "log.open", { schema: 3, pid: 7, role: "host", boot: "b1" }, { ts_us: 1001 }),
     line(2, "log.policy", { source: "file", classes: debug }, { ts_us: 2000 }),
     // Two reloads of the fixture list diagnostics.log with its stored value, so no policy follows them.
     change(3, "diagnostics.fixture", "p1.3", 3000),
@@ -367,7 +369,7 @@ test("a policy is placed at the change whose cids it carries, so changes without
     line(10, "log.policy", { source: "file", classes: error }, { ts_us: 5016, cids: ["p3.2"] }),
     // The change to debug runs under error, which does not store its record; its policy is stored.
     line(11, "log.policy", { source: "file", classes: debug }, { ts_us: 6000, cids: ["p4.2"] }),
-    // The change to error stores its record under debug; the policy error that it brings stores no page.call of it.
+    // The change to error stores its record under debug; the policy error that it brings stores no workbench.call of it.
     change(12, "core.settings.set", "p5.2", 7000),
     line(13, "log.policy", { source: "file", classes: error }, { ts_us: 7016, cids: ["p5.2"] }),
     // A later change to debug runs under error, which does not store its record.
@@ -376,7 +378,7 @@ test("a policy is placed at the change whose cids it carries, so changes without
     change(15, "diagnostics.fixture", "p7.3", 9500),
     ...call(16, "p7.3", 9510),
     // A reload of the fixture that returns diagnostics.log to error stores its record under debug and brings the policy
-    // error, which stores no page.call of it.
+    // error, which stores no workbench.call of it.
     change(18, "diagnostics.fixture", "p8.4", 10000),
     line(19, "log.policy", { source: "file", classes: error }, { ts_us: 10006, cids: ["p8.4"] }),
     // The change to debug of the next check runs under error, which does not store its record.
@@ -398,23 +400,55 @@ test("an event of the layer page or plugin names the page that wrote it, and an 
     line(5, "native.input.key_down", { keyCode: 2 }, { layer: "native", page: "1791948729050" }),
   ].join("\n");
   assert.deepEqual(auditLog("host-b1.jsonl", text, catalog).map(({ line, message }) => [line, message]), [
-    [3, "an event of the layer page names the page that wrote it in page"],
-    [4, "an event of the layer page names the page that wrote it in page"],
-    [5, "page names the writing page only on an event of the layer page or plugin, not native"],
+    [3, "an event of the layer page names the document that wrote it in page"],
+    [4, "an event of the layer page names the document that wrote it in page"],
+    [5, "page names the writing document only on an event of the layer page or plugin, not native"],
   ]);
+});
+
+test("an event of the layer workbench names the start of the workbench in start, and a plugin event names its page or its workbench start", () => {
+  const record = { where: "w", text: "t" };
+  const text = [
+    line(1, "log.open", { schema: 3, pid: 7, role: "host", boot: "b1" }),
+    line(2, "workbench.record.info", record, { class: "lifecycle", layer: "workbench", start: "S1" }),
+    line(3, "workbench.record.info", record, { class: "lifecycle", layer: "workbench", start: undefined }),
+    line(4, "workbench.record.info", record, { class: "lifecycle", layer: "workbench", start: "S1", page: "P1" }),
+    line(5, "plugin.probe.saved", {}, { class: "lifecycle", layer: "plugin", page: undefined, start: "S1" }),
+    line(6, "plugin.probe.saved", {}, { class: "lifecycle", layer: "plugin", page: "P1" }),
+    line(7, "plugin.probe.saved", {}, { class: "lifecycle", layer: "plugin", page: "P1", start: "S1" }),
+    line(8, "plugin.probe.saved", {}, { class: "lifecycle", layer: "plugin", page: undefined }),
+    line(9, "page.terminal.send", {}, { layer: "page", start: "S1" }),
+    line(10, "native.input.key_down", { keyCode: 2 }, { layer: "native", start: "S1" }),
+  ].join("\n");
+  const workbench = { ...catalog, events: { ...catalog.events,
+    "workbench.record.<level>": { layer: "workbench", class: "lifecycle", level: ["error", "info"], fields: objectFields({ where: { type: "string" }, text: { type: "string" } }) },
+    "plugin.probe.saved": { layer: "plugin", class: "lifecycle", level: "info", fields: objectFields() } } };
+  assert.deepEqual(auditLog("host-b1.jsonl", text, workbench).map(({ line, message }) => [line, message]), [
+    [3, "an event of the layer workbench names the document that wrote it in start"],
+    [4, "page names the writing document only on an event of the layer page or plugin, not workbench"],
+    [7, "an event of the layer plugin names the document that wrote it in one of page and start, found both"],
+    [8, "an event of the layer plugin names the document that wrote it in page or start"],
+    [9, "start names the writing document only on an event of the layer workbench or plugin, not page"],
+    [10, "start names the writing document only on an event of the layer workbench or plugin, not native"],
+  ]);
+});
+
+test("a file of the event schema 2 is rejected with the file name and the number", () => {
+  const earlier = line(1, "log.open", { schema: 2, pid: 1, role: "host", boot: "b" });
+  assert.throws(() => parseLog("e.jsonl", earlier), /e\.jsonl: schema 2 is not 3/);
 });
 
 test("a file whose first line is not log.open, or whose schema is unknown, is rejected with the file name and the value", () => {
   assert.throws(() => parseLog("a.jsonl", line(1, "native.input.key_down", { keyCode: 1 })), /a\.jsonl: the first line is not log\.open/);
   const other = line(1, "log.open", { schema: 9, pid: 1, role: "host", boot: "b" });
-  assert.throws(() => parseLog("b.jsonl", other), /b\.jsonl: schema 9 is not 2/);
+  assert.throws(() => parseLog("b.jsonl", other), /b\.jsonl: schema 9 is not 3/);
   assert.throws(() => parseLog("c.jsonl", `${open}\n{not json`), /c\.jsonl:2: not JSON/);
   // A file of the earlier schema is rejected: it has no mono_ns and the reader keeps no code for it.
   const earlier = line(1, "log.open", { schema: 1, pid: 1, role: "host", boot: "b" });
-  assert.throws(() => parseLog("d.jsonl", earlier), /d\.jsonl: schema 1 is not 2/);
+  assert.throws(() => parseLog("d.jsonl", earlier), /d\.jsonl: schema 1 is not 3/);
 });
 
-test("a catalog from the earlier catalog grammar is rejected while raw log schema remains 2", () => {
+test("a catalog from the earlier catalog grammar is rejected and a catalog of the grammar 3 is read", () => {
   assert.throws(() => auditLog("host-b1.jsonl", open, { ...catalog, schema: 2 }), /event catalog schema is 2; expected 3/);
   assert.deepEqual(auditLog("host-b1.jsonl", open, catalog), []);
 });
@@ -481,7 +515,7 @@ test("sampler memory records match one strict role-shaped event schema", async (
     class: "lifecycle",
     layer: "host",
     event: "log.open",
-    fields: { schema: 2, pid: 7, role: "host", boot: "b1" },
+    fields: { schema: 3, pid: 7, role: "host", boot: "b1" },
   });
   assert.deepEqual(auditLog("host-b1.debug.jsonl", [header, ...rows].join("\n"), eventCatalog), []);
 
@@ -508,25 +542,25 @@ test("sampler memory records match one strict role-shaped event schema", async (
 test("a family name with a placeholder declares every event of the family, and a layer outside the catalog is left to its own catalog", () => {
   const family = {
     schema: 3,
-    layers: ["host", "page"],
+    layers: ["host", "workbench"],
     events: {
       "log.open": catalog.events["log.open"],
-      "page.record.<level>": { layer: "page", class: "lifecycle", level: "info", fields: objectFields({ where: { type: "string" }, text: { type: "string" } }) },
-      "page.trace.<event>": { layer: "page", class: "call", level: "debug", fields: objectFields() },
+      "workbench.record.<level>": { layer: "workbench", class: "lifecycle", level: "info", fields: objectFields({ where: { type: "string" }, text: { type: "string" } }) },
+      "workbench.trace.<event>": { layer: "workbench", class: "call", level: "debug", fields: objectFields() },
     },
   };
   const text = [
     open,
-    line(2, "page.record.error", { where: "w", text: "t" }, { layer: "page", class: "lifecycle" }),
-    line(3, "page.trace.command", { name: "x" }, { layer: "page", class: "call" }),
-    line(4, "page.trace.sidecar.send", {}, { layer: "page", class: "call" }),
+    line(2, "workbench.record.error", { where: "w", text: "t" }, { layer: "workbench", class: "lifecycle" }),
+    line(3, "workbench.trace.command", { name: "x" }, { layer: "workbench", class: "call" }),
+    line(4, "workbench.trace.sidecar.send", {}, { layer: "workbench", class: "call" }),
     line(5, "plugin.terminal.send", { n: 1 }, { layer: "plugin" }),
-    line(6, "page.record.error", { where: "w" }, { layer: "page", class: "lifecycle" }),
-    line(7, "page.unknown.thing", {}, { layer: "page" }),
+    line(6, "workbench.record.error", { where: "w" }, { layer: "workbench", class: "lifecycle" }),
+    line(7, "workbench.unknown.thing", {}, { layer: "workbench" }),
   ].join("\n");
   assert.deepEqual(auditLog("host-b1.jsonl", text, family), [
-    { line: 6, message: "fields do not match the schema of page.record.error: data must have required property 'text'" },
-    { line: 7, message: "event page.unknown.thing is not declared" },
+    { line: 6, message: "fields do not match the schema of workbench.record.error: data must have required property 'text'" },
+    { line: 7, message: "event workbench.unknown.thing is not declared" },
   ]);
 });
 
@@ -554,7 +588,7 @@ test("an optional field is checked only when present, and a type with | accepts 
 
 const lines = (...items) => `${items.join("\n")}\n`;
 const generation = (first, last, boot = "b1") => lines(
-  line(first, "log.open", { schema: 2, pid: 7, role: "host", boot }),
+  line(first, "log.open", { schema: 3, pid: 7, role: "host", boot }),
   ...Array.from({ length: last - first }, (_, index) => line(first + 1 + index, "native.input.key_down", { keyCode: 1 })),
 );
 
@@ -567,9 +601,9 @@ test("seq continues across the rotated generations of one process, and a missing
 
 test("seq continues across the main file and the debug file of one process", () => {
   const main = lines(open, line(2, "native.input.key_down", { keyCode: 1 }), line(4, "native.input.key_down", { keyCode: 3 }));
-  const debug = lines(line(3, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" }), line(5, "native.input.key_down", { keyCode: 4 }, { level: "debug" }));
+  const debug = lines(line(3, "log.open", { schema: 3, pid: 7, role: "host", boot: "b1" }), line(5, "native.input.key_down", { keyCode: 4 }, { level: "debug" }));
   assert.deepEqual(auditLogs([{ file: "host-1-2.jsonl", text: main }, { file: "host-1-2.debug.jsonl", text: debug }], catalog), []);
-  const short = lines(line(3, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" }), line(6, "native.input.key_down", { keyCode: 4 }, { level: "debug" }));
+  const short = lines(line(3, "log.open", { schema: 3, pid: 7, role: "host", boot: "b1" }), line(6, "native.input.key_down", { keyCode: 4 }, { level: "debug" }));
   assert.deepEqual(auditLogs([{ file: "host-1-2.jsonl", text: main }, { file: "host-1-2.debug.jsonl", text: short }], catalog), [
     { file: "host-1-2.debug.jsonl", line: 2, message: "seq 6 follows seq 4" },
   ]);
@@ -598,7 +632,7 @@ test("the chains of the files of one configuration folder join, so a hop in a si
     debugOn(2),
     line(3, "native.input.key_down", { keyCode: 36 }, { cids: ["b1.1"] }),
     line(4, "page.terminal.send", {}, { cids: ["b1.1"], layer: "page" }));
-  const sidecar = lines(line(1, "log.open", { schema: 2, pid: 8, role: "probe", boot: "b2" }),
+  const sidecar = lines(line(1, "log.open", { schema: 3, pid: 8, role: "probe", boot: "b2" }),
     line(2, "sidecar.probe.pty_write", { hex: "0d" }, { cids: ["b1.1"], layer: "sidecar" }));
   assert.deepEqual(auditLogs([{ file: "host-1-2.jsonl", text: host }, { file: "probe-3-4.jsonl", text: sidecar }], catalog), []);
   assert.deepEqual(auditLogs([{ file: "host-1-2.jsonl", text: host }], catalog), [
@@ -642,21 +676,21 @@ test("an entrance of calls that the catalog declares with a result has ok, micro
   assert.match(findings[5].message, /micros must be a non-negative integer/);
 });
 
-test("the chain of an operation of the page is complete when its call and the host record carry its identifiers, in any file", () => {
+test("the chain of an operation of the workbench is complete when its call and the host record carry its identifiers, in any file", () => {
   const operations = {
     ...catalog,
     events: {
       ...catalog.events,
-      "page.plugin.operation": { layer: "page", class: "call", level: "info", cids: "required", fields: objectFields({ action: { type: "string" }, plugin: { type: "string" } }) },
-      "page.call": { layer: "page", class: "call", level: ["debug", "warn"], fields: objectFields({ name: { type: "string" } }) },
+      "workbench.plugin.operation": { layer: "workbench", class: "call", level: "info", cids: "required", fields: objectFields({ action: { type: "string" }, plugin: { type: "string" } }) },
+      "workbench.call": { layer: "workbench", class: "call", level: ["debug", "warn"], fields: objectFields({ name: { type: "string" } }) },
       "host.binding.call": { layer: "host", class: "call", level: ["debug", "warn"], fields: objectFields({ name: { type: "string" } }) },
     },
-    chains: { plugin: ["page.plugin.operation", "page.call", "host.binding.call"] },
+    chains: { plugin: ["workbench.plugin.operation", "workbench.call", "host.binding.call"] },
   };
-  const start = (seq, cid) => line(seq, "page.plugin.operation", { action: "install", plugin: "tty" }, { cids: [cid], layer: "page", class: "call" });
-  const call = (seq, cid) => line(seq, "page.call", { name: "pluginsRun" }, { cids: [cid], layer: "page", level: "debug", class: "call" });
+  const start = (seq, cid) => line(seq, "workbench.plugin.operation", { action: "install", plugin: "tty" }, { cids: [cid], layer: "workbench", class: "call" });
+  const call = (seq, cid) => line(seq, "workbench.call", { name: "pluginsRun" }, { cids: [cid], layer: "workbench", level: "debug", class: "call" });
   const binding = (seq, cid) => line(seq, "host.binding.call", { name: "plugins_run" }, { cids: [cid], level: "debug", class: "call" });
-  const debugOpen = (seq) => line(seq, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" });
+  const debugOpen = (seq) => line(seq, "log.open", { schema: 3, pid: 7, role: "host", boot: "b1" });
   // The start of an operation is stored at the level info (the main file); its calls are stored at the level debug (the debug file).
   const complete = [
     { file: "host-b1.jsonl", text: [open, debugOn(2), start(3, "p1.1")].join("\n") },
@@ -708,7 +742,7 @@ test("an extension that names an unknown chain, an event outside the chain or an
   const withExtension = (extension) => composeCatalogs(base, { ...alpha, extends: [extension] });
   const good = alpha.extends[0];
   assert.throws(() => withExtension({ ...good, chain: "output" }), /sidecar alpha: the extension names the chain output, which the catalog does not declare/);
-  assert.throws(() => withExtension({ ...good, after: "page.call" }), /sidecar alpha: the extension follows page\.call, which is not an event of the chain input/);
+  assert.throws(() => withExtension({ ...good, after: "workbench.call" }), /sidecar alpha: the extension follows workbench\.call, which is not an event of the chain input/);
   assert.throws(() => withExtension({ ...good, after: "native.input.key_down" }), /sidecar alpha: the extension follows native\.input\.key_down, which has no field name/);
   assert.throws(() => withExtension({ ...good, events: ["sidecar.alpha.read"] }), /sidecar alpha: the extension names sidecar\.alpha\.read, which the catalog does not declare/);
   assert.throws(() => withExtension({ ...good, events: [] }), /sidecar alpha: the extension of the chain input lists no events/);

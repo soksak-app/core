@@ -464,7 +464,7 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
       return await runCore(name, args);
     } catch (error) {
       if (shortcuts.some((row) => row.owner === "workbench" && row.command === name)) {
-        emitEvent("error", "page.input.shortcut.failed", { plugin, command: name });
+        emitEvent("error", "workbench.input.shortcut.failed", { plugin, command: name });
       }
       throw error;
     }

@@ -172,11 +172,11 @@ test("opening a project, removing it, opening a window and closing it are operat
   kept = true;
   await requestClose();
   const operation = (event, action) => started.filter(([name, fields]) => name === event && fields.action === action).map(([, , cids]) => cids);
-  const [opened] = operation("page.project.operation", "open");
-  const [removed] = operation("page.project.operation", "remove");
-  const [newWindow] = operation("page.window.operation", "new");
-  const [closed] = operation("page.window.operation", "close");
-  const [closedKept] = operation("page.window.operation", "close_kept");
+  const [opened] = operation("workbench.project.operation", "open");
+  const [removed] = operation("workbench.project.operation", "remove");
+  const [newWindow] = operation("workbench.window.operation", "new");
+  const [closed] = operation("workbench.window.operation", "close");
+  const [closedKept] = operation("workbench.window.operation", "close_kept");
   for (const cids of [opened, removed, newWindow, closed, closedKept]) assert.match(cids?.[0] ?? "", /^p[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.\d+$/);
   assert.equal(new Set([opened, removed, newWindow, closed, closedKept].map((cids) => cids[0])).size, 5, "an operation took the identifier of another");
   const cidsOf = (name) => hostCids.filter(([called]) => called === name).map(([, cids]) => cids);
@@ -185,12 +185,12 @@ test("opening a project, removing it, opening a window and closing it are operat
   assert.deepEqual(cidsOf("releaseProject")[0], removed);
   assert.deepEqual(cidsOf("close").at(-1), closed);
   assert.deepEqual(cidsOf("closeKept"), [closedKept]);
-  assert.deepEqual(started.find(([event, fields]) => event === "page.project.operation" && fields.action === "open")[1], { action: "open", project: PROJECT.id });
-  assert.deepEqual(started.find(([event, fields]) => event === "page.project.operation" && fields.action === "remove")[1], { action: "remove", project: PROJECT.id });
+  assert.deepEqual(started.find(([event, fields]) => event === "workbench.project.operation" && fields.action === "open")[1], { action: "open", project: PROJECT.id });
+  assert.deepEqual(started.find(([event, fields]) => event === "workbench.project.operation" && fields.action === "remove")[1], { action: "remove", project: PROJECT.id });
 });
 
 test("the page flushes its event queue after the operation of the close starts and before its host call", async () => {
-  const sink = (event, fields) => { if (event === "page.window.operation") events.push(`operation ${fields.action}`); };
+  const sink = (event, fields) => { if (event === "workbench.window.operation") events.push(`operation ${fields.action}`); };
   installOperationSink((event, fields, cids) => { sink(event, fields); started.push([event, fields, cids]); });
   await projects.initialise(store);
   await projects.activate(PROJECT.id);

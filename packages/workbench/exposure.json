@@ -1205,7 +1205,7 @@
                   "enum": ["error", "warn", "info", "debug", "trace"]
                 },
                 "layer": {
-                  "enum": ["all", "native", "host", "page", "plugin", "sidecar"]
+                  "enum": ["all", "native", "host", "workbench", "page", "plugin", "sidecar", "sok"]
                 },
                 "text": {
                   "type": "string"
@@ -2241,7 +2241,7 @@
               "type": "string"
             },
             "layer": {
-              "enum": ["all", "native", "host", "page", "plugin", "sidecar", "sok"]
+              "enum": ["all", "native", "host", "workbench", "page", "plugin", "sidecar", "sok"]
             },
             "text": {
               "type": "string"

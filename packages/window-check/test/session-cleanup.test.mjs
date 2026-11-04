@@ -128,9 +128,9 @@ function writeEventLog(dir, lines) {
   return Buffer.byteLength(before);
 }
 
-const OPEN = event(1, "info", "log.open", { schema: 2 });
-const PREVIOUS = event(2, "error", "page.record.error", { where: "rejected", text: "an error of the previous check" }, "page");
-const RESIZE = event(4, "error", "page.record.error", { where: "page", text: "ResizeObserver loop completed with undelivered notifications. @ wails://localhost/:0" }, "page");
+const OPEN = event(1, "info", "log.open", { schema: 3 });
+const PREVIOUS = event(2, "error", "workbench.record.error", { where: "rejected", text: "an error of the previous check" }, "workbench");
+const RESIZE = event(4, "error", "workbench.record.error", { where: "workbench", text: "ResizeObserver loop completed with undelivered notifications. @ wails://localhost/:0" }, "workbench");
 
 function runLoggedError(t, expected, during) {
   const dir = mkdtempSync(join(tmpdir(), "soksak-session-log-error-"));
@@ -173,11 +173,11 @@ test("an error event of the event log fails the check unless it is declared", { 
 test("a record event of level error fails the check as the line of the text form unless it is declared", { timeout: 30000 }, (t) => {
   const result = runLoggedError(t, "[]", [RESIZE]);
   assert.equal(result.status, 1, result.stdout + result.stderr);
-  assert.match(result.stdout, /# application error: error page page: ResizeObserver loop completed/);
+  assert.match(result.stdout, /# application error: error workbench workbench: ResizeObserver loop completed/);
   assert.match(result.stdout, /probe: the application logged 1 error that the check did not declare/);
   const declared = runLoggedError(t, "[/ResizeObserver loop/]", [RESIZE]);
   assert.equal(declared.status, 0, declared.stdout + declared.stderr);
-  assert.match(declared.stdout, /# application error: error page page: ResizeObserver loop completed/);
+  assert.match(declared.stdout, /# application error: error workbench workbench: ResizeObserver loop completed/);
 });
 
 // A recording that the check started must be removed when the check ends. A recording folder that remains fails the

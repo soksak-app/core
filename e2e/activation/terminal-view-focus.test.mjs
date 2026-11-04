@@ -17,7 +17,7 @@ const COMMAND = "echo focuscheck";
 const REPEATED_VOWEL_KEYS = ["k", "k", "k", "k"];
 const REPEATED_VOWELS = "ㅏㅏㅏㅏ";
 const INPUT_RECORDS = ["native.record.info", "native.input.key_down", "native.input.report", "host.input.relay",
-  "host.window.event", "host.trace.region", "host.trace.sidecar.send", "page.call", "page.log.clock",
+  "host.window.event", "host.trace.region", "host.trace.sidecar.send", "workbench.call", "workbench.log.clock",
   "host.trace.sidecar.receive", "host.sidecar.request", "sidecar.vt.request", "sidecar.vt.pty_write", "sidecar.vt.pty_read"];
 
 async function step(t, name, action) {

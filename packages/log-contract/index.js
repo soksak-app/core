@@ -4,14 +4,14 @@
 import Ajv2020 from "ajv/dist/2020.js";
 
 /** The schema number that this checker reads. */
-export const SCHEMA = 2;
+export const SCHEMA = 3;
 export const CATALOG_SCHEMA = 3;
 
 const fieldSchemaAjv = new Ajv2020({ allErrors: true, strict: true, strictRequired: false });
 const catalogFieldValidators = new WeakMap();
 
 const LEVELS = new Set(["error", "warn", "info", "debug", "trace"]);
-const LAYERS = new Set(["native", "host", "page", "plugin", "sidecar", "sok"]);
+const LAYERS = new Set(["native", "host", "workbench", "page", "plugin", "sidecar", "sok"]);
 const CLASSES = new Set(["lifecycle", "input", "call", "io", "frame"]);
 
 /** The levels that the file of each channel holds (docs/spec/logging.md#files). `log.open` and `log.rotated` start every file at the level info. */
@@ -29,8 +29,13 @@ export function channelOf(file) {
  */
 const encoder = new TextEncoder();
 
-/** The layers whose events are written by a document and name it in `page`. */
-const PAGE_LAYERS = new Set(["page", "plugin"]);
+/**
+ * The layers whose events are written by a document, with the members that name the writing document: the workbench names its
+ * start in `start`, a view page its page identity in `page`, and the plugin of either names its document in one of them.
+ */
+const PAGE_LAYERS = new Map([["workbench", ["start"]], ["page", ["page"]], ["plugin", ["page", "start"]]]);
+/** The layers whose events name the writing document in each member. */
+const MEMBER_LAYERS = { page: "page or plugin", start: "workbench or plugin" };
 // The identifiers that the host writer stores in the fields of a document event (docs/spec/logging.md#bounds).
 const HOST_FIELD_IDENTIFIERS = new Set(["surface", "session"]);
 
@@ -61,7 +66,7 @@ export function parseLog(file, text) {
 }
 
 /**
- * The declaration of an event name. A catalog name with a placeholder such as `page.record.<level>` declares every event of
+ * The declaration of an event name. A catalog name with a placeholder such as `workbench.record.<level>` declares every event of
  * its family: a placeholder stands for one or more characters of `a-z`, `0-9`, `_` and `.`.
  */
 export function declaration(catalog, name) {
@@ -119,13 +124,19 @@ function lineFindings(entry, catalog, validators, channel = "other") {
   if (!Number.isInteger(event.mono_ns) || event.mono_ns <= 0) report("mono_ns must be a positive integer");
   if (!LEVELS.has(event.level)) report(`level ${event.level} is not one of ${[...LEVELS].join(", ")}`);
   if (!LAYERS.has(event.layer)) report(`layer ${event.layer} is not one of ${[...LAYERS].join(", ")}`);
-  // An event of a document names the document that wrote it by its page identity, so the anchor of its clock
-  // (page.log.clock of the same page) is found from the line.
-  if (PAGE_LAYERS.has(event.layer)) {
-    if (typeof event.page !== "string" || event.page === "") report(`an event of the layer ${event.layer} names the page that wrote it in page`);
-  } else if (event.page !== undefined) {
-    report(`page names the writing page only on an event of the layer page or plugin, not ${event.layer}`);
+  // An event of a document names the document that wrote it in the member of its layer, so the anchor of its clock
+  // (`<layer>.log.clock` of the same document) is found from the line.
+  // default: an event of a layer that no document writes names its writer in no member.
+  const members = PAGE_LAYERS.get(event.layer) ?? [];
+  for (const member of ["page", "start"]) {
+    if (event[member] !== undefined && !members.includes(member)) {
+      report(`${member} names the writing document only on an event of the layer ${MEMBER_LAYERS[member]}, not ${event.layer}`);
+    }
   }
+  const named = members.filter((member) => typeof event[member] === "string" && event[member] !== "");
+  if (members.length === 1 && named.length === 0) report(`an event of the layer ${event.layer} names the document that wrote it in ${members[0]}`);
+  if (members.length === 2 && named.length === 0) report(`an event of the layer ${event.layer} names the document that wrote it in ${members.join(" or ")}`);
+  if (members.length === 2 && named.length === 2) report(`an event of the layer ${event.layer} names the document that wrote it in one of ${members.join(" and ")}, found both`);
   // A file holds the levels of its channel: the main file error, warn and info, the debug file debug and trace.
   if (LEVELS.has(event.level) && !IN_EVERY_FILE.has(event.event) && !CHANNEL_LEVELS[channel].has(event.level)) {
     report(`the level ${event.level} belongs to the ${channel === "debug" ? "main" : "debug"} file, and this is a file of the channel ${channel}`);
@@ -162,7 +173,7 @@ function lineFindings(entry, catalog, validators, channel = "other") {
     const identified = Object.entries(identifiers).every(([key, value]) =>
       HOST_FIELD_IDENTIFIERS.has(key) && typeof value === "string" && value.length > 0);
     if (typeof head !== "string" || head.length === 0 || Buffer.byteLength(head, "utf8") > 4096 || !identified) {
-      report("page field truncation must contain a nonempty head within 4096 bytes, truncated true and only the host identifiers surface and session");
+      report("document field truncation must contain a nonempty head within 4096 bytes, truncated true and only the host identifiers surface and session");
     }
     return findings;
   }
@@ -221,11 +232,11 @@ function chainFindings(entries, catalog) {
   }
   const policies = new Map();
   for (const [process, processEntries] of byProcess) {
-    // Page timestamps are estimates and can fall after the host timestamp of the policy event that the change brings, so the
+    // Workbench timestamps are estimates and can fall after the host timestamp of the policy event that the change brings, so the
     // change and not the policy places the policy that carries its cids.
     const changes = new Map();
     for (const { event } of processEntries) {
-      if (event.event !== "page.settings.change") continue;
+      if (event.event !== "workbench.settings.change") continue;
       // default: a change without cids is reported by the structure check of the required cids.
       for (const cid of event.cids ?? []) changes.set(cid, event.ts_us);
     }

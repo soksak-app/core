@@ -1113,7 +1113,7 @@ function recordBackground(tab, descriptor, action, surface) {
   const decision = `${action}:${surface}`;
   if (action !== "reopen" && backgroundDecisions.get(tab.id) === decision) return;
   backgroundDecisions.set(tab.id, decision);
-  emitEvent("info", "page.background.session", { tab: tab.id, plugin: tab.plugin, sidecar: descriptor.sidecar, action, surface });
+  emitEvent("info", "workbench.background.session", { tab: tab.id, plugin: tab.plugin, sidecar: descriptor.sidecar, action, surface });
 }
 
 function syncBackgroundSessions() {

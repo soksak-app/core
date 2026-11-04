@@ -96,7 +96,7 @@ function recordMountFailure(entry, phase, error) {
   record.state = "failed";
   record.phase = phase;
   record.reason = reason;
-  emitEvent("error", "page.surface.mount.failed", {
+  emitEvent("error", "workbench.surface.mount.failed", {
     plugin: entry.pluginId, surface: entry.surfaceId, attempt: record.attempt, phase, reason,
   });
 }
@@ -463,7 +463,7 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
     push: (event, data) => scoped.native.call("viewEvent", { generation: viewGeneration, event, data }),
     closing,
     leftOut: () => surfaceLeftOut(surface.surfaceId),
-    cancel: (event) => emitEvent("debug", "page.view.event.cancel", {
+    cancel: (event) => emitEvent("debug", "workbench.view.event.cancel", {
       plugin: surface.pluginId, surface: surface.surfaceId, event,
     }),
     report: (text) => dispatchEvent(new ErrorEvent("error", { message: text })),
@@ -621,7 +621,7 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
   const answering = scoped.native.on("view-call", (event) => {
     const currentSource = currentSourceGeneration();
     if (!Number.isSafeInteger(event?.generation) || event.generation < 1 || event.generation !== currentSource) {
-      emitEvent("debug", "page.view.call.cancel", viewCallCancellationFields(surface.pluginId, surface.surfaceId, event));
+      emitEvent("debug", "workbench.view.call.cancel", viewCallCancellationFields(surface.pluginId, surface.surfaceId, event));
       return;
     }
     refreshViewCommands(currentSource);
@@ -633,11 +633,11 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
       return;
     }
     if (closing.aborted) {
-      emitEvent("debug", "page.view.call.cancel", viewCallCancellationFields(surface.pluginId, surface.surfaceId, event));
+      emitEvent("debug", "workbench.view.call.cancel", viewCallCancellationFields(surface.pluginId, surface.surfaceId, event));
       return;
     }
     // The receipt, reply and cancellation records identify the view incarnation at the debug level (docs/spec/logging.md#policy).
-    emitEvent("debug", "page.view.call", {
+    emitEvent("debug", "workbench.view.call", {
       plugin: surface.pluginId, surface: surface.surfaceId, generation: event.generation,
       id: event.id, command: String(event.command),
     });
@@ -662,14 +662,14 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
     ).then((reply) => {
       if (closing.aborted || receivedGeneration !== documentGeneration ||
           receivedSourceGeneration !== viewGeneration || receivedSourceGeneration !== currentSourceGeneration()) {
-        emitEvent("debug", "page.view.call.cancel",
+        emitEvent("debug", "workbench.view.call.cancel",
           viewCallCancellationFields(surface.pluginId, surface.surfaceId, event, receivedSourceGeneration));
         return null;
       }
       return scoped.native.call("viewReply", {
         ...reply, page: pageIdentity, generation: receivedSourceGeneration,
       }).then(() => {
-        emitEvent("debug", "page.view.reply", {
+        emitEvent("debug", "workbench.view.reply", {
           plugin: surface.pluginId, surface: surface.surfaceId, generation: receivedSourceGeneration,
           id: event.id, outcome: "error" in reply ? "error" : "result",
         });
@@ -677,7 +677,7 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
     }).catch((error) => {
       if (closing.aborted || receivedGeneration !== documentGeneration ||
           receivedSourceGeneration !== viewGeneration || receivedSourceGeneration !== currentSourceGeneration()) {
-        emitEvent("debug", "page.view.call.cancel",
+        emitEvent("debug", "workbench.view.call.cancel",
           viewCallCancellationFields(surface.pluginId, surface.surfaceId, event, receivedSourceGeneration));
         return;
       }
@@ -946,7 +946,7 @@ async function mountSurfaceNow(slot, surface, { onState = () => {}, retainedText
       // The responsiveness of the view is the state of its surface in core.plugin.views, and the surface keeps no state after its dispose.
       const responding = scoped.native.on("view-responsiveness", (event) => {
         if (!Number.isSafeInteger(event?.generation) || event.generation !== sourceOrigin(surface.pluginId, surface.surfaceId)) {
-          emitEvent("debug", "page.view.event.cancel", {
+          emitEvent("debug", "workbench.view.event.cancel", {
             plugin: surface.pluginId, surface: surface.surfaceId, event: "view-responsiveness",
           });
           return;

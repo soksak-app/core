@@ -22,7 +22,7 @@ export const CHANNELS = ["other", "debug", "all"];
 /** The levels from the most to the least severe; a level filter shows its level and the more severe ones. */
 export const LEVELS = ["error", "warn", "info", "debug", "trace"];
 /** The layers of an event. */
-export const LAYERS = ["native", "host", "page", "plugin", "sidecar", "sok"];
+export const LAYERS = ["native", "host", "workbench", "page", "plugin", "sidecar", "sok"];
 
 /** The text of a value in an error message. */
 const found = (value) => JSON.stringify(value);

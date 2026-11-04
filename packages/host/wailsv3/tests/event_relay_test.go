@@ -1,5 +1,5 @@
-// The `log` call of the page (docs/spec/logging.md#writers): the page relays a batch of events, the host validates the
-// whole batch before it writes any event, and every event of the batch is stored in the layer `page`.
+// The `log` call of the workbench (docs/spec/logging.md#writers): the workbench relays a batch of events, the host validates the
+// whole batch before it writes any event, and every event of the batch is stored in the layer `workbench` or `plugin` with the start of the workbench.
 package host_test
 
 import (
@@ -14,17 +14,17 @@ import (
 )
 
 func relayEvent(event string, index int) map[string]any {
-	return map[string]any{"ts_us": float64(1_791_000_000_000_000 + index), "mono_ns": float64(5_000_000_000 + index), "level": "info", "event": event, "page": "1791948729050", "fields": map[string]any{"index": float64(index)}}
+	return map[string]any{"ts_us": float64(1_791_000_000_000_000 + index), "mono_ns": float64(5_000_000_000 + index), "level": "info", "event": event, "start": "1791948729050", "fields": map[string]any{"index": float64(index)}}
 }
 
-// contract: log.batch.stores-page-events-in-order
-func TestARelayedBatchIsStoredInOrderInTheLayerPage(t *testing.T) {
+// contract: log.batch.stores-workbench-events-in-order
+func TestARelayedBatchIsStoredInOrderInTheLayerWorkbench(t *testing.T) {
 	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
 	support.StoreEveryLevel(t, log)
-	request := map[string]any{"action": "batch", "events": []any{relayEvent("page.test.first", 1), relayEvent("page.test.second", 2)}}
+	request := map[string]any{"action": "batch", "events": []any{relayEvent("workbench.test.first", 1), relayEvent("workbench.test.second", 2)}}
 	if _, err := host.LogCommand(log, request); err != nil {
 		t.Fatal(err)
 	}
@@ -32,13 +32,13 @@ func TestARelayedBatchIsStoredInOrderInTheLayerPage(t *testing.T) {
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
-	if len(events) != 4 || events[2]["event"] != "page.test.first" || events[3]["event"] != "page.test.second" ||
-		events[2]["layer"] != "page" || events[3]["ts_us"] != float64(1_791_000_000_000_002) {
+	if len(events) != 4 || events[2]["event"] != "workbench.test.first" || events[3]["event"] != "workbench.test.second" ||
+		events[2]["layer"] != "workbench" || events[3]["ts_us"] != float64(1_791_000_000_000_002) {
 		t.Fatalf("events %v", events)
 	}
 }
 
-// contract: log.batch.rejects-an-invalid-batch-without-writing, log.batch.requires-the-page
+// contract: log.batch.rejects-an-invalid-batch-without-writing, log.batch.requires-the-start
 func TestAnInvalidRelayedBatchWritesNothingAndNamesTheEvent(t *testing.T) {
 	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
 	if err != nil {
@@ -52,27 +52,29 @@ func TestAnInvalidRelayedBatchWritesNothingAndNamesTheEvent(t *testing.T) {
 		"no action":      {map[string]any{"events": []any{}}, "action must be batch, clock, policy, policy-read or transcript"},
 		"another action": {map[string]any{"action": "line", "events": []any{}}, "action must be batch, clock, policy, policy-read or transcript, not \"line\""},
 		"no events":      {map[string]any{"action": "batch"}, "events must be an array"},
-		"an event that names no page": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "info", "event": "page.test.event", "fields": map[string]any{}}}},
-			"events[0]: page must name the document that wrote the event"},
-		"a layer other than page": {map[string]any{"action": "batch", "events": []any{relayEvent("page.test.ok", 1), relayEvent("host.test.forged", 2)}},
-			"events[1]: the event \"host.test.forged\" does not start with page. or plugin."},
-		"a level outside the contract": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "loud", "event": "page.test.event", "page": "1791948729050", "fields": map[string]any{}}}},
+		"an event that names no start": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "info", "event": "workbench.test.event", "fields": map[string]any{}}}},
+			"events[0]: start must name the start of the workbench that wrote the event"},
+		"an event that also names a page": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "info", "event": "workbench.test.event", "start": "1791948729050", "page": "1791948729050", "fields": map[string]any{}}}},
+			"events[0]: page is not a member of an event of the workbench"},
+		"a layer other than workbench": {map[string]any{"action": "batch", "events": []any{relayEvent("workbench.test.ok", 1), relayEvent("host.test.forged", 2)}},
+			"events[1]: the event \"host.test.forged\" does not start with workbench. or plugin."},
+		"a level outside the contract": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "loud", "event": "workbench.test.event", "start": "1791948729050", "fields": map[string]any{}}}},
 			"events[0]: level must be one of error, warn, info, debug, trace"},
-		"a time that is not a number": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": "now", "mono_ns": float64(1), "level": "info", "event": "page.test.event", "page": "1791948729050", "fields": map[string]any{}}}},
+		"a time that is not a number": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": "now", "mono_ns": float64(1), "level": "info", "event": "workbench.test.event", "start": "1791948729050", "fields": map[string]any{}}}},
 			"events[0]: ts_us must be a positive integer"},
-		"a monotonic clock of 0": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(0), "level": "info", "event": "page.test.event", "page": "1791948729050", "fields": map[string]any{}}}},
+		"a monotonic clock of 0": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(0), "level": "info", "event": "workbench.test.event", "start": "1791948729050", "fields": map[string]any{}}}},
 			"events[0]: mono_ns must be a positive integer"},
-		"no monotonic clock": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "level": "info", "event": "page.test.event", "page": "1791948729050", "fields": map[string]any{}}}},
+		"no monotonic clock": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "level": "info", "event": "workbench.test.event", "start": "1791948729050", "fields": map[string]any{}}}},
 			"events[0]: mono_ns must be a positive integer"},
-		"cids that are not a list": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "info", "event": "page.test.event", "page": "1791948729050", "fields": map[string]any{}, "cids": "b1.1"}}},
+		"cids that are not a list": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "info", "event": "workbench.test.event", "start": "1791948729050", "fields": map[string]any{}, "cids": "b1.1"}}},
 			"events[0]: cids must be an array of non-empty strings without a quote, a backslash or a control character"},
-		"an empty identifier": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "info", "event": "page.test.event", "page": "1791948729050", "fields": map[string]any{}, "cids": []any{""}}}},
+		"an empty identifier": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "info", "event": "workbench.test.event", "start": "1791948729050", "fields": map[string]any{}, "cids": []any{""}}}},
 			"events[0]: cids must be an array of non-empty strings without a quote, a backslash or a control character"},
-		"an identifier with a quote": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "info", "event": "page.test.event", "page": "1791948729050", "fields": map[string]any{}, "cids": []any{"b1.1", "a\"b"}}}},
+		"an identifier with a quote": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "info", "event": "workbench.test.event", "start": "1791948729050", "fields": map[string]any{}, "cids": []any{"b1.1", "a\"b"}}}},
 			"events[0]: cids must be an array of non-empty strings without a quote, a backslash or a control character"},
-		"an identifier that is not a string": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "info", "event": "page.test.event", "page": "1791948729050", "fields": map[string]any{}, "cids": []any{7}}}},
+		"an identifier that is not a string": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "info", "event": "workbench.test.event", "start": "1791948729050", "fields": map[string]any{}, "cids": []any{7}}}},
 			"events[0]: cids must be an array of non-empty strings without a quote, a backslash or a control character"},
-		"fields that are not an object": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "info", "event": "page.test.event", "page": "1791948729050", "fields": "text"}}},
+		"fields that are not an object": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "info", "event": "workbench.test.event", "start": "1791948729050", "fields": "text"}}},
 			"events[0]: fields must be an object"},
 	}
 	for name, c := range cases {
@@ -90,33 +92,33 @@ func TestAnInvalidRelayedBatchWritesNothingAndNamesTheEvent(t *testing.T) {
 	}
 }
 
-// contract: log.batch.returns-the-transcript-lines-of-page-records
-func TestARelayedBatchReturnsTheTranscriptLinesOfItsPageRecords(t *testing.T) {
+// contract: log.batch.returns-the-transcript-lines-of-workbench-records
+func TestARelayedBatchReturnsTheTranscriptLinesOfItsWorkbenchRecords(t *testing.T) {
 	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
 	support.StoreEveryLevel(t, log)
 	record := func(level, where, text string, index int) map[string]any {
-		return map[string]any{"ts_us": float64(1_791_000_000_000_000 + index), "mono_ns": float64(5_000_000_000 + index), "level": level, "event": "page.record." + level, "page": "1791948729050",
+		return map[string]any{"ts_us": float64(1_791_000_000_000_000 + index), "mono_ns": float64(5_000_000_000 + index), "level": level, "event": "workbench.record." + level, "start": "1791948729050",
 			"fields": map[string]any{"where": where, "text": text}}
 	}
 	request := map[string]any{"action": "batch", "events": []any{
 		record("error", "surface probe", "mount failed\nsecond line", 1),
-		relayEvent("page.trace.action", 2),
-		record("info", "page", "ready", 3),
+		relayEvent("workbench.trace.action", 2),
+		record("info", "workbench", "ready", 3),
 	}}
 	reply, err := host.LogCommand(log, request)
 	if err != nil {
 		t.Fatal(err)
 	}
 	lines := reply.Lines
-	want := []string{"error page surface probe: mount failed\\nsecond line", "info page page: ready"}
+	want := []string{"error workbench surface probe: mount failed\\nsecond line", "info workbench workbench: ready"}
 	if len(lines) != len(want) || lines[0] != want[0] || lines[1] != want[1] {
 		t.Fatalf("lines %q, want %q", lines, want)
 	}
 	// A record event whose fields are not the strings where and text is refused with the batch.
-	bad := map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "info", "event": "page.record.info", "page": "1791948729050", "fields": map[string]any{"where": 7}}}}
+	bad := map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "info", "event": "workbench.record.info", "start": "1791948729050", "fields": map[string]any{"where": 7}}}}
 	if _, err := host.LogCommand(log, bad); err == nil || !strings.Contains(err.Error(), "events[0]: fields where and text must be strings") {
 		t.Fatalf("error %v", err)
 	}
@@ -131,19 +133,19 @@ func TestATranscriptRequestStoresTheCutRecordAndAnswersTheWholeLine(t *testing.T
 	support.StoreEveryLevel(t, log)
 	// The payload holds ": " inside a value and is longer than the record bound, as the call of a layout with its compositions is.
 	line := `host syncSurfaces {"description":"Sets the state: on or off","text":"` + strings.Repeat("x", 9000) + `"} -> null`
-	reply, err := host.LogCommand(log, map[string]any{"action": "transcript", "page": "1791948729050", "line": line})
+	reply, err := host.LogCommand(log, map[string]any{"action": "transcript", "start": "1791948729050", "line": line})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := "info page page: " + line; len(reply.Lines) != 1 || reply.Lines[0] != want {
+	if want := "info workbench workbench: " + line; len(reply.Lines) != 1 || reply.Lines[0] != want {
 		t.Fatalf("lines %q, want the whole line %q", reply.Lines, want)
 	}
 	for _, c := range []struct {
 		request map[string]any
 		message string
 	}{
-		{map[string]any{"action": "transcript", "line": line}, "page must name the document that wrote the line"},
-		{map[string]any{"action": "transcript", "page": "1791948729050", "line": ""}, "line must be a non-empty string"},
+		{map[string]any{"action": "transcript", "line": line}, "start must name the start of the workbench that wrote the line"},
+		{map[string]any{"action": "transcript", "start": "1791948729050", "line": ""}, "line must be a non-empty string"},
 	} {
 		if _, err := host.LogCommand(log, c.request); err == nil || err.Error() != c.message {
 			t.Errorf("error %v, want %q", err, c.message)
@@ -154,31 +156,31 @@ func TestATranscriptRequestStoresTheCutRecordAndAnswersTheWholeLine(t *testing.T
 	}
 	var stored []map[string]any
 	for _, event := range readEventLog(t, log.Path()) {
-		if event["event"] == "page.record.info" {
+		if event["event"] == "workbench.record.info" {
 			stored = append(stored, event)
 		}
 	}
 	if len(stored) != 1 {
-		t.Fatalf("page.record.info events %v, want the one record of the line", stored)
+		t.Fatalf("workbench.record.info events %v, want the one record of the line", stored)
 	}
 	fields, _ := stored[0]["fields"].(map[string]any)
 	text, _ := fields["text"].(string)
-	if stored[0]["page"] != "1791948729050" || stored[0]["layer"] != "page" || fields["where"] != "page" || fields["truncated"] != true ||
+	if stored[0]["start"] != "1791948729050" || stored[0]["layer"] != "workbench" || fields["where"] != "workbench" || fields["truncated"] != true ||
 		len(text) != 8192 || !strings.HasPrefix(line, text) {
 		t.Fatalf("the stored record %v is not the line cut to 8192 bytes with the place page", stored[0])
 	}
 }
 
-// contract: log.batch.stores-clock-and-cids-of-page-events
-func TestARelayedBatchStoresTheMonotonicClockAndTheIdentifiersThatThePageGave(t *testing.T) {
+// contract: log.batch.stores-clock-and-cids-of-workbench-events
+func TestARelayedBatchStoresTheMonotonicClockAndTheIdentifiersThatTheWorkbenchGave(t *testing.T) {
 	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
 	support.StoreEveryLevel(t, log)
-	withCids := relayEvent("page.call", 1)
+	withCids := relayEvent("workbench.call", 1)
 	withCids["cids"] = []any{"b1.7", "b1.8"}
-	request := map[string]any{"action": "batch", "events": []any{withCids, relayEvent("page.call", 2)}}
+	request := map[string]any{"action": "batch", "events": []any{withCids, relayEvent("workbench.call", 2)}}
 	if _, err := host.LogCommand(log, request); err != nil {
 		t.Fatal(err)
 	}
@@ -250,7 +252,7 @@ func TestARelayedBatchStoresAPluginEventInTheLayerPlugin(t *testing.T) {
 		t.Fatal(err)
 	}
 	support.StoreEveryLevel(t, log)
-	request := map[string]any{"action": "batch", "events": []any{relayEvent("plugin.fixture.input", 1), relayEvent("page.console.error", 2)}}
+	request := map[string]any{"action": "batch", "events": []any{relayEvent("plugin.fixture.input", 1), relayEvent("workbench.console.error", 2)}}
 	if _, err := host.LogCommand(log, request); err != nil {
 		t.Fatal(err)
 	}
@@ -258,7 +260,8 @@ func TestARelayedBatchStoresAPluginEventInTheLayerPlugin(t *testing.T) {
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
-	if len(events) != 4 || events[2]["layer"] != "plugin" || events[2]["event"] != "plugin.fixture.input" || events[3]["layer"] != "page" {
+	if len(events) != 4 || events[2]["layer"] != "plugin" || events[2]["event"] != "plugin.fixture.input" || events[3]["layer"] != "workbench" ||
+		events[2]["start"] != "1791948729050" || events[2]["page"] != nil || events[3]["start"] != "1791948729050" {
 		t.Fatalf("events %v", events)
 	}
 }

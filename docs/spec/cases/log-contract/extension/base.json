@@ -3,6 +3,7 @@
   "layers": [
     "native",
     "host",
+    "workbench",
     "page",
     "sidecar",
     "sok"

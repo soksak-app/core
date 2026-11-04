@@ -25,6 +25,6 @@ test("an error shown on the screen is logged once until it changes or clears", a
   showError(el, "library", "registry failed");
   await settled();
   assert.deepEqual(lines.splice(0), [
-    "error page library: folder is missing", "error page library: registry failed", "error page library: registry failed",
+    "error workbench library: folder is missing", "error workbench library: registry failed", "error workbench library: registry failed",
   ]);
 });

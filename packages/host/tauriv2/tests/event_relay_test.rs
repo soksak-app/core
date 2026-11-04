@@ -1,5 +1,5 @@
-//! The `log` call of the page (docs/spec/logging.md#writers): the page relays a batch of events, the host validates the
-//! whole batch before it writes any event, and every event of the batch is stored in the layer `page`.
+//! The `log` call of the workbench and of a view page (docs/spec/logging.md#writers): the writer relays a batch of events, the host
+//! validates the whole batch before it writes any event, and stores each event in the layer of its writer or in the layer `plugin`.
 
 #[path = "support/folder.rs"]
 mod folder;
@@ -44,23 +44,23 @@ fn start_with_queue_bytes(directory: &Path, queue_bytes: usize) -> EventLog {
 }
 
 fn event(name: &str, index: u64) -> Value {
-    json!({"ts_us": 1_791_000_000_000_000u64 + index, "mono_ns": 5_000_000_000u64 + index, "level": "info", "event": name, "page": "1791948729050", "fields": {"index": index}})
+    json!({"ts_us": 1_791_000_000_000_000u64 + index, "mono_ns": 5_000_000_000u64 + index, "level": "info", "event": name, "start": "1791948729050", "fields": {"index": index}})
 }
 
-// contract: log.batch.stores-page-events-in-order
+// contract: log.batch.stores-workbench-events-in-order
 #[test]
-fn a_relayed_batch_is_stored_in_order_in_the_layer_page() {
+fn a_relayed_batch_is_stored_in_order_in_the_layer_workbench() {
     let directory = folder::Folder::new();
     let log = start(directory.path());
-    let request = json!({"action": "batch", "events": [event("page.test.first", 1), event("page.test.second", 2)]});
+    let request = json!({"action": "batch", "events": [event("workbench.test.first", 1), event("workbench.test.second", 2)]});
     log_command(&log, request).unwrap();
     let path = log.path().to_path_buf();
     log.flush(Duration::from_secs(5)).unwrap();
     let events = read(&path);
     assert_eq!(events.len(), 4, "{events:?}");
-    assert_eq!(events[2]["event"], "page.test.first");
-    assert_eq!(events[3]["event"], "page.test.second");
-    assert_eq!(events[2]["layer"], "page");
+    assert_eq!(events[2]["event"], "workbench.test.first");
+    assert_eq!(events[3]["event"], "workbench.test.second");
+    assert_eq!(events[2]["layer"], "workbench");
     assert_eq!(events[3]["ts_us"], 1_791_000_000_000_002u64);
 }
 
@@ -76,17 +76,20 @@ fn a_transcript_request_stores_the_cut_record_and_answers_the_whole_line() {
     );
     let reply = log_command(
         &log,
-        json!({"action": "transcript", "page": "1791948729050", "line": line}),
+        json!({"action": "transcript", "start": "1791948729050", "line": line}),
     )
     .unwrap();
-    assert_eq!(reply.lines, vec![format!("info page page: {line}")]);
+    assert_eq!(
+        reply.lines,
+        vec![format!("info workbench workbench: {line}")]
+    );
     for (request, message) in [
         (
             json!({"action": "transcript", "line": line}),
-            "page must name the document that wrote the line",
+            "start must name the start of the workbench that wrote the line",
         ),
         (
-            json!({"action": "transcript", "page": "1791948729050", "line": ""}),
+            json!({"action": "transcript", "start": "1791948729050", "line": ""}),
             "line must be a non-empty string",
         ),
     ] {
@@ -96,25 +99,25 @@ fn a_transcript_request_stores_the_cut_record_and_answers_the_whole_line() {
     log.flush(Duration::from_secs(5)).unwrap();
     let stored: Vec<Value> = read(&path)
         .into_iter()
-        .filter(|event| event["event"] == "page.record.info")
+        .filter(|event| event["event"] == "workbench.record.info")
         .collect();
     assert_eq!(stored.len(), 1, "{stored:?}");
     let text = stored[0]["fields"]["text"].as_str().unwrap();
-    assert_eq!(stored[0]["page"], "1791948729050");
-    assert_eq!(stored[0]["layer"], "page");
-    assert_eq!(stored[0]["fields"]["where"], "page");
+    assert_eq!(stored[0]["start"], "1791948729050");
+    assert_eq!(stored[0]["layer"], "workbench");
+    assert_eq!(stored[0]["fields"]["where"], "workbench");
     assert_eq!(stored[0]["fields"]["truncated"], true);
     assert_eq!(text.len(), 8192);
     assert!(line.starts_with(text));
 }
 
-// contract: log.batch.rejects-an-invalid-batch-without-writing, log.batch.requires-the-page
+// contract: log.batch.rejects-an-invalid-batch-without-writing, log.batch.requires-the-start
 #[test]
 fn an_invalid_relayed_batch_writes_nothing_and_names_the_event() {
     let directory = folder::Folder::new();
     let log = start(directory.path());
     let bad = |field: &str, value: Value| {
-        let mut item = json!({"ts_us": 1, "mono_ns": 1, "level": "info", "event": "page.test.event", "page": "1791948729050", "fields": {}});
+        let mut item = json!({"ts_us": 1, "mono_ns": 1, "level": "info", "event": "workbench.test.event", "start": "1791948729050", "fields": {}});
         item[field] = value;
         json!({"action": "batch", "events": [item]})
     };
@@ -130,9 +133,14 @@ fn an_invalid_relayed_batch_writes_nothing_and_names_the_event() {
             "action must be batch, clock, policy, policy-read or transcript, not \"line\"",
         ),
         (
-            "an event that names no page",
-            bad("page", Value::Null),
-            "events[0]: page must name the document that wrote the event",
+            "an event that names no start",
+            bad("start", Value::Null),
+            "events[0]: start must name the start of the workbench that wrote the event",
+        ),
+        (
+            "an event that also names a page",
+            bad("page", json!("1791948729050")),
+            "events[0]: page is not a member of an event of the workbench",
         ),
         (
             "no clock",
@@ -170,9 +178,9 @@ fn an_invalid_relayed_batch_writes_nothing_and_names_the_event() {
             "events must be an array",
         ),
         (
-            "a layer other than page",
-            json!({"action": "batch", "events": [event("page.test.ok", 1), event("host.test.forged", 2)]}),
-            "events[1]: the event \"host.test.forged\" does not start with page. or plugin.",
+            "a layer other than workbench",
+            json!({"action": "batch", "events": [event("workbench.test.ok", 1), event("host.test.forged", 2)]}),
+            "events[1]: the event \"host.test.forged\" does not start with workbench. or plugin.",
         ),
         (
             "a level outside the contract",
@@ -202,30 +210,30 @@ fn an_invalid_relayed_batch_writes_nothing_and_names_the_event() {
     assert_eq!(read(&path).len(), 2, "an invalid batch wrote events");
 }
 
-// contract: log.batch.returns-the-transcript-lines-of-page-records
+// contract: log.batch.returns-the-transcript-lines-of-workbench-records
 #[test]
-fn a_relayed_batch_returns_the_transcript_lines_of_its_page_records() {
+fn a_relayed_batch_returns_the_transcript_lines_of_its_workbench_records() {
     let directory = folder::Folder::new();
     let log = start(directory.path());
     let record = |level: &str, place: &str, text: &str, index: u64| {
-        json!({"ts_us": 1_791_000_000_000_000u64 + index, "mono_ns": 5_000_000_000u64 + index, "level": level, "event": format!("page.record.{level}"), "page": "1791948729050",
+        json!({"ts_us": 1_791_000_000_000_000u64 + index, "mono_ns": 5_000_000_000u64 + index, "level": level, "event": format!("workbench.record.{level}"), "start": "1791948729050",
                "fields": {"where": place, "text": text}})
     };
     let request = json!({"action": "batch", "events": [
         record("error", "surface probe", "mount failed\nsecond line", 1),
-        event("page.trace.action", 2),
-        record("info", "page", "ready", 3),
+        event("workbench.trace.action", 2),
+        record("info", "workbench", "ready", 3),
     ]});
     let lines = log_command(&log, request).unwrap().lines;
     assert_eq!(
         lines,
         [
-            "error page surface probe: mount failed\\nsecond line",
-            "info page page: ready"
+            "error workbench surface probe: mount failed\\nsecond line",
+            "info workbench workbench: ready"
         ]
     );
     let bad = json!({"action": "batch", "events": [
-        {"ts_us": 1, "mono_ns": 1, "level": "info", "event": "page.record.info", "page": "1791948729050", "fields": {"where": 7}}
+        {"ts_us": 1, "mono_ns": 1, "level": "info", "event": "workbench.record.info", "start": "1791948729050", "fields": {"where": 7}}
     ]});
     let error = log_command(&log, bad).unwrap_err();
     assert!(
@@ -234,14 +242,14 @@ fn a_relayed_batch_returns_the_transcript_lines_of_its_page_records() {
     );
 }
 
-// contract: log.batch.stores-clock-and-cids-of-page-events
+// contract: log.batch.stores-clock-and-cids-of-workbench-events
 #[test]
-fn a_relayed_batch_stores_the_clock_and_the_cids_that_the_page_gave() {
+fn a_relayed_batch_stores_the_clock_and_the_cids_that_the_workbench_gave() {
     let directory = folder::Folder::new();
     let log = start(directory.path());
-    let mut with = event("page.test.input", 1);
+    let mut with = event("workbench.test.input", 1);
     with["cids"] = json!(["b1.4", "b1.5"]);
-    let request = json!({"action": "batch", "events": [with, event("page.test.plain", 2)]});
+    let request = json!({"action": "batch", "events": [with, event("workbench.test.plain", 2)]});
     log_command(&log, request).unwrap();
     let path = log.path().to_path_buf();
     log.flush(Duration::from_secs(5)).unwrap();
@@ -284,7 +292,7 @@ fn the_clock_request_answers_both_clocks_of_the_host_and_stores_no_event() {
 fn a_relayed_batch_stores_a_plugin_event_in_the_layer_plugin() {
     let directory = folder::Folder::new();
     let log = start(directory.path());
-    let request = json!({"action": "batch", "events": [event("plugin.fixture.input", 1), event("page.console.error", 2)]});
+    let request = json!({"action": "batch", "events": [event("plugin.fixture.input", 1), event("workbench.console.error", 2)]});
     log_command(&log, request).unwrap();
     let path = log.path().to_path_buf();
     log.flush(Duration::from_secs(5)).unwrap();
@@ -292,7 +300,10 @@ fn a_relayed_batch_stores_a_plugin_event_in_the_layer_plugin() {
     assert_eq!(events.len(), 4, "{events:?}");
     assert_eq!(events[2]["layer"], "plugin");
     assert_eq!(events[2]["event"], "plugin.fixture.input");
-    assert_eq!(events[3]["layer"], "page");
+    assert_eq!(events[3]["layer"], "workbench");
+    assert_eq!(events[2]["start"], "1791948729050");
+    assert!(events[2].get("page").is_none(), "{}", events[2]);
+    assert_eq!(events[3]["start"], "1791948729050");
 }
 
 // contract: log.view-batch.binds-ready-page-and-native-surface

@@ -17,7 +17,7 @@ function fakeClient(directory, { stopFails = false, removeFramesOnStopFailure = 
   const captures = join(directory, "logs", "captures");
   mkdirSync(captures, { recursive: true });
   writeFileSync(join(directory, "logs", "host-1-1.jsonl"),
-    `${JSON.stringify({ ts_us: 1791000000000000, seq: 1, level: "info", layer: "host", event: "log.open", fields: { schema: 2 } })}\n`);
+    `${JSON.stringify({ ts_us: 1791000000000000, seq: 1, level: "info", layer: "host", event: "log.open", fields: { schema: 3 } })}\n`);
   return {
     endpoint: { pid: process.pid },
     requests,

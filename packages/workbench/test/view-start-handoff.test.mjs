@@ -88,7 +88,7 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
   };
   const surfaceSyncEvents = () => hostCalls.filter(({ name }) => name === "log")
     .flatMap(({ request }) => request.events ?? [])
-    .filter(({ event }) => event === "page.trace.surface.sync");
+    .filter(({ event }) => event === "workbench.trace.surface.sync");
   try {
     const startValuesSurfaces = ["tab-snapshot-one", "tab-snapshot-two"].map((surfaceId) => {
       recordOrigin(surfaceId, null, "test fixture");
@@ -149,7 +149,7 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
       "the request-local declaration index does not resolve to an object");
     const syncTrace = hostCalls.filter(({ name }) => name === "log")
       .flatMap(({ request }) => request.events ?? [])
-      .find(({ event }) => event === "page.trace.surface.sync");
+      .find(({ event }) => event === "workbench.trace.surface.sync");
     assert.ok(syncTrace, "the frame gate did not record surface sync while the performance trace was off");
     assert.equal(syncTrace.fields.declarationTableBytes > 0, true,
       "the sync event omitted the normalized declaration component size");

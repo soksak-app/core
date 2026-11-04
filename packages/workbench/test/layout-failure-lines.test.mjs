@@ -57,7 +57,7 @@ const schedule = () => { page.onLayout(new Map(), () => {}, new Map(), 40); };
 /** Finishes all microtasks and the reporting of unhandled rejections up to the next macrotask. */
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-test("a layout failure of a project switch started from the interface writes one page error line", async () => {
+test("a layout failure of a project switch started from the interface writes one workbench error line", async () => {
   reportRejectionsAsPage();
   lines.length = 0;
   registry.declare("core", { status: [], dom: [], commands: [{
@@ -73,20 +73,20 @@ test("a layout failure of a project switch started from the interface writes one
   document.getElementById("projectTab").click();
   await settle();
   await settle();
-  assert.deepEqual(lines, [`error page page: surface presentation failed: ${TIMEOUT}`],
+  assert.deepEqual(lines, [`error workbench workbench: surface presentation failed: ${TIMEOUT}`],
     "one layout failure of a project switch must write exactly the line of the layout queue that shows it");
 });
 
-test("a layout failure that no command waits for writes one page error line", async () => {
+test("a layout failure that no command waits for writes one workbench error line", async () => {
   reportRejectionsAsPage();
   // The same line is not written again, so the earlier presentation is withdrawn.
-  hideError(banner, "page");
+  hideError(banner, "workbench");
   lines.length = 0;
   schedule();
   await settle();
   await settle();
   assert.equal(await page.presented(), false, "a failed layout was reported as presented");
-  assert.deepEqual(lines, [`error page page: surface presentation failed: ${TIMEOUT}`],
+  assert.deepEqual(lines, [`error workbench workbench: surface presentation failed: ${TIMEOUT}`],
     "one layout failure of a gesture must write exactly the line of the layout queue that shows it");
 });
 

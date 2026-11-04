@@ -10,7 +10,7 @@ import { currentEventOffsets, untilEventLine } from "@soksak/window-check/event-
 import { fresh, reading, recordCatalog } from "./fixture.mjs";
 
 /** The records that the first check reads. */
-const RECORDS = ["host.record.info", "page.record.info"];
+const RECORDS = ["host.record.info", "workbench.record.info"];
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the event log holds the run record and the records the page reports`, { timeout: 60000 }, async (t) => {
@@ -27,13 +27,13 @@ for (const app of Object.values(APPS)) {
     const offsets = currentEventOffsets(s.app.configDir);
     await s.run("core.focus.set", { name: "core.library.search" });
     // The transcript holds the record in the text form of the application log.
-    await transcript.until((lines) => lines.includes(`info page page: ${line}`), `the page did not report "${line}"`);
+    await transcript.until((lines) => lines.includes(`info workbench workbench: ${line}`), `the page did not report "${line}"`);
     const logs = readdirSync(join(s.app.configDir, "logs"));
     assert.ok(logs.some((name) => /^host-.+\.jsonl$/.test(name)), `logs/ holds no host event log: ${JSON.stringify(logs)}`);
     const run = await untilEventLine(s.app.configDir, {}, (entry) => /^info host run: \S+ pid \d+$/.test(entry), 10000, reading(app, RECORDS));
     assert.ok(run, "the event log has no run record");
     // The writer stores the record at its next batch, so the check reads the event log until the record is there.
-    assert.equal(await untilEventLine(s.app.configDir, offsets, (entry) => entry === `info page page: ${line}`, 10000, reading(app, RECORDS)), `info page page: ${line}`);
+    assert.equal(await untilEventLine(s.app.configDir, offsets, (entry) => entry === `info workbench workbench: ${line}`, 10000, reading(app, RECORDS)), `info workbench workbench: ${line}`);
   });
 }
 

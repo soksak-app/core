@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-const eventSchema = 2
+const eventSchema = 3
 
 var utcTime = regexp.MustCompile(`^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?Z$`)
 

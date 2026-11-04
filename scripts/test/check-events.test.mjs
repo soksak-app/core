@@ -18,7 +18,7 @@ const catalog = {
   events: {
     'log.open': { layer: 'host', class: 'lifecycle', level: 'info', fields: fieldSchema({'schema': { type: 'number' }, 'pid': { type: 'number' }, 'role': { type: 'string' }, 'boot': { type: 'string' }}, ['schema', 'pid', 'role', 'boot']) },
     'host.window.event': { layer: 'host', class: 'lifecycle', level: 'info', fields: fieldSchema({'window': { type: 'string' }, 'kind': { type: 'string' }}, ['window', 'kind']) },
-    'page.record.<level>': { layer: 'page', class: 'lifecycle', level: ['error', 'info'], fields: fieldSchema({'where': { type: 'string' }, 'text': { type: 'string' }}, ['where', 'text']) },
+    'workbench.record.<level>': { layer: 'workbench', class: 'lifecycle', level: ['error', 'info'], fields: fieldSchema({'where': { type: 'string' }, 'text': { type: 'string' }}, ['where', 'text']) },
   },
 };
 
@@ -27,7 +27,7 @@ test('the logs of a configuration folder are audited against the catalog and the
   mkdirSync(join(root, 'logs'));
   const line = (seq, event, fields, layer = 'host') => JSON.stringify({ ts_us: 1000 + seq, mono_ns: 5_000_000 + seq, seq, level: 'info', class: 'lifecycle', layer, event, fields });
   writeFileSync(join(root, 'logs', 'host-1-2.jsonl'), [
-    line(1, 'log.open', { schema: 2, pid: 2, role: 'host', boot: '1-2' }),
+    line(1, 'log.open', { schema: 3, pid: 2, role: 'host', boot: '1-2' }),
     line(2, 'host.window.event', { window: 'main', kind: 'focus' }),
     line(3, 'host.window.event', { window: 'main' }),
     line(4, 'host.surprise', {}),
@@ -44,11 +44,11 @@ test('the audit of a configuration folder reads the files of every layer, genera
   const root = mkdtempSync(join(tmpdir(), 'events-'));
   mkdirSync(join(root, 'logs'));
   const line = (seq, event, fields, extra = {}) => JSON.stringify({ ts_us: 1000 + seq, mono_ns: 5_000_000 + seq, seq, level: 'info', class: 'lifecycle', layer: 'host', event, fields, ...extra });
-  const open = (seq, role) => line(seq, 'log.open', { schema: 2, pid: 2, role, boot: '1-2' });
+  const open = (seq, role) => line(seq, 'log.open', { schema: 3, pid: 2, role, boot: '1-2' });
   const write = (name, lines) => writeFileSync(join(root, 'logs', name), `${lines.join('\n')}\n`);
   // The generations are numbered in the order of the rotations without an upper bound: the debug file has the generation 10.
   write('host-1-2.jsonl.1', [open(1, 'host'), line(2, 'host.window.event', { window: 'main', kind: 'focus' })]);
-  write('host-1-2.jsonl', [open(3, 'host'), line(5, 'page.record.error', { where: 'w', text: 't' }, { layer: 'page', page: '1791948729050', level: 'error' })]);
+  write('host-1-2.jsonl', [open(3, 'host'), line(5, 'workbench.record.error', { where: 'w', text: 't' }, { layer: 'workbench', start: '1791948729050', level: 'error' })]);
   write('host-1-2.debug.jsonl.10', [open(4, 'host'), line(6, 'host.window.event', { window: 'main', kind: 'focus' }, { level: 'debug' })]);
   write('probe-3-4.jsonl', [open(1, 'probe'), line(2, 'host.surprise', {}, { layer: 'sidecar' })]);
   write('notes.txt', ['not an event file']);
@@ -61,19 +61,41 @@ test('the audit of a configuration folder reads the files of every layer, genera
 
 test('the catalog declares the chain of each operation of the page and the first event of each requires identifiers', () => {
   const real = JSON.parse(readFileSync(new URL('../../docs/spec/events.json', import.meta.url), 'utf8'));
-  const first = { plugin: 'page.plugin.operation', project: 'page.project.operation', window: 'page.window.operation', settings: 'page.settings.change', update: 'page.update.operation' };
+  const first = { plugin: 'workbench.plugin.operation', project: 'workbench.project.operation', window: 'workbench.window.operation', settings: 'workbench.settings.change', update: 'workbench.update.operation' };
   for (const [chain, event] of Object.entries(first)) {
     // The close of a window ends its page before the page records the completion of the call (docs/spec/logging.md#operation-chains).
-    const call = chain === 'window' ? [] : ['page.call'];
+    const call = chain === 'window' ? [] : ['workbench.call'];
     assert.deepEqual(real.chains[chain], [event, ...call, 'host.binding.call'], chain);
     assert.equal(real.events[event].cids, 'required', event);
-    assert.equal(real.events[event].layer, 'page', event);
+    assert.equal(real.events[event].layer, 'workbench', event);
   }
-  assert.deepEqual(Object.keys(real.events['page.settings.change'].fields.properties), ['scope', 'actor', 'keys']);
-  assert.deepEqual(Object.keys(real.events['page.plugin.operation'].fields.properties), ['action', 'plugin']);
-  assert.deepEqual(Object.keys(real.events['page.project.operation'].fields.properties), ['action', 'project']);
-  assert.deepEqual(Object.keys(real.events['page.window.operation'].fields.properties), ['action']);
-  assert.deepEqual(Object.keys(real.events['page.update.operation'].fields.properties), ['action', 'version']);
+  assert.deepEqual(Object.keys(real.events['workbench.settings.change'].fields.properties), ['scope', 'actor', 'keys']);
+  assert.deepEqual(Object.keys(real.events['workbench.plugin.operation'].fields.properties), ['action', 'plugin']);
+  assert.deepEqual(Object.keys(real.events['workbench.project.operation'].fields.properties), ['action', 'project']);
+  assert.deepEqual(Object.keys(real.events['workbench.window.operation'].fields.properties), ['action']);
+  assert.deepEqual(Object.keys(real.events['workbench.update.operation'].fields.properties), ['action', 'version']);
+});
+
+test('the catalog puts the events that the workbench writes in the layer workbench and keeps the records of a view page in the layer page', () => {
+  const real = JSON.parse(readFileSync(new URL('../../docs/spec/events.json', import.meta.url), 'utf8'));
+  assert.deepEqual(real.layers, ['native', 'host', 'workbench', 'page', 'sidecar', 'sok']);
+  // A view page writes its start and the records of its batcher; every other event of a document is written by the workbench.
+  assert.deepEqual(Object.keys(real.events).filter((name) => name.startsWith('page.')).sort(),
+    ['page.log.clock', 'page.log.dropped', 'page.log.gated', 'page.start']);
+  for (const [name, event] of Object.entries(real.events)) {
+    assert.equal(event.layer === 'workbench', name.startsWith('workbench.'), name);
+  }
+  for (const name of ['workbench.log.clock', 'workbench.log.dropped', 'workbench.log.gated', 'workbench.call', 'workbench.record.<level>', 'workbench.fixture.step']) {
+    assert.equal(real.events[name]?.layer, 'workbench', name);
+  }
+  // The start of the workbench states its start time; the start of a view page keeps the time origin of its document.
+  assert.deepEqual(real.events['workbench.start'].fields.required, ['started_at', 'url']);
+  assert.deepEqual(Object.keys(real.events['workbench.start'].fields.properties), ['started_at', 'url']);
+  assert.deepEqual(real.events['page.start'].fields.required, ['time_origin', 'url']);
+  assert.deepEqual(real.chains.input, ['native.input.key_down', 'host.input.relay', 'workbench.call', 'host.sidecar.request']);
+  for (const [chain, event] of Object.entries({ plugin: 'workbench.plugin.operation', project: 'workbench.project.operation', window: 'workbench.window.operation', settings: 'workbench.settings.change', update: 'workbench.update.operation' })) {
+    assert.equal(real.chains[chain][0], event, chain);
+  }
 });
 
 const alphaCatalog = JSON.parse(readFileSync(new URL('../../docs/spec/cases/log-contract/extension/alpha.json', import.meta.url), 'utf8'));
@@ -114,7 +136,7 @@ function installedPlugin(t, { manifest = { id: 'probe', name: 'Probe', descripti
   writeFileSync(join(root, PLUGIN_PATH, 'plugin.json'), JSON.stringify(manifest));
   if (pluginCatalog !== null) writeFileSync(join(root, PLUGIN_PATH, 'events.json'), JSON.stringify(pluginCatalog));
   writeFileSync(join(root, 'logs', 'host-1-2.jsonl'), [
-    JSON.stringify({ ts_us: 1, mono_ns: 1, seq: 1, level: 'info', class: 'lifecycle', layer: 'host', event: 'log.open', fields: { schema: 2, pid: 2, role: 'host', boot: '1-2' } }),
+    JSON.stringify({ ts_us: 1, mono_ns: 1, seq: 1, level: 'info', class: 'lifecycle', layer: 'host', event: 'log.open', fields: { schema: 3, pid: 2, role: 'host', boot: '1-2' } }),
     JSON.stringify({ ts_us: 2, mono_ns: 2, seq: 2, level: 'info', class: 'input', layer: 'plugin', event: 'plugin.probe.frame', page: '123', fields: { kind: 'frame' } }),
   ].join('\n') + '\n');
   return root;
@@ -162,11 +184,11 @@ test('the events of an installed sidecar are audited against its catalog, and a 
   const classOf = (event) => (base.events[event] ?? alphaCatalog.events[event])?.class;
   const line = (seq, event, fields, layer, extra = {}) => JSON.stringify({ ts_us: 1000 + seq, mono_ns: 5_000_000 + seq, seq, level: 'info', ...(classOf(event) === undefined ? {} : { class: classOf(event) }), layer, event, fields, ...extra });
   writeFileSync(join(root, 'logs', 'host-1-2.jsonl'), [
-    line(1, 'log.open', { schema: 2, pid: 2, role: 'host', boot: '1-2' }, 'sidecar'),
+    line(1, 'log.open', { schema: 3, pid: 2, role: 'host', boot: '1-2' }, 'sidecar'),
     line(2, 'host.sidecar.request', { name: 'alpha' }, 'host', { cids: ['1-2.1'] }),
   ].join('\n') + '\n');
   writeFileSync(join(root, 'logs', 'alpha-3-4.jsonl'), [
-    line(1, 'log.open', { schema: 2, pid: 3, role: 'alpha', boot: '3-4' }, 'sidecar'),
+    line(1, 'log.open', { schema: 3, pid: 3, role: 'alpha', boot: '3-4' }, 'sidecar'),
     line(2, 'sidecar.alpha.start', { pid: 3 }, 'sidecar'),
     line(3, 'sidecar.alpha.surprise', {}, 'sidecar'),
   ].join('\n') + '\n');
@@ -190,7 +212,7 @@ test('a host stall record at warn that the gate exception stores is not an audit
     },
   };
   writeFileSync(join(root, 'logs', 'host-1-2.jsonl'), [
-    line(1, 'log.open', { schema: 2, pid: 2, role: 'host', boot: '1-2' }),
+    line(1, 'log.open', { schema: 3, pid: 2, role: 'host', boot: '1-2' }),
     line(2, 'host.stall', { late_ms: 1200 }, 'warn'),
     line(3, 'host.stall.sampled', { path: '/logs/stall-host-2-3.txt' }, 'warn'),
   ].join('\n') + '\n');

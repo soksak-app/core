@@ -284,7 +284,7 @@ fn invalid_json_closes_connection() {
 | `view.error.display` | 다른 이유의 `view.error` message는 `error: view <plugin> <surface>: <reason>`으로 오류 표시 경로에 한 번 쓰이고 view는 계속된다. 이유가 빈 `view.error`는 거부한다. | both |
 | `view.call.record` | view의 call 요청은 debug 수준의 `host.view.call`(plugin, surface, id, command)로 기록되고, 그 회신은 결과(outcome)와 함께 `host.view.reply`로 기록된다. cancel은 call로 기록하지 않는다. | both |
 | `view.restart.limit` | process가 끝했거나 message queue가 넘친 view는 300초 안에 네 번째 failure까지 닫히고 다시 만들어지며, surface마다 sliding window로 센다: 새 failure보다 300초 이전인 failure은 세지 않는다. 네 번째 failure가 restart를 멈추고, 멈춘 surface는 view를 만들지 않으며, surface를 제거하면 그 failure 기록을 지운다. | both |
-| `view.responsiveness.relay` | view의 `_webViewWebProcessDidBecomeUnresponsive:` 알림은 `host.trace.view.unresponsive {plugin, surface}`를 쓰고 `view-responsiveness {surface, plugin, generation, responsive: false}`를 메인 page에 보내며, `_webViewWebProcessDidBecomeResponsive:` 알림은 `host.trace.view.responsive {plugin, surface}`를 쓰고 같은 generation의 `responsive: true`를 보낸다. Callback은 이를 만든 view의 generation을 캡처하고, workbench는 해당 generation이 current일 때만 notice를 적용하며 오래된 notice는 `page.view.event.cancel`로 기록한다. 두 알림 모두 view의 call을 끝내지 않는다. | both |
+| `view.responsiveness.relay` | view의 `_webViewWebProcessDidBecomeUnresponsive:` 알림은 `host.trace.view.unresponsive {plugin, surface}`를 쓰고 `view-responsiveness {surface, plugin, generation, responsive: false}`를 메인 page에 보내며, `_webViewWebProcessDidBecomeResponsive:` 알림은 `host.trace.view.responsive {plugin, surface}`를 쓰고 같은 generation의 `responsive: true`를 보낸다. Callback은 이를 만든 view의 generation을 캡처하고, workbench는 해당 generation이 current일 때만 notice를 적용하며 오래된 notice는 `workbench.view.event.cancel`로 기록한다. 두 알림 모두 view의 call을 끝내지 않는다. | both |
 | `view.process.events` | view를 만들면 `host.trace.view.process-request {plugin, surface}`를 쓰고, 그 view의 첫 ready message는 `host.trace.view.process-ready {plugin, surface}`를 쓴다. | both |
 | `view.restart.restores-state` | 프로세스가 끝난 뒤 호스트가 다시 만든 view는 기록의 surface를 가지므로, 새 view의 view 호출은 그 surface를 담은 `view-call`로 전달되고, workbench가 surface별로 보관하는 그 surface의 탭 상태는 끝나기 전과 같이 읽힌다. | both |
 | `view.restart.limit-shows-error` | 300초 안의 네 번째 view surface 실패는 `view-stopped {surface, plugin, reason}` event를 창의 메인 page에 한 번 보내며, reason은 `the view failed 4 times within 300 seconds and is created again when its tab is reopened`이고, application log에 `error: view channel: <surface>: <reason>`을 쓴다. | both |
@@ -461,8 +461,8 @@ fn invalid_json_closes_connection() {
 | `log.application.start-replaces-standard-error` | 애플리케이션 로그를 시작하면 실행의 첫 줄을 쓰고 그 파일을 프로세스와 그 프로세스가 시작하는 자식의 표준 오류로 만든다. | both |
 | `log.error.line-form` | 헬퍼로 쓴 호스트 오류는 애플리케이션 로그의 기록 `<time> error host <where>: <text>`다. | both |
 | `log.transcript.line-reaches-the-application-log` | 창의 진단 기록 줄은 `info host transcript <window>: <line>`으로도 쓰고, Wails host는 진단 기록이 싣는 오류를 `error host <operation> <window>: <error>`로도 써서, 진단 기록을 요청한 연결이 없어도 그 줄이 남는다. | both |
-| `log.page.clock-anchor-passes-default-policy` | Writer는 기본 lifecycle/error 정책에서 page.log.clock 시각 metadata를 저장하고 일반 lifecycle/info event는 계속 거부한다. | both |
-| `log.page.fixture-step-passes-default-policy` | Writer는 기본 lifecycle/error 정책에서 각 page.fixture.step event(lifecycle/info)를 저장하며, 진단 시험 표지와 같다. | both |
+| `log.page.clock-anchor-passes-default-policy` | Writer는 기본 lifecycle/error 정책에서 view page의 `page.log.clock`과 workbench의 `workbench.log.clock` 시각 metadata를 저장하고 일반 lifecycle/info event는 계속 거부한다. | both |
+| `log.workbench.fixture-step-passes-default-policy` | Writer는 기본 lifecycle/error 정책에서 각 workbench.fixture.step event(lifecycle/info)를 저장하며, 진단 시험 표지와 같다. | both |
 | `log.info.record-form` | `LogInfo`(Go)나 `log_info`(Rust)로 쓴 호스트 관측은 애플리케이션 로그의 기록 `<time> info host <where>: <text>`다. | both |
 | `log.record.one-line` | 기록은 한 줄이다. 본문의 줄바꿈은 두 글자 `\n`으로 쓰고, 시각을 뺀 항목은 `<level> <layer> <where>: <text>`다. | both |
 | `sidecars.disconnect.record-end` | 영속 서비스 연결의 `host.sidecar.disconnect` 기록은 연결이 어떻게 끝났는지(`end`: `eof`, `unfinished line`, `read error: <text>`, `violation`)와 그 연결을 기다리던 요청 수(`waiting`)를 담는다. 서비스의 종료 상태는 기록하지 않는다. 호스트가 그 프로세스를 소유하지 않기 때문이다. | both |
@@ -799,7 +799,7 @@ fn invalid_json_closes_connection() {
 | `overlay.pick.dropped-is-recorded` | id와 instance가 열린 모달의 것이 아닌 모달의 응답은 기록 `host.overlay.dropped`의 field `{id, instance, key, open}`과 함께 버려지며, 열린 모달이 없으면 `open`은 빈 글이다. 열린 모달의 응답은 버려지지 않는다. | both |
 | `modal.ready-visible` | 열린 모달의 ready 요청은 모달을 표시하고 visible 플래그를 설정한 뒤, 둘 다 끝난 후에 메인 스레드에서 응답한다. 표시가 실패하면 그 오류로 응답하고 모달은 다음 ready 요청까지 대기 상태로 남는다. id와 instance가 열린 모달의 것이 아닌 ready 요청은 오래된 요청이다. 아무것도 바꾸지 않고 ok로 응답하며, 이벤트 `host.trace.modal.stale-ready`를 `modal`과 `instance`와 함께 기록한다. | both |
 | `reload.timeout.names-running-calls` | 범위 안에 page가 준비를 알리지 않은 다시 읽기는 `the reloaded page did not report ready within <bound>; running host calls: <calls>`로 실패하며, `<calls>`는 그 window에서 돌아오지 않은 호출을 시작 순서로 각각 소수 한 자리의 `<name> <seconds>s`로 적거나 `none`이다. | both |
-| `log.batch.requires-the-page` | 쓴 page를 `page`에 이름하지 않은 relay event는 `page must name the document that wrote the event`로 거부되고, writer는 page 없는 layer page나 plugin의 relay event와 page가 있는 다른 layer의 event를 거부한다. | both |
+| `log.batch.requires-the-start` | 자신을 쓴 workbench의 start를 `start`에 이름하지 않은 workbench 배치의 event는 `start must name the start of the workbench that wrote the event`로, `page`를 이름한 event는 `page is not a member of an event of the workbench`로 거부된다. | both |
 | `debug.save-text.writes-the-text-to-the-destination` | 글 저장은 요청의 글을 줄바꿈과 ASCII가 아닌 글자를 그대로 둔 채 목적지에 쓴다. | both |
 | `debug.save-text.refuses-a-name-that-is-not-a-file-name-and-text-that-is-empty-or-too-large` | 빈 이름, `.`, `..`, `/`나 `\`를 가진 이름은 `debug: name "<name>" is not a file name`으로, 빈 글은 `debug: text is empty`로, 16 MiB를 넘는 글은 `debug: text is <n> bytes, over the limit of 16777216`으로 요청을 거절한다. | both |
 | `files.place.answers-the-path-inside-the-project` | project root 안에서 고른 위치는 root나 위치가 symbolic link를 지나도 root 기준 상대 path를 부분 사이 `/`로 답한다. | both |
@@ -857,6 +857,7 @@ fn invalid_json_closes_connection() {
 | `projects.shown-command-is-registered` | Main page는 등록된 project-shown command로 선택한 project를 commit할 수 있다. | both |
 | `project.shown.ignores-unknown-fields` | project-shown 입력에는 `project` member가 필요하며 값은 `null`일 수 있고, member 생략은 거부된다. 알 수 없는 바깥쪽 및 중첩 field는 무시하고 인식하는 project data를 commit하며 명시적 `null`은 commit된 project를 지운다. | both |
 | `debug.record.writes-the-state-file` | 기록은 주어진 상태와 UTC `time` `YYYYMMDDTHHMMSSZ`를 담은 `logs/state-<time>.json`을 쓰고 그 상대 경로로 답한다. | both |
+| `debug.record.names-the-value-of-the-workbench` | 상태 파일은 요청이 member `workbench`로 준 workbench의 값을 담고, member `page`는 없다. | both |
 | `debug.record.keeps-the-newest-20-state-files` | 상태 파일을 쓴 뒤 host는 시각으로 가장 새 20개를 넘는 `logs/state-<time>.json` 파일을 지우고 `logs/`의 다른 파일은 둔다. | both |
 | `cli.identity.build-identifier` | `dev` 플래그 build는 `app.soksak.<wails 또는 tauri>.dev`를 쓰고, 진단 build를 포함한 다른 build는 `app.soksak.<wails 또는 tauri>`를 쓴다. | both |
 | `cli.command.host-command-without-page` | `host.` command는 `owner`가 `host`인 `exposure.list`로 검사되므로, main page가 노출 목록에 답하지 않는 동안에도 `command.run`으로 실행된다. | both |
@@ -995,7 +996,7 @@ fn invalid_json_closes_connection() {
 | `installed.sidecars.resolve-installed-folders` | Host의 sidecar는 켜진 설치 plugin의 `plugin.json`이 지정한 것이며, 각각 sidecar 폴더의 기록된 `path`와 거기의 `sidecar.json`을 가진다. 설치 version이 없는 sidecar는 실패하고, 빈 설정에는 sidecar가 없다. | both |
 | `installed.sidecars.leave-out-plugin-dependencies` | 켜졌든 꺼졌든 설치된 plugin을 지정하는 `plugin.json`의 dependency는 host의 sidecar가 아니다. | both |
 | `installed.sidecars.dependents-of-a-shared-sidecar` | 여러 켜진 plugin이 `dependencies`에 적은 sidecar는 한 번 선언되며, 그 선언은 그런 plugin을 plugin id 순서로 dependent로 나열한다. | both |
-| `log.writer.assigns-seq-and-opens-with-log-open` | host 로그 파일은 `schema`(2), `pid`, `role`, `boot`를 담은 `log.open`으로 시작하며, writer는 모든 줄에 1부터 연속인 `seq`를 부여한다. | both |
+| `log.writer.assigns-seq-and-opens-with-log-open` | host 로그 파일은 `schema`(3), `pid`, `role`, `boot`를 담은 `log.open`으로 시작하며, writer는 모든 줄에 1부터 연속인 `seq`를 부여한다. | both |
 | `log.writer.stores-both-clocks` | writer의 모든 줄은, `log.open`, `log.rotated`, `log.dropped`를 포함해, `ts_us`(호출 시점의 wall clock, 마이크로초)와 `mono_ns`(호출 시점의 플랫폼 monotonic clock, 나노초이며 양수이고 앞선 호출의 `mono_ns`보다 작지 않다)를 가진다. | both |
 | `log.writer.stores-cids` | host의 생산자가 상관 식별자와 함께 낸 event는 `cids`(순서대로의 목록)와 함께 저장되고, 식별자가 없는 event에는 `cids`가 없다. 비어 있거나 따옴표, 역슬래시, 제어 문자를 담은 식별자는 거부하고 손실로 센다. | both |
 | `log.writer.never-blocks-and-counts-loss` | `emit`은 기다리지 않고 돌아온다. 큐에 자리가 없으면 false를 돌려주고, writer는 거부된 event 수와 같은 `count`와 거부된 event의 `channel`을 가진 `log.dropped` 하나를 그것이 가리키는 `seq` 범위 뒤에 저장한다. | both |
@@ -1005,6 +1006,7 @@ fn invalid_json_closes_connection() {
 | `log.writer.output-follows-the-contract` | writer의 파일은 자신의 event를 선언한 catalog에 대해 `@soksak/log-contract` 감사를 통과한다. | both |
 | `log.writer.flush-at-exit` | `flush`는 받아들인 모든 event가 디스크에 기록된 뒤 돌아오며, 기한이 지나면 실패한다. | both |
 | `log.writer.relays-events-with-their-layer-and-time` | host의 writer는 프로세스의 다른 계층이 중계한 event를 그 event의 `layer`, `ts_us`, `mono_ns`, `cids`와 writer의 `seq`로 저장하고, 계층으로 시작하지 않는 event 이름, 계약에 없는 계층, 0인 `mono_ns`, 유효하지 않은 식별자는 오류로 거부한다. | both |
+| `log.writer.names-the-writing-document` | 중계된 event는 자신을 쓴 문서를 layer `workbench`이면 `start`에, layer `page`이면 `page`에, layer `plugin`이면 둘 중 정확히 하나에 이름한다. writer는 이름한 member를 저장하고, member가 없는 event(`the event <name> of the layer <layer> names its writer in start`, `… in page or start`), layer `plugin`의 event에 두 member가 모두 있는 경우(`… names its writer in one of page and start, not both`), layer가 허용하지 않는 member(`the event <name> of the layer <layer> names page, which only an event of the layer page or plugin names`, `start`이면 `workbench or plugin`)를 거부한다. | both |
 | `log.writer.rotates-at-the-bound-and-keeps-generations` | writer는 파일을 `rotate_bytes`를 넘게 될 줄 앞에서 닫고, 닫은 파일을 하나도 지우지 않고 세대 `.1`부터 `.N`으로 보관하고, 새 파일을 `log.open`과 `log.rotated`로 시작하되 `seq`를 이어 가고, 모든 세대가 계약의 파일이다. | both |
 | `log.writer.refuses-an-unbounded-file` | 양의 회전 경계나 양의 세대 수 없이 시작한 writer는 그 옵션을 가리키는 오류로 시작에 실패한다. | both |
 | `log.native.stores-pulled-records-in-the-layer-native` | writer는 native ring에서 pull한 record를 library가 준 시각과 level, 이름, field, writer의 `seq`로 계층 `native`에 저장한다. | both |
@@ -1029,7 +1031,7 @@ fn invalid_json_closes_connection() {
 | `log.policy.change-is-an-event` | writer의 첫 정책과 이후의 각 변경은 `source`와 `classes`를 가진 `log.policy` event 하나이며, 같은 정책이 다시 오면 아무것도 저장하지 않는다. | both |
 | `log.policy.gate-counts-what-it-did-not-build` | 닫힌 gate는 아무것도 저장하지 않고, writer는 거부한 event의 정확한 수를 class와 level별로 `log.gated`로 보고한다. | both |
 | `log.policy.gate-passes-the-events-of-the-writer-itself` | `log.open`, `log.rotated`, `log.dropped`, `log.policy`, `log.gated`, `log.pruned`는 class `lifecycle`을 끈 정책을 지난다. | both |
-| `log.policy.gate-passes-the-start-of-a-page-document` | page가 host call `log`의 action `batch`로 전달한 `page.start` event는 class `lifecycle`을 끈 정책 아래에서도 저장된다. | both |
+| `log.policy.gate-passes-the-start-of-the-workbench` | workbench가 host call `log`의 action `batch`로 전달한 `workbench.start` event는 class `lifecycle`을 끈 정책 아래에서도 저장된다. | both |
 | `log.policy.page-sets-the-file` | host 호출 `log`의 action `policy`는 class를 파일의 규칙으로 검사하고 `log-policy.json`(mode 0600)을 쓰며, 규칙을 어긴 요청은 오류이고 아무것도 쓰지 않는다. | both |
 | `log.policy.carries-the-cids-of-the-change` | host 호출 `log`의 action `policy`가 `cids`와 함께 쓴 정책은 감시가 적용할 때 그 `cids`를 가진 `log.policy`로 저장된다. 같은 정책이 다시 오면 아무것도 저장하지 않고, 파일의 다른 writer가 가져온 정책에는 `cids`가 없으며, 한 줄에 담을 수 있는 identifier의 목록이 아닌 `cids`는 오류이고 아무것도 쓰지 않는다. | both |
 | `log.policy.read-answers-the-policy-in-force` | host 호출 `log`의 action `policy-read`는 적용 중인 정책의 모든 class 값인 `{classes}`로 답한다. 첫 정책 전에는 기본 정책이고, 그 뒤에는 마지막으로 적용한 정책이다. | both |
@@ -1062,12 +1064,12 @@ fn invalid_json_closes_connection() {
 | `bounds.endpoint.topic-changes-hold-at-most-256` | topic 하나의 구독 변경 256개가 page를 기다리면 다음 변경은 적용하지 않고, 오류 코드 `-32000`과 topic과 256을 말하는 메시지로 답하며, buffer `endpoint topic changes`와 이유 `the buffer holds 256 messages`를 가진 `host.buffer.dropped`로 저장한다. | both |
 | `bounds.endpoint.output-queue-holds-at-most-sixteen-mebibytes` | 연결의 출력 큐가 16,777,216바이트를 넘게 담게 하는 frame은 거절하고, buffer `endpoint output queue`와 이유 `the buffer holds 16777216 bytes`를 가진 `host.buffer.dropped`로 저장하며, 연결을 닫는다. | wailsv3 only: Wails host는 연결의 frame을 writer goroutine이 비우는 큐로 보내지만, Tauri host는 연결을 쥔 채 각 frame을 소켓에 쓴다 |
 | `log.record.flush-stores-the-records-written-so-far` | 기록 flush는 지금까지 쓴 기록이 event log에 들어갈 때까지 기다리고, 붙은 writer가 없으면 곧바로 돌아온다. | both |
-| `log.batch.stores-page-events-in-order` | `log` 중계는 `batch` 요청의 event를 page가 준 `ts_us`와 writer의 `seq`로, 순서대로, 계층 `page`에 저장한다. | both |
-| `log.batch.rejects-an-invalid-batch-without-writing` | `log` 중계는 `batch`나 `clock`이 아닌 action, 배열이 아닌 `events`, `page.`와 `plugin.` 어느 쪽으로도 시작하지 않는 event 이름, 계약에 없는 level, 양의 정수가 아닌 `ts_us`나 `mono_ns`, 따옴표·역슬래시·제어 문자 없는 비어 있지 않은 문자열의 배열이 아닌 `cids`, 객체가 아닌 `fields`에 대해 배치 전체를 거부하고 그 배치는 아무것도 쓰지 않으며, 오류는 `events[<index>]`를 가리킨다. | both |
-| `log.batch.returns-the-transcript-lines-of-page-records` | `log` 중계는 배치의 page 기록(문자열 field `where`와 `text`를 가진 `page.record.<level>`)의 줄 `<level> page <where>: <text>`을 돌려주며 host는 그것을 창의 transcript에 보이고, 그 문자열 field가 아닌 page 기록은 거부한다. | both |
-| `log.transcript.answers-the-whole-line` | host call `log`의 action `transcript`는 줄을 place `page`와 page identity를 가진 `page.record.info`로 저장하되 8,192바이트에서 잘라 `truncated: true`를 두고, 전체 줄 `info page page: <line>`을 응답하며 host는 그것을 창의 transcript에 보인다. `page`가 없거나 `line`이 빈 요청은 오류다. | both |
-| `log.batch.stores-plugin-events-in-the-layer-plugin` | `log` 중계는 이름이 `plugin.`으로 시작하는 event를 계층 `plugin`에, `page.`로 시작하는 event를 계층 `page`에, 각각 page가 준 시각과 writer의 `seq`로 저장한다. | both |
-| `log.batch.stores-clock-and-cids-of-page-events` | `log` 중계는 page가 준 `ts_us`, `mono_ns`와, event에 있으면 `cids`를 저장하고, `cids`가 없는 event에는 `cids`가 없다. | both |
+| `log.batch.stores-workbench-events-in-order` | workbench의 `log` 중계는 `batch` 요청의 event를 workbench가 준 `start`와 `ts_us`, writer의 `seq`로, 순서대로, 계층 `workbench`에 저장한다. | both |
+| `log.batch.rejects-an-invalid-batch-without-writing` | `log` 중계는 `batch`나 `clock`이 아닌 action, 배열이 아닌 `events`, `workbench.`와 `plugin.` 어느 쪽으로도 시작하지 않는 event 이름, 계약에 없는 level, 양의 정수가 아닌 `ts_us`나 `mono_ns`, 따옴표·역슬래시·제어 문자 없는 비어 있지 않은 문자열의 배열이 아닌 `cids`, 객체가 아닌 `fields`에 대해 배치 전체를 거부하고 그 배치는 아무것도 쓰지 않으며, 오류는 `events[<index>]`를 가리킨다. | both |
+| `log.batch.returns-the-transcript-lines-of-workbench-records` | `log` 중계는 배치의 workbench 기록(문자열 field `where`와 `text`를 가진 `workbench.record.<level>`)의 줄 `<level> workbench <where>: <text>`을 돌려주며 host는 그것을 창의 transcript에 보이고, 그 문자열 field가 아닌 workbench 기록은 거부한다. | both |
+| `log.transcript.answers-the-whole-line` | host call `log`의 action `transcript`는 줄을 place `workbench`와 workbench의 start를 가진 `workbench.record.info`로 저장하되 8,192바이트에서 잘라 `truncated: true`를 두고, 전체 줄 `info workbench workbench: <line>`을 응답하며 host는 그것을 창의 transcript에 보인다. `start`가 없거나 `line`이 빈 요청은 오류다. | both |
+| `log.batch.stores-plugin-events-in-the-layer-plugin` | workbench의 `log` 중계는 이름이 `plugin.`으로 시작하는 event를 계층 `plugin`에, `workbench.`로 시작하는 event를 계층 `workbench`에, 각각 workbench가 준 `start`와 시각, `page` 없이 writer의 `seq`로 저장한다. | both |
+| `log.batch.stores-clock-and-cids-of-workbench-events` | `log` 중계는 workbench가 준 `ts_us`, `mono_ns`와, event에 있으면 `cids`를 저장하고, `cids`가 없는 event에는 `cids`가 없다. | both |
 | `log.batch.answers-the-clock-request` | `log` 중계는 `{action: "clock"}`에 host가 호출 시점에 읽은 `ts_us`와 `mono_ns`로 답하고 event를 저장하지 않는다. 두 번째 답은 어느 clock에서도 첫 번째 답보다 작지 않다. | both |
 | `log.view-batch.binds-ready-page-and-native-surface` | view batch는 해당 view의 ready page에 대해서만 허용된다. host는 native plugin과 surface를 묶고 결과 기록에 page와 주입한 surface를 저장한다. | both |
 | `log.view-batch.rejects-foreign-source-without-partial-write` | 다른 page의 event가 포함된 batch는 전체를 거부하며 그보다 앞선 유효 event도 쓰지 않는다. | both |

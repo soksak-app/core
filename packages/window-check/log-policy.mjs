@@ -41,10 +41,10 @@ export function readPolicy(configDir) {
 
 /**
  * The events that pass every gate (docs/spec/logging.md#policy): the events that a writer reports about itself, the counts of the
- * gates and the start of a document of the page.
+ * gates and the start of a document of the workbench and of a view page.
  */
 const UNGATED = new Set(["log.open", "log.rotated", "log.dropped", "log.policy", "log.gated", "log.pruned",
-  "page.log.gated", "native.log.gated", "page.start"]);
+  "workbench.log.gated", "page.log.gated", "native.log.gated", "workbench.start", "page.start"]);
 
 /**
  * Throws when the policy does not store every declared level of a record that the check reads. `catalog` holds the declarations

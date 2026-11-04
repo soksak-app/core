@@ -105,7 +105,7 @@ export function createMemorySaver({
   }
 
   function skipped(trigger, reasons) {
-    emitEvent("info", "page.tab.unload.skipped", { trigger, seq: pressure.seq, reasons });
+    emitEvent("info", "workbench.tab.unload.skipped", { trigger, seq: pressure.seq, reasons });
   }
 
   /**
@@ -160,7 +160,7 @@ export function createMemorySaver({
         commit().catch((again) => failed(`memory saver: tab ${entry.id}: commit failed: ${again.message}`));
         return unloadFailed(entry, trigger, error);
       }
-      emitEvent("info", "page.tab.unloaded", { tab: entry.id, plugin: entry.plugin, trigger });
+      emitEvent("info", "workbench.tab.unloaded", { tab: entry.id, plugin: entry.plugin, trigger });
       return [];
     } finally {
       entry.attempting = false;
@@ -172,7 +172,7 @@ export function createMemorySaver({
    * of the attempt.
    */
   function unloadFailed(entry, trigger, error) {
-    emitEvent("error", "page.tab.unload.failed", { tab: entry.id, plugin: entry.plugin, trigger, reason: error.message });
+    emitEvent("error", "workbench.tab.unload.failed", { tab: entry.id, plugin: entry.plugin, trigger, reason: error.message });
     failed(`memory saver: tab ${entry.id}: unload failed: ${error.message}`);
     return error;
   }
@@ -210,7 +210,7 @@ export function createMemorySaver({
         for (const entry of entries.values()) {
           if (entry.state === "loaded") for (const reason of reasonsOf(entry, { underPressure: true })) reasons.add(reason);
         }
-        emitEvent("info", "page.tab.unload.skipped", { trigger: "pressure", seq, reasons: sorted(reasons) });
+        emitEvent("info", "workbench.tab.unload.skipped", { trigger: "pressure", seq, reasons: sorted(reasons) });
         return;
       }
     } finally {
@@ -317,7 +317,7 @@ export function createMemorySaver({
       if (reasons.length) throw refuse(reasons);
     },
     /**
-     * Sets or clears the mark kept of a tab (core.tab.keep) with one page.tab.keep.changed per change; a tab that can never
+     * Sets or clears the mark kept of a tab (core.tab.keep) with one workbench.tab.keep.changed per change; a tab that can never
      * be unloaded is refused.
      */
     keep(tab, on) {
@@ -327,7 +327,7 @@ export function createMemorySaver({
       if (kind !== "unload") throw new Error(`tab ${tab} can never be unloaded: ${kind}`);
       if (kept(tab) === on) return;
       setKept(tab, on);
-      emitEvent("info", "page.tab.keep.changed", { tab, keep: on });
+      emitEvent("info", "workbench.tab.keep.changed", { tab, keep: on });
       arm();
     },
     /** The memory saver part of the status core.tab.memory: the last pressure report and each tab. */
@@ -345,24 +345,24 @@ export function createMemorySaver({
     restored(tab, history) {
       const entry = restoring(tab);
       setState(entry, "loaded");
-      emitEvent("info", "page.tab.restored", { tab, plugin: entry.plugin, history });
+      emitEvent("info", "workbench.tab.restored", { tab, plugin: entry.plugin, history });
     },
     /** Ends the restore of a tab whose surface or region refused it, and shows the failure (docs/spec/plugins.md#memory-saver). */
     restoreFailed(tab, reason) {
       const entry = entries.get(tab);
       if (!entry) throw new Error(`unknown tab ${tab}`);
       if (entry.state === "restoring") setState(entry, "loaded");
-      emitEvent("error", "page.tab.restore.failed", { tab, plugin: entry.plugin, reason });
+      emitEvent("error", "workbench.tab.restore.failed", { tab, plugin: entry.plugin, reason });
       failed(`memory saver: tab ${tab}: restore failed: ${reason}`);
     },
     /**
      * Reports a document region of a tab of plugin that refused its restored session history. The region attaches again
-     * without it, so a restore stays open and the end of the mount still emits page.tab.restored
+     * without it, so a restore stays open and the end of the mount still emits workbench.tab.restored
      * (docs/spec/plugins.md#memory-saver). The first show of a tab after a restart restores a session history before any
      * commit gives the tab to the memory saver, so the tab need not be known.
      */
     historyRefused(tab, plugin, reason) {
-      emitEvent("error", "page.tab.restore.failed", { tab, plugin, reason });
+      emitEvent("error", "workbench.tab.restore.failed", { tab, plugin, reason });
       failed(`memory saver: tab ${tab}: restore failed: ${reason}`);
     },
     /** The state of the tab: loaded, unloaded or restoring. */

@@ -155,6 +155,31 @@ func TestDebugWriteStateWritesTheStateFile(t *testing.T) {
 	}
 }
 
+// contract: debug.record.names-the-value-of-the-workbench
+func TestDebugStateNamesTheValueOfTheWorkbench(t *testing.T) {
+	config := debugConfig(t)
+	var request host.DebugRecordRequest
+	if err := json.Unmarshal([]byte(`{"workbench":{"core.layout":{"tabs":1}}}`), &request); err != nil {
+		t.Fatal(err)
+	}
+	document := host.DebugStateDocument("wailsv3", map[string]any{"core": "1"}, []map[string]any{}, request)
+	path, err := host.DebugWriteState(config, time.Date(2026, 10, 9, 1, 2, 3, 0, time.UTC), document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(config, path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var state map[string]any
+	if err := json.Unmarshal(data, &state); err != nil {
+		t.Fatal(err)
+	}
+	if _, has := state["page"]; has || fmt.Sprint(state["workbench"]) != "map[core.layout:map[tabs:1]]" || state["host"] != "wailsv3" {
+		t.Fatalf("state %s", data)
+	}
+}
+
 // contract: debug.read.returns-the-end-of-a-text-file
 func TestDebugReadReturnsTheEndOfATextFile(t *testing.T) {
 	config := debugConfig(t)

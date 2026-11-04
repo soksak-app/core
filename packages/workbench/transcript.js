@@ -41,12 +41,12 @@ export function createTranscript(send, reportError = (error) => console.error("t
 
 /**
  * The send function of the recorder in a document with a host: each line goes to the host call `log` with the action `transcript`
- * and the page identity `page`. The host stores the line as a record cut to its bound and sends the whole line to the connections
+ * and the start of the workbench `start`. The host stores the line as a record cut to its bound and sends the whole line to the connections
  * that enabled the transcript (docs/spec/logging.md#bounds); a line sent as an ordinary record would be cut by the page and split
  * at the first `: ` of its payload.
  *
  * call(name, request) is the host call of the document.
  */
-export function transcriptSender(call, page) {
-  return (line) => call("log", { action: "transcript", page, line });
+export function transcriptSender(call, start) {
+  return (line) => call("log", { action: "transcript", start, line });
 }

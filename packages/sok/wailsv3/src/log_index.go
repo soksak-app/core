@@ -24,7 +24,7 @@ import (
 
 const (
 	indexSegmentEvents = 4096
-	indexVersion       = 1
+	indexVersion       = 2
 	indexBlockBytes    = 20480
 	indexRecordBytes   = 18760
 	indexMembersBytes  = 64
@@ -58,7 +58,7 @@ var bloomOffsets = func() [5]int {
 
 var (
 	indexLevels  = []string{"error", "warn", "info", "debug", "trace"}
-	indexLayers  = []string{"native", "host", "page", "plugin", "sidecar", "sok"}
+	indexLayers  = []string{"native", "host", "workbench", "page", "plugin", "sidecar", "sok"}
 	indexClasses = []string{"lifecycle", "input", "call", "io", "frame"}
 )
 

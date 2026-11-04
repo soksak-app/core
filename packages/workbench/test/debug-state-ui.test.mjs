@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 
-const state = (core, modal) => JSON.stringify({ time: "t", host: "tauriv2", versions: { core }, windows: [], page: { modal } });
+const state = (core, modal) => JSON.stringify({ time: "t", host: "tauriv2", versions: { core }, windows: [], workbench: { modal } });
 const FILES = {
   "logs/state-1.json": state("0.0.10", null),
   "logs/state-2.json": state("0.0.11", "debug"),
@@ -78,7 +78,7 @@ test("a state file is shown as a tree and two state files are compared", async (
   assert.deepEqual(ui.debugState().state, { path: "logs/state-1.json", lines: 7, with: null, differences: 0 });
   assert.equal(ui.debugState().viewing, null);
   await ui.compareDebugState("logs/state-2.json");
-  assert.deepEqual(diffText(), ['versions.core: "0.0.10" -> "0.0.11"', 'page.modal: null -> "debug"']);
+  assert.deepEqual(diffText(), ['versions.core: "0.0.10" -> "0.0.11"', 'workbench.modal: null -> "debug"']);
   assert.deepEqual(ui.debugState().state, { path: "logs/state-1.json", lines: 7, with: "logs/state-2.json", differences: 2 });
   const select = document.querySelector('[data-expose="core.debug.state.with"]');
   assert.equal(select.dataset.command, "core.debug.state.compare");

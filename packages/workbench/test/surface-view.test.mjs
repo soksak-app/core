@@ -577,9 +577,9 @@ test("a view call writes receipt and reply records with its source generation", 
     // The reply is sent after the call has settled, so the test waits for the viewReply call.
     await replyArrived;
     await new Promise((resolve) => setImmediate(resolve));
-    assert.deepEqual(emitted.filter(({ event }) => event === "page.view.call"), [{ level: "debug", event: "page.view.call",
+    assert.deepEqual(emitted.filter(({ event }) => event === "workbench.view.call"), [{ level: "debug", event: "workbench.view.call",
       fields: { plugin: pluginId, surface: surfaceId, generation: 1, id: 7, command: "runtime.settings.read" } }]);
-    assert.deepEqual(emitted.filter(({ event }) => event === "page.view.reply"), [{ level: "debug", event: "page.view.reply",
+    assert.deepEqual(emitted.filter(({ event }) => event === "workbench.view.reply"), [{ level: "debug", event: "workbench.view.reply",
       fields: { plugin: pluginId, surface: surfaceId, generation: 1, id: 7, outcome: "result" } }]);
     assert.deepEqual(replies, [{ id: 7, result: {}, page: pageOf(dom), generation: 1 }]);
   } finally {
@@ -635,7 +635,7 @@ test("a view subscription to the text size resolves with a result", { timeout: 5
     listeners.get("view-call")({ id: 8, command: "runtime.textSize.on", params: null });
     await replyArrived;
     await new Promise((resolve) => setImmediate(resolve));
-    assert.deepEqual(emitted.filter(({ event }) => event === "page.view.reply"), [{ level: "debug", event: "page.view.reply",
+    assert.deepEqual(emitted.filter(({ event }) => event === "workbench.view.reply"), [{ level: "debug", event: "workbench.view.reply",
       fields: { plugin: pluginId, surface: surfaceId, generation: 1, id: 8, outcome: "result" } }]);
     assert.deepEqual(replies.map(({ id, result }) => ({ id, result })), [{ id: 8, result: null }]);
   } finally {
@@ -805,7 +805,7 @@ test("a view responsiveness notice is the state of its surface until the surface
     listeners.get("view-responsiveness")({ surface: surfaceId, plugin: pluginId, generation: 2, responsive: false });
     assert.deepEqual(ofSurface(), [{ plugin: pluginId, surface: surfaceId, responsive: false }],
       "the current generation responsiveness notice was not applied");
-    assert.deepEqual(emitted.filter(({ event }) => event === "page.view.event.cancel").map(({ fields }) => fields), [
+    assert.deepEqual(emitted.filter(({ event }) => event === "workbench.view.event.cancel").map(({ fields }) => fields), [
       { plugin: pluginId, surface: surfaceId, event: "view-responsiveness" },
     ], "the stale notice cancellation was not recorded");
     await disposeSurface(surfaceId);
@@ -1367,7 +1367,7 @@ test("a view process end cancels its pending work across restart and accepts new
     assert.deepEqual({
       staleReplies: replies.filter(({ id }) => id === 11),
       staleReplyReachedReplacement: calls.some(({ name }) => name === "staleReplyReachedReplacement"),
-      oldCallCancellation: emitted.filter(({ event, fields }) => event === "page.view.call.cancel" && fields.id === 11)
+      oldCallCancellation: emitted.filter(({ event, fields }) => event === "workbench.view.call.cancel" && fields.id === 11)
         .map(({ fields }) => ({ generation: fields.generation, id: fields.id })),
       routes: routes(),
       relayedEvents: calls.filter(({ name }) => name === "viewEvent").length,
@@ -1586,7 +1586,7 @@ test("closing a view cancels a pending call reply and removes its sidecar route"
     assert.deepEqual({
       staleHostCalls,
       reported,
-      callCancellation: emitted.filter(({ event, fields }) => event === "page.view.call.cancel" && fields.id === 11)
+      callCancellation: emitted.filter(({ event, fields }) => event === "workbench.view.call.cancel" && fields.id === 11)
         .map(({ fields }) => ({ generation: fields.generation, id: fields.id })),
       routes,
     }, {

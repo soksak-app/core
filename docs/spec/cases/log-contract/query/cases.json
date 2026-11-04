@@ -33,20 +33,20 @@
       "lines": 15
     },
     "lines": [
-      "2026-10-08T22:53:20.000000Z info host log.open schema=2 pid=4242 role=\"host\" boot=\"b1\"",
+      "2026-10-08T22:53:20.000000Z info host log.open schema=3 pid=4242 role=\"host\" boot=\"b1\"",
       "2026-10-08T22:53:20.100000Z info native native.input.key_down window=w1 surface=tab-x cids=b1.1 keyCode=36 characters=\"\\r\"",
-      "2026-10-08T22:53:20.200000Z debug page page.call window=w1 surface=tab-x session=s1 cids=b1.1,b1.2 name=\"Café\" ok=true",
-      "2026-10-08T22:53:21.000000Z info host log.open schema=2 pid=4242 role=\"host\" boot=\"b1\"",
+      "2026-10-08T22:53:20.200000Z debug workbench workbench.call window=w1 surface=tab-x session=s1 cids=b1.1,b1.2 name=\"Café\" ok=true",
+      "2026-10-08T22:53:21.000000Z info host log.open schema=3 pid=4242 role=\"host\" boot=\"b1\"",
       "2026-10-08T22:53:21.000001Z info host log.rotated bytes=1024 generation=1",
-      "2026-10-08T22:53:21.005000Z info sidecar log.open schema=2 pid=4343 role=\"probe\" boot=\"v1\"",
+      "2026-10-08T22:53:21.005000Z info sidecar log.open schema=3 pid=4343 role=\"probe\" boot=\"v1\"",
       "2026-10-08T22:53:21.100000Z info host host.test.start name=\"first\" run=\"r1\"",
       "2026-10-08T22:53:21.150000Z info host host.sidecar.request cids=b1.3 name=\"terminal\" surface=\"tab-y\" bytes=3",
       "2026-10-08T22:53:21.160000Z debug sidecar sidecar.probe.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\"",
       "2026-10-08T22:53:21.170000Z debug sidecar sidecar.probe.pty_read surface=tab-y session=s2 bytes=2",
       "2026-10-08T22:53:21.180000Z error sidecar sidecar.probe.failed surface=tab-z session=s3 reason=\"closed\"",
-      "2026-10-08T22:53:21.200000Z warn page page.console.error text=\"boom\"",
+      "2026-10-08T22:53:21.200000Z warn workbench workbench.console.error text=\"boom\"",
       "2026-10-08T22:53:21.300000Z info host host.test.end name=\"first\" run=\"r1\" result=\"pass\"",
-      "2026-10-08T22:53:22.000000Z info sok log.open schema=2 pid=4444 role=\"sok\" boot=\"s1\"",
+      "2026-10-08T22:53:22.000000Z info sok log.open schema=3 pid=4444 role=\"sok\" boot=\"s1\"",
       "2026-10-08T22:53:22.000100Z debug sok sok.command name=\"status\" args=\"\" micros=1200 ok=true status=0"
     ]
   },
@@ -75,8 +75,8 @@
       "lines": 3
     },
     "lines": [
-      "2026-10-08T22:53:21.000002Z info host log.open schema=2 pid=4242 role=\"host\" boot=\"b1\"",
-      "2026-10-08T22:53:21.110000Z debug page page.call cids=b1.3 name=\"sidecarSend\" surface=\"tab-y\" ok=true",
+      "2026-10-08T22:53:21.000002Z info host log.open schema=3 pid=4242 role=\"host\" boot=\"b1\"",
+      "2026-10-08T22:53:21.110000Z debug workbench workbench.call cids=b1.3 name=\"sidecarSend\" surface=\"tab-y\" ok=true",
       "2026-10-08T22:53:21.210000Z debug native native.input.query call=\"markedRange\""
     ]
   },
@@ -122,23 +122,23 @@
       "lines": 18
     },
     "lines": [
-      "2026-10-08T22:53:20.000000Z info host log.open schema=2 pid=4242 role=\"host\" boot=\"b1\"",
+      "2026-10-08T22:53:20.000000Z info host log.open schema=3 pid=4242 role=\"host\" boot=\"b1\"",
       "2026-10-08T22:53:20.100000Z info native native.input.key_down window=w1 surface=tab-x cids=b1.1 keyCode=36 characters=\"\\r\"",
-      "2026-10-08T22:53:20.200000Z debug page page.call window=w1 surface=tab-x session=s1 cids=b1.1,b1.2 name=\"Café\" ok=true",
-      "2026-10-08T22:53:21.000000Z info host log.open schema=2 pid=4242 role=\"host\" boot=\"b1\"",
+      "2026-10-08T22:53:20.200000Z debug workbench workbench.call window=w1 surface=tab-x session=s1 cids=b1.1,b1.2 name=\"Café\" ok=true",
+      "2026-10-08T22:53:21.000000Z info host log.open schema=3 pid=4242 role=\"host\" boot=\"b1\"",
       "2026-10-08T22:53:21.000001Z info host log.rotated bytes=1024 generation=1",
-      "2026-10-08T22:53:21.000002Z info host log.open schema=2 pid=4242 role=\"host\" boot=\"b1\"",
-      "2026-10-08T22:53:21.005000Z info sidecar log.open schema=2 pid=4343 role=\"probe\" boot=\"v1\"",
+      "2026-10-08T22:53:21.000002Z info host log.open schema=3 pid=4242 role=\"host\" boot=\"b1\"",
+      "2026-10-08T22:53:21.005000Z info sidecar log.open schema=3 pid=4343 role=\"probe\" boot=\"v1\"",
       "2026-10-08T22:53:21.100000Z info host host.test.start name=\"first\" run=\"r1\"",
-      "2026-10-08T22:53:21.110000Z debug page page.call cids=b1.3 name=\"sidecarSend\" surface=\"tab-y\" ok=true",
+      "2026-10-08T22:53:21.110000Z debug workbench workbench.call cids=b1.3 name=\"sidecarSend\" surface=\"tab-y\" ok=true",
       "2026-10-08T22:53:21.150000Z info host host.sidecar.request cids=b1.3 name=\"terminal\" surface=\"tab-y\" bytes=3",
       "2026-10-08T22:53:21.160000Z debug sidecar sidecar.probe.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\"",
       "2026-10-08T22:53:21.170000Z debug sidecar sidecar.probe.pty_read surface=tab-y session=s2 bytes=2",
       "2026-10-08T22:53:21.180000Z error sidecar sidecar.probe.failed surface=tab-z session=s3 reason=\"closed\"",
-      "2026-10-08T22:53:21.200000Z warn page page.console.error text=\"boom\"",
+      "2026-10-08T22:53:21.200000Z warn workbench workbench.console.error text=\"boom\"",
       "2026-10-08T22:53:21.210000Z debug native native.input.query call=\"markedRange\"",
       "2026-10-08T22:53:21.300000Z info host host.test.end name=\"first\" run=\"r1\" result=\"pass\"",
-      "2026-10-08T22:53:22.000000Z info sok log.open schema=2 pid=4444 role=\"sok\" boot=\"s1\"",
+      "2026-10-08T22:53:22.000000Z info sok log.open schema=3 pid=4444 role=\"sok\" boot=\"s1\"",
       "2026-10-08T22:53:22.000100Z debug sok sok.command name=\"status\" args=\"\" micros=1200 ok=true status=0"
     ]
   },
@@ -177,10 +177,10 @@
     },
     "lines": [
       "2026-10-08T22:53:22.000100Z debug sok sok.command name=\"status\" args=\"\" micros=1200 ok=true status=0",
-      "2026-10-08T22:53:22.000000Z info sok log.open schema=2 pid=4444 role=\"sok\" boot=\"s1\"",
+      "2026-10-08T22:53:22.000000Z info sok log.open schema=3 pid=4444 role=\"sok\" boot=\"s1\"",
       "2026-10-08T22:53:21.300000Z info host host.test.end name=\"first\" run=\"r1\" result=\"pass\"",
       "2026-10-08T22:53:21.210000Z debug native native.input.query call=\"markedRange\"",
-      "2026-10-08T22:53:21.200000Z warn page page.console.error text=\"boom\""
+      "2026-10-08T22:53:21.200000Z warn workbench workbench.console.error text=\"boom\""
     ]
   },
   {
@@ -204,20 +204,20 @@
     },
     "lines": [
       "2026-10-08T22:53:21.180000Z error sidecar sidecar.probe.failed surface=tab-z session=s3 reason=\"closed\"",
-      "2026-10-08T22:53:21.200000Z warn page page.console.error text=\"boom\""
+      "2026-10-08T22:53:21.200000Z warn workbench workbench.console.error text=\"boom\""
     ]
   },
   {
     "name": "layer",
     "params": {
       "channel": "all",
-      "layer": "page"
+      "layer": "workbench"
     },
     "args": [
       "--channel",
       "all",
       "--layer",
-      "page"
+      "workbench"
     ],
     "rows": [
       "host-b1:3",
@@ -231,22 +231,22 @@
       "sok-s1": 2
     },
     "lines": [
-      "2026-10-08T22:53:20.200000Z debug page page.call window=w1 surface=tab-x session=s1 cids=b1.1,b1.2 name=\"Café\" ok=true",
-      "2026-10-08T22:53:21.110000Z debug page page.call cids=b1.3 name=\"sidecarSend\" surface=\"tab-y\" ok=true",
-      "2026-10-08T22:53:21.200000Z warn page page.console.error text=\"boom\""
+      "2026-10-08T22:53:20.200000Z debug workbench workbench.call window=w1 surface=tab-x session=s1 cids=b1.1,b1.2 name=\"Café\" ok=true",
+      "2026-10-08T22:53:21.110000Z debug workbench workbench.call cids=b1.3 name=\"sidecarSend\" surface=\"tab-y\" ok=true",
+      "2026-10-08T22:53:21.200000Z warn workbench workbench.console.error text=\"boom\""
     ]
   },
   {
     "name": "exact event name",
     "params": {
       "channel": "all",
-      "event": "page.call"
+      "event": "workbench.call"
     },
     "args": [
       "--channel",
       "all",
       "--event",
-      "page.call"
+      "workbench.call"
     ],
     "rows": [
       "host-b1:3",
@@ -265,8 +265,8 @@
       "lines": 6
     },
     "lines": [
-      "2026-10-08T22:53:20.200000Z debug page page.call window=w1 surface=tab-x session=s1 cids=b1.1,b1.2 name=\"Café\" ok=true",
-      "2026-10-08T22:53:21.110000Z debug page page.call cids=b1.3 name=\"sidecarSend\" surface=\"tab-y\" ok=true"
+      "2026-10-08T22:53:20.200000Z debug workbench workbench.call window=w1 surface=tab-x session=s1 cids=b1.1,b1.2 name=\"Café\" ok=true",
+      "2026-10-08T22:53:21.110000Z debug workbench workbench.call cids=b1.3 name=\"sidecarSend\" surface=\"tab-y\" ok=true"
     ]
   },
   {
@@ -343,7 +343,7 @@
     },
     "lines": [
       "2026-10-08T22:53:20.100000Z info native native.input.key_down window=w1 surface=tab-x cids=b1.1 keyCode=36 characters=\"\\r\"",
-      "2026-10-08T22:53:20.200000Z debug page page.call window=w1 surface=tab-x session=s1 cids=b1.1,b1.2 name=\"Café\" ok=true"
+      "2026-10-08T22:53:20.200000Z debug workbench workbench.call window=w1 surface=tab-x session=s1 cids=b1.1,b1.2 name=\"Café\" ok=true"
     ]
   },
   {
@@ -371,7 +371,7 @@
       "sok-s1": 2
     },
     "lines": [
-      "2026-10-08T22:53:21.110000Z debug page page.call cids=b1.3 name=\"sidecarSend\" surface=\"tab-y\" ok=true",
+      "2026-10-08T22:53:21.110000Z debug workbench workbench.call cids=b1.3 name=\"sidecarSend\" surface=\"tab-y\" ok=true",
       "2026-10-08T22:53:21.150000Z info host host.sidecar.request cids=b1.3 name=\"terminal\" surface=\"tab-y\" bytes=3",
       "2026-10-08T22:53:21.160000Z debug sidecar sidecar.probe.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\"",
       "2026-10-08T22:53:21.170000Z debug sidecar sidecar.probe.pty_read surface=tab-y session=s2 bytes=2"
@@ -431,7 +431,7 @@
       "lines": 13
     },
     "lines": [
-      "2026-10-08T22:53:21.110000Z debug page page.call cids=b1.3 name=\"sidecarSend\" surface=\"tab-y\" ok=true",
+      "2026-10-08T22:53:21.110000Z debug workbench workbench.call cids=b1.3 name=\"sidecarSend\" surface=\"tab-y\" ok=true",
       "2026-10-08T22:53:21.150000Z info host host.sidecar.request cids=b1.3 name=\"terminal\" surface=\"tab-y\" bytes=3",
       "2026-10-08T22:53:21.160000Z debug sidecar sidecar.probe.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\""
     ]
@@ -457,7 +457,7 @@
     },
     "lines": [
       "2026-10-08T22:53:20.100000Z info native native.input.key_down window=w1 surface=tab-x cids=b1.1 keyCode=36 characters=\"\\r\"",
-      "2026-10-08T22:53:20.200000Z debug page page.call window=w1 surface=tab-x session=s1 cids=b1.1,b1.2 name=\"Café\" ok=true"
+      "2026-10-08T22:53:20.200000Z debug workbench workbench.call window=w1 surface=tab-x session=s1 cids=b1.1,b1.2 name=\"Café\" ok=true"
     ]
   },
   {
@@ -528,7 +528,7 @@
       "sok-s1": 2
     },
     "lines": [
-      "2026-10-08T22:53:20.200000Z debug page page.call window=w1 surface=tab-x session=s1 cids=b1.1,b1.2 name=\"Café\" ok=true",
+      "2026-10-08T22:53:20.200000Z debug workbench workbench.call window=w1 surface=tab-x session=s1 cids=b1.1,b1.2 name=\"Café\" ok=true",
       "2026-10-08T22:53:22.000100Z debug sok sok.command name=\"status\" args=\"\" micros=1200 ok=true status=0"
     ]
   },
@@ -607,7 +607,7 @@
     },
     "lines": [
       "2026-10-08T22:53:21.100000Z info host host.test.start name=\"first\" run=\"r1\"",
-      "2026-10-08T22:53:21.110000Z debug page page.call cids=b1.3 name=\"sidecarSend\" surface=\"tab-y\" ok=true",
+      "2026-10-08T22:53:21.110000Z debug workbench workbench.call cids=b1.3 name=\"sidecarSend\" surface=\"tab-y\" ok=true",
       "2026-10-08T22:53:21.150000Z info host host.sidecar.request cids=b1.3 name=\"terminal\" surface=\"tab-y\" bytes=3",
       "2026-10-08T22:53:21.160000Z debug sidecar sidecar.probe.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\"",
       "2026-10-08T22:53:21.170000Z debug sidecar sidecar.probe.pty_read surface=tab-y session=s2 bytes=2"
@@ -643,7 +643,7 @@
       "2026-10-08T22:53:21.160000Z debug sidecar sidecar.probe.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\"",
       "2026-10-08T22:53:21.170000Z debug sidecar sidecar.probe.pty_read surface=tab-y session=s2 bytes=2",
       "2026-10-08T22:53:21.180000Z error sidecar sidecar.probe.failed surface=tab-z session=s3 reason=\"closed\"",
-      "2026-10-08T22:53:21.200000Z warn page page.console.error text=\"boom\"",
+      "2026-10-08T22:53:21.200000Z warn workbench workbench.console.error text=\"boom\"",
       "2026-10-08T22:53:21.300000Z info host host.test.end name=\"first\" run=\"r1\" result=\"pass\""
     ]
   },
@@ -666,7 +666,7 @@
       "sok-s1": 2
     },
     "lines": [
-      "2026-10-08T22:53:21.200000Z warn page page.console.error text=\"boom\""
+      "2026-10-08T22:53:21.200000Z warn workbench workbench.console.error text=\"boom\""
     ]
   },
   {
@@ -688,7 +688,7 @@
       "sok-s1": 2
     },
     "lines": [
-      "2026-10-08T22:53:20.200000Z debug page page.call window=w1 surface=tab-x session=s1 cids=b1.1,b1.2 name=\"Café\" ok=true"
+      "2026-10-08T22:53:20.200000Z debug workbench workbench.call window=w1 surface=tab-x session=s1 cids=b1.1,b1.2 name=\"Café\" ok=true"
     ]
   },
   {
@@ -751,7 +751,7 @@
       "sok-s1": 2
     },
     "lines": [
-      "2026-10-08T22:53:21.005000Z info sidecar log.open schema=2 pid=4343 role=\"probe\" boot=\"v1\"",
+      "2026-10-08T22:53:21.005000Z info sidecar log.open schema=3 pid=4343 role=\"probe\" boot=\"v1\"",
       "2026-10-08T22:53:21.100000Z info host host.test.start name=\"first\" run=\"r1\"",
       "2026-10-08T22:53:21.150000Z info host host.sidecar.request cids=b1.3 name=\"terminal\" surface=\"tab-y\" bytes=3"
     ]
@@ -792,7 +792,7 @@
       "sok-s1": 2
     },
     "lines": [
-      "2026-10-08T22:53:21.005000Z info sidecar log.open schema=2 pid=4343 role=\"probe\" boot=\"v1\"",
+      "2026-10-08T22:53:21.005000Z info sidecar log.open schema=3 pid=4343 role=\"probe\" boot=\"v1\"",
       "2026-10-08T22:53:21.000001Z info host log.rotated bytes=1024 generation=1"
     ]
   },
@@ -849,9 +849,9 @@
       "2026-10-08T22:53:21.150000Z info host host.sidecar.request cids=b1.3 name=\"terminal\" surface=\"tab-y\" bytes=3",
       "2026-10-08T22:53:21.170000Z debug sidecar sidecar.probe.pty_read surface=tab-y session=s2 bytes=2",
       "2026-10-08T22:53:21.180000Z error sidecar sidecar.probe.failed surface=tab-z session=s3 reason=\"closed\"",
-      "2026-10-08T22:53:21.200000Z warn page page.console.error text=\"boom\"",
+      "2026-10-08T22:53:21.200000Z warn workbench workbench.console.error text=\"boom\"",
       "2026-10-08T22:53:21.300000Z info host host.test.end name=\"first\" run=\"r1\" result=\"pass\"",
-      "2026-10-08T22:53:22.000000Z info sok log.open schema=2 pid=4444 role=\"sok\" boot=\"s1\"",
+      "2026-10-08T22:53:22.000000Z info sok log.open schema=3 pid=4444 role=\"sok\" boot=\"s1\"",
       "2026-10-08T22:53:22.000100Z debug sok sok.command name=\"status\" args=\"\" micros=1200 ok=true status=0"
     ]
   },
@@ -899,7 +899,7 @@
       "  2026-10-08T22:53:21.160000Z debug sidecar sidecar.probe.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\"",
       "2026-10-08T22:53:21.170000Z debug sidecar sidecar.probe.pty_read surface=tab-y session=s2 bytes=2",
       "  2026-10-08T22:53:21.180000Z error sidecar sidecar.probe.failed surface=tab-z session=s3 reason=\"closed\"",
-      "  2026-10-08T22:53:21.200000Z warn page page.console.error text=\"boom\""
+      "  2026-10-08T22:53:21.200000Z warn workbench workbench.console.error text=\"boom\""
     ]
   },
   {
@@ -942,7 +942,7 @@
     },
     "lines": [
       "  2026-10-08T22:53:21.100000Z info host host.test.start name=\"first\" run=\"r1\"",
-      "2026-10-08T22:53:21.110000Z debug page page.call cids=b1.3 name=\"sidecarSend\" surface=\"tab-y\" ok=true",
+      "2026-10-08T22:53:21.110000Z debug workbench workbench.call cids=b1.3 name=\"sidecarSend\" surface=\"tab-y\" ok=true",
       "  2026-10-08T22:53:21.150000Z info host host.sidecar.request cids=b1.3 name=\"terminal\" surface=\"tab-y\" bytes=3"
     ]
   },
@@ -980,7 +980,7 @@
       "sok-s1": 2
     },
     "lines": [
-      "2026-10-08T22:53:20.000000Z info host log.open schema=2 pid=4242 role=\"host\" boot=\"b1\"",
+      "2026-10-08T22:53:20.000000Z info host log.open schema=3 pid=4242 role=\"host\" boot=\"b1\"",
       "  2026-10-08T22:53:20.100000Z info native native.input.key_down window=w1 surface=tab-x cids=b1.1 keyCode=36 characters=\"\\r\""
     ]
   },
@@ -1018,7 +1018,7 @@
       "sok-s1": 2
     },
     "lines": [
-      "  2026-10-08T22:53:22.000000Z info sok log.open schema=2 pid=4444 role=\"sok\" boot=\"s1\"",
+      "  2026-10-08T22:53:22.000000Z info sok log.open schema=3 pid=4444 role=\"sok\" boot=\"s1\"",
       "2026-10-08T22:53:22.000100Z debug sok sok.command name=\"status\" args=\"\" micros=1200 ok=true status=0"
     ]
   },

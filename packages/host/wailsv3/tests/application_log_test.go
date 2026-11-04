@@ -212,8 +212,8 @@ func TestTheTransportReturnsAFailedCallWithoutLoggingIt(t *testing.T) {
 // A record is one line: a line feed in its text is written as the two characters `\n`.
 // contract: log.record.one-line
 func TestARecordIsOneLineAndEscapesALineFeed(t *testing.T) {
-	line := host.Entry{Level: "error", Layer: "page", Where: "start", Text: "first\nsecond"}.Line()
-	if want := `error page start: first\nsecond`; line != want {
+	line := host.Entry{Level: "error", Layer: "workbench", Where: "start", Text: "first\nsecond"}.Line()
+	if want := `error workbench start: first\nsecond`; line != want {
 		t.Fatalf("line %q, want %q", line, want)
 	}
 	if strings.Contains(host.Entry{Level: "info", Layer: "host", Where: "w", Text: "a\nb"}.Line(), "\n") {

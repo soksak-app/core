@@ -21,7 +21,7 @@ Diagnostic recording은 native stream 소유권이 퇴역한 뒤 finish가 넘�
 | `host-<boot>.stderr` | host 프로세스의 raw 표준 오류: 런타임의 crash 출력과 native 라이브러리의 fatal 줄 | 글 | 실행이 열 때 100 MB이면 `host-<boot>.stderr.1`로 이름을 바꾸고 이전 세대 다섯 개를 남긴다 |
 | `crash-found.txt` | 시작할 때마다 host | 글: host가 `host.crash.found`로 알린 시스템 crash report의 경로, 한 줄에 하나([로깅](logging.ko.md)) | 시작할 때마다 lookup이 아직 보는 report만 남기도록 다시 쓴다. 최대 64줄 |
 | `stall-<pid>-<ms>.txt`, `stall-<pid>-<ms>-page-<pid>.txt` | host가 응답하지 않을 때 창 검사 harness가 `sample`로 쓴다. host는 경로를 `host.stall.dump`로 저장한다 | 글 | 없음. 정지마다 파일 하나 |
-| `host-<boot>.jsonl` | host 프로세스: 자신의 기록, page의 기록(실패와 관측은 `page.record.<level>` event이며 host 호출 `log`의 배치로 중계한다), native 라이브러리의 event 중 level `error`, `warn`, `info` | [로깅 계약](logging.ko.md)의 event | 100 MB에서 회전한다. 닫은 파일은 세대 `host-<boot>.jsonl.<n>`(`.1`이 가장 오래됨)이 되고 지우는 세대는 없다. [보존](logging.ko.md#보존)이 폴더를 6 GiB로 묶는다 |
+| `host-<boot>.jsonl` | host 프로세스: 자신의 기록, page의 기록(실패와 관측은 `workbench.record.<level>` event이며 host 호출 `log`의 배치로 중계한다), native 라이브러리의 event 중 level `error`, `warn`, `info` | [로깅 계약](logging.ko.md)의 event | 100 MB에서 회전한다. 닫은 파일은 세대 `host-<boot>.jsonl.<n>`(`.1`이 가장 오래됨)이 되고 지우는 세대는 없다. [보존](logging.ko.md#보존)이 폴더를 6 GiB로 묶는다 |
 | `host-<boot>.debug.jsonl` | 같은 프로세스: level `debug`와 `trace`의 event. 첫 event에서 만든다 | [로깅 계약](logging.ko.md)의 event | main 파일처럼 회전하며 `host-<boot>.debug.jsonl.<n>`이 된다 |
 | `log-policy.json` | host. 설정 `diagnostics.log`에서 쓴다 | JSON 문서 하나, event 로그의 [정책](logging.ko.md#정책)이며 모든 프로세스가 감시한다 | 설정이 바뀔 때 다시 쓴다 |
 | `<executable-name>.log` | 상주 service. host가 service의 standard error로 연다 | service가 쓰는 같은 형식의 글 기록 | host가 service를 시작할 때 100 MB이면 `<name>.1`로 이름을 바꾸고 이전 세대 다섯 개를 남긴다 |
@@ -57,7 +57,7 @@ Format-1 identity manifest는 `format: 1`, `pixelFormat: "BGRA8"`, 제한값 `li
 
 Matching용 image source를 보존하는 동안 diagnostic capture는 snapshot을 수락하는 즉시 고유한 `{generation,raster,sequence}` identity마다 capture folder의 `sources` directory에 source artifact 하나를 기록한다. 동일한 metadata와 byte로 identity를 반복하면 멱등 처리하고, 다른 metadata나 byte로 재사용하면 `identity-conflict` drop으로 거절한다. 각 `.bgra` 파일은 수락된 immutable image snapshot에서 받은 정확한 byte를 변환 없이 포함한다. Format 2 `manifest.json`은 완성된 artifact의 identity, 상대 file name, dimensions, stride, alpha 및 color 표현, screen bounds, scale, byte count, SHA-256을 기록한다. Artifact output은 identity 512개로 제한하며 source raster 하나는 64 MiB in-memory matching history에 들어가야 한다. Serial source artifact writer의 queued 및 active source raster byte 합계는 artifact 총 byte와 별개로 64 MiB 이하로 제한한다. Pending-byte budget을 넘는 source는 명시적으로 거절해 기록하며 history lock을 잡고 enqueue를 기다리지 않는다. Matching history는 64 MiB와 snapshot 512개로 제한되며 eviction은 계속 `unknown-retention`으로 관측된다. Source가 raster 또는 identity 한도를 넘거나 identity가 충돌하거나 기록에 실패하면 drop으로 보고하고 partial file을 제거한다. Artifact 부재는 ScreenCaptureKit이 source를 누락했다는 증거가 아니다. Manifest는 write failure, partial-file cleanup failure와 최대 32개의 cleanup error 상세 정보를 기록하고, `cleanupErrorsOmitted`는 생략된 상세 개수를 표시한다. Artifact write가 실패하면 capture finalization도 실패한다. Artifact 쓰기는 serial captured-frame writer와 독립적인 자체 serial source writer를 사용하며 image presentation thread에서 실행하지 않는다. Intake가 닫힌 뒤 finalization은 양 writer를 drain하고 recording state를 해제한다. Frame writer가 막혀도 수락된 source artifact의 쓰기를 막지 않는다. 이 파일은 진단 evidence이며 capture가 활성화된 동안 disk I/O를 추가한다. 일반 application 동작에서는 만들지 않는다.
 
-표준 오류에는 계약의 어떤 writer도 쓰지 않는 것만 남는다. Wails 프레임워크는 page가 파일을 요청할 때마다 `[AssetFileServerFS] Handling request` 줄을 level `info`로 쓰며, 이 줄이 실패를 뜻하지 않는 2.0 MB를 파일에 채웠다. 그래서 Wails host는 프레임워크 logger의 level을 `warn`(`FrameworkLogLevel`)으로 정한다. 요청 줄은 빠지고 프레임워크의 warning과 error는 남는다. 의미 있는 요청은 `host.binding.call`, `page.call`, host의 `error` 기록이 밝힌다. Tauri host는 표준 오류에 그런 줄을 쓰지 않으므로 level을 정하지 않는다.
+표준 오류에는 계약의 어떤 writer도 쓰지 않는 것만 남는다. Wails 프레임워크는 page가 파일을 요청할 때마다 `[AssetFileServerFS] Handling request` 줄을 level `info`로 쓰며, 이 줄이 실패를 뜻하지 않는 2.0 MB를 파일에 채웠다. 그래서 Wails host는 프레임워크 logger의 level을 `warn`(`FrameworkLogLevel`)으로 정한다. 요청 줄은 빠지고 프레임워크의 warning과 error는 남는다. 의미 있는 요청은 `host.binding.call`, `workbench.call`, host의 `error` 기록이 밝힌다. Tauri host는 표준 오류에 그런 줄을 쓰지 않으므로 level을 정하지 않는다.
 
 ## 형태
 
@@ -92,10 +92,10 @@ Matching용 image source를 보존하는 동안 diagnostic capture는 snapshot�
 
 | 실패 | 기록 |
 |---|---|
-| main page의 module이 불러오지 못하거나 불러오는 중 던진다 | `error page start: <text> @ <file>:<line>`([page 시작](native-host.ko.md#page-시작)) |
+| main page의 module이 불러오지 못하거나 불러오는 중 던진다 | `error workbench start: <text> @ <file>:<line>`([page 시작](native-host.ko.md#page-시작)) |
 | host가 page가 요청한 파일을 내줄 수 없다 | `error host page asset: <path>: not found`, 경로마다 한 번 |
-| main page가 첫 화면 뒤에 던지거나 reject한다 | page 오류 표시의 `error page <where>: <text>` |
-| view가 자기 page에 오류를 보여 준다 | view call `runtime.error`가 쓰는 `error page surface <surface> <where>: <text>`([native surfaces](native-surfaces.ko.md#view-표면)) |
+| main page가 첫 화면 뒤에 던지거나 reject한다 | page 오류 표시의 `error workbench <where>: <text>` |
+| view가 자기 page에 오류를 보여 준다 | view call `runtime.error`가 쓰는 `error workbench surface <surface> <where>: <text>`([native surfaces](native-surfaces.ko.md#view-표면)) |
 | Wails host에서 modal의 WebContent process가 끝난다 | `error native surface webview: web content process terminated: <address>`. Tauri host는 surface와 modal을 포함한 모든 web view의 종료를 `error host page process: <label>: terminated`로 쓴다 |
 | 창의 WebContent process가 끝난다 | `error host page process: <window>: terminated`. 앱 DOM webview가 등록되어 있으면 native 계층은 WebKit 종료 이유(`reason`과 `code`)를 담은 `native.webview.process_ended` 이벤트도 저장한다 |
 | image detach가 10초 안에 응답을 받지 못하거나, page 시작이 이전 page가 받지 못한 실패를 담은 `image-detach-ended` event를 버린다([sidecars](sidecars.ko.md)) | detach마다 한 번 `error host image detach: image detach sidecar <sidecar> surface <surface> image <name> generation <generation> request <request> timed out`, 버린 event의 실패로 `error host image detach: <failure>` |
@@ -122,11 +122,11 @@ Matching용 image source를 보존하는 동안 diagnostic capture는 snapshot�
 | native document가 view의 직접 `runtime.log` 응답을 거부하거나 응답 전송이 실패한다 | `error host view channel <surface>: posting the view runtime.log reply failed: <reason>`; 요청도 실패했다면 전송 실패 앞에 요청 오류를 함께 기록한다 |
 | host가 image 영역의 프레임을 거부하거나 image 필드가 봉투가 아니다 | 영역을 소유하지 않은 sidecar나 이전 raster의 프레임(`notAttached`, `stale`)은 `info host image frame: surface=<s> name=<n> sender=<sidecar> generation=<g> raster=<r> sequence=<q> refused: <reason> current <state>`, host가 표시하지 않는 형식, token, nonce는 `error host image frame: ... refused: unsupported ...`, 봉투가 아닌 image 필드는 `error host image frame: surface=<s> sender=<sidecar> malformed image envelope: <image>` |
 | image 영역 프레임의 nonce가 base64가 아니거나 16바이트로 풀리지 않는다 | `error host image frame: surface=<s> name=<n> sender=<sidecar> generation=<g> raster=<r> sequence=<q> nonce is not base64: <reason>` 또는 `... nonce is <n> bytes, want 16`을 프레임의 거부 기록(`refused: unsupported`) 전에 쓴다. sidecar에 대한 답은 `unsupported`로 그대로다. `image` member를 가진 JSON 객체가 아닌 body는 image 프레임이 아니어서 기록을 쓰지 않고 일반 메시지로 전달한다 | error |
-| 표면이나 modal 문서의 script가 예외를 던지거나, 그 module이 로드되지 않거나, 그 promise가 처리기 없이 reject된다 | `error page surface <id>: <message> @ <file>:<line>`, `cannot load <address>`, 또는 rejection의 message. 표면 id가 없는 문서는 place `document`를 쓰고, 같은 글은 한 번만 쓴다 |
+| 표면이나 modal 문서의 script가 예외를 던지거나, 그 module이 로드되지 않거나, 그 promise가 처리기 없이 reject된다 | `error workbench surface <id>: <message> @ <file>:<line>`, `cannot load <address>`, 또는 rejection의 message. 표면 id가 없는 문서는 place `document`를 쓰고, 같은 글은 한 번만 쓴다 |
 | Tauri host가 창의 마지막 host.window watch가 끝날 때 마지막으로 보낸 값의 기록을 읽지 못한다 | `error host host.window unwatch: <error>` |
 | host가 창의 진단 단계(modal 렌더링, 끌기, navigation callback)를 서술하거나, Wails host가 창 상태를 읽지 못하거나 page에 다시 감시를 요청하지 못한다 | `info host transcript <window>: <line>`, Wails host는 `error host host.window <window>: <error>`, `error host rewatch <name> <window>: <error>`도 쓴다. 기록을 요청한 연결의 진단 기록도 같은 줄을 받는다 |
-| page가 sidecar로 보낸 전송이 실패한다 | `error page sidecar <name>: send failed: <reason>`, 표면 문서의 `page.report`로 쓴다 |
-| 창에 놓인 파일을 표면에 넘길 수 없다 | `error page drop: <reason>`(잘못된 drop, drop 지점 아래에 표면 없음, plugin이 drop 명령을 선언하지 않음, 명령 실패). 모든 drop은 `info page drop: received <payload>`를 쓰고, 명령이 받으면 `info page drop: command <name> accepted <n> file(s) on surface <id>`도 쓴다 |
+| page가 sidecar로 보낸 전송이 실패한다 | `error workbench sidecar <name>: send failed: <reason>`, 표면 문서의 `page.report`로 쓴다 |
+| 창에 놓인 파일을 표면에 넘길 수 없다 | `error workbench drop: <reason>`(잘못된 drop, drop 지점 아래에 표면 없음, plugin이 drop 명령을 선언하지 않음, 명령 실패). 모든 drop은 `info workbench drop: received <payload>`를 쓰고, 명령이 받으면 `info workbench drop: command <name> accepted <n> file(s) on surface <id>`도 쓴다 |
 | endpoint 요청이 제한 시간 오류 1005로 끝난다(문서가 답하지 않음, 창이 표시되지 않음, 창이 전체 화면을 바꾸지 않음, 문서가 입력을 받지 않음) | `error host endpoint timeout: <method>: <message>` |
 | endpoint 연결이 닫힌다 | `info host endpoint: connection closed: <reason>`을 소켓을 닫기 전에 쓴다. reason은 `peer closed`, `frame of <n> bytes exceeds the limit of <limit>`, `frame is not a JSON-RPC 2.0 request: <body>`, `method "<name>" is not declared`, `the endpoint closed`, `connection closed inside a length prefix`, `connection closed inside a frame body`, 또는 읽기를 끝낸 I/O 오류의 문구이며(프레임 경계에서의 reset과 broken pipe나 reset으로 실패한 쓰기는 `peer closed`), Wails host는 `the output queue is full`, `write failed`, `the reply cannot be encoded`도 쓴다 |
 | 답이나 알림이 상대가 닫은 연결을 만난다 | `info host endpoint: reply to <id> not sent: peer closed` 또는 `info host endpoint: notification <method> not sent: peer closed`. 요청의 call 기록이 답의 결과를 갖는다 |
@@ -170,7 +170,7 @@ Matching용 image source를 보존하는 동안 diagnostic capture는 snapshot�
 | Tauri host가 logs 폴더 저장의 진행이나 끝을 요청한 창에 전달할 수 없다 | `error host debug save: debug-save-progress: <reason>` 또는 `error host debug save: debug-save-done: <reason>` |
 | 호스트의 시작 단계가 실패한다 | `error host startup: <reason>`, 그리고 프로세스가 상태 1로 끝난다 |
 
-호출자가 받아 오류 표시로 보이는 실패는 그 표시가 기록한다. endpoint 요청은 실패를 client에 답하고, `sok` 명령은 상태와 메시지를 표준 오류로 끝내며, plugin은 host가 문서의 `failure`로 알린 document region의 탐색 실패를 `tab.error`([plugins](plugins.md))로 보이고 그 표시가 `error page tab error <tab id>: <text>`를 쓴다.
+호출자가 받아 오류 표시로 보이는 실패는 그 표시가 기록한다. endpoint 요청은 실패를 client에 답하고, `sok` 명령은 상태와 메시지를 표준 오류로 끝내며, plugin은 host가 문서의 `failure`로 알린 document region의 탐색 실패를 `tab.error`([plugins](plugins.md))로 보이고 그 표시가 `error workbench tab error <tab id>: <text>`를 쓴다.
 
 ## 읽기
 

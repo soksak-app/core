@@ -554,6 +554,40 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F502-14",
+    implementation: [
+      { file: "packages/sok/wailsv3/src/event_log.go", symbol: "var layers = []string{\"native\", \"host\", \"workbench\", \"page\", \"plugin\", \"sidecar\"}" },
+      { file: "packages/sok/wailsv3/src/event_log.go", symbol: "func checkWriter(e RelayedEvent) error {" },
+      { file: "packages/sok/tauriv2/src/event_log.rs", symbol: "fn check_writer(" },
+      { file: "packages/sok/tauriv2/src/log_index.rs", symbol: "pub(crate) const LAYERS: [&str; 7] = [" },
+      { file: "packages/log-contract/index.js", symbol: "const PAGE_LAYERS = new Map([[\"workbench\", [\"start\"]], [\"page\", [\"page\"]], [\"plugin\", [\"page\", \"start\"]]]);" },
+      { file: "packages/host/wailsv3/src/debug.go", symbol: "Workbench json.RawMessage `json:\"workbench\"`" },
+      { file: "packages/host/tauriv2/src/debug.rs", symbol: "pub workbench: Value," },
+      { file: "packages/workbench/page-log.js", symbol: "export function recordWorkbenchStart" },
+    ],
+    tests: [
+      { file: "scripts/test/check-events.test.mjs", id: "the catalog puts the events that the workbench writes in the layer workbench and keeps the records of a view page in the layer page" },
+      { file: "packages/log-contract/test/audit.test.mjs", id: "an event of the layer workbench names the start of the workbench in start, and a plugin event names its page or its workbench start" },
+      { file: "packages/log-contract/test/audit.test.mjs", id: "a file of the event schema 2 is rejected with the file name and the number" },
+      { file: "packages/sok/wailsv3/tests/debug_test.go", id: "TestQueryRefusesWhatBreaksTheContract" },
+      { file: "packages/sok/tauriv2/tests/debug_test.rs", id: "query_refuses_what_breaks_the_contract" },
+      { file: "packages/sok/wailsv3/tests/log_query_test.go", id: "TestLogQueryRefusesInvalidParameters" },
+      { file: "packages/sok/tauriv2/tests/log_query_test.rs", id: "query_refuses_invalid_parameters" },
+      { file: "packages/host/wailsv3/tests/event_log_test.go", id: "TestARelayedEventNamesTheDocumentThatWroteItInTheMemberOfItsLayer" },
+      { file: "packages/host/tauriv2/tests/event_log_test.rs", id: "a_relayed_event_names_the_document_that_wrote_it_in_the_member_of_its_layer" },
+      { file: "packages/host/wailsv3/tests/event_relay_test.go", id: "TestARelayedBatchIsStoredInOrderInTheLayerWorkbench" },
+      { file: "packages/host/tauriv2/tests/event_relay_test.rs", id: "a_relayed_batch_is_stored_in_order_in_the_layer_workbench" },
+      { file: "packages/host/wailsv3/tests/debug_test.go", id: "TestDebugStateNamesTheValueOfTheWorkbench" },
+      { file: "packages/host/tauriv2/tests/debug_test.rs", id: "debug_state_names_the_value_of_the_workbench" },
+      { file: "packages/window-check/test/event-log.test.mjs", id: "a record of the workbench reads as a line of the layer workbench, and the trace of the workbench as rows of the layer workbench" },
+      { file: "packages/plugin-api/test/log-batch.test.mjs", id: "a writer of the layer workbench names each event by its start, and the batcher writes its own records and its ungated events in that layer" },
+      { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "the layer choices of the timeline are every layer of the event contract, the workbench included, and the declarations list the same" },
+      { file: "packages/workbench/test/debug-state.test.mjs", id: "the workbench member of a state file is the value the workbench sent: an array of entries is accepted" },
+    ],
+    expected: "The workbench writes its events in the layer workbench as workbench.<name> with the member start, workbench.start carries started_at, view pages keep the layer page and the member page, the event log schema is 3 and a schema 2 log is refused, the sok query and index list the layer workbench, and the debug state file names the member workbench.",
+    levels: ["unit"],
+  },
+  {
     id: "F511",
     implementation: [
       { file: "packages/host/tauriv2/src/documents.rs", symbol: "pub fn attach(&self, key: &Key) -> Result<Vec<StreamEffect>, String> {" },
@@ -880,7 +914,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/workbench/test/page-clock.test.mjs", id: "the main page states its clock once for the events of its records and of its trace" },
     ],
-    expected: "The main page states page.log.clock once for its records and its trace.",
+    expected: "The main page states workbench.log.clock once for its records and its trace.",
     levels: ["unit"],
   },
   {
@@ -1616,7 +1650,7 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/log-contract/index.js", symbol: "const byProcess = new Map();" }],
     tests: [
       { file: "packages/log-contract/test/audit.test.mjs", id: "a policy is in force from the change of a rotated file whose cids it carries when page time is later" },
-      { file: "packages/log-contract/test/audit.test.mjs", id: "same seq in another process cannot hide a missing page.call" },
+      { file: "packages/log-contract/test/audit.test.mjs", id: "same seq in another process cannot hide a missing workbench.call" },
       { file: "packages/log-contract/test/audit.test.mjs", id: "a missing call remains a finding when the policy that the change brings stores it" },
       { file: "packages/log-contract/test/audit.test.mjs", id: "a policy is placed at the change whose cids it carries, so changes without a policy and policies of gated changes move no pair" },
     ],
@@ -2253,7 +2287,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-185",
-    implementation: [{ file: "packages/log-contract/index.js", symbol: "page field truncation must contain" }],
+    implementation: [{ file: "packages/log-contract/index.js", symbol: "document field truncation must contain" }],
     tests: [
       { file: "packages/log-contract/test/audit.test.mjs", id: "document field truncation is audited as the declared bounded envelope" },
       { file: "packages/log-contract/test/audit.test.mjs", id: "document field truncation cannot hide malformed metadata or ordinary fields" },
@@ -3969,8 +4003,8 @@ const FEATURE_LINKS = [
       { file: "native/darwin/src/application_log.m", symbol: "void sp_log_info" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/event_relay_test.go", id: "TestARelayedBatchReturnsTheTranscriptLinesOfItsPageRecords" },
-      { file: "packages/host/tauriv2/tests/event_relay_test.rs", id: "a_relayed_batch_returns_the_transcript_lines_of_its_page_records" },
+      { file: "packages/host/wailsv3/tests/event_relay_test.go", id: "TestARelayedBatchReturnsTheTranscriptLinesOfItsWorkbenchRecords" },
+      { file: "packages/host/tauriv2/tests/event_relay_test.rs", id: "a_relayed_batch_returns_the_transcript_lines_of_its_workbench_records" },
       { file: "packages/window-check/test/event-log.test.mjs", id: "a record event reads as the line of the text form, and another event as its name and fields" },
       { file: "packages/workbench/test/report-record.test.mjs", id: "a line `<where>: <text>` is split at its first `: `" },
     ],
@@ -4010,12 +4044,12 @@ const FEATURE_LINKS = [
       { file: "packages/plugin-api/log-batch.js", symbol: "export function createEventBatcher" },
     ],
     tests: [
-      { file: "packages/workbench/test/page-log.test.mjs", id: "a failure is the event page.record.error with the place and the text, and the wait ends when it was relayed" },
+      { file: "packages/workbench/test/page-log.test.mjs", id: "a failure is the event workbench.record.error with the place and the text, and the wait ends when it was relayed" },
       { file: "packages/plugin-api/test/log-batch.test.mjs", id: "emitAndWait ends when the batch that carries the event was relayed, and the events of one turn share the batch" },
       { file: "apps/wailsv3/test/runtime-contract.test.mjs", id: "Wails page regions expose operations but only composition places geometry" },
       { file: "e2e/host-records.test.mjs", id: "the event log holds the run record and the records the page reports" },
     ],
-    expected: "A failure and an observation of the page are events page.record.<level> relayed in a batch of the host call log, and the host call report does not exist.",
+    expected: "A failure and an observation of the workbench are events workbench.record.<level> relayed in a batch of the host call log, and the host call report does not exist.",
     levels: ["unit", "application"],
   },
   {
@@ -4027,7 +4061,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/host/tauriv2/tests/application_log_test.rs", id: "a_record_is_one_line_and_escapes_a_line_feed" },
       { file: "packages/host/tauriv2/tests/images_test.rs", id: "presentation_outcome_names_the_current_frame_of_a_failure" },
-      { file: "packages/host/wailsv3/tests/event_relay_test.go", id: "TestARelayedBatchReturnsTheTranscriptLinesOfItsPageRecords" },
+      { file: "packages/host/wailsv3/tests/event_relay_test.go", id: "TestARelayedBatchReturnsTheTranscriptLinesOfItsWorkbenchRecords" },
     ],
     expected: "A record travels as a structured entry that is stored as an event and shown as its line, in both hosts.",
     levels: ["unit"],
@@ -4201,7 +4235,7 @@ const FEATURE_LINKS = [
       { file: "packages/plugin-api/test/log-batch.test.mjs", id: "events emitted in one turn are relayed in one call, in order" },
       { file: "packages/plugin-api/test/log-batch.test.mjs", id: "a full queue refuses events and the next batch starts with the counted loss" },
     ],
-    expected: "The events of one turn travel to the host in one ordered call, a full queue counts the refused events in page.log.dropped, and a failed call is reported with its event count.",
+    expected: "The events of one turn travel to the host in one ordered call, a full queue counts the refused events in <layer>.log.dropped of the layer of its writer, and a failed call is reported with its event count.",
     levels: ["unit"],
   },
   {
@@ -4383,7 +4417,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/wailsv3/src/performance.go", symbol: "func PerformanceSurface" },
       { file: "packages/host/tauriv2/src/performance.rs", symbol: "pub fn process_add" },
       { file: "packages/host/tauriv2/src/performance.rs", symbol: "pub fn surface" },
-      { file: "packages/workbench/page-log.js", symbol: "export function recordPageStart" },
+      { file: "packages/workbench/page-log.js", symbol: "export function recordWorkbenchStart" },
     ],
     tests: [
       { file: "packages/host/wailsv3/tests/performance_test.go", id: "TestTheSamplerReadsEveryRegisteredProcess" },
@@ -4392,7 +4426,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/tauriv2/tests/performance_test.rs", id: "the_sampler_reads_every_registered_process" },
       { file: "packages/host/tauriv2/tests/performance_test.rs", id: "surface_lifecycle_events_hold_the_geometry" },
       { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "the_sampler_names_a_running_sidecar_until_it_ends" },
-      { file: "packages/workbench/test/page-log.test.mjs", id: "the start of a page is the event page.start with the origin of the document clock and its address" },
+      { file: "packages/workbench/test/page-log.test.mjs", id: "the start of a document of the workbench is the event workbench.start with the origin of the document clock and its address" },
     ],
     expected: "The sampler of both hosts reads the host and every registered sidecar process, the surface lifecycle of the trace holds the geometry, and a document of the main page marks its start.",
     levels: ["unit"],
@@ -4978,9 +5012,9 @@ const FEATURE_LINKS = [
   },
   {
     id: "F182",
-    implementation: [{ file: "e2e/input-records.test.mjs", symbol: "e.page === hops.pageCall.page" }],
+    implementation: [{ file: "e2e/input-records.test.mjs", symbol: "e.start === hops.pageCall.start" }],
     tests: [{ file: "e2e/input-records.test.mjs", id: "a typed key leaves a record in every layer of the input path" }],
-    expected: "The input records check takes the clock anchor of the page that wrote page.call.",
+    expected: "The input records check takes the clock anchor of the workbench start that wrote workbench.call.",
     levels: ["application"],
   },
   {
@@ -5189,7 +5223,7 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/plugin-api/view.js", symbol: "const writeLog = (level, event, fields, cids) =>" }],
     tests: [
       { file: "packages/plugin-api/test/view.test.mjs", id: "the view bridge keeps the public log API and batches source-clocked records through the direct writer" },
-      { file: "packages/host/tauriv2/tests/event_relay_test.rs", id: "a_relayed_batch_stores_the_clock_and_the_cids_that_the_page_gave" },
+      { file: "packages/host/tauriv2/tests/event_relay_test.rs", id: "a_relayed_batch_stores_the_clock_and_the_cids_that_the_workbench_gave" },
       { file: "packages/host/wailsv3/src/view_call_record_test.go", id: "TestViewRuntimeLogClockRepliesWithoutWorkbenchRelay" },
     ],
     expected: "The public runtime.log API carries its cids through the SDK direct writer, and host relays retain the supplied cids while storing page events.",
@@ -5564,7 +5598,7 @@ const FEATURE_LINKS = [
   {
     id: "F184",
     implementation: [
-      { file: "packages/plugin-api/log-batch.js", symbol: "createEventBatcher requires the page identity of the document" },
+      { file: "packages/plugin-api/log-batch.js", symbol: "createEventBatcher requires the writer {layer, member, identity} of the document" },
       { file: "packages/host/wailsv3/src/running_calls.go", symbol: "func ReloadTimeoutText" },
       { file: "packages/host/tauriv2/src/running_calls.rs", symbol: "pub fn reload_timeout_text" },
     ],
@@ -5590,7 +5624,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/debug-save-ui.test.mjs", id: "a save while one writes is refused and shown, and a failure of the write is shown" },
       { file: "packages/host/tauriv2/tests/modals_test.rs", id: "a_reply_of_a_modal_that_is_not_open_is_dropped_with_the_fields_of_its_record" },
       { file: "packages/host/wailsv3/tests/modals_test.go", id: "TestAReplyOfAModalThatIsNotOpenIsDroppedWithTheFieldsOfItsRecord" },
-      { file: "packages/workbench/test/overlay-pick.test.mjs", id: "a reply of a modal that the page does not show is recorded as page.overlay.dropped" },
+      { file: "packages/workbench/test/overlay-pick.test.mjs", id: "a reply of a modal that the page does not show is recorded as workbench.overlay.dropped" },
     ],
     expected: "A save of the logs folder shows its progress, refuses a second save while it writes, and every dropped modal reply is recorded.",
     levels: ["unit"],
@@ -6088,7 +6122,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "following pages through the rows that grew until none is left and asks again from the first tail" },
       { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "stopping follows no more queries and resuming asks for what grew while stopped" },
       { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "a query that fails while following stops following and is shown with its file and line" },
-      { file: "packages/workbench/test/page-log.test.mjs", id: "every host call is the event page.call with its name, arguments, duration and outcome, except the calls of the log itself and the queries of the debug timeline" },
+      { file: "packages/workbench/test/page-log.test.mjs", id: "every host call is the event workbench.call with its name, arguments, duration and outcome, except the calls of the log itself and the queries of the debug timeline" },
     ],
     expected: "The debug timeline asks for the rows after the tail of the query when a debug-log-changed notice reports a write, adds them in time order while keeping the filter and the selection, stops and resumes following by a command, stops following with an error for a query that fails, and its queries are not recorded as page calls.",
     levels: ["unit"],
@@ -6374,7 +6408,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/host/tauriv2/tests/images_test.rs", id: "presentation_wait_timeout_returns_its_failure_and_writes_no_log_line" },
       { file: "packages/host/wailsv3/tests/images_test.go", id: "TestPresentationWaitTimeoutReturnsItsFailureAndWritesNoLogLine" },
-      { file: "packages/workbench/test/presentation-failure-lines.test.mjs", id: "one presentation timeout writes one page error line" },
+      { file: "packages/workbench/test/presentation-failure-lines.test.mjs", id: "one presentation timeout writes one workbench error line" },
     ],
     expected: "One image presentation timeout writes one application log line, the page display line, on both hosts.",
     levels: ["unit", "application"],
@@ -6450,9 +6484,9 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/index.html", symbol: "createPageLayout" },
     ],
     tests: [
-      { file: "packages/workbench/test/presentation-failure-lines.test.mjs", id: "one presentation timeout writes one page error line" },
-      { file: "packages/workbench/test/layout-failure-lines.test.mjs", id: "a layout failure of a project switch started from the interface writes one page error line" },
-      { file: "packages/workbench/test/layout-failure-lines.test.mjs", id: "a layout failure that no command waits for writes one page error line" },
+      { file: "packages/workbench/test/presentation-failure-lines.test.mjs", id: "one presentation timeout writes one workbench error line" },
+      { file: "packages/workbench/test/layout-failure-lines.test.mjs", id: "a layout failure of a project switch started from the interface writes one workbench error line" },
+      { file: "packages/workbench/test/layout-failure-lines.test.mjs", id: "a layout failure that no command waits for writes one workbench error line" },
     ],
     expected: "The layout wiring of the main page is one module that the page and its tests import.",
     levels: ["unit"],
@@ -6475,8 +6509,8 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/layout-queue.js", symbol: "item.resolve({ status: \"failed\" })" },
     ],
     tests: [
-      { file: "packages/workbench/test/layout-failure-lines.test.mjs", id: "a layout failure of a project switch started from the interface writes one page error line" },
-      { file: "packages/workbench/test/layout-failure-lines.test.mjs", id: "a layout failure that no command waits for writes one page error line" },
+      { file: "packages/workbench/test/layout-failure-lines.test.mjs", id: "a layout failure of a project switch started from the interface writes one workbench error line" },
+      { file: "packages/workbench/test/layout-failure-lines.test.mjs", id: "a layout failure that no command waits for writes one workbench error line" },
     ],
     expected: "A layout failure writes one page error line whether a command, a project switch or a gesture started the layout.",
     levels: ["unit", "application"],
@@ -10740,7 +10774,7 @@ const FEATURE_LINKS = [
     id: "F239-270",
     implementation: [
       { file: "packages/plugin-api/view-start.js", symbol: "const page = crypto.randomUUID();" },
-      { file: "packages/plugin-api/view.js", symbol: "page: window.sokView.page," },
+      { file: "packages/plugin-api/view.js", symbol: "identity: window.sokView.page }," },
     ],
     tests: [
       { file: "packages/plugin-api/test/view.test.mjs", id: "the view writer reuses the document-start page identity when later clock reads differ" },

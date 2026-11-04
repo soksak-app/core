@@ -28,7 +28,7 @@ for (const app of Object.values(APPS)) {
     });
     writeFileSync(file, JSON.stringify({ ...rest, sidecars: Object.keys(dependencies) }, null, 2));
 
-    const pattern = /^error page page: installed plugin terminal \S+ \(@soksak\/plugin-terminal\): plugin\.json: unknown field sidecars/;
+    const pattern = /^error workbench workbench: installed plugin terminal \S+ \(@soksak\/plugin-terminal\): plugin\.json: unknown field sidecars/;
     s.expectError(pattern);
     // The page starts without the refused plugin, so the reload reports ready, and the error display wrote the refusal to the log.
     await s.run("host.window.reload");
@@ -54,7 +54,7 @@ for (const app of Object.values(APPS)) {
     await s.run("core.projects.flush");
     writeFileSync(file, "[]");
 
-    const pattern = /^error page page: .*projects\.json: projects\.json: format must be 1$/;
+    const pattern = /^error workbench workbench: .*projects\.json: projects\.json: format must be 1$/;
     s.expectError(pattern);
     // The reload resolves when the reloaded page reports ready.
     await s.run("host.window.reload");

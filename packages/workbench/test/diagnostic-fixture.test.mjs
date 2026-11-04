@@ -38,10 +38,10 @@ test("each awaited step of the fixture records its start and its end with the el
   const records = [];
   await prepareFixture({ root: "/tmp/project" }, { ...modules([]), emitEvent: (level, event, fields) => records.push([event, fields]) });
   assert.deepEqual(records.map(([event, fields]) => [event, fields.step, fields.phase]), [
-    ["page.fixture.step", "projects.flush", "start"], ["page.fixture.step", "projects.flush", "end"],
-    ["page.fixture.step", "settings.set", "start"], ["page.fixture.step", "settings.set", "end"],
-    ["page.fixture.step", "projects.open", "start"], ["page.fixture.step", "projects.open", "end"],
-    ["page.fixture.step", "projects.flush", "start"], ["page.fixture.step", "projects.flush", "end"],
+    ["workbench.fixture.step", "projects.flush", "start"], ["workbench.fixture.step", "projects.flush", "end"],
+    ["workbench.fixture.step", "settings.set", "start"], ["workbench.fixture.step", "settings.set", "end"],
+    ["workbench.fixture.step", "projects.open", "start"], ["workbench.fixture.step", "projects.open", "end"],
+    ["workbench.fixture.step", "projects.flush", "start"], ["workbench.fixture.step", "projects.flush", "end"],
   ]);
   for (const [, fields] of records.filter(([, value]) => value.phase === "end")) {
     assert.equal(fields.error, null);
@@ -51,7 +51,7 @@ test("each awaited step of the fixture records its start and its end with the el
   records.length = 0;
   await assert.rejects(prepareFixture({ root: "/tmp/project" }, { ...failing, emitEvent: (level, event, fields) => records.push([event, fields]) }), /settings refused/);
   const last = records.at(-1);
-  assert.deepEqual([last[0], last[1].step, last[1].phase, last[1].error], ["page.fixture.step", "settings.set", "end", "settings refused"]);
+  assert.deepEqual([last[0], last[1].step, last[1].phase, last[1].error], ["workbench.fixture.step", "settings.set", "end", "settings refused"]);
 });
 
 test("the awaited steps of the project operations that the fixture runs are recorded as steps of the fixture", async () => {
@@ -66,8 +66,8 @@ test("the awaited steps of the project operations that the fixture runs are reco
   };
   await prepareFixture({ root: "/tmp/project" }, { ...base, projects, emitEvent: (level, event, fields) => records.push([event, fields.step, fields.phase]) });
   assert.deepEqual(records.slice(4, 8), [
-    ["page.fixture.step", "projects.open", "start"], ["page.fixture.step", "projects.open.refresh", "start"],
-    ["page.fixture.step", "projects.open.refresh", "end"], ["page.fixture.step", "projects.open", "end"],
+    ["workbench.fixture.step", "projects.open", "start"], ["workbench.fixture.step", "projects.open.refresh", "start"],
+    ["workbench.fixture.step", "projects.open.refresh", "end"], ["workbench.fixture.step", "projects.open", "end"],
   ]);
   assert.equal(runners.at(-1), null, "the fixture left its step runner installed after it ended");
 });

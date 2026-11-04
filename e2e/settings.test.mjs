@@ -350,7 +350,7 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: performance tracing records enabled card focus and stops while disabled`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
     // The events of the trace are stored in the class call at the level debug, which the default policy does not store.
-    await fresh(s, { log: { call: "debug" }, reads: ["page.trace.action", "host.trace.on", "host.trace.off"] });
+    await fresh(s, { log: { call: "debug" }, reads: ["workbench.trace.action", "host.trace.on", "host.trace.off"] });
     await keepCommonSettings(s);
     // The host uses the path in which the symbolic link of the configuration directory is resolved.
     const config = realpathSync(app.configDir);
@@ -364,7 +364,7 @@ for (const app of Object.values(APPS)) {
     // The events of the trace of the page and of the host are in the event log. The switch controls the events below; the
     // entrances that always record (host.endpoint.call, host.test.mark) and a sidecar, which stores its events in its own
     // file whether or not the trace is on (docs/spec/performance-trace.md), are not output of the switch.
-    const SWITCHED = ["page.trace.", "host.trace.", "host.sampler."];
+    const SWITCHED = ["workbench.trace.", "host.trace.", "host.sampler."];
     const traced = async (offsets) => {
       await s.flushLog();
       const switched = readEvents(config, offsets).events.filter((event) =>
@@ -387,9 +387,9 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(switchFiles(), files, "disabling the trace wrote a file or a service flag");
     const events = await traced(before);
     const after = currentEventOffsets(config);
-    assert.ok(events.some((line) => line.layer === "page" && line.event === "action"
+    assert.ok(events.some((line) => line.layer === "workbench" && line.event === "action"
       && line.kind === "card.focus" && line.card === card), "enabled focus action was not recorded");
-    assert.ok(events.some((line) => line.layer === "page" && line.event === "command"
+    assert.ok(events.some((line) => line.layer === "workbench" && line.event === "command"
       && line.name === "core.card.focus" && line.ok === true), "enabled focus command was not recorded");
     await s.run("core.card.focus", { card });
     assert.deepEqual(await traced(after), [], "focus after disable changed the trace output");

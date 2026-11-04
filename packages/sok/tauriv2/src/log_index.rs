@@ -17,7 +17,7 @@ use crate::files::file_error;
 use crate::platform::{self, Platform};
 
 pub(crate) const SEGMENT_EVENTS: u64 = 4096;
-const VERSION: u32 = 1;
+const VERSION: u32 = 2;
 pub(crate) const BLOCK_BYTES: usize = 20480;
 pub(crate) const RECORD_BYTES: usize = 18760;
 const MEMBERS_BYTES: usize = 64;
@@ -45,7 +45,15 @@ fn bloom_offset(kind: usize) -> usize {
 }
 
 pub(crate) const LEVELS: [&str; 5] = ["error", "warn", "info", "debug", "trace"];
-pub(crate) const LAYERS: [&str; 6] = ["native", "host", "page", "plugin", "sidecar", "sok"];
+pub(crate) const LAYERS: [&str; 7] = [
+    "native",
+    "host",
+    "workbench",
+    "page",
+    "plugin",
+    "sidecar",
+    "sok",
+];
 pub(crate) const CLASSES: [&str; 5] = ["lifecycle", "input", "call", "io", "frame"];
 
 /// FNV-1a 64 over the bytes.
@@ -1127,8 +1135,11 @@ fn index_from(
                     ));
                 }
                 let schema = debug::schema_of(name, &String::from_utf8_lossy(line_bytes))?;
-                if schema != 2 {
-                    return Err(format!("{name}: schema {schema} is not 2"));
+                if schema != debug::EVENT_SCHEMA {
+                    return Err(format!(
+                        "{name}: schema {schema} is not {}",
+                        debug::EVENT_SCHEMA
+                    ));
                 }
                 next.head_len = line_size as u32;
                 let mut head = line_bytes.to_vec();

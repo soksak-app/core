@@ -31,16 +31,16 @@ func TestEveryLineStoresTheClassOfItsCatalogEntry(t *testing.T) {
 	if accepted, err := log.EmitRelayed(relayed); err != nil || !accepted {
 		t.Fatalf("page.start: %v %v", accepted, err)
 	}
-	family := host.RelayedEvent{TsMicros: 1, MonoNs: 1, Layer: "page", Page: "1791948729050", Level: host.LevelInfo, Event: "page.console.info", Fields: []byte(`{"text":"x"}`)}
+	family := host.RelayedEvent{TsMicros: 1, MonoNs: 1, Layer: "workbench", Start: "1791948729050", Level: host.LevelInfo, Event: "workbench.console.info", Fields: []byte(`{"text":"x"}`)}
 	if accepted, err := log.EmitRelayed(family); err != nil || !accepted {
-		t.Fatalf("page.console.info: %v %v", accepted, err)
+		t.Fatalf("workbench.console.info: %v %v", accepted, err)
 	}
 	if err := log.Flush(5 * time.Second); err != nil {
 		t.Fatal(err)
 	}
 	want := map[string]string{
 		"log.open": "lifecycle", "host.app.event": "lifecycle", "host.input.relay": "input", "host.sidecar.reply": "io",
-		"page.start": "lifecycle", "page.console.info": "lifecycle",
+		"page.start": "lifecycle", "workbench.console.info": "lifecycle",
 	}
 	seen := 0
 	for _, event := range readEventLog(t, log.Path()) {

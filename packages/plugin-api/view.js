@@ -210,18 +210,19 @@ export function createViewBridge({ handler, report }) {
   };
   // The identifiers of the operations that start in this view page (docs/spec/logging.md#operation-chains).
   const nextOperationCids = createOperationCids(window.sokView.page);
-  let eventBatcher = null;
+  let batcher = null;
   const writeLog = (level, event, fields, cids) => {
-    if (eventBatcher === null) {
-      eventBatcher = createEventBatcher({
+    if (batcher === null) {
+      batcher = createEventBatcher({
         call: (request) => calls.request("runtime.log", request),
         report: recordError("log batch"),
         now: () => window.performance.now(),
-        page: window.sokView.page,
+        writer: { layer: "page", member: "page", identity: window.sokView.page },
       });
-      eventBatcher.emit("info", "page.start", { time_origin: window.sokView.timeOrigin, url: window.location.href });
+      batcher.emit("info", "page.start", { time_origin: window.sokView.timeOrigin, url: window.location.href });
     }
-    eventBatcher.emit(level, event, fields, cids);
+    // events: forwarded
+    batcher.emit(level, event, fields, cids);
   };
   const { log } = createPluginRuntime({ pluginId: plugin, hooks: {
     log: (level, event, fields, cids) => writeLog(level, event, fields, cids),
@@ -542,7 +543,7 @@ export function createViewBridge({ handler, report }) {
     };
     view.addEventListener("contextmenu", openMenu);
     view.addEventListener("pagehide", () => {
-      if (eventBatcher !== null) eventBatcher.flush().catch(recordError("log batch flush"));
+      if (batcher !== null) batcher.flush().catch(recordError("log batch flush"));
       view.document.removeEventListener("focusin", focusMoved, true);
       view.document.removeEventListener("focusout", focusMoved, true);
       view.removeEventListener("contextmenu", openMenu);

@@ -1,5 +1,7 @@
-//! The `log` call of the page (docs/spec/logging.md#writers): the page relays a batch of events. The host validates the
-//! whole batch before it writes any event, then stores every event in the layer `page` with the time the page gave it.
+//! The `log` call of a document (docs/spec/logging.md#writers): the workbench, and a view page through `runtime.log`, relays a
+//! batch of events. The host validates the whole batch before it writes any event, then stores every event in the layer of its
+//! writer or `plugin`, the one that its name starts with, with the member that names the writing document and the time the
+//! document gave it.
 
 use serde_json::Value;
 use serde_json::value::to_raw_value;
@@ -7,7 +9,38 @@ use serde_json::value::to_raw_value;
 use crate::bounds::{Fields, bounded_serialize, cut_text};
 use crate::event_log::{EventLog, Level, RelayedEvent, monotonic_ns, valid_cid};
 
-/// One validated event of a page batch.
+/// The writer of a batch: the layer of its own events and the member that names it on each event, with the error that a
+/// missing member is refused with.
+struct Writer {
+    layer: &'static str,
+    member: &'static str,
+    missing: &'static str,
+}
+
+/// The writer of the events of the workbench, named by the start of the workbench (docs/spec/logging.md#event).
+const WORKBENCH: Writer = Writer {
+    layer: "workbench",
+    member: "start",
+    missing: "start must name the start of the workbench that wrote the event",
+};
+
+/// The writer of the events of a view page, named by its page identity (docs/spec/logging.md#event).
+const VIEW_PAGE: Writer = Writer {
+    layer: "page",
+    member: "page",
+    missing: "page must name the document that wrote the event",
+};
+
+/// The writer that each member names.
+fn writer_named_by(member: &str) -> &'static str {
+    if member == "start" {
+        "the workbench"
+    } else {
+        "a view page"
+    }
+}
+
+/// One validated event of a document batch.
 struct Relayed {
     ts_us: u64,
     mono_ns: u64,
@@ -15,12 +48,14 @@ struct Relayed {
     level: Level,
     event: String,
     fields: Box<serde_json::value::RawValue>,
-    /// `page` or `plugin`, the prefix of the name of the event.
+    /// The layer of the writer or `plugin`, the prefix of the name of the event.
     layer: &'static str,
-    /// The record of the page that the event carries, when it is a `page.record.<level>` event.
+    /// The record of the writer that the event carries, when it is a `<layer>.record.<level>` event.
     record: Option<crate::application_log::Entry>,
-    /// The page identity of the document that wrote the event (docs/spec/logging.md#event).
-    page: String,
+    /// The page identity of the view page that wrote the event; `None` for an event of the workbench.
+    page: Option<String>,
+    /// The start of the workbench that wrote the event; `None` for an event of a view page (docs/spec/logging.md#event).
+    start: Option<String>,
 }
 
 fn level_of(name: &str) -> Option<Level> {
@@ -34,7 +69,7 @@ fn level_of(name: &str) -> Option<Level> {
     }
 }
 
-fn relayed_of(item: &Value) -> Result<Relayed, String> {
+fn relayed_of(item: &Value, writer: &Writer) -> Result<Relayed, String> {
     let object = item
         .as_object()
         .ok_or_else(|| "the event must be an object".to_string())?;
@@ -79,27 +114,46 @@ fn relayed_of(item: &Value) -> Result<Relayed, String> {
         .get("fields")
         .filter(|fields| fields.is_object())
         .ok_or_else(|| "fields must be an object".to_string())?;
-    let layer = if event.starts_with("page.") {
-        "page"
+    let own = format!("{}.", writer.layer);
+    let layer = if event.starts_with(&own) {
+        writer.layer
     } else if event.starts_with("plugin.") {
         "plugin"
     } else {
         return Err(format!(
-            "the event {event:?} does not start with page. or plugin."
+            "the event {event:?} does not start with {own} or plugin."
         ));
     };
-    let page = object
-        .get("page")
+    if let Some(member) = ["page", "start"]
+        .into_iter()
+        .find(|member| *member != writer.member && object.contains_key(*member))
+    {
+        return Err(format!(
+            "{member} is not a member of an event of {}",
+            writer_named_by(writer.member)
+        ));
+    }
+    let named = object
+        .get(writer.member)
         .and_then(Value::as_str)
-        .filter(|page| !page.is_empty())
-        .ok_or_else(|| "page must name the document that wrote the event".to_string())?;
-    let record = if event.starts_with("page.record.") {
+        .filter(|named| !named.is_empty())
+        .ok_or_else(|| writer.missing.to_string())?
+        .to_string();
+    let (page, start) = if writer.member == "start" {
+        (None, Some(named))
+    } else {
+        (Some(named), None)
+    };
+    let record = if event.starts_with(&format!("{own}record.")) {
         let text_of = |name: &str| fields.get(name).and_then(Value::as_str);
         let (Some(place), Some(text)) = (text_of("where"), text_of("text")) else {
             return Err("fields where and text must be strings".into());
         };
         Some(crate::application_log::Entry::new(
-            level_name, "page", place, text,
+            level_name,
+            writer.layer,
+            place,
+            text,
         ))
     } else {
         None
@@ -114,7 +168,8 @@ fn relayed_of(item: &Value) -> Result<Relayed, String> {
             .map_err(|error| format!("fields cannot be serialized: {error}"))?,
         layer,
         record,
-        page: page.to_string(),
+        page,
+        start,
     })
 }
 
@@ -126,7 +181,7 @@ pub struct ClockReading {
     pub mono_ns: u64,
 }
 
-/// What the `log` call answers: the transcript lines of the page records of a batch or the transcript line of a `transcript`
+/// What the `log` call answers: the transcript lines of the records of the workbench in a batch or the transcript line of a `transcript`
 /// request, the clocks of a clock request, or the classes of the policy in force of a `policy-read` request.
 #[derive(Debug)]
 pub struct LogReply {
@@ -135,8 +190,9 @@ pub struct LogReply {
     pub classes: Option<serde_json::Map<String, Value>>,
 }
 
-/// Validates a request of the page. A `batch` queues its events into the writer of the host and answers the lines
-/// `<level> page <where>: <text>` of the records of the page in it, which the host shows in the transcript of the window.
+/// Validates a request of the workbench. A `batch` queues its events into the writer of the host and answers the lines
+/// `<level> workbench <where>: <text>` of the records of the workbench in it, which the host shows in the transcript of the
+/// window.
 /// A `clock` answers the clocks of the host and stores no event.
 pub fn log_command(log: &EventLog, request: Value) -> Result<LogReply, String> {
     match request.get("action").and_then(Value::as_str) {
@@ -161,17 +217,9 @@ pub fn log_command(log: &EventLog, request: Value) -> Result<LogReply, String> {
             });
         }
         Some("clock") => {
-            // Both clocks are read together, so the page can take them as one moment.
-            let ts_us = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_err(|error| format!("the clock is before the Unix epoch: {error}"))?
-                .as_micros() as u64;
             return Ok(LogReply {
                 lines: Vec::new(),
-                clock: Some(ClockReading {
-                    ts_us,
-                    mono_ns: monotonic_ns(),
-                }),
+                clock: Some(clock_reading()?),
                 classes: None,
             });
         }
@@ -181,6 +229,24 @@ pub fn log_command(log: &EventLog, request: Value) -> Result<LogReply, String> {
             ));
         }
     }
+    log_batch(log, &request, &WORKBENCH)
+}
+
+/// The clocks of the host now; both are read together, so the document can take them as one moment.
+fn clock_reading() -> Result<ClockReading, String> {
+    let ts_us = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|error| format!("the clock is before the Unix epoch: {error}"))?
+        .as_micros() as u64;
+    Ok(ClockReading {
+        ts_us,
+        mono_ns: monotonic_ns(),
+    })
+}
+
+/// Validates the events of a batch of the writer as a whole, queues them into the writer of the host, and answers the lines
+/// of the records of the writer in it.
+fn log_batch(log: &EventLog, request: &Value, writer: &Writer) -> Result<LogReply, String> {
     let items = request
         .get("events")
         .and_then(Value::as_array)
@@ -188,7 +254,9 @@ pub fn log_command(log: &EventLog, request: Value) -> Result<LogReply, String> {
     let events = items
         .iter()
         .enumerate()
-        .map(|(index, item)| relayed_of(item).map_err(|error| format!("events[{index}]: {error}")))
+        .map(|(index, item)| {
+            relayed_of(item, writer).map_err(|error| format!("events[{index}]: {error}"))
+        })
         .collect::<Result<Vec<_>, _>>()?;
     let mut lines = Vec::new();
     for (index, event) in events.into_iter().enumerate() {
@@ -198,7 +266,8 @@ pub fn log_command(log: &EventLog, request: Value) -> Result<LogReply, String> {
             ts_us: event.ts_us,
             mono_ns: event.mono_ns,
             layer: event.layer.to_string(),
-            page: Some(event.page),
+            page: event.page,
+            start: event.start,
             level: event.level,
             event: event.event,
             cids: event.cids,
@@ -216,23 +285,25 @@ pub fn log_command(log: &EventLog, request: Value) -> Result<LogReply, String> {
     })
 }
 
-/// Stores the transcript line of a host call of the page as the record `page.record.info` with the place `page`, cut to
-/// `RECORD_TEXT_BYTES` like every record, and answers the whole line, which the host sends to the connections that enabled the
-/// diagnostic transcript of the window. A batch record carries only the text that the page cut to the bound, so the whole line of
-/// a long call travels in this request (docs/spec/logging.md#bounds).
+/// Stores the transcript line of a host call of the workbench as the record `workbench.record.info` with the place `workbench`,
+/// cut to `RECORD_TEXT_BYTES` like every record, and answers the whole line, which the host sends to the connections that enabled
+/// the diagnostic transcript of the window. A batch record carries only the text that the workbench cut to the bound, so the
+/// whole line of a long call travels in this request (docs/spec/logging.md#bounds).
 fn transcript_line(log: &EventLog, request: &Value) -> Result<LogReply, String> {
-    let page = request
-        .get("page")
+    let start = request
+        .get("start")
         .and_then(Value::as_str)
-        .filter(|page| !page.is_empty())
-        .ok_or_else(|| "page must name the document that wrote the line".to_string())?;
+        .filter(|start| !start.is_empty())
+        .ok_or_else(|| {
+            "start must name the start of the workbench that wrote the line".to_string()
+        })?;
     let line = request
         .get("line")
         .and_then(Value::as_str)
         .filter(|line| !line.is_empty())
         .ok_or_else(|| "line must be a non-empty string".to_string())?;
     let (text, cut) = cut_text(line, crate::bounds::RECORD_TEXT_BYTES);
-    let mut record = serde_json::json!({"where": "page", "text": text});
+    let mut record = serde_json::json!({"where": "workbench", "text": text});
     if cut {
         record["truncated"] = serde_json::json!(true);
     }
@@ -244,16 +315,19 @@ fn transcript_line(log: &EventLog, request: &Value) -> Result<LogReply, String> 
     log.emit_relayed(RelayedEvent {
         ts_us,
         mono_ns: monotonic_ns(),
-        layer: "page".to_string(),
-        page: Some(page.to_string()),
+        layer: "workbench".to_string(),
+        page: None,
+        start: Some(start.to_string()),
         level: Level::Info,
-        event: "page.record.info".to_string(),
+        event: "workbench.record.info".to_string(),
         cids: Vec::new(),
         fields,
     })
     .map_err(|error| error.to_string())?;
     Ok(LogReply {
-        lines: vec![crate::application_log::Entry::new("info", "page", "page", line).line()],
+        lines: vec![
+            crate::application_log::Entry::new("info", "workbench", "workbench", line).line(),
+        ],
         clock: None,
         classes: None,
     })
@@ -273,8 +347,7 @@ pub fn view_log_command(
             if request.as_object().is_none_or(|object| object.len() != 1) {
                 return Err("runtime.log clock request accepts only action".into());
             }
-            let reply = log_command(log, request)?;
-            serde_json::to_value(reply.clock).map_err(|error| error.to_string())
+            serde_json::to_value(clock_reading()?).map_err(|error| error.to_string())
         }
         Some("batch") => {
             if request.as_object().is_none_or(|object| object.len() != 2) {
@@ -370,7 +443,7 @@ pub fn view_log_command(
                     }
                 }
             }
-            log_command(log, request)?;
+            log_batch(log, &request, &VIEW_PAGE)?;
             Ok(Value::Null)
         }
         Some(other) => Err(format!("action must be batch or clock, not {other:?}")),

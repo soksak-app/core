@@ -100,7 +100,7 @@ func TestLogIndexMatchesTheGoldenDigest(t *testing.T) {
 
 func eventLineOf(seq int) string {
 	if seq == 1 {
-		return `{"ts_us":1000,"mono_ns":1,"seq":1,"level":"info","layer":"host","event":"log.open","fields":{"schema":2,"pid":1,"role":"host","boot":"a"}}`
+		return `{"ts_us":1000,"mono_ns":1,"seq":1,"level":"info","layer":"host","event":"log.open","fields":{"schema":3,"pid":1,"role":"host","boot":"a"}}`
 	}
 	return fmt.Sprintf(`{"ts_us":%d,"mono_ns":%d,"seq":%d,"level":"debug","layer":"host","event":"host.x.y","fields":{"n":%d}}`, 1000+seq, seq, seq, seq)
 }
@@ -203,7 +203,7 @@ func TestLogIndexCountsTheLinesThatAnnounceAChange(t *testing.T) {
 		t.Fatalf("first update %+v err %v: the records of the two calls that read the log do not announce a change, log.open and the other event do", update, err)
 	}
 	// A call with the same name in another event, and another call in the same event, announce a change.
-	second := read(5, "host.binding.call", "logQuery") + read(6, "host.binding.call", "debugFiles") + read(7, "page.call", "logQuery")
+	second := read(5, "host.binding.call", "logQuery") + read(6, "host.binding.call", "debugFiles") + read(7, "workbench.call", "logQuery")
 	file, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -254,9 +254,9 @@ func TestLogIndexRefusesADamagedIndexAndABrokenLine(t *testing.T) {
 		want   string
 	}{
 		{"version", func(data []byte) []byte {
-			data[stateBlockBytes+4] = 2
+			data[stateBlockBytes+4] = 1
 			return data
-		}, name + ": version 2 is not 1"},
+		}, name + ": version 1 is not 2"},
 		{"state checksum", func(data []byte) []byte {
 			data[stateBlockBytes+100] ^= 0xff
 			return data
@@ -313,8 +313,8 @@ func TestLogIndexRefusesADamagedIndexAndABrokenLine(t *testing.T) {
 
 	first := []struct{ name, text, want string }{
 		{"first line", `{"ts_us":1,"mono_ns":1,"seq":1,"level":"info","layer":"host","event":"host.x"}` + "\n", `logs/host-f.jsonl: the first line is not log.open: "host.x"`},
-		{"schema", `{"ts_us":1,"mono_ns":1,"seq":1,"level":"info","layer":"host","event":"log.open","fields":{"schema":1}}` + "\n", "logs/host-f.jsonl: schema 1 is not 2"},
-		{"layer", linesOf(1, 1) + `{"ts_us":1,"mono_ns":1,"seq":2,"level":"info","layer":"x","event":"a"}` + "\n", `logs/host-f.jsonl:2: layer "x" is not one of native, host, page, plugin, sidecar, sok`},
+		{"schema", `{"ts_us":1,"mono_ns":1,"seq":1,"level":"info","layer":"host","event":"log.open","fields":{"schema":2}}` + "\n", "logs/host-f.jsonl: schema 2 is not 3"},
+		{"layer", linesOf(1, 1) + `{"ts_us":1,"mono_ns":1,"seq":2,"level":"info","layer":"x","event":"a"}` + "\n", `logs/host-f.jsonl:2: layer "x" is not one of native, host, workbench, page, plugin, sidecar, sok`},
 		{"null surface", linesOf(1, 1) + `{"ts_us":1,"mono_ns":1,"seq":2,"level":"info","layer":"host","event":"a","surface":null}` + "\n", "logs/host-f.jsonl:2: surface must be a string, found null"},
 		{"null cids", linesOf(1, 1) + `{"ts_us":1,"mono_ns":1,"seq":2,"level":"info","layer":"host","event":"a","cids":null}` + "\n", "logs/host-f.jsonl:2: cids must be an array of strings, found null"},
 		{"null class", linesOf(1, 1) + `{"ts_us":1,"mono_ns":1,"seq":2,"level":"info","layer":"host","event":"a","class":null}` + "\n", "logs/host-f.jsonl:2: class null is not one of lifecycle, input, call, io, frame"},

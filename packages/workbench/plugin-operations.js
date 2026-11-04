@@ -144,7 +144,7 @@ export function createPluginOperations({ host, loaded, refused, changed }) {
     if (!host) throw new Error("plugin operations need a native host");
     operation = { action, plugin, state: "running", error: null };
     changed();
-    const cids = beginOperation("page.plugin.operation", { action, plugin });
+    const cids = beginOperation("workbench.plugin.operation", { action, plugin });
     try {
       await host.call("pluginsRun", { action, plugin }, { cids });
       operation = { action, plugin, state: "done", error: null };

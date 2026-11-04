@@ -16,7 +16,7 @@ import { ensureTerminals, readScreenUntil } from "./terminal-screen.mjs";
 // (docs/spec/replay.md#records). The line is `<level> <layer> <event>: <fields>`.
 /** The records of the input path that the check reads, all below `error`. */
 const READS = ["native.record.info", "native.input.key_down", "native.input.report", "host.trace.region", "host.trace.sidecar.send",
-  "host.input.relay", "page.call", "page.log.clock", "host.sidecar.request", "sidecar.vt.request", "sidecar.vt.pty_write",
+  "host.input.relay", "workbench.call", "workbench.log.clock", "host.sidecar.request", "sidecar.vt.request", "sidecar.vt.pty_write",
   "sidecar.vt.pty_read"];
 
 function readText(line) {
@@ -105,33 +105,33 @@ for (const app of Object.values(APPS)) {
     const hops = {
       nativeReport: found.nativeReport.event,
       hostRelay: events.find((e) => e.event === "host.input.relay" && e.cids?.includes(cid)),
-      pageCall: events.find((e) => e.event === "page.call" && e.fields.name === "sidecarSend" && e.cids?.includes(cid)),
+      pageCall: events.find((e) => e.event === "workbench.call" && e.fields.name === "sidecarSend" && e.cids?.includes(cid)),
       hostRequest: events.find((e) => e.event === "host.sidecar.request" && e.cids?.includes(cid)),
     };
     const unlinked = Object.entries(hops).filter(([, hop]) => !hop?.cids?.includes(cid)).map(([name]) => name);
     assert.deepEqual(unlinked, [], `${app.name}: the hops ${unlinked.join(", ")} do not carry ${cid}`);
-    // The page takes its clocks from the host with an error of at most half the round trip of its anchor plus its clock
-    // resolution, which each page states as page.log.clock (docs/spec/logging.md#writers). Every page event names the page
-    // that wrote it, so the anchor of page.call is the last page.log.clock of the same page before it.
+    // The workbench takes its clocks from the host with an error of at most half the round trip of its anchor plus its clock
+    // resolution, which each workbench start states as workbench.log.clock (docs/spec/logging.md#writers). Every workbench event
+    // names the start that wrote it, so the anchor of workbench.call is the last workbench.log.clock of the same start before it.
     const { pid } = JSON.parse(readFileSync(join(s.app.configDir, "endpoint.json"), "utf8"));
     const main = readdirSync(join(s.app.configDir, "logs")).find((name) => /^host-\d+-\d+\.jsonl$/.test(name) && name.endsWith(`-${pid}.jsonl`));
-    assert.ok(hops.pageCall.page, `${app.name}: page.call names no page`);
+    assert.ok(hops.pageCall.start, `${app.name}: workbench.call names no start`);
     const anchor = readFileSync(join(s.app.configDir, "logs", main), "utf8").split("\n")
-      .filter((line) => line.includes('"page.log.clock"')).map((line) => JSON.parse(line))
-      .filter((e) => e.page === hops.pageCall.page && e.mono_ns <= hops.pageCall.mono_ns).at(-1);
-    assert.ok(anchor, `${app.name}: ${main} holds no page.log.clock of the page ${hops.pageCall.page} before page.call`);
+      .filter((line) => line.includes('"workbench.log.clock"')).map((line) => JSON.parse(line))
+      .filter((e) => e.start === hops.pageCall.start && e.mono_ns <= hops.pageCall.mono_ns).at(-1);
+    assert.ok(anchor, `${app.name}: ${main} holds no workbench.log.clock of the start ${hops.pageCall.start} before workbench.call`);
     const { trip_us: tripUs, resolution_us: resolutionUs } = anchor.fields;
     const halfTripUs = tripUs / 2 + resolutionUs;
-    const onPageClock = new Set(["page.call start", "page.call", "pageRegion", "pageSend"]);
-    // page.call is written when the call ends, and its micros is measured on the page clock, so its start, the end less micros,
+    const onPageClock = new Set(["workbench.call start", "workbench.call", "pageRegion", "pageSend"]);
+    // workbench.call is written when the call ends, and its micros is measured on the page clock, so its start, the end less micros,
     // carries one more resolution of the page clock than the end.
     const bound = (left, right) => (onPageClock.has(left) === onPageClock.has(right) ? 0
-      : [left, right].includes("page.call start") ? halfTripUs + resolutionUs : halfTripUs);
+      : [left, right].includes("workbench.call start") ? halfTripUs + resolutionUs : halfTripUs);
     const callStart = { ...hops.pageCall, mono_ns: hops.pageCall.mono_ns - hops.pageCall.fields.micros * 1000 };
     // The delay between the layers is measured on the monotonic clock, which the layers of one boot share. The host receives the
     // send between the start and the end of the call of the page.
     const clock = [["native.input.key_down", found.nativeKeyDown.event], ["native.input.report", hops.nativeReport], ["host.input.relay", hops.hostRelay],
-      ["page.call start", callStart], ["host.sidecar.request", hops.hostRequest], ["page.call", hops.pageCall]];
+      ["workbench.call start", callStart], ["host.sidecar.request", hops.hostRequest], ["workbench.call", hops.pageCall]];
     for (let index = 1; index < clock.length; index++) {
       const [, earlier] = clock[index - 1];
       const [name, later] = clock[index];

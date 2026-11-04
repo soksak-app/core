@@ -13,7 +13,7 @@ const settle = () => new Promise((resolve) => setImmediate(resolve));
 test("a queue over its byte bound refuses events and the next batch starts with the counted loss and its bytes", async () => {
   const calls = [];
   let acknowledge;
-  const batcher = createEventBatcher({ page: PAGE,
+  const batcher = createEventBatcher({ writer: { layer: "page", member: "page", identity: PAGE },
     call: (request) => { if (request.action === "clock") return Promise.resolve(hostClock); calls.push(withoutClock(request)); return new Promise((resolve) => { acknowledge = resolve; }); },
     report: assert.ifError,
     maxBytes: 1000,

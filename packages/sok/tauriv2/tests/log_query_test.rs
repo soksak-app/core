@@ -254,7 +254,7 @@ fn query_pages_through_the_cursor() {
 
 fn event_line_small(seq: i64) -> String {
     if seq == 1 {
-        return r#"{"ts_us":1000,"mono_ns":1,"seq":1,"level":"info","layer":"host","event":"log.open","fields":{"schema":2,"pid":1,"role":"host","boot":"a"}}"#.to_string();
+        return r#"{"ts_us":1000,"mono_ns":1,"seq":1,"level":"info","layer":"host","event":"log.open","fields":{"schema":3,"pid":1,"role":"host","boot":"a"}}"#.to_string();
     }
     format!(
         r#"{{"ts_us":{},"mono_ns":{seq},"seq":{seq},"level":"debug","layer":"host","event":"host.x.y","fields":{{"n":{seq}}}}}"#,
@@ -385,7 +385,7 @@ fn query_refuses_invalid_parameters() {
         ),
         (
             r#"{"layer": "x"}"#,
-            r#"log query layer "x" is not one of native, host, page, plugin, sidecar, sok"#,
+            r#"log query layer "x" is not one of native, host, workbench, page, plugin, sidecar, sok"#,
         ),
         (
             r#"{"event": ""}"#,
@@ -529,6 +529,7 @@ fn query_agrees_with_the_reference_on_the_generated_log() {
         json!({"level": "warn"}),
         json!({"level": "error", "layer": "native"}),
         json!({"layer": "page", "level": "info"}),
+        json!({"layer": "workbench", "level": "info"}),
         json!({"event": "host.call.b"}),
         json!({"event_prefix": "native.input"}),
         json!({"event_prefix": "sidecar"}),

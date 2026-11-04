@@ -181,7 +181,7 @@ export async function recordMaximiseAndRestore(s, judge = () => {}, { geometry =
   const terminal = await fresh(s, {
     ...fixtureSettings(B3_SETTINGS["resize-catch-up"].captured),
     reads: ["host.window.event", "host.trace.view.presentation-join", "host.trace.view.presentation-abandoned", "host.stall",
-      "page.trace.layout"],
+      "workbench.trace.layout"],
   });
   const { pageProcess } = await s.get("host.window");
   const frameGeometry = geometry && pageProcess === null ? await terminalGeometry(s, terminal) : null;

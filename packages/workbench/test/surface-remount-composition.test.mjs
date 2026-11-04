@@ -607,8 +607,8 @@ test("a drawn wait records a listener failure before the native view is declared
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(mountedSurface(id), null, "the failed view registration mounted a native surface");
     assert.equal(slot.dataset.nativeSurfaceId, id, "the drawn layout no longer names the failed surface");
-    assert.deepEqual(events.filter(({ event }) => event === "page.surface.mount.failed"), [{
-      level: "error", event: "page.surface.mount.failed",
+    assert.deepEqual(events.filter(({ event }) => event === "workbench.surface.mount.failed"), [{
+      level: "error", event: "workbench.surface.mount.failed",
       fields: { plugin: id, surface: id, attempt: 1, phase: "mount", reason: registrationError.message },
     }]);
     await assert.rejects(page.drawn(), new RegExp(`surface ${id} mount attempt 1 failed during mount: ${registrationError.message}`));
@@ -756,13 +756,13 @@ test("a disposed pending listener setup cannot replace a newer attempt", { timeo
     rejectOld(new Error("old disposed listener failed"));
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(mountedSurface(id), current, "an old listener failure removed the newer mounted attempt");
-    assert.deepEqual(events.filter(({ event }) => event === "page.surface.mount.failed"), [],
+    assert.deepEqual(events.filter(({ event }) => event === "workbench.surface.mount.failed"), [],
       "a listener rejection after normal dispose was classified as a failed mount");
     rejectNew(new Error("new listener failed before readiness"));
     await errorReported;
     await assert.rejects(newMount, /new listener failed before readiness/);
     await new Promise((resolve) => setImmediate(resolve));
-    assert.equal(events.filter(({ event }) => event === "page.surface.mount.failed").at(-1)?.fields.attempt, 2,
+    assert.equal(events.filter(({ event }) => event === "workbench.surface.mount.failed").at(-1)?.fields.attempt, 2,
       "the new mount failure was attributed to the old attempt");
     await assert.rejects(page.drawn(), /mount attempt 2 failed during mount: new listener failed before readiness/);
   } finally {

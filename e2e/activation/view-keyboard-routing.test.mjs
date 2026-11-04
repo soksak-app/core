@@ -12,11 +12,11 @@ import { ensureTerminals, readScreenUntil } from "../terminal-screen.mjs";
 import { compareAppKitReference } from "./ime-reference-steps.mjs";
 
 const KOREAN_2SET = "com.apple.inputmethod.Korean.2SetKorean";
-const REGISTRY_COMMAND = "page.command";
-const MODAL_ANSWER = "page.trace.modal.answer";
-const PICKER_CLOSE = "page.trace.picker.close";
+const REGISTRY_COMMAND = "workbench.command";
+const MODAL_ANSWER = "workbench.trace.modal.answer";
+const PICKER_CLOSE = "workbench.trace.picker.close";
 const INPUT_INJECTION = "native.record.info";
-const READS = [REGISTRY_COMMAND, MODAL_ANSWER, PICKER_CLOSE, "page.input.shortcut.failed", INPUT_INJECTION,
+const READS = [REGISTRY_COMMAND, MODAL_ANSWER, PICKER_CLOSE, "workbench.input.shortcut.failed", INPUT_INJECTION,
   "native.input.key_down"];
 
 async function openProbe(t, app) {
@@ -306,7 +306,7 @@ for (const app of Object.values(APPS)) {
     // the focused view owns its normal key handling and does not forward the workbench command.
     assert.equal(traceCommands(events, "core.library.search.focus").length, 0,
       "hidden-library cmd+k must not invoke the library-only workbench command");
-    assert.equal(events.filter((event) => event.event === "page.input.shortcut.failed"
+    assert.equal(events.filter((event) => event.event === "workbench.input.shortcut.failed"
       && event.fields?.plugin === "browser" && event.fields?.command === "core.library.search.focus").length, 0,
     "hidden-library cmd+k must not report a failed forwarded command");
     assert.equal((await s.get("core.screen")).screen, "workspace",
@@ -378,7 +378,7 @@ for (const app of Object.values(APPS)) {
     const events = await traceEvents(s, offsets);
     assert.equal(traceCommands(events, "core.picker.close").length, 0,
       "composition Escape must not forward core.picker.close");
-    assert.equal(events.filter((event) => event.event === "page.input.shortcut.failed").length, 0,
+    assert.equal(events.filter((event) => event.event === "workbench.input.shortcut.failed").length, 0,
       "composition Escape must not forward a workbench shortcut command");
     assert.deepEqual((await s.get("core.page.audit")).unbound, []);
     t.diagnostic(`${app.name}: captured complete g/k/s/Escape gesture in ${captured.length} frames`);

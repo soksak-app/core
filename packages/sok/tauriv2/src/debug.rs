@@ -380,6 +380,9 @@ pub(crate) fn event_line(row: &Row) -> String {
     parts.join(" ")
 }
 
+/// The schema number of the event files that this reader reads.
+pub(crate) const EVENT_SCHEMA: i64 = 3;
+
 /// The schema number of a `log.open` line.
 pub(crate) fn schema_of(name: &str, raw: &str) -> Result<i64, String> {
     let row = row_of(name, 1, raw)?;
@@ -390,7 +393,7 @@ pub(crate) fn schema_of(name: &str, raw: &str) -> Result<i64, String> {
             Some(Json::Number(v)) => js_number(*v),
             other => stringify(other),
         };
-        format!("{name}: schema {shown} is not 2")
+        format!("{name}: schema {shown} is not {EVENT_SCHEMA}")
     })
 }
 

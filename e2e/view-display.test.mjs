@@ -19,7 +19,7 @@ async function untilViewReady(s, offsets, wait) {
   } catch (error) {
     await s.flushLog();
     const { events } = readEvents(s.app.configDir, offsets);
-    const calls = unansweredViewCalls(events.filter((event) => event.event.startsWith("page.view.")));
+    const calls = unansweredViewCalls(events.filter((event) => event.event.startsWith("workbench.view.")));
     const detail = calls.length === 0 ? "none" : calls.map((call) => `${call.plugin} ${call.surface} call ${call.id} ${call.command} ` +
       `waited ${(call.waitingUs / 1000).toFixed(0)} ms`).join("; ");
     throw new Error(`${error.message}; view calls without a reply: ${detail}`, { cause: error });
@@ -32,7 +32,7 @@ for (const app of Object.values(APPS)) {
     // The view calls of the page are records at the debug level of the class call; the check declares that policy, and the
     // preparation restores the setting when the check ends (keepCommonSettings).
     const offsets = currentEventOffsets(s.app.configDir);
-    await untilViewReady(s, offsets, () => fresh(s, { log: { call: "debug" }, reads: ["page.view.call", "page.view.reply"] }));
+    await untilViewReady(s, offsets, () => fresh(s, { log: { call: "debug" }, reads: ["workbench.view.call", "workbench.view.reply"] }));
     await checkViewDisplay(s, t, undefined, await viewContentCases(s, message => t.diagnostic(message)));
   });
 }

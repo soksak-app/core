@@ -498,7 +498,7 @@ export const notificationCenter = native ? {
  */
 export const debug = native ? {
   files: () => tell("debugFiles"),
-  record: (page) => tell("debugRecord", { page }),
+  record: (workbench) => tell("debugRecord", { workbench }),
   save: (request) => tell("debugSave", request),
   saveAll: () => tell("debugSaveAll"),
   saveText: (request) => tell("debugSaveText", request),
@@ -791,7 +791,7 @@ if (native) {
   bridge.on("overlay-pick", ({ id, key, value }) => {
     if (id !== shown) {
       // default: a page that shows no modal records the empty text as the shown one.
-      emitEvent("info", "page.overlay.dropped", { id, shown: shown ?? "", key });
+      emitEvent("info", "workbench.overlay.dropped", { id, shown: shown ?? "", key });
       return;
     }
     // The state report of a modal document is not a response. It is not forwarded to the receiver of the element.
@@ -801,7 +801,7 @@ if (native) {
       return;
     }
     if (!pick) {
-      emitEvent("info", "page.overlay.dropped", { id, shown: "", key });
+      emitEvent("info", "workbench.overlay.dropped", { id, shown: "", key });
       return;
     }
     // The answer is traced at its receipt: the overlay document has no trace switch, so the page writes this event for it

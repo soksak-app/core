@@ -56,10 +56,10 @@ test("the event files are the files of the logs folder that the query reads", ()
 
 test("the request of the query leaves the open members out and turns the UTC times into microseconds", () => {
   assert.deepEqual(queryOf({ ...CLEAR_FILTER }), { channel: "other", level: "trace" });
-  assert.deepEqual(queryOf({ ...CLEAR_FILTER, channel: "all", level: "warn", layer: "page", class: "input", text: "boom", event_prefix: "page.call", surface: "tab-x", session: "s1", cid: "b1.1", run: "r1" }),
-    { channel: "all", level: "warn", layer: "page", class: "input", text: "boom", event_prefix: "page.call", surface: "tab-x", session: "s1", cid: "b1.1", run: "r1" });
-  assert.deepEqual(queryOf({ ...CLEAR_FILTER, event: "page.call", from: "2026-10-08T22:53:20Z", to: "2026-10-08T22:53:20.123456Z" }),
-    { channel: "other", level: "trace", event: "page.call", from_us: 1791500000000000, to_us: 1791500000123456 });
+  assert.deepEqual(queryOf({ ...CLEAR_FILTER, channel: "all", level: "warn", layer: "workbench", class: "input", text: "boom", event_prefix: "workbench.call", surface: "tab-x", session: "s1", cid: "b1.1", run: "r1" }),
+    { channel: "all", level: "warn", layer: "workbench", class: "input", text: "boom", event_prefix: "workbench.call", surface: "tab-x", session: "s1", cid: "b1.1", run: "r1" });
+  assert.deepEqual(queryOf({ ...CLEAR_FILTER, event: "workbench.call", from: "2026-10-08T22:53:20Z", to: "2026-10-08T22:53:20.123456Z" }),
+    { channel: "other", level: "trace", event: "workbench.call", from_us: 1791500000000000, to_us: 1791500000123456 });
   assert.throws(() => queryOf({ ...CLEAR_FILTER, from: "yesterday" }), /log query from "yesterday" is not a UTC time like 2026-10-08T22:53:20\.123456Z/);
   assert.throws(() => queryOf({ ...CLEAR_FILTER, to: "2026-02-30T00:00:00Z" }), /log query to "2026-02-30T00:00:00Z" is not a UTC time like/);
   assert.throws(() => queryOf({ ...CLEAR_FILTER, text: 3 }), /log query text must be a string, found 3/);

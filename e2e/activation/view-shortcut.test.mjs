@@ -10,7 +10,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     await fresh(s, {
       log: { input: "info", lifecycle: "info", call: "debug" },
-      reads: ["native.input.key_down", "native.record.info", "native.window.first_responder", "page.command"],
+      reads: ["native.input.key_down", "native.record.info", "native.window.first_responder", "workbench.command"],
     });
     await keepCommonSettings(s);
     const browser = (await s.get("core.surfaces")).find(item => item.plugin === "browser" && item.visible);

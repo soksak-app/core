@@ -1,16 +1,16 @@
 /**
- * Runs one awaited step of the fixture and records it as the event `page.fixture.step`: a `start` record before the step and an
+ * Runs one awaited step of the fixture and records it as the event `workbench.fixture.step`: a `start` record before the step and an
  * `end` record after it with the elapsed milliseconds and the error text, or null when the step succeeded. The error is rethrown.
  */
 async function step(name, emitEvent, work) {
-  emitEvent("info", "page.fixture.step", { step: name, phase: "start" });
+  emitEvent("info", "workbench.fixture.step", { step: name, phase: "start" });
   const started = performance.now();
   try {
     const result = await work();
-    emitEvent("info", "page.fixture.step", { step: name, phase: "end", ms: Math.round(performance.now() - started), error: null });
+    emitEvent("info", "workbench.fixture.step", { step: name, phase: "end", ms: Math.round(performance.now() - started), error: null });
     return result;
   } catch (error) {
-    emitEvent("info", "page.fixture.step", { step: name, phase: "end", ms: Math.round(performance.now() - started), error: error instanceof Error ? error.message : String(error) });
+    emitEvent("info", "workbench.fixture.step", { step: name, phase: "end", ms: Math.round(performance.now() - started), error: error instanceof Error ? error.message : String(error) });
     throw error;
   }
 }

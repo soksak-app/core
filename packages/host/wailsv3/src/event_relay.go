@@ -1,9 +1,10 @@
 package host
 
-// The `log` call of the page (docs/spec/logging.md#writers): the page relays a batch of events. The host validates the
-// whole batch before it writes any event, then stores every event in the layer `page` or `plugin` that its name starts with,
-// with the clocks and the correlation identifiers the page gave it. The page asks for the clocks of the host with the action
-// `clock`, so it can convert its own clock to them.
+// The `log` call of a document (docs/spec/logging.md#writers): the workbench, and a view page through `runtime.log`, relays a
+// batch of events. The host validates the whole batch before it writes any event, then stores every event in the layer of its
+// writer or `plugin`, the one that its name starts with, with the member that names the writing document and the clocks and the
+// correlation identifiers the document gave it. The document asks for the clocks of the host with the action `clock`, so it
+// can convert its own clock to them.
 
 import (
 	"context"
@@ -19,7 +20,23 @@ import (
 	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
 )
 
-// relayedEvent is one validated event of a page batch.
+// documentWriter is the writer of a batch: the layer of its own events and the member that names it on each event, with the
+// error that a missing member is refused with.
+type documentWriter struct {
+	layer, member, missing string
+}
+
+// workbenchWriter writes the events of the workbench, named by the start of the workbench; viewPageWriter writes the events of
+// a view page, named by its page identity (docs/spec/logging.md#event).
+var (
+	workbenchWriter = documentWriter{layer: "workbench", member: "start", missing: "start must name the start of the workbench that wrote the event"}
+	viewPageWriter  = documentWriter{layer: "page", member: "page", missing: "page must name the document that wrote the event"}
+)
+
+// writerMembers names the writer that each member names.
+var writerMembers = map[string]string{"start": "the workbench", "page": "a view page"}
+
+// relayedEvent is one validated event of a document batch.
 type relayedEvent struct {
 	tsMicros int64
 	monoNs   uint64
@@ -27,11 +44,12 @@ type relayedEvent struct {
 	level    Level
 	event    string
 	fields   json.RawMessage
-	// layer is `page` or `plugin`, the prefix of the name of the event.
+	// layer is the layer of the writer or `plugin`, the prefix of the name of the event.
 	layer string
-	// page is the page identity of the document that wrote the event (docs/spec/logging.md#event).
-	page string
-	// record is the record of the page that the event carries, when it is a `page.record.<level>` event.
+	// page is the page identity of the view page and start the start of the workbench that wrote the event; the member of
+	// the writer is set and the other is empty (docs/spec/logging.md#event).
+	page, start string
+	// record is the record of the writer that the event carries, when it is a `<layer>.record.<level>` event.
 	record *Entry
 }
 
@@ -41,8 +59,8 @@ type ClockReading struct {
 	MonoNs   uint64 `json:"mono_ns"`
 }
 
-// LogReply is the answer of the `log` call: the lines `<level> page <where>: <text>` of the records of the page in a batch or of
-// the transcript line of a `transcript` request, which the host shows in the transcript of the window, the clocks of a `clock`
+// LogReply is the answer of the `log` call: the lines `<level> workbench <where>: <text>` of the records of the workbench in a
+// batch or of the transcript line of a `transcript` request, which the host shows in the transcript of the window, the clocks of a `clock`
 // request, or the classes of the policy in force of a `policy-read` request.
 type LogReply struct {
 	Lines   []string
@@ -51,7 +69,7 @@ type LogReply struct {
 }
 
 // LogCommand answers a `clock` request with the clocks of the host and stores nothing. It validates a batch request of the
-// page, queues its events into the writer of the host, and returns the lines of the page records in it.
+// workbench, queues its events into the writer of the host, and returns the lines of the records of the workbench in it.
 func LogCommand(log *EventLog, request map[string]any) (LogReply, error) {
 	action, ok := request["action"].(string)
 	if !ok {
@@ -72,25 +90,25 @@ func LogCommand(log *EventLog, request map[string]any) (LogReply, error) {
 	if action != "batch" {
 		return LogReply{}, fmt.Errorf("action must be batch, clock, policy, policy-read or transcript, not %q", action)
 	}
-	lines, err := logBatch(log, request)
+	lines, err := logBatch(log, request, workbenchWriter)
 	return LogReply{Lines: lines}, err
 }
 
-// transcriptLine stores the transcript line of a host call of the page as the record `page.record.info` with the place `page`, cut
-// to RecordTextBytes like every record, and answers the whole line, which the host sends to the connections that enabled the
-// diagnostic transcript of the window. A batch record carries only the text that the page cut to the bound, so the whole line of a
-// long call travels in this request (docs/spec/logging.md#bounds).
+// transcriptLine stores the transcript line of a host call of the workbench as the record `workbench.record.info` with the place
+// `workbench`, cut to RecordTextBytes like every record, and answers the whole line, which the host sends to the connections that
+// enabled the diagnostic transcript of the window. A batch record carries only the text that the workbench cut to the bound, so
+// the whole line of a long call travels in this request (docs/spec/logging.md#bounds).
 func transcriptLine(log *EventLog, request map[string]any) (LogReply, error) {
-	page, ok := request["page"].(string)
-	if !ok || page == "" {
-		return LogReply{}, fmt.Errorf("page must name the document that wrote the line")
+	start, ok := request["start"].(string)
+	if !ok || start == "" {
+		return LogReply{}, fmt.Errorf("start must name the start of the workbench that wrote the line")
 	}
 	line, ok := request["line"].(string)
 	if !ok || line == "" {
 		return LogReply{}, fmt.Errorf("line must be a non-empty string")
 	}
 	text, cut := sok.CutText(line, RecordTextBytes)
-	record := map[string]any{"where": "page", "text": text}
+	record := map[string]any{"where": "workbench", "text": text}
 	if cut {
 		record["truncated"] = true
 	}
@@ -98,28 +116,28 @@ func transcriptLine(log *EventLog, request map[string]any) (LogReply, error) {
 	if err != nil {
 		return LogReply{}, fmt.Errorf("the transcript record cannot be serialized: %w", err)
 	}
-	if _, err := log.EmitRelayed(RelayedEvent{TsMicros: time.Now().UnixMicro(), MonoNs: monotonicNanos(), Layer: "page", Page: page,
-		Level: LevelInfo, Event: "page.record.info", Fields: fields}); err != nil {
+	if _, err := log.EmitRelayed(RelayedEvent{TsMicros: time.Now().UnixMicro(), MonoNs: monotonicNanos(), Layer: "workbench", Start: start,
+		Level: LevelInfo, Event: "workbench.record.info", Fields: fields}); err != nil {
 		return LogReply{}, err
 	}
-	return LogReply{Lines: []string{Entry{Level: "info", Layer: "page", Where: "page", Text: line}.Line()}}, nil
+	return LogReply{Lines: []string{Entry{Level: "info", Layer: "workbench", Where: "workbench", Text: line}.Line()}}, nil
 }
 
-func logBatch(log *EventLog, request map[string]any) ([]string, error) {
+func logBatch(log *EventLog, request map[string]any, writer documentWriter) ([]string, error) {
 	items, ok := request["events"].([]any)
 	if !ok {
 		return nil, fmt.Errorf("events must be an array")
 	}
 	events := make([]relayedEvent, 0, len(items))
 	for index, item := range items {
-		event, err := relayedEventOf(item)
+		event, err := relayedEventOf(item, writer)
 		if err != nil {
 			return nil, fmt.Errorf("events[%d]: %w", index, err)
 		}
 		events = append(events, event)
 	}
 	for index, event := range events {
-		if _, err := log.EmitRelayed(RelayedEvent{TsMicros: event.tsMicros, MonoNs: event.monoNs, Layer: event.layer, Page: event.page, Level: event.level,
+		if _, err := log.EmitRelayed(RelayedEvent{TsMicros: event.tsMicros, MonoNs: event.monoNs, Layer: event.layer, Page: event.page, Start: event.start, Level: event.level,
 			Event: event.event, Cids: event.cids, Fields: event.fields}); err != nil {
 			// The batch was validated as a whole, so a refusal here is a defect of the validation; nothing is written
 			// after it.
@@ -137,7 +155,7 @@ func logBatch(log *EventLog, request map[string]any) ([]string, error) {
 
 var errBadCids = errors.New("cids must be an array of non-empty strings without a quote, a backslash or a control character")
 
-func relayedEventOf(item any) (relayedEvent, error) {
+func relayedEventOf(item any, writer documentWriter) (relayedEvent, error) {
 	object, ok := item.(map[string]any)
 	if !ok {
 		return relayedEvent{}, fmt.Errorf("the event must be an object")
@@ -185,30 +203,41 @@ func relayedEventOf(item any) (relayedEvent, error) {
 	}
 	var layer string
 	switch {
-	case strings.HasPrefix(name, "page."):
-		layer = "page"
+	case strings.HasPrefix(name, writer.layer+"."):
+		layer = writer.layer
 	case strings.HasPrefix(name, "plugin."):
 		layer = "plugin"
 	default:
-		return relayedEvent{}, fmt.Errorf("the event %q does not start with page. or plugin.", name)
+		return relayedEvent{}, fmt.Errorf("the event %q does not start with %s. or plugin.", name, writer.layer)
 	}
-	page, ok := object["page"].(string)
-	if !ok || page == "" {
-		return relayedEvent{}, fmt.Errorf("page must name the document that wrote the event")
+	for _, member := range []string{"page", "start"} {
+		if _, present := object[member]; present && member != writer.member {
+			return relayedEvent{}, fmt.Errorf("%s is not a member of an event of %s", member, writerMembers[writer.member])
+		}
+	}
+	named, ok := object[writer.member].(string)
+	if !ok || named == "" {
+		return relayedEvent{}, errors.New(writer.missing)
+	}
+	var page, start string
+	if writer.member == "start" {
+		start = named
+	} else {
+		page = named
 	}
 	var record *Entry
-	if strings.HasPrefix(name, "page.record.") {
+	if strings.HasPrefix(name, writer.layer+".record.") {
 		where, okWhere := fields["where"].(string)
 		body, okText := fields["text"].(string)
 		if !okWhere || !okText {
 			return relayedEvent{}, fmt.Errorf("fields where and text must be strings")
 		}
-		record = &Entry{Level: level, Layer: "page", Where: where, Text: body}
+		record = &Entry{Level: level, Layer: writer.layer, Where: where, Text: body}
 	}
-	return relayedEvent{tsMicros: int64(ts), monoNs: uint64(mono), cids: cids, level: Level(level), event: name, fields: text, layer: layer, page: page, record: record}, nil
+	return relayedEvent{tsMicros: int64(ts), monoNs: uint64(mono), cids: cids, level: Level(level), event: name, fields: text, layer: layer, page: page, start: start, record: record}, nil
 }
 
-// Log relays a batch of page events to the event writer of the host and shows its page records in the transcript of the
+// Log relays a batch of events of the workbench to the event writer of the host and shows its records in the transcript of the
 // window; it stores the line of a `transcript` request and shows it whole in the transcript. It answers a `clock` request with the clocks of the host, a `policy-read` request with `{classes}` of the policy in force,
 // and a batch with nothing.
 func (h *Host) Log(ctx context.Context, requestJSON json.RawMessage) (any, error) {
@@ -374,7 +403,17 @@ func viewLogCommand(log *EventLog, plugin, surface, page string, timeOrigin floa
 	default:
 		return LogReply{}, fmt.Errorf("runtime.log action must be batch or clock, not %q", action)
 	}
-	return LogCommand(log, request)
+	return viewPageCommand(log, request)
+}
+
+// viewPageCommand answers a validated `runtime.log` request of a view page: a `clock` request with the clocks of the host, and a
+// batch by queuing its events in the layer `page` or `plugin` with the page identity of the view page.
+func viewPageCommand(log *EventLog, request map[string]any) (LogReply, error) {
+	if request["action"] == "clock" {
+		return LogReply{Clock: &ClockReading{TsMicros: time.Now().UnixMicro(), MonoNs: monotonicNanos()}}, nil
+	}
+	lines, err := logBatch(log, request, viewPageWriter)
+	return LogReply{Lines: lines}, err
 }
 
 func validateViewLogBatch(plugin, surface, page string, timeOrigin float64, request map[string]any) error {

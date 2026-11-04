@@ -84,7 +84,7 @@ for (const app of Object.values(APPS)) {
     const processError = new RegExp(`^error host view channel: ${escapedSurface}: the view process ended$`);
     const nativeError = /^error native document view: web content process terminated: soksak:\/\/browser\/ui\/index\.html$/;
     const stopError = new RegExp(`^error host view channel: ${escapedSurface}: ${escapedReason}$`);
-    const displayError = new RegExp(`^error page surface status ${RegExp.escape(card.id)} ${escapedSurface}: 표면 오류 · ${escapedReason}$`);
+    const displayError = new RegExp(`^error workbench surface status ${RegExp.escape(card.id)} ${escapedSurface}: 표면 오류 · ${escapedReason}$`);
     for (const pattern of [processError, nativeError, stopError, displayError]) s.expectError(pattern);
     const began = performance.now();
     for (let failure = 1; failure <= 4; failure++) {

@@ -454,7 +454,7 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: a real Command-click on an OSC 8 link opens it through the host and a plain click does not`, { timeout: 90000 }, async (t) => {
     const { s, surface, session, origin, row } = await prepare(t, app, "LINKROW",
       // The transcript lines are records of the page at the level info.
-      { log: { lifecycle: "info" }, reads: ["page.record.info"] });
+      { log: { lifecycle: "info" }, reads: ["workbench.record.info"] });
     await s.run("terminal.input", { bytes: `clear; printf '\\033]8;;${LINK}\\007LINKTEXT\\033]8;;\\007\\n'\r` }, surface);
     const lines = await readScreenUntil(s, surface, (screen) => screen.includes("LINKTEXT"), "the link did not render");
     const linkRow = lines.indexOf("LINKTEXT");
@@ -472,11 +472,11 @@ for (const app of Object.values(APPS)) {
     click(point.x, point.y);
     await s.until("terminal.session", (value) => value.selectionReleases > session.selectionReleases,
       "the plain click did not end as a selection click", { surface });
-    assert.equal(log.lines.some((line) => line.startsWith("info page page: host linkOpen")), false, "a plain click opened the link");
+    assert.equal(log.lines.some((line) => line.startsWith("info workbench workbench: host linkOpen")), false, "a plain click opened the link");
     click(point.x, point.y, ["command"]);
-    const opened = await log.until((all) => all.some((line) => line.startsWith("info page page: host linkOpen") && line.includes(LINK) && / -> /.test(line)),
+    const opened = await log.until((all) => all.some((line) => line.startsWith("info workbench workbench: host linkOpen") && line.includes(LINK) && / -> /.test(line)),
       "the host did not answer a linkOpen request", 10000);
-    const answer = opened.find((line) => line.startsWith("info page page: host linkOpen"));
+    const answer = opened.find((line) => line.startsWith("info workbench workbench: host linkOpen"));
     assert.doesNotMatch(answer, /error|reject/i, `the host rejected the link: ${answer}`);
     assert.equal((await s.get("terminal.session", surface)).error ?? null, null, "the link open left a session error");
   });

@@ -43,8 +43,9 @@ fn relayed(layer: &str, event: &str, fields: &str) -> RelayedEvent {
         ts_us: 1,
         mono_ns: 1,
         layer: layer.into(),
-        // An event of a document names its page; another layer names none.
+        // An event of a view page or a plugin names its page and an event of the workbench its start; another layer names none.
         page: matches!(layer, "page" | "plugin").then(|| "1791948729050".to_string()),
+        start: (layer == "workbench").then(|| "1791948729050".to_string()),
         level: Level::Info,
         event: event.into(),
         cids: Vec::new(),
@@ -79,8 +80,12 @@ fn every_line_stores_the_class_of_its_catalog_entry() {
         .unwrap()
     );
     assert!(
-        log.emit_relayed(relayed("page", "page.console.info", r#"{"text":"x"}"#))
-            .unwrap()
+        log.emit_relayed(relayed(
+            "workbench",
+            "workbench.console.info",
+            r#"{"text":"x"}"#
+        ))
+        .unwrap()
     );
     log.flush(Duration::from_secs(5)).unwrap();
     let want = [
@@ -89,7 +94,7 @@ fn every_line_stores_the_class_of_its_catalog_entry() {
         ("host.input.relay", "input"),
         ("host.sidecar.reply", "io"),
         ("page.start", "lifecycle"),
-        ("page.console.info", "lifecycle"),
+        ("workbench.console.info", "lifecycle"),
     ];
     let events = read(log.path());
     for (name, class) in want {

@@ -1,8 +1,8 @@
-// The host calls of a surface document are the events `page.call`, relayed in batches of the host command log
+// The host calls of a surface document are the events `workbench.call`, relayed in batches of the host command log
 // (docs/spec/logging.md#automatic-entrances).
 import assert from "node:assert/strict";
 import test from "node:test";
-// The event page.call is at the level debug, which only the debug state stores (docs/spec/logging.md#policy), so the host answers
+// The event workbench.call is at the level debug, which only the debug state stores (docs/spec/logging.md#policy), so the host answers
 // the action policy-read with every class at trace.
 const TRACE = { lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" };
 
@@ -21,9 +21,9 @@ async function surface(native) {
   } };
   globalThis.location = { search: "?id=s1" };
   const { page } = await import(`../runtime/index.js?test=surface-calls-${Math.random()}`);
-  // The statement of the clock anchor (page.log.clock) leads the first batch of a page and has its own test in the workbench.
+  // The statement of the clock anchor (workbench.log.clock) leads the first batch of a page and has its own test in the workbench.
   const batches = () => calls.filter(([command]) => command === "log")
-    .map(([, { request }]) => request.events.filter((event) => event.event !== "page.log.clock"));
+    .map(([, { request }]) => request.events.filter((event) => event.event !== "workbench.log.clock"));
   return { page, calls, batches };
 }
 
@@ -32,7 +32,7 @@ const cleanup = () => {
   delete globalThis.location;
 };
 
-test("the calls of one turn are the events page.call in one log batch, with the arguments of the host call", async () => {
+test("the calls of one turn are the events workbench.call in one log batch, with the arguments of the host call", async () => {
   const { page, calls, batches } = await surface(async () => undefined);
   try {
     await Promise.all([page.document.attach("doc"), page.document.load("doc", "https://example.test"), page.image.caret("v", 1, 2, 3, 4)]);
@@ -40,9 +40,9 @@ test("the calls of one turn are the events page.call in one log batch, with the 
     assert.equal(batches().length, 1, "one log call carries the events of the turn");
     const events = batches()[0];
     assert.deepEqual(events.map((event) => [event.event, event.level, event.fields.name, event.fields.args, event.fields.ok]), [
-      ["page.call", "debug", "documentAttach", '[{"surface":"s1","document":"doc"}]', true],
-      ["page.call", "debug", "documentLoad", '[{"surface":"s1","document":"doc","url":"https://example.test"}]', true],
-      ["page.call", "debug", "imageCaret", '[{"surface":"s1","name":"v"},1,2,3,4]', true],
+      ["workbench.call", "debug", "documentAttach", '[{"surface":"s1","document":"doc"}]', true],
+      ["workbench.call", "debug", "documentLoad", '[{"surface":"s1","document":"doc","url":"https://example.test"}]', true],
+      ["workbench.call", "debug", "imageCaret", '[{"surface":"s1","name":"v"},1,2,3,4]', true],
     ]);
     for (const event of events) {
       assert.equal(event.fields.truncated, false);
@@ -74,11 +74,11 @@ test("a refused call is at the level warn with the error, and the caller still g
 test("the log call is not recorded, and a long argument is cut with truncated", async () => {
   const { page, batches } = await surface(async () => undefined);
   try {
-    await page.report({ level: "info", where: "page", text: "ready" });
+    await page.report({ level: "info", where: "workbench", text: "ready" });
     await page.sidecar("x").send("s1", "y".repeat(3000));
     await new Promise((resolve) => setTimeout(resolve, 0));
     const events = batches().flat();
-    assert.deepEqual(events.map((event) => event.event), ["page.record.info", "page.call"]);
+    assert.deepEqual(events.map((event) => event.event), ["workbench.record.info", "workbench.call"]);
     assert.equal(events[1].fields.name, "sidecarSend");
     assert.equal(events[1].fields.args.length, 1024);
     assert.equal(events[1].fields.truncated, true);
