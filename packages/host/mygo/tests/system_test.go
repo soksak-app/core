@@ -22,6 +22,7 @@ import (
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	adapter "github.com/soksak-app/core/packages/host/mygo/src"
+	sok "github.com/soksak-app/core/packages/sok/go/src"
 )
 
 // systemHelper names the child process that runs the application with a workbench that acts on its window as the step of
@@ -30,6 +31,9 @@ const systemHelper = "SOKSAK_MYGO_SYSTEM_HELPER"
 
 // systemStep names the step of the child process of systemHelper.
 const systemStep = "SOKSAK_MYGO_SYSTEM_STEP"
+
+// updateBundle is the environment variable of the child process that names the staged bundle of the update step.
+const updateBundle = "SOKSAK_MYGO_UPDATE_BUNDLE"
 
 // refusedLink has a scheme that the host refuses, and declaredLink runs the command core.fixture.
 const (
@@ -42,6 +46,33 @@ var steps = map[string]func(w *systemWorkbench, window host.Frontend){
 	"deep-links": func(w *systemWorkbench, window host.Frontend) {
 		openURLs(refusedLink, declaredLink)
 		w.windowReady(window)
+	},
+	"notifications": func(w *systemWorkbench, window host.Frontend) {
+		w.windowReady(window)
+		// The event of the notification center for a click on the notification of a surface of the window.
+		host.HandleNotificationEvent(w.host, `{"type":"activated","identifier":"[\"main\",\"surface\"]"}`)
+	},
+	"update": func(w *systemWorkbench, window host.Frontend) {
+		w.windowReady(window)
+		// The application takes a quit once it published its endpoint.
+		endpoint := filepath.Join(os.Getenv(systemHelper), "endpoint.json")
+		for _, err := os.Stat(endpoint); err != nil; _, err = os.Stat(endpoint) {
+			time.Sleep(10 * time.Millisecond)
+		}
+		context := host.WithFrontend(context.Background(), window)
+		state, err := w.host.AppUpdateState(context)
+		if err != nil || state.Available == nil {
+			fmt.Println("no candidate:", state, err)
+			return
+		}
+		fmt.Println("candidate", state.Available.Version)
+		request, err := json.Marshal(host.AppUpdateApplyRequest{Bundle: os.Getenv(updateBundle)})
+		if err == nil {
+			err = w.host.AppUpdateApply(context, request)
+		}
+		if err != nil {
+			fmt.Println("the update failed:", err)
+		}
 	},
 }
 
@@ -368,5 +399,80 @@ func TestADropOfAPathThatNoLongerResolvesIsRefused(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "missing")
 	if text, err := adapter.FileDropText(&mygo.FileDropEvent{Paths: []string{missing}}); err == nil || !strings.Contains(err.Error(), missing) {
 		t.Fatalf("the drop gave %q, %v", text, err)
+	}
+}
+
+func TestTheEventsOfTheNotificationCenterReachTheWorkbench(t *testing.T) {
+	run := runStep(t, "notifications")
+	run.expect(t, "event main notification-state")
+	if activated := run.expect(t, "event main notification-activated"); !strings.Contains(activated, `"surface":"surface"`) {
+		t.Fatalf("the workbench received %s", activated)
+	}
+	run.quit(t)
+}
+
+// stagedUpdate gives the registry of config a core release for the application of the mygo host and stages its bundle under config.
+// It returns the staged bundle.
+func stagedUpdate(t *testing.T, config string) string {
+	t.Helper()
+	platform, err := sok.CurrentPlatform()
+	if err != nil {
+		t.Fatal(err)
+	}
+	folder := t.TempDir()
+	index := filepath.Join(folder, "index.json")
+	text := fmt.Sprintf(`{"format": 1, "plugins": [], "sidecars": [], "packs": [], "revoked": {"plugins": [], "sidecars": []}, "core": {"versions": [{"version": "99.0.0", "releases": {"%s-mygo": {"url": "file:///release.zip", "sha256": "%s"}}}]}}`,
+		platform, strings.Repeat("0", 64))
+	if err := os.WriteFile(index, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sok.UseRegistry(config, index, sok.DefaultFetcher); err != nil {
+		t.Fatal(err)
+	}
+	bundle := filepath.Join(config, "updates", "99.0.0", "soksak.app")
+	if err := os.MkdirAll(filepath.Join(bundle, "Contents"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(bundle, "Contents", "Info.plist"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return bundle
+}
+
+func TestAnUpdateQuitsTheApplicationAndStartsTheCommandThatReplacesItsBundle(t *testing.T) {
+	// The host holds the configuration directory and the bundle with their symbolic links resolved.
+	config, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	executable, err := filepath.EvalSymlinks(bundled(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bundle := stagedUpdate(t, config)
+	// The sok of the bundle writes the arguments of the command that replaces the bundle.
+	arguments := filepath.Join(t.TempDir(), "arguments")
+	script := fmt.Sprintf("#!/bin/sh\nprintf '%%s\\n' \"$@\" > '%s.part'\nmv '%s.part' '%s'\n", arguments, arguments, arguments)
+	if err := os.WriteFile(filepath.Join(filepath.Dir(executable), "sok"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	run := startStep(t, "update", config, executable, updateBundle+"="+bundle)
+	run.expect(t, "candidate 99.0.0")
+	log := run.finished(t)
+	if !strings.Contains(log, `"cause":"update"`) {
+		t.Fatalf("the application log holds no update:\n%s", log)
+	}
+	wait(t, "the command of the update", func() bool {
+		_, err := os.Stat(arguments)
+		return err == nil
+	})
+	data, err := os.ReadFile(arguments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Dir(filepath.Dir(filepath.Dir(executable)))
+	want := []string{"app", "update", "--wait", fmt.Sprint(run.child.Process.Pid), "--bundle", bundle, "--target", target}
+	if got := strings.Fields(string(data)); !slices.Equal(got, want) {
+		t.Fatalf("the command got %v, expected %v", got, want)
 	}
 }

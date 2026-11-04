@@ -626,6 +626,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F502-22",
+    implementation: [
+      { file: "packages/host/mygo/src/host.go", symbol: "mygo.App.OnOpenURL(session.OpenDeepLink)" },
+      { file: "packages/host/mygo/src/frontend.go", symbol: "func FileDropText(event *mygo.FileDropEvent) (string, error) {" },
+      { file: "scripts/check-app-update.mjs", symbol: "--host must be wailsv3, tauriv2 or mygo" },
+    ],
+    tests: [
+      { file: "packages/host/mygo/tests/system_test.go", id: "TestALinkThatTheApplicationIsAskedToOpenRunsOnceTheWindowIsReady" },
+      { file: "packages/host/mygo/tests/system_test.go", id: "TestAFileDroppedOnAWindowReachesItsWorkbenchAsTheTextOfTheFileDropView" },
+      { file: "packages/host/mygo/tests/system_test.go", id: "TestADropOfAPathThatNoLongerResolvesIsRefused" },
+      { file: "packages/host/mygo/tests/system_test.go", id: "TestTheEventsOfTheNotificationCenterReachTheWorkbench" },
+      { file: "packages/host/mygo/tests/system_test.go", id: "TestAnUpdateQuitsTheApplicationAndStartsTheCommandThatReplacesItsBundle" },
+      { file: "scripts/test/check-app-update.test.mjs", id: "the options name the host, the bundle and the registry index" },
+    ],
+    expected: "The mygo framework adapter opens a link that the application is asked to open, gives the workbench a dropped file as the JSON text of the file drop view, delivers the events of the notification center, and quits an application update through the command that replaces the bundle; `scripts/check-app-update.mjs` takes the host `mygo`.",
     id: "F502-19",
     implementation: [
       { file: "packages/workbench-mygo/src/text_size.go", symbol: "func NextTextSize(steps []float64, value float64, direction int) (float64, error) {" },

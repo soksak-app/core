@@ -7,7 +7,7 @@
 // newer version. Every process it started ends before it returns, and it fails when one remains.
 // `make app-update-check` runs it.
 //
-//   node scripts/check-app-update.mjs --host wailsv3|tauriv2 --bundle PATH --registry INDEX
+//   node scripts/check-app-update.mjs --host wailsv3|tauriv2|mygo --bundle PATH --registry INDEX
 import { parseArgs } from "node:util";
 import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -28,7 +28,7 @@ export function emptyInstalledState() {
 /** The command line options. */
 export function parseOptions(args) {
   const { values } = parseArgs({ args, options: { host: { type: "string" }, bundle: { type: "string" }, registry: { type: "string" } }, strict: true });
-  if (values.host !== "wailsv3" && values.host !== "tauriv2") throw new Error("--host must be wailsv3 or tauriv2");
+  if (!["wailsv3", "tauriv2", "mygo"].includes(values.host)) throw new Error("--host must be wailsv3, tauriv2 or mygo");
   for (const name of ["bundle", "registry"]) if (!values[name]) throw new Error(`--${name} is required`);
   return { host: values.host, bundle: values.bundle, registry: values.registry };
 }
