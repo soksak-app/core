@@ -127,9 +127,9 @@ pub trait Frontend: Send + Sync {
     /// The presentation notice: done runs on the main thread after the workbench presented the state of this step, or with
     /// the failure of the wait. Call it on the main thread.
     fn after_presentation(&self, done: PresentationDone) -> Result<()>;
-    /// The settled presentation: done runs on the main thread after the content of the window is on the screen, with the
-    /// time of that screen in milliseconds, or with the failure of the wait. Call it on the main thread.
-    fn after_settled(&self, done: SettledDone) -> Result<()>;
+    /// The settled presentation: makes the block that brings the content of the window to the screen in its current state,
+    /// which the caller passes to the settled wait of the platform. Call it on the main thread.
+    fn settled_presentation(&self) -> Result<*mut c_void>;
     /// The workbench start: starts the workbench of the window again.
     fn start_workbench(&self) -> Result<()>;
     /// The workbench call channel: runs script in the workbench.
@@ -162,9 +162,6 @@ pub trait Frontend: Send + Sync {
 
 /// The end of the wait of [`Frontend::after_presentation`].
 pub type PresentationDone = Box<dyn Fn(std::result::Result<(), String>) + Send + Sync>;
-
-/// The end of the wait of [`Frontend::after_settled`].
-pub type SettledDone = Box<dyn Fn(std::result::Result<f64, String>) + Send + Sync>;
 
 /// A task that [`Framework::spawn_blocking`] runs, which returns its value.
 pub type BlockingBody = Box<dyn FnOnce() -> Box<dyn Any + Send> + Send>;
@@ -671,14 +668,6 @@ impl Window {
         done: impl Fn(std::result::Result<(), String>) + Send + Sync + 'static,
     ) -> Result<()> {
         self.frontend.after_presentation(Box::new(done))
-    }
-
-    /// The settled presentation (see [`Frontend::after_settled`]).
-    pub fn after_settled(
-        &self,
-        done: impl Fn(std::result::Result<f64, String>) + Send + Sync + 'static,
-    ) -> Result<()> {
-        self.frontend.after_settled(Box::new(done))
     }
 
     /// The workbench start (see [`Frontend::start_workbench`]).

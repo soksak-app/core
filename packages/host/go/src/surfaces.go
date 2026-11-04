@@ -1211,12 +1211,12 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 			})
 			return prepareErr
 		}, func() error {
-			domReady := make(chan struct{})
+			domReady := make(chan error, 1)
 			var waiting error
 			waiting = runSurfaceDispatch(mainThreadStep, win.Name(), &req.Ticket, "present", "present-dom-register-ui", func() error {
 				queued, trace := surfaceDispatchClock()
-				waiting = win.AfterPresentation(func() {
-					observeSurfaceCallback(win.Name(), &req.Ticket, "present", "present-dom-callback", queued, trace, func() { close(domReady) })
+				waiting = win.AfterPresentation(func(failure error) {
+					observeSurfaceCallback(win.Name(), &req.Ticket, "present", "present-dom-callback", queued, trace, func() { domReady <- failure })
 				})
 				return waiting
 			})
@@ -1226,8 +1226,8 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 			timer := time.NewTimer(pageTimeout)
 			defer timer.Stop()
 			select {
-			case <-domReady:
-				return nil
+			case failure := <-domReady:
+				return failure
 			case <-timer.C:
 				return fmt.Errorf("application documents did not present within %s", pageTimeout)
 			}

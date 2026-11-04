@@ -1636,7 +1636,11 @@ func (s *Surfaces) presented() (float64, error) {
 		}, 1)
 		var err error
 		mainThreadStep(func() {
-			err = s.window.AfterSettled(func(displayed float64, callbackErr error) {
+			var present unsafe.Pointer
+			if present, err = s.window.SettledPresentation(); err != nil {
+				return
+			}
+			err = system.AfterSettled(s.window.NativeWindow(), present, func(displayed float64, callbackErr error) {
 				done <- struct {
 					displayed float64
 					err       error

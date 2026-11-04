@@ -1,11 +1,12 @@
 //! A Tauri window as the Frontend port of the language host library.
 
 use std::ffi::c_void;
-use std::sync::Arc;
+use std::sync::mpsc;
 
+use soksak_host::application_log::log_info;
 use soksak_host::framework::{
-    self as port, LogicalPosition, LogicalSize, PlatformWebview, PresentationDone, SettledDone,
-    WebviewBuilder, WebviewUrl, WindowEvent,
+    self as port, LogicalPosition, LogicalSize, PlatformWebview, PresentationDone, WebviewBuilder,
+    WebviewUrl, WindowEvent,
 };
 use tauri::{Emitter, Manager};
 
@@ -27,6 +28,33 @@ impl Frontend {
             .app_handle()
             .get_webview(label)
             .ok_or_else(|| port::Error::from(format!("webview {label} is not open")))
+    }
+
+    /// Runs work with the native views of the main web view and returns its value. Tauri runs it at once on the main thread,
+    /// where a caller of a presentation method is; on another thread the result is an error.
+    fn with_main_webview<T: Send + 'static>(
+        &self,
+        work: impl FnOnce(&PlatformWebview) -> Result<T, String> + Send + 'static,
+    ) -> port::Result<T> {
+        let main = self
+            .window
+            .app_handle()
+            .get_webview(self.window.label())
+            .ok_or_else(|| port::Error::from("the main webview is gone"))?;
+        let (tx, rx) = mpsc::channel();
+        main.with_webview(move |view| {
+            let view = crate::platform::platform_webview(&view);
+            if tx.send(work(&view)).is_err() {
+                log_info(
+                    "frontend",
+                    "the main web view ran a presentation request outside the main thread",
+                );
+            }
+        })
+        .map_err(error)?;
+        rx.try_recv()
+            .map_err(|_| port::Error::from("a presentation request ran outside the main thread"))?
+            .map_err(port::Error::from)
     }
 }
 
@@ -176,40 +204,16 @@ impl port::Frontend for Frontend {
 
     /// The presentation notice of the main page.
     fn after_presentation(&self, done: PresentationDone) -> port::Result<()> {
-        let done: Arc<dyn Fn(Result<(), String>) + Send + Sync> = Arc::from(done);
-        self.webview(self.window.label())?
-            .with_webview(move |view| {
-                let presented = Arc::clone(&done);
-                let outcome = soksak_host::platform::current().and_then(|platform| {
-                    platform.after_presentation(
-                        &crate::platform::platform_webview(&view),
-                        Box::new(move || presented(Ok(()))),
-                    )
-                });
-                if let Err(failure) = outcome {
-                    done(Err(failure));
-                }
-            })
-            .map_err(error)
+        self.with_main_webview(move |view| {
+            soksak_host::platform::current()?
+                .after_presentation(view, Box::new(move || done(Ok(()))))
+        })
     }
 
-    /// The settled presentation of the main page.
-    fn after_settled(&self, done: SettledDone) -> port::Result<()> {
-        let done: Arc<dyn Fn(Result<f64, String>) + Send + Sync> = Arc::from(done);
-        self.webview(self.window.label())?
-            .with_webview(move |view| {
-                let settled = Arc::clone(&done);
-                let outcome = soksak_host::platform::current().and_then(|platform| {
-                    platform.after_settled(
-                        &crate::platform::platform_webview(&view),
-                        Box::new(move |displayed| settled(displayed)),
-                    )
-                });
-                if let Err(failure) = outcome {
-                    done(Err(failure));
-                }
-            })
-            .map_err(error)
+    /// The settled presentation of the main page: the block of its main web view.
+    fn settled_presentation(&self) -> port::Result<*mut c_void> {
+        self.with_main_webview(|view| soksak_host::platform::current()?.main_presentation(view))
+            .map(|block| block as *mut c_void)
     }
 
     /// Reloads the main page.

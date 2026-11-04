@@ -371,12 +371,16 @@ impl Platform for Windows {
     ) -> Result<(), String> {
         unsupported::start_page_titlebar(window, ticket, height, ready)
     }
+    fn main_presentation(&self, view: &PlatformWebview) -> Result<Handle, String> {
+        unsupported::main_presentation(view)
+    }
     fn after_settled(
         &self,
-        view: &PlatformWebview,
+        window: Handle,
+        present: Handle,
         done: Box<dyn Fn(Result<f64, String>)>,
     ) -> Result<(), String> {
-        unsupported::after_settled(view, done)
+        unsupported::after_settled(window, present, done)
     }
     fn inject_settled_failure(&self) -> Result<(), String> {
         unsupported::inject_settled_failure()

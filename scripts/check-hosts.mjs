@@ -472,6 +472,12 @@ function calleeName(call) {
   return call.inner?.[0] ? find(call.inner[0]) : undefined;
 }
 
+/** Returns whether a CallExpr calls a block: clang gives the callee the type of a block pointer, after its typedefs. */
+function callsBlock(call) {
+  const type = call.inner?.[0]?.type;
+  return /^[^()]*\(\^/.test(type?.desugaredQualType ?? type?.qualType ?? "");
+}
+
 /**
  * Returns the nearest enclosing call of hostRunOnWorker or hostRunOnMain of a node (ON_WORKER and ON_MAIN expand to them),
  * whether any enclosing call is hostRunOnMain, and the function definition that holds the node.
@@ -503,9 +509,9 @@ function enclosing(entry) {
  *   on the worker while the main thread waits in C.
  * - Go code calls a native function only when MAIN_THREAD_FREE lists it; it calls each other native function through a
  *   function of the layer (a main_ wrapper) that runs it through hostRunOnMain or ON_MAIN.
- * - A function of the layer that Go code calls sends no Objective-C message and calls no native or NS function outside
- *   hostRunOnMain or ON_MAIN, directly or through another function of the layer.
- * - No native function and no Objective-C message runs inside hostRunOnWorker or ON_WORKER.
+ * - A function of the layer that Go code calls sends no Objective-C message and calls no native or NS function and no block
+ *   outside hostRunOnMain or ON_MAIN, directly or through another function of the layer.
+ * - No native function, no Objective-C message and no block runs inside hostRunOnWorker or ON_WORKER.
  *
  * go/parser reads the Go files (scripts/cgo-sources.go): the preamble, the #cgo CFLAGS, the //export functions and the calls of
  * C functions. clang reads each preamble and each Objective-C file and dumps its AST as JSON, with the macros expanded and each
@@ -569,6 +575,7 @@ function auditFolder(folder, paths) {
       }
       let use;
       if (node.kind === "DeclRefExpr" && node.referencedDecl?.kind === "FunctionDecl") use = { kind: "reference", name: node.referencedDecl.name };
+      else if (node.kind === "CallExpr" && callsBlock(node)) use = { kind: "block" };
       else if (node.kind === "CallExpr" && calleeName(node) !== undefined) use = { kind: "call", name: calleeName(node) };
       else if (node.kind === "ObjCMessageExpr") use = { kind: "message" };
       if (use) uses.push({ ...use, ...enclosing(entry), path: unit.path, line });
@@ -587,6 +594,9 @@ function auditFolder(folder, paths) {
     if (use.kind === "message") {
       errors.push({ path: use.path, line: use.line, text: "an Objective-C message runs on the worker inside hostRunOnWorker or ON_WORKER; run it through hostRunOnMain or ON_MAIN" });
     }
+    if (use.kind === "block") {
+      errors.push({ path: use.path, line: use.line, text: "a block is called on the worker inside hostRunOnWorker or ON_WORKER; run it through hostRunOnMain or ON_MAIN" });
+    }
   }
   // Returns the chain of calls by which the function name reaches the main thread outside hostRunOnMain or ON_MAIN, or undefined.
   const reaches = new Map();
@@ -599,10 +609,11 @@ function auditFolder(folder, paths) {
       if (found !== undefined) break;
       if (use.definition !== name || use.main) continue;
       if (use.kind === "message") found = `sends an Objective-C message (line ${use.line})`;
+      else if (use.kind === "block") found = `calls a block (line ${use.line})`;
       else if (use.kind !== "call") continue;
       else if (isNative(use.name)) found = `calls the native function ${use.name} (line ${use.line})`;
       else if (/^NS[A-Z]/.test(use.name)) found = `calls the AppKit function ${use.name} (line ${use.line})`;
-      else if (definitions.has(use.name) && use.name !== name) {
+      else if (definitions.has(use.name) && use.name !== name && use.name !== "hostRunOnMain" && use.name !== "hostRunOnWorker") {
         const inner = mainUse(use.name, visiting);
         if (inner) found = `calls ${use.name} (line ${use.line}), which ${inner}`;
       }

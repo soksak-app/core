@@ -1,5 +1,6 @@
 //go:build darwin
 
+#import <Block.h>
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "application_log.h"
@@ -88,14 +89,18 @@ static bool nativeWindowJoinViewOnMain(void *window, uint64_t ticket, void *view
 }
 
 extern void goNativeSettledDone(uintptr_t callback, double displayed, char *error);
-static bool nativeWindowAfterSettledOnMain(void *handle, uintptr_t callback) {
+// The block crosses main-thread steps in the hands of Go, so it is a copy that nativeWindowAfterSettled releases.
+static void *nativeWindowMainPresentationOnMain(void *handle) {
     WKWebView *view = sp_window_main_webview(handle);
-    if (!view) return false;
-    surfaceLayoutAfterSettled(handle, surfaceLayoutMainPresentation(view), ^(double displayed, const char *error) {
+    return view ? Block_copy(surfaceLayoutMainPresentation(view)) : NULL;
+}
+
+static void nativeWindowAfterSettledOnMain(void *handle, void *present, uintptr_t callback) {
+    surfaceLayoutAfterSettled(handle, (surfaceLayoutPresent)present, ^(double displayed, const char *error) {
         char *copy = error ? strdup(error) : NULL;
         hostRunOnWorker(^{ goNativeSettledDone(callback, displayed, copy); });
     });
-    return true;
+    Block_release(present);
 }
 
 static void nativeWindowPrepareOnMain(void *handle) {
@@ -236,8 +241,11 @@ bool nativeWindowAfterPresentation(void *handle, uintptr_t callback) {
 bool nativeWindowJoinView(void *window, uint64_t ticket, void *view, uintptr_t callback) {
     return ON_MAIN(bool, nativeWindowJoinViewOnMain(window, ticket, view, callback));
 }
-bool nativeWindowAfterSettled(void *handle, uintptr_t callback) {
-    return ON_MAIN(bool, nativeWindowAfterSettledOnMain(handle, callback));
+void *nativeWindowMainPresentation(void *handle) {
+    return ON_MAIN(void *, nativeWindowMainPresentationOnMain(handle));
+}
+void nativeWindowAfterSettled(void *handle, void *present, uintptr_t callback) {
+    hostRunOnMain(^{ nativeWindowAfterSettledOnMain(handle, present, callback); });
 }
 void nativeWindowPrepare(void *handle) {
     hostRunOnMain(^{ nativeWindowPrepareOnMain(handle); });

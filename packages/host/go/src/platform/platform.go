@@ -514,9 +514,13 @@ type Platform interface {
 	StartPageTitlebar(window unsafe.Pointer, ticket uint64, height float64, ready func(error)) error
 	// AfterPresentation checks the display readiness of the app document before the open layout is committed.
 	AfterPresentation(window unsafe.Pointer, done func()) error
-	// AfterSettled calls done on the UI thread after the main web view and the visible app document displayed the screen, in a state
-	// in which the window has no open surface layout transaction. displayed is the time (ms, mach absolute time) at which that screen is displayed.
-	AfterSettled(window unsafe.Pointer, done func(displayed float64, err error)) error
+	// MainPresentation makes the block of the main web view of window, which reads the document and waits for the presentation
+	// update after that read. The caller owns the block until it passes the block to AfterSettled.
+	MainPresentation(window unsafe.Pointer) (unsafe.Pointer, error)
+	// AfterSettled takes the block present and calls done on the UI thread after the block and the visible app document displayed
+	// the screen, in a state in which the window has no open surface layout transaction. displayed is the time (ms, mach absolute
+	// time) at which that screen is displayed.
+	AfterSettled(window, present unsafe.Pointer, done func(displayed float64, err error)) error
 	// InjectSettledFailure makes the next settled wait fail in a diagnostic build.
 	InjectSettledFailure(window unsafe.Pointer) error
 

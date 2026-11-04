@@ -1050,3 +1050,59 @@ fn a_press_reads_its_target_before_its_delivery() {
         "a press whose target cannot be read was delivered"
     );
 }
+
+/// The layout transaction commits only after the presentation notice of the Frontend calls back.
+#[test]
+fn the_layout_commits_after_the_presentation_notice_of_the_frontend() {
+    use super::{ask_presentation_notice, await_presentation_notice};
+    use crate::test_framework::{FixtureFrontend, application};
+    let frontend = Arc::new(FixtureFrontend::new(Ok(1)));
+    let window = application().window_of(frontend.clone());
+    let (ready_tx, ready_rx) = mpsc::channel();
+    let (commit_tx, commit_rx) = mpsc::channel();
+    let worker = thread::spawn(move || {
+        commit_tx
+            .send(complete_layout_presentation(
+                || ask_presentation_notice(&window, 7, ready_tx),
+                || await_presentation_notice(&ready_rx),
+                || Ok(()),
+                || Ok("prepared"),
+            ))
+            .unwrap();
+    });
+    let notice = frontend.notice();
+    assert!(
+        commit_rx.recv_timeout(Duration::from_millis(50)).is_err(),
+        "the layout reached its commit before the presentation notice"
+    );
+    notice(Ok(()));
+    assert_eq!(
+        commit_rx.recv_timeout(Duration::from_secs(5)).unwrap(),
+        Ok("prepared")
+    );
+    worker.join().unwrap();
+}
+
+/// A presentation notice that fails ends the present with its error, without its commit.
+#[test]
+fn a_failed_presentation_notice_ends_the_present_with_its_error() {
+    use super::{ask_presentation_notice, await_presentation_notice};
+    use crate::test_framework::{FixtureFrontend, application};
+    let frontend = Arc::new(FixtureFrontend::new(Ok(1)));
+    let window = application().window_of(frontend.clone());
+    let (ready_tx, ready_rx) = mpsc::channel();
+    let notice = frontend.clone();
+    let worker = thread::spawn(move || {
+        complete_layout_presentation(
+            || ask_presentation_notice(&window, 8, ready_tx),
+            || await_presentation_notice(&ready_rx),
+            || panic!("a failed notice reached the raster"),
+            || Ok(()),
+        )
+    });
+    notice.notice()(Err("the window holds its frames".into()));
+    assert_eq!(
+        worker.join().unwrap(),
+        Err("the window holds its frames".to_string())
+    );
+}
