@@ -276,6 +276,30 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F502-2-4",
+    implementation: [
+      { file: "scripts/measure-trace.mjs", symbol: "export async function applyTrace" },
+      { file: "scripts/measure-object-counts.mjs", symbol: "export function operationSteps" },
+      { file: "scripts/measure-object-counts.mjs", symbol: "export function countsOf" },
+      { file: "scripts/measure-host-allocations.mjs", symbol: "export async function prepare" },
+      { file: "scripts/measure-host-calls.mjs", symbol: "the mygo host has no main page" },
+      { file: "scripts/measure-page-memory.mjs", symbol: "the mygo host has no main page" },
+    ],
+    tests: [
+      { file: "scripts/test/measure-trace.test.mjs", id: "TRACE 0 turns the trace off under the default policy, and TRACE 1 turns it on with the classes call and frame at debug" },
+      { file: "scripts/test/measure-trace.test.mjs", id: "applying a trace state changes each setting through core.settings.change and resolves when the policy file holds its policy" },
+      { file: "scripts/test/measure-object-counts.test.mjs", id: "a window of the mygo host reads the host footprint and the runtime figures in every repetition and no page process" },
+      { file: "scripts/test/measure-object-counts.test.mjs", id: "the divider drag splits a card, drags the boundary of the split through diagnostics.drag and closes the split" },
+      { file: "scripts/test/measure-object-counts.test.mjs", id: "the menu and the settings window open and close through their declared commands and wait for their statuses" },
+      { file: "scripts/test/measure-object-counts.test.mjs", id: "each count of a member that the reply adds outside host, page, documents, sessions and runtime is a count of the measurement" },
+      { file: "scripts/test/measure-host-allocations.test.mjs", id: "the host is the process of the release bundle of the mygo host that has the --config-dir of the application, and the trace state is set" },
+      { file: "scripts/test/measure-host-calls.test.mjs", id: "a window whose host.window reports pageProcess null fails before any request with the error of the mygo host" },
+      { file: "scripts/test/measure-page-memory.test.mjs", id: "a window whose host.window reports pageProcess null fails before any step with the error of the mygo host" },
+    ],
+    expected: "The measurement targets take the mygo host: object-counts and host-allocations set the trace state of TRACE, host-allocations finds the host by its --config-dir, object-counts adds a divider drag, a menu and the settings window and reads the runtime figures, the added counts and the host footprint without a page process, and the main page targets fail with the error of the mygo host.",
+    levels: ["unit"],
+  },
+  {
     id: "F502-6",
     implementation: [
       { file: "go.work", symbol: "go 1.27.3" },

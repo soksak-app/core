@@ -9,7 +9,9 @@
 // which measures what the page allocates on its own while idle. With --events N the host sends N host events that the page does not listen to
 // (diagnostics.host.events, in requests of at most 1000 events) instead of the calls, followed by one host call as a barrier that returns after the page
 // evaluated the events that were sent before it (phase "events"), and the summary {events, rounds, perEvent: {beforeCollect, afterCollect}} is the mean growth per event. The idle interval waits for no event, so it is set by duration. The JavaScript heap of WebKit is allocated in WebKit malloc, while the
-// total footprint also moves with graphics memory of the window that the calls do not cause. It measures the first ready window and makes no judgment. `make host-calls` runs it.
+// total footprint also moves with graphics memory of the window that the calls do not cause. It measures the first ready window and makes no judgment. A window
+// whose host.window reports pageProcess null has no main page, which is the window of the mygo host, and the measurement fails with
+// "the mygo host has no main page" before its first request. `make host-calls` runs it.
 //
 //   node scripts/measure-host-calls.mjs --sok PATH --config-dir DIR [--calls N | --idle-minutes M | --events N] [--rounds N]
 import { execFileSync } from "node:child_process";
@@ -29,8 +31,12 @@ export const EVENT_BATCH = 1000;
  * hostEvents(count) a round has the host send that many unlistened host events and then sends one call.
  */
 export async function measure({ status, collect, calls, footprint, count, rounds, log, idleMs, wait, events, hostEvents }) {
+  // host.window reports pageProcess null for a window without a main page, which the mygo host draws in native UI; the
+  // measurement fails before its first request instead of sending main-page methods that the host refuses.
+  if ((await status()).pageProcess === null) throw new Error("the mygo host has no main page");
   const read = async (round, phase, extra = {}) => {
     const { pageProcess } = await status();
+    if (pageProcess === null) throw new Error("the mygo host has no main page");
     if (!Number.isInteger(pageProcess) || pageProcess <= 0) throw new Error(`round ${round} ${phase}: the window has no page process (${pageProcess})`);
     const entry = { round, phase, pageProcess, ...footprint(pageProcess), ...extra };
     log(entry);

@@ -66,8 +66,9 @@ test("a page that answers another count or changes its process fails the round",
   const base = { collect: async () => {}, footprint: () => ({ footprint: 1, webkitMalloc: 1 }), count: 3, rounds: 1, log: () => {} };
   await assert.rejects(measure({ ...base, status: async () => ({ pageProcess: 7 }), calls: async () => ({ count: 2, ms: 1 }) }),
     /round 1: the page answered \{"count":2,"ms":1\} for 3 calls/);
+  // The page process changes when the page receives the calls.
   let pid = 7;
-  await assert.rejects(measure({ ...base, status: async () => ({ pageProcess: pid++ }), calls: async (count) => ({ count, ms: 1 }) }),
+  await assert.rejects(measure({ ...base, status: async () => ({ pageProcess: pid }), calls: async (count) => { pid = 8; return { count, ms: 1 }; } }),
     /round 1: the page process changed from 7 during the round/);
   await assert.rejects(measure({ ...base, status: async () => ({ pageProcess: 0 }), calls: async (count) => ({ count, ms: 1 }) }),
     /round 1 base: the window has no page process \(0\)/);
@@ -89,4 +90,16 @@ test("footprint output and options are read strictly", () => {
   assert.throws(() => parseOptions(["--sok", "/s", "--config-dir", "/c", "--events", "5", "--idle-minutes", "1"]), /exclude each other/);
   assert.throws(() => parseOptions(["--sok", "/s"]), /required options/);
   assert.throws(() => parseOptions(["--sok", "/s", "--config-dir", "/c", "--calls", "0"]), /positive integer/);
+});
+
+test("a window whose host.window reports pageProcess null fails before any request with the error of the mygo host", async () => {
+  const steps = [];
+  await assert.rejects(measure({
+    status: async () => ({ pageProcess: null, frames: 0 }),
+    collect: async () => { steps.push("collect"); },
+    calls: async (count) => { steps.push(`calls ${count}`); return { count, ms: 1 }; },
+    footprint: () => { steps.push("footprint"); return { footprint: 1, webkitMalloc: 1 }; },
+    count: 3, rounds: 1, log: () => {},
+  }), new Error("the mygo host has no main page"));
+  assert.deepEqual(steps, [], "the measurement sent a request to a window without a main page");
 });

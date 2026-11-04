@@ -4,7 +4,8 @@
 // measured. The memory is the physical footprint that the operating system footprint reports. The idle interval is a time that waits for no event, so it is
 // set by duration. For each step it prints {phase, elapsedMs, pageProcess, footprint} as one JSON line and makes no judgment. Reload
 // opens the document in a new page process (docs/spec/native-host.md), so the last step also records whether the process of the start still exists
-// (startProcessAlive).
+// (startProcessAlive). A window whose host.window reports pageProcess null has no main page, which is the window of the mygo host, and the
+// measurement fails with "the mygo host has no main page" at its first step.
 // `make page-memory` runs it.
 //
 //   node scripts/measure-page-memory.mjs --sok PATH --config-dir DIR [--idle-minutes N] [--reloads N]
@@ -20,6 +21,8 @@ export async function measure({ status, reload, footprint, alive, wait, idleMs, 
   const started = now();
   const record = async (phase, extra = () => ({})) => {
     const { pageProcess } = await status();
+    // host.window reports pageProcess null for a window without a main page, which the mygo host draws in native UI.
+    if (pageProcess === null) throw new Error("the mygo host has no main page");
     if (!Number.isInteger(pageProcess) || pageProcess <= 0) throw new Error(`${phase}: the window has no page process (${pageProcess})`);
     const entry = { phase, elapsedMs: now() - started, pageProcess, footprint: footprint(pageProcess), ...extra() };
     log(entry);
