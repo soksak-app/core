@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -396,4 +397,16 @@ func TestAViewFollowsAStatusOfItsPlugin(t *testing.T) {
 		last := r.pushed[len(r.pushed)-1]
 		return last["data"].(map[string]any)["method"] == "status.unwatch"
 	})
+}
+
+func TestARightClickInAViewOpensTheMenuOfItsPlugin(t *testing.T) {
+	r := newViewRelay(t)
+	surface := r.surface()
+	if answer := r.call(surface, "surface.menu", map[string]any{"x": 10, "y": 20}); answer != true {
+		t.Fatalf("the view call answered %v", answer)
+	}
+	menu := r.f.menu()
+	if menu.Title != "터미널" || !slices.Equal(menu.keys(), []string{"terminal.close"}) {
+		t.Fatalf("the menu is %+v", menu)
+	}
 }
