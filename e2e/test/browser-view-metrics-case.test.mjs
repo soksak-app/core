@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { assertBrowserFrameMatchesSlot, BROWSER_FIXTURE_CONTENT_COLOR, browserDragTailGeometryFrame,
   browserViewDescriptor, measureBrowserFrameGeometry } from "../benchmark/cases/browser.mjs";
+import { TAB_PLACEMENT } from "../view-metrics-collection.mjs";
 
 test("browser pixel geometry matches the independently declared document slot", { timeout: 5000 }, () => {
   const geometry = { cardRectPt: { left: 0, top: 0, right: 100, bottom: 100 },
@@ -74,6 +75,7 @@ test("browser metrics descriptor waits for the initial empty state and its visib
   assert.equal(browserViewDescriptor.expectedContent, "주소를 입력하세요");
   assert.equal(browserViewDescriptor.language, "ko-KR");
   assert.equal(browserViewDescriptor.readinessStatus, "browser.location");
+  assert.equal(browserViewDescriptor.placement, TAB_PLACEMENT);
   assert.deepEqual(await browserViewDescriptor.readiness(s, "browser-1"), {
     historyEntries: 1,
     regionHistoryEntries: 0,

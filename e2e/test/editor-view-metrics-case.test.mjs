@@ -6,11 +6,13 @@ import { collectEditorProcessFootprint, collectHiddenEditorFootprint, editorFoot
   from "../benchmark/cases/editor.mjs";
 import { editorSlotInsets } from "../benchmark/cases/editor.mjs";
 import { measureViewFrameGeometry } from "../view-frame-geometry.mjs";
+import { TAB_PLACEMENT } from "../view-metrics-collection.mjs";
 
 test("editor view descriptor calls the declared hyphenated content-trace command", async () => {
   const calls = [];
   const descriptor = editorViewDescriptor({ params: { path: "view-content/content.txt" } });
   assert.equal(descriptor.readinessStatus, "editor.document");
+  assert.equal(descriptor.placement, TAB_PLACEMENT);
   const session = {
     async until(name, predicate) {
       assert.equal(name, "editor.document");

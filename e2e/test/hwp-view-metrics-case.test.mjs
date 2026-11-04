@@ -9,7 +9,7 @@ import * as hwpCase from "../benchmark/cases/hwp.mjs";
 import { assertHwpFrameMatchesSlot, hwpDocumentHistoryEvidence, hwpFirstContentFrame,
   hwpViewDescriptor, layoutObservation, measureHwpPaintFrame, readHwpPaintViewport }
   from "../benchmark/cases/hwp.mjs";
-import { processStartSamples } from "../view-metrics-collection.mjs";
+import { processStartSamples, TAB_PLACEMENT } from "../view-metrics-collection.mjs";
 import { viewProcessPids } from "../view-process-footprint.mjs";
 
 const geometryColors = { content: [30, 30, 30], card: [25, 27, 36], plane: [16, 17, 23], border: [43, 46, 61] };
@@ -355,6 +355,7 @@ test("HWP descriptor waits for its declared document status exposure", { timeout
       cleanup(callback) { cleanups.push(callback); },
     }, undefined, 1001);
     assert.equal(descriptor.readinessStatus, "hwp.document");
+    assert.equal(descriptor.placement, TAB_PLACEMENT);
     assert.equal(descriptor.captureObservationWindowMs, 1001,
       "the HWP descriptor dropped the host-specific first-display observation window");
   } finally {

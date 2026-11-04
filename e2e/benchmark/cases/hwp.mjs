@@ -8,7 +8,7 @@ import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFr
   VIEW_GEOMETRY_COLOR_TOLERANCE } from "../../view-frame-geometry.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, mapViewContentFramesToCapture,
   monotonicTimeMs, requireViewContentFrameCoverage, rootNativePlacementBeforeCapture,
-  selectOneShotViewSourceFrame,
+  selectOneShotViewSourceFrame, TAB_PLACEMENT,
   withViewContentTrace }
   from "../../view-metrics-collection.mjs";
 import { viewContentCases } from "../../view-content.mjs";
@@ -152,6 +152,7 @@ export async function hwpViewDescriptor(s, diagnostic = () => {}, captureObserva
     await session.run("hwp.diagnostics.frames.read", {}, surface));
   return Object.freeze({
     plugin: "hwp",
+    placement: TAB_PLACEMENT,
     params: content.params,
     expectedContent: HWP_CONTENT,
     language: "ko-KR",
