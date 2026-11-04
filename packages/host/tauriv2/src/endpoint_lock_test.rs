@@ -2,7 +2,6 @@
 //! subscription change and the connection removal complete.
 
 use std::sync::PoisonError;
-use std::time::Duration;
 
 use super::*;
 

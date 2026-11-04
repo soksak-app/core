@@ -7,7 +7,6 @@ mod folder;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::Duration;
 
 use serde_json::{Map, Value, json};
 use soksak_host_tauriv2::buttons::Buttons;
@@ -90,9 +89,6 @@ fn buttons_notify_each_mask_change() {
     }));
     assert!(fake.buttons.set(buttons.clone()).is_ok());
     let mut connection = endpoint::connect(endpoint.address()).unwrap();
-    connection
-        .set_read_timeout(Some(Duration::from_secs(5)))
-        .unwrap();
     let watch = json!({"window": "w1", "name": "host.buttons"});
     assert_eq!(
         request(&mut connection, 1, "status.watch", watch.clone())["result"],

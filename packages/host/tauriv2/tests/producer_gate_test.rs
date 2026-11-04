@@ -120,9 +120,6 @@ fn an_endpoint_request_that_the_policy_does_not_store_is_counted() {
     .unwrap();
     endpoint.publish("main").unwrap();
     let mut connection = endpoint::connect(endpoint.address()).unwrap();
-    connection
-        .set_read_timeout(Some(Duration::from_secs(5)))
-        .unwrap();
     for id in 1..=2u64 {
         endpoint::write_frame(
             &mut connection,
