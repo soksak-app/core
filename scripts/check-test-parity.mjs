@@ -701,9 +701,14 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/workbench/package.json", symbol: "\"head-fit.js\"," },
       { file: "packages/plugin-api/index.js", symbol: "export function importSpecifiers(source) {" },
+      { file: "packages/workbench/staged.js", symbol: "export function missingPageReferences(out, page) {" },
+      { file: "packages/workbench/stage.mjs", symbol: "const missing = STAGED.pages.flatMap((page) => missingPageReferences(target, page));" },
     ],
     tests: [
       { file: "packages/workbench/test/stage.test.mjs", id: "staging holds every file that a staged page reaches, in a release and in a diagnostic build" },
+      { file: "packages/workbench/test/stage.test.mjs", id: "staging fails on a page that reaches a file that is not staged, and names the file" },
+      { file: "packages/workbench/test/stage.test.mjs", id: "staging leaves the imports of the application runtime to its host" },
+      { file: "packages/workbench/test/stage.test.mjs", id: "staging reads the references of a page as a browser parser does" },
     ],
     expected: "Every script, style and import that a staged page reaches in a release and in a diagnostic build is staged, except the documents that a host creates for each request.",
     levels: ["unit"],

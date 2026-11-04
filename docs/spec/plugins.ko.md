@@ -309,6 +309,8 @@ plugin 저장소의 catalog 검사(`soksak-events`)는 `runtime.log.<level>(`와
 
 디버그 스테이징 대상 `frontend-wailsv3`, `frontend-tauriv2`는 `--diagnostics`를 더한다. 릴리스 빌드에는 페이지 진단 코드가 없고, 릴리스 빌드는 plugin release가 담은 [진단 선언](#진단-선언)을 읽지 않는다. `make release-check`는 스테이징된 릴리스 프런트엔드에 `/transcript.js`나 페이지 진단 모듈이 있으면 실패한다.
 
+`index.html`이나 `overlay.html`이 staged frontend에 없는 script, style, module import에 닿으면 staging은 실패하고 각 참조를 이름으로 밝힌다. 두 종류의 참조는 이 검사 밖이다. host가 요청마다 만드는 `STAGED.served`의 문서와, staging이 통째로 복사하고 그 module이 framework나 host가 제공하는 것을 import하는 runtime 디렉터리 안 module의 import다.
+
 모든 workbench 페이지는 `PAGE_IMPORTS`와 같은 import map 하나를 선언한다. 항목은 `soksak`, `@soksak/plugin-api`, `@soksak/plugin-api/page`, `@soksak/plugin-api/screen-hash`(화면 메시지의 [화면 hash](replay.ko.md#화면-hash)), `@soksak/runtime`, `@soksak/shared/`, `@soksak/workbench/`다. view 페이지는 자기 import map을 갖지 않으며, 호스트가 `VIEW_IMPORTS`를 넣는다([plugin 처리](plugin-processes.ko.md), rule 4).
 
 ## 런타임 모듈

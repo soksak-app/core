@@ -30,7 +30,7 @@ import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writ
 import { createRequire } from "node:module";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { STAGED } from "./staged.js";
+import { STAGED, missingPageReferences } from "./staged.js";
 import {
   CORE_ROOT_FILE, ENVIRONMENT, INSTALLED_PLUGINS, PAGE_IMPORTS, RUNTIME, VIEW_IMPORTS_FILE,
   modulePath, pageImports, pageImportsForBuild, validateEnvironment, validateInstalledPlugins, viewCoreTargets, viewImports,
@@ -192,5 +192,8 @@ if (diagnostics) {
     if (!existsSync(join(target, stagedFile))) throw new Error(`declared diagnostics-staged file not created: ${stagedFile}`);
   }
 }
+// A page that reaches a file outside the staged frontend stops before the application is ready, so the staging fails instead of the window.
+const missing = STAGED.pages.flatMap((page) => missingPageReferences(target, page));
+if (missing.length > 0) throw new Error(`the staged pages reach files that are not staged:\n${missing.join("\n")}`);
 console.log(`staged the workbench into ${target}${installedDirectory ? ` with ${plugins.length} installed plugins` : ""}` +
   (diagnostics ? " with diagnostics" : ""));
