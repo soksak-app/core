@@ -10,11 +10,12 @@
 // occurred. `make terminal-redraw-usage` runs it.
 //
 // --b3-out FILE writes the B3 record of a measurement without an error to FILE as JSON, with the conditions of the window of the
-// measurement as make app-usage writes them (b3Conditions of measure-app-usage.mjs). The keys:
-//   hostCpuPerFrame, applicationCpuPerFrame, sidecarCpuPerFrame  CPU milliseconds per presented frame of the host, the application
-//                                                                without its sidecars, and the sidecars
-//   frameRate                                                    the presented frames per second
-//   presentedFrames                                              the change of presentedFrames of the region over the interval
+// measurement as make app-usage writes them (b3Conditions of measure-app-usage.mjs). The keys, which B3_MEASUREMENTS lists, end in
+// their unit:
+//   hostCpuPerFrameMs, applicationCpuPerFrameMs,  CPU milliseconds per presented frame of the host, the application without its
+//   sidecarCpuPerFrameMs                          sidecars, and the sidecars
+//   framesPerSecond                               the presented frames per second
+//   presentedFrames                               the change of presentedFrames of the region over the interval
 //
 //   node scripts/measure-terminal-redraw.mjs --sok PATH --config-dir DIR --plugin PLUGIN --rows ROWS --trace 0|1 [--rate 20] [--interval 10]
 //     [--b3-out FILE] [--json]
@@ -106,15 +107,18 @@ export function frameCost({ rows, totals, presented, seconds }) {
   };
 }
 
+/** The keys of the measurements of a B3 record of make terminal-redraw-usage. */
+export const B3_MEASUREMENTS = Object.freeze(["hostCpuPerFrameMs", "applicationCpuPerFrameMs", "sidecarCpuPerFrameMs", "framesPerSecond", "presentedFrames"]);
+
 /** The measurements of a B3 record of make terminal-redraw-usage (the keys that the header declares) from the frame cost of the region. */
 export function redrawMeasurements(cost) {
   const host = cost.rows.find(({ role }) => role === "host");
   if (host === undefined) throw new Error("the measurement has no host row");
   return {
-    hostCpuPerFrame: host.msPerFrame,
-    applicationCpuPerFrame: cost.totals.application,
-    sidecarCpuPerFrame: cost.totals.sidecars,
-    frameRate: cost.framesPerSecond,
+    hostCpuPerFrameMs: host.msPerFrame,
+    applicationCpuPerFrameMs: cost.totals.application,
+    sidecarCpuPerFrameMs: cost.totals.sidecars,
+    framesPerSecond: cost.framesPerSecond,
     presentedFrames: cost.presented,
   };
 }

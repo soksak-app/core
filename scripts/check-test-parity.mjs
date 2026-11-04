@@ -303,6 +303,8 @@ const FEATURE_LINKS = [
       { file: "scripts/measure-app-usage.mjs", symbol: "export function b3Conditions({ windows, trace, logPolicy })" },
       { file: "scripts/measure-app-usage.mjs", symbol: "export function b3Record(measurements, conditions)" },
       { file: "scripts/measure-terminal-redraw.mjs", symbol: "export function redrawMeasurements(cost)" },
+      { file: "scripts/measure-app-usage.mjs", symbol: "export const B3_MEASUREMENTS" },
+      { file: "scripts/measure-terminal-redraw.mjs", symbol: "export const B3_MEASUREMENTS" },
     ],
     tests: [
       { file: "scripts/test/measure-app-usage.test.mjs", id: "the options take a state, the idle wait, the pointer step and the trace state" },
@@ -311,6 +313,7 @@ const FEATURE_LINKS = [
       { file: "scripts/test/measure-app-usage.test.mjs", id: "a host whose host.window reports no frame counters has no frames and commandBuffers measurements, and a partial counter fails" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "the B3 conditions are the refresh rate and backing scale of the windows, the trace state, the log policy and the window size" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "a B3 record holds numbers, passed or failed, and writeB3 writes it as JSON" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the B3 keys of app-usage end in their unit, and a measurement with every figure holds every key" },
       { file: "scripts/test/frame-records.test.mjs", id: "the U7 events are the frame, commit and step records that the U7 row of the plan names" },
       { file: "scripts/test/frame-records.test.mjs", id: "the frame time runs from the start of a frame to its presentation request less its wait for a drawable" },
       { file: "scripts/test/frame-records.test.mjs", id: "the step time runs from the entry of each step to its return and keeps the kind of the step" },

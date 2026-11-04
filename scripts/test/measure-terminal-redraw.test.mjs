@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
-import { frameCost, measureRegion, parseOptions, prepareRedraw, presentedFramesOf, redrawMeasurements, requireRows, screenText } from "../measure-terminal-redraw.mjs";
+import { B3_MEASUREMENTS, frameCost, measureRegion, parseOptions, prepareRedraw, presentedFramesOf, redrawMeasurements, requireRows, screenText } from "../measure-terminal-redraw.mjs";
 
 test("the text of a screen joins the characters of each row and counts an empty cell as spaces of its width", () => {
   assert.equal(screenText([[{ ch: "a", width: 1 }, { width: 1 }, { ch: "b", width: 1 }], [{ ch: "한", width: 2 }, { width: 0 }]]), "a b\n한");
@@ -76,7 +76,10 @@ test("the B3 measurements of the redraw are the cpu milliseconds per presented f
   const rows = [{ role: "host", pid: 10, cpuSeconds: 0.9 }, { role: "sidecar probe", pid: 11, cpuSeconds: 0.3 }];
   const totals = { application: { cpuSeconds: 0.9 }, sidecars: { cpuSeconds: 0.3 }, total: { cpuSeconds: 1.2 } };
   assert.deepEqual(redrawMeasurements(frameCost({ rows, totals, presented: 300, seconds: 10 })),
-    { hostCpuPerFrame: 3, applicationCpuPerFrame: 3, sidecarCpuPerFrame: 1, frameRate: 30, presentedFrames: 300 });
+    { hostCpuPerFrameMs: 3, applicationCpuPerFrameMs: 3, sidecarCpuPerFrameMs: 1, framesPerSecond: 30, presentedFrames: 300 });
+  assert.deepEqual(B3_MEASUREMENTS, ["hostCpuPerFrameMs", "applicationCpuPerFrameMs", "sidecarCpuPerFrameMs", "framesPerSecond", "presentedFrames"]);
+  assert.ok(Object.isFrozen(B3_MEASUREMENTS));
+  assert.deepEqual(Object.keys(redrawMeasurements(frameCost({ rows, totals, presented: 300, seconds: 10 }))), [...B3_MEASUREMENTS]);
 });
 
 /** A session of a window check (get, run, request, until, on) whose answers come from answer(kind, window, name, params, surface). */

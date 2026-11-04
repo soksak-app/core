@@ -7,6 +7,7 @@ import test from "node:test";
 import {
   applicationRows,
   attributeWebKit,
+  B3_MEASUREMENTS,
   b3Conditions,
   b3Record,
   cpuPercent,
@@ -706,25 +707,25 @@ function measuredApp({ after = false } = {}) {
 test("the B3 measurements of app-usage are the host and application figures, the WebKit processes and the change of the frame counters", () => {
   const measured = usageMeasurements({ app: measuredApp(), marks: marksOfTwo() });
   assert.deepEqual(Object.keys(measured).toSorted(), [
-    "applicationCpu", "applicationFootprint", "applicationPeakFootprint", "commandBuffers", "frames", "hostCpu", "hostFootprint", "sidecarCpu",
-    "sidecarFootprint", "webContentProcesses", "webkitProcesses",
+    "applicationCpuSeconds", "applicationFootprintKb", "applicationPeakFootprintKb", "commandBuffers", "frames", "hostCpuSeconds", "hostFootprintKb", "sidecarCpuSeconds",
+    "sidecarFootprintKb", "webContentProcesses", "webKitProcesses",
   ]);
-  assert.equal(measured.hostCpu, 0.12);
-  assert.equal(Number(measured.applicationCpu.toFixed(2)), 0.53);
-  assert.equal(measured.sidecarCpu, 0.02);
-  assert.deepEqual([measured.hostFootprint, measured.applicationFootprint, measured.sidecarFootprint, measured.applicationPeakFootprint],
+  assert.equal(measured.hostCpuSeconds, 0.12);
+  assert.equal(Number(measured.applicationCpuSeconds.toFixed(2)), 0.53);
+  assert.equal(measured.sidecarCpuSeconds, 0.02);
+  assert.deepEqual([measured.hostFootprintKb, measured.applicationFootprintKb, measured.sidecarFootprintKb, measured.applicationPeakFootprintKb],
     [80 * 1024, 144 * 1024, 6 * 1024, 163 * 1024]);
-  assert.deepEqual([measured.webkitProcesses, measured.webContentProcesses, measured.frames, measured.commandBuffers], [3, 1, 1, 2]);
+  assert.deepEqual([measured.webKitProcesses, measured.webContentProcesses, measured.frames, measured.commandBuffers], [3, 1, 1, 2]);
 });
 
 test("the B3 measurements add the footprint after the pointer move, the error lines of the fault and the hit-test p90", () => {
   const measured = usageMeasurements({
     app: measuredApp({ after: true }), marks: marksOfTwo(), faultLines: 1, gesture: { window: "w1", frameRecords: 4, pairs: 4, p90Ms: 6, framesChange: 4 },
   });
-  assert.equal(measured.applicationFootprintAfter, 152 * 1024);
+  assert.equal(measured.applicationFootprintAfterKb, 152 * 1024);
   assert.equal(measured.errorLines, 1);
-  assert.equal(measured.hitTestP90, 6);
-  assert.equal("hitTestP90" in usageMeasurements({ app: measuredApp(), marks: marksOfTwo(), gesture: null }), false);
+  assert.equal(measured.hitTestP90Ms, 6);
+  assert.equal("hitTestP90Ms" in usageMeasurements({ app: measuredApp(), marks: marksOfTwo(), gesture: null }), false);
 });
 
 test("a host whose host.window reports no frame counters has no frames and commandBuffers measurements, and a partial counter fails", () => {
@@ -753,9 +754,9 @@ test("the B3 conditions are the refresh rate and backing scale of the windows, t
 
 test("a B3 record holds numbers, passed or failed, and writeB3 writes it as JSON", () => {
   const conditions = { refreshRate: 120, backingScale: 2, traceState: "frame-records", logPolicy: { frame: "debug" }, window: { width: 1200, height: 760 } };
-  const record = b3Record({ hostCpu: 0.12, viewDrag: "passed" }, conditions);
-  assert.deepEqual(record, { measurements: { hostCpu: 0.12, viewDrag: "passed" }, conditions });
-  assert.throws(() => b3Record({ hostCpu: null }, conditions), /the B3 measurement hostCpu is null, not a finite number, "passed" or "failed"/);
+  const record = b3Record({ hostCpuSeconds: 0.12, viewDrag: "passed" }, conditions);
+  assert.deepEqual(record, { measurements: { hostCpuSeconds: 0.12, viewDrag: "passed" }, conditions });
+  assert.throws(() => b3Record({ hostCpuSeconds: null }, conditions), /the B3 measurement hostCpuSeconds is null, not a finite number, "passed" or "failed"/);
   assert.throws(() => b3Record({ frames: Number.NaN }, conditions), /the B3 measurement frames is NaN, not a finite number/);
   const folder = mkdtempSync(join(tmpdir(), "b3-record-"));
   try {
@@ -777,4 +778,17 @@ test("the process listing of a configuration folder holds its host, its sidecars
   const noHost = async (command, args) => (command === "ps" ? { status: 0, stdout: `   11 ${MYGO}/sidecars/probe/bin/probe\n`, stderr: "" } : run(command, args));
   await assert.rejects(applicationRows({ configDir: MYGO, run: noHost, realpath: (path) => path }),
     new RegExp(`host of ${MYGO}: no host process has --config-dir ${MYGO}`));
+});
+
+test("the B3 keys of app-usage end in their unit, and a measurement with every figure holds every key", () => {
+  assert.deepEqual(B3_MEASUREMENTS, [
+    "hostCpuSeconds", "applicationCpuSeconds", "sidecarCpuSeconds", "hostFootprintKb", "applicationFootprintKb", "sidecarFootprintKb",
+    "applicationFootprintAfterKb", "applicationPeakFootprintKb", "webKitProcesses", "webContentProcesses", "frames", "commandBuffers",
+    "errorLines", "hitTestP90Ms",
+  ]);
+  assert.ok(Object.isFrozen(B3_MEASUREMENTS));
+  const measured = usageMeasurements({
+    app: measuredApp({ after: true }), marks: marksOfTwo(), faultLines: 1, gesture: { window: "w1", frameRecords: 4, pairs: 4, p90Ms: 6, framesChange: 4 },
+  });
+  assert.deepEqual(Object.keys(measured).toSorted(), B3_MEASUREMENTS.toSorted());
 });
