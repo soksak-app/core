@@ -1240,11 +1240,11 @@ export function validateExposes(owner, exposes) {
 /**
  * Validates the diagnostics.json of a plugin together with the manifest. It is `{module, exposes}`; module is the
  * JavaScript path inside the plugin and exposes has the same format as exposes of plugin.json. Only a plugin that has a surface
- * can have it, and a name is declared in only one of plugin.json and diagnostics.json.
+ * or sections can have it, and a name is declared in only one of plugin.json and diagnostics.json.
  */
 export function validateDiagnostics(manifest, diagnostics) {
   const where = `plugin ${manifest.id} ${DIAGNOSTICS}`;
-  if (manifest.surface === undefined) throw new Error(`${where}: diagnostics require a surface`);
+  if (manifest.surface === undefined && manifest.sections === undefined) throw new Error(`${where}: diagnostics require a surface or sections`);
   if (!isObject(diagnostics)) throw new Error(`${where}: expected an object`);
   only(where, diagnostics, ["module", "exposes"]);
   const { module } = diagnostics;

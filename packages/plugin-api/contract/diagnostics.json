@@ -1,6 +1,6 @@
 {
   "surface": "packages/plugin-api/index.js#validateDiagnostics",
-  "description": "Ordered validator calls fix a diagnostics exposure extension and refusals for duplicate names, missing surfaces, invalid module paths, and unknown members.",
+  "description": "Ordered validator calls fix a diagnostics exposure extension of a surface or of sections and refusals for duplicate names, a plugin without a surface or sections, invalid module paths, and unknown members.",
   "cases": [
     {
       "id": "diagnostics.accepts-declared-extension",
@@ -62,6 +62,60 @@
                     },
                     "result": {
                       "type": "null"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "diagnostics.accepts-sections-without-surface",
+      "steps": [
+        {
+          "call": {
+            "manifest": {
+              "id": "probe",
+              "sections": [
+                {
+                  "id": "probe.list",
+                  "name": "List",
+                  "composition": {
+                    "kind": "view",
+                    "page": "ui/list.html"
+                  },
+                  "height": "fill"
+                }
+              ]
+            },
+            "diagnostics": {
+              "module": "ui/probe-diagnostics.js",
+              "exposes": {
+                "status": [
+                  {
+                    "name": "probe.view.ready",
+                    "description": "Reports.",
+                    "schema": {
+                      "type": "object"
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "output": {
+            "accepted": true,
+            "result": {
+              "module": "ui/probe-diagnostics.js",
+              "exposes": {
+                "status": [
+                  {
+                    "name": "probe.view.ready",
+                    "description": "Reports.",
+                    "schema": {
+                      "type": "object"
                     }
                   }
                 ]
@@ -152,7 +206,7 @@
           },
           "output": {
             "accepted": false,
-            "error": "plugin probe diagnostics.json: diagnostics require a surface"
+            "error": "plugin probe diagnostics.json: diagnostics require a surface or sections"
           }
         }
       ]

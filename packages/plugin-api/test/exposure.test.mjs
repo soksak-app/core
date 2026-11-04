@@ -382,7 +382,7 @@ test("a report that fails is given with both errors to reportError, which dispat
   assert.match(String(reported[0]?.message), /exposure reply 31: the host refused the reply; report failed: the report channel is closed/);
 });
 
-test("diagnostic declarations extend a surface plugin once and are rejected otherwise", () => {
+test("diagnostic declarations extend a plugin with a surface or sections once and are rejected otherwise", () => {
   const manifest = { ...page, exposes: exposes() };
   const inject = {
     name: "probe.inject", description: "Injects.", params: { type: "object", properties: {} }, result: { type: "null" },
@@ -393,7 +393,10 @@ test("diagnostic declarations extend a surface plugin once and are rejected othe
     ["probe.send", "probe.inject"]);
   assert.throws(() => validateDiagnostics(manifest, { ...diagnostics, exposes: { commands: [manifest.exposes.commands[0]] } }),
     /command probe\.send is declared twice/);
-  assert.throws(() => validateDiagnostics({ id: "probe", name: "Probe", description: "검사용 플러그인.", sections: [] }, diagnostics), /diagnostics require a surface/);
+  const section = { id: "probe.list", name: "List", composition: { kind: "view", page: "ui/list.html" }, height: "fill" };
+  assert.equal(validateDiagnostics({ id: "probe", name: "Probe", description: "검사용 플러그인.", sections: [section] }, diagnostics), diagnostics);
+  assert.throws(() => validateDiagnostics({ id: "probe", name: "Probe", description: "검사용 플러그인.", contributes: {} }, diagnostics),
+    { message: "plugin probe diagnostics.json: diagnostics require a surface or sections" });
   assert.throws(() => validateDiagnostics(manifest, { ...diagnostics, module: "../probe.js" }), /module must be a JavaScript path/);
   assert.throws(() => validateDiagnostics(manifest, { ...diagnostics, extra: true }), /extra/);
   assert.throws(() => validateDiagnostics(manifest, { module: "ui/probe-diagnostics.js", exposes: { commands: [{ ...inject, name: "other.inject" }] } }),
