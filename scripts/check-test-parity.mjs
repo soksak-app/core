@@ -627,12 +627,16 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/plane.js", symbol: "const HEADER = parseFloat(CHROME[\"head-h\"]), FOOTER = parseFloat(CHROME[\"foot-h\"]);" },
       { file: "packages/workbench/head-fit.js", symbol: "export function fitHead(head)" },
       { file: "packages/workbench-mygo/src/layout/head.go", symbol: "func FitHead(head Head) HeadFit {" },
+      { file: "packages/workbench-mygo/src/layout/outline.go", symbol: "func pathData(steps []PathStep) string {" },
+      { file: "packages/workbench-mygo/src/outline_path.go", symbol: "func OutlineDrawSteps(outline layout.Outline) []DrawStep {" },
     ],
     tests: [
       { file: "packages/workbench/test/workbench-declaration.test.mjs", id: "the layout values that the plane reads are chrome metrics of workbench.json" },
       { file: "packages/workbench-mygo/tests/layout/cases_test.go", id: "TestHeadCases" },
+      { file: "packages/workbench-mygo/tests/outline_path_test.go", id: "TestOutlineDrawStepsReplaceEachArcWithOneCubic" },
+      { file: "packages/workbench-mygo/tests/outline_path_test.go", id: "TestOutlineDrawStepsKeepASquareCorner" },
     ],
-    expected: "The layout values that both workbenches read, the card head and foot and the tab strip thresholds, are chrome metrics of `packages/workbench/workbench.json`; the fold stage of a card head is a function of its measured widths that `packages/workbench` and the Go layout model of `packages/workbench-mygo` compute alike on the layout cases of `docs/spec/cases/layout/head.json`.",
+    expected: "The layout values that both workbenches read, the card head and foot and the tab strip thresholds, are chrome metrics of `packages/workbench/workbench.json`; the fold stage of a card head is a function of its measured widths that `packages/workbench` and the Go layout model of `packages/workbench-mygo` compute alike on the layout cases of `docs/spec/cases/layout/head.json`. The shell draws each arc of the rail outline as one cubic that stays within 0.03 % of the radius.",
     levels: ["unit"],
   },
   {
