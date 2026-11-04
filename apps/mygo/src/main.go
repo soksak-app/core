@@ -60,6 +60,7 @@ func (p *workbenchPort) Prepared(h *host.Host) {
 		Post:        mygo.App.WhenReady,
 		Table:       workbench.HostTable(h),
 		Report:      func(line string) { host.LogError("workbench", errors.New(line)) },
+		Installed:   h.InstalledPlugins,
 	})
 	if err != nil {
 		host.ExitOnFailure(err)

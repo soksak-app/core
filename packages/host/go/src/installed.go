@@ -170,6 +170,11 @@ func InstalledPluginsDocument(configDir string, diagnostics bool) []byte {
 	return data
 }
 
+// InstalledPlugins is the document of the installed plugins of the host, for a workbench without a page.
+func (h *Host) InstalledPlugins() []byte {
+	return InstalledPluginsDocument(h.configDir, diagnosticPlugins)
+}
+
 // InstalledModule returns the path when /modules/<package>/<path> is a file of an enabled installed plugin. When installed is
 // false, that module belongs to the application frontend. When the path is wrong, found is false.
 func InstalledModule(configDir, urlPath string) (file string, installed, found bool, err error) {

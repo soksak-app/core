@@ -1,9 +1,12 @@
 package workbench
 
 import (
+	"encoding/json"
 	"math"
 
 	"github.com/egoist/mygo/ui"
+
+	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
 // The frame of a sidebar (docs/spec/plugins.md#sections): the section headers with their names, folding, the tabs, the
@@ -51,6 +54,8 @@ type SidebarSection struct {
 	// Size is the height that the person dragged the section to, which replaces the declared height.
 	Size   *int
 	Folded bool
+	// Composition is the composition that the section declares.
+	Composition json.RawMessage
 }
 
 // SidebarFrame is what a sidebar draws.
@@ -77,7 +82,11 @@ type SidebarSeat struct {
 	Section   string
 	Plugin    string
 	Title     string
-	Visible   bool
+	// Composition is the composition that the section declares.
+	Composition json.RawMessage
+	Visible     bool
+	// Box is the body of the section, from the top left of the sidebar. A seat that is not visible has an empty box.
+	Box layout.Rect
 }
 
 // SectionDrag is the drag of a divider. It lives across builds, so the shell keeps one for each sidebar.
@@ -105,7 +114,7 @@ func seatOf(frame SidebarFrame, section SidebarSection) SidebarSeat {
 	}
 	return SidebarSeat{
 		SurfaceID: frame.Space + "/" + frame.Sidebar + "/" + section.ID,
-		Section:   section.ID, Plugin: section.Plugin, Title: section.Name, Visible: visible,
+		Section:   section.ID, Plugin: section.Plugin, Title: section.Name, Composition: section.Composition, Visible: visible,
 	}
 }
 
@@ -162,28 +171,60 @@ func SectionHeights(sections []SidebarSection, metrics SidebarMetrics, room floa
 	return heights
 }
 
-// DrawSidebar draws the sidebar of the frame in a box of width and height. seat draws in the body of an open section, where
-// the native view of the section surface stands.
-func DrawSidebar(c *ui.Context, names *ElementNames, drag *SectionDrag, frame SidebarFrame, metrics SidebarMetrics, width, height float32,
-	run RunCommand, seat func(c *ui.Context, seat SidebarSeat)) {
-	room := height - metrics.FootH
-	ui.Column(c.Key(names.Next("core.sidebar"))).Size(width, height).Role(ui.RoleGroup).Label(frame.Sidebar).Clip().Children(func() {
-		switch {
-		case frame.Layout == "tabs":
-			drawSectionTabs(c, names, frame, metrics, width, room, run, seat)
-		case frame.Orientation == "horizontal":
-			drawHorizontalList(c, names, frame, metrics, width, room, run, seat)
-		default:
-			drawVerticalList(c, names, drag, frame, metrics, width, room, run, seat)
-		}
-		drawSidebarStatus(c, names, frame, metrics, run)
-	})
+// sectionParam is the parameter of the commands of a section.
+type sectionParam struct {
+	Sidebar string `json:"sidebar"`
+	Section string `json:"section"`
 }
 
-func drawSectionHeader(c *ui.Context, names *ElementNames, frame SidebarFrame, section SidebarSection, metrics SidebarMetrics, run RunCommand) {
+// sectionSizeParam is the parameter of core.sidebar.section.size.
+type sectionSizeParam struct {
+	Sidebar string `json:"sidebar"`
+	Section string `json:"section"`
+	Height  int    `json:"height"`
+}
+
+// settingsPatchParam is the parameter of core.settings.set.
+type settingsPatchParam struct {
+	Patch map[string]any `json:"patch"`
+}
+
+// seatDrawer draws what stands on a seat. It runs for every section of the sidebar, so a seat that is not visible stays known.
+type seatDrawer func(c *ui.Context, seat SidebarSeat)
+
+// sectionItem tells the elements of the section apart from the same elements of another sidebar.
+func sectionItem(frame SidebarFrame, section SidebarSection) string {
+	return frame.Sidebar + "/" + section.ID
+}
+
+// DrawSidebar draws the sidebar of the frame in a box of width and height. seat runs in the body of an open section, where the
+// native view of the section surface stands, and at the end for each section that is not visible.
+func DrawSidebar(c *ui.Context, binder *Binder, drag *SectionDrag, frame SidebarFrame, metrics SidebarMetrics, width, height float32, seat seatDrawer) {
+	room := height - metrics.FootH
+	ui.Column(binder.Name(c, "core.sidebar", frame.Sidebar)).Size(width, height).Role(ui.RoleGroup).Label(frame.Sidebar).Clip().Children(func() {
+		switch {
+		case frame.Layout == "tabs":
+			drawSectionTabs(c, binder, frame, metrics, width, room, seat)
+		case frame.Orientation == "horizontal":
+			drawHorizontalList(c, binder, frame, metrics, width, room, seat)
+		default:
+			drawVerticalList(c, binder, drag, frame, metrics, width, room, seat)
+		}
+		drawSidebarStatus(c, binder, frame, metrics)
+	})
+	for _, place := range SidebarSeats(frame) {
+		if !place.Visible {
+			seat(c, place)
+		}
+	}
+}
+
+func drawSectionHeader(c *ui.Context, binder *Binder, frame SidebarFrame, section SidebarSection, metrics SidebarMetrics) {
 	theme := c.Theme()
+	item := sectionItem(frame, section)
 	// A list item keeps the name as an element of its own, which a button takes as its text.
-	header := ui.Row(c.Key(names.Next("core.sidebar.section.header"))).Role(ui.RoleListItem).Label(section.Name).Height(metrics.HeadH).FillWidth().
+	header := binder.Press(c, "core.sidebar.section.header", "core.sidebar.section.fold", item, sectionParam{frame.Sidebar, section.ID}).
+		Role(ui.RoleListItem).Label(section.Name).Height(metrics.HeadH).FillWidth().Row().
 		AlignItems(ui.Center).Gap(metrics.SectionHeadGap).PaddingX(metrics.SectionHeadPad).Expanded(!section.Folded)
 	if header.Hovered() {
 		header.Background(theme.Surface)
@@ -194,23 +235,18 @@ func drawSectionHeader(c *ui.Context, names *ElementNames, frame SidebarFrame, s
 			icon = chevronRight
 		}
 		ui.Icon(c, icon).Size(metrics.SectionHeadText, metrics.SectionHeadText)
-		ui.Text(c, section.Name).Key(names.Next("core.sidebar.section.name")).Label(section.Name).NoWrap().Ellipsis("…").FontSize(metrics.SectionHeadText).Bold().TextColor(theme.Text)
+		ui.Text(binder.Name(c, "core.sidebar.section.name", item), section.Name).Label(section.Name).NoWrap().Ellipsis("…").FontSize(metrics.SectionHeadText).Bold().TextColor(theme.Text)
 	})
-	if header.Clicked() {
-		run("core.sidebar.section.fold", map[string]any{"sidebar": frame.Sidebar, "section": section.ID})
-	}
 }
 
-// drawSeat draws the body of the section, which is the seat of its section surface.
-func drawSeat(c *ui.Context, frame SidebarFrame, section SidebarSection, body func(*ui.Element), seat func(*ui.Context, SidebarSeat)) {
+// drawSeat draws the body of the section, which is the seat of its section surface, at box.
+func drawSeat(c *ui.Context, frame SidebarFrame, section SidebarSection, box layout.Rect, seat seatDrawer) {
 	place := seatOf(frame, section)
-	element := ui.Box(c).Key(place.SurfaceID).Role(ui.RoleGroup).Label(place.Title)
-	body(&element)
-	element.Children(func() { seat(c, place) })
+	place.Box = box
+	ui.Box(c).Key(place.SurfaceID).Role(ui.RoleGroup).Label(place.Title).Size(float32(box.W), float32(box.H)).Children(func() { seat(c, place) })
 }
 
-func drawVerticalList(c *ui.Context, names *ElementNames, drag *SectionDrag, frame SidebarFrame, metrics SidebarMetrics, width, room float32,
-	run RunCommand, seat func(*ui.Context, SidebarSeat)) {
+func drawVerticalList(c *ui.Context, binder *Binder, drag *SectionDrag, frame SidebarFrame, metrics SidebarMetrics, width, room float32, seat seatDrawer) {
 	heights := SectionHeights(frame.Sections, metrics, room)
 	ui.Scroll(c).Size(width, room).Children(func() {
 		ui.Column(c).Width(width).Children(func() {
@@ -218,10 +254,10 @@ func drawVerticalList(c *ui.Context, names *ElementNames, drag *SectionDrag, fra
 			starts := make([]float32, len(frame.Sections))
 			for i, section := range frame.Sections {
 				starts[i] = y
-				ui.Column(c.Key(names.Next("core.sidebar.section"))).FillWidth().Role(ui.RoleGroup).Label(section.Name).Children(func() {
-					drawSectionHeader(c, names, frame, section, metrics, run)
+				ui.Column(binder.Name(c, "core.sidebar.section", sectionItem(frame, section))).FillWidth().Role(ui.RoleGroup).Label(section.Name).Children(func() {
+					drawSectionHeader(c, binder, frame, section, metrics)
 					if !section.Folded {
-						drawSeat(c, frame, section, func(e *ui.Element) { e.Size(width, heights[i]) }, seat)
+						drawSeat(c, frame, section, layout.Rect{Y: float64(y + metrics.HeadH), W: float64(width), H: float64(heights[i])}, seat)
 					}
 				})
 				y += metrics.HeadH + heights[i]
@@ -229,7 +265,7 @@ func drawVerticalList(c *ui.Context, names *ElementNames, drag *SectionDrag, fra
 			// A divider lies over the top of the head below it, which the page draws, so a view never covers it.
 			for i := 1; i < len(frame.Sections); i++ {
 				if !frame.Sections[i-1].Folded && !frame.Sections[i].Folded {
-					drawDivider(c, names, drag, frame, i, heights, starts[i], width, metrics, run)
+					drawDivider(c, binder, drag, frame, i, heights, starts[i], width, metrics)
 				}
 			}
 		})
@@ -239,13 +275,13 @@ func drawVerticalList(c *ui.Context, names *ElementNames, drag *SectionDrag, fra
 // drawDivider draws the divider above the section below, and passes its drag to `core.sidebar.section.size` at each move. It
 // sizes the section below when that section has an integer height, and otherwise the section above, and keeps the other
 // section of the divider at least the minimum height.
-func drawDivider(c *ui.Context, names *ElementNames, drag *SectionDrag, frame SidebarFrame, below int, heights []float32, top, width float32,
-	metrics SidebarMetrics, run RunCommand) {
+func drawDivider(c *ui.Context, binder *Binder, drag *SectionDrag, frame SidebarFrame, below int, heights []float32, top, width float32, metrics SidebarMetrics) {
 	target, other, sign := below, below-1, float32(-1)
 	if frame.Sections[below].fills() {
 		target, other, sign = below-1, below, 1
 	}
-	divider := ui.Box(c.Key(names.Next("core.sidebar.section.divider"))).Absolute().Left(0).Top(top).Size(width, metrics.SectionDivider).
+	run := binder.Control(c, "core.sidebar.section.divider", "core.sidebar.section.size", sectionItem(frame, frame.Sections[below]))
+	divider := ui.Box(c).Absolute().Left(0).Top(top).Size(width, metrics.SectionDivider).
 		Role(ui.RoleSplitter).Label(frame.Sections[target].Name).Cursor(ui.CursorResizeNS)
 	_, dy, pressed := divider.Dragged()
 	if !pressed {
@@ -262,33 +298,42 @@ func drawDivider(c *ui.Context, names *ElementNames, drag *SectionDrag, frame Si
 	}
 	drag.moved += sign * dy
 	size := min(sectionHeightMax, drag.room-sectionHeightMin, max(sectionHeightMin, drag.start+drag.moved))
-	run("core.sidebar.section.size", map[string]any{"sidebar": frame.Sidebar, "section": frame.Sections[target].ID, "height": int(math.Round(float64(size)))})
+	run(sectionSizeParam{frame.Sidebar, frame.Sections[target].ID, int(math.Round(float64(size)))})
 }
 
 // drawHorizontalList divides the width equally among the open sections within the height of the set.
-func drawHorizontalList(c *ui.Context, names *ElementNames, frame SidebarFrame, metrics SidebarMetrics, width, room float32,
-	run RunCommand, seat func(*ui.Context, SidebarSeat)) {
+func drawHorizontalList(c *ui.Context, binder *Binder, frame SidebarFrame, metrics SidebarMetrics, width, room float32, seat seatDrawer) {
+	open := 0
+	for _, section := range frame.Sections {
+		if !section.Folded {
+			open++
+		}
+	}
+	share, x := float32(0), float32(0)
+	if open > 0 {
+		share = (width - float32(len(frame.Sections)-open)*metrics.HeadH) / float32(open)
+	}
 	ui.Row(c).Size(width, room).Children(func() {
 		for _, section := range frame.Sections {
-			column := ui.Column(c.Key(names.Next("core.sidebar.section"))).FillHeight().Role(ui.RoleGroup).Label(section.Name)
+			wide := metrics.HeadH
 			if !section.Folded {
-				column = column.Grow(1).Width(0)
+				wide = share
 			}
-			column.Children(func() {
-				drawSectionHeader(c, names, frame, section, metrics, run)
+			ui.Column(binder.Name(c, "core.sidebar.section", sectionItem(frame, section))).Width(wide).FillHeight().Role(ui.RoleGroup).Label(section.Name).Children(func() {
+				drawSectionHeader(c, binder, frame, section, metrics)
 				if !section.Folded {
-					drawSeat(c, frame, section, func(e *ui.Element) { e.Grow(1).FillWidth() }, seat)
+					drawSeat(c, frame, section, layout.Rect{X: float64(x), Y: float64(metrics.HeadH), W: float64(wide), H: float64(room - metrics.HeadH)}, seat)
 				}
 			})
+			x += wide
 		}
 	})
 }
 
 // drawSectionTabs draws the row of tabs and only the section of the selected tab.
-func drawSectionTabs(c *ui.Context, names *ElementNames, frame SidebarFrame, metrics SidebarMetrics, width, room float32,
-	run RunCommand, seat func(*ui.Context, SidebarSeat)) {
+func drawSectionTabs(c *ui.Context, binder *Binder, frame SidebarFrame, metrics SidebarMetrics, width, room float32, seat seatDrawer) {
 	theme := c.Theme()
-	ui.ScrollHorizontal(c.Key(names.Next("core.sidebar.tabs"))).Size(width, metrics.HeadH).Role(ui.RoleTabList).Children(func() {
+	ui.ScrollHorizontal(binder.Name(c, "core.sidebar.tabs", frame.Sidebar)).Size(width, metrics.HeadH).Role(ui.RoleTabList).Children(func() {
 		ui.Row(c).FillHeight().Children(func() {
 			for _, section := range frame.Sections {
 				selected := section.ID == frame.Tab
@@ -296,12 +341,10 @@ func drawSectionTabs(c *ui.Context, names *ElementNames, frame SidebarFrame, met
 				if selected {
 					color = theme.Text
 				}
-				tab := ui.ButtonBase(c.Key(names.Next("core.sidebar.section.tab"))).Role(ui.RoleTab).Selected(selected).FillHeight().Children(func() {
+				binder.Press(c, "core.sidebar.section.tab", "core.sidebar.section.select", sectionItem(frame, section), sectionParam{frame.Sidebar, section.ID}).
+					Role(ui.RoleTab).Selected(selected).FillHeight().Children(func() {
 					ui.Text(c, section.Name).NoWrap().FontSize(metrics.SectionHeadText).Bold().TextColor(color).Padding(0, metrics.SectionHeadPad)
 				})
-				if tab.Clicked() {
-					run("core.sidebar.section.select", map[string]any{"sidebar": frame.Sidebar, "section": section.ID})
-				}
 			}
 		})
 	})
@@ -310,21 +353,21 @@ func drawSectionTabs(c *ui.Context, names *ElementNames, frame SidebarFrame, met
 		if !section.fills() {
 			height = min(height, section.points())
 		}
-		ui.Column(c.Key(names.Next("core.sidebar.section"))).Hidden(section.ID != frame.Tab).Role(ui.RoleGroup).Label(section.Name).Children(func() {
+		ui.Column(binder.Name(c, "core.sidebar.section", sectionItem(frame, section))).Hidden(section.ID != frame.Tab).Role(ui.RoleGroup).Label(section.Name).Children(func() {
 			if section.ID == frame.Tab {
-				drawSeat(c, frame, section, func(e *ui.Element) { e.Size(width, height) }, seat)
+				drawSeat(c, frame, section, layout.Rect{Y: float64(metrics.HeadH), W: float64(width), H: float64(height)}, seat)
 			}
 		})
 	}
 }
 
-func drawSidebarStatus(c *ui.Context, names *ElementNames, frame SidebarFrame, metrics SidebarMetrics, run RunCommand) {
+func drawSidebarStatus(c *ui.Context, binder *Binder, frame SidebarFrame, metrics SidebarMetrics) {
 	theme := c.Theme()
 	name := "core.card.sidebar.status"
 	if frame.Side != "" {
 		name = "core.sidebar.status"
 	}
-	ui.Row(c.Key(names.Next(name))).FillWidth().Height(metrics.FootH).AlignItems(ui.Center).Gap(6).PaddingX(8).Role(ui.RoleStatus).Label(frame.Status).Children(func() {
+	ui.Row(binder.Name(c, name, frame.Sidebar)).FillWidth().Height(metrics.FootH).AlignItems(ui.Center).Gap(6).PaddingX(8).Role(ui.RoleStatus).Label(frame.Status).Children(func() {
 		ui.Text(c, frame.Status).NoWrap().Ellipsis("…").TextColor(theme.TextMuted).Grow(1)
 		if frame.Side == "" {
 			return
@@ -334,11 +377,8 @@ func drawSidebarStatus(c *ui.Context, names *ElementNames, frame SidebarFrame, m
 		if frame.Side == "right" {
 			icon, title = chevronRight, "오른쪽 창 사이드바 접기"
 		}
-		fold := ui.ButtonBase(c.Key(names.Next("core.sidebar.fold"))).Label(title).Size(16, 16).Children(func() {
+		binder.Press(c, "core.sidebar.fold", "core.settings.set", frame.Side, settingsPatchParam{map[string]any{frame.Side: false}}).Label(title).Size(16, 16).Children(func() {
 			ui.Icon(c, icon).Size(12, 12)
 		})
-		if fold.Clicked() {
-			run("core.settings.set", map[string]any{"patch": map[string]any{frame.Side: false}})
-		}
 	})
 }

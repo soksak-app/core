@@ -42,7 +42,7 @@ func fixtureApp(t *testing.T, stored *storedHost) (*workbench.App, *appWindow, s
 		}
 		return calls
 	}
-	app, err := workbench.NewApp(workbench.AppOptions{Environment: environment(t), Post: queue.post, Table: table, Report: func(line string) {
+	app, err := workbench.NewApp(workbench.AppOptions{Environment: environment(t), Post: queue.post, Table: table, Installed: func() []byte { return []byte(stored.installedDocument()) }, Report: func(line string) {
 		t.Errorf("the workbench reported %s", line)
 	}})
 	if err != nil {

@@ -28,6 +28,8 @@ type AppOptions struct {
 	Table func(window host.Frontend) map[string]HostCall
 	// Report writes a line of a shown error to the application log.
 	Report func(line string)
+	// Installed reads the document of the installed plugins.
+	Installed func() []byte
 }
 
 // App is the workbench of the application.
@@ -66,7 +68,7 @@ func (a *App) Build(window host.Frontend) func(c *ui.Context) {
 		panic(err) // NewApp read the same embedded declarations.
 	}
 	shell, err := NewShell(ShellOptions{Declared: declared, Calls: NewCalls(a.options.Table(window), a.options.Post),
-		Environment: a.options.Environment, Invalidate: window.(Painted).Invalidate, Post: a.options.Post, Report: a.options.Report})
+		Environment: a.options.Environment, Installed: a.options.Installed(), Invalidate: window.(Painted).Invalidate, Post: a.options.Post, Report: a.options.Report})
 	if err != nil {
 		panic(err) // The environment declaration is staged with the application, and its test holds its form.
 	}
