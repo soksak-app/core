@@ -1,16 +1,15 @@
 //! Tests of the transport, the frames, the JSON-RPC handling and the watch list of the local endpoint. A fake service
 //! replaces the window and the page.
 
-#![cfg(target_os = "macos")]
-
 #[path = "support/folder.rs"]
 mod folder;
 
-#[path = "support/platform/darwin/endpoint_client.rs"]
+#[path = "support/platform/platform.rs"]
 mod endpoint_client;
 
+use endpoint_client::Connection;
+
 use std::io::Write;
-use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
@@ -326,19 +325,19 @@ fn mode(path: &Path) -> u32 {
     std::fs::metadata(path).unwrap().permissions().mode() & 0o777
 }
 
-fn open(endpoint: &Endpoint) -> UnixStream {
+fn open(endpoint: &Endpoint) -> Connection {
     endpoint_client::connect(endpoint.address(), Duration::from_secs(5))
 }
 
-fn send(connection: &mut UnixStream, message: Value) {
+fn send(connection: &mut Connection, message: Value) {
     endpoint::write_frame(connection, &message).unwrap();
 }
 
-fn receive(connection: &mut UnixStream) -> Option<Value> {
+fn receive(connection: &mut Connection) -> Option<Value> {
     endpoint::read_frame(connection).unwrap()
 }
 
-fn request(connection: &mut UnixStream, id: u64, method: &str, params: Value) -> Value {
+fn request(connection: &mut Connection, id: u64, method: &str, params: Value) -> Value {
     send(
         connection,
         json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}),

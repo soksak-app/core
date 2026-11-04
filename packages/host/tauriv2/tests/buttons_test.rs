@@ -1,15 +1,14 @@
 //! Tests of the value of host.buttons and its notifications. A fake service replaces the window and the page of the
 //! endpoint.
 
-#![cfg(target_os = "macos")]
-
 #[path = "support/folder.rs"]
 mod folder;
 
-#[path = "support/platform/darwin/endpoint_client.rs"]
+#[path = "support/platform/platform.rs"]
 mod endpoint_client;
 
-use std::os::unix::net::UnixStream;
+use endpoint_client::Connection;
+
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -55,7 +54,7 @@ fn start(config: &Path, service: Arc<Fake>) -> Endpoint {
     endpoint
 }
 
-fn request(connection: &mut UnixStream, id: u64, method: &str, params: Value) -> Value {
+fn request(connection: &mut Connection, id: u64, method: &str, params: Value) -> Value {
     endpoint::write_frame(
         connection,
         &json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}),
@@ -72,7 +71,7 @@ fn request(connection: &mut UnixStream, id: u64, method: &str, params: Value) ->
 }
 
 /// The mask of the next notification of host.buttons.
-fn next_mask(connection: &mut UnixStream) -> Value {
+fn next_mask(connection: &mut Connection) -> Value {
     let got = endpoint::read_frame(connection)
         .unwrap()
         .expect("no host.buttons notification");

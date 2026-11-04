@@ -2,16 +2,16 @@
 //! window, so each test changes a registry and checks its count, and checks that the count falls back when the object is
 //! removed. They are compiled only in diagnostic builds. The same cases run in the Go host.
 #![cfg(feature = "diagnostics")]
-#![cfg(target_os = "macos")]
 
 #[path = "support/folder.rs"]
 mod folder;
 
-#[path = "support/platform/darwin/endpoint_client.rs"]
+#[path = "support/platform/platform.rs"]
 mod endpoint_client;
 
+use endpoint_client::Connection;
+
 use std::os::unix::fs::PermissionsExt;
-use std::os::unix::net::UnixStream;
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 
@@ -295,7 +295,7 @@ impl Service for ObjectsService {
     }
 }
 
-fn request(connection: &mut UnixStream, id: u64, params: Value) -> Value {
+fn request(connection: &mut Connection, id: u64, params: Value) -> Value {
     endpoint::write_frame(
         connection,
         &json!({"jsonrpc": "2.0", "id": id, "method": "diagnostics.objects", "params": params}),

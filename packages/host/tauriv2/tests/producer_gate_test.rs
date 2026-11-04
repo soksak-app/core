@@ -2,12 +2,10 @@
 //! into an event, and the writer counts it; a failed call is a warning and still passes a policy that stores the class from warn on.
 //! The same cases run in the Go host.
 
-#![cfg(target_os = "macos")]
-
 #[path = "support/folder.rs"]
 mod folder;
 
-#[path = "support/platform/darwin/endpoint_client.rs"]
+#[path = "support/platform/platform.rs"]
 mod endpoint_client;
 
 #[path = "support/records.rs"]

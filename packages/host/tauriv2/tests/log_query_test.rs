@@ -2,18 +2,17 @@
 //! `log.query`, the host call `logQuery`, the index that follows the writer, and the event of an index that is built from the file. The
 //! same cases run in the Go host.
 
-#![cfg(target_os = "macos")]
-
 #[path = "support/folder.rs"]
 mod folder;
 
-#[path = "support/platform/darwin/endpoint_client.rs"]
+#[path = "support/platform/platform.rs"]
 mod endpoint_client;
+
+use endpoint_client::Connection;
 
 #[path = "support/records.rs"]
 mod records;
 
-use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
@@ -78,7 +77,7 @@ fn write_event_file(config: &Path, name: &str, text: &str) -> PathBuf {
     path
 }
 
-fn request(connection: &mut UnixStream, id: u64, method: &str, params: Value) -> Value {
+fn request(connection: &mut Connection, id: u64, method: &str, params: Value) -> Value {
     endpoint::write_frame(
         connection,
         &json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}),
@@ -90,7 +89,7 @@ fn request(connection: &mut UnixStream, id: u64, method: &str, params: Value) ->
 }
 
 /// Runs `body` with an endpoint on `config` and a connection to it.
-fn with_endpoint<T>(config: &Path, body: impl FnOnce(&mut UnixStream) -> T) -> T {
+fn with_endpoint<T>(config: &Path, body: impl FnOnce(&mut Connection) -> T) -> T {
     let endpoint = Endpoint::start(
         &config.join("sockets"),
         config,

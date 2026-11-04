@@ -2,19 +2,18 @@
 //! serializes it, the start buffer and the lists of the endpoint have bounds, and every loss is counted. The same cases run
 //! in the Go host.
 
-#![cfg(target_os = "macos")]
-
 #[path = "support/folder.rs"]
 mod folder;
 
-#[path = "support/platform/darwin/endpoint_client.rs"]
+#[path = "support/platform/platform.rs"]
 mod endpoint_client;
+
+use endpoint_client::Connection;
 
 #[path = "support/records.rs"]
 mod records;
 
 use std::collections::HashSet;
-use std::os::unix::net::UnixStream;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -186,11 +185,11 @@ impl Service for GatedPage {
     }
 }
 
-fn send(connection: &mut UnixStream, message: Value) {
+fn send(connection: &mut Connection, message: Value) {
     endpoint::write_frame(connection, &message).unwrap();
 }
 
-fn receive(connection: &mut UnixStream) -> Value {
+fn receive(connection: &mut Connection) -> Value {
     endpoint::read_frame(connection)
         .unwrap()
         .expect("the endpoint closed the connection")
@@ -218,7 +217,7 @@ fn the_subscription_changes_of_a_topic_hold_at_most_256_and_the_rest_is_refused_
     endpoint.publish("w1").unwrap();
     let mut connection = endpoint_client::connect(endpoint.address(), Duration::from_secs(10));
     let topic = json!({"window": "w1", "name": "core.layout"});
-    let request = |connection: &mut UnixStream, id: u64, method: &str| {
+    let request = |connection: &mut Connection, id: u64, method: &str| {
         send(
             connection,
             json!({"jsonrpc": "2.0", "id": id, "method": method, "params": topic}),

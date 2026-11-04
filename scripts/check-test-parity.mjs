@@ -802,7 +802,7 @@ const FEATURE_LINKS = [
       { file: "scripts/check-host-parity.mjs", symbol: "function callerGraph(language, sources, scope) {" },
       { file: "scripts/check-host-parity.mjs", symbol: "export function withoutRustTestItems(source) {" },
       { file: "scripts/check-host-parity.mjs", symbol: "export function libraryCrate(manifest, file) {" },
-      { file: "packages/host/tauriv2/tests/support/platform/darwin/endpoint_client.rs", symbol: "pub fn connect(address: &str, read_timeout: Duration) -> UnixStream {" },
+      { file: "packages/host/tauriv2/tests/support/platform/darwin/endpoint_client.rs", symbol: "pub fn connect(address: &str, read_timeout: Duration) -> Connection {" },
     ],
     tests: [
       { file: "scripts/test/check-host-parity.test.mjs", id: "every platform method with a caller passes" },
