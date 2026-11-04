@@ -7,6 +7,7 @@ import { validateDiagnostics } from "../index.js";
 const CONTRACT = JSON.parse(readFileSync(new URL("../contract/diagnostics.json", import.meta.url), "utf8"));
 const EXPECTED_IDS = [
   "diagnostics.accepts-declared-extension",
+  "diagnostics.accepts-sections-without-surface",
   "diagnostics.refuses-duplicate-name",
   "diagnostics.refuses-without-surface",
   "diagnostics.refuses-invalid-module-path",
