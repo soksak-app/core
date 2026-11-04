@@ -1717,7 +1717,7 @@ fn responder_of(
     } else if modal_view == Some(owner) {
         json!({"class": class, "owner": "modal", "surface": null, "document": null})
     } else if main {
-        json!({"class": class, "owner": "page", "surface": null, "document": null})
+        json!({"class": class, "owner": "workbench", "surface": null, "document": null})
     } else {
         json!({"class": class, "owner": "webview", "surface": null, "document": null})
     }

@@ -24,7 +24,7 @@ export function focusState(document) {
     const reported = viewFocusOf(responder.surface);
     return reported === null ? null : { ...reported, surface: responder.surface };
   }
-  if (responder.owner !== "page") return null;
+  if (responder.owner !== "workbench") return null;
   const element = focusedExposedElement(document);
   if (element === null) return null;
   return { ...focusedExposure(document), surface: surfaceOf(element) };

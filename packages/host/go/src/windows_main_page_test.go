@@ -3,6 +3,7 @@ package host
 import (
 	"errors"
 	"io/fs"
+	"reflect"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -97,5 +98,26 @@ func TestAWindowWithoutAMainPageSetsNoWindowOverlays(t *testing.T) {
 	t.Cleanup(func() { framework, system = previousFramework, previousSystem })
 	if err := setWindowOverlays(unsafe.Pointer(new(byte)), nil); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// A window without a main page draws the workbench in its content view, so a first responder outside every web view and surface host
+// is the owner workbench. A native view of a surface stays the owner native with its surface, and in a window with a main page a view
+// outside the web views is a native view.
+func TestTheFirstResponderOutsideTheWebViewsFollowsTheMainPage(t *testing.T) {
+	previous := framework
+	t.Cleanup(func() { framework = previous })
+	named := map[uint64]string{10: "tab-view"}
+	surface := "tab-view"
+	framework = pagelessFramework{}
+	if content, want := windowResponder("MygoView", 0, 0, false, named, nil, 0), (WindowResponder{Class: "MygoView", Owner: "workbench"}); !reflect.DeepEqual(content, want) {
+		t.Fatalf("content view responder %+v, want %+v", content, want)
+	}
+	if view, want := windowResponder("NativeRegion", 0, 10, false, named, nil, 0), (WindowResponder{Class: "NativeRegion", Owner: "native", Surface: &surface}); !reflect.DeepEqual(view, want) {
+		t.Fatalf("surface view responder %+v, want %+v", view, want)
+	}
+	framework = pagedFramework{}
+	if view, want := windowResponder("NSWindow", 0, 0, false, named, nil, 0), (WindowResponder{Class: "NSWindow", Owner: "native"}); !reflect.DeepEqual(view, want) {
+		t.Fatalf("responder of a window with a main page %+v, want %+v", view, want)
 	}
 }

@@ -22,7 +22,7 @@ test("core.focus follows the first responder to the element that a view reports"
     "core.focus did not report the focused element of the view that holds the first responder");
   assert.equal(await call("tab-view", null), null);
   assert.equal(focusState(document), null, "a view without a focused exposed element still reported one");
-  setResponder({ owner: "page", surface: null, document: null });
+  setResponder({ owner: "workbench", surface: null, document: null });
   assert.deepEqual(focusState(document), { name: "core.chrome.projects", index: 0, surface: null });
   for (const owner of ["document", "native", "modal", "webview"]) {
     setResponder({ owner, surface: owner === "document" ? "tab-view" : null, document: owner === "document" ? "page" : null });
@@ -32,7 +32,7 @@ test("core.focus follows the first responder to the element that a view reports"
   setResponder({ owner: "surface", surface: "tab-view", document: null });
   forgetViewFocus("tab-view");
   assert.equal(focusState(document), null, "the focus of an ended view document remained");
-  setResponder({ owner: "page", surface: null, document: null });
+  setResponder({ owner: "workbench", surface: null, document: null });
 });
 
 test("a malformed focus report or first responder event is refused", { timeout: 5000 }, async () => {

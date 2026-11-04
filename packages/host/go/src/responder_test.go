@@ -11,7 +11,7 @@ import (
 func TestTheResponderEventFollowsTheFirstResponderAfterThePageIsReady(t *testing.T) {
 	var state responderState
 	surface := "tab-view"
-	current := &responderEvent{Owner: "page"}
+	current := &responderEvent{Owner: "workbench"}
 	ready := false
 	var sent []responderEvent
 	read := func() (*responderEvent, error) { copied := *current; return &copied, nil }
@@ -32,7 +32,7 @@ func TestTheResponderEventFollowsTheFirstResponderAfterThePageIsReady(t *testing
 	send(false)
 	send(false)
 	send(true)
-	want := []responderEvent{{Owner: "page"}, {Owner: "surface", Surface: &surface}, {Owner: "surface", Surface: &surface}}
+	want := []responderEvent{{Owner: "workbench"}, {Owner: "surface", Surface: &surface}, {Owner: "surface", Surface: &surface}}
 	if !reflect.DeepEqual(sent, want) {
 		t.Fatalf("sent %+v, want the ready value, one value for the change and the value at the next ready %+v", sent, want)
 	}
@@ -43,7 +43,8 @@ func TestTheResponderEventFollowsTheFirstResponderAfterThePageIsReady(t *testing
 }
 
 // The view of a view surface is registered as the document "" of its surface, and a first responder in it is the owner
-// surface with that surface and no document; a first responder in a document region is the owner document.
+// surface with that surface and no document; a first responder in a document region is the owner document, and a first
+// responder in the main web view, which draws the workbench, is the owner workbench.
 // contract: window.responder.view-is-owner-surface
 func TestTheFirstResponderInTheViewOfAViewSurfaceIsOwnerSurface(t *testing.T) {
 	named := map[uint64]string{10: "tab-view"}
@@ -56,6 +57,10 @@ func TestTheFirstResponderInTheViewOfAViewSurfaceIsOwnerSurface(t *testing.T) {
 	region := windowResponder("WKWebView", 30, 10, false, named, documents, 0)
 	if want := (WindowResponder{Class: "WKWebView", Owner: "document", Surface: text("tab-view"), Document: text("page")}); !reflect.DeepEqual(region, want) {
 		t.Fatalf("region responder %+v, want %+v", region, want)
+	}
+	workbench := windowResponder("WKWebView", 40, 0, true, named, documents, 0)
+	if want := (WindowResponder{Class: "WKWebView", Owner: "workbench"}); !reflect.DeepEqual(workbench, want) {
+		t.Fatalf("main web view responder %+v, want %+v", workbench, want)
 	}
 }
 

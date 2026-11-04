@@ -1323,9 +1323,10 @@ func windowRegion(key ImageKey, text string, images *Images) (WindowRegion, erro
 	return region, nil
 }
 
-// WindowResponder is the first responder of the window. Owner is the kind of web view that contains it, one of page, surface,
-// document, modal, webview, and native. webview is a web view that is not registered, and native is a view outside
-// the web views (for example an image region). Surface is the surface that contains the first responder.
+// WindowResponder is the first responder of the window. Owner is what holds it, one of workbench, surface, document, modal,
+// webview, and native. webview is a web view that is not registered, and native is a view outside the web views (for example an
+// image region). The workbench is the main web view, or the content view of a window without a main page. Surface is the surface
+// that contains the first responder.
 type WindowResponder struct {
 	Class    string  `json:"class"`
 	Owner    string  `json:"owner"`
@@ -1355,10 +1356,13 @@ func windowResponder(class string, view, surface uint64, main bool, named map[ui
 		case modalHandle != 0 && modalHandle == view:
 			out.Owner = "modal"
 		case main:
-			out.Owner = "page"
+			out.Owner = "workbench"
 		default:
 			out.Owner = "webview"
 		}
+	} else if surface == 0 && !framework.MainPage() {
+		// A window without a main page draws the workbench in its content view, outside every web view and surface host.
+		out.Owner = "workbench"
 	}
 	return out
 }

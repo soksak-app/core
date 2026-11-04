@@ -56,7 +56,7 @@ for (const app of Object.values(APPS)) {
     await s.click(rename.x + rename.width / 2, rename.y + rename.height / 2);
     await s.until("core.focus", focus => focus?.name === "core.rename.input",
       "native focus did not enter the main document");
-    await s.until("host.window", window => window.responder?.owner === "page",
+    await s.until("host.window", window => window.responder?.owner === "workbench",
       "the main rename field did not become the native first responder");
     await s.presented();
     await s.press("y", { text: "y" });
