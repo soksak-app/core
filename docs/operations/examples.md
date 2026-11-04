@@ -74,7 +74,7 @@ A check removes every folder and file that it writes to the temporary folder, al
 
 ## View drag benchmark
 
-Use `make e2e-benchmark-plain-view` to measure the floor of a view drag: it installs the fixture of `e2e/fixtures/plain-view/probe`, a view with an empty document region and no plugin code, runs the same width drag and recording, and reports the in-gesture source intervals. It judges no target, because the floor is an input of the targets.
+Use `make e2e-benchmark-plain-view` to measure the floor of a view drag: it installs the fixture of `e2e/fixtures/plain-view/probe`, a view with an empty document region and no plugin code, runs the same width drag and recording, and reports the in-gesture source intervals. It judges no target, because the floor is an input of the targets. It also runs a drag with traces disabled and reports its latency and transaction stages.
 
 Build local optimized diagnostic candidates with `make DIAGNOSTIC_RELEASE=1 wailsv3-build-release tauriv2-build-release` and build each installed sidecar with its release profile and diagnostic feature. Record the exact executable hashes and source revisions before running the benchmark; local compilation does not publish a release. Preserve earlier debug-profile measurements as separate observations because the Rust development profile leaves the host crate unoptimized.
 

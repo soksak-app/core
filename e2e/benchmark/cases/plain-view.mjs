@@ -14,3 +14,15 @@ export function sourceIntervalSummary(sourceFrames, gestureStartedAtMs, gestureE
     maxMs: intervals.at(-1),
   };
 }
+
+/** The times and the positions (points) of the frames whose moved card edge measure reads, and the indexes of the other frames. */
+export function cardEdgeSamples(frames, measure) {
+  const samples = [];
+  const unmeasured = [];
+  frames.forEach((frame, index) => {
+    const position = measure(frame);
+    if (position === null) unmeasured.push(index);
+    else samples.push({ time: frame.time, position });
+  });
+  return { samples, unmeasured };
+}
