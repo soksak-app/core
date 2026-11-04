@@ -54,11 +54,10 @@ fn menu_item(
     }
     match item {
         MenuItem::Separator => PredefinedMenuItem::separator(app).map(boxed),
-        MenuItem::Command {
-            id,
-            title,
-            accelerator,
-        } => TauriMenuItem::with_id(app, id, title, true, accelerator.as_deref()).map(boxed),
+        MenuItem::Command { id, title, key } => {
+            let accelerator = key.map(accelerator).transpose()?;
+            TauriMenuItem::with_id(app, id, title, true, accelerator.as_deref()).map(boxed)
+        }
         MenuItem::Predefined {
             role,
             title,
@@ -94,6 +93,30 @@ fn menu_item(
         }
     }
     .map_err(string)
+}
+
+/// Converts the key format of the contract table (the host.menu report format) into the shortcut format of the menu
+/// library of Tauri. The modifier keys are joined with + in the order cmd, shift, ctrl, opt, and the last cell is the key.
+pub fn accelerator(key: &str) -> Result<String, String> {
+    let parts: Vec<&str> = key.split('+').collect();
+    let Some((last, modifiers)) = parts.split_last() else {
+        return Err(format!("menu key {key:?} has no key"));
+    };
+    if last.is_empty() {
+        return Err(format!("menu key {key:?} has no key"));
+    }
+    let mut out: Vec<&str> = Vec::new();
+    for modifier in modifiers {
+        out.push(match *modifier {
+            "cmd" => "CmdOrCtrl",
+            "shift" => "Shift",
+            "ctrl" => "Control",
+            "opt" => "Option",
+            unknown => return Err(format!("menu key {key:?} has unknown modifier {unknown:?}")),
+        });
+    }
+    out.push(last);
+    Ok(out.join("+"))
 }
 
 /// Converts a tauri error into a string error.

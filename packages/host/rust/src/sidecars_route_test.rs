@@ -15,7 +15,7 @@ fn message() -> Message {
     }
 }
 
-// contract: tauriv2.window-notification.closed-window-reports-no-failure
+// contract: window-notification.closed-window-reports-no-failure
 #[test]
 fn a_message_after_its_window_closed_posts_nothing_and_reports_no_failure() {
     let closed: Result<Arc<WindowData>, String> = Err("project window is closed".to_string());
@@ -28,7 +28,7 @@ fn a_message_after_its_window_closed_posts_nothing_and_reports_no_failure() {
     assert!(!posted);
 }
 
-// contract: tauriv2.window-notification.open-window-reports-its-failure
+// contract: window-notification.open-window-reports-its-failure
 #[test]
 fn a_message_of_an_open_window_reports_the_failure_of_its_post() {
     let open: Result<Arc<WindowData>, String> = Ok(Arc::new(WindowData::default()));

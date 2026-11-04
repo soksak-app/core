@@ -3,8 +3,8 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
-use soksak_host::framework::{self as port, BlockingTask, EventTarget, WindowOptions};
-use tauri::{Emitter, Manager};
+use soksak_host::framework::{self as port, BlockingTask, WindowOptions};
+use tauri::Manager;
 use tauri_plugin_dialog::DialogExt;
 
 use crate::frontend::Frontend;
@@ -36,38 +36,6 @@ fn tauri_window(window: &port::Window) -> port::Result<tauri::Window> {
         .ok_or_else(|| port::Error::from(format!("window {} is not open", window.label())))
 }
 
-fn tauri_target(target: EventTarget) -> tauri::EventTarget {
-    match target {
-        EventTarget::Any => tauri::EventTarget::Any,
-        EventTarget::AnyLabel { label } => tauri::EventTarget::AnyLabel { label },
-        EventTarget::App => tauri::EventTarget::App,
-        EventTarget::Window { label } => tauri::EventTarget::Window { label },
-        EventTarget::Webview { label } => tauri::EventTarget::Webview { label },
-        EventTarget::WebviewWindow { label } => tauri::EventTarget::WebviewWindow { label },
-    }
-}
-
-fn port_target(target: &tauri::EventTarget) -> EventTarget {
-    match target {
-        tauri::EventTarget::Any => EventTarget::Any,
-        tauri::EventTarget::AnyLabel { label } => EventTarget::AnyLabel {
-            label: label.clone(),
-        },
-        tauri::EventTarget::App => EventTarget::App,
-        tauri::EventTarget::Window { label } => EventTarget::Window {
-            label: label.clone(),
-        },
-        tauri::EventTarget::Webview { label } => EventTarget::Webview {
-            label: label.clone(),
-        },
-        tauri::EventTarget::WebviewWindow { label } => EventTarget::WebviewWindow {
-            label: label.clone(),
-        },
-        // default: a target that a later framework version adds is no target of the host, which the filter sees as any.
-        _ => EventTarget::Any,
-    }
-}
-
 fn frontend(window: tauri::Window) -> Arc<dyn port::Frontend> {
     Arc::new(Frontend::new(window))
 }
@@ -84,7 +52,8 @@ impl port::Framework for Framework {
         "Tauri v2"
     }
 
-    fn run_on_main_thread(&self, task: Box<dyn FnOnce() + Send>) -> port::Result<()> {
+    /// On the main thread Tauri runs the task before it returns.
+    fn post(&self, task: Box<dyn FnOnce() + Send>) -> port::Result<()> {
         application().run_on_main_thread(task).map_err(error)
     }
 
@@ -93,8 +62,8 @@ impl port::Framework for Framework {
         Box::pin(async move { running.await.map_err(error) })
     }
 
-    fn exit(&self, code: i32) {
-        application().exit(code)
+    fn quit(&self) {
+        application().exit(0)
     }
 
     fn config_dir(&self) -> port::Result<PathBuf> {
@@ -143,6 +112,12 @@ impl port::Framework for Framework {
         app.set_menu(menu).map(drop).map_err(error)
     }
 
+    fn install_dock(&self, new_window: Box<dyn Fn()>) -> port::Result<()> {
+        soksak_host::platform::current()?
+            .install_dock_menu(new_window)
+            .map_err(port::Error::from)
+    }
+
     fn new_window(&self, options: WindowOptions) -> port::Result<Arc<dyn port::Frontend>> {
         soksak_host::platform::current()?;
         let port::Color(red, green, blue, alpha) = options.background;
@@ -174,35 +149,9 @@ impl port::Framework for Framework {
             .collect()
     }
 
-    fn get_window(&self, label: &str) -> Option<Arc<dyn port::Frontend>> {
-        application().get_window(label).map(frontend)
-    }
-
     fn get_webview(&self, label: &str) -> Option<(Arc<dyn port::Frontend>, String)> {
         application()
             .get_webview(label)
             .map(|webview| (frontend(webview.window()), webview.label().to_string()))
-    }
-
-    fn emit_filter(
-        &self,
-        event: &str,
-        payload: serde_json::Value,
-        filter: &dyn Fn(&EventTarget) -> bool,
-    ) -> port::Result<()> {
-        application()
-            .emit_filter(event, payload, |target| filter(&port_target(target)))
-            .map_err(error)
-    }
-
-    fn emit_to(
-        &self,
-        target: EventTarget,
-        event: &str,
-        payload: serde_json::Value,
-    ) -> port::Result<()> {
-        application()
-            .emit_to(tauri_target(target), event, payload)
-            .map_err(error)
     }
 }

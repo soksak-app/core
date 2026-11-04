@@ -12,7 +12,7 @@ use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::time::{Duration, Instant};
 
-use crate::framework::{AppHandle, Emitter, EventTarget, LogicalSize, Manager, Webview, Window};
+use crate::framework::{AppHandle, LogicalSize, Manager, Webview, Window};
 use serde::Deserialize;
 use serde_json::value::RawValue;
 use serde_json::{Map, Value, json};
@@ -830,11 +830,6 @@ fn main_page(webview: &Webview) -> Result<Window, String> {
     Ok(window)
 }
 
-fn emit_to(app: &AppHandle, label: &str, event: &str, payload: Value) -> Result<(), String> {
-    app.emit_to(EventTarget::webview(label), event, payload)
-        .map_err(|e| e.to_string())
-}
-
 /// The observation line of a late reply that a removed surface sent.
 pub fn removed_surface_reply(id: u64, surface: &str) -> String {
     format!("exposure reply {id} of removed surface {surface:?} arrived after its request ended")
@@ -993,7 +988,6 @@ fn end_page_reload(reloading: &AtomicBool) {
 pub fn forward(webview: &Webview, request: Forward) -> Result<Box<RawValue>, String> {
     let window = main_page(webview)?;
     let label = label_for(&window, &request.surface);
-    let app = window.app_handle().clone();
     let surface_exists = crate::surfaces::surface_handle(&window, &request.surface).is_ok();
     // A surface that declared its composition has its plugin (surfaces.rs checks it), so the call names that plugin.
     let call = window_data(&window)?
@@ -1025,12 +1019,12 @@ pub fn forward(webview: &Webview, request: Forward) -> Result<Box<RawValue>, Str
                     "host.trace.exposure.request",
                     json!({"id": id, "surface": request.surface, "method": request.method}),
                 );
-                emit_to(
-                    &app,
-                    window.label(),
-                    "exposure-request",
-                    json!({"id": id, "surface": request.surface, "method": request.method, "params": request.params}),
-                )
+                window
+                    .emit(
+                        "exposure-request",
+                        json!({"id": id, "surface": request.surface, "method": request.method, "params": request.params}),
+                    )
+                    .map_err(|error| error.to_string())
             },
         ),
     };
@@ -1112,12 +1106,12 @@ pub fn register(webview: &Webview, request: Register) -> Result<(), String> {
             registrations.push(entry);
         }
     }
-    emit_to(
-        window.app_handle(),
-        window.label(),
-        "exposure-registered",
-        json!({"surface": request.surface, "kind": request.kind, "name": request.name}),
-    )
+    window
+        .emit(
+            "exposure-registered",
+            json!({"surface": request.surface, "kind": request.kind, "name": request.name}),
+        )
+        .map_err(|error| error.to_string())
 }
 
 /// Notifies the reloaded main page again of the registrations of the surface pages. A surface remains when the main
@@ -1134,9 +1128,7 @@ pub(crate) fn replay_registrations(window: &Window) {
         .unwrap_or_else(PoisonError::into_inner)
         .clone();
     for (surface, kind, name) in registrations {
-        if let Err(error) = emit_to(
-            window.app_handle(),
-            window.label(),
+        if let Err(error) = window.emit(
             "exposure-registered",
             json!({"surface": surface, "kind": kind, "name": name}),
         ) {
@@ -1152,9 +1144,7 @@ pub(crate) fn surface_closed(window: &Window, surface: &str) {
         .relay
         .abandon(&label_for(window, surface));
     remove_surface_registrations(window_data(window), surface);
-    if let Err(error) = emit_to(
-        window.app_handle(),
-        window.label(),
+    if let Err(error) = window.emit(
         "exposure-registered",
         json!({"surface": surface, "closed": true}),
     ) {
@@ -1562,7 +1552,7 @@ pub(crate) fn app_on_main<T: Send + 'static>(
     work: impl FnOnce() -> Result<T, String> + Send + 'static,
 ) -> Result<T, String> {
     let (tx, rx) = mpsc::channel();
-    app.run_on_main_thread(move || {
+    app.post(move || {
         match tx.send(work()) {
             Ok(()) => {}
             // A failure after the request ended was not reported by that request, so it is left as an error line.
@@ -2011,10 +2001,7 @@ fn reload(host: &Host, window: &Window) -> Result<Value, Failure> {
     } else {
         let target = window.clone();
         on_main(window, move || {
-            crate::windows::root_view(&target)
-                .ok_or_else(|| "the main page is gone".to_string())?
-                .reload()
-                .map_err(|error| error.to_string())
+            target.start_workbench().map_err(|error| error.to_string())
         })
         .map_err(internal)?;
     }
@@ -2066,16 +2053,12 @@ pub fn presented(window: &Window, timeout: Duration) -> Result<f64, Failure> {
     let deadline = Instant::now() + timeout;
     let data = window_data(window).map_err(internal)?;
     let wait_frame = || -> Result<f64, Failure> {
-        let platform = platform::current().map_err(internal)?;
-        let main = root_view_on_main(window).map_err(internal)?;
         let (tx, rx) = mpsc::channel();
-        let failed = tx.clone();
-        main.with_webview(move |view| {
-            let done = tx.clone();
-            if let Err(error) = platform.after_settled(
-                &view,
-                Box::new(move |displayed| {
-                    match done.send(displayed) {
+        let settled = window.clone();
+        on_main(window, move || {
+            settled
+                .after_settled(move |displayed| {
+                    match tx.send(displayed) {
                         Ok(()) => {}
                         // A failure after the request ended was not reported by that request, so it is left as an error
                         // line.
@@ -2085,13 +2068,8 @@ pub fn presented(window: &Window, timeout: Duration) -> Result<f64, Failure> {
                             "presentation completion arrived after its request ended",
                         ),
                     }
-                }),
-            ) {
-                // A failure after the request ended was not reported by that request, so it is left as an error line.
-                if let Err(mpsc::SendError(Err(error))) = failed.send(Err(error)) {
-                    log_error("presentation", error);
-                }
-            }
+                })
+                .map_err(|error| error.to_string())
         })
         .map_err(internal)?;
         let remaining = deadline
@@ -2244,12 +2222,12 @@ impl Host {
                 if !data.ready.load(Ordering::Relaxed) {
                     return Err("the main page is not ready".to_string());
                 }
-                emit_to(
-                    &self.0,
-                    &label,
-                    "exposure-request",
-                    json!({"id": id, "method": method, "params": params}),
-                )?;
+                window
+                    .emit(
+                        "exposure-request",
+                        json!({"id": id, "method": method, "params": params}),
+                    )
+                    .map_err(|error| error.to_string())?;
                 sent();
                 Ok(())
             })
@@ -2388,7 +2366,7 @@ impl Host {
             })(),
             "host.hit" => (|| hit(window, number(arguments, "x")?, number(arguments, "y")?))(),
             "host.quit" => {
-                crate::event_record::quit_with_cause("quit-command", || self.0.exit(0));
+                crate::event_record::quit_with_cause("quit-command", || self.0.quit());
                 Ok(Value::Null)
             }
             _ => return None,

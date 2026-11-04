@@ -1,7 +1,11 @@
 //! Checks the framework port of the Tauri framework adapter (docs/spec/hosts.md#mygo-host).
 
+use std::borrow::Cow;
+use std::sync::{Arc, Mutex};
+
+use soksak_host::assets::{Assets, ReportingAssets};
 use soksak_host::framework::WindowEvent;
-use soksak_host_tauriv2::{Framework, Frontend};
+use soksak_host_tauriv2::{Framework, Frontend, PageLookups};
 
 fn implements_framework<T: soksak_host::Framework>() {}
 fn implements_frontend<T: soksak_host::Frontend>() {}
@@ -27,19 +31,14 @@ fn the_tauri_framework_names_the_application_of_the_endpoint() {
 fn each_window_event_of_tauri_is_an_event_of_the_frontend() {
     let size = tauri::PhysicalSize::new(1, 2);
     let position = tauri::PhysicalPosition::new(3, 4);
-    assert!(matches!(
+    assert_eq!(
         soksak_host_tauriv2::window_event(&tauri::WindowEvent::Resized(size)),
-        Some(WindowEvent::Resized(soksak_host::framework::PhysicalSize {
-            width: 1,
-            height: 2
-        }))
-    ));
-    assert!(matches!(
+        Some(WindowEvent::Resized)
+    );
+    assert_eq!(
         soksak_host_tauriv2::window_event(&tauri::WindowEvent::Moved(position)),
-        Some(WindowEvent::Moved(
-            soksak_host::framework::PhysicalPosition { x: 3, y: 4 }
-        ))
-    ));
+        Some(WindowEvent::Moved)
+    );
     assert!(matches!(
         soksak_host_tauriv2::window_event(&tauri::WindowEvent::Focused(true)),
         Some(WindowEvent::Focused(true))
@@ -52,6 +51,95 @@ fn each_window_event_of_tauri_is_an_event_of_the_frontend() {
         soksak_host_tauriv2::window_event(&tauri::WindowEvent::Destroyed),
         Some(WindowEvent::Destroyed)
     ));
+}
+
+/// The page of the Tauri start document comes from the page origin of the adapter (docs/spec/native-host.md#page-start).
+// contract: page.start.requires-window
+#[test]
+fn the_start_document_answers_the_page_origin_of_tauri() {
+    let response = soksak_host::start::serve(
+        soksak_host_tauriv2::PAGE_ORIGIN,
+        soksak_host::start::CORE,
+        soksak_host::start::START_DOCUMENT_PATH,
+        "main",
+        &mut |_| Ok(vec![]),
+    );
+    assert_eq!(
+        response.headers()["Access-Control-Allow-Origin"],
+        "tauri://localhost"
+    );
+}
+
+/// The page files of the lookup tests: `present.js` and the start document.
+struct PageFiles;
+
+impl Assets for PageFiles {
+    fn get(&self, key: &str) -> Option<Cow<'_, [u8]>> {
+        match key {
+            "/present.js" => Some(Cow::Borrowed(&b"ok"[..])),
+            "/index.html" => Some(Cow::Borrowed(&b"<html>"[..])),
+            _ => None,
+        }
+    }
+}
+
+// The asset resolver looks up `<path>.html` and `<path>/index.html` after a path that it does not find, and those two
+// lookups are not requests of the page.
+// contract: assets.missing.writes-one-error-line-for-each-path
+#[test]
+fn the_lookups_after_a_missing_path_are_not_requests_of_the_page() {
+    let reported = Arc::new(Mutex::new(Vec::<String>::new()));
+    let sink = reported.clone();
+    let lookups = PageLookups::new(ReportingAssets::new(
+        Box::new(PageFiles),
+        Box::new(move |path| sink.lock().unwrap().push(path.to_string())),
+    ));
+    for path in [
+        "/present.js",
+        "/missing.js",
+        "/missing.js.html",
+        "/missing.js/index.html",
+        "/missing.js",
+        "/other.css",
+        "/other.css.html",
+        "/other.css/index.html",
+        "/page.html",
+        "/page.html.html",
+        "/page.html/index.html",
+        "/",
+        "/no-extension",
+    ] {
+        let _ = lookups.get(path);
+    }
+    assert_eq!(
+        *reported.lock().unwrap(),
+        ["/missing.js", "/other.css", "/page.html"]
+    );
+}
+
+// contract: assets.missing.does-not-answer-with-the-start-document
+#[test]
+fn a_missing_file_is_not_answered_with_the_start_document() {
+    let lookups = PageLookups::new(ReportingAssets::new(Box::new(PageFiles), Box::new(|_| {})));
+    let get = |path: &str| lookups.get(path).is_some();
+    // The asset resolver looks up `<path>`, `<path>.html`, `<path>/index.html` and then the start document.
+    assert!(!get("/missing.js"));
+    assert!(!get("/missing.js.html"));
+    assert!(!get("/missing.js/index.html"));
+    assert!(
+        !get("/index.html"),
+        "the start document answered a missing file"
+    );
+    // The start document and a document route are served.
+    assert!(get("/index.html"), "the start document is not served");
+    assert!(!get("/route"));
+    assert!(!get("/route.html"));
+    assert!(!get("/route/index.html"));
+    assert!(
+        get("/index.html"),
+        "the start document is not served as the fallback of a route"
+    );
+    assert!(get("/present.js"));
 }
 
 // contract: binding.reply.absent-value-is-null

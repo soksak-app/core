@@ -3,7 +3,7 @@ import test from "node:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { allowedEndpointMethods, auditCommonOnlyKeys, auditHostParity, auditMenuTables, auditPlatformCallers, commonOnlyKeys, goMenuTables, goPlatformMethods, hostProductSources, libraryCrate, rustHandlers, rustMenuTables, rustPlatformMethods, snake, specMenuTables, withoutRustTestItems } from "../check-host-parity.mjs";
+import { allowedEndpointMethods, allowedPortMethods, auditCommonOnlyKeys, auditHostParity, auditMenuTables, auditPlatformCallers, auditPortMethods, commonOnlyKeys, goMenuTables, goPlatformMethods, goPortMethods, hostProductSources, libraryCrate, rustHandlers, rustMenuTables, rustPlatformMethods, rustPortMethods, snake, specMenuTables, withoutRustTestItems } from "../check-host-parity.mjs";
 
 // The base sources of the injection checks. Changing only one name in the real sources proves that each failure is produced mechanically.
 const sources = () => ({
@@ -29,6 +29,8 @@ const sources = () => ({
   tauriv2ApplicationSources: applicationSources().tauriv2,
   wailsv3ApplicationSources: applicationSources().wailsv3,
   tauriv2Crate: tauriv2Crate,
+  tauriv2PortSource: rustPortFixture,
+  wailsv3PortSource: goPortFixture,
 });
 
 // The platform interfaces of the two hosts and host sources outside the platform folder that call each method; in Go one method is passed
@@ -99,6 +101,8 @@ const hostsFixture = `## Allowed differences
 | --- | --- | --- | --- |
 | H1 | none | \`build.rs\` | file difference |
 | E1 | \`diagnostics.heap.profile\` | none | endpoint method difference |
+| P1 | \`Framework.Step\` | none | port method difference |
+| P2 | none | \`Frontend.scale_factor\` | port method difference |
 
 ### Framework table
 
@@ -107,6 +111,10 @@ const hostsFixture = `## Allowed differences
 | H9 | \`tests/framework_log_test.go\` | none | file difference |
 
 ## Process lifecycle`;
+
+// The framework ports of the two languages: the methods that both have, and the two that rows P1 and P2 of the fixture list.
+const goPortFixture = 'type Framework interface {\n\t// ApplicationName names it.\n\tApplicationName() string\n\tStep(task func())\n\tWindows() []Frontend\n}\n\ntype Frontend interface {\n\tNativeWindow() unsafe.Pointer\n\tIsMaximized() bool\n}\n';
+const rustPortFixture = 'pub trait Framework: Send + Sync {\n    /// Names it.\n    fn application_name(&self) -> &\'static str;\n    fn windows(&self) -> Vec<Arc<dyn Frontend>>;\n}\n\npub trait Frontend: Send + Sync {\n    fn native_window(&self) -> Result<*mut c_void>;\n    fn is_maximized(&self) -> Result<bool>;\n    fn scale_factor(\n        &self,\n    ) -> Result<f64>;\n}\n';
 
 const specFixture = `## Application menu
 
@@ -193,6 +201,46 @@ test("an endpoint method of one language passes only when the language table dec
   const allowed = allowedEndpointMethods(tables);
   assert.deepEqual([...allowed.go], ["diagnostics.heap.profile"]);
   assert.deepEqual([...allowed.rust], []);
+});
+
+test("the methods of the framework ports are read from the Go interfaces and the Rust traits", { timeout: 1000 }, () => {
+  assert.deepEqual(Object.fromEntries(goPortMethods(goPortFixture)), {
+    Framework: ["ApplicationName", "Step", "Windows"], Frontend: ["NativeWindow", "IsMaximized"],
+  });
+  assert.deepEqual(Object.fromEntries(rustPortMethods(rustPortFixture)), {
+    Framework: ["application_name", "windows"], Frontend: ["native_window", "is_maximized", "scale_factor"],
+  });
+  assert.throws(() => goPortMethods("type Framework interface {\n}\n"), /framework.go has no Frontend interface/);
+  assert.throws(() => rustPortMethods("pub trait Frontend {\n}\n"), /framework.rs has no Framework trait/);
+});
+
+test("a method of one framework port passes only when a row P lists it", { timeout: 1000 }, () => {
+  const changed = sources();
+  assert.deepEqual(auditHostParity(changed), []);
+  changed.wailsv3PortSource = goPortFixture.replace("IsMaximized() bool", "IsMaximised() bool");
+  assert.deepEqual(auditHostParity(changed), [
+    "the Go Frontend port has IsMaximised, which the Rust Frontend port does not have (is_maximised) and no row P lists",
+    "the Rust Frontend port has is_maximized, which the Go Frontend port does not have and no row P lists",
+  ]);
+});
+
+test("a row P of a method that its language does not have, or that both languages have, fails", { timeout: 1000 }, () => {
+  const go = goPortMethods(goPortFixture);
+  const rust = rustPortMethods(rustPortFixture);
+  const allowed = { go: new Map([["Framework.Windows", "P3"], ["Framework.Quit", "P4"]]), rust: new Map([["Frontend.scale_factor", "P2"], ["Frontend.focus", "P5"]]) };
+  go.get("Framework").splice(1, 1);
+  assert.deepEqual(auditPortMethods(go, rust, allowed), [
+    "row P3 lists Framework.Windows, which both framework ports have",
+    "row P4 lists Framework.Quit, which the Go framework port does not have",
+    "row P5 lists Frontend.focus, which the Rust framework port does not have",
+  ]);
+});
+
+test("a row P reads the port methods of each cell and refuses a cell without one", { timeout: 1000 }, () => {
+  const allowed = allowedPortMethods(hostsFixture);
+  assert.deepEqual([...allowed.go], [["Framework.Step", "P1"]]);
+  assert.deepEqual([...allowed.rust], [["Frontend.scale_factor", "P2"]]);
+  assert.throws(() => allowedPortMethods(hostsFixture.replace("\`Framework.Step\`", "Step")), /row P1 has no port method or none in the go cell/);
 });
 
 test("hyphenated diagnostic endpoint methods are read from both hosts", () => {

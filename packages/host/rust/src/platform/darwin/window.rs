@@ -17,7 +17,7 @@ use super::super::{Frame, Handle};
 /// Returns the NSWindow address of the window.
 pub fn handle(window: &Window) -> Result<Handle, String> {
     window
-        .ns_window()
+        .native_window()
         .map(|h| h as Handle)
         .map_err(|e| e.to_string())
 }

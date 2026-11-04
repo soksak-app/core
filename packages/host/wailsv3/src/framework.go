@@ -64,7 +64,7 @@ func (Framework) InstallDock(newWindow func()) error {
 // NewWindow creates a window whose content reaches under a hidden title bar.
 func (Framework) NewWindow(options host.WindowOptions) host.Frontend {
 	return Frontend{window: application.Get().Window.NewWithOptions(application.WebviewWindowOptions{
-		Name: options.Name, Title: options.Title, Width: options.Width, Height: options.Height,
+		Name: options.Name, Title: options.Title, Width: WailsPixels(options.Width), Height: WailsPixels(options.Height),
 		Mac: application.MacWindow{TitleBar: application.MacTitleBarHidden},
 		// The window is shown after the first screen is displayed (docs/spec/native-host.md#page-start). When the preparation ends, reveal shows it.
 		URL: options.URL, DevToolsEnabled: true, BackgroundColour: application.NewRGB(16, 17, 23), Hidden: true,

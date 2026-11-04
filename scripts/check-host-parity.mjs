@@ -6,7 +6,8 @@
 // Proposition 6 (platform callers) checks that a production source of each host outside src/platform calls every method of its
 // platform interface from code that the product runs: a call inside a free function counts only when an entry point, an
 // application source or another counting call reaches that function, so a function that only tests call does not keep a
-// platform method called. The comparison of the actual menu bar belongs to the window check layer, and propositions 4 and 5 are the next
+// platform method called. Proposition 7 (framework port) checks that the Go and Rust framework ports have the same methods outside the
+// rows P of the language table. The comparison of the actual menu bar belongs to the window check layer, and propositions 4 and 5 are the next
 // extension.
 import { LANGUAGE_TABLE, allowedDifferenceTables } from './check-hosts.mjs';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -227,6 +228,87 @@ export function goPlatformMethods(source) {
   return methods;
 }
 
+// The ports of the framework port (docs/spec/hosts.md#host-tree): the interfaces of src/framework.go and the traits of
+// src/framework.rs of the language host libraries.
+export const PORTS = ['Framework', 'Frontend'];
+
+/** The method names of each port that the Go framework port (src/framework.go) declares, by port name. */
+export function goPortMethods(source) {
+  const ports = new Map();
+  for (const port of PORTS) {
+    const block = new RegExp(`^type ${port} interface \\{\\n([\\s\\S]*?)^\\}`, 'm').exec(source);
+    if (!block) throw new Error(`framework.go has no ${port} interface`);
+    ports.set(port, [...block[1].matchAll(/^\t([A-Z]\w*)\(/gm)].map((match) => match[1]));
+  }
+  return ports;
+}
+
+/** The method names of each port that the Rust framework port (src/framework.rs) declares, by port name. */
+export function rustPortMethods(source) {
+  const ports = new Map();
+  for (const port of PORTS) {
+    const block = new RegExp(`^pub trait ${port}\\b[^{\\n]*\\{\\n([\\s\\S]*?)^\\}`, 'm').exec(source);
+    if (!block) throw new Error(`framework.rs has no ${port} trait`);
+    ports.set(port, [...block[1].matchAll(/^ {4}fn ([a-z_][a-z0-9_]*)/gm)].map((match) => match[1]));
+  }
+  return ports;
+}
+
+/**
+ * Reads the methods that only one language has from the rows P of the language table of the allowed differences of the host
+ * specification (docs/spec/hosts.md): each cell lists `<port>.<method>` names in backticks, in the spelling of its language, or
+ * none.
+ */
+export function allowedPortMethods(hostsMarkdown) {
+  const rows = allowedDifferenceTables(hostsMarkdown).get(LANGUAGE_TABLE.title);
+  const allowed = { go: new Map(), rust: new Map() };
+  for (const [id, row] of rows) {
+    if (!/^P\d+$/.test(id)) continue;
+    for (const [language, cell] of [['go', row[LANGUAGE_TABLE.left]], ['rust', row[LANGUAGE_TABLE.right]]]) {
+      if (cell === 'none') continue;
+      const names = [...(cell ?? '').matchAll(/`(\w+)\.(\w+)`/g)].map((match) => `${match[1]}.${match[2]}`);
+      if (names.length === 0) throw new Error(`hosts spec row ${id} has no port method or none in the ${language} cell: ${cell}`);
+      for (const name of names) allowed[language].set(name, id);
+    }
+  }
+  return allowed;
+}
+
+/**
+ * Proposition 7 (framework port): each port has the same methods in both languages, a Go method and a Rust method being the same
+ * when the snake case of the Go name is the Rust name. A method that one language has passes only when a row P lists it in the
+ * cell of its language, and a row P that lists a method that the language does not have, or that both languages have, fails.
+ */
+export function auditPortMethods(go, rust, allowed) {
+  const failures = [];
+  for (const port of PORTS) {
+    const goNames = go.get(port) ?? [];
+    const rustNames = rust.get(port) ?? [];
+    const rustSet = new Set(rustNames);
+    const goSet = new Set(goNames.map(snake));
+    for (const name of goNames.filter((method) => !rustSet.has(snake(method)) && !allowed.go.has(`${port}.${method}`))) {
+      failures.push(`the Go ${port} port has ${name}, which the Rust ${port} port does not have (${snake(name)}) and no row P lists`);
+    }
+    for (const name of rustNames.filter((method) => !goSet.has(method) && !allowed.rust.has(`${port}.${method}`))) {
+      failures.push(`the Rust ${port} port has ${name}, which the Go ${port} port does not have and no row P lists`);
+    }
+  }
+  for (const [language, names, other, spelling] of [
+    ['Go', go, rust, (method) => snake(method)],
+    ['Rust', rust, go, (method) => method],
+  ]) {
+    for (const [name, id] of allowed[language.toLowerCase()]) {
+      const [port, method] = name.split('.');
+      if (!(names.get(port) ?? []).includes(method)) {
+        failures.push(`row ${id} lists ${name}, which the ${language} framework port does not have`);
+      } else if ((other.get(port) ?? []).some((item) => (language === 'Go' ? item : snake(item)) === spelling(method))) {
+        failures.push(`row ${id} lists ${name}, which both framework ports have`);
+      }
+    }
+  }
+  return failures;
+}
+
 // A line whose first text is a line comment calls nothing; it becomes empty, so the lines keep their positions. A cgo `//export` line
 // is a directive that makes C a caller of the function below it, and it stays.
 const withoutCommentLines = (source) => source.split('\n')
@@ -412,7 +494,7 @@ export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, wailsv3Runtim
   hostContractSpec, tauriv2MenuSource, wailsv3MenuSource, hostsSpec, endpointSpec,
   tauriv2DeclarationSource, wailsv3DeclarationSource, workbenchDeclarationSource,
   tauriv2PlatformSource, wailsv3PlatformSource, tauriv2ProductSources, wailsv3ProductSources,
-  tauriv2ApplicationSources, wailsv3ApplicationSources, tauriv2Crate, tauriv2AdapterCrate }) {
+  tauriv2ApplicationSources, wailsv3ApplicationSources, tauriv2Crate, tauriv2AdapterCrate, tauriv2PortSource, wailsv3PortSource }) {
   const failures = [];
   const tauriv2 = {
     calls: runtimeCalls(tauriv2Runtime, 'const COMMAND = {', 'tauriv2 runtime'),
@@ -466,6 +548,7 @@ export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, wailsv3Runtim
     { language: 'rust', crate: tauriv2Crate, adapterCrates: tauriv2AdapterCrate ? [tauriv2AdapterCrate] : [], applications: tauriv2ApplicationSources }));
   failures.push(...auditPlatformCallers('wailsv3', goPlatformMethods(wailsv3PlatformSource), wailsv3ProductSources,
     { language: 'go', applications: wailsv3ApplicationSources }));
+  failures.push(...auditPortMethods(goPortMethods(wailsv3PortSource), rustPortMethods(tauriv2PortSource), allowedPortMethods(hostsSpec)));
   return failures;
 }
 
@@ -514,6 +597,8 @@ if (process.argv[1] && process.argv[1].endsWith('check-host-parity.mjs')) {
     tauriv2ApplicationSources: { ...applicationSources('packages/host/tauriv2/src', '.rs'), ...applicationSources('apps/tauriv2/src', '.rs') },
     wailsv3ApplicationSources: { ...applicationSources('packages/host/wailsv3/src', '.go'), ...applicationSources('apps/wailsv3/src', '.go') },
     tauriv2Crate: libraryCrate(read('packages/host/rust/Cargo.toml'), 'packages/host/rust/Cargo.toml'),
+    tauriv2PortSource: read('packages/host/rust/src/framework.rs'),
+    wailsv3PortSource: read('packages/host/go/src/framework.go'),
     tauriv2AdapterCrate: ((crate) => ({ ...crate, root: `packages/host/tauriv2/src/${crate.root}` }))(
       libraryCrate(read('packages/host/tauriv2/Cargo.toml'), 'packages/host/tauriv2/Cargo.toml')),
   });
@@ -522,5 +607,5 @@ if (process.argv[1] && process.argv[1].endsWith('check-host-parity.mjs')) {
     console.error(`host parity: ${failures.length} difference(s)`);
     process.exit(1);
   }
-  console.log('Host parity passed: host.call names, handler wiring, endpoint method sets, the diagnostic builds table, menu tables and common-only keys are equal, and every platform method has a caller');
+  console.log('Host parity passed: host.call names, handler wiring, endpoint method sets, the diagnostic builds table, menu tables, common-only keys and the methods of the framework ports are equal, and every platform method has a caller');
 }

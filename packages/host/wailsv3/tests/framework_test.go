@@ -26,6 +26,16 @@ func TestTheWailsFrameworkNamesTheApplicationOfTheEndpoint(t *testing.T) {
 	}
 }
 
+// The port gives logical lengths as float64 and Wails holds integers, so the adapter takes the nearest integer.
+// contract: application.framework.lengths-are-logical-pixels
+func TestALogicalLengthOfThePortIsTheNearestIntegerOfWails(t *testing.T) {
+	for length, want := range map[float64]int{1200: 1200, 1200.4: 1200, 1200.5: 1201, -10.6: -11} {
+		if got := adapter.WailsPixels(length); got != want {
+			t.Errorf("%v is %d pixels of Wails, want %d", length, got, want)
+		}
+	}
+}
+
 // contract: application.framework.window-events-are-port-events
 func TestEachWindowEventOfTheFrontendIsAnEventOfWails(t *testing.T) {
 	for event, want := range map[host.WindowEvent]events.WindowEventType{

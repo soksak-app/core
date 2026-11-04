@@ -206,6 +206,89 @@ export function auditLibraryImports(paths, read) {
   return lines.filter((line, index) => lines.indexOf(line) === index);
 }
 
+// The language host libraries name no framework outside their comments (docs/spec/hosts.md#host-tree): no identifier and no string
+// of a source or a test of packages/host/go or packages/host/rust has a word that names a framework or its host, and no contract
+// declaration of their files names one. A word is a part of an identifier or a string split at underscores and at a change of case.
+const FRAMEWORK_WORD = /^(?:wails|tauri|wry|tao|muda|mygo)(?:v[0-9]+)?$/i;
+const LIBRARY_SOURCE = /\.(go|rs|m|h|c)$/;
+const WORD = /[A-Z]+(?![a-z])[0-9]*|[A-Z]?[a-z]+[0-9]*|[0-9]+/g;
+const frameworkWords = (text) => [...text.matchAll(/[A-Za-z0-9_]+/g)]
+  .flatMap((token) => token[0].split("_").flatMap((part) => part.match(WORD) ?? []))
+  .filter((word) => FRAMEWORK_WORD.test(word));
+
+/**
+ * Returns text with each comment replaced by spaces, so the lines keep their numbers. language is go, rust or c (also Objective-C).
+ * A string, a Go raw string, a Rust raw string and a character literal are kept, so a comment marker inside them starts no comment;
+ * a Rust block comment nests.
+ */
+export function withoutComments(text, language) {
+  const blank = (part) => part.replace(/[^\n]/g, " ");
+  let out = "";
+  let index = 0;
+  while (index < text.length) {
+    const char = text[index];
+    const next = text[index + 1];
+    let end;
+    if (char === "/" && next === "/") {
+      end = text.indexOf("\n", index);
+      if (end < 0) end = text.length;
+      out += blank(text.slice(index, end));
+    } else if (char === "/" && next === "*") {
+      let depth = 1;
+      end = index + 2;
+      while (end < text.length && depth > 0) {
+        if (language === "rust" && text.startsWith("/*", end)) { depth += 1; end += 2; }
+        else if (text.startsWith("*/", end)) { depth -= 1; end += 2; }
+        else end += 1;
+      }
+      out += blank(text.slice(index, end));
+    } else {
+      const raw = language === "rust" && !/\w/.test(text[index - 1] ?? "") ? /^b?r(#*)"/.exec(text.slice(index, index + 260)) : null;
+      const character = char === "'" ? /^'(?:\\(?:x[0-9a-fA-F]{2}|u\{[0-9a-fA-F]+\}|.)|[^\\'\n])'/.exec(text.slice(index, index + 16)) : null;
+      if (raw) {
+        const close = `"${raw[1]}`;
+        const at = text.indexOf(close, index + raw[0].length);
+        end = at < 0 ? text.length : at + close.length;
+      } else if (char === '"' || (language === "go" && char === "`")) {
+        end = index + 1;
+        while (end < text.length && text[end] !== char) end += char === '"' && text[end] === "\\" ? 2 : 1;
+        end += 1;
+      } else if (character) {
+        end = index + character[0].length;
+      } else {
+        end = index + 1;
+      }
+      out += text.slice(index, end);
+    }
+    index = end;
+  }
+  return out;
+}
+
+/**
+ * Returns the lines of the language host libraries whose code outside the comments names a framework, and the contract declarations
+ * of their files that name one. paths are repository-relative paths and read(path) is their text; the files of other packages are
+ * not read.
+ */
+export function auditLibraryNames(paths, read) {
+  const errors = [];
+  for (const path of paths) {
+    if (!Object.values(LIBRARIES).some((library) => path.startsWith(library)) || !LIBRARY_SOURCE.test(path)) continue;
+    const text = read(path);
+    const language = path.endsWith(".go") ? "go" : path.endsWith(".rs") ? "rust" : "c";
+    withoutComments(text, language).split("\n").forEach((line, index) => {
+      for (const word of frameworkWords(line)) errors.push(`${path}:${index + 1}: the language host library names the framework ${word}`);
+    });
+    text.split("\n").forEach((line, index) => {
+      const declaration = /^\s*\/\/\s*contract:\s*(\S+)/.exec(line);
+      for (const word of declaration ? frameworkWords(declaration[1]) : []) {
+        errors.push(`${path}:${index + 1}: the contract case ${declaration[1]} of the language host library names the framework ${word}`);
+      }
+    });
+  }
+  return errors.filter((line, index) => errors.indexOf(line) === index);
+}
+
 // Checks for stub implementations (a regression guard).
 const STUB_PATTERNS = [
   /TODO:\s*Implement/,
@@ -549,6 +632,7 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
   const errors = auditPrefixes(tracked);
   errors.push(...auditHostPairs(tracked));
   errors.push(...auditLibraryImports(tracked, (file) => readFileSync(`${ROOT}${file}`, "utf8")));
+  errors.push(...auditLibraryNames(tracked, (file) => readFileSync(`${ROOT}${file}`, "utf8")));
   for (const file of tracked.filter((path) => path.startsWith(COMMAND_SOURCES) && path.endsWith(".rs"))) {
     errors.push(...findUndecodedCommandArguments(readFileSync(`${ROOT}${file}`, "utf8"), file));
   }

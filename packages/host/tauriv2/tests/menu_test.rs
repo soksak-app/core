@@ -5,6 +5,7 @@
 //! compares the built menu bar itself with host.menu.
 
 use soksak_host::menu;
+use soksak_host_tauriv2::accelerator;
 
 /// The list of the titles of the top-level menus by language.
 fn menu_titles(language: &str) -> Vec<String> {
@@ -53,24 +54,15 @@ fn view_menu_has_full_screen_and_text_size() {
     assert!(!menu::runs_page_command("new-window"));
     // The shortcuts are converted from the key format of the contract table to the format of the menu library. The text
     // sizes are =, - and 0.
-    assert_eq!(menu::accelerator("cmd+=").unwrap(), "CmdOrCtrl+=");
-    assert_eq!(menu::accelerator("cmd+-").unwrap(), "CmdOrCtrl+-");
-    assert_eq!(menu::accelerator("cmd+0").unwrap(), "CmdOrCtrl+0");
-    assert_eq!(
-        menu::accelerator("shift+cmd+n").unwrap(),
-        "Shift+CmdOrCtrl+n"
-    );
-    assert_eq!(
-        menu::accelerator("ctrl+cmd+f").unwrap(),
-        "Control+CmdOrCtrl+f"
-    );
-    assert_eq!(
-        menu::accelerator("opt+cmd+w").unwrap(),
-        "Option+CmdOrCtrl+w"
-    );
+    assert_eq!(accelerator("cmd+=").unwrap(), "CmdOrCtrl+=");
+    assert_eq!(accelerator("cmd+-").unwrap(), "CmdOrCtrl+-");
+    assert_eq!(accelerator("cmd+0").unwrap(), "CmdOrCtrl+0");
+    assert_eq!(accelerator("shift+cmd+n").unwrap(), "Shift+CmdOrCtrl+n");
+    assert_eq!(accelerator("ctrl+cmd+f").unwrap(), "Control+CmdOrCtrl+f");
+    assert_eq!(accelerator("opt+cmd+w").unwrap(), "Option+CmdOrCtrl+w");
     // close-all is provided by the system, so the key cell of the table is empty.
-    assert!(menu::accelerator("cmd+").is_err());
-    assert!(menu::accelerator("meta+w").is_err());
+    assert!(accelerator("cmd+").is_err());
+    assert!(accelerator("meta+w").is_err());
 }
 
 // contract: menu.application.view-has-full-screen-and-text-size

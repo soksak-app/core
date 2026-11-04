@@ -1407,7 +1407,7 @@ pub(crate) fn close_surface(window: &crate::framework::Window, surface: &str) {
     log_failure(
         "image close",
         window
-            .run_on_main_thread(move || {
+            .post(move || {
                 if handles.is_empty() {
                     return;
                 }

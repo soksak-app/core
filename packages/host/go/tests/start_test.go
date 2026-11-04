@@ -39,11 +39,11 @@ func TestStartAssetsStartTheRequestingWindowOnly(t *testing.T) {
 		return []byte(`{"workspace":{},"controls":null}`), nil
 	}
 	frontend := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "frontend "+r.URL.Path) })
-	handler := host.StartAssets(start, "x-wails-window-id")(frontend)
+	handler := host.StartAssets(start, "x-fixture-window-id")(frontend)
 	get := func(path, window string) (int, string, string, string) {
 		request := httptest.NewRequest(http.MethodGet, path, nil)
 		if window != "" {
-			request.Header.Set("x-wails-window-id", window)
+			request.Header.Set("x-fixture-window-id", window)
 		}
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)

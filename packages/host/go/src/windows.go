@@ -205,12 +205,12 @@ func (h *Host) WindowState(ctx context.Context) (*WindowGeometry, error) {
 	if err != nil {
 		return nil, err
 	}
-	if s.window.IsMaximised() || s.window.IsFullscreen() || s.window.IsMinimised() {
+	if s.window.IsMaximized() || s.window.IsFullscreen() || s.window.IsMinimized() {
 		return nil, nil
 	}
 	x, y := s.window.Position()
 	width, height := s.window.Size()
-	return &WindowGeometry{X: int32(x), Y: int32(y), Width: float64(width), Height: float64(height)}, nil
+	return &WindowGeometry{X: int32(math.Round(x)), Y: int32(math.Round(y)), Width: width, Height: height}, nil
 }
 
 func (h *Host) WindowReady(ctx context.Context) error {

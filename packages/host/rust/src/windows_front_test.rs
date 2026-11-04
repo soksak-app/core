@@ -14,7 +14,7 @@ impl WindowFront for FrontRecord {
         Ok(())
     }
 
-    fn set_focus(&self) -> crate::framework::Result<()> {
+    fn focus(&self) -> crate::framework::Result<()> {
         self.calls.borrow_mut().push("focus");
         Ok(())
     }

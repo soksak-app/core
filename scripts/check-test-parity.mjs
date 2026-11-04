@@ -4069,10 +4069,10 @@ const FEATURE_LINKS = [
   {
     id: "F132",
     implementation: [
-      { file: "packages/host/rust/src/assets.rs", symbol: "Step::Start => None" },
+      { file: "packages/host/tauriv2/src/host.rs", symbol: "Lookup::Start => None" },
     ],
     tests: [
-      { file: "packages/host/rust/tests/assets_test.rs", id: "a_missing_file_is_not_answered_with_the_start_document" },
+      { file: "packages/host/tauriv2/tests/framework_test.rs", id: "a_missing_file_is_not_answered_with_the_start_document" },
     ],
     expected: "The Tauri host does not answer a path with a file extension that names no file with the start document.",
     levels: ["unit"],
@@ -4800,7 +4800,7 @@ const FEATURE_LINKS = [
     id: "F335-8",
     implementation: [
       { file: "packages/host/go/src/host.go", symbol: "func (s *Session) Shutdown() {" },
-      { file: "packages/host/rust/src/windows.rs", symbol: "WindowEvent::CloseRequested { .. } =>" },
+      { file: "packages/host/rust/src/windows.rs", symbol: "window.on_closing(move || {" },
     ],
     tests: [
       { file: "native/darwin/tests/application_end_processes_test.m", id: "the native library offers no operation that kills a WebContent process" },
