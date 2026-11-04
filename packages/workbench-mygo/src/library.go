@@ -179,7 +179,7 @@ func (s *Shell) submitForm() error {
 
 // drawLibrary draws the library screen.
 func (s *Shell) drawLibrary(c *ui.Context, width, height float32) {
-	ui.Column(c).Size(width, height).Padding(s.metrics.chromeH).Gap(s.metrics.tabsPad * 3).Children(func() {
+	ui.Column(c).Size(width, height).Padding(s.chromeHeight()).Gap(s.metrics.tabsPad * 3).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Gap(s.metrics.tabsGap).Children(func() {
 			for _, page := range []struct{ id, label string }{{"projects", "프로젝트"}, {"plugins", "플러그인"}} {
 				s.barText(c, s.binder.Press(c, "core.library.page", "core.library.page", page.id, map[string]string{"page": page.id}), page.label,

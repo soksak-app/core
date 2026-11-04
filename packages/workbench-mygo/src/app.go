@@ -3,6 +3,8 @@ package workbench
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -216,8 +218,15 @@ func (s *Shell) Event(name string, data []any) {
 				}
 			})
 		})
+	case "menu-command":
+		s.menuCommand(data)
+	case "debug-save-progress":
+		s.debugSaveProgress(data)
+	case "debug-save-done":
+		s.debugSaveDone(data)
 	case "log-policy":
 		s.events.Follow(data...)
+		s.followLogLevels(data)
 	case "workspace-changed":
 		s.workspaceChanged()
 	case "files-dropped":
@@ -225,6 +234,50 @@ func (s *Shell) Event(name string, data []any) {
 	default:
 		if !s.noticeEvent(name, data) {
 			s.tabEvent(name, data)
+			s.eventLeft(name)
 		}
+	}
+}
+
+// menuCommand runs the command of a menu item, whose failure the window shows.
+func (s *Shell) menuCommand(data []any) {
+	item, err := eventBody[struct {
+		Name string `json:"name"`
+	}]("menu-command", data)
+	if err != nil {
+		s.fail(err)
+		return
+	}
+	s.binder.run(item.Name, nil)
+}
+
+// eventBody reads the one value of the event name.
+func eventBody[T any](name string, data []any) (T, error) {
+	var body T
+	if len(data) != 1 {
+		return body, fmt.Errorf("the event %s holds %d values", name, len(data))
+	}
+	body, err := decode[T](data[0])
+	if err != nil {
+		return body, fmt.Errorf("the event %s: %w", name, err)
+	}
+	return body, nil
+}
+
+// eventsLeft are the events of the host that a window of this workbench leaves, because nothing it draws reads them.
+var eventsLeft = map[string]bool{"debug-log-changed": true, "diagnostics-tick": true, "diagnostics-unlistened": true, "document-event": true,
+	"document-message": true, "document-state": true, "document-stream": true, "exit-request": true, "exposure-registered": true,
+	"image-detach-ended": true, "image-event": true, "log-policy": true, "memory-pressure": true, "modal-content": true,
+	"modal-position": true, "modal-rendered": true, "overlay-pick": true, "page-ready": true, "plugins-changed": true, "project-activate": true,
+	"project-remove-request": true,
+	"run-began":              true, "run-ended": true, "sidecar-failure": true, "sidecar-message": true, "sidecars-changed": true, "surface-input": true,
+	"surface-pressed": true, "theme": true, "view-call": true, "view-presentation-abandoned": true, "view-process-ended": true,
+	"view-reply": true, "view-responsiveness": true, "view-source-ended": true, "view-source-registered": true, "view-stopped": true,
+	"window-active": true, "window-responder": true}
+
+// eventLeft writes an event that no part of the workbench knows to the application log. The host names notification events by type.
+func (s *Shell) eventLeft(name string) {
+	if !eventsLeft[name] && !strings.HasPrefix(name, "notification-") {
+		s.events.Error(fmt.Sprintf("host event: the host sent the unknown event %s", name))
 	}
 }

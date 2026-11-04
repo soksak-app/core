@@ -66,6 +66,8 @@ func (s *Shell) register() {
 	s.registerPlugins()
 	s.registerSettings()
 	s.registerPicker()
+	s.text.Register(s.registry)
+	s.registerDebug()
 	act(s, "core.projects.browse", func(struct{}) error { s.browse(); return nil })
 	act(s, "core.projects.flush", func(struct{}) error { s.keep(); return nil })
 	command(s, "core.plugins.apply", func(struct{}) (any, error) {

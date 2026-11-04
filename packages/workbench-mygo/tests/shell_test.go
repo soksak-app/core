@@ -179,6 +179,26 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 			return nil, nil
 		}),
 		"sidecarsOutdated": answer("sidecarsOutdated", func(json.RawMessage) (any, error) { return h.pluginHost().outdated, nil }),
+		"debugFiles": answer("debugFiles", func(json.RawMessage) (any, error) {
+			return []map[string]any{{"path": "older.log", "size": 1, "modified": 1}, {"path": "newer.log", "size": 2, "modified": 2}}, nil
+		}),
+		"debugRecord": answer("debugRecord", func(json.RawMessage) (any, error) {
+			return map[string]string{"path": "logs/state-20261104T000000Z.json"}, nil
+		}),
+		"debugSave": answer("debugSave", func(argument json.RawMessage) (any, error) {
+			var request struct{ Path string }
+			if err := json.Unmarshal(argument, &request); err != nil {
+				return nil, err
+			}
+			return map[string]string{"saved": "/saved/" + request.Path}, nil
+		}),
+		"debugRead": answer("debugRead", func(argument json.RawMessage) (any, error) {
+			var request struct{ Path string }
+			if err := json.Unmarshal(argument, &request); err != nil {
+				return nil, err
+			}
+			return map[string]any{"path": request.Path, "size": 4, "kind": "text", "text": "text of " + request.Path}, nil
+		}),
 	}
 }
 

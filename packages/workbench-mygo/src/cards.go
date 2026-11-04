@@ -22,7 +22,7 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 	stage := height - s.metrics.spaceTabH - s.metrics.tabsGap
 	inset := s.stageInset()
 	s.plane.Resize(float64(width-2*inset), float64(stage-2*inset))
-	originX, originY := inset, s.metrics.chromeH+s.metrics.spaceTabH+s.metrics.tabsGap+inset
+	originX, originY := inset, s.chromeHeight()+s.metrics.spaceTabH+s.metrics.tabsGap+inset
 	ui.Box(c).Size(width, stage).DrawOver(func(p *ui.Painter, r ui.Rect) { s.drawRail(p, r, inset) }).Children(func() {
 		for _, card := range s.plane.Cards() {
 			if s.fullscreen != "" && card.ID != s.fullscreen {

@@ -56,6 +56,8 @@ type environmentGrid struct {
 // metrics are the chrome metrics that the shell draws with.
 type metrics struct {
 	chromeH, headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, tabsGap, tabsPad, barTabGap, barTabMaxW, tabPeekW, tabMinW float32
+	// debugW is the width of the debug view, and debugH its largest share of the window height.
+	debugW, debugH float32
 }
 
 func readMetrics(declared *Declarations) (metrics, error) {
@@ -69,6 +71,12 @@ func readMetrics(declared *Declarations) (metrics, error) {
 		*into = float32(value)
 	}
 	read("chrome-row-h", &m.chromeH)
+	read("dbg-card-w", &m.debugW)
+	share, ok := declared.HeightMetric("set-card-max-h")
+	if !ok {
+		failed = errors.New("the chrome metric set-card-max-h has no share of the height")
+	}
+	m.debugH = float32(share)
 	read("head-h", &m.headH)
 	read("foot-h", &m.footH)
 	read("space-tab-h", &m.spaceTabH)
@@ -169,6 +177,10 @@ type Shell struct {
 	starter          pluginStarter
 
 	page string
+
+	text *TextSize
+	// debug is the open debug view, and nil while it is closed.
+	debug *debugState
 	// started is set once the host took the first state of the shell, changed once plugins changed before that, and reloading while the
 	// shell saves before a reload. They belong to the main thread.
 	started, changed, reloading bool
@@ -184,6 +196,10 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	if err != nil {
 		return nil, err
 	}
+	steps, err := TextSteps()
+	if err != nil {
+		return nil, err
+	}
 	var environment struct {
 		pluginStarter
 		Workspace struct {
@@ -196,6 +212,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	}
 	s := &Shell{options: options, metrics: read, palette: palette, registry: NewRegistry(options.Declared), calls: options.Calls,
 		grid: environment.Workspace.Grid, focus: environment.Workspace.Focus, browsing: true, library: newLibraryState(), icons: map[string]*ui.SVG{}, heads: map[string]layout.HeadFit{}}
+	s.text = NewTextSize(shellText{s}, steps)
 	s.events = NewEvents(EventsOptions{Calls: s.calls, Post: options.Post, Report: options.Report, Now: time.Now,
 		After: func(delay time.Duration, task func()) { time.AfterFunc(delay, task) }})
 	s.calls.Observe(s.events.Call)
@@ -282,7 +299,7 @@ func (s *Shell) shortcutConditions() map[string]func() bool {
 // Registry is the registry of the window, which the exposure of the window answers from.
 func (s *Shell) Registry() *Registry { return s.registry }
 
-// Start reads the workspace and tells the host that the window takes events.
+// Start tells the host that the workbench of the window starts, reads the workspace and tells the host that the window takes events.
 func (s *Shell) Start() {
 	s.events.Begin(func() {
 		s.calls.CallInOrder("workspace", "workspace", map[string]string{"kind": "snapshot"}, func(value any, err error) {
@@ -438,15 +455,17 @@ func (s *Shell) View(c *ui.Context) {
 	theme.TextMuted = s.palette.Muted
 	theme.Border = s.palette.Edge
 	theme.Danger = s.palette.No
+	theme.FontSize = theme.Rem(1) * float32(s.text.Frame())
 	c.SetTheme(&theme)
 	s.keys.Declare(c)
 	ui.Column(c).Size(width, height).Background(s.palette.Bg).TextColor(s.palette.Fg).Clip().Children(func() {
 		s.drawChrome(c, width)
 		if s.browsing || s.opened() == nil {
-			s.drawLibrary(c, width, height-s.metrics.chromeH)
-			return
+			s.drawLibrary(c, width, height-s.chromeHeight())
+		} else {
+			s.drawWork(c, width, height-s.chromeHeight())
 		}
-		s.drawWork(c, width, height-s.metrics.chromeH)
+		s.drawDebug(c, width, height)
 	})
 	s.drawPicker(c, width, height)
 	s.drawSettings(c, width, height)

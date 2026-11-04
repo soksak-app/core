@@ -22,10 +22,17 @@ type appWindow struct {
 	mu     sync.Mutex
 	frames int
 	starts chan struct{}
+	// restarts counts the starts of the workbench of the window.
+	restarts int
 }
 
 // StartWorkbench records a start of the workbench of the window.
-func (w *appWindow) StartWorkbench() { w.starts <- struct{}{} }
+func (w *appWindow) StartWorkbench() {
+	w.mu.Lock()
+	w.restarts++
+	w.mu.Unlock()
+	w.starts <- struct{}{}
+}
 
 func (w *appWindow) ElementTree() ([]ui.ElementNode, error) { return nil, nil }
 
@@ -39,6 +46,12 @@ func (w *appWindow) Invalidate() {
 
 // fixtureApp returns an application workbench over the table of stored and the replies that it sends the host.
 func fixtureApp(t *testing.T, stored *storedHost) (*workbench.App, *appWindow, steps, *[]map[string]any) {
+	t.Helper()
+	return reportingApp(t, stored, func(line string) { t.Errorf("the workbench reported %s", line) })
+}
+
+// reportingApp is fixtureApp whose lines of the application log go to report.
+func reportingApp(t *testing.T, stored *storedHost, report func(line string)) (*workbench.App, *appWindow, steps, *[]map[string]any) {
 	t.Helper()
 	queue := make(steps, 256)
 	replies := &[]map[string]any{}
@@ -57,9 +70,7 @@ func fixtureApp(t *testing.T, stored *storedHost) (*workbench.App, *appWindow, s
 		}
 		return calls
 	}
-	app, err := workbench.NewApp(workbench.AppOptions{Environment: environment(t), Post: queue.post, Table: table, Installed: func() []byte { return []byte(stored.installedDocument()) }, Report: func(line string) {
-		t.Errorf("the workbench reported %s", line)
-	}})
+	app, err := workbench.NewApp(workbench.AppOptions{Environment: environment(t), Post: queue.post, Table: table, Installed: func() []byte { return []byte(stored.installedDocument()) }, Report: report})
 	if err != nil {
 		t.Fatal(err)
 	}

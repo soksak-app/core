@@ -39,7 +39,11 @@ type viewState struct {
 	events   map[string]bool
 	failures map[string]bool
 	settings bool
+	// textSize tells that the view follows its text scale, and scale is the last scale that it received.
 	textSize bool
+	scale    float64
+	// levels tells that the view follows the log levels.
+	levels bool
 	// data tells that the view follows the project data of its plugin.
 	data bool
 	// commands holds the commands that the view registered, and requests the answer of each request that it has not replied.
@@ -399,11 +403,17 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 		if err != nil {
 			return err
 		}
+		view.scale = size
 		answer(size, nil)
 	case "runtime.textSize.on":
-		view.textSize = true
+		size, err := s.surfaceTextSize(call.Surface)
+		if err != nil {
+			return err
+		}
+		view.scale, view.textSize = size, true
 		done()
 	case "runtime.log.levels.on":
+		view.levels = true
 		done()
 	case "tab.state.read":
 		if unit.Unload == nil || s.tabs == nil || s.tabs.states == nil {
@@ -796,22 +806,14 @@ func (s *Shell) viewSettings(unit *installedUnit) map[string]any {
 
 // surfaceTextSize returns the text scale of the surface: the frame factor multiplied by the factor of its card.
 func (s *Shell) surfaceTextSize(surface string) (float64, error) {
-	frame, ok := s.settings.Value("textSize").(float64)
-	if !ok {
-		return 0, errors.New("the setting textSize has no number")
-	}
 	if held := s.surfaces.held[surface]; held != nil && len(held.section) > 0 {
-		return frame, nil
+		return s.text.Frame(), nil
 	}
 	card := s.cardOfTab(surface)
 	if card == "" {
 		return 0, fmt.Errorf("surface %s is not in the layout", surface)
 	}
-	data, err := s.cardData(card)
-	if err != nil {
-		return 0, err
-	}
-	return frame * data.CardTextSize(), nil
+	return s.text.Effective(card), nil
 }
 
 // readTabState returns the value of the state of the tab: null without one, and a state of another format is refused.

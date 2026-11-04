@@ -784,6 +784,7 @@ func (s *Shell) settingsChanged() error {
 	if err := s.applyPalette(); err != nil {
 		return err
 	}
+	s.followScale()
 	s.options.Invalidate()
 	return nil
 }
