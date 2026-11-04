@@ -80,7 +80,7 @@ func reportingApp(t *testing.T, stored *storedHost, report func(line string)) (*
 		}
 		return calls
 	}
-	app, err := workbench.NewApp(workbench.AppOptions{Environment: environment(t), Post: queue.post, Table: table, Installed: func() []byte { return []byte(stored.installedDocument()) }, Report: report})
+	app, err := workbench.NewApp(workbench.AppOptions{Environment: environment(t), Post: queue.post, Detaching: func(host.Frontend) []string { return stored.detaching }, Element: func(host.Frontend, string) (uintptr, uintptr, bool) { return 0, 0, false }, Table: table, Installed: func() []byte { return []byte(stored.installedDocument()) }, Report: report})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -263,6 +263,170 @@ func lifecycleInfo() map[string]any {
 	return classes
 }
 
+// A surface whose image detach is pending opens no session until the host tells the end of the detach, because its supplier still
+// holds the image view of the workbench that the start replaced.
+func TestABackgroundSessionWaitsForTheImageDetachOfItsTab(t *testing.T) {
+	stored := &storedHost{installed: installedSession, common: map[string]any{"memorySaverDelay": 30},
+		projects: []map[string]any{storedProject(tab("tab-aaaaaa", "other"), tab("tab-bbbbbb", "session"))}, detaching: []string{"tab-bbbbbb"}}
+	sent := make(chan string, 8)
+	stored.extra = map[string]workbench.HostCall{
+		"sidecarListen": func(_ context.Context, argument json.RawMessage) (any, error) { return nil, nil },
+		"sidecarSend": func(_ context.Context, argument json.RawMessage) (any, error) {
+			sent <- string(argument)
+			return nil, nil
+		},
+	}
+	app, window, queue, _ := fixtureApp(t, stored)
+	window.address = "/?project=prj-a"
+	app.Build(window)
+	app.Shown(window)
+	queue.drain(t)
+	if len(sent) != 0 {
+		t.Fatalf("the session opened during the detach: %s", <-sent)
+	}
+	app.Emit(window, "image-detach-ended", map[string]any{"surface": "tab-bbbbbb", "error": nil})
+	queue.drain(t)
+	select {
+	case line := <-sent:
+		if !strings.Contains(line, `"operation":"open"`) {
+			t.Fatalf("the host received %s", line)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatalf("the session did not open after the detach; the calls are %v", stored.calls)
+	}
+}
+
+// A detach that failed leaves its tab without a session, and the tab shows the failure.
+func TestAFailedImageDetachKeepsTheSessionOfItsTabClosed(t *testing.T) {
+	stored := &storedHost{installed: installedSession, common: map[string]any{"memorySaverDelay": 30},
+		projects: []map[string]any{storedProject(tab("tab-aaaaaa", "other"), tab("tab-bbbbbb", "session"))}, detaching: []string{"tab-bbbbbb"}}
+	sent := make(chan string, 8)
+	stored.extra = map[string]workbench.HostCall{
+		"sidecarListen": func(_ context.Context, argument json.RawMessage) (any, error) { return nil, nil },
+		"sidecarSend": func(_ context.Context, argument json.RawMessage) (any, error) {
+			sent <- string(argument)
+			return nil, nil
+		},
+	}
+	app, window, queue, _ := fixtureApp(t, stored)
+	window.address = "/?project=prj-a"
+	app.Build(window)
+	app.Shown(window)
+	queue.drain(t)
+	app.Emit(window, "image-detach-ended", map[string]any{"surface": "tab-bbbbbb", "error": "the supplier stopped"})
+	queue.drain(t)
+	if len(sent) != 0 {
+		t.Fatalf("the session opened after a failed detach: %s", <-sent)
+	}
+}
+
+// viewPlacements answers the placement calls of a view and returns the syncSurfaces requests.
+func viewPlacements(stored *storedHost) *[]string {
+	placed := &[]string{}
+	stored.extra = map[string]workbench.HostCall{
+		"sidecarListen":      func(_ context.Context, argument json.RawMessage) (any, error) { return nil, nil },
+		"sidecarSend":        func(_ context.Context, argument json.RawMessage) (any, error) { return nil, nil },
+		"compositionDeclare": func(_ context.Context, argument json.RawMessage) (any, error) { return nil, nil },
+		"presentSurfaces":    func(_ context.Context, argument json.RawMessage) (any, error) { return nil, nil },
+		"syncSurfaces": func(_ context.Context, argument json.RawMessage) (any, error) {
+			*placed = append(*placed, string(argument))
+			return map[string]any{"ticket": len(*placed), "placements": []any{}, "chrome": map[string]any{}}, nil
+		},
+	}
+	return placed
+}
+
+// A shown tab whose image detach is pending is not placed, so the host creates no view for it, and it stands after the end of the detach.
+func TestAShownTabStandsAfterTheImageDetachOfItsSurface(t *testing.T) {
+	stored := &storedHost{installed: installedSessionView, common: map[string]any{"memorySaverDelay": 30},
+		projects: []map[string]any{storedProject(tab("tab-bbbbbb", "session"))}, detaching: []string{"tab-bbbbbb"}}
+	placed := viewPlacements(stored)
+	app, window, queue, _ := fixtureApp(t, stored)
+	window.address = "/?project=prj-a"
+	tester := ui.NewTester(app.Build(window), 1200, 800)
+	app.Shown(window)
+	queue.drain(t)
+	tester.Frame()
+	queue.drain(t)
+	if strings.Contains(strings.Join(*placed, ""), "tab-bbbbbb") {
+		t.Fatalf("the surface stood during the detach: %v", *placed)
+	}
+	app.Emit(window, "image-detach-ended", map[string]any{"surface": "tab-bbbbbb", "error": nil})
+	queue.drain(t)
+	tester.Frame()
+	queue.drain(t)
+	if !strings.Contains(strings.Join(*placed, ""), "tab-bbbbbb") {
+		t.Fatalf("the surface did not stand after the detach: %v", *placed)
+	}
+}
+
+// A shown tab whose image detach failed shows that failure and stays without a view.
+func TestAShownTabShowsTheFailureOfItsImageDetach(t *testing.T) {
+	stored := &storedHost{installed: installedSessionView, common: map[string]any{"memorySaverDelay": 30},
+		projects: []map[string]any{storedProject(tab("tab-bbbbbb", "session"))}, detaching: []string{"tab-bbbbbb"}}
+	placed := viewPlacements(stored)
+	app, window, queue, _ := fixtureApp(t, stored)
+	window.address = "/?project=prj-a"
+	tester := ui.NewTester(app.Build(window), 1200, 800)
+	app.Shown(window)
+	queue.drain(t)
+	app.Emit(window, "image-detach-ended", map[string]any{"surface": "tab-bbbbbb", "error": "the supplier stopped"})
+	queue.drain(t)
+	tester.Frame()
+	queue.drain(t)
+	if !tester.HasText("the supplier stopped") {
+		t.Fatalf("the tab shows %q", tester.Texts())
+	}
+	if strings.Contains(strings.Join(*placed, ""), "tab-bbbbbb") {
+		t.Fatalf("the failed surface stood: %v", *placed)
+	}
+}
+
+// installedSessionView is installedSession with a plugin that stands in a view of its tab.
+const installedSessionView = `{"plugins": [{"id": "session", "package": "@soksak/plugin-session", "version": "1.0.0", "manifest": {
+	"background": {"sidecar": "@soksak/sidecar-session", "operation": "open"},
+	"surface": {"composition": {"kind": "view", "page": "ui/index.html"}}}}]}`
+
+// A tab whose view stays hidden behind the shown tab of its card owns its session through that view, so a background session would be
+// a second owner of the surface.
+func TestAHiddenTabWithAViewOpensNoBackgroundSession(t *testing.T) {
+	stored := &storedHost{installed: installedSessionView, common: map[string]any{"memorySaverDelay": 30},
+		projects: []map[string]any{storedProject(tab("tab-bbbbbb", "session"), tab("tab-aaaaaa", "other"))}}
+	sent := make(chan string, 8)
+	var placed []string
+	stored.extra = map[string]workbench.HostCall{
+		"sidecarListen":      func(_ context.Context, argument json.RawMessage) (any, error) { return nil, nil },
+		"compositionDeclare": func(_ context.Context, argument json.RawMessage) (any, error) { return nil, nil },
+		"presentSurfaces":    func(_ context.Context, argument json.RawMessage) (any, error) { return nil, nil },
+		"sidecarSend": func(_ context.Context, argument json.RawMessage) (any, error) {
+			sent <- string(argument)
+			return nil, nil
+		},
+		"syncSurfaces": func(_ context.Context, argument json.RawMessage) (any, error) {
+			placed = append(placed, string(argument))
+			return map[string]any{"ticket": len(placed), "placements": []any{}, "chrome": map[string]any{}}, nil
+		},
+	}
+	app, window, queue, _ := fixtureApp(t, stored)
+	window.address = "/?project=prj-a"
+	tester := ui.NewTester(app.Build(window), 1200, 800)
+	app.Shown(window)
+	queue.drain(t)
+	tester.Frame()
+	queue.drain(t)
+	app.Emit(window, "exposure-request", map[string]any{"id": 8, "method": "command.run",
+		"params": map[string]any{"name": "core.tab.select", "params": map[string]string{"tab": "tab-aaaaaa"}}})
+	queue.drain(t)
+	tester.Frame()
+	queue.drain(t)
+	if len(placed) < 2 || !strings.Contains(placed[len(placed)-1], `"id":"tab-bbbbbb"`) || !strings.Contains(placed[len(placed)-1], `"visible":false`) {
+		t.Fatalf("the view of the hidden tab is not held: %v", placed)
+	}
+	if len(sent) != 0 {
+		t.Fatalf("the hidden tab opened a second owner of its surface: %s", <-sent)
+	}
+}
+
 func TestAnInstalledPluginGetsItsBackgroundSessionInTheApplication(t *testing.T) {
 	stored := &storedHost{installed: installedSession, common: map[string]any{"memorySaverDelay": 30}, classes: lifecycleInfo(),
 		projects: []map[string]any{storedProject(tab("tab-aaaaaa", "other"), tab("tab-bbbbbb", "session"))}}
@@ -329,7 +493,7 @@ func TestAnInstalledPluginGetsItsBackgroundSessionInTheApplication(t *testing.T)
 func TestAnInstallationThatCannotBeReadIsShown(t *testing.T) {
 	stored := &storedHost{installed: `{"error":"the installation is broken"}`}
 	queue := make(steps, 256)
-	app, err := workbench.NewApp(workbench.AppOptions{Environment: environment(t), Post: queue.post,
+	app, err := workbench.NewApp(workbench.AppOptions{Detaching: func(host.Frontend) []string { return nil }, Environment: environment(t), Post: queue.post,
 		Table:     func(host.Frontend) map[string]workbench.HostCall { return stored.table() },
 		Report:    func(line string) { t.Fatal(line) },
 		Installed: func() []byte { return []byte(stored.installedDocument()) }})
@@ -348,7 +512,7 @@ func TestAnInstallationThatCannotBeReadIsShown(t *testing.T) {
 
 func TestACancelledTimerDoesNotRun(t *testing.T) {
 	queue := make(steps, 8)
-	app, err := workbench.NewApp(workbench.AppOptions{Environment: environment(t), Post: queue.post, Report: func(string) {},
+	app, err := workbench.NewApp(workbench.AppOptions{Detaching: func(host.Frontend) []string { return nil }, Environment: environment(t), Post: queue.post, Report: func(string) {},
 		Table: func(host.Frontend) map[string]workbench.HostCall { return (&storedHost{}).table() }, Installed: func() []byte { return []byte(`{"plugins":[]}`) }})
 	if err != nil {
 		t.Fatal(err)

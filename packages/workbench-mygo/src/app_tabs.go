@@ -170,7 +170,7 @@ type shellSurfaces struct{ shell *Shell }
 
 func (f shellSurfaces) Mounted(tab string) bool { return f.shell.surfaces.held[tab] != nil }
 
-func (f shellSurfaces) DetachHeld(tab string) bool { return f.shell.surfaces.detaching[tab] }
+func (f shellSurfaces) DetachHeld(tab string) bool { return f.shell.surfaces.detachHeld(tab) }
 
 func (f shellSurfaces) Keeps(tab string) []string {
 	report := f.shell.surfaces.reports[tab]

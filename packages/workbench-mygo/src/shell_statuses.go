@@ -395,7 +395,7 @@ func (u *installedUnit) exposedNames() []string {
 
 // surfacePhase is the page status of a surface: its reported failure, or ready once the document of the view answered.
 func (s *Shell) surfacePhase(id string) map[string]any {
-	if reason, ok := s.surfaces.failed[id]; ok {
+	if reason, stopped := s.surfaces.stopped(id); stopped {
 		return map[string]any{"phase": "error", "reason": reason}
 	}
 	if report := s.surfaces.reports[id]; report != nil && report.Error != "" {

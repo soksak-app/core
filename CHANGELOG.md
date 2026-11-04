@@ -5,6 +5,7 @@
 ## Unreleased
 
 - F502-16: The window of the mygo application shows its project with live views: a split card starts the view of its plugin, a terminal shows its shell and a browser tab its page, and the shell reports `core.grid`, `core.layout`, `core.surfaces`, `core.rail`, `core.chrome`, `core.window.workbench` and the other statuses that the Wails window reports.
+- F502-12: A surface whose image detach is pending at a start of the workbench stands and opens its session after `image-detach-ended`, so a terminal tab keeps one image owner through a reload. A failed detach shows its reason in the tab.
 - F502-12: The window of the mygo host keeps the project that it shows in its address, so a start of the workbench after a change of the plugins shows that project again, and a separate project window starts at its project.
 - F502-12: The library of the mygo workbench draws the plugin page from `pluginsState`. Its cards install, update, remove, enable and disable through `pluginsRun`, `core.plugins` and `core.library` answer as on the page, the first run installs the starter pack, the window control 업데이트 N opens the page, and a tab of a plugin that is not loaded offers its install or enable.
 - F502-22: The mygo framework adapter opens deep links through `App.OnOpenURL` and gives the workbench of a window `files-dropped` with the JSON text of the file drop view; a child process with a fixture workbench checks deep links, the events of the notification center and the quit of an application update, and `make app-update-check` takes `HOST=mygo`.

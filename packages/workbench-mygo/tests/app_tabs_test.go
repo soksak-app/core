@@ -47,6 +47,7 @@ func newTabApp(t *testing.T, stored *surfaceHost, document string) *tabApp {
 		return calls
 	}
 	app, err := workbench.NewApp(workbench.AppOptions{Environment: environment(t), Post: f.queue.post, Table: table,
+		Detaching: func(host.Frontend) []string { return nil },
 		Installed: func() []byte { return []byte(document) },
 		Element:   func(host.Frontend, string) (uintptr, uintptr, bool) { return 0, 0, false },
 		Report:    func(line string) { f.lines = append(f.lines, line) }})
