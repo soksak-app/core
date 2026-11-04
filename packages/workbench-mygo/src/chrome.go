@@ -1,6 +1,8 @@
 package workbench
 
 import (
+	"fmt"
+
 	"github.com/egoist/mygo/ui"
 
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
@@ -38,6 +40,9 @@ func (s *Shell) drawChrome(c *ui.Context, width float32) {
 		if !browsing {
 			s.chromeAct(c, "core.chrome.projects", "core.projects.browse", "프로젝트", nil)
 			s.chromeAct(c, "core.chrome.balance", "core.layout.balance", "균형", nil)
+		}
+		if updates := len(s.pluginOperations.Status().Updates); updates > 0 {
+			s.chromeAct(c, "core.chrome.updates", "core.plugins.show-updates", fmt.Sprintf("업데이트 %d", updates), nil)
 		}
 		s.chromeAct(c, "core.chrome.settings", "core.settings.open", "설정", nil)
 	})

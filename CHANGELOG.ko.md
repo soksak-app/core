@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F502-12: mygo workbench 의 library 가 `pluginsState` 로 플러그인 화면을 그린다. 카드는 `pluginsRun` 으로 설치, 업데이트, 제거, 사용, 사용 안 함을 실행하고, `core.plugins` 와 `core.library` 는 page 와 같은 값을 답한다. 첫 실행은 시작 플러그인 묶음을 설치하고, 창 컨트롤 업데이트 N 이 플러그인 화면을 열며, 불러오지 않은 플러그인의 탭은 설치나 사용을 제안한다.
 - F502-22: mygo framework adapter가 `App.OnOpenURL`로 deep link를 열고, 창의 workbench에 파일 놓기 뷰의 JSON 문자열을 `files-dropped`로 준다. fixture workbench를 쓰는 자식 프로세스가 deep link, 알림 센터의 event, application update의 종료를 검사하고, `make app-update-check`가 `HOST=mygo`를 받는다.
 - F502-18: mygo workbench의 카드가 표면의 view page를 창의 native view에 있는 `SurfaceHost`에 document region, image region과 함께 보여 주고, view page는 layout이 표면을 숨겼다가 보인 뒤 keyboard를 다시 갖는다. `host.window.reload`, `plugins-changed`, `core.plugins.apply`는 mygo workbench를 새 `start`로 다시 만들고, 진단 빌드는 `diagnostics.json`의 선언을 플러그인의 표면 선언에 더한다.
 - F502-20: mygo workbench가 file command, `core.tab.memory`, `core.tab.unload`, `core.tab.keep`을 가진 memory saver, `tab-state.json`과 `tab-sessions` 저장소, background session을 가지며, 뒤의 step에서 답하는 command는 relay를 통해 답한다. 실패한 delay unload는 두 workbench에서 다음 deadline을 한 delay 뒤에 받으므로, 계속 실패하는 읽기가 곧바로 다시 돌지 않는다.

@@ -74,6 +74,7 @@ func (s *Shell) splitFocused(side string) (any, error) {
 // register adds the commands of the shell to the registry.
 func (s *Shell) register() {
 	s.registerLibrary()
+	s.registerPlugins()
 	s.registerSettings()
 	s.registerPicker()
 	act(s, "core.projects.browse", func(struct{}) error { s.browse(); return nil })

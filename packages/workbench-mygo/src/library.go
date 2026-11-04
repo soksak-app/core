@@ -14,6 +14,7 @@ import (
 // libraryState is the state of the library of a window.
 type libraryState struct {
 	page, query, order string
+	pluginQuery        string
 	formMode           string // create, open, or "" while the form is closed.
 	name, parent       string
 }
@@ -57,9 +58,7 @@ func (s *Shell) registerLibrary() {
 	act(s, "core.library.page", func(value struct {
 		Page string `json:"page"`
 	}) error {
-		s.library.page = value.Page
-		s.options.Invalidate()
-		return nil
+		return s.showLibraryPage(value.Page)
 	})
 	act(s, "core.library.search", func(value struct {
 		Query string `json:"query"`
@@ -190,10 +189,14 @@ func (s *Shell) drawLibrary(c *ui.Context, width, height float32) {
 			s.barText(c, s.binder.Press(c, "core.library.add", "core.library.form.open", "", map[string]string{"mode": "create"}), "＋ 프로젝트 만들기", false)
 		})
 		DrawErrorBanner(c, s.errors)
-		if s.library.formMode != "" {
-			s.drawLibraryForm(c)
+		if s.library.page == pluginsPage {
+			ui.Box(c).FillWidth().Grow(1).Children(func() { DrawPluginPage(c, s.binder, s.pluginPage(), s.errors) })
+		} else {
+			if s.library.formMode != "" {
+				s.drawLibraryForm(c)
+			}
+			s.drawProjectList(c)
 		}
-		s.drawProjectList(c)
 		if s.opened() != nil {
 			s.barText(c, s.binder.Press(c, "core.library.return", "core.library.return", "", nil), "돌아가기", false)
 		}

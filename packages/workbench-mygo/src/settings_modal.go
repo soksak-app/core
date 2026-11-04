@@ -22,6 +22,11 @@ type LoadedSection struct{ ID, Name string }
 // LoadedPlugin is a plugin that the window loaded.
 type LoadedPlugin struct {
 	ID, Name, Description string
+	// Version is the installed version, and Dependencies the sidecar ranges of plugin.json.
+	Version      string
+	Dependencies map[string]string
+	// Composition is the kind of the surface composition, and nil without one.
+	Composition *string
 	// Mark is the short text and Icon the SVG elements of the add menu, and Menu the context menu of the surface.
 	Mark, Icon string
 	Menu       []PluginMenuItem
@@ -952,13 +957,6 @@ func (s *Shell) registerSettings() {
 	s.registerSettingsValues()
 	s.registerSettingsSets()
 	s.registerSettingsWindow()
-	act(s, "core.plugins.browse", func(struct{}) error {
-		s.settingsWindow.open = false
-		s.browse()
-		s.library.page = "plugins"
-		s.options.Invalidate()
-		return nil
-	})
 }
 
 func (s *Shell) registerSettingsValues() {

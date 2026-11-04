@@ -183,6 +183,10 @@ func (s *Shell) Event(name string, data []any) {
 		s.surfacePressed(data)
 	case "plugins-changed":
 		s.pluginsChanged()
+	case "sidecars-changed":
+		s.pluginOperations.RefreshOutdated(func() {})
+	case "window-active":
+		s.pluginOperations.Refresh(func() {})
 	case "project-close-request":
 		s.keep()
 		s.flushTabs()
