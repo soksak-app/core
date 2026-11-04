@@ -164,3 +164,106 @@ fn the_first_responder_in_the_view_of_a_view_surface_is_owner_surface() {
         json!({"class": "WKWebView", "owner": "document", "surface": "tab-view", "document": "page"})
     );
 }
+
+/// Sends a request to a surface from another thread and returns the channel of its outcome after the relay holds it.
+fn pending_surface(
+    relay: &std::sync::Arc<Relay>,
+    reloading: &std::sync::Arc<AtomicBool>,
+    label: &'static str,
+) -> mpsc::Receiver<Result<Box<RawValue>, Failure>> {
+    let (outcome, received) = mpsc::channel();
+    let (sent, wait) = mpsc::channel();
+    let (relay, reloading) = (relay.clone(), reloading.clone());
+    std::thread::spawn(move || {
+        let reply = request_surface(&relay, &reloading, label, None, None, |_| {
+            sent.send(()).map_err(|error| error.to_string())
+        });
+        outcome.send(reply).expect("the test holds the receiver");
+    });
+    wait.recv_timeout(Duration::from_secs(5))
+        .expect("the request to the surface was not sent");
+    received
+}
+
+/// Sends a request to a surface whose document answers it at once.
+fn relay_answers_surface(relay: &Relay, reloading: &AtomicBool) -> Result<Box<RawValue>, Failure> {
+    request_surface(
+        relay,
+        reloading,
+        "surface-main-tab",
+        None,
+        Some(Duration::from_secs(1)),
+        |id| {
+            let value =
+                RawValue::from_string("1".to_string()).map_err(|error| error.to_string())?;
+            let pending = relay.pending.lock().map_err(|error| error.to_string())?;
+            let (_, reply) = pending.get(&id).ok_or("the relay holds no request")?;
+            reply.send(Ok(value)).map_err(|error| error.to_string())
+        },
+    )
+}
+
+// contract: exposure.relay.page-reload-ends-surface-requests
+#[test]
+fn a_reload_asked_of_a_page_ends_the_requests_to_its_surfaces() {
+    let relay = std::sync::Arc::new(Relay::default());
+    let reloading = std::sync::Arc::new(AtomicBool::new(false));
+    let other_reloading = std::sync::Arc::new(AtomicBool::new(false));
+    let mine = pending_surface(&relay, &reloading, "surface-main-tab");
+    let theirs = pending_surface(&relay, &other_reloading, "surface-second-tab");
+    ask_page_to_reload(&relay, &reloading, "main", || {
+        assert!(
+            mine.try_recv().is_err(),
+            "the request ended before the page received the reload request"
+        );
+        Ok(())
+    })
+    .expect("the reload request is sent");
+    let ended = mine
+        .recv_timeout(Duration::from_secs(2))
+        .expect("the request to a surface of the reloading page is still waiting");
+    assert!(
+        matches!(ended, Err(failure) if failure.code == MISSING_DOCUMENT),
+        "the request to a surface of the reloading page did not end with the closed-document code"
+    );
+    assert!(
+        theirs.try_recv().is_err(),
+        "the request to a surface of another window ended"
+    );
+    relay.abandon("surface-second-tab");
+    theirs.recv().expect("the abandoned request answers");
+}
+
+// contract: exposure.relay.page-reload-ends-surface-requests
+#[test]
+fn a_request_after_the_reload_is_refused_until_the_new_page_starts() {
+    let relay = Relay::default();
+    let reloading = AtomicBool::new(false);
+    ask_page_to_reload(&relay, &reloading, "main", || Ok(())).expect("the reload request is sent");
+    let mut sent = false;
+    let refused = request_surface(
+        &relay,
+        &reloading,
+        "surface-main-tab",
+        None,
+        Some(Duration::from_secs(1)),
+        |_| {
+            sent = true;
+            Ok(())
+        },
+    );
+    assert!(
+        !sent,
+        "a request sent after the reload request reached the document"
+    );
+    assert!(
+        matches!(refused, Err(failure) if failure.code == MISSING_DOCUMENT),
+        "a request after the reload request was not refused with the closed-document code"
+    );
+    end_page_reload(&reloading);
+    let accepted = relay_answers_surface(&relay, &reloading);
+    assert!(
+        accepted.is_ok(),
+        "a request after the new page started was not sent"
+    );
+}

@@ -117,6 +117,7 @@ func (h *Host) startPage(window uint) ([]byte, error) {
 		return nil, ErrNoStartWindow
 	}
 	h.relay.Abandon(func(t relayTarget) bool { return t.owner == s && t.surface == "" })
+	s.pageStarted()
 	routine.Go("windows-changed", h.windowsChanged)
 	var detachments []imageDetachTarget
 	var reloadErr error

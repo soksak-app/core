@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -430,6 +431,8 @@ type Surfaces struct {
 	// closed is set on the UI thread when the window closes. A layout request of the page that is still in flight then
 	// creates no surface, because nothing would close it.
 	closed bool
+	// pageReloading is set from the reload request to a ready page until the new page starts (askPageToReload).
+	pageReloading atomic.Bool
 	// drawingMu orders the drawing messages to the suppliers of image regions (sendImageDrawing).
 	drawingMu sync.Mutex
 	// prepareNative registers the main web view and prepares the window. It is decided when the window is created.

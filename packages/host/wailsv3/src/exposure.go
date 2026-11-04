@@ -565,7 +565,7 @@ func (h *Host) ExposureForward(ctx context.Context, reqJSON json.RawMessage) (Ex
 	if declared {
 		call = RelayCall{Plugin: plugin, Command: req.Method}
 	}
-	reply := h.relay.RequestCall(relayTarget{owner: s, surface: req.Surface}, call, timeout, func(id uint64) error {
+	reply := s.requestSurface(req.Surface, call, timeout, func(id uint64) error {
 		var sent bool
 		application.InvokeSync(func() {
 			if s.views[req.Surface] != nil {
@@ -585,6 +585,33 @@ func (h *Host) ExposureForward(ctx context.Context, reqJSON json.RawMessage) (Ex
 		reply.Result = json.RawMessage(`null`)
 	}
 	return reply, nil
+}
+
+// requestSurface sends a request to the document of a surface and waits for its reply. A request of a page that the host asked
+// to reload is refused, because that page no longer answers the calls that the document needs to reply. The check runs after the
+// relay holds the request, so askPageToReload ends the request when it runs before the check.
+func (s *Surfaces) requestSurface(surface string, call RelayCall, timeout time.Duration, send func(id uint64) error) ExposureResult {
+	return s.host.relay.RequestCall(relayTarget{owner: s, surface: surface}, call, timeout, func(id uint64) error {
+		if s.pageReloading.Load() {
+			return fmt.Errorf("the page of the window is reloading")
+		}
+		return send(id)
+	})
+}
+
+// askPageToReload sends the reload request to a ready page and ends the requests to its surface documents. Such a request would
+// keep the page from reloading: the page waits for its reply, and the document needs answers from the page, which sends no call
+// after the reload request (docs/spec/native-host.md#page-reload). The requests end after the event, so a page that receives
+// the failure already sends no report of it.
+func (s *Surfaces) askPageToReload(emit func()) {
+	emit()
+	s.pageReloading.Store(true)
+	s.host.relay.Abandon(func(t relayTarget) bool { return t.owner == s && t.surface != "" })
+}
+
+// pageStarted records that a new main page started, which accepts requests to surface documents again.
+func (s *Surfaces) pageStarted() {
+	s.pageReloading.Store(false)
 }
 
 // SurfaceRegistration is an entry that a surface page registered.
@@ -731,7 +758,7 @@ func (s *Surfaces) reloadPage() error {
 	if pageReady {
 		// A ready page reads again by itself after all calls it sent received a reply. When the host reads again, the reply that was being
 		// written at that moment is lost (docs/spec/native-host.md#page-reload).
-		s.window.EmitEvent("page-reload")
+		s.askPageToReload(func() { s.window.EmitEvent("page-reload") })
 	} else {
 		application.InvokeSync(func() { s.window.Reload() })
 	}

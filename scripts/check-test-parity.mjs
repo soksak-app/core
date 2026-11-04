@@ -8840,6 +8840,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F422",
+    implementation: [{ file: "packages/host/tauriv2/src/exposure.rs", symbol: "fn ask_page_to_reload(" }],
+    tests: [{ file: "packages/host/tauriv2/src/exposure_status_test.rs", id: "a_reload_asked_of_a_page_ends_the_requests_to_its_surfaces" }],
+    expected: "A reload asked of a page ends the requests to its surface documents.",
+    levels: ["unit"],
+  },
+  {
     id: "F404",
     implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) fn with_open_window(" }],
     tests: [{ file: "packages/host/tauriv2/src/windows_records_test.rs", id: "a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure" }],

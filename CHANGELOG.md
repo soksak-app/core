@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F422: A page asked to reload no longer waits for a surface document that needs the page: the host ends those requests with 1003 until the new page starts, so `host.window.reload` no longer ends with 1005.
 - F421: A setting changed during the page start is drawn, because the settings listener is connected before the core commands exist; the sidebar failure of `e2e/projects.test.mjs` reports the effective and the stored setting.
 - F420: A layout request in flight when its window closes creates no surface and fails with `project window is closed` on both hosts.
 - F419: `host.window.presented` waits for a shown modal, so `displayed` names a refresh that shows it.

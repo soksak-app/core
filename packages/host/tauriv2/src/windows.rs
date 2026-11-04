@@ -36,6 +36,9 @@ pub(crate) struct WindowData {
     pub running: Running,
     pub root: Mutex<String>,
     pub ready: AtomicBool,
+    /// Set when the host asked the ready page to reload, until the new page starts. The page no longer
+    /// answers the calls of the surface documents in that time (docs/spec/native-host.md#page-reload).
+    pub page_reloading: AtomicBool,
     /// The first responder that the page last received (window-responder). The lock also orders the reads and sends, so
     /// a later change is never sent before an earlier one.
     pub responder: Mutex<Option<serde_json::Value>>,
@@ -1452,7 +1455,7 @@ pub(crate) fn page_started(window: &Window) -> Result<(), String> {
         for failure in data.images.detach_page_starting() {
             log_error("image detach", failure);
         }
-        crate::exposure::page_reloaded(window);
+        crate::exposure::page_reloaded(window, &data);
         reload_surface_documents(window)?;
         data.overlay.discard()?;
         Ok(())

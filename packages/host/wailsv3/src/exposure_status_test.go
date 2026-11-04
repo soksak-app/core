@@ -133,3 +133,86 @@ func TestSidecarStatusNotificationDoesNotWaitForWindowRegistry(t *testing.T) {
 		t.Fatal("closing transition notification waited for the window registry")
 	}
 }
+
+// reloadFixture returns a window whose host holds a relay, and a second window of the same host.
+func reloadFixture() (*Surfaces, *Surfaces) {
+	h := &Host{relay: NewRelay[relayTarget]()}
+	return &Surfaces{host: h}, &Surfaces{host: h}
+}
+
+// pendingSurface sends a request to surface and returns the channel of its reply after the relay holds it.
+func pendingSurface(t *testing.T, s *Surfaces, surface string) <-chan ExposureResult {
+	t.Helper()
+	reply := make(chan ExposureResult, 1)
+	sent := make(chan struct{})
+	go func() {
+		reply <- s.requestSurface(surface, RelayCall{}, 0, func(uint64) error {
+			close(sent)
+			return nil
+		})
+	}()
+	select {
+	case <-sent:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("the request to surface %q was not sent", surface)
+	}
+	return reply
+}
+
+// contract: exposure.relay.page-reload-ends-surface-requests
+func TestReloadAskedOfAPageEndsTheRequestsToItsSurfaces(t *testing.T) {
+	reloading, other := reloadFixture()
+	mine := pendingSurface(t, reloading, "tab")
+	theirs := pendingSurface(t, other, "tab")
+	emitted := false
+	reloading.askPageToReload(func() {
+		emitted = true
+		select {
+		case reply := <-mine:
+			t.Errorf("the request ended before the page received the reload request: %+v", reply)
+		default:
+		}
+	})
+	if !emitted {
+		t.Fatal("the reload request was not sent")
+	}
+	select {
+	case reply := <-mine:
+		if reply.Error == nil || reply.Error.Code != codeNoWindow {
+			t.Fatalf("reply %+v, want %d", reply, codeNoWindow)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the request to a surface of the reloading page is still waiting")
+	}
+	select {
+	case reply := <-theirs:
+		t.Fatalf("the request to a surface of another window ended: %+v", reply)
+	default:
+	}
+	other.host.relay.Abandon(func(relayTarget) bool { return true })
+	<-theirs
+}
+
+// contract: exposure.relay.page-reload-ends-surface-requests
+func TestARequestAfterTheReloadIsRefusedUntilTheNewPageStarts(t *testing.T) {
+	s, _ := reloadFixture()
+	s.askPageToReload(func() {})
+	sent := false
+	reply := s.requestSurface("tab", RelayCall{}, time.Second, func(uint64) error {
+		sent = true
+		return nil
+	})
+	if sent {
+		t.Fatal("a request sent after the reload request reached the document")
+	}
+	if reply.Error == nil || reply.Error.Code != codeNoWindow {
+		t.Fatalf("reply %+v, want %d", reply, codeNoWindow)
+	}
+	s.pageStarted()
+	if reply := s.requestSurface("tab", RelayCall{}, time.Second, func(id uint64) error {
+		sent = true
+		return s.host.relay.Resolve(id, relayTarget{owner: s, surface: "tab"}, ExposureResult{})
+	}); !sent || reply.Error != nil {
+		t.Fatalf("after the new page started: sent %v, reply %+v", sent, reply)
+	}
+}

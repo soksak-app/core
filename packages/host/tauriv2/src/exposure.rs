@@ -7,7 +7,7 @@
 //! command. The format is defined in docs/spec/exposure.md.
 
 use std::collections::{BTreeMap, HashMap};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::time::{Duration, Instant};
@@ -946,6 +946,47 @@ pub fn forward_timeout(timeout: &Value) -> Result<Option<Duration>, Failure> {
     Ok(Some(Duration::from_millis(ms as u64)))
 }
 
+/// Sends a request to the document of a surface and waits for its reply. A request of a page that the host asked to
+/// reload is refused, because that page no longer answers the calls that the document needs to reply. The check runs
+/// after the relay holds the request, so `ask_page_to_reload` ends the request when it runs before the check.
+fn request_surface(
+    relay: &Relay,
+    reloading: &AtomicBool,
+    label: &str,
+    call: Option<RelayCall>,
+    timeout: Option<Duration>,
+    send: impl FnOnce(u64) -> Result<(), String>,
+) -> Result<Box<RawValue>, Failure> {
+    relay.request_call(label, call, timeout, |id| {
+        if reloading.load(Ordering::SeqCst) {
+            return Err("the page of the window is reloading".to_string());
+        }
+        send(id)
+    })
+}
+
+/// Sends the reload request to a ready page and ends the requests to its surface documents. Such a request would keep
+/// the page from reloading: the page waits for its reply, and the document needs answers from the page, which sends no
+/// call after the reload request (docs/spec/native-host.md#page-reload). The requests end after the event, so a page
+/// that receives the failure already sends no report of it.
+fn ask_page_to_reload(
+    relay: &Relay,
+    reloading: &AtomicBool,
+    main: &str,
+    emit: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    emit()?;
+    reloading.store(true, Ordering::SeqCst);
+    let surfaces = format!("surface-{main}-");
+    relay.abandon_matching(|target| target.starts_with(&surfaces));
+    Ok(())
+}
+
+/// Records that a new main page started, which accepts requests to surface documents again.
+fn end_page_reload(reloading: &AtomicBool) {
+    reloading.store(false, Ordering::SeqCst);
+}
+
 /// Sends a request of the main page to a surface page and returns the response as `{result}` or `{error}`. result is
 /// the text that the surface page sent, as received.
 pub(crate) fn forward(webview: &Webview, request: Forward) -> Result<Box<RawValue>, String> {
@@ -966,27 +1007,31 @@ pub(crate) fn forward(webview: &Webview, request: Forward) -> Result<Box<RawValu
             command: request.method.clone(),
         });
     let outcome = match forward_timeout(&request.timeout) {
-		Err(invalid) => Err(invalid),
-		Ok(_) if !surface_exists => Err(Failure::new(
-			MISSING_DOCUMENT,
-			format!("surface {} does not exist", request.surface),
-		)),
-        Ok(timeout) => window
-            .state::<Exposure>()
-			.relay
-			.request_call(&label, call, timeout, |id| {
-				emit_host(
+        Err(invalid) => Err(invalid),
+        Ok(_) if !surface_exists => Err(Failure::new(
+            MISSING_DOCUMENT,
+            format!("surface {} does not exist", request.surface),
+        )),
+        Ok(timeout) => request_surface(
+            &window.state::<Exposure>().relay,
+            &window_data(&window)?.page_reloading,
+            &label,
+            call,
+            timeout,
+            |id| {
+                emit_host(
                     Level::Debug,
                     "host.trace.exposure.request",
                     json!({"id": id, "surface": request.surface, "method": request.method}),
                 );
                 emit_to(
-					&app,
-					window.label(),
-					"exposure-request",
-					json!({"id": id, "surface": request.surface, "method": request.method, "params": request.params}),
-				)
-			}),
+                    &app,
+                    window.label(),
+                    "exposure-request",
+                    json!({"id": id, "surface": request.surface, "method": request.method, "params": request.params}),
+                )
+            },
+        ),
     };
     let text = match outcome {
         Ok(result) => format!(r#"{{"result":{}}}"#, result.get()),
@@ -1149,8 +1194,9 @@ mod surface_closed_tests {
     }
 }
 
-pub(crate) fn page_reloaded(window: &Window) {
+pub(crate) fn page_reloaded(window: &Window, data: &WindowData) {
     window.state::<Exposure>().relay.abandon(window.label());
+    end_page_reload(&data.page_reloading);
     windows_changed(window.app_handle());
 }
 
@@ -1927,8 +1973,16 @@ fn reload(host: &Host, window: &Window) -> Result<Value, Failure> {
     if ready {
         // A ready page reloads itself after all the calls it sent have received their answers. If the host reloaded it,
         // the response being written at that moment would be lost (docs/spec/native-host.md#page-reload).
-        crate::windows::emit_window(window, "page-reload", serde_json::json!({}))
-            .map_err(internal)?;
+        ask_page_to_reload(
+            &window.state::<Exposure>().relay,
+            &window_data(window).map_err(internal)?.page_reloading,
+            window.label(),
+            || {
+                crate::windows::emit_window(window, "page-reload", serde_json::json!({}))
+                    .map_err(|error| error.to_string())
+            },
+        )
+        .map_err(internal)?;
     } else {
         let target = window.clone();
         on_main(window, move || {
