@@ -107,7 +107,6 @@ func (implementation) ClipboardRead(string) (platform.ClipboardValue, error) {
 	return platform.ClipboardValue{}, unsupported("clipboard read")
 }
 func (implementation) ClipboardWriteText(string) error { return unsupported("clipboard text write") }
-func (implementation) ClipboardWritePNG([]byte) error  { return unsupported("clipboard PNG write") }
 func (implementation) OpenLink(string) error           { return unsupported("link open") }
 func (implementation) DiagnosticReportsDirectory() (string, error) {
 	return "", unsupported("crash reports")
@@ -363,11 +362,6 @@ func (implementation) CloseWebview(unsafe.Pointer) {
 	unreachable("native webview close")
 }
 
-func (implementation) WebviewFrame(unsafe.Pointer) platform.Rect {
-	unreachable("native webview frame")
-	return platform.Rect{}
-}
-
 func (implementation) CreateSurface(unsafe.Pointer) (unsafe.Pointer, error) {
 	return nil, unsupported("surface host")
 }
@@ -397,16 +391,8 @@ func (implementation) SetWindowOverlays(unsafe.Pointer, []platform.WindowOverlay
 	return unsupported("window DOM overlays")
 }
 
-func (implementation) SetWebviewAlpha(unsafe.Pointer, float64) {
-	unreachable("native webview alpha")
-}
-
 func (implementation) SetSurfaceOverlays(unsafe.Pointer, []platform.DOMOverlay) {
 	unreachable("surface DOM overlays")
-}
-
-func (implementation) SetWebviewResizing(unsafe.Pointer, bool) {
-	unreachable("native webview live resize")
 }
 
 func (implementation) ConfigureModal(unsafe.Pointer, string, float64) {

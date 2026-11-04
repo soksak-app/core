@@ -234,9 +234,6 @@ impl Platform for Darwin {
         webview::place(view, x, y, w, h);
         Ok(())
     }
-    fn webview_frame(&self, view: &PlatformWebview) -> Result<[f64; 4], String> {
-        Ok(webview::frame(view))
-    }
     fn create_surface(&self, main: Handle) -> Result<Handle, String> {
         webview::create_surface(main)
     }
@@ -266,16 +263,8 @@ impl Platform for Darwin {
     fn file_drop(&self, main: Handle, receive: Box<dyn Fn(String)>) -> Result<(), String> {
         webview::file_drop(main, receive)
     }
-    fn set_surface_hidden(&self, view: &PlatformWebview, hidden: bool) -> Result<(), String> {
-        webview::hidden(view, hidden);
-        Ok(())
-    }
     fn set_surface_overlays(&self, surface: Handle, overlays: &[DOMOverlay]) -> Result<(), String> {
         webview::overlays(surface, overlays);
-        Ok(())
-    }
-    fn set_alpha(&self, view: &PlatformWebview, alpha: f64) -> Result<(), String> {
-        webview::alpha(view, alpha);
         Ok(())
     }
 
@@ -287,10 +276,6 @@ impl Platform for Darwin {
         webview::collect_garbage(view)
     }
 
-    fn set_live_resize(&self, view: &PlatformWebview, live: bool) -> Result<(), String> {
-        webview::live_resize(view, live);
-        Ok(())
-    }
     fn raise_webview(&self, view: &PlatformWebview) -> Result<(), String> {
         webview::raise(view);
         Ok(())
@@ -828,9 +813,6 @@ impl Platform for Darwin {
     }
     fn clipboard_write_text(&self, text: &str) -> Result<(), String> {
         clipboard::write_text(text)
-    }
-    fn clipboard_write_png(&self, bytes: &[u8]) -> Result<(), String> {
-        clipboard::write_png(bytes)
     }
     fn open_link(&self, url: &str) -> Result<(), String> {
         link::open(url)

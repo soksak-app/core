@@ -144,27 +144,12 @@ pub fn corners(webview: &PlatformWebview, radius: f64) {
     }
 }
 
-/// Sets the opacity of the view. A surface that lost the focus can be drawn dimmed.
-pub fn alpha(webview: &PlatformWebview, alpha: f64) {
-    unsafe extern "C" {
-        fn webviewSetSurfaceAlpha(view: *mut c_void, alpha: f64);
-    }
-    unsafe { webviewSetSurfaceAlpha(webview.inner().cast(), alpha) }
-}
-
 /// Converts window coordinates into the parent coordinates of the native view and places it.
 pub fn place(webview: &PlatformWebview, x: f64, y: f64, w: f64, h: f64) {
     unsafe extern "C" {
         fn webviewSetFrame(view: *mut c_void, x: f64, y: f64, w: f64, h: f64);
     }
     unsafe { webviewSetFrame(webview.inner().cast(), x, y, w, h) }
-}
-
-pub fn hidden(webview: &PlatformWebview, hidden: bool) {
-    unsafe extern "C" {
-        fn webviewSetSurfaceHidden(view: *mut c_void, hidden: bool);
-    }
-    unsafe { webviewSetSurfaceHidden(webview.inner().cast(), hidden) }
 }
 
 /// The values of the native overlay call: five per overlay, the left, top, right and bottom insets and then 1 when visible or 0 when not.
@@ -193,31 +178,6 @@ pub fn overlays(surface: Handle, overlays: &[DOMOverlay]) {
 #[cfg(test)]
 #[path = "webview_overlay_test.rs"]
 mod overlay_test;
-
-/// Returns the current position and size of the webview in page coordinates.
-pub fn frame(webview: &PlatformWebview) -> [f64; 4] {
-    unsafe extern "C" {
-        fn webviewGetFrame(view: *mut c_void, rect: *mut f64);
-    }
-    let mut rect = [0.0; 4];
-    unsafe { webviewGetFrame(webview.inner().cast(), rect.as_mut_ptr()) }
-    rect
-}
-
-/// Passes the start and the end of a continuous surface resize to the webview.
-pub fn live_resize(webview: &PlatformWebview, live: bool) {
-    unsafe {
-        let view = webview.inner() as *mut AnyObject;
-        if view.is_null() {
-            return;
-        }
-        if live {
-            let _: () = msg_send![view, viewWillStartLiveResize];
-        } else {
-            let _: () = msg_send![view, viewDidEndLiveResize];
-        }
-    }
-}
 
 /// Raises the webview above another view of the same parent.
 pub fn raise(webview: &PlatformWebview) {

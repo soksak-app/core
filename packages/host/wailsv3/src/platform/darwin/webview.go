@@ -59,15 +59,6 @@ static bool windowFileDrop(void *main, uintptr_t context) {
     return ON_MAIN(bool, sp_window_file_drop(main, fileDroppedBridge, fileDropReleasedBridge, (void *)context));
 }
 
-// Passes the start and the end of a continuous surface resize to the web view.
-static void surfaceBeginLiveResize(void* handle) {
-    wailsRunOnMain(^{ [(WKWebView*)handle viewWillStartLiveResize]; });
-}
-
-static void surfaceEndLiveResize(void* handle) {
-    wailsRunOnMain(^{ [(WKWebView*)handle viewDidEndLiveResize]; });
-}
-
 // A modal is a WKWebView inside the main window. A layer clips the corners, and the position and the focus of the modal
 // do not change the OS window hierarchy.
 static void modalViewConfigureOnMain(void* handle, const char* title, double radius) {
@@ -251,14 +242,6 @@ func (implementation) CollectGarbage(view unsafe.Pointer) error {
 	return fmt.Errorf("the JavaScript garbage collection request is unavailable")
 }
 
-// WebviewFrame returns the current region of a surface. The host fits the declared region to pixels, so
-// it can differ from the region that the page sent, and the page receives that difference.
-func (implementation) WebviewFrame(view unsafe.Pointer) platform.Rect {
-	var out [4]C.double
-	C.main_webviewGetFrame(view, &out[0])
-	return platform.Rect{X: float64(out[0]), Y: float64(out[1]), W: float64(out[2]), H: float64(out[3])}
-}
-
 func (implementation) CreateSurface(window unsafe.Pointer) (unsafe.Pointer, error) {
 	main := C.main_sp_window_main_webview(window)
 	if main == nil {
@@ -275,8 +258,13 @@ func (implementation) CloseSurface(surface unsafe.Pointer) { C.main_sp_surface_c
 func (implementation) SetSurfaceBounds(surface unsafe.Pointer, x, y, width, height float64) {
 	C.main_webviewSetFrame(surface, C.double(x), C.double(y), C.double(width), C.double(height))
 }
+
+// SurfaceFrame returns the current region of a surface. The host fits the declared region to pixels, so
+// it can differ from the region that the page sent, and the page receives that difference.
 func (implementation) SurfaceFrame(surface unsafe.Pointer) platform.Rect {
-	return implementation{}.WebviewFrame(surface)
+	var out [4]C.double
+	C.main_webviewGetFrame(surface, &out[0])
+	return platform.Rect{X: float64(out[0]), Y: float64(out[1]), W: float64(out[2]), H: float64(out[3])}
 }
 func (implementation) SetSurfaceHiddenHandle(surface unsafe.Pointer, hidden bool) {
 	C.main_webviewSetSurfaceHidden(surface, C.bool(hidden))
@@ -299,10 +287,6 @@ func (implementation) SetWindowOverlays(main unsafe.Pointer, overlays []platform
 	}
 	C.main_sp_surface_set_window_overlays(main, data, C.size_t(len(values)/4))
 	return nil
-}
-
-func (implementation) SetWebviewAlpha(view unsafe.Pointer, alpha float64) {
-	C.main_webviewSetSurfaceAlpha(view, C.double(alpha))
 }
 
 // surfaceOverlayValues returns the values of the native overlay call: five per overlay, the left, top, right and bottom insets and then 1 when visible or 0 when not.
@@ -329,16 +313,6 @@ func (implementation) SetSurfaceOverlays(view unsafe.Pointer, overlays []platfor
 		data = &values[0]
 	}
 	C.main_webviewSetSurfaceOverlays(view, data, C.size_t(len(overlays)))
-}
-
-// SetWebviewResizing starts or ends the continuous resize of a surface. The page tells whether the update it just sent
-// is the last one, and an update that has not ended is a continuous resize.
-func (implementation) SetWebviewResizing(view unsafe.Pointer, live bool) {
-	if live {
-		C.surfaceBeginLiveResize(view)
-		return
-	}
-	C.surfaceEndLiveResize(view)
 }
 
 func (implementation) ConfigureModal(view unsafe.Pointer, title string, radius float64) {

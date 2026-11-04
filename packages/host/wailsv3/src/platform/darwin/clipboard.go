@@ -18,9 +18,6 @@ static char *main_sp_clipboard_write_text(void *clipboard, const char *text) {
     return ON_MAIN(char *, sp_clipboard_write_text(clipboard, text));
 }
 static char *main_sp_clipboard_read_png(void *clipboard) { return ON_MAIN(char *, sp_clipboard_read_png(clipboard)); }
-static char *main_sp_clipboard_write_png(void *clipboard, const unsigned char *bytes, size_t length) {
-    return ON_MAIN(char *, sp_clipboard_write_png(clipboard, bytes, length));
-}
 static char *main_sp_clipboard_read_file_urls(void *clipboard) { return ON_MAIN(char *, sp_clipboard_read_file_urls(clipboard)); }
 */
 import "C"
@@ -127,26 +124,6 @@ func (implementation) ClipboardWriteText(text string) error {
 	value := C.CString(text)
 	defer C.free(unsafe.Pointer(value))
 	result, err := clipboardJSON(C.main_sp_clipboard_write_text(board, value))
-	if err != nil {
-		return err
-	}
-	return clipboardStatus(result)
-}
-
-func (implementation) ClipboardWritePNG(bytes []byte) error {
-	if len(bytes) > 16*1024*1024 {
-		return fmt.Errorf("clipboard PNG exceeds 16 MiB")
-	}
-	board := C.main_sp_clipboard_open(nil)
-	if board == nil {
-		return fmt.Errorf("cannot open system clipboard")
-	}
-	defer C.main_sp_clipboard_close(board)
-	var pointer *C.uchar
-	if len(bytes) > 0 {
-		pointer = (*C.uchar)(unsafe.Pointer(&bytes[0]))
-	}
-	result, err := clipboardJSON(C.main_sp_clipboard_write_png(board, pointer, C.size_t(len(bytes))))
 	if err != nil {
 		return err
 	}

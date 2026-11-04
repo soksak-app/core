@@ -127,9 +127,6 @@ impl Platform for Windows {
     ) -> Result<(), String> {
         unsupported::place_webview(view, x, y, w, h)
     }
-    fn webview_frame(&self, view: &PlatformWebview) -> Result<[f64; 4], String> {
-        unsupported::webview_frame(view)
-    }
     fn create_surface(&self, main: Handle) -> Result<Handle, String> {
         unsupported::create_surface(main)
     }
@@ -154,14 +151,8 @@ impl Platform for Windows {
     fn file_drop(&self, main: Handle, receive: Box<dyn Fn(String)>) -> Result<(), String> {
         unsupported::file_drop(main, receive)
     }
-    fn set_surface_hidden(&self, view: &PlatformWebview, hidden: bool) -> Result<(), String> {
-        unsupported::set_surface_hidden(view, hidden)
-    }
     fn set_surface_overlays(&self, surface: Handle, overlays: &[DOMOverlay]) -> Result<(), String> {
         unsupported::set_surface_overlays(surface, overlays)
-    }
-    fn set_alpha(&self, view: &PlatformWebview, alpha: f64) -> Result<(), String> {
-        unsupported::set_alpha(view, alpha)
     }
     fn sample_threads(&self, path: &std::path::Path) -> Result<(), String> {
         unsupported::sample_threads(path)
@@ -170,9 +161,6 @@ impl Platform for Windows {
         unsupported::collect_garbage(view)
     }
 
-    fn set_live_resize(&self, view: &PlatformWebview, live: bool) -> Result<(), String> {
-        unsupported::set_live_resize(view, live)
-    }
     fn raise_webview(&self, view: &PlatformWebview) -> Result<(), String> {
         unsupported::raise_webview(view)
     }
@@ -671,9 +659,6 @@ impl Platform for Windows {
     }
     fn clipboard_write_text(&self, text: &str) -> Result<(), String> {
         unsupported::clipboard_write_text(text)
-    }
-    fn clipboard_write_png(&self, bytes: &[u8]) -> Result<(), String> {
-        unsupported::clipboard_write_png(bytes)
     }
     fn open_link(&self, url: &str) -> Result<(), String> {
         unsupported::open_link(url)

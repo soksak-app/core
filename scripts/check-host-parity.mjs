@@ -216,6 +216,40 @@ export function specDiagnosticMethods(endpointMarkdown) {
   return methods;
 }
 
+/** The method names of every trait that the Rust platform interface (src/platform/platform.rs) declares. */
+export function rustPlatformMethods(source) {
+  const methods = [];
+  for (const trait of source.matchAll(/^pub trait (\w+)[^{\n]*\{\n([\s\S]*?)^\}/gm)) {
+    for (const match of trait[2].matchAll(/^ {4}fn ([a-z_][a-z0-9_]*)/gm)) methods.push(match[1]);
+  }
+  return methods;
+}
+
+/** The method names of every interface that the Go platform interface (src/platform/platform.go) declares. */
+export function goPlatformMethods(source) {
+  const methods = [];
+  for (const block of source.matchAll(/^type (\w+) interface \{\n([\s\S]*?)^\}/gm)) {
+    for (const match of block[2].matchAll(/^\t([A-Z]\w*)\(/gm)) methods.push(match[1]);
+  }
+  return methods;
+}
+
+// A line whose first text is a line comment calls nothing.
+const withoutCommentLines = (source) => source.split("\n").filter((line) => !line.trimStart().startsWith("//")).join("\n");
+
+/**
+ * Returns a failure for each platform method that no host source outside src/platform calls. A Rust method is called as
+ * `.name(` or `::name(`; a Go method is called as `.Name(` or passed as the method value `.Name`. The sources are the production
+ * sources of the host outside src/platform, without test files.
+ */
+export function auditPlatformCallers(host, methods, sources) {
+  const text = Object.values(sources).map(withoutCommentLines).join("\n");
+  return methods
+    .filter((name) => !new RegExp(`(\\.|::)${name}\\b`).test(text))
+    .sort()
+    .map((name) => `${host} platform method ${name} has no caller outside src/platform`);
+}
+
 /** Judges propositions 1, 2, and 3 on the injected sources and returns the list of failures. */
 export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, wailsv3Runtime, wailsv3HostSources,
   tauriv2EndpointSource, wailsv3EndpointSource, wailsv3DiagnosticsSource,

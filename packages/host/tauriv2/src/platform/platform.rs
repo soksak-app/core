@@ -147,8 +147,6 @@ pub trait Connection: Read + Write + Send {
     /// Returns another value that points to the same connection. It is used when reading and writing run on different
     /// threads.
     fn try_clone(&self) -> Result<Box<dyn Connection>, String>;
-    /// Sets the read timeout. None means no limit.
-    fn set_read_timeout(&self, timeout: Option<Duration>) -> Result<(), String>;
     /// Closes both reading and writing of the connection.
     fn close(&self) -> Result<(), String>;
 }
@@ -425,8 +423,6 @@ pub trait Platform: CoreRootHost + Send + Sync {
         w: f64,
         h: f64,
     ) -> Result<(), String>;
-    /// Returns the current position and size of the webview in page coordinates.
-    fn webview_frame(&self, view: &PlatformWebview) -> Result<[f64; 4], String>;
     /// Creates a logical SurfaceHost under the main DOM webview. This call does not create a DOM webview.
     fn create_surface(&self, main: Handle) -> Result<Handle, String>;
     fn close_surface(&self, surface: Handle) -> Result<(), String>;
@@ -438,20 +434,14 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// Receives the files dropped on the window of the main webview. receive receives {"urls":[...],"x":..,"y":..}
     /// (page coordinates).
     fn file_drop(&self, main: Handle, receive: Box<dyn Fn(String)>) -> Result<(), String>;
-    /// Sets the visibility of the SurfaceHost and of its two planes together.
-    fn set_surface_hidden(&self, view: &PlatformWebview, hidden: bool) -> Result<(), String>;
     /// Sets the declared DOM overlays that are handled before native input.
     fn set_surface_overlays(&self, surface: Handle, overlays: &[DOMOverlay]) -> Result<(), String>;
-    /// Sets the opacity of the webview.
-    fn set_alpha(&self, view: &PlatformWebview, alpha: f64) -> Result<(), String>;
     /// Writes the stacks of the threads of this process, sampled for one second, into the file `path`. The watch of the
     /// main thread calls it for a stall (docs/spec/logging.md, stalls).
     fn sample_threads(&self, path: &std::path::Path) -> Result<(), String>;
     /// Makes the WebContent processes of view collect JavaScript objects. The memory measurement of a diagnostic build
     /// uses it.
     fn collect_garbage(&self, view: &PlatformWebview) -> Result<(), String>;
-    /// Passes the start and the end of a continuous resize to the webview.
-    fn set_live_resize(&self, view: &PlatformWebview, live: bool) -> Result<(), String>;
     /// Raises the webview above another view of the same parent.
     fn raise_webview(&self, view: &PlatformWebview) -> Result<(), String>;
     /// Clips the corners of the webview so that they are rounded by radius logical pixels.
@@ -928,7 +918,6 @@ pub trait Platform: CoreRootHost + Send + Sync {
     // Clipboard. The implementations follow the contract that the caller calls them on the main thread.
     fn clipboard_read(&self, kind: &str) -> Result<ClipboardValue, String>;
     fn clipboard_write_text(&self, text: &str) -> Result<(), String>;
-    fn clipboard_write_png(&self, bytes: &[u8]) -> Result<(), String>;
     /// Opens a URL in the default application of the user for its scheme. Call it on the main thread.
     fn open_link(&self, url: &str) -> Result<(), String>;
     /// The folder in which the operating system writes the crash reports of the current user, as the system names it.

@@ -490,9 +490,6 @@ type Surfaces struct {
 	// A surface is a native view, so input that pressed a surface does not reach the page. This map converts the pressed
 	// view to the surface id that the page uses.
 	named map[uintptr]string
-	// Surfaces in a continuous resize. A surface does not receive a call for every frame; it receives the start and
-	// the end of the continuous change.
-	live map[string]bool
 	// registrations are the entries that surface pages registered. When the main page is read again, the new page is told again.
 	registrations map[string][]SurfaceRegistration
 	// Tells whether a continuous update is in progress. The page announces it at every commit, and with this value run-began and
@@ -547,7 +544,6 @@ func NewSurfaces(win *application.WebviewWindow, sidecars *Sidecars) *Surfaces {
 		surfacePlugins:       map[string]string{},
 		compositionRevisions: map[string]uint64{},
 		named:                map[uintptr]string{},
-		live:                 map[string]bool{},
 		shapes:               map[string]*nativeShape{},
 		documents:            NewDocuments(),
 		sourceOrigins:        newSourceOrigins(),
@@ -732,20 +728,6 @@ func (s *Surfaces) whenSettled() <-chan struct{} {
 		s.settled = append(s.settled, done)
 	})
 	return done
-}
-
-// resizing starts or ends the continuous resize of a surface. The two calls form a pair, so the state of each surface
-// is kept here and only a change is passed on.
-func (s *Surfaces) resizing(id string, view *nativeWebview, live bool) {
-	if s.live[id] == live {
-		return
-	}
-	if live {
-		s.live[id] = true
-	} else {
-		delete(s.live, id)
-	}
-	system.SetWebviewResizing(view.NativeView(), live)
 }
 
 // press publishes the id of a surface or of a document web view that the surface owns. The page decides the meaning of the press.

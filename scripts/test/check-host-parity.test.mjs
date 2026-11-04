@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { auditCommonOnlyKeys, auditHostParity, auditMenuTables, commonOnlyKeys, goMenuTables, rustHandlers, rustMenuTables, snake, specMenuTables } from "../check-host-parity.mjs";
+import { auditCommonOnlyKeys, auditHostParity, auditMenuTables, auditPlatformCallers, commonOnlyKeys, goMenuTables, goPlatformMethods, rustHandlers, rustMenuTables, rustPlatformMethods, snake, specMenuTables } from "../check-host-parity.mjs";
 
 // The base sources of the injection checks. Changing only one name in the real sources proves that each failure is produced mechanically.
 const sources = () => ({
@@ -21,6 +21,44 @@ const sources = () => ({
   browserStorageSource: 'const COMMON_ONLY = Object.freeze(["projectOpening", "textSize"]);',
   workbenchSettingsSource: 'const COMMON_ONLY = Object.freeze(["projectOpening", "textSize"]);',
 });
+
+// The platform interfaces of the two hosts and host sources outside the platform folder that call each method; in Go one method is passed
+// as a method value.
+const platformSources = () => ({
+  tauriv2: { "surfaces.rs": "fn sync(p: &dyn Platform) {\n    p.set_core_root(resolve)?;\n    let surface = p.create_surface(main)?;\n    p.place_webview(&view, frame)?;\n}" },
+  wailsv3: { "host.go": "func run() {\n\tsystem.SetCoreRoot(resolve)\n\tsurface, err := system.CreateSurface(window)\n\tapplication.InvokeSync(system.AnswerQuitRequests)\n}" },
+});
+
+// Audits the platform callers of both hosts.
+const platformFailures = (sources) => [
+  ...auditPlatformCallers("tauriv2", rustPlatformMethods(rustPlatformFixture), sources.tauriv2),
+  ...auditPlatformCallers("wailsv3", goPlatformMethods(goPlatformFixture), sources.wailsv3),
+];
+
+const rustPlatformFixture = `pub trait CoreRootHost {
+    fn set_core_root(&self, resolve: CoreRootResolver) -> Result<(), String>;
+}
+
+pub trait Platform: CoreRootHost + Send + Sync {
+    /// Creates a surface.
+    fn create_surface(&self, main: Handle) -> Result<Handle, String>;
+    fn place_webview(
+        &self,
+        view: &PlatformWebview,
+        frame: Frame,
+    ) -> Result<(), String>;
+}`;
+
+const goPlatformFixture = `type CoreRootHost interface {
+	SetCoreRoot(resolve CoreRootResolver) error
+}
+
+type Platform interface {
+	CoreRootHost
+	// CreateSurface creates a surface.
+	CreateSurface(window unsafe.Pointer) (unsafe.Pointer, error)
+	AnswerQuitRequests()
+}`;
 
 const endpointFixture = `## Diagnostic builds
 
@@ -176,4 +214,30 @@ test("the common-only keys of the hosts, the browser runtime and the workbench a
   });
   assert.deepEqual(keys.workbench, ["projectOpening", "textSize", "memorySaver", "memorySaverDelay"]);
   assert.deepEqual(auditCommonOnlyKeys(keys), []);
+});
+
+test("every platform method with a caller passes", { timeout: 1000 }, () => {
+  assert.deepEqual(rustPlatformMethods(rustPlatformFixture), ["set_core_root", "create_surface", "place_webview"]);
+  assert.deepEqual(goPlatformMethods(goPlatformFixture), ["SetCoreRoot", "CreateSurface", "AnswerQuitRequests"]);
+  assert.deepEqual(platformFailures(platformSources()), []);
+});
+
+test("a platform method without a caller outside the platform fails", { timeout: 1000 }, () => {
+  const changed = platformSources();
+  changed.tauriv2["surfaces.rs"] = changed.tauriv2["surfaces.rs"].replace("    p.place_webview(&view, frame)?;\n", "");
+  changed.wailsv3["host.go"] = changed.wailsv3["host.go"].replace("\tapplication.InvokeSync(system.AnswerQuitRequests)\n", "");
+  assert.deepEqual(platformFailures(changed), [
+    "tauriv2 platform method place_webview has no caller outside src/platform",
+    "wailsv3 platform method AnswerQuitRequests has no caller outside src/platform",
+  ]);
+});
+
+test("a platform method named only in a comment has no caller", { timeout: 1000 }, () => {
+  const changed = platformSources();
+  changed.tauriv2["surfaces.rs"] = changed.tauriv2["surfaces.rs"].replace("    p.place_webview(&view, frame)?;", "    // p.place_webview(&view, frame)?;");
+  changed.wailsv3["host.go"] = changed.wailsv3["host.go"].replace("\tsurface, err := system.CreateSurface(window)", "\t// system.CreateSurface(window)");
+  assert.deepEqual(platformFailures(changed), [
+    "tauriv2 platform method place_webview has no caller outside src/platform",
+    "wailsv3 platform method CreateSurface has no caller outside src/platform",
+  ]);
 });
