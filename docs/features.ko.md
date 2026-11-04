@@ -140,6 +140,14 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
 - [ ] F502 — P0: framework mygo 위의 세 번째 host가 workbench를 native UI로 그려서, window가 main page 없이 동작한다. 입력: Wails와 Tauri host의 main page는 사흘 사용 뒤 242 MB와 291 MB를 차지했고(F196), 빈 window도 plugin view가 생기기 전부터 main page의 WebContent, GPU, Networking process를 띄운다(V5-96-14-6-4-9). 기대: 구현 item이 시작되기 전에 명세가 mygo host, 그 목표, 그와 함께 Wails와 Tauri host가 받는 변경을 기술한다.
   - [o] F502-1 — 제안서 `docs/plans/mygo-host.md`와 그 번역이 tag v0.7.4 기준의 mygo 사실, main page의 비용, 목표와 세 host benchmark B3, 구조, framework 변경, 결정, Red와 Green을 갖춘 구현 item F502-2부터 F502-27-1까지를 기술한다. 그 adversarial review는 네 번째 round에서 이의 없이 끝났다. 검증: `make docs-check`.
   - [ ] F502-2 — 세 host의 측정 target, benchmark B3와 그 판정.
+    - [ ] F502-2-1 — Wails와 Tauri host는 `host.window`에서 각 image region의 `presentedFrames`를 보고하고 `frames`, `commandBuffers`, `settled`를 `null`로 보고하며, `diagnostics.drag`의 `native: true`를 받아 press, step, release를 window를 activate하지 않고 `sp_input_pointer`로 전달한다. host contract case가 각각을 다룬다.
+    - [ ] F502-2-2 — window check는 `mygo`를 `SOKSAK_APP`으로 받고, 세 application을 각자의 window 위치에 두며, `requiresBoth`에 `wailsv3`와 `tauriv2`를 이름 짓고, host의 DOM mount baseline을 `@soksak/window-check`의 함수 하나에서 받는다. view benchmark와 hwp window check가 그 함수를 부르고, plugin process 통과 값의 (iii)이 그 규칙을 적는다.
+    - [ ] F502-2-3 — `make app-usage`는 `STATE`, `IDLE=1`, `STEP=pointer`, `TRACE`를 받고, `make terminal-redraw-usage`는 `PLUGIN`, `ROWS`, `TRACE`를 받아 CPU time을 region이 present한 frame 수로 나눈다.
+    - [ ] F502-2-4 — `make object-counts`, `make host-allocations`, `make host-calls`, `make page-memory`, `make trace-share`는 `APP`을 받는 곳에서 `APP=mygo`를 받고, 앞의 둘은 `TRACE`를 받으며, `make host-allocations`는 `CONFIG_DIR`로 host를 찾고, main page target은 page process가 없는 window에서 `the mygo host has no main page`로 실패한다.
+    - [ ] F502-2-5 — `make registry`는 `SIDECARS=diagnostic`과 `PLUGINS=public`을 받고, build한 각 sidecar repository의 revision을 index 옆에 쓴다.
+    - [ ] F502-2-6 — e2e benchmark와 window check는 `term` view와 section view를 측정하고, page process가 없는 window의 U7 record와 frame counter를 읽으며, view drag benchmark의 drag를 B3의 순서로 실행하고, 그 bound를 `docs/spec/performance-goals.json`에서 읽는다.
+    - [ ] F502-2-7 — `make e2e-b3`는 benchmark B3를 실행하고 `make b3-judge`는 그 session folder를 `docs/spec/performance-goals.json`으로 판정한다. host 명세의 Performance goals 절은 그 파일을 옮겨 적고, 예시 검증 안내는 B3의 절차를 적는다.
+    - [!] F502-2-8 — core가 mygo host의 term(KR8)을 담은 records kit release를 pin한다. 보류. 원인: KR8을 담은 kit release 0.0.7(KR10)이 게시되지 않았다. 재시도 조건: kit release 0.0.7이 게시된다.
   - [ ] F502-3 — framework의 U1 (D3).
   - [ ] F502-4 — framework의 U2와 `native/darwin`의 N1.
   - [ ] F502-5 — 명세와 용어, 이후 각 item이 바꾸는 계약을 담은 그 item의 entry, 제안서의 제거.
