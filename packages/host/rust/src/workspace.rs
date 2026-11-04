@@ -6,7 +6,7 @@
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, PoisonError};
+use std::sync::{LazyLock, Mutex, PoisonError};
 
 use crate::framework::{AppHandle, Manager};
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
@@ -35,12 +35,25 @@ pub fn prepare_config_directory(
 /// window title bar from textSize of the common settings before the page starts
 /// (docs/spec/native-surfaces.md#title-bar-height), and the memory of the application that the memory saver settings
 /// govern is shared by its projects (docs/spec/settings.md#values). The workbench refuses the same keys.
-const COMMON_ONLY: [&str; 4] = [
-    "projectOpening",
-    "textSize",
-    "memorySaver",
-    "memorySaverDelay",
-];
+static COMMON_ONLY: LazyLock<Vec<String>> = LazyLock::new(|| {
+    let declaration: Value = serde_json::from_str(WORKBENCH_DECLARATION)
+        .expect("the embedded workbench.json parses: make exposure-check holds it to its source");
+    let keys: Vec<String> = serde_json::from_value(declaration["settings"]["commonOnly"].clone())
+        .expect("the embedded workbench.json lists the common-only keys as strings");
+    assert!(
+        !keys.is_empty(),
+        "workbench.json declares no common-only key"
+    );
+    keys
+});
+
+/// The copy of `packages/workbench/workbench.json`, which `make exposure-check` holds equal to its source.
+const WORKBENCH_DECLARATION: &str = include_str!("workbench.json");
+
+/// The keys that a project setting cannot hold.
+pub fn common_only_keys() -> &'static [String] {
+    &COMMON_ONLY
+}
 
 /// The store of one configuration directory. Write requests run in order.
 pub struct Workspace {
@@ -141,7 +154,7 @@ fn snapshot(directory: &Path, listed: Result<Vec<Value>, String>) -> Result<Valu
 /// Reads the overrides of the project settings file at path; a missing file holds no override.
 fn project_settings(path: &Path) -> Result<Map<String, Value>, String> {
     let mut settings = read_stored(path, "settings.json", SETTINGS_FORMAT)?.unwrap_or_default(); // default: a missing project settings file holds no overrides.
-    if let Some(key) = COMMON_ONLY.iter().find(|key| settings.contains_key(**key)) {
+    if let Some(key) = COMMON_ONLY.iter().find(|key| settings.contains_key(*key)) {
         return Err(format!("{}: {key} is common-only", path.display()));
     }
     // The format member is the carrier of the stored form, not a setting, so the snapshot does not show it
@@ -578,7 +591,7 @@ impl Workspace {
                 let patch = req.patch.unwrap_or_default();
                 let path = if req.id.is_some() {
                     let at = at.ok_or("unknown project")?;
-                    if let Some(key) = COMMON_ONLY.iter().find(|key| patch.contains_key(**key)) {
+                    if let Some(key) = COMMON_ONLY.iter().find(|key| patch.contains_key(*key)) {
                         return Err(format!("{key} is common-only"));
                     }
                     Path::new(

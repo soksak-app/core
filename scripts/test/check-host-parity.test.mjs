@@ -19,8 +19,8 @@ const sources = () => ({
   wailsv3MenuSource: goMenuFixture,
   hostsSpec: hostsFixture,
   endpointSpec: endpointFixture,
-  tauriv2WorkspaceSource: 'const COMMON_ONLY: [&str; 2] = ["projectOpening", "textSize"];',
-  wailsv3WorkspaceSource: 'var commonOnly = []string{"projectOpening", "textSize"}',
+  tauriv2DeclarationSource: '{"settings": {"commonOnly": ["projectOpening", "textSize"]}}',
+  wailsv3DeclarationSource: '{"settings": {"commonOnly": ["projectOpening", "textSize"]}}',
   browserStorageSource: 'const COMMON_ONLY = Object.freeze(["projectOpening", "textSize"]);',
   workbenchDeclarationSource: '{"settings": {"commonOnly": ["projectOpening", "textSize"]}}',
   tauriv2PlatformSource: rustPlatformFixture,
@@ -245,8 +245,8 @@ test("the common-only keys of the hosts, the browser runtime and the workbench a
   const { readFileSync } = await import("node:fs");
   const read = (path) => readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
   const keys = commonOnlyKeys({
-    tauriv2WorkspaceSource: read("packages/host/rust/src/workspace.rs"),
-    wailsv3WorkspaceSource: read("packages/host/go/src/workspace.go"),
+    tauriv2DeclarationSource: read("packages/host/rust/src/workbench.json"),
+    wailsv3DeclarationSource: read("packages/host/go/src/workbench.json"),
     browserStorageSource: read("apps/browser/runtime/browser-storage.js"),
     workbenchDeclarationSource: read("packages/workbench/workbench.json"),
   });

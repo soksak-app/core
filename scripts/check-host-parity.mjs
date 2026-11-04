@@ -154,13 +154,14 @@ function quotedList(source, declaration, close, file) {
 }
 
 /**
- * Proposition 5: reads the common-only keys of each host, of the browser runtime and of the workbench declaration (packages/workbench/workbench.json), which refuse them in project settings
+ * Proposition 5: reads the common-only keys of the copy of workbench.json that each language host library embeds, of the browser runtime and of the workbench declaration
+ * (packages/workbench/workbench.json), which refuse them in project settings
  * (docs/spec/projects.md#persistence).
  */
-export function commonOnlyKeys({ tauriv2WorkspaceSource, wailsv3WorkspaceSource, browserStorageSource, workbenchDeclarationSource }) {
+export function commonOnlyKeys({ tauriv2DeclarationSource, wailsv3DeclarationSource, browserStorageSource, workbenchDeclarationSource }) {
   return {
-    tauriv2: quotedList(tauriv2WorkspaceSource, 'const COMMON_ONLY: [&str;', '];', 'packages/host/rust/src/workspace.rs'),
-    wailsv3: quotedList(wailsv3WorkspaceSource, 'var commonOnly = []string{', '}', 'packages/host/go/src/workspace.go'),
+    tauriv2: JSON.parse(tauriv2DeclarationSource).settings.commonOnly,
+    wailsv3: JSON.parse(wailsv3DeclarationSource).settings.commonOnly,
     browser: quotedList(browserStorageSource, 'const COMMON_ONLY = Object.freeze([', '])', 'apps/browser/runtime/browser-storage.js'),
     workbench: JSON.parse(workbenchDeclarationSource).settings.commonOnly,
   };
@@ -418,7 +419,7 @@ export function hostProductSources(directory, extension) {
 export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, wailsv3Runtime, wailsv3HostSources,
   tauriv2EndpointSource, wailsv3EndpointSource, wailsv3DiagnosticsSource,
   hostContractSpec, tauriv2MenuSource, wailsv3MenuSource, hostsSpec, endpointSpec,
-  tauriv2WorkspaceSource, wailsv3WorkspaceSource, browserStorageSource, workbenchDeclarationSource,
+  tauriv2DeclarationSource, wailsv3DeclarationSource, browserStorageSource, workbenchDeclarationSource,
   tauriv2PlatformSource, wailsv3PlatformSource, tauriv2ProductSources, wailsv3ProductSources,
   tauriv2ApplicationSources, wailsv3ApplicationSources, tauriv2Crate, tauriv2AdapterCrate }) {
   const failures = [];
@@ -467,7 +468,7 @@ export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, wailsv3Runtim
   }
   failures.push(...auditMenuTables(specMenuTables(hostContractSpec), rustMenuTables(tauriv2MenuSource),
     goMenuTables(wailsv3MenuSource)));
-  failures.push(...auditCommonOnlyKeys(commonOnlyKeys({ tauriv2WorkspaceSource, wailsv3WorkspaceSource, browserStorageSource, workbenchDeclarationSource })));
+  failures.push(...auditCommonOnlyKeys(commonOnlyKeys({ tauriv2DeclarationSource, wailsv3DeclarationSource, browserStorageSource, workbenchDeclarationSource })));
   const tauriv2Callers = Object.fromEntries(Object.entries(tauriv2ProductSources)
     .map(([file, source]) => [file, withoutRustTestItems(source)]));
   failures.push(...auditPlatformCallers('tauriv2', rustPlatformMethods(tauriv2PlatformSource), tauriv2Callers,
@@ -512,11 +513,10 @@ if (process.argv[1] && process.argv[1].endsWith('check-host-parity.mjs')) {
     wailsv3MenuSource: read('packages/host/go/src/menu.go'),
     hostsSpec: read('docs/spec/hosts.md'),
     endpointSpec: read('docs/spec/endpoint.md'),
-    tauriv2WorkspaceSource: read('packages/host/rust/src/workspace.rs'),
-    wailsv3WorkspaceSource: read('packages/host/go/src/workspace.go'),
+    tauriv2DeclarationSource: read('packages/host/rust/src/workbench.json'),
+    wailsv3DeclarationSource: read('packages/host/go/src/workbench.json'),
     browserStorageSource: read('apps/browser/runtime/browser-storage.js'),
     workbenchDeclarationSource: read('packages/workbench/workbench.json'),
-    workbenchSettingsSource: read('packages/workbench/settings.js'),
     tauriv2PlatformSource: read('packages/host/rust/src/platform/platform.rs'),
     wailsv3PlatformSource: read('packages/host/go/src/platform/platform.go'),
     tauriv2ProductSources: hostProductSources(join(ROOT, 'packages/host/rust/src'), '.rs'),
