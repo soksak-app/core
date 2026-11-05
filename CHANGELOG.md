@@ -5,6 +5,7 @@
 ## Unreleased
 
 - F535: The event writer of each host and of the tool sleeps while it has nothing to write, so an idle application has no wakeup of its log. What wakes a writer that sleeps is stored at once and the batch interval gathers what follows; a native thread wakes it through the pipe of `sp_event_wake_fd`.
+- F535-1: The Rust event writer answers a flush request that it finds while it answers another one, where the second caller got a false deadline error at once.
 - F533: A delay unload of the memory saver that fails gets its next deadline one delay later, so a read or a commit that keeps failing no longer runs again at once with the error display each time.
 - F532: The update step of the Rust diagnostics ends the application through `quit` of the framework port, so `make tauriv2-build` compiles again. `make hosts-check` runs the new `make host-debug-check`, which compiles the two hosts and the two apps in the configuration of the debug apps.
 - F522: Korean typed in an image region composes from its first syllable. The input context of a region removes document access from its input document when the context is created, so the input method sends every key as marked text instead of reading committed text back from a region that holds only its marked buffer; a failed removal is reported as an input error, and a property already absent counts as removed. The `doCommandBySelector` record no longer has the `unhandledKey` field, whose path could not be reached.

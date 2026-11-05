@@ -220,3 +220,37 @@ func TestPullNeedsWake(t *testing.T) {
 		t.Fatalf("a Pull without a Wake was accepted: %v", err)
 	}
 }
+
+// The source puts the second request in the queue while the writer pulls for the first, so a writer that drains for a flush
+// finds it there. An interval of an hour keeps the end of an interval out of the answer.
+func TestAFlushThatAFlushFindsBehindItIsAnswered(t *testing.T) {
+	useEventLogFilesystemPlatform(t)
+	second := make(chan struct{})
+	var armed atomic.Bool
+	var log *EventLog
+	var err error
+	log, err = StartEventLog(EventLogOptions{
+		Directory: t.TempDir(), Role: "host", Boot: "flush", Layer: "host", Clock: func() uint64 { return 1 },
+		Spawn:       func(_ string, run func()) { go run() },
+		QueueEvents: 64, QueueBytes: 1 << 20, BatchInterval: time.Hour,
+		Pull: func(func(RelayedEvent), func(uint64, uint64, string, Channel)) {
+			if armed.CompareAndSwap(true, false) {
+				log.messages <- eventMessage{flush: second}
+			}
+		},
+		Wake: make(chan struct{}, 1),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(log.Close)
+	armed.Store(true)
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-second:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the flush behind the flush was not answered")
+	}
+}

@@ -1500,12 +1500,9 @@ fn write_loop(
             }
             Message::Rouse => rouser.queued.store(false, Ordering::SeqCst),
             Message::Flush(done) => {
-                let following = drain(&mut out, true);
+                queued = drain(&mut out, true);
                 if done.send(()).is_err() {
                     eprintln!("event writer: the flush was answered after its deadline");
-                }
-                if matches!(following, Some(Message::Stop)) {
-                    return;
                 }
                 continue;
             }
@@ -1522,6 +1519,10 @@ fn write_loop(
         }
     }
 }
+
+#[cfg(test)]
+#[path = "event_log_flush_test.rs"]
+mod flush_test;
 
 #[cfg(test)]
 #[path = "event_log_lock_test.rs"]

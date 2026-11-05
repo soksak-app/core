@@ -10,7 +10,7 @@ use serde_json::json;
 use super::{EventLog, Level, Options};
 
 #[path = "../tests/support/folder.rs"]
-mod folder;
+pub(super) mod folder;
 
 use folder::Folder;
 
