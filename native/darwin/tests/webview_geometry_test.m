@@ -403,13 +403,21 @@ static NSView *nativePlaneOf(NSView *surface) {
     return nil;
 }
 
+// The input that the view of a check received, in order.
+static NSMutableArray<NSString *> *inputOrder;
+
 // A native view that counts its presses. It takes the first click, because the check window is not the key window.
 @interface SPPressCounter : NSView
 @property(nonatomic) NSUInteger presses;
 @end
 @implementation SPPressCounter
 - (BOOL)acceptsFirstMouse:(NSEvent *)event { return YES; }
-- (void)mouseDown:(NSEvent *)event { self.presses++; }
+- (BOOL)acceptsFirstResponder { return YES; }
+- (void)mouseDown:(NSEvent *)event {
+    self.presses++;
+    [inputOrder addObject:@"press"];
+}
+- (void)keyDown:(NSEvent *)event { [inputOrder addObject:@"key"]; }
 @end
 
 static void pressDelivered(void *context, sp_input_result result, const sp_input_held *held) {
@@ -447,7 +455,7 @@ static void pumpInput(double seconds, BOOL (^done)(void)) {
 static void pumpPresses(double seconds, BOOL (^done)(void)) {
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:seconds];
     while (!done() && deadline.timeIntervalSinceNow > 0) {
-        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskLeftMouseDown
+        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny
             untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01] inMode:NSDefaultRunLoopMode dequeue:YES];
         if (event) [NSApp sendEvent:event];
     }
@@ -538,6 +546,7 @@ static void checkHitTesting(WKWebView *main) {
     sp_input_pointer_then(main.window, pressInContent.x, pressY, 1, 0, 0, 0, 1, 5, pressDelivered, &pressResult);
     check(counter.presses == 0, @"an injected press does not reach the surface during its preparation");
     check(surfaceLayoutCommit(main.window, 77002), @"the layout of the injected press commits");
+    pumpPresses(2, ^BOOL { return counter.presses == 1 && pressResult != SP_INPUT_UNRECEIVED; });
     check(counter.presses == 1, @"an injected press under a preparing surface reaches the surface after the commit");
     check(pressResult == SP_INPUT_DELIVERED, @"the injected press reports its delivery after the commit");
     check(sp_input_pointer(main.window, pressInContent.x, pressY, 3, 0, 0, 0) == SP_INPUT_DELIVERED,
@@ -615,6 +624,40 @@ static void checkHitTesting(WKWebView *main) {
     overrideSights = nil;
     free(seen);
     free(seenWhenHeld);
+    // Injected input keeps its order behind input that waits, whichever way it is delivered.
+    [main.window makeFirstResponder:counter];
+    surfaceLayoutBegin(main.window, 77007, ^(int allowed) {});
+    inputOrder = [NSMutableArray array];
+    sp_input_result heldPressResult = SP_INPUT_UNRECEIVED;
+    sp_input_pointer_then(main.window, pressInContent.x, pressY, 1, 0, 0, 0, 1, 5, pressDelivered, &heldPressResult);
+    check(sp_input_key(main.window, "a", "a", 0, true) == SP_INPUT_DELIVERED, @"an injected key behind an injected press is taken");
+    sp_input_key(main.window, "a", "a", 0, false);
+    pumpInput(0.1, ^BOOL { return NO; });
+    check(inputOrder.count == 0, [NSString stringWithFormat:@"injected input behind a press that waits reaches no view: %@", inputOrder]);
+    check(surfaceLayoutCommit(main.window, 77007), @"the layout of the injected press and key commits");
+    pumpInput(2, ^BOOL { return inputOrder.count >= 2 && heldPressResult != SP_INPUT_UNRECEIVED; });
+    check([inputOrder isEqual:(@[ @"press", @"key" ])],
+        [NSString stringWithFormat:@"an injected press reaches the view before the injected key behind it: %@", inputOrder]);
+    check(heldPressResult == SP_INPUT_DELIVERED, @"the injected press behind the commit reports its delivery");
+    sp_input_pointer(main.window, pressInContent.x, pressY, 3, 0, 0, 0);
+    [main.window makeFirstResponder:counter];
+    surfaceLayoutBegin(main.window, 77008, ^(int allowed) {});
+    inputOrder = [NSMutableArray array];
+    [NSApp postEvent:heldDown atStart:NO];
+    pumpInput(0.1, ^BOOL { return NO; });
+    sp_input_key(main.window, "a", "a", 0, true);
+    sp_input_key(main.window, "a", "a", 0, false);
+    check(inputOrder.count == 0, [NSString stringWithFormat:@"an injected key behind a person's press that waits reaches no view: %@", inputOrder]);
+    check(surfaceLayoutCommit(main.window, 77008), @"the layout of the person's press and the injected key commits");
+    // A key sent right after the commit, before the press comes back from the queue, stays behind it too.
+    sp_input_key(main.window, "b", "b", 0, true);
+    sp_input_key(main.window, "b", "b", 0, false);
+    pumpInput(2, ^BOOL { return inputOrder.count >= 3; });
+    check([inputOrder isEqual:(@[ @"press", @"key", @"key" ])],
+        [NSString stringWithFormat:@"a person's press reaches the view before the injected keys behind it: %@", inputOrder]);
+    [NSApp postEvent:heldUp atStart:NO];
+    pumpInput(0.2, ^BOOL { return NO; });
+    inputOrder = nil;
     [counter removeFromSuperview];
 
     // A release that waits for a layout longer than the wait for its receipt does not start that wait.
