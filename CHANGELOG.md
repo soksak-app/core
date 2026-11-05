@@ -36,6 +36,11 @@
 - F559: A normal quit of the mygo app no longer records a `window facts` error: a read of a closed window calls no native code and shows no workbench error.
 - F549: A wake of a settled window no longer wakes the log writer to store a count of frame events that were never refused.
 - F558: An update of a sidecar keeps the sessions that a project layout holds.
+- F502-23: The workbench of a mygo window starts after the first frame of the window, so a window that `windows` reports ready answers the commands that read its elements.
+- F502-23: A watcher of `host.window` on the mygo host hears of the frames when a frame leaves the window settled, so an operation that draws one frame ends with a notification.
+- F502-23: The mygo workbench answers `diagnostics.drag` and `diagnostics.drag.boundary`: a drag of a boundary runs on the ticks of the host through the input of the boundary, and `make object-counts` can run on mygo.
+- F502-23: The main thread of the mygo host records each step that it hands to the worker as `host.frame.step` while the class `frame` stores `debug`, and `diagnostics.objects` of a workbench that the host draws adds `framework`, the registered callbacks and the nodes of the last build pass.
+- F502-16: A press under a surface whose layout is preparing waits for the commit and reaches the surface. It used to reach the main page, or nothing in a window without one.
 - F502-23: The mygo workbench answers `diagnostics.layout.fail`: its next placement of the surfaces fails once with `diagnostic layout fault`, and the workbench shows that failure and goes on answering.
 - F581: `core.workbench.audit` of the mygo host reports an empty list, not `null`, when nothing is unbound.
 - F557: a page that loses the pointer stops hovering, in each order of the enter, the exit, and the move of its tracking area.

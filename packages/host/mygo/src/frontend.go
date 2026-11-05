@@ -105,11 +105,15 @@ func (f *Frontend) started() {
 	// after the first load (docs/spec/hosts.md#operation-groups).
 	f.window.OnReadyToShow(func() {
 		f.mu.Lock()
+		first := !f.ready
 		f.ready = true
 		shown := f.shown
 		f.mu.Unlock()
 		if shown {
 			f.window.Show()
+			if first {
+				routine.Go("workbench-start", f.startHeld)
+			}
 		}
 	})
 	// A listener makes the window take the files that no element of the workbench takes (docs/spec/native-surfaces.md).
@@ -257,11 +261,13 @@ func (f *Frontend) Show() {
 	f.shown = true
 	ready := f.ready
 	f.mu.Unlock()
-	if first {
-		routine.Go("workbench-start", f.startHeld)
-	}
+	// A window answers commands once its workbench started, and they read the elements of its last frame, so a window that drew
+	// no frame starts its workbench with its first frame.
 	if ready {
 		f.window.Show()
+		if first {
+			routine.Go("workbench-start", f.startHeld)
+		}
 	}
 }
 

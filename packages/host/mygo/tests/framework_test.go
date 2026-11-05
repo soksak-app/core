@@ -120,7 +120,7 @@ func (w *sceneWorkbench) received() []string {
 
 func (w *sceneWorkbench) Prepared(*host.Host) {}
 
-func (w *sceneWorkbench) Shown(host.Frontend) {}
+func (w *sceneWorkbench) Shown(window host.Frontend) { w.record("shown %s", window.Name()) }
 
 func (w *sceneWorkbench) Build(window host.Frontend) func(c *ui.Context) {
 	w.record("build %s", window.Name())
@@ -567,6 +567,19 @@ func TestTheFrameReportsOfAWindowReachItsCounters(t *testing.T) {
 	got = frames.Counters()
 	if *got.Frames != 2 || *got.CommandBuffers != 2 || !*got.Settled || frames.Nodes() != 9 {
 		t.Fatalf("after a settled frame: %d frames, %d command buffers, settled %t, %d nodes", *got.Frames, *got.CommandBuffers, *got.Settled, frames.Nodes())
+	}
+}
+
+// A window answers commands once its workbench started, and they read the elements of its last frame, so the start follows the
+// first frame.
+func TestAWorkbenchStartsAfterTheFirstFrameOfItsWindow(t *testing.T) {
+	_, workbench, window := open(t, "started")
+	window.Show()
+	wait(t, "the start of the workbench", func() bool { return slices.Contains(workbench.received(), "shown started") })
+	records := workbench.received()
+	drawn := slices.Index(records, "draw started")
+	if drawn < 0 || drawn > slices.Index(records, "shown started") {
+		t.Fatalf("the workbench started before the first frame: %v", records)
 	}
 }
 

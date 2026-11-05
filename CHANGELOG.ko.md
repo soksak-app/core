@@ -36,6 +36,11 @@
 - F559: mygo 앱의 정상 종료가 `window facts` 오류를 기록하지 않는다. 닫힌 창의 read는 native code를 부르지 않고 워크벤치 오류도 표시하지 않는다.
 - F549: 대기 중인 창이 깨어나도 거부된 적 없는 frame event의 count를 저장하려고 log writer를 깨우지 않는다.
 - F558: 사이드카 update가 project layout이 쥔 세션을 유지한다.
+- F502-23: mygo 창의 workbench 는 창의 첫 프레임 뒤에 시작하므로, `windows` 가 ready 로 보고한 창은 element 를 읽는 command 에 답한다.
+- F502-23: mygo host 의 `host.window` watcher 는 프레임이 창을 settle 상태로 남길 때 알림을 받으므로, 프레임 하나를 그리는 동작도 알림으로 끝난다.
+- F502-23: mygo workbench 가 `diagnostics.drag` 와 `diagnostics.drag.boundary` 에 답한다. boundary drag 는 host 의 tick 에 맞춰 boundary 의 input 경로로 돌고, `make object-counts` 가 mygo 에서 돌 수 있다.
+- F502-23: mygo host 의 main thread 는 class `frame` 이 `debug` 를 저장하는 동안 worker 에 넘긴 step 을 `host.frame.step` 으로 기록한다. host 가 그리는 workbench 의 `diagnostics.objects` 는 등록된 callback 수와 마지막 build pass 의 node 수를 담은 `framework` 를 더한다.
+- F502-16: 배치를 준비 중인 표면 위의 누름은 commit을 기다렸다가 표면에 간다. 이전에는 main page로 갔고, main page가 없는 창에서는 어디에도 가지 않았다.
 - F502-23: mygo workbench 가 `diagnostics.layout.fail` 에 답한다. 다음 surface 배치가 `diagnostic layout fault` 로 한 번 실패하고, workbench 는 그 실패를 보여 준 뒤 계속 요청에 답한다.
 - F581: mygo host의 `core.workbench.audit`이 연결되지 않은 요소가 없을 때 `null`이 아니라 빈 목록을 낸다.
 - F557: 포인터를 잃은 page가 추적 영역의 진입, 이탈, 이동이 어떤 순서로 와도 hover를 멈춘다.
