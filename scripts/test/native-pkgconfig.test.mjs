@@ -115,12 +115,15 @@ test("release host checks audit only their own optimized bundle", { timeout: 100
   for (const [host, target, bundle] of [
     ["wailsv3", "release-check-wailsv3", "--wailsv3-bundle \"target/release/wailsv3/soksak.app\""],
     ["tauriv2", "release-check-tauriv2", "--tauriv2-bundle \"target/release/tauriv2/soksak.app\""],
+    ["mygo", "release-check-mygo", "--mygo-bundle \"target/release/mygo/soksak.app\""],
   ]) {
     const output = execFileSync("make", ["-n", "-o", "native-darwin", "-o", "build", target], {
       cwd: workspace, encoding: "utf8",
     });
     assert.ok(output.includes(`check-release.mjs --host ${host} --macos-minimum 14.4 ${bundle}`), output);
-    assert.doesNotMatch(output, new RegExp(host === "wailsv3" ? "--tauriv2-bundle" : "--wailsv3-bundle"), output);
+    for (const other of ["wailsv3", "tauriv2", "mygo"].filter((name) => name !== host)) {
+      assert.doesNotMatch(output, new RegExp(`--${other}-bundle`), output);
+    }
     assert.doesNotMatch(output, /workspace-registry\.mjs/, output);
   }
 });

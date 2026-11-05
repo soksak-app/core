@@ -56,31 +56,30 @@ test('release builds and packages each host after the reusable CI checks succeed
     const next = text.slice(start + 1).search(/\n(?=  [a-z][a-z0-9-]+:\s*$)/m);
     return next < 0 ? text.slice(start) : text.slice(start, start + 1 + next);
   };
-  for (const [host, target, binary] of [
-    ['wailsv3', 'release-check-wailsv3', 'wailsv3/soksak.app/Contents/MacOS/soksak-wailsv3'],
-    ['tauriv2', 'release-check-tauriv2', 'tauriv2/soksak.app/Contents/MacOS/soksak-tauriv2'],
-  ]) {
+  for (const [host, label] of [['wailsv3', 'Wails'], ['tauriv2', 'Tauri'], ['mygo', 'mygo']]) {
+    const target = `release-check-${host}`;
     const hostJob = job(`release-${host}`);
     assert.match(hostJob, new RegExp(`run: make ${target}`));
     const list = steps(hostJob);
-    const packaging = list.findIndex((step) => step.name === `Package ${host === 'wailsv3' ? 'Wails' : 'Tauri'} release bundle`);
+    const packaging = list.findIndex((step) => step.name === `Package ${label} release bundle`);
     assert.ok(packaging >= 0, `${host}: no package step`);
-    assert.match(list[packaging].text, /ditto -c -k --keepParent/);
+    assert.match(list[packaging].text, new RegExp(`ditto -c -k --keepParent target/release/${host}/soksak\\.app "dist/soksak-\\$version-darwin-arm64-${host}\\.zip"`));
     const nativeFetch = list.findIndex((step) => step.name === 'Fetch the pinned native release file');
-    const build = list.findIndex((step) => step.name === `Build and audit ${host === 'wailsv3' ? 'Wails' : 'Tauri'} release bundle offline`);
+    const build = list.findIndex((step) => step.name === `Build and audit ${label} release bundle offline`);
     assert.ok(nativeFetch >= 0 && build > nativeFetch, `${host}: native dependency fetch must precede its offline build`);
     assert.match(list[build].text, /OFFLINE: '1'/);
   }
   const publish = job('publish');
-  assert.match(publish, /needs: \[checks, gate, release-wailsv3, release-tauriv2\]/);
+  assert.match(publish, /needs: \[checks, gate, release-wailsv3, release-tauriv2, release-mygo\]/);
   assert.match(publish, /if: always\(\) && needs\.gate\.outputs\.release == 'true'/);
   for (const [name, env] of [['checks', 'CHECKS_RESULT'], ['gate', 'GATE_RESULT'], ['release-wailsv3', 'WAILS_RESULT'],
-    ['release-tauriv2', 'TAURI_RESULT']]) {
+    ['release-tauriv2', 'TAURI_RESULT'], ['release-mygo', 'MYGO_RESULT']]) {
     assert.match(publish, new RegExp(`${env}: \\$\\{\\{ needs\\.${name}\\.result \\}\\}`));
     assert.match(publish, new RegExp(`test \\"\\$${env}\\" = success`), `${name}: publication is not gated on success`);
   }
   assert.match(publish, /name: release-wailsv3/);
   assert.match(publish, /name: release-tauriv2/);
+  assert.match(publish, /name: release-mygo/);
 });
 
 test('the release workflow runs no stored data migration step and no release step script', () => {
@@ -269,15 +268,15 @@ test('the hosted native job runs the native unit tests', () => {
   assert.match(hosted.text, /run: make -C core\/native\/darwin test$/m);
 });
 
-test('the release bundles build beside the checks and publication waits for both', () => {
+test('the release bundles build beside the checks and publication waits for them', () => {
   const release = read('.github/workflows/release.yml');
-  // The gate and the bundle builds do not wait for the checks; publish requires the success of the checks and of both builds.
+  // The gate and the bundle builds do not wait for the checks; publish requires the success of the checks and of every build.
   assert.match(release, /^ {2}gate:\n {4}runs-on: /m, 'gate waits for the checks, so the bundle builds start after every check');
-  for (const job of ['release-wailsv3', 'release-tauriv2']) {
+  for (const job of ['release-wailsv3', 'release-tauriv2', 'release-mygo']) {
     assert.match(release, new RegExp(`^ {2}${job}:\\n {4}needs: gate\\n`, 'm'), `${job} waits for a job other than gate`);
   }
-  assert.match(release, /^ {2}publish:\n(?: {4}.+\n)*? {4}needs: \[checks, gate, release-wailsv3, release-tauriv2\]$/m,
-    'publish does not require the checks and both builds');
+  assert.match(release, /^ {2}publish:\n(?: {4}.+\n)*? {4}needs: \[checks, gate, release-wailsv3, release-tauriv2, release-mygo\]$/m,
+    'publish does not require the checks and every build');
 });
 
 test('a push to main releases the declared version after the checks and the gate succeed', () => {
@@ -286,7 +285,7 @@ test('a push to main releases the declared version after the checks and the gate
   assert.doesNotMatch(release, /tags: \['v\*'\]/, 'release.yml does not start on a tag push');
   assert.match(release, /^concurrency:\n {2}group: release\n {2}cancel-in-progress: false$/m);
   assert.match(release, /run: pnpm exec soksak-release-gate packages\/plugin-api\/package\.json docs\/features\.md/);
-  for (const job of ['release-wailsv3', 'release-tauriv2']) {
+  for (const job of ['release-wailsv3', 'release-tauriv2', 'release-mygo']) {
     assert.match(release, new RegExp(`  ${job}:\\n {4}needs: gate\\n {4}if: needs\\.gate\\.outputs\\.release == 'true'\\n`), `${job} runs only on a release`);
   }
   assert.match(release, /git ls-remote origin refs\/heads\/main/, 'publication requires the commit to be the head of main');

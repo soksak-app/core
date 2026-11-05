@@ -202,7 +202,7 @@ On Windows both hosts implement only directory identity (`platform/windows/ident
 
 `make hosts-check` runs `make windows-build-check`, which vets the sources of the Go language host library and of the Wails framework adapter for `windows/arm64` in the default and the diagnostics build.
 
-`make hosts-check` also runs `make host-debug-check`, which compiles the sources and the tests of the two hosts and the two apps for macOS with the features and the tags of the debug apps. `make tauriv2-build`, `make wailsv3-build`, and this check read that configuration from one definition in the Makefile.
+`make hosts-check` also runs `make host-debug-check`, which compiles the sources and the tests of the three hosts and the three apps for macOS with the features and the tags of the debug apps. `make tauriv2-build`, `make wailsv3-build`, `make mygo-build`, and this check read that configuration from one definition in the Makefile.
 
 ## Main thread of the Wails host
 
@@ -408,9 +408,9 @@ On macOS each application runs from an application bundle, because the operating
 
 | Command | Action |
 | --- | --- |
-| `make wailsv3-build`, `make tauriv2-build` | Build `native/darwin` and the frontend, stage it, and build the debug executable |
-| `make wailsv3-build-release`, `make tauriv2-build-release` | Build the release executable |
-| `make wailsv3`, `make tauriv2` | Build and run the debug executable |
+| `make wailsv3-build`, `make tauriv2-build`, `make mygo-build` | Build `native/darwin` and the frontend, stage it, and build the debug executable |
+| `make wailsv3-build-release`, `make tauriv2-build-release`, `make mygo-build-release` | Build the release executable |
+| `make wailsv3`, `make tauriv2`, `make mygo` | Build and run the debug executable |
 | `make registry`, `make install-plugins CONFIG=DIR` | Build the workspace registry in `target/registry` from the plugin and sidecar repositories that `scripts/workspace-registry.json` declares ([repositories](plugins.md#repositories)), and install its plugins into a configuration directory |
 | `make rust-clippy-check` | Run clippy with `-D warnings` on every package and test of the Rust workspace, with and without the diagnostics feature; `make native-test` runs it |
 | `make native-test` | Run `make -C native/darwin test`, `go test` for `packages/host/go` and `packages/host/wailsv3`, and `cargo test -p soksak-host -p soksak-host-tauriv2`, the host tests with and without diagnostics; each sidecar repository runs its own tests |

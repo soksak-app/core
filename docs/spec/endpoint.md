@@ -83,7 +83,7 @@ The host stores every request of a client that names a declared method as the ev
 
 ## Diagnostic builds
 
-The following methods exist only in diagnostic builds (Go build tag `diagnostics`, cargo feature `diagnostics`). Other builds reject them as undeclared methods. `make wailsv3-build` and `make tauriv2-build` produce diagnostic builds; the release targets do not.
+The following methods exist only in diagnostic builds (Go build tag `diagnostics`, cargo feature `diagnostics`). Other builds reject them as undeclared methods. `make wailsv3-build`, `make tauriv2-build` and `make mygo-build` produce diagnostic builds; the release targets do not.
 
 | Method | Params | Purpose |
 | --- | --- | --- |

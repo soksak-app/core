@@ -1,9 +1,9 @@
 // Runs the end-to-end checks of core on this computer (docs/operations/examples.md#end-to-end-run):
 //   node scripts/e2e-run.mjs --script <name> [--native <target>] [--when-idle <seconds>]
-// The e2e targets of the Makefile build both debug applications and the workspace registry, and then run this script with the
+// The e2e targets of the Makefile build the three debug applications and the workspace registry, and then run this script with the
 // window-check script of their tier (`verify`, `verify:activation`, `verify:real`, `verify:person`) and the native end-to-end target
-// of that tier. Each run makes a new configuration root under target/e2e, prepares the registry certificates and the plugins of both
-// applications in it, starts both applications with that root, runs the window checks and the native end-to-end target, quits the
+// of that tier. Each run makes a new configuration root under target/e2e, prepares the registry certificates and the plugins of the
+// applications in it, starts the applications with that root, runs the window checks and the native end-to-end target, quits the
 // applications with host.quit and fails when a process of
 // the root or of a bundle remains. A passed run removes its root; a failed run keeps it with the logs of the applications, so a second
 // run starts from the same state as the first. Each step prints `running`, then `passed` or `failed` with its elapsed time, or `skipped`
@@ -20,7 +20,7 @@ import { untilFolderState } from '@soksak/window-check/folder-wait.mjs';
 import { crashFault } from './crash-fault.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const APPS = ['wailsv3', 'tauriv2'];
+const APPS = ['wailsv3', 'tauriv2', 'mygo'];
 /** The limit of a start step: the time that an application has to write endpoint.json. */
 const START_LIMIT_MS = 60_000;
 /** The limit of a quit step: the time that an application has to exit after host.quit. */
@@ -59,8 +59,7 @@ export function e2ePlan({ root, configRoot, script, native, whenIdle }) {
       argv: ['node', 'scripts/node-tests.mjs', '--script', script, '--concurrency', '1', '--timeout', '600', ...(whenIdle === undefined ? [] : ['--when-idle', whenIdle])],
       env: {
         ...env,
-        SOKSAK_BINARY_WAILSV3: binary(root, 'wailsv3'),
-        SOKSAK_BINARY_TAURIV2: binary(root, 'tauriv2'),
+        ...Object.fromEntries(APPS.map((app) => [`SOKSAK_BINARY_${app.toUpperCase()}`, binary(root, app)])),
         SOKSAK_CANDIDATE_REGISTRY: pathToFileURL(join(root, 'target', 'registry', 'index.json')).href,
       },
     },

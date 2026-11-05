@@ -83,7 +83,7 @@ host는 선언된 메서드를 부른 client의 모든 요청을 성능 trace가
 
 ## 진단 빌드
 
-다음 메서드는 진단 빌드(Go 빌드 태그 `diagnostics`, cargo feature `diagnostics`)에만 있다. 다른 빌드는 이 메서드를 선언되지 않은 메서드로 거부한다. `make wailsv3-build`와 `make tauriv2-build`는 진단 빌드를 만들고, 배포 대상은 진단 빌드를 만들지 않는다.
+다음 메서드는 진단 빌드(Go 빌드 태그 `diagnostics`, cargo feature `diagnostics`)에만 있다. 다른 빌드는 이 메서드를 선언되지 않은 메서드로 거부한다. `make wailsv3-build`, `make tauriv2-build`, `make mygo-build`는 진단 빌드를 만들고, 배포 대상은 진단 빌드를 만들지 않는다.
 
 | 메서드 | 매개변수 | 용도 |
 | --- | --- | --- |

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { auditDiagnostics, auditFrontend, auditMinimum, diagnosticRelease, frontendSources, machoMinimum } from "../check-release.mjs";
+import { auditDiagnostics, auditFrontend, auditMinimum, diagnosticRelease, frontendSources, machoMinimum, viewRootSources } from "../check-release.mjs";
 
 const script = fileURLToPath(new URL("../check-release.mjs", import.meta.url));
 
@@ -76,19 +76,19 @@ test("minimum audit requires the declared minimum in Info.plist and the applicat
   assert.deepEqual(audit("<plist><dict></dict></plist>", []), ["app.app/Contents/Info.plist: LSMinimumSystemVersion is missing, not the macOS minimum 14.4"]);
 });
 
-/** Makes two fake bundles that hold an application executable and an extra executable. */
+/** Makes three fake bundles that hold an application executable and an extra executable. */
 function bundles(t, extra = {}) {
   const dir = mkdtempSync(join(tmpdir(), "soksak-release-bundles-"));
   t.after(() => rmSync(dir, { recursive: true }));
   const paths = {};
-  for (const app of ["wailsv3", "tauriv2"]) {
+  for (const app of ["wailsv3", "tauriv2", "mygo"]) {
     const executables = join(dir, `${app}.app/Contents/MacOS`);
     mkdirSync(executables, { recursive: true });
     writeFileSync(join(executables, `soksak-${app}`), "\0application\0");
     writeFileSync(join(executables, "soksak-fixture-sidecar"), extra[app] ?? "\0clean sidecar\0");
     paths[app] = { bundle: join(dir, `${app}.app`), executables };
   }
-  return { paths, args: ["--macos-minimum", "14.4", "--wailsv3-bundle", paths.wailsv3.bundle, "--tauriv2-bundle", paths.tauriv2.bundle] };
+  return { paths, args: ["--macos-minimum", "14.4", "--wailsv3-bundle", paths.wailsv3.bundle, "--tauriv2-bundle", paths.tauriv2.bundle, "--mygo-bundle", paths.mygo.bundle] };
 }
 
 test("frontend audit accepts an executable that embeds every published file and the release module", () => {
@@ -127,17 +127,41 @@ test("the frontend sources are the files that staging wrote, which a release emb
     /diagnostics\.js is not release-diagnostics\.js of the workbench; the frontend was staged for another kind of build/);
 });
 
+// A host without a main page embeds the view root and no page diagnostic module (docs/spec/hosts.md#mygo-host).
+test("the view root of a host without a main page is every staged file, and the audit asks for no page module", (t) => {
+  const frontend = mkdtempSync(join(tmpdir(), "soksak-release-view-root-"));
+  t.after(() => rmSync(frontend, { recursive: true }));
+  mkdirSync(join(frontend, "modules/soksak"), { recursive: true });
+  writeFileSync(join(frontend, "environment.json"), "{\"name\":\"soksak\"}");
+  writeFileSync(join(frontend, "modules/soksak/card.js"), "export const card = 1;");
+  const sources = viewRootSources(frontend);
+  assert.deepEqual(sources.published.map(({ path, bytes }) => [path, bytes.toString()]).sort(), [
+    ["environment.json", "{\"name\":\"soksak\"}"],
+    [join("modules", "soksak", "card.js"), "export const card = 1;"],
+  ]);
+  const audited = (text) => {
+    const errors = [];
+    auditFrontend(errors, "app", text, sources);
+    return errors;
+  };
+  assert.deepEqual(audited(executable("{\"name\":\"soksak\"}", "export const card = 1;")), []);
+  assert.deepEqual(audited(executable("{\"name\":\"soksak\"}")),
+    [`app: does not embed a readable frontend; missing ${join("modules", "soksak", "card.js")}`]);
+});
+
 test("release CLI inspects the supplied bundles instead of default release paths", { timeout: 5000 }, (t) => {
   const dir = mkdtempSync(join(tmpdir(), "soksak-release-paths-"));
   t.after(() => rmSync(dir, { recursive: true }));
   const wails = join(dir, "isolated-wails.app");
   const tauri = join(dir, "isolated-tauri.app");
-  const stderr = check(["--macos-minimum", "14.4", "--wailsv3-bundle", wails, "--tauriv2-bundle", tauri]);
+  const mygo = join(dir, "isolated-mygo.app");
+  const stderr = check(["--macos-minimum", "14.4", "--wailsv3-bundle", wails, "--tauriv2-bundle", tauri, "--mygo-bundle", mygo]);
   assert.ok(stderr.includes(join(wails, "Contents/MacOS/soksak-wailsv3") + ": missing"), stderr);
   assert.ok(stderr.includes(join(tauri, "Contents/MacOS/soksak-tauriv2") + ": missing"), stderr);
+  assert.ok(stderr.includes(join(mygo, "Contents/MacOS/soksak-mygo") + ": missing"), stderr);
 });
 
-for (const [host, other] of [["wailsv3", "tauriv2"], ["tauriv2", "wailsv3"]]) {
+for (const [host, other] of [["wailsv3", "tauriv2"], ["tauriv2", "mygo"], ["mygo", "wailsv3"]]) {
   test(`release CLI audits only the explicitly selected ${host} bundle`, { timeout: 5000 }, (t) => {
     const dir = mkdtempSync(join(tmpdir(), "soksak-release-host-path-"));
     t.after(() => rmSync(dir, { recursive: true }));
@@ -173,14 +197,16 @@ test("release CLI identifies a missing minimum in selected-host mode", { timeout
   assert.match(check(["--host", "wailsv3", "--wailsv3-bundle", "selected.app"]), /required release option: --macos-minimum VERSION/);
 });
 
-test("release CLI preserves the default audit of both host bundles", { timeout: 5000 }, (t) => {
+test("release CLI preserves the default audit of every host bundle", { timeout: 5000 }, (t) => {
   const dir = mkdtempSync(join(tmpdir(), "soksak-release-both-paths-"));
   t.after(() => rmSync(dir, { recursive: true }));
   const wails = join(dir, "isolated-wails.app");
   const tauri = join(dir, "isolated-tauri.app");
-  const stderr = check(["--macos-minimum", "14.4", "--wailsv3-bundle", wails, "--tauriv2-bundle", tauri]);
+  const mygo = join(dir, "isolated-mygo.app");
+  const stderr = check(["--macos-minimum", "14.4", "--wailsv3-bundle", wails, "--tauriv2-bundle", tauri, "--mygo-bundle", mygo]);
   assert.ok(stderr.includes(join(wails, "Contents/MacOS/soksak-wailsv3") + ": missing"), stderr);
   assert.ok(stderr.includes(join(tauri, "Contents/MacOS/soksak-tauriv2") + ": missing"), stderr);
+  assert.ok(stderr.includes(join(mygo, "Contents/MacOS/soksak-mygo") + ": missing"), stderr);
 });
 
 /**
@@ -193,6 +219,7 @@ function applications(t) {
   const args = [];
   for (const app of ["wailsv3", "tauriv2"]) {
     const appDir = join(dir, app);
+    writeFileSync(join(mkdirSync(appDir, { recursive: true }), "environment.json"), JSON.stringify({ runtime: "runtime" }));
     const workbench = join(appDir, "node_modules/@soksak/workbench");
     const frontend = join(appDir, "src/frontend");
     mkdirSync(workbench, { recursive: true });
@@ -204,6 +231,12 @@ function applications(t) {
     writeFileSync(join(frontend, "diagnostics.js"), "diagnostic module");
     args.push(`--${app}-app`, appDir);
   }
+  // An application without a runtime has no main page, so its frontend is the staged view root.
+  const mygo = join(dir, "mygo");
+  mkdirSync(join(mygo, "src/frontend/modules"), { recursive: true });
+  writeFileSync(join(mygo, "environment.json"), "{}");
+  writeFileSync(join(mygo, "src/frontend/modules/view.js"), "staged view root");
+  args.push("--mygo-app", mygo);
   return args;
 }
 
@@ -212,6 +245,7 @@ test("release CLI inspects every executable in the bundle", { timeout: 5000 }, (
   const stderr = check([...args, ...applications(t)]);
   assert.ok(stderr.includes(`${join(paths.tauriv2.executables, "soksak-fixture-sidecar")}: contains a sidecar diagnostic symbol`), stderr);
   assert.ok(stderr.includes(`${join(paths.wailsv3.executables, "soksak-wailsv3")}: does not embed a readable frontend`), stderr);
+  assert.ok(stderr.includes(`${join(paths.mygo.executables, "soksak-mygo")}: does not embed a readable frontend; missing ${join("modules", "view.js")}`), stderr);
 });
 
 for (const [name, args, message] of [
@@ -224,7 +258,7 @@ for (const [name, args, message] of [
   ["empty value", ["--wailsv3-bundle", ""], /requires a bundle path/],
   ["option as value", ["--wailsv3-bundle", "--tauriv2-bundle"], /argument is ambiguous/],
   ["duplicate option", ["--wailsv3-bundle", "a", "--wailsv3-bundle", "b"], /duplicate release option/],
-  ["unknown host", ["--host", "other", "--macos-minimum", "14.4", "--wailsv3-bundle", "a"], /--host must be wailsv3 or tauriv2/],
+  ["unknown host", ["--host", "other", "--macos-minimum", "14.4", "--wailsv3-bundle", "a"], /--host must be wailsv3, tauriv2 or mygo/],
   ["missing selected host bundle", ["--host", "wailsv3", "--macos-minimum", "14.4"], /required release option: --wailsv3-bundle PATH/],
   ["empty selected host bundle", ["--host", "wailsv3", "--macos-minimum", "14.4", "--wailsv3-bundle", ""], /--wailsv3-bundle requires a bundle path/],
   ["duplicate host", ["--host", "wailsv3", "--host", "tauriv2", "--macos-minimum", "14.4", "--wailsv3-bundle", "a"], /duplicate release option: --host/],
