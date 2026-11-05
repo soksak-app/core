@@ -76,6 +76,13 @@ pub fn focus_surface(surface: Handle) {
     unsafe { sp_surface_focus(surface as *mut c_void) }
 }
 
+pub fn focus_surface_for_region(surface: Handle) {
+    unsafe extern "C" {
+        fn sp_surface_focus_for_region(surface: *mut c_void);
+    }
+    unsafe { sp_surface_focus_for_region(surface as *mut c_void) }
+}
+
 pub fn focus_workbench(window: Handle) {
     unsafe extern "C" {
         fn sp_window_focus_workbench(window: *mut c_void);

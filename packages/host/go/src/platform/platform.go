@@ -416,6 +416,8 @@ type Platform interface {
 	// FocusSurface gives the keyboard of its window to the surface, and FocusWorkbench gives the keyboard of window to the
 	// workbench (docs/spec/native-surfaces.md#keyboard-of-a-surface). Call them on the main thread.
 	FocusSurface(surface unsafe.Pointer)
+	// FocusSurfaceForRegion gives the keyboard to a surface that declared an image region, which keeps the keys until the region shows.
+	FocusSurfaceForRegion(surface unsafe.Pointer)
 	FocusWorkbench(window unsafe.Pointer)
 	SetWindowOverlays(main unsafe.Pointer, overlays []WindowOverlay) error
 	// SetSurfaceOverlays sets the declared DOM overlays to process before the native input.

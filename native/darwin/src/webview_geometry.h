@@ -47,6 +47,9 @@ void webviewSetSurfaceAlpha(void *webview, double alpha);
 // is not ready when the call comes receives the keyboard when it becomes ready. A left press that is open keeps the
 // keyboard where it is until its release, because a first responder that moves during a press ends that press.
 void sp_surface_focus(void *surface);
+// Gives the keyboard to a surface that declared an image region. Until the region shows, the surface itself holds the keyboard
+// and keeps up to 256 keys, and the region receives them in order when it shows. The page does not see them.
+void sp_surface_focus_for_region(void *surface);
 // Gives the keyboard of window to the workbench: the registered main web view, or the view of the framework that draws the
 // workbench of a window without a main web view. An open left press delays it as in sp_surface_focus.
 void sp_window_focus_workbench(void *window);
