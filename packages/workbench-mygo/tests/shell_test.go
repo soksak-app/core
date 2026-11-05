@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"image"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -453,8 +455,20 @@ func startedShell(t testing.TB, stored *storedHost) *shellFixture {
 	}
 	f.shell = shell
 	f.tester = ui.NewTester(shell.View, 1200, 800)
+	f.tester.SetSystemSymbols(squareSymbols)
 	shell.Start()
 	return f
+}
+
+// squareSymbols stands in for the library of symbols of the system: each symbol paints the square of the box of an icon, which
+// tells a symbol from what lies under it at any point of that box.
+func squareSymbols(name string, pointSize, scale float64) (image.Image, bool) {
+	side := int(math.Ceil(13 * scale))
+	mask := image.NewAlpha(image.Rect(0, 0, side, side))
+	for i := range mask.Pix {
+		mask.Pix[i] = 255
+	}
+	return mask, true
 }
 
 // settle runs every later step and draws the frame that shows their result.

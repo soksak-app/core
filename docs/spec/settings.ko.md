@@ -189,7 +189,7 @@ theme catalog와 mode, font, menu 언어와 기본 언어, 그리고 이 설정�
 
 워크벤치 stylesheet(`app.css`, `library.css`, `overlay.html`)의 길이, 비율, 지속 시간은 `packages/workbench/workbench.json`의 chrome metric이다. 워크벤치는 page가 그리기 전에 그 각각을 document root의 custom property로 정하고, stylesheet는 그 custom property를 읽는다. stylesheet는 literal 길이, 비율, 지속 시간을 담지 않는다. media condition은 custom property를 읽지 못하므로, 워크벤치는 window 폭이 `library-narrow-w` 이하인 동안 document root에 `data-library-narrow`를 표시하고, `library.css`는 그 표시로 library를 좁힌다. focus mark는 focus된 카드의 body 밖으로 사방 `focus-mark-t`만큼, 곧 stroke 두께만큼 나와 있어서 stroke가 surface를 덮지 않는다.
 
-규칙이 없는 page의 input과 select는 page의 color scheme으로 browser에서 모양을 받으므로 어느 stylesheet에도 선언이 없다. native workbench는 page 창에서 잰 값인 `workbench.json`의 `plainControls`로 그것을 그리고, 그 표를 읽는 stylesheet는 없다. browser가 그것으로 하는 동작도 같다. Escape는 search를 비우고, Tab은 도착한 field의 text를 선택하며, focus 명령은 focus를 가진 적 없는 field의 text를 선택하고 가진 적 있는 field의 선택은 그대로 둔다. search의 magnifier와 cancel은 browser가 그리는 system symbol이고, 그 symbol이 없는 system에서는 함께 선언한 path가 대신한다.
+규칙이 없는 page의 input과 select는 page의 color scheme으로 browser에서 모양을 받으므로 어느 stylesheet에도 선언이 없다. native workbench는 page 창에서 잰 값인 `workbench.json`의 `plainControls`로 그것을 그리고, 그 표를 읽는 stylesheet는 없다. browser가 그것으로 하는 동작도 같다. Escape는 search를 비우고, Tab은 도착한 field의 text를 선택하며, focus 명령은 focus를 가진 적 없는 field의 text를 선택하고 가진 적 있는 field의 선택은 그대로 둔다. search의 magnifier와 cancel은 browser가 그리는 system symbol이고, 그 symbol이 없는 system은 오류다.
 
 그런 control의 focus ring은 page가 항상 가지는 dark appearance의 시스템 focus 색이다. 그래서 accent color를 따르고 선언에 값이 없다. 다른 색은 시스템을 따르지 않는다. placeholder는 browser stylesheet의 색이고, search의 magnifier와 cancel은 text 색과 상관없이 자기 색을 가진 시스템 image다.
 

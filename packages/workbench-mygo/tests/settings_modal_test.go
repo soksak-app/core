@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"math"
 	"reflect"
 	"slices"
 	"strconv"
@@ -1290,7 +1289,7 @@ func TestTabSelectsTheTextOfTheSearchItReaches(t *testing.T) {
 }
 
 // The browser draws the magnifier and the cancel of a search from the symbols of the system, in the sizes of the page and the colors
-// that it gives them. A system without those symbols keeps the declared paths.
+// that it gives them.
 func TestTheSearchDrawsTheSymbolsOfTheSystem(t *testing.T) {
 	f := opened(t)
 	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
@@ -1299,13 +1298,7 @@ func TestTheSearchDrawsTheSymbolsOfTheSystem(t *testing.T) {
 	asked := map[string]float64{}
 	f.tester.SetSystemSymbols(func(name string, pointSize, scale float64) (image.Image, bool) {
 		asked[name] = pointSize
-		// A square that fills the box of the icon, which no path of the page does.
-		side := int(math.Ceil(float64(plainLength(t, "search-icon-size")) * scale))
-		mask := image.NewAlpha(image.Rect(0, 0, side, side))
-		for i := range mask.Pix {
-			mask.Pix[i] = 255
-		}
-		return mask, true
+		return squareSymbols(name, pointSize, scale)
 	})
 	f.settle()
 	if want := float64(plainLength(t, "search-icon-pt")); asked["magnifyingglass"] != want {
@@ -1330,7 +1323,7 @@ func TestTheSearchDrawsTheSymbolsOfTheSystem(t *testing.T) {
 	size := plainLength(t, "search-icon-size")
 	corner := size/2 - 1
 	x, y := box.X+plainLength(t, "search-icon-x")+size/2, box.Y+box.H/2
-	// The ring of the magnifier leaves its middle and the corners of its box empty.
+	// The square of the fixture reaches the middle and the corners of the box.
 	for _, at := range [][2]float32{{x, y}, {x - corner, y - corner}} {
 		if got, want := f.pixelOf(at[0], at[1]), opaque("search-icon"); got != want {
 			t.Fatalf("the magnifier at %v is %v, not %v", at, got, want)
@@ -1338,7 +1331,6 @@ func TestTheSearchDrawsTheSymbolsOfTheSystem(t *testing.T) {
 	}
 	end, cancelSize := plainLength(t, "search-cancel-end"), plainLength(t, "search-cancel-size")
 	cx := box.X + box.W - end - cancelSize/2
-	// The middle of the cancel is the cross of the path, and the corner of its box lies outside the circle.
 	for _, at := range [][2]float32{{cx, y}, {cx - corner, y - corner}} {
 		if got, want := f.pixelOf(at[0], at[1]), opaque("search-cancel"); got != want {
 			t.Fatalf("the cancel at %v is %v, not %v", at, got, want)
@@ -1350,6 +1342,19 @@ func TestTheSearchDrawsTheSymbolsOfTheSystem(t *testing.T) {
 	if got := f.modal().Query; got != "" {
 		t.Fatalf("after the cancel the query is %q", got)
 	}
+}
+
+// Every system of the host has the symbols of a search, so one without them is an error and no other drawing stands in.
+func TestASearchWithoutItsSymbolsIsAnError(t *testing.T) {
+	f := opened(t)
+	f.tester.SetSystemSymbols(func(string, float64, float64) (image.Image, bool) { return nil, false })
+	defer func() {
+		if got := fmt.Sprint(recover()); !strings.Contains(got, "no symbol magnifyingglass") {
+			t.Fatalf("a search without its symbol ended with %q", got)
+		}
+	}()
+	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
+	f.settle()
 }
 
 // controlBackground is the declared background of a control without a look of its own.

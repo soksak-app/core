@@ -467,8 +467,6 @@
     ]
   },
   "icons": {
-    "control-search": "<circle cx=\"5.2\" cy=\"5.2\" r=\"4.6\"/><path d=\"M8.6 8.6l3.8 3.8\"/>",
-    "control-search-cancel": "<path d=\"M4 4l5 5M9 4l-5 5\"/>",
     "control-select-arrows": "<path d=\"M.75 3.75l3-3 3 3M.75 6.25l3 3 3-3\"/>",
     "card-add": "<path d=\"M8 3v10M3 8h10\"/>",
     "card-split-x": "<rect class=\"half\" x=\"2\" y=\"3\" width=\"6\" height=\"10\" rx=\"1.5\"/><rect x=\"2\" y=\"3\" width=\"12\" height=\"10\" rx=\"2\"/><path d=\"M8 3v10\"/>",
