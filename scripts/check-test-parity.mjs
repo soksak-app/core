@@ -1028,6 +1028,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F591",
+    implementation: [{ file: "packages/host/go/src/windows.go", symbol: "win.NativeWindow() != nil" }],
+    tests: [{ file: "packages/host/go/src/windows_main_page_test.go", id: "TestAWindowThatIsGoneReadsNoStateOnAChange" }],
+    expected: "A change of a window whose native window is gone reads no state and logs no error.",
+    levels: ["unit"],
+  },
+  {
     id: "F589",
     implementation: [{ file: "native/darwin/src/surface_layout.m", symbol: "sendEventAfterLayout" }],
     tests: [

@@ -435,8 +435,11 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	changed := func() {
 		// An occluded or minimized window draws no image region (docs/spec/native-surfaces.md#image-regions).
 		mainThreadStep(func() {
-			if err := s.readOnScreen(); err != nil {
-				LogError("window on screen", err)
+			// A window that closes still reports changes, and it has no state left to read.
+			if win.NativeWindow() != nil {
+				if err := s.readOnScreen(); err != nil {
+					LogError("window on screen", err)
+				}
 			}
 		})
 		routine.Go("image-drawing", func() {
