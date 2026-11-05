@@ -491,7 +491,8 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 	// With native, the page answers the point of the boundary, and the host delivers the drag as native input there.
 	var from point
 	if native {
-		if from, err = dragBoundary(h, s, plan); err != nil {
+		from, err = presentedBoundary(s.presented, func() (point, error) { return dragBoundary(h, s, plan) })
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -636,6 +637,15 @@ func workbenchDrag(plan dragPlan, ask func(method string, params any) (json.RawM
 	}
 	result["boundary"], result["handled"] = record.Boundary, handled
 	return result, nil
+}
+
+// presentedBoundary reads the point of a boundary of a native drag after the window presented its current layout. A press goes where
+// the last frame drew, so a boundary that a change just made takes no press before it.
+func presentedBoundary(presented func() (float64, error), boundary func() (point, error)) (point, error) {
+	if _, err := presented(); err != nil {
+		return point{}, err
+	}
+	return boundary()
 }
 
 // dragBoundary asks the page for the point of the boundary of plan in window content coordinates.
