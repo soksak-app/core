@@ -1099,6 +1099,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F549",
+    implementation: [
+      { file: "native/darwin/src/observe.m", symbol: "if (!sp_event_enabled(SP_CLASS_FRAME, SP_EVENT_DEBUG)) return;" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/observe_test.m", id: "a summary that a closed gate leaves due is no refused event" },
+    ],
+    expected: "A source of the mode count holds its summary back while the gate is closed, so the gate refuses nothing, and the first summary after the gate opens holds every delivery.",
+    levels: ["native"],
+  },
+  {
     id: "F547",
     implementation: [
       { file: "packages/workbench-mygo/src/events.go", symbol: "if e.gatedTimer || e.sending || len(e.gated) == 0 {" },
@@ -1120,18 +1131,7 @@ const FEATURE_LINKS = [
       { file: "native/darwin/tests/webview_input_test.m", id: "a move off the view on top leaves it before its exit comes" },
     ],
     expected: "In each order of the enter, the exit and the move, only the view at the point hovers, and a view that loses the pointer hovers nothing.",
-    levels: ["unit"],
-  },
-  {
-    id: "F549",
-    implementation: [
-      { file: "native/darwin/src/observe.m", symbol: "if (!sp_event_enabled(SP_CLASS_FRAME, SP_EVENT_DEBUG)) return;" },
-    ],
-    tests: [
-      { file: "native/darwin/tests/observe_test.m", id: "a summary that a closed gate leaves due is no refused event" },
-    ],
-    expected: "A closed gate leaves the summary due without a count of the gate, and the first summary after the gate opens holds the deliveries since the earlier summary.",
-    levels: ["unit"],
+    levels: ["native"],
   },
   {
     id: "F548",
