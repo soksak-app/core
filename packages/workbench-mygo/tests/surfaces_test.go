@@ -139,6 +139,10 @@ func surfaceShellOf(t testing.TB, document string) (*shellFixture, *surfaceHost)
 // surfaceShellOn is surfaceShellOf over the host stored.
 func surfaceShellOn(t testing.TB, document string, stored *surfaceHost) *shellFixture {
 	t.Helper()
+	// A window has a backing scale, and the verification of each frame reads it.
+	if stored.window.Scale == 0 {
+		stored.window = workbench.WindowView{Visible: true, Scale: 2, Width: 1200, Height: 800}
+	}
 	declared, err := workbench.Declared()
 	if err != nil {
 		t.Fatal(err)

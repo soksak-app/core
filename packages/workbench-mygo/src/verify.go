@@ -542,6 +542,42 @@ func DrawnCards(tree []ui.ElementNode, plane layout.Rect) map[string]layout.Rect
 	return cards
 }
 
+// DrawnChrome reads the box of each card with its head and its foot from the element tree of the window.
+func DrawnChrome(tree []ui.ElementNode) []CardChrome {
+	boxes := map[string]*CardChrome{}
+	order := []string{}
+	box := func(id string) *CardChrome {
+		if boxes[id] == nil {
+			boxes[id] = &CardChrome{}
+			order = append(order, id)
+		}
+		return boxes[id]
+	}
+	var walk func(nodes []ui.ElementNode)
+	walk = func(nodes []ui.ElementNode) {
+		for _, node := range nodes {
+			if exposed, ok := node.Key.(Exposed); ok {
+				r := layout.Rect{X: float64(node.Bounds.X), Y: float64(node.Bounds.Y), W: float64(node.Bounds.W), H: float64(node.Bounds.H)}
+				switch exposed.Name {
+				case "core.card":
+					box(exposed.Item).Box = r
+				case "core.card.header":
+					box(exposed.Item).Head = r
+				case "core.card.status":
+					box(exposed.Item).Foot = r
+				}
+			}
+			walk(node.Children)
+		}
+	}
+	walk(tree)
+	chrome := make([]CardChrome, 0, len(order))
+	for _, id := range order {
+		chrome = append(chrome, *boxes[id])
+	}
+	return chrome
+}
+
 // Verification holds the value of the status core.verify.
 type Verification struct {
 	changed func()

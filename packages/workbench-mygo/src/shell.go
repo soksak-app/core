@@ -291,6 +291,8 @@ type Shell struct {
 	// keyboard is the keyboard focus of the window, which the first responder and the views report.
 	keyboard     *Focus
 	verification *Verification
+	// verifying tells that the step of the verification waits to run.
+	verifying bool
 	// diagnostics holds the policy and the trace switch that the host received last.
 	diagnostics struct{ policy, trace string }
 	// started is set once the host took the first state of the shell, changed once plugins changed before that, and reloading while the
@@ -326,7 +328,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 		grid: environment.Workspace.Grid, focus: environment.Workspace.Focus, browsing: true, library: newLibraryState(), strips: map[string]*stripPlace{}, icons: map[string]*ui.SVG{}, heads: map[string]layout.HeadFit{}}
 	s.text = NewTextSize(shellText{s}, steps)
 	s.keyboard = NewFocus(options.Declared, func() { s.options.Invalidate() })
-	s.verification = NewVerification(func() { s.options.Invalidate() })
+	s.verification = NewVerification(s.pushStatuses)
 	s.events = NewEvents(EventsOptions{Calls: s.calls, Post: options.Post, Report: options.Report, Now: time.Now,
 		After: func(delay time.Duration, task func()) { time.AfterFunc(delay, task) }})
 	s.calls.Observe(s.events.Call)
@@ -623,4 +625,5 @@ func (s *Shell) View(c *ui.Context) {
 	s.clearVisibleNotices()
 	s.drawn = true
 	s.pushStatuses()
+	s.verifyLater()
 }

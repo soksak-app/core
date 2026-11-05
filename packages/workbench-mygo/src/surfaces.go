@@ -202,6 +202,15 @@ type surfaceState struct {
 	detachFailed map[string]string
 	// sessions holds the stored session that the next attaches of a tab restore.
 	sessions map[string]*storedSession
+	// latest is the record of the last placement, answered the record of the last placement that the host answered, and sequence
+	// the number of the last record.
+	latest, answered *VerifyRecord
+	sequence         int
+	// applied holds where the host applied each visible surface, in window coordinates.
+	applied map[string]layout.Rect
+	// controls is the area of the window buttons that the host answered, and failure the error of the last placement.
+	controls *layout.Rect
+	failure  *string
 }
 
 // holdDetaching holds the surfaces that the host names at the start of the workbench.
@@ -261,7 +270,7 @@ type storedSession struct {
 }
 
 func newSurfaceState() surfaceState {
-	return surfaceState{held: map[string]*heldSurface{}, drawn: map[string]layout.Rect{}, seated: map[string]bool{},
+	return surfaceState{held: map[string]*heldSurface{}, drawn: map[string]layout.Rect{}, applied: map[string]layout.Rect{}, seated: map[string]bool{},
 		views: map[string]*viewState{}, reports: map[string]*tabReport{}, failed: map[string]string{}, documents: map[string]map[string]bool{},
 		detaching: map[string]bool{}, detachFailed: map[string]string{}, sessions: map[string]*storedSession{}}
 }
@@ -481,6 +490,9 @@ func (s *Shell) placeSurfaces() {
 	}
 	s.surfaces.placed = lines
 	s.surfaces.running = true
+	settledNow, _ := request["settled"].(bool)
+	record := s.surfaceRecord(lines, settledNow)
+	s.surfaces.latest = record
 	s.surfaces.placing, s.surfaces.commits = s.surfaces.commits, nil
 	for _, id := range s.surfaces.order {
 		held := s.surfaces.held[id]
@@ -505,13 +517,20 @@ func (s *Shell) placeSurfaces() {
 		prepared, err := decode[struct {
 			Ticket     json.RawMessage `json:"ticket"`
 			Placements json.RawMessage `json:"placements"`
+			Chrome     json.RawMessage `json:"chrome"`
 		}](value)
+		if err == nil {
+			err = s.followChrome(prepared.Chrome)
+		}
 		if err != nil {
 			s.placed(err)
 			return
 		}
 		s.calls.CallInOrder(surfaceOrder, "presentSurfaces", map[string]any{"ticket": prepared.Ticket, "placements": prepared.Placements, "settled": settled},
-			func(_ any, err error) {
+			func(answer any, err error) {
+				if err == nil {
+					err = s.seatRecord(record, answer)
+				}
 				s.placed(err)
 				s.options.Invalidate()
 			})
@@ -527,10 +546,8 @@ func (s *Shell) placed(err error) {
 		text := err.Error()
 		failure = &text
 	}
-	// Nothing reads the drawn plane here, so the update takes no rows and it cannot fail.
-	if err := s.verification.Update(false, nil, failure); err != nil {
-		s.fail(err)
-	}
+	s.surfaces.failure = failure
+	s.verifyLater()
 	placing := s.surfaces.placing
 	s.surfaces.placing = nil
 	s.answerCommits(placing, err)

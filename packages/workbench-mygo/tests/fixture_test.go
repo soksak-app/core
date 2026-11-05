@@ -103,13 +103,15 @@ func TestTheVerificationStatesAFailedPresentation(t *testing.T) {
 	}
 	refused = true
 	verify := place(1000)
-	if verify.Failed != 1 || len(verify.Rows) != 1 || verify.Rows[0].Name != "Surface presentation" ||
-		verify.Rows[0].OK || verify.Rows[0].Note != "the ticket is stale" {
+	if row := verifyRow(t, verify, "Surface presentation"); row.OK || row.Note != "the ticket is stale" || verify.Failed == 0 {
 		t.Fatalf("core.verify is %+v", verify)
 	}
 	refused = false
-	if verify = place(1100); verify.Failed != 0 || len(verify.Rows) != 0 {
-		t.Fatalf("core.verify is %+v", verify)
+	verify = place(1100)
+	for _, row := range verify.Rows {
+		if row.Name == "Surface presentation" {
+			t.Fatalf("core.verify is %+v", verify)
+		}
 	}
 }
 

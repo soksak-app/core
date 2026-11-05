@@ -365,10 +365,10 @@ func (s *Shell) surfacesState() []surfaceStatus {
 		if !visible {
 			box = held.box
 		}
-		entry := surfaceStatus{Surface: id, Plugin: unit.ID, Visible: visible, Dim: s.surfaceDimmed(id), Declared: &box, Applied: &box, Exposes: s.registry.EntriesOf(id),
+		entry := surfaceStatus{Surface: id, Plugin: unit.ID, Visible: visible, Dim: s.surfaceDimmed(id), Declared: &box, Exposes: s.registry.EntriesOf(id),
 			Status: s.surfacePhase(id), Composition: held.composition, Kind: "tab", State: "loaded"}
-		if !visible {
-			entry.Applied = nil
+		if applied, ok := s.surfaces.applied[id]; ok && visible {
+			entry.Applied = &applied
 		}
 		if held.section != nil {
 			entry.Kind = "section"
