@@ -5,6 +5,7 @@
 ## Unreleased
 
 - F443-1: Close the first run finding; the excess follows the load of the machine and a launch does not determine it.
+- F435-4: A run ends when its settled drawing has presented, so the status values held during a drag do not compete with its final layouts.
 - F435-3: Convergence reads every source frame after a drag, so a final viewport in a later frame is measured.
 - F435-2: Every view drag is judged with the performance trace off and the log policy reduced to the frame class.
 - F443: Five plain view runs on both hosts meet the latency targets in their medians; the first run after a launch on Wails is tracked by F443-1.
