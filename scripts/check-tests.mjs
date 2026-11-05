@@ -256,6 +256,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F594",
+    implementation: [
+      { file: "packages/window-check/view-edges.mjs", symbol: "export function viewEdgeFaults(image, frame, scale, { view, lines }) {" },
+      { file: "e2e/view-edges.test.mjs", symbol: "viewEdgeFaults(image, declared, scale, colors)" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/view-edges.test.mjs", id: "a row of the card inside the slot of a view is a fault" },
+      { file: "packages/window-check/test/view-edges.test.mjs", id: "a row of the card between a view and its line is a fault" },
+    ],
+    expected: "A check reads the device pixels across each edge of a native view in a still, so a row of the card beside a view that stands where it declared is a fault.",
+    levels: ["unit"],
+  },
+  {
     id: "F525",
     implementation: [
       { file: "packages/window-check/folder-wait.mjs", symbol: "RESCAN_REPORT" },
