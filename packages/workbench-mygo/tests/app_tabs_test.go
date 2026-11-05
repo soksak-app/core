@@ -522,3 +522,57 @@ func TestTheDelayUnloadsTheHiddenSectionsOfASetLinkedAfterTheStart(t *testing.T)
 		t.Fatal("the delay unloaded a section without a declaration")
 	}
 }
+
+// twoProjectsApp opens the first of two projects on a clock, with a shown tab and a hidden tab in each.
+func twoProjectsApp(t *testing.T) (*tabApp, *surfaceHost, *clock) {
+	t.Helper()
+	stored := &surfaceHost{}
+	stored.installed = hiddenTabsDocument
+	stored.common = map[string]any{"memorySaverDelay": memoryDelayMinutes}
+	other := storedProject(tab("tab-dddddd", "plain"), tab("tab-eeeeee", "notes"))
+	other["id"], other["root"], other["identity"] = "prj-b", "/b", "identity of /b"
+	other["spaces"].([]map[string]any)[0]["id"] = "spc-bbbbbb"
+	other["activeSpaceId"] = "spc-bbbbbb"
+	stored.projects = []map[string]any{storedProject(tab("tab-aaaaaa", "notes")), other}
+	time := &clock{}
+	f := newTabAppAt(t, stored, hiddenTabsDocument, tabClock{time})
+	f.command("core.project.activate", map[string]string{"id": "prj-a"})
+	return f, stored, time
+}
+
+// A project that the window has not opened has no surface and no entry of the memory saver.
+func TestAProjectThatTheWindowHasNotOpenedHoldsNoSurface(t *testing.T) {
+	f, stored, _ := twoProjectsApp(t)
+	if surface := stored.lastSurfaces(t)["tab-dddddd"]; surface != nil {
+		t.Fatalf("the tab of the project that was not opened is %v", surface)
+	}
+	for _, entry := range f.ask("status.get", map[string]any{"name": "core.tab.memory"})["result"].(map[string]any)["tabs"].([]any) {
+		if entry.(map[string]any)["tab"] == "tab-dddddd" {
+			t.Fatalf("the memory saver holds the tab of the project that was not opened: %v", entry)
+		}
+	}
+}
+
+// A project that the window left stays in the memory saver: the delay unloads its hidden tab, and its show restores it.
+func TestTheDelayUnloadsATabOfAProjectThatTheWindowLeft(t *testing.T) {
+	f, stored, time := twoProjectsApp(t)
+	f.command("core.project.activate", map[string]string{"id": "prj-b"})
+	if surface := stored.lastSurfaces(t)["tab-aaaaaa"]; surface == nil || surface["visible"] != false {
+		t.Fatalf("the tab of the project that was left is %v", surface)
+	}
+	time.tick(memoryDelayMinutes * minute)
+	f.settle()
+	if surface := stored.lastSurfaces(t)["tab-aaaaaa"]; surface != nil {
+		t.Fatalf("after the delay the tab of the project that was left is %v", surface)
+	}
+	if state := f.memoryOf("tab-aaaaaa")["state"]; state != "unloaded" {
+		t.Fatalf("after the delay the tab of the project that was left is %v", state)
+	}
+	f.command("core.project.activate", map[string]string{"id": "prj-a"})
+	if surface := stored.lastSurfaces(t)["tab-aaaaaa"]; surface == nil || surface["visible"] != true {
+		t.Fatalf("the shown tab is %v", surface)
+	}
+	if state := f.memoryOf("tab-aaaaaa")["state"]; state != "loaded" {
+		t.Fatalf("the restored tab is %v", state)
+	}
+}

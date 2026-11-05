@@ -343,6 +343,7 @@ func (s *Shell) showThen(id string, done func()) {
 		return
 	}
 	s.active, s.browsing = id, false
+	s.windowProjects[id] = true
 	s.options.Located(id)
 	s.errors.Hide(workbenchErrorPlace)
 	if err := s.beginSettings(s.settings.Common()); err != nil {
@@ -594,11 +595,12 @@ func (s *Shell) removeProjectThen(id string, done func(removed bool, err error))
 func (s *Shell) dropProject(id string) {
 	var tabs []string
 	for tab, held := range s.surfaces.held {
-		if held.project.ID == id {
+		if held.owner == id {
 			tabs = append(tabs, tab)
 		}
 	}
 	s.forgetSurfaces(tabs)
+	delete(s.windowProjects, id)
 	for i := range s.projects {
 		if s.projects[i].ID == id {
 			s.projects = append(s.projects[:i:i], s.projects[i+1:]...)

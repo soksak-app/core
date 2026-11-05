@@ -155,6 +155,8 @@ type heldSurface struct {
 	composition json.RawMessage
 	box         layout.Rect
 	project     projectStart
+	// owner is the project whose layout holds the surface.
+	owner string
 	// section is the start value of a section surface, and nil for the surface of a tab.
 	section *sectionStart
 	// unload is the declaration of unload of a section surface.
@@ -328,6 +330,10 @@ func (s *Shell) holdSurface(surface *heldSurface) {
 	}
 	project := s.opened()
 	surface.project = projectStart{ID: project.ID, Root: project.Root}
+	// A surface drawn in the plane belongs to the shown project, and a hidden one names the project of its layout.
+	if surface.owner == "" {
+		surface.owner = project.ID
+	}
 	s.surfaces.held[id] = surface
 	s.surfaces.order = append(s.surfaces.order, id)
 }
