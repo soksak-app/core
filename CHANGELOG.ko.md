@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F614: `make check-docs`는 tracked 또는 새 text 파일의 줄 시작에 있는 conflict marker에서 실패하고 파일과 줄을 적는다. marker가 든 merge commit이 이 검사와 commit hook을 통과한 적이 있다. Red: `scripts/test/checklist.test.mjs`.
 - F613: `make benchmark-b3`의 각 run은 첫 target 전에 첫 창을 `input.pointer`로 활성화한다. 창은 앞 창 뒤에 열리고 가려진 창은 다른 상태를 재기 때문이다. 활성화가 거부되거나 창이 계속 가려지면 run은 실패하고 아무것도 재지 않는다. Red: `scripts/test/benchmark-b3.test.mjs`의 첫 target이 가려진 창을 읽었다.
 - F612: 빌드와 검증 예제가 three-host benchmark, 시험 목록, 애플리케이션 사용량 측정을 현재 문장으로 한 번씩만 적고, 이름이 바뀐 make target과 package script를 쓴다.
 - F502-13: Wails와 Tauri 호스트에서 picker 항목의 `element.rect`는 mygo 호스트처럼 modal document가 그린 자리를 답하고, 그 document가 보고하기 전에는 실패한다. Red: 항목이 화면에 있는데 main document의 숨겨진 항목이 창 원점의 빈 상자를 답했다.
