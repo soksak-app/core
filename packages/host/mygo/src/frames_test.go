@@ -41,3 +41,14 @@ func TestAPlacementStoresTheNativeViewElementsOfTheWindow(t *testing.T) {
 		t.Fatalf("after a placement of no view the window holds %d native view elements", got)
 	}
 }
+
+func TestAStepWithoutAFocusedWindowBelongsToTheOnlyOpenWindow(t *testing.T) {
+	one := &Framework{frontends: map[*mygo.Window]*Frontend{{}: {name: "main"}}}
+	if got := one.stepWindow(); got != "main" {
+		t.Fatalf("the only window gives %q", got)
+	}
+	two := &Framework{frontends: map[*mygo.Window]*Frontend{{}: {name: "main"}, {}: {name: "second"}}}
+	if got := two.stepWindow(); got != "" {
+		t.Fatalf("two windows give %q", got)
+	}
+}

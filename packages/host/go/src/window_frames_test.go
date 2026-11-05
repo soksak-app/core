@@ -24,7 +24,9 @@ func TestWindowFramesCountEachFrameAndEachCommandBuffer(t *testing.T) {
 }
 
 // contract: window.frames.counts-frames-and-reports-settled
-func TestWindowFramesNotifyOnlyWhenSettledChanges(t *testing.T) {
+// The status of a window changes with each frame, so a watcher hears of a frame when the window settles and when it stops
+// settling, and not of each frame of an animation.
+func TestWindowFramesNotifyWhenAFrameLeavesTheWindowSettledOrEndsItsRest(t *testing.T) {
 	frames := NewWindowFrames("main")
 	notices := 0
 	frames.OnSettled(func() { notices++ })
@@ -33,11 +35,20 @@ func TestWindowFramesNotifyOnlyWhenSettledChanges(t *testing.T) {
 	for _, step := range []struct {
 		record *FrameRecord
 		want   int
-	}{{moving, 1}, {moving, 1}, {settled, 2}, {settled, 2}, {&FrameRecord{Timer: true}, 3}, {&FrameRecord{Repaints: true}, 3}, {&FrameRecord{AsksFrame: true}, 3}, {settled, 4}} {
+	}{{moving, 1}, {moving, 1}, {settled, 2}, {settled, 3}, {&FrameRecord{Timer: true}, 4}, {&FrameRecord{Repaints: true}, 4}, {&FrameRecord{AsksFrame: true}, 4}, {settled, 5}} {
 		frames.Frame(step.record)
 		if notices != step.want {
 			t.Fatalf("%d notices after %+v, want %d", notices, step.record, step.want)
 		}
+	}
+}
+
+func TestAFrameWithoutAWatcherAllocatesNothing(t *testing.T) {
+	frames := NewWindowFrames("main")
+	frames.OnSettled(func() {})
+	record := &FrameRecord{Outcome: "immediate"}
+	if allocations := testing.AllocsPerRun(100, func() { frames.Frame(record) }); allocations != 0 {
+		t.Fatalf("a frame without a start allocates %v", allocations)
 	}
 }
 

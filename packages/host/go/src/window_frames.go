@@ -64,7 +64,7 @@ func (w *WindowFrames) Frame(record *FrameRecord) {
 	if !record.AsksFrame && !record.Animates && !record.Repaints && !record.Timer {
 		state = settledYes
 	}
-	if previous := w.settled.Swap(state); previous != state {
+	if previous := w.settled.Swap(state); previous != state || state == settledYes {
 		if notify := w.onSettled.Load(); notify != nil {
 			(*notify)()
 		}
@@ -94,7 +94,8 @@ func (w *WindowFrames) Commit(kind string, at uint64) {
 	EmitHost(LevelDebug, "host.frame.commit", map[string]any{"window": w.window, "kind": kind, "commit_ns": strconv.FormatUint(at, 10)})
 }
 
-// OnSettled runs notify when the report of a frame changes whether the window settled.
+// OnSettled runs notify after a frame that leaves the window settled and after a frame that ends its rest: each frame changes
+// the counters of the status of the window, and a watcher hears of them when a burst of frames ends, not at each frame.
 func (w *WindowFrames) OnSettled(notify func()) { w.onSettled.Store(&notify) }
 
 // Counters reads the counters of host.window. A window that drew no frame has counted none, and has not settled.

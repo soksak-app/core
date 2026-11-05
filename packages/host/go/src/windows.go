@@ -349,8 +349,13 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	s := NewSurfaces(win, h.sidecars)
 	s.host, s.name, s.title = h, name, windowTitle()
 	if frames := win.Frames(); frames != nil {
-		// Whether the window settled changes with a frame, as whether it is occluded does with the screen.
-		frames.OnSettled(s.windowChanged)
+		// The status of the window changes with a frame, as whether it is occluded does with the screen. A frame runs here, so
+		// a window that nobody watches pays for no reading.
+		frames.OnSettled(func() {
+			if h.endpoint != nil && h.endpoint.Watching(s.name, "host.window") {
+				s.windowChanged()
+			}
+		})
 	}
 	h.mu.Lock()
 	h.windows[win.ID()] = s

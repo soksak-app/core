@@ -1163,7 +1163,7 @@
         ],
         "additionalProperties": false
       },
-      "description": "The U7 record of a step of the main thread: the window with the keyboard focus when the record is written, null when no window has it, what the step entered, when it entered and returned, the calls it forwarded and the time the main thread slept waiting for the worker."
+      "description": "The U7 record of a step of the main thread: the window with the keyboard focus when the record is written, without one the only open window, otherwise null, what the step entered, when it entered and returned, the calls it forwarded and the time the main thread slept waiting for the worker."
     },
     "host.frame.surface.dispatch": {
       "layer": "host",

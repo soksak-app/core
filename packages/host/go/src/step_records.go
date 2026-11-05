@@ -9,7 +9,7 @@ import (
 )
 
 // StepRecord is the record of one step. The times are nanoseconds of the host event clock. Window is the window with the
-// keyboard focus when the record is written, "" when no window has it. Kind is selector, block or callback.
+// keyboard focus when the record is written, without one the only open window, otherwise "". Kind is selector, block or callback.
 type StepRecord struct {
 	Window, Kind, Callback         string
 	Entry, Return, Forwarded, Wait uint64

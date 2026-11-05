@@ -29,25 +29,28 @@ func stepRecord(step mygo.StepRecord, window string) host.StepRecord {
 	}
 }
 
-// RecordSteps has the main thread record its steps until stop returns. The window of a record is the window that has the
-// focus when the record is written.
+// RecordSteps has the main thread record its steps until stop returns. The window of a record is stepWindow when the record
+// is written, because a step belongs to the main thread and not to a window.
 func (f *Framework) RecordSteps(report func(host.StepRecord), lost func(uint64)) func() {
-	return mygo.RecordSteps(func(step mygo.StepRecord) { report(stepRecord(step, f.focusedName())) }, lost)
+	return mygo.RecordSteps(func(step mygo.StepRecord) { report(stepRecord(step, f.stepWindow())) }, lost)
 }
 
 // RegisteredCallbacks is how many callbacks the framework registered through purego, which it never frees.
 func (*Framework) RegisteredCallbacks() int64 { return mygo.RegisteredCallbacks() }
 
-// focusedName is the name of the window with the focus, "" when no window has it.
-func (f *Framework) focusedName() string {
+// stepWindow is the name of the window with the focus, without one the name of the only open window, otherwise "". A gesture
+// that the host delivers does not activate its window.
+func (f *Framework) stepWindow() string {
 	focused := mygo.FocusedWindow()
-	if focused == nil {
-		return ""
-	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if frontend := f.frontends[focused]; frontend != nil {
 		return frontend.Name()
+	}
+	if len(f.frontends) == 1 {
+		for _, frontend := range f.frontends {
+			return frontend.Name()
+		}
 	}
 	return ""
 }
