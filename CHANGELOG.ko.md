@@ -25,6 +25,9 @@
 - F549: 대기 중인 창이 깨어나도 거부된 적 없는 frame event의 count를 저장하려고 log writer를 깨우지 않는다.
 - F502-23: mygo workbench 가 `diagnostics.layout.fail` 에 답한다. 다음 surface 배치가 `diagnostic layout fault` 로 한 번 실패하고, workbench 는 그 실패를 보여 준 뒤 계속 요청에 답한다.
 - F557: 포인터를 잃은 page가 추적 영역의 진입, 이탈, 이동이 어떤 순서로 와도 hover를 멈춘다.
+- F570: mygo host의 `core.workbench.audit`이 연결되지 않은 요소가 없을 때 `null`이 아니라 빈 목록을 낸다.
+- F561: 문서 검사의 activation 실행이 data store를 끝내기 전에 window의 다른 곳을 누른다. 마지막 press의 web view는 다음 press까지 잡혀 있기 때문이다.
+- F560: 포인터를 잃은 page가 추적 영역의 진입, 이탈, 이동이 어떤 순서로 와도 hover를 멈춘다.
 - F543: key window에서 `sok input pointer`의 press가 애플리케이션을 지나, local monitor가 press를 보고 AppKit이 first responder를 옮긴다.
 - F544: release가 뒤따르는 키보드 이동을 멈추지 않는다. image region이 있는 surface를 클릭한 직후에도 키보드가 다음 release를 기다리지 않고 옮겨진다.
 - F502-21: 세 host의 app 메뉴에 `cmd+,` 단축키의 설정…(Settings…)이 생겼고, settings window를 연다.
