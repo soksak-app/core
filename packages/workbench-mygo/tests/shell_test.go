@@ -236,11 +236,11 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 		}),
 		"viewReply": answer("viewReply", none),
 		"setDialogBackground": answer("setDialogBackground", func(argument json.RawMessage) (any, error) {
-			var enabled bool
-			if err := json.Unmarshal(argument, &enabled); err != nil {
+			var request host.DialogBackground
+			if err := json.Unmarshal(argument, &request); err != nil {
 				return nil, err
 			}
-			h.backgrounds = append(h.backgrounds, enabled)
+			h.backgrounds = append(h.backgrounds, request.Enabled)
 			return nil, nil
 		}),
 		"setMenuLanguage": answer("setMenuLanguage", func(argument json.RawMessage) (any, error) { h.language = argument; return nil, nil }),
