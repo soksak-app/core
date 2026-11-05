@@ -663,3 +663,29 @@ func TestTheHeadAndTheSectionsOfTheSettingsWindowAreThoseOfThePage(t *testing.T)
 		t.Fatalf("the name of the section starts %v into it, want %v", first, pad)
 	}
 }
+
+// The scope tabs and the group names of the settings window are those of the page: an underlined tab marked in the rail color, and a
+// group name in that color.
+func TestTheScopeTabsAndGroupsOfTheSettingsWindowAreThoseOfThePage(t *testing.T) {
+	f := opened(t)
+	f.run("core.settings.theme", map[string]any{"name": "midnight", "mode": "dark"})
+	f.settle()
+	rail, card := themeToken(t, "midnight", "dark", "rail"), themeToken(t, "midnight", "dark", "card")
+	tab := f.box("core.settings-modal.scope", "pick:scope:common")
+	middle := tab.X + tab.W/2
+	if got := f.pixelOf(middle, tab.Y+tab.H-1); got != rail {
+		t.Fatalf("the mark of the shown scope is %v, want %v", got, rail)
+	}
+	if got := f.pixelOf(tab.X+2, tab.Y+2); got != card {
+		t.Fatalf("the shown scope has the fill %v, want the card %v", got, card)
+	}
+	near := func(a, b uint8) bool { return int(a)-int(b) < 8 && int(b)-int(a) < 8 }
+	for y := tab.Y + tab.H + 2; y < tab.Y+tab.H+40; y++ {
+		for x := tab.X; x < tab.X+60; x++ {
+			if got := f.pixelOf(x, y); near(got.R, rail.R) && near(got.G, rail.G) && near(got.B, rail.B) {
+				return
+			}
+		}
+	}
+	t.Fatalf("no group name in the rail color %v below the scopes", rail)
+}

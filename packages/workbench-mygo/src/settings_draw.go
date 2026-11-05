@@ -17,6 +17,7 @@ type settingsPane struct {
 	headH, headGap, headPadStart, headPadEnd                                                   float32
 	shadowY, shadowBlur, shadowAlpha                                                           float32
 	rowNameW, rowH, gap                                                                        float32
+	scopeGap, scopePadY, scopePadX, scopeMark, nameGap, captionGap, lineHeight, tracking       float32
 }
 
 func (s *Shell) readSettingsPane() settingsPane {
@@ -31,6 +32,8 @@ func (s *Shell) readSettingsPane() settingsPane {
 		headH: metric("set-card-head-h"), headGap: metric("set-card-head-gap"), headPadStart: metric("set-card-head-pad-start"), headPadEnd: metric("set-card-head-pad-end"),
 		shadowY: metric("set-card-shadow-y"), shadowBlur: metric("set-card-shadow-blur"), shadowAlpha: metric("set-card-shadow-alpha"),
 		rowNameW: metric("set-row-name-w"), rowH: metric("set-row-h"), gap: metric("set-group-gap"),
+		scopeGap: metric("space-4"), scopePadY: metric("space-2"), scopePadX: metric("space-1"), scopeMark: metric("scope-tab-mark"),
+		nameGap: metric("space-1"), captionGap: metric("set-caption-gap"), lineHeight: metric("line-height"), tracking: s.sectionTracking(),
 	}
 }
 
@@ -132,9 +135,9 @@ func (s *Shell) drawSettingsBody(c *ui.Context, model *settingsModel, width floa
 	}
 	ui.Scroll(c).TrackScroll(&w.scroll).Width(width).FillHeight().Children(func() {
 		ui.Column(c).Width(width).Gap(pane.gap).Padding(14, 18, 18, 18).Children(func() {
-			ui.Row(c).Gap(4).Role(ui.RoleGroup).Label("설정 범위").Children(func() {
+			ui.Row(c).FillWidth().Gap(pane.scopeGap).BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.Edge).Role(ui.RoleGroup).Label("설정 범위").Children(func() {
 				for _, control := range model.scopes {
-					s.drawButton(c, control)
+					s.drawSettingsScope(c, control, pane)
 				}
 			})
 			if model.folder != "" {
@@ -147,10 +150,30 @@ func (s *Shell) drawSettingsBody(c *ui.Context, model *settingsModel, width floa
 	})
 }
 
+// drawSettingsScope draws a scope of the window, the button of .set-scope-tabs of packages/workbench/app.css: the shown scope is
+// underlined in the rail color.
+func (s *Shell) drawSettingsScope(c *ui.Context, control *SettingsControl, pane settingsPane) {
+	on := control.On != nil && *control.On
+	button := s.binder.Press(c, control.Name, control.Command.Name, control.item(), control.Command.Params)
+	button.Padding(pane.scopePadY, pane.scopePadX).Margin(0, 0, -s.palette.BorderWidth, 0).BorderWidth(0, 0, pane.scopeMark, 0).Label(control.Label)
+	color := s.palette.Muted
+	if button.Hovered() {
+		color = s.palette.Fg
+	}
+	mark := ui.Transparent
+	if on {
+		color, mark = s.palette.Fg, s.palette.Rail
+	}
+	button.BorderColor(mark).Children(func() {
+		ui.Text(c, control.Label).FontSize(s.textControl()).TextColor(color)
+	})
+}
+
 func (s *Shell) drawSettingsGroup(c *ui.Context, group settingsGroup, pane settingsPane) {
-	ui.Column(c).FillWidth().Gap(6).Role(ui.RoleGroup).Label(group.name).Children(func() {
-		ui.Text(c, group.name).Bold().FontSize(12)
-		ui.Text(c, group.text).Wrap().TextColor(s.palette.Muted).FontSize(11)
+	ui.Column(c).FillWidth().Role(ui.RoleGroup).Label(group.name).Children(func() {
+		size := s.textCaption()
+		ui.Text(c, group.name).FontSize(size).LetterSpacing(size*pane.tracking).TextColor(s.palette.Rail).Margin(0, 0, pane.nameGap, 0)
+		ui.Text(c, group.text).Wrap().LineHeight(pane.lineHeight).TextColor(s.palette.Muted).FontSize(s.textSmall()).Margin(0, 0, pane.captionGap, 0)
 		for _, row := range group.rows {
 			s.drawSettingsRow(c, row, pane)
 		}
@@ -160,14 +183,14 @@ func (s *Shell) drawSettingsGroup(c *ui.Context, group settingsGroup, pane setti
 func (s *Shell) drawSettingsRow(c *ui.Context, row settingsRow, pane settingsPane) {
 	ui.Row(c).FillWidth().MinHeight(pane.rowH).Gap(12).AlignItems(ui.Center).Wrap().Children(func() {
 		if row.name != "" {
-			ui.Text(c, row.name).Width(pane.rowNameW).FontSize(12)
+			ui.Text(c, row.name).Width(pane.rowNameW).FontSize(s.textControl()).TextColor(s.palette.Muted)
 		}
 		for _, control := range row.controls {
 			s.drawControl(c, control)
 		}
 	})
 	if row.description != "" {
-		ui.Text(c, row.description).Wrap().TextColor(s.palette.Muted).FontSize(11)
+		ui.Text(c, row.description).Wrap().TextColor(s.palette.Muted).FontSize(s.textSmall())
 	}
 }
 
