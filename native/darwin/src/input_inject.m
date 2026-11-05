@@ -866,9 +866,10 @@ static sp_input_result keyInput(void *handle, const char *key, const char *text,
     NSWindow *keyWindow = NSApp.keyWindow;
     if (keyWindow && keyWindow != window) { *why = "another window is the key window"; return SP_INPUT_INACTIVE; }
     // When the target window is the key window, the key is dispatched with -[NSApplication sendEvent:] like a human key.
-    // AppKit also decides the menu key equivalents (Command+C, Command+V). An inactive application with no key window
-    // receives no human key, so the key is sent to the target window for checks that do not activate the window.
-    if (keyWindow == window) [NSApp sendEvent:event];
+    // AppKit also decides the menu key equivalents (Command+C, Command+V). An inactive application receives no human key, and
+    // -[NSApplication sendEvent:] drops the key while this answers delivered, so the key is sent to the target window for checks
+    // that do not activate the window.
+    if (keyWindow == window && NSApp.isActive) [NSApp sendEvent:event];
     else [window sendEvent:event];
     return SP_INPUT_DELIVERED;
 }

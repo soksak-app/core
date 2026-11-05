@@ -52,6 +52,7 @@
 - F502-23: `diagnostics.drag` with `native` waits until the window presented its current layout before it reads the point of the boundary, so a press right after a split reaches the divider.
 - F502-13: `element.rect` answers `role` on every host, the ARIA role of the element, and null for an element that only groups or holds text. Red: the request test of the mygo workbench answered no role.
 - F502-13: A select of the mygo debug view holds its element name and its command on its trigger, not on the group around it, and the audit counts the list box and the options of a select as parts of it. Red: TestALongSelectStaysInsideTheWindow listed the trigger, the list box and 201 options.
+- F598: A key of an application that is not active reaches the first responder also when the window is named as its key window. It used to be dropped while `input.key` answered delivered. Red: the first responder received no key.
 - F595: Injected input keeps its order behind input that waits for a layout.
 - F586: The close of a window with a region in the lease mode no longer records `image view released: project window is closed` on the Tauri host. Red: a release after its window closed reported that failure.
 - F502-16: A window of the Wails host has the size that it was asked for, and its web view has the size of its content, so the page shows its last rows and a native view stands on the page. The Wails modules read a local checkout of the fork until F592 publishes it.

@@ -1093,6 +1093,13 @@ const FEATURE_LINKS = [
     levels: ["native", "unit", "application"],
   },
   {
+    id: "F598",
+    implementation: [{ file: "native/darwin/src/input_inject.m", symbol: "keyInput" }],
+    tests: [{ file: "native/darwin/tests/input_inject_test.m", id: "a key that answers delivered reaches the first responder" }],
+    expected: "A key passes the application only while the application is active, so a key that answers delivered reaches the first responder.",
+    levels: ["unit"],
+  },
+  {
     id: "F595",
     implementation: [{ file: "native/darwin/src/surface_layout.m", symbol: "surfaceLayoutHoldCall" }],
     tests: [
