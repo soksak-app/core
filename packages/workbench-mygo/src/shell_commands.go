@@ -89,6 +89,31 @@ func (s *Shell) register() {
 	act(s, "core.project.activate", func(value idParam) error { s.activate(value.ID); return nil })
 	act(s, "core.project.close", func(value idParam) error { s.removeProject(value.ID); return nil })
 	act(s, "core.space.activate", func(value idParam) error { return s.activateSpace(value.ID) })
+	act(s, "core.grid.size", func(value struct {
+		Card string      `json:"card"`
+		Axis layout.Axis `json:"axis"`
+		Size float64     `json:"size"`
+	}) error {
+		if err := s.requirePlane(); err != nil {
+			return err
+		}
+		if !s.plane.SetSize(value.Card, value.Axis, &value.Size) {
+			return fmt.Errorf("cannot size %s on %s", value.Card, value.Axis)
+		}
+		s.settle()
+		return nil
+	})
+	s.registry.CommandLater("core.folder.create", func(raw json.RawMessage, answer func(any, error)) {
+		value, err := params[struct {
+			Parent string `json:"parent"`
+			Name   string `json:"name"`
+		}](raw)
+		if err != nil {
+			answer(nil, fmt.Errorf("core.folder.create: %w", err))
+			return
+		}
+		s.calls.Call("projectCreate", value, answer)
+	})
 	s.registry.CommandLater("core.space.close", func(raw json.RawMessage, answer func(any, error)) {
 		value, err := params[idParam](raw)
 		if err != nil {
