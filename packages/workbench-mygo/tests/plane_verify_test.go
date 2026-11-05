@@ -146,6 +146,46 @@ func TestTheVerificationFailsAPlacementTheHostLeavesUnanswered(t *testing.T) {
 	}
 }
 
+// The answer of a placement posts the verification of its watcher, and a window can close before that step runs. A window without a
+// plane verifies nothing, so the step reads no plane.
+func TestThePlacementAnsweredAfterACloseVerifiesNoPlane(t *testing.T) {
+	f, stored := placingShell(t)
+	resized(f, 1000)
+	var last workbench.VerifyStatus
+	if _, err := f.shell.Registry().Answer("status.watch", json.RawMessage(`{"name":"core.verify"}`), func(_ string, value any) {
+		text, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		last = workbench.VerifyStatus{}
+		if err := json.Unmarshal(text, &last); err != nil {
+			t.Fatal(err)
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(last.Rows) == 0 {
+		t.Fatalf("the plane has no rows before the close: %+v", last)
+	}
+	stored.unanswered = make(chan struct{})
+	resized(f, 900)
+	raw, err := json.Marshal(map[string]string{"id": f.host.projects[0]["id"].(string)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.shell.Registry().RunLater("core.project.close", raw, func(any, error) {})
+	f.pending.drain(t)
+	f.shell.Closed()
+	close(stored.unanswered)
+	f.pending.drain(t)
+	if status[any](t, f, "core.project") != nil {
+		t.Fatal("the project is still shown")
+	}
+	if last.Failed != 0 || len(last.Rows) != 0 {
+		t.Fatalf("core.verify without a plane is %+v", last)
+	}
+}
+
 // A placement that the host refused has its answer: the row of the refusal states it, and V7a does not call it unanswered.
 func TestARefusedPlacementIsNotUnanswered(t *testing.T) {
 	f, stored := placingShell(t)
