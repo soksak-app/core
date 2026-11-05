@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F464: build environment 검사는 Node와 pnpm의 major version만 비교합니다. Red: `scripts/test/check-build-environment.sh`가 Node 26.13.0에서 실패했습니다. Green: 통과합니다.
 - F462: core 0.0.35가 `^0.0.35`를 선언한 plugin release를 설치하고 registry가 이를 나열합니다.
 - F453: release run이 v0.0.35를 게시했고 registry가 이를 나열합니다.
 - F461: release candidate는 0.0.35입니다.

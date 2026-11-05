@@ -3,9 +3,9 @@ set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 [ "$#" -eq 0 ] || { echo 'BUILD_DECLARATION_INVALID: usage: check-build-environment.sh' >&2; exit 78; }
-# Each fact has one owner. .node-version holds the exact Node version,
-# the packageManager field holds the exact pnpm version, and pnpm-lock.yaml
-# holds the dependencies. engines.node of package.json sets the range that a consumer must satisfy,
+# Each fact has one owner. .node-version holds the Node version that CI installs,
+# the packageManager field holds the pnpm version that CI installs, and pnpm-lock.yaml
+# holds the dependencies. A build needs the major version of each tool, so only the major version is compared. engines.node of package.json sets the range that a consumer must satisfy,
 # which is a different fact, and pnpm enforces it at install time.
 node_expected=$(awk 'NF { value=$0; count++ } END { if (count == 1) print value; else exit 1 }' "$root/.node-version" 2>/dev/null || true)
 package_manager=$(node -e 'const v=require(process.argv[1]);process.stdout.write(v.packageManager??"")' "$root/package.json" 2>/dev/null || true)
@@ -25,9 +25,10 @@ node_actual=$(node --version 2>/dev/null || true)
 node_platform=$(node -p process.platform 2>/dev/null || true)
 node_arch=$(node -p process.arch 2>/dev/null || true)
 pnpm_actual=$(pnpm --version 2>/dev/null || true)
-if [ "$node_actual" != "v$node_expected" ] || [ "$node_platform" != "$platform" ] || [ "$node_arch" != "$arch" ] || [ "$pnpm_actual" != "$pnpm_expected" ]; then
-  printf 'TOOLCHAIN_MISMATCH: expected node=v%s pnpm=%s runtime=%s/%s; actual node=%s pnpm=%s runtime=%s/%s\n' \
-    "$node_expected" "$pnpm_expected" "$platform" "$arch" "${node_actual:-missing}" "${pnpm_actual:-missing}" "${node_platform:-unknown}" "${node_arch:-unknown}" >&2
+node_major=${node_actual#v}; node_major=${node_major%%.*}
+if [ "$node_major" != "${node_expected%%.*}" ] || [ "$node_platform" != "$platform" ] || [ "$node_arch" != "$arch" ] || [ "${pnpm_actual%%.*}" != "${pnpm_expected%%.*}" ]; then
+  printf 'TOOLCHAIN_MISMATCH: expected node=v%s.x pnpm=%s.x runtime=%s/%s; actual node=%s pnpm=%s runtime=%s/%s\n' \
+    "${node_expected%%.*}" "${pnpm_expected%%.*}" "$platform" "$arch" "${node_actual:-missing}" "${pnpm_actual:-missing}" "${node_platform:-unknown}" "${node_arch:-unknown}" >&2
   exit 78
 fi
 lock=$(shasum -a 256 "$root/pnpm-lock.yaml" | awk '{print $1}')
