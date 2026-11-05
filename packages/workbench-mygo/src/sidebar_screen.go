@@ -2,6 +2,7 @@ package workbench
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 
 	"github.com/egoist/mygo/ui"
@@ -21,8 +22,21 @@ const (
 var (
 	chevronDown  = chevronIcon("m6 9 6 6 6-6")
 	chevronRight = chevronIcon("m9 18 6-6-6-6")
-	chevronLeft  = chevronIcon("m15 18-6-6 6-6")
 )
+
+// foldIcons holds the parsed icon of a fold control by its path and stroke.
+var foldIcons = map[string]*ui.SVG{}
+
+// foldIcon is the chevron of the path d at the icon stroke of the chrome, as the other buttons of a card have it.
+func foldIcon(d string, stroke float32) *ui.SVG {
+	key := fmt.Sprintf("%s %g", d, stroke)
+	icon, ok := foldIcons[key]
+	if !ok {
+		icon = ui.MustParseSVG([]byte(fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="%g" stroke-linecap="round" stroke-linejoin="round"><path d="%s"/></svg>`, stroke, d)))
+		foldIcons[key] = icon
+	}
+	return icon
+}
 
 // chevronIcon is the stroke icon of the path d, as packages/workbench/icons.js holds it.
 func chevronIcon(d string) *ui.SVG { return strokeIcon(`<path d="` + d + `"/>`) }
@@ -52,6 +66,9 @@ type SidebarMetrics struct {
 	// FoldButton and FoldIcon are the sizes of the fold control of a status line and of its icon.
 	FoldButton float32
 	FoldIcon   float32
+	// IconStroke is the stroke of its icon, FoldRadiusRatio the share of the theme radius in its corners, and FoldHoverMix the share
+	// of the text color in its background under the pointer.
+	IconStroke, FoldRadiusRatio, FoldHoverMix float32
 }
 
 // SidebarSection is a section of the set that a sidebar shows.
@@ -409,13 +426,20 @@ func drawSidebarStatus(c *ui.Context, binder *Binder, frame SidebarFrame, metric
 		if frame.Side == "" {
 			return
 		}
-		icon := chevronLeft
+		icon := foldIcon("m15 18-6-6 6-6", metrics.IconStroke)
 		title := "왼쪽 창 사이드바 접기"
 		if frame.Side == "right" {
-			icon, title = chevronRight, "오른쪽 창 사이드바 접기"
+			icon, title = foldIcon("m9 18 6-6-6-6", metrics.IconStroke), "오른쪽 창 사이드바 접기"
 		}
-		binder.Press(c, "core.sidebar.fold", "core.settings.set", frame.Side, settingsPatchParam{map[string]any{frame.Side: false}}).Label(title).Size(metrics.FoldButton, metrics.FoldButton).Children(func() {
-			ui.Icon(c, icon).Size(metrics.FoldIcon, metrics.FoldIcon)
+		fold := binder.Press(c, "core.sidebar.fold", "core.settings.set", frame.Side, settingsPatchParam{map[string]any{frame.Side: false}}).Label(title).Size(metrics.FoldButton, metrics.FoldButton).
+			Radius(float32(math.Round(float64(theme.Radius * metrics.FoldRadiusRatio))))
+		color := theme.TextMuted
+		if fold.Hovered() {
+			color = theme.Text
+			fold.Background(faded(theme.Text, metrics.FoldHoverMix))
+		}
+		fold.Children(func() {
+			ui.Icon(c, icon).Size(metrics.FoldIcon, metrics.FoldIcon).TextColor(color)
 		})
 	})
 }

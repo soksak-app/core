@@ -169,6 +169,8 @@ func readSidebarMetrics(declared *Declarations) (SidebarMetrics, error) {
 	read("section-tab-mark", &m.SectionTabMark)
 	read("fold-button", &m.FoldButton)
 	read("card-icon", &m.FoldIcon)
+	read("icon-stroke", &m.IconStroke)
+	read("r-xs-ratio", &m.FoldRadiusRatio)
 	share := func(name string, into *float32) {
 		value, ok := declared.Share(name)
 		if !ok {
@@ -176,6 +178,7 @@ func readSidebarMetrics(declared *Declarations) (SidebarMetrics, error) {
 		}
 		*into = float32(value)
 	}
+	share("inset-mix", &m.FoldHoverMix)
 	share("section-head-mix", &m.SectionHeadMix)
 	share("section-head-hover-mix", &m.SectionHeadHoverMix)
 	return m, failed
