@@ -677,7 +677,7 @@ const FEATURE_LINKS = [
       { file: "scripts/test/benchmark-b3.test.mjs", id: "the targets of a scenario come from the goals in their order, and STEP=pointer runs after every other reading of the scenario" },
       { file: "scripts/test/benchmark-b3.test.mjs", id: "phase 1 reruns with TRACE=1 each target that takes the trace state of the run, and no target that names its own TRACE" },
       { file: "scripts/test/benchmark-b3.test.mjs", id: "a target runs in the checkout of its application with its configuration folder, its sok, its trace state and its value file" },
-      { file: "scripts/test/benchmark-b3.test.mjs", id: "a run installs the index of its application into a new configuration folder under target/b3 and starts the executable of its release bundle" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a run installs the index of its application into a new configuration folder under its session folder and starts the executable of its release bundle" },
       { file: "scripts/test/benchmark-b3.test.mjs", id: "a target writes its measurements under its own keys, and the run records each that an entry names under the id of the entry" },
       { file: "scripts/test/benchmark-b3.test.mjs", id: "a target reports the conditions of its measurement, and a display, a window or a trace state other than the run gave fails the run" },
       { file: "scripts/test/benchmark-b3.test.mjs", id: "an e2e benchmark reports the settings that B3_SETTINGS declares for it in the state that its TRACE names, and other settings fail the run" },
@@ -1293,6 +1293,73 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/layout-verify-state.test.mjs", id: "a presentation after a failed presentation withdraws the error of that failure from the banner" },
     ],
     expected: "A placement that succeeds withdraws only the failure of the placement before it from the error banner.",
+    levels: ["unit"],
+  },
+  {
+    id: "F623",
+    implementation: [
+      { file: "scripts/benchmark-b3.mjs", symbol: "export function b3Folder(root) {" },
+    ],
+    tests: [
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "the sessions of B3 live beside the baseline record in the git common directory, which every worktree shares and no clean of the build outputs removes" },
+    ],
+    expected: "The session folders of B3 live in b3 of the git common directory.",
+    levels: ["unit"],
+  },
+  {
+    id: "F624",
+    implementation: [
+      { file: "scripts/benchmark-b3.mjs", symbol: "export function keepRunLogs(configRoot, configDir) {" },
+    ],
+    tests: [
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a failed run keeps only the output of its application and the logs of its configuration, and writes their size" },
+    ],
+    expected: "A failed B3 run keeps only the output of its application and the logs of its configuration.",
+    levels: ["unit"],
+  },
+  {
+    id: "F625",
+    implementation: [
+      { file: "scripts/benchmark-b3.mjs", symbol: '  if (needsPermission.length > 0 && !accessibility()) {' },
+      { file: "e2e/real/hid.mjs", symbol: 'export const trusted = jxa(`return JSON.stringify($.AXIsProcessTrusted());`);' },
+    ],
+    tests: [
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a run of a scenario whose target needs the Accessibility permission fails before its configuration when the permission is missing" },
+    ],
+    expected: "A run of S13 without the Accessibility permission fails before it makes a configuration.",
+    levels: ["unit"],
+  },
+  {
+    id: "F621",
+    implementation: [
+      { file: "scripts/benchmark-b3.mjs", symbol: "export function buildSteps(phase, baseline) {" },
+    ],
+    tests: [
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a session builds one host at a time, the Tauri hosts first, and removes the outputs of each build before the next" },
+    ],
+    expected: "A B3 session builds one host at a time and removes the intermediate outputs of each build before the next.",
+    levels: ["unit"],
+  },
+  {
+    id: "F620",
+    implementation: [
+      { file: "scripts/benchmark-b3.mjs", symbol: "const executable = kind === 'baseline' ? `soksak-${host}` : `sok-${host}`;" },
+    ],
+    tests: [
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a baseline host starts by the executable name of its revision and the other hosts by the current one" },
+    ],
+    expected: "A baseline host of B3 starts by the executable name of its revision.",
+    levels: ["unit"],
+  },
+  {
+    id: "F618",
+    implementation: [
+      { file: "scripts/benchmark-b3.mjs", symbol: "export function baselineRecordFile(root) {" },
+    ],
+    tests: [
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "the baseline record is one file of the git common directory, which every worktree shares and no clean of the build outputs removes" },
+    ],
+    expected: "The baseline record of B3 is one file of the git common directory.",
     levels: ["unit"],
   },
   {
