@@ -155,6 +155,7 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
   padding:var(--project-column-pad);background:var(--card);border-right:var(--bw) solid var(--edge)}
 .project-column .bar-tab{position:relative;width:var(--fill);height:var(--project-tab-h);justify-content:center;padding:0 var(--project-tab-pad)}
 .project-column .bar-tab__name{max-width:var(--fill);text-align:center}
+.project-column .bar-tab__root{width:var(--fill)}
 /* A vertical rail is wide enough only for the name, so the close button does not fit. It is not shown only when
    pressed; it is placed over the name. */
 .project-column .bar-tab__x{position:absolute;top:var(--project-tab-x-inset);right:var(--project-tab-x-inset);opacity:0}
