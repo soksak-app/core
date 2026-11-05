@@ -211,12 +211,13 @@ void webviewInputSendThen(WKWebView *view, NSString *type, NSTimeInterval timeou
     // inactive in that state, WebKit can exclude the target page from the mouse handling path, so the
     // drain callback does not arrive until the next synthetic pointer. Before waiting for the pending
     // mouse work of WebKit, restore the target web view as the responder. Only the one pointer sent
-    // below reaches the page; the caller takes back the focus of the native drawing region.
+    // below reaches the page; the caller takes back the focus of the native drawing region. In a key
+    // window the press passes the application, and AppKit moves the responder.
     NSWindow *window = view.window;
     NSResponder *first = window.firstResponder;
     BOOL targetOwnsResponder = first == view ||
         ([first isKindOfClass:NSView.class] && [(NSView *)first isDescendantOf:view]);
-    if (window && !targetOwnsResponder) [window makeFirstResponder:view];
+    if (window && !window.isKeyWindow && !targetOwnsResponder) [window makeFirstResponder:view];
     // When a timeout or an unregistration ended the wait before the drain, completion is already
     // reported, so nothing is sent.
     void (^sendAfterDrain)(void) = ^{

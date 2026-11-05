@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F543: a press of `sok input pointer` in a key window passes the application, so local monitors see it and AppKit moves the first responder.
 - F544: a release no longer stops a later keyboard move: right after a click in a surface with an image region, the keyboard moves without waiting for the next release.
 - F539: `sok input pointer` moves as a person moves: every tracking area that holds the point hears the move, its enter and its exit, and a press in the key window moves there first.
 - F502-28: The keyboard of the window follows the focus ring on all hosts: typing right after a new tab, a press on a tab, `core.card.focus` or the opening of a project reaches the active surface of the card with the ring, and a new terminal tab draws a focused cursor because the first focus report of its region waits for its handler. A page that took the keyboard because no region showed gives it to a region that shows by the next move.
