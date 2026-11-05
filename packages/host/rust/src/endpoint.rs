@@ -1479,9 +1479,23 @@ fn forget(shared: &Arc<Shared>, peer: u64) {
 #[path = "endpoint_lock_test.rs"]
 mod lock_test;
 
-#[cfg(test)]
-#[path = "endpoint_methods_test.rs"]
-mod methods_test;
+#[cfg(all(test, feature = "diagnostics"))]
+mod draw_covered_declaration_test {
+    // contract: diagnostics.window.draw-covered.is-declared
+    #[test]
+    fn draw_covered_method_is_declared() {
+        assert!(super::declared("diagnostics.window.draw-covered"));
+    }
+}
+
+#[cfg(all(test, not(feature = "diagnostics")))]
+mod draw_covered_release_declaration_test {
+    // contract: image.drawing.covered-window-never-draws-without-diagnostics
+    #[test]
+    fn a_build_without_diagnostics_declares_no_draw_covered() {
+        assert!(!super::declared("diagnostics.window.draw-covered"));
+    }
+}
 
 #[cfg(all(test, feature = "diagnostics"))]
 mod input_reference_declaration_test {

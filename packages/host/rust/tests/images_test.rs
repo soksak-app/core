@@ -6,7 +6,7 @@ mod folder;
 use serde_json::json;
 use soksak_host::application_log::start_standard_error;
 use soksak_host::images::{
-    Configure, Decision, Drawing, Images, Key, after_present, decide, handle_envelope,
+    Configure, Decision, Images, Key, after_present, decide, handle_envelope,
     handle_envelope_with_recovery, leased_reply, released_reply,
 };
 use std::sync::{Arc, Mutex};
@@ -14,6 +14,10 @@ use std::time::Duration;
 
 #[path = "support/records.rs"]
 mod records;
+
+#[path = "support/drawing.rs"]
+mod drawing;
+use drawing::{DrawingStep, attached_drawing_image, drawing_values};
 
 fn configured_envelope(configuration: &Configure, sequence: i32) -> String {
     json!({
@@ -1470,30 +1474,6 @@ fn image_frame_nonce_cause_is_recorded() {
     );
 }
 
-/// Attaches one image region of sidecar-a and returns its key.
-fn attached_drawing_image(images: &Images, surface: &str) -> Key {
-    let key: Key = (surface.to_string(), "view".to_string());
-    images
-        .reserve(&key, "owner-a", "sidecar-a")
-        .expect("reserve image");
-    assert!(images.set(&key, 100), "attach image");
-    key
-}
-
-/// Gives each drawing change as name=value, followed by the word hidden for a hidden surface.
-fn drawing_values(changes: Vec<Drawing>) -> Vec<String> {
-    changes
-        .into_iter()
-        .map(|change| {
-            let hidden = if change.hidden { " hidden" } else { "" };
-            format!("{}={}{hidden}", change.name, change.drawing)
-        })
-        .collect()
-}
-
-/// One step of the drawing test: its name, the change it makes and the drawing changes it expects.
-type DrawingStep<'a> = (&'static str, Box<dyn Fn() + 'a>, Vec<&'static str>);
-
 // contract: image.drawing.sent-at-attach-and-on-change
 #[test]
 fn drawing_state_is_sent_at_attach_and_on_change() {
@@ -1772,40 +1752,4 @@ fn sent_drawing_is_the_state_last_sent_to_the_supplier() {
         images.sent_drawing(&key),
         "a change that was not sent yet is reported as sent"
     );
-}
-
-// A check that reads the pixels of a covered window asks its regions to draw; the window stays occluded, and a region whose
-// surface hides still draws nothing (docs/spec/native-surfaces.md#image-regions).
-#[cfg(feature = "diagnostics")]
-#[test]
-fn a_region_of_a_covered_window_draws_while_the_window_draws_covered() {
-    let images = Images::default();
-    let key = attached_drawing_image(&images, "tab-1");
-    images.set_visible(&key, true).unwrap();
-    assert_eq!(
-        drawing_values(images.drawing_changes()),
-        vec!["view=true"],
-        "placed visible on screen"
-    );
-    let steps: Vec<DrawingStep> = vec![
-        ("occluded window", Box::new(|| images.set_on_screen(false)), vec!["view=false"]),
-        ("drawn while covered", Box::new(|| images.set_draw_covered(true)), vec!["view=true"]),
-        (
-            "hidden surface while drawn covered",
-            Box::new(|| images.set_surface_visible(&key.0, false)),
-            vec!["view=false hidden"],
-        ),
-        (
-            "shown surface while drawn covered",
-            Box::new(|| images.set_surface_visible(&key.0, true)),
-            vec!["view=true"],
-        ),
-        ("no longer drawn while covered", Box::new(|| images.set_draw_covered(false)), vec!["view=false"]),
-        ("window on screen", Box::new(|| images.set_on_screen(true)), vec!["view=true"]),
-        ("drawn covered while on screen", Box::new(|| images.set_draw_covered(true)), vec![]),
-    ];
-    for (name, change, want) in steps {
-        change();
-        assert_eq!(drawing_values(images.drawing_changes()), want, "{name}");
-    }
 }

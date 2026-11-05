@@ -11,6 +11,7 @@ import (
 
 // A check that reads the pixels of a covered window asks its regions to draw; the window stays occluded, and a region whose
 // surface hides still draws nothing (docs/spec/native-surfaces.md#image-regions).
+// contract: image.drawing.draws-covered-in-diagnostic-builds
 func TestARegionOfACoveredWindowDrawsWhileTheWindowDrawsCovered(t *testing.T) {
 	images := host.NewImages()
 	key := attachedDrawingImage(t, images, "tab-1")

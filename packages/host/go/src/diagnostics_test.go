@@ -904,6 +904,7 @@ func TestNativeDragDeliversThePressTheStepsAndTheReleaseOfEachRoundTrip(t *testi
 }
 
 // The method that makes a covered window draw its regions is a diagnostic method.
+// contract: diagnostics.window.draw-covered.is-declared
 func TestDrawCoveredIsADiagnosticMethod(t *testing.T) {
 	if _, found := diagnosticMethods["diagnostics.window.draw-covered"]; !found {
 		t.Fatal("diagnostics.window.draw-covered is not a diagnostic method")

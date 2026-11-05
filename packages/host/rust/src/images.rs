@@ -100,7 +100,8 @@ struct Inner {
     /// change (docs/spec/native-surfaces.md#image-regions).
     off_screen: bool,
     /// Whether the regions of the window draw while it is not on screen. Only the diagnostic method
-    /// diagnostics.window.draw-covered sets it; a build without the diagnostics feature has no such state.
+    /// diagnostics.window.draw-covered sets it (images_draw_covered.rs); a build without the diagnostics feature has no such
+    /// state.
     #[cfg(feature = "diagnostics")]
     draw_covered: bool,
     /// The last (generation, raster) that a detached image region used. A region attached again in the same generation
@@ -124,18 +125,6 @@ impl Inner {
     /// occluded nor minimized.
     fn drawing(&self, key: &Key, state: &RasterState) -> bool {
         self.shown(key, state) && (!self.off_screen || self.draws_covered())
-    }
-
-    /// Whether the regions of the window draw while it is not on screen.
-    #[cfg(feature = "diagnostics")]
-    fn draws_covered(&self) -> bool {
-        self.draw_covered
-    }
-
-    /// False: only a diagnostic build makes a covered window draw its regions.
-    #[cfg(not(feature = "diagnostics"))]
-    fn draws_covered(&self) -> bool {
-        false
     }
 
     /// Reports whether a region and its outer surface are shown, whatever the state of the window.
@@ -263,17 +252,6 @@ impl Images {
         let mut inner = self.lock();
         if inner.off_screen == on_screen {
             inner.off_screen = !on_screen;
-            self.changed();
-        }
-    }
-
-    /// Makes the regions of the window draw while the window is occluded or minimized, for a check that reads the pixels of a
-    /// covered window (docs/spec/native-surfaces.md#image-regions). The window keeps reporting its occlusion.
-    #[cfg(feature = "diagnostics")]
-    pub fn set_draw_covered(&self, draw: bool) {
-        let mut inner = self.lock();
-        if inner.draw_covered != draw {
-            inner.draw_covered = draw;
             self.changed();
         }
     }
@@ -1287,6 +1265,14 @@ fn create(
     });
     platform.create_image(surface, &name, event, released)
 }
+
+#[cfg(feature = "diagnostics")]
+#[path = "images_draw_covered.rs"]
+mod draw_covered;
+
+#[cfg(not(feature = "diagnostics"))]
+#[path = "images_draw_covered_release.rs"]
+mod draw_covered;
 
 #[cfg(test)]
 #[path = "images_test.rs"]
