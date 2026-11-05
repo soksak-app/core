@@ -1,6 +1,6 @@
 {
   "name": "@soksak/mygo",
-  "version": "0.0.36",
+  "version": "0.0.37",
   "private": true,
   "type": "module",
   "description": "mygo application hosting the workbench with native UI and native webview surfaces.",

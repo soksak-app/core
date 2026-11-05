@@ -1143,7 +1143,13 @@ export const EXPOSURE_ERRORS = Object.freeze({
   timeout: 1005,
   inactive: 1006,
   noControl: 1009,
+  inert: 1010,
 });
+
+/** The refusal of an action on an element that an open dialog makes inert (docs/spec/exposure.md). */
+export function inertRefusal(name) {
+  return new ExposureError(EXPOSURE_ERRORS.inert, `element ${name} is behind the open dialog and takes no action`);
+}
 
 const OWNER = /^(core|host|[a-z][a-z0-9-]*)$/;
 const NAME = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
@@ -1531,11 +1537,16 @@ export function actOn(element, { action, value, event }) {
  * request, and each later different value is sent with the next version until status.unwatch. A repeated status.watch sends the
  * current value again with its version, so a new subscriber of the same watch receives it (docs/spec/exposure.md#relay).
  */
-export function exposureEntries(declared, { place = () => null } = {}) {
+export function exposureEntries(declared, { place = () => null, inert = () => false } = {}) {
   // The owner of the document may know a place of an element that the document does not lay out; it answers null for any other element.
   const rectOf = (element) => {
     const placed = place(element);
     return placed ? { ...elementRect(element), ...placed } : elementRect(element);
+  };
+  const elementAnswer = (method, name, element, params) => {
+    if (method === "element.rect") return rectOf(element);
+    if (inert(element)) throw inertRefusal(name);
+    return actOn(element, params);
   };
   const statuses = new Map();
   const commands = new Map();
@@ -1717,8 +1728,7 @@ export function exposureEntries(declared, { place = () => null } = {}) {
         if (!resolve) throw new ExposureError(EXPOSURE_ERRORS.invalidParams, `element ${name} takes no address`);
         const element = resolve(params.address, elements(name));
         if (!element) throw new ExposureError(EXPOSURE_ERRORS.noControl, `element ${name} has no element at the address`);
-        if (method === "element.rect") return rectOf(element);
-        return actOn(element, params);
+        return elementAnswer(method, name, element, params);
       }
       const list = elements(name);
       if (list.length === 0) throw new ExposureError(EXPOSURE_ERRORS.unregistered, `element ${name} has no element`);
@@ -1730,8 +1740,7 @@ export function exposureEntries(declared, { place = () => null } = {}) {
       if (!Number.isInteger(index) || index < 0) throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "index must be a non-negative integer");
       const element = list[index];
       if (!element) throw new ExposureError(EXPOSURE_ERRORS.unregistered, `element ${name} has no element at index ${index}`);
-      if (method === "element.rect") return rectOf(element);
-      return actOn(element, params);
+      return elementAnswer(method, name, element, params);
     },
   };
 }

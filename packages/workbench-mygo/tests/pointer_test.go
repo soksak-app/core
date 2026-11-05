@@ -67,6 +67,25 @@ func wantPointer(t *testing.T, sequence *workbench.PointerSequence, want string)
 	}
 }
 
+// What stands behind a dialog is not under the pointer, also where nothing of the dialog is an element.
+func TestPointerSequenceDoesNotNameAnElementBehindADialog(t *testing.T) {
+	changes := 0
+	elements := &testerElements{}
+	sequence := workbench.NewPointerSequence(elements, func() { changes++ }, func(err error) { t.Error(err) })
+	elements.tester = ui.NewTester(func(c *ui.Context) {
+		ui.Button(c.Key(workbench.Exposed{Name: "core.save"}), "Save").Size(200, 200)
+		ui.Overlay(c, func() {
+			sequence.Watch(ui.Box(c).Absolute().Left(0).Top(0).Right(0).Bottom(0).Modal())
+		})
+	}, 200, 200)
+	elements.tester.Frame()
+	elements.tester.Frame()
+	elements.tester.Press(50, 50)
+	elements.tester.Release(50, 50)
+	elements.tester.Frame()
+	wantPointer(t, sequence, `{"sequence":1,"down":"unknown","up":"unknown","pressedConnected":null,"click":"unknown"}`)
+}
+
 // A press and its release on one element report the element three times, and the next press starts anew.
 func TestPointerSequenceReportsAPressAndItsClick(t *testing.T) {
 	view, tester, changes := pointerShown(t)

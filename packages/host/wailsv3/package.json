@@ -1,6 +1,6 @@
 {
   "name": "@soksak/host-wailsv3",
-  "version": "0.0.36",
+  "version": "0.0.37",
   "private": true,
   "description": "Wails v3 framework adapter: the run of the Wails application and the framework port of the Go language host library."
 }

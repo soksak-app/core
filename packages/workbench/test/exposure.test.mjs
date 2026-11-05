@@ -805,3 +805,39 @@ test("a value that no watch takes is recorded in the trace with its reason", asy
     { surface: "tab-a", name: "probe.lines", version: 1, reason: "older than version 2" },
   ]);
 });
+
+// An open dialog makes the elements outside it inert (docs/spec/exposure.md). A surface document stands behind it as a whole.
+test("an open dialog refuses an action on a core element and a surface element, and keeps their rectangles", { timeout: 5000 }, async () => {
+  const local = { x: 12, y: 24, width: 80, height: 30 };
+  const host = fakeHost(() => ({ result: local }));
+  const made = coreRegistry(host);
+  const button = document.querySelector('[data-expose="core.fixture.button"]');
+  let inert = () => false;
+  const unmark = markViewSurface("tab-a");
+  made.configure({ surfacePlugin: () => "probe", preferred: () => ["tab-a"], elementInert: (element) => inert(element),
+    surfaceFrame: () => ({ x: 100, y: 50, w: 400, h: 300, visible: true }) });
+  made.registered({ surface: "tab-a", kind: "element", name: "probe.lines" });
+  made.element("core.fixture.button");
+  made.element("core.fixture.row");
+  try {
+    let clicked = 0;
+    button.addEventListener("click", () => clicked++);
+    inert = (element) => element === null || element === button;
+    const refusal = (name) => ({ error: { code: EXPOSURE_ERRORS.inert, message: `element ${name} is behind the open dialog and takes no action` } });
+    assert.deepEqual(await made.handle({ method: "element.act", params: { name: "core.fixture.button", action: "click" } }), refusal("core.fixture.button"));
+    assert.equal(clicked, 0);
+    assert.equal((await made.handle({ method: "element.rect", params: { name: "core.fixture.button" } })).error, undefined);
+    const forwarded = () => host.calls.filter(([name, arg]) => name === "exposureForward" && arg.method === "element.act").length;
+    assert.deepEqual(await made.handle({ method: "element.act", params: { name: "probe.lines", action: "click" } }), refusal("probe.lines"));
+    assert.equal(forwarded(), 0, "the action reached the surface behind the dialog");
+    assert.deepEqual((await made.handle({ method: "element.rect", params: { name: "probe.lines" } })).result,
+      { ...local, x: 112, y: 74, document: { x: 0, y: 0 } });
+    // An element that the dialog holds takes the action.
+    assert.deepEqual(await made.handle({ method: "element.act", params: { name: "core.fixture.row", index: 0, action: "click" } }), { result: null });
+    inert = () => false;
+    assert.deepEqual(await made.handle({ method: "element.act", params: { name: "probe.lines", action: "click" } }), { result: local });
+    assert.equal(forwarded(), 1);
+  } finally {
+    unmark();
+  }
+});

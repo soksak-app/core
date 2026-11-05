@@ -24,6 +24,8 @@ type SurfaceLinks struct {
 	Unloaded func(surface string) bool
 	// Frame returns the origin of a surface in its window, and false when it has no applied frame.
 	Frame func(surface string) (x, y float64, ok bool)
+	// BehindDialog tells whether an open dialog stands over the surfaces (docs/spec/exposure.md).
+	BehindDialog func() bool
 	// Forward makes the host call exposureForward and gives answer its reply in a later step.
 	Forward func(request map[string]any, answer func(value any, err error))
 	// Changed sends the value of a watched status to the host. surface is the surface that the watch names, and nil for none.
@@ -342,6 +344,10 @@ func (r *Registry) replySurface(method string, params json.RawMessage, answer fu
 	surface, err := r.pick(kind, *name, requested)
 	if err != nil {
 		answer(nil, err)
+		return true
+	}
+	if method == "element.act" && r.surfaces.links.BehindDialog() {
+		answer(nil, inertRefusal(*name))
 		return true
 	}
 	if method != "status.watch" {

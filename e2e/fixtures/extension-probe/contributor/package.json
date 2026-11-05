@@ -1,6 +1,6 @@
 {
   "name": "@sok-check/probe-contributor",
-  "version": "0.0.36",
+  "version": "0.0.37",
   "private": true,
   "type": "module",
   "description": "Window check fixture: a plugin that contributes one item to the extension point items of the provider probe.",
