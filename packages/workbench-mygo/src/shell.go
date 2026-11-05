@@ -171,6 +171,8 @@ type Shell struct {
 	focused  string
 	// windowSidebars holds the width records of the window sidebars of the shown space.
 	windowSidebars map[string]layout.WindowSidebar
+	// columnsChanged tells that the next frame matches the columns of the window sidebars to the settings.
+	columnsChanged bool
 	// fullscreen is the card that covers the plane, or "" while the cards stand in their arrangement.
 	fullscreen string
 	// heads holds the fit of the head that the last frame drew for each card.

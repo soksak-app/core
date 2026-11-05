@@ -786,6 +786,7 @@ func (s *Shell) settingsChanged() error {
 	}
 	s.followScale()
 	s.followSettings()
+	s.columnsChanged = true
 	s.options.Invalidate()
 	return nil
 }
