@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F435-7: The placement of a composition records a frame dispatch that names its surface, on both hosts.
 - F483: Every view registers `core.surface.clock`, and the content trace maps document times through the narrowest of five clock readings.
 - F482: The Tauri host ends the layout trace of a recorded drag after the last layout is presented, so the trace holds its presentation.
 - F481: The plain view benchmark waits until the probe view registered `probeplain.measure` before its content trace starts.
