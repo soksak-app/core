@@ -20,5 +20,7 @@ bool sp_input_press_origin_point(void *window, int button, double *x, double *y,
 // The state of the application and of the window at the press of a stored origin. Returns false when no origin is stored.
 bool sp_input_press_origin_state(void *window, int button, bool *active, bool *key);
 void sp_input_press_origin_clear(void *window, int button, uint64_t token);
+// Whether sp_input_pointer holds an open press of the button in the window. An origin outlives the release of its press, so it does not tell this.
+bool sp_input_press_open(void *window, int button);
 
 #endif

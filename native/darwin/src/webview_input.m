@@ -54,13 +54,16 @@ static NSString *const kReceiptScript =
             message.frameInfo.isMainFrame ? @"yes" : @"no", NSStringFromClass([message.body class])].UTF8String);
         return;
     }
-    for (SPInputWait *wait in self.waits) {
-        if (![wait.type isEqualToString:message.body]) continue;
+    // One event answers every wait of its type: the sender of a press and the monitor of its origin wait for the same event.
+    BOOL answered = NO;
+    for (SPInputWait *wait in [[self.waits copy] autorelease]) {
+        if (![wait.type isEqualToString:message.body] || ![self.waits containsObject:wait]) continue;
         [[wait retain] autorelease];
         [self.waits removeObject:wait];
         wait.done(YES);
-        return;
+        answered = YES;
     }
+    if (answered) return;
     sp_log_info("webview input", [NSString stringWithFormat:@"receipt of %@ arrived without a wait", message.body].UTF8String);
 }
 @end
