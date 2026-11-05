@@ -91,6 +91,7 @@ func (s *Shell) checkFolders() {
 
 // drawLibrary draws the library screen.
 func (s *Shell) drawLibrary(c *ui.Context, width, height float32) {
+	s.surfaces.drawnLibrary = true
 	m := s.metrics
 	s.checkFolders()
 	ui.Column(c).Size(width, height).Background(s.palette.Bg).Children(func() {

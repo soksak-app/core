@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F502-13: The sections of the fixed sidebars of the mygo workbench leave the placement while the library is shown, as on the page, and the return seats them again. Red: `TestTheLibraryLeavesTheSectionsOfTheSidebars` found the two sections of the left sidebar placed under the library.
 - F502-13: A view of a project that the mygo library covers has no place: `element.rect` answers that its surface has no valid applied frame, as on the page. Red: `TestAViewUnderTheLibraryHasNoPlace` failed on the previous drawing.
 - F502-33: A section name of the mygo workbench has the weight of the page's section header, 600 in the font stack `ui-font` that the chrome declares beside `section-head-weight`, whatever font the settings choose. Red: `TestTheNameOfASectionHasTheStemsOfThePageHeader` and `TestASectionNameHasTheWeightOfThePage` failed with the name drawn bold.
 - F502-13: The close mark of a mygo card tab has the page's height, the small text size with the tight line height, since a line height that the style sets is the height of the line in the framework. Red: `TestTheCloseMarkOfATabHasTheHeightOfThePage` failed before that framework change.
