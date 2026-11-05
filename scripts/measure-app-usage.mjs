@@ -117,6 +117,9 @@ export function cpuPercent(before, after, intervalSeconds) {
   return ((after - before) / intervalSeconds) * 100;
 }
 
+/** The output limit of the process table, whose command lines reach several MB on a machine with many extensions. */
+export const PROCESS_TABLE_BYTES = 64 * 1024 * 1024;
+
 /** Parses the rows of ps -axo pid=,command= into { pid, command }. */
 export function parseProcessTable(text) {
   return text
@@ -1049,7 +1052,7 @@ async function measureOptions(options) {
         },
         logPosition: () => currentEventOffsets(configDir),
         untilFaultLine: (position) => untilEventLine(configDir, position, (line) => faultErrorCount([line]) === 1, FAULT_LINE_LIMIT,
-          { catalog, records: ["page.record.error", "host.record.error"] }),
+          { catalog, records: ["host.record.error", "workbench.record.error"] }),
         remainingWebKit: async () => {
           const remaining = [];
           for (const { role, pid } of (await applicationRows({ configDir })).filter(({ attribution }) => attribution === "launchd domain")) {

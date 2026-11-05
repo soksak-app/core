@@ -216,7 +216,7 @@ func TestTheCommandsOfAProjectChangeTheStore(t *testing.T) {
 
 // A project tab that is dropped on another tab moves its project to the place of that tab.
 func TestAProjectTabDraggedToAnotherMovesItsProject(t *testing.T) {
-	f, alpha, beta := twoProjects(t)
+	f, alpha, beta := libraryOfTwoProjects(t)
 	f.run("core.library.return", nil)
 	f.settle()
 	first, second := f.box("core.project-tab", alpha), f.box("core.project-tab", beta)

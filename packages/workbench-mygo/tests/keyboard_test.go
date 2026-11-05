@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/egoist/mygo/ui"
 )
 
 // keyboardRing returns the card of the focus ring and the active surface of that card.
@@ -266,5 +268,57 @@ func TestTheFocusRingMovesInOnePlace(t *testing.T) {
 			}
 			t.Errorf("%s:%d assigns the focus ring directly: %s", filepath.Base(source), number+1, strings.TrimSpace(line))
 		}
+	}
+}
+
+// A modal that opens without a press takes the keyboard from the view, and the view of the focus ring takes it back when the modal
+// closes: the question about a modified tab, the settings window and the debug view, each opened by its command.
+func TestAModalThatACommandOpensTakesTheKeyboardFromTheView(t *testing.T) {
+	for _, modal := range []struct{ name, open, end string }{
+		{"question", "", "core.picker.close"},
+		{"settings", "core.settings.open", "core.settings.close"},
+		{"debug", "core.debug.open", "core.debug.close"},
+	} {
+		t.Run(modal.name, func(t *testing.T) {
+			f, stored := surfaceShell(t)
+			f.settle()
+			before, ok := stored.keyboardTarget()
+			if !ok || before == nil {
+				t.Fatalf("the view does not hold the keyboard before the modal: %s (%v)", describeTarget(before), ok)
+			}
+			if modal.open == "" {
+				viewCall(t, f, stored, *before, "tab.modified", true)
+				f.run("core.tab.close", map[string]string{"tab": *before})
+			} else {
+				f.run(modal.open, nil)
+			}
+			f.settle()
+			if got, ok := stored.keyboardTarget(); !ok || got != nil {
+				t.Fatalf("the modal is open and the keyboard went to %s (%v)", describeTarget(got), ok)
+			}
+			f.run(modal.end, nil)
+			f.settle()
+			if got, ok := stored.keyboardTarget(); !ok || got == nil || *got != *before {
+				t.Fatalf("the modal closed and the keyboard went to %s (%v), want %s", describeTarget(got), ok, *before)
+			}
+		})
+	}
+}
+
+// Cmd+, is no shortcut of the window (docs/spec/exposure.md), so it opens no modal and the keyboard stays with the view.
+func TestCommandCommaLeavesTheKeyboardWithTheView(t *testing.T) {
+	f, stored := surfaceShell(t)
+	f.settle()
+	before, ok := stored.keyboardTarget()
+	if !ok || before == nil {
+		t.Fatalf("the view does not hold the keyboard: %s (%v)", describeTarget(before), ok)
+	}
+	f.tester.Key(ui.Cmd, ui.KeyComma)
+	f.settle()
+	if f.modal().Open {
+		t.Fatal("Cmd+, opened the settings window")
+	}
+	if got, ok := stored.keyboardTarget(); !ok || got == nil || *got != *before {
+		t.Fatalf("after Cmd+, the keyboard went to %s (%v)", describeTarget(got), ok)
 	}
 }

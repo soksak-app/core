@@ -458,3 +458,46 @@ func TestASaveOfAFileIsAnOperation(t *testing.T) {
 		t.Fatalf("the view shows %q", f.tester.Texts())
 	}
 }
+
+// The first focus of the debug view is its card, so a key presses no control before Tab or a press reaches one.
+func TestEnterInAnOpenedDebugViewClosesNothing(t *testing.T) {
+	f, _ := debugShell(t)
+	f.tester.Key(0, ui.KeyEnter)
+	f.settle()
+	if !strings.Contains(f.status("core.debug"), `"open":true`) {
+		t.Fatal("Enter closed the debug view")
+	}
+}
+
+// The debug view has the card of the settings window: its place, the head with the close switch, and the rows of the page.
+func TestTheDebugViewIsDrawnAsThePage(t *testing.T) {
+	f, _ := debugShell(t)
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	metric := func(name string) float32 {
+		value, ok := declared.Metric(name)
+		if !ok {
+			t.Fatalf("no metric %s", name)
+		}
+		return float32(value)
+	}
+	card := f.box("core.debug.card", "")
+	if card.Y != metric("set-card-top") || card.W != metric("dbg-card-w") {
+		t.Fatalf("the card is at %v wide %v", card.Y, card.W)
+	}
+	closing := f.box("core.debug.close", "")
+	if closing.W != metric("act-w") || closing.H != metric("act-h") {
+		t.Fatalf("the close switch is %v by %v", closing.W, closing.H)
+	}
+	row := f.box("core.debug.file", "logs/app.log")
+	if row.H != metric("dbg-row-h") {
+		t.Fatalf("the row of a file is %v high", row.H)
+	}
+	view := f.box("core.debug.view", "logs/app.log")
+	save := f.box("core.debug.save", "logs/app.log")
+	if view.W != metric("dbg-act-w") || save.X-view.X != metric("dbg-act-w")+metric("space-2") {
+		t.Fatalf("the actions of a file are %+v and %+v", view, save)
+	}
+}

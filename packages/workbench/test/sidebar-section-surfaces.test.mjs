@@ -37,7 +37,7 @@ mock.module("../host.js", { namedExports: { report: () => {} } });
 const { registry } = await import("../exposure.js");
 const { registerSection } = await import("../registry.js");
 registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
-const { drawSet, sidebarsState, clearSet, foldSection, selectSection } = await import("../sidebar-sections.js");
+const { drawSet, sidebarsState, clearSet, foldSection, selectSection, unloadSections, restoreSection } = await import("../sidebar-sections.js");
 const { shownSectionSurfaces } = await import("../section-surfaces.js");
 
 const composition = { kind: "view", page: "ui/tree.html" };
@@ -134,6 +134,47 @@ test("folding and an unselected tab hide a section surface without releasing it"
     const unselected = tabbed.querySelector('[data-native-surface-id="spc-aaaaaa/c2:right/probe.tree"]');
     assert.ok(unselected.closest("[hidden]"), "the section of an unselected tab must be hidden");
   } finally { clearSet(listed); clearSet(tabbed); listed.remove(); tabbed.remove(); }
+});
+
+test("an unloaded section keeps its slot without a mount until the memory saver restores it", async () => {
+  mounts.length = 0;
+  const container = sidebar();
+  try {
+    drawSet(container, "c8:left", tabs, { space: "spc-aaaaaa", card: "c8", surface: "t1", orientation: "vertical" });
+    await settle();
+    selectSection("c8:left", "probe.tree");
+    await settle();
+    const id = "spc-aaaaaa/c8:left/probe.marks";
+    const reported = () => sidebarsState().find(({ sidebar }) => sidebar === "c8:left").sections.find((section) => section.id === "probe.marks");
+    assert.equal(reported().mounted, true);
+    unloadSections([id, "tab-without-a-section"]);
+    assert.equal(reported().mounted, false, "core.sidebars must report the unloaded section without a mount");
+    const before = mounts.length;
+    selectSection("c8:left", "probe.tree");
+    await settle();
+    assert.equal(mounts.length, before, "an apply must not mount an unloaded section");
+    assert.ok(container.querySelector(`[data-native-surface-id="${id}"]`), "an unloaded section keeps its slot");
+    restoreSection(id);
+    await settle();
+    assert.equal(mounts.length, before + 1, "the restore must mount the section again");
+    assert.equal(reported().mounted, true);
+  } finally { clearSet(container); container.remove(); }
+});
+
+test("a sidebar that draws an unloaded section again after its release mounts it", async () => {
+  mounts.length = 0;
+  const container = sidebar();
+  try {
+    const context = { space: "spc-aaaaaa", card: "c9", surface: "t1", orientation: "vertical" };
+    drawSet(container, "c9:left", tabs, context);
+    await settle();
+    unloadSections(["spc-aaaaaa/c9:left/probe.marks"]);
+    clearSet(container);
+    mounts.length = 0;
+    drawSet(container, "c9:left", tabs, context);
+    await settle();
+    assert.ok(mounts.some(({ surface }) => surface.surfaceId === "spc-aaaaaa/c9:left/probe.marks"));
+  } finally { clearSet(container); container.remove(); }
 });
 
 test("a change of the active tab keeps the section surfaces and core.sidebars reports the followed surface", async () => {

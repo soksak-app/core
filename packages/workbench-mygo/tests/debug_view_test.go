@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -24,6 +25,8 @@ func debugEntries() []workbench.DebugEntry {
 
 func drawDebug(view *workbench.DebugView, errors *workbench.ShownErrors, binder *workbench.Binder) *ui.Tester {
 	view.CardWidth, view.CardMaxHeight = 640, 880
+	view.Style = workbench.DebugStyle{HeadH: 40, ActW: 56, RowH: 30, TextControl: 12, TextSmall: 11, LineHeight: 1.45,
+		Close: func(_ *ui.Context, button ui.Element, title string) { button.Size(24, 24).Label(title) }}
 	return ui.NewTester(func(c *ui.Context) {
 		workbench.DrawDebugView(c, binder, *view, errors)
 	}, 1000, 900)
@@ -363,5 +366,24 @@ func TestALeftFilterFieldRunsTheFilter(t *testing.T) {
 	want := []call{{"core.debug.timeline.filter", map[string]any{"session": "s-1"}}}
 	if !reflect.DeepEqual(calls, want) {
 		t.Fatalf("commands %+v, want %+v", calls, want)
+	}
+}
+
+// A time reads as the page writes it, in the language of the window.
+func TestTheTimeOfADebugFileIsWrittenInTheLanguage(t *testing.T) {
+	modified := time.Date(2026, 11, 5, 14, 18, 28, 0, time.Local).UnixMilli()
+	for _, want := range []struct{ locale, text string }{
+		{"ko", "2026. 11. 5. 오후 2:18:28"},
+		{"ko-KR", "2026. 11. 5. 오후 2:18:28"},
+		{"en-US", "11/5/2026, 2:18:28 PM"},
+		{"", "11/5/2026, 2:18:28 PM"},
+	} {
+		if got := workbench.TimeText(modified, want.locale); got != want.text {
+			t.Errorf("in %q the time is %q, want %q", want.locale, got, want.text)
+		}
+	}
+	morning := time.Date(2026, 1, 2, 0, 5, 6, 0, time.Local).UnixMilli()
+	if got := workbench.TimeText(morning, "ko"); got != "2026. 1. 2. 오전 12:05:06" {
+		t.Errorf("the morning is %q", got)
 	}
 }

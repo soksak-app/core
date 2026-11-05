@@ -663,3 +663,100 @@ func TestTheHeadAndTheSectionsOfTheSettingsWindowAreThoseOfThePage(t *testing.T)
 		t.Fatalf("the name of the section starts %v into it, want %v", first, pad)
 	}
 }
+
+// The scope tabs and the group names of the settings window are those of the page: an underlined tab marked in the rail color, and a
+// group name in that color.
+func TestTheScopeTabsAndGroupsOfTheSettingsWindowAreThoseOfThePage(t *testing.T) {
+	f := opened(t)
+	f.run("core.settings.theme", map[string]any{"name": "midnight", "mode": "dark"})
+	f.settle()
+	rail, card := themeToken(t, "midnight", "dark", "rail"), themeToken(t, "midnight", "dark", "card")
+	tab := f.box("core.settings-modal.scope", "pick:scope:common")
+	middle := tab.X + tab.W/2
+	if got := f.pixelOf(middle, tab.Y+tab.H-1); got != rail {
+		t.Fatalf("the mark of the shown scope is %v, want %v", got, rail)
+	}
+	if got := f.pixelOf(tab.X+2, tab.Y+2); got != card {
+		t.Fatalf("the shown scope has the fill %v, want the card %v", got, card)
+	}
+	near := func(a, b uint8) bool { return int(a)-int(b) < 8 && int(b)-int(a) < 8 }
+	for y := tab.Y + tab.H + 2; y < tab.Y+tab.H+40; y++ {
+		for x := tab.X; x < tab.X+60; x++ {
+			if got := f.pixelOf(x, y); near(got.R, rail.R) && near(got.G, rail.G) && near(got.B, rail.B) {
+				return
+			}
+		}
+	}
+	t.Fatalf("no group name in the rail color %v below the scopes", rail)
+}
+
+// The controls of the settings window are those of the page: the themes stand in a grid of named tiles, a select fills the cell of its
+// row, and each line of text takes the line height of the page.
+func TestTheControlsOfTheSettingsWindowAreThoseOfThePage(t *testing.T) {
+	f := opened(t)
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	metric := func(name string) float32 {
+		value, ok := declared.Metric(name)
+		if !ok {
+			t.Fatalf("no metric %s", name)
+		}
+		return float32(value)
+	}
+	if !f.tester.HasText("midnight") {
+		t.Fatalf("no name of a theme in %q", f.tester.Texts())
+	}
+	first, second := f.box("core.settings-modal.theme", "theme:midnight"), f.box("core.settings-modal.theme", "theme:nord")
+	if first.W < metric("theme-swatch-min-w") || second.X-first.X != first.W+metric("theme-grid-gap") {
+		t.Fatalf("the tiles are %+v and %+v", first, second)
+	}
+	card := f.box("core.settings-modal.card", "")
+	selector := f.box("core.settings-modal.set", "projectOpening")
+	if right := card.X + card.W - 1 - metric("set-pane-pad-x"); selector.X+selector.W < right-1 {
+		t.Fatalf("the select ends at %v, want the end of the pane at %v", selector.X+selector.W, right)
+	}
+	want := metric("field-pad-y")*2 + 2 + metric("text-control-at-base")*metric("line-height")
+	if selector.H < want-1 || selector.H > want+1 {
+		t.Fatalf("the select is %v high, want %v", selector.H, want)
+	}
+}
+
+// lastLineInk returns the width of the ink on the last line of the element of a text of two lines.
+func lastLineInk(f *shellFixture, node ui.ElementNode) float32 {
+	f.t.Helper()
+	background := f.pixelOf(node.Bounds.X+node.Bounds.W-1, node.Bounds.Y+1)
+	right := node.Bounds.X
+	for x := node.Bounds.X; x < node.Bounds.X+node.Bounds.W; x++ {
+		for y := node.Bounds.Y + node.Bounds.H/2; y < node.Bounds.Y+node.Bounds.H; y++ {
+			if f.pixelOf(x, y) != background {
+				right = x
+			}
+		}
+	}
+	return right - node.Bounds.X
+}
+
+// Korean breaks at the spaces, as body of the page does with word-break: keep-all: the sentence does not end in a line of one syllable, in
+// the workbench and in what stands over it.
+func TestKoreanTextBreaksAtTheSpaces(t *testing.T) {
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	size, _ := declared.Metric("text-small-at-base")
+	f := opened(t)
+	const caption = "프로젝트를 여는 방식은 모든 프로젝트에 적용됩니다. 이미 열린 창은 유지됩니다."
+	node, ok := nodeLabeled(f.tester.ElementTree(), caption)
+	if !ok {
+		t.Fatalf("no caption in %q", f.tester.Texts())
+	}
+	if node.Bounds.H < 2*float32(size) {
+		t.Fatalf("the caption is one line of %v", node.Bounds.H)
+	}
+	// The last word is five characters, and a break inside it leaves at most two.
+	if ink := lastLineInk(f, node); ink < 3*float32(size) {
+		t.Fatalf("the last line of the caption is %v wide: it broke inside a word", ink)
+	}
+}

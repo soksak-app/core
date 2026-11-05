@@ -21,7 +21,7 @@ import { parseArgs } from "node:util";
 import { readPolicy } from "@soksak/window-check/log-policy.mjs";
 import { b3Conditions, writeB3Out } from "./b3-out.mjs";
 import { readFootprint, settledFootprints } from "./footprints.mjs";
-import { hostProcess, parseProcessTable } from "./measure-app-usage.mjs";
+import { PROCESS_TABLE_BYTES, hostProcess, parseProcessTable } from "./measure-app-usage.mjs";
 import { applyTrace, parseTrace, traceSettings } from "./measure-trace.mjs";
 
 /** The keys of the B3 output of host-allocations (scripts/b3-out.mjs), which b3Output gives. */
@@ -116,7 +116,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const { sok, configDir, trace, minutes, b3Out } = parseOptions(process.argv.slice(2));
   const reply = (args) => JSON.parse(execFileSync(sok, [...args, "--config-dir", configDir], { encoding: "utf8" }));
   const pid = await prepare({
-    processes: parseProcessTable(execFileSync("ps", ["-axww", "-o", "pid=,command="], { encoding: "utf8" })),
+    processes: parseProcessTable(execFileSync("ps", ["-axww", "-o", "pid=,command="], { encoding: "utf8", maxBuffer: PROCESS_TABLE_BYTES })),
     configDir, realPath: realpathSync(configDir), trace,
     run: async (command, params) => reply([command, "--params", JSON.stringify(params)]),
   });

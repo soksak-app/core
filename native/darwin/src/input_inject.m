@@ -131,6 +131,12 @@ static NSView *pointerTarget(NSWindow *window, NSPoint point, int phase, int but
     return phase == 2 || phase == 3 ? objc_getAssociatedObject(window, pressedViewKey(button)) : hitView(window, point);
 }
 
+bool sp_input_press_open(void *handle, int button) {
+    NSCAssert(NSThread.isMainThread, @"mouse presses belong to the main thread");
+    NSWindow *window = (__bridge NSWindow *)handle;
+    return window && objc_getAssociatedObject(window, pressedViewKey(button)) != nil;
+}
+
 static NSEvent *mouseEvent(NSWindow *window, NSEventType type, NSPoint point, NSInteger clicks, float pressure) {
     return [NSEvent mouseEventWithType:type location:point modifierFlags:0
         timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber

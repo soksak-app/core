@@ -8,7 +8,16 @@ import (
 )
 
 // registerFixture answers diagnostics.fixture, which the host asks of the window that a check starts from (docs/spec/diagnostics.md).
-func (s *Shell) registerFixture() { s.registry.Method("diagnostics.fixture", s.prepareFixture) }
+func (s *Shell) registerFixture() {
+	s.registry.Method("diagnostics.fixture", s.prepareFixture)
+	s.registry.Method("diagnostics.layout.fail", func(_ json.RawMessage, answer func(any, error)) {
+		s.surfaces.layoutFault = true
+		answer(nil, nil)
+	})
+}
+
+// layoutFaultText is the failure of the placement that diagnostics.layout.fail arms (docs/spec/endpoint.md).
+const layoutFaultText = "diagnostic layout fault"
 
 // prepareFixture leaves the window with every project closed, the common settings at the defaults with the values of the request,
 // and one project of the root open on a fresh layout.

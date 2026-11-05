@@ -1094,6 +1094,19 @@ const FEATURE_LINKS = [
     levels: ["native"],
   },
   {
+    id: "F544",
+    implementation: [
+      { file: "native/darwin/src/input_press_context.h", symbol: "bool sp_input_press_open(void *window, int button);" },
+      { file: "native/darwin/src/webview_input.m", symbol: "BOOL answered = NO;" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "an origin that outlives its release does not hold the keyboard" },
+      { file: "native/darwin/tests/webview_input_receipts_test.m", id: "one receipt answers every wait of its type" },
+    ],
+    expected: "Only an open press holds a keyboard move, and one receipt answers every wait of its type.",
+    levels: ["native"],
+  },
+  {
     id: "F533",
     implementation: [
       { file: "packages/workbench/memory-saver.js", symbol: 'if (trigger === "delay") entry.unloadAt = now() + delayMs();' },
@@ -8768,6 +8781,21 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/app_tabs_test.go", id: "TestAHiddenSectionThatDeclaresUnloadStartsUnloaded" },
     ],
     expected: "A window starts its memory saver at its first drawn layout that holds a surface, so a hidden section that declares unload never mounts only to unload.",
+    levels: ["unit"],
+  },
+  {
+    id: "F502-18-2",
+    implementation: [
+      { file: "packages/workbench/memory-placement.js", symbol: "record.surfaces = record.surfaces.filter(({ id }) => !unloaded.has(id));" },
+      { file: "packages/workbench/sidebar-sections.js", symbol: "export function unloadSections(ids) {" },
+      { file: "packages/workbench/sidebar-sections.js", symbol: "export function restoreSection(id) {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/memory-placement-start.test.mjs", id: "a placement takes the seat of an unloaded surface out of its record" },
+      { file: "packages/workbench/test/sidebar-section-surfaces.test.mjs", id: "an unloaded section keeps its slot without a mount until the memory saver restores it" },
+      { file: "packages/workbench/test/sidebar-section-surfaces.test.mjs", id: "a sidebar that draws an unloaded section again after its release mounts it" },
+    ],
+    expected: "An unloaded section keeps its slot, leaves the record of the host, and mounts again when the memory saver restores it.",
     levels: ["unit"],
   },
   {

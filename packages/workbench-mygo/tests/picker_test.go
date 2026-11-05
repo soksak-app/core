@@ -729,3 +729,111 @@ func TestACloseRequestOfTheWindowAsksAboutAModifiedTab(t *testing.T) {
 		})
 	}
 }
+
+// nodeLabeled returns the first element with the label.
+func nodeLabeled(nodes []ui.ElementNode, label string) (ui.ElementNode, bool) {
+	for _, node := range nodes {
+		if node.Label == label && len(node.Children) == 0 {
+			return node, true
+		}
+		if found, ok := nodeLabeled(node.Children, label); ok {
+			return found, true
+		}
+	}
+	return ui.ElementNode{}, false
+}
+
+// The title of a layer has the tracking of a section name, as .picker__head has on the page.
+func TestTheTitleOfALayerHasTheSectionTracking(t *testing.T) {
+	f, _ := surfaceShell(t)
+	f.click("core.card.add", f.tabbedCards()[0])
+	const title = "새 탭에 무엇을 띄울까"
+	node, ok := nodeLabeled(f.tester.ElementTree(), title)
+	if !ok {
+		t.Fatalf("no title %q in %q", title, f.tester.Texts())
+	}
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	size, _ := declared.Metric("text-caption-at-base")
+	catalog, err := workbench.ReadSettingsCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stack := catalog.Stack(status[map[string]any](t, f, "core.settings")["values"].(map[string]any)["font"].(string))
+	plain := ui.NewTester(func(c *ui.Context) {
+		ui.Row(c).Children(func() { ui.Text(c, title).FontSize(float32(size)).Font(stack) })
+	}, 1000, 100)
+	bare, ok := nodeLabeled(plain.ElementTree(), title)
+	if !ok {
+		t.Fatalf("no plain element of %q", title)
+	}
+	// The element of the title fills the layer, so the width of the text is that of its ink.
+	background := f.pixelOf(node.Bounds.X+node.Bounds.W-1, node.Bounds.Y+1)
+	right := node.Bounds.X
+	for x := node.Bounds.X; x < node.Bounds.X+node.Bounds.W; x++ {
+		for y := node.Bounds.Y; y < node.Bounds.Y+node.Bounds.H; y++ {
+			if f.pixelOf(x, y) != background {
+				right = x
+			}
+		}
+	}
+	ink := right - node.Bounds.X
+	if want := bare.Bounds.W + 0.04*float32(size)*float32(len([]rune(title))-1)/2; ink < want {
+		t.Fatalf("the ink of the title is %v wide, want at least %v", ink, want)
+	}
+}
+
+// A row of a layer has the line height of the page.
+func TestARowOfALayerHasTheLineHeightOfThePage(t *testing.T) {
+	f, _ := surfaceShell(t)
+	f.click("core.card.add", f.tabbedCards()[0])
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	metric := func(name string) float32 {
+		value, ok := declared.Metric(name)
+		if !ok {
+			t.Fatalf("no metric %s", name)
+		}
+		return float32(value)
+	}
+	item, ok := exposedNode(f.tester.ElementTree(), "core.picker.item", "")
+	if !ok {
+		t.Fatal("no item")
+	}
+	want := 2*metric("picker-item-pad-y") + metric("text-control-at-base")*metric("line-height")
+	if item.Bounds.H < want-1 || item.Bounds.H > want+1 {
+		t.Fatalf("the row is %v high, want %v", item.Bounds.H, want)
+	}
+}
+
+// The question about a tab, which stands over the workbench, breaks at the spaces too.
+func TestAQuestionBreaksAtTheSpaces(t *testing.T) {
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	size, _ := declared.Metric("text-caption-at-base")
+	f := modifiedShell(t)
+	f.run(t, "core.tab.close", `{"tab":"tab-aaaaaa"}`)
+	f.settle()
+	title := ""
+	for _, text := range f.tester.Texts() {
+		if strings.Contains(text, "탭에 저장하지 않은 변경이 있습니다") {
+			title = text
+		}
+	}
+	node, ok := nodeLabeled(f.tester.ElementTree(), title)
+	if !ok || title == "" {
+		t.Fatalf("no title in %q", f.tester.Texts())
+	}
+	if node.Bounds.H < 2*float32(size) {
+		t.Fatalf("the title %q is one line of %v", title, node.Bounds.H)
+	}
+	if ink := lastLineInk(f.shellFixture, node); ink < 3*float32(size) {
+		t.Fatalf("the last line of the title is %v wide: it broke inside a word", ink)
+	}
+}
