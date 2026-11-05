@@ -32,7 +32,7 @@ func (s *Shell) askModified(card string, tab layout.Tab, answered func(settled b
 	if save != "" {
 		items = slices.Insert(items, 0, pickerItem{Key: "save", Name: "저장하고 닫기"})
 	}
-	layer := s.openPicker(layout.TabName(tab, nil, false)+" 탭에 저장하지 않은 변경이 있습니다", items, func(key string) error {
+	layer := s.openPicker(s.tabName(tab)+" 탭에 저장하지 않은 변경이 있습니다", items, func(key string) error {
 		switch key {
 		case "keep":
 			answered(false)
