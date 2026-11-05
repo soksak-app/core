@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F585: A terminal whose region shows after a hide of its surface, or in a press, takes the keyboard from its page, and a region that hid with the keyboard takes it back when it shows.
 - F502-16: The tables of the allowed host differences list the files that the joined lines added, and the library test of a window without a main page names no framework. Red: the audit of the host structure named each file.
 - F502-16: The contract holds the end of the hello deadline as a case of every host, and the Rust host tests the silence after a hello as the Go host does. Red: the audit of the host structure named the Go test without a case.
 - F502-16: `core.projects.flush` on the mygo workbench answers after the host stored the layout, the geometry of the window and the tabs, and with the failure of a store that failed, so a reload loses no write.

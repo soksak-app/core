@@ -1028,6 +1028,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F585",
+    implementation: [{ file: "native/darwin/src/webview_geometry.m", symbol: "void sp_surface_region_shown" }],
+    tests: [
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "the first region that shows after a hide takes the keyboard from the page" },
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "a region that showed behind the hidden surface takes the keyboard when the surface shows" },
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "a call in a press does not undo the region that showed in it" },
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "a region that shows again takes back the keyboard it lost to its hide" },
+    ],
+    expected: "A region takes the keyboard from the page that waited for it after a hide of the surface and in a press, and a region that hid with the keyboard takes it back when it shows, unless the keyboard moved on.",
+    levels: ["unit"],
+  },
+  {
     id: "F583",
     implementation: [{ file: "native/darwin/src/webview_geometry.m", symbol: "sp_observe_notification(\"webview_geometry.window_close\"" }],
     tests: [
