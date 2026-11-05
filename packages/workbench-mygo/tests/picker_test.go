@@ -837,3 +837,43 @@ func TestAQuestionBreaksAtTheSpaces(t *testing.T) {
 		t.Fatalf("the last line of the title is %v wide: it broke inside a word", ink)
 	}
 }
+
+// The question about a tab stands under the whole tab, its name and its close button, and ends with it (askBeforeClose of packages/workbench/plane.js).
+func TestTheQuestionStandsUnderTheWholeTab(t *testing.T) {
+	f := modifiedShell(t)
+	f.run(t, "core.tab.close", `{"tab":"tab-aaaaaa"}`)
+	f.settle()
+	declared, err := workbench.ReadDeclarations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	metric := func(name string) float32 {
+		value, ok := declared.Metric(name)
+		if !ok {
+			t.Fatalf("no metric %s", name)
+		}
+		return float32(value)
+	}
+	var find func(nodes []ui.ElementNode) (ui.ElementNode, bool)
+	find = func(nodes []ui.ElementNode) (ui.ElementNode, bool) {
+		for _, node := range nodes {
+			if node.Label == f.menu().Title {
+				return node, true
+			}
+			if found, ok := find(node.Children); ok {
+				return found, true
+			}
+		}
+		return ui.ElementNode{}, false
+	}
+	panel, ok := find(f.tester.ElementTree())
+	if !ok {
+		t.Fatal("no question")
+	}
+	name, closing := f.box("core.card.tab", "tab-aaaaaa"), f.box("core.card.tab-close", "tab-aaaaaa")
+	bottom := max(name.Y+name.H, closing.Y+closing.H) + metric("tab-pad-y")
+	end := closing.X + closing.W + metric("tab-pad-x")
+	if panel.Bounds.Y != bottom+5 || panel.Bounds.X+panel.Bounds.W != end {
+		t.Fatalf("the question %+v stands under a tab that ends at %v, %v", panel.Bounds, end, bottom)
+	}
+}
