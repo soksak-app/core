@@ -23,6 +23,8 @@ var tints = []string{"#ffb36b", "#7fe3b0", "#7db4ff", "#e08bd8", "#f2d16b"}
 
 // ShellOptions is what a shell needs from its window.
 type ShellOptions struct {
+	// Now is the clock of the window.
+	Now      func() time.Time
 	Declared *Declarations
 	Calls    *Calls
 	// Environment is the text of the environment declaration of the application.

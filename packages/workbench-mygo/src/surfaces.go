@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -217,7 +218,9 @@ type surfaceState struct {
 	// latest is the record of the last placement, answered the record of the last placement that the host answered, and sequence
 	// the number of the last record.
 	latest, answered *VerifyRecord
-	sequence         int
+	// placedAt is when the last placement started.
+	placedAt time.Time
+	sequence int
 	// applied holds where the host applied each visible surface, in window coordinates.
 	applied map[string]layout.Rect
 	// controls is the area of the window buttons that the host answered, and failure the error of the last placement.
@@ -598,6 +601,7 @@ func (s *Shell) placeSurfaces() {
 	s.followRun(!settledNow)
 	record := s.surfaceRecord(lines, settledNow)
 	s.surfaces.latest = record
+	s.surfaces.placedAt = s.options.Now()
 	s.surfaces.placing, s.surfaces.commits = s.surfaces.commits, nil
 	for _, id := range s.surfaces.order {
 		held := s.surfaces.held[id]

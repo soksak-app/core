@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -35,6 +36,8 @@ const installedDocument = `{"plugins": [
 // surfaceHost records the surface calls of the workbench.
 type surfaceHost struct {
 	storedHost
+	// now is the clock of the window, which only a test moves.
+	now time.Time
 	// window is the state of the window that core.window.workbench reads.
 	window workbench.WindowView
 	// windowFailure is the error of each read of the state of the window.
@@ -181,6 +184,7 @@ func surfaceShellOn(t testing.TB, document string, stored *surfaceHost) *shellFi
 	}
 	f := &shellFixture{t: t, host: &stored.storedHost, pending: make(steps, 256)}
 	shell, err := workbench.NewShell(workbench.ShellOptions{
+		Now:         func() time.Time { return stored.now },
 		Detaching:   func() []string { return nil },
 		Located:     func(string) {},
 		Backdrop:    func(string) error { return nil },

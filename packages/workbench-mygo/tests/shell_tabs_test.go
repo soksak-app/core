@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -133,6 +134,7 @@ func newTabShellWithState(t *testing.T, stored *storedHost, refused error) *tabS
 		installed = stored.installed
 	}
 	shell, err := workbench.NewShell(workbench.ShellOptions{
+		Now:       time.Now,
 		Elements:  fixtureElements{f.shellFixture},
 		Detaching: func() []string { return nil },
 		Window: func() (workbench.WindowView, error) {

@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"math"
+	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 	host "github.com/soksak-app/core/packages/host/go/src"
@@ -18,6 +20,10 @@ import (
 type placingHost struct {
 	surfaceHost
 	moved float64
+	// unanswered, when it is set, holds the answer of a placement until it closes.
+	unanswered chan struct{}
+	// refusal, when it is set, is the error that answers a placement.
+	refusal error
 }
 
 func placingShell(t *testing.T) (*shellFixture, *placingHost) {
@@ -44,6 +50,12 @@ func placingShell(t *testing.T) (*shellFixture, *placingHost) {
 				"chrome": map[string]any{"controls": map[string]any{"x": 12, "y": 12, "w": 52, "h": 16}, "row": 40}}, nil
 		},
 		"presentSurfaces": func(_ context.Context, argument json.RawMessage) (any, error) {
+			if stored.unanswered != nil {
+				<-stored.unanswered
+			}
+			if stored.refusal != nil {
+				return nil, stored.refusal
+			}
 			var request struct {
 				Placements json.RawMessage `json:"placements"`
 			}
@@ -91,6 +103,76 @@ func TestTheVerificationReadsTheDrawnPlane(t *testing.T) {
 	if verify.Failed != 0 {
 		t.Fatalf("core.verify is %+v", verify)
 	}
+}
+
+// A drawn rule reaches the padding of the plane and no further, and the margin of the check is that padding: a margin wider than the
+// reach of the rule would pass a rule 1 px past the padding.
+func TestTheRuleMarginIsThePaddingThatARuleReaches(t *testing.T) {
+	f, _ := placingShell(t)
+	resized(f, 1000)
+	note := verifyRow(t, status[workbench.VerifyStatus](t, f, "core.verify"), "R ").Note
+	if !regexp.MustCompile(`^최대 ([1-9][0-9.]*)px · 여백 ([0-9.]+)px$`).MatchString(note) {
+		t.Fatalf("the row R says %q", note)
+	}
+	values := regexp.MustCompile(`[0-9.]+`).FindAllString(note, -1)
+	if values[0] != values[1] {
+		t.Fatalf("a rule reaches %s and the margin is %s", values[0], values[1])
+	}
+}
+
+// A placement that the host never answers skips the rows that wait for it until the bound, and then fails: a check that keeps skipping
+// it answers no failure for a window whose views stay in the old place.
+func TestTheVerificationFailsAPlacementTheHostLeavesUnanswered(t *testing.T) {
+	f, stored := placingShell(t)
+	resized(f, 1000)
+	stored.unanswered = make(chan struct{})
+	t.Cleanup(func() { close(stored.unanswered) })
+	resized(f, 900)
+	verify := status[workbench.VerifyStatus](t, f, "core.verify")
+	skipped := false
+	for _, row := range verify.Skipped {
+		skipped = skipped || strings.HasPrefix(row.Name, "V7a ")
+	}
+	if !skipped || verify.Failed != 0 {
+		t.Fatalf("a placement within the bound: V7a skipped %v, failed %+v", skipped, failedRows(verify))
+	}
+	// A later size waits behind the placement, so it does not start the bound again.
+	stored.now = stored.now.Add(workbench.LatePlacement - time.Millisecond)
+	resized(f, 800)
+	stored.now = stored.now.Add(time.Millisecond)
+	verify = status[workbench.VerifyStatus](t, f, "core.verify")
+	if got := verifyRow(t, verify, "V7a "); got.OK || verify.Failed == 0 || !strings.Contains(got.Note, "3000 ms") {
+		t.Fatalf("a placement past the bound: V7a %+v, failed %+v", got, failedRows(verify))
+	}
+}
+
+// A placement that the host refused has its answer: the row of the refusal states it, and V7a does not call it unanswered.
+func TestARefusedPlacementIsNotUnanswered(t *testing.T) {
+	f, stored := placingShell(t)
+	resized(f, 1000)
+	stored.refusal = errors.New("the host refused")
+	resized(f, 900)
+	stored.now = stored.now.Add(workbench.LatePlacement)
+	verify := status[workbench.VerifyStatus](t, f, "core.verify")
+	for _, row := range failedRows(verify) {
+		if strings.HasPrefix(row.Name, "V7a ") {
+			t.Fatalf("V7a is %+v", row)
+		}
+	}
+	if got := verifyRow(t, verify, "Surface presentation"); got.OK || got.Note != "the host refused" {
+		t.Fatalf("the refusal is %+v", got)
+	}
+}
+
+// failedRows holds the rows of a status that failed.
+func failedRows(verify workbench.VerifyStatus) []workbench.VerifyRow {
+	out := []workbench.VerifyRow{}
+	for _, row := range verify.Rows {
+		if !row.OK {
+			out = append(out, row)
+		}
+	}
+	return out
 }
 
 // A surface that the host applied elsewhere than the workbench declared fails the rows that read the answer of the host.
