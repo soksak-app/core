@@ -16,6 +16,9 @@ export const showSectionSurface = (surfaceId) => { shown.add(surfaceId); };
 /** Records that no drawn sidebar holds the section surface. */
 export const hideSectionSurface = (surfaceId) => { shown.delete(surfaceId); };
 
+/** Whether a drawn sidebar holds the section surface. */
+export const sectionSurfaceShown = (surfaceId) => shown.has(surfaceId);
+
 /** The section surfaces that the drawn sidebars hold, in the order they were drawn. */
 export const shownSectionSurfaces = () => [...shown];
 

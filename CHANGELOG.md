@@ -13,6 +13,7 @@
 - F502-16: The mygo workbench answers `core.plugin.open-calls`, `core.plugin.losses` and `core.plugin.views`.
 - F502-16: The library of the mygo workbench stands where the page stands it: its line heights, form gaps and empty margins are those of `library.css`, the plugin page lays its cards in columns, a project card shows the day its project opened, and the library hides the sidebar switches of the bar.
 - F547: The mygo workbench no longer posts steps without a pause while a log batch is in flight and a count of the gate is due.
+- F554: A view of a section can read its text scale in the Wails workbench.
 - F502-12: The WebContent process of a document region has the display label `soksak://plugin/<plugin id>/<region>`, so Activity Monitor and `lsappinfo` show which plugin and region it belongs to. Before, only a view had a label of its own and a region showed the name of the application. The host composes the label and `sp_document_create` receives it.
 - F548: The first window no longer reads the modules of the settings modal and the debug view; each loads at its first use.
 - F549: A wake of a settled window no longer wakes the log writer to store a count of frame events that were never refused.
