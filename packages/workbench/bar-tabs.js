@@ -22,7 +22,10 @@ export function createBarTabs({ projects, projectBar, spaceBar, workarea, bind, 
     el.dataset.on = String(on);
     el.title = text;
     // The project color is shown as the background of the selected tab. No separate mark is used.
-    if (dot && on) el.style.background = `color-mix(in srgb, ${dot} 24%, transparent)`;
+    if (dot && on) {
+      el.dataset.tinted = "true";
+      el.style.setProperty("--project-color", dot);
+    }
     const name = document.createElement("span");
     name.className = "bar-tab__name";
     name.textContent = text;
