@@ -372,6 +372,7 @@ NATIVE_TESTS = observe_test \
   document_typing_test \
   document_press_test \
   image_nonce_ownership_test \
+  image_region_background_test \
   image_region_test \
   press_release_test \
   image_region_decoration_test \

@@ -186,6 +186,20 @@ pub(crate) fn set_background(window: &Window, enabled: bool) -> Result<(), Strin
     Ok(())
 }
 
+/// Opens a modal of mode in the overlay of a test.
+#[cfg(test)]
+pub(crate) fn open_for_test(overlay: &Overlay, mode: &str) {
+    // default: no test poisons this lock.
+    *overlay.open.lock().unwrap_or_else(PoisonError::into_inner) = Some(Modal {
+        id: "probe".to_string(),
+        content: OverlayContent {
+            mode: mode.to_string(),
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+}
+
 /// Places the modal webview at content coordinates.
 fn place_overlay(view: &Webview, at: Rect) -> Result<(), String> {
     let platform = platform::current()?;

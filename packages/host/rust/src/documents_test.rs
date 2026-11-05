@@ -128,3 +128,24 @@ fn a_creation_without_failure_keeps_the_document_and_a_failed_close_is_reported(
         "event failed; closing the document: the document is gone"
     );
 }
+
+// contract: modal.dialog-blurs-each-document-and-image-region
+#[test]
+fn a_dialog_blurs_each_document_and_image_region() {
+    let documents = std::cell::RefCell::new(Vec::new());
+    let images = std::cell::RefCell::new(Vec::new());
+    super::set_regions_background(
+        vec![1, 2],
+        vec![3],
+        |handle| {
+            documents.borrow_mut().push(handle);
+            Ok(())
+        },
+        |handle| {
+            images.borrow_mut().push(handle);
+            Ok(())
+        },
+    );
+    assert_eq!(*documents.borrow(), vec![1, 2]);
+    assert_eq!(*images.borrow(), vec![3]);
+}

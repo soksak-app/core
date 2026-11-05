@@ -1330,8 +1330,25 @@ pub fn attach(webview: &Webview, request: Request) -> Result<(), String> {
             key.0
         ));
     }
+    // The dialog is read on the main thread after the region is registered, so a later change of the dialog, whose task
+    // runs on the same thread, finds the region.
+    let background_data = data.clone();
+    on_main(&window, move || {
+        seat_background(&background_data.overlay, handle, |handle, enabled| {
+            platform.set_image_background(handle, enabled)
+        })
+    })?;
     exposure::window_changed(&window);
     crate::composition::send_image_drawing(&window)
+}
+
+/// Blurs a registered image region when a dialog is open.
+fn seat_background(
+    overlay: &crate::modals::Overlay,
+    handle: Handle,
+    set: impl Fn(Handle, bool) -> Result<(), String>,
+) -> Result<(), String> {
+    set(handle, overlay.dialog())
 }
 
 /// Makes the image region the first responder and sends the focus event.

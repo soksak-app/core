@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F502-21: Dialog는 각 document web view처럼 각 image region도 세 host에서 blur하므로, dialog 아래의 terminal이 더 이상 선명하게 남지 않는다. `host.window`는 각 image region의 `blurred`를 보고한다.
 - F539: `sok input pointer`가 사람처럼 이동한다. 좌표를 포함하는 모든 추적 영역이 이동과 진입, 이탈을 듣고, key window의 press는 그 좌표로 먼저 이동한다.
 - F538: retain이 저장된 모든 layout의 section persistent session을 유지하므로, tab을 없애거나 space를 닫거나 project를 제거해도 다른 space와 project의 sidebar session이 끝나지 않는다.
 - F502-21: mygo workbench에서 창을 닫으면, Cmd+W를 포함해, 먼저 수정된 탭마다 묻는다. 유지한 탭이 있으면 창이 남는다.

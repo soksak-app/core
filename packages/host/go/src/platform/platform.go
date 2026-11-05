@@ -488,6 +488,8 @@ type Platform interface {
 	// on the main thread. A non-nil released puts the region in the lease mode and receives, on a worker, the frame identity of
 	// each surface that the region stops holding; a nil released keeps the copy mode.
 	CreateImage(surface unsafe.Pointer, name string, event func(json string), released func(generation, raster uint64, sequence int)) (unsafe.Pointer, error)
+	// SetImageBackground blurs the image region while a dialog is open.
+	SetImageBackground(image unsafe.Pointer, enabled bool)
 	// PlaceImage sets the image region with the CSS pixel margins of the surface viewport.
 	PlaceImage(image unsafe.Pointer, left, top, right, bottom float64, visible bool)
 	// RasterImage returns the device pixel size of the applied image region and the ratio of device pixels per CSS pixel.

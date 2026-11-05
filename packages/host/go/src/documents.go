@@ -924,11 +924,20 @@ func (s *Surfaces) surfaceCommitted(viewID uint64) {
 	s.surfacesClosed([]string{surface})
 }
 
-// setDocumentsBackground dims the document regions while a dialog is open. Call it on the UI thread.
+// setDocumentsBackground blurs the document and image regions while a dialog is open. Call it on the UI thread.
 func (s *Surfaces) setDocumentsBackground(enabled bool) {
 	for _, handle := range s.documents.All() {
 		system.SetDocumentBackground(handle, enabled)
 	}
+	for _, handle := range s.images.All() {
+		system.SetImageBackground(handle, enabled)
+	}
+}
+
+// seatImageBackground blurs a registered image region when a dialog is open. It reads the dialog on the UI thread after
+// the region is registered, so a later change of the dialog, whose task runs on the same thread, finds the region.
+func (s *Surfaces) seatImageBackground(handle unsafe.Pointer) {
+	system.SetImageBackground(handle, s.dialog())
 }
 
 // The event goes to the app DOM, and the receiver of the module checks the surface owner of the payload.
@@ -1019,7 +1028,9 @@ func (s *Surfaces) attachCheckedImage(key ImageKey, req ImageRequest) error {
 		registered = s.images.Set(key, handle)
 		if !registered {
 			system.CloseImage(handle)
+			return
 		}
+		s.seatImageBackground(handle)
 	})
 	if screenErr != nil {
 		s.images.Remove(key)

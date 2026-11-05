@@ -78,7 +78,7 @@ var hostStatus = map[string]hostEntry{
 			"regions": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
 				"surface": map[string]any{"type": "string"}, "name": map[string]any{"type": "string"},
 				"frame": rectSchema, "visible": map[string]any{"type": "boolean"}, "drawing": map[string]any{"type": "boolean"},
-				"focused": map[string]any{"type": "boolean"},
+				"focused": map[string]any{"type": "boolean"}, "blurred": map[string]any{"type": "boolean"},
 				"presented": map[string]any{"type": []any{"object", "null"}, "properties": map[string]any{
 					"sequence": map[string]any{"type": "integer"}, "generation": map[string]any{"type": "integer"}, "raster": map[string]any{"type": "integer"},
 					"width": map[string]any{"type": "integer"}, "height": map[string]any{"type": "integer"}, "scale": map[string]any{"type": "number"},
@@ -1275,12 +1275,14 @@ type WindowControl struct {
 
 // WindowRegion is one image region of host.window.
 type WindowRegion struct {
-	Surface   string `json:"surface"`
-	Name      string `json:"name"`
-	Frame     frame  `json:"frame"`
-	Visible   bool   `json:"visible"`
-	Drawing   bool   `json:"drawing"`
-	Focused   bool   `json:"focused"`
+	Surface string `json:"surface"`
+	Name    string `json:"name"`
+	Frame   frame  `json:"frame"`
+	Visible bool   `json:"visible"`
+	Drawing bool   `json:"drawing"`
+	Focused bool   `json:"focused"`
+	// Blurred is true while the host blurs the image region natively, as it does while a dialog is open.
+	Blurred   bool `json:"blurred"`
 	Presented *struct {
 		Width      int     `json:"width"`
 		Height     int     `json:"height"`

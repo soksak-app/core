@@ -25,6 +25,7 @@ unsafe extern "C" {
     );
     fn sp_region_raster(region: *mut c_void, out: *mut f64) -> bool;
     fn sp_region_surface_placed(region: *mut c_void) -> bool;
+    fn sp_region_background(region: *mut c_void, enabled: bool);
     fn sp_region_facts(region: *mut c_void) -> *mut c_char;
     fn free(pointer: *mut c_void);
     fn sp_region_present(
@@ -122,6 +123,10 @@ pub fn raster(image: Handle) -> Option<Raster> {
         height: out[1] as u32,
         scale: out[2],
     })
+}
+
+pub fn background(image: Handle, enabled: bool) {
+    unsafe { sp_region_background(image as *mut c_void, enabled) }
 }
 
 pub fn facts(image: Handle) -> Result<String, String> {

@@ -2850,7 +2850,22 @@ pub(crate) fn close_surface(window: &Window, surface: &str) {
     );
 }
 
-/// Dims the document regions while a dialog is open. It does not wait.
+/// Sets the background of each document and image region. The failure of one does not stop the rest.
+fn set_regions_background(
+    documents: Vec<Handle>,
+    images: Vec<Handle>,
+    document: impl Fn(Handle) -> Result<(), String>,
+    image: impl Fn(Handle) -> Result<(), String>,
+) {
+    for handle in documents {
+        log_failure("document background", document(handle));
+    }
+    for handle in images {
+        log_failure("image background", image(handle));
+    }
+}
+
+/// Blurs the document and image regions while a dialog is open. It does not wait.
 pub(crate) fn set_background(window: &Window, enabled: bool) {
     let Ok(data) = window_data(window) else {
         return;
@@ -2865,12 +2880,12 @@ pub(crate) fn set_background(window: &Window, enabled: bool) {
         "document background",
         window
             .post(move || {
-                for handle in data.documents.all() {
-                    log_failure(
-                        "document background",
-                        platform.set_document_background(handle, enabled),
-                    );
-                }
+                set_regions_background(
+                    data.documents.all(),
+                    data.images.all(),
+                    |handle| platform.set_document_background(handle, enabled),
+                    |handle| platform.set_image_background(handle, enabled),
+                );
             })
             .map_err(|e| e.to_string()),
     );
