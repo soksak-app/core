@@ -6,8 +6,9 @@
 // application over INTERVAL seconds with measure-app-usage.mjs and divides it by the change of presentedFrames of the image region of the
 // tab in host.window over the same interval. The measurement fails while host.window of the window reports occluded true, because a
 // covered window presents less often. It prints the CPU time of each process, its CPU milliseconds per presented frame and the presented
-// frames per second, and closes the project window afterwards. Every error is printed to stderr, and the exit status is 1 when an error
-// occurred. `make terminal-redraw-usage` runs it.
+// frames per second, and closes the project window afterwards. It also prints the CPU time of the window server over the interval, which
+// draws the whole screen and belongs to no application, so it stays outside the sums of the application and the B3 record. Every error is
+// printed to stderr, and the exit status is 1 when an error occurred. `make terminal-redraw-usage` runs it.
 //
 // --b3-out FILE writes the B3 output of a measurement without an error to FILE through writeB3Out of scripts/b3-out.mjs, with the
 // conditions of b3Conditions for the window of the measurement (redrawConditions). The keys, which B3_MEASUREMENTS lists, end in their
@@ -28,7 +29,7 @@ import { connect } from "@soksak/client";
 import { Session } from "@soksak/window-check/app.mjs";
 import { readPolicy } from "@soksak/window-check/log-policy.mjs";
 import { b3Conditions, writeB3Out } from "./b3-out.mjs";
-import { b3OutOption, measureApps, newWindow, openOnlyTab, requireOcclusion } from "./measure-app-usage.mjs";
+import { b3OutOption, execute, measureApps, newWindow, openOnlyTab, parseCpuTime, requireOcclusion } from "./measure-app-usage.mjs";
 import { applyTrace, parseTrace, traceSettings } from "./measure-trace.mjs";
 
 const FIXTURE = fileURLToPath(new URL("./fixtures/status-redraw.mjs", import.meta.url));
@@ -108,6 +109,23 @@ export function frameCost({ rows, totals, presented, seconds }) {
   };
 }
 
+/** The pid and the CPU seconds of the window server in the rows of ps -axww -o pid=,time=,comm=. */
+export function parseWindowServer(text) {
+  for (const line of text.split("\n")) {
+    const match = /^\s*(\d+)\s+(\S+)\s+(.*\/WindowServer)\s*$/.exec(line);
+    if (match) return { pid: Number(match[1]), seconds: parseCpuTime(match[2]) };
+  }
+  throw new Error("the process table has no window server");
+}
+
+/** Reads the window server from the process table. */
+async function readWindowServer() {
+  const result = await execute("ps", ["-axww", "-o", "pid=,time=,comm="]);
+  if (result.error) throw result.error;
+  if (result.status !== 0) throw new Error(`ps exited with ${result.status}: ${String(result.stderr).trim()}`);
+  return parseWindowServer(result.stdout);
+}
+
 /** The keys of the measurements of a B3 record of make terminal-redraw-usage. */
 export const B3_MEASUREMENTS = Object.freeze(["hostCpuPerFrameMs", "applicationCpuPerFrameMs", "sidecarCpuPerFrameMs", "framesPerSecond", "presentedFrames"]);
 
@@ -155,10 +173,12 @@ export async function prepareRedraw(s, plugin, root) {
  * Measures the region of the surface tab in the window of the session s: measure(marks) runs the CPU interval of measureApps with the
  * marks, which read presentedFrames of the region right before the first and right after the last CPU reading and require the window
  * visible at both. covered(ms) resolves with the host.window value that reports occluded true within ms, or with null. Returns the
- * measurement, its frame cost and the host.window value of the window before the first CPU reading.
+ * measurement, its frame cost and the host.window value of the window before the first CPU reading. windowServer() reads the window
+ * server at the same marks, and the frame cost holds its CPU time.
  */
-export async function measureRegion({ s, tab, interval, measure, covered }) {
+export async function measureRegion({ s, tab, interval, measure, covered, windowServer }) {
   let watch;
+  let server;
   const read = async () => {
     const status = await s.get("host.window");
     requireOcclusion(null, [{ window: s.window, occluded: status.occluded }]);
@@ -167,18 +187,23 @@ export async function measureRegion({ s, tab, interval, measure, covered }) {
   const measurement = await measure({
     before: async () => {
       const frames = await read();
+      server = await windowServer();
       watch = covered(interval * 1000);
       return frames;
     },
     after: async () => {
       const status = await watch;
       if (status !== null) throw new Error(`window ${s.window} reported occluded true during the interval: ${JSON.stringify(status.frame)}`);
-      return read();
+      const frames = await read();
+      const { seconds } = await windowServer();
+      server = { pid: server.pid, cpuSeconds: seconds - server.seconds };
+      return frames;
     },
   });
   const [app] = measurement.apps;
   const { before, after } = measurement.marks;
   const cost = frameCost({ rows: app.rows, totals: app.totals, presented: after.presented - before.presented, seconds: measurement.seconds });
+  cost.windowServer = { ...server, msPerFrame: (server.cpuSeconds * 1000) / cost.presented };
   return { measurement, cost, status: before.status };
 }
 
@@ -217,6 +242,7 @@ async function measureRedraw({ sok, configDir, plugin, rows, rate, interval, tra
           if (error.code === "ETIMEDOUT") return null;
           throw error;
         }),
+      windowServer: readWindowServer,
     });
     // The conditions of a B3 output are read only for one: a plain measurement does not require a window on a screen.
     const conditions = b3Out === null ? null : redrawConditions({ status, window: w.window, trace, policy: readPolicy(configDir).classes });
@@ -241,7 +267,7 @@ async function measureRedraw({ sok, configDir, plugin, rows, rate, interval, tra
   return result;
 }
 
-function formatReport({ plugin, rows, rate, window, tab, seconds, cost }) {
+export function formatReport({ plugin, rows, rate, window, tab, seconds, cost }) {
   const value = (number, digits) => (number === null ? "error" : number.toFixed(digits));
   const lines = [
     `${plugin} tab ${tab} of window ${window}: ${rows} rows at ${rate} frames per second, ${seconds.toFixed(2)} s, ` +
@@ -252,6 +278,8 @@ function formatReport({ plugin, rows, rate, window, tab, seconds, cost }) {
   lines.push(`application without sidecars ${value(cost.totals.application, 2)} ms/frame`);
   lines.push(`sidecars ${value(cost.totals.sidecars, 2)} ms/frame`);
   lines.push(`total ${value(cost.totals.total, 2)} ms/frame`);
+  lines.push(`window server ${cost.windowServer.pid} ${value(cost.windowServer.cpuSeconds, 3)} ${value(cost.windowServer.msPerFrame, 2)} the whole screen`);
+  lines.push(`total with the window server ${value(cost.totals.total + cost.windowServer.msPerFrame, 2)} ms/frame`);
   return lines.join("\n");
 }
 
