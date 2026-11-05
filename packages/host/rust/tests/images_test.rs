@@ -1480,11 +1480,14 @@ fn attached_drawing_image(images: &Images, surface: &str) -> Key {
     key
 }
 
-/// Gives each drawing change as name=value.
+/// Gives each drawing change as name=value, followed by the word hidden for a hidden surface.
 fn drawing_values(changes: Vec<Drawing>) -> Vec<String> {
     changes
         .into_iter()
-        .map(|change| format!("{}={}", change.name, change.drawing))
+        .map(|change| {
+            let hidden = if change.hidden { " hidden" } else { "" };
+            format!("{}={}{hidden}", change.name, change.drawing)
+        })
         .collect()
 }
 
@@ -1511,7 +1514,7 @@ fn drawing_state_is_sent_at_attach_and_on_change() {
         (
             "hidden surface",
             Box::new(|| images.set_surface_visible(&key.0, false)),
-            vec!["view=false"],
+            vec!["view=false hidden"],
         ),
         (
             "hidden region while the surface is hidden",
@@ -1521,7 +1524,7 @@ fn drawing_state_is_sent_at_attach_and_on_change() {
         (
             "shown surface while the region is hidden",
             Box::new(|| images.set_surface_visible(&key.0, true)),
-            vec![],
+            vec!["view=false"],
         ),
         (
             "shown region",
@@ -1536,7 +1539,7 @@ fn drawing_state_is_sent_at_attach_and_on_change() {
         (
             "hidden surface while occluded",
             Box::new(|| images.set_surface_visible(&key.0, false)),
-            vec![],
+            vec!["view=false hidden"],
         ),
         (
             "window on screen while the surface is hidden",
@@ -1553,6 +1556,43 @@ fn drawing_state_is_sent_at_attach_and_on_change() {
         change();
         assert_eq!(drawing_values(images.drawing_changes()), want, "{name}");
     }
+}
+
+// contract: image.drawing.reports-a-hidden-surface
+#[test]
+fn drawing_reports_a_hidden_surface() {
+    let images = Images::default();
+    let key = attached_drawing_image(&images, "tab-1");
+    assert_eq!(
+        drawing_values(images.drawing_changes()),
+        vec!["view=false"],
+        "a surface that reported no hiding is not hidden"
+    );
+    images.set_surface_visible(&key.0, false);
+    let changes = images.drawing_changes();
+    assert_eq!(changes.len(), 1, "{changes:?}");
+    assert!(
+        changes[0].hidden,
+        "a region that does not draw reports the hiding of its surface"
+    );
+    assert_eq!(
+        serde_json::to_string(&changes[0]).unwrap(),
+        format!(
+            r#"{{"name":"view","generation":{},"drawing":false,"hidden":true}}"#,
+            changes[0].generation
+        )
+    );
+    assert!(
+        images.drawing_changes().is_empty(),
+        "an unchanged state is sent again"
+    );
+    // The service of a new connection holds no state, so it receives the hiding again.
+    images.invalidate_sidecar("sidecar-a");
+    assert_eq!(
+        drawing_values(images.drawing_changes()),
+        vec!["view=false hidden"],
+        "the service of a new connection does not learn the hiding"
+    );
 }
 
 // contract: image.drawing.configures-shown-regions

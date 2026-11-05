@@ -117,8 +117,9 @@ type ImageRasterState struct {
 	// generation change does not reset it, because it counts the frames of the region (host.window presentedFrames).
 	PresentedFrames   uint64
 	PresentationError string
-	// Drawing is the drawing state last returned by DrawingChanges, and DrawingSent whether one was returned.
+	// Drawing and Hidden are the drawing state last returned by DrawingChanges, and DrawingSent whether one was returned.
 	Drawing     bool
+	Hidden      bool
 	DrawingSent bool
 }
 
@@ -139,6 +140,8 @@ type ImageDrawing struct {
 	Name       string `json:"name"`
 	Generation uint64 `json:"generation"`
 	Drawing    bool   `json:"drawing"`
+	// Hidden reports that the outer surface of the region is hidden: the region receives no configuration until it is shown.
+	Hidden bool `json:"hidden"`
 	// Configure is the configuration that this region waited for while it was not drawing.
 	Configure *ImageConfigure `json:"-"`
 	Key       ImageKey        `json:"-"`
@@ -181,10 +184,13 @@ func (i *Images) DrawingChanges() []ImageDrawing {
 			continue
 		}
 		drawing := i.drawingLocked(key, state)
-		if state.DrawingSent && state.Drawing == drawing {
+		// A surface that reported no hiding is not hidden: it may not be placed yet, and its placement configures the region.
+		outer, known := i.surfaceVisible[key.Surface]
+		hidden := known && !outer
+		if state.DrawingSent && state.Drawing == drawing && state.Hidden == hidden {
 			continue
 		}
-		state.Drawing, state.DrawingSent = drawing, true
+		state.Drawing, state.Hidden, state.DrawingSent = drawing, hidden, true
 		// A raster that changed while the region was hidden has no configuration yet, and no later step sends it when the
 		// region is shown without a new layout.
 		var configure *ImageConfigure
@@ -193,7 +199,7 @@ func (i *Images) DrawingChanges() []ImageDrawing {
 			configure = &ImageConfigure{Name: key.Name, Generation: state.Generation, Raster: state.Raster,
 				Width: state.Width, Height: state.Height, Scale: state.Scale, Sidecar: owner.SidecarName, Owner: owner.SidecarOwner}
 		}
-		changes = append(changes, ImageDrawing{Name: key.Name, Generation: state.Generation, Drawing: drawing, Configure: configure, Key: key,
+		changes = append(changes, ImageDrawing{Name: key.Name, Generation: state.Generation, Drawing: drawing, Hidden: hidden, Configure: configure, Key: key,
 			Sidecar: owner.SidecarName, Owner: owner.SidecarOwner})
 	}
 	sort.Slice(changes, func(a, b int) bool {

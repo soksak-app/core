@@ -744,6 +744,7 @@ fn invalid_json_closes_connection() {
 | `input.pointer.reads-the-press-target-before-delivery` | 주입된 press는 main thread의 한 단계 안에서 전달 전에 그 아래 view를 읽고, target을 읽을 수 없는 press는 전달하지 않는다. | all |
 | `image.drawing.sent-at-attach-and-on-change` | 호스트는 image region의 공급자에게 region의 부착 때와 상태가 바뀔 때마다 그 그리기 상태를 보내고, 바뀌지 않은 상태는 다시 보내지 않는다. | all |
 | `image.drawing.reads-occlusion-at-attach` | 만들 때 완전히 가려진 창에 부착된 region의 그리기 상태는 false이며, 창 event가 아니라 AppKit occlusion 상태에서 읽는다. | all |
+| `image.drawing.reports-a-hidden-surface` | region의 그리기 메시지는 바깥 표면이 숨김을 알린 동안 `hidden`을 true로, 그 밖에는 false로 적는다. 아무것도 알리지 않은 표면은 숨겨진 것이 아니고, 값이 바뀌면 메시지를 보내며, 새 연결의 서비스는 그 값을 다시 받는다. | all |
 | `image.drawing.configures-shown-regions` | 보이는 region은 창의 상태와 상관없이 설정을 받고, 화면에 없는 창에서 raster가 바뀔 때도 받으며, 숨겨진 region은 받지 않는다. 표시 대기는 그리기 상태가 아닌 region을 기다리지 않고 그리기 상태가 된 region을 기다리며, 설정된 raster는 region이 그리기 상태가 될 때 다시 설정되지 않는다. | all |
 | `image.drawing.configures-a-raster-that-changed-while-hidden` | region이 숨겨진 동안 바뀐 raster는 설정을 받지 않는다. region이 보이면 그리기 메시지 뒤에 바뀐 raster의 설정을 한 번 보내고, 바뀌지 않은 raster는 다시 설정하지 않는다. | all |
 | `image.drawing.answers-transfers-while-not-drawing` | region이 그리기를 멈추기 전에 받은 전송 그림은 `consumed`나 오류로 답을 받는다. | all |
