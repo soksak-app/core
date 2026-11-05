@@ -231,6 +231,17 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F632",
+    implementation: [
+      { file: "packages/workbench-mygo/src/cards.go", symbol: "s.errors.Show(where, report.Error, \"\")" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestTheErrorOfTheActiveTabIsRecordedWhenItAppears" },
+    ],
+    expected: "The mygo workbench records the operation error of the active tab when it appears.",
+    levels: ["unit"],
+  },
+  {
     id: "F610",
     implementation: [{ file: "native/darwin/src/capture.m", symbol: "beginCaptureSourceArtifacts" }],
     tests: [{ file: "native/darwin/tests/capture_metadata_test.m", id: "a capture writes the source file only when its reader needs it" }],
