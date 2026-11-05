@@ -1176,6 +1176,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F546",
+    implementation: [
+      { file: "packages/plugin-api/log-batch.js", symbol: "if (gatedTimer || sending || gated.size === 0) return;" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/log-batch.test.mjs", id: "the report of the counts arms no timer while a batch is in flight" },
+      { file: "packages/plugin-api/test/log-batch.test.mjs", id: "a count refused while a batch is in flight waits for the rest of its interval after the batch" },
+    ],
+    expected: "The report of the gate counts of a page arms no timer while a batch is in flight.",
+    levels: ["unit"],
+  },
+  {
     id: "F533",
     implementation: [
       { file: "packages/workbench/memory-saver.js", symbol: 'if (trigger === "delay") entry.unloadAt = now() + delayMs();' },

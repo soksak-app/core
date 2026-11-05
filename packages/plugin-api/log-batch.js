@@ -175,10 +175,12 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
     sending = null;
     for (const end of mine) end();
     if (queue.length > 0 || lost.size > 0 || gatedDue()) await send();
+    awaitGated();
   };
 
+  // A batch in flight holds no timer: the end of that batch sends a count that is due or waits for the rest of the interval.
   const awaitGated = () => {
-    if (gatedTimer || gated.size === 0) return;
+    if (gatedTimer || sending || gated.size === 0) return;
     gatedTimer = true;
     setTimeout(() => {
       gatedTimer = false;
