@@ -1030,6 +1030,7 @@ fn an_image_region_made_under_a_dialog_starts_blurred() {
 
 // The window event removes the records of a window and closes its surfaces at the supplier before the main-thread step
 // closes the regions, so the release of a region that closes with its window comes after the window closed.
+// contract: images.lease.release-after-window-close-sends-nothing
 #[test]
 fn a_release_after_its_window_closed_sends_nothing_and_reports_no_failure() {
     let closed: Result<Arc<crate::windows::WindowData>, String> =
@@ -1050,6 +1051,7 @@ fn a_release_after_its_window_closed_sends_nothing_and_reports_no_failure() {
     );
 }
 
+// contract: images.lease.released-carries-frame-identity
 #[test]
 fn a_release_of_an_open_window_sends_the_frame_with_the_root_of_the_window() {
     let data = Arc::new(crate::windows::WindowData::default());
@@ -1070,6 +1072,7 @@ fn a_release_of_an_open_window_sends_the_frame_with_the_root_of_the_window() {
     );
 }
 
+// contract: images.lease.failed-release-is-reported
 #[test]
 fn a_release_that_fails_in_an_open_window_reports_the_failure() {
     let open = Ok(Arc::new(crate::windows::WindowData::default()));
