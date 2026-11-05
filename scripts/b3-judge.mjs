@@ -234,7 +234,8 @@ function sessionApplications(session) {
 
 /**
  * Judges a session against the goals and returns `{lines, failures}`: one line for each value of each application with its runs,
- * its median and its spread, one line for each criterion with its result, and one line for each failed run or missing reading.
+ * its median and its spread, one line for each criterion with its result, one line for each failed run or missing reading, and one
+ * line `not measured` for each value that an application records in no run and that no criterion needs of it.
  */
 export function judgeSession(goals, session) {
   const lines = [];
@@ -343,6 +344,13 @@ export function judgeSession(goals, session) {
   for (const key of readings.keys()) {
     const [id, application] = key.split("\n");
     describe(goals.values.find((entry) => entry.id === id), application);
+  }
+  // A value that a host records in no run has no result: no line of the runs above says so, so this line does. The missing readings of
+  // a host that a criterion needs already failed above.
+  for (const value of goals.values) {
+    for (const { name } of session.applications) {
+      if (!described.has(`${value.id}\n${name}`)) lines.push(`not measured ${value.id} ${name}`);
+    }
   }
   return { lines, failures };
 }

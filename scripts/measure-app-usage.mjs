@@ -23,7 +23,8 @@
 // repeats the move in the trace state of the frame records (FRAME_RECORDS) to read the U7 records of a window without a main page. The
 // measurement prints occluded, the trace switch, the log policy, the runtime figures of diagnostics.objects and frames and commandBuffers
 // of each window before the first and after the last CPU reading, and requires occluded false in every window, except the covered window of
-// S9, which must report occluded true. Every error is printed to stderr with the process or window it concerns, and the exit status is 1
+// S9, which must report occluded true. It prints each counter of host.window that every window reports null and an idle wait that read
+// no frame as not measured. Every error is printed to stderr with the process or window it concerns, and the exit status is 1
 // when an error occurred. `make app-usage` runs it.
 //
 // --b3-out FILE writes the B3 output of a measurement of one application without an error to FILE through writeB3Out of
@@ -330,7 +331,8 @@ export function cursorTabs(surfaces) {
 /**
  * Waits for the cursor idle timeout of every cursor tab of every window and then until frames has not changed for 3 seconds (G2). The
  * idle timeout is a time after the last input, the preparation, that no status announces, so a timer of the longest timeout waits it.
- * sessions holds a session of each window, frames() returns the frames of each window and sleep(ms) waits.
+ * sessions holds a session of each window, frames() returns the frames of each window and sleep(ms) waits. It resolves "quiet" when every
+ * window reports its frames, and "not measured" when a window reports null: that wait read nothing of the window.
  */
 export async function waitIdle({ sessions, frames, sleep }) {
   let longest = 0;
@@ -346,7 +348,21 @@ export async function waitIdle({ sessions, frames, sleep }) {
     }
   }
   if (longest > 0) await sleep(longest);
-  await untilFramesQuiet({ frames, sleep });
+  const quiet = await untilFramesQuiet({ frames, sleep });
+  return quiet.every(Number.isInteger) ? "quiet" : "not measured";
+}
+
+/**
+ * The lines of the report for what the measurement did not read: an idle wait (`idle`, the result of waitIdle, or null without one) that
+ * read no frame, and each counter of host.window that is null in every window. Such a value is no pass of the rule that reads it.
+ */
+export function notMeasuredLines({ idle, marks }) {
+  const lines = [];
+  if (idle === "not measured") lines.push("idle: not measured: the wait read no frame of a window whose frames is null, so it only waited");
+  for (const name of ["frames", "commandBuffers"]) {
+    if (counterChange(name, marks) === undefined) lines.push(`not measured: ${name} of host.window is null in every window`);
+  }
+  return lines;
 }
 
 /** The number of error lines of the layout fault among the lines of the application log (`error <layer> <where>: <text>`). */
@@ -616,7 +632,7 @@ function formatMarks(when, marks) {
   ]).join("\n");
 }
 
-function formatReport({ options, context, measurement, gesture, faultLines }) {
+function formatReport({ options, context, measurement, gesture, faultLines, idle }) {
   const sections = [`state ${options.state ?? "none"}, trace ${options.trace}, idle ${options.idle ? 1 : 0}, step ${options.step ?? "none"}`];
   if (context?.exited) {
     sections.push([`exited webcontent processes: ${context.exited.join(", ") || "none"}`,
@@ -626,6 +642,11 @@ function formatReport({ options, context, measurement, gesture, faultLines }) {
   for (const app of measurement.apps) sections.push(`app ${app.configDir} (cpu over ${measurement.seconds.toFixed(2)} s)\n${formatTable(app.rows, app.totals)}`);
   sections.push(`webkit processes not attributed to an application\n${formatTable(measurement.unattributed.rows, measurement.unattributed.totals)}`);
   if (measurement.marks.after) sections.push(formatMarks("after the last cpu reading", measurement.marks.after));
+  if (measurement.marks.before && measurement.marks.after) {
+    const windowsOf = (marks) => marks.flatMap(({ windows }) => windows);
+    const lines = notMeasuredLines({ idle, marks: { before: windowsOf(measurement.marks.before), after: windowsOf(measurement.marks.after) } });
+    if (lines.length > 0) sections.push(lines.join("\n"));
+  }
   if (faultLines !== undefined) sections.push(`error lines of the layout fault: ${faultLines}`);
   if (gesture !== undefined) {
     sections.push(gesture === null
@@ -1083,7 +1104,7 @@ async function measureOptions(options) {
       return marks;
     };
     for (const mark of await marksOf()) requireOcclusion(state, mark.windows);
-    if (idle) await waitIdle({ sessions: windowSessions, frames, sleep: delay });
+    const idleResult = idle ? await waitIdle({ sessions: windowSessions, frames, sleep: delay }) : null;
     const measure = (extra) => measureApps({
       sok, configDirs, interval, footprints: context?.footprints ?? "settled", marks: { before: marksOf, after: marksOf }, ...extra,
     });
@@ -1125,7 +1146,7 @@ async function measureOptions(options) {
       await sessions[0].s.request("diagnostics.log.flush");
       faultLines = faultErrorCount(readEventErrors(sessions[0].configDir, context.faultLog).errors);
     }
-    return { options, context, measurement, gesture, faultLines, errors };
+    return { options, context, measurement, gesture, faultLines, errors, idle: idleResult };
   } finally {
     for (const cleanup of cleanups.reverse()) await cleanup();
   }
