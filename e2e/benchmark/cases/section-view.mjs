@@ -1,4 +1,4 @@
-// The section views of the view benchmark (docs/plans/mygo-host.md, S7): each section view of the enabled installed plugins is measured
+// The section views of the view benchmark (docs/operations/examples.md, S7): each section view of the enabled installed plugins is measured
 // for (i), (ii), (iii), (iii-b), (v) and (viii) of plugin processes, through the section-view contract of
 // docs/spec/plugin-processes.md#section-views. A section view whose plugin does not declare that contract fails with its plugin and section.
 import assert from "node:assert/strict";

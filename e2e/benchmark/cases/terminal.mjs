@@ -4,12 +4,12 @@ import { availableParallelism, loadavg } from "node:os";
 import { join } from "node:path";
 
 import { drag, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
-import { frames, readFrame } from "@soksak/window-check/frame.mjs";
+import { frameChange, frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { runViewMeasurements } from "@soksak/window-check/view-metrics.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, monotonicTimeMs,
   mapViewContentFramesToCapture, requireViewContentFrameCoverage, rightEdgeWidthDragPlan,
   rootNativePlacementBeforeCapture, selectOneShotViewSourceFrame,
-  TAB_PLACEMENT, waitForViewReadiness, withViewContentTrace } from "../../view-metrics-collection.mjs";
+  TAB_PLACEMENT, waitForViewReadiness, withDragTraceMode, withViewContentTrace } from "../../view-metrics-collection.mjs";
 import { firstContentFrame } from "../../view-first-content.mjs";
 import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFrame, measureViewFrameGeometry,
   VIEW_GEOMETRY_COLOR_TOLERANCE }
@@ -20,7 +20,7 @@ import { fresh, terminalCheckShell } from "../../fixture.mjs";
 import { b3Conditions, b3Target, fixtureSettings, withB3Out } from "./b3-run.mjs";
 import { B3_MEASUREMENTS, B3_SETTINGS } from "../measurements.mjs";
 import { assertDragPerformance, assertHeldStatesShown, assertRoundTrips, measureDragPerformance,
-  pointerLag, transactionCadence } from "../../drag-measurement.mjs";
+  pointerLag, shownTimes, transactionCadence } from "../../drag-measurement.mjs";
 
 
 /** Uses the fixed check-shell prompt as pixel evidence for the initial terminal content. */
@@ -58,7 +58,12 @@ export function terminalViewDescriptorOf(plugin) {
       const session = await s.until(`${plugin}.session`, (value) => value?.sessionId && value.cols > 0 && value.rows > 0,
         `${plugin} view ${surface} did not open its session`, { surface });
       const lines = await readTabScreenUntil(s, plugin, surface, (rows) => rows.some((line) => line.startsWith("sh-3.2$")),
-        `${plugin} view ${surface} did not display its initial shell prompt`);
+        `${plugin} view ${surface} did not display its initial shell prompt`).catch(async (error) => {
+        const shown = (await s.get("core.surfaces")).find((item) => item.surface === surface);
+        const regions = (await s.get("host.window")).regions.filter((region) => region.surface === surface);
+        const state = await s.get(`${plugin}.session`, surface);
+        throw new Error(`${error.message.slice(0, 200)}; session ${JSON.stringify(state)}; surface ${JSON.stringify(shown)}; regions ${JSON.stringify(regions)}`, { cause: error });
+      });
       const rect = await s.rect(`${plugin}.view`, undefined, surface);
       assert.ok(rect.width > 0 && rect.height > 0, `${plugin} view ${surface} has no visible content region`);
       const history = await s.run(`${plugin}.view.history`, {}, surface);
@@ -124,83 +129,6 @@ export function terminalDragGeometryFrame(frameIndex, measured, slotInsetsPt) {
   };
 }
 
-async function terminalTraceModeSnapshot(s) {
-  const settings = await s.get("core.settings");
-  const values = settings?.values;
-  const performanceTrace = values?.["diagnostics.performance"];
-  const logPolicy = values?.["diagnostics.log"];
-  assert.equal(typeof performanceTrace, "boolean", "terminal drag performance setting must be boolean");
-  assert.ok(logPolicy && typeof logPolicy === "object" && !Array.isArray(logPolicy),
-    "terminal drag log policy must be an object");
-  assert.equal(logPolicy.frame, "trace", "terminal drag requires the frame trace log policy");
-  return { performanceTrace, logPolicy: structuredClone(logPolicy) };
-}
-
-/** Disables only the global performance trace while the terminal content-frame drag is measured. */
-export async function withTerminalDragTraceMode(s, action) {
-  assert.equal(typeof action, "function", "terminal drag trace-mode action is required");
-  const before = await terminalTraceModeSnapshot(s);
-  let during;
-  let result;
-  let actionFailed = false;
-  let actionError;
-  try {
-    if (before.performanceTrace) {
-      await s.run("core.settings.change", {
-        key: "diagnostics.performance", value: false, scope: "common",
-      });
-    }
-    during = await terminalTraceModeSnapshot(s);
-    assert.equal(during.performanceTrace, false, "terminal drag performance trace remained enabled");
-    assert.deepEqual(during.logPolicy, before.logPolicy, "terminal drag log policy changed before measurement");
-    result = await action();
-  } catch (error) {
-    actionFailed = true;
-    actionError = error;
-  }
-
-  let after;
-  const restoreErrors = [];
-  try {
-    await s.run("core.settings.change", {
-      key: "diagnostics.performance", value: before.performanceTrace, scope: "common",
-    });
-  } catch (error) {
-    restoreErrors.push(error);
-  }
-  try {
-    after = await terminalTraceModeSnapshot(s);
-    assert.equal(after.performanceTrace, before.performanceTrace,
-      "terminal drag performance setting was not restored");
-    assert.deepEqual(after.logPolicy, before.logPolicy, "terminal drag log policy was not preserved");
-  } catch (error) {
-    restoreErrors.push(error);
-  }
-
-  const restoreFailed = restoreErrors.length > 0;
-  const restoreError = restoreErrors.length === 1 ? restoreErrors[0]
-    : restoreFailed ? new AggregateError(restoreErrors, "terminal drag trace-mode restoration failed") : undefined;
-  if (actionFailed && restoreFailed) {
-    throw new AggregateError([actionError, restoreError], "terminal drag and trace-mode restoration failed");
-  }
-  if (actionFailed) throw actionError;
-  if (restoreFailed) throw restoreError;
-  return {
-    result,
-    phaseMode: {
-      performanceTrace: {
-        before: before.performanceTrace,
-        during: during.performanceTrace,
-        after: after.performanceTrace,
-      },
-      logPolicy: {
-        before: before.logPolicy,
-        during: during.logPolicy,
-        after: after.logPolicy,
-      },
-    },
-  };
-}
 
 /** Preserves one source document size update and its mapped capture time without assigning a native readback. */
 export function terminalSourceContentFrame(source, displayFrame, displayCapture = null) {
@@ -361,7 +289,7 @@ async function terminalDragObservation(t, s, descriptor, surface, card, configDi
   assert.ok(pane, `terminal measurement card ${card} is absent before drag`);
   const plan = rightEdgeWidthDragPlan(beforeGrid, pane);
   await s.presented();
-  const measurement = await withTerminalDragTraceMode(s, () =>
+  const measurement = await withDragTraceMode(s, () =>
     withViewContentTrace(t, s, descriptor, surface, async () => drag(t, s, plan, { capture: true })));
   const traced = measurement.result;
   const run = traced.action;
@@ -549,13 +477,17 @@ async function captureViewDrag(t, s, configDir, { marks, cornerRadiusPt, slotIns
   assert.ok(files.length > 30, "the benchmark has too few captured frames");
 
   const samples = [];
-  const times = [];
+  const shown = [];
+  let previous = null;
+  let repeatedFrames = 0;
   const unmeasured = [];
   const geometryFrames = [];
   const geometryUnmeasured = [];
   for (const [frameIndex, file] of files.entries()) {
     const frame = readFrame(file);
-    times.push(frame.time);
+    const repeated = previous !== null && frameChange(previous, frame) === null;
+    previous = frame;
+    if (repeated) repeatedFrames++;
     try {
       const geometry = measureViewFrameGeometry(frame, { ...TERMINAL_GEOMETRY,
         colorTolerance: VIEW_GEOMETRY_COLOR_TOLERANCE, cornerRadiusPt, targetRect });
@@ -569,17 +501,20 @@ async function captureViewDrag(t, s, configDir, { marks, cornerRadiusPt, slotIns
       continue;
     }
     samples.push({ time: frame.time, position: at.card.l / at.scale });
+    if (!repeated) shown.push(samples.at(-1));
   }
   assert.ok(samples.length > files.length * 0.5,
     `only ${samples.length}/${files.length} frames have measured geometry`);
   assertRoundTrips(samples.map((sample) => sample.position), 2);
   assertHeldStatesShown(samples, run.ticks, run.boundary);
-  const lag = pointerLag(samples, run.ticks, run.boundary);
+  const lag = pointerLag(shown, run.ticks, run.boundary);
   const refreshRate = (await s.get("host.window")).refreshRate;
+  const times = shownTimes(shown, run.ticks);
   const performance = measureDragPerformance(times, lag, refreshRate);
   const report = {
     host: s.app.name,
     performance,
+    repeatedFrames,
     mode: { performanceTrace: false, rendererTrace: false, logPolicy: {}, recording: true },
     load: loadavg(),
     processors: availableParallelism(),

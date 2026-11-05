@@ -1,7 +1,8 @@
 // Starting layout of the core window checks. The default layout of diagnostics.fixture has a terminal tab, so the preparation opens
 // the layout through prepareFixture of the harness and waits until that terminal is ready (this module knows the terminal until
 // F25.2 replaces the core checks with a fixture plugin).
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { keepCommonSettings, prepareFixture, TRACE } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents, traceRows, untilEventLine } from "@soksak/window-check/event-log.mjs";
@@ -56,6 +57,27 @@ async function registrationTimeline(s, offsets) {
  * that the check declares and `reads` the records below `error` that it reads (prepareFixture); with the performance trace the
  * registration timeline of a failed start is read too.
  */
+/** The file of the disposable configuration that holds the registry of the application while a check uses its own registry. */
+const heldRegistryFile = (s) => join(s.app.configDir, "check-registry.json");
+
+/**
+ * Sets a registry of the check. The first change records the registry that the application had. The record outlives a restore
+ * that fails, so the registry of a failed run is never taken for the registry of the application.
+ */
+export async function useRegistry(s, index) {
+  const held = heldRegistryFile(s);
+  if (!existsSync(held)) writeFileSync(held, JSON.stringify({ registry: (await s.get("core.plugins")).registry }));
+  await s.run("core.plugins.registry", { index });
+}
+
+/** Restores the recorded registry and removes the record; without a record the check changed no registry. */
+export async function restoreRegistry(s) {
+  const held = heldRegistryFile(s);
+  if (!existsSync(held)) return;
+  await s.run("core.plugins.registry", { index: JSON.parse(readFileSync(held, "utf8")).registry });
+  rmSync(held);
+}
+
 export async function fresh(s, { performanceTrace = TRACE, settings = {}, log = {}, reads = [], shell = "check" } = {}) {
   const traceOffsets = currentEventOffsets(s.app.configDir);
   const declared = performanceTrace ? [...reads, "workbench.trace.surface.registration"] : reads;
@@ -63,6 +85,8 @@ export async function fresh(s, { performanceTrace = TRACE, settings = {}, log = 
   // Window checks use fixed shell fixtures; the activation ZLE case never reads user shell startup files.
   await prepareFixture(s, { settings: { ...settings, "terminal.shell": shellPath }, performanceTrace, log, reads: declared,
     catalog: declared.length ? recordCatalog(s.app) : undefined });
+  // A record that remains belongs to an earlier run whose restore failed.
+  await restoreRegistry(s);
   let terminal;
   try {
     [terminal] = await terminalReady(s);

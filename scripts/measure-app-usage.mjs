@@ -1,10 +1,10 @@
 // Reports the CPU and memory of the running applications of the given data folders, by process (docs/operations/examples.md), and
-// prepares the states of the three-host benchmark B3 that it measures (docs/plans/mygo-host.md).
+// prepares the states of the three-host benchmark B3 that it measures (docs/operations/examples.md).
 // The host is the process whose command line has --config-dir DIR. The sidecars are the processes whose executable is under DIR/sidecars/.
 // The page and document processes come from sok windows and from sok status host.window of each window; a window whose host.window
 // reports pageProcess null has no main page and no page row. The WebKit GPU, networking and WebContent services belong to the application
 // whose host lists them in its launchd domain (launchctl print pid/<host>). A WebKit GPU or networking process (pgrep -f
-// com.apple.WebKit.GPU|Networking) that no application claims is printed as unattributed. The memory of a process is its phys_footprint
+// com.apple.WebKit.GPU|Networking) that no application claims is printed as unattributed, and one that ends during the measurement leaves that list without an error. The memory of a process is its phys_footprint
 // and its phys_footprint_peak (footprint -p PID -f bytes); each footprint is read after the readings of every process settle by the rule of
 // G3 that scripts/footprints.mjs reads: two consecutive readings 5 seconds apart differ by less than 1,024 KB, and the reading is at least
 // 3 seconds after the last frame. The U7 records of the pointer step are read through scripts/frame-records.mjs. The CPU time of a
@@ -18,21 +18,22 @@
 // S11 (S1 with a second project window beside it), S12 (S1 after one layout draw that fails), S14 (S0 10 seconds after one character in the
 // library search) and S15 (S1 with the settings window open). --idle waits for the cursor idle timeout of every tab whose plugin exposes a
 // cursor status (the term and terminal tabs) and then for 3 seconds without a change of frames of host.window, or 3 seconds on a window
-// whose frames is null. --step pointer moves the pointer across the window brought to the front with the HID moves of the real-input tool
-// (e2e/real/hid.mjs, the Accessibility permission required), reads the CPU time over the move and the footprints before and after it, and
+// whose frames is null. --step pointer moves the pointer across the window, already the key window and not occluded, with the moves of
+// input.pointer, which take no permission and leave the cursor, reads the CPU time over the move and the footprints before and after it, and
 // repeats the move in the trace state of the frame records (FRAME_RECORDS) to read the U7 records of a window without a main page. The
 // measurement prints occluded, the trace switch, the log policy, the runtime figures of diagnostics.objects and frames and commandBuffers
 // of each window before the first and after the last CPU reading, and requires occluded false in every window, except the covered window of
-// S9, which must report occluded true. Every error is printed to stderr with the process or window it concerns, and the exit status is 1
-// when an error occurred. `make app-usage` runs it.
+// S9, which must report occluded true. It prints each counter of host.window that every window reports null and an idle wait that read
+// no frame as not measured. Every error is printed to stderr with the process or window it concerns, and the exit status is 1
+// when an error occurred. `make measure-app-usage` runs it.
 //
 // --b3-out FILE writes the B3 output of a measurement of one application without an error to FILE through writeB3Out of
 // scripts/b3-out.mjs: {"measurements": {KEY: number}, "conditions": {refreshRate, backingScale, traceState, logPolicy, window}}. The
 // conditions are those of b3Conditions: the refresh rate and the backing scale that every window reports in host.window, traceState, the
 // diagnostics.performance of the trace state of the CPU interval (true or false), the classes of the log policy in force, and the content
 // size of the window of the state, read before the first CPU reading. One output holds the keys of one trace state, the state of its
-// measured interval: under --step pointer, --trace 0|1 writes the keys of the first move except hitTestP90Ms, and --trace frame-records
-// writes hitTestP90Ms alone, from the repeated move in that state. The keys, which B3_MEASUREMENTS lists for each trace state, end in
+// measured interval: under --step pointer, --trace 0|1 writes the keys of the first move except pointerMoveP90Ms, and --trace frame-records
+// writes pointerMoveP90Ms alone, from the repeated move in that state. The keys, which B3_MEASUREMENTS lists for each trace state, end in
 // their unit:
 //   hostCpuSeconds, applicationCpuSeconds,       CPU seconds over the interval of the host, the application without its sidecars,
 //   sidecarCpuSeconds                            and the sidecars
@@ -46,13 +47,13 @@
 //   frames, commandBuffers                       the change of frames and commandBuffers of host.window over the interval, summed
 //                                                over the windows; absent on a host that reports them null
 //   errorLines                                   the error lines of the layout fault (S12)
-//   hitTestP90Ms                                 the 90th percentile in ms of the hitTest: step with its following step (--step
+//   pointerMoveP90Ms                                 the 90th percentile in ms of the mouseMoved: step with a hitTest: step right before it
 //                                                pointer --trace frame-records on a window without a main page)
 //
 //   node scripts/measure-app-usage.mjs --sok PATH --config-dir DIR [--config-dir DIR ...] --trace 0|1|frame-records [--interval SECONDS]
 //     [--state S0|S0b|S1|S9|S11|S12|S14|S15] [--idle] [--step pointer] [--b3-out FILE] [--json]
 import { execFile } from "node:child_process";
-import { mkdirSync, readFileSync, realpathSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { createServer } from "node:http";
 import { basename, isAbsolute, join, posix } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -62,9 +63,8 @@ import { Session } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEventErrors, untilEventLine } from "@soksak/window-check/event-log.mjs";
 import { readPolicy } from "@soksak/window-check/log-policy.mjs";
 import { launchdServices } from "@soksak/window-check/stall-sample.mjs";
-import { bringFront, post, requireTrusted } from "../e2e/real/hid.mjs";
 import { catalogOf } from "./check-events.mjs";
-import { b3Conditions, writeB3Out } from "./b3-out.mjs";
+import { b3Conditions, b3End, writeB3Out } from "./b3-out.mjs";
 import { readFootprint, settledFootprints } from "./footprints.mjs";
 import { percentile, requireCompleteGesture, stepTimes, U7_EVENTS } from "./frame-records.mjs";
 import { applyTrace, FRAME_RECORDS, parseTrace, traceSettings } from "./measure-trace.mjs";
@@ -72,7 +72,7 @@ import { applyTrace, FRAME_RECORDS, parseTrace, traceSettings } from "./measure-
 /** Executables of the tools that run this measurement; their command lines name the data folder, but they are not the application. */
 const TOOL_EXECUTABLES = new Set(["node", "sh", "bash", "zsh", "make", "sok"]);
 
-/** The states of B3 that --state prepares (docs/plans/mygo-host.md, B3). */
+/** The states of B3 that --state prepares (docs/operations/examples.md, B3). */
 export const STATES = ["S0", "S0b", "S1", "S9", "S11", "S12", "S14", "S15"];
 
 /** The content size of the window of every state of B3, in points. */
@@ -116,6 +116,9 @@ export function cpuPercent(before, after, intervalSeconds) {
   if (after < before) throw new Error(`cpu time decreased from ${before} to ${after}`);
   return ((after - before) / intervalSeconds) * 100;
 }
+
+/** The output limit of the process table, whose command lines reach several MB on a machine with many extensions. */
+export const PROCESS_TABLE_BYTES = 64 * 1024 * 1024;
 
 /** Parses the rows of ps -axo pid=,command= into { pid, command }. */
 export function parseProcessTable(text) {
@@ -254,7 +257,7 @@ export function totalsOf(rows) {
 
 /**
  * The page and document rows of one window and the errors of its host.window reply. A window whose host.window reports pageProcess
- * null has no main page, because the mygo host draws its workbench natively (docs/plans/mygo-host.md), so it has no page row.
+ * null has no main page, because the mygo host draws its workbench natively (docs/spec/hosts.md), so it has no page row.
  */
 export function windowRows(window, configDir, status) {
   const where = `page of window ${window} of ${configDir}`;
@@ -275,6 +278,9 @@ export function windowRows(window, configDir, status) {
     const role = `document ${document.surface}/${document.document}`;
     if (Number.isInteger(document.process) && document.process > 0) {
       rows.push({ role, pid: document.process, attribution: "host.window" });
+    } else if (document.document !== "" && document.process === 0 && document.visible === false) {
+      // A hidden document of a view holds no process until it loads, so it has nothing to read. A shown document and the view itself must have one.
+      continue;
     } else {
       errors.push(`${role} of window ${window} of ${configDir}: no process (${JSON.stringify(document.process)})`);
     }
@@ -301,7 +307,7 @@ const framesText = (frames) => frames.map(String).join(" ");
 
 /**
  * Waits until frames of host.window of every window has not changed for 3 seconds; a window whose frames is null waits the 3 seconds
- * (docs/plans/mygo-host.md, G2). frames() returns the frames of each window, and sleep(ms) waits, by default on the timer that
+ * (docs/spec/hosts.md, G2). frames() returns the frames of each window, and sleep(ms) waits, by default on the timer that
  * measureApps uses, so a caller writes no timer of its own. The host notifies host.window watchers
  * when settled changes, not at each frame, and frames counts every frame, so two readings 3 seconds apart are the rule itself.
  */
@@ -319,6 +325,31 @@ export async function untilFramesQuiet({ frames, sleep = delay, intervals = QUIE
   throw new Error(`untilFramesQuiet needs at least 1 interval, not ${intervals}`);
 }
 
+/**
+ * The milliseconds of the wait of --idle between the last request and the first CPU reading. A request is an event that the gate of the
+ * default policy counts, and a count waits for at most a minute before a writer that sleeps writes it (docs/spec/logging.md#policy). No status
+ * announces the end of that wait, and asking would count again, so the wait is the time itself with the time the writer takes to wake.
+ * Those writes belong to the preparation and are no cost of the settled state.
+ */
+export const COUNT_WAIT_MS = 62000;
+
+/** The number of lines of each event log of the configuration folder, which it reads without a request to the application. */
+export function logLineCounts(configDir) {
+  const logs = join(configDir, "logs");
+  const counts = new Map();
+  for (const name of readdirSync(logs)) {
+    if (name.endsWith(".jsonl")) counts.set(name, readFileSync(join(logs, name), "utf8").split("\n").length - 1);
+  }
+  return counts;
+}
+
+/** The lines that the event logs gained between two readings of logLineCounts. */
+export function recordsOver(before, after) {
+  let gained = 0;
+  for (const [name, lines] of after) gained += lines - (before.get(name) ?? 0);
+  return gained;
+}
+
 /** The tabs whose plugin exposes a cursor status `<plugin>.cursor` with its idle timeout: the term and terminal tabs. */
 export function cursorTabs(surfaces) {
   return surfaces.filter((surface) => surface.kind === "tab" && surface.exposes?.includes(`status ${surface.plugin}.cursor`));
@@ -327,7 +358,8 @@ export function cursorTabs(surfaces) {
 /**
  * Waits for the cursor idle timeout of every cursor tab of every window and then until frames has not changed for 3 seconds (G2). The
  * idle timeout is a time after the last input, the preparation, that no status announces, so a timer of the longest timeout waits it.
- * sessions holds a session of each window, frames() returns the frames of each window and sleep(ms) waits.
+ * sessions holds a session of each window, frames() returns the frames of each window and sleep(ms) waits. It resolves "quiet" when every
+ * window reports its frames, and "not measured" when a window reports null: that wait read nothing of the window.
  */
 export async function waitIdle({ sessions, frames, sleep }) {
   let longest = 0;
@@ -343,7 +375,21 @@ export async function waitIdle({ sessions, frames, sleep }) {
     }
   }
   if (longest > 0) await sleep(longest);
-  await untilFramesQuiet({ frames, sleep });
+  const quiet = await untilFramesQuiet({ frames, sleep });
+  return quiet.every(Number.isInteger) ? "quiet" : "not measured";
+}
+
+/**
+ * The lines of the report for what the measurement did not read: an idle wait (`idle`, the result of waitIdle, or null without one) that
+ * read no frame, and each counter of host.window that is null in every window. Such a value is no pass of the rule that reads it.
+ */
+export function notMeasuredLines({ idle, marks }) {
+  const lines = [];
+  if (idle === "not measured") lines.push("idle: not measured: the wait read no frame of a window whose frames is null, so it only waited");
+  for (const name of ["frames", "commandBuffers"]) {
+    if (counterChange(name, marks) === undefined) lines.push(`not measured: ${name} of host.window is null in every window`);
+  }
+  return lines;
 }
 
 /** The number of error lines of the layout fault among the lines of the application log (`error <layer> <where>: <text>`). */
@@ -353,9 +399,10 @@ export function faultErrorCount(lines) {
 
 /**
  * The figures of the U7 records of one pointer move over a window without a main page: the frame records, the change of frames of
- * host.window, and the 90th percentile of the `hitTest:` step together with the step of the move that follows it (G8), in milliseconds.
- * The records must be complete (requireCompleteGesture). A nested step, such as the isFlipped that a hitTest: sends, runs inside the step
- * that sends it and is part of its time, so the step that follows a hitTest: step is the next step by entry that no other step contains.
+ * host.window, and the 90th percentile (G8), in milliseconds, of the moves that were delivered. The value of a move is its outermost
+ * `mouseMoved:` step, with the `hitTest:` step right before it when there is one: a move reaches the view through the tracking area and
+ * mostly without a hit test. The records must be complete (requireCompleteGesture). A nested step, such as the isFlipped that a hitTest:
+ * sends, runs inside the step that sends it and is part of its time, so only a step that no other step contains counts.
  */
 export function gestureFigures({ records, dropped, window, framesBefore, framesAfter, fromSeq, toSeq }) {
   const own = requireCompleteGesture({ records, dropped, window, framesBefore, framesAfter, fromSeq, toSeq });
@@ -363,57 +410,60 @@ export function gestureFigures({ records, dropped, window, framesBefore, framesA
   const contains = (outer, inner) => outer !== inner && outer.entryNs <= inner.entryNs && inner.returnNs <= outer.returnNs &&
     (outer.entryNs !== inner.entryNs || outer.returnNs !== inner.returnNs);
   const outermost = steps.filter((step) => !steps.some((other) => contains(other, step))).toSorted((a, b) => (a.entryNs < b.entryNs ? -1 : a.entryNs > b.entryNs ? 1 : 0));
-  const pairs = [];
+  const moves = [];
   outermost.forEach((step, index) => {
-    if (step.callback !== "hitTest:") return;
-    const next = outermost[index + 1];
-    if (next === undefined || next.callback === "hitTest:") throw new Error(`the hitTest: step at seq ${step.seq} of window ${window} has no following step`);
-    pairs.push(step.ms + next.ms);
+    if (step.callback !== "mouseMoved:") return;
+    const before = outermost[index - 1];
+    moves.push(before?.callback === "hitTest:" ? step.ms + before.ms : step.ms);
   });
-  if (pairs.length === 0) throw new Error(`the gesture of window ${window} has no hitTest: step`);
+  if (moves.length === 0) throw new Error(`the gesture of window ${window} has no mouseMoved: step`);
   return {
     frameRecords: own.filter((record) => record.event === U7_EVENTS.frame).length,
     framesChange: framesAfter - framesBefore,
-    pairs: pairs.length,
-    p90Ms: percentile(pairs.toSorted((a, b) => a - b), 0.9),
+    moves: moves.length,
+    p90Ms: percentile(moves.toSorted((a, b) => a - b), 0.9),
   };
 }
 
-/** The HID moves of the pointer step: across the content of the window, from its left edge to its right edge at its middle, in screen points. */
-export function pointerPath({ frame, content }) {
-  const left = frame.x + content.x + 1;
-  const right = frame.x + content.x + content.width - 1;
-  const y = frame.y + content.y + content.height / 2;
-  return Array.from({ length: POINTER_MOVES + 1 }, (_, index) => ({ type: "move", x: left + ((right - left) * index) / POINTER_MOVES, y }));
+/** The moves of the pointer step in the coordinates of input.pointer: across the content of the window, from its left edge to its right edge at its middle. */
+export function pointerPath({ content }) {
+  const left = 1;
+  const right = content.width - 1;
+  const y = content.height / 2;
+  return Array.from({ length: POINTER_MOVES + 1 }, (_, index) => ({ x: left + ((right - left) * index) / POINTER_MOVES, y }));
+}
+
+/** Delivers the moves of path with input.pointer of the window of s, each after the answer of the one before it, without activating it. */
+async function movePointer(s, path) {
+  for (const point of path) await s.request("input.pointer", { ...point, phase: "move" });
 }
 
 /**
- * The pointer step of G2 and G8 in the window of the session s. It fails without the Accessibility permission (hid.requireTrusted),
- * brings the window to the front (hid.bringFront), and measures the HID move across the window (hid.post) with measure({ span }), which reads
- * the settled footprints before and after the span and the CPU time over it. It then sets the trace state of the frame records
- * (frameRecords; FRAME_RECORDS of scripts/measure-trace.mjs), repeats the move and, for a window whose host.window reports pageProcess null, reads its U7 records (tail, records) into
- * gestureFigures, and sets the trace state of the measurement again (restore), also when the step fails. It reads frames after the move
- * before diagnostics.log.flush, so the record of every frame that the change of frames counts is in the files that records reads.
+ * The pointer step of G2 and G8 in the window of the session s, already the key window and not occluded, because input.pointer refuses
+ * a move in another window (1006). It takes no permission, activates nothing and leaves the cursor: it measures the moves of input.pointer across the window with measure({ span }), which reads the settled footprints
+ * before and after the span and the CPU time over it. It then sets the trace state of the frame records
+ * (frameRecords; FRAME_RECORDS of scripts/measure-trace.mjs), repeats the move and, for a window whose host.window reports pageProcess null,
+ * reads the U7 records of that move (tail and records), gives them to gestureFigures, and sets the trace state of the measurement again
+ * (restore), also when the step fails. It reads frames after the move before diagnostics.log.flush, so the record of every frame that the
+ * change of frames counts is in the files that records reads.
  */
-export async function measurePointer({ s, app, hid, measure, frameRecords, restore, tail, records }) {
-  hid.requireTrusted();
+export async function measurePointer({ s, measure, frameRecords, restore, tail, records }) {
   const status = await s.get("host.window");
-  await hid.bringFront(s, app, { document: { x: 0, y: 0 }, x: 0, y: 0, width: status.content.width, height: status.content.height });
   const path = pointerPath(status);
-  const move = await measure({ span: async () => { hid.post(path); } });
+  const move = await measure({ span: () => movePointer(s, path) });
   await frameRecords();
   let gesture = null;
   try {
     if (status.pageProcess === null) {
       const { frames: framesBefore } = await s.get("host.window");
       const since = await tail();
-      hid.post(path);
+      await movePointer(s, path);
       const { frames: framesAfter } = await s.get("host.window");
       await s.request("diagnostics.log.flush");
       const read = await records(since);
       gesture = { window: s.window, ...gestureFigures({ ...read, window: s.window, framesBefore, framesAfter }) };
     } else {
-      hid.post(path);
+      await movePointer(s, path);
     }
   } catch (error) {
     try {
@@ -613,7 +663,7 @@ function formatMarks(when, marks) {
   ]).join("\n");
 }
 
-function formatReport({ options, context, measurement, gesture, faultLines }) {
+function formatReport({ options, context, measurement, gesture, faultLines, idle, recordsOverCpu }) {
   const sections = [`state ${options.state ?? "none"}, trace ${options.trace}, idle ${options.idle ? 1 : 0}, step ${options.step ?? "none"}`];
   if (context?.exited) {
     sections.push([`exited webcontent processes: ${context.exited.join(", ") || "none"}`,
@@ -623,12 +673,18 @@ function formatReport({ options, context, measurement, gesture, faultLines }) {
   for (const app of measurement.apps) sections.push(`app ${app.configDir} (cpu over ${measurement.seconds.toFixed(2)} s)\n${formatTable(app.rows, app.totals)}`);
   sections.push(`webkit processes not attributed to an application\n${formatTable(measurement.unattributed.rows, measurement.unattributed.totals)}`);
   if (measurement.marks.after) sections.push(formatMarks("after the last cpu reading", measurement.marks.after));
+  if (measurement.marks.before && measurement.marks.after) {
+    const windowsOf = (marks) => marks.flatMap(({ windows }) => windows);
+    const lines = notMeasuredLines({ idle, marks: { before: windowsOf(measurement.marks.before), after: windowsOf(measurement.marks.after) } });
+    if (lines.length > 0) sections.push(lines.join("\n"));
+  }
   if (faultLines !== undefined) sections.push(`error lines of the layout fault: ${faultLines}`);
+  if (recordsOverCpu !== undefined) sections.push(`records written over the cpu interval: ${recordsOverCpu}`);
   if (gesture !== undefined) {
     sections.push(gesture === null
       ? "pointer move under the trace state of the frame records: the window has a main page and no U7 records"
-      : `pointer move under the trace state of the frame records, window ${gesture.window}: hitTest: step with the following step p90 ${gesture.p90Ms.toFixed(2)} ms ` +
-        `over ${gesture.pairs} moves, ${gesture.frameRecords} frame records for a change of frames of ${gesture.framesChange}`);
+      : `pointer move under the trace state of the frame records, window ${gesture.window}: mouseMoved: step with a hitTest: step right before it p90 ${gesture.p90Ms.toFixed(2)} ms ` +
+        `over ${gesture.moves} moves, ${gesture.frameRecords} frame records for a change of frames of ${gesture.framesChange}`);
   }
   return sections.join("\n\n");
 }
@@ -641,10 +697,10 @@ const RUN_MEASUREMENTS = Object.freeze([
 ]);
 
 /**
- * The keys of the B3 output of make app-usage for each trace state that TRACE takes: one output holds the keys of one trace state, and
- * the trace state of the frame records (FRAME_RECORDS, with --step pointer) gives hitTestP90Ms alone.
+ * The keys of the B3 output of make measure-app-usage for each trace state that TRACE takes: one output holds the keys of one trace state, and
+ * the trace state of the frame records (FRAME_RECORDS, with --step pointer) gives pointerMoveP90Ms alone.
  */
-export const B3_MEASUREMENTS = Object.freeze({ 0: RUN_MEASUREMENTS, 1: RUN_MEASUREMENTS, [FRAME_RECORDS]: Object.freeze(["hitTestP90Ms"]) });
+export const B3_MEASUREMENTS = Object.freeze({ 0: RUN_MEASUREMENTS, 1: RUN_MEASUREMENTS, [FRAME_RECORDS]: Object.freeze(["pointerMoveP90Ms"]) });
 
 /** The bytes of a KB, the unit of the footprints of a B3 record. */
 const KB = 1024;
@@ -672,7 +728,7 @@ function counterChange(name, marks) {
 }
 
 /**
- * The measurements of a B3 record of make app-usage (the keys that the header declares) from one application of measureApps (app), the
+ * The measurements of a B3 record of make measure-app-usage (the keys that the header declares) from one application of measureApps (app), the
  * window marks of that application before and after the CPU interval (marks), the error lines of the layout fault of S12 (faultLines)
  * and the figures of the pointer step (gesture).
  */
@@ -697,7 +753,7 @@ export function usageMeasurements({ app, marks, faultLines, gesture }) {
     if (change !== undefined) measured[name] = change;
   }
   if (faultLines !== undefined) measured.errorLines = faultLines;
-  if (gesture) measured.hitTestP90Ms = gesture.p90Ms;
+  if (gesture) measured.pointerMoveP90Ms = gesture.p90Ms;
   return measured;
 }
 
@@ -867,7 +923,7 @@ async function windowStatuses(configDir, sok, errors, text) {
  * realpath(path) are the process executor, the timer and the real path, which the tests replace.
  */
 export async function measureApps({
-  sok, configDirs, interval, footprints = "settled", settleAfter = false, span, marks,
+  sok, configDirs, interval, footprints = "settled", settleAfter = false, span, marks, beforeCpu, afterCpu,
   run = execute, sleep = delay, realpath = realpathSync,
 }) {
   if (footprints !== "settled" && footprints !== "at-once") throw new Error(`footprints must be settled or at-once, not ${JSON.stringify(footprints)}`);
@@ -889,13 +945,19 @@ export async function measureApps({
 
   const groups = [...apps.map((app) => ({ name: app.configDir, rows: app.rows })), { name: "unattributed", rows: unattributed }];
   const measured = groups.flatMap(({ name, rows }) => rows.map((row) => ({ row, where: `${name} ${row.role} (pid ${row.pid})` })));
+  const readCpu = () => readCpuSeconds(run);
+  // A process of no application that ends during the measurement is no failure of the application and leaves the list.
+  const foreign = new Set(unattributed.map(({ pid }) => pid));
+  const ended = new Set();
   // A process whose footprint cannot be read is reported once, whatever the number of readings.
   const failures = new Set();
   const footprintOf = async ({ row, where }) => {
+    if (ended.has(row.pid)) return null;
     try {
       return await readFootprint(row.pid, run);
     } catch (error) {
-      failures.add(`${where}: ${error.message}`);
+      if (foreign.has(row.pid) && !(await readCpu()).has(row.pid)) ended.add(row.pid);
+      else failures.add(`${where}: ${error.message}`);
       return null;
     }
   };
@@ -917,18 +979,23 @@ export async function measureApps({
     : { footprints: await readFootprints() };
   for (const { row } of measured) row.bytes = first.footprints.get(row.pid) ?? null;
 
-  const readCpu = () => readCpuSeconds(run);
   const before = marks ? await marks.before() : undefined;
+  if (beforeCpu) await beforeCpu();
   const cpuBefore = await readCpu();
   const started = performance.now();
   if (span) await span();
   // The fixed sampling interval is the measurement itself; no status notification marks the end of a CPU interval.
   else await sleep(interval * 1000);
   const cpuAfter = await readCpu();
+  if (afterCpu) await afterCpu();
   const elapsed = span ? (performance.now() - started) / 1000 : interval;
   const after = marks ? await marks.after() : undefined;
   for (const { row, where } of measured) {
     if (!cpuBefore.has(row.pid) || !cpuAfter.has(row.pid)) {
+      if (foreign.has(row.pid)) {
+        ended.add(row.pid);
+        continue;
+      }
       errors.push(`${where}: pid is not in the process table at both cpu reads`);
       row.cpuSeconds = null;
       row.cpuPercent = null;
@@ -951,11 +1018,12 @@ export async function measureApps({
     entry.row.peakBytes = (await footprintOf(entry))?.peakBytes ?? null;
   }
   errors.push(...failures);
+  const remaining = unattributed.filter(({ pid }) => !ended.has(pid));
 
   return {
     seconds: elapsed,
     apps: apps.map((app) => ({ configDir: app.configDir, windows: app.windows, rows: app.rows, totals: totalsOf(app.rows) })),
-    unattributed: { rows: unattributed, totals: totalsOf(unattributed) },
+    unattributed: { rows: remaining, totals: totalsOf(remaining) },
     marks: { before, after },
     errors,
   };
@@ -993,7 +1061,7 @@ async function windowMark(s) {
   const objects = await s.request("diagnostics.objects");
   // The Tauri host has no garbage-collected runtime and reports no runtime member (docs/spec/endpoint.md).
   return {
-    window: s.window, occluded: status.occluded, frames: status.frames, commandBuffers: status.commandBuffers, runtime: objects.runtime ?? null,
+    window: s.window, occluded: status.occluded, active: status.active, frames: status.frames, commandBuffers: status.commandBuffers, runtime: objects.runtime ?? null,
     scale: status.scale, refreshRate: status.refreshRate, content: status.content,
   };
 }
@@ -1039,7 +1107,7 @@ async function measureOptions(options) {
         },
         logPosition: () => currentEventOffsets(configDir),
         untilFaultLine: (position) => untilEventLine(configDir, position, (line) => faultErrorCount([line]) === 1, FAULT_LINE_LIMIT,
-          { catalog, records: ["page.record.error", "host.record.error"] }),
+          { catalog, records: ["host.record.error", "workbench.record.error"] }),
         remainingWebKit: async () => {
           const remaining = [];
           for (const { role, pid } of (await applicationRows({ configDir })).filter(({ attribution }) => attribution === "launchd domain")) {
@@ -1070,9 +1138,20 @@ async function measureOptions(options) {
       return marks;
     };
     for (const mark of await marksOf()) requireOcclusion(state, mark.windows);
-    if (idle) await waitIdle({ sessions: windowSessions, frames, sleep: delay });
+    const idleResult = idle ? await waitIdle({ sessions: windowSessions, frames, sleep: delay }) : null;
+    let lines;
+    let recordsOverCpu;
+    const settled = !idle ? {} : {
+      beforeCpu: async () => {
+        await delay(COUNT_WAIT_MS);
+        lines = configDirs.map(logLineCounts);
+      },
+      afterCpu: async () => {
+        recordsOverCpu = configDirs.reduce((sum, configDir, index) => sum + recordsOver(lines[index], logLineCounts(configDir)), 0);
+      },
+    };
     const measure = (extra) => measureApps({
-      sok, configDirs, interval, footprints: context?.footprints ?? "settled", marks: { before: marksOf, after: marksOf }, ...extra,
+      sok, configDirs, interval, footprints: context?.footprints ?? "settled", marks: { before: marksOf, after: marksOf }, ...settled, ...extra,
     });
     let measurement;
     let gesture;
@@ -1080,7 +1159,7 @@ async function measureOptions(options) {
       const [{ configDir, client, s }] = sessions;
       const pid = client.endpoint.pid;
       const pointer = await measurePointer({
-        s, app: { name: basename(configDir), configDir }, hid: { requireTrusted, bringFront, post },
+        s,
         measure: ({ span }) => measure({ span, settleAfter: true }),
         frameRecords: () => applyTrace((name, params) => s.run(name, params), FRAME_RECORDS, configDir),
         restore: traceOf(sessions[0]),
@@ -1112,16 +1191,16 @@ async function measureOptions(options) {
       await sessions[0].s.request("diagnostics.log.flush");
       faultLines = faultErrorCount(readEventErrors(sessions[0].configDir, context.faultLog).errors);
     }
-    return { options, context, measurement, gesture, faultLines, errors };
+    return { options, context, measurement, gesture, faultLines, errors, idle: idleResult, recordsOverCpu };
   } finally {
     for (const cleanup of cleanups.reverse()) await cleanup();
   }
 }
 
 /**
- * The B3 output {measurements, conditions} of a measurement of make app-usage. One output holds the keys of one trace state, the state of
- * its measured interval: with --step pointer, the trace state 0 or 1 gives the keys of the first move without hitTestP90Ms, and the trace
- * state FRAME_RECORDS gives hitTestP90Ms alone, from the repeated move in that state. The conditions come from b3Conditions of
+ * The B3 output {measurements, conditions} of a measurement of make measure-app-usage. One output holds the keys of one trace state, the state of
+ * its measured interval: with --step pointer, the trace state 0 or 1 gives the keys of the first move without pointerMoveP90Ms, and the trace
+ * state FRAME_RECORDS gives pointerMoveP90Ms alone, from the repeated move in that state. The conditions come from b3Conditions of
  * scripts/b3-out.mjs with the window marks of the application before the first CPU reading, which carry the id, the refresh rate, the
  * scale and the content of each window, the diagnostics.performance of the trace state and the classes of the policy in force before
  * that reading.
@@ -1133,13 +1212,13 @@ export function usageOutput({ options, measurement, gesture, faultLines }) {
   let measurements;
   if (options.trace === FRAME_RECORDS) {
     if (gesture === null || gesture === undefined) {
-      throw new Error(`the pointer output under the trace state ${FRAME_RECORDS} is hitTestP90Ms, which a window with a main page has not`);
+      throw new Error(`the pointer output under the trace state ${FRAME_RECORDS} is pointerMoveP90Ms, which a window with a main page has not`);
     }
-    measurements = { hitTestP90Ms: gesture.p90Ms };
+    measurements = { pointerMoveP90Ms: gesture.p90Ms };
   } else {
     measurements = usageMeasurements({ app, marks: { before: before.windows, after: after.windows }, faultLines, gesture: null });
   }
-  const conditions = b3Conditions({ windows: before.windows, performance: traceSettings(options.trace)["diagnostics.performance"], policy: before.policy });
+  const conditions = b3Conditions({ windows: before.windows.map((window, index) => ({ ...window, ...b3End(window, after.windows[index]) })), performance: traceSettings(options.trace)["diagnostics.performance"], policy: before.policy });
   return { measurements, conditions };
 }
 

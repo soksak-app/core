@@ -11,12 +11,12 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { APPS, drag, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets } from "@soksak/window-check/event-log.mjs";
 import { pluginEntry, pnpmPack } from "../../scripts/workspace-registry.mjs";
-import { fresh, pluginChangeApplied } from "../fixture.mjs";
-import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
+import { fresh, pluginChangeApplied, restoreRegistry, useRegistry } from "../fixture.mjs";
+import { frameChange, frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { mapViewContentFramesToCapture, requireViewContentFrameCoverage, rightEdgeWidthDragPlan, withViewContentTrace } from "../view-metrics-collection.mjs";
 import { cardEdgeConvergence, cardEdgeSamples, sourceIntervalSummary } from "./cases/plain-view.mjs";
 import { outside } from "../outside.mjs";
-import { assertRoundTrips, measureDragPerformance, pointerLag, transactionCadence } from "../drag-measurement.mjs";
+import { assertRoundTrips, measureDragPerformance, pointerLag, shownTimes, transactionCadence } from "../drag-measurement.mjs";
 
 const PROBE = fileURLToPath(new URL("../fixtures/plain-view/probe/", import.meta.url));
 const descriptor = Object.freeze({
@@ -49,7 +49,6 @@ const PROBE_COLOUR = [30, 30, 30];
 
 /** Installs the probe, opens it to the right of a card and returns the session state of its drag. */
 async function openProbe(s, app, prepare) {
-  const before = await s.get("core.plugins");
   const folder = probeRegistry(join(dirname(app.binary), "sok"));
   s.cleanup(() => rmSync(folder, { recursive: true, force: true }));
   s.cleanup(async () => {
@@ -57,9 +56,9 @@ async function openProbe(s, app, prepare) {
     if ((await s.get("core.plugins")).plugins.find((row) => row.id === "probeplain")?.installed) {
       await pluginChange(s, "the removal of probeplain", () => s.run("core.plugins.remove", { plugin: "probeplain" }));
     }
-    await s.run("core.plugins.registry", { index: before.registry });
+    await restoreRegistry(s);
   });
-  await s.run("core.plugins.registry", { index: pathToFileURL(join(folder, "index.json")).href });
+  await useRegistry(s, pathToFileURL(join(folder, "index.json")).href);
   await s.until("core.plugins", (value) => value.plugins.some((row) => row.id === "probeplain"), "the registry did not list the probe");
   await pluginChange(s, "the install of probeplain", () => s.run("core.plugins.install", { plugin: "probeplain" }));
   await prepare();
@@ -88,10 +87,13 @@ for (const app of Object.values(APPS)) {
       `surface ${JSON.stringify(frame)}, first frame scale ${first.scale}, colour at its centre ${at(frame.x + frame.width / 2, frame.y + frame.height / 2)}, ` +
       `at its head ${at(frame.x + frame.width / 2, marks.head)}`);
     assertRoundTrips(samples.map((sample) => sample.position), 2);
-    const lag = pointerLag(samples, run.ticks, run.boundary);
-    const performance = measureDragPerformance(captured.map((item) => item.time), lag, (await s.get("host.window")).refreshRate);
+    const changes = captured.slice(1).map((item, index) => ({ time: item.time, change: frameChange(captured[index], item) }));
+    const repeated = new Set(changes.filter((item) => item.change === null).map((item) => item.time));
+    const shown = samples.filter((sample) => !repeated.has(sample.time));
+    const lag = pointerLag(shown, run.ticks, run.boundary);
+    const performance = measureDragPerformance(shownTimes(shown, run.ticks), lag, (await s.get("host.window")).refreshRate);
     const convergence = cardEdgeConvergence(samples, run.ticks.at(-1));
-    const report = { load: loadavg(), performance, convergence, transactionCadence: transactionCadence(run.layouts), samples, ticks: run.ticks, boundary: run.boundary, layouts: run.layouts, times: captured.map((item) => item.time), unmeasured };
+    const report = { load: loadavg(), performance, convergence, transactionCadence: transactionCadence(run.layouts), repeatedFrames: repeated.size, samples, ticks: run.ticks, boundary: run.boundary, layouts: run.layouts, times: captured.map((item) => item.time), unmeasured };
     const directory = join(app.configDir, "logs", "plain-view-latency");
     mkdirSync(directory, { recursive: true });
     writeFileSync(join(directory, `${process.pid}.json`), `${JSON.stringify(report)}\n`);

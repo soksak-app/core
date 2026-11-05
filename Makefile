@@ -41,30 +41,30 @@ app-update-check:
 	@case "$(HOST)" in wailsv3|tauriv2) ;; *) echo "app-update-check requires HOST=wailsv3|tauriv2" >&2; exit 2;; esac
 	@node scripts/check-app-update.mjs --host $(HOST) --bundle target/debug/soksak-$(HOST).app --registry target/registry/index.json
 
-page-memory:
-	@case "$(APP)" in wailsv3|tauriv2|mygo) ;; *) echo "page-memory requires APP=wailsv3|tauriv2|mygo CONFIG=DIR [BUILD=release|debug] [MINUTES=60] [RELOADS=20]" >&2; exit 2;; esac
-	@case "$(CONFIG)" in '') echo "page-memory requires CONFIG=DIR" >&2; exit 2;; esac
-	@case "$(BUILD)" in ''|release|debug) ;; *) echo "page-memory requires BUILD=release|debug" >&2; exit 2;; esac
+measure-page-memory:
+	@case "$(APP)" in wailsv3|tauriv2|mygo) ;; *) echo "measure-page-memory requires APP=wailsv3|tauriv2|mygo CONFIG=DIR [BUILD=release|debug] [MINUTES=60] [RELOADS=20]" >&2; exit 2;; esac
+	@case "$(CONFIG)" in '') echo "measure-page-memory requires CONFIG=DIR" >&2; exit 2;; esac
+	@case "$(BUILD)" in ''|release|debug) ;; *) echo "measure-page-memory requires BUILD=release|debug" >&2; exit 2;; esac
 	@node scripts/measure-page-memory.mjs --sok $(if $(filter debug,$(BUILD)),target/debug/soksak-$(APP).app,target/release/$(APP)/soksak.app)/Contents/MacOS/sok --config-dir "$(CONFIG)" --idle-minutes $(or $(MINUTES),60) --reloads $(or $(RELOADS),20)
 
 # Sets the trace state TRACE, repeats the operations of scripts/measure-object-counts.mjs for the surface plugins PLUGINS REPETITIONS times against a
 # running diagnostic build and prints the object counts, the Go runtime figures and the footprints of the host, page and document processes per
 # repetition (docs/operations/examples.md#page-memory); a window of the mygo host has no page process. The diagnostic methods exist only in
 # diagnostic builds, so BUILD defaults to debug. B3_OUT=FILE, with at least 30 repetitions, writes the B3 output of S3 to FILE.
-object-counts:
-	@case "$(APP)" in wailsv3|tauriv2|mygo) ;; *) echo "object-counts requires APP=wailsv3|tauriv2|mygo CONFIG=DIR PLUGINS='ID...' TRACE=0|1 [BUILD=release|debug] [REPETITIONS=20] [B3_OUT=FILE]" >&2; exit 2;; esac
-	@case "$(CONFIG)" in '') echo "object-counts requires CONFIG=DIR" >&2; exit 2;; esac
-	@case "$(strip $(PLUGINS))" in '') echo "object-counts requires PLUGINS='ID...', the surface plugins whose tabs it opens" >&2; exit 2;; esac
-	@case "$(BUILD)" in ''|debug|release) ;; *) echo "object-counts requires BUILD=release|debug" >&2; exit 2;; esac
+measure-object-counts:
+	@case "$(APP)" in wailsv3|tauriv2|mygo) ;; *) echo "measure-object-counts requires APP=wailsv3|tauriv2|mygo CONFIG=DIR PLUGINS='ID...' TRACE=0|1 [BUILD=release|debug] [REPETITIONS=20] [B3_OUT=FILE]" >&2; exit 2;; esac
+	@case "$(CONFIG)" in '') echo "measure-object-counts requires CONFIG=DIR" >&2; exit 2;; esac
+	@case "$(strip $(PLUGINS))" in '') echo "measure-object-counts requires PLUGINS='ID...', the surface plugins whose tabs it opens" >&2; exit 2;; esac
+	@case "$(BUILD)" in ''|debug|release) ;; *) echo "measure-object-counts requires BUILD=release|debug" >&2; exit 2;; esac
 	@node scripts/measure-object-counts.mjs --sok $(if $(filter release,$(BUILD)),target/release/$(APP)/soksak.app,target/debug/soksak-$(APP).app)/Contents/MacOS/sok --config-dir "$(CONFIG)" --trace "$(TRACE)" $(foreach plugin,$(PLUGINS),--plugin $(plugin)) --repetitions $(or $(REPETITIONS),20) $(if $(B3_OUT),--b3-out "$(B3_OUT)")
 
 # Has the main page of a running diagnostic build send CALLS host calls ROUNDS times and prints the footprint of its page process before the calls, after
 # them and after a collection (scripts/measure-host-calls.mjs); MINUTES=M waits M minutes without input instead of the calls;
 # EVENTS=N has the host send N host events that the page does not listen to instead of the calls. The diagnostic methods exist only in diagnostic builds.
 # A window of the mygo host has no main page, and the measurement fails with "the mygo host has no main page".
-host-calls:
-	@case "$(APP)" in wailsv3|tauriv2|mygo) ;; *) echo "host-calls requires APP=wailsv3|tauriv2|mygo CONFIG=DIR [CALLS=1000 | MINUTES=M | EVENTS=N] [ROUNDS=5]" >&2; exit 2;; esac
-	@case "$(CONFIG)" in '') echo "host-calls requires CONFIG=DIR" >&2; exit 2;; esac
+measure-host-calls:
+	@case "$(APP)" in wailsv3|tauriv2|mygo) ;; *) echo "measure-host-calls requires APP=wailsv3|tauriv2|mygo CONFIG=DIR [CALLS=1000 | MINUTES=M | EVENTS=N] [ROUNDS=5]" >&2; exit 2;; esac
+	@case "$(CONFIG)" in '') echo "measure-host-calls requires CONFIG=DIR" >&2; exit 2;; esac
 	@node scripts/measure-host-calls.mjs --sok target/debug/soksak-$(APP).app/Contents/MacOS/sok --config-dir "$(CONFIG)" --calls $(or $(CALLS),1000) --idle-minutes $(or $(MINUTES),0) --events $(or $(EVENTS),0) --rounds $(or $(ROUNDS),5)
 
 # Reports the CPU and memory of the running application of CONFIG_DIR by process: host, sidecars, pages, documents and WebKit processes
@@ -76,8 +76,8 @@ host-calls:
 # e2e/real/hid.mjs, which needs the Accessibility permission and brings the window to the front. B3_OUT writes the B3 record of the
 # measurement, its measurements and its conditions, to that file as JSON; one record holds the keys of one trace state, so with STEP=pointer
 # TRACE=0|1 writes the keys of the first move without hitTestP90Ms and TRACE=frame-records writes hitTestP90Ms alone. SOK defaults to the sok binary of target/debug.
-app-usage:
-	@case "$(CONFIG_DIR)" in '') echo "app-usage requires CONFIG_DIR=DIR TRACE=0|1|frame-records [STATE=S0|S0b|S1|S9|S11|S12|S14|S15] [IDLE=1] [STEP=pointer] [B3_OUT=FILE] [INTERVAL=10] [SOK=PATH]" >&2; exit 2;; esac
+measure-app-usage:
+	@case "$(CONFIG_DIR)" in '') echo "measure-app-usage requires CONFIG_DIR=DIR TRACE=0|1|frame-records [STATE=S0|S0b|S1|S9|S11|S12|S14|S15] [IDLE=1] [STEP=pointer] [B3_OUT=FILE] [INTERVAL=10] [SOK=PATH]" >&2; exit 2;; esac
 	@case "$(IDLE)" in ''|1) ;; *) echo "app-usage takes IDLE=1, not IDLE=$(IDLE)" >&2; exit 2;; esac
 	@node scripts/measure-app-usage.mjs --sok $(or $(SOK),target/debug/sok) --config-dir "$(CONFIG_DIR)" --trace "$(TRACE)" --interval $(or $(INTERVAL),10) $(if $(STATE),--state "$(STATE)") $(if $(IDLE),--idle) $(if $(STEP),--step "$(STEP)") $(if $(B3_OUT),--b3-out "$(abspath $(B3_OUT))")
 
@@ -86,15 +86,15 @@ app-usage:
 # after the trace state of TRACE=0|1, it opens one tab of PLUGIN, whose PLUGIN.input and PLUGIN.screen it uses, in a new project window of
 # 760 by 614 points and divides the CPU time by the change of presentedFrames of the region of that tab. B3_OUT writes the B3 record of the
 # measurement to that file as JSON. SOK defaults to the sok binary of target/debug.
-terminal-redraw-usage:
-	@case "$(CONFIG_DIR)" in '') echo "terminal-redraw-usage requires CONFIG_DIR=DIR PLUGIN=ID ROWS=N TRACE=0|1 [B3_OUT=FILE] [RATE=20] [INTERVAL=10] [SOK=PATH]" >&2; exit 2;; esac
+measure-terminal-redraw:
+	@case "$(CONFIG_DIR)" in '') echo "measure-terminal-redraw requires CONFIG_DIR=DIR PLUGIN=ID ROWS=N TRACE=0|1 [B3_OUT=FILE] [RATE=20] [INTERVAL=10] [SOK=PATH]" >&2; exit 2;; esac
 	@node scripts/measure-terminal-redraw.mjs --sok $(or $(SOK),target/debug/sok) --config-dir "$(CONFIG_DIR)" --plugin "$(PLUGIN)" --rows "$(ROWS)" --trace "$(TRACE)" --rate $(or $(RATE),20) --interval $(or $(INTERVAL),10) $(if $(B3_OUT),--b3-out "$(abspath $(B3_OUT))")
 
 # Measures the share of the diagnostics in the memory of a running host: in the trace state TRACE=1 and then TRACE=0 it runs five repetitions of
 # object-counts and prints the entry of the last repetition, which holds the footprint of the host process (docs/operations/examples.md).
-trace-share:
-	@case "$(APP)" in wailsv3|tauriv2|mygo) ;; *) echo "trace-share requires APP=wailsv3|tauriv2|mygo CONFIG=DIR PLUGINS='ID...'" >&2; exit 2;; esac
-	@case "$(CONFIG)" in '') echo "trace-share requires CONFIG=DIR" >&2; exit 2;; esac
+measure-trace-share:
+	@case "$(APP)" in wailsv3|tauriv2|mygo) ;; *) echo "measure-trace-share requires APP=wailsv3|tauriv2|mygo CONFIG=DIR PLUGINS='ID...'" >&2; exit 2;; esac
+	@case "$(CONFIG)" in '') echo "measure-trace-share requires CONFIG=DIR" >&2; exit 2;; esac
 	@for trace in 1 0; do \
 	  echo "start TRACE=$$trace"; \
 	  out=$$($(MAKE) --no-print-directory object-counts APP=$(APP) CONFIG="$(CONFIG)" PLUGINS="$(PLUGINS)" TRACE=$$trace BUILD=debug REPETITIONS=5) || exit 1; \
@@ -107,8 +107,8 @@ trace-share:
 # whose command line has --config-dir CONFIG_DIR, at start and after each minute (scripts/measure-host-allocations.mjs,
 # docs/operations/examples.md), and the footprint of the host at each step and after it settles. SOK defaults to the sok binary of target/debug.
 # B3_OUT=FILE, with at least 60 minutes, writes the B3 output of S4 to FILE.
-host-allocations:
-	@case "$(CONFIG_DIR)" in '') echo "host-allocations requires CONFIG_DIR=DIR TRACE=0|1 [MINUTES=10] [SOK=PATH] [B3_OUT=FILE]" >&2; exit 2;; esac
+measure-host-allocations:
+	@case "$(CONFIG_DIR)" in '') echo "measure-host-allocations requires CONFIG_DIR=DIR TRACE=0|1 [MINUTES=10] [SOK=PATH] [B3_OUT=FILE]" >&2; exit 2;; esac
 	@node scripts/measure-host-allocations.mjs --sok $(or $(SOK),target/debug/sok) --config-dir "$(CONFIG_DIR)" --trace "$(TRACE)" --minutes $(or $(MINUTES),10) $(if $(B3_OUT),--b3-out "$(B3_OUT)")
 
 # Checks that core, plugin, and sidecar sources do not name each other.
@@ -444,16 +444,16 @@ wailsv3-build-release: native-darwin build
 	@$(call sok-wailsv3,$(WAILS_RELEASE_BUNDLE),release)
 	@$(call bundle-sign,$(WAILS_RELEASE_BUNDLE))
 
-tauriv2: tauriv2-build
+build-tauriv2: tauriv2-build
 	@./$(TAURI_DEBUG)
 
-tauriv2-release: tauriv2-build-release
+build-tauriv2-release: tauriv2-build-release
 	@./$(TAURI_RELEASE)
 
-wailsv3: wailsv3-build
+build-wailsv3: wailsv3-build
 	@./$(WAILS_DEBUG)
 
-wailsv3-release: wailsv3-build-release
+build-wailsv3-release: wailsv3-build-release
 	@./$(WAILS_RELEASE)
 
 # Unit checks of native code. Runs the shared input check and the host contract check, which runs the tests of the two hosts.
@@ -545,20 +545,20 @@ e2e-shutdown:
 # view drag takes ACCESSIBILITY=1, FLOOR=1 and GC_LOOP=1 (e2e/benchmark/cases/view-drag.mjs). The benchmark refuses a value that it does
 # not take.
 B3_BENCHMARK_ENV = $(if $(B3_OUT),SOKSAK_B3_OUT="$(abspath $(B3_OUT))") $(if $(TRACE),SOKSAK_B3_TRACE="$(TRACE)")
-e2e-benchmark-view-drag:
+benchmark-view-drag:
 	@$(B3_BENCHMARK_ENV) $(if $(ACCESSIBILITY),SOKSAK_ACCESSIBILITY="$(ACCESSIBILITY)") $(if $(FLOOR),SOKSAK_FLOOR="$(FLOOR)") \
 	  $(if $(GC_LOOP),SOKSAK_GC_LOOP="$(GC_LOOP)") pnpm -F @soksak/e2e run benchmark:view-drag
 
-e2e-benchmark-resize-catch-up:
+benchmark-resize-catch-up:
 	@$(B3_BENCHMARK_ENV) pnpm -F @soksak/e2e run benchmark:resize-catch-up
 
-e2e-benchmark-idle-tab:
+benchmark-idle-tab:
 	@$(B3_BENCHMARK_ENV) pnpm -F @soksak/e2e run benchmark:idle-tab
 
-e2e-benchmark-split-load:
+benchmark-split-load:
 	@$(B3_BENCHMARK_ENV) pnpm -F @soksak/e2e run benchmark:split-load
 
-e2e-benchmark-plain-view:
+benchmark-plain-view:
 	@pnpm -F @soksak/e2e run benchmark:plain-view
 
 e2e-repeat:

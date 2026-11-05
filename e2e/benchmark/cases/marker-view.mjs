@@ -8,7 +8,7 @@ import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { firstContentFrame } from "../../view-first-content.mjs";
 import { declaredSlotInsets, findFirstChangedSlotFrame, measureViewFrameGeometry } from "../../view-frame-geometry.mjs";
 import { mapViewContentFramesToCapture, monotonicTimeMs, requireViewContentFrameCoverage, rootNativePlacementBeforeCapture,
-  selectOneShotViewSourceFrame, withViewContentTrace } from "../../view-metrics-collection.mjs";
+  selectOneShotViewSourceFrame, withDragTraceMode, withViewContentTrace } from "../../view-metrics-collection.mjs";
 
 /** The size field of a core.grid card and its name, by the axis of core.grid.size. */
 const AXIS = Object.freeze({ x: Object.freeze({ size: "w", name: "width" }), y: Object.freeze({ size: "h", name: "height" }) });
@@ -177,7 +177,8 @@ export async function markerLayoutObservation(t, s, descriptor, surface, card, {
  */
 export async function markerDragObservation(t, s, descriptor, surface, card, palette, { owner, plan }) {
   await s.presented();
-  const traced = await withViewContentTrace(t, s, descriptor, surface, async () => drag(t, s, plan, { capture: true }));
+  const { result: traced, phaseMode } = await withDragTraceMode(s, () =>
+    withViewContentTrace(t, s, descriptor, surface, async () => drag(t, s, plan, { capture: true })));
   const dragPalette = paletteWithMarkerColor(palette, traced.start?.markerColor, owner);
   const run = traced.action;
   const files = frames(run.frames);
@@ -221,6 +222,7 @@ export async function markerDragObservation(t, s, descriptor, surface, card, pal
     lastGestureFrameIndex: gestureEndedFrameIndex,
     gestureEndedFrameIndex,
     gestureStartedAtMs: run.ticks[0],
+    phaseMode,
     gestureEndedAtMs: run.ticks.at(-1),
     finalPresentation: { displayedAtMs: run.displayed,
       targetViewport: { width: Math.trunc(finalRoot.frame.width), height: Math.trunc(finalRoot.frame.height) },
