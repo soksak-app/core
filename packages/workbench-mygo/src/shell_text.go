@@ -23,6 +23,24 @@ func (t shellText) FocusedCard() string {
 	return t.s.focused
 }
 
+// placeInput is the observer of a place: a press anywhere in it makes the place of scope the scope of the text size.
+func (s *Shell) placeInput(scope TextScope) func(ui.InputEvent) {
+	return func(ev ui.InputEvent) {
+		if ev.Kind == ui.InputPointerDown {
+			s.pressPlace(scope)
+		}
+	}
+}
+
+// pressPlace records a press on the place of scope. A watcher of the status core.text sees it in the next frame.
+func (s *Shell) pressPlace(scope TextScope) {
+	if err := s.text.Press(scope); err != nil {
+		s.fail(err)
+		return
+	}
+	s.options.Invalidate()
+}
+
 func (t shellText) FrameTextSize() float64 { return t.s.settings.Value("textSize").(float64) }
 
 func (t shellText) SetFrameTextSize(size float64, actor string) error {

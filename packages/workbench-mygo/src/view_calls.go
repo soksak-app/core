@@ -1260,7 +1260,7 @@ func (s *Shell) sidecarFailed(data []any) {
 	s.fail(fmt.Errorf("sidecar %s failed for surface %s: %s", failure.Sidecar, failure.Surface, failure.Reason))
 }
 
-// surfacePressed focuses the card of a surface that a pointer pressed.
+// surfacePressed is the press of a pointer on a surface.
 func (s *Shell) surfacePressed(data []any) {
 	if len(data) != 1 || s.plane == nil {
 		return

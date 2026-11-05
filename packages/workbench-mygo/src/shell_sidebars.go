@@ -38,7 +38,7 @@ func (s *Shell) drawSidebarCard(c *ui.Context, id string, rect layout.Rect, inse
 	box := layout.Rect{X: rect.X + float64(originX) + edge, Y: rect.Y + float64(originY) + edge, W: rect.W - 2*edge, H: rect.H - 2*edge}
 	ui.Box(s.binder.Name(c, "core.card", id)).Role(ui.RoleGroup).Label(id).Absolute().Left(float32(rect.X)+inset).Top(float32(rect.Y)+inset).
 		Size(float32(rect.W), float32(rect.H)).Background(s.palette.Card).Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.palette.Radius).
-		Clip().Column().Children(func() {
+		ObserveInput(s.placeInput(CardScope(id))).Clip().Column().Children(func() {
 		ui.Box(c).Size(float32(box.W), float32(box.H)).Children(func() { s.sidebars.Draw(c, frame, box) })
 	})
 }
