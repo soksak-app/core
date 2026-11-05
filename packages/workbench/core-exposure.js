@@ -256,23 +256,25 @@ let settingsScreen = null;
 let debugScreen = null;
 
 const settingsUi = async () => {
-  settingsScreen ??= await import("./settings-ui.js");
+  settingsScreen ??= await import("./settings-ui.js"); // default: a loaded screen is kept.
   settingsScreen.onSettingsDrawn(coreChanged);
   return settingsScreen;
 };
 
 const debugUi = async () => {
-  debugScreen ??= await import("./debug-ui.js");
+  debugScreen ??= await import("./debug-ui.js"); // default: a loaded screen is kept.
   debugScreen.onDebugDrawn(coreChanged);
   return debugScreen;
 };
 
 /** A command of the settings modal, which runs at once when the modal is loaded, so its order with other commands holds. */
-const onSettings = (run) => async (params) => run(settingsScreen ?? await settingsUi(), params);
+const onSettings = (run) => async (params) => run(settingsScreen ?? await settingsUi(), params); // default: a loaded screen is kept.
 /** A command of the debug view. */
-const onDebug = (run) => async (params) => run(debugScreen ?? await debugUi(), params);
+const onDebug = (run) => async (params) => run(debugScreen ?? await debugUi(), params); // default: a loaded screen is kept.
 
+// default: a screen that is not loaded is closed.
 const settingsModalState = () => settingsScreen?.settingsModalState() ?? { open: false, controls: [] };
+// default: a screen that is not loaded is closed.
 const debugState = () => debugScreen?.debugState() ?? {
   open: false, recorded: null, entries: [], viewing: null, timeline: null, state: null, scroll: 0, operation: null, error: null,
 };

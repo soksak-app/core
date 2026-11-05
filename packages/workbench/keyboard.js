@@ -12,7 +12,7 @@ let shown = new Set();
 let owed = false;
 let sent = null;
 
-const editable = (element) => element?.matches?.("input, textarea, select, [contenteditable]") ?? false;
+const editable = (element) => element !== null && element.matches("input, textarea, select, [contenteditable]");
 
 /** The surface that holds the keyboard, or null when the workbench holds it. */
 function target() {
@@ -25,7 +25,7 @@ function send(surface) {
   owed = false;
   sent = surface;
   // An element that kept the focus would still show as focused beside the surface that holds the keyboard.
-  if (surface !== null) document.activeElement?.blur?.();
+  if (surface !== null) document.activeElement?.blur();
   Promise.resolve(surfaces.focus(surface)).catch((why) => report(`surface focus: ${why}`));
 }
 

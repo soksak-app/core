@@ -14,7 +14,7 @@ export function createBarTabs({ projects, projectBar, spaceBar, workarea, bind, 
    *   rename  {kind, id} or none
    */
   function tab(text, on, { dot, pick, close, rename, expose, closeExpose }) {
-    if (rename && renaming?.kind === rename.kind && renaming.id === rename.id) return renameField(text);
+    if (rename && renaming?.kind === rename.kind && renaming.id === rename.id) return renameField();
     const el = document.createElement("button");
     el.className = "bar-tab";
     el.dataset.expose = expose;
@@ -51,11 +51,11 @@ export function createBarTabs({ projects, projectBar, spaceBar, workarea, bind, 
   let renaming = null;
 
   /** Input field in the place of the tab being renamed. Enter confirms, Escape cancels, and losing focus confirms. */
-  function renameField(was) {
+  function renameField() {
     const input = document.createElement("input");
     input.className = "bar-tab__root";
     input.dataset.expose = "core.rename.input";
-    input.value = renaming.value ?? was;
+    input.value = renaming.value;
     // The entered value is recorded with core.rename.set. The confirmation uses that value.
     bind(input, "core.rename.set", () => ({ value: input.value }), { event: "input" });
     input.addEventListener("keydown", (e) => {
@@ -70,7 +70,9 @@ export function createBarTabs({ projects, projectBar, spaceBar, workarea, bind, 
   /** Operations that the rename commands call. */
   const renames = {
     begin({ kind, id }) {
-      const list = kind === "project" ? projects.all() : kind === "space" ? projects.active()?.spaces ?? [] : null;
+      const here = projects.active();
+      if (kind === "space" && !here) throw new Error(`no ${kind} ${id}`);
+      const list = kind === "project" ? projects.all() : kind === "space" ? here.spaces : null;
       if (!list) throw new Error(`unknown rename target ${kind}`);
       const found = list.find((item) => item.id === id);
       if (!found) throw new Error(`no ${kind} ${id}`);
@@ -169,7 +171,7 @@ export function createBarTabs({ projects, projectBar, spaceBar, workarea, bind, 
     keepChildren(into, projectTabs);
     if (column) keepChildren(projectBar, []);
 
-    const spaces = here?.spaces ?? [];
+    const spaces = here?.spaces ?? []; // default: a window with no project has no space tabs.
     const spaceTabs = spaces.map((sp) => ({
       key: JSON.stringify([sp.id, sp.title, sp.id === here.activeSpaceId, spaces.length > 1, renamed("space", sp.id)]),
       create: () => tab(sp.title, sp.id === here.activeSpaceId, {
