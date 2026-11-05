@@ -1082,6 +1082,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F539",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "static void gatherAreas(" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/input_inject_test.m", id: "each owner of a tracking area at the point hears the move" },
+      { file: "native/darwin/tests/input_inject_test.m", id: "the owners hear the point of a press before the press" },
+    ],
+    expected: "A driven move reaches every owner of a tracking area that holds the point, with its enter and its exit, and a press sends this move first.",
+    levels: ["native"],
+  },
+  {
     id: "F533",
     implementation: [
       { file: "packages/workbench/memory-saver.js", symbol: 'if (trigger === "delay") entry.unloadAt = now() + delayMs();' },

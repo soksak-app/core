@@ -280,6 +280,77 @@ static void checkReceipts(void) {
 - (void)rightMouseUp:(NSEvent *)event { self.rightUps++; }
 @end
 
+// A window that answers as the key window, because a move without a button goes only to the key window and make test does not
+// activate the application.
+@interface SPKeyAnswerWindow : NSWindow
+@end
+@implementation SPKeyAnswerWindow
+- (BOOL)isKeyWindow { return YES; }
+@end
+
+@interface SPTrackedView : NSView
+@property(nonatomic) NSUInteger moves;
+@property(nonatomic) NSUInteger enters;
+@property(nonatomic) NSUInteger exits;
+@property(nonatomic) NSUInteger downs;
+@property(nonatomic) NSUInteger movesAtDown;
+@end
+@implementation SPTrackedView
+- (void)track:(NSTrackingAreaOptions)options {
+    NSTrackingArea *area = [[[NSTrackingArea alloc] initWithRect:self.bounds options:options | NSTrackingActiveAlways
+        owner:self userInfo:nil] autorelease];
+    [self addTrackingArea:area];
+}
+- (void)mouseMoved:(NSEvent *)event { self.moves++; }
+- (void)mouseEntered:(NSEvent *)event { self.enters++; }
+- (void)mouseExited:(NSEvent *)event { self.exits++; }
+- (void)mouseDown:(NSEvent *)event { self.downs++; self.movesAtDown = self.moves; }
+@end
+
+// A person's move reaches the owner of every tracking area that holds the pointer, so a view under another view hears it too. The
+// move also crosses the enter and exit of each area.
+static void checkMoveReachesEveryOwner(void) {
+    NSWindow *window = [[SPKeyAnswerWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(300, 200))
+        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+    [window setReleasedWhenClosed:NO];
+    NSView *content = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 300, 200)] autorelease];
+    window.contentView = content;
+    const NSTrackingAreaOptions both = NSTrackingMouseEnteredAndExited | NSTrackingMouseMoved;
+    SPTrackedView *below = [[[SPTrackedView alloc] initWithFrame:content.bounds] autorelease];
+    SPTrackedView *above = [[[SPTrackedView alloc] initWithFrame:NSMakeRect(0, 0, 200, 200)] autorelease];
+    SPTrackedView *inner = [[[SPTrackedView alloc] initWithFrame:NSMakeRect(0, 0, 100, 100)] autorelease];
+    SPTrackedView *hidden = [[[SPTrackedView alloc] initWithFrame:content.bounds] autorelease];
+    SPTrackedView *quiet = [[[SPTrackedView alloc] initWithFrame:NSMakeRect(0, 0, 100, 100)] autorelease];
+    hidden.hidden = YES;
+    [content addSubview:below]; [content addSubview:quiet]; [content addSubview:above]; [above addSubview:inner]; [content addSubview:hidden];
+    [below track:NSTrackingMouseMoved | NSTrackingInVisibleRect];
+    [above track:both];
+    [inner track:both];
+    [hidden track:both];
+    [quiet track:NSTrackingMouseEnteredAndExited];
+    [window orderBack:nil];
+    pointerOutside(window);
+    check(sp_input_pointer(window, 50, 150, 0, 0, 0, 0) == SP_INPUT_DELIVERED, @"a move over overlapping owners is delivered");
+    check(below.moves == 1 && above.moves == 1 && inner.moves == 1, @"each owner of a tracking area at the point hears the move");
+    check(hidden.moves == 0 && hidden.enters == 0, @"the owner of a tracking area in a hidden view hears nothing");
+    check(quiet.moves == 0, @"an area without moves receives no move");
+    check(quiet.enters == 1 && above.enters == 1 && inner.enters == 1, @"a first move enters each area at the point");
+    check(sp_input_pointer(window, 60, 150, 0, 0, 0, 0) == SP_INPUT_DELIVERED && below.moves == 2 && inner.enters == 1,
+        @"a move inside an area enters it once");
+    check(sp_input_pointer(window, 150, 50, 0, 0, 0, 0) == SP_INPUT_DELIVERED && below.moves == 3 && above.moves == 3,
+        @"owners that still hold the point keep hearing the moves");
+    check(inner.moves == 2 && inner.exits == 1 && quiet.exits == 1, @"a move out of an area exits it and sends it no move");
+    check(above.exits == 0, @"an area that holds the point is not exited");
+
+    // A press at another point: a person moved there first, so the owners know the point before the press.
+    const NSUInteger before = below.moves;
+    check(sp_input_pointer(window, 50, 150, 1, 0, 0, 0) == SP_INPUT_DELIVERED, @"a press after a move elsewhere is delivered");
+    check(inner.downs == 1 && below.moves == before + 1 && inner.movesAtDown == 3, @"the owners hear the point of a press before the press");
+    check(sp_input_pointer(window, 50, 150, 3, 0, 0, 0) == SP_INPUT_DELIVERED, @"the release of that press is delivered");
+    [window close];
+    [window release];
+}
+
 static void checkPointerTargetAcrossViews(void) {
     NSWindow *window = [[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(240, 120))
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
@@ -433,6 +504,7 @@ int main(void) { @autoreleasepool {
     checkActivityWaitDelayedRegistration();
     checkActivityWaitRegistrationTimeout();
     checkPointerTargetAcrossViews();
+    checkMoveReachesEveryOwner();
     NSWindow *window = [[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(400, 300))
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
     [window setReleasedWhenClosed:NO];

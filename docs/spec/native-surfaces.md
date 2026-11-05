@@ -263,7 +263,7 @@ A native view is placed on the DOM: it draws the DOM element it is placed on and
 
 `surfaceFocus {surface}` of the host gives the keyboard of the window to a surface, and `surface: null` gives it to the workbench. All hosts reach the one implementation in `native/darwin` (`sp_surface_focus`, `sp_window_focus_workbench`). The rule of what holds the keyboard is in [exposure](exposure.md#the-keyboard-follows-the-focus-ring).
 
-- A first responder inside the surface stays. Otherwise the keyboard goes to the view of the surface that last held it, then to the first shown image region of the surface that takes the keyboard, then to the web view of the surface, or the main web view for a surface module of the main page.
+- A first responder inside the surface stays. Otherwise the keyboard goes to the view of the surface that last held it, then to the first shown image region of the surface that takes the keyboard, then to the web view of the surface, or the main web view for a surface module of the main page. A web view that took the keyboard on this last step counts as no view that held it, so a later call gives the keyboard to a region that shows by then.
 - A surface whose image region is not shown yet holds the keyboard in its web view, and the region takes it when it first shows. A region shows through the geometry of its element, so this needs no call of the page.
 - The call applies when the left mouse button rises, while it is down: a move of the first responder during a press would end the press, which would cancel a click and a drag of a tab or a divider. The last call of a press wins.
 - `surface: null` gives the keyboard to the main web view, and in a window without a main page to the first view of the content view that takes it.

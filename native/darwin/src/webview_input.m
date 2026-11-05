@@ -253,6 +253,11 @@ static NSEvent *routePointer(NSEvent *event) {
     return event;
 }
 
+void webviewInputRoutePointer(NSEvent *event) {
+    NSCAssert(NSThread.isMainThread, @"Webview pointer routing requires the main thread");
+    routePointer(event);
+}
+
 BOOL webviewInputRegister(WKWebView *view) {
     NSCAssert(NSThread.isMainThread, @"Webview input registration requires the main thread");
     if (![view respondsToSelector:@selector(_setIgnoresMouseMoveEvents:)]) {

@@ -103,6 +103,23 @@ int main(void) { @autoreleasepool {
     sp_surface_focus(terminalHost);
     check(window.firstResponder == terminalPage, "a closed region takes no keyboard");
 
+    // The page holds the keyboard only because no region showed. The keyboard goes to the workbench and comes back, as a press on
+    // a tab of the page does, and a region showed meanwhile: the region takes it, as nothing chose the page.
+    sp_window_focus_workbench(window);
+    void *later = sp_region_create(terminalHost, "later", regionEvent, NULL);
+    check(later != NULL, "the later image region of the surface is created");
+    placeRegion(later);
+    check(window.firstResponder == main, "a region that shows takes no keyboard from the workbench");
+    sp_surface_focus(terminalHost);
+    check(window.firstResponder == (NSResponder *)later, "a page that took the keyboard for want of a region does not keep it from a region");
+
+    // A page that a person chose keeps the keyboard across the same return.
+    check([window makeFirstResponder:terminalPage], "the page of the surface takes the keyboard from the later region");
+    sp_window_focus_workbench(window);
+    sp_surface_focus(terminalHost);
+    check(window.firstResponder == terminalPage, "a page that held the keyboard by a press takes it back");
+    sp_region_close(later);
+
     sp_window_end_responder_observation(observation);
     return failures ? 1 : 0;
 } }
