@@ -1787,8 +1787,7 @@ func (s *Surfaces) windowChanged() {
 	}
 	s.windowReads.ask("window-status", func() {
 		state, err := s.windowState()
-		var coded *RPCError
-		if errors.As(err, &coded) && coded.Code == codeNoWindow {
+		if WindowClosed(err) {
 			// A window that closed before the status was read has no status to announce.
 			return
 		}

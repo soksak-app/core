@@ -1,7 +1,6 @@
 package host
 
 import (
-	"errors"
 	"reflect"
 	"sync"
 
@@ -50,12 +49,7 @@ func (s *Surfaces) sendResponder(force bool) {
 		return s.ready
 	}
 	emit := func(event *responderEvent) { s.windowEvent("window-responder", event) }
-	// A read fails with 1003 when the window closed before it.
-	closed := func(err error) bool {
-		var coded *RPCError
-		return errors.As(err, &coded) && coded.Code == codeNoWindow
-	}
-	if err := s.responder.send(force, workbenchReady, read, emit, closed); err != nil {
+	if err := s.responder.send(force, workbenchReady, read, emit, WindowClosed); err != nil {
 		LogError("window responder", err)
 	}
 }

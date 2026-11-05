@@ -34,12 +34,14 @@ const installedDocument = `{"plugins": [
 type surfaceHost struct {
 	storedHost
 	// window is the state of the window that core.window.workbench reads.
-	window   workbench.WindowView
-	requests []map[string]any
-	placed   int
-	declared []string
-	replies  []map[string]any
-	hostName []string
+	window workbench.WindowView
+	// windowFailure is the error of each read of the state of the window.
+	windowFailure error
+	requests      []map[string]any
+	placed        int
+	declared      []string
+	replies       []map[string]any
+	hostName      []string
 	// clipboard is the text of the clipboard.
 	clipboard string
 	debug     debugHost
@@ -187,7 +189,7 @@ func surfaceShellOn(t testing.TB, document string, stored *surfaceHost) *shellFi
 		Reload:      func() { f.reloads++ },
 		Elements:    fixtureElements{f},
 		Tabs:        stored.tabs,
-		Window:      func() (workbench.WindowView, error) { return stored.window, nil },
+		Window:      func() (workbench.WindowView, error) { return stored.window, stored.windowFailure },
 	})
 	if err != nil {
 		t.Fatal(err)
