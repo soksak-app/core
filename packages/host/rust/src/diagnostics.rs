@@ -1035,6 +1035,29 @@ fn parse_drag_capture_options(
     })
 }
 
+/// Waits for placed and then for settled. placed comes first because only the window knows of a layout it
+/// has not placed: while one placement runs, the next waits in the window, and the host sees no run and no
+/// placement. Each wait ends at limit, so a window that does not answer fails the drag.
+fn last_layout_presented(
+    placed: impl FnOnce(Duration) -> Result<(), Failure>,
+    settled: impl FnOnce() -> Result<std::sync::mpsc::Receiver<()>, Failure>,
+    limit: Duration,
+) -> Result<(), Failure> {
+    placed(limit).map_err(|failure| {
+        Failure::new(
+            failure.code,
+            format!("the last placement of the drag: {}", failure.message),
+        )
+    })?;
+    if settled()?.recv_timeout(limit).is_err() {
+        return Err(Failure::new(
+            crate::endpoint::TIMED_OUT,
+            format!("the drag was not presented within {limit:?}"),
+        ));
+    }
+    Ok(())
+}
+
 /// Reads native, which makes the host deliver the drag as native pointer input instead of the page
 /// (docs/spec/endpoint.md), and removes it from the parameters of the page. It is false when absent.
 fn parse_drag_native(params: &mut Map<String, Value>) -> Result<bool, Failure> {
@@ -1287,13 +1310,14 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
         // Waits until the last placement is committed and presented. Waiting for one next presentation could end at a
         // presentation before the commit of the last step. The Wails host waits for the same point.
         let context = crate::windows::window_data(window).map_err(internal)?;
-        let settled = crate::surfaces::when_settled(&context.running).map_err(internal)?;
-        if settled.recv_timeout(TIMEOUT).is_err() {
-            return Err(Failure::new(
-                crate::endpoint::TIMED_OUT,
-                format!("the drag was not presented within {TIMEOUT:?}"),
-            ));
-        }
+        last_layout_presented(
+            |limit| {
+                host.page(window, "diagnostics.drag.placed", Map::new(), limit)
+                    .map(|_| ())
+            },
+            || crate::surfaces::when_settled(&context.running).map_err(internal),
+            TIMEOUT,
+        )?;
         exposure::note(window, "diagnostics: drag presented");
         let mut merged = match result {
             Value::Object(fields) => fields,

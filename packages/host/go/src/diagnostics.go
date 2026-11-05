@@ -598,7 +598,7 @@ func pageDrag(h *Host, s *Surfaces, plan dragPlan, ticks int, sent func()) (map[
 		return nil
 	})
 	close(stop)
-	return dragResult(s, reply)
+	return dragResult(h, s, reply)
 }
 
 // dragStepCallback is the callback through which a step of a native drag reaches the view of a window.
@@ -676,7 +676,7 @@ func nativeDragPresented(h *Host, s *Surfaces, plan dragPlan, from point, sent f
 	if err != nil {
 		return nil, err
 	}
-	if err := dragPresented(s); err != nil {
+	if err := dragPresented(h, s); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -700,11 +700,11 @@ func layoutTrace(records [][5]float64) []map[string]any {
 }
 
 // dragResult checks the drag reply of the page, waits until the last layout is displayed, and returns the result.
-func dragResult(s *Surfaces, reply ExposureResult) (map[string]any, error) {
+func dragResult(h *Host, s *Surfaces, reply ExposureResult) (map[string]any, error) {
 	if reply.Error != nil {
 		return nil, reply.Error
 	}
-	if err := dragPresented(s); err != nil {
+	if err := dragPresented(h, s); err != nil {
 		return nil, err
 	}
 	result := map[string]any{}
@@ -717,13 +717,30 @@ func dragResult(s *Surfaces, reply ExposureResult) (map[string]any, error) {
 }
 
 // dragPresented waits until the last layout of a drag is displayed.
-func dragPresented(s *Surfaces) error {
-	select {
-	case <-s.whenSettled():
-	case <-time.After(pageTimeout):
-		return rpcError(codeTimeout, "the drag was not presented within %s", pageTimeout)
+func dragPresented(h *Host, s *Surfaces) error {
+	err := lastLayoutPresented(func(limit time.Duration) error {
+		_, err := h.ask(s, "diagnostics.drag.placed", nil, limit)
+		return err
+	}, s.whenSettled, pageTimeout)
+	if err != nil {
+		return err
 	}
 	s.note("diagnostics: drag presented")
+	return nil
+}
+
+// lastLayoutPresented waits for placed and then for settled. placed comes first because only the window knows of a layout it
+// has not placed: while one placement runs, the next waits in the window, and the host sees no run and no placement. Each wait
+// ends at limit, so a window that does not answer fails the drag.
+func lastLayoutPresented(placed func(limit time.Duration) error, settled func() <-chan struct{}, limit time.Duration) error {
+	if err := placed(limit); err != nil {
+		return fmt.Errorf("the last placement of the drag: %w", err)
+	}
+	select {
+	case <-settled():
+	case <-time.After(limit):
+		return rpcError(codeTimeout, "the drag was not presented within %s", limit)
+	}
 	return nil
 }
 

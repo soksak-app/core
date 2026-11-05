@@ -586,3 +586,62 @@ fn native_drag_delivers_the_press_the_steps_and_the_release_of_each_round_trip()
     );
     assert_eq!(*phases.borrow(), [1, 2, 3], "down, drag and the release up");
 }
+
+// contract: diagnostics.drag.waits-for-the-last-placement
+#[test]
+fn a_drag_asks_the_window_for_its_last_placement_before_it_waits_for_the_run() {
+    let order = RefCell::new(Vec::new());
+    let settled = || {
+        order.borrow_mut().push("settled");
+        let (tx, rx) = mpsc::channel();
+        tx.send(()).unwrap();
+        Ok(rx)
+    };
+    last_layout_presented(
+        |_| {
+            order.borrow_mut().push("placed");
+            Ok(())
+        },
+        settled,
+        Duration::from_secs(1),
+    )
+    .unwrap();
+    assert_eq!(*order.borrow(), ["placed", "settled"]);
+
+    order.borrow_mut().clear();
+    let failure = last_layout_presented(
+        |_| Err(internal("surface presentation failed")),
+        settled,
+        Duration::from_secs(1),
+    )
+    .unwrap_err();
+    assert!(failure.message.contains("surface presentation failed"));
+    assert!(order.borrow().is_empty(), "a failed placement went on");
+}
+
+// contract: diagnostics.drag.waits-for-the-last-placement
+#[test]
+fn a_drag_fails_when_the_window_does_not_answer_its_last_placement() {
+    let limit = Duration::from_millis(20);
+    let relay = crate::exposure::Relay::default();
+    let asked = Cell::new(Duration::ZERO);
+    let failure = last_layout_presented(
+        |within| {
+            asked.set(within);
+            // The window takes the request and answers nothing.
+            relay
+                .request("window", Some(within), |_| Ok(()))
+                .map(|_| ())
+        },
+        || panic!("the drag went on without the answer of the window"),
+        limit,
+    )
+    .unwrap_err();
+    assert_eq!(asked.get(), limit);
+    assert_eq!(failure.code, crate::endpoint::TIMED_OUT);
+    assert!(
+        failure.message.contains("the last placement of the drag"),
+        "{}",
+        failure.message
+    );
+}
