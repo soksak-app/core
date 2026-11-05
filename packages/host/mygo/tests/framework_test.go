@@ -454,13 +454,10 @@ func TestMaximizeAndItsState(t *testing.T) {
 // contract: application.framework.window-events-are-port-events
 func TestEachWindowEventOfTheFrontendIsAnEventOfMygo(t *testing.T) {
 	_, _, window := open(t, "sources")
-	for _, event := range []host.WindowEvent{host.WindowResize, host.WindowMove, host.WindowFocus, host.WindowFocusLost, host.WindowShow, host.WindowHide} {
+	for _, event := range []host.WindowEvent{host.WindowResize, host.WindowMove, host.WindowFocus, host.WindowFocusLost, host.WindowShow, host.WindowHide, host.WindowScaleChanged} {
 		if !adapter.WindowEventSource(window.Window(), event, func() {}) {
 			t.Errorf("the window event %d has no event of mygo", event)
 		}
-	}
-	if adapter.WindowEventSource(window.Window(), host.WindowScaleChanged, func() {}) {
-		t.Error("the change of the backing scale has an event of mygo, and mygo has none")
 	}
 	for _, event := range []host.WindowEvent{host.WindowWorkbenchEnded, host.WindowWorkbenchCommitted} {
 		if adapter.WindowEventSource(window.Window(), event, func() {}) {

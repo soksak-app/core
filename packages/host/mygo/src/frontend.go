@@ -265,6 +265,9 @@ func WindowEventSource(window *mygo.Window, event host.WindowEvent, listener fun
 		host.WindowFocusLost: window.OnBlur,
 		host.WindowShow:      window.OnShow,
 		host.WindowHide:      window.OnHide,
+		host.WindowScaleChanged: func(listener func()) func() {
+			return window.OnScaleChange(func(float64) { listener() })
+		},
 	}
 	source, ok := sources[event]
 	if ok {

@@ -8,6 +8,7 @@
 #import <CoreVideo/CoreVideo.h>
 #import "image_region.h"
 #import "webview_geometry.h"
+#import "window_facts.h"
 #import "support/scaled_window.h"
 
 static int failures = 0;
@@ -63,12 +64,11 @@ int main(int argc, char **argv) { @autoreleasepool {
     window.contentView = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 500, 400)] autorelease];
     WKWebView *main = [[[WKWebView alloc] initWithFrame:window.contentView.bounds] autorelease];
     [window.contentView addSubview:main];
-    WKWebView *surface = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 500, 400)] autorelease];
-    [window.contentView addSubview:surface];
     [window orderBack:nil];
-    check(sp_surface_create(main) != NULL, @"the main webview creates the composition");
-    webviewAttachSurface(surface, main);
+    void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
+    check(surface != NULL, @"the main webview creates the composition");
     webviewSetFrame(surface, 0, 0, 500, 400);
+    webviewSetSurfaceHidden(surface, false);
 
     void *region = sp_region_create(surface, "scale", ignoreEvent, NULL);
     sp_region_place(region, 10, 20, 120, 80, true);

@@ -64,3 +64,25 @@ fn a_window_event_is_recorded_as_an_event() {
     .collect();
     assert_eq!(seen, want);
 }
+
+// contract: application.window.scale-change-refreshes-rasters
+#[test]
+fn a_change_of_the_backing_scale_refreshes_the_rasters_of_the_window() {
+    let run = |event: &soksak_host::framework::WindowEvent| {
+        let (changed, refreshed) = (std::cell::Cell::new(false), std::cell::Cell::new(false));
+        soksak_host::windows::placement_changed(
+            event,
+            || changed.set(true),
+            || refreshed.set(true),
+        );
+        (changed.get(), refreshed.get())
+    };
+    assert_eq!(
+        run(&soksak_host::framework::WindowEvent::ScaleFactorChanged),
+        (true, true)
+    );
+    assert_eq!(
+        run(&soksak_host::framework::WindowEvent::Moved),
+        (true, false)
+    );
+}
