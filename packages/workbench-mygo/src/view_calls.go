@@ -890,9 +890,6 @@ func (s *Shell) viewTextSize(surface string, view *viewState) (float64, error) {
 	if view.scale != 0 {
 		return view.scale, nil
 	}
-	if held := s.surfaces.held[surface]; held != nil && held.cardFactor != 0 {
-		return s.text.Frame() * held.cardFactor, nil
-	}
 	if size, stored := s.storedTextSize(surface); stored {
 		return size, nil
 	}
