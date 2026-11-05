@@ -23,6 +23,11 @@ sp_input_result sp_input_pointer(void *window, double x, double y, int phase, in
 // second press of a person's double click a count of 2, and WebKit makes the dblclick event from that count. Another count is rejected.
 sp_input_result sp_input_pointer_clicks(void *window, double x, double y, int phase, int button, int clicks);
 
+// The mask of the buttons that a person holds. While a synthetic press is open, +[NSEvent pressedMouseButtons] also has
+// the button of that press, because WebKit reads the buttons of a page event from there. Native code that decides by what
+// a person holds reads this function. Before the first delivered press the two values are the same value of AppKit.
+unsigned long sp_input_physical_buttons(void);
+
 // State measured in the same turn that rejected the input with SP_INPUT_BUTTON_HELD. This state alone does not
 // identify the cause, so the rejection is reported for the receiver to find the cause.
 typedef struct {

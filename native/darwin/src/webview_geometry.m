@@ -1,6 +1,7 @@
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
 #import <objc/runtime.h>
+#import "input_inject.h"
 #import "application_log.h"
 #import "input_press_context.h"
 #import "webview_geometry.h"
@@ -34,7 +35,7 @@ static NSView *domHit(WKWebView *web, NSView *from, NSPoint point) {
 // of the document under the pointer in root. It is not passed while a button is pressed, because that is a drag.
 static void sendPointerMove(NSView *root) {
     NSWindow *window = root.window;
-    if (!window || NSEvent.pressedMouseButtons != 0) return;
+    if (!window || sp_input_physical_buttons() != 0) return;
     NSPoint location = window.mouseLocationOutsideOfEventStream;
     NSView *hit = [root hitTest:[root.superview convertPoint:location fromView:nil]];
     while (hit && ![hit isKindOfClass:WKWebView.class]) hit = hit.superview;
@@ -501,7 +502,7 @@ void *sp_surface_native_plane(void *handle) {
 // The left press of the window that is open: a physical press that AppKit reports, or a diagnostic press of sp_input_pointer.
 static BOOL leftPressOpen(NSWindow *window) {
     uint64_t token = 0;
-    return (NSEvent.pressedMouseButtons & 1) != 0 || sp_input_press_origin_point(window, 0, NULL, NULL, &token);
+    return (sp_input_physical_buttons() & 1) != 0 || sp_input_press_origin_point(window, 0, NULL, NULL, &token);
 }
 
 static char keyboardPendingKey, keyboardMonitorKey;
@@ -529,7 +530,7 @@ static void giveKeyboardAfterPress(NSWindow *window, void (^give)(void)) {
         return;
     }
     objc_setAssociatedObject(window, &keyboardPendingKey, give, OBJC_ASSOCIATION_COPY);
-    if ((NSEvent.pressedMouseButtons & 1) == 0 || objc_getAssociatedObject(window, &keyboardMonitorKey)) return;
+    if ((sp_input_physical_buttons() & 1) == 0 || objc_getAssociatedObject(window, &keyboardMonitorKey)) return;
     id monitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseUp handler:^NSEvent *(NSEvent *event) {
         // It runs after AppKit delivered this release to the view.
         dispatch_async(dispatch_get_main_queue(), ^{ sp_surface_press_released(window); });

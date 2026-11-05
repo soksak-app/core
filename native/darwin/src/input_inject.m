@@ -14,6 +14,7 @@
 #import <Cocoa/Cocoa.h>
 #import <Carbon/Carbon.h>
 #import <objc/runtime.h>
+#include <stdatomic.h>
 #import "input_inject.h"
 #import "input_activity_wait.h"
 #import "input_press_context.h"
@@ -127,6 +128,64 @@ static char leftPressedViewKey, rightPressedViewKey;
 static const void *pressedViewKey(int button) {
     return button == 1 ? &rightPressedViewKey : &leftPressedViewKey;
 }
+// The buttons of open synthetic presses, by button. They are written on the main thread and read on any thread.
+static _Atomic unsigned syntheticPresses[2];
+static NSUInteger (*appKitPressedButtons)(id, SEL);
+
+// WebKit makes the buttons of a page event from +[NSEvent pressedMouseButtons], not from the event, and an event delivered
+// to a view does not change that value. It is replaced at the first delivered press, so an application that receives only
+// a person's input keeps the implementation of AppKit. It adds the buttons of open synthetic presses to the value of AppKit.
+static NSUInteger pressedButtonsWithSynthetic(id self, SEL selector) {
+    NSUInteger buttons = appKitPressedButtons(self, selector);
+    if (atomic_load(&syntheticPresses[0]) > 0) buttons |= 1;
+    if (atomic_load(&syntheticPresses[1]) > 0) buttons |= 2;
+    return buttons;
+}
+
+static void showSyntheticButtons(void) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        Method method = class_getClassMethod(NSEvent.class, @selector(pressedMouseButtons));
+        NSUInteger (*appKit)(id, SEL) = (NSUInteger (*)(id, SEL))method_getImplementation(method);
+        appKitPressedButtons = appKit;
+        method_setImplementation(method, (IMP)pressedButtonsWithSynthetic);
+    });
+}
+
+unsigned long sp_input_physical_buttons(void) {
+    return appKitPressedButtons ? appKitPressedButtons(NSEvent.class, @selector(pressedMouseButtons)) : NSEvent.pressedMouseButtons;
+}
+
+// One synthetic button that the page sees as pressed. The window holds it, so a window that goes away with an open press
+// does not leave the button pressed.
+@interface SPSyntheticButton : NSObject
+@property(nonatomic) int button;
+@end
+@implementation SPSyntheticButton
+- (void)dealloc {
+    atomic_fetch_sub(&syntheticPresses[self.button], 1);
+    [super dealloc];
+}
+@end
+
+static char leftSyntheticButtonKey, rightSyntheticButtonKey;
+static const void *syntheticButtonKey(int button) {
+    return button == 1 ? &rightSyntheticButtonKey : &leftSyntheticButtonKey;
+}
+
+static void syntheticButtonPress(NSWindow *window, int button) {
+    showSyntheticButtons();
+    SPSyntheticButton *held = [[SPSyntheticButton alloc] init];
+    held.button = button;
+    atomic_fetch_add(&syntheticPresses[button], 1);
+    objc_setAssociatedObject(window, syntheticButtonKey(button), held, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [held release];
+}
+
+static void syntheticButtonRelease(NSWindow *window, int button) {
+    objc_setAssociatedObject(window, syntheticButtonKey(button), nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
 static NSView *pointerTarget(NSWindow *window, NSPoint point, int phase, int button) {
     return phase == 2 || phase == 3 ? objc_getAssociatedObject(window, pressedViewKey(button)) : hitView(window, point);
 }
@@ -200,6 +259,7 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
     if (!hit) { held->why = phase == 2 || phase == 3 ? "no open press for the drag or release" : "no view at the point"; return SP_INPUT_REJECTED; }
     if (hit.window != window) {
         objc_setAssociatedObject(window, pressedViewKey(button), nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        syntheticButtonRelease(window, button);
         uint64_t token = 0;
         if (sp_input_press_origin_point(window, button, NULL, NULL, &token)) {
             sp_input_press_origin_clear(window, button, token);
@@ -211,7 +271,7 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
     // While AppKit reports a pressed button, WebKit can handle a press and a release as pointermove instead of pointerdown
     // or pointerup, so they are not delivered and the rejection is reported. This state alone does not identify the cause
     // of the button state, so the mask and the frontmost application are measured in the same rejected turn and reported together.
-    NSUInteger buttons = NSEvent.pressedMouseButtons;
+    NSUInteger buttons = sp_input_physical_buttons();
     if ((phase == 1 || phase == 3) && buttons != 0) {
         held->buttons = buttons;
         held->front = [NSWorkspace.sharedWorkspace.frontmostApplication retain];
@@ -229,6 +289,7 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
             if (objc_getAssociatedObject(window, pressedViewKey(button))) { held->why = "a press of this button is still open"; return SP_INPUT_PRESS_OPEN; }
             objc_setAssociatedObject(window, pressedViewKey(button), hit, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             sp_input_press_origin_set(window, button, point.x, point.y);
+            syntheticButtonPress(window, button);
             // -[NSApplication sendEvent:] is not used because it fails to deliver a synthetic first click to an inactive
             // window. The explicit context lets click-through native regions classify the synchronous responder change
             // without changing NSApp.currentEvent.
@@ -256,6 +317,7 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
                     if (right) [hit rightMouseDragged:mouseEvent(window, NSEventTypeRightMouseDragged, point, 0, 1)];
                     else [hit mouseDragged:mouseEvent(window, NSEventTypeLeftMouseDragged, point, 0, 1)];
                 } else {
+                    syntheticButtonRelease(window, button);
                     if (right) [hit rightMouseUp:mouseEvent(window, NSEventTypeRightMouseUp, point, clicks, 0)];
                     else [hit mouseUp:mouseEvent(window, NSEventTypeLeftMouseUp, point, clicks, 0)];
                 }

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F502-30: `input.pointer` press가 열려 있는 동안 페이지는 event의 `buttons`에서 그 버튼을 본다. `buttons === 0`에서 drag를 끝내는 페이지는 주입한 drag를 사람의 drag처럼 따른다.
 - F502-29: `input.pointer`는 `down`과 `up`에서 event의 click count인 `clicks`를 1부터 3까지 받는다. 모든 호스트, `sok input pointer --clicks`, MCP 도구에서 double click을 실제 press 두 번으로 보낸다. `input.pointer`는 정의하지 않은 field에 -32602를 반환한다.
 - F502-28: 창의 키보드가 모든 호스트에서 focus ring을 따른다. 새 탭, 탭 press, `core.card.focus`, 프로젝트 열기 직후에 입력한 글자가 ring이 있는 card의 active surface에 닿는다.
 - F502-21: mygo workbench가 modal을 native UI로 그린다: 설정 창, 추가·분할·도구·탭·context menu를 가진 picker layer, 수정된 tab에 대한 질문. `core.card.close`, `core.tab.close`, `core.space.close`는 사람의 답 없이 수정된 tab을 닫지 않고, plugin과 그 setting은 설치된 plugin 문서에서 온다. 설정 `left`, `right`는 고정 창 sidebar를 plane에 넣고 뺀다.

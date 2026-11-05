@@ -2,6 +2,7 @@
 //
 // The window is an ordinary NSWindow and does not imitate the key window state. This is the same condition as a real application window.
 #import <Cocoa/Cocoa.h>
+#import <objc/runtime.h>
 #import "input_inject.h"
 #import "input_activity_wait.h"
 #import "support/records.h"
@@ -420,7 +421,87 @@ static void checkClickCount(void) {
     [window close];
 }
 
+// A page reads the pressed buttons of a gesture from the event. WebKit takes them from +[NSEvent pressedMouseButtons], so
+// a press delivered to the view must be visible there for the page to see a person's drag. focused delivers through the
+// input method of a focused field, which passes the event to WebKit later.
+static void checkButtonsReachPage(BOOL focused) {
+    NSWindow *window = [[[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(300, 200))
+        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO] autorelease];
+    [window setReleasedWhenClosed:NO];
+    WKWebView *view = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 300, 200)] autorelease];
+    window.contentView = view;
+    [view loadHTMLString:@"<!doctype html><body style='margin:0;height:200px'><input id=field style='position:absolute;left:0;top:150px'><script>window.seen={};"
+        "for (const type of ['pointerdown','mousedown','pointermove','mousemove','pointerup','mouseup'])"
+        "addEventListener(type,e=>{(seen[type]=seen[type]||[]).push(e.buttons)},true);window.ready=true;</script>" baseURL:nil];
+    until(^BOOL { return [evaluate(view, @"Boolean(window.ready)") boolValue]; });
+    [window orderBack:nil];
+    pointerOutside(window);
+    if (focused) {
+        check(sp_input_pointer(window, 20, 160, 1, 0, 0, 0) == SP_INPUT_DELIVERED && sp_input_pointer(window, 20, 160, 3, 0, 0, 0) == SP_INPUT_DELIVERED,
+            @"a press focuses the field");
+        drain(view);
+        until(^BOOL { return [evaluate(view, @"document.activeElement.id") isEqual:@"field"]; });
+        evaluate(view, @"seen={}; null");
+    }
+    NSString *mode = focused ? @"with a focused field" : @"without a focused field";
+    // The input method of a focused field passes each event to WebKit later, so the next step waits for the page like a person's hand.
+    check(sp_input_pointer(window, 50, 50, 1, 0, 0, 0) == SP_INPUT_DELIVERED, @"the press of a drag is delivered");
+    until(^BOOL { return [evaluate(view, @"(seen.mousedown||[]).length") unsignedIntegerValue] > 0; });
+    check((NSEvent.pressedMouseButtons & 1) != 0 && sp_input_physical_buttons() == 0,
+        @"an open press is in the mask of AppKit that WebKit reads and not in the mask of a person");
+    check(sp_input_pointer(window, 90, 50, 2, 0, 0, 0) == SP_INPUT_DELIVERED, @"the drag is delivered");
+    until(^BOOL { return [evaluate(view, @"(seen.mousemove||[]).length") unsignedIntegerValue] > 0; });
+    check(sp_input_pointer(window, 90, 50, 3, 0, 0, 0) == SP_INPUT_DELIVERED, @"the release of a drag is delivered");
+    check(NSEvent.pressedMouseButtons == sp_input_physical_buttons(), @"a release takes the button out of the mask");
+    until(^BOOL { return [evaluate(view, @"(seen.mouseup||[]).length") unsignedIntegerValue] > 0; });
+    NSString *seen = evaluate(view, @"JSON.stringify(seen)");
+    fprintf(stdout, "measured %s: mask after the release %lu, page %s\n", mode.UTF8String, (unsigned long)NSEvent.pressedMouseButtons, seen.UTF8String);
+    NSDictionary *events = [NSJSONSerialization JSONObjectWithData:[seen dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
+    for (NSString *type in @[@"pointerdown", @"mousedown", @"pointermove", @"mousemove"]) {
+        check([[events[type] lastObject] integerValue] == 1,
+            [NSString stringWithFormat:@"%@: %@ has the left button in e.buttons (got %@)", mode, type, events[type]]);
+    }
+    for (NSString *type in @[@"pointerup", @"mouseup"]) {
+        check([[events[type] lastObject] integerValue] == 0,
+            [NSString stringWithFormat:@"%@: %@ has no button in e.buttons (got %@)", mode, type, events[type]]);
+    }
+    [window close];
+}
+
+static IMP pressedButtonsImplementation(void) {
+    return method_getImplementation(class_getClassMethod(NSEvent.class, @selector(pressedMouseButtons)));
+}
+
+// A right press has its own bit, two windows hold their presses apart, and a window that goes away ends its press.
+static void checkButtonsByWindow(void) {
+    NSWindow *first = [[[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(200, 100))
+        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO] autorelease];
+    [first setReleasedWhenClosed:NO];
+    first.contentView = [[[SPPointerTarget alloc] initWithFrame:NSMakeRect(0, 0, 200, 100)] autorelease];
+    NSWindow *second = nil;
+    check(sp_input_pointer(first, 20, 20, 1, 1, 0, 0) == SP_INPUT_DELIVERED && NSEvent.pressedMouseButtons == 2,
+        @"a right press has the bit of the right button");
+    @autoreleasepool {
+        second = [[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(200, 100))
+            styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+        [second setReleasedWhenClosed:NO];
+        second.contentView = [[[SPPointerTarget alloc] initWithFrame:NSMakeRect(0, 0, 200, 100)] autorelease];
+        check(sp_input_pointer(second, 20, 20, 1, 1, 0, 0) == SP_INPUT_DELIVERED && sp_input_pointer(second, 20, 20, 1, 0, 0, 0) == SP_INPUT_DELIVERED
+            && NSEvent.pressedMouseButtons == 3, @"presses of two windows add up");
+        check(sp_input_pointer(second, 20, 20, 3, 1, 0, 0) == SP_INPUT_DELIVERED && NSEvent.pressedMouseButtons == 3,
+            @"a release in one window keeps the right press of the other window");
+        [second release];
+    }
+    until(^BOOL { return NSEvent.pressedMouseButtons == 2; });
+    check(NSEvent.pressedMouseButtons == 2, @"a window that goes away ends its open press");
+    check(sp_input_pointer(first, 20, 20, 3, 1, 0, 0) == SP_INPUT_DELIVERED && NSEvent.pressedMouseButtons == 0,
+        @"the last release leaves no button");
+}
+
 int main(void) { @autoreleasepool {
+    IMP appKitButtons = pressedButtonsImplementation();
+    check(sp_input_pointer(NULL, 0, 0, 1, 0, 0, 0) == SP_INPUT_REJECTED && pressedButtonsImplementation() == appKitButtons,
+        @"a press that is not delivered leaves the buttons to AppKit");
     // The records that this test reads include events below the level error, which the default policy refuses (docs/spec/logging.md#policy):
     // the policy that stores every level is set here, and the default policy is tested in event_ring_test.
     const int8_t everything[SP_CLASS_COUNT] = {SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE};
@@ -433,6 +514,7 @@ int main(void) { @autoreleasepool {
     checkActivityWaitDelayedRegistration();
     checkActivityWaitRegistrationTimeout();
     checkPointerTargetAcrossViews();
+    check(pressedButtonsImplementation() != appKitButtons, @"a delivered press shows its button to WebKit");
     NSWindow *window = [[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(400, 300))
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
     [window setReleasedWhenClosed:NO];
@@ -580,5 +662,8 @@ int main(void) { @autoreleasepool {
     checkIndependentWindowKeys();
     checkReceipts();
     checkClickCount();
+    checkButtonsReachPage(NO);
+    checkButtonsReachPage(YES);
+    checkButtonsByWindow();
     return failures ? 1 : 0;
 }}
