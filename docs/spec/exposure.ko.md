@@ -134,8 +134,6 @@ status `core.focus`는 창의 first responder를 가진 문서에서 키보드 �
 
 mygo host에서는 워크벤치의 step이 native window가 닫힌 뒤에 실행될 수 있다. 그런 step의 `core.verify`와 `core.window.workbench` read는 native code를 부르지 않고 워크벤치 오류도 표시하지 않는다. 그 밖의 read 실패는 `core.workbench.error`로 표시한다.
 
-mygo host에서는 워크벤치의 step이 native window가 닫힌 뒤에 실행될 수 있다. 그런 step의 `core.verify`와 `core.window.workbench` read는 native code를 부르지 않고 워크벤치 오류도 표시하지 않는다. 그 밖의 read 실패는 `core.workbench.error`로 표시한다.
-
 `host.window.reload`는 창의 워크벤치를 다시 시작하고, `plugins-changed`를 받거나 `core.plugins.apply`를 실행한 창도 같은 방식으로 다시 시작한다([설치](installation.ko.md#변경-적용)). 워크벤치의 새 시작을 기다리는 window check와 측정 대상은 새 page process가 아니라 `core.window.workbench`의 새 `start`를 기다린다.
 
 ## 등록
