@@ -14,6 +14,7 @@
 - F571: The judge of B3 prints `not measured` for a value that a host records in no run, and `make app-usage` prints the counters that every window reports null and an idle wait that read no frame.
 - F457: Each start of a run on the mygo workbench pushes `run-start` to each view, and a run always ends on a settled placement, so the host also ends it when the release of a drag moved nothing.
 - F556: The HWP startup window check fails when the document requests an address outside `soksak://`. Red: its owner case failed. Green: it passes.
+- F502-23: `diagnostics.drag` on the mygo host delivers its gesture through `sp_input_pointer`, so a drag reaches the divider as a person's drag does; `handled` is the time from the entry of each step to the return of its callback.
 - F502-23: In the layouts of a recording on the mygo host, `requested` is the time at which the workbench asked for the frame of the transaction and `presented` the time at which that frame presented.
 - F502-23: `make host-test-mygo` runs the host contract on the mygo host: the Go language host library and the mygo adapter, and the Go `sok` with its three tag sets. A case of the scope `wailsv3, mygo only` declares the Go code that both Go hosts run, and the cases of the main page state their behavior over the workbench or take the scope `wailsv3, tauriv2 only`.
 - F502-23: `diagnostics.gc.loop` `{on}` of the Go hosts runs `runtime.GC` without pause on a goroutine, or stops it and answers after the goroutine has returned.

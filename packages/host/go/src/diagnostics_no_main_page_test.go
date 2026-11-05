@@ -4,6 +4,9 @@ package host
 
 import (
 	"encoding/json"
+	"errors"
+	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -80,5 +83,102 @@ func TestAFrameworkWithAMainPageReachesTheModalMethod(t *testing.T) {
 	err := answerOf(t, e, "diagnostics.modal.held", `{"window":"window-a"}`)
 	if err == nil || err.Error() != "modal content answers are not held in this window" {
 		t.Fatalf("diagnostics.modal.held answered %v", err)
+	}
+}
+
+// fakeDragWorkbench answers the record of a drag and writes down what it was asked.
+type fakeDragWorkbench struct {
+	asked  []string
+	params []any
+	record string
+}
+
+func (f *fakeDragWorkbench) ask(method string, params any) (json.RawMessage, error) {
+	f.asked = append(f.asked, method)
+	f.params = append(f.params, params)
+	if method == "diagnostics.drag.end" {
+		return json.RawMessage(f.record), nil
+	}
+	return json.RawMessage("null"), nil
+}
+
+// contract: diagnostics.drag.no-main-page-delivers-native
+func TestADragOfAWindowWithoutAMainPageDeliversNativeInputAndReadsTheWorkbench(t *testing.T) {
+	plan := dragPlan{Axis: "x", Line: 2, DX: -30, MS: 16, Times: 1}
+	workbench := &fakeDragWorkbench{record: `{"boundary":[100,70,100]}`}
+	var hear func(StepRecord)
+	ended := false
+	result, err := workbenchDrag(plan, workbench.ask, func(report func(StepRecord)) func() {
+		hear = report
+		return func() { ended = true }
+	}, func() (map[string]any, error) {
+		if !reflect.DeepEqual(workbench.asked, []string{"diagnostics.drag"}) {
+			t.Fatalf("the delivery began after %v", workbench.asked)
+		}
+		hear(StepRecord{Kind: "selector", Callback: "mouseDown:", Entry: 0, Return: 9_000_000})
+		hear(StepRecord{Kind: "selector", Callback: "mouseDragged:", Entry: 1_000_000, Return: 3_500_000})
+		hear(StepRecord{Kind: "block", Callback: "frame", Entry: 0, Return: 9_000_000})
+		hear(StepRecord{Kind: "selector", Callback: "mouseDragged:", Entry: 5_000_000, Return: 6_000_000})
+		return map[string]any{"steps": 2}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ended {
+		t.Fatal("the listener of the steps did not end")
+	}
+	if !reflect.DeepEqual(workbench.asked, []string{"diagnostics.drag", "diagnostics.drag.end"}) {
+		t.Fatalf("the workbench was asked %v", workbench.asked)
+	}
+	if want := map[string]any{"axis": plan.Axis, "line": plan.Line}; !reflect.DeepEqual(workbench.params[0], want) {
+		t.Fatalf("the workbench was asked for %v, want %v", workbench.params[0], want)
+	}
+	if !reflect.DeepEqual(result["boundary"], []float64{100, 70, 100}) {
+		t.Fatalf("boundary = %v", result["boundary"])
+	}
+	if !reflect.DeepEqual(result["handled"], []float64{2.5, 1}) {
+		t.Fatalf("handled = %v", result["handled"])
+	}
+	if result["steps"] != 2 {
+		t.Fatalf("the reply lost the steps of the delivery: %v", result)
+	}
+}
+
+// contract: diagnostics.drag.no-main-page-delivers-native
+func TestAFailedDragOfAWindowWithoutAMainPageEndsTheRecordOfTheWorkbench(t *testing.T) {
+	plan := dragPlan{Axis: "x", Line: 2, DX: -30, MS: 16, Times: 1}
+	workbench := &fakeDragWorkbench{record: `{"boundary":[100]}`}
+	failure := errors.New("native drag step 1: no input")
+	_, err := workbenchDrag(plan, workbench.ask, func(func(StepRecord)) func() { return func() {} },
+		func() (map[string]any, error) { return nil, failure })
+	if !errors.Is(err, failure) {
+		t.Fatalf("the drag failed with %v", err)
+	}
+	if !reflect.DeepEqual(workbench.asked, []string{"diagnostics.drag", "diagnostics.drag.end"}) {
+		t.Fatalf("the workbench was asked %v", workbench.asked)
+	}
+}
+
+// contract: diagnostics.drag.no-main-page-delivers-native
+func TestADragThatRecordedFewerStepsThanItDeliveredFails(t *testing.T) {
+	plan := dragPlan{Axis: "x", Line: 2, DX: -30, MS: 16, Times: 1}
+	for name, steps := range map[string][]StepRecord{
+		"no callback":  {},
+		"one callback": {{Callback: "mouseDragged:"}},
+	} {
+		workbench := &fakeDragWorkbench{record: `{"boundary":[100,70,100]}`}
+		var hear func(StepRecord)
+		_, err := workbenchDrag(plan, workbench.ask, func(report func(StepRecord)) func() {
+			hear = report
+			return func() {}
+		}, func() (map[string]any, error) {
+			for _, step := range steps {
+				hear(step)
+			}
+			return map[string]any{"steps": 2}, nil
+		})
+		if err == nil || !strings.HasPrefix(err.Error(), "the drag delivered 2 steps and recorded") {
+			t.Fatalf("%s: the drag answered %v", name, err)
+		}
 	}
 }

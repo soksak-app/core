@@ -138,7 +138,7 @@ Layout timeline replies have a capacity of 4096 transactions. When the actual re
 
 The host writes large data, such as captures, to files under `<config-dir>/logs/captures`, and the reply contains the file paths. The requester removes the capture files after measurement.
 
-Without `native`, `diagnostics.drag` drives the page's existing surface-input route with host-timed steps. Its native recording measures composition during that gesture; it does not establish OS mouse-button delivery. A composition check must also measure actual card movement and every requested round trip. Native pointer delivery is a separate `input.pointer` check, and `diagnostics.drag` with `native: true` delivers the gesture as native pointer input.
+Without `native`, `diagnostics.drag` drives the page's existing surface-input route with host-timed steps. Its native recording measures composition during that gesture; it does not establish OS mouse-button delivery. A composition check must also measure actual card movement and every requested round trip. Native pointer delivery is a separate `input.pointer` check, and `diagnostics.drag` with `native: true` delivers the gesture as native pointer input. The mygo host has no page and always delivers it so, through `sp_input_pointer`, without activating the window or the application; each input reaches the mygo surface view as a nested step of the step that delivers it. Its reply holds `from`, `steps`, `took` and `asked` of the gesture, `boundary` from the workbench, and `handled` as the milliseconds from the entry of each step to the return of its callback.
 
 ## Clients
 

@@ -486,6 +486,8 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 	if err != nil {
 		return nil, err
 	}
+	// A window without a main page has only native input to drag with.
+	native = native || !framework.MainPage()
 	// With native, the page answers the point of the boundary, and the host delivers the drag as native input there.
 	var from point
 	if native {
@@ -527,9 +529,14 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 		}
 	}
 	var result map[string]any
-	if native {
+	switch {
+	case !framework.MainPage():
+		result, err = workbenchDrag(plan, func(method string, params any) (json.RawMessage, error) {
+			return h.ask(s, method, params, pageTimeout)
+		}, h.steps.listen, func() (map[string]any, error) { return nativeDragPresented(h, s, plan, from, stepped) })
+	case native:
 		result, err = nativeDragPresented(h, s, plan, from, stepped)
-	} else {
+	default:
 		result, err = pageDrag(h, s, plan, ticks, stepped)
 	}
 	var layouts []map[string]any
@@ -591,6 +598,44 @@ func pageDrag(h *Host, s *Surfaces, plan dragPlan, ticks int, sent func()) (map[
 	})
 	close(stop)
 	return dragResult(s, reply)
+}
+
+// dragStepCallback is the callback through which a step of a native drag reaches the view of a window.
+const dragStepCallback = "mouseDragged:"
+
+// workbenchDrag runs deliver, which delivers the drag of plan as native input, on a window without a main page. ask reaches the
+// workbench, which records the position of the boundary from diagnostics.drag to diagnostics.drag.end, and listen gives the steps of
+// the main thread. The reply of deliver gains boundary and handled, the milliseconds from the entry of each step to the return of
+// its callback. The record ends after a failed delivery too, so a next drag can start.
+func workbenchDrag(plan dragPlan, ask func(method string, params any) (json.RawMessage, error), listen func(func(StepRecord)) func(),
+	deliver func() (map[string]any, error)) (map[string]any, error) {
+	if _, err := ask("diagnostics.drag", map[string]any{"axis": plan.Axis, "line": plan.Line}); err != nil {
+		return nil, err
+	}
+	handled := []float64{}
+	end := listen(func(step StepRecord) {
+		if step.Callback == dragStepCallback {
+			handled = append(handled, math.Round(float64(step.Return-step.Entry)/1e5)/10)
+		}
+	})
+	result, err := deliver()
+	end()
+	raw, endErr := ask("diagnostics.drag.end", nil)
+	if err = errors.Join(err, endErr); err != nil {
+		return nil, err
+	}
+	var record struct {
+		Boundary []float64 `json:"boundary"`
+	}
+	if err := json.Unmarshal(raw, &record); err != nil {
+		return nil, fmt.Errorf("the workbench record of the drag is not {boundary}: %w", err)
+	}
+	steps := plan.Times * 2 * plan.steps()
+	if len(handled) != steps || len(record.Boundary) != steps+1 {
+		return nil, fmt.Errorf("the drag delivered %d steps and recorded %d callbacks and %d boundary positions", steps, len(handled), len(record.Boundary))
+	}
+	result["boundary"], result["handled"] = record.Boundary, handled
+	return result, nil
 }
 
 // dragBoundary asks the page for the point of the boundary of plan in window content coordinates.
