@@ -7,11 +7,15 @@ import { fresh } from "../fixture.mjs";
 import { echoed, readScreenUntil } from "../terminal-screen.mjs";
 
 const MARKER = "newtabkeys";
+// The keys that the surface keeps and gives to its region, and where the keyboard went, so that a failure names where the keys
+// stopped.
+const READS = ["native.surface.key_kept", "native.surface.keys_delivered", "native.surface.keys_dropped",
+  "native.window.first_responder", "native.input.key_down"];
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: keys typed as a new tab opens reach its terminal whole`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
+    await fresh(s, { log: { input: "debug" }, reads: READS });
     // A person's window is in front; a pointer move that presses nothing activates it.
     const adding = await s.request("element.rect", { name: "core.space-tab.add" });
     await s.pointer(adding.x + adding.width / 2, adding.y + adding.height / 2, "move", { activate: true });
