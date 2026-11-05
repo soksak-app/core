@@ -613,8 +613,6 @@ func (p *attachPlatform) CreateImage(surface unsafe.Pointer, name string, event 
 
 func (p *attachPlatform) CloseImage(image unsafe.Pointer) { p.closed = append(p.closed, image) }
 
-func (p *attachPlatform) SetImageBackground(unsafe.Pointer, bool) {}
-
 func (p *attachPlatform) WindowOnScreen(unsafe.Pointer) (bool, error) { return false, p.onScreen }
 
 // queuedFramework runs a queued task before its next step, as the main thread runs a task that was queued ahead of that step.

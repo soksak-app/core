@@ -315,7 +315,7 @@ func sendDuringARetain(t *testing.T, s *Surfaces, send func(c *Sidecars, name st
 	c.RetainSending = func(name string) { send(c, name) }
 	done := make(chan error, 1)
 	go func() {
-		_, err := c.Retain([]RetainedSurface{{Surface: "listed", Root: "/fixture/listed"}})
+		_, err := c.Retain([]RetainedSurface{{Surface: "listed", Plugin: "probe", Root: "/fixture/listed"}})
 		done <- err
 	}()
 	for {
