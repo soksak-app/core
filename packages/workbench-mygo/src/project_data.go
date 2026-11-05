@@ -118,7 +118,9 @@ func (s *Shell) writeProjectData(project *projectRecord, unit *installedUnit, ke
 		project.Rest = map[string]json.RawMessage{}
 	}
 	project.Rest["plugins"] = stored
+	s.surfaces.dataWrites[id]++
 	s.calls.CallInOrder("workspace", "workspace", map[string]any{"kind": "patch", "id": id, "patch": map[string]any{"plugins": stored}}, func(_ any, err error) {
+		s.surfaces.dataWrites[id]--
 		if err != nil {
 			if kept := s.project(id); kept != nil && bytes.Equal(kept.Rest["plugins"], stored) {
 				if before == nil {
@@ -221,6 +223,10 @@ func (s *Shell) compareData(value any) error {
 		project := s.project(read.ID)
 		if project == nil {
 			continue // A project that this window never read holds no view here.
+		}
+		// The read stands before a write of this window that the record already holds. The host answers that write with this event again.
+		if s.surfaces.dataWrites[read.ID] > 0 {
+			continue
 		}
 		before, err := storedPlugins(project)
 		if err != nil {

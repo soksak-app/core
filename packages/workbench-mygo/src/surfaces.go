@@ -191,6 +191,8 @@ type surfaceState struct {
 	// behindDialog are the native views of the frame that wait to draw over the blurred workbench.
 	behindDialog []viewBehindDialog
 	planeDrawn   bool
+	// dataWrites counts the writes of project data of each project that the store has not answered.
+	dataWrites map[string]int
 	// placed is the lines of the last request, and running tells that a placement has not finished.
 	placed  []surfaceLine
 	running bool
@@ -280,7 +282,7 @@ type storedSession struct {
 func newSurfaceState() surfaceState {
 	return surfaceState{held: map[string]*heldSurface{}, drawn: map[string]layout.Rect{}, applied: map[string]layout.Rect{}, seated: map[string]SidebarSeat{},
 		views: map[string]*viewState{}, reports: map[string]*tabReport{}, failed: map[string]string{}, documents: map[string]map[string]bool{},
-		detaching: map[string]bool{}, detachFailed: map[string]string{}, sessions: map[string]*storedSession{}}
+		detaching: map[string]bool{}, detachFailed: map[string]string{}, sessions: map[string]*storedSession{}, dataWrites: map[string]int{}}
 }
 
 // drawSeat draws the slot of a card: the native view of its active tab. box is the slot in window coordinates.

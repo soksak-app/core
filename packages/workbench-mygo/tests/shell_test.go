@@ -338,7 +338,12 @@ func (h *storedHost) workspace(argument json.RawMessage) (any, error) {
 				project["settings"] = settings
 			}
 		}
-		return map[string]any{"projects": h.projects, "open": h.open, "common": h.common}, nil
+		// The host answers with the store of this moment, which a later write does not change.
+		projects, err := json.Marshal(h.projects)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"projects": json.RawMessage(projects), "open": h.open, "common": h.common}, nil
 	case "settings":
 		h.settings = append(h.settings, map[string]any{"id": request.ID, "patch": request.Patch, "remove": request.Remove})
 		return nil, nil
