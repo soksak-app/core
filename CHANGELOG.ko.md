@@ -27,6 +27,7 @@
 - F502-21: mygo workbench에서 창을 닫으면, Cmd+W를 포함해, 먼저 수정된 탭마다 묻는다. 유지한 탭이 있으면 창이 남는다.
 - F502-21: mygo workbench가 modal을 native UI로 그린다: 설정 창, 추가·분할·도구·탭·context menu를 가진 picker layer, 수정된 tab에 대한 질문. `core.card.close`, `core.tab.close`, `core.space.close`는 사람의 답 없이 수정된 tab을 닫지 않고, plugin과 그 setting은 설치된 plugin 문서에서 온다. 설정 `left`, `right`는 고정 창 sidebar를 plane에 넣고 뺀다. Dialog는 workbench와 document를 50% opacity의 검정 아래에서 blur하고, 사람이 control에 닿기 전의 key는 dialog를 닫지 않는다. 설정 창의 head와 section은 page의 metric을 쓰고, 닫기 icon과 보이는 section의 mark를 그린다. mygo application의 언어 설정 `auto`는 시스템 언어를 따른다.
 - F536: 가만히 있는 window가 host의 stall 감시 때문에 깨어나지 않는다. main run loop가 기다리는 동안 감시는 timer 없이 막힌 채 heartbeat를 보내지 않고 깨어나면 다시 시작하므로, run loop가 event를 처리하는 동안의 stall은 그대로 기록된다.
+- F502-31: 다시 표시되는 탭과 focus call을 받은 영역은 열린 press의 release를 기다리므로, 탭을 바꾼 직후의 divider와 탭 drag가 첫 이동 뒤에 끊기지 않는다.
 - F502-30: `input.pointer` press가 열려 있는 동안 페이지는 event의 `buttons`에서 그 버튼을 본다. `buttons === 0`에서 drag를 끝내는 페이지는 주입한 drag를 사람의 drag처럼 따른다.
 - F502-29: `input.pointer`는 `down`과 `up`에서 event의 click count인 `clicks`를 1부터 3까지 받는다. 모든 호스트, `sok input pointer --clicks`, MCP 도구에서 double click을 실제 press 두 번으로 보낸다. `input.pointer`는 정의하지 않은 field에 -32602를 반환한다.
 - F502-28: 창의 키보드가 모든 호스트에서 focus ring을 따른다. 새 탭, 탭 press, `core.card.focus`, 프로젝트 열기 직후에 입력한 글자가 ring이 있는 card의 active surface에 닿는다. 영역의 첫 focus 보고가 handler를 기다리므로 새 terminal 탭도 focus된 cursor를 그린다. 영역이 표시되지 않아 키보드를 받은 page는 다음 이동 때 그때 표시된 영역에 키보드를 넘긴다.

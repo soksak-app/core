@@ -601,6 +601,14 @@ void sp_surface_region_shown(void *handle) {
     giveKeyboardAfterPress(window, ^{ if (window.firstResponder == host.webview) [window makeFirstResponder:region]; });
 }
 
+void sp_surface_region_focus(void *handle) {
+    NSCAssert(NSThread.isMainThread, @"the keyboard of a surface belongs to the UI thread");
+    NSView *region = (NSView *)handle;
+    NSWindow *window = region.window;
+    if (!window) return;
+    giveKeyboardAfterPress(window, ^{ if (region.window == window) [window makeFirstResponder:region]; });
+}
+
 void sp_surface_responder_moved(void *from, void *to) {
     NSCAssert(NSThread.isMainThread, @"the keyboard of a surface belongs to the UI thread");
     id entered = (id)to, left = (id)from;
@@ -756,8 +764,13 @@ void webviewSetSurfaceHidden(void *handle, bool hidden) {
         // Focus is restored only when it was not moved while hidden and the owner is still inside the surface.
         SPHiddenResponder *held = objc_getAssociatedObject(surface, &hiddenResponderKey);
         if (held) {
-            if (window && window.firstResponder == held.replacement && [held.owner isDescendantOf:surface]) {
-                [window makeFirstResponder:held.owner];
+            NSView *owner = held.owner;
+            NSResponder *replacement = held.replacement;
+            // A call that waits for the release of a press was asked for later than this restore.
+            if (window && !(leftPressOpen(window) && objc_getAssociatedObject(window, &keyboardPendingKey))) {
+                giveKeyboardAfterPress(window, ^{
+                    if (window.firstResponder == replacement && [owner isDescendantOf:surface]) [window makeFirstResponder:owner];
+                });
             }
             objc_setAssociatedObject(surface, &hiddenResponderKey, nil, OBJC_ASSOCIATION_RETAIN);
         }
