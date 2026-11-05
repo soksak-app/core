@@ -409,14 +409,14 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 	case "runtime.data.get", "runtime.data.set", "runtime.data.on":
 		return s.runDataCall(call, unit, view, answer)
 	case "runtime.textSize.read":
-		size, err := s.surfaceTextSize(call.Surface)
+		size, err := s.viewTextSize(call.Surface, view)
 		if err != nil {
 			return err
 		}
 		view.scale = size
 		answer(size, nil)
 	case "runtime.textSize.on":
-		size, err := s.surfaceTextSize(call.Surface)
+		size, err := s.viewTextSize(call.Surface, view)
 		if err != nil {
 			return err
 		}
@@ -830,16 +830,28 @@ func (s *Shell) viewSettings(unit *installedUnit) map[string]any {
 	return values
 }
 
-// surfaceTextSize returns the text scale of the surface: the frame factor multiplied by the factor of its card.
-func (s *Shell) surfaceTextSize(surface string) (float64, error) {
+// surfaceTextSize returns the text scale of the surface: the frame factor multiplied by the factor of its card, and false for a tab of a
+// space off the screen, which has no card.
+func (s *Shell) surfaceTextSize(surface string) (float64, bool) {
 	if held := s.surfaces.held[surface]; held != nil && held.section != nil {
-		return s.text.Frame(), nil
+		return s.text.Frame(), true
 	}
 	card := s.cardOfTab(surface)
 	if card == "" {
+		return 0, false
+	}
+	return s.text.Effective(card), true
+}
+
+// viewTextSize returns the text scale that view reads: a view of a space off the screen keeps the scale it last had.
+func (s *Shell) viewTextSize(surface string, view *viewState) (float64, error) {
+	if size, shown := s.surfaceTextSize(surface); shown {
+		return size, nil
+	}
+	if view.scale == 0 {
 		return 0, fmt.Errorf("surface %s is not in the layout", surface)
 	}
-	return s.text.Effective(card), nil
+	return view.scale, nil
 }
 
 // readTabState returns the value of the state of the tab: null without one, and a state of another format is refused.

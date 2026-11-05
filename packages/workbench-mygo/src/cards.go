@@ -25,11 +25,14 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 	stage := height - s.workBanner - s.spaceRowHeight()
 	inset := s.stageInset()
 	s.plane.Resize(float64(width-2*inset), float64(stage-2*inset))
-	// A column needs the size of the plane, and the settings, the space and the project all decide the columns, so a frame matches them.
-	if changed, err := s.arrangeWindowSidebars(); err != nil {
-		s.errors.Show(workbenchErrorPlace, err.Error(), "")
-	} else if changed {
-		s.keep()
+	// A column takes its width from the plane, whose size only a frame knows, so a change of the columns waits for it.
+	if s.columnsChanged {
+		s.columnsChanged = false
+		if changed, err := s.arrangeWindowSidebars(); err != nil {
+			s.fail(err)
+		} else if changed {
+			s.keep()
+		}
 	}
 	origin := s.planeOrigin()
 	originX, originY := float32(origin.X), float32(origin.Y)

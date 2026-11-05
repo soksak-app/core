@@ -222,6 +222,8 @@ type Shell struct {
 	active   string
 	plane    *layout.Grid
 	focused  string
+	// columnsChanged tells that the next frame matches the columns of the window sidebars to the settings.
+	columnsChanged bool
 	// fullscreen is the card that covers the plane, or "" while the cards stand in their arrangement.
 	fullscreen string
 	// strips holds the scroll of the tab strip of each card.

@@ -796,13 +796,7 @@ func (s *Shell) settingsChanged() error {
 	}
 	s.followScale()
 	s.followSettings()
-	changed, err := s.arrangeWindowSidebars()
-	if err != nil {
-		return err
-	}
-	if changed {
-		s.settle()
-	}
+	s.columnsChanged = true
 	s.options.Invalidate()
 	return nil
 }

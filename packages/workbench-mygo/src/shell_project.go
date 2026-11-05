@@ -293,6 +293,9 @@ func (s *Shell) loadSpace(project *projectRecord) error {
 		return fmt.Errorf("space %s: %w", space.ID, err)
 	}
 	s.operated = map[string]map[string]layout.Side{}
+	s.columnsChanged = true
+	// The views of this space take the scale that changed while it was off the screen.
+	s.followScale()
 	return nil
 }
 

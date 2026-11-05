@@ -8,9 +8,8 @@ func (s *Shell) followScale() {
 		if !view.textSize {
 			continue
 		}
-		scale, err := s.surfaceTextSize(surface)
-		if err != nil {
-			s.fail(err)
+		scale, shown := s.surfaceTextSize(surface)
+		if !shown {
 			continue
 		}
 		if scale != view.scale {
