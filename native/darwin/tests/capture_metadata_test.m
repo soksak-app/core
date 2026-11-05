@@ -237,6 +237,24 @@ int main(void) { @autoreleasepool {
         @"the bounded source manifest records exact identity, pixel layout, geometry, color, byte count and SHA-256 once");
     sp_image_capture_match_end();
 
+    for (int kept = 0; kept < 2; kept++) {
+        bool sourceFiles = kept == 1;
+        NSString *folder = [directory stringByAppendingPathComponent:sourceFiles ? @"with-source-files" : @"without-source-files"];
+        check([NSFileManager.defaultManager createDirectoryAtPath:folder withIntermediateDirectories:YES attributes:nil error:nil]
+            && beginCaptureSourceArtifacts(folder, sourceFiles), @"the source retention of the capture starts");
+        check(sp_image_capture_match_retain(artifactIdentity, artifactSource, 2, 2, 8, CGRectMake(10, 20, 2, 2), 1, "kCGColorSpaceSRGB"),
+            @"a capture retains its source for matching with or without its file");
+        check(sp_image_capture_match_write_manifest(folder.fileSystemRepresentation), @"a capture writes its source manifest");
+        endCaptureSourceArtifacts();
+        NSString *sources = [folder stringByAppendingPathComponent:@"sources"];
+        NSData *data = [NSData dataWithContentsOfFile:[sources stringByAppendingPathComponent:@"manifest.json"]];
+        NSDictionary *written = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
+        check([NSFileManager.defaultManager fileExistsAtPath:[sources stringByAppendingPathComponent:@"7-11-13.bgra"]] == sourceFiles,
+            @"a capture writes the source file only when its reader needs it");
+        check([written[@"sourceFiles"] boolValue] == sourceFiles && [written[@"artifacts"] count] == (sourceFiles ? 1u : 0u),
+            @"the source manifest states whether the capture holds source files and lists only those it holds");
+    }
+
     NSString *cleanupDirectory = [directory stringByAppendingPathComponent:@"cleanup-failure"];
     NSString *cleanupSourceDirectory = [cleanupDirectory stringByAppendingPathComponent:@"sources"];
     NSString *partialPath = [cleanupSourceDirectory stringByAppendingPathComponent:@"77-1-1.bgra.partial"];

@@ -7,6 +7,7 @@
 - F502-13: Wails와 Tauri 호스트에서 picker 항목의 `element.rect`는 mygo 호스트처럼 modal document가 그린 자리를 답하고, 그 document가 보고하기 전에는 실패한다. Red: 항목이 화면에 있는데 main document의 숨겨진 항목이 창 원점의 빈 상자를 답했다.
 - F588: 값 `G8-S1-hit-test-p90`을 측정 `pointerMoveP90Ms`를 쓰는 `G8-S1-pointer-move-p90`으로 바꾼다. 한계 8.33 ms는 그대로다. 이동은 tracking area로 view에 닿고 hit test를 거의 거치지 않으므로, 값은 전달된 이동마다 가장 바깥 `mouseMoved:` step에 바로 앞의 `hitTest:` step이 있으면 더한 시간이다. `STEP=pointer`는 `input.pointer`로 이동을 전달하므로 실제 cursor를 움직이거나 창을 앞으로 가져오지 않고 권한도 필요 없다. 창은 이미 key window이고 가려지지 않아야 한다. Red: `measure-app-usage.test.mjs`의 `mouseMoved:` step만 있는 기록, 이동 앞의 `hitTest:`, 이동이 없는 기록, 실제 입력 import 부재 시험.
 - F584-4: 실패한 캡처의 메시지는 시스템 오류의 domain과 code로 끝난다. description만으로는 둘 다 드러나지 않을 수 있기 때문이다. Red: description이 `the stream failed`인 실패에서 content query, 정지 캡처, 녹화 시작의 code가 사라졌다. native test는 가려진 창이 layer 종류마다, 가려진 동안의 변경까지 가리기 전과 같은 byte로 캡처되고 일반 content query를 쓰지 않음을 확인한다.
+- F610: `frameIdentity` 없는 recording은 source 파일을 기록하지 않는다. 그래서 실패한 captured drag가 수백이 아니라 수십 MB만 남긴다.
 - F608: setup이 이름이 바뀐 native target을 실행하므로, recognizer를 고르지 않아도 macOS window check가 다시 시작된다.
 - F561-1: keyboard를 가진 채 닫힌 document는 close 때 web content process를 끝내고, data store도 끝날 수 있다.
 - F502-23: `native`를 쓰는 `diagnostics.drag`는 창이 현재 layout을 표시한 뒤에 경계 점을 읽는다. 그래서 split 직후의 누름이 divider에 닿는다.
