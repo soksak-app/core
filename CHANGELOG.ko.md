@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F502-13: mygo settings row의 control은 page grid처럼 row 가운데에 선다. reset button이 있는 row만 wrap된다. Red: `TestAControlStandsInTheMiddleOfItsRow`가 이전 drawing에서 실패했다.
 - F502-13: mygo settings slider는 page의 range input처럼 track 높이이다. track 밖으로 나온 thumb 위에서도 pointer를 받고, focus ring은 thumb 둘레에 그려진다. Red: `TestASliderIsAsTallAsItsTrack`가 이전 drawing에서 실패했다.
 - F502-13: mygo settings card는 content와 함께 끝나고, 가장 큰 높이를 넘으면 pane이 scroll된다. max-height를 가진 page card와 같다. Red: `TestTheCardEndsWithItsContent`가 이전 drawing에서 실패했다.
 - F502-13: 이름 없는 mygo settings row는 page grid의 빈 name column을 유지하므로 그 button은 control column에 선다. Red: `TestAButtonOfARowWithoutANameStandsInTheControlColumn`가 이전 drawing에서 실패했다.

@@ -3,6 +3,7 @@ package workbench
 import (
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -219,7 +220,12 @@ func (s *Shell) drawSettingsRow(c *ui.Context, row settingsRow, pane settingsPan
 		})
 		return
 	}
-	ui.Row(c).FillWidth().MinHeight(pane.rowH).Gap(pane.rowGap).AlignItems(ui.Center).Wrap().Children(func() {
+	// A row that wraps stacks its lines at its start, so a control stands in the middle of its row only in a row that does not.
+	line := ui.Row(c).FillWidth().MinHeight(pane.rowH).Gap(pane.rowGap).AlignItems(ui.Center)
+	if slices.ContainsFunc(row.controls, func(control *SettingsControl) bool { return strings.HasPrefix(control.item(), "reset:") }) {
+		line.Wrap()
+	}
+	line.Children(func() {
 		if row.name != "" {
 			ui.Text(c, row.name).Width(pane.rowNameW).FontSize(s.textControl()).TextColor(s.palette.Muted)
 		} else {

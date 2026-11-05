@@ -60,3 +60,14 @@ func TestASliderIsAsTallAsItsTrack(t *testing.T) {
 		t.Fatalf("the slider is %v tall, want 3", slider.H)
 	}
 }
+
+// Rows have one height, and a control stands in the middle of its row whatever its height, as in the grid of the page.
+func TestAControlStandsInTheMiddleOfItsRow(t *testing.T) {
+	f := opened(t)
+	for _, pair := range [][2]string{{"font", "size"}, {"fullRule", "dim"}} {
+		above, below := f.box("core.settings-modal.set", pair[0]), f.box("core.settings-modal.set", pair[1])
+		if got := designMiddle(below) - designMiddle(above); !designNear(got, 30) {
+			t.Fatalf("%s stands %v below %s, want 30", pair[1], got, pair[0])
+		}
+	}
+}
