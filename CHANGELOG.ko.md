@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F561: 문서 검사의 activation 실행이 data store를 끝내기 전에 window의 다른 곳을 누른다. 마지막 press의 web view는 다음 press까지 잡혀 있기 때문이다.
 - F560: 포인터를 잃은 page가 추적 영역의 진입, 이탈, 이동이 어떤 순서로 와도 hover를 멈춘다.
 - F543: key window에서 `sok input pointer`의 press가 애플리케이션을 지나, local monitor가 press를 보고 AppKit이 first responder를 옮긴다.
 - F544: release가 뒤따르는 키보드 이동을 멈추지 않는다. image region이 있는 surface를 클릭한 직후에도 키보드가 다음 release를 기다리지 않고 옮겨진다.

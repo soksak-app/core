@@ -635,6 +635,19 @@ int main(int argc, char **argv) { @autoreleasepool {
         check(documents(nativePlane) == 0, @"closing removes the document view");
     }
 
+    // A web view that took a press of the OS event queue stays held until the next press of the window, so its store cannot
+    // end before that press.
+    if (activation) {
+        NSPoint elsewhere = NSMakePoint(NSWidth(window.contentView.bounds) - 5, 5);
+        for (int phase = 0; phase < 2; phase++) {
+            [NSApp postEvent:[NSEvent mouseEventWithType:phase ? NSEventTypeLeftMouseUp : NSEventTypeLeftMouseDown location:elsewhere
+                modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
+                context:nil eventNumber:2 clickCount:1 pressure:phase ? 0 : 1] atStart:NO];
+        }
+        NSDate *pressed = [NSDate dateWithTimeIntervalSinceNow:0.5];
+        pumpEvents(@"the press elsewhere did not end", ^BOOL { return pressed.timeIntervalSinceNow <= 0; });
+    }
+
     // The stores end before the check removes their folder, so the network process writes nothing into it afterward.
     storeClosed = 0;
     [storeErrors removeAllObjects];
