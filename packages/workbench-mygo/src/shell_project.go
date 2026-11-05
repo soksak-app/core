@@ -371,6 +371,7 @@ func (s *Shell) loadSpace(project *projectRecord) error {
 	if err := json.Unmarshal(space.Layout, &stored); err != nil {
 		return fmt.Errorf("space %s: %w", space.ID, err)
 	}
+	s.leavePlace()
 	s.tabsNamed = stored.Named
 	gap := float64(2 * s.palette.Gap) // The gap of a theme is the half width of the passage between two cards.
 	width, height := 0.0, 0.0
@@ -533,14 +534,27 @@ func (s *Shell) settleThen(stored func()) {
 		s.fail(err)
 	}
 	s.held = nil
+	if s.plane != nil {
+		s.text.KeepPressedCard(func(card string) bool {
+			_, ok := s.plane.Card(card)
+			return ok
+		})
+	}
 	s.keepThen(stored)
 	s.tabsSettled()
 	s.options.Invalidate()
 }
 
+// leavePlace ends the press on a card of the plane leaving the screen: another space has cards of the same ids, which were not
+// pressed (docs/spec/text-size.md#scope).
+func (s *Shell) leavePlace() {
+	s.text.KeepPressedCard(func(string) bool { return false })
+}
+
 // browse shows the library, as the project button does.
 func (s *Shell) browse() {
 	s.keep()
+	s.leavePlace()
 	s.browsing = true
 	s.options.Invalidate()
 }
@@ -608,6 +622,7 @@ func (s *Shell) dropProject(id string) {
 		}
 	}
 	if s.active == id {
+		s.leavePlace()
 		s.active, s.plane, s.browsing, s.fullscreen = "", nil, true, ""
 		s.options.Located("")
 		if len(s.projects) > 0 {

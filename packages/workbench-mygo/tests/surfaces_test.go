@@ -1017,3 +1017,91 @@ func (f *shellFixture) cardOfTab(tab string) string {
 	}
 	return ""
 }
+
+// textFactors returns the card factors of the status core.text.
+func textFactors(t *testing.T, f *shellFixture) map[string]float64 {
+	t.Helper()
+	var text struct {
+		Cards map[string]float64 `json:"cards"`
+	}
+	if err := json.Unmarshal([]byte(f.status("core.text")), &text); err != nil {
+		t.Fatal(err)
+	}
+	return text.Cards
+}
+
+// pressCardHead presses the head of a card and releases it.
+func pressCardHead(f *shellFixture, card string) {
+	f.t.Helper()
+	pressElement(f, "core.card.header", card)
+	f.tester.Release(0, 0)
+	f.settle()
+}
+
+// A pressed card that closes leaves the scope to the focused card, which the next change of the text size changes.
+func TestAClosedCardGivesTheTextScopeToTheFocusedCard(t *testing.T) {
+	f, _ := surfaceShell(t)
+	cards := f.tabbedCards()
+	pressCardHead(f, cards[1])
+	if _, err := f.answer("core.card.close", map[string]string{"card": cards[1]}); err != nil {
+		t.Fatal(err)
+	}
+	f.settle()
+	if got := textScope(t, f); got != workbench.CardScope(cards[0]) {
+		t.Fatalf("the scope is %+v", got)
+	}
+	if _, err := f.answer("core.text.larger", nil); err != nil {
+		t.Fatal(err)
+	}
+	f.settle()
+	if got := textFactors(t, f)[cards[0]]; got == 1 {
+		t.Fatalf("the focused card keeps the factor %v", got)
+	}
+}
+
+// A press on a card does not reach the card of the same id of another space.
+func TestAnotherSpaceDoesNotTakeThePressOfACard(t *testing.T) {
+	f, _ := surfaceShell(t)
+	cards := f.tabbedCards()
+	pressCardHead(f, cards[1])
+	f.run("core.space.add", nil)
+	f.settle()
+	focused := focusedCards(t, f)
+	if len(focused) != 1 || focused[0] == cards[1] {
+		t.Fatalf("the new space focuses %v, which does not tell the scope from the press", focused)
+	}
+	if got := textScope(t, f); got != workbench.CardScope(focused[0]) {
+		t.Fatalf("the scope is %+v", got)
+	}
+	f.run("core.text.larger", nil)
+	f.settle()
+	factors := textFactors(t, f)
+	if factors[cards[1]] != 1 || factors[focused[0]] == 1 {
+		t.Fatalf("the change left the factors %v", factors)
+	}
+}
+
+// The library shows no card, so a press on a card does not stay the scope behind it.
+func TestTheLibraryDoesNotKeepThePressOfACard(t *testing.T) {
+	f, _ := surfaceShell(t)
+	cards := f.tabbedCards()
+	pressCardHead(f, cards[1])
+	f.run("core.projects.browse", nil)
+	f.settle()
+	if got := textScope(t, f); got != workbench.FrameScope() {
+		t.Fatalf("the scope is %+v", got)
+	}
+}
+
+// A press on the frame stays the scope in another space: it is the place pressed last, and the frame does not leave.
+func TestAnotherSpaceKeepsThePressOfTheFrame(t *testing.T) {
+	f, _ := surfaceShell(t)
+	pressElement(f, "core.brand", "")
+	f.tester.Release(0, 0)
+	f.settle()
+	f.run("core.space.add", nil)
+	f.settle()
+	if got := textScope(t, f); got != workbench.FrameScope() {
+		t.Fatalf("the scope is %+v", got)
+	}
+}
