@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -33,6 +34,13 @@ type storedHost struct {
 	// detaching are the surfaces whose image detach is pending when a window starts.
 	detaching []string
 	projects  []map[string]any
+	// opens holds the requests of projectOpen, owners the window of each project with 0 as the window of the shell, and windows the
+	// number of further windows that the requests made.
+	opens   []projectOpenRequest
+	owners  map[string]int
+	windows int
+	// geometry is the answer of windowState.
+	geometry any
 	// createRefused is the refusal of projectCreate.
 	createRefused error
 	// open are the projects that the host names as owned by a window.
@@ -200,9 +208,8 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 			root := request.Parent + "/" + request.Name
 			return map[string]string{"root": root, "identity": "identity of " + root}, nil
 		}),
-		"projectOpen": answer("projectOpen", func(json.RawMessage) (any, error) {
-			return map[string]bool{"local": true, "staged": true}, nil
-		}),
+		"projectOpen": answer("projectOpen", h.projectOpen),
+		"windowState": answer("windowState", func(json.RawMessage) (any, error) { return h.geometry, nil }),
 		"projectShown": answer("projectShown", func(argument json.RawMessage) (any, error) {
 			var shown any
 			if err := json.Unmarshal(argument, &shown); err != nil {
@@ -211,7 +218,14 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 			h.shown = append(h.shown, shown)
 			return nil, nil
 		}),
-		"projectRelease":   answer("projectRelease", none),
+		"projectRelease": answer("projectRelease", func(argument json.RawMessage) (any, error) {
+			var id string
+			if err := json.Unmarshal(argument, &id); err != nil {
+				return nil, err
+			}
+			delete(h.owners, id)
+			return nil, nil
+		}),
 		"projectRemoveAsk": answer("projectRemoveAsk", func(json.RawMessage) (any, error) { return !h.keepsProjects, nil }),
 		"folderChoose":     answer("folderChoose", func(json.RawMessage) (any, error) { return "/chosen", nil }),
 		"windowReady":      answer("windowReady", none),
@@ -317,6 +331,36 @@ func (h *storedHost) project(id string) map[string]any {
 		}
 	}
 	return nil
+}
+
+// projectOpenRequest is the argument of projectOpen.
+type projectOpenRequest struct {
+	ID       string          `json:"id"`
+	Separate bool            `json:"separate"`
+	Geometry json.RawMessage `json:"geometry"`
+}
+
+// projectOpen answers as the host does: the window of a project stays its owner, and a separate request from a window that owns a
+// project makes a window (docs/spec/projects.md).
+func (h *storedHost) projectOpen(argument json.RawMessage) (any, error) {
+	var request projectOpenRequest
+	if err := json.Unmarshal(argument, &request); err != nil {
+		return nil, err
+	}
+	h.opens = append(h.opens, request)
+	if h.owners == nil {
+		h.owners = map[string]int{}
+	}
+	owner, known := h.owners[request.ID]
+	if !known {
+		occupied := slices.Contains(slices.Collect(maps.Values(h.owners)), 0)
+		if request.Separate && occupied {
+			h.windows++
+			owner = h.windows
+		}
+		h.owners[request.ID] = owner
+	}
+	return map[string]bool{"local": owner == 0, "staged": !known}, nil
 }
 
 func (h *storedHost) workspace(argument json.RawMessage) (any, error) {

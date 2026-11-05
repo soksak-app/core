@@ -14,6 +14,7 @@ const fixtureHeight float32 = 800
 func twoProjects(t *testing.T) (*shellFixture, string, string) {
 	t.Helper()
 	f := openedShell(t)
+	f.run("core.settings.set", map[string]any{"patch": map[string]any{"projectOpening": "tabs"}, "scope": "common"})
 	f.run("core.library.form.open", map[string]string{"mode": "open"})
 	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/beta"})
 	f.run("core.library.form.submit", nil)
