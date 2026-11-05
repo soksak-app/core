@@ -5,6 +5,7 @@
 ## 미배포
 
 - F608: setup이 이름이 바뀐 native target을 실행하므로, recognizer를 고르지 않아도 macOS window check가 다시 시작된다.
+- F561-1: keyboard를 가진 채 닫힌 document는 close 때 web content process를 끝내고, data store도 끝날 수 있다.
 - F595: 합성 입력은 layout을 기다리는 입력 뒤에서 순서를 지킨다.
 - F586: lease 방식 영역이 있는 창을 닫아도 Tauri host가 `image view released: project window is closed`를 기록하지 않는다. Red: 창이 닫힌 뒤의 해제가 그 실패를 보고했다.
 - F502-16: Wails host의 window는 요청한 크기를 갖고 web view는 content 크기를 가지므로, page의 마지막 row가 보이고 native view가 page 위 제자리에 선다. F592가 fork를 publish할 때까지 Wails module은 fork의 local checkout을 읽는다.
@@ -74,7 +75,7 @@
 - F557: 포인터를 잃은 page가 추적 영역의 진입, 이탈, 이동이 어떤 순서로 와도 hover를 멈춘다.
 - F570: mygo host의 `core.workbench.audit`이 연결되지 않은 요소가 없을 때 `null`이 아니라 빈 목록을 낸다.
 - F561: 문서 검사의 activation 실행이 data store를 끝내기 전에 window의 다른 곳을 누른다. 마지막 press의 web view는 다음 press까지 잡혀 있기 때문이다.
-- F561-1: 문서 검사의 activation 실행이 store를 끝내기 전에 추가 press를 하지 않는다. web view를 잡는 주체를 찾는 일은 열어 둔다.
+- F561-1: 문서 검사의 activation 실행이 store를 끝내기 전에 추가 press를 하지 않는다.
 - F560: 포인터를 잃은 page가 추적 영역의 진입, 이탈, 이동이 어떤 순서로 와도 hover를 멈춘다.
 - F543: key window에서 `sok input pointer`의 press가 애플리케이션을 지나, local monitor가 press를 보고 AppKit이 first responder를 옮긴다.
 - F544: release가 뒤따르는 키보드 이동을 멈추지 않는다. image region이 있는 surface를 클릭한 직후에도 키보드가 다음 release를 기다리지 않고 옮겨진다.
