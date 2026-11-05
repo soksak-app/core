@@ -39,9 +39,17 @@ func (p *pluginsHost) run(argument json.RawMessage) (any, error) {
 		return nil, err
 	}
 	p.runs = append(p.runs, request.Action+" "+request.Plugin)
+	if request.Action == "update" || request.Action == "enable" || request.Action == "disable" {
+		if p.plugins[request.Plugin] == nil {
+			return nil, errors.New("plugin " + request.Plugin + " is not installed")
+		}
+	}
 	switch request.Action {
 	case "install":
 		p.firstRun = false
+		if p.plugins == nil {
+			p.plugins = map[string]map[string]any{}
+		}
 		p.plugins[request.Plugin] = map[string]any{"version": "1.0.0", "enabled": true, "sidecars": map[string]string{}}
 	case "update":
 		p.plugins[request.Plugin]["version"] = "1.2.0"

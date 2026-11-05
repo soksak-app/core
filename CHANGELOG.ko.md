@@ -4,7 +4,7 @@
 
 ## 미배포
 
-- F502-16: 프로젝트를 닫은 뒤 다음 프레임 전에 구분선이나 탭에 들어온 누름과 키가 mygo host를 멈추지 않고, 잡은 경계와 끌던 탭은 그 plane이 떠날 때 끝나므로 다른 space의 경계를 옮기지 않는다. 떠난 plane의 탭에 관한 질문은 닫히고, 탭보다 오래 간 저장의 응답은 실패를 보여 주지 않는다.
+- F502-16: 프로젝트를 닫은 뒤 다음 프레임 전에 구분선이나 탭에 들어온 누름과 키가 mygo host를 멈추지 않고, 잡은 경계와 끌던 탭은 그 plane이 떠날 때 끝나므로 다른 space의 경계를 옮기지 않는다. 떠난 plane의 탭에 관한 질문은 닫히고, 탭이 떠난 뒤 성공한 저장은 실패를 보여 주지 않되 실패한 저장은 그대로 보여 주며, `core.card.sidebar.*`는 프로젝트가 없는 창에서 거절한다.
 - F502-16: 보이는 프로젝트를 닫은 뒤 `core.verify`를 읽어도 mygo host가 멈추지 않는다. 떠난 plane은 다음 plane의 프레임까지 행이 없으므로, 창이 그리지 않은 plane을 말하지 않는다.
 - F502-21: `setDialogBackground`가 다른 host call처럼 object `{enabled}`를 받고, framework 표의 B 행이 이 call을 mygo에만 있는 call로 나열해 host parity check가 통과한다. P 행이 `Frontend.Frames`를 나열한다.
 - F502-16: mygo workbench의 모든 모양 값은 page도 읽는 `workbench.json`에서 나온다: card foot의 caption, sidebar의 status line, placeholder와 멈춘 view의 글자, dialog의 scrim과 blur, layer의 anchor 아래 간격이다.

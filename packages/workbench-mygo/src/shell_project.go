@@ -844,6 +844,9 @@ func (s *Shell) knownPlugin(id string) (*LoadedPlugin, error) {
 
 // paneCard refuses an id that is no card of the plane or that is a window sidebar.
 func (s *Shell) paneCard(id string) error {
+	if s.plane == nil {
+		return s.requirePlane()
+	}
 	if _, ok := s.plane.Card(id); !ok || isPlace(id) {
 		return fmt.Errorf("no card %s", id)
 	}

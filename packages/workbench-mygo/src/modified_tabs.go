@@ -54,18 +54,15 @@ func (s *Shell) askModified(card string, tab layout.Tab, answered func(settled b
 // saveTab runs the save command of a surface. The answer is true when the command succeeds and the tab is no longer modified.
 func (s *Shell) saveTab(tab, save string, answered func(settled bool)) {
 	s.registry.RunOn(save, json.RawMessage(`{}`), tab, func(_ any, err error) {
-		if s.cardOfTab(tab) == "" {
-			answered(false) // The tab left with its plane while the view saved.
-			return
-		}
-		if err == nil && s.tabModified(tab) {
+		present := s.cardOfTab(tab) != "" // The tab leaves with its plane while the view saves, and then nothing is left to close.
+		if err == nil && present && s.tabModified(tab) {
 			err = errors.New("left the tab modified")
 		}
 		if err != nil {
 			s.errors.Show(tab, fmt.Sprintf("저장하지 못했습니다 · %s: %v", save, err), "")
 			s.settle()
 		}
-		answered(err == nil)
+		answered(err == nil && present)
 	})
 }
 
