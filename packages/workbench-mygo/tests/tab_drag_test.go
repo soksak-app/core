@@ -132,6 +132,8 @@ func TestAPressOnATabIsNoDrag(t *testing.T) {
 	if drag := dragTab(t, f, tab, x+2, y); drag == nil || drag.Moved || drag.Target != nil {
 		t.Fatalf("the drag is %+v", drag)
 	}
+	// The press writes the layout through the host, whose answer the fixture delivers here.
+	f.settle()
 	if f.activeOf(card) != tab {
 		t.Fatalf("the press showed %s", f.activeOf(card))
 	}
