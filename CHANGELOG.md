@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F502-13: A mygo settings slider is as tall as its track, as the range input of the page is; it takes the pointer over the thumb that stands out of it, and its focus ring goes around the thumb. Red: `TestASliderIsAsTallAsItsTrack` failed on the previous drawing.
 - F502-13: The mygo settings card ends with its content, and its pane scrolls past the largest height, as the page's card with max-height does. Red: `TestTheCardEndsWithItsContent` failed on the previous drawing.
 - F502-13: A mygo settings row without a name keeps the empty name column of the page's grid, so its button stands in the control column. Red: `TestAButtonOfARowWithoutANameStandsInTheControlColumn` failed on the previous drawing.
 - F502-13: The grip of the mygo settings card is its whole head, with the padding and the border of the page's header, and the close button stands inside it. Red: `TestTheGripIsTheWholeHeadOfTheCard` failed on the previous drawing.

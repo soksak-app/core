@@ -417,7 +417,10 @@ func (s *Shell) drawSlider(c *ui.Context, control *SettingsControl, pane setting
 	}
 	ui.Row(c).Grow(1).Gap(pane.slideGap).AlignItems(ui.Center).Children(func() {
 		s.binder.Control(c, control.Name, control.Command.Name, control.item())
-		slider := s.binder.Bound(ui.SliderBase(c, &value, control.lo, control.hi), control.Name).Label(control.item()).Grow(1).Height(pane.thumb).PaddingX(pane.thumb / 2)
+		// The slider of the page is as tall as its track, and takes the pointer over the thumb that stands out of it.
+		reach := (pane.thumb - pane.trackH) / 2
+		slider := s.binder.Bound(ui.SliderBase(c, &value, control.lo, control.hi), control.Name).Label(control.item()).Grow(1).Height(pane.trackH).
+			HitOutset(reach).PaddingX(pane.thumb / 2)
 		if slider.Changed() {
 			s.runControl(control, math.Round(value))
 		}
@@ -432,7 +435,7 @@ func (s *Shell) drawSlider(c *ui.Context, control *SettingsControl, pane setting
 		ring := plain.ringColor(c)
 		slider.FocusRing(false).DrawOver(func(p *ui.Painter, r ui.Rect) {
 			if ringed {
-				plain.ring(p, r, r.H/2, ring)
+				plain.ring(p, ui.Rect{X: r.X, Y: r.Y - reach, W: r.W, H: thumb}, thumb/2, ring)
 			}
 		})
 		ui.Text(c, *control.Value+control.unit).Width(s.chLength(c, "slide-value-w", s.textSmall())).TextAlign(ui.End).FontSize(s.textSmall()).TextColor(s.palette.Muted)

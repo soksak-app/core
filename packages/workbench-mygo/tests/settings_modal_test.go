@@ -804,7 +804,16 @@ func TestAFocusedSliderTakesTheRingOfTheSystem(t *testing.T) {
 	if !ok {
 		t.Fatal("no slider of the gap")
 	}
-	box, width := slider.Bounds, plainLength(t, "ring-w")
+	// The element is the track, and the ring goes around the thumb that stands out of it by reach above and below.
+	track, width := slider.Bounds, plainLength(t, "ring-w")
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	thumb, _ := declared.Metric("slide-thumb")
+	trackH, _ := declared.Metric("slide-track-h")
+	reach := float32(thumb-trackH) / 2
+	box := ui.Rect{X: track.X, Y: track.Y - reach, W: track.W, H: track.H + 2*reach}
 	x := box.X + box.W/2
 	if got := f.pixelOf(x, box.Y-width/2); got != want {
 		t.Fatalf("the ring is %v, not %v, around %+v", got, want, box)

@@ -52,3 +52,11 @@ func TestTheCardEndsWithItsContent(t *testing.T) {
 		t.Fatalf("the card ends at %v and its last row at %v, want the card to end at %v", end, create.Y+create.H, want)
 	}
 }
+
+// The slider of the page is as tall as its track.
+func TestASliderIsAsTallAsItsTrack(t *testing.T) {
+	f := opened(t)
+	if slider := f.box("core.settings-modal.set", "size"); !designNear(slider.H, 3) {
+		t.Fatalf("the slider is %v tall, want 3", slider.H)
+	}
+}
