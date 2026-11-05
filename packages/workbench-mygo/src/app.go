@@ -128,7 +128,7 @@ func (a *App) Build(window host.Frontend) func(c *ui.Context) {
 		panic(err) // NewApp read the same embedded declarations.
 	}
 	painted := window.(Painted)
-	shell, err := NewShell(ShellOptions{Declared: declared, Calls: NewCalls(a.options.Table(window), a.options.Post),
+	shell, err := NewShell(ShellOptions{Now: time.Now, Declared: declared, Calls: NewCalls(a.options.Table(window), a.options.Post),
 		Environment: a.options.Environment, Installed: a.options.Installed(),
 		Reload:    func() { routine.Go("workbench-reload", window.StartWorkbench) },
 		Detaching: func() []string { return a.options.Detaching(window) },

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
@@ -169,6 +170,30 @@ func TestVerifyWaitsForAPendingPlacement(t *testing.T) {
 		if got := row(t, rows, prefix); !got.Skipped || got.OK {
 			t.Fatalf("row %s judged a pending placement: %+v", got.Name, got)
 		}
+	}
+}
+
+// A placement that the host leaves unanswered past the bound is a failure of the row that waits for it: a check that keeps skipping it
+// would answer no failure for a window whose views stay in the old place.
+func TestVerifyFailsAPlacementThatStaysUnanswered(t *testing.T) {
+	in := healthy(t)
+	in.Pending = true
+	in.PendingFor = workbench.LatePlacement - time.Millisecond
+	rows, err := workbench.Verify(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := row(t, rows, "V7a"); !got.Skipped {
+		t.Fatalf("a placement within the bound was judged: %+v", got)
+	}
+	in.PendingFor = workbench.LatePlacement
+	rows, err = workbench.Verify(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := row(t, rows, "V7a")
+	if got.Skipped || got.OK || !strings.Contains(got.Note, "3000 ms") {
+		t.Fatalf("a placement past the bound is %+v", got)
 	}
 }
 

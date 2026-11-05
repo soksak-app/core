@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
@@ -53,6 +54,10 @@ type VerifyRecord struct {
 	Settled  bool
 }
 
+// LatePlacement is how long a placement waits for the answer of the host before the check states it as failed. It is the bound after
+// which a window check takes a pending request for stopped (docs/spec/logging.md, stall dumps).
+const LatePlacement = 3 * time.Second
+
 // DrawnSurface is the slot of a surface that the plane drew. Card is the card that holds it.
 type DrawnSurface struct {
 	Frame layout.Rect
@@ -82,8 +87,9 @@ type VerifyInput struct {
 	RailGroups [][]layout.Rect
 	// Latest and Seated are the last commit and the commit that the host answered.
 	Latest, Seated *VerifyRecord
-	// Pending tells that the latest commit waits for the native placement answer of the host.
-	Pending bool
+	// Pending tells that the latest commit waits for the native placement answer of the host, and PendingFor for how long.
+	Pending    bool
+	PendingFor time.Duration
 	// Drawn holds the slots of the plane by surface, Cards the drawn box of each card, and Transformed the number of cards that a
 	// transform moves.
 	Drawn map[string]DrawnSurface
@@ -391,6 +397,8 @@ func Verify(in VerifyInput) ([]VerifyRow, error) {
 	switch {
 	case in.Latest == nil:
 		skip("V7a element − declared == 0", "아직 커밋 없음")
+	case in.Pending && in.PendingFor >= LatePlacement:
+		add("V7a element − declared == 0", false, fmt.Sprintf("host placement unanswered for %d ms (seq %d)", in.PendingFor.Milliseconds(), in.Latest.Seq))
 	case in.Pending:
 		skip("V7a element − declared == 0", pendingNote)
 	case len(in.Latest.Surfaces) == 0 && len(in.Drawn) == 0:

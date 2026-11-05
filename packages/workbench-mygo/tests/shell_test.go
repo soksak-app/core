@@ -498,6 +498,7 @@ func startedShell(t testing.TB, stored *storedHost) *shellFixture {
 	}
 	f := &shellFixture{t: t, host: stored, pending: make(steps, 256)}
 	shell, err := workbench.NewShell(workbench.ShellOptions{
+		Now:       time.Now,
 		Detaching: func() []string { return nil },
 		Window: func() (workbench.WindowView, error) {
 			return workbench.WindowView{Visible: true, Scale: 2, Width: 1200, Height: 800}, nil

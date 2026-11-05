@@ -140,6 +140,8 @@ Composition validation fails closed. Manifest validation rejects undeclared, mis
 
 A check of the verification status that has nothing to measure in the current state is not a pass: `core.verify` lists it with its reason under `skipped`, and it is neither a row nor a failure. A host that cannot have what a check measures always lists that check as skipped.
 
+On the mygo host a placement whose answer waits is such a state for 3 s, the bound of a stalled request of a window check. From then on until the host answers, `V7a` is failed and states how long the placement has waited, so the status does not answer no failure for views that stay in their old place. A placement that the host refused has its answer: it appears as the failure of the presentation, and the rows that read the placement stay skipped.
+
 A failed preparation or presentation rejects its requesting operation and appears in verification status and the error display. It does not permanently reject the work queue: a subsequent user layout operation can submit a new preparation. Rejected preparation promises are not reused, and no automatic retry reports the failed operation as successful.
 
 ## Acceptance

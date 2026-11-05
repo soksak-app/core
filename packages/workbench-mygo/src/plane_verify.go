@@ -2,6 +2,7 @@ package workbench
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 	host "github.com/soksak-app/core/packages/host/go/src"
@@ -91,6 +92,11 @@ func (s *Shell) verifyPlane() ([]VerifyRow, error) {
 	}
 	edge := float64(s.palette.BorderWidth)
 	head, foot := float64(s.metrics.headH), float64(s.metrics.footH)
+	pending := s.surfaces.latest != nil && (s.surfaces.answered == nil || s.surfaces.latest.Seq > s.surfaces.answered.Seq)
+	var pendingFor time.Duration
+	if pending && s.surfaces.running {
+		pendingFor = s.options.Now().Sub(s.surfaces.placedAt)
+	}
 	in := VerifyInput{
 		Grid: s.plane,
 		Tabs: func(id string) int {
@@ -108,7 +114,8 @@ func (s *Shell) verifyPlane() ([]VerifyRow, error) {
 		CardRadius: float64(s.palette.Radius),
 		Latest:     s.surfaces.latest,
 		Seated:     s.surfaces.answered,
-		Pending:    s.surfaces.latest != nil && (s.surfaces.answered == nil || s.surfaces.latest.Seq > s.surfaces.answered.Seq),
+		Pending:    pending,
+		PendingFor: pendingFor,
 		Drawn:      drawn,
 		Cards:      DrawnCards(tree, layout.Rect{X: origin.X, Y: origin.Y}),
 		Plane:      layout.Rect{W: s.plane.Width(), H: s.plane.Height()},
