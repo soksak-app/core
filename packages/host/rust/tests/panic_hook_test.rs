@@ -55,11 +55,12 @@ fn the_panic_hook_does_not_wait_for_the_writer_and_the_record_is_stored_before_t
                 Ok(0)
             })),
             pull_loss: None,
+            wake: Some(Box::new(|_| Ok(()))),
             policy_path: None,
             retention_bytes: 1 << 40,
         })
         .unwrap();
-        records::store_every_level(&log);
+        records::set_every_level(&log);
         use_host_event_log(Some(Arc::new(log)));
         let started = Instant::now();
         let ended = std::panic::catch_unwind(|| panic!("the window has no content view"));
@@ -136,6 +137,7 @@ fn a_panic_before_the_writer_exists_is_stored_when_the_writer_opens() {
             batch_interval: Duration::from_millis(20),
             rotate_bytes: 1 << 30,
             pull: None,
+            wake: None,
             pull_loss: None,
             policy_path: None,
             retention_bytes: 1 << 40,

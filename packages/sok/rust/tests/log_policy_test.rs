@@ -140,6 +140,7 @@ fn the_default_policy_of_the_writer_is_the_golden_default() {
         batch_interval: Duration::from_millis(20),
         rotate_bytes: 1 << 30,
         pull: None,
+        wake: None,
         policy_path: None,
         prune: None,
     })

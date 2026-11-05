@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -110,6 +111,7 @@ func TestAWriterRotatesAtItsBoundAndTheNewFileStartsWithLogOpenAndLogRotated(t *
 func TestAWriterStoresTheEventsAndTheLossOfItsPullSource(t *testing.T) {
 	options := optionsIn(t.TempDir(), "pulling")
 	delivered := false
+	options.Wake = make(chan struct{})
 	options.Pull = func(accept func(sok.RelayedEvent), lost func(events, bytes uint64, reason string, channel sok.Channel)) {
 		if delivered {
 			return
@@ -144,11 +146,16 @@ func TestRefusedPlacedEventsAreRecordedAsLossBeforeTheNextAcceptedEvent(t *testi
 	options.BatchInterval = time.Hour
 	options.Spawn = func(name string, fn func()) { go fn() }
 	// The pull runs on the writer goroutine at each drain. Holding it there keeps the writer from taking the queued events,
-	// so the queue stays full until the test releases it.
+	// so the queue stays full until the test releases it. It holds the first drain after the policy is stored.
 	entered := make(chan struct{})
 	release := make(chan struct{})
 	var once sync.Once
+	var hold atomic.Bool
+	options.Wake = make(chan struct{})
 	options.Pull = func(accept func(sok.RelayedEvent), lost func(events, bytes uint64, reason string, channel sok.Channel)) {
+		if !hold.Load() {
+			return
+		}
 		once.Do(func() {
 			close(entered)
 			<-release
@@ -163,6 +170,10 @@ func TestRefusedPlacedEventsAreRecordedAsLossBeforeTheNextAcceptedEvent(t *testi
 		t.Fatal(err)
 	}
 	log.SetPolicy(policy, "file")
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	hold.Store(true)
 	flushed := make(chan error, 1)
 	go func() { flushed <- log.Flush(5 * time.Second) }()
 	<-entered

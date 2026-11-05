@@ -9,8 +9,8 @@ use serde_json::Value;
 
 use super::super::{
     ClipboardValue, CoreRootResolver, DOMOverlay, Delivery, Frame, Handle, Hit, ImagePresentation,
-    ImageReleased, Insets, Key, Listener, PersistentStream, Pointer, ProcessFootprint, Raster,
-    WindowOverlay,
+    ImageReleased, Insets, Key, Listener, NativeEventWait, PersistentStream, Pointer,
+    ProcessFootprint, Raster, WindowOverlay,
 };
 
 /// Returns an error that contains operation in its name.
@@ -558,6 +558,10 @@ pub fn observe_activity() -> Result<(), String> {
 
 pub fn pull_native_events(_buffer: &mut [u8]) -> Result<usize, String> {
     missing("native event pull")
+}
+
+pub fn native_event_wake() -> Result<NativeEventWait, String> {
+    missing("native event wake")
 }
 
 pub fn set_native_event_policy(_levels: [i8; 5]) -> Result<(), String> {

@@ -70,6 +70,7 @@ fn options(logs: &Path, bound: u64) -> Options {
         batch_interval: Duration::from_millis(20),
         rotate_bytes: 1 << 30,
         pull: None,
+        wake: None,
         pull_loss: None,
         policy_path: None,
         retention_bytes: bound,

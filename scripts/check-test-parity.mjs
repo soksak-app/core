@@ -141,11 +141,11 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Tauri framework adapter", "rust", ["packages/host/tauriv2/src/**/*.rs"], ["packages/host/tauriv2/tests/**/*.rs", "packages/host/tauriv2/src/plugins_starter_test.rs"]),
   lane("Tauri application bootstrap", "rust", ["apps/tauriv2/src/main.rs", "apps/tauriv2/build.rs"], ["e2e/**/*.mjs", "e2e/platform/platform.js", "e2e/platform/darwin/darwin.js", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js", "e2e/fixtures/*/*/ui/*.html"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
 
-  lane("Go language host library", "go", ["packages/host/go/src/**/*.go"], ["packages/host/go/tests/**/*.go", "packages/host/go/tests/fixtures/**/*.json", "packages/host/go/src/exposure_settled_test.go", "packages/host/go/src/projects_test.go", "packages/host/go/src/windows_main_page_test.go", "packages/host/go/src/surface_elements_test.go", "packages/host/go/src/document_post_test.go", "packages/host/go/src/images_relay_test.go", "packages/host/go/src/image_detach_test.go", "packages/host/go/src/responder_test.go", "packages/host/go/src/start_test.go", "packages/host/go/src/diagnostics_test.go", "packages/host/go/src/diagnostics_input_reference_test.go", "packages/host/go/src/diagnostics_clock_test.go", "packages/host/go/src/composition_overlay_test.go", "packages/host/go/src/platform/darwin/webview_overlay_test.go", "packages/host/go/src/platform/darwin/document_test.go", "packages/host/go/src/platform/darwin/input_reference_test.go", "packages/host/go/src/exposure_status_test.go", "packages/host/go/src/exposure_webviews_test.go", "packages/host/go/src/modals_readiness_test.go", "packages/host/go/src/object_counts_test.go", "packages/host/go/src/view_lifecycle_test.go", "packages/host/go/src/view_responsiveness_test.go", "packages/host/go/src/view_theme_test.go", "packages/host/go/src/view_start_test.go", "packages/host/go/src/log_policy_levels_test.go", "packages/host/go/src/view_call_peer_test.go", "packages/host/go/src/view_call_record_test.go", "packages/host/go/src/view_error_test.go", "packages/host/go/src/view_binary_test.go", "packages/host/go/src/documents_test.go", "packages/host/go/src/presentation_wait_test.go", "packages/host/go/src/view_join_test.go", "packages/host/go/src/sidecar_reply_test.go", "packages/host/go/src/surfaces_test.go", "packages/host/go/src/view_origin_test.go", "packages/host/go/src/source_origins_test.go", "packages/host/go/src/sidecar_routes_test.go", "packages/host/go/src/sidecars_session_retention_test.go", "packages/host/go/src/plugins_starter_test.go", "packages/host/go/src/images_test.go", "packages/host/go/src/windows_front_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
+  lane("Go language host library", "go", ["packages/host/go/src/**/*.go"], ["packages/host/go/tests/**/*.go", "packages/host/go/tests/fixtures/**/*.json", "packages/host/go/src/exposure_settled_test.go", "packages/host/go/src/event_log_wake_test.go", "packages/host/go/src/projects_test.go", "packages/host/go/src/windows_main_page_test.go", "packages/host/go/src/surface_elements_test.go", "packages/host/go/src/document_post_test.go", "packages/host/go/src/images_relay_test.go", "packages/host/go/src/image_detach_test.go", "packages/host/go/src/responder_test.go", "packages/host/go/src/start_test.go", "packages/host/go/src/diagnostics_test.go", "packages/host/go/src/diagnostics_input_reference_test.go", "packages/host/go/src/diagnostics_clock_test.go", "packages/host/go/src/composition_overlay_test.go", "packages/host/go/src/platform/darwin/webview_overlay_test.go", "packages/host/go/src/platform/darwin/document_test.go", "packages/host/go/src/platform/darwin/input_reference_test.go", "packages/host/go/src/exposure_status_test.go", "packages/host/go/src/exposure_webviews_test.go", "packages/host/go/src/modals_readiness_test.go", "packages/host/go/src/object_counts_test.go", "packages/host/go/src/view_lifecycle_test.go", "packages/host/go/src/view_responsiveness_test.go", "packages/host/go/src/view_theme_test.go", "packages/host/go/src/view_start_test.go", "packages/host/go/src/log_policy_levels_test.go", "packages/host/go/src/view_call_peer_test.go", "packages/host/go/src/view_call_record_test.go", "packages/host/go/src/view_error_test.go", "packages/host/go/src/view_binary_test.go", "packages/host/go/src/documents_test.go", "packages/host/go/src/presentation_wait_test.go", "packages/host/go/src/view_join_test.go", "packages/host/go/src/sidecar_reply_test.go", "packages/host/go/src/surfaces_test.go", "packages/host/go/src/view_origin_test.go", "packages/host/go/src/source_origins_test.go", "packages/host/go/src/sidecar_routes_test.go", "packages/host/go/src/sidecars_session_retention_test.go", "packages/host/go/src/plugins_starter_test.go", "packages/host/go/src/images_test.go", "packages/host/go/src/windows_front_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
   lane("Wails framework adapter", "go", ["packages/host/wailsv3/src/**/*.go"], ["packages/host/wailsv3/tests/**/*.go"], { sharedTests: true }),
   lane("mygo framework adapter", "go", ["packages/host/mygo/src/**/*.go"], ["packages/host/mygo/tests/**/*.go"], { sharedTests: true }),
   lane("empty mygo window benchmark", "go", ["packages/host/mygo/benchmark/empty_window.go", "packages/host/mygo/benchmark/cmd/main.go"], ["packages/host/mygo/benchmark/empty_window_test.go"], { sharedTests: true }),
-  lane("Wails command line", "go", ["packages/sok/go/src/**/*.go"], ["packages/sok/go/tests/**/*.go", "packages/sok/go/src/diagnostics_test.go", "packages/sok/go/src/dev_test.go", "packages/sok/go/src/wailsv3_test.go", "packages/sok/go/src/mygo_test.go", "packages/sok/go/src/debug_test.go", "packages/sok/go/src/event_log_loss_test.go"]),
+  lane("Wails command line", "go", ["packages/sok/go/src/**/*.go"], ["packages/sok/go/tests/**/*.go", "packages/sok/go/src/diagnostics_test.go", "packages/sok/go/src/dev_test.go", "packages/sok/go/src/wailsv3_test.go", "packages/sok/go/src/mygo_test.go", "packages/sok/go/src/debug_test.go", "packages/sok/go/src/event_log_loss_test.go", "packages/sok/go/src/event_log_idle_test.go"]),
   lane("Tauri command line", "rust", ["packages/sok/rust/src/**/*.rs"], ["packages/sok/rust/tests/**/*.rs", "packages/sok/rust/src/event_log_lock_test.rs", "packages/sok/rust/src/debug_test.rs", "packages/sok/rust/src/event_log_loss_test.rs", "packages/sok/rust/src/process_wait_test.rs"]),
   lane("Wails application bootstrap", "go", ["apps/wailsv3/src/main.go"], ["e2e/**/*.mjs", "e2e/platform/platform.js", "e2e/platform/darwin/darwin.js", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js", "e2e/fixtures/*/*/ui/*.html"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
   lane("mygo application bootstrap", "go", ["apps/mygo/src/main.go"], ["packages/host/mygo/tests/framework_test.go"], { sharedTests: true }),
@@ -1012,6 +1012,29 @@ const FEATURE_LINKS = [
     ],
     expected: "The input context of an image region states no document access, so Korean composes from its first syllable.",
     levels: ["native"],
+  },
+  {
+    id: "F535",
+    implementation: [
+      { file: "packages/sok/go/src/event_log.go", symbol: "wakeUp := func() bool {" },
+      { file: "packages/sok/rust/src/event_log.rs", symbol: "let sleep = || -> Option<Instant> {" },
+      { file: "packages/host/go/src/event_log.go", symbol: "func nativeWake(" },
+      { file: "packages/host/rust/src/event_log.rs", symbol: "fn native_wake(" },
+      { file: "native/darwin/src/event_ring.m", symbol: "int sp_event_wake_fd(void) {" },
+    ],
+    tests: [
+      { file: "packages/sok/go/src/event_log_idle_test.go", id: "TestWriterSleepsWithNothingToWrite" },
+      { file: "packages/sok/go/src/event_log_idle_test.go", id: "TestFirstEventIsStoredAtOnce" },
+      { file: "packages/sok/go/src/event_log_idle_test.go", id: "TestCloseStoresWhatWaits" },
+      { file: "packages/sok/rust/tests/event_log_idle_test.rs", id: "a_writer_with_nothing_to_write_does_not_wake" },
+      { file: "packages/sok/rust/tests/event_log_idle_test.rs", id: "the_first_event_is_stored_at_once" },
+      { file: "packages/sok/rust/tests/event_log_idle_test.rs", id: "close_stores_what_waits_and_what_the_source_holds" },
+      { file: "packages/host/go/src/event_log_wake_test.go", id: "TestNativeWakeTurnsThePipeIntoTheWakeOfTheWriter" },
+      { file: "packages/host/rust/tests/event_native_wake_test.rs", id: "a_native_event_ends_the_wait_of_the_platform" },
+      { file: "native/darwin/tests/event_ring_test.m", id: "a burst of events writes the pipe once" },
+    ],
+    expected: "A writer with nothing to write sleeps, what wakes it is stored at once, and a flush or a close stores what waits.",
+    levels: ["unit", "native"],
   },
   {
     id: "F533",
@@ -6169,7 +6192,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F178",
-    implementation: [{ file: "packages/sok/rust/src/event_log.rs", symbol: "let mut due = Instant::now() + interval;" }],
+    implementation: [{ file: "packages/sok/rust/src/event_log.rs", symbol: "if queued.is_none() && due.is_some_and(|at| Instant::now() >= at) {" }],
     tests: [
       { file: "packages/host/rust/tests/event_log_test.rs", id: "a_steady_stream_of_events_is_written_at_each_batch_interval" },
       { file: "packages/host/go/tests/event_log_test.go", id: "TestASteadyStreamOfEventsIsWrittenAtEachBatchInterval" },
@@ -11134,13 +11157,13 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-243",
-    implementation: [{ file: "e2e/benchmark/cases/terminal.mjs", symbol: "export async function withTerminalDragTraceMode" }],
+    implementation: [{ file: "e2e/view-metrics-collection.mjs", symbol: "export async function withDragTraceMode" }],
     tests: [
-      { file: "e2e/test/terminal-view-metrics-case.test.mjs", id: "terminal drag performance trace mode preserves frame logging and restores the original setting" },
-      { file: "e2e/test/terminal-view-metrics-case.test.mjs", id: "terminal drag trace-mode cleanup preserves action and after-write restoration failures" },
-      { file: "e2e/test/terminal-view-metrics-case.test.mjs", id: "terminal drag trace mode restores performance even when post-action settings cannot be read" },
-      { file: "e2e/test/terminal-view-metrics-case.test.mjs", id: "terminal drag trace mode restores performance before reporting a changed log policy" },
-      { file: "e2e/test/terminal-view-metrics-case.test.mjs", id: "terminal drag trace mode preserves falsy action rejection values" },
+      { file: "e2e/test/view-metrics-collection.test.mjs", id: "a measured drag stores only the frame class without the performance trace and restores both settings" },
+      { file: "e2e/test/view-metrics-collection.test.mjs", id: "a measured drag keeps the failure of its action and of the restoration" },
+      { file: "e2e/test/view-metrics-collection.test.mjs", id: "a measured drag restores the settings when the settings cannot be read after it" },
+      { file: "e2e/test/view-metrics-collection.test.mjs", id: "a measured drag refuses a log policy without the frame trace and changes nothing" },
+      { file: "e2e/test/view-metrics-collection.test.mjs", id: "a measured drag keeps a falsy rejection of its action" },
     ],
     expected: "Terminal drag measurement disables only the global performance trace while preserving frame logging, restores the original setting before reporting failures, and retains action and restoration errors without changing cadence or geometry acceptance criteria.",
     levels: ["unit"],
@@ -11912,7 +11935,7 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // F503 states the framework fork that the Wails host pins in the native surfaces specification and in the go.mod comments; it
 // changes no runtime capability.
 // F524 corrects the release checks that the verification specification states; it changes no runtime capability.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
+const NON_CAPABILITY_COMPLETIONS = new Set(["F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66), the window checks of plugins (F110) and the registry listing of the hwp plugin (F141, registry items G37 and G38). Core cannot read

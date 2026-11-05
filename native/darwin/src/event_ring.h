@@ -95,3 +95,8 @@ size_t sp_event_drain(uint8_t *buffer, size_t capacity);
 
 // Returns the loss of a channel of the process ring since the last call and resets it.
 sp_event_ring_loss sp_event_take_loss(uint8_t channel);
+
+// Returns the read end of a non-blocking pipe, or -1 if it cannot be made. The pipe turns readable when the process ring
+// holds a record, a loss or a count of the gate that no sp_event_drain took since it last turned readable, so that a writer
+// can sleep while nothing waits for it. Its bytes carry nothing. Safe from any thread; the descriptor stays open.
+int sp_event_wake_fd(void);

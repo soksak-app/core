@@ -1010,6 +1010,8 @@ fn invalid_json_closes_connection() {
 | `log.writer.stores-cids` | host의 생산자가 상관 식별자와 함께 낸 event는 `cids`(순서대로의 목록)와 함께 저장되고, 식별자가 없는 event에는 `cids`가 없다. 비어 있거나 따옴표, 역슬래시, 제어 문자를 담은 식별자는 거부하고 손실로 센다. | all |
 | `log.writer.never-blocks-and-counts-loss` | `emit`은 기다리지 않고 돌아온다. 큐에 자리가 없으면 false를 돌려주고, writer는 거부된 event 수와 같은 `count`와 거부된 event의 `channel`을 가진 `log.dropped` 하나를 그것이 가리키는 `seq` 범위 뒤에 저장한다. | all |
 | `log.writer.writes-each-interval` | writer는 마지막 쓰기 뒤 batch 간격이 끝날 때마다 모인 것을 쓰며, event가 간격보다 빨리 계속 들어올 때도 그렇다. event가 없는 간격을 기다리는 writer는 꾸준한 입력 동안 아무것도 쓰지 않고 kill에서 한 간격보다 많이 잃는다. | all |
+| `log.writer.sleeps-with-nothing-to-write` | batch 간격 동안 쓴 것이 없는 writer는 event, source의 wake, count가 닿을 때까지 다시 깨어나지 않는다. | all |
+| `log.writer.stores-the-first-event-at-once` | 잠든 writer를 깨운 event는 batch 간격을 기다리지 않고 저장되고, 뒤따르는 event는 그 event가 시작한 간격의 batch를 기다린다. | all |
 | `log.writer.error-wakes-the-writer` | level이 `error`인 event는 배치 간격을 기다리지 않고 기록된다. | all |
 | `log.writer.files-are-private` | 로그 폴더는 mode 0700, 로그 파일은 mode 0600이다. | all |
 | `log.writer.output-follows-the-contract` | writer의 파일은 자신의 event를 선언한 catalog에 대해 `@soksak/log-contract` 감사를 통과한다. | all |
@@ -1021,7 +1023,8 @@ fn invalid_json_closes_connection() {
 | `log.native.stores-pulled-records-in-the-layer-native` | writer는 native ring에서 pull한 record를 library가 준 시각과 level, 이름, field, writer의 `seq`로 계층 `native`에 저장한다. | all |
 | `log.native.stores-clock-and-cids-of-pulled-records` | native ring에서 pull한 record는 library가 준 `ts_us`, `mono_ns`, `cids`와 함께 저장된다. 식별자에 따옴표, 역슬래시, 제어 문자가 있거나 이름과 식별자의 길이가 record에 맞지 않는 record는 이유 `a native record was refused`의 `log.dropped`로 센다. | all |
 | `log.native.counts-refused-records-and-ring-loss` | writer는 native ring이 거부한 event를 이유 `the native ring was full`의 `log.dropped`로 세고, 계층 `native` 밖의 이름, 정의되지 않은 level이나 class, JSON 객체가 아닌 field, 맞지 않는 길이를 가진 pull한 record를 이유 `a native record was refused`의 `log.dropped`로 센다. | all |
-| `log.native.pulls-at-the-batch-interval` | writer는 배치 간격마다 native ring을 pull하므로, 나중에 도착한 record는 flush 요청 없이 저장된다. | all |
+| `log.native.wake-stores-a-record-at-once` | native ring의 wake는 잠든 writer를 ring으로 데려가므로, 나중에 도착한 record는 flush 요청 없이 즉시 저장된다. | all |
+| `log.native.close-stores-the-ring` | writer를 닫으면 native ring의 record를 저장하며, wake를 받지 못한 record도 저장한다. | all |
 | `log.native.platform-pulls-the-ring` | 플랫폼은 빈 native ring을 0바이트와 손실 없음으로 pull하고, 빈 buffer로의 pull은 거부한다. | all |
 | `log.native.platform-reads-the-clock-and-takes-the-boot` | 플랫폼은 양수이고 줄어들지 않으며 시간과 함께 늘어나는 monotonic clock(나노초)을 읽고, 실행의 boot 식별자를 native 계층의 상관 식별자용으로 받는다. 빈 식별자와 영문자, 숫자, `-`, `_` 외의 문자가 있는 식별자는 거부한다. | all |
 | `log.native.host-writer-starts-with-the-platform-pull` | host의 writer는 플랫폼의 pull과 함께 시작하고 `log.open`을 먼저 쓴다. | all |

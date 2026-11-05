@@ -31,6 +31,7 @@ fn a_created_policy_file_is_watched_before_its_read() {
             batch_interval: Duration::from_millis(20),
             rotate_bytes: 1 << 30,
             pull: None,
+            wake: None,
             pull_loss: None,
             policy_path: Some(policy_path.clone()),
             retention_bytes: 1 << 40,

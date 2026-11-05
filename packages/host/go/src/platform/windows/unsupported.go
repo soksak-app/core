@@ -169,6 +169,10 @@ func (implementation) PullNativeEvents([]byte) (int, error) {
 	return 0, unsupported("native event pull")
 }
 
+func (implementation) NativeEventWake() (int, error) {
+	return 0, unsupported("native event wake")
+}
+
 func (implementation) TakeNativeEventLoss(uint8) (uint64, uint64, error) {
 	return 0, 0, unsupported("native event loss")
 }

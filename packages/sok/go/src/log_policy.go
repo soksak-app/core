@@ -193,6 +193,18 @@ func (g *eventGate) count(class Class, level Level) {
 	}
 }
 
+// counted reports whether a count waits for its report.
+func (g *eventGate) counted() bool {
+	for c := range g.gated {
+		for l := range g.gated[c] {
+			if g.gated[c][l].Load() > 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // Enabled reports whether an event of the class and the level is stored under the policy in force. It counts nothing.
 func (l *EventLog) Enabled(class Class, level Level) bool { return l.gate.enabled(class, level) }
 
@@ -203,6 +215,7 @@ func (l *EventLog) Gate(class Class, level Level) bool {
 		return true
 	}
 	l.gate.count(class, level)
+	l.rouse()
 	return false
 }
 
