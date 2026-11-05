@@ -495,11 +495,23 @@ fn a_request_of_a_page_with_a_recorded_root_goes_on_with_no_project() {
     let window = ShownOwner(shown.clone());
     let sidecars: Sidecars<ShownOwner> = declared(executable.path(), config.path());
     sidecars
-        .send_from_page(&window, SIDECAR, SURFACE, &raw(r#"{"operation":"open"}"#), &[])
+        .send_from_page(
+            &window,
+            SIDECAR,
+            SURFACE,
+            &raw(r#"{"operation":"open"}"#),
+            &[],
+        )
         .unwrap();
     *shown.lock().unwrap() = String::new();
     sidecars
-        .send_from_page(&window, SIDECAR, SURFACE, &raw(r#"{"operation":"input"}"#), &[])
+        .send_from_page(
+            &window,
+            SIDECAR,
+            SURFACE,
+            &raw(r#"{"operation":"input"}"#),
+            &[],
+        )
         .unwrap();
     sidecars.stop();
     thread.join().unwrap();

@@ -5,7 +5,7 @@
 //                                                  that the window checks used) hold only declared events with their required
 //                                                  fields, consecutive seq across generations and the debug file, complete
 //                                                  chains and no error event.
-// The first form runs in `make events-check`; its rules are in the checks kit, which every repository
+// The first form runs in `make events-check`; its rules are in the kit, which every repository
 // calls as `soksak-check census`. The second form audits configuration folders without the judgment of tests;
 // `node scripts/audit-run.mjs <run folder>` audits a run and judges each test by the log.
 import { parseArgs } from 'node:util';
@@ -14,7 +14,7 @@ import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { auditLogs, composeCatalogs } from '../packages/log-contract/index.js';
 import { validateManifest, validateSidecar } from '../packages/plugin-api/index.js';
-import { catalogReport, trackedSources } from '@soksak/kit-checks/census';
+import { catalogReport, trackedSources } from '@soksak/kit/census';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const CATALOG = 'docs/spec/events.json';

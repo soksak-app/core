@@ -5,11 +5,11 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { censusRules, emitFindings, parseCensusConfig } from "@soksak/kit-checks/census";
+import { censusRules, emitFindings, parseCensusConfig } from "@soksak/kit/census";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const CONFIG = "scripts/census.json";
-const CHECK = fileURLToPath(import.meta.resolve("@soksak/kit-checks/check"));
+const CHECK = fileURLToPath(import.meta.resolve("@soksak/kit/check"));
 const run = (...args) => spawnSync(process.execPath, [CHECK, "census", "--config", CONFIG, ...args], { cwd: ROOT, encoding: "utf8" });
 
 test("the repository passes the census of its enabled rules and prints every pending rule with its item and count", () => {

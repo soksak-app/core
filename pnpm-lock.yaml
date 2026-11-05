@@ -32,9 +32,9 @@ importers:
         specifier: workspace:*
         version: link:packages/window-check
     devDependencies:
-      '@soksak/kit-checks':
-        specifier: https://github.com/soksak-app/kit-checks/releases/download/v0.0.8/soksak-kit-checks-0.0.8.tgz
-        version: https://github.com/soksak-app/kit-checks/releases/download/v0.0.8/soksak-kit-checks-0.0.8.tgz
+      '@soksak/kit':
+        specifier: https://github.com/soksak-app/kit/releases/download/v0.0.11/soksak-kit-0.0.11.tgz
+        version: https://github.com/soksak-app/kit/releases/download/v0.0.11/soksak-kit-0.0.11.tgz
       acorn:
         specifier: 8.18.0
         version: 8.18.0
@@ -240,9 +240,9 @@ packages:
     resolution: {integrity: sha512-7FNeNl8NCE7aINx7WXiKQrPYZWC/hvrTsmk6zmxbI7LTXE7hVek/n8AfVgpe2y82zl3w0HvCHN0bVKMBoJcC0w==}
     engines: {node: '>= 10.0.0'}
 
-  '@soksak/kit-checks@https://github.com/soksak-app/kit-checks/releases/download/v0.0.8/soksak-kit-checks-0.0.8.tgz':
-    resolution: {integrity: sha512-0Xj0DbobM75cqn4brkMRkLQSqpBV+lgdkcPqoIfSimrur7LZub1PkveDrRDTIBHohQzXJiFS7+hesmapyuXg7Q==, tarball: https://github.com/soksak-app/kit-checks/releases/download/v0.0.8/soksak-kit-checks-0.0.8.tgz}
-    version: 0.0.8
+  '@soksak/kit@https://github.com/soksak-app/kit/releases/download/v0.0.11/soksak-kit-0.0.11.tgz':
+    resolution: {integrity: sha512-P8dM4BNpmB7dQ9sP6Z2AHVAy56G5DK+Fes+5j+cMCXCmXkJV2QS06ldMlpaNy2QMx2n4rVVbFhwZSRq1CPloMg==, tarball: https://github.com/soksak-app/kit/releases/download/v0.0.11/soksak-kit-0.0.11.tgz}
+    version: 0.0.11
     hasBin: true
 
   '@typescript/typescript-aix-ppc64@7.0.2':
@@ -581,7 +581,7 @@ snapshots:
       node-addon-api: 7.1.1
       picomatch: 4.0.7
 
-  '@soksak/kit-checks@https://github.com/soksak-app/kit-checks/releases/download/v0.0.8/soksak-kit-checks-0.0.8.tgz':
+  '@soksak/kit@https://github.com/soksak-app/kit/releases/download/v0.0.11/soksak-kit-0.0.11.tgz':
     dependencies:
       ajv: 8.20.0
 

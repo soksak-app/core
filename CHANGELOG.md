@@ -132,6 +132,9 @@
 - F502-10: The framework reports what came of the frame that shows a scene (`Window.AfterPresent`), reads the element tree in every build (`Content.ElementTree`), the release builds included, and draws the frames of a window out of sight with `WindowOptions.DrawWhileOccluded`. In both language host libraries the presentation notice of the `Frontend` port carries a failure, which cancels the layout transaction, and the settled presentation of the port makes the block that the settled wait of the platform takes, so that neither the transaction nor the wait names a main web view; the Wails and Tauri framework adapters make that block through the new operation `MainPresentation` of the Surface layout group. The main-thread audit counts a call of a block as a call of a native function.
 - F502-13: The exposure kind `dom` becomes `element` on every host and in every plugin declaration: `exposes.element`, `expose.element`, `element.rect`, `element.act`, `sok element`, the MCP tools `element_rect` and `element_act` and the member `element` of `exposure.list`; a manifest with `exposes.dom` is refused. The workbench statuses are defined over the workbench: `core.window.workbench`, `core.workbench.error` and `core.workbench.audit`, whose rows are `{role, expose, command, text}`, and the responder owner and the `host.hit` kind `workbench`. The window checks wait for a new `start` of `core.window.workbench`, and each iterates `Object.values(APPS)` or `MAIN_PAGE_APPS`, which `scripts/check-e2e-host-parity.mjs` checks.
 - F463: Core uses the checks kit and its one executable `soksak-check`. Red: `scripts/test/workflows.test.mjs` failed. Green: it passes.
+- F466: Records cite no temporary log, and the record check reports a new citation.
+- F467: Core pins `@soksak/kit`.
+- F465: Records cite no log of the local build folder, and the record check reports a new citation.
 - F464: The build environment check compares only major versions of Node and pnpm. Red: `scripts/test/check-build-environment.sh` failed on Node 26.13.0. Green: it passes.
 - F462: Core 0.0.35 installs the plugin releases that declare `^0.0.35`, and the registry lists them.
 - F453: The release run published v0.0.35, and the registry lists it.
@@ -456,9 +459,9 @@
 - F292-67: `node scripts/node-tests.mjs --changed` passes with a `SKIP` line when `--only` and `--exclude` leave no test file of the changed range, instead of failing with `no test file contains ""`.
 - F292-65: `document_report_test` waits until the region reports the title that the test sets before the reload, answers the frame of the reloaded form page one second late, and fails a press that does not focus its target with the load state of the page and its frame, the last reported state, the first responder and the hit view, and an undelivered press or key with its result codes. The failure of the frame field step in a release run was not reproduced in 20 runs and two overlapping repeats of 10. Validation: `make -C native/darwin repeat TEST=document_report_test COUNT=20`.
 - F292-63: Each host has a passing test for the contract case `install.stored.no-migration`. The Go and Rust `sok` install tests refuse a plugin manifest that declares `migrations` with `plugin.json: unknown field migrations`, and the declaration audit test checks that every case of the Contract cases table has a declaring test in the current sources. Validation: the audit test reported both hosts without a test for the case on the unchanged tests and passes with the new tests; `make go-repeat` and `make rust-repeat` run the new tests and pass.
-- F277-3: A process that the process identity package registers is listed by LaunchServices with its display name from its registration, because `_RegisterApplication` receives a check-in dictionary with `_kLSDisplayNameKey`; before, the process was listed under its executable name until `_LSSetApplicationInformationItem` returned, and the files sidecar test that reads `lsappinfo list` received `soksak-files`. Validation: the live case `LaunchServices lists the process with its display name from its registration` of `process_identity_test.m` failed with `found process_identity_test` on the unchanged code and passes after the change; `make -C native/darwin/process-identity repeat TEST=process_identity_test COUNT=20` passes alone and in two concurrent copies (`build/logs/F277/`).
+- F277-3: A process that the process identity package registers is listed by LaunchServices with its display name from its registration, because `_RegisterApplication` receives a check-in dictionary with `_kLSDisplayNameKey`; before, the process was listed under its executable name until `_LSSetApplicationInformationItem` returned, and the files sidecar test that reads `lsappinfo list` received `soksak-files`. Validation: the live case `LaunchServices lists the process with its display name from its registration` of `process_identity_test.m` failed with `found process_identity_test` on the unchanged code and passes after the change; `make -C native/darwin/process-identity repeat TEST=process_identity_test COUNT=20` passes alone and in two concurrent copies.
 - F277-2: The process identity package has the `repeat` target of the native/darwin form, `make -C native/darwin/process-identity repeat TEST=process_identity_test COUNT=<n>`, which runs its test through the native test runner with the per-test RUNNING and PASS lines and time limit; `make -C native/darwin repeat` no longer fails for this test with `No rule to make target`. Validation: `scripts/test/native-repeat.test.mjs` `make repeat in the process-identity package names its test of each run, reports its result and elapsed time, and stops at a failed run` failed with `No rule to make target 'repeat'` on the unchanged Makefile and passes after the change; `test-process-identity` passes after the variable rename.
-- F277: The display-name readback of the process identity test was repeated 75 times without a failure, 60 of those runs in two copies that overlapped, so F277 closes as not reproduced; its cause is recorded when it recurs, through the error text of F277-1. Validation: `make -C native/darwin/process-identity repeat TEST=process_identity_test COUNT=<n>` logs `build/logs/F277/` (solo, sequential, and overlapping runs).
+- F277: The display-name readback of the process identity test was repeated 75 times without a failure, 60 of those runs in two copies that overlapped, so F277 closes as not reproduced; its cause is recorded when it recurs, through the error text of F277-1. Validation: `make -C native/darwin/process-identity repeat TEST=process_identity_test COUNT=<n>` in solo, sequential, and overlapping runs.
 - F296-4: The release workflow of each host runs no stored data migration step; `scripts/release-step.sh` and its test are removed. The generated event class tables and the window-check gate list no longer name `log.migrated`.
 - F296-3: The host readers of projects.json, settings.json, tab-state.json and tab-sessions refuse a file of another format with `<file>: <name>: format must be <n>` instead of reading it, and the workbench refuses a stored plugin data entry of another format or without a format instead of converting it.
 - F296-2: The `sok` command lines of both hosts no longer apply migration definitions. A `plugins/installed.json` of any format other than 3 is refused with `<file>: plugins/installed.json: format must be 3`, and the manifest case of the `migrations` member is replayed by the Go, Rust and plugin-api runners.
@@ -1260,8 +1263,8 @@
   application window a presentation update between reference inputs without
   treating it as proof that the AppKit text view painted or that physical
   scanout occurred. The controlled owner fails because the second key starts
-  before presentation (`/tmp/F239-151-reference-step-red-01.log`) and passes
-  1/1 after the checkpoint (`/tmp/F239-151-reference-step-green-01.log`). The
+  before presentation and passes
+  1/1 after the checkpoint. The
   existing capture, frame identity, 600-frame and 33 ms acceptance requirements
   remain unchanged; runtime acceptance is pending.
 
@@ -1274,9 +1277,9 @@
   is retained. The stop-timeout/late-completion isolation owner also passes
   1/1 in 6.499 s.
 
-- F239-148: Append decoded frame identity rows in sample order on the existing serial identity lane. Retire each admitted job only after the JSONL append completes, independently of the shared raw/source artifact writer. Keep the eight-job and 64 MiB limits unchanged. Red: the matcher owner failed its blocked-writer row-commit assertion (`/tmp/F239-148-image-match-red.log`). Green: the same owner passed 1/1 in 0.873 s; it observed all eight ordered rows while the artifact writer remained blocked, then verified all eight rows drained after release (`/tmp/F239-148-image-match-green-final.log`). `make docs-check` passes (`/tmp/F239-148-docs-check-final.log`).
+- F239-148: Append decoded frame identity rows in sample order on the existing serial identity lane. Retire each admitted job only after the JSONL append completes, independently of the shared raw/source artifact writer. Keep the eight-job and 64 MiB limits unchanged. Red: the matcher owner failed its blocked-writer row-commit assertion. Green: the same owner passed 1/1 in 0.873 s; it observed all eight ordered rows while the artifact writer remained blocked, then verified all eight rows drained after release. `make docs-check` passes.
 
-- F239-149: Return the existing canonical `code-outside-expected-roi` helper reason when a detected QR crosses the expected ROI boundary. The matcher already maps it to `cropped`, while valid payloads absent from the issued set remain `unissued`. Red: `capture_frame_identity_test` reported the synonymous `cropped-code-in-expected-roi` at all four measured clipped edges (`/tmp/F239-149-capture-frame-identity-helper-red-01.log`). Green: the same owner passes 1/1 in 0.444 s (`/tmp/F239-149-capture-frame-identity-helper-green-01.log`).
+- F239-149: Return the existing canonical `code-outside-expected-roi` helper reason when a detected QR crosses the expected ROI boundary. The matcher already maps it to `cropped`, while valid payloads absent from the issued set remain `unissued`. Red: `capture_frame_identity_test` reported the synonymous `cropped-code-in-expected-roi` at all four measured clipped edges. Green: the same owner passes 1/1 in 0.444 s.
 
 - F239-146: Replace the QR frame-identity decoder with pinned ZXing-C++ v3.1.1 after preserved recordings reached the existing eight-job Vision backlog limit. Verify the source release SHA-256, build the QR-only static C API into the existing macOS static library, and stage the Apache-2.0 license in both app bundles. Preserve exact payload, ROI, ambiguity, error, artifact ordering, resource bounds, and raw-frame behavior. Five focused native owners pass, the pkg-config owner passes, and bundle preparation verifies the license in both hosts. Both host builds and full-recording cadence acceptance remain pending.
 
@@ -1289,7 +1292,7 @@
   assertions but failed cleanup when the frontmost application changed from
   Chrome to Terminal; the later fresh session preserved its baseline.
 
-- F239-145: Record the frontmost process when the native application deactivates. The activity observer checks the event gate before querying `NSWorkspace.frontmostApplication` and stores nullable PID and bundle fields. Red: `make -C native/darwin repeat TEST=activity_observers_test COUNT=1` failed because `native.app.deactivated` had no fields (`/tmp/F239-145-activity-observers-red-01.log`). Green: the same target passed in 0.498 s (`/tmp/F239-145-activity-observers-green-01.log`). This identifies the key-event recipient only; it does not establish why focus changed or resolve the preserved F143 failure.
+- F239-145: Record the frontmost process when the native application deactivates. The activity observer checks the event gate before querying `NSWorkspace.frontmostApplication` and stores nullable PID and bundle fields. Red: `make -C native/darwin repeat TEST=activity_observers_test COUNT=1` failed because `native.app.deactivated` had no fields. Green: the same target passed in 0.498 s. This identifies the key-event recipient only; it does not establish why focus changed or resolve the preserved F143 failure.
 
 - F239-144: Report the rejection stage, pending job and crop-byte counts, incoming crop, artifact pending bytes, and applicable limits in the existing frame-identity capacity error. Keep the eight-job and 64 MiB limits unchanged. The preserved Tauri trace shows two long Vision decodes filling eight pending jobs while total crop bytes remain below 64 MiB.
 
@@ -1339,17 +1342,15 @@
 - F239-109: Show each Rust test build's start and elapsed pass/fail result through
   the shared test runner while retaining its per-build timeout. Controlled
   negative: temporarily restoring the no-output callback makes the tracked
-  discovery assertion fail with `no build start line: []`
-  (`/tmp/F239-109-rust-build-progress-red.log`). Green:
-  the same owner test passes (`/tmp/F239-109-rust-build-progress-green.log`), and
+  discovery assertion fail with `no build start line: []`. Green:
+  the same owner test passes, and
   the Rust discovery plus Cargo metadata owner cases pass 2/2
-  (`/tmp/F239-109-rust-build-progress-green-plus-cargo-metadata.log`).
+ .
 
 - F239-102: Select Rust host-contract declarations from Cargo-listed test
   executables and their target source paths. The preserved initial static audit
   included Linux-only and Windows-only Tauri sok declarations in the macOS
-  inventory. The focused selector owner test passes 1/1
-  (`/tmp/F239-102-rust-declaration-inventory-green.log`). The current full
+  inventory. The focused selector owner test passes 1/1. The current full
   declaration audit remains pending while other F239-93 owner changes land.
 
 - F239-140: Explain six typed image detach acknowledgement parse conversions.
@@ -1368,8 +1369,8 @@
 - F239-117: Clear inherited run metadata from E2E subprocess fixtures before
   applying each case's overrides. Preserve the production requirement for both
   nonempty values. Red: with valid outer metadata, missing and partial cases
-  probed the baseline and started a child (`/tmp/F239-117-red.log`). Green: the
-  same focused owner test passes 4/4 (`/tmp/F239-117-green.log`). Production
+  probed the baseline and started a child. Green: the
+  same focused owner test passes 4/4. Production
   runner behavior is unchanged.
 
 - F239-134: Join captured rasters only to exact matching host screen bodies and
@@ -1394,7 +1395,7 @@
   the resize guard, existing target and one-second deadline. The owner test
   passes 1/1; runtime acceptance remains pending.
 
-- F239-137: Include every installed plugin manifest catalog in per-configuration event-log audits. Validate the installed manifest, plugin identity, catalog layer and namespace, and report missing or invalid catalog files explicitly. `composeCatalogs` now preserves sidecar validation while adding plugin event declarations and layers. Red: the owner assertion failed because the installed plugin event was absent from `catalogOf` (`actual: undefined`). Green: both installed-plugin owner cases pass in one run, including a disabled installed plugin and invalid manifest/catalog cases; sidecar audit and log-contract composition regressions each pass 3/3. Runtime host catalog loading already included plugin catalogs and was unchanged. The Wails catalog preflight passed in `/tmp/soksak-final-development-20261025.7QLhon/async-wails-ime-check-02.log` and `/tmp/soksak-final-development-20261025.7QLhon/accepted-frame-wails-ime.log`: the stored-catalog check passed, and all ten reference/terminal steps and capture stop ran without the plugin-catalog error. Both runs still failed the separate F134 frame-message/accepted-marker join and the 33 ms capture-gap check (33.287 ms and 33.800 ms); this is not IME visual acceptance.
+- F239-137: Include every installed plugin manifest catalog in per-configuration event-log audits. Validate the installed manifest, plugin identity, catalog layer and namespace, and report missing or invalid catalog files explicitly. `composeCatalogs` now preserves sidecar validation while adding plugin event declarations and layers. Red: the owner assertion failed because the installed plugin event was absent from `catalogOf` (`actual: undefined`). Green: both installed-plugin owner cases pass in one run, including a disabled installed plugin and invalid manifest/catalog cases; sidecar audit and log-contract composition regressions each pass 3/3. Runtime host catalog loading already included plugin catalogs and was unchanged. The Wails catalog preflight passed: the stored-catalog check passed, and all ten reference/terminal steps and capture stop ran without the plugin-catalog error. Both runs still failed the separate F134 frame-message/accepted-marker join and the 33 ms capture-gap check (33.287 ms and 33.800 ms); this is not IME visual acceptance.
 
 - F239-139: Require `layers` when composing a base catalog and normalize the
   optional plugin diagnostic source once. Preserve supplied source paths and
@@ -1586,22 +1587,20 @@
   `rustfmt --edition 2024 --config skip_children=true`. Red: the final format
   check reported both files as unformatted. Green: `make rust-format-check` and
   `make go-format-check` pass after the required formatting command
-  (`/tmp/soksak-final-development-20261025.7QLhon/format-recheck-02.log`).
+ .
   No semantic changes were made.
 
 - F239-114-3: State why both capture artifact serialization catches preserve
   the exception reason and return it through the existing capture error path.
-  Red: the preserved Node run reported both catch clauses without reasons
-  (`/tmp/soksak-final-development-20261025.7QLhon/node-suite.log`). Green: the
-  fallback owner file passes 10/10 after the precise reason comments
-  (`/tmp/F239-139-fallback-owner-final.log`). No capture error is suppressed.
+  Red: the preserved Node run reported both catch clauses without reasons. Green: the
+  fallback owner file passes 10/10 after the precise reason comments. No capture error is suppressed.
 
 - F239-115: State the caller-visible reason at each of the 11 Objective-C
   `m.error-return` sites in process identity, capture, image matching, image
   regions and input activation. Red: the preserved Node run reported all 11
-  sites without reasons (`/tmp/soksak-final-development-20261025.7QLhon/node-suite.log`).
+  sites without reasons.
   Green: the tracked repository census owner test passes 1/1 after the scoped
-  reason comments (`/tmp/F239-140-census-green.log`). No behavior or census rule
+  reason comments. No behavior or census rule
   changed.
 
 - F239-110: Replace the stale F239-104 implementation reference, add exact
@@ -1658,11 +1657,8 @@
   from a retired generation. Keep event payload decoding, dispatch and state
   mutation behind the current-generation check, and preserve the Tauri handling
   of non-null reply, command and cancel markers. Red: unchanged Go behavior
-  canceled a retired malformed envelope with `accepted=false, error=nil`
-  (`/tmp/F239-106-envelope-red-standard-01.log`). Green: the same owner test
-  passes 1/1 in default and diagnostics builds
-  (`/tmp/F239-106-envelope-green-default-01.log`,
-  `/tmp/F239-106-envelope-green-diagnostics-01.log`).
+  canceled a retired malformed envelope with `accepted=false, error=nil`. Green: the same owner test
+  passes 1/1 in default and diagnostics builds.
 
 - F239-100: Identify the visible webview that remains pending after native
   activation. The activity-state waiter reports exact unresolved members and
@@ -1734,11 +1730,9 @@
   records a clear `SOKSAK_VT_TRACE_DIR` error when renderer metadata is absent.
   Red: the unchanged recording consumer omitted the opt-in option, started
   capture without renderer metadata, and accepted an identity row with a
-  different callback display time (`/tmp/F239-98-ime-frame-optin-red-01.log`,
-  `/tmp/F239-98-ime-render-preflight-red-01.log`,
-  `/tmp/F239-98-ime-display-time-join-red-01.log`). Green: the same helper and
+  different callback display time. Green: the same helper and
   manifest consumer pass 17/17
-  (`/tmp/F239-98-ime-visual-capture-green-final-04.log`); `make e2e-check`
+ ; `make e2e-check`
   passes. Two-host visual acceptance remains pending; no application or bundle
   was run.
 
@@ -1746,41 +1740,35 @@
   33 ms maximum frame gap. The earlier assertion stopped before callback
   identity joins and visual evaluation. Red: the owning helper did not reject a
   34 ms gap after measured visual results and did not report simultaneous
-  visual and cadence failures (`/tmp/F239-98-1-cadence-red-01.log`). Green: the
+  visual and cadence failures. Green: the
   same test verifies persistence before rejection and an `AggregateError` with
-  both failures; the helper passes 18/18
-  (`/tmp/F239-98-1-cadence-green-02.log`). The 33 ms bound is unchanged.
+  both failures; the helper passes 18/18. The 33 ms bound is unchanged.
   Two-host visual acceptance remains pending under F239-98.
 
 - F239-98-1-1: Require cadence evidence in the persisted visual record. The
   helper previously defaulted omitted cadence to `null`, bypassing the 33 ms
-  gate. Red: the owner test observed no rejection when cadence was omitted
-  (`/tmp/F239-98-1-1-missing-cadence-red-01.log`). Green: the same test confirms
+  gate. Red: the owner test observed no rejection when cadence was omitted. Green: the same test confirms
   missing-evidence rejection, acceptance at 33 ms, persistence before an
   over-limit failure and combined visual/cadence reporting; the helper passes
-  18/18 (`/tmp/F239-98-1-1-cadence-green-01.log`).
+  18/18.
 
 - F239-98-2: Project visual input text from rows-only terminal status. The
   `terminal.screen` status has no frame identity; the consumer incorrectly
   passed those rows through the strict framed `terminal.screen.read` helper.
   Red: the owner integration with actual rows-only status and the exported
-  projection failed (`/tmp/F239-98-2-rows-only-screen-red-01.log`). Green: the
+  projection failed. Green: the
   rows-only projection passes, the framed wrapper remains strict, and the
-  visual consumer and terminal document suites pass 19/19 and 38/38
-  (`/tmp/F239-98-2-visual-index-green-01.log`,
-  `/tmp/F239-98-2-terminal-document-green-01.log`).
+  visual consumer and terminal document suites pass 19/19 and 38/38.
 
 - F239-98-3: Map the emitted CoreGraphics sRGB name at the consumer boundary.
   The source artifact and capture callback keep their raw metadata and raster
   bytes; the consumer maps only `kCGColorSpaceSRGB` to semantic `sRGB` and
   rejects other names. Red: both owner boundaries returned the native name
-  unchanged (`/tmp/F239-98-3-color-name-red.log`). Green: both pass 2/2,
-  including unsupported-name rejection, and the visual consumer passes 19/19
-  (`/tmp/F239-98-3-color-name-green-01.log`,
-  `/tmp/F239-98-3-visual-owner-green.log`). First-nine offline replay across
+  unchanged. Green: both pass 2/2,
+  including unsupported-name rejection, and the visual consumer passes 19/19. First-nine offline replay across
   four preserved runs remains `no-proof` due to missing retained-source status
   (Tauri 33/28, Wails 3/3); no tenth-stage boundary is inferred
-  (`/tmp/F239-98-3-offline-first-nine-final.log`).
+ .
 
 - F239-98-4: Add tag-scoped IME raster proof beside the unchanged raw crop
   result. The consumer joins one issued identity artifact and decoded row to
