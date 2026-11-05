@@ -39,10 +39,11 @@ func placingShell(t *testing.T) (*shellFixture, *placingHost) {
 			}
 			placements := []any{}
 			for _, surface := range raw.Surfaces {
-				// The element of the frame stands the view on the whole points inside the slot.
+				// The framework stands the view on the device pixels nearest the slot.
 				x, y := surface["x"].(float64), surface["y"].(float64)
-				left, top := math.Ceil(x), math.Ceil(y)
-				right, bottom := math.Floor(x+surface["w"].(float64)), math.Floor(y+surface["h"].(float64))
+				scale := stored.window.Scale
+				left, top := math.Round(x*scale)/scale, math.Round(y*scale)/scale
+				right, bottom := math.Round((x+surface["w"].(float64))*scale)/scale, math.Round((y+surface["h"].(float64))*scale)/scale
 				placements = append(placements, map[string]any{"id": surface["id"], "visible": surface["visible"],
 					"x": left + stored.moved, "y": top, "w": max(right-left, 0), "h": max(bottom-top, 0)})
 			}

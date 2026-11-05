@@ -362,7 +362,8 @@ func (s *Shell) standSurface(c *ui.Context, surface *heldSurface, box layout.Rec
 	s.holdSurface(surface)
 	ui.Box(c.Key(SurfaceSlot{ID: id})).FillWidth().FillHeight().Role(ui.RoleGroup).Children(func() {
 		if view, key, ok := s.options.Element(id); ok {
-			// The slot stands on whole points, where a web page paints all of a view (docs/spec/hosts.md#workbench).
+			// The framework rounds each edge of a native view to the nearest device pixel, as it does for an edge that it paints, so a
+			// view and the lines beside it share their device pixels at any place of the plane.
 			width, height := float32(box.W), float32(box.H)
 			if s.dialogOpen() {
 				// A hole paints only outside a blurred element, so the view stands over the blurred workbench in the same place.
