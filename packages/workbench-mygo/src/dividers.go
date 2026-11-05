@@ -2,6 +2,7 @@ package workbench
 
 import (
 	"math"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -84,8 +85,41 @@ func (s *Shell) drawDividers(c *ui.Context, inset float32) {
 		if divider.Axis == "y" {
 			cursor = ui.CursorResizeNS
 		}
-		ui.Box(c).Role(ui.RoleSplitter).Absolute().Left(float32(divider.X)+inset).Top(float32(divider.Y)+inset).
-			Size(float32(divider.W), float32(divider.H)).Cursor(cursor).HandleInput(s.dividerInput(divider, items[i]))
+		box := ui.Box(c).Role(ui.RoleSplitter).Absolute().Left(float32(divider.X)+inset).Top(float32(divider.Y)+inset).
+			Size(float32(divider.W), float32(divider.H)).Cursor(cursor).HandleInput(s.dividerInput(divider, items[i])).Center().AlignItems(ui.Center)
+		grip := faded(s.palette.Muted, s.metrics.gripMix)
+		if box.Hovered() || (s.held != nil && s.held.item == items[i]) {
+			grip = s.palette.Focus
+		}
+		grip = box.AnimateColor("grip", grip, ui.Animation{Duration: gripTransition})
+		width, height := s.metrics.gripThickness, s.metrics.gripLength
+		if divider.Axis == "y" {
+			width, height = height, width
+		}
+		box.Children(func() {
+			ui.Box(c).Size(width, height).Radius(height).Background(grip)
+		})
+	}
+}
+
+// gripTransition is how long the grip of a divider takes to change its color (packages/soksak/src/theme.ts).
+const gripTransition = 120 * time.Millisecond
+
+// drawRules draws the boundary lines of the plane, as the setting fullRule places the part that a card crosses: over the cards with over, under them
+// without it, or not at all.
+func (s *Shell) drawRules(c *ui.Context, inset float32, over bool) {
+	placed := s.settings.Value("fullRule")
+	for _, rule := range s.plane.Rules() {
+		color := s.palette.Rule
+		if rule.Virtual {
+			if placed == "none" || (placed == "over") != over {
+				continue
+			}
+			color = faded(s.palette.Rule, s.metrics.lineCrossingMix)
+		} else if over {
+			continue
+		}
+		ui.Box(c).Absolute().Left(float32(rule.X)+inset).Top(float32(rule.Y)+inset).Size(float32(rule.W), float32(rule.H)).Background(color)
 	}
 }
 
