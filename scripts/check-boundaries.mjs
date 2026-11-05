@@ -88,7 +88,7 @@ export function corePackageNames(root = ROOT) {
     if (typeof manifest.name === "string") names.push(manifest.name);
     // A kit is a tool of the repositories, and its release is the one release of another repository that a manifest names
     // (docs/spec/plugins.md#repositories).
-    names.push(...Object.keys({ ...manifest.dependencies, ...manifest.devDependencies }).filter((name) => /^@soksak\/kit-[a-z0-9]/.test(name)));
+    names.push(...Object.keys({ ...manifest.dependencies, ...manifest.devDependencies }).filter((name) => name === "@soksak/kit"));
   }
   return [...names, ...CORE_SERVED];
 }

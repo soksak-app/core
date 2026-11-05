@@ -5,6 +5,7 @@
 ## Unreleased
 
 - F463: Core uses the checks kit and its one executable `soksak-check`. Red: `scripts/test/workflows.test.mjs` failed. Green: it passes.
+- F467: Core pins `@soksak/kit`.
 - F465: Records cite no log of the local build folder, and the record check reports a new citation.
 - F464: The build environment check compares only major versions of Node and pnpm. Red: `scripts/test/check-build-environment.sh` failed on Node 26.13.0. Green: it passes.
 - F462: Core 0.0.35 installs the plugin releases that declare `^0.0.35`, and the registry lists them.

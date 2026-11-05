@@ -5,6 +5,7 @@
 ## 미배포
 
 - F463: core가 checks kit과 실행 파일 하나 `soksak-check`를 씁니다. Red: `scripts/test/workflows.test.mjs`가 실패했습니다. Green: 통과합니다.
+- F467: core가 `@soksak/kit`을 pin합니다.
 - F465: 기록은 local build 폴더의 log를 인용하지 않고, record 검사가 새 인용을 보고합니다.
 - F464: build environment 검사는 Node와 pnpm의 major version만 비교합니다. Red: `scripts/test/check-build-environment.sh`가 Node 26.13.0에서 실패했습니다. Green: 통과합니다.
 - F462: core 0.0.35가 `^0.0.35`를 선언한 plugin release를 설치하고 registry가 이를 나열합니다.
@@ -1210,7 +1211,7 @@
   Resize 조건, 기존 target과 1초 deadline은 유지한다. Owner test가 1/1 통과했고
   runtime acceptance는 남아 있다.
 
-- F239-137: 설정 폴더 event-log 감사에 설치된 모든 plugin manifest catalog를 포함한다. 설치 manifest, plugin identity, catalog layer와 namespace를 검증하고 없거나 잘못된 catalog 파일을 명시적으로 보고한다. `composeCatalogs`는 기존 sidecar 검증을 유지하면서 plugin event 선언과 layer를 합친다. Red: 설치 plugin event가 `catalogOf`에 없어 owner assertion이 `actual: undefined`로 실패했다. Green: 비활성 설치 plugin과 잘못된 manifest/catalog 경우를 포함한 plugin owner test 두 개가 한 번의 실행에서 통과했고, sidecar audit와 log-contract composition 회귀가 각각 3/3 통과했다. Runtime host catalog loader는 plugin catalog를 이미 읽고 있어 변경하지 않았다. Wails catalog preflight 두 번은 stored-catalog 확인을 통과했고 plugin catalog 오류 없이 reference/terminal 단계 10개와 capture stop까지 실행했다. 두 실행은 별도 F134 frame-message/accepted-marker 결합 문제와 33 ms capture-gap 검사(33.287 ms, 33.800 ms)에서 실패했으며 IME visual acceptance 결과는 아니다.
+- F239-137: 설정 폴더 event-log 감사에 설치된 모든 plugin manifest catalog를 포함한다. 설치 manifest, plugin identity, catalog layer와 namespace를 검증하고 없거나 잘못된 catalog 파일을 명시적으로 보고한다. `composeCatalogs`는 기존 sidecar 검증을 유지하면서 plugin event 선언과 layer를 합친다. Red: 설치 plugin event가 `catalogOf`에 없어 owner assertion이 `actual: undefined`로 실패했다. Green: 비활성 설치 plugin과 잘못된 manifest/catalog 경우를 포함한 plugin owner test 두 개가 한 번의 실행에서 통과했고, sidecar audit와 log-contract composition 회귀가 각각 3/3 통과했다. Runtime host catalog loader는 plugin catalog를 이미 읽고 있어 변경하지 않았다. Wails catalog preflight 두 번(`/tmp/soksak-final-development-20261025.7QLhon/async-wails-ime-check-02.log`, `/tmp/soksak-final-development-20261025.7QLhon/accepted-frame-wails-ime.log`)은 stored-catalog 확인을 통과했고 plugin catalog 오류 없이 reference/terminal 단계 10개와 capture stop까지 실행했다. 두 실행은 별도 F134 frame-message/accepted-marker 결합 문제와 33 ms capture-gap 검사(33.287 ms, 33.800 ms)에서 실패했으며 IME visual acceptance 결과는 아니다.
 
 - F239-139: Base catalog 합성에 `layers` 선언을 요구하고 선택적 plugin
   diagnostic source를 한 번 정규화한다. 제공된 source 경로와 chain extension이

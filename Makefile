@@ -104,7 +104,7 @@ boundaries:
 events-check:
 	@node scripts/check-events.mjs
 
-# Applies the census rules of the checks kit to the sources (docs/spec/logging.md#census): a source of occurrences has an event
+# Applies the census rules of the kit to the sources (docs/spec/logging.md#census): a source of occurrences has an event
 # in its function or a reason marker, and a rule that waits for an entrance item is printed with its count. `--list` also prints each pending finding.
 census-check:
 	@pnpm exec soksak-check census --config scripts/census.json
