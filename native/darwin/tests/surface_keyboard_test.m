@@ -104,6 +104,34 @@ int main(void) { @autoreleasepool {
     sp_surface_focus(terminalHost);
     check(window.firstResponder == (NSResponder *)region, "a surface that was hidden gives the keyboard back to its region");
 
+    // A surface that shows again during a press takes its keyboard back at the release, as a move of the first responder would end the press.
+    webviewSetSurfaceHidden(terminalHost, true);
+    NSResponder *replacement = window.firstResponder;
+    check(sp_input_pointer(window, 600, 250, 1, 0, 0, 0) == SP_INPUT_DELIVERED, "a press while the surface is hidden is delivered");
+    check([window makeFirstResponder:replacement], "the view that took the keyboard from the hidden surface holds it during the press");
+    webviewSetSurfaceHidden(terminalHost, false);
+    check(window.firstResponder == replacement, "a surface that shows again during a press keeps the keyboard where it is");
+    check(sp_input_pointer(window, 600, 250, 3, 0, 0, 0) == SP_INPUT_DELIVERED, "the release of that press is delivered");
+    check(window.firstResponder == (NSResponder *)region, "the release gives the keyboard back to the region of the surface that showed");
+
+    // A call that waits for the release is not replaced by a surface that shows again.
+    webviewSetSurfaceHidden(terminalHost, true);
+    replacement = window.firstResponder;
+    check(sp_input_pointer(window, 600, 250, 1, 0, 0, 0) == SP_INPUT_DELIVERED, "a second press while the surface is hidden is delivered");
+    check([window makeFirstResponder:replacement], "the view that took the keyboard holds it during the second press");
+    sp_window_focus_workbench(window);
+    webviewSetSurfaceHidden(terminalHost, false);
+    check(sp_input_pointer(window, 600, 250, 3, 0, 0, 0) == SP_INPUT_DELIVERED, "the release of the second press is delivered");
+    check(window.firstResponder == main, "the call of the press wins over the surface that showed again");
+
+    // The focus call of a region waits for the release like the call of a surface.
+    sp_surface_focus(browserHost);
+    check(sp_input_pointer(window, 600, 250, 1, 0, 0, 0) == SP_INPUT_DELIVERED, "a press before the call of a region is delivered");
+    sp_region_focus(region);
+    check(window.firstResponder == browserPage, "a region called to focus during a press keeps the keyboard where it is");
+    check(sp_input_pointer(window, 600, 250, 3, 0, 0, 0) == SP_INPUT_DELIVERED, "the release after the call of a region is delivered");
+    check(window.firstResponder == (NSResponder *)region, "the release gives the keyboard to the region that asked for it");
+
     // A closed region leaves no owner, and the surface lands on its page.
     sp_region_close(region);
     sp_surface_focus(browserHost);

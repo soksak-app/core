@@ -55,6 +55,8 @@ void sp_window_focus_workbench(void *window);
 void sp_surface_responder_moved(void *from, void *to);
 // Gives the keyboard to the surface that asked for it, now that its image region shows.
 void sp_surface_region_shown(void *region);
+// Gives the keyboard to an image region that a call asked to take it, after the release of an open press.
+void sp_surface_region_focus(void *region);
 // A diagnostic release that sp_input_pointer delivered ended the open left press of window.
 void sp_surface_press_released(void *window);
 // Records that the WebContent process of a web view ended as `error native <kind>: web content process terminated: <address>`.

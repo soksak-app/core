@@ -131,6 +131,7 @@ extern double sp_surface_scale(void *surface) __attribute__((weak_import));
 extern void *sp_surface_main_webview(void *surface) __attribute__((weak_import));
 extern void *sp_surface_native_plane(void *surface) __attribute__((weak_import));
 extern void sp_surface_region_shown(void *region) __attribute__((weak_import));
+extern void sp_surface_region_focus(void *region) __attribute__((weak_import));
 
 static WKWebView *surfaceWebView(NSView *surface) {
     if (sp_surface_main_webview) return (WKWebView *)sp_surface_main_webview(surface);
@@ -1804,7 +1805,10 @@ void sp_region_focus(void *handle) {
     NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
     SPImageRegion *view = (SPImageRegion *)handle;
     NSWindow *window = view.window;
-    if (window) [window makeFirstResponder:view];
+    if (!window) return;
+    // The keyboard of a surface waits for the release of an open press. A program with regions and no surfaces has no such wait.
+    if (sp_surface_region_focus) sp_surface_region_focus(view);
+    else [window makeFirstResponder:view];
 }
 
 void sp_region_caret(void *handle, double x, double y, double w, double h) {
