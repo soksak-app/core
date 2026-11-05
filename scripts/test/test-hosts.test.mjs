@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
-import { auditDeclarations, auditHostContract, parseContractCases, groupResults, goTestSourceFilesForRun, parseDeclarations, selectRustDeclarations, uncoveredCases } from '../check-host-contract.mjs';
+import { auditDeclarations, auditHostContract, parseContractCases, groupResults, goTestSourceFilesForRun, parseDeclarations, selectRustDeclarations, uncoveredCases } from '../test-hosts.mjs';
 
 const SPEC = `# Hosts
 
@@ -413,7 +413,7 @@ test('Go source inventory reports and bounds a stuck go list process', (t) => {
 test('a run removes its build folder', () => {
   const temporary = mkdtempSync(join(tmpdir(), 'host-contract-folder-'));
   try {
-    const script = fileURLToPath(new URL('../check-host-contract.mjs', import.meta.url));
+    const script = fileURLToPath(new URL('../test-hosts.mjs', import.meta.url));
     const run = spawnSync(process.execPath, [script, '--host', 'tauriv2', '--run', 'no-run-has-this-id', '--only', 'none'], {
       env: { ...process.env, TMPDIR: temporary },
       encoding: 'utf8',

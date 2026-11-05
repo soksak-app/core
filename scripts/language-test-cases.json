@@ -54,12 +54,12 @@
       "language": "shell",
       "timeoutMs": 30000,
       "command": "sh",
-      "args": ["scripts/test/check-build-environment.sh"],
+      "args": ["scripts/test/check-tools.sh"],
       "expectedTests": 4,
-      "implementationFiles": ["scripts/check-build-environment.sh"],
-      "testFiles": ["scripts/test/check-build-environment.sh"],
+      "implementationFiles": ["scripts/check-tools.sh"],
+      "testFiles": ["scripts/test/check-tools.sh"],
       "dependencyFiles": [".node-version", "package.json", "pnpm-lock.yaml"],
-      "buildFlags": ["sh scripts/test/check-build-environment.sh"]
+      "buildFlags": ["sh scripts/test/check-tools.sh"]
     }
   ]
 }

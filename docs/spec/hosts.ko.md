@@ -144,7 +144,7 @@ AppKit 이 창 자신의 단추를 소유한다. 제목줄 높이가 AppKit 이 
 
 Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`)만 구현한다. `platform/windows/unsupported.*`의 나머지 연산은 `<operation> is not implemented on windows` 형식의 오류를 반환한다. Windows에서는 애플리케이션 시작이 첫 platform 연산에서 실패한다. Wails의 `Run`과 Tauri의 `run`은 창을 열기 전에 `window resize animation is not implemented on windows`와 상태 1로 끝난다. Linux 구현은 없으며, 그곳에서 `platform.Current()`와 `platform::current()`는 오류를 반환한다.
 
-`make host-layout-check`는 `make windows-build-check`를 실행하며, 이 target은 Wails host source를 기본 build와 diagnostics build에서 `windows/arm64`용으로 vet한다.
+`make check-host-files`는 `make check-windows-build`를 실행하며, 이 target은 Wails host source를 기본 build와 diagnostics build에서 `windows/arm64`용으로 vet한다.
 
 ## Wails host의 main thread
 
@@ -152,7 +152,7 @@ Wails host의 main thread에서는 host에서도 framework에서도 Go code가 �
 
 host는 `application.Run` 바로 앞에서 framework가 init에서 main thread에 고정한 main goroutine으로 platform의 `BlockAsyncSignals`를 불러 signal을 막는다. 막는 signal은 동기 fault인 SIGILL, SIGTRAP, SIGABRT, SIGEMT, SIGFPE, SIGBUS, SIGSEGV, SIGSYS를 뺀 모든 signal이다. kernel은 SIGCHLD, SIGINT, SIGTERM, SIGPROF처럼 프로세스에 보낸 signal을 그것을 막지 않는 thread에 전달하고, Go runtime이 만드는 각 thread는 runtime이 프로세스 시작 때 기록한 mask(`initSigmask`)로 시작하므로 `signal.Notify`와 profiling은 자기 thread를 유지한다. Go runtime은 실행 중인 goroutine을 비동기로 선점하려고 그 thread에 SIGURG를 보낸다(`preemptM`). 애플리케이션이 실행되는 동안 main thread에서는 goroutine이 실행되지 않으며, run loop 전후에 그곳에서 실행되는 main goroutine은 여전히 함수 호출 지점에서 선점된다. main thread가 시작한 프로세스는 이 mask를 물려받는다. host는 자식 프로세스를 다른 thread에서 실행되는 goroutine에서 시작한다.
 
-`make host-layout-check`는 Wails host darwin layer의 C code, 즉 `src/platform/darwin`의 각 Go 파일의 cgo preamble과 각 Objective-C 파일에서 이 규칙을 검사한다(`scripts/check-hosts.mjs`의 `auditMainThreadCalls`. 이 함수는 `scripts/cgo-sources.go`를 통해 `go/parser`로 Go 파일을 읽고, macro를 펼치고 호출한 각 함수를 그것을 선언한 header로 해석한 clang의 JSON AST로 C code를 읽는다). C code가 Go 파일이 export(`//export`)한 함수를 `wailsRunOnWorker`나 `ON_WORKER` 밖에서 참조하면 실패한다. Go code가 `native/darwin/src`의 header가 선언한 함수를 `main_` wrapper 대신 직접 부르면 실패한다. 단 thread가 필요 없는 함수(`MAIN_THREAD_FREE`, 각각 이유를 가진다: event ring과 그 clock, `sp_observe_flush`, `sp_phys_footprint`, `sp_diagnostic_reports_directory`, `sp_capture_clock`, `sp_capture_error`, `sp_facts_free`, `sp_ui_enqueue`, `sp_ui_enqueue_after`)는 예외다. Go code가 부르는 layer의 C 함수가 `wailsRunOnMain`이나 `ON_MAIN` 밖에서 Objective-C message를 보내거나, native 함수나 `NS` 함수를 부르거나, 그렇게 하는 layer의 다른 함수를 부르면 실패한다. native 함수나 Objective-C message가 `wailsRunOnWorker`나 `ON_WORKER` 안에서 실행되어도 실패한다.
+`make check-host-files`는 Wails host darwin layer의 C code, 즉 `src/platform/darwin`의 각 Go 파일의 cgo preamble과 각 Objective-C 파일에서 이 규칙을 검사한다(`scripts/check-host-files.mjs`의 `auditMainThreadCalls`. 이 함수는 `scripts/cgo-sources.go`를 통해 `go/parser`로 Go 파일을 읽고, macro를 펼치고 호출한 각 함수를 그것을 선언한 header로 해석한 clang의 JSON AST로 C code를 읽는다). C code가 Go 파일이 export(`//export`)한 함수를 `wailsRunOnWorker`나 `ON_WORKER` 밖에서 참조하면 실패한다. Go code가 `native/darwin/src`의 header가 선언한 함수를 `main_` wrapper 대신 직접 부르면 실패한다. 단 thread가 필요 없는 함수(`MAIN_THREAD_FREE`, 각각 이유를 가진다: event ring과 그 clock, `sp_observe_flush`, `sp_phys_footprint`, `sp_diagnostic_reports_directory`, `sp_capture_clock`, `sp_capture_error`, `sp_facts_free`, `sp_ui_enqueue`, `sp_ui_enqueue_after`)는 예외다. Go code가 부르는 layer의 C 함수가 `wailsRunOnMain`이나 `ON_MAIN` 밖에서 Objective-C message를 보내거나, native 함수나 `NS` 함수를 부르거나, 그렇게 하는 layer의 다른 함수를 부르면 실패한다. native 함수나 Objective-C message가 `wailsRunOnWorker`나 `ON_WORKER` 안에서 실행되어도 실패한다.
 
 이유: 애플리케이션 프로세스는 WebKit과 다른 in-process client가 만든 JavaScriptCore VM을 가지며, VM의 lock은 그것을 잡은 thread를, main thread를 포함해, collector가 suspend하고 scan하는 thread에 더한다. collector는 각 thread의 stack을 stack pointer부터 그 thread stack의 origin까지 복사하고, 합한 크기의 두 배인 buffer를 할당한다. main thread의 Go code는 Go heap이 main thread의 stack 밖에 둔 goroutine stack에서 실행되므로, 그때의 scan에서 크기 `origin − sp`가 wrap되고 buffer 할당이 실패하며, JavaScriptCore는 `pas_panic_on_out_of_memory_error`에서 프로세스를 끝낸다. Tauri host에는 이 규칙이 필요 없다. 그 main thread는 main thread의 stack에서 Rust를 실행한다.
 
@@ -183,7 +183,7 @@ host는 `application.Run` 바로 앞에서 framework가 init에서 main thread�
 | H21 | 없음 | `src/surface_close_test.rs` | Tauri의 surface close는 `close_surface`가 잡은 창 기록으로 main thread에 넣어져 실행되므로, 실행될 때 창이 아직 열려 있는지 판정한다. 이 `documents.rs`의 자식 테스트는 그 private view-origin 등록에 닿는다. Wails의 surface close(`closeSurfaceDocuments`)는 자기 창의 `Surfaces` 상태에서 실행되고 창을 label로 찾지 않으므로 그런 경우가 없다 |
 | H22 | 없음 | `src/presentation_end_test.rs` | presentation이나 presentation 한도 뒤에 Tauri가 presentation 대기를 끝내는 일은 main thread에 넣어져 실행되고 자기 창의 기록을 label로 찾으므로, 실행될 때 창이 아직 열려 있는지 판정한다. 이 `documents.rs`의 자식 테스트는 창의 private 기록에 닿는다. Wails의 종료(`endPresentationWaitFor`)는 넣어진 호출이 잡은 자기 창의 `Surfaces` 상태에서 실행되고 창을 label로 찾지 않으므로 그런 경우가 없다 |
 | H23 | 없음 | `src/sidecars_route_test.rs` | Tauri의 사이드카 메시지 경로는 창이 닫히면 제거되는 창 record를 조회하므로 창이 열려 있는지 판단한다. Wails 경로는 살아 있는 surfaces의 route를 읽으므로 그 조회가 없다. |
-| E1 | `diagnostics.heap.profile` | 없음 | 이 endpoint method는 Go runtime의 heap profile(`runtime/pprof`)을 쓴다. Rust host에는 profile할 garbage-collected heap이 없다. ID가 E로 시작하는 행은 endpoint method를 나열하고 `make host-parity-check`가 그 행을 읽는다 |
+| E1 | `diagnostics.heap.profile` | 없음 | 이 endpoint method는 Go runtime의 heap profile(`runtime/pprof`)을 쓴다. Rust host에는 profile할 garbage-collected heap이 없다. ID가 E로 시작하는 행은 endpoint method를 나열하고 `make check-hosts-same`가 그 행을 읽는다 |
 | A1 | 내용만 다름 | 내용만 다름 | `runtime/index.js`가 각 프레임워크의 호출 방식을 사용한다 |
 | A2 | 없음 | `build.rs` | Tauri는 `tauri_build::build()`를 요구한다 |
 | A3 | 없음 | `tauri.conf.json`, `capabilities/`, `icons/`, `gen/` | Tauri 설정 |
@@ -284,9 +284,9 @@ packages/sok/wailsv3/          packages/sok/tauriv2/
 
 ## 프런트엔드와 실행 파일
 
-`soksak-stage`는 프런트엔드를 `apps/<app>/src/frontend/`에 배치하며, 각 애플리케이션의 `.gitignore`가 이 디렉터리를 제외한다. `go:embed`는 포함하는 패키지 디렉터리 아래의 파일만 포함할 수 있으므로 Wails는 `src/main.go`의 `//go:embed all:frontend`로 이 디렉터리를 포함한다. `host.Run`은 `frontend/`를 자산 루트로 사용한다. Tauri는 `tauri.conf.json`의 `"frontendDist": "src/frontend"`로 이 디렉터리를 읽고, `src/main.rs`는 `frontend/background.js`를 포함한다.
+`sok-copy-frontend`는 프런트엔드를 `apps/<app>/src/frontend/`에 배치하며, 각 애플리케이션의 `.gitignore`가 이 디렉터리를 제외한다. `go:embed`는 포함하는 패키지 디렉터리 아래의 파일만 포함할 수 있으므로 Wails는 `src/main.go`의 `//go:embed all:frontend`로 이 디렉터리를 포함한다. `host.Run`은 `frontend/`를 자산 루트로 사용한다. Tauri는 `tauri.conf.json`의 `"frontendDist": "src/frontend"`로 이 디렉터리를 읽고, `src/main.rs`는 `frontend/background.js`를 포함한다.
 
-macOS에서 각 애플리케이션은 애플리케이션 번들에서 실행된다. 운영체제의 알림 센터가 번들에서 실행된 프로세스만 받기 때문이다([플러그인](plugins.ko.md#탭-알림)). 두 release 애플리케이션은 표시 이름 `soksak`의 `soksak.app`이다. release 번들은 `target/release/wailsv3/soksak.app`과 `target/release/tauriv2/soksak.app`이고, 번들 식별자는 설정 디렉터리의 식별자인 `app.soksak.wails`와 `app.soksak.tauri`다([projects](projects.ko.md#저장)). 디버그 번들은 release 애플리케이션 옆에서 함께 실행되도록 이름을 유지한다. `target/debug/soksak-wailsv3.app/Contents/MacOS/soksak-wailsv3`와 `target/debug/soksak-tauriv2.app/Contents/MacOS/soksak-tauriv2`이며, 번들 이름은 실행 파일 이름이고 식별자는 `app.soksak.wails.dev`와 `app.soksak.tauri.dev`다. 각 번들 안의 실행 파일은 `soksak-wailsv3` 또는 `soksak-tauriv2`다. 빌드는 각 번들의 `Contents/Info.plist`를 release 값을 선언한 `apps/<app>/platform/darwin/Info.plist`에서 쓰고, 디버그 빌드는 번들 식별자와 번들 이름을 바꾼다. Dock이 보이는 soksak 아이콘 `apps/<app>/platform/darwin/AppIcon.icns`를 `Contents/Resources/`에 복사하며, 번들에 ad hoc 서명을 하고 LaunchServices에 다시 등록한다. Dock은 등록된 번들의 아이콘을 보이며, 번들 안의 파일만 바뀌면 LaunchServices는 번들을 다시 읽지 않는다. 번들에는 플러그인도 사이드카도 없다. 호스트는 설정 디렉터리에 설치된 플러그인을 제공하고 사이드카를 시작하며, `plugins/installed.json`이 기록한 폴더를 쓴다([설치](installation.ko.md#설치된-plugin-제공)).
+macOS에서 각 애플리케이션은 애플리케이션 번들에서 실행된다. 운영체제의 알림 센터가 번들에서 실행된 프로세스만 받기 때문이다([플러그인](plugins.ko.md#탭-알림)). 두 release 애플리케이션은 표시 이름 `soksak`의 `soksak.app`이다. release 번들은 `target/release/wailsv3/soksak.app`과 `target/release/tauriv2/soksak.app`이고, 번들 식별자는 설정 디렉터리의 식별자인 `app.soksak.wails`와 `app.soksak.tauri`다([projects](projects.ko.md#저장)). 디버그 번들은 release 애플리케이션 옆에서 함께 실행되도록 이름을 유지한다. `target/debug/sok-wailsv3.app/Contents/MacOS/sok-wailsv3`와 `target/debug/sok-tauriv2.app/Contents/MacOS/sok-tauriv2`이며, 번들 이름은 실행 파일 이름이고 식별자는 `app.soksak.wails.dev`와 `app.soksak.tauri.dev`다. 각 번들 안의 실행 파일은 `sok-wailsv3` 또는 `sok-tauriv2`다. 빌드는 각 번들의 `Contents/Info.plist`를 release 값을 선언한 `apps/<app>/platform/darwin/Info.plist`에서 쓰고, 디버그 빌드는 번들 식별자와 번들 이름을 바꾼다. Dock이 보이는 soksak 아이콘 `apps/<app>/platform/darwin/AppIcon.icns`를 `Contents/Resources/`에 복사하며, 번들에 ad hoc 서명을 하고 LaunchServices에 다시 등록한다. Dock은 등록된 번들의 아이콘을 보이며, 번들 안의 파일만 바뀌면 LaunchServices는 번들을 다시 읽지 않는다. 번들에는 플러그인도 사이드카도 없다. 호스트는 설정 디렉터리에 설치된 플러그인을 제공하고 사이드카를 시작하며, `plugins/installed.json`이 기록한 폴더를 쓴다([설치](installation.ko.md#설치된-plugin-제공)).
 
 ## 워크스페이스 파일
 
@@ -301,31 +301,31 @@ macOS에서 각 애플리케이션은 애플리케이션 번들에서 실행된�
 
 | 명령 | 동작 |
 | --- | --- |
-| `make wailsv3-build`, `make tauriv2-build` | `native/darwin`과 프런트엔드를 빌드하고 스테이징한 뒤 디버그 실행 파일을 빌드한다 |
-| `make wailsv3-build-release`, `make tauriv2-build-release` | 릴리스 실행 파일을 빌드한다 |
+| `make build-wailsv3`, `make build-tauriv2` | `native/darwin`과 프런트엔드를 빌드하고 스테이징한 뒤 디버그 실행 파일을 빌드한다 |
+| `make build-wailsv3-release`, `make build-tauriv2-release` | 릴리스 실행 파일을 빌드한다 |
 | `make wailsv3`, `make tauriv2` | 디버그 실행 파일을 빌드하고 실행한다 |
 | `make registry`, `make install-plugins CONFIG=DIR` | `scripts/workspace-registry.json`이 선언한 plugin·sidecar repository로 `target/registry`에 workspace registry를 만들고([Repository](plugins.ko.md#repository)), 그 플러그인을 설정 디렉터리에 설치한다 |
-| `make rust-clippy-check` | Rust workspace의 모든 package와 test를 진단 feature가 있을 때와 없을 때 `-D warnings`로 clippy 검사한다. `make native-test`가 실행한다 |
-| `make native-test` | `make -C native/darwin test`, `packages/host/wailsv3`의 `go test`, `cargo test -p soksak-host-tauriv2`를 실행한다. 호스트 검사는 진단 빌드와 일반 빌드로 각각 실행한다. 각 sidecar repository는 자기 test를 실행한다 |
-| `make platforms-check` | `scripts/check-platforms.mjs`를 실행한다 |
-| `make host-layout-check` | `scripts/check-hosts.mjs`를 실행한다 |
+| `make check-rust-clippy` | Rust workspace의 모든 package와 test를 진단 feature가 있을 때와 없을 때 `-D warnings`로 clippy 검사한다. `make test-native`가 실행한다 |
+| `make test-native` | `make -C native/darwin test`, `packages/host/wailsv3`의 `go test`, `cargo test -p soksak-host-tauriv2`를 실행한다. 호스트 검사는 진단 빌드와 일반 빌드로 각각 실행한다. 각 sidecar repository는 자기 test를 실행한다 |
+| `make check-platform-files` | `scripts/check-platform-files.mjs`를 실행한다 |
+| `make check-host-files` | `scripts/check-host-files.mjs`를 실행한다 |
 
 macOS 애플리케이션 bundle build target 네 개는 `Contents`를 교체하기 전에 대상 bundle을 확인한다. 해당 bundle에서 process가 실행 중이면 preparation은 bundle을 변경하기 전에 process PID와 정확한 bundle 경로를 오류로 보고한다. 의도한 검증 checkout에서 build하고 실행 중인 애플리케이션이 사용하는 bundle을 build 대상으로 지정하지 않는다.
 
 ## 구조 검사
 
-`scripts/check-hosts.mjs`는 `packages/host/wailsv3`와 `packages/host/tauriv2`, `apps/wailsv3`와 `apps/tauriv2`를 비교한다. `.go`와 `.rs` 파일은 확장자를 제외한 상대 경로로, 그 밖의 파일은 상대 경로로 비교한다. 한쪽에만 있는 파일은 허용 차이 표의 차이 ID와 함께 목록에 있을 때만 통과한다. 검사는 Git이 추적하거나 추적할 파일만 읽으므로 생성된 `src/frontend/` 파일은 비교하지 않는다.
+`scripts/check-host-files.mjs`는 `packages/host/wailsv3`와 `packages/host/tauriv2`, `apps/wailsv3`와 `apps/tauriv2`를 비교한다. `.go`와 `.rs` 파일은 확장자를 제외한 상대 경로로, 그 밖의 파일은 상대 경로로 비교한다. 한쪽에만 있는 파일은 허용 차이 표의 차이 ID와 함께 목록에 있을 때만 통과한다. 검사는 Git이 추적하거나 추적할 파일만 읽으므로 생성된 `src/frontend/` 파일은 비교하지 않는다.
 
-`scripts/check-platforms.mjs`는 `platform/<os>/` 밖에서 `_darwin`, `_windows` 등의 운영체제 접미사가 붙은 파일 이름과 Go 파일의 `runtime.GOOS` 및 운영체제 build tag, Rust 파일의 운영체제 `cfg`, JavaScript 파일의 실행 가능한 Node `process.platform` member expression을 보고한다. JavaScript는 syntax로 분석하므로 string과 comment는 selector가 아니다. 유일한 metadata 예외는 `environment()` 함수가 반환하는 object의 `platform` property에 쓰는 `process.platform`, 그리고 test 경로의 `assert.equal(result.environment.platform, process.platform)` 또는 `assert.strictEqual`이다. test 경로 안의 selector를 포함해 다른 모든 실행 가능한 사용은 finding이다. `native/<os>/`, `scripts/check-build-environment.sh`, `platform/platform.{go,rs,js}`, 검사 파일 자신은 건너뛴다. `Cargo.toml`은 읽지 않으므로 대상별 의존성 표는 허용된다.
+`scripts/check-platform-files.mjs`는 `platform/<os>/` 밖에서 `_darwin`, `_windows` 등의 운영체제 접미사가 붙은 파일 이름과 Go 파일의 `runtime.GOOS` 및 운영체제 build tag, Rust 파일의 운영체제 `cfg`, JavaScript 파일의 실행 가능한 Node `process.platform` member expression을 보고한다. JavaScript는 syntax로 분석하므로 string과 comment는 selector가 아니다. 유일한 metadata 예외는 `environment()` 함수가 반환하는 object의 `platform` property에 쓰는 `process.platform`, 그리고 test 경로의 `assert.equal(result.environment.platform, process.platform)` 또는 `assert.strictEqual`이다. test 경로 안의 selector를 포함해 다른 모든 실행 가능한 사용은 finding이다. `native/<os>/`, `scripts/check-tools.sh`, `platform/platform.{go,rs,js}`, 검사 파일 자신은 건너뛴다. `Cargo.toml`은 읽지 않으므로 대상별 의존성 표는 허용된다.
 
 플랫폼별 test는 소유 package의 `tests/platform/<os>/` 또는 root script의 해당 `platform/<os>/` directory에 둔다. Cargo target이나 test-runner 경로를 명시적으로 등록한다. 공통 directory의 test는 운영체제를 선택하거나 가정하지 않는 동작을 검증한다.
 
 ## native/darwin
 
-`native/darwin`은 두 호스트가 호출하는 공용 macOS 라이브러리다. 최소 macOS 버전은 14.4다. `capture.m`이 macOS 14.4에서 추가된 `SCShareableContent getCurrentProcessShareableContentWithCompletionHandler:`를 호출하기 때문이다. Makefile은 이 값을 `MACOS_MINIMUM`에 선언하고 라이브러리와 두 애플리케이션을 그 값으로 build한다. 두 애플리케이션의 `Info.plist`는 `LSMinimumSystemVersion`에, `apps/tauriv2/tauri.conf.json`은 `bundle.macOS.minimumSystemVersion`에 같은 값을 선언하는데, Tauri bundler가 그 값으로 애플리케이션을 build하기 때문이다. 번들이 다른 값을 선언하거나, 애플리케이션 실행 파일이 다른 macOS version으로 build되었거나, 번들의 다른 실행 파일이 더 새 version으로 build되었으면 `make release-check`가 실패한다. Bundled Rust 실행 파일은 application과 같은 선언된 Cargo deployment target을 사용하므로 deployment 환경만으로 공용 의존성의 build identity가 달라지지 않는다.
+`native/darwin`은 두 호스트가 호출하는 공용 macOS 라이브러리다. 최소 macOS 버전은 14.4다. `capture.m`이 macOS 14.4에서 추가된 `SCShareableContent getCurrentProcessShareableContentWithCompletionHandler:`를 호출하기 때문이다. Makefile은 이 값을 `MACOS_MINIMUM`에 선언하고 라이브러리와 두 애플리케이션을 그 값으로 build한다. 두 애플리케이션의 `Info.plist`는 `LSMinimumSystemVersion`에, `apps/tauriv2/tauri.conf.json`은 `bundle.macOS.minimumSystemVersion`에 같은 값을 선언하는데, Tauri bundler가 그 값으로 애플리케이션을 build하기 때문이다. 번들이 다른 값을 선언하거나, 애플리케이션 실행 파일이 다른 macOS version으로 build되었거나, 번들의 다른 실행 파일이 더 새 version으로 build되었으면 `make check-release`가 실패한다. Bundled Rust 실행 파일은 application과 같은 선언된 Cargo deployment target을 사용하므로 deployment 환경만으로 공용 의존성의 build identity가 달라지지 않는다.
 
 | 경로 | 내용 |
 | --- | --- |
 | `src/` | `<이름>.h`와 `<이름>.m` 소스. 두 호스트가 창 캡처에 사용하는 `capture.m`을 포함한다. 디렉터리가 플랫폼을 나타내므로 파일 이름에 `_darwin` 접미사가 없다 |
-| `tests/` | `window_motion_test.m`, `input_inject_test.m`, `webview_input_receipts_test.m`, `window_facts_test.m`, `window_controls_test.m`, `window_titlebar_layout_test.m`, `window_titlebar_reload_test.m`, `surface_layout_test.m`, `webview_focus_test.m`, `webview_geometry_test.m`, `document_view_test.m` 기본 실행(`make test`, 활성화 없음. `document_view_test`는 종료 시 프로세스가 활성이면 실패한다), `input_activate_test.m`, `webview_input_test.m`, `webview_inspector_test.m`, `window_fullscreen_test.m`, `image_region_ime_test.m`, `document_view_test.m --activation`(`make e2e-activation`, 애플리케이션 활성화) |
-| `Makefile` | 호스트가 pkg-config에서 `soksak-darwin`으로 찾는 정적 라이브러리를 빌드한다. `make -C native/darwin test`와 `make -C native/darwin e2e-activation`이 입력 검사를 실행한다 |
+| `tests/` | `window_motion_test.m`, `input_inject_test.m`, `webview_input_receipts_test.m`, `window_facts_test.m`, `window_controls_test.m`, `window_titlebar_layout_test.m`, `window_titlebar_reload_test.m`, `surface_layout_test.m`, `webview_focus_test.m`, `webview_geometry_test.m`, `document_view_test.m` 기본 실행(`make test`, 활성화 없음. `document_view_test`는 종료 시 프로세스가 활성이면 실패한다), `input_activate_test.m`, `webview_input_test.m`, `webview_inspector_test.m`, `window_fullscreen_test.m`, `image_region_ime_test.m`, `document_view_test.m --activation`(`make test-app-activation`, 애플리케이션 활성화) |
+| `Makefile` | 호스트가 pkg-config에서 `soksak-darwin`으로 찾는 정적 라이브러리를 빌드한다. `make -C native/darwin test`와 `make -C native/darwin test-app-activation`이 입력 검사를 실행한다 |

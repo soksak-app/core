@@ -5,7 +5,7 @@
 	<key>CFBundleIdentifier</key>
 	<string>app.soksak.wails</string>
 	<key>CFBundleExecutable</key>
-	<string>soksak-wailsv3</string>
+	<string>sok-wailsv3</string>
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
 	<key>CFBundleName</key>

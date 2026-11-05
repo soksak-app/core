@@ -13,7 +13,7 @@ import {
   totalsOf,
 } from "../measure-app-usage.mjs";
 
-const DIR = "/Users/tester/Library/Application Support/soksak-check";
+const DIR = "/Users/tester/Library/Application Support/sok-check";
 
 test("parses the cpu time formats of ps", () => {
   assert.equal(parseCpuTime("0:01.23"), 1.23);
@@ -68,7 +68,7 @@ test("parses ps command rows and rejects a malformed row", () => {
 
 test("finds the host by the config-dir argument and skips tools, sidecars and WebKit", () => {
   const table = parseProcessTable([
-    `  10 /Applications/soksak-check.app/Contents/MacOS/soksak --config-dir ${DIR}`,
+    `  10 /Applications/sok-check.app/Contents/MacOS/soksak --config-dir ${DIR}`,
     `  11 node scripts/measure-app-usage.mjs --sok /x/sok --config-dir ${DIR}`,
     `  12 /x/target/debug/sok windows --config-dir ${DIR}`,
     `  13 ${DIR}/sidecars/probe-service/build/probe --config-dir ${DIR}`,
@@ -81,7 +81,7 @@ test("finds the host by the config-dir argument and skips tools, sidecars and We
 test("matches a data folder whose launch path has a doubled slash", () => {
   const launched = DIR.replace("/Library/", "//Library/");
   const table = parseProcessTable([
-    `  10 /Applications/soksak-check.app/Contents/MacOS/soksak --config-dir ${launched} --registry-ca ${launched}/ca.pem`,
+    `  10 /Applications/sok-check.app/Contents/MacOS/soksak --config-dir ${launched} --registry-ca ${launched}/ca.pem`,
     `  11 ${launched}/sidecars/probe/bin/probe --config-dir ${launched}`,
   ].join("\n"));
   assert.deepEqual(hostProcess(table, DIR), { pid: 10 });
@@ -89,10 +89,10 @@ test("matches a data folder whose launch path has a doubled slash", () => {
 });
 
 test("finds the host and the sidecars of a data folder that the processes launch by its real path", () => {
-  const given = "/var/tester/soksak-check";
-  const real = "/private/var/tester/soksak-check";
+  const given = "/var/tester/sok-check";
+  const real = "/private/var/tester/sok-check";
   const table = parseProcessTable([
-    `  10 /Applications/soksak-check.app/Contents/MacOS/soksak --config-dir ${real}`,
+    `  10 /Applications/sok-check.app/Contents/MacOS/soksak --config-dir ${real}`,
     `  11 ${real}/sidecars/probe/bin/probe --x`,
   ].join("\n"));
   assert.deepEqual(hostProcess(table, given, real), { pid: 10 });
@@ -101,7 +101,7 @@ test("finds the host and the sidecars of a data folder that the processes launch
 
 test("reports a missing or duplicate host", () => {
   const none = parseProcessTable("  15 /usr/bin/other --config-dir /elsewhere\n");
-  assert.throws(() => hostProcess(none, DIR), /no host process has --config-dir .*soksak-check/);
+  assert.throws(() => hostProcess(none, DIR), /no host process has --config-dir .*sok-check/);
   const two = parseProcessTable(`  10 /a/soksak --config-dir ${DIR}\n  20 /b/soksak --config-dir ${DIR}\n`);
   assert.throws(() => hostProcess(two, DIR), /2 host processes have --config-dir/);
 });

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { auditHostParity, auditMenuTables, goMenuTables, rustHandlers, rustMenuTables, snake, specMenuTables } from "../check-host-parity.mjs";
+import { auditHostParity, auditMenuTables, goMenuTables, rustHandlers, rustMenuTables, snake, specMenuTables } from "../check-hosts-same.mjs";
 
 // The base sources of the injection checks. Changing only one name in the real sources proves that each failure is produced mechanically.
 const sources = () => ({

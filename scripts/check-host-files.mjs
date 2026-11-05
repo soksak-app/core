@@ -3,7 +3,7 @@
 // .go and .rs files are compared by the path without the extension, and other files are compared by the path as it is.
 // A file that exists on only one side passes only when a row of the Allowed differences table of docs/spec/hosts.md lists it (the row IDs of PAIRS).
 //
-//   node scripts/check-hosts.mjs
+//   node scripts/check-host-files.mjs
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

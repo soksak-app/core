@@ -89,7 +89,7 @@ fn the_update_starts_sok_from_a_copy_beside_the_updates_and_checks_the_staged_bu
     let running_parent = folder::Folder::new();
     let running = running_parent.path().join("soksak.app");
     std::fs::create_dir_all(running.join("Contents/MacOS")).unwrap();
-    let executable = running.join("Contents/MacOS/soksak-tauriv2");
+    let executable = running.join("Contents/MacOS/sok-tauriv2");
     std::fs::write(running.join("Contents/MacOS/sok"), "#!/bin/sh\nexit 0\n").unwrap();
     let staged = config.path().join("updates/0.0.9/soksak.app");
     std::fs::create_dir_all(staged.join("Contents")).unwrap();
@@ -130,7 +130,7 @@ fn the_update_starts_sok_from_a_copy_beside_the_updates_and_checks_the_staged_bu
     );
     // A bundle outside the updates folder, a bundle without Info.plist and an application outside a bundle are refused.
     let other = running_parent.path().join("other.app");
-    let outside = running_parent.path().join("soksak-tauriv2");
+    let outside = running_parent.path().join("sok-tauriv2");
     let cases: [(&str, &Path, &Path); 3] = [
         ("a bundle outside updates", &executable, &other),
         (
@@ -156,7 +156,7 @@ fn the_detached_update_command_keeps_its_errors_and_is_recorded_when_it_starts()
         let config = PathBuf::from(config);
         let running = config.join("running/soksak.app");
         std::fs::create_dir_all(running.join("Contents/MacOS")).unwrap();
-        let executable = running.join("Contents/MacOS/soksak-tauriv2");
+        let executable = running.join("Contents/MacOS/sok-tauriv2");
         std::fs::write(
             running.join("Contents/MacOS/sok"),
             "#!/bin/sh\necho 'sok: the bundle is not an application bundle' >&2\nexit 1\n",

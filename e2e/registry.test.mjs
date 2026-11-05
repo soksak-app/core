@@ -1,6 +1,6 @@
 // Checks the plugin operations that read the public registry over https against the check-owned TLS registry (Fetching in docs/spec/installation.md).
 //
-// The check application is a diagnostic build and must have been started with the certificate authority that `make e2e-registry-tls` creates:
+// The check application is a diagnostic build and must have been started with the certificate authority that `make create-test-certificates` creates:
 // `--registry-ca <root>/soksak-check-registry-tls/ca.pem` (docs/operations/examples.md). The check serves the workspace registry
 // (target/registry that `make install-plugins` creates) over https and restores the original registry and installation when it ends.
 import assert from "node:assert/strict";
@@ -21,7 +21,7 @@ const REGISTRY = fileURLToPath(new URL("../target/registry/", import.meta.url));
 /** Check-owned TLS registry. Each index variant has a path, and a release is served as /releases/<file>. */
 async function serveRegistry() {
   for (const file of ["server.pem", "server-key.pem", "ca.pem"]) {
-    if (!existsSync(join(TLS, file))) throw new Error(`${join(TLS, file)} is missing; run make e2e-registry-tls and start the check applications with --registry-ca ${join(TLS, "ca.pem")}`);
+    if (!existsSync(join(TLS, file))) throw new Error(`${join(TLS, file)} is missing; run make create-test-certificates and start the check applications with --registry-ca ${join(TLS, "ca.pem")}`);
   }
   if (!existsSync(join(REGISTRY, "index.json"))) throw new Error(`${join(REGISTRY, "index.json")} is missing; run make install-plugins for the check configuration`);
   const original = JSON.parse(readFileSync(join(REGISTRY, "index.json"), "utf8"));

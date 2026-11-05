@@ -1,7 +1,7 @@
 // Runs the end-to-end checks of core on this computer (docs/operations/examples.md#end-to-end-run):
-//   node scripts/e2e-run.mjs --script <name> [--native <target>] [--when-idle <seconds>]
+//   node scripts/test-app.mjs --script <name> [--native <target>] [--when-idle <seconds>]
 // The e2e targets of the Makefile build both debug applications and the workspace registry, and then run this script with the
-// window-check script of their tier (`verify`, `verify:activation`, `verify:real`, `verify:person`) and the native end-to-end target
+// window-check script of their tier (`verify`, `test-app:activation`, `test-app:real`, `test-app:person`) and the native end-to-end target
 // of that tier. Each run makes a new configuration root under target/e2e, prepares the registry certificates and the plugins of both
 // applications in it, starts both applications with that root, runs the window checks and the native end-to-end target, quits the
 // applications with host.quit and fails when a process of
@@ -26,8 +26,8 @@ const START_LIMIT_MS = 60_000;
 /** The limit of a quit step: the time that an application has to exit after host.quit. */
 const QUIT_LIMIT_MS = 60_000;
 
-const bundle = (root, app) => join(root, 'target', 'debug', `soksak-${app}.app`);
-const binary = (root, app) => join(bundle(root, app), 'Contents', 'MacOS', `soksak-${app}`);
+const bundle = (root, app) => join(root, 'target', 'debug', `sok-${app}.app`);
+const binary = (root, app) => join(bundle(root, app), 'Contents', 'MacOS', `sok-${app}`);
 const configDir = (configRoot, app) => join(configRoot, `soksak-check-${app}`);
 
 /** A new empty configuration root of one run, `<root>/target/e2e/<time>-<random>`. */
@@ -46,7 +46,7 @@ export function e2ePlan({ root, configRoot, script, native, whenIdle }) {
   const env = { SOKSAK_CONFIG_ROOT: configRoot };
   const ca = join(configRoot, 'soksak-check-registry-tls', 'ca.pem');
   return [
-    { name: 'registry certificates', phase: 'prepare', kind: 'run', argv: ['make', 'e2e-registry-tls'], env },
+    { name: 'registry certificates', phase: 'prepare', kind: 'run', argv: ['make', 'create-test-certificates'], env },
     ...APPS.map((app) => ({
       name: `install plugins ${app}`, phase: 'prepare', kind: 'run', argv: ['make', 'install-plugins', `CONFIG=${configDir(configRoot, app)}`], env,
     })),
@@ -138,7 +138,7 @@ function crashReports(app, since) {
   const folder = join(homedir(), 'Library', 'Logs', 'DiagnosticReports');
   if (!existsSync(folder)) return [];
   return readdirSync(folder)
-    .filter((name) => name.startsWith(`soksak-${app}-`) && name.endsWith('.ips'))
+    .filter((name) => name.startsWith(`sok-${app}-`) && name.endsWith('.ips'))
     .map((name) => join(folder, name))
     .filter((file) => statSync(file).mtimeMs >= since)
     .map((file) => `${file}: ${JSON.stringify(crashFault(readFileSync(file, 'utf8'), file))}`);

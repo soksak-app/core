@@ -17,7 +17,7 @@ fn the_relaunch_starts_sok_of_the_running_bundle_with_the_arguments_of_the_appli
     let folder = folder::Folder::new();
     let running = folder.path().join("soksak.app");
     std::fs::create_dir_all(running.join("Contents/MacOS")).unwrap();
-    let executable = running.join("Contents/MacOS/soksak-tauriv2");
+    let executable = running.join("Contents/MacOS/sok-tauriv2");
     let arguments = ["--config-dir".to_string(), "/config".to_string()];
     let command = prepare_relaunch(&executable, 4321, &arguments).unwrap();
     let sok = running.join("Contents/MacOS/sok");
@@ -40,7 +40,7 @@ fn the_relaunch_starts_sok_of_the_running_bundle_with_the_arguments_of_the_appli
             "/config"
         ]
     );
-    let outside = folder.path().join("soksak-tauriv2");
+    let outside = folder.path().join("sok-tauriv2");
     assert_eq!(
         prepare_relaunch(&outside, 4321, &[]).unwrap_err(),
         format!(
@@ -71,7 +71,7 @@ fn the_detached_relaunch_command_is_recorded_when_it_starts() {
         soksak_host_tauriv2::application_log::start_standard_error(&config, "check").unwrap();
         let writer = records::start_writer(&config);
         let mut command =
-            prepare_relaunch(&running.join("Contents/MacOS/soksak-tauriv2"), 4321, &[]).unwrap();
+            prepare_relaunch(&running.join("Contents/MacOS/sok-tauriv2"), 4321, &[]).unwrap();
         let mut child = start_relaunch(&mut command).unwrap();
         child.wait().unwrap();
         let missing = config.join("missing-sok");

@@ -1,5 +1,5 @@
 [package]
-name = "soksak-tauriv2"
+name = "sok-tauriv2"
 version = "0.0.35"
 edition = "2024"
 description = "soksak layout running in Tauri v2"

@@ -1,5 +1,5 @@
 {
-  "name": "@soksak-check/probe-provider",
+  "name": "@sok-check/probe-provider",
   "version": "0.0.35",
   "private": true,
   "type": "module",

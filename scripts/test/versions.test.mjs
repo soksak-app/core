@@ -16,7 +16,7 @@ test("every declared workspace version is the release candidate", { timeout: 100
 
 test("workspace Cargo.lock package versions match the release candidate", { timeout: 1000 }, () => {
   const lock = readFileSync(new URL("../../Cargo.lock", import.meta.url), "utf8");
-  for (const name of ["soksak-host-tauriv2", "soksak-sok-tauriv2", "soksak-tauriv2"]) {
+  for (const name of ["soksak-host-tauriv2", "soksak-sok-tauriv2", "sok-tauriv2"]) {
     const version = lock.match(new RegExp(`\\[\\[package\\]\\]\\nname = "${name}"\\nversion = "([^"]+)"`))?.[1];
     assert.equal(version, RELEASE, `Cargo.lock package ${name}`);
   }

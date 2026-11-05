@@ -57,8 +57,8 @@ test('release builds and packages each host after the reusable CI checks succeed
     return next < 0 ? text.slice(start) : text.slice(start, start + 1 + next);
   };
   for (const [host, target, binary] of [
-    ['wailsv3', 'release-check-wailsv3', 'wailsv3/soksak.app/Contents/MacOS/soksak-wailsv3'],
-    ['tauriv2', 'release-check-tauriv2', 'tauriv2/soksak.app/Contents/MacOS/soksak-tauriv2'],
+    ['wailsv3', 'check-release-wailsv3', 'wailsv3/soksak.app/Contents/MacOS/sok-wailsv3'],
+    ['tauriv2', 'check-release-tauriv2', 'tauriv2/soksak.app/Contents/MacOS/sok-tauriv2'],
   ]) {
     const hostJob = job(`release-${host}`);
     assert.match(hostJob, new RegExp(`run: make ${target}`));
@@ -97,15 +97,15 @@ test('the push check runs only the commit message check, and ci runs the structu
     return /run:\s*make -C core (.+)$/m.exec(step.text)[1].trim().split(/\s+/);
   };
   // The check of the event catalog and of the event sources is a structure check of CI: a source change that removes an emitter fails its run.
-  assert.ok(targets('Structure checks').includes('events-check'), 'the structure step of ci.yml does not run events-check');
+  assert.ok(targets('Structure checks').includes('check-events'), 'the structure step of ci.yml does not run check-events');
   for (const name of ['Go format checks', 'Rust format and clippy checks']) assert.ok(targets(name).length > 0, `ci.yml step ${name} runs no target`);
   // A published commit message is kept, so the push checks it before it leaves the checkout; a later commit corrects any other
   // failure, and the release gate releases only a green run of CI.
-  const recipe = /^push-check:[^\n]*\n((?:\t[^\n]*\n)+)/m.exec(read('Makefile'));
-  assert.ok(recipe, 'the Makefile has no push-check target');
+  const recipe = /^check-push:[^\n]*\n((?:\t[^\n]*\n)+)/m.exec(read('Makefile'));
+  assert.ok(recipe, 'the Makefile has no check-push target');
   assert.deepEqual(recipe[1].trim().split('\n').map((line) => line.trim()),
-    ['@$(MAKE) --no-print-directory commits-check RANGE="$(or $(RANGE),origin/main..HEAD)"'], 'push-check runs a check other than the commit messages');
-  assert.match(read('.githooks/pre-push'), /make -C "\$\(git rev-parse --show-toplevel\)" push-check/);
+    ['@$(MAKE) --no-print-directory check-commits RANGE="$(or $(RANGE),origin/main..HEAD)"'], 'check-push runs a check other than the commit messages');
+  assert.match(read('.githooks/pre-push'), /make -C "\$\(git rev-parse --show-toplevel\)" check-push/);
 });
 
 test('the Tauri host job builds its tests with line tables as debug information, set on the job so that the Rust cache key holds it', { timeout: 1000 }, () => {
@@ -119,7 +119,7 @@ test('ci keeps language host checks independent and gates release on every requi
   const ci = read('.github/workflows/ci.yml');
   const jobsText = /^jobs:\n([\s\S]*)$/m.exec(ci)?.[1] ?? '';
   const jobNames = [...jobsText.matchAll(/^  ([a-z][a-z0-9-]+):\s*$/gm)].map((match) => match[1]);
-  const required = ['core-node', 'macos-wailsv3', 'macos-tauriv2', 'native-darwin', 'equivalence', 'required'];
+  const required = ['core-node', 'macos-wailsv3', 'macos-tauriv2', 'build-native', 'equivalence', 'required'];
   for (const name of required) assert.ok(jobNames.includes(name), `ci.yml has no required job ${name}`);
   // Linux and Windows are not verified platforms, so CI runs no product check on them; the Sok CLI tests run in the macOS host jobs.
   assert.deepEqual(jobNames.filter((name) => !required.includes(name)), [], 'ci.yml has a job outside the verified macOS scope');
@@ -129,24 +129,24 @@ test('ci keeps language host checks independent and gates release on every requi
     const next = jobsText.slice(start + 1).search(/\n(?=  [a-z][a-z0-9-]+:\s*$)/m);
     return next < 0 ? jobsText.slice(start) : jobsText.slice(start, start + 1 + next);
   };
-  assert.match(job('macos-wailsv3'), /host-contract-check-wailsv3/);
-  assert.match(job('macos-tauriv2'), /host-contract-check-tauriv2/);
+  assert.match(job('macos-wailsv3'), /test-wailsv3/);
+  assert.match(job('macos-tauriv2'), /test-tauriv2/);
   assert.match(job('core-node'), /node core\/scripts\/node-tests\.mjs --exclude scripts\/ --exclude native\//);
   assert.match(job('equivalence'), /node core\/scripts\/node-tests\.mjs --only scripts\//);
   assert.doesNotMatch(job('equivalence'), /needs:/, 'equivalence installs and builds its own inputs');
-  assert.match(job('native-darwin'), /uses: \.\/core\/\.github\/actions\/setup-node[\s\S]*?root: core/,
+  assert.match(job('build-native'), /uses: \.\/core\/\.github\/actions\/setup-node[\s\S]*?root: core/,
     'native Darwin package tests need the Node and pnpm toolchains');
-  assert.doesNotMatch(job('native-darwin'), /setup-go|setup-rust/,
+  assert.doesNotMatch(job('build-native'), /setup-go|setup-rust/,
     'native Darwin checks install unused language toolchains');
   const wailsSteps = steps(job('macos-wailsv3'));
-  assert.match(wailsSteps.find((step) => step.name === 'Go format checks')?.text ?? '', /make -C core go-format-check/);
+  assert.match(wailsSteps.find((step) => step.name === 'Go format checks')?.text ?? '', /make -C core check-go-format/);
   const tauriSteps = steps(job('macos-tauriv2'));
-  assert.match(tauriSteps.find((step) => step.name === 'Rust format and clippy checks')?.text ?? '', /make -C core rust-format-check rust-clippy-check/);
+  assert.match(tauriSteps.find((step) => step.name === 'Rust format and clippy checks')?.text ?? '', /make -C core check-rust-format check-rust-clippy/);
   // Each host suite runs once: the host jobs run it, and the audit of each host is separable, so equivalence runs no host suite.
   for (const name of jobNames) {
     const text = job(name);
-    const suites = (text.match(/host-contract-check(?:-wailsv3|-tauriv2)?/g) ?? []);
-    const expected = { 'macos-wailsv3': ['host-contract-check-wailsv3'], 'macos-tauriv2': ['host-contract-check-tauriv2'] }[name] ?? [];
+    const suites = (text.match(/\btest-(?:hosts|wailsv3|tauriv2)\b/g) ?? []);
+    const expected = { 'macos-wailsv3': ['test-wailsv3'], 'macos-tauriv2': ['test-tauriv2'] }[name] ?? [];
     assert.deepEqual(suites, expected, `${name} runs the host suites ${JSON.stringify(suites)}`);
   }
   assert.match(steps(job('macos-tauriv2')).find((step) => step.name === 'Tauri host tests')?.text ?? '', /CARGO_INCREMENTAL: '0'/,
@@ -156,7 +156,7 @@ test('ci keeps language host checks independent and gates release on every requi
   const gate = job('required');
   for (const [name, variable] of [
     ['core-node', 'CORE_NODE'], ['macos-wailsv3', 'WAILS'], ['macos-tauriv2', 'TAURI'],
-    ['native-darwin', 'NATIVE'], ['equivalence', 'EQUIVALENCE'],
+    ['build-native', 'NATIVE'], ['equivalence', 'EQUIVALENCE'],
   ]) {
     assert.match(gate, new RegExp(`${variable}: \\$\\{\\{ needs\\.${name}\\.result \\}\\}`), `required gate does not read ${name}`);
   }
@@ -174,7 +174,7 @@ test('ci keeps language host checks independent and gates release on every requi
     assert.ok(fetch >= 0 && check > fetch, `${host}: native release file fetch must precede offline host tests`);
     assert.match(list[check].text, /OFFLINE: '1'/);
   }
-  const native = steps(job('native-darwin'));
+  const native = steps(job('build-native'));
   const nativeFetch = native.findIndex((step) => step.name === 'Fetch pinned native release file');
   const nativeBuild = native.findIndex((step) => step.name === 'Build the native library offline');
   const nativeTest = native.findIndex((step) => step.name === 'Native Darwin tests');
@@ -208,14 +208,14 @@ test('CI JavaScript scopes cover every discovered test file exactly once', { tim
   assert.equal(new Set(assigned).size, tests.length, 'a Node test file is assigned to both CI scopes');
 });
 
-test('the native-darwin job records the display session before the native tests', () => {
+test('the build-native job records the display session before the native tests', () => {
   const text = read('.github/workflows/ci.yml');
-  const job = text.split(/^ {2}(?=[a-z-]+:$)/m).find((part) => part.startsWith('native-darwin:'));
-  assert.ok(job, 'ci.yml has no native-darwin job');
+  const job = text.split(/^ {2}(?=[a-z-]+:$)/m).find((part) => part.startsWith('build-native:'));
+  assert.ok(job, 'ci.yml has no build-native job');
   const list = steps(job);
   const record = list.findIndex((step) => step.name === 'Record the display session');
   const tests = list.findIndex((step) => step.name === 'Native Darwin tests');
-  assert.ok(record >= 0, `the native-darwin job has no step that records the display session: ${list.map((step) => step.name).join(', ')}`);
+  assert.ok(record >= 0, `the build-native job has no step that records the display session: ${list.map((step) => step.name).join(', ')}`);
   assert.ok(record < tests, 'the display session is recorded before the native tests');
   for (const command of ['system_profiler SPDisplaysDataType', 'pmset -g', 'ioreg -n Root -d1 -k IOConsoleUsers']) {
     assert.ok(list[record].text.includes(command), `the session record runs ${command}`);
@@ -242,10 +242,10 @@ test('every CI job installs the locked workspace dependencies before its first c
 });
 
 test('the hosted native job runs the native unit tests', () => {
-  const job = read('.github/workflows/ci.yml').split(/^ {2}(?=[a-z-]+:$)/m).find((part) => part.startsWith('native-darwin:'));
-  assert.ok(job, 'ci.yml has no native-darwin job');
+  const job = read('.github/workflows/ci.yml').split(/^ {2}(?=[a-z-]+:$)/m).find((part) => part.startsWith('build-native:'));
+  assert.ok(job, 'ci.yml has no build-native job');
   const hosted = steps(job).find((step) => step.name === 'Native Darwin tests');
-  assert.ok(hosted, 'the native-darwin job has no step named Native Darwin tests');
+  assert.ok(hosted, 'the build-native job has no step named Native Darwin tests');
   assert.match(hosted.text, /run: make -C core\/native\/darwin test$/m);
 });
 
@@ -265,14 +265,14 @@ test('a push to main releases the declared version after the checks and the gate
   assert.match(release, /^on:\n {2}push:\n {4}branches: \[main\]\n/m, 'release.yml starts on a push to main');
   assert.doesNotMatch(release, /tags: \['v\*'\]/, 'release.yml does not start on a tag push');
   assert.match(release, /^concurrency:\n {2}group: release\n {2}cancel-in-progress: false$/m);
-  assert.match(release, /run: pnpm exec soksak-check release packages\/plugin-api\/package\.json docs\/features\.md/);
+  assert.match(release, /run: pnpm exec sok-check release packages\/plugin-api\/package\.json docs\/features\.md/);
   for (const job of ['release-wailsv3', 'release-tauriv2']) {
     assert.match(release, new RegExp(`  ${job}:\\n {4}needs: gate\\n {4}if: needs\\.gate\\.outputs\\.release == 'true'\\n`), `${job} runs only on a release`);
   }
   assert.match(release, /git ls-remote origin refs\/heads\/main/, 'publication requires the commit to be the head of main');
   // The registry lists a core release in its core.json; the release of core has no condition on the registry state.
   assert.doesNotMatch(release, /registry/i, 'release.yml reads no registry');
-  assert.doesNotMatch(read('Makefile').match(/^release-check:.*$/m)[0], /registry/, 'release-check reads no registry');
+  assert.doesNotMatch(read('Makefile').match(/^check-release:.*$/m)[0], /registry/, 'check-release reads no registry');
   assert.match(release, /tag_name: v\$\{\{ needs\.gate\.outputs\.version \}\}/);
   assert.match(release, /target_commitish: \$\{\{ github\.sha \}\}/);
   const ci = read('.github/workflows/ci.yml');
@@ -316,7 +316,7 @@ test('repeat.yml starts on a dispatch and runs only the tracked repeat targets',
   const repeats = commands.filter((command) => /\brepeat\b/.test(command));
   assert.deepEqual(repeats, [
     'make -C core/native/darwin repeat TEST="$TEST" COUNT="$COUNT"',
-    'make -C core rust-repeat PACKAGE="$PACKAGE" TEST_TARGET="$TEST_TARGET" TEST="$TEST" COUNT="$COUNT"',
+    'make -C core repeat-rust PACKAGE="$PACKAGE" TEST_TARGET="$TEST_TARGET" TEST="$TEST" COUNT="$COUNT"',
   ], `repeat.yml runs ${repeats.join(' | ')}`);
   // The dispatched values reach the commands through the environment, so no value is spliced into a shell line.
   assert.doesNotMatch(commands.join('\n'), /\$\{\{\s*inputs\./, 'a run line splices a dispatched input');
@@ -337,44 +337,24 @@ test('the kit release that core pins defines the presentation mode terms', () =>
 });
 
 test('the hooks, the record targets and the release gate run the commands of the kit release', () => {
-  assert.match(read('.githooks/commit-msg'), /exec pnpm --dir "\$\(git rev-parse --show-toplevel\)" exec soksak-check commits "\$1"/);
-  assert.match(read('.githooks/pre-commit'), /exec pnpm --dir "\$root" exec soksak-check docs "\$root"/);
+  assert.match(read('.githooks/commit-msg'), /exec pnpm --dir "\$\(git rev-parse --show-toplevel\)" exec sok-check commits "\$1"/);
+  assert.match(read('.githooks/pre-commit'), /exec pnpm --dir "\$root" exec sok-check docs "\$root"/);
   const makefile = read('Makefile');
   assert.doesNotMatch(makefile, /packages\/plugin-api\/(?:records|commits)-check\.js/, 'the Makefile runs a record check of the plugin API');
-  assert.match(makefile, /^\t@pnpm exec soksak-check docs$/m);
-  assert.match(makefile, /^\t@pnpm exec soksak-check commits \$\(RANGE\)$/m);
+  assert.match(makefile, /^\t@pnpm exec sok-check docs$/m);
+  assert.match(makefile, /^\t@pnpm exec sok-check commits \$\(RANGE\)$/m);
   assert.match(read('scripts/checklist.mjs'), /^import \{ checklist \} from "@soksak\/kit\/checklist";$/m);
 });
 
-test('events-check and the event scripts run the event source check of the kit release', () => {
+test('check-events and the event scripts run the event source check of the kit release', () => {
   const { devDependencies } = JSON.parse(read('package.json'));
-  assert.match(read('Makefile'), /^\t@pnpm exec soksak-check events --config scripts\/event-sources\.json$/m);
+  assert.match(read('Makefile'), /^\t@pnpm exec sok-check events --config scripts\/event-sources\.json$/m);
   for (const file of ['scripts/check-events.mjs', 'scripts/check-fallbacks.mjs']) {
     assert.match(read(file), /from ["']@soksak\/kit\/events["'];$/m, file);
   }
 });
 
-test('a make target that runs a check names what it reads and no target repeats the recipe of another', () => {
-  const targets = [...read('Makefile').matchAll(/^([a-z0-9][a-z0-9-]*):[^\n=]*\n((?:\t[^\n]*\n)+)/gm)]
-    .map(([, name, recipe]) => ({ name, lines: recipe.split('\n').filter(Boolean) }));
-  const misnamed = targets
-    .filter(({ lines }) => lines.some((line) => /scripts\/check-|soksak-check /.test(line)))
-    .map(({ name }) => name)
-    .filter((name) => !/-check(-wailsv3|-tauriv2)?$/.test(name));
-  assert.deepEqual(misnamed, [], 'a target that runs a check is <what it reads>-check, with the host after it for one host');
-  const repeats = targets.flatMap((one) => targets
-    .filter((other) => other !== one && one.lines.every((line) => other.lines.includes(line)))
-    .map((other) => `${one.name} repeats ${other.name}`));
-  assert.deepEqual(repeats, [], 'a check has one command: a second target with the same recipe is a second name');
-});
-
-test('every make target that a workflow runs exists', () => {
-  const declared = new Set([...read('Makefile').matchAll(/^([a-z0-9][a-z0-9-]*):/gm)].map((match) => match[1]));
-  const missing = [];
-  for (const file of readdirSync(WORKFLOWS)) {
-    for (const [, words] of read(`.github/workflows/${file}`).matchAll(/^\s*(?:run:\s*)?make(?: -C core)? ((?:[a-z0-9-]+ ?)+)(?:\s|$)/gm)) {
-      for (const target of words.trim().split(/\s+/)) if (!declared.has(target)) missing.push(`${file}: ${target}`);
-    }
-  }
-  assert.deepEqual(missing, []);
+test('the structure step of CI checks the names of the commands', () => {
+  assert.match(read('.github/workflows/ci.yml'), /make -C core [^\n]*\bcheck-commands\b/);
+  assert.match(read('Makefile'), /^check-commands:\n\t@pnpm exec sok-check commands$/m);
 });

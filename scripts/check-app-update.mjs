@@ -5,7 +5,7 @@
 // the bundle with a newer version), starts the copy with a disposable configuration directory, runs `core.app.update`,
 // waits until the application that `sok app update` starts is running, and checks that the copied bundle now holds the
 // newer version. Every process it started ends before it returns, and it fails when one remains.
-// `make app-update-check` runs it.
+// `make check-app-update` runs it.
 //
 //   node scripts/check-app-update.mjs --host wailsv3|tauriv2 --bundle PATH --registry INDEX
 import { parseArgs } from "node:util";
@@ -125,7 +125,7 @@ async function main() {
 
     const log = createWriteStream(join(work, "application.out"));
     await new Promise((resolve) => log.once("open", resolve));
-    const child = spawn(join(running, "Contents", "MacOS", `soksak-${options.host}`), ["--config-dir", config], {
+    const child = spawn(join(running, "Contents", "MacOS", `sok-${options.host}`), ["--config-dir", config], {
       stdio: ["ignore", log, log], detached: true,
     });
     child.unref();

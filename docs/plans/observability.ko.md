@@ -111,5 +111,5 @@
 
 - 모든 단계의 교차 검증. 세 출처가 일치해야 단계를 닫는다: 시험의 단언(변경 전 실패, 변경 후 통과), 단위 시험과 창 시험이 남긴 로그, 실행 중인 애플리케이션의 관측. 변경 전에는 실패한 시험과 로그에 event가 없음을 함께 기록한다. 변경 뒤에는 시험이 통과하고, 남은 로그에 기대한 event가 field와 함께 있으며, 예상하지 못한 `error`와 설명되지 않는 `log.dropped`가 없다. 로그 감사 gate는 시험이 남긴 모든 로그를 `soksak-log-check`로 검증한다(schema, 선언된 event, 연속된 `seq`, `log.dropped`로 설명되는 손실, 입력 종류마다 완결된 선언 사슬, 선언한 예상 오류 외의 `error` 없음). 실패한 실행의 로그는 분류하기 전까지 보관한다.
 - 독립 oracle: 입력은 shell 대역이 받은 바이트를 기록된 `pty_write` 바이트와 비교하므로 검사가 로그를 로그와 비교하지 않는다. 각 host의 실행 중인 애플리케이션에서 같은 시나리오를 실행해 시험의 로그와 event, field, 순서를 비교하며, 차이는 결함이다.
-- gate: `make docs-check native-test boundaries-check exposure-check test-inventory-check platforms-check host-layout-check rust-format-check go-format-check rust-clippy-check host-contract-check`, 이어서 `pnpm test`를 `&&`로 묶어 종료 줄로 판단하고, push마다 CI를 읽는다. benchmark는 단계의 개발이 끝난 뒤 기록하며 부하에 따른 시간 때문에 항목을 열어 두지 않는다.
+- gate: `make check-docs test-native check-boundaries check-exposure check-tests check-platform-files check-host-files check-rust-format check-go-format check-rust-clippy test-hosts`, 이어서 `pnpm test`를 `&&`로 묶어 종료 줄로 판단하고, push마다 CI를 읽는다. benchmark는 단계의 개발이 끝난 뒤 기록하며 부하에 따른 시간 때문에 항목을 열어 두지 않는다.
 - 사람이 쓰는 애플리케이션과 그 데이터 폴더는 읽기만 한다. 검사 애플리케이션은 자기 설정 폴더와 프로세스를 쓴다.

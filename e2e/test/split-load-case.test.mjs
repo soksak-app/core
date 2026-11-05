@@ -12,9 +12,9 @@ test("the split load limit is 128 MB, and a measured growth at or above it fails
 
 test("the host process is found by its configuration folder in every build profile", () => {
   const table = [
-    "  10 100 /work/target/release/tauriv2/soksak.app/Contents/MacOS/soksak-tauriv2 --config-dir /work/other",
-    "  11 200 /work/target/release/tauriv2/soksak.app/Contents/MacOS/soksak-tauriv2 --config-dir /work/check",
-    "  12 300 /work/target/debug/soksak-wailsv3.app/Contents/MacOS/soksak-wailsv3 --config-dir /work/debug",
+    "  10 100 /work/target/release/tauriv2/soksak.app/Contents/MacOS/sok-tauriv2 --config-dir /work/other",
+    "  11 200 /work/target/release/tauriv2/soksak.app/Contents/MacOS/sok-tauriv2 --config-dir /work/check",
+    "  12 300 /work/target/debug/sok-wailsv3.app/Contents/MacOS/sok-wailsv3 --config-dir /work/debug",
   ].join("\n");
   assert.equal(hostRssInTable(table, "/work/check"), 200);
   assert.equal(hostRssInTable(table, "/work/debug"), 300);

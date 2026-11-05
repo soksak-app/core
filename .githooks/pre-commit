@@ -2,4 +2,4 @@
 # Checks that the records of the working tree state facts about this repository and use one term per concept.
 # `make hooks` sets this folder as the git hook folder.
 root=$(git rev-parse --show-toplevel) || exit 1
-exec pnpm --dir "$root" exec soksak-check docs "$root"
+exec pnpm --dir "$root" exec sok-check docs "$root"

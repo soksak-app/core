@@ -8,8 +8,8 @@ MINIMUM := -mmacosx-version-min=14.4
 CFLAGS := -fmodules -Wall -Werror -O2 $(MINIMUM)
 FRAMEWORKS := -framework ApplicationServices -framework CoreServices
 
-.PHONY: all test test-process-identity test-package-relocation repeat clean
-all: $(LIBRARY) $(LIBDIR)/pkgconfig/soksak-process-identity.pc
+.PHONY: build test test-process-identity test-package-relocation repeat clean
+build: $(LIBRARY) $(LIBDIR)/pkgconfig/soksak-process-identity.pc
 
 $(BUILD):
 	@mkdir -p $@
@@ -42,10 +42,10 @@ $(LIBDIR)/pkgconfig/soksak-process-identity.pc: Makefile | $(LIBDIR)/pkgconfig
 
 test: test-process-identity test-package-relocation
 
-test-process-identity: $(TEST_EXECUTABLE) all
+test-process-identity: $(TEST_EXECUTABLE) build
 	@NATIVE_TEST_ONLY=process_identity node ../../../scripts/native-tests.mjs $(CURDIR)/build process_identity_test
 
-test-package-relocation: all
+test-package-relocation: build
 	@NATIVE_TEST_ONLY=package_relocation node ../../../scripts/native-tests.mjs $(CURDIR)/tests package_relocation_test.sh
 
 # Each run is one run of scripts/native-tests.mjs, so the test is named, timed and limited as in test-process-identity.

@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { audit, leftovers } from '../check-temp.mjs';
+import { audit, leftovers } from '../check-temp-files.mjs';
 
 function parent(t) {
   const folder = mkdtempSync(join(tmpdir(), 'temp-check-test-'));
@@ -43,6 +43,6 @@ test('a command that fails fails the audit with its status', { timeout: 10000 },
 
 test('a command that cannot start is an error that names it', { timeout: 10000 }, (t) => {
   const where = parent(t);
-  assert.throws(() => audit(join(where, 'missing'), [], { write: () => {}, parent: where }), /^Error: temp-check: .*missing could not start: /);
+  assert.throws(() => audit(join(where, 'missing'), [], { write: () => {}, parent: where }), /^Error: check-temp-files: .*missing could not start: /);
   assert.equal(existsSync(join(where, 'missing')), false);
 });

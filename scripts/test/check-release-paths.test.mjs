@@ -84,7 +84,7 @@ function bundles(t, extra = {}) {
   for (const app of ["wailsv3", "tauriv2"]) {
     const executables = join(dir, `${app}.app/Contents/MacOS`);
     mkdirSync(executables, { recursive: true });
-    writeFileSync(join(executables, `soksak-${app}`), "\0application\0");
+    writeFileSync(join(executables, `sok-${app}`), "\0application\0");
     writeFileSync(join(executables, "soksak-fixture-sidecar"), extra[app] ?? "\0clean sidecar\0");
     paths[app] = { bundle: join(dir, `${app}.app`), executables };
   }
@@ -133,8 +133,8 @@ test("release CLI inspects the supplied bundles instead of default release paths
   const wails = join(dir, "isolated-wails.app");
   const tauri = join(dir, "isolated-tauri.app");
   const stderr = check(["--macos-minimum", "14.4", "--wailsv3-bundle", wails, "--tauriv2-bundle", tauri]);
-  assert.ok(stderr.includes(join(wails, "Contents/MacOS/soksak-wailsv3") + ": missing"), stderr);
-  assert.ok(stderr.includes(join(tauri, "Contents/MacOS/soksak-tauriv2") + ": missing"), stderr);
+  assert.ok(stderr.includes(join(wails, "Contents/MacOS/sok-wailsv3") + ": missing"), stderr);
+  assert.ok(stderr.includes(join(tauri, "Contents/MacOS/sok-tauriv2") + ": missing"), stderr);
 });
 
 for (const [host, other] of [["wailsv3", "tauriv2"], ["tauriv2", "wailsv3"]]) {
@@ -143,8 +143,8 @@ for (const [host, other] of [["wailsv3", "tauriv2"], ["tauriv2", "wailsv3"]]) {
     t.after(() => rmSync(dir, { recursive: true }));
     const bundle = join(dir, `isolated-${host}.app`);
     const stderr = check(["--host", host, "--macos-minimum", "14.4", `--${host}-bundle`, bundle]);
-    assert.ok(stderr.includes(join(bundle, `Contents/MacOS/soksak-${host}`) + ": missing"), stderr);
-    assert.doesNotMatch(stderr, new RegExp(`soksak-${other}:`), stderr);
+    assert.ok(stderr.includes(join(bundle, `Contents/MacOS/sok-${host}`) + ": missing"), stderr);
+    assert.doesNotMatch(stderr, new RegExp(`sok-${other}:`), stderr);
     assert.doesNotMatch(stderr, /required release options/, stderr);
   });
 
@@ -179,8 +179,8 @@ test("release CLI preserves the default audit of both host bundles", { timeout: 
   const wails = join(dir, "isolated-wails.app");
   const tauri = join(dir, "isolated-tauri.app");
   const stderr = check(["--macos-minimum", "14.4", "--wailsv3-bundle", wails, "--tauriv2-bundle", tauri]);
-  assert.ok(stderr.includes(join(wails, "Contents/MacOS/soksak-wailsv3") + ": missing"), stderr);
-  assert.ok(stderr.includes(join(tauri, "Contents/MacOS/soksak-tauriv2") + ": missing"), stderr);
+  assert.ok(stderr.includes(join(wails, "Contents/MacOS/sok-wailsv3") + ": missing"), stderr);
+  assert.ok(stderr.includes(join(tauri, "Contents/MacOS/sok-tauriv2") + ": missing"), stderr);
 });
 
 /**
@@ -211,7 +211,7 @@ test("release CLI inspects every executable in the bundle", { timeout: 5000 }, (
   const { paths, args } = bundles(t, { tauriv2: "\0sp_diag_probe\0" });
   const stderr = check([...args, ...applications(t)]);
   assert.ok(stderr.includes(`${join(paths.tauriv2.executables, "soksak-fixture-sidecar")}: contains a sidecar diagnostic symbol`), stderr);
-  assert.ok(stderr.includes(`${join(paths.wailsv3.executables, "soksak-wailsv3")}: does not embed a readable frontend`), stderr);
+  assert.ok(stderr.includes(`${join(paths.wailsv3.executables, "sok-wailsv3")}: does not embed a readable frontend`), stderr);
 });
 
 for (const [name, args, message] of [

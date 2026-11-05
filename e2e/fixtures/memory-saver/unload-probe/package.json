@@ -1,5 +1,5 @@
 {
-  "name": "@soksak-check/probe-unload",
+  "name": "@sok-check/probe-unload",
   "version": "0.0.35",
   "private": true,
   "type": "module",

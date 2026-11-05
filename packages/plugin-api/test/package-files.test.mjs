@@ -43,7 +43,7 @@ test("the packed SDK contains every current contract file", { timeout: 15000 }, 
 
 test("the plugin API ships no record check, release gate, checklist reader or term list", () => {
   const manifest = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
-  assert.equal(manifest.bin?.["soksak-check"], undefined);
+  assert.equal(manifest.bin?.["sok-check"], undefined);
   for (const file of ["checklist.js", "commits.js", "records.js", "release.js", "terms.json"]) {
     assert.ok(!manifest.files.includes(file), file);
     assert.ok(!existsSync(join(packageRoot, file)), file);
@@ -53,7 +53,7 @@ test("the plugin API ships no record check, release gate, checklist reader or te
 
 test("the plugin API ships no event source check or event source rules", () => {
   const manifest = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
-  assert.equal(manifest.bin?.["soksak-check"], undefined);
+  assert.equal(manifest.bin?.["sok-check"], undefined);
   for (const file of ["events.js", "event-rules.json"]) {
     assert.ok(!manifest.files.includes(file), file);
     assert.ok(!existsSync(join(packageRoot, file)), file);
@@ -64,8 +64,8 @@ test("the plugin API ships no event source check or event source rules", () => {
 test("the plugin API ships no check command that no repository runs", () => {
   const manifest = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
   assert.equal(manifest.bin, undefined);
-  assert.equal(manifest.exports["./exposure-check"], undefined);
-  for (const file of ["exposure-check.js", "engines-check.js", "view-check.js", "core-exposure.json"]) {
+  assert.equal(manifest.exports["./check-exposure"], undefined);
+  for (const file of ["check-exposure.js", "engines-check.js", "view-check.js", "core-exposure.json"]) {
     assert.ok(!manifest.files.includes(file), file);
     assert.ok(!existsSync(join(packageRoot, file)), file);
   }

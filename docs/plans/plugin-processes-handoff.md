@@ -46,7 +46,7 @@ Both sidecar releases follow the core release (F212.15). F212.1-2-2-3-1 stays op
 
 ### Every item
 
-Development comes first. An item runs only the owning checks of what it changed: its unit tests (Red and Green) and the structural checks it touches. Then it is marked `[o]` and the work moves to the next item. A merge into main runs the owning checks of the conflict resolution; CI runs the structure, format and clippy checks of the pushed main. The full suites (`pnpm test`, `make native-test`, `make host-contract-check`, `make verify`), the window checks and the measurements (F212.1-2-2, F212.1-3, F212.7a, F212.7b-1, F212.7c, F212.7d-1, F212.12 to F212.14) run once, when every item of the active checklist is complete. They never run per fix, per item, or recursively.
+Development comes first. An item runs only the owning checks of what it changed: its unit tests (Red and Green) and the structural checks it touches. Then it is marked `[o]` and the work moves to the next item. A merge into main runs the owning checks of the conflict resolution; CI runs the structure, format and clippy checks of the pushed main. The full suites (`pnpm test`, `make test-native`, `make test-hosts`, `make verify`), the window checks and the measurements (F212.1-2-2, F212.1-3, F212.7a, F212.7b-1, F212.7c, F212.7d-1, F212.12 to F212.14) run once, when every item of the active checklist is complete. They never run per fix, per item, or recursively.
 
 Time limits and the progress output of long runs follow the rules in [AGENTS.md](../../AGENTS.md) (Verification).
 
@@ -72,40 +72,40 @@ Time limits and the progress output of long runs follow the rules in [AGENTS.md]
 - Never push a branch. Every branch merges into main, and only main is pushed.
 - Remove the worktree and the local branch right after the merge into main succeeds. Never remove one whose merge failed or has not happened: the condition of a removal is a successful merge.
 - Test or probe code that cannot merge into main is cherry-picked while it still has meaning, otherwise discarded, before the commit. When it cannot be removed at once, register a checklist sub-item that states the removal condition.
-- Before a merge into main, run `git fetch` and `git rev-list --count HEAD..origin/main` on main, and merge origin/main first when the count is not zero. After the merge run the owning checks of the conflict resolution on main. The pre-push hook runs `make push-check` when main is pushed.
-- Run `make hooks`, `make native-darwin` and `make frontend-tauriv2` in a new worktree before tests.
-- On a CHANGELOG conflict keep both entries. On a conflict of the recorded counts in `docs/operations/examples.md`, use the count that `make test-inventory-check` prints for the merged tree.
-- After a worktree moves, the Tauri build cache keeps old paths and clippy fails. Run `cargo clean -p tauri -p soksak-tauriv2` in the worktree.
+- Before a merge into main, run `git fetch` and `git rev-list --count HEAD..origin/main` on main, and merge origin/main first when the count is not zero. After the merge run the owning checks of the conflict resolution on main. The pre-push hook runs `make check-push` when main is pushed.
+- Run `make hooks`, `make build-native` and `make copy-frontend-tauriv2` in a new worktree before tests.
+- On a CHANGELOG conflict keep both entries. On a conflict of the recorded counts in `docs/operations/examples.md`, use the count that `make check-tests` prints for the merged tree.
+- After a worktree moves, the Tauri build cache keeps old paths and clippy fails. Run `cargo clean -p tauri -p sok-tauriv2` in the worktree.
 - Gate commands with `&&`, and never pipe a gate command (`make x | tail && ...`): the pipe returns the status of its last command, so a failure does not stop the chain. Write the output to a log file and judge by the exit status, or set `pipefail`.
-- A change that adds or touches a contract case or a test of `packages/host` or `packages/sok` runs the owning Go or Rust test during development. `make host-contract-check` runs once at checklist completion with the other full suites. CI is the first place it runs after a merge (F220).
+- A change that adds or touches a contract case or a test of `packages/host` or `packages/sok` runs the owning Go or Rust test during development. `make test-hosts` runs once at checklist completion with the other full suites. CI is the first place it runs after a merge (F220).
 
 ### Adding a test file
 
-- Claim it in `scripts/check-test-parity.mjs` (its lane), then update the recorded counts in `docs/operations/examples.md` (+ko) to the output of `make test-inventory-check`.
-- A Rust test with no Go counterpart needs an allowed-difference row in `docs/spec/hosts.md` (+ko) and `scripts/check-hosts.mjs`. Row H13 lists the lock tests.
-- A completed capability needs its feature link in `scripts/check-test-parity.mjs`.
+- Claim it in `scripts/check-tests.mjs` (its lane), then update the recorded counts in `docs/operations/examples.md` (+ko) to the output of `make check-tests`.
+- A Rust test with no Go counterpart needs an allowed-difference row in `docs/spec/hosts.md` (+ko) and `scripts/check-host-files.mjs`. Row H13 lists the lock tests.
+- A completed capability needs its feature link in `scripts/check-tests.mjs`.
 
 ### Test commands
 
 | What | Command |
 |---|---|
 | One Node test file | `node --test packages/<pkg>/test/<file>.test.mjs` |
-| Repeat a Node test | `make node-repeat FILE=<file> NAME=<pattern> COUNT=<n>` |
-| Go tests | `make go-repeat PACKAGE=./packages/host/wailsv3/tests COUNT=1 [TEST=<regexp>]` (also `./packages/sok/wailsv3/tests`, `./packages/host/wailsv3/src`) |
-| Rust tests | `make rust-repeat PACKAGE=soksak-host-tauriv2 COUNT=1 [TEST=<name>]`, and `PACKAGE=soksak-sok-tauriv2` |
-| Rust order dependence | `make rust-tests-alone PACKAGE=<package>` |
+| Repeat a Node test | `make repeat-node FILE=<file> NAME=<pattern> COUNT=<n>` |
+| Go tests | `make repeat-go PACKAGE=./packages/host/wailsv3/tests COUNT=1 [TEST=<regexp>]` (also `./packages/sok/wailsv3/tests`, `./packages/host/wailsv3/src`) |
+| Rust tests | `make repeat-rust PACKAGE=soksak-host-tauriv2 COUNT=1 [TEST=<name>]`, and `PACKAGE=soksak-sok-tauriv2` |
+| Rust order dependence | `make test-rust-alone PACKAGE=<package>` |
 | Native tests | `make -C native/darwin repeat TEST=<name>_test COUNT=<n>` |
-| Docs, links, translations, records | `make docs-check` |
-| Exposure names | `make exposure-check` |
-| Event catalog | `make events-check` |
-| Host file pairs and allowed differences | `make host-layout-check` |
-| Test inventory | `make test-inventory-check` |
-| Core names no plugin | `make boundaries-check` |
-| Event source rules | `make events-check` |
-| Push gate (commit messages) | `make push-check` |
+| Docs, links, translations, records | `make check-docs` |
+| Exposure names | `make check-exposure` |
+| Event catalog | `make check-events` |
+| Host file pairs and allowed differences | `make check-host-files` |
+| Test inventory | `make check-tests` |
+| Core names no plugin | `make check-boundaries` |
+| Event source rules | `make check-events` |
+| Push gate (commit messages) | `make check-push` |
 | View process benchmark | `make -C native/darwin benchmark-view-processes` |
 
-Full suites (`pnpm test`, `make native-test`, `make host-contract-check`, `make verify`, the window suites) are not run to complete an item; they run once when every item of the active checklist is complete, before the release. During development run only the unit tests of what changed; repeat targets of an intermittent failure also wait for that final pass.
+Full suites (`pnpm test`, `make test-native`, `make test-hosts`, `make verify`, the window suites) are not run to complete an item; they run once when every item of the active checklist is complete, before the release. During development run only the unit tests of what changed; repeat targets of an intermittent failure also wait for that final pass.
 
 ### Window checks and measurements
 
@@ -115,7 +115,7 @@ Window checks are end-to-end checks of the applications with installed plugins. 
 - Never activate or focus a window. Capture with `diagnostics.capture.still`, and record with `diagnostics.capture.start` and `diagnostics.capture.stop`. Inspect images at original resolution. An image is observation, not a pass result.
 - For visual or time behavior, record the whole gesture and derive the measured frame gaps and coordinates as tracked evidence.
 - Every application error during a check fails it unless the check declares it with `expectError`.
-- The input method checks (`make e2e-activation`) run only with the person's approval.
+- The input method checks (`make test-app-activation`) run only with the person's approval.
 - Time limits follow [AGENTS.md](../../AGENTS.md) (Verification).
 
 ### Decisions that need a review
@@ -137,7 +137,7 @@ Done on main: F218-2.1, F218-2.2 and F218-2.3 (F219 made the order-dependent sid
 
 **F218-2.4** — in progress on `fix/lock-unwraps-F218-2-4`. 86 lock results that call `unwrap` or `expect`. Same change and test; Red is the panic of the calling thread.
 
-**F218-2.5** — enable `rs.lock-result` with zero findings, and remove its pending entry in `scripts/event-sources.json`. Green is `make events-check` with zero findings. Then mark F218-2 `[o]`.
+**F218-2.5** — enable `rs.lock-result` with zero findings, and remove its pending entry in `scripts/event-sources.json`. Green is `make check-events` with zero findings. Then mark F218-2 `[o]`.
 
 **F212.1-2-2** — the fixture reply waited 12.4 s for the first answer of the files sidecar. `host.trace.sidecar.ready` (F212.1-2-2-6) measures spawn to first answer. S31 is committed in the files sidecar. Repeat the window check of F212.1-2 with the trace on, and read `host.trace.sidecar.ready` and the sidecar's first record. If the gap is before the sidecar's first record, the cause is the start of the process (the binary launch); record the measured time and its cause. If the gap is inside the sidecar, fix it there.
 
@@ -183,7 +183,7 @@ Each move is an item of its own plugin repository, made against main. The table 
 - Moving the files state to a sidecar is an item of the files plugin and files sidecar repositories; whether the editor buffer moves is set by pass value (iv), in the editor repository.
 - Plugin releases with an `engines.soksak` range are published after the core release of F212.15; each is an item of its plugin repository, recorded as unreleased until F212.15 publishes the core version it requires.
 
-- Core names no plugin in code or tests (`make boundaries-check`). Each plugin repository checks its own sources.
+- Core names no plugin in code or tests (`make check-boundaries`). Each plugin repository checks its own sources.
 - Each plugin item measures its view before its release: (iii) first display, (v) display after a layout change, (viii) drag. Each plugin release follows the core release.
 - F212.10-editor comes first, and F212.7a measures pass values (i), (ii), (iii), (iii-b), (v) and (viii) on that first editor view.
 

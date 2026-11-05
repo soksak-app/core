@@ -26,7 +26,7 @@ func relaunchBundle(t *testing.T) (string, string) {
 	if err := os.WriteFile(filepath.Join(running, "Contents", "MacOS", "sok"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	return running, filepath.Join(running, "Contents", "MacOS", "soksak-wailsv3")
+	return running, filepath.Join(running, "Contents", "MacOS", "sok-wailsv3")
 }
 
 // contract: app-relaunch.host.starts-sok-of-the-running-bundle
@@ -45,7 +45,7 @@ func TestTheRelaunchStartsSokOfTheRunningBundleWithTheArgumentsOfTheApplication(
 	if command.Stderr != os.Stderr {
 		t.Fatalf("the standard error of the command is %v, want the standard error of the host", command.Stderr)
 	}
-	outside := filepath.Join(t.TempDir(), "soksak-wailsv3")
+	outside := filepath.Join(t.TempDir(), "sok-wailsv3")
 	_, err = host.PrepareAppRelaunch(outside, 4321, nil)
 	if err == nil || err.Error() != "application relaunch: "+outside+" does not run from an application bundle" {
 		t.Fatalf("an application outside a bundle gave %v", err)

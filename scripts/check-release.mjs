@@ -7,7 +7,7 @@
 // so every file that the workbench publishes and the release page diagnostic module must appear verbatim in the executable for
 // the frontend to be checked. If any is missing, the frontend cannot be read and the check reports an error. The workbench is found as a dependency of the application
 // package.json. Plugins and sidecars are not in the bundle; they are installed into the configuration folder (docs/spec/installation.md).
-// `make release-check` runs the release build first.
+// `make check-release` runs the release build first.
 //
 // The check compares each selected bundle with the macOS minimum of the Makefile (`MACOS_MINIMUM`): Info.plist declares
 // it in LSMinimumSystemVersion, the application executable is built for it, and no other executable is built for a newer
@@ -202,7 +202,7 @@ if (import.meta.main) {
   for (const app of apps) {
     // The application and the command line sok are in Contents/MacOS of the bundle (docs/spec/hosts.md).
     const executables = join(bundles.get(app), "Contents", "MacOS");
-    const executable = join(executables, `soksak-${app}`);
+    const executable = join(executables, `sok-${app}`);
     if (!existsSync(executable)) {
       errors.push(`${executable}: missing; run the release build first`);
       continue;

@@ -91,7 +91,7 @@ test("legacy initialize handshake then tools/list", async (t) => {
   });
   assert.equal(init.result.protocolVersion, "2025-11-25");
   assert.deepEqual(init.result.capabilities, { tools: { listChanged: false } });
-  assert.equal(init.result.serverInfo.name, "soksak-mcp");
+  assert.equal(init.result.serverInfo.name, "sok-mcp");
   mcp.send(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }));
   const list = await mcp.request("tools/list", {});
   assert.equal(list.result.resultType, undefined);
@@ -118,7 +118,7 @@ test("server/discover lists the supported versions", async (t) => {
   assert.equal(reply.result.resultType, "complete");
   assert.deepEqual(reply.result.supportedVersions, ["2026-07-28", "2025-11-25"]);
   assert.deepEqual(reply.result.capabilities, { tools: {} });
-  assert.equal(reply.result._meta["io.modelcontextprotocol/serverInfo"].name, "soksak-mcp");
+  assert.equal(reply.result._meta["io.modelcontextprotocol/serverInfo"].name, "sok-mcp");
 });
 
 test("modern tools/list generates schemas from exposure.list of the key window", async (t) => {

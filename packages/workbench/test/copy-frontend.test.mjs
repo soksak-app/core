@@ -8,7 +8,7 @@ import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { PAGE_IMPORTS, VIEW_IMPORTS, VIEW_IMPORTS_FILE, pageImports, viewImports } from "@soksak/plugin-api";
 
-const STAGE = fileURLToPath(new URL("../stage.mjs", import.meta.url));
+const STAGE = fileURLToPath(new URL("../copy-frontend.mjs", import.meta.url));
 const OBSERVE = fileURLToPath(new URL("../observe.js", import.meta.url));
 const RELEASE_DIAGNOSTICS = fileURLToPath(new URL("../release-diagnostics.js", import.meta.url));
 

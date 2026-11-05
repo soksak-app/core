@@ -1,4 +1,4 @@
-// Resolves the native library input of one run of `make go-repeat` for a Go package. A package needs the library when a package
+// Resolves the native library input of one run of `make repeat-go` for a Go package. A package needs the library when a package
 // in its build graph, test packages included, names the pkg-config package soksak-darwin in a cgo directive; native/darwin
 // installs that pkg-config package with the library. The output is the CGO_CFLAGS define that keys the build to the content
 // of the library. A package that needs no library prints nothing and does not read the library.
@@ -19,7 +19,7 @@ try {
     { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] },
   );
 } catch (error) {
-  console.error(`go-repeat: go list failed for ${pkg} (exit ${error.status})`);
+  console.error(`repeat-go: go list failed for ${pkg} (exit ${error.status})`);
   process.exit(1);
 }
 
@@ -27,7 +27,7 @@ const linksLibrary = listed.split("\n").some((line) => line.split(" ").includes(
 if (!linksLibrary) process.exit(0);
 
 if (!existsSync(LIBRARY)) {
-  console.error(`go-repeat: ${pkg} links ${LIBRARY}, which is not built; run make -C native/darwin first`);
+  console.error(`repeat-go: ${pkg} links ${LIBRARY}, which is not built; run make -C native/darwin first`);
   process.exit(1);
 }
 const digest = createHash("sha256").update(readFileSync(LIBRARY)).digest("hex").slice(0, 16);

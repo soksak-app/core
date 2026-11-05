@@ -17,8 +17,8 @@ A workspace for the soksak layout library, its workbench frontend, plugins, and 
 Plugins and sidecars live in their own repositories ([repositories](docs/spec/plugins.md#repositories)).
 
 ```sh
-make prepare
-make verify
+make install
+make test-all
 pnpm test
 ```
 

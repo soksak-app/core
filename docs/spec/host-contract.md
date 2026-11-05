@@ -19,11 +19,11 @@ func TestEndpointClosesOnInvalidJSON(t *testing.T) {
 fn invalid_json_closes_connection() {
 ```
 
-A test function may declare several cases, separated by commas. Every selected test function in the eight declaration paths declares at least one case: `packages/host/wailsv3/tests/`, `packages/host/wailsv3/src/*_test.go`, `packages/sok/wailsv3/tests/`, `packages/sok/wailsv3/src/*_test.go`, `packages/host/tauriv2/tests/`, `packages/host/tauriv2/src/`, `packages/sok/tauriv2/tests/` and `packages/sok/tauriv2/src/`. A test declares a case only when its assertions check the case's outcome. For Go, the declaration inventory is the union of `_test.go` files selected by `go list` for each configured host-contract run on the current `GOOS` and `GOARCH`; a file excluded from every configured run is not part of this platform's host-contract inventory. Shared contract text lives in `docs/spec/cases` (the manifest case table and the log-contract fixtures), which no package owns: a test reads it there, and `make boundaries-check` refuses a test of a core package that reads a path of another core package.
+A test function may declare several cases, separated by commas. Every selected test function in the eight declaration paths declares at least one case: `packages/host/wailsv3/tests/`, `packages/host/wailsv3/src/*_test.go`, `packages/sok/wailsv3/tests/`, `packages/sok/wailsv3/src/*_test.go`, `packages/host/tauriv2/tests/`, `packages/host/tauriv2/src/`, `packages/sok/tauriv2/tests/` and `packages/sok/tauriv2/src/`. A test declares a case only when its assertions check the case's outcome. For Go, the declaration inventory is the union of `_test.go` files selected by `go list` for each configured host-contract run on the current `GOOS` and `GOARCH`; a file excluded from every configured run is not part of this platform's host-contract inventory. Shared contract text lives in `docs/spec/cases` (the manifest case table and the log-contract fixtures), which no package owns: a test reads it there, and `make check-boundaries` refuses a test of a core package that reads a path of another core package.
 
 ## Check
 
-`make host-contract-check` runs each host's tests in the default configuration and in the diagnostics configuration (Go tag `diagnostics`, Rust feature `diagnostics`) through the command supervisor and reads the reported results. It fails when:
+`make test-hosts` runs each host's tests in the default configuration and in the diagnostics configuration (Go tag `diagnostics`, Rust feature `diagnostics`) through the command supervisor and reads the reported results. It fails when:
 
 - a case in scope for a host has no passing test in that host;
 - a declared test ran in no configuration, or failed or was skipped in one;
@@ -35,7 +35,7 @@ A test function may declare several cases, separated by commas. Every selected t
 
 Owner rule: a declared test takes its result only from the items of its own owner. The owner of a Go test is its package directory, and the owner of a Rust test is its crate directory (the nearest ancestor folder of the file that holds `Cargo.toml`). Results are keyed by run, owner and test name, and a host's results never count for a sok declaration, or the other way round. A Rust declaration matches the one test whose leaf name equals its name.
 
-The scope column is `both`, or `<host> only: <reason>` for behavior that exists in one host. The check runs on macOS, the only platform that both hosts implement; Windows and Linux entry points return `not implemented` errors and have no cases. The unit tests of the check (`scripts/test/check-host-contract.test.mjs`) inject each failure and run in `pnpm test`.
+The scope column is `both`, or `<host> only: <reason>` for behavior that exists in one host. The check runs on macOS, the only platform that both hosts implement; Windows and Linux entry points return `not implemented` errors and have no cases. The unit tests of the check (`scripts/test/test-hosts.test.mjs`) inject each failure and run in `pnpm test`.
 
 ## Application menu
 
@@ -78,7 +78,7 @@ Items:
 | window | bring-all-to-front | system | | | |
 | help | debug | title | 디버그 | Debug | |
 
-`host.menu` reports `{language, menus}` — the active menu language and the built menus; the language is the host's own state, never inferred from titles. Its per-host comparison and the table above are checked at the window tier, and `scripts/check-host-parity.mjs` checks that both hosts carry this same table in their menu builders.
+`host.menu` reports `{language, menus}` — the active menu language and the built menus; the language is the host's own state, never inferred from titles. Its per-host comparison and the table above are checked at the window tier, and `scripts/check-hosts-same.mjs` checks that both hosts carry this same table in their menu builders.
 
 ## Contract cases
 
@@ -724,7 +724,7 @@ Items:
 | `images.calls.name-the-call` | A failure of an image region call after its arguments decode is `<call>: <reason>` with the call name `imageAttach`, `imageFocus`, `imageCaret`, `imageText`, or `imageDetach`. | both |
 | `host-calls.decode.messages` | The argument decoder refuses a missing or `null` required field, a value of another JSON type, a number outside an integer field's range or with a fraction, a `null` argument, and a fixed-length array of another length with the messages of [host calls](native-host.md#host-calls), and accepts a missing or `null` optional field. | both |
 | `host-calls.native.image-argument-lists` | A surface page's `ImageCaret` call with a request and four coordinates and its `ImageText` call with a request and a text decode their own argument lists and reach the caller check. | wailsv3 only: the Wails page runtime sends surface page calls through the native bridge, which decodes their argument lists in the host; Tauri surface pages call the commands of the main page. |
-| `host-calls.decode.every-binding` | Every argument of every `Host` binding is raw JSON that the binding decodes before it does anything else, so the framework decodes no argument. | wailsv3 only: Go reflection lists the bindings at run time; `make host-layout-check` requires every Tauri command argument other than a framework object to be `Argument<T>`. |
+| `host-calls.decode.every-binding` | Every argument of every `Host` binding is raw JSON that the binding decodes before it does anything else, so the framework decodes no argument. | wailsv3 only: Go reflection lists the bindings at run time; `make check-host-files` requires every Tauri command argument other than a framework object to be `Argument<T>`. |
 | `termination.signal.first-requests-quit-second-ends-process` | The first termination signal requests quit, and the second ends the process. | both |
 | `termination.signal.begins-the-quit-state` | The first termination signal begins the quit state before it requests quit, the state that `host.quit` begins, so the end of a WebContent process during that quit writes no error line. | both |
 | `log.closed.signal-before-quit` | The first termination signal stores `log.closed` with its cause `signal` and its number before quit is requested, so the record is in the log when the flush of quit runs. | both |

@@ -39,26 +39,26 @@ test("generated pkg-config file follows a relocated workspace", { timeout: 10000
 });
 
 test("Tauri app and bundled CLI Cargo commands use the declared deployment target", { timeout: 10000 }, () => {
-  for (const target of ["tauriv2-build", "tauriv2-build-release"]) {
-    const output = execFileSync("make", ["-n", "-o", "native-darwin", "-o", "build", "-o", "registry", "-o", "frontend-tauriv2", target], {
+  for (const target of ["build-tauriv2", "build-tauriv2-release"]) {
+    const output = execFileSync("make", ["-n", "-o", "build-native", "-o", "build", "-o", "build-registry", "-o", "copy-frontend-tauriv2", target], {
       cwd: workspace,
       encoding: "utf8",
       env: { ...process.env, MACOSX_DEPLOYMENT_TARGET: "13.0" },
     });
-    const cargo = output.split(/\r?\n/).filter((line) => /\bcargo build\b.*-p soksak-(?:tauriv2|sok-tauriv2)(?:\s|$)/.test(line));
+    const cargo = output.split(/\r?\n/).filter((line) => /\bcargo build\b.*-p (?:sok-tauriv2|soksak-sok-tauriv2)(?:\s|$)/.test(line));
     assert.equal(cargo.length, 2, `${target} must expand to one app build and one bundled CLI build:\n${output}`);
-    assert.match(cargo[0], /^MACOSX_DEPLOYMENT_TARGET=14\.4 cargo build\b.*-p soksak-tauriv2(?:\s|$)/, `${target} app build: ${cargo[0]}`);
+    assert.match(cargo[0], /^MACOSX_DEPLOYMENT_TARGET=14\.4 cargo build\b.*-p sok-tauriv2(?:\s|$)/, `${target} app build: ${cargo[0]}`);
     assert.match(cargo[1], /^MACOSX_DEPLOYMENT_TARGET=14\.4 cargo build\b.*-p soksak-sok-tauriv2(?:\s|$)/, `${target} bundled CLI build: ${cargo[1]}`);
     for (const command of cargo) assert.match(command, /--locked/, `${target} does not preserve the Cargo.lock: ${command}`);
   }
 });
 
 test("registry and workspace lint targets use the tracked Cargo lockfile", { timeout: 10000 }, () => {
-  const registry = execFileSync("make", ["-n", "-o", "native-darwin", "registry"], {
+  const registry = execFileSync("make", ["-n", "-o", "build-native", "build-registry"], {
     cwd: workspace, encoding: "utf8",
   });
   assert.match(registry, /cargo build --locked -p soksak-sok-tauriv2/, registry);
-  const clippy = execFileSync("make", ["-n", "-o", "native-darwin", "-o", "build", "-o", "registry", "-o", "frontend-tauriv2", "rust-clippy-check"], {
+  const clippy = execFileSync("make", ["-n", "-o", "build-native", "-o", "build", "-o", "build-registry", "-o", "copy-frontend-tauriv2", "check-rust-clippy"], {
     cwd: workspace, encoding: "utf8",
   });
   const calls = clippy.split(/\r?\n/).filter((line) => /\bcargo clippy\b/.test(line));
@@ -67,43 +67,43 @@ test("registry and workspace lint targets use the tracked Cargo lockfile", { tim
 });
 
 test("per-host checks build only the selected host and core frontend", { timeout: 10000 }, () => {
-  for (const [host, target] of [["wailsv3", "host-contract-check-wailsv3"], ["tauriv2", "host-contract-check-tauriv2"]]) {
-    const output = execFileSync("make", ["-n", "-o", "native-darwin", "-o", "build", target], {
+  for (const [host, target] of [["wailsv3", "test-wailsv3"], ["tauriv2", "test-tauriv2"]]) {
+    const output = execFileSync("make", ["-n", "-o", "build-native", "-o", "build", target], {
       cwd: workspace, encoding: "utf8",
     });
-    assert.match(output, new RegExp(`soksak-stage src/frontend --diagnostics`), output);
-    assert.match(output, new RegExp(`check-host-contract\\.mjs --host ${host}`), output);
+    assert.match(output, new RegExp(`sok-copy-frontend src/frontend --diagnostics`), output);
+    assert.match(output, new RegExp(`test-hosts\\.mjs --host ${host}`), output);
     assert.doesNotMatch(output, /workspace-registry\.mjs/, output);
     assert.doesNotMatch(output, new RegExp(`--host ${host === "wailsv3" ? "tauriv2" : "wailsv3"}`), output);
   }
 });
 
 test("Rust clippy stages only the core frontend and avoids the workspace registry", { timeout: 10000 }, () => {
-  const output = execFileSync("make", ["-n", "-o", "native-darwin", "-o", "build", "rust-clippy-check"], {
+  const output = execFileSync("make", ["-n", "-o", "build-native", "-o", "build", "check-rust-clippy"], {
     cwd: workspace, encoding: "utf8",
   });
-  assert.match(output, /soksak-stage src\/frontend --diagnostics/, output);
+  assert.match(output, /sok-copy-frontend src\/frontend --diagnostics/, output);
   assert.match(output, /cargo clippy --locked/, output);
   assert.doesNotMatch(output, /workspace-registry\.mjs/, output);
 });
 
 test("native and paired host contract checks use core-only frontend stages", { timeout: 10000 }, () => {
-  for (const target of ["native-test", "host-contract-check"]) {
-    const output = execFileSync("make", ["-n", "-o", "native-darwin", "-o", "build", target], {
+  for (const target of ["test-native", "test-hosts"]) {
+    const output = execFileSync("make", ["-n", "-o", "build-native", "-o", "build", target], {
       cwd: workspace, encoding: "utf8",
     });
-    assert.match(output, /soksak-stage src\/frontend --diagnostics/, output);
-    assert.match(output, /check-host-contract\.mjs/, output);
+    assert.match(output, /sok-copy-frontend src\/frontend --diagnostics/, output);
+    assert.match(output, /test-hosts\.mjs/, output);
     assert.doesNotMatch(output, /workspace-registry\.mjs/, output);
   }
 });
 
 test("release host checks audit only their own optimized bundle", { timeout: 10000 }, () => {
   for (const [host, target, bundle] of [
-    ["wailsv3", "release-check-wailsv3", "--wailsv3-bundle \"target/release/wailsv3/soksak.app\""],
-    ["tauriv2", "release-check-tauriv2", "--tauriv2-bundle \"target/release/tauriv2/soksak.app\""],
+    ["wailsv3", "check-release-wailsv3", "--wailsv3-bundle \"target/release/wailsv3/soksak.app\""],
+    ["tauriv2", "check-release-tauriv2", "--tauriv2-bundle \"target/release/tauriv2/soksak.app\""],
   ]) {
-    const output = execFileSync("make", ["-n", "-o", "native-darwin", "-o", "build", target], {
+    const output = execFileSync("make", ["-n", "-o", "build-native", "-o", "build", target], {
       cwd: workspace, encoding: "utf8",
     });
     assert.ok(output.includes(`check-release.mjs --host ${host} --macos-minimum 14.4 ${bundle}`), output);

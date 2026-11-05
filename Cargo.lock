@@ -3410,7 +3410,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "soksak-tauriv2"
+name = "sok-tauriv2"
 version = "0.0.35"
 dependencies = [
  "soksak-host-tauriv2",

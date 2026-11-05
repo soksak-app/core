@@ -208,7 +208,7 @@ export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, wailsv3Runtim
   return failures;
 }
 
-if (process.argv[1] && process.argv[1].endsWith('check-host-parity.mjs')) {
+if (process.argv[1] && process.argv[1].endsWith('check-hosts-same.mjs')) {
   const read = (path) => readFileSync(join(ROOT, path), 'utf8');
   const wailsv3Sources = {};
   for (const file of readdirSync(join(ROOT, 'packages/host/wailsv3/src'))) {

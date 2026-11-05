@@ -11,7 +11,7 @@
 | 디렉터리 | 내용 |
 | --- | --- |
 | `packages/soksak` | 헤드리스 배치 라이브러리 |
-| `packages/workbench` | 워크벤치 프런트엔드(코어): 프로젝트, 스페이스, 카드, 탭, 사이드바, 설정, 플러그인 로드, `soksak-stage` |
+| `packages/workbench` | 워크벤치 프런트엔드(코어): 프로젝트, 스페이스, 카드, 탭, 사이드바, 설정, 플러그인 로드, `sok-copy-frontend` |
 | `packages/plugin-api` | 선언 형식, 스테이징 배치, 페이지 import map, 플러그인 페이지 도구 |
 | `packages/client` | 로컬 엔드포인트 클라이언트와 지연 시간 벤치마크 |
 | `packages/host/<name>` | [네이티브 호스트](hosts.ko.md) 라이브러리(코어): Go의 `wailsv3`와 Rust의 `tauriv2` |
@@ -25,7 +25,7 @@ Plugin과 sidecar는 자기 repository에 있다([Repository](#repository)).
 
 ## Repository
 
-Core, 각 plugin, 각 sidecar는 core checkout의 sibling 폴더에 있는 별도 git repository다. 각각 자기 test, 자기 `docs/features.md` checklist, 자기 build를 가지며, `make boundaries-check`는 `scripts/workspace-registry.json`이 선언한 plugin id를 읽고 다른 repository는 읽지 않으므로 core checkout만으로 실행된다. `make registry`는 선언된 sibling repository를 읽어 plugin을 pack하고 sidecar를 release하며, `plugin.json`의 `id`가 선언과 다르면 파일과 두 값을 밝히며 실패하고, `make install-plugins`는 `make registry`를 실행한 뒤 그 `index.json`의 plugin을 설치한다.
+Core, 각 plugin, 각 sidecar는 core checkout의 sibling 폴더에 있는 별도 git repository다. 각각 자기 test, 자기 `docs/features.md` checklist, 자기 build를 가지며, `make check-boundaries`는 `scripts/workspace-registry.json`이 선언한 plugin id를 읽고 다른 repository는 읽지 않으므로 core checkout만으로 실행된다. `make registry`는 선언된 sibling repository를 읽어 plugin을 pack하고 sidecar를 release하며, `plugin.json`의 `id`가 선언과 다르면 파일과 두 값을 밝히며 실패하고, `make install-plugins`는 `make registry`를 실행한 뒤 그 `index.json`의 plugin을 설치한다.
 
 | 폴더 | Repository | GitHub |
 | --- | --- | --- |
@@ -37,9 +37,9 @@ Core, 각 plugin, 각 sidecar는 core checkout의 sibling 폴더에 있는 별�
 | `../sidecars/files` | Sidecar `@soksak/sidecar-files`. folder `.`로 선언한다 | `soksak-app/sidecar-files` |
 | `../sidecars/shell` | Sidecar `@soksak/sidecar-shell`. repository가 있으나 선언하지 않는다 | `shell`은 게시하지 않는다 |
 
-이름이 `@soksak/plugin-`으로 시작하는 `@soksak` scope의 package는 plugin이고(core의 `@soksak/plugin-api`는 제외), `@soksak/sidecar-`로 시작하는 package는 sidecar다. core source와 test는 이 중 어느 것도 부르지 않고, fixture는 `@scope/plugin-probe`, `@scope/sidecar-probe` 같은 다른 scope를 쓴다. core 이름은 core checkout에서 추적되는 모든 `package.json`의 이름이며, 애플리케이션, `e2e`, workbench test runtime을 포함한다. `@soksak/shared`도 core 이름이다. core가 import-map 접두사 `soksak://core/shared/`로 제공하며 `package.json`은 없다. Core source나 test가 `@soksak/` package를 이름이 정확한 core package 이름이 아니게 쓰면, 선언 여부와 관계없이 `make boundaries-check`에서 실패한다. Plugin과 sidecar 코드에서 `@soksak/` 이름이 `scripts/workspace-registry.json`의 어느 선언에도 없으면 `make test-inventory-check`(소유자 감사)의 발견이다. `@soksak/` 밖의 이름은 검사하지 않는다.
+이름이 `@soksak/plugin-`으로 시작하는 `@soksak` scope의 package는 plugin이고(core의 `@soksak/plugin-api`는 제외), `@soksak/sidecar-`로 시작하는 package는 sidecar다. core source와 test는 이 중 어느 것도 부르지 않고, fixture는 `@scope/plugin-probe`, `@scope/sidecar-probe` 같은 다른 scope를 쓴다. core 이름은 core checkout에서 추적되는 모든 `package.json`의 이름이며, 애플리케이션, `e2e`, workbench test runtime을 포함한다. `@soksak/shared`도 core 이름이다. core가 import-map 접두사 `soksak://core/shared/`로 제공하며 `package.json`은 없다. Core source나 test가 `@soksak/` package를 이름이 정확한 core package 이름이 아니게 쓰면, 선언 여부와 관계없이 `make check-boundaries`에서 실패한다. Plugin과 sidecar 코드에서 `@soksak/` 이름이 `scripts/workspace-registry.json`의 어느 선언에도 없으면 `make check-tests`(소유자 감사)의 발견이다. `@soksak/` 밖의 이름은 검사하지 않는다.
 
-Core, plugin, sidecar, kit은 소스 수준에서 결합하지 않는다. 어떤 저장소도 의존, build, 검사, workflow에서 다른 저장소의 release, revision, 소스 경로를 가리키지 않으며, 한 저장소의 release가 다른 저장소의 release를 강제하지 않는다. 서로를 아는 것은 설치가 쓰는 선언(`installed.json`, `plugin.json`, `sidecar.json`, `environment.json`)과 명세의 계약뿐이다. Plugin은 `@soksak/plugin-api`를 실행 중에만 import하며, 애플리케이션이 페이지의 import map으로 그것을 해석한다([스테이징 배치](#스테이징-배치)). Plugin의 test는 plugin 경계에서 그 인터페이스를 fake로 바꾸고, plugin은 그것에 대한 의존을 선언하지 않는다. Plugin repository에서 `make test`는 plugin의 test를, `make check`는 그 repository의 검사를 실행한다. 애플리케이션은 plugin을 설치할 때 `plugin.json`, `engines.soksak` 범위, 선언을 검증하고 그것을 어기는 plugin을 거부한다([설치](installation.md)). 여러 repository가 검사나 release에서 실행하는 도구는 kit repository에 있고 그 kit의 게시된 release로 소비된다. kit은 application의 층이 아닌 repository의 도구이므로, kit의 release 파일은 manifest가 가리키는 유일한 다른 repository의 release이다. kit `soksak-app/kit`는 commit message 검사(`soksak-check commits`), record 검사(`soksak-check docs`), release gate(`soksak-check release`), checklist reader, term 목록을 담는다. native process identity library는 sidecar의 공통 기능이므로 core에 있다([process identity](process-identity.md)). core는 그것을 자기 release의 release 파일로 게시하고, sidecar는 그 파일을 build 입력으로 pin해 static link하므로 sidecar 실행 파일은 core에 대한 run-time 의존이 없다.
+Core, plugin, sidecar, kit은 소스 수준에서 결합하지 않는다. 어떤 저장소도 의존, build, 검사, workflow에서 다른 저장소의 release, revision, 소스 경로를 가리키지 않으며, 한 저장소의 release가 다른 저장소의 release를 강제하지 않는다. 서로를 아는 것은 설치가 쓰는 선언(`installed.json`, `plugin.json`, `sidecar.json`, `environment.json`)과 명세의 계약뿐이다. Plugin은 `@soksak/plugin-api`를 실행 중에만 import하며, 애플리케이션이 페이지의 import map으로 그것을 해석한다([스테이징 배치](#스테이징-배치)). Plugin의 test는 plugin 경계에서 그 인터페이스를 fake로 바꾸고, plugin은 그것에 대한 의존을 선언하지 않는다. Plugin repository에서 `make test`는 plugin의 test를, `make check`는 그 repository의 검사를 실행한다. 애플리케이션은 plugin을 설치할 때 `plugin.json`, `engines.soksak` 범위, 선언을 검증하고 그것을 어기는 plugin을 거부한다([설치](installation.md)). 여러 repository가 검사나 release에서 실행하는 도구는 kit repository에 있고 그 kit의 게시된 release로 소비된다. kit은 application의 층이 아닌 repository의 도구이므로, kit의 release 파일은 manifest가 가리키는 유일한 다른 repository의 release이다. kit `soksak-app/kit`는 commit message 검사(`sok-check commits`), record 검사(`sok-check docs`), release gate(`sok-check release`), checklist reader, term 목록을 담는다. native process identity library는 sidecar의 공통 기능이므로 core에 있다([process identity](process-identity.md)). core는 그것을 자기 release의 release 파일로 게시하고, sidecar는 그 파일을 build 입력으로 pin해 static link하므로 sidecar 실행 파일은 core에 대한 run-time 의존이 없다.
 
 로컬 checkout은 repository를 이 sibling 폴더에 두므로 `scripts/workspace-registry.json`의 상대 폴더가 그곳에서 성립한다. 어떤 workflow도 workspace의 다른 repository를 checkout하지 않는다.
 
@@ -234,7 +234,7 @@ OS 창마다 앱 DOM WebView가 하나 있다. 워크벤치는 표면의 카드 
 
 log hook이 없는 표면 컨텍스트(host가 없는 page, 예: 브라우저 예제, 그리고 표면 시험의 host 없는 컨텍스트)에는 event log가 없어서 그 `runtime.log` 호출은 기록을 저장하지 않는다. 이는 의도된 동작이다. host가 있는 표면 컨텍스트에는 workbench가 모든 표면 runtime에 `pluginRecords`를 주므로 항상 hook이 있다.
 
-plugin 저장소의 catalog 검사(`soksak-check events`)는 `runtime.log.<level>(`와 `runtime.log[level]`를 plugin event의 입구로 인식하므로([입구](logging.md#catalog)) plugin은 runtime을 직접 호출하며, `runtime.log`로 전달만 하는 자체 emitter module(`ui/events.js`)은 선택 사항이다.
+plugin 저장소의 catalog 검사(`sok-check events`)는 `runtime.log.<level>(`와 `runtime.log[level]`를 plugin event의 입구로 인식하므로([입구](logging.md#catalog)) plugin은 runtime을 직접 호출하며, `runtime.log`로 전달만 하는 자체 emitter module(`ui/events.js`)은 선택 사항이다.
 
 ## 아이콘
 
@@ -252,7 +252,7 @@ plugin 저장소의 catalog 검사(`soksak-check events`)는 `runtime.log.<level
 | `sidebars.sets` | 플러그인 기본값의 선택적 명시적 덮어쓰기: 섹션 세트 `{id, title, sections, layout}`. `layout`은 `list` 또는 `tabs`다 |
 | `sidecars` | 선택. `false`는 런타임이 [사이드카](sidecars.ko.md)를 실행할 수 없다는 뜻이며 브라우저 예제가 그렇다. 기본값은 `true`다 |
 | `starter` | 선택. [첫 실행](installation.ko.md#첫-실행)이 설치하는 registry pack |
-| `install` | 선택. host가 없는 빌드가 애플리케이션을 스테이징하기 전에 설정 폴더에 설치하는 registry pack. browser 예제(`make browser-frontend`)는 pack `browser-example`의 plugin을 설치한다 |
+| `install` | 선택. host가 없는 빌드가 애플리케이션을 스테이징하기 전에 설정 폴더에 설치하는 registry pack. browser 예제(`make copy-frontend-browser`)는 pack `browser-example`의 plugin을 설치한다 |
 | `registry` | 선택. registry가 정해지지 않았을 때 첫 실행이 정하는 기본 registry index의 `https:` 또는 절대 `file:` URL([첫 실행](installation.ko.md#첫-실행)) |
 | `sidebars.links` | 기본 사이드바 선택: 일반 left/right 연결, 카드 네 변 연결, window-left/window-right 연결. 플러그인 left/right 형식, null 세트, 레일 연결은 거부한다. |
 
@@ -282,7 +282,7 @@ plugin 저장소의 catalog 검사(`soksak-check events`)는 `runtime.log.<level
 
 ## 스테이징 배치
 
-`soksak-stage <출력> [--diagnostics] [--installed <설정 디렉터리>] [--registry-index <절대 index 경로>]`는 애플리케이션 디렉터리에서 실행하고 Node 모듈 해석으로 패키지를 찾는다. `--registry-index`는 절대 index 경로를 Node의 `pathToFileURL`로 file URL로 바꾸고, staged 환경에서만 `environment.json`의 registry를 교체한다. Debug staging target은 `make registry`가 생성한 workspace registry의 절대 경로를 전달한다. Release staging은 `--registry-index`를 전달하지 않으므로 선언된 HTTPS registry가 기본값으로 남는다. 원본 `environment.json`은 바뀌지 않는다. 스테이징된 프런트엔드는 다음을 포함한다:
+`sok-copy-frontend <출력> [--diagnostics] [--installed <설정 디렉터리>] [--registry-index <절대 index 경로>]`는 애플리케이션 디렉터리에서 실행하고 Node 모듈 해석으로 패키지를 찾는다. `--registry-index`는 절대 index 경로를 Node의 `pathToFileURL`로 file URL로 바꾸고, staged 환경에서만 `environment.json`의 registry를 교체한다. Debug staging target은 `make registry`가 생성한 workspace registry의 절대 경로를 전달한다. Release staging은 `--registry-index`를 전달하지 않으므로 선언된 HTTPS registry가 기본값으로 남는다. 원본 `environment.json`은 바뀌지 않는다. 스테이징된 프런트엔드는 다음을 포함한다:
 
 | 경로 | 원본 |
 | --- | --- |
@@ -301,7 +301,7 @@ plugin 저장소의 catalog 검사(`soksak-check events`)는 `runtime.log.<level
 
 `@soksak/plugin-api` package는 설치된 consumer가 현재 공개 API contract를 읽고 replay할 수 있도록 `contract/` directory의 모든 파일을 게시한다.
 
-디버그 스테이징 대상 `frontend-wailsv3`, `frontend-tauriv2`는 `--diagnostics`를 더한다. 릴리스 빌드에는 페이지 진단 코드가 없고, 릴리스 빌드는 plugin release가 담은 [진단 선언](#진단-선언)을 읽지 않는다. `make release-check`는 스테이징된 릴리스 프런트엔드에 `/transcript.js`나 페이지 진단 모듈이 있으면 실패한다.
+디버그 스테이징 대상 `copy-frontend-wailsv3`, `copy-frontend-tauriv2`는 `--diagnostics`를 더한다. 릴리스 빌드에는 페이지 진단 코드가 없고, 릴리스 빌드는 plugin release가 담은 [진단 선언](#진단-선언)을 읽지 않는다. `make check-release`는 스테이징된 릴리스 프런트엔드에 `/transcript.js`나 페이지 진단 모듈이 있으면 실패한다.
 
 모든 workbench 페이지는 `PAGE_IMPORTS`와 같은 import map 하나를 선언한다. 항목은 `soksak`, `@soksak/plugin-api`, `@soksak/plugin-api/page`, `@soksak/plugin-api/screen-hash`(화면 메시지의 [화면 hash](replay.ko.md#화면-hash)), `@soksak/runtime`, `@soksak/shared/`, `@soksak/workbench/`다. view 페이지는 자기 import map을 갖지 않으며, 호스트가 `VIEW_IMPORTS`를 넣는다([plugin 처리](plugin-processes.ko.md), rule 4).
 

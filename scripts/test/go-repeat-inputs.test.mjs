@@ -11,7 +11,7 @@ const library=resolve(root,'native/darwin/build/libsoksak-darwin.a');
 const resolveInputs=(pkg,tags)=>spawnSync('node',['scripts/go-repeat-inputs.mjs',pkg,...(tags?[tags]:[])],{cwd:root,encoding:'utf8',timeout:60000});
 
 test('go repeat does not name the native library for a package that does not link it',{timeout:30000},()=>{
- const result=spawnSync('make',['-n','go-repeat','PACKAGE=./packages/sok/wailsv3/tests','COUNT=1','TEST=TestPluginInstall'],{cwd:root,encoding:'utf8',timeout:20000});
+ const result=spawnSync('make',['-n','repeat-go','PACKAGE=./packages/sok/wailsv3/tests','COUNT=1','TEST=TestPluginInstall'],{cwd:root,encoding:'utf8',timeout:20000});
  assert.equal(result.status,0,result.stdout+result.stderr);
  assert.doesNotMatch(result.stdout,/libsoksak-darwin\.a/,'the recipe computes the native library for a package without cgo');
 });

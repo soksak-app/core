@@ -2,7 +2,7 @@
 
 [English](host-parity.md)
 
-두 애플리케이션 호스트(`tauriv2`, `wailsv3`)는 같은 제품을 구현한다. 호스트 사이의 동일성은 검토 의견이 아니다. 아래의 각 명제는 `make host-parity-check`(`scripts/check-host-parity.mjs`)가 판정한다. 도구는 두 호스트의 소스를 읽고 차이가 있으면 실패한다. 정당한 차이는 명제를 늦추는 것이 아니라, 수정과 함께 이 문서의 명제 자체를 바꾸는 것이다.
+두 애플리케이션 호스트(`tauriv2`, `wailsv3`)는 같은 제품을 구현한다. 호스트 사이의 동일성은 검토 의견이 아니다. 아래의 각 명제는 `make check-hosts-same`(`scripts/check-hosts-same.mjs`)가 판정한다. 도구는 두 호스트의 소스를 읽고 차이가 있으면 실패한다. 정당한 차이는 명제를 늦추는 것이 아니라, 수정과 함께 이 문서의 명제 자체를 바꾸는 것이다.
 
 ## 명제
 

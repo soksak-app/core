@@ -245,7 +245,7 @@ void sp_test_declare_activation(void);
 
 int main(int argc, char **argv) { @autoreleasepool {
     // activation activates the application and checks whether a press in the OS event queue makes the web view the first responder.
-    // Used only by make e2e-activation.
+    // Used only by make test-app-activation.
     BOOL activation = argc > 1 && strcmp(argv[1], "--activation") == 0;
     if (activation) sp_test_declare_activation();
     // The records of the input method are info and debug events, which the default policy refuses (docs/spec/logging.md#policy):
@@ -253,7 +253,7 @@ int main(int argc, char **argv) { @autoreleasepool {
     const int8_t everything[SP_CLASS_COUNT] = {SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE};
     check(sp_event_set_policy(everything), @"the policy stores every level of every class");
     // The correlation identifiers of the inputs are <boot>.<n>; the host gives the boot identifier of its run.
-    check(sp_event_set_boot("native-test"), @"the boot identifier of the run is accepted");
+    check(sp_event_set_boot("test-native"), @"the boot identifier of the run is accepted");
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
@@ -1022,7 +1022,7 @@ int main(int argc, char **argv) { @autoreleasepool {
                 && [keyDown[@"fields"][@"before"][@"markedText"] isEqual:@""],
             [NSString stringWithFormat:@"TEST 11: a key is the event native.input.key_down with its code, characters and one identifier (got %@)", keyEvents]);
         check(keyDown && keyReport && [keyReport[@"cids"] isEqualToArray:keyDown[@"cids"]] && [pageKey[@"cids"] isEqualToArray:keyDown[@"cids"]]
-                && [keyDown[@"cids"][0] hasPrefix:@"native-test."],
+                && [keyDown[@"cids"][0] hasPrefix:@"test-native."],
             [NSString stringWithFormat:@"TEST 11: the key event, its report and the event of the page carry the identifier <boot>.<n> (got %@ and %@)", keyEvents, pageKey]);
         NSArray<NSDictionary *> *again = capturedEvents(^{ [regionView keyDown:returnEvent]; });
         NSDictionary *secondKey = nil;

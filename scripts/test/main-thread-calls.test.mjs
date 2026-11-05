@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { auditMainThreadCalls } from "../check-hosts.mjs";
+import { auditMainThreadCalls } from "../check-host-files.mjs";
 
 // The fixtures use the paths of the darwin layer of the Wails host and of the headers of native/darwin, which the audit selects.
 const LAYER = "packages/host/wailsv3/src/platform/darwin";
@@ -133,7 +133,7 @@ test("main-thread audit rejects a preamble function that Go calls and that uses 
 });
 
 test("main-thread audit names the thread-safe native functions with a reason", { timeout: 30000 }, async () => {
-  const { MAIN_THREAD_FREE } = await import("../check-hosts.mjs");
+  const { MAIN_THREAD_FREE } = await import("../check-host-files.mjs");
   for (const [name, reason] of Object.entries(MAIN_THREAD_FREE)) {
     assert.match(name, /^sp_[a-z_*]+$/, name);
     assert.ok(reason.length > 20, `${name} has no reason`);

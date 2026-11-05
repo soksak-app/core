@@ -51,7 +51,7 @@
 보관: `../sidecars/files` S32(`docs(spec): Hold the files sidecar spec`).
 
 
-`@soksak/sidecar-files`(repository `../sidecars/files`)는 `make build`로 `build/soksak-files`를 빌드하고 세션의 `root` 안의 디렉터리를 나열하고 감시한다. 코드는 `src/`에 있다: 진입점 `src/main.go`, 패키지 `src/files`의 프로토콜, `src/platform/platform.go`를 통해 등록되는 `src/platform/{darwin,linux,windows}/`의 디렉터리 감시. macOS는 디렉터리나 일반 파일에 kqueue `EVFILT_VNODE` 필터를 걸어 감시하고, Linux는 디렉터리를 inotify로 감시하며 일반 파일은 `watching files is not implemented on linux`로 실패하고, Windows는 `watching directories is not implemented on windows`로 실패한다. 세션은 감시하는 경로만 상태로 갖는다. 사이드카는 사이드카 출력 줄 한도와 같은 67108864 byte까지의 요청 줄을 읽고, 답을 HTML escape 없이 쓴다. JSON이 최대 여섯 배로 escape한 8 MiB 텍스트와 32 MiB bytes의 base64는 그 한도 안에 있다.
+`@soksak/sidecar-files`(repository `../sidecars/files`)는 `make build`로 `build/sok-files`를 빌드하고 세션의 `root` 안의 디렉터리를 나열하고 감시한다. 코드는 `src/`에 있다: 진입점 `src/main.go`, 패키지 `src/files`의 프로토콜, `src/platform/platform.go`를 통해 등록되는 `src/platform/{darwin,linux,windows}/`의 디렉터리 감시. macOS는 디렉터리나 일반 파일에 kqueue `EVFILT_VNODE` 필터를 걸어 감시하고, Linux는 디렉터리를 inotify로 감시하며 일반 파일은 `watching files is not implemented on linux`로 실패하고, Windows는 `watching directories is not implemented on windows`로 실패한다. 세션은 감시하는 경로만 상태로 갖는다. 사이드카는 사이드카 출력 줄 한도와 같은 67108864 byte까지의 요청 줄을 읽고, 답을 HTML escape 없이 쓴다. JSON이 최대 여섯 배로 escape한 8 MiB 텍스트와 32 MiB bytes의 base64는 그 한도 안에 있다.
 
 | 요청 본문 | 답 본문 |
 | --- | --- |
@@ -222,14 +222,14 @@ byte가 바뀌면 magic이 바뀌므로 새 contract tag다. plugin과 sidecar�
 | S5 | `docs/spec/replay.md`의 "Screen hash"(33~55줄)와 "Golden vectors"(56~70줄), `docs/spec/replay.ko.md` 39, 54, 58, 83줄: contract를 가리키는 포인터로 바꾼다. `scripts/check-docs.mjs`에서 `#screen-hash`와 `#golden-vectors`가 여전히 풀리도록 제목은 남는다 | contract repository(글) | G1 |
 | S6 | `docs/spec/persistent-services.md` 51~68줄("Screen message")과 `docs/spec/persistent-services.ko.md` 68줄: 포인터로 바꾸고 제목은 남긴다 | contract repository(글) | G1 |
 | S7 | `packages/plugin-api/terms.json`의 용어 "screen hash"(169줄) | contract 용어집 | G1 |
-| S8 | `scripts/check-test-parity.mjs`의 항목 F160.35(2649~2663줄: 구현, 단위 시험, e2e 시험, expected 문구) | 파서와 함께 contract repository 또는 terminal plugin으로 옮긴다. 시험을 가진 쪽으로 | G1 |
+| S8 | `scripts/check-tests.mjs`의 항목 F160.35(2649~2663줄: 구현, 단위 시험, e2e 시험, expected 문구) | 파서와 함께 contract repository 또는 terminal plugin으로 옮긴다. 시험을 가진 쪽으로 | G1 |
 | S9 | sidecar `../sidecars/vt/vt-core/src/screen_hash.rs`: hash 소유자를 뺀다. `message_cells`는 sidecar 모듈로 옮기고, message의 cell과 cursor 형식은 crate에서 온다. 호출자: `vt-core/src/protocol.rs` 1276줄과 1333줄; `vt-alacritty/src/replay.rs` 18줄과 309줄; `vt-core/tests/screen_hash_test.rs` 8줄; `vt-core/tests/screen_message_test.rs` 6줄과 `screen-message.json` 읽기 | sidecar repository, crate를 통해 | G1(crate에 의존하는 sidecar 출시) |
 | S10 | sidecar 사본 `vt-core/tests/fixtures/log-contract/screen-hash.json`, `screen-message.json`과 README 8~11줄("Core owns all three") | sidecar repository가 제거 | G1(S9와 같은 sidecar 출시) |
-| S11 | `scripts/check-test-parity.mjs`의 항목 F160.25(2617~2630줄): 구현 `screenHash`(`screen-hash.js`)가 contract repository로 옮기고, `sok` 시험 `replay_test.go`와 `replay_test.rs`, e2e 시험은 core에 남아 남은 소유자로 항목을 재배정한다. `packages/sok/tauriv2/tests/replay_test.rs`(590줄)와 `packages/sok/wailsv3/tests/replay_test.go`(340줄)의 screen message를 인용한 주석도 재배정한다 | contract repository(구현), core(시험, 재배정) | G1 |
+| S11 | `scripts/check-tests.mjs`의 항목 F160.25(2617~2630줄): 구현 `screenHash`(`screen-hash.js`)가 contract repository로 옮기고, `sok` 시험 `replay_test.go`와 `replay_test.rs`, e2e 시험은 core에 남아 남은 소유자로 항목을 재배정한다. `packages/sok/tauriv2/tests/replay_test.rs`(590줄)와 `packages/sok/wailsv3/tests/replay_test.go`(340줄)의 screen message를 인용한 주석도 재배정한다 | contract repository(구현), core(시험, 재배정) | G1 |
 | S12 | `docs/spec/events.json` 190줄(처음 분기의 설명): page frame의 layer를 `page`로 적고 있다. `replay.md` 22줄에 따라 `plugin`으로 바꾼다(감독자 결정). `page.*` 이벤트의 layer `page`는 남는다 | core | F236-9-3, gate 없음: 이름 정정만 하며 저장된 기록은 이미 `plugin`을 쓴다 |
 | S13 | `packages/plugin-api/terms.json`: 용어 "replay"(150줄과 151줄)이 terminal 세션을 말한다 | core | F236-9-3, gate 없음: "세션"으로 |
 | S14 | terminal page `../plugins/terminal/ui/terminal.js`: `screenFromMessage`와 `screenHash`를 import하는 2줄과 호출 1209줄과 1218줄은 (b)의 복사본을 쓴다. plugin의 `Makefile`에 `make pack` 전 복사 단계를 넣는다 | terminal plugin repository | G1 (b) |
-| S15 | 복원 입력 검증기(gate V2): `docs/spec/replay.md` 72, 87, 109줄; `docs/spec/host-contract.md` 696줄과 `docs/spec/host-contract.ko.md` 697줄(명령 `cli.debug.replay-input-cases`); `packages/log-contract/test/replay-inputs.test.mjs`(7, 17, 23, 29줄); `packages/sok/tauriv2/tests/replay_inputs_test.rs`와 `packages/sok/wailsv3/tests/replay_inputs_test.go`; `scripts/check-test-parity.mjs`의 항목 F160.34(2633~2648줄) | V2가 성립할 때까지 core. 그 뒤 sidecar repository가 검증기 시험을 가지고 항목도 함께 온다. `replay.md`와 `host-contract.md`는 명령 문구를 남긴다 | V2 |
+| S15 | 복원 입력 검증기(gate V2): `docs/spec/replay.md` 72, 87, 109줄; `docs/spec/host-contract.md` 696줄과 `docs/spec/host-contract.ko.md` 697줄(명령 `cli.debug.replay-input-cases`); `packages/log-contract/test/replay-inputs.test.mjs`(7, 17, 23, 29줄); `packages/sok/tauriv2/tests/replay_inputs_test.rs`와 `packages/sok/wailsv3/tests/replay_inputs_test.go`; `scripts/check-tests.mjs`의 항목 F160.34(2633~2648줄) | V2가 성립할 때까지 core. 그 뒤 sidecar repository가 검증기 시험을 가지고 항목도 함께 온다. `replay.md`와 `host-contract.md`는 명령 문구를 남긴다 | V2 |
 | S16 | `CHANGELOG.md`와 `CHANGELOG.ko.md`의 F160.25, F160.34, F160.35 항목, 그리고 `docs/features.md`와 `docs/features.ko.md`의 F236-9 항목은 기록으로 남고 바뀌지 않는다. G1 (e)는 사용자에게 미치는 결과를 담은 changelog 항목을 새로 추가한다 | core(새 changelog 항목만) | G1 (e) |
 
 유지되는 일반 문구는 `docs/spec/replay.md` 5줄("각 화면의 hash"와 입력 종류 표)이며, terminal을 이름 부르지 않는다.
@@ -238,7 +238,7 @@ byte가 바뀌면 magic이 바뀌므로 새 contract tag다. plugin과 sidecar�
 
 ### View state의 producer 규칙(gate V1)
 
-`docs/spec/replay.md` 74~98줄("View state"와 그 "Decision")은 terminal 엔진이 그려진 화면을 계산하는 방식을 말한다: cell의 selection 강조, 테마에 따른 빈 cell 자르기, viewport 이동, viewport 밖의 cursor. 그 저장소가 가질 때 terminal sidecar(`../sidecars/vt`, 그 `docs/spec/`)의 명세로 옮긴다. core는 `replay.md`의 "### Hashed members" 제목 아래에 일반 문장 하나를 둔다. hash된 cell과 cursor는 sidecar가 그려진 화면에 대해 보고하는 것이며, 각 sidecar는 자기 명세에서 그것을 계산하는 방식을 말한다. 97줄(그려진 화면의 golden vector)은 vector가 contract에 남으므로 "Golden vectors"에 남는다. gate V1: sidecar 명세가 글을 가지고 그 저장소의 문서 검사가 통과한다. V1이 성립하면 `scripts/check-test-parity.mjs`의 행 F160.34는 view-state 문구가 아니라 `replay.md`의 입력 종류를 기대한다.
+`docs/spec/replay.md` 74~98줄("View state"와 그 "Decision")은 terminal 엔진이 그려진 화면을 계산하는 방식을 말한다: cell의 selection 강조, 테마에 따른 빈 cell 자르기, viewport 이동, viewport 밖의 cursor. 그 저장소가 가질 때 terminal sidecar(`../sidecars/vt`, 그 `docs/spec/`)의 명세로 옮긴다. core는 `replay.md`의 "### Hashed members" 제목 아래에 일반 문장 하나를 둔다. hash된 cell과 cursor는 sidecar가 그려진 화면에 대해 보고하는 것이며, 각 sidecar는 자기 명세에서 그것을 계산하는 방식을 말한다. 97줄(그려진 화면의 golden vector)은 vector가 contract에 남으므로 "Golden vectors"에 남는다. gate V1: sidecar 명세가 글을 가지고 그 저장소의 문서 검사가 통과한다. V1이 성립하면 `scripts/check-tests.mjs`의 행 F160.34는 view-state 문구가 아니라 `replay.md`의 입력 종류를 기대한다.
 
 ### replay 입력 검증기(gate V2)
 

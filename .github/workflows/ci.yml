@@ -56,7 +56,7 @@ jobs:
           go -C packages/host/wailsv3 mod download
           go -C packages/sok/wailsv3 mod download
       - name: Fetch pinned native release file
-        run: make -C core native-darwin-fetch
+        run: make -C core fetch-native
       - name: Wails host tests
         env:
           npm_config_offline: 'true'
@@ -65,13 +65,13 @@ jobs:
           GOFLAGS: -mod=readonly
           CARGO_NET_OFFLINE: 'true'
           OFFLINE: '1'
-        run: make -C core host-contract-check-wailsv3
+        run: make -C core test-wailsv3
       - name: Go format checks
         env:
           GOPROXY: 'off'
           GOSUMDB: 'off'
           GOFLAGS: '-mod=readonly'
-        run: make -C core go-format-check
+        run: make -C core check-go-format
       - name: Reject lockfile changes
         if: always()
         run: git -C core diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
@@ -102,7 +102,7 @@ jobs:
         working-directory: core
         run: cargo fetch --locked
       - name: Fetch pinned native release file
-        run: make -C core native-darwin-fetch
+        run: make -C core fetch-native
       - name: Tauri host tests
         env:
           npm_config_offline: 'true'
@@ -111,17 +111,17 @@ jobs:
           GOPROXY: 'off'
           GOFLAGS: -mod=readonly
           OFFLINE: '1'
-        run: make -C core host-contract-check-tauriv2
+        run: make -C core test-tauriv2
       - name: Rust format and clippy checks
         env:
           CARGO_NET_OFFLINE: 'true'
           OFFLINE: '1'
-        run: make -C core rust-format-check rust-clippy-check
+        run: make -C core check-rust-format check-rust-clippy
       - name: Reject lockfile changes
         if: always()
         run: git -C core diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
 
-  native-darwin:
+  build-native:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -136,11 +136,11 @@ jobs:
       - name: Fetch locked Node dependencies
         run: pnpm -C core install --frozen-lockfile
       - name: Fetch pinned native release file
-        run: make -C core native-darwin-fetch
+        run: make -C core fetch-native
       - name: Build the native library offline
         env:
           OFFLINE: '1'
-        run: make -C core native-darwin
+        run: make -C core build-native
       # The displays, the power state and the console session of the runner are recorded before the tests, because the tests
       # that record windows or wait for presentation depend on them and the test output does not state them (F239-303).
       - name: Record the display session
@@ -211,10 +211,10 @@ jobs:
         working-directory: core
         run: cargo fetch --locked
       - name: Fetch pinned native release file
-        run: make -C core native-darwin-fetch
+        run: make -C core fetch-native
       - name: Commit messages
         if: github.event_name == 'pull_request' || github.event.before != '0000000000000000000000000000000000000000'
-        run: make -C core commits-check RANGE=${{ github.event_name == 'pull_request' && format('{0}..{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha) || format('{0}..{1}', github.event.before, github.sha) }}
+        run: make -C core check-commits RANGE=${{ github.event_name == 'pull_request' && format('{0}..{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha) || format('{0}..{1}', github.event.before, github.sha) }}
       - name: Structure checks
         env:
           npm_config_offline: 'true'
@@ -224,7 +224,7 @@ jobs:
           CARGO_NET_OFFLINE: 'true'
           CARGO_INCREMENTAL: '0'
           OFFLINE: '1'
-        run: make -C core docs-check boundaries-check platforms-check host-layout-check exposure-check test-inventory-check host-parity-check events-check
+        run: make -C core check-docs check-commands check-boundaries check-platform-files check-host-files check-exposure check-tests check-hosts-same check-events
       - name: Cross-toolchain script tests
         env:
           npm_config_offline: 'true'
@@ -245,7 +245,7 @@ jobs:
       - core-node
       - macos-wailsv3
       - macos-tauriv2
-      - native-darwin
+      - build-native
       - equivalence
     runs-on: ubuntu-26.04-arm
     steps:
@@ -254,7 +254,7 @@ jobs:
           CORE_NODE: ${{ needs.core-node.result }}
           WAILS: ${{ needs.macos-wailsv3.result }}
           TAURI: ${{ needs.macos-tauriv2.result }}
-          NATIVE: ${{ needs.native-darwin.result }}
+          NATIVE: ${{ needs.build-native.result }}
           EQUIVALENCE: ${{ needs.equivalence.result }}
         run: |
           for result in "$CORE_NODE" "$WAILS" "$TAURI" "$NATIVE" "$EQUIVALENCE"; do

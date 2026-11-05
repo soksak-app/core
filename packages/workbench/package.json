@@ -5,7 +5,7 @@
   "description": "Workbench frontend: projects, spaces, cards, tabs, sidebars, settings, and plugin loading.",
   "type": "module",
   "bin": {
-    "soksak-stage": "./stage.mjs"
+    "sok-copy-frontend": "./copy-frontend.mjs"
   },
   "files": [
     "index.html",
@@ -108,7 +108,7 @@
     "focus-state.js",
     "pointer-state.js",
     "plugin-processes.js",
-    "stage.mjs",
+    "copy-frontend.mjs",
     "staged.js",
     "replace-file.mjs"
   ],
