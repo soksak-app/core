@@ -963,6 +963,14 @@ test("source events inside the gesture require a recorded capture frame", { time
     [boundary, next], "a captured source row that may be inside the gesture is retained without false rejection");
 });
 
+test("every source frame after the gesture stays, because the final viewport can arrive in a later frame than the first", { timeout: 5000 }, async () => {
+  const { requireViewContentFrameCoverage } = await import("../view-metrics-collection.mjs");
+  const during = { sequence: 1, sourceSequence: 1, timeRange: { lowerMs: 10, upperMs: 11 }, frameIndex: 1 };
+  const first = { sequence: 2, sourceSequence: 2, width: 455, timeRange: { lowerMs: 21, upperMs: 22 }, frameIndex: 2 };
+  const final = { sequence: 3, sourceSequence: 3, width: 453, timeRange: { lowerMs: 38, upperMs: 39 }, frameIndex: 3 };
+  assert.deepEqual(requireViewContentFrameCoverage([during, first, final], { gestureStartedAtMs: 9, gestureEndedAtMs: 20 }), [during, first, final]);
+});
+
 function dragTraceModeSession(t, { performanceTrace, logPolicy }) {
   const configDir = mkdtempSync(join(tmpdir(), "drag-trace-mode-"));
   t.after(() => rmSync(configDir, { recursive: true, force: true }));
