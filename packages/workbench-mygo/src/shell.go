@@ -73,7 +73,7 @@ type environmentGrid struct {
 
 // metrics are the chrome metrics that the shell draws with.
 type metrics struct {
-	lineHeight, space1, space2, space3, space4, libraryFooterH, librarySortW, librarySearchW, libraryCardMinW, libraryCardMinWNarrow, libraryNarrowW,
+	lineHeight, projectColumnW, projectColumnGap, projectColumnPad, projectTabH, projectTabPad, projectTabXInset, projectTabAddH, space1, space2, space3, space4, libraryFooterH, librarySortW, librarySearchW, libraryCardMinW, libraryCardMinWNarrow, libraryNarrowW,
 	libraryPreviewH, libraryMark, libraryMarkStroke, previewLineH, previewLineStep, previewLineOpacity, previewSidebarOpacity, libraryAddH,
 	libraryFormW, fieldPadY, selectArrowRoom, selectArrowInset, previewBorderMix, previewFillMix, previewInkMix, previewLineW,
 	barTabRootPad, barTabRootW, dropMix, dropBorder, tabDraggingOpacity, actStroke, chromeActsGap, brandGap, brandLogoAtBase, chromeH, chromeRowH, spaceGap, spacePad, chromeGap, barGap, barXPad, barXOpacity, barAddText, barAddPad, textControlAtBase, textCaptionAtBase, chipMix, chipHoverMix, chipOnMix, projectTabMix float32
@@ -110,6 +110,13 @@ func readMetrics(declared *Declarations) (metrics, error) {
 		read(name, into)
 	}
 	read("line-height", &m.lineHeight)
+	read("project-column-w", &m.projectColumnW)
+	read("project-column-gap", &m.projectColumnGap)
+	read("project-column-pad", &m.projectColumnPad)
+	read("project-tab-h", &m.projectTabH)
+	read("project-tab-pad", &m.projectTabPad)
+	read("project-tab-x-inset", &m.projectTabXInset)
+	read("project-tab-add-h", &m.projectTabAddH)
 	read("bar-tab-root-pad", &m.barTabRootPad)
 	read("bar-tab-root-w", &m.barTabRootW)
 	read("drop-border", &m.dropBorder)

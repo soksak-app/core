@@ -2,6 +2,7 @@ package workbench
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -41,8 +42,8 @@ func (s *Shell) drawChrome(c *ui.Context, width float32) {
 		Role(ui.RoleGroup).Label("core.chrome.bar").Children(func() {
 		s.drawBrand(c)
 		ui.Row(c).Grow(1).MinWidth(0).Clip().AlignItems(ui.Center).Gap(s.frameLength(s.metrics.tabsGap)).Children(func() {
-			if !browsing {
-				s.drawProjectTabs(c)
+			if !browsing && !s.projectsToLeft() {
+				s.drawProjectTabs(c, false)
 			}
 		})
 		ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(s.frameLength(s.metrics.chromeActsGap)).Children(func() { s.drawChromeActs(c, browsing) })
@@ -135,11 +136,13 @@ func (s *Shell) chromeTextAct(c *ui.Context, name, command, title string) {
 type barTab struct {
 	key, title string
 	on         bool
-	tint       string
-	rename     renameTarget
-	radius     [4]float32
-	pick       func() ui.Element
-	close      func() ui.Element
+	// column tells that the tab stands in the column of the project tabs, where its name takes the width and its close button stands over the name.
+	column bool
+	tint   string
+	rename renameTarget
+	radius [4]float32
+	pick   func() ui.Element
+	close  func() ui.Element
 }
 
 func (s *Shell) drawBarTab(c *ui.Context, tab barTab) {
@@ -150,6 +153,9 @@ func (s *Shell) drawBarTab(c *ui.Context, tab barTab) {
 	m := s.metrics
 	chip := ui.Row(c.Key(tab.key)).Height(s.frameLength(m.spaceTabH)).Shrink(0).AlignItems(ui.Center).
 		Radius(tab.radius[0], tab.radius[1], tab.radius[2], tab.radius[3])
+	if tab.column {
+		chip.FillWidth().Height(s.frameLength(m.projectTabH))
+	}
 	color := s.palette.Muted
 	fill := faded(s.palette.Fg, m.chipMix)
 	if chip.Hovered() {
@@ -169,8 +175,14 @@ func (s *Shell) drawBarTab(c *ui.Context, tab barTab) {
 		if name.DoubleClicked() {
 			s.binder.run("core.rename.begin", tab.rename)
 		}
-		name.Padding(0, s.frameLength(m.barGap), 0, pad).AlignItems(ui.Center).Label(tab.title).Tooltip(tab.title).Children(func() {
-			ui.Text(c, tab.title).SingleLine().Ellipsis("…").FontSize(size).MaxWidth(s.frameLength(m.barTabMaxW)).TextColor(color)
+		name.Padding(0, s.frameLength(m.barGap), 0, pad).AlignItems(ui.Center).Label(tab.title).Tooltip(tab.title)
+		widest := s.frameLength(m.barTabMaxW)
+		if tab.column {
+			widest = s.frameLength(m.projectColumnW) - 2*m.projectColumnPad - 2*m.projectTabPad - 2*s.palette.BorderWidth
+			name.Padding(0, m.projectTabPad).FillWidth().Height(s.frameLength(m.projectTabH)).Justify(ui.Center)
+		}
+		name.Children(func() {
+			ui.Text(c, tab.title).SingleLine().Ellipsis("…").FontSize(size).MaxWidth(widest).TextColor(color)
 		})
 		if tab.close == nil {
 			ui.Spacer(c).Width(pad - s.frameLength(m.barGap))
@@ -178,7 +190,13 @@ func (s *Shell) drawBarTab(c *ui.Context, tab barTab) {
 		}
 		closing := tab.close()
 		closing.PaddingX(s.frameLength(m.barXPad)).Margin(0, pad, 0, 0).Label("닫기").Tooltip("닫기")
-		if !closing.Hovered() {
+		switch {
+		case tab.column:
+			closing.Absolute().Top(m.projectTabXInset).Right(m.projectTabXInset).Margin(0)
+			if !chip.Hovered() {
+				closing.Opacity(0)
+			}
+		case !closing.Hovered():
 			closing.Opacity(m.barXOpacity)
 		}
 		closing.Children(func() {
@@ -199,13 +217,11 @@ func (s *Shell) drawBarAdd(c *ui.Context, button ui.Element) {
 }
 
 // drawProjectTabs draws the tabs of the projects that the window owns, which are the open projects of the window.
-func (s *Shell) drawProjectTabs(c *ui.Context) {
+func (s *Shell) drawProjectTabs(c *ui.Context, column bool) {
 	radius := s.radiusSmall()
 	for _, project := range s.projects {
-		if project.ID != s.active {
-			continue
-		}
-		s.drawBarTab(c, barTab{key: "project-" + project.ID, title: project.Title, on: true, tint: project.Color, rename: renameTarget{"project", project.ID}, radius: [4]float32{radius, radius, radius, radius},
+		s.drawBarTab(c, barTab{key: "project-" + project.ID, title: project.Title, on: project.ID == s.active, tint: project.Color, column: column,
+			rename: renameTarget{"project", project.ID}, radius: [4]float32{radius, radius, radius, radius},
 			pick: func() ui.Element {
 				return s.binder.Press(c, "core.project-tab", "core.project.activate", project.ID, idParam{project.ID})
 			},
@@ -213,7 +229,32 @@ func (s *Shell) drawProjectTabs(c *ui.Context) {
 				return s.binder.Press(c, "core.project-tab.close", "core.project.close", project.ID, idParam{project.ID})
 			}})
 	}
-	s.drawBarAdd(c, s.binder.Press(c, "core.project-tab.add", "core.projects.browse", "", nil))
+	add := s.binder.Press(c, "core.project-tab.add", "core.projects.browse", "", nil)
+	if column {
+		add.FillWidth().Justify(ui.Center)
+	}
+	s.drawBarAdd(c, add)
+	if column {
+		add.Height(s.frameLength(s.metrics.projectTabAddH))
+	}
+}
+
+// projectsToLeft tells whether the project tabs stand in a column at the left of the work screen rather than in the bar.
+func (s *Shell) projectsToLeft() bool { return s.settings.Value("projectTabs") == "left" }
+
+// projectColumnWidth is the width of the column of the project tabs on the work screen, 0 when the tabs stand in the bar.
+func (s *Shell) projectColumnWidth() float32 {
+	if !s.projectsToLeft() {
+		return 0
+	}
+	return float32(math.Round(float64(s.frameLength(s.metrics.projectColumnW))))
+}
+
+// drawProjectColumn draws the column of the project tabs, which starts above the space row and goes down to the bottom.
+func (s *Shell) drawProjectColumn(c *ui.Context, width, height float32) {
+	m := s.metrics
+	ui.Column(s.binder.Name(c, "core.projects.column", "")).Role(ui.RoleGroup).Label("프로젝트").Size(width, height).Shrink(0).Gap(m.projectColumnGap).Padding(m.projectColumnPad).Background(s.palette.Card).
+		BorderWidth(0, s.palette.BorderWidth, 0, 0).BorderColor(s.palette.Edge).Children(func() { s.drawProjectTabs(c, true) })
 }
 
 // drawSpaces draws the row of the spaces of the project, a band of the card color with its edge under it.

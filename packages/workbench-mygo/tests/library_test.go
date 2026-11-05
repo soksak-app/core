@@ -281,3 +281,51 @@ func TestTheFormStandsAsThePageStandsIt(t *testing.T) {
 		t.Fatalf("the form buttons stand %v under the choose button", gap)
 	}
 }
+
+func TestEveryProjectHasATabInTheBar(t *testing.T) {
+	f, alpha, beta := twoProjects(t)
+	f.run("core.library.return", nil)
+	f.settle()
+	first, second := f.box("core.project-tab", alpha), f.box("core.project-tab", beta)
+	if first.Y != second.Y || first.X >= second.X {
+		t.Fatalf("the tabs stand at %+v and %+v", first, second)
+	}
+	f.tester.ClickAt(first.X+first.W/2, first.Y+first.H/2)
+	f.settle()
+	if got := status[map[string]any](t, f, "core.project"); got["id"] != alpha {
+		t.Fatalf("the active project is %v", got)
+	}
+}
+
+func TestTheProjectTabsStandInAColumnAtTheLeft(t *testing.T) {
+	f, alpha, beta := twoProjects(t)
+	f.run("core.library.return", nil)
+	f.settle()
+	before := status[gridRead](t, f, "core.grid")
+	f.run("core.settings.set", map[string]any{"patch": map[string]any{"projectTabs": "left"}})
+	f.settle()
+	column := f.box("core.projects.column", "")
+	if column.X != 0 || column.W < 64 || column.W > 65 {
+		t.Fatalf("the column is %+v", column)
+	}
+	first, second := f.box("core.project-tab", alpha), f.box("core.project-tab", beta)
+	if first.X != second.X || first.Y >= second.Y || first.X < column.X || first.X+first.W > column.X+column.W {
+		t.Fatalf("the tabs stand at %+v and %+v in %+v", first, second, column)
+	}
+	if first.H != 36 {
+		t.Fatalf("the tab is %+v", first)
+	}
+	add := f.box("core.project-tab.add", "")
+	if add.H != 24 || add.Y <= second.Y {
+		t.Fatalf("the add button is %+v under %+v", add, second)
+	}
+	after := status[gridRead](t, f, "core.grid")
+	if after.Plane.X-before.Plane.X < 64 || after.Width >= before.Width {
+		t.Fatalf("the plane was %+v and is %+v", before, after)
+	}
+	f.run("core.projects.browse", nil)
+	f.settle()
+	if f.has("core.projects.column", "") {
+		t.Fatal("the library shows the column")
+	}
+}

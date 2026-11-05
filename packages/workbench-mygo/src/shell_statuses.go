@@ -119,7 +119,7 @@ func optionalText(value string) *string {
 // planeOrigin is the origin of the plane in the window.
 func (s *Shell) planeOrigin() layout.Point {
 	inset := s.stageInset()
-	return layout.Point{X: float64(inset), Y: float64(s.chromeHeight() + s.workBanner + s.spaceRowHeight() + inset)}
+	return layout.Point{X: float64(s.projectColumnWidth() + inset), Y: float64(s.chromeHeight() + s.workBanner + s.spaceRowHeight() + inset)}
 }
 
 // projectStatus returns the stored record of a project with its open state.

@@ -18,6 +18,19 @@ func (s *Shell) stageInset() float32 { return s.palette.Gap + s.palette.BorderWi
 
 // drawWork draws the spaces and the stage of the shown project.
 func (s *Shell) drawWork(c *ui.Context, width, height float32) {
+	column := s.projectColumnWidth()
+	if column == 0 {
+		s.drawWorkArea(c, width, height)
+		return
+	}
+	ui.Row(c).Size(width, height).Children(func() {
+		s.drawProjectColumn(c, column, height)
+		ui.Column(c).Size(width-column, height).Children(func() { s.drawWorkArea(c, width-column, height) })
+	})
+}
+
+// drawWorkArea draws the error of the work screen, the row of the spaces and the plane.
+func (s *Shell) drawWorkArea(c *ui.Context, width, height float32) {
 	s.surfaces.planeDrawn = true
 	project := s.opened()
 	s.workBanner = s.drawWorkError(c, width)
