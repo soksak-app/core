@@ -31,7 +31,7 @@ func (s *Shell) layoutSurfaces() ([]retainedSurface, error) {
 			eachTab(stored.State.Cards, func(tab layout.Tab, _ bool) {
 				surfaces = append(surfaces, retainedSurface{tab.ID, project.Root})
 			})
-			sections, err := s.spaceSections(space.ID, stored.State.Cards)
+			sections, err := s.spaceSections(project, space.ID, stored.State.Cards)
 			if err != nil {
 				return nil, fmt.Errorf("space %s: %w", space.ID, err)
 			}
@@ -43,21 +43,44 @@ func (s *Shell) layoutSurfaces() ([]retainedSurface, error) {
 	return surfaces, nil
 }
 
-// spaceSections returns the section surfaces of the sidebars of a space: of its fixed sidebars and of the sides of its cards.
-func (s *Shell) spaceSections(space string, cards []layout.Card) ([]string, error) {
-	sections := s.sidebars.WindowSurfaces(space)
+// spaceSections returns the section surfaces of the sidebars of a space of project, with the sets and the links of that project: of its
+// fixed sidebars with every set that a link gives them, and of the sides of its cards with the set that a card chose or the set linked
+// to the plugin of each of its tabs.
+func (s *Shell) spaceSections(project *projectRecord, space string, cards []layout.Card) ([]string, error) {
+	sets, err := decode[[]SidebarSet](s.settings.ProjectValue(project.Settings, "sets"))
+	if err != nil {
+		return nil, err
+	}
+	links, err := decode[[]SidebarLink](s.settings.ProjectValue(project.Settings, "links"))
+	if err != nil {
+		return nil, err
+	}
+	sections := s.sidebars.windowSurfaces(space, sets, links)
 	for _, card := range cards {
 		data, err := layout.DecodeCardData(card.Data)
 		if err != nil || data == nil {
 			continue // A place card has no sides, and the shell refuses a stored card that does not read when it loads the space.
 		}
 		for _, side := range layout.SidebarSides {
-			current, err := layout.EffectiveSidebar(card.ID, data, side, s.sidebarSizes(), s.linkedSide(data, side))
-			if err != nil {
+			held := map[string]bool{}
+			hold := func(linked *string) error {
+				current, err := layout.EffectiveSidebar(card.ID, data, side, s.sidebarSizes(), linked)
+				if err != nil {
+					return err
+				}
+				if current != nil && !held[current.Set] {
+					held[current.Set] = true
+					sections = append(sections, s.sidebars.setSurfaces(space, card.ID+":"+side, current.Set, sets)...)
+				}
+				return nil
+			}
+			if err := hold(nil); err != nil {
 				return nil, err
 			}
-			if current != nil {
-				sections = append(sections, s.sidebars.SetSurfaces(space, card.ID+":"+side, current.Set)...)
+			for _, tab := range data.TabList() {
+				if err := hold(linkedCardOf(links, side, tab.Plugin)); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
