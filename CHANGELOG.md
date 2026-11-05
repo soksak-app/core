@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F584-4: The message of a failed capture ends with the domain and code of the system error, because the description alone may name neither. Red: a failure with the description `the stream failed` lost its code at the content query, at a still capture and at a recording start. A native test checks that a covered window captures the same bytes as before the cover, for each kind of layer and for a change made while covered, without the general content query.
 - F608: The macOS window checks start again without a selected recognizer, because the setup runs the renamed native target.
 - F561-1: A document closed with the keyboard ends its web content process at the close, and its data store can end.
 - F502-23: `diagnostics.drag` with `native` waits until the window presented its current layout before it reads the point of the boundary, so a press right after a split reaches the divider.
