@@ -8,7 +8,7 @@ import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFr
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, mapViewContentFramesToCapture, monotonicTimeMs,
   selectOneShotViewSourceFrame, viewCardWithDifferentPluginTab, viewFootprints,
   requireViewContentFrameCoverage, rootNativePlacementBeforeCapture,
-  withViewContentTrace } from "../../view-metrics-collection.mjs";
+  withDragTraceMode, withViewContentTrace } from "../../view-metrics-collection.mjs";
 import { viewContentCases } from "../../view-content.mjs";
 import { viewProcessGroup } from "../../view-process-footprint.mjs";
 
@@ -256,8 +256,8 @@ async function editorLayoutObservation(t, s, descriptor, surface, card, theme, c
 
 async function editorDragObservation(t, s, descriptor, surface, card, palette) {
   await s.presented();
-  const traced = await withViewContentTrace(t, s, descriptor, surface, async () =>
-    drag(t, s, { axis: "x", line: 1, dx: 80, dy: 0, ms: 500, times: 1 }, { capture: true }));
+  const { result: traced, phaseMode } = await withDragTraceMode(s, () => withViewContentTrace(t, s, descriptor, surface, async () =>
+    drag(t, s, { axis: "x", line: 1, dx: 80, dy: 0, ms: 500, times: 1 }, { capture: true })));
   const dragPalette = editorPaletteWithMarkerColor(palette, traced.start?.markerColor);
   const run = traced.action;
   const files = frames(run.frames);
@@ -303,6 +303,7 @@ async function editorDragObservation(t, s, descriptor, surface, card, palette) {
     lastGestureFrameIndex: gestureEndedFrameIndex,
     gestureEndedFrameIndex,
     gestureStartedAtMs: run.ticks[0],
+    phaseMode,
     gestureEndedAtMs: run.ticks.at(-1),
     finalPresentation: { displayedAtMs: run.displayed,
       targetViewport: { width: Math.trunc(finalRoot.frame.width), height: Math.trunc(finalRoot.frame.height) },

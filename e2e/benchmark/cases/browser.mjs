@@ -8,7 +8,7 @@ import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFr
   from "../../view-frame-geometry.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, monotonicTimeMs,
   mapViewContentFramesToCapture, requireViewContentFrameCoverage, rightEdgeWidthDragPlan, rootNativePlacementBeforeCapture,
-  selectOneShotViewSourceFrame, waitForViewReadiness, withViewContentTrace }
+  selectOneShotViewSourceFrame, waitForViewReadiness, withDragTraceMode, withViewContentTrace }
   from "../../view-metrics-collection.mjs";
 
 /** Browser-specific inputs for the shared view lifecycle measurement collector. */
@@ -185,8 +185,8 @@ async function dragObservation(t, s, descriptor, surface, card, slotInsetsPt, co
   assert.ok(pane, `browser measurement card ${card} is absent before drag`);
   const plan = rightEdgeWidthDragPlan(beforeGrid, pane);
   await s.presented();
-  const traced = await withViewContentTrace(t, s, descriptor, surface, async () =>
-    drag(t, s, plan, { capture: true }));
+  const { result: traced, phaseMode } = await withDragTraceMode(s, () => withViewContentTrace(t, s, descriptor, surface, async () =>
+    drag(t, s, plan, { capture: true })));
   const run = traced.action;
   const files = frames(run.frames);
   assert.equal(files.length, run.count, "browser drag recording omitted finalized frame files");
@@ -232,6 +232,7 @@ async function dragObservation(t, s, descriptor, surface, card, slotInsetsPt, co
     lastGestureFrameIndex: gestureEndedFrameIndex,
     gestureEndedFrameIndex,
     gestureStartedAtMs: run.ticks[0],
+    phaseMode,
     gestureEndedAtMs: run.ticks.at(-1),
     finalPresentation: { displayedAtMs: run.displayed,
       targetViewport: { width: Math.trunc(root.frame.width), height: Math.trunc(root.frame.height) },

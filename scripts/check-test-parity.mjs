@@ -10116,13 +10116,13 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-243",
-    implementation: [{ file: "e2e/benchmark/cases/terminal.mjs", symbol: "export async function withTerminalDragTraceMode" }],
+    implementation: [{ file: "e2e/view-metrics-collection.mjs", symbol: "export async function withDragTraceMode" }],
     tests: [
-      { file: "e2e/test/terminal-view-metrics-case.test.mjs", id: "terminal drag performance trace mode preserves frame logging and restores the original setting" },
-      { file: "e2e/test/terminal-view-metrics-case.test.mjs", id: "terminal drag trace-mode cleanup preserves action and after-write restoration failures" },
-      { file: "e2e/test/terminal-view-metrics-case.test.mjs", id: "terminal drag trace mode restores performance even when post-action settings cannot be read" },
-      { file: "e2e/test/terminal-view-metrics-case.test.mjs", id: "terminal drag trace mode restores performance before reporting a changed log policy" },
-      { file: "e2e/test/terminal-view-metrics-case.test.mjs", id: "terminal drag trace mode preserves falsy action rejection values" },
+      { file: "e2e/test/view-metrics-collection.test.mjs", id: "a measured drag stores only the frame class without the performance trace and restores both settings" },
+      { file: "e2e/test/view-metrics-collection.test.mjs", id: "a measured drag keeps the failure of its action and of the restoration" },
+      { file: "e2e/test/view-metrics-collection.test.mjs", id: "a measured drag restores the settings when the settings cannot be read after it" },
+      { file: "e2e/test/view-metrics-collection.test.mjs", id: "a measured drag refuses a log policy without the frame trace and changes nothing" },
+      { file: "e2e/test/view-metrics-collection.test.mjs", id: "a measured drag keeps a falsy rejection of its action" },
     ],
     expected: "Terminal drag measurement disables only the global performance trace while preserving frame logging, restores the original setting before reporting failures, and retains action and restoration errors without changing cadence or geometry acceptance criteria.",
     levels: ["unit"],
@@ -10877,7 +10877,7 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // F433 removes a check; it adds no capability.
 // F431 names the release candidate 0.0.34; it changes no runtime capability.
 // F432 records the plugin releases and the registry entry for core 0.0.34; it changes no runtime capability of core.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
+const NON_CAPABILITY_COMPLETIONS = new Set(["F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66), the window checks of plugins (F110) and the registry listing of the hwp plugin (F141, registry items G37 and G38). Core cannot read
