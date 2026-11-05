@@ -19,8 +19,13 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 	s.surfaces.planeDrawn = true
 	project := s.opened()
 	DrawErrorBanner(c, s.errors)
+	// An error stands above the spaces and takes its height from the stage.
+	banner := float32(0)
+	if text, ok := s.errors.Text(workbenchErrorPlace); ok {
+		_, banner = c.MeasureText(width, ui.Span{Text: text})
+	}
 	s.drawSpaces(c, project, width)
-	stage := height - s.metrics.spaceTabH - s.metrics.tabsGap
+	stage := height - banner - s.metrics.spaceTabH - s.metrics.tabsGap
 	inset := s.stageInset()
 	s.plane.Resize(float64(width-2*inset), float64(stage-2*inset))
 	// A column takes its width from the plane, whose size only a frame knows, so a change of the columns waits for it.
@@ -32,7 +37,7 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 			s.keep()
 		}
 	}
-	originX, originY := inset, s.chromeHeight()+s.metrics.spaceTabH+s.metrics.tabsGap+inset
+	originX, originY := inset, s.chromeHeight()+banner+s.metrics.spaceTabH+s.metrics.tabsGap+inset
 	ui.Box(c).Size(width, stage).DrawOver(func(p *ui.Painter, r ui.Rect) { s.drawRail(p, r, inset) }).Children(func() {
 		cards := s.plane.Cards()
 		s.forgetCardReads(cards)
