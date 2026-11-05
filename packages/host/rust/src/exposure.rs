@@ -9,7 +9,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Sender};
-use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+use std::sync::{Arc, Condvar, Mutex, OnceLock, PoisonError};
 use std::time::{Duration, Instant};
 
 use crate::framework::{AppHandle, Frontend, LogicalSize, Manager, Webview, Window};
@@ -780,12 +780,13 @@ impl Relay {
     }
 }
 
-/// The endpoint of the application, the relay, and the host.window value that was sent last.
+/// The endpoint of the application, the relay, the host.window value that was sent last, and the thread that reads it.
 #[derive(Default)]
 pub(crate) struct Exposure {
     pub relay: Relay,
     endpoint: OnceLock<Endpoint>,
     reported: Mutex<HashMap<String, Value>>,
+    window_reads: OnceLock<LatestWork<Window>>,
 }
 
 /// Opens the endpoint. publish writes endpoint.json.
@@ -1434,10 +1435,12 @@ pub(crate) fn sidecars_changed(app: &AppHandle) {
 
 /// Called when the host.window value of a window may have changed. If a connection watches it, the value is calculated
 /// and sent when it differs from the value sent last. Native values are read on the main thread, so the calculation
-/// runs on a separate thread.
+/// runs on a separate thread. That thread is one for the application and starts with the first watched change: a change
+/// can arrive on every frame of a region, and each read waits for the main thread, so a thread for each change would
+/// pile up while the main thread is busy, and a read that began earlier could send its older value last.
 pub(crate) fn window_changed(window: &Window) {
-    let watched = window
-        .state::<Exposure>()
+    let state = window.state::<Exposure>();
+    let watched = state
         .endpoint
         .get()
         .is_some_and(|endpoint| endpoint.notifier().watched(window.label(), "host.window"));
@@ -1445,42 +1448,114 @@ pub(crate) fn window_changed(window: &Window) {
         trace_window_notify(window.label(), &WindowNotify::Unwatched);
         return;
     }
-    let window = window.clone();
-    crate::routine::spawn_named("window-status", move || {
-        let value = match window_status(&window) {
-            Ok(value) => value,
-            // A failed read is logged, including the read of a window that closed before its state was read.
-            Err(error) => {
-                log_error("host.window", error.message);
-                return;
-            }
-        };
-        let state = window.state::<Exposure>();
-        let Some(endpoint) = state.endpoint.get() else {
+    state
+        .window_reads
+        .get_or_init(|| LatestWork::new("window-status", |window| send_window_status(&window)))
+        .ask(window.label(), window.clone());
+}
+
+/// Reads host.window of a window and sends the value when it differs from the value sent last.
+fn send_window_status(window: &Window) {
+    let value = match window_status(window) {
+        Ok(value) => value,
+        // A failed read is logged, including the read of a window that closed before its state was read.
+        Err(error) => {
+            log_error("host.window", error.message);
             return;
-        };
-        let decision = {
-            let mut reported = state
-                .reported
-                .lock()
-                // default: a lock that a panicking thread poisoned still holds the record of the values sent, which decides whether
-                // the value is sent; the panic hook records the panic.
-                .unwrap_or_else(PoisonError::into_inner);
-            // The watch is read under the lock of the record. A watch that ends before this read clears the record after
-            // this decision, so the next watch receives the next value.
-            let watched = endpoint.notifier().watched(window.label(), "host.window");
-            decide_window_notify(&mut reported, window.label(), watched, &value)
-        };
-        trace_window_notify(window.label(), &decision);
-        if let WindowNotify::Sent(value) = decision {
-            match raw(&value) {
-                Ok(text) => endpoint
-                    .notifier()
-                    .changed(window.label(), "host.window", None, &text),
-                Err(error) => log_error("host.window change", error.message),
-            }
         }
-    });
+    };
+    let state = window.state::<Exposure>();
+    let Some(endpoint) = state.endpoint.get() else {
+        return;
+    };
+    let decision = {
+        let mut reported = state
+            .reported
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the record of the values sent, which decides whether
+            // the value is sent; the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner);
+        // The watch is read under the lock of the record. A watch that ends before this read clears the record after
+        // this decision, so the next watch receives the next value.
+        let watched = endpoint.notifier().watched(window.label(), "host.window");
+        decide_window_notify(&mut reported, window.label(), watched, &value)
+    };
+    trace_window_notify(window.label(), &decision);
+    if let WindowNotify::Sent(value) = decision {
+        match raw(&value) {
+            Ok(text) => endpoint
+                .notifier()
+                .changed(window.label(), "host.window", None, &text),
+            Err(error) => log_error("host.window change", error.message),
+        }
+    }
+}
+
+/// One thread that runs work for the keys that asked for it, one run at a time. A key that asks again before its run begins
+/// replaces its earlier request, so a run starts after the last request of a key and no older request runs after it. Dropping
+/// it ends the thread after the run in progress.
+pub(crate) struct LatestWork<T> {
+    shared: Arc<(Mutex<LatestRequests<T>>, Condvar)>,
+}
+
+struct LatestRequests<T> {
+    asked: HashMap<String, T>,
+    stopped: bool,
+}
+
+impl<T: Send + 'static> LatestWork<T> {
+    pub(crate) fn new(name: &str, mut run: impl FnMut(T) + Send + 'static) -> Self {
+        let shared = Arc::new((
+            Mutex::new(LatestRequests {
+                asked: HashMap::new(),
+                stopped: false,
+            }),
+            Condvar::new(),
+        ));
+        let worker = Arc::clone(&shared);
+        crate::routine::spawn_named(name, move || {
+            loop {
+                let asked = {
+                    let (lock, wake) = &*worker;
+                    // default: a lock that a panicking thread poisoned still holds the requests, which the thread takes; the
+                    // panic hook records the panic.
+                    let mut requests = lock.lock().unwrap_or_else(PoisonError::into_inner);
+                    while requests.asked.is_empty() && !requests.stopped {
+                        // default: a wait that a poisoned lock ends still returns the guard of the requests, which the thread
+                        // takes; the panic hook records the panic.
+                        requests = wake.wait(requests).unwrap_or_else(PoisonError::into_inner);
+                    }
+                    if requests.stopped {
+                        return;
+                    }
+                    std::mem::take(&mut requests.asked)
+                };
+                for value in asked.into_values() {
+                    run(value);
+                }
+            }
+        });
+        Self { shared }
+    }
+
+    pub(crate) fn ask(&self, key: &str, value: T) {
+        let (lock, wake) = &*self.shared;
+        // default: a lock that a panicking thread poisoned still holds the requests, and this one is added to them; the panic
+        // hook records the panic.
+        let mut requests = lock.lock().unwrap_or_else(PoisonError::into_inner);
+        requests.asked.insert(key.to_string(), value);
+        wake.notify_one();
+    }
+}
+
+impl<T> Drop for LatestWork<T> {
+    fn drop(&mut self) {
+        let (lock, wake) = &*self.shared;
+        // default: a lock that a panicking thread poisoned still holds the requests, and only the stop is set; the panic hook
+        // records the panic.
+        lock.lock().unwrap_or_else(PoisonError::into_inner).stopped = true;
+        wake.notify_one();
+    }
 }
 
 /// The decision of one host.window notification for a window.

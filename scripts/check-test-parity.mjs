@@ -1123,6 +1123,20 @@ const FEATURE_LINKS = [
     levels: ["native"],
   },
   {
+    id: "F550",
+    implementation: [
+      { file: "packages/host/rust/src/exposure.rs", symbol: "pub(crate) struct LatestWork<T>" },
+      { file: "packages/host/go/src/exposure.go", symbol: "type latestRead struct" },
+    ],
+    tests: [
+      { file: "packages/host/rust/src/exposure_status_test.rs", id: "a_burst_of_window_changes_is_one_more_read_on_one_thread" },
+      { file: "packages/host/rust/src/exposure_status_test.rs", id: "each_window_keeps_its_own_latest_read_on_the_same_thread" },
+      { file: "packages/host/go/src/exposure_status_test.go", id: "TestABurstOfWindowChangesIsOneMoreReadingAfterTheLastChange" },
+    ],
+    expected: "The changes of host.window that arrive during a reading join one further reading, on one thread of the Tauri host.",
+    levels: ["unit"],
+  },
+  {
     id: "F544",
     implementation: [
       { file: "native/darwin/src/input_press_context.h", symbol: "bool sp_input_press_open(void *window, int button);" },

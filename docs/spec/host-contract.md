@@ -392,6 +392,7 @@ Items:
 | `endpoint.watch.surface-unwatch-keeps-plain-watch` | Unwatching a surface watch keeps the plain watch on the same name. | all |
 | `endpoint.watch.subscription-arrival-order` | watch, unwatch, and watch sent back to back reach a slow page in that order, and the connection keeps watching. | all |
 | `status.window.rewatch-notifies` | A watch of host.window that starts after the last watch of the window ended receives the next value of the window, even when that value equals the value sent before the earlier watch ended. The Tauri host clears the record of the value sent last when the last watch ends, and the Wails host keeps no record. | all |
+| `status.window.latest-value-last` | The changes of host.window that arrive during a reading join one further reading, which begins after the last of them, so a burst of changes holds one reading and no older value is sent after a newer one. | all |
 | `endpoint.watch.other-requests-not-blocked-by-pending-subscription` | A later request on the same connection is answered while a page unwatch is still pending. | all |
 | `exposure-reply.payload.main-reply-unscoped` | A main document reply payload without a surface decodes with an empty surface. | all |
 | `exposure-reply.payload.scoped-reply-keeps-surface` | A reply payload with a surface keeps it through encoding and decoding. | all |

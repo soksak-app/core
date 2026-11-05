@@ -1741,6 +1741,38 @@ func (h *Host) windowsChanged() {
 	}
 }
 
+// latestRead runs one reading at a time. A request that arrives during a reading joins one further reading, so a reading
+// begins after the last request and no older value is sent after a newer one. A change can arrive on every frame of a
+// region and each reading waits for the main thread, so a goroutine for each change would pile up while that thread is busy.
+type latestRead struct {
+	mu      sync.Mutex
+	running bool
+	again   bool
+}
+
+func (r *latestRead) ask(name string, read func()) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.running {
+		r.again = true
+		return
+	}
+	r.running = true
+	routine.Go(name, func() {
+		for {
+			read()
+			r.mu.Lock()
+			if !r.again {
+				r.running = false
+				r.mu.Unlock()
+				return
+			}
+			r.again = false
+			r.mu.Unlock()
+		}
+	})
+}
+
 // windowChanged sends the new value to the connections that watch host.window. When no connection watches, it does not
 // read the value. It is also called on the UI thread, so the value is read in another goroutine.
 func (s *Surfaces) windowChanged() {
@@ -1751,7 +1783,7 @@ func (s *Surfaces) windowChanged() {
 		EmitHost(LevelDebug, "host.trace.status.notify", map[string]any{"status": "host.window", "window": s.name, "decision": "unwatched"})
 		return
 	}
-	routine.Go("window-status", func() {
+	s.windowReads.ask("window-status", func() {
 		state, err := s.windowState()
 		var coded *RPCError
 		if errors.As(err, &coded) && coded.Code == codeNoWindow {
