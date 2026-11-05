@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- F502-23: `make host-test-mygo` runs the host contract on the mygo host: the Go language host library and the mygo adapter, and the Go `sok` with its three tag sets. A case of the scope `wailsv3, mygo only` declares the Go code that both Go hosts run, and the cases of the main page state their behavior over the workbench or take the scope `wailsv3, tauriv2 only`.
+- F502-23: `diagnostics.gc.loop` `{on}` of the Go hosts runs `runtime.GC` without pause on a goroutine, or stops it and answers after the goroutine has returned.
+- F502-23: `diagnostics.page.request`, `diagnostics.page.calls`, `diagnostics.host.events` and `diagnostics.page.collect` answer `the mygo host has no main page` on the mygo host, and `diagnostics.modal.hold` and `diagnostics.modal.held` answer `the mygo host has no modal web views`.
+- F502-23: `make exposure-check` fails on a status or a command that the workbench declares and that no Go source of the mygo workbench and no view bridge registers.
 - F502-21: `setDialogBackground` takes an object `{enabled}`, as every other host call does, and a row B of the framework table lists it as the call that only mygo has, so the host parity check passes. A row P lists `Frontend.Frames`.
 - F502-16: Every look of the mygo workbench takes its value from `workbench.json`, which the page reads too: the caption of a card foot, the status line of a sidebar, the text of a placeholder and of a stopped view, the scrim of a dialog with its blur, and the gap under an anchor of a layer.
 - F551: The Tauri host holds two workers of its asynchronous runtime instead of one for each processor, and an idle blocking thread ends after one second instead of ten.
