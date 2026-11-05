@@ -394,7 +394,8 @@ func (s *Shell) loadSpace(project *projectRecord) error {
 			return fmt.Errorf("space %s: %w", space.ID, err)
 		}
 	}
-	s.plane, s.fullscreen = plane, ""
+	s.showPlane(plane)
+	s.fullscreen = ""
 	// A new space stores no focus, and the stored focus of a card that left the layout names no card.
 	focused := stored.FocusedID
 	if _, known := plane.Card(focused); !known {
@@ -625,7 +626,8 @@ func (s *Shell) dropProject(id string) {
 	}
 	if s.active == id {
 		s.leavePlace()
-		s.active, s.plane, s.browsing, s.fullscreen = "", nil, true, ""
+		s.active, s.browsing, s.fullscreen = "", true, ""
+		s.showPlane(nil)
 		s.options.Located("")
 		for _, project := range s.projects {
 			if s.windowProjects[project.ID] {
@@ -636,6 +638,19 @@ func (s *Shell) dropProject(id string) {
 	}
 	s.retainSessions()
 	s.options.Invalidate()
+}
+
+// showPlane makes plane, or none, the plane of the window. A gesture and a layer belong to the plane that they started on, so they end
+// here, as settle ends a layer: a question about a tab of a plane that left has nothing to close.
+func (s *Shell) showPlane(plane *layout.Grid) {
+	s.plane, s.held, s.dragging = plane, nil, nil
+	s.closePicker()
+}
+
+// drawnPlaneShown tells whether the last frame drew the plane of the window. Until the next frame the elements of the last frame
+// still take input and a read still finds them, and after a close or a change of space they belong to a plane that left.
+func (s *Shell) drawnPlaneShown() bool {
+	return s.surfaces.drawnPlane != nil && s.surfaces.drawnPlane == s.plane
 }
 
 // activateSpace shows the space id of the project on the screen.

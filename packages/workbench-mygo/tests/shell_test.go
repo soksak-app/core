@@ -44,6 +44,8 @@ type storedHost struct {
 	backgrounds []bool
 	// forwards are the requests that the shell forwarded to surfaces, and each gets an empty result.
 	forwards []map[string]any
+	// holdForwards, when set, keeps the answer of a forwarded request until it closes.
+	holdForwards chan struct{}
 	// extra holds the host calls that the base table has not.
 	extra map[string]workbench.HostCall
 	calls []string
@@ -234,6 +236,9 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 				return nil, err
 			}
 			h.forwards = append(h.forwards, request)
+			if h.holdForwards != nil {
+				<-h.holdForwards
+			}
 			return map[string]any{"result": nil}, nil
 		}),
 		"viewReply": answer("viewReply", none),

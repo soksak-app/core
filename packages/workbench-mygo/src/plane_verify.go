@@ -24,7 +24,7 @@ func (s *Shell) verifyStatus() any {
 		return nil
 	}
 	if !s.building {
-		if err := s.verification.Update(s.surfaces.drawnPlane != nil && s.surfaces.drawnPlane == s.plane, s.verifyPlane, s.surfaces.failure); err != nil {
+		if err := s.verification.Update(s.drawnPlaneShown(), s.verifyPlane, s.surfaces.failure); err != nil {
 			s.failWindowRead(err)
 		}
 	}

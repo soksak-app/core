@@ -54,6 +54,10 @@ func (s *Shell) askModified(card string, tab layout.Tab, answered func(settled b
 // saveTab runs the save command of a surface. The answer is true when the command succeeds and the tab is no longer modified.
 func (s *Shell) saveTab(tab, save string, answered func(settled bool)) {
 	s.registry.RunOn(save, json.RawMessage(`{}`), tab, func(_ any, err error) {
+		if s.cardOfTab(tab) == "" {
+			answered(false) // The tab left with its plane while the view saved.
+			return
+		}
 		if err == nil && s.tabModified(tab) {
 			err = errors.New("left the tab modified")
 		}

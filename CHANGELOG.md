@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F502-16: A press or a key on a divider or a tab between the close of a project and the next frame no longer stops the mygo host, and a held boundary or a dragged tab ends when its plane leaves, so it moves no boundary of another space. A question about a tab of a plane that left closes, and the answer of a save that outlived the tab shows no failure.
 - F502-16: A read of `core.verify` after the close of the shown project no longer stops the mygo host. A plane that left has no rows until the frame of the next plane, so a read states no plane that the window did not draw.
 - F502-21: `setDialogBackground` takes an object `{enabled}`, as every other host call does, and a row B of the framework table lists it as the call that only mygo has, so the host parity check passes. A row P lists `Frontend.Frames`.
 - F502-16: Every look of the mygo workbench takes its value from `workbench.json`, which the page reads too: the caption of a card foot, the status line of a sidebar, the text of a placeholder and of a stopped view, the scrim of a dialog with its blur, and the gap under an anchor of a layer.
