@@ -355,7 +355,7 @@ fn host_hit_declares_the_workbench_document_and_native_kinds() {
     );
 }
 
-// contract: endpoint.input.pointer-invalid-phase, endpoint.input.pointer-missing-coordinate, endpoint.input.pointer-numeric-button-rejected, endpoint.input.pointer-middle-button-rejected, endpoint.input.pointer-activate-only-on-move, endpoint.input.pointer-activate-must-be-bool, endpoint.input.pointer-defaults, endpoint.input.pointer-right-button-accepted, endpoint.input.pointer-phase-and-scroll-decoding, endpoint.input.key-unknown-modifier-rejected, endpoint.input.key-shift-command-mask, endpoint.input.key-control-option-and-text, endpoint.input.key-invalid-phase-or-modifier-type
+// contract: endpoint.input.pointer-invalid-phase, endpoint.input.pointer-missing-coordinate, endpoint.input.pointer-numeric-button-rejected, endpoint.input.pointer-middle-button-rejected, endpoint.input.pointer-clicks-range, endpoint.input.pointer-clicks-only-on-press-and-release, endpoint.input.pointer-clicks-default, endpoint.input.pointer-unknown-field-rejected, endpoint.input.pointer-activate-only-on-move, endpoint.input.pointer-activate-must-be-bool, endpoint.input.pointer-defaults, endpoint.input.pointer-right-button-accepted, endpoint.input.pointer-phase-and-scroll-decoding, endpoint.input.key-unknown-modifier-rejected, endpoint.input.key-shift-command-mask, endpoint.input.key-control-option-and-text, endpoint.input.key-invalid-phase-or-modifier-type
 #[test]
 fn pointer_and_key_params_are_validated() {
     let pointer = exposure::pointer(
@@ -408,11 +408,32 @@ fn pointer_and_key_params_are_validated() {
     .unwrap();
     assert!(moved.activate);
     assert!(!pointer.activate);
+    assert_eq!((pointer.clicks, moved.clicks), (1, 1));
+    for (phase, clicks) in [("down", 2), ("up", 3)] {
+        let press = exposure::pointer(
+            &json!({"window": "main", "x": 0, "y": 0, "phase": phase, "clicks": clicks})
+                .as_object()
+                .unwrap()
+                .clone(),
+        )
+        .unwrap();
+        assert_eq!(press.clicks, clicks);
+    }
     for params in [
         json!({"x": 0, "y": 0, "phase": "down", "activate": true}),
         json!({"x": 0, "y": 0, "phase": "move", "activate": "yes"}),
         json!({"x": 0, "y": 0, "phase": "down", "button": "middle"}),
         json!({"x": 0, "y": 0, "phase": "down", "button": 1}),
+        json!({"x": 0, "y": 0, "phase": "down", "clicks": 0}),
+        json!({"x": 0, "y": 0, "phase": "down", "clicks": -1}),
+        json!({"x": 0, "y": 0, "phase": "down", "clicks": 4}),
+        json!({"x": 0, "y": 0, "phase": "down", "clicks": 1.5}),
+        json!({"x": 0, "y": 0, "phase": "down", "clicks": "2"}),
+        json!({"x": 0, "y": 0, "phase": "move", "clicks": 2}),
+        json!({"x": 0, "y": 0, "phase": "drag", "clicks": 2}),
+        json!({"x": 0, "y": 0, "phase": "scroll", "clicks": 2}),
+        json!({"x": 0, "y": 0, "phase": "down", "clickCount": 2}),
+        json!({"x": 0, "y": 0, "phase": "down", "Clicks": 2}),
     ] {
         assert_eq!(
             exposure::pointer(params.as_object().unwrap())

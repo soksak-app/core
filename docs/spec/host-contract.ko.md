@@ -357,6 +357,10 @@ fn invalid_json_closes_connection() {
 | `endpoint.input.pointer-activate-only-on-move` | activate는 down phase에서 거부되고 move phase에서 받아들여진다. | all |
 | `endpoint.input.pointer-activate-must-be-bool` | 불리언이 아닌 activate는 -32602를 반환한다. | all |
 | `endpoint.input.pointer-defaults` | button이나 activate가 없는 포인터 입력은 왼쪽 버튼과 비활성화를 쓴다. | all |
+| `endpoint.input.pointer-clicks-range` | 1부터 3까지의 정수가 아닌 포인터 clicks는 -32602를 반환한다. | all |
+| `endpoint.input.pointer-clicks-only-on-press-and-release` | clicks는 down, up phase에서 받고 move, drag, scroll phase에서는 -32602를 반환한다. | all |
+| `endpoint.input.pointer-clicks-default` | clicks가 없는 포인터 입력의 click count는 1이고, clicks 2는 click count 2로 전달한다. | all |
+| `endpoint.input.pointer-unknown-field-rejected` | method가 정의하지 않은 field가 있는 포인터 입력은 -32602를 반환한다. | all |
 | `endpoint.input.pointer-right-button-accepted` | 오른쪽 포인터 버튼을 받아들이고 오른쪽 버튼으로 전달한다. | all |
 | `endpoint.input.pointer-phase-and-scroll-decoding` | drag와 scroll phase, deltaY, 소수 좌표를 그대로 전달한다. | all |
 | `endpoint.input.pointer-button-held-message` | 1007 메시지는 `NSEvent.pressedMouseButtons` 마스크를 16진수로, frontmost 애플리케이션을 bundle identifier와 pid로 보고하며, bundle identifier가 없는 애플리케이션은 pid로, frontmost 애플리케이션이 없으면 그 사실을 두 host에서 같은 문장으로 보고한다. | all |

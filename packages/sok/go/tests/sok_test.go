@@ -203,6 +203,7 @@ func TestTheOnlyWindowIsUsedAndParametersAreSent(t *testing.T) {
 		{[]string{"element", "input", "fixture.input", "--value", "ls"}, "element.act", `{"action":"input","name":"fixture.input","value":"ls","window":"main"}`},
 		{[]string{"element", "dispatch", "x.y", "--event", `{"type":"keydown","key":"a"}`}, "element.act", `{"action":"dispatch","event":{"key":"a","type":"keydown"},"name":"x.y","window":"main"}`},
 		{[]string{"input", "pointer", "--x", "1.5", "--y", "2", "--phase", "move", "--activate"}, "input.pointer", `{"activate":true,"phase":"move","window":"main","x":1.5,"y":2}`},
+		{[]string{"input", "pointer", "--x", "1", "--y", "2", "--phase", "down", "--clicks", "2"}, "input.pointer", `{"clicks":2,"phase":"down","window":"main","x":1,"y":2}`},
 		{[]string{"input", "key", "--key", "a", "--phase", "down", "--modifiers", "shift,,command"}, "input.key", `{"key":"a","modifiers":["shift","command"],"phase":"down","window":"main"}`},
 	}
 	for _, c := range cases {

@@ -16,6 +16,13 @@ typedef enum {
 // A drag and a release are delivered to the press target of the window and button. A drag or release without a press and a duplicate press are rejected.
 sp_input_result sp_input_pointer(void *window, double x, double y, int phase, int button, double deltaX, double deltaY);
 
+// The largest click count of a press and a release: a person's triple click.
+#define SP_INPUT_CLICKS_MAX 3
+
+// Same as sp_input_pointer for a press or a release whose event has the click count clicks, 1 to SP_INPUT_CLICKS_MAX. AppKit gives the
+// second press of a person's double click a count of 2, and WebKit makes the dblclick event from that count. Another count is rejected.
+sp_input_result sp_input_pointer_clicks(void *window, double x, double y, int phase, int button, int clicks);
+
 // State measured in the same turn that rejected the input with SP_INPUT_BUTTON_HELD. This state alone does not
 // identify the cause, so the rejection is reported for the receiver to find the cause.
 typedef struct {
@@ -32,9 +39,9 @@ typedef void (*sp_input_done)(void *context, sp_input_result result, const sp_in
 // asynchronously, so a press and a release delivered back to back can be reordered in the document. A scroll is
 // delivered after the web view at the coordinates has rendered its current state; a wheel event received before the
 // scroll tree of a new document is rendered does not move the document. When no receipt or rendering occurs within
-// timeoutSeconds, the result is SP_INPUT_UNRECEIVED. done is called once on the main thread. Call this function on
-// the main thread.
-void sp_input_pointer_then(void *window, double x, double y, int phase, int button, double deltaX, double deltaY,
+// timeoutSeconds, the result is SP_INPUT_UNRECEIVED. clicks is the click count of a press or a release, as in
+// sp_input_pointer_clicks. done is called once on the main thread. Call this function on the main thread.
+void sp_input_pointer_then(void *window, double x, double y, int phase, int button, double deltaX, double deltaY, int clicks,
     double timeoutSeconds, sp_input_done done, void *context);
 
 // Result of sp_input_activate. A failure identifies the stage at which activation stopped.

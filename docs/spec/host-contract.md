@@ -355,6 +355,10 @@ Items:
 | `endpoint.input.pointer-activate-only-on-move` | activate is rejected with the down phase and accepted with the move phase. | all |
 | `endpoint.input.pointer-activate-must-be-bool` | A non-boolean activate returns -32602. | all |
 | `endpoint.input.pointer-defaults` | A pointer input without button or activate uses the left button and no activation. | all |
+| `endpoint.input.pointer-clicks-range` | A pointer clicks value that is not an integer from 1 to 3 returns -32602. | all |
+| `endpoint.input.pointer-clicks-only-on-press-and-release` | clicks is accepted with the down and up phases and returns -32602 with the move, drag and scroll phases. | all |
+| `endpoint.input.pointer-clicks-default` | A pointer input without clicks has the click count 1, and clicks 2 is passed as the click count 2. | all |
+| `endpoint.input.pointer-unknown-field-rejected` | A pointer input with a field that the method does not name returns -32602. | all |
 | `endpoint.input.pointer-right-button-accepted` | The right pointer button is accepted and passed as the right button. | all |
 | `endpoint.input.pointer-phase-and-scroll-decoding` | The drag and scroll phases, deltaY, and fractional coordinates are passed through. | all |
 | `endpoint.input.pointer-button-held-message` | The 1007 message reports the `NSEvent.pressedMouseButtons` mask in hexadecimal and the frontmost application's bundle identifier and pid, an application without a bundle identifier by its pid, or that no application is frontmost, in the same text on both hosts. | all |

@@ -163,7 +163,7 @@ typedef struct {
 } SPHeld;
 
 // When the result is SP_INPUT_BUTTON_HELD, held receives the mask of the rejected turn and the frontmost application.
-static sp_input_result pointerInput(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY,
+static sp_input_result pointerInput(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY, int clicks,
     SPHeld *held) {
     NSWindow *window = (__bridge NSWindow *)handle;
     held->why = "";
@@ -218,6 +218,10 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
         held->why = "AppKit reports a pressed mouse button";
         return SP_INPUT_BUTTON_HELD;
     }
+    if ((phase == 1 || phase == 3) && (clicks < 1 || clicks > SP_INPUT_CLICKS_MAX)) {
+        held->why = "the click count is out of range";
+        return SP_INPUT_REJECTED;
+    }
     BOOL right = button == 1;
     switch (phase) {
         case 1:
@@ -234,8 +238,8 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
                 // -[NSWindow sendEvent:] normally makes the pressed view first responder before the press. This path
                 // delivers directly to the view, so it follows that order without activating the window or application.
                 if (hit != window.firstResponder && hit.acceptsFirstResponder) [window makeFirstResponder:hit];
-                if (right) [hit rightMouseDown:mouseEvent(window, NSEventTypeRightMouseDown, point, 1, 1)];
-                else [hit mouseDown:mouseEvent(window, NSEventTypeLeftMouseDown, point, 1, 1)];
+                if (right) [hit rightMouseDown:mouseEvent(window, NSEventTypeRightMouseDown, point, clicks, 1)];
+                else [hit mouseDown:mouseEvent(window, NSEventTypeLeftMouseDown, point, clicks, 1)];
             } @finally {
                 sp_input_press_context_pop(&context);
             }
@@ -252,8 +256,8 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
                     if (right) [hit rightMouseDragged:mouseEvent(window, NSEventTypeRightMouseDragged, point, 0, 1)];
                     else [hit mouseDragged:mouseEvent(window, NSEventTypeLeftMouseDragged, point, 0, 1)];
                 } else {
-                    if (right) [hit rightMouseUp:mouseEvent(window, NSEventTypeRightMouseUp, point, 1, 0)];
-                    else [hit mouseUp:mouseEvent(window, NSEventTypeLeftMouseUp, point, 1, 0)];
+                    if (right) [hit rightMouseUp:mouseEvent(window, NSEventTypeRightMouseUp, point, clicks, 0)];
+                    else [hit mouseUp:mouseEvent(window, NSEventTypeLeftMouseUp, point, clicks, 0)];
                 }
             } @finally {
                 if (hasOrigin) sp_input_press_context_pop(&context);
@@ -285,20 +289,28 @@ static const char *resultName(sp_input_result result) {
 }
 
 // Records one injected pointer input with its arguments, result, and rejection reason. Every path by which the caller receives a result uses it.
-static void logPointer(double x, double y, int phase, int button, double deltaX, double deltaY,
+static void logPointer(double x, double y, int phase, int button, double deltaX, double deltaY, int clicks,
     sp_input_result result, const char *why) {
     NSString *text = [NSString stringWithFormat:
-        @"{\"kind\":\"pointer\",\"x\":%g,\"y\":%g,\"phase\":%d,\"button\":%d,\"deltaX\":%g,\"deltaY\":%g,\"result\":\"%s\",\"reason\":\"%s\"}",
-        x, y, phase, button, deltaX, deltaY, resultName(result), why ?: ""];
+        @"{\"kind\":\"pointer\",\"x\":%g,\"y\":%g,\"phase\":%d,\"button\":%d,\"deltaX\":%g,\"deltaY\":%g,\"clicks\":%d,\"result\":\"%s\",\"reason\":\"%s\"}",
+        x, y, phase, button, deltaX, deltaY, clicks, resultName(result), why ?: ""];
     sp_log_info("input inject", text.UTF8String);
 }
 
-sp_input_result sp_input_pointer(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY) {
+static sp_input_result pointerAt(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY, int clicks) {
     SPHeld held = {0, nil, ""};
-    sp_input_result result = pointerInput(handle, x, y, phase, button, deltaX, deltaY, &held);
-    logPointer(x, y, phase, button, deltaX, deltaY, result, held.why);
+    sp_input_result result = pointerInput(handle, x, y, phase, button, deltaX, deltaY, clicks, &held);
+    logPointer(x, y, phase, button, deltaX, deltaY, clicks, result, held.why);
     [held.front release];
     return result;
+}
+
+sp_input_result sp_input_pointer(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY) {
+    return pointerAt(handle, x, y, phase, button, deltaX, deltaY, 1);
+}
+
+sp_input_result sp_input_pointer_clicks(void *handle, double x, double y, int phase, int button, int clicks) {
+    return pointerAt(handle, x, y, phase, button, 0, 0, clicks);
 }
 
 // Calls done and releases the reference of held. held is reported only when result is SP_INPUT_BUTTON_HELD.
@@ -318,11 +330,11 @@ static void heldDone(sp_input_done done, void *context, sp_input_result result, 
 }
 
 // Delivers the input and reports the result to done immediately.
-static void pointerNow(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY,
+static void pointerNow(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY, int clicks,
     sp_input_done done, void *context) {
     SPHeld held = {0, nil, ""};
-    sp_input_result result = pointerInput(handle, x, y, phase, button, deltaX, deltaY, &held);
-    logPointer(x, y, phase, button, deltaX, deltaY, result, held.why);
+    sp_input_result result = pointerInput(handle, x, y, phase, button, deltaX, deltaY, clicks, &held);
+    logPointer(x, y, phase, button, deltaX, deltaY, clicks, result, held.why);
     heldDone(done, context, result, held);
 }
 
@@ -333,7 +345,7 @@ static WKWebView *webViewAt(NSWindow *window, double x, double y) {
     return (WKWebView *)view;
 }
 
-void sp_input_pointer_then(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY,
+void sp_input_pointer_then(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY, int clicks,
     double timeoutSeconds, sp_input_done done, void *context) {
     NSWindow *window = (__bridge NSWindow *)handle;
     NSView *pressed = window && NSThread.isMainThread ? pointerTarget(window, windowPoint(window, x, y), phase, button) : nil;
@@ -346,22 +358,22 @@ void sp_input_pointer_then(void *handle, double x, double y, int phase, int butt
         [target _doAfterNextPresentationUpdate:^{
             if (finished) return;
             finished = YES;
-            pointerNow(handle, x, y, phase, button, deltaX, deltaY, done, context);
+            pointerNow(handle, x, y, phase, button, deltaX, deltaY, clicks, done, context);
         }];
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(timeoutSeconds * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             if (finished) return;
             finished = YES;
-            logPointer(x, y, phase, button, deltaX, deltaY, SP_INPUT_UNRECEIVED, "the scroll target did not present within the limit");
+            logPointer(x, y, phase, button, deltaX, deltaY, clicks, SP_INPUT_UNRECEIVED, "the scroll target did not present within the limit");
             done(context, SP_INPUT_UNRECEIVED, NULL);
         });
         return;
     }
     if (phase != 1 && phase != 3) {
-        pointerNow(handle, x, y, phase, button, deltaX, deltaY, done, context);
+        pointerNow(handle, x, y, phase, button, deltaX, deltaY, clicks, done, context);
         return;
     }
     if (!target) {
-        pointerNow(handle, x, y, phase, button, deltaX, deltaY, done, context);
+        pointerNow(handle, x, y, phase, button, deltaX, deltaY, clicks, done, context);
         return;
     }
     // Completes after the document has received pointerdown or pointerup. After receipt, it waits for the pending mouse
@@ -382,12 +394,12 @@ void sp_input_pointer_then(void *handle, double x, double y, int phase, int butt
     if (hasPressContext) sp_input_press_context_push(&pressContext, window, originX, originY);
     @try {
         webviewInputSendThen(target, phase == 3 ? @"pointerup" : @"pointerdown", timeoutSeconds, ^BOOL {
-            result = pointerInput(handle, x, y, phase, button, deltaX, deltaY, &held);
+            result = pointerInput(handle, x, y, phase, button, deltaX, deltaY, clicks, &held);
             return result == SP_INPUT_DELIVERED;
         }, ^(BOOL received) {
             sp_input_result final = result == SP_INPUT_DELIVERED && received ? SP_INPUT_DELIVERED :
                 result == SP_INPUT_DELIVERED ? SP_INPUT_UNRECEIVED : result;
-            logPointer(x, y, phase, button, deltaX, deltaY, final,
+            logPointer(x, y, phase, button, deltaX, deltaY, clicks, final,
                 final == SP_INPUT_UNRECEIVED ? "the document did not receive the press or release within the limit" : held.why);
             heldDone(done, context, final, held);
         });

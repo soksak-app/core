@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F502-29: `input.pointer` takes `clicks` on `down` and `up`, the click count of the event from 1 to 3, so a double click is a real pair of presses on all hosts, in `sok input pointer --clicks` and in the MCP tool. `input.pointer` returns -32602 for a field that it does not name.
 - F502-28: The keyboard of the window follows the focus ring on all hosts: typing right after a new tab, a press on a tab, `core.card.focus` or the opening of a project reaches the active surface of the card with the ring.
 - F502-21: The mygo workbench draws its modals as native UI: the settings window, the picker layer with the add, split, tool, tab and context menus, and the question about a modified tab. `core.card.close`, `core.tab.close` and `core.space.close` do not close a modified tab without the answer of the person, and the plugins and their settings come from the document of the installed plugins. The settings `left` and `right` take the fixed window sidebars in and out of the plane.
 - F502-12: `core.plugins.show-updates` of the mygo workbench brings the update list into view on the plugin page.

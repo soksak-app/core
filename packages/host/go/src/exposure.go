@@ -1039,7 +1039,7 @@ func (b hostBackend) Pointer(window string, input PointerInput) error {
 			return err
 		}, func() error {
 			return system.InjectPointer(window, input.X, input.Y, pointerPhaseCodes[input.Phase], button,
-				input.DeltaX, input.DeltaY, receiveTimeout.Seconds(), func(result platform.PointerResult, held platform.ButtonHeld) {
+				input.DeltaX, input.DeltaY, input.Clicks, receiveTimeout.Seconds(), func(result platform.PointerResult, held platform.ButtonHeld) {
 					done <- delivery{result, held}
 				})
 		})

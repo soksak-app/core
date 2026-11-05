@@ -517,7 +517,7 @@ func (implementation) WatchButtons(func(uint64)) error {
 	return unsupported("mouse button state")
 }
 
-func (implementation) InjectPointer(unsafe.Pointer, float64, float64, int, int, float64, float64, float64, func(platform.PointerResult, platform.ButtonHeld)) error {
+func (implementation) InjectPointer(unsafe.Pointer, float64, float64, int, int, float64, float64, int, float64, func(platform.PointerResult, platform.ButtonHeld)) error {
 	return unsupported("native pointer input")
 }
 
