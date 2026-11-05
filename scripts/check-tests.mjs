@@ -1092,6 +1092,15 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F611",
+    implementation: [{ file: "native/darwin/src/image_region.m", symbol: "spRegionShowsPoint" }],
+    tests: [
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "a press over the frame of a hidden region stays with the view that it reached" },
+    ],
+    expected: "A region that does not show takes no press, so a press over the frame of a hidden region leaves the first responder with the view that it reached.",
+    levels: ["unit"],
+  },
+  {
     id: "F585",
     implementation: [{ file: "native/darwin/src/webview_geometry.m", symbol: "void sp_surface_region_shown" }],
     tests: [
@@ -1294,6 +1303,17 @@ const FEATURE_LINKS = [
       { file: "scripts/test/measure-terminal-redraw.test.mjs", id: "the conditions of the redraw read the window again after the interval, so a window that was covered or lost its activation is recorded" },
     ],
     expected: "Each target of B3 records whether its window is covered and its application active, and the run and the judge refuse a value of a window that its scenario does not require.",
+    levels: ["unit"],
+  },
+  {
+    id: "F616",
+    implementation: [
+      { file: "scripts/benchmark-b3.mjs", symbol: "export function buildSteps(phase, baseline) {" },
+    ],
+    tests: [
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "each build step of a session names a target of the Makefile" },
+    ],
+    expected: "Each build step of a B3 session names a target of the Makefile.",
     levels: ["unit"],
   },
   {

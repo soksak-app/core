@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import { policyOfSetting } from "@soksak/window-check/log-policy.mjs";
 import { judgeSession, readGoals, readSession } from "../b3-judge.mjs";
 import {
-  appendRecord, applicationsOf, attributionUnits, baselineCheckoutFailures, baselinePluginFailures, createSession, fseventsdCores, installedReleases, parseSwapUsage,
+  appendRecord, buildSteps, applicationsOf, attributionUnits, baselineCheckoutFailures, baselinePluginFailures, createSession, fseventsdCores, installedReleases, parseSwapUsage,
   readBaselineRecord, readCheckout, readSidecarRevisions, readTargetOutput, runUnit, scenarioTargets, sessionUnits, sidecarRevisionFailures,
   surfacePlugins, targetCommand, traceStateOf, unitPlan,
 } from "../benchmark-b3.mjs";
@@ -567,4 +567,14 @@ test("a target whose application lost its activation fails its run", { timeout: 
   };
   const [record] = await runUnit({ scenarios: ["S0"], run: 1, application }, context);
   assert.ok(record.failures.some((failure) => failure.endsWith("the application reports active false, expected true")), JSON.stringify(record.failures));
+});
+
+test("each build step of a session names a target of the Makefile", { timeout: 1000 }, () => {
+  const targets = new Set([...readFileSync(join(ROOT, "Makefile"), "utf8").matchAll(/^([A-Za-z0-9_.-]+):/gm)].map((match) => match[1]));
+  for (const phase of ["1", "final"]) {
+    for (const { argv } of buildSteps(phase, "/baseline")) {
+      const named = argv.slice(1).filter((word, index, words) => word !== "-C" && words[index - 1] !== "-C" && !word.includes("="));
+      assert.deepEqual(named.filter((name) => !targets.has(name)), [], argv.join(" "));
+    }
+  }
 });
