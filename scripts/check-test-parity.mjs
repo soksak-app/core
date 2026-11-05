@@ -1067,6 +1067,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F548",
+    implementation: [
+      { file: "packages/workbench/core-exposure.js", symbol: "settingsScreen ??= await import(\"./settings-ui.js\");" },
+      { file: "packages/workbench/core-exposure.js", symbol: "debugScreen ??= await import(\"./debug-ui.js\");" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/page-start-imports.test.mjs", id: "the first window of a main page reads no module of the settings modal or the debug view" },
+      { file: "packages/workbench/test/page-start-imports.test.mjs", id: "a screen that never loaded answers its status as closed, and its first command loads it" },
+    ],
+    expected: "The first window reads no module of the settings modal or the debug view, and each screen loads at its first use.",
+    levels: ["unit"],
+  },
+  {
     id: "F538",
     implementation: [
       { file: "packages/workbench/section-surfaces.js", symbol: "export function spaceSectionSurfaces(space, cards, sets, links)" },

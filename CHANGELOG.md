@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F548: The first window no longer reads the modules of the settings modal and the debug view; each loads at its first use.
 - F502-23: The mygo workbench answers `diagnostics.layout.fail`: its next placement of the surfaces fails once with `diagnostic layout fault`, and the workbench shows that failure and goes on answering.
 - F544: a release no longer stops a later keyboard move: right after a click in a surface with an image region, the keyboard moves without waiting for the next release.
 - F539: `sok input pointer` moves as a person moves: every tracking area that holds the point hears the move, its enter and its exit, and a press in the key window moves there first.

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F548: 첫 window가 설정 modal과 debug view의 module을 읽지 않고, 각 화면은 처음 쓸 때 불러온다.
 - F502-23: mygo workbench 가 `diagnostics.layout.fail` 에 답한다. 다음 surface 배치가 `diagnostic layout fault` 로 한 번 실패하고, workbench 는 그 실패를 보여 준 뒤 계속 요청에 답한다.
 - F544: release가 뒤따르는 키보드 이동을 멈추지 않는다. image region이 있는 surface를 클릭한 직후에도 키보드가 다음 release를 기다리지 않고 옮겨진다.
 - F539: `sok input pointer`가 사람처럼 이동한다. 좌표를 포함하는 모든 추적 영역이 이동과 진입, 이탈을 듣고, key window의 press는 그 좌표로 먼저 이동한다.

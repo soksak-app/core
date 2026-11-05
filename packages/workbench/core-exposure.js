@@ -27,10 +27,6 @@ import {
 import {
   applyTheme, controlValue, defaults, link, onSaved, overridden, reset, saving, scopedValue, set, setDebug, settingProject, THEMES, value,
 } from "./settings.js";
-import {
-  closeSettings, editSet, moveSettings, onSettingsDrawn, openSettings, settingsModalState, searchPlugins, showPlugin, showScope, showSection,
-} from "./settings-ui.js";
-import { closeDebug, compareDebugState, contextDebugRow, debugState, filterDebugTimeline, followDebugTimeline, listDebugFiles, olderDebugTimeline, onDebugDrawn, openDebug, saveDebugFile, saveDebugFiles, saveDebugRows, selectDebugRow, showDebugState, showDebugTimeline, viewDebugFile } from "./debug-ui.js";
 import { changeRow, createSet, deleteSet, updateSet } from "./sidebar-sets.js";
 import { pluginUnits } from "./environment.js";
 import { latest, seated } from "./compositor.js";
@@ -249,6 +245,38 @@ function surfacesState() {
   })), ...placeholders, ...retained(new Set(record.surfaces.map((s) => s.id)))];
 }
 
+// The settings modal and the debug view load at their first use, so the first window reads neither
+// (docs/spec/native-host.md#page-start). A screen that never loaded is closed.
+let settingsScreen = null;
+let debugScreen = null;
+
+const settingsUi = async () => {
+  settingsScreen ??= await import("./settings-ui.js");
+  settingsScreen.onSettingsDrawn(coreChanged);
+  return settingsScreen;
+};
+
+const debugUi = async () => {
+  debugScreen ??= await import("./debug-ui.js");
+  debugScreen.onDebugDrawn(coreChanged);
+  return debugScreen;
+};
+
+/** A command of the settings modal, which runs at once when the modal is loaded, so its order with other commands holds. */
+const onSettings = (run) => async (params) => run(settingsScreen ?? await settingsUi(), params);
+/** A command of the debug view. */
+const onDebug = (run) => async (params) => run(debugScreen ?? await debugUi(), params);
+
+const settingsModalState = () => settingsScreen?.settingsModalState() ?? { open: false, controls: [] };
+const debugState = () => debugScreen?.debugState() ?? {
+  open: false, recorded: null, entries: [], viewing: null, timeline: null, state: null, scroll: 0, operation: null, error: null,
+};
+const closeSettings = () => { settingsScreen?.closeSettings(); };
+const closeDebug = () => { debugScreen?.closeDebug(); };
+
+/** Draws the settings modal again when it is open. */
+export const redrawSettings = () => { settingsScreen?.drawSettings(); };
+
 const withOpen = (project) => ({ ...project, open: projects.isOpen(project.id) });
 
 /** Gives keyboard focus to the element of an element name. */
@@ -405,7 +433,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
     const sets = createSet(scopedValue("sets", scope));
     const { id } = sets.at(-1);
     await set({ sets }, scope, "core.settings.sets.create");
-    if (settingsModalState().open) editSet(id);
+    if (settingsModalState().open) settingsScreen.editSet(id);
     return { id };
   });
   registry.command("core.settings.sets.update", invalid(async ({ id, title, layout, scope = "common" }) => {
@@ -419,24 +447,24 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   registry.command("core.settings.sets.delete", async ({ id, scope = "common" }) => {
     await set(deleteSet(scopedValue("sets", scope), scopedValue("links", scope), id), scope, "core.settings.sets.delete");
   });
-  registry.command("core.settings.open", () => { closeDebug(); openSettings(); });
+  registry.command("core.settings.open", onSettings((screen) => { closeDebug(); screen.openSettings(); }));
   registry.command("core.settings.close", () => { closeSettings(); });
   // The debug view and the settings modal are both dialogs, and the host shows one native modal at a time.
-  registry.command("core.debug.open", async () => { closeSettings(); await openDebug(); });
+  registry.command("core.debug.open", onDebug(async (screen) => { closeSettings(); await screen.openDebug(); }));
   registry.command("core.debug.close", () => { closeDebug(); });
-  registry.command("core.debug.save", ({ path }) => saveDebugFile(path));
-  registry.command("core.debug.save-all", () => saveDebugFiles());
-  registry.command("core.debug.view", ({ path }) => viewDebugFile(path));
-  registry.command("core.debug.list", () => { listDebugFiles(); });
-  registry.command("core.debug.state", ({ path }) => showDebugState(path));
-  registry.command("core.debug.state.compare", ({ with: other }) => compareDebugState(other));
-  registry.command("core.debug.timeline", () => showDebugTimeline());
-  registry.command("core.debug.timeline.filter", (change) => { filterDebugTimeline(change); });
-  registry.command("core.debug.timeline.follow", ({ on }) => followDebugTimeline(on));
-  registry.command("core.debug.timeline.older", () => olderDebugTimeline());
-  registry.command("core.debug.timeline.select", ({ row, selected }) => { selectDebugRow(row, selected); });
-  registry.command("core.debug.timeline.context", ({ row }) => contextDebugRow(row));
-  registry.command("core.debug.timeline.save", () => saveDebugRows());
+  registry.command("core.debug.save", onDebug((screen, { path }) => screen.saveDebugFile(path)));
+  registry.command("core.debug.save-all", onDebug((screen) => screen.saveDebugFiles()));
+  registry.command("core.debug.view", onDebug((screen, { path }) => screen.viewDebugFile(path)));
+  registry.command("core.debug.list", onDebug((screen) => { screen.listDebugFiles(); }));
+  registry.command("core.debug.state", onDebug((screen, { path }) => screen.showDebugState(path)));
+  registry.command("core.debug.state.compare", onDebug((screen, { with: other }) => screen.compareDebugState(other)));
+  registry.command("core.debug.timeline", onDebug((screen) => screen.showDebugTimeline()));
+  registry.command("core.debug.timeline.filter", onDebug((screen, change) => { screen.filterDebugTimeline(change); }));
+  registry.command("core.debug.timeline.follow", onDebug((screen, { on }) => screen.followDebugTimeline(on)));
+  registry.command("core.debug.timeline.older", onDebug((screen) => screen.olderDebugTimeline()));
+  registry.command("core.debug.timeline.select", onDebug((screen, { row, selected }) => { screen.selectDebugRow(row, selected); }));
+  registry.command("core.debug.timeline.context", onDebug((screen, { row }) => screen.contextDebugRow(row)));
+  registry.command("core.debug.timeline.save", onDebug((screen) => screen.saveDebugRows()));
   // The project list shows the projects page of the library.
   registry.command("core.projects.browse", async () => {
     await projects.browse();
@@ -478,10 +506,10 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
     if (!grid?.setSize(card, axis, size)) throw new Error(`cannot size ${card} on ${axis}`);
     settle();
   });
-  registry.command("core.settings-modal.nav", ({ section }) => { showSection(section); });
-  registry.command("core.settings-modal.scope", ({ scope }) => { showScope(scope); });
-  registry.command("core.settings-modal.plugin", ({ plugin: id = null }) => { showPlugin(id); });
-  registry.command("core.settings-modal.search", ({ query }) => { searchPlugins(query); });
+  registry.command("core.settings-modal.nav", onSettings((screen, { section }) => { screen.showSection(section); }));
+  registry.command("core.settings-modal.scope", onSettings((screen, { scope }) => { screen.showScope(scope); }));
+  registry.command("core.settings-modal.plugin", onSettings((screen, { plugin: id = null }) => { screen.showPlugin(id); }));
+  registry.command("core.settings-modal.search", onSettings((screen, { query }) => { screen.searchPlugins(query); }));
   registry.command("core.plugins.install", pluginCommand("install"));
   registry.command("core.plugins.update", pluginCommand("update"));
   registry.command("core.plugins.remove", pluginCommand("remove"));
@@ -515,8 +543,8 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
     if (!projects.inLibrary()) await projects.browse();
     library.actions.showUpdates();
   });
-  registry.command("core.settings-modal.edit", ({ set: id = null }) => { editSet(id); });
-  registry.command("core.settings-modal.move", ({ dx, dy }) => { moveSettings(dx, dy); });
+  registry.command("core.settings-modal.edit", onSettings((screen, { set: id = null }) => { screen.editSet(id); }));
+  registry.command("core.settings-modal.move", onSettings((screen, { dx, dy }) => { screen.moveSettings(dx, dy); }));
 
   registry.command("core.card.focus", ({ card }) => { trace("action", { kind: "card.focus", card }); focusCard(card); });
   registry.command("core.card.sidebar.set", ({ card, side, set }) => { assignSidebar(card, side, set); });
@@ -628,8 +656,6 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   onPicker(coreChanged);
   onSurfaceState(coreChanged);
   onMountedChange(coreChanged);
-  onSettingsDrawn(coreChanged);
-  onDebugDrawn(coreChanged);
   onModalState(coreChanged);
   onSaved(coreChanged);
 
