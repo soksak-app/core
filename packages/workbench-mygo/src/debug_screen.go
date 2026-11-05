@@ -113,6 +113,7 @@ type DebugStyle struct {
 	RowGap, RowH, ActW, BarGap, CaptionGap                       float32
 	ActionsGap, ActionsMargin, FieldPadY, Space1, Space2, Space3 float32
 	LineHeight, TextControl, TextSmall                           float32
+	Plain                                                        PlainControls
 	Close                                                        func(c *ui.Context, button ui.Element, title string)
 }
 
@@ -282,8 +283,8 @@ func drawDebugState(c *ui.Context, binder *Binder, st DebugStyle, state DebugSta
 		with = without
 	}
 	compare := binder.Control(c, "core.debug.state.with", "core.debug.state.compare", "")
-	ui.Box(c).Margin(0, 0, st.Space3, 0).Role(ui.RoleGroup).Label("비교할 상태 파일").Children(func() {
-		if binder.Bound(ui.Select(c, &with, append([]string{without}, state.Compare...)), "core.debug.state.with").Label("비교할 상태 파일").Changed() {
+	ui.Box(c).AlignSelf(ui.Start).Margin(0, 0, st.Space3, 0).Role(ui.RoleGroup).Label("비교할 상태 파일").Children(func() {
+		if st.Plain.drawSelect(c, binder, "core.debug.state.with", "비교할 상태 파일", &with, append([]string{without}, state.Compare...)) {
 			chosen := with
 			if chosen == without {
 				chosen = ""
@@ -365,9 +366,9 @@ func drawTimelineRow(c *ui.Context, binder *Binder, st DebugStyle, index int, ro
 func drawTimelineFilters(c *ui.Context, binder *Binder, st DebugStyle, timeline DebugTimeline) {
 	filter := timeline.Filter
 	ui.Row(c).FillWidth().Gap(st.Space2).Wrap().Margin(0, 0, st.Space3, 0).Children(func() {
-		drawFilterSelect(c, binder, "channel", "channel", "channel", filter.Channel, []string{"other", "debug", "all"})
-		drawFilterSelect(c, binder, "level", "level", "가장 낮은 level", filter.Level, []string{"error", "warn", "info", "debug", "trace"})
-		drawFilterSelect(c, binder, "layer", "layer", "layer", filter.Layer,
+		drawFilterSelect(c, binder, st, "channel", "channel", "channel", filter.Channel, []string{"other", "debug", "all"})
+		drawFilterSelect(c, binder, st, "level", "level", "가장 낮은 level", filter.Level, []string{"error", "warn", "info", "debug", "trace"})
+		drawFilterSelect(c, binder, st, "layer", "layer", "layer", filter.Layer,
 			[]string{"all", "native", "host", "workbench", "page", "plugin", "sidecar", "sok"})
 		for _, field := range []struct{ member, name, label, value string }{
 			{"text", "text", "찾을 글자", filter.Text},
@@ -381,15 +382,15 @@ func drawTimelineFilters(c *ui.Context, binder *Binder, st DebugStyle, timeline 
 			{"from", "from", "시작 시각 (UTC)", filter.From},
 			{"to", "to", "끝 시각 (UTC)", filter.To},
 		} {
-			drawFilterField(c, binder, timeline, field.member, field.name, field.label, field.value)
+			drawFilterField(c, binder, st, timeline, field.member, field.name, field.label, field.value)
 		}
 	})
 }
 
-func drawFilterSelect(c *ui.Context, binder *Binder, member, name, label, value string, options []string) {
+func drawFilterSelect(c *ui.Context, binder *Binder, st DebugStyle, member, name, label, value string, options []string) {
 	run := binder.Control(c, "core.debug.timeline."+name, "core.debug.timeline.filter", "")
 	ui.Box(c).Role(ui.RoleGroup).Label(label).Children(func() {
-		if binder.Bound(ui.Select(c, &value, options), "core.debug.timeline."+name).Label(label).Changed() {
+		if st.Plain.drawSelect(c, binder, "core.debug.timeline."+name, label, &value, options) {
 			run(map[string]any{member: value})
 		}
 	})
@@ -397,13 +398,13 @@ func drawFilterSelect(c *ui.Context, binder *Binder, member, name, label, value 
 
 // drawFilterField draws a text field of a filter member. It runs the filter when the field submits or loses the focus, as
 // the change of an input does, so a query does not run for each key.
-func drawFilterField(c *ui.Context, binder *Binder, timeline DebugTimeline, member, name, label, value string) {
+func drawFilterField(c *ui.Context, binder *Binder, st DebugStyle, timeline DebugTimeline, member, name, label, value string) {
 	text, drafted := timeline.Drafts[member]
 	if !drafted {
 		text = value
 	}
 	run := binder.Control(c, "core.debug.timeline."+name, "core.debug.timeline.filter", "")
-	field := binder.Bound(ui.TextInput(c, &text), "core.debug.timeline."+name).Placeholder(label).Label(label).Grow(1)
+	field := st.Plain.field(c, binder.Bound(ui.TextInputBase(c, &text), "core.debug.timeline."+name)).Placeholder(label).Label(label).Grow(1)
 	if field.Changed() {
 		timeline.Drafts[member] = text
 		drafted = true

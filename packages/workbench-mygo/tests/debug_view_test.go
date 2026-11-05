@@ -2,6 +2,7 @@ package workbench_test
 
 import (
 	"bytes"
+	"fmt"
 	"image"
 	"image/png"
 	"reflect"
@@ -26,6 +27,7 @@ func debugEntries() []workbench.DebugEntry {
 func drawDebug(view *workbench.DebugView, errors *workbench.ShownErrors, binder *workbench.Binder) *ui.Tester {
 	view.CardWidth, view.CardMaxHeight = 640, 880
 	view.Style = workbench.DebugStyle{HeadH: 40, ActW: 56, RowH: 30, TextControl: 12, TextSmall: 11, LineHeight: 1.45,
+		Plain: workbench.PlainControls{Size: 13, Figures: 20, PadX: 7, PadY: 6, SelectH: 23, SelectRoom: 34},
 		Close: func(_ *ui.Context, button ui.Element, title string) { button.Size(24, 24).Label(title) }}
 	return ui.NewTester(func(c *ui.Context) {
 		workbench.DrawDebugView(c, binder, *view, errors)
@@ -385,5 +387,34 @@ func TestTheTimeOfADebugFileIsWrittenInTheLanguage(t *testing.T) {
 	morning := time.Date(2026, 1, 2, 0, 5, 6, 0, time.Local).UnixMilli()
 	if got := workbench.TimeText(morning, "ko"); got != "2026. 1. 2. 오전 12:05:06" {
 		t.Errorf("the morning is %q", got)
+	}
+}
+
+// A select of the debug view with more options than the window has room for keeps its popup inside the window.
+func TestALongSelectStaysInsideTheWindow(t *testing.T) {
+	var calls []call
+	compare := make([]string, 200)
+	for index := range compare {
+		compare[index] = fmt.Sprintf("logs/state-%d.json", index)
+	}
+	view := workbench.DebugView{State: &workbench.DebugStateView{Path: "logs/state-a.json", Compare: compare}}
+	tt := drawDebug(&view, noErrors(), recorder(t, &calls, screenCommands...))
+	pressPositional(t, tt, "core.debug.state.with", 0)
+	bottom := float32(0)
+	var find func(nodes []ui.ElementNode)
+	find = func(nodes []ui.ElementNode) {
+		for _, node := range nodes {
+			if node.Role == ui.RolePopup {
+				bottom = max(bottom, node.Bounds.Y+node.Bounds.H)
+			}
+			find(node.Children)
+		}
+	}
+	find(tt.ElementTree())
+	if !tt.HasText("logs/state-0.json") || bottom == 0 {
+		t.Fatalf("the select opened no popup: %q", tt.Texts())
+	}
+	if bottom > 900 {
+		t.Fatalf("the popup ends at %v, outside the window", bottom)
 	}
 }
