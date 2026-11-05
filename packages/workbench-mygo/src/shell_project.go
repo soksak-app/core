@@ -266,6 +266,18 @@ func (s *Shell) activateThen(id string, done func()) {
 		done()
 		return
 	}
+	var refused string
+	if err := member(project.Rest, "settingsError", &refused); err != nil {
+		s.fail(err)
+		done()
+		return
+	}
+	// The host refused the settings file of the project, so the window does not open it (docs/spec/projects.md#settings).
+	if refused != "" {
+		s.fail(errors.New(refused))
+		done()
+		return
+	}
 	s.keep()
 	root, identity := project.Root, project.Identity
 	s.calls.Call("projectFolder", root, func(value any, err error) {

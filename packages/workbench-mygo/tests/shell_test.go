@@ -919,6 +919,24 @@ func TestAnActivationKeepsTheTheme(t *testing.T) {
 	}
 }
 
+// A project whose settings file the host refused does not open, and the window states the reason (docs/spec/projects.md#settings).
+func TestAProjectWithARefusedSettingsFileDoesNotOpen(t *testing.T) {
+	project := storedProject(tab("tab-aaaaaa", "notes"))
+	project["settingsError"] = "the settings file is refused"
+	f := newShell(t, &storedHost{projects: []map[string]any{project}})
+	if _, err := f.shell.Registry().Run("core.project.activate", json.RawMessage(`{"id":"`+project["id"].(string)+`"}`)); err != nil {
+		t.Fatal(err)
+	}
+	f.pending.drain(t)
+	f.tester.Frame()
+	if errors := f.host.written("workbench.record.error"); len(errors) != 1 || !strings.Contains(fmt.Sprint(errors[0]), "the settings file is refused") {
+		t.Fatalf("the shell recorded %v", errors)
+	}
+	if opened := f.host.called("projectOpen"); opened {
+		t.Fatal("the window opened the project")
+	}
+}
+
 func TestProjectOpenCommandRefusesAnEmptyRoot(t *testing.T) {
 	f := newShell(t, &storedHost{})
 	if err := f.finish("core.project.open", map[string]string{"root": " "}); err == nil || err.Error() != "Project directory is empty" {
