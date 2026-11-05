@@ -1,9 +1,9 @@
-// The trace state of a measurement (docs/operations/examples.md, B3). `make app-usage`, `make terminal-redraw-usage`,
-// `make object-counts` and `make host-allocations` take TRACE=0|1 and set its state with core.settings.change before they
+// The trace state of a measurement (docs/operations/examples.md, B3). `make measure-app-usage`, `make measure-terminal-redraw`,
+// `make measure-object-counts` and `make measure-host-allocations` take TRACE=0|1 and set its state with core.settings.change before they
 // measure: TRACE=0 is the performance trace off under the default log policy, and TRACE=1 is the trace on with the class
 // `frame` at `debug`. TRACE has no default: each run records its trace state, so a target that kept the state it found would
 // measure a state that it did not set. A third state, FRAME_RECORDS, is the trace off under the policy that stores the class
-// `frame` at `debug`, in which `make app-usage STEP=pointer` repeats its move to read the steps of the frame records.
+// `frame` at `debug`, in which `make measure-app-usage STEP=pointer` repeats its move to read the steps of the frame records.
 import { policyOfSetting, untilPolicy } from "@soksak/window-check/log-policy.mjs";
 
 /** The trace state of the frame records: the trace off under the policy that stores the class `frame` at `debug`. */

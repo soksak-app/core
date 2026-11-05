@@ -31,7 +31,7 @@ The host opens `<config-dir>/process.lock` (creating it when it is missing) befo
   "pid": 1234,
   "application": "wailsv3",
   "version": "0.0.8",
-  "executable": "/path/to/soksak-wailsv3",
+  "executable": "/path/to/sok-wailsv3",
   "started": "2026-09-17T09:00:00Z"
 }
 ```
@@ -83,7 +83,7 @@ The host stores every request of a client that names a declared method as the ev
 
 ## Diagnostic builds
 
-The following methods exist only in diagnostic builds (Go build tag `diagnostics`, cargo feature `diagnostics`). Other builds reject them as undeclared methods. `make wailsv3-build`, `make tauriv2-build` and `make mygo-build` produce diagnostic builds; the release targets do not.
+The following methods exist only in diagnostic builds (Go build tag `diagnostics`, cargo feature `diagnostics`). Other builds reject them as undeclared methods. `make build-wailsv3`, `make build-tauriv2` and `make build-mygo` produce diagnostic builds; the release targets do not.
 
 | Method | Params | Purpose |
 | --- | --- | --- |
@@ -97,8 +97,8 @@ The following methods exist only in diagnostic builds (Go build tag `diagnostics
 | `diagnostics.modal.hold` | `{window, on}` | With `on`, holds the host's answers to the window's modal content requests; without, sends the held answers and stops holding The mygo host answers the error `the mygo host has no modal web views`. |
 | `diagnostics.modal.held` | `{window}` | Answers when the window holds a modal content answer or stops holding; fails when the window does not hold answers The mygo host answers the error `the mygo host has no modal web views`. |
 | `diagnostics.page.request` | `{window, path}` | The main page requests the file `path` (starting with `/`) of its application and returns `{path, status}`; the host writes, for a file that does not exist, `error host page asset: <path>: not found` once for the path; the status is the one the host's file server answers ([diagnostics](diagnostics.md#failure-points)) The mygo host answers the error `the mygo host has no main page`. |
-| `diagnostics.page.calls` | `{window, count}` | The main page sends `count` (1 to 50) host calls `theme` one after another and returns `{count, ms}` with the elapsed milliseconds. A host call of a page whose window another window covers took up to 35 ms in both hosts, so the bound keeps one request well under the 10 second page request timeout; `make host-calls` sends a larger number in several requests and uses it to measure what the host calls of the page leave in the page process The mygo host answers the error `the mygo host has no main page`. |
-| `diagnostics.host.events` | `{window, count}` | The host sends `count` (1 to 1000) host events `diagnostics-unlistened` without data to the main page of the window and returns `{count}`. The page declares no listener for this event, so `make host-calls EVENTS=N` uses it to measure what a host event that the page does not listen to leaves in the page process; a `count` outside the range fails with `diagnostics.host.events requires a count from 1 to 1000` The mygo host answers the error `the mygo host has no main page`. |
+| `diagnostics.page.calls` | `{window, count}` | The main page sends `count` (1 to 50) host calls `theme` one after another and returns `{count, ms}` with the elapsed milliseconds. A host call of a page whose window another window covers took up to 35 ms in both hosts, so the bound keeps one request well under the 10 second page request timeout; `make measure-host-calls` sends a larger number in several requests and uses it to measure what the host calls of the page leave in the page process The mygo host answers the error `the mygo host has no main page`. |
+| `diagnostics.host.events` | `{window, count}` | The host sends `count` (1 to 1000) host events `diagnostics-unlistened` without data to the main page of the window and returns `{count}`. The page declares no listener for this event, so `make measure-host-calls EVENTS=N` uses it to measure what a host event that the page does not listen to leaves in the page process; a `count` outside the range fails with `diagnostics.host.events requires a count from 1 to 1000` The mygo host answers the error `the mygo host has no main page`. |
 | `diagnostics.surface.hold` | `{window, surface}` | The main page holds every exposure reply of the surface `surface`, the reply of a mounted surface and the `exposureReply` call of a view surface, until the host reports the surface removed (`exposure-registered` with `closed`). It then sends the held replies in order, so each arrives after the host ended its request with 1003 ([exposure](exposure.md#relay)), and after the host has answered them it writes the line `held exposure replies of surface "<surface>" were sent after the surface closed (<count>)` to the application log. A `surface` that is not a nonempty string fails with `diagnostics.surface.hold requires surface`, a surface that is not mounted with `surface <surface> is not mounted`, and a surface whose replies are already held with `exposure replies of surface "<surface>" are already held` |
 | `diagnostics.surface.held` | `{window, surface}` | Answers when the surface holds a reply. Fails with `exposure replies of surface "<surface>" are not held` when its replies are not held, and with `surface "<surface>" closed before it held an exposure reply` when the host removes the surface first |
 | `diagnostics.layout.fail` | `{window}` | The workbench makes its next layout draw, on the mygo host its next placement of the surfaces, fail with `diagnostic layout fault` once and answers `null`; the workbench shows that failure through its error display, so a check observes that a draw that fails leaves the workbench answering requests. |

@@ -109,11 +109,11 @@ test("a run outside the run conditions, a failed run, a missing run and an unkno
   record("S0", 2, "mygo").display.backingScale = 1;
   record("S0", 3, "mygo").start.swap.usedBytes = 536870912;
   record("S1", 1, "mygo").start.fseventsdCores = 0.1;
-  record("S1", 2, "wailsv3").failures.push("make app-usage STATE=S1 exited with code 1");
+  record("S1", 2, "wailsv3").failures.push("make measure-app-usage STATE=S1 exited with code 1");
   record("S1", 3, "tauriv2").values["G2-S0-frames"] = 0;
-  record("S5", 1, "mygo").conditions["make e2e-benchmark-view-drag TRACE=0"].refreshRate = 60;
-  record("S5", 3, "mygo").conditions["make e2e-benchmark-view-drag TRACE=0"].window = { width: 760, height: 614 };
-  record("S2", 1, "mygo").conditions["make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=1"].window = { width: 1200, height: 760 };
+  record("S5", 1, "mygo").conditions["make benchmark-view-drag TRACE=0"].refreshRate = 60;
+  record("S5", 3, "mygo").conditions["make benchmark-view-drag TRACE=0"].window = { width: 760, height: 614 };
+  record("S2", 1, "mygo").conditions["make measure-terminal-redraw PLUGIN=term RATE=30 ROWS=1"].window = { width: 1200, height: 760 };
   delete record("S5", 2, "mygo").conditions;
   session.records.splice(session.records.indexOf(record("S10", 3, "mygo")), 1);
   assert.deepEqual(failedLines(judgeSession(fixtureGoals(), session)), [
@@ -121,12 +121,12 @@ test("a run outside the run conditions, a failed run, a missing run and an unkno
     "failed run 2 of mygo in S0: the backing scale of the window is 1, expected 2",
     "failed run 3 of mygo in S0: swap use 536870912 B is not below 0.5 of the swap total 1073741824 B",
     "failed run 1 of mygo in S1: fseventsd uses 0.1 of a core, not below 0.1",
-    "failed run 2 of wailsv3 in S1: make app-usage STATE=S1 exited with code 1",
+    "failed run 2 of wailsv3 in S1: make measure-app-usage STATE=S1 exited with code 1",
     "failed run 3 of tauriv2 in S1: it records G2-S0-frames, which is no value of S1",
-    "failed run 1 of mygo in S5: make e2e-benchmark-view-drag TRACE=0: the display mode runs at 60 Hz, expected 120 Hz",
+    "failed run 1 of mygo in S5: make benchmark-view-drag TRACE=0: the display mode runs at 60 Hz, expected 120 Hz",
     "failed run 2 of mygo in S5: the run records no conditions of its targets (undefined)",
-    "failed run 3 of mygo in S5: make e2e-benchmark-view-drag TRACE=0: the window is 760×614 points, expected 1200×760 points",
-    "failed run 1 of mygo in S2: make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=1: the window is 1200×760 points, expected 760×614 points",
+    "failed run 3 of mygo in S5: make benchmark-view-drag TRACE=0: the window is 760×614 points, expected 1200×760 points",
+    "failed run 1 of mygo in S2: make measure-terminal-redraw PLUGIN=term RATE=30 ROWS=1: the window is 1200×760 points, expected 760×614 points",
     "failed G3-S10-host-growth mygo: the session records 2 of its 3 runs",
   ]);
   const short = fixtureSession();
@@ -190,11 +190,11 @@ function sessionMeeting(goals, path) {
   return lines;
 }
 
-test("make b3-judge judges a session folder against docs/spec/performance-goals.json and exits with status 1 when a value fails", { timeout: 20000 }, (t) => {
+test("make check-b3 judges a session folder against docs/spec/performance-goals.json and exits with status 1 when a value fails", { timeout: 20000 }, (t) => {
   const goals = readGoals(readFileSync(GOALS_FILE, "utf8"), "docs/spec/performance-goals.json");
   const path = folder(t);
   const lines = sessionMeeting(goals, path);
-  const judge = () => spawnSync("make", ["-s", "--no-print-directory", "b3-judge", `SESSION=${path}`], { cwd: ROOT, encoding: "utf8" });
+  const judge = () => spawnSync("make", ["-s", "--no-print-directory", "check-b3", `SESSION=${path}`], { cwd: ROOT, encoding: "utf8" });
   const passed = judge();
   assert.equal(passed.status, 0, passed.stdout + passed.stderr);
   assert.match(passed.stdout, new RegExp(`^passed session ${path}: 0 failures$`, "m"));

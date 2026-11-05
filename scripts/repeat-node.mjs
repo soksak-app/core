@@ -2,7 +2,7 @@
 // through the test runner (docs/operations/examples.md#test-runner). A repeat has the limit TEST_TIMEOUT: the runner kills its process
 // group at the limit, and `--test-timeout` gives each test of the repeat the same limit, so a test that hangs is reported with its name
 // and elapsed time. A repeat fails when it fails or when no passed test matches the pattern.
-// Usage: node scripts/node-repeat.mjs --file <file> --name <pattern> --count <n> [--timeout <seconds>]
+// Usage: node scripts/repeat-node.mjs --file <file> --name <pattern> --count <n> [--timeout <seconds>]
 import { loadavg } from 'node:os';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';

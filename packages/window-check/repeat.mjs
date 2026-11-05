@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 // Runs one window check in sequence for the given number of times and stops at the first failed run.
 //
-// soksak-window-repeat --setup ./setup.mjs --file <check file> --name "<check name>" --count 16
+// sok-repeat --setup ./setup.mjs --file <check file> --name "<check name>" --count 16
 //
 // An intermittent failure is reproduced and accepted with this target. Each run uses a new node:test process and does
 // not launch an application. SOKSAK_APP selects one host. The check file and the launch start module of --setup are
 // relative to the current folder of the calling repository.
 import { spawnSync } from "node:child_process";
 
-const USAGE = "usage: soksak-window-repeat --setup <global setup module> --file <test file> --name <test name pattern> --count <n>";
+const USAGE = "usage: sok-repeat --setup <global setup module> --file <test file> --name <test name pattern> --count <n>";
 const options = {};
 const args = process.argv.slice(2);
 for (let i = 0; i < args.length; i += 2) {

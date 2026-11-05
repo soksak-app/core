@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Places the frontend of the application in one directory (staging layout in docs/spec/plugins.md).
 //
-//   soksak-stage <output directory> [--diagnostics] [--no-main-page] [--installed <configuration directory>] [--registry-index <absolute index path>]
+//   sok-copy-frontend <output directory> [--diagnostics] [--no-main-page] [--installed <configuration directory>] [--registry-index <absolute index path>]
 //
 // Reads environment.json from the application package in the current directory. The package location is found
 // by Node module resolution. The staged registry changes only when --registry-index is given.
@@ -39,7 +39,7 @@ import {
   modulePath, pageImports, pageImportsForBuild, validateEnvironment, validateInstalledPlugins, viewCoreTargets, viewImports,
 } from "@soksak/plugin-api";
 
-const USAGE = "usage: soksak-stage <output directory> [--diagnostics] [--no-main-page] [--installed <configuration directory>] [--registry-index <absolute index path>]";
+const USAGE = "usage: sok-copy-frontend <output directory> [--diagnostics] [--no-main-page] [--installed <configuration directory>] [--registry-index <absolute index path>]";
 let parsed;
 try {
   parsed = parseArgs({

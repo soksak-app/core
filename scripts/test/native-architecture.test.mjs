@@ -51,7 +51,7 @@ test("the library build compiles every object and configures ZXing for arm64 in 
   const removal = commands.findIndex((line) => line === `rm -rf ${build}/zxing-cpp-build ${build}/zxing-cpp-install`);
   assert.ok(removal >= 0 && removal < configure, `the ZXing configure does not start from a new build folder:\n${commands.join("\n")}`);
   const identity = folder(t);
-  const identityCompiles = dryRun(processIdentity, [`BUILD=${identity}/build`, `LIBDIR=${identity}/lib`, "all"])
+  const identityCompiles = dryRun(processIdentity, [`BUILD=${identity}/build`, `LIBDIR=${identity}/lib`, "build"])
     .filter((line) => /^clang\b/.test(line));
   assert.ok(identityCompiles.length > 0);
   assert.deepEqual(identityCompiles.filter((line) => !/(^|\s)-arch arm64(\s|$)/.test(line)), [], "a clang call of process identity names no arm64");

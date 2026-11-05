@@ -129,7 +129,7 @@ test("a relative output folder of a pack resolves from the working directory, no
   assert.equal(readFileSync(pack.release, "utf8"), out);
 });
 
-// make boundaries-check reads the plugin ids from the declaration, so the registry build, which reads each plugin.json, rejects a
+// make check-boundaries reads the plugin ids from the declaration, so the registry build, which reads each plugin.json, rejects a
 // declaration that names another id.
 test("a plugin.json that names another id than its declaration fails the registry build with the file and both values", { timeout: 1000 }, () => {
   assert.equal(checkPluginId({ repository: "../plugins/a", id: "a" }, { id: "a" }, "/work/plugins/a/plugin.json"), undefined);
@@ -239,10 +239,10 @@ test("the registry options take SIDECARS=diagnostic and PLUGINS=public, and PLUG
   assert.equal(checkOptions({}), undefined);
   assert.equal(checkOptions({ sidecars: "diagnostic" }), undefined);
   assert.equal(checkOptions({ sidecars: "diagnostic", plugins: "public" }), undefined);
-  assert.throws(() => checkOptions({ sidecars: "debug" }), /^Error: --sidecars must be diagnostic \(make registry SIDECARS=diagnostic\), not "debug"$/);
-  assert.throws(() => checkOptions({ sidecars: "diagnostic", plugins: "all" }), /^Error: --plugins must be public \(make registry PLUGINS=public\), not "all"$/);
+  assert.throws(() => checkOptions({ sidecars: "debug" }), /^Error: --sidecars must be diagnostic \(make build-registry SIDECARS=diagnostic\), not "debug"$/);
+  assert.throws(() => checkOptions({ sidecars: "diagnostic", plugins: "all" }), /^Error: --plugins must be public \(make build-registry PLUGINS=public\), not "all"$/);
   assert.throws(() => checkOptions({ plugins: "public" }),
-    /^Error: --plugins public lists the sidecar releases of --sidecars diagnostic: make registry SIDECARS=diagnostic PLUGINS=public$/);
+    /^Error: --plugins public lists the sidecar releases of --sidecars diagnostic: make build-registry SIDECARS=diagnostic PLUGINS=public$/);
 });
 
 const ENGINE = "@scope/sidecar-engine";
@@ -262,7 +262,7 @@ const publicIndex = (probe, revoked = []) => ({
   revoked: { plugins: [...revoked, { id: "plain", version: "0.0.4", reason: "Probe." }],
     sidecars: [{ name: ENGINE, version: "0.0.1", reason: "Probe." }], core: [] },
 });
-/** The sidecar entries that make registry SIDECARS=diagnostic wrote: one release of version 0.0.2. */
+/** The sidecar entries that make build-registry SIDECARS=diagnostic wrote: one release of version 0.0.2. */
 const diagnosticSidecars = (url = "file:///registry/releases/scope-sidecar-engine-0.0.2-linux-x64.tgz") => [{ name: ENGINE,
   repository: "https://github.com/scope/engine", versions: [{ version: "0.0.2", protocol: 1, releases: { "linux-x64": { url, sha256: SHA } } }] }];
 
@@ -285,15 +285,15 @@ test("PLUGINS=public lists the plugin versions of the public registry whose side
 test("PLUGINS=public fails when leaving out a version would make an installation select an older version or no version", { timeout: 1000 }, () => {
   const newer = publicIndex([publicVersion("0.0.2", { [ENGINE]: "^0.0.2" }), publicVersion("0.0.3", { [ENGINE]: "^0.0.3" })]);
   assert.throws(() => publicRegistryEntries(newer, diagnosticSidecars()),
-    /^Error: public registry: plugin probe 0\.0\.3 needs @scope\/sidecar-engine \^0\.0\.3, which no sidecar release of make registry SIDECARS=diagnostic satisfies, and its older version 0\.0\.2 is listed, so an installation would select 0\.0\.2 where the public registry selects 0\.0\.3$/);
+    /^Error: public registry: plugin probe 0\.0\.3 needs @scope\/sidecar-engine \^0\.0\.3, which no sidecar release of make build-registry SIDECARS=diagnostic satisfies, and its older version 0\.0\.2 is listed, so an installation would select 0\.0\.2 where the public registry selects 0\.0\.3$/);
   const none = publicIndex([publicVersion("0.0.1", { [ENGINE]: "^0.0.1" })]);
   assert.throws(() => publicRegistryEntries(none, diagnosticSidecars()),
-    /^Error: public registry: plugin probe has no version whose sidecar ranges the sidecar releases of make registry SIDECARS=diagnostic satisfy$/);
+    /^Error: public registry: plugin probe has no version whose sidecar ranges the sidecar releases of make build-registry SIDECARS=diagnostic satisfy$/);
   const unknown = publicIndex([publicVersion("0.0.2", { "@scope/sidecar-other": "^0.0.1" })]);
   assert.throws(() => publicRegistryEntries(unknown, diagnosticSidecars()), /plugin probe has no version whose sidecar ranges/);
 });
 
-/** A registry folder as make registry SIDECARS=diagnostic leaves it: the revision record, the sidecar entries and their releases. */
+/** A registry folder as make build-registry SIDECARS=diagnostic leaves it: the revision record, the sidecar entries and their releases. */
 function diagnosticRegistry(t) {
   const work = mkdtempSync(join(tmpdir(), "workspace-public-"));
   t.after(() => rmSync(work, { recursive: true, force: true }));
@@ -307,7 +307,7 @@ function diagnosticRegistry(t) {
   return { work, registry, release, sok: fakeSok(work), out: join(work, "registry-public") };
 }
 
-test("PLUGINS=public writes the public plugin entries beside the sidecar entries of make registry SIDECARS=diagnostic and builds no release", { timeout: 30000 }, (t) => {
+test("PLUGINS=public writes the public plugin entries beside the sidecar entries of make build-registry SIDECARS=diagnostic and builds no release", { timeout: 30000 }, (t) => {
   const fixture = diagnosticRegistry(t);
   mkdirSync(join(fixture.out, "plugins"), { recursive: true });
   writeFileSync(join(fixture.out, "plugins", "earlier.json"), "{}");
@@ -325,15 +325,15 @@ test("PLUGINS=public writes the public plugin entries beside the sidecar entries
   assert.equal(existsSync(join(fixture.out, "core.json")), false);
 });
 
-test("PLUGINS=public fails when the checkout holds no sidecar releases of make registry SIDECARS=diagnostic", { timeout: 30000 }, (t) => {
+test("PLUGINS=public fails when the checkout holds no sidecar releases of make build-registry SIDECARS=diagnostic", { timeout: 30000 }, (t) => {
   const index = publicIndex([publicVersion("0.0.2", { [ENGINE]: "^0.0.2" })]);
   const fixture = diagnosticRegistry(t);
   rmSync(fixture.release);
   assert.throws(() => buildPublicRegistry(fixture.sok, fixture.out, fixture.registry, index),
-    /sidecars\/scope-sidecar-engine\.json: release .*scope-sidecar-engine-0\.0\.2-linux-x64\.tgz of linux-x64 is missing; run make registry SIDECARS=diagnostic first$/);
+    /sidecars\/scope-sidecar-engine\.json: release .*scope-sidecar-engine-0\.0\.2-linux-x64\.tgz of linux-x64 is missing; run make build-registry SIDECARS=diagnostic first$/);
   rmSync(join(fixture.registry, "sidecar-revisions.json"));
   assert.throws(() => buildPublicRegistry(fixture.sok, fixture.out, fixture.registry, index),
-    /registry\/sidecar-revisions\.json is missing: --plugins public lists the sidecar releases that make registry SIDECARS=diagnostic writes; run make registry SIDECARS=diagnostic first$/);
+    /registry\/sidecar-revisions\.json is missing: --plugins public lists the sidecar releases that make build-registry SIDECARS=diagnostic writes; run make build-registry SIDECARS=diagnostic first$/);
   assert.throws(() => buildPublicRegistry(fixture.sok, fixture.registry, fixture.registry, index),
     /^Error: --out .*registry is the folder of the sidecar releases; PLUGINS=public writes another folder$/);
 });

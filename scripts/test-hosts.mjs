@@ -539,7 +539,7 @@ async function main(argv) {
     const rustItems = rustFound.flatMap((entry) => entry.tests);
     return checkDeclarations(cases, rustItems, rustFound.flatMap((entry) => entry.failures));
   }
-  if (values.host !== 'tauriv2' && !values['go-ldflags']) throw new Error('usage: check-host-contract.mjs [--host wailsv3|tauriv2|mygo] [--go-ldflags=<flags>] [--run <text>] [--only <text>] | --static');
+  if (values.host !== 'tauriv2' && !values['go-ldflags']) throw new Error('usage: test-hosts.mjs [--host wailsv3|tauriv2|mygo] [--go-ldflags=<flags>] [--run <text>] [--only <text>] | --static');
   const write = (line) => process.stdout.write(`${line}\n`);
   const concurrency = Math.max(2, cpus().length - 2);
   const buildDir = mkdtempSync(join(tmpdir(), 'host-contract-'));

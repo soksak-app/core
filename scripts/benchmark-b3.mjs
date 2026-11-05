@@ -1,16 +1,16 @@
 // Runs the three-host benchmark B3 (docs/operations/examples.md#three-host-benchmark) on this computer and writes one session folder
-// that `make b3-judge` judges against docs/spec/performance-goals.json:
-//   node scripts/e2e-b3.mjs --phase 1|final --runs <n> --baseline <checkout>
-// `make e2e-b3 PHASE=1|final RUNS=<n> BASELINE=<checkout>` runs it. The five applications are the mygo, the Wails and the Tauri host of
+// that `make check-b3` judges against docs/spec/performance-goals.json:
+//   node scripts/benchmark-b3.mjs --phase 1|final --runs <n> --baseline <checkout>
+// `make benchmark-b3 PHASE=1|final RUNS=<n> BASELINE=<checkout>` runs it. The five applications are the mygo, the Wails and the Tauri host of
 // this checkout and the Wails and the Tauri host of the BASELINE checkout, the baseline hosts. Before its first run it fails when the
 // head of BASELINE differs from the last head of the baseline record or the working tree of BASELINE holds changes outside that head.
 // It then builds the release bundles of the five applications, the workspace registry of the diagnostic sidecars and the index of the
-// public registry (`make registry SIDECARS=diagnostic`, `make registry SIDECARS=diagnostic PLUGINS=public`), and fails when a sidecar
+// public registry (`make build-registry SIDECARS=diagnostic`, `make build-registry SIDECARS=diagnostic PLUGINS=public`), and fails when a sidecar
 // revision of the registry record differs from the last revision of the baseline record for that repository or a sidecar working tree
 // held changes. Phase 1 also builds the debug bundles.
 //
 // Each run of a scenario starts a new application from the executable of its release bundle through the steps `start`, `quit` and
-// `remaining` of runPlan (scripts/e2e-run.mjs), in a new configuration folder under the session folder in target/b3 into which it
+// `remaining` of runPlan (scripts/test-app.mjs), in a new configuration folder under the session folder in target/b3 into which it
 // installs the index of that application: the workspace registry for the mygo and the other hosts, the public index for the baseline
 // hosts. S0b runs in the application that S3 leaves. A run starts only while swap use is below its share of the swap total and
 // fseventsd uses less than its share of a core, and fails when the display mode or the backing scale of a window differs from the run
@@ -20,15 +20,15 @@
 // the window checks. The runs interleave the applications: one run of each application before the next run of any. A scenario
 // whose values no other host compares runs only on the mygo host.
 // Phase 1 also runs each scenario once on each application with TRACE=1 to attribute its costs, through the targets that take the
-// trace state of the run and name no TRACE of their own, and runs make host-calls on the other and the baseline hosts and make
-// trace-share on all five applications from their debug bundles.
+// trace state of the run and name no TRACE of their own, and runs make measure-host-calls on the other and the baseline hosts and make
+// measure-trace-share on all five applications from their debug bundles.
 //
 // The baseline record target/b3/baseline.json of this checkout, which the measurement target items write:
 //   {"schema": 1, "heads": [<40 hex digits>, ...], "sidecars": [{"repository": <path>, "revisions": [<40 hex digits>, ...]}],
 //    "plugins": [{"id": <plugin id>, "version": <version>, "sha256": <64 hex digits>}]}
 // `heads` are the heads of the baseline branch in order and `revisions` the revisions of each sidecar repository in order; the last
 // entry of each list is the one that a run requires. `plugins` are the plugin releases that the baseline hosts install.
-// The sidecar revision record <registry>/sidecar-revisions.json of make registry SIDECARS=diagnostic:
+// The sidecar revision record <registry>/sidecar-revisions.json of make build-registry SIDECARS=diagnostic:
 //   {"sidecars": [{"repository": <path>, "revision": <40 hex digits>, "changes": <whether the working tree held changes>}]}
 //
 // The output of a target. Every target that B3 runs takes the file of its output: a make target as B3_OUT=<file> (a measurement
@@ -47,9 +47,9 @@
 // value, the target and the key. The verdict of a benchmark of S5 and S7 is its measurement "passed" or "failed", never its exit
 // code. The run fails when a target reports a refresh rate or a backing scale other than the run conditions, a window other than
 // the window of its scenario in the run conditions, or a traceState and a logPolicy other than the diagnostics.performance and the
-// classes of the policy of the settings of its measured interval. A target of app-usage, terminal-redraw-usage, object-counts or
-// host-allocations measures in traceSettings (scripts/measure-trace.mjs) of the TRACE argument of its entry, which the pointer step
-// of app-usage names for each of the two trace states of its outputs, or else of the TRACE of the run. An e2e benchmark takes no
+// classes of the policy of the settings of its measured interval. A target of measure-app-usage, measure-terminal-redraw, measure-object-counts or
+// measure-host-allocations measures in traceSettings (scripts/measure-trace.mjs) of the TRACE argument of its entry, which the pointer step
+// of measure-app-usage names for each of the two trace states of its outputs, or else of the TRACE of the run. An e2e benchmark takes no
 // TRACE of the run and measures in the settings that B3_SETTINGS of e2e/benchmark/measurements.mjs declares for it in the shape of
 // its keys in B3_MEASUREMENTS of that module: one settings object for a list of keys, and for an object of states the same states,
 // of which the TRACE argument of its entry names one, so it runs once in each state. A state of one that the other lacks fails the
@@ -70,7 +70,7 @@ import { connect } from '@soksak/client';
 import { policyOfSetting } from '@soksak/window-check/log-policy.mjs';
 import { displayFailures, GOALS_FILE, readGoals, startConditionFailures, targetConditionFailures } from './b3-judge.mjs';
 import { readB3Out } from './b3-out.mjs';
-import { runPlan } from './e2e-run.mjs';
+import { runPlan } from './test-app.mjs';
 import { parseCpuTime } from './measure-app-usage.mjs';
 import { FRAME_RECORDS, traceSettings } from './measure-trace.mjs';
 import { B3_MEASUREMENTS, B3_SETTINGS } from '../e2e/benchmark/measurements.mjs';
@@ -97,7 +97,7 @@ export const RUN_TRACE = 0;
 export const ATTRIBUTION_TRACE = 1;
 
 /** The targets that take TRACE, which phase 1 also runs with TRACE=1 when their entry names no TRACE. */
-const TRACE_TARGETS = ['app-usage', 'terminal-redraw-usage', 'object-counts', 'host-allocations'];
+const TRACE_TARGETS = ['measure-app-usage', 'measure-terminal-redraw', 'measure-object-counts', 'measure-host-allocations'];
 const HEX40 = /^[0-9a-f]{40}$/;
 const HEX64 = /^[0-9a-f]{64}$/;
 
@@ -253,10 +253,10 @@ export function fseventsdCores(before, after, seconds) {
 export function applicationsOf({ root, baseline }, build = 'release') {
   return APPLICATIONS.map(([name, host, kind]) => {
     const checkout = kind === 'baseline' ? baseline : root;
-    const bundle = build === 'release' ? join(checkout, 'target', 'release', host, 'soksak.app') : join(checkout, 'target', 'debug', `soksak-${host}.app`);
+    const bundle = build === 'release' ? join(checkout, 'target', 'release', host, 'soksak.app') : join(checkout, 'target', 'debug', `sok-${host}.app`);
     return {
       name, host, build: kind, checkout, bundle,
-      executable: join(bundle, 'Contents', 'MacOS', `soksak-${host}`), sok: join(bundle, 'Contents', 'MacOS', 'sok'),
+      executable: join(bundle, 'Contents', 'MacOS', `sok-${host}`), sok: join(bundle, 'Contents', 'MacOS', 'sok'),
       index: join(root, 'target', kind === 'baseline' ? 'registry-public' : 'registry', 'index.json'),
     };
   });
@@ -361,10 +361,10 @@ export function traceStateOf(target, trace) {
   return words[0] === 'make' && TRACE_TARGETS.includes(words[1]) ? parseTraceState(text, target) : text;
 }
 
-/** The e2e benchmark that `target` runs: make e2e-benchmark-<name> runs <name>, and a check of e2e/ is the benchmark of its file name. */
+/** The e2e benchmark that `target` runs: make benchmark-<name> runs <name>, and a check of e2e/ is the benchmark of its file name. */
 export function benchmarkOf(target) {
   const [command, name] = target.split(' ');
-  if (command === 'make') return name.startsWith('e2e-benchmark-') ? name.slice('e2e-benchmark-'.length) : null;
+  if (command === 'make') return name.startsWith('benchmark-') ? name.slice('benchmark-'.length) : null;
   const check = /^e2e\/(?:benchmark\/)?([\w-]+)\.test\.mjs$/.exec(command);
   return name === undefined && check ? check[1] : null;
 }
@@ -659,13 +659,13 @@ function toolchains() {
 export function buildSteps(phase, baseline) {
   const step = (name, argv) => ({ name, phase: 'prepare', kind: 'run', argv, env: {} });
   return [
-    step('release bundles', ['make', 'wailsv3-build-release', 'tauriv2-build-release', 'mygo-build-release']),
-    step('baseline release bundles', ['make', '-C', baseline, 'wailsv3-build-release', 'tauriv2-build-release']),
+    step('release bundles', ['make', 'build-wailsv3-release', 'build-tauriv2-release', 'build-mygo-release']),
+    step('baseline release bundles', ['make', '-C', baseline, 'build-wailsv3-release', 'build-tauriv2-release']),
     step('workspace registry', ['make', 'registry', 'SIDECARS=diagnostic']),
     step('public index', ['make', 'registry', 'SIDECARS=diagnostic', 'PLUGINS=public']),
     ...(phase === '1' ? [
-      step('debug bundles', ['make', 'wailsv3-build', 'tauriv2-build', 'mygo-build']),
-      step('baseline debug bundles', ['make', '-C', baseline, 'wailsv3-build', 'tauriv2-build']),
+      step('debug bundles', ['make', 'build-wailsv3', 'build-tauriv2', 'build-mygo']),
+      step('baseline debug bundles', ['make', '-C', baseline, 'build-wailsv3', 'build-tauriv2']),
     ] : []),
   ];
 }
@@ -680,7 +680,7 @@ export function attributionUnits(goals, applications, debugApplications) {
     .map((unit) => ({ ...unit, targets: (scenario) => scenarioTargets(goals, scenario).filter(takesRunTrace) }));
   const debug = debugApplications.map((application) => ({
     scenarios: ['debug'], run: 1, application,
-    targets: () => [...(application.host === 'mygo' ? [] : ['make host-calls']), 'make trace-share'],
+    targets: () => [...(application.host === 'mygo' ? [] : ['make measure-host-calls']), 'make measure-trace-share'],
   }));
   return [...units, ...debug];
 }
@@ -688,7 +688,7 @@ export function attributionUnits(goals, applications, debugApplications) {
 async function main(argv) {
   const { values } = parseArgs({ args: argv, strict: true, options: { phase: { type: 'string' }, runs: { type: 'string' }, baseline: { type: 'string' } } });
   if (!['1', 'final'].includes(values.phase) || !/^[1-9]\d*$/.test(values.runs ?? '') || !values.baseline) {
-    throw new Error('e2e-b3 requires --phase 1|final --runs <n> --baseline <checkout>');
+    throw new Error('benchmark-b3 requires --phase 1|final --runs <n> --baseline <checkout>');
   }
   const runs = Number(values.runs);
   const write = (line) => process.stdout.write(`${line}\n`);
@@ -740,7 +740,7 @@ async function main(argv) {
       if (record.failures.length > 0) failed += 1;
     }
   }
-  write(`${failed === 0 && !interrupt.signal.aborted ? 'passed' : 'failed'} session ${session}: ${failed} failed run${failed === 1 ? '' : 's'}${interrupt.signal.aborted ? `, interrupted by ${interrupt.signal.reason}` : ''}; judge it with make b3-judge SESSION=${session}`);
+  write(`${failed === 0 && !interrupt.signal.aborted ? 'passed' : 'failed'} session ${session}: ${failed} failed run${failed === 1 ? '' : 's'}${interrupt.signal.aborted ? `, interrupted by ${interrupt.signal.reason}` : ''}; judge it with make check-b3 SESSION=${session}`);
   return failed === 0 && !interrupt.signal.aborted ? 0 : 1;
 }
 

@@ -139,6 +139,9 @@
 - F502-13: exposure kind `dom`은 모든 host와 모든 plugin 선언에서 `element`가 된다: `exposes.element`, `expose.element`, `element.rect`, `element.act`, `sok element`, MCP tool `element_rect`와 `element_act`, `exposure.list`의 member `element`. `exposes.dom`을 가진 manifest는 거부된다. workbench status는 workbench에 대해 정의된다: `core.window.workbench`, `core.workbench.error`, 행이 `{role, expose, command, text}`인 `core.workbench.audit`, responder owner와 `host.hit` kind `workbench`. window check는 `core.window.workbench`의 새 `start`를 기다리고, 각각 `Object.values(APPS)` 또는 `MAIN_PAGE_APPS`를 순회하며, `scripts/check-e2e-host-parity.mjs`가 이를 검사한다.
 - F463: core가 checks kit과 실행 파일 하나 `soksak-check`를 씁니다. Red: `scripts/test/workflows.test.mjs`가 실패했습니다. Green: 통과합니다.
 - F466: 기록은 임시 log를 인용하지 않고, record 검사가 새 인용을 보고합니다.
+- F475: `@soksak/plugin-api`가 registry의 publish 검사가 각 core release에서 읽는 `./exposure-check`를 다시 export합니다. 명령은 없습니다. Red: `packages/plugin-api/test/package-files.test.mjs`가 실패했습니다. Green: 통과합니다.
+- F473: process identity library가 깨끗한 checkout에서 빌드됩니다. Red: `scripts/test/process-identity-build.test.mjs`가 실패했습니다. Green: 통과합니다.
+- F472: 모든 실행 파일은 `sok` 또는 `sok-<what>`이고 모든 make target은 선언된 동사로 시작하며, `make check-commands`가 이 형식을 강제합니다. Red: kit test가 이전 형식을 보고했습니다. Green: `make check-commands`가 통과합니다.
 - F471: `@soksak/plugin-api`는 어떤 저장소도 실행하지 않던 `soksak-exposure`, `soksak-engines`, `soksak-view-check`를 더 이상 선언하지 않습니다. `exposure-check.js`는 registry의 listed core 검사가 import하므로 module로 남습니다. Red: `packages/plugin-api/test/package-files.test.mjs`의 새 test가 실패했습니다. Green: 통과합니다.
 - F470: CI의 structure step이 현재 make target을 적고, Makefile이 선언하지 않은 workflow target이면 test가 실패합니다. Red: test가 네 target을 보고했습니다. Green: 통과합니다.
 - F469: `scripts/e2e-run.mjs`의 interrupt test가 완성된 process id 파일을 읽습니다. Red: `make node-repeat`이 1회차에 실패했습니다. Green: 10회 통과합니다.

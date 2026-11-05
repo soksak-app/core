@@ -25,5 +25,5 @@ test("the bundle declares the release identity of docs/spec/hosts.md", () => {
   assert.equal(value("CFBundleIdentifier"), "app.soksak.mygo");
   assert.equal(value("CFBundleName"), "soksak");
   assert.equal(value("CFBundleDisplayName"), "soksak");
-  assert.equal(value("CFBundleExecutable"), "soksak-mygo");
+  assert.equal(value("CFBundleExecutable"), "sok-mygo");
 });

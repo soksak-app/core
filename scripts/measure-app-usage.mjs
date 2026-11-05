@@ -25,7 +25,7 @@
 // of each window before the first and after the last CPU reading, and requires occluded false in every window, except the covered window of
 // S9, which must report occluded true. It prints each counter of host.window that every window reports null and an idle wait that read
 // no frame as not measured. Every error is printed to stderr with the process or window it concerns, and the exit status is 1
-// when an error occurred. `make app-usage` runs it.
+// when an error occurred. `make measure-app-usage` runs it.
 //
 // --b3-out FILE writes the B3 output of a measurement of one application without an error to FILE through writeB3Out of
 // scripts/b3-out.mjs: {"measurements": {KEY: number}, "conditions": {refreshRate, backingScale, traceState, logPolicy, window}}. The
@@ -665,7 +665,7 @@ const RUN_MEASUREMENTS = Object.freeze([
 ]);
 
 /**
- * The keys of the B3 output of make app-usage for each trace state that TRACE takes: one output holds the keys of one trace state, and
+ * The keys of the B3 output of make measure-app-usage for each trace state that TRACE takes: one output holds the keys of one trace state, and
  * the trace state of the frame records (FRAME_RECORDS, with --step pointer) gives hitTestP90Ms alone.
  */
 export const B3_MEASUREMENTS = Object.freeze({ 0: RUN_MEASUREMENTS, 1: RUN_MEASUREMENTS, [FRAME_RECORDS]: Object.freeze(["hitTestP90Ms"]) });
@@ -696,7 +696,7 @@ function counterChange(name, marks) {
 }
 
 /**
- * The measurements of a B3 record of make app-usage (the keys that the header declares) from one application of measureApps (app), the
+ * The measurements of a B3 record of make measure-app-usage (the keys that the header declares) from one application of measureApps (app), the
  * window marks of that application before and after the CPU interval (marks), the error lines of the layout fault of S12 (faultLines)
  * and the figures of the pointer step (gesture).
  */
@@ -1153,7 +1153,7 @@ async function measureOptions(options) {
 }
 
 /**
- * The B3 output {measurements, conditions} of a measurement of make app-usage. One output holds the keys of one trace state, the state of
+ * The B3 output {measurements, conditions} of a measurement of make measure-app-usage. One output holds the keys of one trace state, the state of
  * its measured interval: with --step pointer, the trace state 0 or 1 gives the keys of the first move without hitTestP90Ms, and the trace
  * state FRAME_RECORDS gives hitTestP90Ms alone, from the repeated move in that state. The conditions come from b3Conditions of
  * scripts/b3-out.mjs with the window marks of the application before the first CPU reading, which carry the id, the refresh rate, the

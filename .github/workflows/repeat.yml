@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       kind:
-        description: native runs make -C native/darwin repeat; rust runs make rust-repeat
+        description: native runs make -C native/darwin repeat; rust runs make repeat-rust
         type: choice
         options: [native, rust]
         required: true
@@ -48,11 +48,11 @@ jobs:
       - name: Fetch locked Node dependencies
         run: pnpm -C core install --frozen-lockfile
       - name: Fetch pinned native release file
-        run: make -C core native-darwin-fetch
+        run: make -C core fetch-native
       - name: Build the native library offline
         env:
           OFFLINE: '1'
-        run: make -C core native-darwin
+        run: make -C core build-native
       - name: Repeat the native test
         env:
           OFFLINE: '1'
@@ -99,11 +99,11 @@ jobs:
         working-directory: core
         run: cargo fetch --locked
       - name: Fetch pinned native release file
-        run: make -C core native-darwin-fetch
+        run: make -C core fetch-native
       - name: Build the native library and the Tauri frontend offline
         env:
           OFFLINE: '1'
-        run: make -C core native-darwin frontend-tauriv2-core
+        run: make -C core build-native copy-core-frontend-tauriv2
       - name: Repeat the Rust test
         env:
           CARGO_NET_OFFLINE: 'true'
@@ -113,4 +113,4 @@ jobs:
           TEST_TARGET: ${{ inputs.test_target }}
           TEST: ${{ inputs.test }}
           COUNT: ${{ inputs.count }}
-        run: make -C core rust-repeat PACKAGE="$PACKAGE" TEST_TARGET="$TEST_TARGET" TEST="$TEST" COUNT="$COUNT"
+        run: make -C core repeat-rust PACKAGE="$PACKAGE" TEST_TARGET="$TEST_TARGET" TEST="$TEST" COUNT="$COUNT"

@@ -4,7 +4,7 @@ import { acquireWindowCheckSlot, assertEndpointUsesCurrentBuild } from "@soksak/
 
 const endpoint = {
   pid: 123,
-  executable: "/build/soksak-tauriv2",
+  executable: "/build/sok-tauriv2",
   started: "2026-09-22T00:00:00.000Z",
 };
 const started = Date.parse(endpoint.started);

@@ -31,7 +31,7 @@ macOS 호스트가 이 명세를 구현하며 [기능 상태](../features.ko.md)
   "pid": 1234,
   "application": "wailsv3",
   "version": "0.0.8",
-  "executable": "/path/to/soksak-wailsv3",
+  "executable": "/path/to/sok-wailsv3",
   "started": "2026-09-17T09:00:00Z"
 }
 ```
@@ -83,7 +83,7 @@ host는 선언된 메서드를 부른 client의 모든 요청을 성능 trace가
 
 ## 진단 빌드
 
-다음 메서드는 진단 빌드(Go 빌드 태그 `diagnostics`, cargo feature `diagnostics`)에만 있다. 다른 빌드는 이 메서드를 선언되지 않은 메서드로 거부한다. `make wailsv3-build`, `make tauriv2-build`, `make mygo-build`는 진단 빌드를 만들고, 배포 대상은 진단 빌드를 만들지 않는다.
+다음 메서드는 진단 빌드(Go 빌드 태그 `diagnostics`, cargo feature `diagnostics`)에만 있다. 다른 빌드는 이 메서드를 선언되지 않은 메서드로 거부한다. `make build-wailsv3`, `make build-tauriv2`, `make build-mygo`는 진단 빌드를 만들고, 배포 대상은 진단 빌드를 만들지 않는다.
 
 | 메서드 | 매개변수 | 용도 |
 | --- | --- | --- |
@@ -97,8 +97,8 @@ host는 선언된 메서드를 부른 client의 모든 요청을 성능 trace가
 | `diagnostics.modal.hold` | `{window, on}` | `on`이면 창의 모달 내용 요청에 대한 호스트 응답을 붙잡고, 아니면 붙잡은 응답을 보내고 붙잡기를 멈춘다 mygo host는 오류 `the mygo host has no modal web views`로 답한다. |
 | `diagnostics.modal.held` | `{window}` | 창이 모달 내용 응답을 붙잡거나 붙잡기를 멈추면 답한다. 창이 응답을 붙잡고 있지 않으면 실패한다 mygo host는 오류 `the mygo host has no modal web views`로 답한다. |
 | `diagnostics.page.request` | `{window, path}` | 메인 페이지가 애플리케이션의 파일 `path`(`/`로 시작)를 요청하고 `{path, status}`를 돌려준다. host는 없는 파일에 대해 `error host page asset: <path>: not found`를 그 경로에 대해 한 번 쓴다. 상태는 host의 파일 서버가 답한 값이다([진단](diagnostics.ko.md#실패-지점)) mygo host는 오류 `the mygo host has no main page`로 답한다. |
-| `diagnostics.page.calls` | `{window, count}` | 메인 페이지가 host call `theme`을 `count`번(1부터 50까지) 차례로 보내고 경과 밀리초와 함께 `{count, ms}`를 돌려준다. 다른 window가 가린 window의 페이지에서 host call 하나가 두 host 모두 최대 35 ms 걸렸으므로, 이 상한은 요청 하나를 10초 page 요청 timeout보다 충분히 짧게 유지한다. `make host-calls`는 더 큰 수를 여러 요청으로 나누어 보내며 페이지의 host call이 페이지 process에 남기는 것을 측정할 때 쓴다 mygo host는 오류 `the mygo host has no main page`로 답한다. |
-| `diagnostics.host.events` | `{window, count}` | host가 window의 메인 페이지에 data 없는 host event `diagnostics-unlistened`를 `count`번(1부터 1000까지) 보내고 `{count}`를 돌려준다. 페이지는 이 event의 listener를 선언하지 않으므로, `make host-calls EVENTS=N`은 페이지가 listen하지 않는 host event가 페이지 process에 남기는 것을 측정할 때 쓴다. 범위 밖의 `count`는 `diagnostics.host.events requires a count from 1 to 1000`으로 실패한다 mygo host는 오류 `the mygo host has no main page`로 답한다. |
+| `diagnostics.page.calls` | `{window, count}` | 메인 페이지가 host call `theme`을 `count`번(1부터 50까지) 차례로 보내고 경과 밀리초와 함께 `{count, ms}`를 돌려준다. 다른 window가 가린 window의 페이지에서 host call 하나가 두 host 모두 최대 35 ms 걸렸으므로, 이 상한은 요청 하나를 10초 page 요청 timeout보다 충분히 짧게 유지한다. `make measure-host-calls`는 더 큰 수를 여러 요청으로 나누어 보내며 페이지의 host call이 페이지 process에 남기는 것을 측정할 때 쓴다 mygo host는 오류 `the mygo host has no main page`로 답한다. |
+| `diagnostics.host.events` | `{window, count}` | host가 window의 메인 페이지에 data 없는 host event `diagnostics-unlistened`를 `count`번(1부터 1000까지) 보내고 `{count}`를 돌려준다. 페이지는 이 event의 listener를 선언하지 않으므로, `make measure-host-calls EVENTS=N`은 페이지가 listen하지 않는 host event가 페이지 process에 남기는 것을 측정할 때 쓴다. 범위 밖의 `count`는 `diagnostics.host.events requires a count from 1 to 1000`으로 실패한다 mygo host는 오류 `the mygo host has no main page`로 답한다. |
 | `diagnostics.surface.hold` | `{window, surface}` | 메인 페이지는 표면 `surface`의 모든 exposure 답, 곧 마운트된 표면의 답과 view 표면의 `exposureReply` 호출을 호스트가 그 표면의 제거를 알릴 때(`closed`가 있는 `exposure-registered`)까지 붙잡는다. 그다음 붙잡은 답을 순서대로 보내므로 각 답은 호스트가 그 요청을 1003으로 끝낸 뒤에 도착하며([exposure](exposure.ko.md#전달)), 호스트가 그 답들에 응답한 뒤 애플리케이션 로그에 `held exposure replies of surface "<surface>" were sent after the surface closed (<count>)` 줄을 쓴다. 비어 있지 않은 문자열이 아닌 `surface`는 `diagnostics.surface.hold requires surface`로, 마운트되지 않은 표면은 `surface <surface> is not mounted`로, 답을 이미 붙잡은 표면은 `exposure replies of surface "<surface>" are already held`로 실패한다 |
 | `diagnostics.surface.held` | `{window, surface}` | 표면이 답 하나를 붙잡으면 답한다. 그 표면의 답을 붙잡고 있지 않으면 `exposure replies of surface "<surface>" are not held`로, 호스트가 먼저 표면을 제거하면 `surface "<surface>" closed before it held an exposure reply`로 실패한다 |
 | `diagnostics.layout.fail` | `{window}` | workbench는 다음 layout 그리기(mygo host에서는 다음 surface 배치)가 `diagnostic layout fault`로 한 번 실패하게 하고 `null`로 답한다. workbench는 그 실패를 오류 표시로 보이므로, check는 실패한 그리기 뒤에도 workbench가 요청에 답하는지 관찰한다. |

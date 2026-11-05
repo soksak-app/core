@@ -88,9 +88,9 @@ test("the host is the process of the release bundle of the mygo host that has th
   t.after(() => rmSync(configDir, { recursive: true, force: true }));
   const processes = [
     { pid: 10, command: `node scripts/measure-host-allocations.mjs --sok /s --config-dir ${configDir} --trace 1` },
-    { pid: 11, command: `/app/target/release/mygo/soksak.app/Contents/MacOS/soksak-mygo --config-dir ${configDir}` },
+    { pid: 11, command: `/app/target/release/mygo/soksak.app/Contents/MacOS/sok-mygo --config-dir ${configDir}` },
     { pid: 12, command: `${configDir}/sidecars/pty/0.0.1/pty --config-dir ${configDir}` },
-    { pid: 13, command: "/app/target/release/wailsv3/soksak.app/Contents/MacOS/soksak-wailsv3 --config-dir /other" },
+    { pid: 13, command: "/app/target/release/wailsv3/soksak.app/Contents/MacOS/sok-wailsv3 --config-dir /other" },
   ];
   const calls = [];
   const run = async (command, params) => {

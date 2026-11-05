@@ -6,7 +6,7 @@
 // opens the document in a new page process (docs/spec/native-host.md), so the last step also records whether the process of the start still exists
 // (startProcessAlive). A window whose host.window reports pageProcess null has no main page, which is the window of the mygo host, and the
 // measurement fails with "the mygo host has no main page" at its first step.
-// `make page-memory` runs it.
+// `make measure-page-memory` runs it.
 //
 //   node scripts/measure-page-memory.mjs --sok PATH --config-dir DIR [--idle-minutes N] [--reloads N]
 import { execFileSync } from "node:child_process";

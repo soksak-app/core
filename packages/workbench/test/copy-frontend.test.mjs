@@ -10,7 +10,7 @@ import { JSDOM } from "jsdom";
 import { PAGE_IMPORTS, VIEW_IMPORTS, VIEW_IMPORTS_FILE, importSpecifiers, pageImports, viewImports } from "@soksak/plugin-api";
 import { STAGED, missingPageReferences, pageReferences } from "../staged.js";
 
-const STAGE = fileURLToPath(new URL("../stage.mjs", import.meta.url));
+const STAGE = fileURLToPath(new URL("../copy-frontend.mjs", import.meta.url));
 const OBSERVE = fileURLToPath(new URL("../observe.js", import.meta.url));
 const RELEASE_DIAGNOSTICS = fileURLToPath(new URL("../release-diagnostics.js", import.meta.url));
 
@@ -314,7 +314,7 @@ function workbenchWithout(t, file) {
 test("staging fails on a page that reaches a file that is not staged, and names the file", (t) => {
   const app = fixtureApp(t);
   const workbench = workbenchWithout(t, "head-fit.js");
-  const run = spawnSync(process.execPath, [join(workbench, "stage.mjs"), "out"], { cwd: app, encoding: "utf8" });
+  const run = spawnSync(process.execPath, [join(workbench, "copy-frontend.mjs"), "out"], { cwd: app, encoding: "utf8" });
   assert.notEqual(run.status, 0, "staging succeeded without a file that a page reaches");
   assert.match(run.stderr, /plane\.js imports \.\/head-fit\.js, which is not staged/);
 });

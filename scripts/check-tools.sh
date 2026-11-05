@@ -2,7 +2,7 @@
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-[ "$#" -eq 0 ] || { echo 'BUILD_DECLARATION_INVALID: usage: check-build-environment.sh' >&2; exit 78; }
+[ "$#" -eq 0 ] || { echo 'BUILD_DECLARATION_INVALID: usage: check-tools.sh' >&2; exit 78; }
 # Each fact has one owner. .node-version holds the Node version that CI installs,
 # the packageManager field holds the pnpm version that CI installs, and pnpm-lock.yaml
 # holds the dependencies. A build needs the major version of each tool, so only the major version is compared. engines.node of package.json sets the range that a consumer must satisfy,

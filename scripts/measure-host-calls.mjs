@@ -11,7 +11,7 @@
 // evaluated the events that were sent before it (phase "events"), and the summary {events, rounds, perEvent: {beforeCollect, afterCollect}} is the mean growth per event. The idle interval waits for no event, so it is set by duration. The JavaScript heap of WebKit is allocated in WebKit malloc, while the
 // total footprint also moves with graphics memory of the window that the calls do not cause. It measures the first ready window and makes no judgment. A window
 // whose host.window reports pageProcess null has no main page, which is the window of the mygo host, and the measurement fails with
-// "the mygo host has no main page" before its first request. `make host-calls` runs it.
+// "the mygo host has no main page" before its first request. `make measure-host-calls` runs it.
 //
 //   node scripts/measure-host-calls.mjs --sok PATH --config-dir DIR [--calls N | --idle-minutes M | --events N] [--rounds N]
 import { execFileSync } from "node:child_process";

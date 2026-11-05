@@ -58,7 +58,7 @@ test("the activation target builds and runs its cases through the native test ru
     "-C",
     darwin.pathname,
     `BUILD=${buildDir}`,
-    "e2e-activation",
+    "test-app-activation",
   ], { encoding: "utf8" });
   const lines = output.split("\n");
   const runnerLines = lines.filter((line) => line.includes("native-tests.mjs"));

@@ -5,7 +5,7 @@
 	<key>CFBundleIdentifier</key>
 	<string>app.soksak.mygo</string>
 	<key>CFBundleExecutable</key>
-	<string>soksak-mygo</string>
+	<string>sok-mygo</string>
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
 	<key>CFBundleName</key>

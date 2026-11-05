@@ -9,7 +9,7 @@
 // and would add its own cost to each frame. It prints the CPU time of each process, its CPU milliseconds per presented frame and the presented
 // frames per second, and closes the project window afterwards. It also prints the CPU time of the window server over the interval, which
 // draws the whole screen and belongs to no application, so it stays outside the sums of the application and the B3 record. Every error is
-// printed to stderr, and the exit status is 1 when an error occurred. `make terminal-redraw-usage` runs it.
+// printed to stderr, and the exit status is 1 when an error occurred. `make measure-terminal-redraw` runs it.
 //
 // --b3-out FILE writes the B3 output of a measurement without an error to FILE through writeB3Out of scripts/b3-out.mjs, with the
 // conditions of b3Conditions for the window of the measurement (redrawConditions). The keys, which B3_MEASUREMENTS lists, end in their
@@ -144,10 +144,10 @@ async function readWindowServer() {
   return parseWindowServer(result.stdout);
 }
 
-/** The keys of the measurements of a B3 record of make terminal-redraw-usage. */
+/** The keys of the measurements of a B3 record of make measure-terminal-redraw. */
 export const B3_MEASUREMENTS = Object.freeze(["hostCpuPerFrameMs", "applicationCpuPerFrameMs", "sidecarCpuPerFrameMs", "framesPerSecond", "presentedFrames"]);
 
-/** The measurements of a B3 record of make terminal-redraw-usage (the keys that the header declares) from the frame cost of the region. */
+/** The measurements of a B3 record of make measure-terminal-redraw (the keys that the header declares) from the frame cost of the region. */
 export function redrawMeasurements(cost) {
   const host = cost.rows.find(({ role }) => role === "host");
   if (host === undefined) throw new Error("the measurement has no host row");
