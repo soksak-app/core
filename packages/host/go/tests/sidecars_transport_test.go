@@ -2428,6 +2428,60 @@ func TestTheHelloCarriesTheConfigurationDirectoryAsClient(t *testing.T) {
 	}
 }
 
+// The deadline of the hello ends with its answer: a service may stay silent for longer, and what it sends then arrives.
+func TestAPersistentConnectionHasNoDeadlineAfterItsHello(t *testing.T) {
+	root := t.TempDir()
+	socketDirectory := socketParent(t)
+	socket := filepath.Join(socketDirectory, "s.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	writeHarnessEndpoint(t, root, socket)
+	const deadline = 50 * time.Millisecond
+	silence := 4 * deadline
+	go func() {
+		connection, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer connection.Close()
+		reader := bufio.NewReader(connection)
+		for {
+			line, err := reader.ReadBytes('\n')
+			if err != nil {
+				return
+			}
+			var request map[string]any
+			if json.Unmarshal(line, &request) != nil {
+				return
+			}
+			if request["operation"] == "hello" {
+				io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n")
+				continue
+			}
+			time.Sleep(silence)
+			connection.Write(line)
+		}
+	}()
+	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sidecars.Stop()
+	sidecars.HelloTimeout = deadline
+	owner := &harnessOwner{root: "/silence", seen: make(chan SidecarMessage, 1)}
+	began := time.Now()
+	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	receiveSidecarMessage(t, owner.seen)
+	if elapsed := time.Since(began); elapsed < silence {
+		t.Fatalf("the message arrived after %v, before the silence of %v ended", elapsed, silence)
+	}
+}
+
 // contract: sidecars-transport.stop.leaves-the-close-of-a-replacement-to-the-replacement
 func TestAStopLeavesTheCloseOfAReplacementToTheReplacement(t *testing.T) {
 	root := t.TempDir()

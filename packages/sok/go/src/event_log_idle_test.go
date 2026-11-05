@@ -289,6 +289,22 @@ func TestAFlushThatAStopFindsBehindItIsAnswered(t *testing.T) {
 	}
 }
 
+// A writer that does not answer leaves its caller the deadline, and the error names it.
+func TestAFlushThatGetsNoAnswerReportsItsDeadline(t *testing.T) {
+	useEventLogFilesystemPlatform(t)
+	log, err := StartEventLog(EventLogOptions{
+		Directory: t.TempDir(), Role: "host", Boot: "idle", Layer: "host", Clock: func() uint64 { return 1 },
+		Spawn:       func(string, func()) {},
+		QueueEvents: 64, QueueBytes: 1 << 20, BatchInterval: time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := log.Flush(time.Millisecond); err == nil || !strings.Contains(err.Error(), "within") {
+		t.Fatalf("Flush of a writer that does not answer returned %v", err)
+	}
+}
+
 // A writer that ended cannot answer, and its caller learns that at once and not as a deadline that passed.
 func TestAFlushOfAWriterThatEndedSaysSo(t *testing.T) {
 	log, _, _ := idleLog(t, time.Hour)
