@@ -114,6 +114,8 @@ func (s *Shell) view(surface string) *viewState {
 		view = &viewState{pending: map[uint64]*viewPending{}, events: map[string]bool{}, failures: map[string]bool{}, commands: map[string]bool{},
 			requests: map[uint64]viewAnswer{}, statuses: map[string]string{}, observed: map[string]func(){}}
 		s.surfaces.views[surface] = view
+		// The surface became ready, and no frame needs to follow.
+		s.pushStatuses()
 	}
 	return view
 }
