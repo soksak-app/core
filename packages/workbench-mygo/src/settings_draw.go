@@ -13,7 +13,10 @@ import (
 
 // settingsPane is what the card measures from its metrics.
 type settingsPane struct {
-	navW, headH, rowNameW, rowH, gap float32
+	navW, navGap, navPadY, navPadX, navItemPadY, navItemPadX, navMarkInset, navMarkW, navMarkR float32
+	headH, headGap, headPadStart, headPadEnd                                                   float32
+	shadowY, shadowBlur, shadowAlpha                                                           float32
+	rowNameW, rowH, gap                                                                        float32
 }
 
 func (s *Shell) readSettingsPane() settingsPane {
@@ -21,7 +24,14 @@ func (s *Shell) readSettingsPane() settingsPane {
 		value, _ := s.options.Declared.Metric(name)
 		return float32(value)
 	}
-	return settingsPane{navW: metric("set-nav-w"), headH: metric("set-card-head-h"), rowNameW: metric("set-row-name-w"), rowH: metric("set-row-h"), gap: metric("set-group-gap")}
+	return settingsPane{
+		navW: metric("set-nav-w"), navGap: metric("set-nav-gap"), navPadY: metric("set-nav-pad-y"), navPadX: metric("set-nav-pad-x"),
+		navItemPadY: metric("set-nav-item-pad-y"), navItemPadX: metric("set-nav-item-pad-x"),
+		navMarkInset: metric("set-nav-mark-inset"), navMarkW: metric("set-nav-mark-w"), navMarkR: metric("set-nav-mark-r"),
+		headH: metric("set-card-head-h"), headGap: metric("set-card-head-gap"), headPadStart: metric("set-card-head-pad-start"), headPadEnd: metric("set-card-head-pad-end"),
+		shadowY: metric("set-card-shadow-y"), shadowBlur: metric("set-card-shadow-blur"), shadowAlpha: metric("set-card-shadow-alpha"),
+		rowNameW: metric("set-row-name-w"), rowH: metric("set-row-h"), gap: metric("set-group-gap"),
+	}
 }
 
 // drawSettings draws the scrim and the card over a window of width and height.
@@ -50,11 +60,14 @@ func (s *Shell) drawSettings(c *ui.Context, width, height float32) {
 			// The card takes the focus of the dialog, so a key presses no control before Tab or a press reaches one.
 			card.Focusable().FocusRing(false)
 			card.Absolute().Left(float32(x)).Top(float32(y)).Size(float32(cardW), float32(cardH)).Column().Background(s.palette.Card).
-				Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.palette.Radius).Clip().Role(ui.RoleDialog).Label(settingsName).Children(func() {
-				s.drawSettingsHead(c, model, float32(cardW), pane)
-				ui.Row(c).Height(float32(cardH) - pane.headH).FillWidth().Children(func() {
+				Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.radiusMiddle()).Clip().Shadow(0, pane.shadowY, pane.shadowBlur, 0, ui.RGBA(0, 0, 0, pane.shadowAlpha)).
+				Role(ui.RoleDialog).Label(settingsName).Children(func() {
+				// The border of the card takes its width and height from the content.
+				border := 2 * s.palette.BorderWidth
+				s.drawSettingsHead(c, model, float32(cardW)-border, pane)
+				ui.Row(c).Height(float32(cardH) - border - pane.headH).FillWidth().Children(func() {
 					s.drawSettingsNav(c, model, pane)
-					s.drawSettingsBody(c, model, float32(cardW)-pane.navW, pane)
+					s.drawSettingsBody(c, model, float32(cardW)-border-pane.navW, pane)
 				})
 			})
 		})
@@ -67,23 +80,47 @@ func (s *Shell) exposedBox(c *ui.Context, name, command, item string) ui.Element
 }
 
 func (s *Shell) drawSettingsHead(c *ui.Context, model *settingsModel, width float32, pane settingsPane) {
-	ui.Row(c).Size(width, pane.headH).PaddingX(16).AlignItems(ui.Center).BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.Rule).Children(func() {
+	ui.Row(c).Size(width, pane.headH).Padding(0, pane.headPadEnd, 0, pane.headPadStart).Gap(pane.headGap).AlignItems(ui.Center).
+		BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.Edge).Children(func() {
 		grip := s.exposedBox(c, "core.settings-modal.grip", "core.settings-modal.move", "")
 		grip.Grow(1).FillHeight().AlignItems(ui.Center).Row().Cursor(ui.CursorGrab).Role(ui.RoleGroup).Label(settingsName).Children(func() {
-			ui.Text(c, settingsName).FontSize(13)
+			ui.Text(c, settingsName).FontSize(s.textControl()).TextColor(s.palette.Fg)
 		})
 		if dx, dy, pressed := grip.Dragged(); pressed && (dx != 0 || dy != 0) {
 			s.binder.run("core.settings-modal.move", windowParam{DX: float64(dx), DY: float64(dy)})
 		}
-		s.drawButton(c, model.close)
+		closing := model.close
+		s.drawAct(c, s.binder.Press(c, closing.Name, closing.Command.Name, closing.item(), closing.Command.Params), closing.Label, "close", false, 1)
 	})
 }
 
 func (s *Shell) drawSettingsNav(c *ui.Context, model *settingsModel, pane settingsPane) {
-	ui.Column(c).Width(pane.navW).FillHeight().Gap(2).Padding(10, 8).BorderWidth(0, s.palette.BorderWidth, 0, 0).BorderColor(s.palette.Rule).Children(func() {
+	ui.Column(c).Width(pane.navW).FillHeight().Gap(pane.navGap).Padding(pane.navPadY, pane.navPadX).BorderWidth(0, s.palette.BorderWidth, 0, 0).BorderColor(s.palette.Edge).Children(func() {
 		for _, control := range model.nav {
-			s.drawButton(c, control)
+			s.drawSettingsNavItem(c, control, pane)
 		}
+	})
+}
+
+// drawSettingsNavItem draws a section of the window, the .set-nav of packages/workbench/app.css: the shown section has a mark on its left.
+func (s *Shell) drawSettingsNavItem(c *ui.Context, control *SettingsControl, pane settingsPane) {
+	on := control.On != nil && *control.On
+	button := s.binder.Press(c, control.Name, control.Command.Name, control.item(), control.Command.Params)
+	button.FillWidth().Padding(pane.navItemPadY, pane.navItemPadX).Radius(s.radiusSmall()).Row().Justify(ui.Start).AlignItems(ui.Center).Label(control.Label)
+	color := s.palette.Muted
+	if button.Hovered() {
+		color = s.palette.Fg
+		button.Background(faded(s.palette.Fg, s.metrics.insetMix))
+	}
+	if on {
+		color = s.palette.Fg
+		button.Background(faded(s.palette.Fg, s.metrics.chipSelMix))
+	}
+	button.Children(func() {
+		if on {
+			ui.Box(c).Absolute().Left(0).Top(pane.navMarkInset).Bottom(pane.navMarkInset).Width(pane.navMarkW).Radius(pane.navMarkR).Background(s.palette.Rail)
+		}
+		ui.Text(c, control.Label).FontSize(s.textControl()).TextColor(color)
 	})
 }
 

@@ -95,9 +95,13 @@ func (s *Shell) drawChromeActs(c *ui.Context, browsing bool) {
 
 // chromeAct draws an icon switch of the chrome bar, the .act of packages/workbench/app.css.
 func (s *Shell) chromeAct(c *ui.Context, name, command, title, icon string, on bool, params any) {
+	s.drawAct(c, s.binder.Press(c, name, command, "", params), title, icon, on, float32(s.text.Frame()))
+}
+
+// drawAct draws an icon switch, the .act of packages/workbench/app.css, with its lengths at scale.
+func (s *Shell) drawAct(c *ui.Context, button ui.Element, title, icon string, on bool, scale float32) {
 	m := s.metrics
-	button := s.binder.Press(c, name, command, "", params)
-	button.Size(s.frameLength(m.actW), s.frameLength(m.actH)).Shrink(0).Center().Radius(s.radiusSmall()).Label(title).Tooltip(title)
+	button.Size(scale*m.actW, scale*m.actH).Shrink(0).Center().Radius(s.radiusSmall()).Label(title).Tooltip(title)
 	color := s.palette.Muted
 	if button.Hovered() {
 		color = s.palette.Fg
@@ -108,7 +112,7 @@ func (s *Shell) chromeAct(c *ui.Context, name, command, title, icon string, on b
 	}
 	paint := fmt.Sprintf(`fill="none" stroke="currentColor" stroke-width="%g"`, m.actStroke)
 	button.Children(func() {
-		size := s.frameLength(m.actIcon)
+		size := scale * m.actIcon
 		ui.Icon(c, s.declaredIcon("0 0 24 24", paint, s.options.Declared.Icons[icon])).Size(size, size).TextColor(color)
 	})
 }
