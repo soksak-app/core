@@ -3361,8 +3361,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sok-tauriv2"
+version = "0.0.37"
+dependencies = [
+ "soksak-host-tauriv2",
+ "tauri",
+ "tauri-build",
+]
+
+[[package]]
 name = "soksak-host-tauriv2"
-version = "0.0.36"
+version = "0.0.37"
 dependencies = [
  "base64 0.22.1",
  "block2",
@@ -3391,7 +3400,7 @@ dependencies = [
 
 [[package]]
 name = "soksak-sok-tauriv2"
-version = "0.0.36"
+version = "0.0.37"
 dependencies = [
  "flate2",
  "libc",
@@ -3407,15 +3416,6 @@ dependencies = [
  "signal-hook",
  "tar",
  "ureq",
-]
-
-[[package]]
-name = "sok-tauriv2"
-version = "0.0.36"
-dependencies = [
- "soksak-host-tauriv2",
- "tauri",
- "tauri-build",
 ]
 
 [[package]]
