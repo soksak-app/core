@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F461: release candidate는 0.0.35입니다.
 - F460: `.gitignore`가 local 출력 폴더 `/build/`를 지정합니다.
 - F459: run start listener를 끝내는 optional call이 사유를 밝힙니다.
 - F458: view drag의 cadence와 convergence 한도는 35 ms이고, cadence interval은 source time range의 중간을 읽습니다.

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F461: The release candidate is 0.0.35.
 - F460: `.gitignore` names the local output folder `/build/`.
 - F459: The optional call that ends the run start listener states its reason.
 - F458: The cadence and convergence limit of a view drag is 35 ms, and a cadence interval reads the middle of a source time range.
