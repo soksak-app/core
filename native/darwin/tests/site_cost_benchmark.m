@@ -246,7 +246,7 @@ typedef struct {
 // Opens a region at the margins and starts the load of the address. Returns the time of the load request.
 static Region openRegion(const char *site, NSString *step, void *surface, NSString *directory, const double margins[4], BOOL streams,
     NSString *address, double *requested) {
-    Region region = { sp_document_create(surface, directory.fileSystemRepresentation, NULL, NULL, NULL, documentChanged, NULL), nil };
+    Region region = { sp_document_create(surface, directory.fileSystemRepresentation, NULL, NULL, NULL, NULL, documentChanged, NULL), nil };
     if (!region.document) failStep(site, step, @"a document view is not created inside the surface");
     region.view = (WKWebView *)region.document;
     sp_document_place(region.document, margins[0], margins[1], margins[2], margins[3], true);

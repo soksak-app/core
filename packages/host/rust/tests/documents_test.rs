@@ -21,6 +21,19 @@ fn key(surface: &str, name: &str) -> Key {
     (surface.to_string(), name.to_string())
 }
 
+// contract: document.process-label
+#[test]
+fn the_process_label_names_the_plugin_and_the_region() {
+    assert_eq!(
+        soksak_host::documents::process_label("hwp", ""),
+        "soksak://plugin/hwp"
+    );
+    assert_eq!(
+        soksak_host::documents::process_label("hwp", "studio"),
+        "soksak://plugin/hwp/studio"
+    );
+}
+
 // contract: documents.request.accepts-own-surface, documents.request.rejects-foreign-or-missing-caller, documents.request.rejects-invalid-names
 #[test]
 fn document_requests_belong_to_the_calling_surface() {

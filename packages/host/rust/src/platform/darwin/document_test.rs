@@ -16,7 +16,7 @@ fn create_reports_the_native_cause() {
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let cause = CString::new("cannot create the data store directory /probe: test fault").unwrap();
     unsafe { sp_document_fail_creation_for_test(cause.as_ptr()) };
-    let error = match create(0, "/probe", "", "probe", None, Box::new(|_| {})) {
+    let error = match create(0, "/probe", "", "probe", "", None, Box::new(|_| {})) {
         Ok(_) => panic!("a creation that the native layer fails returned a handle"),
         Err(error) => error,
     };
@@ -36,7 +36,7 @@ fn create_reports_a_missing_native_cause() {
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let cause = CString::new("").unwrap();
     unsafe { sp_document_fail_creation_for_test(cause.as_ptr()) };
-    let error = match create(0, "/probe", "", "probe", None, Box::new(|_| {})) {
+    let error = match create(0, "/probe", "", "probe", "", None, Box::new(|_| {})) {
         Ok(_) => panic!("a creation that the native layer fails returned a handle"),
         Err(error) => error,
     };

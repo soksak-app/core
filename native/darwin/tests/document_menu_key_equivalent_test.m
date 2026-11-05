@@ -54,7 +54,7 @@ int main(void) { @autoreleasepool {
 
     NSString *temporary = temporaryFolder(@"soksak-document-menu-key-equivalent-");
     NSString *store = [temporary stringByAppendingPathComponent:@"store"];
-    void *document = sp_document_create(surface, store.fileSystemRepresentation, NULL, NULL, NULL, changed, NULL);
+    void *document = sp_document_create(surface, store.fileSystemRepresentation, NULL, NULL, NULL, NULL, changed, NULL);
     check(document != NULL, @"the document view is created");
 
     MenuActionSpy *spy = [MenuActionSpy new];

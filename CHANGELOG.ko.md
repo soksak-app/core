@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F502-12: document region의 WebContent process 표시 이름이 `soksak://plugin/<plugin id>/<region>`이 되어 활성 상태 보기와 `lsappinfo`에서 어느 plugin의 어느 region인지 보인다. 지금까지는 view만 자기 이름이 있었고 region은 앱 이름으로 보였다. Host가 이름을 만들고 `sp_document_create`가 받는다.
 - F502-23: mygo workbench 가 `diagnostics.layout.fail` 에 답한다. 다음 surface 배치가 `diagnostic layout fault` 로 한 번 실패하고, workbench 는 그 실패를 보여 준 뒤 계속 요청에 답한다.
 - F544: release가 뒤따르는 키보드 이동을 멈추지 않는다. image region이 있는 surface를 클릭한 직후에도 키보드가 다음 release를 기다리지 않고 옮겨진다.
 - F539: `sok input pointer`가 사람처럼 이동한다. 좌표를 포함하는 모든 추적 영역이 이동과 진입, 이탈을 듣고, key window의 press는 그 좌표로 먼저 이동한다.

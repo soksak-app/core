@@ -475,6 +475,7 @@ pub trait Platform: CoreRootHost + Send + Sync {
         store: &str,
         folder: &str,
         plugin: &str,
+        label: &str,
         channel: Option<&str>,
         changed: Box<dyn Fn(String)>,
     ) -> Result<Handle, String>;

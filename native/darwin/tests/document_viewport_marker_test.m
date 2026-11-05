@@ -145,7 +145,7 @@ int main(void) { @autoreleasepool {
     if (!captureFolder.length) captureFolder = temporary;
     [[NSFileManager defaultManager] createDirectoryAtPath:captureFolder withIntermediateDirectories:YES attributes:nil error:nil];
     NSString *store = [temporary stringByAppendingPathComponent:@"store"];
-    void *document = sp_document_create(surface, store.fileSystemRepresentation, NULL, NULL, NULL, changed, NULL);
+    void *document = sp_document_create(surface, store.fileSystemRepresentation, NULL, NULL, NULL, NULL, changed, NULL);
     check(document != NULL, @"the test creates an attached document region");
     if (!document) return 1;
     sp_document_place(document, 60, 60, 360, 270, true);

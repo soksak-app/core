@@ -306,7 +306,7 @@ func (s *Surfaces) attachDocument(viewID uint64, req DocumentRequest) error {
 		if err != nil {
 			return
 		}
-		handle, err = system.CreateDocument(view.handle, filepath.Join(s.host.configDir, documentData), folder, plugin, "", func(state string) {
+		handle, err = system.CreateDocument(view.handle, filepath.Join(s.host.configDir, documentData), folder, plugin, ProcessLabel(plugin, key.Name), "", func(state string) {
 			s.documentChanged(key, state)
 		})
 		if err != nil {
@@ -403,6 +403,15 @@ func configureSteps(document unsafe.Pointer, setup documentSetup) error {
 // cannot collide with a region, and the view closes with the other documents of its surface.
 const viewRegionName = ""
 
+// ProcessLabel returns the display label of the WebContent process of the view (region viewRegionName) or the document region of
+// plugin (docs/spec/plugin-processes.md#operating-system-display-labels).
+func ProcessLabel(plugin, region string) string {
+	if region == viewRegionName {
+		return "soksak://plugin/" + plugin
+	}
+	return "soksak://plugin/" + plugin + "/" + region
+}
+
 // attachView creates the view web view of a view surface with the view configuration (isView) and loads soksak://<plugin>/<page> into it.
 // The view state is not reported by this step. It runs on the UI thread.
 func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, directory, folder, plugin, page, channel string, start ViewStart) error {
@@ -416,7 +425,7 @@ func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, director
 		return fmt.Errorf("view of surface %q cannot start: %w", surfaceID, err)
 	}
 	var handle unsafe.Pointer
-	handle, err = system.CreateDocument(surface, directory, folder, plugin, channel, func(state string) {
+	handle, err = system.CreateDocument(surface, directory, folder, plugin, ProcessLabel(plugin, viewRegionName), channel, func(state string) {
 		if !s.documents.currentView(surfaceID, handle, generation) {
 			s.traceStaleViewCallback(surfaceID, "state")
 			return

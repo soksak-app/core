@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F502-12: The WebContent process of a document region has the display label `soksak://plugin/<plugin id>/<region>`, so Activity Monitor and `lsappinfo` show which plugin and region it belongs to. Before, only a view had a label of its own and a region showed the name of the application. The host composes the label and `sp_document_create` receives it.
 - F502-23: The mygo workbench answers `diagnostics.layout.fail`: its next placement of the surfaces fails once with `diagnostic layout fault`, and the workbench shows that failure and goes on answering.
 - F544: a release no longer stops a later keyboard move: right after a click in a surface with an image region, the keyboard moves without waiting for the next release.
 - F539: `sok input pointer` moves as a person moves: every tracking area that holds the point hears the move, its enter and its exit, and a press in the key window moves there first.

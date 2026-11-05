@@ -1413,6 +1413,16 @@ impl ViewChannels {
 /// region, and the view closes with the other documents of its surface.
 pub(crate) const VIEW_NAME: &str = "";
 
+/// Returns the display label of the WebContent process of the view (region `VIEW_NAME`) or the document region of `plugin`
+/// (docs/spec/plugin-processes.md#operating-system-display-labels).
+pub fn process_label(plugin: &str, region: &str) -> String {
+    if region == VIEW_NAME {
+        format!("soksak://plugin/{plugin}")
+    } else {
+        format!("soksak://plugin/{plugin}/{region}")
+    }
+}
+
 /// Creates the view web view of a view surface, with the view configuration (`view` is true), configures it and loads
 /// soksak://<plugin>/<page> into it. When the configuration or the load does not succeed, the view is closed before the error
 /// returns, and a failed close is reported with the failure. create, configure, load and close are the platform operations, and
@@ -1637,6 +1647,7 @@ fn attach_view(
                 directory,
                 &folder,
                 plugin,
+                &process_label(plugin, VIEW_NAME),
                 Some(channel),
                 Box::new(move |state: String| {
                     view_state(&state_window, &state_surface, &state_origin, &state)
@@ -2510,8 +2521,9 @@ fn create(
             .to_string();
         // Every step that can fail without the document runs before its creation, so configure_document is the only step after it.
         let dark = crate::theme::is_dark(&host)?;
-        let handle =
-            platform.create_document(surface, directory, &folder, &plugin, None, changed)?;
+        let label = process_label(&plugin, &name);
+        let handle = platform
+            .create_document(surface, directory, &folder, &plugin, &label, None, changed)?;
         let message_host = host.clone();
         let message_surface = surface_id.clone();
         let message_document = name.clone();

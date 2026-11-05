@@ -182,6 +182,7 @@ pub fn create_document(
     _store: &str,
     _folder: &str,
     _plugin: &str,
+    _label: &str,
     _channel: Option<&str>,
     _changed: Box<dyn Fn(String)>,
 ) -> Result<Handle, String> {

@@ -12,7 +12,7 @@ Plugin 코드는 workbench 페이지 밖에서 실행된다. 각 plugin view는 
 
 ## 운영체제 표시 이름
 
-Plugin view의 WebContent process는 `soksak://plugin/<plugin id>` 표시 이름을 사용한다. 이 이름은 view의 WebKit process configuration에 설정하며, 분리된 `soksak://<plugin id>` origin을 바꾸거나 접근 권한을 주거나 요청을 라우팅하지 않는다. Plugin 식별자는 view 선언에서 가져온다. 이 private WebKit 설정은 configuration별이므로 식별자가 다른 plugin의 configuration은 WebContent process를 공유하면 안 된다. 한 process에는 표시 이름 하나만 설정할 수 있기 때문이다.
+Plugin view의 WebContent process는 `soksak://plugin/<plugin id>` 표시 이름을 사용하고, document region의 WebContent process는 `soksak://plugin/<plugin id>/<region>`을 사용한다. `<region>`은 manifest가 그 region에 선언한 이름이다. Host가 이 이름을 만들어 web view의 WebKit process configuration에 설정하며, 분리된 `soksak://<plugin id>` origin을 바꾸거나 접근 권한을 주거나 요청을 라우팅하지 않는다. Plugin 식별자는 view 선언에서 가져온다. 이 private WebKit 설정은 configuration별이므로 이름이 다른 configuration은 WebContent process를 공유하면 안 된다. 한 process에는 표시 이름 하나만 설정할 수 있기 때문이다.
 
 ## 근거
 

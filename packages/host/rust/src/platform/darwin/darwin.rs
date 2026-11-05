@@ -307,10 +307,11 @@ impl Platform for Darwin {
         store: &str,
         folder: &str,
         plugin: &str,
+        label: &str,
         channel: Option<&str>,
         changed: Box<dyn Fn(String)>,
     ) -> Result<Handle, String> {
-        document::create(surface, store, folder, plugin, channel, changed)
+        document::create(surface, store, folder, plugin, label, channel, changed)
     }
     fn set_view_message(
         &self,

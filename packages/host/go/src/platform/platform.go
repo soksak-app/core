@@ -427,7 +427,8 @@ type Platform interface {
 	// soksak://<plugin>/<path> from folder (docs/spec/native-surfaces.md#document-regions). channel is empty for a document region.
 	// A view surface passes the text of the view channel script, and its configuration is the only one that serves the core
 	// root and runs the script (docs/spec/native-surfaces.md#view-surfaces).
-	CreateDocument(surface unsafe.Pointer, directory, folder, plugin, channel string, changed func(state string)) (unsafe.Pointer, error)
+	// label is the display label of the WebContent process (docs/spec/plugin-processes.md#operating-system-display-labels).
+	CreateDocument(surface unsafe.Pointer, directory, folder, plugin, label, channel string, changed func(state string)) (unsafe.Pointer, error)
 	// SetViewMessage receives {"message": value} for each message of the sok-view handler of a view, and {"error": reason} for a
 	// message from another frame. It must be set before the view loads a page.
 	SetViewMessage(document unsafe.Pointer, message func(value string)) error
