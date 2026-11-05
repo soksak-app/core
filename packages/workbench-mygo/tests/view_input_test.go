@@ -20,6 +20,35 @@ func TestViewCallFollowsTheTextScale(t *testing.T) {
 	}
 }
 
+// The view of a hidden space stays out of the layout: it keeps the scale that it has and follows the layout again when its space returns.
+func TestAViewOfAHiddenSpaceKeepsItsTextScale(t *testing.T) {
+	f, stored := surfaceShell(t)
+	surfaces := []string{}
+	for surface := range stored.lastSurfaces(t) {
+		surfaces = append(surfaces, surface)
+		if reply := viewCall(t, f, stored, surface, "runtime.textSize.on", nil); reply["error"] != nil {
+			t.Fatalf("the reply is %v", reply)
+		}
+	}
+	first := f.host.projects[0]["activeSpaceId"].(string)
+	f.run("core.space.add", nil)
+	f.run("core.text.larger", nil)
+	f.settle()
+	if pushed := strings.Join(stored.hostName, "\n"); strings.Contains(pushed, `"event":"textSize"`) {
+		t.Fatalf("a view of a hidden space received %s", pushed)
+	}
+	reply := viewCall(t, f, stored, surfaces[0], "runtime.textSize.read", nil)
+	if reply["error"] != nil || reply["result"] != 1.0 {
+		t.Fatalf("a view of a hidden space reads %v", reply)
+	}
+	f.run("core.space.activate", map[string]string{"id": first})
+	f.run("core.text.larger", nil)
+	f.settle()
+	if pushed := strings.Join(stored.hostName, "\n"); strings.Count(pushed, `"event":"textSize"`) != 1 {
+		t.Fatalf("back in the plane the views received %s", pushed)
+	}
+}
+
 func TestViewCallClipboardReadsAndWritesText(t *testing.T) {
 	f, stored := surfaceShell(t)
 	surface := anySurface(t, stored)

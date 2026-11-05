@@ -159,6 +159,8 @@ type heldSurface struct {
 	section *sectionStart
 	// declared tells that the host took its composition.
 	declared bool
+	// scale is the text scale of the last read in the layout. A surface of a hidden space keeps it until its space returns.
+	scale float64
 }
 
 // sectionStart is the start value section of a section surface. A section of a window sidebar has no card.
@@ -314,6 +316,9 @@ func (s *Shell) standSurface(c *ui.Context, surface *heldSurface, box layout.Rec
 	if s.surfaces.held[id] == nil {
 		project := s.opened()
 		surface.project = projectStart{ID: project.ID, Root: project.Root}
+		if card := s.cardOfTab(id); card != "" {
+			surface.scale = s.text.Effective(card)
+		}
 		s.surfaces.held[id] = surface
 		s.surfaces.order = append(s.surfaces.order, id)
 	}

@@ -830,16 +830,25 @@ func (s *Shell) viewSettings(unit *installedUnit) map[string]any {
 	return values
 }
 
-// surfaceTextSize returns the text scale of the surface: the frame factor multiplied by the factor of its card.
+// surfaceTextSize returns the text scale of the surface: the frame factor multiplied by the factor of its card. A surface whose tab is not in the
+// shown plane stands in a hidden space, so it keeps the scale that it had.
 func (s *Shell) surfaceTextSize(surface string) (float64, error) {
-	if held := s.surfaces.held[surface]; held != nil && held.section != nil {
+	held := s.surfaces.held[surface]
+	if held != nil && held.section != nil {
 		return s.text.Frame(), nil
 	}
 	card := s.cardOfTab(surface)
 	if card == "" {
+		if held != nil && held.scale != 0 {
+			return held.scale, nil
+		}
 		return 0, fmt.Errorf("surface %s is not in the layout", surface)
 	}
-	return s.text.Effective(card), nil
+	scale := s.text.Effective(card)
+	if held != nil {
+		held.scale = scale
+	}
+	return scale, nil
 }
 
 // readTabState returns the value of the state of the tab: null without one, and a state of another format is refused.
