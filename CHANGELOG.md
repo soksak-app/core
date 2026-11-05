@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F502-16: A window of the Wails host has the size that it was asked for, and its web view has the size of its content, so the page shows its last rows and a native view stands on the page. The Wails modules read a local checkout of the fork until F592 publishes it.
 - F590: `IDLE=1` waits after its last request until the counts of the gate that the preparation left are written, and only then takes the first CPU reading, because those writes are no cost of the settled state. It prints the records written over the CPU interval. The bounds of G2 are unchanged. Red: `measure-app-usage.test.mjs` found no wait between the marks and the first CPU reading.
 - F591: A window that closes no longer logs `window on screen: the window is gone`.
 - F589: A press and a release that wait for a layout reach every event monitor once, and a release that waits longer than a second no longer reports that its receipt did not arrive.
