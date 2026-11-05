@@ -17,6 +17,7 @@ pub fn set_log_policy_watch_hook(hook: Option<LogPolicyWatchHook>) {
     *HOOK.lock().unwrap_or_else(PoisonError::into_inner) = hook;
 }
 
+#[cfg(any(target_os = "macos", test))]
 pub(crate) fn observe(watched: &[PathBuf]) {
     if let Some(hook) = HOOK
         .lock()

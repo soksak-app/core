@@ -136,6 +136,7 @@ impl tauri::Assets<tauri::Wry> for PageAssets {
 }
 
 /// The web view handle of a Tauri web view.
+#[cfg(target_os = "macos")]
 fn webview_of(app: &AppHandle, webview: &tauri::Webview) -> soksak_host::framework::Webview {
     app.webview_of(Arc::new(Frontend::new(webview.window())), webview.label())
 }
@@ -211,10 +212,11 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
         }
     };
     let scheme_app = app.clone();
+    #[cfg(target_os = "macos")]
     let terminated_app = app.clone();
     let setup_app = app.clone();
     let menu_app = app.clone();
-    builder
+    let builder = builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_deep_link::init())
         .manage(app.clone())
@@ -230,10 +232,13 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 context.webview_label(),
                 &mut |webview| soksak_host::start::start_page(&scheme_app, webview),
             )
-        })
-        .on_web_content_process_terminate(move |webview| {
-            soksak_host::web_content_process_terminated(&webview_of(&terminated_app, webview))
-        })
+        });
+    // Tauri offers this hook only on macOS and iOS.
+    #[cfg(target_os = "macos")]
+    let builder = builder.on_web_content_process_terminate(move |webview| {
+        soksak_host::web_content_process_terminated(&webview_of(&terminated_app, webview))
+    });
+    builder
         .setup(move |tauri_app| {
             let deep = tauri_app.handle().clone();
             soksak_host::startup::exit_on_failure(soksak_host::setup(

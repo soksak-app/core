@@ -1,6 +1,6 @@
 //! The Windows implementation.
 //!
-//! It implements directory identification. The other functions, including the local endpoint (named pipe), return a
+//! It implements directory identification, the pointer and key input of a WebView2 and, with the diagnostics feature, its still capture. The other functions, including the local endpoint (named pipe), return a
 //! "not implemented on windows" error from unsupported.
 
 use std::fs::Metadata;
@@ -24,6 +24,11 @@ use super::{
 mod identity;
 #[path = "unsupported.rs"]
 mod unsupported;
+#[cfg(feature = "diagnostics")]
+#[path = "webview_capture.rs"]
+mod webview_capture;
+#[path = "webview_input.rs"]
+mod webview_input;
 
 /// The Windows platform implementation.
 pub struct Windows;
@@ -92,7 +97,7 @@ impl Platform for Windows {
     }
     #[cfg(feature = "diagnostics")]
     fn window_numbers(&self, window: &Window) -> Result<Vec<isize>, String> {
-        unsupported::window_numbers(window)
+        webview_capture::window_numbers(window)
     }
     fn hit(&self, window: Handle, x: f64, y: f64) -> Result<Hit, String> {
         unsupported::hit(window, x, y)
@@ -435,7 +440,7 @@ impl Platform for Windows {
     }
 
     fn register_input(&self, view: &PlatformWebview) -> Result<bool, String> {
-        unsupported::register_input(view)
+        webview_input::register(view)
     }
     fn ignore_page_focus(&self, view: &PlatformWebview) -> Result<bool, String> {
         unsupported::ignore_page_focus(view)
@@ -458,20 +463,20 @@ impl Platform for Windows {
         receive: Duration,
         done: Box<dyn FnOnce(Delivery) + Send>,
     ) -> Result<(), String> {
-        unsupported::input_pointer(window, pointer, receive, done)
+        webview_input::pointer(window, pointer, receive, done)
     }
     fn input_activate(
         &self,
         window: Handle,
-        x: f64,
-        y: f64,
+        _x: f64,
+        _y: f64,
         timeout: Duration,
         done: Box<dyn FnOnce(Result<(), String>) + Send>,
     ) -> Result<(), String> {
-        unsupported::input_activate(window, x, y, timeout, done)
+        webview_input::activate(window, timeout, done)
     }
     fn input_key(&self, window: Handle, key: &Key) -> Result<Delivery, String> {
-        unsupported::input_key(window, key)
+        webview_input::key(window, key)
     }
 
     #[cfg(feature = "diagnostics")]
@@ -533,7 +538,7 @@ impl Platform for Windows {
     }
     #[cfg(feature = "diagnostics")]
     fn capture_still(&self, window_number: isize, path: &str) -> Result<(), String> {
-        unsupported::capture_still(window_number, path)
+        webview_capture::capture_still(window_number, path)
     }
     #[cfg(feature = "diagnostics")]
     fn delivered_notifications(&self, done: Box<dyn FnOnce(String) + Send>) -> Result<(), String> {
@@ -552,7 +557,7 @@ impl Platform for Windows {
     #[cfg(feature = "diagnostics")]
     fn count_page_objects(
         &self,
-        view: super::super::Handle,
+        view: Handle,
         document: bool,
         done: crate::object_counts::PageCountDone,
     ) -> Result<(), String> {
