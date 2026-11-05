@@ -87,6 +87,8 @@
 - F527: `core.settings.change`는 설정의 type을 그 선언에서 정하므로, `applyTrace`, `make app-usage TRACE=0`, `make terminal-redraw-usage TRACE=0`이 `diagnostics.log`를 객체로 설정한다. 컨트롤의 문자열은 설정이 선언한 boolean이나 number가 되고, 다른 type의 값은 -32602와 그 설정의 검사로 실패하며, scope가 없으면 command는 common 값을 설정한다
 - F502-10: framework는 scene을 보여 주는 frame의 결과를 알리고(`Window.AfterPresent`), release build를 포함한 모든 build에서 element tree를 읽으며(`Content.ElementTree`), `WindowOptions.DrawWhileOccluded`로 화면 밖 window의 frame을 그린다. 두 language host library에서 `Frontend` port의 presentation notice는 실패를 전달하고 그 실패는 layout transaction을 취소하며, port의 settled presentation은 platform의 settled wait가 받는 block을 만들어 transaction도 wait도 main web view를 이름으로 부르지 않는다. Wails와 Tauri framework adapter는 Surface layout group의 새 operation `MainPresentation`으로 그 block을 만든다. main-thread audit은 block 호출을 native 함수 호출로 센다.
 - F502-13: exposure kind `dom`은 모든 host와 모든 plugin 선언에서 `element`가 된다: `exposes.element`, `expose.element`, `element.rect`, `element.act`, `sok element`, MCP tool `element_rect`와 `element_act`, `exposure.list`의 member `element`. `exposes.dom`을 가진 manifest는 거부된다. workbench status는 workbench에 대해 정의된다: `core.window.workbench`, `core.workbench.error`, 행이 `{role, expose, command, text}`인 `core.workbench.audit`, responder owner와 `host.hit` kind `workbench`. window check는 `core.window.workbench`의 새 `start`를 기다리고, 각각 `Object.values(APPS)` 또는 `MAIN_PAGE_APPS`를 순회하며, `scripts/check-e2e-host-parity.mjs`가 이를 검사한다.
+- F462: core 0.0.35가 `^0.0.35`를 선언한 plugin release를 설치하고 registry가 이를 나열합니다.
+- F453: release run이 v0.0.35를 게시했고 registry가 이를 나열합니다.
 - F461: release candidate는 0.0.35입니다.
 - F460: `.gitignore`가 local 출력 폴더 `/build/`를 지정합니다.
 - F459: run start listener를 끝내는 optional call이 사유를 밝힙니다.
