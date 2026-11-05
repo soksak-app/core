@@ -311,6 +311,9 @@ func (r *Registry) dispatch(method string, params json.RawMessage, changed Chang
 		return nil, err
 	}
 	if method == "element.rect" {
+		if element.Bounds.W == 0 && element.Bounds.H == 0 {
+			element.Bounds = ui.Rect{} // An element that the window does not show has no place, as the rectangle of a page element under display:none.
+		}
 		return map[string]any{"x": element.Bounds.X, "y": element.Bounds.Y, "width": element.Bounds.W, "height": element.Bounds.H,
 			"zoom": 1, "document": map[string]any{"x": 0, "y": 0}}, nil
 	}

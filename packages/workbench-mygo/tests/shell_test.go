@@ -485,9 +485,10 @@ func exposedNode(nodes []ui.ElementNode, name, item string) (ui.ElementNode, boo
 	return ui.ElementNode{}, false
 }
 
+// has tells whether the window shows the element: an element without a size holds its index and shows nothing.
 func (f *shellFixture) has(name, item string) bool {
-	_, ok := exposedNode(f.tester.ElementTree(), name, item)
-	return ok
+	node, ok := exposedNode(f.tester.ElementTree(), name, item)
+	return ok && (node.Bounds.W > 0 || node.Bounds.H > 0)
 }
 
 // click presses the element with the element name and shows the result.
