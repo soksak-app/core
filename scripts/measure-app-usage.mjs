@@ -18,8 +18,8 @@
 // S11 (S1 with a second project window beside it), S12 (S1 after one layout draw that fails), S14 (S0 10 seconds after one character in the
 // library search) and S15 (S1 with the settings window open). --idle waits for the cursor idle timeout of every tab whose plugin exposes a
 // cursor status (the term and terminal tabs) and then for 3 seconds without a change of frames of host.window, or 3 seconds on a window
-// whose frames is null. --step pointer moves the pointer across the window brought to the front with the HID moves of the real-input tool
-// (e2e/real/hid.mjs, the Accessibility permission required), reads the CPU time over the move and the footprints before and after it, and
+// whose frames is null. --step pointer moves the pointer across the window with the moves of input.pointer, which take no permission and
+// leave the cursor and the key window of the person, reads the CPU time over the move and the footprints before and after it, and
 // repeats the move in the trace state of the frame records (FRAME_RECORDS) to read the U7 records of a window without a main page. The
 // measurement prints occluded, the trace switch, the log policy, the runtime figures of diagnostics.objects and frames and commandBuffers
 // of each window before the first and after the last CPU reading, and requires occluded false in every window, except the covered window of
@@ -32,8 +32,8 @@
 // conditions are those of b3Conditions: the refresh rate and the backing scale that every window reports in host.window, traceState, the
 // diagnostics.performance of the trace state of the CPU interval (true or false), the classes of the log policy in force, and the content
 // size of the window of the state, read before the first CPU reading. One output holds the keys of one trace state, the state of its
-// measured interval: under --step pointer, --trace 0|1 writes the keys of the first move except hitTestP90Ms, and --trace frame-records
-// writes hitTestP90Ms alone, from the repeated move in that state. The keys, which B3_MEASUREMENTS lists for each trace state, end in
+// measured interval: under --step pointer, --trace 0|1 writes the keys of the first move except pointerMoveP90Ms, and --trace frame-records
+// writes pointerMoveP90Ms alone, from the repeated move in that state. The keys, which B3_MEASUREMENTS lists for each trace state, end in
 // their unit:
 //   hostCpuSeconds, applicationCpuSeconds,       CPU seconds over the interval of the host, the application without its sidecars,
 //   sidecarCpuSeconds                            and the sidecars
@@ -47,7 +47,7 @@
 //   frames, commandBuffers                       the change of frames and commandBuffers of host.window over the interval, summed
 //                                                over the windows; absent on a host that reports them null
 //   errorLines                                   the error lines of the layout fault (S12)
-//   hitTestP90Ms                                 the 90th percentile in ms of the hitTest: step with its following step (--step
+//   pointerMoveP90Ms                                 the 90th percentile in ms of the mouseMoved: step with a hitTest: step right before it
 //                                                pointer --trace frame-records on a window without a main page)
 //
 //   node scripts/measure-app-usage.mjs --sok PATH --config-dir DIR [--config-dir DIR ...] --trace 0|1|frame-records [--interval SECONDS]
@@ -63,7 +63,6 @@ import { Session } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEventErrors, untilEventLine } from "@soksak/window-check/event-log.mjs";
 import { readPolicy } from "@soksak/window-check/log-policy.mjs";
 import { launchdServices } from "@soksak/window-check/stall-sample.mjs";
-import { bringFront, post, requireTrusted } from "../e2e/real/hid.mjs";
 import { catalogOf } from "./check-events.mjs";
 import { b3Conditions, writeB3Out } from "./b3-out.mjs";
 import { readFootprint, settledFootprints } from "./footprints.mjs";
@@ -372,9 +371,10 @@ export function faultErrorCount(lines) {
 
 /**
  * The figures of the U7 records of one pointer move over a window without a main page: the frame records, the change of frames of
- * host.window, and the 90th percentile of the `hitTest:` step together with the step of the move that follows it (G8), in milliseconds.
- * The records must be complete (requireCompleteGesture). A nested step, such as the isFlipped that a hitTest: sends, runs inside the step
- * that sends it and is part of its time, so the step that follows a hitTest: step is the next step by entry that no other step contains.
+ * host.window, and the 90th percentile (G8), in milliseconds, of the moves that were delivered. The value of a move is its outermost
+ * `mouseMoved:` step, with the `hitTest:` step right before it when there is one: a move reaches the view through the tracking area and
+ * mostly without a hit test. The records must be complete (requireCompleteGesture). A nested step, such as the isFlipped that a hitTest:
+ * sends, runs inside the step that sends it and is part of its time, so only a step that no other step contains counts.
  */
 export function gestureFigures({ records, dropped, window, framesBefore, framesAfter, fromSeq, toSeq }) {
   const own = requireCompleteGesture({ records, dropped, window, framesBefore, framesAfter, fromSeq, toSeq });
@@ -382,57 +382,60 @@ export function gestureFigures({ records, dropped, window, framesBefore, framesA
   const contains = (outer, inner) => outer !== inner && outer.entryNs <= inner.entryNs && inner.returnNs <= outer.returnNs &&
     (outer.entryNs !== inner.entryNs || outer.returnNs !== inner.returnNs);
   const outermost = steps.filter((step) => !steps.some((other) => contains(other, step))).toSorted((a, b) => (a.entryNs < b.entryNs ? -1 : a.entryNs > b.entryNs ? 1 : 0));
-  const pairs = [];
+  const moves = [];
   outermost.forEach((step, index) => {
-    if (step.callback !== "hitTest:") return;
-    const next = outermost[index + 1];
-    if (next === undefined || next.callback === "hitTest:") throw new Error(`the hitTest: step at seq ${step.seq} of window ${window} has no following step`);
-    pairs.push(step.ms + next.ms);
+    if (step.callback !== "mouseMoved:") return;
+    const before = outermost[index - 1];
+    moves.push(before?.callback === "hitTest:" ? step.ms + before.ms : step.ms);
   });
-  if (pairs.length === 0) throw new Error(`the gesture of window ${window} has no hitTest: step`);
+  if (moves.length === 0) throw new Error(`the gesture of window ${window} has no mouseMoved: step`);
   return {
     frameRecords: own.filter((record) => record.event === U7_EVENTS.frame).length,
     framesChange: framesAfter - framesBefore,
-    pairs: pairs.length,
-    p90Ms: percentile(pairs.toSorted((a, b) => a - b), 0.9),
+    moves: moves.length,
+    p90Ms: percentile(moves.toSorted((a, b) => a - b), 0.9),
   };
 }
 
-/** The HID moves of the pointer step: across the content of the window, from its left edge to its right edge at its middle, in screen points. */
-export function pointerPath({ frame, content }) {
-  const left = frame.x + content.x + 1;
-  const right = frame.x + content.x + content.width - 1;
-  const y = frame.y + content.y + content.height / 2;
-  return Array.from({ length: POINTER_MOVES + 1 }, (_, index) => ({ type: "move", x: left + ((right - left) * index) / POINTER_MOVES, y }));
+/** The moves of the pointer step in the coordinates of input.pointer: across the content of the window, from its left edge to its right edge at its middle. */
+export function pointerPath({ content }) {
+  const left = 1;
+  const right = content.width - 1;
+  const y = content.height / 2;
+  return Array.from({ length: POINTER_MOVES + 1 }, (_, index) => ({ x: left + ((right - left) * index) / POINTER_MOVES, y }));
+}
+
+/** Delivers the moves of path with input.pointer of the window of s, each after the answer of the one before it, without activating it. */
+async function movePointer(s, path) {
+  for (const point of path) await s.request("input.pointer", { ...point, phase: "move" });
 }
 
 /**
- * The pointer step of G2 and G8 in the window of the session s. It fails without the Accessibility permission (hid.requireTrusted),
- * brings the window to the front (hid.bringFront), and measures the HID move across the window (hid.post) with measure({ span }), which reads
- * the settled footprints before and after the span and the CPU time over it. It then sets the trace state of the frame records
- * (frameRecords; FRAME_RECORDS of scripts/measure-trace.mjs), repeats the move and, for a window whose host.window reports pageProcess null, reads its U7 records (tail, records) into
- * gestureFigures, and sets the trace state of the measurement again (restore), also when the step fails. It reads frames after the move
- * before diagnostics.log.flush, so the record of every frame that the change of frames counts is in the files that records reads.
+ * The pointer step of G2 and G8 in the window of the session s. It takes no permission and leaves the window and the cursor of the person
+ * where they are: it measures the moves of input.pointer across the window with measure({ span }), which reads the settled footprints
+ * before and after the span and the CPU time over it. It then sets the trace state of the frame records
+ * (frameRecords; FRAME_RECORDS of scripts/measure-trace.mjs), repeats the move and, for a window whose host.window reports pageProcess null,
+ * reads the U7 records of that move (tail and records), gives them to gestureFigures, and sets the trace state of the measurement again
+ * (restore), also when the step fails. It reads frames after the move before diagnostics.log.flush, so the record of every frame that the
+ * change of frames counts is in the files that records reads.
  */
-export async function measurePointer({ s, app, hid, measure, frameRecords, restore, tail, records }) {
-  hid.requireTrusted();
+export async function measurePointer({ s, measure, frameRecords, restore, tail, records }) {
   const status = await s.get("host.window");
-  await hid.bringFront(s, app, { document: { x: 0, y: 0 }, x: 0, y: 0, width: status.content.width, height: status.content.height });
   const path = pointerPath(status);
-  const move = await measure({ span: async () => { hid.post(path); } });
+  const move = await measure({ span: () => movePointer(s, path) });
   await frameRecords();
   let gesture = null;
   try {
     if (status.pageProcess === null) {
       const { frames: framesBefore } = await s.get("host.window");
       const since = await tail();
-      hid.post(path);
+      await movePointer(s, path);
       const { frames: framesAfter } = await s.get("host.window");
       await s.request("diagnostics.log.flush");
       const read = await records(since);
       gesture = { window: s.window, ...gestureFigures({ ...read, window: s.window, framesBefore, framesAfter }) };
     } else {
-      hid.post(path);
+      await movePointer(s, path);
     }
   } catch (error) {
     try {
@@ -651,8 +654,8 @@ function formatReport({ options, context, measurement, gesture, faultLines, idle
   if (gesture !== undefined) {
     sections.push(gesture === null
       ? "pointer move under the trace state of the frame records: the window has a main page and no U7 records"
-      : `pointer move under the trace state of the frame records, window ${gesture.window}: hitTest: step with the following step p90 ${gesture.p90Ms.toFixed(2)} ms ` +
-        `over ${gesture.pairs} moves, ${gesture.frameRecords} frame records for a change of frames of ${gesture.framesChange}`);
+      : `pointer move under the trace state of the frame records, window ${gesture.window}: mouseMoved: step with a hitTest: step right before it p90 ${gesture.p90Ms.toFixed(2)} ms ` +
+        `over ${gesture.moves} moves, ${gesture.frameRecords} frame records for a change of frames of ${gesture.framesChange}`);
   }
   return sections.join("\n\n");
 }
@@ -666,9 +669,9 @@ const RUN_MEASUREMENTS = Object.freeze([
 
 /**
  * The keys of the B3 output of make app-usage for each trace state that TRACE takes: one output holds the keys of one trace state, and
- * the trace state of the frame records (FRAME_RECORDS, with --step pointer) gives hitTestP90Ms alone.
+ * the trace state of the frame records (FRAME_RECORDS, with --step pointer) gives pointerMoveP90Ms alone.
  */
-export const B3_MEASUREMENTS = Object.freeze({ 0: RUN_MEASUREMENTS, 1: RUN_MEASUREMENTS, [FRAME_RECORDS]: Object.freeze(["hitTestP90Ms"]) });
+export const B3_MEASUREMENTS = Object.freeze({ 0: RUN_MEASUREMENTS, 1: RUN_MEASUREMENTS, [FRAME_RECORDS]: Object.freeze(["pointerMoveP90Ms"]) });
 
 /** The bytes of a KB, the unit of the footprints of a B3 record. */
 const KB = 1024;
@@ -721,7 +724,7 @@ export function usageMeasurements({ app, marks, faultLines, gesture }) {
     if (change !== undefined) measured[name] = change;
   }
   if (faultLines !== undefined) measured.errorLines = faultLines;
-  if (gesture) measured.hitTestP90Ms = gesture.p90Ms;
+  if (gesture) measured.pointerMoveP90Ms = gesture.p90Ms;
   return measured;
 }
 
@@ -1114,7 +1117,7 @@ async function measureOptions(options) {
       const [{ configDir, client, s }] = sessions;
       const pid = client.endpoint.pid;
       const pointer = await measurePointer({
-        s, app: { name: basename(configDir), configDir }, hid: { requireTrusted, bringFront, post },
+        s,
         measure: ({ span }) => measure({ span, settleAfter: true }),
         frameRecords: () => applyTrace((name, params) => s.run(name, params), FRAME_RECORDS, configDir),
         restore: traceOf(sessions[0]),
@@ -1154,8 +1157,8 @@ async function measureOptions(options) {
 
 /**
  * The B3 output {measurements, conditions} of a measurement of make app-usage. One output holds the keys of one trace state, the state of
- * its measured interval: with --step pointer, the trace state 0 or 1 gives the keys of the first move without hitTestP90Ms, and the trace
- * state FRAME_RECORDS gives hitTestP90Ms alone, from the repeated move in that state. The conditions come from b3Conditions of
+ * its measured interval: with --step pointer, the trace state 0 or 1 gives the keys of the first move without pointerMoveP90Ms, and the trace
+ * state FRAME_RECORDS gives pointerMoveP90Ms alone, from the repeated move in that state. The conditions come from b3Conditions of
  * scripts/b3-out.mjs with the window marks of the application before the first CPU reading, which carry the id, the refresh rate, the
  * scale and the content of each window, the diagnostics.performance of the trace state and the classes of the policy in force before
  * that reading.
@@ -1167,9 +1170,9 @@ export function usageOutput({ options, measurement, gesture, faultLines }) {
   let measurements;
   if (options.trace === FRAME_RECORDS) {
     if (gesture === null || gesture === undefined) {
-      throw new Error(`the pointer output under the trace state ${FRAME_RECORDS} is hitTestP90Ms, which a window with a main page has not`);
+      throw new Error(`the pointer output under the trace state ${FRAME_RECORDS} is pointerMoveP90Ms, which a window with a main page has not`);
     }
-    measurements = { hitTestP90Ms: gesture.p90Ms };
+    measurements = { pointerMoveP90Ms: gesture.p90Ms };
   } else {
     measurements = usageMeasurements({ app, marks: { before: before.windows, after: after.windows }, faultLines, gesture: null });
   }

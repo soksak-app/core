@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F588: The value `G8-S1-hit-test-p90` becomes `G8-S1-pointer-move-p90` with the measurement `pointerMoveP90Ms`, with the same bound of 8.33 ms. It is the outermost `mouseMoved:` step of each delivered move with the `hitTest:` step right before it when there is one, because a move reaches the view through the tracking area and mostly without a hit test. `STEP=pointer` delivers its moves with `input.pointer`, so it no longer moves the real cursor, brings the window to the front or needs a permission. Red: the tests of `measure-app-usage.test.mjs` for a record with only `mouseMoved:` steps, a `hitTest:` before a move, a record without a move and the absence of the real-input import.
 - F502-16: A press under a surface whose layout is preparing waits for the commit and reaches the surface. It used to reach the main page, or nothing in a window without one.
 - F585: A terminal whose region shows after a hide of its surface, or in a press, takes the keyboard from its page, and a region that hid with the keyboard takes it back when it shows.
 - F535-3: A count of the gate alone does not write: a writer that sleeps keeps it until the next event, for at most a minute, so a change of the input source in another application no longer costs an idle application a write and an index update each second. Red: `TestACountWaitsForTheNextWrite`, `a_count_waits_for_the_next_write` and the pipe checks of `event_ring_test` found the count written.

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F588: 값 `G8-S1-hit-test-p90`을 측정 `pointerMoveP90Ms`를 쓰는 `G8-S1-pointer-move-p90`으로 바꾼다. 한계 8.33 ms는 그대로다. 이동은 tracking area로 view에 닿고 hit test를 거의 거치지 않으므로, 값은 전달된 이동마다 가장 바깥 `mouseMoved:` step에 바로 앞의 `hitTest:` step이 있으면 더한 시간이다. `STEP=pointer`는 `input.pointer`로 이동을 전달하므로 실제 cursor를 움직이거나 창을 앞으로 가져오지 않고 권한도 필요 없다. Red: `measure-app-usage.test.mjs`의 `mouseMoved:` step만 있는 기록, 이동 앞의 `hitTest:`, 이동이 없는 기록, 실제 입력 import 부재 시험.
 - F502-16: 배치를 준비 중인 표면 위의 누름은 commit을 기다렸다가 표면에 간다. 이전에는 main page로 갔고, main page가 없는 창에서는 어디에도 가지 않았다.
 - F585: surface가 숨겨진 뒤나 press 중에 영역이 표시되는 터미널은 page에서 키보드를 받고, 키보드를 가진 채 숨겨진 영역은 표시될 때 키보드를 되찾는다.
 - F535-3: gate count만으로는 쓰지 않는다. 잠든 writer는 다음 event까지 최대 1분 동안 count를 들고 있으므로, 다른 앱에서 입력 소스를 바꿔도 idle 앱이 초마다 쓰기와 index update를 치르지 않는다. Red: `TestACountWaitsForTheNextWrite`, `a_count_waits_for_the_next_write`, `event_ring_test`의 pipe 검사가 count가 쓰인 것을 찾았다.

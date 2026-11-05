@@ -200,14 +200,14 @@ test("make b3-judge judges a session folder against docs/spec/performance-goals.
   assert.match(passed.stdout, new RegExp(`^passed session ${path}: 0 failures$`, "m"));
   for (const value of goals.values) assert.match(passed.stdout, new RegExp(`^value ${value.id} mygo: runs `, "m"), `${value.id} is not printed`);
   const records = lines.map((line) => JSON.parse(line));
-  const hitTests = records.filter((entry) => entry.application === "mygo" && Object.hasOwn(entry.values, "G8-S1-hit-test-p90"));
-  for (const entry of hitTests.slice(0, Math.ceil(goals.runs / 2))) entry.values["G8-S1-hit-test-p90"] = 8.34;
+  const moves = records.filter((entry) => entry.application === "mygo" && Object.hasOwn(entry.values, "G8-S1-pointer-move-p90"));
+  for (const entry of moves.slice(0, Math.ceil(goals.runs / 2))) entry.values["G8-S1-pointer-move-p90"] = 8.34;
   const verdict = records.find((entry) => entry.application === "mygo" && Object.hasOwn(entry.values, "G4-S7-term-view"));
   verdict.values["G4-S7-term-view"] = "failed";
   writeFileSync(join(path, "runs.jsonl"), `${records.map((entry) => JSON.stringify(entry)).join("\n")}\n`);
   const failed = judge();
   assert.equal(failed.status, 2, `make reports the exit status 1 of the judge as 2: ${failed.stdout}${failed.stderr}`);
-  assert.match(failed.stdout, /^failed G8-S1-hit-test-p90 mygo: median 8\.34, at most 8\.33 ms$/m);
+  assert.match(failed.stdout, /^failed G8-S1-pointer-move-p90 mygo: median 8\.34, at most 8\.33 ms$/m);
   assert.match(failed.stdout, /^failed G4-S7-term-view mygo: runs (passed )*failed( passed)*, equals passed$/m);
   assert.match(failed.stdout, new RegExp(`^failed session ${path}: 2 failures$`, "m"));
 });

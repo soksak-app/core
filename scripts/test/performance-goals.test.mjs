@@ -249,16 +249,16 @@ test("each e2e benchmark of docs/spec/performance-goals.json measures in the set
 });
 
 test("a target that takes the trace state of the run declares its measurement in the trace states 0 and 1, and a target that names TRACE in that state", { timeout: 1000 }, () => {
-  const declarations = { scripts: { "app-usage": { 0: ["applicationCpuSeconds", "hitTestP90Ms"], 1: ["applicationCpuSeconds"], "frame-records": ["hitTestP90Ms"] } }, benchmarks: {} };
+  const declarations = { scripts: { "app-usage": { 0: ["applicationCpuSeconds", "pointerMoveP90Ms"], 1: ["applicationCpuSeconds"], "frame-records": ["pointerMoveP90Ms"] } }, benchmarks: {} };
   const value = (id, target, measurement) => ({ id, target, measurement });
   assert.deepEqual(measurementFailures([
     value("cpu", "make app-usage STATE=S1 STEP=pointer", "applicationCpuSeconds"),
-    value("hit-test", "make app-usage STATE=S1 STEP=pointer", "hitTestP90Ms"),
-    value("frame-records", "make app-usage STATE=S1 STEP=pointer TRACE=frame-records", "hitTestP90Ms"),
-    value("named", "make app-usage STATE=S1 STEP=pointer TRACE=1", "hitTestP90Ms"),
+    value("hit-test", "make app-usage STATE=S1 STEP=pointer", "pointerMoveP90Ms"),
+    value("frame-records", "make app-usage STATE=S1 STEP=pointer TRACE=frame-records", "pointerMoveP90Ms"),
+    value("named", "make app-usage STATE=S1 STEP=pointer TRACE=1", "pointerMoveP90Ms"),
   ], read("Makefile"), declarations), [
-    "hit-test: make app-usage STATE=S1 STEP=pointer declares no measurement hitTestP90Ms in the trace state 1",
-    "named: make app-usage STATE=S1 STEP=pointer TRACE=1 declares no measurement hitTestP90Ms in the trace state 1",
+    "hit-test: make app-usage STATE=S1 STEP=pointer declares no measurement pointerMoveP90Ms in the trace state 1",
+    "named: make app-usage STATE=S1 STEP=pointer TRACE=1 declares no measurement pointerMoveP90Ms in the trace state 1",
   ]);
 });
 
