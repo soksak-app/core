@@ -85,6 +85,14 @@ export function armLayoutFault() {
   layoutFault = true;
 }
 
+/* Waits for the newest layout of the page that createPageLayout made last (diagnostics.drag in docs/spec/endpoint.md). */
+let newestLayout = async () => {};
+
+/** Ends when the newest layout ran to the end. It fails with the failure of that layout. */
+export function layoutsPlaced() {
+  return newestLayout();
+}
+
 /**
  * Creates the layout queue of the main document and the functions that schedule and wait for its layouts.
  *
@@ -128,6 +136,9 @@ export function createPageLayout({
   /* Layout number of the performance trace. While the trace is on, each layout records the times (performance.now, ms) of the wait,
      the prepare reply, before and after the DOM draw, the animation frame and the presentation, so the stage that delays the layout on screen can be identified. */
   let layoutTraceId = 0;
+  newestLayout = async () => {
+    if (!(await layouts.wait())) throw failure;
+  };
 
   /**
    * Withdraws the error of a failed layout after a later render, once every surface has presented. The failure names a surface that did

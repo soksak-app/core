@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 // namedPagelessFramework is a framework without a main page that names its application.
@@ -203,5 +204,59 @@ func TestANativeDragAsksForItsBoundaryAfterTheWindowPresentedIt(t *testing.T) {
 	})
 	if !errors.Is(err, failure) {
 		t.Fatalf("the failure of the wait answered %v", err)
+	}
+}
+
+// contract: diagnostics.drag.waits-for-the-last-placement
+func TestADragAsksTheWindowForItsLastPlacementBeforeItWaitsForTheRun(t *testing.T) {
+	var order []string
+	settled := func() <-chan struct{} {
+		order = append(order, "settled")
+		done := make(chan struct{})
+		close(done)
+		return done
+	}
+	err := lastLayoutPresented(func(time.Duration) error {
+		order = append(order, "placed")
+		return nil
+	}, settled, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(order, []string{"placed", "settled"}) {
+		t.Fatalf("the drag waited in the order %v", order)
+	}
+	order = nil
+	failure := errors.New("surface presentation failed")
+	if err := lastLayoutPresented(func(time.Duration) error { return failure }, settled, time.Second); !errors.Is(err, failure) {
+		t.Fatalf("a failed placement answered %v", err)
+	}
+	if len(order) != 0 {
+		t.Fatalf("a failed placement went on to %v", order)
+	}
+}
+
+// contract: diagnostics.drag.waits-for-the-last-placement
+func TestADragFailsWhenTheWindowDoesNotAnswerItsLastPlacement(t *testing.T) {
+	const limit = 20 * time.Millisecond
+	relay := NewRelay[string]()
+	var asked time.Duration
+	err := lastLayoutPresented(func(within time.Duration) error {
+		asked = within
+		// The window takes the request and answers nothing.
+		return relay.Request("window", within, func(uint64) error { return nil }).Error
+	}, func() <-chan struct{} {
+		t.Fatal("the drag went on without the answer of the window")
+		return nil
+	}, limit)
+	if asked != limit {
+		t.Fatalf("the drag asked the window with the limit %s", asked)
+	}
+	var failure *RPCError
+	if !errors.As(err, &failure) || failure.Code != codeTimeout {
+		t.Fatalf("a window that does not answer failed the drag with %v", err)
+	}
+	if !strings.Contains(err.Error(), "the last placement of the drag") {
+		t.Fatalf("the failure does not name the last placement: %v", err)
 	}
 }

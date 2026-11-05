@@ -2,6 +2,7 @@ package workbench_test
 
 import (
 	"encoding/json"
+	"errors"
 	"math"
 	"strings"
 	"testing"
@@ -107,5 +108,102 @@ func TestTheRecordOfADragHoldsTheBoundaryBeforeTheDragAndAfterEachStep(t *testin
 	// The record ended: a step after its end records nothing, and another end has no drag.
 	if _, err := reply("diagnostics.drag.end", nil); err == nil || err.Error() != "no drag of this window is running" {
 		t.Fatalf("a second end answered %v", err)
+	}
+}
+
+// A drag asks for its last placement. A placement that runs when the steps arrive holds none of them, so the answer waits for
+// the placement that follows it.
+func TestTheLastPlacementOfADragIsThePlacementAfterTheOneThatRuns(t *testing.T) {
+	f, stored := surfaceShell(t)
+	left := f.tabbedCards()[0]
+	made, err := f.answer("core.card.split", map[string]string{"card": left, "side": "right", "plugin": "terminal"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	right := made["card"].(string)
+	f.settle()
+	box, _ := f.divider(left, right)
+	x, y := box.X+box.W/2, box.Y+box.H/2
+	f.tester.Move(x, y)
+	f.tester.Frame()
+	f.tester.Press(x, y)
+	f.tester.Frame()
+	// The press may place too; it ends before the steps arrive.
+	f.pending.drain(t)
+	began := len(stored.requests)
+
+	// The first step starts a placement, which runs until the queue drains. The next steps and the release wait for it.
+	f.tester.Move(x-20, y)
+	f.tester.Frame()
+	f.tester.Move(x-40, y)
+	f.tester.Frame()
+	f.tester.Release(x-40, y)
+	f.tester.Frame()
+
+	answered := false
+	var failure error
+	f.shell.Registry().Reply("diagnostics.drag.placed", nil, nil, func(_ any, err error) { answered, failure = true, err })
+	if answered {
+		t.Fatalf("the window answered while a placement ran: %v", failure)
+	}
+	f.pending.drain(t)
+	if answered {
+		t.Fatal("the window answered with the placement that ran when the steps arrived")
+	}
+	if got := len(stored.requests); got != began+1 {
+		t.Fatalf("the steps made %d placements while one ran", got-began)
+	}
+	f.tester.Frame()
+	if answered {
+		t.Fatal("the window answered before the host replied to the last placement")
+	}
+	f.pending.drain(t)
+	if got := len(stored.requests); got != began+2 {
+		t.Fatalf("after the first placement the window sent %d placements", got-began)
+	}
+	if settled := stored.requests[len(stored.requests)-1]["settled"]; settled != true {
+		t.Fatalf("the last placement of the drag has settled %v", settled)
+	}
+	if !answered || failure != nil {
+		t.Fatalf("after the last placement the window answered %t with %v", answered, failure)
+	}
+}
+
+// A last placement that fails fails the drag, which then does not claim a presented layout. The placement that ran when
+// the steps arrived succeeds, so the failure is the one of the last placement.
+func TestAFailedLastPlacementAnswersItsFailure(t *testing.T) {
+	f, stored := surfaceShell(t)
+	left := f.tabbedCards()[0]
+	made, err := f.answer("core.card.split", map[string]string{"card": left, "side": "right", "plugin": "terminal"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	right := made["card"].(string)
+	f.settle()
+	box, _ := f.divider(left, right)
+	x, y := box.X+box.W/2, box.Y+box.H/2
+	f.tester.Move(x, y)
+	f.tester.Frame()
+	f.tester.Press(x, y)
+	f.tester.Frame()
+	f.pending.drain(t)
+	f.tester.Move(x-20, y)
+	f.tester.Frame()
+	f.tester.Move(x-40, y)
+	f.tester.Frame()
+	f.tester.Release(x-40, y)
+	f.tester.Frame()
+	var failure error
+	answered := false
+	f.shell.Registry().Reply("diagnostics.drag.placed", nil, nil, func(_ any, err error) { answered, failure = true, err })
+	f.pending.drain(t)
+	if answered {
+		t.Fatalf("the window answered with the placement that ran when the steps arrived: %v", failure)
+	}
+	stored.presentFailure = errors.New("the current image raster did not present within 10s")
+	f.tester.Frame()
+	f.pending.drain(t)
+	if !answered || failure == nil || !strings.Contains(failure.Error(), stored.presentFailure.Error()) {
+		t.Fatalf("the window answered %t with %v", answered, failure)
 	}
 }

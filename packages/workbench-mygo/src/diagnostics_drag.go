@@ -27,6 +27,7 @@ type boundaryDrag struct {
 func (s *Shell) registerDrag() {
 	s.registry.Method("diagnostics.drag", s.startDrag)
 	s.registry.Method("diagnostics.drag.end", s.endDrag)
+	s.registry.Method("diagnostics.drag.placed", s.dragPlaced)
 	s.registry.Method("diagnostics.drag.boundary", func(raw json.RawMessage, answer func(any, error)) {
 		plan, err := params[dragPlan](raw)
 		if err != nil {
@@ -81,6 +82,13 @@ func (s *Shell) endDrag(_ json.RawMessage, answer func(any, error)) {
 	boundary := s.drag.boundary
 	s.drag = nil
 	answer(map[string]any{"boundary": boundary}, nil)
+}
+
+// dragPlaced answers after the host replied to the placement that holds every step of the drag. A placement that runs
+// meanwhile holds none of the later steps, so it does not count, and a window with nothing to place answers at its next
+// frame. It answers the failure of that placement.
+func (s *Shell) dragPlaced(_ json.RawMessage, answer func(any, error)) {
+	s.afterPlacement(func(err error) { answer(nil, err) })
 }
 
 // dragStepped records the position of the held boundary after a step of a drag. A held line that the step dropped renumbers.

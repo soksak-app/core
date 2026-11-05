@@ -21,7 +21,8 @@ mock.module("../surface-reply-hold.js", { exports: {
 } });
 mock.module("../surface-modules.js", { exports: { mountedSurface: () => null } });
 mock.module("../resize-loop.js", { exports: { watchResizeLoop: () => {} } });
-mock.module("../page-layout.js", { exports: { armLayoutFault: () => {} } });
+let placed = async () => {};
+mock.module("../page-layout.js", { exports: { armLayoutFault: () => {}, layoutsPlaced: () => placed() } });
 mock.module("../plane.js", { exports: {
   currentGrid: () => ({ boundaryPos: () => 0 }),
   surfaceInput: (input) => inputs.push(input),
@@ -59,4 +60,19 @@ test("the page drag presses at the point that diagnostics.drag.boundary answers"
   assert.deepEqual(result.from, from);
   assert.deepEqual(inputs[0], { phase: 0, ...from });
   assert.deepEqual(inputs.at(-1), { phase: 2, ...from });
+});
+
+test("diagnostics.drag.placed answers after the layouts of the page ended, and with their failure", async () => {
+  const answer = methods.get("diagnostics.drag.placed");
+  assert.equal(typeof answer, "function", "the page registers no diagnostics.drag.placed");
+  let end;
+  placed = () => new Promise((resolve) => { end = resolve; });
+  let answered = false;
+  const reply = answer({}).then(() => { answered = true; });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(answered, false, "the page answered while a layout ran");
+  end();
+  await reply;
+  placed = async () => { throw new Error("surface presentation failed"); };
+  await assert.rejects(answer({}), /surface presentation failed/);
 });
