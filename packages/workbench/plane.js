@@ -23,6 +23,7 @@ import { checkStoredLayout, recordStoredOrigins } from "./stored-layout.js";
 import { checkTabParams, storedParamsProblem } from "./tab-params.js";
 import { chooseOpener } from "./file-open.js";
 import { clearSlotSurface, setSlotSurface, standIn } from "./compositor.js";
+import { followRing, keyboardOwed } from "./keyboard.js";
 import { native, onSurfaceInput, overlay, report, shapes, windowSidecar } from "./host.js";
 import { declaredIcons, icon } from "./icons.js";
 import { issueId } from "./ids.js";
@@ -118,6 +119,17 @@ const pickerEl = document.getElementById("picker");
 let windowSidebars = {};
 
 let grid, view, focusedId;
+
+/* The one move of the focus ring: the keyboard follows it (keyboard.js). */
+function focusOn(id) {
+  focusedId = id;
+  keyboardOwed();
+}
+// default: without a grid, a card or a tab, or with a tab of a plugin that is not loaded, the ring has no surface.
+followRing(() => {
+  const tab = activeTab(grid?.card(focusedId));
+  return tab && hasPlugin(tab.plugin) ? tab.id : null;
+});
 // The space of the layout that the plane holds, which qualifies the section surface ids of its sidebars (docs/spec/plugins.md#sections);
 // null while the plane holds no layout. The project state can change before the plane changes, so the ids follow the plane.
 let heldSpace = null;
@@ -334,6 +346,8 @@ function updateCard(el, card, rect) {
       b.querySelector(".tab__name").textContent = tabName(t);
       // A name longer than the width bound of a tab is cut, so the tooltip shows the whole name.
       b.title = tabName(t);
+      // A press leaves the DOM focus where it is, so the keyboard does not stay on the tab, and the Tab key still stops here.
+      b.addEventListener("mousedown", (e) => e.preventDefault());
       // A press selects the tab and starts a drag. The result at the drop position is produced by core.tab.move.
       b.addEventListener("pointerdown", (e) => {
         if (e.target.closest(".tab__x")) return;
@@ -550,7 +564,7 @@ async function closeTab(cardId, tabId) {
   }
   settleActiveTab(card);
   // default: when only place cards remain, there is no card to focus (null).
-  if (!grid.card(focusedId)) focusedId = grid.cards.find((c) => !isPlace(c.id))?.id ?? null;
+  if (!grid.card(focusedId)) focusOn(grid.cards.find((c) => !isPlace(c.id))?.id ?? null);
   settle();
 }
 
@@ -721,7 +735,7 @@ function openTabList(anchor, cardId) {
     const c = grid.card(cardId);
     if (!c?.data || !tabsOf(c).some((t) => t.id === id)) return;
     c.data.activeId = id;
-    focusedId = cardId;
+    focusOn(cardId);
     settle();
   }, "left");
 }
@@ -806,7 +820,7 @@ function addTab(cardId, plugin, params) {
   // default: a card without an active tab has no tab to inherit.
   const t = newTab(plugin, params, activeTab(card)?.id ?? null, "new tab");
   appendTab(card, t);
-  focusedId = cardId;
+  focusOn(cardId);
   settle();
   return t.id;
 }
@@ -825,7 +839,7 @@ function splitWith(cardId, side, plugin) {
   // When there is no space, splitToward returns null. No tab was removed from the source card, so there is no state to
   // restore.
   const born = grid.splitToward(cardId, side, { data: { tabs: [t], activeId: t.id } });
-  if (born) focusedId = born;
+  if (born) focusOn(born);
   settle();
   return born ? { card: born, tab: t.id } : null;
 }
@@ -910,7 +924,7 @@ function dropTab(fromId, tabId, hit) {
     if (target.id === fromId) { from.data.activeId = tabId; return settle(); }
     removeTab(from, tabId);
     appendTab(target, moving);
-    focusedId = target.id;
+    focusOn(target.id);
     if (tabsOf(from).length === 0 && grid.canClose(fromId)) grid.close(fromId);
     else settleActiveTab(from);
     return settle();
@@ -919,7 +933,7 @@ function dropTab(fromId, tabId, hit) {
   if (tabsOf(from).length === 1) {                               // T5 — nothing is left to keep
     if (fromId === hit.id) return settle();
     grid.move(fromId, hit.id, hit.zone);
-    focusedId = fromId;
+    focusOn(fromId);
     return settle();
   }
 
@@ -930,7 +944,7 @@ function dropTab(fromId, tabId, hit) {
   if (born === null) {                                           // If there is no slot, revert
     appendTab(from, moving);
   } else {
-    focusedId = born;
+    focusOn(born);
   }
   settle();
 }
@@ -1076,7 +1090,7 @@ function settle() {
   arrangeWindowSidebars(grid, windowSidebarCards(pluginUnits(), value("links"), focusedPlugin()), windowSidebars,
     value("sidebarWidth"), side => value(side), dismiss);
   // default: when only place cards remain, there is no card to focus (null).
-  if (!grid.card(focusedId)) focusedId = grid.cards.find((c) => !isPlace(c.id))?.id ?? null;
+  if (!grid.card(focusedId)) focusOn(grid.cards.find((c) => !isPlace(c.id))?.id ?? null);
   view.render();
   syncBackgroundSessions();
 }
@@ -1439,7 +1453,7 @@ function build(kept) {
   windowSidebars = restored;
   const half = halfGap();
   grid = new Soksak(kept.state, { gap: half * 2 });
-  focusedId = kept.focusedId;
+  focusOn(kept.focusedId);
   view = new SoksakView(plane, grid, {
     createCard, updateCard,
     // The plane is inset inside the stage by this value. Only the host knows the value, so it must be passed to the view so
@@ -1590,7 +1604,7 @@ export function adopt(kept, space) {
   const restored = restoreWindowState(kept);
   logRefusals(recordStoredOrigins(kept));
   grid.replace(kept.state);
-  focusedId = kept.focusedId;
+  focusOn(kept.focusedId);
   windowSidebars = restored;
   named = kept.named;
   // default: a stored layout without sidebars has no stored selection (docs/spec/projects.md#persistence).
@@ -1615,6 +1629,7 @@ export function clear() {
   view?.destroy();
   view = null;
   grid = null;
+  keyboardOwed();
   railPath.setAttribute("d", "");
   document.getElementById("focusMark").hidden = true;
 }
@@ -1662,7 +1677,7 @@ function restoreFullscreen() {
 
 export function toggleCardFullscreen(id) {
   paneCard(id);
-  focusedId = id;
+  focusOn(id);
   closePicker("fullscreen");
   view.fullscreen(view.fullscreenCard === id ? null : id);
 }
@@ -1670,7 +1685,7 @@ export function toggleCardFullscreen(id) {
 export function focusCard(id) {
   paneCard(id);
   if (view.fullscreenCard !== id) restoreFullscreen();
-  focusedId = id;
+  focusOn(id);
   settle();
 }
 
@@ -1684,7 +1699,7 @@ export function openCardMenu(id, menu) {
   if (!anchor) throw new Error(`card ${id} has no ${menu} button`);
   if (anchor.disabled) throw new Error(`card ${id} cannot ${menu}`);
   if (picker?.anchor === anchor) { closePicker("toggle"); return; }
-  focusedId = id;
+  focusOn(id);
   settle();
   openPicker(anchor, what, id);
 }
@@ -1709,7 +1724,7 @@ export function openCardTools(id) {
     viewBox: b.querySelector("svg").getAttribute("viewBox"),
     active: b.getAttribute("aria-pressed") === "true",
   }));
-  focusedId = id;
+  focusOn(id);
   settle();
   openLayer(anchor, "카드 도구", items, (key) => {
     if (key.startsWith("side-")) return run("core.card.sidebar.toggle", { card: id, side: key.slice(5) });
@@ -1816,7 +1831,7 @@ function showFullscreen(cardId, tabId) {
   const card = grid.card(cardId);
   if (!card?.data || !tabsOf(card).some((t) => t.id === tabId)) throw new Error(`no tab ${tabId} in card ${cardId}`);
   card.data.activeId = tabId;
-  focusedId = cardId;
+  focusOn(cardId);
   if (view.fullscreenCard !== cardId) view.fullscreen(cardId);
   settle();
 }
@@ -1860,7 +1875,7 @@ export function closeCard(id) {
   restoreFullscreen();
   grid.close(id);
   // default: when only place cards remain, there is no card to focus (null).
-  if (!grid.card(focusedId)) focusedId = grid.cards.find((c) => !isPlace(c.id))?.id ?? null;
+  if (!grid.card(focusedId)) focusOn(grid.cards.find((c) => !isPlace(c.id))?.id ?? null);
   settle();
   return { closed: true };
 }
@@ -1982,7 +1997,7 @@ export function selectTab(tabId) {
   const card = cardOfTab(tabId);
   if (view.fullscreenCard !== card.id) restoreFullscreen();
   card.data.activeId = tabId;
-  focusedId = card.id;
+  focusOn(card.id);
   settle();
 }
 
