@@ -6,6 +6,7 @@
 
 - F463: Core uses the checks kit and its one executable `soksak-check`. Red: `scripts/test/workflows.test.mjs` failed. Green: it passes.
 - F466: Records cite no temporary log, and the record check reports a new citation.
+- F469: The interrupt test of `scripts/e2e-run.mjs` reads a complete process id file. Red: `make node-repeat` failed on run 1. Green: it passes 10 runs.
 - F468: Every make target that runs a check is `<what it reads>-check`, a check has one command, and core uses `soksak-check docs` and `events` with `scripts/event-sources.json`. The temporary folder check is `scripts/check-temp.mjs`. Red: the new test of `scripts/test/workflows.test.mjs` failed on the earlier Makefile. Green: it passes.
 - F467: Core pins `@soksak/kit`.
 - F465: Records cite no log of the local build folder, and the record check reports a new citation.
