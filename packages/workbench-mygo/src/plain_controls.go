@@ -1,6 +1,7 @@
 package workbench
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -10,19 +11,25 @@ import (
 // PlainControls is the look of an input and a select of the page without a rule of their own: the controls of the color scheme of
 // the page, as WebKit draws them. The declaration holds what a window of the page measures.
 type PlainControls struct {
-	Background, Edge, Fg, Placeholder, SelectFill, Muted ui.Color
-	Font                                                 string
-	Size, Figures                                        float32
-	EdgeW, PadX, PadY, Radius, Height                    float32
-	SelectH, SelectPad, SelectRoom, SelectRadius, Halo   float32
-	PanelGap, PanelRadius, PanelEdgeW                    float32
-	PanelFill, PanelEdge                                 ui.Color
-	Arrows                                               *ui.SVG
-	// The search: an input of type search, and the ring of the browser around a focused one.
-	Ring, SearchIcon                             ui.Color
-	RingW, RingGap, SearchW, SearchH, SearchPadY float32
-	SearchIconX, SearchIconSize, SearchTextX     float32
-	Magnifier                                    *ui.SVG
+	Background, Edge, Fg, Placeholder, SelectFill, SelectFg, Muted ui.Color
+	Font                                                           string
+	Size, Figures                                                  float32
+	EdgeW, PadX, PadY, Radius, Height                              float32
+	SelectH, SelectPad, SelectRoom, SelectRadius, Halo             float32
+	ArrowsW, ArrowsH, ArrowsEnd                                    float32
+	PanelGap, PanelRadius, PanelEdgeW                              float32
+	PanelFill, PanelEdge                                           ui.Color
+	Arrows                                                         *ui.SVG
+	// RingW is the width of the ring of the browser around a focused control. Its color is that of the system (ringColor), and
+	// Focus takes its place on a desktop without one.
+	RingW float32
+	Focus ui.Color
+	// The search: an input of type search, whose magnifier and cancel the browser draws in colors of their own, whatever the color
+	// of the text is. Inset lies between its box and its pill.
+	SearchIcon, SearchCancel                                                      ui.Color
+	SearchW, SearchInset, SearchTextX, SearchTextEnd, SearchIconX, SearchIconSize float32
+	SearchCancelSize, SearchCancelEnd                                             float32
+	Magnifier, Cross                                                              *ui.SVG
 }
 
 // plainControls reads the look from the declaration.
@@ -38,16 +45,36 @@ func (s *Shell) plainControls() PlainControls {
 	}
 	color := func(name string) ui.Color { return ui.Hex(declared.PlainControl(name)) }
 	figures, _ := strconv.ParseFloat(strings.TrimSuffix(declared.PlainControl("text-w"), "ch"), 32)
+	size := float32(s.settings.Value("size").(float64))
+	stroke := `fill="none" stroke="currentColor" stroke-width="%s" stroke-linecap="round" stroke-linejoin="round"`
 	return PlainControls{Background: color("bg"), Edge: color("edge"), Fg: color("fg"),
-		Placeholder: color("placeholder"), SelectFill: color("select-bg"), Muted: s.palette.Muted,
-		Font: s.fontFamily(), Size: float32(s.settings.Value("size").(float64)), Figures: float32(figures),
-		EdgeW: metric("edge-w"), PadX: metric("pad-x"), PadY: metric("pad-y"), Radius: metric("r"), Height: metric("h"),
+		Placeholder: color("placeholder"), SelectFill: color("select-bg"), SelectFg: color("select-fg"), Muted: s.palette.Muted,
+		Font: s.fontFamily(), Size: size, Figures: float32(figures),
+		EdgeW: metric("edge-w"), PadX: metric("pad-x"), PadY: metric("pad-y"), Radius: metric("r"),
+		Height:  float32(chrome("line-height"))*size + 2*(metric("pad-y")+metric("edge-w")),
 		SelectH: metric("select-h"), SelectPad: metric("select-pad"), SelectRoom: metric("select-room"),
-		SelectRadius: metric("select-r"), Halo: metric("select-halo"), PanelGap: chrome("space-1"), PanelRadius: s.radiusSmall(), PanelEdgeW: s.palette.BorderWidth,
-		Ring: color("ring"), SearchIcon: color("search-icon"), RingW: metric("ring-w"), RingGap: metric("ring-gap"), SearchW: metric("search-w"), SearchH: metric("search-h"),
-		SearchPadY: metric("search-pad-y"), SearchIconX: metric("search-icon-x"), SearchIconSize: metric("search-icon-size"), SearchTextX: metric("search-text-x"),
-		Magnifier: s.declaredIcon("0 0 16 16", `fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"`, declared.Icons["control-search"]),
-		PanelFill: s.palette.Card, PanelEdge: s.palette.Edge, Arrows: s.declaredIcon("0 0 16 16", `fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"`, declared.Icons["control-select-arrows"])}
+		SelectRadius: metric("select-r"), Halo: metric("select-halo"), ArrowsW: metric("select-arrows-w"), ArrowsH: metric("select-arrows-h"), ArrowsEnd: metric("select-arrows-end"),
+		PanelGap: chrome("space-1"), PanelRadius: s.radiusSmall(), PanelEdgeW: s.palette.BorderWidth,
+		RingW: metric("ring-w"), Focus: s.palette.Focus, SearchIcon: color("search-icon"), SearchCancel: color("search-cancel"),
+		SearchW: metric("search-w"), SearchInset: metric("search-inset"), SearchTextX: metric("search-text-x"), SearchTextEnd: metric("search-text-end"),
+		SearchIconX: metric("search-icon-x"), SearchIconSize: metric("search-icon-size"), SearchCancelSize: metric("search-cancel-size"), SearchCancelEnd: metric("search-cancel-end"),
+		Magnifier: s.declaredIcon("0 0 13 13", fmt.Sprintf(stroke, "1.25"), declared.Icons["control-search"]),
+		Cross:     s.declaredIcon("0 0 13 13", fmt.Sprintf(stroke, "1.1"), declared.Icons["control-search-cancel"]),
+		PanelFill: s.palette.Card, PanelEdge: s.palette.Edge,
+		Arrows: s.declaredIcon("0 0 7.5 10", fmt.Sprintf(stroke, "1.1"), declared.Icons["control-select-arrows"])}
+}
+
+// ringColor is the focus color of the system in the appearance of the page, which follows the accent color.
+func (p PlainControls) ringColor(c *ui.Context) ui.Color {
+	if ring := c.Preferences().DarkFocusRing; ring.A != 0 {
+		return ring
+	}
+	return p.Focus
+}
+
+// ring draws the ring of the browser around box, whose corners have radius.
+func (p PlainControls) ring(painter *ui.Painter, box ui.Rect, radius float32, color ui.Color) {
+	painter.Stroke(ui.Rect{X: box.X - p.RingW, Y: box.Y - p.RingW, W: box.W + 2*p.RingW, H: box.H + 2*p.RingW}, color, radius+p.RingW, p.RingW)
 }
 
 // textWidth is the width of text in the font of the controls.
@@ -56,24 +83,41 @@ func (p PlainControls) textWidth(c *ui.Context, text string) float32 {
 	return width
 }
 
-// field gives a text field the look of an input: it starts as wide as twenty figures, the size that an input takes by default.
+// field gives a text field the look of an input: it starts as wide as twenty figures, the size that an input takes by default,
+// and the browser rings it while it has the focus.
 func (p PlainControls) field(c *ui.Context, field ui.Element) ui.Element {
+	focused, ring := field.Focused(), p.ringColor(c)
 	return field.Basis(p.Figures*p.textWidth(c, "0")+2*(p.PadX+p.EdgeW)).Height(p.Height).Padding(p.PadY, p.PadX, p.PadY, p.PadX).
-		Border(p.EdgeW, p.Edge).Radius(p.Radius).Background(p.Background).TextColor(p.Fg).PlaceholderColor(p.Placeholder).FontSize(p.Size)
+		Border(p.EdgeW, p.Edge).Radius(p.Radius).Background(p.Background).TextColor(p.Fg).PlaceholderColor(p.Placeholder).FontSize(p.Size).
+		DrawOver(func(painter *ui.Painter, box ui.Rect) {
+			if focused {
+				p.ring(painter, box, p.Radius, ring)
+			}
+		})
 }
 
-// search gives a text field the look of an input of type search: a pill with a magnifier in front of the text, and the ring of
-// the browser while it has the focus.
-func (p PlainControls) search(field ui.Element) ui.Element {
-	radius, focused := p.SearchH/2, field.Focused()
-	return field.Width(p.SearchW).Height(p.SearchH).Padding(p.SearchPadY, p.PadX, p.SearchPadY, p.SearchTextX).Radius(radius).Background(p.Background).
+// search gives a text field the look of an input of type search: a pill with a magnifier in front of the text, inside a box that
+// the ring of the browser goes around while it has the focus.
+func (p PlainControls) search(c *ui.Context, field ui.Element) ui.Element {
+	focused, ring := field.Focused(), p.ringColor(c)
+	height := p.Height - 2*p.SearchInset
+	padY := p.PadY + p.EdgeW - p.SearchInset
+	return field.Width(p.SearchW).Height(height).Margin(p.SearchInset).Padding(padY, p.SearchTextEnd, padY, p.SearchTextX).Radius(height / 2).Background(p.Background).
 		TextColor(p.Fg).PlaceholderColor(p.Placeholder).FontSize(p.Size).DrawOver(func(painter *ui.Painter, box ui.Rect) {
 		painter.Icon(p.Magnifier, ui.Rect{X: box.X + p.SearchIconX, Y: box.Y + (box.H-p.SearchIconSize)/2, W: p.SearchIconSize, H: p.SearchIconSize}, p.SearchIcon)
 		if focused {
-			out := p.RingGap + p.RingW
-			painter.Stroke(ui.Rect{X: box.X - out, Y: box.Y - out, W: box.W + 2*out, H: box.H + 2*out}, p.Ring, radius+out, p.RingW)
+			inset := p.SearchInset
+			p.ring(painter, ui.Rect{X: box.X - inset, Y: box.Y - inset, W: box.W + 2*inset, H: box.H + 2*inset}, height/2+inset, ring)
 		}
 	})
+}
+
+// drawSearchCancel draws the cancel of a search with a text, and reports its press. It takes no focus, as that of the browser.
+func (p PlainControls) drawSearchCancel(c *ui.Context) bool {
+	cancel := ui.Box(c).Absolute().Right(p.SearchInset+p.SearchCancelEnd).Top((p.Height-p.SearchCancelSize)/2).Size(p.SearchCancelSize, p.SearchCancelSize).
+		Radius(p.SearchCancelSize / 2).Background(p.SearchCancel).Role(ui.RoleButton).Label("cancel")
+	cancel.Children(func() { ui.Icon(c, p.Cross).Size(p.SearchCancelSize, p.SearchCancelSize).TextColor(p.Background) })
+	return cancel.Clicked()
 }
 
 // drawSelect draws a select as wide as its longest option, and reports that the value changed.
@@ -84,11 +128,16 @@ func (p PlainControls) drawSelect(c *ui.Context, binder *Binder, name, label str
 	}
 	selector := ui.SelectBase(c, value)
 	binder.Bound(selector.Trigger, name)
-	selector.Trigger.Width(longest+p.SelectRoom).Height(p.SelectH).Row().AlignItems(ui.Center).Padding(0, 0, 0, p.SelectPad).
-		Radius(p.SelectRadius).Border(p.Halo, p.Background).Background(p.SelectFill).Label(label).Children(func() {
-		ui.Text(c, *value).FontSize(p.Size).TextColor(p.Fg).Font(p.Font).NoWrap().Grow(1)
+	ringed, ring := selector.Trigger.FocusVisible(), p.ringColor(c)
+	selector.Trigger.FocusRing(false).Width(longest+p.SelectRoom).Height(p.SelectH).Row().AlignItems(ui.Center).Padding(0, 0, 0, p.SelectPad).
+		Radius(p.SelectRadius).Border(p.Halo, p.Background).Background(p.SelectFill).Label(label).DrawOver(func(painter *ui.Painter, box ui.Rect) {
+		if ringed {
+			p.ring(painter, box, p.SelectRadius, ring)
+		}
+	}).Children(func() {
+		ui.Text(c, *value).FontSize(p.Size).TextColor(p.SelectFg).Font(p.Font).NoWrap().Grow(1)
 		if p.Arrows != nil {
-			ui.Icon(c, p.Arrows).Size(p.Size, p.Size).TextColor(p.Fg).MarginEnd(p.PadX)
+			ui.Icon(c, p.Arrows).Size(p.ArrowsW, p.ArrowsH).TextColor(p.SelectFg).MarginEnd(p.ArrowsEnd)
 		}
 	})
 	selector.Popup(func(panel ui.Element) {
@@ -102,7 +151,7 @@ func (p PlainControls) drawSelect(c *ui.Context, binder *Binder, name, label str
 				if item.Highlighted() {
 					item.Background(p.PanelEdge)
 				}
-				item.Children(func() { ui.Text(c, option).FontSize(p.Size).TextColor(p.Fg) })
+				item.Children(func() { ui.Text(c, option).FontSize(p.Size).TextColor(p.SelectFg) })
 			}
 		})
 	})

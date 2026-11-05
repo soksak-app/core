@@ -191,6 +191,8 @@ The lengths, ratios and durations of the workbench stylesheets (`app.css`, `libr
 
 An input and a select of the page without a rule of their own take their look from the browser, in the color scheme of the page, so no stylesheet declares it. The native workbench draws them from `plainControls` of `workbench.json`, the values that a window of the page measures, and no stylesheet reads that table.
 
+The focus ring of such a control is the focus color of the system in the dark appearance, which the page always has, so it follows the accent color and no declaration holds it. Its other colors do not follow the system: the placeholder is the color of the stylesheet of the browser, and the magnifier and the cancel of a search are images of the system in colors of their own, whatever the color of the text is.
+
 ## Status
 
 `core.settings-modal` reports:

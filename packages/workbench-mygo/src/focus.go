@@ -48,7 +48,9 @@ type Focus struct {
 	handles map[elementPlace]*ui.Handle
 	places  []elementPlace
 	// absent holds the places of the last frame whose elements the window does not show.
-	absent    map[elementPlace]bool
+	absent map[elementPlace]bool
+	// reveal is the place that the focus command focused, which the next frame brings into view.
+	reveal    *elementPlace
 	responder Responder
 	views     map[string]*FocusStatus
 	reported  *FocusStatus
@@ -92,6 +94,11 @@ func (f *Focus) Bind(element ui.Element, name string) ui.Element {
 		f.handles[place] = handle
 	}
 	f.places = append(f.places, place)
+	if f.reveal != nil && *f.reveal == place {
+		// A focus of a page brings its element into view.
+		element.ScrollIntoView()
+		f.reveal = nil
+	}
 	return element.Bind(handle)
 }
 
@@ -123,6 +130,7 @@ func (f *Focus) Set(name string, index int) error {
 		if drawn == place {
 			if !f.absent[place] {
 				f.handles[place].Focus(f.window)
+				f.reveal = &place
 			}
 			return nil
 		}

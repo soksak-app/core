@@ -191,6 +191,8 @@ theme catalog와 mode, font, menu 언어와 기본 언어, 그리고 이 설정�
 
 규칙이 없는 page의 input과 select는 page의 color scheme으로 browser에서 모양을 받으므로 어느 stylesheet에도 선언이 없다. native workbench는 page 창에서 잰 값인 `workbench.json`의 `plainControls`로 그것을 그리고, 그 표를 읽는 stylesheet는 없다.
 
+그런 control의 focus ring은 page가 항상 가지는 dark appearance의 시스템 focus 색이다. 그래서 accent color를 따르고 선언에 값이 없다. 다른 색은 시스템을 따르지 않는다. placeholder는 browser stylesheet의 색이고, search의 magnifier와 cancel은 text 색과 상관없이 자기 색을 가진 시스템 image다.
+
 ## 상태
 
 `core.settings-modal`은 다음을 보고한다.
