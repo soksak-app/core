@@ -132,6 +132,7 @@ func TestAPressOnATabIsNoDrag(t *testing.T) {
 	if drag := dragTab(t, f, tab, x+2, y); drag == nil || drag.Moved || drag.Target != nil {
 		t.Fatalf("the drag is %+v", drag)
 	}
+	f.settle() // The press selects the tab through a command that finishes on the queue of the shell.
 	if f.activeOf(card) != tab {
 		t.Fatalf("the press showed %s", f.activeOf(card))
 	}
