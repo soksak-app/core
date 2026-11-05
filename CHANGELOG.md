@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F536: A settled window no longer wakes through the stall watch of its host. Through a wait of the main run loop the watch blocks without a timer and sends no heartbeat, and it starts again on the wake, so a stall is still recorded while the run loop handles an event.
 - F533: A delay unload of the memory saver that fails gets its next deadline one delay later, so a read or a commit that keeps failing no longer runs again at once with the error display each time.
 - F532: The update step of the Rust diagnostics ends the application through `quit` of the framework port, so `make tauriv2-build` compiles again. `make hosts-check` runs the new `make host-debug-check`, which compiles the two hosts and the two apps in the configuration of the debug apps.
 - F522: Korean typed in an image region composes from its first syllable. The input context of a region removes document access from its input document when the context is created, so the input method sends every key as marked text instead of reading committed text back from a region that holds only its marked buffer; a failed removal is reported as an input error, and a property already absent counts as removed. The `doCommandBySelector` record no longer has the `unhandledKey` field, whose path could not be reached.

@@ -1,4 +1,5 @@
-//! The sample of a stall of the host on macOS: the system tool `sample` writes the stacks of every thread of this process.
+//! The heartbeat and the sample of a stall of the host on macOS: the native library answers the heartbeat on the main
+//! thread in C and reads the state of the main run loop (stall_watch.h), and the system tool `sample` writes the stacks of every thread of this process.
 
 /// Writes the stacks of every thread of this process, sampled for one second, to path.
 pub fn sample_threads(path: &std::path::Path) -> Result<(), String> {
@@ -18,4 +19,21 @@ pub fn sample_threads(path: &std::path::Path) -> Result<(), String> {
             String::from_utf8_lossy(&output.stderr).trim()
         ))
     }
+}
+
+unsafe extern "C" {
+    fn sp_stall_heartbeat(now: *mut u64, answered: *mut u64);
+    fn sp_stall_await_awake();
+}
+
+/// The time of the call and the time of the last answer, on the clock of `sp_mono_ns`.
+pub fn stall_heartbeat() -> (u64, u64) {
+    let (mut now, mut answered) = (0u64, 0u64);
+    unsafe { sp_stall_heartbeat(&mut now, &mut answered) };
+    (now, answered)
+}
+
+/// Blocks while the main run loop waits for an event.
+pub fn stall_await_awake() {
+    unsafe { sp_stall_await_awake() };
 }

@@ -99,6 +99,10 @@ func (implementation) StallHeartbeat() (uint64, uint64) {
 	return 0, 0
 }
 
+func (implementation) StallAwaitAwake() {
+	unreachable("stall await awake")
+}
+
 func (implementation) CollectGarbage(unsafe.Pointer) error {
 	return unsupported("JavaScript garbage collection")
 }

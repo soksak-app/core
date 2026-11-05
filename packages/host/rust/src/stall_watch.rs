@@ -1,14 +1,15 @@
 //! The watch of the main thread (docs/spec/logging.md, stalls). A stall is the absence of events, which no event of the
 //! stalled thread reports, so a thread outside the main thread sends a heartbeat to it and compares the last heartbeat with
-//! the clock. No event source reports a thread that does not run, which is why this watch uses a timer. A heartbeat
-//! STALL_LATE or more late is `host.stall`, with `watch_late_ms`, the lateness of the watch's own wake: a stall in which the
+//! the clock. No event source reports a thread that does not run, which is why this watch uses a timer while the thread
+//! handles an event. A run loop that waits for an event cannot be stalled, so the watch blocks without a timer through
+//! that wait. A heartbeat STALL_LATE or more late is `host.stall`, with `watch_late_ms`, the lateness of the watch's own wake: a stall in which the
 //! watch wakes late too is a process that the system did not schedule, and one in which it wakes on time is a blocked main
 //! thread. The stacks of the threads go into a file of the logs folder as
 //! `host.stall.sampled`, and the next heartbeat is `host.stall.resumed` with the length of the stall.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde_json::json;
@@ -22,10 +23,12 @@ const STALL_LATE: Duration = Duration::from_secs(1);
 /// The error of a stall during the sample of an earlier stall.
 const STALL_SAMPLE_RUNNING: &str = "a sample of the threads is still running";
 
-/// A function that runs on the watched thread.
-pub type MainTask = Box<dyn FnOnce() + Send>;
-/// Runs a task on the watched thread.
-pub type OnMain = Box<dyn Fn(MainTask) -> Result<(), String> + Send>;
+/// Sends a heartbeat that the watched thread answers and returns the time of the call and the time of the last answer on
+/// one clock, where the time of the answer is the time of the first heartbeat while none was answered. While the run loop
+/// of the watched thread waits for an event, it sends nothing and returns the start of that wait as both times.
+pub type Heartbeat = Box<dyn Fn() -> Result<(Duration, Duration), String> + Send>;
+/// Blocks while the run loop of the watched thread waits for an event, and returns while it does not.
+pub type AwaitAwake = Box<dyn Fn() -> Result<(), String> + Send>;
 /// Writes the stacks of the threads of the process into a file.
 pub type Sample = Arc<dyn Fn(&Path) -> Result<(), String> + Send + Sync>;
 /// Stores an event.
@@ -35,11 +38,12 @@ pub type Clock = Arc<dyn Fn() -> Duration + Send + Sync>;
 /// Waits one beat. A test gives a wait that advances its clock; the host gives none, and the watch sleeps.
 pub type Wait = Arc<dyn Fn(Duration) + Send + Sync>;
 
-/// The parts of the watch: `on_main` runs a function on the watched thread, `sample` writes the stacks of the threads of the
+/// The parts of the watch: `heartbeat` and `await_awake` reach the watched thread, `sample` writes the stacks of the threads of the
 /// process into a file, `folder` is the logs folder and `emit_host` stores an event of the host. `clock` and `wait` are the
 /// seams of the time: None takes the monotonic clock and the thread sleep.
 pub struct StallWatchOptions {
-    pub on_main: OnMain,
+    pub heartbeat: Heartbeat,
+    pub await_awake: AwaitAwake,
     pub sample: Sample,
     pub folder: PathBuf,
     pub emit_host: Emit,
@@ -59,12 +63,22 @@ pub fn start_stall_watch(options: StallWatchOptions) -> impl FnOnce() {
         .clone()
         // default: the host gives no wait, so the watch sleeps one beat on its thread.
         .unwrap_or_else(|| Arc::new(std::thread::sleep));
-    let beat = Arc::new(AtomicU64::new(0));
     let stopped = Arc::new(AtomicBool::new(false));
     let stop = Arc::clone(&stopped);
     let sampling = Arc::new(AtomicBool::new(false));
     crate::routine::spawn_named("stall watch", move || {
         let emit_host = &options.emit_host;
+        // A watched thread that takes no heartbeat any more ends the watch, and the error says so.
+        let refused = |error: String| {
+            crate::application_log::log_error("stall watch", format!("heartbeat: {error}"));
+        };
+        if let Err(error) = (options.await_awake)() {
+            return refused(error);
+        }
+        // The first heartbeat is the reference of the answers until the watched thread answers one.
+        if let Err(error) = (options.heartbeat)() {
+            return refused(error);
+        }
         let mut stalled_from: Option<u64> = None;
         while !stopped.load(Ordering::Acquire) {
             let before = clock();
@@ -72,18 +86,12 @@ pub fn start_stall_watch(options: StallWatchOptions) -> impl FnOnce() {
             // The lateness of this beat: the time that the watch slept beyond STALL_BEAT. When the whole process is not scheduled,
             // the watch wakes late as well as the main thread; when the main thread is blocked, the watch wakes on time.
             let watch_late = clock().saturating_sub(before).saturating_sub(STALL_BEAT);
-            let written = Arc::clone(&beat);
-            let clock_on_main = Arc::clone(&clock);
-            let sent = (options.on_main)(Box::new(move || {
-                written.store(clock_on_main().as_millis() as u64, Ordering::Release);
-            }));
-            // A main thread that takes no task any more ends the watch, and the error says so.
-            if let Err(error) = sent {
-                crate::application_log::log_error("stall watch", format!("heartbeat: {error}"));
-                return;
-            }
-            let now = clock().as_millis() as u64;
-            let last = beat.load(Ordering::Acquire);
+            let (sent, answered) = match (options.heartbeat)() {
+                Ok(times) => times,
+                Err(error) => return refused(error),
+            };
+            let now = sent.as_millis() as u64;
+            let last = answered.as_millis() as u64;
             match stalled_from {
                 None if now.saturating_sub(last) >= STALL_LATE.as_millis() as u64 => {
                     stalled_from = Some(last);
@@ -99,21 +107,21 @@ pub fn start_stall_watch(options: StallWatchOptions) -> impl FnOnce() {
                             "host.stall.sampled",
                             json!({"path": path, "error": STALL_SAMPLE_RUNNING}),
                         );
-                        continue;
+                    } else {
+                        // A sample lasts for seconds on a loaded system. The watch keeps sending heartbeats meanwhile, so that
+                        // time is not read as lateness of the main thread.
+                        let sample = Arc::clone(&options.sample);
+                        let emit = Arc::clone(&options.emit_host);
+                        let running = Arc::clone(&sampling);
+                        crate::routine::spawn_named("stall sample", move || {
+                            let fields = match sample(&path) {
+                                Ok(()) => json!({"path": path}),
+                                Err(error) => json!({"path": path, "error": error}),
+                            };
+                            emit(Level::Warn, "host.stall.sampled", fields);
+                            running.store(false, Ordering::Release);
+                        });
                     }
-                    // A sample lasts for seconds on a loaded system. The watch keeps sending heartbeats meanwhile, so that time
-                    // is not read as lateness of the main thread.
-                    let sample = Arc::clone(&options.sample);
-                    let emit = Arc::clone(&options.emit_host);
-                    let running = Arc::clone(&sampling);
-                    crate::routine::spawn_named("stall sample", move || {
-                        let fields = match sample(&path) {
-                            Ok(()) => json!({"path": path}),
-                            Err(error) => json!({"path": path, "error": error}),
-                        };
-                        emit(Level::Warn, "host.stall.sampled", fields);
-                        running.store(false, Ordering::Release);
-                    });
                 }
                 Some(from) if last > from => {
                     stalled_from = None;
@@ -124,6 +132,10 @@ pub fn start_stall_watch(options: StallWatchOptions) -> impl FnOnce() {
                     );
                 }
                 _ => {}
+            }
+            // After the check, so a stall that ended in this wait has its end first.
+            if let Err(error) = (options.await_awake)() {
+                return refused(error);
             }
         }
     });

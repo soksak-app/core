@@ -154,6 +154,14 @@ impl Platform for Windows {
     fn sample_threads(&self, path: &std::path::Path) -> Result<(), String> {
         unsupported::sample_threads(path)
     }
+
+    fn stall_heartbeat(&self) -> Result<(u64, u64), String> {
+        unsupported::stall_heartbeat()
+    }
+
+    fn stall_await_awake(&self) -> Result<(), String> {
+        unsupported::stall_await_awake()
+    }
     fn collect_garbage(&self, view: &PlatformWebview) -> Result<(), String> {
         unsupported::collect_garbage(view)
     }

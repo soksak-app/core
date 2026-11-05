@@ -195,6 +195,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Darwin observe", "objective-c", ["native/darwin/src/observe.m"], ["native/darwin/tests/observe_test.m"], { sharedTests: true }),
   lane("Darwin mouse buttons", "objective-c", ["native/darwin/src/mouse_buttons.m"], ["native/darwin/tests/mouse_buttons_test.m"], { sharedTests: true }),
   lane("Darwin quit request", "objective-c", ["native/darwin/src/quit_request.m"], ["native/darwin/tests/quit_request_test.m"], { sharedTests: true }),
+  lane("Darwin stall watch", "objective-c", ["native/darwin/src/stall_watch.m"], ["native/darwin/tests/stall_watch_test.m"], { sharedTests: true }),
   lane("Darwin memory pressure", "objective-c", ["native/darwin/src/memory_pressure.m"], ["native/darwin/tests/memory_pressure_test.m", "native/darwin/tests/document_backforward_test.m"], { sharedTests: true }),
   lane("Darwin process identity", "objective-c", ["native/darwin/process-identity/src/process_identity.m"], ["native/darwin/process-identity/tests/**/*.m", "native/darwin/process-identity/tests/**/*.sh"], { testExtensions: new Set([".m", ".sh"]) }),
   lane("Darwin process identity Node test entrypoint", "js-ts", ["native/darwin/process-identity/tests/package.test.mjs"], ["native/darwin/process-identity/tests/package.test.mjs"]),
@@ -895,6 +896,22 @@ const FEATURE_LINKS = [
     ],
     expected: "The input context of an image region states no document access, so Korean composes from its first syllable.",
     levels: ["native"],
+  },
+  {
+    id: "F536",
+    implementation: [
+      { file: "native/darwin/src/stall_watch.m", symbol: "void sp_stall_await_awake(void)" },
+      { file: "packages/host/go/src/stall_watch.go", symbol: "func StartStallWatch" },
+      { file: "packages/host/rust/src/stall_watch.rs", symbol: "pub fn start_stall_watch" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/stall_watch_test.go", id: "TestARunLoopThatWaitsTakesNoHeartbeat" },
+      { file: "packages/host/go/tests/stall_watch_test.go", id: "TestAStallThatEndsInAWaitIsResumedAndItsSampleEnds" },
+      { file: "packages/host/rust/tests/stall_watch_test.rs", id: "a_run_loop_that_waits_takes_no_heartbeat" },
+      { file: "packages/host/rust/tests/stall_watch_test.rs", id: "a_stall_that_ends_in_a_wait_is_resumed_and_its_sample_ends" },
+    ],
+    expected: "Both hosts send no heartbeat while the main run loop waits and block the watch without a timer, and they keep recording a stall while it handles an event.",
+    levels: ["unit"],
   },
   {
     id: "F533",

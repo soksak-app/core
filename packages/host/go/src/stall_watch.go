@@ -2,8 +2,9 @@ package host
 
 // The watch of the main thread (docs/spec/logging.md, stalls): a stall is the absence of events, which no event of the stalled
 // thread reports, so a goroutine outside the main thread sends a heartbeat to it and compares the last heartbeat with the
-// clock. No event source reports a thread that does not run, which is why this watch uses a timer. A heartbeat stallLate or
-// more late is `host.stall`, the stacks of the threads go into a file of the logs folder as `host.stall.sampled`, and the next
+// clock. No event source reports a thread that does not run, which is why this watch uses a timer while the thread handles an
+// event. A run loop that waits for an event cannot be stalled, so the watch blocks without a timer through that wait. A heartbeat
+// stallLate or more late is `host.stall`, the stacks of the threads go into a file of the logs folder as `host.stall.sampled`, and the next
 // heartbeat is `host.stall.resumed` with the length of the stall. A `host.stall` carries watch_late_ms, the lateness of the
 // watch's own wake: a stall in which the watch wakes late too is a process that the system did not schedule.
 
@@ -29,17 +30,20 @@ const (
 
 // StallWatchOptions are the parts of the watch: Heartbeat sends a heartbeat that the watched thread answers and returns the time
 // of the call and the time of the last answer on one clock, where the time of the answer is the time of the first heartbeat
-// while none was answered; the watched thread answers without Go code (docs/spec/hosts.md, main thread of the Wails host).
+// while none was answered; the watched thread answers without Go code (docs/spec/hosts.md, main thread of the Wails host). While
+// the run loop of the watched thread waits for an event, Heartbeat sends nothing and returns the start of that wait as both times.
+// AwaitAwake blocks while that run loop waits and returns while it does not.
 // Sample writes the stacks of the threads of the process into a file, Folder is the logs folder and EmitHost stores an event of
 // the host. Clock is the time since the watch started, which measures the lateness of the watch's own wake, and Wait waits one
 // beat; nil takes the monotonic clock and time.Sleep.
 type StallWatchOptions struct {
-	Heartbeat func() (now, answered time.Duration)
-	Sample    func(path string) error
-	Folder    string
-	EmitHost  func(Level, string, map[string]any)
-	Clock     func() time.Duration
-	Wait      func(time.Duration)
+	Heartbeat  func() (now, answered time.Duration)
+	AwaitAwake func()
+	Sample     func(path string) error
+	Folder     string
+	EmitHost   func(Level, string, map[string]any)
+	Clock      func() time.Duration
+	Wait       func(time.Duration)
 }
 
 // StallHeartbeat is the heartbeat of the watch that the platform answers on the main thread in C.
@@ -63,6 +67,7 @@ func StartStallWatch(options StallWatchOptions) func() {
 	}
 	var stopped, sampling atomic.Bool
 	routine.Go("stall-watch", func() {
+		options.AwaitAwake()
 		// The first heartbeat is the reference of the answers until the watched thread answers one.
 		options.Heartbeat()
 		var stalledFrom int64 = -1
@@ -100,6 +105,8 @@ func StartStallWatch(options StallWatchOptions) func() {
 				options.EmitHost(LevelInfo, "host.stall.resumed", map[string]any{"stalled_ms": last - stalledFrom})
 				stalledFrom = -1
 			}
+			// After the check, so a stall that ended in this wait has its end first.
+			options.AwaitAwake()
 		}
 	})
 	return func() { stopped.Store(true) }

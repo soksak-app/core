@@ -269,6 +269,15 @@ impl Platform for Darwin {
         stall_sample::sample_threads(path)
     }
 
+    fn stall_heartbeat(&self) -> Result<(u64, u64), String> {
+        Ok(stall_sample::stall_heartbeat())
+    }
+
+    fn stall_await_awake(&self) -> Result<(), String> {
+        stall_sample::stall_await_awake();
+        Ok(())
+    }
+
     fn collect_garbage(&self, view: &PlatformWebview) -> Result<(), String> {
         webview::collect_garbage(view)
     }

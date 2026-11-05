@@ -303,8 +303,8 @@ func (s *Session) Started() []func() {
 		// A stall of the main thread is recorded without a window check (docs/spec/logging.md, stalls). The heartbeat starts when the
 		// main loop runs, because before it the main thread runs the start and takes no heartbeat.
 		func() {
-			stop := StartStallWatch(StallWatchOptions{Heartbeat: StallHeartbeat(system), Sample: system.SampleThreads,
-				Folder: filepath.Dir(host.events.Path()), EmitHost: EmitHost})
+			stop := StartStallWatch(StallWatchOptions{Heartbeat: StallHeartbeat(system), AwaitAwake: system.StallAwaitAwake,
+				Sample: system.SampleThreads, Folder: filepath.Dir(host.events.Path()), EmitHost: EmitHost})
 			s.stopStall.Store(&stop)
 		},
 	}

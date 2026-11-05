@@ -434,6 +434,14 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// Writes the stacks of the threads of this process, sampled for one second, into the file `path`. The watch of the
     /// main thread calls it for a stall (docs/spec/logging.md, stalls).
     fn sample_threads(&self, path: &std::path::Path) -> Result<(), String>;
+    /// Sends a heartbeat that a C function answers on the main thread and returns the time of the call and the time of
+    /// the last answer on the clock of `monotonic_ns`; while no heartbeat was answered, the time of the answer is the
+    /// time of the first heartbeat. While the main run loop waits for an event it sends nothing and returns the start of
+    /// that wait as both times. The watch of the main thread calls it (docs/spec/logging.md, stalls).
+    fn stall_heartbeat(&self) -> Result<(u64, u64), String>;
+    /// Blocks the calling thread while the main run loop waits for an event, and returns at once while it does not. The
+    /// watch of the main thread calls it (docs/spec/logging.md, stalls).
+    fn stall_await_awake(&self) -> Result<(), String>;
     /// Makes the WebContent processes of view collect JavaScript objects. The memory measurement of a diagnostic build
     /// uses it.
     fn collect_garbage(&self, view: &PlatformWebview) -> Result<(), String>;
