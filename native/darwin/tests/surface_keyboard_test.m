@@ -155,6 +155,66 @@ int main(void) { @autoreleasepool {
     check(window.firstResponder == terminalPage, "a page that held the keyboard by a press takes it back");
     sp_region_close(later);
 
+    // A surface hidden and shown again before its region shows: the page held the keyboard for want of a region, and nothing
+    // chose it by the return.
+    sp_window_focus_workbench(window);
+    void *waitingHost = sp_surface_create(composition);
+    webviewSetFrame(waitingHost, 0, 0, 400, 500);
+    webviewSetSurfaceHidden(waitingHost, false);
+    WKWebView *waitingPage = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 500)] autorelease];
+    check(sp_surface_place_view(waitingHost, waitingPage), "the page of the surface that waits for its region is placed");
+    sp_surface_focus(waitingHost);
+    check(window.firstResponder == waitingPage, "the page holds the keyboard for want of a region");
+    webviewSetSurfaceHidden(waitingHost, true);
+    webviewSetSurfaceHidden(waitingHost, false);
+    check(window.firstResponder == waitingPage, "the surface that shows again gives the keyboard back to its page");
+    void *waited = sp_region_create(waitingHost, "view", regionEvent, NULL);
+    placeRegion(waited);
+    check(window.firstResponder == (NSResponder *)waited, "the first region that shows after a hide takes the keyboard from the page");
+    sp_window_focus_workbench(window);
+    sp_surface_focus(waitingHost);
+    check(window.firstResponder == (NSResponder *)waited, "the keyboard returns to the region that took it after a hide");
+    sp_region_close(waited);
+
+    // The region shows while the surface is hidden, and the surface shows after it.
+    sp_surface_focus(waitingHost);
+    check(window.firstResponder == waitingPage, "the page holds the keyboard again for want of a region");
+    webviewSetSurfaceHidden(waitingHost, true);
+    void *behind = sp_region_create(waitingHost, "view", regionEvent, NULL);
+    placeRegion(behind);
+    webviewSetSurfaceHidden(waitingHost, false);
+    check(window.firstResponder == (NSResponder *)behind, "a region that showed behind the hidden surface takes the keyboard when the surface shows");
+    sp_region_close(behind);
+
+    // A press of a surface whose page holds the keyboard when its region shows, and a call that follows in the press.
+    sp_surface_focus(waitingHost);
+    check(window.firstResponder == waitingPage, "the page holds the keyboard before the press");
+    check(sp_input_pointer(window, 600, 250, 1, 0, 0, 0) == SP_INPUT_DELIVERED, "a press while the page holds the keyboard is delivered");
+    void *during = sp_region_create(waitingHost, "view", regionEvent, NULL);
+    placeRegion(during);
+    sp_surface_focus(waitingHost);
+    check(sp_input_pointer(window, 600, 250, 3, 0, 0, 0) == SP_INPUT_DELIVERED, "the release of that press is delivered");
+    check(window.firstResponder == (NSResponder *)during, "a call in a press does not undo the region that showed in it");
+    sp_region_close(during);
+    sp_surface_close(waitingHost);
+
+    // A region that hides with the keyboard leaves it with the window, where no key has a view, and takes it back as it shows.
+    void *hiding = sp_region_create(browserHost, "hiding", regionEvent, NULL);
+    placeRegion(hiding);
+    check([window makeFirstResponder:(NSResponder *)hiding], "the region takes the keyboard before it hides");
+    sp_region_place(hiding, 0, 0, 0, 0, false);
+    [NSRunLoop.mainRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+    check(window.firstResponder == window, "AppKit gives the keyboard of a region that hides to the window");
+    placeRegion(hiding);
+    check(window.firstResponder == (NSResponder *)hiding, "a region that shows again takes back the keyboard it lost to its hide");
+    // The keyboard that moved on while the region was hidden stays where it went.
+    sp_region_place(hiding, 0, 0, 0, 0, false);
+    [NSRunLoop.mainRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+    sp_window_focus_workbench(window);
+    placeRegion(hiding);
+    check(window.firstResponder == main, "a region that shows again takes no keyboard that moved on");
+    sp_region_close(hiding);
+
     // A window that closes takes no keyboard. The region of its surface stays alive until the host closes it, so the owner of
     // the surface is still readable: a call that follows it would put the first responder into a window that gets no key.
     NSWindow *closing = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 800, 500)

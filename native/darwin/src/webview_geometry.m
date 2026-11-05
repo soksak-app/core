@@ -583,7 +583,8 @@ static void giveKeyboardToSurface(NSView *view) {
         return;
     }
     NSResponder *first = window.firstResponder;
-    if ([first isKindOfClass:NSView.class] && [(NSView *)first isDescendantOf:surface]) return;
+    // A page that holds the keyboard for want of a region holds it only until a region shows.
+    if (!host.keyboardWanted && [first isKindOfClass:NSView.class] && [(NSView *)first isDescendantOf:surface]) return;
     NSView *owner = host.keyboardOwner;
     NSView *target = owner && [owner isDescendantOf:surface] && !owner.isHiddenOrHasHiddenAncestor ? owner : nil;
     if (!target && host) target = shownInputRegion(host.nativePlane);
@@ -618,11 +619,14 @@ void sp_surface_region_shown(void *handle) {
     NSCAssert(NSThread.isMainThread, @"the keyboard of a surface belongs to the UI thread");
     NSView *region = (NSView *)handle;
     SPSurfaceHost *host = surfaceHost(region);
-    if (!host.keyboardWanted) return;
-    host.keyboardWanted = NO;
     NSWindow *window = region.window;
-    if (!window || window.firstResponder != host.webview) return;
-    giveKeyboardAfterPress(window, ^{ if (window.firstResponder == host.webview) [window makeFirstResponder:region]; });
+    if (!window || region.isHiddenOrHasHiddenAncestor) return;
+    NSResponder *holder = window.firstResponder;
+    // The page holds the keyboard for want of a region, or AppKit gave it to the window when this region hid.
+    if (!(host.keyboardWanted && holder == host.webview) && !(host.keyboardOwner == region && holder == window)) return;
+    // A geometry change shows a region again and again, and it does not replace a call that waits for the release.
+    if (leftPressOpen(window) && objc_getAssociatedObject(window, &keyboardPendingKey)) return;
+    giveKeyboardAfterPress(window, ^{ if (window.firstResponder == holder) [window makeFirstResponder:region]; });
 }
 
 void sp_surface_region_focus(void *handle) {
@@ -758,6 +762,7 @@ void webviewGetFrame(void *handle, double *out) {
 @interface SPHiddenResponder : NSObject
 @property(nonatomic, retain) NSView *owner;
 @property(nonatomic, assign) NSResponder *replacement;
+@property(nonatomic, assign) BOOL landed;
 @end
 @implementation SPHiddenResponder
 - (void)dealloc { [_owner release]; [super dealloc]; }
@@ -774,6 +779,8 @@ void webviewSetSurfaceHidden(void *handle, bool hidden) {
     NSResponder *first = window.firstResponder;
     NSView *owner = hidden && !surface.hidden && [first isKindOfClass:NSView.class]
         && [(NSView *)first isDescendantOf:surface] ? (NSView *)first : nil;
+    // The move of the first responder that the hide causes ends the wait of the page for a region.
+    BOOL landed = host.keyboardWanted;
     // Native regions inspect the superview chain of the surface while applying geometry. The superview chain is settled
     // before applying again. Otherwise, after the surface is restored, that document stays hidden even after the host became visible.
     surface.hidden = hidden;
@@ -782,6 +789,7 @@ void webviewSetSurfaceHidden(void *handle, bool hidden) {
         SPHiddenResponder *held = [[SPHiddenResponder new] autorelease];
         held.owner = owner;
         held.replacement = window.firstResponder;
+        held.landed = landed;
         objc_setAssociatedObject(surface, &hiddenResponderKey, held, OBJC_ASSOCIATION_RETAIN);
     }
     if (!hidden) {
@@ -790,10 +798,14 @@ void webviewSetSurfaceHidden(void *handle, bool hidden) {
         if (held) {
             NSView *owner = held.owner;
             NSResponder *replacement = held.replacement;
+            BOOL heldLanded = held.landed;
             // A call that waits for the release of a press was asked for later than this restore.
             if (window && !(leftPressOpen(window) && objc_getAssociatedObject(window, &keyboardPendingKey))) {
                 giveKeyboardAfterPress(window, ^{
-                    if (window.firstResponder == replacement && [owner isDescendantOf:surface]) [window makeFirstResponder:owner];
+                    if (window.firstResponder != replacement || ![owner isDescendantOf:surface]) return;
+                    // Nothing chose the page that held the keyboard for want of a region, so the return lands again.
+                    if (heldLanded) giveKeyboardToSurface(surface);
+                    else [window makeFirstResponder:owner];
                 });
             }
             objc_setAssociatedObject(surface, &hiddenResponderKey, nil, OBJC_ASSOCIATION_RETAIN);

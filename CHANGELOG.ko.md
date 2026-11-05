@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F585: surface가 숨겨진 뒤나 press 중에 영역이 표시되는 터미널은 page에서 키보드를 받고, 키보드를 가진 채 숨겨진 영역은 표시될 때 키보드를 되찾는다.
 - F502-16: 허용된 host 차이 표가 합류로 늘어난 파일을 적고, main page 없는 창의 library test 는 framework 를 부르지 않는다. Red: host structure audit 이 각 파일을 지목했다.
 - F502-16: contract 는 hello deadline 의 끝을 모든 host 의 case 로 두고, Rust host 도 Go host 처럼 hello 뒤의 침묵을 test 한다. Red: host structure audit 이 case 없는 Go test 를 지목했다.
 - F502-16: mygo workbench의 `core.projects.flush`는 host가 layout, 창 geometry, tab을 저장한 뒤에 답하고 저장이 실패하면 그 실패를 답하므로, reload가 쓰기를 잃지 않는다.
