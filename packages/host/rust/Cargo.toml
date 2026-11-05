@@ -39,8 +39,9 @@ crc32fast = "1"
 url = "2"
 # The start document answers the request of the scheme handler of the framework as an HTTP response.
 http = "1"
-# The surface presentation waits for its main-thread step on a channel of the asynchronous runtime.
-tokio = { version = "1", features = ["sync"] }
+# The surface presentation waits for its main-thread step on a channel of the asynchronous runtime, and the host builds that
+# runtime (routine.rs async_runtime).
+tokio = { version = "1", features = ["sync", "rt-multi-thread"] }
 # The session file name is the RFC 3986 percent-encoding of the session id (workspace.rs tab_session_name).
 percent-encoding = "2"
 

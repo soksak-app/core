@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F551: Tauri host는 비동기 runtime의 worker를 processor마다 하나가 아니라 둘만 두고, 일 없는 blocking thread는 10초가 아니라 1초 뒤에 끝난다.
 - F550: 구독된 `host.window`는 한 창의 값을 한 번에 하나만 읽는다. 읽는 동안 들어온 변경은 다음 읽기 하나로 합쳐지므로, redraw가 프레임마다 thread를 시작하지 않고 구독이 새 값 뒤에 옛 값을 받지 않는다.
 - F502-16: mygo workbench의 숨은 element는 `display:none`인 page element처럼 같은 이름의 element 사이에서 index를 유지하므로, tab을 `core.grid`의 자리로 부르는 window check는 card head의 모든 단계와 전체 화면 card에서 그 tab에 닿는다. bar는 element `core.chrome.bar`다.
 - F502-16: mygo workbench는 `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.views`에 답한다.

@@ -123,7 +123,7 @@ async fn project_shown(
 }
 
 /// Runs the body of an async command on the blocking threads of the async runtime. Tauri runs an async command as a task of
-/// its runtime, which has one worker for each processor; a body that waits there for a page reply, a lock or the main thread
+/// its runtime, which has few workers; a body that waits there for a page reply, a lock or the main thread
 /// holds a worker, so a few waiting commands would stop every other command and reply until their waits end.
 async fn blocking<T: Send + 'static>(
     body: impl FnOnce() -> Result<T, String> + Send + 'static,

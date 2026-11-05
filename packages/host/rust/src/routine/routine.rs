@@ -46,6 +46,25 @@ where
         .unwrap_or_else(|error| panic!("cannot start the thread {name}: {error}"))
 }
 
+/// The workers of the asynchronous runtime of the framework. A worker only awaits and answers a file of the page: a command
+/// body that waits runs on the blocking threads. Two workers keep the commands moving while one reads a file, and the number of
+/// processors decides nothing here.
+const ASYNC_WORKERS: usize = 2;
+
+/// How long a blocking thread of the asynchronous runtime stays without a task. A burst of commands that wait for the main thread
+/// starts many of them, and a thread that stays holds its stack. A new thread costs far less than the command it runs.
+const BLOCKING_KEEP_ALIVE: Duration = Duration::from_secs(1);
+
+/// Builds the asynchronous runtime of the framework. The number of blocking threads keeps the bound of the runtime: a command
+/// body can wait for a page reply that another command brings, so a low bound would stop both.
+pub fn async_runtime() -> std::io::Result<tokio::runtime::Runtime> {
+    tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(ASYNC_WORKERS)
+        .thread_keep_alive(BLOCKING_KEEP_ALIVE)
+        .enable_all()
+        .build()
+}
+
 /// Starts the thread that ends the process after a panic. Call it before the panic hook is installed; calling it again does
 /// nothing.
 pub fn start_panic_ender() {
@@ -126,3 +145,7 @@ pub fn record_panic(location: &str, message: &str) {
         ),
     }
 }
+
+#[cfg(test)]
+#[path = "async_runtime_test.rs"]
+mod async_runtime_test;

@@ -156,12 +156,27 @@ fn launch_activation(
     platform::launch_activation(builder, launch_activates_ignoring_other_apps())
 }
 
+/// Gives Tauri the asynchronous runtime of the host, before anything asks for the default runtime of Tauri, which holds one worker
+/// for each processor. A runtime that cannot start ends the process with status 1 before it opens a window. The runtime lives
+/// until the process ends, as Tauri requires of a runtime that it is given.
+fn set_async_runtime() {
+    let runtime = match soksak_host::routine::async_runtime() {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            eprintln!("asynchronous runtime: {error}");
+            std::process::exit(1);
+        }
+    };
+    tauri::async_runtime::set(Box::leak(Box::new(runtime)).handle().clone());
+}
+
 /// Creates the application and runs it until it exits.
 ///
 /// context is the `tauri::generate_context!()` of the application. background is the script that the surface webviews
 /// run before the document, and the application passes it including the `background.js` of the frontend.
 pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
     soksak_host::start_process();
+    set_async_runtime();
     // Installed plugins are provided from the configuration folder (docs/spec/installation.md). setup decides the
     // configuration folder.
     let installed_directory = Arc::new(OnceLock::new());

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F551: The Tauri host holds two workers of its asynchronous runtime instead of one for each processor, and an idle blocking thread ends after one second instead of ten.
 - F550: A watched `host.window` holds one reading of a window: the changes that arrive during a reading join one further reading, so a redraw no longer starts one thread for each frame and a watch no longer receives an older value after a newer one.
 - F502-16: A hidden element of the mygo workbench keeps its index among the elements of its name, as a page element under `display:none`, so a window check that names a tab by its place in `core.grid` reaches that tab through every stage of a card head and through a full screen card. The bar is the element `core.chrome.bar`.
 - F502-16: The mygo workbench answers `core.plugin.open-calls`, `core.plugin.losses` and `core.plugin.views`.
