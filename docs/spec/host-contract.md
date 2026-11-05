@@ -201,6 +201,7 @@ Items:
 | `binding.record.every-host-method-is-callable` | Every exported method of the host is reachable through the entrance by its name, and a method with an unsupported signature stops the start of the host with an error that names the method. | wailsv3 only: Tauri registers the commands that the `bindings!` macro defines, so a command outside the macro does not compile into the registration |
 | `binding.record.unsupported-method-fails-at-start` | An exported method whose parameters are not an optional context and `json.RawMessage` values, or whose results are not an optional value and an optional error, makes the creation of the entrance fail with an error that names the method. | wailsv3 only: Tauri has no reflection over its commands |
 | `diagnostics.test-mark.needs-the-event-log` | A mark while no event log is attached fails with `the event log of the host is not attached`. | all |
+| `documents.attach.one-main-step` | An attach checks the region, takes the name, creates the document and registers it in one step of the main thread, so a close of the surface or a reload of its page runs before or after the whole attach: a failed attach takes back its own name and request log without an error record, and no document stays open without a name. | all |
 | `documents.request.accepts-own-surface` | A document request for the caller's own surface is accepted and returns the surface and name key. | all |
 | `documents.request.rejects-foreign-or-missing-caller` | A document request from no caller surface or from another surface fails with "not surface". | all |
 | `documents.request.rejects-invalid-names` | Empty, capitalized, hyphen-first, slash-containing, and 65-character document names are rejected. | all |
@@ -365,6 +366,7 @@ Items:
 | `endpoint.input.key-unknown-modifier-rejected` | An unknown key modifier returns -32602. | all |
 | `endpoint.input.key-shift-command-mask` | The shift and command modifiers become the bit mask 9, with the key and phase passed through. | all |
 | `endpoint.input.key-control-option-and-text` | The control and option modifiers become 6, and text is passed through. | all |
+| `endpoint.input.key-empty-text-types-the-key` | A key with an empty text reaches the platform with no text, so the key name gives the characters of the event. | all |
 | `endpoint.input.key-invalid-phase-or-modifier-type` | An unknown key phase or a non-array modifiers value returns -32602. | all |
 | `endpoint.discovery.writes-endpoint-json` | endpoint.json holds the transport, address, pid, application, version, executable, and start time. | all |
 | `endpoint.discovery.written-after-first-window` | endpoint.json is not written when the endpoint starts; publishing it for a window that does not exist fails and writes no file; after publishing for an existing window, a request for that window is answered. | all |
@@ -565,6 +567,7 @@ Items:
 | `images.present.older-ack-preserves-newer-rejection` | A successful older in-flight presentation advances the actual presented sequence but does not clear a rejection recorded for a newer accepted sequence; only a successful acknowledgment of the latest accepted sequence clears that rejection. | all |
 | `images.present.missing-native-surface-requests-reconfiguration` | A presentation that fails with notFound requests a fresh configuration of the same raster. | all |
 | `images.attach.surface-close-removes-only-its-images` | Removing a surface returns its image handles and keeps another surface's images. | all |
+| `images.attach.one-main-step` | An attach checks its request, takes the name, creates the region and registers it in one step of the main thread, so a close of the surface or a reload of its page runs before or after the whole attach: a failed attach takes back only its own name without an error record, and no region stays open without a name. | all |
 | `images.attach.rejects-reservation-without-sidecar` | An image reservation without its owning sidecar is rejected and registers nothing. | all |
 | `images.present.replaced-frame-is-logged-as-invalidated` | A frame that is no longer current (`stale`, `notAttached`, or `staleRaster native=... frame=...`) answers `stale` and logs `image frame invalidated before native presentation: ... reason=<detail>` without marking a presentation failure. | all |
 | `images.present.frame-of-undeclared-sidecar-is-invalidated` | A frame of a sidecar that no plugin declares is answered `stale` and recorded without native presentation, recovery or error, and an answer to the ended sidecar is recorded as `not sent`. | all |

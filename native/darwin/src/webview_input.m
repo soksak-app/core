@@ -1,6 +1,7 @@
 #import <Cocoa/Cocoa.h>
 #import <objc/runtime.h>
 #import "webview_input.h"
+#import "input_inject.h"
 #import "application_log.h"
 #import "event_ring.h"
 #import "observe.h"
@@ -16,7 +17,7 @@ static NSMapTable<NSWindow *, WKWebView *> *lastPointerTargets;
 // The move that turns tracking on may not reach the tracking owner of WebKit.
 // Delivering the first move of the new target lets the page compute the cursor at the current position.
 static void refreshPointerCursor(WKWebView *view, NSEvent *event) {
-    if (NSEvent.pressedMouseButtons != 0) return;
+    if (sp_input_physical_buttons() != 0) return;
     [view updateTrackingAreas];
     for (NSTrackingArea *area in view.trackingAreas) {
         if ((area.options & NSTrackingMouseMoved) && [area.owner respondsToSelector:@selector(mouseMoved:)]) {
@@ -246,7 +247,7 @@ static NSEvent *routePointer(NSEvent *event) {
     for (WKWebView *view in inputViews) {
         if (view.window == window) [view _setIgnoresMouseMoveEvents:view != target];
     }
-    if (NSEvent.pressedMouseButtons != 0) {
+    if (sp_input_physical_buttons() != 0) {
         [lastPointerTargets removeObjectForKey:window];
     } else if (target != previous) {
         if (target) [lastPointerTargets setObject:(WKWebView *)target forKey:window];

@@ -2,11 +2,15 @@ package host
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 	"unsafe"
+
+	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
 type imageDetachMessageOwner struct {
@@ -584,10 +588,128 @@ func TestAnUnacknowledgedImageDetachKeepsOnlyItsSurfacePending(t *testing.T) {
 	if err := surfaces.SidecarSend("fixture-sidecar", "surface-b", json.RawMessage(`{"open":{}}`), nil); err != nil {
 		t.Fatalf("send of another surface: %v", err)
 	}
+	savedFramework := framework
+	framework = stepFramework{}
+	t.Cleanup(func() { framework = savedFramework })
 	err = surfaces.attachCheckedImage(ImageKey{Surface: "surface-a", Name: "view"}, ImageRequest{Surface: "surface-a", Name: "view", Sidecar: "fixture-sidecar"})
 	if err == nil || !strings.HasPrefix(err.Error(), "image detach sidecar fixture-sidecar surface surface-a image view generation 7") ||
 		!strings.HasSuffix(err.Error(), "is pending") {
 		t.Fatalf("image attach of the pending surface returned %v, want the pending detach", err)
+	}
+}
+
+// attachPlatform creates and closes image regions and reports a window that is on screen or a failure of that read.
+type attachPlatform struct {
+	platform.Platform
+	created, closed []unsafe.Pointer
+	onScreen        error
+}
+
+func (p *attachPlatform) CreateImage(surface unsafe.Pointer, name string, event func(json string), released func(generation, raster uint64, sequence int)) (unsafe.Pointer, error) {
+	handle := unsafe.Pointer(new(int))
+	p.created = append(p.created, handle)
+	return handle, nil
+}
+
+func (p *attachPlatform) CloseImage(image unsafe.Pointer) { p.closed = append(p.closed, image) }
+
+func (p *attachPlatform) WindowOnScreen(unsafe.Pointer) (bool, error) { return false, p.onScreen }
+
+// queuedFramework runs a queued task before its next step, as the main thread runs a task that was queued ahead of that step.
+type queuedFramework struct {
+	frameworkRecord
+	queued func()
+}
+
+func (f *queuedFramework) Step(task func()) {
+	if queued := f.queued; queued != nil {
+		f.queued = nil
+		queued()
+	}
+	task()
+}
+
+// attachSurfaces returns the surfaces of a window whose surface-a declares the image region view of fixture-sidecar.
+func attachSurfaces(t *testing.T) (*Surfaces, *attachPlatform, *queuedFramework) {
+	t.Helper()
+	surfaces := sidecarSessionSurfaces(t)
+	surfaces.sidecars.stopped = false
+	surfaces.sidecars.running["fixture-sidecar"] = &sidecar{name: "fixture-sidecar", persistent: true, outbox: make(chan queuedLine, 16),
+		closeWaiters: map[string]chan error{}, retained: map[string]int{}, surfaces: map[string]bool{}}
+	surfaces.images = NewImages()
+	surfaces.window = &noticeFrontend{}
+	surfaces.views = map[string]*nativeWebview{"surface-a": {handle: unsafe.Pointer(new(int))}}
+	surfaces.compositions = map[string]SurfaceComposition{"surface-a": {Kind: "view", Regions: []SurfaceRegion{
+		{Name: "view", Kind: "image", Sidecar: "fixture-sidecar", Present: "copy"},
+	}}}
+	fake, steps := &attachPlatform{}, &queuedFramework{}
+	savedSystem, savedFramework := system, framework
+	system, framework = fake, steps
+	t.Cleanup(func() { system, framework = savedSystem, savedFramework })
+	return surfaces, fake, steps
+}
+
+// contract: images.attach.one-main-step
+func TestAReloadDuringAnAttachLeavesNoRegionWithoutAName(t *testing.T) {
+	surfaces, fake, steps := attachSurfaces(t)
+	key, request := ImageKey{Surface: "surface-a", Name: "view"}, ImageRequest{Surface: "surface-a", Name: "view", Sidecar: "fixture-sidecar"}
+	// The reload of the surface and the attach of its new page, which run on the main thread ahead of the main-thread work of the attach.
+	var attachedAgain error
+	steps.queued = func() {
+		surfaces.reloadSurfaceImages("surface-a", system.CloseImage)
+		attachedAgain = surfaces.attachCheckedImage(key, request)
+	}
+	if err := surfaces.attachCheckedImage(key, request); err == nil {
+		t.Fatal("the attach of the earlier page took the name of the new page")
+	}
+	if attachedAgain != nil {
+		t.Fatalf("the attach of the new page: %v", attachedAgain)
+	}
+	registered, err := surfaces.images.Get(key)
+	if err != nil {
+		t.Fatalf("the region of the new page: %v", err)
+	}
+	for _, handle := range fake.created {
+		if handle != registered && !slices.Contains(fake.closed, handle) {
+			t.Fatalf("created %v, closed %v, registered %v: a region has no name and stays open", fake.created, fake.closed, registered)
+		}
+	}
+}
+
+// contract: images.attach.one-main-step
+func TestASurfaceCloseDuringAnAttachFindsNoNameOfTheAttach(t *testing.T) {
+	surfaces, fake, steps := attachSurfaces(t)
+	key, request := ImageKey{Surface: "surface-a", Name: "view"}, ImageRequest{Surface: "surface-a", Name: "view", Sidecar: "fixture-sidecar"}
+	steps.queued = func() {
+		surfaces.images.CloseSurface("surface-a", system.CloseImage)
+		surfaces.images.EndGeneration("surface-a")
+		delete(surfaces.views, "surface-a")
+		delete(surfaces.compositions, "surface-a")
+	}
+	if err := surfaces.attachCheckedImage(key, request); err == nil {
+		t.Fatal("the attach of a closed surface succeeded")
+	}
+	if len(fake.created) != 0 {
+		t.Fatalf("the attach created %d regions in a closed surface", len(fake.created))
+	}
+	if err := surfaces.images.Reserve(key, &ImageOwner{SidecarName: "fixture-sidecar", SidecarOwner: surfaces}); err != nil {
+		t.Fatalf("the attach kept a name after the close: %v", err)
+	}
+}
+
+// contract: images.attach.one-main-step
+func TestAFailedAttachTakesBackItsName(t *testing.T) {
+	surfaces, fake, _ := attachSurfaces(t)
+	fake.onScreen = errors.New("the window state cannot be read")
+	key, request := ImageKey{Surface: "surface-a", Name: "view"}, ImageRequest{Surface: "surface-a", Name: "view", Sidecar: "fixture-sidecar"}
+	if err := surfaces.attachCheckedImage(key, request); err == nil || err.Error() != "the window state cannot be read" {
+		t.Fatalf("attach: %v", err)
+	}
+	if err := surfaces.images.Reserve(key, &ImageOwner{SidecarName: "fixture-sidecar", SidecarOwner: surfaces}); err != nil {
+		t.Fatalf("the failed attach kept its name: %v", err)
+	}
+	if len(fake.created) != len(fake.closed) {
+		t.Fatalf("created %v, closed %v: the failed attach left a region", fake.created, fake.closed)
 	}
 }
 

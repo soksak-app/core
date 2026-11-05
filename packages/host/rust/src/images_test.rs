@@ -48,6 +48,106 @@ fn attached_images(surface: &str) -> super::Images {
     images
 }
 
+/// A window of a framework that holds queued tasks, with records in which surface declares the image region name. Its
+/// native window fails, so an attach ends at its read of the window state, before it reaches the native platform.
+fn attach_fixture(
+    surface: &str,
+    name: &str,
+) -> (
+    crate::framework::Webview,
+    Arc<crate::windows::WindowData>,
+    Arc<crate::test_framework::Fixture>,
+) {
+    use crate::framework::Manager;
+    use crate::surfaces::{SurfaceComposition, SurfaceRegion};
+    let (app, framework) = crate::test_framework::application_with_queue();
+    let frontend = Arc::new(
+        crate::test_framework::FixtureFrontend::without_native_window(
+            "the test window has no native window",
+        ),
+    );
+    let webview = app.webview_of(frontend, "fixture");
+    let records = Arc::new(crate::windows::WindowData::default());
+    let windows = crate::windows::Windows::default();
+    crate::windows::register_records(&windows, "fixture", records.clone());
+    app.manage(windows);
+    records.compositions.lock().unwrap().insert(
+        surface.to_string(),
+        SurfaceComposition {
+            kind: "view".into(),
+            page: String::new(),
+            regions: vec![SurfaceRegion {
+                name: name.to_string(),
+                kind: "image".into(),
+                sidecar: "fixture-sidecar".into(),
+                present: "copy".into(),
+                input: String::new(),
+            }],
+            overlays: None,
+        },
+    );
+    (webview, records, framework)
+}
+
+/// The error records of the image region name. The buffer holds the records of every test of the binary.
+fn image_error_records(name: &str) -> Vec<serde_json::Value> {
+    crate::event_record::buffered_fields("host.record.error")
+        .into_iter()
+        .filter(|fields| fields["where"] == format!("image {name}"))
+        .collect()
+}
+
+fn attach_request(surface: &str, name: &str) -> super::Request {
+    super::Request {
+        surface: surface.to_string(),
+        name: name.to_string(),
+        sidecar: Some("fixture-sidecar".to_string()),
+    }
+}
+
+// contract: images.attach.one-main-step
+#[test]
+fn a_surface_close_during_an_attach_finds_no_name_of_the_attach() {
+    let (surface, name) = ("attach-close-surface", "attach-close-region");
+    let (webview, records, framework) = attach_fixture(surface, name);
+    let closed = records.clone();
+    // The close of the page's surface list, which runs on the main thread ahead of the main-thread work of the attach.
+    framework.queue(move || {
+        closed.images.begin_generation(surface);
+        closed.images.remove_surface(surface);
+        closed.images.end_generation(surface);
+        closed.compositions.lock().unwrap().remove(surface);
+    });
+    let attached = super::attach(&webview, attach_request(surface, name));
+    assert!(attached.is_err(), "the attach of a closed surface fails");
+    assert_eq!(
+        image_error_records(name),
+        Vec::<serde_json::Value>::new(),
+        "the close leaves the attach no name to take back, so nothing fails after the failure of the attach"
+    );
+}
+
+// contract: images.attach.one-main-step
+#[test]
+fn a_failed_attach_takes_back_its_name() {
+    let (surface, name) = ("attach-failed-surface", "attach-failed-region");
+    let (webview, records, _framework) = attach_fixture(surface, name);
+    assert_eq!(
+        super::attach(&webview, attach_request(surface, name)).unwrap_err(),
+        "the test window has no native window"
+    );
+    let key = (surface.to_string(), name.to_string());
+    records
+        .images
+        .reserve(&key, "owner", "fixture-sidecar")
+        .expect("the failed attach took back its name");
+    assert_eq!(
+        image_error_records(name),
+        Vec::<serde_json::Value>::new(),
+        "taking back the name of the failed attach records no error"
+    );
+}
+
 // contract: images.detach.timeout-keeps-waiting
 #[test]
 fn a_reload_sends_no_second_detach_for_a_pending_image() {
