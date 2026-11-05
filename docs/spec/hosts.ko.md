@@ -70,6 +70,16 @@ packages/host/go/                          packages/host/rust/
       windows/                                   windows/
         windows.go     패키지 문서, 등록                windows.rs
         identity.go    파일 ID                          identity.rs
+        input.go       WebView2 의 pointer·키 입력       input.rs
+        devtools_input.go  DevTools protocol 호출       devtools_input.rs
+        webview.go     창의 WebView2                    webview.rs
+        capture.go     still capture                    capture.rs
+        capture_diagnostics.go  diagnostic method      차이 H54
+        com.go         COM table                        차이 H53
+        (없음)                                          process_failure.rs   차이 H55
+        show.go        show 명령                        show.rs
+        show_windows.go  앞을 지키는 show               show_windows.rs
+        ui_thread.go   UI thread 와 그 대기             ui_thread.rs
         unsupported.go named pipe 엔드포인트를 포함한 "not implemented" 동작  unsupported.rs
       linux/  (구현 시 추가)                     linux/
   tests/                                     tests/
@@ -202,7 +212,7 @@ Wayland에서 client는 toplevel을 배치하거나 focus할 수 없다. 둘 다
 
 ## Windows 상태
 
-Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`)만 구현한다. `platform/windows/unsupported.*`의 나머지 연산은 `<operation> is not implemented on windows` 형식의 오류를 반환한다. Windows에서는 애플리케이션 시작이 첫 platform 연산에서 실패한다. Wails의 `Run`과 Tauri의 `run`은 창을 열기 전에 `window resize animation is not implemented on windows`와 상태 1로 끝난다. Linux 구현은 없으며, 그곳에서 `platform.Current()`와 `platform::current()`는 오류를 반환한다.
+Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`), WebView2 의 pointer·키 입력(`platform/windows/input.*`, `devtools_input.*`), still capture(`capture.*`), 앞을 지키는 show(`show.*`, `show_windows.*`)를 구현한다. `platform/windows/unsupported.*`의 나머지 연산은 `<operation> is not implemented on windows` 형식의 오류를 반환한다. Windows에서는 애플리케이션 시작이 첫 platform 연산에서 실패한다. Wails의 `Run`과 Tauri의 `run`은 창을 열기 전에 `window resize animation is not implemented on windows`와 상태 1로 끝난다. Linux 구현은 없으며, 그곳에서 `platform.Current()`와 `platform::current()`는 오류를 반환한다.
 
 `make check-host-files`는 `make check-windows-build`를 실행하며, 이 target은 Go language host library와 Wails framework adapter의 source를 기본 build와 diagnostics build에서 `windows/arm64`용으로 vet한다.
 
@@ -287,6 +297,9 @@ Go language host library의 header `src/platform/darwin/main_thread.h`는 두 ma
 | C8 | `go.mod`, `go.sum` | `Cargo.toml` | 언어마다 매니페스트와 잠금 파일이 다르다. Rust 패키지의 잠금 파일은 워크스페이스의 `Cargo.lock`이다 |
 | C9 | `tests/installed_plugins_test.go` | 없음 | mygo workbench는 Go process에서 그리므로 Go `sok`이 그를 위해 `AcceptInstalledPlugins`로 설치된 plugin 문서를 검사한다. Rust host의 창은 그 문서를 page에서 `packages/plugin-api`의 `acceptInstalledPlugins`로 검사하므로 Rust `sok`에는 test할 검사가 없다 |
 | C10 | `src/event_log_idle_test.go` | `src/event_log_flush_test.rs`, `tests/event_log_idle_test.rs` | 두 언어는 writer의 같은 잠듦과 flush의 같은 응답을 확인한다. Go test는 file system fixture 때문에 `package sok`에 있고, Rust flush test는 비공개 `wait_for_flush` 때문에 `event_log.rs`의 자식이다 |
+| H53 | `src/platform/windows/com.go` | 없음 | Go host 는 cgo 없이 COM table 로 WebView2 를 호출한다. Rust host 는 그 table 을 `webview2-com` crate 에서 얻는다 |
+| H54 | `src/platform/windows/capture_diagnostics.go` | 없음 | Go build tag 는 파일 전체를 고르므로 diagnostic build 의 method 가 자기 파일을 가진다. Rust 는 `src/platform/windows/windows.rs` 에서 method 마다 feature 로 고른다 |
+| H55 | 없음 | `src/platform/windows/process_failure.rs`, `src/platform/windows/process_failure_test.rs` | Tauri framework adapter 는 자기 web view 의 process failure 를 읽는다. Go host 는 아직 창의 WebView2 를 쥐지 못하므로 거기서는 failure 를 읽을 수 없다 |
 
 ### Framework 표
 

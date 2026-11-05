@@ -71,6 +71,16 @@ packages/host/go/                          packages/host/rust/
       windows/                                   windows/
         windows.go     package documentation, registration  windows.rs
         identity.go    file ID                          identity.rs
+        input.go       pointer and key input of a WebView2  input.rs
+        devtools_input.go  DevTools protocol calls       devtools_input.rs
+        webview.go     the WebView2 of a window         webview.rs
+        capture.go     still capture                    capture.rs
+        capture_diagnostics.go  diagnostic methods      difference H54
+        com.go         COM tables                       difference H53
+        (none)                                          process_failure.rs   difference H55
+        show.go        the show command                 show.rs
+        show_windows.go  the show that keeps the front  show_windows.rs
+        ui_thread.go   the UI thread and its waits      ui_thread.rs
         unsupported.go "not implemented" operations, including the named-pipe endpoint  unsupported.rs
       linux/  (added when implemented)           linux/
   tests/                                     tests/
@@ -202,7 +212,7 @@ A client on Wayland cannot place or focus a toplevel: the compositor decides bot
 
 ## Windows state
 
-On Windows both hosts implement only directory identity (`platform/windows/identity.*`). Every other operation in `platform/windows/unsupported.*` returns an error of the form `<operation> is not implemented on windows`. Application startup fails on Windows at its first platform operation: Wails `Run` and Tauri `run` end with `window resize animation is not implemented on windows` and status 1 before any window opens. Linux has no implementation; `platform.Current()` and `platform::current()` return an error there.
+On Windows both hosts implement directory identity (`platform/windows/identity.*`), the pointer and key input of a WebView2 (`platform/windows/input.*`, `devtools_input.*`), its still capture (`capture.*`) and a show that keeps the front (`show.*`, `show_windows.*`). Every other operation in `platform/windows/unsupported.*` returns an error of the form `<operation> is not implemented on windows`. Application startup fails on Windows at its first platform operation: Wails `Run` and Tauri `run` end with `window resize animation is not implemented on windows` and status 1 before any window opens. Linux has no implementation; `platform.Current()` and `platform::current()` return an error there.
 
 `make check-host-files` runs `make check-windows-build`, which vets the sources of the Go language host library and of the Wails framework adapter for `windows/arm64` in the default and the diagnostics build.
 
@@ -287,6 +297,9 @@ The allowed differences are two tables, and a row ID is unique across both. The 
 | C8 | `go.mod`, `go.sum` | `Cargo.toml` | Each language has its own manifest and lock file; the lock file of the Rust packages is the `Cargo.lock` of the workspace |
 | C9 | `tests/installed_plugins_test.go` | none | The mygo workbench draws in the Go process, so the Go `sok` checks the installed plugin document with `AcceptInstalledPlugins` for it; a window of the Rust host checks that document in its page, with `acceptInstalledPlugins` of `packages/plugin-api`, so the Rust `sok` has no such check to test |
 | C10 | `src/event_log_idle_test.go` | `src/event_log_flush_test.rs`, `tests/event_log_idle_test.rs` | Both languages assert the same sleep of the writer and the same answers of a flush. The Go test is in `package sok` for the fixture of its file system, and the Rust flush test is a child of `event_log.rs` for the private `wait_for_flush` |
+| H53 | `src/platform/windows/com.go` | none | The Go host calls WebView2 through its COM tables with no cgo; the Rust host has those tables from the `webview2-com` crate |
+| H54 | `src/platform/windows/capture_diagnostics.go` | none | A Go build tag selects a whole file, so the methods of the diagnostic build are a file of their own; Rust selects each method in `src/platform/windows/windows.rs` with a feature |
+| H55 | none | `src/platform/windows/process_failure.rs`, `src/platform/windows/process_failure_test.rs` | The Tauri framework adapter reads the process failures of its web views; the Go hosts do not hold the WebView2 of a window yet, so nothing there could read a failure |
 
 ### Framework table
 

@@ -4,129 +4,23 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::mpsc;
-use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
-use ::windows::Win32::Foundation::{HMODULE, HWND, LPARAM, LRESULT, WPARAM};
 use ::windows::Win32::System::Com::StructuredStorage::CreateStreamOnHGlobal;
 use ::windows::Win32::System::Com::{IStream, STREAM_SEEK_END, STREAM_SEEK_SET};
-use ::windows::Win32::System::LibraryLoader::GetModuleHandleW;
-use ::windows::Win32::System::Threading::GetCurrentThreadId;
-use ::windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, HWND_MESSAGE, IsIconic, IsWindowVisible, PostMessageW,
-    RegisterClassExW, WINDOW_EX_STYLE, WINDOW_STYLE, WM_APP, WNDCLASSEXW,
-};
-use ::windows::core::{BOOL, PCWSTR, w};
+use ::windows::Win32::UI::WindowsAndMessaging::{IsIconic, IsWindowVisible};
+use ::windows::core::BOOL;
 use webview2_com::CapturePreviewCompletedHandler;
 use webview2_com::Microsoft::Web::WebView2::Win32::COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT_PNG;
 
-use super::webview_input::{after, error, view_of};
+use super::ui_thread::{error, on_ui_thread, post};
+use super::webview::{after, view_of};
 use crate::framework::Window;
 use crate::platform::Handle;
-use crate::platform::devtools::{capture_refusal, capture_wait, check_still};
+use crate::platform::devtools_input::{capture_refusal, capture_wait, check_still};
 
 /// Limits a capture, whose completion is not promised ([`capture_wait`]).
 const CAPTURE_WAIT: Duration = Duration::from_secs(10);
-
-const RUN_TASKS: u32 = WM_APP + 1;
-
-/// The window that runs tasks of other threads on the UI thread.
-struct TaskWindow {
-    window: isize,
-    thread: u32,
-}
-
-type Task = Box<dyn FnOnce() + Send>;
-
-static TASK_WINDOW: OnceLock<TaskWindow> = OnceLock::new();
-static TASKS: Mutex<Vec<Task>> = Mutex::new(Vec::new());
-
-unsafe extern "system" fn task_window_proc(
-    window: HWND,
-    message: u32,
-    wparam: WPARAM,
-    lparam: LPARAM,
-) -> LRESULT {
-    if message != RUN_TASKS {
-        return unsafe { DefWindowProcW(window, message, wparam, lparam) };
-    }
-    // default: a lock that a panicking thread poisoned still holds whole tasks; the panic hook records the panic.
-    let tasks = std::mem::take(&mut *TASKS.lock().unwrap_or_else(|e| e.into_inner()));
-    for task in tasks {
-        task();
-    }
-    LRESULT(0)
-}
-
-/// Makes the calling thread the thread that [`post`] runs tasks on. Call it on the UI thread.
-pub(super) fn start_task_window() -> Result<(), String> {
-    if TASK_WINDOW.get().is_some() {
-        return Ok(());
-    }
-    let instance: HMODULE = unsafe { GetModuleHandleW(PCWSTR::null()) }
-        .map_err(|e| error("UI task window module", e))?;
-    let class = WNDCLASSEXW {
-        cbSize: std::mem::size_of::<WNDCLASSEXW>() as u32,
-        lpfnWndProc: Some(task_window_proc),
-        hInstance: instance.into(),
-        lpszClassName: w!("soksak-ui-tasks"),
-        ..Default::default()
-    };
-    if unsafe { RegisterClassExW(&class) } == 0 {
-        return Err(error(
-            "UI task window class",
-            ::windows::core::Error::from_thread(),
-        ));
-    }
-    let window = unsafe {
-        CreateWindowExW(
-            WINDOW_EX_STYLE(0),
-            w!("soksak-ui-tasks"),
-            PCWSTR::null(),
-            WINDOW_STYLE(0),
-            0,
-            0,
-            0,
-            0,
-            Some(HWND_MESSAGE),
-            None,
-            Some(instance.into()),
-            None,
-        )
-    }
-    .map_err(|e| error("UI task window", e))?;
-    TASK_WINDOW
-        .set(TaskWindow {
-            window: window.0 as isize,
-            thread: unsafe { GetCurrentThreadId() },
-        })
-        .map_err(|_| "the UI task window started twice")?;
-    Ok(())
-}
-
-fn on_ui_thread() -> bool {
-    TASK_WINDOW
-        .get()
-        .is_some_and(|task_window| task_window.thread == unsafe { GetCurrentThreadId() })
-}
-
-/// Runs a task as a later step of the UI thread, from any thread.
-fn post(task: Task) -> Result<(), String> {
-    let task_window = TASK_WINDOW
-        .get()
-        .ok_or("no web view of this process has started the UI thread")?;
-    // default: a lock that a panicking thread poisoned still holds whole tasks; the panic hook records the panic.
-    TASKS.lock().unwrap_or_else(|e| e.into_inner()).push(task);
-    unsafe {
-        PostMessageW(
-            Some(HWND(task_window.window as *mut _)),
-            RUN_TASKS,
-            WPARAM(0),
-            LPARAM(0),
-        )
-    }
-    .map_err(|e| error("UI task message", e))
-}
 
 /// The window number of a window is its handle: a web view is no window of its own here.
 pub fn window_numbers(window: &Window) -> Result<Vec<isize>, String> {

@@ -74,18 +74,13 @@ pub(crate) fn levels_from(
 /// Writes the policy file as a new file renamed over the path, so a watcher never reads half a policy.
 pub fn write_log_policy(path: &Path, policy: &LogPolicy) -> Result<(), String> {
     use std::io::Write;
-    #[cfg(unix)]
-    use std::os::unix::fs::OpenOptionsExt;
+    let mut options = crate::platform::current()?.private_file_options();
     let directory = path
         .parent()
         .ok_or_else(|| format!("{} has no folder", path.display()))?;
     let temporary = directory.join(format!(".log-policy-{}", std::process::id()));
     let result = (|| -> std::io::Result<()> {
-        let mut options = std::fs::OpenOptions::new();
         options.create(true).truncate(true).write(true);
-        // On Windows the access of the file comes from its folder.
-        #[cfg(unix)]
-        options.mode(0o600);
         let mut file = options.open(&temporary)?;
         file.write_all(policy.to_json().as_bytes())?;
         file.sync_all()?;

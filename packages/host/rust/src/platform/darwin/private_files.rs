@@ -68,6 +68,13 @@ pub fn write_private_file(path: &Path, data: &[u8]) -> Result<(), String> {
         .map_err(|error| format!("{}: {error}", path.display()))
 }
 
+/// The options that create a file with mode 0600.
+pub fn private_file_options() -> OpenOptions {
+    let mut options = OpenOptions::new();
+    options.mode(0o600);
+    options
+}
+
 /// Changes the permissions of the persistent service directory path to 0700.
 pub fn secure_service_directory(path: &Path) -> Result<(), String> {
     std::fs::set_permissions(path, Permissions::from_mode(0o700)).map_err(|error| error.to_string())

@@ -21,5 +21,5 @@ pub(crate) fn show_command(holds_foreground: bool) -> i32 {
 }
 
 #[cfg(test)]
-#[path = "show_rule_test.rs"]
+#[path = "show_test.rs"]
 mod tests;
