@@ -178,7 +178,7 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides 
 	}
 	strip := width - 2*m.cardHeadPad - m.cardButton - 2*m.cardHeadGap - tools
 	ui.Row(s.binder.Name(c, "core.card.header", id)).Size(width, m.headH).PaddingX(m.cardHeadPad).AlignItems(ui.Center).Gap(m.cardHeadGap).Clip().
-		Role(ui.RoleGroup).Label("core.card.header").BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.Edge).Children(func() {
+		Role(ui.RoleGroup).Label("core.card.header").BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.cardLine()).Children(func() {
 		// What the head does not show stands out of the flow, where the gap of the head does not reach it. The tree holds what stands
 		// out of the flow after what stands in it, which keeps the order of each name, as each card holds these once.
 		ui.Box(c).Absolute().Size(0, 0).Children(func() {
@@ -229,6 +229,15 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides 
 		}
 		s.headButton(c, "core.card.tools", "core.card.tools", id, cardParam{Card: id}, "카드 도구", s.headIcon("card-more", true), true)
 	})
+}
+
+// cardLine is the color of the lines below the head of a card and above its foot: the rule of the plane when the cards share one line
+// (.chrome and .status of packages/workbench/app.css).
+func (s *Shell) cardLine() ui.Color {
+	if s.palette.Gap == 0 {
+		return s.palette.Rule
+	}
+	return s.palette.Edge
 }
 
 // drawAbsentTabs draws the elements of tabs that the head does not show.
@@ -557,7 +566,7 @@ func faded(color ui.Color, share float32) ui.Color {
 
 // drawStatus draws the status line of a card, with the text of the sides folded for lack of space when there is one.
 func (s *Shell) drawStatus(c *ui.Context, id string, data *layout.CardData, fold string) {
-	ui.Row(s.binder.Name(c, "core.card.status", id)).FillWidth().Height(s.metrics.footH).PaddingX(s.metrics.tabsPad).AlignItems(ui.Center).BorderWidth(s.palette.BorderWidth, 0, 0, 0).BorderColor(s.palette.Rule).
+	ui.Row(s.binder.Name(c, "core.card.status", id)).FillWidth().Height(s.metrics.footH).PaddingX(s.metrics.tabsPad).AlignItems(ui.Center).BorderWidth(s.palette.BorderWidth, 0, 0, 0).BorderColor(s.cardLine()).
 		Role(ui.RoleStatus).Label("core.card.status").Children(func() {
 		text := s.cardStatusText(data)
 		if fold != "" {

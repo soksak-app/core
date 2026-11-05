@@ -2,6 +2,7 @@ package workbench_test
 
 import (
 	"fmt"
+	"image/color"
 	"slices"
 	"strings"
 	"testing"
@@ -82,5 +83,29 @@ func TestAHiddenTabLeavesTheActiveTabInItsPlace(t *testing.T) {
 		if box := f.box("core.card.tab", tab.ID); box.W != 0 || box.H != 0 {
 			t.Fatalf("the hidden tab %s has the box %+v", tab.ID, box)
 		}
+	}
+}
+
+// The line above the foot of a card and the line below its head are the edge of the card, and the rule of the plane when the cards share one line.
+func TestTheLinesOfACardFollowItsSeam(t *testing.T) {
+	f := narrowCard(t, 1, "a")
+	f.settle()
+	line := func(box ui.Rect, y float32) color.RGBA { return f.pixelOf(box.X+box.W/2, y) }
+	edge, rule := color.RGBA{0x2b, 0x2e, 0x3d, 0xff}, color.RGBA{0x22, 0x24, 0x2f, 0xff}
+	foot, head := f.box("core.card.status", "other"), f.box("core.card.header", "other")
+	if got := line(foot, foot.Y); got != edge {
+		t.Errorf("the line above the foot is %v, want %v", got, edge)
+	}
+	if got := line(head, head.Y+head.H-0.5); got != edge {
+		t.Errorf("the line below the head is %v, want %v", got, edge)
+	}
+	f.run("core.settings.set", map[string]any{"patch": map[string]any{"gap": 0}})
+	f.settle()
+	foot, head = f.box("core.card.status", "other"), f.box("core.card.header", "other")
+	if got := line(foot, foot.Y); got != rule {
+		t.Errorf("at a seam the line above the foot is %v, want %v", got, rule)
+	}
+	if got := line(head, head.Y+head.H-0.5); got != rule {
+		t.Errorf("at a seam the line below the head is %v, want %v", got, rule)
 	}
 }
