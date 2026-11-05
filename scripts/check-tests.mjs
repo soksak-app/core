@@ -1036,6 +1036,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F593",
+    implementation: [{ file: "native/darwin/src/surface_layout.m", symbol: "object_getClass([NSApplication sharedApplication])" }],
+    tests: [
+      { file: "native/darwin/tests/webview_geometry_test.m", id: "an override of the application sees no input that waits" },
+      { file: "native/darwin/tests/webview_geometry_test.m", id: "held input comes back to the override once each and in order" },
+    ],
+    expected: "No override of sendEvent: on the class of the application sees input that waits, and every later pointer and key event of the window comes back once and in order.",
+    levels: ["unit"],
+  },
+  {
     id: "F589",
     implementation: [{ file: "native/darwin/src/surface_layout.m", symbol: "sendEventAfterLayout" }],
     tests: [

@@ -113,12 +113,13 @@ size_t surfaceLayoutTraceStop(double *out, size_t capacity) {
     return total;
 }
 
-// Takes a press that surfaceLayoutPressWaits holds back, and every later press, release and key of the window, so the input
-// stays in order.
+// Takes a press that surfaceLayoutPressWaits holds back, and every later pointer and key event of the window, so the input stays
+// in order.
 static BOOL holdInput(NSEvent *event) {
     const NSEventMask presses = NSEventMaskLeftMouseDown | NSEventMaskRightMouseDown;
     const NSEventMask later = presses | NSEventMaskLeftMouseDragged | NSEventMaskLeftMouseUp | NSEventMaskRightMouseDragged
-        | NSEventMaskRightMouseUp | NSEventMaskKeyDown | NSEventMaskKeyUp;
+        | NSEventMaskRightMouseUp | NSEventMaskOtherMouseDown | NSEventMaskOtherMouseDragged | NSEventMaskOtherMouseUp
+        | NSEventMaskMouseMoved | NSEventMaskScrollWheel | NSEventMaskKeyDown | NSEventMaskKeyUp | NSEventMaskFlagsChanged;
     NSEventMask type = NSEventMaskFromType(event.type);
     NSWindow *window = event.window;
     BOOL held = NO;
@@ -138,13 +139,14 @@ static void sendEventAfterLayout(id application, SEL selector, NSEvent *event) {
     if (!holdInput(event)) applicationSendEvent(application, selector, event);
 }
 
-// -[NSApplication sendEvent:] calls the local monitors, in no fixed order, and a monitor that returns nil ends the others. The
-// hold stands in front of it, so no monitor of the library, a host or a framework sees an event that waits, and each sees the
-// event once when it comes back. A subclass of an application calls this implementation through super.
+// -[NSApplication sendEvent:] calls the local monitors, in no fixed order, and a monitor that returns nil ends the others. A
+// framework's application class can override the method, read the event before super and send a key past super. The hold stands
+// in front of the method of the class of the application, so no monitor or override of the library, a host or a framework sees
+// an event that waits, and each sees the event once when it comes back.
 static void watchInput(void) {
     static dispatch_once_t once;
     dispatch_once(&once, ^{
-        Method method = class_getInstanceMethod(NSApplication.class, @selector(sendEvent:));
+        Method method = class_getInstanceMethod(object_getClass([NSApplication sharedApplication]), @selector(sendEvent:));
         applicationSendEvent = (void (*)(id, SEL, NSEvent *))method_getImplementation(method);
         method_setImplementation(method, (IMP)sendEventAfterLayout);
     });
