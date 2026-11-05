@@ -400,7 +400,6 @@ export function requireViewContentFrameCoverage(mappedFrames, { gestureStartedAt
   assert.ok(Array.isArray(mappedFrames), "mapped view content frames must be an array");
   const possiblyInGesture = [];
   const definitelyBefore = [];
-  const definitelyAfter = [];
   for (const [index, frame] of mappedFrames.entries()) {
     const lowerMs = frame?.timeRange?.lowerMs;
     const upperMs = frame?.timeRange?.upperMs;
@@ -410,18 +409,15 @@ export function requireViewContentFrameCoverage(mappedFrames, { gestureStartedAt
       possiblyInGesture.push(frame);
     } else if (upperMs < gestureStartedAtMs) {
       definitelyBefore.push(frame);
-    } else if (lowerMs > gestureEndedAtMs) {
-      definitelyAfter.push(frame);
     }
     if (lowerMs <= gestureEndedAtMs && upperMs >= gestureStartedAtMs && frame.frameIndex === null) {
       assert.fail(`source content frame ${frame.sourceSequence} inside the gesture has no capture frame`);
     }
   }
   assert.ok(possiblyInGesture.length > 0, "source frames do not cover any possible part of the recorded gesture");
-  const included = new Set(possiblyInGesture);
-  if (definitelyBefore.length > 0) included.add(definitelyBefore.at(-1));
-  if (definitelyAfter.length > 0) included.add(definitelyAfter[0]);
-  return mappedFrames.filter((frame) => included.has(frame));
+  // Convergence reads every frame after the gesture, because the final viewport can arrive in a later frame than the first.
+  const left = new Set(definitelyBefore.slice(0, -1));
+  return mappedFrames.filter((frame) => !left.has(frame));
 }
 
 /** Runs a gesture or layout operation between explicit source-frame observer start and stop callbacks. */
