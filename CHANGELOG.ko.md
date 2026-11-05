@@ -5,6 +5,7 @@
 ## 미배포
 
 - F590: `IDLE=1`은 마지막 요청 뒤 준비가 남긴 gate count가 기록되기를 기다린 다음 첫 CPU를 읽는다. 그 기록은 settled 상태의 비용이 아니기 때문이다. CPU 구간에 쓰인 기록 수도 출력한다. G2의 한계는 그대로다. Red: `measure-app-usage.test.mjs`가 mark와 첫 CPU 읽기 사이에 대기가 없음을 찾았다.
+- F591: 닫히는 창이 `window on screen: the window is gone`을 기록하지 않는다.
 - F589: layout을 기다리는 press와 release는 모든 event monitor에 한 번씩 닿고, 1초 넘게 기다린 release가 receipt가 도착하지 않았다고 보고하지 않는다.
 - F587: 성공한 placement는 native와 page workbench 모두에서 직전 placement의 실패를 error banner에서 거둔다. banner는 보여 주는 오류의 출처를 기록하므로, 다른 출처의 오류는 문구가 같아도 남고 placement가 계속 실패하는 동안 그 실패도 남는다. Red: `TestARecoveredPlacementWithdrawsItsError`와 `layout-verify-state.test.mjs`의 banner 시험이 실패가 계속 보이는 것을 찾았다.
 - F502-16: 배치를 준비 중인 표면 위의 누름은 commit을 기다렸다가 표면에 간다. 이전에는 main page로 갔고, main page가 없는 창에서는 어디에도 가지 않았다.
