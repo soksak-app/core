@@ -966,6 +966,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F526-2",
+    implementation: [{ file: "native/darwin/src/webview_geometry.m", symbol: "sp_observe_local_monitor(\"webview_geometry.press_release\"" }],
+    tests: [
+      { file: "scripts/test/census.test.mjs", id: "the repository passes the census of its enabled rules and prints every pending rule with its item and count" },
+      { file: "scripts/test/test-kinds.test.mjs", id: "every script of the e2e package that drives an application is run by a root target with the e2e prefix" },
+    ],
+    expected: "The monitor of a press release goes through the entrance of the observers, and the script of the input latency has a root target with the e2e prefix.",
+    levels: ["unit"],
+  },
+  {
     id: "F526-1",
     implementation: [{ file: "scripts/language-test-adapters.mjs", symbol: "function caseResult(caseSpec, commandResult) {" }],
     tests: [{ file: "scripts/test/test-language-test-adapters.test.mjs", id: "parses each language result and rejects zero, skipped, and crashed outcomes" }],
