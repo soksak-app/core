@@ -1,12 +1,11 @@
 package workbench
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
-
-	"github.com/egoist/mygo/ui"
 )
 
 // The library: the screen of the saved projects and the form that adds one, as packages/workbench/library.js draws them. The plugin
@@ -20,16 +19,28 @@ type libraryState struct {
 	revealUpdates bool
 	formMode      string // create, open, or "" while the form is closed.
 	name, parent  string
+	// folderErrors holds the reason of each project folder that cannot be read, checks the latest check of each root, and foldersFor the
+	// roots that were last checked.
+	folderErrors map[string]string
+	checks       map[string]int
+	checkCount   int
+	foldersFor   string
+	// previews holds the panes of the preview of each shown project, as they stood in the last frame, and previewErrors the reason of each
+	// project whose stored layout cannot be opened.
+	previews      map[string][]previewPane
+	previewErrors map[string]string
 }
 
-func newLibraryState() libraryState { return libraryState{page: "projects", order: "saved"} }
+func newLibraryState() libraryState {
+	return libraryState{page: "projects", order: "saved", folderErrors: map[string]string{}, checks: map[string]int{}}
+}
 
 // shownProjects returns the projects of the search in the order of the library.
 func (s *Shell) shownProjects() []projectRecord {
 	shown := make([]projectRecord, 0, len(s.projects))
-	query := strings.ToLower(s.library.query)
+	query := strings.ToLower(strings.TrimSpace(s.library.query))
 	for _, project := range s.projects {
-		if strings.Contains(strings.ToLower(project.Title), query) || strings.Contains(strings.ToLower(project.Root), query) {
+		if strings.Contains(strings.ToLower(project.Title+" "+project.Root), query) {
 			shown = append(shown, project)
 		}
 	}
@@ -37,17 +48,16 @@ func (s *Shell) shownProjects() []projectRecord {
 	case "name":
 		slices.SortStableFunc(shown, func(a, b projectRecord) int { return strings.Compare(a.Title, b.Title) })
 	case "recent":
-		slices.SortStableFunc(shown, func(a, b projectRecord) int { return int(b.LastOpened - a.LastOpened) })
-	}
-	slices.SortStableFunc(shown, func(a, b projectRecord) int {
-		switch {
-		case a.Pinned == b.Pinned:
+		slices.SortStableFunc(shown, func(a, b projectRecord) int { return cmp.Compare(b.LastOpened, a.LastOpened) })
+	case "open":
+		isOpen := func(project projectRecord) int {
+			if project.ID == s.active {
+				return 1
+			}
 			return 0
-		case a.Pinned:
-			return -1
 		}
-		return 1
-	})
+		slices.SortStableFunc(shown, func(a, b projectRecord) int { return cmp.Compare(isOpen(b), isOpen(a)) })
+	}
 	return shown
 }
 
@@ -73,9 +83,21 @@ func (s *Shell) registerLibrary() {
 	act(s, "core.library.sort", func(value struct {
 		Order string `json:"order"`
 	}) error {
+		if !slices.Contains(librarySorts, value.Order) {
+			return fmt.Errorf("unknown sort %s", value.Order)
+		}
 		s.library.order = value.Order
 		s.options.Invalidate()
 		return nil
+	})
+	act(s, "core.library.search.focus", func(struct{}) error {
+		if !s.inLibrary() {
+			return fmt.Errorf("the library is not shown")
+		}
+		if s.library.page == pluginsPage {
+			return s.keyboard.Set("core.library.plugins.search", 0)
+		}
+		return s.keyboard.Set("core.library.search", 0)
 	})
 	act(s, "core.library.open", func(value idParam) error { s.activate(value.ID); return nil })
 	act(s, "core.library.pin", func(value struct {
@@ -176,106 +198,4 @@ func (s *Shell) submitForm() error {
 	}
 	s.calls.Call("projectFolder", s.library.parent, opened)
 	return nil
-}
-
-// drawLibrary draws the library screen.
-func (s *Shell) drawLibrary(c *ui.Context, width, height float32) {
-	ui.Column(c).Size(width, height).Padding(s.chromeHeight()).Gap(s.metrics.tabsPad * 3).Children(func() {
-		ui.Row(c).AlignItems(ui.Center).Gap(s.metrics.tabsGap).Children(func() {
-			for _, page := range []struct{ id, label string }{{"projects", "프로젝트"}, {"plugins", "플러그인"}} {
-				s.barText(c, s.binder.Press(c, "core.library.page", "core.library.page", page.id, map[string]string{"page": page.id}), page.label,
-					s.library.page == page.id)
-			}
-			ui.Spacer(c).Grow(1)
-			s.barText(c, s.binder.Press(c, "core.library.add", "core.library.form.open", "", map[string]string{"mode": "create"}), "＋ 프로젝트 만들기", false)
-		})
-		DrawErrorBanner(c, s.errors)
-		if s.library.page == pluginsPage {
-			ui.Box(c).FillWidth().Grow(1).Children(func() { s.drawPlugins(c) })
-		} else {
-			if s.library.formMode != "" {
-				s.drawLibraryForm(c)
-			}
-			s.drawProjectList(c)
-		}
-		if s.opened() != nil {
-			s.barText(c, s.binder.Press(c, "core.library.return", "core.library.return", "", nil), "돌아가기", false)
-		}
-	})
-}
-
-func (s *Shell) drawProjectList(c *ui.Context) {
-	if len(s.projects) == 0 {
-		if s.library.formMode == "" {
-			ui.Column(c).Gap(s.metrics.tabsGap).Children(func() {
-				ui.Text(c, "프로젝트를 시작하세요").Bold().FontSize(18)
-				ui.Text(c, "새 프로젝트를 만들거나 기존 폴더를 여세요.").TextColor(s.palette.Muted)
-			})
-		}
-		return
-	}
-	shown := s.shownProjects()
-	if len(shown) == 0 {
-		ui.Text(c, "찾는 프로젝트가 없습니다.").TextColor(s.palette.Muted)
-		return
-	}
-	ui.Scroll(c).FillWidth().Grow(1).Children(func() {
-		ui.Column(c).FillWidth().Gap(s.metrics.tabsGap).Children(func() {
-			for _, project := range shown {
-				ui.Row(c.Key("library-" + project.ID)).FillWidth().Gap(s.metrics.tabsGap).AlignItems(ui.Center).Children(func() {
-					open := s.binder.Press(c, "core.library.open", "core.library.open", project.ID, idParam{project.ID})
-					open.Grow(1).Padding(s.metrics.tabsPad * 2).Radius(s.palette.Radius).Background(s.palette.Card).Label(project.Title).Children(func() {
-						ui.Column(c).Children(func() {
-							ui.Text(c, project.Title).Bold().TextColor(ui.Hex(project.Color))
-							ui.Text(c, project.Root).FontSize(11).TextColor(s.palette.Muted)
-						})
-					})
-					pin := "고정"
-					if project.Pinned {
-						pin = "고정 해제"
-					}
-					s.barText(c, s.binder.Press(c, "core.library.pin", "core.library.pin", project.ID,
-						map[string]any{"id": project.ID, "pinned": !project.Pinned}), pin, false)
-					s.barText(c, s.binder.Press(c, "core.library.remove", "core.library.remove", project.ID, idParam{project.ID}), "제거", false)
-				})
-			}
-		})
-	})
-}
-
-func (s *Shell) drawLibraryForm(c *ui.Context) {
-	creates := s.library.formMode == "create"
-	ui.Column(c).FillWidth().Gap(s.metrics.tabsGap).Padding(s.metrics.tabsPad * 2).Radius(s.palette.Radius).Background(s.palette.Card).Children(func() {
-		ui.Row(c).Gap(s.metrics.tabsGap).Children(func() {
-			s.barText(c, s.binder.Press(c, "core.library.form.mode-new", "core.library.form.open", "", map[string]string{"mode": "create"}), "새 폴더", creates)
-			s.barText(c, s.binder.Press(c, "core.library.form.mode-existing", "core.library.form.open", "", map[string]string{"mode": "open"}), "기존 폴더", !creates)
-		})
-		if creates {
-			s.drawFormField(c, "core.library.form.name", "name", &s.library.name, "프로젝트 폴더 이름")
-		}
-		label := "폴더 경로"
-		if creates {
-			label = "생성 위치"
-		}
-		s.drawFormField(c, "core.library.form.parent", "parent", &s.library.parent, label)
-		ui.Row(c).Gap(s.metrics.tabsGap).Children(func() {
-			s.barText(c, s.binder.Press(c, "core.library.form.choose", "core.library.choose-folder", "", nil), "폴더 선택", false)
-			ui.Spacer(c).Grow(1)
-			s.barText(c, s.binder.Press(c, "core.library.form.cancel", "core.library.form.cancel", "", nil), "취소", false)
-			submit := "프로젝트로 열기"
-			if creates {
-				submit = "생성 후 열기"
-			}
-			s.barText(c, s.binder.Press(c, "core.library.form.submit", "core.library.form.submit", "", nil), submit, true)
-		})
-	})
-}
-
-func (s *Shell) drawFormField(c *ui.Context, name, field string, value *string, label string) {
-	set := s.binder.Control(c, name, "core.library.form.set", field)
-	before := *value
-	s.binder.Bound(ui.TextInput(c, value), name).FillWidth().Label(label).Placeholder(label)
-	if *value != before {
-		set(libraryField{Field: field, Value: *value})
-	}
 }

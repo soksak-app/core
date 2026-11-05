@@ -289,12 +289,6 @@ func versionLine(page PluginPage, row PluginRow) string {
 func DrawPluginPage(c *ui.Context, binder *Binder, page PluginPage, shown *ShownErrors) {
 	ui.Scroll(c).Fill().Children(func() {
 		ui.Column(c).FillWidth().Gap(12).Padding(16).Children(func() {
-			search := binder.Control(c, "core.library.plugins.search", "core.library.plugins.search", "")
-			query := page.Query
-			binder.Bound(ui.TextInput(c, &query), "core.library.plugins.search").Label("플러그인 검색").Placeholder("플러그인 검색").FillWidth()
-			if query != page.Query {
-				search(map[string]any{"query": query})
-			}
 			drawPluginFailure(c, page, shown)
 			if page.Hosted {
 				drawUpdateList(c, binder, page, shown)
@@ -309,6 +303,16 @@ func DrawPluginPage(c *ui.Context, binder *Binder, page PluginPage, shown *Shown
 			}
 		})
 	})
+}
+
+// DrawPluginSearch draws the search of the plugin page in the place of its element, which the head of the library gives.
+func DrawPluginSearch(c *ui.Context, binder *Binder, query string, place func(ui.Element) ui.Element) {
+	search := binder.Control(c, "core.library.plugins.search", "core.library.plugins.search", "")
+	before := query
+	place(binder.Bound(ui.TextInput(c, &query), "core.library.plugins.search")).Label("플러그인 검색").Placeholder("이름, id, 설명 검색")
+	if query != before {
+		search(map[string]any{"query": query})
+	}
 }
 
 func drawPluginFailure(c *ui.Context, page PluginPage, shown *ShownErrors) {

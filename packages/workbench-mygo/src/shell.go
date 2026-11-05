@@ -73,8 +73,11 @@ type environmentGrid struct {
 
 // metrics are the chrome metrics that the shell draws with.
 type metrics struct {
+	space1, space2, space3, space4, libraryFooterH, librarySortW, librarySearchW, libraryCardMinW, libraryCardMinWNarrow, libraryNarrowW,
+	libraryPreviewH, libraryMark, libraryMarkStroke, previewLineH, previewLineStep, previewLineOpacity, previewSidebarOpacity, libraryAddH,
+	libraryFormW, fieldPadY, selectArrowRoom, selectArrowInset, previewBorderMix, previewFillMix, previewInkMix, previewLineW,
 	barTabRootPad, barTabRootW, dropMix, dropBorder, tabDraggingOpacity, actStroke, chromeActsGap, brandGap, brandLogoAtBase, chromeH, chromeRowH, spaceGap, spacePad, chromeGap, barGap, barXPad, barXOpacity, barAddText, barAddPad, textControlAtBase, textCaptionAtBase, chipMix, chipHoverMix, chipOnMix, projectTabMix float32
-	headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW                                                                                                                                                                                             float32
+	headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW float32
 	// The card head (.chrome of packages/workbench/app.css).
 	cardHeadGap, cardHeadPad, cardTabsGap, cardButton, cardIcon, cardActsGap, cardActsPad, cardActHalfOpacity, tabGap, tabPadY, tabPadX, tabXPad, tabXOpacity, iconStroke, disabledOpacity, noticeDotInset, radiusSmallRatio, textSmallAtBase, textBase, chipSelMix, insetMix, tabXHoverMix float32
 	// The error line (#applicationError of packages/workbench/app.css).
@@ -96,6 +99,15 @@ func readMetrics(declared *Declarations) (metrics, error) {
 			failed = fmt.Errorf("the chrome metric %s has no number", name)
 		}
 		*into = float32(value)
+	}
+	for name, into := range map[string]*float32{"space-1": &m.space1, "space-2": &m.space2, "space-3": &m.space3, "space-4": &m.space4,
+		"library-footer-h": &m.libraryFooterH, "library-sort-w": &m.librarySortW, "library-search-w": &m.librarySearchW,
+		"library-card-min-w": &m.libraryCardMinW, "library-card-min-w-narrow": &m.libraryCardMinWNarrow, "library-narrow-w": &m.libraryNarrowW,
+		"library-preview-h": &m.libraryPreviewH, "library-mark": &m.libraryMark, "library-mark-stroke": &m.libraryMarkStroke,
+		"preview-line-h": &m.previewLineH, "preview-line-step": &m.previewLineStep, "preview-line-opacity": &m.previewLineOpacity,
+		"preview-sidebar-opacity": &m.previewSidebarOpacity, "library-add-h": &m.libraryAddH, "library-form-w": &m.libraryFormW,
+		"field-pad-y": &m.fieldPadY, "select-arrow-room": &m.selectArrowRoom, "select-arrow-inset": &m.selectArrowInset} {
+		read(name, into)
 	}
 	read("bar-tab-root-pad", &m.barTabRootPad)
 	read("bar-tab-root-w", &m.barTabRootW)
@@ -167,6 +179,10 @@ func readMetrics(declared *Declarations) (metrics, error) {
 		*into = float32(value)
 	}
 	mix("chip-sel-mix", &m.chipSelMix)
+	mix("preview-border-mix", &m.previewBorderMix)
+	mix("preview-fill-mix", &m.previewFillMix)
+	mix("preview-ink-mix", &m.previewInkMix)
+	mix("preview-line-w", &m.previewLineW)
 	mix("drop-mix", &m.dropMix)
 	mix("chip-mix", &m.chipMix)
 	mix("chip-hover-mix", &m.chipHoverMix)
