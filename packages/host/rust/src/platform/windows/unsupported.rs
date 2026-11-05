@@ -8,9 +8,9 @@ use crate::framework::Window;
 use serde_json::Value;
 
 use super::super::{
-    ClipboardValue, CoreRootResolver, DOMOverlay, Delivery, Frame, Handle, Hit, ImagePresentation,
-    ImageReleased, Insets, Key, Listener, NativeEventWait, PersistentStream, Pointer,
-    ProcessFootprint, Raster, WindowOverlay,
+    ClipboardValue, CoreRootResolver, DOMOverlay, Frame, Handle, Hit, ImagePresentation,
+    ImageReleased, Insets, Listener, NativeEventWait, PersistentStream, ProcessFootprint, Raster,
+    WindowOverlay,
 };
 
 /// Returns an error that contains operation in its name.
@@ -84,11 +84,6 @@ pub fn post_notification(_identifier: &str, _title: &str, _body: &str) -> Result
 }
 pub fn remove_notification(_identifier: &str) -> Result<(), String> {
     missing("system notifications")
-}
-
-#[cfg(feature = "diagnostics")]
-pub fn window_numbers(_window: &Window) -> Result<Vec<isize>, String> {
-    missing("window numbers")
 }
 
 pub fn hit(_window: Handle, _x: f64, _y: f64) -> Result<Hit, String> {
@@ -394,10 +389,6 @@ pub fn destroy_shape(_shape: Handle) -> Result<(), String> {
     missing("native shape destroy")
 }
 
-pub fn register_input(_view: &PlatformWebview) -> Result<bool, String> {
-    missing("webview input routing")
-}
-
 pub fn ignore_page_focus(_view: &PlatformWebview) -> Result<bool, String> {
     missing("webview focus isolation")
 }
@@ -412,29 +403,6 @@ pub fn watch_input(
 
 pub fn unwatch_input(_monitor: Handle) -> Result<(), String> {
     missing("surface input release")
-}
-
-pub fn input_pointer(
-    _window: Handle,
-    _pointer: Pointer,
-    _receive: std::time::Duration,
-    _done: Box<dyn FnOnce(Delivery) + Send>,
-) -> Result<(), String> {
-    missing("native pointer input")
-}
-
-pub fn input_activate(
-    _window: Handle,
-    _x: f64,
-    _y: f64,
-    _timeout: std::time::Duration,
-    _done: Box<dyn FnOnce(Result<(), String>) + Send>,
-) -> Result<(), String> {
-    missing("window activation")
-}
-
-pub fn input_key(_window: Handle, _key: &Key) -> Result<Delivery, String> {
-    missing("native key input")
 }
 
 #[cfg(feature = "diagnostics")]
@@ -478,11 +446,6 @@ pub fn capture_clock() -> Result<f64, String> {
 }
 
 #[cfg(feature = "diagnostics")]
-pub fn capture_still(_window_number: isize, _path: &str) -> Result<(), String> {
-    missing("window capture")
-}
-
-#[cfg(feature = "diagnostics")]
 pub fn delivered_notifications(_done: Box<dyn FnOnce(String) + Send>) -> Result<(), String> {
     missing("system notifications")
 }
@@ -497,6 +460,7 @@ pub fn count_page_objects(
     missing("page object counts")
 }
 
+#[cfg(feature = "diagnostics")]
 pub fn window_objects_when(
     _expected: Option<super::super::WindowObjects>,
     _seconds: f64,

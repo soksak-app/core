@@ -103,6 +103,7 @@ Matching용 image source를 보존하는 동안 diagnostic capture는 snapshot�
 | 호스트가 창의 first responder를 읽지 못하거나 `window-responder` event를 전달하지 못한다([exposure](exposure.ko.md#키보드-포커스)) | `error host window responder: <failure>` |
 | Tauri host가 main thread 감시의 heartbeat를 그 thread에 보내지 못한다 | `error host stall watch: heartbeat: <reason>`, 그리고 감시가 끝난다([logging](logging.ko.md), 정지) |
 | `diagnostics.input.source`의 선택한 input source 대기가 응답이 끝난 뒤에 답한다(Tauri host) | `error host input source: the wait answered after its reply ended: <result>` |
+| Windows 에서 입력 대기 timer 가 시작되거나 멈추지 않거나, WebView2 의 pointer 입력이 실패한다 (Tauri host) | `error host input wait: <reason>`, `error host input.pointer: <failure>` |
 | document-frame identity callback이 wait 종료 뒤 error를 보고하거나 Go callback이 두 번 이상 호출된다 | Go는 `error host document frame identity callback: <reason>`을 쓴다. Tauri는 늦은 callback failure를 `error host diagnostics: document frame identity callback failed after its request ended: <reason>`으로 쓴다. 첫 callback 결과가 유지된다. |
 | writer가 쓴 뒤 event 파일의 색인을 최신으로 맞출 수 없다(event 구조를 어기는 줄, 손상된 색인, 열 수 없는 파일) | `error host log index: <reason>`, 파일마다 이유가 다를 때마다 한 번([logging](logging.ko.md#색인)) |
 | 파일 `log-policy.json`이 [정책](logging.ko.md#정책)의 형식을 어기거나(JSON이 아닌 글, 모르는 항목, 빠졌거나 계약 밖인 class, 여섯 밖의 level) 정책을 감시하거나 적용할 수 없다 | `error host log policy: <file>: <발견한 것>`, 파일이 바뀔 때마다 한 번. 적용 중인 정책은 그대로 남는다 |

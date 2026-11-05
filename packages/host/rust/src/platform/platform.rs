@@ -34,6 +34,10 @@ mod darwin;
 #[path = "windows/windows.rs"]
 mod windows;
 
+#[cfg(any(windows, test))]
+#[path = "windows/devtools.rs"]
+mod devtools;
+
 /// The number of live objects, among those that the shared library attached to windows and webviews, whose lifetime
 /// shows the release of the window and the webview. When a closed window and its webviews are released, the object
 /// count of that window decreases.

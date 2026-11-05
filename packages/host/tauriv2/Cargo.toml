@@ -24,6 +24,10 @@ tauri-plugin-dialog = "2"
 tauri-plugin-deep-link = "2"
 url = "2"
 
+[target.'cfg(windows)'.dependencies]
+# The controller that tauri gives is passed to soksak-host as a raw COM pointer.
+windows = { version = "0.62", features = ["Win32_Foundation"] }
+
 [dev-dependencies]
 tauri = { version = "2", default-features = false, features = ["test"] }
 tempfile = "3"
