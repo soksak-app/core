@@ -92,7 +92,7 @@ Run `SOKSAK_NATIVE_TEST_RUN_FOLDER=<unique-dir> make -C native/darwin benchmark-
 
 ## Input latency
 
-Use `make input-latency` to measure the time from a key to the prompt in a `terminal` tab and a `term` tab of an application that is already open. Start the application with `--config-dir <folder>` and run the target with `SOKSAK_CONFIG_DIR=<folder>`. `APP` names the application, by default `mygo`. The output of the check, in the folder of the run under `target/test-runs`, holds the median, the 90th percentile and the time of each key for each configuration of the trace and the log gate. `B3_OUT=<file>` writes the values of the trace off and the default gate to the file.
+Use `make e2e-input-latency` to measure the time from a key to the prompt in a `terminal` tab and a `term` tab of an application that is already open. Start the application with `--config-dir <folder>` and run the target with `SOKSAK_CONFIG_DIR=<folder>`. `APP` names the application, by default `mygo`. The output of the check, in the folder of the run under `target/test-runs`, holds the median, the 90th percentile and the time of each key for each configuration of the trace and the log gate. `B3_OUT=<file>` writes the values of the trace off and the default gate to the file.
 
 ## Test kinds
 
@@ -280,7 +280,7 @@ A value is the median of its runs, and the spread of a value is the range of its
 | S5 | Divider drag of a `terminal` tab; window maximise and restore | `make e2e-benchmark-view-drag`, `make e2e-benchmark-resize-catch-up` | G3, G4, G8 |
 | S6 | Idle browser tab on a blank page | `make e2e-benchmark-idle-tab` | G6 |
 | S7 | First display, reclaim, total and drag of every plugin view | `e2e/benchmark/{browser,editor,hwp,terminal,term}-view.test.mjs`, `e2e/benchmark/section-view.test.mjs`, `e2e/benchmark/editor-footprint.test.mjs` | G4 |
-| S8 | Key to prompt in a `terminal` tab and a `term` tab | `make input-latency` (`e2e/input-latency.test.mjs`) | G7 |
+| S8 | Key to prompt in a `terminal` tab and a `term` tab | `make e2e-input-latency` (`e2e/input-latency.test.mjs`) | G7 |
 | S9 | S1 with a second window of the application, on the library screen, placed over the window of S1 so that its `host.window` reports `occluded` true | `make app-usage STATE=S9` | G2 |
 | S10 | Split, resize and view churn rounds | `make e2e-benchmark-split-load` | G3 |
 | S11 | A second project window beside S1 | `make app-usage STATE=S11` | G3 |
@@ -335,7 +335,7 @@ A value is the median of its runs, and the spread of a value is the range of its
 | S5 | Divider drag of a `terminal` tab; window maximise and restore | `make e2e-benchmark-view-drag`, `make e2e-benchmark-resize-catch-up` | G3, G4, G8 |
 | S6 | Idle browser tab on a blank page | `make e2e-benchmark-idle-tab` | G6 |
 | S7 | First display, reclaim, total and drag of every plugin view | `e2e/benchmark/{browser,editor,hwp,terminal,term}-view.test.mjs`, `e2e/benchmark/section-view.test.mjs`, `e2e/benchmark/editor-footprint.test.mjs` | G4 |
-| S8 | Key to prompt in a `terminal` tab and a `term` tab | `make input-latency` (`e2e/input-latency.test.mjs`) | G7 |
+| S8 | Key to prompt in a `terminal` tab and a `term` tab | `make e2e-input-latency` (`e2e/input-latency.test.mjs`) | G7 |
 | S9 | S1 with a second window of the application, on the library screen, placed over the window of S1 so that its `host.window` reports `occluded` true | `make app-usage STATE=S9` | G2 |
 | S10 | Split, resize and view churn rounds | `make e2e-benchmark-split-load` | G3 |
 | S11 | A second project window beside S1 | `make app-usage STATE=S11` | G3 |
@@ -420,7 +420,7 @@ The focused e2e/capture-lifecycle.test.mjs runs three consecutive recordings per
 
 When Cargo compilation or metadata discovery fails, the Rust owner runner prints the captured stdout before reporting the command failure. This preserves JSON compiler diagnostics and plain metadata errors. It retains the failed outcome and starts no test from a failed discovery.
 
-Stall sampling and launchd process discovery use asynchronous child processes with a ten-second limit for each process. The check continues to read endpoint messages while samples run. Host and page samples start together; page failures are reported individually and a host failure fails the sample operation.
+Stall sampling and launchd process discovery use asynchronous child processes with a ten-second limit for each process. A process at its limit keeps running for at most six seconds while the failure reads free space on the system volume and the load of that moment, and a `sample` that stalls also records its own stacks next to its file. The check continues to read endpoint messages while samples run. Host and page samples start together; page failures are reported individually and a host failure fails the sample operation.
 
 IME window checks end their owned terminal status observer after capture stop and before copying artifacts or running visual analysis. Every input stage and the terminal sequence boundary are already saved. Cleanup may call stop again safely and retries only subscriptions whose earlier release failed.
 

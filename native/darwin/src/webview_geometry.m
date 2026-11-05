@@ -4,6 +4,7 @@
 #import "input_inject.h"
 #import "application_log.h"
 #import "input_press_context.h"
+#import "observe.h"
 #import "webview_geometry.h"
 #import "surface_layout.h"
 #import "window_objects.h"
@@ -530,11 +531,11 @@ static void giveKeyboardAfterPress(NSWindow *window, void (^give)(void)) {
     }
     objc_setAssociatedObject(window, &keyboardPendingKey, give, OBJC_ASSOCIATION_COPY);
     if ((sp_input_physical_buttons() & 1) == 0 || objc_getAssociatedObject(window, &keyboardMonitorKey)) return;
-    id monitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseUp handler:^NSEvent *(NSEvent *event) {
+    id monitor = sp_observe_local_monitor("webview_geometry.press_release", SP_OBSERVE_RECORD, NSEventMaskLeftMouseUp, ^NSEvent *(NSEvent *event) {
         // It runs after AppKit delivered this release to the view.
         dispatch_async(dispatch_get_main_queue(), ^{ sp_surface_press_released(window); });
         return event;
-    }];
+    });
     objc_setAssociatedObject(window, &keyboardMonitorKey, monitor, OBJC_ASSOCIATION_RETAIN);
 }
 

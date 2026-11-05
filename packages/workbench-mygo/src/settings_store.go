@@ -632,7 +632,7 @@ func (s *SettingsStore) Theme(name, mode, scope string) error {
 	return s.Set(patch, scope)
 }
 
-// Debug turns the 디버그 switch on or off: on sets the trace on and every class of the log policy to trace, and off sets the
+// Debug turns the debug switch on or off: on sets the trace on and every class of the log policy to trace, and off sets the
 // trace off and the empty policy, which stores only the errors.
 func (s *SettingsStore) Debug(on bool) error {
 	policy := map[string]any{}

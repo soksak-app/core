@@ -2,29 +2,77 @@
 // not answer within the limit can be seen only then, so the check records every thread of the host process at that
 // moment with sample of macOS. A process of the same user can be sampled without privilege.
 import { execFile } from "node:child_process";
+import { statfs } from "node:fs/promises";
+import { loadavg } from "node:os";
 import { join } from "node:path";
 
 /** The seconds in which sample watches the host. One short record shows the stack of the blocked main thread. */
 const SECONDS = 2;
 
-// The error of a process that did not reach its own exit. A signal is named with what is known of its sender, because
-// the text of execFile names neither: `killed` is set when the limit ended the process.
-function endError(error, stderr, limitMs) {
-  if (!error.signal) return error;
-  const limit = error.killed ? ` at its limit of ${limitMs} ms` : "";
-  return new Error(`ended by ${error.signal}${limit}; standard error: ${stderr.trim() || "none"}`);
+/** The milliseconds of the record of a sample that stalled. Its record takes one second and about one more to write. */
+const SAMPLER_LIMIT = 5000;
+
+/** The milliseconds in which a process at its limit waits for the state of that moment, longer than SAMPLER_LIMIT. */
+const STATE_LIMIT = 6000;
+
+// The state of the machine when a process reached its limit. A stalled process writes nothing itself, so what it waited
+// for is seen only from what surrounds it at that moment.
+async function systemState() {
+  const { bavail, bsize } = await statfs("/");
+  return `free ${Math.floor(bavail * bsize / 1048576)} MB on /, load ${loadavg()[0].toFixed(1)}`;
 }
 
-// Child operations have their own limit and never block endpoint reads or test deadlines.
-export function runProcess(command, args, limitMs = 10000) {
+/**
+ * The state of the machine and the stacks of the process pid of sample, recorded in file, while it stalls. It names
+ * the reason when the stacks could not be recorded, because then the state is all that remains of that moment.
+ *
+ * run(command, args, options)  an executor that resolves to a process result ({status, stderr}). The checks replace it.
+ */
+export async function samplerState(pid, file, run = runProcess) {
+  const [state, result] = await Promise.all([systemState(), run("/usr/bin/sample", [String(pid), "1", "-file", file], { limitMs: SAMPLER_LIMIT, atLimit: null })]);
+  if (result.error) return `${state}, stacks of the process not recorded: ${result.error.message}`;
+  if (result.status !== 0) return `${state}, stacks of the process not recorded: exited with ${result.status}: ${String(result.stderr).trim()}`;
+  return `${state}, stacks of the process: ${file}`;
+}
+
+// The error of a process that did not reach its own exit. A signal is named with what is known of its sender, because
+// the text of execFile names neither: `killed` is set when the limit ended the process.
+function endError(error, stderr, limitMs, state) {
+  if (!error.signal) return error;
+  const limit = error.killed ? ` at its limit of ${limitMs} ms` : "";
+  const at = error.killed && state !== undefined ? `; at the limit: ${state}` : "";
+  return new Error(`ended by ${error.signal}${limit}; standard error: ${stderr.trim() || "none"}${at}`);
+}
+
+// The answer of atLimit within stateLimitMs. What it reads may wait for the same thing as the stalled process.
+function readState(atLimit, pid, stateLimitMs) {
   return new Promise((resolve) => {
-    execFile(command, args, { encoding: "utf8", timeout: limitMs }, (error, stdout, stderr) => {
-      resolve({ status: error?.code ?? 0, stdout, stderr,
-        error: error && typeof error.code !== "number" ? endError(error, stderr, limitMs) : undefined });
-    });
+    AbortSignal.timeout(stateLimitMs).addEventListener("abort", () => resolve(`not read within ${stateLimitMs} ms`), { once: true });
+    atLimit(pid).then(resolve, (error) => resolve(`not read: ${error.message}`));
   });
 }
 
+/**
+ * Runs command with its own limit, so child operations never block endpoint reads or test deadlines. At the limit the
+ * process still runs while atLimit(pid) reads the state of that moment, within stateLimitMs, and then ends. A null
+ * atLimit ends it at once. The limit runs on AbortSignal.timeout: a check that moves mocked timers does not move it.
+ */
+export function runProcess(command, args, { limitMs = 10000, atLimit = systemState, stateLimitMs = STATE_LIMIT } = {}) {
+  return new Promise((resolve) => {
+    const limit = AbortSignal.timeout(limitMs);
+    let state;
+    const end = async () => {
+      if (atLimit !== null) state = await readState(atLimit, child.pid, stateLimitMs);
+      child.kill();
+    };
+    const child = execFile(command, args, { encoding: "utf8" }, (error, stdout, stderr) => {
+      limit.removeEventListener("abort", end);
+      resolve({ status: error?.code ?? 0, stdout, stderr,
+        error: error && typeof error.code !== "number" ? endError(error, stderr, limitMs, state) : undefined });
+    });
+    limit.addEventListener("abort", end, { once: true });
+  });
+}
 
 /**
  * The milliseconds that a request may stay pending before the check samples the host and its page processes. A pending
@@ -34,12 +82,14 @@ export function runProcess(command, args, limitMs = 10000) {
 export const STALL_AFTER = 3000;
 
 /**
- * Writes the thread stacks of process pid to file and returns file. It fails with the reason when sample fails.
+ * Writes the thread stacks of process pid to file and returns file. It fails with the reason when sample fails, and a
+ * sample that stalls leaves the stacks of its own process next to file.
  *
- * run(command, args)  an executor that resolves to a process result ({status, stderr}). The checks replace it.
+ * run(command, args, options)  an executor that resolves to a process result ({status, stderr}). The checks replace it.
  */
 export async function sampleProcess(pid, file, run = runProcess) {
-  const result = await run("/usr/bin/sample", [String(pid), String(SECONDS), "-file", file]);
+  const atLimit = (sampler) => samplerState(sampler, `${file}.sampler.txt`);
+  const result = await run("/usr/bin/sample", [String(pid), String(SECONDS), "-file", file], { atLimit });
   if (result.error) throw new Error(`sample ${pid}: ${result.error.message}`);
   if (result.status !== 0) throw new Error(`sample ${pid} exited with ${result.status}: ${String(result.stderr).trim()}`);
   return file;

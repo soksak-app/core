@@ -298,7 +298,8 @@ pub(crate) fn register_records(registry: &Windows, label: &str, records: Arc<Win
     registry
         .windows
         .lock()
-        .unwrap()
+        // default: a test that panicked poisoned the lock of its own registry, which this test does not share.
+        .unwrap_or_else(PoisonError::into_inner)
         .insert(label.to_string(), records);
 }
 

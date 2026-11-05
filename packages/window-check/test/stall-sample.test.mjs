@@ -1,6 +1,9 @@
 // When a request does not answer within the limit, the check keeps the stacks of the host process at that time (F69).
 // What the main thread did while it did not answer can be seen only at that moment.
 import assert from "node:assert/strict";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import { within } from "../app.mjs";
 import { sampleProcess } from "../stall-sample.mjs";
@@ -33,19 +36,68 @@ test("sampleProcess runs sample on the host process into the given file and repo
     /^Error: sample 4321 exited with 1: sample cannot examine process 4321$/);
 });
 
-test("a process ended at its limit is named with the signal, the limit and its standard error", async () => {
+test("a process ended at its limit is named with the signal, the limit, its standard error and the state of the system", async () => {
   const { runProcess } = await import("../stall-sample.mjs");
-  const ended = (script) => sampleProcess(4321, "/x/stall.txt", () => runProcess("/bin/sh", ["-c", script], 200));
+  const ended = (script) => sampleProcess(4321, "/x/stall.txt", () => runProcess("/bin/sh", ["-c", script], { limitMs: 200 }));
   await assert.rejects(ended("echo held >&2; exec sleep 5"),
-    /^Error: sample 4321: ended by SIGTERM at its limit of 200 ms; standard error: held$/);
+    /^Error: sample 4321: ended by SIGTERM at its limit of 200 ms; standard error: held; at the limit: free \d+ MB on \/, load \d+\.\d$/);
   await assert.rejects(ended("exec sleep 5"),
-    /^Error: sample 4321: ended by SIGTERM at its limit of 200 ms; standard error: none$/);
+    /^Error: sample 4321: ended by SIGTERM at its limit of 200 ms; standard error: none; at the limit: free \d+ MB on \/, load \d+\.\d$/);
 });
 
 test("a process ended by a signal of another sender is not reported as ended at its limit", async () => {
   const { runProcess } = await import("../stall-sample.mjs");
-  await assert.rejects(sampleProcess(4321, "/x/stall.txt", () => runProcess("/bin/sh", ["-c", "echo held >&2; kill -KILL $$"], 5000)),
+  await assert.rejects(sampleProcess(4321, "/x/stall.txt", () => runProcess("/bin/sh", ["-c", "echo held >&2; kill -KILL $$"], { limitMs: 5000 })),
     /^Error: sample 4321: ended by SIGKILL; standard error: held$/);
+});
+
+test("the state at the limit is read while the process still runs", async () => {
+  const { runProcess } = await import("../stall-sample.mjs");
+  let running = false;
+  const atLimit = async (pid) => {
+    process.kill(pid, 0);
+    running = true;
+    return `state of ${pid}`;
+  };
+  const { error } = await runProcess("/bin/sh", ["-c", "exec sleep 5"], { limitMs: 100, atLimit });
+  assert.equal(running, true, "the process had ended before its state was read");
+  assert.match(error.message, /^ended by SIGTERM at its limit of 100 ms; standard error: none; at the limit: state of \d+$/);
+});
+
+test("a state at the limit that does not finish does not hold the end of the process", { timeout: 5000 }, async () => {
+  const { runProcess } = await import("../stall-sample.mjs");
+  const { error } = await runProcess("/bin/sh", ["-c", "exec sleep 5"], { limitMs: 100, atLimit: () => new Promise(() => {}), stateLimitMs: 100 });
+  assert.equal(error.message, "ended by SIGTERM at its limit of 100 ms; standard error: none; at the limit: not read within 100 ms");
+});
+
+test("a sample that stalls records the stacks of the sampling process before it ends", { timeout: 20000 }, async (t) => {
+  const { runProcess } = await import("../stall-sample.mjs");
+  const folder = mkdtempSync(join(tmpdir(), "stall-sampler-"));
+  t.after(() => rmSync(folder, { recursive: true, force: true }));
+  const file = join(folder, "stall.txt");
+  const stalled = (command, args, options) => runProcess("/bin/sh", ["-c", "exec sleep 30"], { ...options, limitMs: 100 });
+  const failure = await sampleProcess(4321, file, stalled).then(() => null, (error) => error.message);
+  const start = "sample 4321: ended by SIGTERM at its limit of 100 ms; standard error: none; at the limit: ";
+  assert.ok(failure?.startsWith(start), failure);
+  const state = failure.slice(start.length);
+  assert.match(state, /^free \d+ MB on \/, load \d+\.\d, stacks of the process: /);
+  assert.equal(state.split("stacks of the process: ")[1], `${file}.sampler.txt`);
+  assert.match(readFileSync(`${file}.sampler.txt`, "utf8"), /Call graph:/);
+});
+
+test("the limit of a process holds while a check moves mocked timers", { timeout: 5000 }, async (t) => {
+  const { runProcess } = await import("../stall-sample.mjs");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { error } = await runProcess("/bin/sh", ["-c", "exec sleep 5"], { limitMs: 100, atLimit: null });
+  assert.equal(error.message, "ended by SIGTERM at its limit of 100 ms; standard error: none");
+});
+
+test("stacks that the sampling process cannot record are named with the reason", async () => {
+  const { samplerState } = await import("../stall-sample.mjs");
+  assert.match(await samplerState(99, "/x/sampler.txt", async () => ({ error: new Error("ended by SIGTERM at its limit of 3000 ms") })),
+    /^free \d+ MB on \/, load \d+\.\d, stacks of the process not recorded: ended by SIGTERM at its limit of 3000 ms$/);
+  assert.match(await samplerState(99, "/x/sampler.txt", async () => ({ status: 1, stderr: "no such process\n" })),
+    /^free \d+ MB on \/, load \d+\.\d, stacks of the process not recorded: exited with 1: no such process$/);
 });
 
 test("the page processes of a host are the running WebContent services of its launchd domain", async () => {

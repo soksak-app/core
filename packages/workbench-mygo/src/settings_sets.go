@@ -43,7 +43,7 @@ func clonedSets(sets []StoredSet) []StoredSet {
 	return cloned
 }
 
-// CreateSet appends a set titled 새 세트 with the first free number, the layout list and no sections.
+// CreateSet appends a set with the title of a new set, the first free number, the layout list and no sections.
 func CreateSet(sets []StoredSet) []StoredSet {
 	number := 1
 	for slices.ContainsFunc(sets, func(set StoredSet) bool { return set.ID == fmt.Sprintf("set-%d", number) }) {

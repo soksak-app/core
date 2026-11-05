@@ -92,7 +92,7 @@ Benchmark는 B3 순서로 세 drag를 실행한다. 먼저 capture 없이 `diagn
 
 ## Input latency
 
-이미 열린 애플리케이션의 `terminal` tab과 `term` tab에서 key부터 prompt까지의 시간은 `make input-latency`로 측정한다. 애플리케이션을 `--config-dir <folder>`로 시작하고 target을 `SOKSAK_CONFIG_DIR=<folder>`로 실행한다. `APP`은 애플리케이션을 지정하며 기본값은 `mygo`다. `target/test-runs` 아래 run folder에 있는 check output은 trace와 log gate의 configuration마다 median, 90th percentile, key별 시간을 담는다. `B3_OUT=<file>`은 trace off와 default gate의 값을 file에 쓴다.
+이미 열린 애플리케이션의 `terminal` tab과 `term` tab에서 key부터 prompt까지의 시간은 `make e2e-input-latency`로 측정한다. 애플리케이션을 `--config-dir <folder>`로 시작하고 target을 `SOKSAK_CONFIG_DIR=<folder>`로 실행한다. `APP`은 애플리케이션을 지정하며 기본값은 `mygo`다. `target/test-runs` 아래 run folder에 있는 check output은 trace와 log gate의 configuration마다 median, 90th percentile, key별 시간을 담는다. `B3_OUT=<file>`은 trace off와 default gate의 값을 file에 쓴다.
 
 ## test 종류
 
@@ -280,7 +280,7 @@ run은 application을 번갈아 실행한다: 각 scenario마다 어느 applicat
 | S5 | `terminal` tab의 divider drag; 창 maximise와 restore | `make e2e-benchmark-view-drag`, `make e2e-benchmark-resize-catch-up` | G3, G4, G8 |
 | S6 | 빈 page의 idle browser tab | `make e2e-benchmark-idle-tab` | G6 |
 | S7 | 모든 plugin view의 첫 표시, 회수, 합계, drag | `e2e/benchmark/{browser,editor,hwp,terminal,term}-view.test.mjs`, `e2e/benchmark/section-view.test.mjs`, `e2e/benchmark/editor-footprint.test.mjs` | G4 |
-| S8 | `terminal` tab과 `term` tab에서 key부터 prompt까지 | `make input-latency` (`e2e/input-latency.test.mjs`) | G7 |
+| S8 | `terminal` tab과 `term` tab에서 key부터 prompt까지 | `make e2e-input-latency` (`e2e/input-latency.test.mjs`) | G7 |
 | S9 | application의 두 번째 창을 library 화면으로 S1 창 위에 놓아 그 `host.window`가 `occluded` true를 보고하는 S1 | `make app-usage STATE=S9` | G2 |
 | S10 | split, resize, view churn round | `make e2e-benchmark-split-load` | G3 |
 | S11 | S1 옆의 두 번째 project 창 | `make app-usage STATE=S11` | G3 |
@@ -335,7 +335,7 @@ run은 application을 번갈아 실행한다: 각 scenario마다 어느 applicat
 | S5 | `terminal` tab의 divider drag; 창 maximise와 restore | `make e2e-benchmark-view-drag`, `make e2e-benchmark-resize-catch-up` | G3, G4, G8 |
 | S6 | 빈 page의 idle browser tab | `make e2e-benchmark-idle-tab` | G6 |
 | S7 | 모든 plugin view의 첫 표시, 회수, 합계, drag | `e2e/benchmark/{browser,editor,hwp,terminal,term}-view.test.mjs`, `e2e/benchmark/section-view.test.mjs`, `e2e/benchmark/editor-footprint.test.mjs` | G4 |
-| S8 | `terminal` tab과 `term` tab에서 key부터 prompt까지 | `make input-latency` (`e2e/input-latency.test.mjs`) | G7 |
+| S8 | `terminal` tab과 `term` tab에서 key부터 prompt까지 | `make e2e-input-latency` (`e2e/input-latency.test.mjs`) | G7 |
 | S9 | application의 두 번째 창을 library 화면으로 S1 창 위에 놓아 그 `host.window`가 `occluded` true를 보고하는 S1 | `make app-usage STATE=S9` | G2 |
 | S10 | split, resize, view churn round | `make e2e-benchmark-split-load` | G3 |
 | S11 | S1 옆의 두 번째 project 창 | `make app-usage STATE=S11` | G3 |
@@ -420,7 +420,7 @@ Terminal mode가 아니면 runner는 main window의 `diagnostics.objects`를 조
 
 Cargo compile 또는 metadata discovery가 실패하면 Rust owner runner는 command 실패 보고 전에 capture한 stdout을 출력한다. JSON compiler diagnostic과 plain metadata 오류를 보존하며, 실패 결과를 유지하고 실패한 discovery에서 test를 시작하지 않는다.
 
-Stall sampling과 launchd process 조회는 각 process에 10초 제한을 둔 비동기 child process를 사용한다. Sample 실행 중에도 검사는 endpoint message를 계속 읽는다. Host와 page sample은 함께 시작하고 page 실패는 각각 보고하며 host 실패는 sample operation을 실패시킨다.
+Stall sampling과 launchd process 조회는 각 process에 10초 제한을 둔 비동기 child process를 사용한다. 제한에 이른 process는 실패가 그 순간의 system volume 여유 공간과 load를 읽는 동안 최대 6초 더 실행되고, 멈춘 `sample`은 자기 file 옆에 자기 stack도 기록한다. Sample 실행 중에도 검사는 endpoint message를 계속 읽는다. Host와 page sample은 함께 시작하고 page 실패는 각각 보고하며 host 실패는 sample operation을 실패시킨다.
 
 IME window 검사는 capture stop 후 artifact 복사 또는 visual 분석 전에 소유 terminal status observer를 끝낸다. 모든 입력 단계와 terminal sequence boundary는 이미 저장돼 있다. Cleanup은 stop을 다시 안전하게 호출할 수 있으며 이전 해제에 실패한 구독만 재시도한다.
 

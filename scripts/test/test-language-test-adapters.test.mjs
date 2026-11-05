@@ -38,13 +38,14 @@ test('parses each language result and rejects zero, skipped, and crashed outcome
   const cases = discoverLanguageCases({ cases: [
     { id: 'pass', language: 'js-ts', ...command("console.log('ℹ tests 1\\nℹ pass 1\\nℹ fail 0\\nℹ skipped 0\\nℹ todo 0\\nℹ cancelled 0')") },
     { id: 'zero', language: 'rust', ...command('process.exit(0)') },
-    { id: 'crash', language: 'go', ...command('process.kill(process.pid, \'SIGABRT\')') },
+    // A signal ends the case, whichever it is. SIGKILL leaves no crash report on the machine, as SIGABRT does at each run.
+    { id: 'crash', language: 'go', ...command('process.kill(process.pid, \'SIGKILL\')') },
   ] });
   const result = await runLanguageCases(cases);
   assert.equal(result.status, 'fail');
   assert.equal(result.cases.find((item) => item.id === 'pass').status, 'pass');
   assert.match(result.cases.find((item) => item.id === 'zero').errors.join(' '), /zero tests/);
-  assert.match(result.cases.find((item) => item.id === 'crash').errors.join(' '), /crashed/);
+  assert.match(result.cases.find((item) => item.id === 'crash').errors.join(' '), /process crashed with SIGKILL/);
 
   const skipped = await runLanguageCases(discoverLanguageCases({ cases: [
     { id: 'mandatory-skip', language: 'rust', ...command("console.log('test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out;')") },
