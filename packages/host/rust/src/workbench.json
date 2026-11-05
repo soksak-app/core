@@ -718,6 +718,9 @@
     "clip-all": "50%",
     "library-card-min-w-narrow": "215px",
     "library-narrow-w": "780px",
-    "scrim-alpha": ".5"
+    "scrim-alpha": ".5",
+    "scrim-blur": "3px",
+    "picker-anchor-gap": "5px",
+    "placeholder-gap": "10px"
   }
 }

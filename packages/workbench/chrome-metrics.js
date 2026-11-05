@@ -6,6 +6,9 @@ import declaration from "./workbench.json" with { type: "json" };
 /** The chrome metrics of workbench.json: a custom property name without the leading dashes and its CSS value. */
 export const CHROME = declaration.chrome;
 
+/** The rule of background.js, which runs in every web document and reads no module, so a test holds that script to this value. */
+export const backgroundBlurRule = `:root { filter: blur(${CHROME["scrim-blur"]}) !important }`;
+
 /** Draws the logo, the one declaration of both workbenches, in the logo element of the chrome bar. */
 export function installBrandLogo(element) {
   element.setAttribute("viewBox", CHROME["brand-logo-box"]);

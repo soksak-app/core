@@ -513,7 +513,7 @@ function pluginPlaceholder(tab, paramsProblem) {
   const el = document.createElement("div");
   el.dataset.pluginPlaceholder = reason;
   el.dataset.plugin = tab.plugin;
-  el.style.cssText = "position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:10px;color:var(--muted)";
+  el.style.cssText = `position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:${CHROME["placeholder-gap"]};color:var(--muted)`;
   const line = document.createElement("p");
   const text = reason === "params" ? paramsProblem : PLACEHOLDER_LINES[reason](tab.plugin);
   // The reasons unread and params state a failure (the install state could not be read, or the stored params do not match the declaration),
@@ -768,7 +768,7 @@ function openLayer(anchor, ask, items, pick, align = "right", groups = [{ headin
   const fit = (v, span, room) => Math.max(2, Math.min(v, room - span - 2));
   const rect = {
     x: fit(align === "left" ? a.left - host.left : a.right - host.left - p.width, p.width, host.width),
-    y: fit(a.bottom - host.top + 5, p.height, host.height),
+    y: fit(a.bottom - host.top + parseFloat(CHROME["picker-anchor-gap"]), p.height, host.height),
     w: p.width, h: p.height,
   };
   pickerEl.style.left = `${rect.x}px`;
