@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F595: 합성 입력은 layout을 기다리는 입력 뒤에서 순서를 지킨다.
 - F502-16: Wails host의 window는 요청한 크기를 갖고 web view는 content 크기를 가지므로, page의 마지막 row가 보이고 native view가 page 위 제자리에 선다. F592가 fork를 publish할 때까지 Wails module은 fork의 local checkout을 읽는다.
 - F593: layout을 기다리는 입력은 framework가 `sendEvent:`를 override하는 Tauri host에서도 순서를 지키고, 가운데 버튼, scroll, 이동, modifier 변경이 앞지르지 않는다.
 - F590: `IDLE=1`은 마지막 요청 뒤 준비가 남긴 gate count가 기록되기를 기다린 다음 첫 CPU를 읽는다. 그 기록은 settled 상태의 비용이 아니기 때문이다. CPU 구간에 쓰인 기록 수도 출력한다. G2의 한계는 그대로다. Red: `measure-app-usage.test.mjs`가 mark와 첫 CPU 읽기 사이에 대기가 없음을 찾았다.

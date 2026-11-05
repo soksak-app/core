@@ -30,8 +30,9 @@ uint64_t surfaceLayoutTraceRequested(void);
 void surfaceLayoutTracePresented(uint64_t ticket);
 #ifdef __BLOCKS__
 void surfaceLayoutBegin(void *owner, uint64_t ticket, void (^ready)(int));
-// Runs done after the open transaction of owner has ended, and at once when owner has none open.
-void surfaceLayoutAfterCommit(void *owner, void (^done)(void));
+// Keeps an injected call behind the input of owner that waits and returns true, or returns false when it runs now. A press at the
+// point, in window coordinates, waits as surfaceLayoutPressWaits says. The event loop of the application runs the call in its turn.
+bool surfaceLayoutHoldCall(void *owner, bool press, double x, double y, void (^call)(void));
 // Checks that the single app DOM is ready to present before committing an open layout.
 void surfaceLayoutAfterPresentation(void *mainWebview, void (^done)(void));
 // A block that brings the content of a window to the screen in its current state. It calls presented once on the main thread
