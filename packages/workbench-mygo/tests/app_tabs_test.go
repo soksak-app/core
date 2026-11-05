@@ -372,3 +372,66 @@ func TestASectionWritesItsStateUnderItsOwnDeclaration(t *testing.T) {
 		t.Fatalf("a section without the declaration wrote its state: %v", reply)
 	}
 }
+
+// hiddenTabsDocument is the document of the installed plugins with a view that declares unload, a view that does not and a view of a plugin
+// with a background session.
+const hiddenTabsDocument = `{"plugins": [
+	{"id": "notes", "package": "@scope/plugin-notes", "version": "1.0.0", "manifest": {"id": "notes", "name": "노트", "description": "notes",
+		"mark": "n", "icon": "<path d=\"M1 1h14\"/>", "surface": {"unload": {"format": 1, "maxBytes": 1024}, "composition": {"kind": "view", "page": "ui/index.html"}}}},
+	{"id": "plain", "package": "@scope/plugin-plain", "version": "1.0.0", "manifest": {"id": "plain", "name": "평문", "description": "plain",
+		"mark": "p", "icon": "<path d=\"M1 1h14\"/>", "surface": {"composition": {"kind": "view", "page": "ui/index.html"}}}}]}`
+
+// hiddenTabsApp opens a project with a shown tab and two hidden tabs, with the setting memorySaver.
+func hiddenTabsApp(t *testing.T, memorySaver bool) *surfaceHost {
+	t.Helper()
+	stored := &surfaceHost{}
+	stored.installed = hiddenTabsDocument
+	stored.common = map[string]any{"memorySaver": memorySaver}
+	stored.projects = []map[string]any{storedProject(tab("tab-aaaaaa", "notes"), tab("tab-bbbbbb", "notes"), tab("tab-cccccc", "plain"))}
+	f := newTabApp(t, stored, hiddenTabsDocument)
+	f.command("core.project.activate", map[string]string{"id": "prj-a"})
+	return stored
+}
+
+// While the memory saver is off, a hidden tab mounts at startup (docs/spec/plugins.md#memory-saver).
+func TestHiddenTabsMountAtStartupWhileTheMemorySaverIsOff(t *testing.T) {
+	surfaces := hiddenTabsApp(t, false).lastSurfaces(t)
+	for _, id := range []string{"tab-bbbbbb", "tab-cccccc"} {
+		if surface := surfaces[id]; surface == nil || surface["visible"] != false {
+			t.Fatalf("the hidden tab %s is %v", id, surface)
+		}
+	}
+}
+
+// While the memory saver is on, a hidden tab that declares unload has no view, and a hidden tab that may never unload mounts.
+func TestOnlyAnUndeclaredHiddenTabMountsWhileTheMemorySaverIsOn(t *testing.T) {
+	surfaces := hiddenTabsApp(t, true).lastSurfaces(t)
+	if surface := surfaces["tab-bbbbbb"]; surface != nil {
+		t.Fatalf("the hidden tab that declares unload is %v", surface)
+	}
+	if surface := surfaces["tab-cccccc"]; surface == nil || surface["visible"] != false {
+		t.Fatalf("the hidden tab without the declaration is %v", surface)
+	}
+}
+
+// A hidden tab of another space mounts at startup, and its view reads the text scale of its stored card.
+func TestAHiddenTabOfAnotherSpaceReadsTheTextScaleOfItsCard(t *testing.T) {
+	stored := &surfaceHost{}
+	stored.installed = hiddenTabsDocument
+	stored.common = map[string]any{"memorySaver": false}
+	project := storedProject(tab("tab-aaaaaa", "notes"))
+	other := map[string]any{"xs": []float64{0, 1}, "ys": []float64{0, 1}, "paidBy": map[string]any{}, "cards": []map[string]any{{
+		"id": "main", "c0": 0, "c1": 1, "r0": 0, "r1": 1, "data": map[string]any{"tabs": []map[string]any{tab("tab-dddddd", "plain")}, "activeId": "tab-dddddd", "textSize": 1.5}}}}
+	project["spaces"] = append(project["spaces"].([]map[string]any), map[string]any{"id": "spc-bbbbbb", "title": "other", "layout": map[string]any{"state": other}})
+	stored.projects = []map[string]any{project}
+	f := newTabApp(t, stored, hiddenTabsDocument)
+	f.command("core.project.activate", map[string]string{"id": "prj-a"})
+	if surface := stored.lastSurfaces(t)["tab-dddddd"]; surface == nil || surface["visible"] != false {
+		t.Fatalf("the hidden tab of the other space is %v", surface)
+	}
+	f.app.Emit(f.window, "view-call", map[string]any{"surface": "tab-dddddd", "plugin": "plain", "generation": 1, "id": 5, "command": "runtime.textSize.read"})
+	f.settle()
+	if reply := stored.replies[len(stored.replies)-1]; reply["error"] != nil || reply["result"] != 1.5 {
+		t.Fatalf("the read is %v", reply)
+	}
+}

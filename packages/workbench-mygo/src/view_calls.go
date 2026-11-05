@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
 // The calls of the views of a window (docs/spec/native-surfaces.md#view-surfaces). The host forwards each call request of a view
@@ -855,13 +857,41 @@ func (s *Shell) viewTextSize(surface string, view *viewState) (float64, error) {
 	if size, shown := s.surfaceTextSize(surface); shown {
 		return size, nil
 	}
-	if view.scale == 0 {
-		return 0, fmt.Errorf("surface %s is not in the layout", surface)
+	if view.scale != 0 {
+		return view.scale, nil
 	}
-	return view.scale, nil
+	if size, stored := s.storedTextSize(surface); stored {
+		return size, nil
+	}
+	return 0, fmt.Errorf("surface %s is not in the layout", surface)
 }
 
-// readTabState returns the value of the state of the tab: null without one, and a state of another format is refused.
+// storedTextSize returns the text scale of a tab of a space off the screen, which reads the factor of its stored card.
+func (s *Shell) storedTextSize(surface string) (float64, bool) {
+	project := s.opened()
+	if project == nil {
+		return 0, false
+	}
+	for _, space := range project.Spaces {
+		var stored storedLayout
+		if space.ID == project.ActiveSpaceID || json.Unmarshal(space.Layout, &stored) != nil {
+			continue // silent: the memory saver reports a stored layout that does not read.
+		}
+		for _, card := range stored.State.Cards {
+			data, err := layout.DecodeCardData(card.Data)
+			if err != nil || data == nil {
+				continue // silent: a place card has no tabs, and the shell refuses a stored card that does not read when it loads the space.
+			}
+			for _, tab := range data.TabList() {
+				if tab.ID == surface {
+					return s.text.Frame() * data.CardTextSize(), true
+				}
+			}
+		}
+	}
+	return 0, false
+}
+
 // unloadOf returns the declaration of unload of the surface: a section surface has the declaration of its section, and a tab that of its plugin.
 func (s *Shell) unloadOf(surface string, unit *installedUnit) *surfaceUnload {
 	if held := s.surfaces.held[surface]; held != nil && held.section != nil {
@@ -870,6 +900,7 @@ func (s *Shell) unloadOf(surface string, unit *installedUnit) *surfaceUnload {
 	return unit.Unload
 }
 
+// readTabState returns the value of the state of the tab: null without one, and a state of another format is refused.
 func readTabState(tab string, unload *surfaceUnload, states *TabStates) (any, error) {
 	entry, _ := states.Entry(tab) // silent: a tab without an entry reads null, as a tab without a state.
 	if len(entry.State) == 0 {

@@ -620,6 +620,7 @@ func (s *Shell) View(c *ui.Context) {
 	s.drawDebug(c)
 	s.forgetUnseated()
 	s.observeSections()
+	s.holdHiddenTabs()
 	s.placeSurfaces()
 	s.clearVisibleNotices()
 	s.drawn = true
