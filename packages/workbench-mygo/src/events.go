@@ -212,7 +212,7 @@ type BeginOperation func(event string, fields map[string]any) []string
 func (e *Events) BeginOperation(event string, fields map[string]any) []string {
 	e.operations++
 	cids := []string{fmt.Sprintf("p%s.%d", e.start, e.operations)}
-	// events: forwarded
+	// events: workbench.plugin.operation, workbench.project.operation, workbench.settings.change, workbench.update.operation, workbench.window.operation
 	e.Emit(sok.LevelInfo, event, func() map[string]any { return fields }, cids)
 	return cids
 }

@@ -712,7 +712,9 @@ static BOOL measureRegisteredDisplayNameHelper(NSString *executable, NSString *c
     NSPipe *outputPipe = [NSPipe pipe];
     NSPipe *controlPipe = [NSPipe pipe];
     task.standardOutput = outputPipe;
-    task.standardError = outputPipe;
+    // The helper reports on its standard output. A system framework writes its own lines to the standard error during the check-in,
+    // so they stay out of the report and remain visible in the output of the check.
+    task.standardError = [NSFileHandle fileHandleWithStandardError];
     task.standardInput = controlPipe;
     NSMutableDictionary *environment = [NSMutableDictionary dictionaryWithDictionary:NSProcessInfo.processInfo.environment];
     environment[@"SOKSAK_SIDECAR_DISPLAY_NAME"] = requestedName;
