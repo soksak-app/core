@@ -45,7 +45,7 @@ type TextPlace interface {
 	// FocusedCard is the id of the focused card, or "" when the window has none.
 	FocusedCard() string
 	FrameTextSize() float64
-	SetFrameTextSize(size float64) error
+	SetFrameTextSize(size float64, actor string) error
 	// CardTextSizes is the factor of each card of the layout.
 	CardTextSizes() map[string]float64
 	SetCardTextSize(card string, size float64) error
@@ -106,15 +106,15 @@ func (s *TextSize) Effective(card string) float64 {
 	return s.Frame() * factor
 }
 
-// Change moves the factor of the scope in direction, as NextTextSize does.
-func (s *TextSize) Change(direction int) error {
+// Change moves the factor of the scope in direction, as NextTextSize does. actor is the command that asks for it.
+func (s *TextSize) Change(direction int, actor string) error {
 	scope := s.Scope()
 	if scope.Kind == "frame" {
 		next, err := NextTextSize(s.steps, s.Frame(), direction)
 		if err != nil {
 			return err
 		}
-		return s.place.SetFrameTextSize(next)
+		return s.place.SetFrameTextSize(next, actor)
 	}
 	factor, ok := s.place.CardTextSizes()[scope.Card]
 	if !ok {
@@ -130,12 +130,12 @@ func (s *TextSize) Change(direction int) error {
 // Register registers the status and the commands of the text size.
 func (s *TextSize) Register(registry *Registry) {
 	registry.Status("core.text", func() any { return s.Status() })
-	change := func(direction int) Command {
-		return func(json.RawMessage) (any, error) { return nil, s.Change(direction) }
+	change := func(name string, direction int) {
+		registry.Command(name, func(json.RawMessage) (any, error) { return nil, s.Change(direction, name) })
 	}
-	registry.Command("core.text.larger", change(1))
-	registry.Command("core.text.smaller", change(-1))
-	registry.Command("core.text.reset", change(0))
+	change("core.text.larger", 1)
+	change("core.text.smaller", -1)
+	change("core.text.reset", 0)
 }
 
 // Status is the value of the status core.text.

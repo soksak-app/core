@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -27,11 +28,12 @@ type LoadedPlugin struct {
 	Dependencies map[string]string
 	// Composition is the kind of the surface composition, and nil without one.
 	Composition *string
-	// Mark is the short text and Icon the SVG elements of the add menu, and Menu the context menu of the surface.
-	Mark, Icon string
-	Menu       []PluginMenuItem
-	Sections   []LoadedSection
-	Surface    bool
+	// Mark is the short text and Icon the SVG elements of the add menu, Menu the context menu of the surface, and Save the command
+	// that saves a surface.
+	Mark, Icon, Save string
+	Menu             []PluginMenuItem
+	Sections         []LoadedSection
+	Surface          bool
 	// Params is surface.params, the schema of the parameters of a tab, and nil for a plugin that opens tabs without them.
 	Params any
 }
@@ -770,8 +772,14 @@ func (s *Shell) settingsSave(project string, patch map[string]any, remove []stri
 	if project != "" {
 		id = project
 	}
+	scope := "common"
+	if project != "" {
+		scope = "project"
+	}
+	keys := slices.Concat(slices.Sorted(maps.Keys(patch)), remove)
+	cids := s.events.BeginOperation("workbench.settings.change", map[string]any{"scope": scope, "actor": s.settingsActor, "keys": strings.Join(keys, ",")})
 	s.settings.BeginSave()
-	s.calls.CallInOrder("workspace", "workspace", map[string]any{"kind": "settings", "id": id, "patch": patch, "remove": remove}, func(_ any, err error) {
+	s.calls.Caused(cids).CallInOrder("workspace", "workspace", map[string]any{"kind": "settings", "id": id, "patch": patch, "remove": remove}, func(_ any, err error) {
 		s.settings.EndSave()
 		if err != nil {
 			s.fail(err)
@@ -783,13 +791,36 @@ func (s *Shell) settingsSave(project string, patch map[string]any, remove []stri
 
 // settingsChanged applies the settings after a change.
 func (s *Shell) settingsChanged() error {
-	if err := s.applyPalette(); err != nil {
+	if err := s.applySettings(); err != nil {
 		return err
 	}
 	s.followScale()
 	s.followSettings()
+	changed, err := s.arrangeWindowSidebars()
+	if err != nil {
+		return err
+	}
+	if changed {
+		s.settle()
+	}
 	s.options.Invalidate()
 	return nil
+}
+
+// applySettings takes what the settings hold for the screens: the colors and the shape, and the sets and the links of the sidebars.
+func (s *Shell) applySettings() error {
+	if err := s.applyPalette(); err != nil {
+		return err
+	}
+	sets, err := decode[[]SidebarSet](s.settings.Value("sets"))
+	if err != nil {
+		return err
+	}
+	links, err := decode[[]SidebarLink](s.settings.Value("links"))
+	if err != nil {
+		return err
+	}
+	return s.sidebars.Adopt(sets, links)
 }
 
 // applyPalette takes the colors and the shape of the settings.
@@ -951,12 +982,18 @@ func inScope(scope string) string {
 	return scope
 }
 
-// changing runs a change of the settings and applies its result.
-func (s *Shell) changing(change func() error) error {
-	if err := change(); err != nil {
+// changing runs a change of the settings that actor makes and applies its result.
+func (s *Shell) changing(actor string, change func() error) error {
+	if err := s.settingsChange(actor, change); err != nil {
 		return err
 	}
 	return s.settingsChanged()
+}
+
+// settingsChange runs a change of the settings that actor, the command that asks for it, makes (docs/spec/logging.md#operation-chains).
+func (s *Shell) settingsChange(actor string, change func() error) error {
+	s.settingsActor = actor
+	return change()
 }
 
 // registerSettings adds the commands and the statuses of the settings.
@@ -977,23 +1014,23 @@ func (s *Shell) registerSettings() {
 
 func (s *Shell) registerSettingsValues() {
 	act(s, "core.settings.set", func(value settingsParam) error {
-		return s.changing(func() error { return s.settings.Set(value.Patch, value.Scope) })
+		return s.changing("core.settings.set", func() error { return s.settings.Set(value.Patch, value.Scope) })
 	})
 	act(s, "core.settings.reset", func(value settingsParam) error {
-		return s.changing(func() error { return s.settings.Reset(value.Key) })
+		return s.changing("core.settings.reset", func() error { return s.settings.Reset(value.Key) })
 	})
 	act(s, "core.settings.debug", func(value settingsParam) error {
-		return s.changing(func() error { return s.settings.Debug(value.On) })
+		return s.changing("core.settings.debug", func() error { return s.settings.Debug(value.On) })
 	})
 	act(s, "core.settings.change", func(value settingsParam) error {
 		var input any
 		if err := json.Unmarshal(value.Value, &input); err != nil {
 			return fmt.Errorf("core.settings.change: %w", err)
 		}
-		return s.changing(func() error { return s.settings.Change(value.Key, input, value.Scope) })
+		return s.changing("core.settings.change", func() error { return s.settings.Change(value.Key, input, value.Scope) })
 	})
 	act(s, "core.settings.theme", func(value settingsParam) error {
-		return s.changing(func() error { return s.settings.Theme(value.Name, value.Mode, value.Scope) })
+		return s.changing("core.settings.theme", func() error { return s.settings.Theme(value.Name, value.Mode, value.Scope) })
 	})
 	act(s, "core.settings.link", func(value settingsParam) error {
 		scope := inScope(value.Scope)
@@ -1009,7 +1046,7 @@ func (s *Shell) registerSettingsValues() {
 		if err != nil {
 			return err
 		}
-		return s.changing(func() error { return s.settings.Set(map[string]any{"links": next}, scope) })
+		return s.changing("core.settings.link", func() error { return s.settings.Set(map[string]any{"links": next}, scope) })
 	})
 }
 
@@ -1022,7 +1059,7 @@ func (s *Shell) registerSettingsSets() {
 		}
 		next := CreateSet(sets)
 		id := next[len(next)-1].ID
-		if err := s.changing(func() error { return s.settings.Set(map[string]any{"sets": next}, scope) }); err != nil {
+		if err := s.changing("core.settings.link", func() error { return s.settings.Set(map[string]any{"sets": next}, scope) }); err != nil {
 			return nil, err
 		}
 		if s.settingsWindow.open {
@@ -1040,7 +1077,7 @@ func (s *Shell) registerSettingsSets() {
 		if err != nil {
 			return err
 		}
-		return s.changing(func() error { return s.settings.Set(map[string]any{"sets": next}, scope) })
+		return s.changing("core.settings.link", func() error { return s.settings.Set(map[string]any{"sets": next}, scope) })
 	}
 	act(s, "core.settings.sets.update", func(value settingsParam) error {
 		return change(value, func(sets []StoredSet) ([]StoredSet, error) {
@@ -1066,7 +1103,7 @@ func (s *Shell) registerSettingsSets() {
 		if err != nil {
 			return err
 		}
-		return s.changing(func() error { return s.settings.Set(map[string]any{"sets": remaining, "links": kept}, scope) })
+		return s.changing("core.settings.sets.delete", func() error { return s.settings.Set(map[string]any{"sets": remaining, "links": kept}, scope) })
 	})
 }
 
@@ -1098,17 +1135,13 @@ func windowAct(s *Shell, name string, run func(value windowParam) error) {
 func (s *Shell) registerSettingsWindow() {
 	w := &s.settingsWindow
 	act(s, "core.settings.open", func(struct{}) error {
-		s.closePicker()
 		s.closeDebug()
+		s.closePicker()
 		w.open = true
 		s.options.Invalidate()
 		return nil
 	})
-	act(s, "core.settings.close", func(struct{}) error {
-		w.open = false
-		s.options.Invalidate()
-		return nil
-	})
+	act(s, "core.settings.close", func(struct{}) error { s.closeSettings(); return nil })
 	windowAct(s, "core.settings-modal.nav", func(value windowParam) error {
 		if !slices.ContainsFunc(settingsSections, func(section [2]string) bool { return section[0] == value.Section }) {
 			return fmt.Errorf("unknown settings section %s", value.Section)
@@ -1176,5 +1209,11 @@ func (s *Shell) beginSettings() error {
 	if err := s.settings.Begin(s.commonSettings, overrides, id); err != nil {
 		return err
 	}
-	return s.applyPalette()
+	return s.applySettings()
+}
+
+// closeSettings closes the card.
+func (s *Shell) closeSettings() {
+	s.settingsWindow.open = false
+	s.options.Invalidate()
 }

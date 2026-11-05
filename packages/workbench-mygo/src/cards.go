@@ -24,7 +24,13 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 	s.drawSpaces(c, project, width)
 	stage := height - banner - s.metrics.spaceTabH - s.metrics.tabsGap
 	inset := s.stageInset()
+	sized := s.plane.Width() > 0
 	s.plane.Resize(float64(width-2*inset), float64(stage-2*inset))
+	if !sized {
+		if _, err := s.arrangeWindowSidebars(); err != nil {
+			s.fail(err)
+		}
+	}
 	originX, originY := inset, s.chromeHeight()+banner+s.metrics.spaceTabH+s.metrics.tabsGap+inset
 	ui.Box(c).Size(width, stage).DrawOver(func(p *ui.Painter, r ui.Rect) { s.drawRail(p, r, inset) }).Children(func() {
 		cards := s.plane.Cards()
@@ -88,6 +94,7 @@ func (s *Shell) drawCard(c *ui.Context, id string, data *layout.CardData, rect l
 		border = s.palette.Focus
 	}
 	card := s.binder.Press(c, "core.card", "core.card.focus", id, cardParam{Card: id})
+	s.anchored("core.card/"+id, card)
 	card.Role(ui.RoleGroup).Label(id).Absolute().Left(float32(rect.X)+inset).Top(float32(rect.Y)+inset).Size(float32(rect.W), float32(rect.H)).
 		Background(s.palette.Card).Border(s.palette.BorderWidth, border).Radius(s.palette.Radius).Clip().Column().Children(func() {
 		// The border takes its width from every edge of the card, so the rows stand in what lies inside it.
@@ -276,6 +283,7 @@ func (s *Shell) drawTab(c *ui.Context, tab layout.Tab, on bool, size, width floa
 			start = m.tabGap
 		}
 		button := s.binder.Press(c, "core.card.tab", "core.tab.select", tab.ID, tabParam{tab.ID})
+		s.anchored("core.card.tab/"+tab.ID, button)
 		button.Padding(0, m.tabGap, 0, start).AlignItems(ui.Center).Label(name).Tooltip(name).Children(func() {
 			ui.Text(c, name).SingleLine().Ellipsis("…").FontSize(size).MaxWidth(width).TextColor(color)
 		})

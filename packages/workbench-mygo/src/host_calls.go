@@ -177,7 +177,7 @@ type Calls struct {
 	ctx   context.Context
 	post  func(task func())
 	// observer receives every call that ended, in the step of its answer.
-	observer func(name string, argument any, elapsed time.Duration, failure error)
+	observer func(name string, argument any, cids []string, elapsed time.Duration, failure error)
 	mu       sync.Mutex
 	// orders holds the calls that wait for the previous call of their order, and an order exists while a call of it runs.
 	orders map[string][]func()
@@ -196,18 +196,38 @@ func NewHostCalls(h *host.Host, window host.Frontend, post func(task func())) *C
 }
 
 // Observe installs the observer of the calls (docs/spec/logging.md#automatic-entrances), before the first call.
-func (c *Calls) Observe(observer func(name string, argument any, elapsed time.Duration, failure error)) {
+func (c *Calls) Observe(observer func(name string, argument any, cids []string, elapsed time.Duration, failure error)) {
 	c.observer = observer
 }
 
 // Call runs the handler name with argument and gives answer its result in a later step.
 func (c *Calls) Call(name string, argument any, answer func(value any, err error)) {
-	c.start(name, argument, answer, func() {})
+	c.Caused(nil).Call(name, argument, answer)
 }
 
 // CallInOrder is Call for a call whose order a specification requires: it starts only after the previous call of order finished.
 func (c *Calls) CallInOrder(order, name string, argument any, answer func(value any, err error)) {
-	begin := func() { c.start(name, argument, answer, func() { c.next(order) }) }
+	c.Caused(nil).CallInOrder(order, name, argument, answer)
+}
+
+// Caused returns the calls that carry out the operation with the correlation identifiers cids (docs/spec/logging.md#operation-chains).
+func (c *Calls) Caused(cids []string) CausedCalls { return CausedCalls{calls: c, cids: cids} }
+
+// CausedCalls are the host calls of one operation.
+type CausedCalls struct {
+	calls *Calls
+	cids  []string
+}
+
+// Call is Calls.Call for a call of the operation.
+func (o CausedCalls) Call(name string, argument any, answer func(value any, err error)) {
+	o.calls.start(name, argument, o.cids, answer, func() {})
+}
+
+// CallInOrder is Calls.CallInOrder for a call of the operation.
+func (o CausedCalls) CallInOrder(order, name string, argument any, answer func(value any, err error)) {
+	c := o.calls
+	begin := func() { c.start(name, argument, o.cids, answer, func() { c.next(order) }) }
 	c.mu.Lock()
 	waiting, running := c.orders[order]
 	if running {
@@ -235,23 +255,23 @@ func (c *Calls) next(order string) {
 }
 
 // start runs the handler on a goroutine of its own, posts its answer and calls finished.
-func (c *Calls) start(name string, argument any, answer func(value any, err error), finished func()) {
+func (c *Calls) start(name string, argument any, cids []string, answer func(value any, err error), finished func()) {
 	routine.Go("host-call", func() {
 		started := time.Now()
-		value, err := c.invoke(name, argument)
+		value, err := c.invoke(name, argument, cids)
 		elapsed := time.Since(started)
 		finished()
 		c.post(func() {
 			if c.observer != nil {
-				c.observer(name, argument, elapsed, err)
+				c.observer(name, argument, cids, elapsed, err)
 			}
 			answer(value, err)
 		})
 	})
 }
 
-// invoke runs the handler name with argument as JSON.
-func (c *Calls) invoke(name string, argument any) (any, error) {
+// invoke runs the handler name with argument as JSON. The call is an event of the host, as a call through the bound method of a page is.
+func (c *Calls) invoke(name string, argument any, cids []string) (any, error) {
 	call := c.table[name]
 	if call == nil {
 		return nil, fmt.Errorf("unknown host call: %s", name)
@@ -264,5 +284,9 @@ func (c *Calls) invoke(name string, argument any) (any, error) {
 		}
 		raw = encoded
 	}
-	return call(c.ctx, raw)
+	var args []json.RawMessage
+	if raw != nil {
+		args = []json.RawMessage{raw}
+	}
+	return host.RecordedCall(c.ctx, name, args, cids, func() (any, error) { return call(c.ctx, raw) })
 }

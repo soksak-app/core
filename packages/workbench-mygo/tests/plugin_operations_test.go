@@ -125,7 +125,7 @@ func (f *shellFixture) pluginStatus() pluginsStatus {
 }
 
 const loadedAlpha = `{"plugins":[{"id":"alpha","package":"alpha","version":"1.0.0","manifest":{"id":"alpha","name":"Alpha","description":"Loaded alpha",
-	"surface":{"composition":{"kind":"view"}},"dependencies":{"hello":"^2.0.0"}}}]}`
+	"mark":"a","icon":"<path d=\"M1 1h14\"/>","surface":{"composition":{"kind":"view","page":"ui/index.html"}},"dependencies":{"hello":"^2.0.0"}}}]}`
 
 func TestPluginRowsFollowTheStateOfThePage(t *testing.T) {
 	version := func(v string) *string { return &v }
@@ -285,6 +285,59 @@ func TestAFailedPluginOperationIsTheStateOfItsCard(t *testing.T) {
 	}
 	if errors := f.host.written("workbench.record.error"); len(errors) != 1 {
 		t.Fatalf("the shown failure is recorded %d times", len(errors))
+	}
+}
+
+// The update button of the chrome shows the update list at the top of a page that was scrolled away from it.
+func TestShowUpdatesBringsTheUpdateListIntoView(t *testing.T) {
+	versions := map[string][]string{"alpha": {"1.0.0", "1.2.0"}}
+	for i := range 30 {
+		versions[fmt.Sprintf("plugin-%02d", i)] = []string{"1.0.0"}
+	}
+	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(versions), plugins: map[string]map[string]any{
+		"alpha": {"version": "1.0.0", "enabled": true, "sidecars": map[string]string{}}}}
+	f := pluginShell(t, plugins, `{"plugins":[]}`)
+	f.run("core.library.page", map[string]string{"page": "plugins"})
+	f.settle()
+	top := positional(t, f.tester, "core.library.plugins.updates", 0).Bounds.Y
+	f.tester.Scroll(600, 600, 0, 1500)
+	f.tester.Frame()
+	if scrolled := positional(t, f.tester, "core.library.plugins.updates", 0).Bounds.Y; scrolled >= 0 {
+		t.Fatalf("the list stands at %v after the scroll, from %v", scrolled, top)
+	}
+	f.run("core.plugins.show-updates", nil)
+	f.settle()
+	if shown := positional(t, f.tester, "core.library.plugins.updates", 0).Bounds.Y; shown < 0 {
+		t.Fatalf("the list stands at %v", shown)
+	}
+}
+
+// A plugin whose manifest the window refuses is left out with its error, its row says so, and the other plugins load.
+func TestAnInstalledPluginWithARefusedManifestIsRefused(t *testing.T) {
+	record := func() map[string]any {
+		return map[string]any{"version": "1.0.0", "enabled": true, "sidecars": map[string]string{}}
+	}
+	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(map[string][]string{"alpha": {"1.0.0"}, "beta": {"1.0.0"}}),
+		plugins: map[string]map[string]any{"alpha": record(), "beta": record()}}
+	plugins.core = "1.0.0"
+	stored := &storedHost{plugins: plugins, installed: `{"plugins":[
+		{"id":"alpha","package":"@scope/plugin-alpha","version":"1.0.0","manifest":{"id":"alpha","name":"알파","description":"alpha","contributes":{}}},
+		{"id":"beta","package":"@scope/plugin-beta","version":"1.0.0","manifest":{"id":"beta","name":"베타","description":"beta","contributes":{},"state":{}}}]}`}
+	f := startedShell(t, stored)
+	f.pending.drain(t)
+	f.tester.Frame()
+	f.pending.drain(t)
+	status := f.pluginStatus()
+	states := map[string]string{}
+	for _, row := range status.Plugins {
+		states[row.ID] = row.State
+	}
+	if states["alpha"] != "loaded" || states["beta"] != "refused" {
+		t.Fatalf("the states are %v", states)
+	}
+	written := f.host.written("workbench.record.error")
+	if len(written) != 1 || !strings.Contains(fmt.Sprint(written[0]), "installed plugin beta 1.0.0 (@scope/plugin-beta): ") {
+		t.Fatalf("the shell recorded %v", written)
 	}
 }
 

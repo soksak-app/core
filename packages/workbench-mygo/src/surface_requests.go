@@ -1,6 +1,7 @@
 package workbench
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -73,10 +74,10 @@ type surfaceObserver struct {
 // surfaceTable holds what the registry knows of the plugins and the surfaces of its window.
 type surfaceTable struct {
 	links SurfaceLinks
-	// declared holds the declaration keys of the plugins, exposes their entries in the format of the declaration file, and timeouts
-	// the declared time limit of each command that has one.
+	// declared holds the declaration keys of the plugins, exposes their entries as the plugins wrote them, and timeouts the declared
+	// time limit of each command that has one.
 	declared map[string]bool
-	exposes  map[string][]map[string]any
+	exposes  map[string][]json.RawMessage
 	timeouts map[string]int64
 	// owners holds the surfaces that registered each declaration key, in registration order.
 	owners map[string][]string
@@ -87,7 +88,7 @@ type surfaceTable struct {
 }
 
 func newSurfaceTable() surfaceTable {
-	return surfaceTable{declared: map[string]bool{}, exposes: map[string][]map[string]any{}, timeouts: map[string]int64{},
+	return surfaceTable{declared: map[string]bool{}, exposes: map[string][]json.RawMessage{}, timeouts: map[string]int64{},
 		owners: map[string][]string{}, watches: map[string]*surfaceWatch{}}
 }
 
@@ -121,9 +122,9 @@ func (r *Registry) Link(links SurfaceLinks) { r.surfaces.links = links }
 // of exposes is added.
 func (r *Registry) Declare(owner string, exposes Exposes) error {
 	type entry struct {
-		key, kind string
-		fields    map[string]any
-		timeout   int64
+		key, kind, name string
+		raw             json.RawMessage
+		timeout         int64
 	}
 	var read []entry
 	seen := map[string]bool{}
@@ -133,10 +134,8 @@ func (r *Registry) Declare(owner string, exposes Exposes) error {
 	}{{"status", exposes.Status}, {"commands", exposes.Commands}, {"element", exposes.Element}} {
 		kind := exposeKinds[list.key]
 		for _, raw := range list.entries {
-			fields := map[string]any{}
-			decoder := json.NewDecoder(strings.NewReader(string(raw)))
-			decoder.UseNumber()
-			if err := decoder.Decode(&fields); err != nil {
+			fields, err := exposureFields(raw)
+			if err != nil {
 				return fmt.Errorf("%s declaration of %s: %w", kind, owner, err)
 			}
 			name, _ := fields["name"].(string) // silent: an absent name is refused below as an empty one.
@@ -151,7 +150,7 @@ func (r *Registry) Declare(owner string, exposes Exposes) error {
 				return fmt.Errorf("%s does not belong to %s", key, owner)
 			}
 			seen[key] = true
-			each := entry{key: key, kind: list.key, fields: fields}
+			each := entry{key: key, kind: list.key, name: name, raw: raw}
 			if number, present := fields["timeout"]; present {
 				text, _ := number.(json.Number) // silent: a value of another form is refused below.
 				timeout, err := text.Int64()
@@ -167,12 +166,23 @@ func (r *Registry) Declare(owner string, exposes Exposes) error {
 	defer r.mu.Unlock()
 	for _, each := range read {
 		r.surfaces.declared[each.key] = true
-		r.surfaces.exposes[each.kind] = append(r.surfaces.exposes[each.kind], each.fields)
+		r.surfaces.exposes[each.kind] = append(r.surfaces.exposes[each.kind], each.raw)
 		if each.timeout != 0 {
-			r.surfaces.timeouts[each.fields["name"].(string)] = each.timeout
+			r.surfaces.timeouts[each.name] = each.timeout
 		}
 	}
 	return nil
+}
+
+// exposureFields decodes one declaration and keeps its numbers as written.
+func exposureFields(raw json.RawMessage) (map[string]any, error) {
+	fields := map[string]any{}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	if err := decoder.Decode(&fields); err != nil {
+		return nil, err
+	}
+	return fields, nil
 }
 
 // CommandTimeout returns the time limit of the plugin command name.

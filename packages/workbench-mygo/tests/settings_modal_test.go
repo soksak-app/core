@@ -87,9 +87,9 @@ func (s modalStatus) labels(name string) []string {
 
 // acmeDocument is the document of two installed plugins: one with a surface, sections and settings, and one without them.
 const acmeDocument = `{"plugins":[
-	{"id":"plain","package":"plain","version":"1.0.0","manifest":{"id":"plain","name":"Plain","description":"nothing"}},
+	{"id":"plain","package":"plain","version":"1.0.0","manifest":{"id":"plain","name":"Plain","description":"nothing","contributes":{}}},
 	{"id":"acme","package":"acme","version":"1.0.0","manifest":{"id":"acme","name":"Acme","description":"the files",
-		"mark":"Ac","icon":"<path d=\"M1 1h14\"/>",
+		"mark":"Ac","icon":"<path d=\"M1 1h14\"/>","exposes":{"commands":[{"name":"acme.copy","description":"copies","params":{"type":"object","properties":{}},"result":{"type":"null"}}]},
 		"surface":{"composition":{"kind":"view","page":"a.html"},"menu":[{"command":"acme.copy","title":"복사"}],
 			"params":{"type":"object","properties":{"path":{"type":"string"}}}},
 		"sections":[{"id":"acme.files","name":"파일","composition":{"kind":"view","page":"f.html"},"height":"fill"},
@@ -99,7 +99,7 @@ const acmeDocument = `{"plugins":[
 
 func acme() *storedHost {
 	return &storedHost{
-		common:    map[string]any{"sets": []any{map[string]any{"id": "set-1", "title": "하나", "sections": []any{"acme.files"}, "layout": "list"}}},
+		common:    map[string]any{"sets": []any{map[string]any{"id": "set-1", "title": "하나", "sections": []any{"acme.files"}, "layout": "list"}}, "links": []any{}},
 		installed: acmeDocument,
 	}
 }
@@ -255,6 +255,20 @@ func TestASelectBoxASliderAndADebugSwitchChangeTheirSettings(t *testing.T) {
 	f.click("core.settings-modal.debug", "")
 	if value := f.settingValues()["diagnostics.performance"]; value != true {
 		t.Fatalf("the debug switch %v", value)
+	}
+}
+
+func TestTheKeysOfAnOpenSelectBoxChooseItsItem(t *testing.T) {
+	f := opened(t)
+	f.click("core.settings-modal.set", "mode")
+	f.tester.Key(0, ui.KeyDown)
+	f.tester.Key(0, ui.KeyEnter)
+	f.settle()
+	if f.settingValues()["mode"] != "light" {
+		t.Fatalf("mode %v", f.settingValues()["mode"])
+	}
+	if _, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.close", ""); !ok {
+		t.Fatal("the keys closed the settings window")
 	}
 }
 
@@ -480,7 +494,7 @@ func TestDraggingTheHeaderMovesTheCardInsideTheWindow(t *testing.T) {
 
 func TestTheEnvironmentValueReplacesTheDefaultOfThePlugin(t *testing.T) {
 	f := newShell(t, &storedHost{installed: `{"plugins":[{"id":"terminal","package":"terminal","version":"1.0.0","manifest":{"id":"terminal",
-		"name":"Terminal","description":"the terminal","settings":{"cursor.shape":{"type":"enum","label":"모양","values":["bar","block"],"default":"bar"}}}}]}`})
+		"name":"Terminal","description":"the terminal","contributes":{},"settings":{"cursor.shape":{"type":"enum","label":"모양","values":["bar","block"],"default":"bar"}}}}]}`})
 	f.click("core.chrome.settings", "")
 	if got := f.settingValues()["terminal.cursor.shape"]; got != "block" {
 		t.Fatalf("the setting is %v", got)

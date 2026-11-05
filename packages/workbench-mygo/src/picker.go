@@ -180,7 +180,8 @@ func (s *Shell) openCardTools(card string) error {
 	s.settle()
 	s.openPicker("카드 도구", items, func(key string) error {
 		if key == "close" {
-			return s.closeCard(card)
+			_, err := s.askedCloseCard(card)
+			return err
 		}
 		if key == "fullscreen" {
 			s.binder.run("core.card.fullscreen", cardParam{Card: card})

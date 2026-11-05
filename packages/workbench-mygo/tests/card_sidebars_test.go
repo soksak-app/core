@@ -262,3 +262,30 @@ func TestACardSectionFollowsItsCardAndEndsWithItsSide(t *testing.T) {
 		t.Fatalf("a side that is off holds the surface %v", surface)
 	}
 }
+
+// A window takes the sets and the links of the settings at once, and they start as the declared ones.
+func TestTheSettingsHoldTheSetsAndLinksOfTheSidebars(t *testing.T) {
+	f := sidebarShell(t)
+	f.run("core.settings.link", map[string]any{"place": "left", "plugin": nil, "set": "set-browser"})
+	if status := element(t, f.tester, "core.sidebar.status", "left"); status.Label != "왼쪽 창 사이드바" {
+		t.Fatalf("the status line says %q", status.Label)
+	}
+	element(t, f.tester, "core.sidebar.tabs", "left")
+	if f.has("core.sidebar.section.name", "left/files.tree") {
+		t.Fatal("the left sidebar keeps the set of the environment")
+	}
+	f.run("core.settings.sets.create", nil)
+	var status struct {
+		Values struct {
+			Sets []struct {
+				ID string `json:"id"`
+			} `json:"sets"`
+		} `json:"values"`
+	}
+	if err := json.Unmarshal([]byte(f.status("core.settings")), &status); err != nil {
+		t.Fatal(err)
+	}
+	if len(status.Values.Sets) != 4 || status.Values.Sets[3].ID != "set-1" {
+		t.Fatalf("the settings hold the sets %v", status.Values.Sets)
+	}
+}

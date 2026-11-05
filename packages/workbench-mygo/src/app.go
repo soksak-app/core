@@ -230,7 +230,10 @@ func (s *Shell) pluginsChanged() {
 }
 
 // Event handles an event of the host in a step of the main thread.
-func (s *Shell) Event(name string, data []any) {
+func (s *Shell) Event(name string, data []any) { s.event(name, data) }
+
+// event handles an event of the host in a step of the main thread.
+func (s *Shell) event(name string, data []any) {
 	switch name {
 	case "exposure-request":
 		if !s.viewExposure(data) {
@@ -267,8 +270,10 @@ func (s *Shell) Event(name string, data []any) {
 	case "project-close-request":
 		s.keep()
 		s.flushTabs()
+		// The call ends the workbench of the window, so its first event leaves before the call.
+		cids := s.events.BeginOperation("workbench.window.operation", map[string]any{"action": "close"})
 		s.events.Flush(func() {
-			s.calls.CallInOrder("workspace", "windowClose", nil, func(_ any, err error) {
+			s.calls.Caused(cids).CallInOrder("workspace", "windowClose", nil, func(_ any, err error) {
 				if err != nil {
 					s.fail(err)
 				}

@@ -34,6 +34,8 @@ type storedHost struct {
 	// appUpdate is the answer of appUpdateState, and opened holds the arguments of linkOpen.
 	appUpdate any
 	opened    []json.RawMessage
+	// forwards are the requests that the shell forwarded to surfaces, and each gets an empty result.
+	forwards []map[string]any
 	// extra holds the host calls that the base table has not.
 	extra map[string]workbench.HostCall
 	calls []string
@@ -111,6 +113,29 @@ func (h *storedHost) written(name string) []map[string]any {
 	return events
 }
 
+// shownErrors takes the errors that the shell recorded and returns their texts.
+func (f *shellFixture) shownErrors() []string {
+	f.t.Helper()
+	f.pending.drain(f.t)
+	f.tester.Frame()
+	f.pending.drain(f.t)
+	f.host.mu.Lock()
+	defer f.host.mu.Unlock()
+	var texts []string
+	kept := f.host.batches[:0]
+	for _, event := range f.host.batches {
+		if event["event"] != "workbench.record.error" {
+			kept = append(kept, event)
+			continue
+		}
+		fields, _ := event["fields"].(map[string]any)
+		text, _ := fields["text"].(string)
+		texts = append(texts, text)
+	}
+	f.host.batches = kept
+	return texts
+}
+
 func (h *storedHost) table() map[string]workbench.HostCall {
 	answer := func(name string, read func(argument json.RawMessage) (any, error)) workbench.HostCall {
 		return func(_ context.Context, argument json.RawMessage) (any, error) {
@@ -172,6 +197,15 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 			return map[string]any{"ticket": 1, "placements": []any{}, "chrome": map[string]any{}}, nil
 		}),
 		"presentSurfaces": answer("presentSurfaces", none),
+		"exposureForward": answer("exposureForward", func(argument json.RawMessage) (any, error) {
+			var request map[string]any
+			if err := json.Unmarshal(argument, &request); err != nil {
+				return nil, err
+			}
+			h.forwards = append(h.forwards, request)
+			return map[string]any{"result": nil}, nil
+		}),
+		"viewReply":       answer("viewReply", none),
 		"setMenuLanguage": answer("setMenuLanguage", func(argument json.RawMessage) (any, error) { h.language = argument; return nil, nil }),
 		"windowNew":       answer("windowNew", none),
 		"windowClose":     answer("windowClose", none),
@@ -325,6 +359,14 @@ func environment(t testing.TB) []byte {
 
 func newShell(t testing.TB, stored *storedHost) *shellFixture {
 	t.Helper()
+	f := startedShell(t, stored)
+	f.settle()
+	return f
+}
+
+// startedShell is newShell without its settle, for a start whose failure the test expects.
+func startedShell(t testing.TB, stored *storedHost) *shellFixture {
+	t.Helper()
 	declared, err := workbench.Declared()
 	if err != nil {
 		t.Fatal(err)
@@ -341,6 +383,7 @@ func newShell(t testing.TB, stored *storedHost) *shellFixture {
 		Environment: environment(t),
 		Installed:   []byte(stored.installedDocument()),
 		Invalidate:  func() { f.frames++ },
+		Elements:    fixtureElements{f},
 		Post:        f.pending.post,
 		Report:      func(line string) { f.lines = append(f.lines, line) },
 		Reload:      func() { stored.reloads++ },
@@ -353,7 +396,6 @@ func newShell(t testing.TB, stored *storedHost) *shellFixture {
 	f.shell = shell
 	f.tester = ui.NewTester(shell.View, 1200, 800)
 	shell.Start()
-	f.settle()
 	return f
 }
 

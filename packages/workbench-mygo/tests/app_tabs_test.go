@@ -15,8 +15,8 @@ import (
 )
 
 // unloadDocument is the document of the installed plugins with a view that the memory saver can unload.
-const unloadDocument = `{"plugins": [{"id": "notes", "package": "@scope/plugin-notes", "version": "1.0.0", "manifest": {"id": "notes", "name": "노트",
-	"mark": "n", "surface": {"unload": {"format": 1, "maxBytes": 1024}, "composition": {"kind": "view", "page": "ui/index.html"}}}}]}`
+const unloadDocument = `{"plugins": [{"id": "notes", "package": "@scope/plugin-notes", "version": "1.0.0", "manifest": {"id": "notes", "name": "노트", "description": "notes",
+	"mark": "n", "icon": "<path d=\"M1 1h14\"/>", "surface": {"unload": {"format": 1, "maxBytes": 1024}, "composition": {"kind": "view", "page": "ui/index.html"}}}}]}`
 
 // tabApp is an application workbench whose window draws in a tester.
 type tabApp struct {

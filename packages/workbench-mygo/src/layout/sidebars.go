@@ -3,6 +3,7 @@ package layout
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"slices"
 	"sort"
@@ -383,4 +384,66 @@ func SpaceFoldText(presented map[Side]PresentedSidebar) string {
 		return ""
 	}
 	return strings.Join(names, "·") + " 사이드바: 공간 부족으로 접힘"
+}
+
+// KeepWindowSidebarWidths copies the width drawn on the fixed sidebar cards of the plane into records.
+func KeepWindowSidebarWidths(g *Grid, records map[string]WindowSidebar) {
+	for _, card := range g.Cards() {
+		if isWindowSidebar(card.ID) && card.Width != nil {
+			records[card.ID] = WindowSidebar{Width: *card.Width}
+		}
+	}
+}
+
+// ArrangeWindowSidebars matches the fixed sidebar columns to sides, the sides that have a sidebar, and to shown. It removes the
+// column of a side that is not shown, adds a missing column at the edge of its side with its stored width, and tells whether the
+// plane changed. A side without a record starts with initialWidth.
+func ArrangeWindowSidebars(g *Grid, sides []string, records map[string]WindowSidebar, initialWidth float64, shown func(side string) bool) (bool, error) {
+	if !finite(initialWidth) || initialWidth <= 0 {
+		return false, errors.New("invalid initial window sidebar width")
+	}
+	KeepWindowSidebarWidths(g, records)
+	changed := false
+	for _, card := range g.Cards() {
+		if !isWindowSidebar(card.ID) || (slices.Contains(sides, card.ID) && shown(card.ID)) {
+			continue
+		}
+		if !g.SetFixed(card.ID, false) {
+			return changed, fmt.Errorf("cannot remove window sidebar %s", card.ID)
+		}
+		if !g.Close(card.ID) {
+			g.SetFixed(card.ID, true)
+			return changed, fmt.Errorf("cannot remove window sidebar %s", card.ID)
+		}
+		// A closed card leaves its lines, and a sidebar that opens again adds new ones, so the lines would pile up in one slot.
+		g.Tidy()
+		changed = true
+	}
+	for _, side := range sides {
+		if !shown(side) {
+			continue
+		}
+		if _, ok := g.Card(side); ok {
+			continue
+		}
+		record, ok := records[side]
+		if !ok {
+			record = WindowSidebar{Width: initialWidth}
+			records[side] = record
+		}
+		line := 0
+		if side == "right" {
+			line = len(g.Lines("x")) - 1
+		}
+		if !g.CanInsertAt("x", line, "") {
+			return changed, fmt.Errorf("cannot place window sidebar %s", side)
+		}
+		id, width := side, record.Width
+		if _, ok := g.InsertAt("x", line, InsertInit{ID: &id, Size: &width}); !ok {
+			return changed, fmt.Errorf("cannot place window sidebar %s", side)
+		}
+		g.SetFixed(side, true)
+		changed = true
+	}
+	return changed, nil
 }

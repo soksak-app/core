@@ -336,6 +336,154 @@ func matchesSchema(schema map[string]any, value any) bool {
 	return true
 }
 
+// installedPluginsFile names the installed plugin document in the errors of its checks.
+const installedPluginsFile = "installed-plugins.json"
+
+// operationFieldPattern is the form of the field that names the operation of a sidecar message.
+var operationFieldPattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]*$`)
+
+// AcceptedInstalled is what a window keeps of the installed plugin document: the accepted plugins, the error of each refusal, and the
+// ids of the refused plugins.
+type AcceptedInstalled struct {
+	Plugins []any
+	Errors  []string
+	Refused []string
+}
+
+// AcceptInstalledPlugins checks a parsed installed plugin document with the rules of the page reader (acceptInstalledPlugins of
+// packages/plugin-api/index.js). A plugin that is refused is left out, and its id is in Refused when it is text. An { error } document
+// accepts no plugin and answers its error. A document of another form, and two accepted plugins with one id or package, are errors.
+func AcceptInstalledPlugins(value any) (AcceptedInstalled, error) {
+	accepted := AcceptedInstalled{Plugins: []any{}, Errors: []string{}, Refused: []string{}}
+	document, ok := value.(map[string]any)
+	if !ok {
+		return accepted, fmt.Errorf("%s: expected an object", installedPluginsFile)
+	}
+	if failure, ok := document["error"]; ok {
+		if !isText(failure) {
+			return accepted, fmt.Errorf("%s: error must be text", installedPluginsFile)
+		}
+		accepted.Errors = append(accepted.Errors, "installed plugins: "+failure.(string))
+		return accepted, nil
+	}
+	if err := only(installedPluginsFile, document, "plugins"); err != nil {
+		return accepted, err
+	}
+	plugins, ok := document["plugins"].([]any)
+	if !ok {
+		return accepted, fmt.Errorf("%s: plugins must be an array", installedPluginsFile)
+	}
+	for _, plugin := range plugins {
+		err := checkInstalledPlugin(plugin)
+		if err == nil {
+			accepted.Plugins = append(accepted.Plugins, plugin)
+			continue
+		}
+		accepted.Errors = append(accepted.Errors, err.Error())
+		if entry, ok := plugin.(map[string]any); ok && isText(entry["id"]) {
+			accepted.Refused = append(accepted.Refused, entry["id"].(string))
+		}
+	}
+	ids := map[string]bool{}
+	packages := map[string]bool{}
+	for _, plugin := range accepted.Plugins {
+		entry := plugin.(map[string]any)
+		id, name := entry["id"].(string), entry["package"].(string)
+		if ids[id] {
+			return accepted, fmt.Errorf("%s: plugin %s appears twice", installedPluginsFile, id)
+		}
+		if packages[name] {
+			return accepted, fmt.Errorf("%s: package %s appears twice", installedPluginsFile, name)
+		}
+		ids[id], packages[name] = true, true
+	}
+	return accepted, nil
+}
+
+// checkInstalledPlugin checks one entry of the installed plugin document: { id, package, version, manifest, sidecars?, diagnostics? }.
+// The error names the plugin.
+func checkInstalledPlugin(value any) error {
+	plugin, ok := value.(map[string]any)
+	if !ok {
+		return fmt.Errorf("%s: every plugin must be an object", installedPluginsFile)
+	}
+	id := jsFieldText(plugin, "id")
+	if err := only(installedPluginsFile+" plugin "+id, plugin, "id", "package", "version", "manifest", "sidecars", "diagnostics"); err != nil {
+		return err
+	}
+	if !isText(plugin["id"]) || !idPattern.MatchString(id) {
+		return fmt.Errorf("%s: plugin id %s is invalid", installedPluginsFile, id)
+	}
+	if name, ok := plugin["package"].(string); !ok || !packagePattern.MatchString(name) {
+		return fmt.Errorf("%s: plugin %s package must be a package.json name", installedPluginsFile, id)
+	}
+	if !isText(plugin["version"]) {
+		return fmt.Errorf("%s: plugin %s version is required", installedPluginsFile, id)
+	}
+	if _, ok := plugin["manifest"]; !ok {
+		return fmt.Errorf("%s: plugin %s manifest is required", installedPluginsFile, id)
+	}
+	manifest, ok := plugin["manifest"].(map[string]any)
+	if !ok || manifest["id"] != plugin["id"] {
+		return fmt.Errorf("%s: plugin %s has a plugin.json with id %s", installedPluginsFile, id, jsFieldText(manifest, "id"))
+	}
+	if err := ValidateManifest(manifest); err != nil {
+		// States which installed plugin the rejected manifest belongs to.
+		return fmt.Errorf("installed plugin %s %s (%s): %w", id, plugin["version"], plugin["package"], err)
+	}
+	if sidecars, ok := plugin["sidecars"]; ok {
+		// A plugin without dependencies has no sidecar whose facts are checked.
+		dependencies, _ := manifest["dependencies"].(map[string]any)
+		if err := checkSidecarFacts(installedPluginsFile+": plugin "+id, sidecars, dependencies); err != nil {
+			return err
+		}
+	}
+	if diagnostics, ok := plugin["diagnostics"]; ok {
+		if _, ok := diagnostics.(map[string]any); !ok {
+			return fmt.Errorf("%s: plugin %s diagnostics must be an object", installedPluginsFile, id)
+		}
+	}
+	return nil
+}
+
+// checkSidecarFacts checks the sidecar facts of an installed plugin: each sidecar dependency maps to the message form of its
+// sidecar.json. A name that is not a dependency is refused.
+func checkSidecarFacts(where string, raw any, dependencies map[string]any) error {
+	sidecars, ok := raw.(map[string]any)
+	if !ok {
+		return fmt.Errorf("%s: sidecars must map sidecars to facts", where)
+	}
+	for _, name := range sortedKeys(sidecars) {
+		if _, ok := dependencies[name]; !ok {
+			return fmt.Errorf("%s: sidecars %s is not a dependency", where, name)
+		}
+		sidecarWhere := where + " sidecar " + name
+		facts, ok := sidecars[name].(map[string]any)
+		if !ok {
+			return fmt.Errorf("%s: facts must be an object", sidecarWhere)
+		}
+		if err := only(sidecarWhere, facts, "message"); err != nil {
+			return err
+		}
+		if declared, ok := facts["message"]; ok {
+			message, ok := declared.(map[string]any)
+			if !ok {
+				return fmt.Errorf("%s: message must be an object", sidecarWhere)
+			}
+			if err := only(sidecarWhere+" message", message, "form", "operationField"); err != nil {
+				return err
+			}
+			if message["form"] != "json-object" {
+				return fmt.Errorf("%s: message form must be json-object", sidecarWhere)
+			}
+			if field, ok := message["operationField"].(string); !ok || !operationFieldPattern.MatchString(field) {
+				return fmt.Errorf("%s: message operationField must be a field name", sidecarWhere)
+			}
+		}
+	}
+	return nil
+}
+
 // ValidateManifest checks a parsed plugin.json with the rules of the page reader and returns the first refused member
 // as the reader's error text (validateManifest of packages/plugin-api/index.js).
 func ValidateManifest(value any) error {

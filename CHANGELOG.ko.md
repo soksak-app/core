@@ -4,6 +4,10 @@
 
 ## 미배포
 
+- F502-21: mygo workbench가 modal을 native UI로 그린다: 설정 창, 추가·분할·도구·탭·context menu를 가진 picker layer, 수정된 tab에 대한 질문. `core.card.close`, `core.tab.close`, `core.space.close`는 사람의 답 없이 수정된 tab을 닫지 않고, plugin과 그 setting은 설치된 plugin 문서에서 온다. 설정 `left`, `right`는 고정 창 sidebar를 plane에 넣고 뺀다.
+- F502-12: mygo workbench 의 `core.plugins.show-updates` 가 플러그인 화면의 업데이트 목록이 보이도록 스크롤한다.
+- F502-12: mygo workbench 가 설치 plugin 문서를 page 와 같은 규칙으로 검사한다. window 가 거부한 plugin 은 빠지고, 에러가 보이며, 행의 상태는 `refused` 다.
+- F502-12: `docs/spec/logging.md`의 operation chain이 mygo workbench에서 동작한다. 각 operation은 첫 event를 식별자와 함께 저장하고, workbench의 모든 host call은 event `host.binding.call`이다.
 - F502-12: mygo workbench 가 status `core.app` 과 command `core.app.update`, `core.app.release` 에 답한다. 플러그인 화면은 core 업데이트를 맨 앞에 보여 주고, 그 진행 상태와 후보 버전에 맞지 않는 플러그인도 함께 보여 준다.
 - F502-12: mygo workbench 의 tab 은 unload 뒤에도 이름을 유지한다. tab store 는 view 가 보고한 제목을 저장하므로, unload 상태로 시작한 tab 에도 그 이름이 보인다.
 - F502-16: mygo workbench의 `core.focus`는 창의 first responder와 view가 보고한 focus를 따른다.
@@ -18,7 +22,7 @@
 - F502-16: mygo workbench가 `menu-command` event를 처리한다. View menu는 frame factor와 card factor를 바꾸고 frame chrome은 frame factor로 그린다. Help menu는 `logs/`의 파일을 나열하고 보여주고 저장하고 비교하는 debug view를 연다. workbench가 모르는 event는 error record로 간다. mygo workbench가 text scale, clipboard, focus, link, log level view call에 답해 terminal view가 시작된다.
 - F502-19: `packages/workbench-mygo`가 `core.text`, `core.focus`, `core.pointer`, `core.contributions`, `core.verify`와 `core.text.larger`, `core.text.smaller`, `core.text.reset`, `core.focus.set`의 function, `shortcuts.json`의 key를 가지며, window의 shell에 연결하는 일이 남아 있다. 각 function에는 `ui.Tester` test가 있고, 검증은 layout model과 element tree에서 page workbench의 row를 만든다.
 - F502-17: mygo workbench는 화면을 값의 함수로 가지고, 각각 `ui.Tester` test가 있다.
-- F502-17-1: mygo workbench의 화면은 `Binder`로만 command를 실행한다. window는 error 표시와 section header를 가진 window sidebar를 그리고, 그 command는 registry를 통해 답한다. shell은 timeline을 가진 debug view, card sidebar, section view도 그리고, 도움말 메뉴의 디버그 항목이 그 view를 연다. window capture는 내용을 가진 files와 browser plugin의 section을 보여 주고, 선택한 파일에서 Enter를 누르면 그 tab이 열리며, debug view는 run의 진단 파일을 보여 준다. card sidebar를 보여 주는 capture는 아직 없다.
+- F502-17-1: mygo workbench의 화면은 `Binder`로만 command를 실행한다. window는 error 표시와 section header를 가진 window sidebar를 그리고, 그 command는 registry를 통해 답한다. shell은 timeline을 가진 debug view, card sidebar, section view도 그리고, 도움말 메뉴의 디버그 항목이 그 view를 연다. window capture는 내용을 가진 files와 browser plugin의 section을 보여 주고, 선택한 파일에서 Enter를 누르면 그 tab이 열리며, debug view는 run의 진단 파일을 보여 준다. 설정이 선언된 set과 link를 가지므로 그 변경이 window의 sidebar에 닿고, capture는 그런 link의 card sidebar를 보여 준다.
 - F502-12: `apps/mygo`와 framework adapter `packages/host/mygo`가 mygo host를 시작한다: fixture workbench로 검사한 `Framework`와 `Frontend`의 모든 method, `Workbench` 없는 시작의 오류 `no workbench is installed`, endpoint(`application` `mygo`), application log, 종료, launch와 window 표시, layout transaction 동안 window의 frame을 멈추는 notice, 빈 mygo window benchmark다. `make mygo-build`, `make mygo-build-release`, `make host-test-mygo`, CI job `macos-mygo`, root target `e2e-host-go`가 이들을 실행하고, 구조 검사는 framework adapter 셋을 비교하며, `validateEnvironment`에서 `environment.runtime`은 선택이고, staging script는 `--no-main-page`를 받으며, 시작한 Go host는 종료 signal로 끝난다. 전에는 아무도 닫지 않는 channel을 기다려 끝나지 않았다.
 - F533: 실패한 memory saver delay unload는 다음 deadline을 한 delay 뒤에 받으므로, 계속 실패하는 읽기나 commit이 매번 오류 표시와 함께 곧바로 다시 돌지 않는다.
 - F532: Rust diagnostics의 update 단계가 framework port의 `quit`으로 애플리케이션을 끝내므로, `make tauriv2-build`가 다시 컴파일된다. `make hosts-check`는 새 `make host-debug-check`를 실행하며, 이 target은 두 host와 두 앱을 debug 앱의 구성으로 컴파일한다.

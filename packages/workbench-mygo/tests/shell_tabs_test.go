@@ -126,6 +126,12 @@ func newTabShellWithState(t *testing.T, stored *storedHost, refused error) *tabS
 	}
 	table["sidecarListen"] = record("listen")
 	table["sidecarSend"] = record("send")
+	// A fixture without its own document has the plugin notes, which holds the tabs.
+	installed := `{"plugins": [{"id": "notes", "package": "@scope/plugin-notes", "version": "1.0.0", "manifest": {"id": "notes", "name": "노트", "description": "notes", "mark": "n", "icon": "<path d=\"M1 1h14\"/>",
+			"surface": {"composition": {"kind": "view", "page": "ui/index.html"}, "params": {"type": "object", "properties": {"path": {"type": "string"}}}}}}]}`
+	if stored.installed != "" {
+		installed = stored.installed
+	}
 	shell, err := workbench.NewShell(workbench.ShellOptions{
 		Detaching: func() []string { return nil },
 		Window: func() (workbench.WindowView, error) {
@@ -137,11 +143,10 @@ func newTabShellWithState(t *testing.T, stored *storedHost, refused error) *tabS
 		Declared:    declared,
 		Calls:       workbench.NewCalls(table, f.pending.post),
 		Environment: environment(t),
-		Installed: []byte(`{"plugins": [{"id": "notes", "manifest": {"id": "notes", "mark": "n",
-			"surface": {"composition": {"kind": "view", "page": "ui/index.html"}, "params": {"type": "object", "properties": {"path": {"type": "string"}}}}}}]}`),
-		Invalidate: func() {},
-		Post:       f.pending.post,
-		Report:     func(line string) { f.lines = append(f.lines, line) },
+		Installed:   []byte(installed),
+		Invalidate:  func() {},
+		Post:        f.pending.post,
+		Report:      func(line string) { f.lines = append(f.lines, line) },
 		Tabs: func(*workbench.Shell) workbench.TabPorts {
 			return workbench.TabPorts{Plugins: func() []workbench.ShellPlugin {
 				return []workbench.ShellPlugin{

@@ -125,6 +125,8 @@ type PluginPage struct {
 	Outdated      []OutdatedSidecar
 	App           AppUpdate
 	Contributions []PluginContribution
+	// Reveal brings the update list into view in this frame.
+	Reveal bool
 }
 
 // PluginAction is an action button of a card, in the position of its element name: an entry of `actions` of `core.library`.
@@ -330,7 +332,11 @@ func drawUpdateList(c *ui.Context, binder *Binder, page PluginPage, shown *Shown
 	if page.App.Available == nil && len(page.Updates) == 0 {
 		return
 	}
-	ui.Column(c).FillWidth().Gap(8).Children(func() {
+	list := ui.Column(c).FillWidth().Gap(8)
+	if page.Reveal {
+		list.ScrollIntoView()
+	}
+	list.Children(func() {
 		if page.App.Available != nil {
 			drawAppUpdateRow(c, binder, page.App, shown)
 		}

@@ -17,16 +17,16 @@ import (
 // installedDocument is the document of the installed plugins with one plugin of a view and one without a surface.
 const installedDocument = `{"plugins": [
 	{"id": "terminal", "package": "@scope/plugin-terminal", "version": "1.0.0", "sidecars": {"@scope/sidecar-vt": {}},
-		"manifest": {"id": "terminal", "name": "터미널", "mark": "◊",
+		"manifest": {"id": "terminal", "name": "터미널", "description": "terminal", "mark": "◊", "icon": "<path d=\"M1 1h14\"/>",
 			"dependencies": {"@scope/sidecar-vt": "^1.0.0"},
-			"exposes": {"status": [{"name": "terminal.screen"}], "commands": [{"name": "terminal.drop"}, {"name": "terminal.input"}, {"name": "terminal.close", "timeout": 40}]},
+			"exposes": {"status": [{"name": "terminal.screen", "description": "the screen", "schema": {"type": "object", "properties": {}}}], "commands": [{"name": "terminal.drop", "description": "does it", "params": {"type": "object", "properties": {}}, "result": {"type": "null"}}, {"name": "terminal.input", "description": "does it", "params": {"type": "object", "properties": {}}, "result": {"type": "null"}}, {"name": "terminal.close", "description": "does it", "params": {"type": "object", "properties": {}}, "result": {"type": "null"}, "timeout": 40}]},
 			"data": {"notes": {"schema": {"type": "string"}, "default": "none", "format": 2},
 				"marks": {"schema": {"type": "array", "items": {"type": "string"}}, "default": ["start"]}},
-			"settings": {"cursor.shape": {"type": "enum", "default": "block", "values": ["block", "beam"]}, "shell": {"type": "text", "default": ""}},
-			"surface": {"menu": [{"title": "닫기", "command": "terminal.close"}], "drop": "terminal.drop", "composition": {"kind": "view", "page": "ui/terminal.html", "regions": [{"name": "view", "kind": "image"}]}}}},
+			"settings": {"cursor.shape": {"type": "enum", "label": "모양", "default": "block", "values": ["block", "beam"]}, "shell": {"type": "string", "label": "셸", "default": "login", "maxLength": 64}},
+			"surface": {"menu": [{"title": "닫기", "command": "terminal.close"}], "drop": "terminal.drop", "composition": {"kind": "view", "page": "ui/terminal.html", "regions": [{"name": "view", "kind": "image", "input": "dom", "sidecar": "@scope/sidecar-vt", "present": "copy"}]}}}},
 	{"id": "browser", "package": "@scope/plugin-browser", "version": "1.0.0",
 		"diagnostics": {"module": "ui/diagnostics.js", "exposes": {"status": [{"name": "browser.probe"}]}},
-		"manifest": {"id": "browser", "name": "브라우저", "mark": "www",
+		"manifest": {"id": "browser", "name": "브라우저", "description": "browser", "mark": "www", "icon": "<path d=\"M1 1h14\"/>",
 			"surface": {"composition": {"kind": "view", "page": "ui/index.html"}}}}
 ]}`
 

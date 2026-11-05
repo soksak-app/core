@@ -3,6 +3,7 @@
 package workbench_test
 
 import (
+	"runtime"
 	"testing"
 
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
@@ -30,5 +31,32 @@ func TestTheDeclarationsNameTheEntriesOfTheShell(t *testing.T) {
 	}
 	if metric, ok := declared.Metric("head-h"); !ok || metric <= 0 {
 		t.Errorf("the chrome metric head-h is %v, %v", metric, ok)
+	}
+}
+
+// heldBytes returns the bytes that stay after a collection, for what build returns.
+func heldBytes(build func() any) uint64 {
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	held := build()
+	runtime.GC()
+	runtime.ReadMemStats(&after)
+	runtime.KeepAlive(held)
+	return after.HeapAlloc - min(after.HeapAlloc, before.HeapAlloc)
+}
+
+// The declarations stay for the life of the window, so they keep the names and schemas that calls read and leave the
+// descriptions that a listing reads to the embedded file.
+func TestTheDeclarationsKeepWhatTheyRead(t *testing.T) {
+	n := heldBytes(func() any {
+		declared, err := workbench.ReadDeclarations()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return declared
+	})
+	if n > 256<<10 {
+		t.Errorf("the declarations hold %d kB", n>>10)
 	}
 }

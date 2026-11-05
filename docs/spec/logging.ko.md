@@ -331,7 +331,7 @@ task의 종료처럼 어떤 입구도 덮지 못하는 원천은 소스 lint가 
 
 ### 작업 사슬
 
-page가 애플리케이션을 바꾸는 작업은 상관 식별자 `p<page identity>.<n>`으로 묶인 event 사슬이다. page는 작업이 시작될 때 식별자를 부여하고(`beginOperation`, `packages/workbench/operations.js`), 사슬의 첫 event를 그 식별자와 함께 저장하며, 작업을 수행하는 host 호출에 `host.call(name, arg, {cids})`로 식별자를 함께 넘긴다. Wails page는 목록을 바인딩 메서드 `Bindings.Call`의 네 번째 인자(`method`, `args`, `cids`)로 보내고, Tauri page는 command의 인자 옆 key `cids`로 보낸다. page는 호출을 식별자와 함께 `workbench.call`로, host는 같은 식별자와 함께 `host.binding.call`로 기록하며, 호출이 성공했는지는 묻지 않는다. 줄이 담을 수 있는 식별자의 목록이 아닌 목록(빈 식별자, 따옴표, 역슬래시, 제어 문자가 든 식별자)은 그 식별자를 밝힌 오류로 거절한다. 메서드는 실행되지 않고, 실패한 `host.binding.call`은 식별자를 담지 않는다.
+page가 애플리케이션을 바꾸는 작업은 상관 식별자 `p<page identity>.<n>`으로 묶인 event 사슬이다. page는 작업이 시작될 때 식별자를 부여하고(`beginOperation`, `packages/workbench/operations.js`), 사슬의 첫 event를 그 식별자와 함께 저장하며, 작업을 수행하는 host 호출에 `host.call(name, arg, {cids})`로 식별자를 함께 넘긴다. Wails page는 목록을 바인딩 메서드 `Bindings.Call`의 네 번째 인자(`method`, `args`, `cids`)로 보내고, Tauri page는 command의 인자 옆 key `cids`로 보낸다. mygo host의 workbench에는 page가 없어서, event의 `start`로 `p<start>.<n>`을 부여하고 같은 호출을 그 목록과 함께 실행한다. page는 호출을 식별자와 함께 `workbench.call`로, host는 같은 식별자와 함께 `host.binding.call`로 기록하며, 호출이 성공했는지는 묻지 않는다. 줄이 담을 수 있는 식별자의 목록이 아닌 목록(빈 식별자, 따옴표, 역슬래시, 제어 문자가 든 식별자)은 그 식별자를 밝힌 오류로 거절한다. 메서드는 실행되지 않고, 실패한 `host.binding.call`은 식별자를 담지 않는다.
 
 | 사슬 | 첫 event(필드) | 작업을 수행하는 host 호출 |
 | --- | --- | --- |
