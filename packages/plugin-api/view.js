@@ -104,6 +104,9 @@ export function createViewReporter({ reportError, console }) {
 const statusKey = (name, surface) => `status:${JSON.stringify([name, surface ?? null])}`;
 
 /** Refuses a project data call whose key is not a non-empty text (docs/spec/plugins.md#project-data). */
+// The reads of one change of project data (docs/spec/plugins.md#project-data).
+const DATA_CHANGE_READS = 64;
+
 function requireDataKey(command, key) {
   if (typeof key !== "string" || key === "") throw new TypeError(`${command} requires a non-empty key`);
 }
@@ -116,7 +119,7 @@ function requireDataKey(command, key) {
  *     report    report(event) receives the counts and losses of the calls, as createCalls reports them; a view page passes createViewReporter()
  *
  * Returns {calls, runtime, commands, exposure, contributions, composition}. runtime serves the context entries of the view page: native.on, sidecar(name).on, .onFailure and .send,
- * theme, status.watch, data.get and data.set, textSize and settings with read and on each, and clipboard with read, writeText and persistPNG. composition.create({regions, overlays})
+ * theme, status.watch, data.get, data.set and data.change, textSize and settings with read and on each, and clipboard with read, writeText and persistPNG. composition.create({regions, overlays})
  * creates the composition of the declared regions of the view (docs/spec/native-surfaces.md#view-surfaces, regions).
  */
 export function createViewBridge({ handler, report }) {
@@ -268,6 +271,9 @@ export function createViewBridge({ handler, report }) {
     // The project data of the plugin for the project of the view (docs/spec/plugins.md#project-data): get(key) resolves with the stored
     // value or the default, and set(key, value) resolves with null after the store accepted the write. on(listener) registers listener({key})
     // for each change of a key, by a view of this window or by another window, under one subscription of the page.
+    // change(key, next) stores what next makes of the value it receives, and resolves with the value that stands: another write
+    // between the read and the write starts it over from a new read, next returning undefined writes nothing, and a read that
+    // no writer changed or too many other writers fail it.
     data: {
       on: (listener) => listen("data", () => calls.request("runtime.data.on", null), listener),
       get: (key) => {
@@ -277,6 +283,22 @@ export function createViewBridge({ handler, report }) {
       set: (key, value) => {
         requireDataKey("runtime.data.set", key);
         return calls.request("runtime.data.set", { key, value });
+      },
+      change: async (key, next) => {
+        requireDataKey("runtime.data.change", key);
+        let before;
+        for (let reads = 0; reads < DATA_CHANGE_READS; reads += 1) {
+          const base = await calls.request("runtime.data.get", { key });
+          const read = JSON.stringify(base);
+          // Only another writer starts a change over, and another writer leaves another value.
+          if (read === before) throw new Error(`runtime.data.change ${key}: the store refused the value that it answered`);
+          before = read;
+          // next owns its copy, so a change that it makes in place does not reach the base of the comparison.
+          const value = next(structuredClone(base));
+          if (value === undefined) return base;
+          if (await calls.request("runtime.data.replace", { key, base, value })) return value;
+        }
+        throw new Error(`runtime.data.change ${key}: other writers changed the value ${DATA_CHANGE_READS} times`);
       },
     },
     // The scale of the surface and the settings of the plugin: read reads the current value, and on registers one listener

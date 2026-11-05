@@ -338,6 +338,71 @@ test("runtime.data.get and runtime.data.set send the key, and the value for a se
   assert.throws(() => runtime.data.set(1, "x"), /runtime.data.set requires a non-empty key/);
 });
 
+test("runtime.data.change reads, replaces, and starts over from a new read when another write came first", async (t) => {
+  const { posted, host } = setup(t);
+  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const settle = () => new Promise((resolve) => setImmediate(resolve));
+  const change = runtime.data.change("note", (list) => {
+    list.push("mine");
+    return list;
+  });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.data.get", params: { key: "note" } });
+  host({ sok: 1, id: 1, result: ["a"] });
+  await settle();
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 2, command: "runtime.data.replace", params: { key: "note", base: ["a"], value: ["a", "mine"] } });
+  host({ sok: 1, id: 2, result: false });
+  await settle();
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 3, command: "runtime.data.get", params: { key: "note" } });
+  host({ sok: 1, id: 3, result: ["a", "b"] });
+  await settle();
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 4, command: "runtime.data.replace", params: { key: "note", base: ["a", "b"], value: ["a", "b", "mine"] } });
+  host({ sok: 1, id: 4, result: true });
+  assert.deepEqual(await change, ["a", "b", "mine"]);
+});
+
+test("runtime.data.change writes nothing when next returns undefined, and fails when next throws", async (t) => {
+  const { posted, host } = setup(t);
+  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const same = runtime.data.change("note", () => undefined);
+  host({ sok: 1, id: 1, result: ["a"] });
+  assert.deepEqual(await same, ["a"]);
+  const refused = runtime.data.change("note", () => { throw new Error("not bookmarked"); });
+  host({ sok: 1, id: 2, result: ["a"] });
+  await assert.rejects(refused, /^Error: not bookmarked$/);
+  assert.deepEqual(posted.filter((message) => message.command).map((message) => message.command), ["runtime.data.get", "runtime.data.get"]);
+  await assert.rejects(runtime.data.change("", () => undefined), /runtime.data.change requires a non-empty key/);
+});
+
+test("runtime.data.change fails when a new read equals the read before it, because no writer changed the value", async (t) => {
+  const { posted, host } = setup(t);
+  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const settle = () => new Promise((resolve) => setImmediate(resolve));
+  const change = runtime.data.change("note", () => ["next"]);
+  host({ sok: 1, id: 1, result: { a: 1, b: 2 } });
+  await settle();
+  host({ sok: 1, id: 2, result: false });
+  await settle();
+  host({ sok: 1, id: 3, result: { a: 1, b: 2 } });
+  await assert.rejects(change, /^Error: runtime\.data\.change note: the store refused the value that it answered$/);
+  assert.equal(posted.filter((message) => message.command === "runtime.data.replace").length, 1);
+});
+
+test("runtime.data.change fails after 64 reads when other writers keep changing the value", async (t) => {
+  const { posted, host } = setup(t);
+  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const settle = () => new Promise((resolve) => setImmediate(resolve));
+  const change = runtime.data.change("note", () => ["next"]);
+  const failed = assert.rejects(change, /^Error: runtime\.data\.change note: other writers changed the value 64 times$/);
+  for (let id = 1; id <= 128; id += 2) {
+    host({ sok: 1, id, result: [`value ${id}`] });
+    await settle();
+    host({ sok: 1, id: id + 1, result: false });
+    await settle();
+  }
+  await failed;
+  assert.equal(posted.filter((message) => message.command === "runtime.data.get").length, 64);
+});
+
 test("runtime.log.levels of a document without start levels is refused", (t) => {
   const { posted } = setup(t);
   const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });

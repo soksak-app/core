@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { auditCommittedEvidenceWording, auditCompletedFeatureLinks, auditExecutableLanguageCoverage, auditFailureMatrix, auditFeatureLinks, auditGoFailurePropagation, auditHistoricalScopeWording, auditInventory, auditJsFailurePropagation, auditModalParitySnapshotWording, auditNativeFailurePropagation, auditOwnership, auditRecordedInventoryCounts, auditRustFailurePropagation, discoverInventory, packageIndex, repositoryFiles } from "../check-test-parity.mjs";
+import { auditWorkbenchCases, auditCommittedEvidenceWording, auditCompletedFeatureLinks, auditExecutableLanguageCoverage, auditFailureMatrix, auditFeatureLinks, auditGoFailurePropagation, auditHistoricalScopeWording, auditInventory, auditJsFailurePropagation, auditModalParitySnapshotWording, auditNativeFailurePropagation, auditOwnership, auditRecordedInventoryCounts, auditRustFailurePropagation, discoverInventory, packageIndex, repositoryFiles } from "../check-test-parity.mjs";
 
 const files = repositoryFiles();
 
@@ -451,4 +451,36 @@ test("failure matrix preserves JS/TS, Rust, Go, and Objective-C lane attribution
   const matrix = auditFailureMatrix(repositoryFiles());
   assert.deepEqual(matrix.lanes.map(({ language }) => language), ["js-ts", "rust", "go", "objective-c"]);
   assert.deepEqual(matrix.errors, []);
+});
+
+const WORKBENCH_SPEC = "## Contract cases\n\n| `host.case` | x | all |\n\n## Workbench cases\n\n| Case | Behavior |\n| --- | --- |\n| `area.shared` | x |\n";
+
+test("a workbench case with a page test and a mygo test passes, and a host case of a page test does not count", () => {
+  assert.deepEqual(auditWorkbenchCases(WORKBENCH_SPEC, [
+    { path: "packages/workbench/test/a.test.mjs", text: "// contract: host.case\ntest(\"host\", () => {});\n// contract: area.shared\ntest(\"page\", () => {});\n" },
+    { path: "packages/workbench-mygo/tests/a_test.go", text: "// contract: area.shared\nfunc TestShared(t *testing.T) {\n}\n" },
+  ]), []);
+});
+
+test("a workbench case without a test on one side fails, and names the side", () => {
+  assert.deepEqual(auditWorkbenchCases(WORKBENCH_SPEC, [
+    { path: "packages/workbench/test/a.test.mjs", text: "// contract: area.shared\ntest(\"page\", () => {});\n" },
+  ]), ["docs/spec/host-contract.md: workbench case area.shared has no mygo test"]);
+  assert.deepEqual(auditWorkbenchCases(WORKBENCH_SPEC, [
+    { path: "packages/workbench-mygo/tests/a_test.go", text: "// contract: area.shared\nfunc TestShared(t *testing.T) {\n}\n" },
+  ]), ["docs/spec/host-contract.md: workbench case area.shared has no page test"]);
+});
+
+test("a mygo test of a case that the table does not have, and a declaration on no test, fail", () => {
+  assert.deepEqual(auditWorkbenchCases(WORKBENCH_SPEC, [
+    { path: "packages/workbench/test/a.test.mjs", text: "// contract: area.shared\nconst helper = 1;\n// contract: area.shared\ntest(\"page\", () => {});\n" },
+    { path: "packages/workbench-mygo/tests/a_test.go", text: "// contract: area.other\nfunc TestOther(t *testing.T) {\n}\n// contract: area.shared\nfunc TestShared(t *testing.T) {\n}\n" },
+  ]), [
+    "packages/workbench/test/a.test.mjs:1: the declaration of area.shared is not attached to a test",
+    "packages/workbench-mygo/tests/a_test.go:1: workbench case area.other is not in docs/spec/host-contract.md",
+  ]);
+});
+
+test("a specification without the section of workbench cases fails", () => {
+  assert.deepEqual(auditWorkbenchCases("## Contract cases\n", []), ["docs/spec/host-contract.md has no \"Workbench cases\" section"]);
 });

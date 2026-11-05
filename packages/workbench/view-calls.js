@@ -294,7 +294,8 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
     // The project data of the plugin for the project of the start values of the view (docs/spec/plugins.md#project-data). A view of a
     // project that the window does not show reads and writes that project, so the project is not the shown one.
     case "runtime.data.get":
-    case "runtime.data.set": {
+    case "runtime.data.set":
+    case "runtime.data.replace": {
       const fields = objectOf(command, params);
       const project = startProject();
       if (project === null) throw new Error(`view call ${command} requires a project`);
@@ -302,6 +303,10 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
       const data = runtime.data.of(project, plugin);
       if (!data.declares(fields.key)) throw new Error(`view call ${command} ${fields.key} is not a data key of ${plugin}`);
       if (command === "runtime.data.get") return data.get(fields.key);
+      if (command === "runtime.data.replace") {
+        if (!Object.hasOwn(fields, "base")) throw new TypeError(`view call ${command} requires base`);
+        return data.replace(fields.key, fields.base, fields.value);
+      }
       await data.set(fields.key, fields.value);
       return null;
     }

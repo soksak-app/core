@@ -5,6 +5,8 @@ package workbench_test
 import (
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -67,6 +69,7 @@ func storedData(t *testing.T, stored *surfaceHost) string {
 	return string(text)
 }
 
+// contract: project-data.write.keeps-the-keys-before-it
 func TestTwoWritesInARowKeepBothKeys(t *testing.T) {
 	f, stored := surfaceShell(t)
 	surface := terminalSurface(t, stored)
@@ -79,6 +82,111 @@ func TestTwoWritesInARowKeepBothKeys(t *testing.T) {
 	}
 }
 
+// contract: project-data.replace.changed-value-writes-nothing
+func TestTwoReplacesFromOneReadKeepTheFirstAndTheSecondAnswersFalse(t *testing.T) {
+	f, stored := surfaceShell(t)
+	surface := terminalSurface(t, stored)
+	for id, value := range []string{"first", "second"} {
+		f.shell.Event("view-call", []any{map[string]any{"surface": surface, "plugin": "terminal", "generation": 1, "id": id + 1,
+			"command": "runtime.data.replace", "params": map[string]any{"key": "marks", "base": []string{"start"}, "value": []string{value}}}})
+	}
+	f.settle()
+	answers := map[float64]any{}
+	for _, reply := range stored.replies {
+		answers[reply["id"].(float64)] = reply["result"]
+	}
+	if answers[1] != true || answers[2] != false {
+		t.Fatalf("the replaces answer %v", answers)
+	}
+	if got := storedData(t, stored); !strings.Contains(got, `"value":["first"]`) {
+		t.Fatalf("the project stores %s", got)
+	}
+}
+
+// projectDataValues returns the stored values and bases that every host answers alike.
+func projectDataValues(t *testing.T) []struct {
+	Stored string `json:"stored"`
+	Base   string `json:"base"`
+	Same   bool   `json:"same"`
+} {
+	t.Helper()
+	text, err := os.ReadFile(filepath.Join("..", "..", "workbench", "test", "fixtures", "project-data-values.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var values []struct {
+		Stored string `json:"stored"`
+		Base   string `json:"base"`
+		Same   bool   `json:"same"`
+	}
+	if err := json.Unmarshal(text, &values); err != nil {
+		t.Fatal(err)
+	}
+	return values
+}
+
+// storePoint stores the JSON text of a value of the key point, as the store answers it, and lets the window read it.
+func storePoint(f *shellFixture, stored *surfaceHost, text string) {
+	stored.projects[0]["plugins"] = map[string]any{"terminal": map[string]any{"point": map[string]any{"format": 1, "value": json.RawMessage(text)}}}
+	f.shell.Event("workspace-changed", nil)
+	f.settle()
+}
+
+// contract: project-data.replace.compares-json-values
+func TestAReplaceComparesJSONValuesWhateverTheFormOfTheirText(t *testing.T) {
+	f, stored := surfaceShell(t)
+	surface := terminalSurface(t, stored)
+	for _, value := range projectDataValues(t) {
+		storePoint(f, stored, value.Stored)
+		reply := viewCall(t, f, stored, surface, "runtime.data.replace", map[string]any{"key": "point", "base": json.RawMessage(value.Base), "value": map[string]any{"next": 1}})
+		if reply["result"] != value.Same {
+			t.Errorf("%s against %s: the reply is %v", value.Stored, value.Base, reply)
+		}
+	}
+}
+
+// contract: project-data.replace.read-value-is-its-base
+func TestTheValueThatAReadAnsweredIsABaseThatAReplaceAccepts(t *testing.T) {
+	f, stored := surfaceShell(t)
+	surface := terminalSurface(t, stored)
+	for _, value := range projectDataValues(t) {
+		storePoint(f, stored, value.Stored)
+		read := viewCall(t, f, stored, surface, "runtime.data.get", map[string]any{"key": "point"})
+		reply := viewCall(t, f, stored, surface, "runtime.data.replace", map[string]any{"key": "point", "base": read["result"], "value": map[string]any{"next": 1}})
+		if reply["result"] != true {
+			t.Errorf("%s: the reply is %v", value.Stored, reply)
+		}
+	}
+}
+
+// contract: project-data.replace.refusal-answers-the-view
+func TestAStoreThatRefusesAReplaceAnswersTheViewAndKeepsTheValue(t *testing.T) {
+	f, stored := surfaceShell(t)
+	surface := terminalSurface(t, stored)
+	refused := errors.New("the disk is full")
+	stored.failing = map[string]error{"workspace": refused}
+	reply := viewCall(t, f, stored, surface, "runtime.data.replace", map[string]any{"key": "marks", "base": []string{"start"}, "value": []string{"lost"}})
+	stored.failing = nil
+	if got := failure(t, reply); got != refused.Error() {
+		t.Fatalf("the replace is refused with %q", got)
+	}
+	reply = viewCall(t, f, stored, surface, "runtime.data.get", map[string]any{"key": "marks"})
+	if text, _ := json.Marshal(reply["result"]); string(text) != `["start"]` {
+		t.Fatalf("the reply is %v", reply)
+	}
+}
+
+// contract: project-data.replace.requires-base
+func TestAReplaceRequiresItsBase(t *testing.T) {
+	f, stored := surfaceShell(t)
+	surface := terminalSurface(t, stored)
+	reply := viewCall(t, f, stored, surface, "runtime.data.replace", map[string]any{"key": "marks", "value": []string{"next"}})
+	if got := failure(t, reply); got != "view call runtime.data.replace requires base" {
+		t.Fatalf("the replace is refused with %q", got)
+	}
+}
+
+// contract: project-data.write.refusal-answers-the-view
 func TestAStoreThatRefusesAWriteAnswersTheViewAndKeepsTheValue(t *testing.T) {
 	f, stored := surfaceShell(t)
 	surface := terminalSurface(t, stored)
@@ -371,6 +479,7 @@ func TestANotificationIsNamedAsItsTabIsNamed(t *testing.T) {
 	}
 }
 
+// contract: project-data.write.outran-read-keeps-the-write
 func TestASnapshotThatAWriteOutranKeepsTheWrite(t *testing.T) {
 	f, stored := surfaceShell(t)
 	surface := terminalSurface(t, stored)
