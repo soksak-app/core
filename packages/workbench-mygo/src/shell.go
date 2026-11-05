@@ -73,6 +73,8 @@ type environmentGrid struct {
 
 // metrics are the chrome metrics that the shell draws with.
 type metrics struct {
+	// The library heading and the project column (.library-search, .project-column of packages/workbench).
+	librarySearchW, space4, projectColumnW, projectColumnGap, projectColumnPad, projectTabH, projectTabPad, projectTabXInset, projectTabAddH                                                                                                                                                                                 float32
 	barTabRootPad, barTabRootW, dropMix, dropBorder, tabDraggingOpacity, actStroke, chromeActsGap, brandGap, brandLogoAtBase, chromeH, chromeRowH, spaceGap, spacePad, chromeGap, barGap, barXPad, barXOpacity, barAddText, barAddPad, textControlAtBase, textCaptionAtBase, chipMix, chipHoverMix, chipOnMix, projectTabMix float32
 	headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW                                                                                                                                                                                             float32
 	// The card head (.chrome of packages/workbench/app.css).
@@ -81,8 +83,6 @@ type metrics struct {
 	errorPadY, errorPadX, errorBorder float32
 	// debugW is the width of the debug view, and debugH its largest share of the window height.
 	debugW, debugH float32
-	// librarySearchW is the width of the search of the library (.library-search of packages/workbench/library.css).
-	librarySearchW float32
 	// The grip of a divider, the dots of a folded side and the lines of the boundaries (.sp-divider, .card-sidebar__grip and .sp-rule of
 	// packages/workbench/app.css).
 	gripThickness, gripLength, gripMix, gripDot, gripDotSpacing, lineCrossingMix float32
@@ -101,6 +101,15 @@ func readMetrics(declared *Declarations) (metrics, error) {
 	}
 	read("bar-tab-root-pad", &m.barTabRootPad)
 	read("bar-tab-root-w", &m.barTabRootW)
+	read("library-search-w", &m.librarySearchW)
+	read("space-4", &m.space4)
+	read("project-column-w", &m.projectColumnW)
+	read("project-column-gap", &m.projectColumnGap)
+	read("project-column-pad", &m.projectColumnPad)
+	read("project-tab-h", &m.projectTabH)
+	read("project-tab-pad", &m.projectTabPad)
+	read("project-tab-x-inset", &m.projectTabXInset)
+	read("project-tab-add-h", &m.projectTabAddH)
 	read("drop-border", &m.dropBorder)
 	read("tab-dragging-opacity", &m.tabDraggingOpacity)
 	read("act-stroke", &m.actStroke)
@@ -133,7 +142,6 @@ func readMetrics(declared *Declarations) (metrics, error) {
 	read("act-h", &m.actH)
 	read("act-icon", &m.actIcon)
 	read("tabs-gap", &m.tabsGap)
-	read("library-search-w", &m.librarySearchW)
 	read("tabs-pad", &m.tabsPad)
 	read("bar-tab-gap", &m.barTabGap)
 	read("bar-tab-max-w", &m.barTabMaxW)
@@ -307,6 +315,7 @@ type Shell struct {
 	text *TextSize
 	// keyboard is the keyboard focus of the window, which the first responder and the views report.
 	keyboard     *Focus
+	pointer      *PointerSequence
 	verification *Verification
 	// diagnostics holds the policy and the trace switch that the host received last.
 	diagnostics struct{ policy, trace string }
@@ -350,6 +359,8 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.registry.Record(s.events.Command)
 	s.errors = NewShownErrors(s.events.Error)
 	s.binder = NewBinder(s.registry, func(_ string, err error) { s.fail(err) })
+	s.pointer = NewPointerSequence(func() { s.options.Invalidate() })
+	s.binder.Attach(s.pointer, s.keyboard)
 	s.starter = environment.pluginStarter
 	s.pluginOperations = NewPluginOperations(s.calls, s.events.BeginOperation, func() []LoadedPlugin { return s.plugins }, func() map[string]bool { return s.refused }, options.Invalidate)
 	s.appUpdates = NewAppUpdates(s.calls, s.events.BeginOperation, s.pluginOperations.State, options.Invalidate)
@@ -607,6 +618,7 @@ func baseName(root string) string { return path.Base(root) }
 // View draws the workbench of the window.
 func (s *Shell) View(c *ui.Context) {
 	s.keyboard.Frame(c)
+	s.pointer.Frame()
 	s.sidebars.Begin()
 	clear(s.surfaces.drawn)
 	clear(s.picker.drawn)
@@ -633,7 +645,7 @@ func (s *Shell) View(c *ui.Context) {
 		if s.browsing || s.opened() == nil {
 			s.drawLibrary(c, width, height-s.chromeHeight())
 		} else {
-			s.drawWork(c, width, height-s.chromeHeight())
+			s.drawWorkArea(c, width, height-s.chromeHeight())
 		}
 	})
 	s.drawViewsBehindDialog(c)

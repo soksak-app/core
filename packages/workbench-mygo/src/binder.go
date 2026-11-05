@@ -18,6 +18,9 @@ type Exposed struct {
 type Binder struct {
 	registry *Registry
 	failed   func(command string, err error)
+	// pointer records the presses of the elements, and focus holds the elements that a command can focus, when the binder belongs to a window.
+	pointer *PointerSequence
+	focus   *Focus
 }
 
 // NewBinder returns the binder of registry. failed receives each command of an element that fails.
@@ -25,10 +28,30 @@ func NewBinder(registry *Registry, failed func(command string, err error)) *Bind
 	return &Binder{registry: registry, failed: failed}
 }
 
+// Attach gives the binder the pointer sequence and the focus of its window.
+func (b *Binder) Attach(pointer *PointerSequence, focus *Focus) { b.pointer, b.focus = pointer, focus }
+
+// Focusable lets a command give the keyboard focus to element under its element name.
+func (b *Binder) Focusable(element ui.Element, name string) ui.Element {
+	if b.focus == nil {
+		return element
+	}
+	return b.focus.Bind(element, name)
+}
+
 // Press creates a button without a look that runs command with params, and gives it the element name name. item tells it from
 // the elements of the same name. Add its look and its children to the element that it returns.
 func (b *Binder) Press(c *ui.Context, name, command, item string, params any) ui.Element {
-	return ui.ButtonBase(b.next(c, name, command, item)).OnClick(func() { b.run(command, params) })
+	button := ui.ButtonBase(b.next(c, name, command, item)).OnClick(func() {
+		if b.pointer != nil {
+			b.pointer.Click(name)
+		}
+		b.run(command, params)
+	})
+	if b.pointer != nil {
+		button.ObserveInput(b.pointer.Observer(name))
+	}
+	return button
 }
 
 // Control gives the next widget of c its element name and command, for a widget that takes its input as it is created. It returns

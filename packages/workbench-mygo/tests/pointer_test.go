@@ -123,3 +123,16 @@ func TestPointerSequenceReportsAReleaseAwayFromThePress(t *testing.T) {
 		t.Fatalf("the status is %s, want %s", got, want)
 	}
 }
+
+func TestAPressReportsThePointerSequence(t *testing.T) {
+	f := openedShell(t)
+	f.click("core.space-tab.add", "")
+	got := status[struct {
+		Sequence         int
+		Down, Up, Click  *string
+		PressedConnected *bool
+	}](t, f, "core.pointer")
+	if got.Sequence != 1 || got.Down == nil || *got.Down != "core.space-tab.add" || got.Up == nil || got.Click == nil || *got.Click != "core.space-tab.add" {
+		t.Fatalf("the sequence is %+v", got)
+	}
+}

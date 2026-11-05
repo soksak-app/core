@@ -1,6 +1,7 @@
 package workbench_test
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -123,22 +124,75 @@ func TestTheRenameCommandsRefuseWhatIsNotThere(t *testing.T) {
 		{"core.rename.commit", nil, "nothing is being renamed"},
 		{"core.rename.cancel", nil, "nothing is being renamed"},
 		{"core.project.rename", map[string]string{"id": "absent", "title": "x"}, "absent"},
+		{"core.project.pin", map[string]any{"id": "absent", "pinned": true}, "absent"},
 		{"core.space.rename", map[string]string{"id": "absent", "title": "x"}, "absent"},
 	} {
-		if _, err := f.answer(refused.command, refused.params); err == nil || !strings.Contains(err.Error(), refused.text) {
+		if _, err := f.answerLater(refused.command, refused.params); err == nil || !strings.Contains(err.Error(), refused.text) {
 			t.Fatalf("%s %v answered %v", refused.command, refused.params, err)
 		}
 	}
 }
 
-// The commands that name a project or a space change the store without a field, and the list of the projects follows a move.
+// answerLater runs a command as the exposure does and returns its answer once the host calls are done.
+func (f *shellFixture) answerLater(name string, params any) (any, error) {
+	f.t.Helper()
+	raw, err := json.Marshal(params)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	var value any
+	var failure error
+	answered := false
+	f.shell.Registry().RunLater(name, raw, func(got any, err error) { value, failure, answered = got, err, true })
+	f.settle()
+	if !answered {
+		f.t.Fatalf("%s did not answer", name)
+	}
+	return value, failure
+}
+
+// A command of a project answers when the store holds the change, and the shell shows the change only then.
+func TestAProjectCommandAnswersWhenTheStoreHoldsIt(t *testing.T) {
+	f := openedShell(t)
+	id := f.host.projects[0]["id"].(string)
+	for name, params := range map[string]any{
+		"core.project.rename": map[string]string{"id": id, "title": "gamma"},
+		"core.project.pin":    map[string]any{"id": id, "pinned": true},
+		"core.library.pin":    map[string]any{"id": id, "pinned": false},
+		"core.project.move":   map[string]any{"id": id, "delta": 0},
+	} {
+		raw, err := json.Marshal(params)
+		if err != nil {
+			t.Fatal(err)
+		}
+		answered := false
+		f.shell.Registry().RunLater(name, raw, func(_ any, err error) {
+			if err != nil {
+				t.Errorf("%s: %v", name, err)
+			}
+			answered = true
+		})
+		f.tester.Frame()
+		if answered {
+			t.Fatalf("%s answered before the store did", name)
+		}
+		f.settle()
+		if !answered {
+			t.Fatalf("%s did not answer after the store did", name)
+		}
+	}
+	if got := storedTitle(f); got != "gamma" {
+		t.Fatalf("the store holds the title %q", got)
+	}
+}
+
 func TestTheCommandsOfAProjectChangeTheStore(t *testing.T) {
 	f := openedShell(t)
 	id := f.host.projects[0]["id"].(string)
 	space := f.host.projects[0]["spaces"].([]any)[0].(map[string]any)["id"].(string)
-	f.run("core.project.rename", map[string]string{"id": id, "title": "gamma"})
+	f.answerLater("core.project.rename", map[string]string{"id": id, "title": "gamma"})
 	f.run("core.space.rename", map[string]string{"id": space, "title": "plan"})
-	f.run("core.project.pin", map[string]any{"id": id, "pinned": true})
+	f.answerLater("core.project.pin", map[string]any{"id": id, "pinned": true})
 	f.settle()
 	if storedTitle(f) != "gamma" || storedSpaceTitle(f, space) != "plan" || f.host.projects[0]["pinned"] != true {
 		t.Fatalf("the store holds %v", f.host.projects[0])
@@ -148,12 +202,12 @@ func TestTheCommandsOfAProjectChangeTheStore(t *testing.T) {
 	f.run("core.library.form.submit", nil)
 	f.settle()
 	other := f.host.projects[1]["id"].(string)
-	f.run("core.project.move", map[string]any{"id": other, "delta": -1})
+	f.answerLater("core.project.move", map[string]any{"id": other, "delta": -1})
 	f.settle()
 	if f.host.projects[0]["id"] != other {
 		t.Fatalf("the store holds %v first", f.host.projects[0]["id"])
 	}
-	f.run("core.project.move", map[string]any{"id": other, "delta": -1}) // Past the end nothing moves.
+	f.answerLater("core.project.move", map[string]any{"id": other, "delta": -1}) // Past the end nothing moves.
 	f.settle()
 	if f.host.projects[0]["id"] != other {
 		t.Fatalf("the store holds %v first", f.host.projects[0]["id"])

@@ -31,6 +31,8 @@ type storedHost struct {
 	// detaching are the surfaces whose image detach is pending when a window starts.
 	detaching []string
 	projects  []map[string]any
+	// createRefused is the refusal of projectCreate.
+	createRefused error
 	// appUpdate is the answer of appUpdateState, and opened holds the arguments of linkOpen.
 	appUpdate any
 	opened    []json.RawMessage
@@ -184,6 +186,9 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 			return map[string]string{"root": root, "identity": "identity of " + root}, nil
 		}),
 		"projectCreate": answer("projectCreate", func(argument json.RawMessage) (any, error) {
+			if h.createRefused != nil {
+				return nil, h.createRefused
+			}
 			var request struct{ Parent, Name string }
 			if err := json.Unmarshal(argument, &request); err != nil {
 				return nil, err
