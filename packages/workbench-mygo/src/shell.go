@@ -341,6 +341,9 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	if s.settings, err = NewSettingsStore(definitions, s.settingsSave); err != nil {
 		return nil, err
 	}
+	if err = s.settings.SidebarDefaults(s.sidebars.Declared()); err != nil {
+		return nil, err
+	}
 	for _, plugin := range s.plugins {
 		s.settings.Loaded(plugin.ID)
 	}

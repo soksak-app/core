@@ -99,7 +99,7 @@ const acmeDocument = `{"plugins":[
 
 func acme() *storedHost {
 	return &storedHost{
-		common:    map[string]any{"sets": []any{map[string]any{"id": "set-1", "title": "하나", "sections": []any{"acme.files"}, "layout": "list"}}},
+		common:    map[string]any{"sets": []any{map[string]any{"id": "set-1", "title": "하나", "sections": []any{"acme.files"}, "layout": "list"}}, "links": []any{}},
 		installed: acmeDocument,
 	}
 }

@@ -241,6 +241,21 @@ func effectiveSidebars(environment []byte, installed []InstalledPlugin) ([]Sideb
 	return sets, links, nil
 }
 
+// Declared returns the sets and the links that the environment and the installed plugins declare, which are the defaults of the
+// settings until a person changes them.
+func (s *Sidebars) Declared() ([]SidebarSet, []SidebarLink) { return s.sets, s.links }
+
+// Adopt takes the sets and the links of the settings, which the next frame shows.
+func (s *Sidebars) Adopt(sets []SidebarSet, links []SidebarLink) error {
+	previousSets, previousLinks := s.sets, s.links
+	s.sets, s.links = sets, links
+	if err := s.check(); err != nil {
+		s.sets, s.links = previousSets, previousLinks
+		return err
+	}
+	return nil
+}
+
 // check refuses a set that has no known layout and a link to a set that is gone.
 func (s *Sidebars) check() error {
 	for _, set := range s.sets {
