@@ -27,6 +27,7 @@ func releasePage(url string) string {
 // AppUpdates is the application update of a window.
 type AppUpdates struct {
 	calls   *Calls
+	begin   BeginOperation
 	plugins func() *PluginsState
 	changed func()
 
@@ -37,8 +38,8 @@ type AppUpdates struct {
 
 // NewAppUpdates returns the application update of a window over its host calls. plugins returns the plugin state of the host, or nil
 // before it was read, and changed runs whenever the state or the operation changes.
-func NewAppUpdates(calls *Calls, plugins func() *PluginsState, changed func()) *AppUpdates {
-	return &AppUpdates{calls: calls, plugins: plugins, changed: changed}
+func NewAppUpdates(calls *Calls, begin BeginOperation, plugins func() *PluginsState, changed func()) *AppUpdates {
+	return &AppUpdates{calls: calls, begin: begin, plugins: plugins, changed: changed}
 }
 
 // Refresh reads the candidate of the registry index again. A read that fails is the error of the status.
@@ -72,7 +73,8 @@ func (u *AppUpdates) Update(answer func(err error)) {
 	}
 	u.operation = &AppOperation{Version: version, State: "staging"}
 	u.changed()
-	u.calls.Call("appUpdateStage", map[string]string{"version": version}, func(value any, err error) {
+	operation := u.calls.Caused(u.begin("workbench.update.operation", map[string]any{"action": "update", "version": version}))
+	operation.Call("appUpdateStage", map[string]string{"version": version}, func(value any, err error) {
 		if err != nil {
 			failed(err)
 			return
@@ -86,7 +88,7 @@ func (u *AppUpdates) Update(answer func(err error)) {
 		}
 		u.operation = &AppOperation{Version: version, State: "applying"}
 		u.changed()
-		u.calls.Call("appUpdateApply", map[string]string{"bundle": staged.Bundle}, func(_ any, err error) {
+		operation.Call("appUpdateApply", map[string]string{"bundle": staged.Bundle}, func(_ any, err error) {
 			if err != nil {
 				failed(err)
 				return

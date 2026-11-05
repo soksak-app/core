@@ -360,7 +360,7 @@ func TestAddTabStoresTheDeclaredParamsAndFocusesTheCard(t *testing.T) {
 }
 
 func TestAPluginWithoutDeclaredParamsRefusesThem(t *testing.T) {
-	f := newShell(t, &storedHost{installed: `{"plugins":[{"id":"plain","package":"plain","version":"1.0.0","manifest":{"id":"plain","name":"Plain","mark":"Pl",
+	f := newShell(t, &storedHost{installed: `{"plugins":[{"id":"plain","package":"plain","version":"1.0.0","manifest":{"id":"plain","name":"Plain","description":"plain","mark":"Pl","icon":"<path d=\"M1 1h14\"/>",
 		"surface":{"composition":{"kind":"view","page":"a.html"}}}}]}`})
 	f.run("core.library.form.open", map[string]string{"mode": "open"})
 	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
@@ -374,7 +374,8 @@ func TestAPluginWithoutDeclaredParamsRefusesThem(t *testing.T) {
 func modifiedShell(t *testing.T) *tabShell {
 	t.Helper()
 	f := newTabShell(t, &storedHost{installed: `{"plugins":[{"id":"notes","package":"notes","version":"1.0.0","manifest":{"id":"notes","name":"Notes",
-		"description":"notes","mark":"N","surface":{"composition":{"kind":"view","page":"n.html"},"save":"notes.save"},"exposes":{"commands":[{"name":"notes.save"}]}}}]}`,
+		"description":"notes","mark":"N","icon":"<path d=\"M1 1h14\"/>","surface":{"composition":{"kind":"view","page":"n.html"},"save":"notes.save"},
+		"exposes":{"commands":[{"name":"notes.save","description":"saves","params":{"type":"object","properties":{}},"result":{"type":"null"}}]}}}]}`,
 		projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"), tab("tab-bbbbbb", "notes"))}})
 	f.open(t)
 	f.modified("tab-aaaaaa")

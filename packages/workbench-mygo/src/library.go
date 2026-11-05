@@ -16,8 +16,10 @@ import (
 type libraryState struct {
 	page, query, order string
 	pluginQuery        string
-	formMode           string // create, open, or "" while the form is closed.
-	name, parent       string
+	// revealUpdates brings the update list into view in the next frame of the plugin page.
+	revealUpdates bool
+	formMode      string // create, open, or "" while the form is closed.
+	name, parent  string
 }
 
 func newLibraryState() libraryState { return libraryState{page: "projects", order: "saved"} }
@@ -99,7 +101,8 @@ func (s *Shell) registerLibrary() {
 		return nil
 	})
 	act(s, "core.library.window", func(struct{}) error {
-		s.calls.Call("windowNew", nil, func(_ any, err error) {
+		cids := s.events.BeginOperation("workbench.window.operation", map[string]any{"action": "new"})
+		s.calls.Caused(cids).Call("windowNew", nil, func(_ any, err error) {
 			if err != nil {
 				s.fail(err)
 			}
@@ -195,7 +198,7 @@ func (s *Shell) drawLibrary(c *ui.Context, width, height float32) {
 		})
 		DrawErrorBanner(c, s.errors)
 		if s.library.page == pluginsPage {
-			ui.Box(c).FillWidth().Grow(1).Children(func() { DrawPluginPage(c, s.binder, s.pluginPage(), s.errors) })
+			ui.Box(c).FillWidth().Grow(1).Children(func() { s.drawPlugins(c) })
 		} else {
 			if s.library.formMode != "" {
 				s.drawLibraryForm(c)

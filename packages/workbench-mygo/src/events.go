@@ -108,6 +108,8 @@ type Events struct {
 	sending    bool
 	anchor     *eventClock
 	flushes    []func()
+	// operations counts the operations that this start of the workbench began.
+	operations int
 	ended      bool
 }
 
@@ -202,11 +204,26 @@ func (e *Events) record(level sok.Level, line string) {
 	}, nil)
 }
 
+// BeginOperation starts an operation of the workbench and returns the identifiers that its host calls carry.
+type BeginOperation func(event string, fields map[string]any) []string
+
+// BeginOperation starts an operation of the workbench (docs/spec/logging.md#operation-chains): it assigns the identifier
+// p<start>.<n>, stores the first event of the chain with it, and returns the identifiers that the host calls of the operation carry.
+func (e *Events) BeginOperation(event string, fields map[string]any) []string {
+	e.operations++
+	cids := []string{fmt.Sprintf("p%s.%d", e.start, e.operations)}
+	e.Emit(sok.LevelInfo, event, func() map[string]any { return fields }, cids)
+	return cids
+}
+
 // Call stores the event workbench.call of a host call that ended (docs/spec/logging.md#automatic-entrances): the level is debug, and
 // warn for a refused call. The arguments are read only for an event that the gate stores.
-func (e *Events) Call(name string, argument any, elapsed time.Duration, failure error) {
+func (e *Events) Call(name string, argument any, cids []string, elapsed time.Duration, failure error) {
 	if unrecordedCalls[name] {
 		return
+	}
+	if cids == nil {
+		cids = callCids(name, argument)
 	}
 	level := sok.LevelDebug
 	if failure != nil {
@@ -223,7 +240,7 @@ func (e *Events) Call(name string, argument any, elapsed time.Duration, failure 
 			fields["error"] = failureText(failure, internalFailure)
 		}
 		return fields
-	}, callCids(name, argument))
+	}, cids)
 }
 
 // callText is the JSON text of the arguments of a host call, cut at its bound, and whether it was cut.

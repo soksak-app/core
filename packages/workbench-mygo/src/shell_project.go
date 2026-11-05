@@ -191,7 +191,8 @@ func (s *Shell) activateThen(id string, done func()) {
 			done()
 			return
 		}
-		s.calls.Call("projectOpen", map[string]any{"id": id, "root": root, "separate": false, "geometry": nil}, func(value any, err error) {
+		cids := s.events.BeginOperation("workbench.project.operation", map[string]any{"action": "open", "project": id})
+		s.calls.Caused(cids).Call("projectOpen", map[string]any{"id": id, "root": root, "separate": false, "geometry": nil}, func(value any, err error) {
 			if err != nil {
 				s.fail(err)
 				done()
@@ -418,7 +419,8 @@ func (s *Shell) browse() {
 
 // removeProject removes the project id, as projects.close does.
 func (s *Shell) removeProject(id string) {
-	s.calls.Call("projectRemoveAsk", id, func(value any, err error) {
+	operation := s.calls.Caused(s.events.BeginOperation("workbench.project.operation", map[string]any{"action": "remove", "project": id}))
+	operation.Call("projectRemoveAsk", id, func(value any, err error) {
 		if err != nil {
 			s.fail(err)
 			return
@@ -434,7 +436,7 @@ func (s *Shell) removeProject(id string) {
 		if id != s.active {
 			s.keep()
 		}
-		s.calls.Call("projectRelease", id, func(_ any, err error) {
+		operation.Call("projectRelease", id, func(_ any, err error) {
 			if err != nil {
 				s.fail(err)
 				return

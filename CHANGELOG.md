@@ -5,6 +5,9 @@
 ## Unreleased
 
 - F502-21: The mygo workbench draws its modals as native UI: the settings window, the picker layer with the add, split, tool, tab and context menus, and the question about a modified tab. `core.card.close`, `core.tab.close` and `core.space.close` do not close a modified tab without the answer of the person, and the plugins and their settings come from the document of the installed plugins. The settings `left` and `right` take the fixed window sidebars in and out of the plane.
+- F502-12: `core.plugins.show-updates` of the mygo workbench brings the update list into view on the plugin page.
+- F502-12: The mygo workbench checks the installed plugin document with the rules of the page: a plugin that the window refuses is left out, its error is shown, and its row states `refused`.
+- F502-12: The operation chains of `docs/spec/logging.md` run on the mygo workbench: each operation stores its first event with its identifier, and every host call of the workbench is the event `host.binding.call`.
 - F502-12: The mygo workbench answers the status `core.app` and the commands `core.app.update` and `core.app.release`, and the plugin page lists the core update first with its operation and the plugins that do not fit the candidate.
 - F502-12: A tab of the mygo workbench keeps its label through an unload, and the tab store caches the title that a view reports, so a tab that starts unloaded shows it too.
 - F502-16: `core.focus` of the mygo workbench follows the first responder of the window and the focus that a view reports.
