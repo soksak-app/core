@@ -450,6 +450,15 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	})
 	// The framework loads the page again after the WebContent process ends; the host writes the end as an error line
 	// (docs/spec/diagnostics.md).
+	// A frame of the earlier backing scale is refused, so each supplier draws at the new raster when the window changes display.
+	win.OnWindowEvent(events.Mac.WindowDidChangeBackingProperties, func(*application.WindowEvent) {
+		RecordWindowEvent(s.name, "scale_factor_changed")
+		routine.Go("image-rasters", func() {
+			if err := s.refreshImageRasters(); err != nil {
+				LogError("image rasters", err)
+			}
+		})
+	})
 	win.OnWindowEvent(events.Mac.WebViewWebContentProcessDidTerminate, func(*application.WindowEvent) {
 		RecordWindowEvent(s.name, "web_process_ended")
 		if place, text, reported := PageProcessEnded(s.name, h.quit.Active()); reported {

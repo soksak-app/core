@@ -5,6 +5,7 @@
 ## 미배포
 
 - F443-1: 첫 실행 finding을 닫는다. 초과는 machine의 load를 따르고 launch가 결정하지 않는다.
+- F456: 창이 backing scale이 다른 화면으로 옮겨도 표시 중인 image는 크기를 유지하고, 두 host가 raster를 다시 구성한다.
 - F455: view measurement가 화면의 refresh rate를 기록한다. F435는 benchmark가 120 Hz에서 돌 때까지 보류한다.
 - F435-4: run은 settled drawing이 present된 때 끝나므로, drag 동안 묶인 status 값이 마지막 layout과 경쟁하지 않는다.
 - F435-3: convergence가 drag 뒤의 모든 source frame을 읽어, 뒤늦은 frame의 최종 viewport도 측정한다.

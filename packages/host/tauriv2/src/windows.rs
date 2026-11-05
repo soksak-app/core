@@ -901,8 +901,19 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             crate::exposure::window_changed(&host);
             crate::exposure::windows_changed(host.app_handle());
         }
-        tauri::WindowEvent::Moved(_) | tauri::WindowEvent::ScaleFactorChanged { .. } => {
+        tauri::WindowEvent::Moved(_) => {
             crate::exposure::window_changed(&host);
+        }
+        tauri::WindowEvent::ScaleFactorChanged { .. } => {
+            crate::exposure::window_changed(&host);
+            // A frame of the earlier backing scale is refused, so each supplier draws at the new raster when the window
+            // changes display. The refresh runs its native part on the main thread and waits for it.
+            let window = host.clone();
+            crate::routine::spawn_named("image-rasters", move || {
+                if let Err(error) = crate::composition::refresh_image_rasters(&window) {
+                    log_error("image rasters", error);
+                }
+            });
         }
         _ => {}
     });
