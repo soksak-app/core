@@ -167,7 +167,11 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides 
 	strip := width - 2*m.cardHeadPad - m.cardButton - 2*m.cardHeadGap - tools
 	ui.Row(s.binder.Name(c, "core.card.header", id)).Size(width, m.headH).PaddingX(m.cardHeadPad).AlignItems(ui.Center).Gap(m.cardHeadGap).Clip().
 		Role(ui.RoleGroup).Label("core.card.header").BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.Edge).Children(func() {
-		s.drawTabList(c, id, tabs, fit)
+		if s.fullscreen == id {
+			s.drawSpaceApps(c, id)
+		} else {
+			s.drawTabList(c, id, tabs, fit)
+		}
 		if fit.Fit == "ham" {
 			ui.Spacer(c).Grow(1)
 		} else {
@@ -191,6 +195,18 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides 
 			return
 		}
 		s.headButton(c, "core.card.tools", "core.card.tools", id, cardParam{Card: id}, "카드 도구", s.headIcon("card-more", true), true)
+	})
+}
+
+// drawSpaceApps draws the button at the start of the head of a fullscreen card, which lists the tabs of the space.
+func (s *Shell) drawSpaceApps(c *ui.Context, id string) {
+	m := s.metrics
+	apps := s.binder.Press(c, "core.card.space-apps", "core.space.apps", id, cardParam{Card: id})
+	s.anchored("core.card.space-apps/"+id, apps)
+	s.dressHeadButton(apps, "스페이스 앱", false)
+	color := s.headIconColor(apps)
+	apps.Label("스페이스 앱").Children(func() {
+		ui.Icon(c, s.headIcon("card-tabs", false)).Size(m.cardIcon, m.cardIcon).TextColor(color)
 	})
 }
 

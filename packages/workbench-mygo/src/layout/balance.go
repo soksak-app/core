@@ -16,6 +16,39 @@ type slice struct {
 	sides []*slice
 }
 
+// SlicedCard is a card in the order of reading the slicing tree of an arrangement, with the number of cuts above it.
+type SlicedCard struct {
+	ID   string
+	Cuts int
+}
+
+// Sliced returns the cards that keep accepts in the order of reading their slicing tree, and false when they are not slicing.
+func (g *Grid) Sliced(keep func(Card) bool) ([]SlicedCard, bool) {
+	cards := []*Card{}
+	for _, card := range g.list {
+		if keep(*card) {
+			cards = append(cards, card)
+		}
+	}
+	tree := sliceTree(cards)
+	if tree == nil {
+		return nil, false
+	}
+	order := []SlicedCard{}
+	var walk func(part *slice, cuts int)
+	walk = func(part *slice, cuts int) {
+		if part.card != nil {
+			order = append(order, SlicedCard{ID: part.card.ID, Cuts: cuts})
+			return
+		}
+		for _, side := range part.sides {
+			walk(side, cuts+1)
+		}
+	}
+	walk(tree, 0)
+	return order, true
+}
+
 // sliceTree is the slicing tree of an arrangement, or nil when it is not slicing.
 func sliceTree(cards []*Card) *slice {
 	if len(cards) == 1 {

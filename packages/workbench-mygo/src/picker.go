@@ -17,6 +17,9 @@ import (
 // pickerAsk are the questions of the add menu by its tool.
 var pickerAsk = map[string]string{"add": "새 탭에 무엇을 띄울까", "x": "새 위치에 무엇을 띄울까", "y": "새 위치에 무엇을 띄울까"}
 
+// The view box of the map of a group heading (fillPicker of packages/workbench/picker-layer.js).
+const pickerMapWidth, pickerMapHeight = 16, 10
+
 // menuTools are the menus of the card head, with the tool of each and the side that its split takes.
 var menuTools = map[string]struct{ tool, side string }{"add": {tool: "add"}, "split-x": {"x", "right"}, "split-y": {"y", "bottom"}}
 
@@ -25,6 +28,15 @@ var menuTools = map[string]struct{ tool, side string }{"add": {tool: "add"}, "sp
 type pickerItem struct {
 	Key, Name, Mark, Icon, Expose string
 	Active                        bool
+	// Group is the id of the group heading of the item in a grouped layer, and Notice the tab whose notice the item shows.
+	Group, Notice string
+}
+
+// pickerGroup is a heading of a grouped layer: its name, its tree depth, and its map of the plane.
+type pickerGroup struct {
+	ID, Name string
+	Depth    int
+	Map      *ui.SVG
 }
 
 // picker is the open layer. An anchored layer stands below the element of anchor, on its start with start and on its end
@@ -33,6 +45,7 @@ type picker struct {
 	open    bool
 	title   string
 	items   []pickerItem
+	groups  []pickerGroup
 	anchor  string
 	start   bool
 	x, y    float32
@@ -45,6 +58,7 @@ type picker struct {
 // pickerMetrics are the chrome metrics of the layer.
 type pickerMetrics struct {
 	minW, maxW, maxH, outerPad, pad, icon, iconH, gap, itemPadY, headTop, headX, headBottom, noteGap, shadowY, shadowBlur, shadowAlpha float32
+	indent, groupedMaxW, groupedMaxH, groupedMargin, groupedIcon, groupTop, groupBottom, groupStroke                                   float32
 }
 
 func (s *Shell) readPickerMetrics() pickerMetrics {
@@ -55,7 +69,9 @@ func (s *Shell) readPickerMetrics() pickerMetrics {
 	return pickerMetrics{minW: metric("min-w"), maxW: metric("max-w"), maxH: metric("max-h"), outerPad: metric("outer-pad"), pad: metric("pad"),
 		icon: metric("icon"), iconH: metric("icon-h"), gap: metric("gap"), itemPadY: metric("item-pad-y"), headTop: metric("head-pad-top"),
 		headX: metric("head-pad-x"), headBottom: metric("head-pad-bottom"), noteGap: metric("item-note-gap"), shadowY: metric("shadow-y"),
-		shadowBlur: metric("shadow-blur"), shadowAlpha: metric("shadow-alpha")}
+		shadowBlur: metric("shadow-blur"), shadowAlpha: metric("shadow-alpha"), indent: metric("indent"), groupedMaxW: metric("grouped-max-w"),
+		groupedMaxH: metric("grouped-max-h"), groupedMargin: metric("grouped-margin"), groupedIcon: metric("grouped-icon"),
+		groupTop: metric("group-pad-top"), groupBottom: metric("group-pad-bottom"), groupStroke: metric("group-stroke")}
 }
 
 // anchored records element as the anchor key of this frame.
@@ -217,7 +233,7 @@ func (s *Shell) openTabList(card string) error {
 	active := data.ActiveTab()
 	items := make([]pickerItem, 0, len(tabs))
 	for _, tab := range tabs {
-		item := pickerItem{Key: tab.ID, Name: layout.TabName(tab, nil, false), Mark: "?", Active: active != nil && tab.ID == active.ID}
+		item := pickerItem{Key: tab.ID, Name: layout.TabName(tab, nil, false), Mark: "?", Notice: tab.ID, Active: active != nil && tab.ID == active.ID}
 		if plugin := s.loadedPlugin(tab.Plugin); plugin != nil {
 			item.Mark, item.Icon = plugin.Mark, plugin.Icon
 		}
@@ -228,6 +244,85 @@ func (s *Shell) openTabList(card string) error {
 		return s.selectTab(tab)
 	})
 	layer.anchor, layer.start = anchor, true
+	return nil
+}
+
+// openSpaceApps opens the list of the tabs of the space under the button of a fullscreen card, and closes it when it is open. The groups are
+// the cards in the order of reading the slicing tree, and a pick moves the full screen to the card of the tab and shows the tab.
+func (s *Shell) openSpaceApps(id string) error {
+	if err := s.paneCard(id); err != nil {
+		return err
+	}
+	if s.fullscreen != id {
+		return fmt.Errorf("card %s is not fullscreen", id)
+	}
+	anchor := "core.card.space-apps/" + id
+	if s.toggled(anchor) {
+		return nil
+	}
+	holdsTabs := func(card layout.Card) bool { return len(card.Data) > 0 && string(card.Data) != "null" }
+	order, ok := s.plane.Sliced(holdsTabs)
+	if !ok {
+		return errors.New("the cards of the space are not a slicing arrangement")
+	}
+	metrics := s.readPickerMetrics()
+	groups := make([]pickerGroup, 0, len(order))
+	items := []pickerItem{}
+	for index, card := range order {
+		data, err := s.cardData(card.ID)
+		if err != nil {
+			return err
+		}
+		groups = append(groups, pickerGroup{ID: card.ID, Name: fmt.Sprintf("카드 %d", index+1), Depth: max(0, card.Cuts-1), Map: s.planeMap(order, card.ID, metrics)})
+		active := data.ActiveTab()
+		for _, tab := range data.TabList() {
+			item := pickerItem{Key: card.ID + "/" + tab.ID, Name: s.tabName(tab), Mark: "?", Group: card.ID, Notice: tab.ID,
+				Active: card.ID == id && active != nil && tab.ID == active.ID}
+			if plugin := s.loadedPlugin(tab.Plugin); plugin != nil {
+				item.Mark, item.Icon = plugin.Mark, plugin.Icon
+			}
+			items = append(items, item)
+		}
+	}
+	layer := s.openPicker(fmt.Sprintf("스페이스 앱 %d개", len(items)), items, func(key string) error {
+		card, tab, _ := strings.Cut(key, "/")
+		return s.showFullscreen(card, tab)
+	})
+	layer.groups, layer.anchor, layer.start = groups, anchor, true
+	return nil
+}
+
+// planeMap is the icon of a group heading: the cards of the plane, with the card own filled.
+func (s *Shell) planeMap(cards []layout.SlicedCard, own string, metrics pickerMetrics) *ui.SVG {
+	var elements strings.Builder
+	sx, sy := pickerMapWidth/s.plane.Width(), pickerMapHeight/s.plane.Height()
+	for _, card := range cards {
+		rect, _ := s.plane.Rect(card.ID)
+		fill := "none"
+		if card.ID == own {
+			fill = "currentColor"
+		}
+		fmt.Fprintf(&elements, `<rect x="%.2f" y="%.2f" width="%.2f" height="%.2f" rx=".6" fill="%s"/>`, rect.X*sx, rect.Y*sy, rect.W*sx, rect.H*sy, fill)
+	}
+	paint := fmt.Sprintf(`fill="none" stroke="currentColor" stroke-width="%g"`, metrics.groupStroke)
+	return s.declaredIcon(fmt.Sprintf("0 0 %d %d", pickerMapWidth, pickerMapHeight), paint, elements.String())
+}
+
+// showFullscreen moves the full screen to a card and shows its tab.
+func (s *Shell) showFullscreen(card, tab string) error {
+	data, err := s.cardData(card)
+	if err != nil {
+		return err
+	}
+	if !slices.ContainsFunc(data.TabList(), func(held layout.Tab) bool { return held.ID == tab }) {
+		return fmt.Errorf("no tab %s in card %s", tab, card)
+	}
+	data.SelectTab(tab)
+	if err := s.storeCard(card, data); err != nil {
+		return err
+	}
+	s.focused, s.fullscreen = card, card
+	s.settle()
 	return nil
 }
 
@@ -351,8 +446,7 @@ type pickerColumns struct {
 	Items  []pickerColumn `json:"items"`
 }
 
-// pickerGroupStatus is a group heading of the status core.picker. The menus of this host have no group yet: the space apps list
-// is the grouped one, and it needs the fullscreen card.
+// pickerGroupStatus is a group heading of the status core.picker.
 type pickerGroupStatus struct {
 	ID    string `json:"id"`
 	Name  string `json:"name"`
@@ -373,9 +467,23 @@ func (s *Shell) pickerStatus() pickerStatus {
 		Columns: pickerColumns{Groups: []pickerColumn{}, Items: []pickerColumn{}}}
 	metrics := s.readPickerMetrics()
 	icon := s.palette.BorderWidth + metrics.outerPad + metrics.pad
+	cell := s.pickerCell(metrics)
+	column := func(depth int) pickerColumn {
+		start := icon + float32(depth)*metrics.indent
+		return pickerColumn{Icon: start, Name: start + cell + metrics.gap}
+	}
+	for _, group := range s.picker.groups {
+		status.Groups = append(status.Groups, pickerGroupStatus{ID: group.ID, Name: group.Name, Depth: group.Depth})
+		status.Columns.Groups = append(status.Columns.Groups, column(group.Depth))
+	}
 	for _, item := range s.picker.items {
-		status.Items = append(status.Items, pickerStatusItem{Key: item.Key, Name: item.Name, Active: item.Active})
-		status.Columns.Items = append(status.Columns.Items, pickerColumn{Icon: icon, Name: icon + metrics.icon + metrics.gap})
+		shown := pickerStatusItem{Key: item.Key, Name: item.Name, Active: item.Active}
+		if item.Group != "" {
+			group := item.Group
+			shown.Group = &group
+		}
+		status.Items = append(status.Items, shown)
+		status.Columns.Items = append(status.Columns.Items, column(s.pickerDepth(item)))
 	}
 	return status
 }
@@ -428,6 +536,12 @@ func (s *Shell) registerPicker() {
 			return err
 		}
 		return s.openCardTools(value.Card)
+	})
+	act(s, "core.space.apps", func(value cardParam) error {
+		if err := s.requirePlane(); err != nil {
+			return err
+		}
+		return s.openSpaceApps(value.Card)
 	})
 	act(s, "core.card.tab-list", func(value cardParam) error {
 		if err := s.requirePlane(); err != nil {
@@ -500,14 +614,23 @@ func (s *Shell) drawPicker(c *ui.Context, width, height float32) {
 		default:
 			panel.Absolute().Left(min(layer.x, max(0, width-metrics.maxW))).Top(min(layer.y, max(0, height-metrics.maxH)))
 		}
-		panel.Margin(5, 0, 0, 0).MinWidth(metrics.minW).MaxWidth(metrics.maxW).MaxHeight(metrics.maxH).Column().Padding(metrics.outerPad).
+		maxW, maxH := metrics.maxW, metrics.maxH
+		if len(layer.groups) > 0 {
+			maxW, maxH = metrics.groupedMaxW, min(metrics.groupedMaxH, height-metrics.groupedMargin)
+		}
+		panel.Margin(5, 0, 0, 0).MinWidth(metrics.minW).MaxWidth(maxW).MaxHeight(maxH).Column().Padding(metrics.outerPad).
 			Background(s.palette.Card).Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.palette.Radius).Label(layer.title).
 			Shadow(0, metrics.shadowY, metrics.shadowBlur, 0, ui.RGBA(0, 0, 0, metrics.shadowAlpha)).Children(func() {
 			ui.Box(c).Padding(metrics.headTop, metrics.headX, metrics.headBottom, metrics.headX).Children(func() {
-				ui.Text(c, layer.title).FontSize(11).TextColor(s.palette.Muted)
+				ui.Text(c, layer.title).FontSize(s.textCaption()).TextColor(s.palette.Muted)
 			})
 			ui.Scroll(c).Grow(1).Column().Children(func() {
+				heading := ""
 				for index, item := range layer.items {
+					if item.Group != heading {
+						heading = item.Group
+						s.drawPickerGroup(c, heading, metrics)
+					}
 					s.drawPickerItem(c, index, item, metrics)
 				}
 			})
@@ -518,6 +641,40 @@ func (s *Shell) drawPicker(c *ui.Context, width, height float32) {
 	}
 }
 
+// pickerGroupOf returns the heading of a grouped layer.
+func (s *Shell) pickerGroupOf(id string) pickerGroup {
+	for _, group := range s.picker.groups {
+		if group.ID == id {
+			return group
+		}
+	}
+	return pickerGroup{}
+}
+
+// pickerDepth is the indentation level of an item, the depth of its heading.
+func (s *Shell) pickerDepth(item pickerItem) int { return s.pickerGroupOf(item.Group).Depth }
+
+// pickerCell is the width of the icon cell of the rows of the layer, which is wider in a grouped layer.
+func (s *Shell) pickerCell(metrics pickerMetrics) float32 {
+	if len(s.picker.groups) > 0 {
+		return metrics.groupedIcon
+	}
+	return metrics.icon
+}
+
+// drawPickerGroup draws the heading of a group: the map of the plane and the name. It does not receive presses.
+func (s *Shell) drawPickerGroup(c *ui.Context, id string, metrics pickerMetrics) {
+	group := s.pickerGroupOf(id)
+	ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(metrics.gap).
+		Padding(metrics.groupTop, metrics.pad, metrics.groupBottom, metrics.pad+float32(group.Depth)*metrics.indent).Children(func() {
+		slot := ui.Box(s.binder.Name(c, "core.picker.group-icon", id)).Size(metrics.groupedIcon, metrics.iconH).Role(ui.RoleGroup).Label(group.Name).Center().AlignItems(ui.Center)
+		slot.Children(func() {
+			ui.Icon(c, group.Map).Size(metrics.groupedIcon, metrics.groupedIcon*pickerMapHeight/pickerMapWidth).TextColor(s.palette.Muted)
+		})
+		ui.Text(s.binder.Name(c, "core.picker.group-name", id), group.Name).FontSize(s.textCaption()).SingleLine().Ellipsis("…").TextColor(s.palette.Muted)
+	})
+}
+
 // drawPickerItem draws an item of the layer.
 func (s *Shell) drawPickerItem(c *ui.Context, index int, item pickerItem, metrics pickerMetrics) {
 	name := item.Expose
@@ -525,23 +682,33 @@ func (s *Shell) drawPickerItem(c *ui.Context, index int, item pickerItem, metric
 		name = "core.picker.item"
 	}
 	ui.Box(c).FillWidth().Children(func() {
-		row := ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(metrics.gap).PaddingX(metrics.pad).PaddingY(metrics.itemPadY).Radius(4)
+		row := ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(metrics.gap).
+			Padding(metrics.itemPadY, metrics.pad, metrics.itemPadY, metrics.pad+float32(s.pickerDepth(item))*metrics.indent).Radius(s.radiusSmall())
 		// The press lies over the row, since the element tree holds no element inside a button and the icon and the name are elements.
 		button := s.binder.Press(c, name, "core.picker.pick", item.Key, map[string]int{"index": index})
 		button.Absolute().Left(0).Top(0).Right(0).Bottom(0).Label(item.Name)
-		if item.Active || button.Hovered() {
-			row.Background(s.palette.Bg)
+		switch {
+		case button.Hovered():
+			row.Background(faded(s.palette.Fg, s.metrics.chipHoverMix))
+		case item.Active:
+			row.Background(faded(s.palette.Fg, s.metrics.chipSelMix))
+		}
+		if text := s.tabNoticeText(item.Notice); text != "" {
+			button.Tooltip(text)
 		}
 		row.Children(func() {
-			slot := ui.Box(s.binder.Name(c, "core.picker.item-icon", item.Key)).Size(metrics.icon, metrics.iconH).Role(ui.RoleGroup).Label(item.Name)
+			if item.Notice != "" {
+				s.noticeMark(c, item.Notice)
+			}
+			slot := ui.Box(s.binder.Name(c, "core.picker.item-icon", item.Key)).Size(s.pickerCell(metrics), metrics.iconH).Role(ui.RoleGroup).Label(item.Name).Center().AlignItems(ui.Center)
 			slot.Children(func() {
 				if icon := s.pickerIcon(item.Icon); icon != nil {
 					ui.Icon(c, icon).Size(metrics.icon, metrics.iconH)
 				}
 			})
-			ui.Text(s.binder.Name(c, "core.picker.item-name", item.Key), item.Name).FontSize(12).SingleLine().Ellipsis("…").Grow(1)
+			ui.Text(s.binder.Name(c, "core.picker.item-name", item.Key), item.Name).FontSize(s.textControl()).SingleLine().Ellipsis("…").Grow(1)
 			if item.Mark != "" {
-				ui.Text(c, item.Mark).FontSize(11).TextColor(s.palette.Muted).MarginStart(metrics.noteGap)
+				ui.Text(c, item.Mark).FontSize(s.textCaption()).TextColor(s.palette.Muted).MarginStart(metrics.noteGap)
 			}
 		})
 	})

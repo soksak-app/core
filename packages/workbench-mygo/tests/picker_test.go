@@ -2,12 +2,15 @@ package workbench_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+
+	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
 // pickerStatus is the status core.picker as JSON.
@@ -15,10 +18,26 @@ type pickerStatus struct {
 	Open  bool   `json:"open"`
 	Title string `json:"title"`
 	Items []struct {
-		Key    string `json:"key"`
-		Name   string `json:"name"`
-		Active bool   `json:"active"`
+		Key    string  `json:"key"`
+		Name   string  `json:"name"`
+		Active bool    `json:"active"`
+		Group  *string `json:"group"`
 	} `json:"items"`
+	Groups []struct {
+		ID    string `json:"id"`
+		Name  string `json:"name"`
+		Depth int    `json:"depth"`
+	} `json:"groups"`
+	Columns struct {
+		Groups []struct {
+			Icon float64 `json:"icon"`
+			Name float64 `json:"name"`
+		} `json:"groups"`
+		Items []struct {
+			Icon float64 `json:"icon"`
+			Name float64 `json:"name"`
+		} `json:"items"`
+	} `json:"columns"`
 }
 
 func (f *shellFixture) menu() pickerStatus {
@@ -516,4 +535,106 @@ func TestClosingTheActiveSpaceAsksAboutItsModifiedTabs(t *testing.T) {
 	if len(f.host.projects[0]["spaces"].([]any)) != 2 {
 		t.Fatal("the space closed")
 	}
+}
+
+// The head of a fullscreen card starts with the button of the space apps, which lists every tab of the space by card, and a pick moves the
+// full screen to the card of the tab.
+func TestTheSpaceAppsListTheTabsOfTheSpaceByCard(t *testing.T) {
+	f := projectWithPlugins(t)
+	first := f.tabbedCards()[0]
+	f.run("core.card.split", map[string]any{"card": first, "side": "right", "plugin": "acme"})
+	cards := f.tabbedCards()
+	if len(cards) != 3 {
+		t.Fatalf("the plane holds %v", cards)
+	}
+	if f.has("core.card.space-apps", first) {
+		t.Fatal("a card that is not fullscreen shows the space apps button")
+	}
+	if _, err := f.answer("core.space.apps", map[string]any{"card": first}); err == nil || !strings.Contains(err.Error(), "is not fullscreen") {
+		t.Fatalf("a card that is not fullscreen answered %v", err)
+	}
+	f.run("core.card.fullscreen", map[string]any{"card": first})
+	if !f.has("core.card.space-apps", first) || f.has("core.card.tab-list", first) {
+		t.Fatalf("the head has the apps %v and the list %v", f.has("core.card.space-apps", first), f.has("core.card.tab-list", first))
+	}
+	f.click("core.card.space-apps", first)
+	menu := f.menu()
+	total := 0
+	for _, card := range cards {
+		total += len(f.tabsOf(card))
+	}
+	if !menu.Open || menu.Title != fmt.Sprintf("스페이스 앱 %d개", total) || len(menu.Items) != total || len(menu.Groups) != 3 {
+		t.Fatalf("the list is %+v", menu)
+	}
+	// The first row is cut in two under the cut of the plane, so its cards stand one level in.
+	want := []struct {
+		name  string
+		depth int
+	}{{"카드 1", 1}, {"카드 2", 1}, {"카드 3", 0}}
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	indent, _ := declared.Metric("picker-indent")
+	for index, group := range menu.Groups {
+		if group.Name != want[index].name || group.Depth != want[index].depth {
+			t.Fatalf("group %d is %+v, want %+v", index, group, want[index])
+		}
+		if got, flat := menu.Columns.Groups[index].Icon, menu.Columns.Groups[2].Icon; got != flat+float64(group.Depth)*indent {
+			t.Fatalf("the icon of group %d stands at %v over %v", index, got, flat)
+		}
+		if !f.has("core.picker.group-icon", group.ID) || !f.has("core.picker.group-name", group.ID) {
+			t.Fatalf("group %s is not drawn", group.ID)
+		}
+	}
+	var picked string
+	for index, item := range menu.Items {
+		owner, tab, _ := strings.Cut(item.Key, "/")
+		if item.Group == nil || *item.Group != owner {
+			t.Fatalf("item %+v stands in another group", item)
+		}
+		if item.Active != (owner == first && tab == f.activeOf(first)) {
+			t.Fatalf("item %+v is marked wrongly", item)
+		}
+		if column := menu.Columns.Items[index]; column.Icon != menu.Columns.Groups[f.groupIndex(menu, owner)].Icon {
+			t.Fatalf("item %d stands at %v under another heading", index, column.Icon)
+		}
+		if owner != first {
+			picked = item.Key
+		}
+	}
+	f.click("core.card.space-apps", first)
+	if f.menu().Open {
+		t.Fatal("a second press leaves the list open")
+	}
+	f.click("core.card.space-apps", first)
+	f.click("core.picker.item", picked)
+	owner, tab, _ := strings.Cut(picked, "/")
+	grid := status[gridRead](t, f, "core.grid")
+	if grid.Fullscreen == nil || *grid.Fullscreen != owner || f.activeOf(owner) != tab {
+		t.Fatalf("the pick left the full screen on %v with the tab %s", grid.Fullscreen, f.activeOf(owner))
+	}
+	if !f.has("core.card.space-apps", owner) || f.has("core.card.tab-list", owner) {
+		t.Fatal("the new fullscreen card has no space apps button")
+	}
+}
+
+func (f *shellFixture) activeOf(card string) string {
+	for _, stored := range f.cardsOf() {
+		if stored["id"] == card {
+			active, _ := stored["data"].(map[string]any)["activeId"].(string)
+			return active
+		}
+	}
+	return ""
+}
+
+func (f *shellFixture) groupIndex(menu pickerStatus, id string) int {
+	for index, group := range menu.Groups {
+		if group.ID == id {
+			return index
+		}
+	}
+	f.t.Fatalf("no group %s", id)
+	return -1
 }
