@@ -162,6 +162,8 @@ export async function prepareRedraw(s, plugin, root) {
   await w.run("host.window.resize", WINDOW_SIZE);
   await w.until("host.window", (status) => status.content?.width === WINDOW_SIZE.width && status.content?.height === WINDOW_SIZE.height,
     `window ${w.window} did not reach a content of ${WINDOW_SIZE.width} by ${WINDOW_SIZE.height} points`);
+  // A covered region sends no screen, so the start line of the fixture would never come.
+  await w.until("host.window", (status) => status.occluded === false, `window ${w.window} is covered by another window`);
   const { tab } = await openOnlyTab(w, plugin);
   const entries = [`command ${plugin}.input`, `status ${plugin}.screen`];
   await w.until("core.surfaces", (list) => list.some((surface) => surface.surface === tab && entries.every((entry) => surface.exposes?.includes(entry))),

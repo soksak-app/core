@@ -135,6 +135,7 @@ test("the measurement opens one tab of the plugin in a new project window of 760
     ["run", "w2", "core.project.open", { root: "/var/tester/redraw-project" }],
     ["run", "w2", "host.window.resize", { width: 760, height: 614 }],
     ["until", "w2", "host.window", undefined],
+    ["until", "w2", "host.window", undefined],
     ["run", "w2", "core.card.add-tab", { card: "c1", plugin: "probe" }],
     ["run", "w2", "core.tab.close", { tab: "t-old" }],
     ["until", "w2", "core.surfaces", undefined],
@@ -142,6 +143,23 @@ test("the measurement opens one tab of the plugin in a new project window of 760
   ]);
   assert.equal(prepared.s.window, "w2");
   assert.deepEqual([prepared.tab, prepared.project], ["tab-1", "p2"]);
+});
+
+test("the measurement stops at a covered window before it opens the tab, because a covered region shows no screen of the fixture", async () => {
+  const windows = [{ window: "w1", ready: true }];
+  const answer = (kind, window, name) => {
+    if (name === "core.window.new") {
+      windows.push({ window: "w2", ready: true });
+      return null;
+    }
+    if (name === "host.windows") return windows.map((entry) => ({ ...entry }));
+    if (name === "core.project.open") return { id: "p2" };
+    if (name === "host.window") return redrawWindow({ occluded: true });
+    return null;
+  };
+  const calls = [];
+  await assert.rejects(prepareRedraw(fakeSession(answer, "w1", calls), "probe", "/var/tester/redraw-project"), /window w2 is covered/);
+  assert.equal(calls.some(([, , name]) => name === "core.card.add-tab"), false);
 });
 
 test("the region measurement reads presentedFrames right around the cpu interval and fails while the window is occluded", async () => {
