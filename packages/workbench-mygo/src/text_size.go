@@ -8,8 +8,8 @@ import (
 )
 
 // The steps and the scope of the text size (docs/spec/text-size.md). The scope is the place the user pressed last: a press on a
-// card makes it that card, and a press on the frame outside the plane makes it the frame. Before any press the focused card is
-// the scope, and a window without a focused card has the frame as its scope.
+// card makes it that card, and a press on the frame outside the plane makes it the frame. Before any press and after the pressed
+// card left the focused card is the scope, and a window without a focused card has the frame as its scope.
 
 // TextScope is a scope of the text size. Its form is the scope of the status core.text.
 type TextScope struct {
@@ -80,6 +80,14 @@ func (s *TextSize) Press(scope TextScope) error {
 	}
 	s.pressed = &scope
 	return nil
+}
+
+// KeepPressedCard ends the scope of a pressed card that holds does not hold, and the focused card is the scope again. A press
+// on the frame stays.
+func (s *TextSize) KeepPressedCard(holds func(card string) bool) {
+	if s.pressed != nil && s.pressed.Kind == "card" && !holds(s.pressed.Card) {
+		s.pressed = nil
+	}
 }
 
 // Scope is the scope in which the text size changes.

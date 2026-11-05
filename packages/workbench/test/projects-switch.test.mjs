@@ -223,9 +223,9 @@ test("the surfaces of every layout are listed with their project root, and remov
 });
 
 test("the layouts hold the sections of every space of every project, whatever the window draws, with the sets of each project", async () => {
-  const card = { id: "crd", data: { tabs: [{ id: "tab-x", plugin: "term" }], activeId: "tab-x", sidebars: { left: { set: "own" } } } };
+  const card = { id: "crd", data: { tabs: [{ id: "tab-x", plugin: "beta" }], activeId: "tab-x", sidebars: { left: { set: "own" } } } };
   const sets = (first) => ({
-    sets: [{ id: first, sections: ["files.tree"] }, { id: "own", sections: ["files.bookmarks"] }],
+    sets: [{ id: first, sections: ["alpha.tree"] }, { id: "own", sections: ["alpha.bookmarks"] }],
     links: [{ place: "left", plugin: null, set: first }],
   });
   const listed = [
@@ -233,15 +233,15 @@ test("the layouts hold the sections of every space of every project, whatever th
       { id: "spc-a1", title: "SPACE1", layout: { state: { cards: [structuredClone(card)] } } },
       { id: "spc-a2", title: "SPACE2", layout: { state: { cards: [] } } },
     ], activeSpaceId: "spc-a1" },
-    { ...structuredClone(PROJECT), id: "prj-b", root: "/work/b", sidebarsOfTest: { sets: [{ id: "only", sections: ["other.list"] }], links: [{ place: "window-right", plugin: "term", set: "only" }] },
+    { ...structuredClone(PROJECT), id: "prj-b", root: "/work/b", sidebarsOfTest: { sets: [{ id: "only", sections: ["other.list"] }], links: [{ place: "window-right", plugin: "beta", set: "only" }] },
       spaces: [{ id: "spc-b", title: "SPACE1", layout: { state: { cards: [] } } }], activeSpaceId: "spc-b" },
   ];
   await projects.initialise({ ...store, snapshot: async () => ({ common: {}, projects: structuredClone(listed), open: [] }) });
   assert.deepEqual(projects.layoutSurfaces(), [
     { surface: "tab-x", root: "/work/a" },
-    { surface: "spc-a1/left/files.tree", root: "/work/a" },
-    { surface: "spc-a1/crd:left/files.bookmarks", root: "/work/a" },
-    { surface: "spc-a2/left/files.tree", root: "/work/a" },
+    { surface: "spc-a1/left/alpha.tree", root: "/work/a" },
+    { surface: "spc-a1/crd:left/alpha.bookmarks", root: "/work/a" },
+    { surface: "spc-a2/left/alpha.tree", root: "/work/a" },
     { surface: "spc-b/right/other.list", root: "/work/b" },
   ]);
 });

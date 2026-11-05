@@ -261,6 +261,21 @@ func TestThePickerClosesWhenThePlaneChangesAndTheSettingsOpen(t *testing.T) {
 	}
 }
 
+// A change of a setting settles the plane, also when it leaves the columns as they are.
+func TestThePickerClosesWhenASettingChanges(t *testing.T) {
+	for _, patch := range []map[string]any{{"left": false}, {"dim": false}} {
+		f := projectWithPlugins(t)
+		f.click("core.card.add", f.tabbedCards()[0])
+		if !f.menu().Open {
+			t.Fatal("the menu is not open")
+		}
+		f.run("core.settings.set", map[string]any{"patch": patch, "scope": "common"})
+		if f.menu().Open {
+			t.Fatalf("the change %v leaves the menu open", patch)
+		}
+	}
+}
+
 func TestScreenStatusNamesTheOpenModal(t *testing.T) {
 	f := projectWithPlugins(t)
 	read := func() string {
@@ -465,6 +480,9 @@ func TestClosingACardAsksAboutEachModifiedTab(t *testing.T) {
 	if _, err := f.answer("core.card.split", map[string]string{"card": "main", "side": "right", "plugin": "notes"}); err != nil {
 		t.Fatal(err)
 	}
+	// A hidden tab has no view until the host holds its surface, and showing the tab makes the host hold it.
+	f.run(t, "core.tab.select", `{"tab":"tab-bbbbbb"}`)
+	f.settle()
 	f.modified("tab-bbbbbb")
 	answer := f.run(t, "core.card.close", `{"card":"main"}`).(map[string]bool)
 	if answer["closed"] {

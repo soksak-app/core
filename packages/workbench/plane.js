@@ -6,7 +6,7 @@
 // It does not know that verification exists. It only announces that rendering finished, and the document decides what follows.
 import { Soksak, SoksakView, outline, sliceTree } from "soksak";
 import { borderWidth, cardRadius, halfGap, linkedSet, pluginSettings, set as setSetting, stagePad, value } from "./settings.js";
-import { effectiveTextScope, nextTextSize, notifyTextSize, setSurfaceTextSize, setTextScope, textScope } from "./text-size.js";
+import { effectiveTextScope, keepCardScope, nextTextSize, notifyTextSize, setSurfaceTextSize, setTextScope, textScope } from "./text-size.js";
 import { applyFrameText, chromeRow, measureAt } from "./frame-text.js";
 import { CHROME, placeFocusMark } from "./chrome-metrics.js";
 import { activeTab, appendTab, cardTextSize, removeTab, settleActiveTab, tabsOf } from "./card-data.js";
@@ -1091,6 +1091,7 @@ function settle() {
     value("sidebarWidth"), side => value(side), dismiss);
   // default: when only place cards remain, there is no card to focus (null).
   if (!grid.card(focusedId)) focusOn(grid.cards.find((c) => !isPlace(c.id))?.id ?? null);
+  keepCardScope((id) => grid.card(id));
   view.render();
   syncBackgroundSessions();
 }
@@ -1599,6 +1600,8 @@ export const capture = (path = null) => {
 /** Applies one stored set of state to the plane. */
 export function adopt(kept, space) {
   if (typeof space !== "string" || !space) throw new TypeError(`adopt requires the id of the space of the layout, not ${space}`);
+  // Another space has cards of the same ids, which were not pressed (docs/spec/text-size.md#scope).
+  if (space !== heldSpace) keepCardScope(() => false);
   heldSpace = space;
   if (!grid) return build(kept);
   const restored = restoreWindowState(kept);
@@ -1625,6 +1628,7 @@ export const fresh = () => ({
 });
 
 export function clear() {
+  keepCardScope(() => false);
   heldSpace = null;
   view?.destroy();
   view = null;

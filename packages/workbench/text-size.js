@@ -1,7 +1,7 @@
 // The steps and the scope of the text size. docs/spec/text-size.md
 //
 // The scope is the place the user pressed last. Pressing a card makes it that card, and pressing the frame outside the plane makes it the
-// frame. It is null if nothing was pressed yet, and then the focused card is the scope.
+// frame. It is null if nothing was pressed yet or the pressed card left, and then the focused card is the scope.
 
 import declaration from "./workbench.json" with { type: "json" };
 
@@ -72,6 +72,13 @@ export function setTextScope(next) {
   } else {
     throw new Error(`text scope ${JSON.stringify(next)} is invalid`);
   }
+  for (const fn of listeners) fn(scope);
+}
+
+/** Ends the scope of a pressed card that holds does not hold, and the focused card is the scope again. A pressed frame stays. */
+export function keepCardScope(holds) {
+  if (scope?.kind !== "card" || holds(scope.card)) return;
+  scope = null;
   for (const fn of listeners) fn(scope);
 }
 

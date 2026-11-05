@@ -525,6 +525,21 @@ func TestACardHeadHoldsItsTabsBetweenItsListAndItsTools(t *testing.T) {
 	}
 }
 
+// A column that a setting brings takes its width from the plane, so the head of the card draws its list in the narrower card.
+func TestAColumnThatASettingBringsNarrowsTheHeadOfACard(t *testing.T) {
+	f := narrowCard(t, 3, "title")
+	before, card := f.box("core.card.tab-list", "main"), f.box("core.card", "main")
+	f.run("core.settings.set", map[string]any{"patch": map[string]any{"left": true}, "scope": "common"})
+	f.settle()
+	after, narrowed := f.box("core.card.tab-list", "main"), f.box("core.card", "main")
+	if narrowed.W >= card.W {
+		t.Fatalf("the card is %v wide with the column, it was %v", narrowed.W, card.W)
+	}
+	if after.X <= before.X || after.X < narrowed.X {
+		t.Fatalf("the tab list stands at %v in the card %v, it stood at %v", after, narrowed, before)
+	}
+}
+
 // The strip scrolls to the tab that a press chose, and the tools stay in the head.
 func TestAHeadScrollsItsStripToTheActiveTab(t *testing.T) {
 	f := narrowCard(t, 8, strings.Repeat("long-title-", 3))

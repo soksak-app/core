@@ -798,9 +798,11 @@ func (s *Shell) settingsChanged() error {
 	}
 	s.followScale()
 	s.followSettings()
-	s.columnsChanged = true
 	if err := s.followDiagnostics(); err != nil {
 		return err
+	}
+	if s.plane != nil {
+		s.settle()
 	}
 	s.options.Invalidate()
 	return nil

@@ -146,6 +146,11 @@ func (s *Shell) viewCall(data []any) {
 		s.fail(fmt.Errorf("view call: %w", err))
 		return
 	}
+	// Closing a surface ends its in-flight calls: the host closes the view at the next placement, so a call that crossed the close gets
+	// no reply and no state (docs/spec/native-surfaces.md).
+	if s.surfaces.held[call.Surface] == nil {
+		return
+	}
 	view := s.view(call.Surface)
 	// The first call of a page that started anew can arrive before the end of the page before it.
 	if view.generation != 0 && call.Generation > view.generation {
@@ -890,9 +895,6 @@ func (s *Shell) viewTextSize(surface string, view *viewState) (float64, error) {
 	if view.scale != 0 {
 		return view.scale, nil
 	}
-	if held := s.surfaces.held[surface]; held != nil && held.cardFactor != 0 {
-		return s.text.Frame() * held.cardFactor, nil
-	}
 	if size, stored := s.storedTextSize(surface); stored {
 		return size, nil
 	}
@@ -1263,7 +1265,7 @@ func (s *Shell) sidecarFailed(data []any) {
 	s.fail(fmt.Errorf("sidecar %s failed for surface %s: %s", failure.Sidecar, failure.Surface, failure.Reason))
 }
 
-// surfacePressed focuses the card of a surface that a pointer pressed.
+// surfacePressed is the press of a pointer on a surface.
 func (s *Shell) surfacePressed(data []any) {
 	if len(data) != 1 || s.plane == nil {
 		return
