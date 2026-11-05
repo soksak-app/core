@@ -26,6 +26,7 @@ fn key(name: &str, text: Option<&str>, modifiers: u32, down: bool) -> Key {
     }
 }
 
+// contract: platform.windows.input.pointer-phase-becomes-mouse-event
 #[test]
 fn a_pointer_phase_becomes_its_mouse_event() {
     let closed = [false, false];
@@ -87,6 +88,7 @@ fn a_pointer_phase_becomes_its_mouse_event() {
     }
 }
 
+// contract: platform.windows.input.pointer-breaking-press-rules-is-not-sent
 #[test]
 fn a_pointer_that_breaks_the_press_rules_is_not_sent() {
     let closed = [false, false];
@@ -104,6 +106,7 @@ fn a_pointer_that_breaks_the_press_rules_is_not_sent() {
     }
 }
 
+// contract: platform.windows.input.only-delivered-pointer-changes-press
 #[test]
 fn only_a_delivered_pointer_changes_the_press() {
     let mut state = PressState::default();
@@ -115,6 +118,7 @@ fn only_a_delivered_pointer_changes_the_press() {
     assert_eq!(state.open, [false, false]);
 }
 
+// contract: platform.windows.input.key-becomes-key-event
 #[test]
 fn a_key_becomes_its_key_event() {
     for (input, want) in [
@@ -177,6 +181,7 @@ fn a_key_becomes_its_key_event() {
     }
 }
 
+// contract: platform.windows.input.key-without-name-or-character-is-not-sent
 #[test]
 fn a_key_that_is_no_name_and_no_character_is_not_sent() {
     for name in ["", "Enterr", "ab"] {
@@ -272,6 +277,7 @@ fn answers() -> (Answers, impl Fn() -> Answer) {
     (got, answer)
 }
 
+// contract: platform.windows.input.queue-sends-one-call-at-a-time
 #[test]
 fn a_queue_sends_one_call_at_a_time() {
     let (queue, fake) = queue();
@@ -287,6 +293,7 @@ fn a_queue_sends_one_call_at_a_time() {
     assert_eq!(got.borrow().len(), 2);
 }
 
+// contract: platform.windows.input.queue-emulates-focus-before-first-input-only
 #[test]
 fn a_queue_emulates_the_focus_before_its_first_input_only() {
     let (queue, fake) = queue();
@@ -301,6 +308,7 @@ fn a_queue_emulates_the_focus_before_its_first_input_only() {
     assert_eq!(*fake.methods.borrow(), [FOCUS, "a", "b"]);
 }
 
+// contract: platform.windows.input.failed-call-answers-its-failure
 #[test]
 fn a_call_that_fails_answers_its_failure() {
     let (queue, fake) = focused_queue();
@@ -313,6 +321,7 @@ fn a_call_that_fails_answers_its_failure() {
     );
 }
 
+// contract: platform.windows.input.unanswered-failure-goes-to-next-input
 #[test]
 fn the_failure_of_a_call_with_no_answer_goes_to_the_next_input() {
     let (queue, fake) = focused_queue();
@@ -323,6 +332,7 @@ fn the_failure_of_a_call_with_no_answer_goes_to_the_next_input() {
     queue.push(call("c"), WAIT, None).unwrap();
 }
 
+// contract: platform.windows.input.call-that-cannot-start-answers-and-next-runs
 #[test]
 fn a_call_that_cannot_start_answers_its_failure_and_the_next_one_runs() {
     let (queue, fake) = focused_queue();
@@ -338,6 +348,7 @@ fn a_call_that_cannot_start_answers_its_failure_and_the_next_one_runs() {
     assert_eq!(*fake.methods.borrow(), ["b"]);
 }
 
+// contract: platform.windows.input.incomplete-call-ends-wait-and-stops-queue
 #[test]
 fn a_call_that_does_not_complete_ends_its_wait_and_stops_the_queue() {
     let (queue, fake) = focused_queue();
@@ -353,6 +364,7 @@ fn a_call_that_does_not_complete_ends_its_wait_and_stops_the_queue() {
     assert_eq!(*fake.methods.borrow(), ["a", "c"]);
 }
 
+// contract: platform.windows.input.completed-call-ends-its-wait
 #[test]
 fn a_completed_call_ends_its_wait() {
     let (queue, fake) = focused_queue();
@@ -361,6 +373,7 @@ fn a_completed_call_ends_its_wait() {
     assert!(fake.timers.borrow()[0].is_none());
 }
 
+// contract: platform.windows.input.call-answer-becomes-pointer-result
 #[test]
 fn an_answer_of_a_call_becomes_the_pointer_result() {
     assert_eq!(pointer_delivery(&Ok(())), Delivery::Delivered);
@@ -374,6 +387,7 @@ fn an_answer_of_a_call_becomes_the_pointer_result() {
     );
 }
 
+// contract: platform.windows.capture.view-that-does-not-draw-is-refused
 #[test]
 fn a_capture_of_a_view_that_does_not_draw_is_refused() {
     assert_eq!(capture_refusal(false, true, true), Ok(()));
@@ -395,6 +409,7 @@ fn capture_done() -> (CaptureAnswers, Box<dyn FnOnce(Result<(), String>)>) {
     (got, Box::new(move |result| held.borrow_mut().push(result)))
 }
 
+// contract: platform.windows.capture.incomplete-capture-ends-its-wait
 #[test]
 fn a_capture_that_does_not_complete_ends_its_wait() {
     let fake = Rc::new(Fake::default());
@@ -407,6 +422,7 @@ fn a_capture_that_does_not_complete_ends_its_wait() {
     assert_eq!(got.borrow().len(), 1);
 }
 
+// contract: platform.windows.capture.completed-capture-answers-once
 #[test]
 fn a_completed_capture_answers_once() {
     let fake = Rc::new(Fake::default());
@@ -417,6 +433,7 @@ fn a_completed_capture_answers_once() {
     assert!(fake.timers.borrow()[0].is_none());
 }
 
+// contract: platform.windows.capture.still-must-be-an-image
 #[test]
 fn a_still_must_be_an_image() {
     assert!(check_still(b"\x89PNG\r\n\x1a\nrest").is_ok());

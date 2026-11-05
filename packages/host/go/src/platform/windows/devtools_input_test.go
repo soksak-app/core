@@ -21,6 +21,7 @@ func params(t *testing.T, call devToolsCall) map[string]any {
 	return read
 }
 
+// contract: platform.windows.input.pointer-phase-becomes-mouse-event
 func TestAPointerPhaseBecomesItsMouseEvent(t *testing.T) {
 	for _, test := range []struct {
 		name          string
@@ -53,6 +54,7 @@ func TestAPointerPhaseBecomesItsMouseEvent(t *testing.T) {
 	}
 }
 
+// contract: platform.windows.input.pointer-breaking-press-rules-is-not-sent
 func TestAPointerThatBreaksThePressRulesIsNotSent(t *testing.T) {
 	for _, test := range []struct {
 		name                  string
@@ -78,6 +80,7 @@ func TestAPointerThatBreaksThePressRulesIsNotSent(t *testing.T) {
 }
 
 // A delivered release ends an open press, and a press that did not arrive leaves none open.
+// contract: platform.windows.input.only-delivered-pointer-changes-press
 func TestOnlyADeliveredPointerChangesThePress(t *testing.T) {
 	var state pressState
 	state.delivered(phasePress, 1)
@@ -94,6 +97,7 @@ func TestOnlyADeliveredPointerChangesThePress(t *testing.T) {
 	}
 }
 
+// contract: platform.windows.input.key-becomes-key-event
 func TestAKeyBecomesItsKeyEvent(t *testing.T) {
 	for _, test := range []struct {
 		name      string
@@ -131,6 +135,7 @@ func TestAKeyBecomesItsKeyEvent(t *testing.T) {
 	}
 }
 
+// contract: platform.windows.input.key-without-name-or-character-is-not-sent
 func TestAKeyThatIsNoNameAndNoCharacterIsNotSent(t *testing.T) {
 	for _, key := range []string{"", "Enterr", "ab"} {
 		if _, result := keyCall(key, "", 0, true); result != platform.PointerRejected {
@@ -176,6 +181,7 @@ func newFakeQueue() (*inputQueue, *fakeProtocol) {
 }
 
 // The protocol may process calls out of order, so a call starts when the one before it completed.
+// contract: platform.windows.input.queue-sends-one-call-at-a-time
 func TestAQueueSendsOneCallAtATime(t *testing.T) {
 	q, f := newFakeQueue()
 	var ended []string
@@ -207,6 +213,7 @@ func TestAQueueSendsOneCallAtATime(t *testing.T) {
 }
 
 // A page shows :focus only while it counts as active, and a window behind others does not.
+// contract: platform.windows.input.queue-emulates-focus-before-first-input-only
 func TestAQueueEmulatesTheFocusBeforeItsFirstInputOnly(t *testing.T) {
 	q, f := newFakeQueue()
 	if err := q.push(devToolsCall{method: "a"}, time.Second, nil); err != nil {
@@ -225,6 +232,7 @@ func TestAQueueEmulatesTheFocusBeforeItsFirstInputOnly(t *testing.T) {
 	}
 }
 
+// contract: platform.windows.input.failed-call-answers-its-failure
 func TestACallThatFailsAnswersItsFailure(t *testing.T) {
 	q, f := newFakeQueue()
 	failure := errors.New("the protocol refused")
@@ -240,6 +248,7 @@ func TestACallThatFailsAnswersItsFailure(t *testing.T) {
 }
 
 // A key answers before its call ends, so the next input reports the failure of that call.
+// contract: platform.windows.input.unanswered-failure-goes-to-next-input
 func TestTheFailureOfACallWithNoAnswerGoesToTheNextInput(t *testing.T) {
 	q, f := newFakeQueue()
 	failure := errors.New("the protocol refused")
@@ -256,6 +265,7 @@ func TestTheFailureOfACallWithNoAnswerGoesToTheNextInput(t *testing.T) {
 	}
 }
 
+// contract: platform.windows.input.call-that-cannot-start-answers-and-next-runs
 func TestACallThatCannotStartAnswersItsFailureAndTheNextOneRuns(t *testing.T) {
 	q, f := newFakeQueue()
 	q.focused = true
@@ -278,6 +288,7 @@ func TestACallThatCannotStartAnswersItsFailureAndTheNextOneRuns(t *testing.T) {
 }
 
 // A call may never complete, so its wait ends, and a later input fails at once because the order of the calls is lost.
+// contract: platform.windows.input.incomplete-call-ends-wait-and-stops-queue
 func TestACallThatDoesNotCompleteEndsItsWaitAndStopsTheQueue(t *testing.T) {
 	q, f := newFakeQueue()
 	q.focused = true
@@ -305,6 +316,7 @@ func TestACallThatDoesNotCompleteEndsItsWaitAndStopsTheQueue(t *testing.T) {
 	}
 }
 
+// contract: platform.windows.input.completed-call-ends-its-wait
 func TestACompletedCallEndsItsWait(t *testing.T) {
 	q, f := newFakeQueue()
 	q.focused = true
@@ -317,6 +329,7 @@ func TestACompletedCallEndsItsWait(t *testing.T) {
 	}
 }
 
+// contract: platform.windows.input.call-answer-becomes-pointer-result
 func TestAnAnswerOfACallBecomesThePointerResult(t *testing.T) {
 	for _, test := range []struct {
 		err  error
@@ -333,6 +346,7 @@ func TestAnAnswerOfACallBecomesThePointerResult(t *testing.T) {
 }
 
 // A hidden or minimized web view is reported never to complete a capture, so that state is the answer before the capture starts.
+// contract: platform.windows.capture.view-that-does-not-draw-is-refused
 func TestACaptureOfAViewThatDoesNotDrawIsRefused(t *testing.T) {
 	for _, test := range []struct {
 		name                      string
@@ -360,6 +374,7 @@ func TestACaptureOfAViewThatDoesNotDrawIsRefused(t *testing.T) {
 }
 
 // A capture of a covered window may never complete. The wait names that state, and a late completion answers nothing.
+// contract: platform.windows.capture.incomplete-capture-ends-its-wait
 func TestACaptureThatDoesNotCompleteEndsItsWait(t *testing.T) {
 	f := &fakeProtocol{}
 	var got []error
@@ -374,6 +389,7 @@ func TestACaptureThatDoesNotCompleteEndsItsWait(t *testing.T) {
 	}
 }
 
+// contract: platform.windows.capture.completed-capture-answers-once
 func TestACompletedCaptureAnswersOnce(t *testing.T) {
 	f := &fakeProtocol{}
 	var got []error
@@ -387,6 +403,7 @@ func TestACompletedCaptureAnswersOnce(t *testing.T) {
 	}
 }
 
+// contract: platform.windows.capture.still-must-be-an-image
 func TestAStillMustBeAnImage(t *testing.T) {
 	if err := checkStill([]byte("\x89PNG\r\n\x1a\nrest")); err != nil {
 		t.Fatal(err)
