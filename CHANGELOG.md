@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F622: S13 of B3 is held for a person, because its accessibility client needs the Accessibility permission and no path inside the application is shown to give the same value.
 - F621: `make benchmark-b3` builds one host at a time, the Tauri hosts first, and removes the intermediate outputs of each build before the next. Built together, its bundles did not fit the disk of a session. Red: `scripts/test/benchmark-b3.test.mjs` reads the order of the build steps and the removal after each.
 - F620: `make benchmark-b3` starts a baseline host by the executable name of its revision, `soksak-<host>`. It looked for `sok-<host>`, which that revision does not build. Red: `scripts/test/benchmark-b3.test.mjs` reads the executables of the five applications.
 - F618: The baseline record of `make benchmark-b3` is `b3/baseline.json` in the git common directory. In `target/b3` a `cargo clean` removed it, and a session could not start without it. Red: `scripts/test/benchmark-b3.test.mjs` reads the path from a main checkout and from its worktree.

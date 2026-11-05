@@ -648,7 +648,7 @@ repeat-app-test:
 # The three-host benchmark B3 (scripts/benchmark-b3.mjs, docs/operations/examples.md#three-host-benchmark): it checks the BASELINE checkout
 # against the baseline record b3/baseline.json of the git common directory, builds the release bundles of this checkout and of BASELINE and the two registry indexes, starts and
 # quits each application for each run of each scenario and writes one session folder under target/b3 for make check-b3. It runs
-# the accessibility client of S13, so it runs with the Accessibility permission.
+# the accessibility client of S13, which needs the Accessibility permission, so a person runs S13 (F622).
 benchmark-b3:
 	@case "$(PHASE)" in 1|final) ;; *) echo "benchmark-b3 requires PHASE=1|final RUNS=<n> BASELINE=<checkout>" >&2; exit 2;; esac
 	@case "$(RUNS)" in ''|*[!0-9]*|0*) echo "benchmark-b3 requires PHASE=1|final RUNS=<n> BASELINE=<checkout>" >&2; exit 2;; esac
