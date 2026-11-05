@@ -65,7 +65,7 @@ jobs:
           root: core
       - name: Install locked dependencies
         run: |
-          make preflight
+          make toolchain-check
           CI=1 PNPM_DISABLE_SELF_UPDATE_CHECK=1 pnpm install --frozen-lockfile
           go -C apps/wailsv3 mod download
           go -C packages/sok/go mod download
@@ -127,7 +127,7 @@ jobs:
           root: core
       - name: Install locked dependencies
         run: |
-          make preflight
+          make toolchain-check
           CI=1 PNPM_DISABLE_SELF_UPDATE_CHECK=1 pnpm install --frozen-lockfile
           cargo fetch --locked
       - name: Fetch the pinned native release file
@@ -180,7 +180,7 @@ jobs:
           root: core
       - name: Install locked dependencies
         run: |
-          make preflight
+          make toolchain-check
           CI=1 PNPM_DISABLE_SELF_UPDATE_CHECK=1 pnpm install --frozen-lockfile
           go -C apps/mygo mod download
           go -C packages/sok/go mod download

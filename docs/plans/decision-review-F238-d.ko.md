@@ -28,17 +28,17 @@
 - `docs/spec/plugins.md`의 Repositories 단락: "none reads the files of another."는 거짓이다. `scripts/check-boundaries.mjs:27-42`는 선언된 모든 폴더의 `package.json` 이름과 의존 키, `plugin.json`의 id를 읽고, 형제가 없으면 `readJson`이 던진다. `Makefile:374-375`(`registry`)와 `Makefile:382-388`(`install-plugins`)은 선언된 형제 저장소를 읽어 패키징하고 설치한다.
 - 저장소 표는 "The plugins are `browser`, `terminal`, `files` and `shell`"이라고 쓴다. 레지스트리는 `editor`와 `hwp`를 선언하고 `shell`은 선언하지 않는다.
 - `AGENTS.md:32`는 "`environment.json` lists plugins"라고 쓰고, `AGENTS.md:33`은 `environment.json`을 "설치된 버전을 나열하는" 매니페스트에 넣는다. `CHANGELOG.md:1023`(R1-2-3-3)은 `environment.json`이 더 이상 플러그인을 나열하지 않는다고 기록한다. 그러나 탭은 여전히 플러그인을 이름으로 가리킨다: `apps/wailsv3/environment.json:47`(`"plugin": "terminal"`), `:60`과 `:115`(`"plugin": "browser"`). 설치 목록은 `plugins/installed.json`에 있다(`Makefile:385`가 그 `plugins` 키를 읽는다).
-- `.github/workflows/ci.yml:19-46`은 `plugins/browser`, `plugins/editor`, `plugins/files`, `plugins/hwp`, `plugins/terminal`, `sidecars/files`, `sidecars/vt`를 checkout한다. `ci.yml:73`은 Structure 작업에서 `make boundaries`를 실행한다. `window-checks.yml`은 `make install-plugins`를 위해 같은 형제를 checkout한다.
+- `.github/workflows/ci.yml:19-46`은 `plugins/browser`, `plugins/editor`, `plugins/files`, `plugins/hwp`, `plugins/terminal`, `sidecars/files`, `sidecars/vt`를 checkout한다. `ci.yml:73`은 Structure 작업에서 `make boundaries-check`를 실행한다. `window-checks.yml`은 `make install-plugins`를 위해 같은 형제를 checkout한다.
 - `scripts/check-registry-manifests.mjs`는 네트워크로 플러그인 릴리스를 내려받는다. `release-check`(`Makefile:35`)에서 실행되며 `push-check`에서는 실행되지 않고, 형제 파일을 읽지 않는다.
 - `scripts/check-test-parity.mjs`는 `scripts/workspace-registry.mjs`를 lane 파일로만 언급한다. 레지스트리 json을 읽지 않는다.
 
 필요한 변경:
 
-- R2.1 `docs/spec/plugins.md`(Repositories 단락, `.ko.md`도 동일): "none reads the files of another."를 다음으로 바꾼다: "`make boundaries`는 `scripts/workspace-registry.json`이 선언한 각 폴더의 `package.json` 이름과 의존 키, `plugin.json`의 id를 읽고, 선언된 폴더가 없으면 실패한다. `make registry`와 `make install-plugins`는 선언된 형제 저장소를 읽어 패키징하고 설치한다."
+- R2.1 `docs/spec/plugins.md`(Repositories 단락, `.ko.md`도 동일): "none reads the files of another."를 다음으로 바꾼다: "`make boundaries-check`는 `scripts/workspace-registry.json`이 선언한 각 폴더의 `package.json` 이름과 의존 키, `plugin.json`의 id를 읽고, 선언된 폴더가 없으면 실패한다. `make registry`와 `make install-plugins`는 선언된 형제 저장소를 읽어 패키징하고 설치한다."
 - R2.2 `docs/spec/plugins.md` 저장소 표(`.ko.md`도 동일): "The plugins are `browser`, `terminal`, `files` and `shell`"을 "The declared plugins are `browser`, `editor`, `files`, `hwp` and `terminal`, the same as `scripts/workspace-registry.json`. `shell` has a repository, is not published and is not declared."로 바꾼다. 사이드카 행은 선언된 폴더로 `vt-alacritty`를 적는다.
-- R2.3 `AGENTS.md:32-33`과 `AGENTS.ko.md:32-33`: "`environment.json` lists plugins"를 "`environment.json` names plugins only as tab and sidebar references in `workspace` and `sidebars`; it does not install them."로 바꾼다. 33행의 설치 버전 매니페스트 목록에서 `environment.json`을 뺀다. `plugins/installed.json`이 설치된 플러그인을 나열하고, `scripts/workspace-registry.json`이 `make boundaries`와 `make registry`가 읽는 형제 폴더를 선언한다는 점을 적는다.
+- R2.3 `AGENTS.md:32-33`과 `AGENTS.ko.md:32-33`: "`environment.json` lists plugins"를 "`environment.json` names plugins only as tab and sidebar references in `workspace` and `sidebars`; it does not install them."로 바꾼다. 33행의 설치 버전 매니페스트 목록에서 `environment.json`을 뺀다. `plugins/installed.json`이 설치된 플러그인을 나열하고, `scripts/workspace-registry.json`이 `make boundaries-check`와 `make registry`가 읽는 형제 폴더를 선언한다는 점을 적는다.
 - R2.4 Red와 Green: `scripts/test/workspace-registry.test.mjs`에 사례를 추가한다. `docs/spec/plugins.md` 저장소 표의 선언된 플러그인 이름과 `scripts/workspace-registry.json`의 `plugins`가 같은지 단언한다. 변경 전 표는 `shell`을 나열하고 `editor`와 `hwp`를 빠뜨리므로 실패한다. R2.2 후 Green.
-- R2.5 CI: `ci.yml`은 바꾸지 않는다. 스펙은 Structure 작업과 window 검사가 `make boundaries`와 `make install-plugins`를 위해 형제 checkout을 필요로 한다고 적는다.
+- R2.5 CI: `ci.yml`은 바꾸지 않는다. 스펙은 Structure 작업과 window 검사가 `make boundaries-check`와 `make install-plugins`를 위해 형제 checkout을 필요로 한다고 적는다.
 
 범위 밖: 레지스트리 선언을 registry 저장소로 옮기는 일.
 
@@ -306,7 +306,7 @@
 
 - `AGENTS.md:32-33`과 `AGENTS.ko.md:32-33`(R2.3): 소유자는 사람이다. `AGENTS.md`는 사람의 파일이기 때문이다. 정확한 본문은 다음 문단에 있다. `docs/spec/plugins.md`(R2.1, R2.2), `scripts/test/workspace-registry.test.mjs`(R2.4): core main.
 
-R2.3의 정확한 본문(영문 `AGENTS.md` 32줄): "`environment.json` lists plugins, `plugin.json` lists"를 "`environment.json` names plugins only as references in `workspace`, `sidebars` and `settings`, and does not install them; `plugin.json` lists"로 바꾼다. 33줄: "manifests such as `environment.json`, `settings`, and `plugin.json` list what is installed at which version"을 "manifests such as `plugin.json` list what is installed at which version; `plugins/installed.json` lists the installed plugins, and `scripts/workspace-registry.json` declares the sibling folders that `make boundaries` and `make registry` read"로 바꾼다.
+R2.3의 정확한 본문(영문 `AGENTS.md` 32줄): "`environment.json` lists plugins, `plugin.json` lists"를 "`environment.json` names plugins only as references in `workspace`, `sidebars` and `settings`, and does not install them; `plugin.json` lists"로 바꾼다. 33줄: "manifests such as `environment.json`, `settings`, and `plugin.json` list what is installed at which version"을 "manifests such as `plugin.json` list what is installed at which version; `plugins/installed.json` lists the installed plugins, and `scripts/workspace-registry.json` declares the sibling folders that `make boundaries-check` and `make registry` read"로 바꾼다.
 - `../core-host-routes-F229/docs/plans/plugin-host-routes.md:55`에 이름만 있는 F230 백로그 항목은 `feat/host-routes-F229`에 커밋되지 않았다. 하위 항목 F238-d-10이다(소유자: F229 브랜치).
 - `plugins/files` 저장소: F238-d-15~F238-d-17. `plugins/shell` 저장소: F238-d-21(`plugin.json`의 `shell.history` 설명과 체크리스트 P10).
 - F229가 층 규칙, 표현 위치, 자르기 위치를 정한다: F238-d-20.

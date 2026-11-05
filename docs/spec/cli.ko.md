@@ -61,7 +61,7 @@
 - `sok debug replay`가 저장된 hash와 재생한 hash가 다른 것을 찾으면 level `error`의 `sok.replay.divergence`: session, segment, 순번, 층, 기대한 hash와 찾은 hash([replay](replay.ko.md#명령)).
 - panic이면 level `error`의 `sok.panic`: panic한 goroutine이나 thread(명령이면 `main`), panic의 글, panic 시점의 stack. 도구는 `sok: panic: <text>`와 stack을 표준 오류에 쓰고, event와 상태 4의 `sok.command`를 저장하고, 파일을 flush한 뒤 상태 4로 끝난다. 명령이 아닌 goroutine이나 thread의 panic도 같은 방식으로 프로세스를 끝낸다.
 
-Go 도구의 모든 goroutine은 `Go`(`src/routine.go`)로, Rust 도구의 모든 thread는 `spawn_named`(`src/routine.rs`)로 시작한다. 이 둘이 도구에서 goroutine이나 thread를 시작하고 panic을 recover하는 유일한 곳이며, [census](logging.ko.md#census)가 이를 요구한다. writer는 [상한](logging.ko.md#상한)의 한도를 가진 event 계약의 writer이고, 한 번의 실행이 저장하는 event는 위 몇 개뿐이므로 두 파일 모두 rotate하지 않는다. 만들 수 없는 폴더나 파일은 표준 오류에 `sok: event log: <path>: <reason>`로 보고하고, 명령은 기록 없이 실행되며 자기 종료 상태를 유지한다. 도구는 이 파일을 읽지 않으며, 읽는 쪽은 로그 감사와 사람뿐이다.
+Go 도구의 모든 goroutine은 `Go`(`src/routine.go`)로, Rust 도구의 모든 thread는 `spawn_named`(`src/routine.rs`)로 시작한다. 이 둘이 도구에서 goroutine이나 thread를 시작하고 panic을 recover하는 유일한 곳이며, [event source check](logging.ko.md#event-sources)가 이를 요구한다. writer는 [상한](logging.ko.md#상한)의 한도를 가진 event 계약의 writer이고, 한 번의 실행이 저장하는 event는 위 몇 개뿐이므로 두 파일 모두 rotate하지 않는다. 만들 수 없는 폴더나 파일은 표준 오류에 `sok: event log: <path>: <reason>`로 보고하고, 명령은 기록 없이 실행되며 자기 종료 상태를 유지한다. 도구는 이 파일을 읽지 않으며, 읽는 쪽은 로그 감사와 사람뿐이다.
 
 ## Release, registry
 

@@ -2,7 +2,7 @@
 // event handler, timer and delegate (docs/spec/logging.md#automatic-entrances). A registration is made only through these functions:
 // each records the registration as the event `native.observe.registered` (or `native.observe.failed` at the level error when the
 // platform refuses it) and counts every delivery by the name of its source, so a new registration is covered without a record at its
-// call site. `make census-check` rejects the registration API outside observe.m.
+// call site. `make events-check` rejects the registration API outside observe.m.
 //
 // A `source` names one kind of registration (1 to 63 characters of a to z, 0 to 9 and `._-`); all registrations of a source
 // share its counts. The delivery of a block is recorded by the block this entrance installs; a selector, a key-value observer, an

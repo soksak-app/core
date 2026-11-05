@@ -228,7 +228,8 @@ test("an interrupting signal ends the running step, runs the cleanup steps and f
   const controller = new AbortController();
   const { lines, write } = recorder();
   const steps = [
-    step("checks", "check", `require("node:fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setTimeout(() => {}, 30000);`),
+    // The rename makes the file appear with its content, so the interrupt below cannot read a file that the step has created but not written.
+    step("checks", "check", `const fs = require("node:fs"); fs.writeFileSync(${JSON.stringify(`${pidFile}.partial`)}, String(process.pid)); fs.renameSync(${JSON.stringify(`${pidFile}.partial`)}, ${JSON.stringify(pidFile)}); setTimeout(() => {}, 30000);`),
     step("later checks", "check", "process.exit(0)"),
     step("cleanup", "cleanup", `require("node:fs").writeFileSync(${JSON.stringify(cleaned)}, "")`),
   ];

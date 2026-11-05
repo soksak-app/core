@@ -73,7 +73,7 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
   const ungated = new Set(UNGATED.map((name) => `${layer}.${name}`));
   // The names of the records that the batcher writes about itself, in the layer of its writer.
   const own = { dropped: `${layer}.log.dropped`, gated: `${layer}.log.gated`, clock: `${layer}.log.clock` };
-  // A record of the batcher at the reading `at` of the clock of the page; `scripts/census.json` declares it as an emit site.
+  // A record of the batcher at the reading `at` of the clock of the page; `scripts/event-sources.json` declares it as an emit site.
   const ownRecord = (at, level, event, fields) => ({ at, level, event, fields });
   let queue = [];
   let queueBytes = 0;

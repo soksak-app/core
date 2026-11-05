@@ -26,10 +26,10 @@ test("the diagnostic observer entry is mapped only for a diagnostic module graph
 test("a module that imports a specifier outside the view import map is an error that names the module and the specifier", () => {
   const files = {
     "ui/view.js": 'import { mount } from "./render.js";\n',
-    "ui/render.js": 'import { records } from "@soksak/plugin-api/records-check";\n',
+    "ui/render.js": 'import { records } from "@soksak/plugin-api/unknown-check";\n',
   };
   assert.deepEqual(checkViewModules(reader(files), "ui/view.js"), [
-    "ui/render.js: import @soksak/plugin-api/records-check is not in the view import map",
+    "ui/render.js: import @soksak/plugin-api/unknown-check is not in the view import map",
   ]);
 });
 
@@ -65,10 +65,10 @@ test("a string literal of a minified vendor bundle that reads as an import is no
 
 test("a re-export of a bare specifier outside the view import map is an error, and a re-export of a missing relative module too", () => {
   const files = {
-    "ui/view.js": 'export { records } from "@soksak/plugin-api/records-check";\nexport * from "./missing.js";\n',
+    "ui/view.js": 'export { records } from "@soksak/plugin-api/unknown-check";\nexport * from "./missing.js";\n',
   };
   assert.deepEqual(checkViewModules(reader(files), "ui/view.js"), [
-    "ui/view.js: import @soksak/plugin-api/records-check is not in the view import map",
+    "ui/view.js: import @soksak/plugin-api/unknown-check is not in the view import map",
     "ui/view.js: module ui/missing.js does not exist",
   ]);
 });

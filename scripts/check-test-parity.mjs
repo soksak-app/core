@@ -62,8 +62,8 @@ lane("run log audit", "js-ts", ["scripts/audit-run.mjs"], ["scripts/test/audit-r
 lane("crash report fault", "js-ts", ["scripts/crash-fault.mjs"], ["scripts/test/crash-fault.test.mjs"]),
 lane("end-to-end run", "js-ts", ["scripts/e2e-run.mjs"], ["scripts/test/e2e-run.test.mjs"]),
 lane("log command audit", "js-ts", ["scripts/audit-log.mjs"], ["scripts/test/audit-log.test.mjs"]),
-lane("temporary folder audit", "js-ts", ["scripts/temp-audit.mjs"], ["scripts/test/temp-audit.test.mjs"]),
-lane("census", "declaration", ["scripts/census.json"], ["scripts/test/census.test.mjs"], { testLanguage: "js-ts" }),
+lane("temporary folder audit", "js-ts", ["scripts/check-temp.mjs"], ["scripts/test/temp.test.mjs"]),
+lane("event source check", "declaration", ["scripts/event-sources.json"], ["scripts/test/event-sources.test.mjs"], { testLanguage: "js-ts" }),
 lane("performance goals", "declaration", ["docs/spec/performance-goals.json"], ["scripts/test/performance-goals.test.mjs"], { testLanguage: "js-ts" }),
 lane("three-host benchmark judge", "js-ts", ["scripts/b3-judge.mjs"], ["scripts/test/b3-judge.test.mjs"]),
 lane("three-host benchmark", "js-ts", ["scripts/e2e-b3.mjs"], ["scripts/test/e2e-b3.test.mjs", "scripts/test/fixtures/b3/application.mjs", "scripts/test/fixtures/b3/sok.mjs"]),
@@ -842,7 +842,7 @@ const FEATURE_LINKS = [
       { file: "scripts/check-exposure.mjs", symbol: "export function auditDeclarationCopies(copies, read) {" },
       { file: "packages/host/go/src/workspace.go", symbol: "func CommonOnlyKeys() []string" },
       { file: "packages/host/rust/src/workspace.rs", symbol: "pub fn common_only_keys() -> &'static [String]" },
-      { file: "Makefile", symbol: "host-test-mygo:" },
+      { file: "Makefile", symbol: "host-contract-check-mygo:" },
     ],
     tests: [
       { file: "packages/workbench/test/workbench-declaration.test.mjs", id: "no stylesheet of the workbench holds a literal length, ratio or duration" },
@@ -858,9 +858,9 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/tests/workspace_test.rs", id: "common_only_keys_are_the_declared_list" },
       { file: "scripts/test/check-exposure.test.mjs", id: "each language host library and the mygo workbench hold their copies of the declarations" },
       { file: "scripts/test/check-exposure.test.mjs", id: "a copy of workbench.json in a language host library that differs from its source fails" },
-      { file: "scripts/test/workflows.test.mjs", id: "make host-test-mygo runs the unit tests of the Go packages of the mygo host" },
+      { file: "scripts/test/workflows.test.mjs", id: "make host-contract-check-mygo runs the unit tests of the Go packages of the mygo host" },
     ],
-    expected: "The workbench values are declared once in `packages/workbench/workbench.json`, which `settings.js` and `text-size.js` import and whose chrome metrics the workbench sets as custom properties of the document root, so no stylesheet holds a literal length, ratio or duration; the JavaScript layout model of `packages/soksak` and `packages/workbench` and the Go layout model of `packages/workbench-mygo` pass the same layout cases of `docs/spec/cases/layout`, which `make host-test-mygo` runs for the Go model. Each language host library embeds a copy of `workbench.json` and reads the common-only keys from it, and `make exposure-check` fails when a copy differs from its source.",
+    expected: "The workbench values are declared once in `packages/workbench/workbench.json`, which `settings.js` and `text-size.js` import and whose chrome metrics the workbench sets as custom properties of the document root, so no stylesheet holds a literal length, ratio or duration; the JavaScript layout model of `packages/soksak` and `packages/workbench` and the Go layout model of `packages/workbench-mygo` pass the same layout cases of `docs/spec/cases/layout`, which `make host-contract-check-mygo` runs for the Go model. Each language host library embeds a copy of `workbench.json` and reads the common-only keys from it, and `make exposure-check` fails when a copy differs from its source.",
     levels: ["unit"],
   },
   {
@@ -881,13 +881,13 @@ const FEATURE_LINKS = [
     id: "F532",
     implementation: [
       { file: "packages/host/rust/src/diagnostics.rs", symbol: "crate::event_record::quit_with_cause(\"update\", || host.0.quit());" },
-      { file: "Makefile", symbol: "hosts-check: windows-build-check host-debug-check" },
+      { file: "Makefile", symbol: "host-layout-check: windows-build-check host-debug-check" },
     ],
     tests: [
       { file: "scripts/test/host-debug-check.test.mjs", id: "the debug check compiles the features and tags of the debug apps" },
-      { file: "scripts/test/host-debug-check.test.mjs", id: "hosts-check runs the debug check" },
+      { file: "scripts/test/host-debug-check.test.mjs", id: "host-layout-check runs the debug check" },
     ],
-    expected: "make hosts-check compiles the sources and the tests of the two hosts and the two apps with the features and the tags of the debug apps, and the update step of the Rust diagnostics ends the application through quit.",
+    expected: "make host-layout-check compiles the sources and the tests of the two hosts and the two apps with the features and the tags of the debug apps, and the update step of the Rust diagnostics ends the application through quit.",
     levels: ["unit"],
   },
   {
@@ -1057,7 +1057,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/tests/support/platform/native_event.rs", symbol: "pub use implementation::*;" },
     ],
     tests: [
-      { file: "scripts/test/census.test.mjs", id: "the repository passes the census of its enabled rules and prints every pending rule with its item and count" },
+      { file: "scripts/test/event-sources.test.mjs", id: "the repository passes the event source check of its enabled rules and prints every pending rule with its item and count" },
       { file: "scripts/test/test-kinds.test.mjs", id: "every script of the e2e package that drives an application is run by a root target with the e2e prefix" },
       { file: "scripts/test/fallbacks.test.mjs", id: "the repository states a reason for every default and discarded error in product code" },
       { file: "scripts/test/soksak-scripts.test.mjs", id: "platform audit finds no selectors outside platform directories" },
@@ -2196,16 +2196,6 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/plugin-api/package.json", symbol: '"contract/"' }],
     tests: [{ file: "packages/plugin-api/test/package-files.test.mjs", id: "the packed SDK contains every current contract file" }],
     expected: "The SDK tar release contains every current file under its public contract directory, checked from the packed output rather than a mirrored manifest list.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-276",
-    implementation: [{ file: "packages/plugin-api/view-check.js", symbol: "export const VIEW_START_SHA256" }],
-    tests: [
-      { file: "packages/plugin-api/test/view-check.test.mjs", id: "a literal copied from the SDK has no difference" },
-      { file: "packages/plugin-api/test/view-check.test.mjs", id: "a changed view-start.js fails until the constant and the literals are updated" },
-    ],
-    expected: "The SDK constant matches its injected bootstrap while script and literal drift remain explicit errors.",
     levels: ["unit"],
   },
 {
@@ -3926,7 +3916,7 @@ const FEATURE_LINKS = [
     id: "F258-2",
     implementation: [{ file: "scripts/check-boundaries.mjs", symbol: "export function checkTestPathReads" }],
     tests: [{ file: "scripts/test/check-boundaries.test.mjs", id: "checkTestPathReads refuses a test that reads a path of another core package" }],
-    expected: "make boundaries refuses a test of a core package whose string resolves into another core package, and the shared contract text of the manifest case table is read from docs/spec/cases, which no package owns.",
+    expected: "make boundaries-check refuses a test of a core package whose string resolves into another core package, and the shared contract text of the manifest case table is read from docs/spec/cases, which no package owns.",
     levels: ["unit"],
   },
   {
@@ -5585,7 +5575,7 @@ const FEATURE_LINKS = [
   {
     id: "F388",
     implementation: [
-      { file: "package.json", symbol: "soksak-kit-0.0.11.tgz" },
+      { file: "package.json", symbol: "soksak-kit-0.0.12.tgz" },
     ],
     tests: [
       { file: "scripts/test/workflows.test.mjs", id: "the kit release that core pins defines the presentation mode terms" },
@@ -6271,15 +6261,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F225",
-    implementation: [{ file: "packages/plugin-api/exposure-check.js", symbol: "checkPluginRepository" }],
-    tests: [
-      { file: "packages/plugin-api/test/exposure-check.test.mjs", id: "a plugin repository whose sources match its declarations passes" },
-    ],
-    expected: "The exposure check reads a manifest whose sections are status-form sections, which carry no module source, so a manifest with a status section is checked instead of crashing.",
-    levels: ["unit"],
-  },
-  {
     id: "F251",
     implementation: [
       { file: "packages/workbench/view-calls.js", symbol: "statusNameOf" },
@@ -6792,7 +6773,7 @@ const FEATURE_LINKS = [
     id: "F173",
     implementation: [{ file: ".github/workflows/ci.yml", symbol: "node-tests.mjs --only scripts/" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "ci keeps language host checks independent and gates release on every required job" }],
-    expected: "CI runs the census and fallback tests of the sources on each pushed commit, so a registration outside its entrance or an unexplained default fails the run and is not released.",
+    expected: "CI runs the event source check and fallback tests of the sources on each pushed commit, so a registration outside its entrance or an unexplained default fails the run and is not released.",
     levels: ["unit"],
   },
   {
@@ -6813,7 +6794,7 @@ const FEATURE_LINKS = [
     id: "F169",
     implementation: [{ file: "scripts/check-build-environment.sh", symbol: "node_major=" }],
     tests: [{ file: "scripts/test/check-build-environment.sh", id: "a node executable of the declared major version is accepted" }],
-    expected: "The build runs the major Node version that .node-version declares, and another major version stops the preflight.",
+    expected: "The build runs the major Node version that .node-version declares, and another major version stops the toolchain check.",
     levels: ["unit"],
   },
   {
@@ -7513,7 +7494,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "scripts/test/windows-build-check.test.mjs", id: "the Windows build check compiles the Go host source in the default and diagnostics builds" },
-      { file: "scripts/test/windows-build-check.test.mjs", id: "hosts-check runs the Windows build check" },
+      { file: "scripts/test/windows-build-check.test.mjs", id: "host-layout-check runs the Windows build check" },
       { file: "packages/host/go/tests/service_process_test.go", id: "TestAServiceProcessOfAnotherUserExists" },
       { file: "packages/host/rust/tests/service_process_test.rs", id: "a_service_process_of_another_user_exists" },
     ],
@@ -7718,12 +7699,12 @@ const FEATURE_LINKS = [
   {
     id: "F74",
     implementation: [
-      { file: "Makefile", symbol: "hosts-check: windows-build-check" },
+      { file: "Makefile", symbol: "host-layout-check: windows-build-check" },
     ],
     tests: [
-      { file: "scripts/test/windows-build-check.test.mjs", id: "hosts-check runs the Windows build check" },
+      { file: "scripts/test/windows-build-check.test.mjs", id: "host-layout-check runs the Windows build check" },
     ],
-    expected: "hosts-check vets the Wails host for Windows and needs no Windows C compiler.",
+    expected: "host-layout-check vets the Wails host for Windows and needs no Windows C compiler.",
     levels: ["unit"],
   },
   {
@@ -7961,14 +7942,12 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/sok/go/src/install.go", symbol: "func ParseRange" },
       { file: "packages/sok/rust/src/install.rs", symbol: "pub fn parse_range" },
-      { file: "packages/plugin-api/engines-check.js", symbol: "export function enginesErrors" },
     ],
     tests: [
       { file: "packages/sok/go/tests/install_test.go", id: "TestVersionRangesAcceptExactCaretTildeAndBoundedForms" },
       { file: "packages/sok/rust/tests/install_test.rs", id: "version_ranges_accept_exact_caret_tilde_and_bounded_forms" },
-      { file: "packages/plugin-api/test/engines-check.test.mjs", id: "a plugin declares the core release of its plugin API" },
     ],
-    expected: "The range * is >=0.0.0 without an upper bound in both installers, and soksak-engines accepts it.",
+    expected: "The range * is >=0.0.0 without an upper bound in both installers.",
     levels: ["unit"],
   },
   {
@@ -8043,17 +8022,6 @@ const FEATURE_LINKS = [
       { file: "scripts/test/check-release-paths.test.mjs", id: "machoMinimum reads the minimum macOS version of an executable" },
     ],
     expected: "make release-check fails unless every bundle declares MACOS_MINIMUM and every application executable is built for it.",
-    levels: ["unit"],
-  },
-  {
-    id: "F97",
-    implementation: [
-      { file: "packages/plugin-api/engines-check.js", symbol: "engines.soksak is ${pkg.engines.soksak}" },
-    ],
-    tests: [
-      { file: "packages/plugin-api/test/engines-check.test.mjs", id: "the command checks the package.json of the given plugin repository" },
-    ],
-    expected: "soksak-engines prints the range it checked.",
     levels: ["unit"],
   },
   {
@@ -8216,16 +8184,6 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/tests/endpoint_test.rs", id: "a_held_lock_with_another_form_is_refused_and_kept" },
     ],
     expected: "Both hosts refuse a held process.lock whose contents are not the current form, with the same text.",
-    levels: ["unit"],
-  },
-  {
-    id: "F16",
-    implementation: [
-      { file: "packages/plugin-api/exposure-check.js", symbol: "realpathSync(process.argv[1])" },
-      { file: "packages/plugin-api/engines-check.js", symbol: "realpathSync(process.argv[1])" },
-    ],
-    tests: [{ file: "packages/plugin-api/test/command-entry.test.mjs", id: "the plugin commands run their check when started through a linked package" }],
-    expected: "soksak-exposure and soksak-engines run their check when a plugin repository starts them through the package that its package manager links.",
     levels: ["unit"],
   },
   {
@@ -9489,7 +9447,7 @@ const FEATURE_LINKS = [
     id: "F298-5",
     implementation: [
       { file: "native/darwin/Makefile", symbol: "NATIVE_E2E_TESTS = " },
-      { file: "Makefile", symbol: "e2e: docs-check e2e-check exposure-check $(E2E_BUILD)" },
+      { file: "Makefile", symbol: "e2e: docs-check e2e-source-check exposure-check $(E2E_BUILD)" },
       { file: "e2e/package.json", symbol: "\"test\": \"node --test test/\"" },
     ],
     tests: [
@@ -9568,7 +9526,7 @@ const FEATURE_LINKS = [
   {
     id: "F325-1",
     implementation: [
-      { file: ".github/workflows/ci.yml", symbol: "run: make -C core host-test-tauriv2" },
+      { file: ".github/workflows/ci.yml", symbol: "run: make -C core host-contract-check-tauriv2" },
     ],
     tests: [
       { file: "scripts/test/workflows.test.mjs", id: "ci keeps language host checks independent and gates release on every required job" },
@@ -11771,7 +11729,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/diagnostics_lock_test.rs", id: "a_poisoned_pending_lock_is_reported_without_consuming_the_receiver" },
       { file: "packages/host/rust/src/diagnostics_lock_test.rs", id: "a_pending_start_probe_releases_the_lock_before_receive" },
     ],
-    expected: "The lock census accepts explicit error propagation while preserving findings for discarded errors and unapproved recovery defaults; poisoned identity lifecycle and pending-start locks return explicit errors, and the pending probe releases its guard before the receiving helper reacquires it.",
+    expected: "The lock event source check accepts explicit error propagation while preserving findings for discarded errors and unapproved recovery defaults; poisoned identity lifecycle and pending-start locks return explicit errors, and the pending probe releases its guard before the receiving helper reacquires it.",
     levels: ["unit"],
   },
   {
@@ -12513,7 +12471,7 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // F359 names the release candidate 0.0.27; it changes no runtime capability.
 // F357 ends the group of one runner test through killGroup in its cleanup; it changes no runtime capability.
 // These items change no runtime capability and remain outside this capability-link inventory.
-// F386-7 removes a default value that the census check reported; make census-check is its check.
+// F386-7 removes a default value that the event source check reported; make events-check is its check.
 // F391 states a screen form in the contract; the replay of both sok packages already compares only existing page frames.
 // F389 records the plugin releases and the registry entry for core 0.0.32; it changes no runtime capability of core.
 // F400 removes the build folder of the host contract check; it changes no runtime capability.
@@ -12527,14 +12485,14 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // F503 states the framework fork that the Wails host pins in the native surfaces specification and in the go.mod comments; it
 // changes no runtime capability.
 // F524 corrects the release checks that the verification specification states; it changes no runtime capability.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F466", "F467", "F465", "F463", "F464", "F561", "F581", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
+const NON_CAPABILITY_COMPLETIONS = new Set(["F471", "F239-276", "F225", "F97", "F16", "F470", "F469", "F468", "F466", "F467", "F465", "F463", "F464", "F561", "F581", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66), the window checks of plugins (F110) and the registry listing of the hwp plugin (F141, registry items G37 and G38). Core cannot read
 // those repositories, so they have no link here and each repository checks its own evidence.
 // F167, F224, F287, R3 and R5 wrote the term list, the record check and the release gate, which F355-3-2 moves to the
 // kit; the kit holds their implementation and tests. F239-170, F239-197, F239-247, F273 and F273-1 wrote rules of
-// the census check, which F355-3-5 moves to the kit.
+// the event source check, which F355-3-5 moves to the kit.
 const MOVED_COMPLETIONS = new Set(["F239-170", "F239-197", "F239-247", "F273", "F273-1", "F167", "F224", "F287", "R3", "R5", "F0.3", "F1.4", "F2.1-1", "F2.10", "F2.1", "F2.4-1", "F2.4", "F2.5", "F2.8", "F2.9", "F2", "F3", "F6.3-10", "F6.6-1", "F6.6-2", "F7.14", "F7.15", "F7.16", "F7.17", "F7", "G1.2", "F18", "F19", "F98", "F100", "F101", "F109", "F110", "F203", "F210", "F141"]);
 
 // Completed capabilities whose implementation a later item removed: F68 wrote the WebKit child record, which F196.22

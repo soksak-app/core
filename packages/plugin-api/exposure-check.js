@@ -1,17 +1,14 @@
-#!/usr/bin/env node
 // Checks in the sources that the names of exposed entries match the declarations (docs/spec/exposure.md).
 //
 // Rules:
 //     1. Every exposed name written in a source (a name in quotes, data-expose, data-command, bindings and runs) is declared.
 //     2. A declared status and command is registered, and a declared element name is written as a value attached to an element.
-// The core checks the workbench with this check, and each plugin repository checks its own pages and sections. The core
+// The core checks the workbench with this check, and the listed core check of the registry runs it on each plugin release. The core
 // status and commands that a section module writes are compared with the declarations in core-exposure.json. Whether an operable element has a command and an element name is decided by the audit of the running
 // document.
 //
-//   soksak-exposure [plugin repository]
-import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { join, relative } from "node:path";
 import { createHash } from "node:crypto";
 
 /* A dotted name in quotes that is not an exposed name. It is a file name. */
@@ -158,17 +155,4 @@ export function checkContractCopies(root) {
     }
   }
   return errors;
-}
-
-// A package manager places a package as a link, so the started path is resolved before it is compared with this module.
-if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
-  // default: without an argument, the plugin repository in the current folder is checked.
-  const root = resolve(process.argv[2] ?? ".");
-  const errors = checkPluginRepository(root);
-  if (errors.length) {
-    console.error(errors.join("\n"));
-    process.exitCode = 1;
-  } else {
-    console.log(`Exposure checks passed: plugin ${readJson(join(root, "plugin.json")).id}`);
-  }
 }

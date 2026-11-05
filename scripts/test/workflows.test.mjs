@@ -95,9 +95,8 @@ test('the push check runs only the commit message check, and ci runs the structu
     assert.ok(step, `ci.yml has no step ${name}`);
     return /run:\s*make -C core (.+)$/m.exec(step.text)[1].trim().split(/\s+/);
   };
-  // The event catalog and census audits are structure checks of CI: a source change that removes an emitter fails its run.
-  assert.deepEqual(['events-check', 'census-check'].filter((target) => !targets('Structure checks').includes(target)), [],
-    'the structure step of ci.yml does not run the event catalog and census audits');
+  // The check of the event catalog and of the event sources is a structure check of CI: a source change that removes an emitter fails its run.
+  assert.ok(targets('Structure checks').includes('events-check'), 'the structure step of ci.yml does not run events-check');
   for (const name of ['Go format checks', 'Rust format and clippy checks']) assert.ok(targets(name).length > 0, `ci.yml step ${name} runs no target`);
   // A published commit message is kept, so the push checks it before it leaves the checkout; a later commit corrects any other
   // failure, and the release gate releases only a green run of CI.
@@ -129,9 +128,9 @@ test('ci keeps language host checks independent and gates release on every requi
     const next = jobsText.slice(start + 1).search(/\n(?=  [a-z][a-z0-9-]+:\s*$)/m);
     return next < 0 ? jobsText.slice(start) : jobsText.slice(start, start + 1 + next);
   };
-  assert.match(job('macos-wailsv3'), /host-test-wailsv3/);
-  assert.match(job('macos-tauriv2'), /host-test-tauriv2/);
-  assert.match(steps(job('macos-mygo')).find((step) => step.name === 'mygo host tests')?.text ?? '', /make -C core host-test-mygo/);
+  assert.match(job('macos-wailsv3'), /host-contract-check-wailsv3/);
+  assert.match(job('macos-tauriv2'), /host-contract-check-tauriv2/);
+  assert.match(steps(job('macos-mygo')).find((step) => step.name === 'mygo host tests')?.text ?? '', /make -C core host-contract-check-mygo/);
   assert.match(job('core-node'), /node core\/scripts\/node-tests\.mjs --exclude scripts\/ --exclude native\//);
   assert.match(job('equivalence'), /node core\/scripts\/node-tests\.mjs --only scripts\//);
   assert.doesNotMatch(job('equivalence'), /needs:/, 'equivalence installs and builds its own inputs');
@@ -146,8 +145,8 @@ test('ci keeps language host checks independent and gates release on every requi
   // Each host suite runs once: the host jobs run it, and the audit of each host is separable, so equivalence runs no host suite.
   for (const name of jobNames) {
     const text = job(name);
-    const suites = (text.match(/host-contract-check|host-test-wailsv3|host-test-tauriv2/g) ?? []);
-    const expected = { 'macos-wailsv3': ['host-test-wailsv3'], 'macos-tauriv2': ['host-test-tauriv2'] }[name] ?? [];
+    const suites = (text.match(/host-contract-check(?:-wailsv3|-tauriv2|-mygo)?/g) ?? []);
+    const expected = { 'macos-wailsv3': ['host-contract-check-wailsv3'], 'macos-tauriv2': ['host-contract-check-tauriv2'], 'macos-mygo': ['host-contract-check-mygo'] }[name] ?? [];
     assert.deepEqual(suites, expected, `${name} runs the host suites ${JSON.stringify(suites)}`);
   }
   assert.match(steps(job('macos-tauriv2')).find((step) => step.name === 'Tauri host tests')?.text ?? '', /CARGO_INCREMENTAL: '0'/,
@@ -194,18 +193,18 @@ test('ci keeps language host checks independent and gates release on every requi
   assert.doesNotMatch(job('equivalence'), /CARGO_BUILD_JOBS/, 'equivalence limits its Rust builds to fewer jobs than the runner has processors');
 });
 
-test('make host-test-mygo runs the unit tests of the Go packages of the mygo host', { timeout: 1000 }, () => {
-  const recipe = /^host-test-mygo:[^\n]*\n((?:\t[^\n]*\n)+)/m.exec(read('Makefile'));
-  assert.ok(recipe, 'the Makefile has no host-test-mygo target');
+test('make host-contract-check-mygo runs the unit tests of the Go packages of the mygo host', { timeout: 1000 }, () => {
+  const recipe = /^host-contract-check-mygo:[^\n]*\n((?:\t[^\n]*\n)+)/m.exec(read('Makefile'));
+  assert.ok(recipe, 'the Makefile has no host-contract-check-mygo target');
   // Each package of the mygo host that holds unit tests is a pattern of the Go test runner, which fails when a pattern has no test.
   const patterns = [...recipe[1].matchAll(/node scripts\/go-tests\.mjs --package '([^']+)'/g)].map((match) => match[1]);
   for (const folder of ['packages/workbench-mygo']) {
-    assert.ok(patterns.includes(`./${folder}/...`), `host-test-mygo runs no test of ${folder}: ${JSON.stringify(patterns)}`);
+    assert.ok(patterns.includes(`./${folder}/...`), `host-contract-check-mygo runs no test of ${folder}: ${JSON.stringify(patterns)}`);
   }
 });
 
-test('make host-test-mygo runs the contract run of the mygo host and the unit tests of the mygo application', { timeout: 10_000 }, () => {
-  const output = execFileSync('make', ['-n', '-o', 'native-darwin', '-o', 'build', 'host-test-mygo'], { cwd: ROOT, encoding: 'utf8' });
+test('make host-contract-check-mygo runs the contract run of the mygo host and the unit tests of the mygo application', { timeout: 10_000 }, () => {
+  const output = execFileSync('make', ['-n', '-o', 'native-darwin', '-o', 'build', 'host-contract-check-mygo'], { cwd: ROOT, encoding: 'utf8' });
   assert.match(output, /pnpm -F @soksak\/mygo test/, output);
   assert.match(output, /check-host-contract\.mjs --host mygo/, output);
 });
@@ -355,18 +354,43 @@ test('the kit release that core pins defines the presentation mode terms', () =>
 
 test('the hooks, the record targets and the release gate run the commands of the kit release', () => {
   assert.match(read('.githooks/commit-msg'), /exec pnpm --dir "\$\(git rev-parse --show-toplevel\)" exec soksak-check commits "\$1"/);
-  assert.match(read('.githooks/pre-commit'), /exec pnpm --dir "\$root" exec soksak-check records "\$root"/);
+  assert.match(read('.githooks/pre-commit'), /exec pnpm --dir "\$root" exec soksak-check docs "\$root"/);
   const makefile = read('Makefile');
   assert.doesNotMatch(makefile, /packages\/plugin-api\/(?:records|commits)-check\.js/, 'the Makefile runs a record check of the plugin API');
-  assert.match(makefile, /^\t@pnpm exec soksak-check records$/m);
+  assert.match(makefile, /^\t@pnpm exec soksak-check docs$/m);
   assert.match(makefile, /^\t@pnpm exec soksak-check commits \$\(RANGE\)$/m);
   assert.match(read('scripts/checklist.mjs'), /^import \{ checklist \} from "@soksak\/kit\/checklist";$/m);
 });
 
-test('the census check and the event scripts run the census check of the kit release', () => {
+test('events-check and the event scripts run the event source check of the kit release', () => {
   const { devDependencies } = JSON.parse(read('package.json'));
-  assert.match(read('Makefile'), /^\t@pnpm exec soksak-check census --config scripts\/census\.json$/m);
+  assert.match(read('Makefile'), /^\t@pnpm exec soksak-check events --config scripts\/event-sources\.json$/m);
   for (const file of ['scripts/check-events.mjs', 'scripts/check-fallbacks.mjs']) {
-    assert.match(read(file), /from ["']@soksak\/kit\/census["'];$/m, file);
+    assert.match(read(file), /from ["']@soksak\/kit\/events["'];$/m, file);
   }
+});
+
+test('a make target that runs a check names what it reads and no target repeats the recipe of another', () => {
+  const targets = [...read('Makefile').matchAll(/^([a-z0-9][a-z0-9-]*):[^\n=]*\n((?:\t[^\n]*\n)+)/gm)]
+    .map(([, name, recipe]) => ({ name, lines: recipe.split('\n').filter(Boolean) }));
+  const misnamed = targets
+    .filter(({ lines }) => lines.some((line) => /scripts\/check-|soksak-check /.test(line)))
+    .map(({ name }) => name)
+    .filter((name) => !/-check(-wailsv3|-tauriv2|-mygo)?$/.test(name));
+  assert.deepEqual(misnamed, [], 'a target that runs a check is <what it reads>-check, with the host after it for one host');
+  const repeats = targets.flatMap((one) => targets
+    .filter((other) => other !== one && one.lines.every((line) => other.lines.includes(line)))
+    .map((other) => `${one.name} repeats ${other.name}`));
+  assert.deepEqual(repeats, [], 'a check has one command: a second target with the same recipe is a second name');
+});
+
+test('every make target that a workflow runs exists', () => {
+  const declared = new Set([...read('Makefile').matchAll(/^([a-z0-9][a-z0-9-]*):/gm)].map((match) => match[1]));
+  const missing = [];
+  for (const file of readdirSync(WORKFLOWS)) {
+    for (const [, words] of read(`.github/workflows/${file}`).matchAll(/^\s*(?:run:\s*)?make(?: -C core)? ((?:[a-z0-9-]+ ?)+)(?:\s|$)/gm)) {
+      for (const target of words.trim().split(/\s+/)) if (!declared.has(target)) missing.push(`${file}: ${target}`);
+    }
+  }
+  assert.deepEqual(missing, []);
 });

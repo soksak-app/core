@@ -76,7 +76,7 @@
 - `docs/features.md`와 `docs/features.ko.md` 2014줄: F236-9는 이 결정으로 닫는다. 세 handoff 항목이 gate가 있는 후속 작업이다.
 - `CHANGELOG.md`와 `CHANGELOG.ko.md`: 결정, 검토 라운드, 답변.
 
-문서 검증: `make docs-check`(모든 fragment를 검사하므로 위 연결 변경이 모두 필요하다), `make parity-check`, `node --test packages/log-contract/test/*.test.mjs packages/plugin-api/test/*.test.mjs`. Red와 Green: 위의 `replay-doc.test.mjs`. sok 인용 편집의 소유자 검사: `packages/sok/go`에서 `go test ./tests`, `cargo test -p soksak-sok --test replay_test`.
+문서 검증: `make docs-check`(모든 fragment를 검사하므로 위 연결 변경이 모두 필요하다), `make test-inventory-check`, `node --test packages/log-contract/test/*.test.mjs packages/plugin-api/test/*.test.mjs`. Red와 Green: 위의 `replay-doc.test.mjs`. sok 인용 편집의 소유자 검사: `packages/sok/go`에서 `go test ./tests`, `cargo test -p soksak-sok --test replay_test`.
 
 ## 잔여
 

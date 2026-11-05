@@ -7,7 +7,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { markerErrors, reasonFor } from "@soksak/kit/census";
+import { markerErrors, reasonFor } from "@soksak/kit/events";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 

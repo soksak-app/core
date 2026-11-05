@@ -51,12 +51,30 @@ test("the plugin API ships no record check, release gate, checklist reader or te
   assert.equal(manifest.exports["./records"], undefined);
 });
 
-test("the plugin API ships no census check or census rules", () => {
+test("the plugin API ships no event source check or event source rules", () => {
   const manifest = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
   assert.equal(manifest.bin?.["soksak-check"], undefined);
-  for (const file of ["census.js", "census-rules.json"]) {
+  for (const file of ["events.js", "event-rules.json"]) {
     assert.ok(!manifest.files.includes(file), file);
     assert.ok(!existsSync(join(packageRoot, file)), file);
   }
-  assert.equal(manifest.dependencies?.ajv, undefined, "only the census check used ajv");
+  assert.equal(manifest.dependencies?.ajv, undefined, "only the event source check used ajv");
+});
+
+test("the plugin API ships no check command that no repository runs", () => {
+  const manifest = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
+  assert.equal(manifest.bin, undefined);
+  for (const file of ["engines-check.js", "view-check.js"]) {
+    assert.ok(!manifest.files.includes(file), file);
+    assert.ok(!existsSync(join(packageRoot, file)), file);
+  }
+});
+
+test("the plugin API ships the exposure module that the listed core check of the registry reads", () => {
+  const manifest = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
+  assert.equal(manifest.exports["./exposure-check"], "./exposure-check.js");
+  for (const file of ["exposure-check.js", "core-exposure.json"]) {
+    assert.ok(manifest.files.includes(file), file);
+    assert.ok(existsSync(join(packageRoot, file)), file);
+  }
 });

@@ -41,7 +41,7 @@ const folderText = (value) => typeof value === "string" && value !== "" && !valu
 
 /**
  * Checks the declarations of scripts/workspace-registry.json. plugins are {repository, id} (id is the id of the plugin.json of
- * the repository, which make boundaries reads without the repository), sidecars are {repository, folder} (folder is the folder
+ * the repository, which make boundaries-check reads without the repository), sidecars are {repository, folder} (folder is the folder
  * in the repository that holds sidecar.json), and packs are registry pack entries. Folders are paths relative to the core checkout.
  */
 export function checkDeclaration(value) {

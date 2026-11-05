@@ -4,10 +4,10 @@ import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { audit, leftovers } from '../temp-audit.mjs';
+import { audit, leftovers } from '../check-temp.mjs';
 
 function parent(t) {
-  const folder = mkdtempSync(join(tmpdir(), 'temp-audit-test-'));
+  const folder = mkdtempSync(join(tmpdir(), 'temp-check-test-'));
   t.after(() => rmSync(folder, { recursive: true }));
   return folder;
 }
@@ -22,7 +22,7 @@ test('a command that leaves a soksak- folder fails the audit and the folder is n
   const status = audit('/bin/sh', ['-c', 'mkdir "$TMPDIR/soksak-left-1" "$TMPDIR/soksak-check-kept"'], { write: (line) => lines.push(line), parent: parent(t) });
   assert.equal(status, 1);
   assert.equal(lines.filter((line) => line.startsWith('TEMP LEFT ')).length, 1);
-  assert.match(lines[0], /^TEMP LEFT .*\/temp-audit-[^/]+\/soksak-left-1$/);
+  assert.match(lines[0], /^TEMP LEFT .*\/temp-check-[^/]+\/soksak-left-1$/);
   assert.match(lines.at(-1), /^TEMP FAIL \/bin\/sh .* left 1 soksak- entries/);
 });
 
@@ -43,6 +43,6 @@ test('a command that fails fails the audit with its status', { timeout: 10000 },
 
 test('a command that cannot start is an error that names it', { timeout: 10000 }, (t) => {
   const where = parent(t);
-  assert.throws(() => audit(join(where, 'missing'), [], { write: () => {}, parent: where }), /^Error: temp-audit: .*missing could not start: /);
+  assert.throws(() => audit(join(where, 'missing'), [], { write: () => {}, parent: where }), /^Error: temp-check: .*missing could not start: /);
   assert.equal(existsSync(join(where, 'missing')), false);
 });

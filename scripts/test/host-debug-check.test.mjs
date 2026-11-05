@@ -1,4 +1,4 @@
-// Verifies that the check of the debug build compiles what the debug apps compile, and its connection to hosts-check.
+// Verifies that the check of the debug build compiles what the debug apps compile, and its connection to host-layout-check.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
@@ -33,6 +33,6 @@ test("the debug check compiles the features and tags of the debug apps", { timeo
   assertCompilesDebugConfiguration(dryRun("host-debug-check", "frontend-wailsv3-core", "frontend-tauriv2-core", "frontend-mygo-core"));
 });
 
-test("hosts-check runs the debug check", { timeout: 60000 }, () => {
-  assertCompilesDebugConfiguration(dryRun("hosts-check", "frontend-wailsv3-core", "frontend-tauriv2-core", "frontend-mygo-core"));
+test("host-layout-check runs the debug check", { timeout: 60000 }, () => {
+  assertCompilesDebugConfiguration(dryRun("host-layout-check", "frontend-wailsv3-core", "frontend-tauriv2-core", "frontend-mygo-core"));
 });

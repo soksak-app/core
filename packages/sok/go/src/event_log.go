@@ -173,13 +173,13 @@ type EventLog struct {
 	messages chan eventMessage
 	// wake says that the source of pull holds something; nudge wakes a writer that sleeps for a count that no message carries,
 	// and asleep says that the writer sleeps.
-	wake         <-chan struct{}
-	nudge        chan struct{}
-	asleep       atomic.Bool
+	wake   <-chan struct{}
+	nudge  chan struct{}
+	asleep atomic.Bool
 	// countsHeld says that a writer that sleeps knows of a count and has its time set, so a further count wakes nothing;
 	// countWait is how long such a count waits, in nanoseconds.
-	countsHeld atomic.Bool
-	countWait  atomic.Int64
+	countsHeld   atomic.Bool
+	countWait    atomic.Int64
 	queuedEvents atomic.Int64
 	queuedBytes  atomic.Int64
 	queueEvents  int64

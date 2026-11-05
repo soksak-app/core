@@ -1,6 +1,5 @@
 // The module graph rule of a view page (docs/spec/plugins.md#view-surfaces): every module that the page loads imports bare
-// specifiers only from the view import map. The page check of view-check.js compares the map itself and does not read the modules,
-// so an import outside the map (which stops the whole graph before any module runs) passes that check.
+// specifiers only from the view import map. An import outside the map stops the whole graph before any module runs.
 // The imports are read by es-module-lexer, which lexes code: a string literal or a comment of a minified bundle is not an import.
 // A regular expression reads the text of a string literal as an import (ui/vendor/libraries.js of the editor holds the text
 // "import export from" in a keyword list), so the rule does not use one.

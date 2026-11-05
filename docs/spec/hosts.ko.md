@@ -200,9 +200,9 @@ AppKit 이 창 자신의 단추를 소유한다. 제목줄 높이가 AppKit 이 
 
 Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`)만 구현한다. `platform/windows/unsupported.*`의 나머지 연산은 `<operation> is not implemented on windows` 형식의 오류를 반환한다. Windows에서는 애플리케이션 시작이 첫 platform 연산에서 실패한다. Wails의 `Run`과 Tauri의 `run`은 창을 열기 전에 `window resize animation is not implemented on windows`와 상태 1로 끝난다. Linux 구현은 없으며, 그곳에서 `platform.Current()`와 `platform::current()`는 오류를 반환한다.
 
-`make hosts-check`는 `make windows-build-check`를 실행하며, 이 target은 Go language host library와 Wails framework adapter의 source를 기본 build와 diagnostics build에서 `windows/arm64`용으로 vet한다.
+`make host-layout-check`는 `make windows-build-check`를 실행하며, 이 target은 Go language host library와 Wails framework adapter의 source를 기본 build와 diagnostics build에서 `windows/arm64`용으로 vet한다.
 
-`make hosts-check`는 `make host-debug-check`도 실행하며, 이 target은 세 host와 세 앱의 source와 test를 debug 앱의 feature와 tag로 macOS용으로 컴파일한다. `make tauriv2-build`, `make wailsv3-build`, `make mygo-build`, 이 check는 그 구성을 Makefile의 정의 하나에서 읽는다.
+`make host-layout-check`는 `make host-debug-check`도 실행하며, 이 target은 세 host와 세 앱의 source와 test를 debug 앱의 feature와 tag로 macOS용으로 컴파일한다. `make tauriv2-build`, `make wailsv3-build`, `make mygo-build`, 이 check는 그 구성을 Makefile의 정의 하나에서 읽는다.
 
 ## Wails host의 main thread
 
@@ -212,7 +212,7 @@ host는 `application.Run` 바로 앞에서 framework가 init에서 main thread�
 
 Go language host library의 header `src/platform/darwin/main_thread.h`는 두 main-thread 함수 `hostRunOnWorker`와 `hostRunOnMain`, 그리고 이 함수로 식을 평가하는 macro `ON_WORKER`와 `ON_MAIN`을 선언한다. `main_thread.m`은 framework adapter가 설치한 함수를 가진다. Wails framework adapter는 library 시작 전에 자기 darwin 패키지의 `init`에서 Wails fork의 함수(`wailsRunOnWorker`와 `wailsRunOnMain`)를 이 함수로 설치하므로, library의 어떤 파일도 Wails를 이름으로 부르지 않는다. library의 시작은 둘 다 요구한다. `Prepare`는 첫 native call 전에 platform의 `RequireMainThread`를 부르고, 이 함수는 `main-thread functions are not installed`와 빠진 함수 각각의 이름으로 실패한다. 설치되지 않은 함수를 부르면 프로세스가 그 이름을 내고 끝난다. block을 호출한 thread에서 실행하면 Go code나 native call이 잘못된 thread에서 실행되기 때문이다. framework adapter 없이 darwin layer를 실행하는 test는 자기 `TestMain`에서 둘 다에 test 함수를 설치한다.
 
-`make hosts-check`는 Go language host library darwin layer의 C code, 즉 `packages/host/go/src/platform/darwin/`의 각 Go 파일의 cgo preamble과 각 Objective-C 파일에서 이 규칙을 검사한다(`scripts/check-hosts.mjs`의 `auditMainThreadCalls`. 이 함수는 `scripts/cgo-sources.go`를 통해 `go/parser`로 Go 파일을 읽고, macro를 펼치고 호출한 각 함수를 그것을 선언한 header로 해석한 clang의 JSON AST로 C code를 읽는다). C code가 Go 파일이 export(`//export`)한 함수를 `hostRunOnWorker`나 `ON_WORKER` 밖에서 참조하면 실패한다. Go code가 `native/darwin/src`의 header가 선언한 함수를 `main_` wrapper 대신 직접 부르면 실패한다. 단 thread가 필요 없는 함수(`MAIN_THREAD_FREE`, 각각 이유를 가진다: event ring과 그 clock, `sp_observe_flush`, `sp_phys_footprint`, `sp_diagnostic_reports_directory`, `sp_capture_clock`, `sp_capture_error`, `sp_facts_free`, `sp_ui_enqueue`, `sp_ui_enqueue_after`)는 예외다. Go code가 부르는 layer의 C 함수가 `hostRunOnMain`이나 `ON_MAIN` 밖에서 Objective-C message를 보내거나, native 함수나 `NS` 함수나 block을 부르거나, 그렇게 하는 layer의 다른 함수를 부르면 실패한다. native 함수, Objective-C message, block이 `hostRunOnWorker`나 `ON_WORKER` 안에서 실행되어도 실패한다.
+`make host-layout-check`는 Go language host library darwin layer의 C code, 즉 `packages/host/go/src/platform/darwin/`의 각 Go 파일의 cgo preamble과 각 Objective-C 파일에서 이 규칙을 검사한다(`scripts/check-hosts.mjs`의 `auditMainThreadCalls`. 이 함수는 `scripts/cgo-sources.go`를 통해 `go/parser`로 Go 파일을 읽고, macro를 펼치고 호출한 각 함수를 그것을 선언한 header로 해석한 clang의 JSON AST로 C code를 읽는다). C code가 Go 파일이 export(`//export`)한 함수를 `hostRunOnWorker`나 `ON_WORKER` 밖에서 참조하면 실패한다. Go code가 `native/darwin/src`의 header가 선언한 함수를 `main_` wrapper 대신 직접 부르면 실패한다. 단 thread가 필요 없는 함수(`MAIN_THREAD_FREE`, 각각 이유를 가진다: event ring과 그 clock, `sp_observe_flush`, `sp_phys_footprint`, `sp_diagnostic_reports_directory`, `sp_capture_clock`, `sp_capture_error`, `sp_facts_free`, `sp_ui_enqueue`, `sp_ui_enqueue_after`)는 예외다. Go code가 부르는 layer의 C 함수가 `hostRunOnMain`이나 `ON_MAIN` 밖에서 Objective-C message를 보내거나, native 함수나 `NS` 함수나 block을 부르거나, 그렇게 하는 layer의 다른 함수를 부르면 실패한다. native 함수, Objective-C message, block이 `hostRunOnWorker`나 `ON_WORKER` 안에서 실행되어도 실패한다.
 
 이유: 애플리케이션 프로세스는 WebKit과 다른 in-process client가 만든 JavaScriptCore VM을 가지며, VM의 lock은 그것을 잡은 thread를, main thread를 포함해, collector가 suspend하고 scan하는 thread에 더한다. collector는 각 thread의 stack을 stack pointer부터 그 thread stack의 origin까지 복사하고, 합한 크기의 두 배인 buffer를 할당한다. main thread의 Go code는 Go heap이 main thread의 stack 밖에 둔 goroutine stack에서 실행되므로, 그때의 scan에서 크기 `origin − sp`가 wrap되고 buffer 할당이 실패하며, JavaScriptCore는 `pas_panic_on_out_of_memory_error`에서 프로세스를 끝낸다. Tauri host에는 이 규칙이 필요 없다. 그 main thread는 main thread의 stack에서 Rust를 실행한다.
 
@@ -422,8 +422,8 @@ macOS에서 각 애플리케이션은 애플리케이션 번들에서 실행된�
 | `make registry`, `make install-plugins CONFIG=DIR` | `scripts/workspace-registry.json`이 선언한 plugin·sidecar repository로 `target/registry`에 workspace registry를 만들고([Repository](plugins.ko.md#repository)), 그 플러그인을 설정 디렉터리에 설치한다 |
 | `make rust-clippy-check` | Rust workspace의 모든 package와 test를 진단 feature가 있을 때와 없을 때 `-D warnings`로 clippy 검사한다. `make native-test`가 실행한다 |
 | `make native-test` | `make -C native/darwin test`, `packages/host/go`와 `packages/host/wailsv3`의 `go test`, `cargo test -p soksak-host -p soksak-host-tauriv2`를 실행한다. 호스트 검사는 진단 빌드와 일반 빌드로 각각 실행한다. 각 sidecar repository는 자기 test를 실행한다 |
-| `make platforms` | `scripts/check-platforms.mjs`를 실행한다 |
-| `make hosts-check` | `make windows-build-check`, `make host-debug-check`, `scripts/check-hosts.mjs`를 실행한다 |
+| `make platforms-check` | `scripts/check-platforms.mjs`를 실행한다 |
+| `make host-layout-check` | `make windows-build-check`, `make host-debug-check`, `scripts/check-hosts.mjs`를 실행한다 |
 
 macOS 애플리케이션 bundle build target 네 개는 `Contents`를 교체하기 전에 대상 bundle을 확인한다. 해당 bundle에서 process가 실행 중이면 preparation은 bundle을 변경하기 전에 process PID와 정확한 bundle 경로를 오류로 보고한다. 의도한 검증 checkout에서 build하고 실행 중인 애플리케이션이 사용하는 bundle을 build 대상으로 지정하지 않는다.
 

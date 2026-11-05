@@ -1,4 +1,4 @@
-// Verifies the result of the Windows compile check target and its connection to hosts-check at the ownership boundary of the target.
+// Verifies the result of the Windows compile check target and its connection to host-layout-check at the ownership boundary of the target.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {resolve} from 'node:path';
@@ -14,8 +14,8 @@ test('the Windows build check compiles the Go host source in the default and dia
  assert.match(result.stdout,/PASS: Wails diagnostics framework adapter for windows\/arm64/);
  assert.match(result.stdout,/PASS: mygo diagnostics framework adapter for windows\/arm64/);
 });
-test('hosts-check runs the Windows build check',{timeout:30000},()=>{
- const result=spawnSync('make',['-n','hosts-check'],{cwd:root,encoding:'utf8',timeout:20000});
+test('host-layout-check runs the Windows build check',{timeout:30000},()=>{
+ const result=spawnSync('make',['-n','host-layout-check'],{cwd:root,encoding:'utf8',timeout:20000});
  assert.equal(result.status,0,result.stdout+result.stderr);
  assert.match(result.stdout,/GOOS=windows GOARCH=arm64 go vet \.\/src\/\.\.\./);
  assert.match(result.stdout,/GOOS=windows GOARCH=arm64 go vet -tags diagnostics \.\/src\/\.\.\./);

@@ -6,7 +6,7 @@
 //   2. Every declared status and command is registered, and every declared element name is written as a value attached to an element.
 // Whether an interactive element has a command and an element name is judged by the audit of the running workbench (core.workbench.audit,
 // unbound of core.surface.document). It is not guessed from the shape of the source.
-// Checks the workbench (core). The check rules are in exposure-check.js of plugin-api, and each plugin repository checks the plugin pages with that module.
+// Checks the workbench (core). The check rules are in exposure-check.js of plugin-api, and the listed core check of the registry runs that module on each plugin release.
 // It also holds the copies of the workbench declarations equal to their source.
 // --write rewrites core-exposure.json of plugin-api and the copies from the workbench declarations.
 //
@@ -125,7 +125,6 @@ if (process.argv[1]?.endsWith("check-exposure.mjs")) {
   errors.push(...auditWorkbenchNames(coreExposes, goSources));
   errors.push(...auditWorkbenchRegistrations(coreExposes, goSources, [readFileSync(join(ROOT, "packages/plugin-api/view.js"), "utf8")]));
 
-  // The declarations of a plugin are checked by each plugin repository with soksak-exposure of plugin-api (docs/spec/plugins.md#repositories).
   if (errors.length) {
     console.error(errors.join("\n"));
     process.exitCode = 1;
