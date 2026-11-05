@@ -1198,14 +1198,5 @@ func (s *Shell) surfacePressed(data []any) {
 		s.fail(fmt.Errorf("surface pressed: %w", err))
 		return
 	}
-	for _, card := range s.plane.Cards() {
-		if held, err := s.cardData(card.ID); err == nil && held != nil {
-			for _, tab := range held.TabList() {
-				if tab.ID == surface && s.focused != card.ID {
-					s.focused = card.ID
-					s.options.Invalidate()
-				}
-			}
-		}
-	}
+	s.pressSurface(surface)
 }

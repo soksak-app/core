@@ -646,3 +646,100 @@ func TestARegionAttachAnswersWhetherItRestoredAHistory(t *testing.T) {
 		})
 	}
 }
+
+// focusedCards returns the cards that the grid holds as focused.
+func focusedCards(t *testing.T, f *shellFixture) []string {
+	t.Helper()
+	var focused []string
+	for _, card := range status[gridRead](t, f, "core.grid").Cards {
+		if card.Focused {
+			focused = append(focused, card.ID)
+		}
+	}
+	return focused
+}
+
+// A press reaches the content over a view while the host holds the views of a placement out of the pointer. It still is a
+// press on the card, and focuses it as the press goes down.
+func TestAPressOnTheSeatOfAViewFocusesItsCard(t *testing.T) {
+	f, stored := surfaceShell(t)
+	stored.elements = true
+	f.settle()
+	cards := f.tabbedCards()
+	f.run("core.card.focus", map[string]string{"card": cards[0]})
+	f.settle()
+	box := f.box("core.card", cards[1])
+	x, y := box.X+box.W/2, box.Y+box.H/2
+	f.tester.Press(x, y)
+	f.settle()
+	if got := focusedCards(t, f); !slices.Equal(got, []string{cards[1]}) {
+		t.Fatalf("after the press on the seat of %s the focused cards are %v", cards[1], got)
+	}
+	f.tester.Release(x, y)
+	f.settle()
+	if got := focusedCards(t, f); !slices.Equal(got, []string{cards[1]}) {
+		t.Fatalf("after the release on the seat of %s the focused cards are %v", cards[1], got)
+	}
+}
+
+// The section of a card stands inside the card, so a press on its view is a press on the card: the view that takes it reports
+// it, and the seat takes the press that reaches the content.
+func TestAPressOnASectionOfACardFocusesTheCard(t *testing.T) {
+	section := func(t *testing.T) (*shellFixture, string, string, map[string]any) {
+		f, stored := surfaceShellOf(t, sidebarsInstalled)
+		stored.elements = true
+		cards := f.tabbedCards()
+		f.run("core.card.sidebar.set", map[string]string{"card": cards[1], "side": "left", "set": "set-install"})
+		f.run("core.card.focus", map[string]string{"card": cards[0]})
+		f.settle()
+		for id, surface := range stored.lastSurfaces(t) {
+			if start, ok := surface["start"].(map[string]any); ok {
+				if held, ok := start["section"].(map[string]any); ok && held["card"] == cards[1] {
+					return f, cards[1], id, surface
+				}
+			}
+		}
+		t.Fatalf("no section stands in the card %s", cards[1])
+		return nil, "", "", nil
+	}
+	t.Run("the view reports it", func(t *testing.T) {
+		f, card, id, _ := section(t)
+		f.shell.Event("surface-pressed", []any{id})
+		f.settle()
+		if got := focusedCards(t, f); !slices.Equal(got, []string{card}) {
+			t.Fatalf("after the press on the section %s the focused cards are %v", id, got)
+		}
+	})
+	t.Run("the seat takes it", func(t *testing.T) {
+		f, card, id, surface := section(t)
+		x, y := float32(surface["x"].(float64)+surface["w"].(float64)/2), float32(surface["y"].(float64)+surface["h"].(float64)/2)
+		f.tester.Press(x, y)
+		f.settle()
+		if got := focusedCards(t, f); !slices.Equal(got, []string{card}) {
+			t.Fatalf("after the press on the seat of the section %s the focused cards are %v", id, got)
+		}
+	})
+}
+
+// A section of a window sidebar stands in no card, and a press on it leaves the focus of the cards.
+func TestAPressOnASectionOfAWindowSidebarLeavesTheFocusedCard(t *testing.T) {
+	f, stored := surfaceShellOf(t, sidebarsInstalled)
+	stored.elements = true
+	cards := f.tabbedCards()
+	f.run("core.card.focus", map[string]string{"card": cards[1]})
+	f.settle()
+	var id string
+	for held, surface := range stored.lastSurfaces(t) {
+		if strings.HasSuffix(held, "/left/files.tree") && surface["visible"] == true {
+			id = held
+		}
+	}
+	if id == "" {
+		t.Fatal("no section stands in the left sidebar of the window")
+	}
+	f.shell.Event("surface-pressed", []any{id})
+	f.settle()
+	if got := focusedCards(t, f); !slices.Equal(got, []string{cards[1]}) {
+		t.Fatalf("after the press on the section %s the focused cards are %v", id, got)
+	}
+}
