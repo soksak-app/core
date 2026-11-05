@@ -20,3 +20,10 @@ func TestTheApplicationLeavesTheLaunchActivationToTheSystem(t *testing.T) {
 		t.Fatal("the application activates itself when it finishes launching, so a launch that requested no activation takes the focus")
 	}
 }
+
+// contract: application.window.opens-without-taking-the-front
+func TestAWindowShowsThroughTheShowOfTheHost(t *testing.T) {
+	if adapter.LaunchMacOptions().WindowShow == nil {
+		t.Fatal("a shown window comes to the front while another application is active")
+	}
+}

@@ -25,6 +25,10 @@ pub(crate) fn ns_window(_window: &tauri::Window) -> port::Result<*mut c_void> {
     ))
 }
 
+pub(crate) fn show_window(window: &tauri::Window) -> port::Result<()> {
+    window.show().map_err(crate::framework::error)
+}
+
 pub(crate) fn launch_activation(
     builder: tauri::Builder<tauri::Wry>,
     _ignore_other_apps: bool,

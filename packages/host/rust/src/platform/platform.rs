@@ -361,6 +361,10 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// main webview ended. The caller puts the window on the screen after this call
     /// (native/darwin/src/window_reveal.h). Call it on the UI thread.
     fn reveal_after_load(&self, window: Handle) -> Result<(), String>;
+    /// Puts the window on the screen without taking the front from another application: it comes to the front of an
+    /// active application, and an application that is not active keeps it behind the front window
+    /// (docs/spec/hosts.md#launch-activation). Call it on the main thread.
+    fn show_window(&self, window: Handle) -> Result<(), String>;
     fn set_main_appearance(&self, view: &PlatformWebview, dark: bool) -> Result<(), String>;
     /// Changes the window to full screen or back, and calls done when the transition ends. A request that arrives
     /// during a transition is handled after that transition ends.

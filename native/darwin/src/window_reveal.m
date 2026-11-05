@@ -73,3 +73,8 @@ bool sp_window_reveal_after_load(void *handle, char **error) {
     [[[SPWindowReveal alloc] initWithWindow:window webview:main] start];
     return true;
 }
+
+void sp_window_show(void *handle) {
+    NSCAssert(NSThread.isMainThread, @"window show requires the UI thread");
+    [(NSWindow *)handle makeKeyAndOrderFront:nil];
+}
