@@ -175,6 +175,7 @@ fn invalid_json_closes_connection() {
 | `diagnostics.drag.waits-for-the-last-placement` | `diagnostics.drag`는 run을 기다리기 전에 창에 마지막 placement를 묻는다. 진행 중인 presentation 뒤에서 기다리는 layout은 창만 알기 때문이다. 그 placement가 실패하거나 창이 시간 제한 안에 답하지 않으면 drag도 실패한다. | all |
 | `diagnostics.drag.forwards-frame-identity` | `diagnostics.drag`는 선택적 strict boolean `frameIdentity`를 받고 기본값은 false다. Identity를 켜면 `capture: true`를 요구하고 recording 시작에 전달한다. | all |
 | `diagnostics.drag.native-delivers-pointer-gesture` | `diagnostics.drag`는 선택적 strict boolean `native`를 받고, 다른 값은 `native must be a boolean`으로 거절하며 workbench에 전달하지 않는다. `native: true`이면 왕복마다 경계 점에서 주 버튼을 누르고, 각 단계를 그 점에 offset과 단계 비율을 곱한 값을 더한 위치의 끌기로 나갔다가 돌아오며, 경계에서 떼고, 어느 입력도 활성화하지 않으며, `{from, steps, took, asked}`로 응답한다. 실패한 단계는 그 위치에서 버튼을 떼고 `native drag step <n>: <error>`로 실패한다. | all |
+| `diagnostics.drag.native-reads-boundary-after-presentation` | native drag는 창이 현재 layout을 표시할 때까지 기다린 뒤 page에 경계의 점을 묻고, 표시하지 못한 창은 그 실패로 drag를 끝내며 묻지 않는다. | all |
 | `diagnostics.drag.no-main-page-delivers-native` | main page 없는 창에서 `diagnostics.drag`는 `native`와 무관하게 제스처를 네이티브 포인터 입력으로 전달한다. 제스처 전에 workbench에 `diagnostics.drag` `{axis, line}`를, 제스처 뒤에는 실패한 제스처 뒤에도 `diagnostics.drag.end`를 요청하고, 네이티브 제스처의 응답에 workbench가 준 `boundary`(드래그 전과 각 단계 뒤의 위치)와 `handled`(각 drag 입력의 `mouseDragged:` step이 들어가서 돌아올 때까지의 밀리초)를 더한다. callback이나 위치의 수가 전달한 단계 수와 다른 드래그는 `the drag delivered <n> steps and recorded <n> callbacks and <n> boundary positions`로 실패한다. | mygo only: Wails와 Tauri host는 main page에서 드래그를 구동한다 |
 | `diagnostics.native-objects.payload-names-counts` | `diagnostics.native.objects` 응답은 라이브러리의 살아 있는 객체 수를 `windowCompositions`, `surfaceHosts`, `inputRegistrations` 정수로만 담는다. | all |
 | `diagnostics.native-window-color-space.reports-appkit-profile` | `diagnostics.native.window-color-space`는 선택한 window를 한 번 읽어 `name`과 `iccSHA256`만 반환한다. `name`은 AppKit color space의 localized name이고 hash는 ICC profile byte의 lowercase SHA-256이며 ICC profile을 사용할 수 없으면 null이다. Window에 backing color space가 없으면 두 값 모두 null이다. 이 method는 diagnostic build에서만 선언되고 window를 변경하지 않는다. 비활성 window check는 OS가 선택한 profile을 고정하지 않고 응답 형식을 정확히 확인하며, 존재하지 않는 window에 error 1003을 요구하고, query 전후의 안정된 `host.window` facts를 비교한다. | all |
@@ -493,6 +494,47 @@ fn invalid_json_closes_connection() {
 | `platform.private.appends-owner-only-file` | private append 연산은 없는 파일을 mode 0600으로 만들고, 있는 파일에는 덧붙이며, 있는 파일의 mode는 유지한다. | all |
 | `platform.private.creates-new-owner-only-file` | private 새 파일 연산은 없는 파일을 mode 0600으로 만들고, 이미 있는 경로에는 already-exists 오류로 실패한다. | all |
 | `platform.private.writes-owner-only-file` | private write 연산은 없는 파일을 mode 0600으로 만들고, 있는 파일의 내용을 바꾸며, 있는 파일의 mode는 유지한다. | all |
+| `platform.windows.input.pointer-phase-becomes-mouse-event` | pointer 입력은 DevTools 호출 `Input.dispatchMouseEvent`가 된다. move는 `mouseMoved`, press는 버튼과 `buttons`, `clickCount`를 담은 `mousePressed`, drag는 눌린 버튼을 담은 `mouseMoved`, release는 아직 눌린 버튼을 담은 `mouseReleased`, scroll은 delta를 담은 `mouseWheel`이다. | all |
+| `platform.windows.input.pointer-breaking-press-rules-is-not-sent` | 버튼이 눌린 동안의 press, press 없는 drag나 release, click이 없거나 셋보다 많은 press, 모르는 phase와 모르는 버튼은 보내지 않는다. 그 press는 열린 press로, 나머지는 거절로 답한다. | all |
+| `platform.windows.input.only-delivered-pointer-changes-press` | 전달된 press만 그 버튼의 press를 열고 전달된 release만 닫는다. drag는 그대로 둔다. | all |
+| `platform.windows.input.key-becomes-key-event` | 키는 key, code, Windows 가상 키 코드를 담은 DevTools 호출 `Input.dispatchKeyEvent`가 된다. 글자를 치는 키는 text를 담은 `keyDown`, 글자를 치지 않는 키나 Control, Alt, Meta가 붙은 키는 text 없는 `rawKeyDown`, 떼기는 `keyUp`이다. Shift와 입력기의 text는 친 글자를 유지하고, 어떤 키도 이름 붙이지 않는 글자는 text만 담아 보낸다. | all |
+| `platform.windows.input.key-without-name-or-character-is-not-sent` | 키 이름도 한 글자도 아닌 키는 빈 키나 `Enterr`처럼 거절되고 보내지 않는다. | all |
+| `platform.windows.input.queue-sends-one-call-at-a-time` | web view의 입력 queue는 DevTools 호출을 한 번에 하나씩 보낸다. 다음 호출은 앞 호출이 끝난 뒤에 시작하고, 각 호출은 끝날 때 답한다. | all |
+| `platform.windows.input.queue-emulates-focus-before-first-input-only` | queue는 첫 입력 전에 `Emulation.setFocusEmulationEnabled` `{enabled: true}`로 page의 focus emulation을 켜고, 이후 입력에는 그 호출을 보내지 않는다. | all |
+| `platform.windows.input.failed-call-answers-its-failure` | 실패로 끝난 호출은 그 실패를 호출자에게 답한다. | all |
+| `platform.windows.input.unanswered-failure-goes-to-next-input` | 답할 호출자가 없는 호출의 실패는 다음 입력이 돌려주고, 그다음 입력은 받는다. | all |
+| `platform.windows.input.call-that-cannot-start-answers-and-next-runs` | web view가 시작을 거절한 호출은 그 실패를 곧바로 답하고, 다음 호출은 보낸다. | all |
+| `platform.windows.input.incomplete-call-ends-wait-and-stops-queue` | 기다리는 시간 안에 끝나지 않은 호출은 시간이 다 됐다고 답하고, 그 호출이 열린 동안 다음 입력은 `did not complete`로 실패하며, 늦은 완료는 아무것도 답하지 않고, 그 뒤 queue는 다시 보낸다. | all |
+| `platform.windows.input.completed-call-ends-its-wait` | 끝난 호출은 기다림의 timer를 취소한다. | all |
+| `platform.windows.input.call-answer-becomes-pointer-result` | pointer 호출의 답이 그 결과가 된다. 끝난 호출은 delivered, 시간이 다 된 호출은 unreceived, 실패한 호출은 rejected다. | all |
+| `platform.windows.capture.view-that-does-not-draw-is-refused` | 최소화된 창, 보이지 않는 창, 숨은 view의 capture는 그 상태를 이름으로 든 실패로 거절하고, 보이는 view는 capture한다. | all |
+| `platform.windows.capture.incomplete-capture-ends-its-wait` | 기다리는 시간 안에 끝나지 않은 capture는 가려진 view를 이름으로 든 실패를 답하고, 늦은 완료는 아무것도 답하지 않는다. | all |
+| `platform.windows.capture.completed-capture-answers-once` | 끝난 capture는 한 번 답하고 기다림의 timer를 취소한다. | all |
+| `platform.windows.capture.still-must-be-an-image` | still은 bytes가 PNG signature로 시작할 때만 받는다. 빈 bytes와 다른 bytes는 실패한다. | all |
+| `platform.windows.mouse.mask-follows-raw-input-buttons` | button mask는 raw mouse 입력의 각 버튼 flag를 따른다. down은 그 버튼의 bit를 켜고 up은 끄며, 한 입력에 같은 버튼의 down과 up이 함께 있으면 bit는 꺼진 채이고, move나 wheel 입력은 버튼을 이름으로 들지 않고 mask를 유지한다. | all |
+| `platform.windows.mouse.held-buttons-name-their-bits` | 시스템이 눌렸다고 보고한 버튼은 mask에서 그 버튼의 bit를 켠다. | all |
+| `platform.windows.mouse.button-watch-reports-mask-from-its-start` | button watch는 시작할 때 눌린 mask를 보고하고, 그 뒤 각 버튼 입력 뒤의 mask를 보고한다. move나 wheel 입력은 아무것도 보고하지 않는다. | all |
+| `platform.windows.mouse.second-button-watch-is-refused` | 첫 button watch가 도는 동안 두 번째 watch는 거절한다. | all |
+| `platform.windows.mouse.drag-over-surface-reaches-window-in-order` | 감시하는 surface 위의 주 버튼 press는 pointer 아래 view와 함께 그 창에 닿고, press, 각 move, release가 위치와 함께 순서대로 surface에 닿는다. release 뒤의 move는 아무 데도 닿지 않는다. | all |
+| `platform.windows.mouse.fast-click-still-ends-its-drag` | UI thread가 press를 돌리기 전에 도착한 press와 release도 surface에 press와 release로 닿는다. | all |
+| `platform.windows.mouse.page-drag-never-wakes-ui-thread` | 감시하는 surface가 아니라 page 위에서 시작한 drag는 UI thread에 단계를 보내지 않고 어느 surface에도 닿지 않는다. | all |
+| `platform.windows.mouse.move-without-position-change-wakes-nothing` | drag 중 위치를 바꾸지 않는 move나 wheel 입력은 단계를 보내지 않는다. | all |
+| `platform.windows.mouse.press-over-another-window-is-not-delivered` | 감시하지 않는 창이나 창이 없는 곳의 press와 그 release는 전달하지 않는다. | all |
+| `platform.windows.mouse.primary-button-follows-system-exchange` | 시스템이 마우스 버튼을 바꿔 두면 오른쪽 버튼이 주 버튼이다. 그 버튼이 drag를 시작하고, 왼쪽 버튼은 hit를 읽지 않는다. | all |
+| `platform.windows.mouse.secondary-button-is-no-drag` | 감시하는 surface 위의 보조 버튼 press는 drag를 시작하지 않는다. | all |
+| `platform.windows.mouse.removed-watch-takes-no-input` | 제거된 창의 watch는 press, 단계, release를 받지 않는다. | all |
+| `platform.windows.mouse.read-failure-is-reported-and-release-ends-drag` | drag 중 위치를 읽지 못하면 입력마다 그 실패를 보고하고, release는 마지막으로 읽은 위치에서 drag를 끝낸다. | all |
+| `platform.windows.mouse.unreadable-hit-is-reported` | hit를 읽지 못한 press는 그 실패를 보고하고 어느 surface에도 닿지 않는다. | all |
+| `platform.windows.ui-queue.tasks-run-in-order-once` | UI queue의 task는 들어온 순서대로 한 번씩 돌고, UI thread의 단계 전에는 하나도 돌지 않는다. | all |
+| `platform.windows.ui-queue.task-queued-by-task-waits-for-later-step` | 도는 task가 넣은 task는 그것을 넣은 단계가 아니라 다음 단계에 돈다. | all |
+| `platform.windows.ui-queue.refused-task-never-runs` | queue가 거절한 task는 곧바로 실패하고 돌지 않으며, 나중 task는 받아서 돈다. | all |
+| `platform.windows.ui-queue.refuses-before-its-thread` | UI thread가 시작하기 전에 queue는 task를 `the UI thread has not started`로 거절하고, 지연 task는 timer를 시작하지 않고 거절한다. | all |
+| `platform.windows.ui-queue.delayed-task-runs-as-step-after-wait` | 지연 task는 timer에 기다릴 시간을 요청하고, timer가 울린 뒤 UI thread의 첫 단계에서 돈다. timer의 thread에서는 돌지 않는다. | all |
+| `platform.windows.ui-queue.refused-delayed-task-enters-later` | timer가 울릴 때 queue가 거절한 지연 task는 한 번 보고되고 재시도 시간 뒤 다시 들어가며, 그 뒤 한 단계에서 돈다. | all |
+| `platform.windows.ui-queue.negative-delay-is-refused` | 기다릴 시간이 음수인 지연 task는 거절하고 timer를 시작하지 않는다. | wailsv3, mygo only: Rust task의 지연은 음수 값이 없는 `Duration`이다 |
+| `platform.windows.show.only-foreground-shows-with-activation` | 창은 이 application이 foreground를 가진 동안에만 활성화하며 보이고, 그 밖에는 활성화하지 않고 보인다. | all |
+| `platform.windows.show.position-change-keeps-the-front` | foreground 밖에서 창을 보이는 위치 변경에는 활성화 안 함과 z-order 유지를 더해 앞 창이 앞에 남는다. foreground 안의 show와 아무것도 보이지 않는 변경은 요청한 그대로 둔다. | tauriv2 only: tao는 host가 고쳐 쓰는 위치 변경으로 창을 보이고, Go host들은 host의 show로 창을 보인다 |
+| `platform.windows.page-process.failure-kind-decides-the-page` | WebView2의 browser process나 render process가 끝나면 page가 끝나고, 다른 종류의 process 실패는 page를 유지한다. | all |
 | `log.application.start-replaces-standard-error` | 애플리케이션 로그를 시작하면 실행의 첫 줄을 쓰고 그 파일을 프로세스와 그 프로세스가 시작하는 자식의 표준 오류로 만든다. | all |
 | `log.error.line-form` | 헬퍼로 쓴 호스트 오류는 애플리케이션 로그의 기록 `<time> error host <where>: <text>`다. | all |
 | `log.transcript.line-reaches-the-application-log` | 창의 진단 기록 줄은 `info host transcript <window>: <line>`으로도 쓰고, Wails host는 진단 기록이 싣는 오류를 `error host <operation> <window>: <error>`로도 써서, 진단 기록을 요청한 연결이 없어도 그 줄이 남는다. | all |
@@ -510,6 +552,7 @@ fn invalid_json_closes_connection() {
 | `sidecars-transport.persistent.connection-events` | host가 영구 service에 연결할 때마다 `name`, service `pid`, `spawned`를 가진 event `host.sidecar.connect`가 있고, 그 끝은 `name`, `pid`, `stopping`, 위반 문구 `violation`(service가 연결을 닫았으면 빈 문자열)을 가진 event `host.sidecar.disconnect`다. | all |
 | `windows.events.window-event-is-recorded` | 창 event는 `window`와 `kind`(`resize`, `move`, `scale_factor_changed`, `show`, `hide`, `occlusion_changed`, `focus`, `lost_focus`, `close_requested`, `closed`, `web_process_ended`, `navigation_committed`, `window-active`)를 가진 event `host.window.event`이며, `resize`, `move`, `scale_factor_changed`는 level `debug`, 나머지는 `info`다. 목록에 없는 kind는 표준 오류에 보고하고 아무것도 저장하지 않는다. | all |
 | `application.window.scale-change-refreshes-rasters` | window의 backing scale이 바뀌면 그 window의 image raster refresh가 시작되고, window가 움직이기만 하면 시작되지 않는다. | all |
+| `application.window.gone-window-reads-no-state-on-change` | native window가 사라진 뒤 창이 보고한 변경은 그 창의 상태를 읽지 않고 오류를 보고하지 않는다. | wailsv3, mygo only: Rust host는 region을 만들 때만 창의 on-screen 상태를 읽으므로, 닫힌 창의 변경은 거기서 아무것도 읽지 않는다 |
 | `application.events.app-event-is-recorded` | 애플리케이션 event는 `kind`(`started`, `activated`, `deactivated`, `exit_requested`, `exit`)를 가진 event `host.app.event`이며 level은 `info`다. 목록에 없는 kind는 표준 오류에 보고하고 아무것도 저장하지 않는다. | all |
 | `application.launch.system-decides-activation` | host는 다른 애플리케이션이 active인 동안 실행을 마칠 때 스스로 activate하지 않으므로 Launch Services가 실행의 activation을 결정한다([launch activation](hosts.md#launch-activation)). | all |
 | `application.window.opens-without-taking-the-front` | 시스템이 active 로 보는 애플리케이션의 window 는 앞으로 온다. 시스템이 active 로 보지 않는 애플리케이션은 보이는 window 를 앞 window 뒤에 두고 앞 애플리케이션을 그대로 둔다([launch activation](hosts.md#launch-activation)). | all |
@@ -584,6 +627,8 @@ fn invalid_json_closes_connection() {
 | `images.ack.consumed-carries-frame-identity` | 표시에 성공하면 consumed와 프레임의 name, generation, raster, sequence로 응답한다. | all |
 | `images.ack.leased-carries-frame-identity` | lease 방식 영역의 표시에 성공하면 leased와 프레임의 name, generation, raster, sequence로 응답한다. | all |
 | `images.lease.released-carries-frame-identity` | lease 방식 영역이 surface를 더 쥐지 않게 되면, 호스트는 그 surface가 담았던 프레임의 name, generation, raster, sequence와 함께 released를 공급자에게 보낸다. | all |
+| `images.lease.release-after-window-close-sends-nothing` | 창이 닫힌 뒤 도착한 lease region의 release는 supplier에 아무것도 보내지 않고 실패도 보고하지 않는다. supplier가 이미 그 surface를 끝냈기 때문이다. | tauriv2 only: Go host들은 region을 닫는 중에, supplier에서 surface가 닫히기 전에 release를 보내므로, 창이 닫힌 뒤 오는 release가 없다 |
+| `images.lease.failed-release-is-reported` | 열린 창에서 supplier가 받지 못한 lease region의 release는 그 실패를 보고한다. | all |
 | `images.ack.failure-carries-error-and-frame-identity` | 표시에 실패하면 오류와 프레임의 name, generation, raster, sequence로 응답한다. | all |
 | `images.transfer.rejects-duplicate-sequence` | 현재 raster에서 같은 sequence를 반복하면 stale로 응답한다. | all |
 | `images.transfer.reconfigure-advances-raster` | 새 크기를 구성하면 더 큰 raster 번호를 반환한다. | all |
