@@ -367,3 +367,14 @@ test('a make target that runs a check names what it reads and no target repeats 
     .map((other) => `${one.name} repeats ${other.name}`));
   assert.deepEqual(repeats, [], 'a check has one command: a second target with the same recipe is a second name');
 });
+
+test('every make target that a workflow runs exists', () => {
+  const declared = new Set([...read('Makefile').matchAll(/^([a-z0-9][a-z0-9-]*):/gm)].map((match) => match[1]));
+  const missing = [];
+  for (const file of readdirSync(WORKFLOWS)) {
+    for (const [, words] of read(`.github/workflows/${file}`).matchAll(/^\s*(?:run:\s*)?make(?: -C core)? ((?:[a-z0-9-]+ ?)+)(?:\s|$)/gm)) {
+      for (const target of words.trim().split(/\s+/)) if (!declared.has(target)) missing.push(`${file}: ${target}`);
+    }
+  }
+  assert.deepEqual(missing, []);
+});

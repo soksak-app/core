@@ -224,7 +224,7 @@ jobs:
           CARGO_NET_OFFLINE: 'true'
           CARGO_INCREMENTAL: '0'
           OFFLINE: '1'
-        run: make -C core docs-check boundaries platforms hosts-check exposure-check parity-check host-parity-check events-check
+        run: make -C core docs-check boundaries-check platforms-check host-layout-check exposure-check test-inventory-check host-parity-check events-check
       - name: Cross-toolchain script tests
         env:
           npm_config_offline: 'true'
