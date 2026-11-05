@@ -96,3 +96,13 @@ func TestTheSearchOfPluginsIsTheWholeField(t *testing.T) {
 		t.Fatalf("the search is %+v, want x 611, 250x29", search)
 	}
 }
+
+// The field of a rename has the line height of the page.
+func TestTheRenameFieldHasTheHeightOfThePage(t *testing.T) {
+	f := openedShell(t)
+	id := f.host.projects[0]["id"].(string)
+	doubleClick(f, f.box("core.project-tab", id))
+	if field := f.box("core.rename.input", ""); !designNear(field.H, 19) {
+		t.Fatalf("the field is %v tall, want 19", field.H)
+	}
+}
