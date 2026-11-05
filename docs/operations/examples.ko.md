@@ -247,7 +247,7 @@ three-host benchmark B3는 다섯 application에서 한 session으로 [performan
 
 baseline host는 baseline record가 나열한, [public registry](../spec/registry.ko.md) index의 plugin release를 설치한다. 이 release는 version 선택이 baseline revision의 core version에 대해 고른 것이며, 설치된 version이나 `sha256`이 그 record와 다르면 run이 실패한다. baseline revision의 core version은 공개 registry의 `core.json`이 나열하는 version이고, baseline host는 `exposes.element`를 선언하는 release 이전에 발행된 plugin release를 실행한다. other host와 mygo host는 모든 창 검사처럼 workspace registry에서 plugin을 설치한다. 다섯 application은 모두 각 phase에서 other host의 checkout에서 한 번 실행한 `make build-registry SIDECARS=diagnostic`이 build한 sidecar release를 실행하므로, 모든 application이 같은 sidecar build를 실행한다; `make build-registry SIDECARS=diagnostic PLUGINS=public`이 같은 checkout에서 baseline host의 index를 쓴다.
 
-S13의 accessibility client에 필요하므로, display를 켜고 Accessibility 권한을 갖춘 상태에서 실행한다:
+각 run은 첫 target 전에 첫 창을 `input.pointer`로 활성화한다. 창은 앞 창 뒤에 열리고 가려진 창은 다른 상태를 재기 때문이다. 그래서 run은 key window를 가져간다. 활성화가 거부되거나 창이 계속 가려지면 run은 실패하고 아무것도 재지 않는다. S13의 accessibility client에 필요하므로, display를 켜고 Accessibility 권한을 갖춘 상태에서 실행한다:
 
 ```
 make benchmark-b3 PHASE=1|final RUNS=7 BASELINE=<baseline branch의 checkout>
