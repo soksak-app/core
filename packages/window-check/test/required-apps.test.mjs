@@ -20,16 +20,15 @@ async function withSet(value, run) {
 }
 
 test("requiredApps covers every application when SOKSAK_APP is unset", () => {
-  assert.deepEqual(harness.requiredApps({}), ["wailsv3", "tauriv2"]);
+  assert.deepEqual(harness.requiredApps({}), ["wailsv3", "tauriv2", "mygo"]);
 });
 
 test("requiredApps covers only the application that SOKSAK_APP names", () => {
   assert.deepEqual(harness.requiredApps({ SOKSAK_APP: "tauriv2" }), ["tauriv2"]);
 });
 
-test("requiredApps accepts mygo as SOKSAK_APP and keeps it out of the set without SOKSAK_APP", () => {
+test("requiredApps accepts mygo as SOKSAK_APP", () => {
   assert.deepEqual(harness.requiredApps({ SOKSAK_APP: "mygo" }), ["mygo"]);
-  assert.deepEqual(harness.requiredApps({}), ["wailsv3", "tauriv2"]);
 });
 
 test("requiredApps rejects a SOKSAK_APP that names no application", () => {
@@ -70,18 +69,16 @@ test("open returns null without reading the binary of an application outside the
   });
 });
 
-test("requiresAll is true only when the required set holds every application of the default set", () => {
+test("requiresAll is true only when the required set holds every application", () => {
   assert.equal(harness.requiresAll({}), true);
   assert.equal(harness.requiresAll({ SOKSAK_APP: "wailsv3" }), false);
   assert.equal(harness.requiresAll({ SOKSAK_APP: "tauriv2" }), false);
   assert.equal(harness.requiresAll({ SOKSAK_APP: "mygo" }), false);
 });
 
-test("requiresAll reads the default set, so a default set of three applications is not held by a required set of two", () => {
-  const three = ["wailsv3", "tauriv2", "mygo"];
-  assert.deepEqual(harness.requiredApps({}), ["wailsv3", "tauriv2"]);
-  assert.equal(harness.requiresAll({}, three), false);
-  assert.equal(harness.requiresAll({}, ["wailsv3", "tauriv2"]), true);
+test("requiresAll holds only for a set that covers the mygo application", () => {
+  assert.ok(harness.requiredApps({}).includes("mygo"), "the session without SOKSAK_APP does not cover mygo");
+  assert.equal(harness.requiresAll({}), true);
 });
 
 test("APP_NAMES names the three applications that SOKSAK_APP may name", () => {

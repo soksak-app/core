@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F502-24: A release builds, audits and packages the mygo application as `soksak-<version>-darwin-arm64-mygo.zip`, and `make e2e` builds and starts it, so a window session without `SOKSAK_APP` covers the three applications.
 - F502-21: `setDialogBackground` takes an object `{enabled}`, as every other host call does, and a row B of the framework table lists it as the call that only mygo has, so the host parity check passes. A row P lists `Frontend.Frames`.
 - F502-16: A hidden element of the mygo workbench keeps its index among the elements of its name, as a page element under `display:none`, so a window check that names a tab by its place in `core.grid` reaches that tab through every stage of a card head and through a full screen card. The bar is the element `core.chrome.bar`.
 - F502-16: The mygo workbench answers `core.plugin.open-calls`, `core.plugin.losses` and `core.plugin.views`.

@@ -3,18 +3,18 @@
 // later version series carries no diagnostic code and embeds the release page diagnostic module.
 //
 // Diagnostic code (the diagnostic methods of the host, window recording, the page diagnostic module) is included only in diagnostic builds. This check
-// reads every executable in Contents/MacOS of the given bundle. Both applications put the frontend into the executable without compression,
+// reads every executable in Contents/MacOS of the given bundle. Each application puts the frontend into the executable without compression,
 // so every file that the workbench publishes and the release page diagnostic module must appear verbatim in the executable for
 // the frontend to be checked. If any is missing, the frontend cannot be read and the check reports an error. The workbench is found as a dependency of the application
-// package.json. Plugins and sidecars are not in the bundle; they are installed into the configuration folder (docs/spec/installation.md).
+// package.json. An application whose environment.json names no runtime has no main page, so its frontend is the staged view root, every file of its frontend folder. Plugins and sidecars are not in the bundle; they are installed into the configuration folder (docs/spec/installation.md).
 // `make release-check` runs the release build first.
 //
 // The check compares each selected bundle with the macOS minimum of the Makefile (`MACOS_MINIMUM`): Info.plist declares
 // it in LSMinimumSystemVersion, the application executable is built for it, and no other executable is built for a newer
-// macOS (docs/spec/hosts.md#nativedarwin). Without --host, both application bundles remain required.
+// macOS (docs/spec/hosts.md#nativedarwin). Without --host, every application bundle remains required.
 //
-//   node scripts/check-release.mjs --macos-minimum VERSION --wailsv3-bundle PATH --tauriv2-bundle PATH
-//   node scripts/check-release.mjs --host wailsv3|tauriv2 --macos-minimum VERSION --<host>-bundle PATH
+//   node scripts/check-release.mjs --macos-minimum VERSION --wailsv3-bundle PATH --tauriv2-bundle PATH --mygo-bundle PATH
+//   node scripts/check-release.mjs --host wailsv3|tauriv2|mygo --macos-minimum VERSION --<host>-bundle PATH
 // The frontend of a host is read from its application directory, apps/<host> of the checkout unless --<host>-app DIR
 // gives another one; the application directory holds src/frontend (the staged frontend) and the workbench dependency.
 import { parseArgs } from "node:util";
@@ -25,7 +25,7 @@ import { plistString, RELEASE } from "./check-versions.mjs";
 
 const ROOT = new URL("../", import.meta.url).pathname;
 
-const APPS = ["wailsv3", "tauriv2"];
+const APPS = ["wailsv3", "tauriv2", "mygo"];
 
 /** The markers of diagnostic code: diagnostic method names, recording library symbols, and sidecar diagnostic symbols. */
 const MARKS = [
@@ -62,11 +62,12 @@ const latin1 = (bytes) => Buffer.from(bytes).toString("latin1");
 /**
  * Checks the frontend included in an application executable. text is the executable read as latin1.
  * published is the files {path, bytes} that the workbench publishes, and releaseModule is the bytes of the release page diagnostic module.
- * If a published file or the release module is not present verbatim, the check reports that the frontend cannot be read.
+ * If a published file or the release module is not present verbatim, the check reports that the frontend cannot be read. A frontend
+ * without a main page has no page module: pageModule is null.
  */
 export function auditFrontend(errors, label, text, { published, pageModule, pageModuleName }) {
   const missing = published.filter((file) => !text.includes(latin1(file.bytes))).map((file) => file.path);
-  if (!text.includes(latin1(pageModule))) missing.push(pageModuleName);
+  if (pageModule !== null && !text.includes(latin1(pageModule))) missing.push(pageModuleName);
   if (missing.length) errors.push(`${label}: does not embed a readable frontend; missing ${missing.join(", ")}`);
 }
 
@@ -144,9 +145,20 @@ export function frontendSources(workbench, frontend, diagnostic) {
   return { published, pageModule, pageModuleName: `page diagnostics module ${source}` };
 }
 
-/** The frontend that the application directory staged, and the workbench that the application depends on. */
+/** The files that a release of an application without a main page embeds: every file of the staged view root, and no page module. */
+export function viewRootSources(frontend) {
+  const published = [...expand(frontend, "")].map((path) => ({ path, bytes: readFileSync(join(frontend, path)) }));
+  return { published, pageModule: null, pageModuleName: null };
+}
+
+/**
+ * The frontend that the application directory staged. An application whose environment.json names a runtime has a main page, so the
+ * workbench that it depends on says which files staging wrote; any other application staged the view root.
+ */
 function applicationSources(appDir, diagnostic) {
-  return frontendSources(packageDir(appDir, "@soksak/workbench"), join(appDir, "src/frontend"), diagnostic);
+  const frontend = join(appDir, "src/frontend");
+  const { runtime } = JSON.parse(readFileSync(join(appDir, "environment.json"), "utf8"));
+  return runtime === undefined ? viewRootSources(frontend) : frontendSources(packageDir(appDir, "@soksak/workbench"), frontend, diagnostic);
 }
 
 // Runs the check only when executed directly as a CLI.
@@ -162,7 +174,7 @@ if (import.meta.main) {
     seen.add(token.name);
   }
   const selectedHost = values.host;
-  if (selectedHost !== undefined && !APPS.includes(selectedHost)) throw new Error("--host must be wailsv3 or tauriv2");
+  if (selectedHost !== undefined && !APPS.includes(selectedHost)) throw new Error("--host must be wailsv3, tauriv2 or mygo");
   const apps = selectedHost === undefined ? APPS : [selectedHost];
   const minimum = values["macos-minimum"];
   if (minimum !== undefined && !/^\d+\.\d+(?:\.\d+)?$/.test(minimum)) throw new Error("--macos-minimum requires a macOS version such as 14.4");
@@ -192,7 +204,7 @@ if (import.meta.main) {
       throw new Error(`required release option: --${selectedHost}-bundle PATH`);
     }
   } else if (minimum === undefined || bundles.size !== APPS.length) {
-    throw new Error("required release options: --macos-minimum VERSION --wailsv3-bundle PATH --tauriv2-bundle PATH");
+    throw new Error("required release options: --macos-minimum VERSION --wailsv3-bundle PATH --tauriv2-bundle PATH --mygo-bundle PATH");
   }
   const errors = [];
   // The version of the release is the declared workspace version.

@@ -202,7 +202,7 @@ Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`
 
 `make hosts-check`는 `make windows-build-check`를 실행하며, 이 target은 Go language host library와 Wails framework adapter의 source를 기본 build와 diagnostics build에서 `windows/arm64`용으로 vet한다.
 
-`make hosts-check`는 `make host-debug-check`도 실행하며, 이 target은 두 host와 두 앱의 source와 test를 debug 앱의 feature와 tag로 macOS용으로 컴파일한다. `make tauriv2-build`, `make wailsv3-build`, 이 check는 그 구성을 Makefile의 정의 하나에서 읽는다.
+`make hosts-check`는 `make host-debug-check`도 실행하며, 이 target은 세 host와 세 앱의 source와 test를 debug 앱의 feature와 tag로 macOS용으로 컴파일한다. `make tauriv2-build`, `make wailsv3-build`, `make mygo-build`, 이 check는 그 구성을 Makefile의 정의 하나에서 읽는다.
 
 ## Wails host의 main thread
 
@@ -400,9 +400,9 @@ macOS에서 각 애플리케이션은 애플리케이션 번들에서 실행된�
 
 | 명령 | 동작 |
 | --- | --- |
-| `make wailsv3-build`, `make tauriv2-build` | `native/darwin`과 프런트엔드를 빌드하고 스테이징한 뒤 디버그 실행 파일을 빌드한다 |
-| `make wailsv3-build-release`, `make tauriv2-build-release` | 릴리스 실행 파일을 빌드한다 |
-| `make wailsv3`, `make tauriv2` | 디버그 실행 파일을 빌드하고 실행한다 |
+| `make wailsv3-build`, `make tauriv2-build`, `make mygo-build` | `native/darwin`과 프런트엔드를 빌드하고 스테이징한 뒤 디버그 실행 파일을 빌드한다 |
+| `make wailsv3-build-release`, `make tauriv2-build-release`, `make mygo-build-release` | 릴리스 실행 파일을 빌드한다 |
+| `make wailsv3`, `make tauriv2`, `make mygo` | 디버그 실행 파일을 빌드하고 실행한다 |
 | `make registry`, `make install-plugins CONFIG=DIR` | `scripts/workspace-registry.json`이 선언한 plugin·sidecar repository로 `target/registry`에 workspace registry를 만들고([Repository](plugins.ko.md#repository)), 그 플러그인을 설정 디렉터리에 설치한다 |
 | `make rust-clippy-check` | Rust workspace의 모든 package와 test를 진단 feature가 있을 때와 없을 때 `-D warnings`로 clippy 검사한다. `make native-test`가 실행한다 |
 | `make native-test` | `make -C native/darwin test`, `packages/host/go`와 `packages/host/wailsv3`의 `go test`, `cargo test -p soksak-host -p soksak-host-tauriv2`를 실행한다. 호스트 검사는 진단 빌드와 일반 빌드로 각각 실행한다. 각 sidecar repository는 자기 test를 실행한다 |

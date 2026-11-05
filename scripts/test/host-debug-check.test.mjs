@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 
 const root = resolve(import.meta.dirname, "../..");
-const modules = ["apps/wailsv3", "packages/host/go", "packages/host/wailsv3", "packages/sok/go"];
+const modules = ["apps/wailsv3", "apps/mygo", "packages/host/go", "packages/host/wailsv3", "packages/host/mygo", "packages/sok/go"];
 
 function dryRun(target, ...skipped) {
   const options = ["native-darwin", ...skipped].flatMap((name) => ["-o", name]);
@@ -30,9 +30,9 @@ function assertCompilesDebugConfiguration(output) {
 }
 
 test("the debug check compiles the features and tags of the debug apps", { timeout: 60000 }, () => {
-  assertCompilesDebugConfiguration(dryRun("host-debug-check", "frontend-wailsv3-core", "frontend-tauriv2-core"));
+  assertCompilesDebugConfiguration(dryRun("host-debug-check", "frontend-wailsv3-core", "frontend-tauriv2-core", "frontend-mygo-core"));
 });
 
 test("hosts-check runs the debug check", { timeout: 60000 }, () => {
-  assertCompilesDebugConfiguration(dryRun("hosts-check", "frontend-wailsv3-core", "frontend-tauriv2-core"));
+  assertCompilesDebugConfiguration(dryRun("hosts-check", "frontend-wailsv3-core", "frontend-tauriv2-core", "frontend-mygo-core"));
 });

@@ -35,7 +35,7 @@ test("each run gets a new empty configuration root under target/e2e", { timeout:
   }
 });
 
-test("the plan prepares, starts both applications, checks and quits them in this order", { timeout: 5000 }, () => {
+test("the plan prepares, starts the three applications, checks and quits them in this order", { timeout: 5000 }, () => {
   const root = "/work";
   const configRoot = "/work/target/e2e/run";
   const plan = e2ePlan({ root, configRoot, script: "verify", native: "e2e" });
@@ -43,12 +43,15 @@ test("the plan prepares, starts both applications, checks and quits them in this
     ["prepare", "registry certificates"],
     ["prepare", "install plugins wailsv3"],
     ["prepare", "install plugins tauriv2"],
+    ["prepare", "install plugins mygo"],
     ["prepare", "start wailsv3"],
     ["prepare", "start tauriv2"],
+    ["prepare", "start mygo"],
     ["check", "window checks"],
     ["check", "native end-to-end tests"],
     ["cleanup", "quit wailsv3"],
     ["cleanup", "quit tauriv2"],
+    ["cleanup", "quit mygo"],
     ["cleanup", "remaining processes"],
   ]);
   for (const item of plan.filter((entry) => entry.kind === "run")) assert.equal(item.env.SOKSAK_CONFIG_ROOT, configRoot, item.name);
@@ -60,6 +63,13 @@ test("the plan prepares, starts both applications, checks and quits them in this
   ]);
   const checks = plan.find((item) => item.name === "window checks");
   assert.equal(checks.env.SOKSAK_BINARY_TAURIV2, "/work/target/debug/soksak-tauriv2.app/Contents/MacOS/soksak-tauriv2");
+  assert.equal(checks.env.SOKSAK_BINARY_MYGO, "/work/target/debug/soksak-mygo.app/Contents/MacOS/soksak-mygo");
+  assert.deepEqual(plan.find((item) => item.name === "start mygo").argv, [
+    "/work/target/debug/soksak-mygo.app/Contents/MacOS/soksak-mygo",
+    "--config-dir", "/work/target/e2e/run/soksak-check-mygo",
+    "--registry-ca", "/work/target/e2e/run/soksak-check-registry-tls/ca.pem",
+  ]);
+  assert.ok(plan.find((item) => item.name === "remaining processes").paths.includes("/work/target/debug/soksak-mygo.app"));
   assert.equal(checks.env.SOKSAK_CANDIDATE_REGISTRY, "file:///work/target/registry/index.json");
   assert.deepEqual(checks.argv.slice(2, 4), ["--script", "verify"]);
   assert.ok(!checks.argv.includes("--when-idle"));
