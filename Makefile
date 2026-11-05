@@ -72,10 +72,10 @@ measure-host-calls:
 # on with the class frame at debug before the measurement; TRACE=frame-records, which needs STEP=pointer, sets the trace state of the frame
 # records (scripts/measure-trace.mjs) for both moves of the pointer step. STATE prepares a state of the three-host benchmark B3 in a window of 1200 by 760
 # points through declared commands (docs/operations/examples.md); IDLE=1 then waits for the cursor idle timeout of every term and terminal tab
-# and for 3 seconds without a change of frames of host.window, and for the counts of the gate to be written before the first CPU reading; STEP=pointer measures a pointer move across the window with the HID moves of
-# e2e/real/hid.mjs, which needs the Accessibility permission and brings the window to the front. B3_OUT writes the B3 record of the
+# and for 3 seconds without a change of frames of host.window, and for the counts of the gate to be written before the first CPU reading; STEP=pointer measures a pointer move across the window with the moves of
+# input.pointer, which take no permission and leave the cursor, in a window that is already the key window and not occluded. B3_OUT writes the B3 record of the
 # measurement, its measurements and its conditions, to that file as JSON; one record holds the keys of one trace state, so with STEP=pointer
-# TRACE=0|1 writes the keys of the first move without hitTestP90Ms and TRACE=frame-records writes hitTestP90Ms alone. SOK defaults to the sok binary of target/debug.
+# TRACE=0|1 writes the keys of the first move without pointerMoveP90Ms and TRACE=frame-records writes pointerMoveP90Ms alone. SOK defaults to the sok binary of target/debug.
 measure-app-usage:
 	@case "$(CONFIG_DIR)" in '') echo "measure-app-usage requires CONFIG_DIR=DIR TRACE=0|1|frame-records [STATE=S0|S0b|S1|S9|S11|S12|S14|S15] [IDLE=1] [STEP=pointer] [B3_OUT=FILE] [INTERVAL=10] [SOK=PATH]" >&2; exit 2;; esac
 	@case "$(IDLE)" in ''|1) ;; *) echo "app-usage takes IDLE=1, not IDLE=$(IDLE)" >&2; exit 2;; esac
@@ -648,7 +648,7 @@ repeat-app-test:
 # The three-host benchmark B3 (scripts/benchmark-b3.mjs, docs/operations/examples.md#three-host-benchmark): it checks the BASELINE checkout
 # against target/b3/baseline.json, builds the release bundles of this checkout and of BASELINE and the two registry indexes, starts and
 # quits each application for each run of each scenario and writes one session folder under target/b3 for make check-b3. It runs
-# STEP=pointer, which brings a window to the front, so it runs with the Accessibility permission and the approval of the real-input tier.
+# the accessibility client of S13, so it runs with the Accessibility permission.
 benchmark-b3:
 	@case "$(PHASE)" in 1|final) ;; *) echo "benchmark-b3 requires PHASE=1|final RUNS=<n> BASELINE=<checkout>" >&2; exit 2;; esac
 	@case "$(RUNS)" in ''|*[!0-9]*|0*) echo "benchmark-b3 requires PHASE=1|final RUNS=<n> BASELINE=<checkout>" >&2; exit 2;; esac

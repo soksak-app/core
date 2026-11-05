@@ -768,11 +768,11 @@
       }
     },
     {
-      "id": "G8-S1-hit-test-p90",
+      "id": "G8-S1-pointer-move-p90",
       "goal": "G8",
       "scenario": "S1",
       "target": "make measure-app-usage STATE=S1 STEP=pointer TRACE=frame-records",
-      "measurement": "hitTestP90Ms",
+      "measurement": "pointerMoveP90Ms",
       "unit": "ms",
       "over": "median",
       "bound": {
