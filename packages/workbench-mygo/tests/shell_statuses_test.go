@@ -29,7 +29,11 @@ func status[T any](t *testing.T, f *shellFixture, name string) T {
 type gridRead struct {
 	Fullscreen *string `json:"fullscreen"`
 	Width      float64 `json:"width"`
-	Cards      []struct {
+	Plane      struct {
+		X float64 `json:"x"`
+		Y float64 `json:"y"`
+	} `json:"plane"`
+	Cards []struct {
 		ID         string  `json:"id"`
 		X          float64 `json:"x"`
 		W          float64 `json:"w"`
