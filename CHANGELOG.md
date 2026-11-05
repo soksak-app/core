@@ -39,6 +39,7 @@
 - F557: a page that loses the pointer stops hovering, in each order of the enter, the exit, and the move of its tracking area.
 - F570: `core.workbench.audit` of the mygo host reports an empty list, not `null`, when nothing is unbound.
 - F561: the activation run of the document check presses elsewhere in the window before its data stores end, because the web view of the last press stays held until the next one.
+- F561-1: the activation run of the document check makes no further press before its stores end; finding the holder of the web view stays open.
 - F560: a page that loses the pointer stops hovering, in each order of the enter, the exit, and the move of its tracking area.
 - F543: a press of `sok input pointer` in a key window passes the application, so local monitors see it and AppKit moves the first responder.
 - F544: a release no longer stops a later keyboard move: right after a click in a surface with an image region, the keyboard moves without waiting for the next release.

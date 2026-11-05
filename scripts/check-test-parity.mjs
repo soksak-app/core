@@ -229,6 +229,40 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F525",
+    implementation: [
+      { file: "packages/window-check/folder-wait.mjs", symbol: "RESCAN_REPORT" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/folder-wait-drop.test.mjs", id: "a report of lost events without a state rejects no wait and reads the folder once more" },
+    ],
+    expected: "A wait for a folder state reads the folder again at a report of lost events and goes on.",
+    levels: ["unit"],
+  },
+  {
+    id: "F560",
+    implementation: [
+      { file: "native/darwin/src/webview_input.m", symbol: "static void pointerLeft(WKWebView *view, NSEvent *event)" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/webview_input_test.m", id: "a move off the view on top leaves it before its exit comes" },
+      { file: "native/darwin/tests/webview_input_test.m", id: "overlapping areas hover the view on top" },
+    ],
+    expected: "A page that loses the pointer stops hovering, in any order of the moves and of the tracking events.",
+    levels: ["native"],
+  },
+  {
+    id: "F570",
+    implementation: [
+      { file: "packages/workbench-mygo/src/binder.go", symbol: "unbound := []Unbound{}" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/audit_test.go", id: "TestAnAuditWithNothingUnboundIsAnEmptyList" },
+    ],
+    expected: "The audit of the mygo host states an empty list when nothing is unbound.",
+    levels: ["unit"],
+  },
+  {
     id: "F397",
     implementation: [
       { file: "packages/host/rust/src/event_record.rs", symbol: "pub fn quit_with_cause(cause: &str, quit: impl FnOnce()) {" },
@@ -1144,6 +1178,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F559",
+    implementation: [
+      { file: "packages/host/mygo/src/frontend.go", symbol: "func WindowScale(invoke func(func()), name string, native func() unsafe.Pointer, read func(unsafe.Pointer) (string, error)) (float64, error) {" },
+      { file: "packages/workbench-mygo/src/plane_verify.go", symbol: "func (s *Shell) failWindowRead(err error) {" },
+    ],
+    tests: [
+      { file: "packages/host/mygo/tests/framework_test.go", id: "TestAScaleOfAClosedWindowCallsNoNativeCode" },
+      { file: "packages/workbench-mygo/tests/plane_verify_test.go", id: "TestAVerificationOfAClosedWindowShowsNoFailure" },
+      { file: "packages/workbench-mygo/tests/plane_verify_test.go", id: "TestTheWorkbenchStatusOfAClosedWindowShowsNoFailure" },
+      { file: "packages/workbench-mygo/tests/plane_verify_test.go", id: "TestAReadOfAnOpenWindowThatFailsIsShown" },
+    ],
+    expected: "A read of a closed window gives the error 1003 without native code and shows no workbench error, and any other failure of the read is shown.",
+    levels: ["unit"],
+  },
+  {
     id: "F549",
     implementation: [
       { file: "native/darwin/src/observe.m", symbol: "if (!sp_event_enabled(SP_CLASS_FRAME, SP_EVENT_DEBUG)) return;" },
@@ -1156,10 +1205,13 @@ const FEATURE_LINKS = [
   },
   {
     id: "F558",
+    implementation: [
       { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) replaceIdle()" },
       { file: "packages/host/rust/src/sidecars.rs", symbol: "fn replace_idle(&self)" },
       { file: "packages/workbench/projects.js", symbol: "sectionSurfacePlugin(surface)" },
       { file: "packages/workbench-mygo/src/sidebars.go", symbol: "func (s *Sidebars) surfacePlugin(surface string) string {" },
+    ],
+    tests: [
       { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestAnOutdatedServiceKeepsASurfaceThatALayoutHolds" },
       { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestALayoutSurfaceOfAnotherPluginDoesNotHoldAnOutdatedService" },
       { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestAnOutdatedServiceWaitsForTheFirstLayoutList" },
@@ -1168,11 +1220,18 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "an_outdated_service_waits_for_the_first_layout_list" },
       { file: "packages/workbench-mygo/tests/sidecar_sessions_test.go", id: "TestARetainNamesThePluginOfEachSurface" },
       { file: "packages/workbench/test/projects-switch.test.mjs", id: "the layouts hold the sections of every space of every project, whatever the window draws, with the sets of each project" },
+    ],
     expected: "An outdated persistent service stays while a project layout holds a surface of a plugin of its sidecar, and a list of the layouts without such a surface replaces it.",
+    levels: ["unit"],
+  },
+  {
     id: "F556",
     implementation: [{ file: "e2e/hwp-startup.mjs", symbol: "export async function collectHwpStartupResourceEvidence" }],
     tests: [{ file: "e2e/test/hwp-startup.test.mjs", id: "HWP startup collection fails when the document requests an address outside soksak" }],
     expected: "The HWP startup window check fails with each address outside soksak that the resource entries of the document name.",
+    levels: ["unit"],
+  },
+  {
     id: "F547",
     implementation: [
       { file: "packages/workbench-mygo/src/events.go", symbol: "if e.gatedTimer || e.sending || len(e.gated) == 0 {" },
@@ -1195,48 +1254,6 @@ const FEATURE_LINKS = [
     ],
     expected: "In each order of the enter, the exit and the move, only the view at the point hovers, and a view that loses the pointer hovers nothing.",
     levels: ["native"],
-    levels: ["unit"],
-  },
-  {
-    id: "F559",
-    implementation: [
-      { file: "packages/host/mygo/src/frontend.go", symbol: "func WindowScale(invoke func(func()), name string, native func() unsafe.Pointer, read func(unsafe.Pointer) (string, error)) (float64, error) {" },
-      { file: "packages/workbench-mygo/src/plane_verify.go", symbol: "func (s *Shell) failWindowRead(err error) {" },
-    ],
-    tests: [
-      { file: "packages/host/mygo/tests/framework_test.go", id: "TestAScaleOfAClosedWindowCallsNoNativeCode" },
-      { file: "packages/workbench-mygo/tests/plane_verify_test.go", id: "TestAVerificationOfAClosedWindowShowsNoFailure" },
-      { file: "packages/workbench-mygo/tests/plane_verify_test.go", id: "TestTheWorkbenchStatusOfAClosedWindowShowsNoFailure" },
-      { file: "packages/workbench-mygo/tests/plane_verify_test.go", id: "TestAReadOfAnOpenWindowThatFailsIsShown" },
-    ],
-    expected: "A read of a closed window gives the error 1003 without native code and shows no workbench error, and any other failure of the read is shown.",
-    levels: ["unit"],
-  },
-  {
-    id: "F559",
-    implementation: [
-      { file: "packages/host/mygo/src/frontend.go", symbol: "func WindowScale(invoke func(func()), name string, native func() unsafe.Pointer, read func(unsafe.Pointer) (string, error)) (float64, error) {" },
-      { file: "packages/workbench-mygo/src/plane_verify.go", symbol: "func (s *Shell) failWindowRead(err error) {" },
-    ],
-    tests: [
-      { file: "packages/host/mygo/tests/framework_test.go", id: "TestAScaleOfAClosedWindowCallsNoNativeCode" },
-      { file: "packages/workbench-mygo/tests/plane_verify_test.go", id: "TestAVerificationOfAClosedWindowShowsNoFailure" },
-      { file: "packages/workbench-mygo/tests/plane_verify_test.go", id: "TestTheWorkbenchStatusOfAClosedWindowShowsNoFailure" },
-      { file: "packages/workbench-mygo/tests/plane_verify_test.go", id: "TestAReadOfAnOpenWindowThatFailsIsShown" },
-    ],
-    expected: "A read of a closed window gives the error 1003 without native code and shows no workbench error, and any other failure of the read is shown.",
-    levels: ["unit"],
-  },
-  {
-    id: "F549",
-    implementation: [
-      { file: "native/darwin/src/observe.m", symbol: "if (!sp_event_enabled(SP_CLASS_FRAME, SP_EVENT_DEBUG)) return;" },
-    ],
-    tests: [
-      { file: "native/darwin/tests/observe_test.m", id: "a summary that a closed gate leaves due is no refused event" },
-    ],
-    expected: "A closed gate leaves the summary due without a count of the gate, and the first summary after the gate opens holds the deliveries since the earlier summary.",
-    levels: ["unit"],
   },
   {
     id: "F548",
@@ -1337,19 +1354,33 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/projects-switch.test.mjs", id: "a change of the store is read through the read of that change" },
     ],
     expected: "One change of the store is one read of the host for a window, and each listener receives a value of its own.",
+    levels: ["unit"],
+  },
+  {
     id: "F562",
+    implementation: [
       { file: "packages/workbench-mygo/tests/host_calls_test.go", symbol: "func (s steps) drain(t testing.TB)" },
       { file: "packages/workbench-mygo/tests/host_calls_test.go", symbol: "func workingGoroutine() string" },
+    ],
+    tests: [
       { file: "packages/workbench-mygo/tests/host_calls_test.go", id: "TestDrainWaitsForAHostCallThatRuns" },
       { file: "packages/workbench-mygo/tests/host_calls_test.go", id: "TestDrainEndsWhileAHostCallWaitsForTheTest" },
       { file: "packages/workbench-mygo/tests/host_calls_test.go", id: "TestDrainFollowsTheCallsOfAnAnswer" },
+    ],
     expected: "drain ends when no step waits and every other goroutine waits for something only another goroutine or the test can end.",
+    levels: ["unit"],
+  },
+  {
     id: "F571",
+    implementation: [
       { file: "scripts/b3-judge.mjs", symbol: "lines.push(`not measured ${value.id} ${name}`)" },
       { file: "scripts/measure-app-usage.mjs", symbol: "export function notMeasuredLines({ idle, marks })" },
+    ],
+    tests: [
       { file: "scripts/test/b3-judge.test.mjs", id: "a value that a host records in no run is printed as not measured, and it is no pass and no failure" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "an idle wait over a window whose frames is null reports that no frame was read, and frames that hold still report quiet" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "the report names the counters that no window reports and an idle wait that read no frame" },
+    ],
     expected: "A value that a host records in no run is printed as not measured, and an idle wait over a window whose frames is null says that it read no frame.",
     levels: ["unit"],
   },
@@ -12435,7 +12466,7 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // F503 states the framework fork that the Wails host pins in the native surfaces specification and in the go.mod comments; it
 // changes no runtime capability.
 // F524 corrects the release checks that the verification specification states; it changes no runtime capability.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
+const NON_CAPABILITY_COMPLETIONS = new Set(["F561", "F581", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66), the window checks of plugins (F110) and the registry listing of the hwp plugin (F141, registry items G37 and G38). Core cannot read
