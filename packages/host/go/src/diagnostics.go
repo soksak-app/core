@@ -67,6 +67,7 @@ func init() {
 	diagnosticMethods["diagnostics.native.window-color-space"] = diagnosticNativeWindowColorSpace
 	diagnosticMethods["diagnostics.objects"] = diagnosticObjects
 	diagnosticMethods["diagnostics.heap.profile"] = diagnosticHeapProfile
+	diagnosticMethods["diagnostics.cpu.profile"] = diagnosticCPUProfile
 	diagnosticMethods["diagnostics.gc.loop"] = diagnosticGCLoop
 	diagnosticMethods["diagnostics.process.exit"] = diagnosticProcessExit
 	diagnosticMethods["diagnostics.memory.pressure"] = diagnosticMemoryPressure
@@ -1761,6 +1762,32 @@ func diagnosticHeapProfile(e *Endpoint, _ *endpointConn, params json.RawMessage)
 		return nil, err
 	}
 	return map[string]any{"path": path}, nil
+}
+
+// diagnosticCPUProfile starts the CPU profile of the Go runtime with on: true and stops it with on: false, so a check profiles the work
+// of the host between its two requests (docs/spec/endpoint.md).
+func diagnosticCPUProfile(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+	var p struct {
+		On *bool `json:"on"`
+	}
+	if err := decode(params, &p); err != nil {
+		return nil, err
+	}
+	if p.On == nil {
+		return nil, rpcError(codeInvalidParams, "on is required")
+	}
+	if !*p.On {
+		path, err := StopCPUProfile()
+		if err != nil || path == "" {
+			return nil, err
+		}
+		return map[string]any{"path": path}, nil
+	}
+	h, _, err := diagnosticHost(e, params)
+	if err != nil {
+		return nil, err
+	}
+	return nil, StartCPUProfile(filepath.Join(h.workspace.directory, "logs"))
 }
 
 // collectGarbage is the collection of the loop of diagnostics.gc.loop.

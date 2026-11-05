@@ -26,6 +26,7 @@ Diagnostic recording은 native stream 소유권이 퇴역한 뒤 finish가 넘�
 | `log-policy.json` | host. 설정 `diagnostics.log`에서 쓴다 | JSON 문서 하나, event 로그의 [정책](logging.ko.md#정책)이며 모든 프로세스가 감시한다 | 설정이 바뀔 때 다시 쓴다 |
 | `<executable-name>.log` | 상주 service. host가 service의 standard error로 연다 | service가 쓰는 같은 형식의 글 기록 | host가 service를 시작할 때 100 MB이면 `<name>.1`로 이름을 바꾸고 이전 세대 다섯 개를 남긴다 |
 | `heap-<pid>-<ms>.pprof` | 진단 build의 Go host가 `diagnostics.heap.profile`에 쓴다 | Go runtime의 heap profile(`runtime/pprof`) | 없음. 요청마다 파일 하나 |
+| `cpu-<pid>-<ms>.pprof` | 진단 build의 Go host가 `diagnostics.cpu.profile`에 쓴다 | 시작과 멈춤 사이 Go runtime의 CPU profile(`runtime/pprof`) | 없음. 시작마다 파일 하나 |
 | `state-<time>.json` | debug view가 열릴 때 두 host | JSON 문서 하나 | 없음. 열 때마다 파일 하나 |
 | `captures/…` | 진단 빌드의 두 host | PNG와 frame 파일, `callback-status.jsonl`, `display-link.json`. Image-source matching을 요청하면 상한이 있는 source raster 파일과 manifest도 기록한다 | 요청한 쪽이 지운다 |
 

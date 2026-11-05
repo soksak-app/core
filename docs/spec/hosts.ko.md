@@ -280,8 +280,10 @@ Go language host library의 header `src/platform/darwin/main_thread.h`는 두 ma
 | H48 | `src/step_records.go`, `src/step_records_test.go` | 없음 | row P10 의 step 기록이다. main thread 의 callback 을 worker 에 넘기는 것은 Go framework 뿐이다 |
 | H50 | 없음 | `tests/support/platform/native_event.rs`, `tests/support/platform/darwin/native_event.rs`, `tests/support/platform/windows/native_event.rs` | 행 H42 의 integration test 는 자기 crate 이므로 운영체제마다 이 파일로 native ring 에 기록한다. Go test 는 library package 안에 있어 그 binding 을 쓴다 |
 | H51 | `src/diagnostics_no_main_page_test.go` | 없음 | Go framework 에만 main page 가 없는 경우가 있고, 이 test 는 그 창의 diagnostics 답을 지킨다 |
+| H56 | `src/diagnostics_cpu_profile_test.go` | 없음 | row E3 의 endpoint method 를 시험한다. 그 method 는 Go language host library 에만 있다 |
 | E1 | `diagnostics.heap.profile` | 없음 | 이 endpoint method는 Go runtime의 heap profile(`runtime/pprof`)을 쓴다. Rust language host library에는 profile할 garbage-collected heap이 없다. ID가 E로 시작하는 행은 endpoint method를 나열하고 `make check-hosts-same`가 그 행을 읽는다 |
 | E2 | `diagnostics.gc.loop` | 없음 | 이 endpoint method는 Go runtime의 `runtime.GC`를 쉬지 않고 돈다. Rust language host library에는 수집할 garbage-collected heap이 없다 |
+| E3 | `diagnostics.cpu.profile` | 없음 | 이 endpoint method는 Go runtime을 profile한다(`runtime/pprof`). `sample`은 goroutine을 호출자 frame 없이 읽지만, Rust language host library의 frame은 모두 읽는다 |
 | P1 | `Framework.Step` | 없음 | Go language host library는 main thread의 worker에서 실행되며 main thread의 step을 기다린다(H20 행). Rust language host library는 `post`로 step을 보내고 그 channel을 기다린다 |
 | P2 | 없음 | `Framework.spawn_blocking` | Go goroutine은 다른 작업을 막지 않는다. Rust language host library의 blocking 작업은 framework 비동기 runtime의 blocking thread에서 실행된다. 호스트는 그 runtime을 worker 둘로 만든다. worker는 await하고 page 파일에 답할 뿐이기 때문이다. blocking thread는 1초 동안 일이 없으면 끝난다 |
 | P3 | 없음 | `Framework.config_dir`, `Framework.home_dir` | Go는 두 directory를 표준 라이브러리(`os.UserConfigDir`, `os.UserHomeDir`)에서 읽는다. Rust 표준 라이브러리에는 설정 directory가 없어 framework가 둘 다 준다 |
