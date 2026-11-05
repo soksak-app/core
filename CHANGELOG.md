@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F615: Every target of B3 records in `occluded` whether its window is covered when it writes its output, and `make benchmark-b3` and `make check-b3` refuse a value of a covered window. S9 is the one scenario named as covered, where they refuse a window that is not covered. Each target also records `active`, and they refuse an application that is not active, so an activation that ended during a run fails it. An e2e benchmark and `e2e/input-latency.test.mjs` had no such reading, so a covered window could give a value without a failure. Red: `b3-out.test.mjs`, `b3-judge.test.mjs`, `b3-run.test.mjs` and `benchmark-b3.test.mjs`.
 - F611: A press over the frame of a hidden region stays with the view that it reached, so the keyboard does not go to a hidden tab and the drag of a divider or a tab is not cut off.
 - F616: `make benchmark-b3` builds its two registries with `make build-registry`. It named the target by its old name, so a session stopped at that build step. Red: `scripts/test/benchmark-b3.test.mjs` checks each make target of a build step against the Makefile.
 - F614: `make check-docs` fails on a conflict marker at the start of a line of a tracked or new text file, and names the file and the line. A merge commit that held markers had passed the check and the commit hook. Red: `scripts/test/checklist.test.mjs`.

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F615: B3의 모든 target은 output을 쓸 때 창이 가려졌는지를 `occluded`에 적고, `make benchmark-b3`와 `make check-b3`는 가려진 창의 값을 거부한다. S9는 가려진 scenario로 이름한 유일한 scenario이며, 여기서는 가려지지 않은 창을 거부한다. 각 target은 `active`도 적고, 활성이 아닌 application을 거부하므로 run 도중 활성화가 풀리면 run이 실패한다. e2e benchmark와 `e2e/input-latency.test.mjs`에는 이 읽기가 없어 가려진 창이 실패 없이 값을 낼 수 있었다. Red: `b3-out.test.mjs`, `b3-judge.test.mjs`, `b3-run.test.mjs`, `benchmark-b3.test.mjs`.
 - F611: 숨은 region의 frame 위 press는 그 press가 닿은 view에 남는다. keyboard가 숨은 tab으로 가지 않고 divider나 tab의 drag가 끊기지 않는다.
 - F616: `make benchmark-b3`는 두 registry를 `make build-registry`로 build한다. 옛 이름의 target을 불러 session이 그 build 단계에서 멈췄다. Red: `scripts/test/benchmark-b3.test.mjs`가 build 단계의 각 make target을 Makefile과 대조한다.
 - F614: `make check-docs`는 tracked 또는 새 text 파일의 줄 시작에 있는 conflict marker에서 실패하고 파일과 줄을 적는다. marker가 든 merge commit이 이 검사와 commit hook을 통과한 적이 있다. Red: `scripts/test/checklist.test.mjs`.

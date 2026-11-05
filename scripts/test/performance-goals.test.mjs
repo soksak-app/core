@@ -28,6 +28,7 @@ const WORDS = {
       fseventsdCoreBelow: (n) => ["CPU share of `fseventsd` at the start of a run", `below ${n} of a core`],
       window: (size) => [["Content size of the window of each scenario", `${size.width}×${size.height} points`]],
       scenarioWindows: (sizes) => Object.entries(sizes).map(([scenario, size]) => [`Content size of the window of ${scenario}`, `${size.width}×${size.height} points`]),
+      occludedScenarios: (scenarios) => [["Scenarios whose window is covered", scenarios.join(", ")]],
     },
     over: { median: "median", each: "each run" },
     bound: {
@@ -47,6 +48,7 @@ const WORDS = {
       fseventsdCoreBelow: (n) => ["run 시작 시 `fseventsd`의 CPU 비율", `core 하나의 ${n} 미만`],
       window: (size) => [["각 scenario의 window content 크기", `${size.width}×${size.height} point`]],
       scenarioWindows: (sizes) => Object.entries(sizes).map(([scenario, size]) => [`${scenario}의 window content 크기`, `${size.width}×${size.height} point`]),
+      occludedScenarios: (scenarios) => [["window가 가려지는 scenario", scenarios.join(", ")]],
     },
     over: { median: "median", each: "각 run" },
     bound: {

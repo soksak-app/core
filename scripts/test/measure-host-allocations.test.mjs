@@ -58,13 +58,13 @@ test("B3_MEASUREMENTS declares hostFootprintKb, the settled footprint in KB that
   assert.ok(Object.isFrozen(B3_MEASUREMENTS));
   const policy = { lifecycle: "error", input: "error", call: "error", io: "error", frame: "error" };
   const windows = [
-    { window: "w1", refreshRate: 120, scale: 2, content: { width: 1200, height: 760 }, frames: 41 },
+    { window: "w1", refreshRate: 120, scale: 2, content: { width: 1200, height: 760 }, frames: 41, occluded: false, active: true },
     { window: "w2", refreshRate: 120, scale: 2, content: { width: 600, height: 400 }, frames: null },
   ];
   const output = b3Output({ settledBytes: 81 * 1024 * 1024 + 512, windows, trace: 0, policy });
   assert.deepEqual(output, {
     measurements: { hostFootprintKb: 81 * 1024 + 0.5 },
-    conditions: { refreshRate: 120, backingScale: 2, traceState: false, logPolicy: policy, window: { width: 1200, height: 760 } },
+    conditions: { refreshRate: 120, backingScale: 2, traceState: false, logPolicy: policy, window: { width: 1200, height: 760 }, occluded: false, active: true },
   });
   assert.deepEqual(Object.keys(output.measurements), B3_MEASUREMENTS);
   assert.equal(b3Output({ settledBytes: 1024, windows, trace: 1, policy }).conditions.traceState, true);
