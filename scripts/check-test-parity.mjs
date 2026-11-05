@@ -1067,6 +1067,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F547",
+    implementation: [
+      { file: "packages/workbench-mygo/src/events.go", symbol: "if e.gatedTimer || e.sending || len(e.gated) == 0 {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/events_test.go", id: "TestTheReportOfTheCountsArmsNoTimerWhileABatchIsInFlight" },
+      { file: "packages/workbench-mygo/tests/events_test.go", id: "TestACountRefusedWhileABatchIsInFlightWaitsForTheRestOfItsInterval" },
+    ],
+    expected: "The report of the gate counts of the mygo workbench arms no timer while a batch is in flight.",
+    levels: ["unit"],
+  },
+  {
     id: "F538",
     implementation: [
       { file: "packages/workbench/section-surfaces.js", symbol: "export function spaceSectionSurfaces(space, cards, sets, links)" },
