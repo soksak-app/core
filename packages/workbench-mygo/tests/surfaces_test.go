@@ -22,7 +22,7 @@ const installedDocument = `{"plugins": [
 	{"id": "terminal", "package": "@scope/plugin-terminal", "version": "1.0.0", "sidecars": {"@scope/sidecar-vt": {}},
 		"manifest": {"id": "terminal", "name": "터미널", "description": "terminal", "mark": "◊", "icon": "<path d=\"M1 1h14\"/>",
 			"dependencies": {"@scope/sidecar-vt": "^1.0.0"},
-			"exposes": {"status": [{"name": "terminal.screen", "description": "the screen", "schema": {"type": "object", "properties": {}}}], "commands": [{"name": "terminal.drop", "description": "does it", "params": {"type": "object", "properties": {}}, "result": {"type": "null"}}, {"name": "terminal.input", "description": "does it", "params": {"type": "object", "properties": {}}, "result": {"type": "null"}}, {"name": "terminal.close", "description": "does it", "params": {"type": "object", "properties": {}}, "result": {"type": "null"}, "timeout": 40}]},
+			"exposes": {"element": [{"name": "terminal.view", "description": "the view"}], "status": [{"name": "terminal.screen", "description": "the screen", "schema": {"type": "object", "properties": {}}}], "commands": [{"name": "terminal.drop", "description": "does it", "params": {"type": "object", "properties": {}}, "result": {"type": "null"}}, {"name": "terminal.input", "description": "does it", "params": {"type": "object", "properties": {}}, "result": {"type": "null"}}, {"name": "terminal.close", "description": "does it", "params": {"type": "object", "properties": {}}, "result": {"type": "null"}, "timeout": 40}]},
 			"data": {"notes": {"schema": {"type": "string"}, "default": "none", "format": 2},
 				"marks": {"schema": {"type": "array", "items": {"type": "string"}}, "default": ["start"]},
 				"point": {"schema": {"type": "object"}, "default": {}}},

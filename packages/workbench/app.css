@@ -16,8 +16,6 @@
   /* Shape. Independent of the mode. The settings set --r, --half-gap, --bw, --font and --size from the theme (settings.js). --divider, the
      width in which the boundary line of a sidebar inside a card is pressed and dragged and the width that remains of a collapsed sidebar, is a
      chrome metric of workbench.json, as is every other length, ratio and duration that this stylesheet reads. */
-  /* Korean UI font for sidebar section names and empty-state text. */
-  --ui-font:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",system-ui,sans-serif;
 
   /* Font size and spacing of every screen. The font size is proportional to the default size of the settings. */
   --text-control:calc(var(--size) * var(--text-control-at-base) / var(--text-base));
@@ -616,7 +614,7 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 /* The head has the height of the card head, so the bottom line of the first sidebar head and the bottom line of the neighboring card head lie in one line. */
 .set__head,.set__tab{display:flex;align-items:center;gap:var(--section-head-gap);height:var(--head-h);flex:0 0 var(--head-h);box-sizing:border-box;padding:0 var(--section-head-pad);
   border:0;background:color-mix(in srgb,var(--fg) var(--section-head-mix),var(--card));color:var(--fg);
-  font:600 var(--section-head-text) var(--ui-font);letter-spacing:0;text-align:left;cursor:pointer}
+  font:var(--section-head-weight) var(--section-head-text) var(--ui-font);letter-spacing:0;text-align:left;cursor:pointer}
 /* The head line is an inner shadow, so the content box of the head is the same in every state and the name does not move. The bottom line is always present,
    and the top line is drawn only where the body ends because the previous section is expanded. When the previous section is collapsed, the bottom line of its head is the boundary. */
 .set__head{width:var(--fill);box-shadow:inset 0 calc(0px - var(--bw)) 0 var(--edge)}

@@ -49,10 +49,13 @@ func TestACardShowsItsSetBesideItsContent(t *testing.T) {
 	if side.X != box.X+cardBorder || side.W != 190 {
 		t.Fatalf("the sidebar stands at %+v in the card %+v", side, box)
 	}
+	// The page names the set core.sidebar, and the status line of the sidebar stands below it in the same column (plane.js draws
+	// `.set` and `.card-sidebar__status` in `.card-sidebar`): the column runs from below the header to the end of the footer.
 	head := f.box("core.card.header", card)
 	status := f.box("core.card.status", card)
-	if side.Y != head.Y+head.H || side.Y+side.H != status.Y+status.H {
-		t.Fatalf("the sidebar %+v does not run from below the header %+v to the end of the footer %+v", side, head, status)
+	line := f.box("core.card.sidebar.status", item)
+	if side.Y != head.Y+head.H || line.Y != side.Y+side.H || line.Y+line.H != status.Y+status.H {
+		t.Fatalf("the sidebar %+v and its status line %+v do not run from below the header %+v to the end of the footer %+v", side, line, head, status)
 	}
 	if status.X != box.X+cardBorder+side.W || status.W != box.W-2*cardBorder-side.W {
 		t.Fatalf("the footer %+v does not span the content column of the card %+v", status, box)
@@ -67,8 +70,9 @@ func TestATopSideLiesInTheContentColumn(t *testing.T) {
 	if top.X != left.X+left.W {
 		t.Fatalf("the top side %+v does not start after the left side %+v", top, left)
 	}
-	if top.H != 190 {
-		t.Fatalf("the top side is %+v", top)
+	// The top side is 190 tall: its set and the status line below the set.
+	if line := f.box("core.card.sidebar.status", card+":top"); line.Y != top.Y+top.H || top.H+line.H != 190 {
+		t.Fatalf("the top side is %+v and its status line %+v", top, line)
 	}
 	value, err := f.shell.Registry().Read("core.sidebars")
 	if err != nil {

@@ -57,6 +57,10 @@ type SidebarMetrics struct {
 	SectionHeadGap  float32
 	SectionHeadPad  float32
 	SectionHeadText float32
+	// SectionHeadWeight and SectionHeadFont are the weight and the font stack of the name of a section, which the page draws in the font of
+	// the system whatever font the settings choose.
+	SectionHeadWeight float32
+	SectionHeadFont   string
 	// SectionTabMark is the height of the mark of the selected tab of a `tabs` set.
 	SectionTabMark float32
 	// SectionHeadMix and SectionHeadHoverMix are the shares of the text color over the card in a section band, and in a band under
@@ -107,6 +111,8 @@ type SidebarFrame struct {
 	Side     string
 	Status   string
 	Sections []SidebarSection
+	// Set is the id of the set that the sidebar shows, and empty for a sidebar without a set.
+	Set string
 	// Rail is the color of the mark of the selected tab.
 	Rail ui.Color
 }
@@ -240,9 +246,22 @@ func sectionItem(frame SidebarFrame, section SidebarSection) string {
 // native view of the section surface stands, and at the end for each section that is not visible.
 func DrawSidebar(c *ui.Context, binder *Binder, drag *SectionDrag, frame SidebarFrame, metrics SidebarMetrics, width, height float32, seat seatDrawer) {
 	room := height - metrics.FootH
-	ui.Column(binder.Name(c, "core.sidebar", frame.Sidebar)).Size(width, height).Role(ui.RoleGroup).Label(frame.Sidebar).Clip().Children(func() {
+	// The group of the sidebar is its set, as the page names its container when it draws a set, and the set holds no status line. A
+	// sidebar without a set is a group as a whole and has no element.
+	named := frame.Set != ""
+	whole := ui.Column(c).Size(width, height).Clip()
+	if !named {
+		whole.Role(ui.RoleGroup).Label(frame.Sidebar)
+	}
+	whole.Children(func() {
 		// The set takes all the room, so a set of short sections leaves the status line at the bottom.
-		ui.Column(c).Size(width, room).Children(func() {
+		var set ui.Element
+		if named {
+			set = ui.Column(binder.Name(c, "core.sidebar", frame.Sidebar)).Size(width, room).Role(ui.RoleGroup).Label(frame.Sidebar)
+		} else {
+			set = ui.Column(c).Size(width, room)
+		}
+		set.Children(func() {
 			switch {
 			case frame.Layout == "tabs":
 				drawSectionTabs(c, binder, frame, metrics, width, room, seat)
@@ -278,7 +297,7 @@ func drawSectionHeader(c *ui.Context, binder *Binder, frame SidebarFrame, sectio
 			icon = chevronRight
 		}
 		ui.Icon(c, icon).Size(metrics.SectionHeadText, metrics.SectionHeadText)
-		ui.Text(binder.Name(c, "core.sidebar.section.name", item), section.Name).Label(section.Name).SingleLine().Ellipsis("…").FontSize(metrics.SectionHeadText).Bold().TextColor(theme.Text)
+		ui.Text(binder.Name(c, "core.sidebar.section.name", item), section.Name).Label(section.Name).SingleLine().Ellipsis("…").FontSize(metrics.SectionHeadText).Font(metrics.SectionHeadFont).FontWeight(int(metrics.SectionHeadWeight)).TextColor(theme.Text)
 	})
 }
 
@@ -414,7 +433,7 @@ func drawSectionTab(c *ui.Context, binder *Binder, frame SidebarFrame, section S
 		tab.Background(faded(theme.Text, metrics.SectionHeadHoverMix-metrics.SectionHeadMix))
 	}
 	tab.Children(func() {
-		ui.Text(c, section.Name).NoWrap().FontSize(metrics.SectionHeadText).Bold().TextColor(color).Padding(0, metrics.SectionHeadPad)
+		ui.Text(c, section.Name).NoWrap().FontSize(metrics.SectionHeadText).Font(metrics.SectionHeadFont).FontWeight(int(metrics.SectionHeadWeight)).TextColor(color).Padding(0, metrics.SectionHeadPad)
 		if selected {
 			ui.Box(c).Absolute().Left(0).Right(0).Bottom(0).Height(metrics.SectionTabMark).Background(frame.Rail)
 		}

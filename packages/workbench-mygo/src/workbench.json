@@ -726,6 +726,8 @@
     "section-head-pad": "10px",
     "section-head-mix": "3%",
     "section-head-text": "11.5px",
+    "section-head-weight": "600",
+    "ui-font": "-apple-system,BlinkMacSystemFont,\"Apple SD Gothic Neo\",system-ui,sans-serif",
     "section-head-hover-mix": "7%",
     "chevron": "1em",
     "chevron-stroke": "2",

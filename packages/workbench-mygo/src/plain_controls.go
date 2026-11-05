@@ -104,27 +104,28 @@ func (p PlainControls) field(c *ui.Context, field ui.Element) ui.Element {
 		})
 }
 
-// search gives a text field the look of an input of type search: a pill with a magnifier in front of the text, inside a box that
-// the ring of the browser goes around while it has the focus.
+// search gives a text field the look of an input of type search: the whole field, with a pill inside it by the inset and a magnifier
+// in front of the text. The ring of the browser goes around the field while it has the focus.
 func (p PlainControls) search(c *ui.Context, field ui.Element) ui.Element {
 	focused, ring := field.Focused(), p.ringColor(c)
-	height := p.Height - 2*p.SearchInset
-	padY := p.PadY + p.EdgeW - p.SearchInset
+	inset, height := p.SearchInset, p.Height-2*p.SearchInset
+	padY := p.PadY + p.EdgeW
 	magnifier := systemSymbol(c, searchSymbol, p.SearchIconPt)
-	return field.FillWidth().Height(height).Padding(padY, p.SearchTextEnd, padY, p.SearchTextX).Radius(height / 2).Background(p.Background).
+	return field.FillWidth().Height(p.Height).Padding(padY, p.SearchTextEnd+inset, padY, p.SearchTextX+inset).
+		Draw(func(painter *ui.Painter, box ui.Rect) {
+			painter.Fill(ui.Rect{X: box.X + inset, Y: box.Y + inset, W: box.W - 2*inset, H: box.H - 2*inset}, p.Background, height/2)
+		}).
 		TextColor(p.Fg).PlaceholderColor(p.Placeholder).FontSize(p.Size).DrawOver(func(painter *ui.Painter, box ui.Rect) {
-		painter.Symbol(magnifier, ui.Rect{X: box.X + p.SearchIconX, Y: box.Y + (box.H-p.SearchIconSize)/2, W: p.SearchIconSize, H: p.SearchIconSize}, p.SearchIcon)
+		painter.Symbol(magnifier, ui.Rect{X: box.X + inset + p.SearchIconX, Y: box.Y + (box.H-p.SearchIconSize)/2, W: p.SearchIconSize, H: p.SearchIconSize}, p.SearchIcon)
 		if focused {
-			inset := p.SearchInset
-			p.ring(painter, ui.Rect{X: box.X - inset, Y: box.Y - inset, W: box.W + 2*inset, H: box.H + 2*inset}, height/2+inset, ring)
+			p.ring(painter, box, p.Height/2, ring)
 		}
 	})
 }
 
-// searchBox is the box of a search, which takes the free width of its row as the input does in its grid column. The search lies
-// inside it by the inset.
+// searchBox is the box of a search, which takes the free width of its row as the input does in its grid column.
 func (p PlainControls) searchBox(c *ui.Context) ui.Element {
-	return ui.Box(c).Grow(1).Basis(0).Padding(p.SearchInset)
+	return ui.Box(c).Grow(1).Basis(0)
 }
 
 // drawSearchCancel draws the cancel of a search with a text, and reports its press. It takes no focus, as that of the browser.

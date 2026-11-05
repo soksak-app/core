@@ -12,13 +12,13 @@ import (
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
-var sidebarMetrics = workbench.SidebarMetrics{StatusGap: 6, StatusPad: 8, BorderWidth: 1, StatusText: 10, HeadH: 32, FootH: 22, SectionMinH: 32, SectionDivider: 6, SectionHeadGap: 6, SectionHeadPad: 10, SectionHeadText: 11.5, SectionTabMark: 2, FoldButton: 18, FoldIcon: 14, IconStroke: 1.3, FoldRadiusRatio: 0.5, FoldHoverMix: 0.1, SectionHeadMix: 0.03, SectionHeadHoverMix: 0.07}
+var sidebarMetrics = workbench.SidebarMetrics{SectionHeadWeight: 600, SectionHeadFont: "system-ui", StatusGap: 6, StatusPad: 8, BorderWidth: 1, StatusText: 10, HeadH: 32, FootH: 22, SectionMinH: 32, SectionDivider: 6, SectionHeadGap: 6, SectionHeadPad: 10, SectionHeadText: 11.5, SectionTabMark: 2, FoldButton: 18, FoldIcon: 14, IconStroke: 1.3, FoldRadiusRatio: 0.5, FoldHoverMix: 0.1, SectionHeadMix: 0.03, SectionHeadHoverMix: 0.07}
 
 func pixels(v int) *int { return &v }
 
 func listFrame() workbench.SidebarFrame {
 	return workbench.SidebarFrame{
-		Sidebar: "left", Space: "spc-1", Layout: "list", Orientation: "vertical", Side: "left",
+		Sidebar: "left", Space: "spc-1", Layout: "list", Set: "set-1", Orientation: "vertical", Side: "left",
 		Status: "왼쪽 창 사이드바",
 		Sections: []workbench.SidebarSection{
 			{ID: "files.tree", Name: "Files", Plugin: "files", Height: 100},
@@ -184,7 +184,7 @@ func TestTheSelectedTabHasTheRailMarkOnItsPlainBackground(t *testing.T) {
 func TestDraggingADividerSizesTheSectionBelowItWithAnIntegerHeight(t *testing.T) {
 	var calls []call
 	frame := workbench.SidebarFrame{
-		Sidebar: "left", Space: "spc-1", Layout: "list", Orientation: "vertical", Side: "left", Status: "s",
+		Sidebar: "left", Space: "spc-1", Layout: "list", Set: "set-1", Orientation: "vertical", Side: "left", Status: "s",
 		Sections: []workbench.SidebarSection{
 			{ID: "a", Name: "A", Plugin: "p", Height: 100},
 			{ID: "b", Name: "B", Plugin: "p", Height: 100},

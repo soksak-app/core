@@ -29,7 +29,8 @@ func (s *Shell) linkSurfaces() {
 		},
 		Frame: func(surface string) (float64, float64, bool) {
 			held := s.surfaces.held[surface]
-			if held == nil {
+			// The library covers the plane, so a surface of a project that it covers stands in no place.
+			if held == nil || s.inLibrary() {
 				return 0, 0, false
 			}
 			return held.box.X, held.box.Y, true
