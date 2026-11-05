@@ -206,6 +206,8 @@ type Shell struct {
 	// keyboard is the keyboard focus of the window, which the first responder and the views report.
 	keyboard     *Focus
 	verification *Verification
+	// diagnostics holds the policy and the trace switch that the host received last.
+	diagnostics struct{ policy, trace string }
 	// started is set once the host took the first state of the shell, changed once plugins changed before that, and reloading while the
 	// shell saves before a reload. They belong to the main thread.
 	started, changed, reloading bool

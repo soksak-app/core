@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
+	"slices"
 	"testing"
 
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
@@ -108,5 +110,47 @@ func TestTheVerificationStatesAFailedPresentation(t *testing.T) {
 	refused = false
 	if verify = place(1100); verify.Failed != 0 || len(verify.Rows) != 0 {
 		t.Fatalf("core.verify is %+v", verify)
+	}
+}
+
+// The host stores the policy that the setting diagnostics.log gives: a class that the setting does not name stores the errors, and
+// the same policy is not stored again.
+func TestTheLogSettingStoresThePolicyOfTheEventLog(t *testing.T) {
+	stored := &storedHost{}
+	f := newShell(t, stored)
+	want := map[string]string{"lifecycle": "error", "input": "error", "call": "debug", "io": "error", "frame": "error"}
+	before := len(stored.policies)
+	f.run("core.settings.set", map[string]any{"patch": map[string]any{"diagnostics.log": map[string]string{"call": "debug"}}, "scope": "common"})
+	if len(stored.policies) != before+1 || !maps.Equal(stored.policies[before], want) {
+		t.Fatalf("the host stored %v", stored.policies[before:])
+	}
+	f.run("core.settings.set", map[string]any{"patch": map[string]any{"memorySaverDelay": 7}, "scope": "common"})
+	if len(stored.policies) != before+1 {
+		t.Fatalf("the host stored %v", stored.policies[before:])
+	}
+}
+
+// A window that starts puts the stored setting in force: the file of a page that ended can hold another policy.
+func TestAStartStoresThePolicyOfTheStoredSetting(t *testing.T) {
+	stored := &storedHost{}
+	newShell(t, stored)
+	want := map[string]string{"lifecycle": "error", "input": "error", "call": "error", "io": "error", "frame": "error"}
+	if len(stored.policies) != 1 || !maps.Equal(stored.policies[0], want) {
+		t.Fatalf("the host stored %v", stored.policies)
+	}
+}
+
+// The switch of the performance trace of the host follows the setting; a window that starts reports it, because the switch can be
+// on from a window that ended.
+func TestTheTraceSwitchFollowsTheSetting(t *testing.T) {
+	stored := &storedHost{}
+	f := newShell(t, stored)
+	if !slices.Equal(stored.traces, []string{"off"}) {
+		t.Fatalf("the start reported %v", stored.traces)
+	}
+	f.run("core.settings.set", map[string]any{"patch": map[string]any{"diagnostics.performance": true}, "scope": "common"})
+	f.run("core.settings.set", map[string]any{"patch": map[string]any{"memorySaverDelay": 7}, "scope": "common"})
+	if !slices.Equal(stored.traces, []string{"off", "on"}) {
+		t.Fatalf("the host received %v", stored.traces)
 	}
 }

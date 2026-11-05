@@ -434,7 +434,7 @@ func TestAHiddenTabWithAViewOpensNoBackgroundSession(t *testing.T) {
 }
 
 func TestAnInstalledPluginGetsItsBackgroundSessionInTheApplication(t *testing.T) {
-	stored := &storedHost{installed: installedSession, common: map[string]any{"memorySaverDelay": 30}, classes: lifecycleInfo(),
+	stored := &storedHost{installed: installedSession, common: map[string]any{"memorySaverDelay": 30, "diagnostics.log": lifecycleInfo()}, classes: lifecycleInfo(),
 		projects: []map[string]any{storedProject(tab("tab-aaaaaa", "other"), tab("tab-bbbbbb", "session"))}}
 	sent := make(chan string, 8)
 	stored.extra = map[string]workbench.HostCall{
