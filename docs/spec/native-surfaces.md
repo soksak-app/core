@@ -95,6 +95,8 @@ The window title bar joins the layout transaction, so the window buttons move in
 
 A view is the native web view of a surface whose composition is `view` ([plugins](plugins.md#view-surfaces)). Each view is one web view on the `soksak://<plugin id>` origin, one per tab, and it runs the page of its plugin. The workbench page runs no plugin code.
 
+A view receives the event `run-start` at the start of a run and requests one animation frame. An idle document renders a new size at once and then waits for the display, while each later size of a run reaches a document that already waits for the display, so without this frame the second size of a run misses a display frame. The view keeps no frame loop, because a frame loop in every view lengthens each layout of the run.
+
 The workbench derives each active surface descriptor from the tab before mounting it and preserves that same descriptor through the compositor's placement record. A dormant surface uses the descriptor derived from its stored tab, including its stored `params`. The host request carries view start values computed from that descriptor in its existing `start` member; it does not carry a second `params` member. A slot that becomes a placeholder no longer contributes a surface descriptor.
 
 - **Configuration.** The host creates each view with a web view configuration that has:

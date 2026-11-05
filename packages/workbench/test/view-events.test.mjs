@@ -331,3 +331,22 @@ test("a status watch holds the values of a run and delivers the newest at its en
   assert.deepEqual(f.pushed.at(-1).data.value, { w: 4 }, "a held value was delivered after its unwatch");
   assert.deepEqual(f.failures, []);
 });
+
+test("each start of a run is pushed to the view as the event run-start, and a closed view receives no more", async () => {
+  const f = fakes();
+  let started = null;
+  const subs = createViewSubscriptions({
+    ...f, report: (text) => f.failures.push(text), cancel: () => {},
+    status: () => () => {},
+    run: {
+      active: () => false,
+      onStart: (fn) => { started = fn; return () => { started = null; }; },
+      onEnd: () => () => {},
+    },
+  });
+  started();
+  await new Promise(setImmediate);
+  assert.deepEqual(f.pushed.map(({ event, data }) => [event, data]), [["run-start", null]]);
+  await subs.close();
+  assert.equal(started, null, "the listener of the start of a run ends with the subscriptions");
+});

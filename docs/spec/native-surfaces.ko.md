@@ -96,6 +96,8 @@ macOS에서 각 표면의 root view는 AppKit point를 좌표 단위로 사용�
 
 view는 `view` 합성을 가진 표면의 native 웹뷰다([plugins](plugins.ko.md#view-표면)). 각 view는 탭마다 하나의 웹뷰이며 `soksak://<plugin id>` origin에서 그 plugin의 페이지를 실행한다. 워크벤치 페이지는 plugin 코드를 실행하지 않는다.
 
+view는 run이 시작될 때 event `run-start`를 받고 animation frame을 한 번 요청한다. idle document는 새 크기를 바로 render한 뒤 display를 기다리지만, run의 이후 크기는 이미 display를 기다리는 document에 도착한다. 그래서 이 frame이 없으면 run의 두 번째 크기가 display frame 하나를 놓친다. view는 frame loop를 두지 않는다. 모든 view의 frame loop는 run의 각 layout을 늘리기 때문이다.
+
 워크벤치는 mount 전에 tab에서 활성 surface descriptor를 만들고 compositor의 placement record까지 같은 descriptor를 보존한다. Dormant surface는 저장된 `params`를 포함해 저장 tab에서 descriptor를 만든다. Host request는 이 descriptor에서 계산한 view start values를 기존 `start` member에 담으며 별도 `params` member를 추가하지 않는다. Slot이 placeholder가 되면 surface descriptor도 더 이상 제공하지 않는다.
 
 - **구성.** 호스트는 view를 다음을 가진 웹뷰 구성으로 만든다.

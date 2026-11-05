@@ -27,7 +27,9 @@ const statusData = (name, surface, value) => (surface === undefined ? { name, va
  *     status      status(name, surface, fn): follows the value of the status name on the surface, as the registry observe does, and on the
  *                 workbench when surface is undefined; fn(value) receives each value and the function returns the unsubscribe function,
  *                 which it calls at the end of the watch
- *     run         {active(), onEnd(fn)}: whether a run continues, and fn for each end of a run; onEnd returns its off function. A status watch
+ *     run         {active(), onStart(fn), onEnd(fn)}: whether a run continues, and fn for each start and end of a run; both
+ *                 return their off functions. Each start is pushed as the event run-start, which the page answers with one
+ *                 frame request (packages/plugin-api/view.js). A watch
  *                 that has delivered a value holds the values of a run and delivers the newest at its end, because every layout of a run
  *                 changes the core statuses and a view has its own geometry from its placement. A replaced value is recorded through cancel.
  *     push        push(event, data): posts {event, data} to the view through viewEvent; rejects when the host refuses it
@@ -108,6 +110,8 @@ export function createViewSubscriptions({ native, sidecar, textSize, settings, d
     pending.catch(() => registered.delete(key));
     return pending;
   };
+  // default: subscriptions without a run state have no start to push.
+  const offRunStart = run?.onStart ? run.onStart(() => forward("run-start", null)) : null;
   return {
     native(name) {
       return subscribe(`native:${name}`, () => {
@@ -204,6 +208,7 @@ export function createViewSubscriptions({ native, sidecar, textSize, settings, d
     async close() {
       closed = true;
       heldStatus.clear();
+      offRunStart?.();
       // default: subscriptions that never held a value registered no listener for the end of a run.
       offRunEnd?.();
       const offs = [...registered.values()];
