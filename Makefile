@@ -30,7 +30,7 @@ push-check:
 	@$(MAKE) --no-print-directory commits-check RANGE="$(or $(RANGE),origin/main..HEAD)"
 
 # Builds release and checks that the staged frontend and the release executables hold no diagnostic code.
-release-check: wailsv3-build-release tauriv2-build-release
+release-check: build-wailsv3-release build-tauriv2-release
 	@node scripts/check-release.mjs --macos-minimum $(MACOS_MINIMUM) --wailsv3-bundle "$(WAILS_RELEASE_BUNDLE)" --tauriv2-bundle "$(TAURI_RELEASE_BUNDLE)"
 
 # Measures the memory of the main page process of a running application at start, idle, and after reload (docs/operations/examples.md).
@@ -292,8 +292,8 @@ COMMA := ,
 # The declared core release candidate is the RELEASE constant of scripts/check-versions.mjs.
 DIAGNOSTIC_RELEASE := $(filter 0.0.%,$(shell sed -n 's/^export const RELEASE = "\(.*\)";$$/\1/p' scripts/check-versions.mjs))
 .PHONY: native-darwin native-darwin-fetch registry registry-install install-plugins browser-frontend browser-example frontend-wailsv3 frontend-tauriv2 frontend-wailsv3-core frontend-tauriv2-core host-test-wailsv3 host-test-tauriv2 host-contract-check release-check-wailsv3 release-check-tauriv2 rust-format-check rust-clippy-check go-format-check \
-        tauriv2 tauriv2-release tauriv2-build tauriv2-build-release \
-        wailsv3 wailsv3-release wailsv3-build wailsv3-build-release \
+        run-tauriv2 run-tauriv2-release build-tauriv2 build-tauriv2-release \
+        run-wailsv3 run-wailsv3-release build-wailsv3 build-wailsv3-release \
         e2e e2e-activation e2e-real e2e-person e2e-section-design examples-size
 
 # rustup installs cargo here and adds the path to the shell profile. The shell of make
@@ -412,7 +412,7 @@ frontend-tauriv2-core: build
 	@$(call stage-tauriv2,--diagnostics)
 
 # generate_context! includes the frontend, so this rebuilds the crate.
-tauriv2-build: native-darwin frontend-tauriv2
+build-tauriv2: native-darwin frontend-tauriv2
 	@$(call bundle-info,$(TAURI_DEBUG_BUNDLE),tauriv2)
 	@$(call bundle-dev,$(TAURI_DEBUG_BUNDLE),tauriv2)
 	@touch apps/tauriv2/src/main.rs
@@ -421,7 +421,7 @@ tauriv2-build: native-darwin frontend-tauriv2
 	@$(call sok-tauriv2,$(TAURI_DEBUG_BUNDLE),debug)
 	@$(call bundle-sign,$(TAURI_DEBUG_BUNDLE))
 
-tauriv2-build-release: native-darwin build
+build-tauriv2-release: native-darwin build
 	@$(call bundle-info,$(TAURI_RELEASE_BUNDLE),tauriv2)
 	@$(call stage-tauriv2,$(if $(DIAGNOSTIC_RELEASE),--diagnostics))
 	@touch apps/tauriv2/src/main.rs
@@ -430,30 +430,30 @@ tauriv2-build-release: native-darwin build
 	@$(call sok-tauriv2,$(TAURI_RELEASE_BUNDLE),release)
 	@$(call bundle-sign,$(TAURI_RELEASE_BUNDLE))
 
-wailsv3-build: native-darwin frontend-wailsv3
+build-wailsv3: native-darwin frontend-wailsv3
 	@$(call bundle-info,$(WAILS_DEBUG_BUNDLE),wailsv3)
 	@$(call bundle-dev,$(WAILS_DEBUG_BUNDLE),wailsv3)
 	@$(GO_ENV) go build -C apps/wailsv3 -tags "diagnostics dev" -ldflags "$(GO_LINK)" -o ../../$(WAILS_DEBUG) ./src
 	@$(call sok-wailsv3,$(WAILS_DEBUG_BUNDLE),debug)
 	@$(call bundle-sign,$(WAILS_DEBUG_BUNDLE))
 
-wailsv3-build-release: native-darwin build
+build-wailsv3-release: native-darwin build
 	@$(call bundle-info,$(WAILS_RELEASE_BUNDLE),wailsv3)
 	@$(call stage-wailsv3,$(if $(DIAGNOSTIC_RELEASE),--diagnostics))
 	@$(GO_ENV) go build -C apps/wailsv3 -trimpath $(if $(DIAGNOSTIC_RELEASE),-tags diagnostics) -ldflags "-s -w $(GO_LINK)" -o ../../$(WAILS_RELEASE) ./src
 	@$(call sok-wailsv3,$(WAILS_RELEASE_BUNDLE),release)
 	@$(call bundle-sign,$(WAILS_RELEASE_BUNDLE))
 
-build-tauriv2: tauriv2-build
+run-tauriv2: build-tauriv2
 	@./$(TAURI_DEBUG)
 
-build-tauriv2-release: tauriv2-build-release
+run-tauriv2-release: build-tauriv2-release
 	@./$(TAURI_RELEASE)
 
-build-wailsv3: wailsv3-build
+run-wailsv3: build-wailsv3
 	@./$(WAILS_DEBUG)
 
-build-wailsv3-release: wailsv3-build-release
+run-wailsv3-release: build-wailsv3-release
 	@./$(WAILS_RELEASE)
 
 # Unit checks of native code. Runs the shared input check and the host contract check, which runs the tests of the two hosts.
@@ -498,10 +498,10 @@ host-test-tauriv2: native-darwin frontend-tauriv2-core
 	@$(CARGO_ENV) node scripts/check-host-contract.mjs --host tauriv2
 
 # Release host checks build and audit only the selected application bundle. Registry verification is a separate target.
-release-check-wailsv3: wailsv3-build-release
+release-check-wailsv3: build-wailsv3-release
 	@node scripts/check-release.mjs --host wailsv3 --macos-minimum $(MACOS_MINIMUM) --wailsv3-bundle "$(WAILS_RELEASE_BUNDLE)"
 
-release-check-tauriv2: tauriv2-build-release
+release-check-tauriv2: build-tauriv2-release
 	@node scripts/check-release.mjs --host tauriv2 --macos-minimum $(MACOS_MINIMUM) --tauriv2-bundle "$(TAURI_RELEASE_BUNDLE)"
 
 # The window checks drive running applications in sequence through the local endpoint; the harness does not start them.
@@ -512,7 +512,7 @@ release-check-tauriv2: tauriv2-build-release
 # Each e2e target builds both debug applications and the workspace registry, and scripts/e2e-run.mjs runs the window-check script
 # and the native end-to-end target of its tier in a new configuration root under target/e2e: it starts the applications, runs the
 # checks and quits the applications.
-E2E_BUILD = wailsv3-build tauriv2-build registry
+E2E_BUILD = build-wailsv3 build-tauriv2 registry
 e2e: docs-check e2e-check exposure-check $(E2E_BUILD)
 	@node scripts/e2e-run.mjs --script verify --native e2e $(if $(WHEN_IDLE),--when-idle $(WHEN_IDLE))
 
@@ -583,7 +583,7 @@ b3-judge:
 	@node scripts/b3-judge.mjs --session "$(SESSION)"
 
 # The two-profile builds of the two apps and their sizes.
-examples-size: tauriv2-build tauriv2-build-release wailsv3-build-release wailsv3-build
+examples-size: build-tauriv2 build-tauriv2-release build-wailsv3-release build-wailsv3
 	@printf "%-10s %10s %10s\n" "" debug release
 	@printf "%-10s %9.1fM %9.1fM\n" tauriv2 \
 	  $$(echo "$$(stat -f%z $(TAURI_DEBUG))/1048576" | bc -l) \
