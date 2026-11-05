@@ -14,6 +14,7 @@ import (
 	"runtime/pprof"
 	"slices"
 	"sort"
+	"sync"
 	"time"
 	"unsafe"
 )
@@ -168,6 +169,52 @@ func WriteHeapProfile(folder string) (string, error) {
 		return "", fmt.Errorf("heap profile %s: %w", path, err)
 	}
 	return path, nil
+}
+
+// cpuProfile is the file of the CPU profile of the Go runtime while one runs, and nil while none runs.
+var cpuProfile struct {
+	mu   sync.Mutex
+	file *os.File
+}
+
+// StartCPUProfile starts the CPU profile of the Go runtime into cpu-<pid>-<ms>.pprof in folder. It fails while a profile runs.
+func StartCPUProfile(folder string) error {
+	cpuProfile.mu.Lock()
+	defer cpuProfile.mu.Unlock()
+	if cpuProfile.file != nil {
+		return fmt.Errorf("a cpu profile runs into %s", cpuProfile.file.Name())
+	}
+	if err := os.MkdirAll(folder, 0o755); err != nil {
+		return fmt.Errorf("cpu profile folder: %w", err)
+	}
+	path := filepath.Join(folder, fmt.Sprintf("cpu-%d-%d.pprof", os.Getpid(), time.Now().UnixMilli()))
+	file, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("cpu profile: %w", err)
+	}
+	if err := pprof.StartCPUProfile(file); err != nil {
+		file.Close()
+		os.Remove(path)
+		return fmt.Errorf("cpu profile %s: %w", path, err)
+	}
+	cpuProfile.file = file
+	return nil
+}
+
+// StopCPUProfile stops the CPU profile that runs and returns the path of its file. It returns an empty path while no profile runs.
+func StopCPUProfile() (string, error) {
+	cpuProfile.mu.Lock()
+	defer cpuProfile.mu.Unlock()
+	if cpuProfile.file == nil {
+		return "", nil
+	}
+	pprof.StopCPUProfile()
+	file := cpuProfile.file
+	cpuProfile.file = nil
+	if err := file.Close(); err != nil {
+		return "", fmt.Errorf("cpu profile %s: %w", file.Name(), err)
+	}
+	return file.Name(), nil
 }
 
 // Count returns the number of names of the document regions of the window, including the names whose document is being created.

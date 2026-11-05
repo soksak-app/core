@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -243,6 +244,46 @@ func TestWriteHeapProfileWritesAProfileInTheFolder(t *testing.T) {
 	// A heap profile is a gzip-compressed protocol buffer.
 	if len(data) < 2 || data[0] != 0x1f || data[1] != 0x8b {
 		t.Fatalf("the profile %s does not start with the gzip header: % x", path, data[:min(len(data), 4)])
+	}
+}
+
+// contract: diagnostics.cpu-profile.profiles-until-stopped
+func TestACPUProfileWritesTheWorkBetweenItsStartAndItsStop(t *testing.T) {
+	folder := filepath.Join(t.TempDir(), "logs")
+	if err := host.StartCPUProfile(folder); err != nil {
+		t.Fatal(err)
+	}
+	stopped := false
+	t.Cleanup(func() {
+		if !stopped {
+			host.StopCPUProfile()
+		}
+	})
+	if err := host.StartCPUProfile(folder); err == nil {
+		t.Fatal("a second start while a profile runs succeeded")
+	}
+	sum := 0
+	for deadline := time.Now().Add(100 * time.Millisecond); time.Now().Before(deadline); {
+		sum++
+	}
+	path, err := host.StopCPUProfile()
+	stopped = true
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Dir(path) != folder || filepath.Ext(path) != ".pprof" || !strings.HasPrefix(filepath.Base(path), "cpu-") {
+		t.Fatalf("the profile path is %s after %d turns, want a cpu-*.pprof file in %s", path, sum, folder)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A CPU profile is a gzip-compressed protocol buffer.
+	if len(data) < 2 || data[0] != 0x1f || data[1] != 0x8b {
+		t.Fatalf("the profile %s does not start with the gzip header: % x", path, data[:min(len(data), 4)])
+	}
+	if again, err := host.StopCPUProfile(); again != "" || err != nil {
+		t.Fatalf("a stop while no profile runs answered %q, %v", again, err)
 	}
 }
 
