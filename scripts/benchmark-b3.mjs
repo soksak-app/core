@@ -688,8 +688,8 @@ export function buildSteps(phase, baseline) {
   return [
     step('release bundles', ['make', 'build-wailsv3-release', 'build-tauriv2-release', 'build-mygo-release']),
     step('baseline release bundles', ['make', '-C', baseline, 'build-wailsv3-release', 'build-tauriv2-release']),
-    step('workspace registry', ['make', 'registry', 'SIDECARS=diagnostic']),
-    step('public index', ['make', 'registry', 'SIDECARS=diagnostic', 'PLUGINS=public']),
+    step('workspace registry', ['make', 'build-registry', 'SIDECARS=diagnostic']),
+    step('public index', ['make', 'build-registry', 'SIDECARS=diagnostic', 'PLUGINS=public']),
     ...(phase === '1' ? [
       step('debug bundles', ['make', 'build-wailsv3', 'build-tauriv2', 'build-mygo']),
       step('baseline debug bundles', ['make', '-C', baseline, 'build-wailsv3', 'build-tauriv2']),
