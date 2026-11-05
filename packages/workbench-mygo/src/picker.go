@@ -494,6 +494,28 @@ type screenStatus struct {
 	Modal  *string `json:"modal"`
 }
 
+// The background of a dialog (docs/spec/native-modals.md): black at 50% opacity over the workbench, which is blurred by 3 points.
+const dialogBlur = 3
+
+var dialogScrim = ui.RGBA(0, 0, 0, 0.5)
+
+// dialogOpen tells whether a dialog of the window is open. A menu has no background.
+func (s *Shell) dialogOpen() bool { return s.settingsWindow.open || s.debugView.open }
+
+// tellBackground tells the host when a dialog opened or closed, so the host blurs the documents of the window.
+func (s *Shell) tellBackground() {
+	open := s.dialogOpen()
+	if open == s.backgroundTold {
+		return
+	}
+	s.backgroundTold = open
+	s.calls.CallInOrder("appearance", "setDialogBackground", open, func(_ any, err error) {
+		if err != nil {
+			s.fail(err)
+		}
+	})
+}
+
 // modalName is the open modal of the window, or nil.
 func (s *Shell) modalName() *string {
 	name := ""
@@ -619,7 +641,7 @@ func (s *Shell) drawPicker(c *ui.Context, width, height float32) {
 			maxW, maxH = metrics.groupedMaxW, min(metrics.groupedMaxH, height-metrics.groupedMargin)
 		}
 		panel.Margin(5, 0, 0, 0).MinWidth(metrics.minW).MaxWidth(maxW).MaxHeight(maxH).Column().Padding(metrics.outerPad).
-			Background(s.palette.Card).Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.palette.Radius).Label(layer.title).
+			Background(s.palette.Card).Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.radiusMiddle()).Label(layer.title).
 			Shadow(0, metrics.shadowY, metrics.shadowBlur, 0, ui.RGBA(0, 0, 0, metrics.shadowAlpha)).Children(func() {
 			ui.Box(c).Padding(metrics.headTop, metrics.headX, metrics.headBottom, metrics.headX).Children(func() {
 				ui.Text(c, layer.title).FontSize(s.textCaption()).TextColor(s.palette.Muted)

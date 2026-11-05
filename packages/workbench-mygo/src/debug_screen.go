@@ -118,8 +118,9 @@ func megabytes(size int64) string { return fmt.Sprintf("%.1f", float64(size)/102
 // DrawDebugView draws the scrim and the card of the view.
 func DrawDebugView(c *ui.Context, binder *Binder, view DebugView, shown *ShownErrors) {
 	theme := c.Theme()
-	ui.Box(binder.Name(c, "core.debug.scrim", "")).Absolute().Left(0).Top(0).Right(0).Bottom(0).Center().Modal().Role(ui.RoleGroup).Label(debugName).Children(func() {
-		ui.Column(binder.Name(c, "core.debug.card", "")).Width(view.CardWidth).MaxHeight(view.CardMaxHeight).Background(theme.Background).Border(1, theme.Border).
+	ui.Box(binder.Name(c, "core.debug.scrim", "")).Absolute().Left(0).Top(0).Right(0).Bottom(0).Center().Background(dialogScrim).Modal().Role(ui.RoleGroup).Label(debugName).Children(func() {
+		// The card takes the focus of the dialog, so a key presses no control before Tab or a press reaches one.
+		ui.Column(binder.Name(c, "core.debug.card", "")).Focusable().FocusRing(false).Width(view.CardWidth).MaxHeight(view.CardMaxHeight).Background(theme.Background).Border(1, theme.Border).
 			Role(ui.RoleDialog).Label(debugName).Children(func() {
 			ui.Row(c).FillWidth().AlignItems(ui.Center).Padding(8, 16).Children(func() {
 				ui.Text(c, debugName).Grow(1)

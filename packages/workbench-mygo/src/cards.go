@@ -291,7 +291,12 @@ func (s *Shell) tabText() (float32, string) {
 	return s.textSmall(), s.fontFamily()
 }
 
-// radiusSmall is the radius of a tab, of the group of tools and of a control inside it.
+// radiusMiddle is --r-sm of packages/workbench/app.css, the radius of a card of a dialog.
+func (s *Shell) radiusMiddle() float32 {
+	return float32(math.Round(float64(s.palette.Radius * s.metrics.radiusMiddleRatio)))
+}
+
+// radiusSmall is the radius of a tab, of the group of tools and of a control inside it, --r-xs of packages/workbench/app.css.
 func (s *Shell) radiusSmall() float32 {
 	return float32(math.Round(float64(s.palette.Radius * s.metrics.radiusSmallRatio)))
 }

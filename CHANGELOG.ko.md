@@ -9,7 +9,7 @@
 - F502-23: mygo workbench 가 `core.window.new` 를 실행한다. 이 command 는 `core.library.window` 처럼 프로젝트가 없는 새 창을 연다.
 - F502-23: main page 가 없는 host 의 `host.window` 는 specification 대로 `pageProcess` 를 null 로 보고하고, memory sampler 는 그 창의 page process 를 읽지 않는다.
 - F502-23: mygo host 의 `host.window` 는 workbench 의 frame 과 command buffer 를 세고, 마지막 frame 뒤에 창이 settle 했는지 보고한다. `host.frame.record` 와 `host.frame.commit` 은 각 frame 과 frame 밖의 각 commit 을 class `frame` 에 기록한다.
-- F502-21: mygo workbench가 modal을 native UI로 그린다: 설정 창, 추가·분할·도구·탭·context menu를 가진 picker layer, 수정된 tab에 대한 질문. `core.card.close`, `core.tab.close`, `core.space.close`는 사람의 답 없이 수정된 tab을 닫지 않고, plugin과 그 setting은 설치된 plugin 문서에서 온다. 설정 `left`, `right`는 고정 창 sidebar를 plane에 넣고 뺀다.
+- F502-21: mygo workbench가 modal을 native UI로 그린다: 설정 창, 추가·분할·도구·탭·context menu를 가진 picker layer, 수정된 tab에 대한 질문. `core.card.close`, `core.tab.close`, `core.space.close`는 사람의 답 없이 수정된 tab을 닫지 않고, plugin과 그 setting은 설치된 plugin 문서에서 온다. 설정 `left`, `right`는 고정 창 sidebar를 plane에 넣고 뺀다. Dialog는 workbench와 document를 50% opacity의 검정 아래에서 blur하고, 사람이 control에 닿기 전의 key는 dialog를 닫지 않는다. 설정 창의 head와 section은 page의 metric을 쓰고, 닫기 icon과 보이는 section의 mark를 그린다.
 - F502-12: mygo workbench 의 `core.plugins.show-updates` 가 플러그인 화면의 업데이트 목록이 보이도록 스크롤한다.
 - F502-12: mygo workbench 가 설치 plugin 문서를 page 와 같은 규칙으로 검사한다. window 가 거부한 plugin 은 빠지고, 에러가 보이며, 행의 상태는 `refused` 다.
 - F502-12: `docs/spec/logging.md`의 operation chain이 mygo workbench에서 동작한다. 각 operation은 첫 event를 식별자와 함께 저장하고, workbench의 모든 host call은 event `host.binding.call`이다.

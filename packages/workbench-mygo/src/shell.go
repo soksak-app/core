@@ -76,7 +76,7 @@ type metrics struct {
 	actStroke, chromeActsGap, brandGap, brandLogoAtBase, chromeH, chromeRowH, spaceGap, spacePad, chromeGap, barGap, barXPad, barXOpacity, barAddText, barAddPad, textControlAtBase, textCaptionAtBase, chipMix, chipHoverMix, chipOnMix, projectTabMix float32
 	headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW                                                                                                                        float32
 	// The card head (.chrome of packages/workbench/app.css).
-	cardHeadGap, cardHeadPad, cardTabsGap, cardButton, cardIcon, cardActsGap, cardActsPad, cardActHalfOpacity, tabGap, tabPadY, tabPadX, tabXPad, tabXOpacity, iconStroke, disabledOpacity, noticeDotInset, radiusSmallRatio, textSmallAtBase, textBase, chipSelMix, insetMix, tabXHoverMix float32
+	cardHeadGap, cardHeadPad, cardTabsGap, cardButton, cardIcon, cardActsGap, cardActsPad, cardActHalfOpacity, tabGap, tabPadY, tabPadX, tabXPad, tabXOpacity, iconStroke, disabledOpacity, noticeDotInset, radiusMiddleRatio, radiusSmallRatio, textSmallAtBase, textBase, chipSelMix, insetMix, tabXHoverMix float32
 	// The error line (#applicationError of packages/workbench/app.css).
 	errorPadY, errorPadX, errorBorder float32
 	// debugW is the width of the debug view, and debugH its largest share of the window height.
@@ -156,6 +156,7 @@ func readMetrics(declared *Declarations) (metrics, error) {
 	read("disabled-opacity", &m.disabledOpacity)
 	read("notice-dot-inset", &m.noticeDotInset)
 	read("r-xs-ratio", &m.radiusSmallRatio)
+	read("r-sm-ratio", &m.radiusMiddleRatio)
 	read("text-small-at-base", &m.textSmallAtBase)
 	read("text-base", &m.textBase)
 	mix := func(name string, into *float32) {
@@ -274,6 +275,8 @@ type Shell struct {
 
 	picker picker
 	icons  map[string]*ui.SVG
+	// backgroundTold is the value that the host last received of the background of a dialog.
+	backgroundTold bool
 	// windowSidebars holds the widths of the fixed sidebars of the shown space, which outlive their columns.
 	windowSidebars map[string]layout.WindowSidebar
 
@@ -610,7 +613,11 @@ func (s *Shell) View(c *ui.Context) {
 	theme.Font = s.fontFamily()
 	c.SetTheme(&theme)
 	s.keys.Declare(c)
-	ui.Column(c).Size(width, height).Background(s.palette.Bg).TextColor(s.palette.Fg).Clip().Children(func() {
+	root := ui.Column(c).Size(width, height).Background(s.palette.Bg).TextColor(s.palette.Fg).Clip()
+	if s.dialogOpen() {
+		root.Blur(dialogBlur)
+	}
+	root.Children(func() {
 		s.drawChrome(c, width)
 		if s.browsing || s.opened() == nil {
 			s.drawLibrary(c, width, height-s.chromeHeight())
@@ -618,9 +625,11 @@ func (s *Shell) View(c *ui.Context) {
 			s.drawWork(c, width, height-s.chromeHeight())
 		}
 	})
+	s.drawViewsBehindDialog(c)
 	s.drawPicker(c, width, height)
 	s.drawSettings(c, width, height)
 	s.drawDebug(c)
+	s.tellBackground()
 	s.forgetUnseated()
 	s.observeSections()
 	s.placeSurfaces()

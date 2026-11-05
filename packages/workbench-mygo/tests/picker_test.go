@@ -649,3 +649,27 @@ func (f *shellFixture) groupIndex(menu pickerStatus, id string) int {
 	f.t.Fatalf("no group %s", id)
 	return -1
 }
+
+// A layer of a picker has the middle radius of the page, --r-sm: its left border is straight from that distance above its bottom, which is
+// still inside the curve of the whole radius.
+func TestTheLayerOfAPickerTakesTheMiddleRadius(t *testing.T) {
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pad, ok := declared.Metric("picker-outer-pad")
+	if !ok {
+		t.Fatal("no metric picker-outer-pad")
+	}
+	f := projectWithPlugins(t)
+	f.run("core.settings.theme", map[string]any{"name": "midnight", "mode": "dark"})
+	f.settle()
+	f.click("core.card.add", f.tabbedCards()[0])
+	keys := f.menu().keys()
+	last := f.box("core.picker.item", keys[len(keys)-1])
+	x, y := last.X-float32(pad)-1, last.Y+last.H+float32(pad)+1
+	// The edge of the curve is antialiased, so the color only comes near that of the border.
+	if got, want := f.pixelOf(x+0.5, y-8.5), themeToken(t, "midnight", "dark", "edge"); int(want.R)-int(got.R) > 3 {
+		t.Fatalf("the left border of the layer is %v at 8.5 above its bottom, near %v is wanted", got, want)
+	}
+}
