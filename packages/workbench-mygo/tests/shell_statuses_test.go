@@ -2,6 +2,7 @@ package workbench_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -184,6 +185,26 @@ func TestAStoredProjectOpensWithItsFocus(t *testing.T) {
 	second.click("core.library.open", first.host.projects[0]["id"].(string))
 	if got := status[map[string]any](t, second, "core.layout")["focusedId"]; got != focused {
 		t.Fatalf("the focus is on %v and not on %v", got, focused)
+	}
+}
+
+// An error above the stage takes its height from the stage, so the cards stay in the window.
+func TestAnErrorLeavesTheCardsInTheWindow(t *testing.T) {
+	f := openedShell(t)
+	cards := f.tabbedCards()
+	f.host.failing = map[string]error{"workspace": fmt.Errorf("the project cannot be written")}
+	if _, err := f.shell.Registry().Run("core.space.add", nil); err != nil {
+		t.Fatal(err)
+	}
+	f.pending.drain(t)
+	f.tester.Frame()
+	if !f.tester.HasText("the project cannot be written") {
+		t.Fatalf("the window shows %q", f.tester.Texts())
+	}
+	for _, card := range cards {
+		if bounds := element(t, f.tester, "core.card", card).Bounds; bounds.Y+bounds.H > 800 {
+			t.Fatalf("the card %s at %+v leaves a window of the height 800", card, bounds)
+		}
 	}
 }
 
