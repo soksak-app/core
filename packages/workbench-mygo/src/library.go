@@ -2,6 +2,7 @@ package workbench
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -69,6 +70,35 @@ func (s *Shell) registerLibrary() {
 		s.library.query = value.Query
 		s.options.Invalidate()
 		return nil
+	})
+	act(s, "core.library.search.focus", func(struct{}) error {
+		if !s.libraryShown() {
+			return errors.New("the library is not shown")
+		}
+		switch s.library.page {
+		case "projects":
+			return s.keyboard.Set("core.library.search", 0)
+		case pluginsPage:
+			return s.keyboard.Set("core.library.plugins.search", 0)
+		}
+		return fmt.Errorf("unknown library page %q", s.library.page)
+	})
+	later(s, "core.folder.create", func(value struct {
+		Parent string `json:"parent"`
+		Name   string `json:"name"`
+	}, answer func(any, error)) {
+		s.calls.Call("projectCreate", map[string]string{"parent": value.Parent, "name": value.Name}, func(got any, err error) {
+			if err != nil {
+				answer(nil, err)
+				return
+			}
+			folder, err := decode[ProjectFolderValue](got)
+			if err != nil {
+				answer(nil, err)
+				return
+			}
+			answer(folder, nil)
+		})
 	})
 	act(s, "core.library.sort", func(value struct {
 		Order string `json:"order"`
@@ -175,6 +205,20 @@ func (s *Shell) submitForm() error {
 	return nil
 }
 
+// libraryShown tells whether the window shows the library.
+func (s *Shell) libraryShown() bool { return s.browsing || s.opened() == nil }
+
+// drawLibrarySearch draws the search field of the projects, which filters the list as it is typed.
+func (s *Shell) drawLibrarySearch(c *ui.Context) {
+	const name = "core.library.search"
+	search := s.binder.Control(c, name, name, "")
+	query := s.library.query
+	s.binder.Focusable(ui.TextInput(c, &query).Label("프로젝트 검색").Placeholder("이름 또는 폴더 검색").Width(s.frameLength(s.metrics.librarySearchW)), name)
+	if query != s.library.query {
+		search(map[string]string{"query": query})
+	}
+}
+
 // drawLibrary draws the library screen.
 func (s *Shell) drawLibrary(c *ui.Context, width, height float32) {
 	ui.Column(c).Size(width, height).Padding(s.chromeHeight()).Gap(s.metrics.tabsPad * 3).Children(func() {
@@ -184,6 +228,9 @@ func (s *Shell) drawLibrary(c *ui.Context, width, height float32) {
 					s.library.page == page.id)
 			}
 			ui.Spacer(c).Grow(1)
+			if s.library.page != pluginsPage {
+				s.drawLibrarySearch(c)
+			}
 			s.barText(c, s.binder.Press(c, "core.library.add", "core.library.form.open", "", map[string]string{"mode": "create"}), "＋ 프로젝트 만들기", false)
 		})
 		DrawErrorBanner(c, s.errors)
@@ -203,17 +250,15 @@ func (s *Shell) drawLibrary(c *ui.Context, width, height float32) {
 
 func (s *Shell) drawProjectList(c *ui.Context) {
 	if len(s.projects) == 0 {
-		if s.library.formMode == "" {
-			ui.Column(c).Gap(s.metrics.tabsGap).Children(func() {
-				ui.Text(c, "프로젝트를 시작하세요").Bold().FontSize(18)
-				ui.Text(c, "새 프로젝트를 만들거나 기존 폴더를 여세요.").TextColor(s.palette.Muted)
-			})
-		}
+		ui.Column(s.binder.Name(c, "core.library.empty", "")).Role(ui.RoleGroup).Label("빈 라이브러리").FillWidth().AlignItems(ui.Center).PaddingY(s.metrics.space4).Gap(s.metrics.tabsGap).Children(func() {
+			ui.Text(c, "프로젝트를 시작하세요").FontWeight(600)
+			ui.Text(c, "새 프로젝트를 만들거나 기존 폴더를 여세요.").TextColor(s.palette.Muted)
+		})
 		return
 	}
 	shown := s.shownProjects()
 	if len(shown) == 0 {
-		ui.Text(c, "찾는 프로젝트가 없습니다.").TextColor(s.palette.Muted)
+		ui.Text(s.binder.Name(c, "core.library.no-results", ""), "일치하는 프로젝트가 없습니다.").TextColor(s.palette.Muted)
 		return
 	}
 	ui.Scroll(c).FillWidth().Grow(1).Children(func() {
