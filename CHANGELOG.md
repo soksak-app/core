@@ -73,6 +73,7 @@
 - F537-3: A draw of the project and space tab strips keeps the tabs that did not change, so a press on a tab during a draw keeps its click.
 - F537-2: An image attach runs in one step of the main thread on both hosts, so a tab closed during the attach of its image region records no error, and a page reload during the attach leaves no region open without a name.
 - F537-1: `input.key` with an empty `text` types its key on the Tauri host, as on the Wails host, so Enter runs the line of a terminal.
+- F525: A wait of `untilFolderState` reads the folder at a report of lost events of FSEvents and goes on, every other error of the watch rejects the wait, and the patch of @parcel/watcher wakes the callbacks for a report in a batch that adds no event.
 - F533: A delay unload of the memory saver that fails gets its next deadline one delay later, so a read or a commit that keeps failing no longer runs again at once with the error display each time.
 - F534: A read of the window facts no longer goes through the WebKit feature list, which allocated every feature in the WebKit heap of the application process for each web view at each read; the feature is looked up once in a process.
 - F532: The update step of the Rust diagnostics ends the application through `quit` of the framework port, so `make tauriv2-build` compiles again. `make hosts-check` runs the new `make host-debug-check`, which compiles the two hosts and the two apps in the configuration of the debug apps.

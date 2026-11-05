@@ -13,15 +13,26 @@
 // its prebuilt binaries. The FSEvents backend of 2.6.0 assigns the tree of a new watch only after FSEventStreamStart
 // returned, while the run loop thread already runs the callback of the started stream, so a change that arrives during
 // the start ends the process with SIGSEGV in DirTree::remove or DirTree::add; the patch assigns the tree before the stream
-// is scheduled (test/folder-wait-stream-start.test.mjs).
+// is scheduled (test/folder-wait-stream-start.test.mjs). Watcher::notify of 2.6.0 wakes the callbacks only for a list that
+// holds events, so a report of lost events in a batch that adds no event stays unseen until a later event; the patch wakes
+// them for the report too (test/folder-wait-drop.test.mjs).
 import { subscribe } from "@parcel/watcher";
+
+// FSEvents marks a batch after events were lost, and the FSEvents backend of @parcel/watcher passes that to the callback as
+// an error whose message ends with this text, in the forms for the client, the kernel and too many events, while its
+// stream keeps running. The mark asks the client to scan, and a wait uses no event: the read at the report is that scan and
+// sees the changes of the lost events, so the report is a change and nothing is lost. The message is the only
+// distinction, because the binding gives the callback an Error with no other field; @parcel/watcher is pinned, and
+// test/folder-wait-drop.test.mjs fails when the text changes. Every other error ends the watch.
+const RESCAN_REPORT = / File system must be re-scanned\.$/;
 
 /**
  * Resolves with the first value other than undefined that `read()` returns. `read` runs once after the watch of `folder`
- * (recursive) is active and again at each change; an error that `read` throws or that the watch reports rejects the
- * wait. At the deadline `timeout` (ms) `read` runs once more, and the wait rejects with the error that `expired()` returns
- * when it returns undefined. An abort of `signal` rejects the wait with its reason, as a process whose state the wait
- * awaits that ends first. The watch ends before the wait settles, and an error of its end rejects the wait.
+ * (recursive) is active and again at each change and at each report of lost events (RESCAN_REPORT); an error that `read`
+ * throws or any other error that the watch reports rejects the wait. At the deadline `timeout` (ms) `read` runs once more,
+ * and the wait rejects with the error that `expired()` returns when it returns undefined. An abort of `signal` rejects the
+ * wait with its reason, as a process whose state the wait awaits that ends first. The watch ends before the wait settles,
+ * and an error of its end rejects the wait.
  */
 export function untilFolderState(folder, read, timeout, expired, signal) {
   return new Promise((resolve, reject) => {
@@ -51,7 +62,10 @@ export function untilFolderState(folder, read, timeout, expired, signal) {
     // watch can become active or deliver a change after the deadline, so the state is read once more there.
     const timer = setTimeout(() => check(true), timeout);
     signal?.addEventListener("abort", () => finish(() => reject(signal.reason)), { once: true });
-    const subscribed = subscribe(folder, (error) => (error ? finish(() => reject(error)) : check()));
+    const subscribed = subscribe(folder, (error) => {
+      if (error && !RESCAN_REPORT.test(error.message)) finish(() => reject(error));
+      else check();
+    });
     subscribed.then(() => {
       active = true;
       check();

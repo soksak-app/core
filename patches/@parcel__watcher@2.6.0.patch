@@ -11,6 +11,20 @@ index dbdfab2d65b65c10a2ad68a7c1f1a30627fccb75..124128fd7db75f8325a4145bc98587a5
      "test": "mocha"
    },
    "engines": {
+diff --git a/src/Watcher.cc b/src/Watcher.cc
+index a58ff37..244825b 100644
+--- a/src/Watcher.cc
++++ b/src/Watcher.cc
+@@ -69,7 +69,8 @@ void Watcher::notify() {
+   std::unique_lock<std::mutex> lk(mMutex);
+   mCond.notify_all();
+ 
+-  if (mCallbacks.size() > 0 && mEvents.size() > 0) {
++  // A report of lost events can come in a batch that adds no event, and only triggerCallbacks passes it to the callbacks.
++  if (mCallbacks.size() > 0 && (mEvents.size() > 0 || mEvents.hasError())) {
+     // We must release our lock before calling into the debouncer
+     // to avoid a deadlock: the debouncer thread itself will require
+     // our lock from its thread when calling into `triggerCallbacks`
 diff --git a/src/macos/FSEventsBackend.cc b/src/macos/FSEventsBackend.cc
 index cfda9625fc7d9beb00a0014d87333bf97c130c84..d7a46091a7bfef68ee0ec5cf1db6312696867e71 100644
 --- a/src/macos/FSEventsBackend.cc

@@ -73,6 +73,7 @@
 - F537-3: project 탭 줄과 space 탭 줄의 draw는 바뀌지 않은 탭을 유지하므로, draw 중에 누른 탭의 click이 사라지지 않는다.
 - F537-2: 두 host에서 그림 영역 attach는 main thread의 한 step에서 실행되므로, attach 중에 닫힌 탭은 오류를 기록하지 않고 attach 중의 page reload는 이름 없이 열린 영역을 남기지 않는다.
 - F537-1: Tauri host에서도 Wails host처럼 `text`가 빈 `input.key`는 그 키를 입력하므로, Enter가 terminal의 줄을 실행한다.
+- F525: `untilFolderState`의 wait는 FSEvents의 event 손실 보고에서 폴더를 읽고 계속 기다리고, watch의 다른 error는 wait를 reject하며, @parcel/watcher의 patch는 event를 더하지 않는 batch의 보고에도 callback을 깨운다.
 - F533: 실패한 memory saver delay unload는 다음 deadline을 한 delay 뒤에 받으므로, 계속 실패하는 읽기나 commit이 매번 오류 표시와 함께 곧바로 다시 돌지 않는다.
 - F534: window facts 읽기는 더 이상 WebKit feature 목록을 훑지 않는다. 이 목록은 읽을 때마다 web view별로 애플리케이션 프로세스의 WebKit heap에 모든 feature를 할당했다. feature는 프로세스에서 한 번만 찾는다.
 - F532: Rust diagnostics의 update 단계가 framework port의 `quit`으로 애플리케이션을 끝내므로, `make tauriv2-build`가 다시 컴파일된다. `make hosts-check`는 새 `make host-debug-check`를 실행하며, 이 target은 두 host와 두 앱을 debug 앱의 구성으로 컴파일한다.
