@@ -168,13 +168,22 @@ func (s *Shell) cardActs(id string) map[string]any {
 	return acts
 }
 
+// linePositions is where the lines of an axis stand in the plane, the positions that core.boundary.move takes.
+func linePositions(plane *layout.Grid, axis layout.Axis) []float64 {
+	lines := plane.Lines(axis)
+	for line := range lines {
+		lines[line] = plane.BoundaryPos(axis, line)
+	}
+	return lines
+}
+
 // gridState returns the value of core.grid, or nil without a plane.
 func (s *Shell) gridState() (any, error) {
 	if s.plane == nil {
 		return nil, nil
 	}
 	status := gridStatus{Width: s.plane.Width(), Height: s.plane.Height(), Gap: s.plane.Gap(), Plane: s.planeOrigin(),
-		Lines: map[string][]float64{"x": s.plane.Lines("x"), "y": s.plane.Lines("y")}, Cards: []gridCardStatus{}}
+		Lines: map[string][]float64{"x": linePositions(s.plane, "x"), "y": linePositions(s.plane, "y")}, Cards: []gridCardStatus{}}
 	if s.fullscreen != "" {
 		status.Fullscreen = &s.fullscreen
 	}

@@ -146,6 +146,32 @@ func TestTheVerificationFailsAPlacementTheHostLeavesUnanswered(t *testing.T) {
 	}
 }
 
+// core.grid states its lines where they stand in the plane, so a position that it states is a position that core.boundary.move takes.
+func TestTheGridStatesItsLinesWhereTheyStand(t *testing.T) {
+	f, _ := placingShell(t)
+	resized(f, 1000)
+	read := func() (grid struct {
+		Width, Height float64
+		Lines         map[string][]float64
+	}) {
+		return status[struct {
+			Width, Height float64
+			Lines         map[string][]float64
+		}](t, f, "core.grid")
+	}
+	grid := read()
+	x, y := grid.Lines["x"], grid.Lines["y"]
+	if x[0] != 0 || x[len(x)-1] != grid.Width || y[0] != 0 || y[len(y)-1] != grid.Height {
+		t.Fatalf("the grid of %vx%v has the lines %v", grid.Width, grid.Height, grid.Lines)
+	}
+	target := x[1] - 60.25
+	f.answerText("core.boundary.move", map[string]any{"axis": "x", "line": 1, "position": target})
+	f.settle()
+	if got := read().Lines["x"][1]; math.Abs(got-target) > 1e-6 {
+		t.Fatalf("a line asked to stand at %v stands at %v", target, got)
+	}
+}
+
 // The answer of a placement posts the verification of its watcher, and a window can close before that step runs. A window without a
 // plane verifies nothing, so the step reads no plane.
 func TestThePlacementAnsweredAfterACloseVerifiesNoPlane(t *testing.T) {
