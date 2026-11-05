@@ -1096,6 +1096,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F557",
+    implementation: [
+      { file: "native/darwin/src/webview_input.m", symbol: "static void pointerLeft(WKWebView *view, NSEvent *event)" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/webview_input_test.m", id: "a move before the enter hovers the view at the point" },
+      { file: "native/darwin/tests/webview_input_test.m", id: "a move off the view on top leaves it before its exit comes" },
+    ],
+    expected: "In each order of the enter, the exit and the move, only the view at the point hovers, and a view that loses the pointer hovers nothing.",
+    levels: ["unit"],
+  },
+  {
     id: "F549",
     implementation: [
       { file: "native/darwin/src/observe.m", symbol: "if (!sp_event_enabled(SP_CLASS_FRAME, SP_EVENT_DEBUG)) return;" },
