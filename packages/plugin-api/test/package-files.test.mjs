@@ -43,18 +43,18 @@ test("the packed SDK contains every current contract file", { timeout: 15000 }, 
 
 test("the plugin API ships no record check, release gate, checklist reader or term list", () => {
   const manifest = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
-  for (const command of ["soksak-commits", "soksak-records", "soksak-release-gate"]) assert.equal(manifest.bin?.[command], undefined, command);
-  for (const file of ["checklist.js", "commits-check.js", "records-check.js", "release-gate.js", "terms.json"]) {
+  assert.equal(manifest.bin?.["soksak-check"], undefined);
+  for (const file of ["checklist.js", "commits.js", "records.js", "release.js", "terms.json"]) {
     assert.ok(!manifest.files.includes(file), file);
     assert.ok(!existsSync(join(packageRoot, file)), file);
   }
-  assert.equal(manifest.exports["./records-check"], undefined);
+  assert.equal(manifest.exports["./records"], undefined);
 });
 
 test("the plugin API ships no census check or census rules", () => {
   const manifest = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
-  assert.equal(manifest.bin?.["soksak-events"], undefined);
-  for (const file of ["events-check.js", "census-rules.json"]) {
+  assert.equal(manifest.bin?.["soksak-check"], undefined);
+  for (const file of ["census.js", "census-rules.json"]) {
     assert.ok(!manifest.files.includes(file), file);
     assert.ok(!existsSync(join(packageRoot, file)), file);
   }

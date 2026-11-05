@@ -27,8 +27,7 @@
     "@soksak/window-check": "workspace:*"
   },
   "devDependencies": {
-    "@soksak/kit-events": "https://github.com/soksak-app/kit-events/releases/download/v0.0.1/soksak-kit-events-0.0.1.tgz",
-    "@soksak/kit-records": "https://github.com/soksak-app/kit-records/releases/download/v0.0.6/soksak-kit-records-0.0.6.tgz",
+    "@soksak/kit-checks": "https://github.com/soksak-app/kit-checks/releases/download/v0.0.8/soksak-kit-checks-0.0.8.tgz",
     "acorn": "8.18.0",
     "yaml": "2.9.1"
   }

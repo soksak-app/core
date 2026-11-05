@@ -37,8 +37,8 @@ test('setup-node uses the exact Node and pnpm versions declared by the workspace
   assert.equal(setupNode.with['node-version-file'], '${{ inputs.root }}/.node-version');
   assert.equal(setupPnpm.with.package_json_file, '${{ inputs.root }}/package.json');
   assert.equal(setupPnpm.with.run_install, false, 'setup-node must not install workspace dependencies');
-  assert.equal(read('.node-version').trim(), '26.11.1');
-  assert.match(read('package.json'), /"packageManager":\s*"pnpm@11\.24\.0"/);
+  assert.match(read('.node-version').trim(), /^\d+\.\d+\.\d+$/);
+  assert.match(read('package.json'), /"packageManager":\s*"pnpm@\d+\.\d+\.\d+"/);
   assert.doesNotMatch(JSON.stringify(steps), /steps\.pnpm-version\.outputs\.version/,
     'setup-node must let pnpm/action-setup read the declared package manager version');
   assert.doesNotMatch(JSON.stringify(steps), /pnpm install|pnpm fetch|cache:/, 'setup-node must not fetch workspace dependencies');

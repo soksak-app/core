@@ -27,6 +27,25 @@ else
   printf 'FAIL: a standalone pnpm executable of the declared version exited %s: %s\n' "$status" "$ready"
   exit 1
 fi
+# A build needs the major version of a tool, so another minor or patch version is a matching toolchain.
+printf '#!/bin/sh\nprintf "%%s\\n" %s.999.0\n' "${declared%%.*}" > "$standalone/pnpm"
+if ready=$(PATH="$standalone:$PATH" sh scripts/check-build-environment.sh 2>&1); then
+  printf 'PASS: a pnpm executable of the declared major version is accepted\n'
+else
+  status=$?
+  printf 'FAIL: a pnpm executable of the declared major version exited %s: %s\n' "$status" "$ready"
+  exit 1
+fi
+printf '#!/bin/sh\ncase "$1" in --version) printf "v%s.999.0\\n" ;; *) exec "%s" "$@" ;; esac\n' "$(cut -d. -f1 .node-version)" "$(command -v node)" > "$standalone/node"
+chmod +x "$standalone/node"
+if ready=$(PATH="$standalone:$PATH" sh scripts/check-build-environment.sh 2>&1); then
+  printf 'PASS: a node executable of the declared major version is accepted\n'
+else
+  status=$?
+  printf 'FAIL: a node executable of the declared major version exited %s: %s\n' "$status" "$ready"
+  exit 1
+fi
+rm "$standalone/node"
 printf '#!/bin/sh\nprintf "0.0.1\\n"\n' > "$standalone/pnpm"
 if other=$(PATH="$standalone:$PATH" sh scripts/check-build-environment.sh 2>&1); then
   printf 'FAIL: a pnpm executable of another version was accepted\n'
