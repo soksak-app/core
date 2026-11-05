@@ -6,6 +6,7 @@
 
 - F463: Core uses the checks kit and its one executable `soksak-check`. Red: `scripts/test/workflows.test.mjs` failed. Green: it passes.
 - F466: Records cite no temporary log, and the record check reports a new citation.
+- F435-5: A convergence failure of a view drag states when the gesture ended.
 - F480: `e2e/terminal-reopen.test.mjs` checks that a terminal opened after the earlier terminals closed displays its prompt, and the benchmark readiness failure reports the session, the surface and its regions.
 - F478: The Wails host keeps a null `data` of a view event and a null `params` of a view request as values.
 - F477: The window check setup names the declared make target `build-capture-text-path`.

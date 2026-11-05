@@ -6,6 +6,7 @@
 
 - F463: core가 checks kit과 실행 파일 하나 `soksak-check`를 씁니다. Red: `scripts/test/workflows.test.mjs`가 실패했습니다. Green: 통과합니다.
 - F466: 기록은 임시 log를 인용하지 않고, record 검사가 새 인용을 보고합니다.
+- F435-5: view drag의 수렴 실패가 gesture 종료 시각을 밝힙니다.
 - F480: `e2e/terminal-reopen.test.mjs`가 앞선 terminal이 닫힌 뒤 연 terminal의 prompt 표시를 검사하고, benchmark readiness 실패가 session, surface, region을 보고합니다.
 - F478: Wails host가 view event의 null `data`와 view request의 null `params`를 값으로 보존합니다.
 - F477: window check setup이 선언된 make target `build-capture-text-path`를 부릅니다.
