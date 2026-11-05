@@ -403,7 +403,7 @@ func TestAModifiedTabAsksBeforeItCloses(t *testing.T) {
 	}
 	f.settle()
 	menu := f.menu()
-	if menu.Title != "tab-aaaaaa 탭에 저장하지 않은 변경이 있습니다" || !slices.Equal(menu.keys(), []string{"save", "discard", "keep"}) {
+	if menu.Title != "● tab-aaaaaa 탭에 저장하지 않은 변경이 있습니다" || !slices.Equal(menu.keys(), []string{"save", "discard", "keep"}) {
 		t.Fatalf("the question is %+v", menu)
 	}
 	f.click("core.picker.item", "keep")
@@ -431,7 +431,7 @@ func TestClosingACardAsksAboutEachModifiedTab(t *testing.T) {
 	f.settle()
 	f.click("core.picker.item", "discard")
 	menu := f.menu()
-	if !menu.Open || !strings.HasPrefix(menu.Title, "tab-bbbbbb ") {
+	if !menu.Open || !strings.HasPrefix(menu.Title, "● tab-bbbbbb ") {
 		t.Fatalf("the next question is %+v", menu)
 	}
 	f.click("core.picker.item", "discard")
@@ -439,6 +439,17 @@ func TestClosingACardAsksAboutEachModifiedTab(t *testing.T) {
 		if id == "main" {
 			t.Fatal("the card stays")
 		}
+	}
+}
+
+// The question names the tab as its head does, with the title its view reported and the mark of a modified tab.
+func TestTheQuestionNamesTheTabAsItsHeadDoes(t *testing.T) {
+	f := modifiedShell(t)
+	f.viewCalled("tab-aaaaaa", "tab.title", "readme.txt")
+	f.run(t, "core.tab.close", `{"tab":"tab-aaaaaa"}`)
+	f.settle()
+	if menu := f.menu(); menu.Title != "● readme.txt 탭에 저장하지 않은 변경이 있습니다" {
+		t.Fatalf("the question is %q", menu.Title)
 	}
 }
 
