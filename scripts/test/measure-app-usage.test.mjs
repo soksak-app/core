@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import test, { mock } from "node:test";
 
 import { readB3Out, writeB3Out } from "../b3-out.mjs";
@@ -10,6 +11,9 @@ import {
   applicationRows,
   attributeWebKit,
   B3_MEASUREMENTS,
+  COUNT_WAIT_MS,
+  logLineCounts,
+  recordsOver,
   cpuPercent,
   execute,
   faultErrorCount,
@@ -749,6 +753,47 @@ test("measureApps reads a mygo application without a page row, settles its footp
   assert.equal(result.seconds, 240);
   assert.deepEqual(result.apps[0].totals.sidecars.bytes, 11 * MB);
   assert.deepEqual(result.apps[0].totals.application.bytes, (10 + 902 + 300) * MB);
+});
+
+test("measureApps waits for the counts after the marks and before the first cpu reading, and counts the records over the interval", async () => {
+  const order = [];
+  let cpuReads = 0;
+  const run = mygoProcesses({
+    footprints: (pid) => [pid * MB, pid * MB * 2],
+    cpu: () => { order.push(`cpu ${++cpuReads}`); return [[10, "0:01.00"], [11, "0:00.50"], [902, "0:02.00"], [300, "0:00.10"]]; },
+  });
+  const result = await measureApps({
+    sok: "/b/sok", configDirs: [MYGO], interval: 240, footprints: "at-once", run, realpath: (path) => path,
+    sleep: async (ms) => { order.push(`sleep ${ms}`); },
+    marks: { before: async () => { order.push("before"); return []; }, after: async () => { order.push("after"); return []; } },
+    beforeCpu: async () => { order.push("counts written"); },
+    afterCpu: async () => { order.push("records read"); },
+  });
+  assert.deepEqual(result.errors, []);
+  const at = (name) => order.indexOf(name);
+  assert.ok(at("before") < at("counts written") && at("counts written") < at("cpu 1") && at("cpu 2") < at("records read") && at("records read") < at("after"), order.join(", "));
+});
+
+test("the wait for the counts is longer than the time a count of the gate waits for a write", () => {
+  const source = readFileSync(fileURLToPath(new URL("../../packages/sok/go/src/event_log.go", import.meta.url)), "utf8");
+  assert.match(source, /const gatedWait = time\.Minute\n/);
+  assert.ok(COUNT_WAIT_MS > 60000);
+});
+
+test("the records of the interval are the lines that the event logs gained, in a file that appeared as well", () => {
+  const folder = mkdtempSync(join(tmpdir(), "records-over-"));
+  try {
+    mkdirSync(join(folder, "logs"));
+    writeFileSync(join(folder, "logs", "host-1-1.jsonl"), "{}\n{}\n");
+    writeFileSync(join(folder, "logs", "host-1-1.stderr"), "not counted\n");
+    const before = logLineCounts(folder);
+    assert.equal(recordsOver(before, logLineCounts(folder)), 0);
+    appendFileSync(join(folder, "logs", "host-1-1.jsonl"), "{}\n");
+    writeFileSync(join(folder, "logs", "files-2-2.jsonl"), "{}\n{}\n");
+    assert.equal(recordsOver(before, logLineCounts(folder)), 3);
+  } finally {
+    rmSync(folder, { recursive: true });
+  }
 });
 
 /** The window marks of a measurement of two windows of the mygo host, before and after the cpu interval. */

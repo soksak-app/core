@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F590: `IDLE=1` waits after its last request until the counts of the gate that the preparation left are written, and only then takes the first CPU reading, because those writes are no cost of the settled state. It prints the records written over the CPU interval. The bounds of G2 are unchanged. Red: `measure-app-usage.test.mjs` found no wait between the marks and the first CPU reading.
 - F589: A press and a release that wait for a layout reach every event monitor once, and a release that waits longer than a second no longer reports that its receipt did not arrive.
 - F587: A placement that succeeds withdraws the failure of the placement before it from the error banner, in the native and the page workbench. The banner records the source of what it shows, so an error of another source stays, also with the same text, and the failure stays while placements keep failing. Red: `TestARecoveredPlacementWithdrawsItsError` and the banner test of `layout-verify-state.test.mjs` found the failure still shown.
 - F502-16: A press under a surface whose layout is preparing waits for the commit and reaches the surface. It used to reach the main page, or nothing in a window without one.
