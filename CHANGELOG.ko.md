@@ -6,6 +6,7 @@
 
 - F463: core가 checks kit과 실행 파일 하나 `soksak-check`를 씁니다. Red: `scripts/test/workflows.test.mjs`가 실패했습니다. Green: 통과합니다.
 - F466: 기록은 임시 log를 인용하지 않고, record 검사가 새 인용을 보고합니다.
+- F476: 0.0.36 release 뒤에도 0.0.34였던 `LATEST_PUBLISHED`와 그 test를 지워 test가 선언된 version을 되풀이하지 않습니다.
 - F474: release run이 v0.0.36을 게시했고 registry가 이를 plugin, sidecar release와 함께 올립니다.
 - F474: release candidate는 0.0.36입니다.
 - F475: `@soksak/plugin-api`가 registry의 publish 검사가 각 core release에서 읽는 `./exposure-check`를 다시 export합니다. 명령은 없습니다. Red: `packages/plugin-api/test/package-files.test.mjs`가 실패했습니다. Green: 통과합니다.
