@@ -63,3 +63,13 @@ func TestAWindowWithoutAMainPageCountsItsHostObjects(t *testing.T) {
 		t.Fatalf("the counts are %+v", counts.Payload())
 	}
 }
+
+func TestTheObjectCountsNameTheFrameworkCountsOfAWorkbenchThatTheHostDraws(t *testing.T) {
+	drawn := ObjectCounts{Framework: &FrameworkObjects{Callbacks: 180, Nodes: 412}}.Payload()
+	if got, ok := drawn["framework"].(map[string]int64); !ok || got["callbacks"] != 180 || got["nodes"] != 412 {
+		t.Fatalf("the reply of a drawn workbench holds framework %#v", drawn["framework"])
+	}
+	if _, present := (ObjectCounts{}).Payload()["framework"]; present {
+		t.Fatal("the reply of a main page holds framework counts")
+	}
+}

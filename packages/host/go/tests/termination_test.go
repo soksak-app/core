@@ -152,10 +152,13 @@ type quitFramework struct {
 	quit chan struct{}
 }
 
-func (quitFramework) ApplicationName() string   { return "termination-test" }
-func (quitFramework) MainPage() bool            { return true }
-func (quitFramework) DisplayName() string       { return "Test" }
-func (quitFramework) Step(func())               {}
+func (quitFramework) ApplicationName() string { return "termination-test" }
+func (quitFramework) MainPage() bool          { return true }
+func (quitFramework) DisplayName() string     { return "Test" }
+func (quitFramework) Step(func())             {}
+func (quitFramework) RecordSteps(func(host.StepRecord), func(uint64)) func() {
+	return nil
+}
 func (quitFramework) Post(func())               {}
 func (quitFramework) SetMenu([]host.Menu) error { return nil }
 func (f quitFramework) Quit()                   { close(f.quit) }

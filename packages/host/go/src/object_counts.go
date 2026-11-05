@@ -44,6 +44,17 @@ func (c PageObjects) Payload() map[string]int64 {
 	return map[string]int64{"elements": c.Elements, "documents": c.Documents}
 }
 
+// FrameworkObjects are the counts of a workbench that the host draws, a window without a main page: the callbacks that the
+// framework registered in the process, which it never frees, and the nodes of the last build pass of the window.
+type FrameworkObjects struct {
+	Callbacks, Nodes int64
+}
+
+// Payload returns the counts with the names of the reply.
+func (c FrameworkObjects) Payload() map[string]int64 {
+	return map[string]int64{"callbacks": c.Callbacks, "nodes": c.Nodes}
+}
+
 // DocumentObjects are the counts of the document region Key.
 type DocumentObjects struct {
 	Key    DocumentKey
@@ -54,7 +65,9 @@ type DocumentObjects struct {
 type ObjectCounts struct {
 	Host HostObjects
 	// Page is nil for a window without a main page.
-	Page      *PageObjects
+	Page *PageObjects
+	// Framework is nil for a window with a main page.
+	Framework *FrameworkObjects
 	Documents []DocumentObjects
 	Sessions  []SidecarSession
 }
@@ -90,7 +103,11 @@ func (c ObjectCounts) Payload() map[string]any {
 	if c.Page != nil {
 		page = c.Page.Payload()
 	}
-	return map[string]any{"host": c.Host.Payload(), "page": page, "documents": list, "sessions": sessions}
+	payload := map[string]any{"host": c.Host.Payload(), "page": page, "documents": list, "sessions": sessions}
+	if c.Framework != nil {
+		payload["framework"] = c.Framework.Payload()
+	}
+	return payload
 }
 
 // surfaceCount returns the number of surfaces of the window, which is the number of their native views. It runs on the UI thread, which

@@ -26,6 +26,7 @@ var eventClasses = map[string]Class{
 	"host.endpoint.call":                     ClassCall,
 	"host.frame.commit":                      ClassFrame,
 	"host.frame.record":                      ClassFrame,
+	"host.frame.step":                        ClassFrame,
 	"host.frame.surface.dispatch":            ClassFrame,
 	"host.input.relay":                       ClassInput,
 	"host.log.index_rebuilt":                 ClassLifecycle,

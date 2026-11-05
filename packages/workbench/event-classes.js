@@ -13,6 +13,7 @@ const EXACT = new Map([
   ["host.endpoint.call", "call"],
   ["host.frame.commit", "frame"],
   ["host.frame.record", "frame"],
+  ["host.frame.step", "frame"],
   ["host.frame.surface.dispatch", "frame"],
   ["host.input.relay", "input"],
   ["host.log.index_rebuilt", "lifecycle"],

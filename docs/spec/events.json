@@ -1109,6 +1109,62 @@
       },
       "description": "The U7 record of one frame of a mygo window: its times on the host event clock, the pixels it changed, the nodes of the last build pass, how it presented, whether it committed a command buffer, and what the window still asks for after it."
     },
+    "host.frame.step": {
+      "layer": "host",
+      "class": "frame",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "kind": {
+            "enum": [
+              "selector",
+              "block",
+              "callback"
+            ]
+          },
+          "callback": {
+            "type": "string",
+            "minLength": 1
+          },
+          "entry_ns": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "return_ns": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "forwarded": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "wait_ns": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          }
+        },
+        "required": [
+          "window",
+          "kind",
+          "callback",
+          "entry_ns",
+          "return_ns",
+          "forwarded",
+          "wait_ns"
+        ],
+        "additionalProperties": false
+      },
+      "description": "The U7 record of a step of the main thread: the window with the keyboard focus when the record is written, null when no window has it, what the step entered, when it entered and returned, the calls it forwarded and the time the main thread slept waiting for the worker."
+    },
     "host.frame.surface.dispatch": {
       "layer": "host",
       "class": "frame",

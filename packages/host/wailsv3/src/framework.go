@@ -18,6 +18,12 @@ func (Framework) ApplicationName() string { return "wailsv3" }
 // DisplayName is the end of a window title.
 func (Framework) DisplayName() string { return "Wails v3" }
 
+// RecordSteps records nothing: the framework hands no callback of the main thread to a worker.
+func (Framework) RecordSteps(func(host.StepRecord), func(uint64)) func() { return nil }
+
+// RegisteredCallbacks is 0: the framework registers no callback that it never frees.
+func (Framework) RegisteredCallbacks() int64 { return 0 }
+
 // MainPage is true: a window shows the workbench in a main page.
 func (Framework) MainPage() bool { return true }
 

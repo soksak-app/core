@@ -20,12 +20,14 @@ func (f startFramework) reached(method string) {
 	f.t.Errorf("the start reached %s of the framework", method)
 }
 
-func (f startFramework) ApplicationName() string { f.reached("ApplicationName"); return "fixture" }
-func (f startFramework) DisplayName() string     { f.reached("DisplayName"); return "Fixture" }
-func (f startFramework) MainPage() bool          { f.reached("MainPage"); return true }
-func (f startFramework) Step(func())             { f.reached("Step") }
-func (f startFramework) Post(func())             { f.reached("Post") }
-func (f startFramework) Quit()                   { f.reached("Quit") }
+func (f startFramework) ApplicationName() string                              { f.reached("ApplicationName"); return "fixture" }
+func (f startFramework) DisplayName() string                                  { f.reached("DisplayName"); return "Fixture" }
+func (f startFramework) MainPage() bool                                       { f.reached("MainPage"); return true }
+func (startFramework) RecordSteps(func(host.StepRecord), func(uint64)) func() { return nil }
+func (startFramework) RegisteredCallbacks() int64                             { return 0 }
+func (f startFramework) Step(func())                                          { f.reached("Step") }
+func (f startFramework) Post(func())                                          { f.reached("Post") }
+func (f startFramework) Quit()                                                { f.reached("Quit") }
 func (f startFramework) ChooseFolder(host.Frontend, string) (string, error) {
 	f.reached("ChooseFolder")
 	return "", nil

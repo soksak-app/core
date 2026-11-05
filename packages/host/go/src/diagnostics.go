@@ -1663,6 +1663,9 @@ func (b hostBackend) ObjectCounts(window string) (ObjectCounts, error) {
 	if failure != nil {
 		return ObjectCounts{}, failure
 	}
+	if frames := s.window.Frames(); frames != nil {
+		counts.Framework = &FrameworkObjects{Callbacks: framework.RegisteredCallbacks(), Nodes: frames.Nodes()}
+	}
 	counts.Sessions = s.sidecars.Sessions(s)
 	counts.Host = HostObjects{
 		Surfaces:         int64(views),

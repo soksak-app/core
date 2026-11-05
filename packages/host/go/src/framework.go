@@ -19,6 +19,12 @@ type Framework interface {
 	// MainPage reports whether a window shows the workbench in a main page. A framework that draws the workbench in native UI has
 	// no main web view, and the library calls no operation of a main web view on its windows.
 	MainPage() bool
+	// RecordSteps has the main thread record its steps until stop returns, when the framework hands the callbacks of the
+	// main thread to a worker; otherwise it returns nil. report and lost run on a goroutine of the framework.
+	RecordSteps(report func(StepRecord), lost func(uint64)) (stop func())
+	// RegisteredCallbacks is how many callbacks the framework registered with the native side and never frees, 0 for a
+	// framework without such a limit.
+	RegisteredCallbacks() int64
 	// Step runs task as one step of the main thread and returns when it returned.
 	Step(task func())
 	// Post runs task as a later step of the main thread and returns at once.

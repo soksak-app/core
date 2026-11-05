@@ -162,11 +162,17 @@ func Prepare(adapter Framework, assets fs.FS, options Options) (_ *Session, fail
 		ReportUnrecordedEnd(end)
 	}
 	// The policy of the event log is the file log-policy.json, which the host and every process watch (docs/spec/logging.md#classes-and-policy).
-	stopPolicy, err := StartLogPolicy(eventLog, LogPolicyAnnouncer(eventLog, host.announceToWindows))
+	steps := newStepRecording(framework.RecordSteps, func() bool { return eventLog.Enabled(ClassFrame, LevelDebug) },
+		func(events uint64) { eventLog.CountLoss(sok.ChannelDebug, events, 0) })
+	announcePolicy := LogPolicyAnnouncer(eventLog, host.announceToWindows)
+	stopPolicy, err := StartLogPolicy(eventLog, func(source, detail string) {
+		announcePolicy(source, detail)
+		steps.sync()
+	})
 	if err != nil {
 		return nil, fmt.Errorf("log policy: %w", err)
 	}
-	session.cleanups = append(session.cleanups, stopPolicy)
+	session.cleanups = append(session.cleanups, stopPolicy, steps.stop)
 	// The debug view follows the event files: every window and every watcher of host.log learns that a line announced a change
 	// (docs/spec/debug.md#following). The index covers the lines before the notice, so the notice follows the indexer and the queries
 	// that update an index, and not the writer.
