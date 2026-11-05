@@ -106,6 +106,8 @@ type settingsRow struct {
 	key         string
 	description string
 	controls    []*SettingsControl
+	// list says that the controls stand in the flow of a line, one after the other (.set-list).
+	list bool
 }
 
 // settingsGroup is a group of rows with its name and its one-line text.
@@ -486,10 +488,12 @@ func (s *Shell) buildPlugins(b *settingsBuilder) error {
 		kind: controlText, param: "query", searchable: true, Label: "이름, id, 설명으로 찾기"})
 	rows := []settingsRow{{controls: []*SettingsControl{manage}}, {name: "찾기", controls: []*SettingsControl{search}}}
 	matched := s.matchedPlugins(w.query)
+	list := settingsRow{list: true}
 	for _, plugin := range matched {
-		rows = append(rows, settingsRow{controls: []*SettingsControl{b.button("plugin:"+plugin.ID, "core.settings-modal.plugin", plugin.Name, "core.settings-modal.plugin", map[string]any{"plugin": plugin.ID})}})
+		list.controls = append(list.controls, b.button("plugin:"+plugin.ID, "core.settings-modal.plugin", plugin.Name, "core.settings-modal.plugin", map[string]any{"plugin": plugin.ID}))
 		b.model.listed = append(b.model.listed, plugin.ID)
 	}
+	rows = append(rows, list)
 	if len(matched) == 0 {
 		rows = append(rows, settingsRow{description: "찾는 플러그인이 없습니다."})
 	}

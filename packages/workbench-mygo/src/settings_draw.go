@@ -211,6 +211,14 @@ func (s *Shell) drawSettingsRow(c *ui.Context, row settingsRow, pane settingsPan
 		})
 		return
 	}
+	if row.list {
+		ui.Row(c).FillWidth().Wrap().Children(func() {
+			for _, control := range row.controls {
+				s.drawControl(c, control, pane)
+			}
+		})
+		return
+	}
 	ui.Row(c).FillWidth().MinHeight(pane.rowH).Gap(pane.rowGap).AlignItems(ui.Center).Wrap().Children(func() {
 		if row.name != "" {
 			ui.Text(c, row.name).Width(pane.rowNameW).FontSize(s.textControl()).TextColor(s.palette.Muted)

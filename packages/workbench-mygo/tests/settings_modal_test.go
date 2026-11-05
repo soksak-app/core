@@ -918,3 +918,18 @@ func TestAFocusedCardHasNoOutline(t *testing.T) {
 		t.Fatalf("the focused card has %v at its edge, %v before", got, before)
 	}
 }
+
+// The plugins of the settings window are buttons in the flow of a line (.set-list), one after the other.
+func TestThePluginsOfTheSettingsStandOnOneLine(t *testing.T) {
+	f := opened(t)
+	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
+	f.settle()
+	first, ok := pressLabeled(f.tester.ElementTree(), "Acme")
+	second, found := pressLabeled(f.tester.ElementTree(), "Plain")
+	if !ok || !found {
+		t.Fatalf("the plugins are not listed in %q", f.tester.Texts())
+	}
+	if first.Bounds.Y != second.Bounds.Y || first.Bounds.X+first.Bounds.W != second.Bounds.X {
+		t.Fatalf("the plugins stand at %+v and %+v", first.Bounds, second.Bounds)
+	}
+}
