@@ -1253,6 +1253,13 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/projects-switch.test.mjs", id: "a change of the store is read through the read of that change" },
     ],
     expected: "One change of the store is one read of the host for a window, and each listener receives a value of its own.",
+    id: "F562",
+      { file: "packages/workbench-mygo/tests/host_calls_test.go", symbol: "func (s steps) drain(t testing.TB)" },
+      { file: "packages/workbench-mygo/tests/host_calls_test.go", symbol: "func workingGoroutine() string" },
+      { file: "packages/workbench-mygo/tests/host_calls_test.go", id: "TestDrainWaitsForAHostCallThatRuns" },
+      { file: "packages/workbench-mygo/tests/host_calls_test.go", id: "TestDrainEndsWhileAHostCallWaitsForTheTest" },
+      { file: "packages/workbench-mygo/tests/host_calls_test.go", id: "TestDrainFollowsTheCallsOfAnAnswer" },
+    expected: "drain ends when no step waits and every other goroutine waits for something only another goroutine or the test can end.",
     levels: ["unit"],
   },
   {

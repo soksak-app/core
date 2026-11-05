@@ -6,7 +6,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"runtime"
+	"slices"
+	"strings"
 	"testing"
+	"time"
 
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
@@ -18,6 +22,77 @@ func (s steps) post(task func()) { s <- task }
 
 // run runs the next step.
 func (s steps) run() { (<-s)() }
+
+// drain runs the later steps until nothing can post another one: no step waits and every other goroutine waits for
+// something only a goroutine or the test can end. A host call that still runs holds it however long it takes, and one
+// that waits for the test does not. A timer is not waited for; a test that needs one runs until its state arrives.
+func (s steps) drain(t testing.TB) {
+	t.Helper()
+	limit := time.NewTimer(drainLimit)
+	defer limit.Stop()
+	for {
+		select {
+		case task := <-s:
+			task()
+			limit.Reset(drainLimit)
+			continue
+		default:
+		}
+		working := workingGoroutine()
+		if working == "" {
+			// The goroutines waited after every step that they posted, so a step that is not here now never comes.
+			select {
+			case task := <-s:
+				task()
+				limit.Reset(drainLimit)
+				continue
+			default:
+				return
+			}
+		}
+		select {
+		case task := <-s:
+			task()
+			limit.Reset(drainLimit)
+		case <-time.After(100 * time.Microsecond):
+		case <-limit.C:
+			t.Fatalf("a goroutine works without a step for %v:\n%s", drainLimit, working)
+		}
+	}
+}
+
+// drainLimit is the time without a step after which a goroutine that keeps working is a defect of the test.
+const drainLimit = 60 * time.Second
+
+// waitingStates are the states of a goroutine that only another goroutine can end, as runtime.Stack prints them.
+var waitingStates = []string{"chan receive", "chan send", "select", "sync.Cond.Wait", "sync.WaitGroup.Wait", "IO wait", "finalizer wait"}
+
+// workingGoroutine returns the stack of a goroutine other than the caller that is not waiting, or "" when there is none.
+func workingGoroutine() string {
+	buffer := make([]byte, 1<<20)
+	for {
+		n := runtime.Stack(buffer, true)
+		if n < len(buffer) {
+			buffer = buffer[:n]
+			break
+		}
+		buffer = make([]byte, 2*len(buffer))
+	}
+	// The stack of the caller comes first.
+	for _, stack := range strings.Split(string(buffer), "\n\n")[1:] {
+		_, rest, found := strings.Cut(stack, "[")
+		if !found {
+			continue
+		}
+		state, _, _ := strings.Cut(rest, "]")
+		state, _, _ = strings.Cut(state, ",")
+		if slices.ContainsFunc(waitingStates, func(waiting string) bool { return strings.HasPrefix(state, waiting) }) {
+			continue
+		}
+		return stack
+	}
+	return ""
+}
 
 func TestPresentSurfacesFromAStepAnswersInALaterStep(t *testing.T) {
 	queue := make(steps, 8)
@@ -103,4 +178,68 @@ func TestCallsOfOneOrderRunOneAfterTheOther(t *testing.T) {
 		t.Fatalf("the second call is %s", got)
 	}
 	queue.run()
+}
+
+// A host call that still runs holds drain, however late its answer comes: a later step of it is part of the steps.
+func TestDrainWaitsForAHostCallThatRuns(t *testing.T) {
+	queue := make(steps, 8)
+	calls := workbench.NewCalls(map[string]workbench.HostCall{
+		"slow": func(context.Context, json.RawMessage) (any, error) {
+			time.Sleep(50 * time.Millisecond)
+			return "done", nil
+		},
+	}, queue.post)
+	var answer any
+	calls.Call("slow", nil, func(value any, _ error) { answer = value })
+	queue.drain(t)
+	if answer != "done" {
+		t.Fatalf("drain ended with the answer %v", answer)
+	}
+}
+
+// A host call that waits for the test does not hold drain: only the test can end the wait.
+func TestDrainEndsWhileAHostCallWaitsForTheTest(t *testing.T) {
+	queue := make(steps, 8)
+	release := make(chan struct{})
+	calls := workbench.NewCalls(map[string]workbench.HostCall{
+		"held": func(context.Context, json.RawMessage) (any, error) {
+			<-release
+			return "done", nil
+		},
+	}, queue.post)
+	var answer any
+	calls.Call("held", nil, func(value any, _ error) { answer = value })
+	queue.drain(t)
+	if answer != nil {
+		t.Fatalf("the answer %v came before the release", answer)
+	}
+	close(release)
+	queue.drain(t)
+	if answer != "done" {
+		t.Fatalf("drain ended with the answer %v", answer)
+	}
+}
+
+// A call in a step of an answer is drained like the first: each answer can start the next call.
+func TestDrainFollowsTheCallsOfAnAnswer(t *testing.T) {
+	queue := make(steps, 8)
+	calls := workbench.NewCalls(map[string]workbench.HostCall{
+		"next": func(context.Context, json.RawMessage) (any, error) {
+			time.Sleep(20 * time.Millisecond)
+			return nil, nil
+		},
+	}, queue.post)
+	answers := 0
+	var again func(any, error)
+	again = func(any, error) {
+		answers++
+		if answers < 3 {
+			calls.Call("next", nil, again)
+		}
+	}
+	calls.Call("next", nil, again)
+	queue.drain(t)
+	if answers != 3 {
+		t.Fatalf("drain ended after %d answers", answers)
+	}
 }
