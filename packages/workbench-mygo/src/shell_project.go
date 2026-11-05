@@ -563,7 +563,12 @@ func (s *Shell) storeSpaces(project *projectRecord) {
 
 // storeSpacesThen stores the spaces of project and runs stored after the write is confirmed.
 func (s *Shell) storeSpacesThen(project *projectRecord, stored func()) {
-	s.patchThen(project.ID, map[string]any{"spaces": project.Spaces, "activeSpaceId": project.ActiveSpaceID, "named": project.Named}, stored)
+	s.patchThen(project.ID, spacesPatch(project), stored)
+}
+
+// spacesPatch is the patch that stores the spaces of project.
+func spacesPatch(project *projectRecord) map[string]any {
+	return map[string]any{"spaces": project.Spaces, "activeSpaceId": project.ActiveSpaceID, "named": project.Named}
 }
 
 // patch writes members of the stored project id in the order of the changes.

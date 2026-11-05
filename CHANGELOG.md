@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F502-16: `core.projects.flush` on the mygo workbench answers after the host stored the layout, the geometry of the window and the tabs, and with the failure of a store that failed, so a reload loses no write.
 - F583: A surface of a closed window no longer takes the keyboard, and the close of a window drops a keyboard call that waits for a release, which held the window.
 - F502-18-1: A command that adds a set with a hidden section that starts unloaded no longer reports `exposure settled failed` on the Wails and Tauri hosts.
 - F502-32: The Tauri host refuses a request that the page of a closed project sends with no project shown, and sends the service no surface with an empty root. The mygo workbench ends the sessions of a removed project after the placement without its views.

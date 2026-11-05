@@ -90,7 +90,7 @@ func (s *Shell) register() {
 	s.registerPlugins()
 	s.registerDebug()
 	act(s, "core.projects.browse", func(struct{}) error { s.browse(); return nil })
-	act(s, "core.projects.flush", func(struct{}) error { s.keep(); return nil })
+	later(s, "core.projects.flush", func(_ struct{}, answer func(any, error)) { s.flushProjects(answerNull(answer)) })
 	command(s, "core.plugins.apply", func(struct{}) (any, error) {
 		s.pluginsChanged()
 		return map[string]bool{"reloaded": true}, nil

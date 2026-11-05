@@ -35,7 +35,11 @@ func (s *Shell) prepareFixture(raw json.RawMessage, answer func(any, error)) {
 		answer(nil, errors.New("diagnostics.fixture requires root"))
 		return
 	}
-	s.flushProjects(func() {
+	s.flushProjects(func(err error) {
+		if err != nil {
+			answer(nil, err)
+			return
+		}
 		s.closeProjects(func(err error) {
 			if err != nil {
 				answer(nil, err)
@@ -52,35 +56,57 @@ func (s *Shell) prepareFixture(raw json.RawMessage, answer func(any, error)) {
 					answer(nil, err)
 					return
 				}
-				s.flushProjects(func() { answer(map[string]any{"root": value.Root}, nil) })
+				s.flushProjects(func(err error) {
+					if err != nil {
+						answer(nil, err)
+						return
+					}
+					answer(map[string]any{"root": value.Root}, nil)
+				})
 			})
 		})
 	})
 }
 
-// flushProjects writes the layout and the geometry of the shown project, the tab sessions and the tab states, and runs done after the writes.
-func (s *Shell) flushProjects(done func()) {
+// flushProjects writes the layout and the geometry of the shown project, the tab sessions and the tab states, as projects.flush does.
+// A reload or an end of the window follows done, so done runs after the host answered these writes and every store before them, with
+// the failure of a write that failed.
+func (s *Shell) flushProjects(done func(error)) {
+	finish := func() {
+		// A call in the order of the stores ends after them.
+		s.calls.CallInOrder("workspace", "workspace", map[string]string{"kind": "snapshot"}, func(_ any, err error) { done(err) })
+	}
 	tabs := func() {
 		if s.tabs == nil {
-			done()
+			finish()
 			return
 		}
 		s.tabs.sessions.Flush(func() {
 			if s.tabs.states == nil {
-				done()
+				finish()
 				return
 			}
-			s.tabs.states.Flush(done)
+			s.tabs.states.Flush(finish)
 		})
 	}
-	if s.opened() == nil || s.plane == nil {
+	project := s.opened()
+	if project == nil || s.plane == nil {
 		tabs()
 		return
 	}
-	s.keepThen(func() {
+	if err := s.keepPlane(project); err != nil {
+		done(err)
+		return
+	}
+	s.calls.CallInOrder("workspace", "workspace", map[string]any{"kind": "patch", "id": project.ID, "patch": spacesPatch(project)}, func(_ any, err error) {
+		if err != nil {
+			done(err)
+			return
+		}
 		s.saveGeometry(func(err error) {
 			if err != nil {
-				s.fail(err)
+				done(err)
+				return
 			}
 			tabs()
 		})
