@@ -385,6 +385,30 @@ export function requireViewContentFrameCoverage(mappedFrames, { gestureStartedAt
   return mappedFrames.filter((frame) => !left.has(frame));
 }
 
+// The mapping of document times to the native clock is as wide as the round trip that read the document clock, and the start
+// command of a view can take tens of milliseconds under load. The trace therefore reads core.surface.clock CLOCK_SAMPLES times and
+// keeps the narrowest bracket of the same document (Cristian's algorithm).
+const CLOCK_SAMPLES = 5;
+
+async function narrowestClockBracket(s, surface, startBracket) {
+  const width = (bracket) => bracket.after.timeMs - bracket.before.timeMs;
+  let narrowest = startBracket;
+  for (let sample = 0; sample < CLOCK_SAMPLES; sample++) {
+    const before = await monotonicTimeMs(s);
+    const clock = await s.run("core.surface.clock", {}, surface);
+    const after = await monotonicTimeMs(s);
+    assert.ok(Number.isFinite(clock?.timeOrigin) && Number.isFinite(clock?.now),
+      `${surface} core.surface.clock returned ${JSON.stringify(clock)}`);
+    assert.equal(clock.timeOrigin, startBracket.sourceClock.documentTimeOriginMs,
+      `${surface} core.surface.clock read another document than the trace start`);
+    const bracket = viewStartClockBracket(surface, { sourceClock: {
+      documentTimeOriginMs: clock.timeOrigin, sourceNowMs: clock.now, sourceResolutionMs: startBracket.sourceClock.sourceResolutionMs,
+    } }, before, after, { hostPid: startBracket.hostPid, window: startBracket.window });
+    if (width(bracket) < width(narrowest)) narrowest = bracket;
+  }
+  return narrowest;
+}
+
 /** Runs a gesture or layout operation between explicit source-frame observer start and stop callbacks. */
 export async function withViewContentTrace(t, s, descriptor, surface, action) {
   assert.ok(typeof descriptor?.plugin === "string" && descriptor.plugin.length > 0,
@@ -410,7 +434,7 @@ export async function withViewContentTrace(t, s, descriptor, surface, action) {
     assert.strictEqual(s.client, client, "content trace start changed the session host client");
     assert.equal(s.client.endpoint.pid, hostPid, "content trace start changed the host process");
     assert.equal(s.window, window, "content trace start changed the target window");
-    startBracket = viewStartClockBracket(surface, start, before, after, { hostPid, window });
+    startBracket = await narrowestClockBracket(s, surface, viewStartClockBracket(surface, start, before, after, { hostPid, window }));
   } catch (error) {
     if (started) {
       try {

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F483: 모든 view가 `core.surface.clock`을 등록하고, content trace가 다섯 번의 clock 읽기 중 가장 좁은 것으로 문서 시각을 대응시킵니다.
 - F482: Tauri host가 기록하는 drag의 layout trace를 마지막 layout이 표시된 뒤에 끝내므로, trace가 그 presentation을 가집니다.
 - F481: plain view benchmark가 probe view가 `probeplain.measure`를 등록할 때까지 기다린 뒤 content trace를 시작합니다.
 - F463: core가 checks kit과 실행 파일 하나 `soksak-check`를 씁니다. Red: `scripts/test/workflows.test.mjs`가 실패했습니다. Green: 통과합니다.
