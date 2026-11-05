@@ -356,6 +356,7 @@ NATIVE_TESTS = observe_test \
   document_report_test \
   document_cause_test \
   document_plugin_test \
+  document_response_memory_test \
   core_root_cors_test \
   view_import_map_test \
   document_view_import_map_test \

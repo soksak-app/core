@@ -12,8 +12,8 @@ function frame(seq, { start, request, wait = 0, window = "w1" }) {
     seq,
     event: "host.frame.record",
     fields: {
-      window, start_ns: ns(start), request_ns: request === null ? null : ns(request), end_ns: ns((request ?? start) + 500), damage: true, nodes: 48,
-      drawable_wait_ns: String(wait * 1000), outcome: request === null ? "undamaged" : "transaction", command_buffer: seq,
+      window, start_ns: ns(start), request_ns: request === null ? null : ns(request), end_ns: ns((request ?? start) + 500), damage: 12288, nodes: 48,
+      drawable_wait_ns: String(wait * 1000), outcome: request === null ? "undamaged" : "transaction", command_buffer: request !== null,
       asks_frame: false, animates: false, repaints: false, timer: false,
     },
   };

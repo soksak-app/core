@@ -94,7 +94,7 @@ import { checkStoredLayout } from "./stored-layout.js";
 import { onChoicesChange } from "./sidebar-sections.js";
 
 import { createLibrary } from "./library.js";
-import { followLibraryWidth, installBrandLogo, installChromeMetrics } from "./chrome-metrics.js";
+import { followLibraryWidth, gripMetrics, installBrandLogo, installChromeMetrics } from "./chrome-metrics.js";
 
 /* The chrome metrics and the tokens of the default theme are set on the root before anything is drawn, so the first screen and an error
    that stops the start read every length of the stylesheets (chrome-metrics.js). */
@@ -133,7 +133,7 @@ try {
 
 // This sheet defines the shape of the line and the divider. This document specifies only the colors, and :root below
 // connects those tokens to the colors of this document.
-installTheme(document);
+installTheme(document, { metrics: gripMetrics() });
 
 /* Sets the setting values on the document root. The stylesheet reads them. */
 install();

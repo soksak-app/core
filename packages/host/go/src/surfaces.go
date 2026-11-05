@@ -504,7 +504,9 @@ type Surfaces struct {
 	// rejects the reply of an earlier display.
 	nextModal uint64
 	modal     *modal
-	shapes    map[string]*nativeShape
+	// workbenchDialog is true while a dialog that the workbench draws itself is open (SetDialogBackground).
+	workbenchDialog bool
+	shapes          map[string]*nativeShape
 	// documents are the document regions that the surface pages attached.
 	documents *Documents
 	// sourceOrigins assigns generations to view incarnations and exposes their current window snapshot.

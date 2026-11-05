@@ -87,6 +87,55 @@ func TestTheSectionsOfTheShownProjectAreRetained(t *testing.T) {
 	}
 }
 
+// A stored card that shows the installed set on its left.
+func cardWithSidebar(project map[string]any) string {
+	card := project["spaces"].([]map[string]any)[0]["layout"].(map[string]any)["state"].(map[string]any)["cards"].([]map[string]any)[0]
+	card["data"].(map[string]any)["sidebars"] = map[string]any{"left": map[string]any{"set": "set-install"}}
+	return card["id"].(string)
+}
+
+// A restart leaves the services alive and their sessions recoverable while a layout holds the surface
+// (docs/spec/persistent-services.md), and a window starts in the library, where no sidebar is drawn yet.
+func TestTheStartKeepsTheSessionsOfTheSectionsOfTheStoredLayouts(t *testing.T) {
+	project := storedProject(tab("tab-aaaaaa", "notes"))
+	card := cardWithSidebar(project)
+	stored := &storedHost{installed: sidebarsInstalled, projects: []map[string]any{project}}
+	newShell(t, stored)
+	calls := retained(t, stored)
+	if len(calls) != 1 {
+		t.Fatalf("retained %v", calls)
+	}
+	for _, want := range []string{"/a tab-aaaaaa", "/a spc-aaaaaa/left/files.tree", "/a spc-aaaaaa/" + card + ":left/files.tree"} {
+		if !slices.Contains(calls[0], want) {
+			t.Fatalf("the start retains %v, without %s", calls[0], want)
+		}
+	}
+}
+
+// A retain of a shown project keeps the sections of its other spaces and of the other projects, which their layouts still hold.
+func TestARetainKeepsTheSectionsOfTheSpacesThatAreNotShown(t *testing.T) {
+	other := storedProject(tab("tab-cccccc", "notes"))
+	other["id"], other["root"], other["identity"] = "prj-b", "/b", "identity of /b"
+	other["spaces"].([]map[string]any)[0]["id"] = "spc-bbbbbb"
+	other["activeSpaceId"] = "spc-bbbbbb"
+	card := cardWithSidebar(other)
+	stored := &storedHost{installed: sidebarsInstalled, projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"), tab("tab-bbbbbb", "notes")), other}}
+	f := newShell(t, stored)
+	f.run("core.project.activate", map[string]string{"id": "prj-a"})
+	stored.retains = nil
+	f.run("core.tab.close", map[string]string{"tab": "tab-bbbbbb"})
+	f.settle()
+	calls := retained(t, stored)
+	if len(calls) != 1 {
+		t.Fatalf("retained %v", calls)
+	}
+	for _, want := range []string{"/b spc-bbbbbb/left/files.tree", "/b spc-bbbbbb/" + card + ":left/files.tree"} {
+		if !slices.Contains(calls[0], want) {
+			t.Fatalf("the retain holds %v, without %s", calls[0], want)
+		}
+	}
+}
+
 func TestAFailedRetainIsShown(t *testing.T) {
 	stored := &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"), tab("tab-bbbbbb", "notes"))}}
 	f := newTabShell(t, stored)

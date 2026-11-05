@@ -119,13 +119,23 @@ func paintGrips(p *ui.Painter, stage ui.Rect, inset float32, grips []dividerGrip
 	}
 }
 
+// drawStageEdge draws the line around the stage, under the cards. Its corners are those of the rail, and a stage without a padding has
+// square corners.
+func (s *Shell) drawStageEdge(c *ui.Context, width, height float32) {
+	border, radius := s.palette.BorderWidth, s.palette.Radius+s.palette.Gap
+	if s.palette.Gap == 0 {
+		radius = 0
+	}
+	ui.Box(c).Absolute().Left(0).Top(0).Size(width, height).BorderWidth(border, border, border, border).BorderColor(s.palette.Rule).Radius(radius).PassThrough()
+}
+
 // ruleEdge is how near the edge of the plane a rule stands to be at that edge.
 const ruleEdge = 0.5
 
 // ruleRect is where a rule of the plane stands in the stage, whose margin around the plane is inset. A rule at the edge of the plane
-// goes on to the edge of the stage.
-func ruleRect(rule layout.Rule, width, height float64, stage ui.Rect, inset float32) ui.Rect {
-	bleed := float64(inset)
+// goes on across the padding of the stage, bleed, to the line around the stage.
+func ruleRect(rule layout.Rule, width, height float64, stage ui.Rect, inset, padding float32) ui.Rect {
+	bleed := float64(padding)
 	x, y, w, h := rule.X, rule.Y, rule.W, rule.H
 	if rule.Axis == "x" {
 		if rule.Y <= ruleEdge {
@@ -159,7 +169,7 @@ func (s *Shell) drawRules(p *ui.Painter, stage ui.Rect, inset float32, rules []l
 		} else if over {
 			continue
 		}
-		p.Fill(ruleRect(rule, s.plane.Width(), s.plane.Height(), stage, inset), color, 0)
+		p.Fill(ruleRect(rule, s.plane.Width(), s.plane.Height(), stage, inset, s.palette.Gap), color, 0)
 	}
 }
 

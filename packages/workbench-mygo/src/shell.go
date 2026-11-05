@@ -73,10 +73,12 @@ type environmentGrid struct {
 
 // metrics are the chrome metrics that the shell draws with.
 type metrics struct {
-	actStroke, chromeActsGap, brandGap, brandLogoAtBase, chromeH, chromeRowH, spaceGap, spacePad, chromeGap, barGap, barXPad, barXOpacity, barAddText, barAddPad, textControlAtBase, textCaptionAtBase, chipMix, chipHoverMix, chipOnMix, projectTabMix float32
-	headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW                                                                                                                        float32
+	// The library heading and the project column (.library-search, .project-column of packages/workbench).
+	librarySearchW, space4, projectColumnW, projectColumnGap, projectColumnPad, projectTabH, projectTabPad, projectTabXInset, projectTabAddH                                                                                                                                                                                 float32
+	barTabRootPad, barTabRootW, dropMix, dropBorder, tabDraggingOpacity, actStroke, chromeActsGap, brandGap, brandLogoAtBase, chromeH, chromeRowH, spaceGap, spacePad, chromeGap, barGap, barXPad, barXOpacity, barAddText, barAddPad, textControlAtBase, textCaptionAtBase, chipMix, chipHoverMix, chipOnMix, projectTabMix float32
+	headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW                                                                                                                                                                                             float32
 	// The card head (.chrome of packages/workbench/app.css).
-	cardHeadGap, cardHeadPad, cardTabsGap, cardButton, cardIcon, cardActsGap, cardActsPad, cardActHalfOpacity, tabGap, tabPadY, tabPadX, tabXPad, tabXOpacity, iconStroke, disabledOpacity, noticeDotInset, radiusSmallRatio, textSmallAtBase, textBase, chipSelMix, insetMix, tabXHoverMix float32
+	cardHeadGap, cardHeadPad, cardTabsGap, cardButton, cardIcon, cardActsGap, cardActsPad, cardActHalfOpacity, tabGap, tabPadY, tabPadX, tabXPad, tabXOpacity, iconStroke, disabledOpacity, noticeDotInset, radiusMiddleRatio, radiusSmallRatio, textSmallAtBase, textBase, chipSelMix, insetMix, tabXHoverMix float32
 	// The error line (#applicationError of packages/workbench/app.css).
 	errorPadY, errorPadX, errorBorder float32
 	// debugW is the width of the debug view, and debugH its largest share of the window height.
@@ -97,6 +99,19 @@ func readMetrics(declared *Declarations) (metrics, error) {
 		}
 		*into = float32(value)
 	}
+	read("bar-tab-root-pad", &m.barTabRootPad)
+	read("bar-tab-root-w", &m.barTabRootW)
+	read("library-search-w", &m.librarySearchW)
+	read("space-4", &m.space4)
+	read("project-column-w", &m.projectColumnW)
+	read("project-column-gap", &m.projectColumnGap)
+	read("project-column-pad", &m.projectColumnPad)
+	read("project-tab-h", &m.projectTabH)
+	read("project-tab-pad", &m.projectTabPad)
+	read("project-tab-x-inset", &m.projectTabXInset)
+	read("project-tab-add-h", &m.projectTabAddH)
+	read("drop-border", &m.dropBorder)
+	read("tab-dragging-opacity", &m.tabDraggingOpacity)
 	read("act-stroke", &m.actStroke)
 	read("chrome-acts-gap", &m.chromeActsGap)
 	read("brand-gap", &m.brandGap)
@@ -153,6 +168,7 @@ func readMetrics(declared *Declarations) (metrics, error) {
 	read("disabled-opacity", &m.disabledOpacity)
 	read("notice-dot-inset", &m.noticeDotInset)
 	read("r-xs-ratio", &m.radiusSmallRatio)
+	read("r-sm-ratio", &m.radiusMiddleRatio)
 	read("text-small-at-base", &m.textSmallAtBase)
 	read("text-base", &m.textBase)
 	mix := func(name string, into *float32) {
@@ -163,6 +179,7 @@ func readMetrics(declared *Declarations) (metrics, error) {
 		*into = float32(value)
 	}
 	mix("chip-sel-mix", &m.chipSelMix)
+	mix("drop-mix", &m.dropMix)
 	mix("chip-mix", &m.chipMix)
 	mix("chip-hover-mix", &m.chipHoverMix)
 	mix("chip-on-mix", &m.chipOnMix)
@@ -250,6 +267,12 @@ type Shell struct {
 	strips map[string]*stripPlace
 	// heads holds the fit of the head that the last frame drew for each card.
 	heads map[string]layout.HeadFit
+	// tabsNamed is how many tabs the shown layout has named; a new tab takes the next number.
+	tabsNamed int
+	// renaming is the rename of a project or a space in progress.
+	renaming *rename
+	// dragging is the drag of a tab in progress.
+	dragging *tabDrag
 	// workBanner is the height of the error line over the row of the spaces in the last drawing.
 	workBanner float32
 	// controlsWidth is the width that the window keeps for its own buttons.
@@ -271,6 +294,8 @@ type Shell struct {
 
 	picker picker
 	icons  map[string]*ui.SVG
+	// backgroundTold is the value that the host last received of the background of a dialog.
+	backgroundTold bool
 	// windowSidebars holds the widths of the fixed sidebars of the shown space, which outlive their columns.
 	windowSidebars map[string]layout.WindowSidebar
 
@@ -290,6 +315,7 @@ type Shell struct {
 	text *TextSize
 	// keyboard is the keyboard focus of the window, which the first responder and the views report.
 	keyboard     *Focus
+	pointer      *PointerSequence
 	verification *Verification
 	// diagnostics holds the policy and the trace switch that the host received last.
 	diagnostics struct{ policy, trace string }
@@ -333,6 +359,8 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.registry.Record(s.events.Command)
 	s.errors = NewShownErrors(s.events.Error)
 	s.binder = NewBinder(s.registry, func(_ string, err error) { s.fail(err) })
+	s.pointer = NewPointerSequence(func() { s.options.Invalidate() })
+	s.binder.Attach(s.pointer, s.keyboard)
 	s.starter = environment.pluginStarter
 	s.pluginOperations = NewPluginOperations(s.calls, s.events.BeginOperation, func() []LoadedPlugin { return s.plugins }, func() map[string]bool { return s.refused }, options.Invalidate)
 	s.appUpdates = NewAppUpdates(s.calls, s.events.BeginOperation, s.pluginOperations.State, options.Invalidate)
@@ -590,6 +618,7 @@ func baseName(root string) string { return path.Base(root) }
 // View draws the workbench of the window.
 func (s *Shell) View(c *ui.Context) {
 	s.keyboard.Frame(c)
+	s.pointer.Frame()
 	s.sidebars.Begin()
 	clear(s.surfaces.drawn)
 	clear(s.picker.drawn)
@@ -607,17 +636,23 @@ func (s *Shell) View(c *ui.Context) {
 	theme.Font = s.fontFamily()
 	c.SetTheme(&theme)
 	s.keys.Declare(c)
-	ui.Column(c).Size(width, height).Background(s.palette.Bg).TextColor(s.palette.Fg).Clip().Children(func() {
+	root := ui.Column(c).Size(width, height).Background(s.palette.Bg).TextColor(s.palette.Fg).Clip()
+	if s.dialogOpen() {
+		root.Blur(dialogBlur)
+	}
+	root.Children(func() {
 		s.drawChrome(c, width)
 		if s.browsing || s.opened() == nil {
 			s.drawLibrary(c, width, height-s.chromeHeight())
 		} else {
-			s.drawWork(c, width, height-s.chromeHeight())
+			s.drawWorkArea(c, width, height-s.chromeHeight())
 		}
 	})
+	s.drawViewsBehindDialog(c)
 	s.drawPicker(c, width, height)
 	s.drawSettings(c, width, height)
 	s.drawDebug(c)
+	s.tellBackground()
 	s.forgetUnseated()
 	s.observeSections()
 	s.holdHiddenTabs()

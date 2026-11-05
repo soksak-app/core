@@ -93,8 +93,9 @@ func TestOpeningAndRemovingAProjectAreChains(t *testing.T) {
 	}
 	id := fields["project"].(string)
 	f.host.batches = nil
-	f.run("core.project.close", map[string]string{"id": id})
-	f.settle()
+	if err := f.finish("core.project.close", map[string]string{"id": id}); err != nil {
+		t.Fatal(err)
+	}
 	fields = f.chain(f.host, "workbench.project.operation", "projectRemoveAsk", "projectRelease")
 	if fields["action"] != "remove" || fields["project"] != id {
 		t.Fatalf("the fields are %v", fields)
@@ -102,12 +103,17 @@ func TestOpeningAndRemovingAProjectAreChains(t *testing.T) {
 }
 
 func TestANewWindowIsAChain(t *testing.T) {
-	f := newShell(t, &storedHost{})
-	f.followCalls()
-	f.run("core.library.window", nil)
-	f.settle()
-	if fields := f.chain(f.host, "workbench.window.operation", "windowNew"); fields["action"] != "new" {
-		t.Fatalf("the fields are %v", fields)
+	for _, command := range []string{"core.library.window", "core.window.new"} {
+		t.Run(command, func(t *testing.T) {
+			f := newShell(t, &storedHost{})
+			f.followCalls()
+			if err := f.finish(command, struct{}{}); err != nil {
+				t.Fatal(err)
+			}
+			if fields := f.chain(f.host, "workbench.window.operation", "windowNew"); fields["action"] != "new" {
+				t.Fatalf("the fields are %v", fields)
+			}
+		})
 	}
 }
 

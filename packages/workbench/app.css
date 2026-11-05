@@ -608,7 +608,7 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .sidebar-status__fold{display:grid;place-items:center;margin-left:auto;width:var(--fold-button);height:var(--fold-button);padding:0;border:0;border-radius:var(--r-xs);
   background:transparent;color:var(--muted);cursor:pointer}
 .sidebar-status__fold:hover{background:var(--inset);color:var(--fg)}
-.sidebar-status__fold svg{width:var(--card-icon);height:var(--card-icon)}
+.sidebar-status__fold svg{width:var(--card-icon);height:var(--card-icon);fill:none;stroke:currentColor;stroke-width:var(--icon-stroke);stroke-linecap:round;stroke-linejoin:round}
 .sidebar-status,.card-sidebar__status{display:flex;align-items:center;gap:var(--sidebar-status-gap);height:var(--foot-h);flex:0 0 var(--foot-h);box-sizing:border-box;
   padding:0 var(--space-2);border-top:var(--bw) solid var(--edge);font-size:var(--text-caption);color:var(--muted);
   white-space:nowrap;overflow:hidden}

@@ -393,4 +393,6 @@ type frontendRecord struct{ Frontend }
 
 func (*frontendRecord) ID() uint { return 0 }
 
+func (*frontendRecord) Frames() *WindowFrames { return nil }
+
 func (*frontendRecord) Name() string { return "" }

@@ -32,3 +32,29 @@ func TestTheWatchRemovesTheSavedReportAndNotTheHiddenFileThatTheSystemRenames(t 
 		t.Fatalf("the watch removed the hidden file %s, which the system renames to the saved report: %v", hidden, err)
 	}
 }
+
+// contract: test-support.crash-reports.child-runs-under-a-name-of-its-run
+func TestACrashingChildRunsACopyOfTheTestExecutableUnderANameOfItsRun(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected, err := os.Stat(executable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := support.CrashingExecutable(t)
+	second := support.CrashingExecutable(t)
+	if filepath.Base(first) == filepath.Base(second) || filepath.Base(first) == filepath.Base(executable) {
+		t.Fatalf("names %s, %s of the test executable %s", first, second, executable)
+	}
+	for _, path := range []string{first, second} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Size() != expected.Size() || info.Mode().Perm()&0o100 == 0 {
+			t.Fatalf("%s has size %d and mode %v, the test executable has size %d", path, info.Size(), info.Mode(), expected.Size())
+		}
+	}
+}

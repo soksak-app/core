@@ -291,7 +291,7 @@ func DrawPluginPage(c *ui.Context, binder *Binder, page PluginPage, shown *Shown
 		ui.Column(c).FillWidth().Gap(12).Padding(16).Children(func() {
 			search := binder.Control(c, "core.library.plugins.search", "core.library.plugins.search", "")
 			query := page.Query
-			ui.TextInput(c, &query).Label("플러그인 검색").Placeholder("플러그인 검색").FillWidth()
+			binder.Focusable(ui.TextInput(c, &query).Label("플러그인 검색").Placeholder("플러그인 검색").FillWidth(), "core.library.plugins.search")
 			if query != page.Query {
 				search(map[string]any{"query": query})
 			}

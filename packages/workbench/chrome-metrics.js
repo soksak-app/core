@@ -12,6 +12,9 @@ export function installBrandLogo(element) {
   element.innerHTML = declaration.icons["brand-logo"];
 }
 
+/** The sizes of the grip of a divider, for the stylesheet of the plane. */
+export const gripMetrics = () => ({ gripThickness: parseFloat(CHROME["sp-grip-thickness"]), gripLength: parseFloat(CHROME["sp-grip-length"]) });
+
 /** Sets every chrome metric on root as the custom property --<name>. */
 export function installChromeMetrics(root) {
   for (const [name, value] of Object.entries(CHROME)) root.style.setProperty(`--${name}`, value);

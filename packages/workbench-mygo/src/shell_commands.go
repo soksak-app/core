@@ -27,6 +27,18 @@ func command[T any](s *Shell, name string, run func(value T) (any, error)) {
 	})
 }
 
+// later registers name with a function of its parameters that answers in a later step.
+func later[T any](s *Shell, name string, run func(value T, answer func(any, error))) {
+	s.registry.CommandLater(name, func(raw json.RawMessage, answer func(any, error)) {
+		value, err := params[T](raw)
+		if err != nil {
+			answer(nil, fmt.Errorf("%s: %w", name, err))
+			return
+		}
+		run(value, answer)
+	})
+}
+
 // act is a command without an answer.
 func act[T any](s *Shell, name string, run func(value T) error) {
 	command(s, name, func(value T) (any, error) { return nil, run(value) })
@@ -69,10 +81,11 @@ func (s *Shell) requirePlane() error {
 // register adds the commands of the shell to the registry.
 func (s *Shell) register() {
 	s.registerLibrary()
+	s.registerRename()
 	s.registerSettings()
 	s.registerPicker()
-	s.text.Register(s.registry)
-	s.keyboard.Register(s.registry)
+	Functions{Text: s.text, Focus: s.keyboard, Pointer: s.pointer, Contributions: s.contributions, Verification: s.verification}.Register(s.registry)
+	s.registerTabDrag()
 	s.registerCardSidebars()
 	s.registerPlugins()
 	s.registerDebug()
@@ -85,7 +98,10 @@ func (s *Shell) register() {
 	s.registerProjectOpen()
 	s.registerFixture()
 	act(s, "core.project.activate", func(value idParam) error { s.activate(value.ID); return nil })
-	act(s, "core.project.close", func(value idParam) error { s.removeProject(value.ID); return nil })
+	s.registerProjectClose()
+	s.registry.CommandLater("core.window.new", func(_ json.RawMessage, answer func(any, error)) {
+		s.newWindow(func(err error) { answer(nil, err) })
+	})
 	act(s, "core.space.activate", func(value idParam) error { return s.activateSpace(value.ID) })
 	s.registry.CommandLater("core.space.close", func(raw json.RawMessage, answer func(any, error)) {
 		value, err := params[idParam](raw)
@@ -120,7 +136,13 @@ func (s *Shell) register() {
 		}
 		closeIt(true)
 	})
-	act(s, "core.space.add", func(struct{}) error { return s.addSpace() })
+	command(s, "core.space.add", func(struct{}) (any, error) {
+		space, err := s.addSpace()
+		if err != nil {
+			return nil, err
+		}
+		return map[string]string{"id": space.ID, "title": space.Title}, nil
+	})
 	act(s, "core.layout.balance", func(struct{}) error {
 		if err := s.requirePlane(); err != nil {
 			return err

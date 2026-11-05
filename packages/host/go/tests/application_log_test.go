@@ -288,9 +288,10 @@ func TestStartStandardErrorWritesAFatalErrorToTheCrashFileAndEndsTheProcessWithT
 		<-done
 		os.Exit(0)
 	}
-	reports := support.WatchCrashReports(t, filepath.Base(os.Args[0]))
+	executable := support.CrashingExecutable(t)
+	reports := support.WatchCrashReports(t, filepath.Base(executable))
 	config := t.TempDir()
-	command := exec.Command(os.Args[0], "-test.run=^TestStartStandardErrorWritesAFatalErrorToTheCrashFileAndEndsTheProcessWithTheSystemCrash$")
+	command := exec.Command(executable, "-test.run=^TestStartStandardErrorWritesAFatalErrorToTheCrashFileAndEndsTheProcessWithTheSystemCrash$")
 	command.Env = append(os.Environ(), crashOutputChild+"="+config)
 	output, err := command.Output()
 	var exit *exec.ExitError

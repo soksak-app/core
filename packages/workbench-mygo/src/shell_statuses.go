@@ -119,7 +119,7 @@ func optionalText(value string) *string {
 // planeOrigin is the origin of the plane in the window.
 func (s *Shell) planeOrigin() layout.Point {
 	inset := s.stageInset()
-	return layout.Point{X: float64(inset), Y: float64(s.chromeHeight() + s.workBanner + s.spaceRowHeight() + inset)}
+	return layout.Point{X: float64(s.projectColumnWidth() + inset), Y: float64(s.chromeHeight() + s.workBanner + s.spaceRowHeight() + inset)}
 }
 
 // projectStatus returns the stored record of a project with its open state.
@@ -430,7 +430,6 @@ func (s *Shell) sectionProgress(id string) SectionProgress {
 
 // registerStatuses adds the statuses of the shell.
 func (s *Shell) registerStatuses() {
-	s.registry.Status("core.verify", func() any { return s.verification.Status() })
 	s.registry.Status("core.projects", func() any {
 		status := make([]map[string]any, 0, len(s.projects))
 		for _, project := range s.projects {
@@ -473,11 +472,7 @@ func (s *Shell) registerStatuses() {
 	})
 	s.registry.Status("core.surfaces", func() any { return s.surfacesState() })
 	s.registry.Status("core.chrome", func() any {
-		tabs, ok := s.settings.Value("projectTabs").(string)
-		if !ok {
-			s.fail(fmt.Errorf("the setting projectTabs has no text"))
-		}
-		return map[string]any{"controlsWidth": math.Max(0, float64(s.controlsWidth)), "projectTabs": tabs}
+		return map[string]any{"controlsWidth": math.Max(0, float64(s.controlsWidth)), "projectTabs": s.projectTabsPlace()}
 	})
 	s.registry.Status("core.rail", func() any { return s.railState() })
 	s.registry.Status("core.window.workbench", func() any {
@@ -494,7 +489,7 @@ func (s *Shell) registerStatuses() {
 			visibility = "visible"
 		}
 		return map[string]any{"start": s.events.Start(), "startedAt": float64(s.events.StartedAt().UnixMilli()), "readyState": ready,
-			"visibility": visibility, "scheme": s.settings.Scheme(), "background": false, // no modal of this host blurs the workbench
+			"visibility": visibility, "scheme": s.settings.Scheme(), "background": s.dialogOpen(),
 			"scale": window.Scale, "width": window.Width, "height": window.Height}
 	})
 	s.registry.Status("core.workbench.audit", func() any {

@@ -2,6 +2,7 @@ package workbench_test
 
 import (
 	"encoding/json"
+	"image/color"
 	"reflect"
 	"slices"
 	"strings"
@@ -584,5 +585,81 @@ func TestACommonSettingOutlivesTheOpenOfAProject(t *testing.T) {
 	}
 	if status.Values["memorySaverDelay"] != float64(7) {
 		t.Fatalf("the setting is %v", status.Values["memorySaverDelay"])
+	}
+}
+
+// The first focus of the settings window is its card, so a key closes nothing that the user did not reach.
+func TestEnterInAnOpenedSettingsWindowClosesNothing(t *testing.T) {
+	f := opened(t)
+	f.tester.Key(0, ui.KeyEnter)
+	f.settle()
+	if !f.modal().Open {
+		t.Fatal("Enter closed the settings window")
+	}
+}
+
+// A dialog draws over a blurred workbench and tells the host, which blurs the documents. A menu has no background.
+func TestADialogSetsTheBackgroundOfTheWorkbench(t *testing.T) {
+	f := newShell(t, acme())
+	background := func() any { return status[map[string]any](t, f, "core.window.workbench")["background"] }
+	if background() != false || len(f.host.backgrounds) != 0 {
+		t.Fatalf("the background is %v and the host received %v before a dialog", background(), f.host.backgrounds)
+	}
+	f.click("core.chrome.settings", "")
+	if background() != true || !slices.Equal(f.host.backgrounds, []bool{true}) {
+		t.Fatalf("the background is %v and the host received %v with the settings open", background(), f.host.backgrounds)
+	}
+	f.click("core.settings-modal.close", "")
+	if background() != false || !slices.Equal(f.host.backgrounds, []bool{true, false}) {
+		t.Fatalf("the background is %v and the host received %v after the settings", background(), f.host.backgrounds)
+	}
+}
+
+// The head and the sections of the settings window are those of the page: the .act of the close button and the left marked .set-nav.
+func TestTheHeadAndTheSectionsOfTheSettingsWindowAreThoseOfThePage(t *testing.T) {
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	metric := func(name string) float32 {
+		value, ok := declared.Metric(name)
+		if !ok {
+			t.Fatalf("no metric %s", name)
+		}
+		return float32(value)
+	}
+	f := opened(t)
+	f.run("core.settings.theme", map[string]any{"name": "midnight", "mode": "dark"})
+	f.settle()
+	card, closing := f.box("core.settings-modal.card", ""), f.box("core.settings-modal.close", "close")
+	if closing.W != metric("act-w") || closing.H != metric("act-h") {
+		t.Fatalf("the close button is %v, the size of an icon switch is %v by %v", closing, metric("act-w"), metric("act-h"))
+	}
+	if end := card.X + card.W - closing.X - closing.W; end < metric("set-card-head-pad-end") || end > metric("set-card-head-pad-end")+1 {
+		t.Fatalf("the close button stands %v from the end of the card", end)
+	}
+	item := f.box("core.settings-modal.nav", "nav:general")
+	if want := metric("set-nav-w") - 2*metric("set-nav-pad-x") - 1; item.W != want {
+		t.Fatalf("the section is %v wide, want %v", item.W, want)
+	}
+	image := f.tester.Image()
+	scale := float32(image.Bounds().Dx()) / 1200
+	at := func(x, y float32) color.RGBA { return image.RGBAAt(int(x*scale), int(y*scale)) }
+	middle := item.Y + item.H/2
+	if got, want := at(item.X+metric("set-nav-mark-w")/2, middle), themeToken(t, "midnight", "dark", "rail"); got != want {
+		t.Fatalf("the mark of the shown section is %v, want %v", got, want)
+	}
+	fill := at(item.X+item.W-2, middle)
+	first := float32(-1)
+	for x := item.X + metric("set-nav-mark-w") + 1; x < item.X+item.W && first < 0; x += 0.5 {
+		for y := item.Y + 2; y < item.Y+item.H-2; y += 0.5 {
+			if at(x, y) != fill {
+				first = x - item.X
+				break
+			}
+		}
+	}
+	if pad := metric("set-nav-item-pad-x"); first < pad-1 || first > pad+2 {
+		t.Fatalf("the name of the section starts %v into it, want %v", first, pad)
 	}
 }

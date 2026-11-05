@@ -169,6 +169,8 @@ type quitWindow struct {
 	name string
 }
 
+func (quitWindow) Frames() *host.WindowFrames { return nil }
+
 func (quitWindow) ID() uint                               { return 1 }
 func (w quitWindow) Name() string                         { return w.name }
 func (quitWindow) NativeWindow() unsafe.Pointer           { return nil }
