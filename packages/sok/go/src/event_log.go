@@ -163,6 +163,10 @@ const reservedForRequests = 2
 // gatedReportInterval is the interval between two reports of the counts of the gate (docs/spec/logging.md#policy).
 const gatedReportInterval = time.Second
 
+// gatedWait is how long a count of the gate waits for an event when the writer sleeps: a count alone costs one write and one
+// index update, and it may wait for the next event, up to this bound on what a crash can take with it (docs/spec/logging.md#policy).
+const gatedWait = time.Minute
+
 // EventLog is the writer of one process.
 type EventLog struct {
 	system   platform.Platform
@@ -172,6 +176,10 @@ type EventLog struct {
 	wake         <-chan struct{}
 	nudge        chan struct{}
 	asleep       atomic.Bool
+	// countsHeld says that a writer that sleeps knows of a count and has its time set, so a further count wakes nothing;
+	// countWait is how long such a count waits, in nanoseconds.
+	countsHeld atomic.Bool
+	countWait  atomic.Int64
 	queuedEvents atomic.Int64
 	queuedBytes  atomic.Int64
 	queueEvents  int64
@@ -299,6 +307,7 @@ func StartEventLog(options EventLogOptions) (*EventLog, error) {
 		nudge:       make(chan struct{}, 1),
 		done:        make(chan struct{}),
 	}
+	log.countWait.Store(int64(gatedWait))
 	open := log.writerEvent(LevelInfo, "log.open", fields)
 	options.Spawn("event-log-writer", func() { log.write(file, options.BatchInterval, open) })
 	return log, nil
@@ -603,14 +612,25 @@ func (l *EventLog) rouse() {
 	}
 }
 
-// counted reports whether a count of the queue or of the gate waits for the writer.
-func (l *EventLog) counted() bool {
+// rouseForCount wakes a writer that sleeps for the first count of the gate that it does not know of. The writer does not write
+// for the count: it sets the time of the report and sleeps again. It does not wait.
+func (l *EventLog) rouseForCount() {
+	if !l.countsHeld.Load() {
+		l.rouse()
+	}
+}
+
+// SetGatedWait sets how long a count of the gate waits for an event when the writer sleeps. A log starts with gatedWait.
+func (l *EventLog) SetGatedWait(wait time.Duration) { l.countWait.Store(int64(wait)) }
+
+// lossCounted reports whether a count of the queue waits for the writer.
+func (l *EventLog) lossCounted() bool {
 	for channel := range l.lost {
 		if l.lost[channel].events.Load() > 0 {
 			return true
 		}
 	}
-	return l.gate.counted()
+	return false
 }
 
 // raiseDepth keeps the largest depth of the queue that a refusal of the channel saw since the writer last recorded the loss.
@@ -946,14 +966,23 @@ func (l *EventLog) write(main *os.File, interval time.Duration, open *pendingEve
 			dropped(events, bytes, "the queue was full", channel, &queued)
 		}
 	}
-	// reportGated reports the events that the gate refused with the exact count for each class and level, each second and
-	// at a flush or a stop (force): a report at each batch interval stored more events than a narrow policy removed.
+	// reportGated reports the events that the gate refused with the exact count for each class and level, at most each second
+	// and at a flush or a stop (force): a report at each batch interval stored more events than a narrow policy removed. A
+	// report goes with a batch of other events, or alone when the count that the writer held has waited its time.
 	gatedAt := time.Now()
+	var heldSince time.Time
 	reportGated := func(force bool) {
-		if !force && time.Since(gatedAt) < gatedReportInterval {
-			return
+		if !force {
+			if time.Since(gatedAt) < gatedReportInterval {
+				return
+			}
+			due := !heldSince.IsZero() && time.Since(heldSince) >= time.Duration(l.countWait.Load())
+			if !due && len(files[ChannelOther].batch) == 0 && len(files[ChannelDebug].batch) == 0 {
+				return
+			}
 		}
 		gatedAt = time.Now()
+		heldSince = time.Time{}
 		for c, class := range Classes {
 			for i, level := range levelNames {
 				if count := l.gate.gated[c][i].Swap(0); count > 0 {
@@ -1016,23 +1045,39 @@ func (l *EventLog) write(main *os.File, interval time.Duration, open *pendingEve
 	timer := time.NewTimer(interval)
 	timer.Stop()
 	var ended <-chan time.Time
+	// holding says that the timer waits for a count of the gate and not for the end of an interval: the writer sleeps.
+	holding := false
 	begin := func() {
+		holding = false
+		l.countsHeld.Store(false)
 		timer.Reset(interval)
 		ended = timer.C
 	}
 	sleep := func() {
 		ended = nil
+		holding = false
+		l.countsHeld.Store(false)
 		// A producer counts and then reads asleep, and the writer stores asleep and then reads the counts, so one of them sees
-		// the other. A count of the gate keeps the intervals running until its report, which comes at most once each second.
+		// the other. A loss keeps the intervals running until its report. A count of the gate sets the time of its report.
 		l.asleep.Store(true)
-		if l.counted() {
+		if l.lossCounted() {
 			l.asleep.Store(false)
 			begin()
+			return
+		}
+		if l.gate.counted() {
+			if heldSince.IsZero() {
+				heldSince = time.Now()
+			}
+			l.countsHeld.Store(true)
+			timer.Reset(max(time.Until(heldSince.Add(time.Duration(l.countWait.Load()))), interval))
+			ended = timer.C
+			holding = true
 		}
 	}
 	// wakeUp takes what woke a writer that slept and reports whether a request that it met ends the writer.
 	wakeUp := func() bool {
-		if ended != nil {
+		if ended != nil && !holding {
 			return false
 		}
 		l.asleep.Store(false)
@@ -1074,6 +1119,9 @@ func (l *EventLog) write(main *os.File, interval time.Duration, open *pendingEve
 				return
 			}
 		case <-ended:
+			if holding {
+				l.asleep.Store(false)
+			}
 			wrote = false
 			if answer(drain()) {
 				return

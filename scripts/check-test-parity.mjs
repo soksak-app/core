@@ -195,7 +195,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Darwin UI queue", "objective-c", ["native/darwin/src/ui_queue.m"], ["native/darwin/tests/ui_queue_test.m"], { sharedTests: true }),
   lane("Darwin process exit", "objective-c", ["native/darwin/src/process_exit.m"], ["native/darwin/tests/process_exit_test.m"], { sharedTests: true }),
   lane("Darwin application log", "objective-c", ["native/darwin/src/application_log.m"], ["native/darwin/tests/application_log_test.m"], { sharedTests: true }),
-  lane("Darwin event ring", "objective-c", ["native/darwin/src/event_ring.m"], ["native/darwin/tests/event_ring_test.m"], { sharedTests: true }),
+  lane("Darwin event ring", "objective-c", ["native/darwin/src/event_ring.m"], ["native/darwin/tests/event_ring_test.m", "native/darwin/tests/event_gate_wait_test.m"], { sharedTests: true }),
   lane("Darwin observe", "objective-c", ["native/darwin/src/observe.m"], ["native/darwin/tests/observe_test.m"], { sharedTests: true }),
   lane("Darwin mouse buttons", "objective-c", ["native/darwin/src/mouse_buttons.m"], ["native/darwin/tests/mouse_buttons_test.m"], { sharedTests: true }),
   lane("Darwin quit request", "objective-c", ["native/darwin/src/quit_request.m"], ["native/darwin/tests/quit_request_test.m"], { sharedTests: true }),
@@ -1159,6 +1159,21 @@ const FEATURE_LINKS = [
     ],
     expected: "A flush request behind a stop is answered, and a caller whose writer ended gets that error at once.",
     levels: ["unit"],
+  },
+  {
+    id: "F535-3",
+    implementation: [
+      { file: "packages/sok/go/src/event_log.go", symbol: "func (l *EventLog) rouseForCount() {" },
+      { file: "packages/sok/rust/src/event_log.rs", symbol: "pub(crate) fn nudge_for_count(&self) {" },
+      { file: "native/darwin/src/event_ring.m", symbol: "static void wakeWriterForCount(void) {" },
+    ],
+    tests: [
+      { file: "packages/sok/go/src/event_log_idle_test.go", id: "TestACountWaitsForTheNextWrite" },
+      { file: "packages/sok/rust/tests/event_log_idle_test.rs", id: "a_count_waits_for_the_next_write" },
+      { file: "native/darwin/tests/event_gate_wait_test.m", id: "a count leaves the pipe quiet during its wait" },
+    ],
+    expected: "A count of the gate alone makes no write: a writer that sleeps keeps it until the next event, for at most a minute.",
+    levels: ["unit", "native"],
   },
   {
     id: "F535-1",

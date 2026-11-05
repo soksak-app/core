@@ -216,7 +216,7 @@ func (l *EventLog) Gate(class Class, level Level) bool {
 		return true
 	}
 	l.gate.count(class, level)
-	l.rouse()
+	l.rouseForCount()
 	return false
 }
 

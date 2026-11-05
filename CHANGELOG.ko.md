@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F535-3: gate count만으로는 쓰지 않는다. 잠든 writer는 다음 event까지 최대 1분 동안 count를 들고 있으므로, 다른 앱에서 입력 소스를 바꿔도 idle 앱이 초마다 쓰기와 index update를 치르지 않는다. Red: `TestACountWaitsForTheNextWrite`, `a_count_waits_for_the_next_write`, `event_ring_test`의 pipe 검사가 count가 쓰인 것을 찾았다.
 - F502-16: 허용된 host 차이 표가 합류로 늘어난 파일을 적고, main page 없는 창의 library test 는 framework 를 부르지 않는다. Red: host structure audit 이 각 파일을 지목했다.
 - F502-16: contract 는 hello deadline 의 끝을 모든 host 의 case 로 두고, Rust host 도 Go host 처럼 hello 뒤의 침묵을 test 한다. Red: host structure audit 이 case 없는 Go test 를 지목했다.
 - F502-16: mygo workbench의 `core.projects.flush`는 host가 layout, 창 geometry, tab을 저장한 뒤에 답하고 저장이 실패하면 그 실패를 답하므로, reload가 쓰기를 잃지 않는다.
