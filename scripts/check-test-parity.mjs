@@ -1084,6 +1084,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F554",
+    implementation: [
+      { file: "packages/workbench/plane.js", symbol: "return sectionSurfaceShown(surfaceId) ? value(\"textSize\") : null;" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/plane-frame-text.test.mjs", id: "a frame factor change prepares the row of the next draw and writes the factor in that draw" },
+    ],
+    expected: "A view of a section that a drawn sidebar holds reads the frame factor in the Wails workbench.",
+    levels: ["unit"],
+  },
+  {
     id: "F547",
     implementation: [
       { file: "packages/workbench-mygo/src/events.go", symbol: "if e.gatedTimer || e.sending || len(e.gated) == 0 {" },
