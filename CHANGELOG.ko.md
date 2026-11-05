@@ -5,6 +5,7 @@
 ## 미배포
 
 - F617: 사이드카 메시지가 요청의 cids를 안고 표면 소유자에게 간다.
+- F631: 가득 찬 event queue의 test는 writer를 붙잡아 거부를 모두 세고, 한 run을 count 합이 거부된 event 수인 여러 `log.dropped` 범위로 읽는다. writer는 queue를 쓸 때마다 손실을 기록하므로, `log.dropped` 하나를 기대한 test는 거부 도중에 writer가 깨면 실패했다. Red: 기록 양쪽의 두 거부를 `log.dropped` 하나로 기대했다.
 - F626: mygo host에서 열린 dialog의 frame은 dialog를 다시 그리고, 그 뒤의 blur된 workbench는 바뀔 때까지 유지해 다시 그리지 않는다. scroll하는 dialog의 매 frame이 창 전체를 바꿨다. Red: `TestScrollingTheSettingsCardRedrawsTheCardAlone`이 167 frame 모두에서 바뀐 pixel 960,000을 읽었고, card의 상한은 430,080이다.
 - F630: `make measure-app-usage`는 footprint를 읽지 못한, 어느 애플리케이션에도 속하지 않는 process를 측정 끝의 process table로 판정한다. `footprint`는 끝나는 WebKit process를 `ps`가 지우기 전에 찾지 못하고, 그것이 애플리케이션의 측정을 실패시켰다. Red: `scripts/test/measure-app-usage.test.mjs`가 cpu 읽기가 아직 그 process를 나열하는 동안 footprint를 실패시킨다.
 - F502-13: 열린 dialog는 세 host에서 그 밖의 모든 element를 inert로 만든다. `element.rect`는 여전히 rectangle을 답하고, 한 점이 무엇에 닿는지는 `host.hit`이 답하며, `element.act`는 core element와 surface element 모두 code 1010으로 거절된다. mygo host의 pointer sequence는 dialog 뒤의 element 이름을 대지 않는다. Red: page는 dialog 뒤 element의 action을 수행했다. mygo host는 1010 대신 -32000으로 거절했고, surface element의 action을 surface로 전달했으며, pointer sequence는 dialog 뒤의 `core.save`를 이름으로 댔다.

@@ -10,10 +10,13 @@ mod records;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde_json::{Value, json};
-use soksak_host::event_log::{self, Level, Options, RelayedEvent};
+use soksak_host::event_log::{self, EventLog, Level, Options, RelayedEvent};
 use soksak_host::platform;
 
 /// The events of a log file, parsed.
@@ -84,43 +87,153 @@ fn the_first_line_is_log_open_and_seq_is_consecutive() {
     );
 }
 
-// contract: log.writer.never-blocks-and-counts-loss
-#[test]
-fn a_full_queue_returns_false_and_the_writer_records_the_range_as_dropped() {
-    let directory = folder::Folder::new();
-    let mut opts = options(directory.path());
-    opts.queue_events = 4;
-    // The writer waits a long time between batches, so the queue stays full while the producer pushes.
-    opts.batch_interval = Duration::from_secs(30);
-    let log = event_log::start(opts).unwrap();
-    records::store_every_level(&log);
-    let mut accepted = 0;
-    let mut refused = 0;
-    for index in 0..50 {
+/// Holds the writer thread in its write observer, as a slow disk holds it: while the writer is held it takes nothing from the
+/// queue, so the queue fills and stays full.
+struct Hold {
+    armed: Arc<AtomicBool>,
+    entered: Receiver<()>,
+    release: SyncSender<()>,
+}
+
+fn hold_writer(log: &EventLog) -> Hold {
+    let armed = Arc::new(AtomicBool::new(false));
+    let (entered_sender, entered) = sync_channel(1);
+    let (release, released) = sync_channel(0);
+    let observer_armed = Arc::clone(&armed);
+    let entered_sender = Mutex::new(entered_sender);
+    let released = Mutex::new(released);
+    log.set_on_write(Box::new(move |_, _| {
+        if observer_armed.swap(false, Ordering::SeqCst) {
+            entered_sender.lock().unwrap().send(()).unwrap();
+            released.lock().unwrap().recv().unwrap();
+        }
+    }));
+    Hold {
+        armed,
+        entered,
+        release,
+    }
+}
+
+/// Holds the writer, emits 20 events into a queue of 4 and releases the writer; returns the accepted and the refused events.
+/// An error is written without waiting for the batch interval, so its write is where the writer is held.
+fn refuse_while_held(log: &EventLog, hold: &Hold, first: u64) -> (u64, u64) {
+    hold.armed.store(true, Ordering::SeqCst);
+    assert!(log.emit(
+        Level::Error,
+        "host.test.failure",
+        &json!({"reason": "the writer is held"})
+    ));
+    hold.entered
+        .recv_timeout(Duration::from_secs(5))
+        .expect("the writer did not write the error");
+    let (mut accepted, mut refused) = (0, 0);
+    for index in first..first + 20 {
         if log.emit(Level::Info, "host.test.event", &json!({"index": index})) {
             accepted += 1;
         } else {
             refused += 1;
         }
     }
-    assert!(
-        accepted >= 3 && refused > 0,
-        "accepted {accepted}, refused {refused}"
+    hold.release.send(()).unwrap();
+    (accepted, refused)
+}
+
+/// The `log.dropped` events of a run, after checking that each names `count` consecutive `seq` before its own and that the
+/// stored events and the named ranges hold every `seq` from 1 once.
+fn dropped_ranges(events: &[Value]) -> Vec<&Value> {
+    let mut seqs: Vec<u64> = Vec::new();
+    let mut dropped = Vec::new();
+    for event in events {
+        let seq = event["seq"].as_u64().unwrap();
+        seqs.push(seq);
+        if event["event"] == "log.dropped" {
+            let fields = &event["fields"];
+            let (from, to) = (
+                fields["from_seq"].as_u64().unwrap(),
+                fields["to_seq"].as_u64().unwrap(),
+            );
+            assert_eq!(to + 1 - from, fields["count"].as_u64().unwrap(), "{event}");
+            assert!(seq > to, "{event}");
+            seqs.extend(from..=to);
+            dropped.push(event);
+        }
+    }
+    seqs.sort_unstable();
+    assert_eq!(
+        seqs,
+        (1..=seqs.len() as u64).collect::<Vec<_>>(),
+        "{events:?}"
     );
-    let path = log.path().to_path_buf();
+    dropped
+}
+
+// contract: log.writer.never-blocks-and-counts-loss
+#[test]
+fn a_full_queue_returns_false_and_the_writer_records_the_range_as_dropped() {
+    let directory = folder::Folder::new();
+    let mut opts = options(directory.path());
+    opts.queue_events = 4;
+    opts.batch_interval = Duration::from_secs(30);
+    let log = event_log::start(opts).unwrap();
+    records::store_every_level(&log);
+    let hold = hold_writer(&log);
+    let (accepted, refused) = refuse_while_held(&log, &hold, 0);
+    assert_eq!((accepted, refused), (4, 16));
     log.flush(Duration::from_secs(5)).unwrap();
-    let events = read(&path);
-    let dropped: Vec<&Value> = events
-        .iter()
-        .filter(|e| e["event"] == "log.dropped")
-        .collect();
+    let events = read(log.path());
+    let dropped = dropped_ranges(&events);
     assert_eq!(dropped.len(), 1, "{events:?}");
     assert_eq!(dropped[0]["fields"]["count"], refused);
+    assert_eq!(dropped[0]["fields"]["channel"], "other");
     let stored = events
         .iter()
         .filter(|e| e["event"] == "host.test.event")
-        .count();
+        .count() as u64;
     assert_eq!(stored, accepted);
+}
+
+// contract: log.writer.never-blocks-and-counts-loss
+#[test]
+fn a_record_of_the_loss_between_two_refusals_splits_them_into_two_dropped_ranges() {
+    // The writer records the loss counted so far each time it writes the queue (the end of an interval, an error, a flush or
+    // the wakeup of a writer that slept); refusals on both sides of such a write are two ranges.
+    let directory = folder::Folder::new();
+    let mut opts = options(directory.path());
+    opts.queue_events = 4;
+    opts.batch_interval = Duration::from_secs(30);
+    let log = event_log::start(opts).unwrap();
+    records::store_every_level(&log);
+    let hold = hold_writer(&log);
+    let first = refuse_while_held(&log, &hold, 0);
+    log.flush(Duration::from_secs(5)).unwrap();
+    let second = refuse_while_held(&log, &hold, 20);
+    assert_eq!((first, second), ((4, 16), (4, 16)));
+    log.flush(Duration::from_secs(5)).unwrap();
+    let events = read(log.path());
+    let dropped = dropped_ranges(&events);
+    assert_eq!(dropped.len(), 2, "{events:?}");
+    let counts: Vec<u64> = dropped
+        .iter()
+        .map(|e| e["fields"]["count"].as_u64().unwrap())
+        .collect();
+    assert_eq!(counts, [first.1, second.1]);
+    // The four events accepted after the first range are stored between the two ranges.
+    let between: Vec<u64> = events
+        .iter()
+        .filter(|e| {
+            e["event"] == "host.test.event"
+                && e["seq"].as_u64().unwrap() > dropped[0]["seq"].as_u64().unwrap()
+                && e["seq"].as_u64().unwrap() < dropped[1]["fields"]["from_seq"].as_u64().unwrap()
+        })
+        .map(|e| e["fields"]["index"].as_u64().unwrap())
+        .collect();
+    assert_eq!(between, [20, 21, 22, 23]);
+    let stored = events
+        .iter()
+        .filter(|e| e["event"] == "host.test.event")
+        .count() as u64;
+    assert_eq!(stored, first.0 + second.0);
 }
 
 // contract: log.writer.error-wakes-the-writer
