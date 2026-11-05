@@ -509,18 +509,18 @@ test("a hidden section of a project opened from the library starts unloaded in t
   const marks = { id: "spc-aaaaaa/left/probe.marks", plugin: "fixture", kind: "section" };
   const tab = { id: "a", plugin: "fixture", kind: "tab" };
   // The library draws no surface, so the start waits.
-  assert.deepEqual((await place({ drawn: true }, [], [])).surfaces, []);
+  assert.deepEqual((await place({ drawn: true, surfaces: [] }, [], [])).surfaces, []);
   // A preparation before the first draw of the plane has no complete seats, so the start waits for the drawn record.
-  await place({ drawn: false }, [tab], [tab.id]);
+  await place({ drawn: false, surfaces: [] }, [tab], [tab.id]);
   assert.equal(saver.state(marks.id), null);
   // The first drawn record of the project classifies its hidden section, so the placement never holds it.
-  const { surfaces } = await place({ drawn: true }, [tab, tree, marks], [tab.id, tree.id]);
+  const { surfaces } = await place({ drawn: true, surfaces: [] }, [tab, tree, marks], [tab.id, tree.id]);
   assert.deepEqual(surfaces.map(({ id }) => id), [tab.id, tree.id]);
   assert.equal(saver.state(marks.id), "unloaded");
   assert.equal(saver.state(tree.id), "loaded");
   // The start runs once: a section that a later set shows hidden mounts, and the delay unloads it.
   const later = { id: "spc-aaaaaa/left/probe.later", plugin: "fixture", kind: "section" };
-  const next = await place({ drawn: true }, [tab, tree, marks, later], [tab.id, tree.id]);
+  const next = await place({ drawn: true, surfaces: [] }, [tab, tree, marks, later], [tab.id, tree.id]);
   assert.deepEqual(next.surfaces.map(({ id }) => id), [tab.id, tree.id, later.id]);
   assert.equal(saver.state(later.id), "loaded");
 });
