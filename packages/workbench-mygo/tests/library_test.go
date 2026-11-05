@@ -2,6 +2,7 @@ package workbench_test
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 )
@@ -90,15 +91,100 @@ func TestTheSearchTakesTheFocusOfItsPage(t *testing.T) {
 	}
 }
 
+// savedAndOpened returns a shell with a saved project that the window never opened, then a project that it opened.
+func savedAndOpened(t *testing.T, host *storedHost) (f *shellFixture, saved, opened string) {
+	t.Helper()
+	host.projects = []map[string]any{storedProject(tab("tab-aaaaaa", "other"))}
+	saved = host.projects[0]["id"].(string)
+	f = newShell(t, host)
+	f.run("core.library.form.open", map[string]string{"mode": "open"})
+	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/beta"})
+	f.run("core.library.form.submit", nil)
+	f.settle()
+	f.run("core.projects.browse", nil)
+	f.settle()
+	return f, saved, f.host.projects[1]["id"].(string)
+}
+
 func TestTheSortOrdersTheProjects(t *testing.T) {
-	f, alpha, beta := libraryOfTwoProjects(t)
+	f, saved, opened := savedAndOpened(t, &storedHost{})
 	f.run("core.library.sort", map[string]string{"order": "open"})
 	f.settle()
-	if got := status[libraryRead](t, f, "core.library"); got.Sort != "open" || got.Shown[0] != beta {
-		t.Fatalf("the open project is not first in %v of %s and %s", got.Shown, alpha, beta)
+	if got := status[libraryRead](t, f, "core.library"); got.Sort != "open" || !slices.Equal(got.Shown, []string{opened, saved}) {
+		t.Fatalf("the open project is not first in %v of %s and %s", got.Shown, saved, opened)
 	}
 	if _, err := f.answer("core.library.sort", map[string]string{"order": "size"}); err == nil || err.Error() != "unknown sort size" {
 		t.Fatalf("the command answered %v", err)
+	}
+}
+
+// Every project that the window opened is open, and not only the shown one, so the sort keeps their saved order.
+func TestEveryProjectOfTheWindowIsOpen(t *testing.T) {
+	f, alpha, beta := libraryOfTwoProjects(t)
+	f.run("core.library.sort", map[string]string{"order": "open"})
+	f.settle()
+	got := status[libraryRead](t, f, "core.library")
+	if !slices.Equal(got.Shown, []string{alpha, beta}) || got.Count != "프로젝트 2 · 열림 2" {
+		t.Fatalf("the library shows %v and %q", got.Shown, got.Count)
+	}
+	for _, project := range status[[]map[string]any](t, f, "core.projects") {
+		if project["open"] != true {
+			t.Fatalf("the project %v is not open", project["id"])
+		}
+	}
+}
+
+// A project that another window owns is open here too, as the snapshot of the store tells.
+func TestAProjectOfAnotherWindowIsOpen(t *testing.T) {
+	host := &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "other"))}}
+	host.open = []string{host.projects[0]["id"].(string)}
+	f := newShell(t, host)
+	f.settle()
+	if got := status[libraryRead](t, f, "core.library"); got.Count != "프로젝트 1 · 열림 1" {
+		t.Fatalf("the count is %q", got.Count)
+	}
+}
+
+// A change of the store tells that another window has released its project.
+func TestTheOpenProjectsFollowTheStore(t *testing.T) {
+	host := &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "other"))}}
+	host.open = []string{host.projects[0]["id"].(string)}
+	f := newShell(t, host)
+	f.settle()
+	host.open = nil
+	f.shell.Event("workspace-changed", nil)
+	f.settle()
+	if got := status[libraryRead](t, f, "core.library"); got.Count != "프로젝트 1 · 열림 0" {
+		t.Fatalf("the count is %q", got.Count)
+	}
+}
+
+// Closing the shown project shows another project of the window and never opens one that the window did not open.
+func TestClosingTheShownProjectLeavesTheSavedOnes(t *testing.T) {
+	f, saved, opened := savedAndOpened(t, &storedHost{})
+	f.run("core.library.open", map[string]string{"id": opened})
+	f.settle()
+	f.run("core.project.close", map[string]string{"id": opened})
+	f.settle()
+	if got := status[libraryRead](t, f, "core.library"); got.ReturnVisible {
+		t.Fatalf("the window took the project %s that it did not open: %+v", saved, got)
+	}
+}
+
+// The name order reads as a person does, whatever the case of a letter.
+func TestTheNameOrderIgnoresTheCase(t *testing.T) {
+	f, alpha, beta := libraryOfTwoProjects(t)
+	if _, err := f.answerLater("core.project.rename", map[string]string{"id": alpha, "title": "beta"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.answerLater("core.project.rename", map[string]string{"id": beta, "title": "Alpha"}); err != nil {
+		t.Fatal(err)
+	}
+	f.settle()
+	f.run("core.library.sort", map[string]string{"order": "name"})
+	f.settle()
+	if got := status[libraryRead](t, f, "core.library"); !slices.Equal(got.Shown, []string{beta, alpha}) {
+		t.Fatalf("the order is %v of Alpha %s and beta %s", got.Shown, beta, alpha)
 	}
 }
 
@@ -115,7 +201,7 @@ func TestAProjectCardShowsItsLayoutAndItsState(t *testing.T) {
 			t.Fatalf("the pane %+v is outside the card %v", pane, card)
 		}
 	}
-	for _, text := range []string{"스페이스 1", "열림", "프로젝트 2 · 열림 1", "alpha", "/work/alpha"} {
+	for _, text := range []string{"스페이스 1", "열림", "프로젝트 2 · 열림 2", "alpha", "/work/alpha"} {
 		if !f.tester.HasText(text) {
 			t.Fatalf("the library shows %q, without %q", f.tester.Texts(), text)
 		}

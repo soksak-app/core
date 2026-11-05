@@ -274,8 +274,10 @@ type Shell struct {
 	active   string
 	// windowProjects are the projects that the window opened: their hidden tabs stay surfaces of the window (docs/spec/plugins.md#memory-saver).
 	windowProjects map[string]bool
-	plane          *layout.Grid
-	focused        string
+	// otherOpen are the projects that the store last named as owned by a window.
+	otherOpen map[string]bool
+	plane     *layout.Grid
+	focused   string
 	// columnsChanged tells that the next frame matches the columns of the window sidebars to the settings.
 	columnsChanged bool
 	// fullscreen is the card that covers the plane, or "" while the cards stand in their arrangement.
@@ -537,6 +539,7 @@ func (s *Shell) showRequested(done func()) {
 func (s *Shell) adopt(value any) error {
 	snapshot, err := decode[struct {
 		Projects      []json.RawMessage `json:"projects"`
+		Open          []string          `json:"open"`
 		ProjectsError *string           `json:"projectsError"`
 		Common        map[string]any    `json:"common"`
 	}](value)
@@ -555,6 +558,7 @@ func (s *Shell) adopt(value any) error {
 		projects = append(projects, record)
 	}
 	s.projects = projects
+	s.takeOpen(snapshot.Open)
 	return s.beginSettings(snapshot.Common)
 }
 
@@ -583,6 +587,17 @@ func (s *Shell) project(id string) *projectRecord {
 	}
 	return nil
 }
+
+// takeOpen takes the projects that a workspace snapshot names as owned by a window.
+func (s *Shell) takeOpen(ids []string) {
+	s.otherOpen = make(map[string]bool, len(ids))
+	for _, id := range ids {
+		s.otherOpen[id] = true
+	}
+}
+
+// isOpen tells whether a window holds the project id, this window or another, as projects.isOpen does.
+func (s *Shell) isOpen(id string) bool { return s.windowProjects[id] || s.otherOpen[id] }
 
 // opened returns the project that the window shows, or nil.
 func (s *Shell) opened() *projectRecord { return s.project(s.active) }

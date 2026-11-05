@@ -35,6 +35,8 @@ type storedHost struct {
 	projects  []map[string]any
 	// createRefused is the refusal of projectCreate.
 	createRefused error
+	// open are the projects that the host names as owned by a window.
+	open []string
 	// appUpdate is the answer of appUpdateState, and opened holds the arguments of linkOpen.
 	appUpdate any
 	opened    []json.RawMessage
@@ -336,7 +338,7 @@ func (h *storedHost) workspace(argument json.RawMessage) (any, error) {
 				project["settings"] = settings
 			}
 		}
-		return map[string]any{"projects": h.projects, "open": []string{}, "common": h.common}, nil
+		return map[string]any{"projects": h.projects, "open": h.open, "common": h.common}, nil
 	case "settings":
 		h.settings = append(h.settings, map[string]any{"id": request.ID, "patch": request.Patch, "remove": request.Remove})
 		return nil, nil
