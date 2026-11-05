@@ -3,6 +3,7 @@ package workbench_test
 import (
 	"fmt"
 	"image/color"
+	"math"
 	"slices"
 	"strings"
 	"testing"
@@ -107,5 +108,145 @@ func TestTheLinesOfACardFollowItsSeam(t *testing.T) {
 	}
 	if got := line(head, head.Y+head.H-0.5); got != rule {
 		t.Errorf("at a seam the line below the head is %v, want %v", got, rule)
+	}
+}
+
+// inkEnd is where the ink of a name ends in a box: the end of the last column before the given end that holds a pixel other than the fill of the box.
+// The name lies at the start of the box, and its padding ends the box in its fill.
+func (f *shellFixture) inkEnd(box ui.Rect, before float32) float32 {
+	f.t.Helper()
+	image := f.tester.Image()
+	scale := float32(image.Bounds().Dx()) / f.tester.ElementTree()[0].Bounds.W
+	fill := image.RGBAAt(int((box.X+box.W-2)*scale), int((box.Y+box.H/2)*scale))
+	end := box.X
+	for column := int((box.X + 2) * scale); column < int(before*scale); column++ {
+		for row := int((box.Y + 2) * scale); row < int((box.Y+box.H-2)*scale); row++ {
+			if image.RGBAAt(column, row) != fill {
+				end = float32(column+1) / scale
+				break
+			}
+		}
+	}
+	return end
+}
+
+// standsIn reports whether inner stands in outer, within the rounding of a layout.
+func standsIn(inner, outer ui.Rect) bool {
+	return inner.X >= outer.X-.01 && inner.Y >= outer.Y-.01 && inner.X+inner.W <= outer.X+outer.W+.01 && inner.Y+inner.H <= outer.Y+outer.H+.01
+}
+
+// The whole of a tab of a card is its button, as on the page: a press on its edge shows the tab, and its close button stands in it and
+// only closes.
+func TestTheWholeOfACardTabIsItsButton(t *testing.T) {
+	f, card, tab, _ := cardWithTwoTabs(t)
+	first := f.tabsOf(card)[0].(map[string]any)["id"].(string)
+	f.run("core.tab.select", map[string]string{"tab": first})
+	f.settle()
+	box, closing := f.box("core.card.tab", tab), f.box("core.card.tab-close", tab)
+	if !standsIn(closing, box) {
+		t.Fatalf("the close button %+v stands out of the tab %+v", closing, box)
+	}
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pad, _ := declared.Metric("tab-pad-y")
+	line, _ := declared.Metric("line-height")
+	small, _ := declared.Metric("text-small-at-base")
+	if want := 2*pad + small*line; math.Abs(float64(box.H)-want) > .01 {
+		t.Fatalf("the tab is %v high, the page %v", box.H, want)
+	}
+	f.tester.ClickAt(box.X+1, box.Y+1)
+	f.settle()
+	if f.activeOf(card) != tab {
+		t.Fatalf("a press on the edge of the tab shows %s", f.activeOf(card))
+	}
+	other := f.box("core.card.tab-close", first)
+	f.tester.ClickAt(other.X+other.W/2, other.Y+other.H/2)
+	f.settle()
+	if hasTab(f, card, first) || f.activeOf(card) != tab {
+		t.Fatalf("a press on the close button left %v showing %s", f.tabsOf(card), f.activeOf(card))
+	}
+}
+
+// The whole of a chip of the bar is its button, so a press above its name shows the project.
+func TestTheWholeOfAProjectTabIsItsButton(t *testing.T) {
+	f, alpha, beta := twoProjects(t)
+	shown := status[map[string]any](t, f, "core.project")["id"].(string)
+	other := alpha
+	if shown == alpha {
+		other = beta
+	}
+	box, closing := f.box("core.project-tab", other), f.box("core.project-tab.close", other)
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	high, _ := declared.Metric("space-tab-h")
+	if !standsIn(closing, box) || box.H != float32(high) {
+		t.Fatalf("the tab %+v of height %v and its close button %+v", box, high, closing)
+	}
+	f.tester.ClickAt(box.X+1, box.Y+1)
+	f.settle()
+	if got := status[map[string]any](t, f, "core.project")["id"]; got != other {
+		t.Fatalf("a press on the edge of the tab shows %v", got)
+	}
+}
+
+// The line of a card keeps the side padding of the page.
+func TestTheStatusLineStandsOnItsPadding(t *testing.T) {
+	f, stored := surfaceShell(t)
+	surface := terminalSurface(t, stored)
+	viewCall(t, f, stored, surface, "tab.footer", "short")
+	found, ok := f.tester.Find("short")
+	if !ok {
+		t.Fatalf("the texts are %q", f.tester.Texts())
+	}
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pad, _ := declared.Metric("space-2")
+	for _, card := range status[gridRead](t, f, "core.grid").Cards {
+		if len(card.Tabs) == 0 || card.Tabs[0].ID != surface {
+			continue
+		}
+		if got := found.X - f.box("core.card.status", card.ID).X; got != float32(pad) {
+			t.Fatalf("the text stands %v from the start of the line, the page %v", got, pad)
+		}
+		return
+	}
+	t.Fatal("no card holds the surface")
+}
+
+// The name of a tab ends where its measured width ends, so the ink that the checks of a close button read is the ink of the name.
+func TestTheInkOfTheNameOfATabIsAsWideAsTheName(t *testing.T) {
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	size, _ := declared.Metric("text-small-at-base")
+	pad, _ := declared.Metric("tab-pad-x")
+	catalog, err := workbench.ReadSettingsCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := narrowCard(t, 1, "title")
+	stack := catalog.Stack(status[map[string]any](t, f, "core.settings")["values"].(map[string]any)["font"].(string))
+	tab, closing := f.box("core.card.tab", "tab-000000"), f.box("core.card.tab-close", "tab-000000")
+	node, ok := exposedNode(f.tester.ElementTree(), "core.card.tab", "tab-000000")
+	if !ok {
+		t.Fatal("no element of the tab")
+	}
+	plain := ui.NewTester(func(c *ui.Context) {
+		ui.Row(c).Children(func() { ui.Text(c, node.Label).FontSize(float32(size)).Font(stack) })
+	}, 1000, 100)
+	bare, ok := nodeLabeled(plain.ElementTree(), node.Label)
+	if !ok {
+		t.Fatalf("no plain element of %q", node.Label)
+	}
+	end := f.inkEnd(tab, closing.X)
+	if want := tab.X + float32(pad) + bare.Bounds.W; math.Abs(float64(end-want)) > 1.5 {
+		t.Fatalf("the ink of %q ends at %v, its measured width ends at %v", node.Label, end, want)
 	}
 }

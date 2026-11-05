@@ -412,42 +412,51 @@ func (s *Shell) tabName(tab layout.Tab) string {
 func (s *Shell) drawTab(c *ui.Context, card string, tab layout.Tab, on bool, size, width float32) {
 	m := s.metrics
 	name := s.tabName(tab)
-	pill := ui.Row(c.Key("tab-" + tab.ID)).AlignItems(ui.Center).Radius(s.radiusSmall()).Shrink(0).PaddingY(m.tabPadY)
-	s.anchored("core.card.tab/"+tab.ID, pill)
+	line := size * m.lineHeight
+	family := s.fontFamily()
+	mark, _ := c.MeasureText(0, ui.Span{Text: tabCloseMark, Size: size, Font: family})
+	holder := ui.Box(c.Key("tab-" + tab.ID)).Shrink(0)
 	color := s.palette.Muted
-	if on || pill.Hovered() {
+	if on || holder.Hovered() {
 		color = s.palette.Fg
 	}
-	if on {
-		pill.Background(faded(s.palette.Fg, m.chipSelMix))
-	}
 	if s.dragging != nil && s.dragging.tab == tab.ID {
-		pill.Opacity(m.tabDraggingOpacity)
+		holder.Opacity(m.tabDraggingOpacity)
 	}
-	pill.Children(func() {
-		start := m.tabPadX
-		if s.tabNoticeText(tab.ID) != "" {
-			ui.Spacer(c).Width(m.tabPadX)
-			s.noticeMark(c, tab.ID)
-			start = m.tabGap
+	holder.Children(func() {
+		// The whole tab is the button, so a press on its padding shows the tab. A press leaves the keyboard focus where it is, and the Tab
+		// key still stops here. A control does not hold a control, so the notice and the close button stand over the room it keeps for them.
+		pill := s.binder.Press(c, "core.card.tab", "core.tab.select", tab.ID, tabParam{tab.ID})
+		pill.KeepFocus()
+		pill.AlignItems(ui.Center).Radius(s.radiusSmall()).PaddingY(m.tabPadY).Label(name).Tooltip(name)
+		if on {
+			pill.Background(faded(s.palette.Fg, m.chipSelMix))
 		}
-		button := s.binder.Press(c, "core.card.tab", "core.tab.select", tab.ID, tabParam{tab.ID})
-		// A press leaves the keyboard focus where it is, and the Tab key still stops here.
-		button.KeepFocus()
-		button.Padding(0, m.tabGap, 0, start).AlignItems(ui.Center).Label(name).Tooltip(name).Children(func() {
-			ui.Text(c, name).SingleLine().Ellipsis("…").FontSize(size).MaxWidth(width).TextColor(color)
+		s.tabContextMenu(pill, tab.ID)
+		pill.HandleInput(s.tabInput(card, tab.ID, pill.Bounds()))
+		s.anchored("core.card.tab/"+tab.ID, pill)
+		noticed := s.tabNoticeText(tab.ID) != ""
+		start := m.tabPadX
+		if noticed {
+			start += m.noticeDot + m.tabGap
+		}
+		pill.Children(func() {
+			ui.Row(c).Padding(0, m.tabGap+mark+2*m.tabXPad+m.tabPadX, 0, start).Children(func() {
+				ui.Text(c, name).SingleLine().Ellipsis("…").LineHeight(m.lineHeight).FontSize(size).MaxWidth(width).TextColor(color)
+			})
 		})
-		s.tabContextMenu(button, tab.ID)
-		button.HandleInput(s.tabInput(card, tab.ID, button.Bounds()))
+		if noticed {
+			ui.Box(c).Absolute().Left(m.tabPadX).Top(m.tabPadY + (line-m.noticeDot)/2).Children(func() { s.noticeMark(c, tab.ID) })
+		}
 		closing := s.binder.Press(c, "core.card.tab-close", "core.tab.close", tab.ID, tabParam{tab.ID})
-		closing.PaddingX(m.tabXPad).Margin(0, m.tabPadX, 0, 0).Radius(s.radiusSmall()).Label("닫기").Tooltip("닫기")
+		closing.Absolute().Top(m.tabPadY + (line-size*m.lineHeightTight)/2).Right(m.tabPadX).PaddingX(m.tabXPad).Radius(s.radiusSmall()).Label("닫기").Tooltip("닫기")
 		if closing.Hovered() {
 			closing.Background(faded(s.palette.No, m.tabXHoverMix))
 		} else {
 			closing.Opacity(m.tabXOpacity)
 		}
 		closing.Children(func() {
-			ui.Text(c, tabCloseMark).SingleLine().FontSize(size).TextColor(color)
+			ui.Text(c, tabCloseMark).SingleLine().LineHeight(m.lineHeightTight).FontSize(size).TextColor(color)
 		})
 	})
 }
@@ -581,7 +590,7 @@ func faded(color ui.Color, share float32) ui.Color {
 
 // drawStatus draws the status line of a card at height, with the text of the sides folded for lack of space when there is one.
 func (s *Shell) drawStatus(c *ui.Context, id string, data *layout.CardData, fold string, height float32) {
-	ui.Row(s.binder.Name(c, "core.card.status", id)).FillWidth().Height(height).Clip().PaddingX(s.metrics.tabsPad).AlignItems(ui.Center).BorderWidth(s.palette.BorderWidth, 0, 0, 0).BorderColor(s.cardLine()).
+	ui.Row(s.binder.Name(c, "core.card.status", id)).FillWidth().Height(height).Clip().PaddingX(s.metrics.chromeGap).AlignItems(ui.Center).BorderWidth(s.palette.BorderWidth, 0, 0, 0).BorderColor(s.cardLine()).
 		Role(ui.RoleStatus).Label("core.card.status").Children(func() {
 		text := s.cardStatusText(data)
 		if fold != "" {

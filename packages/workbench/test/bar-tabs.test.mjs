@@ -24,10 +24,11 @@ function strips() {
   const projectBar = document.getElementById("projectBar");
   const spaceBar = document.getElementById("spaceBar");
   const workarea = document.getElementById("workarea");
-  const tabs = createBarTabs({ projects, projectBar, spaceBar, workarea, bind: () => {}, run: async () => {}, keyboardOwed: () => {},
+  const runs = [];
+  const tabs = createBarTabs({ projects, projectBar, spaceBar, workarea, bind: () => {}, run: async (name, params) => { runs.push([name, params]); }, keyboardOwed: () => {},
     redraw: () => { redraws += 1; }, changed: () => {} });
   const texts = (strip) => [...strip.children].map((child) => child.textContent);
-  return { state, tabs, projectBar, spaceBar, workarea, texts, redraws: () => redraws };
+  return { state, tabs, projectBar, spaceBar, workarea, texts, runs, redraws: () => redraws };
 }
 
 test("a draw between a press and its release keeps the pressed project and space tabs", () => {
@@ -68,6 +69,40 @@ test("the left column takes the project tabs from the top strip and gives them b
   tabs.draw(false);
   assert.equal(workarea.querySelector(".project-column"), null);
   assert.deepEqual(texts(projectBar), ["first✕", "second✕", "+"]);
+});
+
+/** The events of a person's drag from one element onto another, with the one data transfer that the page sees through a drag. */
+function dragOnto(from, to) {
+  const stored = new Map();
+  const transfer = { setData: (type, value) => stored.set(type, value), getData: (type) => stored.get(type) ?? "" };
+  const send = (element, name) => {
+    const event = new element.ownerDocument.defaultView.Event(name, { bubbles: true, cancelable: true });
+    event.dataTransfer = transfer;
+    element.dispatchEvent(event);
+    return event;
+  };
+  send(from, "dragstart");
+  const over = send(to, "dragover");
+  const drop = send(to, "drop");
+  send(from, "dragend");
+  return { over, drop };
+}
+
+test("a project tab dragged onto another moves its project, on the bar and in the column", () => {
+  for (const left of [false, true]) {
+    const { tabs, projectBar, workarea, runs } = strips();
+    tabs.draw(left);
+    const strip = left ? workarea.querySelector(".project-column") : projectBar;
+    const [first, second] = strip.children;
+    assert.equal(first.draggable, true, "a project tab is not a drag source");
+    const { over, drop } = dragOnto(first, second);
+    assert.equal(over.defaultPrevented, true, "the tab under the drag does not accept it");
+    assert.equal(drop.defaultPrevented, true, "the drop falls to the default of the page");
+    assert.deepEqual(runs, [["core.project.move", { id: "p1", delta: 1 }]]);
+    runs.length = 0;
+    dragOnto(second, first);
+    assert.deepEqual(runs, [["core.project.move", { id: "p2", delta: -1 }]]);
+  }
 });
 
 test("the library draws no tab, also with the left setting", () => {

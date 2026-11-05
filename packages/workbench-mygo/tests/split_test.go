@@ -500,6 +500,12 @@ func narrowCard(t *testing.T, tabs int, title string) *shellFixture {
 // A card head starts with its tab list button and ends with its tools in one group. Its tabs stand between them, each with its name,
 // cut within the bound of a tab, and its close button.
 func TestACardHeadHoldsItsTabsBetweenItsListAndItsTools(t *testing.T) {
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pad, _ := declared.Metric("tab-pad-x")
+	xPad, _ := declared.Metric("tab-x-pad")
 	f := narrowCard(t, 3, strings.Repeat("max@maxs-MacBook-Pro-9:/private/tmp/", 3))
 	list, add, closing, card := f.box("core.card.tab-list", "main"), f.box("core.card.add", "main"), f.box("core.card.close", "main"), f.box("core.card", "main")
 	if list.W != 20 || add.W != 20 || closing.W != 20 {
@@ -508,20 +514,30 @@ func TestACardHeadHoldsItsTabsBetweenItsListAndItsTools(t *testing.T) {
 	if closing.X+closing.W >= card.X+card.W-4 || add.X >= closing.X {
 		t.Fatalf("the tools are at %v and %v in the card %v", add, closing, card)
 	}
-	right := list.X + list.W
+	right, painted := list.X+list.W, 0
 	for i := range 3 {
 		id := fmt.Sprintf("tab-%06d", i)
 		tab, x := f.box("core.card.tab", id), f.box("core.card.tab-close", id)
-		if x.X+x.W-tab.X > 200 {
-			t.Fatalf("tab %d is %v wide, want at most 200", i, x.X+x.W-tab.X)
+		if tab.W > 200 {
+			t.Fatalf("tab %d is %v wide, want at most 200", i, tab.W)
 		}
 		if tab.X < right {
 			t.Fatalf("tab %d starts at %v, over the one that ends at %v", i, tab.X, right)
 		}
-		if x.X < tab.X+tab.W {
-			t.Fatalf("the close button %v of tab %d stands over its name %v", x, i, tab)
+		if !standsIn(x, tab) || tab.X+tab.W-(x.X+x.W) != 7 {
+			t.Fatalf("the close button %v does not end tab %d %v by the padding of a tab", x, i, tab)
 		}
-		right = x.X + x.W
+		// The strip cuts the tabs past the tools, and the ink of a tab that it cuts is not the ink of its name.
+		if tab.X+tab.W <= add.X {
+			painted++
+			if end := f.inkEnd(tab, x.X+float32(xPad)); end <= tab.X+float32(pad) || end > x.X {
+				t.Fatalf("the name of tab %d ends at %v, its close button starts at %v", i, end, x.X)
+			}
+		}
+		right = tab.X + tab.W
+	}
+	if painted == 0 {
+		t.Fatal("the strip paints no whole tab")
 	}
 }
 
@@ -838,9 +854,14 @@ func TestATabOfABarIsAChipOverTheBand(t *testing.T) {
 	if got, want := inside(f.box("core.project-tab", record["id"].(string))), over(card, color.RGBA{tint.R, tint.G, tint.B, 255}, share("project-tab-mix")); !near(got, want) {
 		t.Fatalf("the selected project tab is %v, want %v", got, want)
 	}
-	name, closing := f.box("core.space-tab", on), f.box("core.space-tab.close", on)
-	if closing.X < name.X+name.W {
-		t.Fatalf("the close button starts at %v inside the name that ends at %v", closing.X, name.X+name.W)
+	chip, closing := f.box("core.space-tab", on), f.box("core.space-tab.close", on)
+	if !standsIn(closing, chip) {
+		t.Fatalf("the close button %v stands out of the chip %v", closing, chip)
+	}
+	xPad, _ := declared.Metric("bar-tab-x-pad")
+	pad, _ := declared.Metric("chrome-gap")
+	if end := f.inkEnd(chip, closing.X+float32(xPad)); end <= chip.X+float32(pad) || end > closing.X {
+		t.Fatalf("the name of the chip %v ends at %v, its close button starts at %v", chip, end, closing.X)
 	}
 	if got, want := image.RGBAAt(int((closing.X+closing.W+1)*scale), int((closing.Y+closing.H/2)*scale)), over(card, rail, share("chip-on-mix")); !near(got, want) {
 		t.Fatalf("beside the close button the chip is %v, want %v", got, want)
