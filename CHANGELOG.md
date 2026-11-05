@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F502-23: In the layouts of a recording on the mygo host, `requested` is the time at which the workbench asked for the frame of the transaction and `presented` the time at which that frame presented.
 - F502-23: `make host-test-mygo` runs the host contract on the mygo host: the Go language host library and the mygo adapter, and the Go `sok` with its three tag sets. A case of the scope `wailsv3, mygo only` declares the Go code that both Go hosts run, and the cases of the main page state their behavior over the workbench or take the scope `wailsv3, tauriv2 only`.
 - F502-23: `diagnostics.gc.loop` `{on}` of the Go hosts runs `runtime.GC` without pause on a goroutine, or stops it and answers after the goroutine has returned.
 - F502-23: `diagnostics.page.request`, `diagnostics.page.calls`, `diagnostics.host.events` and `diagnostics.page.collect` answer `the mygo host has no main page` on the mygo host, and `diagnostics.modal.hold` and `diagnostics.modal.held` answer `the mygo host has no modal web views`.

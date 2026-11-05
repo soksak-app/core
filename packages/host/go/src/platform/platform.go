@@ -270,6 +270,9 @@ type Capturer interface {
 	// LayoutTraceStop stops the recording and returns, for each transaction, ticket, begun, presented and committed (ms, on the same clock as the display time).
 	// A stage that did not happen is NaN. Call it on the UI thread.
 	LayoutTraceStop() ([][5]float64, error)
+	// LayoutTraceRequested records the time at which the presentation of the open layout transaction was requested, and returns
+	// the function that records the time at which it was confirmed. Call both on the UI thread.
+	LayoutTraceRequested() (presented func())
 	// CaptureStill takes one picture of the window with the window server number windowNumber without giving it focus and writes it to path as PNG.
 	// It is observation material.
 	CaptureStill(windowNumber int, path string) error

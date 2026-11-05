@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F502-23: mygo 호스트의 녹화 layouts에서 `requested`는 workbench가 그 트랜잭션의 frame을 요청한 시각이고 `presented`는 그 frame이 표시된 시각이다.
 - F502-23: `make host-test-mygo`가 mygo 호스트의 host contract를 실행한다. Go 언어 host library와 mygo adapter, 세 tag 조합의 Go `sok`이 대상이다. 두 Go 호스트가 함께 돌리는 Go 코드의 사례는 scope `wailsv3, mygo only`로 선언하고, main page 사례는 동작을 workbench 기준으로 쓰거나 scope `wailsv3, tauriv2 only`를 받는다.
 - F502-23: Go 호스트의 `diagnostics.gc.loop` `{on}`은 goroutine에서 `runtime.GC`를 쉬지 않고 돌리거나, 멈춘 뒤 goroutine이 끝나면 답한다.
 - F502-23: mygo 호스트에서 `diagnostics.page.request`, `diagnostics.page.calls`, `diagnostics.host.events`, `diagnostics.page.collect`는 `the mygo host has no main page`로, `diagnostics.modal.hold`, `diagnostics.modal.held`는 `the mygo host has no modal web views`로 답한다.
