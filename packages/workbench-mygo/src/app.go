@@ -249,6 +249,8 @@ func (s *Shell) event(name string, data []any) {
 		}
 	case "exposure-registered":
 		s.surfaceRegistered(data)
+	case "diagnostics-tick":
+		s.dragTick()
 	case "view-call":
 		s.viewCall(data)
 	case "view-reply":

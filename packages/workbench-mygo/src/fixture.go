@@ -10,6 +10,7 @@ import (
 // registerFixture answers diagnostics.fixture, which the host asks of the window that a check starts from (docs/spec/diagnostics.md).
 func (s *Shell) registerFixture() {
 	s.registry.Method("diagnostics.fixture", s.prepareFixture)
+	s.registerDrag()
 	s.registry.Method("diagnostics.layout.fail", func(_ json.RawMessage, answer func(any, error)) {
 		s.surfaces.layoutFault = true
 		answer(nil, nil)

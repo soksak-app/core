@@ -38,6 +38,7 @@ type gridRead struct {
 		ID         string  `json:"id"`
 		X          float64 `json:"x"`
 		W          float64 `json:"w"`
+		C0         int     `json:"c0"`
 		Focused    bool    `json:"focused"`
 		Fullscreen bool    `json:"fullscreen"`
 		Pane       *int    `json:"pane"`

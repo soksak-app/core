@@ -305,6 +305,7 @@ type Shell struct {
 	// controlsWidth is the width that the window keeps for its own buttons.
 	controlsWidth float32
 	held          *heldDivider
+	drag          *boundaryDrag
 	library       libraryState
 	tabs          *shellTabs
 	installed     []InstalledPlugin
