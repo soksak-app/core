@@ -3,6 +3,7 @@ package workbench_test
 import (
 	"fmt"
 	"image/color"
+	"math"
 	"slices"
 	"strings"
 	"testing"
@@ -108,4 +109,93 @@ func TestTheLinesOfACardFollowItsSeam(t *testing.T) {
 	if got := line(head, head.Y+head.H-0.5); got != rule {
 		t.Errorf("at a seam the line below the head is %v, want %v", got, rule)
 	}
+}
+
+// standsIn reports whether inner stands in outer, within the rounding of a layout.
+func standsIn(inner, outer ui.Rect) bool {
+	return inner.X >= outer.X-.01 && inner.Y >= outer.Y-.01 && inner.X+inner.W <= outer.X+outer.W+.01 && inner.Y+inner.H <= outer.Y+outer.H+.01
+}
+
+// The whole of a tab of a card is its button, as on the page: a press on its edge shows the tab, and its close button stands in it and
+// only closes.
+func TestTheWholeOfACardTabIsItsButton(t *testing.T) {
+	f, card, tab, _ := cardWithTwoTabs(t)
+	first := f.tabsOf(card)[0].(map[string]any)["id"].(string)
+	f.run("core.tab.select", map[string]string{"tab": first})
+	f.settle()
+	box, closing := f.box("core.card.tab", tab), f.box("core.card.tab-close", tab)
+	if !standsIn(closing, box) {
+		t.Fatalf("the close button %+v stands out of the tab %+v", closing, box)
+	}
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pad, _ := declared.Metric("tab-pad-y")
+	line, _ := declared.Metric("line-height")
+	small, _ := declared.Metric("text-small-at-base")
+	if want := 2*pad + small*line; math.Abs(float64(box.H)-want) > .01 {
+		t.Fatalf("the tab is %v high, the page %v", box.H, want)
+	}
+	f.tester.ClickAt(box.X+1, box.Y+1)
+	f.settle()
+	if f.activeOf(card) != tab {
+		t.Fatalf("a press on the edge of the tab shows %s", f.activeOf(card))
+	}
+	other := f.box("core.card.tab-close", first)
+	f.tester.ClickAt(other.X+other.W/2, other.Y+other.H/2)
+	f.settle()
+	if hasTab(f, card, first) || f.activeOf(card) != tab {
+		t.Fatalf("a press on the close button left %v showing %s", f.tabsOf(card), f.activeOf(card))
+	}
+}
+
+// The whole of a chip of the bar is its button, so a press above its name shows the project.
+func TestTheWholeOfAProjectTabIsItsButton(t *testing.T) {
+	f, alpha, beta := twoProjects(t)
+	shown := status[map[string]any](t, f, "core.project")["id"].(string)
+	other := alpha
+	if shown == alpha {
+		other = beta
+	}
+	box, closing := f.box("core.project-tab", other), f.box("core.project-tab.close", other)
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	high, _ := declared.Metric("space-tab-h")
+	if !standsIn(closing, box) || box.H != float32(high) {
+		t.Fatalf("the tab %+v of height %v and its close button %+v", box, high, closing)
+	}
+	f.tester.ClickAt(box.X+1, box.Y+1)
+	f.settle()
+	if got := status[map[string]any](t, f, "core.project")["id"]; got != other {
+		t.Fatalf("a press on the edge of the tab shows %v", got)
+	}
+}
+
+// The line of a card keeps the side padding of the page.
+func TestTheStatusLineStandsOnItsPadding(t *testing.T) {
+	f, stored := surfaceShell(t)
+	surface := terminalSurface(t, stored)
+	viewCall(t, f, stored, surface, "tab.footer", "short")
+	found, ok := f.tester.Find("short")
+	if !ok {
+		t.Fatalf("the texts are %q", f.tester.Texts())
+	}
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pad, _ := declared.Metric("space-2")
+	for _, card := range status[gridRead](t, f, "core.grid").Cards {
+		if len(card.Tabs) == 0 || card.Tabs[0].ID != surface {
+			continue
+		}
+		if got := found.X - f.box("core.card.status", card.ID).X; got != float32(pad) {
+			t.Fatalf("the text stands %v from the start of the line, the page %v", got, pad)
+		}
+		return
+	}
+	t.Fatal("no card holds the surface")
 }

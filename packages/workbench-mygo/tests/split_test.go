@@ -512,16 +512,16 @@ func TestACardHeadHoldsItsTabsBetweenItsListAndItsTools(t *testing.T) {
 	for i := range 3 {
 		id := fmt.Sprintf("tab-%06d", i)
 		tab, x := f.box("core.card.tab", id), f.box("core.card.tab-close", id)
-		if x.X+x.W-tab.X > 200 {
-			t.Fatalf("tab %d is %v wide, want at most 200", i, x.X+x.W-tab.X)
+		if tab.W > 200 {
+			t.Fatalf("tab %d is %v wide, want at most 200", i, tab.W)
 		}
 		if tab.X < right {
 			t.Fatalf("tab %d starts at %v, over the one that ends at %v", i, tab.X, right)
 		}
-		if x.X < tab.X+tab.W {
-			t.Fatalf("the close button %v of tab %d stands over its name %v", x, i, tab)
+		if !standsIn(x, tab) || tab.X+tab.W-(x.X+x.W) != 7 {
+			t.Fatalf("the close button %v does not end tab %d %v by the padding of a tab", x, i, tab)
 		}
-		right = x.X + x.W
+		right = tab.X + tab.W
 	}
 }
 
@@ -838,9 +838,9 @@ func TestATabOfABarIsAChipOverTheBand(t *testing.T) {
 	if got, want := inside(f.box("core.project-tab", record["id"].(string))), over(card, color.RGBA{tint.R, tint.G, tint.B, 255}, share("project-tab-mix")); !near(got, want) {
 		t.Fatalf("the selected project tab is %v, want %v", got, want)
 	}
-	name, closing := f.box("core.space-tab", on), f.box("core.space-tab.close", on)
-	if closing.X < name.X+name.W {
-		t.Fatalf("the close button starts at %v inside the name that ends at %v", closing.X, name.X+name.W)
+	chip, closing := f.box("core.space-tab", on), f.box("core.space-tab.close", on)
+	if !standsIn(closing, chip) {
+		t.Fatalf("the close button %v stands out of the chip %v", closing, chip)
 	}
 	if got, want := image.RGBAAt(int((closing.X+closing.W+1)*scale), int((closing.Y+closing.H/2)*scale)), over(card, rail, share("chip-on-mix")); !near(got, want) {
 		t.Fatalf("beside the close button the chip is %v, want %v", got, want)

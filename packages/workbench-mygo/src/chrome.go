@@ -157,31 +157,41 @@ func (s *Shell) drawBarTab(c *ui.Context, tab barTab) {
 		return
 	}
 	m := s.metrics
-	chip := ui.Row(c.Key(tab.key)).Height(s.frameLength(m.spaceTabH)).Shrink(0).AlignItems(ui.Center).
-		Radius(tab.radius[0], tab.radius[1], tab.radius[2], tab.radius[3])
-	color, fill := s.barTabColors(tab, chip.Hovered())
 	size := s.frameFont(s.textControl())
 	pad := s.frameLength(m.chromeGap)
-	if tab.drop != nil {
-		tab.drop(chip)
-	}
-	chip.Background(fill).Children(func() {
-		name := tab.pick()
-		if name.DoubleClicked() {
+	line := size * m.lineHeight
+	high := s.frameLength(m.spaceTabH)
+	holder := ui.Box(c.Key(tab.key)).Shrink(0)
+	color, fill := s.barTabColors(tab, holder.Hovered())
+	holder.Children(func() {
+		// The whole chip is the button, so a press above its name shows its project or space. A control does not hold a control, so the
+		// close button stands over the room that the chip keeps for it.
+		chip := tab.pick().Height(high).AlignItems(ui.Center).Radius(tab.radius[0], tab.radius[1], tab.radius[2], tab.radius[3]).
+			Label(tab.title).Tooltip(tab.title).Background(fill)
+		if chip.DoubleClicked() {
 			s.binder.run("core.rename.begin", tab.rename)
 		}
 		if tab.drag != nil {
-			name.Drag(tab.drag)
+			chip.Drag(tab.drag)
 		}
-		name.Padding(0, s.frameLength(m.barGap), 0, pad).AlignItems(ui.Center).Label(tab.title).Tooltip(tab.title).Children(func() {
-			ui.Text(c, tab.title).SingleLine().Ellipsis("…").FontSize(size).MaxWidth(s.frameLength(m.barTabMaxW)).TextColor(color)
+		if tab.drop != nil {
+			tab.drop(chip)
+		}
+		room := pad
+		if tab.close != nil {
+			mark, _ := c.MeasureText(0, ui.Span{Text: tabCloseMark, Size: size, Font: s.fontFamily()})
+			room = s.frameLength(m.barGap) + mark + 2*s.frameLength(m.barXPad) + pad
+		}
+		chip.Children(func() {
+			ui.Row(c).Padding(0, room, 0, pad).Children(func() {
+				ui.Text(c, tab.title).SingleLine().Ellipsis("…").FontSize(size).MaxWidth(s.frameLength(m.barTabMaxW)).TextColor(color)
+			})
 		})
 		if tab.close == nil {
-			ui.Spacer(c).Width(pad - s.frameLength(m.barGap))
 			return
 		}
 		closing := tab.close()
-		closing.PaddingX(s.frameLength(m.barXPad)).Margin(0, pad, 0, 0).Label("닫기").Tooltip("닫기")
+		closing.Absolute().Top((high - line) / 2).Right(pad).Height(line).PaddingX(s.frameLength(m.barXPad)).AlignItems(ui.Center).Label("닫기").Tooltip("닫기")
 		if !closing.Hovered() {
 			closing.Opacity(m.barXOpacity)
 		}
