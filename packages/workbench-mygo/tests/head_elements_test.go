@@ -111,6 +111,25 @@ func TestTheLinesOfACardFollowItsSeam(t *testing.T) {
 	}
 }
 
+// inkEnd is where the ink of a name ends in a box: the end of the last column before the given end that holds a pixel other than the fill of the box.
+// The name lies at the start of the box, and its padding ends the box in its fill.
+func (f *shellFixture) inkEnd(box ui.Rect, before float32) float32 {
+	f.t.Helper()
+	image := f.tester.Image()
+	scale := float32(image.Bounds().Dx()) / f.tester.ElementTree()[0].Bounds.W
+	fill := image.RGBAAt(int((box.X+box.W-2)*scale), int((box.Y+box.H/2)*scale))
+	end := box.X
+	for column := int((box.X + 2) * scale); column < int(before*scale); column++ {
+		for row := int((box.Y + 2) * scale); row < int((box.Y+box.H-2)*scale); row++ {
+			if image.RGBAAt(column, row) != fill {
+				end = float32(column+1) / scale
+				break
+			}
+		}
+	}
+	return end
+}
+
 // standsIn reports whether inner stands in outer, within the rounding of a layout.
 func standsIn(inner, outer ui.Rect) bool {
 	return inner.X >= outer.X-.01 && inner.Y >= outer.Y-.01 && inner.X+inner.W <= outer.X+outer.W+.01 && inner.Y+inner.H <= outer.Y+outer.H+.01
@@ -198,4 +217,36 @@ func TestTheStatusLineStandsOnItsPadding(t *testing.T) {
 		return
 	}
 	t.Fatal("no card holds the surface")
+}
+
+// The name of a tab ends where its measured width ends, so the ink that the checks of a close button read is the ink of the name.
+func TestTheInkOfTheNameOfATabIsAsWideAsTheName(t *testing.T) {
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	size, _ := declared.Metric("text-small-at-base")
+	pad, _ := declared.Metric("tab-pad-x")
+	catalog, err := workbench.ReadSettingsCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := narrowCard(t, 1, "title")
+	stack := catalog.Stack(status[map[string]any](t, f, "core.settings")["values"].(map[string]any)["font"].(string))
+	tab, closing := f.box("core.card.tab", "tab-000000"), f.box("core.card.tab-close", "tab-000000")
+	node, ok := exposedNode(f.tester.ElementTree(), "core.card.tab", "tab-000000")
+	if !ok {
+		t.Fatal("no element of the tab")
+	}
+	plain := ui.NewTester(func(c *ui.Context) {
+		ui.Row(c).Children(func() { ui.Text(c, node.Label).FontSize(float32(size)).Font(stack) })
+	}, 1000, 100)
+	bare, ok := nodeLabeled(plain.ElementTree(), node.Label)
+	if !ok {
+		t.Fatalf("no plain element of %q", node.Label)
+	}
+	end := f.inkEnd(tab, closing.X)
+	if want := tab.X + float32(pad) + bare.Bounds.W; math.Abs(float64(end-want)) > 1.5 {
+		t.Fatalf("the ink of %q ends at %v, its measured width ends at %v", node.Label, end, want)
+	}
 }
