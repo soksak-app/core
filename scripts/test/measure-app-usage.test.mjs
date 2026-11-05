@@ -255,6 +255,16 @@ test("a window with a main page has its page row, and a page process that is nei
     { rows: [], errors: [`page of window w1 of ${MYGO}: host.window reply has no documents array`] });
 });
 
+test("a hidden document that has not loaded has no row and is no error, and a shown document or a view without a process is an error", () => {
+  const started = { surface: "tab-2", document: "", process: 902 };
+  assert.deepEqual(windowRows("w1", MYGO, { pageProcess: null, documents: [started, { surface: "tab-2", document: "page", process: 0, visible: false }] }),
+    { rows: [{ role: "document tab-2/", pid: 902, attribution: "host.window" }], errors: [] });
+  assert.deepEqual(windowRows("w1", MYGO, { pageProcess: null, documents: [{ surface: "tab-2", document: "page", process: 0, visible: true }] }),
+    { rows: [], errors: [`document tab-2/page of window w1 of ${MYGO}: no process (0)`] });
+  assert.deepEqual(windowRows("w1", MYGO, { pageProcess: null, documents: [{ surface: "tab-2", document: "", process: 0, visible: false }] }),
+    { rows: [], errors: [`document tab-2/ of window w1 of ${MYGO}: no process (0)`] });
+});
+
 test("every window must be visible except the covered first window of S9", () => {
   const visible = [{ window: "w1", occluded: false }, { window: "w2", occluded: false }];
   requireOcclusion("S1", visible);

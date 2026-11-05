@@ -279,6 +279,9 @@ export function windowRows(window, configDir, status) {
     const role = `document ${document.surface}/${document.document}`;
     if (Number.isInteger(document.process) && document.process > 0) {
       rows.push({ role, pid: document.process, attribution: "host.window" });
+    } else if (document.document !== "" && document.process === 0 && document.visible === false) {
+      // A hidden document of a view holds no process until it loads, so it has nothing to read. A shown document and the view itself must have one.
+      continue;
     } else {
       errors.push(`${role} of window ${window} of ${configDir}: no process (${JSON.stringify(document.process)})`);
     }
