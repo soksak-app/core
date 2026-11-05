@@ -643,6 +643,8 @@ fn invalid_json_closes_connection() {
 | `sidecars.retain.skips-service-without-endpoint` | 실행 중인 서비스와 그 엔드포인트 파일이 없으면 retain은 서비스를 시작하지 않고 아무것도 닫지 않는다. | all |
 | `sidecars.retain.timeout-names-the-request-stage` | service가 읽고 답하지 않은 retain은 10초 뒤 요청 줄의 stage, 즉 쓰인 뒤의 시간과 service에서 마지막 줄이 도착한 뒤의 시간으로 실패한다. | all |
 | `sidecars.retain.keeps-surface-first-sent-during-start` | Persistent service가 시작된 뒤 keep 목록을 모으기 전에 처음 보낸 일반 surface session도 해당 retain에 포함된다. | all |
+| `sidecars.send.page-needs-a-project-root` | project를 보여 주지 않는 window에서 root가 기록되지 않은 surface로 보내는 page 요청은 실패하고, 어떤 sidecar에도 가지 않으며, 진행 중인 retain은 계속된다. root가 기록된 surface는 그 root로 계속 보낸다. | all |
+| `sidecars.send.host-send-leaves-no-session-without-a-root` | project를 보여 주지 않는 window에서 host의 send는 sidecar에 도달하되 root를 기록하지 않아, 어떤 retain도 그 surface를 유지하지 않는다. | all |
 | `sidecars.retain.closes-sessions-absent-from-layout` | 이전에 알려진 일반 surface를 retain에서 생략하면 stale owner와 root를 제거하고 persistent service에 그 surface가 없는 keep 목록을 보낸다. | all |
 | `sidecars.restart.enable-clears-stops` | plugin 하나를 사람이 enable하면 그 plugin이 `dependencies`에 나열한 사이드카마다 정지를 해제해 다음 전송이 사이드카를 시작한다. 어떤 활성 plugin도 나열하지 않은 사이드카의 정지는 그대로 남는다. | all |
 | `sidecars.retain.rejects-after-stop` | 사이드카가 멈춘 뒤 시작한 retain이나 서비스를 준비한 뒤 멈춤이 끼어든 retain은 "sidecars are stopped"로 실패하고 서비스에 retain을 보내지 않는다. | all |

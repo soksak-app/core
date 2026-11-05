@@ -315,7 +315,7 @@ func sendDuringARetain(t *testing.T, s *Surfaces, send func(c *Sidecars, name st
 	c.RetainSending = func(name string) { send(c, name) }
 	done := make(chan error, 1)
 	go func() {
-		_, err := c.Retain([]RetainedSurface{{Surface: "listed", Root: "/fixture/listed"}})
+		_, err := c.Retain([]RetainedSurface{{Surface: "listed", Plugin: "probe", Root: "/fixture/listed"}})
 		done <- err
 	}()
 	for {
@@ -348,6 +348,7 @@ func sendDuringARetain(t *testing.T, s *Surfaces, send func(c *Sidecars, name st
 
 // The page of a tab outlives the close of its project for a moment, and its request then finds a window that shows no project.
 // That request starts no session, and the retain goes on.
+// contract: sidecars.send.page-needs-a-project-root
 func TestARequestOfAPageInAWindowWithNoProjectIsRefusedDuringARetain(t *testing.T) {
 	s := sidecarSessionSurfaces(t)
 	s.root = ""
@@ -364,6 +365,7 @@ func TestARequestOfAPageInAWindowWithNoProjectIsRefusedDuringARetain(t *testing.
 }
 
 // A send of the host reaches its service in a window with no project, as an image detach does, and leaves no session behind.
+// contract: sidecars.send.host-send-leaves-no-session-without-a-root
 func TestASendOfTheHostInAWindowWithNoProjectLeavesNoSession(t *testing.T) {
 	s := sidecarSessionSurfaces(t)
 	s.root = ""
