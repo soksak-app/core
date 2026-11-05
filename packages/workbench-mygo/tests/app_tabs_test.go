@@ -31,7 +31,20 @@ type tabApp struct {
 	id      atomic.Int64
 }
 
+// tabClock is the time of an application that a test moves.
+type tabClock struct{ *clock }
+
+func (c tabClock) Now() int64 { return c.now }
+
+func (c tabClock) After(milliseconds int64, run func()) func() { return c.after(milliseconds, run) }
+
 func newTabApp(t *testing.T, stored *surfaceHost, document string) *tabApp {
+	t.Helper()
+	return newTabAppAt(t, stored, document, nil)
+}
+
+// newTabAppAt is newTabApp with the time of the application.
+func newTabAppAt(t *testing.T, stored *surfaceHost, document string, time workbench.TabClock) *tabApp {
 	t.Helper()
 	f := &tabApp{t: t, window: &appWindow{}, queue: make(steps, 1024), stored: stored, replies: make(chan map[string]any, 64)}
 	table := func(host.Frontend) map[string]workbench.HostCall {
@@ -46,7 +59,7 @@ func newTabApp(t *testing.T, stored *surfaceHost, document string) *tabApp {
 		}
 		return calls
 	}
-	app, err := workbench.NewApp(workbench.AppOptions{Environment: environment(t), Post: f.queue.post, Table: table,
+	app, err := workbench.NewApp(workbench.AppOptions{Environment: environment(t), Post: f.queue.post, Table: table, Clock: time,
 		Detaching: func(host.Frontend) []string { return nil },
 		Installed: func() []byte { return []byte(document) },
 		Element:   func(host.Frontend, string) (uintptr, uintptr, bool) { return 0, 0, false },
@@ -239,13 +252,18 @@ const sectionsDocument = `{"plugins": [
 		{"id": "files.tree", "name": "파일 트리", "composition": {"kind": "view", "page": "ui/tree.html"}, "height": "fill"},
 		{"id": "files.bookmarks", "name": "북마크", "composition": {"kind": "view", "page": "ui/bookmarks.html"}, "height": 160}]}}]}`
 
-// sectionsApp opens the project of an application whose left sidebar shows the sections as tabs, files.tree first.
+// sectionsSet is the common settings whose left sidebar shows the sections as tabs, files.tree first.
+func sectionsSet() map[string]any {
+	return map[string]any{"sets": []any{map[string]any{"id": "set-all", "title": "전체", "layout": "tabs",
+		"sections": []any{"files.tree", "browser.tabs", "files.bookmarks"}}}, "links": []any{map[string]any{"place": "left", "plugin": nil, "set": "set-all"}}}
+}
+
+// sectionsApp opens the project of an application whose left sidebar shows the sections as tabs.
 func sectionsApp(t *testing.T) (*tabApp, *surfaceHost) {
 	t.Helper()
 	stored := &surfaceHost{}
 	stored.installed = sectionsDocument
-	stored.common = map[string]any{"sets": []any{map[string]any{"id": "set-all", "title": "전체", "layout": "tabs",
-		"sections": []any{"files.tree", "browser.tabs", "files.bookmarks"}}}, "links": []any{map[string]any{"place": "left", "plugin": nil, "set": "set-all"}}}
+	stored.common = sectionsSet()
 	stored.projects = []map[string]any{storedProject(tab("tab-aaaaaa", "notes"))}
 	f := newTabApp(t, stored, sectionsDocument)
 	f.command("core.project.activate", map[string]string{"id": "prj-a"})
@@ -433,5 +451,74 @@ func TestAHiddenTabOfAnotherSpaceReadsTheTextScaleOfItsCard(t *testing.T) {
 	f.settle()
 	if reply := stored.replies[len(stored.replies)-1]; reply["error"] != nil || reply["result"] != 1.5 {
 		t.Fatalf("the read is %v", reply)
+	}
+}
+
+const memoryDelayMinutes = 5
+
+// delaySections opens a project on a clock, with the setting memorySaverDelay at its lowest value.
+func delaySections(t *testing.T, common map[string]any) (*tabApp, *surfaceHost, *clock) {
+	t.Helper()
+	stored := &surfaceHost{}
+	stored.installed = sectionsDocument
+	stored.common = common
+	stored.common["memorySaverDelay"] = memoryDelayMinutes
+	stored.projects = []map[string]any{storedProject(tab("tab-aaaaaa", "notes"))}
+	time := &clock{}
+	f := newTabAppAt(t, stored, sectionsDocument, tabClock{time})
+	f.command("core.project.activate", map[string]string{"id": "prj-a"})
+	return f, stored, time
+}
+
+// The delay unloads a section that a person hid, as it does a hidden tab, and the next show restores it.
+func TestTheDelayUnloadsAHiddenSection(t *testing.T) {
+	f, stored, time := delaySections(t, sectionsSet())
+	f.command("core.sidebar.section.select", map[string]string{"sidebar": "left", "section": "browser.tabs"})
+	f.command("core.sidebar.section.select", map[string]string{"sidebar": "left", "section": "files.tree"})
+	time.tick(memoryDelayMinutes*minute - 1)
+	f.settle()
+	if surface := stored.lastSurfaces(t)[sectionTabs]; surface == nil || surface["visible"] != false {
+		t.Fatalf("before the delay the hidden section is %v", surface)
+	}
+	time.tick(1)
+	f.settle()
+	if surface := stored.lastSurfaces(t)[sectionTabs]; surface != nil {
+		t.Fatalf("after the delay the hidden section is %v", surface)
+	}
+	if state := f.memoryOf(sectionTabs)["state"]; state != "unloaded" {
+		t.Fatalf("after the delay the hidden section is %v", state)
+	}
+	if surface := stored.lastSurfaces(t)[sectionBookmarks]; surface == nil {
+		t.Fatal("the delay unloaded a section without a declaration")
+	}
+	f.command("core.sidebar.section.select", map[string]string{"sidebar": "left", "section": "browser.tabs"})
+	if surface := stored.lastSurfaces(t)[sectionTabs]; surface == nil || surface["visible"] != true {
+		t.Fatalf("the shown section is %v", surface)
+	}
+	if state := f.memoryOf(sectionTabs)["state"]; state != "loaded" {
+		t.Fatalf("the restored section is %v", state)
+	}
+}
+
+// A set that a person links after the start holds its hidden sections, and the delay unloads those that declare unload.
+func TestTheDelayUnloadsTheHiddenSectionsOfASetLinkedAfterTheStart(t *testing.T) {
+	f, stored, time := delaySections(t, map[string]any{})
+	values := f.ask("status.get", map[string]any{"name": "core.settings"})["result"].(map[string]any)["values"].(map[string]any)
+	sets := append(values["sets"].([]any), sectionsSet()["sets"].([]any)...)
+	f.command("core.settings.set", map[string]any{"patch": map[string]any{"sets": sets}, "scope": "common"})
+	f.command("core.settings.link", map[string]any{"place": "left", "plugin": nil, "set": "set-all", "scope": "common"})
+	if surface := stored.lastSurfaces(t)[sectionTabs]; surface == nil || surface["visible"] != false {
+		t.Fatalf("after the link the hidden section is %v", surface)
+	}
+	if state := f.memoryOf(sectionTabs)["state"]; state != "loaded" {
+		t.Fatalf("after the link the hidden section is %v", state)
+	}
+	time.tick(memoryDelayMinutes * minute)
+	f.settle()
+	if surface := stored.lastSurfaces(t)[sectionTabs]; surface != nil {
+		t.Fatalf("after the delay the hidden section is %v", surface)
+	}
+	if surface := stored.lastSurfaces(t)[sectionBookmarks]; surface == nil {
+		t.Fatal("the delay unloaded a section without a declaration")
 	}
 }

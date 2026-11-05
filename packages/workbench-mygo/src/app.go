@@ -69,6 +69,14 @@ type AppOptions struct {
 	Element func(window host.Frontend, id string) (surface, key uintptr, ok bool)
 	// Detaching returns the surfaces of window whose image detach is pending.
 	Detaching func(window host.Frontend) []string
+	// Clock is the time of the tab parts, and nil the time of the system.
+	Clock TabClock
+}
+
+// TabClock is the time that the tab parts read: a monotonic time in milliseconds, and a timer that runs in a later step of the main thread.
+type TabClock interface {
+	Now() int64
+	After(milliseconds int64, run func()) (cancel func())
 }
 
 // App is the workbench of the application.
