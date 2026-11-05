@@ -25,6 +25,10 @@ let changed = () => {};
 let savedLayout = "";
 let writing = Promise.resolve();
 let refreshing = Promise.resolve();
+// The writes of project data of each project that the store has not answered, and the end of the last write: each write carries the
+// data of the write before it, so the store takes them in order.
+const dataWrites = new Map();
+let dataWriting = Promise.resolve();
 /* Project that was drawn on the first screen and is not activated yet. The activation of initialise takes it over. */
 let begun = null;
 let initialContextPending = false;
@@ -183,8 +187,24 @@ async function setPluginData(id, plugin, key, value) {
   if (!project) throw new Error(`Unknown project: ${id}`);
   // default: a project that never stored plugin data has no plugins.
   const plugins = { ...(project.plugins ?? {}), [plugin]: { ...(project.plugins?.[plugin] ?? {}), [key]: value } };
-  await store.patch(id, { plugins });
+  // The next write starts from this one, so the record takes it before the store confirms it. A store that refuses it takes it
+  // back out, unless a later write stands on it.
+  const before = project.plugins;
   project.plugins = plugins;
+  // default: a project without a write that the store has not answered counts none.
+  dataWrites.set(id, (dataWrites.get(id) ?? 0) + 1);
+  const stored = dataWriting.then(() => store.patch(id, { plugins }));
+  // The refusal reaches the caller through stored; the next write does not depend on it.
+  dataWriting = stored.then(() => undefined, () => undefined);
+  try {
+    await stored;
+  } catch (error) {
+    const kept = projects.find((p) => p.id === id);
+    if (kept?.plugins === plugins) kept.plugins = before;
+    throw error;
+  } finally {
+    dataWrites.set(id, dataWrites.get(id) - 1);
+  }
 }
 
 /**
@@ -346,7 +366,9 @@ async function readProjects() {
   const read = projects;
   projects = snapshot.projects.map((p) => {
     const old = previous.get(p.id);
-    return owned.has(p.id) && old ? { ...p, spaces: old.spaces, activeSpaceId: old.activeSpaceId, named: old.named } : p;
+    const kept = owned.has(p.id) && old ? { ...p, spaces: old.spaces, activeSpaceId: old.activeSpaceId, named: old.named } : p;
+    // The read stands before a write of this window that the record already holds. The host answers that write with a change again.
+    return old && dataWrites.get(p.id) > 0 ? { ...kept, plugins: old.plugins } : kept;
   });
   compareProjectData(read, projects);
   const removed = [...owned].filter(id => !projects.some(p => p.id === id));
