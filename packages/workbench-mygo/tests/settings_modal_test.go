@@ -3,7 +3,9 @@ package workbench_test
 import (
 	"encoding/json"
 	"fmt"
+	"image"
 	"image/color"
+	"math"
 	"reflect"
 	"slices"
 	"strconv"
@@ -1284,6 +1286,69 @@ func TestTabSelectsTheTextOfTheSearchItReaches(t *testing.T) {
 	f.settle()
 	if got := f.modal().Query; got != "x" {
 		t.Fatalf("the key after Tab made the query %q", got)
+	}
+}
+
+// The browser draws the magnifier and the cancel of a search from the symbols of the system, in the sizes of the page and the colors
+// that it gives them. A system without those symbols keeps the declared paths.
+func TestTheSearchDrawsTheSymbolsOfTheSystem(t *testing.T) {
+	f := opened(t)
+	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
+	f.run("core.settings-modal.search", map[string]string{"query": "term"})
+	f.settle()
+	asked := map[string]float64{}
+	f.tester.SetSystemSymbols(func(name string, pointSize, scale float64) (image.Image, bool) {
+		asked[name] = pointSize
+		// A square that fills the box of the icon, which no path of the page does.
+		side := int(math.Ceil(float64(plainLength(t, "search-icon-size")) * scale))
+		mask := image.NewAlpha(image.Rect(0, 0, side, side))
+		for i := range mask.Pix {
+			mask.Pix[i] = 255
+		}
+		return mask, true
+	})
+	f.settle()
+	if want := float64(plainLength(t, "search-icon-pt")); asked["magnifyingglass"] != want {
+		t.Fatalf("asked for %v, not the magnifier at %v", asked, want)
+	}
+	if want := float64(plainLength(t, "search-cancel-pt")); asked["xmark.circle.fill"] != want {
+		t.Fatalf("asked for %v, not the cancel at %v", asked, want)
+	}
+	node, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.search", "")
+	if !ok {
+		t.Fatalf("no search in %q", f.tester.Texts())
+	}
+	box := node.Bounds
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	opaque := func(name string) color.RGBA {
+		value := ui.Hex(declared.PlainControl(name))
+		return color.RGBA{value.R, value.G, value.B, 255}
+	}
+	size := plainLength(t, "search-icon-size")
+	corner := size/2 - 1
+	x, y := box.X+plainLength(t, "search-icon-x")+size/2, box.Y+box.H/2
+	// The ring of the magnifier leaves its middle and the corners of its box empty.
+	for _, at := range [][2]float32{{x, y}, {x - corner, y - corner}} {
+		if got, want := f.pixelOf(at[0], at[1]), opaque("search-icon"); got != want {
+			t.Fatalf("the magnifier at %v is %v, not %v", at, got, want)
+		}
+	}
+	end, cancelSize := plainLength(t, "search-cancel-end"), plainLength(t, "search-cancel-size")
+	cx := box.X + box.W - end - cancelSize/2
+	// The middle of the cancel is the cross of the path, and the corner of its box lies outside the circle.
+	for _, at := range [][2]float32{{cx, y}, {cx - corner, y - corner}} {
+		if got, want := f.pixelOf(at[0], at[1]), opaque("search-cancel"); got != want {
+			t.Fatalf("the cancel at %v is %v, not %v", at, got, want)
+		}
+	}
+	// The cancel still answers its press.
+	f.tester.ClickAt(cx, y)
+	f.settle()
+	if got := f.modal().Query; got != "" {
+		t.Fatalf("after the cancel the query is %q", got)
 	}
 }
 

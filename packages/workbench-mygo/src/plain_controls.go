@@ -8,6 +8,12 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
+// The symbols of the system that the browser draws in a search. A system without them keeps the declared paths.
+const (
+	searchSymbol = "magnifyingglass"
+	cancelSymbol = "xmark.circle.fill"
+)
+
 // PlainControls is the look of an input and a select of the page without a rule of their own: the controls of the color scheme of
 // the page, as WebKit draws them. The declaration holds what a window of the page measures.
 type PlainControls struct {
@@ -28,7 +34,7 @@ type PlainControls struct {
 	// of the text is. Inset lies between its box and its pill.
 	SearchIcon, SearchCancel                                             ui.Color
 	SearchInset, SearchTextX, SearchTextEnd, SearchIconX, SearchIconSize float32
-	SearchCancelSize, SearchCancelEnd                                    float32
+	SearchCancelPt, SearchIconPt, SearchCancelSize, SearchCancelEnd      float32
 	Magnifier, Cross                                                     *ui.SVG
 }
 
@@ -57,7 +63,7 @@ func (s *Shell) plainControls() PlainControls {
 		PanelGap: chrome("space-1"), PanelRadius: s.radiusSmall(), PanelEdgeW: s.palette.BorderWidth,
 		RingW: metric("ring-w"), Focus: s.palette.Focus, SearchIcon: color("search-icon"), SearchCancel: color("search-cancel"),
 		SearchInset: metric("search-inset"), SearchTextX: metric("search-text-x"), SearchTextEnd: metric("search-text-end"),
-		SearchIconX: metric("search-icon-x"), SearchIconSize: metric("search-icon-size"), SearchCancelSize: metric("search-cancel-size"), SearchCancelEnd: metric("search-cancel-end"),
+		SearchIconX: metric("search-icon-x"), SearchIconSize: metric("search-icon-size"), SearchCancelPt: metric("search-cancel-pt"), SearchIconPt: metric("search-icon-pt"), SearchCancelSize: metric("search-cancel-size"), SearchCancelEnd: metric("search-cancel-end"),
 		Magnifier: s.declaredIcon("0 0 13 13", fmt.Sprintf(stroke, "1.25"), declared.Icons["control-search"]),
 		Cross:     s.declaredIcon("0 0 13 13", fmt.Sprintf(stroke, "1.1"), declared.Icons["control-search-cancel"]),
 		PanelFill: s.palette.Card, PanelEdge: s.palette.Edge,
@@ -102,9 +108,15 @@ func (p PlainControls) search(c *ui.Context, field ui.Element) ui.Element {
 	focused, ring := field.Focused(), p.ringColor(c)
 	height := p.Height - 2*p.SearchInset
 	padY := p.PadY + p.EdgeW - p.SearchInset
+	magnifier := c.SystemSymbol(searchSymbol, p.SearchIconPt)
 	return field.FillWidth().Height(height).Padding(padY, p.SearchTextEnd, padY, p.SearchTextX).Radius(height / 2).Background(p.Background).
 		TextColor(p.Fg).PlaceholderColor(p.Placeholder).FontSize(p.Size).DrawOver(func(painter *ui.Painter, box ui.Rect) {
-		painter.Icon(p.Magnifier, ui.Rect{X: box.X + p.SearchIconX, Y: box.Y + (box.H-p.SearchIconSize)/2, W: p.SearchIconSize, H: p.SearchIconSize}, p.SearchIcon)
+		icon := ui.Rect{X: box.X + p.SearchIconX, Y: box.Y + (box.H-p.SearchIconSize)/2, W: p.SearchIconSize, H: p.SearchIconSize}
+		if magnifier.Bitmap != nil {
+			painter.Symbol(magnifier, icon, p.SearchIcon)
+		} else {
+			painter.Icon(p.Magnifier, icon, p.SearchIcon)
+		}
 		if focused {
 			inset := p.SearchInset
 			p.ring(painter, ui.Rect{X: box.X - inset, Y: box.Y - inset, W: box.W + 2*inset, H: box.H + 2*inset}, height/2+inset, ring)
@@ -121,7 +133,12 @@ func (p PlainControls) searchBox(c *ui.Context) ui.Element {
 // drawSearchCancel draws the cancel of a search with a text, and reports its press. It takes no focus, as that of the browser.
 func (p PlainControls) drawSearchCancel(c *ui.Context) bool {
 	cancel := ui.Box(c).Absolute().Right(p.SearchInset+p.SearchCancelEnd).Top((p.Height-p.SearchCancelSize)/2).Size(p.SearchCancelSize, p.SearchCancelSize).
-		Radius(p.SearchCancelSize / 2).Background(p.SearchCancel).Role(ui.RoleButton).Label("cancel")
+		Role(ui.RoleButton).Label("cancel")
+	if symbol := c.SystemSymbol(cancelSymbol, p.SearchCancelPt); symbol.Bitmap != nil {
+		cancel.Draw(func(painter *ui.Painter, box ui.Rect) { painter.Symbol(symbol, box, p.SearchCancel) })
+		return cancel.Clicked()
+	}
+	cancel.Radius(p.SearchCancelSize / 2).Background(p.SearchCancel)
 	cancel.Children(func() { ui.Icon(c, p.Cross).Size(p.SearchCancelSize, p.SearchCancelSize).TextColor(p.Background) })
 	return cancel.Clicked()
 }
