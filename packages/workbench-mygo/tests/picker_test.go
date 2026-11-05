@@ -784,3 +784,28 @@ func TestTheTitleOfALayerHasTheSectionTracking(t *testing.T) {
 		t.Fatalf("the ink of the title is %v wide, want at least %v", ink, want)
 	}
 }
+
+// A row of a layer has the line height of the page.
+func TestARowOfALayerHasTheLineHeightOfThePage(t *testing.T) {
+	f, _ := surfaceShell(t)
+	f.click("core.card.add", f.tabbedCards()[0])
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	metric := func(name string) float32 {
+		value, ok := declared.Metric(name)
+		if !ok {
+			t.Fatalf("no metric %s", name)
+		}
+		return float32(value)
+	}
+	item, ok := exposedNode(f.tester.ElementTree(), "core.picker.item", "")
+	if !ok {
+		t.Fatal("no item")
+	}
+	want := 2*metric("picker-item-pad-y") + metric("text-control-at-base")*metric("line-height")
+	if item.Bounds.H < want-1 || item.Bounds.H > want+1 {
+		t.Fatalf("the row is %v high, want %v", item.Bounds.H, want)
+	}
+}
