@@ -529,6 +529,7 @@ fn invalid_json_closes_connection() {
 | `log.panic.before-writer-is-stored-when-the-writer-opens` | writer가 붙기 전의 host panic은 시작 buffer에 남고, writer가 붙으면 event가 저장되고 저장 뒤 프로세스가 상태로 끝난다. 5초 안에 붙은 writer가 없으면 프로세스는 상태로 끝나고 record와 stack이 표준 오류에 남는다. | all |
 | `log.panic.without-writer-is-written-to-the-standard-error` | writer가 저장하지 못한 panic은 표준 오류에 전부 쓰인다. writer가 열리지 않았다는 줄 뒤에 `host.panic name=<name> text=<text>` 줄과 stack이 온다. | all |
 | `host.stall.passes-every-gate` | stall 기록 `host.stall`, `host.stall.sampled`, `host.stall.dump`는 lifecycle 기록을 끄는 policy에서도 저장된다. 로깅 명세의 이름 붙은 gate 예외로 모든 gate를 `warn`에서 지나가기 때문이다. | all |
+| `host.crash.found.passes-every-gate` | crash 기록 `host.crash.found`는 lifecycle 기록을 끄는 policy에서도 저장된다. 명세의 이름 붙은 gate 예외로 `warn`에서 모든 gate를 지나기 때문이다. | all |
 | `host.view.killed.passes-every-gate` | 종료 기록 `host.view.killed`는 lifecycle 기록을 끄는 policy에서도 저장된다. 명세의 이름 붙은 gate 예외로 `warn`에서 모든 gate를 지나기 때문이다. | all |
 | `host.view.killed.is-written-on-every-end` | host가 종료를 관찰하는 view(process가 끝난 뒤 kill, surface 또는 window와 함께 close)는 자기 plugin, 자기 surface와 `unsent` true를 담은 `host.view.killed`를 종료마다 한 번 저장한다. 살아 있는 view가 없는 surface는 아무것도 저장하지 않는다. 성공한 메시지 전달은 살아 있는 view를 끝내거나 종료 record를 저장하지 않는다. | all |
 | `host.locks.poisoned-state-is-recovered` | poisoned lock은 가지고 있던 상태와 함께 복구되고 연산이 끝난다. host의 panic hook이 panic을 기록한다. 로깅 명세의 하나뿐인 방식이다. | tauriv2 only: Go mutex는 poison되지 않는다 |

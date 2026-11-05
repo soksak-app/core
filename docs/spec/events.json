@@ -4105,7 +4105,7 @@
           "time"
         ]
       },
-      "description": "The system wrote a crash report of an earlier run of the application; the start of the host announces it once."
+      "description": "The system wrote a crash report of an earlier run of the application; the start of the host announces it once. It passes every gate."
     },
     "host.log.index_rebuilt": {
       "layer": "host",

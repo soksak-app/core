@@ -48,12 +48,13 @@ func DefaultLogPolicy() LogPolicy {
 // PassesEveryGate names the events that pass every gate, so the policy never refuses them (docs/spec/logging.md#policy):
 // workbench.start and page.start, which mark a document of the workbench or a view page before its policy reaches the gate;
 // workbench.log.clock and page.log.clock, the one-time clock uncertainty metadata required to compare that document's
-// timestamps; host stall records, the only record of a main-thread stall; host.view.killed, which states the loss of a view's
+// timestamps; host stall records, the only record of a main-thread stall; host.crash.found, the only record of a crash, which the
+// ledger of the reports lists once, so a gate would lose it for good; host.view.killed, which states the loss of a view's
 // unsent batch; host.test.start/end, whose flushed positions delimit a diagnostic window check under every selected policy;
 // and workbench.fixture.step, the steps of the fixture of a window check.
 func PassesEveryGate(event string) bool {
 	switch event {
-	case "workbench.start", "page.start", "workbench.log.clock", "page.log.clock", "host.stall", "host.stall.sampled", "host.stall.dump", "host.view.killed", "host.test.start", "host.test.end", "workbench.fixture.step":
+	case "workbench.start", "page.start", "workbench.log.clock", "page.log.clock", "host.stall", "host.stall.sampled", "host.stall.dump", "host.crash.found", "host.view.killed", "host.test.start", "host.test.end", "workbench.fixture.step":
 		return true
 	}
 	return false

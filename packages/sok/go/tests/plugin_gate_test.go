@@ -144,3 +144,35 @@ func TestTheViewEndRecordIsStoredUnderAPolicyThatTurnsLifecycleOff(t *testing.T)
 		t.Fatalf("host.view.killed record %v", stored[0])
 	}
 }
+
+// contract: host.crash.found.passes-every-gate
+func TestTheCrashRecordIsStoredUnderAPolicyThatTurnsLifecycleOff(t *testing.T) {
+	log, err := sok.StartEventLog(optionsIn(t.TempDir(), "b1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer log.Close()
+	policy, err := sok.ParseLogPolicy("log-policy.json", []byte(`{"schema":1,"classes":{"lifecycle":"error","input":"error","call":"error","io":"error","frame":"error"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	log.SetPolicy(policy, "file")
+	if !log.Emit(sok.LevelWarn, "host.crash.found", map[string]any{"path": "soksak-1.ips", "pid": 7, "time": "t"}) {
+		t.Fatal("host.crash.found was refused")
+	}
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	var stored []map[string]any
+	for _, event := range storedLines(t, log.Path()) {
+		if event["event"] == "host.crash.found" {
+			stored = append(stored, event)
+		}
+	}
+	if len(stored) != 1 {
+		t.Fatalf("host.crash.found records %v, want 1", stored)
+	}
+	if stored[0]["level"] != "warn" || stored[0]["class"] != "lifecycle" {
+		t.Fatalf("host.crash.found record %v", stored[0])
+	}
+}

@@ -165,3 +165,30 @@ fn the_view_end_record_is_stored_under_a_policy_that_turns_lifecycle_off() {
     assert_eq!(stored[0]["level"], "warn", "{lines:?}");
     assert_eq!(stored[0]["class"], "lifecycle", "{lines:?}");
 }
+
+// contract: host.crash.found.passes-every-gate
+#[test]
+fn the_crash_record_is_stored_under_a_policy_that_turns_lifecycle_off() {
+    let dir = Folder::new("plugin-gate-crash-found");
+    support::store_every_level(dir.path());
+    let log = soksak_sok::start_tool_event_log(dir.path()).unwrap();
+    log.set_policy(lifecycle_off(), "file");
+    assert!(
+        log.emit(
+            Level::Warn,
+            "host.crash.found",
+            &json!({"path": "soksak-1.ips", "pid": 7, "time": "t"}),
+        ),
+        "host.crash.found was refused"
+    );
+    log.flush(Duration::from_secs(5)).unwrap();
+    log.close();
+    let lines = stored_lines(log.path());
+    let stored: Vec<&Value> = lines
+        .iter()
+        .filter(|line| line["event"] == "host.crash.found")
+        .collect();
+    assert_eq!(stored.len(), 1, "{lines:?}");
+    assert_eq!(stored[0]["level"], "warn", "{lines:?}");
+    assert_eq!(stored[0]["class"], "lifecycle", "{lines:?}");
+}
