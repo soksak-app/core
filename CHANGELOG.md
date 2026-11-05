@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F537-6: A test resolves every name of the inline scripts of the pages and of the shipped modules, so a name that a page does not declare fails before the page opens.
 - F537-5: A read of the registry, the plugin state or the application update that finds nothing new draws nothing.
 - F537-4: A document region attach runs in one step of the main thread on both hosts, so a page reload during the attach leaves no region without a name, and a failure of taking the name back is recorded.
 - F537-3: A draw of the project and space tab strips keeps the tabs that did not change, so a press on a tab during a draw keeps its click.

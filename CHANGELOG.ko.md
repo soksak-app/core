@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F537-6: test가 페이지의 inline script와 배포되는 module의 모든 이름을 찾으므로, 페이지가 선언하지 않은 이름은 페이지가 열리기 전에 실패한다.
 - F537-5: 새로 찾은 것이 없는 registry, plugin 상태, 애플리케이션 업데이트의 read는 아무것도 그리지 않는다.
 - F537-4: 문서 영역 attach는 두 host에서 main thread의 한 step에서 실행되므로, attach 중의 page reload가 이름 없는 영역을 남기지 않고, 이름을 되돌리는 실패가 기록된다.
 - F537-3: project 탭 줄과 space 탭 줄의 draw는 바뀌지 않은 탭을 유지하므로, draw 중에 누른 탭의 click이 사라지지 않는다.
