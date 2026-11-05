@@ -990,6 +990,27 @@ fn an_image_region_declares_its_presentation_mode() {
     );
 }
 
+// contract: surface-layout.keyboard-follows-the-focus-ring
+#[test]
+fn the_page_names_the_surface_that_takes_the_keyboard() {
+    let surface: super::FocusRequest = serde_json::from_str(r#"{"surface":"tab-1"}"#).unwrap();
+    assert_eq!(surface.surface.as_deref(), Some("tab-1"));
+    let workbench: super::FocusRequest = serde_json::from_str(r#"{"surface":null}"#).unwrap();
+    assert_eq!(workbench.surface, None);
+    assert!(serde_json::from_str::<super::FocusRequest>(r#"{"surface":5}"#).is_err());
+}
+
+// contract: surface-layout.keyboard-follows-the-focus-ring
+#[test]
+fn a_surface_that_the_window_does_not_hold_cannot_take_the_keyboard() {
+    let hosts = Mutex::new(HashMap::from([("tab-1".to_string(), 7)]));
+    assert_eq!(super::held_surface(&hosts, "tab-1"), Ok(7));
+    assert_eq!(
+        super::held_surface(&hosts, "gone"),
+        Err(r#"surface "gone" is not attached"#.to_string())
+    );
+}
+
 // contract: surface-layout.page-cancels-preparation
 #[test]
 fn the_page_can_cancel_a_preparation() {

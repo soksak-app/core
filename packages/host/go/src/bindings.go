@@ -134,6 +134,19 @@ func (h *Host) PresentSurfaces(ctx context.Context, reqJSON json.RawMessage) ([]
 	return s.PresentSurfaces(req)
 }
 
+// SurfaceFocus gives the keyboard of the window to a surface or to the workbench.
+func (h *Host) SurfaceFocus(ctx context.Context, reqJSON json.RawMessage) error {
+	req, err := argument[FocusRequest]("request", reqJSON)
+	if err != nil {
+		return err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	return s.FocusSurface(req)
+}
+
 // CancelSurfaces ends a preparation that the page does not present, so the windows that wait for its transaction continue.
 func (h *Host) CancelSurfaces(ctx context.Context, reqJSON json.RawMessage) error {
 	req, err := argument[CancelRequest]("request", reqJSON)

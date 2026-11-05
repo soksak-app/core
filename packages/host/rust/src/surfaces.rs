@@ -517,8 +517,12 @@ pub(crate) fn surface_attached(window: &Window, surface: &str) -> Result<bool, S
 }
 
 pub(crate) fn surface_handle(window: &Window, surface: &str) -> Result<Handle, String> {
-    window_data(window)?
-        .surface_hosts
+    held_surface(&window_data(window)?.surface_hosts, surface)
+}
+
+/// The handle of a surface that `hosts` holds. A surface that it does not hold is refused.
+fn held_surface(hosts: &Mutex<HashMap<String, Handle>>, surface: &str) -> Result<Handle, String> {
+    hosts
         .lock()
         // default: a lock that a panicking thread poisoned still holds the surface registrations, which are only read; the
         // panic hook records the panic.
@@ -1014,6 +1018,23 @@ fn cancel_layout_after_setup_error(
         Ok(()) => error,
         Err(cancel) => format!("{error}; cancelling layout: {cancel}"),
     }
+}
+
+/// Names the surface that takes the keyboard of the window, and null names the workbench.
+#[derive(Deserialize)]
+pub struct FocusRequest {
+    surface: Option<String>,
+}
+
+/// Gives the keyboard of the window to the surface of the request or to the workbench on the main thread
+/// (docs/spec/native-surfaces.md#keyboard-of-a-surface). A surface that the window does not hold is refused.
+pub fn focus(window: &Window, request: FocusRequest) -> Result<(), String> {
+    let platform = platform::current()?;
+    let focus_window = window.clone();
+    exposure::on_main(window, move || match request.surface {
+        Some(surface) => platform.focus_surface(surface_handle(&focus_window, &surface)?),
+        None => platform.focus_workbench(focus_window.native_window().map_err(|error| error.to_string())? as Handle),
+    })
 }
 
 /// Names the preparation that the page does not present.

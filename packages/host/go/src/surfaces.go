@@ -1319,6 +1319,38 @@ func (s *Surfaces) CancelSurfaces(req CancelRequest) error {
 	return <-done
 }
 
+// FocusRequest names the surface that takes the keyboard of the window, and null names the workbench.
+type FocusRequest struct {
+	Surface *string `json:"surface"`
+}
+
+// FocusSurface gives the keyboard of the window to the surface of the request or to the workbench on the UI thread
+// (docs/spec/native-surfaces.md#keyboard-of-a-surface). A surface that the window does not hold is refused.
+func (s *Surfaces) FocusSurface(req FocusRequest) error {
+	if s.window == nil {
+		return errNoWindow
+	}
+	done := make(chan error, 1)
+	window := s.window.NativeWindow()
+	if err := system.EnqueueUI(func() {
+		if req.Surface == nil {
+			system.FocusWorkbench(window)
+			done <- nil
+			return
+		}
+		view := s.views[*req.Surface]
+		if view == nil {
+			done <- fmt.Errorf("surface %q is not attached", *req.Surface)
+			return
+		}
+		system.FocusSurface(view.handle)
+		done <- nil
+	}); err != nil {
+		return err
+	}
+	return <-done
+}
+
 // finishLayoutPresentation reads the actual surface frames and commits an accepted presentation on the UI thread.
 func (s *Surfaces) finishLayoutPresentation(window unsafe.Pointer, req PresentRequest) ([]Placement, error) {
 	if err := s.ensureCurrentPresentationJoins(window, req); err != nil {

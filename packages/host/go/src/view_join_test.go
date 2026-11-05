@@ -1,6 +1,8 @@
 package host
 
 import (
+	"context"
+	"encoding/json"
 	"testing"
 	"time"
 	"unsafe"
@@ -560,6 +562,23 @@ func TestTheLimitOfAPresentedJoinChangesNothing(t *testing.T) {
 	}
 	if len(fake.joins) != 2 {
 		t.Fatalf("the presented generation joined %d times after the limit of its first join, want 2", len(fake.joins))
+	}
+}
+
+// contract: surface-layout.keyboard-follows-the-focus-ring
+func TestSurfaceFocusRefusesAWindowlessCallAndAMissingMember(t *testing.T) {
+	s, _, _ := newLifecycleSurfaces(t, &fakeClock{})
+	s.window = nil
+	if err := s.FocusSurface(FocusRequest{}); err != errNoWindow {
+		t.Fatalf("FocusSurface without a window = %v, want %v", err, errNoWindow)
+	}
+	if err := (&Host{}).SurfaceFocus(context.Background(), json.RawMessage(`{"surface":5}`)); err == nil || err.Error() != "argument request.surface must be a string, not a number" {
+		t.Fatalf("SurfaceFocus with a number = %v", err)
+	}
+	s.window = &noticeFrontend{}
+	surface := "gone"
+	if err := s.FocusSurface(FocusRequest{Surface: &surface}); err == nil || err.Error() != `surface "gone" is not attached` {
+		t.Fatalf("FocusSurface of a surface that is not attached = %v", err)
 	}
 }
 

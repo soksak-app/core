@@ -260,6 +260,15 @@ place가 빼는 표면의 영역 종료는 호스트가 맡는다. 두 호스트
 - Wails host와 Tauri host는 프레임워크의 파일 놓기 처리를 끄므로, 놓인 파일은 파일 놓기 뷰만 받는다.
 - mygo 창에는 main page도 파일 놓기 뷰도 없다. surface view가 끌기를 받고, workbench의 요소가 자기 위의 파일을 받으며, 나머지 놓기는 `Window.OnFileDrop`에 도착한다. framework adapter는 창의 workbench에 같은 JSON 문자열을 `files-dropped`로 준다. 놓인 점은 내용 왼쪽 위 모서리에서 잰 point이고, 폴더 URL은 슬래시로 끝난다. 더 이상 파일을 가리키지 않는 경로는 놓기를 거절하고 오류 기록 `error host file drop: <reason>`을 한 번 쓴다.
 
+## Surface의 키보드
+
+호스트의 `surfaceFocus {surface}`는 창의 키보드를 surface에 주고, `surface: null`은 워크벤치에 준다. 모든 호스트는 `native/darwin`의 구현 하나(`sp_surface_focus`, `sp_window_focus_workbench`)에 닿는다. 무엇이 키보드를 갖는지의 규칙은 [exposure](exposure.ko.md#키보드는-focus-ring을-따른다)에 있다.
+
+- surface 안의 first responder는 유지된다. 그렇지 않으면 키보드는 그 surface에서 마지막으로 키보드를 가졌던 view, 키보드를 받는 첫 번째 표시된 그림 영역, surface의 web view 순으로 간다. 메인 page의 surface module이면 메인 web view로 간다.
+- 그림 영역이 아직 표시되지 않은 surface는 web view에 키보드를 두고, 영역이 처음 표시될 때 영역이 키보드를 받는다. 영역은 자기 element의 geometry로 표시되므로 page의 call이 필요 없다.
+- 왼쪽 mouse button이 눌려 있는 동안의 call은 button이 올라올 때 적용된다. press 중 first responder가 옮겨지면 press가 끝나 click과 탭이나 divider drag가 취소되기 때문이다. 한 press의 마지막 call이 이긴다.
+- `surface: null`은 키보드를 메인 web view에 주고, 메인 page가 없는 창에서는 content view에서 키보드를 받는 첫 view에 준다.
+
 ## 문서 영역
 
 표면 페이지는 문서 영역으로 자기 요소 하나에 웹 문서를 표시한다. 표면은 항상 플러그인의 페이지를 표시하며([플러그인](plugins.ko.md)), 웹 주소는 표면이 아니다.

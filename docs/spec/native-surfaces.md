@@ -259,6 +259,15 @@ A native view is placed on the DOM: it draws the DOM element it is placed on and
 - The Wails and Tauri hosts disable the file-drop handling of their frameworks, so the file drop view is the only receiver of dropped files.
 - A mygo window has no main page and no file drop view: its surface view takes the drag, an element of the workbench takes the files over it, and every other drop reaches `Window.OnFileDrop`. The framework adapter gives the workbench of the window `files-dropped` with the same JSON text, the drop point in points from the top-left corner of the content; the URL of a folder ends with a slash. A path that no longer resolves refuses the drop and writes one error record `error host file drop: <reason>`.
 
+## Keyboard of a surface
+
+`surfaceFocus {surface}` of the host gives the keyboard of the window to a surface, and `surface: null` gives it to the workbench. All hosts reach the one implementation in `native/darwin` (`sp_surface_focus`, `sp_window_focus_workbench`). The rule of what holds the keyboard is in [exposure](exposure.md#the-keyboard-follows-the-focus-ring).
+
+- A first responder inside the surface stays. Otherwise the keyboard goes to the view of the surface that last held it, then to the first shown image region of the surface that takes the keyboard, then to the web view of the surface, or the main web view for a surface module of the main page.
+- A surface whose image region is not shown yet holds the keyboard in its web view, and the region takes it when it first shows. A region shows through the geometry of its element, so this needs no call of the page.
+- The call applies when the left mouse button rises, while it is down: a move of the first responder during a press would end the press, which would cancel a click and a drag of a tab or a divider. The last call of a press wins.
+- `surface: null` gives the keyboard to the main web view, and in a window without a main page to the first view of the content view that takes it.
+
 ## Document regions
 
 A surface page shows a web document in one of its elements through a document region. Surfaces themselves always show a page of their plugin ([plugins](plugins.md)); a web address is never a surface.

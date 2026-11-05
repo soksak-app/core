@@ -402,6 +402,10 @@ type Platform interface {
 	SurfaceFrame(surface unsafe.Pointer) Rect
 	SetSurfaceHiddenHandle(surface unsafe.Pointer, hidden bool)
 	SetSurfaceAlphaHandle(surface unsafe.Pointer, alpha float64)
+	// FocusSurface gives the keyboard of its window to the surface, and FocusWorkbench gives the keyboard of window to the
+	// workbench (docs/spec/native-surfaces.md#keyboard-of-a-surface). Call them on the main thread.
+	FocusSurface(surface unsafe.Pointer)
+	FocusWorkbench(window unsafe.Pointer)
 	SetWindowOverlays(main unsafe.Pointer, overlays []WindowOverlay) error
 	// SetSurfaceOverlays sets the declared DOM overlays to process before the native input.
 	SetSurfaceOverlays(view unsafe.Pointer, overlays []DOMOverlay)

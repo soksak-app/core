@@ -69,6 +69,20 @@ pub fn set_surface_hidden_handle(surface: Handle, hidden: bool) {
     unsafe { webviewSetSurfaceHidden(surface as *mut c_void, hidden) }
 }
 
+pub fn focus_surface(surface: Handle) {
+    unsafe extern "C" {
+        fn sp_surface_focus(surface: *mut c_void);
+    }
+    unsafe { sp_surface_focus(surface as *mut c_void) }
+}
+
+pub fn focus_workbench(window: Handle) {
+    unsafe extern "C" {
+        fn sp_window_focus_workbench(window: *mut c_void);
+    }
+    unsafe { sp_window_focus_workbench(window as *mut c_void) }
+}
+
 pub fn set_surface_alpha_handle(surface: Handle, alpha: f64) {
     unsafe extern "C" {
         fn webviewSetSurfaceAlpha(view: *mut c_void, alpha: f64);

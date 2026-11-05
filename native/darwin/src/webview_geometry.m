@@ -2,6 +2,7 @@
 #import <QuartzCore/QuartzCore.h>
 #import <objc/runtime.h>
 #import "application_log.h"
+#import "input_press_context.h"
 #import "webview_geometry.h"
 #import "surface_layout.h"
 #import "window_objects.h"
@@ -64,10 +65,16 @@ static void sendPointerMove(NSView *root) {
 }
 @end
 
-@interface SPSurfaceHost : NSView
+@interface SPSurfaceHost : NSView {
+    id _keyboardOwner;
+}
 @property(nonatomic, assign) WKWebView *webview;
 @property(retain) SPSurfaceNativePlane *nativePlane;
 @property(nonatomic, copy) NSArray<NSValue *> *domOverlays;
+// The view of the surface that last held the first responder of the window. A closed region leaves it empty.
+@property(nonatomic, assign) NSView *keyboardOwner;
+// The surface landed on its web view and gives the keyboard to the first image region that shows.
+@property(nonatomic) BOOL keyboardWanted;
 @end
 
 // A surface places native regions below its view WebView. CSS transparency does not turn off the native opaque
@@ -218,10 +225,13 @@ static void notifyScale(NSView *view) {
 }
 - (void)dealloc {
     sp_window_object_change(SP_WINDOW_OBJECT_SURFACE_HOST, -1);
+    objc_storeWeak(&_keyboardOwner, nil);
     [_nativePlane release];
     [_domOverlays release];
     [super dealloc];
 }
+- (NSView *)keyboardOwner { return objc_loadWeak(&_keyboardOwner); }
+- (void)setKeyboardOwner:(NSView *)owner { objc_storeWeak(&_keyboardOwner, owner); }
 - (BOOL)isFlipped { return YES; }
 // Rectangles of the visible declared overlays (host coordinates). The hit test and the native mask use the same
 // rectangles. Surface DOM coordinates are CSS/AppKit points. A document region can use a different pageZoom, but it is
@@ -486,6 +496,146 @@ void sp_surface_close(void *handle) {
 
 void *sp_surface_native_plane(void *handle) {
     return surfaceHost((NSView *)handle).nativePlane;
+}
+
+// The left press of the window that is open: a physical press that AppKit reports, or a diagnostic press of sp_input_pointer.
+static BOOL leftPressOpen(NSWindow *window) {
+    uint64_t token = 0;
+    return (NSEvent.pressedMouseButtons & 1) != 0 || sp_input_press_origin_point(window, 0, NULL, NULL, &token);
+}
+
+static char keyboardPendingKey, keyboardMonitorKey;
+
+// Runs the keyboard move that waits for the release of the press of window.
+void sp_surface_press_released(void *handle) {
+    NSCAssert(NSThread.isMainThread, @"the keyboard of a window belongs to the UI thread");
+    NSWindow *window = (NSWindow *)handle;
+    id monitor = objc_getAssociatedObject(window, &keyboardMonitorKey);
+    if (monitor) {
+        [NSEvent removeMonitor:monitor];
+        objc_setAssociatedObject(window, &keyboardMonitorKey, nil, OBJC_ASSOCIATION_RETAIN);
+    }
+    void (^give)(void) = [[objc_getAssociatedObject(window, &keyboardPendingKey) retain] autorelease];
+    objc_setAssociatedObject(window, &keyboardPendingKey, nil, OBJC_ASSOCIATION_COPY);
+    if (give) give();
+}
+
+// A first responder that moves during a press ends the press in the view that holds it (a framework that draws the workbench
+// ends a pressed control when its view resigns), so the move waits for the release. The last move that waits replaces an earlier one.
+static void giveKeyboardAfterPress(NSWindow *window, void (^give)(void)) {
+    if (!leftPressOpen(window)) {
+        objc_setAssociatedObject(window, &keyboardPendingKey, nil, OBJC_ASSOCIATION_COPY);
+        give();
+        return;
+    }
+    objc_setAssociatedObject(window, &keyboardPendingKey, give, OBJC_ASSOCIATION_COPY);
+    if ((NSEvent.pressedMouseButtons & 1) == 0 || objc_getAssociatedObject(window, &keyboardMonitorKey)) return;
+    id monitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseUp handler:^NSEvent *(NSEvent *event) {
+        // It runs after AppKit delivered this release to the view.
+        dispatch_async(dispatch_get_main_queue(), ^{ sp_surface_press_released(window); });
+        return event;
+    }];
+    objc_setAssociatedObject(window, &keyboardMonitorKey, monitor, OBJC_ASSOCIATION_RETAIN);
+}
+
+// The first image region in view that shows: a view that takes the first responder and is no web view, whose document holds
+// its own keyboard.
+static NSView *shownInputRegion(NSView *view) {
+    for (NSView *child in view.subviews) {
+        if ([child isKindOfClass:WKWebView.class] || child.isHiddenOrHasHiddenAncestor) continue;
+        if (child.acceptsFirstResponder) return child;
+        NSView *inside = shownInputRegion(child);
+        if (inside) return inside;
+    }
+    return nil;
+}
+
+static void giveKeyboardToSurface(NSView *view) {
+    SPSurfaceHost *host = surfaceHost(view);
+    NSView *surface = host ?: view;
+    NSWindow *window = surface.window;
+    if (!window) {
+        sp_log_error("surface keyboard", "the surface that takes the keyboard is not in a window");
+        return;
+    }
+    NSResponder *first = window.firstResponder;
+    if ([first isKindOfClass:NSView.class] && [(NSView *)first isDescendantOf:surface]) return;
+    NSView *owner = host.keyboardOwner;
+    NSView *target = owner && [owner isDescendantOf:surface] && !owner.isHiddenOrHasHiddenAncestor ? owner : nil;
+    if (!target && host) target = shownInputRegion(host.nativePlane);
+    BOOL landed = !target;
+    // A surface without a web view of its own is a surface module of the main web view.
+    if (!target) target = host.webview ?: sp_window_main_webview(window);
+    if (!target) {
+        sp_log_error("surface keyboard", "the surface has no view that takes the keyboard");
+        return;
+    }
+    if (![window makeFirstResponder:target]) {
+        sp_log_error("surface keyboard", [NSString stringWithFormat:@"%@ refused the keyboard", NSStringFromClass(target.class)].UTF8String);
+        return;
+    }
+    host.keyboardWanted = landed;
+}
+
+void sp_surface_focus(void *handle) {
+    NSCAssert(NSThread.isMainThread, @"the keyboard of a surface belongs to the UI thread");
+    NSView *view = (NSView *)handle;
+    NSWindow *window = view.window;
+    if (!window) {
+        sp_log_error("surface keyboard", "the surface that takes the keyboard is not in a window");
+        return;
+    }
+    giveKeyboardAfterPress(window, ^{ giveKeyboardToSurface(view); });
+}
+
+void sp_surface_region_shown(void *handle) {
+    NSCAssert(NSThread.isMainThread, @"the keyboard of a surface belongs to the UI thread");
+    NSView *region = (NSView *)handle;
+    SPSurfaceHost *host = surfaceHost(region);
+    if (!host.keyboardWanted) return;
+    host.keyboardWanted = NO;
+    NSWindow *window = region.window;
+    if (!window || window.firstResponder != host.webview) return;
+    giveKeyboardAfterPress(window, ^{ if (window.firstResponder == host.webview) [window makeFirstResponder:region]; });
+}
+
+void sp_surface_responder_moved(void *from, void *to) {
+    NSCAssert(NSThread.isMainThread, @"the keyboard of a surface belongs to the UI thread");
+    id entered = (id)to, left = (id)from;
+    SPSurfaceHost *into = [entered isKindOfClass:NSView.class] ? surfaceHost(entered) : nil;
+    if (into) {
+        into.keyboardOwner = entered;
+        if (entered != into.webview) into.keyboardWanted = NO;
+    }
+    SPSurfaceHost *outOf = [left isKindOfClass:NSView.class] ? surfaceHost(left) : nil;
+    if (outOf && outOf != into) outOf.keyboardWanted = NO;
+}
+
+// The view that draws the workbench of a window without a main web view: the first view in view that takes the first responder,
+// outside the container of the surface hosts.
+static NSView *frameworkKeyView(NSView *view) {
+    if (view.acceptsFirstResponder) return view;
+    for (NSView *child in view.subviews) {
+        if ([child isKindOfClass:SPSurfaceCoordinates.class]) continue;
+        NSView *inside = frameworkKeyView(child);
+        if (inside) return inside;
+    }
+    return nil;
+}
+
+void sp_window_focus_workbench(void *handle) {
+    NSCAssert(NSThread.isMainThread, @"the keyboard of a window belongs to the UI thread");
+    NSWindow *window = (NSWindow *)handle;
+    giveKeyboardAfterPress(window, ^{
+        NSView *target = (NSView *)sp_window_main_webview(window) ?: frameworkKeyView(window.contentView);
+        if (!target) {
+            sp_log_error("surface keyboard", "the window has no view of the workbench that takes the keyboard");
+            return;
+        }
+        if (![window makeFirstResponder:target]) {
+            sp_log_error("surface keyboard", [NSString stringWithFormat:@"%@ refused the keyboard", NSStringFromClass(target.class)].UTF8String);
+        }
+    });
 }
 
 void *sp_surface_main_webview(void *handle) {

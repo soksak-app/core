@@ -313,6 +313,7 @@ NATIVE_TESTS = observe_test \
   event_ring_test \
   site_cost_test \
   surface_host_test \
+  surface_keyboard_test \
   surface_container_test \
   surface_layout_observe_test \
   ui_queue_test \

@@ -174,6 +174,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
     "native/darwin/tests/window_cursor_rects_test.m",
     "native/darwin/tests/webview_inspector_test.m",
     "native/darwin/tests/surface_host_test.m",
+    "native/darwin/tests/surface_keyboard_test.m",
     "native/darwin/tests/surface_container_test.m",
     "native/darwin/tests/surface_layout_observe_test.m",
   ], { sharedTests: true }),

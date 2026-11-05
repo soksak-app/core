@@ -260,6 +260,7 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
                 if (phase == 3) {
                     objc_setAssociatedObject(window, pressedViewKey(button), nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
                     if (hasOrigin) sp_input_press_origin_clear(window, button, originToken);
+                    if (button == 0) sp_surface_press_released(window);
                 }
             }
             return SP_INPUT_DELIVERED;
