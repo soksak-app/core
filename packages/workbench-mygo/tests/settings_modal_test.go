@@ -933,3 +933,33 @@ func TestThePluginsOfTheSettingsStandOnOneLine(t *testing.T) {
 		t.Fatalf("the plugins stand at %+v and %+v", first.Bounds, second.Bounds)
 	}
 }
+
+// The search of the settings window is an input of the page without a look of its own: the control background of its color scheme.
+func TestTheSearchOfTheSettingsHasTheBackgroundOfThePage(t *testing.T) {
+	f := opened(t)
+	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
+	f.settle()
+	node, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.search", "")
+	if !ok {
+		t.Fatalf("no search in %q", f.tester.Texts())
+	}
+	want := controlBackground(t)
+	if got := f.pixelOf(node.Bounds.X+node.Bounds.W-6, node.Bounds.Y+node.Bounds.H/2); got != want {
+		t.Fatalf("the search has the background %v, not %v", got, want)
+	}
+}
+
+// controlBackground is the declared background of a control without a look of its own.
+func controlBackground(t *testing.T) color.RGBA {
+	t.Helper()
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	text, ok := declared.ChromeText("control-bg")
+	if !ok {
+		t.Fatal("no control-bg is declared")
+	}
+	value := ui.Hex(text)
+	return color.RGBA{value.R, value.G, value.B, 255}
+}

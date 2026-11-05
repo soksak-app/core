@@ -501,3 +501,16 @@ func TestTheDebugViewIsDrawnAsThePage(t *testing.T) {
 		t.Fatalf("the actions of a file are %+v and %+v", view, save)
 	}
 }
+
+// A filter of the timeline is an input of the page without a look of its own: the control background of its color scheme.
+func TestAFilterOfTheTimelineHasTheBackgroundOfThePage(t *testing.T) {
+	f, _ := timelineShell(t, logPage("null", 2, 1))
+	node, ok := exposedNode(f.tester.ElementTree(), "core.debug.timeline.class", "")
+	if !ok {
+		t.Fatalf("no filter in %q", f.tester.Texts())
+	}
+	want := controlBackground(t)
+	if got := f.pixelOf(node.Bounds.X+node.Bounds.W-6, node.Bounds.Y+node.Bounds.H/2); got != want {
+		t.Fatalf("the filter has the background %v, not %v", got, want)
+	}
+}

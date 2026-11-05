@@ -526,6 +526,7 @@
     "brand-logo-box": "0 0 323 80",
     "brand-text-dark": "#EDE6D8",
     "brand-text-light": "#16181D",
+    "control-bg": "#1e1e1e",
     "chrome-acts-gap": "6px",
     "tabs-gap": "4px",
     "tabs-pad": "5px",
