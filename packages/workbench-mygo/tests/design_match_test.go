@@ -163,3 +163,42 @@ func TestASectionNameHasTheWeightOfThePage(t *testing.T) {
 		t.Fatalf("the name %q is %v wide, want %v", name.Label, name.Bounds.W, semibold)
 	}
 }
+
+// A view of a project that the library covers has no place: the rectangle of its element would lead an audit and an input to what the
+// window does not show. The page answers so, because the surface is not in the seated placement.
+func TestAViewUnderTheLibraryHasNoPlace(t *testing.T) {
+	r := newViewRelay(t)
+	surface := r.surface()
+	r.call(surface, "runtime.native.on", map[string]any{"name": "exposure-request"})
+	r.call(surface, "runtime.native.call", map[string]any{"name": "registered", "payload": map[string]any{"kind": "element", "name": "terminal.view"}})
+	ask := func(id int) map[string]any {
+		t.Helper()
+		r.mu.Lock()
+		seen := len(r.pushed)
+		r.mu.Unlock()
+		r.ask(id, "element.rect", `{"name": "terminal.view"}`)
+		var pushed map[string]any
+		r.f.pending.until(t, func() bool {
+			r.mu.Lock()
+			defer r.mu.Unlock()
+			if len(r.pushed) <= seen {
+				return false
+			}
+			pushed = r.pushed[seen]
+			return true
+		})
+		data := pushed["data"].(map[string]any)
+		r.call(surface, "runtime.native.call", map[string]any{"name": "exposureReply", "payload": map[string]any{"id": data["id"],
+			"result": map[string]any{"x": 0, "y": 0, "width": 10, "height": 20, "zoom": 1}}})
+		return r.answer(id)
+	}
+	if reply := ask(9); reply["error"] != nil {
+		t.Fatalf("the shown view answers %v", reply)
+	}
+	r.f.run("core.projects.browse", nil)
+	reply := ask(10)
+	failure, _ := reply["error"].(map[string]any)
+	if failure == nil || failure["message"] != "surface "+surface+" has no valid applied frame" {
+		t.Fatalf("the view under the library answers %v", reply)
+	}
+}

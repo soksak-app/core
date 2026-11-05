@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F502-13: mygo library가 가린 project의 view는 자리가 없다. `element.rect`는 page처럼 그 surface에 유효한 applied frame이 없다고 답한다. Red: `TestAViewUnderTheLibraryHasNoPlace`가 이전 drawing에서 실패했다.
 - F502-33: mygo workbench의 section 이름은 settings가 고른 font와 무관하게 page section header의 굵기, 즉 chrome이 `section-head-weight` 옆에 선언한 font stack `ui-font`의 600을 갖는다. Red: 이름을 bold로 그렸을 때 `TestTheNameOfASectionHasTheStemsOfThePageHeader`와 `TestASectionNameHasTheWeightOfThePage`가 실패했다.
 - F502-13: mygo card tab의 닫기 mark는 page 높이, 즉 작은 text size와 tight line height를 갖는다. framework에서 style이 정한 line height가 line의 높이가 되었기 때문이다. Red: `TestTheCloseMarkOfATabHasTheHeightOfThePage`가 그 framework 변경 전에 실패했다.
 - F502-13: mygo workbench의 element `core.sidebar`는 page처럼 sidebar의 set이고 status line 위에서 끝난다. set이 없는 sidebar에는 그 element가 없다. Red: `TestTheSidebarElementEndsAboveItsStatus`와 `TestASidebarWithoutASetHasNoElement`가 이전 drawing에서 실패했고, set과 status line을 재는 card test도 실패했다.
