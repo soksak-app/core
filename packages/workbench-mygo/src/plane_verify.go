@@ -121,7 +121,7 @@ func (s *Shell) surfaceRecord(lines []surfaceLine, settled bool) *VerifyRecord {
 	record := &VerifyRecord{Seq: s.surfaces.sequence, Settled: settled, Surfaces: []VerifySurface{}}
 	for _, line := range lines {
 		if line.visible {
-			record.Surfaces = append(record.Surfaces, VerifySurface{ID: line.held.tab.ID, Declared: inPlane(line.box, origin), Visible: true})
+			record.Surfaces = append(record.Surfaces, VerifySurface{ID: line.held.tab.ID, Declared: inPlane(line.box, origin), Visible: true, Dim: line.dim})
 		}
 	}
 	return record

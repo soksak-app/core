@@ -142,3 +142,39 @@ func TestTheLibraryHasNoVerificationRows(t *testing.T) {
 		t.Fatalf("core.verify is %+v", verify)
 	}
 }
+
+// The setting dim reaches the host: a surface outside the focused card is declared dimmed, and a change of the focus places the
+// surfaces again.
+func TestTheHostDimsTheSurfaceOutsideTheFocus(t *testing.T) {
+	f, stored := surfaceShell(t)
+	cards := f.tabbedCards()
+	if len(cards) < 2 {
+		t.Fatalf("the shell has the cards %v", cards)
+	}
+	f.run("core.settings.set", map[string]any{"patch": map[string]any{"dim": true}})
+	f.settle()
+	dimmed := func() (dim, bright int) {
+		for _, surface := range stored.lastSurfaces(t) {
+			if surface["dim"] == true {
+				dim++
+			} else {
+				bright++
+			}
+		}
+		return dim, bright
+	}
+	if dim, bright := dimmed(); dim != len(cards)-1 || bright != 1 {
+		t.Fatalf("the last request dims %d and leaves %d", dim, bright)
+	}
+	if verify := status[workbench.VerifyStatus](t, f, "core.verify"); !verifyRow(t, verify, "V7a ").OK {
+		t.Fatalf("core.verify is %+v", verify)
+	}
+	before := len(stored.requests)
+	f.run("core.card.focus", map[string]string{"card": cards[0]})
+	f.settle()
+	f.run("core.card.focus", map[string]string{"card": cards[1]})
+	f.settle()
+	if len(stored.requests) == before {
+		t.Fatal("a change of the focus placed no surface")
+	}
+}

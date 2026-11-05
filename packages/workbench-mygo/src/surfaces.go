@@ -406,6 +406,7 @@ type surfaceLine struct {
 	held    *heldSurface
 	unit    *installedUnit
 	visible bool
+	dim     bool
 	box     layout.Rect
 }
 
@@ -418,7 +419,7 @@ func (s *Shell) surfaceLines() []surfaceLine {
 		if visible {
 			held.box = box
 		}
-		lines = append(lines, surfaceLine{held: held, unit: s.units[held.tab.Plugin], visible: visible, box: held.box})
+		lines = append(lines, surfaceLine{held: held, unit: s.units[held.tab.Plugin], visible: visible, dim: visible && s.surfaceDimmed(id), box: held.box})
 	}
 	return lines
 }
@@ -443,7 +444,7 @@ func (s *Shell) surfaceRequest() (map[string]any, error) {
 			tables[unit.ID] = index
 			table = append(table, marks)
 		}
-		surfaces = append(surfaces, map[string]any{"id": id, "visible": visible, "dim": false, "plugin": unit.ID,
+		surfaces = append(surfaces, map[string]any{"id": id, "visible": visible, "dim": visible && s.surfaceDimmed(id), "plugin": unit.ID,
 			"composition": held.composition, "x": held.box.X, "y": held.box.Y, "w": held.box.W, "h": held.box.H,
 			"start": map[string]any{"params": tabMember(held.tab, "params", "null"), "origin": tabMember(held.tab, "origin", `{"directory":null}`),
 				"project": held.project, "declarations": index, "diagnostics": rawOrNull(unit.Diagnostics), "section": held.section}})
