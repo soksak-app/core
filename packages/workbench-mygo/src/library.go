@@ -100,7 +100,7 @@ func (s *Shell) registerLibrary() {
 		s.options.Invalidate()
 		return nil
 	})
-	act(s, "core.library.window", func(struct{}) error {
+	newWindow := func(struct{}) error {
 		cids := s.events.BeginOperation("workbench.window.operation", map[string]any{"action": "new"})
 		s.calls.Caused(cids).Call("windowNew", nil, func(_ any, err error) {
 			if err != nil {
@@ -108,7 +108,9 @@ func (s *Shell) registerLibrary() {
 			}
 		})
 		return nil
-	})
+	}
+	act(s, "core.library.window", newWindow)
+	act(s, "core.window.new", newWindow)
 	act(s, "core.library.form.open", func(value struct {
 		Mode string `json:"mode"`
 	}) error {

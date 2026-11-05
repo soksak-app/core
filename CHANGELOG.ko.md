@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F502-23: mygo workbench 가 `core.window.new` 를 실행한다. 이 command 는 `core.library.window` 처럼 프로젝트가 없는 새 창을 연다.
 - F502-23: main page 가 없는 host 의 `host.window` 는 specification 대로 `pageProcess` 를 null 로 보고하고, memory sampler 는 그 창의 page process 를 읽지 않는다.
 - F502-23: mygo host 의 `host.window` 는 workbench 의 frame 과 command buffer 를 세고, 마지막 frame 뒤에 창이 settle 했는지 보고한다. `host.frame.record` 와 `host.frame.commit` 은 각 frame 과 frame 밖의 각 commit 을 class `frame` 에 기록한다.
 - F502-21: mygo workbench가 modal을 native UI로 그린다: 설정 창, 추가·분할·도구·탭·context menu를 가진 picker layer, 수정된 tab에 대한 질문. `core.card.close`, `core.tab.close`, `core.space.close`는 사람의 답 없이 수정된 tab을 닫지 않고, plugin과 그 setting은 설치된 plugin 문서에서 온다. 설정 `left`, `right`는 고정 창 sidebar를 plane에 넣고 뺀다.
