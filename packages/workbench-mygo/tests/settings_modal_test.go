@@ -722,3 +722,41 @@ func TestTheControlsOfTheSettingsWindowAreThoseOfThePage(t *testing.T) {
 		t.Fatalf("the select is %v high, want %v", selector.H, want)
 	}
 }
+
+// lastLineInk returns the width of the ink on the last line of the element of a text of two lines.
+func lastLineInk(f *shellFixture, node ui.ElementNode) float32 {
+	f.t.Helper()
+	background := f.pixelOf(node.Bounds.X+node.Bounds.W-1, node.Bounds.Y+1)
+	right := node.Bounds.X
+	for x := node.Bounds.X; x < node.Bounds.X+node.Bounds.W; x++ {
+		for y := node.Bounds.Y + node.Bounds.H/2; y < node.Bounds.Y+node.Bounds.H; y++ {
+			if f.pixelOf(x, y) != background {
+				right = x
+			}
+		}
+	}
+	return right - node.Bounds.X
+}
+
+// Korean breaks at the spaces, as body of the page does with word-break: keep-all: the sentence does not end in a line of one syllable, in
+// the workbench and in what stands over it.
+func TestKoreanTextBreaksAtTheSpaces(t *testing.T) {
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	size, _ := declared.Metric("text-small-at-base")
+	f := opened(t)
+	const caption = "프로젝트를 여는 방식은 모든 프로젝트에 적용됩니다. 이미 열린 창은 유지됩니다."
+	node, ok := nodeLabeled(f.tester.ElementTree(), caption)
+	if !ok {
+		t.Fatalf("no caption in %q", f.tester.Texts())
+	}
+	if node.Bounds.H < 2*float32(size) {
+		t.Fatalf("the caption is one line of %v", node.Bounds.H)
+	}
+	// The last word is five characters, and a break inside it leaves at most two.
+	if ink := lastLineInk(f, node); ink < 3*float32(size) {
+		t.Fatalf("the last line of the caption is %v wide: it broke inside a word", ink)
+	}
+}

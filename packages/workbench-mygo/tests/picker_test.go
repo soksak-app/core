@@ -809,3 +809,31 @@ func TestARowOfALayerHasTheLineHeightOfThePage(t *testing.T) {
 		t.Fatalf("the row is %v high, want %v", item.Bounds.H, want)
 	}
 }
+
+// The question about a tab, which stands over the workbench, breaks at the spaces too.
+func TestAQuestionBreaksAtTheSpaces(t *testing.T) {
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	size, _ := declared.Metric("text-caption-at-base")
+	f := modifiedShell(t)
+	f.run(t, "core.tab.close", `{"tab":"tab-aaaaaa"}`)
+	f.settle()
+	title := ""
+	for _, text := range f.tester.Texts() {
+		if strings.Contains(text, "탭에 저장하지 않은 변경이 있습니다") {
+			title = text
+		}
+	}
+	node, ok := nodeLabeled(f.tester.ElementTree(), title)
+	if !ok || title == "" {
+		t.Fatalf("no title in %q", f.tester.Texts())
+	}
+	if node.Bounds.H < 2*float32(size) {
+		t.Fatalf("the title %q is one line of %v", title, node.Bounds.H)
+	}
+	if ink := lastLineInk(f.shellFixture, node); ink < 3*float32(size) {
+		t.Fatalf("the last line of the title is %v wide: it broke inside a word", ink)
+	}
+}

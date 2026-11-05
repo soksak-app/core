@@ -652,7 +652,8 @@ func (s *Shell) View(c *ui.Context) {
 	theme.Font = s.fontFamily()
 	c.SetTheme(&theme)
 	s.keys.Declare(c)
-	root := ui.Column(c).Size(width, height).Background(s.palette.Bg).TextColor(s.palette.Fg).Clip()
+	// Korean breaks at the spaces, as body of packages/workbench/app.css says. It is inherited, except by an overlay, whose root takes it.
+	root := ui.Column(c).Size(width, height).Background(s.palette.Bg).TextColor(s.palette.Fg).KeepAll().Clip()
 	if s.dialogOpen() {
 		root.Blur(dialogBlur)
 	}
