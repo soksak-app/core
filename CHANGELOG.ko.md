@@ -5,6 +5,7 @@
 ## 미배포
 
 - F443-1: 첫 실행 finding을 닫는다. 초과는 machine의 load를 따르고 launch가 결정하지 않는다.
+- F455: view measurement가 화면의 refresh rate를 기록한다. F435는 benchmark가 120 Hz에서 돌 때까지 보류한다.
 - F435-4: run은 settled drawing이 present된 때 끝나므로, drag 동안 묶인 status 값이 마지막 layout과 경쟁하지 않는다.
 - F435-3: convergence가 drag 뒤의 모든 source frame을 읽어, 뒤늦은 frame의 최종 viewport도 측정한다.
 - F435-2: 모든 view drag를 performance trace를 끄고 log policy를 frame class로 줄인 상태로 판정한다.
