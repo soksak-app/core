@@ -12,7 +12,7 @@ import { errorText } from "./error-text.js";
 import { timed, trace } from "./performance.js";
 import { emitEvent } from "./page-log.js";
 import {
-  EXPOSE_KINDS, EXPOSURE_ERRORS, ExposureError, METHOD_KINDS, surfaceDocumentEntry, declarationKey, declarationMap,
+  EXPOSE_KINDS, EXPOSURE_ERRORS, ExposureError, METHOD_KINDS, inertRefusal, surfaceDocumentEntry, declarationKey, declarationMap,
   exposureEntries, replyPayload, validateExposes, validateExposureFile,
 } from "@soksak/plugin-api";
 
@@ -82,7 +82,7 @@ export function createRegistry({ call = null, report = null } = {}) {
   if (call && typeof report !== "function") throw new TypeError("a registry with a host call needs report(error)");
   const declared = new Map();
   const coreDeclared = new Map();
-  const core = exposureEntries(coreDeclared, { place: (element) => options.elementPlace(element) });
+  const core = exposureEntries(coreDeclared, { place: (element) => options.elementPlace(element), inert: (element) => options.elementInert(element) });
   const methods = new Map();
   /* For each declaration key, the surfaces that registered the entry. Registration order is kept. */
   const surfaces = new Map();
@@ -103,6 +103,8 @@ export function createRegistry({ call = null, report = null } = {}) {
     surfaceFrame: () => null,
     // default: without a modal source every core element has the rectangle of its own document.
     elementPlace: () => null,
+    // default: without a modal source no element is inert. It takes null for the document of a surface.
+    elementInert: () => false,
     // Called when an observation inside this document fails. It is reported as a page error (docs/spec/plugins.md#sections).
     failed: (error) => dispatchEvent(new ErrorEvent("error", { message: error.message })),
   };
@@ -271,6 +273,7 @@ export function createRegistry({ call = null, report = null } = {}) {
       return null;
     }
     const surface = pick(kind, name, requested);
+    if (method === "element.act" && options.elementInert(null)) throw inertRefusal(name);
     if (method !== "status.watch") return forward(surface, method, params);
     // The watch exists before the surface answers, because the surface sends the current value as it starts the watch. Each watch
     // receives from version 0, so a watch of a name that the surface already follows receives the current value again.
@@ -472,7 +475,7 @@ export function createRegistry({ call = null, report = null } = {}) {
      */
     plugin(owner) {
       if (pages.has(owner)) throw new Error(`plugin ${owner} state is already registered`);
-      const page = { entries: exposureEntries(declared), statuses: new Map() };
+      const page = { entries: exposureEntries(declared, { inert: (element) => options.elementInert(element) }), statuses: new Map() };
       pages.set(owner, page);
       const own = (name) => {
         if (ownerOf(name) !== owner) throw new Error(`${name} does not belong to ${owner}`);

@@ -573,3 +573,22 @@ test("the owner of a document can place an element that the document does not la
   assert.deepEqual(await entries.answer("element.rect", { name: "probe.row", index: 0 }), { x: 10, y: 20, width: 30, height: 40, zoom: 1, role: null, document: { x: 100, y: 200 } });
   assert.deepEqual(await entries.answer("element.rect", { name: "probe.row", index: 1 }), { x: 5, y: 6, width: 7, height: 8, zoom: 1, role: null });
 });
+
+// An open dialog makes the elements outside it inert (docs/spec/exposure.md): the layout stays, an action is refused.
+test("an inert element answers its rectangle and refuses every action", async () => {
+  const input = element();
+  const other = element();
+  const entries = exposureEntries(declarationMap(exposes()), { inert: (found) => found === input });
+  entries.element("probe.input", () => [input]);
+  entries.element("probe.row", () => [input, other], (address, elements) => elements[address.at]);
+  assert.deepEqual(await entries.answer("element.rect", { name: "probe.input" }), { x: 1, y: 2, width: 3, height: 4, zoom: 1, role: null });
+  const refusal = { code: EXPOSURE_ERRORS.inert, message: "element probe.input is behind the open dialog and takes no action" };
+  for (const request of [{ action: "click" }, { action: "input", value: "typed" }, { action: "dispatch", event: { type: "keydown" } }]) {
+    await assert.rejects(entries.answer("element.act", { name: "probe.input", ...request }), refusal);
+  }
+  assert.deepEqual([input.clicks, input.value, input.events], [0, "", []]);
+  await assert.rejects(entries.answer("element.act", { name: "probe.row", address: { at: 0 }, action: "click" }), { code: EXPOSURE_ERRORS.inert });
+  await entries.answer("element.act", { name: "probe.row", address: { at: 1 }, action: "click" });
+  assert.deepEqual([input.clicks, other.clicks], [0, 1]);
+  assert.equal(EXPOSURE_ERRORS.inert, 1010);
+});
