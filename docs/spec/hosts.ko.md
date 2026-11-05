@@ -80,6 +80,9 @@ packages/host/go/                          packages/host/rust/
         show.go        show 명령                        show.rs
         show_windows.go  앞을 지키는 show               show_windows.rs
         ui_thread.go   UI thread 와 그 대기             ui_thread.rs
+        ui_queue.go    UI thread 의 task                ui_queue.rs
+        mouse_watch.go  mouse 버튼과 창 입력            mouse_watch.rs
+        mouse_watch_windows.go  raw mouse input         mouse_watch_windows.rs
         unsupported.go named pipe 엔드포인트를 포함한 "not implemented" 동작  unsupported.rs
       linux/  (구현 시 추가)                     linux/
   tests/                                     tests/
@@ -214,7 +217,7 @@ Wayland에서 client는 toplevel을 배치하거나 focus할 수 없다. 둘 다
 
 ## Windows 상태
 
-Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`), WebView2 의 pointer·키 입력(`platform/windows/input.*`, `devtools_input.*`), still capture(`capture.*`), 앞을 지키는 show(`show.*`, `show_windows.*`)를 구현한다. `platform/windows/unsupported.*`의 나머지 연산은 `<operation> is not implemented on windows` 형식의 오류를 반환한다. Windows에서는 애플리케이션 시작이 첫 platform 연산에서 실패한다. Wails의 `Run`과 Tauri의 `run`은 창을 열기 전에 `window resize animation is not implemented on windows`와 상태 1로 끝난다. Linux 구현은 없으며, 그곳에서 `platform.Current()`와 `platform::current()`는 오류를 반환한다.
+Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`), WebView2 의 pointer·키 입력(`platform/windows/input.*`, `devtools_input.*`), still capture(`capture.*`), 앞을 지키는 show(`show.*`, `show_windows.*`), UI thread 의 queue(`ui_queue.*`, `ui_thread.*`), mouse 버튼과 창 입력의 감시(`mouse_watch.*`)를 구현한다. `platform/windows/unsupported.*`의 나머지 연산은 `<operation> is not implemented on windows` 형식의 오류를 반환한다. Windows에서는 애플리케이션 시작이 첫 platform 연산에서 실패한다. Wails의 `Run`과 Tauri의 `run`은 창을 열기 전에 `window resize animation is not implemented on windows`와 상태 1로 끝난다. Linux 구현은 없으며, 그곳에서 `platform.Current()`와 `platform::current()`는 오류를 반환한다.
 
 `make check-host-files`는 `make check-windows-build`를 실행하며, 이 target은 Go language host library와 Wails framework adapter의 source를 기본 build와 diagnostics build에서 `windows/arm64`용으로 vet한다.
 

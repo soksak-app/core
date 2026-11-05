@@ -61,30 +61,39 @@ var uiTasks = uiQueue{
 	},
 }
 
-// startUIThread makes the calling thread the thread that post runs tasks on. Call it on the UI thread.
-var startUIThread = sync.OnceValue(func() error {
-	name, err := sys.UTF16PtrFromString("soksak-ui-tasks")
+// createMessageWindow registers a window class of that name and creates a message-only window of it on this thread.
+func createMessageWindow(className string, proc uintptr) (uintptr, error) {
+	name, err := sys.UTF16PtrFromString(className)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	instance, _, err := procGetModuleHandleW.Call(0)
 	if instance == 0 {
-		return fmt.Errorf("UI task window module: %w", err)
+		return 0, fmt.Errorf("module: %w", err)
 	}
-	class := windowClass{instance: instance, proc: syscall.NewCallback(func(window, message, wParam, lParam uintptr) uintptr {
+	class := windowClass{instance: instance, proc: proc, className: name}
+	class.size = uint32(unsafe.Sizeof(class))
+	if atom, _, err := procRegisterClassExW.Call(uintptr(unsafe.Pointer(&class))); atom == 0 {
+		return 0, fmt.Errorf("class: %w", err)
+	}
+	window, _, err := procCreateWindowExW.Call(0, uintptr(unsafe.Pointer(name)), 0, 0, 0, 0, 0, 0, hwndMessage, 0, instance, 0)
+	if window == 0 {
+		return 0, fmt.Errorf("creation: %w", err)
+	}
+	return window, nil
+}
+
+// startUIThread makes the calling thread the thread that post runs tasks on. Call it on the UI thread.
+var startUIThread = sync.OnceValue(func() error {
+	window, err := createMessageWindow("soksak-ui-tasks", syscall.NewCallback(func(window, message, wParam, lParam uintptr) uintptr {
 		if message != wmRunTasks {
 			result, _, _ := procDefWindowProcW.Call(window, message, wParam, lParam)
 			return result
 		}
 		uiTasks.run()
 		return 0
-	}), className: name}
-	class.size = uint32(unsafe.Sizeof(class))
-	if atom, _, err := procRegisterClassExW.Call(uintptr(unsafe.Pointer(&class))); atom == 0 {
-		return fmt.Errorf("UI task window class: %w", err)
-	}
-	window, _, err := procCreateWindowExW.Call(0, uintptr(unsafe.Pointer(name)), 0, 0, 0, 0, 0, 0, hwndMessage, 0, instance, 0)
-	if window == 0 {
+	}))
+	if err != nil {
 		return fmt.Errorf("UI task window: %w", err)
 	}
 	uiThread.mu.Lock()

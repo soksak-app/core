@@ -1,6 +1,6 @@
 //! The Windows implementation.
 //!
-//! It implements directory identification, the pointer and key input of a WebView2 and, with the diagnostics feature, its still capture. The other functions, including the local endpoint (named pipe), return a
+//! It implements directory identification, the pointer and key input of a WebView2 and, with the diagnostics feature, its still capture, and the watches of the mouse buttons and of window input. The other functions, including the local endpoint (named pipe), return a
 //! "not implemented on windows" error from unsupported.
 
 use std::fs::Metadata;
@@ -27,6 +27,8 @@ mod capture;
 mod identity;
 #[path = "input.rs"]
 mod input;
+#[path = "mouse_watch_windows.rs"]
+mod mouse_watch_windows;
 #[path = "show_windows.rs"]
 mod show_windows;
 #[path = "ui_thread.rs"]
@@ -53,14 +55,14 @@ impl CoreRootHost for Windows {
 
 impl Platform for Windows {
     fn enqueue_ui(&self, work: Box<dyn FnOnce() + Send>) -> Result<(), String> {
-        unsupported::enqueue_ui(work)
+        ui_thread::enqueue_ui(work)
     }
     fn enqueue_ui_after(
         &self,
         delay: std::time::Duration,
         work: Box<dyn FnOnce() + Send>,
     ) -> Result<(), String> {
-        unsupported::enqueue_ui_after(delay, work)
+        ui_thread::enqueue_ui_after(delay, work)
     }
     fn window_handle(&self, window: &Window) -> Result<Handle, String> {
         unsupported::window_handle(window)
@@ -459,10 +461,10 @@ impl Platform for Windows {
         pressed: Box<dyn Fn(Vec<Handle>) -> bool>,
         pointed: Box<dyn Fn(u8, f64, f64)>,
     ) -> Result<Handle, String> {
-        unsupported::watch_input(window, pressed, pointed)
+        mouse_watch_windows::watch_input(window, pressed, pointed)
     }
     fn unwatch_input(&self, monitor: Handle) -> Result<(), String> {
-        unsupported::unwatch_input(monitor)
+        mouse_watch_windows::unwatch_input(monitor)
     }
     fn input_pointer(
         &self,
@@ -706,7 +708,7 @@ impl Platform for Windows {
         unsupported::diagnostic_reports_directory()
     }
     fn watch_buttons(&self, changed: Box<dyn Fn(u64) + Send + Sync>) -> Result<(), String> {
-        unsupported::watch_buttons(changed)
+        mouse_watch_windows::watch_buttons(changed)
     }
     fn start_notifications(
         &self,

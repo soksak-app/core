@@ -81,6 +81,9 @@ packages/host/go/                          packages/host/rust/
         show.go        the show command                 show.rs
         show_windows.go  the show that keeps the front  show_windows.rs
         ui_thread.go   the UI thread and its waits      ui_thread.rs
+        ui_queue.go    the tasks of the UI thread       ui_queue.rs
+        mouse_watch.go  mouse buttons and window input  mouse_watch.rs
+        mouse_watch_windows.go  raw mouse input         mouse_watch_windows.rs
         unsupported.go "not implemented" operations, including the named-pipe endpoint  unsupported.rs
       linux/  (added when implemented)           linux/
   tests/                                     tests/
@@ -214,7 +217,7 @@ A client on Wayland cannot place or focus a toplevel: the compositor decides bot
 
 ## Windows state
 
-On Windows both hosts implement directory identity (`platform/windows/identity.*`), the pointer and key input of a WebView2 (`platform/windows/input.*`, `devtools_input.*`), its still capture (`capture.*`) and a show that keeps the front (`show.*`, `show_windows.*`). Every other operation in `platform/windows/unsupported.*` returns an error of the form `<operation> is not implemented on windows`. Application startup fails on Windows at its first platform operation: Wails `Run` and Tauri `run` end with `window resize animation is not implemented on windows` and status 1 before any window opens. Linux has no implementation; `platform.Current()` and `platform::current()` return an error there.
+On Windows both hosts implement directory identity (`platform/windows/identity.*`), the pointer and key input of a WebView2 (`platform/windows/input.*`, `devtools_input.*`), its still capture (`capture.*`) a show that keeps the front (`show.*`, `show_windows.*`), the queue of the UI thread (`ui_queue.*`, `ui_thread.*`), and the watches of the mouse buttons and of window input (`mouse_watch.*`). Every other operation in `platform/windows/unsupported.*` returns an error of the form `<operation> is not implemented on windows`. Application startup fails on Windows at its first platform operation: Wails `Run` and Tauri `run` end with `window resize animation is not implemented on windows` and status 1 before any window opens. Linux has no implementation; `platform.Current()` and `platform::current()` return an error there.
 
 `make check-host-files` runs `make check-windows-build`, which vets the sources of the Go language host library and of the Wails framework adapter for `windows/arm64` in the default and the diagnostics build.
 

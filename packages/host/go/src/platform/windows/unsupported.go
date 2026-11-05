@@ -505,18 +505,6 @@ func (implementation) DestroyShape(unsafe.Pointer) {
 	unreachable("native shape destroy")
 }
 
-func (implementation) WatchInput(unsafe.Pointer, platform.Input) (uintptr, error) {
-	return 0, unsupported("surface input")
-}
-
-func (implementation) UnwatchInput(uintptr) {
-	unreachable("surface input release")
-}
-
-func (implementation) WatchButtons(func(uint64)) error {
-	return unsupported("mouse button state")
-}
-
 func (implementation) Listen(string, string) (net.Listener, platform.Endpoint, error) {
 	return nil, platform.Endpoint{}, unsupported("local endpoint")
 }

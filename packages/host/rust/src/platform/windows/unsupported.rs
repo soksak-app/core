@@ -73,9 +73,6 @@ pub fn open_link(_url: &str) -> Result<(), String> {
 pub fn diagnostic_reports_directory() -> Result<std::path::PathBuf, String> {
     missing("crash reports")
 }
-pub fn watch_buttons(_changed: Box<dyn Fn(u64) + Send + Sync>) -> Result<(), String> {
-    missing("mouse button state")
-}
 pub fn start_notifications(_receive: Box<dyn Fn(String) + Send + Sync>) -> Result<(), String> {
     missing("system notifications")
 }
@@ -310,17 +307,6 @@ pub fn commit_layout(_window: Handle, _ticket: u64) -> Result<bool, String> {
     missing("surface layout commit")
 }
 
-pub fn enqueue_ui(_work: Box<dyn FnOnce() + Send>) -> Result<(), String> {
-    missing("UI queue")
-}
-
-pub fn enqueue_ui_after(
-    _delay: std::time::Duration,
-    _work: Box<dyn FnOnce() + Send>,
-) -> Result<(), String> {
-    missing("UI queue")
-}
-
 pub fn cancel_layout(_window: Handle) -> Result<(), String> {
     missing("surface layout cancel")
 }
@@ -391,18 +377,6 @@ pub fn destroy_shape(_shape: Handle) -> Result<(), String> {
 
 pub fn ignore_page_focus(_view: &PlatformWebview) -> Result<bool, String> {
     missing("webview focus isolation")
-}
-
-pub fn watch_input(
-    _window: Handle,
-    _pressed: Box<dyn Fn(Vec<Handle>) -> bool>,
-    _pointed: Box<dyn Fn(u8, f64, f64)>,
-) -> Result<Handle, String> {
-    missing("surface input")
-}
-
-pub fn unwatch_input(_monitor: Handle) -> Result<(), String> {
-    missing("surface input release")
 }
 
 #[cfg(feature = "diagnostics")]

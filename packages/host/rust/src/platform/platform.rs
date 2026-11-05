@@ -42,12 +42,20 @@ pub use windows::keep_front_on_show;
 mod devtools_input;
 
 #[cfg(any(windows, test))]
+#[path = "windows/mouse_watch.rs"]
+mod mouse_watch;
+
+#[cfg(any(windows, test))]
 #[path = "windows/process_failure.rs"]
 pub mod process_failure;
 
 #[cfg(any(windows, test))]
 #[path = "windows/show.rs"]
 mod show;
+
+#[cfg(any(windows, test))]
+#[path = "windows/ui_queue.rs"]
+mod ui_queue;
 
 /// The number of live objects, among those that the shared library attached to windows and webviews, whose lifetime
 /// shows the release of the window and the webview. When a closed window and its webviews are released, the object
