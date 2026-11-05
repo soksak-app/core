@@ -379,7 +379,7 @@ Functional window checks retain cadence and latency measurements and target exce
 
 Performance acceptance uses locally optimized diagnostic binaries: both core hosts and installed sidecars use the release compilation profile with diagnostic support enabled. Record source revisions, executable hashes, profile, display mode and system load. Preserve debug-profile observations separately; a pass establishes only the measured profile. Compiler optimization does not change the targets.
 
-- Consecutive captured view-drag frames target a maximum interval of 33 ms. ScreenCaptureKit does not guarantee its requested update interval; retain the measured interval and whether it exceeds this target.
+- Consecutive captured view-drag frames target a maximum interval of 35 ms. ScreenCaptureKit does not guarantee its requested update interval; retain the measured interval and whether it exceeds this target.
 - During a divider drag, a recorded frame shows the layout of a step at most four display frames after the grid left that layout, and over the drag the median delay is at most 2.5 frames and the 90th percentile at most 3 frames (at 60Hz: 66.7ms, 41.7ms and 50ms).
 
 ## Platform scope

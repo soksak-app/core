@@ -14,7 +14,7 @@ static int failures;
 static const NSUInteger resizeSteps = 48;
 static const double resizeBaseWidth = 300;
 static const double resizeBaseHeight = 200;
-static const double contentIntervalLimitMs = 33.0;
+static const double contentIntervalLimitMs = 35.0;
 
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);

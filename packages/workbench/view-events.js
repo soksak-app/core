@@ -208,6 +208,7 @@ export function createViewSubscriptions({ native, sidecar, textSize, settings, d
     async close() {
       closed = true;
       heldStatus.clear();
+      // default: subscriptions without a run state have no start listener to end.
       offRunStart?.();
       // default: subscriptions that never held a value registered no listener for the end of a run.
       offRunEnd?.();

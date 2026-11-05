@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F459: The optional call that ends the run start listener states its reason.
+- F458: The cadence and convergence limit of a view drag is 35 ms, and a cadence interval reads the middle of a source time range.
 - F457: A view requests one animation frame at the start of a run, so the second size of a drag no longer misses a display frame.
 - F435: Record the views without a frame loop; the Tauri terminal meets every criterion at 60 Hz, and the browser view runs at half the rate.
 - F443-1: Close the first run finding; the excess follows the load of the machine and a launch does not determine it.

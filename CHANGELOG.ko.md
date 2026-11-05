@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F459: run start listener를 끝내는 optional call이 사유를 밝힙니다.
+- F458: view drag의 cadence와 convergence 한도는 35 ms이고, cadence interval은 source time range의 중간을 읽습니다.
 - F457: view가 run 시작에 animation frame을 한 번 요청하여 drag의 두 번째 크기가 display frame을 놓치지 않습니다.
 - F435: frame loop 없는 view 측정을 기록합니다. 60 Hz에서 Tauri terminal은 모든 기준을 만족하고, browser view는 절반 rate로 동작합니다.
 - F443-1: 첫 실행 finding을 닫는다. 초과는 machine의 load를 따르고 launch가 결정하지 않는다.
