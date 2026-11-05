@@ -476,6 +476,8 @@ bool sp_window_file_drop(void *mainHandle, sp_file_drop_event event, sp_file_dro
     return true;
 }
 
+static void observeKeyboardWindowClose(void);
+
 void *sp_surface_create(void *handle) {
     NSCAssert(NSThread.isMainThread, @"surface creation requires the UI thread");
     NSView *view = (NSView *)handle;
@@ -483,6 +485,7 @@ void *sp_surface_create(void *handle) {
         sp_log_error("surface", "the view that holds the surface container is missing or is not in a window");
         return NULL;
     }
+    observeKeyboardWindowClose();
     SPSurfaceHost *surface = [[SPSurfaceHost alloc] initWithFrame:NSZeroRect];
     surface.hidden = YES;
     [surfaceContainer(view) addSubview:surface];
@@ -505,12 +508,10 @@ static BOOL leftPressOpen(NSWindow *window) {
     return (sp_input_physical_buttons() & 1) != 0 || sp_input_press_open(window, 0);
 }
 
-static char keyboardPendingKey, keyboardMonitorKey;
+static char keyboardPendingKey, keyboardMonitorKey, keyboardClosedKey;
 
-// Runs the keyboard move that waits for the release of the press of window.
-void sp_surface_press_released(void *handle) {
-    NSCAssert(NSThread.isMainThread, @"the keyboard of a window belongs to the UI thread");
-    NSWindow *window = (NSWindow *)handle;
+// Ends the wait for the release of the press of window and returns the keyboard move that waited.
+static void (^takeKeyboardWait(NSWindow *window))(void) {
     id monitor = objc_getAssociatedObject(window, &keyboardMonitorKey);
     if (monitor) {
         [NSEvent removeMonitor:monitor];
@@ -518,12 +519,34 @@ void sp_surface_press_released(void *handle) {
     }
     void (^give)(void) = [[objc_getAssociatedObject(window, &keyboardPendingKey) retain] autorelease];
     objc_setAssociatedObject(window, &keyboardPendingKey, nil, OBJC_ASSOCIATION_COPY);
+    return give;
+}
+
+// Runs the keyboard move that waits for the release of the press of window.
+void sp_surface_press_released(void *handle) {
+    NSCAssert(NSThread.isMainThread, @"the keyboard of a window belongs to the UI thread");
+    void (^give)(void) = takeKeyboardWait((NSWindow *)handle);
     if (give) give();
+}
+
+// A window that closes gets no key, and the release of its press may never come. The views of its surfaces outlive the close
+// until the host closes them, so a call could still follow the owner of a surface into the window. It drops what waits, which
+// also holds the window.
+static void observeKeyboardWindowClose(void) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        sp_observe_notification("webview_geometry.window_close", SP_OBSERVE_RECORD, NSWindowWillCloseNotification, nil, nil,
+            ^(NSNotification *note) {
+                objc_setAssociatedObject(note.object, &keyboardClosedKey, @YES, OBJC_ASSOCIATION_RETAIN);
+                takeKeyboardWait(note.object);
+            });
+    });
 }
 
 // A first responder that moves during a press ends the press in the view that holds it (a framework that draws the workbench
 // ends a pressed control when its view resigns), so the move waits for the release. The last move that waits replaces an earlier one.
 static void giveKeyboardAfterPress(NSWindow *window, void (^give)(void)) {
+    if (objc_getAssociatedObject(window, &keyboardClosedKey) && !window.isVisible) return;
     if (!leftPressOpen(window)) {
         objc_setAssociatedObject(window, &keyboardPendingKey, nil, OBJC_ASSOCIATION_COPY);
         give();

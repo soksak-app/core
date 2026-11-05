@@ -269,6 +269,7 @@ A native view is placed on the DOM: it draws the DOM element it is placed on and
 - A surface whose image region is not shown yet holds the keyboard in its web view, and the region takes it when it first shows. A region shows through the geometry of its element, so this needs no call of the page.
 - The call applies when the left mouse button rises, while it is down: a move of the first responder during a press would end the press, which would cancel a click and a drag of a tab or a divider. The last call of a press wins. The region focus call and the return of the keyboard to a surface that shows again wait for the same release; the return does not replace a call that already waits.
 - `surface: null` gives the keyboard to the main web view, and in a window without a main page to the first view of the content view that takes it.
+- A window that closed takes no keyboard until it shows again, and its close drops a call that waits for a release. The views of its surfaces live on until the host closes them, and a window that gets no key would hold the keyboard of the call.
 
 ## Document regions
 

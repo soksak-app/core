@@ -1028,6 +1028,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F583",
+    implementation: [{ file: "native/darwin/src/webview_geometry.m", symbol: "sp_observe_notification(\"webview_geometry.window_close\"" }],
+    tests: [
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "a surface of a closed window does not take the keyboard" },
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "a call that waited for the release of a press does not move in a closed window" },
+    ],
+    expected: "The first responder of a closed window stays until the window shows again, and the close of a window drops the keyboard call that waits for a release.",
+    levels: ["unit"],
+  },
+  {
     id: "F526-2",
     implementation: [
       { file: "native/darwin/src/webview_geometry.m", symbol: "sp_observe_local_monitor(\"webview_geometry.press_release\"" },
