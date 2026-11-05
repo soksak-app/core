@@ -112,6 +112,10 @@ function fakes({ startProject = { id: "p1", root: "/projects/p1" } } = {}) {
             ran.data.push({ read: key, project: project.id, plugin });
             return stored.get(`${project.id} ${plugin} ${key}`) ?? "default";
           },
+          replace: async (key, base, value) => {
+            ran.data.push({ replace: key, base, value, project: project.id, plugin });
+            return true;
+          },
           set: async (key, value) => {
             ran.data.push({ write: key, value, project: project.id, plugin });
             stored.set(`${project.id} ${plugin} ${key}`, value);
@@ -193,6 +197,16 @@ test("runtime.data.get and runtime.data.set answer for the start project of the 
     { write: "note", value: "kept", project: "p1", plugin: "probe" },
     { read: "note", project: "p1", plugin: "probe" },
   ]);
+});
+
+// contract: project-data.replace.requires-base
+test("runtime.data.replace answers for the start project of the view and requires its base", async () => {
+  const { ran, options } = fakes();
+  assert.equal(await answerViewCall({ id: 1, command: "runtime.data.replace", params: { key: "note", base: "default", value: "kept" } }, options), true);
+  assert.deepEqual(ran.data, [{ replace: "note", base: "default", value: "kept", project: "p1", plugin: "probe" }]);
+  await assert.rejects(answerViewCall({ id: 2, command: "runtime.data.replace", params: { key: "note", value: "x" } }, options),
+    /^TypeError: view call runtime.data.replace requires base$/);
+  assert.equal(ran.data.length, 1);
 });
 
 test("runtime.data calls refuse a view whose start values carry no project, and run nothing", async () => {

@@ -1168,3 +1168,25 @@ fn invalid_json_closes_connection() {
 | `surface.sync.closed-window-creates-nothing` | 창이 닫힐 때 진행 중인 배치나 modal 요청은 표면이나 modal view를 만들지 않고 `project window is closed`로 실패한다. 창을 닫을 때 모든 표면을 이미 닫았으므로 그 뒤에 만든 표면은 닫는 곳이 없기 때문이다. | all |
 | `exposure.reply.error-member-names-code-and-message` | document reply의 `error` member에 `code`나 `message`가 없으면 `error has no code` 또는 `error has no message`로 거부하며, 기다리는 요청에 code 0이나 빈 message를 전달하지 않는다. | all |
 | `sok.endpoint.error-member-names-code-and-message` | endpoint 응답의 error member에 `code`나 `message`가 없으면 `invalid frame from endpoint: error has no code` 또는 `... error has no message`로 거부하며, code 0이나 빈 message로 대신하지 않는다. | all |
+
+## Workbench cases
+
+Wails와 Tauri 호스트의 메인 페이지와 mygo 호스트의 workbench는 각자 project data의 view call에 답한다. 그래서 한 동작의 page 시험과 mygo 시험은 시험 바로 위의 줄 `// contract: <id>`로 한 사례를 선언한다. 시험 목록 검사(`scripts/check-test-parity.mjs`)는 한쪽에 시험이 없는 사례, `packages/workbench-mygo/tests/`의 시험이 선언한 표에 없는 사례, 시험에 붙지 않은 선언에서 실패한다.
+
+| 층 | 이 사례의 코드 | 시험 |
+| --- | --- | --- |
+| 메인 페이지(Wails, Tauri) | `packages/workbench/plugin-data.js`, `packages/workbench/projects.js` | `packages/workbench/test/` |
+| mygo 호스트의 workbench | `packages/workbench-mygo/src/project_data.go` | `packages/workbench-mygo/tests/` |
+| Go 호스트, Rust 호스트 | 없음: patch는 자기가 실은 `plugins` object를 저장하고, 어느 호스트도 그 안의 key를 읽지 않는다. `workspace.projects.plugin-data-patched`가 이것을 다룬다 | 없음 |
+| SDK | `packages/plugin-api/view.js`: 모든 호스트에 하나인 `runtime.data.change` | `packages/plugin-api/test/view.test.mjs` |
+
+| Case | Behavior |
+| --- | --- |
+| `project-data.write.keeps-the-keys-before-it` | 뷰의 쓰기는 앞선 쓰기 뒤에 store에 닿고 앞선 쓰기를 함께 실으므로, 연달아 쓴 두 key가 모두 남는다. |
+| `project-data.write.outran-read-keeps-the-write` | 쓰기가 앞지른 store 읽기는 창의 기록에서 그 쓰기를 빼지 않는다. |
+| `project-data.write.refusal-answers-the-view` | store가 거부한 쓰기는 view call을 실패시키고 key의 값을 그대로 둔다. |
+| `project-data.replace.changed-value-writes-nothing` | 한 읽기에서 나온 `runtime.data.replace` 두 호출 중 첫째는 값을 저장하고 `true`를 답하며, 둘째는 아무것도 저장하지 않고 `false`를 답한다. |
+| `project-data.replace.compares-json-values` | `packages/workbench/test/fixtures/project-data-values.json`의 각 행은 한 답을 낸다. object member의 순서, 숫자의 표기, 문자열의 escape는 차이를 만들지 않고, 값이 다르면 `false`를 답한다. |
+| `project-data.replace.read-value-is-its-base` | 그 파일의 각 저장 값에 `runtime.data.get`이 답한 값을 `base`로 돌려보내면 `true`를 답한다. |
+| `project-data.replace.requires-base` | `base`가 없는 `runtime.data.replace`는 `view call runtime.data.replace requires base`로 실패한다. |
+| `project-data.replace.refusal-answers-the-view` | store가 거부한 replace는 view call을 실패시키고 key의 값을 그대로 둔다. |

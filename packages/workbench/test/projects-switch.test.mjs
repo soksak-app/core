@@ -540,6 +540,31 @@ test("closing a tab removes its session file after the layout write, and the sta
   await projects.flush();
 });
 
+test("a refused layout write answers its caller, and the next layout write and the same layout reach the store", async () => {
+  const written = [];
+  let refusals = 0;
+  plane.layout = PROJECT.spaces[0].layout;
+  await projects.initialise({ ...store, patch: async (id, patch) => {
+    if (refusals > 0 && patch.spaces) {
+      refusals -= 1;
+      throw new Error("the disk is full");
+    }
+    if (patch.spaces) written.push(patch.spaces[0].layout.state.name);
+  } });
+  await projects.activate(PROJECT.id);
+  const named = (name) => ({ state: { ...PROJECT.spaces[0].layout.state, name } });
+  written.length = 0;
+  refusals = 1;
+  plane.layout = named("refused");
+  await assert.rejects(projects.keep(), /the disk is full/);
+  await projects.keep();
+  assert.deepEqual(written, ["refused"], "the refused layout was not written again");
+  plane.layout = named("later");
+  await projects.keep();
+  assert.deepEqual(written, ["refused", "later"], "a write after a refused write did not reach the store");
+  assert.equal(await projects.close(PROJECT.id), true);
+});
+
 test("each layout save names its writing path: add space for a new space of the shown project", async () => {
   saves.length = 0;
   await projects.initialise(store);

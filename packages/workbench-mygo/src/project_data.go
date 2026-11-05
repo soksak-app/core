@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 )
 
@@ -165,6 +166,7 @@ func (s *Shell) runDataCall(call viewCallEvent, unit *installedUnit, view *viewS
 	}
 	fields, err := viewFields[struct {
 		Key   string          `json:"key"`
+		Base  json.RawMessage `json:"base"`
 		Value json.RawMessage `json:"value"`
 	}](call)
 	if err != nil {
@@ -183,8 +185,41 @@ func (s *Shell) runDataCall(call viewCallEvent, unit *installedUnit, view *viewS
 	if err != nil {
 		return err
 	}
-	answer(value, nil)
-	return nil
+	if call.Command != "runtime.data.replace" {
+		answer(value, nil)
+		return nil
+	}
+	if fields.Base == nil {
+		return fmt.Errorf("view call %s requires base", call.Command)
+	}
+	same, err := sameData(value, fields.Base)
+	if err != nil {
+		return err
+	}
+	if !same {
+		answer(false, nil)
+		return nil
+	}
+	return s.writeProjectData(project, unit, fields.Key, fields.Value, func(_ any, err error) {
+		if err != nil {
+			answer(nil, err)
+			return
+		}
+		answer(true, nil)
+	})
+}
+
+// sameData tells whether two values of project data are the same value, whatever the order of the members of their objects and
+// the form of their text.
+func sameData(one, other json.RawMessage) (bool, error) {
+	var first, second any
+	if err := json.Unmarshal(one, &first); err != nil {
+		return false, err
+	}
+	if err := json.Unmarshal(other, &second); err != nil {
+		return false, err
+	}
+	return reflect.DeepEqual(first, second), nil
 }
 
 // workspaceChanged reads the store after a write and reports each key of plugin data that differs from what this window holds,

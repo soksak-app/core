@@ -1,0 +1,87 @@
+[
+  {
+    "stored": "{\"x\":1,\"y\":\"<a>\"}",
+    "base": "{\"y\":\"<a>\",\"x\":1}",
+    "same": true
+  },
+  {
+    "stored": "{\"a\":{\"b\":1,\"c\":[{\"d\":2,\"e\":3}]}}",
+    "base": "{\"a\":{\"c\":[{\"e\":3,\"d\":2}],\"b\":1}}",
+    "same": true
+  },
+  {
+    "stored": "{\"x\":1.0}",
+    "base": "{\"x\":1}",
+    "same": true
+  },
+  {
+    "stored": "{\"x\":1e3}",
+    "base": "{\"x\":1000}",
+    "same": true
+  },
+  {
+    "stored": "{\"x\":-0.0}",
+    "base": "{\"x\":0}",
+    "same": true
+  },
+  {
+    "stored": "{\"x\":9007199254740993}",
+    "base": "{\"x\":9007199254740992}",
+    "same": true
+  },
+  {
+    "stored": "{\"t\":\"\\u003ca\\u003e\"}",
+    "base": "{\"t\":\"<a>\"}",
+    "same": true
+  },
+  {
+    "stored": "{\"t\":\"a\\/b\"}",
+    "base": "{\"t\":\"a/b\"}",
+    "same": true
+  },
+  {
+    "stored": "{\"\\u00e9\":\"\\u00e9\"}",
+    "base": "{\"é\":\"é\"}",
+    "same": true
+  },
+  {
+    "stored": "{ \"x\" : [ 1 , 2 ] }",
+    "base": "{\"x\":[1,2]}",
+    "same": true
+  },
+  {
+    "stored": "{\"x\":[1,2]}",
+    "base": "{\"x\":[2,1]}",
+    "same": false
+  },
+  {
+    "stored": "{\"x\":null}",
+    "base": "{}",
+    "same": false
+  },
+  {
+    "stored": "{\"x\":0}",
+    "base": "{\"x\":false}",
+    "same": false
+  },
+  {
+    "stored": "{\"x\":\"\"}",
+    "base": "{\"x\":null}",
+    "same": false
+  },
+  {
+    "stored": "{\"x\":1}",
+    "base": "{\"x\":\"1\"}",
+    "same": false
+  },
+  {
+    "stored": "{\"x\":[]}",
+    "base": "{\"x\":{}}",
+    "same": false
+  },
+  {
+    "stored": "{\"x\":1}",
+    "base": "{\"x\":1,\"y\":2}",
+    "same": false
+  }
+]

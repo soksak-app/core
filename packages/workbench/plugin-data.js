@@ -77,9 +77,19 @@ function checkStored(project, plugin, declared) {
   return failures;
 }
 
+/** Whether two values of project data are the same value, whatever the order of the members of their objects. */
+function sameValue(one, other) {
+  if (one === other) return true;
+  if (one === null || other === null || typeof one !== "object" || typeof other !== "object") return false;
+  if (Array.isArray(one) !== Array.isArray(other)) return false;
+  const members = Object.keys(one);
+  return members.length === Object.keys(other).length
+    && members.every((member) => Object.hasOwn(other, member) && sameValue(one[member], other[member]));
+}
+
 /**
- * The project data functions of one plugin for one project: get(key) and set(key, value), which the views of the plugin call with the same
- * checks. failures holds the stored-format failures of the keys (checkStored).
+ * The project data functions of one plugin for one project: get(key), set(key, value) and replace(key, base, value), which the views
+ * of the plugin call with the same checks. failures holds the stored-format failures of the keys (checkStored).
  */
 function dataOf(project, plugin, declared, failures) {
   const read = (key) => {
@@ -95,17 +105,23 @@ function dataOf(project, plugin, declared, failures) {
     failures.delete(key);
     changed(project.id, plugin, key);
   };
-  return { get: read, set: write };
+  // Between the comparison and the record of the write this function does not yield, so no other write comes between them.
+  const replace = async (key, base, value) => {
+    if (!sameValue(read(key), base)) return false;
+    await write(key, value);
+    return true;
+  };
+  return { get: read, set: write, replace };
 }
 
 /**
  * The project data of a plugin for the project that a view names in its start values (docs/spec/plugins.md#project-data). The
  * project may be one that the window does not show, so the view reads and writes its own project. declares(key) tells whether the
- * plugin declares the key, and get(key) and set(key, value) run the checks of the stored data.
+ * plugin declares the key, and get(key), set(key, value) and replace(key, base, value) run the checks of the stored data.
  */
 export function viewDataOf(project, plugin) {
   // default: a plugin that declares no data keys has the empty declaration.
   const declared = declaredData.get(plugin) ?? {};
   const access = dataOf(project, plugin, declared, checkStored(project, plugin, declared));
-  return { declares: (key) => Object.hasOwn(declared, key), get: access.get, set: access.set };
+  return { declares: (key) => Object.hasOwn(declared, key), get: access.get, set: access.set, replace: access.replace };
 }

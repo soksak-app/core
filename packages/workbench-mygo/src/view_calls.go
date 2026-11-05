@@ -425,7 +425,7 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 	case "runtime.settings.on":
 		view.settings, view.settingValues = true, jsonText(s.viewSettings(unit))
 		done()
-	case "runtime.data.get", "runtime.data.set", "runtime.data.on":
+	case "runtime.data.get", "runtime.data.set", "runtime.data.replace", "runtime.data.on":
 		return s.runDataCall(call, unit, view, answer)
 	case "runtime.textSize.read":
 		size, err := s.viewTextSize(call.Surface, view)

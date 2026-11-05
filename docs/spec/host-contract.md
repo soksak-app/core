@@ -1168,3 +1168,25 @@ Items:
 | `surface.sync.closed-window-creates-nothing` | A layout or modal request that is still in flight when its window closes creates no surface or modal view and fails with `project window is closed`, because the close of the window has already closed every surface and nothing would close a later one. | all |
 | `exposure.reply.error-member-names-code-and-message` | A document reply whose `error` member has no `code` or no `message` is refused with `error has no code` or `error has no message`, and no code 0 or empty message is delivered to the request that waits for it. | all |
 | `sok.endpoint.error-member-names-code-and-message` | An error member of an endpoint reply without a `code` or without a `message` is refused with `invalid frame from endpoint: error has no code` or `... error has no message`; no code 0 or empty message stands for it. | all |
+
+## Workbench cases
+
+The main page of the Wails and Tauri hosts and the workbench of the mygo host each answer the view calls of project data, so the page test and the mygo test of one behavior declare one case with the line `// contract: <id>` directly above the test. The test inventory check (`scripts/check-test-parity.mjs`) fails when a case has no test on one side, when a test in `packages/workbench-mygo/tests/` declares a case that the table does not have, or when a declaration is not attached to a test.
+
+| Layer | Code of these cases | Tests |
+| --- | --- | --- |
+| Main page (Wails, Tauri) | `packages/workbench/plugin-data.js`, `packages/workbench/projects.js` | `packages/workbench/test/` |
+| Workbench of the mygo host | `packages/workbench-mygo/src/project_data.go` | `packages/workbench-mygo/tests/` |
+| Go host, Rust host | None: a patch stores the `plugins` object that it carries, and neither host reads a key inside it; `workspace.projects.plugin-data-patched` covers that | None |
+| SDK | `packages/plugin-api/view.js`: `runtime.data.change`, one for every host | `packages/plugin-api/test/view.test.mjs` |
+
+| Case | Behavior |
+| --- | --- |
+| `project-data.write.keeps-the-keys-before-it` | A write of a view reaches the store after the writes before it and carries them, so two writes in a row keep both keys. |
+| `project-data.write.outran-read-keeps-the-write` | A read of the store that a write outran keeps the write in the record of the window. |
+| `project-data.write.refusal-answers-the-view` | A write that the store refuses fails the view call and leaves the value of the key. |
+| `project-data.replace.changed-value-writes-nothing` | Of two `runtime.data.replace` calls from one read the first stores its value and replies `true`, and the second stores nothing and replies `false`. |
+| `project-data.replace.compares-json-values` | Every row of `packages/workbench/test/fixtures/project-data-values.json` gives one answer: the order of object members, the form of a number and the escapes of a text make no difference, and a difference of value replies `false`. |
+| `project-data.replace.read-value-is-its-base` | The value that `runtime.data.get` answered for each stored value of that file, carried back as `base`, replies `true`. |
+| `project-data.replace.requires-base` | `runtime.data.replace` without `base` fails with `view call runtime.data.replace requires base`. |
+| `project-data.replace.refusal-answers-the-view` | A replace that the store refuses fails the view call and leaves the value of the key. |

@@ -120,13 +120,19 @@ section surface는 보이는 스페이스의 사이드바가 그 섹션을 그�
 ## 프로젝트 데이터
 per-key 형식은 코어가 소유한 file 안의 값마다 형태를 정하며, 다른 형태의 값은 변환되지 않고 거부된다([저장 데이터 형식](installation.ko.md#저장-데이터-형식)).
 
-`data`는 plugin의 view가 프로젝트마다 읽고 쓰는 키를 선언한다. view는 [view calls](native-surfaces.ko.md#view-표면)의 `runtime.data.get {key}`와 `runtime.data.set {key, value}`로 이 키를 읽고 쓰며, 메인 페이지는 호출한 view의 시작 값에 있는 프로젝트에 대해 답한다. 그러므로 창이 더 이상 보여 주지 않는 프로젝트의 숨은 view는 자기 프로젝트만 읽고 쓰며, 표시되지 않는 프로젝트에 대한 쓰기는 그 프로젝트에 저장된다. `schema`는 공개 선언의 스키마 부분 집합(`type`, `enum`, `properties`, `items`)을 쓰고 `default`는 그 스키마에 맞아야 한다. 선택 항목 `format`은 양의 정수이며 없으면 1이다. 플러그인은 키의 저장 형태를 바꿀 때 이 값을 올린다. 워크벤치는 각 값을 `projects.json`에서 그 프로젝트의 `plugins.<플러그인 id>.<키>` 항목에 `{ "format": <format>, "value": <value> }`로 저장한다([저장](projects.ko.md#저장)). `runtime.data.get`은 저장된 값이나 기본값을 반환하고, 저장된 값이 스키마에 맞지 않으면 실패한다. `runtime.data.set`은 값이 맞지 않거나 선언하지 않은 키이면 쓰지 않고 실패하며, 선언한 format으로 저장하고, 저장소가 쓰기를 받아들인 뒤 끝난다.
+`data`는 plugin의 view가 프로젝트마다 읽고 쓰는 키를 선언한다. view는 [view calls](native-surfaces.ko.md#view-표면)의 `runtime.data.get {key}`와 `runtime.data.set {key, value}`로 이 키를 읽고 쓴다. `runtime.data.set`은 key의 값 전체를 자기가 실은 값으로 덮어쓴다. 값을 읽지도 합치지도 않는다. 메인 페이지는 호출한 view의 시작 값에 있는 프로젝트에 대해 답한다. 그러므로 창이 더 이상 보여 주지 않는 프로젝트의 숨은 view는 자기 프로젝트만 읽고 쓰며, 표시되지 않는 프로젝트에 대한 쓰기는 그 프로젝트에 저장된다. `schema`는 공개 선언의 스키마 부분 집합(`type`, `enum`, `properties`, `items`)을 쓰고 `default`는 그 스키마에 맞아야 한다. 선택 항목 `format`은 양의 정수이며 없으면 1이다. 플러그인은 키의 저장 형태를 바꿀 때 이 값을 올린다. 워크벤치는 각 값을 `projects.json`에서 그 프로젝트의 `plugins.<플러그인 id>.<키>` 항목에 `{ "format": <format>, "value": <value> }`로 저장한다([저장](projects.ko.md#저장)). `runtime.data.get`은 저장된 값이나 기본값을 반환하고, 저장된 값이 스키마에 맞지 않으면 실패한다. `runtime.data.set`은 값이 맞지 않거나 선언하지 않은 키이면 쓰지 않고 실패하며, 선언한 format으로 저장하고, 저장소가 쓰기를 받아들인 뒤 끝난다.
 
 저장된 항목은 정확히 양의 정수 `format`과 `value`만 가진 객체일 때 현재 형태다. 워크벤치는 창이 프로젝트를 표시할 때 그 프로젝트에 저장된 선언 키를 확인한다. 선언한 format과 다른 format으로 저장된 항목, format 없이 저장된 값, 스키마에 맞지 않는 값은 바꾸지 않고 두며, 그 키의 `runtime.data.get`은 프로젝트, 플러그인, 키, format이나 스키마 불일치를 적은 message로 실패한다. 워크벤치는 저장된 값을 변환하지 않는다.
 
 view는 `runtime.data.on`으로 자기 시작 프로젝트의 프로젝트 데이터 변경을 따라간다. SDK는 `runtime.data.on(listener)`에 이 call을 보낸다. 메인 페이지는 이 창의 view가 쓴 값이 저장된 뒤, 그리고 다른 창이 쓴 그 키의 저장 값을 창이 읽은 뒤 view에 event `data` `{key}`를 보내고, view는 `runtime.data.get`으로 값을 다시 읽는다. 그래서 한 프로젝트에 대한 plugin의 두 view(두 section 등)가 같은 값을 본다. 시작 값에 프로젝트가 없는 view는 `view call runtime.data.on requires a project`로 거부된다.
 
 창은 view의 쓰기를 store가 확인하기 전에 들고 있고, 한 프로젝트의 쓰기를 앞선 쓰기를 포함한 채 하나씩 차례로 store에 보낸다. 그래서 연달아 쓴 두 값의 키가 모두 남는다. 그런 쓰기보다 앞선 store 읽기는 그 프로젝트의 데이터를 창이 들고 있는 그대로 두고, host는 그 쓰기에 `workspace-changed`로 다시 답한다. store가 쓰기를 거부하면 view에 이유를 답하고 값을 되돌린다. 단, 뒤의 쓰기가 그 값 위에 있으면 되돌리지 않는다.
+
+읽은 값으로 다음 값을 만드는 view는 SDK의 `runtime.data.change(key, next)`를 쓴다. `runtime.data.get` 뒤의 `runtime.data.set`은 그 사이에 온 다른 view의 쓰기를 덮어쓰고도 `null`을 답하기 때문이다. `change`는 값을 읽어 그 복사본을 `next`에 넘기고, `next`가 돌려준 값을 view call `runtime.data.replace {key, base, value}`로 저장한다. 이 호출은 key의 값이 아직 `base`와 같을 때만 `value`를 저장하고 `true`를 답하며, 다르면 아무것도 저장하지 않고 `false`를 답한다. `next`가 `undefined`를 돌려주면 아무것도 쓰지 않고, `next`가 throw하면 change가 실패하며, change의 결과는 남아 있는 값이다.
+
+`base`와 저장된 값은 모든 호스트에서 JSON 값으로 비교한다. object member의 순서, 숫자의 표기, 문자열의 escape는 차이를 만들지 않으며, 숫자는 배정밀도 숫자로 비교한다. 그러므로 `runtime.data.get`이 답한 값은, key가 그 값을 가지는 동안 `runtime.data.replace`가 받아들이는 `base`다.
+
+`change`는 다른 writer가 있을 때만 새 읽기부터 다시 시작한다. 새 읽기가 직전 읽기와 같으면 값을 바꾼 writer가 없다는 뜻이므로 change는 `runtime.data.change <key>: the store refused the value that it answered`로 실패한다. 64번 읽은 뒤에는 `runtime.data.change <key>: other writers changed the value 64 times`로 실패한다. 각 실패는 change를 부른 쪽에 닿아 view가 보여 주고, 값은 다른 writer가 남긴 대로 있다.
 
 ## 확장 지점
 

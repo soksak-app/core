@@ -716,6 +716,9 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/plugin_services_test.go", id: "TestADropOnAViewBehindTheDebugViewIsRecordedAsItsReason" },
       { file: "packages/workbench-mygo/tests/plugin_services_test.go", id: "TestANotificationIsNamedAsItsTabIsNamed" },
       { file: "packages/workbench/test/project-data-writes.test.mjs", id: "two writes in a row keep both keys, and the store takes them in order" },
+      { file: "packages/workbench/test/project-data-writes.test.mjs", id: "two replaces from one read keep the first, and the second answers false and writes nothing" },
+      { file: "packages/workbench-mygo/tests/plugin_services_test.go", id: "TestTwoReplacesFromOneReadKeepTheFirstAndTheSecondAnswersFalse" },
+      { file: "packages/plugin-api/test/view.test.mjs", id: "runtime.data.change reads, replaces, and starts over from a new read when another write came first" },
     ],
     expected: "The mygo workbench runs the drop command of the view under a dropped file, follows the visible tab with its notices and the notification center, and keeps each write of project data.",
     levels: ["unit"],
@@ -12513,6 +12516,52 @@ export function auditCompletedFeatureLinks(features, checklistSource = readFileS
 }
 
 // The current inventory counts are recorded in the sentence of the operations document that states the current state. The evidence of a completed checklist item is not changed.
+// The tests of the workbench cases of the two workbenches, which the declaration line of each test names (docs/spec/host-contract.md#workbench-cases).
+const WORKBENCH_CASE_SIDES = [
+  { side: "page", directory: "packages/workbench/test/", file: /\.test\.mjs$/, test: /^\s*(?:await\s+)?test\(/ },
+  { side: "mygo", directory: "packages/workbench-mygo/tests/", file: /_test\.go$/, test: /^func Test/ },
+];
+
+/**
+ * Checks that each case of the table "Workbench cases" has a test of the page and a test of the mygo workbench. The page tests also
+ * declare host cases, which the table does not name; the mygo tests declare workbench cases only.
+ */
+export function auditWorkbenchCases(specification, files) {
+  const SPEC = "docs/spec/host-contract.md";
+  const start = specification.indexOf("\n## Workbench cases\n");
+  if (start < 0) return [`${SPEC} has no "Workbench cases" section`];
+  const next = specification.indexOf("\n## ", start + 1);
+  const section = specification.slice(start, next < 0 ? undefined : next);
+  const cases = [...section.matchAll(/^\| `([^`]+)` \|/gm)].map((match) => match[1]);
+  const declared = new Map(WORKBENCH_CASE_SIDES.map(({ side }) => [side, new Set()]));
+  const errors = [];
+  for (const { path, text } of files) {
+    const side = WORKBENCH_CASE_SIDES.find(({ directory, file }) => path.startsWith(directory) && file.test(path));
+    if (!side) continue;
+    const lines = text.split("\n");
+    lines.forEach((line, index) => {
+      const declaration = line.match(/^\s*\/\/\s*contract:\s*(.*)$/);
+      if (!declaration) return;
+      for (const id of declaration[1].split(",").map((item) => item.trim())) {
+        if (!cases.includes(id)) {
+          if (side.side === "mygo") errors.push(`${path}:${index + 1}: workbench case ${id} is not in ${SPEC}`);
+          continue;
+        }
+        if (side.test.test(lines[index + 1])) declared.get(side.side).add(id);
+        else errors.push(`${path}:${index + 1}: the declaration of ${id} is not attached to a test`);
+      }
+    });
+  }
+  for (const { side } of WORKBENCH_CASE_SIDES) {
+    for (const id of cases) {
+      if (!declared.get(side).has(id) && !errors.some((error) => error.includes(`declaration of ${id} `))) {
+        errors.push(`${SPEC}: workbench case ${id} has no ${side} test`);
+      }
+    }
+  }
+  return errors;
+}
+
 export function auditRecordedInventoryCounts(
   inventory,
   english = readFileSync(`${ROOT}docs/operations/examples.md`, "utf8"),
@@ -12577,6 +12626,9 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
     errors.push(`${adapterManifestFile}: cannot read language adapter cases: ${error.message}`);
   }
   errors.push(...auditCompletedFeatureLinks(featureLinks));
+  errors.push(...auditWorkbenchCases(readFileSync(`${ROOT}docs/spec/host-contract.md`, "utf8"),
+    repositoryFiles().filter((path) => WORKBENCH_CASE_SIDES.some(({ directory, file }) => path.startsWith(directory) && file.test(path)))
+      .map((path) => ({ path, text: readFileSync(`${ROOT}${path}`, "utf8") }))));
   errors.push(...auditRecordedInventoryCounts({ trackCount, implementationCount, testCount }));
   errors.push(...auditHistoricalScopeWording());
   errors.push(...auditModalParitySnapshotWording());
