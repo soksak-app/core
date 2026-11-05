@@ -188,7 +188,7 @@ func equal(t *testing.T, got, want any) {
 
 func TestTheDelayUnloadsAHiddenTabAndAShowRestoresIt(t *testing.T) {
 	h := newSaver()
-	h.saver.Start()
+	h.saver.Classify()
 	h.observe(t, []string{"a", "b"}, "a", "b")
 	h.observe(t, []string{"b"}, "a", "b")
 	h.tick(120*minute - 1)
@@ -215,7 +215,7 @@ func protectedBy(t *testing.T, tab string, setup func(h *saverHarness)) ([]strin
 	if setup != nil {
 		setup(h)
 	}
-	h.saver.Start()
+	h.saver.Classify()
 	h.observe(t, []string{"x"}, "x", tab)
 	h.tick(120 * minute)
 	h.tick(120 * minute)
@@ -253,7 +253,7 @@ func TestTheProtectionsKeepATabLoaded(t *testing.T) {
 
 func TestShownProtectsTheShownTab(t *testing.T) {
 	h := newSaver()
-	h.saver.Start()
+	h.saver.Classify()
 	h.observe(t, []string{"a"}, "a")
 	h.tick(240 * minute)
 	equal(t, h.saver.Unloaded("a"), false)
@@ -262,7 +262,7 @@ func TestShownProtectsTheShownTab(t *testing.T) {
 
 func TestRecentProtectsATabShownLessThanTheDelayAgo(t *testing.T) {
 	h := newSaver()
-	h.saver.Start()
+	h.saver.Classify()
 	h.observe(t, []string{"a"}, "a", "x")
 	h.tick(10 * minute)
 	h.observe(t, []string{"x"}, "a", "x")
@@ -280,7 +280,7 @@ func TestAMediaReplyMovesTheDeadlineOneDelayLater(t *testing.T) {
 
 func TestAnUnloadStoresTheSessionFirstAndARestoreGivesItBack(t *testing.T) {
 	h := newSaver()
-	h.saver.Start()
+	h.saver.Classify()
 	h.observe(t, []string{"b"}, "a", "b")
 	h.tick(120 * minute)
 	equal(t, h.saver.Unloaded("a"), true)
@@ -297,7 +297,7 @@ func TestAnUnloadStoresTheSessionFirstAndARestoreGivesItBack(t *testing.T) {
 func TestTurningTheSettingOnKeepsTheHiddenTimeOfEachTab(t *testing.T) {
 	h := newSaver()
 	h.enabled = false
-	h.saver.Start()
+	h.saver.Classify()
 	h.observe(t, []string{"x"}, "a", "x")
 	h.tick(100 * minute)
 	h.enabled = true
@@ -310,7 +310,7 @@ func TestTurningTheSettingOnKeepsTheHiddenTimeOfEachTab(t *testing.T) {
 
 func TestATabMountedWithoutBeingShownTakesItsMountTimeAsItsHiddenTime(t *testing.T) {
 	h := newSaver()
-	h.saver.Start()
+	h.saver.Classify()
 	h.observe(t, []string{"x"}, "x")
 	h.tick(30 * minute)
 	h.observe(t, []string{"x"}, "x", "a")
@@ -331,7 +331,7 @@ func TestOneCriticalReportUnloadsOneAtATimeLeastRecentlyShownFirstUntilANormalRe
 	h := newSaver()
 	var gates []func(error)
 	h.commit = func(answer func(error)) { gates = append(gates, answer) }
-	h.saver.Start()
+	h.saver.Classify()
 	// a, b and c are shown in this order and then hidden; recent does not protect under pressure.
 	all := []string{"a", "b", "c", "d"}
 	for _, id := range []string{"c", "a", "b", "d"} {
@@ -365,7 +365,7 @@ func TestOneCriticalReportUnloadsOneAtATimeLeastRecentlyShownFirstUntilANormalRe
 
 func TestAPressureReportWithoutACandidateIsSkipped(t *testing.T) {
 	h := newSaver()
-	h.saver.Start()
+	h.saver.Classify()
 	h.keeps["a"] = []string{"keep:busy"}
 	h.observe(t, []string{"x"}, "a", "x")
 	pressure(t, h, "warn", 7)
@@ -400,7 +400,7 @@ func TestAnInterruptionDuringAPendingStepLeavesTheTabLoaded(t *testing.T) {
 			h := newSaver()
 			var release func(error)
 			h.interact = func(_ string, answer func(error)) { release = answer }
-			h.saver.Start()
+			h.saver.Classify()
 			h.observe(t, []string{"x"}, "a", "x")
 			h.tick(120 * minute)
 			if release == nil {
@@ -417,7 +417,7 @@ func TestAnInterruptionDuringAPendingStepLeavesTheTabLoaded(t *testing.T) {
 
 func TestACommitAfterAnUnloadNeitherDeclaresTheTabNorReleasesItAsAClosedTab(t *testing.T) {
 	h := newSaver()
-	h.saver.Start()
+	h.saver.Classify()
 	h.observe(t, []string{"x"}, "a", "x")
 	h.tick(120 * minute)
 	equal(t, h.saver.Unloaded("a"), true)
@@ -432,7 +432,7 @@ func TestACommitAfterAnUnloadNeitherDeclaresTheTabNorReleasesItAsAClosedTab(t *t
 func TestARestartWithTheSettingOnStartsHiddenDeclaringTabsUnloadedWithTheirLabel(t *testing.T) {
 	on := newSaver()
 	on.observe(t, []string{"x"}, "x", "a", "u-b")
-	on.saver.Start()
+	on.saver.Classify()
 	equal(t, on.saver.Unloaded("a"), true)
 	equal(t, on.saver.Unloaded("u-b"), false)
 	equal(t, on.saver.Unloaded("x"), false)
@@ -441,7 +441,7 @@ func TestARestartWithTheSettingOnStartsHiddenDeclaringTabsUnloadedWithTheirLabel
 	off := newSaver()
 	off.enabled = false
 	off.observe(t, []string{"x"}, "x", "a")
-	off.saver.Start()
+	off.saver.Classify()
 	equal(t, off.saver.Unloaded("a"), false)
 }
 
@@ -466,7 +466,7 @@ func message(err error) string {
 func TestCoreTabUnloadUnloadsAHiddenTabThatRecentAndTheRegionsProtect(t *testing.T) {
 	h := newSaver()
 	h.regions = func(_ string, answer func([]string, error)) { answer([]string{"media", "capture", "form"}, nil) }
-	h.saver.Start()
+	h.saver.Classify()
 	h.observe(t, []string{"a"}, "a", "x")
 	h.observe(t, []string{"x"}, "a", "x")
 	equal(t, h.reasons(t, "a"), []string{"recent"})
@@ -489,7 +489,7 @@ func TestCoreTabUnloadUnloadsAHiddenTabThatRecentAndTheRegionsProtect(t *testing
 
 func TestCoreTabUnloadRefusesATabThatAStandingReasonProtects(t *testing.T) {
 	h := newSaver()
-	h.saver.Start()
+	h.saver.Classify()
 	h.observe(t, []string{"x"}, "x", "k", "u-a", "g-a")
 	h.kept["k"] = true
 	h.keeps["k"] = []string{"keep:modified"}
@@ -508,7 +508,7 @@ func TestCoreTabUnloadFailsWithTheReasonsThatEndedTheAttempt(t *testing.T) {
 		h.observe(t, []string{"a"}, "a", "x")
 		answer(nil, nil)
 	}
-	h.saver.Start()
+	h.saver.Classify()
 	h.observe(t, []string{"x"}, "a", "x")
 	equal(t, message(unload(t, h, "a")), "tab a is protected: shown")
 	equal(t, h.saver.Unloaded("a"), false)
@@ -516,7 +516,7 @@ func TestCoreTabUnloadFailsWithTheReasonsThatEndedTheAttempt(t *testing.T) {
 
 func TestCoreTabKeepSetsAndClearsTheMarkOncePerChange(t *testing.T) {
 	h := newSaver()
-	h.saver.Start()
+	h.saver.Classify()
 	h.observe(t, []string{"x"}, "x", "a", "u-a", "g-a")
 	for _, on := range []bool{true, true} {
 		if err := h.saver.Keep("a", on); err != nil {
@@ -536,7 +536,7 @@ func TestCoreTabKeepSetsAndClearsTheMarkOncePerChange(t *testing.T) {
 
 func TestTheStatusListsEachTabWithItsStateReasonsAndTimes(t *testing.T) {
 	h := newSaver()
-	h.saver.Start()
+	h.saver.Classify()
 	h.observe(t, []string{"x"}, "x", "a")
 	hidden := h.now
 	pressure(t, h, "normal", 3)
@@ -560,7 +560,7 @@ func TestTheStatusListsEachTabWithItsStateReasonsAndTimes(t *testing.T) {
 func TestARefusedInteractionReadEndsTheAttemptWithAReportedFailure(t *testing.T) {
 	h := newSaver()
 	h.interact = func(_ string, answer func(error)) { answer(errors.New("document region page is gone")) }
-	h.saver.Start()
+	h.saver.Classify()
 	h.observe(t, []string{"b"}, "a", "b")
 	h.tick(120 * minute)
 	equal(t, h.saver.Unloaded("a"), false)
@@ -577,7 +577,7 @@ func TestARefusedInteractionReadEndsTheAttemptWithAReportedFailure(t *testing.T)
 
 func TestAShownUnloadedTabIsRestoringUntilItsSurfaceMountsAndAFailedRestoreIsReported(t *testing.T) {
 	h := newSaver()
-	h.saver.Start()
+	h.saver.Classify()
 	h.observe(t, []string{"b"}, "a", "b")
 	h.tick(120 * minute)
 	h.observe(t, []string{"a"}, "a", "b")
@@ -603,7 +603,7 @@ func TestAFailedCommitAfterTheTabIsMarkedReturnsItToLoaded(t *testing.T) {
 		}
 		answer(nil)
 	}
-	h.saver.Start()
+	h.saver.Classify()
 	h.observe(t, []string{"b"}, "a", "b")
 	h.tick(120 * minute)
 	equal(t, h.saver.Unloaded("a"), false)
@@ -622,7 +622,7 @@ func TestAFailedCommitOfTheStartIsShown(t *testing.T) {
 	h := newSaver()
 	h.commit = func(answer func(error)) { answer(errors.New("host.place refused the layout")) }
 	h.observe(t, []string{"x"}, "x", "a")
-	h.saver.Start()
+	h.saver.Classify()
 	equal(t, h.failures, []string{"memory saver commit: host.place refused the layout"})
 }
 
@@ -635,7 +635,7 @@ func TestTheDeclarationOfASurface(t *testing.T) {
 
 func TestASessionHistoryRefusedBeforeAnyCommitIsReported(t *testing.T) {
 	h := newSaver()
-	h.saver.Start()
+	h.saver.Classify()
 	h.saver.HistoryRefused("a", "fixture", "document region page: the web view refused the interactionState")
 	equal(t, h.saver.State("a"), "")
 	equal(t, h.named("workbench.tab.restore.failed"), []map[string]any{{"tab": "a", "plugin": "fixture", "reason": "document region page: the web view refused the interactionState"}})
@@ -644,7 +644,7 @@ func TestASessionHistoryRefusedBeforeAnyCommitIsReported(t *testing.T) {
 
 func TestARefusedSessionHistoryKeepsTheRestoreOpen(t *testing.T) {
 	h := newSaver()
-	h.saver.Start()
+	h.saver.Classify()
 	h.observe(t, []string{"b"}, "a", "b")
 	h.tick(120 * minute)
 	h.observe(t, []string{"a"}, "a", "b")
@@ -668,7 +668,7 @@ func sectioned() []workbench.MemorySurface {
 
 func TestASectionSurfaceIsObservedWithTheTabsAndListedWithKindSection(t *testing.T) {
 	h := newSaver()
-	h.saver.Start()
+	h.saver.Classify()
 	if err := h.saver.Observe(shown("a"), sectioned()); err != nil {
 		t.Fatal(err)
 	}
@@ -684,7 +684,7 @@ func TestASectionSurfaceIsObservedWithTheTabsAndListedWithKindSection(t *testing
 
 func TestTheTabCommandsRefuseASectionSurfaceID(t *testing.T) {
 	h := newSaver()
-	h.saver.Start()
+	h.saver.Classify()
 	if err := h.saver.Observe(shown(), sectioned()); err != nil {
 		t.Fatal(err)
 	}
@@ -704,7 +704,7 @@ func memoryRegistry(t *testing.T, h *saverHarness) *workbench.Registry {
 
 func TestTheMemoryCommandsAnswerWithTheCodesOfTheExposure(t *testing.T) {
 	h := newSaver()
-	h.saver.Start()
+	h.saver.Classify()
 	r := memoryRegistry(t, h)
 	h.observe(t, []string{"x"}, "x", "a")
 	var failure error
@@ -750,4 +750,20 @@ func TestTheMemoryCommandsAnswerWithTheCodesOfTheExposure(t *testing.T) {
 	if !slices.Contains(commands, "core.tab.unload") || !slices.Contains(commands, "core.tab.keep") {
 		t.Fatalf("commands %v", commands)
 	}
+}
+
+// Only a surface first seen since the last classification starts unloaded, so a surface that the setting kept loaded waits for the delay.
+func TestClassifyTakesOnlyASurfaceFirstSeenSinceTheLast(t *testing.T) {
+	h := newSaver()
+	h.enabled = false
+	h.observe(t, []string{"x"}, "x", "a")
+	h.saver.Classify()
+	equal(t, h.saver.Unloaded("a"), false)
+	h.enabled = true
+	h.saver.Classify()
+	equal(t, h.saver.Unloaded("a"), false)
+	h.observe(t, []string{"x"}, "x", "a", "b")
+	h.saver.Classify()
+	equal(t, h.saver.Unloaded("a"), false)
+	equal(t, h.saver.Unloaded("b"), true)
 }

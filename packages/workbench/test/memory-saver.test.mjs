@@ -6,7 +6,7 @@ const emitted = [];
 const actualLog = await import("../page-log.js");
 mock.module("../page-log.js", { exports: { ...actualLog, emitEvent: (level, event, fields) => emitted.push({ level, event, fields }) } });
 const { createMemorySaver } = await import("../memory-saver.js");
-const { memoryPlacement, memoryStart } = await import("../memory-placement.js");
+const { memoryPlacement } = await import("../memory-placement.js");
 
 const MINUTE = 60_000;
 // Lets the awaited steps of an attempt run; the fakes resolve in microtasks.
@@ -37,7 +37,7 @@ function harness(options = {}) {
     failed: (text) => state.failures.push(text),
     stateChanged: (tab, value) => state.states.push([tab, value]),
   });
-  if (options.start !== false) saver.start();
+  if (options.start !== false) saver.classify();
   return { saver, state };
 }
 
@@ -274,7 +274,7 @@ test("a restart with the setting on starts hidden declaring tabs unloaded with t
   });
   const on = create(true);
   on.observe(new Set(["x"]), tabs("x", "a", "u-b"));
-  on.start();
+  on.classify();
   assert.equal(on.unloaded("a"), true);
   assert.equal(on.unloaded("u-b"), false);
   assert.equal(on.unloaded("x"), false);
@@ -282,7 +282,7 @@ test("a restart with the setting on starts hidden declaring tabs unloaded with t
   assert.deepEqual(named("workbench.tab.unloaded"), []);
   const off = create(false);
   off.observe(new Set(["x"]), tabs("x", "a"));
-  off.start();
+  off.classify();
   assert.equal(off.unloaded("a"), false);
 });
 
@@ -495,32 +495,46 @@ test("the tab commands refuse a section surface id, so only the memory saver unl
   assert.throws(() => saver.tab("missing"), /unknown tab "missing"/);
 });
 
-test("a hidden section of a project opened from the library starts unloaded in the placement that first holds it", async () => {
+test("a drawn placement starts unloaded every surface that it first holds hidden", async () => {
   const { saver } = harness({ start: false });
-  const started = memoryStart(saver);
   const place = (record, candidates, shown) => memoryPlacement(record, candidates, {
     ready: Promise.resolve(), saver, start: (entries) => entries,
-    observe: (drawn, all) => {
-      saver.observe(new Set(shown), all.map(({ id, plugin, kind }) => ({ id, plugin, kind, unload: true })));
-      started(drawn, all);
-    },
+    observe: (_record, all) => saver.observe(new Set(shown), all.map(({ id, plugin, kind }) => ({ id, plugin, kind, unload: true }))),
   });
   const tree = { id: "spc-aaaaaa/left/probe.tree", plugin: "fixture", kind: "section" };
   const marks = { id: "spc-aaaaaa/left/probe.marks", plugin: "fixture", kind: "section" };
   const tab = { id: "a", plugin: "fixture", kind: "tab" };
-  // The library draws no surface, so the start waits.
+  // The library draws no surface.
   assert.deepEqual((await place({ drawn: true, surfaces: [] }, [], [])).surfaces, []);
-  // A preparation before the first draw of the plane has no complete seats, so the start waits for the drawn record.
-  await place({ drawn: false, surfaces: [] }, [tab], [tab.id]);
-  assert.equal(saver.state(marks.id), null);
+  // A preparation before the draw of the plane has no complete seats, so it classifies nothing.
+  await place({ drawn: false, surfaces: [] }, [tab, marks], [tab.id]);
+  assert.equal(saver.state(marks.id), "loaded");
   // The first drawn record of the project classifies its hidden section, so the placement never holds it.
   const { surfaces } = await place({ drawn: true, surfaces: [] }, [tab, tree, marks], [tab.id, tree.id]);
   assert.deepEqual(surfaces.map(({ id }) => id), [tab.id, tree.id]);
   assert.equal(saver.state(marks.id), "unloaded");
   assert.equal(saver.state(tree.id), "loaded");
-  // The start runs once: a section that a later set shows hidden mounts, and the delay unloads it.
+  // A section that a set linked later shows hidden has never been seen either, so it starts the same way.
   const later = { id: "spc-aaaaaa/left/probe.later", plugin: "fixture", kind: "section" };
   const next = await place({ drawn: true, surfaces: [] }, [tab, tree, marks, later], [tab.id, tree.id]);
-  assert.deepEqual(next.surfaces.map(({ id }) => id), [tab.id, tree.id, later.id]);
-  assert.equal(saver.state(later.id), "loaded");
+  assert.deepEqual(next.surfaces.map(({ id }) => id), [tab.id, tree.id]);
+  assert.equal(saver.state(later.id), "unloaded");
+  // A surface that lost its show stays until the delay: it is no longer first seen.
+  const hidden = await place({ drawn: true, surfaces: [] }, [tab, tree, marks, later], [tab.id]);
+  assert.deepEqual(hidden.surfaces.map(({ id }) => id), [tab.id, tree.id]);
+  assert.equal(saver.state(tree.id), "loaded");
+});
+
+test("a surface first seen while the setting is off waits for the delay after the setting turns on", () => {
+  const { saver, state } = harness({ start: false, enabled: false });
+  saver.observe(new Set(["x"]), tabs("x", "a"));
+  saver.classify();
+  assert.equal(saver.state("a"), "loaded");
+  state.enabled = true;
+  saver.classify();
+  assert.equal(saver.state("a"), "loaded");
+  saver.observe(new Set(["x"]), tabs("x", "a", "b"));
+  saver.classify();
+  assert.equal(saver.state("a"), "loaded");
+  assert.equal(saver.state("b"), "unloaded");
 });

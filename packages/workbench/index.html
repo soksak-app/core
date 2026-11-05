@@ -52,7 +52,7 @@ import {
 import { cancelPrepared, latest, onCommit, onRun, placeCompositorRecord, publish, publishAhead } from "./compositor.js";
 import { authorizeSurface, disposeSurfacesExcept, mountedSurface, onMountedChange, onSurfaceMounted, placeSurfaces, surfaceForTab, surfacePlacementsForHost, waitSurfaceCompositionDeclared } from "./surface-modules.js";
 import { prepareRetainedSurface, releaseRetainedSurfaceSlots } from "./retained-surface-mounts.js";
-import { memoryPlacement, memoryStart } from "./memory-placement.js";
+import { memoryPlacement } from "./memory-placement.js";
 import { keyboardOwed, keyboardPlaced } from "./keyboard.js";
 import { createBarTabs } from "./bar-tabs.js";
 import { prepareSourceOriginIngress, startSourceOriginIngress } from "./source-origins.js";
@@ -265,7 +265,6 @@ const memorySaver = createMemorySaver({
   stateChanged: reportTabState,
 });
 let memoryObserved = false;
-const startMemory = memoryStart(memorySaver);
 let resolveMemoryPlacementReady;
 let rejectMemoryPlacementReady;
 const memoryPlacementReady = new Promise((resolve, reject) => {
@@ -302,7 +301,6 @@ function observeMemory(record, all) {
     .map((surface) => surface.id)),
     all.map((surface) => ({ id: surface.id, plugin: surface.plugin, kind: surfaceKindOf(surface.surface).kind,
       unload: Boolean(surface.surface.unload) })));
-  startMemory(record, all);
 }
 
 /**
