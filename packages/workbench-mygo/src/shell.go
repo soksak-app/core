@@ -293,6 +293,8 @@ type Shell struct {
 	tabsNamed int
 	// renaming is the rename of a project or a space in progress.
 	renaming *rename
+	// doublePressed is the tab whose second press of a double click has not been released.
+	doublePressed renameTarget
 	// dragging is the drag of a tab in progress.
 	dragging *tabDrag
 	// workBanner is the height of the error line over the row of the spaces in the last drawing.

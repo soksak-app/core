@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+
+	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
 // renameRead is the status core.rename.
@@ -267,5 +269,64 @@ func TestAProjectTabDraggedToAnotherMovesItsProject(t *testing.T) {
 	f.settle()
 	if got := status[map[string]any](t, f, "core.project"); got["id"] != alpha || f.host.projects[0]["id"] != beta {
 		t.Fatalf("the click left %v active over %v", got["id"], f.host.projects[0]["id"])
+	}
+}
+
+// A double click reads as the same pointer sequence as on a page: its release lands on the tab, which the rename replaces after it.
+func TestADoubleClickEndsItsPointerSequenceOnTheTab(t *testing.T) {
+	f := openedShell(t)
+	id := f.host.projects[0]["id"].(string)
+	box := f.box("core.project-tab", id)
+	x, y := box.X+box.W/2, box.Y+box.H/2
+	f.tester.Advance(time.Second)
+	f.tester.Move(x, y)
+	f.tester.Frame()
+	for range 2 {
+		f.tester.Press(x, y)
+		f.tester.Frame()
+		f.tester.Release(x, y)
+		f.tester.Frame()
+	}
+	got := status[workbench.PointerStatus](t, f, "core.pointer")
+	text := func(value *string) string {
+		if value == nil {
+			return "null"
+		}
+		return *value
+	}
+	t.Logf("down %s up %s click %s", text(got.Down), text(got.Up), text(got.Click))
+	if text(got.Down) != "core.project-tab" || text(got.Up) != "core.project-tab" || text(got.Click) != "core.project-tab" {
+		t.Fatalf("the sequence is down %s, up %s, click %s", text(got.Down), text(got.Up), text(got.Click))
+	}
+}
+
+// A second press that drags away from the tab is no double click, and the click after it starts no rename.
+func TestASecondPressThatLeavesTheTabRenamesNothing(t *testing.T) {
+	f := openedShell(t)
+	id := f.host.projects[0]["id"].(string)
+	box := f.box("core.project-tab", id)
+	x, y := box.X+box.W/2, box.Y+box.H/2
+	f.tester.Advance(time.Second)
+	f.tester.Move(x, y)
+	f.tester.Frame()
+	f.tester.ClickAt(x, y)
+	f.tester.Frame()
+	f.tester.Press(x, y)
+	f.tester.Frame()
+	f.tester.Move(x+box.W*3, y+box.H*12)
+	f.tester.Frame()
+	f.tester.Release(x+box.W*3, y+box.H*12)
+	f.tester.Frame()
+	f.settle()
+	if got := status[*renameRead](t, f, "core.rename"); got != nil {
+		t.Fatalf("the rename is %+v after a press that left the tab", got)
+	}
+	f.tester.Advance(time.Second)
+	f.tester.Move(x, y)
+	f.tester.Frame()
+	f.tester.ClickAt(x, y)
+	f.settle()
+	if got := status[*renameRead](t, f, "core.rename"); got != nil {
+		t.Fatalf("the rename is %+v after one click", got)
 	}
 }
