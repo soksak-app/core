@@ -813,7 +813,6 @@ func TestHostFailureShowsInTheLibrary(t *testing.T) {
 	}
 }
 
-// drain runs the later steps until no call of the host is answering. The handlers of storedHost answer at once.
 // until runs the steps until done reports true.
 func (s steps) until(t testing.TB, done func() bool) {
 	t.Helper()
@@ -826,18 +825,6 @@ func (s steps) until(t testing.TB, done func() bool) {
 			// The state can arrive on the goroutine of a host call, without a step.
 		case <-limit:
 			t.Fatal("the steps ended before the state arrived")
-		}
-	}
-}
-
-func (s steps) drain(t testing.TB) {
-	t.Helper()
-	for {
-		select {
-		case task := <-s:
-			task()
-		case <-time.After(10 * time.Millisecond):
-			return
 		}
 	}
 }

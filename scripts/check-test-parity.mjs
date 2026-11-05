@@ -1200,6 +1200,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F562",
+    implementation: [
+      { file: "packages/workbench-mygo/tests/host_calls_test.go", symbol: "func (s steps) drain(t testing.TB)" },
+      { file: "packages/workbench-mygo/tests/host_calls_test.go", symbol: "func workingGoroutine() string" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/host_calls_test.go", id: "TestDrainWaitsForAHostCallThatRuns" },
+      { file: "packages/workbench-mygo/tests/host_calls_test.go", id: "TestDrainEndsWhileAHostCallWaitsForTheTest" },
+      { file: "packages/workbench-mygo/tests/host_calls_test.go", id: "TestDrainFollowsTheCallsOfAnAnswer" },
+    ],
+    expected: "drain ends when no step waits and every other goroutine waits for something only another goroutine or the test can end.",
+    levels: ["unit"],
+  },
+  {
     id: "F544",
     implementation: [
       { file: "native/darwin/src/input_press_context.h", symbol: "bool sp_input_press_open(void *window, int button);" },
