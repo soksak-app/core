@@ -1183,6 +1183,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F587",
+    implementation: [
+      { file: "packages/workbench-mygo/src/surfaces.go", symbol: "func (s *Shell) placed(err error) {" },
+      { file: "packages/workbench/page-layout.js", symbol: "export function createErrorWithdrawal({ document, changed }) {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestARecoveredPlacementWithdrawsItsError" },
+      { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestARecoveredPlacementLeavesAnotherError" },
+      { file: "packages/workbench-mygo/tests/errors_screen_test.go", id: "TestAnErrorIsWithdrawnOnlyByItsSource" },
+      { file: "packages/workbench/test/layout-verify-state.test.mjs", id: "a presentation after a failed presentation withdraws the error of that failure from the banner" },
+    ],
+    expected: "A placement that succeeds withdraws only the failure of the placement before it from the error banner.",
+    levels: ["unit"],
+  },
+  {
     id: "F535-3",
     implementation: [
       { file: "packages/sok/go/src/event_log.go", symbol: "func (l *EventLog) rouseForCount() {" },
