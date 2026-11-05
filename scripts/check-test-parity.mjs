@@ -1096,6 +1096,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F549",
+    implementation: [
+      { file: "native/darwin/src/observe.m", symbol: "if (!sp_event_enabled(SP_CLASS_FRAME, SP_EVENT_DEBUG)) return;" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/observe_test.m", id: "a summary that a closed gate leaves due is no refused event" },
+    ],
+    expected: "A closed gate leaves the summary due without a count of the gate, and the first summary after the gate opens holds the deliveries since the earlier summary.",
+    levels: ["unit"],
+  },
+  {
     id: "F548",
     implementation: [
       { file: "packages/workbench/core-exposure.js", symbol: "settingsScreen ??= await import(\"./settings-ui.js\");" },

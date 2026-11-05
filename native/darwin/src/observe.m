@@ -112,8 +112,6 @@ static source_record *recordRegistration(const char *source, sp_observe_mode mod
 
 // Stores the summary of a counted source: the count since the earlier summary, the total and the microseconds between them.
 static void summarize(source_record *record, uint64_t now, uint64_t before) {
-    // A closed gate keeps the count in pending, so the first summary after the gate opens holds the deliveries since the earlier one.
-    if (!sp_event_gate(SP_CLASS_FRAME, SP_EVENT_DEBUG)) return;
     unsigned long long count = atomic_exchange_explicit(&record->pending, 0, memory_order_relaxed);
     if (count == 0) return;
     char fields[192];
@@ -133,6 +131,9 @@ static void deliver(source_record *record) {
         return;
     }
     atomic_fetch_add_explicit(&record->pending, 1, memory_order_relaxed);
+    // A closed gate leaves the summary due: the count stays in pending, so the first summary after the gate opens holds the deliveries
+    // since the earlier one. Nothing is refused, so the gate counts nothing and a turn of the main run loop does not wake the writer.
+    if (!sp_event_enabled(SP_CLASS_FRAME, SP_EVENT_DEBUG)) return;
     uint64_t now = monotonicNs();
     uint64_t last = atomic_load_explicit(&record->lastSummary, memory_order_relaxed);
     if (now - last >= summaryIntervalNs && atomic_compare_exchange_strong_explicit(&record->lastSummary, &last, now, memory_order_relaxed, memory_order_relaxed)) {
@@ -152,6 +153,7 @@ unsigned long long sp_observe_count(const char *source) {
 }
 
 void sp_observe_flush(void) {
+    if (!sp_event_enabled(SP_CLASS_FRAME, SP_EVENT_DEBUG)) return;
     uint64_t now = monotonicNs();
     for (size_t index = 0; index < kMaxSources; index++) {
         source_record *record = NULL;

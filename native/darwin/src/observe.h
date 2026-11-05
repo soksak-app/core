@@ -15,7 +15,8 @@
 //                      `native.observe.counted` {source, count, total, micros} with the count since the earlier summary, so no
 //                      delivery is lost from the count and a delivery at the speed of a frame costs one atomic add and no allocation.
 //                      The first summary comes one interval after the first registration of the source. The count after the last
-//                      summary is stored by sp_observe_flush and is readable with sp_observe_count.
+//                      summary is stored by sp_observe_flush and is readable with sp_observe_count. A closed gate of the class frame
+//                      leaves the summary due, without a count of the gate, and the first summary after it opens holds the count.
 //   SP_OBSERVE_STORED  the receiver stores an event of its own for each occurrence, so the entrance only counts (sp_observe_count). It
 //                      is for a delivery whose event carries more than the delivery.
 //
