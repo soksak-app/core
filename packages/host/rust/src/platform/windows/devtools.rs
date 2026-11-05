@@ -216,6 +216,7 @@ pub(crate) fn key_call(key: &Key) -> Result<Call, Delivery> {
         event["type"] = json!("keyUp");
         return Ok(Call::new("Input.dispatchKeyEvent", event));
     }
+    // default: a key without given text types the text of the key itself
     let given = key.text.as_deref().unwrap_or("");
     let types = if !given.is_empty() {
         given

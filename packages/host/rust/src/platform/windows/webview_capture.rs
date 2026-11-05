@@ -224,6 +224,7 @@ fn stream_bytes(stream: &IStream) -> Result<Vec<u8>, String> {
     }
     let mut read = 0u32;
     unsafe { stream.Read(data.as_mut_ptr().cast(), size as u32, Some(&mut read)) }
+        // silent: ok turns the status of Read into the Result reported on the next line
         .ok()
         .map_err(|e| error("capture: stream read", e))?;
     data.truncate(read as usize);

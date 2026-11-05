@@ -64,6 +64,7 @@ unsafe extern "system" fn timer_proc(_: HWND, _: u32, timer: usize, _: u32) {
 
 /// Runs task on the UI thread after a wait, unless the returned function cancels it. Call it on the UI thread.
 pub(super) fn after_on_ui_thread(wait: Duration, task: Box<dyn FnOnce()>) -> Cancel {
+    // default: a wait longer than a timer can hold waits the longest it can
     let millis = u32::try_from(wait.as_millis()).unwrap_or(u32::MAX);
     let timer = unsafe { SetTimer(None, 0, millis, Some(timer_proc)) };
     if timer == 0 {

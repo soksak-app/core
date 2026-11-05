@@ -1195,7 +1195,12 @@ fn create(
                     (generation, raster, sequence),
                     |root, body| {
                         window.state::<WindowSidecars>().send_in_root(
-                            &window, &sidecar, &surface, root, body, &[],
+                            &window,
+                            &sidecar,
+                            &surface,
+                            root,
+                            body,
+                            &[],
                         )
                     },
                 );
