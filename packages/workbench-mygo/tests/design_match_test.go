@@ -142,3 +142,11 @@ func TestASidebarWithoutASetHasNoElement(t *testing.T) {
 		t.Fatalf("the right sidebar without a set has an element at %+v", f.box("core.sidebar", "right"))
 	}
 }
+
+// The close mark of a tab has the small text size and the tight line height of the page.
+func TestTheCloseMarkOfATabHasTheHeightOfThePage(t *testing.T) {
+	f, _, tab, _ := cardWithTwoTabs(t)
+	if closing := f.box("core.card.tab-close", tab); !designNear(closing.H, 11) {
+		t.Fatalf("the close mark is %v tall, want 11", closing.H)
+	}
+}

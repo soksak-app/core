@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F502-13: mygo card tab의 닫기 mark는 page 높이, 즉 작은 text size와 tight line height를 갖는다. framework에서 style이 정한 line height가 line의 높이가 되었기 때문이다. Red: `TestTheCloseMarkOfATabHasTheHeightOfThePage`가 그 framework 변경 전에 실패했다.
 - F502-13: mygo workbench의 element `core.sidebar`는 page처럼 sidebar의 set이고 status line 위에서 끝난다. set이 없는 sidebar에는 그 element가 없다. Red: `TestTheSidebarElementEndsAboveItsStatus`와 `TestASidebarWithoutASetHasNoElement`가 이전 drawing에서 실패했고, set과 status line을 재는 card test도 실패했다.
 - F502-13: mygo library의 결과 없음 note는 page 문단의 margin을 갖고, project를 추가하는 card와의 사이에 grid gap이 있다. Red: `TestTheNoteOfNoResultsHasTheMarginsOfAParagraph`가 이전 drawing에서 실패했다.
 - F502-13: mygo project tab의 rename field는 chrome의 line height를 가져 page input과 같은 높이이다. Red: `TestTheRenameFieldHasTheHeightOfThePage`가 이전 drawing에서 실패했다.
