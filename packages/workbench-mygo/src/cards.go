@@ -170,7 +170,11 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides 
 	strip := width - 2*m.cardHeadPad - m.cardButton - 2*m.cardHeadGap - tools
 	ui.Row(s.binder.Name(c, "core.card.header", id)).Size(width, m.headH).PaddingX(m.cardHeadPad).AlignItems(ui.Center).Gap(m.cardHeadGap).Clip().
 		Role(ui.RoleGroup).Label("core.card.header").BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.Edge).Children(func() {
-		s.drawTabList(c, id, tabs, fit)
+		if s.fullscreen == id {
+			s.drawSpaceApps(c, id)
+		} else {
+			s.drawTabList(c, id, tabs, fit)
+		}
 		if fit.Fit == "ham" {
 			ui.Spacer(c).Grow(1)
 		} else {
@@ -194,6 +198,18 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides 
 			return
 		}
 		s.headButton(c, "core.card.tools", "core.card.tools", id, cardParam{Card: id}, "카드 도구", s.headIcon("card-more", true), true)
+	})
+}
+
+// drawSpaceApps draws the button at the start of the head of a fullscreen card, which lists the tabs of the space.
+func (s *Shell) drawSpaceApps(c *ui.Context, id string) {
+	m := s.metrics
+	apps := s.binder.Press(c, "core.card.space-apps", "core.space.apps", id, cardParam{Card: id})
+	s.anchored("core.card.space-apps/"+id, apps)
+	s.dressHeadButton(apps, "스페이스 앱", false)
+	color := s.headIconColor(apps)
+	apps.Label("스페이스 앱").Children(func() {
+		ui.Icon(c, s.headIcon("card-tabs", false)).Size(m.cardIcon, m.cardIcon).TextColor(color)
 	})
 }
 
@@ -221,8 +237,8 @@ func (s *Shell) drawTabList(c *ui.Context, id string, tabs []layout.Tab, fit lay
 // stripState returns the scroll of the tab strip of a card. It centres the active tab when the tab or the place of its centre changes,
 // and otherwise leaves the strip where the wheel put it.
 func (s *Shell) stripState(id string, active *layout.Tab, left, width, whole, strip float64, fit string) *ui.ScrollState {
-	place, ok := s.strips[id]
-	if !ok {
+	place, known := s.strips[id]
+	if !known {
 		place = &stripPlace{state: &ui.ScrollState{}}
 		s.strips[id] = place
 	}
@@ -230,10 +246,26 @@ func (s *Shell) stripState(id string, active *layout.Tab, left, width, whole, st
 	if active != nil && fit == "strip" {
 		target = stripTarget{tab: active.ID, to: max(0, min(left+width/2-strip/2, whole-strip))}
 	}
-	if place.target != target {
-		place.target = target
-		place.state.X = float32(target.to)
+	to := float32(target.to)
+	switch {
+	case place.target == target:
+		if place.aim {
+			// The last frame laid out the content that this tab needs, so the glide can reach it now.
+			place.aim = false
+			place.state.ScrollTo(to, 0, ui.Smooth)
+		}
+	case known && place.target.tab != target.tab && target.tab != "":
+		// A chosen tab: the strip glides there. A new tab lengthens the content in this frame, so the glide takes its place again in the next.
+		place.state.ScrollTo(to, 0, ui.Smooth)
+		if place.aim = place.state.MaxX < to; place.aim {
+			s.options.Invalidate()
+		}
+	case place.state.Scrolling():
+		place.state.ScrollTo(to, 0, ui.Smooth)
+	default:
+		place.state.X = to
 	}
+	place.target = target
 	place.drawn = true
 	return place.state
 }

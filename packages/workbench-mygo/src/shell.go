@@ -73,8 +73,8 @@ type environmentGrid struct {
 
 // metrics are the chrome metrics that the shell draws with.
 type metrics struct {
-	chromeH, chromeRowH, spaceGap, spacePad, chromeGap, barGap, barXPad, barXOpacity, barAddText, barAddPad, textControlAtBase, chipMix, chipHoverMix, chipOnMix, projectTabMix float32
-	headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW                                                float32
+	chromeH, chromeRowH, spaceGap, spacePad, chromeGap, barGap, barXPad, barXOpacity, barAddText, barAddPad, textControlAtBase, textCaptionAtBase, chipMix, chipHoverMix, chipOnMix, projectTabMix float32
+	headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW                                                                   float32
 	// The card head (.chrome of packages/workbench/app.css).
 	cardHeadGap, cardHeadPad, cardTabsGap, cardButton, cardIcon, cardActsGap, cardActsPad, cardActHalfOpacity, tabGap, tabPadY, tabPadX, tabXPad, tabXOpacity, iconStroke, disabledOpacity, noticeDotInset, radiusSmallRatio, textSmallAtBase, textBase, chipSelMix, insetMix, tabXHoverMix float32
 	// The error line (#applicationError of packages/workbench/app.css).
@@ -104,6 +104,7 @@ func readMetrics(declared *Declarations) (metrics, error) {
 	read("bar-tab-add-text", &m.barAddText)
 	read("bar-tab-add-pad", &m.barAddPad)
 	read("text-control-at-base", &m.textControlAtBase)
+	read("text-caption-at-base", &m.textCaptionAtBase)
 	read("dbg-card-w", &m.debugW)
 	share, ok := declared.HeightMetric("set-card-max-h")
 	if !ok {

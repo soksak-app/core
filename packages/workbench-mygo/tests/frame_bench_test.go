@@ -54,6 +54,7 @@ func fullShell(b testing.TB) *shellFixture {
 		f.run("core.card.add-tab", map[string]string{"card": cards[added%len(cards)], "plugin": "browser"})
 	}
 	f.run("core.card.tools", map[string]string{"card": cards[0]})
+	f.tester.Advance(2 * time.Second) // The strips glide to their new tabs.
 	f.settle()
 	if !f.has("core.sidebar.section.name", "left/files.tree") || !f.has("core.sidebar.section.name", "left/files.bookmarks") {
 		b.Fatal("the window sidebar shows no two sections")

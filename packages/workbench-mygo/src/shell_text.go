@@ -95,6 +95,11 @@ func (s *Shell) textControl() float32 {
 	return float32(s.settings.Value("size").(float64)) * s.metrics.textControlAtBase / s.metrics.textBase
 }
 
+// textCaption is the size of a caption at the size setting.
+func (s *Shell) textCaption() float32 {
+	return float32(s.settings.Value("size").(float64)) * s.metrics.textCaptionAtBase / s.metrics.textBase
+}
+
 // textSmall is the size of the small text of a card head, the proportion of the size setting that the page states.
 func (s *Shell) textSmall() float32 {
 	return float32(s.settings.Value("size").(float64)) * s.metrics.textSmallAtBase / s.metrics.textBase
@@ -110,6 +115,8 @@ type stripPlace struct {
 	state  *ui.ScrollState
 	target stripTarget
 	drawn  bool
+	// aim is whether the next frame takes the glide to the target again.
+	aim bool
 }
 
 // stripTarget is where a strip centres its active tab.

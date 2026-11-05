@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -522,10 +523,45 @@ func TestAHeadScrollsItsStripToTheActiveTab(t *testing.T) {
 	last := "tab-000007"
 	f.run("core.tab.select", map[string]string{"tab": last})
 	f.settle()
+	f.tester.Advance(2 * time.Second)
 	f.tester.Frame()
 	tab, list, add := f.box("core.card.tab", last), f.box("core.card.tab-list", "main"), f.box("core.card.add", "main")
 	if tab.X < list.X+list.W || tab.X+tab.W > add.X {
 		t.Fatalf("the active tab %v stands outside the strip between %v and %v", tab, list, add)
+	}
+}
+
+// The strip glides to a tab that the user chose, and a change of the layout moves it at once.
+func TestTheStripGlidesOnlyToAChosenTab(t *testing.T) {
+	f := narrowCard(t, 8, strings.Repeat("long-title-", 3))
+	first, last := "tab-000000", "tab-000007"
+	f.run("core.tab.select", map[string]string{"tab": last})
+	f.settle()
+	f.tester.Advance(2 * time.Second)
+	f.tester.Frame()
+	f.run("core.tab.select", map[string]string{"tab": first})
+	f.settle()
+	f.tester.Advance(50 * time.Millisecond)
+	f.tester.Frame()
+	moving := f.box("core.card.tab", first).X
+	f.tester.Advance(2 * time.Second)
+	f.tester.Frame()
+	landed := f.box("core.card.tab", first).X
+	if moving >= landed {
+		t.Fatalf("after 50 ms the chosen tab stands at %v, and it lands at %v", moving, landed)
+	}
+	f.run("core.tab.select", map[string]string{"tab": last})
+	f.settle()
+	f.tester.Advance(2 * time.Second)
+	f.tester.Frame()
+	before := f.box("core.card.tab", last)
+	f.tester.SetSize(1000, 800)
+	f.settle()
+	after := f.box("core.card.tab", last)
+	list, add := f.box("core.card.tab-list", "main"), f.box("core.card.add", "main")
+	centre := (list.X + list.W + add.X) / 2
+	if math.Abs(float64(after.X+after.W/2-centre)) > float64(before.W) {
+		t.Fatalf("after the resize the tab %v stands off the centre %v of the strip at once", after, centre)
 	}
 }
 
