@@ -35,7 +35,12 @@ type viewRelay struct {
 
 func newViewRelay(t *testing.T) *viewRelay {
 	t.Helper()
-	r := &viewRelay{t: t, stored: &surfaceHost{}, open: map[uint64]chan map[string]any{}, answers: map[float64]map[string]any{},
+	return newViewRelayOn(t, &surfaceHost{})
+}
+
+func newViewRelayOn(t *testing.T, stored *surfaceHost) *viewRelay {
+	t.Helper()
+	r := &viewRelay{t: t, stored: stored, open: map[uint64]chan map[string]any{}, answers: map[float64]map[string]any{},
 		post: func(map[string]any) (any, error) { return nil, nil }}
 	read := func(argument json.RawMessage) map[string]any {
 		var value map[string]any

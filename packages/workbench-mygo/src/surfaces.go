@@ -354,8 +354,12 @@ func (s *Shell) forgetUnseated() {
 func (s *Shell) forgetSurfaces(tabs []string) {
 	for _, id := range tabs {
 		if view := s.surfaces.views[id]; view != nil {
+			if len(view.requests) > 0 {
+				s.processes.loss(view.plugin).PeerLost += len(view.requests)
+			}
 			view.end()
 		}
+		s.processes.forgetView(id)
 		delete(s.surfaces.held, id)
 		delete(s.surfaces.failed, id)
 		delete(s.surfaces.reports, id)

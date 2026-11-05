@@ -303,6 +303,7 @@ type Shell struct {
 	windowSidebars map[string]layout.WindowSidebar
 
 	units         map[string]*installedUnit
+	processes     pluginProcesses
 	contributions *Contributions
 	// lastDrop is the status core.drop, and notices the state of the notification center.
 	lastDrop *dropRecord
