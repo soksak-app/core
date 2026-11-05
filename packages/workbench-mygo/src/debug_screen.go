@@ -281,8 +281,8 @@ func drawDebugState(c *ui.Context, binder *Binder, st DebugStyle, state DebugSta
 	if with == "" {
 		with = without
 	}
-	compare := binder.Control(c, "core.debug.state.with", "core.debug.state.compare", "")
 	ui.Box(c).AlignSelf(ui.Start).Margin(0, 0, st.Space3, 0).Role(ui.RoleGroup).Label("비교할 상태 파일").Children(func() {
+		compare := binder.Control(c, "core.debug.state.with", "core.debug.state.compare", "")
 		if st.Plain.drawSelect(c, binder, "core.debug.state.with", "비교할 상태 파일", &with, append([]string{without}, state.Compare...)) {
 			chosen := with
 			if chosen == without {
@@ -387,8 +387,8 @@ func drawTimelineFilters(c *ui.Context, binder *Binder, st DebugStyle, timeline 
 }
 
 func drawFilterSelect(c *ui.Context, binder *Binder, st DebugStyle, member, name, label, value string, options []string) {
-	run := binder.Control(c, "core.debug.timeline."+name, "core.debug.timeline.filter", "")
 	ui.Box(c).Role(ui.RoleGroup).Label(label).Children(func() {
+		run := binder.Control(c, "core.debug.timeline."+name, "core.debug.timeline.filter", "")
 		if st.Plain.drawSelect(c, binder, "core.debug.timeline."+name, label, &value, options) {
 			run(map[string]any{member: value})
 		}
