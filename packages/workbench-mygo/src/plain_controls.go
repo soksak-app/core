@@ -24,21 +24,21 @@ type PlainControls struct {
 func (s *Shell) plainControls() PlainControls {
 	declared := s.options.Declared
 	metric := func(name string) float32 {
+		value, _ := strconv.ParseFloat(strings.TrimSuffix(declared.PlainControl(name), "px"), 32)
+		return float32(value)
+	}
+	chrome := func(name string) float32 {
 		value, _ := declared.Metric(name)
 		return float32(value)
 	}
-	color := func(name string) ui.Color {
-		text, _ := declared.ChromeText(name)
-		return ui.Hex(text)
-	}
-	width, _ := declared.ChromeText("control-text-w")
-	figures, _ := strconv.ParseFloat(strings.TrimSuffix(width, "ch"), 32)
-	return PlainControls{Background: color("control-bg"), Edge: color("control-edge"), Fg: color("control-fg"),
-		Placeholder: color("control-placeholder"), SelectFill: color("control-select-bg"), Muted: s.palette.Muted,
+	color := func(name string) ui.Color { return ui.Hex(declared.PlainControl(name)) }
+	figures, _ := strconv.ParseFloat(strings.TrimSuffix(declared.PlainControl("text-w"), "ch"), 32)
+	return PlainControls{Background: color("bg"), Edge: color("edge"), Fg: color("fg"),
+		Placeholder: color("placeholder"), SelectFill: color("select-bg"), Muted: s.palette.Muted,
 		Font: s.fontFamily(), Size: float32(s.settings.Value("size").(float64)), Figures: float32(figures),
-		EdgeW: metric("control-edge-w"), PadX: metric("control-pad-x"), PadY: metric("control-pad-y"), Radius: metric("control-r"), Height: metric("control-h"),
-		SelectH: metric("control-select-h"), SelectPad: metric("control-select-pad"), SelectRoom: metric("control-select-room"),
-		SelectRadius: metric("control-select-r"), Halo: metric("control-select-halo"), PanelGap: metric("space-1"), PanelRadius: s.radiusSmall(), PanelEdgeW: s.palette.BorderWidth,
+		EdgeW: metric("edge-w"), PadX: metric("pad-x"), PadY: metric("pad-y"), Radius: metric("r"), Height: metric("h"),
+		SelectH: metric("select-h"), SelectPad: metric("select-pad"), SelectRoom: metric("select-room"),
+		SelectRadius: metric("select-r"), Halo: metric("select-halo"), PanelGap: chrome("space-1"), PanelRadius: s.radiusSmall(), PanelEdgeW: s.palette.BorderWidth,
 		PanelFill: s.palette.Card, PanelEdge: s.palette.Edge, Arrows: s.declaredIcon("0 0 16 16", `fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"`, declared.Icons["control-select-arrows"])}
 }
 

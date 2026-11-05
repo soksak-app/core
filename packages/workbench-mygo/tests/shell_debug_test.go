@@ -533,9 +533,8 @@ func TestTheFiltersOfTheTimelineFlowAsOnThePage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	height, _ := declared.Metric("control-h")
-	if class.H != float32(height) {
-		t.Fatalf("an input is %v high, not %v", class.H, height)
+	if height := declared.PlainControl("h"); fmt.Sprintf("%gpx", class.H) != height {
+		t.Fatalf("an input is %v high, not %s", class.H, height)
 	}
 	if channel.W != level.W || layer.W <= channel.W {
 		t.Fatalf("the selects are %v, %v and %v wide", channel.W, level.W, layer.W)

@@ -956,10 +956,6 @@ func controlBackground(t *testing.T) color.RGBA {
 	if err != nil {
 		t.Fatal(err)
 	}
-	text, ok := declared.ChromeText("control-bg")
-	if !ok {
-		t.Fatal("no control-bg is declared")
-	}
-	value := ui.Hex(text)
+	value := ui.Hex(declared.PlainControl("bg"))
 	return color.RGBA{value.R, value.G, value.B, 255}
 }
