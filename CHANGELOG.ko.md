@@ -43,6 +43,7 @@
 - F502-12: `apps/mygo`와 framework adapter `packages/host/mygo`가 mygo host를 시작한다: fixture workbench로 검사한 `Framework`와 `Frontend`의 모든 method, `Workbench` 없는 시작의 오류 `no workbench is installed`, endpoint(`application` `mygo`), application log, 종료, launch와 window 표시, layout transaction 동안 window의 frame을 멈추는 notice, 빈 mygo window benchmark다. `make mygo-build`, `make mygo-build-release`, `make host-test-mygo`, CI job `macos-mygo`, root target `e2e-host-go`가 이들을 실행하고, 구조 검사는 framework adapter 셋을 비교하며, `validateEnvironment`에서 `environment.runtime`은 선택이고, staging script는 `--no-main-page`를 받으며, 시작한 Go host는 종료 signal로 끝난다. 전에는 아무도 닫지 않는 channel을 기다려 끝나지 않았다.
 - F535: 각 host와 도구의 event writer는 쓸 것이 없는 동안 잠들므로 유휴 앱에는 log의 깨움이 없다. 잠든 writer를 깨운 것은 즉시 저장되고 batch 간격이 뒤따르는 것을 모으며, native 스레드는 `sp_event_wake_fd`의 pipe로 writer를 깨운다.
 - F535-1: Rust event writer는 flush 요청에 답하는 중에 찾은 다른 flush 요청에도 답한다. 전에는 두 번째 호출자가 사실이 아닌 deadline 오류를 곧바로 받았다.
+- F535-2: event writer는 stop 뒤의 flush 요청에 답하고 그 요청 뒤의 event를 저장한다. writer가 끝난 호출자는 사실이 아닌 deadline 오류 대신 그 사실을 알리는 오류를 곧바로 받는다.
 - F533: 실패한 memory saver delay unload는 다음 deadline을 한 delay 뒤에 받으므로, 계속 실패하는 읽기나 commit이 매번 오류 표시와 함께 곧바로 다시 돌지 않는다.
 - F534: window facts 읽기는 더 이상 WebKit feature 목록을 훑지 않는다. 이 목록은 읽을 때마다 web view별로 애플리케이션 프로세스의 WebKit heap에 모든 feature를 할당했다. feature는 프로세스에서 한 번만 찾는다.
 - F532: Rust diagnostics의 update 단계가 framework port의 `quit`으로 애플리케이션을 끝내므로, `make tauriv2-build`가 다시 컴파일된다. `make hosts-check`는 새 `make host-debug-check`를 실행하며, 이 target은 두 host와 두 앱을 debug 앱의 구성으로 컴파일한다.

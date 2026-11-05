@@ -926,8 +926,7 @@ impl EventLog {
         self.sender
             .try_send(Message::Flush(done))
             .map_err(|e| format!("the event writer did not take the flush request: {e}"))?;
-        wait.recv_timeout(deadline)
-            .map_err(|_| format!("the event writer did not flush within {deadline:?}"))
+        wait_for_flush(&wait, deadline)
     }
 
     /// Writes everything that is queued and ends the writer.
@@ -1369,6 +1368,24 @@ impl PullSink for Output {
     }
 }
 
+fn answer_flush(done: SyncSender<()>) {
+    if done.send(()).is_err() {
+        eprintln!("event writer: the flush was answered after its deadline");
+    }
+}
+
+/// A closed answer channel means that the writer ended without taking the request, which is not a deadline that passed.
+fn wait_for_flush(wait: &Receiver<()>, deadline: Duration) -> Result<(), String> {
+    wait.recv_timeout(deadline).map_err(|error| match error {
+        RecvTimeoutError::Timeout => {
+            format!("the event writer did not flush within {deadline:?}")
+        }
+        RecvTimeoutError::Disconnected => {
+            "the event writer ended before it answered the flush".to_string()
+        }
+    })
+}
+
 #[allow(clippy::too_many_arguments)]
 fn write_loop(
     mut out: Output,
@@ -1501,13 +1518,16 @@ fn write_loop(
             Message::Rouse => rouser.queued.store(false, Ordering::SeqCst),
             Message::Flush(done) => {
                 queued = drain(&mut out, true);
-                if done.send(()).is_err() {
-                    eprintln!("event writer: the flush was answered after its deadline");
-                }
+                answer_flush(done);
                 continue;
             }
             Message::Stop => {
-                drain(&mut out, true);
+                // A request behind the stop gets its answer, and what is behind that request is written.
+                while let Some(request) = drain(&mut out, true) {
+                    if let Message::Flush(done) = request {
+                        answer_flush(done);
+                    }
+                }
                 return;
             }
         }

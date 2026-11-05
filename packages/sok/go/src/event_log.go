@@ -645,6 +645,14 @@ func (l *EventLog) Flush(deadline time.Duration) error {
 		return nil
 	case <-timer.C:
 		return fmt.Errorf("the event writer did not flush within %s", deadline)
+	case <-l.done:
+		// A writer answers before it ends, so the two can be ready together.
+		select {
+		case <-answer:
+			return nil
+		default:
+			return fmt.Errorf("the event writer ended before it answered the flush")
+		}
 	}
 }
 
@@ -991,7 +999,16 @@ func (l *EventLog) write(main *os.File, interval time.Duration, open *pendingEve
 		if request.flush != nil {
 			close(request.flush)
 		}
-		return request.stop
+		if !request.stop {
+			return false
+		}
+		// A request behind the stop gets its answer, and what is behind that request is written.
+		for behind := drain(); behind != nil; behind = drain() {
+			if behind.flush != nil {
+				close(behind.flush)
+			}
+		}
+		return true
 	}
 	// The writer runs in intervals and sleeps after one that wrote nothing, because a wakeup of each interval is the idle cost
 	// of the application (G2 of docs/spec/hosts.md). A writer that slept has written everything, so it writes what wakes it at
