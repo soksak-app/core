@@ -414,22 +414,30 @@ func viewShell(t *testing.T) *shellFixture {
 	return f
 }
 
-// A new tab is named by the mark of its plugin and the counter of the project, which is stored with the project.
+// A new tab is named by the mark of its plugin and the counter of its layout, which is stored with the layout.
 func TestANewTabCarriesTheMarkOfItsPlugin(t *testing.T) {
 	f := viewShell(t)
 	card := f.tabbedCards()[0]
 	f.run("core.card.add-tab", map[string]string{"card": card, "plugin": "browser"})
 	f.settle()
-	if !f.tester.HasText("www 탭 2") {
+	if !f.tester.HasText("www 탭 1") {
 		t.Fatalf("the texts are %q", f.tester.Texts())
 	}
 	f.run("core.card.split", map[string]string{"card": card, "side": "right", "plugin": "terminal"})
 	f.settle()
-	if !f.tester.HasText("◊ 탭 3") {
+	if !f.tester.HasText("◊ 탭 2") {
 		t.Fatalf("the texts are %q", f.tester.Texts())
 	}
-	if got := f.host.projects[0]["named"]; fmt.Sprint(got) != "3" {
-		t.Fatalf("the stored counter is %v", got)
+	encoded, err := json.Marshal(f.host.projects[0]["spaces"].([]any)[0].(map[string]any)["layout"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var kept struct{ Named int }
+	if err := json.Unmarshal(encoded, &kept); err != nil {
+		t.Fatal(err)
+	}
+	if kept.Named != 2 {
+		t.Fatalf("the stored counter is %d", kept.Named)
 	}
 }
 
@@ -867,5 +875,51 @@ func TestTheChromeBarHoldsTheLogoAndTheSwitchesOfThePage(t *testing.T) {
 	f.click("core.chrome.projects", "")
 	if f.has("core.chrome.projects", "") || f.has("core.chrome.balance", "") || !f.has("core.chrome.settings", "") || !f.has("core.brand", "") {
 		t.Fatal("the bar of the library holds other switches than those of the page")
+	}
+}
+
+// The number of a new tab counts the tabs of its layout and the name of a new space counts the spaces of its project, so neither moves the other.
+func TestTabsAndSpacesCountApart(t *testing.T) {
+	f, first, made := splitShell(t)
+	layoutOf := func(index int) map[string]any {
+		var layout map[string]any
+		encoded, err := json.Marshal(f.host.projects[0]["spaces"].([]any)[index].(map[string]any)["layout"])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(encoded, &layout); err != nil {
+			t.Fatal(err)
+		}
+		return layout
+	}
+	f.settle()
+	if got := fmt.Sprint(f.host.projects[0]["named"]); got != "1" {
+		t.Fatalf("a new tab moved the counter of the spaces to %s", got)
+	}
+	if got := fmt.Sprint(layoutOf(0)["named"]); got != "1" {
+		t.Fatalf("the layout counted %s tabs", got)
+	}
+	title := func(card string) string {
+		tabs := f.tabsOf(card)
+		return tabs[len(tabs)-1].(map[string]any)["title"].(string)
+	}
+	if got := title(made); !strings.HasSuffix(got, "탭 1") {
+		t.Fatalf("the first new tab of the layout is %q", got)
+	}
+	f.run("core.space.add", nil)
+	f.settle()
+	spaces := f.host.projects[0]["spaces"].([]any)
+	if got := spaces[1].(map[string]any)["title"]; got != "SPACE2" {
+		t.Fatalf("the second space is %v", got)
+	}
+	if got := fmt.Sprint(layoutOf(1)["named"]); got != "0" {
+		t.Fatalf("a new layout counted %s tabs", got)
+	}
+	f.run("core.space.activate", map[string]string{"id": spaces[0].(map[string]any)["id"].(string)})
+	f.settle()
+	f.run("core.card.add-tab", map[string]string{"card": first, "plugin": "terminal"})
+	f.settle()
+	if got := title(first); !strings.HasSuffix(got, "탭 2") {
+		t.Fatalf("the layout went on as %q", got)
 	}
 }

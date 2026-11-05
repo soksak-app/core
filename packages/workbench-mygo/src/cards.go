@@ -70,6 +70,7 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 		if s.fullscreen == "" {
 			grips = s.drawDividers(c, inset)
 		}
+		s.drawDropPreview(c, inset)
 	})
 	s.forgetStrips()
 }
@@ -190,7 +191,7 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides 
 					for _, tab := range tabs {
 						on := active != nil && tab.ID == active.ID
 						if fit.Fit == "strip" || on {
-							s.drawTab(c, tab, on, size, min(m.tabMaxW, strip)-chrome)
+							s.drawTab(c, id, tab, on, size, min(m.tabMaxW, strip)-chrome)
 						}
 					}
 				})
@@ -252,6 +253,10 @@ func (s *Shell) stripState(id string, active *layout.Tab, left, width, whole, st
 	if active != nil && fit == "strip" {
 		target = stripTarget{tab: active.ID, to: max(0, min(left+width/2-strip/2, whole-strip))}
 	}
+	place.drawn = true
+	if s.dragging != nil {
+		return place.state // The strip holds still under a press and centres its tab after the release.
+	}
 	to := float32(target.to)
 	switch {
 	case place.target == target:
@@ -272,7 +277,6 @@ func (s *Shell) stripState(id string, active *layout.Tab, left, width, whole, st
 		place.state.X = to
 	}
 	place.target = target
-	place.drawn = true
 	return place.state
 }
 
@@ -306,7 +310,7 @@ func (s *Shell) tabName(tab layout.Tab) string {
 }
 
 // drawTab draws a tab: a pill, filled only on the active tab, with its name cut to width and its close button.
-func (s *Shell) drawTab(c *ui.Context, tab layout.Tab, on bool, size, width float32) {
+func (s *Shell) drawTab(c *ui.Context, card string, tab layout.Tab, on bool, size, width float32) {
 	m := s.metrics
 	name := s.tabName(tab)
 	pill := ui.Row(c.Key("tab-" + tab.ID)).AlignItems(ui.Center).Radius(s.radiusSmall()).Shrink(0).PaddingY(m.tabPadY)
@@ -316,6 +320,9 @@ func (s *Shell) drawTab(c *ui.Context, tab layout.Tab, on bool, size, width floa
 	}
 	if on {
 		pill.Background(faded(s.palette.Fg, m.chipSelMix))
+	}
+	if s.dragging != nil && s.dragging.tab == tab.ID {
+		pill.Opacity(m.tabDraggingOpacity)
 	}
 	pill.Children(func() {
 		start := m.tabPadX
@@ -332,6 +339,7 @@ func (s *Shell) drawTab(c *ui.Context, tab layout.Tab, on bool, size, width floa
 			ui.Text(c, name).SingleLine().Ellipsis("…").FontSize(size).MaxWidth(width).TextColor(color)
 		})
 		s.tabContextMenu(button, tab.ID)
+		button.HandleInput(s.tabInput(card, tab.ID, button.Bounds()))
 		closing := s.binder.Press(c, "core.card.tab-close", "core.tab.close", tab.ID, tabParam{tab.ID})
 		closing.PaddingX(m.tabXPad).Margin(0, m.tabPadX, 0, 0).Radius(s.radiusSmall()).Label("닫기").Tooltip("닫기")
 		if closing.Hovered() {

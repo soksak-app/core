@@ -18,6 +18,7 @@ import (
 // storedLayout is a stored layout: the state of the plane with the other members as they are stored.
 type storedLayout struct {
 	State          layout.State    `json:"state"`
+	Named          int             `json:"named"`
 	FocusedID      string          `json:"focusedId"`
 	WindowSidebars json.RawMessage `json:"windowSidebars"`
 	Sidebars       json.RawMessage `json:"sidebars"`
@@ -45,7 +46,7 @@ func (s *Shell) newLayout() (json.RawMessage, error) {
 		}
 		cards = append(cards, card)
 	}
-	return json.Marshal(map[string]any{"state": map[string]any{"xs": s.grid.Xs, "ys": s.grid.Ys, "cards": cards}})
+	return json.Marshal(map[string]any{"state": map[string]any{"xs": s.grid.Xs, "ys": s.grid.Ys, "cards": cards}, "named": 0})
 }
 
 // issueTab returns a new tab id that also differs from the tabs of the card that is being made.
@@ -265,6 +266,7 @@ func (s *Shell) loadSpace(project *projectRecord) error {
 	if err := json.Unmarshal(space.Layout, &stored); err != nil {
 		return fmt.Errorf("space %s: %w", space.ID, err)
 	}
+	s.tabsNamed = stored.Named
 	gap := float64(2 * s.palette.Gap) // The gap of a theme is the half width of the passage between two cards.
 	width, height := 0.0, 0.0
 	if s.plane != nil {
@@ -367,6 +369,9 @@ func (s *Shell) keepPlane(project *projectRecord) error {
 		return err
 	}
 	kept["state"] = state
+	if kept["named"], err = json.Marshal(s.tabsNamed); err != nil {
+		return err
+	}
 	if kept["focusedId"], err = json.Marshal(s.focused); err != nil {
 		return err
 	}
@@ -679,9 +684,8 @@ func (s *Shell) newTabOf(plugin *LoadedPlugin, from *layout.Tab) (layout.Tab, er
 	if err != nil {
 		return layout.Tab{}, err
 	}
-	project := s.opened()
-	project.Named++
-	return layout.Tab{ID: s.newTabID(), Plugin: plugin.ID, Title: fmt.Sprintf("%s 탭 %d", plugin.Mark, project.Named),
+	s.tabsNamed++
+	return layout.Tab{ID: s.newTabID(), Plugin: plugin.ID, Title: fmt.Sprintf("%s 탭 %d", plugin.Mark, s.tabsNamed),
 		Rest: map[string]json.RawMessage{"origin": origin}}, nil
 }
 

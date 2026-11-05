@@ -73,8 +73,8 @@ type environmentGrid struct {
 
 // metrics are the chrome metrics that the shell draws with.
 type metrics struct {
-	actStroke, chromeActsGap, brandGap, brandLogoAtBase, chromeH, chromeRowH, spaceGap, spacePad, chromeGap, barGap, barXPad, barXOpacity, barAddText, barAddPad, textControlAtBase, textCaptionAtBase, chipMix, chipHoverMix, chipOnMix, projectTabMix float32
-	headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW                                                                                                                        float32
+	barTabRootPad, barTabRootW, dropMix, dropBorder, tabDraggingOpacity, actStroke, chromeActsGap, brandGap, brandLogoAtBase, chromeH, chromeRowH, spaceGap, spacePad, chromeGap, barGap, barXPad, barXOpacity, barAddText, barAddPad, textControlAtBase, textCaptionAtBase, chipMix, chipHoverMix, chipOnMix, projectTabMix float32
+	headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW                                                                                                                                                                                             float32
 	// The card head (.chrome of packages/workbench/app.css).
 	cardHeadGap, cardHeadPad, cardTabsGap, cardButton, cardIcon, cardActsGap, cardActsPad, cardActHalfOpacity, tabGap, tabPadY, tabPadX, tabXPad, tabXOpacity, iconStroke, disabledOpacity, noticeDotInset, radiusSmallRatio, textSmallAtBase, textBase, chipSelMix, insetMix, tabXHoverMix float32
 	// The error line (#applicationError of packages/workbench/app.css).
@@ -97,6 +97,10 @@ func readMetrics(declared *Declarations) (metrics, error) {
 		}
 		*into = float32(value)
 	}
+	read("bar-tab-root-pad", &m.barTabRootPad)
+	read("bar-tab-root-w", &m.barTabRootW)
+	read("drop-border", &m.dropBorder)
+	read("tab-dragging-opacity", &m.tabDraggingOpacity)
 	read("act-stroke", &m.actStroke)
 	read("chrome-acts-gap", &m.chromeActsGap)
 	read("brand-gap", &m.brandGap)
@@ -163,6 +167,7 @@ func readMetrics(declared *Declarations) (metrics, error) {
 		*into = float32(value)
 	}
 	mix("chip-sel-mix", &m.chipSelMix)
+	mix("drop-mix", &m.dropMix)
 	mix("chip-mix", &m.chipMix)
 	mix("chip-hover-mix", &m.chipHoverMix)
 	mix("chip-on-mix", &m.chipOnMix)
@@ -250,6 +255,12 @@ type Shell struct {
 	strips map[string]*stripPlace
 	// heads holds the fit of the head that the last frame drew for each card.
 	heads map[string]layout.HeadFit
+	// tabsNamed is how many tabs the shown layout has named; a new tab takes the next number.
+	tabsNamed int
+	// renaming is the rename of a project or a space in progress.
+	renaming *rename
+	// dragging is the drag of a tab in progress.
+	dragging *tabDrag
 	// workBanner is the height of the error line over the row of the spaces in the last drawing.
 	workBanner float32
 	// controlsWidth is the width that the window keeps for its own buttons.
