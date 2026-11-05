@@ -4692,6 +4692,25 @@
       },
       "description": "A key reached an image region. The native layer assigns the correlation identifier of the input here; `before` and `after` hold the state of the input document."
     },
+    "native.image.spare_released": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "bytes": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "bytes"
+        ]
+      },
+      "description": "An image region in the copy mode released its spare presentation copy because no frame arrived for the spare delay. bytes is the allocation size of the copy."
+    },
     "native.input.callback": {
       "layer": "native",
       "class": "input",

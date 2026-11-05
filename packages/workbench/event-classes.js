@@ -75,6 +75,7 @@ const EXACT = new Map([
   ["native.app.unhidden", "lifecycle"],
   ["native.capture.lifecycle", "lifecycle"],
   ["native.document.backforward_cleared", "lifecycle"],
+  ["native.image.spare_released", "lifecycle"],
   ["native.input.callback", "input"],
   ["native.input.key_down", "input"],
   ["native.input.query", "input"],

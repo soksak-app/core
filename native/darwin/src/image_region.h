@@ -33,6 +33,11 @@ typedef void (*sp_region_released)(void *context, uint64_t generation, uint64_t 
 // lease mode presents host-owned copies. Called once, after sp_region_create and before the first frame.
 void sp_region_lease(void *region, sp_region_released released, void *context);
 
+// Sets the time in seconds without a frame after which a region in the copy mode releases its spare presentation copy
+// (docs/spec/native-surfaces.md#image-regions). A delay that is running keeps the time it started with. Returns false and
+// changes nothing if seconds is not a finite positive number.
+bool sp_region_set_spare_delay(double seconds);
+
 // Shows an external IOSurface. token_id is the global ID of the IOSurface, nonce is 16 bytes of data for the nonce
 // comparison, width and height are the size in device pixels, and scale is the scale at which the image was made
 // (used as contentsScale). The accepted snapshot retains its generic source identity. That identity does not report

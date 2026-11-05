@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F580: An image region in the `copy` mode releases its spare copy when no frame arrives for 1 second, so a terminal card at rest no longer holds 3.36 MiB more than the frame on screen.
 - F502-21: `setDialogBackground` takes an object `{enabled}`, as every other host call does, and a row B of the framework table lists it as the call that only mygo has, so the host parity check passes. A row P lists `Frontend.Frames`.
 - F502-16: Every look of the mygo workbench takes its value from `workbench.json`, which the page reads too: the caption of a card foot, the status line of a sidebar, the text of a placeholder and of a stopped view, the scrim of a dialog with its blur, and the gap under an anchor of a layer.
 - F551: The Tauri host holds two workers of its asynchronous runtime instead of one for each processor, and an idle blocking thread ends after one second instead of ten.

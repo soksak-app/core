@@ -378,6 +378,7 @@ NATIVE_TESTS = observe_test \
   image_region_decoration_test \
   iosurface_use_count_test \
   image_region_lease_test \
+  image_region_spare_test \
   image_region_scale_test \
   ime_reference_state_test \
   ime_source_restore_test \
