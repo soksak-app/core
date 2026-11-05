@@ -283,6 +283,7 @@ func (s *Shell) loadSpace(project *projectRecord) error {
 			return fmt.Errorf("space %s: %w", space.ID, err)
 		}
 	}
+	s.keepCardFactors()
 	s.plane, s.fullscreen = plane, ""
 	// A new space stores no focus, and the stored focus of a card that left the layout names no card.
 	s.focused = stored.FocusedID
@@ -589,6 +590,25 @@ func (s *Shell) closeSpace(id string) error {
 // planeHasTab reports whether the shown plane holds the tab id.
 func (s *Shell) planeHasTab(id string) bool {
 	return s.cardOfTab(id) != ""
+}
+
+// keepCardFactors gives each held tab of the plane that leaves the screen the factor of its card.
+func (s *Shell) keepCardFactors() {
+	if s.plane == nil {
+		return
+	}
+	factors := s.text.place.CardTextSizes()
+	for _, card := range s.plane.Cards() {
+		data, err := layout.DecodeCardData(card.Data)
+		if err != nil || data == nil {
+			continue
+		}
+		for _, tab := range data.TabList() {
+			if held := s.surfaces.held[tab.ID]; held != nil {
+				held.cardFactor = factors[card.ID]
+			}
+		}
+	}
 }
 
 // cardOfTab returns the card of the shown plane that holds the tab id.

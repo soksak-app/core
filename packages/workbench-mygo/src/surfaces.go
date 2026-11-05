@@ -159,6 +159,8 @@ type heldSurface struct {
 	section *sectionStart
 	// declared tells that the host took its composition.
 	declared bool
+	// cardFactor is the factor of the card of a tab whose space left the screen, which a view that starts after that reads.
+	cardFactor float64
 }
 
 // sectionStart is the start value section of a section surface. A section of a window sidebar has no card.
