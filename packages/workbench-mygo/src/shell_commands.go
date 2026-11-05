@@ -86,6 +86,9 @@ func (s *Shell) register() {
 	s.registerFixture()
 	act(s, "core.project.activate", func(value idParam) error { s.activate(value.ID); return nil })
 	act(s, "core.project.close", func(value idParam) error { s.removeProject(value.ID); return nil })
+	s.registry.CommandLater("core.window.new", func(_ json.RawMessage, answer func(any, error)) {
+		s.newWindow(func(err error) { answer(nil, err) })
+	})
 	act(s, "core.space.activate", func(value idParam) error { return s.activateSpace(value.ID) })
 	s.registry.CommandLater("core.space.close", func(raw json.RawMessage, answer func(any, error)) {
 		value, err := params[idParam](raw)

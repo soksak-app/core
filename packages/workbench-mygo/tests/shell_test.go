@@ -792,6 +792,21 @@ func TestProjectOpenCommandOpensTheFolder(t *testing.T) {
 	}
 }
 
+// core.window.new opens a window and answers null when the host opened it.
+func TestWindowNewCommandOpensAWindow(t *testing.T) {
+	f := newShell(t, &storedHost{})
+	var answer any = "no answer"
+	var failure error
+	f.shell.Registry().RunLater("core.window.new", json.RawMessage(`{}`), func(value any, err error) { answer, failure = value, err })
+	f.settle()
+	if failure != nil || answer != nil {
+		t.Fatalf("the command answered %v with %v", answer, failure)
+	}
+	if !f.host.called("windowNew") {
+		t.Fatalf("the host received %v", f.host.calls)
+	}
+}
+
 func TestProjectOpenCommandRefusesAnEmptyRoot(t *testing.T) {
 	f := newShell(t, &storedHost{})
 	if err := f.finish("core.project.open", map[string]string{"root": " "}); err == nil || err.Error() != "Project directory is empty" {

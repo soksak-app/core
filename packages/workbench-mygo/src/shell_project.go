@@ -147,6 +147,12 @@ func (s *Shell) openRoot(root, color string, done func(project json.RawMessage, 
 	})
 }
 
+// newWindow opens a new unassigned window, as projects.newWindow does, and gives done the outcome of the host call.
+func (s *Shell) newWindow(done func(err error)) {
+	cids := s.events.BeginOperation("workbench.window.operation", map[string]any{"action": "new"})
+	s.calls.Caused(cids).Call("windowNew", nil, func(_ any, err error) { done(err) })
+}
+
 // ProjectFolderValue is the answer of projectFolder and projectCreate.
 type ProjectFolderValue struct {
 	Root     string `json:"root"`

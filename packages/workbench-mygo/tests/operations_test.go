@@ -102,12 +102,17 @@ func TestOpeningAndRemovingAProjectAreChains(t *testing.T) {
 }
 
 func TestANewWindowIsAChain(t *testing.T) {
-	f := newShell(t, &storedHost{})
-	f.followCalls()
-	f.run("core.library.window", nil)
-	f.settle()
-	if fields := f.chain(f.host, "workbench.window.operation", "windowNew"); fields["action"] != "new" {
-		t.Fatalf("the fields are %v", fields)
+	for _, command := range []string{"core.library.window", "core.window.new"} {
+		t.Run(command, func(t *testing.T) {
+			f := newShell(t, &storedHost{})
+			f.followCalls()
+			if err := f.finish(command, struct{}{}); err != nil {
+				t.Fatal(err)
+			}
+			if fields := f.chain(f.host, "workbench.window.operation", "windowNew"); fields["action"] != "new" {
+				t.Fatalf("the fields are %v", fields)
+			}
+		})
 	}
 }
 
