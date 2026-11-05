@@ -237,11 +237,20 @@ static void afterNextFrame(NSScreen *screen, void (^done)(double, const char *))
 // On macOS, WebKit enables by default the feature that limits page rendering updates to about 60 fps. One layout
 // waits for the next presentation of the app DOM (_doAfterNextPresentationUpdate), so even on a 120 Hz display the
 // layout is limited to a 60 Hz cycle and during a drag the screen lags the pointer by two or more cycles. This feature is turned on and off with the feature flag list of WebKit (_WKFeature).
+// The list does not change in a process, and each read of it allocates every feature in the WebKit heap of the process, so the
+// feature is looked up once: a status watcher reads the window facts for each frame of a region.
 static _WKFeature *near60FPSFeature(void) {
-    for (_WKFeature *feature in [WKPreferences _features]) {
-        if ([feature.key isEqualToString:@"PreferPageRenderingUpdatesNear60FPSEnabled"]) return feature;
-    }
-    return nil;
+    static _WKFeature *near60;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        for (_WKFeature *feature in [WKPreferences _features]) {
+            if ([feature.key isEqualToString:@"PreferPageRenderingUpdatesNear60FPSEnabled"]) {
+                near60 = [feature retain];
+                break;
+            }
+        }
+    });
+    return near60;
 }
 
 bool surfaceLayoutRenderAtDisplayRate(void *handle) {
