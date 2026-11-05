@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F502-23: `core.project.close` and `core.space.add` of the mygo workbench answer what `exposure.json` declares, and its library draws the project search that `core.library.search.focus` gives the focus to.
 - F502-23: The mygo workbench runs `core.window.new`, which opens a new unassigned window as `core.library.window` does.
 - F502-23: `host.window` reports `pageProcess` as null on a host without a main page, as its specification says, and the memory sampler reads no page process for that window.
 - F502-23: `host.window` of the mygo host counts the frames and the command buffers of its workbench and reports whether the window settled after its last frame, and `host.frame.record` and `host.frame.commit` write each frame and each commit outside a frame to the class `frame`.

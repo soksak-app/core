@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F502-23: mygo workbench 의 `core.project.close` 와 `core.space.add` 는 `exposure.json` 이 선언한 값을 답한다. library 에는 프로젝트 검색이 그려지고, `core.library.search.focus` 가 이 검색에 focus 를 준다.
 - F502-23: mygo workbench 가 `core.window.new` 를 실행한다. 이 command 는 `core.library.window` 처럼 프로젝트가 없는 새 창을 연다.
 - F502-23: main page 가 없는 host 의 `host.window` 는 specification 대로 `pageProcess` 를 null 로 보고하고, memory sampler 는 그 창의 page process 를 읽지 않는다.
 - F502-23: mygo host 의 `host.window` 는 workbench 의 frame 과 command buffer 를 세고, 마지막 frame 뒤에 창이 settle 했는지 보고한다. `host.frame.record` 와 `host.frame.commit` 은 각 frame 과 frame 밖의 각 commit 을 class `frame` 에 기록한다.

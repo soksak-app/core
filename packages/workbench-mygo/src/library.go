@@ -20,6 +20,10 @@ type libraryState struct {
 	revealUpdates bool
 	formMode      string // create, open, or "" while the form is closed.
 	name, parent  string
+	// search and pluginSearch hold the fields of the searches between frames, and frame is the context of the last frame of the
+	// library, in which core.library.search.focus asks for the focus.
+	search, pluginSearch ui.Handle
+	frame                *ui.Context
 }
 
 func newLibraryState() libraryState { return libraryState{page: "projects", order: "saved"} }
@@ -67,6 +71,21 @@ func (s *Shell) registerLibrary() {
 		Query string `json:"query"`
 	}) error {
 		s.library.query = value.Query
+		s.options.Invalidate()
+		return nil
+	})
+	act(s, "core.library.search.focus", func(struct{}) error {
+		if !s.browsing && s.opened() != nil {
+			return fmt.Errorf("the library is not shown")
+		}
+		switch s.library.page {
+		case "projects":
+			s.library.search.Focus(s.library.frame)
+		case pluginsPage:
+			s.library.pluginSearch.Focus(s.library.frame)
+		default:
+			return fmt.Errorf("unknown library page %q", s.library.page)
+		}
 		s.options.Invalidate()
 		return nil
 	})
@@ -189,6 +208,7 @@ func (s *Shell) submitForm() error {
 
 // drawLibrary draws the library screen.
 func (s *Shell) drawLibrary(c *ui.Context, width, height float32) {
+	s.library.frame = c
 	ui.Column(c).Size(width, height).Padding(s.chromeHeight()).Gap(s.metrics.tabsPad * 3).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Gap(s.metrics.tabsGap).Children(func() {
 			for _, page := range []struct{ id, label string }{{"projects", "프로젝트"}, {"plugins", "플러그인"}} {
@@ -196,6 +216,14 @@ func (s *Shell) drawLibrary(c *ui.Context, width, height float32) {
 					s.library.page == page.id)
 			}
 			ui.Spacer(c).Grow(1)
+			if s.library.page != pluginsPage {
+				search := s.binder.Control(c, "core.library.search", "core.library.search", "")
+				query := s.library.query
+				ui.TextInput(c, &query).Bind(&s.library.search).Label("프로젝트 검색").Placeholder("프로젝트 검색").Width(s.metrics.librarySearchW)
+				if query != s.library.query {
+					search(map[string]any{"query": query})
+				}
+			}
 			s.barText(c, s.binder.Press(c, "core.library.add", "core.library.form.open", "", map[string]string{"mode": "create"}), "＋ 프로젝트 만들기", false)
 		})
 		DrawErrorBanner(c, s.errors)

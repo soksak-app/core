@@ -469,10 +469,37 @@ func (f *shellFixture) run(name string, params any) {
 	if err != nil {
 		f.t.Fatal(err)
 	}
-	if _, err := f.shell.Registry().Run(name, raw); err != nil {
+	var failure error
+	f.shell.Registry().RunLater(name, raw, func(_ any, err error) { failure = err })
+	f.settle()
+	if failure != nil {
+		f.t.Fatal(failure)
+	}
+}
+
+// answerText runs a command as the endpoint runs it and returns its answer as JSON.
+func (f *shellFixture) answerText(name string, params any) string {
+	f.t.Helper()
+	raw, err := json.Marshal(params)
+	if err != nil {
 		f.t.Fatal(err)
 	}
+	answered := false
+	var value any
+	var failure error
+	f.shell.Registry().RunLater(name, raw, func(answer any, err error) { answered, value, failure = true, answer, err })
 	f.settle()
+	if !answered {
+		f.t.Fatalf("%s did not answer", name)
+	}
+	if failure != nil {
+		f.t.Fatalf("%s failed: %v", name, failure)
+	}
+	text, err := json.Marshal(value)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	return string(text)
 }
 
 // audit fails the test when the frame has an interactive element without a command or an element name.

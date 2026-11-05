@@ -528,26 +528,26 @@ func (s *Shell) activateSpace(id string) error {
 }
 
 // addSpace adds a space with a new layout and shows it.
-func (s *Shell) addSpace() error {
+func (s *Shell) addSpace() (layout.Space, error) {
 	project := s.opened()
 	if project == nil {
-		return fmt.Errorf("no project is shown")
+		return layout.Space{}, fmt.Errorf("no project is shown")
 	}
 	first, err := s.newLayout()
 	if err != nil {
-		return err
+		return layout.Space{}, err
 	}
 	if err := s.keepPlane(project); err != nil {
-		return err
+		return layout.Space{}, err
 	}
-	layout.AppendSpace(&project.Project, s.newSpaceID(), first)
+	space := layout.AppendSpace(&project.Project, s.newSpaceID(), first)
 	if err := s.loadSpace(project); err != nil {
-		return err
+		return layout.Space{}, err
 	}
 	s.storeSpaces(project)
 	s.tabsSettled()
 	s.options.Invalidate()
-	return nil
+	return space, nil
 }
 
 // closeSpace closes the space id. The only space of a project does not close.

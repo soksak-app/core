@@ -81,6 +81,8 @@ type metrics struct {
 	errorPadY, errorPadX, errorBorder float32
 	// debugW is the width of the debug view, and debugH its largest share of the window height.
 	debugW, debugH float32
+	// librarySearchW is the width of the search of the library (.library-search of packages/workbench/library.css).
+	librarySearchW float32
 	// The grip of a divider, the dots of a folded side and the lines of the boundaries (.sp-divider, .card-sidebar__grip and .sp-rule of
 	// packages/workbench/app.css).
 	gripThickness, gripLength, gripMix, gripDot, gripDotSpacing, lineCrossingMix float32
@@ -127,6 +129,7 @@ func readMetrics(declared *Declarations) (metrics, error) {
 	read("act-h", &m.actH)
 	read("act-icon", &m.actIcon)
 	read("tabs-gap", &m.tabsGap)
+	read("library-search-w", &m.librarySearchW)
 	read("tabs-pad", &m.tabsPad)
 	read("bar-tab-gap", &m.barTabGap)
 	read("bar-tab-max-w", &m.barTabMaxW)
