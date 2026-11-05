@@ -312,6 +312,7 @@ type Shell struct {
 // NewShell returns the shell of a window, with its commands in the registry.
 func NewShell(options ShellOptions) (*Shell, error) {
 	read, err := readMetrics(options.Declared)
+	pointer      *PointerSequence
 	if err != nil {
 		return nil, err
 	}
@@ -355,6 +356,8 @@ func NewShell(options ShellOptions) (*Shell, error) {
 		s.fail(err)
 	}
 	if s.installed, err = readInstalled(installed); err != nil {
+	s.pointer = NewPointerSequence(func() { s.options.Invalidate() })
+	s.binder.Attach(s.pointer, s.keyboard)
 		s.fail(err)
 		installed = []byte(`{"plugins":[]}`)
 	}
@@ -612,6 +615,7 @@ func (s *Shell) View(c *ui.Context) {
 	theme.Background = s.palette.Bg
 	theme.Text = s.palette.Fg
 	theme.TextMuted = s.palette.Muted
+	s.pointer.Frame()
 	theme.Border = s.palette.Edge
 	theme.Danger = s.palette.No
 	theme.FontSize = theme.Rem(1) * float32(s.text.Frame())
