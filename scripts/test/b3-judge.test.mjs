@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { GOALS_FILE, judgeSession, readGoals, readSession } from "../b3-judge.mjs";
+import { GOALS_FILE, judgeSession, readGoals, readSession, runConditionFailures, targetConditionFailures } from "../b3-judge.mjs";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const FIXTURES = join(ROOT, "scripts", "test", "fixtures", "b3");
@@ -180,7 +180,7 @@ function sessionMeeting(goals, path) {
           display: { refreshRate: goals.conditions.refreshRate, backingScale: goals.conditions.backingScale }, end: { loadAverage: [1, 1, 1] },
           conditions: Object.fromEntries(goals.values.filter((value) => value.scenario === scenario).map((value) => [value.target, {
             refreshRate: goals.conditions.refreshRate, backingScale: goals.conditions.backingScale, traceState: false, logPolicy: { lifecycle: "error", input: "error", call: "error", io: "error", frame: "error" },
-            window: goals.conditions.scenarioWindows[scenario] ?? goals.conditions.window,
+            window: goals.conditions.scenarioWindows[scenario] ?? goals.conditions.window, occluded: goals.conditions.occludedScenarios.includes(scenario),
           }])),
         }));
       }
@@ -210,4 +210,38 @@ test("make check-b3 judges a session folder against docs/spec/performance-goals.
   assert.match(failed.stdout, /^failed G8-S1-pointer-move-p90 mygo: median 8\.34, at most 8\.33 ms$/m);
   assert.match(failed.stdout, /^failed G4-S7-term-view mygo: runs (passed )*failed( passed)*, equals passed$/m);
   assert.match(failed.stdout, new RegExp(`^failed session ${path}: 2 failures$`, "m"));
+});
+
+test("a target of S9 reports a covered window and a target of any other scenario a window that is not covered", () => {
+  const goals = readGoals(readFileSync(GOALS_FILE, "utf8"), "performance-goals.json");
+  const conditions = (scenario, occluded) => ({
+    refreshRate: goals.conditions.refreshRate, backingScale: goals.conditions.backingScale,
+    window: goals.conditions.scenarioWindows[scenario] ?? goals.conditions.window, ...(occluded === undefined ? {} : { occluded }),
+  });
+  assert.deepEqual(targetConditionFailures(goals, "S9", conditions("S9", true)), []);
+  assert.deepEqual(targetConditionFailures(goals, "S5", conditions("S5", false)), []);
+  assert.deepEqual(targetConditionFailures(goals, "S5", conditions("S5", true)), ["the window reports occluded true, expected false"]);
+  assert.deepEqual(targetConditionFailures(goals, "S9", conditions("S9", false)), ["the window reports occluded false, expected true"]);
+  assert.deepEqual(targetConditionFailures(goals, "S8", conditions("S8")), ["the window reports occluded undefined, expected false"]);
+});
+
+test("the judge refuses a session whose run records a covered window", () => {
+  const goals = readGoals(readFileSync(GOALS_FILE, "utf8"), "performance-goals.json");
+  const record = {
+    scenario: "S5", start: { loadAverage: [1, 1, 1], swap: { usedBytes: 0, totalBytes: 1 << 30 }, fseventsdCores: 0 },
+    display: { refreshRate: goals.conditions.refreshRate, backingScale: goals.conditions.backingScale }, end: { loadAverage: [1, 1, 1] },
+    conditions: { "make benchmark-view-drag TRACE=0": {
+      refreshRate: goals.conditions.refreshRate, backingScale: goals.conditions.backingScale, window: goals.conditions.window, occluded: true,
+    } },
+  };
+  assert.deepEqual(runConditionFailures(goals, record), ["make benchmark-view-drag TRACE=0: the window reports occluded true, expected false"]);
+});
+
+test("the goals name the scenarios whose window is covered, each of them a scenario of a value", () => {
+  const goals = JSON.parse(readFileSync(GOALS_FILE, "utf8"));
+  assert.deepEqual(goals.conditions.occludedScenarios, ["S9"]);
+  const changed = (change) => { const copy = structuredClone(goals); change(copy); return JSON.stringify(copy); };
+  assert.throws(() => readGoals(changed((copy) => { delete copy.conditions.occludedScenarios; }), "goals.json"), /holds the conditions/);
+  assert.throws(() => readGoals(changed((copy) => { copy.conditions.occludedScenarios = "S9"; }), "goals.json"), /holds the condition occludedScenarios "S9", expected an array/);
+  assert.throws(() => readGoals(changed((copy) => { copy.conditions.occludedScenarios = ["S99"]; }), "goals.json"), /names S99 as covered, which no value names/);
 });

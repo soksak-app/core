@@ -15,7 +15,8 @@
         "width": 760,
         "height": 614
       }
-    }
+    },
+    "occludedScenarios": ["S9"]
   },
   "values": [
     {

@@ -1218,7 +1218,7 @@ export function usageOutput({ options, measurement, gesture, faultLines }) {
   } else {
     measurements = usageMeasurements({ app, marks: { before: before.windows, after: after.windows }, faultLines, gesture: null });
   }
-  const conditions = b3Conditions({ windows: before.windows, performance: traceSettings(options.trace)["diagnostics.performance"], policy: before.policy });
+  const conditions = b3Conditions({ windows: before.windows.map((window, index) => ({ ...window, occluded: after.windows[index].occluded })), performance: traceSettings(options.trace)["diagnostics.performance"], policy: before.policy });
   return { measurements, conditions };
 }
 

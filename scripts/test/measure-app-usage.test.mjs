@@ -1017,7 +1017,7 @@ test("a pointer output holds the keys of one trace state: the cpu and footprint 
   assert.deepEqual(Object.keys(records.measurements), B3_MEASUREMENTS["frame-records"]);
   assert.deepEqual(records, {
     measurements: { pointerMoveP90Ms: 6 },
-    conditions: { refreshRate: 120, backingScale: 2, traceState: false, logPolicy: POLICY, window: { width: 1200, height: 760 } },
+    conditions: { refreshRate: 120, backingScale: 2, traceState: false, logPolicy: POLICY, window: { width: 1200, height: 760 }, occluded: false },
   });
   assert.throws(() => usageOutput({ options: { trace: "frame-records", step: "pointer" }, measurement, gesture: null }),
     /the pointer output under the trace state frame-records is pointerMoveP90Ms, which a window with a main page has not/);
@@ -1038,9 +1038,11 @@ test("the B3 output of app-usage takes its conditions from b3-out with the perfo
     },
   };
   const output = usageOutput({ options: { trace: 0 }, measurement, faultLines: undefined, gesture: undefined });
-  assert.deepEqual(output.conditions, { refreshRate: 120, backingScale: 2, traceState: false, logPolicy: POLICY, window: { width: 1200, height: 760 } });
+  assert.deepEqual(output.conditions, { refreshRate: 120, backingScale: 2, traceState: false, logPolicy: POLICY, window: { width: 1200, height: 760 }, occluded: false });
   assert.equal(output.measurements.hostCpuSeconds, 0.12);
   assert.equal(usageOutput({ options: { trace: 1 }, measurement }).conditions.traceState, true);
+  const covered = { ...measurement, marks: { ...measurement.marks, after: [{ ...measurement.marks.after[0], windows: marksOfTwo().after.map((window) => ({ ...window, occluded: true })) }] } };
+  assert.equal(usageOutput({ options: { trace: 0 }, measurement: covered }).conditions.occluded, true, "the output states the last reading of occluded");
   const folder = mkdtempSync(join(tmpdir(), "b3-usage-"));
   try {
     writeB3Out(join(folder, "S1.json"), output);

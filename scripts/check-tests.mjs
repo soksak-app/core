@@ -1269,6 +1269,25 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F615",
+    implementation: [
+      { file: "scripts/b3-out.mjs", symbol: 'const CONDITIONS = ["refreshRate", "backingScale", "traceState", "logPolicy", "window", "occluded"];' },
+      { file: "scripts/b3-judge.mjs", symbol: "const covered = goals.conditions.occludedScenarios.includes(scenario);" },
+      { file: "e2e/benchmark/cases/b3-run.mjs", symbol: "async function conditionsAtEnd(conditions, failure) {" },
+    ],
+    tests: [
+      { file: "scripts/test/b3-out.test.mjs", id: "the conditions of a run state whether the first window, the window of the state, is covered" },
+      { file: "scripts/test/b3-judge.test.mjs", id: "a target of S9 reports a covered window and a target of any other scenario a window that is not covered" },
+      { file: "scripts/test/b3-judge.test.mjs", id: "the judge refuses a session whose run records a covered window" },
+      { file: "scripts/test/b3-judge.test.mjs", id: "the goals name the scenarios whose window is covered, each of them a scenario of a value" },
+      { file: "e2e/test/b3-run.test.mjs", id: "a benchmark records whether its window is covered when it writes, and a window covered at the start stays recorded" },
+      { file: "e2e/test/b3-run.test.mjs", id: "a benchmark that failed and cannot read its window keeps the conditions of its start, and its verdict is failed" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a target that reports a covered window fails its run" },
+    ],
+    expected: "Each target of B3 records whether its window is covered, and the run and the judge refuse a value of a window that its scenario does not require.",
+    levels: ["unit"],
+  },
+  {
     id: "F613",
     implementation: [
       { file: "scripts/benchmark-b3.mjs", symbol: "export async function activateWindow(configDir, { waitMs = 5000 } = {}) {" },

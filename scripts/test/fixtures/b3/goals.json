@@ -7,7 +7,8 @@
     "swapUseBelow": 0.5,
     "fseventsdCoreBelow": 0.1,
     "window": { "width": 1200, "height": 760 },
-    "scenarioWindows": { "S2": { "width": 760, "height": 614 } }
+    "scenarioWindows": { "S2": { "width": 760, "height": 614 } },
+    "occludedScenarios": []
   },
   "values": [
     { "id": "G2-S0-frames", "goal": "G2", "scenario": "S0", "target": "make measure-app-usage STATE=S0 IDLE=1 INTERVAL=240", "measurement": "frames", "unit": "count", "over": "each", "bound": { "equals": 0 } },
