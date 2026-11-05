@@ -75,6 +75,8 @@ Host는 state mutation을 직렬화하는 동안 각 immutable `host.sidecars` �
 
 실패 뒤의 프로토콜 상태는 정의되지 않으므로 호스트는 그 프로세스의 메시지를 더 읽지 않는다. 호스트는 프로세스를 실행 중인 사이드카에서 제거하고 강제 종료 신호를 보낸 뒤 끝나기를 기다린다. 그다음 실패를 로그에 쓰고, 그 프로세스에 요청을 보냈고 아직 소유 창이 있는 각 표면의 소유 창에 `sidecar-failure` 이벤트 `{sidecar, surface, reason}`을 전달한다. `reason`은 원인을 밝히는 텍스트로 `message exceeds 67108864 bytes`, `invalid message: <parser 오류>`, `unknown surface <surface>`, `unexpected close answer for <surface>`, `read: <오류>`, `output closed: <exit>` 중 하나다. `<exit>`는 [선언과 시작](#선언과-시작)의 종료 규칙과 같은 형식이다. 실패한 프로세스가 답하지 않은 요청은 답을 받지 않고, 페이지는 대신 실패를 관측한다.
 
+프로젝트를 보여 주지 않는 창에서 세션이 없는 표면으로 온 페이지 요청은 거절한다. 세션에는 프로젝트의 root가 있어야 하기 때문이다. 페이지는 프로젝트가 닫힌 뒤 잠시 살아 있으며 이 경우가 그때다. 이미지 분리처럼 호스트가 보내는 전송은 그대로 서비스에 닿고 세션을 시작하지 않는다.
+
 실패 뒤의 전송은 시작 규칙을 따른다. 재시작 한도가 멈추지 않는 한 그 사이드카에 대한 다음 요청이 새 프로세스를 시작한다. 새 프로세스에는 실패한 프로세스의 세션이 없으므로 세션을 유지하는 페이지는 세션을 다시 연다. 각 표면은 소유 창과 첫 root를 유지한다.
 
 재시작 한도는 두 transport의 사이드카에 적용된다. 표준 입출력 사이드카의 실패는 위의 것이고, 영속 서비스의 실패는 [영속 서비스](persistent-services.ko.md#서비스-전송)이 적는 것이다. 호스트는 각 실패의 시각으로 사이드카의 실패를 센다. 시각은 실패 event가 도착할 때 잡으며, timer는 돌지 않는다. 새 실패보다 300초 넘게 앞선 실패는 세지 않는다(sliding window). 네 번째 실패가 세어지면 호스트는 로그에 `error: sidecar <name>: restart limit: 4 failures within 300 s`를 쓰고, `{sidecar}`를 가진 event `host.sidecar.restart-limit`을 level `error`로 쓰며, 그 사이드카의 재시작을 멈춘다. 멈춘 사이드카에 대한 요청은 표면이 실패한 프로세스에 보냈든 나중에 열렸든 어느 표면에서 오든 프로세스를 시작하지 않는다. 호스트는 `error: sidecar <name>: restart limit: request for <surface> refused`를 쓰고, 표면의 소유 창에 `{sidecar, surface, reason: "restart limit"}`인 `sidecar-failure`를 전달하며, 전송은 `sidecar <name>: restart limit`로 실패한다. 거부된 전송의 `sidecar-failure` 전달은 표준 입출력 transport의 보고다. 영속 서비스는 [영속 서비스](persistent-services.ko.md#서비스-전송)이 적는 대로 거부된 전송을 연결 알림으로 보고한다.

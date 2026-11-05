@@ -644,7 +644,7 @@ func (s *Surfaces) SidecarSend(name, surface string, body json.RawMessage, cids 
 	if err := s.pendingImageDetachError(surface); err != nil {
 		return err
 	}
-	return s.sidecars.SendWithCids(s, name, surface, body, cids)
+	return s.sidecars.SendFromPage(s, name, surface, body, cids)
 }
 
 func (s *Surfaces) sidecarSendFrom(viewID uint64, name, surface string, body json.RawMessage, cids []string) error {

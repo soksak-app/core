@@ -621,6 +621,18 @@ func (c *Sidecars) SendWithCids(owner SidecarOwner, name, surface string, body j
 	return c.send(owner, name, surface, body, cids)
 }
 
+// SendFromPage sends a request of a page. A page outlives the close of its project for a moment, and its request then starts
+// no session: a session has the root of its project.
+func (c *Sidecars) SendFromPage(owner SidecarOwner, name, surface string, body json.RawMessage, cids []string) error {
+	c.mu.Lock()
+	_, known := c.roots[surface]
+	c.mu.Unlock()
+	if !known && owner.ProjectRoot() == "" {
+		return fmt.Errorf("sidecar %s: surface %s has no project", name, surface)
+	}
+	return c.send(owner, name, surface, body, cids)
+}
+
 // send is the send of SendWithCids.
 func (c *Sidecars) send(owner SidecarOwner, name, surface string, body json.RawMessage, cids []string) error {
 	c.mu.Lock()
@@ -708,7 +720,8 @@ func (c *Sidecars) send(owner SidecarOwner, name, surface string, body json.RawM
 	outdatedChanged = (started || !process.surfaces[surface] || c.owners[surface] == nil) && c.outdated(process)
 	process.surfaces[surface] = true
 	c.owners[surface] = owner
-	if _, ok := c.roots[surface]; !ok {
+	// A surface of a window that shows no project has no session to keep: no retain list can name it without a root.
+	if _, ok := c.roots[surface]; !ok && root != "" {
 		c.roots[surface] = root
 	}
 
@@ -1326,6 +1339,11 @@ func (c *Sidecars) retainLayoutOwners(listed map[string]string) bool {
 		delete(c.roots, surface)
 		delete(c.owners, surface)
 		delete(c.persistentSurfaces, surface)
+	}
+	for surface := range c.owners {
+		if !listed[surface] {
+			delete(c.owners, surface)
+		}
 	}
 	changed := !reflect.DeepEqual(before, c.statusLocked())
 	if changed {

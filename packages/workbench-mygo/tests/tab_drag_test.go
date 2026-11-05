@@ -1,6 +1,7 @@
 package workbench_test
 
 import (
+	"errors"
 	"math"
 	"strings"
 	"testing"
@@ -222,5 +223,39 @@ func TestTheStripWaitsForTheReleaseOfAPress(t *testing.T) {
 	f.tester.Frame()
 	if landed := f.box("core.card.tab", tab); landed.X == box.X {
 		t.Fatalf("after the release the tab stays at %v", landed.X)
+	}
+}
+
+// A drag in steps reaches its last place with the error line over the plane, which moves every element of the plane down.
+func TestATabDragUnderTheErrorLineDropsWhereItEnds(t *testing.T) {
+	f, card, tab, other := cardWithTwoTabs(t)
+	before := f.box("core.card", other).Y
+	f.host.failing = map[string]error{"presentSurfaces": errors.New("a fault")}
+	f.tester.SetSize(1160, 800)
+	if shown := f.shownErrors(); len(shown) == 0 {
+		t.Fatal("no error to show")
+	}
+	f.host.failing = nil
+	f.settle()
+	f.shownErrors()
+	target := f.box("core.card", other)
+	if target.Y <= before {
+		t.Fatalf("the plane stayed at %v, it was %v", target.Y, before)
+	}
+	box := f.box("core.card.tab", tab)
+	from, at := box.X+box.W/2, box.Y+box.H/2
+	x, y := target.X+target.W/2, target.Y+target.H/2
+	f.tester.Move(from, at)
+	f.tester.Frame()
+	f.tester.Press(from, at)
+	f.tester.Frame()
+	for step := float32(1); step <= 10; step++ {
+		f.tester.Move(from+(x-from)*step/10, at+(y-at)*step/10)
+		f.tester.Frame()
+	}
+	f.tester.Release(x, y)
+	f.settle()
+	if hasTab(f, card, tab) || !hasTab(f, other, tab) {
+		t.Fatalf("the cards hold %v and %v", f.tabsOf(card), f.tabsOf(other))
 	}
 }
