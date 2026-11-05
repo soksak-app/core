@@ -306,7 +306,7 @@ func TestTheSamplerReadsTheProcessesOfEveryWindow(t *testing.T) {
 		t.Cleanup(func() { _ = child.Process.Kill(); _ = child.Wait() })
 	}
 	host.PerformanceWindowAdd("window-a", func() (host.PerformanceWindowProcesses, error) {
-		return host.PerformanceWindowProcesses{Page: page.Process.Pid, Documents: []host.PerformanceDocumentProcess{
+		return host.PerformanceWindowProcesses{Page: &page.Process.Pid, Documents: []host.PerformanceDocumentProcess{
 			{Surface: "surface-a", Document: "page", Process: document.Process.Pid},
 			{Surface: "surface-b", Document: "page", Process: 0},
 		}}, nil
@@ -377,7 +377,7 @@ func TestTheSamplerDividesTheFootprintOfEachProcess(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = page.Process.Kill(); _ = page.Wait() })
 	host.PerformanceWindowAdd("window-a", func() (host.PerformanceWindowProcesses, error) {
-		return host.PerformanceWindowProcesses{Page: page.Process.Pid, Documents: []host.PerformanceDocumentProcess{
+		return host.PerformanceWindowProcesses{Page: &page.Process.Pid, Documents: []host.PerformanceDocumentProcess{
 			{Surface: "surface-b", Document: "page", Process: 0},
 		}}, nil
 	})

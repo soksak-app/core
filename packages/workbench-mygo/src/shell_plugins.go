@@ -54,7 +54,7 @@ type libraryStatus struct {
 // pluginPage returns what the plugin page draws.
 func (s *Shell) pluginPage() PluginPage {
 	status := s.pluginOperations.Status()
-	page := PluginPage{Hosted: true, Core: status.Core, Query: s.library.pluginQuery, Failure: s.pluginOperations.Failure(), Plugins: status.Plugins,
+	page := PluginPage{Hosted: true, Core: status.Core, Query: s.library.pluginQuery, Search: &s.library.pluginSearch, Failure: s.pluginOperations.Failure(), Plugins: status.Plugins,
 		Operation: status.Operation, Updates: status.Updates, Outdated: status.Outdated, App: s.appUpdates.Status()}
 	for _, entry := range s.contributions.Status() {
 		contribution := PluginContribution{Plugin: entry.Plugin, Point: entry.Point, Index: entry.Index, State: entry.State}

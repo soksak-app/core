@@ -103,6 +103,8 @@ type Frontend interface {
 	StartWorkbench()
 	// CallWorkbench is the workbench call channel: it runs script in the workbench.
 	CallWorkbench(script string)
+	// Frames counts the frames of the workbench of the window, or is nil on a host that does not draw them.
+	Frames() *WindowFrames
 }
 
 // framework is the framework that Prepare received.

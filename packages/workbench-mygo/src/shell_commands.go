@@ -85,7 +85,24 @@ func (s *Shell) register() {
 	s.registerProjectOpen()
 	s.registerFixture()
 	act(s, "core.project.activate", func(value idParam) error { s.activate(value.ID); return nil })
-	act(s, "core.project.close", func(value idParam) error { s.removeProject(value.ID); return nil })
+	s.registry.CommandLater("core.project.close", func(raw json.RawMessage, answer func(any, error)) {
+		value, err := params[idParam](raw)
+		if err != nil {
+			answer(nil, fmt.Errorf("core.project.close: %w", err))
+			return
+		}
+		if s.project(value.ID) == nil {
+			answer(nil, fmt.Errorf("Unknown project: %s", value.ID))
+			return
+		}
+		s.removeProjectThen(value.ID, func(removed bool, err error) {
+			if err != nil {
+				answer(nil, err)
+				return
+			}
+			answer(map[string]bool{"closed": removed}, nil)
+		})
+	})
 	act(s, "core.space.activate", func(value idParam) error { return s.activateSpace(value.ID) })
 	s.registry.CommandLater("core.space.close", func(raw json.RawMessage, answer func(any, error)) {
 		value, err := params[idParam](raw)
@@ -120,7 +137,13 @@ func (s *Shell) register() {
 		}
 		closeIt(true)
 	})
-	act(s, "core.space.add", func(struct{}) error { return s.addSpace() })
+	command(s, "core.space.add", func(struct{}) (any, error) {
+		space, err := s.addSpace()
+		if err != nil {
+			return nil, err
+		}
+		return map[string]string{"id": space.ID, "title": space.Title}, nil
+	})
 	act(s, "core.layout.balance", func(struct{}) error {
 		if err := s.requirePlane(); err != nil {
 			return err

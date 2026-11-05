@@ -108,13 +108,14 @@ func (*Framework) InstallDock(newWindow func()) error {
 // window is made in one step, so its view first runs when the frontend is complete, and its native view is in the window before any
 // surface of the window exists.
 func (f *Framework) NewWindow(options host.WindowOptions) host.Frontend {
-	frontend := &Frontend{name: options.Name, framework: f, address: options.URL}
+	frontend := &Frontend{name: options.Name, framework: f, address: options.URL, frames: host.NewWindowFrames(options.Name)}
 	mygo.RunOnMain(func() {
 		frontend.content = ui.View(func(c *ui.Context) {
 			if view := frontend.view.Load(); view != nil {
 				(*view)(c)
 			}
 		})
+		frontend.content.RecordFrames(FrameRecorder(frontend.frames))
 		frontend.window = mygo.NewWindow(mygo.WindowOptions{
 			Title: options.Title, Width: Pixels(options.Width), Height: Pixels(options.Height), Hidden: true,
 			TitleBarStyle: mygo.TitleBarHidden, BackgroundColor: "#101117", DrawWhileOccluded: true,
