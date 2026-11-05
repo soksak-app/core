@@ -306,7 +306,7 @@ func (s *Shell) sideItems(card string) ([]pickerItem, error) {
 	if err != nil {
 		return nil, err
 	}
-	rect, _ := s.plane.Rect(card) // paneCard found the card.
+	rect, _ := s.plane.Rect(card) // silent: paneCard found the card.
 	presented, err := s.presentCard(card, data, rect)
 	if err != nil {
 		return nil, err
@@ -361,7 +361,7 @@ func (s *Shell) registerCardSidebars() {
 		return layout.SetSidebar(id, data, value.Side, value.Set, sets)
 	})
 	change("core.card.sidebar.toggle", func(id string, data *layout.CardData, value cardSideParam) error {
-		rect, _ := s.plane.Rect(id) // paneCard found the card.
+		rect, _ := s.plane.Rect(id) // silent: paneCard found the card.
 		presented, err := s.presentCard(id, data, rect)
 		if err != nil {
 			return err

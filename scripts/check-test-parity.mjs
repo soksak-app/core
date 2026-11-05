@@ -1029,12 +1029,21 @@ const FEATURE_LINKS = [
   },
   {
     id: "F526-2",
-    implementation: [{ file: "native/darwin/src/webview_geometry.m", symbol: "sp_observe_local_monitor(\"webview_geometry.press_release\"" }],
+    implementation: [
+      { file: "native/darwin/src/webview_geometry.m", symbol: "sp_observe_local_monitor(\"webview_geometry.press_release\"" },
+      { file: "packages/workbench-mygo/src/declarations.go", symbol: "func (d *Declarations) ChromeNumber(name, unit string) float64 {" },
+      { file: "packages/host/rust/tests/support/platform/native_event.rs", symbol: "pub use implementation::*;" },
+    ],
     tests: [
       { file: "scripts/test/census.test.mjs", id: "the repository passes the census of its enabled rules and prints every pending rule with its item and count" },
       { file: "scripts/test/test-kinds.test.mjs", id: "every script of the e2e package that drives an application is run by a root target with the e2e prefix" },
+      { file: "scripts/test/fallbacks.test.mjs", id: "the repository states a reason for every default and discarded error in product code" },
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "platform audit finds no selectors outside platform directories" },
+      { file: "packages/workbench-mygo/tests/declarations_test.go", id: "TestAChromeNumberThatIsNotDeclaredIsRefusedWithItsName" },
+      { file: "packages/workbench-mygo/tests/declarations_test.go", id: "TestEveryChromeNameThatASourceReadsIsDeclared" },
+      { file: "packages/workbench-mygo/tests/declarations_test.go", id: "TestEveryThemeHoldsTheShapeThatItsPreviewReads" },
     ],
-    expected: "The monitor of a press release goes through the entrance of the observers, and the script of the input latency has a root target with the e2e prefix.",
+    expected: "The monitor of a press release goes through the entrance of the observers, the script of the input latency has a root target with the e2e prefix, each discarded value in product code states its reason, no test holds a condition of an operating system outside a platform directory, and a chrome value that the declaration does not hold ends a draw with its name.",
     levels: ["unit"],
   },
   {

@@ -63,7 +63,7 @@ export function attachImage(port, element, name, sidecar, options = {}) {
         queueMicrotask(() => {
           const events = heldInput;
           heldInput = [];
-          for (const event of events) for (const handler of listeners.get("input") ?? []) handler(event);
+          for (const event of events) for (const handler of listeners.get("input")) handler(event);
         });
       }
       return () => listeners.get(type).delete(fn);

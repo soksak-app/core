@@ -559,7 +559,7 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 		if err != nil {
 			return err
 		}
-		if owner, _, _ := strings.Cut(fields.Name, "."); owner != call.Plugin {
+		if owner := firstPart(fields.Name, "."); owner != call.Plugin {
 			return fmt.Errorf("view call %s %s is not a command of %s", call.Command, fields.Name, call.Plugin)
 		}
 		if held := s.surfaces.held[fields.Surface]; held == nil || held.tab.Plugin != call.Plugin {
@@ -1102,7 +1102,7 @@ func (s *Shell) runNativeCall(call viewCallEvent, view *viewState, unit *install
 	switch fields.Name {
 	case "registered":
 		kind, _ := payload["kind"].(string) // silent: an absent kind is refused below as an empty one.
-		name, _ := payload["name"].(string) // silent: as above.
+		name, _ := payload["name"].(string) // silent: an absent name is refused below as an empty one.
 		if kind == "" || name == "" {
 			return fmt.Errorf("view call %s requires a non-empty kind and name", fields.Name)
 		}

@@ -467,8 +467,11 @@ func validateDeclared(definition SettingDefinition, value any) error {
 
 // check holds what no single value tells: the widths in order, and each link to a set that exists.
 func (s *SettingsStore) check(values map[string]any) error {
+	// silent: validate checked the type of each value before this check runs.
 	least, _ := values["sidebarMinWidth"].(float64)
+	// silent: validate checked the type of each value before this check runs.
 	width, _ := values["sidebarWidth"].(float64)
+	// silent: validate checked the type of each value before this check runs.
 	most, _ := values["sidebarMaxWidth"].(float64)
 	if !(least <= width && width <= most) {
 		return errors.New("Invalid setting: sidebarMinWidth <= sidebarWidth <= sidebarMaxWidth does not hold")

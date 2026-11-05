@@ -165,12 +165,12 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides 
 	tabs := data.TabList()
 	active := data.ActiveTab()
 	size, family := s.tabText()
-	mark, _ := c.MeasureText(0, ui.Span{Text: tabCloseMark, Size: size, Font: family})
+	mark := spanWidth(c, ui.Span{Text: tabCloseMark, Size: size, Font: family})
 	chrome := 2*m.tabPadX + m.tabGap + mark + 2*m.tabXPad
 	widths := make([]float64, len(tabs))
 	activeWidth, activeLeft, left := 0.0, 0.0, 0.0
 	for i, tab := range tabs {
-		measured, _ := c.MeasureText(0, ui.Span{Text: s.tabName(tab), Size: size, Font: family})
+		measured := spanWidth(c, ui.Span{Text: s.tabName(tab), Size: size, Font: family})
 		spare := chrome
 		if s.tabNoticeText(tab.ID) != "" {
 			spare += m.noticeDot + m.tabGap
@@ -414,7 +414,7 @@ func (s *Shell) drawTab(c *ui.Context, card string, tab layout.Tab, on bool, siz
 	name := s.tabName(tab)
 	line := size * m.lineHeight
 	family := s.fontFamily()
-	mark, _ := c.MeasureText(0, ui.Span{Text: tabCloseMark, Size: size, Font: family})
+	mark := spanWidth(c, ui.Span{Text: tabCloseMark, Size: size, Font: family})
 	holder := ui.Box(c.Key("tab-" + tab.ID)).Shrink(0)
 	color := s.palette.Muted
 	if on || holder.Hovered() {

@@ -105,7 +105,7 @@ var exposeKinds = map[string]string{"status": "status", "commands": "command", "
 func declarationKey(kind, name string) string { return kind + " " + name }
 
 func ownerOf(name string) string {
-	owner, _, _ := strings.Cut(name, ".")
+	owner := firstPart(name, ".")
 	return owner
 }
 

@@ -158,7 +158,7 @@ func ruleRect(rule layout.Rule, width, height float64, stage ui.Rect, inset, pad
 // drawRules paints the boundary lines. The solid stretches lie under the cards. The rest of a line, where a card crosses it, follows the
 // fullRule setting: it lies under the cards, over them and their surfaces, or is not drawn. over tells which of the two layers this is.
 func (s *Shell) drawRules(p *ui.Painter, stage ui.Rect, inset float32, rules []layout.Rule, over bool) {
-	place, _ := s.settings.Value("fullRule").(string)
+	place, _ := s.settings.Value("fullRule").(string) // silent: the settings store checks the type of the value.
 	for _, rule := range rules {
 		color := s.palette.Rule
 		if rule.Virtual {

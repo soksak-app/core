@@ -246,7 +246,7 @@ type pluginStarter struct {
 func (s *Shell) drawPluginPlaceholder(c *ui.Context, plugin string) {
 	line, action, label := s.placeholderOf(plugin)
 	// The line is a paragraph of the page, whose margin of one line stands under it as well as the gap of the placeholder.
-	gap, _ := s.options.Declared.Metric("placeholder-gap")
+	gap := s.options.Declared.ChromeNumber("placeholder-gap", "px")
 	ui.Column(c).Fill().Gap(float32(gap) + s.textBody()).Center().Children(func() {
 		ui.Text(c, line).LineHeight(s.metrics.lineHeight).FontSize(s.textBody()).TextColor(s.palette.Muted)
 		if action != "" {

@@ -39,7 +39,7 @@ func (s *Shell) newLayout() (json.RawMessage, error) {
 			for _, item := range tabs {
 				declared := item.(map[string]any)
 				plugin, _ := declared["plugin"].(string) // silent: the environment test holds the form of these tabs.
-				title, _ := declared["title"].(string)   // silent: as above.
+				title, _ := declared["title"].(string)   // silent: the environment test holds the form of these tabs.
 				made = append(made, layout.Tab{ID: s.issueTab(made), Plugin: plugin, Title: title})
 			}
 			card["data"] = tabData(made, made[0].ID)
@@ -472,10 +472,10 @@ func (s *Shell) arrangeWindowSidebars() (bool, error) {
 		return false, nil
 	}
 	shown := func(side string) bool {
-		on, _ := s.settings.Value(side).(bool)
+		on, _ := s.settings.Value(side).(bool) // silent: the settings store checks the type of the value.
 		return on
 	}
-	width, _ := s.settings.Value("sidebarWidth").(float64)
+	width, _ := s.settings.Value("sidebarWidth").(float64) // silent: the settings store checks the type of the value.
 	changed, err := layout.ArrangeWindowSidebars(s.plane, s.sidebars.Sides(), s.windowSidebars, width, shown)
 	if _, ok := s.plane.Card(s.focused); !ok {
 		s.focusCard(s.firstCard(s.plane))

@@ -432,7 +432,7 @@ func checkInstalledPlugin(value any) error {
 		return fmt.Errorf("installed plugin %s %s (%s): %w", id, plugin["version"], plugin["package"], err)
 	}
 	if sidecars, ok := plugin["sidecars"]; ok {
-		// A plugin without dependencies has no sidecar whose facts are checked.
+		// silent: ValidateManifest checked the form, and a plugin without dependencies has no sidecar whose facts are checked.
 		dependencies, _ := manifest["dependencies"].(map[string]any)
 		if err := checkSidecarFacts(installedPluginsFile+": plugin "+id, sidecars, dependencies); err != nil {
 			return err

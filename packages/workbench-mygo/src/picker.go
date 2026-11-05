@@ -64,8 +64,7 @@ type pickerMetrics struct {
 
 func (s *Shell) readPickerMetrics() pickerMetrics {
 	metric := func(name string) float32 {
-		value, _ := s.options.Declared.Metric("picker-" + name)
-		return float32(value)
+		return float32(s.options.Declared.ChromeNumber("picker-"+name, "px"))
 	}
 	return pickerMetrics{anchorGap: metric("anchor-gap"), minW: metric("min-w"), maxW: metric("max-w"), maxH: metric("max-h"), outerPad: metric("outer-pad"), pad: metric("pad"),
 		icon: metric("icon"), iconH: metric("icon-h"), gap: metric("gap"), itemPadY: metric("item-pad-y"), headTop: metric("head-pad-top"),
@@ -189,7 +188,7 @@ func (s *Shell) openCardTools(card string) error {
 	}
 	for _, tool := range s.headTools(card) {
 		if tool.Enabled {
-			name, _, _ := strings.Cut(tool.Title, " — ")
+			name := firstPart(tool.Title, " — ")
 			items = append(items, pickerItem{Key: tool.Do, Name: name, Icon: s.headIconElements(tool.Icon), Active: tool.Pressed})
 		}
 	}
@@ -286,7 +285,7 @@ func (s *Shell) openSpaceApps(id string) error {
 		}
 	}
 	layer := s.openPicker(fmt.Sprintf("스페이스 앱 %d개", len(items)), items, func(key string) error {
-		card, tab, _ := strings.Cut(key, "/")
+		card, tab, _ := strings.Cut(key, "/") // silent: the items of this layer have keys of the form card/tab.
 		return s.showFullscreen(card, tab)
 	})
 	layer.groups, layer.anchor, layer.start = groups, anchor, true
@@ -298,7 +297,7 @@ func (s *Shell) planeMap(cards []layout.SlicedCard, own string, metrics pickerMe
 	var elements strings.Builder
 	sx, sy := pickerMapWidth/s.plane.Width(), pickerMapHeight/s.plane.Height()
 	for _, card := range cards {
-		rect, _ := s.plane.Rect(card.ID)
+		rect, _ := s.plane.Rect(card.ID) // silent: the card comes from the slices of this plane.
 		fill := "none"
 		if card.ID == own {
 			fill = "currentColor"
@@ -368,9 +367,15 @@ func (s *Shell) tabContextMenu(button ui.Element, tab string) {
 	if len(tabMenuItems(reasons)) == 0 {
 		return
 	}
-	x, y, _ := button.PointerPosition() // The right click reports the pointer, which stands in the button.
+	x, y := pointerOf(button)
 	bounds := button.Bounds()
 	s.binder.run("core.tab.menu", pointParam{Tab: tab, X: float64(bounds.X + x), Y: float64(bounds.Y + y)})
+}
+
+// pointerOf is the place of the pointer in element.
+func pointerOf(element ui.Element) (float32, float32) {
+	x, y, _ := element.PointerPosition() // silent: the third result tells that the pointer stands in the element, which a right click of it holds.
+	return x, y
 }
 
 // tabOf returns the tab id of the shown plane.
@@ -498,13 +503,11 @@ type screenStatus struct {
 
 // The background of a dialog (docs/spec/native-modals.md): black at 50% opacity over the workbench, which is blurred by 3 points.
 func (s *Shell) dialogBlur() float32 {
-	blur, _ := s.options.Declared.Metric("scrim-blur")
-	return float32(blur)
+	return float32(s.options.Declared.ChromeNumber("scrim-blur", "px"))
 }
 
 func (s *Shell) dialogScrim() ui.Color {
-	alpha, _ := s.options.Declared.Metric("scrim-alpha")
-	return ui.RGBA(0, 0, 0, float32(alpha))
+	return ui.RGBA(0, 0, 0, float32(s.options.Declared.ChromeNumber("scrim-alpha", "px")))
 }
 
 // dialogOpen tells whether a dialog of the window is open. A menu has no background.
@@ -669,7 +672,7 @@ func (s *Shell) drawPicker(c *ui.Context, width, height float32) {
 		if len(layer.groups) > 0 {
 			maxW, maxH = metrics.groupedMaxW, min(metrics.groupedMaxH, height-metrics.groupedMargin)
 		}
-		lineHeight, _ := s.options.Declared.Metric("line-height")
+		lineHeight := s.options.Declared.ChromeNumber("line-height", "px")
 		panel.Margin(metrics.anchorGap, 0, 0, 0).KeepAll().MinWidth(metrics.minW).MaxWidth(maxW).MaxHeight(maxH).Column().Padding(metrics.outerPad).LineHeight(float32(lineHeight)).
 			Background(s.palette.Card).Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.radiusMiddle()).Label(layer.title).
 			Shadow(0, metrics.shadowY, metrics.shadowBlur, 0, ui.RGBA(0, 0, 0, metrics.shadowAlpha)).Children(func() {

@@ -250,8 +250,7 @@ func callText(arguments []any) (string, bool) {
 	if err != nil {
 		return fmt.Sprintf("unserializable: %v", err), false
 	}
-	cut, _ := sok.CutText(text, callArgumentsBytes)
-	return cut, produced > 0
+	return headOf(text, callArgumentsBytes), produced > 0
 }
 
 // callCids are the correlation identifiers that a host call continues: only the send of a request to a sidecar carries them.
@@ -339,8 +338,7 @@ func boundedFields(fields map[string]any) (json.RawMessage, int, error) {
 	if produced == 0 {
 		return text, len(text), nil
 	}
-	head, _ := sok.CutText(text, eventHeadBytes)
-	stored, err := json.Marshal(map[string]any{"head": head, "truncated": true})
+	stored, err := json.Marshal(map[string]any{"head": headOf(text, eventHeadBytes), "truncated": true})
 	return stored, eventHeadBytes + 32, err
 }
 
@@ -574,4 +572,10 @@ func (e *Events) stamped(events []queuedEvent) []map[string]any {
 		out = append(out, item)
 	}
 	return out
+}
+
+// headOf is the first limit bytes of text, backed up to a rune boundary.
+func headOf[T ~string | ~[]byte](text T, limit int) string {
+	head, _ := sok.CutText(text, limit) // silent: the second result tells that the text was longer, which a head does not read.
+	return head
 }

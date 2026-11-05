@@ -23,7 +23,7 @@ func plainControlReads(t *testing.T) map[string]bool {
 	}
 	reads := map[string]bool{}
 	literal := func(call *ast.CallExpr) {
-		if len(call.Args) != 1 {
+		if len(call.Args) == 0 {
 			return
 		}
 		if argument, ok := call.Args[0].(*ast.BasicLit); ok && argument.Kind == token.STRING {
@@ -42,7 +42,7 @@ func plainControlReads(t *testing.T) map[string]bool {
 		ast.Inspect(file, func(node ast.Node) bool {
 			switch node := node.(type) {
 			case *ast.CallExpr:
-				if selector, ok := node.Fun.(*ast.SelectorExpr); ok && selector.Sel.Name == "PlainControl" {
+				if selector, ok := node.Fun.(*ast.SelectorExpr); ok && (selector.Sel.Name == "PlainControl" || selector.Sel.Name == "PlainNumber") {
 					literal(node)
 				}
 			case *ast.FuncDecl:

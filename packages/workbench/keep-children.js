@@ -9,13 +9,13 @@ const keys = new WeakMap();
 export function keepChildren(container, wanted) {
   const held = new Map([...container.children].map((child) => [keys.get(child), child]));
   const next = wanted.map(({ key, create }) => {
-    const element = held.get(key) ?? create();
+    const element = held.get(key) ?? create(); // default: a key that no element holds gets a new element.
     keys.set(element, key);
     return element;
   });
   const staying = new Set(next);
   for (const child of [...container.children]) if (!staying.has(child)) child.remove();
   next.forEach((element, index) => {
-    if (container.children[index] !== element) container.insertBefore(element, container.children[index] ?? null);
+    if (container.children[index] !== element) container.insertBefore(element, container.children[index] ?? null); // default: insertBefore with null appends at the end.
   });
 }
