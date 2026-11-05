@@ -13,7 +13,7 @@ mock.module("../host.js", { namedExports: {
 mock.module("../plugin-data.js", { namedExports: {
   configureData: () => {}, compareProjectData: () => {},
 } });
-mock.module("../settings.js", { namedExports: {
+mock.module("../settings.js", { namedExports: { projectSidebars: () => ({ sets: [], links: [] }),
   beginSettings: () => {}, selectProject: async () => {}, value: () => "tabs", flushSettings: async () => {},
 } });
 mock.module("../tab-state.js", { namedExports: {

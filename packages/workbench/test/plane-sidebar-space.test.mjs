@@ -52,7 +52,7 @@ test("a sidebar draws the section surface ids of the space of the held layout wh
   } });
   const sets = [{ id: setId, title: "Fixture", layout: "list", sections: [`${pluginId}.tree`] }];
   const actualSettings = await import("../settings.js");
-  t.mock.module("../settings.js", { exports: { ...actualSettings,
+  t.mock.module("../settings.js", { exports: { projectSidebars: () => ({ sets: [], links: [] }), ...actualSettings,
     value: (key) => (key === "sets" ? sets : actualSettings.value(key)) } });
   registerPlugin({
     id: pluginId, name: "Fixture", mark: "f", svg: "<path/>", ink: null, background: null, drop: null,

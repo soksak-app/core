@@ -4,7 +4,7 @@ import { appendSpace, closingSpace, removeSpace, renameSpace as renameSpaceOf, s
 import { forgetTabsLeft } from "./tab-reports.js";
 import { recordStoredOrigins } from "./stored-layout.js";
 import { beginOperation } from "./operations.js";
-import { beginSettings, selectProject, value, flushSettings } from "./settings.js";
+import { beginSettings, projectSidebars, selectProject, value, flushSettings } from "./settings.js";
 import { flushEvents } from "./page-log.js";
 import { windows } from "@soksak/runtime";
 import { log, retainSidecarSessions, windowSidecar } from "./host.js";
@@ -12,7 +12,7 @@ import { compareProjectData, configureData } from "./plugin-data.js";
 import { openTabStates } from "./tab-state.js";
 import { createTabSessions } from "./tab-session.js";
 import { documentRegions } from "./document-regions.js";
-import { shownSectionSurfaces, storedSurfaceKept } from "./section-surfaces.js";
+import { spaceSectionSurfaces, storedSurfaceKept } from "./section-surfaces.js";
 
 let store;
 let projects = [];
@@ -92,21 +92,21 @@ export const storedTabTaken = (id) => projects.some((project) => projectTabs(pro
 const projectTabs = (project) => new Set(spaceTabIds(project));
 
 /**
- * Returns the tabs of the layouts of all spaces of all projects as surfaces with the root of their project, and the section
- * surfaces of the shown space with the root of the active project (docs/spec/plugins.md#sections). A sidecar session of a surface
- * that is not in this list has nowhere to attach again (docs/spec/persistent-services.md).
+ * Returns what the layouts of all spaces of all projects hold, as surfaces with the root of their project: the tabs and the section
+ * surfaces of the sidebars of each space (docs/spec/plugins.md#sections). A sidecar session of a surface that is not in this list has
+ * nowhere to attach again (docs/spec/persistent-services.md).
  */
 export function layoutSurfaces() {
-  const tabs = projects.flatMap((project) => project.spaces.flatMap((space) => {
-    const cards = space.layout?.state?.cards;
-    if (!Array.isArray(cards)) throw new Error(`project ${project.id} space ${space.id} has no layout cards`);
-    // default: a seat card has null data, so it has no tabs.
-    return cards.flatMap((card) => (card.data?.tabs ?? []).map((tab) => ({ surface: tab.id, root: project.root })));
-  }));
-  const shown = active();
-  // The library shows no project, so its sidebars hold no section surface of a project.
-  if (!shown || browsing) return tabs;
-  return [...tabs, ...shownSectionSurfaces().map((surface) => ({ surface, root: shown.root }))];
+  return projects.flatMap((project) => {
+    const { sets, links } = projectSidebars(project);
+    return project.spaces.flatMap((space) => {
+      const cards = space.layout?.state?.cards;
+      if (!Array.isArray(cards)) throw new Error(`project ${project.id} space ${space.id} has no layout cards`);
+      // default: a seat card has null data, so it has no tabs.
+      const tabs = cards.flatMap((card) => (card.data?.tabs ?? []).map((tab) => tab.id));
+      return [...tabs, ...spaceSectionSurfaces(space.id, cards, sets, links)].map((surface) => ({ surface, root: project.root }));
+    });
+  });
 }
 
 /** The ids of the cards of the layouts of all spaces of all projects, which the stored section surface entries name. */

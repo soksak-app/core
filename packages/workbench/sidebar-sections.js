@@ -7,7 +7,7 @@ import { bind, mark, run } from "./commands.js";
 import { clearSlotSurface, setSlotSurface } from "./compositor.js";
 import { icon } from "./icons.js";
 import { hasSection, section } from "./registry.js";
-import { hideSectionSurface, showSectionSurface } from "./section-surfaces.js";
+import { hideSectionSurface, showSectionSurface, sectionSurfaceId } from "./section-surfaces.js";
 import { mountSurface } from "./surface-modules.js";
 
 /* Selected tab, collapsed sections and dragged section heights for each sidebar id. */
@@ -28,11 +28,7 @@ function choiceOf(sidebar) {
   return choices.get(sidebar);
 }
 
-/**
- * The surface id of a section in a sidebar of a space (docs/spec/plugins.md#sections). The sidebar ids repeat in every window
- * and the card ids in every space, so the space makes the id name one surface of the host.
- */
-export const sectionSurfaceId = (space, sidebar, sectionId) => `${space}/${sidebar}/${sectionId}`;
+export { sectionSurfaceId };
 
 /** Mounts the view of a section once; a hidden section keeps its surface, which the compositor places invisible. */
 function mount(entry) {
