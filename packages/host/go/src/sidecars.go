@@ -1341,7 +1341,7 @@ func (c *Sidecars) retainLayoutOwners(listed map[string]string) bool {
 		delete(c.persistentSurfaces, surface)
 	}
 	for surface := range c.owners {
-		if !listed[surface] {
+		if _, held := listed[surface]; !held {
 			delete(c.owners, surface)
 		}
 	}
