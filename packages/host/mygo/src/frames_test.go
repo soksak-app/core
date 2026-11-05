@@ -2,10 +2,12 @@ package adapter
 
 import (
 	"testing"
+	"unsafe"
 
 	"github.com/egoist/mygo"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
+	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
 func TestAStepRecordCarriesTheNamesOfTheEventLog(t *testing.T) {
@@ -20,4 +22,22 @@ func TestAStepRecordCarriesTheNamesOfTheEventLog(t *testing.T) {
 func TestRecordStepsEndsWhenItsStopReturns(t *testing.T) {
 	stop := (&Framework{}).RecordSteps(func(host.StepRecord) {}, func(uint64) {})
 	stop()
+}
+
+// placementPlatform takes the placement of the surface hosts.
+type placementPlatform struct{ platform.Platform }
+
+func (placementPlatform) SetSurfaceBounds(unsafe.Pointer, float64, float64, float64, float64) {}
+func (placementPlatform) SetSurfaceHiddenHandle(unsafe.Pointer, bool)                         {}
+
+func TestAPlacementStoresTheNativeViewElementsOfTheWindow(t *testing.T) {
+	f := &Frontend{frames: host.NewWindowFrames("main")}
+	f.placeSurfaces(placementPlatform{}, []mygo.NativePlacement{{View: 1}, {View: 2}})
+	if got := f.frames.NativeViews(); got != 2 {
+		t.Fatalf("after a placement of two views the window holds %d native view elements", got)
+	}
+	f.placeSurfaces(placementPlatform{}, nil)
+	if got := f.frames.NativeViews(); got != 0 {
+		t.Fatalf("after a placement of no view the window holds %d native view elements", got)
+	}
 }

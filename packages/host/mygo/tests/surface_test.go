@@ -67,4 +67,7 @@ func TestE2EANativeViewElementPlacesItsSurfaceHost(t *testing.T) {
 		mygo.RunOnMain(func() { frame = system.SurfaceFrame(surface) })
 		return frame == platform.Rect{X: 30, Y: 40, W: 200, H: 100}
 	})
+	if got := window.Frames().NativeViews(); got != 1 {
+		t.Fatalf("the window holds %d native view elements, want the 1 that it placed", got)
+	}
 }

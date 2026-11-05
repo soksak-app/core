@@ -204,6 +204,7 @@ func (s *Shell) dividerInput(divider layout.Divider, item string) func(ui.InputE
 				return false
 			}
 			s.carry(func() float64 { return s.plane.MoveBoundary(held.axis, held.line, held.base+at-held.from, true) })
+			s.dragStepped(held)
 			s.options.Invalidate()
 			return true
 		case ui.InputPointerUp:

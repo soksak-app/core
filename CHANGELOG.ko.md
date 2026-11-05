@@ -14,6 +14,8 @@
 - F571: B3 judge는 host가 어느 run에도 기록하지 않은 값을 `not measured`로 출력하고, `make app-usage`는 모든 창이 null로 보고하는 counter와 frame을 읽지 않은 idle 대기를 출력한다.
 - F457: mygo workbench의 run 시작마다 각 view에 `run-start`를 보낸다. run은 항상 settled placement로 끝나므로, drag의 release가 아무것도 옮기지 않아도 host가 run을 끝낸다.
 - F556: 문서가 `soksak://` 밖의 address를 요청하면 HWP startup window check가 실패한다. Red: owner case가 실패했다. Green: 통과한다.
+- F502-23: `diagnostics.objects`의 `framework`는 창의 마지막 placement의 native view element 수 `nativeViews`를 가진다.
+- F502-23: mygo host의 `diagnostics.drag`는 제스처를 `sp_input_pointer`로 전달하므로 드래그가 사람의 드래그처럼 divider에 닿는다. `handled`는 각 step이 들어가서 callback이 돌아올 때까지의 시간이다.
 - F502-23: mygo 호스트의 녹화 layouts에서 `requested`는 workbench가 그 트랜잭션의 frame을 요청한 시각이고 `presented`는 그 frame이 표시된 시각이다.
 - F502-23: `make host-test-mygo`가 mygo 호스트의 host contract를 실행한다. Go 언어 host library와 mygo adapter, 세 tag 조합의 Go `sok`이 대상이다. 두 Go 호스트가 함께 돌리는 Go 코드의 사례는 scope `wailsv3, mygo only`로 선언하고, main page 사례는 동작을 workbench 기준으로 쓰거나 scope `wailsv3, tauriv2 only`를 받는다.
 - F502-23: Go 호스트의 `diagnostics.gc.loop` `{on}`은 goroutine에서 `runtime.GC`를 쉬지 않고 돌리거나, 멈춘 뒤 goroutine이 끝나면 답한다.

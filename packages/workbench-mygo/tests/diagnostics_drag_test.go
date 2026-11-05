@@ -52,66 +52,60 @@ func TestADragOfNoBoundaryFailsWithItsLine(t *testing.T) {
 	}
 }
 
-func TestADragStepsTheBoundaryOnTheTicksOfTheHost(t *testing.T) {
+func TestTheRecordOfADragHoldsTheBoundaryBeforeTheDragAndAfterEachStep(t *testing.T) {
 	f, left, right := splitShell(t)
-	from := f.box("core.card", left)
-	stored := cardRowsStored(t, f)
-	raw, _ := json.Marshal(map[string]any{"axis": "x", "line": dragLine(t, f, right), "dx": -30, "dy": 0, "ms": 48, "times": 1})
-	var answer any
-	var failure error
-	answered := false
-	f.shell.Registry().Reply("diagnostics.drag", raw, nil, func(value any, err error) { answer, failure, answered = value, err, true })
+	box, _ := f.divider(left, right)
+	x, y := box.X+box.W/2, box.Y+box.H/2
+	raw, _ := json.Marshal(map[string]any{"axis": "x", "line": dragLine(t, f, right)})
+	reply := func(method string, params json.RawMessage) (any, error) {
+		t.Helper()
+		var answer any
+		var failure error
+		answered := false
+		f.shell.Registry().Reply(method, params, nil, func(value any, err error) { answer, failure, answered = value, err, true })
+		if !answered {
+			t.Fatalf("%s did not answer", method)
+		}
+		return answer, failure
+	}
+	if _, err := reply("diagnostics.drag", raw); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reply("diagnostics.drag", raw); err == nil || err.Error() != "another drag of this window is running" {
+		t.Fatalf("a second drag answered %v", err)
+	}
+	// Only a step of a held boundary counts: the move before the press holds no boundary.
+	f.tester.Move(x, y)
 	f.tester.Frame()
-	for i := 1; i <= 3; i++ {
-		if answered {
-			t.Fatalf("the drag answered before tick %d", i)
-		}
-		f.shell.Event("diagnostics-tick", nil)
-		f.tester.Frame()
-		want := from.W - float32(10*i)
-		if now := f.box("core.card", left); math.Abs(float64(now.W-want)) > 0.5 {
-			t.Fatalf("after tick %d the left card is %v wide, want %v", i, now.W, want)
-		}
-	}
-	if stored != cardRowsStored(t, f) {
-		t.Fatal("a step of the drag stored the layout before the release")
-	}
-	for range 3 {
-		f.shell.Event("diagnostics-tick", nil)
+	f.tester.Press(x, y)
+	f.tester.Frame()
+	for _, step := range []float32{-10, -20, -30, -20, -10, 0} {
+		f.tester.Move(x+step, y)
 		f.tester.Frame()
 	}
-	if !answered || failure != nil {
-		t.Fatalf("after the last tick the drag answered %t with %v", answered, failure)
-	}
+	f.tester.Release(x, y)
 	f.settle()
-	if now := f.box("core.card", left); math.Abs(float64(now.W-from.W)) > 0.5 {
-		t.Fatalf("the drag ended with the left card %v wide, it was %v", now.W, from.W)
+	answer, err := reply("diagnostics.drag.end", nil)
+	if err != nil {
+		t.Fatal(err)
 	}
 	encoded, _ := json.Marshal(answer)
 	var result struct {
-		From     struct{ X, Y float64 } `json:"from"`
-		Steps    int                    `json:"steps"`
-		Asked    int                    `json:"asked"`
-		Took     *float64               `json:"took"`
-		Late     *int                   `json:"late"`
-		Deepest  *int                   `json:"deepest"`
-		Boundary []float64              `json:"boundary"`
-		Handled  []float64              `json:"handled"`
+		Boundary []float64 `json:"boundary"`
 	}
 	if err := json.Unmarshal(encoded, &result); err != nil {
 		t.Fatal(err)
 	}
-	if result.Steps != 6 || result.Asked != 96 || result.Took == nil || result.Late == nil || *result.Late != 0 || result.Deepest == nil ||
-		len(result.Boundary) != 7 || len(result.Handled) != 6 || result.From.X == 0 {
-		t.Fatalf("the result is %s", encoded)
+	if len(result.Boundary) != 7 {
+		t.Fatalf("the record is %s, want 7 positions", encoded)
 	}
-	if result.Boundary[3]-result.Boundary[0] > -29 || math.Abs(result.Boundary[6]-result.Boundary[0]) > 0.5 {
-		t.Fatalf("the boundary moved %v", result.Boundary)
+	for i, want := range []float64{0, -10, -20, -30, -20, -10, 0} {
+		if math.Abs(result.Boundary[i]-result.Boundary[0]-want) > 0.5 {
+			t.Fatalf("position %d of %v is not the start %v", i, result.Boundary, want)
+		}
 	}
-	// A tick without a drag does nothing.
-	f.shell.Event("diagnostics-tick", nil)
-	f.settle()
-	if now := f.box("core.card", left); math.Abs(float64(now.W-from.W)) > 0.5 {
-		t.Fatalf("a tick after the drag left the card %v wide", now.W)
+	// The record ended: a step after its end records nothing, and another end has no drag.
+	if _, err := reply("diagnostics.drag.end", nil); err == nil || err.Error() != "no drag of this window is running" {
+		t.Fatalf("a second end answered %v", err)
 	}
 }

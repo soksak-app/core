@@ -32,6 +32,7 @@ type WindowFrames struct {
 	commandBuffers atomic.Uint64
 	settled        atomic.Uint32
 	nodes          atomic.Int64
+	nativeViews    atomic.Int64
 	onSettled      atomic.Pointer[func()]
 }
 
@@ -105,3 +106,10 @@ func (w *WindowFrames) Counters() WindowFrameCounters {
 
 // Nodes reads the number of nodes of the last build pass of the window.
 func (w *WindowFrames) Nodes() int64 { return w.nodes.Load() }
+
+// SetNativeViews stores the number of native view elements that the last placement of the window showed. The placement runs on the
+// thread of the frame, and diagnostics.objects reads the number on a goroutine of its own.
+func (w *WindowFrames) SetNativeViews(count int64) { w.nativeViews.Store(count) }
+
+// NativeViews reads the number of native view elements that the last placement of the window showed.
+func (w *WindowFrames) NativeViews() int64 { return w.nativeViews.Load() }

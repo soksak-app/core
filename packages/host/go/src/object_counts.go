@@ -45,14 +45,15 @@ func (c PageObjects) Payload() map[string]int64 {
 }
 
 // FrameworkObjects are the counts of a workbench that the host draws, a window without a main page: the callbacks that the
-// framework registered in the process, which it never frees, and the nodes of the last build pass of the window.
+// framework registered in the process, which it never frees, the nodes of the last build pass of the window and the native view
+// elements of its last placement.
 type FrameworkObjects struct {
-	Callbacks, Nodes int64
+	Callbacks, Nodes, NativeViews int64
 }
 
 // Payload returns the counts with the names of the reply.
 func (c FrameworkObjects) Payload() map[string]int64 {
-	return map[string]int64{"callbacks": c.Callbacks, "nodes": c.Nodes}
+	return map[string]int64{"callbacks": c.Callbacks, "nodes": c.Nodes, "nativeViews": c.NativeViews}
 }
 
 // DocumentObjects are the counts of the document region Key.

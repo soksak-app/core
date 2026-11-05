@@ -31,8 +31,8 @@ func writeStepRecord(record StepRecord) {
 	})
 }
 
-// stepRecording runs the recording of the framework while the policy stores the step records, because a recording costs
-// a drain of its records and a time reading in each step.
+// stepRecording runs the recording of the framework while the policy stores the step records or a listener hears them, because
+// a recording costs a drain of its records and a time reading in each step.
 type stepRecording struct {
 	mu      sync.Mutex
 	start   func(report func(StepRecord), lost func(uint64)) (stop func())
@@ -40,6 +40,8 @@ type stepRecording struct {
 	lost    func(uint64)
 	running bool
 	end     func()
+	// listener hears each step until its listen ends; r.mu guards it.
+	listener func(StepRecord)
 }
 
 func newStepRecording(start func(func(StepRecord), func(uint64)) func(), enabled func() bool, lost func(uint64)) *stepRecording {
@@ -50,14 +52,42 @@ func newStepRecording(start func(func(StepRecord), func(uint64)) func(), enabled
 func (r *stepRecording) sync() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	on := r.enabled()
+	on := r.enabled() || r.listener != nil
 	switch {
 	case on && !r.running:
-		r.end = r.start(writeStepRecord, r.lost)
-		r.running = true
+		r.begin()
 	case !on && r.running:
 		r.halt()
 	}
+}
+
+// listen gives each step to report until the returned function returns, which has reported the last step before it. A running
+// recording ends for each change of the listener, because only the end of a recording drains what the main thread recorded.
+func (r *stepRecording) listen(report func(StepRecord)) (end func()) {
+	r.relisten(report)
+	return func() { r.relisten(nil) }
+}
+
+func (r *stepRecording) relisten(report func(StepRecord)) {
+	r.mu.Lock()
+	if r.running {
+		r.halt()
+	}
+	r.listener = report
+	r.mu.Unlock()
+	r.sync()
+}
+
+// begin starts the recording. r.mu is held.
+func (r *stepRecording) begin() {
+	listener := r.listener
+	r.end = r.start(func(record StepRecord) {
+		writeStepRecord(record)
+		if listener != nil {
+			listener(record)
+		}
+	}, r.lost)
+	r.running = true
 }
 
 // stop ends the recording for good.

@@ -1,6 +1,7 @@
 package host
 
 import (
+	"slices"
 	"testing"
 )
 
@@ -73,4 +74,38 @@ func TestStepRecordingWithoutFrameworkStepsRecordsNothing(t *testing.T) {
 	recording := newStepRecording(func(func(StepRecord), func(uint64)) func() { return nil }, func() bool { return true }, func(uint64) {})
 	recording.sync()
 	recording.stop()
+}
+
+func TestAListenerHearsEachStepWithoutThePolicyAndEndsWithADrain(t *testing.T) {
+	fake := &fakeStepFramework{}
+	stored := false
+	recording := newStepRecording(fake.RecordSteps, func() bool { return stored }, func(uint64) {})
+	heard := []string{}
+	end := recording.listen(func(step StepRecord) { heard = append(heard, step.Callback) })
+	if fake.starts != 1 {
+		t.Fatalf("a listener started %d recordings, want 1", fake.starts)
+	}
+	fake.report(StepRecord{Callback: "first"})
+	end()
+	if fake.stops != 1 || fake.starts != 1 {
+		t.Fatalf("the end of the listener: %d starts and %d stops, want 1 and 1", fake.starts, fake.stops)
+	}
+	if !slices.Equal(heard, []string{"first"}) {
+		t.Fatalf("the listener heard %v", heard)
+	}
+	// Under a policy that stores the records, the end of a listener drains and the recording goes on without it.
+	stored = true
+	recording.sync()
+	end = recording.listen(func(step StepRecord) { heard = append(heard, step.Callback) })
+	if fake.starts != 3 || fake.stops != 2 {
+		t.Fatalf("a listener under the policy: %d starts and %d stops, want 3 and 2", fake.starts, fake.stops)
+	}
+	end()
+	if fake.starts != 4 || fake.stops != 3 {
+		t.Fatalf("the end under the policy: %d starts and %d stops, want 4 and 3", fake.starts, fake.stops)
+	}
+	fake.report(StepRecord{Callback: "after"})
+	if !slices.Equal(heard, []string{"first"}) {
+		t.Fatalf("after its end the listener heard %v", heard)
+	}
 }

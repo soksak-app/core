@@ -55,6 +55,8 @@ const (
 // Host selects the native state of the calling window. Wails binds the public methods of Host to the page.
 type Host struct {
 	quit *Quit
+	// steps runs the recording of the steps of the main thread.
+	steps *stepRecording
 	// update is the command of an application update or a relaunch that the shutdown starts; h.mu guards it.
 	update     *pendingStart
 	removals   Removals
