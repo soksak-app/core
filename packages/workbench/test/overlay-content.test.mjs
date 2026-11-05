@@ -36,3 +36,20 @@ test("an update replaces an element whose kind or command changed", () => {
   assert.equal(root.innerHTML, `<button data-command="b">B</button><span>y</span>`);
   dom.window.close();
 });
+
+test("the elements of a modal document are reported in document order with their rectangles", async () => {
+  const { exposedElements } = await import("../overlay-content.js");
+  const dom = new JSDOM('<div id="root" data-expose="core.root"><button data-expose="core.item"></button><span></span><button data-expose="core.item"></button></div>');
+  const root = dom.window.document.getElementById("root");
+  let y = 0;
+  for (const element of [root, ...root.querySelectorAll("[data-expose]")]) {
+    const top = y;
+    element.getBoundingClientRect = () => ({ left: 1, top, width: 2, height: 3 });
+    y += 10;
+  }
+  assert.deepEqual(exposedElements(root), [
+    { name: "core.root", x: 1, y: 0, width: 2, height: 3 },
+    { name: "core.item", x: 1, y: 10, width: 2, height: 3 },
+    { name: "core.item", x: 1, y: 20, width: 2, height: 3 },
+  ]);
+});

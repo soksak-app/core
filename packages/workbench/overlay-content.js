@@ -49,3 +49,12 @@ function patchNode(have, want) {
   // The value of a select must be set after its options are matched, so that a new option can be chosen too.
   if (have.tagName === "SELECT" && have.value !== want.value) have.value = want.value;
 }
+
+/** The named elements of a modal document in document order with their rectangles in that document (docs/spec/exposure.md). */
+export function exposedElements(root) {
+  const named = [...(root.matches("[data-expose]") ? [root] : []), ...root.querySelectorAll("[data-expose]")];
+  return named.map((element) => {
+    const { left, top, width, height } = element.getBoundingClientRect();
+    return { name: element.dataset.expose, x: left, y: top, width, height };
+  });
+}

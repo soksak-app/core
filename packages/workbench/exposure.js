@@ -82,7 +82,7 @@ export function createRegistry({ call = null, report = null } = {}) {
   if (call && typeof report !== "function") throw new TypeError("a registry with a host call needs report(error)");
   const declared = new Map();
   const coreDeclared = new Map();
-  const core = exposureEntries(coreDeclared);
+  const core = exposureEntries(coreDeclared, { place: (element) => options.elementPlace(element) });
   const methods = new Map();
   /* For each declaration key, the surfaces that registered the entry. Registration order is kept. */
   const surfaces = new Map();
@@ -101,6 +101,8 @@ export function createRegistry({ call = null, report = null } = {}) {
     settled: () => undefined,
     // default: without a composition source no applied frame is known, and a view rectangle is refused by forward.
     surfaceFrame: () => null,
+    // default: without a modal source every core element has the rectangle of its own document.
+    elementPlace: () => null,
     // Called when an observation inside this document fails. It is reported as a page error (docs/spec/plugins.md#sections).
     failed: (error) => dispatchEvent(new ErrorEvent("error", { message: error.message })),
   };

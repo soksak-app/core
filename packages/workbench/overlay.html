@@ -35,7 +35,7 @@
   import { onAnswer, onGripDrag, showValue } from "./card.js";
   import { modalOrder } from "./modal-order.js";
   import { restoreScroll, scrollPositions } from "./scroll-keep.js";
-  import { updateContent } from "./overlay-content.js";
+  import { exposedElements, updateContent } from "./overlay-content.js";
   import { installChromeMetrics } from "./chrome-metrics.js";
 
   // The copied stylesheet reads the chrome metrics from the root, as the main document does.
@@ -72,6 +72,7 @@
       bodyBackground: getComputedStyle(document.body).backgroundColor,
       scrimBackground: getComputedStyle(document.body, "::before").backgroundColor,
       rect: { x: r.left, y: r.top, width: r.width, height: r.height },
+      elements: exposedElements(root),
       loaded,
     }));
   }

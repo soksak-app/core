@@ -539,3 +539,12 @@ test("an undefined status value or command result is refused with an error that 
   nullResult.command("probe.send", () => null);
   assert.deepEqual(await replyPayload(() => nullResult.answer("command.run", { name: "probe.send", params: {} })), { result: null });
 });
+
+test("the owner of a document can place an element that the document does not lay out", async () => {
+  const placed = element();
+  const own = element({ left: 5, top: 6, width: 7, height: 8 });
+  const entries = exposureEntries(declarationMap(exposes()), { place: (target) => target === placed ? { x: 10, y: 20, width: 30, height: 40, document: { x: 100, y: 200 } } : null });
+  entries.element("probe.row", () => [placed, own]);
+  assert.deepEqual(await entries.answer("element.rect", { name: "probe.row", index: 0 }), { x: 10, y: 20, width: 30, height: 40, zoom: 1, document: { x: 100, y: 200 } });
+  assert.deepEqual(await entries.answer("element.rect", { name: "probe.row", index: 1 }), { x: 5, y: 6, width: 7, height: 8, zoom: 1 });
+});
