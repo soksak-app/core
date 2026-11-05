@@ -26,6 +26,15 @@
 - (void)dealloc { [_window release]; [_present release]; [_done release]; [super dealloc]; }
 @end
 
+// SPAfterCommit is work that waits for the end of the open layout transaction of a window.
+@interface SPAfterCommit : NSObject
+@property(nonatomic, assign) void *owner;
+@property(nonatomic, copy) void (^done)(void);
+@end
+@implementation SPAfterCommit
+- (void)dealloc { [_done release]; [super dealloc]; }
+@end
+
 // SPViewJoin is a view that the open layout transaction waits for. It ends once: by its presentation or by an abandon.
 @interface SPViewJoin : NSObject
 @property(nonatomic, retain) WKWebView *view;
@@ -46,6 +55,11 @@ static NSMutableArray<SPSettleRequest *> *settling;
 static bool injectSettledFailure;
 static void (^layoutStarted)(void *);
 static void (^layoutEnded)(void *);
+// YES while surfaceLayoutPressWaits asks where a press goes once the open transaction has reached the screen.
+static BOOL pastPreparation;
+// The input of a window that waits for the end of its open transaction, in the order it arrived.
+static NSMutableArray<NSEvent *> *heldInput;
+static NSMutableArray<SPAfterCommit *> *afterCommit;
 
 static void releaseSettled(void);
 
@@ -98,7 +112,52 @@ size_t surfaceLayoutTraceStop(double *out, size_t capacity) {
     return total;
 }
 
+// Takes a press that surfaceLayoutPressWaits holds back, and every later input of the window, so the input stays in order.
+static NSEvent *holdPress(NSEvent *event) {
+    NSWindow *window = event.window;
+    if (!window) return event;
+    BOOL held = NO;
+    for (NSEvent *earlier in heldInput) held = held || earlier.window == window;
+    BOOL press = event.type == NSEventTypeLeftMouseDown || event.type == NSEventTypeRightMouseDown;
+    if (!held && !(press && surfaceLayoutPressWaits(window, event.locationInWindow.x, event.locationInWindow.y))) return event;
+    if (!heldInput) heldInput = [[NSMutableArray alloc] init];
+    [heldInput addObject:event];
+    return nil;
+}
+
+// AppKit calls the local monitors in no fixed order, so another monitor can see a held event as it arrives and again as it comes
+// back. The monitors of a press and a release take the second sight as the same fact.
+static void watchPresses(void) {
+    static id monitor;
+    if (monitor) return;
+    NSEventMask mask = NSEventMaskLeftMouseDown | NSEventMaskLeftMouseDragged | NSEventMaskLeftMouseUp
+        | NSEventMaskRightMouseDown | NSEventMaskRightMouseDragged | NSEventMaskRightMouseUp
+        | NSEventMaskKeyDown | NSEventMaskKeyUp;
+    monitor = [sp_observe_local_monitor("surface_layout.held_input", SP_OBSERVE_COUNT, mask, ^NSEvent *(NSEvent *event) {
+        return holdPress(event);
+    }) retain];
+}
+
+// Gives the waiting input of owner back after its transaction ended. The events go to the start of the queue from the last
+// to the first, so they stay in order and ahead of the input that arrived after them.
+static void releaseInput(void *owner) {
+    NSArray<NSEvent *> *held = [[heldInput copy] autorelease];
+    for (NSEvent *event in held.reverseObjectEnumerator) {
+        if (event.window != owner) continue;
+        [NSApp postEvent:event atStart:YES];
+        [heldInput removeObjectIdenticalTo:event];
+    }
+    NSArray<SPAfterCommit *> *waits = [[afterCommit copy] autorelease];
+    for (SPAfterCommit *wait in waits) {
+        if (wait.owner != owner) continue;
+        [[wait retain] autorelease];
+        [afterCommit removeObjectIdenticalTo:wait];
+        wait.done();
+    }
+}
+
 static void startLayout(SPLayoutRequest *request) {
+    watchPresses();
     if (!activeOwner) {
         [CATransaction begin];
         [CATransaction setDisableActions:YES];
@@ -148,6 +207,7 @@ static void finishTransaction(void) {
     [CATransaction commit];
     traceMark(ticket, 3);
     if (layoutEnded) layoutEnded(owner);
+    releaseInput(owner);
     nextLayout();
     releaseSettled();
 }
@@ -185,7 +245,32 @@ bool surfaceLayoutCommit(void *owner, uint64_t ticket) {
 
 bool surfaceLayoutIsPreparing(void *owner) {
     NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
-    return owner != NULL && activeOwner == owner;
+    return !pastPreparation && owner != NULL && activeOwner == owner;
+}
+
+bool surfaceLayoutPressWaits(void *owner, double x, double y) {
+    NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
+    if (!owner || activeOwner != owner) return false;
+    NSView *content = ((NSWindow *)owner).contentView;
+    NSPoint point = [content.superview convertPoint:NSMakePoint(x, y) fromView:nil];
+    NSView *now = [content hitTest:point];
+    pastPreparation = YES;
+    NSView *committed = [content hitTest:point];
+    pastPreparation = NO;
+    return now != committed;
+}
+
+void surfaceLayoutAfterCommit(void *owner, void (^done)(void)) {
+    NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
+    if (activeOwner != owner) {
+        done();
+        return;
+    }
+    SPAfterCommit *wait = [[[SPAfterCommit alloc] init] autorelease];
+    wait.owner = owner;
+    wait.done = done;
+    if (!afterCommit) afterCommit = [[NSMutableArray alloc] init];
+    [afterCommit addObject:wait];
 }
 
 void surfaceLayoutCancel(void *owner) {

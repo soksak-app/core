@@ -5,6 +5,9 @@
 bool surfaceLayoutCommit(void *owner, uint64_t ticket);
 // Returns whether owner has the active layout preparation. Call on the UI thread.
 bool surfaceLayoutIsPreparing(void *owner);
+// Returns whether a press at the point, in window coordinates, would reach another view once the open transaction of the
+// window has reached the screen. The surface hosts give no hit target during a preparation, so such a press has no target yet.
+bool surfaceLayoutPressWaits(void *owner, double x, double y);
 // Lets the app DOM web view update rendering at the refresh interval of the display instead of being limited to about 60 fps.
 // Returns false when WebKit does not have that feature.
 bool surfaceLayoutRenderAtDisplayRate(void *webview);
@@ -27,6 +30,8 @@ uint64_t surfaceLayoutTraceRequested(void);
 void surfaceLayoutTracePresented(uint64_t ticket);
 #ifdef __BLOCKS__
 void surfaceLayoutBegin(void *owner, uint64_t ticket, void (^ready)(int));
+// Runs done after the open transaction of owner has ended, and at once when owner has none open.
+void surfaceLayoutAfterCommit(void *owner, void (^done)(void));
 // Checks that the single app DOM is ready to present before committing an open layout.
 void surfaceLayoutAfterPresentation(void *mainWebview, void (^done)(void));
 // A block that brings the content of a window to the screen in its current state. It calls presented once on the main thread

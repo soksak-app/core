@@ -21,6 +21,7 @@
 #import "input_activity_wait.h"
 #import "input_press_context.h"
 #import "observe.h"
+#import "surface_layout.h"
 #import "application_log.h"
 #import "webview_input.h"
 #import "webview_geometry.h"
@@ -491,6 +492,16 @@ static WKWebView *webViewAt(NSWindow *window, double x, double y) {
 void sp_input_pointer_then(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY, int clicks,
     double timeoutSeconds, sp_input_done done, void *context) {
     NSWindow *window = (__bridge NSWindow *)handle;
+    if (phase == 1 && window && NSThread.isMainThread) {
+        // A press that has no target before the open layout reaches the screen waits for that, as the press of the window system does.
+        NSPoint at = windowPoint(window, x, y);
+        if (surfaceLayoutPressWaits(window, at.x, at.y)) {
+            surfaceLayoutAfterCommit(window, ^{
+                sp_input_pointer_then(handle, x, y, phase, button, deltaX, deltaY, clicks, timeoutSeconds, done, context);
+            });
+            return;
+        }
+    }
     NSView *pressed = window && NSThread.isMainThread ? pointerTarget(window, windowPoint(window, x, y), phase, button) : nil;
     while (pressed && ![pressed isKindOfClass:WKWebView.class]) pressed = pressed.superview;
     WKWebView *target = (WKWebView *)pressed;

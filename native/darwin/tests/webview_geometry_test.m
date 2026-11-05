@@ -400,6 +400,29 @@ static NSView *nativePlaneOf(NSView *surface) {
     return nil;
 }
 
+// A native view that counts its presses. It takes the first click, because the check window is not the key window.
+@interface SPPressCounter : NSView
+@property(nonatomic) NSUInteger presses;
+@end
+@implementation SPPressCounter
+- (BOOL)acceptsFirstMouse:(NSEvent *)event { return YES; }
+- (void)mouseDown:(NSEvent *)event { self.presses++; }
+@end
+
+static void pressDelivered(void *context, sp_input_result result, const sp_input_held *held) {
+    *(sp_input_result *)context = result;
+}
+
+// Sends the queued presses of the check until done or the deadline, as the application loop does.
+static void pumpPresses(double seconds, BOOL (^done)(void)) {
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:seconds];
+    while (!done() && deadline.timeIntervalSinceNow > 0) {
+        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskLeftMouseDown
+            untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01] inMode:NSDefaultRunLoopMode dequeue:YES];
+        if (event) [NSApp sendEvent:event];
+    }
+}
+
 // Adds a native view that covers the native plane, as a native document region does.
 static NSView *addNativeView(NSView *surface) {
     NSView *plane = nativePlaneOf(surface);
@@ -473,6 +496,32 @@ static void checkHitTesting(WKWebView *main) {
     check(!surfaceLayoutIsPreparing(main.window), @"the window no longer reports preparation after commit");
     check([moved hitTest:superviewPoint(moved, NSMakePoint(5, 5))] == movedNative,
         @"native surface hit testing resumes after its window layout commits");
+    // A press under a preparing surface has no target on the screen yet, so it waits for the commit and reaches the surface.
+    SPPressCounter *counter = [[[SPPressCounter alloc] initWithFrame:nativePlaneOf(moved).bounds] autorelease];
+    [nativePlaneOf(moved) addSubview:counter];
+    NSPoint pressInWindow = [moved convertPoint:NSMakePoint(5, 5) toView:nil];
+    NSView *content = main.window.contentView;
+    NSPoint pressInContent = [content convertPoint:pressInWindow fromView:nil];
+    double pressY = content.isFlipped ? pressInContent.y : content.bounds.size.height - pressInContent.y;
+    surfaceLayoutBegin(main.window, 77002, ^(int allowed) {});
+    sp_input_result pressResult = SP_INPUT_UNRECEIVED;
+    sp_input_pointer_then(main.window, pressInContent.x, pressY, 1, 0, 0, 0, 1, 5, pressDelivered, &pressResult);
+    check(counter.presses == 0, @"an injected press does not reach the surface during its preparation");
+    check(surfaceLayoutCommit(main.window, 77002), @"the layout of the injected press commits");
+    check(counter.presses == 1, @"an injected press under a preparing surface reaches the surface after the commit");
+    check(pressResult == SP_INPUT_DELIVERED, @"the injected press reports its delivery after the commit");
+    check(sp_input_pointer(main.window, pressInContent.x, pressY, 3, 0, 0, 0) == SP_INPUT_DELIVERED,
+        @"the injected press releases");
+    NSEvent *press = [NSEvent mouseEventWithType:NSEventTypeLeftMouseDown location:pressInWindow modifierFlags:0 timestamp:0
+        windowNumber:main.window.windowNumber context:nil eventNumber:0 clickCount:1 pressure:1];
+    surfaceLayoutBegin(main.window, 77003, ^(int allowed) {});
+    [NSApp postEvent:press atStart:NO];
+    pumpPresses(0.1, ^BOOL { return NO; });
+    check(counter.presses == 1, @"a press of the window system does not reach the surface during its preparation");
+    check(surfaceLayoutCommit(main.window, 77003), @"the layout of the press of the window system commits");
+    pumpPresses(2, ^BOOL { return counter.presses == 2; });
+    check(counter.presses == 2, @"a press of the window system under a preparing surface reaches the surface after the commit");
+    [counter removeFromSuperview];
     sp_surface_close(otherSurface);
     // A view surface whose web view does not cover the point: the point under the overlay is not a native hit.
     WKWebView *view = [[[WKWebView alloc] initWithFrame:NSZeroRect] autorelease];
