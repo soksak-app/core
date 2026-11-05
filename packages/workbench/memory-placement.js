@@ -14,3 +14,18 @@ export async function memoryPlacement(record, candidates, { ready, saver, observ
   observe(record, started);
   return saver.place(started);
 }
+
+/**
+ * Returns the step that starts the memory saver: it runs once, at the first drawn record that holds a surface, because only that record
+ * has every seat. A window that opens at the library starts at the first project it shows, so a hidden surface that declares unload
+ * never mounts to unload (docs/spec/plugins.md#memory-saver).
+ */
+export function memoryStart(saver) {
+  if (typeof saver?.start !== "function") throw new TypeError("memory start requires a saver");
+  let started = false;
+  return (record, candidates) => {
+    if (started || record?.drawn !== true || candidates.length === 0) return;
+    started = true;
+    saver.start();
+  };
+}

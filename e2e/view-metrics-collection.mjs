@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
+import { policyOfSetting, untilPolicy } from "@soksak/window-check/log-policy.mjs";
 import { firstContentFrame, firstDifferentContentFrame } from "./view-first-content.mjs";
 import { allViewRootProcessPids, measureProcessGroup, physicalFootprintBytes, processGroupReclaimEvidence,
   viewDocumentHistoryInventory, viewProcessGroup, viewProcessPids, viewProcessSurfaces,
@@ -399,7 +400,6 @@ export function requireViewContentFrameCoverage(mappedFrames, { gestureStartedAt
   assert.ok(Array.isArray(mappedFrames), "mapped view content frames must be an array");
   const possiblyInGesture = [];
   const definitelyBefore = [];
-  const definitelyAfter = [];
   for (const [index, frame] of mappedFrames.entries()) {
     const lowerMs = frame?.timeRange?.lowerMs;
     const upperMs = frame?.timeRange?.upperMs;
@@ -409,18 +409,15 @@ export function requireViewContentFrameCoverage(mappedFrames, { gestureStartedAt
       possiblyInGesture.push(frame);
     } else if (upperMs < gestureStartedAtMs) {
       definitelyBefore.push(frame);
-    } else if (lowerMs > gestureEndedAtMs) {
-      definitelyAfter.push(frame);
     }
     if (lowerMs <= gestureEndedAtMs && upperMs >= gestureStartedAtMs && frame.frameIndex === null) {
       assert.fail(`source content frame ${frame.sourceSequence} inside the gesture has no capture frame`);
     }
   }
   assert.ok(possiblyInGesture.length > 0, "source frames do not cover any possible part of the recorded gesture");
-  const included = new Set(possiblyInGesture);
-  if (definitelyBefore.length > 0) included.add(definitelyBefore.at(-1));
-  if (definitelyAfter.length > 0) included.add(definitelyAfter[0]);
-  return mappedFrames.filter((frame) => included.has(frame));
+  // Convergence reads every frame after the gesture, because the final viewport can arrive in a later frame than the first.
+  const left = new Set(definitelyBefore.slice(0, -1));
+  return mappedFrames.filter((frame) => !left.has(frame));
 }
 
 /** Runs a gesture or layout operation between explicit source-frame observer start and stop callbacks. */
@@ -493,6 +490,76 @@ export async function withViewContentTrace(t, s, descriptor, surface, action) {
   if (eventError) throw eventError;
   const contentFrames = viewContentFrameEvents(events, descriptor.plugin, surface, startBracket);
   return { action: actionResult, start, startBracket, stop: stopResult, events, contentFrames };
+}
+
+/** The log policy of a measured drag: the content frames of the view and nothing of the classes that a gesture calls often. */
+const DRAG_LOG_POLICY = Object.freeze({ frame: "trace" });
+
+async function dragTraceModeSnapshot(s) {
+  const settings = await s.get("core.settings");
+  const values = settings?.values;
+  const performanceTrace = values?.["diagnostics.performance"];
+  const logPolicy = values?.["diagnostics.log"];
+  assert.equal(typeof performanceTrace, "boolean", "drag performance setting must be boolean");
+  assert.ok(logPolicy && typeof logPolicy === "object" && !Array.isArray(logPolicy), "drag log policy must be an object");
+  assert.equal(logPolicy.frame, "trace", "drag requires the frame trace log policy");
+  return { performanceTrace, logPolicy: structuredClone(logPolicy) };
+}
+
+/**
+ * Runs a measured drag with the performance trace off and with the log policy reduced to the frame class, because criterion
+ * (viii) states the behavior of a build that stores neither, and restores both afterwards.
+ */
+export async function withDragTraceMode(s, action) {
+  assert.equal(typeof action, "function", "drag trace-mode action is required");
+  const before = await dragTraceModeSnapshot(s);
+  const change = async (performanceTrace, logPolicy) => {
+    await s.run("core.settings.set", { patch: { "diagnostics.performance": performanceTrace, "diagnostics.log": logPolicy }, scope: "common" });
+    await untilPolicy(s.app.configDir, policyOfSetting(logPolicy));
+  };
+  let during;
+  let result;
+  let actionFailed = false;
+  let actionError;
+  try {
+    await change(false, { ...DRAG_LOG_POLICY });
+    during = await dragTraceModeSnapshot(s);
+    assert.equal(during.performanceTrace, false, "drag performance trace remained enabled");
+    assert.deepEqual(during.logPolicy, DRAG_LOG_POLICY, "drag log policy was not reduced before measurement");
+    result = await action();
+  } catch (error) {
+    actionFailed = true;
+    actionError = error;
+  }
+
+  let after;
+  const restoreErrors = [];
+  try {
+    await change(before.performanceTrace, before.logPolicy);
+  } catch (error) {
+    restoreErrors.push(error);
+  }
+  try {
+    after = await dragTraceModeSnapshot(s);
+    assert.equal(after.performanceTrace, before.performanceTrace, "drag performance setting was not restored");
+    assert.deepEqual(after.logPolicy, before.logPolicy, "drag log policy was not restored");
+  } catch (error) {
+    restoreErrors.push(error);
+  }
+
+  const restoreFailed = restoreErrors.length > 0;
+  const restoreError = restoreErrors.length === 1 ? restoreErrors[0]
+    : restoreFailed ? new AggregateError(restoreErrors, "drag trace-mode restoration failed") : undefined;
+  if (actionFailed && restoreFailed) throw new AggregateError([actionError, restoreError], "drag and trace-mode restoration failed");
+  if (actionFailed) throw actionError;
+  if (restoreFailed) throw restoreError;
+  return {
+    result,
+    phaseMode: {
+      performanceTrace: { before: before.performanceTrace, during: during.performanceTrace, after: after.performanceTrace },
+      logPolicy: { before: before.logPolicy, during: during.logPolicy, after: after.logPolicy },
+    },
+  };
 }
 
 /** Reads the shared monotonic host clock in the same domain as recorded frame display times. */

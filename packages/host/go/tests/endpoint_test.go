@@ -468,7 +468,7 @@ func TestEndpointNameErrors(t *testing.T) {
 	}
 }
 
-// contract: endpoint.input.pointer-missing-coordinate, endpoint.input.pointer-numeric-button-rejected, endpoint.input.pointer-middle-button-rejected, endpoint.input.pointer-activate-only-on-move, endpoint.input.pointer-activate-must-be-bool, endpoint.input.pointer-defaults, endpoint.input.pointer-right-button-accepted, endpoint.input.pointer-phase-and-scroll-decoding
+// contract: endpoint.input.pointer-missing-coordinate, endpoint.input.pointer-numeric-button-rejected, endpoint.input.pointer-middle-button-rejected, endpoint.input.pointer-clicks-range, endpoint.input.pointer-clicks-only-on-press-and-release, endpoint.input.pointer-clicks-default, endpoint.input.pointer-unknown-field-rejected, endpoint.input.pointer-activate-only-on-move, endpoint.input.pointer-activate-must-be-bool, endpoint.input.pointer-defaults, endpoint.input.pointer-right-button-accepted, endpoint.input.pointer-phase-and-scroll-decoding
 func TestEndpointPointerParams(t *testing.T) {
 	backend := newFakeBackend()
 	_, address, _ := serve(t, backend)
@@ -479,6 +479,16 @@ func TestEndpointPointerParams(t *testing.T) {
 		{"window": "main", "x": 1, "y": 2, "phase": "down", "activate": true},
 		{"window": "main", "y": 2, "phase": "move"},
 		{"window": "main", "x": 1, "y": 2, "phase": "move", "activate": "yes"},
+		{"window": "main", "x": 1, "y": 2, "phase": "down", "clicks": 0},
+		{"window": "main", "x": 1, "y": 2, "phase": "down", "clicks": -1},
+		{"window": "main", "x": 1, "y": 2, "phase": "down", "clicks": 4},
+		{"window": "main", "x": 1, "y": 2, "phase": "down", "clicks": 1.5},
+		{"window": "main", "x": 1, "y": 2, "phase": "down", "clicks": "2"},
+		{"window": "main", "x": 1, "y": 2, "phase": "move", "clicks": 2},
+		{"window": "main", "x": 1, "y": 2, "phase": "drag", "clicks": 2},
+		{"window": "main", "x": 1, "y": 2, "phase": "scroll", "clicks": 2},
+		{"window": "main", "x": 1, "y": 2, "phase": "down", "clickCount": 2},
+		{"window": "main", "x": 1, "y": 2, "phase": "down", "Clicks": 2},
 	}
 	for i, params := range rejected {
 		got := call(t, conn, i+1, "input.pointer", params)
@@ -491,19 +501,23 @@ func TestEndpointPointerParams(t *testing.T) {
 		{"window": "main", "x": 3, "y": 4, "phase": "up", "button": "right"},
 		{"window": "main", "x": 1.5, "y": 2, "phase": "drag"},
 		{"window": "main", "x": 0, "y": 0, "phase": "scroll", "deltaY": -3, "button": "right"},
+		{"window": "main", "x": 5, "y": 6, "phase": "down", "clicks": 2},
+		{"window": "main", "x": 5, "y": 6, "phase": "up", "clicks": 3},
 	}
 	for i, params := range accepted {
-		if got := call(t, conn, 10+i, "input.pointer", params); got.Error != nil {
+		if got := call(t, conn, 100+i, "input.pointer", params); got.Error != nil {
 			t.Fatalf("%v: %+v", params, got)
 		}
 	}
 	backend.mu.Lock()
 	defer backend.mu.Unlock()
 	want := []host.PointerInput{
-		{X: 1, Y: 2, Phase: "move", Button: "left", Activate: true},
-		{X: 3, Y: 4, Phase: "up", Button: "right"},
-		{X: 1.5, Y: 2, Phase: "drag", Button: "left"},
-		{X: 0, Y: 0, Phase: "scroll", Button: "right", DeltaY: -3},
+		{X: 1, Y: 2, Phase: "move", Button: "left", Activate: true, Clicks: 1},
+		{X: 3, Y: 4, Phase: "up", Button: "right", Clicks: 1},
+		{X: 1.5, Y: 2, Phase: "drag", Button: "left", Clicks: 1},
+		{X: 0, Y: 0, Phase: "scroll", Button: "right", DeltaY: -3, Clicks: 1},
+		{X: 5, Y: 6, Phase: "down", Button: "left", Clicks: 2},
+		{X: 5, Y: 6, Phase: "up", Button: "left", Clicks: 3},
 	}
 	if len(backend.pointers) != len(want) {
 		t.Fatalf("pointer input %+v, want %+v", backend.pointers, want)

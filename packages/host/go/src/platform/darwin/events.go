@@ -30,6 +30,14 @@ func (implementation) PullNativeEvents(buffer []byte) (int, error) {
 	return int(C.sp_event_drain((*C.uint8_t)(unsafe.Pointer(&buffer[0])), C.size_t(len(buffer)))), nil
 }
 
+func (implementation) NativeEventWake() (int, error) {
+	descriptor := int(C.sp_event_wake_fd())
+	if descriptor < 0 {
+		return 0, fmt.Errorf("native event wake: the pipe cannot be made")
+	}
+	return descriptor, nil
+}
+
 func (implementation) TakeNativeEventLoss(channel uint8) (uint64, uint64, error) {
 	loss := C.sp_event_take_loss(C.uint8_t(channel))
 	return uint64(loss.events), uint64(loss.bytes), nil

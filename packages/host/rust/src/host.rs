@@ -363,9 +363,15 @@ pub fn setup(app: &AppHandle, setup: Setup) -> Result<(), Box<dyn std::error::Er
     app.manage(workspace::Workspace::new(directory.clone()));
     // A stall of the main thread is recorded without a window check (docs/spec/logging.md, stalls). The
     // watch runs until the process ends.
-    let main = app.clone();
     let _runs_until_exit = stall_watch::start_stall_watch(stall_watch::StallWatchOptions {
-        on_main: Box::new(move |task| main.post(task).map_err(|e| e.to_string())),
+        heartbeat: Box::new(|| {
+            let (now, answered) = platform::current()?.stall_heartbeat()?;
+            Ok((
+                std::time::Duration::from_nanos(now),
+                std::time::Duration::from_nanos(answered),
+            ))
+        }),
+        await_awake: Box::new(|| platform::current()?.stall_await_awake()),
         sample: Arc::new(|path| platform::current()?.sample_threads(path)),
         folder: directory.join("logs"),
         emit_host: Arc::new(event_record::emit_host),

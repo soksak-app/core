@@ -172,6 +172,8 @@ pub struct Pointer {
     pub button: i32,
     pub delta_x: f64,
     pub delta_y: f64,
+    /// The click count of the event of a press or a release, from 1 to 3.
+    pub clicks: i32,
     /// Activates the application and makes the window the key window before the move. It is true only when phase is 0.
     pub activate: bool,
 }
@@ -425,6 +427,11 @@ pub trait Platform: CoreRootHost + Send + Sync {
     fn surface_frame(&self, surface: Handle) -> Result<[f64; 4], String>;
     fn set_surface_hidden_handle(&self, surface: Handle, hidden: bool) -> Result<(), String>;
     fn set_surface_alpha_handle(&self, surface: Handle, alpha: f64) -> Result<(), String>;
+    /// Gives the keyboard of its window to the surface (docs/spec/native-surfaces.md#keyboard-of-a-surface). Call it on the main
+    /// thread.
+    fn focus_surface(&self, surface: Handle) -> Result<(), String>;
+    /// Gives the keyboard of window to the workbench. Call it on the main thread.
+    fn focus_workbench(&self, window: Handle) -> Result<(), String>;
     fn set_window_overlays(&self, main: Handle, overlays: &[WindowOverlay]) -> Result<(), String>;
     /// Receives the files dropped on the window of the main webview. receive receives {"urls":[...],"x":..,"y":..}
     /// (page coordinates).
@@ -434,6 +441,14 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// Writes the stacks of the threads of this process, sampled for one second, into the file `path`. The watch of the
     /// main thread calls it for a stall (docs/spec/logging.md, stalls).
     fn sample_threads(&self, path: &std::path::Path) -> Result<(), String>;
+    /// Sends a heartbeat that a C function answers on the main thread and returns the time of the call and the time of
+    /// the last answer on the clock of `monotonic_ns`; while no heartbeat was answered, the time of the answer is the
+    /// time of the first heartbeat. While the main run loop waits for an event it sends nothing and returns the start of
+    /// that wait as both times. The watch of the main thread calls it (docs/spec/logging.md, stalls).
+    fn stall_heartbeat(&self) -> Result<(u64, u64), String>;
+    /// Blocks the calling thread while the main run loop waits for an event, and returns at once while it does not. The
+    /// watch of the main thread calls it (docs/spec/logging.md, stalls).
+    fn stall_await_awake(&self) -> Result<(), String>;
     /// Makes the WebContent processes of view collect JavaScript objects. The memory measurement of a diagnostic build
     /// uses it.
     fn collect_garbage(&self, view: &PlatformWebview) -> Result<(), String>;
@@ -878,6 +893,9 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// Moves whole records of the native event ring into `buffer` and returns the number of bytes written; 0 means the ring
     /// is empty (docs/spec/logging.md#writers).
     fn pull_native_events(&self, buffer: &mut [u8]) -> Result<usize, String>;
+    /// Returns what sleeps until the native event ring holds a record, a loss or a count of the gate that no pull took, and then
+    /// returns; a native thread must not call into Rust, so this is how a writer that sleeps hears it.
+    fn native_event_wake(&self) -> Result<NativeEventWait, String>;
     /// Returns the events and bytes that the native ring refused in a channel (0 for the main file, 1 for the debug file) since
     /// the last call.
     fn take_native_event_loss(&self, channel: u8) -> Result<(u64, u64), String>;
@@ -1005,6 +1023,9 @@ pub trait Platform: CoreRootHost + Send + Sync {
 }
 
 /// Returns the implementation of the current operating system.
+/// What `native_event_wake` returns.
+pub type NativeEventWait = Box<dyn FnMut() -> Result<(), String> + Send>;
+
 pub fn current() -> Result<&'static dyn Platform, String> {
     #[cfg(target_os = "macos")]
     return Ok(&darwin::Darwin);

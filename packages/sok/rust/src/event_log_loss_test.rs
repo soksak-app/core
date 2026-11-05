@@ -37,6 +37,7 @@ fn options(directory: &Path, boot: &str) -> Options {
         batch_interval: Duration::from_millis(10),
         rotate_bytes: 0,
         pull: None,
+        wake: None,
         policy_path: None,
         prune: None,
     }

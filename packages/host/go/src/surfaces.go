@@ -504,7 +504,9 @@ type Surfaces struct {
 	// rejects the reply of an earlier display.
 	nextModal uint64
 	modal     *modal
-	shapes    map[string]*nativeShape
+	// workbenchDialog is true while a dialog that the workbench draws itself is open (SetDialogBackground).
+	workbenchDialog bool
+	shapes          map[string]*nativeShape
 	// documents are the document regions that the surface pages attached.
 	documents *Documents
 	// sourceOrigins assigns generations to view incarnations and exposes their current window snapshot.
@@ -1314,6 +1316,38 @@ func (s *Surfaces) CancelSurfaces(req CancelRequest) error {
 	done := make(chan error, 1)
 	window := s.window.NativeWindow()
 	if err := system.EnqueueUI(func() { done <- s.cancelLayoutPresentation(window, req.Ticket) }); err != nil {
+		return err
+	}
+	return <-done
+}
+
+// FocusRequest names the surface that takes the keyboard of the window, and null names the workbench.
+type FocusRequest struct {
+	Surface *string `json:"surface"`
+}
+
+// FocusSurface gives the keyboard of the window to the surface of the request or to the workbench on the UI thread
+// (docs/spec/native-surfaces.md#keyboard-of-a-surface). A surface that the window does not hold is refused.
+func (s *Surfaces) FocusSurface(req FocusRequest) error {
+	if s.window == nil {
+		return errNoWindow
+	}
+	done := make(chan error, 1)
+	window := s.window.NativeWindow()
+	if err := system.EnqueueUI(func() {
+		if req.Surface == nil {
+			system.FocusWorkbench(window)
+			done <- nil
+			return
+		}
+		view := s.views[*req.Surface]
+		if view == nil {
+			done <- fmt.Errorf("surface %q is not attached", *req.Surface)
+			return
+		}
+		system.FocusSurface(view.handle)
+		done <- nil
+	}); err != nil {
 		return err
 	}
 	return <-done

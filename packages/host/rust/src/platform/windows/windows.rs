@@ -16,8 +16,8 @@ use std::time::Duration;
 use super::DocumentViewportMarker;
 use super::{
     ClipboardValue, CoreRootHost, CoreRootResolver, DOMOverlay, Delivery, Frame, Handle, Hit,
-    ImagePresentation, ImageReleased, Insets, Key, Listener, PersistentStream, Platform, Pointer,
-    ProcessFootprint, Raster, WindowOverlay,
+    ImagePresentation, ImageReleased, Insets, Key, Listener, NativeEventWait, PersistentStream,
+    Platform, Pointer, ProcessFootprint, Raster, WindowOverlay,
 };
 
 #[path = "identity.rs"]
@@ -139,6 +139,12 @@ impl Platform for Windows {
     fn set_surface_hidden_handle(&self, surface: Handle, hidden: bool) -> Result<(), String> {
         unsupported::set_surface_hidden_handle(surface, hidden)
     }
+    fn focus_surface(&self, surface: Handle) -> Result<(), String> {
+        unsupported::focus_surface(surface)
+    }
+    fn focus_workbench(&self, window: Handle) -> Result<(), String> {
+        unsupported::focus_workbench(window)
+    }
     fn set_surface_alpha_handle(&self, surface: Handle, alpha: f64) -> Result<(), String> {
         unsupported::set_surface_alpha_handle(surface, alpha)
     }
@@ -153,6 +159,14 @@ impl Platform for Windows {
     }
     fn sample_threads(&self, path: &std::path::Path) -> Result<(), String> {
         unsupported::sample_threads(path)
+    }
+
+    fn stall_heartbeat(&self) -> Result<(u64, u64), String> {
+        unsupported::stall_heartbeat()
+    }
+
+    fn stall_await_awake(&self) -> Result<(), String> {
+        unsupported::stall_await_awake()
     }
     fn collect_garbage(&self, view: &PlatformWebview) -> Result<(), String> {
         unsupported::collect_garbage(view)
@@ -596,6 +610,9 @@ impl Platform for Windows {
     }
     fn pull_native_events(&self, buffer: &mut [u8]) -> Result<usize, String> {
         unsupported::pull_native_events(buffer)
+    }
+    fn native_event_wake(&self) -> Result<NativeEventWait, String> {
+        unsupported::native_event_wake()
     }
     fn set_native_event_policy(&self, levels: [i8; 5]) -> Result<(), String> {
         unsupported::set_native_event_policy(levels)

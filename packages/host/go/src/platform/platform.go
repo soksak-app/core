@@ -346,9 +346,13 @@ type Platform interface {
 	SampleThreads(path string) error
 	// StallHeartbeat sends a heartbeat that a C function answers on the main thread, so no Go code runs on the main thread for it
 	// (docs/spec/hosts.md, main thread of the Wails host). It returns the time of the call and the time of the last answer on the
-	// clock of MonotonicNanos; while no heartbeat was answered, the time of the answer is the time of the first heartbeat. The
-	// watch of the main thread calls it (docs/spec/logging.md, stalls).
+	// clock of MonotonicNanos; while no heartbeat was answered, the time of the answer is the time of the first heartbeat. While the
+	// main run loop waits for an event it sends nothing and returns the start of that wait as both times. The watch of the main
+	// thread calls it (docs/spec/logging.md, stalls).
 	StallHeartbeat() (now, answered uint64)
+	// StallAwaitAwake blocks the calling goroutine and its thread while the main run loop waits for an event, and returns at once
+	// while it does not. The watch of the main thread calls it (docs/spec/logging.md, stalls).
+	StallAwaitAwake()
 	// CollectGarbage makes the WebContent processes of view collect JavaScript objects. The memory measurement of a diagnostic build
 	// uses it. Call it on the UI thread.
 	CollectGarbage(view unsafe.Pointer) error
@@ -402,6 +406,10 @@ type Platform interface {
 	SurfaceFrame(surface unsafe.Pointer) Rect
 	SetSurfaceHiddenHandle(surface unsafe.Pointer, hidden bool)
 	SetSurfaceAlphaHandle(surface unsafe.Pointer, alpha float64)
+	// FocusSurface gives the keyboard of its window to the surface, and FocusWorkbench gives the keyboard of window to the
+	// workbench (docs/spec/native-surfaces.md#keyboard-of-a-surface). Call them on the main thread.
+	FocusSurface(surface unsafe.Pointer)
+	FocusWorkbench(window unsafe.Pointer)
 	SetWindowOverlays(main unsafe.Pointer, overlays []WindowOverlay) error
 	// SetSurfaceOverlays sets the declared DOM overlays to process before the native input.
 	SetSurfaceOverlays(view unsafe.Pointer, overlays []DOMOverlay)
@@ -561,7 +569,7 @@ type Platform interface {
 	// phase is 0 for move, 1 for press, 2 for drag, 3 for release and 4 for scroll, and button is 0 for left and 1 for right.
 	// For a press and a release, it calls done on the UI thread after the document at the coordinates received the event or receive seconds passed.
 	// For other phases, it calls done immediately after delivery. held is the state of the rejection when the result is PointerButtonHeld.
-	InjectPointer(window unsafe.Pointer, x, y float64, phase, button int, deltaX, deltaY, receive float64, done func(result PointerResult, held ButtonHeld)) error
+	InjectPointer(window unsafe.Pointer, x, y float64, phase, button int, deltaX, deltaY float64, clicks int, receive float64, done func(result PointerResult, held ButtonHeld)) error
 	// ActivateWindow activates the application and the window. It calls done(nil) on the UI thread after only the web view at the coordinates received the active state,
 	// or calls done with an error that names the stage where it stopped when it does not finish within timeout seconds.
 	// When the coordinates are a native surface, it does not wait for the web view state.
@@ -629,6 +637,9 @@ type Platform interface {
 	// 0 means the ring is empty (docs/spec/logging.md#writers).
 	PullNativeEvents(buffer []byte) (int, error)
 
+	// NativeEventWake returns the read end of the non-blocking pipe that turns readable when the native event ring holds
+	// something for PullNativeEvents. The process owns the descriptor for its whole life.
+	NativeEventWake() (int, error)
 	// TakeNativeEventLoss returns the events and bytes that the native ring refused in a channel (0 for the main file, 1 for the
 	// debug file) since the last call.
 	TakeNativeEventLoss(channel uint8) (events, bytes uint64, err error)

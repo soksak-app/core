@@ -40,6 +40,23 @@ void webviewSetFrame(void *webview, double x, double y, double width, double hei
 void webviewGetFrame(void *webview, double *rect);
 void webviewSetSurfaceHidden(void *webview, bool hidden);
 void webviewSetSurfaceAlpha(void *webview, double alpha);
+// Gives the keyboard of the window to the surface, the active surface of the card with the focus ring
+// (docs/spec/native-surfaces.md#keyboard-of-a-surface). What already holds it inside the surface keeps it. Otherwise the
+// view that last held it in the surface takes it, then the first shown image region, then the web view of the surface. A
+// surface that lands on its web view gives the keyboard to the first image region that shows after that, so a surface that
+// is not ready when the call comes receives the keyboard when it becomes ready. A left press that is open keeps the
+// keyboard where it is until its release, because a first responder that moves during a press ends that press.
+void sp_surface_focus(void *surface);
+// Gives the keyboard of window to the workbench: the registered main web view, or the view of the framework that draws the
+// workbench of a window without a main web view. An open left press delays it as in sp_surface_focus.
+void sp_window_focus_workbench(void *window);
+// Records a move of the first responder of a window for the surfaces that it leaves and enters. The observation of the first
+// responder calls it.
+void sp_surface_responder_moved(void *from, void *to);
+// Gives the keyboard to the surface that asked for it, now that its image region shows.
+void sp_surface_region_shown(void *region);
+// A diagnostic release that sp_input_pointer delivered ended the open left press of window.
+void sp_surface_press_released(void *window);
 // Records that the WebContent process of a web view ended as `error native <kind>: web content process terminated: <address>`.
 // Called from the process termination notification of the navigation delegate of web views that the framework did not create (surface, modal).
 void sp_webview_log_process_end(void *webview, const char *kind);

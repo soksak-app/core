@@ -389,6 +389,12 @@ export async function selectProject(id) {
 }
 
 export const settingProject = () => projectId;
+/** The sets and links of a project that is not necessarily the selected one: its own overrides over the common settings. */
+export function projectSidebars(project) {
+  // default: a project that overrides no setting has no settings.
+  const { sets, links } = effectiveSettings(defaults, applied(common), applied(project.settings ?? {}));
+  return { sets, links };
+}
 export const scopedValue = (key, scope) => scope === "common"
   // default: a setting without a stored common value takes its default value.
   ? (common[key] ?? defaults[key]) : settings[key];

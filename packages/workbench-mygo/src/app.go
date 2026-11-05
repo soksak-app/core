@@ -69,6 +69,14 @@ type AppOptions struct {
 	Element func(window host.Frontend, id string) (surface, key uintptr, ok bool)
 	// Detaching returns the surfaces of window whose image detach is pending.
 	Detaching func(window host.Frontend) []string
+	// Clock is the time of the tab parts, and nil the time of the system.
+	Clock TabClock
+}
+
+// TabClock is the time that the tab parts read: a monotonic time in milliseconds, and a timer that runs in a later step of the main thread.
+type TabClock interface {
+	Now() int64
+	After(milliseconds int64, run func()) (cancel func())
 }
 
 // App is the workbench of the application.
@@ -272,17 +280,7 @@ func (s *Shell) event(name string, data []any) {
 		s.pluginOperations.Refresh(func() {})
 		s.appUpdates.Refresh()
 	case "project-close-request":
-		s.keep()
-		s.flushTabs()
-		// The call ends the workbench of the window, so its first event leaves before the call.
-		cids := s.events.BeginOperation("workbench.window.operation", map[string]any{"action": "close"})
-		s.events.Flush(func() {
-			s.calls.Caused(cids).CallInOrder("workspace", "windowClose", nil, func(_ any, err error) {
-				if err != nil {
-					s.fail(err)
-				}
-			})
-		})
+		s.closeWindowAsked()
 	case "menu-command":
 		s.menuCommand(data)
 	case "debug-save-progress", "debug-save-done", "debug-log-changed":
@@ -320,11 +318,13 @@ func (s *Shell) menuCommand(data []any) {
 func (s *Shell) windowResponder(data []any) {
 	responder, err := eventBody[Responder]("window-responder", data)
 	if err == nil {
-		err = s.keyboard.SetResponder(responder)
+		err = s.exposedFocus.SetResponder(responder)
 	}
 	if err != nil {
 		s.fail(err)
+		return
 	}
+	s.keyboardLeft(responder)
 }
 
 // eventBody reads the one value of the event name.

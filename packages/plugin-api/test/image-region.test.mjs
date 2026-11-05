@@ -216,6 +216,36 @@ test("an event of a type without handlers is reported as an error, not dropped",
   assert.deepEqual(f.reported, ["image preview: no handlers for event type unknownType"]);
 });
 
+// A region takes the first responder as soon as it shows, which can come before the module of the surface registers its handler.
+test("an input transaction before the first input handler reaches that handler in order", async () => {
+  const f = fixture();
+  const p = port();
+  const image = attachImage(p, f.element, "preview", "writer", { report: f.report });
+  await settle();
+  p.send("preview", { type: "input", actions: [{ type: "focus", focused: true }], preedit: null, errors: [] });
+  p.send("preview", { type: "input", actions: [{ type: "insert", text: "a" }], preedit: null, errors: [] });
+  await settle();
+  const received = [];
+  image.on("input", (event) => received.push(event.actions[0].type));
+  assert.deepEqual(received, [], "the handler ran inside its own registration");
+  p.send("preview", { type: "input", actions: [{ type: "insert", text: "b" }], preedit: null, errors: [] });
+  await settle();
+  assert.deepEqual(received, ["focus", "insert", "insert"]);
+  assert.deepEqual(f.reported, []);
+});
+
+test("an input transaction that no handler ever takes is reported at the detach", async () => {
+  const f = fixture();
+  const p = port();
+  const image = attachImage(p, f.element, "preview", "writer", { report: f.report });
+  await settle();
+  p.send("preview", { type: "input", actions: [{ type: "focus", focused: true }], preedit: null, errors: [] });
+  await settle();
+  assert.deepEqual(f.reported, []);
+  await image.detach();
+  assert.deepEqual(f.reported, ["image preview: no handlers for event type input (1 held until the detach)"]);
+});
+
 test("an event without a type is reported as an error, not dropped", async () => {
   const f = fixture();
   const p = port();

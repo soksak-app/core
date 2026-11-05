@@ -5,6 +5,7 @@
 #import "webview_geometry.h"
 #import "window_facts.h"
 #import <CommonCrypto/CommonDigest.h>
+#import <objc/runtime.h>
 
 static int failures = 0;
 
@@ -29,6 +30,32 @@ static void pumpOcclusion(void) {
         [NSApp sendEvent:[NSApp nextEventMatchingMask:NSEventMaskAppKitDefined untilDate:nil inMode:NSDefaultRunLoopMode dequeue:YES]];
     }
     [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+}
+
+// Counts the reads of the WebKit feature list. A status watcher reads the window facts for each frame of a region, and each read of
+// the list allocates every feature key in the WebKit heap of the application process.
+static NSUInteger featureReads;
+static id (*readFeatures)(id, SEL);
+
+static id countedFeatures(id self, SEL command) {
+    featureReads++;
+    return readFeatures(self, command);
+}
+
+static void checkFactsKeepTheFeature(NSWindow *window) {
+    Method method = class_getClassMethod(WKPreferences.class, NSSelectorFromString(@"_features"));
+    readFeatures = (id (*)(id, SEL))method_setImplementation(method, (IMP)countedFeatures);
+    NSDictionary *first = parse(sp_window_facts(window, sp_window_composition(window)));
+    featureReads = 0;
+    NSDictionary *last = nil;
+    for (int read = 0; read < 3; read++) last = parse(sp_window_facts(window, sp_window_composition(window)));
+    method_setImplementation(method, (IMP)readFeatures);
+    check(featureReads == 0, [NSString stringWithFormat:@"a later read of the window facts reads no feature list (%lu reads)", (unsigned long)featureReads]);
+    NSArray *views = last[@"webviews"];
+    check(views.count == 2, [NSString stringWithFormat:@"the window facts list the two web views: %@", views]);
+    for (NSUInteger index = 0; index < views.count; index++)
+        check([views[index][@"near60fps"] isKindOfClass:NSNumber.class] && [views[index][@"near60fps"] isEqual:first[@"webviews"][index][@"near60fps"]],
+            [NSString stringWithFormat:@"a later read reports the rendering preference of the view: %@", views[index][@"near60fps"]]);
 }
 
 int main(void) { @autoreleasepool {
@@ -101,6 +128,7 @@ int main(void) { @autoreleasepool {
     check(!sp_menu_select("View", "Missing") && !sp_menu_select("Missing", "Zoom In"), @"an unknown menu item is rejected");
 
     check(sp_window_move(window, 120, 80), @"move accepted");
+    checkFactsKeepTheFeature(window);
     NSDictionary *facts = parse(sp_window_facts(window, sp_window_composition(window)));
     CGFloat primary = NSMaxY(NSScreen.screens.firstObject.frame);
     check([facts[@"frame"][@"x"] doubleValue] == 120 && [facts[@"frame"][@"y"] doubleValue] == 80,

@@ -15,6 +15,10 @@ export function attachImage(port, element, name, sidecar, options = {}) {
   const { report } = options;
   if (typeof report !== "function") throw new TypeError(`image ${name} requires a report for its failures`);
   const listeners = new Map();
+  // The input transactions before the first input handler, in order. A region takes the first responder as soon as it shows, which
+  // can come before the module of the surface registers its handler, and input of the user is not lost
+  // (docs/spec/native-surfaces.md#image-regions).
+  let heldInput = [];
   let detached = false;
   let chain = port.attach(name, sidecar);
   // The host holds the caret of the region relative to the region, so a caret equal to the last accepted one changes nothing.
@@ -37,6 +41,10 @@ export function attachImage(port, element, name, sidecar, options = {}) {
       return;
     }
     const handlers = listeners.get(eventType);
+    if (eventType === "input" && (!handlers || heldInput.length > 0)) {
+      heldInput.push(event);
+      return;
+    }
     if (!handlers) {
       report(`image ${name}: no handlers for event type ${eventType}`);
       return;
@@ -50,6 +58,14 @@ export function attachImage(port, element, name, sidecar, options = {}) {
     on(type, fn) {
       if (!listeners.has(type)) listeners.set(type, new Set());
       listeners.get(type).add(fn);
+      // The registration ends first, so the module finishes its setup before its handler runs.
+      if (type === "input" && heldInput.length > 0) {
+        queueMicrotask(() => {
+          const events = heldInput;
+          heldInput = [];
+          for (const event of events) for (const handler of listeners.get("input") ?? []) handler(event);
+        });
+      }
       return () => listeners.get(type).delete(fn);
     },
     focus() {
@@ -73,6 +89,8 @@ export function attachImage(port, element, name, sidecar, options = {}) {
     detach() {
       const done = queue(() => port.detach(name));
       detached = true;
+      if (heldInput.length > 0) report(`image ${name}: no handlers for event type input (${heldInput.length} held until the detach)`);
+      heldInput = [];
       listeners.clear();
       unlisten.then((stop) => stop());
       return done;

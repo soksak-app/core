@@ -9,7 +9,7 @@ import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFr
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, mapViewContentFramesToCapture,
   monotonicTimeMs, requireViewContentFrameCoverage, rootNativePlacementBeforeCapture,
   selectOneShotViewSourceFrame, TAB_PLACEMENT,
-  withViewContentTrace }
+  withDragTraceMode, withViewContentTrace }
   from "../../view-metrics-collection.mjs";
 import { viewContentCases } from "../../view-content.mjs";
 
@@ -468,14 +468,14 @@ async function dragObservation(t, s, descriptor, surface, card, theme, cornerRad
   const slotInsetsPt = declaredSlotInsets({ grid, surfaces, card, surface,
     regionRect: { x: region.x, y: region.y, w: region.width, h: region.height } });
   await s.presented();
-  const traced = await withViewContentTrace(t, s, descriptor, surface, async (startReply) => {
+  const { result: traced, phaseMode } = await withDragTraceMode(s, () => withViewContentTrace(t, s, descriptor, surface, async (startReply) => {
     assert.equal(startReply?.enabled, true, `HWP view ${surface} content-frame observer did not start`);
     return withHwpNativeMarker(s, surface, async () => {
       const run = await drag(t, s, { axis: "x", line: 1, dx: 80, dy: 0, ms: 500, times: 1 }, { capture: true });
       const studioViewport = await readHwpPaintViewport(s, surface);
       return { run, studioViewport };
     });
-  });
+  }));
   const { marker, result: action } = traced.action;
   const run = action.run;
   const paintViewport = action.studioViewport;
@@ -529,6 +529,7 @@ async function dragObservation(t, s, descriptor, surface, card, theme, cornerRad
     lastGestureFrameIndex: gestureEndedFrameIndex,
     gestureEndedFrameIndex,
     gestureStartedAtMs: run.ticks[0],
+    phaseMode,
     gestureEndedAtMs: run.ticks.at(-1),
     finalPresentation: { displayedAtMs: run.displayed,
       targetViewport: { width: Math.trunc(root.frame.width), height: Math.trunc(root.frame.height) },

@@ -164,6 +164,7 @@ test("tools/call maps tools to endpoint methods", async (t) => {
   assert.equal(await call("input_pointer", { x: 1, y: 2, phase: "move" }), null);
   assert.equal(await call("input_pointer", { x: 1, y: 2, phase: "down", button: "right" }), null);
   assert.equal(await call("input_pointer", { x: 1, y: 2, phase: "move", activate: true }), null);
+  assert.equal(await call("input_pointer", { x: 1, y: 2, phase: "down", clicks: 2 }), null);
   assert.equal(await call("input_key", { key: "Enter", phase: "down", modifiers: ["shift"] }), null);
   assert.deepEqual(
     endpoint.requests.map((m) => [m.method, m.params]),
@@ -177,6 +178,7 @@ test("tools/call maps tools to endpoint methods", async (t) => {
       ["input.pointer", { window: "main", x: 1, y: 2, phase: "move" }],
       ["input.pointer", { window: "main", x: 1, y: 2, phase: "down", button: "right" }],
       ["input.pointer", { window: "main", x: 1, y: 2, phase: "move", activate: true }],
+      ["input.pointer", { window: "main", x: 1, y: 2, phase: "down", clicks: 2 }],
       ["input.key", { window: "main", key: "Enter", phase: "down", modifiers: ["shift"] }],
     ],
   );

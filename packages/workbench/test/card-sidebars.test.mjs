@@ -213,6 +213,18 @@ test("a section view of an open sidebar stops before the boundary line, so the v
   }
 });
 
+test("the fold of a sidebar status line is a stroke icon in the color of its button, not a filled shape", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const css = await readFile(new URL("../app.css", import.meta.url), "utf8");
+  // The declarations are read from the rule, because jsdom does not keep the keyword of an SVG paint in a computed style.
+  const rule = css.match(/\.sidebar-status__fold svg\{([^}]*)\}/);
+  assert.ok(rule, "the rule of the fold icon");
+  const declared = new Map(rule[1].split(";").map((item) => item.split(":").map((part) => part.trim())));
+  assert.equal(declared.get("fill"), "none");
+  assert.equal(declared.get("stroke"), "currentColor");
+  assert.equal(declared.get("stroke-width"), "var(--icon-stroke)");
+});
+
 test("a section with an integer height gives way when the sidebar is short, and a fill section keeps its head and minimum height", async () => {
   const { JSDOM } = await import("jsdom");
   const { readFile } = await import("node:fs/promises");

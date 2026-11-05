@@ -202,7 +202,7 @@ static void timed(void *context, sp_input_result result, const sp_input_held *he
 static SPReceipt pointerThen(NSWindow *window, WKWebView *view, double x, double y, int phase, double timeout) {
     SPReceipt receipt = {NO, SP_INPUT_REJECTED, 0, view, NO};
     SPReceipt *state = &receipt;
-    sp_input_pointer_then(window, x, y, phase, 0, 0, 0, timeout, received, state);
+    sp_input_pointer_then(window, x, y, phase, 0, 0, 0, 1, timeout, received, state);
     until(^BOOL { return state->done; });
     return receipt;
 }
@@ -243,7 +243,7 @@ static void checkReceipts(void) {
     [view evaluateJavaScript:@"{const end=Date.now()+1000; while(Date.now()<end){}} null" completionHandler:nil];
     SPTimed late = {NO, SP_INPUT_REJECTED, [NSDate timeIntervalSinceReferenceDate], 0};
     SPTimed *lateState = &late;
-    sp_input_pointer_then(window, 50, 50, 1, 0, 0, 0, 5, timed, lateState);
+    sp_input_pointer_then(window, 50, 50, 1, 0, 0, 0, 1, 5, timed, lateState);
     until(^BOOL { return lateState->done; });
     check(late.result == SP_INPUT_DELIVERED && late.took >= 0.9,
         [NSString stringWithFormat:@"a press completes only after a busy document is free to receive it (%d after %.3fs)", late.result, late.took]);
@@ -253,7 +253,7 @@ static void checkReceipts(void) {
     [view evaluateJavaScript:@"{const end=Date.now()+2500; while(Date.now()<end){}} null" completionHandler:nil];
     SPTimed busy = {NO, SP_INPUT_DELIVERED, [NSDate timeIntervalSinceReferenceDate], 0};
     SPTimed *busyState = &busy;
-    sp_input_pointer_then(window, 50, 50, 1, 0, 0, 0, 0.5, timed, busyState);
+    sp_input_pointer_then(window, 50, 50, 1, 0, 0, 0, 1, 0.5, timed, busyState);
     until(^BOOL { return busyState->done; });
     check(busy.result == SP_INPUT_UNRECEIVED && busy.took >= 0.45 && busy.took < 2,
         [NSString stringWithFormat:@"a press a busy document does not receive in time is reported (%d after %.3fs)", busy.result, busy.took]);
@@ -279,6 +279,77 @@ static void checkReceipts(void) {
 - (void)rightMouseDragged:(NSEvent *)event { self.rightDrags++; }
 - (void)rightMouseUp:(NSEvent *)event { self.rightUps++; }
 @end
+
+// A window that answers as the key window, because a move without a button goes only to the key window and make test does not
+// activate the application.
+@interface SPKeyAnswerWindow : NSWindow
+@end
+@implementation SPKeyAnswerWindow
+- (BOOL)isKeyWindow { return YES; }
+@end
+
+@interface SPTrackedView : NSView
+@property(nonatomic) NSUInteger moves;
+@property(nonatomic) NSUInteger enters;
+@property(nonatomic) NSUInteger exits;
+@property(nonatomic) NSUInteger downs;
+@property(nonatomic) NSUInteger movesAtDown;
+@end
+@implementation SPTrackedView
+- (void)track:(NSTrackingAreaOptions)options {
+    NSTrackingArea *area = [[[NSTrackingArea alloc] initWithRect:self.bounds options:options | NSTrackingActiveAlways
+        owner:self userInfo:nil] autorelease];
+    [self addTrackingArea:area];
+}
+- (void)mouseMoved:(NSEvent *)event { self.moves++; }
+- (void)mouseEntered:(NSEvent *)event { self.enters++; }
+- (void)mouseExited:(NSEvent *)event { self.exits++; }
+- (void)mouseDown:(NSEvent *)event { self.downs++; self.movesAtDown = self.moves; }
+@end
+
+// A person's move reaches the owner of every tracking area that holds the pointer, so a view under another view hears it too. The
+// move also crosses the enter and exit of each area.
+static void checkMoveReachesEveryOwner(void) {
+    NSWindow *window = [[SPKeyAnswerWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(300, 200))
+        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+    [window setReleasedWhenClosed:NO];
+    NSView *content = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 300, 200)] autorelease];
+    window.contentView = content;
+    const NSTrackingAreaOptions both = NSTrackingMouseEnteredAndExited | NSTrackingMouseMoved;
+    SPTrackedView *below = [[[SPTrackedView alloc] initWithFrame:content.bounds] autorelease];
+    SPTrackedView *above = [[[SPTrackedView alloc] initWithFrame:NSMakeRect(0, 0, 200, 200)] autorelease];
+    SPTrackedView *inner = [[[SPTrackedView alloc] initWithFrame:NSMakeRect(0, 0, 100, 100)] autorelease];
+    SPTrackedView *hidden = [[[SPTrackedView alloc] initWithFrame:content.bounds] autorelease];
+    SPTrackedView *quiet = [[[SPTrackedView alloc] initWithFrame:NSMakeRect(0, 0, 100, 100)] autorelease];
+    hidden.hidden = YES;
+    [content addSubview:below]; [content addSubview:quiet]; [content addSubview:above]; [above addSubview:inner]; [content addSubview:hidden];
+    [below track:NSTrackingMouseMoved | NSTrackingInVisibleRect];
+    [above track:both];
+    [inner track:both];
+    [hidden track:both];
+    [quiet track:NSTrackingMouseEnteredAndExited];
+    [window orderBack:nil];
+    pointerOutside(window);
+    check(sp_input_pointer(window, 50, 150, 0, 0, 0, 0) == SP_INPUT_DELIVERED, @"a move over overlapping owners is delivered");
+    check(below.moves == 1 && above.moves == 1 && inner.moves == 1, @"each owner of a tracking area at the point hears the move");
+    check(hidden.moves == 0 && hidden.enters == 0, @"the owner of a tracking area in a hidden view hears nothing");
+    check(quiet.moves == 0, @"an area without moves receives no move");
+    check(quiet.enters == 1 && above.enters == 1 && inner.enters == 1, @"a first move enters each area at the point");
+    check(sp_input_pointer(window, 60, 150, 0, 0, 0, 0) == SP_INPUT_DELIVERED && below.moves == 2 && inner.enters == 1,
+        @"a move inside an area enters it once");
+    check(sp_input_pointer(window, 150, 50, 0, 0, 0, 0) == SP_INPUT_DELIVERED && below.moves == 3 && above.moves == 3,
+        @"owners that still hold the point keep hearing the moves");
+    check(inner.moves == 2 && inner.exits == 1 && quiet.exits == 1, @"a move out of an area exits it and sends it no move");
+    check(above.exits == 0, @"an area that holds the point is not exited");
+
+    // A press at another point: a person moved there first, so the owners know the point before the press.
+    const NSUInteger before = below.moves;
+    check(sp_input_pointer(window, 50, 150, 1, 0, 0, 0) == SP_INPUT_DELIVERED, @"a press after a move elsewhere is delivered");
+    check(inner.downs == 1 && below.moves == before + 1 && inner.movesAtDown == 3, @"the owners hear the point of a press before the press");
+    check(sp_input_pointer(window, 50, 150, 3, 0, 0, 0) == SP_INPUT_DELIVERED, @"the release of that press is delivered");
+    [window close];
+    [window release];
+}
 
 static void checkPointerTargetAcrossViews(void) {
     NSWindow *window = [[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(240, 120))
@@ -372,6 +443,54 @@ static void checkIndependentWindowKeys(void) {
     [second release];
 }
 
+// A press and a release carry the click count of a person's click, and the second press of a double click makes the page's dblclick.
+@interface SPClickRecorder : NSView
+@property(nonatomic) NSInteger downCount;
+@property(nonatomic) NSInteger upCount;
+@end
+@implementation SPClickRecorder
+- (void)mouseDown:(NSEvent *)event { self.downCount = event.clickCount; }
+- (void)mouseUp:(NSEvent *)event { self.upCount = event.clickCount; }
+@end
+
+static void checkClickCount(void) {
+    NSWindow *window = [[[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(300, 200))
+        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO] autorelease];
+    [window setReleasedWhenClosed:NO];
+    SPClickRecorder *recorder = [[[SPClickRecorder alloc] initWithFrame:NSMakeRect(0, 0, 300, 200)] autorelease];
+    window.contentView = recorder;
+    [window orderBack:nil];
+    check(sp_input_pointer(window, 20, 20, 1, 0, 0, 0) == SP_INPUT_DELIVERED && sp_input_pointer(window, 20, 20, 3, 0, 0, 0) == SP_INPUT_DELIVERED,
+        @"a click without a count is delivered");
+    check(recorder.downCount == 1 && recorder.upCount == 1, @"a click without a count has the click count 1");
+    check(sp_input_pointer_clicks(window, 20, 20, 1, 0, 2) == SP_INPUT_DELIVERED && sp_input_pointer_clicks(window, 20, 20, 3, 0, 2) == SP_INPUT_DELIVERED,
+        @"a second press with the count 2 is delivered");
+    check(recorder.downCount == 2 && recorder.upCount == 2,
+        [NSString stringWithFormat:@"the press and the release have the click count 2 (got %ld and %ld)", (long)recorder.downCount, (long)recorder.upCount]);
+    recorder.downCount = 0;
+    const int outside[] = {0, -1, SP_INPUT_CLICKS_MAX + 1};
+    for (size_t index = 0; index < sizeof outside / sizeof outside[0]; index++) {
+        check(sp_input_pointer_clicks(window, 20, 20, 1, 0, outside[index]) == SP_INPUT_REJECTED, @"a click count out of range is rejected");
+    }
+    check(recorder.downCount == 0, @"a rejected click count delivers no press");
+    check(sp_input_pointer(window, 20, 20, 1, 0, 0, 0) == SP_INPUT_DELIVERED && sp_input_pointer(window, 20, 20, 3, 0, 0, 0) == SP_INPUT_DELIVERED,
+        @"a rejected click count leaves no press open");
+
+    WKWebView *view = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 300, 200)] autorelease];
+    window.contentView = view;
+    [view loadHTMLString:@"<!doctype html><body style='margin:0;height:200px'><script>window.probe={double:0,detail:0};"
+        "addEventListener('dblclick',e=>{probe.double++;probe.detail=e.detail},true);window.ready=true;</script>" baseURL:nil];
+    until(^BOOL { return [evaluate(view, @"Boolean(window.ready)") boolValue]; });
+    pointerOutside(window);
+    check(sp_input_pointer_clicks(window, 50, 50, 1, 0, 1) == SP_INPUT_DELIVERED && sp_input_pointer_clicks(window, 50, 50, 3, 0, 1) == SP_INPUT_DELIVERED
+        && sp_input_pointer_clicks(window, 50, 50, 1, 0, 2) == SP_INPUT_DELIVERED && sp_input_pointer_clicks(window, 50, 50, 3, 0, 2) == SP_INPUT_DELIVERED,
+        @"the presses of a double click are delivered to the page");
+    until(^BOOL { return [evaluate(view, @"probe.double") unsignedIntegerValue] > 0; });
+    check([evaluate(view, @"probe.double") unsignedIntegerValue] == 1 && [evaluate(view, @"probe.detail") unsignedIntegerValue] == 2,
+        @"the second press with the count 2 makes one dblclick with the detail 2");
+    [window close];
+}
+
 int main(void) { @autoreleasepool {
     // The records that this test reads include events below the level error, which the default policy refuses (docs/spec/logging.md#policy):
     // the policy that stores every level is set here, and the default policy is tested in event_ring_test.
@@ -385,6 +504,7 @@ int main(void) { @autoreleasepool {
     checkActivityWaitDelayedRegistration();
     checkActivityWaitRegistrationTimeout();
     checkPointerTargetAcrossViews();
+    checkMoveReachesEveryOwner();
     NSWindow *window = [[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(400, 300))
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
     [window setReleasedWhenClosed:NO];
@@ -531,5 +651,6 @@ int main(void) { @autoreleasepool {
     [window close];
     checkIndependentWindowKeys();
     checkReceipts();
+    checkClickCount();
     return failures ? 1 : 0;
 }}

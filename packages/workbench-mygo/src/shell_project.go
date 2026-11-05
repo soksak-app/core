@@ -95,8 +95,54 @@ func (s *Shell) openFolder(folder ProjectFolderValue, color string, done func(pr
 			done(nil, err)
 			return
 		}
-		s.projects = append(s.projects, added)
-		s.activateThen(added.ID, func() { done(raw, nil) })
+		s.adoptAdded(added.ID, func(err error) {
+			if err != nil {
+				done(nil, err)
+				return
+			}
+			s.activateThen(added.ID, func() { done(raw, nil) })
+		})
+	})
+}
+
+// adoptAdded takes the project id that the workspace just added or already knew, as readProjects does after an add: the record of
+// the workspace holds the settings of the file of its folder, which the answer of the add does not. A project that the window holds
+// keeps its layouts and takes the settings.
+func (s *Shell) adoptAdded(id string, done func(err error)) {
+	s.calls.CallInOrder("workspace", "workspace", map[string]string{"kind": "snapshot"}, func(value any, err error) {
+		if err != nil {
+			done(err)
+			return
+		}
+		snapshot, err := decode[struct {
+			Projects []json.RawMessage `json:"projects"`
+		}](value)
+		if err != nil {
+			done(err)
+			return
+		}
+		for _, raw := range snapshot.Projects {
+			stored, err := readProject(raw)
+			if err != nil {
+				done(err)
+				return
+			}
+			if stored.ID != id {
+				continue
+			}
+			if known := s.project(id); known != nil {
+				delete(known.Rest, "settings")
+				if settings, ok := stored.Rest["settings"]; ok {
+					known.Rest["settings"] = settings
+				}
+				done(nil)
+				return
+			}
+			s.projects = append(s.projects, stored)
+			done(nil)
+			return
+		}
+		done(fmt.Errorf("Unknown project: %s", id))
 	})
 }
 
@@ -148,6 +194,48 @@ func (s *Shell) openRoot(root, color string, done func(project json.RawMessage, 
 	})
 }
 
+// registerProjectClose registers core.project.close. The window that shows the project asks about its modified tabs, and the
+// command answers when the host removed the project or when a tab or another window kept it.
+func (s *Shell) registerProjectClose() {
+	s.registry.CommandLater("core.project.close", func(raw json.RawMessage, answer func(any, error)) {
+		value, err := params[idParam](raw)
+		if err != nil {
+			answer(nil, Refuse(InvalidParams, "core.project.close: %s", err))
+			return
+		}
+		if s.project(value.ID) == nil {
+			answer(nil, fmt.Errorf("Unknown project: %s", value.ID))
+			return
+		}
+		remove := func() {
+			s.removeProjectThen(value.ID, func(removed bool, err error) {
+				if err != nil {
+					answer(nil, err)
+					return
+				}
+				answer(closed(removed), nil)
+			})
+		}
+		if value.ID != s.active {
+			remove()
+			return
+		}
+		s.settleModified(func(settled bool) {
+			if !settled {
+				answer(closed(false), nil)
+				return
+			}
+			remove()
+		})
+	})
+}
+
+// newWindow opens a new unassigned window, as projects.newWindow does, and gives done the outcome of the host call.
+func (s *Shell) newWindow(done func(err error)) {
+	cids := s.events.BeginOperation("workbench.window.operation", map[string]any{"action": "new"})
+	s.calls.Caused(cids).Call("windowNew", nil, func(_ any, err error) { done(err) })
+}
+
 // ProjectFolderValue is the answer of projectFolder and projectCreate.
 type ProjectFolderValue struct {
 	Root     string `json:"root"`
@@ -176,6 +264,18 @@ func (s *Shell) activateThen(id string, done func()) {
 	project := s.project(id)
 	if project == nil {
 		s.fail(fmt.Errorf("Unknown project: %s", id))
+		done()
+		return
+	}
+	var refused string
+	if err := member(project.Rest, "settingsError", &refused); err != nil {
+		s.fail(err)
+		done()
+		return
+	}
+	// The host refused the settings file of the project, so the window does not open it (docs/spec/projects.md#settings).
+	if refused != "" {
+		s.fail(errors.New(refused))
 		done()
 		return
 	}
@@ -243,6 +343,7 @@ func (s *Shell) showThen(id string, done func()) {
 		return
 	}
 	s.active, s.browsing = id, false
+	s.windowProjects[id] = true
 	s.options.Located(id)
 	s.errors.Hide(workbenchErrorPlace)
 	if err := s.beginSettings(s.settings.Common()); err != nil {
@@ -289,12 +390,14 @@ func (s *Shell) loadSpace(project *projectRecord) error {
 			return fmt.Errorf("space %s: %w", space.ID, err)
 		}
 	}
+	s.keepCardFactors()
 	s.plane, s.fullscreen = plane, ""
 	// A new space stores no focus, and the stored focus of a card that left the layout names no card.
-	s.focused = stored.FocusedID
-	if _, known := plane.Card(s.focused); !known {
-		s.focused = s.firstCard(plane)
+	focused := stored.FocusedID
+	if _, known := plane.Card(focused); !known {
+		focused = s.firstCard(plane)
 	}
+	s.focusCard(focused)
 	if _, err := s.arrangeWindowSidebars(); err != nil {
 		return fmt.Errorf("space %s: %w", space.ID, err)
 	}
@@ -318,7 +421,7 @@ func (s *Shell) arrangeWindowSidebars() (bool, error) {
 	width, _ := s.settings.Value("sidebarWidth").(float64)
 	changed, err := layout.ArrangeWindowSidebars(s.plane, s.sidebars.Sides(), s.windowSidebars, width, shown)
 	if _, ok := s.plane.Card(s.focused); !ok {
-		s.focused = s.firstCard(s.plane)
+		s.focusCard(s.firstCard(s.plane))
 	}
 	return changed, err
 }
@@ -492,11 +595,12 @@ func (s *Shell) removeProjectThen(id string, done func(removed bool, err error))
 func (s *Shell) dropProject(id string) {
 	var tabs []string
 	for tab, held := range s.surfaces.held {
-		if held.project.ID == id {
+		if held.owner == id {
 			tabs = append(tabs, tab)
 		}
 	}
 	s.forgetSurfaces(tabs)
+	delete(s.windowProjects, id)
 	for i := range s.projects {
 		if s.projects[i].ID == id {
 			s.projects = append(s.projects[:i:i], s.projects[i+1:]...)
@@ -537,26 +641,26 @@ func (s *Shell) activateSpace(id string) error {
 }
 
 // addSpace adds a space with a new layout and shows it.
-func (s *Shell) addSpace() error {
+func (s *Shell) addSpace() (layout.Space, error) {
 	project := s.opened()
 	if project == nil {
-		return fmt.Errorf("no project is shown")
+		return layout.Space{}, fmt.Errorf("no project is shown")
 	}
 	first, err := s.newLayout()
 	if err != nil {
-		return err
+		return layout.Space{}, err
 	}
 	if err := s.keepPlane(project); err != nil {
-		return err
+		return layout.Space{}, err
 	}
-	layout.AppendSpace(&project.Project, s.newSpaceID(), first)
+	space := layout.AppendSpace(&project.Project, s.newSpaceID(), first)
 	if err := s.loadSpace(project); err != nil {
-		return err
+		return layout.Space{}, err
 	}
 	s.storeSpaces(project)
 	s.tabsSettled()
 	s.options.Invalidate()
-	return nil
+	return space, nil
 }
 
 // closeSpace closes the space id. The only space of a project does not close.
@@ -598,6 +702,25 @@ func (s *Shell) closeSpace(id string) error {
 // planeHasTab reports whether the shown plane holds the tab id.
 func (s *Shell) planeHasTab(id string) bool {
 	return s.cardOfTab(id) != ""
+}
+
+// keepCardFactors gives each held tab of the plane that leaves the screen the factor of its card.
+func (s *Shell) keepCardFactors() {
+	if s.plane == nil {
+		return
+	}
+	factors := s.text.place.CardTextSizes()
+	for _, card := range s.plane.Cards() {
+		data, err := layout.DecodeCardData(card.Data)
+		if err != nil || data == nil {
+			continue
+		}
+		for _, tab := range data.TabList() {
+			if held := s.surfaces.held[tab.ID]; held != nil {
+				held.cardFactor = factors[card.ID]
+			}
+		}
+	}
 }
 
 // cardOfTab returns the card of the shown plane that holds the tab id.
@@ -756,7 +879,7 @@ func (s *Shell) splitCard(id, side, plugin string) (map[string]string, error) {
 	if !ok {
 		return nil, fmt.Errorf("card %s cannot split toward %s", id, side)
 	}
-	s.focused = born
+	s.focusCard(born)
 	s.settle()
 	return map[string]string{"card": born, "tab": tab.ID}, nil
 }
@@ -781,7 +904,7 @@ func (s *Shell) closeCard(id string) error {
 	s.plane.Close(id)
 	delete(s.operated, id)
 	if s.focused == id {
-		s.focused = s.firstCard(s.plane)
+		s.focusCard(s.firstCard(s.plane))
 	}
 	s.settleThen(s.droppedTabs(dropped))
 	return nil
@@ -815,7 +938,7 @@ func (s *Shell) addTab(id, plugin string, params json.RawMessage) (string, error
 	if err := s.storeCard(id, data); err != nil {
 		return "", err
 	}
-	s.focused = id
+	s.focusCard(id)
 	s.settle()
 	return tab.ID, nil
 }
@@ -855,7 +978,7 @@ func (s *Shell) selectTab(id string) error {
 	if err := s.storeCard(card, data); err != nil {
 		return err
 	}
-	s.focused = card
+	s.focusCard(card)
 	s.settle()
 	return nil
 }

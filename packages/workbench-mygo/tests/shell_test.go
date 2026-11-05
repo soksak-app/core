@@ -21,7 +21,9 @@ import (
 
 // storedHost answers the host calls of the shell from memory, as the workspace store of the language host library does.
 type storedHost struct {
-	plugins *pluginsHost
+	folderSettings map[string]map[string]any // The settings files of the folders, by root.
+	keepsProjects  bool                      // The answer of projectRemoveAsk is that the project stays.
+	plugins        *pluginsHost
 	// reloads counts the starts of the workbench that the shell asked for.
 	reloads int
 	// located is the project that the shell last named as the one that its window shows.
@@ -31,9 +33,13 @@ type storedHost struct {
 	// detaching are the surfaces whose image detach is pending when a window starts.
 	detaching []string
 	projects  []map[string]any
+	// createRefused is the refusal of projectCreate.
+	createRefused error
 	// appUpdate is the answer of appUpdateState, and opened holds the arguments of linkOpen.
 	appUpdate any
 	opened    []json.RawMessage
+	// backgrounds are the values of setDialogBackground in their order.
+	backgrounds []bool
 	// forwards are the requests that the shell forwarded to surfaces, and each gets an empty result.
 	forwards []map[string]any
 	// extra holds the host calls that the base table has not.
@@ -182,6 +188,9 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 			return map[string]string{"root": root, "identity": "identity of " + root}, nil
 		}),
 		"projectCreate": answer("projectCreate", func(argument json.RawMessage) (any, error) {
+			if h.createRefused != nil {
+				return nil, h.createRefused
+			}
 			var request struct{ Parent, Name string }
 			if err := json.Unmarshal(argument, &request); err != nil {
 				return nil, err
@@ -201,7 +210,7 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 			return nil, nil
 		}),
 		"projectRelease":   answer("projectRelease", none),
-		"projectRemoveAsk": answer("projectRemoveAsk", func(json.RawMessage) (any, error) { return true, nil }),
+		"projectRemoveAsk": answer("projectRemoveAsk", func(json.RawMessage) (any, error) { return !h.keepsProjects, nil }),
 		"folderChoose":     answer("folderChoose", func(json.RawMessage) (any, error) { return "/chosen", nil }),
 		"windowReady":      answer("windowReady", none),
 		"sidecarsRetain": answer("sidecarsRetain", func(argument json.RawMessage) (any, error) {
@@ -216,6 +225,7 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 			return map[string]any{"ticket": 1, "placements": []any{}, "chrome": map[string]any{}}, nil
 		}),
 		"presentSurfaces": answer("presentSurfaces", none),
+		"surfaceFocus":    answer("surfaceFocus", none),
 		"exposureForward": answer("exposureForward", func(argument json.RawMessage) (any, error) {
 			var request map[string]any
 			if err := json.Unmarshal(argument, &request); err != nil {
@@ -224,10 +234,19 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 			h.forwards = append(h.forwards, request)
 			return map[string]any{"result": nil}, nil
 		}),
-		"viewReply":       answer("viewReply", none),
+		"viewReply": answer("viewReply", none),
+		"setDialogBackground": answer("setDialogBackground", func(argument json.RawMessage) (any, error) {
+			var enabled bool
+			if err := json.Unmarshal(argument, &enabled); err != nil {
+				return nil, err
+			}
+			h.backgrounds = append(h.backgrounds, enabled)
+			return nil, nil
+		}),
 		"setMenuLanguage": answer("setMenuLanguage", func(argument json.RawMessage) (any, error) { h.language = argument; return nil, nil }),
 		"windowNew":       answer("windowNew", none),
 		"windowClose":     answer("windowClose", none),
+		"windowCloseKept": answer("windowCloseKept", none),
 		"pluginsState":    answer("pluginsState", h.pluginHost().state),
 		"pluginsRun":      answer("pluginsRun", h.pluginHost().run),
 		"pluginsUseRegistry": answer("pluginsUseRegistry", func(argument json.RawMessage) (any, error) {
@@ -312,6 +331,11 @@ func (h *storedHost) workspace(argument json.RawMessage) (any, error) {
 	}
 	switch request.Kind {
 	case "snapshot":
+		for _, project := range h.projects {
+			if settings, ok := h.folderSettings[project["root"].(string)]; ok {
+				project["settings"] = settings
+			}
+		}
 		return map[string]any{"projects": h.projects, "open": []string{}, "common": h.common}, nil
 	case "settings":
 		h.settings = append(h.settings, map[string]any{"id": request.ID, "patch": request.Patch, "remove": request.Remove})
@@ -323,6 +347,12 @@ func (h *storedHost) workspace(argument json.RawMessage) (any, error) {
 	case "tabStatePut", "tabSessionPut":
 		return 1, nil
 	case "add":
+		for _, project := range h.projects {
+			if project["root"] == request.Project["root"] {
+				return project, nil
+			}
+		}
+		delete(request.Project, "settings") // The settings of a project are the file of its folder.
 		h.projects = append(h.projects, request.Project)
 		return request.Project, nil
 	case "patch":
@@ -478,10 +508,37 @@ func (f *shellFixture) run(name string, params any) {
 	if err != nil {
 		f.t.Fatal(err)
 	}
-	if _, err := f.shell.Registry().Run(name, raw); err != nil {
+	var failure error
+	f.shell.Registry().RunLater(name, raw, func(_ any, err error) { failure = err })
+	f.settle()
+	if failure != nil {
+		f.t.Fatal(failure)
+	}
+}
+
+// answerText runs a command as the endpoint runs it and returns its answer as JSON.
+func (f *shellFixture) answerText(name string, params any) string {
+	f.t.Helper()
+	raw, err := json.Marshal(params)
+	if err != nil {
 		f.t.Fatal(err)
 	}
+	answered := false
+	var value any
+	var failure error
+	f.shell.Registry().RunLater(name, raw, func(answer any, err error) { answered, value, failure = true, answer, err })
 	f.settle()
+	if !answered {
+		f.t.Fatalf("%s did not answer", name)
+	}
+	if failure != nil {
+		f.t.Fatalf("%s failed: %v", name, failure)
+	}
+	text, err := json.Marshal(value)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	return string(text)
 }
 
 // audit fails the test when the frame has an interactive element without a command or an element name.
@@ -564,7 +621,9 @@ func TestTheWindowNamesTheProjectThatItShows(t *testing.T) {
 	if f.host.located != id {
 		t.Fatal("the library over an open project gave up the project of the window")
 	}
-	f.run("core.project.close", map[string]string{"id": id})
+	if err := f.finish("core.project.close", map[string]string{"id": id}); err != nil {
+		t.Fatal(err)
+	}
 	if f.host.located != "" {
 		t.Fatalf("the window still names %q", f.host.located)
 	}
@@ -798,6 +857,150 @@ func TestProjectOpenCommandOpensTheFolder(t *testing.T) {
 	}
 	if opened.Root != "/work/alpha" || project["id"] != opened.ID || len(stored.projects) != 1 || stored.projects[0]["color"] != "#ffb36b" {
 		t.Fatalf("the command answered %s, the shell shows %v and stores %v", text, project, stored.projects)
+	}
+}
+
+// answerOf runs the command name, which may answer in a later step, and returns the text of its answer.
+func (f *shellFixture) answerOf(name string, params any) string {
+	f.t.Helper()
+	raw, err := json.Marshal(params)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	var value any
+	var failure error
+	answered := false
+	f.shell.Registry().RunLater(name, raw, func(result any, err error) { value, failure, answered = result, err, true })
+	f.settle()
+	if !answered || failure != nil {
+		f.t.Fatalf("%s answered %v with %v", name, answered, failure)
+	}
+	text, err := json.Marshal(value)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	return string(text)
+}
+
+// core.project.close answers after the host removed the project, as a client that closes the last window reads it.
+func TestProjectCloseCommandAnswersThatItClosed(t *testing.T) {
+	f := openedShell(t)
+	id := f.host.projects[0]["id"].(string)
+	if got := f.answerOf("core.project.close", map[string]string{"id": id}); got != `{"closed":true}` {
+		t.Fatalf("the command answered %s", got)
+	}
+	if len(f.host.projects) != 0 {
+		t.Fatalf("the host still stores %v", f.host.projects)
+	}
+}
+
+func TestProjectCloseCommandAnswersThatTheHostKeptTheProject(t *testing.T) {
+	f := openedShell(t)
+	f.host.keepsProjects = true
+	id := f.host.projects[0]["id"].(string)
+	if got := f.answerOf("core.project.close", map[string]string{"id": id}); got != `{"closed":false}` {
+		t.Fatalf("the command answered %s", got)
+	}
+	if len(f.host.projects) != 1 {
+		t.Fatalf("the host stores %v", f.host.projects)
+	}
+}
+
+func TestProjectCloseCommandRefusesAnUnknownProject(t *testing.T) {
+	f := openedShell(t)
+	if err := f.finish("core.project.close", map[string]string{"id": "project-none"}); err == nil || err.Error() != "Unknown project: project-none" {
+		t.Fatalf("the command failed with %v", err)
+	}
+}
+
+// core.window.new opens a window and answers null when the host opened it.
+func TestWindowNewCommandOpensAWindow(t *testing.T) {
+	f := newShell(t, &storedHost{})
+	var answer any = "no answer"
+	var failure error
+	f.shell.Registry().RunLater("core.window.new", json.RawMessage(`{}`), func(value any, err error) { answer, failure = value, err })
+	f.settle()
+	if failure != nil || answer != nil {
+		t.Fatalf("the command answered %v with %v", answer, failure)
+	}
+	if !f.host.called("windowNew") {
+		t.Fatalf("the host received %v", f.host.calls)
+	}
+}
+
+// A folder that holds a settings file shows them when it opens, as after a start of the application.
+func TestAnOpenedFolderTakesTheSettingsOfItsFile(t *testing.T) {
+	stored := &storedHost{folderSettings: map[string]map[string]any{"/work/alpha": {"mode": "light"}}}
+	f := newShell(t, stored)
+	if err := f.finish("core.project.open", map[string]string{"root": "/work/alpha"}); err != nil {
+		t.Fatal(err)
+	}
+	var theme struct {
+		Scheme string `json:"scheme"`
+	}
+	if err := json.Unmarshal(stored.theme, &theme); err != nil {
+		t.Fatal(err)
+	}
+	if theme.Scheme != "light" {
+		t.Fatalf("the window shows the scheme %s of %s", theme.Scheme, stored.theme)
+	}
+}
+
+// A folder that the application knows opens as the project that it is.
+func TestOpeningAKnownFolderAddsNoProject(t *testing.T) {
+	f := newShell(t, &storedHost{})
+	for range 2 {
+		if err := f.finish("core.project.open", map[string]string{"root": "/work/alpha"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	projects := status[[]map[string]any](t, f, "core.projects")
+	if len(projects) != 1 {
+		t.Fatalf("the window lists %v", projects)
+	}
+}
+
+// Coming back to the application keeps the theme: the mode is a setting.
+func TestAnActivationKeepsTheTheme(t *testing.T) {
+	stored := &storedHost{}
+	f := newShell(t, stored)
+	before := string(stored.theme)
+	f.shell.Event("window-active", nil)
+	f.settle()
+	if got := string(stored.theme); got != before {
+		t.Fatalf("the theme went from %s to %s", before, got)
+	}
+}
+
+// A project whose settings file the host refused does not open, and the window states the reason (docs/spec/projects.md#settings).
+func TestAProjectWithARefusedSettingsFileDoesNotOpen(t *testing.T) {
+	project := storedProject(tab("tab-aaaaaa", "notes"))
+	project["settingsError"] = "the settings file is refused"
+	f := newShell(t, &storedHost{projects: []map[string]any{project}})
+	if _, err := f.shell.Registry().Run("core.project.activate", json.RawMessage(`{"id":"`+project["id"].(string)+`"}`)); err != nil {
+		t.Fatal(err)
+	}
+	f.pending.drain(t)
+	f.tester.Frame()
+	if errors := f.host.written("workbench.record.error"); len(errors) != 1 || !strings.Contains(fmt.Sprint(errors[0]), "the settings file is refused") {
+		t.Fatalf("the shell recorded %v", errors)
+	}
+	if opened := f.host.called("projectOpen"); opened {
+		t.Fatal("the window opened the project")
+	}
+}
+
+// The host answers a folder that it knows with its project, and the window keeps one tab of that project.
+func TestProjectOpenCommandShowsAKnownFolderOnce(t *testing.T) {
+	stored := &storedHost{}
+	f := newShell(t, stored)
+	for range 2 {
+		if err := f.finish("core.project.open", map[string]string{"root": "/work/alpha"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if projects := status[[]map[string]any](t, f, "core.projects"); len(projects) != 1 {
+		t.Fatalf("the window holds the projects %v", projects)
 	}
 }
 

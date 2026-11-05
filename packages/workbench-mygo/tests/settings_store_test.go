@@ -3,6 +3,7 @@ package workbench_test
 import (
 	"encoding/json"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -315,5 +316,22 @@ func TestAStoredSettingOfALoadedPluginMustBeDeclared(t *testing.T) {
 	err := store.Begin(map[string]any{"acme.gone": 1.0}, nil, "")
 	if err == nil || !strings.Contains(err.Error(), "unknown setting acme.gone") {
 		t.Fatalf("the error is %v", err)
+	}
+}
+
+// The application is written in the languages of its menu, its default language first, so the language it shows follows the system.
+func TestTheApplicationIsWrittenInTheLanguagesOfItsMenu(t *testing.T) {
+	catalog, err := workbench.ReadSettingsCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	languages := catalog.AppLanguages()
+	if len(languages) != len(catalog.MenuLanguages) || languages[0] != catalog.Default {
+		t.Fatalf("the languages are %v of the menu languages %v with the default %s", languages, catalog.MenuLanguages, catalog.Default)
+	}
+	for _, language := range catalog.MenuLanguages {
+		if !slices.Contains(languages, language.ID) {
+			t.Fatalf("the languages %v lack %s", languages, language.ID)
+		}
 	}
 }

@@ -102,7 +102,7 @@ fn host_declarations() -> Value {
                 "content": rect,
                 "scale": {"type": "number"},
                 "refreshRate": {"type": ["integer", "null"]},
-                "pageProcess": {"type": "integer"},
+                "pageProcess": {"type": ["integer", "null"]},
                 "quitting": {"type": "boolean"},
                 "maximized": {"type": "boolean"},
                 "key": {"type": "boolean"},
@@ -278,8 +278,25 @@ pub fn button_held_message(held: &ButtonHeld) -> String {
     )
 }
 
+/// The largest click count of `input.pointer`: a person's triple click.
+const POINTER_CLICKS_MAX: i64 = 3;
+
+/// Every field of `input.pointer`. A field outside it is rejected, so a misspelled or an unsupported field does not
+/// deliver a different gesture than the caller asked for.
+const POINTER_FIELDS: [&str; 9] = [
+    "window", "x", "y", "phase", "button", "deltaX", "deltaY", "activate", "clicks",
+];
+
 /// Reads the parameters of `input.pointer`.
 pub fn pointer(params: &Map<String, Value>) -> Result<Pointer, Failure> {
+    if let Some(field) = params
+        .keys()
+        .find(|field| !POINTER_FIELDS.contains(&field.as_str()))
+    {
+        return Err(Failure::params(format!(
+            "input.pointer has no field {field}"
+        )));
+    }
     let phase = match params.get("phase").and_then(Value::as_str) {
         Some("move") => 0,
         Some("down") => 1,
@@ -306,6 +323,20 @@ pub fn pointer(params: &Map<String, Value>) -> Result<Pointer, Failure> {
     if activate && phase != 0 {
         return Err(Failure::params("activate applies only to phase move"));
     }
+    let clicks = match params.get("clicks") {
+        None | Some(Value::Null) => 1,
+        Some(_) if phase != 1 && phase != 3 => {
+            return Err(Failure::params("clicks applies only to phase down or up"));
+        }
+        Some(clicks) => match clicks.as_i64() {
+            Some(clicks) if (1..=POINTER_CLICKS_MAX).contains(&clicks) => clicks as i32,
+            _ => {
+                return Err(Failure::params(format!(
+                    "clicks must be from 1 to {POINTER_CLICKS_MAX}"
+                )));
+            }
+        },
+    };
     Ok(Pointer {
         x: number(params, "x")?,
         y: number(params, "y")?,
@@ -313,6 +344,7 @@ pub fn pointer(params: &Map<String, Value>) -> Result<Pointer, Failure> {
         button,
         delta_x: optional_number(params, "deltaX")?,
         delta_y: optional_number(params, "deltaY")?,
+        clicks,
         activate,
     })
 }

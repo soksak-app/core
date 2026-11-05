@@ -6,10 +6,11 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { readFrame } from "@soksak/window-check/frame.mjs";
+import { policyOfSetting, readPolicy } from "@soksak/window-check/log-policy.mjs";
 import * as viewMetrics from "../view-metrics-collection.mjs";
 import { closeViewGroup, collectViewProcessGroups, collectViewReclaimMeasurements, collectViewStartAndMemory, openRecordedView,
   processStartSamples, TAB_PLACEMENT, viewContentFrameEvents, mapViewContentFramesToCapture, viewCardWithDifferentPluginTab,
-  viewStartClockBracket, waitForViewReadiness, withViewContentTrace } from "../view-metrics-collection.mjs";
+  viewStartClockBracket, waitForViewReadiness, withDragTraceMode, withViewContentTrace } from "../view-metrics-collection.mjs";
 
 const event = (name, surface, ts_us, mono_ns) => ({ event: name, ts_us, mono_ns,
   fields: { plugin: "fixture", surface } });
@@ -1005,4 +1006,115 @@ test("the tab placement chooses a card with a tab of another plugin, adds the vi
   s.run = async () => ({ closed: false });
   await assert.rejects(TAB_PLACEMENT.close(s, "view-1", { cleanup: true }), { message: /^view view-1 did not close during cleanup\n/ });
   assert.ok(Object.isFrozen(TAB_PLACEMENT));
+});
+
+test("every source frame after the gesture stays, because the final viewport can arrive in a later frame than the first", { timeout: 5000 }, async () => {
+  const { requireViewContentFrameCoverage } = await import("../view-metrics-collection.mjs");
+  const during = { sequence: 1, sourceSequence: 1, timeRange: { lowerMs: 10, upperMs: 11 }, frameIndex: 1 };
+  const first = { sequence: 2, sourceSequence: 2, width: 455, timeRange: { lowerMs: 21, upperMs: 22 }, frameIndex: 2 };
+  const final = { sequence: 3, sourceSequence: 3, width: 453, timeRange: { lowerMs: 38, upperMs: 39 }, frameIndex: 3 };
+  assert.deepEqual(requireViewContentFrameCoverage([during, first, final], { gestureStartedAtMs: 9, gestureEndedAtMs: 20 }), [during, first, final]);
+});
+
+function dragTraceModeSession(t, { performanceTrace, logPolicy }) {
+  const configDir = mkdtempSync(join(tmpdir(), "drag-trace-mode-"));
+  t.after(() => rmSync(configDir, { recursive: true, force: true }));
+  const values = { "diagnostics.performance": performanceTrace, "diagnostics.log": structuredClone(logPolicy) };
+  const writePolicy = () => writeFileSync(join(configDir, "log-policy.json"), JSON.stringify(policyOfSetting(values["diagnostics.log"])));
+  writePolicy();
+  const calls = [];
+  return {
+    calls,
+    values,
+    session: {
+      app: { configDir },
+      async get(name) {
+        assert.equal(name, "core.settings");
+        return { values: structuredClone(values) };
+      },
+      async run(name, params) {
+        calls.push({ name, params });
+        assert.equal(name, "core.settings.set");
+        assert.equal(params.scope, "common");
+        Object.assign(values, structuredClone(params.patch));
+        writePolicy();
+        return null;
+      },
+    },
+  };
+}
+
+test("a measured drag stores only the frame class without the performance trace and restores both settings", { timeout: 5000 }, async (t) => {
+  const logPolicy = { frame: "trace", call: "debug" };
+  const { session, calls, values } = dragTraceModeSession(t, { performanceTrace: true, logPolicy });
+  const result = await withDragTraceMode(session, async () => {
+    const during = (await session.get("core.settings")).values;
+    assert.equal(during["diagnostics.performance"], false);
+    assert.deepEqual(during["diagnostics.log"], { frame: "trace" });
+    assert.deepEqual(readPolicy(session.app.configDir).classes, policyOfSetting({ frame: "trace" }).classes);
+    return { gesture: "captured" };
+  });
+  assert.deepEqual(result, {
+    result: { gesture: "captured" },
+    phaseMode: {
+      performanceTrace: { before: true, during: false, after: true },
+      logPolicy: { before: logPolicy, during: { frame: "trace" }, after: logPolicy },
+    },
+  });
+  assert.deepEqual(calls.map(({ params }) => params.patch), [
+    { "diagnostics.performance": false, "diagnostics.log": { frame: "trace" } },
+    { "diagnostics.performance": true, "diagnostics.log": logPolicy },
+  ]);
+  assert.equal(values["diagnostics.performance"], true);
+  assert.deepEqual(readPolicy(session.app.configDir).classes, policyOfSetting(logPolicy).classes);
+});
+
+test("a measured drag keeps the failure of its action and of the restoration", { timeout: 5000 }, async (t) => {
+  const { session, values } = dragTraceModeSession(t, { performanceTrace: true, logPolicy: { frame: "trace" } });
+  const restoreError = new Error("trace setting restoration failed");
+  const actionError = new Error("drag evidence failed");
+  const originalRun = session.run;
+  session.run = async (name, params) => {
+    if (params.patch["diagnostics.performance"] === true) {
+      values["diagnostics.performance"] = true;
+      throw restoreError;
+    }
+    return originalRun(name, params);
+  };
+  await assert.rejects(withDragTraceMode(session, async () => { throw actionError; }), (error) => {
+    assert.ok(error instanceof AggregateError);
+    assert.deepEqual(error.errors, [actionError, restoreError]);
+    return true;
+  });
+  assert.equal(values["diagnostics.performance"], true);
+});
+
+test("a measured drag restores the settings when the settings cannot be read after it", { timeout: 5000 }, async (t) => {
+  const logPolicy = { frame: "trace", call: "debug" };
+  const { session, values } = dragTraceModeSession(t, { performanceTrace: true, logPolicy });
+  const stateError = new Error("post-action settings read failed");
+  const originalGet = session.get;
+  let reads = 0;
+  session.get = async (name) => {
+    reads++;
+    if (reads === 3) throw stateError;
+    return originalGet(name);
+  };
+  await assert.rejects(withDragTraceMode(session, async () => "captured"), (error) => error === stateError);
+  assert.equal(values["diagnostics.performance"], true);
+  assert.deepEqual(values["diagnostics.log"], logPolicy);
+});
+
+test("a measured drag refuses a log policy without the frame trace and changes nothing", { timeout: 5000 }, async (t) => {
+  const { session, calls } = dragTraceModeSession(t, { performanceTrace: true, logPolicy: {} });
+  await assert.rejects(withDragTraceMode(session, async () => "captured"), /drag requires the frame trace log policy/);
+  assert.deepEqual(calls, []);
+});
+
+test("a measured drag keeps a falsy rejection of its action", { timeout: 5000 }, async (t) => {
+  for (const failure of [null, undefined, 0]) {
+    const { session, values } = dragTraceModeSession(t, { performanceTrace: true, logPolicy: { frame: "trace" } });
+    await assert.rejects(withDragTraceMode(session, async () => { throw failure; }), (error) => error === failure);
+    assert.equal(values["diagnostics.performance"], true);
+  }
 });

@@ -17,6 +17,7 @@ const COMMAND = {
   syncSurfaces: "sync_surfaces",
   presentSurfaces: "present_surfaces",
   cancelSurfaces: "cancel_surfaces",
+  surfaceFocus: "surface_focus",
   waitPresented: "wait_presented",
   setTheme: "set_theme",
   setMenuLanguage: "set_menu_language",
@@ -94,6 +95,7 @@ const ARG = {
   syncSurfaces: (v) => ({ request: v }),
   presentSurfaces: (v) => ({ request: v }),
   cancelSurfaces: (v) => ({ request: v }),
+  surfaceFocus: (v) => ({ request: v }),
   waitPresented: () => ({}),
   setTheme: (v) => ({ theme: v }),
   setMenuLanguage: (v) => {

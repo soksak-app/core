@@ -9,8 +9,8 @@ use serde_json::Value;
 
 use super::super::{
     ClipboardValue, CoreRootResolver, DOMOverlay, Delivery, Frame, Handle, Hit, ImagePresentation,
-    ImageReleased, Insets, Key, Listener, PersistentStream, Pointer, ProcessFootprint, Raster,
-    WindowOverlay,
+    ImageReleased, Insets, Key, Listener, NativeEventWait, PersistentStream, Pointer,
+    ProcessFootprint, Raster, WindowOverlay,
 };
 
 /// Returns an error that contains operation in its name.
@@ -120,6 +120,12 @@ pub fn surface_frame(_surface: Handle) -> Result<[f64; 4], String> {
 pub fn set_surface_hidden_handle(_surface: Handle, _hidden: bool) -> Result<(), String> {
     missing("surface visibility")
 }
+pub fn focus_surface(_surface: Handle) -> Result<(), String> {
+    missing("surface keyboard")
+}
+pub fn focus_workbench(_window: Handle) -> Result<(), String> {
+    missing("workbench keyboard")
+}
 pub fn set_surface_alpha_handle(_surface: Handle, _alpha: f64) -> Result<(), String> {
     missing("surface opacity")
 }
@@ -137,6 +143,14 @@ pub fn set_surface_overlays(_surface: Handle, _overlays: &[DOMOverlay]) -> Resul
 
 pub fn sample_threads(_path: &std::path::Path) -> Result<(), String> {
     missing("thread sampling")
+}
+
+pub fn stall_heartbeat() -> Result<(u64, u64), String> {
+    missing("stall heartbeat")
+}
+
+pub fn stall_await_awake() -> Result<(), String> {
+    missing("stall await awake")
 }
 
 pub fn collect_garbage(_view: &PlatformWebview) -> Result<(), String> {
@@ -558,6 +572,10 @@ pub fn observe_activity() -> Result<(), String> {
 
 pub fn pull_native_events(_buffer: &mut [u8]) -> Result<usize, String> {
     missing("native event pull")
+}
+
+pub fn native_event_wake() -> Result<NativeEventWait, String> {
+    missing("native event wake")
 }
 
 pub fn set_native_event_policy(_levels: [i8; 5]) -> Result<(), String> {

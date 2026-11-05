@@ -450,6 +450,43 @@ func TestTheSurfaceStatusListsWhatTheViewRegistered(t *testing.T) {
 	}
 }
 
+// The view of a surface makes its surface ready with its first call, so a watch of core.surfaces receives what status.get reads
+// without a frame.
+func TestAStartedViewReachesAWatchWithoutAFrame(t *testing.T) {
+	r := newViewRelay(t)
+	surface := r.surface()
+	var last string
+	watch := []byte(`{"name": "core.surfaces"}`)
+	if _, err := r.f.shell.Registry().Answer("status.watch", watch, func(_ string, value any) {
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			t.Error(err)
+		}
+		last = string(encoded)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(last, `"phase":"ready"`) {
+		t.Fatalf("a surface without a view is ready: %s", last)
+	}
+	r.emit("view-call", map[string]any{"surface": surface, "plugin": "terminal", "generation": 1, "id": 5, "cancel": true})
+	r.f.pending.drain(t)
+	value, err := r.f.shell.Registry().Read("core.surfaces")
+	if err != nil {
+		t.Fatal(err)
+	}
+	read, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(read), `"phase":"ready"`) {
+		t.Fatalf("status.get reads %s", read)
+	}
+	if last != string(read) {
+		t.Fatalf("the watch holds %s and status.get reads %s", last, read)
+	}
+}
+
 func TestARegistrationReachesAWatchWithoutAFrame(t *testing.T) {
 	r := newViewRelay(t)
 	surface := r.surface()

@@ -27,21 +27,17 @@ type libraryRead struct {
 	} `json:"previews"`
 }
 
-// twoProjects returns a shell on the library page with the projects alpha and beta, of which beta is open.
-func twoProjects(t *testing.T) (f *shellFixture, alpha, beta string) {
+// libraryOfTwoProjects returns a shell on the library page with the projects alpha and beta, of which beta is open.
+func libraryOfTwoProjects(t *testing.T) (f *shellFixture, alpha, beta string) {
 	t.Helper()
-	f = openedShell(t)
-	f.run("core.library.form.open", map[string]string{"mode": "open"})
-	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/beta"})
-	f.run("core.library.form.submit", nil)
-	f.settle()
+	f, alpha, beta = twoProjects(t)
 	f.run("core.projects.browse", nil)
 	f.settle()
-	return f, f.host.projects[0]["id"].(string), f.host.projects[1]["id"].(string)
+	return f, alpha, beta
 }
 
 func TestTheLibraryHeadHasTheSearchAndTheSort(t *testing.T) {
-	f, alpha, beta := twoProjects(t)
+	f, alpha, beta := libraryOfTwoProjects(t)
 	for _, name := range []string{"core.library.search", "core.library.sort", "core.library.add", "core.library.return"} {
 		if !f.has(name, "") {
 			t.Fatalf("the library has no %s", name)
@@ -71,7 +67,7 @@ func TestTheLibraryHeadHasTheSearchAndTheSort(t *testing.T) {
 }
 
 func TestTheSearchTakesTheFocusOfItsPage(t *testing.T) {
-	f, _, _ := twoProjects(t)
+	f, _, _ := libraryOfTwoProjects(t)
 	type focused struct {
 		Name string `json:"name"`
 	}
@@ -95,7 +91,7 @@ func TestTheSearchTakesTheFocusOfItsPage(t *testing.T) {
 }
 
 func TestTheSortOrdersTheProjects(t *testing.T) {
-	f, alpha, beta := twoProjects(t)
+	f, alpha, beta := libraryOfTwoProjects(t)
 	f.run("core.library.sort", map[string]string{"order": "open"})
 	f.settle()
 	if got := status[libraryRead](t, f, "core.library"); got.Sort != "open" || got.Shown[0] != beta {
@@ -107,7 +103,7 @@ func TestTheSortOrdersTheProjects(t *testing.T) {
 }
 
 func TestAProjectCardShowsItsLayoutAndItsState(t *testing.T) {
-	f, alpha, beta := twoProjects(t)
+	f, alpha, beta := libraryOfTwoProjects(t)
 	got := status[libraryRead](t, f, "core.library")
 	panes := got.Previews[alpha]
 	if len(panes) == 0 {
@@ -135,7 +131,7 @@ func TestAProjectCardShowsItsLayoutAndItsState(t *testing.T) {
 
 // The cards fill the width in columns of at least the declared width.
 func TestTheCardsOfTheLibraryStandInColumns(t *testing.T) {
-	f, alpha, beta := twoProjects(t)
+	f, alpha, beta := libraryOfTwoProjects(t)
 	a, b := f.box("core.library.open", alpha), f.box("core.library.open", beta)
 	if a.Y != b.Y || b.X <= a.X+a.W || a.W < 245 {
 		t.Fatalf("the cards stand at %v and %v", a, b)
@@ -188,7 +184,7 @@ func TestAProjectWithoutItsFolderShowsTheReason(t *testing.T) {
 }
 
 func TestTheSortReadsFromTheLeftWithItsArrowInTheMiddle(t *testing.T) {
-	f, _, _ := twoProjects(t)
+	f, _, _ := libraryOfTwoProjects(t)
 	trigger := f.box("core.library.sort", "")
 	label, ok := f.tester.Find("저장 순서")
 	if !ok {
@@ -207,7 +203,7 @@ func TestTheSortReadsFromTheLeftWithItsArrowInTheMiddle(t *testing.T) {
 }
 
 func TestTheFormButtonsTakeTheWidthOfTheirLabel(t *testing.T) {
-	f, _, _ := twoProjects(t)
+	f, _, _ := libraryOfTwoProjects(t)
 	f.run("core.library.form.open", map[string]string{"mode": "open"})
 	f.tester.Frame()
 	choose, field := f.box("core.library.form.choose", ""), f.box("core.library.form.parent", "")
@@ -217,7 +213,7 @@ func TestTheFormButtonsTakeTheWidthOfTheirLabel(t *testing.T) {
 }
 
 func TestTheLibraryKeepsItsSizeWhenTheFrameTextGrows(t *testing.T) {
-	f, _, _ := twoProjects(t)
+	f, _, _ := libraryOfTwoProjects(t)
 	before, _ := f.tester.Find("저장 순서")
 	f.run("core.text.larger", nil)
 	f.tester.Frame()
@@ -228,7 +224,7 @@ func TestTheLibraryKeepsItsSizeWhenTheFrameTextGrows(t *testing.T) {
 }
 
 func TestTheLibraryHidesTheSidebarSwitches(t *testing.T) {
-	f, _, _ := twoProjects(t)
+	f, _, _ := libraryOfTwoProjects(t)
 	if f.has("core.chrome.left", "") || f.has("core.chrome.right", "") {
 		t.Fatal("the library shows the switches of the sidebars")
 	}
@@ -253,7 +249,7 @@ func TestACardShowsTheDayItsProjectOpened(t *testing.T) {
 }
 
 func TestTheLinesOfTheLibraryHaveTheHeightOfThePage(t *testing.T) {
-	f, _, _ := twoProjects(t)
+	f, _, _ := libraryOfTwoProjects(t)
 	// .text-field: a line of text-control at the line height of the page, two paddings of 5 and two borders.
 	if field := f.box("core.library.search", ""); field.H < 28 || field.H > 29.5 {
 		t.Fatalf("the search is %+v", field)
@@ -261,7 +257,7 @@ func TestTheLinesOfTheLibraryHaveTheHeightOfThePage(t *testing.T) {
 }
 
 func TestTheFormStandsAsThePageStandsIt(t *testing.T) {
-	f, _, _ := twoProjects(t)
+	f, _, _ := libraryOfTwoProjects(t)
 	f.run("core.library.form.open", map[string]string{"mode": "open"})
 	f.tester.Frame()
 	first, second := f.box("core.library.form.mode-new", ""), f.box("core.library.form.mode-existing", "")
@@ -283,7 +279,7 @@ func TestTheFormStandsAsThePageStandsIt(t *testing.T) {
 }
 
 func TestEveryProjectHasATabInTheBar(t *testing.T) {
-	f, alpha, beta := twoProjects(t)
+	f, alpha, beta := libraryOfTwoProjects(t)
 	f.run("core.library.return", nil)
 	f.settle()
 	first, second := f.box("core.project-tab", alpha), f.box("core.project-tab", beta)
@@ -298,7 +294,7 @@ func TestEveryProjectHasATabInTheBar(t *testing.T) {
 }
 
 func TestTheProjectTabsStandInAColumnAtTheLeft(t *testing.T) {
-	f, alpha, beta := twoProjects(t)
+	f, alpha, beta := libraryOfTwoProjects(t)
 	f.run("core.library.return", nil)
 	f.settle()
 	before := status[gridRead](t, f, "core.grid")

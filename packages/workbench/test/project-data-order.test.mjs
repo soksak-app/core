@@ -55,7 +55,7 @@ mock.module("../host.js", {
     documents: null, report: () => {} },
 });
 mock.module("../settings.js", {
-  namedExports: { beginSettings: (_snapshot, id) => { selectedProject = id; }, selectProject: async (id) => {
+  namedExports: { projectSidebars: () => ({ sets: [], links: [] }), beginSettings: (_snapshot, id) => { selectedProject = id; }, selectProject: async (id) => {
     selectedProject = id;
     if (id === failSelection) throw new Error("settings project selection failed");
   }, value: () => "tabs", flushSettings: async () => {} },

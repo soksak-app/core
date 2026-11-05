@@ -1074,6 +1074,7 @@ fn native_drag(
         button: 0,
         delta_x: 0.0,
         delta_y: 0.0,
+        clicks: 1,
         activate: false,
     };
     let at = |fraction: f64| (from.0 + plan.dx * fraction, from.1 + plan.dy * fraction);

@@ -88,6 +88,8 @@ type EventLogOptions struct {
 	// process has no native ring. PullLoss returns the events and bytes that the ring refused in a channel since the last call.
 	Pull     func(buffer []byte) (int, error)
 	PullLoss func(channel Channel) (events, bytes uint64)
+	// Wake says that the ring holds something for Pull. A process with a Pull gives it, because a writer with nothing to write sleeps.
+	Wake <-chan struct{}
 }
 
 // Channel is the set of the files of a process that holds a set of levels.
@@ -116,7 +118,7 @@ func StartEventLog(options EventLogOptions) (*EventLog, error) {
 	return sok.StartEventLog(sok.EventLogOptions{
 		Directory: options.Directory, Role: options.Role, Boot: options.Boot, Layer: "host", Clock: monotonicNanos, Spawn: routine.Go,
 		QueueEvents: options.QueueEvents, QueueBytes: options.QueueBytes, BatchInterval: options.BatchInterval,
-		RotateBytes: options.RotateBytes, PolicyPath: options.PolicyPath, Pull: pull,
+		RotateBytes: options.RotateBytes, PolicyPath: options.PolicyPath, Pull: pull, Wake: options.Wake,
 		Prune: func() (Level, json.RawMessage, bool) {
 			// The pass counts what is on disk; the batch that waits for the interval is not in it, which is at most one batch.
 			result, err := pruneRuns(options.Directory, runName, options.RetentionBytes)
@@ -182,8 +184,13 @@ func StartHostEventLog(config string) (*EventLog, error) {
 	if err := system.ObserveActivity(); err != nil {
 		return nil, err
 	}
+	wake, err := nativeWake(system)
+	if err != nil {
+		return nil, err
+	}
 	return StartEventLog(EventLogOptions{
 		Pull: system.PullNativeEvents,
+		Wake: wake,
 		PullLoss: func(channel Channel) (uint64, uint64) {
 			events, bytes, err := system.TakeNativeEventLoss(uint8(channel))
 			if err != nil {
@@ -206,6 +213,31 @@ func FlushEventLog(log *EventLog, flushObservers func() error, deadline time.Dur
 		observers = fmt.Errorf("flush native observers: %w", observers)
 	}
 	return errors.Join(observers, log.Flush(deadline))
+}
+
+// nativeWake turns the pipe of the native ring into the Wake of the writer. The goroutine sleeps in the runtime poller until
+// a native thread writes the pipe.
+func nativeWake(system platform.Platform) (<-chan struct{}, error) {
+	descriptor, err := system.NativeEventWake()
+	if err != nil {
+		return nil, err
+	}
+	pipe := os.NewFile(uintptr(descriptor), "native event wake")
+	wake := make(chan struct{}, 1)
+	routine.Go("native-event-wake", func() {
+		buffer := make([]byte, 64)
+		for {
+			if _, err := pipe.Read(buffer); err != nil {
+				fmt.Fprintf(os.Stderr, "event writer: the wake of the native ring failed: %v\n", err)
+				return
+			}
+			select {
+			case wake <- struct{}{}:
+			default:
+			}
+		}
+	})
+	return wake, nil
 }
 
 // nativePuller is the Pull of the writer for a native ring: it moves the records of the ring into a buffer, decodes each into

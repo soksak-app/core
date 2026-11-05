@@ -60,6 +60,12 @@ func (p *PointerSequence) up(name string) {
 	p.changed()
 }
 
+// Observer is Handler for an element that keeps its own handler: it sees the press without taking it.
+func (p *PointerSequence) Observer(name string) func(ui.InputEvent) {
+	handler := p.Handler(name)
+	return func(ev ui.InputEvent) { handler(ev) }
+}
+
 // Click records the click that the element name reported.
 func (p *PointerSequence) Click(name string) {
 	p.status.Click = &name

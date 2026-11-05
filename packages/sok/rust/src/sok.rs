@@ -55,7 +55,7 @@ commands:
   exposures [window]
   status NAME [window] [--surface S] [--watch]
   element rect|click|input|dispatch NAME [window] [--surface S] [--index N] [--value V] [--event JSON]
-  input pointer [window] --x X --y Y --phase move|down|drag|up|scroll [--button left|right] [--delta-x N] [--delta-y N] [--activate]
+  input pointer [window] --x X --y Y --phase move|down|drag|up|scroll [--button left|right] [--delta-x N] [--delta-y N] [--clicks N] [--activate]
   input key [window] --key K --phase down|up [--text T] [--modifiers shift,control,option,command]
   debug query [--channel C] [--level L] [--class C] [--layer L] [--event E] [--event-prefix P] [--surface S] [--session S] [--cid C] [--run R] [--text T] [--from T] [--to T] [--order asc|desc] [--limit N] [--after CURSOR]
                             prints one page of the events of the event files that pass the filter
@@ -121,6 +121,7 @@ const OPTIONS: &[&str] = &[
     "platform",
     "button",
     "delta-x",
+    "clicks",
     "delta-y",
     "key",
     "text",
@@ -395,6 +396,7 @@ fn plan(
                     let y = a.required_number("y")?;
                     let delta_x = a.number("delta-x")?;
                     let delta_y = a.number("delta-y")?;
+                    let clicks = a.number("clicks")?;
                     let activate = a.flag("activate").then_some(Value::Bool(true));
                     let window = window()?;
                     Ok(Request {
@@ -407,6 +409,7 @@ fn plan(
                             ("button", a.optional("button")),
                             ("deltaX", delta_x),
                             ("deltaY", delta_y),
+                            ("clicks", clicks),
                             ("activate", activate),
                         ])),
                         watch: false,

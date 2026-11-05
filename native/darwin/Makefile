@@ -313,6 +313,7 @@ NATIVE_TESTS = observe_test \
   event_ring_test \
   site_cost_test \
   surface_host_test \
+  surface_keyboard_test \
   surface_container_test \
   surface_layout_observe_test \
   ui_queue_test \
@@ -333,6 +334,7 @@ NATIVE_TESTS = observe_test \
   process_exit_test \
   quit_request_test \
   memory_pressure_test \
+  stall_watch_test \
   webview_navigation_test \
   window_controls_test \
   window_cursor_rects_test \
@@ -356,6 +358,7 @@ NATIVE_TESTS = observe_test \
   document_report_test \
   document_cause_test \
   document_plugin_test \
+  document_response_memory_test \
   core_root_cors_test \
   view_import_map_test \
   document_view_import_map_test \

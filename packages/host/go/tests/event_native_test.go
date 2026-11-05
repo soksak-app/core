@@ -1,5 +1,5 @@
 // The pull of the native ring (docs/spec/logging.md#writers): the writer of the host takes the records of the native
-// library at its batch interval, stores them in the layer `native` with the time the library gave, and counts the records
+// library when the ring wakes it and at its batch interval, stores them in the layer `native` with the time the library gave, and counts the records
 // it refuses and the events the ring refused.
 package host_test
 
@@ -71,17 +71,70 @@ func (r *fakeRing) loss(channel host.Channel) (uint64, uint64) {
 	return events, bytes
 }
 
+// startWithRing starts a writer with the policy of every level. The ring holds what it holds when the policy is stored, so
+// the records follow log.policy in the file.
 func startWithRing(t *testing.T, ring *fakeRing) *host.EventLog {
 	t.Helper()
 	options := eventLogOptions(t.TempDir())
 	options.Pull = ring.pull
 	options.PullLoss = ring.loss
+	options.Wake = make(chan struct{})
+	ring.mu.Lock()
+	held := fakeRing{bytes: ring.bytes, lossEvents: ring.lossEvents, lossBytes: ring.lossBytes, debugEvents: ring.debugEvents, debugBytes: ring.debugBytes}
+	ring.bytes, ring.lossEvents, ring.lossBytes, ring.debugEvents, ring.debugBytes = nil, 0, 0, 0, 0
+	ring.mu.Unlock()
 	log, err := host.StartEventLog(options)
 	if err != nil {
 		t.Fatal(err)
 	}
 	support.StoreEveryLevel(t, log)
+	ring.mu.Lock()
+	ring.bytes, ring.lossEvents, ring.lossBytes, ring.debugEvents, ring.debugBytes = held.bytes, held.lossEvents, held.lossBytes, held.debugEvents, held.debugBytes
+	ring.mu.Unlock()
 	return log
+}
+
+// noInterval does not end during a test, so what a test finds in the file was not written at the end of an interval.
+const noInterval = time.Hour
+
+// stores reports whether the file of the log holds the event.
+func stores(t *testing.T, log *host.EventLog, name string) bool {
+	t.Helper()
+	for _, event := range readEventLog(t, log.Path()) {
+		if event["event"] == name {
+			return true
+		}
+	}
+	return false
+}
+
+// waitFor waits for what the writer does at once.
+func waitFor(t *testing.T, log *host.EventLog, name string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for !stores(t, log, name) {
+		if time.Now().After(deadline) {
+			t.Fatalf("%s was not stored at once", name)
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+}
+
+// startWaking starts a writer with the ring and returns the channel that wakes it, once it took what its start left.
+func startWaking(t *testing.T, ring *fakeRing, interval time.Duration) (*host.EventLog, chan struct{}) {
+	t.Helper()
+	options := eventLogOptions(t.TempDir())
+	options.BatchInterval = interval
+	options.Pull = ring.pull
+	options.PullLoss = ring.loss
+	wake := make(chan struct{}, 1)
+	options.Wake = wake
+	log, err := host.StartEventLog(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, log, "log.open")
+	return log, wake
 }
 
 // contract: log.native.stores-pulled-records-in-the-layer-native
@@ -182,33 +235,62 @@ func TestAPulledNativeRecordOfADeclaredEventStoresTheCatalogClassAndAnUndeclared
 	}
 }
 
-// contract: log.native.pulls-at-the-batch-interval
-func TestTheWriterPullsNativeRecordsAtTheBatchInterval(t *testing.T) {
+// contract: log.native.wake-stores-a-record-at-once
+func TestAWakeOfTheRingStoresItsRecordAtOnce(t *testing.T) {
 	ring := &fakeRing{}
-	options := eventLogOptions(t.TempDir())
-	options.BatchInterval = 10 * time.Millisecond
-	options.Pull = ring.pull
-	options.PullLoss = ring.loss
-	log, err := host.StartEventLog(options)
-	if err != nil {
-		t.Fatal(err)
-	}
-	support.StoreEveryLevel(t, log)
-	// The ring is empty at the start; a record that arrives later is stored without a flush request.
-	time.Sleep(30 * time.Millisecond)
+	log, wake := startWaking(t, ring, noInterval)
 	ring.mu.Lock()
 	ring.bytes = nativeRecord(1_791_000_000_000_001, 5_000_000_001, 2, "", "native.test.late", `{}`)
 	ring.mu.Unlock()
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		for _, event := range readEventLog(t, log.Path()) {
-			if event["event"] == "native.test.late" {
-				return
-			}
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("the record was not stored within 5 seconds")
-		}
-		time.Sleep(5 * time.Millisecond)
+	wake <- struct{}{}
+	waitFor(t, log, "native.test.late")
+}
+
+// contract: log.native.close-stores-the-ring
+func TestCloseStoresTheRecordsOfTheRingWithoutAWake(t *testing.T) {
+	ring := &fakeRing{}
+	log, _ := startWaking(t, ring, noInterval)
+	ring.mu.Lock()
+	ring.bytes = nativeRecord(1_791_000_000_000_001, 5_000_000_001, 2, "", "native.test.late", `{}`)
+	ring.mu.Unlock()
+	log.Close()
+	if !stores(t, log, "native.test.late") {
+		t.Fatal("Close did not store the record of the ring")
+	}
+}
+
+// contract: log.writer.sleeps-with-nothing-to-write
+func TestAWriterWithNothingToWriteDoesNotPull(t *testing.T) {
+	ring := &fakeRing{}
+	_, _ = startWaking(t, ring, 5*time.Millisecond)
+	time.Sleep(30 * time.Millisecond)
+	ring.mu.Lock()
+	from := ring.drainCalled
+	ring.mu.Unlock()
+	time.Sleep(100 * time.Millisecond)
+	ring.mu.Lock()
+	defer ring.mu.Unlock()
+	if woke := ring.drainCalled - from; woke != 0 {
+		t.Fatalf("the writer pulled %d times in 100 ms with nothing to write", woke)
+	}
+}
+
+// contract: log.writer.stores-the-first-event-at-once
+func TestAWriterThatSleptStoresTheFirstEventAtOnceAndGathersTheNext(t *testing.T) {
+	log, _ := startWaking(t, &fakeRing{}, noInterval)
+	if !log.Emit(host.LevelInfo, "host.test.first", map[string]any{}) {
+		t.Fatal("the first event was refused")
+	}
+	waitFor(t, log, "host.test.first")
+	if !log.Emit(host.LevelInfo, "host.test.second", map[string]any{}) {
+		t.Fatal("the second event was refused")
+	}
+	time.Sleep(50 * time.Millisecond)
+	if stores(t, log, "host.test.second") {
+		t.Fatal("the second event of an interval was written alone")
+	}
+	log.Close()
+	if !stores(t, log, "host.test.second") {
+		t.Fatal("Close did not store the batch")
 	}
 }

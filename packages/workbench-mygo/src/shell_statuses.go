@@ -372,10 +372,25 @@ func (s *Shell) surfacesState() []surfaceStatus {
 		}
 		if held.section != nil {
 			entry.Kind = "section"
+			entry.Sidebar = &held.section.Sidebar
 		}
 		status = append(status, entry)
 	}
-	return status
+	return append(status, s.unloadedSections()...)
+}
+
+// unloadedSections returns the rows of the sections whose surfaces the memory saver unloaded: a section keeps its seat, so it stays in the
+// list without a view.
+func (s *Shell) unloadedSections() []surfaceStatus {
+	var rows []surfaceStatus
+	for _, seat := range s.seatsInOrder() {
+		if s.surfaces.held[seat.SurfaceID] != nil || s.tabs == nil || !s.tabs.saver.Unloaded(seat.SurfaceID) {
+			continue
+		}
+		rows = append(rows, surfaceStatus{Surface: seat.SurfaceID, Plugin: seat.Plugin, Declared: &layout.Rect{}, Exposes: s.registry.EntriesOf(seat.SurfaceID),
+			Status: s.surfacePhase(seat.SurfaceID), Composition: seat.Composition, Kind: "section", Sidebar: &seat.Sidebar, State: "unloaded"})
+	}
+	return rows
 }
 
 // surfaceProgress is the phase of a surface with the reason of an error: its reported failure, or ready once the document of the
@@ -415,7 +430,6 @@ func (s *Shell) sectionProgress(id string) SectionProgress {
 
 // registerStatuses adds the statuses of the shell.
 func (s *Shell) registerStatuses() {
-	s.registry.Status("core.verify", func() any { return s.verification.Status() })
 	s.registry.Status("core.plugin.open-calls", func() any { return s.processes.openCalls() })
 	s.registry.Status("core.plugin.losses", func() any { return s.processes.lossList() })
 	s.registry.Status("core.plugin.views", func() any { return s.processes.viewList() })
@@ -461,11 +475,7 @@ func (s *Shell) registerStatuses() {
 	})
 	s.registry.Status("core.surfaces", func() any { return s.surfacesState() })
 	s.registry.Status("core.chrome", func() any {
-		tabs, ok := s.settings.Value("projectTabs").(string)
-		if !ok {
-			s.fail(fmt.Errorf("the setting projectTabs has no text"))
-		}
-		return map[string]any{"controlsWidth": math.Max(0, float64(s.controlsWidth)), "projectTabs": tabs}
+		return map[string]any{"controlsWidth": math.Max(0, float64(s.controlsWidth)), "projectTabs": s.projectTabsPlace()}
 	})
 	s.registry.Status("core.rail", func() any { return s.railState() })
 	s.registry.Status("core.window.workbench", func() any {
@@ -482,7 +492,7 @@ func (s *Shell) registerStatuses() {
 			visibility = "visible"
 		}
 		return map[string]any{"start": s.events.Start(), "startedAt": float64(s.events.StartedAt().UnixMilli()), "readyState": ready,
-			"visibility": visibility, "scheme": s.settings.Scheme(), "background": false, // no modal of this host blurs the workbench
+			"visibility": visibility, "scheme": s.settings.Scheme(), "background": s.dialogOpen(),
 			"scale": window.Scale, "width": window.Width, "height": window.Height}
 	})
 	s.registry.Status("core.workbench.audit", func() any {

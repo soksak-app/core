@@ -99,6 +99,10 @@ func (implementation) StallHeartbeat() (uint64, uint64) {
 	return 0, 0
 }
 
+func (implementation) StallAwaitAwake() {
+	unreachable("stall await awake")
+}
+
 func (implementation) CollectGarbage(unsafe.Pointer) error {
 	return unsupported("JavaScript garbage collection")
 }
@@ -167,6 +171,10 @@ func (implementation) InstantWindowResize() error {
 
 func (implementation) PullNativeEvents([]byte) (int, error) {
 	return 0, unsupported("native event pull")
+}
+
+func (implementation) NativeEventWake() (int, error) {
+	return 0, unsupported("native event wake")
 }
 
 func (implementation) TakeNativeEventLoss(uint8) (uint64, uint64, error) {
@@ -404,6 +412,14 @@ func (implementation) SetSurfaceHiddenHandle(unsafe.Pointer, bool) {
 	unreachable("surface visibility")
 }
 
+func (implementation) FocusSurface(unsafe.Pointer) {
+	unreachable("surface keyboard")
+}
+
+func (implementation) FocusWorkbench(unsafe.Pointer) {
+	unreachable("workbench keyboard")
+}
+
 func (implementation) SetSurfaceAlphaHandle(unsafe.Pointer, float64) {
 	unreachable("surface opacity")
 }
@@ -509,7 +525,7 @@ func (implementation) WatchButtons(func(uint64)) error {
 	return unsupported("mouse button state")
 }
 
-func (implementation) InjectPointer(unsafe.Pointer, float64, float64, int, int, float64, float64, float64, func(platform.PointerResult, platform.ButtonHeld)) error {
+func (implementation) InjectPointer(unsafe.Pointer, float64, float64, int, int, float64, float64, int, float64, func(platform.PointerResult, platform.ButtonHeld)) error {
 	return unsupported("native pointer input")
 }
 

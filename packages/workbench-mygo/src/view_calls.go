@@ -9,6 +9,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
 // The calls of the views of a window (docs/spec/native-surfaces.md#view-surfaces). The host forwards each call request of a view
@@ -118,6 +120,8 @@ func (s *Shell) view(surface string) *viewState {
 		view = &viewState{pending: map[uint64]*viewPending{}, events: map[string]bool{}, failures: map[string]bool{}, commands: map[string]bool{},
 			requests: map[uint64]viewAnswer{}, statuses: map[string]string{}, observed: map[string]func(){}}
 		s.surfaces.views[surface] = view
+		// The surface became ready, and no frame needs to follow.
+		s.pushStatuses()
 	}
 	return view
 }
@@ -436,29 +440,31 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 		view.levels = true
 		done()
 	case "tab.state.read":
-		if unit.Unload == nil || s.tabs == nil || s.tabs.states == nil {
+		unload := s.unloadOf(call.Surface, unit)
+		if unload == nil || s.tabs == nil || s.tabs.states == nil {
 			return fmt.Errorf("view call %s: the tab state is not declared", call.Command)
 		}
-		value, err := readTabState(call.Surface, unit, s.tabs.states)
+		value, err := readTabState(call.Surface, unload, s.tabs.states)
 		if err != nil {
 			return err
 		}
 		answer(value, nil)
 	case "tab.state.write":
-		if unit.Unload == nil || s.tabs == nil || s.tabs.states == nil {
+		unload := s.unloadOf(call.Surface, unit)
+		if unload == nil || s.tabs == nil || s.tabs.states == nil {
 			return fmt.Errorf("view call %s: the tab state is not declared", call.Command)
 		}
-		if len(call.Params) > unit.Unload.MaxBytes {
-			return fmt.Errorf("tab %s state of %d bytes exceeds %d", call.Surface, len(call.Params), unit.Unload.MaxBytes)
+		if len(call.Params) > unload.MaxBytes {
+			return fmt.Errorf("tab %s state of %d bytes exceeds %d", call.Surface, len(call.Params), unload.MaxBytes)
 		}
-		state, err := json.Marshal(map[string]json.RawMessage{"format": unit.Unload.Format, "value": call.Params})
+		state, err := json.Marshal(map[string]json.RawMessage{"format": unload.Format, "value": call.Params})
 		if err != nil {
 			return err
 		}
 		s.tabs.states.Write(call.Surface, state)
 		done()
 	case "tab.focus":
-		if err := s.keyboard.SetViewFocus(call.Surface, call.Params); err != nil {
+		if err := s.exposedFocus.SetViewFocus(call.Surface, call.Params); err != nil {
 			return err
 		}
 		done()
@@ -875,19 +881,61 @@ func (s *Shell) surfaceTextSize(surface string) (float64, bool) {
 	return s.text.Effective(card), true
 }
 
-// viewTextSize returns the text scale that view reads: a view of a space off the screen keeps the scale it last had.
+// viewTextSize returns the text scale that view reads: a view of a space off the screen keeps the scale it last had, and one that has read
+// none yet starts with the frame factor of now and the factor of its card (docs/spec/text-size.md).
 func (s *Shell) viewTextSize(surface string, view *viewState) (float64, error) {
 	if size, shown := s.surfaceTextSize(surface); shown {
 		return size, nil
 	}
-	if view.scale == 0 {
-		return 0, fmt.Errorf("surface %s is not in the layout", surface)
+	if view.scale != 0 {
+		return view.scale, nil
 	}
-	return view.scale, nil
+	if held := s.surfaces.held[surface]; held != nil && held.cardFactor != 0 {
+		return s.text.Frame() * held.cardFactor, nil
+	}
+	if size, stored := s.storedTextSize(surface); stored {
+		return size, nil
+	}
+	return 0, fmt.Errorf("surface %s is not in the layout", surface)
+}
+
+// storedTextSize returns the text scale of a tab of a space off the screen, which reads the factor of its stored card.
+func (s *Shell) storedTextSize(surface string) (float64, bool) {
+	for _, project := range s.projects {
+		if !s.windowProjects[project.ID] {
+			continue
+		}
+		for _, space := range project.Spaces {
+			var stored storedLayout
+			if (project.ID == s.active && space.ID == project.ActiveSpaceID) || json.Unmarshal(space.Layout, &stored) != nil {
+				continue // silent: the memory saver reports a stored layout that does not read.
+			}
+			for _, card := range stored.State.Cards {
+				data, err := layout.DecodeCardData(card.Data)
+				if err != nil || data == nil {
+					continue // silent: a place card has no tabs, and the shell refuses a stored card that does not read when it loads the space.
+				}
+				for _, tab := range data.TabList() {
+					if tab.ID == surface {
+						return s.text.Frame() * data.CardTextSize(), true
+					}
+				}
+			}
+		}
+	}
+	return 0, false
+}
+
+// unloadOf returns the declaration of unload of the surface: a section surface has the declaration of its section, and a tab that of its plugin.
+func (s *Shell) unloadOf(surface string, unit *installedUnit) *surfaceUnload {
+	if held := s.surfaces.held[surface]; held != nil && held.section != nil {
+		return held.unload
+	}
+	return unit.Unload
 }
 
 // readTabState returns the value of the state of the tab: null without one, and a state of another format is refused.
-func readTabState(tab string, unit *installedUnit, states *TabStates) (any, error) {
+func readTabState(tab string, unload *surfaceUnload, states *TabStates) (any, error) {
 	entry, _ := states.Entry(tab) // silent: a tab without an entry reads null, as a tab without a state.
 	if len(entry.State) == 0 {
 		return nil, nil
@@ -899,8 +947,8 @@ func readTabState(tab string, unit *installedUnit, states *TabStates) (any, erro
 	if err := json.Unmarshal(entry.State, &stored); err != nil {
 		return nil, fmt.Errorf("tab %s state: %w", tab, err)
 	}
-	if string(stored.Format) != string(unit.Unload.Format) {
-		return nil, fmt.Errorf("tab %s state format %s is not %s", tab, stored.Format, unit.Unload.Format)
+	if string(stored.Format) != string(unload.Format) {
+		return nil, fmt.Errorf("tab %s state format %s is not %s", tab, stored.Format, unload.Format)
 	}
 	return stored.Value, nil
 }
@@ -1173,7 +1221,7 @@ func (s *Shell) viewEnded(data []any) {
 func (s *Shell) forgetView(surface string, view *viewState) {
 	view.end()
 	delete(s.surfaces.views, surface)
-	s.keyboard.ForgetView(surface)
+	s.exposedFocus.ForgetView(surface)
 	delete(s.surfaces.documents, surface)
 }
 
@@ -1225,14 +1273,5 @@ func (s *Shell) surfacePressed(data []any) {
 		s.fail(fmt.Errorf("surface pressed: %w", err))
 		return
 	}
-	for _, card := range s.plane.Cards() {
-		if held, err := s.cardData(card.ID); err == nil && held != nil {
-			for _, tab := range held.TabList() {
-				if tab.ID == surface && s.focused != card.ID {
-					s.focused = card.ID
-					s.options.Invalidate()
-				}
-			}
-		}
-	}
+	s.pressSurface(surface)
 }

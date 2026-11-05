@@ -284,6 +284,10 @@ func (f shellSurfaces) ReportState(string, string) { f.shell.options.Invalidate(
 // tabPorts returns the tab ports of the window of shell.
 func (a *App) tabPorts(shell *Shell) TabPorts {
 	began := time.Now()
+	now, after := func() int64 { return time.Since(began).Milliseconds() }, a.After
+	if clock := a.options.Clock; clock != nil {
+		now, after = clock.Now, clock.After
+	}
 	return TabPorts{
 		Plugins:        shell.shellPlugins,
 		Surfaces:       shellSurfaces{shell},
@@ -292,7 +296,7 @@ func (a *App) tabPorts(shell *Shell) TabPorts {
 		PluginSettings: shell.pluginSettings,
 		Commit:         shell.commitSurfaces,
 		Emit:           shell.emitTabEvent,
-		Now:            func() int64 { return time.Since(began).Milliseconds() },
-		After:          a.After,
+		Now:            now,
+		After:          after,
 	}
 }

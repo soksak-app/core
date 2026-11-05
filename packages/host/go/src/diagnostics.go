@@ -322,7 +322,7 @@ func nativeDrag(plan dragPlan, from point, deliver func(PointerInput) error, ste
 		return point{X: from.X + plan.DX*fraction, Y: from.Y + plan.DY*fraction}
 	}
 	input := func(phase string, p point) PointerInput {
-		return PointerInput{X: p.X, Y: p.Y, Phase: phase, Button: "left"}
+		return PointerInput{X: p.X, Y: p.Y, Phase: phase, Button: "left", Clicks: 1}
 	}
 	began := time.Now()
 	for turn := 0; turn < plan.Times; turn++ {

@@ -10,7 +10,7 @@ use serde_json::json;
 use super::{EventLog, Level, Options};
 
 #[path = "../tests/support/folder.rs"]
-mod folder;
+pub(super) mod folder;
 
 use folder::Folder;
 
@@ -45,6 +45,7 @@ fn options(directory: &Path) -> Options {
         batch_interval: Duration::from_millis(10),
         rotate_bytes: 0,
         pull: None,
+        wake: None,
         policy_path: None,
         prune: None,
     }

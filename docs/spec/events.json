@@ -992,6 +992,123 @@
       },
       "description": "The performance trace of an existing surface-layout UI admission or native callback. queued_ns is sampled immediately before the existing dispatch or callback registration, entered_ns at the UI closure or callback entry, and returned_ns at that closure or callback's end. All three are canonical decimal nanoseconds from the host event clock (CLOCK_UPTIME_RAW on macOS). ticket is omitted until the sync request has assigned one. The record does not include the caller's resume time after a synchronous dispatch."
     },
+    "host.frame.commit": {
+      "layer": "host",
+      "class": "frame",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "enum": [
+              "stashed",
+              "offscreen",
+              "pixels"
+            ]
+          },
+          "commit_ns": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          }
+        },
+        "required": [
+          "window",
+          "kind",
+          "commit_ns"
+        ],
+        "additionalProperties": false
+      },
+      "description": "The U7 record of a command buffer of a mygo window committed outside a frame."
+    },
+    "host.frame.record": {
+      "layer": "host",
+      "class": "frame",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "string",
+            "minLength": 1
+          },
+          "start_ns": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "request_ns": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "end_ns": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "damage": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "nodes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "drawable_wait_ns": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "outcome": {
+            "enum": [
+              "transaction",
+              "immediate",
+              "stashed",
+              "skipped",
+              "undamaged",
+              "held"
+            ]
+          },
+          "command_buffer": {
+            "type": "boolean"
+          },
+          "asks_frame": {
+            "type": "boolean"
+          },
+          "animates": {
+            "type": "boolean"
+          },
+          "repaints": {
+            "type": "boolean"
+          },
+          "timer": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "window",
+          "start_ns",
+          "request_ns",
+          "end_ns",
+          "damage",
+          "nodes",
+          "drawable_wait_ns",
+          "outcome",
+          "command_buffer",
+          "asks_frame",
+          "animates",
+          "repaints",
+          "timer"
+        ],
+        "additionalProperties": false
+      },
+      "description": "The U7 record of one frame of a mygo window: its times on the host event clock, the pixels it changed, the nodes of the last build pass, how it presented, whether it committed a command buffer, and what the window still asks for after it."
+    },
     "host.frame.surface.dispatch": {
       "layer": "host",
       "class": "frame",

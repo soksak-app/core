@@ -43,7 +43,7 @@ func TestTheFolderCommandCreatesThroughTheHost(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := string(encoded), `{"identity":"identity of /work/gamma","root":"/work/gamma"}`; got != want {
+	if got, want := string(encoded), `{"root":"/work/gamma","identity":"identity of /work/gamma"}`; got != want {
 		t.Fatalf("the command answered %s", got)
 	}
 	if !f.host.called("projectCreate") {

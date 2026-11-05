@@ -141,12 +141,12 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Tauri framework adapter", "rust", ["packages/host/tauriv2/src/**/*.rs"], ["packages/host/tauriv2/tests/**/*.rs", "packages/host/tauriv2/src/plugins_starter_test.rs"]),
   lane("Tauri application bootstrap", "rust", ["apps/tauriv2/src/main.rs", "apps/tauriv2/build.rs"], ["e2e/**/*.mjs", "e2e/platform/platform.js", "e2e/platform/darwin/darwin.js", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js", "e2e/fixtures/*/*/ui/*.html"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
 
-  lane("Go language host library", "go", ["packages/host/go/src/**/*.go"], ["packages/host/go/tests/**/*.go", "packages/host/go/tests/fixtures/**/*.json", "packages/host/go/src/exposure_settled_test.go", "packages/host/go/src/projects_test.go", "packages/host/go/src/windows_main_page_test.go", "packages/host/go/src/surface_elements_test.go", "packages/host/go/src/document_post_test.go", "packages/host/go/src/images_relay_test.go", "packages/host/go/src/image_detach_test.go", "packages/host/go/src/responder_test.go", "packages/host/go/src/start_test.go", "packages/host/go/src/diagnostics_test.go", "packages/host/go/src/diagnostics_input_reference_test.go", "packages/host/go/src/diagnostics_clock_test.go", "packages/host/go/src/composition_overlay_test.go", "packages/host/go/src/platform/darwin/webview_overlay_test.go", "packages/host/go/src/platform/darwin/document_test.go", "packages/host/go/src/platform/darwin/input_reference_test.go", "packages/host/go/src/exposure_status_test.go", "packages/host/go/src/exposure_webviews_test.go", "packages/host/go/src/modals_readiness_test.go", "packages/host/go/src/object_counts_test.go", "packages/host/go/src/view_lifecycle_test.go", "packages/host/go/src/view_responsiveness_test.go", "packages/host/go/src/view_theme_test.go", "packages/host/go/src/view_start_test.go", "packages/host/go/src/log_policy_levels_test.go", "packages/host/go/src/view_call_peer_test.go", "packages/host/go/src/view_call_record_test.go", "packages/host/go/src/view_error_test.go", "packages/host/go/src/view_binary_test.go", "packages/host/go/src/documents_test.go", "packages/host/go/src/presentation_wait_test.go", "packages/host/go/src/view_join_test.go", "packages/host/go/src/sidecar_reply_test.go", "packages/host/go/src/surfaces_test.go", "packages/host/go/src/view_origin_test.go", "packages/host/go/src/source_origins_test.go", "packages/host/go/src/sidecar_routes_test.go", "packages/host/go/src/sidecars_session_retention_test.go", "packages/host/go/src/plugins_starter_test.go", "packages/host/go/src/images_test.go", "packages/host/go/src/windows_front_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
+  lane("Go language host library", "go", ["packages/host/go/src/**/*.go"], ["packages/host/go/tests/**/*.go", "packages/host/go/tests/fixtures/**/*.json", "packages/host/go/src/exposure_settled_test.go", "packages/host/go/src/modals_workbench_test.go", "packages/host/go/src/window_frames_test.go", "packages/host/go/src/window_page_process_test.go", "packages/host/go/src/event_log_wake_test.go", "packages/host/go/src/projects_test.go", "packages/host/go/src/windows_main_page_test.go", "packages/host/go/src/surface_elements_test.go", "packages/host/go/src/document_post_test.go", "packages/host/go/src/images_relay_test.go", "packages/host/go/src/image_detach_test.go", "packages/host/go/src/responder_test.go", "packages/host/go/src/start_test.go", "packages/host/go/src/diagnostics_test.go", "packages/host/go/src/diagnostics_input_reference_test.go", "packages/host/go/src/diagnostics_clock_test.go", "packages/host/go/src/composition_overlay_test.go", "packages/host/go/src/platform/darwin/webview_overlay_test.go", "packages/host/go/src/platform/darwin/document_test.go", "packages/host/go/src/platform/darwin/input_reference_test.go", "packages/host/go/src/exposure_status_test.go", "packages/host/go/src/exposure_webviews_test.go", "packages/host/go/src/modals_readiness_test.go", "packages/host/go/src/object_counts_test.go", "packages/host/go/src/view_lifecycle_test.go", "packages/host/go/src/view_responsiveness_test.go", "packages/host/go/src/view_theme_test.go", "packages/host/go/src/view_start_test.go", "packages/host/go/src/log_policy_levels_test.go", "packages/host/go/src/view_call_peer_test.go", "packages/host/go/src/view_call_record_test.go", "packages/host/go/src/view_error_test.go", "packages/host/go/src/view_binary_test.go", "packages/host/go/src/documents_test.go", "packages/host/go/src/presentation_wait_test.go", "packages/host/go/src/view_join_test.go", "packages/host/go/src/sidecar_reply_test.go", "packages/host/go/src/surfaces_test.go", "packages/host/go/src/view_origin_test.go", "packages/host/go/src/source_origins_test.go", "packages/host/go/src/sidecar_routes_test.go", "packages/host/go/src/sidecars_session_retention_test.go", "packages/host/go/src/plugins_starter_test.go", "packages/host/go/src/images_test.go", "packages/host/go/src/windows_front_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
   lane("Wails framework adapter", "go", ["packages/host/wailsv3/src/**/*.go"], ["packages/host/wailsv3/tests/**/*.go"], { sharedTests: true }),
   lane("mygo framework adapter", "go", ["packages/host/mygo/src/**/*.go"], ["packages/host/mygo/tests/**/*.go"], { sharedTests: true }),
   lane("empty mygo window benchmark", "go", ["packages/host/mygo/benchmark/empty_window.go", "packages/host/mygo/benchmark/cmd/main.go"], ["packages/host/mygo/benchmark/empty_window_test.go"], { sharedTests: true }),
-  lane("Wails command line", "go", ["packages/sok/go/src/**/*.go"], ["packages/sok/go/tests/**/*.go", "packages/sok/go/src/diagnostics_test.go", "packages/sok/go/src/dev_test.go", "packages/sok/go/src/wailsv3_test.go", "packages/sok/go/src/mygo_test.go", "packages/sok/go/src/debug_test.go", "packages/sok/go/src/event_log_loss_test.go"]),
-  lane("Tauri command line", "rust", ["packages/sok/rust/src/**/*.rs"], ["packages/sok/rust/tests/**/*.rs", "packages/sok/rust/src/event_log_lock_test.rs", "packages/sok/rust/src/debug_test.rs", "packages/sok/rust/src/event_log_loss_test.rs", "packages/sok/rust/src/process_wait_test.rs"]),
+  lane("Wails command line", "go", ["packages/sok/go/src/**/*.go"], ["packages/sok/go/tests/**/*.go", "packages/sok/go/src/diagnostics_test.go", "packages/sok/go/src/dev_test.go", "packages/sok/go/src/wailsv3_test.go", "packages/sok/go/src/mygo_test.go", "packages/sok/go/src/debug_test.go", "packages/sok/go/src/event_log_loss_test.go", "packages/sok/go/src/event_log_idle_test.go"]),
+  lane("Tauri command line", "rust", ["packages/sok/rust/src/**/*.rs"], ["packages/sok/rust/tests/**/*.rs", "packages/sok/rust/src/event_log_lock_test.rs", "packages/sok/rust/src/event_log_flush_test.rs", "packages/sok/rust/src/debug_test.rs", "packages/sok/rust/src/event_log_loss_test.rs", "packages/sok/rust/src/process_wait_test.rs"]),
   lane("Wails application bootstrap", "go", ["apps/wailsv3/src/main.go"], ["e2e/**/*.mjs", "e2e/platform/platform.js", "e2e/platform/darwin/darwin.js", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js", "e2e/fixtures/*/*/ui/*.html"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
   lane("mygo application bootstrap", "go", ["apps/mygo/src/main.go"], ["packages/host/mygo/tests/framework_test.go"], { sharedTests: true }),
 
@@ -174,6 +174,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
     "native/darwin/tests/window_cursor_rects_test.m",
     "native/darwin/tests/webview_inspector_test.m",
     "native/darwin/tests/surface_host_test.m",
+    "native/darwin/tests/surface_keyboard_test.m",
     "native/darwin/tests/surface_container_test.m",
     "native/darwin/tests/surface_layout_observe_test.m",
   ], { sharedTests: true }),
@@ -198,6 +199,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Darwin observe", "objective-c", ["native/darwin/src/observe.m"], ["native/darwin/tests/observe_test.m"], { sharedTests: true }),
   lane("Darwin mouse buttons", "objective-c", ["native/darwin/src/mouse_buttons.m"], ["native/darwin/tests/mouse_buttons_test.m"], { sharedTests: true }),
   lane("Darwin quit request", "objective-c", ["native/darwin/src/quit_request.m"], ["native/darwin/tests/quit_request_test.m"], { sharedTests: true }),
+  lane("Darwin stall watch", "objective-c", ["native/darwin/src/stall_watch.m"], ["native/darwin/tests/stall_watch_test.m"], { sharedTests: true }),
   lane("Darwin memory pressure", "objective-c", ["native/darwin/src/memory_pressure.m"], ["native/darwin/tests/memory_pressure_test.m", "native/darwin/tests/document_backforward_test.m"], { sharedTests: true }),
   lane("Darwin process identity", "objective-c", ["native/darwin/process-identity/src/process_identity.m"], ["native/darwin/process-identity/tests/**/*.m", "native/darwin/process-identity/tests/**/*.sh"], { testExtensions: new Set([".m", ".sh"]) }),
   lane("Darwin process identity Node test entrypoint", "js-ts", ["native/darwin/process-identity/tests/package.test.mjs"], ["native/darwin/process-identity/tests/package.test.mjs"]),
@@ -315,7 +317,7 @@ const FEATURE_LINKS = [
       { file: "scripts/measure-app-usage.mjs", symbol: "export function requireOcclusion(state, readings)" },
       { file: "scripts/measure-app-usage.mjs", symbol: "export function windowRows(window, configDir, status)" },
       { file: "scripts/measure-terminal-redraw.mjs", symbol: "export async function prepareRedraw(s, plugin, root)" },
-      { file: "scripts/measure-terminal-redraw.mjs", symbol: "export async function measureRegion({ s, tab, interval, measure, covered })" },
+      { file: "scripts/measure-terminal-redraw.mjs", symbol: "export async function measureRegion({ s, tab, interval, measure, covered, windowServer })" },
       { file: "scripts/measure-terminal-redraw.mjs", symbol: "export function frameCost({ rows, totals, presented, seconds })" },
       { file: "scripts/measure-app-usage.mjs", symbol: "export function usageMeasurements({ app, marks, faultLines, gesture })" },
       { file: "scripts/measure-app-usage.mjs", symbol: "export function usageOutput({ options, measurement, gesture, faultLines })" },
@@ -722,7 +724,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/src/errors_screen.go", symbol: "func (e *ShownErrors) Show(where, text, detail string) {" },
       { file: "packages/workbench-mygo/src/sidebar_screen.go", symbol: "func SectionHeights(sections []SidebarSection, metrics SidebarMetrics, room float32) []float32 {" },
       { file: "packages/workbench-mygo/src/sidebar_screen.go", symbol: "func SidebarSeats(frame SidebarFrame) []SidebarSeat {" },
-      { file: "packages/workbench-mygo/src/plugin_screen.go", symbol: "func DrawPluginPage(c *ui.Context, binder *Binder, page PluginPage, shown *ShownErrors) {" },
+      { file: "packages/workbench-mygo/src/plugin_screen.go", symbol: "func DrawPluginPage(c *ui.Context, binder *Binder, page PluginPage, shown *ShownErrors, look PluginLook) {" },
       { file: "packages/workbench-mygo/src/debug_screen.go", symbol: "func DrawDebugView(c *ui.Context, binder *Binder, view DebugView, shown *ShownErrors) {" },
       { file: "packages/workbench-mygo/src/debug_state.go", symbol: "func ParseDebugState(file, text string, truncated bool) (DebugState, error) {" },
     ],
@@ -1014,6 +1016,84 @@ const FEATURE_LINKS = [
     levels: ["native"],
   },
   {
+    id: "F535",
+    implementation: [
+      { file: "packages/sok/go/src/event_log.go", symbol: "wakeUp := func() bool {" },
+      { file: "packages/sok/rust/src/event_log.rs", symbol: "let sleep = || -> Option<Instant> {" },
+      { file: "packages/host/go/src/event_log.go", symbol: "func nativeWake(" },
+      { file: "packages/host/rust/src/event_log.rs", symbol: "fn native_wake(" },
+      { file: "native/darwin/src/event_ring.m", symbol: "int sp_event_wake_fd(void) {" },
+    ],
+    tests: [
+      { file: "packages/sok/go/src/event_log_idle_test.go", id: "TestWriterSleepsWithNothingToWrite" },
+      { file: "packages/sok/go/src/event_log_idle_test.go", id: "TestFirstEventIsStoredAtOnce" },
+      { file: "packages/sok/go/src/event_log_idle_test.go", id: "TestCloseStoresWhatWaits" },
+      { file: "packages/sok/rust/tests/event_log_idle_test.rs", id: "a_writer_with_nothing_to_write_does_not_wake" },
+      { file: "packages/sok/rust/tests/event_log_idle_test.rs", id: "the_first_event_is_stored_at_once" },
+      { file: "packages/sok/rust/tests/event_log_idle_test.rs", id: "close_stores_what_waits_and_what_the_source_holds" },
+      { file: "packages/host/go/src/event_log_wake_test.go", id: "TestNativeWakeTurnsThePipeIntoTheWakeOfTheWriter" },
+      { file: "packages/host/rust/tests/event_native_wake_test.rs", id: "a_native_event_ends_the_wait_of_the_platform" },
+      { file: "native/darwin/tests/event_ring_test.m", id: "a burst of events writes the pipe once" },
+    ],
+    expected: "A writer with nothing to write sleeps, what wakes it is stored at once, and a flush or a close stores what waits.",
+    levels: ["unit", "native"],
+  },
+  {
+    id: "F535-1",
+    implementation: [
+      { file: "packages/sok/rust/src/event_log.rs", symbol: "queued = drain(&mut out, true);" },
+    ],
+    tests: [
+      { file: "packages/sok/rust/src/event_log_flush_test.rs", id: "a_flush_that_a_flush_finds_behind_it_is_answered" },
+      { file: "packages/sok/go/src/event_log_idle_test.go", id: "TestAFlushThatAFlushFindsBehindItIsAnswered" },
+    ],
+    expected: "A flush request that the writer finds while it answers another flush request is answered.",
+    levels: ["unit"],
+  },
+  {
+    id: "F536",
+    implementation: [
+      { file: "native/darwin/src/stall_watch.m", symbol: "void sp_stall_await_awake(void)" },
+      { file: "packages/host/go/src/stall_watch.go", symbol: "func StartStallWatch" },
+      { file: "packages/host/rust/src/stall_watch.rs", symbol: "pub fn start_stall_watch" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/stall_watch_test.go", id: "TestARunLoopThatWaitsTakesNoHeartbeat" },
+      { file: "packages/host/go/tests/stall_watch_test.go", id: "TestAStallThatEndsInAWaitIsResumedAndItsSampleEnds" },
+      { file: "packages/host/rust/tests/stall_watch_test.rs", id: "a_run_loop_that_waits_takes_no_heartbeat" },
+      { file: "packages/host/rust/tests/stall_watch_test.rs", id: "a_stall_that_ends_in_a_wait_is_resumed_and_its_sample_ends" },
+    ],
+    expected: "Both hosts send no heartbeat while the main run loop waits and block the watch without a timer, and they keep recording a stall while it handles an event.",
+    levels: ["unit"],
+  },
+  {
+    id: "F538",
+    implementation: [
+      { file: "packages/workbench/section-surfaces.js", symbol: "export function spaceSectionSurfaces(space, cards, sets, links)" },
+      { file: "packages/workbench/projects.js", symbol: "const { sets, links } = projectSidebars(project);" },
+      { file: "packages/workbench/settings.js", symbol: "export function projectSidebars(project)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "the layouts hold the sections of every space of every project, whatever the window draws, with the sets of each project" },
+      { file: "packages/workbench/test/section-surfaces.test.mjs", id: "a space holds the sections of the sets of its window sidebars and of the sides of its cards" },
+      { file: "packages/workbench/test/settings-debug-switch.test.mjs", id: "the sidebars of a project are its own overrides over the common settings" },
+    ],
+    expected: "A retain keeps the persistent sessions of the sections of every stored layout.",
+    levels: ["unit"],
+  },
+  {
+    id: "F539",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "static void gatherAreas(" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/input_inject_test.m", id: "each owner of a tracking area at the point hears the move" },
+      { file: "native/darwin/tests/input_inject_test.m", id: "the owners hear the point of a press before the press" },
+    ],
+    expected: "A driven move reaches every owner of a tracking area that holds the point, with its enter and its exit, and a press sends this move first.",
+    levels: ["native"],
+  },
+  {
     id: "F533",
     implementation: [
       { file: "packages/workbench/memory-saver.js", symbol: 'if (trigger === "delay") entry.unloadAt = now() + delayMs();' },
@@ -1023,6 +1103,18 @@ const FEATURE_LINKS = [
     ],
     expected: "A delay unload that fails runs again one delay later.",
     levels: ["unit"],
+  },
+  {
+    id: "F534",
+    implementation: [
+      { file: "native/darwin/src/surface_layout.m", symbol: "near60 = [feature retain];" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/window_facts_test.m", id: "a later read of the window facts reads no feature list" },
+      { file: "native/darwin/tests/window_facts_test.m", id: "a later read reports the rendering preference of the view" },
+    ],
+    expected: "A read of the window facts reads no WebKit feature list, and each view reports its own rendering preference.",
+    levels: ["native"],
   },
   {
     id: "F531",
@@ -6169,7 +6261,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F178",
-    implementation: [{ file: "packages/sok/rust/src/event_log.rs", symbol: "let mut due = Instant::now() + interval;" }],
+    implementation: [{ file: "packages/sok/rust/src/event_log.rs", symbol: "if queued.is_none() && due.is_some_and(|at| Instant::now() >= at) {" }],
     tests: [
       { file: "packages/host/rust/tests/event_log_test.rs", id: "a_steady_stream_of_events_is_written_at_each_batch_interval" },
       { file: "packages/host/go/tests/event_log_test.go", id: "TestASteadyStreamOfEventsIsWrittenAtEachBatchInterval" },
@@ -8666,6 +8758,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F502-18-1",
+    implementation: [
+      { file: "packages/workbench/memory-placement.js", symbol: "export function memoryStart(saver) {" },
+      { file: "packages/workbench-mygo/src/shell_tabs.go", symbol: "func (s *Shell) observeSections() {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/memory-saver.test.mjs", id: "a hidden section of a project opened from the library starts unloaded in the placement that first holds it" },
+      { file: "packages/workbench-mygo/tests/app_tabs_test.go", id: "TestAHiddenSectionThatDeclaresUnloadStartsUnloaded" },
+    ],
+    expected: "A window starts its memory saver at its first drawn layout that holds a surface, so a hidden section that declares unload never mounts only to unload.",
+    levels: ["unit"],
+  },
+  {
     id: "F292-22",
     implementation: [{ file: "packages/workbench/memory-placement.js", symbol: "const started = start(candidates);" }],
     tests: [{ file: "packages/workbench/test/memory-placement-start.test.mjs", id: "a placement keeps the start values of its commit when a tab leaves its layout during the readiness wait" }],
@@ -9388,7 +9493,7 @@ const FEATURE_LINKS = [
   {
     id: "F347",
     implementation: [
-      { file: "packages/workbench/sidebar-sections.js", symbol: "export const sectionSurfaceId = (space, sidebar, sectionId) =>" },
+      { file: "packages/workbench/section-surfaces.js", symbol: "export const sectionSurfaceId = (space, sidebar, sectionId) =>" },
       { file: "packages/workbench/section-surfaces.js", symbol: "export function storedSurfaceKept(tabIds, spaceCards)" },
       { file: "packages/host/go/src/workspace.go", symbol: "func listTabSessions(directory string) (any, error)" },
       { file: "packages/host/rust/src/workspace.rs", symbol: "fn valid_section_surface(id: &str) -> bool" },
@@ -11134,13 +11239,13 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-243",
-    implementation: [{ file: "e2e/benchmark/cases/terminal.mjs", symbol: "export async function withTerminalDragTraceMode" }],
+    implementation: [{ file: "e2e/view-metrics-collection.mjs", symbol: "export async function withDragTraceMode" }],
     tests: [
-      { file: "e2e/test/terminal-view-metrics-case.test.mjs", id: "terminal drag performance trace mode preserves frame logging and restores the original setting" },
-      { file: "e2e/test/terminal-view-metrics-case.test.mjs", id: "terminal drag trace-mode cleanup preserves action and after-write restoration failures" },
-      { file: "e2e/test/terminal-view-metrics-case.test.mjs", id: "terminal drag trace mode restores performance even when post-action settings cannot be read" },
-      { file: "e2e/test/terminal-view-metrics-case.test.mjs", id: "terminal drag trace mode restores performance before reporting a changed log policy" },
-      { file: "e2e/test/terminal-view-metrics-case.test.mjs", id: "terminal drag trace mode preserves falsy action rejection values" },
+      { file: "e2e/test/view-metrics-collection.test.mjs", id: "a measured drag stores only the frame class without the performance trace and restores both settings" },
+      { file: "e2e/test/view-metrics-collection.test.mjs", id: "a measured drag keeps the failure of its action and of the restoration" },
+      { file: "e2e/test/view-metrics-collection.test.mjs", id: "a measured drag restores the settings when the settings cannot be read after it" },
+      { file: "e2e/test/view-metrics-collection.test.mjs", id: "a measured drag refuses a log policy without the frame trace and changes nothing" },
+      { file: "e2e/test/view-metrics-collection.test.mjs", id: "a measured drag keeps a falsy rejection of its action" },
     ],
     expected: "Terminal drag measurement disables only the global performance trace while preserving frame logging, restores the original setting before reporting failures, and retains action and restoration errors without changing cadence or geometry acceptance criteria.",
     levels: ["unit"],
@@ -11912,7 +12017,7 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // F503 states the framework fork that the Wails host pins in the native surfaces specification and in the go.mod comments; it
 // changes no runtime capability.
 // F524 corrects the release checks that the verification specification states; it changes no runtime capability.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
+const NON_CAPABILITY_COMPLETIONS = new Set(["F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66), the window checks of plugins (F110) and the registry listing of the hwp plugin (F141, registry items G37 and G38). Core cannot read

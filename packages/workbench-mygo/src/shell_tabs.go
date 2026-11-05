@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
@@ -74,7 +76,13 @@ type shellTabs struct {
 	sidecars   *HostSidecars
 	after      func(milliseconds int64, run func()) (cancel func())
 	started    bool
-	closed     bool
+	// sectionsStarted tells that the first frame of a plane ended the start for the sections, and seats holds the seats that the
+	// memory saver read last.
+	sectionsStarted bool
+	seats           []string
+	// hiddenDue tells that a change of the plane may have left a hidden tab without its surface.
+	hiddenDue bool
+	closed    bool
 	// shown tells that the host took the first shown project, and failed that it refused it.
 	shown, failed bool
 	waiting       func(err error)
@@ -242,29 +250,102 @@ func (s *Shell) backgroundTabs() []BackgroundTab {
 	return tabs
 }
 
-// layoutTabs returns the tabs of every space of project, with the plane in the place of the shown space, and the tabs that are shown.
-func (s *Shell) layoutTabs(project *projectRecord) ([]MemorySurface, map[string]bool, error) {
+// layoutTabs returns the tabs of the layouts of the window, with the plane in the place of the shown space, and the tabs that are shown.
+func (s *Shell) layoutTabs() ([]MemorySurface, map[string]bool, error) {
 	var surfaces []MemorySurface
 	shown := map[string]bool{}
-	add := func(tab layout.Tab, active bool) {
+	err := s.eachLayoutTab(func(_ string, tab layout.Tab, active bool) {
 		plugin := s.pluginOf(tab.Plugin)
 		surfaces = append(surfaces, MemorySurface{ID: tab.ID, Plugin: tab.Plugin, Kind: "tab", Unload: plugin != nil && plugin.Unload})
 		if active {
 			shown[tab.ID] = true
 		}
+	})
+	if err != nil {
+		return nil, nil, err
 	}
-	for _, space := range project.Spaces {
-		if space.ID == project.ActiveSpaceID {
-			eachTab(s.plane.Cards(), add)
-			continue
+	for _, seat := range s.seatsInOrder() {
+		surfaces = append(surfaces, MemorySurface{ID: seat.SurfaceID, Plugin: seat.Plugin, Kind: "section", Unload: seat.Unload != nil})
+		if seat.Visible {
+			shown[seat.SurfaceID] = true
 		}
-		var stored storedLayout
-		if err := json.Unmarshal(space.Layout, &stored); err != nil {
-			return nil, nil, fmt.Errorf("space %s: %w", space.ID, err)
-		}
-		eachTab(stored.State.Cards, func(tab layout.Tab, _ bool) { add(tab, false) })
 	}
 	return surfaces, shown, nil
+}
+
+// eachLayoutTab visits the tabs of every space of the projects that the window opened, with the plane in the place of the shown space.
+func (s *Shell) eachLayoutTab(visit func(project string, tab layout.Tab, active bool)) error {
+	for _, project := range s.projects {
+		if !s.windowProjects[project.ID] {
+			continue
+		}
+		for _, space := range project.Spaces {
+			if project.ID == s.active && space.ID == project.ActiveSpaceID {
+				eachTab(s.plane.Cards(), func(tab layout.Tab, active bool) { visit(project.ID, tab, active) })
+				continue
+			}
+			var stored storedLayout
+			if err := json.Unmarshal(space.Layout, &stored); err != nil {
+				return fmt.Errorf("space %s: %w", space.ID, err)
+			}
+			eachTab(stored.State.Cards, func(tab layout.Tab, _ bool) { visit(project.ID, tab, false) })
+		}
+	}
+	return nil
+}
+
+// holdHiddenTabs holds a surface for each hidden tab that the memory saver left loaded, as the start mounts it: only a tab that starts
+// unloaded and a tab of a plugin with a background session have no surface while hidden (docs/spec/plugins.md#memory-saver).
+func (s *Shell) holdHiddenTabs() {
+	if s.tabs == nil || !s.tabs.hiddenDue || !s.tabs.sectionsStarted || s.opened() == nil || s.plane == nil {
+		return
+	}
+	s.tabs.hiddenDue = false
+	err := s.eachLayoutTab(func(project string, tab layout.Tab, active bool) {
+		unit := s.units[tab.Plugin]
+		_, stopped := s.surfaces.stopped(tab.ID)
+		if active || unit == nil || unit.Composition == nil || unit.Background != nil || stopped || s.surfaces.detachHeld(tab.ID) || s.tabs.saver.Unloaded(tab.ID) {
+			return
+		}
+		s.holdSurface(&heldSurface{tab: tab, composition: unit.Composition, owner: project})
+	})
+	if err != nil {
+		s.fail(err)
+	}
+}
+
+// seatsInOrder returns the seats of the section surfaces of the last frame in the order of their ids.
+func (s *Shell) seatsInOrder() []SidebarSeat {
+	seats := make([]SidebarSeat, 0, len(s.surfaces.seated))
+	for _, id := range slices.Sorted(maps.Keys(s.surfaces.seated)) {
+		seats = append(seats, s.surfaces.seated[id])
+	}
+	return seats
+}
+
+// observeSections gives the memory saver the seats of a frame that changed them, because only a frame knows which section it shows. The
+// first frame of a plane ends the start for the sections: the start of the tabs ran before any section had a seat
+// (docs/spec/plugins.md#memory-saver).
+func (s *Shell) observeSections() {
+	if s.tabs == nil || !s.surfaces.planeDrawn || !s.tabs.started {
+		return
+	}
+	lines := make([]string, 0, len(s.surfaces.seated))
+	for _, seat := range s.seatsInOrder() {
+		lines = append(lines, fmt.Sprintf("%s %t", seat.SurfaceID, seat.Visible))
+	}
+	if s.tabs.sectionsStarted && slices.Equal(lines, s.tabs.seats) {
+		return
+	}
+	s.tabs.seats = lines
+	if !s.observeMemory() {
+		return
+	}
+	if !s.tabs.sectionsStarted {
+		s.tabs.sectionsStarted = true
+		s.tabs.saver.Start()
+		s.tabs.hiddenDue = true
+	}
 }
 
 // tabsSettled brings these parts to the plane after each change of it.
@@ -275,22 +356,30 @@ func (s *Shell) tabsSettled() {
 	if err := s.tabs.background.Sync(); err != nil {
 		s.fail(err)
 	}
-	project := s.opened()
-	if project == nil || s.plane == nil || s.tabs.states == nil {
+	if !s.observeMemory() {
 		return
 	}
-	surfaces, shown, err := s.layoutTabs(project)
+	s.tabs.hiddenDue = true
+	if !s.tabs.started {
+		s.tabs.started = true
+		s.tabs.saver.Start()
+	}
+}
+
+// observeMemory gives the memory saver the surfaces of the layouts of the window, and tells whether it took them.
+func (s *Shell) observeMemory() bool {
+	if s.opened() == nil || s.plane == nil || s.tabs.states == nil {
+		return false
+	}
+	surfaces, shown, err := s.layoutTabs()
 	if err == nil {
 		err = s.tabs.saver.Observe(shown, surfaces)
 	}
 	if err != nil {
 		s.fail(err)
-		return
+		return false
 	}
-	if !s.tabs.started {
-		s.tabs.started = true
-		s.tabs.saver.Start()
-	}
+	return true
 }
 
 // droppedTabs removes the stored state and session of tabs and ends their sidecar sessions after the layout write that drops them is

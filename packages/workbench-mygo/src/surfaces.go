@@ -155,10 +155,16 @@ type heldSurface struct {
 	composition json.RawMessage
 	box         layout.Rect
 	project     projectStart
+	// owner is the project whose layout holds the surface.
+	owner string
 	// section is the start value of a section surface, and nil for the surface of a tab.
 	section *sectionStart
+	// unload is the declaration of unload of a section surface.
+	unload *surfaceUnload
 	// declared tells that the host took its composition.
 	declared bool
+	// cardFactor is the factor of the card of a tab whose space left the screen, which a view that starts after that reads.
+	cardFactor float64
 }
 
 // sectionStart is the start value section of a section surface. A section of a window sidebar has no card.
@@ -180,9 +186,11 @@ type surfaceState struct {
 	order []string
 	// drawn holds the tabs that the current frame seats, with their boxes in window coordinates.
 	drawn map[string]layout.Rect
-	// seated holds the section surfaces of the sidebars of the current frame, and planeDrawn tells that the frame drew a plane.
-	seated     map[string]bool
-	planeDrawn bool
+	// seated holds the seats of the section surfaces of the sidebars of the current frame, and planeDrawn tells that the frame drew a plane.
+	seated map[string]SidebarSeat
+	// behindDialog are the native views of the frame that wait to draw over the blurred workbench.
+	behindDialog []viewBehindDialog
+	planeDrawn   bool
 	// placed is the lines of the last request, and running tells that a placement has not finished.
 	placed  []surfaceLine
 	running bool
@@ -261,7 +269,7 @@ type storedSession struct {
 }
 
 func newSurfaceState() surfaceState {
-	return surfaceState{held: map[string]*heldSurface{}, drawn: map[string]layout.Rect{}, seated: map[string]bool{},
+	return surfaceState{held: map[string]*heldSurface{}, drawn: map[string]layout.Rect{}, seated: map[string]SidebarSeat{},
 		views: map[string]*viewState{}, reports: map[string]*tabReport{}, failed: map[string]string{}, documents: map[string]map[string]bool{},
 		detaching: map[string]bool{}, detachFailed: map[string]string{}, sessions: map[string]*storedSession{}}
 }
@@ -291,7 +299,7 @@ func (s *Shell) drawSeat(c *ui.Context, tab layout.Tab, box layout.Rect) {
 // drawSectionSeat draws the body of a section: the native view of its section surface. A seat that is not visible keeps its surface
 // hidden, and a section that was never visible has none.
 func (s *Shell) drawSectionSeat(c *ui.Context, seat SidebarSeat) {
-	s.surfaces.seated[seat.SurfaceID] = true
+	s.surfaces.seated[seat.SurfaceID] = seat
 	if reason, stopped := s.surfaces.failed[seat.SurfaceID]; stopped {
 		if seat.Visible {
 			ui.Text(c, reason).FontSize(12).TextColor(s.palette.No)
@@ -302,10 +310,13 @@ func (s *Shell) drawSectionSeat(c *ui.Context, seat SidebarSeat) {
 	if card, _, ok := strings.Cut(seat.Sidebar, ":"); ok {
 		start.Card = &card
 	}
-	surface := &heldSurface{tab: layout.Tab{ID: seat.SurfaceID, Plugin: seat.Plugin}, composition: seat.Composition, box: seat.Box, section: start}
-	// Every section of a set has its surface: a folded section and a section of an unselected tab keep it hidden.
+	surface := &heldSurface{tab: layout.Tab{ID: seat.SurfaceID, Plugin: seat.Plugin}, composition: seat.Composition, box: seat.Box, section: start, unload: seat.Unload}
+	// Every section of a set has its surface: a folded section and a section of an unselected tab keep it hidden. A hidden section that
+	// the memory saver unloaded has none until it is shown (docs/spec/plugins.md#memory-saver).
 	if !seat.Visible {
-		s.holdSurface(surface)
+		if s.tabs == nil || !s.tabs.saver.Unloaded(seat.SurfaceID) {
+			s.holdSurface(surface)
+		}
 		return
 	}
 	s.standSurface(c, surface, seat.Box)
@@ -319,6 +330,10 @@ func (s *Shell) holdSurface(surface *heldSurface) {
 	}
 	project := s.opened()
 	surface.project = projectStart{ID: project.ID, Root: project.Root}
+	// A surface drawn in the plane belongs to the shown project, and a hidden one names the project of its layout.
+	if surface.owner == "" {
+		surface.owner = project.ID
+	}
 	s.surfaces.held[id] = surface
 	s.surfaces.order = append(s.surfaces.order, id)
 }
@@ -331,8 +346,71 @@ func (s *Shell) standSurface(c *ui.Context, surface *heldSurface, box layout.Rec
 	s.holdSurface(surface)
 	if view, key, ok := s.options.Element(id); ok {
 		// A web page paints whole points only: past them a fractional view shows the window, and here the card shows instead.
-		ui.NativeView(c, view, key).Size(float32(math.Floor(box.W)), float32(math.Floor(box.H)))
+		width, height := float32(math.Floor(box.W)), float32(math.Floor(box.H))
+		if s.dialogOpen() {
+			// A hole paints only outside a blurred element, so the view stands over the blurred workbench in the same place.
+			ui.Spacer(c).Size(width, height)
+			s.surfaces.behindDialog = append(s.surfaces.behindDialog, viewBehindDialog{view, key, box, width, height})
+			return
+		}
+		ui.NativeView(c, view, key).Size(width, height).ObserveInput(func(ev ui.InputEvent) {
+			// A press reaches the content here while the host holds the views of a placement out of the pointer.
+			if ev.Kind == ui.InputPointerDown {
+				s.pressSurface(id)
+			}
+		})
 	}
+}
+
+// viewBehindDialog is a native view that the frame draws over the blurred workbench while a dialog is open.
+type viewBehindDialog struct {
+	view, key     uintptr
+	box           layout.Rect
+	width, height float32
+}
+
+// drawViewsBehindDialog draws the native views that the blurred workbench holds, each over its place.
+func (s *Shell) drawViewsBehindDialog(c *ui.Context) {
+	for _, behind := range s.surfaces.behindDialog {
+		ui.NativeView(c, behind.view, behind.key).Absolute().Left(float32(behind.box.X)).Top(float32(behind.box.Y)).Size(behind.width, behind.height)
+	}
+	s.surfaces.behindDialog = s.surfaces.behindDialog[:0]
+}
+
+// pressSurface focuses the card that holds a pressed surface: the card of its tab or of its section. A section of a window
+// sidebar stands in no card.
+func (s *Shell) pressSurface(surface string) {
+	if s.plane == nil {
+		return
+	}
+	var sectionCard string
+	if held := s.surfaces.held[surface]; held != nil && held.section != nil && held.section.Card != nil {
+		sectionCard = *held.section.Card
+	}
+	for _, card := range s.plane.Cards() {
+		if card.ID != sectionCard && !s.cardHoldsTab(card.ID, surface) {
+			continue
+		}
+		if s.focused != card.ID {
+			s.focusCard(card.ID)
+			s.options.Invalidate()
+		}
+		return
+	}
+}
+
+// cardHoldsTab reports whether the card holds the tab.
+func (s *Shell) cardHoldsTab(card, tab string) bool {
+	held, err := s.cardData(card)
+	if err != nil || held == nil {
+		return false
+	}
+	for _, item := range held.TabList() {
+		if item.ID == tab {
+			return true
+		}
+	}
+	return false
 }
 
 // forgetUnseated forgets the section surfaces that no sidebar of the frame holds: a section lives while a drawn set holds it. Only a
@@ -343,7 +421,7 @@ func (s *Shell) forgetUnseated() {
 	}
 	var gone []string
 	for _, id := range s.surfaces.order {
-		if s.surfaces.held[id].section != nil && !s.surfaces.seated[id] {
+		if _, seated := s.surfaces.seated[id]; s.surfaces.held[id].section != nil && !seated {
 			gone = append(gone, id)
 		}
 	}

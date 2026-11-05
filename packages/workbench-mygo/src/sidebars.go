@@ -36,6 +36,8 @@ type PluginSection struct {
 	Name        string          `json:"name"`
 	Composition json.RawMessage `json:"composition"`
 	Height      json.RawMessage `json:"height"`
+	// Unload holds the declaration that lets the memory saver unload the section surface.
+	Unload *surfaceUnload `json:"unload"`
 }
 
 // PluginSidebars are the default sidebar sets of a plugin (docs/spec/plugins.md#default-sidebar-sets).
@@ -169,6 +171,8 @@ func readSidebarMetrics(declared *Declarations) (SidebarMetrics, error) {
 	read("section-tab-mark", &m.SectionTabMark)
 	read("fold-button", &m.FoldButton)
 	read("card-icon", &m.FoldIcon)
+	read("icon-stroke", &m.IconStroke)
+	read("r-xs-ratio", &m.FoldRadiusRatio)
 	share := func(name string, into *float32) {
 		value, ok := declared.Share(name)
 		if !ok {
@@ -176,6 +180,7 @@ func readSidebarMetrics(declared *Declarations) (SidebarMetrics, error) {
 		}
 		*into = float32(value)
 	}
+	share("inset-mix", &m.FoldHoverMix)
 	share("section-head-mix", &m.SectionHeadMix)
 	share("section-head-hover-mix", &m.SectionHeadHoverMix)
 	return m, failed
@@ -405,20 +410,33 @@ func (s *Sidebars) Hide(c *ui.Context, frame SidebarFrame) {
 	}
 }
 
-// Surfaces returns the ids of the section surfaces of the fixed sidebars in the space.
-func (s *Sidebars) Surfaces(space string, focused FocusedSurface) []string {
+// WindowSurfaces returns the ids of the section surfaces of the fixed sidebars in the space, for every set that a link gives them,
+// because the set of a fixed sidebar follows the plugin that has the focus.
+func (s *Sidebars) WindowSurfaces(space string) []string {
 	var surfaces []string
 	for _, place := range []string{"left", "right"} {
-		set, _ := s.windowSet(place, focused)
-		if set == nil {
-			continue
-		}
-		frame := SidebarFrame{Sidebar: place, Space: space}
-		s.fill(&frame, set)
-		for _, seat := range SidebarSeats(frame) {
-			if len(seat.Composition) > 0 {
-				surfaces = append(surfaces, seat.SurfaceID)
+		seen := map[string]bool{}
+		for _, link := range s.links {
+			if (link.Place == place || link.Place == "window-"+place) && !seen[link.Set] {
+				seen[link.Set] = true
+				surfaces = append(surfaces, s.SetSurfaces(space, place, link.Set)...)
 			}
+		}
+	}
+	return surfaces
+}
+
+// SetSurfaces returns the ids of the section surfaces of the set on the sidebar of the space. A set or a section that no plugin that
+// is loaded declares has no surface.
+func (s *Sidebars) SetSurfaces(space, sidebar, set string) []string {
+	declared := s.set(set)
+	if declared == nil {
+		return nil
+	}
+	var surfaces []string
+	for _, id := range declared.Sections {
+		if loaded, ok := s.sections[id]; ok && len(loaded.Composition) > 0 {
+			surfaces = append(surfaces, space+"/"+sidebar+"/"+id)
 		}
 	}
 	return surfaces
@@ -434,7 +452,7 @@ func (s *Sidebars) fill(frame *SidebarFrame, set *SidebarSet) {
 		if !ok {
 			continue
 		}
-		drawn := SidebarSection{ID: id, Name: loaded.Name, Plugin: loaded.plugin, Height: loaded.height, Fill: loaded.fill,
+		drawn := SidebarSection{ID: id, Name: loaded.Name, Plugin: loaded.plugin, Height: loaded.height, Fill: loaded.fill, Unload: loaded.Unload,
 			Folded: set.Layout == "list" && slices.Contains(choice.Folded, id), Composition: loaded.Composition}
 		if size, ok := choice.Sizes[id]; ok {
 			drawn.Size = &size

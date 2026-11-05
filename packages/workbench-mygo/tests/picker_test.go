@@ -414,6 +414,29 @@ func (f *tabShell) modified(surface string) {
 	f.viewCalled(surface, "tab.modified", true)
 }
 
+func TestAKeptModifiedTabKeepsItsProject(t *testing.T) {
+	f := modifiedShell(t)
+	project := status[map[string]any](t, f.shellFixture, "core.project")["id"].(string)
+	var value any
+	var failure error
+	answered := false
+	f.shell.Registry().RunLater("core.project.close", json.RawMessage(`{"id":"`+project+`"}`), func(result any, err error) {
+		value, failure, answered = result, err, true
+	})
+	f.settle()
+	if answered {
+		t.Fatalf("the command answered %v with %v before the question", value, failure)
+	}
+	f.click("core.picker.item", "keep")
+	f.settle()
+	if !answered || failure != nil || !reflect.DeepEqual(value, map[string]bool{"closed": false}) {
+		t.Fatalf("the command answered %v, %v with %v", answered, value, failure)
+	}
+	if len(f.host.projects) != 1 {
+		t.Fatalf("the host stores %v", f.host.projects)
+	}
+}
+
 func TestAModifiedTabAsksBeforeItCloses(t *testing.T) {
 	f := modifiedShell(t)
 	answer := f.run(t, "core.tab.close", `{"tab":"tab-aaaaaa"}`).(map[string]bool)
@@ -648,4 +671,61 @@ func (f *shellFixture) groupIndex(menu pickerStatus, id string) int {
 	}
 	f.t.Fatalf("no group %s", id)
 	return -1
+}
+
+// A layer of a picker has the middle radius of the page, --r-sm: its left border is straight from that distance above its bottom, which is
+// still inside the curve of the whole radius.
+func TestTheLayerOfAPickerTakesTheMiddleRadius(t *testing.T) {
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pad, ok := declared.Metric("picker-outer-pad")
+	if !ok {
+		t.Fatal("no metric picker-outer-pad")
+	}
+	f := projectWithPlugins(t)
+	f.run("core.settings.theme", map[string]any{"name": "midnight", "mode": "dark"})
+	f.settle()
+	f.click("core.card.add", f.tabbedCards()[0])
+	keys := f.menu().keys()
+	last := f.box("core.picker.item", keys[len(keys)-1])
+	x, y := last.X-float32(pad)-1, last.Y+last.H+float32(pad)+1
+	// The edge of the curve is antialiased, so the color only comes near that of the border.
+	if got, want := f.pixelOf(x+0.5, y-8.5), themeToken(t, "midnight", "dark", "edge"); int(want.R)-int(got.R) > 3 {
+		t.Fatalf("the left border of the layer is %v at 8.5 above its bottom, near %v is wanted", got, want)
+	}
+}
+
+// A close request of the window, as Cmd+W sends, asks about a modified tab: discarding closes the window and keeping keeps it and tells
+// the host (docs/spec/plugins.md#tab-reports).
+func TestACloseRequestOfTheWindowAsksAboutAModifiedTab(t *testing.T) {
+	for _, answer := range []struct {
+		key  string
+		call string
+	}{{"keep", "windowCloseKept"}, {"discard", "windowClose"}} {
+		t.Run(answer.key, func(t *testing.T) {
+			f := modifiedShell(t)
+			f.shell.Event("project-close-request", nil)
+			f.settle()
+			if f.host.called("windowClose") {
+				t.Fatal("the window closed before the question")
+			}
+			if !f.tester.HasText("저장하지 않고 닫기") {
+				t.Fatalf("no question in %q", f.tester.Texts())
+			}
+			item, ok := exposedNode(f.tester.ElementTree(), "core.picker.item", answer.key)
+			if !ok {
+				t.Fatal("no item")
+			}
+			f.tester.ClickAt(item.Bounds.X+4, item.Bounds.Y+4)
+			f.settle()
+			if !f.host.called(answer.call) {
+				t.Fatalf("the answer %s called %v", answer.key, f.host.calls)
+			}
+			if answer.key == "keep" && f.host.called("windowClose") {
+				t.Fatal("the kept tab closed the window")
+			}
+		})
+	}
 }

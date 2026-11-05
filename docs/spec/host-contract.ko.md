@@ -253,6 +253,7 @@ fn invalid_json_closes_connection() {
 | `view.presentation-wait.invisible-present-defers-end` | presentation 요청에서 보이지 않는 root 배치는 wait에 참여하지 않고, 그 요청은 그 배치의 wait를 끝내지 않는다. 보이는 view의 wait는 보이지 않음을 적용하는 sync까지 열려 있으며, 그 sync가 `host.trace.view.presentation-abandoned {surface, reason: hidden}`과 함께 한 번 끝낸다. | all |
 | `view.presentation-wait.joins` | 표시되며 기다리는 것이 없는 view는 배치가 그 frame을 바꾸거나, 그것을 보이게 하거나, 새 generation을 보이게 할 때 settled든 unsettled든 present의 열린 배치 트랜잭션에 참여하고, 트랜잭션은 view가 표시된 뒤 commit된다. 표시 없이 끝나면 native 참여를 한 번 끝낸다. | all |
 | `surface-layout.setup-failure-cancels-open-transaction` | Tauri가 layout setup 중 WebView presentation callback을 등록하지 못하면 열린 layout transaction을 취소하고 setup 오류를 반환한다. 취소도 실패하면 그 오류를 setup 오류에 덧붙인다. | tauriv2 only: callback 등록 setup 단계는 Tauri WebView 경로의 일부이며 Wails는 platform operation으로 참여한다 |
+| `surface-layout.keyboard-follows-the-focus-ring` | page는 `surfaceFocus {surface}`로 창의 키보드를 surface에 주고, `surface`가 null이면 워크벤치에 준다([surface의 키보드](native-surfaces.ko.md#surface의-키보드)). window가 없거나 window가 갖지 않은 surface면 요청을 거부한다. | all |
 | `surface-layout.page-cancels-preparation` | page는 presentation하지 않는 preparation을 `cancelSurfaces {ticket}`로 취소하고, 이 요청은 main thread에서 ticket의 wait를 포기하고 layout을 취소한다. window가 없으면 요청을 거부한다. | all |
 | `surface-layout.prepare-visible-surfaces` | 표시할 surface를 준비하면 요청된 표시 상태를 유지하고, 표시하지 않을 surface는 즉시 숨긴다. | all |
 | `surface-layout.joins-root-views-before-awaiting-app-dom` | 표시 중인 root view가 변경되면 host는 application DOM presentation을 기다리기 전에 열린 layout ticket에 참여한다. host는 DOM과 raster 준비를 기다린 뒤 commit하며 교체된 root generation도 commit 전에 해당 ticket에 참여해야 한다. 변경되지 않은 commit된 root는 다시 참여하지 않는다. | all |
@@ -356,6 +357,10 @@ fn invalid_json_closes_connection() {
 | `endpoint.input.pointer-activate-only-on-move` | activate는 down phase에서 거부되고 move phase에서 받아들여진다. | all |
 | `endpoint.input.pointer-activate-must-be-bool` | 불리언이 아닌 activate는 -32602를 반환한다. | all |
 | `endpoint.input.pointer-defaults` | button이나 activate가 없는 포인터 입력은 왼쪽 버튼과 비활성화를 쓴다. | all |
+| `endpoint.input.pointer-clicks-range` | 1부터 3까지의 정수가 아닌 포인터 clicks는 -32602를 반환한다. | all |
+| `endpoint.input.pointer-clicks-only-on-press-and-release` | clicks는 down, up phase에서 받고 move, drag, scroll phase에서는 -32602를 반환한다. | all |
+| `endpoint.input.pointer-clicks-default` | clicks가 없는 포인터 입력의 click count는 1이고, clicks 2는 click count 2로 전달한다. | all |
+| `endpoint.input.pointer-unknown-field-rejected` | method가 정의하지 않은 field가 있는 포인터 입력은 -32602를 반환한다. | all |
 | `endpoint.input.pointer-right-button-accepted` | 오른쪽 포인터 버튼을 받아들이고 오른쪽 버튼으로 전달한다. | all |
 | `endpoint.input.pointer-phase-and-scroll-decoding` | drag와 scroll phase, deltaY, 소수 좌표를 그대로 전달한다. | all |
 | `endpoint.input.pointer-button-held-message` | 1007 메시지는 `NSEvent.pressedMouseButtons` 마스크를 16진수로, frontmost 애플리케이션을 bundle identifier와 pid로 보고하며, bundle identifier가 없는 애플리케이션은 pid로, frontmost 애플리케이션이 없으면 그 사실을 두 host에서 같은 문장으로 보고한다. | all |
@@ -499,6 +504,7 @@ fn invalid_json_closes_connection() {
 | `log.fatal-signal.writes-an-error-line` | 애플리케이션 로그를 연 뒤 host process가 fatal signal을 받으면 그 signal로 process가 끝나기 전에 `error: fatal: <signal name>`을 한 번 쓴다. | tauriv2 only: Go runtime은 fatal signal을 스스로 처리하고 보고를 crash file에 쓴다(`log.fatal-error.writes-the-crash-file`) |
 | `log.fatal-error.writes-the-crash-file` | event log를 연 뒤 host의 runtime fatal error는 출력을 `logs/host-<boot>.crash`에 쓰고 process를 `SIGABRT`로 끝낸다. 그래서 시스템이 모든 thread의 native frame을 담은 crash report를 쓴다. | wailsv3 only: Rust host에는 runtime fatal error가 없으며, fatal signal은 `log.fatal-signal.writes-an-error-line`을 따른다 |
 | `test-support.crash-reports.removes-only-the-saved-report` | 의도한 crash를 검사하는 test가 쓰는 crash report watch는 자기 process의 저장된 report `<application>-<time>.ips`를 지우고, 시스템이 rename하기 전에 report를 쓰는 숨김 파일은 지우지 않는다. | all |
+| `test-support.crash-reports.child-runs-under-a-name-of-its-run` | 의도한 crash를 검사하는 test의 child는 test 실행 파일의 복사본을 그 run의 이름으로 실행한다. 시스템은 한 process 이름의 crash report가 25개에 이르면, test가 지운 report까지 세어, 더 쓰지 않기 때문이다. | all |
 | `log.binding-failure.returned-not-logged` | 실패한 binding 호출은 framework transport의 log 줄 없이 page로 돌아가므로 page가 그 실패를 한 번 기록한다. | wailsv3 only: Wails HTTP transport가 binding 호출을 나르고, Tauri invoke는 돌려준 오류에 log 줄을 쓰지 않는다 |
 | `log.service.standard-error-goes-to-service-log` | 호스트가 시작한 영속 서비스는 표준 오류를 `logs/<실행 파일 이름>.log`에 쓴다. | all |
 | `log.service.open-failure-fails-start` | 서비스 로그를 열 수 없으면 `sidecar <name>: service log: <error>`로 시작을 실패시키고 서비스를 시작하지 않는다. | all |
@@ -754,10 +760,12 @@ fn invalid_json_closes_connection() {
 | `window-close.surfaces.reports-every-failure` | 네이티브 닫기 하나가 실패해도 나머지를 닫고, 창 닫기는 모든 실패를 표면 id 와 객체 종류와 함께 반환한다. | all |
 | `host.main-thread.runs-no-code-outside-own-stack` | Go host가 main-thread step(Wails host에서는 각 exported callback, `EnqueueUI`, `application.InvokeSync`, Dock menu callback, memory pressure callback, stall heartbeat, 비동기 signal, mygo host에서는 U1의 worker에서 실행되는 `App.Run`의 Go 코드, framework의 각 Objective-C method와 block, 각 C callback)을 실행하는 동안, main thread의 stack pointer를 표본한 값은 모두 main thread의 stack 안에 있다. | wailsv3 only: Tauri host는 main thread의 stack 위에서 Rust를 실행하므로 표본할 Go stack이 없다 |
 | `host.main-thread.start-requires-both-functions` | macOS에서 Go language host library의 시작은 첫 native call 전에 `main-thread functions are not installed`와 framework adapter가 설치하지 않은 함수 각각의 이름으로 실패한다. | wailsv3 only: Rust language host library는 Tauri host의 main thread에서 실행되며 main-thread 함수가 없다 |
-| `host.stall.recorded-without-a-check` | main thread 밖의 thread가 250 ms마다 main thread에 heartbeat를 보낸다. 1 s 이상 늦은 heartbeat는 `host.stall`(`late_ms`)을 저장하고, `logs/stall-host-<pid>-<ms>.txt`로 표본한 thread들의 stack은 `host.stall.sampled`(`path`, 파일을 쓰지 못했으면 `error`)를 저장하며, 다음 heartbeat는 `host.stall.resumed`(`stalled_ms`)를 저장한다. window check 없이 그렇게 한다. 기본 정책은 앞의 두 기록을 gate 예외([정책](logging.ko.md#정책))로 저장한다. | all |
+| `host.stall.recorded-without-a-check` | main run loop가 event를 처리하는 동안 main thread 밖의 thread가 250 ms마다 main thread에 heartbeat를 보낸다. 1 s 이상 늦은 heartbeat는 `host.stall`(`late_ms`)을 저장하고, `logs/stall-host-<pid>-<ms>.txt`로 표본한 thread들의 stack은 `host.stall.sampled`(`path`, 파일을 쓰지 못했으면 `error`)를 저장하며, 다음 heartbeat는 `host.stall.resumed`(`stalled_ms`)를 저장한다. window check 없이 그렇게 한다. 기본 정책은 앞의 두 기록을 gate 예외([정책](logging.ko.md#정책))로 저장한다. | all |
 | `host.stall.watch-late-separates-scheduling` | 감시 thread가 heartbeat와 함께 늦게 깨어나면, `host.stall`(`late_ms`)은 감시 thread가 250 ms 박자를 넘어 깨어난 시간인 `watch_late_ms`를 가져, `watch_late_ms`가 `late_ms`의 절반 이상이다. | all |
 | `host.stall.watch-late-separates-blocked-main` | 감시 thread가 제때 깨어나고 heartbeat만 늦으면, `host.stall`은 `watch_late_ms` 0을 가져, `late_ms`의 절반 미만이다. | all |
-| `host.stall.sample-keeps-the-watch-running` | stall의 sample이 도는 동안 감시 thread는 heartbeat를 계속 보낸다. stall은 `host.stall.resumed`로 끝나고, sample 시간은 이후 `host.stall`의 `late_ms`에 들어가지 않으며, sample이 도는 중의 stall은 `error`가 `a sample of the threads is still running`인 `host.stall.sampled`이다. | all |
+| `host.stall.sample-keeps-the-watch-running` | stall의 sample이 도는 동안 감시 thread는 event를 처리하는 main run loop에 heartbeat를 계속 보낸다. stall은 `host.stall.resumed`로 끝나고, sample 시간은 이후 `host.stall`의 `late_ms`에 들어가지 않으며, sample이 도는 중의 stall은 `error`가 `a sample of the threads is still running`인 `host.stall.sampled`이다. | all |
+| `host.stall.waiting-run-loop-takes-no-heartbeat` | main run loop가 event를 기다리는 동안 감시 thread는 heartbeat를 보내지 않고 timer 없이 막힌다. run loop가 깨어나면 박자가 이어지고, 대기 시간은 늦음이 아니며, 깨어나서 돌지 않는 run loop는 `late_ms`를 그 깨어남부터 재는 `host.stall`이다. | all |
+| `host.stall.ends-when-the-run-loop-waits` | stall에서 돌아와 다음 박자 전에 대기로 들어간 main thread는 그 대기의 시작까지의 `stalled_ms`를 가진 `host.stall.resumed`를 저장하고, 도는 sample은 여전히 `host.stall.sampled`를 저장한다. | all |
 | `window-close.surfaces.closed-once` | surface sync 가 제거하는 surface 는 handle 을 닫기 전에 창의 surface registry 에서 빠지므로, 그 닫기보다 먼저 실행된 창 닫기는 그 handle 을 받지 않고 모든 surface handle 은 한 번만 닫힌다. 제거된 surface 하나의 닫기가 실패해도 나머지를 닫고, sync 는 모든 실패를 surface id 와 함께 반환한다. | tauriv2 only: Wails host 는 surface 를 view 객체로 닫고 그 객체가 main-thread 단계의 C 호출([hosts](hosts.ko.md#wails-host의-main-thread))에서 handle 을 비우므로 두 번째 닫기는 native code 에 닿지 않는다. Tauri host 는 surface 를 handle 로 닫고 그 handle 은 registry 항목만 가진다 |
 | `surfaces.sync.name-outlives-native-surface` | surface sync가 제거하는 surface는 native surface가 닫힐 때까지 이름을 유지한다. 닫기와 이름 제거가 main thread의 한 단계에서 실행되므로, 창의 native surface 읽기(`host.window`)는 이름이 있는 surface를 찾거나 surface를 찾지 않는다. 닫기가 실패해도 이름을 제거하고 실패를 반환한다. | tauriv2 only: Wails host는 worker가 main thread에 전달한 C 호출([hosts](hosts.ko.md#wails-host의-main-thread))로 view를 닫고 그 main-thread 단계가 끝난 뒤 이름을 제거하므로, 둘 사이의 창 읽기는 surface를 찾지 않고 이름은 알려진 상태다. Tauri host는 sync의 thread에서 main thread로 닫기를 보낸다 |
 | `window-overlay.rects.packs-four-values-per-rect` | 보이는 오버레이는 입력 순서대로 x, y, width, height 값으로 묶인다. | all |
@@ -1010,6 +1018,8 @@ fn invalid_json_closes_connection() {
 | `log.writer.stores-cids` | host의 생산자가 상관 식별자와 함께 낸 event는 `cids`(순서대로의 목록)와 함께 저장되고, 식별자가 없는 event에는 `cids`가 없다. 비어 있거나 따옴표, 역슬래시, 제어 문자를 담은 식별자는 거부하고 손실로 센다. | all |
 | `log.writer.never-blocks-and-counts-loss` | `emit`은 기다리지 않고 돌아온다. 큐에 자리가 없으면 false를 돌려주고, writer는 거부된 event 수와 같은 `count`와 거부된 event의 `channel`을 가진 `log.dropped` 하나를 그것이 가리키는 `seq` 범위 뒤에 저장한다. | all |
 | `log.writer.writes-each-interval` | writer는 마지막 쓰기 뒤 batch 간격이 끝날 때마다 모인 것을 쓰며, event가 간격보다 빨리 계속 들어올 때도 그렇다. event가 없는 간격을 기다리는 writer는 꾸준한 입력 동안 아무것도 쓰지 않고 kill에서 한 간격보다 많이 잃는다. | all |
+| `log.writer.sleeps-with-nothing-to-write` | batch 간격 동안 쓴 것이 없는 writer는 event, source의 wake, count가 닿을 때까지 다시 깨어나지 않는다. | all |
+| `log.writer.stores-the-first-event-at-once` | 잠든 writer를 깨운 event는 batch 간격을 기다리지 않고 저장되고, 뒤따르는 event는 그 event가 시작한 간격의 batch를 기다린다. | all |
 | `log.writer.error-wakes-the-writer` | level이 `error`인 event는 배치 간격을 기다리지 않고 기록된다. | all |
 | `log.writer.files-are-private` | 로그 폴더는 mode 0700, 로그 파일은 mode 0600이다. | all |
 | `log.writer.output-follows-the-contract` | writer의 파일은 자신의 event를 선언한 catalog에 대해 `@soksak/log-contract` 감사를 통과한다. | all |
@@ -1021,7 +1031,8 @@ fn invalid_json_closes_connection() {
 | `log.native.stores-pulled-records-in-the-layer-native` | writer는 native ring에서 pull한 record를 library가 준 시각과 level, 이름, field, writer의 `seq`로 계층 `native`에 저장한다. | all |
 | `log.native.stores-clock-and-cids-of-pulled-records` | native ring에서 pull한 record는 library가 준 `ts_us`, `mono_ns`, `cids`와 함께 저장된다. 식별자에 따옴표, 역슬래시, 제어 문자가 있거나 이름과 식별자의 길이가 record에 맞지 않는 record는 이유 `a native record was refused`의 `log.dropped`로 센다. | all |
 | `log.native.counts-refused-records-and-ring-loss` | writer는 native ring이 거부한 event를 이유 `the native ring was full`의 `log.dropped`로 세고, 계층 `native` 밖의 이름, 정의되지 않은 level이나 class, JSON 객체가 아닌 field, 맞지 않는 길이를 가진 pull한 record를 이유 `a native record was refused`의 `log.dropped`로 센다. | all |
-| `log.native.pulls-at-the-batch-interval` | writer는 배치 간격마다 native ring을 pull하므로, 나중에 도착한 record는 flush 요청 없이 저장된다. | all |
+| `log.native.wake-stores-a-record-at-once` | native ring의 wake는 잠든 writer를 ring으로 데려가므로, 나중에 도착한 record는 flush 요청 없이 즉시 저장된다. | all |
+| `log.native.close-stores-the-ring` | writer를 닫으면 native ring의 record를 저장하며, wake를 받지 못한 record도 저장한다. | all |
 | `log.native.platform-pulls-the-ring` | 플랫폼은 빈 native ring을 0바이트와 손실 없음으로 pull하고, 빈 buffer로의 pull은 거부한다. | all |
 | `log.native.platform-reads-the-clock-and-takes-the-boot` | 플랫폼은 양수이고 줄어들지 않으며 시간과 함께 늘어나는 monotonic clock(나노초)을 읽고, 실행의 boot 식별자를 native 계층의 상관 식별자용으로 받는다. 빈 식별자와 영문자, 숫자, `-`, `_` 외의 문자가 있는 식별자는 거부한다. | all |
 | `log.native.host-writer-starts-with-the-platform-pull` | host의 writer는 플랫폼의 pull과 함께 시작하고 `log.open`을 먼저 쓴다. | all |

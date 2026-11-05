@@ -5,14 +5,14 @@
 //! refused as `log.dropped`. The levels `error`, `warn` and `info` go to the main file and `debug` and `trace` to the debug
 //! file, and `seq` runs across both. The policy of the event log (`log_policy`) is the gate of the producers. The hosts and the tool start this writer with their own layer, role, clock and thread
 //! entrance; a process with a source of events that cannot call into the writer (the native ring of a host) gives the
-//! writer a `Pull`.
+//! writer a `Pull` and a `Wake`.
 
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering, fence};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, SyncSender, TrySendError, sync_channel};
 use std::sync::{Arc, Mutex, PoisonError, RwLock};
 use std::thread::JoinHandle;
@@ -102,9 +102,45 @@ pub trait PullSink {
     fn lost(&mut self, events: u64, bytes: u64, reason: &str, channel: Channel);
 }
 
-/// Takes the events of a source that cannot call into the writer. It runs on the thread of the writer at the batch interval
-/// and when the writer flushes.
+/// Takes the events of a source that cannot call into the writer. It runs on the thread of the writer when `Wake` wakes the
+/// writer, at the end of each batch interval and when the writer flushes.
 pub type Pull = Box<dyn FnMut(&mut dyn PullSink) + Send>;
+
+/// Starts what says that the source of a `Pull` holds something, through the `Rouser` that it gets. A writer with nothing to
+/// write sleeps, so a process with a `Pull` gives its `Wake`.
+pub type Wake = Box<dyn FnOnce(Rouser) -> Result<(), String> + Send>;
+
+/// What wakes the writer without an event. It does not wait.
+#[derive(Clone)]
+pub struct Rouser {
+    sender: SyncSender<Message>,
+    /// Whether a `Message::Rouse` waits in the queue, which holds at most one.
+    queued: Arc<AtomicBool>,
+    /// Whether the writer sleeps.
+    asleep: Arc<AtomicBool>,
+}
+
+impl Rouser {
+    /// Says that the source of the `Pull` holds something. A queue without room holds messages, which wake the writer.
+    pub fn wake(&self) {
+        if !self.queued.swap(true, Ordering::SeqCst)
+            && self.sender.try_send(Message::Rouse).is_err()
+        {
+            self.queued.store(false, Ordering::SeqCst);
+        }
+    }
+
+    /// Wakes a writer that sleeps for a count that no message carries. A writer that runs takes the count at the end of its
+    /// interval, so a refused event costs it no wakeup.
+    pub(crate) fn nudge(&self) {
+        // A producer counts and then reads `asleep`, and the writer stores `asleep` and then reads the counts, so one of them
+        // sees the other.
+        fence(Ordering::SeqCst);
+        if self.asleep.load(Ordering::SeqCst) && self.asleep.swap(false, Ordering::SeqCst) {
+            self.wake();
+        }
+    }
+}
 
 /// The retention hook of a writer (docs/spec/logging.md#retention). It runs on the thread of the writer after `log.open` and after
 /// each rotation; when it removed a file or left the files over the bound it returns the level and the fields of the event
@@ -138,6 +174,8 @@ pub struct Options {
     pub rotate_bytes: u64,
     /// The source of events that cannot call into the writer; `None` when the process has none.
     pub pull: Option<Pull>,
+    /// What says that `pull` holds something; `None` when the process has no `pull`.
+    pub wake: Option<Wake>,
     /// The policy file that the writer follows (`<config-dir>/log-policy.json`); `None` for a writer that has none.
     pub policy_path: Option<PathBuf>,
     /// The retention of the files of the runs; `None` for a writer that has none.
@@ -206,10 +244,12 @@ enum Message {
     Flush(SyncSender<()>),
     /// Write everything that is queued, then end.
     Stop,
+    /// Wake a writer that sleeps, which takes the source and the counts.
+    Rouse,
 }
 
-/// The slots of the queue that only requests use.
-const RESERVED_FOR_REQUESTS: usize = 2;
+/// The slots of the queue that only requests use: a flush, a stop and a rouse.
+const RESERVED_FOR_REQUESTS: usize = 3;
 
 /// The interval between two reports of the counts of the gate (docs/spec/logging.md#policy).
 const GATED_REPORT_INTERVAL: Duration = Duration::from_secs(1);
@@ -259,6 +299,7 @@ pub struct EventLog {
     boot: String,
     layer: &'static str,
     clock: fn() -> u64,
+    rouser: Rouser,
     writer: Mutex<Option<JoinHandle<()>>>,
     /// The classes that the catalogs of the installed plugins declare (docs/spec/logging.md#plugin-catalogs).
     plugin_classes: RwLock<HashMap<String, Class>>,
@@ -405,6 +446,11 @@ impl EventLog {
 
     /// Creates the folder (mode 0700) and the file (mode 0600, created new), writes `log.open` and starts the writer thread.
     pub fn start(options: Options) -> Result<EventLog, String> {
+        if options.pull.is_some() && options.wake.is_none() {
+            return Err(
+                "event writer: pull needs wake, or the writer does not hear its source".into(),
+            );
+        }
         let system = crate::platform::current()?;
         system.prepare_log_directory(&options.directory)?;
         let path = options
@@ -438,7 +484,13 @@ impl EventLog {
             }))
             .map_err(|e| format!("log.open: {e}"))?,
         );
-        let gate = Arc::new(Gate::new());
+        let asleep = Arc::new(AtomicBool::new(false));
+        let rouser = Rouser {
+            sender: sender.clone(),
+            queued: Arc::new(AtomicBool::new(false)),
+            asleep: Arc::clone(&asleep),
+        };
+        let gate = Arc::new(Gate::new(rouser.clone()));
         let writer = {
             let queued_bytes = Arc::clone(&queued_bytes);
             let queued_events = Arc::clone(&queued_events);
@@ -453,6 +505,7 @@ impl EventLog {
             let pull = options.pull;
             let prune = options.prune;
             let gate = Arc::clone(&gate);
+            let rouser = rouser.clone();
             (options.spawn)(Box::new(move || {
                 write_loop(
                     Output::new(
@@ -474,9 +527,13 @@ impl EventLog {
                     open,
                     pull,
                     gate,
+                    rouser,
                 )
             }))?
         };
+        if let Some(wake) = options.wake {
+            wake(rouser.clone())?;
+        }
         Ok(EventLog {
             on_write,
             sender,
@@ -492,6 +549,7 @@ impl EventLog {
             boot: options.boot,
             layer: options.layer,
             clock: options.clock,
+            rouser,
             writer: Mutex::new(Some(writer)),
             plugin_classes: RwLock::new(HashMap::new()),
             plugin_versions: Mutex::new(BTreeMap::new()),
@@ -858,6 +916,7 @@ impl EventLog {
         self.loss.bytes[channel.index()].fetch_add(bytes, Ordering::Relaxed);
         let depth = self.queued_events.load(Ordering::Relaxed) as u64;
         self.loss.depth[channel.index()].fetch_max(depth, Ordering::Relaxed);
+        self.rouser.nudge();
     }
 
     /// Writes everything that is queued and waits until it is on disk, at most `deadline`.
@@ -1011,6 +1070,8 @@ struct Output {
     seq: u64,
     on_write: Arc<Mutex<Option<WriteObserver>>>,
     prune: Option<Prune>,
+    /// Whether a batch was written since the end of the last interval.
+    wrote: bool,
 }
 
 impl Output {
@@ -1038,6 +1099,7 @@ impl Output {
             seq: 0,
             on_write,
             prune,
+            wrote: false,
         }
     }
 
@@ -1191,6 +1253,7 @@ impl Output {
         if file.batch.is_empty() {
             return;
         }
+        self.wrote = true;
         let Some(handle) = file.file.as_mut() else {
             return;
         };
@@ -1317,11 +1380,13 @@ fn write_loop(
     open: Pending,
     mut pull: Option<Pull>,
     gate: Arc<Gate>,
+    rouser: Rouser,
 ) {
     out.push(&open);
     out.prune();
-    // No event source reaches the writer from the native ring: a native thread must not call into this process's Rust
-    // code, so the writer pulls at its batch interval and when it flushes.
+    // No event source reaches the writer from the native ring: a native thread must not call into this process's Rust code,
+    // so the source says through `Wake` that it holds something, and the writer pulls then, at the end of each interval and
+    // when it flushes.
     let mut pull_source = |out: &mut Output| {
         if let Some(pull) = pull.as_mut() {
             pull(out);
@@ -1365,6 +1430,8 @@ fn write_loop(
         while let Ok(message) = receiver.try_recv() {
             match message {
                 Message::Event(pending) => take(out, &pending),
+                // This drain does what the message asks for.
+                Message::Rouse => rouser.queued.store(false, Ordering::SeqCst),
                 other => {
                     request = Some(other);
                     break;
@@ -1376,26 +1443,47 @@ fn write_loop(
         out.flush();
         request
     };
-    // The batch is written when the interval since the last write ends, also while events keep arriving: a wait that
-    // restarted at each event would write nothing while events came faster than the interval.
-    let mut due = Instant::now() + interval;
-    // A flush or a stop that a write at the end of an interval found queued behind the events.
-    let mut queued: Option<Message> = None;
+    // The writer runs in intervals and sleeps after one that wrote nothing, because a wakeup of each interval is the idle cost
+    // of the application (G2 of docs/spec/hosts.md). A writer that slept has written everything, so it writes what wakes it at
+    // once; the interval that starts then gathers what follows into one batch.
+    let sleep = || -> Option<Instant> {
+        // A producer counts and then reads `asleep`, and the writer stores `asleep` and then reads the counts, so one of them
+        // sees the other. A count of the gate keeps the intervals running until its report, which comes at most once each second.
+        rouser.asleep.store(true, Ordering::SeqCst);
+        fence(Ordering::SeqCst);
+        let counted = loss
+            .events
+            .iter()
+            .any(|count| count.load(Ordering::Relaxed) > 0);
+        if counted || gate.counted() {
+            rouser.asleep.store(false, Ordering::SeqCst);
+            return Some(Instant::now() + interval);
+        }
+        None
+    };
+    // A flush or a stop that a write found queued behind the events.
+    let mut queued = drain(&mut out, false);
+    // The end of the interval, or `None` while the writer sleeps.
+    let mut due = sleep();
     loop {
-        let received = match queued.take() {
-            Some(message) => Ok(message),
-            None => receiver.recv_timeout(due.saturating_duration_since(Instant::now())),
+        // Events that keep arriving after the interval ended do not postpone its write.
+        if queued.is_none() && due.is_some_and(|at| Instant::now() >= at) {
+            out.wrote = false;
+            queued = drain(&mut out, false);
+            due = if out.wrote {
+                Some(Instant::now() + interval)
+            } else {
+                sleep()
+            };
+        }
+        let received = match (queued.take(), due) {
+            (Some(message), _) => Ok(message),
+            (None, Some(at)) => receiver.recv_timeout(at.saturating_duration_since(Instant::now())),
+            (None, None) => receiver.recv().map_err(|_| RecvTimeoutError::Disconnected),
         };
         let message = match received {
             Ok(message) => message,
-            Err(RecvTimeoutError::Timeout) => {
-                // The interval ended: write what has gathered, and handle a request that was queued behind it.
-                due = Instant::now() + interval;
-                match drain(&mut out, false) {
-                    Some(request) => request,
-                    None => continue,
-                }
-            }
+            Err(RecvTimeoutError::Timeout) => continue,
             Err(RecvTimeoutError::Disconnected) => {
                 drain(&mut out, true);
                 return;
@@ -1409,28 +1497,32 @@ fn write_loop(
                     record_loss(&mut out);
                     out.flush();
                 }
-                // Events that keep arriving after the interval ended do not postpone its write.
-                if Instant::now() >= due {
-                    due = Instant::now() + interval;
-                    queued = drain(&mut out, false);
-                }
             }
+            Message::Rouse => rouser.queued.store(false, Ordering::SeqCst),
             Message::Flush(done) => {
-                let following = drain(&mut out, true);
+                queued = drain(&mut out, true);
                 if done.send(()).is_err() {
                     eprintln!("event writer: the flush was answered after its deadline");
                 }
-                if matches!(following, Some(Message::Stop)) {
-                    return;
-                }
+                continue;
             }
             Message::Stop => {
                 drain(&mut out, true);
                 return;
             }
         }
+        // What woke a writer that slept is written at once.
+        if due.is_none() {
+            rouser.asleep.store(false, Ordering::SeqCst);
+            due = Some(Instant::now() + interval);
+            queued = drain(&mut out, false);
+        }
     }
 }
+
+#[cfg(test)]
+#[path = "event_log_flush_test.rs"]
+mod flush_test;
 
 #[cfg(test)]
 #[path = "event_log_lock_test.rs"]

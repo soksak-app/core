@@ -80,6 +80,23 @@ func (s *Shell) registerLibrary() {
 		s.options.Invalidate()
 		return nil
 	})
+	later(s, "core.folder.create", func(value struct {
+		Parent string `json:"parent"`
+		Name   string `json:"name"`
+	}, answer func(any, error)) {
+		s.calls.Call("projectCreate", map[string]string{"parent": value.Parent, "name": value.Name}, func(got any, err error) {
+			if err != nil {
+				answer(nil, err)
+				return
+			}
+			folder, err := decode[ProjectFolderValue](got)
+			if err != nil {
+				answer(nil, err)
+				return
+			}
+			answer(folder, nil)
+		})
+	})
 	act(s, "core.library.sort", func(value struct {
 		Order string `json:"order"`
 	}) error {
@@ -95,16 +112,13 @@ func (s *Shell) registerLibrary() {
 			return fmt.Errorf("the library is not shown")
 		}
 		if s.library.page == pluginsPage {
-			return s.keyboard.Set("core.library.plugins.search", 0)
+			return s.exposedFocus.Set("core.library.plugins.search", 0)
 		}
-		return s.keyboard.Set("core.library.search", 0)
+		return s.exposedFocus.Set("core.library.search", 0)
 	})
 	act(s, "core.library.open", func(value idParam) error { s.activate(value.ID); return nil })
-	act(s, "core.library.pin", func(value struct {
-		ID     string `json:"id"`
-		Pinned bool   `json:"pinned"`
-	}) error {
-		return s.pinProject(value.ID, value.Pinned)
+	later(s, "core.library.pin", func(value pinParam, answer func(any, error)) {
+		s.pinProject(value.ID, value.Pinned, answerNull(answer))
 	})
 	act(s, "core.library.remove", func(value idParam) error { s.removeProject(value.ID); return nil })
 	act(s, "core.library.return", func(struct{}) error {
@@ -116,8 +130,7 @@ func (s *Shell) registerLibrary() {
 		return nil
 	})
 	act(s, "core.library.window", func(struct{}) error {
-		cids := s.events.BeginOperation("workbench.window.operation", map[string]any{"action": "new"})
-		s.calls.Caused(cids).Call("windowNew", nil, func(_ any, err error) {
+		s.newWindow(func(err error) {
 			if err != nil {
 				s.fail(err)
 			}

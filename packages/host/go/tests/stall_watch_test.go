@@ -10,6 +10,9 @@ import (
 	host "github.com/soksak-app/core/packages/host/go/src"
 )
 
+// neverWaits is the run loop of a main thread that always handles an event.
+func neverWaits() {}
+
 // contract: host.stall.recorded-without-a-check
 func TestABlockedMainThreadIsRecordedWithItsStacksAndItsEnd(t *testing.T) {
 	// A fake main thread: the watch sends its heartbeat here, and the test holds the thread for 1.6 s.
@@ -34,9 +37,10 @@ func TestABlockedMainThreadIsRecordedWithItsStacksAndItsEnd(t *testing.T) {
 			work <- func() { answered.Store(int64(clock())) }
 			return clock(), time.Duration(answered.Load())
 		},
-		Clock:  clock,
-		Sample: func(path string) error { mu.Lock(); sampled = append(sampled, path); mu.Unlock(); return nil },
-		Folder: t.TempDir(),
+		AwaitAwake: neverWaits,
+		Clock:      clock,
+		Sample:     func(path string) error { mu.Lock(); sampled = append(sampled, path); mu.Unlock(); return nil },
+		Folder:     t.TempDir(),
 		EmitHost: func(level host.Level, event string, f map[string]any) {
 			mu.Lock()
 			levels = append(levels, level)
@@ -115,9 +119,10 @@ func firstStall(t *testing.T, extra time.Duration) map[string]any {
 	}, 64)
 	stop := host.StartStallWatch(host.StallWatchOptions{
 		// The main thread never answers, so the time of the answer stays the time of the first heartbeat, the start of the clock.
-		Heartbeat: func() (time.Duration, time.Duration) { return ct.clock(), 0 },
-		Sample:    func(string) error { return nil },
-		Folder:    t.TempDir(),
+		Heartbeat:  func() (time.Duration, time.Duration) { return ct.clock(), 0 },
+		AwaitAwake: neverWaits,
+		Sample:     func(string) error { return nil },
+		Folder:     t.TempDir(),
 		EmitHost: func(_ host.Level, event string, fields map[string]any) {
 			records <- struct {
 				name   string
@@ -218,9 +223,10 @@ func TestASampleOfTheThreadsDoesNotStopTheWatch(t *testing.T) {
 			work <- func() { answered.Store(int64(clock())) }
 			return clock(), time.Duration(answered.Load())
 		},
-		Clock:  clock,
-		Sample: func(string) error { <-release; return nil },
-		Folder: t.TempDir(),
+		AwaitAwake: neverWaits,
+		Clock:      clock,
+		Sample:     func(string) error { <-release; return nil },
+		Folder:     t.TempDir(),
 		EmitHost: func(_ host.Level, event string, f map[string]any) {
 			mu.Lock()
 			events = append(events, event)
@@ -259,5 +265,220 @@ func TestASampleOfTheThreadsDoesNotStopTheWatch(t *testing.T) {
 	}
 	if _, failed := fields[5]["error"]; failed {
 		t.Fatalf("the first sample reports %v", fields[5])
+	}
+}
+
+// fakeRunLoop is a main run loop that waits or handles an event, with the state that the observers of the platform write: the
+// start of a wait and a wake are answers, and while it waits a heartbeat sends nothing and returns the start of the wait as both
+// times. While held it takes no heartbeat.
+type fakeRunLoop struct {
+	mu         sync.Mutex
+	awake      *sync.Cond
+	clock      func() time.Duration
+	waits      bool
+	held       bool
+	answered   time.Duration
+	heartbeats int
+	blocked    int
+}
+
+func newFakeRunLoop(clock func() time.Duration) *fakeRunLoop {
+	loop := &fakeRunLoop{clock: clock, waits: true}
+	loop.awake = sync.NewCond(&loop.mu)
+	return loop
+}
+
+func (l *fakeRunLoop) heartbeat() (time.Duration, time.Duration) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.waits {
+		return l.answered, l.answered
+	}
+	l.heartbeats++
+	now := l.clock()
+	if !l.held {
+		l.answered = now
+	}
+	return now, l.answered
+}
+
+func (l *fakeRunLoop) awaitAwake() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.blocked++
+	for l.waits {
+		l.awake.Wait()
+	}
+	l.blocked--
+}
+
+func (l *fakeRunLoop) wake(held bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.waits, l.held, l.answered = false, held, l.clock()
+	l.awake.Broadcast()
+}
+
+func (l *fakeRunLoop) wait() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.waits, l.held, l.answered = true, false, l.clock()
+}
+
+func (l *fakeRunLoop) sent() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.heartbeats
+}
+
+// awaitBlocked returns when the watch blocks on the wait of the run loop.
+func (l *fakeRunLoop) awaitBlocked(t *testing.T) {
+	t.Helper()
+	deadline := time.Now().Add(4 * time.Second)
+	for {
+		l.mu.Lock()
+		blocked := l.blocked > 0
+		l.mu.Unlock()
+		if blocked {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the watch does not block while the run loop waits")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+// awaitHeartbeats returns when the watch has sent the count of heartbeats.
+func (l *fakeRunLoop) awaitHeartbeats(t *testing.T, count int) {
+	t.Helper()
+	deadline := time.Now().Add(4 * time.Second)
+	for l.sent() < count {
+		if time.Now().After(deadline) {
+			t.Fatalf("%d heartbeats, want %d", l.sent(), count)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+// stallRecords collects the names and the fields of the records of a watch.
+type stallRecords struct {
+	mu     sync.Mutex
+	names  []string
+	fields []map[string]any
+}
+
+func (r *stallRecords) emit(_ host.Level, event string, fields map[string]any) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.names = append(r.names, event)
+	r.fields = append(r.fields, fields)
+}
+
+func (r *stallRecords) joined() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return strings.Join(r.names, ",")
+}
+
+func (r *stallRecords) await(t *testing.T, want string) {
+	t.Helper()
+	deadline := time.Now().Add(4 * time.Second)
+	for r.joined() != want {
+		if time.Now().After(deadline) {
+			t.Fatalf("events %q, want %q", r.joined(), want)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+// contract: host.stall.waiting-run-loop-takes-no-heartbeat
+func TestARunLoopThatWaitsTakesNoHeartbeat(t *testing.T) {
+	ct := &controlledTime{}
+	loop := newFakeRunLoop(ct.clock)
+	records := &stallRecords{}
+	stop := host.StartStallWatch(host.StallWatchOptions{
+		Heartbeat: loop.heartbeat, AwaitAwake: loop.awaitAwake, Sample: func(string) error { return nil },
+		Folder: t.TempDir(), EmitHost: records.emit, Clock: ct.clock, Wait: ct.wait,
+	})
+	defer func() {
+		stop()
+		loop.wake(false)
+	}()
+
+	// The run loop waits from the start of the watch.
+	loop.awaitBlocked(t)
+	time.Sleep(100 * time.Millisecond)
+	if got := loop.sent(); got != 0 {
+		t.Fatalf("%d heartbeats to a run loop that waits", got)
+	}
+
+	// It wakes and the beats start.
+	loop.wake(false)
+	loop.awaitHeartbeats(t, 4)
+
+	// It waits again: the watch blocks, and a time much longer than a beat sends nothing and stores nothing.
+	loop.wait()
+	loop.awaitBlocked(t)
+	sent := loop.sent()
+	ct.mu.Lock()
+	ct.now += 10 * time.Second
+	ct.mu.Unlock()
+	time.Sleep(100 * time.Millisecond)
+	if got := loop.sent(); got != sent {
+		t.Fatalf("%d heartbeats to a run loop that waits", got-sent)
+	}
+
+	// The wake ends the block, and the 10 s of the wait are no lateness.
+	loop.wake(false)
+	loop.awaitHeartbeats(t, sent+4)
+	if got := records.joined(); got != "" {
+		t.Fatalf("a wait of the run loop stored %s", got)
+	}
+
+	// A run loop that wakes and does not turn is a stall, measured from its wake.
+	loop.wait()
+	loop.awaitBlocked(t)
+	loop.wake(true)
+	records.await(t, "host.stall,host.stall.sampled")
+	records.mu.Lock()
+	defer records.mu.Unlock()
+	if got := int64Field(t, records.fields[0], "late_ms"); got != 1000 {
+		t.Fatalf("late_ms %d, want 1000 from the wake", got)
+	}
+	if got := int64Field(t, records.fields[0], "watch_late_ms"); got != 0 {
+		t.Fatalf("watch_late_ms %d, want 0", got)
+	}
+}
+
+// contract: host.stall.ends-when-the-run-loop-waits
+func TestAStallThatEndsInAWaitIsResumedAndItsSampleEnds(t *testing.T) {
+	ct := &controlledTime{}
+	loop := newFakeRunLoop(ct.clock)
+	records := &stallRecords{}
+	release := make(chan struct{})
+	stop := host.StartStallWatch(host.StallWatchOptions{
+		Heartbeat: loop.heartbeat, AwaitAwake: loop.awaitAwake, Sample: func(string) error { <-release; return nil },
+		Folder: t.TempDir(), EmitHost: records.emit, Clock: ct.clock, Wait: ct.wait,
+	})
+	defer func() {
+		stop()
+		loop.wake(false)
+	}()
+	loop.awaitBlocked(t)
+	loop.wake(true)
+	records.await(t, "host.stall")
+
+	// The main thread returns and its run loop waits before the next beat: the watch stores the end and then blocks, while the
+	// sample goes on apart from it.
+	loop.wait()
+	records.await(t, "host.stall,host.stall.resumed")
+	loop.awaitBlocked(t)
+	close(release)
+	records.await(t, "host.stall,host.stall.resumed,host.stall.sampled")
+	records.mu.Lock()
+	defer records.mu.Unlock()
+	if got := int64Field(t, records.fields[1], "stalled_ms"); got < 1000 {
+		t.Fatalf("stalled_ms %d, want at least 1000", got)
 	}
 }

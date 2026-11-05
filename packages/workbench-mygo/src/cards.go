@@ -18,19 +18,6 @@ func (s *Shell) stageInset() float32 { return s.palette.Gap + s.palette.BorderWi
 
 // drawWork draws the spaces and the stage of the shown project.
 func (s *Shell) drawWork(c *ui.Context, width, height float32) {
-	column := s.projectColumnWidth()
-	if column == 0 {
-		s.drawWorkArea(c, width, height)
-		return
-	}
-	ui.Row(c).Size(width, height).Children(func() {
-		s.drawProjectColumn(c, column, height)
-		ui.Column(c).Size(width-column, height).Children(func() { s.drawWorkArea(c, width-column, height) })
-	})
-}
-
-// drawWorkArea draws the error of the work screen, the row of the spaces and the plane.
-func (s *Shell) drawWorkArea(c *ui.Context, width, height float32) {
 	s.surfaces.planeDrawn = true
 	project := s.opened()
 	s.workBanner = s.drawWorkError(c, width)
@@ -56,6 +43,7 @@ func (s *Shell) drawWorkArea(c *ui.Context, width, height float32) {
 		paintGrips(p, r, inset, grips)
 		s.drawRules(p, r, inset, rules, true)
 	}).Children(func() {
+		s.drawStageEdge(c, width, stage)
 		cards := s.plane.Cards()
 		s.forgetCardReads(cards)
 		for _, card := range cards {
@@ -308,7 +296,12 @@ func (s *Shell) tabText() (float32, string) {
 	return s.textSmall(), s.fontFamily()
 }
 
-// radiusSmall is the radius of a tab, of the group of tools and of a control inside it.
+// radiusMiddle is --r-sm of packages/workbench/app.css, the radius of a card of a dialog.
+func (s *Shell) radiusMiddle() float32 {
+	return float32(math.Round(float64(s.palette.Radius * s.metrics.radiusMiddleRatio)))
+}
+
+// radiusSmall is the radius of a tab, of the group of tools and of a control inside it, --r-xs of packages/workbench/app.css.
 func (s *Shell) radiusSmall() float32 {
 	return float32(math.Round(float64(s.palette.Radius * s.metrics.radiusSmallRatio)))
 }
@@ -346,6 +339,8 @@ func (s *Shell) drawTab(c *ui.Context, card string, tab layout.Tab, on bool, siz
 		}
 		button := s.binder.Press(c, "core.card.tab", "core.tab.select", tab.ID, tabParam{tab.ID})
 		s.anchored("core.card.tab/"+tab.ID, button)
+		// A press leaves the keyboard focus where it is, and the Tab key still stops here.
+		button.KeepFocus()
 		button.Padding(0, m.tabGap, 0, start).AlignItems(ui.Center).Label(name).Tooltip(name).Children(func() {
 			ui.Text(c, name).SingleLine().Ellipsis("…").FontSize(size).MaxWidth(width).TextColor(color)
 		})

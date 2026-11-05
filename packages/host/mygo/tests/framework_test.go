@@ -537,3 +537,43 @@ func TestTheLayoutObserverReportsTheTransactionOfAWindow(t *testing.T) {
 		t.Fatalf("the second report is %q", got)
 	}
 }
+
+func TestTheFrameReportsOfAWindowReachItsCounters(t *testing.T) {
+	frames := host.NewWindowFrames("main")
+	recorder := adapter.FrameRecorder(frames)
+	recorder.Frame(&ui.FrameRecord{Outcome: ui.FrameStashed, Nodes: 9, Timer: true})
+	recorder.Commit(ui.CommitRecord{Kind: ui.CommitStashed})
+	got := frames.Counters()
+	if *got.Frames != 1 || *got.CommandBuffers != 1 || *got.Settled {
+		t.Fatalf("after a stashed frame and its commit: %d frames, %d command buffers, settled %t", *got.Frames, *got.CommandBuffers, *got.Settled)
+	}
+	recorder.Frame(&ui.FrameRecord{Outcome: ui.FrameImmediate, CommandBuffer: true, Nodes: 9})
+	got = frames.Counters()
+	if *got.Frames != 2 || *got.CommandBuffers != 2 || !*got.Settled || frames.Nodes() != 9 {
+		t.Fatalf("after a settled frame: %d frames, %d command buffers, settled %t, %d nodes", *got.Frames, *got.CommandBuffers, *got.Settled, frames.Nodes())
+	}
+}
+
+func TestAShownWindowCountsItsFramesAndThenDrawsNone(t *testing.T) {
+	_, _, window := open(t, "frames")
+	frames := window.Frames()
+	if frames == nil {
+		t.Fatal("a mygo window counts no frame")
+	}
+	window.Show()
+	wait(t, "a window that settled after its frames", func() bool {
+		got := frames.Counters()
+		return *got.Frames > 0 && *got.CommandBuffers > 0 && *got.Settled
+	})
+	if frames.Nodes() == 0 {
+		t.Fatal("a window that drew reports no nodes of its last build pass")
+	}
+	// The window shows after its first frame, and showing asks for one more.
+	time.Sleep(500 * time.Millisecond)
+	before := frames.Counters()
+	time.Sleep(time.Second)
+	after := frames.Counters()
+	if *after.Frames != *before.Frames || *after.CommandBuffers != *before.CommandBuffers {
+		t.Fatalf("a settled window went from %d frames and %d command buffers to %d and %d", *before.Frames, *before.CommandBuffers, *after.Frames, *after.CommandBuffers)
+	}
+}

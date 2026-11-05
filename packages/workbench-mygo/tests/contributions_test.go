@@ -172,3 +172,10 @@ func TestContributionStatusStartsEmpty(t *testing.T) {
 		t.Fatalf("the status is %s", status)
 	}
 }
+
+func TestTheContributionsHaveAStatus(t *testing.T) {
+	f := openedShell(t)
+	if got := status[[]map[string]any](t, f, "core.contributions"); got == nil {
+		t.Fatal("no status")
+	}
+}

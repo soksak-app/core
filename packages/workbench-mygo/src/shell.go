@@ -73,13 +73,15 @@ type environmentGrid struct {
 
 // metrics are the chrome metrics that the shell draws with.
 type metrics struct {
-	lineHeight, projectColumnW, projectColumnGap, projectColumnPad, projectTabH, projectTabPad, projectTabXInset, projectTabAddH, space1, space2, space3, space4, libraryFooterH, librarySortW, librarySearchW, libraryCardMinW, libraryCardMinWNarrow, libraryNarrowW,
+	// The library (packages/workbench/library.css) and the project column (.project-column of packages/workbench).
+	space1, space2, space3, space4, libraryFooterH, librarySortW, librarySearchW, libraryCardMinW, libraryCardMinWNarrow, libraryNarrowW,
 	libraryPreviewH, libraryMark, libraryMarkStroke, previewLineH, previewLineStep, previewLineOpacity, previewSidebarOpacity, libraryAddH,
 	libraryFormW, fieldPadY, selectArrowRoom, selectArrowInset, previewBorderMix, previewFillMix, previewInkMix, previewLineW,
+	lineHeight, projectColumnW, projectColumnGap, projectColumnPad, projectTabH, projectTabPad, projectTabXInset, projectTabAddH,
 	barTabRootPad, barTabRootW, dropMix, dropBorder, tabDraggingOpacity, actStroke, chromeActsGap, brandGap, brandLogoAtBase, chromeH, chromeRowH, spaceGap, spacePad, chromeGap, barGap, barXPad, barXOpacity, barAddText, barAddPad, textControlAtBase, textCaptionAtBase, chipMix, chipHoverMix, chipOnMix, projectTabMix float32
 	headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW float32
 	// The card head (.chrome of packages/workbench/app.css).
-	cardHeadGap, cardHeadPad, cardTabsGap, cardButton, cardIcon, cardActsGap, cardActsPad, cardActHalfOpacity, tabGap, tabPadY, tabPadX, tabXPad, tabXOpacity, iconStroke, disabledOpacity, noticeDotInset, radiusSmallRatio, textSmallAtBase, textBase, chipSelMix, insetMix, tabXHoverMix float32
+	cardHeadGap, cardHeadPad, cardTabsGap, cardButton, cardIcon, cardActsGap, cardActsPad, cardActHalfOpacity, tabGap, tabPadY, tabPadX, tabXPad, tabXOpacity, iconStroke, disabledOpacity, noticeDotInset, radiusMiddleRatio, radiusSmallRatio, textSmallAtBase, textBase, chipSelMix, insetMix, tabXHoverMix float32
 	// The error line (#applicationError of packages/workbench/app.css).
 	errorPadY, errorPadX, errorBorder float32
 	// debugW is the width of the debug view, and debugH its largest share of the window height.
@@ -110,6 +112,8 @@ func readMetrics(declared *Declarations) (metrics, error) {
 		read(name, into)
 	}
 	read("line-height", &m.lineHeight)
+	read("bar-tab-root-pad", &m.barTabRootPad)
+	read("bar-tab-root-w", &m.barTabRootW)
 	read("project-column-w", &m.projectColumnW)
 	read("project-column-gap", &m.projectColumnGap)
 	read("project-column-pad", &m.projectColumnPad)
@@ -117,8 +121,6 @@ func readMetrics(declared *Declarations) (metrics, error) {
 	read("project-tab-pad", &m.projectTabPad)
 	read("project-tab-x-inset", &m.projectTabXInset)
 	read("project-tab-add-h", &m.projectTabAddH)
-	read("bar-tab-root-pad", &m.barTabRootPad)
-	read("bar-tab-root-w", &m.barTabRootW)
 	read("drop-border", &m.dropBorder)
 	read("tab-dragging-opacity", &m.tabDraggingOpacity)
 	read("act-stroke", &m.actStroke)
@@ -177,6 +179,7 @@ func readMetrics(declared *Declarations) (metrics, error) {
 	read("disabled-opacity", &m.disabledOpacity)
 	read("notice-dot-inset", &m.noticeDotInset)
 	read("r-xs-ratio", &m.radiusSmallRatio)
+	read("r-sm-ratio", &m.radiusMiddleRatio)
 	read("text-small-at-base", &m.textSmallAtBase)
 	read("text-base", &m.textBase)
 	mix := func(name string, into *float32) {
@@ -269,8 +272,10 @@ type Shell struct {
 	browsing bool
 	projects []projectRecord
 	active   string
-	plane    *layout.Grid
-	focused  string
+	// windowProjects are the projects that the window opened: their hidden tabs stay surfaces of the window (docs/spec/plugins.md#memory-saver).
+	windowProjects map[string]bool
+	plane          *layout.Grid
+	focused        string
 	// columnsChanged tells that the next frame matches the columns of the window sidebars to the settings.
 	columnsChanged bool
 	// fullscreen is the card that covers the plane, or "" while the cards stand in their arrangement.
@@ -306,14 +311,13 @@ type Shell struct {
 
 	picker picker
 	icons  map[string]*ui.SVG
+	// backgroundTold is the value that the host last received of the background of a dialog.
+	backgroundTold bool
 	// windowSidebars holds the widths of the fixed sidebars of the shown space, which outlive their columns.
 	windowSidebars map[string]layout.WindowSidebar
 
-	units     map[string]*installedUnit
-	processes pluginProcesses
-	// projectDrag is the press on a project tab, and projectBoxes holds the names of the project tabs as the last frame placed them.
-	projectDrag   *projectTabDrag
-	projectBoxes  map[string]ui.Rect
+	units         map[string]*installedUnit
+	processes     pluginProcesses
 	contributions *Contributions
 	// lastDrop is the status core.drop, and notices the state of the notification center.
 	lastDrop *dropRecord
@@ -327,8 +331,11 @@ type Shell struct {
 	page string
 
 	text *TextSize
-	// keyboard is the keyboard focus of the window, which the first responder and the views report.
-	keyboard     *Focus
+	// exposedFocus is the keyboard focus of the window, which the first responder and the views report.
+	exposedFocus *Focus
+	// keyboard is what the workbench asked of the host about the keyboard.
+	keyboard     keyboardState
+	pointer      *PointerSequence
 	verification *Verification
 	// diagnostics holds the policy and the trace switch that the host received last.
 	diagnostics struct{ policy, trace string }
@@ -361,11 +368,10 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	if err := json.Unmarshal(options.Environment, &environment); err != nil {
 		return nil, fmt.Errorf("environment declaration: %w", err)
 	}
-	s := &Shell{cardReads: map[string]cardRead{}, options: options, metrics: read, palette: palette, registry: NewRegistry(options.Declared), calls: options.Calls,
+	s := &Shell{windowProjects: map[string]bool{}, cardReads: map[string]cardRead{}, options: options, metrics: read, palette: palette, registry: NewRegistry(options.Declared), calls: options.Calls,
 		grid: environment.Workspace.Grid, focus: environment.Workspace.Focus, browsing: true, library: newLibraryState(), strips: map[string]*stripPlace{}, icons: map[string]*ui.SVG{}, heads: map[string]layout.HeadFit{}}
 	s.text = NewTextSize(shellText{s}, steps)
-	s.projectBoxes = map[string]ui.Rect{}
-	s.keyboard = NewFocus(options.Declared, func() { s.options.Invalidate() })
+	s.exposedFocus = NewFocus(options.Declared, func() { s.options.Invalidate() })
 	s.verification = NewVerification(func() { s.options.Invalidate() })
 	s.events = NewEvents(EventsOptions{Calls: s.calls, Post: options.Post, Report: options.Report, Now: time.Now,
 		After: func(delay time.Duration, task func()) { time.AfterFunc(delay, task) }})
@@ -373,7 +379,8 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.registry.Record(s.events.Command)
 	s.errors = NewShownErrors(s.events.Error)
 	s.binder = NewBinder(s.registry, func(_ string, err error) { s.fail(err) })
-	s.binder.Keyboard(s.keyboard)
+	s.pointer = NewPointerSequence(func() { s.options.Invalidate() })
+	s.binder.Attach(s.pointer, s.exposedFocus)
 	s.starter = environment.pluginStarter
 	s.pluginOperations = NewPluginOperations(s.calls, s.events.BeginOperation, func() []LoadedPlugin { return s.plugins }, func() map[string]bool { return s.refused }, options.Invalidate)
 	s.appUpdates = NewAppUpdates(s.calls, s.events.BeginOperation, s.pluginOperations.State, options.Invalidate)
@@ -630,12 +637,12 @@ func baseName(root string) string { return path.Base(root) }
 
 // View draws the workbench of the window.
 func (s *Shell) View(c *ui.Context) {
-	s.keyboard.Frame(c)
+	s.exposedFocus.Frame(c)
+	s.pointer.Frame()
 	s.sidebars.Begin()
 	clear(s.surfaces.drawn)
 	clear(s.picker.drawn)
 	clear(s.heads)
-	clear(s.projectBoxes)
 	clear(s.surfaces.seated)
 	s.surfaces.planeDrawn = false
 	width, height := c.Size()
@@ -649,19 +656,28 @@ func (s *Shell) View(c *ui.Context) {
 	theme.Font = s.fontFamily()
 	c.SetTheme(&theme)
 	s.keys.Declare(c)
-	ui.Column(c).Size(width, height).Background(s.palette.Bg).TextColor(s.palette.Fg).Clip().Children(func() {
+	root := ui.Column(c).Size(width, height).Background(s.palette.Bg).TextColor(s.palette.Fg).Clip()
+	if s.dialogOpen() {
+		root.Blur(dialogBlur)
+	}
+	root.Children(func() {
 		s.drawChrome(c, width)
 		if s.browsing || s.opened() == nil {
 			s.drawLibrary(c, width, height-s.chromeHeight())
 		} else {
-			s.drawWork(c, width, height-s.chromeHeight())
+			s.drawWorkArea(c, width, height-s.chromeHeight())
 		}
 	})
+	s.drawViewsBehindDialog(c)
 	s.drawPicker(c, width, height)
 	s.drawSettings(c, width, height)
 	s.drawDebug(c)
+	s.tellBackground()
 	s.forgetUnseated()
+	s.observeSections()
+	s.holdHiddenTabs()
 	s.placeSurfaces()
+	s.followKeyboard()
 	s.clearVisibleNotices()
 	s.drawn = true
 	s.pushStatuses()

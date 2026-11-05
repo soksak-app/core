@@ -21,8 +21,8 @@ use std::time::Duration;
 use super::DocumentViewportMarker;
 use super::{
     CoreRootHost, CoreRootResolver, DOMOverlay, Delivery, Frame, Handle, Hit, ImagePresentation,
-    ImageReleased, Insets, Key, Listener, PersistentStream, Platform, Pointer, ProcessFootprint,
-    Raster, WindowOverlay,
+    ImageReleased, Insets, Key, Listener, NativeEventWait, PersistentStream, Platform, Pointer,
+    ProcessFootprint, Raster, WindowOverlay,
 };
 
 #[cfg(feature = "diagnostics")]
@@ -269,6 +269,15 @@ impl Platform for Darwin {
         stall_sample::sample_threads(path)
     }
 
+    fn stall_heartbeat(&self) -> Result<(u64, u64), String> {
+        Ok(stall_sample::stall_heartbeat())
+    }
+
+    fn stall_await_awake(&self) -> Result<(), String> {
+        stall_sample::stall_await_awake();
+        Ok(())
+    }
+
     fn collect_garbage(&self, view: &PlatformWebview) -> Result<(), String> {
         webview::collect_garbage(view)
     }
@@ -283,6 +292,14 @@ impl Platform for Darwin {
     }
     fn focus_webview(&self, view: &PlatformWebview) -> Result<(), String> {
         webview::focus(view)
+    }
+    fn focus_surface(&self, surface: Handle) -> Result<(), String> {
+        webview::focus_surface(surface);
+        Ok(())
+    }
+    fn focus_workbench(&self, window: Handle) -> Result<(), String> {
+        webview::focus_workbench(window);
+        Ok(())
     }
     fn create_document(
         &self,
@@ -748,6 +765,9 @@ impl Platform for Darwin {
     }
     fn pull_native_events(&self, buffer: &mut [u8]) -> Result<usize, String> {
         events::pull(buffer)
+    }
+    fn native_event_wake(&self) -> Result<NativeEventWait, String> {
+        events::wake()
     }
     fn take_native_event_loss(&self, channel: u8) -> Result<(u64, u64), String> {
         events::take_loss(channel)

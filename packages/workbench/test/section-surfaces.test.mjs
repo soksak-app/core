@@ -2,7 +2,7 @@
 // (docs/spec/plugins.md#sections, docs/spec/projects.md).
 import assert from "node:assert/strict";
 import test from "node:test";
-import { shownSectionSurfaces, showSectionSurface, hideSectionSurface, storedSurfaceKept } from "../section-surfaces.js";
+import { spaceSectionSurfaces, shownSectionSurfaces, showSectionSurface, hideSectionSurface, storedSurfaceKept } from "../section-surfaces.js";
 
 test("the shown section surfaces are the ones that a drawn sidebar holds", () => {
   showSectionSurface("spc-aaaaaa/left/probe.tree");
@@ -27,4 +27,31 @@ test("a load keeps the entries of layout tabs and of the sections of a space of 
   assert.equal(kept("spc-cccccc/left/probe.tree"), false, "a section of a removed space is dropped");
   assert.equal(kept("spc-aaaaaa/middle/probe.tree"), false, "a sidebar that is neither a window sidebar nor a card sidebar is dropped");
   assert.equal(kept("left/probe.tree"), false, "an id without a space is dropped");
+});
+
+test("a space holds the sections of the sets of its window sidebars and of the sides of its cards", () => {
+  const sets = [
+    { id: "wide", sections: ["files.tree", "files.bookmarks"] },
+    { id: "plugin", sections: ["term.list"] },
+    { id: "card", sections: ["browser.tabs"] },
+    { id: "chosen", sections: ["browser.history"] },
+  ];
+  const links = [
+    { place: "left", plugin: null, set: "wide" },
+    { place: "window-left", plugin: "term", set: "plugin" },
+    { place: "window-right", plugin: "term", set: "wide" },
+    { place: "card-top", plugin: "browser", set: "card" },
+    { place: "card-left", plugin: "browser", set: "gone" },
+  ];
+  const cards = [
+    { id: "seat" },
+    { id: "one", data: { tabs: [{ id: "a", plugin: "term" }, { id: "b", plugin: "browser" }], activeId: "a" } },
+    { id: "two", data: { tabs: [{ id: "c", plugin: "browser" }], activeId: "c", sidebars: { top: { set: "off" }, bottom: { set: "chosen" } } } },
+  ];
+  assert.deepEqual(spaceSectionSurfaces("spc", cards, sets, links), [
+    "spc/left/files.tree", "spc/left/files.bookmarks", "spc/left/term.list",
+    "spc/right/files.tree", "spc/right/files.bookmarks",
+    "spc/one:top/browser.tabs",
+    "spc/two:bottom/browser.history",
+  ], "a set that is gone and a side that is off hold nothing, and a tab that is not active keeps its link");
 });
