@@ -6,6 +6,7 @@
 
 - F463: Core uses the checks kit and its one executable `soksak-check`. Red: `scripts/test/workflows.test.mjs` failed. Green: it passes.
 - F466: Records cite no temporary log, and the record check reports a new citation.
+- F473: The process identity library builds in a clean checkout. Red: `scripts/test/process-identity-build.test.mjs` failed. Green: it passes.
 - F472: Every executable is `sok` or `sok-<what>`, every make target starts with a declared verb, and `make check-commands` holds this form. Red: the kit test reported the earlier forms. Green: `make check-commands` passes.
 - F471: `@soksak/plugin-api` no longer declares `soksak-exposure`, `soksak-engines` and `soksak-view-check`, which no repository ran. The rules of `make exposure-check` are in `scripts/exposure-rules.mjs`. Red: the new test of `packages/plugin-api/test/package-files.test.mjs` failed. Green: it passes.
 - F470: The structure step of CI names the current make targets, and a test fails on a workflow target that the Makefile does not declare. Red: the test reported four targets. Green: it passes.

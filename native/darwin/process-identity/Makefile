@@ -1,5 +1,5 @@
 SHELL := /bin/sh
-BUILD := build
+BUILD := $(CURDIR)/build
 LIBDIR := lib
 LIBRARY := $(LIBDIR)/libsoksak-process-identity.a
 OBJECT := $(BUILD)/process_identity.o
