@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import { policyOfSetting } from "@soksak/window-check/log-policy.mjs";
 import { judgeSession, readGoals, readSession } from "../b3-judge.mjs";
 import {
-  appendRecord, applicationsOf, attributionUnits, baselineCheckoutFailures, baselinePluginFailures, createSession, fseventsdCores, installedReleases, parseSwapUsage,
+  appendRecord, buildSteps, applicationsOf, attributionUnits, baselineCheckoutFailures, baselinePluginFailures, createSession, fseventsdCores, installedReleases, parseSwapUsage,
   readBaselineRecord, readCheckout, readSidecarRevisions, readTargetOutput, runUnit, scenarioTargets, sessionUnits, sidecarRevisionFailures,
   surfacePlugins, targetCommand, traceStateOf, unitPlan,
 } from "../benchmark-b3.mjs";
@@ -541,4 +541,14 @@ test("make benchmark-b3 refuses a phase, a run count or a baseline checkout that
   assert.match(run("PHASE=2", "RUNS=7", "BASELINE=/baseline").stderr, /^benchmark-b3 requires PHASE=1\|final RUNS=<n> BASELINE=<checkout>$/m);
   assert.match(run("PHASE=final", "RUNS=0", "BASELINE=/baseline").stderr, /^benchmark-b3 requires PHASE=1\|final RUNS=<n> BASELINE=<checkout>$/m);
   assert.match(run("PHASE=final", "RUNS=7").stderr, /^benchmark-b3 requires PHASE=1\|final RUNS=<n> BASELINE=<checkout>$/m);
+});
+
+test("each build step of a session names a target of the Makefile", { timeout: 1000 }, () => {
+  const targets = new Set([...readFileSync(join(ROOT, "Makefile"), "utf8").matchAll(/^([A-Za-z0-9_.-]+):/gm)].map((match) => match[1]));
+  for (const phase of ["1", "final"]) {
+    for (const { argv } of buildSteps(phase, "/baseline")) {
+      const named = argv.slice(1).filter((word, index, words) => word !== "-C" && words[index - 1] !== "-C" && !word.includes("="));
+      assert.deepEqual(named.filter((name) => !targets.has(name)), [], argv.join(" "));
+    }
+  }
 });

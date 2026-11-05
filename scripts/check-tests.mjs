@@ -1269,6 +1269,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F616",
+    implementation: [
+      { file: "scripts/benchmark-b3.mjs", symbol: "export function buildSteps(phase, baseline) {" },
+    ],
+    tests: [
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "each build step of a session names a target of the Makefile" },
+    ],
+    expected: "Each build step of a B3 session names a target of the Makefile.",
+    levels: ["unit"],
+  },
+  {
     id: "F613",
     implementation: [
       { file: "scripts/benchmark-b3.mjs", symbol: "export async function activateWindow(configDir, { waitMs = 5000 } = {}) {" },

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F616: `make benchmark-b3` builds its two registries with `make build-registry`. It named the target by its old name, so a session stopped at that build step. Red: `scripts/test/benchmark-b3.test.mjs` checks each make target of a build step against the Makefile.
 - F614: `make check-docs` fails on a conflict marker at the start of a line of a tracked or new text file, and names the file and the line. A merge commit that held markers had passed the check and the commit hook. Red: `scripts/test/checklist.test.mjs`.
 - F613: Each run of `make benchmark-b3` activates its first window with `input.pointer` before its first target, because a window opens behind the front and a covered window measures another state. A refused activation and a window that stays covered fail the run and measure nothing. Red: `scripts/test/benchmark-b3.test.mjs` read a covered window in the first target.
 - F612: The build and verify examples state the three-host benchmark, the test inventory and the application usage measurement once, each with its current text, and name the renamed make targets and package scripts.
