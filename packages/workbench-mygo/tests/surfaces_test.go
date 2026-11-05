@@ -636,7 +636,8 @@ func TestEachStartOfARunTellsEachViewOnce(t *testing.T) {
 				Data    any
 			}
 			if text, found := strings.CutPrefix(line, "viewEvent "); found && json.Unmarshal([]byte(text), &event) == nil && event.Event == "run-start" {
-				if event.Data != nil {
+				// The host call refuses an event whose data is null, as a missing field (docs/spec/native-host.md#host-calls).
+				if data, isObject := event.Data.(map[string]any); !isObject || len(data) != 0 {
 					t.Fatalf("run-start carries %v", event.Data)
 				}
 				counts[event.Surface]++
