@@ -27,6 +27,7 @@ func runSelfActivationHelper() {
 	adapter.ConfigureApplication()
 	var activated atomic.Bool
 	mygo.App.OnDidBecomeActive(func() { activated.Store(true) })
+	fmt.Println("window show", mygo.App.WindowShow() != nil)
 	framework := adapter.NewFramework(&sceneWorkbench{})
 	mygo.App.WhenReady(func() {
 		go func() {
@@ -51,5 +52,18 @@ func TestTheApplicationDoesNotActivateItselfWhenItFinishesLaunching(t *testing.T
 	}
 	if !strings.Contains(string(output), "active false\n") {
 		t.Fatalf("the child reported %q, want active false", output)
+	}
+}
+
+// contract: application.window.opens-without-taking-the-front
+func TestAWindowShowsThroughTheShowOfTheHost(t *testing.T) {
+	child := exec.Command(os.Args[0])
+	child.Env = append(os.Environ(), selfActivationHelper+"=1")
+	output, err := child.CombinedOutput()
+	if err != nil {
+		t.Fatalf("the child failed: %v\n%s", err, output)
+	}
+	if !strings.Contains(string(output), "window show true\n") {
+		t.Fatalf("the child reported %q: Window.Show makes the window key and orders it front while another application is active", output)
 	}
 }

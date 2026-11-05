@@ -62,6 +62,9 @@ impl Platform for Windows {
     fn reveal_after_load(&self, window: Handle) -> Result<(), String> {
         unsupported::reveal_after_load(window)
     }
+    fn show_window(&self, window: Handle) -> Result<(), String> {
+        unsupported::show_window(window)
+    }
     fn set_main_appearance(&self, view: &PlatformWebview, dark: bool) -> Result<(), String> {
         unsupported::set_main_appearance(view, dark)
     }

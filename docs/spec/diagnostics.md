@@ -102,6 +102,7 @@ A row shows a record without its time, as `<level> <layer> <where>: <text>`.
 | a joined view neither presents nor ends by the presentation limit of 10 s ([native surfaces](native-surfaces.md#view-surfaces)) | `error host view presentation: surface <surface> did not present within 10s`, once for each join that ends at the limit |
 | the host cannot read the clock of a frame record of a mygo window | `error host frame record clock: <failure>` |
 | the host cannot read the first responder of a window or deliver the `window-responder` event ([exposure](exposure.md#keyboard-focus)) | `error host window responder: <failure>` |
+| the host cannot put a window on the screen through its show ([launch activation](hosts.md#launch-activation)) | `error host window show: <failure>` |
 | the Tauri host cannot send the heartbeat of the watch of its main thread to that thread | `error host stall watch: heartbeat: <reason>`, and the watch ends ([logging](logging.md), stalls) |
 | the wait for a selected input source of `diagnostics.input.source` answers after the reply ended (Tauri host) | `error host input source: the wait answered after its reply ended: <result>` |
 | a document-frame identity callback reports an error after its wait ends, or the Go callback is invoked more than once | Go writes `error host document frame identity callback: <reason>`; Tauri writes a late callback failure as `error host diagnostics: document frame identity callback failed after its request ended: <reason>`. The first callback result remains authoritative. |

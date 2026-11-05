@@ -28,6 +28,9 @@ pub fn window_color_space(_window: Handle) -> Result<Value, String> {
 pub fn reveal_after_load(_window: Handle) -> Result<(), String> {
     missing("window reveal")
 }
+pub fn show_window(_window: Handle) -> Result<(), String> {
+    missing("window show")
+}
 pub fn set_main_webview(_window: Handle, _main: Handle) -> Result<(), String> {
     missing("main webview identity")
 }

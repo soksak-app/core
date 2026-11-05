@@ -250,6 +250,14 @@ func (h *Host) WindowClose(ctx context.Context) error {
 	return nil
 }
 
+// ShowWindow puts a native window on the screen without taking the front from another application, for the show of a
+// framework (docs/spec/hosts.md#launch-activation).
+func ShowWindow(window unsafe.Pointer) {
+	if err := system.ShowWindow(window); err != nil {
+		fatalError("window show", err)
+	}
+}
+
 // WindowCloseKept records that the page kept a modified tab when the window was asked to close, which ends a quit that
 // asked the window (docs/spec/hosts.md#process-lifecycle).
 func (h *Host) WindowCloseKept(ctx context.Context) error {

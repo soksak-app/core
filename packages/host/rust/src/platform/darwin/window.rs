@@ -33,6 +33,14 @@ pub fn set_main_webview(window: Handle, main: Handle) -> Result<(), String> {
     }
 }
 
+pub fn show_window(window: Handle) -> Result<(), String> {
+    unsafe extern "C" {
+        fn sp_window_show(window: *mut c_void);
+    }
+    unsafe { sp_window_show(window as *mut c_void) };
+    Ok(())
+}
+
 pub fn reveal_after_load(window: Handle) -> Result<(), String> {
     unsafe extern "C" {
         fn sp_window_reveal_after_load(window: *mut c_void, error: *mut *mut c_char) -> bool;

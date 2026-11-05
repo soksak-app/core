@@ -81,6 +81,9 @@ func (implementation) ConfigureMainWindow(unsafe.Pointer, bool) error {
 func (implementation) RevealAfterLoad(unsafe.Pointer) error {
 	return unsupported("window reveal")
 }
+func (implementation) ShowWindow(unsafe.Pointer) error {
+	return unsupported("window show")
+}
 func (implementation) SetMainWebview(unsafe.Pointer) error {
 	return unsupported("main webview identity")
 }

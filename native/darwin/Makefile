@@ -328,6 +328,8 @@ NATIVE_TESTS = observe_test \
   window_occlusion_test \
   window_responder_test \
   window_reveal_test \
+  window_show_test \
+  window_show_order_test \
   window_release_test \
   modal_release_test \
   window_objects_test \
