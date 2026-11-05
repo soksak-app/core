@@ -189,6 +189,8 @@ theme catalog와 mode, font, menu 언어와 기본 언어, 그리고 이 설정�
 
 워크벤치 stylesheet(`app.css`, `library.css`, `overlay.html`)의 길이, 비율, 지속 시간은 `packages/workbench/workbench.json`의 chrome metric이다. 워크벤치는 page가 그리기 전에 그 각각을 document root의 custom property로 정하고, stylesheet는 그 custom property를 읽는다. stylesheet는 literal 길이, 비율, 지속 시간을 담지 않는다. media condition은 custom property를 읽지 못하므로, 워크벤치는 window 폭이 `library-narrow-w` 이하인 동안 document root에 `data-library-narrow`를 표시하고, `library.css`는 그 표시로 library를 좁힌다. focus mark는 focus된 카드의 body 밖으로 사방 `focus-mark-t`만큼, 곧 stroke 두께만큼 나와 있어서 stroke가 surface를 덮지 않는다.
 
+규칙이 없는 page의 input과 select는 page의 color scheme으로 browser에서 모양을 받으므로 어느 stylesheet에도 선언이 없다. native workbench는 page 창에서 잰 값인 `workbench.json`의 `plainControls`로 그것을 그리고, 그 표를 읽는 stylesheet는 없다.
+
 ## 상태
 
 `core.settings-modal`은 다음을 보고한다.

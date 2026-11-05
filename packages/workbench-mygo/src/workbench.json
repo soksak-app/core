@@ -467,6 +467,7 @@
     ]
   },
   "icons": {
+    "control-select-arrows": "<path d=\"M5 6l3-3 3 3M5 10l3 3 3-3\"/>",
     "card-add": "<path d=\"M8 3v10M3 8h10\"/>",
     "card-split-x": "<rect class=\"half\" x=\"2\" y=\"3\" width=\"6\" height=\"10\" rx=\"1.5\"/><rect x=\"2\" y=\"3\" width=\"12\" height=\"10\" rx=\"2\"/><path d=\"M8 3v10\"/>",
     "card-split-y": "<rect class=\"half\" x=\"3\" y=\"2\" width=\"10\" height=\"6\" rx=\"1.5\"/><rect x=\"3\" y=\"2\" width=\"10\" height=\"12\" rx=\"2\"/><path d=\"M3 8h10\"/>",
@@ -486,6 +487,24 @@
     "close": "<path d=\"M18 6 6 18\"/><path d=\"m6 6 12 12\"/>",
     "settings": "<path d=\"M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/>",
     "brand-logo": "<svg x=\"0\" y=\"0\" width=\"80\" height=\"80\" viewBox=\"0 0 128 128\"><rect x=\"1\" y=\"1\" width=\"126\" height=\"126\" rx=\"27\" fill=\"#16181D\" stroke=\"#33373F\" stroke-width=\"2\"/><path d=\"M26 37 L56 64 M53 61.3 L26 91\" fill=\"none\" stroke=\"#7FE3B8\" stroke-width=\"12\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><rect x=\"70\" y=\"87\" width=\"38\" height=\"10\" rx=\"5\" fill=\"#EDE6D8\"/></svg><svg x=\"102\" y=\"19.375\" width=\"221.25\" height=\"41.25\" viewBox=\"-1 15 236 44\"><g fill=\"none\" stroke=\"currentColor\" stroke-width=\"8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M27 25 C24 20.5 19 19 15 19 C8 19 4 22.5 4 27.5 C4 33 10 35 15.5 36 C21.5 37 28 39 28 46 C28 52 22.5 55 16 55 C10.5 55 6 53 3 49\"/><circle cx=\"56\" cy=\"37\" r=\"18\"/><path d=\"M88 19 V55 M108 19 L88 37 M88 37 L110 55\"/><path transform=\"translate(120,0)\" d=\"M27 25 C24 20.5 19 19 15 19 C8 19 4 22.5 4 27.5 C4 33 10 35 15.5 36 C21.5 37 28 39 28 46 C28 52 22.5 55 16 55 C10.5 55 6 53 3 49\"/><circle cx=\"174\" cy=\"37\" r=\"18\"/><path d=\"M192 19 V55\"/><path d=\"M208 19 V55 M228 19 L208 37 M208 37 L230 55\"/></g></svg>"
+  },
+  "plainControls": {
+    "bg": "#1e1e1e",
+    "edge": "#52535a",
+    "edge-w": "0.5px",
+    "fg": "#dfdfdf",
+    "h": "29px",
+    "pad-x": "7px",
+    "pad-y": "4.5px",
+    "placeholder": "#a9a9a9",
+    "r": "3px",
+    "select-bg": "#2f2f2f",
+    "select-pad": "8px",
+    "select-r": "6px",
+    "select-h": "23px",
+    "select-halo": "1px",
+    "select-room": "34px",
+    "text-w": "20ch"
   },
   "chrome": {
     "divider": "6px",
@@ -526,7 +545,6 @@
     "brand-logo-box": "0 0 323 80",
     "brand-text-dark": "#EDE6D8",
     "brand-text-light": "#16181D",
-    "control-bg": "#1e1e1e",
     "chrome-acts-gap": "6px",
     "tabs-gap": "4px",
     "tabs-pad": "5px",

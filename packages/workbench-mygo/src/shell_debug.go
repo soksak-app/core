@@ -1119,7 +1119,7 @@ func (s *Shell) debugStyle() DebugStyle {
 		RowGap: metric("dbg-row-gap"), RowH: metric("dbg-row-h"), ActW: metric("dbg-act-w"), BarGap: metric("dbg-bar-gap"), CaptionGap: pane.captionGap,
 		ActionsGap: metric("set-actions-gap"), ActionsMargin: metric("set-actions-margin"), FieldPadY: metric("field-pad-y"),
 		Space1: metric("space-1"), Space2: metric("space-2"), Space3: metric("space-3"),
-		LineHeight: pane.lineHeight, TextControl: s.textControl(), TextSmall: s.textSmall(),
+		LineHeight: pane.lineHeight, TextControl: s.textControl(), TextSmall: s.textSmall(), Plain: s.plainControls(),
 		Close: func(c *ui.Context, button ui.Element, title string) { s.drawAct(c, button, title, "close", false, 1) }}
 }
 
