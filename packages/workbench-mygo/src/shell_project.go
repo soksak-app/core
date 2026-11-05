@@ -94,7 +94,10 @@ func (s *Shell) openFolder(folder ProjectFolderValue, color string, done func(pr
 			done(nil, err)
 			return
 		}
-		s.projects = append(s.projects, added)
+		// The host answers a folder that it knows with its project, which the window may hold already.
+		if !slices.ContainsFunc(s.projects, func(project projectRecord) bool { return project.ID == added.ID }) {
+			s.projects = append(s.projects, added)
+		}
 		s.activateThen(added.ID, func() { done(raw, nil) })
 	})
 }
