@@ -5,16 +5,16 @@ SHELL := /bin/sh
 docs-check:
 	@node scripts/check-docs.mjs
 	@node scripts/check-failure-table.mjs
-	@pnpm exec soksak-records
+	@pnpm exec soksak-check records
 
 # Checks that the documents and configuration comments state only facts about the repository (AGENTS.md Documentation).
 records-check:
-	@pnpm exec soksak-records
+	@pnpm exec soksak-check records
 
 # Checks the commit message form of RANGE, which holds one or more revision ranges separated by spaces. Example: make commits-check RANGE=origin/main..HEAD
 commits-check:
 	@test -n "$(RANGE)" || { echo "make commits-check RANGE=<revision range>" >&2; exit 2; }
-	@pnpm exec soksak-commits $(RANGE)
+	@pnpm exec soksak-check commits $(RANGE)
 
 # Sets the git hook folder of this checkout to .githooks. The commit-msg hook checks the commit message form.
 hooks:
@@ -104,10 +104,10 @@ boundaries:
 events-check:
 	@node scripts/check-events.mjs
 
-# Applies the census rules of the events kit to the sources (docs/spec/logging.md#census): a source of occurrences has an event
+# Applies the census rules of the checks kit to the sources (docs/spec/logging.md#census): a source of occurrences has an event
 # in its function or a reason marker, and a rule that waits for an entrance item is printed with its count. `--list` also prints each pending finding.
 census-check:
-	@pnpm exec soksak-events --census scripts/census.json
+	@pnpm exec soksak-check census --config scripts/census.json
 
 # Checks that every error record whose place is written in the sources of the hosts and the native library has a row in the failure table of docs/spec/diagnostics.md.
 failures-check:

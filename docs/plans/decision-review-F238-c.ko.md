@@ -26,7 +26,7 @@
 
 SDK 동작은 소유 패키지에서만 검사한다. 플러그인 테스트가 SDK 값을 단언하면 그 단언은 소유 core 테스트로 옮기고, 플러그인은 리터럴 상수나 단언되는 가짜를 쓴다.
 
-명령 분리: `make test`는 플러그인 테스트 스크립트만 실행한다. `make check`는 SDK를 읽는 도구(`soksak-exposure`, `soksak-engines`, `soksak-events --census`, `soksak-records`), check 스크립트에 기록된 상수와 SDK `view-start.js`의 SHA-256을 비교하는 검사, 픽스처가 담은 값의 리터럴 일치 검사(`VIEW_IMPORTS` 항목, 화면 메시지 벡터), `build-vendor --check`를 실행한다. 모든 플러그인 저장소는 Makefile에 `check` 대상을 가지며 `pack`은 `check`에 의존한다. 빌드와 검사 스크립트(테스트가 아님)는 SDK 검증기를 호출할 수 있다.
+명령 분리: `make test`는 플러그인 테스트 스크립트만 실행한다. `make check`는 SDK를 읽는 도구(`soksak-exposure`, `soksak-engines`, `soksak-check census --config`, `soksak-check records`), check 스크립트에 기록된 상수와 SDK `view-start.js`의 SHA-256을 비교하는 검사, 픽스처가 담은 값의 리터럴 일치 검사(`VIEW_IMPORTS` 항목, 화면 메시지 벡터), `build-vendor --check`를 실행한다. 모든 플러그인 저장소는 Makefile에 `check` 대상을 가지며 `pack`은 `check`에 의존한다. 빌드와 검사 스크립트(테스트가 아님)는 SDK 검증기를 호출할 수 있다.
 
 가짜가 SDK에 충실하도록 core가 소유한 계약 사례를 둔다. 계약 사례 하나는 플러그인의 리터럴 가짜가 대신하는 SDK 표면 하나를 덮는다. 뷰 wire(`view-start.js`의 시작 값과 `VIEW_IMPORTS` 항목, 뷰 브리지 메시지, 페이지가 호출하는 `sokView` 멤버), `createBinder`, `screenHash`, `drawList`, 매니페스트와 진단 검증기가 그것이다. 사례는 하나의 순서 있는 단계 목록이다. 단계는 입력과 기대 출력을 가진 호출, 또는 표면이 플러그인에 전달하는 수신 이벤트다. 순수한 호출 하나는 단계 하나짜리 목록이다. core는 이런 표면 전부의 사례를 `packages/plugin-api/contract/`에 리터럴 예제로 공개하고, core `make test`는 모든 사례를 core 자신의 구현에 대해 실행한다. 플러그인의 리터럴 가짜는 표로 구동된다. 복사한 사례의 단계를 들고, 호출은 목록에서 그 위치에서만 답하고, 이벤트는 테스트가 그 위치에 닿았을 때만 전달하며, 그 밖의 것에는 던진다. 그러므로 플러그인 테스트가 관찰하는 동작은 공개된 동작뿐이다. 플러그인 테스트에 필요하지만 core가 공개하지 않은 순서는 core가 먼저 추가한다. 테스트 트리 빌드는 플러그인이 커밋한 표가 나열한 (지정자, export 이름) 짝에 대해서만 SDK import를 그런 가짜로 바꾸고, 가짜는 나열된 이름만 export하며, core 경로는 읽지 않는다. 그 밖의 SDK import가 `ui/`에서 닿으면 빌드가 실패하므로, 플러그인은 그 코드 경로를 빼거나 core가 사례를 먼저 공개한다. 플러그인 테스트는 SDK 코드를 import하거나, 감싸거나, 기록하거나, 호출하지 않는다. 플러그인 `check` 대상은 복사한 각 표를 공개 파일과 비교하고 차이가 있으면 실패한다. 공개된 사례가 없는 표면을 덮는 가짜는 `check`에서 실패한다. 검사는 SDK 파일을 읽을 수 있고, 테스트는 읽을 수 없다.
 
@@ -54,7 +54,7 @@ SDK 동작은 소유 패키지에서만 검사한다. 플러그인 테스트가 
 
 resolver hook: `editor/test/shared-modules.mjs:4-18`(`registerHooks`, `POINT` `@soksak/shared/editor.extension/`), `editor/package.json:23`이 `--import`로 실행.
 
-`make test` 안의 SDK 도구: `editor/Makefile:16-20`과 `terminal/Makefile:16-20`(`soksak-exposure`, `soksak-engines`, `soksak-events --census`); `flowmark/Makefile:10-14`(`soksak-engines`, `soksak-events`, `soksak-records`). `build-vendor --check`는 `editor/package.json:22`와 `files/package.json`의 `scripts.test`에서 실행된다.
+`make test` 안의 SDK 도구: `editor/Makefile:16-20`과 `terminal/Makefile:16-20`(`soksak-exposure`, `soksak-engines`, `soksak-check census --config`); `flowmark/Makefile:10-14`(`soksak-engines`, `soksak-check census`, `soksak-check records`). `build-vendor --check`는 `editor/package.json:22`와 `files/package.json`의 `scripts.test`에서 실행된다.
 
 Makefile: 어떤 저장소도 `check` 대상을 정의하지 않는다(각 `Makefile` 확인).
 
@@ -86,7 +86,7 @@ CI: `ci.yml:23`이 `appview`, `browser`, `editor`, `files`, `hwp`, `shell`, `ter
 9. `terminal/test/census.test.mjs`를 삭제한다(`:24`, `:29`). 플러그인 소스의 census는 `make check`에서 실행한다. 프로브 사례는 `packages/plugin-api/test/events-check.test.mjs`(`:26`, `:147`, `:161`)가 다룬다.
 10. flowmark는 테스트와 도우미를 `ui/`에서 `test/`로 옮기고, `test` 스크립트를 `node scripts/build-test.mjs && node --test test/`로 바꾼다. `ui/`에는 페이지 파일만 배포한다.
 11. Makefile: 각 플러그인 저장소(`appview`, `browser`, `editor`, `files`, `hwp`, `shell`, `terminal`, `flowmark`)는 12번 목록을 실행하는 `check` 대상을 추가한다. `pack`은 `check`를 선행 조건으로 가진다. `pack`이 이미 `studio`에 의존하는 `hwp`는 `pack: studio check`다.
-12. `make check`는 `soksak-exposure`, `soksak-engines`, `soksak-events --census`, `soksak-records`, view-start SHA-256 비교, 2번·5번·6번·7번 변경의 리터럴 일치 검사, `build-vendor --check`를 실행한다. 각 저장소의 `check` 대상은 자기 파일이 필요로 하는 부분집합을 실행하며, 명세가 저장소와 부분집합을 적는다.
+12. `make check`는 `soksak-exposure`, `soksak-engines`, `soksak-check census --config`, `soksak-check records`, view-start SHA-256 비교, 2번·5번·6번·7번 변경의 리터럴 일치 검사, `build-vendor --check`를 실행한다. 각 저장소의 `check` 대상은 자기 파일이 필요로 하는 부분집합을 실행하며, 명세가 저장소와 부분집합을 적는다.
 13. CI와 릴리스는 저장소별로 적는다(파일이 없는 저장소에는 파일이 있다고 가정하지 않는다).
     - `appview`, `browser`, `editor`, `files`, `hwp`, `terminal`: `ci.yml`과 `release.yml`이 `make test` 뒤에 `make check`를 실행한다.
     - `shell`: `ci.yml`이 `make test` 뒤에 `make check`를 실행한다. `release.yml`이 없으므로 sub-item은 이를 소유자 `shell`의 열린 결함으로 기록하며, `make pack`은 손으로만 실행된다.

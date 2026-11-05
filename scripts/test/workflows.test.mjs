@@ -266,7 +266,7 @@ test('a push to main releases the declared version after the checks and the gate
   assert.match(release, /^on:\n {2}push:\n {4}branches: \[main\]\n/m, 'release.yml starts on a push to main');
   assert.doesNotMatch(release, /tags: \['v\*'\]/, 'release.yml does not start on a tag push');
   assert.match(release, /^concurrency:\n {2}group: release\n {2}cancel-in-progress: false$/m);
-  assert.match(release, /run: pnpm exec soksak-release-gate packages\/plugin-api\/package\.json docs\/features\.md/);
+  assert.match(release, /run: pnpm exec soksak-check release packages\/plugin-api\/package\.json docs\/features\.md/);
   for (const job of ['release-wailsv3', 'release-tauriv2']) {
     assert.match(release, new RegExp(`  ${job}:\\n {4}needs: gate\\n {4}if: needs\\.gate\\.outputs\\.release == 'true'\\n`), `${job} runs only on a release`);
   }
@@ -323,39 +323,34 @@ test('repeat.yml starts on a dispatch and runs only the tracked repeat targets',
   assert.doesNotMatch(commands.join('\n'), /\$\{\{\s*inputs\./, 'a run line splices a dispatched input');
 });
 
-test('the records kit release that core pins defines the kit term', () => {
-  const { terms } = JSON.parse(readFileSync(fileURLToPath(import.meta.resolve('@soksak/kit-records/terms.json')), 'utf8'));
+test('the checks kit release that core pins defines the kit term', () => {
+  const { terms } = JSON.parse(readFileSync(fileURLToPath(import.meta.resolve('@soksak/kit-checks/terms.json')), 'utf8'));
   const kit = terms.find((entry) => entry.term === 'kit');
-  assert.ok(kit, 'the term list of the pinned records kit has no entry for kit');
+  assert.ok(kit, 'the term list of the pinned checks kit has no entry for kit');
   assert.doesNotMatch(kit.definition, /static library|link/, 'the kit term names a library that core owns');
 });
 
-test('the records kit release that core pins defines the presentation mode terms', () => {
-  const { terms } = JSON.parse(readFileSync(fileURLToPath(import.meta.resolve('@soksak/kit-records/terms.json')), 'utf8'));
+test('the checks kit release that core pins defines the presentation mode terms', () => {
+  const { terms } = JSON.parse(readFileSync(fileURLToPath(import.meta.resolve('@soksak/kit-checks/terms.json')), 'utf8'));
   for (const term of ['presentation mode', 'lease']) {
-    assert.ok(terms.some((entry) => entry.term === term), `the term list of the pinned records kit has no entry for ${term}`);
+    assert.ok(terms.some((entry) => entry.term === term), `the term list of the pinned checks kit has no entry for ${term}`);
   }
 });
 
-test('the hooks, the record targets and the release gate run the commands of the records kit release', () => {
-  const { devDependencies } = JSON.parse(read('package.json'));
-  assert.match(devDependencies['@soksak/kit-records'] ?? '', /^https:\/\/github\.com\/soksak-app\/kit-records\/releases\/download\/v\d+\.\d+\.\d+\/soksak-kit-records-\d+\.\d+\.\d+\.tgz$/,
-    'package.json pins the release file of the records kit');
-  assert.match(read('.githooks/commit-msg'), /exec pnpm --dir "\$\(git rev-parse --show-toplevel\)" exec soksak-commits "\$1"/);
-  assert.match(read('.githooks/pre-commit'), /exec pnpm --dir "\$root" exec soksak-records "\$root"/);
+test('the hooks, the record targets and the release gate run the commands of the checks kit release', () => {
+  assert.match(read('.githooks/commit-msg'), /exec pnpm --dir "\$\(git rev-parse --show-toplevel\)" exec soksak-check commits "\$1"/);
+  assert.match(read('.githooks/pre-commit'), /exec pnpm --dir "\$root" exec soksak-check records "\$root"/);
   const makefile = read('Makefile');
   assert.doesNotMatch(makefile, /packages\/plugin-api\/(?:records|commits)-check\.js/, 'the Makefile runs a record check of the plugin API');
-  assert.match(makefile, /^\t@pnpm exec soksak-records$/m);
-  assert.match(makefile, /^\t@pnpm exec soksak-commits \$\(RANGE\)$/m);
-  assert.match(read('scripts/checklist.mjs'), /^import \{ checklist \} from "@soksak\/kit-records\/checklist";$/m);
+  assert.match(makefile, /^\t@pnpm exec soksak-check records$/m);
+  assert.match(makefile, /^\t@pnpm exec soksak-check commits \$\(RANGE\)$/m);
+  assert.match(read('scripts/checklist.mjs'), /^import \{ checklist \} from "@soksak\/kit-checks\/checklist";$/m);
 });
 
-test('the census check and the event scripts run the census check of the events kit release', () => {
+test('the census check and the event scripts run the census check of the checks kit release', () => {
   const { devDependencies } = JSON.parse(read('package.json'));
-  assert.match(devDependencies['@soksak/kit-events'] ?? '', /^https:\/\/github\.com\/soksak-app\/kit-events\/releases\/download\/v\d+\.\d+\.\d+\/soksak-kit-events-\d+\.\d+\.\d+\.tgz$/,
-    'package.json pins the release file of the events kit');
-  assert.match(read('Makefile'), /^\t@pnpm exec soksak-events --census scripts\/census\.json$/m);
+  assert.match(read('Makefile'), /^\t@pnpm exec soksak-check census --config scripts\/census\.json$/m);
   for (const file of ['scripts/check-events.mjs', 'scripts/check-fallbacks.mjs']) {
-    assert.match(read(file), /from ["']@soksak\/kit-events\/events-check["'];$/m, file);
+    assert.match(read(file), /from ["']@soksak\/kit-checks\/census["'];$/m, file);
   }
 });

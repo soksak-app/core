@@ -5,12 +5,12 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { censusRules, parseCensusConfig } from "@soksak/kit-events/events-check";
+import { censusRules, parseCensusConfig } from "@soksak/kit-checks/census";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const CONFIG = "scripts/census.json";
-const CHECK = fileURLToPath(import.meta.resolve("@soksak/kit-events/events-check"));
-const run = (...args) => spawnSync(process.execPath, [CHECK, "--census", CONFIG, ...args], { cwd: ROOT, encoding: "utf8" });
+const CHECK = fileURLToPath(import.meta.resolve("@soksak/kit-checks/check"));
+const run = (...args) => spawnSync(process.execPath, [CHECK, "census", "--config", CONFIG, ...args], { cwd: ROOT, encoding: "utf8" });
 
 test("the repository passes the census of its enabled rules and prints every pending rule with its item and count", () => {
   const output = run();
@@ -36,7 +36,7 @@ test("a rule waits only for an item of the checklist that is not complete, and a
 });
 
 test("the repository census declaration is read and rejects what it does not know", () => {
-  const output = spawnSync(process.execPath, [CHECK, "--census", "scripts/test/missing-census.json"], { cwd: ROOT, encoding: "utf8" });
+  const output = spawnSync(process.execPath, [CHECK, "census", "--config", "scripts/test/missing-census.json"], { cwd: ROOT, encoding: "utf8" });
   assert.equal(output.status, 1);
   assert.match(output.stderr, /missing-census\.json/);
 });
