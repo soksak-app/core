@@ -121,6 +121,79 @@ static void reset(NSArray *views) {
     for (WKWebView *view in views) evaluate(view, @"probe.moves = 0");
 }
 
+static NSEvent *moved(NSWindow *window, NSPoint point) {
+    return [NSEvent mouseEventWithType:NSEventTypeMouseMoved location:point modifierFlags:0
+        timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber context:nil eventNumber:1 clickCount:0 pressure:0];
+}
+
+static NSEvent *crossed(NSWindow *window, NSEventType type, NSPoint point) {
+    return [NSEvent enterExitEventWithType:type location:point modifierFlags:0
+        timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber context:nil eventNumber:20 trackingNumber:0 userData:NULL];
+}
+
+static int orderFailures = 0;
+
+static void expectHover(NSArray *views, NSArray *expected, NSString *stage) {
+    NSMutableArray *actual = [NSMutableArray array];
+    for (WKWebView *view in views) {
+        drain(view);
+        [actual addObject:evaluate(view, @"document.body.matches(':hover')") ?: @NO];
+    }
+    BOOL same = [actual isEqual:expected];
+    if (!same) orderFailures++;
+    fprintf(same ? stdout : stderr, "%s: %s: expected %s, received %s\n", same ? "PASS" : "FAIL", stage.UTF8String,
+        [expected componentsJoinedByString:@","].UTF8String, [actual componentsJoinedByString:@","].UTF8String);
+}
+
+// AppKit fixes no order among the enter, the exit and the move of a tracking area, and each area of overlapping views hears its
+// own. The pointer that a page hovers follows the view at the point in each order. Each step calls what AppKit calls: the local
+// monitor that routes the pointer, then the tracking owner.
+static void checkTrackingOrders(NSWindow *window, WKWebView *bottom, WKWebView *top) {
+    NSArray *views = @[bottom, top];
+    const NSPoint both = NSMakePoint(300, 150), lower = NSMakePoint(100, 150), away = NSMakePoint(-10, 150);
+    pointerOutside(window);
+    // Starts with the pointer out of both views.
+    webviewInputRoutePointer(moved(window, away));
+    [observer(top) mouseExited:crossed(window, NSEventTypeMouseExited, away)];
+    [observer(bottom) mouseExited:crossed(window, NSEventTypeMouseExited, away)];
+    expectHover(views, @[@NO, @NO], @"the pointer starts out of both views");
+
+    // The move before the enter, in the view at the point, which no other view covers.
+    webviewInputRoutePointer(moved(window, lower));
+    [observer(bottom) mouseMoved:moved(window, lower)];
+    webviewInputRoutePointer(crossed(window, NSEventTypeMouseEntered, lower));
+    [observer(bottom) mouseEntered:crossed(window, NSEventTypeMouseEntered, lower)];
+    expectHover(views, @[@YES, @NO], @"a move before the enter hovers the view at the point");
+
+    // Overlapping views: each area hears its enter and its move, and the view on top is the one at the point.
+    webviewInputRoutePointer(crossed(window, NSEventTypeMouseEntered, both));
+    [observer(top) mouseEntered:crossed(window, NSEventTypeMouseEntered, both)];
+    webviewInputRoutePointer(moved(window, both));
+    [observer(bottom) mouseMoved:moved(window, both)];
+    [observer(top) mouseMoved:moved(window, both)];
+    expectHover(views, @[@NO, @YES], @"overlapping areas hover the view on top");
+
+    // The area of the view on top is left before its exit comes: an enter without the exit, and the exit last.
+    webviewInputRoutePointer(moved(window, lower));
+    [observer(bottom) mouseMoved:moved(window, lower)];
+    expectHover(views, @[@YES, @NO], @"a move off the view on top leaves it before its exit comes");
+    [observer(top) mouseExited:crossed(window, NSEventTypeMouseExited, lower)];
+    expectHover(views, @[@YES, @NO], @"the exit that comes last leaves the view at the point hovered");
+
+    // The enter of the view on top after its move, and its exit before a later move of the view below.
+    webviewInputRoutePointer(moved(window, both));
+    [observer(top) mouseMoved:moved(window, both)];
+    webviewInputRoutePointer(crossed(window, NSEventTypeMouseEntered, both));
+    [observer(top) mouseEntered:crossed(window, NSEventTypeMouseEntered, both)];
+    expectHover(views, @[@NO, @YES], @"a move before the enter takes the hover from the view below");
+    [observer(top) mouseExited:crossed(window, NSEventTypeMouseExited, lower)];
+    webviewInputRoutePointer(moved(window, lower));
+    [observer(bottom) mouseMoved:moved(window, lower)];
+    expectHover(views, @[@YES, @NO], @"an exit before the move gives the hover back");
+    [observer(bottom) mouseExited:crossed(window, NSEventTypeMouseExited, away)];
+    expectHover(views, @[@NO, @NO], @"the exit of the last view clears the hover");
+}
+
 // tests/support/no_activation.m: this check activates the app in make e2e-activation.
 void sp_test_declare_activation(void);
 
@@ -217,6 +290,9 @@ int main(int argc, const char **argv) { @autoreleasepool {
         until(^BOOL { return [evaluate(top, @"document.getElementById('field').value") isEqual:@"a"]; });
         printf("PASS: pointer on another view does not block keyboard input\n");
 
+        top.frame = NSMakeRect(200,50,250,250);
+        checkTrackingOrders(window, bottom, top);
+
         webviewInputUnregister(top);
         [top removeFromSuperview];
         reset(@[bottom]);
@@ -234,5 +310,5 @@ int main(int argc, const char **argv) { @autoreleasepool {
     for (WKWebView *view in views) webviewInputUnregister(view);
     [window orderOut:nil];
     [top release]; [bottom release]; [window close]; [window release];
-    return 0;
+    return orderFailures ? 1 : 0;
 } }

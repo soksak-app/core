@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F560: a page that loses the pointer stops hovering, in each order of the enter, the exit, and the move of its tracking area.
 - F543: a press of `sok input pointer` in a key window passes the application, so local monitors see it and AppKit moves the first responder.
 - F544: a release no longer stops a later keyboard move: right after a click in a surface with an image region, the keyboard moves without waiting for the next release.
 - F539: `sok input pointer` moves as a person moves: every tracking area that holds the point hears the move, its enter and its exit, and a press in the key window moves there first.
