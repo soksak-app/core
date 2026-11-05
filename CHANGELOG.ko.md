@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F481: plain view benchmark가 probe view가 `probeplain.measure`를 등록할 때까지 기다린 뒤 content trace를 시작합니다.
 - F463: core가 checks kit과 실행 파일 하나 `soksak-check`를 씁니다. Red: `scripts/test/workflows.test.mjs`가 실패했습니다. Green: 통과합니다.
 - F466: 기록은 임시 log를 인용하지 않고, record 검사가 새 인용을 보고합니다.
 - F479: release candidate는 0.0.37입니다.

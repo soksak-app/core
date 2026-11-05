@@ -64,6 +64,8 @@ async function openProbe(s, app, prepare) {
   await prepare();
   const anchor = (await s.get("core.grid")).cards.find((item) => item.pane !== null);
   const split = await s.run("core.card.split", { card: anchor.id, side: "right", plugin: descriptor.plugin });
+  // The view registers its command after its phase ready, so a trace that starts at once can reach a view without it.
+  await s.registered(split.tab, ["command probeplain.measure"]);
   const grid = await s.get("core.grid");
   await s.presented();
   return { surface: split.tab, grid, card: grid.cards.find((item) => item.id === split.card) };
