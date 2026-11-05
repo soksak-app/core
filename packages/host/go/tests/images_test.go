@@ -1448,11 +1448,15 @@ func attachedDrawingImage(t *testing.T, images *host.Images, surface string) hos
 	return key
 }
 
-// drawingValues gives each drawing change as name=value.
+// drawingValues gives each drawing change as name=value, followed by the word hidden for a hidden surface.
 func drawingValues(changes []host.ImageDrawing) []string {
 	values := []string{}
 	for _, change := range changes {
-		values = append(values, fmt.Sprintf("%s=%v", change.Name, change.Drawing))
+		value := fmt.Sprintf("%s=%v", change.Name, change.Drawing)
+		if change.Hidden {
+			value += " hidden"
+		}
+		values = append(values, value)
 	}
 	return values
 }
@@ -1473,20 +1477,20 @@ func TestDrawingStateIsSentAtAttachAndOnChange(t *testing.T) {
 			}
 		}, []string{"view=true"}},
 		{"unchanged", func() {}, []string{}},
-		{"hidden surface", func() { images.SetSurfaceVisible(key.Surface, false) }, []string{"view=false"}},
+		{"hidden surface", func() { images.SetSurfaceVisible(key.Surface, false) }, []string{"view=false hidden"}},
 		{"hidden region while the surface is hidden", func() {
 			if err := images.SetVisible(key, false); err != nil {
 				t.Fatal(err)
 			}
 		}, []string{}},
-		{"shown surface while the region is hidden", func() { images.SetSurfaceVisible(key.Surface, true) }, []string{}},
+		{"shown surface while the region is hidden", func() { images.SetSurfaceVisible(key.Surface, true) }, []string{"view=false"}},
 		{"shown region", func() {
 			if err := images.SetVisible(key, true); err != nil {
 				t.Fatal(err)
 			}
 		}, []string{"view=true"}},
 		{"occluded window", func() { images.SetOnScreen(false) }, []string{"view=false"}},
-		{"hidden surface while occluded", func() { images.SetSurfaceVisible(key.Surface, false) }, []string{}},
+		{"hidden surface while occluded", func() { images.SetSurfaceVisible(key.Surface, false) }, []string{"view=false hidden"}},
 		{"window on screen while the surface is hidden", func() { images.SetOnScreen(true) }, []string{}},
 		{"shown surface", func() { images.SetSurfaceVisible(key.Surface, true) }, []string{"view=true"}},
 	}
@@ -1495,6 +1499,36 @@ func TestDrawingStateIsSentAtAttachAndOnChange(t *testing.T) {
 		if got := drawingValues(images.DrawingChanges()); !slices.Equal(got, step.want) {
 			t.Fatalf("%s: drawing changes %v, want %v", step.name, got, step.want)
 		}
+	}
+}
+
+// contract: image.drawing.reports-a-hidden-surface
+func TestDrawingReportsAHiddenSurface(t *testing.T) {
+	images := host.NewImages()
+	key := attachedDrawingImage(t, images, "tab-1")
+	if got := drawingValues(images.DrawingChanges()); !slices.Equal(got, []string{"view=false"}) {
+		t.Fatalf("a surface that reported no hiding is not hidden: %v", got)
+	}
+	images.SetSurfaceVisible(key.Surface, false)
+	changes := images.DrawingChanges()
+	if len(changes) != 1 || !changes[0].Hidden {
+		t.Fatalf("a region that does not draw reports the hiding of its surface: %+v", changes)
+	}
+	wire, err := json.Marshal(changes[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := fmt.Sprintf(`{"name":"view","generation":%d,"drawing":false,"hidden":true}`, changes[0].Generation)
+	if string(wire) != want {
+		t.Fatalf("message %s, want %s", wire, want)
+	}
+	if got := drawingValues(images.DrawingChanges()); len(got) != 0 {
+		t.Fatalf("an unchanged state is sent again: %v", got)
+	}
+	// The service of a new connection holds no state, so it receives the hiding again.
+	images.InvalidateSidecar("sidecar-a")
+	if got := drawingValues(images.DrawingChanges()); !slices.Equal(got, []string{"view=false hidden"}) {
+		t.Fatalf("the service of a new connection does not learn the hiding: %v", got)
 	}
 }
 

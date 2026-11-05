@@ -189,8 +189,8 @@ struct RasterState {
     /// change does not reset it, because it counts the frames of the region (host.window presentedFrames).
     presented_frames: u64,
     presentation_error: Option<String>,
-    /// The drawing state last returned by drawing_changes, or None before one was returned.
-    drawing_sent: Option<bool>,
+    /// The drawing state and the hiding last returned by drawing_changes, or None before one was returned.
+    drawing_sent: Option<(bool, bool)>,
 }
 
 /// The raster, its size and the sequence number to which a frame that a supplier sent belongs.
@@ -230,6 +230,8 @@ pub struct Drawing {
     pub name: String,
     pub generation: u64,
     pub drawing: bool,
+    /// The outer surface of the region is hidden: the region receives no configuration until it is shown.
+    pub hidden: bool,
     /// The configuration that this region waited for while it was not drawing.
     #[serde(skip)]
     pub configure: Option<Configure>,
@@ -265,14 +267,17 @@ impl Images {
                 continue;
             }
             let drawing = inner.drawing(&key, &inner.states[&key]);
+            // A surface that reported no hiding is not hidden: it may not be placed yet, and its placement configures
+            // the region.
+            let hidden = inner.surface_visibility.get(&key.0) == Some(&false);
             let state = inner
                 .states
                 .get_mut(&key)
                 .expect("the key was read from the states");
-            if state.drawing_sent == Some(drawing) {
+            if state.drawing_sent == Some((drawing, hidden)) {
                 continue;
             }
-            state.drawing_sent = Some(drawing);
+            state.drawing_sent = Some((drawing, hidden));
             // A raster that changed while the region was hidden has no configuration yet, and no later step sends it
             // when the region is shown without a new layout.
             let configure = (drawing && !state.configured && state.width > 0).then(|| {
@@ -291,6 +296,7 @@ impl Images {
                 name: key.1.clone(),
                 generation: state.generation,
                 drawing,
+                hidden,
                 configure,
                 key,
                 sidecar,
@@ -1037,7 +1043,7 @@ impl Images {
         self.lock()
             .states
             .get(key)
-            .is_some_and(|state| state.drawing_sent == Some(true))
+            .is_some_and(|state| matches!(state.drawing_sent, Some((true, _))))
     }
 
     /// Waits until all visible image regions present the current raster or the time limit ends.
