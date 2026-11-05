@@ -27,3 +27,21 @@ fn the_watch_removes_the_saved_report_and_not_the_hidden_file_that_the_system_re
         "the watch removed the hidden file {hidden:?}, which the system renames to the saved report"
     );
 }
+
+// contract: test-support.crash-reports.child-runs-under-a-name-of-its-run
+#[test]
+fn a_crashing_child_runs_a_copy_of_the_test_executable_under_a_name_of_its_run() {
+    use std::os::unix::fs::PermissionsExt;
+    let folder = folder::Folder::new();
+    let executable = std::env::current_exe().unwrap();
+    let expected = std::fs::metadata(&executable).unwrap().len();
+    let first = crash_reports::crashing_executable(folder.path());
+    let second = crash_reports::crashing_executable(folder.path());
+    assert_ne!(first.file_name(), second.file_name());
+    assert_ne!(first.file_name(), executable.file_name());
+    for path in [&first, &second] {
+        let metadata = std::fs::metadata(path).unwrap();
+        assert_eq!(metadata.len(), expected, "size of {path:?}");
+        assert_ne!(metadata.permissions().mode() & 0o100, 0, "mode of {path:?}");
+    }
+}
