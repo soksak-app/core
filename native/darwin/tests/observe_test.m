@@ -156,6 +156,28 @@ int main(void) { @autoreleasepool {
     check(stored == 2 && sp_observe_count("test.stored") == 2 && own.count == 1 && [own[0][@"fields"][@"mode"] isEqual:@"stored"],
         [NSString stringWithFormat:@"a stored source counts two deliveries exactly and stores only its registration: %@", own]);
 
+    // A closed gate keeps the deliveries of a counted source for a later summary, so the summary it refuses loses nothing: the gate
+    // counts no refused event, and a source that keeps delivering at rest stores no event a second.
+    int8_t frameClosed[SP_CLASS_COUNT];
+    memcpy(frameClosed, allLevels, sizeof frameClosed);
+    frameClosed[SP_CLASS_FRAME] = SP_EVENT_INFO;
+    sp_observe_notification("test.closed", SP_OBSERVE_COUNT, @"ObserveTestClosed", nil, nil, ^(NSNotification *note) {});
+    check(sp_event_set_policy(frameClosed), @"the policy refuses the summaries of the counted sources");
+    NSArray<NSDictionary *> *closed = capturedEvents(^{
+        [center postNotificationName:@"ObserveTestClosed" object:nil];
+        usleep(1100 * 1000);
+        [center postNotificationName:@"ObserveTestClosed" object:nil];
+        usleep(1100 * 1000);
+    });
+    NSArray *closedCounts = [named(closed, @"native.log.gated") filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"fields.class == 'frame'"]];
+    check(closedCounts.count == 0 && named(closed, @"native.observe.counted").count == 0,
+        [NSString stringWithFormat:@"a summary refused by a closed gate is neither stored nor counted as refused: %@", closedCounts]);
+    check(sp_event_set_policy(allLevels), @"the policy stores the summaries again");
+    NSArray<NSDictionary *> *opened = capturedEvents(^{ sp_observe_flush(); });
+    NSArray *openedSummary = [named(opened, @"native.observe.counted") filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"fields.source == 'test.closed'"]];
+    check(openedSummary.count == 1 && [openedSummary[0][@"fields"][@"count"] intValue] == 2,
+        [NSString stringWithFormat:@"the first summary after the gate opens holds the deliveries behind the closed gate: %@", openedSummary]);
+
     // A delegate is set through the entrance; an owner without a delegate property is refused with an error event.
     Probe *owner = [[Probe alloc] init];
     NSArray<NSDictionary *> *delegate = capturedEvents(^{

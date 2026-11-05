@@ -112,8 +112,10 @@ static source_record *recordRegistration(const char *source, sp_observe_mode mod
 
 // Stores the summary of a counted source: the count since the earlier summary, the total and the microseconds between them.
 static void summarize(source_record *record, uint64_t now, uint64_t before) {
-    // A closed gate keeps the count in pending, so the first summary after the gate opens holds the deliveries since the earlier one.
-    if (!sp_event_gate(SP_CLASS_FRAME, SP_EVENT_DEBUG)) return;
+    // A closed gate keeps the count in pending, so the first summary after the gate opens holds the deliveries since the earlier
+    // summary. Nothing is lost, so the gate is only read: a refused event would be counted and stored, a second after a second, for a
+    // source that delivers at rest.
+    if (!sp_event_enabled(SP_CLASS_FRAME, SP_EVENT_DEBUG)) return;
     unsigned long long count = atomic_exchange_explicit(&record->pending, 0, memory_order_relaxed);
     if (count == 0) return;
     char fields[192];
