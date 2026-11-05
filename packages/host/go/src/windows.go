@@ -346,6 +346,10 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	win := framework.NewWindow(WindowOptions{Name: name, Title: windowTitle(), URL: url, Width: startWidth, Height: startHeight})
 	s := NewSurfaces(win, h.sidecars)
 	s.host, s.name, s.title = h, name, windowTitle()
+	if frames := win.Frames(); frames != nil {
+		// Whether the window settled changes with a frame, as whether it is occluded does with the screen.
+		frames.OnSettled(s.windowChanged)
+	}
 	h.mu.Lock()
 	h.windows[win.ID()] = s
 	h.mu.Unlock()

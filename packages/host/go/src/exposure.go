@@ -1367,9 +1367,9 @@ func windowResponder(class string, view, surface uint64, main bool, named map[ui
 	return out
 }
 
-// WindowFrameCounters are the frame counters of host.window. WebKit draws the workbench of this host, and the host
-// counts neither the frames of the workbench nor the command buffers that WebKit commits for it, so frames,
-// commandBuffers and settled are null; the mygo host counts them through the frame reports of its workbench (U7).
+// WindowFrameCounters are the frame counters of host.window. The mygo host counts them through the frame reports of its
+// workbench (U7). On the other hosts WebKit draws the workbench, and the host counts neither its frames nor the command buffers
+// that WebKit commits for it, so frames, commandBuffers and settled are null.
 type WindowFrameCounters struct {
 	Frames         *uint64 `json:"frames"`
 	CommandBuffers *uint64 `json:"commandBuffers"`
@@ -1492,6 +1492,11 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 		PageProcess: facts.PageProcess, Quitting: s.host.quit.Active(),
 		Controls: facts.Controls, Surfaces: []WindowSurface{}, Documents: []WindowDocument{}, Regions: regions,
 		Webviews: []WindowWebview{},
+	}
+	if s.window != nil {
+		if frames := s.window.Frames(); frames != nil {
+			out.WindowFrameCounters = frames.Counters()
+		}
 	}
 	out.AppDomWebviews, out.DocumentWebviews = windowWebviewCounts(facts)
 	if out.Controls == nil {

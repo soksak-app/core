@@ -29,6 +29,9 @@ type Frontend struct {
 	// view is the view of the current workbench of the window.
 	view atomic.Pointer[func(c *ui.Context)]
 
+	// frames counts the frames of the workbench of the window (U7).
+	frames *host.WindowFrames
+
 	mu sync.Mutex
 	// ready is true once the window drew its first frame, and shown once the host asked to show it.
 	ready, shown bool
@@ -40,6 +43,9 @@ type Frontend struct {
 	// address belongs to the main thread: the address of the window, which names the project that it shows.
 	address string
 }
+
+// Frames counts the frames of the workbench of the window.
+func (f *Frontend) Frames() *host.WindowFrames { return f.frames }
 
 // Window is the mygo window.
 func (f *Frontend) Window() *mygo.Window { return f.window }

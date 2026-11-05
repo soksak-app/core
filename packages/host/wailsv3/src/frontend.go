@@ -107,3 +107,6 @@ func (f Frontend) StartWorkbench() { f.window.Reload() }
 
 // CallWorkbench runs script in the main page.
 func (f Frontend) CallWorkbench(script string) { f.window.ExecJS(script) }
+
+// Frames is nil: WebKit draws the workbench of this host.
+func (f Frontend) Frames() *host.WindowFrames { return nil }
