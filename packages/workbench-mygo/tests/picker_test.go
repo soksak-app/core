@@ -414,6 +414,29 @@ func (f *tabShell) modified(surface string) {
 	f.viewCalled(surface, "tab.modified", true)
 }
 
+func TestAKeptModifiedTabKeepsItsProject(t *testing.T) {
+	f := modifiedShell(t)
+	project := status[map[string]any](t, f.shellFixture, "core.project")["id"].(string)
+	var value any
+	var failure error
+	answered := false
+	f.shell.Registry().RunLater("core.project.close", json.RawMessage(`{"id":"`+project+`"}`), func(result any, err error) {
+		value, failure, answered = result, err, true
+	})
+	f.settle()
+	if answered {
+		t.Fatalf("the command answered %v with %v before the question", value, failure)
+	}
+	f.click("core.picker.item", "keep")
+	f.settle()
+	if !answered || failure != nil || !reflect.DeepEqual(value, map[string]bool{"closed": false}) {
+		t.Fatalf("the command answered %v, %v with %v", answered, value, failure)
+	}
+	if len(f.host.projects) != 1 {
+		t.Fatalf("the host stores %v", f.host.projects)
+	}
+}
+
 func TestAModifiedTabAsksBeforeItCloses(t *testing.T) {
 	f := modifiedShell(t)
 	answer := f.run(t, "core.tab.close", `{"tab":"tab-aaaaaa"}`).(map[string]bool)

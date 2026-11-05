@@ -314,11 +314,20 @@ func TestTheSamplerReadsTheProcessesOfEveryWindow(t *testing.T) {
 	host.PerformanceWindowAdd("window-b", func() (host.PerformanceWindowProcesses, error) {
 		return host.PerformanceWindowProcesses{}, errors.New("window facts unavailable")
 	})
-	t.Cleanup(func() { host.PerformanceWindowRemove("window-a"); host.PerformanceWindowRemove("window-b") })
+	host.PerformanceWindowAdd("window-c", func() (host.PerformanceWindowProcesses, error) {
+		return host.PerformanceWindowProcesses{}, nil
+	})
+	t.Cleanup(func() {
+		host.PerformanceWindowRemove("window-a")
+		host.PerformanceWindowRemove("window-b")
+		host.PerformanceWindowRemove("window-c")
+	})
 	host.PerformanceSample()
 	var pageFields, documentFields, notStarted, unreadable map[string]any
 	for _, fields := range traceFields(t, config, log, "host.sampler.memory") {
 		switch {
+		case fields["role"] == "page" && fields["window"] == "window-c":
+			t.Fatalf("a window without a main page has a page sample: %v", fields)
 		case fields["role"] == "page" && fields["window"] == "window-a":
 			pageFields = fields
 		case fields["role"] == "document" && fields["surface"] == "surface-a":

@@ -4,9 +4,23 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, channel};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
+
+/// Copies the running test executable into directory under a name of this run. The system counts the crash reports of one process
+/// name, also the reports that a test removed, and after 25 it writes none and gives the crashing process no error. A child that
+/// crashes under a fixed name gets no report after the runs of a day, so the test would judge the runs before it.
+pub fn crashing_executable(directory: &Path) -> PathBuf {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let path = directory.join(format!("crash-{:08x}", nanos as u32));
+    std::fs::copy(std::env::current_exe().unwrap(), &path)
+        .unwrap_or_else(|error| panic!("copy of the test executable to {path:?}: {error}"));
+    path
+}
 
 pub struct CrashReports {
     // The watcher ends the watch when it is dropped, so it lives as long as the receiver of its events.

@@ -98,23 +98,9 @@ func (s *Shell) register() {
 	s.registerProjectOpen()
 	s.registerFixture()
 	act(s, "core.project.activate", func(value idParam) error { s.activate(value.ID); return nil })
-	s.registry.CommandLater("core.project.close", func(raw json.RawMessage, answer func(any, error)) {
-		value, err := params[idParam](raw)
-		if err != nil {
-			answer(nil, fmt.Errorf("core.project.close: %w", err))
-			return
-		}
-		if s.project(value.ID) == nil {
-			answer(nil, fmt.Errorf("Unknown project: %s", value.ID))
-			return
-		}
-		s.removeProjectThen(value.ID, func(removed bool, err error) {
-			if err != nil {
-				answer(nil, err)
-				return
-			}
-			answer(map[string]bool{"closed": removed}, nil)
-		})
+	s.registerProjectClose()
+	s.registry.CommandLater("core.window.new", func(_ json.RawMessage, answer func(any, error)) {
+		s.newWindow(func(err error) { answer(nil, err) })
 	})
 	act(s, "core.space.activate", func(value idParam) error { return s.activateSpace(value.ID) })
 	s.registry.CommandLater("core.space.close", func(raw json.RawMessage, answer func(any, error)) {

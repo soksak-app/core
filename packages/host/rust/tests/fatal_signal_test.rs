@@ -26,7 +26,8 @@ fn a_fatal_signal_writes_an_error_line_to_the_standard_error_file() {
         std::process::abort();
     }
     let config = folder::Folder::new();
-    let executable = std::env::current_exe().unwrap();
+    let copies = folder::Folder::new();
+    let executable = crash_reports::crashing_executable(copies.path());
     let application = executable
         .file_name()
         .unwrap()

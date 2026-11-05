@@ -3,6 +3,8 @@ package support
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,6 +22,34 @@ type CrashReports struct {
 	watcher     *fsnotify.Watcher
 	directory   string
 	application string
+}
+
+// CrashingExecutable copies the running test executable to a name of this run. The system counts the crash reports of one process
+// name, also the reports that a test removed, and after 25 it writes none and gives the crashing process no error. A child that
+// crashes under a fixed name gets no report after the runs of a day, so the test would judge the runs before it.
+func CrashingExecutable(t *testing.T) string {
+	t.Helper()
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := os.Open(executable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer source.Close()
+	path := filepath.Join(t.TempDir(), fmt.Sprintf("crash-%08x", uint32(time.Now().UnixNano())))
+	target, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o700)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.Copy(target, source); err != nil {
+		t.Fatal(err)
+	}
+	if err := target.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }
 
 // WatchCrashReports starts the watch of the crash reports of application before the test starts the child that crashes.
