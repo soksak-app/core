@@ -110,6 +110,8 @@ func TestAKeyBecomesItsKeyEvent(t *testing.T) {
 		{"an arrow types nothing", "ArrowLeft", "", 0, true, map[string]any{"type": "rawKeyDown", "key": "ArrowLeft", "code": "ArrowLeft", "windowsVirtualKeyCode": 37.0, "modifiers": 0.0}},
 		{"Control types nothing", "c", "", 2, true, map[string]any{"type": "rawKeyDown", "key": "c", "code": "KeyC", "windowsVirtualKeyCode": 67.0, "modifiers": 2.0}},
 		{"each modifier has its bit", "c", "", 1 | 2 | 4 | 8, true, map[string]any{"type": "rawKeyDown", "key": "c", "code": "KeyC", "windowsVirtualKeyCode": 67.0, "modifiers": 15.0}},
+		{"Control and A select the page", "a", "", 2, true, map[string]any{"type": "rawKeyDown", "key": "a", "code": "KeyA", "windowsVirtualKeyCode": 65.0, "modifiers": 2.0}},
+		{"Command and A go down as Meta", "a", "", 8, true, map[string]any{"type": "rawKeyDown", "key": "a", "code": "KeyA", "windowsVirtualKeyCode": 65.0, "modifiers": 4.0}},
 		{"Shift keeps the text", "A", "", 1, true, map[string]any{"type": "keyDown", "key": "A", "code": "KeyA", "windowsVirtualKeyCode": 65.0, "text": "A", "unmodifiedText": "A", "modifiers": 8.0}},
 		{"a given text is typed", "a", "한", 4, true, map[string]any{"type": "keyDown", "key": "a", "code": "KeyA", "windowsVirtualKeyCode": 65.0, "text": "한", "unmodifiedText": "한", "modifiers": 1.0}},
 		{"a character without a key", "한", "", 0, true, map[string]any{"type": "keyDown", "key": "한", "text": "한", "unmodifiedText": "한", "modifiers": 0.0}},
