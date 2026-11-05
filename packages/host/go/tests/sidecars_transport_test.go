@@ -1919,6 +1919,33 @@ func serveHelloVersion(t *testing.T, listener net.Listener, version *string) {
 	}()
 }
 
+// contract: sidecars.protocol.reply-cids-reach-the-owner
+func TestAMessageOfAPersistentServiceReachesItsOwnerWithTheIdentifiersOfItsRequest(t *testing.T) {
+	// The replies are records: without a writer of this test the host holds them for the writer of the next test.
+	support.StartWriter(t, t.TempDir())
+	root := t.TempDir()
+	socket := filepath.Join(socketParent(t), "s.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	writeHarnessEndpoint(t, root, socket)
+	serveHelloVersion(t, listener, nil)
+	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sidecars.Stop()
+	owner := &harnessOwner{root: "/cids", seen: make(chan SidecarMessage, 1)}
+	if err := sidecars.SendWithCids(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"input"}`), []string{"view-a.1"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := receiveSidecarMessage(t, owner.seen).Cids; len(got) != 1 || got[0] != "view-a.1" {
+		t.Fatalf("the message names %v, want the identifier of its request", got)
+	}
+}
+
 // contract: sidecars-transport.hello.reports-a-service-of-another-version
 func TestPersistentServiceOfAnotherVersionIsReportedOutdated(t *testing.T) {
 	old := "0.0.6"

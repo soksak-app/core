@@ -2211,7 +2211,7 @@ pub(crate) fn post_sidecar_message(
     message: &crate::sidecars::Message,
     views: Vec<(String, u64)>,
 ) {
-    let text = crate::sidecar_routes::view_message(&message.surface, &message.body);
+    let text = crate::sidecar_routes::view_message(&message.surface, &message.cids, &message.body);
     let sidecar = message.sidecar.clone();
     let id = message.surface.clone();
     let task_window = window.clone();

@@ -174,7 +174,7 @@ const applySidecarListen = (sidecar, id, on) => {
   sidecarListenOrder = Promise.allSettled([applied]);
   return applied;
 };
-/** Calls fn(body) for each message of the session id of the sidecar name. The returned promise of the off function resolves after the host applied the registration. */
+/** Calls fn(body, cids) for each message of the session id of the sidecar name; cids are the identifiers of the requests that it answers. The returned promise of the off function resolves after the host applied the registration. */
 function onSidecarMessage(name, id, fn) {
   const key = JSON.stringify([name, id]);
   let entry = sidecarListens.get(key);
@@ -182,7 +182,8 @@ function onSidecarMessage(name, id, fn) {
   entry.count += 1;
   if (entry.count === 1) entry.applied = applySidecarListen(name, id, true);
   const registered = Promise.resolve(bridge.on("sidecar-message", (event) => {
-    if (event?.sidecar === name && event?.surface === id) fn(event.body);
+    // default: the host leaves out cids when the line of the message names none (docs/spec/sidecars.md), so fn receives no identifiers.
+    if (event?.sidecar === name && event?.surface === id) fn(event.body, event.cids ?? []);
   }));
   const listening = entry;
   return Promise.all([registered, listening.applied]).then(([off]) => () => {

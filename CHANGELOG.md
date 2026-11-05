@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F617: A message of a sidecar reaches the owner of its surface with the cids of its request.
 - F626: A frame of an open dialog on the mygo host redraws the dialog and not the blurred workbench behind it, which is kept until it changes. Each frame of a scrolling dialog changed the whole window. Red: `TestScrollingTheSettingsCardRedrawsTheCardAlone` read 960,000 changed pixels in each of 167 frames, against at most 430,080 for the card.
 - F630: `make measure-app-usage` judges a process of no application whose footprint cannot be read by the process table at the end of the measurement. `footprint` stops finding an ending WebKit process before `ps` drops it, and that failed the measurement of an application. Red: `scripts/test/measure-app-usage.test.mjs` fails the footprint of such a process while the cpu reads still list it.
 - F502-13: An open dialog makes every element outside it inert on the three hosts: `element.rect` still answers its rectangle, `host.hit` answers what a point reaches, and `element.act` is refused with code 1010 for a core element and for a surface element. The pointer sequence of the mygo host names no element behind the dialog. Red: the page performed an action on an element behind a dialog; the mygo host refused it with -32000 instead of 1010, forwarded an action on a surface element to the surface, and its pointer sequence named `core.save` behind the dialog.

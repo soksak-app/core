@@ -12,6 +12,7 @@ fn message() -> Message {
         sidecar: "sidecar".to_string(),
         surface: "tab-a".to_string(),
         body: RawValue::from_string("{}".to_string()).unwrap(),
+        cids: Vec::new(),
     }
 }
 

@@ -255,6 +255,18 @@ test("runtime.sidecar() delivers the messages and failures of its id only, with 
   assert.deepEqual(reasons, ["exited"]);
 });
 
+test("runtime.sidecar(name).on passes the identifiers of the requests that a message answers", async (t) => {
+  const { posted, host } = setup(t);
+  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const received = [];
+  const on = runtime.sidecar("fixture-sidecar").on("probe-surface", (body, cids) => received.push([body, cids]));
+  host({ sok: 1, id: 1, result: null });
+  await on;
+  host({ sok: 1, event: "sidecar.message", data: { id: "probe-surface", cids: ["b1.7", "view-a.1"], body: { ack: true } } });
+  host({ sok: 1, event: "sidecar.message", data: { id: "probe-surface", body: { event: "state" } } });
+  assert.deepEqual(received, [[{ ack: true }, ["b1.7", "view-a.1"]], [{ event: "state" }, []]]);
+});
+
 test("runtime.sidecar(name) sends to the named sidecar and its requests carry the name and the id", async (t) => {
   const { posted, host } = setup(t);
   const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });

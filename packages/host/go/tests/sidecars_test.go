@@ -1416,6 +1416,33 @@ printf '%s\n' '{"surface":"s1","body":{"event":"state"}}'
 cat >/dev/null
 `
 
+// contract: sidecars.protocol.reply-cids-reach-the-owner
+func TestAMessageOfASidecarReachesItsOwnerWithTheIdentifiersOfItsRequest(t *testing.T) {
+	// The replies are records: without a writer of this test the host holds them for the writer of the next test.
+	support.StartWriter(t, t.TempDir())
+	sidecars, _ := scriptSidecars(t, replyScript)
+	owner := newFakeOwner("/projects/a")
+	body := json.RawMessage(`{"operation":"input"}`)
+	if err := sidecars.SendWithCids(owner, echoSidecar, "s1", body, []string{"b1.7", "b1.8"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := owner.next(t).Cids; fmt.Sprint(got) != "[b1.7 b1.8]" {
+		t.Fatalf("the message names %v, want both identifiers of its request", got)
+	}
+	if err := sidecars.SendWithCids(owner, echoSidecar, "s1", body, []string{"b1.9"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := owner.next(t).Cids; fmt.Sprint(got) != "[b1.9]" {
+		t.Fatalf("the message names %v, want the identifier of its request", got)
+	}
+	if err := sidecars.Send(owner, echoSidecar, "s1", body); err != nil {
+		t.Fatal(err)
+	}
+	if got := owner.next(t).Cids; len(got) != 0 {
+		t.Fatalf("a message without identifiers names %v", got)
+	}
+}
+
 // contract: sidecars.protocol.reply-with-cids-is-recorded
 func TestAReplyOfASidecarIsRecordedWithTheIdentifiersOfItsRequest(t *testing.T) {
 	config := t.TempDir()

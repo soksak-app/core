@@ -2087,6 +2087,64 @@ fn persistent_start_fails_when_the_service_prints_no_endpoint() {
     );
 }
 
+// contract: sidecars.protocol.reply-cids-reach-the-owner
+#[test]
+fn a_message_of_a_persistent_service_reaches_its_owner_with_the_identifiers_of_its_request() {
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
+    let service_directory = config_directory.path().join("services/echo");
+    std::fs::create_dir_all(&service_directory).unwrap();
+    let socket_path = service_directory.join("cids.sock");
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    let endpoint = serde_json::json!({
+        "protocol": 1,
+        "pid": std::process::id(),
+        "socket": socket_path,
+        "token": "cids-token"
+    });
+    std::fs::write(
+        service_directory.join("endpoint.json"),
+        serde_json::to_vec(&endpoint).unwrap(),
+    )
+    .unwrap();
+    // The service answers hello and echoes each surface request, its cids included.
+    std::thread::spawn(move || {
+        let Ok((mut stream, _)) = listener.accept() else {
+            return;
+        };
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let mut line = String::new();
+        while reader.read_line(&mut line).unwrap_or(0) > 0 {
+            let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+            let reply = if request["operation"] == "hello" {
+                serde_json::json!({"operation": "hello", "protocol": 1, "ok": true}).to_string()
+            } else {
+                line.trim_end().to_string()
+            };
+            if writeln!(stream, "{reply}").is_err() {
+                return;
+            }
+            line.clear();
+        }
+    });
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
+    let declarations = declare(&fixture, executable_directory.path());
+    let sidecars = Sidecars::new(&declarations, config_directory.path().to_path_buf()).unwrap();
+    let (owner, events) = owner("cids", "/projects/cids");
+    sidecars
+        .send_with_cids(
+            &owner,
+            ECHO,
+            "surface",
+            &raw(r#"{"operation":"input"}"#),
+            &["view-a.1".to_string()],
+        )
+        .unwrap();
+    assert_eq!(events.recv_timeout(STALL).unwrap().cids, ["view-a.1"]);
+}
+
 // The standard error of a newly started service accumulates in the log of the executable name in the configuration
 // directory.
 // contract: log.service.standard-error-goes-to-service-log
