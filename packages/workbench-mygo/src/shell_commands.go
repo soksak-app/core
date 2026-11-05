@@ -27,6 +27,18 @@ func command[T any](s *Shell, name string, run func(value T) (any, error)) {
 	})
 }
 
+// later registers name with a function of its parameters that answers in a later step.
+func later[T any](s *Shell, name string, run func(value T, answer func(any, error))) {
+	s.registry.CommandLater(name, func(raw json.RawMessage, answer func(any, error)) {
+		value, err := params[T](raw)
+		if err != nil {
+			answer(nil, fmt.Errorf("%s: %w", name, err))
+			return
+		}
+		run(value, answer)
+	})
+}
+
 // act is a command without an answer.
 func act[T any](s *Shell, name string, run func(value T) error) {
 	command(s, name, func(value T) (any, error) { return nil, run(value) })

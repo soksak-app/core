@@ -46,7 +46,7 @@ func (s *Shell) registerRename() {
 		s.options.Invalidate()
 		return nil
 	})
-	act(s, "core.rename.commit", func(struct{}) error { return s.commitRename() })
+	later(s, "core.rename.commit", func(_ struct{}, answer func(any, error)) { s.commitRename(answerNull(answer)) })
 	act(s, "core.rename.cancel", func(struct{}) error {
 		if s.renaming == nil {
 			return fmt.Errorf("nothing is being renamed")
@@ -55,11 +55,11 @@ func (s *Shell) registerRename() {
 		s.options.Invalidate()
 		return nil
 	})
-	act(s, "core.project.rename", func(value struct {
+	later(s, "core.project.rename", func(value struct {
 		ID    string `json:"id"`
 		Title string `json:"title"`
-	}) error {
-		return s.renameProject(value.ID, value.Title)
+	}, answer func(any, error)) {
+		s.renameProject(value.ID, value.Title, answerNull(answer))
 	})
 	act(s, "core.space.rename", func(value struct {
 		ID    string `json:"id"`
@@ -67,19 +67,26 @@ func (s *Shell) registerRename() {
 	}) error {
 		return s.renameSpace(value.ID, value.Title)
 	})
-	act(s, "core.project.pin", func(value struct {
-		ID     string `json:"id"`
-		Pinned bool   `json:"pinned"`
-	}) error {
-		return s.pinProject(value.ID, value.Pinned)
+	later(s, "core.project.pin", func(value pinParam, answer func(any, error)) {
+		s.pinProject(value.ID, value.Pinned, answerNull(answer))
 	})
-	act(s, "core.project.move", func(value struct {
+	later(s, "core.project.move", func(value struct {
 		ID    string `json:"id"`
 		Delta int    `json:"delta"`
-	}) error {
-		s.moveProject(value.ID, value.Delta)
-		return nil
+	}, answer func(any, error)) {
+		s.moveProject(value.ID, value.Delta, answerNull(answer))
 	})
+}
+
+// pinParam is the parameter of a command that pins a project.
+type pinParam struct {
+	ID     string `json:"id"`
+	Pinned bool   `json:"pinned"`
+}
+
+// answerNull answers a command without a value once its store call is done.
+func answerNull(answer func(any, error)) func(error) {
+	return func(err error) { answer(nil, err) }
 }
 
 func (s *Shell) beginRename(target renameTarget) error {
@@ -109,32 +116,43 @@ func (s *Shell) beginRename(target renameTarget) error {
 	return nil
 }
 
-// commitRename saves the name. An empty name keeps the old one.
-func (s *Shell) commitRename() error {
+// commitRename saves the name and tells when the store holds it. An empty name keeps the old one.
+func (s *Shell) commitRename(done func(error)) {
 	if s.renaming == nil {
-		return fmt.Errorf("nothing is being renamed")
+		done(fmt.Errorf("nothing is being renamed"))
+		return
 	}
 	target, title := s.renaming.renameTarget, strings.TrimSpace(s.renaming.Value)
 	s.renaming = nil
 	s.options.Invalidate()
 	switch {
 	case title == "":
-		return nil
+		done(nil)
 	case target.Kind == "project":
-		return s.renameProject(target.ID, title)
+		s.renameProject(target.ID, title, done)
+	default:
+		done(s.renameSpace(target.ID, title))
 	}
-	return s.renameSpace(target.ID, title)
 }
 
-func (s *Shell) renameProject(id, title string) error {
-	project := s.project(id)
-	if project == nil {
-		return fmt.Errorf("Unknown project: %s", id)
-	}
-	project.Title = title
-	s.patch(id, map[string]any{"title": title})
-	s.options.Invalidate()
-	return nil
+// patchProject writes members into the stored project and tells when the store holds them, or the refusal of the store. The shell takes
+// the change from the answer, so it never shows what the store refused.
+func (s *Shell) patchProject(id string, members map[string]any, apply func(project *projectRecord), done func(error)) {
+	s.calls.CallInOrder("workspace", "workspace", map[string]any{"kind": "patch", "id": id, "patch": members}, func(_ any, err error) {
+		if err != nil {
+			done(err)
+			return
+		}
+		if project := s.project(id); project != nil {
+			apply(project)
+		}
+		s.options.Invalidate()
+		done(nil)
+	})
+}
+
+func (s *Shell) renameProject(id, title string, done func(error)) {
+	s.patchProject(id, map[string]any{"title": title}, func(project *projectRecord) { project.Title = title }, done)
 }
 
 func (s *Shell) renameSpace(id, title string) error {
@@ -155,31 +173,26 @@ func (s *Shell) renameSpace(id, title string) error {
 	return nil
 }
 
-func (s *Shell) pinProject(id string, pinned bool) error {
-	project := s.project(id)
-	if project == nil {
-		return fmt.Errorf("Unknown project: %s", id)
-	}
-	project.Pinned = pinned
-	s.patch(id, map[string]any{"pinned": pinned})
-	s.options.Invalidate()
-	return nil
+func (s *Shell) pinProject(id string, pinned bool, done func(error)) {
+	s.patchProject(id, map[string]any{"pinned": pinned}, func(project *projectRecord) { project.Pinned = pinned }, done)
 }
 
 // moveProject moves a project in the stored order. Like the store, it moves nothing for a project that is not there or past either end.
-func (s *Shell) moveProject(id string, delta int) {
-	at := slices.IndexFunc(s.projects, func(project projectRecord) bool { return project.ID == id })
-	to := at + delta
-	if at >= 0 && to >= 0 && to < len(s.projects) {
-		project := s.projects[at]
-		s.projects = slices.Insert(slices.Delete(s.projects, at, at+1), to, project)
-	}
+func (s *Shell) moveProject(id string, delta int, done func(error)) {
 	s.calls.CallInOrder("workspace", "workspace", map[string]any{"kind": "move", "id": id, "delta": delta}, func(_ any, err error) {
 		if err != nil {
-			s.fail(err)
+			done(err)
+			return
 		}
+		at := slices.IndexFunc(s.projects, func(project projectRecord) bool { return project.ID == id })
+		to := at + delta
+		if at >= 0 && to >= 0 && to < len(s.projects) {
+			project := s.projects[at]
+			s.projects = slices.Insert(slices.Delete(s.projects, at, at+1), to, project)
+		}
+		s.options.Invalidate()
+		done(nil)
 	})
-	s.options.Invalidate()
 }
 
 // drawRenameField draws the field in the place of the tab being renamed.

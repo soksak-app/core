@@ -78,11 +78,8 @@ func (s *Shell) registerLibrary() {
 		return nil
 	})
 	act(s, "core.library.open", func(value idParam) error { s.activate(value.ID); return nil })
-	act(s, "core.library.pin", func(value struct {
-		ID     string `json:"id"`
-		Pinned bool   `json:"pinned"`
-	}) error {
-		return s.pinProject(value.ID, value.Pinned)
+	later(s, "core.library.pin", func(value pinParam, answer func(any, error)) {
+		s.pinProject(value.ID, value.Pinned, answerNull(answer))
 	})
 	act(s, "core.library.remove", func(value idParam) error { s.removeProject(value.ID); return nil })
 	act(s, "core.library.return", func(struct{}) error {
