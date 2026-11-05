@@ -544,12 +544,13 @@ func TestAViewFillsTheCardBetweenItsHeadAndItsFoot(t *testing.T) {
 	}
 }
 
-// The view of a surface stands on whole points inside its slot, also when the lines of the plane lie between points: the framework
-// rounds a fractional edge to the nearest device pixel, which can leave the slot.
+// The view of a surface fills its slot on whole points, also when the lines of the plane lie between points: the framework rounds a
+// fractional edge to the nearest device pixel, which can leave the slot.
 func TestAViewStandsInsideItsSlotOnWholePoints(t *testing.T) {
 	f, stored := surfaceShell(t)
 	stored.elements = true
 	f.run("core.card.focus", map[string]string{"card": f.tabbedCards()[0]})
+	requireFractionalLines(t, f)
 	var views []ui.ElementNode
 	var walk func(nodes []ui.ElementNode)
 	walk = func(nodes []ui.ElementNode) {
@@ -561,9 +562,10 @@ func TestAViewStandsInsideItsSlotOnWholePoints(t *testing.T) {
 		}
 	}
 	walk(f.tester.ElementTree())
-	fractional := false
+	if len(views) == 0 {
+		t.Fatal("the window holds no slot of a surface")
+	}
 	for _, slot := range views {
-		fractional = fractional || slot.Bounds.Y != float32(math.Floor(float64(slot.Bounds.Y)))
 		if len(slot.Children) != 1 {
 			t.Fatalf("the slot %+v holds %d elements", slot.Bounds, len(slot.Children))
 		}
@@ -573,30 +575,29 @@ func TestAViewStandsInsideItsSlotOnWholePoints(t *testing.T) {
 				t.Fatalf("the view %+v of the slot %+v stands between points", view, slot.Bounds)
 			}
 		}
-		if view.X < slot.Bounds.X || view.Y < slot.Bounds.Y || view.X+view.W > slot.Bounds.X+slot.Bounds.W || view.Y+view.H > slot.Bounds.Y+slot.Bounds.H {
-			t.Fatalf("the view %+v leaves the slot %+v", view, slot.Bounds)
+		if view != slot.Bounds {
+			t.Fatalf("the view %+v does not fill the slot %+v", view, slot.Bounds)
 		}
-	}
-	if len(views) == 0 || !fractional {
-		t.Fatalf("no slot stands between points, so the test shows nothing: %+v", views)
 	}
 }
 
-// A web page paints whole points only, so a native view of a fractional height would show the window below its last row.
+// A web page paints whole points only, so the host is told a whole height, and a native view of it fills the declared slot: a fractional
+// height would show the window below the last row.
 func TestAViewStandsOnWholePoints(t *testing.T) {
 	f, stored := surfaceShell(t)
 	stored.elements = true
 	f.run("core.card.focus", map[string]string{"card": f.tabbedCards()[0]})
+	requireFractionalLines(t, f)
 	surface := stored.lastSurfaces(t)[anySurface(t, stored)]
 	height := surface["h"].(float64)
-	if height == math.Floor(height) {
-		t.Fatalf("the slot height %v is whole, so the test shows nothing", height)
+	if height != math.Floor(height) {
+		t.Fatalf("the slot height %v stands between points", height)
 	}
 	found := false
 	var walk func(nodes []ui.ElementNode)
 	walk = func(nodes []ui.ElementNode) {
 		for _, node := range nodes {
-			if float64(node.Bounds.H) == math.Floor(height) && float64(node.Bounds.W) == surface["w"].(float64) {
+			if float64(node.Bounds.H) == height && float64(node.Bounds.W) == surface["w"].(float64) {
 				found = true
 			}
 			walk(node.Children)
@@ -604,7 +605,101 @@ func TestAViewStandsOnWholePoints(t *testing.T) {
 	}
 	walk(f.tester.ElementTree())
 	if !found {
-		t.Fatalf("no native view of the height %v stands in the slot of the height %v", math.Floor(height), height)
+		t.Fatalf("no native view of the height %v stands in the slot", height)
+	}
+}
+
+// requireFractionalLines fails a test of whole points over a plane whose lines are whole already, as it would show nothing.
+func requireFractionalLines(t *testing.T, f *shellFixture) {
+	t.Helper()
+	grid := status[struct {
+		Lines map[string][]float64 `json:"lines"`
+	}](t, f, "core.grid")
+	for _, lines := range grid.Lines {
+		for _, line := range lines {
+			if line != math.Round(line) {
+				return
+			}
+		}
+	}
+	t.Fatalf("every line %v is whole, so the test shows nothing", grid.Lines)
+}
+
+// A card stands on whole points when the lines of the plane lie between them, so its head, its view and its foot touch: a device
+// pixel of the card would show between a view on whole points and a line on a half point.
+func TestACardStandsOnWholePoints(t *testing.T) {
+	f, stored := surfaceShell(t)
+	stored.elements = true
+	f.run("core.card.focus", map[string]string{"card": f.tabbedCards()[0]})
+	requireFractionalLines(t, f)
+	whole := func(what string, r ui.Rect) {
+		for _, edge := range []float32{r.X, r.Y, r.X + r.W, r.Y + r.H} {
+			if float64(edge) != math.Round(float64(edge)) {
+				t.Errorf("%s %+v stands between points", what, r)
+				return
+			}
+		}
+	}
+	var slots []ui.Rect
+	var walk func(nodes []ui.ElementNode)
+	walk = func(nodes []ui.ElementNode) {
+		for _, node := range nodes {
+			if _, ok := node.Key.(workbench.SurfaceSlot); ok {
+				slots = append(slots, node.Bounds)
+			}
+			walk(node.Children)
+		}
+	}
+	walk(f.tester.ElementTree())
+	touched := 0
+	for _, card := range f.tabbedCards() {
+		box, head, foot := f.box("core.card", card), f.box("core.card.header", card), f.box("core.card.status", card)
+		whole("the card "+card, box)
+		for _, slot := range slots {
+			if slot.X < box.X || slot.X+slot.W > box.X+box.W || slot.Y < box.Y || slot.Y+slot.H > box.Y+box.H {
+				continue
+			}
+			touched++
+			whole("the slot in "+card, slot)
+			if slot.Y != head.Y+head.H || slot.Y+slot.H != foot.Y {
+				t.Errorf("the slot %+v of %s does not touch the head %+v and the foot %+v", slot, card, head, foot)
+			}
+		}
+	}
+	if touched == 0 {
+		t.Fatalf("no slot stands in a tabbed card: %+v", slots)
+	}
+}
+
+// Every slot of a surface stands on whole points at any size of the window, also the slot of a section in a sidebar.
+func TestEverySlotStandsOnWholePoints(t *testing.T) {
+	f, stored := surfaceShellOf(t, sidebarsInstalled)
+	stored.elements = true
+	for _, size := range [][2]int{{1200, 800}, {1203, 803}, {997, 701}, {700, 433}} {
+		stored.window.Width, stored.window.Height = float64(size[0]), float64(size[1])
+		f.tester.SetSize(size[0], size[1])
+		f.settle()
+		slots := 0
+		var walk func(nodes []ui.ElementNode)
+		walk = func(nodes []ui.ElementNode) {
+			for _, node := range nodes {
+				if _, ok := node.Key.(workbench.SurfaceSlot); ok {
+					slots++
+					r := node.Bounds
+					for _, edge := range []float32{r.X, r.Y, r.X + r.W, r.Y + r.H} {
+						if float64(edge) != math.Round(float64(edge)) {
+							t.Errorf("at %v the slot %+v stands between points", size, r)
+							break
+						}
+					}
+				}
+				walk(node.Children)
+			}
+		}
+		walk(f.tester.ElementTree())
+		if slots == 0 {
+			t.Fatalf("at %v the window holds no slot of a surface", size)
+		}
 	}
 }
 

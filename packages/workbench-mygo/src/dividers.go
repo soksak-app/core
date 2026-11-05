@@ -101,8 +101,14 @@ func (s *Shell) drawDividers(c *ui.Context, inset float32) []dividerGrip {
 		if box.Hovered() || box.FocusVisible() || (s.held != nil && s.held.item == items[i]) {
 			color = s.palette.Focus
 		}
+		gripRect := ui.Rect{X: float32(divider.X) + (float32(divider.W)-across)/2, Y: float32(divider.Y) + (float32(divider.H)-along)/2, W: across, H: along}
+		if divider.Axis == "x" {
+			gripRect.X = float32(s.lineOnWholePoint("x", divider.X+divider.W/2)) - across/2
+		} else {
+			gripRect.Y = float32(s.lineOnWholePoint("y", divider.Y+divider.H/2)) - along/2
+		}
 		grips = append(grips, dividerGrip{
-			rect:  ui.Rect{X: float32(divider.X) + (float32(divider.W)-across)/2, Y: float32(divider.Y) + (float32(divider.H)-along)/2, W: across, H: along},
+			rect:  gripRect,
 			color: box.AnimateColor("grip", color, ui.Animation{Duration: m.gripTransition}),
 		})
 	}
