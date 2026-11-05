@@ -8714,6 +8714,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F502-18-2",
+    implementation: [
+      { file: "packages/workbench/memory-placement.js", symbol: "record.surfaces = record.surfaces.filter(({ id }) => !unloaded.has(id));" },
+      { file: "packages/workbench/sidebar-sections.js", symbol: "export function unloadSections(ids) {" },
+      { file: "packages/workbench/sidebar-sections.js", symbol: "export function restoreSection(id) {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/memory-placement-start.test.mjs", id: "a placement takes the seat of an unloaded surface out of its record" },
+      { file: "packages/workbench/test/sidebar-section-surfaces.test.mjs", id: "an unloaded section keeps its slot without a mount until the memory saver restores it" },
+      { file: "packages/workbench/test/sidebar-section-surfaces.test.mjs", id: "a sidebar that draws an unloaded section again after its release mounts it" },
+    ],
+    expected: "An unloaded section keeps its slot, leaves the record of the host, and mounts again when the memory saver restores it.",
+    levels: ["unit"],
+  },
+  {
     id: "F292-22",
     implementation: [{ file: "packages/workbench/memory-placement.js", symbol: "const started = start(candidates);" }],
     tests: [{ file: "packages/workbench/test/memory-placement-start.test.mjs", id: "a placement keeps the start values of its commit when a tab leaves its layout during the readiness wait" }],

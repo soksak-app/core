@@ -91,7 +91,7 @@ import { bind, run } from "./commands.js";
 import { icon } from "./icons.js";
 import { adopt, capture, clear, onDrag } from "./plane.js";
 import { checkStoredLayout } from "./stored-layout.js";
-import { onChoicesChange } from "./sidebar-sections.js";
+import { onChoicesChange, restoreSection, unloadSections } from "./sidebar-sections.js";
 
 import { createLibrary } from "./library.js";
 import { followLibraryWidth, gripMetrics, installBrandLogo, installChromeMetrics } from "./chrome-metrics.js";
@@ -241,7 +241,10 @@ const memorySaver = createMemorySaver({
   setKept: (tab, on) => projects.tabStateStore().setKept(tab, on),
   regions: (tab) => documentRegions.reasons(tab),
   interaction: (tab) => projects.tabSessionStore().capture(tab),
-  restore: (tab) => documentRegions.restore(tab),
+  restore: (tab) => {
+    restoreSection(tab);
+    return documentRegions.restore(tab);
+  },
   commit: () => Promise.resolve(publish()),
   showLabel: (tab) => {
     const label = projects.tabStateStore()?.label(tab) ?? null;
@@ -320,6 +323,7 @@ onCommit((record) => {
     start: (entries) => commitStarts(entries, holders),
   });
   return Promise.all([startSourceOriginIngress(), placing]).then(async ([, { surfaces: all, retain: ids, unload }]) => {
+    unloadSections(unload);
     // An unloaded tab stays in the layout: it is not declared to the host, its surface is released in the unload mode, and
     // it is retained so that it is not released as a closed tab.
     // A tab of a plugin that is not loaded is not a surface, but its placeholder must stay alive (docs/spec/plugins.md).

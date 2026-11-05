@@ -4,15 +4,19 @@
  * close a tab of the candidates, which ends its origin, so the start values are those of the commit (docs/spec/projects.md#tab-origin).
  */
 export async function memoryPlacement(record, candidates, { ready, saver, observe, start }) {
-  if (!record || typeof record !== "object" || typeof record.drawn !== "boolean"
+  if (!record || typeof record !== "object" || typeof record.drawn !== "boolean" || !Array.isArray(record.surfaces)
       || !Array.isArray(candidates) || !ready || typeof saver?.place !== "function" || typeof observe !== "function"
       || typeof start !== "function") {
-    throw new TypeError("memory placement requires a drawn state, candidates, readiness, saver, observer, and start values");
+    throw new TypeError("memory placement requires a drawn state, its surfaces, candidates, readiness, saver, observer, and start values");
   }
   const started = start(candidates);
   if (record.drawn) await ready;
   observe(record, started);
-  return saver.place(started);
+  const placement = saver.place(started);
+  // A hidden section keeps its slot, so the seat of an unloaded section stands in the record, which the request of the host must hold.
+  const unloaded = new Set(placement.unload);
+  record.surfaces = record.surfaces.filter(({ id }) => !unloaded.has(id));
+  return placement;
 }
 
 /**

@@ -50,7 +50,7 @@ test("a failed tab-state open rejects drawn placement waiters while the existing
   let observed = false;
   let placed = false;
   const saver = { place: () => { placed = true; return { surfaces: [], retain: new Set(), unload: [] }; } };
-  const record = { drawn: true };
+  const record = { drawn: true, surfaces: [] };
   const candidates = [{ id: "hidden-view", plugin: "probe" }];
   const waiters = [1, 2].map(() => memoryPlacement(record, candidates, {
     ready, saver, observe: () => { observed = true; }, start: (entries) => entries,

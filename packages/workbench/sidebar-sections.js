@@ -34,9 +34,12 @@ function choiceOf(sidebar) {
  */
 export const sectionSurfaceId = (space, sidebar, sectionId) => `${space}/${sidebar}/${sectionId}`;
 
+/** The section surfaces that the memory saver unloaded: each keeps its slot and has no mount until the saver restores it. */
+const unloaded = new Set();
+
 /** Mounts the view of a section once; a hidden section keeps its surface, which the compositor places invisible. */
 function mount(entry) {
-  if (entry.mount) return;
+  if (entry.mount || unloaded.has(entry.surface.surfaceId)) return;
   const surface = entry.surface;
   setSlotSurface(entry.body, surface);
   showSectionSurface(surface.surfaceId);
@@ -70,12 +73,48 @@ function mount(entry) {
  * closed tab; a sidebar that draws the section again mounts the surface in its new slot (docs/spec/plugins.md#sections).
  */
 function release(entry) {
+  // A sidebar that draws the section again holds a new surface, which the memory saver has not unloaded.
+  unloaded.delete(entry.surface.surfaceId);
   if (!entry.mount) return;
   entry.mount = null;
   entry.mounted = false;
   entry.error = null;
   clearSlotSurface(entry.body);
   hideSectionSurface(entry.surface.surfaceId);
+}
+
+/** The drawn entry of the section surface, or null for another surface. */
+function drawnEntry(surfaceId) {
+  for (const record of drawn.values()) {
+    const entry = record.entries.find((candidate) => candidate.surface.surfaceId === surfaceId);
+    if (entry) return entry;
+  }
+  return null;
+}
+
+/**
+ * Ends the mounts of the section surfaces among ids, which the placement of the memory saver leaves out. Each keeps its slot and its
+ * seat, so its show reaches the saver (docs/spec/plugins.md#memory-saver). The other ids are tabs.
+ */
+export function unloadSections(ids) {
+  for (const id of ids) {
+    const entry = drawnEntry(id);
+    if (!entry) continue;
+    unloaded.add(id);
+    entry.mount = null;
+    entry.mounted = false;
+    entry.phase = null;
+    entry.error = null;
+    notify();
+  }
+}
+
+/** Mounts a section surface again that the memory saver restores. Another id is a tab. */
+export function restoreSection(id) {
+  const entry = drawnEntry(id);
+  if (!entry) return;
+  unloaded.delete(id);
+  mount(entry);
 }
 
 /** Releases all sections of one set element and clears its record. */
