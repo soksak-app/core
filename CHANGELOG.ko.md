@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F443-1: 첫 실행 finding을 닫는다. 초과는 machine의 load를 따르고 launch가 결정하지 않는다.
 - F435-3: convergence가 drag 뒤의 모든 source frame을 읽어, 뒤늦은 frame의 최종 viewport도 측정한다.
 - F435-2: 모든 view drag를 performance trace를 끄고 log policy를 frame class로 줄인 상태로 판정한다.
 - F443: 두 host의 plain view 5회가 median에서 latency 목표를 충족한다. Wails의 launch 뒤 첫 실행은 F443-1이 추적한다.
