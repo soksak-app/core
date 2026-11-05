@@ -10,7 +10,7 @@ test("a placement keeps the start values of its commit when a tab leaves its lay
   recordOrigin("tab-left", null, "new tab");
   let resolveReady;
   const ready = new Promise((resolve) => { resolveReady = resolve; });
-  const saver = { place: (surfaces) => ({ surfaces, retain: new Set(surfaces.map(({ id }) => id)), unload: [] }) };
+  const saver = { classify: () => {}, place: (surfaces) => ({ surfaces, retain: new Set(surfaces.map(({ id }) => id)), unload: [] }) };
   const placing = memoryPlacement({ drawn: true, surfaces: [] }, [{ id: "tab-left", plugin: "probe" }], {
     ready, saver, observe: () => {},
     start: (candidates) => candidates.map((entry) => ({ ...entry, start: { origin: tabOrigin(entry.id) } })),
@@ -28,7 +28,7 @@ test("a placement takes the seat of an unloaded surface out of its record", { ti
   const seat = { id: "spc-a/left/probe.marks", plugin: "probe" };
   const shown = { id: "tab-a", plugin: "probe" };
   const record = { drawn: true, surfaces: [shown, seat] };
-  const saver = { place: (surfaces) => ({ surfaces: surfaces.filter(({ id }) => id !== seat.id), retain: new Set(surfaces.map(({ id }) => id)), unload: [seat.id] }) };
+  const saver = { classify: () => {}, place: (surfaces) => ({ surfaces: surfaces.filter(({ id }) => id !== seat.id), retain: new Set(surfaces.map(({ id }) => id)), unload: [seat.id] }) };
   const { surfaces } = await memoryPlacement(record, [shown, seat], { ready: Promise.resolve(), saver, observe: () => {}, start: (entries) => entries });
   assert.deepEqual(surfaces, [shown]);
   assert.deepEqual(record.surfaces, [shown]);

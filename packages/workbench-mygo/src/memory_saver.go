@@ -113,6 +113,8 @@ type memoryEntry struct {
 	region                      []string
 	generation                  int
 	attempting                  bool
+	// firstSeen tells that no classification has read the surface yet.
+	firstSeen bool
 }
 
 // memoryOutcome ends an attempt: the reasons that ended it, empty when the tab was unloaded, or the error of a failed step.
@@ -426,7 +428,7 @@ func (s *MemorySaver) Observe(shown map[string]bool, surfaces []MemorySurface) e
 		isShown := shown[surface.ID]
 		switch {
 		case entry == nil:
-			entry = &memoryEntry{MemorySurface: surface, state: "loaded"}
+			entry = &memoryEntry{MemorySurface: surface, state: "loaded", firstSeen: true}
 			if isShown {
 				entry.shownAt = &time
 			} else {
@@ -455,14 +457,22 @@ func (s *MemorySaver) Observe(shown map[string]bool, surfaces []MemorySurface) e
 	return nil
 }
 
-// Start ends the start of the window: while the setting is on, a hidden tab of a declaring plugin that was never shown starts
-// unloaded and shows its cached label (docs/spec/plugins.md#memory-saver).
-func (s *MemorySaver) Start() {
+// Classify classifies the surfaces first seen since the last call: while the setting is on, a hidden surface that declares unload and
+// was never shown starts unloaded and shows its cached label, so it never mounts only to unload. A surface first seen while the
+// setting is off stays and waits for the delay (docs/spec/plugins.md#memory-saver).
+func (s *MemorySaver) Classify() {
+	var seen []*memoryEntry
+	for _, entry := range s.order {
+		if entry.firstSeen {
+			entry.firstSeen = false
+			seen = append(seen, entry)
+		}
+	}
 	if !s.ports.Enabled() {
 		return
 	}
 	changed := false
-	for _, entry := range s.order {
+	for _, entry := range seen {
 		if entry.state != "loaded" || entry.hiddenAt == nil || entry.shownAt != nil || s.ports.Declaration(entry.MemorySurface) != "unload" {
 			continue
 		}
