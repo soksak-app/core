@@ -37,6 +37,7 @@ fn options(directory: &Path, policy_path: Option<std::path::PathBuf>) -> Options
         batch_interval: Duration::from_millis(20),
         rotate_bytes: 1 << 30,
         pull: None,
+        wake: None,
         pull_loss: None,
         policy_path,
         retention_bytes: 1 << 40,

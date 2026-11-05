@@ -12,7 +12,7 @@ use std::sync::{Mutex, PoisonError};
 use serde_json::{Map, Value, json};
 
 pub use crate::event_classes::Class;
-use crate::event_log::{EventLog, Level};
+use crate::event_log::{EventLog, Level, Rouser};
 
 /// The schema number of the policy file.
 pub const SCHEMA: u64 = 1;
@@ -168,15 +168,18 @@ pub struct Gate {
     current: Mutex<Option<(LogPolicy, String)>>,
     /// The policy that a writer of the policy file writes for a settings change, with the cids of that change.
     cause: Mutex<Option<(LogPolicy, Vec<String>)>>,
+    /// Wakes a writer that sleeps for a count, which no message carries.
+    rouser: Rouser,
 }
 
 impl Gate {
-    pub(crate) fn new() -> Gate {
+    pub(crate) fn new(rouser: Rouser) -> Gate {
         let gate = Gate {
             max: Default::default(),
             gated: Default::default(),
             current: Mutex::new(None),
             cause: Mutex::new(None),
+            rouser,
         };
         gate.store(LogPolicy::default());
         gate
@@ -195,6 +198,15 @@ impl Gate {
 
     pub(crate) fn count(&self, class: Class, level: Level) {
         self.gated[class_index(class)][level_index(level)].fetch_add(1, Ordering::Relaxed);
+        self.rouser.nudge();
+    }
+
+    /// Whether a count waits for its report.
+    pub(crate) fn counted(&self) -> bool {
+        self.gated
+            .iter()
+            .flatten()
+            .any(|count| count.load(Ordering::Relaxed) > 0)
     }
 
     /// Whether the event is stored under the policy in force; a closed gate counts the event.

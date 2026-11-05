@@ -119,6 +119,10 @@ func StoreEveryLevel(t *testing.T, log *host.EventLog) {
 		t.Fatal(err)
 	}
 	log.SetPolicy(policy, "file")
+	// The writer stores the record, which starts a batch interval, so the events of the test gather in the batch of that interval.
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // TraceOn turns the performance trace on for the test, whose switch controls the host.trace events

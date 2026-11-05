@@ -512,7 +512,7 @@ N1은 `native/darwin`의 변경이다: `sp_surface_create`는 main web view 대�
 
 ### Operation group
 
-Go host의 darwin platform layer에는 operation이 171개 있다: `Platform` interface(`packages/host/go/src/platform/platform.go`)의 method 146개와, 그 optional interface와 diagnostic build의 method 25개다. Surface layout group은 main web view의 block을 만들고, 이 group의 settled wait는 block을 받는다. mygo host를 위해 caller의 Go function으로 만드는 block과 caller의 Go function으로 하는 N1 layout observer 등록을 추가하며, 그런 function은 각각 `hostRunOnWorker`를 통해 worker에서 실행된다. 표는 operation을 파일별로 묶고 mygo host가 각 group을 어떻게 제공하는지 적는다.
+Go host의 darwin platform layer에는 operation이 172개 있다: `Platform` interface(`packages/host/go/src/platform/platform.go`)의 method 147개와, 그 optional interface와 diagnostic build의 method 25개다. Surface layout group은 main web view의 block을 만들고, 이 group의 settled wait는 block을 받는다. mygo host를 위해 caller의 Go function으로 만드는 block과 caller의 Go function으로 하는 N1 layout observer 등록을 추가하며, 그런 function은 각각 `hostRunOnWorker`를 통해 worker에서 실행된다. 표는 operation을 파일별로 묶고 mygo host가 각 group을 어떻게 제공하는지 적는다.
 
 | Group(`src/platform/darwin`의 파일) | Operation | mygo host |
 | --- | --- | --- |

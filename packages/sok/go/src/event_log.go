@@ -6,7 +6,7 @@ package sok
 // serializes the JSON line, writes batches, rotates the files when it has a bound, and records the events that the queue
 // refused as log.dropped. It writes two files, the main file of the levels error, warn and info and the debug file of the levels
 // debug and trace, with one seq across both, and it asks the policy gate for every event of a declared name. The hosts and the tool start this writer with their own layer, role, clock and goroutine entrance;
-// a process with a source of events that cannot call into the writer (the native ring of a host) gives the writer a Pull.
+// a process with a source of events that cannot call into the writer (the native ring of a host) gives the writer a Pull and a Wake.
 
 import (
 	"encoding/json"
@@ -86,10 +86,13 @@ type EventLogOptions struct {
 	// the files of the runs; when it removed a file or left the files over the bound it returns the level and the fields of the event
 	// log.pruned, which the writer stores, and true.
 	Prune func() (level Level, fields json.RawMessage, stored bool)
-	// Pull takes the events of a source that cannot call into the writer. It runs on the goroutine of the writer at the batch
-	// interval and when it flushes: it passes each event to accept, and each loss of the source (events, bytes, the reason and the
-	// channel of the lost events) to lost. It is nil when the process has no such source.
+	// Pull takes the events of a source that cannot call into the writer. It runs on the goroutine of the writer when Wake wakes
+	// the writer, at the end of each batch interval and when it flushes: it passes each event to accept, and each loss of the
+	// source (events, bytes, the reason and the channel of the lost events) to lost. It is nil when the process has no such source.
 	Pull func(accept func(RelayedEvent), lost func(events, bytes uint64, reason string, channel Channel))
+	// Wake says that the source of Pull holds something to take. A writer with nothing to write sleeps, so a process with a
+	// Pull gives its Wake.
+	Wake <-chan struct{}
 }
 
 // Channel is the set of the files of a process that holds a set of levels (docs/spec/logging.md#files): the channel other holds
@@ -162,8 +165,13 @@ const gatedReportInterval = time.Second
 
 // EventLog is the writer of one process.
 type EventLog struct {
-	system       platform.Platform
-	messages     chan eventMessage
+	system   platform.Platform
+	messages chan eventMessage
+	// wake says that the source of pull holds something; nudge wakes a writer that sleeps for a count that no message carries,
+	// and asleep says that the writer sleeps.
+	wake         <-chan struct{}
+	nudge        chan struct{}
+	asleep       atomic.Bool
 	queuedEvents atomic.Int64
 	queuedBytes  atomic.Int64
 	queueEvents  int64
@@ -246,6 +254,9 @@ func StartEventLog(options EventLogOptions) (*EventLog, error) {
 	if options.Layer == "" || options.Clock == nil || options.Spawn == nil {
 		return nil, fmt.Errorf("event writer: Layer, Clock and Spawn must be set")
 	}
+	if options.Pull != nil && options.Wake == nil {
+		return nil, fmt.Errorf("event writer: Pull needs Wake, or the writer does not hear its source")
+	}
 	if options.RotateBytes < 0 {
 		return nil, fmt.Errorf("event writer: RotateBytes must not be negative, not %d", options.RotateBytes)
 	}
@@ -284,6 +295,8 @@ func StartEventLog(options EventLogOptions) (*EventLog, error) {
 		layer:       options.Layer,
 		clock:       options.Clock,
 		pull:        options.Pull,
+		wake:        options.Wake,
+		nudge:       make(chan struct{}, 1),
 		done:        make(chan struct{}),
 	}
 	open := log.writerEvent(LevelInfo, "log.open", fields)
@@ -576,6 +589,28 @@ func (l *EventLog) countLoss(channel Channel, bytes int) {
 	l.lost[channel].events.Add(1)
 	l.lost[channel].bytes.Add(uint64(bytes))
 	raiseDepth(&l.lost[channel].depth, l.queuedEvents.Load())
+	l.rouse()
+}
+
+// rouse wakes a writer that sleeps for a count that no message carries. A writer that runs takes the count at the end of its
+// interval, so a refused event costs it no wakeup. It does not wait.
+func (l *EventLog) rouse() {
+	if l.asleep.Load() && l.asleep.Swap(false) {
+		select {
+		case l.nudge <- struct{}{}:
+		default:
+		}
+	}
+}
+
+// counted reports whether a count of the queue or of the gate waits for the writer.
+func (l *EventLog) counted() bool {
+	for channel := range l.lost {
+		if l.lost[channel].events.Load() > 0 {
+			return true
+		}
+	}
+	return l.gate.counted()
 }
 
 // raiseDepth keeps the largest depth of the queue that a refusal of the channel saw since the writer last recorded the loss.
@@ -758,10 +793,13 @@ func (l *EventLog) write(main *os.File, interval time.Duration, open *pendingEve
 	// rotated a file.
 	var prune func()
 	rotatedFile := false
+	// wrote says that a batch was written since the end of the last interval.
+	wrote := false
 	flushFile := func(f *logFile) {
 		if len(f.batch) == 0 {
 			return
 		}
+		wrote = true
 		// A failed write is reported on the standard error; the writer keeps running for the next batch.
 		if _, err := f.file.Write(f.batch); err != nil {
 			fmt.Fprintf(os.Stderr, "event writer: %v\n", err)
@@ -878,8 +916,8 @@ func (l *EventLog) write(main *os.File, interval time.Duration, open *pendingEve
 		fields := json.RawMessage(text + "}")
 		push(l.writerEvent(LevelWarn, "log.dropped", fields))
 	}
-	// pull takes the events of the source of the process. No event source reaches the writer from there (a native thread
-	// must not call into Go), so the writer pulls at its batch interval and when it flushes.
+	// pull takes the events of the source of the process. A native thread must not call into Go, so the source says through
+	// Wake that it holds something, and the writer pulls then, at the end of each interval and when it flushes.
 	pull := func() {
 		if l.pull == nil {
 			return
@@ -945,10 +983,59 @@ func (l *EventLog) write(main *os.File, interval time.Duration, open *pendingEve
 			}
 		}
 	}
+	// answer answers a request that drain met and reports whether it ends the writer.
+	answer := func(request *eventMessage) bool {
+		if request == nil {
+			return false
+		}
+		if request.flush != nil {
+			close(request.flush)
+		}
+		return request.stop
+	}
+	// The writer runs in intervals and sleeps after one that wrote nothing, because a wakeup of each interval is the idle cost
+	// of the application (G2 of docs/spec/hosts.md). A writer that slept has written everything, so it writes what wakes it at
+	// once; the interval that starts then gathers what follows into one batch.
 	timer := time.NewTimer(interval)
-	defer timer.Stop()
+	timer.Stop()
+	var ended <-chan time.Time
+	begin := func() {
+		timer.Reset(interval)
+		ended = timer.C
+	}
+	sleep := func() {
+		ended = nil
+		// A producer counts and then reads asleep, and the writer stores asleep and then reads the counts, so one of them sees
+		// the other. A count of the gate keeps the intervals running until its report, which comes at most once each second.
+		l.asleep.Store(true)
+		if l.counted() {
+			l.asleep.Store(false)
+			begin()
+		}
+	}
+	// wakeUp takes what woke a writer that slept and reports whether a request that it met ends the writer.
+	wakeUp := func() bool {
+		if ended != nil {
+			return false
+		}
+		l.asleep.Store(false)
+		begin()
+		return answer(drain())
+	}
+	if answer(drain()) {
+		return
+	}
+	sleep()
 	for {
 		select {
+		case <-l.wake:
+			if wakeUp() {
+				return
+			}
+		case <-l.nudge:
+			if wakeUp() {
+				return
+			}
 		case message := <-l.messages:
 			if message.event != nil {
 				urgent := message.event.level == LevelError
@@ -957,28 +1044,28 @@ func (l *EventLog) write(main *os.File, interval time.Duration, open *pendingEve
 					recordLoss()
 					write()
 				}
+				if wakeUp() {
+					return
+				}
 				continue
 			}
 			pull()
 			recordLoss()
 			reportGated(true)
 			write()
-			if message.flush != nil {
-				close(message.flush)
-			}
-			if message.stop {
+			if answer(&message) {
 				return
 			}
-		case <-timer.C:
-			if request := drain(); request != nil {
-				if request.flush != nil {
-					close(request.flush)
-				}
-				if request.stop {
-					return
-				}
+		case <-ended:
+			wrote = false
+			if answer(drain()) {
+				return
 			}
-			timer.Reset(interval)
+			if wrote {
+				begin()
+			} else {
+				sleep()
+			}
 		}
 	}
 }

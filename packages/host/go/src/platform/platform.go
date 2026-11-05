@@ -615,6 +615,9 @@ type Platform interface {
 	// 0 means the ring is empty (docs/spec/logging.md#writers).
 	PullNativeEvents(buffer []byte) (int, error)
 
+	// NativeEventWake returns the read end of the non-blocking pipe that turns readable when the native event ring holds
+	// something for PullNativeEvents. The process owns the descriptor for its whole life.
+	NativeEventWake() (int, error)
 	// TakeNativeEventLoss returns the events and bytes that the native ring refused in a channel (0 for the main file, 1 for the
 	// debug file) since the last call.
 	TakeNativeEventLoss(channel uint8) (events, bytes uint64, err error)

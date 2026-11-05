@@ -21,8 +21,8 @@ use std::time::Duration;
 use super::DocumentViewportMarker;
 use super::{
     CoreRootHost, CoreRootResolver, DOMOverlay, Delivery, Frame, Handle, Hit, ImagePresentation,
-    ImageReleased, Insets, Key, Listener, PersistentStream, Platform, Pointer, ProcessFootprint,
-    Raster, WindowOverlay,
+    ImageReleased, Insets, Key, Listener, NativeEventWait, PersistentStream, Platform, Pointer,
+    ProcessFootprint, Raster, WindowOverlay,
 };
 
 #[cfg(feature = "diagnostics")]
@@ -748,6 +748,9 @@ impl Platform for Darwin {
     }
     fn pull_native_events(&self, buffer: &mut [u8]) -> Result<usize, String> {
         events::pull(buffer)
+    }
+    fn native_event_wake(&self) -> Result<NativeEventWait, String> {
+        events::wake()
     }
     fn take_native_event_loss(&self, channel: u8) -> Result<(u64, u64), String> {
         events::take_loss(channel)

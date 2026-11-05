@@ -13,7 +13,9 @@ use serde_json::value::{RawValue, to_raw_value};
 use soksak_sok::event_classes::{Class, class_of};
 use soksak_sok::event_log::{Options as WriterOptions, PullSink};
 
-pub use soksak_sok::event_log::{Channel, EventLog, Level, RelayedEvent, SCHEMA, valid_cid};
+pub use soksak_sok::event_log::{
+    Channel, EventLog, Level, RelayedEvent, Rouser, SCHEMA, Wake, valid_cid,
+};
 
 use crate::bounds::Fields;
 
@@ -40,6 +42,8 @@ pub struct Options {
     /// call.
     pub pull: Option<Pull>,
     pub pull_loss: Option<PullLoss>,
+    /// What says that the ring holds something for `pull`; `None` when the process has no native ring.
+    pub wake: Option<Wake>,
     /// The policy file that the writer follows (`<config-dir>/log-policy.json`); `None` for a writer that has none.
     pub policy_path: Option<PathBuf>,
     /// The bound of the files of the runs in the folder (docs/spec/logging.md#retention): the writer removes the oldest runs when it
@@ -109,6 +113,7 @@ pub fn start_host(config: &Path) -> Result<EventLog, String> {
         pull: Some(Box::new(|buffer| {
             crate::platform::current()?.pull_native_events(buffer)
         })),
+        wake: Some(Box::new(native_wake)),
         policy_path: Some(config.join("log-policy.json")),
         retention_bytes: crate::log_retention::HOST_RETENTION_BYTES,
         pull_loss: Some(Box::new(|channel| {
@@ -140,6 +145,26 @@ pub fn flush_event_log(
         (Err(error), Ok(())) | (Ok(()), Err(error)) => Err(error),
         (Err(observers), Err(writer)) => Err(format!("{observers}; {writer}")),
     }
+}
+
+/// Wakes the writer when the native ring holds something: a thread sleeps in the platform until a native thread says so, because
+/// a native thread must not call into Rust.
+fn native_wake(rouser: Rouser) -> Result<(), String> {
+    // A platform that cannot wait fails here, at the start, instead of a writer that does not hear the ring.
+    let mut wait = crate::platform::current()?.native_event_wake()?;
+    std::thread::Builder::new()
+        .name("native-event-wake".into())
+        .spawn(move || {
+            loop {
+                if let Err(error) = wait() {
+                    eprintln!("event writer: the wake of the native ring failed: {error}");
+                    return;
+                }
+                rouser.wake();
+            }
+        })
+        .map_err(|error| format!("native event wake thread: {error}"))?;
+    Ok(())
 }
 
 /// Starts the writer of the layer `host`. A writer of the host always rotates and always applies the retention.
@@ -175,6 +200,7 @@ pub fn start(options: Options) -> Result<EventLog, String> {
         batch_interval: options.batch_interval,
         rotate_bytes: options.rotate_bytes,
         pull,
+        wake: options.wake,
         policy_path: options.policy_path,
         prune: Some(prune),
     })

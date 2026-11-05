@@ -6,6 +6,7 @@ struct Loss {
 
 unsafe extern "C" {
     fn sp_event_drain(buffer: *mut u8, capacity: usize) -> usize;
+    fn sp_event_wake_fd() -> std::ffi::c_int;
     fn sp_event_take_loss(channel: u8) -> Loss;
     fn sp_event_set_policy(levels: *const i8) -> bool;
     fn sp_observe_activity();
@@ -55,6 +56,35 @@ pub fn pull(buffer: &mut [u8]) -> Result<usize, String> {
         return Err("pull native events: the buffer is empty".into());
     }
     Ok(unsafe { sp_event_drain(buffer.as_mut_ptr(), buffer.len()) })
+}
+
+/// What sleeps until a native thread writes the pipe of the ring, and empties it. The pipe does not block, so a poll is the sleep.
+pub fn wake() -> Result<crate::platform::NativeEventWait, String> {
+    let descriptor = unsafe { sp_event_wake_fd() };
+    if descriptor < 0 {
+        return Err("native event wake: the pipe cannot be made".into());
+    }
+    Ok(Box::new(move || {
+        let mut reader = libc::pollfd {
+            fd: descriptor,
+            events: libc::POLLIN,
+            revents: 0,
+        };
+        while unsafe { libc::poll(&mut reader, 1, -1) } < 0 {
+            let error = std::io::Error::last_os_error();
+            if error.kind() != std::io::ErrorKind::Interrupted {
+                return Err(format!("native event wake: {error}"));
+            }
+        }
+        let mut bytes = [0u8; 64];
+        if unsafe { libc::read(descriptor, bytes.as_mut_ptr().cast(), bytes.len()) } < 0 {
+            let error = std::io::Error::last_os_error();
+            if error.kind() != std::io::ErrorKind::WouldBlock {
+                return Err(format!("native event wake: {error}"));
+            }
+        }
+        Ok(())
+    }))
 }
 
 pub fn take_loss(channel: u8) -> Result<(u64, u64), String> {

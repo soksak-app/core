@@ -137,8 +137,16 @@ pub fn standard_error_text(config: &Path) -> String {
 }
 
 /// Puts the policy that stores every level of every class in force in `log`. The default policy stores only errors, so a test that
-/// checks an event below error gives its writer this policy first; the policy is recorded with the event `log.policy`.
+/// checks an event below error gives its writer this policy first; the policy is recorded with the event `log.policy`. It waits
+/// until the writer stored the record, which starts a batch interval, so the events of the test gather in the batch of that
+/// interval.
 pub fn store_every_level(log: &EventLog) {
+    set_every_level(log);
+    log.flush(std::time::Duration::from_secs(5)).unwrap();
+}
+
+/// Queues the policy of `store_every_level` for a writer that a test keeps from taking it.
+pub fn set_every_level(log: &EventLog) {
     let policy = LogPolicy::parse(
         "every level",
         br#"{"schema":1,"classes":{"lifecycle":"trace","input":"trace","call":"trace","io":"trace","frame":"trace"}}"#,
