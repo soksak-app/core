@@ -474,17 +474,38 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F502-24",
+    implementation: [
+      { file: "scripts/check-release.mjs", symbol: "export function viewRootSources(frontend) {" },
+      { file: "scripts/e2e-run.mjs", symbol: "const APPS = ['wailsv3', 'tauriv2', 'mygo'];" },
+      { file: "packages/window-check/app.mjs", symbol: "export function requiresAll(env) {" },
+      { file: "Makefile", symbol: "release-check-mygo: mygo-build-release" },
+      { file: "Makefile", symbol: "E2E_BUILD = wailsv3-build tauriv2-build mygo-build registry" },
+      { file: ".github/workflows/release.yml", symbol: "  release-mygo:" },
+    ],
+    tests: [
+      { file: "scripts/test/check-release-paths.test.mjs", id: "the view root of a host without a main page is every staged file, and the audit asks for no page module" },
+      { file: "scripts/test/workflows.test.mjs", id: "release builds and packages each host after the reusable CI checks succeed" },
+      { file: "scripts/test/e2e-run.test.mjs", id: "the plan prepares, starts the three applications, checks and quits them in this order" },
+      { file: "scripts/test/native-pkgconfig.test.mjs", id: "release host checks audit only their own optimized bundle" },
+      { file: "scripts/test/host-debug-check.test.mjs", id: "the debug check compiles the features and tags of the debug apps" },
+      { file: "packages/window-check/test/required-apps.test.mjs", id: "requiresAll holds only for a set that covers the mygo application" },
+    ],
+    expected: "A release builds, audits and packages the three applications, and make e2e builds and starts them, so a window session without SOKSAK_APP covers the three.",
+    levels: ["unit"],
+  },
+  {
     id: "F502-2-2",
     implementation: [
       { file: "packages/window-check/app.mjs", symbol: "export function requiredApps(env) {" },
-      { file: "packages/window-check/app.mjs", symbol: "export function requiresAll(env, defaults = DEFAULT_APPS) {" },
+      { file: "packages/window-check/app.mjs", symbol: "export function requiresAll(env) {" },
       { file: "packages/window-check/app.mjs", symbol: "export function windowPosition(name, area, frame) {" },
       { file: "packages/window-check/view-metrics.mjs", symbol: "export function domMountBaselineMs(host, recordedMs) {" },
       { file: "e2e/benchmark/cases/hwp.mjs", symbol: "export function hwpFirstDisplayLimitMs(host) {" },
     ],
     tests: [
-      { file: "packages/window-check/test/required-apps.test.mjs", id: "requiredApps accepts mygo as SOKSAK_APP and keeps it out of the set without SOKSAK_APP" },
-      { file: "packages/window-check/test/required-apps.test.mjs", id: "requiresAll is true only when the required set holds every application of the default set" },
+      { file: "packages/window-check/test/required-apps.test.mjs", id: "requiredApps accepts mygo as SOKSAK_APP" },
+      { file: "packages/window-check/test/required-apps.test.mjs", id: "requiresAll is true only when the required set holds every application" },
       { file: "packages/window-check/test/window-position.test.mjs", id: "windowPosition gives each of the three applications its own position inside the visible area" },
       { file: "packages/window-check/test/window-position.test.mjs", id: "windowPosition centres mygo on whole points in an area of odd remaining width" },
       { file: "packages/window-check/test/window-position.test.mjs", id: "windowPosition rejects an application that has no window position" },
@@ -884,7 +905,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/tests/exposure_test.rs", id: "a_registration_kind_is_status_command_or_element" },
       { file: "packages/host/rust/tests/exposure_test.rs", id: "host_hit_declares_the_workbench_document_and_native_kinds" },
       { file: "packages/client/test/client.test.mjs", id: "the sample endpoint lists element entries and answers element.rect and element.act" },
-      { file: "packages/window-check/test/required-apps.test.mjs", id: "requiresAll reads the default set, so a default set of three applications is not held by a required set of two" },
+      { file: "packages/window-check/test/required-apps.test.mjs", id: "requiresAll holds only for a set that covers the mygo application" },
       { file: "packages/window-check/test/prepare-fixture-settings.test.mjs", id: "the preparation reloads the workbench and waits for a new start of core.window.workbench" },
       { file: "scripts/test/e2e-host-parity.test.mjs", id: "a window check that iterates another set of applications is an error" },
       { file: "scripts/test/main-page-apps.test.mjs", id: "MAIN_PAGE_APPS lists the applications whose environment.json names a runtime" },
@@ -3221,7 +3242,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "scripts/test/check-release-paths.test.mjs", id: "release CLI audits only the explicitly selected ${host} bundle" },
       { file: "scripts/test/check-release-paths.test.mjs", id: "release CLI rejects an unselected ${other} bundle in ${host} mode" },
-      { file: "scripts/test/check-release-paths.test.mjs", id: "release CLI preserves the default audit of both host bundles" },
+      { file: "scripts/test/check-release-paths.test.mjs", id: "release CLI preserves the default audit of every host bundle" },
       { file: "scripts/test/native-pkgconfig.test.mjs", id: "release host checks audit only their own optimized bundle" },
       { file: "scripts/test/workflows.test.mjs", id: "release builds and packages each host after the reusable CI checks succeed" },
     ],
@@ -3240,7 +3261,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "scripts/test/check-release-paths.test.mjs", id: "release CLI audits only the explicitly selected ${host} bundle" },
       { file: "scripts/test/check-release-paths.test.mjs", id: "release CLI rejects an unselected ${other} bundle in ${host} mode" },
-      { file: "scripts/test/check-release-paths.test.mjs", id: "release CLI preserves the default audit of both host bundles" },
+      { file: "scripts/test/check-release-paths.test.mjs", id: "release CLI preserves the default audit of every host bundle" },
       { file: "scripts/test/native-pkgconfig.test.mjs", id: "release host checks audit only their own optimized bundle" },
       { file: "scripts/test/workflows.test.mjs", id: "release builds and packages each host after the reusable CI checks succeed" },
     ],
@@ -6399,9 +6420,9 @@ const FEATURE_LINKS = [
   },
   {
     id: "F183",
-    implementation: [{ file: "Makefile", symbol: "release-check: wailsv3-build-release tauriv2-build-release" }],
+    implementation: [{ file: "Makefile", symbol: "release-check: wailsv3-build-release tauriv2-build-release mygo-build-release" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "release builds and packages each host after the reusable CI checks succeed" }],
-    expected: "A release publishes both bundles from a tag whose CI passed.",
+    expected: "A release publishes every bundle from a tag whose CI passed.",
     levels: ["unit"],
   },
   {
@@ -7831,7 +7852,7 @@ const FEATURE_LINKS = [
       { file: "scripts/test/check-release-paths.test.mjs", id: "minimum audit requires the declared minimum in Info.plist and the application, and no newer executable" },
       { file: "scripts/test/check-release-paths.test.mjs", id: "machoMinimum reads the minimum macOS version of an executable" },
     ],
-    expected: "make release-check fails unless both bundles declare MACOS_MINIMUM and both application executables are built for it.",
+    expected: "make release-check fails unless every bundle declares MACOS_MINIMUM and every application executable is built for it.",
     levels: ["unit"],
   },
   {
@@ -9245,14 +9266,14 @@ const FEATURE_LINKS = [
   },
   {
     id: "F276",
-    implementation: [{ file: ".github/workflows/release.yml", symbol: "needs: [checks, gate, release-wailsv3, release-tauriv2]" }],
+    implementation: [{ file: ".github/workflows/release.yml", symbol: "needs: [checks, gate, release-wailsv3, release-tauriv2, release-mygo]" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "a push to main releases the declared version after the checks and the gate succeed" }],
     expected: "The release of core has no condition on the registry state; the registry checks the plugin versions of each core version that it lists.",
     levels: ["unit"],
   },
   {
     id: "F298-2",
-    implementation: [{ file: ".github/workflows/release.yml", symbol: "needs: [checks, gate, release-wailsv3, release-tauriv2]" }],
+    implementation: [{ file: ".github/workflows/release.yml", symbol: "needs: [checks, gate, release-wailsv3, release-tauriv2, release-mygo]" }],
     tests: [{ file: "scripts/test/test-kinds.test.mjs", id: "no workflow runs a target or script of the end-to-end checks" }],
     expected: "No workflow runs an end-to-end check, and the release publishes after the checks, the gate and the two host builds succeed.",
     levels: ["unit"],
@@ -9371,7 +9392,7 @@ const FEATURE_LINKS = [
       { file: ".github/workflows/release.yml", symbol: "The gate and the bundle builds run beside the checks" },
     ],
     tests: [
-      { file: "scripts/test/workflows.test.mjs", id: "the release bundles build beside the checks and publication waits for both" },
+      { file: "scripts/test/workflows.test.mjs", id: "the release bundles build beside the checks and publication waits for them" },
     ],
     expected: "The gate and both release bundle builds run beside the checks, and publish requires the success of the checks, the gate and both builds.",
     levels: ["unit"],
@@ -10265,7 +10286,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F298",
-    implementation: [{ file: ".github/workflows/release.yml", symbol: "needs: [checks, gate, release-wailsv3, release-tauriv2]" }],
+    implementation: [{ file: ".github/workflows/release.yml", symbol: "needs: [checks, gate, release-wailsv3, release-tauriv2, release-mygo]" }],
     tests: [{ file: "scripts/test/test-kinds.test.mjs", id: "no workflow runs a target or script of the end-to-end checks" }],
     expected: "CI and release jobs run only unit tests and structure checks of their repository.",
     levels: ["unit"],
@@ -10309,7 +10330,7 @@ const FEATURE_LINKS = [
     id: "F332-7",
     implementation: [{ file: "e2e/observation/section-design.test.mjs", symbol: "stills of the files and browser sections in each mode" }],
     tests: [{ file: "e2e/observation/section-design.test.mjs", id: "stills of the files and browser sections in each mode" }],
-    expected: "Stills of both applications in each mode show the sections for inspection.",
+    expected: "Stills of the applications in each mode show the sections for inspection.",
     levels: ["application"],
   },
   {
@@ -10557,7 +10578,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "scripts/test/e2e-run.test.mjs", id: "each run gets a new empty configuration root under target/e2e" },
-      { file: "scripts/test/e2e-run.test.mjs", id: "the plan prepares, starts both applications, checks and quits them in this order" },
+      { file: "scripts/test/e2e-run.test.mjs", id: "the plan prepares, starts the three applications, checks and quits them in this order" },
       { file: "scripts/test/e2e-run.test.mjs", id: "a failed preparation skips the checks, runs the cleanup and names the failed step" },
       { file: "scripts/test/e2e-run.test.mjs", id: "a failed check does not skip the next check" },
       { file: "scripts/test/e2e-run.test.mjs", id: "a start step ends when the application writes endpoint.json and fails when the application exits first" },
@@ -10566,7 +10587,7 @@ const FEATURE_LINKS = [
       { file: "scripts/test/e2e-run.test.mjs", id: "a process whose command names the configuration root or an application bundle remains" },
       { file: "scripts/test/e2e-run.test.mjs", id: "a passed run removes its configuration root and a failed run keeps it" },
     ],
-    expected: "make e2e runs the end-to-end checks in a new configuration root for each run: it starts both applications, runs the checks, quits the applications with host.quit and fails on a remaining process.",
+    expected: "make e2e runs the end-to-end checks in a new configuration root for each run: it starts the applications, runs the checks, quits the applications with host.quit and fails on a remaining process.",
     levels: ["unit"],
   },
   {

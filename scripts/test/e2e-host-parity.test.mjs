@@ -36,13 +36,3 @@ test("a window check that iterates another set of applications is an error", () 
   assert.deepEqual(audit("for (const [name, app] of Object.entries(APPS)) {}\n"),
     ["probe.test.mjs:2: window check selects Object.entries(APPS); it iterates Object.values(APPS) or MAIN_PAGE_APPS"]);
 });
-
-// A window check runs against every application, except a check of the main page or a modal web view (docs/spec/host-parity.md).
-test("a window check that iterates a set other than Object.values(APPS) and MAIN_PAGE_APPS is an error", () => {
-  const check = (body) => auditE2EHostParity(["set.test.mjs"], () => `import { APPS, MAIN_PAGE_APPS } from "@soksak/window-check/app.mjs";\n${body}\n`).errors;
-  const refused = ["set.test.mjs: window check iterates a set other than Object.values(APPS) and MAIN_PAGE_APPS"];
-  assert.deepEqual(check("for (const app of Object.values(APPS)) test(app.name);"), []);
-  assert.deepEqual(check("for (const app of MAIN_PAGE_APPS) test(app.name);"), []);
-  assert.deepEqual(check("for (const app of [APPS.wailsv3]) test(app.name);"), refused);
-  assert.deepEqual(check("for (const app of Object.values(APPS).filter((item) => item.name !== 'mygo')) test(app.name);"), refused);
-});

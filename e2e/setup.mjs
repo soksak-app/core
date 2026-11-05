@@ -1,7 +1,7 @@
 // Start of a core window-check run. It runs once, before the first check file, through --test-global-setup of node:test.
 //
 // The application executable to check is a build output of this repository. cargo decides that folder (it follows CARGO_TARGET_DIR), so
-// it is found in target_directory of `cargo metadata` and declared as SOKSAK_BINARY_WAILSV3 and SOKSAK_BINARY_TAURIV2. A path that the run has already
+// it is found in target_directory of `cargo metadata` and declared as SOKSAK_BINARY_WAILSV3, SOKSAK_BINARY_TAURIV2 and SOKSAK_BINARY_MYGO. A path that the run has already
 // declared is kept.
 import { spawnSync } from "node:child_process";
 import { captureTextCommand, debugBinaries } from "./platform/platform.js";

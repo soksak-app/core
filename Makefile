@@ -30,8 +30,8 @@ push-check:
 	@$(MAKE) --no-print-directory commits-check RANGE="$(or $(RANGE),origin/main..HEAD)"
 
 # Builds release and checks that the staged frontend and the release executables hold no diagnostic code.
-release-check: wailsv3-build-release tauriv2-build-release
-	@node scripts/check-release.mjs --macos-minimum $(MACOS_MINIMUM) --wailsv3-bundle "$(WAILS_RELEASE_BUNDLE)" --tauriv2-bundle "$(TAURI_RELEASE_BUNDLE)"
+release-check: wailsv3-build-release tauriv2-build-release mygo-build-release
+	@node scripts/check-release.mjs --macos-minimum $(MACOS_MINIMUM) --wailsv3-bundle "$(WAILS_RELEASE_BUNDLE)" --tauriv2-bundle "$(TAURI_RELEASE_BUNDLE)" --mygo-bundle "$(MYGO_RELEASE_BUNDLE)"
 
 # Measures the memory of the main page process of a running application at start, idle, and after reload (docs/operations/examples.md).
 # APP is wailsv3, tauriv2 or mygo, CONFIG is the configuration folder of that application, BUILD is release (default) or debug. A window of the
@@ -275,14 +275,16 @@ windows-build-check:
 # Compiles the sources and the tests of the two native hosts and the two native apps for macOS in the configuration of the debug apps.
 # A source behind a diagnostic feature or tag fails here and not in the build of an app. The core frontend is staged because the apps
 # include it at compile time.
-host-debug-check: native-darwin frontend-wailsv3-core frontend-tauriv2-core
+host-debug-check: native-darwin frontend-wailsv3-core frontend-tauriv2-core frontend-mygo-core
 	@echo "START: Rust hosts cargo check --tests --features $(TAURI_DEBUG_FEATURES)"
 	@$(CARGO_ENV) cargo check --locked --tests -p soksak-sok -p soksak-host -p soksak-host-tauriv2 -p soksak-tauriv2 --features $(TAURI_DEBUG_FEATURES)
 	@echo "PASS: Rust hosts in the debug configuration"
 	@echo "START: Go hosts go vet -tags \"$(WAILS_DEBUG_TAGS)\""
 	@$(GO_ENV) go vet -C apps/wailsv3 -tags "$(WAILS_DEBUG_TAGS)" ./src/...
+	@$(GO_ENV) go vet -C apps/mygo -tags "$(WAILS_DEBUG_TAGS)" ./src/...
 	@$(GO_ENV) go vet -C packages/host/go -tags "$(WAILS_DEBUG_TAGS)" ./src/...
 	@$(GO_ENV) go vet -C packages/host/wailsv3 -tags "$(WAILS_DEBUG_TAGS)" ./src/...
+	@$(GO_ENV) go vet -C packages/host/mygo -tags "$(WAILS_DEBUG_TAGS)" ./src/...
 	@$(GO_ENV) go vet -C packages/sok/go -tags "$(WAILS_DEBUG_TAGS)" ./src/...
 	@echo "PASS: Go hosts in the debug configuration"
 
@@ -320,7 +322,7 @@ TAURI_DEBUG_FEATURES = diagnostics,dev
 WAILS_DEBUG_TAGS     = diagnostics dev
 # The declared core release candidate is the RELEASE constant of scripts/check-versions.mjs.
 DIAGNOSTIC_RELEASE := $(filter 0.0.%,$(shell sed -n 's/^export const RELEASE = "\(.*\)";$$/\1/p' scripts/check-versions.mjs))
-.PHONY: native-darwin native-darwin-fetch registry registry-install install-plugins browser-frontend browser-example frontend-wailsv3 frontend-tauriv2 frontend-mygo frontend-wailsv3-core frontend-tauriv2-core frontend-mygo-core host-test-wailsv3 host-test-tauriv2 host-test-mygo host-contract-check release-check-wailsv3 release-check-tauriv2 rust-format-check rust-clippy-check go-format-check  \
+.PHONY: native-darwin native-darwin-fetch registry registry-install install-plugins browser-frontend browser-example frontend-wailsv3 frontend-tauriv2 frontend-mygo frontend-wailsv3-core frontend-tauriv2-core frontend-mygo-core host-test-wailsv3 host-test-tauriv2 host-test-mygo host-contract-check release-check-wailsv3 release-check-tauriv2 release-check-mygo rust-format-check rust-clippy-check go-format-check  \
         tauriv2 tauriv2-release tauriv2-build tauriv2-build-release \
         wailsv3 wailsv3-release wailsv3-build wailsv3-build-release \
         mygo mygo-release mygo-build mygo-build-release \
@@ -573,15 +575,18 @@ release-check-wailsv3: wailsv3-build-release
 release-check-tauriv2: tauriv2-build-release
 	@node scripts/check-release.mjs --host tauriv2 --macos-minimum $(MACOS_MINIMUM) --tauriv2-bundle "$(TAURI_RELEASE_BUNDLE)"
 
+release-check-mygo: mygo-build-release
+	@node scripts/check-release.mjs --host mygo --macos-minimum $(MACOS_MINIMUM) --mygo-bundle "$(MYGO_RELEASE_BUNDLE)"
+
 # The window checks drive running applications in sequence through the local endpoint; the harness does not start them.
 # The end-to-end checks (docs/operations/examples.md#test-kinds): the window checks of the running applications and the native
 # end-to-end tests. They need a display, so they run only locally. e2e-activation runs the activation tier and e2e-real the
 # real-input tier, which a person approves because they activate the applications and change the input source; e2e-person runs
 # the checks that a person operates at the machine.
-# Each e2e target builds both debug applications and the workspace registry, and scripts/e2e-run.mjs runs the window-check script
+# Each e2e target builds the three debug applications and the workspace registry, and scripts/e2e-run.mjs runs the window-check script
 # and the native end-to-end target of its tier in a new configuration root under target/e2e: it starts the applications, runs the
 # checks and quits the applications.
-E2E_BUILD = wailsv3-build tauriv2-build registry
+E2E_BUILD = wailsv3-build tauriv2-build mygo-build registry
 # The tests of the Go language host library and of the Go framework adapters that carry the build constraint e2e: they need a display
 # or the activation of a process, and their names start with TestE2E.
 E2E_GO_PACKAGES = packages/host/go packages/host/wailsv3 packages/host/mygo
@@ -667,8 +672,8 @@ b3-judge:
 	@case "$(SESSION)" in '') echo "b3-judge requires SESSION=<session folder of make e2e-b3>" >&2; exit 2;; esac
 	@node scripts/b3-judge.mjs --session "$(SESSION)"
 
-# The two-profile builds of the two apps and their sizes.
-examples-size: tauriv2-build tauriv2-build-release wailsv3-build-release wailsv3-build
+# The two-profile builds of the three apps and their sizes.
+examples-size: tauriv2-build tauriv2-build-release wailsv3-build-release wailsv3-build mygo-build mygo-build-release
 	@printf "%-10s %10s %10s\n" "" debug release
 	@printf "%-10s %9.1fM %9.1fM\n" tauriv2 \
 	  $$(echo "$$(stat -f%z $(TAURI_DEBUG))/1048576" | bc -l) \
@@ -676,3 +681,6 @@ examples-size: tauriv2-build tauriv2-build-release wailsv3-build-release wailsv3
 	@printf "%-10s %9.1fM %9.1fM\n" wailsv3 \
 	  $$(echo "$$(stat -f%z $(WAILS_DEBUG))/1048576" | bc -l) \
 	  $$(echo "$$(stat -f%z $(WAILS_RELEASE))/1048576" | bc -l)
+	@printf "%-10s %9.1fM %9.1fM\n" mygo \
+	  $$(echo "$$(stat -f%z $(MYGO_DEBUG))/1048576" | bc -l) \
+	  $$(echo "$$(stat -f%z $(MYGO_RELEASE))/1048576" | bc -l)

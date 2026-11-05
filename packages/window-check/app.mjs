@@ -16,7 +16,7 @@ import { policyFile, policyOfSetting, readPolicy, requireStored, untilPolicy } f
 import { policyAllows } from "@soksak/log-contract";
 import { readPasteboard, restoreFailure, writePasteboard } from "./pasteboard.mjs";
 
-// The launch declares the application executables that are checked. SOKSAK_BINARY_WAILSV3 and SOKSAK_BINARY_TAURIV2
+// The launch declares the application executables that are checked. SOKSAK_BINARY_WAILSV3, SOKSAK_BINARY_TAURIV2 and SOKSAK_BINARY_MYGO
 // hold the executable path inside the bundle of each application (docs/operations/examples.md#window-checks). The
 // checks of core find these paths in the build output folder and pass them on; the checks of other repositories declare
 // the build to check themselves.
@@ -27,31 +27,28 @@ const declared = (name) => {
   return path;
 };
 
-// The applications that SOKSAK_APP may name, and the set that a session covers when SOKSAK_APP is unset. The mygo
-// application is not built yet (F502-24), so the default set holds only the Wails and the Tauri application.
+// The applications that SOKSAK_APP may name, and the set that a session covers when SOKSAK_APP is unset.
 export const APP_NAMES = ["wailsv3", "tauriv2", "mygo"];
-const DEFAULT_APPS = ["wailsv3", "tauriv2"];
 
 /**
  * The applications that a window session covers. SOKSAK_APP names one application of APP_NAMES; when it is unset, the
- * session covers DEFAULT_APPS. An application of the set whose executable is missing fails the check (open), and an
+ * session covers every application of APP_NAMES. An application of the set whose executable is missing fails the check (open), and an
  * application outside the set is not opened.
  */
 export function requiredApps(env) {
-  if (!env.SOKSAK_APP) return [...DEFAULT_APPS];
+  if (!env.SOKSAK_APP) return [...APP_NAMES];
   if (!APP_NAMES.includes(env.SOKSAK_APP)) throw new Error(`unknown SOKSAK_APP: ${env.SOKSAK_APP}`);
   return [env.SOKSAK_APP];
 }
 
 /**
- * Whether the required set holds every application of the default set (DEFAULT_APPS), so that a check that compares
- * the hosts of the session with each other is part of the session; it then compares every application of APPS. A
- * session of one application compares nothing. defaults is the default set; a check passes none, and a test passes
- * another set to show that the answer follows the default set.
+ * Whether the required set holds every application of APP_NAMES, so that a check that compares the hosts of the session
+ * with each other is part of the session; it then compares every application of APPS. A session of one application
+ * compares nothing.
  */
-export function requiresAll(env, defaults = DEFAULT_APPS) {
+export function requiresAll(env) {
   const names = requiredApps(env);
-  return defaults.every((name) => names.includes(name));
+  return APP_NAMES.every((name) => names.includes(name));
 }
 
 /** The applications to check: the executable and the configuration folder. */

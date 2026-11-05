@@ -21,7 +21,7 @@ jobs:
     uses: ./.github/workflows/ci.yml
 
   # The gate and the bundle builds run beside the checks, so a release run takes the time of its longest job; publish requires
-  # the success of the checks and of both builds.
+  # the success of the checks and of every build.
   gate:
     runs-on: ubuntu-26.04-arm
     outputs:
@@ -153,9 +153,66 @@ jobs:
         if: always()
         run: git diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
 
+  release-mygo:
+    needs: gate
+    if: needs.gate.outputs.release == 'true'
+    runs-on: macos-15
+    env:
+      GOTOOLCHAIN: local
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: core
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: core
+      - uses: ./core/.github/actions/setup-node
+        with:
+          root: core
+      - uses: ./core/.github/actions/setup-go
+        with:
+          root: core
+          module: apps/mygo
+      - uses: ./core/.github/actions/setup-native
+        with:
+          root: core
+      - name: Install locked dependencies
+        run: |
+          make preflight
+          CI=1 PNPM_DISABLE_SELF_UPDATE_CHECK=1 pnpm install --frozen-lockfile
+          go -C apps/mygo mod download
+          go -C packages/sok/go mod download
+      - name: Fetch the pinned native release file
+        run: make native-darwin-fetch
+      - name: Build and audit mygo release bundle offline
+        env:
+          OFFLINE: '1'
+          npm_config_offline: 'true'
+          GOTOOLCHAIN: local
+          GOFLAGS: -mod=readonly
+          GOPROXY: 'off'
+          GOSUMDB: 'off'
+        run: make release-check-mygo
+      - name: Package mygo release bundle
+        run: |
+          version="${{ needs.gate.outputs.version }}"
+          mkdir -p dist
+          ditto -c -k --keepParent target/release/mygo/soksak.app "dist/soksak-$version-darwin-arm64-mygo.zip"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-mygo
+          path: core/dist/*.zip
+          if-no-files-found: error
+          retention-days: 1
+      - name: Verify lockfiles remain unchanged
+        if: always()
+        run: git diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
+
   publish:
     runs-on: ubuntu-26.04-arm
-    needs: [checks, gate, release-wailsv3, release-tauriv2]
+    needs: [checks, gate, release-wailsv3, release-tauriv2, release-mygo]
     if: always() && needs.gate.outputs.release == 'true'
     permissions:
       contents: write
@@ -166,11 +223,13 @@ jobs:
           GATE_RESULT: ${{ needs.gate.result }}
           WAILS_RESULT: ${{ needs.release-wailsv3.result }}
           TAURI_RESULT: ${{ needs.release-tauriv2.result }}
+          MYGO_RESULT: ${{ needs.release-mygo.result }}
         run: |
           test "$CHECKS_RESULT" = success
           test "$GATE_RESULT" = success
           test "$WAILS_RESULT" = success
           test "$TAURI_RESULT" = success
+          test "$MYGO_RESULT" = success
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       # A later push or a tag of the version that appeared while the run built makes this run stale, so it publishes nothing.
       - name: Require the commit to be the head of main and the tag to be absent
@@ -187,6 +246,10 @@ jobs:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: release-tauriv2
+          path: dist
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: release-mygo
           path: dist
       - uses: ./.github/actions/setup-node
         with:
