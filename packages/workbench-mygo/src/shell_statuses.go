@@ -119,7 +119,7 @@ func optionalText(value string) *string {
 // planeOrigin is the origin of the plane in the window.
 func (s *Shell) planeOrigin() layout.Point {
 	inset := s.stageInset()
-	return layout.Point{X: float64(inset), Y: float64(s.chromeHeight() + s.workBanner + s.spaceRowHeight() + inset)}
+	return layout.Point{X: float64(s.projectColumnWidth() + inset), Y: float64(s.chromeHeight() + s.workBanner + s.spaceRowHeight() + inset)}
 }
 
 // projectStatus returns the stored record of a project with its open state.
@@ -457,11 +457,7 @@ func (s *Shell) registerStatuses() {
 	})
 	s.registry.Status("core.surfaces", func() any { return s.surfacesState() })
 	s.registry.Status("core.chrome", func() any {
-		tabs, ok := s.settings.Value("projectTabs").(string)
-		if !ok {
-			s.fail(fmt.Errorf("the setting projectTabs has no text"))
-		}
-		return map[string]any{"controlsWidth": math.Max(0, float64(s.controlsWidth)), "projectTabs": tabs}
+		return map[string]any{"controlsWidth": math.Max(0, float64(s.controlsWidth)), "projectTabs": s.projectTabsPlace()}
 	})
 	s.registry.Status("core.rail", func() any { return s.railState() })
 	s.registry.Status("core.window.workbench", func() any {

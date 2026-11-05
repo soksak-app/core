@@ -312,6 +312,7 @@ type Shell struct {
 	text *TextSize
 	// keyboard is the keyboard focus of the window, which the first responder and the views report.
 	keyboard     *Focus
+	pointer      *PointerSequence
 	verification *Verification
 	// diagnostics holds the policy and the trace switch that the host received last.
 	diagnostics struct{ policy, trace string }
@@ -323,7 +324,6 @@ type Shell struct {
 // NewShell returns the shell of a window, with its commands in the registry.
 func NewShell(options ShellOptions) (*Shell, error) {
 	read, err := readMetrics(options.Declared)
-	pointer      *PointerSequence
 	if err != nil {
 		return nil, err
 	}
@@ -356,6 +356,8 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.registry.Record(s.events.Command)
 	s.errors = NewShownErrors(s.events.Error)
 	s.binder = NewBinder(s.registry, func(_ string, err error) { s.fail(err) })
+	s.pointer = NewPointerSequence(func() { s.options.Invalidate() })
+	s.binder.Attach(s.pointer, s.keyboard)
 	s.starter = environment.pluginStarter
 	s.pluginOperations = NewPluginOperations(s.calls, s.events.BeginOperation, func() []LoadedPlugin { return s.plugins }, func() map[string]bool { return s.refused }, options.Invalidate)
 	s.appUpdates = NewAppUpdates(s.calls, s.events.BeginOperation, s.pluginOperations.State, options.Invalidate)
@@ -367,8 +369,6 @@ func NewShell(options ShellOptions) (*Shell, error) {
 		s.fail(err)
 	}
 	if s.installed, err = readInstalled(installed); err != nil {
-	s.pointer = NewPointerSequence(func() { s.options.Invalidate() })
-	s.binder.Attach(s.pointer, s.keyboard)
 		s.fail(err)
 		installed = []byte(`{"plugins":[]}`)
 	}
@@ -615,6 +615,7 @@ func baseName(root string) string { return path.Base(root) }
 // View draws the workbench of the window.
 func (s *Shell) View(c *ui.Context) {
 	s.keyboard.Frame(c)
+	s.pointer.Frame()
 	s.sidebars.Begin()
 	clear(s.surfaces.drawn)
 	clear(s.picker.drawn)
@@ -626,7 +627,6 @@ func (s *Shell) View(c *ui.Context) {
 	theme.Background = s.palette.Bg
 	theme.Text = s.palette.Fg
 	theme.TextMuted = s.palette.Muted
-	s.pointer.Frame()
 	theme.Border = s.palette.Edge
 	theme.Danger = s.palette.No
 	theme.FontSize = theme.Rem(1) * float32(s.text.Frame())
@@ -638,7 +638,7 @@ func (s *Shell) View(c *ui.Context) {
 		if s.browsing || s.opened() == nil {
 			s.drawLibrary(c, width, height-s.chromeHeight())
 		} else {
-			s.drawWork(c, width, height-s.chromeHeight())
+			s.drawWorkArea(c, width, height-s.chromeHeight())
 		}
 	})
 	s.drawPicker(c, width, height)

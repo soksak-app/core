@@ -196,12 +196,12 @@ func (s *Shell) moveProject(id string, delta int, done func(error)) {
 }
 
 // drawRenameField draws the field in the place of the tab being renamed.
-func (s *Shell) drawRenameField(c *ui.Context) {
+func (s *Shell) drawRenameField(c *ui.Context, width float32) {
 	m := s.metrics
 	held := s.renaming
 	value := held.Value
 	s.binder.Control(c, "core.rename.input", "core.rename.set", "")
-	field := ui.TextInputBase(c, &value).Label(value).AutoFocus().Shrink(0).Width(s.frameLength(m.barTabRootW)).PaddingX(s.frameLength(m.barTabRootPad)).
+	field := ui.TextInputBase(c, &value).Label(value).AutoFocus().Shrink(0).Width(width).PaddingX(s.frameLength(m.barTabRootPad)).
 		Border(s.palette.BorderWidth, s.palette.Focus).Radius(s.radiusSmall()).Background(s.palette.Bg).TextColor(s.palette.Fg).
 		FontSize(s.frameFont(s.textControl())).
 		HandleInput(func(event ui.InputEvent) bool {
