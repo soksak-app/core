@@ -8,6 +8,7 @@
     ".": "./index.js",
     "./page": "./page.js",
     "./view": "./view.js",
+    "./exposure-check": "./exposure-check.js",
     "./package.json": "./package.json",
     "./screen-hash": "./screen-hash.js",
     "./view-modules": "./view-modules.js",
@@ -41,6 +42,8 @@
     "view-modules.js",
     "log-batch.js",
     "bounded-json.js",
+    "exposure-check.js",
+    "core-exposure.json",
     "contract/"
   ],
   "scripts": {
