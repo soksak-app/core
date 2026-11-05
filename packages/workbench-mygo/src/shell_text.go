@@ -102,6 +102,20 @@ func (s *Shell) textCaption() float32 {
 	return float32(s.settings.Value("size").(float64)) * s.metrics.textCaptionAtBase / s.metrics.textBase
 }
 
+// chromePercent is the chrome value name, a percentage, as a share.
+func (s *Shell) chromePercent(name string) float32 {
+	text, _ := s.options.Declared.ChromeText(name)
+	value, _ := strconv.ParseFloat(strings.TrimSuffix(text, "%"), 32)
+	return float32(value) / 100
+}
+
+// chLength is the chrome value name, a number of ch, at the font size: a figure of a form font is about .6 of its size wide.
+func (s *Shell) chLength(name string, size float32) float32 {
+	text, _ := s.options.Declared.ChromeText(name)
+	value, _ := strconv.ParseFloat(strings.TrimSuffix(text, "ch"), 32)
+	return float32(value) * size * .6
+}
+
 // sectionTracking is the chrome value section-tracking, the spacing of a section name as a share of its font size.
 func (s *Shell) sectionTracking() float32 {
 	text, _ := s.options.Declared.ChromeText("section-tracking")

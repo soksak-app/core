@@ -689,3 +689,36 @@ func TestTheScopeTabsAndGroupsOfTheSettingsWindowAreThoseOfThePage(t *testing.T)
 	}
 	t.Fatalf("no group name in the rail color %v below the scopes", rail)
 }
+
+// The controls of the settings window are those of the page: the themes stand in a grid of named tiles, a select fills the cell of its
+// row, and each line of text takes the line height of the page.
+func TestTheControlsOfTheSettingsWindowAreThoseOfThePage(t *testing.T) {
+	f := opened(t)
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	metric := func(name string) float32 {
+		value, ok := declared.Metric(name)
+		if !ok {
+			t.Fatalf("no metric %s", name)
+		}
+		return float32(value)
+	}
+	if !f.tester.HasText("midnight") {
+		t.Fatalf("no name of a theme in %q", f.tester.Texts())
+	}
+	first, second := f.box("core.settings-modal.theme", "theme:midnight"), f.box("core.settings-modal.theme", "theme:nord")
+	if first.W < metric("theme-swatch-min-w") || second.X-first.X != first.W+metric("theme-grid-gap") {
+		t.Fatalf("the tiles are %+v and %+v", first, second)
+	}
+	card := f.box("core.settings-modal.card", "")
+	selector := f.box("core.settings-modal.set", "projectOpening")
+	if right := card.X + card.W - 1 - metric("set-pane-pad-x"); selector.X+selector.W < right-1 {
+		t.Fatalf("the select ends at %v, want the end of the pane at %v", selector.X+selector.W, right)
+	}
+	want := metric("field-pad-y")*2 + 2 + metric("text-control-at-base")*metric("line-height")
+	if selector.H < want-1 || selector.H > want+1 {
+		t.Fatalf("the select is %v high, want %v", selector.H, want)
+	}
+}

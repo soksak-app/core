@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -18,6 +19,10 @@ type settingsPane struct {
 	shadowY, shadowBlur, shadowAlpha                                                           float32
 	rowNameW, rowH, gap                                                                        float32
 	scopeGap, scopePadY, scopePadX, scopeMark, nameGap, captionGap, lineHeight, tracking       float32
+	paneTop, paneX, paneBottom, rowGap, fieldPadY, buttonPadX, fieldPadX, arrowInset           float32
+	swatchMinW, swatchW, gridGap, gridMargin, swatchGap, swatchPad, boxH, boxBorder            float32
+	railW, pairLeft, pairInset, dotInset, dot                                                  float32
+	switchW, switchH, knobInset, knob, knobOn, switchOnMix, slideGap, trackH, thumb, valueW    float32
 }
 
 func (s *Shell) readSettingsPane() settingsPane {
@@ -33,6 +38,14 @@ func (s *Shell) readSettingsPane() settingsPane {
 		shadowY: metric("set-card-shadow-y"), shadowBlur: metric("set-card-shadow-blur"), shadowAlpha: metric("set-card-shadow-alpha"),
 		rowNameW: metric("set-row-name-w"), rowH: metric("set-row-h"), gap: metric("set-group-gap"),
 		scopeGap: metric("space-4"), scopePadY: metric("space-2"), scopePadX: metric("space-1"), scopeMark: metric("scope-tab-mark"),
+		paneTop: metric("set-pane-pad-top"), paneX: metric("set-pane-pad-x"), paneBottom: metric("set-pane-pad-bottom"), rowGap: metric("set-row-gap"),
+		fieldPadY: metric("field-pad-y"), buttonPadX: metric("space-3"), fieldPadX: metric("space-2"), arrowInset: metric("select-arrow-inset"),
+		swatchMinW: metric("theme-swatch-min-w"), gridGap: metric("theme-grid-gap"), gridMargin: metric("theme-grid-margin"), swatchGap: metric("theme-swatch-gap"),
+		swatchPad: metric("theme-swatch-pad"), boxH: metric("theme-box-h"), boxBorder: metric("theme-box-border"), railW: metric("theme-rail-w"),
+		pairLeft: metric("theme-pair-left"), pairInset: metric("theme-pair-inset"), dotInset: metric("theme-dot-inset"), dot: metric("theme-dot"),
+		switchW: metric("switch-w"), switchH: metric("switch-h"), knobInset: metric("switch-knob-inset"), knob: metric("switch-knob"), knobOn: metric("switch-knob-on"),
+		switchOnMix: s.chromePercent("switch-on-mix"), slideGap: metric("slide-gap"), trackH: metric("slide-track-h"), thumb: metric("slide-thumb"),
+		valueW:  s.chLength("slide-value-w", s.textSmall()),
 		nameGap: metric("space-1"), captionGap: metric("set-caption-gap"), lineHeight: metric("line-height"), tracking: s.sectionTracking(),
 	}
 }
@@ -61,7 +74,7 @@ func (s *Shell) drawSettings(c *ui.Context, width, height float32) {
 		scrim.Children(func() {
 			card := s.exposedBox(c, "core.settings-modal.card", "", "")
 			// The card takes the focus of the dialog, so a key presses no control before Tab or a press reaches one.
-			card.Focusable().FocusRing(false)
+			card.Focusable().FocusRing(false).LineHeight(pane.lineHeight)
 			card.Absolute().Left(float32(x)).Top(float32(y)).Size(float32(cardW), float32(cardH)).Column().Background(s.palette.Card).
 				Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.radiusMiddle()).Clip().Shadow(0, pane.shadowY, pane.shadowBlur, 0, ui.RGBA(0, 0, 0, pane.shadowAlpha)).
 				Role(ui.RoleDialog).Label(settingsName).Children(func() {
@@ -134,17 +147,21 @@ func (s *Shell) drawSettingsBody(c *ui.Context, model *settingsModel, width floa
 		w.scrollKey, w.scroll.X, w.scroll.Y = key, 0, 0
 	}
 	ui.Scroll(c).TrackScroll(&w.scroll).Width(width).FillHeight().Children(func() {
-		ui.Column(c).Width(width).Gap(pane.gap).Padding(14, 18, 18, 18).Children(func() {
-			ui.Row(c).FillWidth().Gap(pane.scopeGap).BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.Edge).Role(ui.RoleGroup).Label("설정 범위").Children(func() {
+		ui.Column(c).Width(width).Padding(pane.paneTop, pane.paneX, pane.paneBottom, pane.paneX).Children(func() {
+			ui.Row(c).FillWidth().Gap(pane.scopeGap).Margin(0, 0, pane.scopeGap, 0).BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.Edge).Role(ui.RoleGroup).Label("설정 범위").Children(func() {
 				for _, control := range model.scopes {
 					s.drawSettingsScope(c, control, pane)
 				}
 			})
 			if model.folder != "" {
-				ui.Text(c, model.folder).TextColor(s.palette.Muted).FontSize(11)
+				ui.Text(c, model.folder).TextColor(s.palette.Muted).FontSize(s.textSmall()).Margin(0, 0, pane.captionGap, 0)
 			}
-			for _, group := range model.groups {
-				s.drawSettingsGroup(c, group, pane)
+			// A grid of themes has as many columns of the least width as the pane holds, and they share the free width.
+			inner := width - 2*pane.paneX
+			columns := max(1, float32(math.Floor(float64((inner+pane.gridGap)/(pane.swatchMinW+pane.gridGap)))))
+			pane.swatchW = (inner - pane.gridGap*(columns-1)) / columns
+			for index, group := range model.groups {
+				s.drawSettingsGroup(c, group, pane, index == len(model.groups)-1)
 			}
 		})
 	})
@@ -169,8 +186,12 @@ func (s *Shell) drawSettingsScope(c *ui.Context, control *SettingsControl, pane 
 	})
 }
 
-func (s *Shell) drawSettingsGroup(c *ui.Context, group settingsGroup, pane settingsPane) {
-	ui.Column(c).FillWidth().Role(ui.RoleGroup).Label(group.name).Children(func() {
+func (s *Shell) drawSettingsGroup(c *ui.Context, group settingsGroup, pane settingsPane, last bool) {
+	margin := pane.gap
+	if last {
+		margin = 0
+	}
+	ui.Column(c).FillWidth().Margin(0, 0, margin, 0).Role(ui.RoleGroup).Label(group.name).Children(func() {
 		size := s.textCaption()
 		ui.Text(c, group.name).FontSize(size).LetterSpacing(size*pane.tracking).TextColor(s.palette.Rail).Margin(0, 0, pane.nameGap, 0)
 		ui.Text(c, group.text).Wrap().LineHeight(pane.lineHeight).TextColor(s.palette.Muted).FontSize(s.textSmall()).Margin(0, 0, pane.captionGap, 0)
@@ -181,36 +202,44 @@ func (s *Shell) drawSettingsGroup(c *ui.Context, group settingsGroup, pane setti
 }
 
 func (s *Shell) drawSettingsRow(c *ui.Context, row settingsRow, pane settingsPane) {
-	ui.Row(c).FillWidth().MinHeight(pane.rowH).Gap(12).AlignItems(ui.Center).Wrap().Children(func() {
+	if len(row.controls) > 0 && row.controls[0].kind == controlSwatch {
+		ui.Row(c).FillWidth().Gap(pane.gridGap).Margin(0, 0, pane.gridMargin, 0).Wrap().Children(func() {
+			for _, control := range row.controls {
+				s.drawControl(c, control, pane)
+			}
+		})
+		return
+	}
+	ui.Row(c).FillWidth().MinHeight(pane.rowH).Gap(pane.rowGap).AlignItems(ui.Center).Wrap().Children(func() {
 		if row.name != "" {
 			ui.Text(c, row.name).Width(pane.rowNameW).FontSize(s.textControl()).TextColor(s.palette.Muted)
 		}
 		for _, control := range row.controls {
-			s.drawControl(c, control)
+			s.drawControl(c, control, pane)
 		}
 	})
 	if row.description != "" {
-		ui.Text(c, row.description).Wrap().TextColor(s.palette.Muted).FontSize(s.textSmall())
+		ui.Text(c, row.description).Wrap().TextColor(s.palette.Muted).FontSize(s.textSmall()).Margin(0, 0, pane.captionGap, 0)
 	}
 }
 
-func (s *Shell) drawControl(c *ui.Context, control *SettingsControl) {
+func (s *Shell) drawControl(c *ui.Context, control *SettingsControl, pane settingsPane) {
 	switch control.kind {
 	case controlButton:
-		s.drawButton(c, control)
+		s.drawButton(c, control, pane)
 	case controlSwatch:
-		s.drawSwatch(c, control)
+		s.drawSwatch(c, control, pane)
 	case controlSwitch:
-		s.drawSwitch(c, control)
+		s.drawSwitch(c, control, pane)
 	case controlSelect:
-		s.drawSelect(c, control)
+		s.drawSelect(c, control, pane)
 	case controlSlider:
-		s.drawSlider(c, control)
+		s.drawSlider(c, control, pane)
 	case controlText:
 		s.drawTextControl(c, control)
 	case controlCaption:
 		s.exposedBox(c, control.Name, "", "").Grow(1).Role(ui.RoleGroup).Label(control.Label).Children(func() {
-			ui.Text(c, control.Label).Wrap().FontSize(11).TextColor(s.palette.Muted)
+			ui.Text(c, control.Label).Wrap().FontSize(s.textSmall()).TextColor(s.palette.Muted)
 		})
 	}
 }
@@ -235,42 +264,74 @@ func (s *Shell) runControl(control *SettingsControl, value any) {
 	s.binder.run(control.Command.Name, params)
 }
 
-func (s *Shell) drawButton(c *ui.Context, control *SettingsControl) {
+// drawButton draws a button, the .ui-button of packages/workbench/app.css. A button that is on has the fill of a chosen chip.
+func (s *Shell) drawButton(c *ui.Context, control *SettingsControl, pane settingsPane) {
 	on := control.On != nil && *control.On
 	button := s.binder.Press(c, control.Name, control.Command.Name, control.item(), control.Command.Params)
-	button.PaddingX(8).Height(26).Radius(4).AlignItems(ui.Center).Label(control.Label).Children(func() {
-		text := ui.Text(c, control.Label).FontSize(12)
-		if !on {
-			text.TextColor(s.palette.Muted)
-		}
-	})
+	edge := s.palette.Edge
+	if button.Hovered() {
+		edge = s.palette.Rail
+	}
+	fill := s.palette.Bg
 	if on {
-		button.Background(s.palette.Rule)
+		fill = faded(s.palette.Fg, s.metrics.chipSelMix)
 	}
-}
-
-func (s *Shell) drawSwatch(c *ui.Context, control *SettingsControl) {
-	colors := control.theme.Dark
-	if s.value("mode") == "light" {
-		colors = control.theme.Light
-	}
-	border := ui.Hex(colors["edge"])
-	if control.On != nil && *control.On {
-		border = s.palette.Focus
-	}
-	button := s.binder.Press(c, control.Name, control.Command.Name, control.item(), control.Command.Params)
-	button.Size(42, 42).Background(ui.Hex(colors["bg"])).Border(2, border).Radius(4).Padding(4).Row().Gap(2).Label(control.Label).Children(func() {
-		ui.Box(c).Width(4).FillHeight().Background(ui.Hex(colors["rail"]))
-		ui.Box(c).Grow(1).FillHeight().Background(ui.Hex(colors["card"])).Children(func() {
-			ui.Box(c).Size(5, 5).Background(ui.Hex(colors["focus"]))
-		})
+	button.Padding(pane.fieldPadY, pane.buttonPadX).Border(s.palette.BorderWidth, edge).Radius(s.radiusSmall()).Background(fill).AlignItems(ui.Center).Label(control.Label).Children(func() {
+		ui.Text(c, control.Label).FontSize(s.textControl()).TextColor(s.palette.Fg)
 	})
 }
 
-func (s *Shell) drawSwitch(c *ui.Context, control *SettingsControl) {
+// drawSwatch draws a theme with its own values, the .th of packages/workbench/app.css: its background, rail, focus, and two cards with the
+// passage and the radius of the theme.
+func (s *Shell) drawSwatch(c *ui.Context, control *SettingsControl, pane settingsPane) {
+	theme := control.theme
+	colors := theme.Dark
+	if s.value("mode") == "light" {
+		colors = theme.Light
+	}
+	shape := func(name string) float64 {
+		value, _ := strconv.ParseFloat(strings.TrimSuffix(theme.Shape[name], "px"), 64)
+		return value
+	}
+	// The box is small, so the passage is halved, and a theme without a passage keeps the line that its cards share.
+	gap := shape("gap")
+	slit, between := float32(max(2, math.Round(gap/2))), ui.Hex(colors["bg"])
+	if gap == 0 {
+		slit, between = 1, ui.Hex(colors["rule"])
+	}
+	radius := float32(min(shape("r")/2, 5))
+	on := control.On != nil && *control.On
+	button := s.binder.Press(c, control.Name, control.Command.Name, control.item(), control.Command.Params)
+	name, frame := s.palette.Muted, ui.Transparent
+	if button.Hovered() {
+		name = s.palette.Fg
+	}
+	if on {
+		name, frame = s.palette.Fg, s.palette.Focus
+	}
+	card := func(children func()) {
+		ui.Box(c).Grow(1).FillHeight().Background(ui.Hex(colors["card"])).Border(pane.boxBorder, ui.Hex(colors["edge"])).Radius(radius).Children(children)
+	}
+	button.Width(pane.swatchW).Column().Gap(pane.swatchGap).Padding(pane.swatchPad).Border(s.palette.BorderWidth, frame).Radius(s.radiusSmall()).Label(control.Label).Children(func() {
+		ui.Box(c).FillWidth().Height(pane.boxH).Background(ui.Hex(colors["bg"])).Border(pane.boxBorder, ui.Hex(colors["edge"])).Radius(s.radiusSmall()).Clip().Children(func() {
+			ui.Box(c).Absolute().Left(0).Top(0).Bottom(0).Width(pane.railW).Background(ui.Hex(colors["rail"]))
+			ui.Row(c).Absolute().Left(pane.pairLeft).Top(pane.pairInset).Right(pane.pairInset).Bottom(pane.pairInset).Gap(slit).Background(between).Children(func() {
+				card(func() {
+					ui.Box(c).Absolute().Right(pane.dotInset).Bottom(pane.dotInset).Size(pane.dot, pane.dot).Radius(pane.dot / 2).Background(ui.Hex(colors["focus"]))
+				})
+				card(func() {})
+			})
+		})
+		ui.Text(c, control.Label).FontSize(s.textCaption()).TextColor(name).AlignSelf(ui.Center)
+	})
+}
+
+// drawSwitch draws an on and off value, the .set-switch of packages/workbench/app.css.
+func (s *Shell) drawSwitch(c *ui.Context, control *SettingsControl, pane settingsPane) {
 	on := control.On != nil && *control.On
 	run := s.binder.Control(c, control.Name, control.Command.Name, control.item())
-	if s.binder.Bound(ui.Switch(c, &on), control.Name).Label(control.Label).Changed() {
+	body := s.binder.Bound(ui.SwitchBase(c, &on), control.Name).Size(pane.switchW, pane.switchH).Label(control.Label)
+	if body.Changed() {
 		params := make(map[string]any, len(control.Command.Params)+1)
 		for key, param := range control.Command.Params {
 			params[key] = param
@@ -278,24 +339,39 @@ func (s *Shell) drawSwitch(c *ui.Context, control *SettingsControl) {
 		params[control.param] = on
 		run(params)
 	}
+	track, knob, left := faded(s.palette.Fg, s.metrics.insetMix), s.palette.Muted, pane.knobInset
+	if on {
+		track, knob, left = faded(s.palette.Focus, pane.switchOnMix), s.palette.Focus, pane.knobOn
+	}
+	body.Radius(pane.switchH).Background(track).Children(func() {
+		ui.Box(c).Absolute().Left(left).Top(pane.knobInset).Size(pane.knob, pane.knob).Radius(pane.knob / 2).Background(knob)
+	})
 }
 
-func (s *Shell) drawSelect(c *ui.Context, control *SettingsControl) {
+func (s *Shell) drawSelect(c *ui.Context, control *SettingsControl, pane settingsPane) {
 	value := *control.Value
 	s.binder.Control(c, control.Name, control.Command.Name, control.item())
 	selector := ui.SelectBase(c, &value)
 	s.binder.Bound(selector.Trigger, control.Name)
-	selector.Trigger.PaddingX(8).Height(26).Radius(4).Border(s.palette.BorderWidth, s.palette.Edge).AlignItems(ui.Center).Label(control.item()).Children(func() {
-		ui.Text(c, control.labels[value]).FontSize(12).NoWrap()
+	edge := s.palette.Edge
+	if selector.Trigger.Hovered() {
+		edge = s.palette.Rail
+	}
+	if selector.Trigger.Focused() {
+		edge = s.palette.Focus
+	}
+	selector.Trigger.Grow(1).Row().Padding(pane.fieldPadY, pane.arrowInset, pane.fieldPadY, pane.fieldPadX).Radius(s.radiusSmall()).Border(s.palette.BorderWidth, edge).Background(s.palette.Bg).AlignItems(ui.Center).Label(control.Label).Children(func() {
+		ui.Text(c, control.labels[value]).FontSize(s.textControl()).TextColor(s.palette.Fg).NoWrap().Grow(1)
+		ui.Text(c, "▾").FontSize(s.textCaption()).TextColor(s.palette.Muted)
 	})
 	selector.Popup(func(panel ui.Element) {
-		panel.Padding(4).Background(s.palette.Card).Border(s.palette.BorderWidth, s.palette.Edge).Radius(4)
+		panel.Padding(pane.nameGap).Background(s.palette.Card).Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.radiusSmall())
 		option := func(id string) {
-			item := selector.Item(id).PaddingX(8).Height(24).AlignItems(ui.Center)
+			item := selector.Item(id).Padding(pane.fieldPadY, pane.fieldPadX).AlignItems(ui.Center)
 			if item.Highlighted() {
 				item.Background(s.palette.Rule)
 			}
-			item.Children(func() { ui.Text(c, control.labels[id]).FontSize(12) })
+			item.Children(func() { ui.Text(c, control.labels[id]).FontSize(s.textControl()) })
 		}
 		if control.Groups == nil {
 			for _, id := range control.Options {
@@ -304,7 +380,7 @@ func (s *Shell) drawSelect(c *ui.Context, control *SettingsControl) {
 			return
 		}
 		for _, group := range control.Groups {
-			ui.Text(c, group.Label).FontSize(11).TextColor(s.palette.Muted)
+			ui.Text(c, group.Label).FontSize(s.textSmall()).TextColor(s.palette.Muted)
 			for _, id := range group.Values {
 				option(id)
 			}
@@ -315,18 +391,27 @@ func (s *Shell) drawSelect(c *ui.Context, control *SettingsControl) {
 	}
 }
 
-func (s *Shell) drawSlider(c *ui.Context, control *SettingsControl) {
+// drawSlider draws a bounded number, the .set-slide of packages/workbench/app.css.
+func (s *Shell) drawSlider(c *ui.Context, control *SettingsControl, pane settingsPane) {
 	value, err := strconv.ParseFloat(*control.Value, 64)
 	if err != nil {
 		s.fail(fmt.Errorf("the setting %s is not a number: %s", control.item(), *control.Value))
 		return
 	}
-	s.binder.Control(c, control.Name, control.Command.Name, control.item())
-	slider := s.binder.Bound(ui.Slider(c, &value, control.lo, control.hi), control.Name).Label(control.item()).Grow(1)
-	if slider.Changed() {
-		s.runControl(control, math.Round(value))
-	}
-	ui.Text(c, *control.Value+control.unit).FontSize(11).TextColor(s.palette.Muted)
+	ui.Row(c).Grow(1).Gap(pane.slideGap).AlignItems(ui.Center).Children(func() {
+		s.binder.Control(c, control.Name, control.Command.Name, control.item())
+		slider := s.binder.Bound(ui.SliderBase(c, &value, control.lo, control.hi), control.Name).Label(control.item()).Grow(1).Height(pane.thumb).PaddingX(pane.thumb / 2)
+		if slider.Changed() {
+			s.runControl(control, math.Round(value))
+		}
+		share := float32((value - control.lo) / (control.hi - control.lo))
+		track, thumb, thumbColor, trackH := faded(s.palette.Fg, s.metrics.insetMix), pane.thumb, s.palette.Focus, pane.trackH
+		slider.Draw(func(p *ui.Painter, r ui.Rect) {
+			p.Fill(ui.Rect{X: r.X, Y: r.Y + (r.H-trackH)/2, W: r.W, H: trackH}, track, trackH/2)
+			p.Fill(ui.Rect{X: r.X + (r.W-thumb)*share, Y: r.Y + (r.H-thumb)/2, W: thumb, H: thumb}, thumbColor, thumb/2)
+		})
+		ui.Text(c, *control.Value+control.unit).Width(pane.valueW).TextAlign(ui.End).FontSize(s.textSmall()).TextColor(s.palette.Muted)
+	})
 }
 
 // drawTextControl draws a one-line field. A setting takes its text when the field submits or loses the focus, as the change
@@ -339,7 +424,7 @@ func (s *Shell) drawTextControl(c *ui.Context, control *SettingsControl) {
 		value = *control.Value
 	}
 	s.binder.Control(c, control.Name, control.Command.Name, key)
-	field := s.binder.Bound(ui.TextInput(c, &value), control.Name).Label(key).Placeholder(control.Label).Grow(1).FontSize(12)
+	field := s.binder.Bound(ui.TextInput(c, &value), control.Name).Label(key).Placeholder(control.Label).Grow(1).FontSize(s.textControl())
 	if field.Changed() {
 		if control.searchable {
 			s.runControl(control, value)
