@@ -6,7 +6,7 @@
 // Rust tests without executing test bodies. Neither check uses file names or counts to infer coverage.
 import { parseArgs } from 'node:util';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statfsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, posix, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -522,6 +522,12 @@ function checkDeclarations(cases, rustItems, rustFailures = []) {
   return 0;
 }
 
+/** The free space of the volume that holds `path`, in MB. */
+function freeMegabytes(path) {
+  const { bavail, bsize } = statfsSync(path);
+  return Math.floor((bavail * bsize) / 2 ** 20);
+}
+
 async function main(argv) {
   // The Go link flags start with a dash, so they are given as --go-ldflags=<flags>.
   const { values } = parseArgs({
@@ -536,7 +542,10 @@ async function main(argv) {
   if (values.static) {
     const write = (line) => process.stdout.write(`${line}\n`);
     const rustFound = [];
-    for (const run of RUST_RUNS) rustFound.push(await discoverRust({ ...run, cwd: ROOT, write, timeoutMs: TEST_TIMEOUT_MS, listOnly: true }));
+    for (const run of RUST_RUNS) {
+      rustFound.push(await discoverRust({ ...run, cwd: ROOT, write, timeoutMs: TEST_TIMEOUT_MS, listOnly: true }));
+      write(`DISK after ${run.id}: ${freeMegabytes(ROOT)} MB free`);
+    }
     const rustItems = rustFound.flatMap((entry) => entry.tests);
     return checkDeclarations(cases, rustItems, rustFound.flatMap((entry) => entry.failures));
   }

@@ -3,8 +3,8 @@
 // time too; then the test binary lists its tests, and every test becomes one process with the working directory that
 // `go test` and `cargo test` give it.
 import { execFile } from 'node:child_process';
-import { mkdirSync, readdirSync, realpathSync, rmSync } from 'node:fs';
-import { basename, dirname, isAbsolute, join, relative } from 'node:path';
+import { mkdirSync, realpathSync, rmSync } from 'node:fs';
+import { dirname, isAbsolute, join, relative } from 'node:path';
 import { promisify } from 'node:util';
 import { runTests } from './test-runner.mjs';
 
@@ -63,8 +63,9 @@ export async function discoverGo({ patterns, cwd, tags, ldflags, buildDir, id, w
  * The tests of the Rust package `packageName` built with `features`. `cargo test --no-run` builds the test executables; each
  * executable lists its tests and every test runs as `<executable> --exact <name>` in the folder of its manifest. Returns the
  * same `{tests, failures}` as discoverGo; a test that is `#[ignore]` is listed and its result is `skip`. With `listOnly`, each
- * executable and the object files that rustc kept beside it are removed once it listed its tests: a check that only lists
- * the tests of several runs then holds the executables of one run on the disk, and its tests are not run.
+ * executable is removed once it listed its tests, so a check that only lists the tests of several runs holds the executables
+ * of one run on the disk; its tests are not run. Only an executable that cargo named and that lies in the target folder of
+ * cargo is removed: the run fails, and removes nothing, when one lies elsewhere.
  */
 export async function discoverRust({ packageName, features, cwd, env, id, write, timeoutMs, listOnly = false }) {
   const build = await runTests({
@@ -75,6 +76,13 @@ export async function discoverRust({ packageName, features, cwd, env, id, write,
   const result = build.results.get(`build ${id}`);
   if (result.status !== 'pass') return { tests: [], failures: [`${id}: the build failed`] };
   const executables = cargoTestExecutables(result.output);
+  if (listOnly) {
+    const targetDir = await cargoTargetDirectory({ cwd, env });
+    const outside = executables.filter(({ executable }) => !isInside(targetDir, executable));
+    if (outside.length > 0) {
+      return { tests: [], failures: outside.map(({ executable }) => `${id}: the executable ${executable} is not in the target folder ${targetDir}`) };
+    }
+  }
   const tests = [];
   for (const { executable, dir, target, srcPath } of executables) {
     const listed = await execFileAsync(executable, ['--list', '--format', 'terse'], { cwd: dir, maxBuffer: 1 << 24 });
@@ -82,23 +90,25 @@ export async function discoverRust({ packageName, features, cwd, env, id, write,
       const match = line.match(/^(.+): test$/);
       if (match) tests.push({ name: `${id} ${target}::${match[1]}`, run: id, testName: match[1], owner: relative(realpathSync(cwd), dir), target, sourcePath: srcPath, command: executable, args: ['--exact', match[1]], cwd: dir, env, timeoutMs });
     }
-    if (listOnly) removeExecutable(executable);
+    if (listOnly) rmSync(executable);
   }
   if (tests.length === 0) return { tests, failures: [`${id}: the compiler listed no tests`] };
   return { tests, failures: [] };
 }
 
-/**
- * Removes a test executable and the object files of its crate that rustc keeps beside it for the debug information on macOS
- * (`<executable>.<unit>.rcgu.o`). The libraries of its dependencies stay, so the next run of the same package reuses them.
- */
-function removeExecutable(executable) {
-  const dir = dirname(executable);
-  const prefix = `${basename(executable)}.`;
-  for (const name of readdirSync(dir)) {
-    if (name.startsWith(prefix) && name.endsWith('.o')) rmSync(join(dir, name), { force: true });
-  }
-  rmSync(executable, { force: true });
+/** The target folder of cargo for the package in `cwd`, as `cargo metadata` reports it with the environment `env`. */
+async function cargoTargetDirectory({ cwd, env }) {
+  const { stdout } = await execFileAsync('cargo', ['metadata', '--format-version', '1', '--no-deps', '--locked'],
+    { cwd, env: env ? { ...process.env, ...env } : process.env, maxBuffer: 1 << 26 });
+  const { target_directory: targetDir } = JSON.parse(stdout);
+  if (typeof targetDir !== 'string' || !isAbsolute(targetDir)) throw new Error(`cargo metadata has no absolute target directory: ${targetDir}`);
+  return targetDir;
+}
+
+/** Whether `path` lies in the folder `dir`, after both resolve their links. */
+function isInside(dir, path) {
+  const inner = relative(realpathSync(dir), realpathSync(path));
+  return inner !== '' && !inner.startsWith('..') && !isAbsolute(inner);
 }
 
 /**
