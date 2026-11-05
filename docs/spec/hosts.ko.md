@@ -249,8 +249,14 @@ Go language host library의 header `src/platform/darwin/main_thread.h`는 두 ma
 | H26 | `go.mod`, `go.sum` | `Cargo.toml` | 언어마다 매니페스트와 잠금 파일이 다르다. Rust 패키지의 잠금 파일은 워크스페이스의 `Cargo.lock`이다 |
 | H27 | `src/bindings.go`, `src/plugins_starter_test.go` | 없음 | Go page의 host 호출은 `bindings.go`에 있는 `Host`의 메서드이며, Wails framework adapter의 바인딩 타입이 `Bindings`를 통해 닿는다. `plugins_starter_test.go`는 그 진입점으로 그중 하나를 호출한다. Rust page의 host 호출은 Tauri 명령이며, Tauri framework adapter가 자기 `src/bindings.rs`에 그 test와 함께 선언한다(H30 행) |
 | H28 | 없음 | `tests/support/framework.rs` | Rust language host library의 unit test는 framework port의 이 fixture로 library의 창과 웹뷰 handle을 만들고, `src/host.rs`가 이 file을 test module로 포함한다. framework가 필요한 Go test는 `package host`의 test이며, 그 fixture는 `src/projects_test.go`의 `frameworkRecord`와 `frontendRecord`이고, test file은 자기 사례에 맞게 이를 확장한다 |
-| H34 | `src/windows_main_page_test.go` | 없음 | Go framework에만 main page가 없는 경우가 있고, 이 test는 main page 없는 창이 건너뛰는 비공개 단계에 닿는다 |
+| H34 | `src/windows_main_page_test.go`, `src/window_page_process_test.go` | 없음 | Go framework에만 main page가 없는 경우가 있고, 이 test들은 main page 없는 창이 건너뛰는 비공개 단계와 그 창이 `null`로 보고하는 page process에 닿는다 |
 | H38 | `src/surface_elements.go`, `src/surface_elements_test.go` | 없음 | Go framework에만 main page가 없는 경우가 있고, main page 없는 창은 각 surface를 native view element로 보여 주며, 이 source는 그 view를 다음 settled frame까지 붙든다 |
+| H40 | `src/window_frames.go`, `src/window_frames_test.go` | 없음 | mygo host의 창은 workbench를 native UI로 그리고 그 프레임을 센다(행 P9). Tauri와 Wails 창의 프레임은 main page의 프레임이므로 Rust language host library에는 이 수가 없다 |
+| H41 | `src/modals_workbench_test.go` | 없음 | mygo host의 창만 dialog를 직접 그리고 host에 알리므로(행 B2), 이 dialog 상태 test에는 Rust 짝이 없다 |
+| H42 | `src/event_log_wake_test.go` | `tests/event_native_wake_test.rs` | native ring의 pipe는 한 process에 reader가 하나다. Rust integration test는 자기 process이므로 platform의 pipe를 읽는다. 한 package의 Go test는 모두 한 process를 쓰므로 Go test는 비공개 `nativeWake`에 자기 pipe를 준다. pipe 쓰기는 `native/darwin/tests/event_ring_test.m`이 양쪽을 위해 확인한다 |
+| H43 | 없음 | `src/installed_reads_test.rs` | `installed.rs`의 이 자식은 module의 비공개 serving이 읽는 횟수를 `sok`의 read hook으로 센다. `tests/installed_test.go`가 같은 경우를 Go language host library의 공개 함수로 확인한다 |
+| H44 | 없음 | `src/routine/async_runtime_test.rs` | 이 test는 framework 비동기 runtime의 worker와 blocking thread를 확인한다(행 P2). goroutine에는 이런 runtime이 필요 없다 |
+| H45 | 없음 | `src/sidecars_read_deadline_test.rs` | `sidecars.rs`의 이 자식은 비공개 `end_hello_deadline`과 deadline을 기록하는 stream에 닿는다. `tests/sidecars_transport_test.go`의 `TestAPersistentConnectionHasNoDeadlineAfterItsHello`가 같은 침묵을 공개 `Sidecars`로 확인한다 |
 | E1 | `diagnostics.heap.profile` | 없음 | 이 endpoint method는 Go runtime의 heap profile(`runtime/pprof`)을 쓴다. Rust language host library에는 profile할 garbage-collected heap이 없다. ID가 E로 시작하는 행은 endpoint method를 나열하고 `make host-parity-check`가 그 행을 읽는다 |
 | P1 | `Framework.Step` | 없음 | Go language host library는 main thread의 worker에서 실행되며 main thread의 step을 기다린다(H20 행). Rust language host library는 `post`로 step을 보내고 그 channel을 기다린다 |
 | P2 | 없음 | `Framework.spawn_blocking` | Go goroutine은 다른 작업을 막지 않는다. Rust language host library의 blocking 작업은 framework 비동기 runtime의 blocking thread에서 실행된다. 호스트는 그 runtime을 worker 둘로 만든다. worker는 await하고 page 파일에 답할 뿐이기 때문이다. blocking thread는 1초 동안 일이 없으면 끝난다 |
@@ -270,6 +276,7 @@ Go language host library의 header `src/platform/darwin/main_thread.h`는 두 ma
 | C7 | `src/wailsv3.go`, `src/mygo.go` | 없음 | Go `sok`은 Wails host와 mygo host를 맡으므로, build constraint마다 한 파일이 그 host의 release 식별자를 둔다. `src/wailsv3.go`(`!mygo`)는 `app.soksak.wails`를, `src/mygo.go`(`mygo`)는 `app.soksak.mygo`를 둔다. Rust `sok`은 Tauri host만 맡고 `app.soksak.tauri`를 `src/identity.rs`에 둔다 |
 | C8 | `go.mod`, `go.sum` | `Cargo.toml` | 언어마다 매니페스트와 잠금 파일이 다르다. Rust 패키지의 잠금 파일은 워크스페이스의 `Cargo.lock`이다 |
 | C9 | `tests/installed_plugins_test.go` | 없음 | mygo workbench는 Go process에서 그리므로 Go `sok`이 그를 위해 `AcceptInstalledPlugins`로 설치된 plugin 문서를 검사한다. Rust host의 창은 그 문서를 page에서 `packages/plugin-api`의 `acceptInstalledPlugins`로 검사하므로 Rust `sok`에는 test할 검사가 없다 |
+| C10 | `src/event_log_idle_test.go` | `src/event_log_flush_test.rs`, `tests/event_log_idle_test.rs` | 두 언어는 writer의 같은 잠듦과 flush의 같은 응답을 확인한다. Go test는 file system fixture 때문에 `package sok`에 있고, Rust flush test는 비공개 `wait_for_flush` 때문에 `event_log.rs`의 자식이다 |
 
 ### Framework 표
 
@@ -286,6 +293,7 @@ Go language host library의 header `src/platform/darwin/main_thread.h`는 두 ma
 | H36 | 없음 | 없음 | `tests/presentation_notice_test.go` | Frame의 결과를 읽는 것은 mygo framework adapter뿐이고(`AwaitPresentation`), 이 test는 display 없이 각 결과를 준다 |
 | H37 | 없음 | 없음 | `tests/system_test.go` | mygo 창의 workbench는 Go 코드이므로, 이 test의 자식 프로세스는 workbench처럼 host handler를 호출하는 fixture workbench로 애플리케이션을 실행한다. Wails host의 창은 그렇게 하려면 page가 필요하다 |
 | H39 | 없음 | 없음 | `tests/platform/darwin/frame.go`, `tests/surface_test.go`, `tests/view_still_test.go`, `tests/view_surface_test.go` | mygo 창의 surface는 native view 안에 있고 배치는 표시된 frame에서 실행되므로, 이 test는 display가 필요해 build constraint `e2e`를 가진다. `tests/platform/darwin/frame.go`는 전송 이미지의 IOSurface를 가지며, cgo는 test 파일에 쓸 수 없다. 다른 framework는 surface를 page로 보여 주고, 그 test는 window check다 |
+| H46 | 없음 | 없음 | `src/frames.go` | 이 adapter는 mygo 창의 frame 보고를 host의 수로 넘긴다(행 H40). 다른 framework의 창은 host에 frame을 보고하지 않는다 |
 | B1 | `overlayShow`, `overlayPlace`, `overlayUpdate`, `overlayHide`, `setShape`, `clearShape` | `overlayShow`, `overlayPlace`, `overlayUpdate`, `overlayHide`, `setShape`, `clearShape` | none | native modal web view와 surface 위 shape의 call이다. mygo host의 window는 modal과 shape를 native UI로 그리므로 `packages/workbench-mygo`의 `hostCalls`에는 이 call이 없다. |
 | B2 | none | none | `setDialogBackground` | workbench가 직접 그리는 dialog를 host에 알리는 call이다. Wails와 Tauri host에서는 mode `dialog`의 modal web view가 document를 blur하고, mygo host의 window에는 그런 web view가 없다(B 행 B1). |
 | A1 | 내용만 다름 | 내용만 다름 | 없음 | `runtime/index.js`가 각 프레임워크의 호출 방식을 사용한다. mygo 애플리케이션에는 runtime이 없다(A6 행). |

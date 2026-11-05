@@ -418,6 +418,8 @@ export const MAIN_THREAD_FREE = {
   sp_facts_free: "the function frees a string that a native function returned",
   sp_ui_enqueue: "the function adds a C function to the main queue of libdispatch, which any thread may do",
   sp_ui_enqueue_after: "the function adds a C function to the main queue of libdispatch after a delay, which any thread may do",
+  sp_stall_heartbeat: "the stall watch calls it on its own thread, because a stalled main thread could not run it, and it uses atomics and CFRunLoopPerformBlock, which any thread may call",
+  sp_stall_await_awake: "the stall watch blocks its own thread on a semaphore until the main run loop wakes; on the main thread the function would wait for itself",
 };
 
 const mainThreadFree = (name) => Object.keys(MAIN_THREAD_FREE)
