@@ -190,6 +190,9 @@ func ReadDeclarations() (*Declarations, error) {
 	}, nil
 }
 
+// HeldByView tells whether a declared name is registered by the document of each view and not by the workbench.
+func (d *Declarations) HeldByView(name string) bool { return surfaceNames[name] }
+
 // readExposures reads the declarations under the keys of the declaration file.
 func readExposures() (map[string][]map[string]any, error) {
 	var exposure struct {

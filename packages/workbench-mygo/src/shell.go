@@ -277,8 +277,10 @@ type Shell struct {
 	active   string
 	// windowProjects are the projects that the window opened: their hidden tabs stay surfaces of the window (docs/spec/plugins.md#memory-saver).
 	windowProjects map[string]bool
-	plane          *layout.Grid
-	focused        string
+	// otherOpen are the projects that the store last named as owned by a window.
+	otherOpen map[string]bool
+	plane     *layout.Grid
+	focused   string
 	// columnsChanged tells that the next frame matches the columns of the window sidebars to the settings.
 	columnsChanged bool
 	// fullscreen is the card that covers the plane, or "" while the cards stand in their arrangement.
@@ -386,7 +388,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.registry.Record(s.events.Command)
 	s.errors = NewShownErrors(s.events.Error)
 	s.binder = NewBinder(s.registry, func(_ string, err error) { s.fail(err) })
-	s.pointer = NewPointerSequence(func() { s.options.Invalidate() })
+	s.pointer = NewPointerSequence(options.Elements, func() { s.options.Invalidate() }, s.fail)
 	s.binder.Attach(s.pointer, s.exposedFocus)
 	s.starter = environment.pluginStarter
 	s.pluginOperations = NewPluginOperations(s.calls, s.events.BeginOperation, func() []LoadedPlugin { return s.plugins }, func() map[string]bool { return s.refused }, options.Invalidate)
@@ -540,6 +542,7 @@ func (s *Shell) showRequested(done func()) {
 func (s *Shell) adopt(value any) error {
 	snapshot, err := decode[struct {
 		Projects      []json.RawMessage `json:"projects"`
+		Open          []string          `json:"open"`
 		ProjectsError *string           `json:"projectsError"`
 		Common        map[string]any    `json:"common"`
 	}](value)
@@ -558,6 +561,7 @@ func (s *Shell) adopt(value any) error {
 		projects = append(projects, record)
 	}
 	s.projects = projects
+	s.takeOpen(snapshot.Open)
 	return s.beginSettings(snapshot.Common)
 }
 
@@ -586,6 +590,17 @@ func (s *Shell) project(id string) *projectRecord {
 	}
 	return nil
 }
+
+// takeOpen takes the projects that a workspace snapshot names as owned by a window.
+func (s *Shell) takeOpen(ids []string) {
+	s.otherOpen = make(map[string]bool, len(ids))
+	for _, id := range ids {
+		s.otherOpen[id] = true
+	}
+}
+
+// isOpen tells whether a window holds the project id, this window or another, as projects.isOpen does.
+func (s *Shell) isOpen(id string) bool { return s.windowProjects[id] || s.otherOpen[id] }
 
 // opened returns the project that the window shows, or nil.
 func (s *Shell) opened() *projectRecord { return s.project(s.active) }
@@ -648,7 +663,6 @@ func (s *Shell) View(c *ui.Context) {
 	s.building = true
 	defer func() { s.building = false }()
 	s.exposedFocus.Frame(c)
-	s.pointer.Frame()
 	s.sidebars.Begin()
 	clear(s.surfaces.drawn)
 	clear(s.picker.drawn)
@@ -673,7 +687,7 @@ func (s *Shell) View(c *ui.Context) {
 	c.SetTheme(&theme)
 	s.keys.Declare(c)
 	// Korean breaks at the spaces, as body of packages/workbench/app.css says. It is inherited, except by an overlay, whose root takes it.
-	root := ui.Column(c).Size(width, height).Background(s.palette.Bg).TextColor(s.palette.Fg).KeepAll().Clip()
+	root := s.binder.Watched(ui.Column(c).Size(width, height).Background(s.palette.Bg).TextColor(s.palette.Fg).KeepAll().Clip())
 	if s.dialogOpen() {
 		root.Blur(s.dialogBlur())
 	}

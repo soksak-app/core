@@ -70,7 +70,7 @@ func (s *Shell) drawSettings(c *ui.Context, width, height float32) {
 	x, y, cardW, cardH := s.settingsCard()
 	pane := s.readSettingsPane()
 	ui.Overlay(c, func() {
-		scrim := s.exposedBox(c, "core.settings-modal.scrim", "", "")
+		scrim := s.binder.Watched(s.exposedBox(c, "core.settings-modal.scrim", "", ""))
 		scrim.Absolute().Left(0).Top(0).Size(width, height).Background(s.dialogScrim()).KeepAll().Modal().Role(ui.RoleGroup).Label("core.settings-modal.scrim")
 		scrim.Children(func() {
 			card := s.exposedBox(c, "core.settings-modal.card", "", "")

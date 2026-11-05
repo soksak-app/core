@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+
+	"golang.org/x/text/collate"
+	"golang.org/x/text/language"
 )
 
 // The library: the screen of the saved projects and the form that adds one, as packages/workbench/library.js draws them. The plugin
@@ -46,12 +49,13 @@ func (s *Shell) shownProjects() []projectRecord {
 	}
 	switch s.library.order {
 	case "name":
-		slices.SortStableFunc(shown, func(a, b projectRecord) int { return strings.Compare(a.Title, b.Title) })
+		titles := collate.New(language.Und)
+		slices.SortStableFunc(shown, func(a, b projectRecord) int { return titles.CompareString(a.Title, b.Title) })
 	case "recent":
 		slices.SortStableFunc(shown, func(a, b projectRecord) int { return cmp.Compare(b.LastOpened, a.LastOpened) })
 	case "open":
 		isOpen := func(project projectRecord) int {
-			if project.ID == s.active {
+			if s.isOpen(project.ID) {
 				return 1
 			}
 			return 0

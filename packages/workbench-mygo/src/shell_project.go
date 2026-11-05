@@ -627,8 +627,11 @@ func (s *Shell) dropProject(id string) {
 		s.leavePlace()
 		s.active, s.plane, s.browsing, s.fullscreen = "", nil, true, ""
 		s.options.Located("")
-		if len(s.projects) > 0 {
-			s.activate(s.projects[0].ID)
+		for _, project := range s.projects {
+			if s.windowProjects[project.ID] {
+				s.activate(project.ID)
+				break
+			}
 		}
 	}
 	s.retainSessions()

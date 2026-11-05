@@ -176,6 +176,7 @@ func TestTheTimelineHasItsRowsAndTheirButtons(t *testing.T) {
 	pressPositional(t, tt, "core.debug.timeline.select", 2)
 	pressPositional(t, tt, "core.debug.timeline.context", 1)
 	pressPositional(t, tt, "core.debug.timeline.follow", 0)
+	positional(t, tt, "core.debug.timeline.omitted", 0)
 	pressPositional(t, tt, "core.debug.timeline.older", 0)
 	pressPositional(t, tt, "core.debug.timeline.save", 0)
 	pressPositional(t, tt, "core.debug.timeline.list", 0)

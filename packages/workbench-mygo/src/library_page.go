@@ -290,7 +290,7 @@ func (s *Shell) drawProjectCard(c *ui.Context, project *projectRecord, width flo
 	var panes []previewPane
 	failure := ""
 	_, folderFailed := s.library.folderErrors[project.Root]
-	open := project.ID == s.active
+	open := s.isOpen(project.ID)
 	card := ui.Box(c.Key("library-" + project.ID)).Width(width).Radius(s.palette.Radius).Clip().Background(s.palette.Card)
 	edge := s.palette.Edge
 	switch {

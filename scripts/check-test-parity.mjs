@@ -119,7 +119,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("workspace registry", "js-ts", ["scripts/workspace-registry.mjs"], ["scripts/test/workspace-registry.test.mjs"]),
   lane("platform boundary audit", "js-ts", ["scripts/check-platforms.mjs"], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
   lane("component boundary audit", "js-ts", ["scripts/check-boundaries.mjs"], ["scripts/test/check-boundaries.test.mjs", "scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
-  lane("plugin API", "js-ts", ["packages/plugin-api/*.js"], ["packages/plugin-api/test/**/*.mjs", "scripts/test/fixture-compositions.test.mjs"]),
+  lane("plugin API", "js-ts", ["packages/plugin-api/*.js"], ["packages/plugin-api/test/**/*.mjs", "scripts/test/fixture-compositions.test.mjs", "scripts/test/surface-names.test.mjs"]),
   lane("log contract", "js-ts", ["packages/log-contract/*.js"], ["packages/log-contract/test/**/*.mjs"]),
   lane("workbench", "js-ts", ["packages/workbench/*.js", "packages/workbench/*.mjs"], ["packages/workbench/test/**/*.js", "packages/workbench/test/**/*.mjs"], { sharedTests: true }),
   lane("client", "js-ts", [
@@ -698,7 +698,7 @@ const FEATURE_LINKS = [
     id: "F502-19",
     implementation: [
       { file: "packages/workbench-mygo/src/text_size.go", symbol: "func NextTextSize(steps []float64, value float64, direction int) (float64, error) {" },
-      { file: "packages/workbench-mygo/src/pointer.go", symbol: "func NewPointerSequence(changed func()) *PointerSequence {" },
+      { file: "packages/workbench-mygo/src/pointer.go", symbol: "func NewPointerSequence(elements Elements, changed func(), fail func(error)) *PointerSequence {" },
       { file: "packages/workbench-mygo/src/focus.go", symbol: "func (f *Focus) SetResponder(event Responder) error {" },
       { file: "packages/workbench-mygo/src/shortcuts.go", symbol: "func ParseShortcut(text string) (ui.Modifiers, ui.Key, error) {" },
       { file: "packages/workbench-mygo/src/contributions.go", symbol: "func ResolveContributions(installed []InstalledPlugin) ([]ResolvedContribution, error) {" },

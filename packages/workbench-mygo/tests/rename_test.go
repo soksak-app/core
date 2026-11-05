@@ -67,6 +67,32 @@ func TestADoubleClickRenamesAProjectInPlace(t *testing.T) {
 }
 
 // Escape leaves the title as it was.
+// The command that begins a rename hands the field the focus with its whole text selected, wherever the focus was, as a press does.
+func TestABegunRenameHoldsTheFocus(t *testing.T) {
+	f := openedShell(t)
+	f.settle()
+	f.run("core.focus.set", map[string]any{"name": "core.space-tab.add"})
+	f.settle()
+	f.run("core.rename.begin", map[string]string{"kind": "project", "id": f.host.projects[0]["id"].(string)})
+	f.settle()
+	focus := status[*struct {
+		Name string `json:"name"`
+	}](t, f, "core.focus")
+	if focus == nil || focus.Name != "core.rename.input" {
+		t.Fatalf("the focus is %+v", focus)
+	}
+	f.tester.Type("x")
+	f.settle()
+	if got := status[*renameRead](t, f, "core.rename"); got == nil || got.Value != "x" {
+		t.Fatalf("the rename is %+v", got)
+	}
+	f.tester.Key(0, ui.KeyEnter)
+	f.settle()
+	if f.host.projects[0]["title"] != "x" {
+		t.Fatalf("the store holds %v", f.host.projects[0]["title"])
+	}
+}
+
 func TestEscapeStopsARename(t *testing.T) {
 	f := openedShell(t)
 	id := f.host.projects[0]["id"].(string)

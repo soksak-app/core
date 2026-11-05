@@ -132,7 +132,7 @@ func (s *Shell) projectStatus(record projectRecord) (map[string]any, error) {
 	if err := json.Unmarshal(text, &status); err != nil {
 		return nil, err
 	}
-	status["open"] = record.ID == s.active
+	status["open"] = s.isOpen(record.ID)
 	return status, nil
 }
 
