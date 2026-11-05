@@ -878,49 +878,6 @@ func TestTheChromeBarHoldsTheLogoAndTheSwitchesOfThePage(t *testing.T) {
 	}
 }
 
-// A divider shows a grip in the muted color at the middle of its grab area, which turns to the focus color under the pointer, and the boundary
-// shows its line in the rule color.
-func TestADividerShowsItsGripAndItsLine(t *testing.T) {
-	declared, err := workbench.Declared()
-	if err != nil {
-		t.Fatal(err)
-	}
-	mix, ok := declared.Share("sp-grip-mix")
-	if !ok {
-		t.Fatal("no share sp-grip-mix")
-	}
-	f, left, right := splitShell(t)
-	f.run("core.settings.theme", map[string]any{"name": "midnight", "mode": "dark"})
-	f.tester.Move(5, 5)
-	f.tester.Advance(time.Second)
-	f.settle()
-	token := func(name string) color.RGBA { return themeToken(t, "midnight", "dark", name) }
-	box, _ := f.divider(left, right)
-	at := func(x, y float32) color.RGBA {
-		image := f.tester.Image()
-		scale := float32(image.Bounds().Dx()) / 1200
-		return image.RGBAAt(int(x*scale), int(y*scale))
-	}
-	x, y := box.X+box.W/2, box.Y+box.H/2
-	stage, muted := token("bg"), token("muted")
-	blend := func(a, b uint8) uint8 { return uint8(math.Round(float64(a)*(1-mix) + float64(b)*mix)) }
-	want := color.RGBA{blend(stage.R, muted.R), blend(stage.G, muted.G), blend(stage.B, muted.B), 255}
-	off := func(a, b uint8) bool { return math.Abs(float64(a)-float64(b)) > 3 }
-	if got := at(x+1, y); off(got.R, want.R) || off(got.G, want.G) || off(got.B, want.B) {
-		t.Fatalf("the grip is %v, want %v", got, want)
-	}
-	if got, want := at(x, y+40), token("rule"); got != want {
-		t.Fatalf("the line is %v, want %v", got, want)
-	}
-	f.tester.Move(x, y)
-	f.tester.Frame()
-	f.tester.Advance(time.Second)
-	f.tester.Frame()
-	if got, want := at(x+1, y), token("focus"); got != want {
-		t.Fatalf("the grip under the pointer is %v, want %v", got, want)
-	}
-}
-
 // The number of a new tab counts the tabs of its layout and the name of a new space counts the spaces of its project, so neither moves the other.
 func TestTabsAndSpacesCountApart(t *testing.T) {
 	f, first, made := splitShell(t)

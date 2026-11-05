@@ -236,11 +236,6 @@ func (s *Shell) layoutState() (any, error) {
 	if err := json.Unmarshal(space.Layout, &kept); err != nil {
 		return nil, err
 	}
-	focused, err := json.Marshal(s.focused)
-	if err != nil {
-		return nil, err
-	}
-	kept["focusedId"] = focused
 	return kept, nil
 }
 
@@ -370,7 +365,7 @@ func (s *Shell) surfacesState() []surfaceStatus {
 		if !visible {
 			box = held.box
 		}
-		entry := surfaceStatus{Surface: id, Plugin: unit.ID, Visible: visible, Dim: s.surfaceDimmed(id), Declared: &box, Applied: &box, Exposes: unit.exposedNames(),
+		entry := surfaceStatus{Surface: id, Plugin: unit.ID, Visible: visible, Dim: s.surfaceDimmed(id), Declared: &box, Applied: &box, Exposes: s.registry.EntriesOf(id),
 			Status: s.surfacePhase(id), Composition: held.composition, Kind: "tab", State: "loaded"}
 		if !visible {
 			entry.Applied = nil
@@ -383,38 +378,44 @@ func (s *Shell) surfacesState() []surfaceStatus {
 	return status
 }
 
-// exposedNames lists what the plugin of a surface registers, as "<kind> <name>".
-func (u *installedUnit) exposedNames() []string {
-	names := []string{}
-	for kind, entries := range map[string][]json.RawMessage{"status": u.Exposes.Status, "command": u.Exposes.Commands, "element": u.Exposes.Element} {
-		for _, raw := range entries {
-			var entry struct {
-				Name string `json:"name"`
-			}
-			if json.Unmarshal(raw, &entry) == nil { // silent: readSurfaceUnits holds a manifest whose entries are objects.
-				names = append(names, kind+" "+entry.Name)
-			}
-		}
-	}
-	return names
-}
-
-// surfacePhase is the page status of a surface: its reported failure, or ready once the document of the view answered.
-func (s *Shell) surfacePhase(id string) map[string]any {
+// surfaceProgress is the phase of a surface with the reason of an error: its reported failure, or ready once the document of the
+// view answered.
+func (s *Shell) surfaceProgress(id string) (phase, reason string) {
 	if reason, stopped := s.surfaces.stopped(id); stopped {
-		return map[string]any{"phase": "error", "reason": reason}
+		return "error", reason
 	}
 	if report := s.surfaces.reports[id]; report != nil && report.Error != "" {
-		return map[string]any{"phase": "error", "reason": report.Error}
+		return "error", report.Error
 	}
 	if s.surfaces.views[id] != nil {
-		return map[string]any{"phase": "ready"}
+		return "ready", ""
 	}
-	return map[string]any{"phase": "loading"}
+	return "loading", ""
+}
+
+// surfacePhase is the page status of a surface.
+func (s *Shell) surfacePhase(id string) map[string]any {
+	phase, reason := s.surfaceProgress(id)
+	if phase == "error" {
+		return map[string]any{"phase": phase, "reason": reason}
+	}
+	return map[string]any{"phase": phase}
+}
+
+// sectionProgress is the state of a section surface in core.sidebars. A section is mounted once its view answered, and a view that
+// stopped is no longer mounted. A section without a surface has no phase.
+func (s *Shell) sectionProgress(id string) SectionProgress {
+	if s.surfaces.held[id] == nil {
+		return SectionProgress{}
+	}
+	phase, reason := s.surfaceProgress(id)
+	_, stopped := s.surfaces.stopped(id)
+	return SectionProgress{Mounted: s.surfaces.views[id] != nil && !stopped, Phase: &phase, Error: nullable(reason)}
 }
 
 // registerStatuses adds the statuses of the shell.
 func (s *Shell) registerStatuses() {
+	s.registry.Status("core.verify", func() any { return s.verification.Status() })
 	s.registry.Status("core.projects", func() any {
 		status := make([]map[string]any, 0, len(s.projects))
 		for _, project := range s.projects {

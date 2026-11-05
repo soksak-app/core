@@ -12,7 +12,7 @@
 // macro.
 #![recursion_limit = "256"]
 
-use std::sync::PoisonError;
+use std::sync::{Arc, PoisonError};
 
 use framework::{AppHandle, Manager, Webview};
 
@@ -366,9 +366,9 @@ pub fn setup(app: &AppHandle, setup: Setup) -> Result<(), Box<dyn std::error::Er
     let main = app.clone();
     let _runs_until_exit = stall_watch::start_stall_watch(stall_watch::StallWatchOptions {
         on_main: Box::new(move |task| main.post(task).map_err(|e| e.to_string())),
-        sample: Box::new(|path| platform::current()?.sample_threads(path)),
+        sample: Arc::new(|path| platform::current()?.sample_threads(path)),
         folder: directory.join("logs"),
-        emit_host: Box::new(event_record::emit_host),
+        emit_host: Arc::new(event_record::emit_host),
         clock: None,
         wait: None,
     });

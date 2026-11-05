@@ -796,12 +796,9 @@ func (s *Shell) settingsChanged() error {
 	}
 	s.followScale()
 	s.followSettings()
-	changed, err := s.arrangeWindowSidebars()
-	if err != nil {
+	s.columnsChanged = true
+	if err := s.followDiagnostics(); err != nil {
 		return err
-	}
-	if changed {
-		s.settle()
 	}
 	s.options.Invalidate()
 	return nil
@@ -1195,8 +1192,8 @@ func (s *Shell) registerSettingsWindow() {
 	})
 }
 
-// beginSettings takes the stored settings of the window and of its project.
-func (s *Shell) beginSettings() error {
+// beginSettings takes the common settings and the stored settings of the project of the window.
+func (s *Shell) beginSettings(common map[string]any) error {
 	var overrides map[string]any
 	project := s.opened()
 	id := ""
@@ -1206,7 +1203,10 @@ func (s *Shell) beginSettings() error {
 			return err
 		}
 	}
-	if err := s.settings.Begin(s.commonSettings, overrides, id); err != nil {
+	if err := s.settings.Begin(common, overrides, id); err != nil {
+		return err
+	}
+	if err := s.followDiagnostics(); err != nil {
 		return err
 	}
 	return s.applySettings()
@@ -1216,4 +1216,44 @@ func (s *Shell) beginSettings() error {
 func (s *Shell) closeSettings() {
 	s.settingsWindow.open = false
 	s.options.Invalidate()
+}
+
+// followDiagnostics puts the settings of the diagnostics in force: the host stores the policy of diagnostics.log and sets the switch
+// of the performance trace. The same value is not sent again; a value that the host refused is sent again by the next change.
+func (s *Shell) followDiagnostics() error {
+	setting, err := decode[map[string]string](s.settings.Value("diagnostics.log"))
+	if err != nil {
+		return fmt.Errorf("diagnostics.log: %w", err)
+	}
+	classes := map[string]string{}
+	for _, name := range eventClasses {
+		classes[name] = "error" // default: a class that the setting does not name stores the errors.
+		if level, named := setting[name]; named {
+			classes[name] = level
+		}
+	}
+	if text := jsonText(classes); text != s.diagnostics.policy {
+		s.diagnostics.policy = text
+		s.events.Follow(map[string]any{"classes": classes})
+		s.calls.Call("log", map[string]any{"action": "policy", "classes": classes}, func(_ any, err error) {
+			if err != nil {
+				s.diagnostics.policy = ""
+				s.fail(err)
+			}
+		})
+	}
+	action := "off"
+	if s.settings.Value("diagnostics.performance") == true {
+		action = "on"
+	}
+	if action != s.diagnostics.trace {
+		s.diagnostics.trace = action
+		s.calls.Call("performance", map[string]string{"action": action}, func(_ any, err error) {
+			if err != nil {
+				s.diagnostics.trace = ""
+				s.fail(err)
+			}
+		})
+	}
+	return nil
 }

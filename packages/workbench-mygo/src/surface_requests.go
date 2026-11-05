@@ -247,6 +247,20 @@ func (r *Registry) applyRegistration(event SurfaceRegistered) error {
 	return nil
 }
 
+// EntriesOf returns the entries that the surface registered, as "<kind> <name>" in sorted order.
+func (r *Registry) EntriesOf(surface string) []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	entries := []string{}
+	for key, owners := range r.surfaces.owners {
+		if slices.Contains(owners, surface) {
+			entries = append(entries, key)
+		}
+	}
+	slices.Sort(entries)
+	return entries
+}
+
 // ownersOf returns the surfaces that registered the entry, in registration order.
 func (r *Registry) ownersOf(kind, name string) []string {
 	r.mu.Lock()

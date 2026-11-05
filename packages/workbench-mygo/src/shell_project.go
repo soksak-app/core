@@ -19,8 +19,9 @@ import (
 type storedLayout struct {
 	State          layout.State    `json:"state"`
 	Named          int             `json:"named"`
-	Sidebars       json.RawMessage `json:"sidebars"`
+	FocusedID      string          `json:"focusedId"`
 	WindowSidebars json.RawMessage `json:"windowSidebars"`
+	Sidebars       json.RawMessage `json:"sidebars"`
 }
 
 // newLayout returns the layout of a new space, from the grid of the environment declaration.
@@ -121,24 +122,29 @@ func (s *Shell) registerProjectOpen() {
 		if color == "" {
 			color = projectOpenColor
 		}
-		s.calls.Call("projectFolder", value.Root, func(reply any, err error) {
+		s.openRoot(value.Root, color, func(project json.RawMessage, err error) {
 			if err != nil {
 				answer(nil, err)
 				return
 			}
-			folder, err := decode[ProjectFolderValue](reply)
-			if err != nil {
-				answer(nil, err)
-				return
-			}
-			s.openFolder(folder, color, func(project json.RawMessage, err error) {
-				if err != nil {
-					answer(nil, err)
-					return
-				}
-				answer(project, nil)
-			})
+			answer(project, nil)
 		})
+	})
+}
+
+// openRoot opens the folder of root as a project on a fresh layout.
+func (s *Shell) openRoot(root, color string, done func(project json.RawMessage, err error)) {
+	s.calls.Call("projectFolder", root, func(reply any, err error) {
+		if err != nil {
+			done(nil, err)
+			return
+		}
+		folder, err := decode[ProjectFolderValue](reply)
+		if err != nil {
+			done(nil, err)
+			return
+		}
+		s.openFolder(folder, color, done)
 	})
 }
 
@@ -235,7 +241,7 @@ func (s *Shell) showThen(id string, done func()) {
 	s.active, s.browsing = id, false
 	s.options.Located(id)
 	s.errors.Hide(workbenchErrorPlace)
-	if err := s.beginSettings(); err != nil {
+	if err := s.beginSettings(s.settings.Common()); err != nil {
 		s.fail(err)
 	}
 	s.calls.Call("projectShown", map[string]any{"project": map[string]string{"id": id, "root": project.Root, "title": project.Title}},
@@ -273,18 +279,25 @@ func (s *Shell) loadSpace(project *projectRecord) error {
 	if err := s.sidebars.Restore(stored.Sidebars); err != nil {
 		return fmt.Errorf("space %s: %w", space.ID, err)
 	}
-	// default: a stored layout without records has no stored width (docs/spec/projects.md#persistence).
-	widths := map[string]layout.WindowSidebar{}
+	s.windowSidebars = map[string]layout.WindowSidebar{}
 	if len(stored.WindowSidebars) > 0 {
-		if widths, err = layout.RestoreWindowSidebars(stored.WindowSidebars); err != nil {
+		if s.windowSidebars, err = layout.RestoreWindowSidebars(stored.WindowSidebars); err != nil {
 			return fmt.Errorf("space %s: %w", space.ID, err)
 		}
 	}
-	s.plane, s.focused, s.fullscreen, s.windowSidebars = plane, s.firstCard(plane), "", widths
+	s.plane, s.fullscreen = plane, ""
+	// A new space stores no focus, and the stored focus of a card that left the layout names no card.
+	s.focused = stored.FocusedID
+	if _, known := plane.Card(s.focused); !known {
+		s.focused = s.firstCard(plane)
+	}
 	if _, err := s.arrangeWindowSidebars(); err != nil {
 		return fmt.Errorf("space %s: %w", space.ID, err)
 	}
 	s.operated = map[string]map[string]layout.Side{}
+	s.columnsChanged = true
+	// The views of this space take the scale that changed while it was off the screen.
+	s.followScale()
 	return nil
 }
 
@@ -358,6 +371,9 @@ func (s *Shell) keepPlane(project *projectRecord) error {
 	if kept["named"], err = json.Marshal(s.tabsNamed); err != nil {
 		return err
 	}
+	if kept["focusedId"], err = json.Marshal(s.focused); err != nil {
+		return err
+	}
 	if kept["sidebars"], err = json.Marshal(s.sidebars.Stored()); err != nil {
 		return err
 	}
@@ -424,18 +440,28 @@ func (s *Shell) browse() {
 
 // removeProject removes the project id, as projects.close does.
 func (s *Shell) removeProject(id string) {
+	s.removeProjectThen(id, func(_ bool, err error) {
+		if err != nil {
+			s.fail(err)
+		}
+	})
+}
+
+// removeProjectThen is removeProject that tells whether the project was removed: a kept tab of the project keeps it.
+func (s *Shell) removeProjectThen(id string, done func(removed bool, err error)) {
 	operation := s.calls.Caused(s.events.BeginOperation("workbench.project.operation", map[string]any{"action": "remove", "project": id}))
 	operation.Call("projectRemoveAsk", id, func(value any, err error) {
 		if err != nil {
-			s.fail(err)
+			done(false, err)
 			return
 		}
 		allowed, err := decode[bool](value)
 		if err != nil {
-			s.fail(err)
+			done(false, err)
 			return
 		}
 		if !allowed {
+			done(false, nil)
 			return
 		}
 		if id != s.active {
@@ -443,15 +469,16 @@ func (s *Shell) removeProject(id string) {
 		}
 		operation.Call("projectRelease", id, func(_ any, err error) {
 			if err != nil {
-				s.fail(err)
+				done(false, err)
 				return
 			}
 			s.calls.CallInOrder("workspace", "workspace", map[string]any{"kind": "remove", "id": id}, func(_ any, err error) {
 				if err != nil {
-					s.fail(err)
+					done(false, err)
 					return
 				}
 				s.dropProject(id)
+				done(true, nil)
 			})
 		})
 	})
@@ -500,6 +527,7 @@ func (s *Shell) activateSpace(id string) error {
 		return err
 	}
 	s.storeSpaces(project)
+	s.tabsSettled()
 	s.options.Invalidate()
 	return nil
 }
@@ -522,6 +550,7 @@ func (s *Shell) addSpace() error {
 		return err
 	}
 	s.storeSpaces(project)
+	s.tabsSettled()
 	s.options.Invalidate()
 	return nil
 }

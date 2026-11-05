@@ -84,6 +84,16 @@ func (d *Declarations) Share(name string) (float64, bool) {
 	return number / 100, err == nil
 }
 
+// Seconds returns the chrome metric name, which is a time in seconds, and false when the metric does not exist or holds another unit.
+func (d *Declarations) Seconds(name string) (float64, bool) {
+	value, ok := strings.CutSuffix(d.chrome[name], "s")
+	if !ok {
+		return 0, false
+	}
+	number, err := strconv.ParseFloat(value, 64)
+	return number, err == nil
+}
+
 // HeightMetric returns the chrome metric name, which is a share of the window height in vh, as a ratio, and false when the metric does
 // not exist or holds another unit.
 func (d *Declarations) HeightMetric(name string) (float64, bool) {

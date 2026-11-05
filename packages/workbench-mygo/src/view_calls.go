@@ -139,6 +139,11 @@ func (s *Shell) viewCall(data []any) {
 		return
 	}
 	view := s.view(call.Surface)
+	// The first call of a page that started anew can arrive before the end of the page before it.
+	if view.generation != 0 && call.Generation > view.generation {
+		s.forgetView(call.Surface, view)
+		view = s.view(call.Surface)
+	}
 	if call.Cancel {
 		// default: a cancel of a call that has no pending call ends nothing, because that call has already replied.
 		if pending := view.pending[call.ID]; pending != nil {
@@ -409,14 +414,14 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 	case "runtime.data.get", "runtime.data.set", "runtime.data.on":
 		return s.runDataCall(call, unit, view, answer)
 	case "runtime.textSize.read":
-		size, err := s.surfaceTextSize(call.Surface)
+		size, err := s.viewTextSize(call.Surface, view)
 		if err != nil {
 			return err
 		}
 		view.scale = size
 		answer(size, nil)
 	case "runtime.textSize.on":
-		size, err := s.surfaceTextSize(call.Surface)
+		size, err := s.viewTextSize(call.Surface, view)
 		if err != nil {
 			return err
 		}
@@ -830,25 +835,28 @@ func (s *Shell) viewSettings(unit *installedUnit) map[string]any {
 	return values
 }
 
-// surfaceTextSize returns the text scale of the surface: the frame factor multiplied by the factor of its card. A surface whose tab is not in the
-// shown plane stands in a hidden space, so it keeps the scale that it had.
-func (s *Shell) surfaceTextSize(surface string) (float64, error) {
-	held := s.surfaces.held[surface]
-	if held != nil && held.section != nil {
-		return s.text.Frame(), nil
+// surfaceTextSize returns the text scale of the surface: the frame factor multiplied by the factor of its card, and false for a tab of a
+// space off the screen, which has no card.
+func (s *Shell) surfaceTextSize(surface string) (float64, bool) {
+	if held := s.surfaces.held[surface]; held != nil && held.section != nil {
+		return s.text.Frame(), true
 	}
 	card := s.cardOfTab(surface)
 	if card == "" {
-		if held != nil && held.scale != 0 {
-			return held.scale, nil
-		}
+		return 0, false
+	}
+	return s.text.Effective(card), true
+}
+
+// viewTextSize returns the text scale that view reads: a view of a space off the screen keeps the scale it last had.
+func (s *Shell) viewTextSize(surface string, view *viewState) (float64, error) {
+	if size, shown := s.surfaceTextSize(surface); shown {
+		return size, nil
+	}
+	if view.scale == 0 {
 		return 0, fmt.Errorf("surface %s is not in the layout", surface)
 	}
-	scale := s.text.Effective(card)
-	if held != nil {
-		held.scale = scale
-	}
-	return scale, nil
+	return view.scale, nil
 }
 
 // readTabState returns the value of the state of the tab: null without one, and a state of another format is refused.
@@ -974,8 +982,11 @@ func (s *Shell) observeForView(call viewCallEvent, view *viewState, name string,
 	return nil
 }
 
-// pushStatuses sends each watched status of a view whose value changed.
+// pushStatuses sends each watched status of a view and of the endpoint whose value changed.
 func (s *Shell) pushStatuses() {
+	if err := s.registry.Changed(); err != nil {
+		s.fail(err)
+	}
 	for surface, view := range s.surfaces.views {
 		for name, last := range view.statuses {
 			value, err := s.registry.Read(name)
@@ -1128,10 +1139,15 @@ func (s *Shell) viewEnded(data []any) {
 	if view == nil || view.generation != event.Generation {
 		return
 	}
+	s.forgetView(event.Surface, view)
+}
+
+// forgetView ends what the page of a view held.
+func (s *Shell) forgetView(surface string, view *viewState) {
 	view.end()
-	delete(s.surfaces.views, event.Surface)
-	s.keyboard.ForgetView(event.Surface)
-	delete(s.surfaces.documents, event.Surface)
+	delete(s.surfaces.views, surface)
+	s.keyboard.ForgetView(surface)
+	delete(s.surfaces.documents, surface)
 }
 
 // viewStopped shows the reason of a view that stopped its restarts as the error of its surface.

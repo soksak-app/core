@@ -73,14 +73,18 @@ type environmentGrid struct {
 
 // metrics are the chrome metrics that the shell draws with.
 type metrics struct {
-	barTabRootPad, barTabRootW, gripMix, gripThickness, gripLength, lineCrossingMix, dropMix, dropBorder, tabDraggingOpacity, actStroke, chromeActsGap, brandGap, brandLogoAtBase, chromeH, chromeRowH, spaceGap, spacePad, chromeGap, barGap, barXPad, barXOpacity, barAddText, barAddPad, textControlAtBase, textCaptionAtBase, chipMix, chipHoverMix, chipOnMix, projectTabMix float32
-	headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW                                                                                                                                                                                                                                                  float32
+	barTabRootPad, barTabRootW, dropMix, dropBorder, tabDraggingOpacity, actStroke, chromeActsGap, brandGap, brandLogoAtBase, chromeH, chromeRowH, spaceGap, spacePad, chromeGap, barGap, barXPad, barXOpacity, barAddText, barAddPad, textControlAtBase, textCaptionAtBase, chipMix, chipHoverMix, chipOnMix, projectTabMix float32
+	headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW                                                                                                                                                                                             float32
 	// The card head (.chrome of packages/workbench/app.css).
 	cardHeadGap, cardHeadPad, cardTabsGap, cardButton, cardIcon, cardActsGap, cardActsPad, cardActHalfOpacity, tabGap, tabPadY, tabPadX, tabXPad, tabXOpacity, iconStroke, disabledOpacity, noticeDotInset, radiusSmallRatio, textSmallAtBase, textBase, chipSelMix, insetMix, tabXHoverMix float32
 	// The error line (#applicationError of packages/workbench/app.css).
 	errorPadY, errorPadX, errorBorder float32
 	// debugW is the width of the debug view, and debugH its largest share of the window height.
 	debugW, debugH float32
+	// The grip of a divider, the dots of a folded side and the lines of the boundaries (.sp-divider, .card-sidebar__grip and .sp-rule of
+	// packages/workbench/app.css).
+	gripThickness, gripLength, gripMix, gripDot, gripDotSpacing, lineCrossingMix float32
+	gripTransition                                                               time.Duration
 }
 
 func readMetrics(declared *Declarations) (metrics, error) {
@@ -95,8 +99,6 @@ func readMetrics(declared *Declarations) (metrics, error) {
 	}
 	read("bar-tab-root-pad", &m.barTabRootPad)
 	read("bar-tab-root-w", &m.barTabRootW)
-	read("sp-grip-thickness", &m.gripThickness)
-	read("sp-grip-length", &m.gripLength)
 	read("drop-border", &m.dropBorder)
 	read("tab-dragging-opacity", &m.tabDraggingOpacity)
 	read("act-stroke", &m.actStroke)
@@ -165,8 +167,6 @@ func readMetrics(declared *Declarations) (metrics, error) {
 		*into = float32(value)
 	}
 	mix("chip-sel-mix", &m.chipSelMix)
-	mix("sp-grip-mix", &m.gripMix)
-	mix("sp-line-crossing-mix", &m.lineCrossingMix)
 	mix("drop-mix", &m.dropMix)
 	mix("chip-mix", &m.chipMix)
 	mix("chip-hover-mix", &m.chipHoverMix)
@@ -174,6 +174,17 @@ func readMetrics(declared *Declarations) (metrics, error) {
 	mix("project-tab-mix", &m.projectTabMix)
 	mix("inset-mix", &m.insetMix)
 	mix("tab-x-hover-mix", &m.tabXHoverMix)
+	mix("sp-grip-mix", &m.gripMix)
+	mix("sp-line-crossing-mix", &m.lineCrossingMix)
+	read("sp-grip-thickness", &m.gripThickness)
+	read("sp-grip-length", &m.gripLength)
+	read("grip-dot", &m.gripDot)
+	read("grip-dot-spacing", &m.gripDotSpacing)
+	seconds, ok := declared.Seconds("grip-transition")
+	if !ok {
+		failed = errors.New("the chrome metric grip-transition has no time")
+	}
+	m.gripTransition = time.Duration(seconds * float64(time.Second))
 	return m, failed
 }
 
@@ -236,6 +247,8 @@ type Shell struct {
 	active   string
 	plane    *layout.Grid
 	focused  string
+	// columnsChanged tells that the next frame matches the columns of the window sidebars to the settings.
+	columnsChanged bool
 	// fullscreen is the card that covers the plane, or "" while the cards stand in their arrangement.
 	fullscreen string
 	// strips holds the scroll of the tab strip of each card.
@@ -260,7 +273,6 @@ type Shell struct {
 	settings       *SettingsStore
 	settingsWindow settingsWindow
 	debugView      debugViewState
-	commonSettings map[string]any
 	menuLanguage   string
 	plugins        []LoadedPlugin
 	// refused holds the ids of the installed plugins whose manifest the window refused.
@@ -288,7 +300,10 @@ type Shell struct {
 
 	text *TextSize
 	// keyboard is the keyboard focus of the window, which the first responder and the views report.
-	keyboard *Focus
+	keyboard     *Focus
+	verification *Verification
+	// diagnostics holds the policy and the trace switch that the host received last.
+	diagnostics struct{ policy, trace string }
 	// started is set once the host took the first state of the shell, changed once plugins changed before that, and reloading while the
 	// shell saves before a reload. They belong to the main thread.
 	started, changed, reloading bool
@@ -322,6 +337,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 		grid: environment.Workspace.Grid, focus: environment.Workspace.Focus, browsing: true, library: newLibraryState(), strips: map[string]*stripPlace{}, icons: map[string]*ui.SVG{}, heads: map[string]layout.HeadFit{}}
 	s.text = NewTextSize(shellText{s}, steps)
 	s.keyboard = NewFocus(options.Declared, func() { s.options.Invalidate() })
+	s.verification = NewVerification(func() { s.options.Invalidate() })
 	s.events = NewEvents(EventsOptions{Calls: s.calls, Post: options.Post, Report: options.Report, Now: time.Now,
 		After: func(delay time.Duration, task func()) { time.AfterFunc(delay, task) }})
 	s.calls.Observe(s.events.Call)
@@ -366,7 +382,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	})
 	s.sidebars, err = NewSidebars(SidebarsOptions{Declared: options.Declared, Registry: s.registry, Binder: s.binder,
 		Environment: options.Environment, Installed: installed, Changed: s.settle, Seat: s.drawSectionSeat,
-		Mounted: func(id string) bool { return s.surfaces.held[id] != nil }, Rail: func() ui.Color { return s.palette.Rail }})
+		Progress: s.sectionProgress, Rail: func() ui.Color { return s.palette.Rail }})
 	if err != nil {
 		return nil, err
 	}
@@ -497,8 +513,7 @@ func (s *Shell) adopt(value any) error {
 		projects = append(projects, record)
 	}
 	s.projects = projects
-	s.commonSettings = snapshot.Common
-	return s.beginSettings()
+	return s.beginSettings(snapshot.Common)
 }
 
 // decode reads the answer of a host call, which is the value of the handler or its JSON text.

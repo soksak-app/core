@@ -410,3 +410,89 @@ func TestARightClickInAViewOpensTheMenuOfItsPlugin(t *testing.T) {
 		t.Fatalf("the menu is %+v", menu)
 	}
 }
+
+func TestTheSurfaceStatusListsWhatTheViewRegistered(t *testing.T) {
+	r := newViewRelay(t)
+	surface := r.surface()
+	exposes := func() []any {
+		value, err := r.f.shell.Registry().Read("core.surfaces")
+		if err != nil {
+			t.Fatal(err)
+		}
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var surfaces []map[string]any
+		if err := json.Unmarshal(encoded, &surfaces); err != nil {
+			t.Fatal(err)
+		}
+		for _, entry := range surfaces {
+			if entry["surface"] == surface {
+				return entry["exposes"].([]any)
+			}
+		}
+		t.Fatalf("no surface %s in %v", surface, surfaces)
+		return nil
+	}
+	if listed := exposes(); len(listed) != 0 {
+		t.Fatalf("a view that registered nothing lists %v", listed)
+	}
+	r.call(surface, "runtime.command.register", map[string]any{"name": "terminal.input"})
+	r.f.pending.until(r.t, func() bool { return len(exposes()) == 1 })
+	if listed := exposes(); !reflect.DeepEqual(listed, []any{"command terminal.input"}) {
+		t.Fatalf("the view lists %v", listed)
+	}
+}
+
+func TestARegistrationReachesAWatchWithoutAFrame(t *testing.T) {
+	r := newViewRelay(t)
+	surface := r.surface()
+	var last string
+	watch := []byte(`{"name": "core.surfaces"}`)
+	if _, err := r.f.shell.Registry().Answer("status.watch", watch, func(_ string, value any) {
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			t.Error(err)
+		}
+		last = string(encoded)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	r.emit("exposure-registered", map[string]any{"surface": surface, "kind": "command", "name": "terminal.input"})
+	r.f.pending.drain(t)
+	if !strings.Contains(last, "command terminal.input") {
+		t.Fatalf("the watch holds %s", last)
+	}
+}
+
+// A page that starts anew in a surface holds nothing of the page before it, also when the end of that page arrives after its first
+// call: it registers the same command again, and the late end leaves its registration.
+func TestANewDocumentOfASurfaceRegistersItsCommandsAgain(t *testing.T) {
+	r := newViewRelay(t)
+	surface := r.surface()
+	register := func(generation, id int) map[string]any {
+		t.Helper()
+		r.f.shell.Event("view-call", []any{map[string]any{"surface": surface, "plugin": "terminal", "generation": generation, "id": id,
+			"command": "runtime.command.register", "params": map[string]any{"name": "terminal.input"}}})
+		r.f.settle()
+		for _, reply := range r.stored.replies {
+			if reply["id"] == float64(id) && reply["generation"] == float64(generation) {
+				return reply
+			}
+		}
+		t.Fatalf("the call %d has no reply", id)
+		return nil
+	}
+	if reply := register(1, 21); reply["error"] != nil {
+		t.Fatalf("the first document: %v", reply["error"])
+	}
+	if reply := register(2, 22); reply["error"] != nil {
+		t.Fatalf("the second document: %v", reply["error"])
+	}
+	r.f.shell.Event("view-process-ended", []any{map[string]any{"surface": surface, "generation": 1}})
+	r.f.settle()
+	if reply := register(2, 23); reply["error"] == nil {
+		t.Fatal("the second document registered its command twice")
+	}
+}

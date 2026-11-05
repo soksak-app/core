@@ -217,14 +217,17 @@ func sectionItem(frame SidebarFrame, section SidebarSection) string {
 func DrawSidebar(c *ui.Context, binder *Binder, drag *SectionDrag, frame SidebarFrame, metrics SidebarMetrics, width, height float32, seat seatDrawer) {
 	room := height - metrics.FootH
 	ui.Column(binder.Name(c, "core.sidebar", frame.Sidebar)).Size(width, height).Role(ui.RoleGroup).Label(frame.Sidebar).Clip().Children(func() {
-		switch {
-		case frame.Layout == "tabs":
-			drawSectionTabs(c, binder, frame, metrics, width, room, seat)
-		case frame.Orientation == "horizontal":
-			drawHorizontalList(c, binder, frame, metrics, width, room, seat)
-		default:
-			drawVerticalList(c, binder, drag, frame, metrics, width, room, seat)
-		}
+		// The set takes all the room, so a set of short sections leaves the status line at the bottom.
+		ui.Column(c).Size(width, room).Children(func() {
+			switch {
+			case frame.Layout == "tabs":
+				drawSectionTabs(c, binder, frame, metrics, width, room, seat)
+			case frame.Orientation == "horizontal":
+				drawHorizontalList(c, binder, frame, metrics, width, room, seat)
+			default:
+				drawVerticalList(c, binder, drag, frame, metrics, width, room, seat)
+			}
+		})
 		drawSidebarStatus(c, binder, frame, metrics)
 	})
 	for _, place := range SidebarSeats(frame) {

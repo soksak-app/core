@@ -20,8 +20,39 @@ func TestViewCallFollowsTheTextScale(t *testing.T) {
 	}
 }
 
-// The view of a hidden space stays out of the layout: it keeps the scale that it has and follows the layout again when its space returns.
+// A view of a space off the screen has no card, so it keeps its scale, and it reads that scale. It hears the change when its space shows.
 func TestAViewOfAHiddenSpaceKeepsItsTextScale(t *testing.T) {
+	f, stored := surfaceShell(t)
+	surface := terminalSurface(t, stored)
+	if reply := viewCall(t, f, stored, surface, "runtime.textSize.on", nil); reply["error"] != nil {
+		t.Fatalf("the reply is %v", reply)
+	}
+	first := f.host.projects[0]["spaces"].([]any)[0].(map[string]any)["id"].(string)
+	f.run("core.space.add", nil)
+	f.settle()
+	f.run("core.settings.set", map[string]any{"patch": map[string]any{"left": false}})
+	f.settle()
+	if reply := viewCall(t, f, stored, surface, "runtime.textSize.read", nil); reply["error"] != nil || reply["result"] != float64(1) {
+		t.Fatalf("the reply is %v", reply)
+	}
+	f.run("core.settings.set", map[string]any{"scope": "common", "patch": map[string]any{"textSize": 1.25}})
+	f.settle()
+	count := func() int { return strings.Count(strings.Join(stored.hostName, "\n"), `"event":"textSize"`) }
+	if count() != 0 {
+		t.Fatalf("a view off the screen received %v", stored.hostName)
+	}
+	f.run("core.space.activate", map[string]string{"id": first})
+	f.settle()
+	if count() != 1 {
+		t.Fatalf("the view of the shown space received %v", stored.hostName)
+	}
+	if reply := viewCall(t, f, stored, surface, "runtime.textSize.read", nil); reply["error"] != nil || reply["result"] == float64(1) {
+		t.Fatalf("the reply is %v", reply)
+	}
+}
+
+// The view of a hidden space stays out of the layout: it keeps the scale that it has and follows the layout again when its space returns.
+func TestAViewOfAHiddenSpaceFollowsTheLayoutWhenItsSpaceReturns(t *testing.T) {
 	f, stored := surfaceShell(t)
 	surfaces := []string{}
 	for surface := range stored.lastSurfaces(t) {
