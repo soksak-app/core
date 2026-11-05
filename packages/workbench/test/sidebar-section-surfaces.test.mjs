@@ -37,7 +37,7 @@ mock.module("../host.js", { namedExports: { report: () => {} } });
 const { registry } = await import("../exposure.js");
 const { registerSection } = await import("../registry.js");
 registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
-const { drawSet, sidebarsState, clearSet, foldSection, selectSection, unloadSections, restoreSection } = await import("../sidebar-sections.js");
+const { drawSet, sidebarsState, clearSet, foldSection, selectSection, mountPlacedSections, unloadSections, restoreSection, unloadedSections } = await import("../sidebar-sections.js");
 const { shownSectionSurfaces } = await import("../section-surfaces.js");
 
 const composition = { kind: "view", page: "ui/tree.html" };
@@ -124,6 +124,7 @@ test("folding and an unselected tab hide a section surface without releasing it"
     drawSet(listed, "c2:left", list, { space: "spc-aaaaaa", card: "c2", surface: "t2", orientation: "vertical" });
     drawSet(tabbed, "c2:right", tabs, { space: "spc-aaaaaa", card: "c2", surface: "t2", orientation: "vertical" });
     await settle();
+    mountPlacedSections(["spc-aaaaaa/c2:right/probe.marks"]);
     foldSection("c2:left", "probe.tree");
     selectSection("c2:right", "probe.marks");
     await settle();
@@ -136,44 +137,73 @@ test("folding and an unselected tab hide a section surface without releasing it"
   } finally { clearSet(listed); clearSet(tabbed); listed.remove(); tabbed.remove(); }
 });
 
-test("an unloaded section keeps its slot without a mount until the memory saver restores it", async () => {
+test("a hidden section mounts only when a placement holds it", async () => {
+  mounts.length = 0;
+  const container = sidebar();
+  try {
+    drawSet(container, "c7:left", tabs, { space: "spc-aaaaaa", card: "c7", surface: "t1", orientation: "vertical" });
+    await settle();
+    const id = "spc-aaaaaa/c7:left/probe.marks";
+    assert.deepEqual(mounts.map(({ surface }) => surface.surfaceId), ["spc-aaaaaa/c7:left/probe.tree"], "only the shown section mounts at its draw");
+    assert.ok(container.querySelector(`[data-native-surface][data-native-surface-id="${id}"]`), "a hidden section has a seat before its mount");
+    mountPlacedSections([id, "tab-without-a-section"]);
+    mountPlacedSections([id]);
+    await settle();
+    assert.deepEqual(mounts.map(({ surface }) => surface.surfaceId), ["spc-aaaaaa/c7:left/probe.tree", id], "a placement mounts the hidden section once");
+  } finally { clearSet(container); container.remove(); }
+});
+
+test("an unloaded section leaves the seats and returns to them on its show, and only the restore mounts it", async () => {
   mounts.length = 0;
   const container = sidebar();
   try {
     drawSet(container, "c8:left", tabs, { space: "spc-aaaaaa", card: "c8", surface: "t1", orientation: "vertical" });
     await settle();
-    selectSection("c8:left", "probe.tree");
-    await settle();
     const id = "spc-aaaaaa/c8:left/probe.marks";
+    const seat = () => container.querySelector(`[data-native-surface][data-native-surface-id="${id}"]`);
     const reported = () => sidebarsState().find(({ sidebar }) => sidebar === "c8:left").sections.find((section) => section.id === "probe.marks");
+    mountPlacedSections([id]);
+    await settle();
     assert.equal(reported().mounted, true);
     unloadSections([id, "tab-without-a-section"]);
     assert.equal(reported().mounted, false, "core.sidebars must report the unloaded section without a mount");
+    assert.equal(seat(), null, "an unloaded section has no seat for the compositor and the verification");
+    assert.deepEqual(unloadedSections().map(({ id: unloaded, plugin }) => [unloaded, plugin]), [[id, "probe"]], "the page keeps an unloaded section a candidate");
     const before = mounts.length;
+    mountPlacedSections([id]);
     selectSection("c8:left", "probe.tree");
     await settle();
-    assert.equal(mounts.length, before, "an apply must not mount an unloaded section");
-    assert.ok(container.querySelector(`[data-native-surface-id="${id}"]`), "an unloaded section keeps its slot");
+    assert.equal(mounts.length, before, "neither a placement nor an apply mounts an unloaded section");
+    assert.equal(seat(), null, "a hidden unloaded section stays without a seat");
+    selectSection("c8:left", "probe.marks");
+    await settle();
+    assert.ok(seat(), "a shown unloaded section has a seat, which gives the memory saver its show");
+    assert.equal(mounts.length, before, "the show alone does not mount the section");
     restoreSection(id);
     await settle();
     assert.equal(mounts.length, before + 1, "the restore must mount the section again");
     assert.equal(reported().mounted, true);
+    assert.deepEqual(unloadedSections(), []);
   } finally { clearSet(container); container.remove(); }
 });
 
-test("a sidebar that draws an unloaded section again after its release mounts it", async () => {
+test("a sidebar that draws an unloaded section again after its release holds a new surface", async () => {
   mounts.length = 0;
   const container = sidebar();
   try {
     const context = { space: "spc-aaaaaa", card: "c9", surface: "t1", orientation: "vertical" };
+    const id = "spc-aaaaaa/c9:left/probe.marks";
     drawSet(container, "c9:left", tabs, context);
     await settle();
-    unloadSections(["spc-aaaaaa/c9:left/probe.marks"]);
+    unloadSections([id]);
     clearSet(container);
+    assert.deepEqual(unloadedSections(), [], "a released section is no candidate of the page");
     mounts.length = 0;
     drawSet(container, "c9:left", tabs, context);
+    mountPlacedSections([id]);
     await settle();
-    assert.ok(mounts.some(({ surface }) => surface.surfaceId === "spc-aaaaaa/c9:left/probe.marks"));
+    assert.ok(mounts.some(({ surface }) => surface.surfaceId === id));
+    assert.ok(container.querySelector(`[data-native-surface][data-native-surface-id="${id}"]`));
   } finally { clearSet(container); container.remove(); }
 });
 
