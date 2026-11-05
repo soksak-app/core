@@ -1105,3 +1105,26 @@ func TestAnotherSpaceKeepsThePressOfTheFrame(t *testing.T) {
 		t.Fatalf("the scope is %+v", got)
 	}
 }
+
+// A space that shows again is the same space: its cards are the ones pressed.
+func TestTheSameSpaceKeepsThePressOfACard(t *testing.T) {
+	f, _ := surfaceShell(t)
+	cards := f.tabbedCards()
+	pressCardHead(f, cards[1])
+	f.run("core.card.focus", map[string]string{"card": cards[0]})
+	f.settle()
+	var project struct {
+		ActiveSpaceID string `json:"activeSpaceId"`
+	}
+	if err := json.Unmarshal([]byte(f.status("core.project")), &project); err != nil {
+		t.Fatal(err)
+	}
+	if project.ActiveSpaceID == "" {
+		t.Fatalf("no active space in %s", f.status("core.project"))
+	}
+	f.run("core.space.activate", map[string]string{"id": project.ActiveSpaceID})
+	f.settle()
+	if got := textScope(t, f); got != workbench.CardScope(cards[1]) {
+		t.Fatalf("the scope is %+v", got)
+	}
+}
