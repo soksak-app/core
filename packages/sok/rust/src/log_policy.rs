@@ -198,7 +198,7 @@ impl Gate {
 
     pub(crate) fn count(&self, class: Class, level: Level) {
         self.gated[class_index(class)][level_index(level)].fetch_add(1, Ordering::Relaxed);
-        self.rouser.nudge();
+        self.rouser.nudge_for_count();
     }
 
     /// Whether a count waits for its report.

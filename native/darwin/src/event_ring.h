@@ -74,8 +74,12 @@ bool sp_event_enabled(uint8_t eventClass, uint8_t level);
 
 // The question of a producer before it builds the fields of an event: like sp_event_enabled, and a closed gate counts the event
 // that the producer then does not build. sp_event asks it too. The drain reports each count as the event `native.log.gated`
-// (`class`, `level`, `count`) of the class lifecycle at the level info, which passes every gate.
+// (`class`, `level`, `count`) of the class lifecycle at the level info, which passes every gate. A count does not wake a writer
+// that sleeps until its wait has passed, which is a minute unless sp_event_set_gated_wait_ms sets another.
 bool sp_event_gate(uint8_t eventClass, uint8_t level);
+
+// Sets how long a count of the gate waits for a drain before it wakes the writer. Safe from any thread.
+void sp_event_set_gated_wait_ms(uint32_t milliseconds);
 
 // Sets the boot identifier of the run, which the host chose for its event files: letters, digits, '-' and '_' (at most 64
 // bytes). The correlation identifiers of this process are `<boot>.<n>`. Returns false, and keeps the earlier identifier, for
@@ -97,6 +101,6 @@ size_t sp_event_drain(uint8_t *buffer, size_t capacity);
 sp_event_ring_loss sp_event_take_loss(uint8_t channel);
 
 // Returns the read end of a non-blocking pipe, or -1 if it cannot be made. The pipe turns readable when the process ring
-// holds a record, a loss or a count of the gate that no sp_event_drain took since it last turned readable, so that a writer
+// holds a record, a loss or a count of the gate past its wait that no sp_event_drain took since it last turned readable, so that a writer
 // can sleep while nothing waits for it. Its bytes carry nothing. Safe from any thread; the descriptor stays open.
 int sp_event_wake_fd(void);

@@ -1083,7 +1083,8 @@ Items:
 | `log.writer.stores-cids` | An event that a host producer emits with correlation identifiers is stored with `cids` (the list, in order), and an event without identifiers has no `cids`; an identifier that is empty or holds a quote, a backslash or a control character is refused and counted as lost. | all |
 | `log.writer.never-blocks-and-counts-loss` | `emit` returns without waiting; when the queue has no room it returns false, and the writer stores one `log.dropped` after the range of `seq` it names, with `count` equal to the refused events and the `channel` of the refused events. | all |
 | `log.writer.writes-each-interval` | The writer writes what has gathered when each batch interval since its last write ends, also while events keep arriving faster than the interval; a writer that waited for an interval without events would write nothing during a steady stream of input and lose more than one interval at a kill. | all |
-| `log.writer.sleeps-with-nothing-to-write` | A writer whose batch interval wrote nothing does not wake again until an event, a wake of its source or a count reaches it. | all |
+| `log.writer.sleeps-with-nothing-to-write` | A writer whose batch interval wrote nothing does not wake again until an event, a wake of its source or a count that waited reaches it. | all |
+| `log.writer.a-count-waits-for-a-write` | A count of the gate alone does not write: a writer that sleeps keeps it until the next event, and for at most a minute. | all |
 | `log.writer.stores-the-first-event-at-once` | An event that wakes a writer that sleeps is stored without waiting for a batch interval, and the events that follow wait for the batch of the interval that it starts. | all |
 | `log.writer.error-wakes-the-writer` | An event of level `error` is written without waiting for the batch interval. | all |
 | `log.writer.files-are-private` | The log folder has mode 0700 and the log file has mode 0600. | all |

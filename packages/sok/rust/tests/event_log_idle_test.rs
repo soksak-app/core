@@ -193,10 +193,45 @@ fn the_events_after_the_first_wait_for_the_batch() {
     assert!(idle.stores("writer.idle.second"));
 }
 
-// contract: log.writer.sleeps-with-nothing-to-write
+/// A refused event makes no write of its own, which would wake the indexer as well: a writer that sleeps keeps the count, and
+/// the next event carries it to the file.
+// contract: log.writer.a-count-waits-for-a-write
+#[test]
+fn a_count_waits_for_the_next_write() {
+    let idle = idle(Duration::from_millis(5));
+    let from = idle.settle();
+    for _ in 0..50 {
+        assert!(!idle.log.gate(Class::Io, Level::Trace));
+        std::thread::sleep(Duration::from_millis(30));
+    }
+    assert!(
+        !idle.stores("log.gated"),
+        "a count alone was written to the file"
+    );
+    let pulls = idle.pulls() - from;
+    assert!(
+        pulls <= 2,
+        "the counts woke the writer for {pulls} pulls; the first count takes the start and the end of one interval"
+    );
+    assert!(
+        idle.log
+            .emit(Level::Info, "writer.idle.carrier", &json!({}))
+    );
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while !idle.stores("log.gated") {
+        assert!(
+            Instant::now() < deadline,
+            "the count did not leave with the event"
+        );
+        std::thread::sleep(Duration::from_millis(1));
+    }
+}
+
+// contract: log.writer.a-count-waits-for-a-write
 #[test]
 fn a_count_of_the_gate_wakes_the_writer() {
     let idle = idle(Duration::from_millis(5));
+    idle.log.set_gated_wait(Duration::from_millis(50));
     assert!(!idle.log.gate(Class::Io, Level::Trace));
     let deadline = Instant::now() + Duration::from_secs(3);
     while !idle.stores("log.gated") {

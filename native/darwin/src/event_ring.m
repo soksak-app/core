@@ -209,6 +209,36 @@ static _Atomic int8_t policyOffset[SP_CLASS_COUNT] = {
 };
 // The events that a closed gate refused, for each class and level, since the drain last reported them.
 static _Atomic uint64_t gatedCount[SP_CLASS_COUNT][SP_EVENT_TRACE + 1];
+// How long a count waits for a drain before it wakes the writer: a count alone costs one write and one index update, and it may
+// wait for the next event, up to this bound on what a crash can take with it (docs/spec/logging.md#policy).
+static _Atomic uint64_t gatedWaitNs = 60ull * NSEC_PER_SEC;
+static _Atomic bool gatedWakeSet;
+
+static bool anyGated(void) {
+    for (int eventClass = 0; eventClass < SP_CLASS_COUNT; eventClass++) {
+        for (int level = 0; level <= SP_EVENT_TRACE; level++) {
+            if (atomic_load_explicit(&gatedCount[eventClass][level], memory_order_relaxed) != 0) return true;
+        }
+    }
+    return false;
+}
+
+// Sets one wake of the writer after the wait of a count, unless one is set. No drain clears it: a wake that finds no count left
+// writes nothing to the pipe.
+static void wakeWriterForCount(void) {
+    if (atomic_load_explicit(&gatedWakeSet, memory_order_relaxed)) return;
+    if (atomic_exchange_explicit(&gatedWakeSet, true, memory_order_relaxed)) return;
+    dispatch_time_t when = dispatch_time(DISPATCH_TIME_NOW, (int64_t)atomic_load_explicit(&gatedWaitNs, memory_order_relaxed));
+    dispatch_after(when, dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        atomic_store_explicit(&gatedWakeSet, false, memory_order_relaxed);
+        if (anyGated()) wakeWriter();
+    });
+}
+
+void sp_event_set_gated_wait_ms(uint32_t milliseconds) {
+    atomic_store_explicit(&gatedWaitNs, (uint64_t)milliseconds * NSEC_PER_MSEC, memory_order_relaxed);
+}
+
 
 bool sp_event_set_policy(const int8_t *levels) {
     if (!levels) return false;
@@ -230,7 +260,7 @@ bool sp_event_enabled(uint8_t eventClass, uint8_t level) {
 bool sp_event_gate(uint8_t eventClass, uint8_t level) {
     if (sp_event_enabled(eventClass, level)) return true;
     atomic_fetch_add_explicit(&gatedCount[eventClass][level], 1, memory_order_relaxed);
-    wakeWriter();
+    wakeWriterForCount();
     return false;
 }
 
@@ -348,15 +378,6 @@ static void reportGated(void) {
     if (reported) atomic_store_explicit(&gatedReportedAt, now, memory_order_relaxed);
 }
 
-static bool anyGated(void) {
-    for (int eventClass = 0; eventClass < SP_CLASS_COUNT; eventClass++) {
-        for (int level = 0; level <= SP_EVENT_TRACE; level++) {
-            if (atomic_load_explicit(&gatedCount[eventClass][level], memory_order_relaxed) != 0) return true;
-        }
-    }
-    return false;
-}
-
 size_t sp_event_drain(uint8_t *buffer, size_t capacity) {
     sp_event_ring *ring = processRing();
     if (!ring) return 0;
@@ -364,9 +385,8 @@ size_t sp_event_drain(uint8_t *buffer, size_t capacity) {
     size_t drained = sp_event_ring_drain(ring, buffer, capacity);
     atomic_store_explicit(&wakePending, false, memory_order_relaxed);
     atomic_thread_fence(memory_order_seq_cst);
-    // What this drain left waits for the next one: a buffer that filled, or a count of the gate before its report.
-    if (atomic_load_explicit(&ring->head, memory_order_relaxed) != atomic_load_explicit(&ring->tail, memory_order_relaxed) ||
-        anyGated())
+    // What this drain left waits for the next one: a buffer that filled. A count of the gate has its own wake.
+    if (atomic_load_explicit(&ring->head, memory_order_relaxed) != atomic_load_explicit(&ring->tail, memory_order_relaxed))
         wakeWriter();
     return drained;
 }

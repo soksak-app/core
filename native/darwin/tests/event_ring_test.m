@@ -326,7 +326,7 @@ int main(void) { @autoreleasepool {
     const int8_t restored[SP_CLASS_COUNT] = {SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE};
     check(sp_event_set_policy(restored), @"the policy that stores everything is accepted again");
 
-    // The pipe wakes a writer that sleeps: once for a burst, again after a drain, and for a count of the gate.
+    // The pipe wakes a writer that sleeps: once for a burst and again after a drain. A count of the gate waits (docs/spec/logging.md#policy).
     int wake = sp_event_wake_fd();
     check(wake >= 0, @"the wake pipe opens");
     uint8_t wakeBytes[64];
@@ -344,7 +344,9 @@ int main(void) { @autoreleasepool {
     while (read(wake, wakeBytes, sizeof wakeBytes) > 0) {}
     check(sp_event_set_policy(lifecycleOff), @"a policy that turns the class lifecycle off is accepted");
     (void)sp_event_gate(SP_CLASS_LIFECYCLE, SP_EVENT_INFO);
-    check(read(wake, wakeBytes, sizeof wakeBytes) == 1, @"a count of the gate writes the pipe");
+    check(read(wake, wakeBytes, sizeof wakeBytes) == -1 && errno == EAGAIN, @"a count of the gate leaves the pipe quiet");
+    used = sp_event_drain(pulled, sizeof pulled);
+    check(read(wake, wakeBytes, sizeof wakeBytes) == -1 && errno == EAGAIN, @"a drain that leaves a count leaves the pipe quiet");
     check(sp_event_set_policy(restored), @"the policy that stores everything is accepted again");
 
     sp_event_ring_destroy(ring);

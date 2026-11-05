@@ -154,11 +154,34 @@ func TestEventsAfterTheFirstWaitForTheBatch(t *testing.T) {
 	}
 }
 
-// A count of the gate leaves a sleeping writer as log.gated: no other event may be there to wake it.
-// contract: log.writer.sleeps-with-nothing-to-write
+// A refused event makes no write of its own, which would wake the indexer as well: a writer that sleeps keeps the count, and
+// the next event carries it to the file.
+// contract: log.writer.a-count-waits-for-a-write
+func TestACountWaitsForTheNextWrite(t *testing.T) {
+	log, source, _ := idleLog(t, 5*time.Millisecond)
+	from := settledPulls(t, source)
+	for range 50 {
+		if log.Gate(ClassIo, LevelTrace) {
+			t.Fatal("the default policy stores io at trace")
+		}
+		time.Sleep(30 * time.Millisecond)
+	}
+	if fileHas(t, log.Path(), "log.gated") {
+		t.Fatal("a count alone was written to the file")
+	}
+	if pulls := source.pulls.Load() - from; pulls > 2 {
+		t.Fatalf("the counts woke the writer for %d pulls; the first count takes the start and the end of one interval", pulls)
+	}
+	log.Emit(LevelInfo, "writer.idle.carrier", map[string]any{})
+	waitForFile(t, log.Path(), "log.gated", "the count that waited for an event")
+}
+
+// A count of the gate leaves a sleeping writer as log.gated after its wait: no other event may be there to carry it.
+// contract: log.writer.a-count-waits-for-a-write
 func TestGateCountWakesTheWriter(t *testing.T) {
 	log, source, _ := idleLog(t, 5*time.Millisecond)
 	settledPulls(t, source)
+	log.SetGatedWait(50 * time.Millisecond)
 	if log.Gate(ClassIo, LevelTrace) {
 		t.Fatal("the default policy stores io at trace")
 	}

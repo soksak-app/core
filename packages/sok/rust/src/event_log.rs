@@ -8,6 +8,7 @@
 //! writer a `Pull` and a `Wake`.
 
 use std::borrow::Cow;
+use std::cell::Cell;
 use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
 use std::io::Write;
@@ -118,6 +119,10 @@ pub struct Rouser {
     queued: Arc<AtomicBool>,
     /// Whether the writer sleeps.
     asleep: Arc<AtomicBool>,
+    /// Whether a writer that sleeps knows of a count of the gate and has its time set, so a further count wakes nothing.
+    counts_held: Arc<AtomicBool>,
+    /// How long such a count waits, in nanoseconds.
+    count_wait: Arc<AtomicU64>,
 }
 
 impl Rouser {
@@ -138,6 +143,15 @@ impl Rouser {
         fence(Ordering::SeqCst);
         if self.asleep.load(Ordering::SeqCst) && self.asleep.swap(false, Ordering::SeqCst) {
             self.wake();
+        }
+    }
+
+    /// Wakes a writer that sleeps for the first count of the gate that it does not know of. The writer does not write for
+    /// the count: it sets the time of the report and sleeps again.
+    pub(crate) fn nudge_for_count(&self) {
+        fence(Ordering::SeqCst);
+        if !self.counts_held.load(Ordering::SeqCst) {
+            self.nudge();
         }
     }
 }
@@ -253,6 +267,10 @@ const RESERVED_FOR_REQUESTS: usize = 3;
 
 /// The interval between two reports of the counts of the gate (docs/spec/logging.md#policy).
 const GATED_REPORT_INTERVAL: Duration = Duration::from_secs(1);
+
+/// How long a count of the gate waits for an event when the writer sleeps: a count alone costs one write and one index update,
+/// and it may wait for the next event, up to this bound on what a crash can take with it (docs/spec/logging.md#policy).
+const GATED_WAIT: Duration = Duration::from_secs(60);
 
 /// The loss that the queue counted since the writer last recorded it, for each channel.
 struct Loss {
@@ -491,6 +509,8 @@ impl EventLog {
             sender: sender.clone(),
             queued: Arc::new(AtomicBool::new(false)),
             asleep: Arc::clone(&asleep),
+            counts_held: Arc::new(AtomicBool::new(false)),
+            count_wait: Arc::new(AtomicU64::new(GATED_WAIT.as_nanos() as u64)),
         };
         let gate = Arc::new(Gate::new(rouser.clone()));
         let writer = {
@@ -616,6 +636,13 @@ impl EventLog {
             None if layer == "plugin" => (Some(Class::Lifecycle), true),
             None => (None, true),
         }
+    }
+
+    /// Sets how long a count of the gate waits for an event when the writer sleeps. A writer starts with `GATED_WAIT`.
+    pub fn set_gated_wait(&self, wait: Duration) {
+        self.rouser
+            .count_wait
+            .store(wait.as_nanos() as u64, Ordering::SeqCst);
     }
 
     /// The main file of this writer (error, warn and info).
@@ -1419,14 +1446,27 @@ fn write_loop(
             out.dropped(events, bytes, "the queue was full", channel, Some(queued));
         }
     };
+    // The time since which a writer that sleeps holds a count of the gate.
+    let held_since = Cell::new(None::<Instant>);
     // The events that the gate refused are reported with the exact count for each class and level, each second and at a
     // flush or a stop (`force`): a report at each batch interval stored more events than a narrow policy removed.
     let mut gated_at = Instant::now();
     let mut report_gated = |out: &mut Output, force: bool| {
-        if !force && gated_at.elapsed() < GATED_REPORT_INTERVAL {
-            return;
+        if !force {
+            if gated_at.elapsed() < GATED_REPORT_INTERVAL {
+                return;
+            }
+            // A report goes with a batch of other events, or alone when the count that the writer held has waited its time.
+            let wait = Duration::from_nanos(rouser.count_wait.load(Ordering::SeqCst));
+            let due = held_since
+                .get()
+                .is_some_and(|since| since.elapsed() >= wait);
+            if !due && out.files.iter().all(|file| file.batch.is_empty()) {
+                return;
+            }
         }
         gated_at = Instant::now();
+        held_since.set(None);
         for (class, level, count) in gate.take_counts() {
             let fields = to_raw_value(
                 &json!({"class": class.as_str(), "level": level.name(), "count": count}),
@@ -1465,18 +1505,29 @@ fn write_loop(
     // The writer runs in intervals and sleeps after one that wrote nothing, because a wakeup of each interval is the idle cost
     // of the application (G2 of docs/spec/hosts.md). A writer that slept has written everything, so it writes what wakes it at
     // once; the interval that starts then gathers what follows into one batch.
+    let holding = Cell::new(false);
     let sleep = || -> Option<Instant> {
+        holding.set(false);
+        rouser.counts_held.store(false, Ordering::SeqCst);
         // A producer counts and then reads `asleep`, and the writer stores `asleep` and then reads the counts, so one of them
-        // sees the other. A count of the gate keeps the intervals running until its report, which comes at most once each second.
+        // sees the other. A loss keeps the intervals running until its report. A count of the gate sets the time of its report.
         rouser.asleep.store(true, Ordering::SeqCst);
         fence(Ordering::SeqCst);
         let counted = loss
             .events
             .iter()
             .any(|count| count.load(Ordering::Relaxed) > 0);
-        if counted || gate.counted() {
+        if counted {
             rouser.asleep.store(false, Ordering::SeqCst);
             return Some(Instant::now() + interval);
+        }
+        if gate.counted() {
+            let since = *held_since.get().get_or_insert_with(Instant::now);
+            held_since.set(Some(since));
+            rouser.counts_held.store(true, Ordering::SeqCst);
+            holding.set(true);
+            let wait = Duration::from_nanos(rouser.count_wait.load(Ordering::SeqCst));
+            return Some((since + wait).max(Instant::now() + interval));
         }
         None
     };
@@ -1487,6 +1538,10 @@ fn write_loop(
     loop {
         // Events that keep arriving after the interval ended do not postpone its write.
         if queued.is_none() && due.is_some_and(|at| Instant::now() >= at) {
+            if holding.replace(false) {
+                rouser.asleep.store(false, Ordering::SeqCst);
+                rouser.counts_held.store(false, Ordering::SeqCst);
+            }
             out.wrote = false;
             queued = drain(&mut out, false);
             due = if out.wrote {
@@ -1534,7 +1589,8 @@ fn write_loop(
             }
         }
         // What woke a writer that slept is written at once.
-        if due.is_none() {
+        if due.is_none() || holding.replace(false) {
+            rouser.counts_held.store(false, Ordering::SeqCst);
             rouser.asleep.store(false, Ordering::SeqCst);
             due = Some(Instant::now() + interval);
             queued = drain(&mut out, false);
