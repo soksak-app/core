@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F621: `make benchmark-b3` builds one host at a time, the Tauri hosts first, and removes the intermediate outputs of each build before the next. Built together, its bundles did not fit the disk of a session. Red: `scripts/test/benchmark-b3.test.mjs` reads the order of the build steps and the removal after each.
 - F620: `make benchmark-b3` starts a baseline host by the executable name of its revision, `soksak-<host>`. It looked for `sok-<host>`, which that revision does not build. Red: `scripts/test/benchmark-b3.test.mjs` reads the executables of the five applications.
 - F618: The baseline record of `make benchmark-b3` is `b3/baseline.json` in the git common directory. In `target/b3` a `cargo clean` removed it, and a session could not start without it. Red: `scripts/test/benchmark-b3.test.mjs` reads the path from a main checkout and from its worktree.
 - F611: A press over the frame of a hidden region stays with the view that it reached, so the keyboard does not go to a hidden tab and the drag of a divider or a tab is not cut off.

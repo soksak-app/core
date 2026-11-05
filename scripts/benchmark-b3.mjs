@@ -693,18 +693,27 @@ function toolchains() {
   };
 }
 
-/** The build steps of a phase: the release bundles of both checkouts, the two registry indexes and, in phase 1, the debug bundles. */
+/**
+ * The build steps of a phase: the release bundles of both checkouts and, in phase 1, the debug bundles, one host at a time with the Tauri hosts
+ * first, because they take the most disk, and then the two registry indexes.
+ */
 export function buildSteps(phase, baseline) {
   const step = (name, argv) => ({ name, phase: 'prepare', kind: 'run', argv, env: {} });
+  const profiles = phase === '1' ? ['-release', ''] : ['-release'];
+  // The intermediate outputs leave before the next build; the bundles and the executables stay, because the runs start them.
+  const outputs = (checkout) => ['debug', 'release'].flatMap((profile) => ['build', 'deps', '.fingerprint', 'incremental'].map((name) => join(checkout, 'target', profile, name)));
+  const host = (name, target, checkout) => [
+    step(`${name} ${target}`, checkout === ROOT ? ['make', target] : ['make', '-C', checkout, target]),
+    step(`outputs of ${name} ${target}`, ['rm', '-rf', ...outputs(checkout)]),
+  ];
+  const each = (name, checkouts) => profiles.flatMap((profile) => checkouts.flatMap(([label, checkout]) => host(label, `build-${name}${profile}`, checkout)));
+  const both = [['current', ROOT], ['baseline', baseline]];
   return [
-    step('release bundles', ['make', 'build-wailsv3-release', 'build-tauriv2-release', 'build-mygo-release']),
-    step('baseline release bundles', ['make', '-C', baseline, 'build-wailsv3-release', 'build-tauriv2-release']),
+    ...each('tauriv2', both),
+    ...each('wailsv3', both),
+    ...each('mygo', [['current', ROOT]]),
     step('workspace registry', ['make', 'build-registry', 'SIDECARS=diagnostic']),
     step('public index', ['make', 'build-registry', 'SIDECARS=diagnostic', 'PLUGINS=public']),
-    ...(phase === '1' ? [
-      step('debug bundles', ['make', 'build-wailsv3', 'build-tauriv2', 'build-mygo']),
-      step('baseline debug bundles', ['make', '-C', baseline, 'build-wailsv3', 'build-tauriv2']),
-    ] : []),
   ];
 }
 

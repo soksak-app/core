@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F621: `make benchmark-b3`는 host를 한 번에 하나씩, Tauri host부터 build하고 다음 build 전에 각 build의 중간 출력을 지운다. 한꺼번에 build하면 session의 디스크에 들어가지 않았다. Red: `scripts/test/benchmark-b3.test.mjs`가 build 단계의 순서와 각 단계 뒤의 제거를 읽는다.
 - F620: `make benchmark-b3`는 baseline host를 그 revision의 executable 이름 `soksak-<host>`로 시작한다. 그 revision이 build하지 않는 `sok-<host>`를 찾고 있었다. Red: `scripts/test/benchmark-b3.test.mjs`가 다섯 application의 executable을 읽는다.
 - F618: `make benchmark-b3`의 baseline record는 git common directory의 `b3/baseline.json`이다. `target/b3`에서는 `cargo clean`이 지웠고, 그러면 session이 시작할 수 없었다. Red: `scripts/test/benchmark-b3.test.mjs`가 main checkout과 그 worktree에서 경로를 읽는다.
 - F611: 숨은 region의 frame 위 press는 그 press가 닿은 view에 남는다. keyboard가 숨은 tab으로 가지 않고 divider나 tab의 drag가 끊기지 않는다.

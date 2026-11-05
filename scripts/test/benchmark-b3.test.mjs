@@ -546,7 +546,7 @@ test("make benchmark-b3 refuses a phase, a run count or a baseline checkout that
 test("each build step of a session names a target of the Makefile", { timeout: 1000 }, () => {
   const targets = new Set([...readFileSync(join(ROOT, "Makefile"), "utf8").matchAll(/^([A-Za-z0-9_.-]+):/gm)].map((match) => match[1]));
   for (const phase of ["1", "final"]) {
-    for (const { argv } of buildSteps(phase, "/baseline")) {
+    for (const { argv } of buildSteps(phase, "/baseline").filter((step) => step.argv[0] === "make")) {
       const named = argv.slice(1).filter((word, index, words) => word !== "-C" && words[index - 1] !== "-C" && !word.includes("="));
       assert.deepEqual(named.filter((name) => !targets.has(name)), [], argv.join(" "));
     }
@@ -579,4 +579,27 @@ test("a baseline host starts by the executable name of its revision and the othe
   });
   assert.equal(executables("debug")["baseline-wailsv3"], "/base/target/debug/soksak-wailsv3.app/Contents/MacOS/soksak-wailsv3");
   assert.equal(executables("debug").wailsv3, "/core/target/debug/sok-wailsv3.app/Contents/MacOS/sok-wailsv3");
+});
+
+test("a session builds one host at a time, the Tauri hosts first, and removes the outputs of each build before the next", { timeout: 1000 }, () => {
+  const made = (steps) => steps.filter(({ argv }) => argv[0] === "make").map(({ argv }) => argv.slice(1).join(" "));
+  const steps = buildSteps("1", "/baseline");
+  assert.deepEqual(made(steps), [
+    "build-tauriv2-release", "-C /baseline build-tauriv2-release", "build-tauriv2", "-C /baseline build-tauriv2",
+    "build-wailsv3-release", "-C /baseline build-wailsv3-release", "build-wailsv3", "-C /baseline build-wailsv3",
+    "build-mygo-release", "build-mygo",
+    "build-registry SIDECARS=diagnostic", "build-registry SIDECARS=diagnostic PLUGINS=public",
+  ]);
+  assert.deepEqual(made(buildSteps("final", "/baseline")), [
+    "build-tauriv2-release", "-C /baseline build-tauriv2-release", "build-wailsv3-release", "-C /baseline build-wailsv3-release", "build-mygo-release",
+    "build-registry SIDECARS=diagnostic", "build-registry SIDECARS=diagnostic PLUGINS=public",
+  ]);
+  steps.slice(0, -2).forEach((step, position) => {
+    if (step.argv[0] === "make") {
+      const next = steps[position + 1].argv;
+      const checkout = step.argv[1] === "-C" ? "/baseline" : ROOT.replace(/\/$/, "");
+      assert.equal(next[0], "rm", `${step.argv.join(" ")} is followed by ${next.join(" ")}`);
+      assert.deepEqual(next.slice(2).sort(), ["debug", "release"].flatMap((profile) => ["build", "deps", ".fingerprint", "incremental"].map((name) => join(checkout, "target", profile, name))).sort());
+    }
+  });
 });

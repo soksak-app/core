@@ -1278,6 +1278,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F621",
+    implementation: [
+      { file: "scripts/benchmark-b3.mjs", symbol: "export function buildSteps(phase, baseline) {" },
+    ],
+    tests: [
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a session builds one host at a time, the Tauri hosts first, and removes the outputs of each build before the next" },
+    ],
+    expected: "A B3 session builds one host at a time and removes the intermediate outputs of each build before the next.",
+    levels: ["unit"],
+  },
+  {
     id: "F620",
     implementation: [
       { file: "scripts/benchmark-b3.mjs", symbol: "const executable = kind === 'baseline' ? `soksak-${host}` : `sok-${host}`;" },
