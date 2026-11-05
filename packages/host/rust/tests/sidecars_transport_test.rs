@@ -2987,6 +2987,72 @@ fn the_hello_carries_the_configuration_directory_as_client() {
     sidecars.stop();
 }
 
+// contract: sidecars-transport.hello.deadline-ends-with-its-answer
+// The deadline of the hello ends with its answer: a service may stay silent for longer, and what it sends then arrives.
+#[test]
+fn a_persistent_connection_has_no_deadline_after_its_hello() {
+    const DEADLINE: Duration = Duration::from_millis(50);
+    let silence = DEADLINE * 4;
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
+    let service_directory = config_directory.path().join("services/echo");
+    std::fs::create_dir_all(&service_directory).unwrap();
+    let socket_path = service_directory.join("silence.sock");
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    std::fs::write(
+        service_directory.join("endpoint.json"),
+        serde_json::to_vec(&serde_json::json!({
+            "protocol": 1,
+            "pid": std::process::id(),
+            "socket": socket_path,
+            "token": "silence-token"
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    std::thread::spawn(move || {
+        let Ok((mut stream, _)) = listener.accept() else {
+            return;
+        };
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let mut line = String::new();
+        while reader.read_line(&mut line).unwrap_or(0) > 0 {
+            let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+            let reply = if request["operation"] == "hello" {
+                serde_json::json!({"operation": "hello", "protocol": 1, "ok": true}).to_string()
+            } else {
+                std::thread::sleep(silence);
+                line.trim_end().to_string()
+            };
+            if writeln!(stream, "{reply}").is_err() {
+                return;
+            }
+            line.clear();
+        }
+    });
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
+    let sidecars = Sidecars::new(
+        &declare(&fixture, executable_directory.path()),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap()
+    .with_hello_timeout(DEADLINE);
+    let (owner, events) = owner("silence", "/projects/silence");
+    let begun = std::time::Instant::now();
+    sidecars
+        .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    events.recv_timeout(STALL).unwrap();
+    assert!(
+        begun.elapsed() >= silence,
+        "the message arrived after {:?}, before the silence of {silence:?} ended",
+        begun.elapsed()
+    );
+    sidecars.stop();
+}
+
 // contract: sidecars-transport.stop.leaves-the-close-of-a-replacement-to-the-replacement
 #[test]
 fn stop_does_not_close_the_owner_again_while_a_replacement_closes_it() {

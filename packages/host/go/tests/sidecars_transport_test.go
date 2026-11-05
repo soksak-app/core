@@ -2521,6 +2521,7 @@ func TestTheHelloCarriesTheConfigurationDirectoryAsClient(t *testing.T) {
 	}
 }
 
+// contract: sidecars-transport.hello.deadline-ends-with-its-answer
 // The deadline of the hello ends with its answer: a service may stay silent for longer, and what it sends then arrives.
 func TestAPersistentConnectionHasNoDeadlineAfterItsHello(t *testing.T) {
 	root := t.TempDir()

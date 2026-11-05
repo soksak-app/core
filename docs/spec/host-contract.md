@@ -727,6 +727,7 @@ Items:
 | `sidecars-transport.hello.rejects-auth-failure` | A failed hello reply makes the send fail with "authentication handshake failed". | all |
 | `sidecars-transport.hello.rejects-unsupported-protocol-without-replacing-endpoint` | A hello reply with another protocol fails the send and leaves endpoint.json unchanged. | all |
 | `sidecars-transport.hello.times-out` | A service that receives the hello and does not answer fails the send after 5 s with "the service did not answer hello within 5s". | all |
+| `sidecars-transport.hello.deadline-ends-with-its-answer` | The deadline of a hello ends with its answer: a persistent service may stay silent for longer, and what it sends then reaches the owner. | all |
 | `sidecars-transport.startup.times-out` | A started service that prints no endpoint within the ready bound fails the send with "the service did not print its endpoint within <bound>", and the host ends and reaps it. | all |
 | `sidecars-transport.startup.exits-before-endpoint` | A started service that ends before its endpoint fails the send with "service exited before endpoint". | all |
 | `sidecars-transport.endpoint.replaces-dead-service-endpoint` | An endpoint left by a dead service is replaced by the new service endpoint. | all |

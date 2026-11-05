@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F502-16: 허용된 host 차이 표가 합류로 늘어난 파일을 적고, main page 없는 창의 library test 는 framework 를 부르지 않는다. Red: host structure audit 이 각 파일을 지목했다.
+- F502-16: contract 는 hello deadline 의 끝을 모든 host 의 case 로 두고, Rust host 도 Go host 처럼 hello 뒤의 침묵을 test 한다. Red: host structure audit 이 case 없는 Go test 를 지목했다.
 - F502-16: mygo workbench의 `core.projects.flush`는 host가 layout, 창 geometry, tab을 저장한 뒤에 답하고 저장이 실패하면 그 실패를 답하므로, reload가 쓰기를 잃지 않는다.
 - F583: 닫힌 창의 surface는 더 이상 키보드를 받지 않고, 창이 닫힐 때 release를 기다리며 그 창을 붙들던 키보드 call을 버린다.
 - F502-18-1: unloaded로 시작하는 숨은 section이 있는 set을 추가하는 command가 Wails와 Tauri host에서 더 이상 `exposure settled failed`를 보고하지 않는다.

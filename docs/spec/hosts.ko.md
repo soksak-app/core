@@ -257,6 +257,10 @@ Go language host library의 header `src/platform/darwin/main_thread.h`는 두 ma
 | H43 | 없음 | `src/installed_reads_test.rs` | `installed.rs`의 이 자식은 module의 비공개 serving이 읽는 횟수를 `sok`의 read hook으로 센다. `tests/installed_test.go`가 같은 경우를 Go language host library의 공개 함수로 확인한다 |
 | H44 | 없음 | `src/routine/async_runtime_test.rs` | 이 test는 framework 비동기 runtime의 worker와 blocking thread를 확인한다(행 P2). goroutine에는 이런 runtime이 필요 없다 |
 | H45 | 없음 | `src/sidecars_read_deadline_test.rs` | `sidecars.rs`의 이 자식은 비공개 `end_hello_deadline`과 deadline을 기록하는 stream에 닿는다. `tests/sidecars_transport_test.go`의 `TestAPersistentConnectionHasNoDeadlineAfterItsHello`가 같은 침묵을 공개 `Sidecars`로 확인한다 |
+| H47 | `src/diagnostics_gc_loop_test.go` | 없음 | row E2 의 endpoint method 를 시험한다. 그 method 는 Go language host library 에만 있다 |
+| H48 | `src/step_records.go`, `src/step_records_test.go` | 없음 | row P10 의 step 기록이다. main thread 의 callback 을 worker 에 넘기는 것은 Go framework 뿐이다 |
+| H50 | 없음 | `tests/support/platform/native_event.rs`, `tests/support/platform/darwin/native_event.rs`, `tests/support/platform/windows/native_event.rs` | 행 H42 의 integration test 는 자기 crate 이므로 운영체제마다 이 파일로 native ring 에 기록한다. Go test 는 library package 안에 있어 그 binding 을 쓴다 |
+| H51 | `src/diagnostics_no_main_page_test.go` | 없음 | Go framework 에만 main page 가 없는 경우가 있고, 이 test 는 그 창의 diagnostics 답을 지킨다 |
 | E1 | `diagnostics.heap.profile` | 없음 | 이 endpoint method는 Go runtime의 heap profile(`runtime/pprof`)을 쓴다. Rust language host library에는 profile할 garbage-collected heap이 없다. ID가 E로 시작하는 행은 endpoint method를 나열하고 `make host-parity-check`가 그 행을 읽는다 |
 | E2 | `diagnostics.gc.loop` | 없음 | 이 endpoint method는 Go runtime의 `runtime.GC`를 쉬지 않고 돈다. Rust language host library에는 수집할 garbage-collected heap이 없다 |
 | P1 | `Framework.Step` | 없음 | Go language host library는 main thread의 worker에서 실행되며 main thread의 step을 기다린다(H20 행). Rust language host library는 `post`로 step을 보내고 그 channel을 기다린다 |
@@ -295,7 +299,9 @@ Go language host library의 header `src/platform/darwin/main_thread.h`는 두 ma
 | H36 | 없음 | 없음 | `tests/presentation_notice_test.go` | Frame의 결과를 읽는 것은 mygo framework adapter뿐이고(`AwaitPresentation`), 이 test는 display 없이 각 결과를 준다 |
 | H37 | 없음 | 없음 | `tests/system_test.go` | mygo 창의 workbench는 Go 코드이므로, 이 test의 자식 프로세스는 workbench처럼 host handler를 호출하는 fixture workbench로 애플리케이션을 실행한다. Wails host의 창은 그렇게 하려면 page가 필요하다 |
 | H39 | 없음 | 없음 | `tests/platform/darwin/frame.go`, `tests/surface_test.go`, `tests/view_still_test.go`, `tests/view_surface_test.go` | mygo 창의 surface는 native view 안에 있고 배치는 표시된 frame에서 실행되므로, 이 test는 display가 필요해 build constraint `e2e`를 가진다. `tests/platform/darwin/frame.go`는 전송 이미지의 IOSurface를 가지며, cgo는 test 파일에 쓸 수 없다. 다른 framework는 surface를 page로 보여 주고, 그 test는 window check다 |
-| H46 | 없음 | 없음 | `src/frames.go` | 이 adapter는 mygo 창의 frame 보고를 host의 수로 넘긴다(행 H40). 다른 framework의 창은 host에 frame을 보고하지 않는다 |
+| H46 | 없음 | 없음 | `src/frames.go`, `src/frames_test.go` | 이 adapter는 mygo 창의 frame 보고를 host의 수로 넘긴다(행 H40). 다른 framework의 창은 host에 frame을 보고하지 않는다 |
+| H49 | 없음 | 없음 | `tests/drag_test.go` | 이 test 가 세는 step 은 row P10 의 기록이고, 그 기록은 mygo framework adapter 만 낸다 |
+| H52 | 없음 | 없음 | `tests/launch_self_activation_test.go` | mygo framework adapter 의 `tests/launch_activation_test.go` 는 창을 띄우고 display 가 필요하다. 이 test 는 창을 띄우지 않으므로 host contract run 이 display 없이 mygo host 의 이 case 를 지키고 focus 를 가져가지 않는다 |
 | B1 | `overlayShow`, `overlayPlace`, `overlayUpdate`, `overlayHide`, `setShape`, `clearShape` | `overlayShow`, `overlayPlace`, `overlayUpdate`, `overlayHide`, `setShape`, `clearShape` | none | native modal web view와 surface 위 shape의 call이다. mygo host의 window는 modal과 shape를 native UI로 그리므로 `packages/workbench-mygo`의 `hostCalls`에는 이 call이 없다. |
 | B2 | none | none | `setDialogBackground` | workbench가 직접 그리는 dialog를 host에 알리는 call이다. Wails와 Tauri host에서는 mode `dialog`의 modal web view가 document를 blur하고, mygo host의 window에는 그런 web view가 없다(B 행 B1). |
 | A1 | 내용만 다름 | 내용만 다름 | 없음 | `runtime/index.js`가 각 프레임워크의 호출 방식을 사용한다. mygo 애플리케이션에는 runtime이 없다(A6 행). |

@@ -13,7 +13,7 @@ import (
 // namedPagelessFramework is a framework without a main page that names its application.
 type namedPagelessFramework struct{ pagelessFramework }
 
-func (namedPagelessFramework) ApplicationName() string { return "mygo" }
+func (namedPagelessFramework) ApplicationName() string { return "fixture" }
 
 // pagelessEndpoint is the endpoint of a host of one window under framework.
 func pagelessEndpoint(t *testing.T, use Framework) *Endpoint {
@@ -46,7 +46,7 @@ func TestAFrameworkWithoutAMainPageAnswersTheMainPageMethods(t *testing.T) {
 		"diagnostics.page.collect": `{"window":"window-a"}`,
 	} {
 		err := answerOf(t, e, name, params)
-		if err == nil || err.Error() != "the mygo host has no main page" {
+		if err == nil || err.Error() != "the fixture host has no main page" {
 			t.Errorf("%s answered %v", name, err)
 		}
 	}
@@ -60,7 +60,7 @@ func TestAFrameworkWithoutAMainPageAnswersTheModalMethods(t *testing.T) {
 		"diagnostics.modal.held": `{"window":"window-a"}`,
 	} {
 		err := answerOf(t, e, name, params)
-		if err == nil || err.Error() != "the mygo host has no modal web views" {
+		if err == nil || err.Error() != "the fixture host has no modal web views" {
 			t.Errorf("%s answered %v", name, err)
 		}
 	}
@@ -71,7 +71,7 @@ func TestAMissingWindowIsAnsweredBeforeTheMainPage(t *testing.T) {
 	e := pagelessEndpoint(t, namedPagelessFramework{})
 	for _, name := range []string{"diagnostics.page.collect", "diagnostics.modal.held"} {
 		err := answerOf(t, e, name, `{"window":"window-b"}`)
-		if err == nil || err.Error() == "the mygo host has no main page" || err.Error() == "the mygo host has no modal web views" {
+		if err == nil || err.Error() == "the fixture host has no main page" || err.Error() == "the fixture host has no modal web views" {
 			t.Errorf("%s answered a missing window with %v", name, err)
 		}
 	}

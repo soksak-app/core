@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F502-16: The tables of the allowed host differences list the files that the joined lines added, and the library test of a window without a main page names no framework. Red: the audit of the host structure named each file.
+- F502-16: The contract holds the end of the hello deadline as a case of every host, and the Rust host tests the silence after a hello as the Go host does. Red: the audit of the host structure named the Go test without a case.
 - F502-16: `core.projects.flush` on the mygo workbench answers after the host stored the layout, the geometry of the window and the tabs, and with the failure of a store that failed, so a reload loses no write.
 - F583: A surface of a closed window no longer takes the keyboard, and the close of a window drops a keyboard call that waits for a release, which held the window.
 - F502-18-1: A command that adds a set with a hidden section that starts unloaded no longer reports `exposure settled failed` on the Wails and Tauri hosts.
