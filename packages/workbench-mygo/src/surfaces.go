@@ -196,6 +196,8 @@ type surfaceState struct {
 	// placed is the lines of the last request, and running tells that a placement has not finished.
 	placed  []surfaceLine
 	running bool
+	// going tells that the last placement belongs to a run.
+	going   bool
 	views   map[string]*viewState
 	reports map[string]*tabReport
 	// failed holds the reason of each view that stopped its restarts.
@@ -570,7 +572,9 @@ func (s *Shell) placeSurfaces() {
 		return
 	}
 	lines := s.surfaceLines()
-	if slices.Equal(lines, s.surfaces.placed) {
+	// The host ends a run on a settled placement, so the end of a run places also when its last move placed these lines.
+	runEnds := s.surfaces.going && s.held == nil
+	if slices.Equal(lines, s.surfaces.placed) && !runEnds {
 		s.answerCommits(s.surfaces.commits, nil)
 		s.surfaces.commits = nil
 		return
@@ -591,6 +595,7 @@ func (s *Shell) placeSurfaces() {
 	s.surfaces.placed = lines
 	s.surfaces.running = true
 	settledNow, _ := request["settled"].(bool)
+	s.followRun(!settledNow)
 	record := s.surfaceRecord(lines, settledNow)
 	s.surfaces.latest = record
 	s.surfaces.placing, s.surfaces.commits = s.surfaces.commits, nil
@@ -635,6 +640,21 @@ func (s *Shell) placeSurfaces() {
 				s.options.Invalidate()
 			})
 	})
+}
+
+// followRun tells each view the start of a run: an update that continues, such as a divider drag. The view asks for one frame, so
+// the first size of the run waits for the display like every later size (docs/spec/native-surfaces.md#views).
+func (s *Shell) followRun(going bool) {
+	if going == s.surfaces.going {
+		return
+	}
+	s.surfaces.going = going
+	if !going {
+		return
+	}
+	for surface, view := range s.surfaces.views {
+		s.pushView(surface, view, "run-start", nil)
+	}
 }
 
 // placed ends a placement.

@@ -7,6 +7,7 @@ import (
 	"math"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -34,12 +35,13 @@ const installedDocument = `{"plugins": [
 type surfaceHost struct {
 	storedHost
 	// window is the state of the window that core.window.workbench reads.
-	window   workbench.WindowView
-	requests []map[string]any
-	placed   int
-	declared []string
-	replies  []map[string]any
-	hostName []string
+	window     workbench.WindowView
+	requests   []map[string]any
+	placed     int
+	declared   []string
+	replies    []map[string]any
+	hostName   []string
+	hostNameMu sync.Mutex
 	// clipboard is the text of the clipboard.
 	clipboard string
 	debug     debugHost
@@ -129,6 +131,9 @@ func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 	h.debug.serve(table)
 	for _, name := range []string{"viewSidecarRoute", "sidecarListen", "viewEvent", "compositionPlace", "imageAttach", "sidecarSend", "exposureRegister", "documentAttach", "viewRequest", "notify", "notificationRemove"} {
 		table[name] = func(_ context.Context, argument json.RawMessage) (any, error) {
+			// Each host call runs on a goroutine of its own.
+			h.hostNameMu.Lock()
+			defer h.hostNameMu.Unlock()
 			h.hostName = append(h.hostName, name+" "+string(argument))
 			return nil, nil
 		}
@@ -593,6 +598,78 @@ func TestAViewStandsOnWholePoints(t *testing.T) {
 	walk(f.tester.ElementTree())
 	if !found {
 		t.Fatalf("no native view of the height %v stands in the slot of the height %v", math.Floor(height), height)
+	}
+}
+
+// Each start of a run tells each view once, and no later step of the run does (docs/spec/native-surfaces.md#views).
+func TestEachStartOfARunTellsEachViewOnce(t *testing.T) {
+	f, stored := surfaceShell(t)
+	left := f.tabbedCards()[0]
+	made, err := f.answer("core.card.split", map[string]string{"card": left, "side": "right", "plugin": "terminal"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	right := made["card"].(string)
+	f.settle()
+	surfaces := stored.lastSurfaces(t)
+	if len(surfaces) < 2 {
+		t.Fatalf("the split shell has %d surfaces", len(surfaces))
+	}
+	for surface := range surfaces {
+		viewCall(t, f, stored, surface, "runtime.settings.on", nil)
+	}
+	starts := func() map[string]int {
+		counts := map[string]int{}
+		stored.hostNameMu.Lock()
+		defer stored.hostNameMu.Unlock()
+		for _, line := range stored.hostName {
+			var event struct {
+				Surface string
+				Event   string
+				Data    any
+			}
+			if text, found := strings.CutPrefix(line, "viewEvent "); found && json.Unmarshal([]byte(text), &event) == nil && event.Event == "run-start" {
+				if event.Data != nil {
+					t.Fatalf("run-start carries %v", event.Data)
+				}
+				counts[event.Surface]++
+			}
+		}
+		return counts
+	}
+	drag := func(round int) {
+		t.Helper()
+		box, _ := f.divider(left, right)
+		x, y := box.X+box.W/2, box.Y+box.H/2
+		f.tester.Move(x, y)
+		f.tester.Frame()
+		f.tester.Press(x, y)
+		f.tester.Frame()
+		for _, step := range []float32{-20, -40, -60} {
+			f.tester.Move(x+step, y)
+			f.settle()
+		}
+		for surface := range surfaces {
+			if got := starts()[surface]; got != round {
+				t.Fatalf("after %d drags the view %s heard %d starts during the drag", round, surface, got)
+			}
+		}
+		if settled := stored.requests[len(stored.requests)-1]["settled"]; settled != false {
+			t.Fatalf("a placement of the drag has settled %v", settled)
+		}
+		f.tester.Release(x-60, y)
+		f.settle()
+		// The host ends the run on a settled placement, also when the release moved nothing.
+		if settled := stored.requests[len(stored.requests)-1]["settled"]; settled != true {
+			t.Fatalf("the last placement of the drag has settled %v", settled)
+		}
+	}
+	drag(1)
+	drag(2)
+	for surface := range surfaces {
+		if got := starts()[surface]; got != 2 {
+			t.Fatalf("the view %s heard %d starts of two drags", surface, got)
+		}
 	}
 }
 

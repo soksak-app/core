@@ -10,6 +10,7 @@
 - F502-24: A release builds, audits and packages the mygo application as `soksak-<version>-darwin-arm64-mygo.zip`, and `make e2e` builds and starts it, so a window session without `SOKSAK_APP` covers the three applications.
 - F562: A test of the mygo workbench no longer ends `drain` on a time without a step, so a host call that starts late cannot fail it.
 - F571: The judge of B3 prints `not measured` for a value that a host records in no run, and `make app-usage` prints the counters that every window reports null and an idle wait that read no frame.
+- F457: Each start of a run on the mygo workbench pushes `run-start` to each view, and a run always ends on a settled placement, so the host also ends it when the release of a drag moved nothing.
 - F502-21: `setDialogBackground` takes an object `{enabled}`, as every other host call does, and a row B of the framework table lists it as the call that only mygo has, so the host parity check passes. A row P lists `Frontend.Frames`.
 - F502-16: Every look of the mygo workbench takes its value from `workbench.json`, which the page reads too: the caption of a card foot, the status line of a sidebar, the text of a placeholder and of a stopped view, the scrim of a dialog with its blur, and the gap under an anchor of a layer.
 - F551: The Tauri host holds two workers of its asynchronous runtime instead of one for each processor, and an idle blocking thread ends after one second instead of ten.
