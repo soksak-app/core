@@ -36,7 +36,13 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 	}
 	origin := s.planeOrigin()
 	originX, originY := float32(origin.X), float32(origin.Y)
-	ui.Box(c).Size(width, stage).DrawOver(func(p *ui.Painter, r ui.Rect) { s.drawRail(p, r, inset) }).Children(func() {
+	rules := s.plane.Rules()
+	var grips []dividerGrip
+	ui.Box(c).Size(width, stage).Draw(func(p *ui.Painter, r ui.Rect) { s.drawRules(p, r, inset, rules, false) }).DrawOver(func(p *ui.Painter, r ui.Rect) {
+		s.drawRail(p, r, inset)
+		paintGrips(p, r, inset, grips)
+		s.drawRules(p, r, inset, rules, true)
+	}).Children(func() {
 		cards := s.plane.Cards()
 		s.forgetCardReads(cards)
 		for _, card := range cards {
@@ -62,7 +68,7 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 			s.drawCard(c, card.ID, data, rect, inset, originX, originY)
 		}
 		if s.fullscreen == "" {
-			s.drawDividers(c, inset)
+			grips = s.drawDividers(c, inset)
 		}
 	})
 	s.forgetStrips()
