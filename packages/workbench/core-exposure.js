@@ -30,7 +30,7 @@ import {
 import { changeRow, createSet, deleteSet, updateSet } from "./sidebar-sets.js";
 import { pluginUnits } from "./environment.js";
 import { latest, seated } from "./compositor.js";
-import { filePlace, modalState, onFilesDropped, onModalState, onWindowResponder, overlayElementRect } from "./host.js";
+import { behindDialog, filePlace, modalState, onFilesDropped, onModalState, onWindowResponder, overlayElementRect } from "./host.js";
 import { keyboardResponder } from "./keyboard.js";
 import { plugin, sectionSurfacePlugin } from "./registry.js";
 import { compositionKindOf } from "./surface-composition-kind.js";
@@ -671,7 +671,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
       const record = seated()?.surfaces.find((entry) => entry.id === surface);
       return record ? shift(record.applied, planeOrigin()) : null;
     },
-    elementPlace: overlayElementRect, unloaded: (surface) => memory.unloaded(surface), leftOut: surfaceLeftOut });
+    elementPlace: overlayElementRect, elementInert: behindDialog, unloaded: (surface) => memory.unloaded(surface), leftOut: surfaceLeftOut });
 }
 
 // Action marker for window size changes (V5-104). It marks the log so that an event can be matched to the action that preceded it.

@@ -34,6 +34,7 @@ type surfaceRequests struct {
 	preferred []string
 	frames    map[string][2]float64
 	unloaded  map[string]bool
+	behind    bool
 	links     workbench.SurfaceLinks
 }
 
@@ -51,9 +52,10 @@ func newSurfaceRequests(t *testing.T) *surfaceRequests {
 		t.Fatal(err)
 	}
 	f.links = workbench.SurfaceLinks{
-		Plugin:    func(surface string) string { return f.plugins[surface] },
-		Preferred: func() []string { return f.preferred },
-		Unloaded:  func(surface string) bool { return f.unloaded[surface] },
+		Plugin:       func(surface string) string { return f.plugins[surface] },
+		Preferred:    func() []string { return f.preferred },
+		Unloaded:     func(surface string) bool { return f.unloaded[surface] },
+		BehindDialog: func() bool { return f.behind },
 		Frame: func(surface string) (float64, float64, bool) {
 			frame, ok := f.frames[surface]
 			return frame[0], frame[1], ok
@@ -295,6 +297,30 @@ func TestTheStatusAndTheElementOfASurfaceAreForwarded(t *testing.T) {
 	}
 	if last := f.forwards[len(f.forwards)-1]; last["method"] != "element.act" {
 		t.Fatalf("the forward is %v", last)
+	}
+}
+
+// An open dialog stands over a surface: the rectangle stays and an action does not reach the surface (docs/spec/exposure.md).
+func TestAnOpenDialogRefusesAnActionOnASurfaceElementAndKeepsItsPlace(t *testing.T) {
+	f := newSurfaceRequests(t)
+	f.register("tab-a", "element", "terminal.view")
+	f.frames["tab-a"] = [2]float64{100, 50}
+	f.reply = func(map[string]any) (any, error) {
+		return map[string]any{"result": map[string]any{"x": 3, "y": 4, "width": 10, "height": 20, "zoom": 1}}, nil
+	}
+	f.behind = true
+	if got := f.ask("element.rect", `{"name": "terminal.view"}`)["result"].(map[string]any); got["x"] != float64(103) || got["y"] != float64(54) {
+		t.Fatalf("the rectangle is %v", got)
+	}
+	forwards := len(f.forwards)
+	f.refuses2("element.act", `{"name": "terminal.view", "action": "click"}`, 1010, "element terminal.view is behind the open dialog and takes no action")
+	if len(f.forwards) != forwards {
+		t.Fatalf("the action reached the surface: %v", f.forwards[len(f.forwards)-1])
+	}
+	f.behind = false
+	f.reply = func(map[string]any) (any, error) { return map[string]any{}, nil }
+	if reply := f.ask("element.act", `{"name": "terminal.view", "action": "click"}`); reply["error"] != nil {
+		t.Fatalf("after the dialog the action answered %v", reply)
 	}
 }
 

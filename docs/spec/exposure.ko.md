@@ -259,6 +259,8 @@ document audit는 open shadow tree를 포함하여 그 document의 모든 shared
 
 `index`는 0 이상의 정수이며, 타입이 다른 `index`를 준 요청은 -32602로 거부한다.
 
+열린 dialog 는 그 바깥의 모든 element 를 inert 로 만든다. dialog 는 종류가 `dialog` 인 modal, 곧 settings 와 debug view 이고, 종류가 `menu` 인 modal 인 picker 는 어떤 element 도 inert 로 만들지 않는다. inert element 는 layout 을 유지하므로 dialog 가 덮고 있어도 `element.rect` 는 그 사각형을 답하고, 어떤 점에 무엇이 닿는지는 `host.hit` 이 답한다. inert element 에 대한 `element.act` 는 어느 document 에서든 1010 과 메시지 `element <name> is behind the open dialog and takes no action` 을 돌려준다.
+
 네이티브 포인터 주입은 창과 버튼별로 누름을 받은 뷰를 유지한다. 포인터가 다른 뷰를 가로질러도 끌기와 뗌을 그 뷰에 전달하며 뗌의 수신 확인은 누름을 받은 문서를 기다린다. 일치하는 누름 없는 끌기·뗌, 같은 버튼을 누른 상태에서의 추가 누름, 제거된 누름 대상 뷰는 명시적 입력 거부를 반환한다. 스크롤과 버튼 없는 이동은 현재 포인터 위치를 사용한다.
 
 workbench page와 card 요소는 app DOM document를 공유하고 view surface는 자기 document를 가진다. main registry는 선택된 surface가 답할 때 view 내부 `element.rect`에 현재 applied view 원점을 한 번 더한다. view의 native page zoom은 1이고 CSS sizing은 이미 element rectangle에 반영되므로 text-size나 capture scale을 곱하지 않는다. 반환된 rectangle은 app-document 좌표이고 `document` 원점은 `{x: 0, y: 0}`이다. applied frame이 없으면 surface 식별자를 담아 실패하며 zero origin으로 대체하지 않는다. hidden 또는 zero-size view도 자기 applied origin을 사용한다. native modal은 별도 document이므로 rectangle은 modal-local 좌표를 유지하고 `document` 원점은 실제 modal frame 원점이다. picker 항목처럼 main document가 숨긴 native modal의 요소도 이렇게 답한다. modal document가 자기 상태의 `elements`로 이름 있는 요소의 rectangle을 보고하고, 그 보고 전이나 보고에 없는 요소를 요청하면 실패한다. 숨겨진 요소의 빈 상자는 답하지 않는다. client는 보고된 document origin을 정확히 한 번 더하며 surface kind나 card placement에 따라 보정하지 않는다. mygo 호스트에서 워크벤치의 요소에 대한 `element.rect`는 창 point로 나타낸 요소의 frame을 `zoom` 1, `document` `{x: 0, y: 0}`으로 반환하고, `element.act`는 `click`과 `input`을 받는다. `dispatch`는 `the mygo workbench has no DOM events`로 실패한다. view 페이지의 요소는 모든 호스트에서 모든 동작을 유지한다.
@@ -326,6 +328,8 @@ Windows 에서 호스트는 `SendInput` 이 아니라 web view 의 DevTools prot
 | 1006 | 창이 활성 상태가 아님: 포인터 `move`에는 키 창이 필요하거나, 시스템이 애플리케이션을 활성화하지 않음 |
 | 1007 | AppKit이 0이 아닌 `NSEvent.pressedMouseButtons` 마스크를 보고해 합성 포인터 `down`이나 `up`을 전달하지 않음. 메시지는 거부 시점의 마스크와 frontmost 애플리케이션을 보고함 |
 | 1008 | 그 창에서 그 버튼의 합성 누름이 아직 열려 있어 포인터 `down`을 전달하지 않음 |
+| 1009 | element 요청의 address 에 해당하는 element 가 없음 |
+| 1010 | element 가 열린 dialog 뒤에서 inert 이므로 동작을 전달하지 않음 |
 | -32000 | 등록된 명령이나 status 처리기가 실패함. `message`는 그 오류 메시지다 |
 
 중계한 요청의 1005 오류 메시지는 `the document did not reply within <ms> ms`다. 두 host는 시간이 초과된 최근 요청 256개를 기억하고 가장 오래된 것을 버린다. 그중 하나에 온 답은 `exposure reply <id> arrived <ms> ms after it was sent; its request timed out after <ms> ms`로 실패하고, 기억하지 않는 요청에 온 답은 `exposure reply <id> has no matching request`로 실패하므로, 늦은 답의 지연이 page가 보고하는 오류에 들어간다. 표면 페이지로 전달한 command가 시간 초과되면 `host.call.timeout`을 plugin과 command와 함께 쓰고, 그 늦은 답은 `host.trace.call.late-reply`를 지연과 함께 쓴다.

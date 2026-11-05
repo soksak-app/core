@@ -385,6 +385,52 @@ func TestAnElementActionReachesTheElement(t *testing.T) {
 	}
 }
 
+// An element behind an open dialog answers its place, and an action on it is refused in words that say why (docs/spec/exposure.md).
+func TestAnElementBehindADialogAnswersItsPlaceAndRefusesAnAction(t *testing.T) {
+	declared := registry(t)
+	open, behind, inside := false, 0, 0
+	tester := ui.NewTester(func(c *ui.Context) {
+		ui.Column(c).Fill().Children(func() {
+			if ui.Button(c.Key(workbench.Exposed{Name: "core.debug.close"}), "behind").Size(100, 40).Clicked() {
+				behind++
+			}
+		})
+		if open {
+			ui.Overlay(c, func() {
+				ui.Box(c).Absolute().Left(0).Top(0).Right(0).Bottom(0).Modal().Children(func() {
+					if ui.Button(c.Key(workbench.Exposed{Name: "core.settings-modal.close"}), "inside").Size(100, 40).Clicked() {
+						inside++
+					}
+				})
+			})
+		}
+	}, 400, 300)
+	declared.Elements(drawnElements{tester})
+	r := newRelay(t, declared)
+	before := r.ask("element.rect", `{"name":"core.debug.close"}`)["result"]
+	open = true
+	tester.Frame()
+	tester.Frame()
+	if got := r.ask("element.rect", `{"name":"core.debug.close"}`)["result"]; !reflect.DeepEqual(got, before) {
+		t.Fatalf("behind the dialog the rectangle is %v, before it %v", got, before)
+	}
+	code, message := r.refused(r.ask("element.act", `{"name":"core.debug.close","action":"click"}`))
+	if code != 1010 || message != "element core.debug.close is behind the open dialog and takes no action" {
+		t.Fatalf("the action behind the dialog was refused with %d %q", code, message)
+	}
+	tester.Frame()
+	if behind != 0 {
+		t.Fatalf("the button behind the dialog ran %d times", behind)
+	}
+	if reply := r.ask("element.act", `{"name":"core.settings-modal.close","action":"click"}`); reply["error"] != nil {
+		t.Fatalf("the action in the dialog answered %v", reply)
+	}
+	tester.Frame()
+	if inside != 1 {
+		t.Fatalf("the button in the dialog ran %d times", inside)
+	}
+}
+
 func TestTheListReportsADrawnElementAsRegistered(t *testing.T) {
 	r, _, _, _ := elementScene(t)
 	list := r.ask("exposure.list", `{}`)["result"].(map[string]any)

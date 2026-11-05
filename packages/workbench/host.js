@@ -756,6 +756,15 @@ export function overlayElementRect(element) {
   return { x, y, width, height, document: { x: modalFrame.x, y: modalFrame.y } };
 }
 
+/**
+ * Whether the open dialog stands over the element, which makes the element inert (docs/spec/exposure.md). null names the document
+ * of a surface, which a dialog covers as a whole. A modal of the kind menu makes no element inert.
+ */
+export function behindDialog(element) {
+  const el = shown ? document.getElementById(shown) : null;
+  return el?.dataset.nativeModal === "dialog" && !el.contains(element);
+}
+
 /** The open modal and the state its document reported. It is null when no modal is open. */
 export function modalState() {
   if (!shown) return null;

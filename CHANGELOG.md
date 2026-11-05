@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F502-13: An open dialog makes every element outside it inert on the three hosts: `element.rect` still answers its rectangle, `host.hit` answers what a point reaches, and `element.act` is refused with code 1010 for a core element and for a surface element. The pointer sequence of the mygo host names no element behind the dialog. Red: the page performed an action on an element behind a dialog; the mygo host refused it with -32000 instead of 1010, forwarded an action on a surface element to the surface, and its pointer sequence named `core.save` behind the dialog.
 - F623: The session folders of `make benchmark-b3` live in `b3/` of the git common directory beside the baseline record. In `target/b3` a `cargo clean` of a board removed values that took hours to measure. Red: `scripts/test/benchmark-b3.test.mjs` reads the folder from a main checkout and from its worktree.
 - F624: A failed B3 run keeps only the output of its application and the logs of its configuration and prints their size. It kept its whole configuration, tens of MB of plugins, sidecars and web view data. Red: `scripts/test/benchmark-b3.test.mjs` fails a run and reads what stays.
 - F625: A run of S13 fails before it makes a configuration when the process of the session lacks the Accessibility permission, and names the permission. It started the application and kept its configuration in every round. Red: `scripts/test/benchmark-b3.test.mjs` runs S13 without the permission.

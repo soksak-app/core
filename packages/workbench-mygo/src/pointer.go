@@ -91,6 +91,10 @@ func pathAt(nodes []ui.ElementNode, x, y float32) []ui.ElementNode {
 		if inner := pathAt(node.Children, x, y); inner != nil {
 			return append([]ui.ElementNode{node}, inner...)
 		}
+		// An element behind an open dialog takes no pointer, though an element of the dialog inside it does.
+		if node.Inert {
+			continue
+		}
 		if box := node.Bounds; x >= box.X && x < box.X+box.W && y >= box.Y && y < box.Y+box.H {
 			return []ui.ElementNode{node}
 		}

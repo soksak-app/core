@@ -31,7 +31,13 @@ const (
 	UnknownName   = 1001
 	Unregistered  = 1002
 	Gone          = 1003
+	Inert         = 1010
 )
+
+// inertRefusal refuses an action on an element that an open dialog makes inert (docs/spec/exposure.md).
+func inertRefusal(name string) *Refusal {
+	return Refuse(Inert, "element %s is behind the open dialog and takes no action", name)
+}
 
 // Refusal is the failure of a request with its code. A command returns one to choose the code of its failure; any other error of
 // a command answers with the code Failed.
@@ -378,8 +384,12 @@ func (r *Registry) element(name string, index json.RawMessage) (ui.ElementNode, 
 	return list[position], nil
 }
 
-// act performs the action of a request on element. The action works as assistive technology performs it, in the next frame.
+// act performs the action of a request on element. The action works as assistive technology performs it, in the next frame. An
+// element behind an open dialog takes no action.
 func (r *Registry) act(name string, element ui.ElementNode, fields map[string]json.RawMessage) error {
+	if element.Inert {
+		return inertRefusal(name)
+	}
 	action := "undefined"
 	if raw, present := fields["action"]; present && json.Unmarshal(raw, &action) != nil {
 		return Refuse(InvalidParams, "unknown action %s", raw)

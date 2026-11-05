@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F502-13: 열린 dialog는 세 host에서 그 밖의 모든 element를 inert로 만든다. `element.rect`는 여전히 rectangle을 답하고, 한 점이 무엇에 닿는지는 `host.hit`이 답하며, `element.act`는 core element와 surface element 모두 code 1010으로 거절된다. mygo host의 pointer sequence는 dialog 뒤의 element 이름을 대지 않는다. Red: page는 dialog 뒤 element의 action을 수행했다. mygo host는 1010 대신 -32000으로 거절했고, surface element의 action을 surface로 전달했으며, pointer sequence는 dialog 뒤의 `core.save`를 이름으로 댔다.
 - F623: `make benchmark-b3`의 session folder는 git common directory의 `b3/`, baseline record 옆에 있다. `target/b3`에서는 판의 `cargo clean`이 몇 시간 동안 잰 값을 지웠다. Red: `scripts/test/benchmark-b3.test.mjs`가 main checkout과 그 worktree에서 folder를 읽는다.
 - F624: 실패한 B3 run은 application 출력과 configuration의 log만 남기고 그 크기를 출력한다. configuration 전체, 즉 plugin, sidecar, web view 데이터 수십 MB를 남기고 있었다. Red: `scripts/test/benchmark-b3.test.mjs`가 run을 실패시키고 남은 것을 읽는다.
 - F625: session의 process에 Accessibility 권한이 없으면 S13의 run은 configuration을 만들기 전에 실패하고 권한을 말한다. 매 round 애플리케이션을 시작하고 configuration을 남기고 있었다. Red: `scripts/test/benchmark-b3.test.mjs`가 권한 없이 S13을 돌린다.

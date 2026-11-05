@@ -250,6 +250,13 @@ for (const app of MAIN_PAGE_APPS) {
     assert.deepEqual([document.mode, document.htmlBackground, document.bodyBackground, document.scrimBackground],
       ["dialog", "rgba(0, 0, 0, 0)", "rgba(0, 0, 0, 0)", "rgba(0, 0, 0, 0.5)"]);
 
+    // The element behind the dialog keeps its layout and takes no action (docs/spec/exposure.md).
+    const behind = await s.rect("core.chrome.settings");
+    assert.ok(behind.width > 0 && behind.height > 0, `the element behind the dialog has no place: ${JSON.stringify(behind)}`);
+    for (const refused of [() => s.act("core.chrome.settings", "click"), () => s.act("browser.document", "click", { surface: browser.surface })]) {
+      await assert.rejects(refused, (error) => error.code === 1010 && /is behind the open dialog and takes no action/.test(error.message));
+    }
+
     await s.act("core.settings-modal.close", "click");
     await s.until("host.window", (state) => state.modal === null, "settings did not close");
     await background(s, false);
