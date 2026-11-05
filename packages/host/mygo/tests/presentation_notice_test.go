@@ -35,6 +35,7 @@ func doneOf() (func(error), *[]error) {
 	return func(err error) { *calls = append(*calls, err) }, calls
 }
 
+// contract: mygo.presentation.notice-answers
 func TestAFrameThatFoundNoDrawableAsksAgainAndCallsBackOnItsNotice(t *testing.T) {
 	notice, asked := noticeOf(answer{presentation: mygo.PresentNoDrawable}, answer{presentation: mygo.PresentNoDrawable}, answer{presentation: mygo.Presented})
 	done, calls := doneOf()
@@ -49,6 +50,7 @@ func TestAFrameThatFoundNoDrawableAsksAgainAndCallsBackOnItsNotice(t *testing.T)
 	}
 }
 
+// contract: mygo.presentation.notice-answers
 func TestAFrameWithoutDamageCountsAsPresented(t *testing.T) {
 	notice, _ := noticeOf(answer{presentation: mygo.PresentNoDamage})
 	done, calls := doneOf()
@@ -60,6 +62,7 @@ func TestAFrameWithoutDamageCountsAsPresented(t *testing.T) {
 	}
 }
 
+// contract: mygo.presentation.notice-answers
 func TestAHeldFrameFailsWhenItsCallerDoesNotWait(t *testing.T) {
 	notice, _ := noticeOf(answer{presentation: mygo.PresentHeld})
 	done, calls := doneOf()
@@ -71,6 +74,7 @@ func TestAHeldFrameFailsWhenItsCallerDoesNotWait(t *testing.T) {
 	}
 }
 
+// contract: mygo.presentation.notice-answers
 func TestAHeldFrameAsksAgainAfterTheRelease(t *testing.T) {
 	notice, asked := noticeOf(answer{presentation: mygo.PresentHeld}, answer{presentation: mygo.Presented})
 	done, calls := doneOf()
@@ -87,6 +91,7 @@ func TestAHeldFrameAsksAgainAfterTheRelease(t *testing.T) {
 	}
 }
 
+// contract: mygo.presentation.notice-answers
 func TestAFailedFrameReturnsItsFailure(t *testing.T) {
 	failure := errors.New("the device is lost")
 	notice, _ := noticeOf(answer{presentation: mygo.PresentFailed, failure: failure})
@@ -99,6 +104,7 @@ func TestAFailedFrameReturnsItsFailure(t *testing.T) {
 	}
 }
 
+// contract: mygo.presentation.notice-answers
 func TestAClosedWindowEndsTheWait(t *testing.T) {
 	notice, _ := noticeOf(answer{presentation: mygo.PresentClosed})
 	done, calls := doneOf()
@@ -110,6 +116,7 @@ func TestAClosedWindowEndsTheWait(t *testing.T) {
 	}
 }
 
+// contract: mygo.presentation.notice-answers
 func TestAnAskThatFailsAfterANoticeReachesDone(t *testing.T) {
 	refused := errors.New("the window is closed")
 	asked := 0

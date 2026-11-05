@@ -93,6 +93,7 @@ func waitForFile(t *testing.T, path, text, what string) {
 
 // A writer with nothing to write does not wake: the batch interval of the host would be ten wakeups each second of an idle
 // application, which G2 of docs/spec/hosts.md does not leave room for.
+// contract: log.writer.sleeps-with-nothing-to-write
 func TestWriterSleepsWithNothingToWrite(t *testing.T) {
 	_, source, _ := idleLog(t, 5*time.Millisecond)
 	from := settledPulls(t, source)
@@ -103,6 +104,7 @@ func TestWriterSleepsWithNothingToWrite(t *testing.T) {
 }
 
 // One Wake takes the source at once and once at the end of the interval it starts, and the writer sleeps again.
+// contract: log.writer.sleeps-with-nothing-to-write
 func TestWriterSleepsAgainAfterAWake(t *testing.T) {
 	_, source, wake := idleLog(t, 5*time.Millisecond)
 	from := settledPulls(t, source)
@@ -114,6 +116,7 @@ func TestWriterSleepsAgainAfterAWake(t *testing.T) {
 }
 
 // An event that wakes a writer that slept is stored at once, without an interval and without a flush.
+// contract: log.writer.stores-the-first-event-at-once
 func TestFirstEventIsStoredAtOnce(t *testing.T) {
 	log, source, _ := idleLog(t, time.Hour)
 	settledPulls(t, source)
@@ -122,6 +125,7 @@ func TestFirstEventIsStoredAtOnce(t *testing.T) {
 }
 
 // A record of the source that wakes a writer that slept is stored at once.
+// contract: log.native.wake-stores-a-record-at-once
 func TestFirstRecordOfTheSourceIsStoredAtOnce(t *testing.T) {
 	log, source, wake := idleLog(t, time.Hour)
 	settledPulls(t, source)
@@ -131,6 +135,7 @@ func TestFirstRecordOfTheSourceIsStoredAtOnce(t *testing.T) {
 }
 
 // The events after the first gather into the batch of the interval: the writer does not write each event.
+// contract: log.writer.stores-the-first-event-at-once
 func TestEventsAfterTheFirstWaitForTheBatch(t *testing.T) {
 	log, source, _ := idleLog(t, time.Hour)
 	settledPulls(t, source)
@@ -150,6 +155,7 @@ func TestEventsAfterTheFirstWaitForTheBatch(t *testing.T) {
 }
 
 // A count of the gate leaves a sleeping writer as log.gated: no other event may be there to wake it.
+// contract: log.writer.sleeps-with-nothing-to-write
 func TestGateCountWakesTheWriter(t *testing.T) {
 	log, source, _ := idleLog(t, 5*time.Millisecond)
 	settledPulls(t, source)
@@ -166,6 +172,7 @@ func TestGateCountWakesTheWriter(t *testing.T) {
 }
 
 // A loss that no message carries leaves a sleeping writer as log.dropped at once.
+// contract: log.writer.sleeps-with-nothing-to-write
 func TestLossWakesTheWriter(t *testing.T) {
 	log, source, _ := idleLog(t, time.Hour)
 	settledPulls(t, source)
@@ -174,6 +181,7 @@ func TestLossWakesTheWriter(t *testing.T) {
 }
 
 // Close stores what waits for an interval and what the source holds, and needs no Wake for it.
+// contract: log.native.close-stores-the-ring
 func TestCloseStoresWhatWaits(t *testing.T) {
 	log, source, _ := idleLog(t, time.Hour)
 	settledPulls(t, source)
@@ -190,6 +198,7 @@ func TestCloseStoresWhatWaits(t *testing.T) {
 }
 
 // Close and Flush of a writer that sleeps take the source, which may not have said that it holds something.
+// contract: log.native.close-stores-the-ring
 func TestAWriterThatSleepsTakesTheSourceAtTheEnd(t *testing.T) {
 	log, source, _ := idleLog(t, time.Hour)
 	settledPulls(t, source)
@@ -208,6 +217,7 @@ func TestAWriterThatSleepsTakesTheSourceAtTheEnd(t *testing.T) {
 }
 
 // A process with a Pull and no Wake could not hear its source.
+// contract: log.native.pull-needs-a-wake
 func TestPullNeedsWake(t *testing.T) {
 	useEventLogFilesystemPlatform(t)
 	_, err := StartEventLog(EventLogOptions{
@@ -223,6 +233,7 @@ func TestPullNeedsWake(t *testing.T) {
 
 // The source puts the second request in the queue while the writer pulls for the first, so a writer that drains for a flush
 // finds it there. An interval of an hour keeps the end of an interval out of the answer.
+// contract: log.writer.flush-behind-a-flush-or-a-stop-is-answered
 func TestAFlushThatAFlushFindsBehindItIsAnswered(t *testing.T) {
 	useEventLogFilesystemPlatform(t)
 	second := make(chan struct{})
@@ -256,6 +267,7 @@ func TestAFlushThatAFlushFindsBehindItIsAnswered(t *testing.T) {
 }
 
 // A flush request and an event are in the queue behind the stop: the source puts them there while the writer pulls for it.
+// contract: log.writer.flush-behind-a-flush-or-a-stop-is-answered
 func TestAFlushThatAStopFindsBehindItIsAnswered(t *testing.T) {
 	useEventLogFilesystemPlatform(t)
 	second := make(chan struct{})
@@ -306,6 +318,7 @@ func TestAFlushThatGetsNoAnswerReportsItsDeadline(t *testing.T) {
 }
 
 // A writer that ended cannot answer, and its caller learns that at once and not as a deadline that passed.
+// contract: log.writer.flush-behind-a-flush-or-a-stop-is-answered
 func TestAFlushOfAWriterThatEndedSaysSo(t *testing.T) {
 	log, _, _ := idleLog(t, time.Hour)
 	log.Close()

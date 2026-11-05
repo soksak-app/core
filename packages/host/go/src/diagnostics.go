@@ -19,6 +19,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"sync"
 	"time"
@@ -48,8 +49,8 @@ func init() {
 	diagnosticMethods["diagnostics.capture.start"] = diagnosticCaptureStart
 	diagnosticMethods["diagnostics.capture.stop"] = diagnosticCaptureStop
 	diagnosticMethods["diagnostics.capture.document-identity.start"] = diagnosticCaptureDocumentIdentityStart
-	diagnosticMethods["diagnostics.modal.hold"] = diagnosticModalHold
-	diagnosticMethods["diagnostics.modal.held"] = diagnosticModalHeld
+	diagnosticMethods["diagnostics.modal.hold"] = onModalWebViews(diagnosticModalHold)
+	diagnosticMethods["diagnostics.modal.held"] = onModalWebViews(diagnosticModalHeld)
 	diagnosticMethods["diagnostics.presentation.failure"] = diagnosticPresentationFailure
 	diagnosticMethods["diagnostics.input.source"] = diagnosticInputSource
 	diagnosticMethods["diagnostics.input.reference"] = diagnosticInputReference
@@ -61,17 +62,18 @@ func init() {
 	debugCaptures = debugCaptureWindows
 	diagnosticMethods["diagnostics.notifications"] = diagnosticNotifications
 	holdModalContent = modalHolds.wait
-	diagnosticMethods["diagnostics.page.collect"] = diagnosticPageCollect
+	diagnosticMethods["diagnostics.page.collect"] = onMainPage(diagnosticPageCollect)
 	diagnosticMethods["diagnostics.native.objects"] = diagnosticNativeObjects
 	diagnosticMethods["diagnostics.native.window-color-space"] = diagnosticNativeWindowColorSpace
 	diagnosticMethods["diagnostics.objects"] = diagnosticObjects
 	diagnosticMethods["diagnostics.heap.profile"] = diagnosticHeapProfile
+	diagnosticMethods["diagnostics.gc.loop"] = diagnosticGCLoop
 	diagnosticMethods["diagnostics.process.exit"] = diagnosticProcessExit
 	diagnosticMethods["diagnostics.memory.pressure"] = diagnosticMemoryPressure
-	diagnosticMethods["diagnostics.page.request"] = diagnosticPageMethod("diagnostics.page.request")
-	diagnosticMethods["diagnostics.page.calls"] = diagnosticPageMethod("diagnostics.page.calls")
+	diagnosticMethods["diagnostics.page.request"] = onMainPage(diagnosticPageMethod("diagnostics.page.request"))
+	diagnosticMethods["diagnostics.page.calls"] = onMainPage(diagnosticPageMethod("diagnostics.page.calls"))
 	diagnosticMethods["diagnostics.document.viewport-marker"] = diagnosticDocumentViewportMarker
-	diagnosticMethods["diagnostics.host.events"] = diagnosticHostEvents
+	diagnosticMethods["diagnostics.host.events"] = onMainPage(diagnosticHostEvents)
 	diagnosticMethods["diagnostics.surface.hold"] = diagnosticPageMethod("diagnostics.surface.hold")
 	diagnosticMethods["diagnostics.surface.held"] = diagnosticPageMethod("diagnostics.surface.held")
 	diagnosticMethods["diagnostics.layout.fail"] = diagnosticPageMethod("diagnostics.layout.fail")
@@ -180,6 +182,26 @@ func diagnosticHost(e *Endpoint, params json.RawMessage) (*Host, *Surfaces, erro
 		return nil, nil, errMissingWindow(window)
 	}
 	return backend.h, s, nil
+}
+
+// onMainPage is a method that acts on the main page of a window: a framework without a main page answers it with an error.
+func onMainPage(method endpointMethod) endpointMethod { return onlyWith("main page", method) }
+
+// onModalWebViews is a method that acts on the modal web views of a window, which a framework without a main page does not have.
+func onModalWebViews(method endpointMethod) endpointMethod {
+	return onlyWith("modal web views", method)
+}
+
+func onlyWith(subject string, method endpointMethod) endpointMethod {
+	return func(e *Endpoint, c *endpointConn, params json.RawMessage) (any, error) {
+		if _, _, err := diagnosticHost(e, params); err != nil {
+			return nil, err
+		}
+		if !framework.MainPage() {
+			return nil, fmt.Errorf("the %s host has no %s", framework.ApplicationName(), subject)
+		}
+		return method(e, c, params)
+	}
 }
 
 // diagnosticPageMethod sends a diagnostic method that the main page handles to that page. The exposure reply of a surface must be held
@@ -1664,6 +1686,53 @@ func diagnosticHeapProfile(e *Endpoint, _ *endpointConn, params json.RawMessage)
 		return nil, err
 	}
 	return map[string]any{"path": path}, nil
+}
+
+// collectGarbage is the collection of the loop of diagnostics.gc.loop.
+var collectGarbage = runtime.GC
+
+// gcLoop is the goroutine of diagnostics.gc.loop while it runs.
+var gcLoop struct {
+	mu   sync.Mutex
+	stop chan struct{}
+	done chan struct{}
+}
+
+// diagnosticGCLoop starts a goroutine that collects garbage without pause, or stops it and answers after it has returned, so a
+// check measures the work of the main thread while the runtime collects (docs/spec/endpoint.md).
+func diagnosticGCLoop(_ *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+	var p struct {
+		On *bool `json:"on"`
+	}
+	if err := decode(params, &p); err != nil {
+		return nil, err
+	}
+	if p.On == nil {
+		return nil, rpcError(codeInvalidParams, "on is required")
+	}
+	gcLoop.mu.Lock()
+	defer gcLoop.mu.Unlock()
+	switch {
+	case *p.On && gcLoop.stop == nil:
+		stop, done, collect := make(chan struct{}), make(chan struct{}), collectGarbage
+		gcLoop.stop, gcLoop.done = stop, done
+		routine.Go("diagnostics-gc-loop", func() {
+			defer close(done)
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+					collect()
+				}
+			}
+		})
+	case !*p.On && gcLoop.stop != nil:
+		close(gcLoop.stop)
+		<-gcLoop.done
+		gcLoop.stop, gcLoop.done = nil, nil
+	}
+	return nil, nil
 }
 
 // diagnosticMemoryPressure delivers a memory pressure level as the source of the process delivers it, so a check observes the

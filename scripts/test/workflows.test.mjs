@@ -132,7 +132,6 @@ test('ci keeps language host checks independent and gates release on every requi
   assert.match(job('macos-wailsv3'), /host-test-wailsv3/);
   assert.match(job('macos-tauriv2'), /host-test-tauriv2/);
   assert.match(steps(job('macos-mygo')).find((step) => step.name === 'mygo host tests')?.text ?? '', /make -C core host-test-mygo/);
-  assert.doesNotMatch(job('macos-mygo'), /check-host-contract/, 'the mygo job runs no contract run');
   assert.match(job('core-node'), /node core\/scripts\/node-tests\.mjs --exclude scripts\/ --exclude native\//);
   assert.match(job('equivalence'), /node core\/scripts\/node-tests\.mjs --only scripts\//);
   assert.doesNotMatch(job('equivalence'), /needs:/, 'equivalence installs and builds its own inputs');
@@ -205,11 +204,10 @@ test('make host-test-mygo runs the unit tests of the Go packages of the mygo hos
   }
 });
 
-test('make host-test-mygo runs the unit tests of the mygo framework adapter and the mygo application', { timeout: 10_000 }, () => {
+test('make host-test-mygo runs the contract run of the mygo host and the unit tests of the mygo application', { timeout: 10_000 }, () => {
   const output = execFileSync('make', ['-n', '-o', 'native-darwin', '-o', 'build', 'host-test-mygo'], { cwd: ROOT, encoding: 'utf8' });
-  assert.match(output, /go -C packages\/host\/mygo test /, output);
   assert.match(output, /pnpm -F @soksak\/mygo test/, output);
-  assert.doesNotMatch(output, /check-host-contract/, output);
+  assert.match(output, /check-host-contract\.mjs --host mygo/, output);
 });
 
 test('CI JavaScript scopes cover every discovered test file exactly once', { timeout: 10_000 }, async () => {

@@ -147,6 +147,44 @@ func begin(t *testing.T, window *adapter.Frontend, ticket uint64) (commit func()
 	}
 }
 
+func TestE2EARecordingHoldsTheRequestAndThePresentationOfTheFrameOfATransaction(t *testing.T) {
+	_, _, window := held(t, "recording")
+	system, err := platform.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	capture, ok := system.(platform.Capturer)
+	if !ok {
+		t.Fatal("the platform has no capture")
+	}
+	mygo.RunOnMain(capture.LayoutTraceStart)
+	commit := begin(t, window, 9)
+	if err := presentation(t, window); err != nil {
+		t.Fatal(err)
+	}
+	commit()
+	// A notice outside a transaction belongs to no transaction, so it adds no record.
+	if err := presentation(t, window); err != nil {
+		t.Fatal(err)
+	}
+	var records [][5]float64
+	mygo.RunOnMain(func() { records, err = capture.LayoutTraceStop() })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("the recording holds %d transactions, want one: %v", len(records), records)
+	}
+	record := records[0]
+	ticket, begun, presented, committed, requested := record[0], record[1], record[2], record[3], record[4]
+	if ticket != 9 {
+		t.Fatalf("the record has the ticket %v, want 9", ticket)
+	}
+	if !(begun <= requested && requested <= presented && presented <= committed) {
+		t.Fatalf("begun %v, requested %v, presented %v, committed %v are not in this order", begun, requested, presented, committed)
+	}
+}
+
 // draws returns how many frames the workbench drew in window.
 func draws(workbench *sceneWorkbench, name string) int {
 	count := 0

@@ -74,6 +74,8 @@ static void main_surfaceLayoutTraceStart(void) { hostRunOnMain(^{ surfaceLayoutT
 static size_t main_surfaceLayoutTraceStop(double *out, size_t capacity) {
     return ON_MAIN(size_t, surfaceLayoutTraceStop(out, capacity));
 }
+static uint64_t main_surfaceLayoutTraceRequested(void) { return ON_MAIN(uint64_t, surfaceLayoutTraceRequested()); }
+static void main_surfaceLayoutTracePresented(uint64_t ticket) { hostRunOnMain(^{ surfaceLayoutTracePresented(ticket); }); }
 */
 import "C"
 
@@ -181,6 +183,11 @@ func (implementation) DeliveredNotifications(done func(json string)) {
 }
 
 func (implementation) LayoutTraceStart() { C.main_surfaceLayoutTraceStart() }
+
+func (implementation) LayoutTraceRequested() (presented func()) {
+	ticket := C.main_surfaceLayoutTraceRequested()
+	return func() { C.main_surfaceLayoutTracePresented(ticket) }
+}
 
 func (implementation) LayoutTraceStop() ([][5]float64, error) {
 	const capacity = 4096

@@ -35,6 +35,7 @@ func pageProcessSurfaces(t *testing.T, selected Framework, pid int) *Surfaces {
 	return s
 }
 
+// contract: window.page-process.null-without-a-main-page
 func TestAWindowWithoutAMainPageReportsNoPageProcess(t *testing.T) {
 	s := pageProcessSurfaces(t, pagelessFramework{}, 0)
 	status, err := s.windowState()
@@ -53,6 +54,7 @@ func TestAWindowWithoutAMainPageReportsNoPageProcess(t *testing.T) {
 	}
 }
 
+// contract: window.page-process.null-without-a-main-page
 func TestAWindowWithAMainPageReportsItsPageProcess(t *testing.T) {
 	for _, pid := range []int{0, 4321} {
 		s := pageProcessSurfaces(t, mainPageFramework{}, pid)
@@ -73,6 +75,7 @@ func TestAWindowWithAMainPageReportsItsPageProcess(t *testing.T) {
 	}
 }
 
+// contract: window.page-process.null-without-a-main-page
 func TestHostWindowDeclaresAPageProcessThatCanBeNull(t *testing.T) {
 	properties := hostStatus["host.window"].Schema["properties"].(map[string]any)
 	declared, _ := properties["pageProcess"].(map[string]any)

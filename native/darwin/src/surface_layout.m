@@ -67,6 +67,17 @@ static void traceMark(uint64_t ticket, NSUInteger stage) {
     record[stage] = @(now);
 }
 
+uint64_t surfaceLayoutTraceRequested(void) {
+    NSCAssert(NSThread.isMainThread, @"surface layout trace requires the UI thread");
+    traceMark(preparation, 4);
+    return preparation;
+}
+
+void surfaceLayoutTracePresented(uint64_t ticket) {
+    NSCAssert(NSThread.isMainThread, @"surface layout trace requires the UI thread");
+    traceMark(ticket, 2);
+}
+
 void surfaceLayoutTraceStart(void) {
     NSCAssert(NSThread.isMainThread, @"surface layout trace requires the UI thread");
     [trace release];
@@ -273,13 +284,12 @@ void surfaceLayoutAfterPresentation(void *handle, void (^done)(void)) {
     NSCAssert(NSThread.isMainThread, @"surface presentation requires the UI thread");
     WKWebView *main = (WKWebView *)handle;
     // The app DOM is a separate web view; plugin roots and nested document regions are independent web views.
-    uint64_t ticket = preparation;
     // Time at which the presentation check of the DOM drawn by the page was requested. This time and presented measure whether the wait
     // for presentation waits for the update of the frame that was drawn or for the update after it (docs/features.md F92).
-    traceMark(ticket, 4);
+    uint64_t ticket = surfaceLayoutTraceRequested();
     void (^finish)(void) = [[done copy] autorelease];
     [main _doAfterNextPresentationUpdate:^{
-        traceMark(ticket, 2);
+        surfaceLayoutTracePresented(ticket);
         finish();
     }];
 }

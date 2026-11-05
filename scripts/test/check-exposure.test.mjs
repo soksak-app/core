@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import test from 'node:test';
-import {auditDeclarationCopies, auditWorkbenchNames, DECLARATION_COPIES} from '../check-exposure.mjs';
+import {auditDeclarationCopies, auditWorkbenchNames, auditWorkbenchRegistrations, DECLARATION_COPIES} from '../check-exposure.mjs';
 
 test('exposure audit checks published shared and orientation-specific section implementations',{timeout:10000},()=>{
  const output=execFileSync(process.execPath,[new URL('../check-exposure.mjs',import.meta.url).pathname],{encoding:'utf8',stdio:'pipe'});
@@ -61,4 +61,29 @@ test('a Go source of the mygo workbench that passes a name of another kind fails
 
 test('the Go sources of the mygo workbench pass names that are declared',{timeout:1000},()=>{
  assert.deepEqual(auditWorkbenchNames(declared,goSource('r.Status("core.layout", read)\nr.Command("core.space.add", run)\nb.Control(c, "core.chrome.left", "core.space.add", "")')),[]);
+});
+
+const registered={status:[{name:'core.layout'}],commands:[{name:'core.space.add'}],element:[]};
+
+test('a Go source of the mygo workbench that does not register a declared status or command fails',{timeout:1000},()=>{
+ assert.deepEqual(auditWorkbenchRegistrations(registered,goSource('b.Press(c, "core.chrome.left", "core.space.add", "", nil)\nread("core.layout")')),[
+  'status core.layout is declared and no Go source of the mygo workbench registers it',
+  'command core.space.add is declared and no Go source of the mygo workbench registers it',
+ ]);
+});
+
+test('each registration of a Go source of the mygo workbench counts for its kind',{timeout:1000},()=>{
+ assert.deepEqual(auditWorkbenchRegistrations(registered,goSource('r.Status("core.layout", read)\nr.Command("core.space.add", run)')),[]);
+ for(const call of ['r.CommandLater("core.space.add", run)','command(s, "core.space.add", run)','later(s, "core.space.add", run)','act(s, "core.space.add", run)','laterAct(s, "core.space.add", run)','laterCommand(s, "core.space.add", run)','windowAct(s, "core.space.add", run)','sectionCommand(s, "core.space.add", run)','change("core.space.add", run)','act[T](s, "core.space.add", run)']){
+  assert.deepEqual(auditWorkbenchRegistrations(registered,goSource(`r.Status("core.layout", read)\n${call}`)),[],call);
+ }
+ assert.deepEqual(auditWorkbenchRegistrations(registered,goSource('r.Command("core.layout", run)\nr.Status("core.space.add", read)')),[
+  'status core.layout is declared and no Go source of the mygo workbench registers it',
+  'command core.space.add is declared and no Go source of the mygo workbench registers it',
+ ],'a registration of the other kind does not count');
+});
+
+test('the entries that the view bridge registers count as registered',{timeout:1000},()=>{
+ const bridge='expose.status("core.layout", read);\nexpose.command("core.space.add", hit);';
+ assert.deepEqual(auditWorkbenchRegistrations(registered,goSource(''),[bridge]),[]);
 });

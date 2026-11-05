@@ -42,6 +42,7 @@ func (p *fixtureProcess) CPU() (time.Duration, error) {
 	return used, nil
 }
 
+// contract: mygo.benchmark.empty-window-reads-the-window
 func TestTheBenchmarkReadsTheWindowOfTheThreeHostBenchmark(t *testing.T) {
 	window := &fixtureWindow{}
 	process := &fixtureProcess{window: window, footprints: []int64{10, 20, 30}, cpu: []time.Duration{time.Second, 3500 * time.Millisecond}}
@@ -72,6 +73,7 @@ func TestTheBenchmarkReadsTheWindowOfTheThreeHostBenchmark(t *testing.T) {
 	}
 }
 
+// contract: mygo.benchmark.empty-window-reads-the-window
 func TestAFailedReadingEndsTheBenchmark(t *testing.T) {
 	failure := errors.New("no footprint")
 	_, err := benchmark.Measure(&fixtureWindow{}, &fixtureProcess{failure: failure}, benchmark.Options{Seconds: 1}, func(time.Duration) {})
@@ -80,6 +82,7 @@ func TestAFailedReadingEndsTheBenchmark(t *testing.T) {
 	}
 }
 
+// contract: mygo.benchmark.empty-window-reads-the-window
 func TestTheArgumentsOfTheBenchmark(t *testing.T) {
 	options, err := benchmark.ParseArguments(nil)
 	if err != nil || options.Seconds != 240 {
@@ -96,6 +99,7 @@ func TestTheArgumentsOfTheBenchmark(t *testing.T) {
 	}
 }
 
+// contract: mygo.benchmark.empty-window-reads-the-window
 func TestTheReportIsOneLineOfJSON(t *testing.T) {
 	var output bytes.Buffer
 	if err := benchmark.Write(&output, benchmark.Report{Width: 1200, Height: 760, Footprint: 10, Seconds: 240, CPU: 2.5, ResizeFootprint: 20, AfterResize: 30}); err != nil {
@@ -119,6 +123,7 @@ func TestTheReportIsOneLineOfJSON(t *testing.T) {
 	}
 }
 
+// contract: mygo.benchmark.empty-window-reads-the-window
 func TestTheFootprintIsReadFromTheOutputOfFootprint(t *testing.T) {
 	footprint, err := benchmark.ParseFootprint("mygo [1]: 64-bit\n  phys_footprint: 52428800 B\n  phys_footprint_peak: 62428800 B\n")
 	if err != nil || footprint != 52428800 {

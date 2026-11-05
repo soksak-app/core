@@ -35,6 +35,7 @@ type errString string
 
 func (e errString) Error() string { return string(e) }
 
+// contract: installed.document.acceptance-of-the-workbench
 func TestAcceptingLeavesOutEachRefusedPluginWithItsError(t *testing.T) {
 	unnamed := `{"id":"beta","package":"plugin-beta","version":"0.0.1","manifest":{"id":"beta","description":"이름이 없는 manifest."}}`
 	badPackage := strings.NewReplacer(`"plugin-alpha"`, `"Bad"`, `"alpha"`, `"gamma"`).Replace(installedAlpha)
@@ -54,6 +55,7 @@ func TestAcceptingLeavesOutEachRefusedPluginWithItsError(t *testing.T) {
 	}
 }
 
+// contract: installed.document.acceptance-of-the-workbench
 func TestAnErrorDocumentAcceptsNoPluginAndAnswersItsError(t *testing.T) {
 	accepted, err := sok.AcceptInstalledPlugins(decode(t, `{"error":"plugins/installed.json: format must be 3"}`))
 	if err != nil {
@@ -65,6 +67,7 @@ func TestAnErrorDocumentAcceptsNoPluginAndAnswersItsError(t *testing.T) {
 	}
 }
 
+// contract: installed.document.acceptance-of-the-workbench
 func TestADocumentOfAnotherFormOrWithAPluginTwiceIsAnError(t *testing.T) {
 	for text, want := range map[string]string{
 		`[]`:                       "expected an object",
@@ -79,6 +82,7 @@ func TestADocumentOfAnotherFormOrWithAPluginTwiceIsAnError(t *testing.T) {
 	}
 }
 
+// contract: installed.document.acceptance-of-the-workbench
 func TestAnInstalledEntryFollowsTheRulesOfThePage(t *testing.T) {
 	entry := func(old, new string) string {
 		if !strings.Contains(installedAlpha, old) {
@@ -101,6 +105,7 @@ func TestAnInstalledEntryFollowsTheRulesOfThePage(t *testing.T) {
 	}
 }
 
+// contract: installed.document.acceptance-of-the-workbench
 func TestTheSidecarFactsOfAnInstalledPluginAreItsDependencies(t *testing.T) {
 	const facts = `{"message":{"form":"json-object","operationField":"operation"}}`
 	for _, sidecars := range []string{`{"@fixture/sidecar-probe":` + facts + `}`, `{"@fixture/sidecar-probe":{}}`} {

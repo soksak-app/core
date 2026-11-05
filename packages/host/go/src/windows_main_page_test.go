@@ -175,6 +175,7 @@ func TestAWindowWithoutAMainPageSetsNoWindowOverlays(t *testing.T) {
 // A window without a main page draws the workbench in its content view, so a first responder outside every web view and surface host
 // is the owner workbench. A native view of a surface stays the owner native with its surface, and in a window with a main page a view
 // outside the web views is a native view.
+// contract: window.responder.outside-the-web-views-follows-the-main-page
 func TestTheFirstResponderOutsideTheWebViewsFollowsTheMainPage(t *testing.T) {
 	previous := framework
 	t.Cleanup(func() { framework = previous })

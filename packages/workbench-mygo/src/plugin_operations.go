@@ -13,9 +13,6 @@ import (
 // The plugin operations of a window and the value of `core.plugins`, as packages/workbench/plugin-operations.js has them
 // (docs/spec/installation.md#plugin-screen). The host keeps the state; a window reads it and runs its operations.
 
-// PluginActions are the operations of the host call pluginsRun.
-var PluginActions = []string{"install", "update", "remove", "enable", "disable"}
-
 // PluginIndex is `index` of the plugin state: the checked registry index, or the error of its read.
 type PluginIndex struct {
 	sok.Index

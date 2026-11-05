@@ -51,6 +51,7 @@ func (p *pageFactsPlatform) WindowFacts(unsafe.Pointer) (string, error) {
 
 // A window without a main page has no page process, so host.window reports null and the sampler reads no page. A window
 // with a main page reports 0 until its WebContent process starts.
+// contract: window.page-process.null-without-a-main-page
 func TestWindowReportsNoPageProcessWithoutAMainPage(t *testing.T) {
 	savedFramework, savedSystem := framework, system
 	t.Cleanup(func() { framework, system = savedFramework, savedSystem })

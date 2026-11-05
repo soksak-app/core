@@ -21,6 +21,10 @@ void surfaceLayoutTraceStart(void);
 // Stops recording and writes SURFACE_LAYOUT_TRACE_STAGES values per transaction to out, at most capacity values.
 // A stage that did not occur is NaN. Returns the total number of transactions. The caller treats exceeding capacity as an error.
 size_t surfaceLayoutTraceStop(double *out, size_t capacity);
+// Diagnostics only. Records the time at which the presentation of the open transaction was requested and returns its ticket.
+uint64_t surfaceLayoutTraceRequested(void);
+// Diagnostics only. Records the time at which the presentation of the transaction of the ticket was confirmed.
+void surfaceLayoutTracePresented(uint64_t ticket);
 #ifdef __BLOCKS__
 void surfaceLayoutBegin(void *owner, uint64_t ticket, void (^ready)(int));
 // Checks that the single app DOM is ready to present before committing an open layout.

@@ -2,7 +2,7 @@
 
 [English](host-contract.md)
 
-Wails 호스트(Go)와 Tauri 호스트(Rust)는 하나의 호스트 계약을 구현한다([네이티브 호스트](hosts.ko.md)). 이 문서는 두 호스트가 모두 실행해야 하는 계약 사례를 나열해, 한 호스트에서 검사한 동작을 다른 호스트에서도 검사하게 한다.
+Wails 호스트(Go), Tauri 호스트(Rust), mygo 호스트(Go)는 하나의 호스트 계약을 구현한다([네이티브 호스트](hosts.ko.md)). 이 문서는 호스트들이 실행해야 하는 계약 사례를 나열해, 한 호스트에서 검사한 동작을 다른 호스트에서도 검사하게 한다.
 
 ## 선언
 
@@ -19,11 +19,11 @@ func TestEndpointClosesOnInvalidJSON(t *testing.T) {
 fn invalid_json_closes_connection() {
 ```
 
-테스트 함수 하나는 쉼표로 나눈 여러 사례를 선언할 수 있다. 열두 개 선언 경로에서 선택된 테스트 함수는 사례를 하나 이상 선언한다: `packages/host/go/tests/`, `packages/host/go/src/*_test.go`, `packages/host/wailsv3/tests/`, `packages/host/wailsv3/src/*_test.go`, `packages/sok/go/tests/`, `packages/sok/go/src/*_test.go`, `packages/host/rust/tests/`, `packages/host/rust/src/`, `packages/host/tauriv2/tests/`, `packages/host/tauriv2/src/`, `packages/sok/rust/tests/`, `packages/sok/rust/src/`. 테스트는 단언이 사례의 결과를 확인할 때만 그 사례를 선언한다. Go 선언 inventory는 현재 `GOOS`와 `GOARCH`에서 host-contract의 각 설정에 대해 `go list`가 선택한 `_test.go` 파일의 합집합이다. 모든 설정에서 제외된 파일은 이 platform의 host-contract inventory에 포함하지 않는다. 공유 계약 텍스트는 어느 패키지도 소유하지 않는 `docs/spec/cases`에 있다(manifest 사례표와 log-contract fixture). 테스트는 거기서 읽고, `make boundaries`는 핵심 패키지의 테스트가 다른 핵심 패키지의 경로를 읽는 것을 거부한다.
+테스트 함수 하나는 쉼표로 나눈 여러 사례를 선언할 수 있다. 열다섯 개 선언 경로에서 선택된 테스트 함수는 사례를 하나 이상 선언한다: `packages/host/go/tests/`, `packages/host/go/src/*_test.go`, `packages/host/wailsv3/tests/`, `packages/host/wailsv3/src/*_test.go`, `packages/host/mygo/tests/`, `packages/host/mygo/src/*_test.go`, `packages/host/mygo/benchmark/`, `packages/sok/go/tests/`, `packages/sok/go/src/*_test.go`, `packages/host/rust/tests/`, `packages/host/rust/src/`, `packages/host/tauriv2/tests/`, `packages/host/tauriv2/src/`, `packages/sok/rust/tests/`, `packages/sok/rust/src/`. 테스트는 단언이 사례의 결과를 확인할 때만 그 사례를 선언한다. Go 선언 inventory는 현재 `GOOS`와 `GOARCH`에서 host-contract의 각 설정에 대해 `go list`가 선택한 `_test.go` 파일의 합집합이다. 모든 설정에서 제외된 파일은 이 platform의 host-contract inventory에 포함하지 않는다. 공유 계약 텍스트는 어느 패키지도 소유하지 않는 `docs/spec/cases`에 있다(manifest 사례표와 log-contract fixture). 테스트는 거기서 읽고, `make boundaries`는 핵심 패키지의 테스트가 다른 핵심 패키지의 경로를 읽는 것을 거부한다.
 
 ## 검사
 
-`make host-contract-check`는 명령 감독자로 각 호스트의 테스트를 기본 구성과 진단 구성(Go 태그 `diagnostics`, Rust 기능 `diagnostics`)에서 실행하고 보고된 결과를 읽는다. 다음 경우에 실패한다.
+`make host-contract-check`는 명령 감독자로 각 호스트의 테스트를 기본 구성과 진단 구성(Go 태그 `diagnostics`, Rust 기능 `diagnostics`)에서 실행하고 보고된 결과를 읽는다. mygo 호스트의 실행은 각 태그 집합에 `mygo` 태그를 더한다. `packages/host/go`와 `packages/host/mygo`는 `mygo`와 `diagnostics mygo`로, `packages/sok/go`는 `mygo`, `diagnostics mygo`, `diagnostics dev mygo`로 실행한다. 다음 경우에 실패한다.
 
 - 호스트 범위의 사례에 그 호스트의 통과한 테스트가 없다.
 - 선언한 테스트가 어느 구성에서도 실행되지 않았거나, 한 구성에서 실패했거나 건너뛰었다.
@@ -35,7 +35,7 @@ fn invalid_json_closes_connection() {
 
 소유자 규칙: 선언된 테스트는 자기 소유자의 항목에서만 결과를 얻는다. Go 테스트의 소유자는 패키지 디렉터리이고, Rust 테스트의 소유자는 크레이트 디렉터리(파일 위쪽에서 가장 가까운 `Cargo.toml`이 있는 폴더)다. 결과는 실행, 소유자, 테스트 이름으로 묶으며, 호스트의 결과가 sok 선언에 쓰이거나 그 반대가 되지 않는다. Rust 선언은 이름이 같은 잎 이름을 가진 테스트 하나와 일치한다.
 
-범위 열은 `all`이거나, 이름을 든 호스트에만 있는 동작이면 `<host>[, <host>] only: <이유>`다. 검사의 호스트는 `wailsv3`와 `tauriv2`이고, 각 호스트는 모든 `all` 사례를 실행하며, 범위는 이 호스트만 이름으로 든다. 호스트는 자기 contract run과 함께 이 목록에 들어간다. 그때부터 모든 `all` 사례가 그 호스트에도 세어지기 때문이다. language host library가 framework port 없이 구현하는 사례는 library의 test가 선언하고, 그 library를 link하는 범위 안의 각 호스트에 센다. 동작이 `Framework`나 `Frontend`를 거치는 사례는 범위 안의 각 framework adapter의 test가 선언한다([host tree](hosts.ko.md#호스트-트리)). Language host library가 선언하는 사례의 id는 호스트 이름으로 시작하지 않는다. 호스트는 범위가 이름으로 든다. 검사는 두 호스트가 모두 구현한 유일한 플랫폼인 macOS에서 실행한다. Windows와 Linux 진입점은 `not implemented` 오류를 반환하며 사례가 없다. 검사의 단위 테스트(`scripts/test/check-host-contract.test.mjs`)는 각 실패를 주입하며 `pnpm test`에서 실행된다.
+범위 열은 `all`이거나, 이름을 든 호스트에만 있는 동작이면 `<host>[, <host>] only: <이유>`다. 검사의 호스트는 `wailsv3`, `tauriv2`, `mygo`이고, 각 호스트는 모든 `all` 사례를 실행하며, 범위는 이 호스트만 이름으로 든다. 호스트는 자기 contract run과 함께 이 목록에 들어간다. 그때부터 모든 `all` 사례가 그 호스트에도 세어지기 때문이다. language host library가 framework port 없이 구현하는 사례는 library의 test가 선언하고, 그 library를 link하는 범위 안의 각 호스트에 센다. 두 Go 호스트는 Go language host library와 Go `sok`의 test를 모두 실행하므로, 그런 test는 어느 Go 호스트의 사례든 선언할 수 있고, 그 사례의 호스트만 그것을 센다. 동작이 `Framework`나 `Frontend`를 거치는 사례는 범위 안의 각 framework adapter의 test가 선언한다([host tree](hosts.ko.md#호스트-트리)). Language host library가 선언하는 사례의 id는 호스트 이름으로 시작하지 않는다. 호스트는 범위가 이름으로 든다. 검사는 호스트들이 구현한 유일한 플랫폼인 macOS에서 실행한다. Windows와 Linux 진입점은 `not implemented` 오류를 반환하며 사례가 없다. 검사의 단위 테스트(`scripts/test/check-host-contract.test.mjs`)는 각 실패를 주입하며 `pnpm test`에서 실행된다.
 
 ## 애플리케이션 메뉴
 
@@ -114,6 +114,10 @@ fn invalid_json_closes_connection() {
 | `window.responder.sent-at-ready-and-on-each-change` | 호스트는 창의 first responder를 워크벤치가 ready를 알릴 때와 그 뒤 바뀔 때마다 창 event `window-responder {owner, surface, document}`로 보내고, ready가 아닌 워크벤치에는 보내지 않으며, 바뀌지 않은 값은 한 번만 보내고, 읽기 실패를 돌려준다. | all |
 | `window.responder.view-is-owner-surface` | host가 surface의 document `""`로 등록하는 view surface의 view에 first responder가 있으면 `{owner: "surface", surface, document: null}`로 보고한다. document region에 first responder가 있으면 `{owner: "document", surface, document}`다. | all |
 | `window.responder.closed-window-sends-nothing` | close가 window를 지운 뒤 그 window에 닿은 first responder 변경은 받을 워크벤치가 없으므로 `window-responder` event를 보내지 않고 오류도 저장하지 않는다. window가 열려 있는 동안 실패한 responder 읽기는 오류로 보고한다. | all |
+| `window.frames.counts-frames-and-reports-settled` | 창의 frame 기록은 각 frame과 commit된 각 command buffer를 세고, 마지막 frame 뒤 창이 settled인지 보고하며, `settled`가 바뀔 때만 `host.window` watcher에게 알린다. | mygo only: frame을 보고하는 framework는 mygo뿐이다([framework 변경](hosts.ko.md#framework-변경)의 U7) |
+| `window.frames.records-reach-the-class-frame` | 각 frame 보고는 class `frame`의 event `host.frame.record`이고, frame 밖의 각 commit은 event `host.frame.commit`이다. | mygo only: frame을 보고하는 framework는 mygo뿐이다([framework 변경](hosts.ko.md#framework-변경)의 U7) |
+| `window.responder.outside-the-web-views-follows-the-main-page` | main page 없는 창에서 모든 web view와 surface host 밖의 first responder는 owner workbench이고, surface의 native view는 그 surface와 함께 owner native로 남으며, main page가 있는 창에서 web view 밖의 view는 native view다. | wailsv3, mygo only: Go language host library는 fixture framework로 시험하고, Rust language host library에는 main page 없는 framework가 없다 |
+| `window.page-process.null-without-a-main-page` | `host.window`는 `pageProcess`를 정수 또는 `null`로 선언하고, main page 없는 창에는 `null`을 보고하며 sampler는 그 page를 읽지 않는다. main page가 있는 창은 그 page의 process를 보고하고, 시작 전에는 0을 보고한다. | wailsv3, mygo only: Go language host library는 fixture framework로 시험하고, Rust language host library에는 main page 없는 framework가 없다 |
 | `window.facts.modal-order-is-above-every-webview` | `host.window`은 열린 modal의 `order`를 창의 native surface 수와 web view 수의 합으로 보고한다. native surface의 order와 web view의 order는 두 목록의 index이고 modal은 둘 위에 붙으므로, 이 값은 모든 native surface, 모든 web view와 document region의 `order`보다 크다. | all |
 | `window.facts.document-reports-its-blur` | `host.window`은 dialog 배경의 native blur filter를 가진 각 document web view(view 표면의 page와 document region)에 `blurred: true`를, filter가 없는 것에 `blurred: false`를 보고한다. | all |
 | `window.facts.region-reports-its-blur` | `host.window`의 각 image region 항목은 region이 dialog 배경의 native blur filter를 가진 동안 `blurred: true`를, filter가 없는 동안 `blurred: false`를 보고한다. | all |
@@ -154,7 +158,7 @@ fn invalid_json_closes_connection() {
 | `diagnostics.capture-document-identity.start-selects-one-source-per-capture` | capture 하나는 document identity source를 최대 하나 선택하며 두 번째 source는 거부한다. | all |
 | `diagnostics.capture-document-identity.start-requires-explicit-capture-endpoint` | document identity source는 명시적인 capture endpoint가 필요하며 drag operation이 소유한 identity capture에는 연결할 수 없다. | all |
 | `diagnostics.capture-start.waits-for-prior-identity-removal` | 새 capture 시작은 이전에 선택한 document identity source 제거가 완료될 때까지 기다린다. | all |
-| `diagnostics.capture-document-identity.callback-completion-is-single-use` | 첫 callback이 document identity 결과를 제공하며 추가 호출은 오류를 보고하고 완료된 결과를 대체하지 않는다. | wailsv3 only: Go callback closure는 반복 호출이 가능하며 Rust FnOnce callback은 이를 정적으로 막는다 |
+| `diagnostics.capture-document-identity.callback-completion-is-single-use` | 첫 callback이 document identity 결과를 제공하며 추가 호출은 오류를 보고하고 완료된 결과를 대체하지 않는다. | wailsv3, mygo only: Go callback closure는 반복 호출이 가능하며 Rust FnOnce callback은 이를 정적으로 막는다 |
 | `diagnostics.capture-document-identity.schedule-error-preserves-callback-error` | 동기 callback이 오류를 보고한 뒤 scheduling도 실패하면 반환 오류는 두 오류를 보존한다. 성공 callback이 scheduling 실패를 대체하지 않는다. | all |
 | `diagnostics.capture-stop.bounds-identity-callback-wait` | document identity callback 대기는 제한되어 있으며 callback이 오지 않으면 명시적인 timeout 오류를 반환한다. | all |
 | `diagnostics.capture-document-identity.reports-late-callback-errors` | 늦은 document identity callback 오류는 error level로 기록하고 현재 source 결과를 대체하지 않는다. | all |
@@ -164,7 +168,7 @@ fn invalid_json_closes_connection() {
 | `diagnostics.capture.poisoned-pending-lock-is-reported` | poisoned pending-start lock은 명시적인 interruption 오류를 반환하고 저장된 receiver를 유지한다. | tauriv2 only: Rust `Mutex` poisoning은 Rust 전용 synchronization 상태다 |
 | `diagnostics.capture.pending-start-probe-does-not-reenter-lock` | pending-start probe는 receive helper가 다시 lock을 얻기 전에 기존 lock을 놓아 ready receiver가 deadlock을 일으키지 않는다. | tauriv2 only: pending receiver helper와 `Mutex`는 Rust 전용이다 |
 | `diagnostics.drag.forwards-frame-identity` | `diagnostics.drag`는 선택적 strict boolean `frameIdentity`를 받고 기본값은 false다. Identity를 켜면 `capture: true`를 요구하고 recording 시작에 전달한다. | all |
-| `diagnostics.drag.native-delivers-pointer-gesture` | `diagnostics.drag`는 선택적 strict boolean `native`를 받고, 다른 값은 `native must be a boolean`으로 거절하며 페이지에 전달하지 않는다. `native: true`이면 왕복마다 경계 점에서 주 버튼을 누르고, 각 단계를 그 점에 offset과 단계 비율을 곱한 값을 더한 위치의 끌기로 나갔다가 돌아오며, 경계에서 떼고, 어느 입력도 활성화하지 않으며, `{from, steps, took, asked}`로 응답한다. 실패한 단계는 그 위치에서 버튼을 떼고 `native drag step <n>: <error>`로 실패한다. | all |
+| `diagnostics.drag.native-delivers-pointer-gesture` | `diagnostics.drag`는 선택적 strict boolean `native`를 받고, 다른 값은 `native must be a boolean`으로 거절하며 workbench에 전달하지 않는다. `native: true`이면 왕복마다 경계 점에서 주 버튼을 누르고, 각 단계를 그 점에 offset과 단계 비율을 곱한 값을 더한 위치의 끌기로 나갔다가 돌아오며, 경계에서 떼고, 어느 입력도 활성화하지 않으며, `{from, steps, took, asked}`로 응답한다. 실패한 단계는 그 위치에서 버튼을 떼고 `native drag step <n>: <error>`로 실패한다. | all |
 | `diagnostics.native-objects.payload-names-counts` | `diagnostics.native.objects` 응답은 라이브러리의 살아 있는 객체 수를 `windowCompositions`, `surfaceHosts`, `inputRegistrations` 정수로만 담는다. | all |
 | `diagnostics.native-window-color-space.reports-appkit-profile` | `diagnostics.native.window-color-space`는 선택한 window를 한 번 읽어 `name`과 `iccSHA256`만 반환한다. `name`은 AppKit color space의 localized name이고 hash는 ICC profile byte의 lowercase SHA-256이며 ICC profile을 사용할 수 없으면 null이다. Window에 backing color space가 없으면 두 값 모두 null이다. 이 method는 diagnostic build에서만 선언되고 window를 변경하지 않는다. 비활성 window check는 OS가 선택한 profile을 고정하지 않고 응답 형식을 정확히 확인하며, 존재하지 않는 window에 error 1003을 요구하고, query 전후의 안정된 `host.window` facts를 비교한다. | all |
 | `diagnostics.native-objects.equal-validates` | `diagnostics.native.objects`는 `equal`을 정확히 `windowCompositions`, `surfaceHosts`, `inputRegistrations`를 음이 아닌 정수로 담은 객체로만 받고, 다른 값은 `equal must be an object of windowCompositions, surfaceHosts and inputRegistrations, each a non-negative integer`로 거부한다. `equal`에 이르지 않은 수는 `window object counts did not reach <equal> within 10s; they are <counts>`로 실패하며, 각 수는 `windowCompositions N, surfaceHosts N, inputRegistrations N`으로 쓴다. | all |
@@ -177,9 +181,13 @@ fn invalid_json_closes_connection() {
 | `diagnostics.objects.counts-host-objects` | `diagnostics.objects`는 host가 창을 위해 가진 surface, region, document, sidecar session, 대기 중인 응답, event 구독자의 수를 돌려주고, 각 수는 그 객체가 제거되면 다시 준다. | all |
 | `diagnostics.objects.reply-and-params` | `diagnostics.objects`는 `window`를 요구하고, 없는 창에는 세지 않고 오류 1003으로 답하며, 이름이 주어진 창에 대해 diagnostic backend가 센 수로 `{host, page, documents, sessions}`를 답하고 `documents`는 surface와 document 순서로 둔다. | all |
 | `diagnostics.objects.sidecar-sessions-agree` | `diagnostics.objects`는 창의 sidecar session을 sidecar와 surface 순서의 `{sidecar, surface}`로 담은 `sessions`를 돌려주고, surface는 그것이 보낸 적이 있는 사이드카의 session일 뿐이다: page를 다시 불러와도 host는 사이드카에 아무 메시지도 보내지 않으므로, 두 host는 같은 project에 대해 같은 session을 나열한다. | all |
-| `diagnostics.objects.runtime-memory` | `diagnostics.objects`는 Go runtime의 수치 여덟 개를 가진 `runtime`을 돌려준다: heap 객체, 쓰이지 않는 heap, free heap, released heap, stack, 그 밖의 metadata의 byte 수, heap goal, goroutine 수다. | wailsv3 only: Tauri host에는 garbage collection runtime이 없다 |
-| `diagnostics.heap-profile.writes-a-profile` | `diagnostics.heap.profile`은 Go runtime의 heap profile(gzip으로 압축한 protocol buffer)을 진단 폴더의 `heap-<pid>-<ms>.pprof`에 쓰고 그 경로로 답한다. | wailsv3 only: Tauri host에는 garbage collection heap이 없다 |
-| `diagnostics.objects.counts-documents` | `diagnostics.objects`는 main page와 창의 각 document region의 요소 수와 문서 수를 돌려준다. | all |
+| `diagnostics.objects.runtime-memory` | `diagnostics.objects`는 Go runtime의 수치 여덟 개를 가진 `runtime`을 돌려준다: heap 객체, 쓰이지 않는 heap, free heap, released heap, stack, 그 밖의 metadata의 byte 수, heap goal, goroutine 수다. | wailsv3, mygo only: Tauri host에는 garbage collection runtime이 없다 |
+| `diagnostics.heap-profile.writes-a-profile` | `diagnostics.heap.profile`은 Go runtime의 heap profile(gzip으로 압축한 protocol buffer)을 진단 폴더의 `heap-<pid>-<ms>.pprof`에 쓰고 그 경로로 답한다. | wailsv3, mygo only: Tauri host에는 garbage collection heap이 없다 |
+| `diagnostics.gc-loop.collects-until-stopped` | `diagnostics.gc.loop` `{on: true}`는 `runtime.GC`를 쉬지 않고 도는 goroutine을 시작하고, `{on: false}`는 그 goroutine을 멈추고 반환한 뒤 답하므로 그 답 뒤에 collection이 시작되지 않는다. 두 번째 시작은 goroutine을 더 만들지 않고, loop가 꺼져 있을 때의 정지는 `null`로 답하며, `on`이 없는 요청은 거절한다. | wailsv3, mygo only: Tauri host에는 garbage collection heap이 없다 |
+| `diagnostics.objects.counts-documents` | `diagnostics.objects`는 창의 각 document region의 요소 수와 문서 수를, main page가 있는 창이면 그 main page의 것까지 돌려준다. | all |
+| `diagnostics.objects.page-is-null-without-a-main-page` | main page 없는 창의 `diagnostics.objects`는 host의 객체를 세고 `page`를 `null`로 답한다. | wailsv3, mygo only: Go language host library는 fixture framework로 시험하고, Rust language host library에는 main page 없는 framework가 없다 |
+| `diagnostics.main-page-methods.answer-no-main-page` | `diagnostics.page.request`, `diagnostics.page.calls`, `diagnostics.host.events`, `diagnostics.page.collect`는 main page에 작용하고, main page 없는 host는 창을 검사한 뒤 각각 오류 `the mygo host has no main page`로 답한다. | mygo only: Wails와 Tauri host에는 main page가 있다 |
+| `diagnostics.modal-methods.answer-no-modal-web-views` | `diagnostics.modal.hold`와 `diagnostics.modal.held`는 modal web view에 작용한다. modal web view가 없는 host는 창을 검사한 뒤 각각 오류 `the mygo host has no modal web views`로 답하고, main page가 있는 framework는 method에 닿는다. | mygo only: Wails와 Tauri host는 modal을 web view에 보여 준다 |
 | `diagnostics.crash.report-is-announced-once` | crash report 폴더에 있는 애플리케이션의 crash report는 level `warn`의 event `host.crash.found`(`path`, `pid`, header의 `time`)이다. 두 번째 lookup은 아무것도 알리지 않고, 나중에 생긴 report는 다음 lookup만 알린다. | all |
 | `diagnostics.crash.report-belongs-to-the-application` | 파일 이름이 다른 이름으로 시작하거나, header가 다른 애플리케이션(애플리케이션 이름으로 시작하는 이름 포함)을 가리키거나, 확장자가 `.ips`가 아닌 report는 알리지 않는다. | all |
 | `diagnostics.crash.lookup-is-bounded` | lookup 한 번은 파일 이름 기준으로 애플리케이션의 최신 report 64개만 알리고 그보다 오래된 것은 알리지 않는다. | all |
@@ -191,13 +199,13 @@ fn invalid_json_closes_connection() {
 | `endpoint.record.call-is-an-event` | endpoint client의 모든 요청(구독 변경도)은 성능 trace가 꺼져 있을 때도 layer `host`, level `debug`이고 `name`, `args`(받은 그대로의 params, 없으면 `null`), `micros`, `ok: true`, `truncated: false`를 가진 event `host.endpoint.call`이다. | all |
 | `endpoint.record.failure-names-the-error` | 실패한 요청은 level `warn`이고 `ok: false`와 client가 받는 코드와 메시지인 `error` `<code>: <message>`를 가진 event `host.endpoint.call`이다. | all |
 | `endpoint.record.arguments-are-cut-before-copying` | `args`는 문자 경계에서 자른 최대 1024바이트이고, params가 더 길면 event에 `truncated: true`가 있다. | all |
-| `binding.record.call-is-an-event` | page의 모든 host 호출은 layer `host`, level `debug`이고 `name`(호출의 snake case 이름), `args`(호출 순서대로의 인자를 담은 JSON 배열, 없으면 `[]`), `micros`, `ok: true`, `truncated: false`를 가진 event `host.binding.call`이며, 성능 trace가 꺼져 있을 때도 그렇다. | all |
-| `binding.record.failure-names-the-error` | 실패한 host 호출은 level `warn`이고 `ok: false`와 `error` `<code>: <text>`(page가 받는 글에 내부 code `-32603`을 붙인 것이다. host 메서드는 글만 가진 오류로 실패하기 때문이다)를 가진 event `host.binding.call`이다. | all |
+| `binding.record.call-is-an-event` | page의 모든 host 호출은 layer `host`, level `debug`이고 `name`(호출의 snake case 이름), `args`(호출 순서대로의 인자를 담은 JSON 배열, 없으면 `[]`), `micros`, `ok: true`, `truncated: false`를 가진 event `host.binding.call`이며, 성능 trace가 꺼져 있을 때도 그렇다. | wailsv3, tauriv2 only: mygo host의 workbench는 binding 없이 host 함수를 직접 부른다 |
+| `binding.record.failure-names-the-error` | 실패한 host 호출은 level `warn`이고 `ok: false`와 `error` `<code>: <text>`(page가 받는 글에 내부 code `-32603`을 붙인 것이다. host 메서드는 글만 가진 오류로 실패하기 때문이다)를 가진 event `host.binding.call`이다. | wailsv3, tauriv2 only: mygo host의 workbench는 binding 없이 host 함수를 직접 부른다 |
 | `binding.record.operation-identifiers-are-stored` | `cids`를 나르는 host 호출(`Bindings.Call`의 네 번째 인자, Tauri command의 payload key `cids`)은 그 `cids`를 가진 event `host.binding.call`이며 실패해도 그렇다. `cids`가 없는 호출은 없는 event를 저장하고, 식별자는 호출의 인자가 아니다. | all |
 | `binding.record.invalid-identifiers-are-refused` | 빈 식별자이거나 따옴표, 역슬래시, 제어 문자가 든 식별자를 `cids`에 담은 호출은 그 식별자를 밝힌 오류로 거절된다. 메서드는 실행되지 않고, event는 `cids` 없이 `error`가 `-32603: <그 글>`인 실패한 `host.binding.call`이다. | all |
 | `binding.record.arguments-are-cut-before-copying` | `args`는 최대 1024바이트이고 문자 경계에서 자르며, 인자가 더 길었으면 event에 `truncated: true`가 있다. | all |
 | `binding.record.unfinished-call-names-the-error` | 결과 없이 끝난 host 호출은 level `warn`이고 `ok: false`와 `error` `-32603: the call ended without a result`를 가진 event `host.binding.call`이다. | all |
-| `binding.reply.absent-value-is-null` | method가 값을 돌려주지 않거나 null 값을 돌려주는 host 호출은 page에 JSON 값 `null`을 응답한다; Wails transport가 nil 결과를 `{}`로 쓰므로 Wails entrance는 `null`로 encode되는 값을 돌려준다. | all |
+| `binding.reply.absent-value-is-null` | method가 값을 돌려주지 않거나 null 값을 돌려주는 host 호출은 page에 JSON 값 `null`을 응답한다; Wails transport가 nil 결과를 `{}`로 쓰므로 Wails entrance는 `null`로 encode되는 값을 돌려준다. | wailsv3, tauriv2 only: mygo host의 workbench는 binding 없이 host 함수를 직접 부른다 |
 | `binding.record.refusal-names-the-error` | host의 어떤 메서드도 가리키지 않는 호출이나 메서드가 받는 것과 다른 수의 인자를 넘기는 호출은 오류로 거절되고, 그 오류를 `-32603: <text>`로 가진 level `warn`의 event `host.binding.call`로 저장된다. | wailsv3 only: Wails는 host의 모든 메서드를 이름으로 찾는 바인딩 메서드 `Bindings.Call` 하나로 닿게 하지만, Tauri는 모르는 command와 거절된 인자를 host가 실행되기 전에 거절한다 |
 | `binding.record.native-call-is-an-event` | native web view 문서의 호출은 같은 필드를 가진 event `host.binding.call`로 저장된다. | wailsv3 only: Wails page runtime은 surface page 호출을 native bridge로 보내지만, Tauri surface page는 main page의 command를 부른다 |
 | `binding.record.every-host-method-is-callable` | host의 내보낸 모든 메서드는 입구를 통해 이름으로 닿고, 지원하지 않는 서명의 메서드는 그 메서드의 이름을 말하는 오류로 host 시작을 멈춘다. | wailsv3 only: Tauri는 `bindings!` 매크로가 정의한 command를 등록하므로 매크로 밖의 command는 등록에 들어가지 않는다 |
@@ -211,7 +219,7 @@ fn invalid_json_closes_connection() {
 | `documents.query.reply-is-the-region-report` | 세 boolean으로 된 native의 질의 답 `{media, capture, form}`은 `documentQuery`의 보고다. 답 `{error}`는 오류 `document <name>: <error>`이고, 다른 값, 빠진 field, JSON이 아닌 글은 오류 `document <name> answered an invalid query reply: <reply>`다. | all |
 | `documents.request.interaction-state-must-not-be-empty` | `interactionState`가 없는 문서 요청은 아무것도 복원하지 않고, 비어 있지 않은 `interactionState`는 `documentAttach`가 복원하는 상태이며, 빈 값은 `document interactionState must not be empty`로 거부한다. | all |
 | `documents.request.entry-requires-offset` | `entry` 문서 `go` 요청은 0이 아닌 정수 `offset`이 필요하고, `offset`이 있는 다른 동작은 거부한다. | all |
-| `documents.commit.precedes-messages` | 웹뷰가 문서 commit 뒤에 보낸 메시지는 그 commit 처리 뒤에 처리되고, 한 웹뷰의 commit은 순서대로 처리되며, 다른 웹뷰의 메시지는 기다리지 않는다. | wailsv3 only: Go host는 WebKit의 commit과 script message를 메인 스레드에서 record를 쓰고 돌아가는 C callback으로 받고, 메인 스레드의 worker([hosts](hosts.ko.md#wails-host의-main-thread))가 각 record를 그 웹뷰의 고루틴에 넘기며, 그 고루틴은 그 웹뷰의 record를 순서대로 처리하고 다른 웹뷰를 기다리지 않지만, Tauri는 commit에서 표면의 문서 상태를 초기화하지 않는다 |
+| `documents.commit.precedes-messages` | 웹뷰가 문서 commit 뒤에 보낸 메시지는 그 commit 처리 뒤에 처리되고, 한 웹뷰의 commit은 순서대로 처리되며, 다른 웹뷰의 메시지는 기다리지 않는다. | wailsv3, mygo only: Go host는 WebKit의 commit과 script message를 메인 스레드에서 record를 쓰고 돌아가는 C callback으로 받고, 메인 스레드의 worker([hosts](hosts.ko.md#wails-host의-main-thread))가 각 record를 그 웹뷰의 고루틴에 넘기며, 그 고루틴은 그 웹뷰의 record를 순서대로 처리하고 다른 웹뷰를 기다리지 않지만, Tauri는 commit에서 표면의 문서 상태를 초기화하지 않는다 |
 | `documents.request.ignores-placement-fields` | 문서 요청을 해석하면 표면과 문서만 남기고 배치 필드를 버린다. | all |
 | `documents.request.url-and-action-default-empty` | url과 action이 없는 문서 요청을 해석하면 둘 다 비어 있다. | all |
 | `documents.registry.rejects-duplicate-reservation` | 같은 문서 키를 두 번 예약하면 "already attached"로 실패한다. | all |
@@ -257,12 +265,14 @@ fn invalid_json_closes_connection() {
 | `view.presentation-wait.invisible-present-defers-end` | presentation 요청에서 보이지 않는 root 배치는 wait에 참여하지 않고, 그 요청은 그 배치의 wait를 끝내지 않는다. 보이는 view의 wait는 보이지 않음을 적용하는 sync까지 열려 있으며, 그 sync가 `host.trace.view.presentation-abandoned {surface, reason: hidden}`과 함께 한 번 끝낸다. | all |
 | `view.presentation-wait.joins` | 표시되며 기다리는 것이 없는 view는 배치가 그 frame을 바꾸거나, 그것을 보이게 하거나, 새 generation을 보이게 할 때 settled든 unsettled든 present의 열린 배치 트랜잭션에 참여하고, 트랜잭션은 view가 표시된 뒤 commit된다. 표시 없이 끝나면 native 참여를 한 번 끝낸다. | all |
 | `surface-layout.setup-failure-cancels-open-transaction` | Tauri가 layout setup 중 WebView presentation callback을 등록하지 못하면 열린 layout transaction을 취소하고 setup 오류를 반환한다. 취소도 실패하면 그 오류를 setup 오류에 덧붙인다. | tauriv2 only: callback 등록 setup 단계는 Tauri WebView 경로의 일부이며 Wails는 platform operation으로 참여한다 |
-| `surface-layout.keyboard-follows-the-focus-ring` | page는 `surfaceFocus {surface}`로 창의 키보드를 surface에 주고, `surface`가 null이면 워크벤치에 준다([surface의 키보드](native-surfaces.ko.md#surface의-키보드)). window가 없거나 window가 갖지 않은 surface면 요청을 거부한다. | all |
-| `surface-layout.page-cancels-preparation` | page는 presentation하지 않는 preparation을 `cancelSurfaces {ticket}`로 취소하고, 이 요청은 main thread에서 ticket의 wait를 포기하고 layout을 취소한다. window가 없으면 요청을 거부한다. | all |
+| `surface-layout.keyboard-follows-the-focus-ring` | workbench는 `surfaceFocus {surface}`로 창의 키보드를 surface에 주고, `surface`가 null이면 워크벤치에 준다([surface의 키보드](native-surfaces.ko.md#surface의-키보드)). window가 없거나 window가 갖지 않은 surface면 요청을 거부한다. | all |
+| `surface-layout.page-cancels-preparation` | workbench는 presentation하지 않는 preparation을 `cancelSurfaces {ticket}`로 취소하고, 이 요청은 main thread에서 ticket의 wait를 포기하고 layout을 취소한다. window가 없으면 요청을 거부한다. | all |
+| `surface-layout.element-holds-its-views-until-the-next-frame` | main page 없는 창에서 surface의 native view element는 떠난 뒤 다음 frame까지 view를 붙들고, 새 view page의 element는 끝난 page의 element를 대체하며, 이어질 frame이 없으면 view를 놓는다. main page가 있는 창에는 element가 없다. | wailsv3, mygo only: Go language host library는 fixture framework로 시험하고, Rust language host library에는 main page 없는 framework가 없다 |
+| `surface-layout.commits-after-the-presentation-notice` | layout transaction은 `Frontend`의 presentation notice가 답한 뒤에만 commit하고, 실패한 notice는 transaction을 취소하며 그 오류로 present를 끝낸다. | mygo only: frame의 presentation을 보고하는 framework는 mygo뿐이다([framework 변경](hosts.ko.md#framework-변경)의 U3) |
 | `surface-layout.prepare-visible-surfaces` | 표시할 surface를 준비하면 요청된 표시 상태를 유지하고, 표시하지 않을 surface는 즉시 숨긴다. | all |
 | `surface-layout.joins-root-views-before-awaiting-app-dom` | 표시 중인 root view가 변경되면 host는 application DOM presentation을 기다리기 전에 열린 layout ticket에 참여한다. host는 DOM과 raster 준비를 기다린 뒤 commit하며 교체된 root generation도 commit 전에 해당 ticket에 참여해야 한다. 변경되지 않은 commit된 root는 다시 참여하지 않는다. | all |
 | `surface-layout.presentation-failure-stops-before-commit` | application DOM presentation 실패 시 raster 작업을 건너뛰며 DOM 또는 raster 오류를 성공한 native commit 없이 반환한다. | all |
-| `view.call.peer-lost` | view가 `sok-view`로 보내고 메인 page가 답하지 않은 call 요청은 view process가 끝날 때까지 열려 있다. process 종료는 그것을 process-ended 이유로 끝내고 `host.call.peer-lost {plugin, command, reason}`을 쓴다. 종료 전에 메인 page가 답한 call은 아무것도 쓰지 않는다. | all |
+| `view.call.peer-lost` | view가 `sok-view`로 보내고 workbench가 답하지 않은 call 요청은 view process가 끝날 때까지 열려 있다. process 종료는 그것을 process-ended 이유로 끝내고 `host.call.peer-lost {plugin, command, reason}`을 쓴다. 종료 전에 workbench가 답한 call은 아무것도 쓰지 않는다. | all |
 | `view.theme.first-script` | host가 만든 view는 page를 불러오기 전에 생성 시점의 테마 `{scheme, tokens}`를 동결해 `window.sokTheme`에 넣는 document-start script를 가진다. 그래서 page의 첫 script가 토큰을 읽으며, 나중의 테마 변경은 post 경로로 보낸다. | all |
 | `view.start-values.first-script` | host가 만든 view는 page를 불러오기 전에 페이지가 준비로 그 surface에 선언한 동결된 시작 값 `{surface, params, origin, project, declarations, diagnostics, section, levels}`를 `window.sokSurface`에 넣는 document-start script를 가진다. 그래서 page의 첫 script가 이를 읽는다. surface가 가지지 않은 값은 `null`이되, `origin`은 연 탭이 directory를 기록하지 않았을 때 `{directory: null}`이고, 형식이 맞지 않는 값은 준비와 함께 거부되며, 다른 구성의 surface는 이 값을 담지 않고, host는 view를 다시 만들 때 surface의 기록에서 이 값을 다시 주입한다. | all |
 | `view.start-values.levels` | 시작 값 `levels`는 host가 view를 만들 때 host writer의 gate에서 각 event class의 저장 level인 `{<class>: <level>}`이다. 아무 level도 저장하지 않는 class는 `off`이고, writer가 host를 gate하지 않는 동안 모든 class는 `trace`다. 페이지는 `levels`를 보내지 않는다. | all |
@@ -289,10 +299,10 @@ fn invalid_json_closes_connection() {
 | `view.error.display` | 다른 이유의 `view.error` message는 `error: view <plugin> <surface>: <reason>`으로 오류 표시 경로에 한 번 쓰이고 view는 계속된다. 이유가 빈 `view.error`는 거부한다. | all |
 | `view.call.record` | view의 call 요청은 debug 수준의 `host.view.call`(plugin, surface, id, command)로 기록되고, 그 회신은 결과(outcome)와 함께 `host.view.reply`로 기록된다. cancel은 call로 기록하지 않는다. | all |
 | `view.restart.limit` | process가 끝했거나 message queue가 넘친 view는 300초 안에 네 번째 failure까지 닫히고 다시 만들어지며, surface마다 sliding window로 센다: 새 failure보다 300초 이전인 failure은 세지 않는다. 네 번째 failure가 restart를 멈추고, 멈춘 surface는 view를 만들지 않으며, surface를 제거하면 그 failure 기록을 지운다. | all |
-| `view.responsiveness.relay` | view의 `_webViewWebProcessDidBecomeUnresponsive:` 알림은 `host.trace.view.unresponsive {plugin, surface}`를 쓰고 `view-responsiveness {surface, plugin, generation, responsive: false}`를 메인 page에 보내며, `_webViewWebProcessDidBecomeResponsive:` 알림은 `host.trace.view.responsive {plugin, surface}`를 쓰고 같은 generation의 `responsive: true`를 보낸다. Callback은 이를 만든 view의 generation을 캡처하고, workbench는 해당 generation이 current일 때만 notice를 적용하며 오래된 notice는 `workbench.view.event.cancel`로 기록한다. 두 알림 모두 view의 call을 끝내지 않는다. | all |
+| `view.responsiveness.relay` | view의 `_webViewWebProcessDidBecomeUnresponsive:` 알림은 `host.trace.view.unresponsive {plugin, surface}`를 쓰고 `view-responsiveness {surface, plugin, generation, responsive: false}`를 workbench에 보내며, `_webViewWebProcessDidBecomeResponsive:` 알림은 `host.trace.view.responsive {plugin, surface}`를 쓰고 같은 generation의 `responsive: true`를 보낸다. Callback은 이를 만든 view의 generation을 캡처하고, workbench는 해당 generation이 current일 때만 notice를 적용하며 오래된 notice는 `workbench.view.event.cancel`로 기록한다. 두 알림 모두 view의 call을 끝내지 않는다. | all |
 | `view.process.events` | view를 만들면 `host.trace.view.process-request {plugin, surface}`를 쓰고, 그 view의 첫 ready message는 `host.trace.view.process-ready {plugin, surface}`를 쓴다. | all |
 | `view.restart.restores-state` | 프로세스가 끝난 뒤 호스트가 다시 만든 view는 기록의 surface를 가지므로, 새 view의 view 호출은 그 surface를 담은 `view-call`로 전달되고, workbench가 surface별로 보관하는 그 surface의 탭 상태는 끝나기 전과 같이 읽힌다. | all |
-| `view.restart.limit-shows-error` | 300초 안의 네 번째 view surface 실패는 `view-stopped {surface, plugin, reason}` event를 창의 메인 page에 한 번 보내며, reason은 `the view failed 4 times within 300 seconds and is created again when its tab is reopened`이고, application log에 `error: view channel: <surface>: <reason>`을 쓴다. | all |
+| `view.restart.limit-shows-error` | 300초 안의 네 번째 view surface 실패는 `view-stopped {surface, plugin, reason}` event를 창의 workbench에 한 번 보내며, reason은 `the view failed 4 times within 300 seconds and is created again when its tab is reopened`이고, application log에 `error: view channel: <surface>: <reason>`을 쓴다. | all |
 | `view.channel.overflow-closes` | 이유가 `queue full for <plugin>`인 `view.error` message는 그 surface의 view를 닫고 그 surface의 실패 하나로 센다. 이미 닫힌 view의 message는 아무것도 닫지 않는다. | all |
 | `view.origin.current-callback-is-dispatched` | 현재 view origin의 callback은 view dispatch 경로에 도달한다. | all |
 | `view.origin.retired-callback-is-cancelled` | 종료된 view origin의 callback은 dispatch 전에 취소되고 교체 view에는 도달하지 않는다. | all |
@@ -310,15 +320,15 @@ fn invalid_json_closes_connection() {
 | `view.process-end-precedes-replacement-registration` | 실패한 view의 process-ended event는 대체 view가 source-registration event를 보내기 전에 전달된다. | all |
 | `view.call.forward` | 멤버 `cids`(식별자 목록)를 가진 call 요청은 event에 멤버 `cids`를 싣는다. 한 줄에 담을 수 없는 목록은 애플리케이션 로그에 쓰고 어떤 page에도 전달하지 않는다.  view가 `sok-view`로 보낸 call 요청 `{sok: 1, id, command, params}`은 view의 surface와 plugin을 담은 `view-call {surface, plugin, id, command, params}` event가 된다. `id`가 정수가 아니거나 `command`가 비어 있는 요청은 application log에 쓰고 어떤 page에도 전달하지 않는다. | all |
 | `view.call.cancel` | view가 `sok-view`로 보낸 cancel `{sok: 1, id, cancel: true}`은 view의 surface와 plugin을 담은 `view-call {surface, plugin, id, cancel: true}` event가 된다. `id`가 정수가 아니거나, `cancel`이 `true`가 아니거나, `command`를 담은 cancel은 application log에 쓰고 어떤 page에도 전달하지 않는다. | all |
-| `view.call.reply-null-result` | 메인 page의 `viewReply {page, surface, generation, id, result: null}`는 `{sok: 1, id, result: null}`로 ready document에 post된다. 값이 없는 명령은 null result로 답하며, host는 그 null을 result로 보존한다. | all |
-| `view.call.reply` | 메인 page의 응답 `viewReply {page, surface, generation, id, result}` 또는 `viewReply {page, surface, generation, id, error}`는 view의 ready 문서에 `{sok: 1, id, result}` 또는 `{sok: 1, id, error}`로 post된다. `page`는 현재 메인 문서의 page identity다([logging](logging.ko.md#event)). ready document가 없는 view 응답은 `<surface> has no ready document`로 실패한다. generation 검증 뒤 host는 `host.view.reply.dispatch`를 기록하며, current 대상은 native post가 반환된 뒤 기록한다. 기록에는 window, page, surface, generation, id, outcome과 disposition이 있다. stale 대상은 `discarded`와 `view-generation-not-current` reason을 기록한다. `posted`는 native post 수락이지 JavaScript 수신이 아니다. Native post 오류는 host call을 거부하고 dispatch record를 쓰지 않는다. | all |
-| `view.event.push` | 메인 page의 `viewEvent {surface, generation, event, data}`는 view의 ready 문서에 `{sok: 1, event, data}`로 post되고 `data`는 임의의 JSON 값이다. Host는 current view generation만 받아들이며 `sok-view`에 generation을 노출하지 않는다. Stale generation은 post 없이 취소한다. Current generation event를 보낼 ready 문서가 없으면 `<surface> has no ready document`로 실패한다. | all |
-| `sidecar.route.calls` | 메인 page의 `sidecarListen {sidecar, id, on}`과 `viewSidecarRoute {surface, generation, sidecar, id, on}`은 `null`로 답한다. 각 call은 메인 page가 아닌 호출자에게 거절되고, 형식 밖의 field에는 `<call> requires a non-empty sidecar`, `<call> requires a non-empty id`, `<call> requires on as a boolean`, `viewSidecarRoute requires a non-empty surface`, `viewSidecarRoute has no source generation`, `viewSidecarRoute source generation exceeds the JavaScript safe integer limit`로 거절된다. | all |
-| `sidecar.route.delivery` | 한 쌍의 sidecar message는 메인 page가 그 쌍을 듣는 동안에만 메인 page에 `sidecar-message`로 가고, generation이 current인 route된 view 각각은 raw body를 담은 `{"sok":1,"event":"sidecar.message","data":{"id":<id>,"body":<body>}}`를 받는다. 더 이상 current가 아닌 generation의 route는 `host.view.sidecar.discard`와 함께 지워지고, 같은 call의 반복은 아무것도 바꾸지 않으며, 메인 문서의 load는 모든 route를 지운다. | all |
+| `view.call.reply-null-result` | workbench의 `viewReply {page, surface, generation, id, result: null}`는 `{sok: 1, id, result: null}`로 ready document에 post된다. 값이 없는 명령은 null result로 답하며, host는 그 null을 result로 보존한다. | all |
+| `view.call.reply` | workbench의 응답 `viewReply {page, surface, generation, id, result}` 또는 `viewReply {page, surface, generation, id, error}`는 view의 ready 문서에 `{sok: 1, id, result}` 또는 `{sok: 1, id, error}`로 post된다. `page`는 현재 메인 문서의 page identity다([logging](logging.ko.md#event)). ready document가 없는 view 응답은 `<surface> has no ready document`로 실패한다. generation 검증 뒤 host는 `host.view.reply.dispatch`를 기록하며, current 대상은 native post가 반환된 뒤 기록한다. 기록에는 window, page, surface, generation, id, outcome과 disposition이 있다. stale 대상은 `discarded`와 `view-generation-not-current` reason을 기록한다. `posted`는 native post 수락이지 JavaScript 수신이 아니다. Native post 오류는 host call을 거부하고 dispatch record를 쓰지 않는다. | all |
+| `view.event.push` | workbench의 `viewEvent {surface, generation, event, data}`는 view의 ready 문서에 `{sok: 1, event, data}`로 post되고 `data`는 임의의 JSON 값이다. Host는 current view generation만 받아들이며 `sok-view`에 generation을 노출하지 않는다. Stale generation은 post 없이 취소한다. Current generation event를 보낼 ready 문서가 없으면 `<surface> has no ready document`로 실패한다. | all |
+| `sidecar.route.calls` | workbench의 `sidecarListen {sidecar, id, on}`과 `viewSidecarRoute {surface, generation, sidecar, id, on}`은 `null`로 답한다. 각 call은 workbench가 아닌 호출자에게 거절되고, 형식 밖의 field에는 `<call> requires a non-empty sidecar`, `<call> requires a non-empty id`, `<call> requires on as a boolean`, `viewSidecarRoute requires a non-empty surface`, `viewSidecarRoute has no source generation`, `viewSidecarRoute source generation exceeds the JavaScript safe integer limit`로 거절된다. | all |
+| `sidecar.route.delivery` | 한 쌍의 sidecar message는 workbench가 그 쌍을 듣는 동안에만 workbench에 `sidecar-message`로 가고, generation이 current인 route된 view 각각은 raw body를 담은 `{"sok":1,"event":"sidecar.message","data":{"id":<id>,"body":<body>}}`를 받는다. 더 이상 current가 아닌 generation의 route는 `host.view.sidecar.discard`와 함께 지워지고, 같은 call의 반복은 아무것도 바꾸지 않으며, 메인 문서의 load는 모든 route를 지운다. | all |
 | `view.status.relay` | `sok-view`로 view가 보낸 status watch `{sok: 1, id, command: "runtime.status.watch", params: {name}}`는 call request와 같이 command와 params를 바꾸지 않고 `view-call {surface, plugin, id, command, params}` event가 된다. 메인 페이지의 `viewEvent {surface, generation, event: "status", data: {name, value}}`는 ready document에 `{sok: 1, event: "status", data: {name, value}}`로 게시된다. Host는 current view generation을 검사하고 command와 status 이름은 읽지 않으며, 어느 owner의 status든 전달한다. | all |
-| `view.command.request` | 메인 page의 `viewRequest {surface, id, command, params}`는 view의 ready 문서에 `{sok: 1, id, command, params}`로 post된다. `viewRequest`가 `cids`를 가지면 메시지에 멤버 `cids`로 실어 보내고, `cids`가 없는 요청은 멤버를 싣지 않는다. 한 줄에 담을 수 없는 식별자(빈 식별자, 또는 따옴표, 역슬래시, 제어 문자가 있는 식별자)가 있는 `cids`는 요청을 이름 붙인 오류로 거부하며 어떤 view에도 post하지 않는다. view가 `sok-view`로 보낸 응답 `{sok: 1, reply: id, result}` 또는 `{sok: 1, reply: id, error: {code, message}}`는 `view-reply {surface, plugin, id, result}` 또는 `view-reply {surface, plugin, id, error}` event가 된다. `id`가 정수가 아니거나, `result`와 `error` 중 하나만 없거나, error에 message가 없는 응답은 application log에 쓰고 어떤 page에도 전달하지 않는다. | all |
+| `view.command.request` | workbench의 `viewRequest {surface, id, command, params}`는 view의 ready 문서에 `{sok: 1, id, command, params}`로 post된다. `viewRequest`가 `cids`를 가지면 메시지에 멤버 `cids`로 실어 보내고, `cids`가 없는 요청은 멤버를 싣지 않는다. 한 줄에 담을 수 없는 식별자(빈 식별자, 또는 따옴표, 역슬래시, 제어 문자가 있는 식별자)가 있는 `cids`는 요청을 이름 붙인 오류로 거부하며 어떤 view에도 post하지 않는다. view가 `sok-view`로 보낸 응답 `{sok: 1, reply: id, result}` 또는 `{sok: 1, reply: id, error: {code, message}}`는 `view-reply {surface, plugin, id, result}` 또는 `view-reply {surface, plugin, id, error}` event가 된다. `id`가 정수가 아니거나, `result`와 `error` 중 하나만 없거나, error에 message가 없는 응답은 application log에 쓰고 어떤 page에도 전달하지 않는다. | all |
 | `view.message.unknown-event` | view가 `sok-view`로 보낸 message의 `event`가 `view.ready`도 `view.error`도 아니면 `<surface>: view event "<event>" is unknown`으로 application log에 기록되고 어떤 page에도 전달되지 않는다. 지워진 `declared-ui.snapshot`도 그런 event다. | all |
-| `view.exposure.register` | 메인 페이지는 view 페이지의 status·element 등록을 `{surface, kind, name}`을 담은 `exposureRegister` 호출로 전달한다. 호스트는 이를 기록하고 메인 페이지에 event `exposure-registered {surface, kind, name}`를 보내며, 다시 읽은 메인 페이지는 replay를 통해 살아 있는 모든 등록을 다시 받는다. view가 없는 surface에 대한 전달, `status`·`command`·`element` 이외의 `kind`, surface가 등록할 수 없는 이름은 오류로 거부되며 아무것도 기록하거나 알리지 않는다. | all |
+| `view.exposure.register` | workbench는 view 페이지의 status·element 등록을 `{surface, kind, name}`을 담은 `exposureRegister` 호출로 전달한다. 호스트는 이를 기록하고 workbench에 event `exposure-registered {surface, kind, name}`를 보내며, 다시 읽은 workbench는 replay를 통해 살아 있는 모든 등록을 다시 받는다. view가 없는 surface에 대한 전달, `status`·`command`·`element` 이외의 `kind`, surface가 등록할 수 없는 이름은 오류로 거부되며 아무것도 기록하거나 알리지 않는다. | all |
 | `view.regions.close-with-process` | view의 process가 끝나면 호스트는 view를 다시 만들기 전에 그 표면의 document·image 영역을 닫으므로, 새 view는 선언된 영역 이름을 다시 붙인다. view 자체는 재시작 한도 안에서 다시 만들어진다. | all |
 | `view.process-ended.forgets-regions` | view의 process가 끝나면 호스트는 그 표면의 영역을 닫은 뒤 window event `view-process-ended {surface}`를 보내므로, 페이지는 새 view가 영역을 다시 붙일 때까지 그 표면의 영역을 잊는다. | all |
 | `view.create-loads-page` | view surface는 첫 sync에서 view 구성(`isView` 설정)으로 web view를 folder와 plugin을 surface의 것으로 하여 만들고, `soksak://<plugin>/<page>`를 load한다. | all |
@@ -331,7 +341,7 @@ fn invalid_json_closes_connection() {
 | `view.overlays.native-mask-values` | view surface의 native overlay mask는 native 호출 순서대로 overlay마다 다섯 값을 받는다. left, top, right, bottom insets와, 보이는 overlay는 1, 숨긴 overlay는 0인 표시 flag다. | all |
 | `host.arguments.declared-only` | `--config-dir PATH`와 `--config-dir=PATH`는 설정 폴더를 정한다. 선언하지 않은 인자, 값 없는 flag, 두 번 준 flag는 그 문장으로 실패한다. | all |
 | `host.arguments.registry-ca-in-diagnostic-builds` | 진단 build는 `--registry-ca PATH`를 받고, 그 뒤 registry 받기는 그 PEM 파일의 인증 기관만 신뢰한다. 인증서 없는 파일은 `--registry-ca <path>: <reason>`으로 실패하고, host의 TLS parser가 거부하는 인증서는 `--registry-ca <path>: certificate <n> does not parse: <reason>`으로 실패한다. n은 파일의 인증서 block을 1부터 센다. | all |
-| `host.memory-pressure.relays-level-and-seq` | host는 시작할 때 platform의 memory pressure source를 시작하고, 각 보고를 그 보고의 `{level, seq}`를 가진 page event `memory-pressure`로 `seq` 순서대로, 보고하는 thread를 붙잡지 않고 모든 창에 보낸다. platform이 거부한 source는 `failed to start the memory pressure source`로 시작을 실패시킨다. | all |
+| `host.memory-pressure.relays-level-and-seq` | host는 시작할 때 platform의 memory pressure source를 시작하고, 각 보고를 그 보고의 `{level, seq}`를 가진 workbench event `memory-pressure`로 `seq` 순서대로, 보고하는 thread를 붙잡지 않고 모든 창에 보낸다. platform이 거부한 source는 `failed to start the memory pressure source`로 시작을 실패시킨다. | all |
 | `endpoint.process.rejects-a-malformed-lock` | 잠금이 걸린 `process.lock`의 내용이 비었거나 다른 형식이면 엔드포인트는 `already owned by a live process`로 거부하며, 거부에 드는 내용은 256 바이트로 잘린다. 잠금 파일은 그대로 남는다. | all |
 | `endpoint.lock.empty-is-no-previous-run` | 시작할 때 비었고 잠기지 않은 `process.lock`은 event `host.run.unrecorded-end`를 저장하지 않고 넘겨받는다. 시작자가 잠그기 전에 파일을 만들고, 소유자는 잠금 아래에서만 기록을 쓰기 때문이다. | all |
 | `endpoint.lock.unrecorded-end` | 시작할 때 잠기지 않았고 비어 있지 않은 `process.lock`은 내용과 관계없이 넘겨받으며, 엔드포인트는 이전 실행의 `boot`와 `pid`, 또는 다른 형식 파일의 내용을 알려 준다. host는 이를 `host.run.unrecorded-end`로 저장한다. | all |
@@ -341,15 +351,15 @@ fn invalid_json_closes_connection() {
 | `endpoint.transport.invalid-json-closes` | 본문이 JSON이 아닌 프레임은 응답 없이 연결을 닫는다. | all |
 | `endpoint.transport.closing-a-disconnected-connection-succeeds` | socket이 이미 끊긴 연결을 닫으면 성공한다. 다른 shutdown 오류는 보고한다. | tauriv2 only: Rust host는 socket을 명시적으로 shutdown하며 끊긴 socket을 보고하고, Go는 shutdown 없이 연결을 닫는다 |
 | `endpoint.transport.non-jsonrpc-object-closes` | JSON-RPC 2.0 요청이 아닌 JSON 프레임은 응답 없이 연결을 닫는다. | all |
-| `endpoint.transport.undeclared-method-closes` | 선언되지 않은 메서드는 응답 없이 연결을 닫고 페이지에 아무것도 전달하지 않는다. | all |
+| `endpoint.transport.undeclared-method-closes` | 선언되지 않은 메서드는 응답 없이 연결을 닫고 workbench에 아무것도 전달하지 않는다. | all |
 | `endpoint.transport.close-reason-is-recorded` | 닫히는 연결은 소켓을 닫기 전에 `info host endpoint: connection closed: <reason>`을 쓴다. reason은 한도를 넘은 frame, JSON-RPC 2.0 요청이 아닌 frame(본문 포함), 선언되지 않은 메서드, peer의 종료다. | all |
 | `endpoint.timeout.is-recorded` | 제한 시간 오류 1005로 끝나는 endpoint 요청은 client가 오류를 받기 전에 `error host endpoint timeout: <method>: <message>`를 쓴다. | all |
-| `endpoint.diagnostics.methods-exist-only-in-diagnostic-builds` | 릴리스 빌드에서 diagnostics.transcript는 연결을 닫고 페이지에 닿지 않으며, 진단 빌드에서는 응답된다. | all |
+| `endpoint.diagnostics.methods-exist-only-in-diagnostic-builds` | 릴리스 빌드에서 diagnostics.transcript는 연결을 닫고 workbench에 닿지 않으며, 진단 빌드에서는 응답된다. | all |
 | `endpoint.rpc.round-trip-by-id` | 한 연결의 여러 요청은 각각 같은 id와 결과를 가진 JSON-RPC 2.0 응답을 받는다. | all |
-| `endpoint.rpc.page-params-omit-window` | 페이지는 window 필드를 뺀 전달 매개변수를 받는다. | all |
-| `endpoint.rpc.unknown-window-1003` | 존재하지 않는 창에 대한 선언된 메서드는 페이지에 닿지 않고 오류 1003을 반환한다. | all |
+| `endpoint.rpc.page-params-omit-window` | workbench는 window 필드를 뺀 전달 매개변수를 받는다. | all |
+| `endpoint.rpc.unknown-window-1003` | 존재하지 않는 창에 대한 선언된 메서드는 workbench에 닿지 않고 오류 1003을 반환한다. | all |
 | `endpoint.rpc.missing-window-param-invalid` | window 매개변수가 없는 status.get은 -32602를 반환한다. | all |
-| `endpoint.rpc.target-params-are-checked-in-order` | window를 지정하는 요청은 params를 한 순서로 검사한다. window가 없거나, null이거나, 문자열이 아니거나, 비어 있으면 -32602 `window must be a non-empty string`으로 실패한다. 그다음 `status.get`, `status.watch`, `status.unwatch`, `command.run`, `element.rect`, `element.act`에서 name이 없거나, 문자열이 아니거나, `<owner>.<name>` 형식이 아니면 -32602 `name is required and must have the form <owner>.<name>`으로 실패한다. 그다음 없는 window는 1003으로 실패한다. 이런 요청은 page에 닿지 않는다. | all |
+| `endpoint.rpc.target-params-are-checked-in-order` | window를 지정하는 요청은 params를 한 순서로 검사한다. window가 없거나, null이거나, 문자열이 아니거나, 비어 있으면 -32602 `window must be a non-empty string`으로 실패한다. 그다음 `status.get`, `status.watch`, `status.unwatch`, `command.run`, `element.rect`, `element.act`에서 name이 없거나, 문자열이 아니거나, `<owner>.<name>` 형식이 아니면 -32602 `name is required and must have the form <owner>.<name>`으로 실패한다. 그다음 없는 window는 1003으로 실패한다. 이런 요청은 workbench에 닿지 않는다. | all |
 | `endpoint.names.unknown-host-name-1001` | 알 수 없는 host 이름의 command.run은 오류 1001을 반환한다. | all |
 | `endpoint.names.missing-name-invalid` | name이 없는 status.get은 -32602를 반환한다. | all |
 | `endpoint.names.owner-form-required` | owner.name 형식이 아닌 이름과 문자열이 아닌 이름은 -32602를 반환한다. | all |
@@ -388,31 +398,31 @@ fn invalid_json_closes_connection() {
 | `endpoint.watch.notifies-watching-connection` | status.watch 뒤의 변경은 window, name, value를 가진 status.changed 알림으로 그 연결에 도착한다. | all |
 | `endpoint.watch.non-watching-connection-not-notified` | 구독하지 않은 연결은 알림을 받지 않는다. | all |
 | `endpoint.watch.unwatch-is-per-connection` | 한 연결의 구독 해제는 같은 상태를 구독한 다른 연결의 알림을 유지한다. | all |
-| `endpoint.watch.page-watch-deduplicated` | 같은 상태를 구독하는 두 번째 연결은 페이지에 status.watch를 더 보내지 않는다. | all |
-| `endpoint.watch.no-page-unwatch-while-watched` | 어떤 연결이든 상태를 구독하는 동안 페이지는 status.unwatch를 받지 않는다. | all |
-| `endpoint.watch.last-watcher-close-unwatches-page` | 마지막 구독 연결을 닫으면 페이지에 status.unwatch를 보낸다. | all |
+| `endpoint.watch.page-watch-deduplicated` | 같은 상태를 구독하는 두 번째 연결은 workbench에 status.watch를 더 보내지 않는다. | all |
+| `endpoint.watch.no-page-unwatch-while-watched` | 어떤 연결이든 상태를 구독하는 동안 workbench는 status.unwatch를 받지 않는다. | all |
+| `endpoint.watch.last-watcher-close-unwatches-page` | 마지막 구독 연결을 닫으면 workbench에 status.unwatch를 보낸다. | all |
 | `endpoint.watch.registry-reflects-watches` | 구독 등록소는 활성 구독만 정확히 나열하고 마지막 구독자가 떠나면 비어 있다. | all |
-| `endpoint.watch.surface-and-plain-forwarded-separately` | 같은 이름의 표면 구독과 일반 구독은 각자의 매개변수로 모두 페이지에 전달된다. | all |
+| `endpoint.watch.surface-and-plain-forwarded-separately` | 같은 이름의 표면 구독과 일반 구독은 각자의 매개변수로 모두 workbench에 전달된다. | all |
 | `endpoint.watch.empty-surface-invalid` | 빈 surface의 status.watch는 -32602를 반환한다. | all |
 | `endpoint.watch.surface-change-names-surface` | 표면 구독의 변경은 surface를 담고, 일반 구독의 변경은 담지 않는다. | all |
-| `endpoint.watch.surface-unwatch-forwarded-with-surface` | 표면 구독을 해제하면 surface를 담은 status.unwatch를 페이지에 보낸다. | all |
+| `endpoint.watch.surface-unwatch-forwarded-with-surface` | 표면 구독을 해제하면 surface를 담은 status.unwatch를 workbench에 보낸다. | all |
 | `endpoint.watch.surface-unwatch-keeps-plain-watch` | 표면 구독을 해제해도 같은 이름의 일반 구독은 유지된다. | all |
-| `endpoint.watch.subscription-arrival-order` | 연달아 보낸 watch, unwatch, watch는 느린 페이지에 그 순서로 도착하고 연결은 계속 구독한다. | all |
+| `endpoint.watch.subscription-arrival-order` | 연달아 보낸 watch, unwatch, watch는 느린 workbench에 그 순서로 도착하고 연결은 계속 구독한다. | all |
 | `status.window.rewatch-notifies` | host.window의 마지막 watch가 끝난 뒤 시작한 watch는, 앞선 watch 종료 전에 보낸 값과 같더라도 창의 다음 값을 받는다. Tauri host는 마지막 watch가 끝날 때 마지막으로 보낸 값의 기록을 지우고, Wails host는 기록을 두지 않는다. | all |
 | `status.window.latest-value-last` | 읽는 동안 들어온 host.window 변경은 그 마지막 변경 뒤에 시작하는 읽기 하나로 합쳐지므로, 변경이 몰려도 읽기는 하나이고 새 값 뒤에 옛 값을 보내지 않는다. | all |
-| `endpoint.watch.other-requests-not-blocked-by-pending-subscription` | 페이지 구독 해제가 대기 중이어도 같은 연결의 다음 요청에 응답한다. | all |
+| `endpoint.watch.other-requests-not-blocked-by-pending-subscription` | workbench 구독 해제가 대기 중이어도 같은 연결의 다음 요청에 응답한다. | all |
 | `exposure-reply.payload.main-reply-unscoped` | surface가 없는 주 문서 응답 페이로드는 빈 surface로 해석된다. | all |
 | `exposure-reply.payload.scoped-reply-keeps-surface` | surface가 있는 응답 페이로드는 인코딩과 해석을 거쳐도 surface를 유지한다. | all |
 | `exposure-reply.target.main-and-surface-distinct` | surface가 없는 응답은 창의 주 문서를, surface가 있는 응답은 그 표면 문서를 대상으로 한다. | all |
 | `exposure-reply.target.invalid-surface-rejected` | surface가 null, 빈 문자열, 숫자, 객체인 응답은 주 응답이 아니라 오류다. | all |
 | `exposure-reply.removed-surface-discarded` | 표면이 제거된 표면 페이지의 답은 오류 대신 관측 `exposure reply <id> of removed surface "<surface>" arrived after its request ended`와 함께 버려진다. | all |
-| `exposure.list.host-owner-without-page` | `owner`가 `host`인 노출 목록은 호스트 항목만 등록된 항목으로 담고 main page에 묻지 않으며, 다른 `owner`는 `exposure.list owner must be host`로 실패한다. | all |
-| `exposure.list.appends-host-entries-registered` | 노출 목록은 페이지 항목을 유지하고 호스트 상태와 명령 항목을 등록된 항목으로 더한다. | all |
+| `exposure.list.host-owner-without-page` | `owner`가 `host`인 노출 목록은 호스트 항목만 등록된 항목으로 담고 workbench에 묻지 않으며, 다른 `owner`는 `exposure.list owner must be host`로 실패한다. | all |
+| `exposure.list.appends-host-entries-registered` | 노출 목록은 workbench 항목을 유지하고 호스트 상태와 명령 항목을 등록된 항목으로 더한다. | all |
 | `exposure.list.host-entries-exact-sorted-set` | 호스트 상태와 명령 이름은 정해진 정렬 목록과 같다. | all |
 | `exposure.list.host-entries-described` | 모든 호스트 항목은 비어 있지 않은 설명을 가진다. | all |
 | `exposure.list.host-quit-result-null` | host.quit은 null 결과 스키마를 선언한다. | all |
 | `exposure.list.host-hit-kinds` | host.hit은 결과 kind `workbench`, `document`, `native`를 선언한다. | all |
-| `exposure.list.non-object-list-rejected` | 객체가 아닌 페이지 노출 목록은 오류다. | all |
+| `exposure.list.non-object-list-rejected` | 객체가 아닌 workbench 노출 목록은 오류다. | all |
 | `exposure.host-window.reads-during-surface-creation` | 네이티브 surface view는 생성하는 같은 단계에서 surface id로 이름이 붙으므로, window status 읽기는 surface id가 없는 네이티브 view를 만나지 않는다. | all |
 | `exposure.host-window.reads-during-surface-close` | 네이티브 surface view는 닫는 단계가 id를 잊을 때까지 surface id를 유지하므로, view가 열려 있는 동안 window status 읽기는 surface id가 없는 네이티브 view를 만나지 않는다. | all |
 | `exposure.host-window.unregistered-surface-named` | window status 읽기가 등록된 surface가 없는 네이티브 surface view를 만나면 `unregistered native surface <id>`로 실패하며, `<id>`는 window facts의 네이티브 view 주소이고 두 host의 글은 같다. | all |
@@ -420,7 +430,7 @@ fn invalid_json_closes_connection() {
 | `exposure.timeout.every-forward-bounded` | timeout이 없는 forward 요청은 method와 관계없이 10초를 기다리므로, 시간 제한이 없는 forward는 없다. | all |
 | `exposure.timeout.invalid-timeout-rejected` | 0, 600000 초과, 소수, 문자열, 음수인 command.run timeout은 -32602를 반환한다. | all |
 | `exposure.relay.reply-resolves-request` | 대상 문서에서 온 같은 id의 응답은 그 결과로 요청을 완료한다. | all |
-| `exposure.relay.keeps-value-text` | Page 응답은 page가 보낸 텍스트 그대로 중계되므로 값의 key 순서가 유지된다(`{"zeta":1,"alpha":{"b":2,"a":1}}`는 보낸 그대로다). | all |
+| `exposure.relay.keeps-value-text` | workbench 응답은 workbench가 보낸 텍스트 그대로 중계되므로 값의 key 순서가 유지된다(`{"zeta":1,"alpha":{"b":2,"a":1}}`는 보낸 그대로다). | all |
 | `exposure.relay.missing-result-is-null` | result가 없는 응답은 null로 완료된다. | all |
 | `exposure.relay.error-reply-keeps-code-and-message` | 오류 응답은 같은 코드와 메시지로 요청을 실패시킨다. | all |
 | `exposure.relay.foreign-document-reply-ignored-timeout-1005` | 다른 문서의 응답은 무시되고, 요청은 1005로 시간 초과되며, 늦은 응답도 받지 않는다. | all |
@@ -429,7 +439,8 @@ fn invalid_json_closes_connection() {
 | `exposure.relay.late-reply-writes-call-event` | 시간이 초과된 command의 늦은 답은 `plugin`, `command`와 보낸 뒤의 `delay`를 가진 `host.trace.call.late-reply`를 쓴다. | all |
 | `exposure.relay.send-failure-1003` | 문서로 보내기가 실패하면 요청은 즉시 1003으로 실패한다. | all |
 | `exposure.relay.closed-document-fails-pending-1003` | 문서를 닫으면 대기 중인 요청은 1003으로 실패한다. | all |
-| `exposure.relay.page-reload-ends-surface-requests` | 준비된 page에 reload 요청을 보낸 뒤 그 window의 surface document로 보낸 요청은 1003으로 끝나고, 새 page가 시작할 때까지 이후 요청은 1003으로 거부된다. 다른 window의 요청은 계속 기다린다. | all |
+| `exposure.relay.page-reload-ends-surface-requests` | 준비된 workbench에 reload 요청을 보낸 뒤 그 window의 surface document로 보낸 요청은 1003으로 끝나고, 새 workbench가 시작할 때까지 이후 요청은 1003으로 거부된다. 다른 window의 요청은 계속 기다린다. | all |
+| `exposure.settled-wait.presents-through-the-frontend` | settled wait는 `Frontend`의 settled presentation으로 내용을 화면에 올리고, `Frontend`가 만들지 못한 presentation은 platform의 settled wait 전에 그 오류로 wait를 끝내며, block의 실패도 wait를 끝낸다. | wailsv3, mygo only: Go language host library는 fixture frontend로 시험하고, Rust language host library는 Tauri host의 window check로만 닿는다 |
 | `exposure.relay.ended-reply-is-observed` | 문서가 1003으로 끝낸 요청에 대한 답은 받아들여 관측 `exposure reply <id> arrived after its request ended`로 쓴다. 릴레이가 보낸 적 없는 요청에 대한 답은 `exposure reply <id> has no matching request`로 실패한다. | all |
 | `exposure.relay.no-timeout-waits-until-close` | timeout이 없는 요청은 문서가 닫힐 때까지 기다린 뒤 1003으로 실패한다. | all |
 | `exposure.window.dropped-view-work-reports-no-view` | 실행되기 전에 파괴된 웹뷰로 보낸 작업은 수신 오류 대신 결과 없음이 되어, `host.window`가 닫히는 모달을 뷰 없이 보고한다. 실행되어 실패한 작업은 그 오류를 유지한다. | tauriv2 only: Tauri는 웹뷰 작업을 dispatch로 실행하며 웹뷰가 파괴되면 작업을 버리고, Wails는 모달 뷰를 자기 기록에서 읽는다 |
@@ -489,11 +500,24 @@ fn invalid_json_closes_connection() {
 | `application.window.scale-change-refreshes-rasters` | window의 backing scale이 바뀌면 그 window의 image raster refresh가 시작되고, window가 움직이기만 하면 시작되지 않는다. | all |
 | `application.events.app-event-is-recorded` | 애플리케이션 event는 `kind`(`started`, `activated`, `deactivated`, `exit_requested`, `exit`)를 가진 event `host.app.event`이며 level은 `info`다. 목록에 없는 kind는 표준 오류에 보고하고 아무것도 저장하지 않는다. | all |
 | `application.launch.system-decides-activation` | host는 다른 애플리케이션이 active인 동안 실행을 마칠 때 스스로 activate하지 않으므로 Launch Services가 실행의 activation을 결정한다([launch activation](hosts.md#launch-activation)). | all |
-| `application.window.no-main-page-calls-no-main-web-view` | Main page가 없는 framework의 창은 main web view operation을 호출하지 않는다. Library는 main web view를 배치하지 않고 load 뒤에 창을 드러내지 않는다. | wailsv3 only: the Go language host library tests it with a fixture framework; the Rust language host library has no framework without a main page |
-| `application.window.no-main-page-stages-no-page-script` | Library는 main page가 있는 framework에서만 staged 프런트엔드의 background script를 읽으므로, main page가 없는 framework의 view root가 시작한다. | wailsv3 only: the Go language host library tests it with a fixture framework; the Rust language host library has no framework without a main page |
+| `application.window.no-main-page-calls-no-main-web-view` | Main page가 없는 framework의 창은 main web view operation을 호출하지 않는다. Library는 main web view를 배치하지 않고 load 뒤에 창을 드러내지 않는다. | wailsv3, mygo only: the Go language host library tests it with a fixture framework; the Rust language host library has no framework without a main page |
+| `application.window.no-main-page-stages-no-page-script` | Library는 main page가 있는 framework에서만 staged 프런트엔드의 background script를 읽으므로, main page가 없는 framework의 view root가 시작한다. | wailsv3, mygo only: the Go language host library tests it with a fixture framework; the Rust language host library has no framework without a main page |
+| `application.window.no-main-page-starts-without-the-page-title-bar` | main page 없는 framework의 창은 시작할 때 title bar를 설정하지 않는다. workbench가 layout과 함께 title bar를 설정하기 때문이다. | wailsv3, mygo only: Go language host library는 fixture framework로 시험하고, Rust language host library에는 main page 없는 framework가 없다 |
 | `application.framework.names-the-application` | framework adapter는 `endpoint.json`, endpoint socket의 이름, application update의 release key, debug view의 state file이 담는 application을 정한다. Wails host는 `wailsv3`이고 Tauri host는 `tauriv2`다([host tree](hosts.md#host-tree)). | all |
 | `application.framework.window-events-are-port-events` | framework adapter는 language host library가 관찰하는 framework의 각 window event를 `Frontend` port의 window event로 알린다([host tree](hosts.md#host-tree)). | all |
-| `application.framework.lengths-are-logical-pixels` | `Frontend` port는 크기와 위치를 logical pixel로 받고 주며, Wails framework adapter는 각 길이의 가장 가까운 정수를 Wails에 준다([host tree](hosts.ko.md#호스트-트리)). | wailsv3 only: Wails는 길이를 정수로 가지고, Tauri는 logical 길이를 부동소수점 수로 가진다. |
+| `application.framework.lengths-are-logical-pixels` | `Frontend` port는 크기와 위치를 logical pixel로 받고 주며, framework가 정수를 가지는 framework adapter는 각 길이의 가장 가까운 정수를 framework에 준다([host tree](hosts.ko.md#호스트-트리)). | wailsv3, mygo only: Wails와 mygo는 길이를 정수로 가지고, Tauri는 logical 길이를 부동소수점 수로 가진다. |
+| `mygo.framework.start-builds-the-workbench` | adapter의 시작은 workbench 없이 실패하고, 창은 workbench와 함께 숨겨진 채 시작하며, `StartWorkbench`는 workbench를 닫고 다시 만든다. | mygo only: mygo framework adapter를 직접 시험하며, 다른 adapter에는 그 framework가 없다 |
+| `mygo.framework.steps-and-quit` | `Step`과 `Post`는 main thread에서 순서대로 돌고, quit은 quit listener를 거쳐 application을 끝낸다. | mygo only: mygo framework adapter를 직접 시험하며, 다른 adapter에는 그 framework가 없다 |
+| `mygo.framework.window-operations` | adapter의 창은 제목, 크기와 위치, 최대화 상태를 바꾸고, closing hook은 창을 유지하거나 닫으며, dialog는 그 창에 붙는다. | mygo only: mygo framework adapter를 직접 시험하며, 다른 adapter에는 그 framework가 없다 |
+| `mygo.framework.dock-menu-has-the-new-window-item` | adapter의 Dock menu에는 새 창 항목이 있다. | mygo only: mygo framework adapter를 직접 시험하며, 다른 adapter에는 그 framework가 없다 |
+| `mygo.framework.events-and-calls-reach-the-workbench` | 창의 event와 call은 그 창의 workbench에 닿는다. | mygo only: mygo framework adapter를 직접 시험하며, 다른 adapter에는 그 framework가 없다 |
+| `mygo.framework.frame-reports-reach-the-counters` | layout observer는 창의 transaction을 보고하고, 창의 frame 보고는 그 counter에 닿으며, 보여진 창은 frame을 센 뒤 더 그리지 않는다. | mygo only: mygo framework adapter를 직접 시험하며, 다른 adapter에는 그 framework가 없다 |
+| `mygo.menu.set-menu-builds-the-application-menu` | `SetMenu`는 menu를 application에 설치하고, 알 수 없는 role이나 modifier를 가진 항목은 menu를 만들지 않는다. | mygo only: mygo framework adapter를 직접 시험하며, 다른 adapter에는 그 framework가 없다 |
+| `mygo.presentation.notice-answers` | drawable을 찾지 못한 frame은 다시 묻고 그 notice에 답하며, damage 없는 frame은 presented로 세고, held frame은 호출자가 기다리지 않으면 실패하고 그렇지 않으면 release 뒤 다시 묻는다. 실패한 frame은 그 실패를 돌려주고, 닫힌 창은 wait를 끝내며, notice 뒤에 실패한 ask는 `done`에 닿는다. | mygo only: frame의 presentation을 보고하는 framework는 mygo뿐이다([framework 변경](hosts.ko.md#framework-변경)의 U3) |
+| `mygo.system.file-drop-reaches-the-workbench` | 창에 놓은 파일은 file drop view의 텍스트로 workbench에 닿고, 더 이상 해석되지 않는 경로의 drop은 거절된다. | mygo only: mygo framework adapter를 직접 시험하며, 다른 adapter에는 그 framework가 없다 |
+| `mygo.system.notification-events-reach-the-workbench` | notification center의 event는 workbench에 닿는다. | mygo only: mygo framework adapter를 직접 시험하며, 다른 adapter에는 그 framework가 없다 |
+| `mygo.system.update-replaces-the-bundle` | application update는 application을 끝내고 그 bundle을 교체하는 명령을 시작한다. | mygo only: mygo framework adapter를 직접 시험하며, 다른 adapter에는 그 framework가 없다 |
+| `mygo.benchmark.empty-window-reads-the-window` | 빈 창 benchmark는 세 host benchmark의 창을 읽고, 읽기에 실패하면 끝나며, 인수를 받고, JSON 한 줄을 보고하고, `footprint`의 출력에서 footprint를 읽는다. | mygo only: 이 benchmark는 mygo framework의 창을 실행한다 |
 | `sidecars.protocol.request-line-carries-cids` | 입력을 이어받는 페이지 요청은 `root`와 `body` 사이에 필드 `cids`(상관 식별자, 순서대로)를 가진 요청 줄로 사이드카에 가고, 입력을 이어받지 않는 요청에는 `cids` 필드가 없다. | all |
 | `sidecars.protocol.request-with-cids-is-recorded` | `cids`를 가진 페이지 요청은 그 `cids`, 사이드카의 `name`, `surface`, body 크기 `bytes`를 가진 level `info`의 event `host.sidecar.request`가 되고, `cids`가 없는 요청은 이 event를 저장하지 않는다. | all |
 | `sidecars.protocol.reply-with-cids-is-recorded` | 줄이 `cids`를 밝히거나 body가 `error` member를 가진 객체인 sidecar의 메시지는 event `host.sidecar.reply`이다. `name`, `surface`, body 크기 `bytes`, `ok`(`error`이면 false), 줄의 `cids`, 그 첫 번째 요청을 host가 기억하면 `micros`, 오류이면 `error` `-32603: <text>`(문자열 오류는 그 글, 다른 값은 JSON 글)를 level `warn`(오류가 없는 reply는 `info`)으로 가진다. 둘 다 없는 메시지는 이 event를 저장하지 않는다. | all |
@@ -509,7 +533,7 @@ fn invalid_json_closes_connection() {
 | `host.view.killed.is-written-on-every-end` | host가 종료를 관찰하는 view(process가 끝난 뒤 kill, surface 또는 window와 함께 close)는 자기 plugin, 자기 surface와 `unsent` true를 담은 `host.view.killed`를 종료마다 한 번 저장한다. 살아 있는 view가 없는 surface는 아무것도 저장하지 않는다. 성공한 메시지 전달은 살아 있는 view를 끝내거나 종료 record를 저장하지 않는다. | all |
 | `host.locks.poisoned-state-is-recovered` | poisoned lock은 가지고 있던 상태와 함께 복구되고 연산이 끝난다. host의 panic hook이 panic을 기록한다. 로깅 명세의 하나뿐인 방식이다. | tauriv2 only: Go mutex는 poison되지 않는다 |
 | `log.fatal-signal.writes-an-error-line` | 애플리케이션 로그를 연 뒤 host process가 fatal signal을 받으면 그 signal로 process가 끝나기 전에 `error: fatal: <signal name>`을 한 번 쓴다. | tauriv2 only: Go runtime은 fatal signal을 스스로 처리하고 보고를 crash file에 쓴다(`log.fatal-error.writes-the-crash-file`) |
-| `log.fatal-error.writes-the-crash-file` | event log를 연 뒤 host의 runtime fatal error는 출력을 `logs/host-<boot>.crash`에 쓰고 process를 `SIGABRT`로 끝낸다. 그래서 시스템이 모든 thread의 native frame을 담은 crash report를 쓴다. | wailsv3 only: Rust host에는 runtime fatal error가 없으며, fatal signal은 `log.fatal-signal.writes-an-error-line`을 따른다 |
+| `log.fatal-error.writes-the-crash-file` | event log를 연 뒤 host의 runtime fatal error는 출력을 `logs/host-<boot>.crash`에 쓰고 process를 `SIGABRT`로 끝낸다. 그래서 시스템이 모든 thread의 native frame을 담은 crash report를 쓴다. | wailsv3, mygo only: Rust host에는 runtime fatal error가 없으며, fatal signal은 `log.fatal-signal.writes-an-error-line`을 따른다 |
 | `test-support.crash-reports.removes-only-the-saved-report` | 의도한 crash를 검사하는 test가 쓰는 crash report watch는 자기 process의 저장된 report `<application>-<time>.ips`를 지우고, 시스템이 rename하기 전에 report를 쓰는 숨김 파일은 지우지 않는다. | all |
 | `test-support.crash-reports.child-runs-under-a-name-of-its-run` | 의도한 crash를 검사하는 test의 child는 test 실행 파일의 복사본을 그 run의 이름으로 실행한다. 시스템은 한 process 이름의 crash report가 25개에 이르면, test가 지운 report까지 세어, 더 쓰지 않기 때문이다. | all |
 | `log.binding-failure.returned-not-logged` | 실패한 binding 호출은 framework transport의 log 줄 없이 page로 돌아가므로 page가 그 실패를 한 번 기록한다. | wailsv3 only: Wails HTTP transport가 binding 호출을 나르고, Tauri invoke는 돌려준 오류에 log 줄을 쓰지 않는다 |
@@ -527,7 +551,7 @@ fn invalid_json_closes_connection() {
 | `surfaces.reload.sends-only-image-detaches` | page reload는 다시 불러온 surface가 캡처한 각 image의 detach만 sidecar에 보낸다. image supplier에도, surface가 보낸 적이 있는 persistent sidecar에도 다른 메시지는 보내지 않으며, 새 page의 module이 같은 session owner에 닿는다. | all |
 | `images.detach.pending-surface-is-refused` | surface의 detach가 pending인 동안 그 surface의 `imageAttach`와 page의 모든 sidecar send는 `... is pending`으로 거부되고, 다른 surface는 거부되지 않는다. | all |
 | `images.detach.session-end-releases` | supplier 연결이 끝나면 그 supplier의 pending detach가 끝나고 각 surface의 ended event가 `... ended: the supplier connection ended`를 담는다. surface session이 끝나면 그 surface의 pending detach가 ended event 없이 끝난다. | all |
-| `images.detach.ended-event-waits-for-ready` | page가 ready를 알리기 전의 ended event는 ready를 알릴 때 보낸다. page 시작은 이전 page가 받지 못한 event를 버리고 그 실패를 오류 기록으로 쓴다. | all |
+| `images.detach.ended-event-waits-for-ready` | workbench가 ready를 알리기 전의 ended event는 ready를 알릴 때 보낸다. workbench 시작은 이전 workbench가 받지 못한 event를 버리고 그 실패를 오류 기록으로 쓴다. | all |
 | `images.envelope.rejects-unattached-image` | 연결된 적 없는 이미지 이름의 봉투에 notAttached로 응답한다. | all |
 | `images.envelope.refusal-echoes-name-and-sequence` | 거부 응답은 봉투의 name과 sequence를 담는다. | all |
 | `images.envelope.refusal-preserves-quoted-name` | 따옴표가 든 이름의 거부 응답은 올바른 JSON이며 이름을 유지한다. | all |
@@ -622,8 +646,8 @@ fn invalid_json_closes_connection() {
 | `sidecars.restart.enable-clears-stops` | plugin 하나를 사람이 enable하면 그 plugin이 `dependencies`에 나열한 사이드카마다 정지를 해제해 다음 전송이 사이드카를 시작한다. 어떤 활성 plugin도 나열하지 않은 사이드카의 정지는 그대로 남는다. | all |
 | `sidecars.retain.rejects-after-stop` | 사이드카가 멈춘 뒤 시작한 retain이나 서비스를 준비한 뒤 멈춤이 끼어든 retain은 "sidecars are stopped"로 실패하고 서비스에 retain을 보내지 않는다. | all |
 | `menu.application.view-has-full-screen-and-text-size` | 애플리케이션 메뉴의 View 메뉴에는 전체 화면과 Command `=`, `-`, `0`의 [글자 크기](text-size.ko.md) 항목이 있고, 웹뷰 전체를 확대하거나 다시 읽는 메뉴 항목이 없다. | all |
-| `menu.application.help-has-debug` | 애플리케이션 메뉴의 도움말 메뉴에 단축키 없는 항목 디버그(Debug)가 있다. 이 항목은 main 창의 메인 page에서 `core.debug.open`을 실행한다([디버그 화면](debug.ko.md)). | all |
-| `menu.application.app-has-settings` | 애플리케이션 메뉴의 app 메뉴에 about 항목 바로 다음으로 단축키 Command `,`의 항목 설정…(Settings…)이 있다. 이 항목은 메인 윈도우의 main page에서 `core.settings.open`을 실행한다([settings window](settings.ko.md)). | all |
+| `menu.application.help-has-debug` | 애플리케이션 메뉴의 도움말 메뉴에 단축키 없는 항목 디버그(Debug)가 있다. 이 항목은 main 창의 workbench에서 `core.debug.open`을 실행한다([디버그 화면](debug.ko.md)). | all |
+| `menu.application.app-has-settings` | 애플리케이션 메뉴의 app 메뉴에 about 항목 바로 다음으로 단축키 Command `,`의 항목 설정…(Settings…)이 있다. 이 항목은 메인 윈도우의 workbench에서 `core.settings.open`을 실행한다([settings window](settings.ko.md)). | all |
 | `sidecars.protocol.surface-keeps-its-first-root` | 소유 창의 프로젝트가 바뀐 뒤에도 열린 표면의 요청과 closed 알림은 첫 요청의 root를 가진다. | all |
 | `sidecars.protocol.closed-surface-messages-are-discarded-and-unknown-ones-fail` | 호스트가 닫은 표면에 대한 stdio sidecar 메시지는 버리고, 호스트가 그 프로세스에 한 번도 보내지 않은 표면의 메시지는 보낸 표면에 `unknown surface <surface>`를 전달하며 sidecar를 실패시킨다. | all |
 | `sidecars.protocol.dropped-message-is-recorded` | 소유 창이 없어 버려지는 사이드카 메시지는 `info host sidecar <name>: message for surface <surface> dropped: no window owns the surface: <body>`를 쓴다. | all |
@@ -636,7 +660,7 @@ fn invalid_json_closes_connection() {
 | `sidecars.send.rejects-after-stop` | 사이드카가 멈춘 뒤 보내면 "stopped"로 실패한다. | all |
 | `sidecars.send.rejects-when-no-plugin-declares-sidecars` | 선언된 사이드카가 없으면 생성은 성공하고 모든 보내기는 "not declared by any plugin"으로 실패한다. | all |
 | `sidecars.start.fails-on-missing-executable` | 디스크에 없는 선언된 실행 파일은 첫 보내기를 사이드카 이름과 함께 실패시킨다. | all |
-| `sidecars.start.refuses-zero-hello-timeout` | 영값 `Sidecars`로 영속 서비스를 시작하면 서비스 생성 전에 거부하며 `HelloTimeout`을 이름 붙인 오류를 낸다. | wailsv3 only: Go는 영값 `Sidecars`를 허용하지만 Tauri는 공개 영값 구조체가 아니라 builder로 사이드카 core를 만든다 |
+| `sidecars.start.refuses-zero-hello-timeout` | 영값 `Sidecars`로 영속 서비스를 시작하면 서비스 생성 전에 거부하며 `HelloTimeout`을 이름 붙인 오류를 낸다. | wailsv3, mygo only: Go는 영값 `Sidecars`를 허용하지만 Tauri는 공개 영값 구조체가 아니라 builder로 사이드카 core를 만든다 |
 | `sidecars.start.passes-log-directory` | 표준 입출력 sidecar는 인자 `--log-dir <config-dir>/logs`만 받아 시작한다. | all |
 | `sidecars.declaration.refuses-missing-sidecar-json` | sidecar.json이 없는 설치 sidecar 폴더나 installed.json에 version이 없는 sidecar는 선언되지 않고, 그 sidecar에 대한 요청은 없는 파일이나 그 sidecar를 나열한 plugin.json을 밝히는 `sidecar <name>: <path>: <reason>`으로 실패한다. | all |
 | `installed.sidecars.unreadable-installation-starts-without-sidecars` | `installed.json`이 이전 형식이거나 사용 중인 plugin의 `plugin.json`이 parse되지 않으면, host 시작의 sidecar channel은 선언 없이 만들어지고, host는 `installed plugins: <error>`를 기록하며, 설치된 sidecar에 대한 요청은 `sidecar <name> is not declared by any plugin`으로 실패한다. | all |
@@ -757,7 +781,7 @@ fn invalid_json_closes_connection() {
 | `workspace.settings.refuses-project-file-at-its-project` | 현재 `format`이 없는 프로젝트 설정 파일은 스냅샷에서 그 프로젝트에 `settingsError` `<path>: settings.json: format must be 1`을 주고 `settings`는 주지 않으며, 다른 프로젝트는 `settingsError` 없이 설정을 유지한다. | all |
 | `workspace.snapshot.reports-refused-stored-files` | 다른 형태의 `projects.json`이 있을 때 snapshot은 프로젝트 없이 빈 공통 설정과 `<file>: projects.json: format must be 1`의 `projectsError`를 돌려준다. 다른 형태의 `settings.json`이 있을 때는 빈 공통 설정과 `<file>: settings.json: format must be 1`의 `settingsError`를 돌려준다. 그 뒤 `add`나 공통 `settings` 쓰기는 그 오류로 실패하고 file은 바뀌지 않는다. | all |
 | `exposure.host-buttons.notifies-mask-change` | `host.buttons`는 버튼 source가 마지막으로 보고한 마스크를 담은 `{mask}`이고, 그와 다른 마스크의 보고는 새 값으로 감시자에게 한 번 알리며, 같은 마스크의 보고는 알리지 않는다. | all |
-| `exposure.status-change.refuses-host-name` | 메인 페이지가 `host.`로 시작하는 이름에 보낸 상태 변경은 `the page cannot change host status <name>`으로 거부되고, 다른 이름의 변경은 받아들여진다. | all |
+| `exposure.status-change.refuses-host-name` | workbench가 `host.`로 시작하는 이름에 보낸 상태 변경은 `the page cannot change host status <name>`으로 거부되고, 다른 이름의 변경은 받아들여진다. | all |
 | `images.calls.name-the-call` | 인자 해석 뒤 image 영역 호출의 실패는 호출 이름 `imageAttach`, `imageFocus`, `imageCaret`, `imageText`, `imageDetach`를 붙인 `<call>: <reason>`이다. | all |
 | `host-calls.decode.messages` | 인자 decoder는 빠졌거나 `null`인 필수 field, 다른 JSON 형식의 값, 정수 field 범위 밖이거나 소수인 수, `null` 인자, 길이가 다른 고정 길이 배열을 [host 호출](native-host.ko.md#host-호출)의 message로 거부하고, 빠졌거나 `null`인 선택 field는 받는다. | all |
 | `host-calls.native.image-argument-lists` | surface 페이지의 요청 하나와 좌표 넷인 `ImageCaret` 호출과 요청 하나와 텍스트인 `ImageText` 호출은 각자의 인자 목록으로 해석되어 호출자 확인에 닿는다. | wailsv3 only: Wails page runtime은 surface 페이지 호출을 native bridge로 보내고 host가 그 인자 목록을 해석한다. Tauri surface 페이지는 메인 페이지의 명령을 부른다. |
@@ -770,8 +794,8 @@ fn invalid_json_closes_connection() {
 | `window-close.surfaces.closes-regions-then-surface` | 창을 닫으면 논리 표면마다 id 순서로 그 문서 영역과 그림 영역을 닫은 뒤 표면을 닫고, 그 이름을 창의 문서 영역 목록과 그림 영역 목록에서 지운다. | all |
 | `window-close.native-window.used-in-reading-step` | native 창을 쓰는 host 요청은 native 창을 native code에 넘기는 main thread 단계에서 읽으므로(Wails host에서는 main thread가 그 단계를 위해 C에서 기다리는 동안 worker가 읽고, main thread가 같은 단계에서 실행하는 C 호출로 넘긴다: [hosts](hosts.ko.md#wails-host의-main-thread)), 요청의 앞선 단계 뒤에 main thread가 처리한 닫기가 닫힌 창을 native code에 넘기지 않는다. 그 단계 전에 닫힌 창은 native code에 닿지 않고, 요청은 오류 1003 `window "<name>" does not exist`로 실패한다. | all |
 | `window-close.surfaces.reports-every-failure` | 네이티브 닫기 하나가 실패해도 나머지를 닫고, 창 닫기는 모든 실패를 표면 id 와 객체 종류와 함께 반환한다. | all |
-| `host.main-thread.runs-no-code-outside-own-stack` | Go host가 main-thread step(Wails host에서는 각 exported callback, `EnqueueUI`, `application.InvokeSync`, Dock menu callback, memory pressure callback, stall heartbeat, 비동기 signal, mygo host에서는 U1의 worker에서 실행되는 `App.Run`의 Go 코드, framework의 각 Objective-C method와 block, 각 C callback)을 실행하는 동안, main thread의 stack pointer를 표본한 값은 모두 main thread의 stack 안에 있다. | wailsv3 only: Tauri host는 main thread의 stack 위에서 Rust를 실행하므로 표본할 Go stack이 없다 |
-| `host.main-thread.start-requires-both-functions` | macOS에서 Go language host library의 시작은 첫 native call 전에 `main-thread functions are not installed`와 framework adapter가 설치하지 않은 함수 각각의 이름으로 실패한다. | wailsv3 only: Rust language host library는 Tauri host의 main thread에서 실행되며 main-thread 함수가 없다 |
+| `host.main-thread.runs-no-code-outside-own-stack` | Go host가 main-thread step(Wails host에서는 각 exported callback, `EnqueueUI`, `application.InvokeSync`, Dock menu callback, memory pressure callback, stall heartbeat, 비동기 signal, mygo host에서는 U1의 worker에서 실행되는 `App.Run`의 Go 코드, framework의 각 Objective-C method와 block, 각 C callback)을 실행하는 동안, main thread의 stack pointer를 표본한 값은 모두 main thread의 stack 안에 있다. | wailsv3, mygo only: Tauri host는 main thread의 stack 위에서 Rust를 실행하므로 표본할 Go stack이 없다 |
+| `host.main-thread.start-requires-both-functions` | macOS에서 Go language host library의 시작은 첫 native call 전에 `main-thread functions are not installed`와 framework adapter가 설치하지 않은 함수 각각의 이름으로 실패한다. | wailsv3, mygo only: Rust language host library는 Tauri host의 main thread에서 실행되며 main-thread 함수가 없다 |
 | `host.stall.recorded-without-a-check` | main run loop가 event를 처리하는 동안 main thread 밖의 thread가 250 ms마다 main thread에 heartbeat를 보낸다. 1 s 이상 늦은 heartbeat는 `host.stall`(`late_ms`)을 저장하고, `logs/stall-host-<pid>-<ms>.txt`로 표본한 thread들의 stack은 `host.stall.sampled`(`path`, 파일을 쓰지 못했으면 `error`)를 저장하며, 다음 heartbeat는 `host.stall.resumed`(`stalled_ms`)를 저장한다. window check 없이 그렇게 한다. 기본 정책은 앞의 두 기록을 gate 예외([정책](logging.ko.md#정책))로 저장한다. | all |
 | `host.stall.watch-late-separates-scheduling` | 감시 thread가 heartbeat와 함께 늦게 깨어나면, `host.stall`(`late_ms`)은 감시 thread가 250 ms 박자를 넘어 깨어난 시간인 `watch_late_ms`를 가져, `watch_late_ms`가 `late_ms`의 절반 이상이다. | all |
 | `host.stall.watch-late-separates-blocked-main` | 감시 thread가 제때 깨어나고 heartbeat만 늦으면, `host.stall`은 `watch_late_ms` 0을 가져, `late_ms`의 절반 미만이다. | all |
@@ -829,7 +853,7 @@ fn invalid_json_closes_connection() {
 | `modal.ready-visible` | 열린 모달의 ready 요청은 모달을 표시하고 visible 플래그를 설정한 뒤, 둘 다 끝난 후에 메인 스레드에서 응답한다. 표시가 실패하면 그 오류로 응답하고 모달은 다음 ready 요청까지 대기 상태로 남는다. id와 instance가 열린 모달의 것이 아닌 ready 요청은 오래된 요청이다. 아무것도 바꾸지 않고 ok로 응답하며, 이벤트 `host.trace.modal.stale-ready`를 `modal`과 `instance`와 함께 기록한다. | all |
 | `modal.dialog-blurs-each-document-and-image-region` | Dialog를 열면 window의 각 document web view와 각 image region에 native blur를 걸고, 닫으면 걷는다. | all |
 | `modal.region-under-a-dialog-starts-blurred` | Dialog가 열린 동안 만든 image region은 흐린 상태로 시작하고, dialog가 없는 동안 만든 것은 blur 없이 시작한다. | all |
-| `reload.timeout.names-running-calls` | 범위 안에 page가 준비를 알리지 않은 다시 읽기는 `the reloaded page did not report ready within <bound>; running host calls: <calls>`로 실패하며, `<calls>`는 그 window에서 돌아오지 않은 호출을 시작 순서로 각각 소수 한 자리의 `<name> <seconds>s`로 적거나 `none`이다. | all |
+| `reload.timeout.names-running-calls` | 범위 안에 workbench가 준비를 알리지 않은 다시 읽기는 `the reloaded page did not report ready within <bound>; running host calls: <calls>`로 실패하며, `<calls>`는 그 window에서 돌아오지 않은 호출을 시작 순서로 각각 소수 한 자리의 `<name> <seconds>s`로 적거나 `none`이다. | all |
 | `log.batch.requires-the-start` | 자신을 쓴 workbench의 start를 `start`에 이름하지 않은 workbench 배치의 event는 `start must name the start of the workbench that wrote the event`로, `page`를 이름한 event는 `page is not a member of an event of the workbench`로 거부된다. | all |
 | `debug.save-text.writes-the-text-to-the-destination` | 글 저장은 요청의 글을 줄바꿈과 ASCII가 아닌 글자를 그대로 둔 채 목적지에 쓴다. | all |
 | `debug.save-text.refuses-a-name-that-is-not-a-file-name-and-text-that-is-empty-or-too-large` | 빈 이름, `.`, `..`, `/`나 `\`를 가진 이름은 `debug: name "<name>" is not a file name`으로, 빈 글은 `debug: text is empty`로, 16 MiB를 넘는 글은 `debug: text is <n> bytes, over the limit of 16777216`으로 요청을 거절한다. | all |
@@ -867,32 +891,32 @@ fn invalid_json_closes_connection() {
 | `debug.read.returns-the-end-of-a-text-file` | `debugRead`는 `logs/` 아래 글 파일의 전체 내용을, 더 크면 문자 경계에서 시작하는 마지막 262144 byte를 `truncated` true와 함께 `kind` `text`인 `{path, size, truncated, kind, text}`로 답한다. | all |
 | `debug.read.returns-a-png-file-as-an-image` | `debugRead`는 PNG 파일 전체의 `data:image/png;base64,` 주소를 `kind` `image`인 `{path, size, truncated, kind, image}`로 답하고, PNG signature로 시작하지 않는 `.png` 파일과 16 MB보다 큰 PNG 파일은 거부한다. | all |
 | `debug.read.refuses-a-path-outside-logs-and-a-file-that-is-not-text` | `debugRead`는 `logs/` 밖의 경로, 파일이 아닌 경로, 내용이 UTF-8 글이 아닌 파일을 그 경로를 밝히는 오류로 거부한다. | all |
-| `assets.missing.writes-one-error-line-for-each-path` | host가 내줄 수 없는 page 파일 요청은 그 경로마다 한 번 `error host page asset: <path>: not found`로 알리고, 내준 파일은 알리지 않으며, 파일 확장자가 없는 경로도 알리지 않는다. | all |
+| `assets.missing.writes-one-error-line-for-each-path` | host가 내줄 수 없는 page 파일 요청은 그 경로마다 한 번 `error host page asset: <path>: not found`로 알리고, 내준 파일은 알리지 않으며, 파일 확장자가 없는 경로도 알리지 않는다. | wailsv3, tauriv2 only: mygo host에는 이 줄이 보고하는 파일의 main page가 없다 |
 | `assets.missing.does-not-answer-with-the-start-document` | 파일 확장자가 있고 어떤 파일도 가리키지 않는 경로의 요청은 두 host의 파일 서버에서 시작 문서로 답하지 않는다. Wails 서버는 404로, Tauri 프레임워크는 asset 오류로 답한다. | tauriv2 only: Tauri 프레임워크는 `<path>`, `<path>.html`, `<path>/index.html`을 찾고 시작 문서로 대신한다. Wails 서버는 스스로 404로 답한다 |
 | `assets.missing.runtime-optional-file-is-not-reported` | Wails runtime이 요청하고 애플리케이션이 제공하지 않는 runtime 파일 `/wails/custom.js`는 알리지 않는다. | wailsv3 only: Wails runtime이 이 선택 파일을 설계상 요청한다 |
-| `page.process.termination-writes-an-error-line` | host가 실행되는 동안 창의 WebContent process가 끝나면 host는 그 종료마다 한 번 `error host page process: <window>: terminated`를 쓴다. 단 host가 종료하는 동안은 process를 일부러 끝내므로 쓰지 않는다. | all |
+| `page.process.termination-writes-an-error-line` | host가 실행되는 동안 창의 WebContent process가 끝나면 host는 그 종료마다 한 번 `error host page process: <window>: terminated`를 쓴다. 단 host가 종료하는 동안은 process를 일부러 끝내므로 쓰지 않는다. | wailsv3, tauriv2 only: mygo host에는 이 줄이 보고하는 WebContent process의 main page가 없다 |
 | `quit.cancel.ends-the-quit-state` | 시작한 종료 상태는 `windowCloseKept`가 취소할 때까지 유지된다. 시작과 취소는 멱등이고, `host.window`가 이 상태를 `quitting`으로 보고한다. | all |
 | `quit.request.begins-the-quit-state` | quit 요청은 준비된 창이 있든 없든 quit을 실행하기 전에 종료 상태를 시작하므로, 그 종료 중의 page process 종료는 오류 줄을 쓰지 않는다. | all |
 | `project-removal.ask.waits-for-the-owner-answer` | 프로젝트의 제거 요청은 그 프로젝트를 보이는 창의 답으로 이행한다. 요청이 대기 중인 프로젝트에 대한 두 번째 요청, 요청 없는 답, 올바르지 않은 project id는 오류로 실패하고, 요청을 받은 창이 끝나면 제거해도 된다고 답한 것으로 본다. | all |
 | `project-removal.abandon.records-each-allowed-removal` | 제거에 대한 질문을 받은 창이 끝나면 제거를 허용하고, 그 요청마다 `window`와 `project`를 가진 event `host.project.removal_allowed`를 저장한다. 다른 창의 요청에는 저장하지 않는다. | all |
-| `project.open-ready-shown-order` | project를 열 때 page가 새 project를 선택하기 전까지 이전에 commit된 project를 유지하며, 선택 전에는 staged project를 게시하지 않는다. | all |
-| `project.open.prepare-before-show` | 이미 보이는 project를 다시 열 때 page가 그 project의 root를 선택하기 전까지 commit된 root를 유지한다. | all |
-| `project.open.registers-owner-without-commit` | 새 project를 열 때 owner는 등록하지만 page가 표시된 project를 알릴 때까지 기존 commit 상태를 유지하고 project를 게시하지 않는다. | all |
-| `project.open.staged-until-shown` | project owner는 project를 여는 동안 staged 상태로 남고, page가 표시된 project를 알린 뒤에만 commit된다. | all |
+| `project.open-ready-shown-order` | project를 열 때 workbench가 새 project를 선택하기 전까지 이전에 commit된 project를 유지하며, 선택 전에는 staged project를 게시하지 않는다. | all |
+| `project.open.prepare-before-show` | 이미 보이는 project를 다시 열 때 workbench가 그 project의 root를 선택하기 전까지 commit된 root를 유지한다. | all |
+| `project.open.registers-owner-without-commit` | 새 project를 열 때 owner는 등록하지만 workbench가 표시된 project를 알릴 때까지 기존 commit 상태를 유지하고 project를 게시하지 않는다. | all |
+| `project.open.staged-until-shown` | project owner는 project를 여는 동안 staged 상태로 남고, workbench가 표시된 project를 알린 뒤에만 commit된다. | all |
 | `project.open.other-owner-is-shown-without-activation` | 다른 창이 가진 project를 열면 응용의 활성화를 요청하지 않은 채 그 창을 보인다. | all |
 | `project.open.front-is-recorded` | project owner의 창을 보이게 하면 event `host.project.front`를 level `info`로 저장한다. 필드는 `window`, `project`, `key`(보이게 한 뒤 그 창이 key window인지)와 `app_active`(응용이 활성 상태인지, 그 상태를 읽지 못하면 null)다. | all |
 | `projects.open.geometry-failure-closes-before-reservation` | 새 project window의 geometry 설정이 실패하면 host는 owner reservation을 추가하기 전에 그 window를 닫고 다른 project 상태는 유지한다. | tauriv2 only: Tauri window geometry operation은 오류 결과를 반환한다 |
-| `project.shown-commits-after-page-ready` | Page가 선택한 project를 알린 뒤 host가 해당 project를 commit한다. 게시되는 값은 commit된 상태를 반영하며, project 없음 선택은 그 상태를 지운다. | all |
+| `project.shown-commits-after-page-ready` | workbench가 선택한 project를 알린 뒤 host가 해당 project를 commit한다. 게시되는 값은 commit된 상태를 반영하며, project 없음 선택은 그 상태를 지운다. | all |
 | `projects.shown.requires-project-field` | Project-shown 요청에는 `project` member가 필요하다. 명시적 `null`은 표시 project를 지우며, member를 생략하면 상태 변경 전에 거부한다. | all |
 | `projects.shown-validates-before-commit` | Staged project와 root가 일치하지 않는 project-shown 요청은 commit된 상태나 staged 상태를 바꾸지 않고 거부된다. | all |
 | `projects.release-rolls-back-staged-owner` | Pending project를 release하면 다른 owner의 reservation이나 commit된 project는 바꾸지 않고 해당 owner reservation을 제거한다. | all |
-| `projects.shown-command-is-registered` | Main page는 등록된 project-shown command로 선택한 project를 commit할 수 있다. | all |
+| `projects.shown-command-is-registered` | workbench는 등록된 project-shown command로 선택한 project를 commit할 수 있다. | all |
 | `project.shown.ignores-unknown-fields` | project-shown 입력에는 `project` member가 필요하며 값은 `null`일 수 있고, member 생략은 거부된다. 알 수 없는 바깥쪽 및 중첩 field는 무시하고 인식하는 project data를 commit하며 명시적 `null`은 commit된 project를 지운다. | all |
 | `debug.record.writes-the-state-file` | 기록은 주어진 상태와 UTC `time` `YYYYMMDDTHHMMSSZ`를 담은 `logs/state-<time>.json`을 쓰고 그 상대 경로로 답한다. | all |
 | `debug.record.names-the-value-of-the-workbench` | 상태 파일은 요청이 member `workbench`로 준 workbench의 값을 담고, member `page`는 없다. | all |
 | `debug.record.keeps-the-newest-20-state-files` | 상태 파일을 쓴 뒤 host는 시각으로 가장 새 20개를 넘는 `logs/state-<time>.json` 파일을 지우고 `logs/`의 다른 파일은 둔다. | all |
 | `cli.identity.build-identifier` | `dev` 플래그 build는 `app.soksak.<wails, mygo 또는 tauri>.dev`를 쓰고, 진단 build를 포함한 다른 build는 `app.soksak.<wails, mygo 또는 tauri>`를 쓴다. | all |
-| `cli.command.host-command-without-page` | `host.` command는 `owner`가 `host`인 `exposure.list`로 검사되므로, main page가 노출 목록에 답하지 않는 동안에도 `command.run`으로 실행된다. | all |
+| `cli.command.host-command-without-page` | `host.` command는 `owner`가 `host`인 `exposure.list`로 검사되므로, workbench가 노출 목록에 답하지 않는 동안에도 `command.run`으로 실행된다. | all |
 | `cli.command.flags-from-schema` | 선언된 command는 창, surface, 그리고 선언된 schema로 flag에서 바꾼 매개변수와 함께 `command.run`으로 실행된다. 텍스트, 숫자, 정수, boolean, enum 값, nullable type의 `null`, JSON 객체와 배열, `--`로 시작하며 `=` 뒤에 준 값이며, `--params`는 객체 전체를 준다. | all |
 | `cli.command.rejects-undeclared-or-invalid-values` | 선언되지 않은 flag, schema와 맞지 않는 값, 값이 없는 flag, 값이 따라오는 boolean, 매개변수 flag와 함께 쓴 `--params`, 선언되지 않은 command는 `command.run`을 보내기 전에 종료 상태 2로 끝난다. | all |
 | `cli.commands.lists-declared-commands` | `sok commands`는 `exposure.list`의 `commands` 목록을 애플리케이션이 선언한 순서대로 출력한다. | all |
@@ -942,7 +966,7 @@ fn invalid_json_closes_connection() {
 | `cli.process-wait.timeout-is-an-error` | 요청한 timeout이 끝날 때까지 process가 남아 있으면 `sok process wait`는 exit 1로 끝나고 표준 출력을 쓰지 않으며 PID와 timeout을 보고한다. | all |
 | `cli.process-wait.reports-pid-absent` | PID가 이미 없으면 `sok process wait`는 exit 0으로 끝나고 `{pid, ended: true}`를 출력한다. | all |
 | `cli.process-wait.platform-error-is-reported` | 운영체제의 process-wait operation이 실패하면 `sok process wait`는 exit 1로 끝나고 표준 출력을 쓰지 않으며 platform 오류를 보고한다. | all |
-| `cli.process-wait.registered-platform-receives-request` | Go `sok`의 등록된 process-wait 구현은 요청한 PID와 timeout을 받고 command는 그 결과를 직렬화한다. | wailsv3 only: Go CLI는 변경 가능한 platform 등록 API를 제공한다 |
+| `cli.process-wait.registered-platform-receives-request` | Go `sok`의 등록된 process-wait 구현은 요청한 PID와 timeout을 받고 command는 그 결과를 직렬화한다. | wailsv3, mygo only: Go CLI는 변경 가능한 platform 등록 API를 제공한다 |
 | `cli.debug.query-golden-lines` | `sok debug query`가 모든 사례에서 `docs/spec/cases/log-contract/query`의 golden page의 글 줄을 debug 화면과 같은 줄로 출력하고, 행이 page 뒤에 더 있으면 표준 오류에 `more: --after <cursor>`를 쓴다. | all |
 | `cli.debug.query-errors` | `sok debug query`는 event 파일이 event 구조를 어기면 파일과 줄 번호를 담은 오류로, `logs/` 폴더가 없으면 폴더를 담은 오류로 실패한다. | all |
 | `cli.debug.reports-a-rejected-file` | `sok debug query`는 다른 파일의 줄을 상태 0으로 출력하고, `sok debug query`와 `sok debug replay`는 schema 번호가 다른 파일마다 표준 오류에 `rejected: <error>`를 쓴다. | all |
@@ -957,11 +981,11 @@ fn invalid_json_closes_connection() {
 | `cli.debug.replay-input-cases` | 도구의 재생 입력 규칙은 `docs/spec/cases/log-contract/replay/inputs.json`의 모든 case를 재현한다: valid 입력, 문구가 있는 invalid 입력, problem이 있는 session. | all |
 | `cli.debug.replay-errors` | `sok debug replay`는 sidecar event가 없는 session, 두 role의 sidecar event가 있는 session, 그 role을 선언한 설치된 sidecar가 없는 경우, frame 기록이 없는 경우, 소문자 16진 64자가 아닌 저장된 hash, 실패하거나 `{"sequence", "hash"}`가 아닌 줄을 출력하거나 frame 기록의 hash를 출력하지 않는 재생 실행 파일에서 불일치가 아닌 오류로 실패한다. | all |
 | `cli.log.records-each-command-with-its-result` | `sok`을 실행할 때마다 대상 설정 디렉터리에 `logs/sok-<boot>.jsonl`을 쓴다. `seq` 1의 `log.open`, 이어서 명령 단어, 공백으로 이은 인자, 마이크로초, `ok`, `status`, 상태가 0이 아니면 표준 오류의 첫 줄인 `error`를 담은 `sok.command`가 level `debug` 또는 `warn`으로 저장되며, 모든 줄이 층 `sok`, `ts_us`, `mono_ns`를 가진다. | all |
-| `cli.log.registered-platform-file-operations` | Go `sok`에서 `StartToolEventLog`는 현재 등록된 platform 구현의 `PrepareLogDirectory`와 `CreateLogFile`을 각각 한 번 호출한다. | wailsv3 only: 이 case는 Go의 변경 가능한 platform 등록을 통한 dispatch를 규정한다. Tauri는 target에 따라 platform 구현을 선택한다 |
-| `cli.log.registered-platform-prepare-error` | Go `sok`에서 현재 등록된 platform의 `PrepareLogDirectory`가 error를 돌려주면 `Logged`는 표준 오류에 `sok: event log: <reason>`을 쓰고 command를 실행해 command status를 반환하며 `logs/` 경로를 만들지 않는다. | wailsv3 only: 이 case는 Go의 변경 가능한 platform 등록의 실패 처리를 규정한다. Cross-host event-log 시작 동작은 `cli.log.reports-a-folder-that-cannot-be-written`이 다룬다 |
+| `cli.log.registered-platform-file-operations` | Go `sok`에서 `StartToolEventLog`는 현재 등록된 platform 구현의 `PrepareLogDirectory`와 `CreateLogFile`을 각각 한 번 호출한다. | wailsv3, mygo only: 이 case는 Go의 변경 가능한 platform 등록을 통한 dispatch를 규정한다. Tauri는 target에 따라 platform 구현을 선택한다 |
+| `cli.log.registered-platform-prepare-error` | Go `sok`에서 현재 등록된 platform의 `PrepareLogDirectory`가 error를 돌려주면 `Logged`는 표준 오류에 `sok: event log: <reason>`을 쓰고 command를 실행해 command status를 반환하며 `logs/` 경로를 만들지 않는다. | wailsv3, mygo only: 이 case는 Go의 변경 가능한 platform 등록의 실패 처리를 규정한다. Cross-host event-log 시작 동작은 `cli.log.reports-a-folder-that-cannot-be-written`이 다룬다 |
 | `cli.log.records-a-panic-with-its-stack` | 명령의 panic은 `sok.panic`(thread `main`, 글, panic한 함수를 가리키는 stack)과 상태 4의 `sok.command`를 저장하고, `sok: panic: <text>`를 표준 오류의 맨 앞에 쓰며, 호출자에게 닿지 않고 상태 4를 돌려준다. | all |
 | `cli.log.records-a-panic-of-a-routine-and-ends-the-process` | 도구가 시작한 goroutine이나 thread의 panic은 routine의 이름과 stack을 담은 `sok.panic`을 저장하고 프로세스를 상태 4로 끝낸다. | all |
-| `cli.log.writer-options.refuses-a-negative-rotation-bound` | rotation 한도가 0 미만인 writer는 한도를 이름으로 가진 오류로 거부된다. | wailsv3 only: Rust writer의 rotation 한도는 부호 없는 수여서 음수일 수 없다 |
+| `cli.log.writer-options.refuses-a-negative-rotation-bound` | rotation 한도가 0 미만인 writer는 한도를 이름으로 가진 오류로 거부된다. | wailsv3, mygo only: Rust writer의 rotation 한도는 부호 없는 수여서 음수일 수 없다 |
 | `cli.log.writer-options.stores-the-layer-the-clock-and-the-cids` | rotation이 없는 writer는 옵션이 주는 layer, 시계, correlation identifier를 저장하고 rotation하지 않는다. | all |
 | `cli.log.writer-options.rotates-at-its-bound` | rotation 한도가 있는 writer는 한도에서 새 파일을 쓰고, 새 파일은 `log.open`과 `log.rotated`로 시작한다. | all |
 | `cli.log.writer.poisoned-observer-lock-is-recovered` | panic한 thread가 poison한 write observer의 lock은 복구된다. observer는 여전히 설정되고 다음에 쓴 batch 뒤에 호출된다. panic hook이 panic을 기록한다. | tauriv2 only: Go mutex는 poison되지 않는다 |
@@ -1007,11 +1031,12 @@ fn invalid_json_closes_connection() {
 | `installed.document.refuses-package` | Plugin이 `package`를 담은 `installed.json`은 `{"error":"<file>: plugins/installed.json <id>: unknown field package"}`다. | all |
 | `installed.document.reports-errors` | 켜진 plugin의 `plugin.json`이 없거나 잘못되었거나, `diagnostics.json`이나 `installed.json`이 잘못되었으면 `/installed-plugins.json`은 파일과 이유를 담은 `{"error":...}`다. | all |
 | `installed.document.sidecar-facts` | `/installed-plugins.json`의 plugin `sidecars` 항목은 사이드카 의존마다 그 사이드카의 `sidecar.json`에 있는 `message`를 사이드카 이름 아래 담으며, 사이드카 의존이 없는 plugin에는 `sidecars` 필드가 없다. | all |
+| `installed.document.acceptance-of-the-workbench` | Go `sok`는 page 없는 workbench를 위해 `/installed-plugins.json`을 받아들인다. 거절된 plugin은 그 오류와 함께 빼고, 오류 문서는 plugin을 받지 않고 그 오류로 답하며, 다른 형식이거나 plugin이 두 번 있는 문서는 오류이고, 항목은 page의 규칙을 따르며, plugin의 sidecar 사실은 그 dependency다. | mygo only: Wails와 Tauri host의 workbench는 page의 JavaScript에서 이 문서를 받아들인다 |
 | `installed.plugin-json.invalid-text` | 켜진 plugin의 `plugin.json`이 JSON이 아니면 두 host 모두 `/installed-plugins.json`은 `{"error":"<file> is not valid JSON"}`다. host마다 다른 parser 세부는 담지 않는다. | all |
 | `installed.json.invalid-text` | `installed.json`이 JSON이 아니면 두 host 모두 `/installed-plugins.json`은 `{"error":"<file> is not valid JSON"}`다. host마다 다른 parser 세부는 담지 않는다. | all |
 | `installed.package-json.invalid-text` | 켜진 plugin의 `package.json`이 JSON이 아니면 두 host 모두 `/installed-plugins.json`은 `{"error":"<file> is not valid JSON"}`다. host마다 다른 parser 세부는 담지 않는다. | all |
 | `page.start.document` | 시작 문서는 작업 공간 스냅샷, window의 `windowControls` 답, pending image detach가 있는 surface의 byte 순서 목록을 이 순서로 담은 `{"workspace":...,"controls":...,"pendingSurfaces":[...]}`다. | all |
-| `page.start.snapshot-error-carries-controls` | page 시작의 작업 공간 스냅샷이 실패하면 host는 설정이 없을 때의 title bar를 설정하고, 그 뒤 `windowControls`를 읽으며, `workspace` 대신 스냅샷 오류를 담은 `{"error":...,"controls":...,"pendingSurfaces":[...]}`로 답한다. | all |
+| `page.start.snapshot-error-carries-controls` | page 시작의 작업 공간 스냅샷이 실패하면 host는 설정이 없을 때의 title bar를 설정하고, 그 뒤 `windowControls`를 읽으며, `workspace` 대신 스냅샷 오류를 담은 `{"error":...,"controls":...,"pendingSurfaces":[...]}`로 답한다. | wailsv3, tauriv2 only: 시작 문서는 main page의 것이고, mygo host의 workbench는 host call로 시작을 읽는다 |
 | `page.start.requires-window` | 시작 문서 요청은 요청한 window를 시작한 뒤 문서를 `no-store`인 `application/json`으로 답하고, 요청이 window를 가리키지 않으면 아무것도 시작하지 않고 400과 `the start document request names no window`로 실패하며, 시작이 실패하면 500과 그 이유로 실패한다. | all |
 | `page.start.sok-core-owner` | Tauri는 시작 문서를 `soksak://core/start.json`에서 내보낸다. 다른 owner의 `soksak` 주소는 창을 시작하지 않고 404와 `soksak://<owner>/start.json not found`로 답한다. | tauriv2 only: Wails는 시작 문서를 asset server의 `/start.json`에서 내보낸다 |
 | `plugins.state.reports-registry-and-installed` | `pluginsState`는 실행 중인 core의 version을 `core`로 돌려주고, `plugins/registry.json`이 없으면 `registry`와 `index`를 `null`로, 있으면 index URL과 검사한 index를, 읽거나 검사하지 못한 index는 `index`를 `{"error":...}`로 돌려주고, `installed.json`의 내용 또는 없을 때 빈 format 1 문서를 돌려준다. | all |
@@ -1043,6 +1068,7 @@ fn invalid_json_closes_connection() {
 | `log.writer.files-are-private` | 로그 폴더는 mode 0700, 로그 파일은 mode 0600이다. | all |
 | `log.writer.output-follows-the-contract` | writer의 파일은 자신의 event를 선언한 catalog에 대해 `@soksak/log-contract` 감사를 통과한다. | all |
 | `log.writer.flush-at-exit` | `flush`는 받아들인 모든 event가 디스크에 기록된 뒤 돌아오며, 기한이 지나면 실패한다. | all |
+| `log.writer.flush-behind-a-flush-or-a-stop-is-answered` | writer가 다른 flush 요청이나 stop 뒤에서 찾은 flush 요청은 답을 받고 그 뒤의 event는 저장되며, 끝난 writer의 flush는 deadline이 아닌 오류로 바로 실패한다. | all |
 | `log.writer.relays-events-with-their-layer-and-time` | host의 writer는 프로세스의 다른 계층이 중계한 event를 그 event의 `layer`, `ts_us`, `mono_ns`, `cids`와 writer의 `seq`로 저장하고, 계층으로 시작하지 않는 event 이름, 계약에 없는 계층, 0인 `mono_ns`, 유효하지 않은 식별자는 오류로 거부한다. | all |
 | `log.writer.names-the-writing-document` | 중계된 event는 자신을 쓴 문서를 layer `workbench`이면 `start`에, layer `page`이면 `page`에, layer `plugin`이면 둘 중 정확히 하나에 이름한다. writer는 이름한 member를 저장하고, member가 없는 event(`the event <name> of the layer <layer> names its writer in start`, `… in page or start`), layer `plugin`의 event에 두 member가 모두 있는 경우(`… names its writer in one of page and start, not both`), layer가 허용하지 않는 member(`the event <name> of the layer <layer> names page, which only an event of the layer page or plugin names`, `start`이면 `workbench or plugin`)를 거부한다. | all |
 | `log.writer.rotates-at-the-bound-and-keeps-generations` | writer는 파일을 `rotate_bytes`를 넘게 될 줄 앞에서 닫고, 닫은 파일을 하나도 지우지 않고 세대 `.1`부터 `.N`으로 보관하고, 새 파일을 `log.open`과 `log.rotated`로 시작하되 `seq`를 이어 가고, 모든 세대가 계약의 파일이다. | all |
@@ -1052,6 +1078,7 @@ fn invalid_json_closes_connection() {
 | `log.native.counts-refused-records-and-ring-loss` | writer는 native ring이 거부한 event를 이유 `the native ring was full`의 `log.dropped`로 세고, 계층 `native` 밖의 이름, 정의되지 않은 level이나 class, JSON 객체가 아닌 field, 맞지 않는 길이를 가진 pull한 record를 이유 `a native record was refused`의 `log.dropped`로 센다. | all |
 | `log.native.wake-stores-a-record-at-once` | native ring의 wake는 잠든 writer를 ring으로 데려가므로, 나중에 도착한 record는 flush 요청 없이 즉시 저장된다. | all |
 | `log.native.close-stores-the-ring` | writer를 닫으면 native ring의 record를 저장하며, wake를 받지 못한 record도 저장한다. | all |
+| `log.native.pull-needs-a-wake` | source의 pull이 있고 wake가 없는 writer는 wake를 말하는 오류로 시작에 실패한다. | all |
 | `log.native.platform-pulls-the-ring` | 플랫폼은 빈 native ring을 0바이트와 손실 없음으로 pull하고, 빈 buffer로의 pull은 거부한다. | all |
 | `log.native.platform-reads-the-clock-and-takes-the-boot` | 플랫폼은 양수이고 줄어들지 않으며 시간과 함께 늘어나는 monotonic clock(나노초)을 읽고, 실행의 boot 식별자를 native 계층의 상관 식별자용으로 받는다. 빈 식별자와 영문자, 숫자, `-`, `_` 외의 문자가 있는 식별자는 거부한다. | all |
 | `log.native.host-writer-starts-with-the-platform-pull` | host의 writer는 플랫폼의 pull과 함께 시작하고 `log.open`을 먼저 쓴다. | all |
@@ -1100,8 +1127,8 @@ fn invalid_json_closes_connection() {
 | `bounds.producer.fields-are-cut-while-serialized` | host event의 fields는 1,048,576바이트까지만 직렬화한다. 상한을 넘는 값은 `fields` `{"head": <첫 4,096바이트>}`와 상한을 막 넘은 `truncated`(직렬화가 멈출 때까지 쓴 바이트 수)로 저장하고, 상한에 들어가는 fields는 그 JSON으로 저장한다. | all |
 | `bounds.producer.record-text-is-cut` | host record의 `text`는 최대 8,192바이트, `where`는 최대 1,024바이트이며 각각 문자 경계에서 자르고, 둘 중 하나라도 잘렸으면 fields에 `truncated: true`가 있다. | all |
 | `bounds.start-buffer.holds-at-most-four-mebibytes` | record의 시작 buffer는 record 1,024개 외에 최대 4,194,304바이트를 담고, writer는 거절한 record와 그 바이트를 `log.dropped`로 센다. | all |
-| `bounds.endpoint.topic-changes-hold-at-most-256` | topic 하나의 구독 변경 256개가 page를 기다리면 다음 변경은 적용하지 않고, 오류 코드 `-32000`과 topic과 256을 말하는 메시지로 답하며, buffer `endpoint topic changes`와 이유 `the buffer holds 256 messages`를 가진 `host.buffer.dropped`로 저장한다. | all |
-| `bounds.endpoint.output-queue-holds-at-most-sixteen-mebibytes` | 연결의 출력 큐가 16,777,216바이트를 넘게 담게 하는 frame은 거절하고, buffer `endpoint output queue`와 이유 `the buffer holds 16777216 bytes`를 가진 `host.buffer.dropped`로 저장하며, 연결을 닫는다. | wailsv3 only: Go host는 연결의 frame을 writer goroutine이 비우는 큐로 보내지만, Tauri host는 연결을 쥔 채 각 frame을 소켓에 쓴다 |
+| `bounds.endpoint.topic-changes-hold-at-most-256` | topic 하나의 구독 변경 256개가 workbench를 기다리면 다음 변경은 적용하지 않고, 오류 코드 `-32000`과 topic과 256을 말하는 메시지로 답하며, buffer `endpoint topic changes`와 이유 `the buffer holds 256 messages`를 가진 `host.buffer.dropped`로 저장한다. | all |
+| `bounds.endpoint.output-queue-holds-at-most-sixteen-mebibytes` | 연결의 출력 큐가 16,777,216바이트를 넘게 담게 하는 frame은 거절하고, buffer `endpoint output queue`와 이유 `the buffer holds 16777216 bytes`를 가진 `host.buffer.dropped`로 저장하며, 연결을 닫는다. | wailsv3, mygo only: Go host는 연결의 frame을 writer goroutine이 비우는 큐로 보내지만, Tauri host는 연결을 쥔 채 각 frame을 소켓에 쓴다 |
 | `log.record.flush-stores-the-records-written-so-far` | 기록 flush는 지금까지 쓴 기록이 event log에 들어갈 때까지 기다리고, 붙은 writer가 없으면 곧바로 돌아온다. | all |
 | `log.batch.stores-workbench-events-in-order` | workbench의 `log` 중계는 `batch` 요청의 event를 workbench가 준 `start`와 `ts_us`, writer의 `seq`로, 순서대로, 계층 `workbench`에 저장한다. | all |
 | `log.batch.rejects-an-invalid-batch-without-writing` | `log` 중계는 `batch`나 `clock`이 아닌 action, 배열이 아닌 `events`, `workbench.`와 `plugin.` 어느 쪽으로도 시작하지 않는 event 이름, 계약에 없는 level, 양의 정수가 아닌 `ts_us`나 `mono_ns`, 따옴표·역슬래시·제어 문자 없는 비어 있지 않은 문자열의 배열이 아닌 `cids`, 객체가 아닌 `fields`에 대해 배치 전체를 거부하고 그 배치는 아무것도 쓰지 않으며, 오류는 `events[<index>]`를 가리킨다. | all |

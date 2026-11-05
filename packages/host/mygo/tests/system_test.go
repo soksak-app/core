@@ -349,6 +349,7 @@ func dropFiles(t *testing.T, window *adapter.Frontend, x, y float64, paths ...st
 	return over, dropped
 }
 
+// contract: mygo.system.file-drop-reaches-the-workbench
 func TestAFileDroppedOnAWindowReachesItsWorkbenchAsTheTextOfTheFileDropView(t *testing.T) {
 	_, workbench, window := open(t, "drop")
 	folder, err := filepath.EvalSymlinks(t.TempDir())
@@ -395,6 +396,7 @@ func TestAFileDroppedOnAWindowReachesItsWorkbenchAsTheTextOfTheFileDropView(t *t
 	}
 }
 
+// contract: mygo.system.file-drop-reaches-the-workbench
 func TestADropOfAPathThatNoLongerResolvesIsRefused(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "missing")
 	if text, err := adapter.FileDropText(&mygo.FileDropEvent{Paths: []string{missing}}); err == nil || !strings.Contains(err.Error(), missing) {
@@ -402,6 +404,7 @@ func TestADropOfAPathThatNoLongerResolvesIsRefused(t *testing.T) {
 	}
 }
 
+// contract: mygo.system.notification-events-reach-the-workbench
 func TestTheEventsOfTheNotificationCenterReachTheWorkbench(t *testing.T) {
 	run := runStep(t, "notifications")
 	run.expect(t, "event main notification-state")
@@ -439,6 +442,7 @@ func stagedUpdate(t *testing.T, config string) string {
 	return bundle
 }
 
+// contract: mygo.system.update-replaces-the-bundle
 func TestAnUpdateQuitsTheApplicationAndStartsTheCommandThatReplacesItsBundle(t *testing.T) {
 	// The host holds the configuration directory and the bundle with their symbolic links resolved.
 	config, err := filepath.EvalSymlinks(t.TempDir())

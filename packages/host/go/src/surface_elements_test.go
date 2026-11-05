@@ -62,6 +62,7 @@ func elements(t *testing.T, window *elementWindow) (*Surfaces, *elementPlatform)
 	return surfaces, fake
 }
 
+// contract: surface-layout.element-holds-its-views-until-the-next-frame
 func TestAnElementHoldsItsViewsUntilTheNextFrameAfterItLeft(t *testing.T) {
 	surfaces, fake := elements(t, &elementWindow{})
 	element := SurfaceElement{Surface: unsafe.Pointer(new(byte)), Key: unsafe.Pointer(new(byte))}
@@ -82,6 +83,7 @@ func TestAnElementHoldsItsViewsUntilTheNextFrameAfterItLeft(t *testing.T) {
 	}
 }
 
+// contract: surface-layout.element-holds-its-views-until-the-next-frame
 func TestAnElementOfANewViewPageReplacesTheOneOfTheEndedPage(t *testing.T) {
 	surfaces, fake := elements(t, &elementWindow{})
 	host, first, second := unsafe.Pointer(new(byte)), unsafe.Pointer(new(byte)), unsafe.Pointer(new(byte))
@@ -93,6 +95,7 @@ func TestAnElementOfANewViewPageReplacesTheOneOfTheEndedPage(t *testing.T) {
 	}
 }
 
+// contract: surface-layout.element-holds-its-views-until-the-next-frame
 func TestAnElementReleasesItsViewsWhenNoFrameCanFollow(t *testing.T) {
 	surfaces, fake := elements(t, &elementWindow{failing: true})
 	surfaces.setElement("a", SurfaceElement{Surface: unsafe.Pointer(new(byte)), Key: unsafe.Pointer(new(byte))})
@@ -102,6 +105,7 @@ func TestAnElementReleasesItsViewsWhenNoFrameCanFollow(t *testing.T) {
 	}
 }
 
+// contract: surface-layout.element-holds-its-views-until-the-next-frame
 func TestAWindowWithAMainPageHasNoElements(t *testing.T) {
 	surfaces, _ := elements(t, &elementWindow{})
 	surfaces.elements.drawn = false
@@ -112,6 +116,7 @@ func TestAWindowWithAMainPageHasNoElements(t *testing.T) {
 }
 
 // A window without a main page has no first row to wait for: the workbench sets its title bar with its layout.
+// contract: application.window.no-main-page-starts-without-the-page-title-bar
 func TestAWindowWithoutAMainPageStartsWithoutThePageTitleBar(t *testing.T) {
 	surfaces, fake := elements(t, &elementWindow{})
 	if err := surfaces.startTitlebar(Record{}); err != nil {

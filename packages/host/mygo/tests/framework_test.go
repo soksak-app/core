@@ -175,6 +175,7 @@ func TestTheMygoFrameworkNamesTheApplicationOfTheEndpoint(t *testing.T) {
 }
 
 // The adapter installs both main-thread functions, so the start of the library passes its check of them without a test function.
+// contract: host.main-thread.start-requires-both-functions
 func TestTheAdapterInstallsBothMainThreadFunctions(t *testing.T) {
 	system, err := platform.Current()
 	if err != nil {
@@ -186,6 +187,7 @@ func TestTheAdapterInstallsBothMainThreadFunctions(t *testing.T) {
 }
 
 // The port gives logical lengths as float64 and the framework holds integers, so the adapter takes the nearest integer.
+// contract: application.framework.lengths-are-logical-pixels
 func TestALogicalLengthOfThePortIsTheNearestIntegerOfTheFramework(t *testing.T) {
 	for length, want := range map[float64]int{1200: 1200, 1200.4: 1200, 1200.5: 1201, -10.6: -11} {
 		if got := adapter.Pixels(length); got != want {
@@ -194,6 +196,7 @@ func TestALogicalLengthOfThePortIsTheNearestIntegerOfTheFramework(t *testing.T) 
 	}
 }
 
+// contract: mygo.framework.start-builds-the-workbench
 func TestTheStartWithoutAWorkbenchFails(t *testing.T) {
 	err := adapter.Run(nil, host.Options{}, nil)
 	if !errors.Is(err, adapter.ErrNoWorkbench) || err.Error() != "no workbench is installed" {
@@ -201,6 +204,7 @@ func TestTheStartWithoutAWorkbenchFails(t *testing.T) {
 	}
 }
 
+// contract: mygo.framework.steps-and-quit
 func TestStepAndPostRunOnTheMainThreadInOrder(t *testing.T) {
 	framework := adapter.NewFramework(&sceneWorkbench{})
 	var order []string
@@ -219,6 +223,7 @@ func TestStepAndPostRunOnTheMainThreadInOrder(t *testing.T) {
 	}
 }
 
+// contract: mygo.framework.steps-and-quit
 func TestQuitEndsTheApplicationThroughItsQuitListeners(t *testing.T) {
 	child := exec.Command(os.Args[0])
 	child.Env = append(os.Environ(), quitHelper+"=1")
@@ -348,6 +353,7 @@ func TestARunPublishesTheEndpointWritesItsLogAndQuitsOnASignal(t *testing.T) {
 	}
 }
 
+// contract: mygo.framework.window-operations
 func TestDialogsAttachToTheWindow(t *testing.T) {
 	_, _, window := open(t, "dialogs")
 	folder := adapter.FolderDialog(window.Window(), "프로젝트 폴더 선택")
@@ -363,6 +369,7 @@ func TestDialogsAttachToTheWindow(t *testing.T) {
 	}
 }
 
+// contract: mygo.framework.dock-menu-has-the-new-window-item
 func TestTheDockMenuHasTheNewWindowItem(t *testing.T) {
 	framework := adapter.NewFramework(&sceneWorkbench{})
 	opened := make(chan struct{}, 1)
@@ -377,6 +384,7 @@ func TestTheDockMenuHasTheNewWindowItem(t *testing.T) {
 	<-opened
 }
 
+// contract: mygo.framework.start-builds-the-workbench
 func TestAWindowStartsHiddenWithItsWorkbench(t *testing.T) {
 	framework, workbench, window := open(t, "main")
 	if window.Name() != "main" || window.ID() == 0 {
@@ -402,6 +410,7 @@ func TestAWindowStartsHiddenWithItsWorkbench(t *testing.T) {
 	}
 }
 
+// contract: mygo.framework.window-operations
 func TestTheTitleOfTheWindowChanges(t *testing.T) {
 	_, _, window := open(t, "title")
 	window.SetTitle("next")
@@ -410,6 +419,7 @@ func TestTheTitleOfTheWindowChanges(t *testing.T) {
 	}
 }
 
+// contract: mygo.framework.events-and-calls-reach-the-workbench
 func TestEventsAndCallsReachTheWorkbenchOfTheWindow(t *testing.T) {
 	_, workbench, window := open(t, "events")
 	window.Emit("theme", "dark", 1)
@@ -422,6 +432,7 @@ func TestEventsAndCallsReachTheWorkbenchOfTheWindow(t *testing.T) {
 	}
 }
 
+// contract: mygo.framework.window-operations
 func TestSizeAndPositionOfTheWindow(t *testing.T) {
 	_, _, window := open(t, "bounds")
 	resized := make(chan struct{}, 8)
@@ -440,6 +451,7 @@ func TestSizeAndPositionOfTheWindow(t *testing.T) {
 	}
 }
 
+// contract: mygo.framework.window-operations
 func TestMaximizeAndItsState(t *testing.T) {
 	_, _, window := open(t, "maximise")
 	if window.IsMaximized() || window.IsFullscreen() || window.IsMinimized() {
@@ -466,6 +478,7 @@ func TestEachWindowEventOfTheFrontendIsAnEventOfMygo(t *testing.T) {
 	}
 }
 
+// contract: mygo.framework.window-operations
 func TestAClosingHookKeepsOrClosesTheWindow(t *testing.T) {
 	framework, workbench, window := open(t, "closing")
 	keep := true
@@ -487,6 +500,7 @@ func TestAClosingHookKeepsOrClosesTheWindow(t *testing.T) {
 	}
 }
 
+// contract: mygo.framework.start-builds-the-workbench
 func TestStartWorkbenchClosesAndBuildsTheWorkbench(t *testing.T) {
 	_, workbench, window := open(t, "restart")
 	window.StartWorkbench()
@@ -497,6 +511,7 @@ func TestStartWorkbenchClosesAndBuildsTheWorkbench(t *testing.T) {
 	}
 }
 
+// contract: mygo.framework.frame-reports-reach-the-counters
 func TestTheLayoutObserverReportsTheTransactionOfAWindow(t *testing.T) {
 	_, _, window := open(t, "layout")
 	system, err := platform.Current()
@@ -538,6 +553,7 @@ func TestTheLayoutObserverReportsTheTransactionOfAWindow(t *testing.T) {
 	}
 }
 
+// contract: mygo.framework.frame-reports-reach-the-counters
 func TestTheFrameReportsOfAWindowReachItsCounters(t *testing.T) {
 	frames := host.NewWindowFrames("main")
 	recorder := adapter.FrameRecorder(frames)
@@ -554,6 +570,7 @@ func TestTheFrameReportsOfAWindowReachItsCounters(t *testing.T) {
 	}
 }
 
+// contract: mygo.framework.frame-reports-reach-the-counters
 func TestAShownWindowCountsItsFramesAndThenDrawsNone(t *testing.T) {
 	_, _, window := open(t, "frames")
 	frames := window.Frames()
