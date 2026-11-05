@@ -31,27 +31,27 @@ test("a load keeps the entries of layout tabs and of the sections of a space of 
 
 test("a space holds the sections of the sets of its window sidebars and of the sides of its cards", () => {
   const sets = [
-    { id: "wide", sections: ["files.tree", "files.bookmarks"] },
-    { id: "plugin", sections: ["term.list"] },
-    { id: "card", sections: ["browser.tabs"] },
-    { id: "chosen", sections: ["browser.history"] },
+    { id: "wide", sections: ["alpha.tree", "alpha.bookmarks"] },
+    { id: "plugin", sections: ["beta.list"] },
+    { id: "card", sections: ["gamma.tabs"] },
+    { id: "chosen", sections: ["gamma.history"] },
   ];
   const links = [
     { place: "left", plugin: null, set: "wide" },
-    { place: "window-left", plugin: "term", set: "plugin" },
-    { place: "window-right", plugin: "term", set: "wide" },
-    { place: "card-top", plugin: "browser", set: "card" },
-    { place: "card-left", plugin: "browser", set: "gone" },
+    { place: "window-left", plugin: "beta", set: "plugin" },
+    { place: "window-right", plugin: "beta", set: "wide" },
+    { place: "card-top", plugin: "gamma", set: "card" },
+    { place: "card-left", plugin: "gamma", set: "gone" },
   ];
   const cards = [
     { id: "seat" },
-    { id: "one", data: { tabs: [{ id: "a", plugin: "term" }, { id: "b", plugin: "browser" }], activeId: "a" } },
-    { id: "two", data: { tabs: [{ id: "c", plugin: "browser" }], activeId: "c", sidebars: { top: { set: "off" }, bottom: { set: "chosen" } } } },
+    { id: "one", data: { tabs: [{ id: "a", plugin: "beta" }, { id: "b", plugin: "gamma" }], activeId: "a" } },
+    { id: "two", data: { tabs: [{ id: "c", plugin: "gamma" }], activeId: "c", sidebars: { top: { set: "off" }, bottom: { set: "chosen" } } } },
   ];
   assert.deepEqual(spaceSectionSurfaces("spc", cards, sets, links), [
-    "spc/left/files.tree", "spc/left/files.bookmarks", "spc/left/term.list",
-    "spc/right/files.tree", "spc/right/files.bookmarks",
-    "spc/one:top/browser.tabs",
-    "spc/two:bottom/browser.history",
+    "spc/left/alpha.tree", "spc/left/alpha.bookmarks", "spc/left/beta.list",
+    "spc/right/alpha.tree", "spc/right/alpha.bookmarks",
+    "spc/one:top/gamma.tabs",
+    "spc/two:bottom/gamma.history",
   ], "a set that is gone and a side that is off hold nothing, and a tab that is not active keeps its link");
 });
