@@ -17,6 +17,8 @@
 - F608: setup이 이름이 바뀐 native target을 실행하므로, recognizer를 고르지 않아도 macOS window check가 다시 시작된다.
 - F561-1: keyboard를 가진 채 닫힌 document는 close 때 web content process를 끝내고, data store도 끝날 수 있다.
 - F502-23: `native`를 쓰는 `diagnostics.drag`는 창이 현재 layout을 표시한 뒤에 경계 점을 읽는다. 그래서 split 직후의 누름이 divider에 닿는다.
+- F502-13: `element.rect` 는 모든 host 에서 element 의 ARIA role 인 `role` 을 답하고, 묶거나 글자만 담는 element 에는 null 을 답한다. Red: mygo workbench 의 request test 가 role 을 답하지 않았다.
+- F502-13: mygo debug view 의 select 는 element 이름과 command 를 감싸는 group 이 아니라 trigger 에 둔다. audit 은 select 의 list box 와 option 을 select 의 일부로 본다. Red: TestALongSelectStaysInsideTheWindow 가 trigger, list box, option 201 개를 나열했다.
 - F595: 합성 입력은 layout을 기다리는 입력 뒤에서 순서를 지킨다.
 - F586: lease 방식 영역이 있는 창을 닫아도 Tauri host가 `image view released: project window is closed`를 기록하지 않는다. Red: 창이 닫힌 뒤의 해제가 그 실패를 보고했다.
 - F502-16: Wails host의 window는 요청한 크기를 갖고 web view는 content 크기를 가지므로, page의 마지막 row가 보이고 native view가 page 위 제자리에 선다. F592가 fork를 publish할 때까지 Wails module은 fork의 local checkout을 읽는다.

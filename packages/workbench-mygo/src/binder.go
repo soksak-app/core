@@ -126,6 +126,11 @@ func Audit(tree []ui.ElementNode) []Unbound {
 	var walk func(nodes []ui.ElementNode)
 	walk = func(nodes []ui.ElementNode) {
 		for _, node := range nodes {
+			// The list box of a select and its options are parts of the select, whose trigger holds the name and the command,
+			// as the options of a select of the page are no controls of their own.
+			if node.Role == ui.RoleList {
+				continue
+			}
 			exposed, _ := node.Key.(Exposed) // silent: an element without this key is unbound, which the zero value reports.
 			// The panel of a popup catches the presses on it, and it is no control.
 			if node.Actions&interactive != 0 && node.Role != ui.RolePopup && (exposed.Name == "" || exposed.Command == "") {

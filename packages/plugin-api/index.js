@@ -9,7 +9,7 @@
  * Workbench files are placed in the document root. Other modules are placed under `modules/<package.json name>/`
  * with their path inside the package. Runtime modules are placed in `runtime/`.
  */
-import { createBinder } from "./binder.js";
+import { createBinder, roleOf } from "./binder.js";
 import { causeCids } from "./calls.js";
 
 export { INTERACTIVE, commandOf, createBinder, valueOf } from "./binder.js";
@@ -1460,10 +1460,10 @@ export class ExposureError extends Error {
   }
 }
 
-/** The rectangle of an element, in CSS pixels relative to the viewport of the document that the element belongs to. */
+/** The rectangle of an element, in CSS pixels relative to the viewport of the document that the element belongs to, and its ARIA role. */
 export function elementRect(element) {
   const r = element.getBoundingClientRect();
-  return { x: r.left, y: r.top, width: r.width, height: r.height, zoom: effectiveZoom(element) };
+  return { x: r.left, y: r.top, width: r.width, height: r.height, zoom: effectiveZoom(element), role: roleOf(element) };
 }
 
 /**
