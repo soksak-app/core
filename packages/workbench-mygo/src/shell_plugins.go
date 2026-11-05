@@ -174,15 +174,20 @@ func (s *Shell) registerPlugins() {
 	s.registry.Status("core.plugins", func() any { return s.pluginOperations.Status() })
 	s.registry.Status("core.library", func() any { return s.libraryStatus() })
 	s.registry.Status("core.app", func() any { return s.appUpdates.Status() })
-	for _, action := range PluginActions {
-		laterCommand(s, "core.plugins."+action, func(value pluginParam, answer func(err error)) error {
+	operation := func(action string) func(value pluginParam, answer func(err error)) error {
+		return func(value pluginParam, answer func(err error)) error {
 			if value.Plugin == "" {
 				return Refuse(InvalidParams, "plugin must be a non-empty string")
 			}
 			s.pluginOperations.Run(action, value.Plugin, answer)
 			return nil
-		})
+		}
 	}
+	laterCommand(s, "core.plugins.install", operation("install"))
+	laterCommand(s, "core.plugins.update", operation("update"))
+	laterCommand(s, "core.plugins.remove", operation("remove"))
+	laterCommand(s, "core.plugins.enable", operation("enable"))
+	laterCommand(s, "core.plugins.disable", operation("disable"))
 	laterCommand(s, "core.plugins.update-all", func(_ struct{}, answer func(err error)) error {
 		s.pluginOperations.UpdateAll(answer)
 		return nil

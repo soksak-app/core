@@ -74,6 +74,29 @@ export function auditWorkbenchNames(exposes, sources) {
   return errors;
 }
 
+// The calls of a Go source of the mygo workbench that register a status or a command. A registration through another call reports its
+// name as not registered, so a new function of registration is added here.
+const WORKBENCH_REGISTRATIONS = {
+  status: /\.Status\(\s*"([^"]+)"/g,
+  commands: /(?:\.Command|\.CommandLater|\b(?:command|later|act|laterAct|laterCommand|windowAct|sectionCommand|change)(?:\[[^\]]*\])?)\(\s*(?:\w+,\s*)?"([^"]+)"/g,
+};
+// The entries that the view bridge registers in a surface document of the mygo workbench.
+const BRIDGE_REGISTRATIONS = { status: /expose\.status\(\s*"([^"]+)"/g, commands: /expose\.command\(\s*"([^"]+)"/g };
+
+/** Names each status and command that exposes declares and that no Go source of the mygo workbench and no view bridge source registers. */
+export function auditWorkbenchRegistrations(exposes, sources, bridges = []) {
+  const errors = [];
+  for (const [kind, label] of [["status", "status"], ["commands", "command"]]) {
+    const names = new Set();
+    for (const { text } of sources) for (const match of text.matchAll(WORKBENCH_REGISTRATIONS[kind])) names.add(match[1]);
+    for (const text of bridges) for (const match of text.matchAll(BRIDGE_REGISTRATIONS[kind])) names.add(match[1]);
+    for (const { name } of exposes[kind]) {
+      if (!names.has(name)) errors.push(`${label} ${name} is declared and no Go source of the mygo workbench registers it`);
+    }
+  }
+  return errors;
+}
+
 if (process.argv[1]?.endsWith("check-exposure.mjs")) {
   const coreExposes = readJson(join(WORKBENCH, "exposure.json")).exposes;
   const names = `${JSON.stringify(coreExposureNames(coreExposes), null, 2)}\n`;
@@ -100,6 +123,7 @@ if (process.argv[1]?.endsWith("check-exposure.mjs")) {
   const goSources = [...sourceFiles(join(ROOT, "packages/workbench-mygo/src"), (name) => name.endsWith(".go"))]
     .map((path) => ({ path: relative(ROOT, path), text: readFileSync(path, "utf8") }));
   errors.push(...auditWorkbenchNames(coreExposes, goSources));
+  errors.push(...auditWorkbenchRegistrations(coreExposes, goSources, [readFileSync(join(ROOT, "packages/plugin-api/view.js"), "utf8")]));
 
   // The declarations of a plugin are checked by each plugin repository with soksak-exposure of plugin-api (docs/spec/plugins.md#repositories).
   if (errors.length) {
