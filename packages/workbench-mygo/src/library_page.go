@@ -98,7 +98,7 @@ func (s *Shell) drawLibrary(c *ui.Context, width, height float32) {
 			s.drawLibraryHead(c, width-2*m.space3)
 			DrawErrorBanner(c, s.errors)
 			if s.library.page == pluginsPage {
-				s.drawPlugins(c)
+				s.drawPlugins(c, width-2*m.space3)
 				return
 			}
 			if s.library.formMode != "" {
@@ -146,7 +146,7 @@ func (s *Shell) drawLibraryHead(c *ui.Context, width float32) {
 					}
 					button := s.binder.Press(c, "core.library.page", "core.library.page", page.id, map[string]string{"page": page.id})
 					button.PaddingX(m.space1).Label(page.label).Children(func() {
-						ui.Text(c, page.label).Bold().FontSize(float32(s.settings.Value("size").(float64))).TextColor(color)
+						ui.Text(c, page.label).Bold().LineHeight(s.metrics.lineHeight).FontSize(float32(s.settings.Value("size").(float64))).TextColor(color)
 					})
 				}
 			})
@@ -173,9 +173,9 @@ func (s *Shell) drawLibrarySort(c *ui.Context) {
 	s.binder.Bound(selector.Trigger, "core.library.sort")
 	selector.Trigger.Width(m.librarySortW).Padding(m.fieldPadY, m.selectArrowRoom, m.fieldPadY, m.space2).Radius(s.radiusSmall()).
 		Border(s.palette.BorderWidth, s.palette.Edge).Background(s.palette.Bg).AlignItems(ui.Center).Justify(ui.Start).Label("프로젝트 정렬").Children(func() {
-		ui.Text(c, librarySortLabels[order]).SingleLine().FontSize(s.textControl()).TextColor(s.palette.Fg)
+		ui.Text(c, librarySortLabels[order]).SingleLine().LineHeight(s.metrics.lineHeight).FontSize(s.textControl()).TextColor(s.palette.Fg)
 		ui.Row(c).Absolute().Right(m.selectArrowInset).Top(0).Bottom(0).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, "▾").FontSize(s.textCaption()).TextColor(s.palette.Muted)
+			ui.Text(c, "▾").LineHeight(s.metrics.lineHeight).FontSize(s.textCaption()).TextColor(s.palette.Muted)
 		})
 	})
 	selector.Popup(func(panel ui.Element) {
@@ -186,7 +186,7 @@ func (s *Shell) drawLibrarySort(c *ui.Context) {
 				item.Background(s.palette.Rule)
 			}
 			item.Children(func() {
-				ui.Text(c, librarySortLabels[id]).FontSize(s.textControl()).TextColor(s.palette.Fg)
+				ui.Text(c, librarySortLabels[id]).LineHeight(s.metrics.lineHeight).FontSize(s.textControl()).TextColor(s.palette.Fg)
 			})
 		}
 	})
@@ -206,14 +206,19 @@ func (s *Shell) drawnTextField(field ui.Element) ui.Element {
 		edge = s.palette.Rail
 	}
 	return field.Padding(m.fieldPadY, m.space2, m.fieldPadY, m.space2).Border(s.palette.BorderWidth, edge).Radius(s.radiusSmall()).
-		Background(s.palette.Bg).TextColor(s.palette.Fg).FontSize(s.textControl())
+		Background(s.palette.Bg).TextColor(s.palette.Fg).LineHeight(s.metrics.lineHeight).FontSize(s.textControl())
 }
 
+// drawLibraryEmpty draws the start of an empty library. The heading and the line keep the margins of a browser, which the page leaves to them: .83em
+// around a heading and 1em around a line, where the margin between the two is the larger of them.
 func (s *Shell) drawLibraryEmpty(c *ui.Context) {
 	m := s.metrics
-	ui.Column(s.binder.Name(c, "core.library.empty", "")).Role(ui.RoleGroup).Label("프로젝트를 시작하세요").FillWidth().AlignItems(ui.Center).Gap(m.space2).PaddingY(m.space4).Children(func() {
-		ui.Text(c, "프로젝트를 시작하세요").Bold().FontSize(float32(s.settings.Value("size").(float64))).TextColor(s.palette.Fg)
-		ui.Text(c, "새 프로젝트를 만들거나 기존 폴더를 여세요.").FontSize(s.textControl()).TextColor(s.palette.Muted)
+	const headingMargin = .83
+	size := float32(s.settings.Value("size").(float64))
+	between := max(size*headingMargin, s.textControl())
+	ui.Column(s.binder.Name(c, "core.library.empty", "")).Role(ui.RoleGroup).Label("프로젝트를 시작하세요").FillWidth().AlignItems(ui.Center).PaddingY(m.space4).Children(func() {
+		ui.Text(c, "프로젝트를 시작하세요").Bold().LineHeight(m.lineHeight).FontSize(size).TextColor(s.palette.Fg).Margin(size*headingMargin, 0, between, 0)
+		ui.Text(c, "새 프로젝트를 만들거나 기존 폴더를 여세요.").LineHeight(m.lineHeight).FontSize(s.textControl()).TextColor(s.palette.Muted).Margin(0, 0, s.textControl(), 0)
 	})
 }
 
@@ -222,7 +227,7 @@ func (s *Shell) drawProjectGrid(c *ui.Context, width float32) {
 	m := s.metrics
 	shown := s.shownProjects()
 	if len(shown) == 0 && len(s.projects) > 0 {
-		ui.Text(s.binder.Name(c, "core.library.no-results", ""), "일치하는 프로젝트가 없습니다.").FontSize(s.textControl()).
+		ui.Text(s.binder.Name(c, "core.library.no-results", ""), "일치하는 프로젝트가 없습니다.").LineHeight(s.metrics.lineHeight).FontSize(s.textControl()).
 			TextColor(s.palette.Muted).Margin(0, 0, 2*s.palette.Gap, 0)
 	}
 	least := m.libraryCardMinW
@@ -267,7 +272,7 @@ func (s *Shell) drawLibraryAdd(c *ui.Context, width float32) {
 	}
 	button.Width(width).MinHeight(m.libraryAddH).Padding(m.space3).Center().Radius(s.palette.Radius).BorderStyle(ui.BorderDashed).
 		Border(s.palette.BorderWidth, s.palette.Edge).Label(label).Children(func() {
-		ui.Text(c, label).FontSize(s.textControl()).TextColor(color)
+		ui.Text(c, label).LineHeight(s.metrics.lineHeight).FontSize(s.textControl()).TextColor(color)
 	})
 }
 
@@ -292,17 +297,17 @@ func (s *Shell) drawProjectCard(c *ui.Context, project *projectRecord, width flo
 			panes, failure = s.drawPreview(c, project, width-2*s.palette.BorderWidth)
 			ui.Column(c).FillWidth().Padding(m.space2, m.space3, m.space2, m.space3).BorderWidth(s.palette.BorderWidth, 0, 0, 0).
 				BorderColor(s.palette.Edge).Children(func() {
-				ui.Text(c, project.Title).SingleLine().Ellipsis("…").FontSize(s.textControl()).TextColor(s.palette.Fg).Margin(0, 0, m.space1, 0)
-				ui.Text(c, project.Root).SingleLine().Ellipsis("…").FontSize(s.textSmall()).TextColor(s.palette.Muted).Margin(0, 0, m.space2, 0)
+				ui.Text(c, project.Title).SingleLine().Ellipsis("…").LineHeight(s.metrics.lineHeight).FontSize(s.textControl()).TextColor(s.palette.Fg).Margin(0, 0, m.space1, 0)
+				ui.Text(c, project.Root).SingleLine().Ellipsis("…").LineHeight(s.metrics.lineHeight).FontSize(s.textSmall()).TextColor(s.palette.Muted).Margin(0, 0, m.space2, 0)
 				ui.Row(c).Gap(m.space2).Children(func() {
 					size := s.textCaption()
-					ui.Text(c, fmt.Sprintf("스페이스 %d", len(project.Spaces))).FontSize(size).TextColor(s.palette.Muted)
+					ui.Text(c, fmt.Sprintf("스페이스 %d", len(project.Spaces))).LineHeight(s.metrics.lineHeight).FontSize(size).TextColor(s.palette.Muted)
 					if open {
-						ui.Text(c, "열림").FontSize(size).TextColor(s.palette.Rail)
+						ui.Text(c, "열림").LineHeight(s.metrics.lineHeight).FontSize(size).TextColor(s.palette.Rail)
 					}
 					if project.LastOpened > 0 {
 						when := time.UnixMilli(int64(project.LastOpened))
-						ui.Text(c, fmt.Sprintf("%d월 %d일", when.Month(), when.Day())).FontSize(size).TextColor(s.palette.Muted).Tooltip(when.Format(time.DateTime))
+						ui.Text(c, fmt.Sprintf("%d월 %d일", when.Month(), when.Day())).LineHeight(s.metrics.lineHeight).FontSize(size).TextColor(s.palette.Muted).Tooltip(when.Format(time.DateTime))
 					}
 				})
 				DrawError(c, s.errors, "library project "+project.Root)
@@ -362,7 +367,7 @@ func (s *Shell) drawPreview(c *ui.Context, project *projectRecord, width float32
 		}
 		if err := layout.CheckStoredLayout(space.Layout, s.pluginUnits()); err != nil {
 			failure = fmt.Sprintf("projects.json: project %s space %s: %s", project.Root, project.ActiveSpaceID, err)
-			ui.Text(c, failure).Wrap().FontSize(s.textCaption()).TextColor(s.palette.No).Margin(padY, padX, padY, padX)
+			ui.Text(c, failure).Wrap().LineHeight(s.metrics.lineHeight).FontSize(s.textCaption()).TextColor(s.palette.No).Margin(padY, padX, padY, padX)
 			return
 		}
 		var stored storedLayout
@@ -493,17 +498,31 @@ func (s *Shell) drawLibraryFooter(c *ui.Context, width float32) {
 	m := s.metrics
 	size := s.textCaption()
 	text := func(button ui.Element, label string) {
-		button.PaddingX(m.space1).Label(label).Children(func() { ui.Text(c, label).SingleLine().FontSize(size).TextColor(s.palette.Muted) })
+		button.PaddingX(m.space1).Label(label).Children(func() {
+			ui.Text(c, label).SingleLine().LineHeight(s.metrics.lineHeight).FontSize(size).TextColor(s.palette.Muted)
+		})
 	}
 	ui.Row(c).Size(width, m.libraryFooterH).PaddingX(m.space3).Gap(m.space3).AlignItems(ui.Center).Background(s.palette.Card).
 		BorderWidth(s.palette.BorderWidth, 0, 0, 0).BorderColor(s.palette.Edge).Children(func() {
-		ui.Text(c, fmt.Sprintf("프로젝트 %d · 열림 %d", len(s.projects), s.openCount())).SingleLine().FontSize(size).TextColor(s.palette.Muted)
+		ui.Text(c, fmt.Sprintf("프로젝트 %d · 열림 %d", len(s.projects), s.openCount())).SingleLine().LineHeight(s.metrics.lineHeight).FontSize(size).TextColor(s.palette.Muted)
 		if s.opened() != nil {
 			text(s.binder.Press(c, "core.library.return", "core.library.return", "", nil), "작업 화면으로 돌아가기")
 		}
 		ui.Spacer(c).Grow(1)
 		text(s.binder.Press(c, "core.library.window", "core.library.window", "", nil), "＋ 새 창")
 	})
+}
+
+// pluginLook is the theme and the lengths of the plugin page at width.
+func (s *Shell) pluginLook(width float32) PluginLook {
+	m, p := s.metrics, s.palette
+	least := m.libraryCardMinW
+	if width+2*m.space3 < m.libraryNarrowW {
+		least = m.libraryCardMinWNarrow
+	}
+	return PluginLook{Bg: p.Bg, Card: p.Card, Fg: p.Fg, Muted: p.Muted, Edge: p.Edge, Rail: p.Rail, No: p.No, Control: s.textControl(), Small: s.textSmall(),
+		Caption: s.textCaption(), LineHeight: m.lineHeight, Radius: p.Radius, RadiusSmall: s.radiusSmall(), BorderWidth: p.BorderWidth, Gap: p.Gap, Space1: m.space1,
+		Space2: m.space2, Space3: m.space3, FieldPadY: m.fieldPadY, Width: width, LeastCard: least}
 }
 
 // uiButton gives a pressable element the look of .ui-button, and of .library-primary with primary.
@@ -518,7 +537,9 @@ func (s *Shell) uiButton(c *ui.Context, button ui.Element, label string, primary
 		fill = faded(s.palette.Rail, m.chipOnMix)
 	}
 	button.Padding(m.fieldPadY, m.space3, m.fieldPadY, m.space3).Border(s.palette.BorderWidth, edge).Radius(s.radiusSmall()).Background(fill).
-		Label(label).Children(func() { ui.Text(c, label).SingleLine().FontSize(s.textControl()).TextColor(s.palette.Fg) })
+		Label(label).Children(func() {
+		ui.Text(c, label).SingleLine().LineHeight(s.metrics.lineHeight).FontSize(s.textControl()).TextColor(s.palette.Fg)
+	})
 }
 
 // drawLibraryForm draws the form of a new project.
@@ -530,29 +551,30 @@ func (s *Shell) drawLibraryForm(c *ui.Context) {
 	if creates {
 		heading, newMark, existingMark = "새 폴더로 프로젝트 만들기", "●", "○"
 	}
-	ui.Column(c).FillWidth().MaxWidth(m.libraryFormW).Gap(m.space3).Padding(m.space4).Margin(0, 0, m.space3, 0).Radius(s.radiusSmall()).
+	ui.Column(c).FillWidth().MaxWidth(m.libraryFormW).Padding(m.space4).Margin(0, 0, m.space3, 0).Radius(s.radiusSmall()).
 		Border(s.palette.BorderWidth, s.palette.Edge).Background(s.palette.Card).Children(func() {
-		ui.Text(c, heading).Bold().FontSize(s.textControl()).TextColor(s.palette.Fg)
-		ui.Row(c).Gap(m.space2).Children(func() {
+		ui.Text(c, heading).Bold().LineHeight(m.lineHeight).FontSize(s.textControl()).TextColor(s.palette.Fg).Margin(0, 0, m.space3, 0)
+		ui.Row(c).Children(func() {
 			s.uiButton(c, s.binder.Press(c, "core.library.form.mode-new", "core.library.form.open", "", map[string]string{"mode": "create"}), newMark+" 새 폴더 만들기", false)
 			s.uiButton(c, s.binder.Press(c, "core.library.form.mode-existing", "core.library.form.open", "", map[string]string{"mode": "open"}), existingMark+" 기존 폴더 선택", false)
 		})
-		label := "폴더 경로"
-		if creates {
-			s.drawFormField(c, "core.library.form.name", "name", &s.library.name, "프로젝트 폴더 이름", "my-project", true, nil)
-			label = "생성 위치"
-		}
-		s.drawFormField(c, "core.library.form.parent", "parent", &s.library.parent, label, "/Users/…", !creates, func() {
-			s.uiButton(c, s.binder.Press(c, "core.library.form.choose", "core.library.choose-folder", "", nil).AlignSelf(ui.Start), "폴더 선택", false)
-		})
-		ui.Row(c).FillWidth().Gap(m.space2).Children(func() {
-			ui.Spacer(c).Grow(1)
-			s.uiButton(c, s.binder.Press(c, "core.library.form.cancel", "core.library.form.cancel", "", nil), "취소", false)
-			submit := "프로젝트로 열기"
+		ui.Column(c).FillWidth().Gap(m.space3).Children(func() {
+			label := "폴더 경로"
 			if creates {
-				submit = "생성 후 열기"
+				s.drawFormField(c, "core.library.form.name", "name", &s.library.name, "프로젝트 폴더 이름", "my-project", true, nil)
+				label = "생성 위치"
 			}
-			s.uiButton(c, s.binder.Press(c, "core.library.form.submit", "core.library.form.submit", "", nil), submit, true)
+			s.drawFormField(c, "core.library.form.parent", "parent", &s.library.parent, label, "/Users/…", !creates, func() {
+				s.uiButton(c, s.binder.Press(c, "core.library.form.choose", "core.library.choose-folder", "", nil).AlignSelf(ui.Start), "폴더 선택", false)
+			})
+			ui.Row(c).FillWidth().Gap(m.space2).Justify(ui.End).Children(func() {
+				s.uiButton(c, s.binder.Press(c, "core.library.form.cancel", "core.library.form.cancel", "", nil), "취소", false)
+				submit := "프로젝트로 열기"
+				if creates {
+					submit = "생성 후 열기"
+				}
+				s.uiButton(c, s.binder.Press(c, "core.library.form.submit", "core.library.form.submit", "", nil), submit, true)
+			})
 		})
 	})
 }
@@ -562,7 +584,7 @@ func (s *Shell) drawLibraryForm(c *ui.Context) {
 func (s *Shell) drawFormField(c *ui.Context, name, field string, value *string, title, placeholder string, first bool, after func()) {
 	m := s.metrics
 	ui.Column(c).FillWidth().Gap(m.space2).Children(func() {
-		ui.Text(c, title).FontSize(s.textControl()).TextColor(s.palette.Muted)
+		ui.Text(c, title).LineHeight(s.metrics.lineHeight).FontSize(s.textControl()).TextColor(s.palette.Muted)
 		set := s.binder.Control(c, name, "core.library.form.set", field)
 		input := s.drawnTextField(s.binder.Bound(ui.TextInputBase(c, value), name)).FillWidth().Label(title).Placeholder(placeholder)
 		if first {

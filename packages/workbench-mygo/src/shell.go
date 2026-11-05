@@ -77,7 +77,7 @@ type metrics struct {
 	space1, space2, space3, space4, libraryFooterH, librarySortW, librarySearchW, libraryCardMinW, libraryCardMinWNarrow, libraryNarrowW,
 	libraryPreviewH, libraryMark, libraryMarkStroke, previewLineH, previewLineStep, previewLineOpacity, previewSidebarOpacity, libraryAddH,
 	libraryFormW, fieldPadY, selectArrowRoom, selectArrowInset, previewBorderMix, previewFillMix, previewInkMix, previewLineW,
-	projectColumnW, projectColumnGap, projectColumnPad, projectTabH, projectTabPad, projectTabXInset, projectTabAddH,
+	lineHeight, projectColumnW, projectColumnGap, projectColumnPad, projectTabH, projectTabPad, projectTabXInset, projectTabAddH,
 	barTabRootPad, barTabRootW, dropMix, dropBorder, tabDraggingOpacity, actStroke, chromeActsGap, brandGap, brandLogoAtBase, chromeH, chromeRowH, spaceGap, spacePad, chromeGap, barGap, barXPad, barXOpacity, barAddText, barAddPad, textControlAtBase, textCaptionAtBase, chipMix, chipHoverMix, chipOnMix, projectTabMix float32
 	headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW float32
 	// The card head (.chrome of packages/workbench/app.css).
@@ -111,6 +111,7 @@ func readMetrics(declared *Declarations) (metrics, error) {
 		"field-pad-y": &m.fieldPadY, "select-arrow-room": &m.selectArrowRoom, "select-arrow-inset": &m.selectArrowInset} {
 		read(name, into)
 	}
+	read("line-height", &m.lineHeight)
 	read("bar-tab-root-pad", &m.barTabRootPad)
 	read("bar-tab-root-w", &m.barTabRootW)
 	read("project-column-w", &m.projectColumnW)
@@ -314,6 +315,7 @@ type Shell struct {
 	windowSidebars map[string]layout.WindowSidebar
 
 	units         map[string]*installedUnit
+	processes     pluginProcesses
 	contributions *Contributions
 	// lastDrop is the status core.drop, and notices the state of the notification center.
 	lastDrop *dropRecord

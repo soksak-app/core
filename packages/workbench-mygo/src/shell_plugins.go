@@ -67,10 +67,10 @@ func (s *Shell) pluginPage() PluginPage {
 }
 
 // drawPlugins draws the plugin page, which brings the update list into view once after core.plugins.show-updates.
-func (s *Shell) drawPlugins(c *ui.Context) {
+func (s *Shell) drawPlugins(c *ui.Context, width float32) {
 	page := s.pluginPage()
 	page.Reveal, s.library.revealUpdates = s.library.revealUpdates, false
-	DrawPluginPage(c, s.binder, page, s.errors)
+	DrawPluginPage(c, s.binder, page, s.errors, s.pluginLook(width))
 }
 
 func (s *Shell) libraryStatus() libraryStatus {

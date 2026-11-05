@@ -313,7 +313,11 @@ func (s *Shell) activateThen(id string, done func()) {
 				done()
 				return
 			}
-			s.patch(id, map[string]any{"lastOpened": time.Now().UnixMilli()})
+			now := time.Now().UnixMilli()
+			if project := s.project(id); project != nil {
+				project.LastOpened = float64(now)
+			}
+			s.patch(id, map[string]any{"lastOpened": now})
 			if opened.Local {
 				s.showThen(id, done)
 				return

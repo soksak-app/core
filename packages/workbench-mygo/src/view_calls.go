@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -55,6 +56,9 @@ type viewState struct {
 	// commands holds the commands that the view registered, and requests the answer of each request that it has not replied.
 	commands map[string]bool
 	requests map[uint64]viewAnswer
+	// plugin is the plugin of the view, and ended holds the last commands that ended, whose replies are late.
+	plugin string
+	ended  []uint64
 	// statuses holds the text of the last value of each core status that the view watches, and observed the end of each watch of a
 	// status of a surface.
 	statuses map[string]string
@@ -148,6 +152,7 @@ func (s *Shell) viewCall(data []any) {
 		s.forgetView(call.Surface, view)
 		view = s.view(call.Surface)
 	}
+	view.plugin = call.Plugin
 	if call.Cancel {
 		// default: a cancel of a call that has no pending call ends nothing, because that call has already replied.
 		if pending := view.pending[call.ID]; pending != nil {
@@ -747,12 +752,25 @@ func (s *Shell) runViewCommand(surface string, view *viewState, name string, par
 		ended = true
 		timer.Stop()
 		delete(view.requests, id)
+		view.ended = append(view.ended, id)
+		if len(view.ended) > endedCallsKept {
+			view.ended = view.ended[1:]
+		}
+		s.processes.closeCall(id)
+		s.options.Invalidate()
 		answer(result, err)
 	}
 	timer = time.AfterFunc(limit, func() {
-		s.options.Post(func() { settle(nil, fmt.Errorf("command %s did not reply within %dms", name, limit.Milliseconds())) })
+		s.options.Post(func() {
+			if !ended {
+				s.processes.loss(view.plugin).Timeouts++
+			}
+			settle(nil, fmt.Errorf("command %s did not reply within %dms", name, limit.Milliseconds()))
+		})
 	})
 	view.requests[id] = settle
+	s.processes.openCall(id, view.plugin)
+	s.options.Invalidate()
 	request := map[string]any{"surface": surface, "generation": view.generation, "id": id, "command": name, "params": rawOrNull(params)}
 	if len(cids) > 0 {
 		request["cids"] = cids
@@ -792,7 +810,16 @@ func (s *Shell) viewReplied(data []any) {
 		return
 	}
 	view := s.surfaces.views[reply.Surface]
-	if view == nil || view.requests[reply.ID] == nil {
+	if view == nil {
+		return
+	}
+	if view.requests[reply.ID] == nil {
+		if !slices.Contains(view.ended, reply.ID) {
+			s.fail(fmt.Errorf("call reply %d has no matching request", reply.ID))
+			return
+		}
+		s.processes.loss(view.plugin).LateReplies++
+		s.options.Invalidate()
 		return
 	}
 	if reply.Error != nil {
