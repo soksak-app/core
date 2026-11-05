@@ -1128,10 +1128,8 @@ fn owner(webview: &Webview, request: &Request) -> Result<(Key, crate::framework:
     Ok((key, window))
 }
 
-/// Registers the created image region in the window and returns the handle. When the surface is removed during
-/// creation, it is closed.
+/// Creates the image region of key in its surface and returns the handle. Call it on the main thread.
 fn create(
-    _webview: &Webview,
     window: &crate::framework::Window,
     key: &Key,
     sidecar: &str,
@@ -1148,85 +1146,80 @@ fn create(
     let (released_window, released_sidecar, (released_surface, released_name)) =
         (window.clone(), sidecar.to_string(), key.clone());
 
-    on_main(window, move || {
-        let released: platform::ImageReleased = lease.then(|| {
-            Box::new(move |generation: u64, raster: u64, sequence: i32| {
-                let (window, sidecar, surface, name) = (
-                    released_window.clone(),
-                    released_sidecar.clone(),
-                    released_surface.clone(),
-                    released_name.clone(),
-                );
-                let app = window.app_handle().clone();
-                app.spawn_detached(move || {
-                    let sent = serde_json::value::to_raw_value(&released_reply(
-                        &name, generation, raster, sequence,
-                    ))
-                    .map_err(|e| e.to_string())
-                    .and_then(|body| {
-                        window
-                            .state::<WindowSidecars>()
-                            .send(&window, &sidecar, &surface, &body)
-                    });
-                    log_failure(&format!("image {name} released"), sent);
+    let released: platform::ImageReleased = lease.then(|| {
+        Box::new(move |generation: u64, raster: u64, sequence: i32| {
+            let (window, sidecar, surface, name) = (
+                released_window.clone(),
+                released_sidecar.clone(),
+                released_surface.clone(),
+                released_name.clone(),
+            );
+            let app = window.app_handle().clone();
+            app.spawn_detached(move || {
+                let sent = serde_json::value::to_raw_value(&released_reply(
+                    &name, generation, raster, sequence,
+                ))
+                .map_err(|e| e.to_string())
+                .and_then(|body| {
+                    window
+                        .state::<WindowSidecars>()
+                        .send(&window, &sidecar, &surface, &body)
                 });
-            }) as Box<dyn Fn(u64, u64, i32)>
-        });
-        let event = Box::new(move |json: String| {
-            // Native input is sent only to the owning surface. A parse or send failure is not hidden.
-            let event_surface = surface_id.clone();
-            let event_name = event_name.clone();
-            let result = (|| {
-                let event: serde_json::Value = serde_json::from_str(&json)
-                    .map_err(|error| format!("{event_surface}/{event_name}: {error}"))?;
-                crate::event_record::record_input_relay(&event_surface, &event_name, &json);
-                // Every event of a native region is recorded with its whole body before it is relayed
-                // (docs/spec/diagnostics.md). It writes nothing while the performance trace is off.
+                log_failure(&format!("image {name} released"), sent);
+            });
+        }) as Box<dyn Fn(u64, u64, i32)>
+    });
+    let event = Box::new(move |json: String| {
+        // Native input is sent only to the owning surface. A parse or send failure is not hidden.
+        let event_surface = surface_id.clone();
+        let event_name = event_name.clone();
+        let result = (|| {
+            let event: serde_json::Value = serde_json::from_str(&json)
+                .map_err(|error| format!("{event_surface}/{event_name}: {error}"))?;
+            crate::event_record::record_input_relay(&event_surface, &event_name, &json);
+            // Every event of a native region is recorded with its whole body before it is relayed
+            // (docs/spec/diagnostics.md). It writes nothing while the performance trace is off.
+            crate::performance::observe("host", || {
+                serde_json::json!({
+                    "event": "region",
+                    "surface": event_surface,
+                    "name": event_name,
+                    "body": event,
+                })
+            });
+            // A focus transition is also left in the timeline of the performance trace (V5-114, the window event
+            // line that the performance-trace specification promises). When the trace is off, line writes nothing.
+            if event.get("type").and_then(|value| value.as_str()) == Some("focus") {
                 crate::performance::observe("host", || {
                     serde_json::json!({
-                        "event": "region",
+                        "event": "focus",
                         "surface": event_surface,
                         "name": event_name,
-                        "body": event,
+                        "focused": event.get("focused"),
                     })
                 });
-                // A focus transition is also left in the timeline of the performance trace (V5-114, the window event
-                // line that the performance-trace specification promises). When the trace is off, line writes nothing.
-                if event.get("type").and_then(|value| value.as_str()) == Some("focus") {
-                    crate::performance::observe("host", || {
-                        serde_json::json!({
-                            "event": "focus",
-                            "surface": event_surface,
-                            "name": event_name,
-                            "focused": event.get("focused"),
-                        })
-                    });
-                }
-                let report_surface = event_surface.clone();
-                let report_name = event_name.clone();
-                let payload = image_event_payload(&event_surface, &event_name, event);
-                let deferred_surface = report_surface.clone();
-                let deferred_name = report_name.clone();
-                let deferred_host = host.clone();
-                platform
-                    .enqueue_ui(Box::new(move || {
-                        let sent = emit_window(&deferred_host, "image-event", payload)
-                            .map_err(|error| error.to_string())
-                            .map_err(|error| {
-                                format!("{deferred_surface}/{deferred_name}: {error}")
-                            });
-                        log_failure("image event", sent);
-                        exposure::window_changed(&deferred_host);
-                    }))
-                    .map_err(|error| {
-                        format!("{report_surface}/{report_name}: scheduling failed: {error}")
-                    })
-            })();
-            log_failure("image event", result);
-        });
-        let handle = platform.create_image(surface, &name, event, released)?;
-        Ok(handle)
-    })
+            }
+            let report_surface = event_surface.clone();
+            let report_name = event_name.clone();
+            let payload = image_event_payload(&event_surface, &event_name, event);
+            let deferred_surface = report_surface.clone();
+            let deferred_name = report_name.clone();
+            let deferred_host = host.clone();
+            platform
+                .enqueue_ui(Box::new(move || {
+                    let sent = emit_window(&deferred_host, "image-event", payload)
+                        .map_err(|error| error.to_string())
+                        .map_err(|error| format!("{deferred_surface}/{deferred_name}: {error}"));
+                    log_failure("image event", sent);
+                    exposure::window_changed(&deferred_host);
+                }))
+                .map_err(|error| {
+                    format!("{report_surface}/{report_name}: scheduling failed: {error}")
+                })
+        })();
+        log_failure("image event", result);
+    });
+    platform.create_image(surface, &name, event, released)
 }
 
 #[cfg(test)]
@@ -1275,32 +1268,45 @@ pub fn attach(webview: &Webview, request: Request) -> Result<(), String> {
         ));
     }
 
+    let sidecar = sidecar.to_string();
     let (key, window) = owner(webview, &request)?;
     let platform = platform::current()?;
     let Ok(data) = window_data(&window) else {
         return Err("cannot get window data".to_string());
     };
+    let host = window.clone();
+    on_main(&window, move || {
+        attach_on_main(&host, &data, &key, &sidecar, platform)
+    })?;
+    exposure::window_changed(&window);
+    crate::composition::send_image_drawing(&window)
+}
+
+/// Checks the request, takes the name and creates the region in one task of the main thread. A close of the surface, a
+/// reload of its page and a detach run on the main thread too, so each of them runs before or after the whole attach and
+/// finds no name without its region.
+fn attach_on_main(
+    window: &crate::framework::Window,
+    data: &crate::windows::WindowData,
+    key: &Key,
+    sidecar: &str,
+    platform: &'static dyn platform::Platform,
+) -> Result<(), String> {
     data.images.pending_detach_error(&key.0)?;
     let present = require_region(&data.compositions, &key.0, &key.1, "image", Some(sidecar))?;
-
-    // The name is taken first. The lock is not held while waiting for native work.
-    data.images.reserve(&key, "", sidecar)?;
+    data.images.reserve(key, "", sidecar)?;
     let lease = present == "lease";
     if lease {
-        data.images.lease(&key);
+        data.images.lease(key);
     }
     // The window state is read before the region counts as attached, so its first drawing state is exact
     // (docs/spec/native-surfaces.md#image-regions).
-    let screen_window = window.clone();
-    let screen_data = data.clone();
-    let handle = match on_main(&window, move || {
-        crate::composition::read_on_screen(&screen_window, &screen_data.images)
-    })
-    .and_then(|()| create(webview, &window, &key, sidecar, lease, platform))
+    let handle = match crate::composition::read_on_screen(window, &data.images)
+        .and_then(|()| create(window, key, sidecar, lease, platform))
     {
         Ok(handle) => handle,
         Err(error) => {
-            if let Err(e) = data.images.remove(&key) {
+            if let Err(e) = data.images.remove(key) {
                 log_error(
                     &format!("image {}", key.1),
                     format!("remove the reserved image: {e}"),
@@ -1309,29 +1315,14 @@ pub fn attach(webview: &Webview, request: Request) -> Result<(), String> {
             return Err(error);
         }
     };
-    if !data.images.set(&key, handle) {
-        if let Err(e) = on_main(&window, move || {
-            let platform = platform::current()?;
-            platform.close_image(handle)
-        }) {
-            log_error(
-                &format!("image {}", key.1),
-                format!("close the image on the main thread: {e}"),
-            );
-        }
-        if let Err(e) = data.images.remove(&key) {
-            log_error(
-                &format!("image {}", key.1),
-                format!("remove the image after a failed set: {e}"),
-            );
-        }
+    if !data.images.set(key, handle) {
+        platform.close_image(handle)?;
         return Err(format!(
-            "surface {:?} closed while its image was created",
-            key.0
+            "image {:?} lost its name while it was created",
+            key.1
         ));
     }
-    exposure::window_changed(&window);
-    crate::composition::send_image_drawing(&window)
+    Ok(())
 }
 
 /// Makes the image region the first responder and sends the focus event.

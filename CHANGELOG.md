@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F537-2: An image attach runs in one step of the main thread on both hosts, so a tab closed during the attach of its image region records no error, and a page reload during the attach leaves no region open without a name.
 - F537-1: `input.key` with an empty `text` types its key on the Tauri host, as on the Wails host, so Enter runs the line of a terminal.
 - F533: A delay unload of the memory saver that fails gets its next deadline one delay later, so a read or a commit that keeps failing no longer runs again at once with the error display each time.
 - F532: The update step of the Rust diagnostics ends the application through `quit` of the framework port, so `make tauriv2-build` compiles again. `make hosts-check` runs the new `make host-debug-check`, which compiles the two hosts and the two apps in the configuration of the debug apps.

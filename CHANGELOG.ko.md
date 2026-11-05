@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F537-2: 두 host에서 그림 영역 attach는 main thread의 한 step에서 실행되므로, attach 중에 닫힌 탭은 오류를 기록하지 않고 attach 중의 page reload는 이름 없이 열린 영역을 남기지 않는다.
 - F537-1: Tauri host에서도 Wails host처럼 `text`가 빈 `input.key`는 그 키를 입력하므로, Enter가 terminal의 줄을 실행한다.
 - F533: 실패한 memory saver delay unload는 다음 deadline을 한 delay 뒤에 받으므로, 계속 실패하는 읽기나 commit이 매번 오류 표시와 함께 곧바로 다시 돌지 않는다.
 - F532: Rust diagnostics의 update 단계가 framework port의 `quit`으로 애플리케이션을 끝내므로, `make tauriv2-build`가 다시 컴파일된다. `make hosts-check`는 새 `make host-debug-check`를 실행하며, 이 target은 두 host와 두 앱을 debug 앱의 구성으로 컴파일한다.

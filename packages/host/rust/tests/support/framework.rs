@@ -16,8 +16,19 @@ use crate::framework::{
 /// The display name of the test framework, the end of a window title.
 pub const DISPLAY_NAME: &str = "Fixture";
 
-/// The framework of the tests.
-pub struct Fixture;
+/// The framework of the tests. A task that a test queued runs before the next post, as the main thread runs a task that
+/// was queued ahead of the posted one.
+#[derive(Default)]
+pub struct Fixture {
+    queued: Mutex<Option<Box<dyn FnOnce() + Send>>>,
+}
+
+impl Fixture {
+    /// Runs task before the next post.
+    pub fn queue(&self, task: impl FnOnce() + Send + 'static) {
+        *self.queued.lock().unwrap_or_else(PoisonError::into_inner) = Some(Box::new(task));
+    }
+}
 
 impl Framework for Fixture {
     fn application_name(&self) -> &'static str {
@@ -29,6 +40,14 @@ impl Framework for Fixture {
     }
 
     fn post(&self, task: Box<dyn FnOnce() + Send>) -> Result<()> {
+        let queued = self
+            .queued
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take();
+        if let Some(queued) = queued {
+            queued();
+        }
         task();
         Ok(())
     }
@@ -94,6 +113,7 @@ pub struct FixtureFrontend {
     notices: Sender<PresentationDone>,
     asked: Mutex<Receiver<PresentationDone>>,
     presentation: std::result::Result<usize, String>,
+    native: std::result::Result<usize, String>,
 }
 
 /// The error of a call that the window of the tests does not hold.
@@ -109,6 +129,15 @@ impl FixtureFrontend {
             notices,
             asked: Mutex::new(asked),
             presentation,
+            native: Ok(WINDOW),
+        }
+    }
+
+    /// A window whose native window fails with error, so a read of native window state ends before it reaches the platform.
+    pub fn without_native_window(error: &str) -> Self {
+        Self {
+            native: Err(error.to_string()),
+            ..Self::new(Ok(1))
         }
     }
 
@@ -192,7 +221,10 @@ impl Frontend for FixtureFrontend {
     }
 
     fn native_window(&self) -> Result<*mut c_void> {
-        Ok(WINDOW as *mut c_void)
+        self.native
+            .clone()
+            .map(|window| window as *mut c_void)
+            .map_err(Error::from)
     }
 
     fn webviews(&self) -> Vec<String> {
@@ -288,5 +320,11 @@ impl Frontend for FixtureFrontend {
 
 /// The application of the test framework. The first application of the test process names the host.
 pub fn application() -> AppHandle {
-    AppHandle::new(Arc::new(Fixture))
+    AppHandle::new(Arc::new(Fixture::default()))
+}
+
+/// The application of a framework that the test holds to queue main-thread tasks.
+pub fn application_with_queue() -> (AppHandle, Arc<Fixture>) {
+    let framework = Arc::new(Fixture::default());
+    (AppHandle::new(framework.clone()), framework)
 }

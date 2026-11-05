@@ -967,6 +967,18 @@ func (s *Surfaces) attachCheckedImage(key ImageKey, req ImageRequest) error {
 	if req.Sidecar == "" {
 		return fmt.Errorf("image %q: attach requires a sidecar", req.Name)
 	}
+	var err error
+	mainThreadStep(func() { err = s.attachImageOnMain(key, req) })
+	if err != nil {
+		return err
+	}
+	s.windowChanged()
+	return s.sendImageDrawing()
+}
+
+// attachImageOnMain checks the request, takes the name and creates the region in one step of the main thread. A close of the surface, a reload of its page and a detach
+// run on the main thread too, so each of them runs before or after the whole attach and finds no name without its region.
+func (s *Surfaces) attachImageOnMain(key ImageKey, req ImageRequest) error {
 	if err := s.pendingImageDetachError(key.Surface); err != nil {
 		return err
 	}
@@ -977,6 +989,30 @@ func (s *Surfaces) attachCheckedImage(key ImageKey, req ImageRequest) error {
 	lease := present == "lease"
 	if err := s.images.Reserve(key, &ImageOwner{SidecarName: req.Sidecar, SidecarOwner: s, Lease: lease}); err != nil {
 		return err
+	}
+	handle, err := s.createImage(key, req, lease)
+	if err != nil {
+		if _, removed := s.images.Remove(key); removed != nil {
+			LogError(fmt.Sprintf("image %s", key.Name), fmt.Errorf("remove the reserved image: %w", removed))
+		}
+		return err
+	}
+	if !s.images.Set(key, handle) {
+		system.CloseImage(handle)
+		return fmt.Errorf("image %q lost its name while it was created", key.Name)
+	}
+	return nil
+}
+
+// createImage creates the region of key in its surface. Call it on the main thread. The window state is read before the region counts as attached, so its first
+// drawing state is exact (docs/spec/native-surfaces.md#image-regions).
+func (s *Surfaces) createImage(key ImageKey, req ImageRequest, lease bool) (unsafe.Pointer, error) {
+	if err := s.readOnScreen(); err != nil {
+		return nil, err
+	}
+	view := s.views[key.Surface]
+	if view == nil || view.handle == nil {
+		return nil, fmt.Errorf("surface %q has no view", key.Surface)
 	}
 	// A region in the lease mode tells its supplier each surface that it stops holding (docs/spec/native-surfaces.md#image-regions).
 	var released func(generation, raster uint64, sequence int)
@@ -991,45 +1027,9 @@ func (s *Surfaces) attachCheckedImage(key ImageKey, req ImageRequest) error {
 			}
 		}
 	}
-	var handle unsafe.Pointer
-	mainThreadStep(func() {
-		view := s.views[key.Surface]
-		if view == nil || view.handle == nil {
-			err = fmt.Errorf("surface %q has no view", key.Surface)
-			return
-		}
-		handle, err = system.CreateImage(view.handle, key.Name, func(event string) {
-			s.imageChanged(key, event)
-		}, released)
-	})
-	if err != nil {
-		s.images.Remove(key)
-		return err
-	}
-	// When the surface was removed during creation, the created image region is closed. Registration and closing run on the UI thread.
-	// The window state is read before the region counts as attached, so its first drawing state is exact
-	// (docs/spec/native-surfaces.md#image-regions).
-	var registered bool
-	var screenErr error
-	mainThreadStep(func() {
-		if screenErr = s.readOnScreen(); screenErr != nil {
-			return
-		}
-		registered = s.images.Set(key, handle)
-		if !registered {
-			system.CloseImage(handle)
-		}
-	})
-	if screenErr != nil {
-		s.images.Remove(key)
-		mainThreadStep(func() { system.CloseImage(handle) })
-		return screenErr
-	}
-	if !registered {
-		return fmt.Errorf("surface %q closed while its image was created", key.Surface)
-	}
-	s.windowChanged()
-	return s.sendImageDrawing()
+	return system.CreateImage(view.handle, key.Name, func(event string) {
+		s.imageChanged(key, event)
+	}, released)
 }
 
 // withImage runs run on the UI thread for an open image region.
