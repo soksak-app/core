@@ -16,8 +16,8 @@ use std::time::Duration;
 use super::DocumentViewportMarker;
 use super::{
     ClipboardValue, CoreRootHost, CoreRootResolver, DOMOverlay, Delivery, Frame, Handle, Hit,
-    ImagePresentation, ImageReleased, Insets, Key, Listener, PersistentStream, Platform, Pointer,
-    ProcessFootprint, Raster, WindowOverlay,
+    ImagePresentation, ImageReleased, Insets, Key, Listener, NativeEventWait, PersistentStream,
+    Platform, Pointer, ProcessFootprint, Raster, WindowOverlay,
 };
 
 #[path = "identity.rs"]
@@ -596,6 +596,9 @@ impl Platform for Windows {
     }
     fn pull_native_events(&self, buffer: &mut [u8]) -> Result<usize, String> {
         unsupported::pull_native_events(buffer)
+    }
+    fn native_event_wake(&self) -> Result<NativeEventWait, String> {
+        unsupported::native_event_wake()
     }
     fn set_native_event_policy(&self, levels: [i8; 5]) -> Result<(), String> {
         unsupported::set_native_event_policy(levels)

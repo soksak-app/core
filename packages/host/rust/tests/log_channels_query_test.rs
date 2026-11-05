@@ -27,6 +27,7 @@ fn write_mixed_events(config: &Path) -> BTreeMap<&'static str, usize> {
         batch_interval: Duration::from_millis(20),
         rotate_bytes: 1500,
         pull: None,
+        wake: None,
         pull_loss: None,
         policy_path: None,
         retention_bytes: 1 << 40,

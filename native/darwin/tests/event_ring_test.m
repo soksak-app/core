@@ -3,7 +3,9 @@
 #import <Foundation/Foundation.h>
 #import <pthread.h>
 #include <stdatomic.h>
+#include <errno.h>
 #include <time.h>
+#include <unistd.h>
 #import "event_ring.h"
 #import "support/records.h"
 
@@ -322,6 +324,27 @@ int main(void) { @autoreleasepool {
     check([reported[@"name"] isEqualToString:@"native.log.gated"] && [reported[@"fields"][@"class"] isEqualToString:@"lifecycle"] && [reported[@"fields"][@"count"] intValue] == 1,
         @"the report of the gate passes a gate that turns the class lifecycle off");
     const int8_t restored[SP_CLASS_COUNT] = {SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE};
+    check(sp_event_set_policy(restored), @"the policy that stores everything is accepted again");
+
+    // The pipe wakes a writer that sleeps: once for a burst, again after a drain, and for a count of the gate.
+    int wake = sp_event_wake_fd();
+    check(wake >= 0, @"the wake pipe opens");
+    uint8_t wakeBytes[64];
+    while (sp_event_drain(pulled, sizeof pulled) > 0) {}
+    while (read(wake, wakeBytes, sizeof wakeBytes) > 0) {}
+    check(read(wake, wakeBytes, sizeof wakeBytes) == -1 && errno == EAGAIN, @"an empty ring leaves the pipe empty");
+    sp_event(SP_CLASS_LIFECYCLE, SP_EVENT_INFO, "test.wake", "{}");
+    sp_event(SP_CLASS_LIFECYCLE, SP_EVENT_INFO, "test.wake", "{}");
+    check(read(wake, wakeBytes, sizeof wakeBytes) == 1, @"a burst of events writes the pipe once");
+    while (sp_event_drain(pulled, sizeof pulled) > 0) {}
+    check(read(wake, wakeBytes, sizeof wakeBytes) == -1 && errno == EAGAIN, @"a drain that takes everything leaves the pipe quiet");
+    sp_event(SP_CLASS_LIFECYCLE, SP_EVENT_INFO, "test.wake", "{}");
+    check(read(wake, wakeBytes, sizeof wakeBytes) == 1, @"the event after a drain writes the pipe again");
+    while (sp_event_drain(pulled, sizeof pulled) > 0) {}
+    while (read(wake, wakeBytes, sizeof wakeBytes) > 0) {}
+    check(sp_event_set_policy(lifecycleOff), @"a policy that turns the class lifecycle off is accepted");
+    (void)sp_event_gate(SP_CLASS_LIFECYCLE, SP_EVENT_INFO);
+    check(read(wake, wakeBytes, sizeof wakeBytes) == 1, @"a count of the gate writes the pipe");
     check(sp_event_set_policy(restored), @"the policy that stores everything is accepted again");
 
     sp_event_ring_destroy(ring);

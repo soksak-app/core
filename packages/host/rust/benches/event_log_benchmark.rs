@@ -30,6 +30,7 @@ fn main() {
             batch_interval: Duration::from_millis(100),
             rotate_bytes: 100 << 20,
             pull: None,
+            wake: None,
             pull_loss: None,
             policy_path: None,
             retention_bytes: 1 << 40,

@@ -878,6 +878,9 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// Moves whole records of the native event ring into `buffer` and returns the number of bytes written; 0 means the ring
     /// is empty (docs/spec/logging.md#writers).
     fn pull_native_events(&self, buffer: &mut [u8]) -> Result<usize, String>;
+    /// Returns what sleeps until the native event ring holds a record, a loss or a count of the gate that no pull took, and then
+    /// returns; a native thread must not call into Rust, so this is how a writer that sleeps hears it.
+    fn native_event_wake(&self) -> Result<NativeEventWait, String>;
     /// Returns the events and bytes that the native ring refused in a channel (0 for the main file, 1 for the debug file) since
     /// the last call.
     fn take_native_event_loss(&self, channel: u8) -> Result<(u64, u64), String>;
@@ -1005,6 +1008,9 @@ pub trait Platform: CoreRootHost + Send + Sync {
 }
 
 /// Returns the implementation of the current operating system.
+/// What `native_event_wake` returns.
+pub type NativeEventWait = Box<dyn FnMut() -> Result<(), String> + Send>;
+
 pub fn current() -> Result<&'static dyn Platform, String> {
     #[cfg(target_os = "macos")]
     return Ok(&darwin::Darwin);

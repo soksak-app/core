@@ -7,7 +7,7 @@
 // into data attributes of the slot element, and this module reads those attributes to measure and report.
 import { native, surfaces as app } from "./host.js";
 import { chromeRow, drawnFrameText } from "./frame-text.js";
-import { setRunActive } from "./run-state.js";
+import { runActive, setRunActive } from "./run-state.js";
 
 const plane = document.getElementById("plane");
 
@@ -208,16 +208,32 @@ export function publish() {
   return deliver(mine, snapshot, chromeRow(drawnFrameText()));
 }
 
-/** Commits this snapshot and reports the edge of a run when a run started or ended. titlebar is the height of the first row of that placement. */
+/** Ends the run unless a later gesture continued it. */
+function endRun() {
+  if (!going) setRunActive(false);
+}
+
+/**
+ * Commits this snapshot and reports the edge of a run when a run started or ended. titlebar is the height of the first row of that placement.
+ *
+ * The run itself ends when the settled drawing has presented, so the work held until the end of a run does not compete with that drawing.
+ * A settled preparation ends it only by failing, because no drawing follows a failed preparation.
+ */
 function deliver(mine, snapshot, titlebar) {
   const running = !settled();
   if (running !== going) {
     going = running;
-    setRunActive(going);
+    if (going) setRunActive(true);
     // default: the run-edge listener exists only when one was registered.
     edge?.(going);
   }
-  return commit(mine, snapshot, !running, titlebar);
+  const drawing = mine !== aheadSeq;
+  const result = commit(mine, snapshot, !running, titlebar);
+  if (!running && runActive()) {
+    if (typeof result?.then === "function") result.then(drawing ? endRun : undefined, endRun);
+    else if (drawing) endRun();
+  }
+  return result;
 }
 
 function validatePlacementAnswer(record, answer, nativeKinds = app.kinds) {
@@ -362,6 +378,8 @@ function placementAnswer(record, answer) {
 /** Cancels the preparation that its draw did not reach. The next commit then prepares again. */
 export function cancelPrepared() {
   aheadRecord = null;
+  // No drawing of this preparation follows, so a run that only waited for that drawing ends.
+  endRun();
   return app.cancelPrepared();
 }
 

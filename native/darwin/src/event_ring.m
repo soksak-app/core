@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <fcntl.h>
+#include <unistd.h>
 #import "event_ring.h"
 
 // A record is an 8-byte header and the bytes of the event, padded to a multiple of 8. The header holds the length of the
@@ -145,6 +147,39 @@ static sp_event_ring *processRing(void) {
     return ring;
 }
 
+// The writer sleeps while nothing waits for it, and a thread here must not call into Go or Rust: one byte in a pipe wakes it.
+// wakePending keeps the push of a burst to one write, until the writer drains. Each side stores first and reads the other's
+// store after a fence, so a record that the drain missed always finds wakePending false.
+static _Atomic int wakeWrite = -1;
+static atomic_bool wakePending;
+
+static void wakeWriter(void) {
+    atomic_thread_fence(memory_order_seq_cst);
+    if (atomic_load_explicit(&wakePending, memory_order_relaxed)) return;
+    if (atomic_exchange_explicit(&wakePending, true, memory_order_relaxed)) return;
+    int descriptor = atomic_load_explicit(&wakeWrite, memory_order_relaxed);
+    if (descriptor < 0) return;
+    // A full pipe already wakes the writer, so a refused byte loses nothing.
+    const uint8_t byte = 0;
+    (void)write(descriptor, &byte, 1);
+}
+
+int sp_event_wake_fd(void) {
+    static int reader = -1;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        int ends[2];
+        if (pipe(ends) != 0) return;
+        for (int index = 0; index < 2; index++) {
+            fcntl(ends[index], F_SETFL, O_NONBLOCK);
+            fcntl(ends[index], F_SETFD, FD_CLOEXEC);
+        }
+        atomic_store_explicit(&wakeWrite, ends[1], memory_order_release);
+        reader = ends[0];
+    });
+    return reader;
+}
+
 uint64_t sp_mono_ns(void) { return clock_gettime_nsec_np(CLOCK_UPTIME_RAW); }
 
 // Whether the list of identifiers can be stored: no '"', no '\\' and no control character, so a host writes it as the strings
@@ -195,6 +230,7 @@ bool sp_event_enabled(uint8_t eventClass, uint8_t level) {
 bool sp_event_gate(uint8_t eventClass, uint8_t level) {
     if (sp_event_enabled(eventClass, level)) return true;
     atomic_fetch_add_explicit(&gatedCount[eventClass][level], 1, memory_order_relaxed);
+    wakeWriter();
     return false;
 }
 
@@ -208,6 +244,7 @@ static bool pushEvent(uint8_t eventClass, uint8_t level, const char *name, const
     if (nameLength == 0 || nameLength > 255 || level > SP_EVENT_TRACE || eventClass >= SP_CLASS_COUNT || !fields_json || !cids ||
         !validCids(cids, &cidsLength)) {
         countLoss(ring, channel, nameLength);
+        wakeWriter();
         return false;
     }
     // A closed gate stores nothing and counts the event.
@@ -219,6 +256,7 @@ static bool pushEvent(uint8_t eventClass, uint8_t level, const char *name, const
     uint8_t *record = length <= sizeof stack ? stack : malloc(length);
     if (!record) {
         countLoss(ring, channel, length);
+        wakeWriter();
         return false;
     }
     struct timespec now;
@@ -237,6 +275,7 @@ static bool pushEvent(uint8_t eventClass, uint8_t level, const char *name, const
     memcpy(record + SP_EVENT_HEADER_BYTES + nameLength + cidsLength, fields_json, fieldsLength);
     bool stored = sp_event_ring_push(ring, channel, record, length);
     if (record != stack) free(record);
+    wakeWriter();
     return stored;
 }
 
@@ -309,11 +348,27 @@ static void reportGated(void) {
     if (reported) atomic_store_explicit(&gatedReportedAt, now, memory_order_relaxed);
 }
 
+static bool anyGated(void) {
+    for (int eventClass = 0; eventClass < SP_CLASS_COUNT; eventClass++) {
+        for (int level = 0; level <= SP_EVENT_TRACE; level++) {
+            if (atomic_load_explicit(&gatedCount[eventClass][level], memory_order_relaxed) != 0) return true;
+        }
+    }
+    return false;
+}
+
 size_t sp_event_drain(uint8_t *buffer, size_t capacity) {
     sp_event_ring *ring = processRing();
     if (!ring) return 0;
     reportGated();
-    return sp_event_ring_drain(ring, buffer, capacity);
+    size_t drained = sp_event_ring_drain(ring, buffer, capacity);
+    atomic_store_explicit(&wakePending, false, memory_order_relaxed);
+    atomic_thread_fence(memory_order_seq_cst);
+    // What this drain left waits for the next one: a buffer that filled, or a count of the gate before its report.
+    if (atomic_load_explicit(&ring->head, memory_order_relaxed) != atomic_load_explicit(&ring->tail, memory_order_relaxed) ||
+        anyGated())
+        wakeWriter();
+    return drained;
 }
 
 sp_event_ring_loss sp_event_take_loss(uint8_t channel) {

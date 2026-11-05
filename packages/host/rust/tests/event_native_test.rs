@@ -1,5 +1,5 @@
 //! The pull of the native ring (docs/spec/logging.md#writers): the writer of the host takes the records of the native
-//! library at its batch interval, stores them in the layer `native` with the time the library gave, and counts the records
+//! library when the ring wakes it and at its batch interval, stores them in the layer `native` with the time the library gave, and counts the records
 //! it refuses and the events the ring refused.
 
 #[path = "support/folder.rs"]
@@ -9,11 +9,12 @@ mod folder;
 mod records;
 use std::fs;
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use serde_json::Value;
-use soksak_host::event_log::{Channel, EventLog, Options};
+use soksak_host::event_log::{self, Channel, EventLog, Level, Options, Rouser};
 
 /// A record of the class call as the native library drains it; the names of the tests that use it are not in the catalog.
 fn native_record(ts: u64, level: u8, name: &str, fields: &str) -> Vec<u8> {
@@ -76,10 +77,20 @@ fn read(path: &Path) -> Vec<Value> {
         .collect()
 }
 
+/// Starts a writer with the policy of every level; the ring holds what it holds when the policy is stored, so the records
+/// follow `log.policy` in the file.
 fn start(directory: &Path, ring: &Arc<Mutex<FakeRing>>, interval: Duration) -> EventLog {
+    let held = std::mem::take(&mut *ring.lock().unwrap());
+    let log = records::start_every_level(ring_options(directory, ring, interval)).unwrap();
+    *ring.lock().unwrap() = held;
+    log
+}
+
+/// The options of a writer that pulls the ring, with no way to wake it.
+fn ring_options(directory: &Path, ring: &Arc<Mutex<FakeRing>>, interval: Duration) -> Options {
     let pull_ring = Arc::clone(ring);
     let loss_ring = Arc::clone(ring);
-    records::start_every_level(Options {
+    Options {
         directory: directory.to_path_buf(),
         role: "host".into(),
         boot: "b1".into(),
@@ -107,10 +118,47 @@ fn start(directory: &Path, ring: &Arc<Mutex<FakeRing>>, interval: Duration) -> E
                 ),
             }
         })),
+        wake: Some(Box::new(|_| Ok(()))),
         policy_path: None,
         retention_bytes: 1 << 40,
-    })
-    .unwrap()
+    }
+}
+
+/// How long a test waits for what the writer does at once.
+const AT_ONCE: Duration = Duration::from_secs(2);
+
+/// An interval that does not end during a test, so what a test finds in the file was not written at the end of an interval.
+const NO_INTERVAL: Duration = Duration::from_secs(3600);
+
+fn stores(path: &Path, event: &str) -> bool {
+    path.exists() && read(path).iter().any(|line| line["event"] == event)
+}
+
+fn wait_for(path: &Path, event: &str) {
+    let deadline = Instant::now() + AT_ONCE;
+    while !stores(path, event) {
+        assert!(Instant::now() < deadline, "{event} was not stored at once");
+        std::thread::sleep(Duration::from_millis(2));
+    }
+}
+
+/// A writer with the ring and the handle that wakes it, after it took what its start left.
+fn start_waking(
+    directory: &Path,
+    ring: &Arc<Mutex<FakeRing>>,
+    interval: Duration,
+) -> (EventLog, Rouser) {
+    let rouser = Arc::new(Mutex::new(None));
+    let mut options = ring_options(directory, ring, interval);
+    let given = Arc::clone(&rouser);
+    options.wake = Some(Box::new(move |handle| {
+        *given.lock().unwrap() = Some(handle);
+        Ok(())
+    }));
+    let log = event_log::start(options).unwrap();
+    wait_for(log.path(), "log.open");
+    let handle = rouser.lock().unwrap().take().unwrap();
+    (log, handle)
 }
 
 // contract: log.native.stores-pulled-records-in-the-layer-native
@@ -320,29 +368,62 @@ fn a_pulled_native_record_keeps_its_clock_and_cids() {
     assert!(events[3].get("cids").is_none());
 }
 
-// contract: log.native.pulls-at-the-batch-interval
+// contract: log.native.wake-stores-a-record-at-once
 #[test]
-fn the_writer_pulls_native_records_at_the_batch_interval() {
+fn a_wake_of_the_ring_stores_its_record_at_once() {
     let ring = Arc::new(Mutex::new(FakeRing::default()));
     let directory = folder::Folder::new();
-    let log = start(directory.path(), &ring, Duration::from_millis(10));
+    let (log, rouser) = start_waking(directory.path(), &ring, NO_INTERVAL);
     let path = log.path().to_path_buf();
-    // The ring is empty at the start; a record that arrives later is stored without a flush request.
-    std::thread::sleep(Duration::from_millis(30));
     ring.lock().unwrap().bytes = native_record(1_791_000_000_000_001, 2, "native.test.late", "{}");
-    let deadline = Instant::now() + Duration::from_secs(5);
-    loop {
-        if read(&path)
-            .iter()
-            .any(|event| event["event"] == "native.test.late")
-        {
-            break;
-        }
-        assert!(
-            Instant::now() < deadline,
-            "the record was not stored within 5 seconds"
-        );
-        std::thread::sleep(Duration::from_millis(5));
-    }
-    log.flush(Duration::from_secs(5)).unwrap();
+    rouser.wake();
+    wait_for(&path, "native.test.late");
+}
+
+// contract: log.native.close-stores-the-ring
+#[test]
+fn close_stores_the_records_of_the_ring_without_a_wake() {
+    let ring = Arc::new(Mutex::new(FakeRing::default()));
+    let directory = folder::Folder::new();
+    let (log, _rouser) = start_waking(directory.path(), &ring, NO_INTERVAL);
+    let path = log.path().to_path_buf();
+    ring.lock().unwrap().bytes = native_record(1_791_000_000_000_001, 2, "native.test.late", "{}");
+    log.close();
+    assert!(stores(&path, "native.test.late"));
+}
+
+// contract: log.writer.sleeps-with-nothing-to-write
+#[test]
+fn a_writer_with_nothing_to_write_does_not_pull() {
+    let pulls = Arc::new(AtomicU64::new(0));
+    let ring = Arc::new(Mutex::new(FakeRing::default()));
+    let directory = folder::Folder::new();
+    let counted = Arc::clone(&pulls);
+    let mut options = ring_options(directory.path(), &ring, Duration::from_millis(5));
+    options.pull = Some(Box::new(move |_: &mut [u8]| {
+        counted.fetch_add(1, Ordering::SeqCst);
+        Ok(0)
+    }));
+    let log = event_log::start(options).unwrap();
+    wait_for(log.path(), "log.open");
+    std::thread::sleep(Duration::from_millis(30));
+    let from = pulls.load(Ordering::SeqCst);
+    std::thread::sleep(Duration::from_millis(100));
+    assert_eq!(pulls.load(Ordering::SeqCst), from);
+}
+
+// contract: log.writer.stores-the-first-event-at-once
+#[test]
+fn a_writer_that_slept_stores_the_first_event_at_once_and_gathers_the_next() {
+    let ring = Arc::new(Mutex::new(FakeRing::default()));
+    let directory = folder::Folder::new();
+    let (log, _rouser) = start_waking(directory.path(), &ring, NO_INTERVAL);
+    let path = log.path().to_path_buf();
+    assert!(log.emit(Level::Info, "host.test.first", &serde_json::json!({})));
+    wait_for(&path, "host.test.first");
+    assert!(log.emit(Level::Info, "host.test.second", &serde_json::json!({})));
+    std::thread::sleep(Duration::from_millis(50));
+    assert!(!stores(&path, "host.test.second"));
+    log.close();
+    assert!(stores(&path, "host.test.second"));
 }

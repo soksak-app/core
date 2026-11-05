@@ -3,6 +3,8 @@
 //! and the source of events that cannot call into the writer.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde_json::{Value, json};
@@ -32,6 +34,7 @@ fn options(directory: &Path, boot: &str) -> Options {
         batch_interval: Duration::from_millis(10),
         rotate_bytes: 0,
         pull: None,
+        wake: None,
         policy_path: None,
         prune: None,
     }
@@ -100,6 +103,7 @@ fn a_writer_stores_the_events_and_the_loss_of_its_pull_source() {
     let directory = Folder::new("options-pulling");
     let mut pulling = options(directory.path(), "pulling");
     let mut delivered = false;
+    pulling.wake = Some(Box::new(|_| Ok(())));
     pulling.pull = Some(Box::new(move |sink: &mut dyn PullSink| {
         if delivered {
             return;
@@ -140,11 +144,22 @@ fn refused_events_are_recorded_as_loss_before_the_next_accepted_event() {
     let mut full = options(directory.path(), "full-queue");
     full.queue_events = 2;
     // The pull runs on the writer thread at each drain. Holding it there keeps the writer from taking the queued events, so the
-    // queue stays full until the test releases it.
+    // queue stays full until the test releases it. It holds the first drain after the policy is stored.
     let (entered_tx, entered_rx) = std::sync::mpsc::channel::<()>();
     let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
     let mut entered_tx = Some(entered_tx);
+    let hold = Arc::new(AtomicBool::new(false));
+    let holding = Arc::clone(&hold);
+    let rouser = Arc::new(Mutex::new(None));
+    let given = Arc::clone(&rouser);
+    full.wake = Some(Box::new(move |handle| {
+        *given.lock().unwrap() = Some(handle);
+        Ok(())
+    }));
     full.pull = Some(Box::new(move |_sink: &mut dyn PullSink| {
+        if !holding.load(Ordering::SeqCst) {
+            return;
+        }
         if let Some(entered) = entered_tx.take() {
             entered.send(()).unwrap();
             release_rx.recv().unwrap();
@@ -157,6 +172,9 @@ fn refused_events_are_recorded_as_loss_before_the_next_accepted_event() {
     )
     .unwrap();
     log.set_policy(policy, "file");
+    log.flush(Duration::from_secs(5)).unwrap();
+    hold.store(true, Ordering::SeqCst);
+    rouser.lock().unwrap().as_ref().unwrap().wake();
     entered_rx.recv().unwrap();
     assert!(log.emit(Level::Warn, "host.stall.dump", &json!({"path": "/first"})));
     assert!(log.emit(Level::Warn, "host.stall.dump", &json!({"path": "/second"})));
