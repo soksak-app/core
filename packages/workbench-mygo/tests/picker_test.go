@@ -465,6 +465,9 @@ func TestClosingACardAsksAboutEachModifiedTab(t *testing.T) {
 	if _, err := f.answer("core.card.split", map[string]string{"card": "main", "side": "right", "plugin": "notes"}); err != nil {
 		t.Fatal(err)
 	}
+	// A hidden tab has no view until the host holds its surface, and showing the tab makes the host hold it.
+	f.run(t, "core.tab.select", `{"tab":"tab-bbbbbb"}`)
+	f.settle()
 	f.modified("tab-bbbbbb")
 	answer := f.run(t, "core.card.close", `{"card":"main"}`).(map[string]bool)
 	if answer["closed"] {

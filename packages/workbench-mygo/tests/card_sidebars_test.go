@@ -4,6 +4,7 @@ package workbench_test
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -247,6 +248,31 @@ func (f *shellFixture) sectionOf(sidebar, section string) sectionState {
 	}
 	f.t.Fatalf("core.sidebars has no section %s of %s: %+v", section, sidebar, sidebars)
 	return sectionState{}
+}
+
+// Closing a surface ends its in-flight calls (docs/spec/native-surfaces.md): a section that the space left has no view to answer.
+func TestACallOfASectionThatTheSpaceLeftIsDropped(t *testing.T) {
+	f, stored := surfaceShellOf(t, sidebarsInstalled)
+	left := f.sectionOf("left", "files.bookmarks").SurfaceID
+	f.run("core.space.add", nil)
+	f.settle()
+	if _, held := stored.lastSurfaces(t)[left]; held {
+		t.Fatalf("the space left the section %s, and the host still holds it", left)
+	}
+	before := len(stored.replies)
+	f.shell.Event("view-call", []any{map[string]any{"surface": left, "plugin": "files", "generation": 1, "id": 7, "command": "runtime.data.get", "params": map[string]string{"key": "marks"}}})
+	f.settle()
+	if len(stored.replies) != before {
+		t.Fatalf("the ended section got the reply %v", stored.replies[len(stored.replies)-1])
+	}
+	f.shell.Event("view-call", []any{map[string]any{"surface": left, "plugin": "files", "generation": 1, "id": 8, "command": "runtime.error", "params": map[string]string{"where": "files bookmarks", "text": "late"}}})
+	f.settle()
+	if len(stored.replies) != before {
+		t.Fatalf("the ended section got the reply %v", stored.replies[len(stored.replies)-1])
+	}
+	if slices.ContainsFunc(f.lines, func(line string) bool { return strings.Contains(line, "late") }) {
+		t.Fatalf("the ended section reported an error: %v", f.lines)
+	}
 }
 
 func TestASectionIsMountedOnceItsViewAnswers(t *testing.T) {

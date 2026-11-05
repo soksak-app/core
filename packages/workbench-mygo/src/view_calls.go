@@ -146,6 +146,11 @@ func (s *Shell) viewCall(data []any) {
 		s.fail(fmt.Errorf("view call: %w", err))
 		return
 	}
+	// Closing a surface ends its in-flight calls: the host closes the view at the next placement, so a call that crossed the close gets
+	// no reply and no state (docs/spec/native-surfaces.md).
+	if s.surfaces.held[call.Surface] == nil {
+		return
+	}
 	view := s.view(call.Surface)
 	// The first call of a page that started anew can arrive before the end of the page before it.
 	if view.generation != 0 && call.Generation > view.generation {
