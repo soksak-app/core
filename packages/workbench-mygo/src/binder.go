@@ -31,6 +31,14 @@ func NewBinder(registry *Registry, failed func(command string, err error)) *Bind
 // Attach gives the binder the pointer sequence and the focus of its window.
 func (b *Binder) Attach(pointer *PointerSequence, focus *Focus) { b.pointer, b.focus = pointer, focus }
 
+// Watched gives the presses in element, a root of the workbench or an overlay, to the pointer sequence of the window.
+func (b *Binder) Watched(element ui.Element) ui.Element {
+	if b.pointer == nil {
+		return element
+	}
+	return b.pointer.Watch(element)
+}
+
 // Bound gives a widget of the element name name to the keyboard focus of the window, which reaches it by that name.
 func (b *Binder) Bound(element ui.Element, name string) ui.Element {
 	if b.focus == nil {

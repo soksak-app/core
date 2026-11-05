@@ -2,7 +2,7 @@ package workbench
 
 import "github.com/egoist/mygo/ui"
 
-// The last pointer sequence of the workbench, the value of the status core.pointer. The root of the workbench observes each press
+// The last pointer sequence of the workbench, the value of the status core.pointer. Each root of the workbench observes each press
 // and release, which reach it whatever element takes them, and names what stands under the pointer from the element tree of the
 // last frame (docs/spec/exposure.md#workbench-statuses).
 
@@ -34,14 +34,18 @@ func NewPointerSequence(elements Elements, changed func(), fail func(error)) *Po
 	return &PointerSequence{elements: elements, changed: changed, fail: fail}
 }
 
-// Observe takes the input of the element that holds the workbench at the origin of the window (ui.Element.ObserveInput).
-func (p *PointerSequence) Observe(ev ui.InputEvent) {
-	switch ev.Kind {
-	case ui.InputPointerDown:
-		p.down(ev)
-	case ui.InputPointerUp:
-		p.up(ev)
-	}
+// Watch observes the presses and the releases in element, a root of the workbench or an overlay, which stands outside the root.
+func (p *PointerSequence) Watch(element ui.Element) ui.Element {
+	box := element.Bounds()
+	return element.ObserveInput(func(ev ui.InputEvent) {
+		ev.X, ev.Y = ev.X+box.X, ev.Y+box.Y
+		switch ev.Kind {
+		case ui.InputPointerDown:
+			p.down(ev)
+		case ui.InputPointerUp:
+			p.up(ev)
+		}
+	})
 }
 
 func (p *PointerSequence) tree() []ui.ElementNode {

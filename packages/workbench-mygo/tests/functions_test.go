@@ -55,7 +55,7 @@ func TestFunctionsAnswerTheRegistry(t *testing.T) {
 
 	tester := ui.NewTester(func(c *ui.Context) {
 		focus.Frame(c)
-		ui.Column(c).ObserveInput(pointer.Observe).Children(func() {
+		pointer.Watch(ui.Column(c)).Children(func() {
 			focus.Bind(ui.Box(c.Key(workbench.Exposed{Name: "core.card"})).Role(ui.RoleGroup).Label("first").Size(100, 30).Focusable(), "core.card")
 			focus.Bind(ui.Box(c.Key("second")).Size(100, 30).Focusable(), "core.card")
 		})

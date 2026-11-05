@@ -635,6 +635,7 @@ func (s *Shell) drawPicker(c *ui.Context, width, height float32) {
 	anchor, attached := layer.drawn[layer.anchor]
 	open := true
 	ui.PopoverBase(c, anchor, &open, func(panel ui.Element) {
+		s.binder.Watched(panel)
 		switch {
 		case attached && layer.start:
 			panel.AttachTo(anchor, ui.AnchorBottomStart, ui.AnchorTopStart)

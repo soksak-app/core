@@ -22,7 +22,7 @@ func (v *pointerView) button(c *ui.Context, name, label string) {
 }
 
 func (v *pointerView) view(c *ui.Context) {
-	ui.Column(c).Size(200, 200).ObserveInput(v.sequence.Observe).Children(func() {
+	v.sequence.Watch(ui.Column(c).Size(200, 200)).Children(func() {
 		ui.Column(c.Key(workbench.Exposed{Name: "core.list"})).Role(ui.RoleGroup).Label("list").Size(200, 100).Children(func() {
 			if v.present {
 				v.button(c, "core.save", "Save")
@@ -196,4 +196,36 @@ func TestAKeyReportsTheClickOfAButton(t *testing.T) {
 	if got.Sequence != 0 || got.Down != nil || got.Click == nil || *got.Click != "core.space-tab.add" {
 		t.Fatalf("the sequence is %+v", got)
 	}
+}
+
+// A press in an overlay of the workbench is a press of the workbench: the dialogs and the picker stand outside its root.
+func TestAPressInAnOverlayReportsThePointerSequence(t *testing.T) {
+	for _, each := range []struct{ title, command, name string }{
+		{"settings", "core.settings.open", "core.settings-modal.close"},
+		{"debug", "core.debug.open", "core.debug.close"},
+	} {
+		t.Run(each.title, func(t *testing.T) {
+			f := openedShell(t)
+			f.settle()
+			f.run(each.command, map[string]any{})
+			f.settle()
+			wantPress(t, f, each.name, "")
+		})
+	}
+}
+
+func wantPress(t *testing.T, f *shellFixture, name, item string) {
+	t.Helper()
+	before := status[workbench.PointerStatus](t, f, "core.pointer").Sequence
+	f.click(name, item)
+	got := status[workbench.PointerStatus](t, f, "core.pointer")
+	if got.Sequence != before+1 || got.Down == nil || *got.Down != name {
+		t.Fatalf("the sequence is %+v", got)
+	}
+}
+
+func TestAPressInThePickerReportsThePointerSequence(t *testing.T) {
+	f := projectWithPlugins(t)
+	f.click("core.card.add", f.tabbedCards()[0])
+	wantPress(t, f, "core.picker.item", "acme")
 }
