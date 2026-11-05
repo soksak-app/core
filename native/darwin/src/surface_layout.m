@@ -1,5 +1,6 @@
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
+#import <objc/runtime.h>
 #import "surface_layout.h"
 #import "application_log.h"
 #import "observe.h"
@@ -112,30 +113,51 @@ size_t surfaceLayoutTraceStop(double *out, size_t capacity) {
     return total;
 }
 
-// Takes a press that surfaceLayoutPressWaits holds back, and every later input of the window, so the input stays in order.
-static NSEvent *holdPress(NSEvent *event) {
+// Takes a press that surfaceLayoutPressWaits holds back, and every later press, release and key of the window, so the input
+// stays in order.
+static BOOL holdInput(NSEvent *event) {
     NSWindow *window = event.window;
-    if (!window) return event;
+    if (!window) return NO;
+    BOOL press = NO;
+    switch (event.type) {
+        case NSEventTypeLeftMouseDown:
+        case NSEventTypeRightMouseDown:
+            press = YES;
+            break;
+        case NSEventTypeLeftMouseDragged:
+        case NSEventTypeLeftMouseUp:
+        case NSEventTypeRightMouseDragged:
+        case NSEventTypeRightMouseUp:
+        case NSEventTypeKeyDown:
+        case NSEventTypeKeyUp:
+            break;
+        default:
+            return NO;
+    }
     BOOL held = NO;
     for (NSEvent *earlier in heldInput) held = held || earlier.window == window;
-    BOOL press = event.type == NSEventTypeLeftMouseDown || event.type == NSEventTypeRightMouseDown;
-    if (!held && !(press && surfaceLayoutPressWaits(window, event.locationInWindow.x, event.locationInWindow.y))) return event;
+    if (!held && !(press && surfaceLayoutPressWaits(window, event.locationInWindow.x, event.locationInWindow.y))) return NO;
     if (!heldInput) heldInput = [[NSMutableArray alloc] init];
     [heldInput addObject:event];
-    return nil;
+    return YES;
 }
 
-// AppKit calls the local monitors in no fixed order, so another monitor can see a held event as it arrives and again as it comes
-// back. The monitors of a press and a release take the second sight as the same fact.
-static void watchPresses(void) {
-    static id monitor;
-    if (monitor) return;
-    NSEventMask mask = NSEventMaskLeftMouseDown | NSEventMaskLeftMouseDragged | NSEventMaskLeftMouseUp
-        | NSEventMaskRightMouseDown | NSEventMaskRightMouseDragged | NSEventMaskRightMouseUp
-        | NSEventMaskKeyDown | NSEventMaskKeyUp;
-    monitor = [sp_observe_local_monitor("surface_layout.held_input", SP_OBSERVE_COUNT, mask, ^NSEvent *(NSEvent *event) {
-        return holdPress(event);
-    }) retain];
+static void (*applicationSendEvent)(id, SEL, NSEvent *);
+
+static void sendEventAfterLayout(id application, SEL selector, NSEvent *event) {
+    if (!holdInput(event)) applicationSendEvent(application, selector, event);
+}
+
+// -[NSApplication sendEvent:] calls the local monitors, in no fixed order, and a monitor that returns nil ends the others. The
+// hold stands in front of it, so no monitor of the library, a host or a framework sees an event that waits, and each sees the
+// event once when it comes back. A subclass of an application calls this implementation through super.
+static void watchInput(void) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        Method method = class_getInstanceMethod(NSApplication.class, @selector(sendEvent:));
+        applicationSendEvent = (void (*)(id, SEL, NSEvent *))method_getImplementation(method);
+        method_setImplementation(method, (IMP)sendEventAfterLayout);
+    });
 }
 
 // Gives the waiting input of owner back after its transaction ended. The events go to the start of the queue from the last
@@ -157,7 +179,7 @@ static void releaseInput(void *owner) {
 }
 
 static void startLayout(SPLayoutRequest *request) {
-    watchPresses();
+    watchInput();
     if (!activeOwner) {
         [CATransaction begin];
         [CATransaction setDisableActions:YES];
