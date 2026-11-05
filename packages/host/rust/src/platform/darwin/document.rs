@@ -37,6 +37,7 @@ unsafe extern "C" {
         store: *const c_char,
         folder: *const c_char,
         plugin: *const c_char,
+        label: *const c_char,
         channel: *const c_char,
         changed: Changed,
         context: *mut c_void,
@@ -195,12 +196,14 @@ pub fn create(
     store: &str,
     folder: &str,
     plugin: &str,
+    label: &str,
     channel: Option<&str>,
     receive: Box<dyn Fn(String)>,
 ) -> Result<Handle, String> {
     let store = CString::new(store).map_err(|e| e.to_string())?;
     let folder = CString::new(folder).map_err(|e| e.to_string())?;
     let plugin = CString::new(plugin).map_err(|e| e.to_string())?;
+    let label = CString::new(label).map_err(|e| e.to_string())?;
     let channel = channel
         .map(CString::new)
         .transpose()
@@ -212,6 +215,7 @@ pub fn create(
             store.as_ptr(),
             folder.as_ptr(),
             plugin.as_ptr(),
+            label.as_ptr(),
             channel
                 .as_ref()
                 .map_or(std::ptr::null(), |text| text.as_ptr()),

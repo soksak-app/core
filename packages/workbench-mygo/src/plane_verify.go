@@ -7,22 +7,49 @@ import (
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
-// The value of core.verify for the plane of the window. A frame ends with a verification of what it drew, as a render of the page
-// workbench does. The rows read the element tree of the frame and the answer of the host, so a row states what happened and not
-// what the workbench asked for.
+// The value of core.verify for the plane of the window. A frame computes nothing: a read verifies the plane that the last frame drew.
+// The rows read the element tree of the frame and the answer of the host, so a row states what happened and not what the workbench
+// asked for.
 
-// verifyLater runs the verification in the step after the frame, because the element tree of a frame is not readable while the
-// frame builds. A frame that follows before the step ran is verified by that step.
+// SurfaceSlot is the key of the element that holds a surface in the window. Its bounds are where the window drew the slot.
+type SurfaceSlot struct{ ID string }
+
+// verifyStatus returns the value of core.verify, null before the first frame. The element tree of a frame is not readable while the
+// frame builds, so a read inside a frame has the last value, and the step after the frame gives a watcher the new one.
+func (s *Shell) verifyStatus() any {
+	if !s.drawn {
+		return nil
+	}
+	if !s.building {
+		if err := s.verification.Update(s.surfaces.planeDrawn, s.verifyPlane, s.surfaces.failure); err != nil {
+			s.fail(err)
+		}
+	}
+	return s.verification.Status()
+}
+
+// verifyWatched tells whether a watcher or a view follows core.verify.
+func (s *Shell) verifyWatched() bool {
+	if s.registry.Watched("core.verify") {
+		return true
+	}
+	for _, view := range s.surfaces.views {
+		if _, ok := view.statuses["core.verify"]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+// verifyLater gives a watcher of core.verify the result of the frame in the step after it.
 func (s *Shell) verifyLater() {
-	if s.verifying {
+	if s.verifying || !s.verifyWatched() {
 		return
 	}
 	s.verifying = true
 	s.options.Post(func() {
 		s.verifying = false
-		if err := s.verification.Update(s.surfaces.planeDrawn, s.verifyPlane, s.surfaces.failure); err != nil {
-			s.fail(err)
-		}
+		s.pushStatuses()
 	})
 }
 
@@ -37,12 +64,16 @@ func (s *Shell) verifyPlane() ([]VerifyRow, error) {
 		return nil, err
 	}
 	origin := s.planeOrigin()
+	slots := drawnSlots(tree)
 	drawn := make(map[string]DrawnSurface, len(s.surfaces.drawn))
-	for id, box := range s.surfaces.drawn {
+	for id := range s.surfaces.drawn {
+		box, ok := slots[id]
+		if !ok {
+			continue // A surface that the commit holds and the window does not draw is what V7a counts as gone.
+		}
 		held := s.surfaces.held[id]
-		slot := DrawnSurface{Frame: inPlane(box, origin), Dim: s.surfaceDimmed(id), Predicted: true, Card: s.cardOfTab(id)}
+		slot := DrawnSurface{Frame: inPlane(box, origin), Dim: s.surfaceDimmed(id), Card: s.cardOfTab(id)}
 		if held != nil && held.section != nil {
-			slot.Predicted = false
 			slot.Card = sectionCard(held.section)
 		}
 		drawn[id] = slot
@@ -70,7 +101,7 @@ func (s *Shell) verifyPlane() ([]VerifyRow, error) {
 		Drawn:      drawn,
 		Cards:      DrawnCards(tree, layout.Rect{X: origin.X, Y: origin.Y}),
 		Plane:      layout.Rect{W: s.plane.Width(), H: s.plane.Height()},
-		Pad:        float64(s.stageInset()),
+		Pad:        float64(s.palette.Gap),
 		Rules:      s.drawnRules(),
 		Band:       DropBand{HeaderPx: head + edge, FooterPx: foot + edge},
 		Head:       head,
@@ -84,6 +115,22 @@ func (s *Shell) verifyPlane() ([]VerifyRow, error) {
 		in.RailGroups = append(in.RailGroups, group.Rects)
 	}
 	return Verify(in)
+}
+
+// drawnSlots reads where the window drew the slot of each surface, in window coordinates.
+func drawnSlots(tree []ui.ElementNode) map[string]layout.Rect {
+	slots := map[string]layout.Rect{}
+	var walk func(nodes []ui.ElementNode)
+	walk = func(nodes []ui.ElementNode) {
+		for _, node := range nodes {
+			if slot, ok := node.Key.(SurfaceSlot); ok {
+				slots[slot.ID] = layout.Rect{X: float64(node.Bounds.X), Y: float64(node.Bounds.Y), W: float64(node.Bounds.W), H: float64(node.Bounds.H)}
+			}
+			walk(node.Children)
+		}
+	}
+	walk(tree)
+	return slots
 }
 
 // sectionCard is the card that holds a section surface: the card that the section belongs to, or its window sidebar.

@@ -57,6 +57,7 @@ fn invalid_json_closes_connection() {
 | menu | id | source | ko | en | key |
 |---|---|---|---|---|---|
 | app | about | title | 정보 | About | |
+| app | settings | title | 설정… | Settings… | cmd+, |
 | app | services | system | | | |
 | app | hide | title | 가리기 | Hide | cmd+h |
 | app | hide-others | title | 기타 가리기 | Hide Others | opt+cmd+h |
@@ -115,6 +116,7 @@ fn invalid_json_closes_connection() {
 | `window.responder.closed-window-sends-nothing` | close가 window를 지운 뒤 그 window에 닿은 first responder 변경은 받을 워크벤치가 없으므로 `window-responder` event를 보내지 않고 오류도 저장하지 않는다. window가 열려 있는 동안 실패한 responder 읽기는 오류로 보고한다. | all |
 | `window.facts.modal-order-is-above-every-webview` | `host.window`은 열린 modal의 `order`를 창의 native surface 수와 web view 수의 합으로 보고한다. native surface의 order와 web view의 order는 두 목록의 index이고 modal은 둘 위에 붙으므로, 이 값은 모든 native surface, 모든 web view와 document region의 `order`보다 크다. | all |
 | `window.facts.document-reports-its-blur` | `host.window`은 dialog 배경의 native blur filter를 가진 각 document web view(view 표면의 page와 document region)에 `blurred: true`를, filter가 없는 것에 `blurred: false`를 보고한다. | all |
+| `window.facts.region-reports-its-blur` | `host.window`의 각 image region 항목은 region이 dialog 배경의 native blur filter를 가진 동안 `blurred: true`를, filter가 없는 동안 `blurred: false`를 보고한다. | all |
 | `links.open.accepts-web-and-mail-schemes` | 절대 `http`, `https`, `mailto` URL은 열기를 받아들인다. | all |
 | `links.open.rejects-other-schemes` | 다른 스킴의 URL, 해석되지 않는 URL, 8192자보다 긴 URL은 거부한다. | all |
 | `notifications.request.accepts-tab-notices` | 제어 문자 없이 1–256자인 표면과 제목, 1–1024자인 본문의 알림을 받아들이며, 제거에는 표면만 필요하다. | all |
@@ -201,6 +203,7 @@ fn invalid_json_closes_connection() {
 | `binding.record.every-host-method-is-callable` | host의 내보낸 모든 메서드는 입구를 통해 이름으로 닿고, 지원하지 않는 서명의 메서드는 그 메서드의 이름을 말하는 오류로 host 시작을 멈춘다. | wailsv3 only: Tauri는 `bindings!` 매크로가 정의한 command를 등록하므로 매크로 밖의 command는 등록에 들어가지 않는다 |
 | `binding.record.unsupported-method-fails-at-start` | 매개변수가 선택적 context와 `json.RawMessage` 값이 아니거나 결과가 선택적 값과 선택적 오류가 아닌 내보낸 메서드는 입구의 생성을 그 메서드의 이름을 말하는 오류로 실패시킨다. | wailsv3 only: Tauri는 command를 reflection으로 읽지 않는다 |
 | `diagnostics.test-mark.needs-the-event-log` | event log가 연결되지 않은 동안의 표시는 `the event log of the host is not attached`로 실패한다. | all |
+| `documents.attach.one-main-step` | attach는 영역 확인, 이름 예약, 문서 생성과 등록을 main thread의 한 step에서 실행하므로, 표면 닫기나 page reload는 attach 전체의 앞이나 뒤에 실행된다. 실패한 attach는 오류 기록 없이 자기 이름과 request log만 되돌리고, 이름 없이 열린 문서는 남지 않는다. | all |
 | `documents.request.accepts-own-surface` | 호출자 자신의 표면에 대한 문서 요청을 받아들이고 표면과 이름 키를 반환한다. | all |
 | `documents.request.rejects-foreign-or-missing-caller` | 호출자 표면이 없거나 다른 표면에서 온 문서 요청은 "not surface"로 실패한다. | all |
 | `documents.request.rejects-invalid-names` | 빈 이름, 대문자, 하이픈으로 시작, 슬래시 포함, 65자 문서 이름을 거부한다. | all |
@@ -237,7 +240,8 @@ fn invalid_json_closes_connection() {
 | `document.stream.ack-refusal-names-seq` | native가 거부한 확인은 `document "<name>" stream <stream>: seq <seq> was not sent`로 실패하며, host는 이를 애플리케이션 로그에 쓴다. | all |
 | `document.stream.process-end-removes-subscriptions` | 구독한 표면 페이지의 web content process가 끝나면 그 구독을 제거하고, stream마다 구독자 수는 0으로 돌아가며, 마지막 구독을 잃은 `elements` 수집은 꺼지고, 영역은 요청 수집과 요청 로그를 유지한다. | all |
 | `document.stream.window-close-removes-subscriptions` | 구독한 표면이 있는 창을 닫으면 그 구독을 제거하고, 구독자 수는 0으로 돌아가며, 요청 로그는 해제된다. | all |
-| `document.plugin.folder` | 문서 영역의 plugin 폴더는 `plugins/installed.json`이 표면의 켜진 설치 plugin에 기록한 폴더다. 꺼졌거나 알 수 없는 plugin은 `plugin <id> is not installed and enabled`로 실패한다. | all |
+| `document.plugin.folder` | 문서 영역의 plugin 폴더는 `plugins/installed.json`이 표면의 켜진 설치 plugin에 기록한 폴더다. 꺼졌거나 알 수 없는 plugin은 `plugin <id> is not installed and enabled`로 실패한다. 그 plugin의 `plugin.json`만 읽으므로 다른 plugin의 잘못된 `plugin.json`은 답을 바꾸지 않고, 설치나 제거 뒤의 답은 설치를 따른다. | all |
+| `document.process-label` | view의 WebContent process 표시 이름은 `soksak://plugin/<plugin id>`이고 document region의 표시 이름은 `soksak://plugin/<plugin id>/<region>`이다. host가 이 이름을 만들어 web view를 만들 때 platform에 넘긴다. | all |
 | `document.message.forward` | plugin 문서의 메시지 `{"message": value}`는 `document-message`의 payload `{surface, document, message}`가 되고, `{"error": reason}`은 host가 로그에 쓰는 이유가 되며, 둘 다 없는 값은 `document message <name> has neither message nor error`로 실패한다. | all |
 | `document.core-root.grant` | core root(`soksak://core`)는 view import map의 core target을 bundled frontend에서 제공하고 그 목록은 bundled frontend의 `core-root.json`에서 읽으며(없거나 잘못된 파일은 error이다), `install.granted-items`가 요청 plugin에 허용한 설치 plugin 파일만 제공한다. 그 밖의 경로, enabled가 아닌 요청 plugin, grant가 이름 붙이지 않은 다른 plugin의 경로는 not found가 되며 `error: core root: <path> is not granted to <plugin>`을 기록한다. 허용되었으나 없는 파일은 거부가 아니라 error이다. | all |
 | `document.core-root.native` | host는 core root resolver를 platform에 등록하며, resolver는 view의 요청을 `CoreRoot`로 답한다. 허용된 module, shared target, core 파일은 확장자의 content type으로 내보내고, 거부된 path나 설치되지 않은 요청자는 not found가 되며 `error: core root: <path> is not granted to <plugin>`을 기록한다. `CoreRoot`의 error는 application log에 기록되고 요청은 not found가 된다. | all |
@@ -367,6 +371,7 @@ fn invalid_json_closes_connection() {
 | `endpoint.input.key-unknown-modifier-rejected` | 알 수 없는 키 수정자는 -32602를 반환한다. | all |
 | `endpoint.input.key-shift-command-mask` | shift와 command 수정자는 비트 마스크 9가 되고, 키와 phase는 그대로 전달된다. | all |
 | `endpoint.input.key-control-option-and-text` | control과 option 수정자는 6이 되고 text는 그대로 전달된다. | all |
+| `endpoint.input.key-empty-text-types-the-key` | text가 빈 키는 text 없이 플랫폼에 닿으므로, 키 이름이 event의 문자를 정한다. | all |
 | `endpoint.input.key-invalid-phase-or-modifier-type` | 알 수 없는 키 phase나 배열이 아닌 modifiers 값은 -32602를 반환한다. | all |
 | `endpoint.discovery.writes-endpoint-json` | endpoint.json은 전송 방식, 주소, pid, 애플리케이션, 버전, 실행 파일, 시작 시각을 담는다. | all |
 | `endpoint.discovery.written-after-first-window` | 엔드포인트를 시작할 때 endpoint.json을 쓰지 않는다. 없는 창으로 게시하면 실패하고 파일을 쓰지 않으며, 있는 창으로 게시한 뒤에는 그 창의 요청에 응답한다. | all |
@@ -394,6 +399,7 @@ fn invalid_json_closes_connection() {
 | `endpoint.watch.surface-unwatch-keeps-plain-watch` | 표면 구독을 해제해도 같은 이름의 일반 구독은 유지된다. | all |
 | `endpoint.watch.subscription-arrival-order` | 연달아 보낸 watch, unwatch, watch는 느린 페이지에 그 순서로 도착하고 연결은 계속 구독한다. | all |
 | `status.window.rewatch-notifies` | host.window의 마지막 watch가 끝난 뒤 시작한 watch는, 앞선 watch 종료 전에 보낸 값과 같더라도 창의 다음 값을 받는다. Tauri host는 마지막 watch가 끝날 때 마지막으로 보낸 값의 기록을 지우고, Wails host는 기록을 두지 않는다. | all |
+| `status.window.latest-value-last` | 읽는 동안 들어온 host.window 변경은 그 마지막 변경 뒤에 시작하는 읽기 하나로 합쳐지므로, 변경이 몰려도 읽기는 하나이고 새 값 뒤에 옛 값을 보내지 않는다. | all |
 | `endpoint.watch.other-requests-not-blocked-by-pending-subscription` | 페이지 구독 해제가 대기 중이어도 같은 연결의 다음 요청에 응답한다. | all |
 | `exposure-reply.payload.main-reply-unscoped` | surface가 없는 주 문서 응답 페이로드는 빈 surface로 해석된다. | all |
 | `exposure-reply.payload.scoped-reply-keeps-surface` | surface가 있는 응답 페이로드는 인코딩과 해석을 거쳐도 surface를 유지한다. | all |
@@ -568,6 +574,7 @@ fn invalid_json_closes_connection() {
 | `images.present.older-ack-preserves-newer-rejection` | 성공한 오래된 in-flight presentation은 실제 presented sequence를 전진시키지만 더 새 accepted sequence의 rejection을 지우지 않는다. 최신 accepted sequence의 성공 acknowledgment만 그 rejection을 지운다. | all |
 | `images.present.missing-native-surface-requests-reconfiguration` | notFound로 실패한 표시는 같은 raster의 새 구성을 요청한다. | all |
 | `images.attach.surface-close-removes-only-its-images` | 표면을 제거하면 그 이미지 핸들을 반환하고 다른 표면의 이미지는 유지한다. | all |
+| `images.attach.one-main-step` | attach는 요청 확인, 이름 예약, 영역 생성과 등록을 main thread의 한 step에서 실행하므로, 표면 닫기나 page reload는 attach 전체의 앞이나 뒤에 실행된다. 실패한 attach는 오류 기록 없이 자기 이름만 되돌리고, 이름 없이 열린 영역은 남지 않는다. | all |
 | `images.attach.rejects-reservation-without-sidecar` | 소유 사이드카가 없는 이미지 예약을 거부하고 아무것도 등록하지 않는다. | all |
 | `images.present.replaced-frame-is-logged-as-invalidated` | 더는 현재가 아닌 프레임(`stale`, `notAttached`, `staleRaster native=... frame=...`)은 `stale`로 답하고 표시 실패로 기록하지 않으며 `image frame invalidated before native presentation: ... reason=<detail>`을 남긴다. | all |
 | `images.present.frame-of-undeclared-sidecar-is-invalidated` | 어떤 plugin도 선언하지 않는 사이드카의 그림은 `stale`로 답하고 native 표시, 복구, 오류 없이 기록되며, 끝난 사이드카에 대한 답은 `not sent`로 기록된다. | all |
@@ -615,6 +622,7 @@ fn invalid_json_closes_connection() {
 | `sidecars.retain.rejects-after-stop` | 사이드카가 멈춘 뒤 시작한 retain이나 서비스를 준비한 뒤 멈춤이 끼어든 retain은 "sidecars are stopped"로 실패하고 서비스에 retain을 보내지 않는다. | all |
 | `menu.application.view-has-full-screen-and-text-size` | 애플리케이션 메뉴의 View 메뉴에는 전체 화면과 Command `=`, `-`, `0`의 [글자 크기](text-size.ko.md) 항목이 있고, 웹뷰 전체를 확대하거나 다시 읽는 메뉴 항목이 없다. | all |
 | `menu.application.help-has-debug` | 애플리케이션 메뉴의 도움말 메뉴에 단축키 없는 항목 디버그(Debug)가 있다. 이 항목은 main 창의 메인 page에서 `core.debug.open`을 실행한다([디버그 화면](debug.ko.md)). | all |
+| `menu.application.app-has-settings` | 애플리케이션 메뉴의 app 메뉴에 about 항목 바로 다음으로 단축키 Command `,`의 항목 설정…(Settings…)이 있다. 이 항목은 메인 윈도우의 main page에서 `core.settings.open`을 실행한다([settings window](settings.ko.md)). | all |
 | `sidecars.protocol.surface-keeps-its-first-root` | 소유 창의 프로젝트가 바뀐 뒤에도 열린 표면의 요청과 closed 알림은 첫 요청의 root를 가진다. | all |
 | `sidecars.protocol.closed-surface-messages-are-discarded-and-unknown-ones-fail` | 호스트가 닫은 표면에 대한 stdio sidecar 메시지는 버리고, 호스트가 그 프로세스에 한 번도 보내지 않은 표면의 메시지는 보낸 표면에 `unknown surface <surface>`를 전달하며 sidecar를 실패시킨다. | all |
 | `sidecars.protocol.dropped-message-is-recorded` | 소유 창이 없어 버려지는 사이드카 메시지는 `info host sidecar <name>: message for surface <surface> dropped: no window owns the surface: <body>`를 쓴다. | all |
@@ -815,6 +823,8 @@ fn invalid_json_closes_connection() {
 | `debug.save-all.reports-progress` | tar writer는 나열한 byte를 1 MiB 이상 더 쓸 때마다, 그리고 마지막 파일 뒤에 쓴 byte가 전체와 같게 한 번 보고한다. | all |
 | `overlay.pick.dropped-is-recorded` | id와 instance가 열린 모달의 것이 아닌 모달의 응답은 기록 `host.overlay.dropped`의 field `{id, instance, key, open}`과 함께 버려지며, 열린 모달이 없으면 `open`은 빈 글이다. 열린 모달의 응답은 버려지지 않는다. | all |
 | `modal.ready-visible` | 열린 모달의 ready 요청은 모달을 표시하고 visible 플래그를 설정한 뒤, 둘 다 끝난 후에 메인 스레드에서 응답한다. 표시가 실패하면 그 오류로 응답하고 모달은 다음 ready 요청까지 대기 상태로 남는다. id와 instance가 열린 모달의 것이 아닌 ready 요청은 오래된 요청이다. 아무것도 바꾸지 않고 ok로 응답하며, 이벤트 `host.trace.modal.stale-ready`를 `modal`과 `instance`와 함께 기록한다. | all |
+| `modal.dialog-blurs-each-document-and-image-region` | Dialog를 열면 window의 각 document web view와 각 image region에 native blur를 걸고, 닫으면 걷는다. | all |
+| `modal.region-under-a-dialog-starts-blurred` | Dialog가 열린 동안 만든 image region은 흐린 상태로 시작하고, dialog가 없는 동안 만든 것은 blur 없이 시작한다. | all |
 | `reload.timeout.names-running-calls` | 범위 안에 page가 준비를 알리지 않은 다시 읽기는 `the reloaded page did not report ready within <bound>; running host calls: <calls>`로 실패하며, `<calls>`는 그 window에서 돌아오지 않은 호출을 시작 순서로 각각 소수 한 자리의 `<name> <seconds>s`로 적거나 `none`이다. | all |
 | `log.batch.requires-the-start` | 자신을 쓴 workbench의 start를 `start`에 이름하지 않은 workbench 배치의 event는 `start must name the start of the workbench that wrote the event`로, `page`를 이름한 event는 `page is not a member of an event of the workbench`로 거부된다. | all |
 | `debug.save-text.writes-the-text-to-the-destination` | 글 저장은 요청의 글을 줄바꿈과 ASCII가 아닌 글자를 그대로 둔 채 목적지에 쓴다. | all |
@@ -827,6 +837,7 @@ fn invalid_json_closes_connection() {
 | `log.query.follows-the-tail-with-since` | 앞선 답의 `tail`을 `since`로 준 질의는 그 뒤에 덧붙은 행을 돌려주며 앞선 답이 담은 행보다 `ts_us`가 이른 행도 돌려주고, 프로세스의 `seq` 이하의 행은 뺀다. | all |
 | `log.query.resolves-a-run-to-the-range-of-its-marks` | `run`은 질의를 channel의 모든 파일에서 그 run의 가장 이른 `host.test.start`부터 가장 늦은 `host.test.end`까지의 시간 범위로 한정하고, start가 없는 run은 오류 `log query run "<run>" has no host.test.start in the channel`이다. | all |
 | `log.query.refuses-invalid-parameters` | 선언하지 않은 항목과 매개변수의 잘못된 값은 명세의 오류 문구로 거절하고, event 구조를 어기는 줄이 있는 파일을 읽는 질의는 파일과 줄을 밝히며 실패한다. | all |
+| `log.query.leaves-out-a-file-of-another-schema` | 질의는 schema 번호가 다른 파일을 빼고 다른 파일의 행을 답하며, `around`에서도 그 파일의 오류를 `rejected`에 담는다. 그런 파일이 없는 질의는 빈 `rejected`를 답한다. | all |
 | `log.query.answers-the-rows-around-a-row` | `around`가 있는 질의는 key 앞의 `earlier`개 행과 뒤의 `later`개 행을 key에 있는 행과 함께 channel의 파일에서 filter 없이 key 순서로 돌려주고, 각 행에 `context`(이웃은 true, key의 행은 false)를 표시하며 `next`는 null이다. 행이 없는 key는 이웃만 돌려준다. `docs/spec/cases/log-contract/query/cases.json`의 golden `around` 사례와 그 글 줄(context 행은 공백 둘로 들여 쓴다)은 두 구현에서 같다. `channel`, `earlier`, `later` 외의 항목, `around` 없는 `earlier`나 `later`, 잘못된 cursor, 0에서 500을 벗어난 개수는 명세의 오류 문구로 거절하며, 답의 줄 글은 8,388,608바이트 이하다. | all |
 | `log.query.reads-only-the-segments-that-can-hold-a-row` | segment가 여럿인 로그에서 `cid`, `event`, `surface`, 시간 범위로 묻는 질의는 색인이 받아들이는 segment만 읽고(`scanned.read`), `text`가 있는 질의는 모든 segment를 읽는다. | all |
 | `log.query.answers-a-million-events-within-the-limit` | event 1,000,000개의 로그가 첫 page, `cid`, event 이름, surface, 시간 범위, level, `text`로 묻는 page를 test가 밝힌 한도 안에서 답하고 색인 생성도 한도 안에 끝나며, test는 시간을 출력한다. | all |
@@ -930,6 +941,7 @@ fn invalid_json_closes_connection() {
 | `cli.process-wait.registered-platform-receives-request` | Go `sok`의 등록된 process-wait 구현은 요청한 PID와 timeout을 받고 command는 그 결과를 직렬화한다. | wailsv3 only: Go CLI는 변경 가능한 platform 등록 API를 제공한다 |
 | `cli.debug.query-golden-lines` | `sok debug query`가 모든 사례에서 `docs/spec/cases/log-contract/query`의 golden page의 글 줄을 debug 화면과 같은 줄로 출력하고, 행이 page 뒤에 더 있으면 표준 오류에 `more: --after <cursor>`를 쓴다. | all |
 | `cli.debug.query-errors` | `sok debug query`는 event 파일이 event 구조를 어기면 파일과 줄 번호를 담은 오류로, `logs/` 폴더가 없으면 폴더를 담은 오류로 실패한다. | all |
+| `cli.debug.reports-a-rejected-file` | `sok debug query`는 다른 파일의 줄을 상태 0으로 출력하고, `sok debug query`와 `sok debug replay`는 schema 번호가 다른 파일마다 표준 오류에 `rejected: <error>`를 쓴다. | all |
 | `cli.debug.query-flag-values` | `sok debug query`는 잘못된 flag 값을 질의의 오류 문구를 가진 사용법 오류로 거부하고, 명령에 없는 flag를 거부한다. | all |
 | `cli.debug.replay-equal` | `sok debug replay <session>`은 session의 sidecar event가 가진 role을 선언한 설치된 sidecar의 replay 실행 파일을 segment마다 한 번 실행하고, 저장된 hash가 모두 재생한 hash이면 `replay session <session>: <n> sidecar frames and <m> page frames equal in <k> segments`를 출력한다. | all |
 | `cli.debug.replay-until` | `sok debug replay --until <sequence>`는 실행 파일에 그 순번까지의 event만 주고 그 순번까지의 frame 기록만 비교한다. 음이 아닌 정수가 아닌 값은 사용법 오류다. | all |
@@ -1009,6 +1021,9 @@ fn invalid_json_closes_connection() {
 | `fetch.url.rejects-other-schemes` | `https:`도 절대 `file:` URL도 아닌 index나 release URL은 `the URL must be https: or an absolute file: URL`로 실패한다. | all |
 | `installed.modules.unreadable-installation-serves-frontend` | `plugins/installed.json`을 읽을 수 없으면 `/modules/` 아래 요청은 설치 plugin을 가리키지 않고 bundled frontend가 답하므로, core module이 불러와지고 page가 시작한다. `/installed-plugins.json`이 오류를 담는다. | all |
 | `installed.modules.serve-installed-files` | 켜진 설치 plugin의 `/modules/<package>/<path>`는 기록된 `path` 안의 파일을 제공한다. 없는 파일이나 빈 segment, `.`, `..`가 있는 경로는 찾을 수 없다. 꺼진 plugin이나 다른 package는 애플리케이션 frontend가 제공한다. | all |
+| `installed.modules.frontend-first` | 애플리케이션 frontend가 가진 `/modules/` 아래 파일은 frontend가 제공한다. 그 요청은 `plugin.json`도 `package.json`도 읽지 않고, 같은 package의 plugin이 그 파일을 대신하지 않는다. | all |
+| `installed.modules.read-the-manifest-of-the-request` | `/modules/`와 `/shared/` 아래 요청은 자기가 가리키는 plugin의 `plugin.json`만 읽고, `/modules/` 아래 요청은 자기 package의 plugin에서 `package.json` 읽기를 멈춘다. core module은 하나도 읽지 않고, 다른 plugin의 잘못된 `plugin.json`이나 `package.json`은 답을 바꾸지 않는다. | all |
+| `installed.modules.follow-the-installation` | 설치, 제거, `plugin.json` 변경 뒤의 요청은 새 파일로 답한다. 어떤 요청도 앞 요청이 읽은 것을 갖고 있지 않기 때문이다. | all |
 | `installed.shared.serve-extension-point-modules` | `/shared/<plugin id>.<point>/<specifier>.js`는 켜진 설치 plugin의 `plugin.json` `extends.<point>.modules`가 specifier에 대응한, 그 plugin의 기록된 `path` 안의 파일을 제공한다. `.js`로 끝나지 않는 경로, plugin이 선언하지 않은 지점, 지점이 대응하지 않은 specifier, 없는 파일, 빈 부분이나 `.`, `..` 부분이 있는 경로, 꺼졌거나 알 수 없는 plugin은 찾을 수 없고, 읽을 수 없는 `plugin.json`은 그 경로와 함께 실패한다. | all |
 | `installed.sidecars.resolve-installed-folders` | Host의 sidecar는 켜진 설치 plugin의 `plugin.json`이 지정한 것이며, 각각 sidecar 폴더의 기록된 `path`와 거기의 `sidecar.json`을 가진다. 설치 version이 없는 sidecar는 실패하고, 빈 설정에는 sidecar가 없다. | all |
 | `installed.sidecars.leave-out-plugin-dependencies` | 켜졌든 꺼졌든 설치된 plugin을 지정하는 `plugin.json`의 dependency는 host의 sidecar가 아니다. | all |

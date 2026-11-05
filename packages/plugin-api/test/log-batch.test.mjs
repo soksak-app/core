@@ -398,3 +398,81 @@ test("a fixture step event passes a gate that refuses every lifecycle info event
   assert.deepEqual(calls.flatMap((request) => request.events).filter(({ event }) => event === "workbench.fixture.step").map(({ fields }) => fields),
     [{ step: "settings.set", phase: "start" }]);
 });
+
+test("the report of the counts arms no timer while a batch is in flight", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const armed = t.mock.method(globalThis, "setTimeout");
+  let clock = 0;
+  const batches = [];
+  const answers = [];
+  const batcher = createEventBatcher({ writer: { layer: "page", member: "page", identity: PAGE },
+    call: answering((request) => {
+      batches.push(request);
+      return new Promise((resolve) => answers.push(resolve));
+    }),
+    report: assert.ifError,
+    classify: () => "call",
+    gate: { enabled: () => false },
+    now: () => clock,
+  });
+  const interval = async () => {
+    clock += 1000;
+    t.mock.timers.tick(1000);
+    await settle();
+  };
+  // The first count leaves in a batch that the host does not answer yet, and a second count waits for its interval.
+  batcher.emit("debug", "page.test.call");
+  await interval();
+  assert.equal(batches.length, 1);
+  batcher.emit("debug", "page.test.call");
+  const before = armed.mock.callCount();
+  await interval();
+  for (let turn = 0; turn < 10; turn++) {
+    t.mock.timers.tick(0);
+    await settle();
+  }
+  assert.equal(armed.mock.callCount(), before, "a timer was armed while the batch was in flight");
+  assert.equal(batches.length, 1);
+  // The end of the batch sends the count that is due, and then no count and no timer remain.
+  answers[0]();
+  await settle();
+  assert.equal(batches.length, 2);
+  answers[1]();
+  await settle();
+  assert.equal(armed.mock.callCount(), before, "a timer was armed after the counts left");
+});
+
+test("a count refused while a batch is in flight waits for the rest of its interval after the batch", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let clock = 0;
+  const batches = [];
+  const answers = [];
+  const batcher = createEventBatcher({ writer: { layer: "page", member: "page", identity: PAGE },
+    call: answering((request) => {
+      batches.push(request);
+      return new Promise((resolve) => answers.push(resolve));
+    }),
+    report: assert.ifError,
+    classify: () => "call",
+    gate: { enabled: () => false },
+    now: () => clock,
+  });
+  batcher.emit("debug", "page.test.call");
+  clock += 1000;
+  t.mock.timers.tick(1000);
+  await settle();
+  assert.equal(batches.length, 1);
+  batcher.emit("debug", "page.test.call");
+  clock += 400;
+  t.mock.timers.tick(400);
+  answers[0]();
+  await settle();
+  assert.equal(batches.length, 1, "the count left before its interval ended");
+  clock += 600;
+  t.mock.timers.tick(600);
+  await settle();
+  assert.equal(batches.length, 2);
+  assert.deepEqual(batches[1].events.map(({ event, fields }) => [event, fields.count]), [["page.log.gated", 1]]);
+  answers[1]();
+  await settle();
+});

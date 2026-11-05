@@ -134,7 +134,7 @@ func (p *lifecyclePlatform) CancelLayoutTicket(window unsafe.Pointer, ticket uin
 	return nil
 }
 
-func (p *lifecyclePlatform) CreateDocument(surface unsafe.Pointer, directory, folder, plugin, channel string, changed func(state string)) (unsafe.Pointer, error) {
+func (p *lifecyclePlatform) CreateDocument(surface unsafe.Pointer, directory, folder, plugin, label, channel string, changed func(state string)) (unsafe.Pointer, error) {
 	handle := unsafe.Pointer(new(int))
 	p.created = append(p.created, handle)
 	p.createdFor = append(p.createdFor, surface)

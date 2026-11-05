@@ -2,6 +2,7 @@ package host
 
 import (
 	"encoding/json"
+	"sync"
 	"testing"
 	"time"
 )
@@ -216,5 +217,53 @@ func TestARequestAfterTheReloadIsRefusedUntilTheNewPageStarts(t *testing.T) {
 		return s.host.relay.Resolve(id, relayTarget{owner: s, surface: "tab"}, ExposureResult{})
 	}); !sent || reply.Error != nil {
 		t.Fatalf("after the new page started: sent %v, reply %+v", sent, reply)
+	}
+}
+
+// The changes that arrive during a reading join into one further reading, which begins after the last of them. A reading that
+// began earlier therefore cannot send its older value after a newer one.
+// contract: status.window.latest-value-last
+func TestABurstOfWindowChangesIsOneMoreReadingAfterTheLastChange(t *testing.T) {
+	var reads latestRead
+	var mu sync.Mutex
+	var seen []int
+	began := make(chan struct{}, 256)
+	release := make(chan struct{})
+	current := 0
+	read := func() {
+		mu.Lock()
+		seen = append(seen, current)
+		mu.Unlock()
+		began <- struct{}{}
+		<-release
+	}
+	reads.ask("window-status", read)
+	select {
+	case <-began:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the first reading did not begin")
+	}
+	for n := 1; n <= 100; n++ {
+		mu.Lock()
+		current = n
+		mu.Unlock()
+		reads.ask("window-status", read)
+	}
+	close(release)
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		last := seen[len(seen)-1]
+		mu.Unlock()
+		if last == 100 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	time.Sleep(100 * time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
+	if len(seen) != 2 || seen[0] != 0 || seen[1] != 100 {
+		t.Fatalf("the readings of the burst saw %v, want [0 100]", seen)
 	}
 }

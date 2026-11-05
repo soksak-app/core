@@ -47,6 +47,7 @@ static void main_sp_region_caret(void *region, double x, double y, double w, dou
     hostRunOnMain(^{ sp_region_caret(region, x, y, w, h); });
 }
 static void main_sp_region_text(void *region, const char *utf8) { hostRunOnMain(^{ sp_region_text(region, utf8); }); }
+static void main_sp_region_background(void *region, bool enabled) { hostRunOnMain(^{ sp_region_background(region, enabled); }); }
 static const char *main_sp_region_facts(void *region) { return ON_MAIN(const char *, sp_region_facts(region)); }
 static void main_sp_region_close(void *region) { hostRunOnMain(^{ sp_region_close(region); }); }
 */
@@ -152,6 +153,10 @@ func (implementation) CloseImage(image unsafe.Pointer) {
 		lease.Delete()
 		delete(leases, image)
 	}
+}
+
+func (implementation) SetImageBackground(image unsafe.Pointer, enabled bool) {
+	C.main_sp_region_background(image, C.bool(enabled))
 }
 
 func (implementation) FactsImage(image unsafe.Pointer) (string, error) {

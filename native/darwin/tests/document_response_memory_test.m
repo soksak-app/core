@@ -150,7 +150,7 @@ int main(void) { @autoreleasepool {
     NSString *store = [temporary stringByAppendingPathComponent:@"store"];
 
     @autoreleasepool {
-        void *region = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe", NULL, changed, NULL);
+        void *region = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe", NULL, NULL, changed, NULL);
         check(region != NULL, @"a region is created");
         sp_document_place(region, 0, 0, 0, 0, true);
 
@@ -187,7 +187,7 @@ int main(void) { @autoreleasepool {
         check(closed - before < fileMiB / 2,
             [NSString stringWithFormat:@"the footprint stays %.1f MiB above its start after the region closes", closed - before]);
 
-        void *view = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe", "", changed, NULL);
+        void *view = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe", NULL, "", changed, NULL);
         check(view != NULL, @"a view is created");
         sp_document_place(view, 0, 0, 0, 0, true);
         [latest release];

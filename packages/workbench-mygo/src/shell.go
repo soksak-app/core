@@ -222,6 +222,8 @@ type projectRecord struct {
 	Title, Root, Color, Identity string
 	Pinned                       bool
 	LastOpened                   float64
+	// Settings holds the overrides of the project, which a project that is not shown still has.
+	Settings map[string]any
 }
 
 // member reads the member key of a stored project into value. A project without the member keeps the zero value.
@@ -243,7 +245,8 @@ func readProject(raw json.RawMessage) (projectRecord, error) {
 	}
 	return record, errors.Join(member(record.Rest, "title", &record.Title), member(record.Rest, "root", &record.Root),
 		member(record.Rest, "color", &record.Color), member(record.Rest, "identity", &record.Identity),
-		member(record.Rest, "pinned", &record.Pinned), member(record.Rest, "lastOpened", &record.LastOpened))
+		member(record.Rest, "pinned", &record.Pinned), member(record.Rest, "lastOpened", &record.LastOpened),
+		member(record.Rest, "settings", &record.Settings))
 }
 
 // Shell is the workbench of one window.
@@ -275,8 +278,10 @@ type Shell struct {
 	active   string
 	// windowProjects are the projects that the window opened: their hidden tabs stay surfaces of the window (docs/spec/plugins.md#memory-saver).
 	windowProjects map[string]bool
-	plane          *layout.Grid
-	focused        string
+	// otherOpen are the projects that the store last named as owned by a window.
+	otherOpen map[string]bool
+	plane     *layout.Grid
+	focused   string
 	// columnsChanged tells that the next frame matches the columns of the window sidebars to the settings.
 	columnsChanged bool
 	// fullscreen is the card that covers the plane, or "" while the cards stand in their arrangement.
@@ -340,8 +345,8 @@ type Shell struct {
 	keyboard     keyboardState
 	pointer      *PointerSequence
 	verification *Verification
-	// verifying tells that the step of the verification waits to run.
-	verifying bool
+	// verifying tells that the step that gives a watcher the verification waits to run, and building that a frame builds.
+	verifying, building bool
 	// diagnostics holds the policy and the trace switch that the host received last.
 	diagnostics struct{ policy, trace string }
 	// started is set once the host took the first state of the shell, changed once plugins changed before that, and reloading while the
@@ -377,14 +382,14 @@ func NewShell(options ShellOptions) (*Shell, error) {
 		grid: environment.Workspace.Grid, focus: environment.Workspace.Focus, browsing: true, library: newLibraryState(), strips: map[string]*stripPlace{}, icons: map[string]*ui.SVG{}, heads: map[string]layout.HeadFit{}}
 	s.text = NewTextSize(shellText{s}, steps)
 	s.exposedFocus = NewFocus(options.Declared, func() { s.options.Invalidate() })
-	s.verification = NewVerification(s.pushStatuses)
+	s.verification = NewVerification()
 	s.events = NewEvents(EventsOptions{Calls: s.calls, Post: options.Post, Report: options.Report, Now: time.Now,
 		After: func(delay time.Duration, task func()) { time.AfterFunc(delay, task) }})
 	s.calls.Observe(s.events.Call)
 	s.registry.Record(s.events.Command)
 	s.errors = NewShownErrors(s.events.Error)
 	s.binder = NewBinder(s.registry, func(_ string, err error) { s.fail(err) })
-	s.pointer = NewPointerSequence(func() { s.options.Invalidate() })
+	s.pointer = NewPointerSequence(options.Elements, func() { s.options.Invalidate() }, s.fail)
 	s.binder.Attach(s.pointer, s.exposedFocus)
 	s.starter = environment.pluginStarter
 	s.pluginOperations = NewPluginOperations(s.calls, s.events.BeginOperation, func() []LoadedPlugin { return s.plugins }, func() map[string]bool { return s.refused }, options.Invalidate)
@@ -538,6 +543,7 @@ func (s *Shell) showRequested(done func()) {
 func (s *Shell) adopt(value any) error {
 	snapshot, err := decode[struct {
 		Projects      []json.RawMessage `json:"projects"`
+		Open          []string          `json:"open"`
 		ProjectsError *string           `json:"projectsError"`
 		Common        map[string]any    `json:"common"`
 	}](value)
@@ -556,6 +562,7 @@ func (s *Shell) adopt(value any) error {
 		projects = append(projects, record)
 	}
 	s.projects = projects
+	s.takeOpen(snapshot.Open)
 	return s.beginSettings(snapshot.Common)
 }
 
@@ -584,6 +591,17 @@ func (s *Shell) project(id string) *projectRecord {
 	}
 	return nil
 }
+
+// takeOpen takes the projects that a workspace snapshot names as owned by a window.
+func (s *Shell) takeOpen(ids []string) {
+	s.otherOpen = make(map[string]bool, len(ids))
+	for _, id := range ids {
+		s.otherOpen[id] = true
+	}
+}
+
+// isOpen tells whether a window holds the project id, this window or another, as projects.isOpen does.
+func (s *Shell) isOpen(id string) bool { return s.windowProjects[id] || s.otherOpen[id] }
 
 // opened returns the project that the window shows, or nil.
 func (s *Shell) opened() *projectRecord { return s.project(s.active) }
@@ -643,8 +661,9 @@ func baseName(root string) string { return path.Base(root) }
 
 // View draws the workbench of the window.
 func (s *Shell) View(c *ui.Context) {
+	s.building = true
+	defer func() { s.building = false }()
 	s.exposedFocus.Frame(c)
-	s.pointer.Frame()
 	s.sidebars.Begin()
 	clear(s.surfaces.drawn)
 	clear(s.picker.drawn)
@@ -658,12 +677,17 @@ func (s *Shell) View(c *ui.Context) {
 	theme.TextMuted = s.palette.Muted
 	theme.Border = s.palette.Edge
 	theme.Danger = s.palette.No
+	// A field or a box of the framework has the look of an input of the page without a rule: the control of its color scheme.
+	theme.Surface = ui.Hex(s.options.Declared.PlainControl("bg"))
 	theme.FontSize = theme.Rem(1) * float32(s.text.Frame())
 	theme.Font = s.fontFamily()
+	// The outline of button:focus-visible of the page: inside the edge, in the focus color.
+	outline, _ := s.options.Declared.Metric("focus-outline")
+	theme.Focus, theme.FocusRingWidth, theme.FocusRingOffset = s.palette.Focus, float32(outline), -float32(outline)
 	c.SetTheme(&theme)
 	s.keys.Declare(c)
 	// Korean breaks at the spaces, as body of packages/workbench/app.css says. It is inherited, except by an overlay, whose root takes it.
-	root := ui.Column(c).Size(width, height).Background(s.palette.Bg).TextColor(s.palette.Fg).KeepAll().Clip()
+	root := s.binder.Watched(ui.Column(c).Size(width, height).Background(s.palette.Bg).TextColor(s.palette.Fg).KeepAll().Clip())
 	if s.dialogOpen() {
 		root.Blur(s.dialogBlur())
 	}

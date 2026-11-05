@@ -874,14 +874,14 @@ func TestPluginRemoveUsesTheManifestThatTheReaderReturned(t *testing.T) {
 	useRegistry(t, config, dependencyRegistry(t, base("1.0.0"), ext("^1.0.0")))
 	succeeds(t, "plugin", "install", "ext", "--config-dir", config)
 	dependent := filepath.Join(config, "plugins/ext/1.0.0/plugin.json")
-	sok.SetAfterManifestRead(func(file string) {
+	sok.SetAfterPluginFileRead(func(file string) {
 		if strings.HasSuffix(file, "ext/1.0.0/plugin.json") {
 			if err := os.Remove(dependent); err != nil {
 				t.Errorf("remove the dependent plugin.json: %v", err)
 			}
 		}
 	})
-	defer sok.SetAfterManifestRead(nil)
+	defer sok.SetAfterPluginFileRead(nil)
 	_, err := sok.ChangePlugin(config, "base", "remove")
 	if err == nil || err.Error() != "plugin base is required by ext ^1.0.0" {
 		t.Fatalf("remove base: error %v", err)

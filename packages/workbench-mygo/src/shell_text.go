@@ -131,10 +131,11 @@ func (s *Shell) chromePercent(name string) float32 {
 }
 
 // chLength is the chrome value name, a number of ch, at the font size: a figure of a form font is about .6 of its size wide.
-func (s *Shell) chLength(name string, size float32) float32 {
+func (s *Shell) chLength(c *ui.Context, name string, size float32) float32 {
 	text, _ := s.options.Declared.ChromeText(name)
 	value, _ := strconv.ParseFloat(strings.TrimSuffix(text, "ch"), 32)
-	return float32(value) * size * .6
+	figure, _ := c.MeasureText(0, ui.Span{Text: "0", Size: size, Font: s.fontFamily()})
+	return float32(value) * figure
 }
 
 // sectionTracking is the chrome value section-tracking, the spacing of a section name as a share of its font size.

@@ -187,10 +187,11 @@ impl Platform for Windows {
         store: &str,
         folder: &str,
         plugin: &str,
+        label: &str,
         channel: Option<&str>,
         changed: Box<dyn Fn(String)>,
     ) -> Result<Handle, String> {
-        unsupported::create_document(surface, store, folder, plugin, channel, changed)
+        unsupported::create_document(surface, store, folder, plugin, label, channel, changed)
     }
     fn set_view_message(
         &self,
@@ -326,6 +327,9 @@ impl Platform for Windows {
     }
     fn image_surface_placed(&self, image: Handle) -> Result<bool, String> {
         unsupported::image_surface_placed(image)
+    }
+    fn set_image_background(&self, image: Handle, enabled: bool) -> Result<(), String> {
+        unsupported::set_image_background(image, enabled)
     }
     fn image_facts(&self, image: Handle) -> Result<String, String> {
         unsupported::image_facts(image)

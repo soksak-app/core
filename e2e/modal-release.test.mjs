@@ -23,7 +23,10 @@ for (const app of MAIN_PAGE_APPS) {
     await fresh(s);
     await keepCommonSettings(s);
     s.cleanup(async () => {
-      if (await s.get("core.modal")) await s.run("core.settings.close");
+      const modal = await s.get("core.modal");
+      // A status that answers neither null nor a modal fails, and does not pass as a closed modal.
+      assert.ok(modal === null || typeof modal?.id === "string", `core.modal is ${JSON.stringify(modal)}`);
+      if (modal !== null) await s.run("core.settings.close");
     });
 
     // The first child web view of a window registers the input of the main web view too (nativeWebviewCreate of the Wails host,

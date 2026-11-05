@@ -20,7 +20,7 @@ use serde_json::{Value, json};
 use crate::application_log::{log_error, log_failure};
 use crate::event_log::Level;
 use crate::event_record::emit_host;
-use crate::exposure::{self, on_main, with_view};
+use crate::exposure::{self, on_main};
 use crate::platform::{self, Handle, Platform};
 use crate::presentation_wait::{
     PresentationWait, ViewPlacement, presentation_abandoned_payload, trace_presentation_join,
@@ -1413,6 +1413,16 @@ impl ViewChannels {
 /// region, and the view closes with the other documents of its surface.
 pub(crate) const VIEW_NAME: &str = "";
 
+/// Returns the display label of the WebContent process of the view (region `VIEW_NAME`) or the document region of `plugin`
+/// (docs/spec/plugin-processes.md#operating-system-display-labels).
+pub fn process_label(plugin: &str, region: &str) -> String {
+    if region == VIEW_NAME {
+        format!("soksak://plugin/{plugin}")
+    } else {
+        format!("soksak://plugin/{plugin}/{region}")
+    }
+}
+
 /// Creates the view web view of a view surface, with the view configuration (`view` is true), configures it and loads
 /// soksak://<plugin>/<page> into it. When the configuration or the load does not succeed, the view is closed before the error
 /// returns, and a failed close is reported with the failure. create, configure, load and close are the platform operations, and
@@ -1558,7 +1568,7 @@ pub(crate) fn sync_view(
                     handle
                 }
                 Err(error) => {
-                    data.documents.remove(&key)?;
+                    take_back_name(&data, &key);
                     data.documents.views().forget_if_current(surface, &origin);
                     data.view_source_origins.end_view(surface, generation);
                     emit_source_ended(window, plugin, surface, generation);
@@ -1637,6 +1647,7 @@ fn attach_view(
                 directory,
                 &folder,
                 plugin,
+                &process_label(plugin, VIEW_NAME),
                 Some(channel),
                 Box::new(move |state: String| {
                     view_state(&state_window, &state_surface, &state_origin, &state)
@@ -2282,27 +2293,41 @@ fn owner(webview: &Webview, request: &Request) -> Result<(Key, Window), String> 
     Ok((key, window))
 }
 
-/// Creates a hidden document region inside a surface. It is an error when the same name already exists.
+/// Creates a hidden document region inside a surface. It is an error when the same name already exists. The attach takes the
+/// name, creates the region and registers it in one task of the main thread, where a close of the surface and a reload of its
+/// page also run, so neither finds a name of the attach or a region without a name (docs/spec/native-surfaces.md#region-lifetime).
 pub fn attach(webview: &Webview, request: Request) -> Result<(), String> {
     let (key, window) = owner(webview, &request)?;
     let platform = platform::current()?;
     let restore = request.restore_state()?.map(str::to_string);
     let data = window_data(&window)?;
+    let host = window.clone();
+    on_main(&window, move || {
+        attach_on_main(&host, &data, &key, platform, restore)
+    })
+}
+
+/// The attach of a checked request. Call it on the main thread.
+fn attach_on_main(
+    window: &Window,
+    data: &WindowData,
+    key: &Key,
+    platform: &'static dyn platform::Platform,
+    restore: Option<String>,
+) -> Result<(), String> {
     require_region(&data.compositions, &key.0, &key.1, "document", None)?;
-    // The name is taken first. The lock is not held while waiting for native work.
-    data.documents.reserve(&key)?;
+    data.documents.reserve(key)?;
     // The request log exists before native can send an entry of the region.
-    let effects = match data.streams.attach(&key) {
+    let effects = match data.streams.attach(key) {
         Ok(effects) => effects,
         Err(error) => {
-            drop(data.documents.remove(&key));
+            take_back_name(data, key);
             return Err(error);
         }
     };
     let handle = match create(
-        webview,
-        &window,
-        &key,
+        window,
+        key,
         platform,
         data.overlay.dialog(),
         restore,
@@ -2310,30 +2335,31 @@ pub fn attach(webview: &Webview, request: Request) -> Result<(), String> {
     ) {
         Ok(handle) => handle,
         Err(error) => {
-            drop(data.documents.remove(&key));
-            data.streams.remove_region(&key);
+            take_back_name(data, key);
+            data.streams.remove_region(key);
             return Err(error);
         }
     };
-    // When the surface was removed during creation, the created document is closed. The registration and the close
-    // happen in one task of the main thread.
-    let registry = data.clone();
-    let stored = key.clone();
-    let registered = on_main(&window, move || {
-        if registry.documents.set(&stored, handle) {
-            return Ok(true);
-        }
-        registry.streams.remove_region(&stored);
+    if !data.documents.set(key, handle) {
+        data.streams.remove_region(key);
         platform.close_document(handle)?;
-        Ok(false)
-    })?;
-    if !registered {
         return Err(format!(
-            "surface {:?} closed while its document was created",
-            key.0
+            "document {:?} lost its name while it was created",
+            key.1
         ));
     }
     Ok(())
+}
+
+/// Takes back the name of a document region whose creation failed. Everything that removes a name runs on the main thread, as
+/// the attach does, so a failure is a defect that the record reports.
+fn take_back_name(data: &WindowData, key: &Key) {
+    if let Err(error) = data.documents.remove(key) {
+        log_error(
+            &format!("document {}", key.1),
+            format!("remove the reserved name: {error}"),
+        );
+    }
 }
 
 /// The native operations that configure a document region after its creation. `PlatformDocument` runs them on the platform,
@@ -2447,7 +2473,6 @@ fn configure_steps(
 
 /// Creates a document webview inside the surface webview, applies the stream effects of its attach and returns its address.
 fn create(
-    webview: &Webview,
     window: &Window,
     key: &Key,
     platform: &'static dyn platform::Platform,
@@ -2455,126 +2480,123 @@ fn create(
     restore: Option<String>,
     effects: Vec<StreamEffect>,
 ) -> Result<Handle, String> {
-    with_view(webview, move |view| platform.view_id(view))?;
     let host = window.clone();
     let (surface_id, name) = key.clone();
     let state_host = host.clone();
     let state_surface = surface_id.clone();
     let state_document = name.clone();
-    on_main(window, move || {
-        let changed = Box::new(move |state: String| {
-            let state = match serde_json::from_str(&state) {
-                Ok(state) => state,
-                Err(error) => {
-                    log_error(
-                        "document-state",
-                        format!("the state is not JSON: {error}: {state}"),
-                    );
-                    return;
-                }
-            };
-            let payload = State {
-                surface: state_surface.clone(),
-                document: state_document.clone(),
-                state,
-            };
-            if let Err(error) = emit_window(&state_host, "document-state", payload) {
-                log_error("document-state", error);
+    let changed = Box::new(move |state: String| {
+        let state = match serde_json::from_str(&state) {
+            Ok(state) => state,
+            Err(error) => {
+                log_error(
+                    "document-state",
+                    format!("the state is not JSON: {error}: {state}"),
+                );
+                return;
             }
-            exposure::window_changed(&state_host);
-        });
-        let surface = surface_handle(&host, &surface_id)?;
-        let directory = crate::config_directory(host.app_handle())
-            .map_err(|e| e.to_string())?
-            .join(DOCUMENT_DATA);
-        let directory = directory.to_str().ok_or_else(|| {
-            format!(
-                "document data directory is not UTF-8: {}",
-                directory.display()
-            )
-        })?;
-        let plugin = window_data(&host)?
-            .surface_plugins
-            .lock()
-            // default: a lock that a panicking thread poisoned still holds the surface plugins, which are only read;
-            // the panic hook records the panic.
-            .unwrap_or_else(PoisonError::into_inner)
-            .get(&surface_id)
-            .cloned()
-            .ok_or_else(|| format!("surface {surface_id:?} has no composition declaration"))?;
-        let config = crate::config_directory(host.app_handle()).map_err(|e| e.to_string())?;
-        let folder = crate::installed::plugin_folder(&config, &plugin)?;
-        let folder = folder
-            .to_str()
-            .ok_or_else(|| format!("plugin folder is not UTF-8: {}", folder.display()))?
-            .to_string();
-        // Every step that can fail without the document runs before its creation, so configure_document is the only step after it.
-        let dark = crate::theme::is_dark(&host)?;
-        let handle =
-            platform.create_document(surface, directory, &folder, &plugin, None, changed)?;
-        let message_host = host.clone();
-        let message_surface = surface_id.clone();
-        let message_document = name.clone();
-        let message = Box::new(move |value: String| {
-            let place = format!("document message {message_document}");
-            match document_message(&message_surface, &message_document, &value) {
-                Ok(Message::Forward(payload)) => {
-                    if let Err(error) = emit_window(&message_host, "document-message", payload) {
-                        log_error(&place, error);
-                    }
+        };
+        let payload = State {
+            surface: state_surface.clone(),
+            document: state_document.clone(),
+            state,
+        };
+        if let Err(error) = emit_window(&state_host, "document-state", payload) {
+            log_error("document-state", error);
+        }
+        exposure::window_changed(&state_host);
+    });
+    let surface = surface_handle(&host, &surface_id)?;
+    let directory = crate::config_directory(host.app_handle())
+        .map_err(|e| e.to_string())?
+        .join(DOCUMENT_DATA);
+    let directory = directory.to_str().ok_or_else(|| {
+        format!(
+            "document data directory is not UTF-8: {}",
+            directory.display()
+        )
+    })?;
+    let plugin = window_data(&host)?
+        .surface_plugins
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the surface plugins, which are only read;
+        // the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .get(&surface_id)
+        .cloned()
+        .ok_or_else(|| format!("surface {surface_id:?} has no composition declaration"))?;
+    let config = crate::config_directory(host.app_handle()).map_err(|e| e.to_string())?;
+    let folder = crate::installed::plugin_folder(&config, &plugin)?;
+    let folder = folder
+        .to_str()
+        .ok_or_else(|| format!("plugin folder is not UTF-8: {}", folder.display()))?
+        .to_string();
+    // Every step that can fail without the document runs before its creation, so configure_document is the only step after it.
+    let dark = crate::theme::is_dark(&host)?;
+    let label = process_label(&plugin, &name);
+    let handle =
+        platform.create_document(surface, directory, &folder, &plugin, &label, None, changed)?;
+    let message_host = host.clone();
+    let message_surface = surface_id.clone();
+    let message_document = name.clone();
+    let message = Box::new(move |value: String| {
+        let place = format!("document message {message_document}");
+        match document_message(&message_surface, &message_document, &value) {
+            Ok(Message::Forward(payload)) => {
+                if let Err(error) = emit_window(&message_host, "document-message", payload) {
+                    log_error(&place, error);
                 }
-                Ok(Message::Failure(reason)) => log_error(&place, reason),
-                Err(error) => log_error(&place, error),
             }
-        });
-        let stream_host = host.clone();
-        let stream_key = (surface_id.clone(), name.clone());
-        let stream = Box::new(move |value: String| {
-            deliver_stream(&stream_host, platform, &stream_key, &value)
-        });
-        let event_host = host.clone();
-        let event_surface = surface_id.clone();
-        let event_document = name.clone();
-        let event = Box::new(move |value: String| {
-            let event = match serde_json::from_str(&value) {
-                Ok(event) => event,
-                Err(error) => {
-                    log_error(
-                        "document-event",
-                        format!("the event is not JSON: {error}: {value}"),
-                    );
-                    return;
-                }
-            };
-            if let Err(error) = emit_window(
-                &event_host,
-                "document-event",
-                Event {
-                    surface: event_surface.clone(),
-                    document: event_document.clone(),
-                    event,
-                },
-            ) {
-                log_error("document-event", error);
+            Ok(Message::Failure(reason)) => log_error(&place, reason),
+            Err(error) => log_error(&place, error),
+        }
+    });
+    let stream_host = host.clone();
+    let stream_key = (surface_id.clone(), name.clone());
+    let stream =
+        Box::new(move |value: String| deliver_stream(&stream_host, platform, &stream_key, &value));
+    let event_host = host.clone();
+    let event_surface = surface_id.clone();
+    let event_document = name.clone();
+    let event = Box::new(move |value: String| {
+        let event = match serde_json::from_str(&value) {
+            Ok(event) => event,
+            Err(error) => {
+                log_error(
+                    "document-event",
+                    format!("the event is not JSON: {error}: {value}"),
+                );
+                return;
             }
-            exposure::window_changed(&event_host);
-        });
-        configure_document(
-            &PlatformDocument(platform),
-            handle,
-            DocumentSetup {
-                name: name.clone(),
-                restore,
-                dark,
-                dialog,
-                message,
-                stream,
-                effects,
+        };
+        if let Err(error) = emit_window(
+            &event_host,
+            "document-event",
+            Event {
+                surface: event_surface.clone(),
+                document: event_document.clone(),
                 event,
             },
-        )?;
-        Ok(handle)
-    })
+        ) {
+            log_error("document-event", error);
+        }
+        exposure::window_changed(&event_host);
+    });
+    configure_document(
+        &PlatformDocument(platform),
+        handle,
+        DocumentSetup {
+            name: name.clone(),
+            restore,
+            dark,
+            dialog,
+            message,
+            stream,
+            effects,
+            event,
+        },
+    )?;
+    Ok(handle)
 }
 
 /// Runs work on the main thread for an open document region.
@@ -2850,7 +2872,22 @@ pub(crate) fn close_surface(window: &Window, surface: &str) {
     );
 }
 
-/// Dims the document regions while a dialog is open. It does not wait.
+/// Sets the background of each document and image region. The failure of one does not stop the rest.
+fn set_regions_background(
+    documents: Vec<Handle>,
+    images: Vec<Handle>,
+    document: impl Fn(Handle) -> Result<(), String>,
+    image: impl Fn(Handle) -> Result<(), String>,
+) {
+    for handle in documents {
+        log_failure("document background", document(handle));
+    }
+    for handle in images {
+        log_failure("image background", image(handle));
+    }
+}
+
+/// Blurs the document and image regions while a dialog is open. It does not wait.
 pub(crate) fn set_background(window: &Window, enabled: bool) {
     let Ok(data) = window_data(window) else {
         return;
@@ -2865,12 +2902,12 @@ pub(crate) fn set_background(window: &Window, enabled: bool) {
         "document background",
         window
             .post(move || {
-                for handle in data.documents.all() {
-                    log_failure(
-                        "document background",
-                        platform.set_document_background(handle, enabled),
-                    );
-                }
+                set_regions_background(
+                    data.documents.all(),
+                    data.images.all(),
+                    |handle| platform.set_document_background(handle, enabled),
+                    |handle| platform.set_image_background(handle, enabled),
+                );
             })
             .map_err(|e| e.to_string()),
     );

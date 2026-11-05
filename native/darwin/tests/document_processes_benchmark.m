@@ -372,7 +372,7 @@ static NSArray<NSNumber *> *runScenario(NSString *name, NSArray<NSString *> *add
     for (int i = 0; i < 4; i++) @autoreleasepool {
         regions[i].address = addresses[i];
         regions[i].state = nil;
-        regions[i].document = sp_document_create(surface, store.fileSystemRepresentation, NULL, NULL, NULL, changed, &regions[i]);
+        regions[i].document = sp_document_create(surface, store.fileSystemRepresentation, NULL, NULL, NULL, NULL, changed, &regions[i]);
         regions[i].process = 0;
         regions[i].footprint = -1;
         check(regions[i].document != NULL, [NSString stringWithFormat:@"region %d is created", i + 1]);

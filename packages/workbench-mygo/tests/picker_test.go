@@ -300,9 +300,6 @@ func TestScreenStatusNamesTheOpenModal(t *testing.T) {
 	if got := read(); got != `{"screen":"workspace","modal":"settings"}` {
 		t.Fatalf("the status is %s", got)
 	}
-	if value, err := f.shell.Registry().Read("core.modal"); err != nil || value != nil {
-		t.Fatalf("the status core.modal is %v, %v", value, err)
-	}
 }
 
 func TestARightClickOfATabOpensItsKeepItem(t *testing.T) {
@@ -883,4 +880,68 @@ func TestTheQuestionStandsUnderTheWholeTab(t *testing.T) {
 	if panel.Bounds.Y != bottom+5 || panel.Bounds.X+panel.Bounds.W != end {
 		t.Fatalf("the question %+v stands under a tab that ends at %v, %v", panel.Bounds, end, bottom)
 	}
+}
+
+// A picker takes the keyboard on its first item, and Tab goes through its items (the focus of openLayer of the page).
+func TestAPickerTakesTheKeyboardOnItsFirstItem(t *testing.T) {
+	type focused struct {
+		Name  string `json:"name"`
+		Index int    `json:"index"`
+	}
+	f := modifiedShell(t)
+	f.run(t, "core.tab.close", `{"tab":"tab-aaaaaa"}`)
+	f.settle()
+	if got := status[*focused](t, f.shellFixture, "core.focus"); got == nil || got.Name != "core.picker.item" || got.Index != 0 {
+		t.Fatalf("after the question opened the focus is %+v", got)
+	}
+	f.tester.Key(0, ui.KeyTab)
+	f.settle()
+	if got := status[*focused](t, f.shellFixture, "core.focus"); got == nil || got.Name != "core.picker.item" || got.Index != 1 {
+		t.Fatalf("after Tab the focus is %+v", got)
+	}
+}
+
+// A picker item that the keyboard reached has the look of a hovered one and no outline (.picker__item:focus-visible).
+func TestAFocusedPickerItemIsDrawnAsAHoveredOne(t *testing.T) {
+	f := modifiedShell(t)
+	f.run(t, "core.tab.close", `{"tab":"tab-aaaaaa"}`)
+	f.settle()
+	const label = "저장하지 않고 닫기"
+	node, ok := pressLabeled(f.tester.ElementTree(), label)
+	if !ok {
+		t.Fatalf("no item %q in %q", label, f.tester.Texts())
+	}
+	x, y := node.Bounds.X+node.Bounds.W-4, node.Bounds.Y+node.Bounds.H/2
+	f.tester.Move(node.Bounds.X+node.Bounds.W/2, y)
+	f.settle()
+	hovered := f.pixelOf(x, y)
+	f.tester.Move(1, 1)
+	f.settle()
+	if rest := f.pixelOf(x, y); rest == hovered {
+		t.Fatalf("a hovered item has the background %v of one at rest", hovered)
+	}
+	f.tester.Key(0, ui.KeyTab)
+	f.settle()
+	if !f.tester.Focused(label) {
+		t.Fatalf("Tab did not reach the item %q", label)
+	}
+	if got := f.pixelOf(x, y); got != hovered {
+		t.Fatalf("a focused item has the background %v, a hovered one %v", got, hovered)
+	}
+	if got := f.pixelOf(node.Bounds.X+node.Bounds.W/2, node.Bounds.Y+1); got != hovered {
+		t.Fatalf("a focused item has the outline %v at its edge, a hovered one the background %v", got, hovered)
+	}
+}
+
+// pressLabeled finds the button of a label in a tree, which the name and the icon of an item share.
+func pressLabeled(nodes []ui.ElementNode, label string) (ui.ElementNode, bool) {
+	for _, node := range nodes {
+		if node.Role == ui.RoleButton && node.Label == label {
+			return node, true
+		}
+		if found, ok := pressLabeled(node.Children, label); ok {
+			return found, true
+		}
+	}
+	return ui.ElementNode{}, false
 }

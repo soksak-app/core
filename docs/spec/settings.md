@@ -6,6 +6,8 @@ The independent window declaration, placement, association and rail-border contr
 
 This specification defines the sections of the settings window, the settings they show, and the stored form of sidebar sets. [Projects](projects.md#settings) defines scopes and storage files, [native modals](native-modals.md) defines how the window is drawn, and [plugins](plugins.md) defines plugin declarations. [Features](../features.md) records implementation and validation.
 
+The chrome button and the item 설정… (Settings…) of the app menu, with `cmd+,`, open the window through `core.settings.open`.
+
 ## Sections
 
 Plugins are installed from separate repositories, so their number and the number of their sections grow without bound. No control of the window is repeated per plugin or per section, except rows of a list and options of a select box.
@@ -186,6 +188,8 @@ A change that leaves `sidebarMinWidth` ≤ `sidebarWidth` ≤ `sidebarMaxWidth` 
 The layout values that both workbenches read have one source, the chrome metrics of `workbench.json`: the card head `head-h` and foot `foot-h`, which also bound the drop zones, and the tab strip thresholds `tab-peek-w` and `tab-min-w`. A value written in the code of each workbench would be a second copy that drifts from the first. The left and right sidebar widths of a new space come from the `workspace.grid` cards of `environment.json`.
 
 The lengths, ratios and durations of the workbench stylesheets (`app.css`, `library.css` and `overlay.html`) are the chrome metrics of `packages/workbench/workbench.json`. The workbench sets each of them as a custom property of the document root before the page draws, and the stylesheets read the custom properties; a stylesheet holds no literal length, ratio or duration. A media condition cannot read a custom property, so the workbench marks the document root with `data-library-narrow` while the window is at most `library-narrow-w` wide, and `library.css` narrows the library by that mark. The focus mark stands outside the body of the focused card on every side by `focus-mark-t`, the thickness of its stroke, so the stroke does not cover the surface.
+
+An input and a select of the page without a rule of their own take their look from the browser, in the color scheme of the page, so no stylesheet declares it. The native workbench draws them from `plainControls` of `workbench.json`, the values that a window of the page measures, and no stylesheet reads that table.
 
 ## Status
 

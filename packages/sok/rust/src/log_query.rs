@@ -13,8 +13,8 @@ use crate::files::file_error;
 pub use crate::log_index::IndexUpdate;
 use crate::log_index::{
     BLOOM_CIDS, BLOOM_EVENT, BLOOM_RUN, BLOOM_SESSION, BLOOM_SHAPES, BLOOM_SURFACE, CLASSES,
-    LAYERS, LEVELS, OpenedLog, SEGMENT_EVENTS, ScannedLine, Segment, bloom_has, open_log,
-    read_range, scan_line,
+    LAYERS, LEVELS, OpenFailure, OpenedLog, SEGMENT_EVENTS, ScannedLine, Segment, bloom_has,
+    open_log, read_range, scan_line,
 };
 
 const DEFAULT_LIMIT: usize = 500;
@@ -348,6 +348,8 @@ pub struct LogPage {
     pub next: Option<LogCursor>,
     pub tail: BTreeMap<String, i64>,
     pub scanned: LogScanned,
+    /// The error of each event file of the channel of another schema number, which the query left out.
+    pub rejected: Vec<String>,
 }
 
 /// An event file of the channel.
@@ -641,10 +643,18 @@ fn query_page(
         next: None,
         tail: BTreeMap::new(),
         scanned: LogScanned::default(),
+        rejected: vec![],
     };
     let mut logs: Vec<(LogSource, OpenedLog)> = vec![];
     for source in sources {
-        let opened = open_log(&source.path)?;
+        let opened = match open_log(&source.path) {
+            Ok(opened) => opened,
+            Err(OpenFailure::Rejected(text)) => {
+                page.rejected.push(text);
+                continue;
+            }
+            Err(OpenFailure::Failed(text)) => return Err(text),
+        };
         if opened.update.changed
             && let Some(callback) = indexed.as_mut()
         {
@@ -854,6 +864,7 @@ fn query_around(
             lines: first.scanned.lines,
             rebuilt: first.scanned.rebuilt,
         },
+        rejected: first.rejected.clone(),
     };
     let mut middle = vec![];
     if let [row] = first.rows.as_slice()

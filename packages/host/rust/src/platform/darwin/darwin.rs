@@ -307,10 +307,11 @@ impl Platform for Darwin {
         store: &str,
         folder: &str,
         plugin: &str,
+        label: &str,
         channel: Option<&str>,
         changed: Box<dyn Fn(String)>,
     ) -> Result<Handle, String> {
-        document::create(surface, store, folder, plugin, channel, changed)
+        document::create(surface, store, folder, plugin, label, channel, changed)
     }
     fn set_view_message(
         &self,
@@ -459,6 +460,10 @@ impl Platform for Darwin {
     }
     fn image_surface_placed(&self, image: Handle) -> Result<bool, String> {
         Ok(image::surface_placed(image))
+    }
+    fn set_image_background(&self, image: Handle, enabled: bool) -> Result<(), String> {
+        image::background(image, enabled);
+        Ok(())
     }
     fn image_facts(&self, image: Handle) -> Result<String, String> {
         image::facts(image)

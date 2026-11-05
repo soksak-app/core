@@ -532,6 +532,16 @@ pub fn read_message_line(
     })
 }
 
+/// Ends the deadline of the hello round trip of a persistent connection, so the read thread that follows sleeps until
+/// the service sends and a silence of the service does not end the connection. macOS rejects the SO_RCVTIMEO setting of
+/// a socket that the peer closed with EINVAL, so a failure in this step is a closed connection: a service that answers
+/// hello and closes soon is not a live connection.
+fn end_hello_deadline(stream: &dyn PersistentStream, name: &str) -> Result<(), String> {
+    stream
+        .set_read_deadline(None)
+        .map_err(|e| format!("sidecar {name}: hello deadline end: {e}"))
+}
+
 /// Records the line that a sidecar did not finish before its output ended.
 fn log_unfinished_line(sidecar: &str, bytes: usize) {
     crate::application_log::log_info(
@@ -2934,10 +2944,7 @@ impl<O: Owner> Core<O> {
         // The read deadline is set only for the hello round trip (V5-106). The requests and stop of the same sidecar
         // wait for this start, so a service that accepted the socket and does not answer must not stop those requests.
         // When the deadline passes, the connection is a failure, and the connection loss record makes the next start
-        // try the same path again. When the round trip ends, the deadline is set back to waiting indefinitely for the
-        // read thread that follows. macOS rejects 0 (clear) for SO_RCVTIMEO with EINVAL, so clearing is replaced by a
-        // deadline of one day. The read thread that follows wakes up once a day with WouldBlock and waits again.
-        const NO_READ_DEADLINE: Duration = Duration::from_secs(24 * 60 * 60);
+        // try the same path again. When the round trip ends, end_hello_deadline removes the deadline.
         stream
             .set_read_deadline(Some(core.hello_timeout))
             .map_err(|e| format!("sidecar {name}: hello deadline: {e}"))?;
@@ -3002,12 +3009,8 @@ impl<O: Owner> Core<O> {
             .get("version")
             .and_then(|v| v.as_str())
             .map(str::to_string);
-        // The hello succeeded, so the read deadline is extended to one day. macOS rejects the SO_RCVTIMEO setting of a
-        // socket that the peer closed with EINVAL, so a failure in this step is a closed connection: a service that
-        // answers hello and closes soon is not a live connection.
-        stream
-            .set_read_deadline(Some(NO_READ_DEADLINE))
-            .map_err(|e| format!("sidecar {name}: hello deadline extend: {e}"))?;
+        // The hello succeeded, so the read thread that follows waits without a deadline.
+        end_hello_deadline(&*stream, name)?;
 
         let reader_stream = response_reader.into_inner();
         let (tx, rx) = sync_channel::<Outgoing>(256);
@@ -4464,6 +4467,10 @@ mod lock_test;
 #[cfg(test)]
 #[path = "sidecars_session_retention_test.rs"]
 mod session_retention_test;
+
+#[cfg(all(test, unix))]
+#[path = "sidecars_read_deadline_test.rs"]
+mod read_deadline_test;
 
 /// Records a received body and returns whether native image dispatch consumes it.
 pub fn receive_sidecar_message(trace: impl FnOnce(), handle_image: impl FnOnce() -> bool) -> bool {

@@ -202,6 +202,7 @@ func (s *Shell) workspaceChanged() {
 func (s *Shell) compareData(value any) error {
 	snapshot, err := decode[struct {
 		Projects      []json.RawMessage `json:"projects"`
+		Open          []string          `json:"open"`
 		ProjectsError *string           `json:"projectsError"`
 	}](value)
 	if err != nil {
@@ -210,6 +211,8 @@ func (s *Shell) compareData(value any) error {
 	if snapshot.ProjectsError != nil {
 		return errors.New(*snapshot.ProjectsError)
 	}
+	s.takeOpen(snapshot.Open)
+	s.options.Invalidate()
 	for _, raw := range snapshot.Projects {
 		read, err := readProject(raw)
 		if err != nil {

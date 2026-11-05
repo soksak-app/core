@@ -36,7 +36,7 @@ async function railRow(t, painted) {
 
 test("rail lines are not measured while the plane shows a layout of an earlier size", async (t) => {
   const row = await railRow(t, { x: 0, y: 0, w: 700, h: 300 });
-  assert.equal(row.ok, true, `lines of the earlier layout were measured against the new plane: ${row.note}`);
+  assert.equal(row.skipped, true, `lines of the earlier layout were measured against the new plane: ${row.note}`);
   assert.equal(row.note, "판이 아직 새 크기로 그려지지 않았다");
 });
 

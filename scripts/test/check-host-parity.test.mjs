@@ -10,8 +10,8 @@ const sources = () => ({
   tauriv2Runtime: 'const COMMAND = {\n  windowNew: "window_new",\n  overlayShow: "overlay_show",\n};',
   tauriv2Bindings: 'macro_rules! bindings {}\nbindings! {\n#[tauri::command]\nfn window_new() {}\n#[tauri::command(async)]\nasync fn overlay_show() {}\n}',
   wailsv3Runtime: 'const METHOD = {\n  windowNew: "WindowNew",\n  overlayShow: "OverlayShow",\n}',
-  mygoCallsSource: 'func hostCalls(h *host.Host, ctx context.Context) map[string]HostCall {\n\treturn map[string]HostCall{\n\t\t"windowNew": run(h.WindowNew),\n\t}\n}',
-  wailsv3HostSources: { "host.go": "func (h *Host) WindowNew(ctx context.Context) error { return nil }\nfunc (h *Host) OverlayShow(ctx context.Context) error { return nil }" },
+  mygoCallsSource: 'func hostCalls(h *host.Host, ctx context.Context) map[string]HostCall {\n\treturn map[string]HostCall{\n\t\t"windowNew": run(h.WindowNew),\n\t\t"setDialogBackground": doneOf(h.SetDialogBackground),\n\t}\n}',
+  wailsv3HostSources: { "host.go": "func (h *Host) WindowNew(ctx context.Context) error { return nil }\nfunc (h *Host) SetDialogBackground(ctx context.Context) error { return nil }\nfunc (h *Host) OverlayShow(ctx context.Context) error { return nil }" },
   tauriv2EndpointSource: 'const METHODS: &[&str] = &[\n  "windows.list",\n];\nconst DIAGNOSTICS: &[&str] = &[\n  "diagnostics.fixture",\n];',
   wailsv3EndpointSource: 'var endpointMethods = map[string]endpointMethod{\n  "windows.list": nil,\n}\nvar subscriptionMethods = map[string]subscriptionMethod{}\nvar diagnosticSubscriptions = map[string]subscriptionMethod{}',
   wailsv3DiagnosticsSource: 'func init() {\n  diagnosticMethods["diagnostics.fixture"] = nil\n}',
@@ -107,10 +107,11 @@ const hostsFixture = `## Allowed differences
 
 ### Framework table
 
-| ID | Wails | Tauri | Reason |
-| --- | --- | --- | --- |
-| H9 | \`tests/framework_log_test.go\` | none | file difference |
-| B1 | \`overlayShow\` | \`overlayShow\` | calls that a mygo window does not have |
+| ID | Wails | Tauri | mygo | Reason |
+| --- | --- | --- | --- | --- |
+| H9 | \`tests/framework_log_test.go\` | none | none | file difference |
+| B1 | \`overlayShow\` | \`overlayShow\` | none | calls that a mygo window does not have |
+| B2 | none | none | \`setDialogBackground\` | calls that only a mygo window has |
 
 ## Process lifecycle`;
 
@@ -147,6 +148,34 @@ test("a name of hostCalls without a handler fails", () => {
   const changed = sources();
   changed.mygoCallsSource = changed.mygoCallsSource.replace('"windowNew": run(h.WindowNew),', '"windowNew": run(h.WindowNew),\n\t\t"overlayShow": run(h.OverlayShow),\n\t\t"absent": run(h.Absent),');
   assert.deepEqual(auditHostParity(changed), ["mygo host.call(absent) does not exist on wailsv3", "mygo host.call(absent) has no Host method", "mygo host.call(overlay_show) is listed as absent on mygo"]);
+});
+
+test("a call that only mygo has fails unless a row B lists it", () => {
+  const changed = sources();
+  changed.hostsSpec = changed.hostsSpec.replace(/\| B2 .*\n/, "");
+  assert.deepEqual(auditHostParity(changed), ["mygo host.call(set_dialog_background) does not exist on wailsv3"]);
+});
+
+test("a row B of a call that hostCalls does not name fails", () => {
+  const changed = sources();
+  changed.mygoCallsSource = changed.mygoCallsSource.replace(/\n\t\t"setDialogBackground": [^\n]*/, "");
+  assert.deepEqual(auditHostParity(changed), ["host.call(set_dialog_background) is listed as only on mygo and hostCalls does not name it"]);
+});
+
+test("a call that a row B lists as only on mygo fails when wailsv3 has it", () => {
+  const changed = sources();
+  changed.wailsv3Runtime = changed.wailsv3Runtime.replace('windowNew: "WindowNew",', 'windowNew: "WindowNew",\n  setDialogBackground: "SetDialogBackground",');
+  const failures = auditHostParity(changed);
+  assert.ok(failures.includes("host.call(set_dialog_background) is listed as only on mygo and exists on wailsv3"), failures.join("\n"));
+});
+
+test("a call that only hostCalls names passes when a row B lists it in the column of mygo", () => {
+  const changed = sources();
+  changed.mygoCallsSource = changed.mygoCallsSource.replace('"windowNew": run(h.WindowNew),', '"windowNew": run(h.WindowNew),\n\t\t"mygoOwn": run(h.WindowNew),');
+  changed.hostsSpec = changed.hostsSpec.replace('\`setDialogBackground\`', '\`setDialogBackground\`, \`mygoOwn\`');
+  assert.deepEqual(auditHostParity(changed), []);
+  changed.hostsSpec = changed.hostsSpec.replace(', \`mygoOwn\`', '');
+  assert.deepEqual(auditHostParity(changed), ["mygo host.call(mygo_own) does not exist on wailsv3"]);
 });
 
 test("a call of wailsv3 that hostCalls does not name fails unless a row B lists it", () => {

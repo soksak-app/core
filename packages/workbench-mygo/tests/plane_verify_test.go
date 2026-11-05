@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/egoist/mygo/ui"
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
@@ -30,12 +31,12 @@ func placingShell(t *testing.T) (*shellFixture, *placingHost) {
 			}
 			placements := []any{}
 			for _, surface := range raw.Surfaces {
-				// The host fits the declared rectangle inward to the device pixels of the scale 2.
+				// The element of the frame stands the view on the whole points inside the slot.
 				x, y := surface["x"].(float64), surface["y"].(float64)
-				left, top := math.Ceil(x*2)/2, math.Ceil(y*2)/2
-				right, bottom := math.Floor((x+surface["w"].(float64))*2)/2, math.Floor((y+surface["h"].(float64))*2)/2
+				left, top := math.Ceil(x), math.Ceil(y)
+				right, bottom := math.Floor(x+surface["w"].(float64)), math.Floor(y+surface["h"].(float64))
 				placements = append(placements, map[string]any{"id": surface["id"], "visible": surface["visible"],
-					"x": left + stored.moved, "y": top, "w": right - left, "h": bottom - top})
+					"x": left + stored.moved, "y": top, "w": max(right-left, 0), "h": max(bottom-top, 0)})
 			}
 			return map[string]any{"ticket": 1, "placements": placements,
 				"chrome": map[string]any{"controls": map[string]any{"x": 12, "y": 12, "w": 52, "h": 16}, "row": 40}}, nil
@@ -81,7 +82,8 @@ func TestTheVerificationReadsTheDrawnPlane(t *testing.T) {
 	f, _ := placingShell(t)
 	resized(f, 1000)
 	verify := status[workbench.VerifyStatus](t, f, "core.verify")
-	for _, name := range []string{"V0 ", "V1 ", "V2 ", "V3 ", "V4 ", "V5 ", "V6 ", "V7a ", "V7c ", "V7b ", "V8 ", "V9 ", "V10 ", "R ", "D ", "T5 ", "P ", "W "} {
+	// These measure a plane with one card and one surface. The other checks of the page workbench are listed as skipped.
+	for _, name := range []string{"V2 ", "V4 ", "V5 ", "V7a ", "V7b ", "V10 ", "R ", "D ", "T5 ", "W "} {
 		verifyRow(t, verify, name)
 	}
 	if verify.Failed != 0 {
@@ -97,6 +99,59 @@ func TestTheVerificationStatesAPlacementThatTheHostMoved(t *testing.T) {
 	verify := status[workbench.VerifyStatus](t, f, "core.verify")
 	if verifyRow(t, verify, "V7b ").OK || verify.Failed == 0 {
 		t.Fatalf("core.verify is %+v", verify)
+	}
+}
+
+// V7a measures the slot that the window drew, and not the box that the workbench computed: a slot elsewhere fails it.
+func TestTheVerificationMeasuresTheDrawnSlot(t *testing.T) {
+	f, _ := placingShell(t)
+	resized(f, 1000)
+	if verify := status[workbench.VerifyStatus](t, f, "core.verify"); !verifyRow(t, verify, "V7a ").OK {
+		t.Fatalf("core.verify is %+v", verify)
+	}
+	var moved int
+	var move func(nodes []ui.ElementNode)
+	move = func(nodes []ui.ElementNode) {
+		for index := range nodes {
+			if _, ok := nodes[index].Key.(workbench.SurfaceSlot); ok {
+				nodes[index].Bounds.X += 5
+				moved++
+			}
+			move(nodes[index].Children)
+		}
+	}
+	f.treeEdit = move
+	verify := status[workbench.VerifyStatus](t, f, "core.verify")
+	if moved == 0 {
+		t.Fatal("the element tree holds no slot of a surface")
+	}
+	if verifyRow(t, verify, "V7a ").OK || verify.Failed == 0 {
+		t.Fatalf("core.verify is %+v", verify)
+	}
+}
+
+// The slot stands where the frame declared it at any size of the window, also in a card too small for its rows.
+func TestTheDrawnSlotFollowsEverySize(t *testing.T) {
+	f, stored := placingShell(t)
+	for _, size := range [][2]int{{1000, 700}, {700, 300}, {400, 200}, {200, 120}, {120, 80}, {80, 60}, {40, 30}} {
+		stored.window.Width, stored.window.Height = float64(size[0]), float64(size[1])
+		f.tester.SetSize(size[0], size[1])
+		f.settle()
+		verify := status[workbench.VerifyStatus](t, f, "core.verify")
+		for _, row := range verify.Rows {
+			if !row.OK {
+				t.Errorf("%v: %s: %s", size, row.Name, row.Note)
+			}
+		}
+	}
+}
+
+// A section surface stands where the sidebar drew its body: the box that the sidebar computes is the slot of the window.
+func TestTheVerificationMeasuresASectionSlot(t *testing.T) {
+	f, _ := surfaceShellOf(t, sidebarsInstalled)
+	verify := status[workbench.VerifyStatus](t, f, "core.verify")
+	if row := verifyRow(t, verify, "V7a "); !row.OK {
+		t.Fatalf("core.verify is %+v", row)
 	}
 }
 
@@ -116,6 +171,53 @@ func TestTheSurfaceStatusStatesWhatTheHostApplied(t *testing.T) {
 			t.Fatalf("declared %+v applied %+v", surface.Declared, surface.Applied)
 		}
 	}
+}
+
+// A frame verifies nothing while nobody watches: the verification runs at a read, over the plane that the last frame drew.
+func TestAFrameReadsNoElementTree(t *testing.T) {
+	f, _ := placingShell(t)
+	resized(f, 1000)
+	reads := f.treeReads
+	for range 3 {
+		f.tester.Frame()
+		f.pending.drain(t)
+	}
+	if f.treeReads != reads {
+		t.Fatalf("three frames read the element tree %d times", f.treeReads-reads)
+	}
+	if verify := status[workbench.VerifyStatus](t, f, "core.verify"); len(verify.Rows) == 0 {
+		t.Fatalf("core.verify is %+v", verify)
+	}
+	if f.treeReads == reads {
+		t.Fatal("the read did not verify")
+	}
+}
+
+// A watcher of core.verify receives the result of a frame without reading it.
+func TestAWatchOfTheVerificationFollowsTheFrames(t *testing.T) {
+	f, stored := placingShell(t)
+	var values []workbench.VerifyStatus
+	if _, err := f.shell.Registry().Answer("status.watch", json.RawMessage(`{"name":"core.verify"}`), func(_ string, value any) {
+		text, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var verify workbench.VerifyStatus
+		if err := json.Unmarshal(text, &verify); err != nil {
+			t.Fatal(err)
+		}
+		values = append(values, verify)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	stored.moved = 3
+	resized(f, 1000)
+	for _, value := range values {
+		if value.Failed > 0 {
+			return
+		}
+	}
+	t.Fatalf("the watcher received %+v", values)
 }
 
 // The verification of a settled plane asks for no frame, or each frame would ask for the next.
@@ -187,13 +289,102 @@ func TestAVerificationThatCannotRunIsAFailure(t *testing.T) {
 		t.Fatalf("core.verify is %+v", verify)
 	}
 	stored.window.Scale = 0
-	f.tester.Frame()
-	f.pending.drain(t)
 	verify := status[workbench.VerifyStatus](t, f, "core.verify")
 	if verify.Failed == 0 || !strings.Contains(verifyRow(t, verify, "Verification").Note, "device pixel ratio") {
 		t.Fatalf("core.verify is %+v", verify)
 	}
+	f.pending.drain(t)
 	if len(f.lines) == 0 && len(f.host.written("workbench.record.error")) == 0 {
 		t.Fatal("the failed verification reported nothing")
 	}
+}
+
+// The shell answers core.contributions: the contributions of the installed plugins, which the page workbench states too.
+func TestTheShellAnswersItsContributions(t *testing.T) {
+	f, _ := surfaceShell(t)
+	if _, err := f.shell.Registry().Read("core.contributions"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A check that has nothing to measure is no pass: it is listed as skipped and counts in no row and in no failure.
+func TestACheckWithNothingToMeasureIsSkipped(t *testing.T) {
+	f, _ := placingShell(t)
+	resized(f, 1000)
+	verify := status[workbench.VerifyStatus](t, f, "core.verify")
+	for _, name := range []string{"V7c ", "V8 "} {
+		for _, row := range verify.Rows {
+			if strings.HasPrefix(row.Name, name) {
+				t.Fatalf("%s is a row: %+v", name, row)
+			}
+		}
+		found := false
+		for _, skipped := range verify.Skipped {
+			found = found || strings.HasPrefix(skipped.Name, name) && skipped.Note != ""
+		}
+		if !found {
+			t.Fatalf("%s is not skipped: %+v", name, verify.Skipped)
+		}
+	}
+	if verify.Failed != 0 {
+		t.Fatalf("core.verify is %+v", verify)
+	}
+}
+
+// core.modal states the open modal as the page workbench does, with no document on a host that has no modal web view.
+func TestTheModalStatusStatesTheOpenModal(t *testing.T) {
+	f := projectWithPlugins(t)
+	f.settle()
+	if got := f.status("core.modal"); got != "null" {
+		t.Fatalf("core.modal is %s with no modal", got)
+	}
+	f.click("core.card.add", f.tabbedCards()[0])
+	if got, want := f.status("core.modal"), `{"id":"picker","mode":"menu","document":null}`; got != want {
+		t.Fatalf("core.modal is %s, want %s", got, want)
+	}
+	f.run("core.picker.close", nil)
+	f.settle()
+	if got := f.status("core.modal"); got != "null" {
+		t.Fatalf("core.modal is %s after the menu closed", got)
+	}
+	f.run("core.settings.open", nil)
+	f.settle()
+	if got, want := f.status("core.modal"), `{"id":"settings","mode":"dialog","document":null}`; got != want {
+		t.Fatalf("core.modal is %s, want %s", got, want)
+	}
+}
+
+// core.grid states the sides that a card presents.
+func TestTheGridStatesTheSidesOfACard(t *testing.T) {
+	f, card := cardSidebar(t, "left")
+	f.settle()
+	var grid struct {
+		Cards []struct {
+			ID       string `json:"id"`
+			Sidebars map[string]struct {
+				Set       *string  `json:"set"`
+				Size      float64  `json:"size"`
+				Collapsed bool     `json:"collapsed"`
+				ShownSize *float64 `json:"shownSize"`
+			} `json:"sidebars"`
+		} `json:"cards"`
+	}
+	if err := json.Unmarshal([]byte(f.status("core.grid")), &grid); err != nil {
+		t.Fatal(err)
+	}
+	for _, drawn := range grid.Cards {
+		if drawn.ID != card {
+			continue
+		}
+		left, ok := drawn.Sidebars["left"]
+		if !ok || left.Set == nil || left.Size <= 0 || left.ShownSize == nil {
+			t.Fatalf("the sides of the card are %+v", drawn.Sidebars)
+		}
+		box := f.box("core.sidebar", card+":left")
+		if *left.ShownSize != float64(box.W) {
+			t.Fatalf("the side states %v and the window drew %v", *left.ShownSize, box.W)
+		}
+		return
+	}
+	t.Fatalf("core.grid has no card %s", card)
 }

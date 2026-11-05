@@ -439,11 +439,11 @@ type viewPlatform struct {
 }
 
 type viewCreation struct {
-	folder, plugin, channel string
+	folder, plugin, label, channel string
 }
 
-func (p *viewPlatform) CreateDocument(surface unsafe.Pointer, directory, folder, plugin, channel string, changed func(state string)) (unsafe.Pointer, error) {
-	p.created = append(p.created, viewCreation{folder: folder, plugin: plugin, channel: channel})
+func (p *viewPlatform) CreateDocument(surface unsafe.Pointer, directory, folder, plugin, label, channel string, changed func(state string)) (unsafe.Pointer, error) {
+	p.created = append(p.created, viewCreation{folder: folder, plugin: plugin, label: label, channel: channel})
 	return unsafe.Pointer(new(int)), nil
 }
 
@@ -471,7 +471,7 @@ func (p *viewPlatform) SetViewResponsiveness(document unsafe.Pointer, responsive
 
 func (p *viewPlatform) AddDocumentScript(document unsafe.Pointer, source string) error { return nil }
 
-// contract: view.create-loads-page
+// contract: view.create-loads-page, document.process-label
 func TestViewSurfaceCreatesViewConfigurationAndLoadsItsPage(t *testing.T) {
 	fake := &viewPlatform{}
 	saved := system
@@ -481,8 +481,8 @@ func TestViewSurfaceCreatesViewConfigurationAndLoadsItsPage(t *testing.T) {
 	if err := s.attachView("probe-surface", unsafe.Pointer(new(int)), "/config/document-data", "/plugins/probe", "probe", "ui/page.html", "channel-script", nullOriginStart()); err != nil {
 		t.Fatalf("attach view: %v", err)
 	}
-	if len(fake.created) != 1 || fake.created[0].channel != "channel-script" || fake.created[0].plugin != "probe" || fake.created[0].folder != "/plugins/probe" {
-		t.Fatalf("created documents: %+v, want one view configuration of plugin probe in its folder with the channel script", fake.created)
+	if len(fake.created) != 1 || fake.created[0].channel != "channel-script" || fake.created[0].plugin != "probe" || fake.created[0].folder != "/plugins/probe" || fake.created[0].label != "soksak://plugin/probe" {
+		t.Fatalf("created documents: %+v, want one view configuration of plugin probe in its folder with its process label and the channel script", fake.created)
 	}
 	if want := []string{"soksak://probe/ui/page.html"}; !reflect.DeepEqual(fake.loaded, want) {
 		t.Fatalf("loaded addresses: %v, want %v", fake.loaded, want)

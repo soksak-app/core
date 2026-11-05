@@ -427,7 +427,8 @@ type Platform interface {
 	// soksak://<plugin>/<path> from folder (docs/spec/native-surfaces.md#document-regions). channel is empty for a document region.
 	// A view surface passes the text of the view channel script, and its configuration is the only one that serves the core
 	// root and runs the script (docs/spec/native-surfaces.md#view-surfaces).
-	CreateDocument(surface unsafe.Pointer, directory, folder, plugin, channel string, changed func(state string)) (unsafe.Pointer, error)
+	// label is the display label of the WebContent process (docs/spec/plugin-processes.md#operating-system-display-labels).
+	CreateDocument(surface unsafe.Pointer, directory, folder, plugin, label, channel string, changed func(state string)) (unsafe.Pointer, error)
 	// SetViewMessage receives {"message": value} for each message of the sok-view handler of a view, and {"error": reason} for a
 	// message from another frame. It must be set before the view loads a page.
 	SetViewMessage(document unsafe.Pointer, message func(value string)) error
@@ -488,6 +489,8 @@ type Platform interface {
 	// on the main thread. A non-nil released puts the region in the lease mode and receives, on a worker, the frame identity of
 	// each surface that the region stops holding; a nil released keeps the copy mode.
 	CreateImage(surface unsafe.Pointer, name string, event func(json string), released func(generation, raster uint64, sequence int)) (unsafe.Pointer, error)
+	// SetImageBackground blurs the image region while a dialog is open.
+	SetImageBackground(image unsafe.Pointer, enabled bool)
 	// PlaceImage sets the image region with the CSS pixel margins of the surface viewport.
 	PlaceImage(image unsafe.Pointer, left, top, right, bottom float64, visible bool)
 	// RasterImage returns the device pixel size of the applied image region and the ratio of device pixels per CSS pixel.

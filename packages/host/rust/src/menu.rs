@@ -54,6 +54,7 @@ pub const MENUS: &[(&str, &str, &str)] = &[
 #[rustfmt::skip]
 pub const ITEMS: &[(&str, &str, &str, &str, &str, &str)] = &[
     ("app", "about", "title", "정보", "About", ""),
+    ("app", "settings", "title", "설정…", "Settings…", "cmd+,"),
     ("app", "services", "system", "", "", ""),
     ("app", "hide", "title", "가리기", "Hide", "cmd+h"),
     ("app", "hide-others", "title", "기타 가리기", "Hide Others", "opt+cmd+h"),
@@ -89,6 +90,7 @@ const PAGE_COMMANDS: &[(&str, &str, &str)] = &[
     ("view", "text-larger", "core.text.larger"),
     ("view", "text-smaller", "core.text.smaller"),
     ("view", "text-default", "core.text.reset"),
+    ("app", "settings", "core.settings.open"),
     ("help", "debug", "core.debug.open"),
 ];
 
@@ -219,6 +221,12 @@ fn app_submenu(language: &str) -> Result<Menu, String> {
         title: None,
         items: vec![
             named("about")?,
+            MenuItem::Separator,
+            MenuItem::Command {
+                id: "core.settings.open",
+                title: item_title("app", "settings", language)?,
+                key: Some(item_key("app", "settings")?),
+            },
             MenuItem::Separator,
             system("services"),
             MenuItem::Separator,

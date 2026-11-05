@@ -6,6 +6,8 @@
 
 이 명세는 설정 창의 절, 각 절이 보여 주는 설정, 사이드바 세트의 저장 형식을 정의한다. 범위와 저장 파일은 [프로젝트](projects.ko.md#설정)가, 창을 그리는 방식은 [네이티브 모달](native-modals.ko.md)이, 플러그인 선언은 [플러그인](plugins.ko.md)이 정의한다. 구현과 검증은 [기능](../features.ko.md)에 기록한다.
 
+chrome 버튼과 app 메뉴의 항목 설정…(Settings…), 단축키 `cmd+,`는 `core.settings.open`으로 창을 연다.
+
 ## 절
 
 플러그인은 별도 저장소에서 설치되므로 플러그인과 그 섹션의 수는 제한 없이 늘어난다. 목록의 행과 선택 상자의 항목을 빼면 창의 어떤 컨트롤도 플러그인이나 섹션마다 반복되지 않는다.
@@ -186,6 +188,8 @@ theme catalog와 mode, font, menu 언어와 기본 언어, 그리고 이 설정�
 두 workbench가 읽는 배치 값의 원천은 하나, `workbench.json`의 chrome metric이다. 카드 머리 `head-h`와 바닥 `foot-h`는 drop zone의 경계이기도 하고, 탭 줄의 기준 폭은 `tab-peek-w`와 `tab-min-w`다. 각 workbench의 code에 적은 값은 처음 값에서 벗어나는 두 번째 사본이 된다. 새 스페이스의 왼쪽과 오른쪽 사이드바 폭은 `environment.json`의 `workspace.grid` 카드에서 온다.
 
 워크벤치 stylesheet(`app.css`, `library.css`, `overlay.html`)의 길이, 비율, 지속 시간은 `packages/workbench/workbench.json`의 chrome metric이다. 워크벤치는 page가 그리기 전에 그 각각을 document root의 custom property로 정하고, stylesheet는 그 custom property를 읽는다. stylesheet는 literal 길이, 비율, 지속 시간을 담지 않는다. media condition은 custom property를 읽지 못하므로, 워크벤치는 window 폭이 `library-narrow-w` 이하인 동안 document root에 `data-library-narrow`를 표시하고, `library.css`는 그 표시로 library를 좁힌다. focus mark는 focus된 카드의 body 밖으로 사방 `focus-mark-t`만큼, 곧 stroke 두께만큼 나와 있어서 stroke가 surface를 덮지 않는다.
+
+규칙이 없는 page의 input과 select는 page의 color scheme으로 browser에서 모양을 받으므로 어느 stylesheet에도 선언이 없다. native workbench는 page 창에서 잰 값인 `workbench.json`의 `plainControls`로 그것을 그리고, 그 표를 읽는 stylesheet는 없다.
 
 ## 상태
 

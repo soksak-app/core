@@ -44,7 +44,7 @@ func healthy(t *testing.T) workbench.VerifyInput {
 		CardRadius: 8,
 		Latest:     record,
 		Seated:     record,
-		Drawn:      map[string]workbench.DrawnSurface{"tab-1": {Frame: surface.Declared, Predicted: true, Card: "c"}},
+		Drawn:      map[string]workbench.DrawnSurface{"tab-1": {Frame: surface.Declared, Card: "c"}},
 		Cards:      rects,
 		Plane:      layout.Rect{W: 1000, H: 600},
 		Pad:        6,
@@ -73,18 +73,26 @@ func TestVerifyPassesADrawnPlane(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	var names, skipped []string
 	for _, candidate := range rows {
-		if !candidate.OK {
+		name := strings.Fields(candidate.Name)[0]
+		switch {
+		case candidate.Skipped:
+			skipped = append(skipped, name)
+		case !candidate.OK:
 			t.Errorf("row %s failed: %s", candidate.Name, candidate.Note)
+			fallthrough
+		default:
+			names = append(names, name)
 		}
 	}
-	var names []string
-	for _, candidate := range rows {
-		names = append(names, strings.Fields(candidate.Name)[0])
-	}
-	want := "V0 V1 V2 V3 V4 V5 V6 V7a V7c V7b V8 V9 V10 R D T5 P"
+	want := "V1 V2 V3 V4 V5 V6 V7a V7b V10 R D T5"
 	if got := strings.Join(names, " "); got != want {
 		t.Fatalf("the rows are %s, want %s", got, want)
+	}
+	// V7c and V8 have nothing to measure in a native window, V0 and V9 need a rail, P a window sidebar and W the window buttons.
+	if got, want := strings.Join(skipped, " "), "V0 V7c V8 V9 P W"; got != want {
+		t.Fatalf("the skipped checks are %s, want %s", got, want)
 	}
 }
 
@@ -101,7 +109,7 @@ func TestVerifyRowsFindTheirDefects(t *testing.T) {
 			in.Drawn["tab-1"] = drawn
 		}},
 		{"a surface missing from the commit", "V7a", func(in *workbench.VerifyInput) {
-			in.Drawn["tab-2"] = workbench.DrawnSurface{Predicted: true}
+			in.Drawn["tab-2"] = workbench.DrawnSurface{}
 		}},
 		{"a surface that left the plane", "V7a", func(in *workbench.VerifyInput) { delete(in.Drawn, "tab-1") }},
 		{"a blur that differs", "V7a", func(in *workbench.VerifyInput) {
@@ -109,17 +117,11 @@ func TestVerifyRowsFindTheirDefects(t *testing.T) {
 			drawn.Dim = true
 			in.Drawn["tab-1"] = drawn
 		}},
-		{"a prediction off by a point", "V7c", func(in *workbench.VerifyInput) {
-			surface := in.Latest.Surfaces[0]
-			surface.Declared.X += 0.25
-			in.Ahead = &workbench.VerifyRecord{Seq: 4, Surfaces: []workbench.VerifySurface{surface}}
-		}},
 		{"a surface applied outside its declaration", "V7b", func(in *workbench.VerifyInput) {
 			surface := in.Latest.Surfaces[0]
 			surface.Applied.W += 1
 			in.Seated = &workbench.VerifyRecord{Seq: 3, Surfaces: []workbench.VerifySurface{surface}}
 		}},
-		{"a card that a transform moves", "V8", func(in *workbench.VerifyInput) { in.Transformed = 1 }},
 		{"a rail stroke through a card", "V9", func(in *workbench.VerifyInput) {
 			in.Outline.Loops = [][]layout.Point{{{X: 100, Y: 100}, {X: 200, Y: 100}, {X: 200, Y: 200}, {X: 100, Y: 200}}}
 			in.RailGroups = [][]layout.Rect{{{X: 100, Y: 100, W: 100, H: 100}}}
@@ -144,14 +146,14 @@ func TestVerifyRowsFindTheirDefects(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if failed := row(t, rows, c.row); failed.OK {
-				t.Fatalf("row %s passed: %s", failed.Name, failed.Note)
+			if failed := row(t, rows, c.row); failed.OK || failed.Skipped {
+				t.Fatalf("row %s did not fail: %+v", failed.Name, failed)
 			}
 		})
 	}
 }
 
-// While the host has not answered a commit, the rows that compare with it do not judge it.
+// While the host has not answered a commit, the rows that compare with it are skipped and are no pass.
 func TestVerifyWaitsForAPendingPlacement(t *testing.T) {
 	in := healthy(t)
 	in.Pending = true
@@ -163,9 +165,9 @@ func TestVerifyWaitsForAPendingPlacement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, prefix := range []string{"V7a", "V7c", "V10", "R"} {
-		if got := row(t, rows, prefix); !got.OK {
-			t.Fatalf("row %s judged a pending placement: %s", got.Name, got.Note)
+	for _, prefix := range []string{"V7a", "V10", "R"} {
+		if got := row(t, rows, prefix); !got.Skipped || got.OK {
+			t.Fatalf("row %s judged a pending placement: %+v", got.Name, got)
 		}
 	}
 }
@@ -217,10 +219,8 @@ func TestVerifyComparesTheWindowButtons(t *testing.T) {
 	if rows, err = workbench.Verify(in); err != nil {
 		t.Fatal(err)
 	}
-	for _, candidate := range rows {
-		if strings.HasPrefix(candidate.Name, "W") {
-			t.Fatalf("buttons out of the row were compared: %+v", candidate)
-		}
+	if got := row(t, rows, "W"); !got.Skipped {
+		t.Fatalf("buttons out of the row were compared: %+v", got)
 	}
 }
 
@@ -236,7 +236,7 @@ func TestVerifyRefusesAScaleThatIsNotPositive(t *testing.T) {
 // core.verify holds null before the first verification and then the rows of the current state: a failed layout is a row of its
 // own, and a state without a drawn plane holds no other row.
 func TestVerificationStatus(t *testing.T) {
-	verification := workbench.NewVerification(func() {})
+	verification := workbench.NewVerification()
 	encoded := func() string {
 		text, err := json.Marshal(verification.Status())
 		if err != nil {
@@ -248,25 +248,25 @@ func TestVerificationStatus(t *testing.T) {
 		t.Fatalf("the first status is %s", got)
 	}
 	rows := func() ([]workbench.VerifyRow, error) {
-		return []workbench.VerifyRow{{Name: "V1", Note: "a", OK: true}, {Name: "V2", Note: "b", OK: false}}, nil
+		return []workbench.VerifyRow{{Name: "V1", Note: "a", OK: true}, {Name: "V2", Note: "b", OK: false}, {Name: "V3", Note: "c", Skipped: true}}, nil
 	}
 	if err := verification.Update(true, rows, nil); err != nil {
 		t.Fatal(err)
 	}
-	if want := `{"failed":1,"rows":[{"name":"V1","note":"a","ok":true},{"name":"V2","note":"b","ok":false}]}`; encoded() != want {
+	if want := `{"failed":1,"rows":[{"name":"V1","note":"a","ok":true},{"name":"V2","note":"b","ok":false}],"skipped":[{"name":"V3","note":"c"}]}`; encoded() != want {
 		t.Fatalf("the status is %s, want %s", encoded(), want)
 	}
 	failure := "the current image raster did not present"
 	if err := verification.Update(false, rows, &failure); err != nil {
 		t.Fatal(err)
 	}
-	if want := `{"failed":1,"rows":[{"name":"Surface presentation","note":"the current image raster did not present","ok":false}]}`; encoded() != want {
+	if want := `{"failed":1,"rows":[{"name":"Surface presentation","note":"the current image raster did not present","ok":false}],"skipped":[]}`; encoded() != want {
 		t.Fatalf("the status is %s, want %s", encoded(), want)
 	}
 	if err := verification.Update(false, rows, nil); err != nil {
 		t.Fatal(err)
 	}
-	if want := `{"failed":0,"rows":[]}`; encoded() != want {
+	if want := `{"failed":0,"rows":[],"skipped":[]}`; encoded() != want {
 		t.Fatalf("the status is %s, want %s", encoded(), want)
 	}
 }
@@ -316,7 +316,7 @@ func TestVerifyNamesWhatItFound(t *testing.T) {
 	drawn := in.Drawn["tab-1"]
 	drawn.Frame.X += 1
 	in.Drawn["tab-1"] = drawn
-	in.Drawn["tab-2"] = workbench.DrawnSurface{Predicted: true}
+	in.Drawn["tab-2"] = workbench.DrawnSurface{}
 	in.Latest.Surfaces = append(in.Latest.Surfaces, workbench.VerifySurface{ID: "tab-3", Visible: true})
 	surface := in.Latest.Surfaces[0]
 	surface.Applied.W += 1

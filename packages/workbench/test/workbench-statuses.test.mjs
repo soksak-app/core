@@ -27,7 +27,7 @@ test("core.window.workbench, core.workbench.error and core.workbench.audit descr
   const { registry } = await import("../exposure.js");
   registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
   const { pageIdentity } = await import("../page-identity.js");
-  const { installCoreExposure } = await import("../core-exposure.js");
+  const { installCoreExposure, setVerify } = await import("../core-exposure.js");
   const get = (name) => registry.handle({ method: "status.get", params: { name } });
   try {
     await installCoreExposure({
@@ -40,6 +40,13 @@ test("core.window.workbench, core.workbench.error and core.workbench.audit descr
     assert.equal(workbench.start, pageIdentity, "start is the page identity of the main page on this host");
     assert.equal(workbench.startedAt, performance.timeOrigin, "startedAt is the time origin of the main page on this host");
     assert.deepEqual([workbench.scale, workbench.width, workbench.height], [2, 1200, 800]);
+
+    setVerify([{ name: "V1", ok: true, note: "a" }, { name: "V7c", skipped: true, note: "b" }, { name: "V2", ok: false, note: "c" }]);
+    assert.deepEqual(await get("core.verify"), { result: {
+      failed: 1,
+      rows: [{ name: "V1", ok: true, note: "a" }, { name: "V2", ok: false, note: "c" }],
+      skipped: [{ name: "V7c", note: "b" }],
+    } }, "a skipped check is neither a row nor a failure");
 
     assert.deepEqual(await get("core.workbench.error"), { result: null }, "a workbench that shows no error reports null");
     const shown = document.createElement("div");

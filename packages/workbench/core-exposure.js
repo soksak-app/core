@@ -134,8 +134,13 @@ function status(name, read) {
 let verified = null;
 
 /** Records the last verification result. */
-export function setVerify(rows) {
-  verified = { failed: rows.filter((row) => !row.ok).length, rows };
+export function setVerify(results) {
+  const rows = results.filter((row) => !row.skipped);
+  verified = {
+    failed: rows.filter((row) => !row.ok).length,
+    rows,
+    skipped: results.filter((row) => row.skipped).map(({ name, note }) => ({ name, note })),
+  };
   coreChanged();
 }
 

@@ -136,6 +136,47 @@ func TestARetainKeepsTheSectionsOfTheSpacesThatAreNotShown(t *testing.T) {
 	}
 }
 
+// The sets and the links are project settings, so the sections of a project that is not shown follow from its own overrides.
+func TestARetainTakesTheSetsOfEachProject(t *testing.T) {
+	other := storedProject(tab("tab-cccccc", "notes"))
+	other["id"], other["root"], other["identity"] = "prj-b", "/b", "identity of /b"
+	other["spaces"].([]map[string]any)[0]["id"] = "spc-bbbbbb"
+	other["activeSpaceId"] = "spc-bbbbbb"
+	other["settings"] = map[string]any{
+		"sets":  []any{map[string]any{"id": "mine", "title": "mine", "sections": []any{"files.bookmarks"}, "layout": "list"}},
+		"links": []any{map[string]any{"place": "left", "plugin": nil, "set": "mine"}},
+	}
+	stored := &storedHost{installed: sidebarsInstalled, projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes")), other}}
+	newShell(t, stored)
+	calls := retained(t, stored)
+	if len(calls) != 1 {
+		t.Fatalf("retained %v", calls)
+	}
+	if !slices.Contains(calls[0], "/b spc-bbbbbb/left/files.bookmarks") || slices.Contains(calls[0], "/b spc-bbbbbb/left/files.tree") {
+		t.Fatalf("the retain holds %v, want the set of the project prj-b", calls[0])
+	}
+	if !slices.Contains(calls[0], "/a spc-aaaaaa/left/files.tree") {
+		t.Fatalf("the retain holds %v, without the common set of the project prj-a", calls[0])
+	}
+}
+
+// A card draws the side that the plugin of its active tab links, and the other tabs of the card can become active.
+func TestARetainKeepsTheLinkedSideOfEachTabOfACard(t *testing.T) {
+	project := storedProject(tab("tab-aaaaaa", "notes"), tab("tab-bbbbbb", "browser"))
+	project["settings"] = map[string]any{
+		"sets":  []any{map[string]any{"id": "mine", "title": "mine", "sections": []any{"browser.history"}, "layout": "list"}},
+		"links": []any{map[string]any{"place": "card-top", "plugin": "browser", "set": "mine"}},
+	}
+	card := project["spaces"].([]map[string]any)[0]["layout"].(map[string]any)["state"].(map[string]any)["cards"].([]map[string]any)[0]
+	stored := &storedHost{installed: sidebarsInstalled, projects: []map[string]any{project}}
+	newShell(t, stored)
+	calls := retained(t, stored)
+	want := "/a spc-aaaaaa/" + card["id"].(string) + ":top/browser.history"
+	if len(calls) != 1 || !slices.Contains(calls[0], want) {
+		t.Fatalf("retained %v, without %s", calls, want)
+	}
+}
+
 func TestAFailedRetainIsShown(t *testing.T) {
 	stored := &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"), tab("tab-bbbbbb", "notes"))}}
 	f := newTabShell(t, stored)

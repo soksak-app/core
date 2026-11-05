@@ -114,3 +114,23 @@ func TestAnItemWithAnUnknownRoleOrModifierBuildsNoMenu(t *testing.T) {
 		t.Fatal("an unknown modifier built a menu")
 	}
 }
+
+// contract: menu.application.app-has-settings
+func TestApplicationMenuAppHasSettings(t *testing.T) {
+	for language, want := range map[string]string{"en": "Settings…", "ko": "설정…"} {
+		menu, err := adapter.ApplicationMenuFor(language)
+		if err != nil {
+			t.Fatal(err)
+		}
+		app := menu.Items()[0].Submenu
+		if got := labels(app); len(got) < 2 || got[1] != want {
+			t.Fatalf("the %s app menu = %v, want %q right after the about item", language, got, want)
+		}
+		if app[1].Accelerator != "CmdOrCtrl+," {
+			t.Fatalf("the settings item has the key %q", app[1].Accelerator)
+		}
+	}
+	if command, ok := host.MenuCommand("settings"); !ok || command != "core.settings.open" {
+		t.Fatalf("the settings item runs %q (%v), want core.settings.open", command, ok)
+	}
+}

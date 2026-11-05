@@ -978,11 +978,28 @@ pub fn fail_head_read_for_test(path: &Path, error: &str) {
 }
 
 pub fn update_log_index(path: &Path) -> Result<IndexUpdate, String> {
-    open_log(path).map(|opened| opened.update)
+    open_log(path)
+        .map(|opened| opened.update)
+        .map_err(|failure| match failure {
+            OpenFailure::Rejected(text) | OpenFailure::Failed(text) => text,
+        })
+}
+
+/// Why an event file was not opened. A query leaves a rejected file out and names it in its answer.
+pub(crate) enum OpenFailure {
+    /// The file has another schema number.
+    Rejected(String),
+    Failed(String),
+}
+
+impl From<String> for OpenFailure {
+    fn from(text: String) -> Self {
+        OpenFailure::Failed(text)
+    }
 }
 
 /// Brings the index of the event file up to date and returns the file with the index content.
-pub(crate) fn open_log(path: &Path) -> Result<OpenedLog, String> {
+pub(crate) fn open_log(path: &Path) -> Result<OpenedLog, OpenFailure> {
     let (source, idx, system) = locked_index(path)?;
     let opened = refresh_locked(path, source, &idx);
     let closed = close_index(system.as_ref(), idx, path);
@@ -992,7 +1009,7 @@ pub(crate) fn open_log(path: &Path) -> Result<OpenedLog, String> {
 }
 
 /// Brings the index up to date while the caller holds its lock.
-fn refresh_locked(path: &Path, source: File, idx: &File) -> Result<OpenedLog, String> {
+fn refresh_locked(path: &Path, source: File, idx: &File) -> Result<OpenedLog, OpenFailure> {
     let started = Instant::now();
     let name = display_name(path);
     let idx_display = format!("{name}.idx");
@@ -1082,7 +1099,7 @@ fn index_from(
     size: u64,
     mtime: i64,
     rebuild: bool,
-) -> Result<(i64, i64, i64), String> {
+) -> Result<(i64, i64, i64), OpenFailure> {
     let idx_display = format!("{name}.idx");
     let (mut start, mut events, state) = if rebuild {
         (0, 0, IndexState::default())
@@ -1132,14 +1149,15 @@ fn index_from(
                     return Err(format!(
                         "{name}: the first line is not log.open: {}",
                         debug::js_string(&line.event)
-                    ));
+                    )
+                    .into());
                 }
                 let schema = debug::schema_of(name, &String::from_utf8_lossy(line_bytes))?;
                 if schema != debug::EVENT_SCHEMA {
-                    return Err(format!(
+                    return Err(OpenFailure::Rejected(format!(
                         "{name}: schema {schema} is not {}",
                         debug::EVENT_SCHEMA
-                    ));
+                    )));
                 }
                 next.head_len = line_size as u32;
                 let mut head = line_bytes.to_vec();
@@ -1167,9 +1185,7 @@ fn index_from(
         if !chunk.is_empty() {
             carry.extend_from_slice(chunk);
             if carry.len() > LINE_LIMIT {
-                return Err(format!(
-                    "{name}:{number}: the line is over {LINE_LIMIT} bytes"
-                ));
+                return Err(format!("{name}:{number}: the line is over {LINE_LIMIT} bytes").into());
             }
         }
     }
@@ -1261,5 +1277,8 @@ pub fn rotate_log_indexes(
     let closed = close_index(system.as_ref(), idx, path);
     result?;
     closed?;
-    refreshed.map_err(|error| format!("the index of the closed file is not complete: {error}"))
+    refreshed.map_err(|failure| {
+        let (OpenFailure::Rejected(error) | OpenFailure::Failed(error)) = failure;
+        format!("the index of the closed file is not complete: {error}")
+    })
 }

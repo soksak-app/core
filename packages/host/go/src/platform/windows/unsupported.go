@@ -262,7 +262,7 @@ func (implementation) EvaluateScript(unsafe.Pointer, string) {
 	unreachable("native webview script evaluation")
 }
 
-func (implementation) CreateDocument(unsafe.Pointer, string, string, string, string, func(string)) (unsafe.Pointer, error) {
+func (implementation) CreateDocument(unsafe.Pointer, string, string, string, string, string, func(string)) (unsafe.Pointer, error) {
 	return nil, unsupported("document view")
 }
 
@@ -629,6 +629,9 @@ func (implementation) CaretImage(unsafe.Pointer, float64, float64, float64, floa
 
 func (implementation) TextImage(unsafe.Pointer, string) {
 	unreachable("image text")
+}
+
+func (implementation) SetImageBackground(unsafe.Pointer, bool) {
 }
 
 func (implementation) FactsImage(unsafe.Pointer) (string, error) {

@@ -35,7 +35,12 @@ type debugHost struct {
 type fixtureElements struct{ f *shellFixture }
 
 func (e fixtureElements) ElementTree() ([]ui.ElementNode, error) {
-	return e.f.tester.ElementTree(), nil
+	e.f.treeReads++
+	tree := e.f.tester.ElementTree()
+	if e.f.treeEdit != nil {
+		e.f.treeEdit(tree)
+	}
+	return tree, nil
 }
 
 func (e fixtureElements) ActElement(id uint64, action ui.Actions, text string) error {
@@ -499,5 +504,56 @@ func TestTheDebugViewIsDrawnAsThePage(t *testing.T) {
 	save := f.box("core.debug.save", "logs/app.log")
 	if view.W != metric("dbg-act-w") || save.X-view.X != metric("dbg-act-w")+metric("space-2") {
 		t.Fatalf("the actions of a file are %+v and %+v", view, save)
+	}
+}
+
+// A filter of the timeline is an input of the page without a look of its own: the control background of its color scheme.
+func TestAFilterOfTheTimelineHasTheBackgroundOfThePage(t *testing.T) {
+	f, _ := timelineShell(t, logPage("null", 2, 1))
+	node, ok := exposedNode(f.tester.ElementTree(), "core.debug.timeline.class", "")
+	if !ok {
+		t.Fatalf("no filter in %q", f.tester.Texts())
+	}
+	want := controlBackground(t)
+	if got := f.pixelOf(node.Bounds.X+node.Bounds.W-6, node.Bounds.Y+node.Bounds.H/2); got != want {
+		t.Fatalf("the filter has the background %v, not %v", got, want)
+	}
+}
+
+// The filters of the timeline flow as those of the page (.dbg-card__filters): an input starts as wide as twenty figures and grows
+// into what its line leaves, and a select is as wide as its longest option.
+func TestTheFiltersOfTheTimelineFlowAsOnThePage(t *testing.T) {
+	f, _ := timelineShell(t, logPage("null", 2, 1))
+	bounds := func(name string) ui.Rect {
+		t.Helper()
+		node, ok := exposedNode(f.tester.ElementTree(), "core.debug.timeline."+name, "")
+		if !ok {
+			t.Fatalf("no filter %s in %q", name, f.tester.Texts())
+		}
+		return node.Bounds
+	}
+	channel, level, layer, text := bounds("channel"), bounds("level"), bounds("layer"), bounds("text")
+	class, event, prefix, surface := bounds("class"), bounds("event"), bounds("event-prefix"), bounds("surface")
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if height := declared.PlainControl("h"); fmt.Sprintf("%gpx", class.H) != height {
+		t.Fatalf("an input is %v high, not %s", class.H, height)
+	}
+	if channel.W != level.W || layer.W <= channel.W {
+		t.Fatalf("the selects are %v, %v and %v wide", channel.W, level.W, layer.W)
+	}
+	if text.Y+text.H/2 != layer.Y+layer.H/2 || text.X <= layer.X {
+		t.Fatalf("the text stands at %+v after the select at %+v", text, layer)
+	}
+	if class.Y <= text.Y || class.X != channel.X {
+		t.Fatalf("the class stands at %+v under the first line at %+v", class, channel)
+	}
+	if event.Y != class.Y || prefix.Y != class.Y || event.W != class.W || prefix.W != class.W || surface.Y <= class.Y {
+		t.Fatalf("three inputs do not share the line: %+v %+v %+v, then %+v", class, event, prefix, surface)
+	}
+	if end := text.X + text.W - prefix.X - prefix.W; end < -.5 || end > .5 {
+		t.Fatalf("the text ends at %v and the line under it at %v", text.X+text.W, prefix.X+prefix.W)
 	}
 }

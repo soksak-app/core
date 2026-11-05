@@ -42,8 +42,10 @@ typedef void (*sp_view_message)(void *context, const char *json);
 // (docs/spec/plugin-processes.md, rule 4). A non-NULL channel is the text of the view channel script of a view
 // configuration: the script runs at document start in the page world, the sok-view handler is registered, and the
 // configuration may request soksak://core/<path> from the core root resolver (sp_core_root_set_resolver). A view needs
-// folder and plugin. Returns NULL if the webview cannot be created.
-void *sp_document_create(void *surface, const char *directory, const char *folder, const char *plugin, const char *channel,
+// folder and plugin. label is the display label of the WebContent process of the document, which the host composes
+// (docs/spec/plugin-processes.md#operating-system-display-labels), and NULL gives the process no label of its own. Returns NULL
+// if the webview cannot be created.
+void *sp_document_create(void *surface, const char *directory, const char *folder, const char *plugin, const char *label, const char *channel,
     sp_document_changed changed, void *context);
 
 // The cause of the last creation of a document region or view web view that returned NULL on the main thread, as a UTF-8

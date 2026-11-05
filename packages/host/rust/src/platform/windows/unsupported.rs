@@ -182,6 +182,7 @@ pub fn create_document(
     _store: &str,
     _folder: &str,
     _plugin: &str,
+    _label: &str,
     _channel: Option<&str>,
     _changed: Box<dyn Fn(String)>,
 ) -> Result<Handle, String> {
@@ -696,6 +697,10 @@ pub fn image_raster(_image: Handle) -> Result<Option<Raster>, String> {
 }
 pub fn image_surface_placed(_image: Handle) -> Result<bool, String> {
     missing("image surface placement")
+}
+
+pub fn set_image_background(_image: Handle, _enabled: bool) -> Result<(), String> {
+    missing("image background")
 }
 
 pub fn image_facts(_image: Handle) -> Result<String, String> {

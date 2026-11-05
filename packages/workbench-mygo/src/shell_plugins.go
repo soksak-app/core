@@ -112,10 +112,13 @@ func (s *Shell) libraryStatus() libraryStatus {
 }
 
 func (s *Shell) openCount() int {
-	if s.opened() != nil {
-		return 1
+	count := 0
+	for _, project := range s.projects {
+		if s.isOpen(project.ID) {
+			count++
+		}
 	}
-	return 0
+	return count
 }
 
 // showLibraryPage shows a page of the library. The plugin page reads the state of the host when it is shown.

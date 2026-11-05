@@ -10,7 +10,7 @@ import (
 func TestAWorkbenchDialogBlursTheDocuments(t *testing.T) {
 	fake := &creationPlatform{}
 	useCreationPlatform(t, fake)
-	s := &Surfaces{invoke: func(work func()) { work() }, documents: NewDocuments()}
+	s := &Surfaces{invoke: func(work func()) { work() }, documents: NewDocuments(), images: NewImages()}
 	key := DocumentKey{Surface: "tab-1", Name: "page"}
 	if err := s.documents.Reserve(key); err != nil {
 		t.Fatal(err)

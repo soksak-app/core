@@ -100,6 +100,16 @@ export function createPluginOperations({ host, loaded, refused, changed }) {
   let outdated = [];
   // The number of the last started read of the plugin state.
   let lastRead = 0;
+  // What the listeners last heard. The host answers an activation and every plugin event with a read, and a read that
+  // finds what the page holds calls no listener: each of them draws the bars and the exposure again.
+  let reported = null;
+
+  function report() {
+    const now = JSON.stringify([state, failure, operation, outdated, loaded(), [...refused()]]);
+    if (now === reported) return;
+    reported = now;
+    changed();
+  }
 
   /** Reads the outdated sidecars of the host again. A read that fails is reported as the error of the state. */
   async function refreshOutdated() {
@@ -111,7 +121,7 @@ export function createPluginOperations({ host, loaded, refused, changed }) {
       // default: an error that is not an Error carries its value as the text.
       failure = { kind: "state", message: String(error?.message ?? error) };
     } finally {
-      changed();
+      report();
     }
   }
 
@@ -137,13 +147,13 @@ export function createPluginOperations({ host, loaded, refused, changed }) {
       if (read !== lastRead) return;
       state = value;
       failure = state.index && typeof state.index.error === "string" ? { kind: "index", message: state.index.error } : null;
-      changed();
+      report();
     } catch (error) {
       if (read !== lastRead) return;
       state = null;
       // default: an error that is not an Error carries its value as the text.
       failure = { kind: "state", message: String(error?.message ?? error) };
-      changed();
+      report();
     }
   }
 
@@ -152,7 +162,7 @@ export function createPluginOperations({ host, loaded, refused, changed }) {
     if (!PLUGIN_ACTIONS.includes(action)) throw new Error(`unknown plugin action ${action}`);
     if (!host) throw new Error("plugin operations need a native host");
     operation = { action, plugin, state: "running", error: null };
-    changed();
+    report();
     const cids = beginOperation("workbench.plugin.operation", { action, plugin });
     try {
       await host.call("pluginsRun", { action, plugin }, { cids });

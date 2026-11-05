@@ -9,6 +9,7 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import <IOSurface/IOSurface.h>
+#import <CoreImage/CoreImage.h>
 #import <QuartzCore/QuartzCore.h>
 #include <stdlib.h>
 #import "application_log.h"
@@ -1882,6 +1883,20 @@ void sp_region_close(void *handle) {
     }
 }
 
+void sp_region_background(void *handle, bool enabled) {
+    NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
+    SPImageRegion *view = (SPImageRegion *)handle;
+    if (!enabled) {
+        view.contentFilters = @[];
+        return;
+    }
+    // The radius of sp_document_background. The region has no page zoom: one unit of the view is one CSS pixel of the
+    // surface (docs/spec/text-size.md).
+    CIFilter *blur = [CIFilter filterWithName:@"CIGaussianBlur"];
+    [blur setValue:@3 forKey:kCIInputRadiusKey];
+    view.contentFilters = @[ blur ];
+}
+
 const char *sp_region_facts(void *handle) {
     NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
     SPImageRegion *view = (SPImageRegion *)handle;
@@ -1924,6 +1939,7 @@ const char *sp_region_facts(void *handle) {
     // The raster size is decided by the backing size of the placed region and the surface scale (sp_region_raster).
     [json appendFormat:@"\"placed\":%@,\"surfaceScale\":%.2f,", view.placed ? @"true" : @"false", surfaceScale(view.webSurface)];
     [json appendFormat:@"\"focused\":%@,", focused ? @"true" : @"false"];
+    [json appendFormat:@"\"blurred\":%@,", view.contentFilters.count > 0 ? @"true" : @"false"];
     [json appendFormat:@"\"layer\":{\"bounds\":{\"x\":0,\"y\":0,\"width\":%.1f,\"height\":%.1f},\"contentsScale\":%.2f},",
           layerWidth, layerHeight, contentsScale];
 

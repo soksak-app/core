@@ -35,6 +35,8 @@ type storedHost struct {
 	projects  []map[string]any
 	// createRefused is the refusal of projectCreate.
 	createRefused error
+	// open are the projects that the host names as owned by a window.
+	open []string
 	// appUpdate is the answer of appUpdateState, and opened holds the arguments of linkOpen.
 	appUpdate any
 	opened    []json.RawMessage
@@ -236,11 +238,11 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 		}),
 		"viewReply": answer("viewReply", none),
 		"setDialogBackground": answer("setDialogBackground", func(argument json.RawMessage) (any, error) {
-			var enabled bool
-			if err := json.Unmarshal(argument, &enabled); err != nil {
+			var request host.DialogBackground
+			if err := json.Unmarshal(argument, &request); err != nil {
 				return nil, err
 			}
-			h.backgrounds = append(h.backgrounds, enabled)
+			h.backgrounds = append(h.backgrounds, request.Enabled)
 			return nil, nil
 		}),
 		"setMenuLanguage": answer("setMenuLanguage", func(argument json.RawMessage) (any, error) { h.language = argument; return nil, nil }),
@@ -336,7 +338,7 @@ func (h *storedHost) workspace(argument json.RawMessage) (any, error) {
 				project["settings"] = settings
 			}
 		}
-		return map[string]any{"projects": h.projects, "open": []string{}, "common": h.common}, nil
+		return map[string]any{"projects": h.projects, "open": h.open, "common": h.common}, nil
 	case "settings":
 		h.settings = append(h.settings, map[string]any{"id": request.ID, "patch": request.Patch, "remove": request.Remove})
 		return nil, nil
@@ -395,6 +397,10 @@ type shellFixture struct {
 	reloads int
 	// frames counts the frames that the shell asked for.
 	frames int
+	// treeReads counts the reads of the element tree.
+	treeReads int
+	// treeEdit changes the element tree that the shell reads, as a window that drew elsewhere.
+	treeEdit func(tree []ui.ElementNode)
 }
 
 // installedDocument is the document of the installed plugins of the host.
@@ -464,6 +470,7 @@ func (f *shellFixture) settle() {
 	f.tester.Frame()
 	f.pending.drain(f.t)
 	f.tester.Frame()
+	noteElementNames(f.tester.ElementTree())
 	if len(f.lines) > 0 {
 		f.t.Fatalf("the shell reported %q", f.lines)
 	}
@@ -474,11 +481,16 @@ func (f *shellFixture) settle() {
 
 // exposedNode returns the element with the element name, and with the item when item is not "".
 func exposedNode(nodes []ui.ElementNode, name, item string) (ui.ElementNode, bool) {
+	noteElementNames(nodes)
+	return findExposed(nodes, name, item)
+}
+
+func findExposed(nodes []ui.ElementNode, name, item string) (ui.ElementNode, bool) {
 	for _, node := range nodes {
 		if exposed, ok := node.Key.(workbench.Exposed); ok && exposed.Name == name && (item == "" || exposed.Item == item) {
 			return node, true
 		}
-		if found, ok := exposedNode(node.Children, name, item); ok {
+		if found, ok := findExposed(node.Children, name, item); ok {
 			return found, true
 		}
 	}

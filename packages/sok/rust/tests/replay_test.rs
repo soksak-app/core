@@ -183,6 +183,42 @@ fn replay_reports_equal_when_every_stored_hash_is_the_replayed_one() {
     );
 }
 
+// contract: cli.debug.reports-a-rejected-file
+#[test]
+fn replay_reports_a_rejected_file() {
+    let old = "{\"ts_us\":1,\"mono_ns\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"sidecar\",\"event\":\"log.open\",\"fields\":{\"schema\":2}}\n";
+    let config = replay_config("replay-rejected", &standard_events(), FAKE_REPLAY, "fake");
+    write_file(&config.join("logs/files-old.jsonl"), old, 0o644);
+    let (stdout, stderr, code) = run_replay(&config, &["s1"]);
+    assert!(
+        code == 0
+            && stdout
+                == "replay session s1: 2 sidecar frames and 2 page frames equal in 1 segments\n"
+            && stderr == "rejected: logs/files-old.jsonl: schema 2 is not 3\n",
+        "code {code} stdout {stdout:?} stderr {stderr:?}"
+    );
+    let config = replay_config(
+        "replay-rejected-all",
+        &standard_events(),
+        FAKE_REPLAY,
+        "fake",
+    );
+    write_file(&config.join("logs/fake-b1.jsonl"), old, 0o644);
+    write_file(
+        &config.join("logs/host-b1.jsonl"),
+        &old.replace("\"schema\":2", "\"schema\":3")
+            .replace("sidecar", "host"),
+        0o644,
+    );
+    let (_, stderr, code) = run_replay(&config, &["s1"]);
+    assert!(
+        code == 1
+            && stderr.contains("rejected: logs/fake-b1.jsonl: schema 2 is not 3\n")
+            && stderr.contains("hold no event of the layer sidecar"),
+        "the rejected file holds the session: code {code} stderr {stderr:?}"
+    );
+}
+
 // contract: cli.debug.replay-until
 #[test]
 fn replay_stops_at_the_sequence_of_until() {

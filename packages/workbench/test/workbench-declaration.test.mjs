@@ -179,3 +179,10 @@ test("the declaration states each setting of the defaults once, with a choice li
   assert.deepEqual(settings.commonOnly, ["projectOpening", "textSize", "memorySaver", "memorySaverDelay"]);
   assert.ok(declaration.menuLanguages.some((language) => language.id === declaration.defaultLanguage));
 });
+
+// A rename stands in the place of its tab, so in the column of the project tabs it keeps to the column.
+test("a rename field fits the column of the project tabs", () => {
+  const rule = read("app.css").match(/\.project-column \.bar-tab__root\{([^}]*)\}/);
+  assert.ok(rule, "no rule for the rename field of the column");
+  assert.match(rule[1], /width:var\(--fill\)/);
+});

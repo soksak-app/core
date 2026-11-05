@@ -8,6 +8,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
@@ -516,7 +517,7 @@ func (s *Shell) tellBackground() {
 		return
 	}
 	s.backgroundTold = open
-	s.calls.CallInOrder("appearance", "setDialogBackground", open, func(_ any, err error) {
+	s.calls.CallInOrder("appearance", "setDialogBackground", host.DialogBackground{Enabled: open}, func(_ any, err error) {
 		if err != nil {
 			s.fail(err)
 		}
@@ -537,6 +538,26 @@ func (s *Shell) modalName() *string {
 		return nil
 	}
 	return &name
+}
+
+// modalStatus is the value of the status core.modal. Document is always null: this host creates no modal web view.
+type modalStatus struct {
+	ID       string `json:"id"`
+	Mode     string `json:"mode"`
+	Document any    `json:"document"`
+}
+
+// modalStatus returns the value of core.modal: the open modal, or nil.
+func (s *Shell) modalStatus() any {
+	name := s.modalName()
+	if name == nil {
+		return nil
+	}
+	mode := "dialog"
+	if *name == "picker" {
+		mode = "menu"
+	}
+	return &modalStatus{ID: *name, Mode: mode}
 }
 
 type menuParam struct {
@@ -598,7 +619,7 @@ func (s *Shell) registerPicker() {
 	act(s, "core.picker.close", func(struct{}) error { s.closePicker(); return nil })
 	act(s, "core.modal.dismiss", func(struct{}) error { s.closePicker(); return nil })
 	s.registry.Status("core.picker", func() any { return s.pickerStatus() })
-	s.registry.Status("core.modal", func() any { return nil })
+	s.registry.Status("core.modal", s.modalStatus)
 	s.registry.Status("core.screen", func() any {
 		screen := "workspace"
 		if s.browsing || s.opened() == nil {
@@ -635,6 +656,7 @@ func (s *Shell) drawPicker(c *ui.Context, width, height float32) {
 	anchor, attached := layer.drawn[layer.anchor]
 	open := true
 	ui.PopoverBase(c, anchor, &open, func(panel ui.Element) {
+		s.binder.Watched(panel)
 		switch {
 		case attached && layer.start:
 			panel.AttachTo(anchor, ui.AnchorBottomStart, ui.AnchorTopStart)
@@ -705,6 +727,16 @@ func (s *Shell) drawPickerGroup(c *ui.Context, id string, metrics pickerMetrics)
 	})
 }
 
+// pickerTakesFocus returns the index of the item that takes the keyboard as the layer opens: the active item, or the first.
+func (s *Shell) pickerTakesFocus() int {
+	for index, item := range s.picker.items {
+		if item.Active {
+			return index
+		}
+	}
+	return 0
+}
+
 // drawPickerItem draws an item of the layer.
 func (s *Shell) drawPickerItem(c *ui.Context, index int, item pickerItem, metrics pickerMetrics) {
 	name := item.Expose
@@ -716,9 +748,13 @@ func (s *Shell) drawPickerItem(c *ui.Context, index int, item pickerItem, metric
 			Padding(metrics.itemPadY, metrics.pad, metrics.itemPadY, metrics.pad+float32(s.pickerDepth(item))*metrics.indent).Radius(s.radiusSmall())
 		// The press lies over the row, since the element tree holds no element inside a button and the icon and the name are elements.
 		button := s.binder.Press(c, name, "core.picker.pick", item.Key, map[string]int{"index": index})
-		button.Absolute().Left(0).Top(0).Right(0).Bottom(0).Label(item.Name)
+		// .picker__item:focus-visible: the look of a hovered item, without an outline.
+		button.Absolute().Left(0).Top(0).Right(0).Bottom(0).Label(item.Name).FocusRing(false)
+		if index == s.pickerTakesFocus() {
+			button.AutoFocus()
+		}
 		switch {
-		case button.Hovered():
+		case button.Hovered() || button.FocusVisible():
 			row.Background(faded(s.palette.Fg, s.metrics.chipHoverMix))
 		case item.Active:
 			row.Background(faded(s.palette.Fg, s.metrics.chipSelMix))

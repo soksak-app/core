@@ -1475,8 +1475,8 @@ bool sp_view_page_insert(const char *html, const char *map, char **output, char 
 // Builds the web view with the configuration of a document region, or with the view configuration (isView) that a view
 // surface uses (docs/spec/native-surfaces.md#view-surfaces). The view is hidden with a zero frame and
 // is attached to no parent; the caller places it and owns the reference until sp_document_close.
-static SPDocumentView *pluginView(const char *directory, const char *folder, const char *plugin, NSString *channelSource,
-    bool isView, sp_document_changed changed, void *context) {
+static SPDocumentView *pluginView(const char *directory, const char *folder, const char *plugin, NSString *label,
+    NSString *channelSource, bool isView, sp_document_changed changed, void *context) {
     WKWebsiteDataStore *store = storeForDirectory(directory);
     if (!store) return nil;
     NSString *applicationName = safariApplicationName();
@@ -1495,9 +1495,7 @@ static SPDocumentView *pluginView(const char *directory, const char *folder, con
         scheme.root = [NSString stringWithUTF8String:folder];
         scheme.plugin = [NSString stringWithUTF8String:plugin];
     }
-    if (isView && scheme.plugin.length > 0) {
-        [configuration _setProcessDisplayName:[NSString stringWithFormat:@"soksak://plugin/%@", scheme.plugin]];
-    }
+    if (label) [configuration _setProcessDisplayName:label];
     [configuration setURLSchemeHandler:scheme forURLScheme:kApplicationScheme];
     WKContentWorld *world = [WKContentWorld worldWithName:kDocumentWorld];
     SPDocumentScroll *scroll = [[SPDocumentScroll new] autorelease];
@@ -1544,7 +1542,7 @@ static void *documentCreationFails(NSString *cause) {
     return NULL;
 }
 
-void *sp_document_create(void *surfaceHandle, const char *directory, const char *folder, const char *plugin, const char *channel,
+void *sp_document_create(void *surfaceHandle, const char *directory, const char *folder, const char *plugin, const char *label, const char *channel,
     sp_document_changed changed, void *context) {
     setDocumentFailure(nil);
     if (takeInjectedCreationFailure()) return NULL;
@@ -1561,9 +1559,11 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
     if (isView && !plugin) return documentCreationFails(@"the view has no plugin");
     NSString *channelSource = isView ? [NSString stringWithUTF8String:channel] : nil;
     if (isView && !channelSource) return documentCreationFails(@"the channel of the view is not UTF-8");
+    NSString *labelText = label ? [NSString stringWithUTF8String:label] : nil;
+    if (label && !labelText) return documentCreationFails(@"the process label is not UTF-8");
     NSView *nativePlane = (NSView *)sp_surface_native_plane(surface);
     if (!nativePlane) return documentCreationFails(@"the surface has no native plane");
-    SPDocumentView *view = pluginView(directory, folder, plugin, channelSource, isView, changed, context);
+    SPDocumentView *view = pluginView(directory, folder, plugin, labelText, channelSource, isView, changed, context);
     if (!view) return NULL;
 #ifdef SOKSAK_DIAGNOSTIC
     view.pluginRootView = isView;

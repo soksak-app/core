@@ -475,6 +475,7 @@ pub trait Platform: CoreRootHost + Send + Sync {
         store: &str,
         folder: &str,
         plugin: &str,
+        label: &str,
         channel: Option<&str>,
         changed: Box<dyn Fn(String)>,
     ) -> Result<Handle, String>;
@@ -596,6 +597,8 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// Whether the surface of the region has a native size. The region of a surface that is not placed yet has no
     /// raster size.
     fn image_surface_placed(&self, image: Handle) -> Result<bool, String>;
+    /// Blurs the image region while a dialog is open. Call it on the main thread.
+    fn set_image_background(&self, image: Handle, enabled: bool) -> Result<(), String>;
     /// Returns the current frame, the displayed raster and the error of the image region as JSON. Call it on the main
     /// thread.
     fn image_facts(&self, image: Handle) -> Result<String, String>;

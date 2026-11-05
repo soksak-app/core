@@ -84,7 +84,7 @@ func (s *Shell) register() {
 	s.registerRename()
 	s.registerSettings()
 	s.registerPicker()
-	Functions{Text: s.text, Focus: s.exposedFocus, Pointer: s.pointer, Contributions: s.contributions, Verification: s.verification}.Register(s.registry)
+	Functions{Text: s.text, Focus: s.exposedFocus, Pointer: s.pointer, Contributions: s.contributions}.Register(s.registry)
 	s.registerTabDrag()
 	s.registerCardSidebars()
 	s.registerPlugins()

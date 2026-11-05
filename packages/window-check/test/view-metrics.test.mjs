@@ -797,6 +797,7 @@ test("view metric runner selects the host baseline and writes raw measurements a
   const diagnostics = [];
   const report = await runViewMeasurements({ diagnostic: (message) => diagnostics.push(message) }, {
     app: { name: "wailsv3", configDir: configDir(t) },
+    get: async () => ({ refreshRate: 120 }),
   }, {
     plugin: "fixture-view",
     baselinesMs: { wailsv3: 10, tauriv2: 20 },
@@ -804,10 +805,10 @@ test("view metric runner selects the host baseline and writes raw measurements a
   });
   assert.strictEqual(report.measurements, raw);
   assert.equal(report.evaluation.baselineMs, 10);
-  assert.equal(diagnostics.length, 1);
+  assert.equal(diagnostics.length, 2);
   const directory = diagnostics[0].replace("view measurement artifacts: ", "");
   assert.match(directory, /\/logs\/view-measurements-[^/]+$/u);
-  assert.deepEqual(JSON.parse(readFileSync(join(directory, "measurements.json"), "utf8")), raw);
+  assert.deepEqual(JSON.parse(readFileSync(join(directory, "measurements.json"), "utf8")), { ...raw, displayRefreshRate: 120 });
   assert.deepEqual(JSON.parse(readFileSync(join(directory, "evaluation.json"), "utf8")), report.evaluation);
   assert.deepEqual(readdirSync(directory).sort(), ["evaluation.json", "measurements.json"]);
 });
@@ -835,6 +836,7 @@ test("domMountBaselineMs rejects an unknown host and a record that is not one va
 test("view metric runner evaluates the mygo host with the lower of the recorded baselines", { timeout: 1000 }, async (t) => {
   const report = await runViewMeasurements({ diagnostic() {} }, {
     app: { name: "mygo", configDir: configDir(t) },
+    get: async () => ({ refreshRate: 120 }),
   }, {
     plugin: "fixture-view",
     baselinesMs: { wailsv3: 30, tauriv2: 20 },
@@ -844,21 +846,53 @@ test("view metric runner evaluates the mygo host with the lower of the recorded 
   assert.equal(report.evaluation.baselineMs, 20);
 });
 
+test("view metric runner records the display refresh rate, because a skipped frame takes a different time at each rate", { timeout: 1000 }, async (t) => {
+  const diagnostics = [];
+  await runViewMeasurements({ diagnostic: (message) => diagnostics.push(message) }, {
+    app: { name: "wailsv3", configDir: configDir(t) },
+    get: async (name) => {
+      assert.equal(name, "host.window");
+      return { refreshRate: 60 };
+    },
+  }, {
+    plugin: "fixture-view",
+    baselinesMs: { wailsv3: 10, tauriv2: 20 },
+    collect: async () => metrics(),
+  });
+  assert.equal(diagnostics[1], "view measurement display refresh rate: 60 Hz");
+  const directory = diagnostics[0].replace("view measurement artifacts: ", "");
+  assert.equal(JSON.parse(readFileSync(join(directory, "measurements.json"), "utf8")).displayRefreshRate, 60);
+});
+
+test("view metric runner refuses a window without a display refresh rate", { timeout: 1000 }, async (t) => {
+  let collected = false;
+  await assert.rejects(runViewMeasurements({ diagnostic: () => {} }, {
+    app: { name: "wailsv3", configDir: configDir(t) },
+    get: async () => ({ refreshRate: null }),
+  }, {
+    plugin: "fixture-view",
+    baselinesMs: { wailsv3: 10, tauriv2: 20 },
+    collect: async () => { collected = true; return metrics(); },
+  }), /host\.window\.refreshRate/u);
+  assert.equal(collected, false);
+});
+
 test("view metric runner retains raw measurements and an error artifact when evaluation fails", { timeout: 1000 }, async (t) => {
   const raw = metrics();
   raw.total.allViewProcesses[2].footprintBytes += 1;
   const diagnostics = [];
   await assert.rejects(runViewMeasurements({ diagnostic: (message) => diagnostics.push(message) }, {
     app: { name: "wailsv3", configDir: configDir(t) },
+    get: async () => ({ refreshRate: 120 }),
   }, {
     plugin: "fixture-view",
     baselinesMs: { wailsv3: 10, tauriv2: 20 },
     collect: async () => raw,
   }), /total\.allViewProcesses sums .* exceeding/);
-  assert.equal(diagnostics.length, 1);
+  assert.equal(diagnostics.length, 2);
   const directory = diagnostics[0].replace("view measurement artifacts: ", "");
   assert.match(directory, /\/logs\/view-measurements-[^/]+$/u);
-  assert.deepEqual(JSON.parse(readFileSync(join(directory, "measurements.json"), "utf8")), raw);
+  assert.deepEqual(JSON.parse(readFileSync(join(directory, "measurements.json"), "utf8")), { ...raw, displayRefreshRate: 120 });
   const error = JSON.parse(readFileSync(join(directory, "error.json"), "utf8"));
   assert.match(error.message, /total\.allViewProcesses sums .* exceeding/);
   assert.deepEqual(readdirSync(directory).sort(), ["error.json", "measurements.json"]);
@@ -871,6 +905,8 @@ test("drag criterion outcomes survive in the persisted error artifact", { timeou
   try {
     await runViewMeasurements({ diagnostic: (message) => diagnostics.push(message) }, {
       app: { name: "wailsv3", configDir: configDir(t) },
+      get: async () => ({ refreshRate: 120 }),
+    get: async () => ({ refreshRate: 120 }),
     }, {
       plugin: "fixture-view",
       baselinesMs: { wailsv3: 10, tauriv2: 20 },
@@ -882,9 +918,9 @@ test("drag criterion outcomes survive in the persisted error artifact", { timeou
   }
 
   assert.ok(thrown.criteria, thrown.stack);
-  assert.equal(diagnostics.length, 1);
+  assert.equal(diagnostics.length, 2);
   const directory = diagnostics[0].replace("view measurement artifacts: ", "");
-  assert.deepEqual(JSON.parse(readFileSync(join(directory, "measurements.json"), "utf8")), raw);
+  assert.deepEqual(JSON.parse(readFileSync(join(directory, "measurements.json"), "utf8")), { ...raw, displayRefreshRate: 120 });
   const error = JSON.parse(readFileSync(join(directory, "error.json"), "utf8"));
   assert.deepEqual(error.criteria, thrown.criteria);
   assert.equal(error.criteria.cadence.passed, false);
@@ -898,6 +934,7 @@ test("view metric runner preserves independent failures in the error artifact", 
   const diagnostics = [];
   await assert.rejects(runViewMeasurements({ diagnostic: (message) => diagnostics.push(message) }, {
     app: { name: "wailsv3", configDir: configDir(t) },
+    get: async () => ({ refreshRate: 120 }),
   }, {
     plugin: "fixture-view",
     baselinesMs: { wailsv3: 10, tauriv2: 20 },

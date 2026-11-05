@@ -29,7 +29,7 @@ int main(void) {
         [window.contentView addSubview:main];
         void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
         check(surface != NULL, @"a logical surface is created for the document");
-        void *document = sp_document_create(surface, "/dev/null/soksak-store", "/tmp", "probe", "", changed, NULL);
+        void *document = sp_document_create(surface, "/dev/null/soksak-store", "/tmp", "probe", NULL, "", changed, NULL);
         check(document == NULL, @"a data store under a file is not created");
         NSString *cause = [NSString stringWithUTF8String:sp_document_last_error()];
         check([cause hasPrefix:@"cannot create the data store directory /dev/null/soksak-store: "],
@@ -53,7 +53,7 @@ int main(void) {
         };
         for (size_t index = 0; index < sizeof cases / sizeof cases[0]; index++) {
             void *refused = sp_document_create(cases[index].surface, cases[index].directory, cases[index].folder,
-                cases[index].plugin, cases[index].channel, cases[index].changed, NULL);
+                cases[index].plugin, NULL, cases[index].channel, cases[index].changed, NULL);
             NSString *reported = [NSString stringWithUTF8String:sp_document_last_error()];
             check(refused == NULL && [reported isEqualToString:cases[index].cause],
                 [NSString stringWithFormat:@"case %zu fails with \"%@\" (actual %@, \"%@\")", index, cases[index].cause,

@@ -78,7 +78,7 @@ var hostStatus = map[string]hostEntry{
 			"regions": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
 				"surface": map[string]any{"type": "string"}, "name": map[string]any{"type": "string"},
 				"frame": rectSchema, "visible": map[string]any{"type": "boolean"}, "drawing": map[string]any{"type": "boolean"},
-				"focused": map[string]any{"type": "boolean"},
+				"focused": map[string]any{"type": "boolean"}, "blurred": map[string]any{"type": "boolean"},
 				"presented": map[string]any{"type": []any{"object", "null"}, "properties": map[string]any{
 					"sequence": map[string]any{"type": "integer"}, "generation": map[string]any{"type": "integer"}, "raster": map[string]any{"type": "integer"},
 					"width": map[string]any{"type": "integer"}, "height": map[string]any{"type": "integer"}, "scale": map[string]any{"type": "number"},
@@ -1275,12 +1275,14 @@ type WindowControl struct {
 
 // WindowRegion is one image region of host.window.
 type WindowRegion struct {
-	Surface   string `json:"surface"`
-	Name      string `json:"name"`
-	Frame     frame  `json:"frame"`
-	Visible   bool   `json:"visible"`
-	Drawing   bool   `json:"drawing"`
-	Focused   bool   `json:"focused"`
+	Surface string `json:"surface"`
+	Name    string `json:"name"`
+	Frame   frame  `json:"frame"`
+	Visible bool   `json:"visible"`
+	Drawing bool   `json:"drawing"`
+	Focused bool   `json:"focused"`
+	// Blurred is true while the host blurs the image region natively, as it does while a dialog is open.
+	Blurred   bool `json:"blurred"`
 	Presented *struct {
 		Width      int     `json:"width"`
 		Height     int     `json:"height"`
@@ -1741,6 +1743,38 @@ func (h *Host) windowsChanged() {
 	}
 }
 
+// latestRead runs one reading at a time. A request that arrives during a reading joins one further reading, so a reading
+// begins after the last request and no older value is sent after a newer one. A change can arrive on every frame of a
+// region and each reading waits for the main thread, so a goroutine for each change would pile up while that thread is busy.
+type latestRead struct {
+	mu      sync.Mutex
+	running bool
+	again   bool
+}
+
+func (r *latestRead) ask(name string, read func()) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.running {
+		r.again = true
+		return
+	}
+	r.running = true
+	routine.Go(name, func() {
+		for {
+			read()
+			r.mu.Lock()
+			if !r.again {
+				r.running = false
+				r.mu.Unlock()
+				return
+			}
+			r.again = false
+			r.mu.Unlock()
+		}
+	})
+}
+
 // windowChanged sends the new value to the connections that watch host.window. When no connection watches, it does not
 // read the value. It is also called on the UI thread, so the value is read in another goroutine.
 func (s *Surfaces) windowChanged() {
@@ -1751,7 +1785,7 @@ func (s *Surfaces) windowChanged() {
 		EmitHost(LevelDebug, "host.trace.status.notify", map[string]any{"status": "host.window", "window": s.name, "decision": "unwatched"})
 		return
 	}
-	routine.Go("window-status", func() {
+	s.windowReads.ask("window-status", func() {
 		state, err := s.windowState()
 		var coded *RPCError
 		if errors.As(err, &coded) && coded.Code == codeNoWindow {

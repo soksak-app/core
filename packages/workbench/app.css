@@ -155,6 +155,7 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
   padding:var(--project-column-pad);background:var(--card);border-right:var(--bw) solid var(--edge)}
 .project-column .bar-tab{position:relative;width:var(--fill);height:var(--project-tab-h);justify-content:center;padding:0 var(--project-tab-pad)}
 .project-column .bar-tab__name{max-width:var(--fill);text-align:center}
+.project-column .bar-tab__root{width:var(--fill)}
 /* A vertical rail is wide enough only for the name, so the close button does not fit. It is not shown only when
    pressed; it is placed over the name. */
 .project-column .bar-tab__x{position:absolute;top:var(--project-tab-x-inset);right:var(--project-tab-x-inset);opacity:0}
@@ -493,7 +494,7 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 /* The pane has no padding above, so the sticky bar of a shown file stays at its top edge. */
 .dbg-card__pane{flex:1 1 auto;min-height:0;padding:0 var(--dbg-pane-pad-x) var(--dbg-pane-pad-bottom);overflow:auto}
 .dbg-card__pane > :first-child{margin-top:var(--dbg-pane-pad-top)}
-.dbg-card__error{margin:0 0 var(--dbg-error-gap);font-size:var(--text-small)}
+.dbg-card__error{margin:0 0 var(--dbg-error-gap);font-size:var(--text-small);white-space:pre-line}
 .dbg-row{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:var(--dbg-row-gap);min-height:var(--dbg-row-h)}
 .dbg-row__path{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--text-control);color:var(--fg)}
 .dbg-row__acts{display:grid;grid-template-columns:repeat(3,var(--dbg-act-w));gap:var(--space-2)}

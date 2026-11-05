@@ -26,25 +26,25 @@ type gridStatus struct {
 
 // gridCardStatus is a card of core.grid.
 type gridCardStatus struct {
-	Fullscreen bool            `json:"fullscreen"`
-	ID         string          `json:"id"`
-	X          float64         `json:"x"`
-	Y          float64         `json:"y"`
-	W          float64         `json:"w"`
-	H          float64         `json:"h"`
-	C0         int             `json:"c0"`
-	C1         int             `json:"c1"`
-	R0         int             `json:"r0"`
-	R1         int             `json:"r1"`
-	Fixed      bool            `json:"fixed"`
-	Width      *float64        `json:"width"`
-	Focused    bool            `json:"focused"`
-	Pane       *int            `json:"pane"`
-	Tabs       []gridTabStatus `json:"tabs"`
-	Status     string          `json:"status"`
-	Active     *string         `json:"active"`
-	Acts       map[string]any  `json:"acts"`
-	Sidebars   map[string]any  `json:"sidebars"`
+	Fullscreen bool                                    `json:"fullscreen"`
+	ID         string                                  `json:"id"`
+	X          float64                                 `json:"x"`
+	Y          float64                                 `json:"y"`
+	W          float64                                 `json:"w"`
+	H          float64                                 `json:"h"`
+	C0         int                                     `json:"c0"`
+	C1         int                                     `json:"c1"`
+	R0         int                                     `json:"r0"`
+	R1         int                                     `json:"r1"`
+	Fixed      bool                                    `json:"fixed"`
+	Width      *float64                                `json:"width"`
+	Focused    bool                                    `json:"focused"`
+	Pane       *int                                    `json:"pane"`
+	Tabs       []gridTabStatus                         `json:"tabs"`
+	Status     string                                  `json:"status"`
+	Active     *string                                 `json:"active"`
+	Acts       map[string]any                          `json:"acts"`
+	Sidebars   map[layout.Side]layout.PresentedSidebar `json:"sidebars"`
 }
 
 // gridTabStatus is a tab of a card of core.grid.
@@ -132,7 +132,7 @@ func (s *Shell) projectStatus(record projectRecord) (map[string]any, error) {
 	if err := json.Unmarshal(text, &status); err != nil {
 		return nil, err
 	}
-	status["open"] = record.ID == s.active
+	status["open"] = s.isOpen(record.ID)
 	return status, nil
 }
 
@@ -190,7 +190,12 @@ func (s *Shell) gridState() (any, error) {
 		}
 		entry := gridCardStatus{Fullscreen: card.ID == s.fullscreen, ID: card.ID, X: rect.X, Y: rect.Y, W: rect.W, H: rect.H,
 			C0: card.C0, C1: card.C1, R0: card.R0, R1: card.R1, Fixed: card.Fixed, Width: card.Width, Focused: card.ID == s.focused,
-			Tabs: []gridTabStatus{}, Status: s.cardStatusText(data), Acts: s.cardActs(card.ID), Sidebars: map[string]any{}}
+			Tabs: []gridTabStatus{}, Status: s.cardStatusText(data), Acts: s.cardActs(card.ID), Sidebars: map[layout.Side]layout.PresentedSidebar{}}
+		if data != nil {
+			if entry.Sidebars, err = s.presentCard(card.ID, data, rect); err != nil {
+				return nil, fmt.Errorf("card %s: %w", card.ID, err)
+			}
+		}
 		if entry.Acts != nil {
 			index := pane
 			entry.Pane = &index
@@ -297,7 +302,9 @@ func (s *Shell) focusMark() *layout.Rect {
 		return nil
 	}
 	const out = 1 // The chrome metric focus-mark-t.
-	edge, head, foot := float64(s.palette.BorderWidth), float64(s.metrics.headH), float64(s.metrics.footH)
+	edge := float64(s.palette.BorderWidth)
+	shrunkHead, shrunkFoot := cardRows(float32(rect.H-2*edge), s.metrics.headH, s.metrics.footH)
+	head, foot := float64(shrunkHead), float64(shrunkFoot)
 	return &layout.Rect{X: rect.X + edge - out, Y: rect.Y + edge + head - out, W: rect.W - 2*edge + 2*out, H: rect.H - 2*edge - head - foot + 2*out}
 }
 
@@ -366,7 +373,7 @@ func (s *Shell) surfacesState() []surfaceStatus {
 			box = held.box
 		}
 		entry := surfaceStatus{Surface: id, Plugin: unit.ID, Visible: visible, Dim: s.surfaceDimmed(id), Declared: &box, Exposes: s.registry.EntriesOf(id),
-			Status: s.surfacePhase(id), Composition: held.composition, Kind: "tab", State: "loaded"}
+			Status: s.surfacePhase(id), Composition: held.composition, Kind: "tab", State: s.surfaceMemoryState(id)}
 		if applied, ok := s.surfaces.applied[id]; ok && visible {
 			entry.Applied = &applied
 		}
@@ -391,6 +398,16 @@ func (s *Shell) unloadedSections() []surfaceStatus {
 			Status: s.surfacePhase(seat.SurfaceID), Composition: seat.Composition, Kind: "section", Sidebar: &seat.Sidebar, State: "unloaded"})
 	}
 	return rows
+}
+
+// surfaceMemoryState returns the state of a surface in the memory saver. A surface that the memory saver does not hold is loaded.
+func (s *Shell) surfaceMemoryState(id string) string {
+	if s.tabs != nil && s.tabs.saver != nil {
+		if state := s.tabs.saver.State(id); state != "" {
+			return state
+		}
+	}
+	return "loaded"
 }
 
 // surfaceProgress is the phase of a surface with the reason of an error: its reported failure, or ready once the document of the
@@ -433,6 +450,7 @@ func (s *Shell) registerStatuses() {
 	s.registry.Status("core.plugin.open-calls", func() any { return s.processes.openCalls() })
 	s.registry.Status("core.plugin.losses", func() any { return s.processes.lossList() })
 	s.registry.Status("core.plugin.views", func() any { return s.processes.viewList() })
+	s.registry.Status("core.verify", s.verifyStatus)
 	s.registry.Status("core.projects", func() any {
 		status := make([]map[string]any, 0, len(s.projects))
 		for _, project := range s.projects {

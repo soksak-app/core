@@ -61,8 +61,8 @@ static void documentQuery(void *document, uintptr_t context) {
     hostRunOnMain(^{ sp_document_query(document, documentQueriedBridge, (void *)context); });
 }
 
-static void *documentCreate(void *surface, const char *store, const char *package, const char *plugin, const char *channel, uintptr_t context) {
-    return ON_MAIN(void *, sp_document_create(surface, store, package, plugin, channel, documentChangedBridge, (void *)context));
+static void *documentCreate(void *surface, const char *store, const char *package, const char *plugin, const char *label, const char *channel, uintptr_t context) {
+    return ON_MAIN(void *, sp_document_create(surface, store, package, plugin, label, channel, documentChangedBridge, (void *)context));
 }
 static void documentSetMessage(void *document, uintptr_t context) {
     hostRunOnMain(^{ sp_document_set_message(document, documentMessageBridge, (void *)context); });
@@ -240,13 +240,15 @@ func (implementation) SetViewImportMap(text string) error {
 	return nil
 }
 
-func (implementation) CreateDocument(surface unsafe.Pointer, directory, folder, plugin, channel string, changed func(state string)) (unsafe.Pointer, error) {
+func (implementation) CreateDocument(surface unsafe.Pointer, directory, folder, plugin, label, channel string, changed func(state string)) (unsafe.Pointer, error) {
 	name := C.CString(directory)
 	defer C.free(unsafe.Pointer(name))
 	folderText := C.CString(folder)
 	defer C.free(unsafe.Pointer(folderText))
 	id := C.CString(plugin)
 	defer C.free(unsafe.Pointer(id))
+	labelText := C.CString(label)
+	defer C.free(unsafe.Pointer(labelText))
 	// A region has no channel script, so its channel is NULL; a view configuration has the script text.
 	var channelText *C.char
 	if channel != "" {
@@ -254,7 +256,7 @@ func (implementation) CreateDocument(surface unsafe.Pointer, directory, folder, 
 		defer C.free(unsafe.Pointer(channelText))
 	}
 	receiver := cgo.NewHandle(changed)
-	document := C.documentCreate(surface, name, folderText, id, channelText, C.uintptr_t(receiver))
+	document := C.documentCreate(surface, name, folderText, id, labelText, channelText, C.uintptr_t(receiver))
 	if document == nil {
 		receiver.Delete()
 		return nil, creationError("cannot create a document view in this surface", C.GoString(C.main_sp_document_last_error()))

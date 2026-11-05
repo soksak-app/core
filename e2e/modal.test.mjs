@@ -49,11 +49,12 @@ async function background(s, enabled) {
     `the workbench background state must be ${enabled}`);
   for (const surface of await s.surfaces()) {
     // The host blurs the page of a view surface and its regions natively, and host.window reports the filter of each document
-    // web view as blurred (docs/spec/native-surfaces.md#regions); a module surface carries the CSS blur of its document.
+    // web view and image region as blurred (docs/spec/native-surfaces.md#regions); a module surface carries the CSS blur of its document.
     if (surface.composition === "view") {
       await s.until("host.window", (state) => {
         const documents = state.documents.filter((entry) => entry.surface === surface.surface);
-        return documents.length > 0 && documents.every((entry) => entry.blurred === enabled);
+        const regions = state.regions.filter((entry) => entry.surface === surface.surface);
+        return documents.length > 0 && [...documents, ...regions].every((entry) => entry.blurred === enabled);
       }, `${surface.surface}: the native blur of its documents must match dialog visibility`);
       continue;
     }

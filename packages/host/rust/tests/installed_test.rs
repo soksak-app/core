@@ -251,7 +251,9 @@ struct Frontend;
 
 impl Assets for Frontend {
     fn get(&self, key: &str) -> Option<Cow<'_, [u8]>> {
-        Some(Cow::Owned(format!("frontend {key}").into_bytes()))
+        ["/modules/soksak/dist/index.js", "/index.html"]
+            .contains(&key)
+            .then(|| Cow::Owned(format!("frontend {key}").into_bytes()))
     }
 }
 
@@ -287,11 +289,8 @@ fn installed_assets_serve_the_files_of_enabled_packages() {
             "{path}"
         );
     }
-    for path in [
-        "/modules/plugin-off/plugin.json",
-        "/modules/soksak/dist/index.js",
-        "/index.html",
-    ] {
+    assert_eq!(get("/modules/plugin-off/plugin.json"), None);
+    for path in ["/modules/soksak/dist/index.js", "/index.html"] {
         assert_eq!(get(path), Some(format!("frontend {path}")), "{path}");
     }
     assert!(

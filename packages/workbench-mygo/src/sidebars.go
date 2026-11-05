@@ -327,9 +327,14 @@ func (s *Sidebars) windowSet(side string, focused FocusedSurface) (*SidebarSet, 
 
 // linkedCard returns the id of the set that the link of plugin gives the side of a card, or nil without such a link.
 func (s *Sidebars) linkedCard(side, plugin string) *string {
-	for _, link := range s.links {
-		if link.Place == "card-"+side && link.Plugin != nil && *link.Plugin == plugin {
-			return &link.Set
+	return linkedCardOf(s.links, side, plugin)
+}
+
+// linkedCardOf returns the set of links for the side of a card with a tab of plugin, or nil without a link.
+func linkedCardOf(links []SidebarLink, side, plugin string) *string {
+	for i := range links {
+		if links[i].Place == "card-"+side && links[i].Plugin != nil && *links[i].Plugin == plugin {
+			return &links[i].Set
 		}
 	}
 	return nil
@@ -414,33 +419,34 @@ func (s *Sidebars) Hide(c *ui.Context, frame SidebarFrame) {
 	}
 }
 
-// WindowSurfaces returns the ids of the section surfaces of the fixed sidebars in the space, for every set that a link gives them,
-// because the set of a fixed sidebar follows the plugin that has the focus.
-func (s *Sidebars) WindowSurfaces(space string) []string {
+// windowSurfaces returns the ids of the section surfaces of the fixed sidebars of the space: every set of sets that a link of links gives
+// them, whichever plugin has the focus.
+func (s *Sidebars) windowSurfaces(space string, sets []SidebarSet, links []SidebarLink) []string {
 	var surfaces []string
 	for _, place := range []string{"left", "right"} {
 		seen := map[string]bool{}
-		for _, link := range s.links {
+		for _, link := range links {
 			if (link.Place == place || link.Place == "window-"+place) && !seen[link.Set] {
 				seen[link.Set] = true
-				surfaces = append(surfaces, s.SetSurfaces(space, place, link.Set)...)
+				surfaces = append(surfaces, s.setSurfaces(space, place, link.Set, sets)...)
 			}
 		}
 	}
 	return surfaces
 }
 
-// SetSurfaces returns the ids of the section surfaces of the set on the sidebar of the space. A set or a section that no plugin that
-// is loaded declares has no surface.
-func (s *Sidebars) SetSurfaces(space, sidebar, set string) []string {
-	declared := s.set(set)
-	if declared == nil {
-		return nil
-	}
+// setSurfaces returns the ids of the section surfaces of the set of sets on the sidebar of the space. A set that is gone or a section that
+// no plugin that is loaded declares has no surface.
+func (s *Sidebars) setSurfaces(space, sidebar, id string, sets []SidebarSet) []string {
 	var surfaces []string
-	for _, id := range declared.Sections {
-		if loaded, ok := s.sections[id]; ok && len(loaded.Composition) > 0 {
-			surfaces = append(surfaces, space+"/"+sidebar+"/"+id)
+	for i := range sets {
+		if sets[i].ID != id {
+			continue
+		}
+		for _, section := range sets[i].Sections {
+			if loaded, ok := s.sections[section]; ok && len(loaded.Composition) > 0 {
+				surfaces = append(surfaces, space+"/"+sidebar+"/"+section)
+			}
 		}
 	}
 	return surfaces

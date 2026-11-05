@@ -133,6 +133,7 @@ func newTabShellWithState(t *testing.T, stored *storedHost, refused error) *tabS
 		installed = stored.installed
 	}
 	shell, err := workbench.NewShell(workbench.ShellOptions{
+		Elements:  fixtureElements{f.shellFixture},
 		Detaching: func() []string { return nil },
 		Window: func() (workbench.WindowView, error) {
 			return workbench.WindowView{Visible: true, Scale: 2, Width: 1200, Height: 800}, nil
@@ -146,7 +147,6 @@ func newTabShellWithState(t *testing.T, stored *storedHost, refused error) *tabS
 		Installed:   []byte(installed),
 		Invalidate:  func() {},
 		Post:        f.pending.post,
-		Elements:    fixtureElements{f.shellFixture},
 		Report:      func(line string) { f.lines = append(f.lines, line) },
 		Tabs: func(*workbench.Shell) workbench.TabPorts {
 			return workbench.TabPorts{Plugins: func() []workbench.ShellPlugin {
@@ -312,6 +312,39 @@ func TestTheMemorySaverReadsTheTabsOfThePlaneAndAShowRestoresAnUnloadedTab(t *te
 		}
 	}
 	equal(t, unloaded, []string{"tab-aaaaaa"})
+}
+
+// core.surfaces states that the memory saver unloaded a surface.
+func TestTheSurfaceStatusStatesAnUnloadedSurface(t *testing.T) {
+	f := newTabShell(t, &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"), tab("tab-bbbbbb", "notes"))}})
+	f.open(t)
+	if _, err := f.shell.Registry().Run("core.tab.select", json.RawMessage(`{"tab":"tab-bbbbbb"}`)); err != nil {
+		t.Fatal(err)
+	}
+	f.settle()
+	f.timers.tick(120 * minute)
+	f.settle()
+	equal(t, memoryTabs(t, f)["tab-aaaaaa"]["state"], "unloaded")
+	value, err := f.shell.Registry().Read("core.surfaces")
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var surfaces []struct {
+		Surface string `json:"surface"`
+		State   string `json:"state"`
+	}
+	if err := json.Unmarshal(encoded, &surfaces); err != nil {
+		t.Fatal(err)
+	}
+	states := map[string]string{}
+	for _, surface := range surfaces {
+		states[surface.Surface] = surface.State
+	}
+	equal(t, states, map[string]string{"tab-aaaaaa": "unloaded", "tab-bbbbbb": "loaded"})
 }
 
 func TestCoreTabKeepStoresTheMarkInTheTabStateStore(t *testing.T) {

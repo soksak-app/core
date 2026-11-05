@@ -46,6 +46,7 @@ type Declarations struct {
 	params  map[string]any
 	many    map[string]bool
 	chrome  map[string]string
+	plain   map[string]string
 	themes  []declaredTheme
 }
 
@@ -72,6 +73,9 @@ func (d *Declarations) ChromeText(name string) (string, bool) {
 	value, ok := d.chrome[name]
 	return value, ok
 }
+
+// PlainControl returns the value name of the look of a control that the page takes from its browser, which no stylesheet declares.
+func (d *Declarations) PlainControl(name string) string { return d.plain[name] }
 
 // Share returns the chrome metric name, which is a percentage, as a ratio, and false when the metric does not exist or holds another
 // unit.
@@ -156,6 +160,7 @@ func ReadDeclarations() (*Declarations, error) {
 	var values struct {
 		Icons  map[string]string `json:"icons"`
 		Chrome map[string]string `json:"chrome"`
+		Plain  map[string]string `json:"plainControls"`
 		Themes []declaredTheme   `json:"themes"`
 	}
 	if err := json.Unmarshal(workbenchFile, &values); err != nil {
@@ -186,9 +191,12 @@ func ReadDeclarations() (*Declarations, error) {
 	}
 	return &Declarations{
 		Statuses: names(exposes["status"]), Commands: names(exposes["commands"]), Elements: names(exposes["element"]),
-		Icons: values.Icons, Shortcuts: shortcuts.Shortcuts, surface: surface, params: params, many: many, chrome: values.Chrome, themes: values.Themes,
+		Icons: values.Icons, Shortcuts: shortcuts.Shortcuts, surface: surface, params: params, many: many, chrome: values.Chrome, plain: values.Plain, themes: values.Themes,
 	}, nil
 }
+
+// HeldByView tells whether a declared name is registered by the document of each view and not by the workbench.
+func (d *Declarations) HeldByView(name string) bool { return surfaceNames[name] }
 
 // readExposures reads the declarations under the keys of the declaration file.
 func readExposures() (map[string][]map[string]any, error) {

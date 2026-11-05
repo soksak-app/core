@@ -412,7 +412,7 @@ int main(int argc, char **argv) { @autoreleasepool {
     NSString *store = [temporary stringByAppendingPathComponent:@"store"];
 
     WKWebView *view = (WKWebView *)sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation,
-        "probe", channelScript.UTF8String, changed, NULL);
+        "probe", NULL, channelScript.UTF8String, changed, NULL);
     check(view != NULL, @"a view is created on the surface");
     if (!view) return 1;
     // Both hosts place a wanted view while its surface is hidden for layout preparation, then reveal the surface at presentation.

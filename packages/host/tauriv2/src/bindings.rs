@@ -26,7 +26,8 @@ use soksak_host::projects::{self, CreateProject, Folder};
 use soksak_host::shapes::{self, ShapeRequest};
 use soksak_host::sidecars::WindowSidecars;
 use soksak_host::surfaces::{
-    self, CancelRequest, FocusRequest, Placement, PreparedSurfaces, PresentRequest, Rect, SyncRequest,
+    self, CancelRequest, FocusRequest, Placement, PreparedSurfaces, PresentRequest, Rect,
+    SyncRequest,
 };
 use soksak_host::theme::{self, Theme};
 use soksak_host::windows::{self, Geometry, OpenProject, ProjectShown};
@@ -123,7 +124,7 @@ async fn project_shown(
 }
 
 /// Runs the body of an async command on the blocking threads of the async runtime. Tauri runs an async command as a task of
-/// its runtime, which has one worker for each processor; a body that waits there for a page reply, a lock or the main thread
+/// its runtime, which has few workers; a body that waits there for a page reply, a lock or the main thread
 /// holds a worker, so a few waiting commands would stop every other command and reply until their waits end.
 async fn blocking<T: Send + 'static>(
     body: impl FnOnce() -> Result<T, String> + Send + 'static,

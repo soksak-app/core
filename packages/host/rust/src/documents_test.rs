@@ -128,3 +128,128 @@ fn a_creation_without_failure_keeps_the_document_and_a_failed_close_is_reported(
         "event failed; closing the document: the document is gone"
     );
 }
+
+/// A window whose surface declares the document region name, with no surface host: the attach ends at the lookup of the
+/// surface, before native. The third value holds the task that runs ahead of the next task of the main thread.
+fn attach_fixture(
+    surface: &str,
+    name: &str,
+) -> (
+    crate::framework::Webview,
+    std::sync::Arc<crate::windows::WindowData>,
+    std::sync::Arc<crate::test_framework::Fixture>,
+) {
+    use crate::framework::Manager;
+    use crate::surfaces::{SurfaceComposition, SurfaceRegion};
+    let (app, framework) = crate::test_framework::application_with_queue();
+    let frontend = std::sync::Arc::new(crate::test_framework::FixtureFrontend::new(Ok(1)));
+    let webview = app.webview_of(frontend, "fixture");
+    let records = std::sync::Arc::new(crate::windows::WindowData::default());
+    let windows = crate::windows::Windows::default();
+    crate::windows::register_records(&windows, "fixture", records.clone());
+    app.manage(windows);
+    records.compositions.lock().unwrap().insert(
+        surface.to_string(),
+        SurfaceComposition {
+            kind: "view".into(),
+            page: String::new(),
+            regions: vec![SurfaceRegion {
+                name: name.to_string(),
+                kind: "document".into(),
+                sidecar: String::new(),
+                present: String::new(),
+                input: String::new(),
+            }],
+            overlays: None,
+        },
+    );
+    (webview, records, framework)
+}
+
+fn attach_request(surface: &str, name: &str) -> super::Request {
+    serde_json::from_value(serde_json::json!({"surface": surface, "document": name}))
+        .expect("the request of the attach")
+}
+
+/// The records of a failure of the attach of the region name.
+fn document_error_records(name: &str) -> Vec<serde_json::Value> {
+    crate::event_record::buffered_fields("host.record.error")
+        .into_iter()
+        .filter(|fields| fields["where"] == format!("document {name}"))
+        .collect()
+}
+
+// contract: documents.attach.one-main-step
+#[test]
+fn a_surface_close_during_an_attach_finds_no_name_of_the_attach() {
+    let (surface, name) = ("document-close-surface", "document-close-region");
+    let (webview, records, framework) = attach_fixture(surface, name);
+    let closed = records.clone();
+    let key = (surface.to_string(), name.to_string());
+    let found = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let seen = found.clone();
+    // The close of the surface, which runs on the main thread ahead of the main-thread work of the attach.
+    framework.queue(move || {
+        *seen.lock().unwrap() = Some(closed.documents.remove(&key).is_ok());
+        closed.streams.remove_surface(surface);
+        closed.documents.remove_surface(surface);
+        closed.compositions.lock().unwrap().remove(surface);
+    });
+    let attached = super::attach(&webview, attach_request(surface, name));
+    assert!(attached.is_err(), "the attach of a closed surface fails");
+    assert_eq!(
+        *found.lock().unwrap(),
+        Some(false),
+        "the close found the name of an attach that holds it across the steps of the main thread"
+    );
+    assert_eq!(
+        document_error_records(name),
+        Vec::<serde_json::Value>::new()
+    );
+}
+
+// contract: documents.attach.one-main-step
+#[test]
+fn a_failed_attach_takes_back_its_name_and_its_request_log() {
+    let (surface, name) = ("document-failed-surface", "document-failed-region");
+    let (webview, records, _framework) = attach_fixture(surface, name);
+    assert_eq!(
+        super::attach(&webview, attach_request(surface, name)).unwrap_err(),
+        format!("surface {surface:?} is not attached")
+    );
+    let key = (surface.to_string(), name.to_string());
+    records
+        .documents
+        .reserve(&key)
+        .expect("the failed attach took back its name");
+    records
+        .streams
+        .attach(&key)
+        .expect("the failed attach took back its request log");
+    assert_eq!(
+        document_error_records(name),
+        Vec::<serde_json::Value>::new(),
+        "taking back the name of the failed attach records no error"
+    );
+}
+
+// contract: modal.dialog-blurs-each-document-and-image-region
+#[test]
+fn a_dialog_blurs_each_document_and_image_region() {
+    let documents = std::cell::RefCell::new(Vec::new());
+    let images = std::cell::RefCell::new(Vec::new());
+    super::set_regions_background(
+        vec![1, 2],
+        vec![3],
+        |handle| {
+            documents.borrow_mut().push(handle);
+            Ok(())
+        },
+        |handle| {
+            images.borrow_mut().push(handle);
+            Ok(())
+        },
+    );
+    assert_eq!(*documents.borrow(), vec![1, 2]);
+    assert_eq!(*images.borrow(), vec![3]);
+}

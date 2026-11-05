@@ -1033,7 +1033,11 @@ pub fn focus(window: &Window, request: FocusRequest) -> Result<(), String> {
     let focus_window = window.clone();
     exposure::on_main(window, move || match request.surface {
         Some(surface) => platform.focus_surface(surface_handle(&focus_window, &surface)?),
-        None => platform.focus_workbench(focus_window.native_window().map_err(|error| error.to_string())? as Handle),
+        None => platform.focus_workbench(
+            focus_window
+                .native_window()
+                .map_err(|error| error.to_string())? as Handle,
+        ),
     })
 }
 

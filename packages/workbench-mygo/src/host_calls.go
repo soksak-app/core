@@ -16,7 +16,7 @@ type HostCall func(ctx context.Context, argument json.RawMessage) (any, error)
 
 // hostCalls is the one table through which the workbench calls the host handlers of the language host library
 // (docs/spec/hosts.md#workbench). Its names are the names of METHOD of the Wails runtime and of COMMAND of the Tauri runtime, except
-// the calls that a row B of the framework table lists as absent on mygo.
+// the calls that a row B of the framework table lists as absent on mygo or only on mygo.
 func hostCalls(h *host.Host) map[string]HostCall {
 	return map[string]HostCall{
 		"workspace":                request(h.Workspace),

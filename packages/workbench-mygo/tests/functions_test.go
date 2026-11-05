@@ -34,39 +34,36 @@ func TestFunctionsAnswerTheRegistry(t *testing.T) {
 	}
 	place := &textPlace{frame: 1, cards: map[string]float64{"a": 1}}
 	focus := workbench.NewFocus(declared, func() {})
-	pointer := workbench.NewPointerSequence(func() {})
+	elements := &testerElements{}
+	pointer := workbench.NewPointerSequence(elements, func() {}, func(err error) { t.Error(err) })
 	registry := workbench.NewRegistry(declared)
 	workbench.Functions{
 		Text:          workbench.NewTextSize(place, steps),
 		Focus:         focus,
 		Pointer:       pointer,
 		Contributions: workbench.NewContributions(),
-		Verification:  workbench.NewVerification(func() {}),
 	}.Register(registry)
 
 	commands, statuses := registry.Names()
 	if want := []string{"core.focus.set", "core.text.larger", "core.text.reset", "core.text.smaller"}; !slices.Equal(commands, want) {
 		t.Fatalf("the commands are %v, want %v", commands, want)
 	}
-	if want := []string{"core.contributions", "core.focus", "core.pointer", "core.text", "core.verify"}; !slices.Equal(statuses, want) {
+	if want := []string{"core.contributions", "core.focus", "core.pointer", "core.text"}; !slices.Equal(statuses, want) {
 		t.Fatalf("the statuses are %v, want %v", statuses, want)
 	}
 
 	tester := ui.NewTester(func(c *ui.Context) {
 		focus.Frame(c)
-		pointer.Frame()
-		ui.Column(c).Children(func() {
-			focus.Bind(ui.Box(c.Key("first")).Size(100, 30).Focusable().HandleInput(pointer.Handler("core.card")), "core.card")
+		pointer.Watch(ui.Column(c)).Children(func() {
+			focus.Bind(ui.Box(c.Key(workbench.Exposed{Name: "core.card"})).Role(ui.RoleGroup).Label("first").Size(100, 30).Focusable(), "core.card")
 			focus.Bind(ui.Box(c.Key("second")).Size(100, 30).Focusable(), "core.card")
 		})
 	}, 200, 200)
+	elements.tester = tester
 	tester.Frame()
 
 	if got, want := statusText(t, registry, "core.contributions"), "[]"; got != want {
 		t.Fatalf("core.contributions is %s, want %s", got, want)
-	}
-	if got, want := statusText(t, registry, "core.verify"), "null"; got != want {
-		t.Fatalf("core.verify is %s, want %s", got, want)
 	}
 
 	if _, err := registry.Run("core.focus.set", json.RawMessage(`{"name":"core.card","index":1}`)); err != nil {

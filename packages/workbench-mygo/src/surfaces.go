@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"slices"
 	"strings"
 
@@ -354,22 +353,26 @@ func (s *Shell) standSurface(c *ui.Context, surface *heldSurface, box layout.Rec
 	id := surface.tab.ID
 	s.surfaces.drawn[id] = box
 	s.holdSurface(surface)
-	if view, key, ok := s.options.Element(id); ok {
-		// A web page paints whole points only: past them a fractional view shows the window, and here the card shows instead.
-		width, height := float32(math.Floor(box.W)), float32(math.Floor(box.H))
-		if s.dialogOpen() {
-			// A hole paints only outside a blurred element, so the view stands over the blurred workbench in the same place.
-			ui.Spacer(c).Size(width, height)
-			s.surfaces.behindDialog = append(s.surfaces.behindDialog, viewBehindDialog{view, key, box, width, height})
-			return
-		}
-		ui.NativeView(c, view, key).Size(width, height).ObserveInput(func(ev ui.InputEvent) {
-			// A press reaches the content here while the host holds the views of a placement out of the pointer.
-			if ev.Kind == ui.InputPointerDown {
-				s.pressSurface(id)
+	ui.Box(c.Key(SurfaceSlot{ID: id})).FillWidth().FillHeight().Role(ui.RoleGroup).Children(func() {
+		if view, key, ok := s.options.Element(id); ok {
+			// A web page paints whole points only: past them a fractional view shows the window, and here the card shows instead. The
+			// framework rounds a fractional edge to the nearest device pixel, so a view off the whole points could leave its slot.
+			whole := WholePoints(box)
+			width, height := float32(whole.W), float32(whole.H)
+			if s.dialogOpen() {
+				// A hole paints only outside a blurred element, so the view stands over the blurred workbench in the same place.
+				ui.Spacer(c).Size(width, height)
+				s.surfaces.behindDialog = append(s.surfaces.behindDialog, viewBehindDialog{view, key, whole, width, height})
+				return
 			}
-		})
-	}
+			ui.NativeView(c, view, key).Absolute().Left(float32(whole.X-box.X)).Top(float32(whole.Y-box.Y)).Size(width, height).ObserveInput(func(ev ui.InputEvent) {
+				// A press reaches the content here while the host holds the views of a placement out of the pointer.
+				if ev.Kind == ui.InputPointerDown {
+					s.pressSurface(id)
+				}
+			})
+		}
+	})
 }
 
 // viewBehindDialog is a native view that the frame draws over the blurred workbench while a dialog is open.

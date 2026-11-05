@@ -2,6 +2,7 @@ package workbench_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"image"
 	"image/color"
 	"reflect"
@@ -762,6 +763,204 @@ func TestKoreanTextBreaksAtTheSpaces(t *testing.T) {
 	}
 }
 
+// The figures of the value of a slider take six widths of a figure of the font, as 6ch of the page does (--slide-value-w).
+func TestTheValueOfASliderIsSixFiguresWide(t *testing.T) {
+	f := opened(t)
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	size, _ := declared.Metric("text-small-at-base")
+	catalog, err := workbench.ReadSettingsCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stack := catalog.Stack(status[map[string]any](t, f, "core.settings")["values"].(map[string]any)["font"].(string))
+	const figures = "000000"
+	plain := ui.NewTester(func(c *ui.Context) {
+		ui.Row(c).Children(func() { ui.Text(c, figures).FontSize(float32(size)).Font(stack) })
+	}, 1000, 100)
+	want, ok := nodeLabeled(plain.ElementTree(), figures)
+	if !ok {
+		t.Fatalf("no plain element of %q", figures)
+	}
+	node, ok := nodeLabeled(f.tester.ElementTree(), "6px")
+	if !ok {
+		t.Fatalf("no value of the passage in %q", f.tester.Texts())
+	}
+	if diff := node.Bounds.W - want.Bounds.W; diff < -.01 || diff > .01 {
+		t.Fatalf("the value is %v wide, six figures of its font are %v", node.Bounds.W, want.Bounds.W)
+	}
+}
+
+// switches lists the elements of the switches of a tree.
+func switches(nodes []ui.ElementNode) []ui.ElementNode {
+	var found []ui.ElementNode
+	for _, node := range nodes {
+		if node.Role == ui.RoleSwitch {
+			found = append(found, node)
+		}
+		found = append(found, switches(node.Children)...)
+	}
+	return found
+}
+
+// A switch that the keyboard reached has the outline of the page around it (.set-switch:focus-visible).
+func TestAFocusedSwitchHasTheOutlineOfThePage(t *testing.T) {
+	f := opened(t)
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	width, _ := declared.Metric("focus-outline")
+	offset, _ := declared.Metric("switch-focus-offset")
+	f.tester.SetSize(1200, 2400)
+	f.settle()
+	values := status[map[string]any](t, f, "core.settings")["values"].(map[string]any)
+	catalog, err := workbench.ReadSettingsCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	theme, err := catalog.Theme(values["theme"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	colors := theme.Dark
+	if values["mode"] == "light" {
+		colors = theme.Light
+	}
+	want := ui.Hex(colors["focus"])
+	focus := color.RGBA{want.R, want.G, want.B, 255}
+	reach := float32(offset) + float32(width)/2
+	var seen []color.RGBA
+	for range 60 {
+		f.tester.Key(0, ui.KeyTab)
+		f.settle()
+		for _, node := range switches(f.tester.ElementTree()) {
+			y := node.Bounds.Y + node.Bounds.H/2
+			left := f.pixelOf(node.Bounds.X-reach, y)
+			if left == focus && f.pixelOf(node.Bounds.X+node.Bounds.W+reach-1, y) == focus {
+				return
+			}
+			seen = append(seen, left)
+		}
+	}
+	t.Fatalf("Tab reached no switch with the outline %v: %v", focus, seen[:min(len(seen), 8)])
+}
+
+// A select box that the keyboard reached has the focus color on its border and no outline (.select-field select:focus-visible).
+func TestAFocusedSelectBoxHasTheBorderOfThePage(t *testing.T) {
+	f := opened(t)
+	values := status[map[string]any](t, f, "core.settings")["values"].(map[string]any)
+	catalog, err := workbench.ReadSettingsCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	theme, err := catalog.Theme(values["theme"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	colors := theme.Dark
+	if values["mode"] == "light" {
+		colors = theme.Light
+	}
+	want := ui.Hex(colors["focus"])
+	focus := color.RGBA{want.R, want.G, want.B, 255}
+	surface := ui.Hex(colors["bg"])
+	inside := color.RGBA{surface.R, surface.G, surface.B, 255}
+	f.tester.Key(0, ui.KeyTab)
+	f.settle()
+	var seen []string
+	for index := range 12 {
+		f.run("core.focus.set", map[string]any{"name": "core.settings-modal.set", "index": index})
+		f.settle()
+		for _, node := range selectBoxes(f.tester.ElementTree()) {
+			y := node.Bounds.Y + node.Bounds.H/2
+			edge, within := f.pixelOf(node.Bounds.X+.5, y), f.pixelOf(node.Bounds.X+1.5, y)
+			if edge == focus && within == inside {
+				return
+			}
+			seen = append(seen, fmt.Sprint(edge, within))
+		}
+	}
+	t.Fatalf("no select box has the border %v around the field %v: %v", focus, inside, seen[:min(len(seen), 6)])
+}
+
+// selectBoxes lists the elements of the select boxes of a tree.
+func selectBoxes(nodes []ui.ElementNode) []ui.ElementNode {
+	var found []ui.ElementNode
+	for _, node := range nodes {
+		if node.Role == ui.RolePopUpButton {
+			found = append(found, node)
+		}
+		found = append(found, selectBoxes(node.Children)...)
+	}
+	return found
+}
+
+// The card of the page draws no outline when it has the focus (.card): its border says which card it is.
+func TestAFocusedCardHasNoOutline(t *testing.T) {
+	f, _ := surfaceShell(t)
+	card := f.tabbedCards()[0]
+	node, ok := exposedNode(f.tester.ElementTree(), "core.card", card)
+	if !ok {
+		t.Fatalf("no card %s", card)
+	}
+	x, y := node.Bounds.X+1.5, node.Bounds.Y+node.Bounds.H/2
+	f.tester.Key(0, ui.KeyTab)
+	f.settle()
+	before := f.pixelOf(x, y)
+	f.run("core.focus.set", map[string]any{"name": "core.card", "index": 0})
+	f.settle()
+	if !f.tester.Focused(card) {
+		t.Fatalf("the keyboard did not reach the card %s", card)
+	}
+	if got := f.pixelOf(x, y); got != before {
+		t.Fatalf("the focused card has %v at its edge, %v before", got, before)
+	}
+}
+
+// The plugins of the settings window are buttons in the flow of a line (.set-list), one after the other.
+func TestThePluginsOfTheSettingsStandOnOneLine(t *testing.T) {
+	f := opened(t)
+	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
+	f.settle()
+	first, ok := pressLabeled(f.tester.ElementTree(), "Acme")
+	second, found := pressLabeled(f.tester.ElementTree(), "Plain")
+	if !ok || !found {
+		t.Fatalf("the plugins are not listed in %q", f.tester.Texts())
+	}
+	if first.Bounds.Y != second.Bounds.Y || first.Bounds.X+first.Bounds.W != second.Bounds.X {
+		t.Fatalf("the plugins stand at %+v and %+v", first.Bounds, second.Bounds)
+	}
+}
+
+// The search of the settings window is an input of the page without a look of its own: the control background of its color scheme.
+func TestTheSearchOfTheSettingsHasTheBackgroundOfThePage(t *testing.T) {
+	f := opened(t)
+	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
+	f.settle()
+	node, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.search", "")
+	if !ok {
+		t.Fatalf("no search in %q", f.tester.Texts())
+	}
+	want := controlBackground(t)
+	if got := f.pixelOf(node.Bounds.X+node.Bounds.W-6, node.Bounds.Y+node.Bounds.H/2); got != want {
+		t.Fatalf("the search has the background %v, not %v", got, want)
+	}
+}
+
+// controlBackground is the declared background of a control without a look of its own.
+func controlBackground(t *testing.T) color.RGBA {
+	t.Helper()
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	value := ui.Hex(declared.PlainControl("bg"))
+	return color.RGBA{value.R, value.G, value.B, 255}
+}
+
 // The name of a group of settings is a heading of the page, so it is bold.
 func TestTheNameOfASettingsGroupIsBold(t *testing.T) {
 	f := opened(t)
@@ -796,7 +995,7 @@ func TestTheNameOfASettingsGroupIsBold(t *testing.T) {
 	written := func(bold bool) int {
 		tester := ui.NewTester(func(c *ui.Context) {
 			ui.Box(c).Fill().Background(ui.Color{R: card.R, G: card.G, B: card.B, A: 255}).Children(func() {
-				name := ui.Text(c, "테마").Font(stack).FontSize(float32(size)).LetterSpacing(float32(size*tracking)).
+				name := ui.Text(c, "테마").Font(stack).FontSize(float32(size)).LetterSpacing(float32(size * tracking)).
 					TextColor(ui.Color{R: rail.R, G: rail.G, B: rail.B, A: 255})
 				if bold {
 					name.Bold()
