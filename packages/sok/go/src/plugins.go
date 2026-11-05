@@ -675,8 +675,8 @@ func ReadInstalledManifest(configDir, id string, plugin InstalledPlugin) (Instal
 	if err := json.Compact(&compact, data); err != nil {
 		return InstalledManifest{}, fmt.Errorf("%s is not valid JSON", file)
 	}
-	if afterManifestRead != nil {
-		afterManifestRead(file)
+	if afterPluginFileRead != nil {
+		afterPluginFileRead(file)
 	}
 	return InstalledManifest{Compact: compact.Bytes(), Value: manifest}, nil
 }
@@ -700,14 +700,14 @@ func checkPluginID(id, file string, manifest map[string]any) error {
 	return nil
 }
 
-// afterManifestRead is the fault hook of the reader. It runs after checkInstalledPluginIDs reads and checks each
-// plugin.json. Tests use it to change a file between two reads; nil means no hook.
-var afterManifestRead func(file string)
+// afterPluginFileRead is the fault hook of the readers. It receives the location of each plugin.json and package.json
+// of an installed plugin after the reader reads it.
+var afterPluginFileRead func(file string)
 
-// SetAfterManifestRead sets the fault hook that runs after ReadInstalled reads and checks each plugin.json. A nil
-// hook removes it.
-func SetAfterManifestRead(hook func(file string)) {
-	afterManifestRead = hook
+// SetAfterPluginFileRead sets the fault hook that runs after a reader reads a plugin.json or a package.json of an
+// installed plugin. A test uses it to change a file between two reads and to count the reads; nil removes the hook.
+func SetAfterPluginFileRead(hook func(file string)) {
+	afterPluginFileRead = hook
 }
 
 // manifestDependenciesOf checks and returns the dependencies of a parsed plugin.json. file is the location for errors.
@@ -725,6 +725,9 @@ func InstalledName(configDir string, plugin InstalledPlugin) (string, error) {
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return "", fileError(file, err)
+	}
+	if afterPluginFileRead != nil {
+		afterPluginFileRead(file)
 	}
 	value, err := DecodeJSON(data)
 	if err != nil {

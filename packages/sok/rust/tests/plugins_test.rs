@@ -1279,13 +1279,13 @@ fn plugin_remove_uses_the_manifest_that_the_reader_returned() {
     use_registry(&config, &registry);
     succeeds(&["plugin", "install", "ext", "--config-dir", config.text()]);
     let dependent = config.path().join("plugins/ext/1.0.0/plugin.json");
-    soksak_sok::plugins::set_after_manifest_read(Some(Box::new(move |file: &Path| {
+    soksak_sok::plugins::set_after_plugin_file_read(Some(Box::new(move |file: &Path| {
         if file.ends_with("ext/1.0.0/plugin.json") {
             std::fs::remove_file(&dependent).expect("remove the dependent plugin.json");
         }
     })));
     let result = soksak_sok::plugins::change_plugin(config.path(), "base", "remove");
-    soksak_sok::plugins::set_after_manifest_read(None);
+    soksak_sok::plugins::set_after_plugin_file_read(None);
     assert_eq!(
         result.expect_err("base is required by ext"),
         "plugin base is required by ext ^1.0.0"

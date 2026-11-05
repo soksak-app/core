@@ -44,6 +44,8 @@
 - F535: 각 host와 도구의 event writer는 쓸 것이 없는 동안 잠들므로 유휴 앱에는 log의 깨움이 없다. 잠든 writer를 깨운 것은 즉시 저장되고 batch 간격이 뒤따르는 것을 모으며, native 스레드는 `sp_event_wake_fd`의 pipe로 writer를 깨운다.
 - F535-1: Rust event writer는 flush 요청에 답하는 중에 찾은 다른 flush 요청에도 답한다. 전에는 두 번째 호출자가 사실이 아닌 deadline 오류를 곧바로 받았다.
 - F535-2: event writer는 stop 뒤의 flush 요청에 답하고 그 요청 뒤의 event를 저장한다. writer가 끝난 호출자는 사실이 아닌 deadline 오류 대신 그 사실을 알리는 오류를 곧바로 받는다.
+- F545: 두 host 모두 core module이 설치를 읽지 않으며, frontend의 core 파일은 view에서처럼 main page에서도 같은 package의 plugin보다 우선한다. plugin module은 자기 plugin에서 `package.json` 읽기를 멈추고, 한 plugin의 잘못된 `package.json`이 다른 plugin의 module을 거부하지 않는다. view의 plugin 폴더는 자기 plugin의 manifest만 읽는다.
+- F541: 두 host 모두 page module 요청이 자기 plugin의 manifest만 읽으므로, 첫 창이 module마다 설치된 manifest를 모두 읽고 parse하지 않으며, 한 plugin의 잘못된 manifest가 다른 plugin의 module을 거부하지 않는다.
 - F533: 실패한 memory saver delay unload는 다음 deadline을 한 delay 뒤에 받으므로, 계속 실패하는 읽기나 commit이 매번 오류 표시와 함께 곧바로 다시 돌지 않는다.
 - F534: window facts 읽기는 더 이상 WebKit feature 목록을 훑지 않는다. 이 목록은 읽을 때마다 web view별로 애플리케이션 프로세스의 WebKit heap에 모든 feature를 할당했다. feature는 프로세스에서 한 번만 찾는다.
 - F532: Rust diagnostics의 update 단계가 framework port의 `quit`으로 애플리케이션을 끝내므로, `make tauriv2-build`가 다시 컴파일된다. `make hosts-check`는 새 `make host-debug-check`를 실행하며, 이 target은 두 host와 두 앱을 debug 앱의 구성으로 컴파일한다.
@@ -63,6 +65,7 @@
 - F502-10: framework는 scene을 보여 주는 frame의 결과를 알리고(`Window.AfterPresent`), release build를 포함한 모든 build에서 element tree를 읽으며(`Content.ElementTree`), `WindowOptions.DrawWhileOccluded`로 화면 밖 window의 frame을 그린다. 두 language host library에서 `Frontend` port의 presentation notice는 실패를 전달하고 그 실패는 layout transaction을 취소하며, port의 settled presentation은 platform의 settled wait가 받는 block을 만들어 transaction도 wait도 main web view를 이름으로 부르지 않는다. Wails와 Tauri framework adapter는 Surface layout group의 새 operation `MainPresentation`으로 그 block을 만든다. main-thread audit은 block 호출을 native 함수 호출로 센다.
 - F502-13: exposure kind `dom`은 모든 host와 모든 plugin 선언에서 `element`가 된다: `exposes.element`, `expose.element`, `element.rect`, `element.act`, `sok element`, MCP tool `element_rect`와 `element_act`, `exposure.list`의 member `element`. `exposes.dom`을 가진 manifest는 거부된다. workbench status는 workbench에 대해 정의된다: `core.window.workbench`, `core.workbench.error`, 행이 `{role, expose, command, text}`인 `core.workbench.audit`, responder owner와 `host.hit` kind `workbench`. window check는 `core.window.workbench`의 새 `start`를 기다리고, 각각 `Object.values(APPS)` 또는 `MAIN_PAGE_APPS`를 순회하며, `scripts/check-e2e-host-parity.mjs`가 이를 검사한다.
 - F443-1: 첫 실행 finding을 닫는다. 초과는 machine의 load를 따르고 launch가 결정하지 않는다.
+- F455: view measurement가 화면의 refresh rate를 기록한다. F435는 benchmark가 120 Hz에서 돌 때까지 보류한다.
 - F435-4: run은 settled drawing이 present된 때 끝나므로, drag 동안 묶인 status 값이 마지막 layout과 경쟁하지 않는다.
 - F435-3: convergence가 drag 뒤의 모든 source frame을 읽어, 뒤늦은 frame의 최종 viewport도 측정한다.
 - F435-2: 모든 view drag를 performance trace를 끄고 log policy를 frame class로 줄인 상태로 판정한다.

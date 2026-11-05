@@ -137,7 +137,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Tauri runtime", "js-ts", ["apps/tauriv2/runtime/**/*.js"], ["apps/tauriv2/test/**/*.mjs"], { sharedTests: true }),
   lane("Wails runtime", "js-ts", ["apps/wailsv3/runtime/**/*.js"], ["apps/wailsv3/test/**/*.mjs"], { sharedTests: true }),
 
-  lane("Rust language host library", "rust", ["packages/host/rust/src/**/*.rs", "packages/host/rust/build.rs"], ["packages/host/rust/tests/**/*.rs", "packages/host/rust/src/exposure_settled_test.rs", "packages/host/rust/src/documents_test.rs", "packages/host/rust/src/windows_front_test.rs", "packages/host/rust/src/sidecars_route_test.rs", "packages/host/rust/src/document_post_test.rs", "packages/host/rust/src/images_test.rs", "packages/host/rust/src/images_relay_test.rs", "packages/host/rust/src/object_counts_test.rs", "packages/host/rust/src/composition_overlay_test.rs", "packages/host/rust/src/platform/darwin/webview_overlay_test.rs", "packages/host/rust/src/platform/darwin/document_test.rs", "packages/host/rust/src/sidecar_reply_test.rs", "packages/host/rust/src/surfaces_test.rs", "packages/host/rust/src/modals_readiness_test.rs", "packages/host/rust/src/exposure_webviews_test.rs", "packages/host/rust/src/exposure_status_test.rs", "packages/host/rust/src/notifications_test.rs", "packages/host/rust/src/project_removal_test.rs", "packages/host/rust/src/endpoint_lock_test.rs", "packages/host/rust/src/windows_records_test.rs", "packages/host/rust/src/responder_test.rs", "packages/host/rust/src/sidecars_lock_test.rs", "packages/host/rust/src/image_detach_test.rs", "packages/host/rust/src/start_test.rs", "packages/host/rust/src/performance_lock_test.rs", "packages/host/rust/src/workspace_lock_test.rs", "packages/host/rust/src/view_lifecycle_test.rs", "packages/host/rust/src/view_origin_test.rs", "packages/host/rust/src/view_responsiveness_test.rs", "packages/host/rust/src/view_theme_test.rs", "packages/host/rust/src/surface_close_test.rs", "packages/host/rust/src/presentation_end_test.rs", "packages/host/rust/src/view_start_test.rs", "packages/host/rust/src/log_policy_levels_test.rs", "packages/host/rust/src/view_call_peer_test.rs", "packages/host/rust/src/view_binary_test.rs", "packages/host/rust/src/presentation_wait_test.rs", "packages/host/rust/src/view_join_test.rs", "packages/host/rust/benches/**/*.rs", "packages/host/rust/tests/fixtures/**/*.json", "packages/host/rust/src/diagnostics_lock_test.rs", "packages/host/rust/src/diagnostics_input_reference_test.rs", "packages/host/rust/src/diagnostics_test.rs", "packages/host/rust/src/platform/darwin/input_reference_test.rs", "packages/host/rust/src/log_policy_watch_hook_lock_test.rs", "packages/host/rust/src/process_lock_hook_lock_test.rs", "packages/host/rust/src/assets_lock_test.rs", "packages/host/rust/src/deep_link_lock_test.rs", "packages/host/rust/src/log_query_lock_test.rs", "packages/host/rust/src/debug_follow_lock_test.rs", "packages/host/rust/src/source_origins_test.rs", "packages/host/rust/src/sidecar_routes_test.rs", "packages/host/rust/src/sidecars_session_retention_test.rs"], { testExtensions: new Set([".rs", ".json"]) }),
+  lane("Rust language host library", "rust", ["packages/host/rust/src/**/*.rs", "packages/host/rust/build.rs"], ["packages/host/rust/tests/**/*.rs", "packages/host/rust/src/exposure_settled_test.rs", "packages/host/rust/src/documents_test.rs", "packages/host/rust/src/windows_front_test.rs", "packages/host/rust/src/sidecars_route_test.rs", "packages/host/rust/src/document_post_test.rs", "packages/host/rust/src/images_test.rs", "packages/host/rust/src/images_relay_test.rs", "packages/host/rust/src/object_counts_test.rs", "packages/host/rust/src/composition_overlay_test.rs", "packages/host/rust/src/platform/darwin/webview_overlay_test.rs", "packages/host/rust/src/platform/darwin/document_test.rs", "packages/host/rust/src/sidecar_reply_test.rs", "packages/host/rust/src/surfaces_test.rs", "packages/host/rust/src/modals_readiness_test.rs", "packages/host/rust/src/exposure_webviews_test.rs", "packages/host/rust/src/exposure_status_test.rs", "packages/host/rust/src/notifications_test.rs", "packages/host/rust/src/project_removal_test.rs", "packages/host/rust/src/endpoint_lock_test.rs", "packages/host/rust/src/windows_records_test.rs", "packages/host/rust/src/responder_test.rs", "packages/host/rust/src/sidecars_lock_test.rs", "packages/host/rust/src/installed_reads_test.rs", "packages/host/rust/src/image_detach_test.rs", "packages/host/rust/src/start_test.rs", "packages/host/rust/src/performance_lock_test.rs", "packages/host/rust/src/workspace_lock_test.rs", "packages/host/rust/src/view_lifecycle_test.rs", "packages/host/rust/src/view_origin_test.rs", "packages/host/rust/src/view_responsiveness_test.rs", "packages/host/rust/src/view_theme_test.rs", "packages/host/rust/src/surface_close_test.rs", "packages/host/rust/src/presentation_end_test.rs", "packages/host/rust/src/view_start_test.rs", "packages/host/rust/src/log_policy_levels_test.rs", "packages/host/rust/src/view_call_peer_test.rs", "packages/host/rust/src/view_binary_test.rs", "packages/host/rust/src/presentation_wait_test.rs", "packages/host/rust/src/view_join_test.rs", "packages/host/rust/benches/**/*.rs", "packages/host/rust/tests/fixtures/**/*.json", "packages/host/rust/src/diagnostics_lock_test.rs", "packages/host/rust/src/diagnostics_input_reference_test.rs", "packages/host/rust/src/diagnostics_test.rs", "packages/host/rust/src/platform/darwin/input_reference_test.rs", "packages/host/rust/src/log_policy_watch_hook_lock_test.rs", "packages/host/rust/src/process_lock_hook_lock_test.rs", "packages/host/rust/src/assets_lock_test.rs", "packages/host/rust/src/deep_link_lock_test.rs", "packages/host/rust/src/log_query_lock_test.rs", "packages/host/rust/src/debug_follow_lock_test.rs", "packages/host/rust/src/source_origins_test.rs", "packages/host/rust/src/sidecar_routes_test.rs", "packages/host/rust/src/sidecars_session_retention_test.rs"], { testExtensions: new Set([".rs", ".json"]) }),
   lane("Tauri framework adapter", "rust", ["packages/host/tauriv2/src/**/*.rs"], ["packages/host/tauriv2/tests/**/*.rs", "packages/host/tauriv2/src/plugins_starter_test.rs"]),
   lane("Tauri application bootstrap", "rust", ["apps/tauriv2/src/main.rs", "apps/tauriv2/build.rs"], ["e2e/**/*.mjs", "e2e/platform/platform.js", "e2e/platform/darwin/darwin.js", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js", "e2e/fixtures/*/*/ui/*.html"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
 
@@ -1122,6 +1122,58 @@ const FEATURE_LINKS = [
     ],
     expected: "Only an open press holds a keyboard move, and one receipt answers every wait of its type.",
     levels: ["native"],
+  },
+  {
+    id: "F545",
+    implementation: [
+      { file: "packages/host/rust/src/installed.rs", symbol: "if path.starts_with(\"/modules/\")" },
+      { file: "packages/host/rust/src/installed.rs", symbol: "state.plugins.get(plugin).filter(|entry| entry.enabled)" },
+      { file: "packages/host/go/src/installed.go", symbol: "func holdsModule(frontend fs.FS, urlPath string) bool {" },
+      { file: "packages/host/go/src/installed.go", symbol: "func PluginFolder(configDir, plugin string) (string, error) {" },
+    ],
+    tests: [
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "a_file_of_the_frontend_reads_no_file_of_a_plugin" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "a_file_of_the_frontend_wins_over_a_plugin_of_the_same_package" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "a_module_of_a_plugin_stops_reading_at_its_package" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "a_module_beside_a_malformed_package_json_is_served" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "the_plugin_folder_reads_the_manifest_of_its_plugin_alone" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "the_plugin_folder_is_found_beside_a_malformed_plugin" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "the_plugin_folder_follows_the_installation" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestAFileOfTheFrontendReadsNoFileOfAPlugin" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestAFileOfTheFrontendWinsOverAPluginOfTheSamePackage" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestAModuleOfAPluginStopsReadingAtItsPackage" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestAModuleBesideAMalformedPackageJSONIsServed" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestThePluginFolderReadsTheManifestOfItsPluginAlone" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestThePluginFolderIsFoundBesideAMalformedPlugin" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestThePluginFolderFollowsTheInstallation" },
+    ],
+    expected: "A core module reads nothing of the installation and wins over a plugin of its package; a plugin module and a plugin folder read up to their own plugin.",
+    levels: ["unit"],
+  },
+  {
+    id: "F541",
+    implementation: [
+      { file: "packages/host/rust/src/installed.rs", symbol: "fn installed_package(config_dir: &Path, name: &str) -> Result<Option<PathBuf>, String> {" },
+      { file: "packages/host/go/src/installed.go", symbol: "func installedPackage(configDir, name string) (string, error) {" },
+    ],
+    tests: [
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "a_module_of_a_plugin_reads_the_manifest_of_that_plugin_alone" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "a_module_of_the_frontend_reads_no_manifest" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "a_shared_module_reads_the_manifest_of_its_provider_alone" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "a_malformed_manifest_refuses_the_modules_of_its_own_plugin_alone" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "the_request_after_an_install_serves_the_new_plugin" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "the_request_after_a_removal_does_not_serve_the_plugin" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "the_request_after_an_update_reads_the_new_manifest" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestAModuleOfAPluginReadsTheManifestOfThatPluginAlone" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestAModuleOfTheFrontendReadsNoManifest" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestASharedModuleReadsTheManifestOfItsProviderAlone" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestAMalformedManifestRefusesTheModulesOfItsOwnPluginAlone" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestTheRequestAfterAnInstallServesTheNewPlugin" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestTheRequestAfterARemovalDoesNotServeThePlugin" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestTheRequestAfterAnUpdateReadsTheNewManifest" },
+    ],
+    expected: "A request of a page module reads the manifest of its own plugin alone, and the request after a change of the installation answers from the new files.",
+    levels: ["unit"],
   },
   {
     id: "F533",
@@ -9140,7 +9192,7 @@ const FEATURE_LINKS = [
     id: "F321-7",
     implementation: [
       { file: "packages/host/go/src/installed.go", symbol: "func InstalledModule(" },
-      { file: "packages/host/rust/src/installed.rs", symbol: "let Ok((plugins, _)) = enabled_plugins(config_dir) else {" },
+      { file: "packages/host/rust/src/installed.rs", symbol: "let Ok(Some(dir)) = installed_package(config_dir, &name) else {" },
     ],
     tests: [
       { file: "packages/host/go/tests/installed_test.go", id: "TestAnUnreadableInstallationServesTheFrontendModules" },
@@ -12062,7 +12114,7 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // F503 states the framework fork that the Wails host pins in the native surfaces specification and in the go.mod comments; it
 // changes no runtime capability.
 // F524 corrects the release checks that the verification specification states; it changes no runtime capability.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
+const NON_CAPABILITY_COMPLETIONS = new Set(["F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66), the window checks of plugins (F110) and the registry listing of the hwp plugin (F141, registry items G37 and G38). Core cannot read

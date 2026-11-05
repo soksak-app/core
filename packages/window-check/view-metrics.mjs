@@ -887,8 +887,14 @@ export async function runViewMeasurements(t, s, descriptor) {
   const artifactDirectory = await mkdtemp(join(logsDirectory, "view-measurements-"));
   t.diagnostic(`view measurement artifacts: ${artifactDirectory}`);
   try {
+    // A skipped frame takes a different time at each refresh rate, so a result has its meaning only with this rate.
+    const { refreshRate: displayRefreshRate } = await s.get("host.window");
+    if (!Number.isInteger(displayRefreshRate) || displayRefreshRate <= 0) {
+      fail("host.window.refreshRate", "a positive integer", displayRefreshRate);
+    }
+    t.diagnostic(`view measurement display refresh rate: ${displayRefreshRate} Hz`);
     const measurements = await descriptor.collect(t, s);
-    const rawDocument = JSON.stringify(measurements, null, 2);
+    const rawDocument = JSON.stringify({ ...measurements, displayRefreshRate }, null, 2);
     if (typeof rawDocument !== "string") fail("measurements", "JSON-serializable raw measurements", measurements);
     await writeFile(join(artifactDirectory, "measurements.json"), `${rawDocument}\n`, "utf8");
     const report = assertViewMeasurements(measurements, {

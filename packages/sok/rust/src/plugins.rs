@@ -452,11 +452,7 @@ pub fn read_installed_manifest(
     let invalid = || format!("{location} is not valid JSON");
     let text = std::str::from_utf8(&data).map_err(|_| invalid())?;
     let compact = RawValue::from_string(compact_json(text)).map_err(|_| invalid())?;
-    AFTER_MANIFEST_READ.with(|slot| {
-        if let Some(hook) = slot.borrow().as_ref() {
-            hook(&file);
-        }
-    });
+    after_plugin_file_read(&file);
     Ok(InstalledManifest {
         compact,
         value: manifest,
@@ -492,18 +488,28 @@ pub fn compact_json(text: &str) -> String {
     out
 }
 
-/// The fault hook of read_installed_manifests: it receives the location of each plugin.json after the reader checks it.
-type ManifestHook = Box<dyn Fn(&Path)>;
+/// The fault hook of the readers: it receives the location of each plugin.json and package.json of an installed plugin
+/// after the reader reads it.
+type PluginFileHook = Box<dyn Fn(&Path)>;
 
 thread_local! {
-    // The fault hook of the reader. It runs on the calling thread after read_installed reads and checks a plugin.json.
-    static AFTER_MANIFEST_READ: RefCell<Option<ManifestHook>> = const { RefCell::new(None) };
+    // The fault hook of the readers. It runs on the calling thread.
+    static AFTER_PLUGIN_FILE_READ: RefCell<Option<PluginFileHook>> = const { RefCell::new(None) };
 }
 
-/// Sets the fault hook that runs after read_installed reads and checks each plugin.json on the calling thread. Tests use
-/// it to change a file between two reads; None removes the hook.
-pub fn set_after_manifest_read(hook: Option<ManifestHook>) {
-    AFTER_MANIFEST_READ.with(|slot| *slot.borrow_mut() = hook);
+/// Sets the fault hook that runs on the calling thread after a reader reads a plugin.json or a package.json of an
+/// installed plugin. A test uses it to change a file between two reads and to count the reads; None removes the hook.
+pub fn set_after_plugin_file_read(hook: Option<PluginFileHook>) {
+    AFTER_PLUGIN_FILE_READ.with(|slot| *slot.borrow_mut() = hook);
+}
+
+/// Runs the fault hook for the file that a reader read.
+fn after_plugin_file_read(file: &Path) {
+    AFTER_PLUGIN_FILE_READ.with(|slot| {
+        if let Some(hook) = slot.borrow().as_ref() {
+            hook(file);
+        }
+    });
 }
 
 /// Changes installed.json once.
@@ -731,6 +737,7 @@ pub fn installed_name(config_dir: &Path, plugin: &InstalledPlugin) -> Result<Str
     let file = config_dir.join(&plugin.path).join("package.json");
     let data =
         std::fs::read(&file).map_err(|error| crate::files::file_error(file.display(), &error))?;
+    after_plugin_file_read(&file);
     let value: Value = serde_json::from_slice(&data)
         .map_err(|_| format!("{} is not valid JSON", file.display()))?;
     let package = value

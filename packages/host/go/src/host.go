@@ -47,6 +47,7 @@ var system platform.Platform
 type Session struct {
 	host        *Host
 	config      string
+	frontend    fs.FS
 	quit        *Quit
 	started     chan struct{}
 	unpublished chan error
@@ -94,6 +95,7 @@ func Prepare(adapter Framework, assets fs.FS, options Options) (_ *Session, fail
 	if err != nil {
 		return nil, err
 	}
+	session.frontend = frontend
 	if err := readBackgroundScript(frontend); err != nil {
 		return nil, err
 	}
@@ -206,7 +208,7 @@ func (s *Session) Host() *Host { return s.host }
 // optional is the file that the runtime of the framework requests and the application does not provide.
 func (s *Session) Assets(windowHeader, optional string) Middleware {
 	return func(next http.Handler) http.Handler {
-		return MissingAssets(StartAssets(s.host.startPage, windowHeader)(InstalledAssets(s.config)(next)), optional, reportMissingAsset)
+		return MissingAssets(StartAssets(s.host.startPage, windowHeader)(InstalledAssets(s.config, s.frontend)(next)), optional, reportMissingAsset)
 	}
 }
 
