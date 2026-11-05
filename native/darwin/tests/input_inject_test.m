@@ -202,7 +202,7 @@ static void timed(void *context, sp_input_result result, const sp_input_held *he
 static SPReceipt pointerThen(NSWindow *window, WKWebView *view, double x, double y, int phase, double timeout) {
     SPReceipt receipt = {NO, SP_INPUT_REJECTED, 0, view, NO};
     SPReceipt *state = &receipt;
-    sp_input_pointer_then(window, x, y, phase, 0, 0, 0, timeout, received, state);
+    sp_input_pointer_then(window, x, y, phase, 0, 0, 0, 1, timeout, received, state);
     until(^BOOL { return state->done; });
     return receipt;
 }
@@ -243,7 +243,7 @@ static void checkReceipts(void) {
     [view evaluateJavaScript:@"{const end=Date.now()+1000; while(Date.now()<end){}} null" completionHandler:nil];
     SPTimed late = {NO, SP_INPUT_REJECTED, [NSDate timeIntervalSinceReferenceDate], 0};
     SPTimed *lateState = &late;
-    sp_input_pointer_then(window, 50, 50, 1, 0, 0, 0, 5, timed, lateState);
+    sp_input_pointer_then(window, 50, 50, 1, 0, 0, 0, 1, 5, timed, lateState);
     until(^BOOL { return lateState->done; });
     check(late.result == SP_INPUT_DELIVERED && late.took >= 0.9,
         [NSString stringWithFormat:@"a press completes only after a busy document is free to receive it (%d after %.3fs)", late.result, late.took]);
@@ -253,7 +253,7 @@ static void checkReceipts(void) {
     [view evaluateJavaScript:@"{const end=Date.now()+2500; while(Date.now()<end){}} null" completionHandler:nil];
     SPTimed busy = {NO, SP_INPUT_DELIVERED, [NSDate timeIntervalSinceReferenceDate], 0};
     SPTimed *busyState = &busy;
-    sp_input_pointer_then(window, 50, 50, 1, 0, 0, 0, 0.5, timed, busyState);
+    sp_input_pointer_then(window, 50, 50, 1, 0, 0, 0, 1, 0.5, timed, busyState);
     until(^BOOL { return busyState->done; });
     check(busy.result == SP_INPUT_UNRECEIVED && busy.took >= 0.45 && busy.took < 2,
         [NSString stringWithFormat:@"a press a busy document does not receive in time is reported (%d after %.3fs)", busy.result, busy.took]);
@@ -370,6 +370,54 @@ static void checkIndependentWindowKeys(void) {
     [second close];
     [first release];
     [second release];
+}
+
+// A press and a release carry the click count of a person's click, and the second press of a double click makes the page's dblclick.
+@interface SPClickRecorder : NSView
+@property(nonatomic) NSInteger downCount;
+@property(nonatomic) NSInteger upCount;
+@end
+@implementation SPClickRecorder
+- (void)mouseDown:(NSEvent *)event { self.downCount = event.clickCount; }
+- (void)mouseUp:(NSEvent *)event { self.upCount = event.clickCount; }
+@end
+
+static void checkClickCount(void) {
+    NSWindow *window = [[[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(300, 200))
+        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO] autorelease];
+    [window setReleasedWhenClosed:NO];
+    SPClickRecorder *recorder = [[[SPClickRecorder alloc] initWithFrame:NSMakeRect(0, 0, 300, 200)] autorelease];
+    window.contentView = recorder;
+    [window orderBack:nil];
+    check(sp_input_pointer(window, 20, 20, 1, 0, 0, 0) == SP_INPUT_DELIVERED && sp_input_pointer(window, 20, 20, 3, 0, 0, 0) == SP_INPUT_DELIVERED,
+        @"a click without a count is delivered");
+    check(recorder.downCount == 1 && recorder.upCount == 1, @"a click without a count has the click count 1");
+    check(sp_input_pointer_clicks(window, 20, 20, 1, 0, 2) == SP_INPUT_DELIVERED && sp_input_pointer_clicks(window, 20, 20, 3, 0, 2) == SP_INPUT_DELIVERED,
+        @"a second press with the count 2 is delivered");
+    check(recorder.downCount == 2 && recorder.upCount == 2,
+        [NSString stringWithFormat:@"the press and the release have the click count 2 (got %ld and %ld)", (long)recorder.downCount, (long)recorder.upCount]);
+    recorder.downCount = 0;
+    const int outside[] = {0, -1, SP_INPUT_CLICKS_MAX + 1};
+    for (size_t index = 0; index < sizeof outside / sizeof outside[0]; index++) {
+        check(sp_input_pointer_clicks(window, 20, 20, 1, 0, outside[index]) == SP_INPUT_REJECTED, @"a click count out of range is rejected");
+    }
+    check(recorder.downCount == 0, @"a rejected click count delivers no press");
+    check(sp_input_pointer(window, 20, 20, 1, 0, 0, 0) == SP_INPUT_DELIVERED && sp_input_pointer(window, 20, 20, 3, 0, 0, 0) == SP_INPUT_DELIVERED,
+        @"a rejected click count leaves no press open");
+
+    WKWebView *view = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 300, 200)] autorelease];
+    window.contentView = view;
+    [view loadHTMLString:@"<!doctype html><body style='margin:0;height:200px'><script>window.probe={double:0,detail:0};"
+        "addEventListener('dblclick',e=>{probe.double++;probe.detail=e.detail},true);window.ready=true;</script>" baseURL:nil];
+    until(^BOOL { return [evaluate(view, @"Boolean(window.ready)") boolValue]; });
+    pointerOutside(window);
+    check(sp_input_pointer_clicks(window, 50, 50, 1, 0, 1) == SP_INPUT_DELIVERED && sp_input_pointer_clicks(window, 50, 50, 3, 0, 1) == SP_INPUT_DELIVERED
+        && sp_input_pointer_clicks(window, 50, 50, 1, 0, 2) == SP_INPUT_DELIVERED && sp_input_pointer_clicks(window, 50, 50, 3, 0, 2) == SP_INPUT_DELIVERED,
+        @"the presses of a double click are delivered to the page");
+    until(^BOOL { return [evaluate(view, @"probe.double") unsignedIntegerValue] > 0; });
+    check([evaluate(view, @"probe.double") unsignedIntegerValue] == 1 && [evaluate(view, @"probe.detail") unsignedIntegerValue] == 2,
+        @"the second press with the count 2 makes one dblclick with the detail 2");
+    [window close];
 }
 
 int main(void) { @autoreleasepool {
@@ -531,5 +579,6 @@ int main(void) { @autoreleasepool {
     [window close];
     checkIndependentWindowKeys();
     checkReceipts();
+    checkClickCount();
     return failures ? 1 : 0;
 }}

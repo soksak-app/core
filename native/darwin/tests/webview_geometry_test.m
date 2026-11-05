@@ -270,7 +270,7 @@ static double scrollViewCenter(NSWindow *window, WKWebView *view) {
     [view _doAfterNextPresentationUpdate:^{ shown = YES; }];
     until(^BOOL { return shown; });
     __block sp_input_result result = SP_INPUT_REJECTED;
-    sp_input_pointer_then(window, x, y, 4, 0, 0, 120, 5, scrollDone, &result);
+    sp_input_pointer_then(window, x, y, 4, 0, 0, 120, 1, 5, scrollDone, &result);
     until(^BOOL { return result != SP_INPUT_REJECTED; });
     check(result == SP_INPUT_DELIVERED, @"a 120-point scroll into the view is delivered");
     return scrolledByView(view);
@@ -304,7 +304,7 @@ static double scrollBy(NSWindow *window, WKWebView *surface, BOOL posted) {
     until(^BOOL { return shown; });
     if (!posted) {
         __block sp_input_result result = SP_INPUT_REJECTED;
-        sp_input_pointer_then(window, x, y, 4, 0, 0, 120, 5, scrollDone, &result);
+        sp_input_pointer_then(window, x, y, 4, 0, 0, 120, 1, 5, scrollDone, &result);
         until(^BOOL { return result != SP_INPUT_REJECTED; });
         check(result == SP_INPUT_DELIVERED, @"a scroll into the surface is delivered");
         return scrolledByView(surface);

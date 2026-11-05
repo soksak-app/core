@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F502-29: `input.pointer` takes `clicks` on `down` and `up`, the click count of the event from 1 to 3, so a double click is a real pair of presses on all hosts, in `sok input pointer --clicks` and in the MCP tool. `input.pointer` returns -32602 for a field that it does not name.
 - F502-28: The keyboard of the window follows the focus ring on all hosts: typing right after a new tab, a press on a tab, `core.card.focus` or the opening of a project reaches the active surface of the card with the ring, and a new terminal tab draws a focused cursor because the first focus report of its region waits for its handler.
 - F502-12: Opening a plugin view with a large file no longer leaves that file in the memory of the host. A document response reads and sends a plugin file in chunks of 256 KiB, and a core root answer no longer copies the bytes that it sends.
 - F502-23: `core.project.close` and `core.space.add` of the mygo workbench answer what `exposure.json` declares, and its library draws the project search that `core.library.search.focus` gives the focus to.

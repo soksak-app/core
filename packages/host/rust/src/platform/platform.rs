@@ -172,6 +172,8 @@ pub struct Pointer {
     pub button: i32,
     pub delta_x: f64,
     pub delta_y: f64,
+    /// The click count of the event of a press or a release, from 1 to 3.
+    pub clicks: i32,
     /// Activates the application and makes the window the key window before the move. It is true only when phase is 0.
     pub activate: bool,
 }

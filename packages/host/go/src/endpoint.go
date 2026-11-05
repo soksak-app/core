@@ -95,14 +95,24 @@ type WindowEntry struct {
 }
 
 // PointerInput is the value of input.pointer. Phase is one of move, down, drag, up, and scroll, and
-// Button is left or right. Activate can be true only for move.
+// Button is left or right. Activate can be true only for move. Clicks is the click count of the event of a
+// down or an up, from 1 to pointerClicksMax.
 type PointerInput struct {
 	X, Y           float64
 	Phase          string
 	Button         string
 	DeltaX, DeltaY float64
 	Activate       bool
+	Clicks         int
 }
+
+// pointerClicksMax is the largest click count of input.pointer: a person's triple click.
+const pointerClicksMax = 3
+
+// pointerFields names every field of input.pointer. A field outside it is rejected, so a misspelled or an
+// unsupported field does not deliver a different gesture than the caller asked for.
+var pointerFields = map[string]bool{"window": true, "x": true, "y": true, "phase": true, "button": true,
+	"deltaX": true, "deltaY": true, "activate": true, "clicks": true}
 
 // KeyInput is the value of input.key. Modifiers is a bit sum: 1 Shift, 2 Control, 4 Option, 8 Command.
 type KeyInput struct {
@@ -1190,9 +1200,19 @@ func inputPointer(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, er
 		Button         *string
 		DeltaX, DeltaY float64
 		Activate       bool
+		Clicks         *int
 	}
 	if err := decode(params, &p); err != nil {
 		return nil, err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(params, &fields); err != nil {
+		return nil, rpcError(codeInvalidParams, "%v", err)
+	}
+	for field := range fields {
+		if !pointerFields[field] {
+			return nil, rpcError(codeInvalidParams, "input.pointer has no field %s", field)
+		}
 	}
 	if p.X == nil || p.Y == nil {
 		return nil, rpcError(codeInvalidParams, "x and y are required")
@@ -1210,8 +1230,18 @@ func inputPointer(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, er
 	if p.Activate && p.Phase != "move" {
 		return nil, rpcError(codeInvalidParams, "activate applies only to phase move")
 	}
+	clicks := 1
+	if p.Clicks != nil {
+		if p.Phase != "down" && p.Phase != "up" {
+			return nil, rpcError(codeInvalidParams, "clicks applies only to phase down or up")
+		}
+		if *p.Clicks < 1 || *p.Clicks > pointerClicksMax {
+			return nil, rpcError(codeInvalidParams, "clicks must be from 1 to %d", pointerClicksMax)
+		}
+		clicks = *p.Clicks
+	}
 	return nil, e.backend.Pointer(window, PointerInput{X: *p.X, Y: *p.Y, Phase: p.Phase, Button: button,
-		DeltaX: p.DeltaX, DeltaY: p.DeltaY, Activate: p.Activate})
+		DeltaX: p.DeltaX, DeltaY: p.DeltaY, Activate: p.Activate, Clicks: clicks})
 }
 
 // modifierBits are the modifiers names of input.key and the bits of the native input.

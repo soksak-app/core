@@ -565,7 +565,7 @@ type Platform interface {
 	// phase is 0 for move, 1 for press, 2 for drag, 3 for release and 4 for scroll, and button is 0 for left and 1 for right.
 	// For a press and a release, it calls done on the UI thread after the document at the coordinates received the event or receive seconds passed.
 	// For other phases, it calls done immediately after delivery. held is the state of the rejection when the result is PointerButtonHeld.
-	InjectPointer(window unsafe.Pointer, x, y float64, phase, button int, deltaX, deltaY, receive float64, done func(result PointerResult, held ButtonHeld)) error
+	InjectPointer(window unsafe.Pointer, x, y float64, phase, button int, deltaX, deltaY float64, clicks int, receive float64, done func(result PointerResult, held ButtonHeld)) error
 	// ActivateWindow activates the application and the window. It calls done(nil) on the UI thread after only the web view at the coordinates received the active state,
 	// or calls done with an error that names the stage where it stopped when it does not finish within timeout seconds.
 	// When the coordinates are a native surface, it does not wait for the web view state.

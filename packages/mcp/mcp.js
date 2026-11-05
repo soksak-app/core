@@ -180,6 +180,7 @@ function buildTools(window, exposure) {
           button: { type: "string", enum: ["left", "right"], description: "Defaults to left." },
           deltaX: { type: "number", description: "Scroll distance in points." },
           deltaY: { type: "number", description: "Scroll distance in points." },
+          clicks: { type: "integer", minimum: 1, maximum: 3, description: "Only for down and up: the click count of the event. The second press and release of a double click use 2. Defaults to 1." },
           activate: { type: "boolean", description: "Only for move: activate the application and make the window key first." },
         },
         ["x", "y", "phase"],
@@ -247,7 +248,7 @@ async function callTool(params) {
           value = await c.request("element.act", withWindow(window, args, ["name", "surface", "index", "action", "value", "event"]));
           break;
         case "input_pointer":
-          value = await c.request("input.pointer", withWindow(window, args, ["x", "y", "phase", "button", "deltaX", "deltaY", "activate"]));
+          value = await c.request("input.pointer", withWindow(window, args, ["x", "y", "phase", "button", "deltaX", "deltaY", "clicks", "activate"]));
           break;
         case "input_key":
           value = await c.request("input.key", withWindow(window, args, ["key", "text", "modifiers", "phase"]));

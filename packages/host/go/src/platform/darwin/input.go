@@ -22,9 +22,9 @@ extern void goInputDelivered(void *context, int result, sp_input_held *held);
 static void delivered(void *context, sp_input_result result, const sp_input_held *held) {
     hostRunOnWorker(^{ goInputDelivered(context, (int)result, (sp_input_held *)held); });
 }
-static void injectPointer(void *window, double x, double y, int phase, int button, double deltaX, double deltaY,
+static void injectPointer(void *window, double x, double y, int phase, int button, double deltaX, double deltaY, int clicks,
     double receive, uintptr_t handle) {
-    hostRunOnMain(^{ sp_input_pointer_then(window, x, y, phase, button, deltaX, deltaY, receive, delivered, (void *)handle); });
+    hostRunOnMain(^{ sp_input_pointer_then(window, x, y, phase, button, deltaX, deltaY, clicks, receive, delivered, (void *)handle); });
 }
 
 // Announces whether a view that a press passes through is a surface. For a surface it returns a non-zero value, and the upward
@@ -145,7 +145,7 @@ func (implementation) WatchInput(window unsafe.Pointer, input platform.Input) (u
 }
 
 // InjectPointer delivers input with sp_input_pointer_then of native/darwin. It does not activate the application.
-func (implementation) InjectPointer(window unsafe.Pointer, x, y float64, phase, button int, deltaX, deltaY, receive float64, done func(platform.PointerResult, platform.ButtonHeld)) error {
+func (implementation) InjectPointer(window unsafe.Pointer, x, y float64, phase, button int, deltaX, deltaY float64, clicks int, receive float64, done func(platform.PointerResult, platform.ButtonHeld)) error {
 	pointerSequence.Lock()
 	var once sync.Once
 	serialized := func(result platform.PointerResult, held platform.ButtonHeld) {
@@ -154,7 +154,7 @@ func (implementation) InjectPointer(window unsafe.Pointer, x, y float64, phase, 
 			done(result, held)
 		})
 	}
-	C.injectPointer(window, C.double(x), C.double(y), C.int(phase), C.int(button), C.double(deltaX), C.double(deltaY),
+	C.injectPointer(window, C.double(x), C.double(y), C.int(phase), C.int(button), C.double(deltaX), C.double(deltaY), C.int(clicks),
 		C.double(receive), C.uintptr_t(cgo.NewHandle(serialized)))
 	return nil
 }
