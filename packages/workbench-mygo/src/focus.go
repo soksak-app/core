@@ -50,7 +50,9 @@ type Focus struct {
 	// absent holds the places of the last frame whose elements the window does not show.
 	absent map[elementPlace]bool
 	// reveal is the place that the focus command focused, which the next frame brings into view.
-	reveal    *elementPlace
+	reveal *elementPlace
+	// held holds the places whose elements have had the focus, each of which keeps its own selection.
+	held      map[elementPlace]bool
 	responder Responder
 	views     map[string]*FocusStatus
 	reported  *FocusStatus
@@ -58,7 +60,7 @@ type Focus struct {
 
 // NewFocus makes the focus of a window. changed runs on each change of the status.
 func NewFocus(declared *Declarations, changed func()) *Focus {
-	return &Focus{declared: declared, changed: changed, handles: map[elementPlace]*ui.Handle{}, absent: map[elementPlace]bool{}, responder: Responder{Owner: "workbench"},
+	return &Focus{declared: declared, changed: changed, handles: map[elementPlace]*ui.Handle{}, absent: map[elementPlace]bool{}, held: map[elementPlace]bool{}, responder: Responder{Owner: "workbench"},
 		views: map[string]*FocusStatus{}}
 }
 
@@ -95,9 +97,15 @@ func (f *Focus) Bind(element ui.Element, name string) ui.Element {
 	}
 	f.places = append(f.places, place)
 	if f.reveal != nil && *f.reveal == place {
-		// A focus of a page brings its element into view.
+		// A focus of a page brings its element into view, and selects the text of a field that has not had the focus.
 		element.ScrollIntoView()
+		if !f.held[place] {
+			element.SelectAll()
+		}
 		f.reveal = nil
+	}
+	if element.Focused() {
+		f.held[place] = true
 	}
 	return element.Bind(handle)
 }

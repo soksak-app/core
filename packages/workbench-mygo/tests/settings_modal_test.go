@@ -1041,9 +1041,6 @@ func TestTheSearchOfTheSettingsIsThePillOfThePage(t *testing.T) {
 	if want := inputHeight(t) - 2*plainLength(t, "search-inset"); box.H != want {
 		t.Fatalf("the search is %v high, not %v", box.H, want)
 	}
-	if want := plainLength(t, "search-w"); box.W != want {
-		t.Fatalf("the search is %v wide, not %v", box.W, want)
-	}
 	fill := controlBackground(t)
 	if got := f.pixelOf(box.X+2, box.Y+2); got == fill {
 		t.Fatal("the corner of the search is square")
@@ -1170,6 +1167,123 @@ func TestTheCancelOfTheSearchEmptiesIt(t *testing.T) {
 	}
 	if !f.tester.Focused(node.Label) {
 		t.Fatal("the search lost the focus to its cancel")
+	}
+}
+
+// The column of a row is the free width of the pane, which the border of a theme narrows. The box of a search is that column, and
+// the search lies inside its box.
+func TestTheSearchOfTheSettingsFillsTheColumnOfItsRow(t *testing.T) {
+	f := opened(t)
+	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
+	f.settle()
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	metric := func(name string) float32 {
+		value, _ := declared.Metric(name)
+		return float32(value)
+	}
+	check := func(border float32) {
+		t.Helper()
+		node, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.search", "")
+		if !ok {
+			t.Fatalf("no search in %q", f.tester.Texts())
+		}
+		want := metric("set-card-w") - 2*border - metric("set-nav-w") - 2*metric("set-pane-pad-x") - metric("set-row-name-w") - metric("set-row-gap")
+		if got := node.Bounds.W + 2*plainLength(t, "search-inset"); got != want {
+			t.Fatalf("with a border of %v the box of the search is %v wide, not %v", border, got, want)
+		}
+	}
+	check(1)
+	f.run("core.settings-modal.nav", map[string]string{"section": "general"})
+	f.settle()
+	f.click("core.settings-modal.theme", "theme:solar")
+	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
+	f.settle()
+	check(2)
+}
+
+// The browser empties a search on Escape and keeps it focused, as its input event tells the page. Escape closes no dialog.
+func TestEscapeEmptiesTheSearchOfTheSettings(t *testing.T) {
+	f := opened(t)
+	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
+	f.run("core.settings-modal.search", map[string]string{"query": "term"})
+	f.run("core.focus.set", map[string]any{"name": "core.settings-modal.search", "index": 0})
+	f.settle()
+	node, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.search", "")
+	if !ok {
+		t.Fatalf("no search in %q", f.tester.Texts())
+	}
+	f.tester.Key(0, ui.KeyEscape)
+	f.settle()
+	if got := f.modal().Query; got != "" {
+		t.Fatalf("after Escape the query is %q", got)
+	}
+	if !f.tester.Focused(node.Label) {
+		t.Fatal("Escape took the focus from the search")
+	}
+	f.tester.Key(0, ui.KeyEscape)
+	f.settle()
+	if !f.modal().Open {
+		t.Fatal("Escape closed the settings")
+	}
+}
+
+// The browser selects the text of a field that a script focuses for the first time, so the next key replaces it.
+func TestTheFocusCommandSelectsTheTextOfAFieldNotYetFocused(t *testing.T) {
+	f := opened(t)
+	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
+	f.run("core.settings-modal.search", map[string]string{"query": "term"})
+	f.settle()
+	f.run("core.focus.set", map[string]any{"name": "core.settings-modal.search", "index": 0})
+	f.settle()
+	f.tester.Type("x")
+	f.settle()
+	if got := f.modal().Query; got != "x" {
+		t.Fatalf("the key after the focus made the query %q", got)
+	}
+}
+
+// The browser gives a field that had the focus its own selection back when a script focuses it again.
+func TestTheFocusCommandKeepsTheSelectionOfAFieldThatHadTheFocus(t *testing.T) {
+	f := opened(t)
+	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
+	f.run("core.settings-modal.search", map[string]string{"query": "term"})
+	f.settle()
+	f.run("core.focus.set", map[string]any{"name": "core.settings-modal.search", "index": 0})
+	f.settle()
+	f.tester.Key(0, ui.KeyEnd)
+	f.settle()
+	f.run("core.focus.set", map[string]any{"name": "core.settings-modal.manage", "index": 0})
+	f.settle()
+	f.run("core.focus.set", map[string]any{"name": "core.settings-modal.search", "index": 0})
+	f.settle()
+	f.tester.Type("x")
+	f.settle()
+	if got := f.modal().Query; got != "termx" {
+		t.Fatalf("the key after the second focus made the query %q", got)
+	}
+}
+
+// Tab selects the text of the field it reaches, whatever selection that field had.
+func TestTabSelectsTheTextOfTheSearchItReaches(t *testing.T) {
+	f := opened(t)
+	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
+	f.run("core.settings-modal.search", map[string]string{"query": "term"})
+	f.settle()
+	f.run("core.focus.set", map[string]any{"name": "core.settings-modal.search", "index": 0})
+	f.settle()
+	f.tester.Key(0, ui.KeyEnd)
+	f.settle()
+	f.run("core.focus.set", map[string]any{"name": "core.settings-modal.manage", "index": 0})
+	f.settle()
+	f.tester.Key(0, ui.KeyTab)
+	f.settle()
+	f.tester.Type("x")
+	f.settle()
+	if got := f.modal().Query; got != "x" {
+		t.Fatalf("the key after Tab made the query %q", got)
 	}
 }
 

@@ -26,10 +26,10 @@ type PlainControls struct {
 	Focus ui.Color
 	// The search: an input of type search, whose magnifier and cancel the browser draws in colors of their own, whatever the color
 	// of the text is. Inset lies between its box and its pill.
-	SearchIcon, SearchCancel                                                      ui.Color
-	SearchW, SearchInset, SearchTextX, SearchTextEnd, SearchIconX, SearchIconSize float32
-	SearchCancelSize, SearchCancelEnd                                             float32
-	Magnifier, Cross                                                              *ui.SVG
+	SearchIcon, SearchCancel                                             ui.Color
+	SearchInset, SearchTextX, SearchTextEnd, SearchIconX, SearchIconSize float32
+	SearchCancelSize, SearchCancelEnd                                    float32
+	Magnifier, Cross                                                     *ui.SVG
 }
 
 // plainControls reads the look from the declaration.
@@ -56,7 +56,7 @@ func (s *Shell) plainControls() PlainControls {
 		SelectRadius: metric("select-r"), Halo: metric("select-halo"), ArrowsW: metric("select-arrows-w"), ArrowsH: metric("select-arrows-h"), ArrowsEnd: metric("select-arrows-end"),
 		PanelGap: chrome("space-1"), PanelRadius: s.radiusSmall(), PanelEdgeW: s.palette.BorderWidth,
 		RingW: metric("ring-w"), Focus: s.palette.Focus, SearchIcon: color("search-icon"), SearchCancel: color("search-cancel"),
-		SearchW: metric("search-w"), SearchInset: metric("search-inset"), SearchTextX: metric("search-text-x"), SearchTextEnd: metric("search-text-end"),
+		SearchInset: metric("search-inset"), SearchTextX: metric("search-text-x"), SearchTextEnd: metric("search-text-end"),
 		SearchIconX: metric("search-icon-x"), SearchIconSize: metric("search-icon-size"), SearchCancelSize: metric("search-cancel-size"), SearchCancelEnd: metric("search-cancel-end"),
 		Magnifier: s.declaredIcon("0 0 13 13", fmt.Sprintf(stroke, "1.25"), declared.Icons["control-search"]),
 		Cross:     s.declaredIcon("0 0 13 13", fmt.Sprintf(stroke, "1.1"), declared.Icons["control-search-cancel"]),
@@ -102,7 +102,7 @@ func (p PlainControls) search(c *ui.Context, field ui.Element) ui.Element {
 	focused, ring := field.Focused(), p.ringColor(c)
 	height := p.Height - 2*p.SearchInset
 	padY := p.PadY + p.EdgeW - p.SearchInset
-	return field.Width(p.SearchW).Height(height).Margin(p.SearchInset).Padding(padY, p.SearchTextEnd, padY, p.SearchTextX).Radius(height / 2).Background(p.Background).
+	return field.FillWidth().Height(height).Padding(padY, p.SearchTextEnd, padY, p.SearchTextX).Radius(height / 2).Background(p.Background).
 		TextColor(p.Fg).PlaceholderColor(p.Placeholder).FontSize(p.Size).DrawOver(func(painter *ui.Painter, box ui.Rect) {
 		painter.Icon(p.Magnifier, ui.Rect{X: box.X + p.SearchIconX, Y: box.Y + (box.H-p.SearchIconSize)/2, W: p.SearchIconSize, H: p.SearchIconSize}, p.SearchIcon)
 		if focused {
@@ -110,6 +110,12 @@ func (p PlainControls) search(c *ui.Context, field ui.Element) ui.Element {
 			p.ring(painter, ui.Rect{X: box.X - inset, Y: box.Y - inset, W: box.W + 2*inset, H: box.H + 2*inset}, height/2+inset, ring)
 		}
 	})
+}
+
+// searchBox is the box of a search, which takes the free width of its row as the input does in its grid column. The search lies
+// inside it by the inset.
+func (p PlainControls) searchBox(c *ui.Context) ui.Element {
+	return ui.Box(c).Grow(1).Basis(0).Padding(p.SearchInset)
 }
 
 // drawSearchCancel draws the cancel of a search with a text, and reports its press. It takes no focus, as that of the browser.

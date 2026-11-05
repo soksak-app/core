@@ -461,13 +461,14 @@ func (s *Shell) drawTextControl(c *ui.Context, control *SettingsControl) {
 // drawSearchControl draws the search, which runs its command for each change and has the cancel of the browser while it has a text.
 func (s *Shell) drawSearchControl(c *ui.Context, control *SettingsControl) {
 	plain, value := s.plainControls(), *control.Value
-	ui.Box(c).Children(func() {
+	plain.searchBox(c).Children(func() {
 		s.binder.Control(c, control.Name, control.Command.Name, control.item())
 		field := plain.search(c, s.binder.Bound(ui.TextInputBase(c, &value), control.Name)).Label(control.item()).Placeholder(control.Label)
 		if field.Changed() {
 			s.runControl(control, value)
 		}
-		if value != "" && plain.drawSearchCancel(c) {
+		// The browser empties a search on Escape as its cancel does. An empty search leaves the key to the window.
+		if value != "" && (plain.drawSearchCancel(c) || field.Shortcut(0, ui.KeyEscape)) {
 			s.runControl(control, "")
 		}
 	})
