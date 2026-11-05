@@ -568,3 +568,74 @@ func TestALongStatusKeepsTheFootOfItsCard(t *testing.T) {
 		}
 	}
 }
+
+// tool reads a tool of the head of card from core.grid.
+func (f *shellFixture) tool(t *testing.T, card, key string) (enabled bool, title string) {
+	t.Helper()
+	for _, read := range status[gridRead](t, f, "core.grid").Cards {
+		if read.ID == card {
+			tool, ok := read.Acts[key].(map[string]any)
+			if !ok {
+				t.Fatalf("card %s has no tool %s: %v", card, key, read.Acts)
+			}
+			return tool["enabled"].(bool), tool["title"].(string)
+		}
+	}
+	t.Fatalf("no card %s", card)
+	return false, ""
+}
+
+func TestTheToolsOfAHeadFollowWhatTheCardCanDo(t *testing.T) {
+	const held = "전체 화면에서는 배치를 바꾸지 않는다 — 먼저 카드 배치를 복원한다"
+	f := narrowCard(t, 1, "a")
+	f.run("core.card.close", map[string]string{"card": "other"})
+	f.settle()
+	// The last card of the plane has no neighbor that fills its place.
+	if enabled, title := f.tool(t, "main", "close"); enabled || title != "닫을 수 없다 — 어느 이웃도 이 위치를 빈틈없이 못 메운다" {
+		t.Fatalf("the close tool of the last card is %v %q", enabled, title)
+	}
+	node, ok := exposedNode(f.tester.ElementTree(), "core.card.close", "main")
+	if !ok || node.Actions&ui.ActionPress != 0 {
+		t.Fatalf("the close tool of the last card takes a press: %+v", node)
+	}
+	if enabled, title := f.tool(t, "main", "split-x"); !enabled || title != "세로선으로 쪼개기 — 좌우로 나뉜다" {
+		t.Fatalf("the split tool is %v %q", enabled, title)
+	}
+
+	f.click("core.card.fullscreen", "main")
+	for _, key := range []string{"add", "split-x", "split-y", "close"} {
+		if enabled, title := f.tool(t, "main", key); enabled || title != held {
+			t.Fatalf("the tool %s of a fullscreen card is %v %q", key, enabled, title)
+		}
+	}
+	if enabled, title := f.tool(t, "main", "fullscreen"); !enabled || title != "카드 배치 복원" {
+		t.Fatalf("the fullscreen tool is %v %q", enabled, title)
+	}
+}
+
+// A card that is too narrow to cut across stays open to a cut along it, and its tool menu leaves out what it cannot do.
+func TestATooNarrowCardCannotSplitAndItsMenuHoldsWhatItCan(t *testing.T) {
+	f := projectWithPlugins(t)
+	card := f.tabbedCards()[0]
+	refused := false
+	for range 12 {
+		if _, err := f.answer("core.card.split", map[string]string{"card": card, "side": "right", "plugin": "acme"}); err != nil {
+			refused = true
+			break
+		}
+	}
+	if !refused {
+		t.Fatal("the card never stopped splitting")
+	}
+	if enabled, _ := f.tool(t, card, "split-x"); enabled {
+		t.Fatal("the split tool of a card that does not split is enabled")
+	}
+	if enabled, _ := f.tool(t, card, "split-y"); !enabled {
+		t.Fatal("the card cannot split along its height")
+	}
+	f.click("core.card.tools", card)
+	keys := f.menu().keys()
+	if slices.Contains(keys, "x") || !slices.Contains(keys, "y") || !slices.Contains(keys, "fullscreen") {
+		t.Fatalf("the tool menu holds %q", keys)
+	}
+}

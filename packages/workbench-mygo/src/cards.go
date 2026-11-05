@@ -293,27 +293,58 @@ func (s *Shell) drawTab(c *ui.Context, tab layout.Tab, on bool, size, width floa
 	})
 }
 
-// drawTools draws the tools of a card, in the order of the page. A full screen card keeps the layout, so the tools that change it wait
-// for the restore.
-func (s *Shell) drawTools(c *ui.Context, id string) {
+// headTool is a tool of a card head with its state, as updateCardTools of the page sets it. Do is its key in the tool menu, Status its key
+// in core.grid, and Name its element.
+type headTool struct {
+	Do, Status, Name, Command string
+	Params                    any
+	Title, Icon               string
+	Enabled, Pressed          bool
+}
+
+// headTools returns the tools of the card id in the order of the page. A full screen card keeps the layout, so the tools that change it
+// wait for the restore.
+func (s *Shell) headTools(id string) []headTool {
 	fullscreen := s.fullscreen == id
 	const held = "전체 화면에서는 배치를 바꾸지 않는다 — 먼저 카드 배치를 복원한다"
-	tool := func(name, command string, params any, title, icon string) {
+	changes := func(tool headTool, can bool) headTool {
+		tool.Enabled = !fullscreen && can
 		if fullscreen {
-			title = held
+			tool.Title = held
 		}
-		s.headButton(c, name, command, id, params, title, s.headIcon(icon, false), !fullscreen)
+		return tool
 	}
-	tool("core.card.add", "core.card.menu", menuParam{Card: id, Menu: "add"}, "이 카드에 탭 추가 — 무엇을 띄울지 묻는다", "card-add")
-	tool("core.card.split-x", "core.card.menu", menuParam{Card: id, Menu: "split-x"}, "세로선으로 쪼개기 — 좌우로 나뉜다", "card-split-x")
-	tool("core.card.split-y", "core.card.menu", menuParam{Card: id, Menu: "split-y"}, "가로선으로 쪼개기 — 위아래로 나뉜다", "card-split-y")
-	title, icon := "카드 전체 화면", "card-expand"
+	closing := headTool{Do: "close", Status: "close", Name: "core.card.close", Command: "core.card.close", Params: cardParam{Card: id},
+		Title: "이 카드를 닫는다 — 안의 탭이 몇 개든 함께 간다", Icon: "card-close"}
+	canClose := s.plane.CanClose(id)
+	if !canClose {
+		closing.Title = "닫을 수 없다 — 어느 이웃도 이 위치를 빈틈없이 못 메운다"
+	}
+	whole := headTool{Do: "fullscreen", Status: "fullscreen", Name: "core.card.fullscreen", Command: "core.card.fullscreen", Params: cardParam{Card: id},
+		Title: "카드 전체 화면", Icon: "card-expand", Enabled: true, Pressed: fullscreen}
 	if fullscreen {
-		title, icon = "카드 배치 복원", "card-restore"
+		whole.Title, whole.Icon = "카드 배치 복원", "card-restore"
 	}
-	button := s.headButton(c, "core.card.fullscreen", "core.card.fullscreen", id, cardParam{Card: id}, title, s.headIcon(icon, false), true)
-	button.Checked(fullscreen)
-	tool("core.card.close", "core.card.close", cardParam{Card: id}, "이 카드를 닫는다 — 안의 탭이 몇 개든 함께 간다", "card-close")
+	return []headTool{
+		changes(headTool{Do: "add", Status: "add", Name: "core.card.add", Command: "core.card.menu", Params: menuParam{Card: id, Menu: "add"},
+			Title: "이 카드에 탭 추가 — 무엇을 띄울지 묻는다", Icon: "card-add"}, true),
+		changes(headTool{Do: "x", Status: "split-x", Name: "core.card.split-x", Command: "core.card.menu", Params: menuParam{Card: id, Menu: "split-x"},
+			Title: "세로선으로 쪼개기 — 좌우로 나뉜다", Icon: "card-split-x"}, s.plane.CanSplit(id, "x")),
+		changes(headTool{Do: "y", Status: "split-y", Name: "core.card.split-y", Command: "core.card.menu", Params: menuParam{Card: id, Menu: "split-y"},
+			Title: "가로선으로 쪼개기 — 위아래로 나뉜다", Icon: "card-split-y"}, s.plane.CanSplit(id, "y")),
+		whole,
+		changes(closing, canClose),
+	}
+}
+
+// drawTools draws the tools of a card.
+func (s *Shell) drawTools(c *ui.Context, id string) {
+	for _, tool := range s.headTools(id) {
+		button := s.headButton(c, tool.Name, tool.Command, id, tool.Params, tool.Title, s.headIcon(tool.Icon, false), tool.Enabled)
+		if tool.Do == "fullscreen" {
+			button.Checked(tool.Pressed)
+		}
+	}
 }
 
 // headButton draws a button of a card head with an icon.
@@ -348,15 +379,19 @@ func (s *Shell) headIconColor(button ui.Element) ui.Color {
 	return s.palette.Muted
 }
 
-// headIcon returns the declared icon name of a 16 point viewBox, drawn in strokes or, with filled, in the text color. The half of a
-// split icon is a filled part of its strokes.
+// headIcon returns the declared icon name of a 16 point viewBox, drawn in strokes or, with filled, in the text color.
 func (s *Shell) headIcon(name string, filled bool) *ui.SVG {
 	paint := fmt.Sprintf(`fill="none" stroke="currentColor" stroke-width="%g"`, s.metrics.iconStroke)
 	if filled {
 		paint = `fill="currentColor" stroke="none"`
 	}
+	return s.declaredIcon("0 0 16 16", paint, s.headIconElements(name))
+}
+
+// headIconElements returns the SVG elements of the declared icon name. The half of a split icon is a filled part of its strokes.
+func (s *Shell) headIconElements(name string) string {
 	half := fmt.Sprintf(`fill="currentColor" stroke="none" opacity="%g"`, s.metrics.cardActHalfOpacity)
-	return s.declaredIcon("0 0 16 16", paint, strings.ReplaceAll(s.options.Declared.Icons[name], `class="half"`, half))
+	return strings.ReplaceAll(s.options.Declared.Icons[name], `class="half"`, half)
 }
 
 // panelIcon returns the declared icon of a side of a card, on the 24 point viewBox of the icon table of the page.

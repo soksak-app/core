@@ -66,15 +66,6 @@ type cardTool struct {
 	Title   string `json:"title"`
 }
 
-// cardToolTitles are the titles of the tools of a card head, by their key in core.grid.
-var cardToolTitles = map[string]string{
-	"add":        "이 카드에 탭 추가 — 무엇을 띄울지 묻는다",
-	"split-x":    "세로선으로 쪼개기 — 좌우로 나뉜다",
-	"split-y":    "가로선으로 쪼개기 — 위아래로 나뉜다",
-	"fullscreen": "카드 전체 화면",
-	"close":      "이 카드를 닫는다 — 안의 탭이 몇 개든 함께 간다",
-}
-
 // railStatus is the value of the status core.rail.
 type railStatus struct {
 	Path      string       `json:"path"`
@@ -171,8 +162,8 @@ func (s *Shell) cardActs(id string) map[string]any {
 		return nil
 	}
 	acts := map[string]any{"fit": fit.Fit, "tools": fit.Tools}
-	for key, title := range cardToolTitles {
-		acts[key] = cardTool{Enabled: true, Hidden: fit.Tools != "bar", Title: title}
+	for _, tool := range s.headTools(id) {
+		acts[tool.Status] = cardTool{Enabled: tool.Enabled, Hidden: fit.Tools != "bar", Title: tool.Title}
 	}
 	return acts
 }
