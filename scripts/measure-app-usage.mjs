@@ -951,13 +951,16 @@ export async function measureApps({
   const ended = new Set();
   // A process whose footprint cannot be read is reported once, whatever the number of readings.
   const failures = new Set();
+  // A process of no application whose footprint cannot be read is judged by the process table at the end of the measurement: footprint
+  // stops finding a process that ends before the process table drops it.
+  const unread = new Map();
   const footprintOf = async ({ row, where }) => {
     if (ended.has(row.pid)) return null;
     try {
       return await readFootprint(row.pid, run);
     } catch (error) {
-      if (foreign.has(row.pid) && !(await readCpu()).has(row.pid)) ended.add(row.pid);
-      else failures.add(`${where}: ${error.message}`);
+      if (!foreign.has(row.pid)) failures.add(`${where}: ${error.message}`);
+      else if (!unread.has(row.pid)) unread.set(row.pid, `${where}: ${error.message}`);
       return null;
     }
   };
@@ -1016,6 +1019,13 @@ export async function measureApps({
   }
   for (const entry of measured) {
     entry.row.peakBytes = (await footprintOf(entry))?.peakBytes ?? null;
+  }
+  if (unread.size > 0) {
+    const last = await readCpu();
+    for (const [pid, failure] of unread) {
+      if (last.has(pid)) failures.add(failure);
+      else ended.add(pid);
+    }
   }
   errors.push(...failures);
   const remaining = unattributed.filter(({ pid }) => !ended.has(pid));

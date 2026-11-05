@@ -876,6 +876,14 @@ test("measureApps leaves out a process of no application that ended before its f
   assert.deepEqual(result.unattributed.rows, []);
 });
 
+test("measureApps leaves out a process of no application whose footprint fails while it ends", async () => {
+  // footprint no longer finds the process while the two cpu reads still list it; the read of the process table at the end does not.
+  const result = await measureForeign(foreignProcesses({ footprintFails: () => true, foreignCpu: (read) => read <= 2 }));
+  assert.deepEqual(result.errors, []);
+  assert.deepEqual(result.unattributed.rows, []);
+  assert.deepEqual(result.apps[0].rows.map(({ pid }) => pid), [10, 11, 902, 300]);
+});
+
 test("measureApps reports a process of no application that runs and has no footprint", async () => {
   const result = await measureForeign(foreignProcesses({ footprintFails: () => true, foreignCpu: () => true }));
   assert.equal(result.errors.length, 1);

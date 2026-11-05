@@ -1333,6 +1333,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F630",
+    implementation: [
+      { file: "scripts/measure-app-usage.mjs", symbol: "const unread = new Map();" },
+    ],
+    tests: [
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "measureApps leaves out a process of no application whose footprint fails while it ends" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "measureApps reports a process of no application that runs and has no footprint" },
+    ],
+    expected: "A process of no application whose footprint cannot be read leaves the measurement when the process table at its end no longer lists it, and fails it while that table lists it.",
+    levels: ["unit"],
+  },
+  {
     id: "F625",
     implementation: [
       { file: "scripts/benchmark-b3.mjs", symbol: '  if (needsPermission.length > 0 && !accessibility()) {' },
