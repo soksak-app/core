@@ -1199,6 +1199,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F590",
+    implementation: [
+      { file: "scripts/measure-app-usage.mjs", symbol: "export const COUNT_WAIT_MS = 62000;" },
+      { file: "scripts/measure-app-usage.mjs", symbol: "export function recordsOver(before, after) {" },
+    ],
+    tests: [
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "measureApps waits for the counts after the marks and before the first cpu reading, and counts the records over the interval" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the wait for the counts is longer than the time a count of the gate waits for a write" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the records of the interval are the lines that the event logs gained, in a file that appeared as well" },
+    ],
+    expected: "The idle measurement starts its CPU interval after the counts of the preparation are written and reports the records of the interval.",
+    levels: ["unit"],
+  },
+  {
     id: "F535-3",
     implementation: [
       { file: "packages/sok/go/src/event_log.go", symbol: "func (l *EventLog) rouseForCount() {" },

@@ -53,7 +53,7 @@
 //   node scripts/measure-app-usage.mjs --sok PATH --config-dir DIR [--config-dir DIR ...] --trace 0|1|frame-records [--interval SECONDS]
 //     [--state S0|S0b|S1|S9|S11|S12|S14|S15] [--idle] [--step pointer] [--b3-out FILE] [--json]
 import { execFile } from "node:child_process";
-import { mkdirSync, readFileSync, realpathSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { createServer } from "node:http";
 import { basename, isAbsolute, join, posix } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -321,6 +321,31 @@ export async function untilFramesQuiet({ frames, sleep = delay, intervals = QUIE
     previous = current;
   }
   throw new Error(`untilFramesQuiet needs at least 1 interval, not ${intervals}`);
+}
+
+/**
+ * The milliseconds of the wait of --idle between the last request and the first CPU reading. A request is an event that the gate of the
+ * default policy counts, and a count waits for at most a minute before a writer that sleeps writes it (docs/spec/logging.md#policy). No status
+ * announces the end of that wait, and asking would count again, so the wait is the time itself with the time the writer takes to wake.
+ * Those writes belong to the preparation and are no cost of the settled state.
+ */
+export const COUNT_WAIT_MS = 62000;
+
+/** The number of lines of each event log of the configuration folder, which it reads without a request to the application. */
+export function logLineCounts(configDir) {
+  const logs = join(configDir, "logs");
+  const counts = new Map();
+  for (const name of readdirSync(logs)) {
+    if (name.endsWith(".jsonl")) counts.set(name, readFileSync(join(logs, name), "utf8").split("\n").length - 1);
+  }
+  return counts;
+}
+
+/** The lines that the event logs gained between two readings of logLineCounts. */
+export function recordsOver(before, after) {
+  let gained = 0;
+  for (const [name, lines] of after) gained += lines - (before.get(name) ?? 0);
+  return gained;
 }
 
 /** The tabs whose plugin exposes a cursor status `<plugin>.cursor` with its idle timeout: the term and terminal tabs. */
@@ -632,7 +657,7 @@ function formatMarks(when, marks) {
   ]).join("\n");
 }
 
-function formatReport({ options, context, measurement, gesture, faultLines, idle }) {
+function formatReport({ options, context, measurement, gesture, faultLines, idle, recordsOverCpu }) {
   const sections = [`state ${options.state ?? "none"}, trace ${options.trace}, idle ${options.idle ? 1 : 0}, step ${options.step ?? "none"}`];
   if (context?.exited) {
     sections.push([`exited webcontent processes: ${context.exited.join(", ") || "none"}`,
@@ -648,6 +673,7 @@ function formatReport({ options, context, measurement, gesture, faultLines, idle
     if (lines.length > 0) sections.push(lines.join("\n"));
   }
   if (faultLines !== undefined) sections.push(`error lines of the layout fault: ${faultLines}`);
+  if (recordsOverCpu !== undefined) sections.push(`records written over the cpu interval: ${recordsOverCpu}`);
   if (gesture !== undefined) {
     sections.push(gesture === null
       ? "pointer move under the trace state of the frame records: the window has a main page and no U7 records"
@@ -891,7 +917,7 @@ async function windowStatuses(configDir, sok, errors, text) {
  * realpath(path) are the process executor, the timer and the real path, which the tests replace.
  */
 export async function measureApps({
-  sok, configDirs, interval, footprints = "settled", settleAfter = false, span, marks,
+  sok, configDirs, interval, footprints = "settled", settleAfter = false, span, marks, beforeCpu, afterCpu,
   run = execute, sleep = delay, realpath = realpathSync,
 }) {
   if (footprints !== "settled" && footprints !== "at-once") throw new Error(`footprints must be settled or at-once, not ${JSON.stringify(footprints)}`);
@@ -948,12 +974,14 @@ export async function measureApps({
   for (const { row } of measured) row.bytes = first.footprints.get(row.pid) ?? null;
 
   const before = marks ? await marks.before() : undefined;
+  if (beforeCpu) await beforeCpu();
   const cpuBefore = await readCpu();
   const started = performance.now();
   if (span) await span();
   // The fixed sampling interval is the measurement itself; no status notification marks the end of a CPU interval.
   else await sleep(interval * 1000);
   const cpuAfter = await readCpu();
+  if (afterCpu) await afterCpu();
   const elapsed = span ? (performance.now() - started) / 1000 : interval;
   const after = marks ? await marks.after() : undefined;
   for (const { row, where } of measured) {
@@ -1105,8 +1133,19 @@ async function measureOptions(options) {
     };
     for (const mark of await marksOf()) requireOcclusion(state, mark.windows);
     const idleResult = idle ? await waitIdle({ sessions: windowSessions, frames, sleep: delay }) : null;
+    let lines;
+    let recordsOverCpu;
+    const settled = !idle ? {} : {
+      beforeCpu: async () => {
+        await delay(COUNT_WAIT_MS);
+        lines = configDirs.map(logLineCounts);
+      },
+      afterCpu: async () => {
+        recordsOverCpu = configDirs.reduce((sum, configDir, index) => sum + recordsOver(lines[index], logLineCounts(configDir)), 0);
+      },
+    };
     const measure = (extra) => measureApps({
-      sok, configDirs, interval, footprints: context?.footprints ?? "settled", marks: { before: marksOf, after: marksOf }, ...extra,
+      sok, configDirs, interval, footprints: context?.footprints ?? "settled", marks: { before: marksOf, after: marksOf }, ...settled, ...extra,
     });
     let measurement;
     let gesture;
@@ -1146,7 +1185,7 @@ async function measureOptions(options) {
       await sessions[0].s.request("diagnostics.log.flush");
       faultLines = faultErrorCount(readEventErrors(sessions[0].configDir, context.faultLog).errors);
     }
-    return { options, context, measurement, gesture, faultLines, errors, idle: idleResult };
+    return { options, context, measurement, gesture, faultLines, errors, idle: idleResult, recordsOverCpu };
   } finally {
     for (const cleanup of cleanups.reverse()) await cleanup();
   }
