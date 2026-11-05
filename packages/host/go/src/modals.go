@@ -6,6 +6,7 @@
 package host
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -391,7 +392,32 @@ func (s *Surfaces) rendered(id string) {
 func (s *Surfaces) dialog() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.modal != nil && s.modal.content.Mode == "dialog"
+	return s.workbenchDialog || s.modal != nil && s.modal.content.Mode == "dialog"
+}
+
+// SetDialogBackground tells whether a dialog that the workbench draws itself is open, which blurs the documents as a modal web view
+// of the mode dialog does. The mygo host calls it (docs/spec/hosts.md#native-views).
+func (h *Host) SetDialogBackground(ctx context.Context, enabledJSON json.RawMessage) error {
+	enabled, err := argument[bool]("enabled", enabledJSON)
+	if err != nil {
+		return err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	s.setWorkbenchDialog(enabled)
+	return nil
+}
+
+// setWorkbenchDialog records whether a dialog that the workbench draws itself is open and blurs the documents to match.
+func (s *Surfaces) setWorkbenchDialog(enabled bool) {
+	s.mu.Lock()
+	s.workbenchDialog = enabled
+	s.mu.Unlock()
+	s.invoke(func() {
+		s.setDocumentsBackground(enabled)
+	})
 }
 
 // setBackground tells the main document and the surface documents whether a dialog is open.

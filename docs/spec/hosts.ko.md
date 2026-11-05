@@ -515,7 +515,7 @@ host는 요청을 [relay](exposure.ko.md#전달)의 event `exposure-request`로 
 - 창에는 다시 불러올 page가 없다. 창의 다시 불러오기(`host.window.reload`, `plugins-changed`, `core.plugins.apply`)는 창의 workbench를 끝내고 다시 만든 뒤 main page의 시작을 실행한다. 그래서 host는 이전 page를 떠나듯 이전 workbench를 떠나고, 새 workbench는 새 `start`를 받는다.
 - window마다 container 하나를 두면 각 geometry의 배치자가 하나로 유지된다: layout transaction은 모든 surface host를 window의 content 좌표에 배치하고, `native/darwin`은 그 frame을 적용할 때 container의 좌표로 변환하므로(`webview_geometry.m`, `webviewSetFrame`), mygo가 같은 frame에서 옮긴 holder가 있다면 host를 잘못된 곳에 두게 된다.
 - **Image region**은 lease된 IOSurface를 가진 `image_region.m`의 `CALayer`를 유지하므로, lease의 in-use 규칙, color 처리, frame identity가 세 host에 대해 하나의 구현으로 남고, mygo renderer는 terminal frame을 위해 frame을 그리지 않는다. IOSurface를 Metal texture로 import하는 방식은 기각한다: 그러면 mygo renderer가 각 terminal frame을 upload하고 그것을 위한 frame을 그리며, lease 규칙이 framework 안으로 옮겨진다.
-- **Modal**(settings window, menu, dialog)은 native UI이며, mygo host는 native modal web view를 만들지 않는다.
+- **Modal**(settings window, menu, dialog)은 native UI이며, mygo host는 native modal web view를 만들지 않는다. Dialog가 열린 동안 workbench는 자신을 3 point blur한 위에 50% opacity의 검정을 그리고, host call `setDialogBackground`는 host가 mode `dialog`의 modal web view일 때처럼 각 document web view를 blur하게 한다([region](native-surfaces.ko.md#영역)).
 
 ### Framework 변경
 

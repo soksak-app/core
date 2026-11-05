@@ -42,6 +42,7 @@ func hostCalls(h *host.Host) map[string]HostCall {
 		"waitPresented":            readOf(h.WaitPresented),
 		"setTheme":                 doneOf(h.SetTheme),
 		"setMenuLanguage":          doneOf(h.SetMenuLanguage),
+		"setDialogBackground":      doneOf(h.SetDialogBackground),
 		"theme":                    readOf(h.Theme),
 		"windowControls":           readOf(h.WindowControls),
 		"exposureReply":            doneOf(h.ExposureReply),

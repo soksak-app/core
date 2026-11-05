@@ -44,9 +44,11 @@ func (s *Shell) drawSettings(c *ui.Context, width, height float32) {
 	pane := s.readSettingsPane()
 	ui.Overlay(c, func() {
 		scrim := s.exposedBox(c, "core.settings-modal.scrim", "", "")
-		scrim.Absolute().Left(0).Top(0).Size(width, height).Modal().Role(ui.RoleGroup).Label("core.settings-modal.scrim")
+		scrim.Absolute().Left(0).Top(0).Size(width, height).Background(dialogScrim).Modal().Role(ui.RoleGroup).Label("core.settings-modal.scrim")
 		scrim.Children(func() {
 			card := s.exposedBox(c, "core.settings-modal.card", "", "")
+			// The card takes the focus of the dialog, so a key presses no control before Tab or a press reaches one.
+			card.Focusable().FocusRing(false)
 			card.Absolute().Left(float32(x)).Top(float32(y)).Size(float32(cardW), float32(cardH)).Column().Background(s.palette.Card).
 				Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.palette.Radius).Clip().Role(ui.RoleDialog).Label(settingsName).Children(func() {
 				s.drawSettingsHead(c, model, float32(cardW), pane)

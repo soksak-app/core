@@ -181,8 +181,10 @@ type surfaceState struct {
 	// drawn holds the tabs that the current frame seats, with their boxes in window coordinates.
 	drawn map[string]layout.Rect
 	// seated holds the section surfaces of the sidebars of the current frame, and planeDrawn tells that the frame drew a plane.
-	seated     map[string]bool
-	planeDrawn bool
+	seated map[string]bool
+	// behindDialog are the native views of the frame that wait to draw over the blurred workbench.
+	behindDialog []viewBehindDialog
+	planeDrawn   bool
 	// placed is the lines of the last request, and running tells that a placement has not finished.
 	placed  []surfaceLine
 	running bool
@@ -331,8 +333,30 @@ func (s *Shell) standSurface(c *ui.Context, surface *heldSurface, box layout.Rec
 	s.holdSurface(surface)
 	if view, key, ok := s.options.Element(id); ok {
 		// A web page paints whole points only: past them a fractional view shows the window, and here the card shows instead.
-		ui.NativeView(c, view, key).Size(float32(math.Floor(box.W)), float32(math.Floor(box.H)))
+		width, height := float32(math.Floor(box.W)), float32(math.Floor(box.H))
+		if s.dialogOpen() {
+			// A hole paints only outside a blurred element, so the view stands over the blurred workbench in the same place.
+			ui.Spacer(c).Size(width, height)
+			s.surfaces.behindDialog = append(s.surfaces.behindDialog, viewBehindDialog{view, key, box, width, height})
+			return
+		}
+		ui.NativeView(c, view, key).Size(width, height)
 	}
+}
+
+// viewBehindDialog is a native view that the frame draws over the blurred workbench while a dialog is open.
+type viewBehindDialog struct {
+	view, key     uintptr
+	box           layout.Rect
+	width, height float32
+}
+
+// drawViewsBehindDialog draws the native views that the blurred workbench holds, each over its place.
+func (s *Shell) drawViewsBehindDialog(c *ui.Context) {
+	for _, behind := range s.surfaces.behindDialog {
+		ui.NativeView(c, behind.view, behind.key).Absolute().Left(float32(behind.box.X)).Top(float32(behind.box.Y)).Size(behind.width, behind.height)
+	}
+	s.surfaces.behindDialog = s.surfaces.behindDialog[:0]
 }
 
 // forgetUnseated forgets the section surfaces that no sidebar of the frame holds: a section lives while a drawn set holds it. Only a

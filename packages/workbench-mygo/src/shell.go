@@ -271,6 +271,8 @@ type Shell struct {
 
 	picker picker
 	icons  map[string]*ui.SVG
+	// backgroundTold is the value that the host last received of the background of a dialog.
+	backgroundTold bool
 	// windowSidebars holds the widths of the fixed sidebars of the shown space, which outlive their columns.
 	windowSidebars map[string]layout.WindowSidebar
 
@@ -607,7 +609,11 @@ func (s *Shell) View(c *ui.Context) {
 	theme.Font = s.fontFamily()
 	c.SetTheme(&theme)
 	s.keys.Declare(c)
-	ui.Column(c).Size(width, height).Background(s.palette.Bg).TextColor(s.palette.Fg).Clip().Children(func() {
+	root := ui.Column(c).Size(width, height).Background(s.palette.Bg).TextColor(s.palette.Fg).Clip()
+	if s.dialogOpen() {
+		root.Blur(dialogBlur)
+	}
+	root.Children(func() {
 		s.drawChrome(c, width)
 		if s.browsing || s.opened() == nil {
 			s.drawLibrary(c, width, height-s.chromeHeight())
@@ -615,9 +621,11 @@ func (s *Shell) View(c *ui.Context) {
 			s.drawWork(c, width, height-s.chromeHeight())
 		}
 	})
+	s.drawViewsBehindDialog(c)
 	s.drawPicker(c, width, height)
 	s.drawSettings(c, width, height)
 	s.drawDebug(c)
+	s.tellBackground()
 	s.forgetUnseated()
 	s.placeSurfaces()
 	s.clearVisibleNotices()

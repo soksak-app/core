@@ -479,7 +479,7 @@ func (s *Shell) registerStatuses() {
 			visibility = "visible"
 		}
 		return map[string]any{"start": s.events.Start(), "startedAt": float64(s.events.StartedAt().UnixMilli()), "readyState": ready,
-			"visibility": visibility, "scheme": s.settings.Scheme(), "background": false, // no modal of this host blurs the workbench
+			"visibility": visibility, "scheme": s.settings.Scheme(), "background": s.dialogOpen(),
 			"scale": window.Scale, "width": window.Width, "height": window.Height}
 	})
 	s.registry.Status("core.workbench.audit", func() any {

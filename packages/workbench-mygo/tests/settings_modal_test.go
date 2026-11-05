@@ -586,3 +586,30 @@ func TestACommonSettingOutlivesTheOpenOfAProject(t *testing.T) {
 		t.Fatalf("the setting is %v", status.Values["memorySaverDelay"])
 	}
 }
+
+// The first focus of the settings window is its card, so a key closes nothing that the user did not reach.
+func TestEnterInAnOpenedSettingsWindowClosesNothing(t *testing.T) {
+	f := opened(t)
+	f.tester.Key(0, ui.KeyEnter)
+	f.settle()
+	if !f.modal().Open {
+		t.Fatal("Enter closed the settings window")
+	}
+}
+
+// A dialog draws over a blurred workbench and tells the host, which blurs the documents. A menu has no background.
+func TestADialogSetsTheBackgroundOfTheWorkbench(t *testing.T) {
+	f := newShell(t, acme())
+	background := func() any { return status[map[string]any](t, f, "core.window.workbench")["background"] }
+	if background() != false || len(f.host.backgrounds) != 0 {
+		t.Fatalf("the background is %v and the host received %v before a dialog", background(), f.host.backgrounds)
+	}
+	f.click("core.chrome.settings", "")
+	if background() != true || !slices.Equal(f.host.backgrounds, []bool{true}) {
+		t.Fatalf("the background is %v and the host received %v with the settings open", background(), f.host.backgrounds)
+	}
+	f.click("core.settings-modal.close", "")
+	if background() != false || !slices.Equal(f.host.backgrounds, []bool{true, false}) {
+		t.Fatalf("the background is %v and the host received %v after the settings", background(), f.host.backgrounds)
+	}
+}

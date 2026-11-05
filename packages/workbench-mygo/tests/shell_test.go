@@ -34,6 +34,8 @@ type storedHost struct {
 	// appUpdate is the answer of appUpdateState, and opened holds the arguments of linkOpen.
 	appUpdate any
 	opened    []json.RawMessage
+	// backgrounds are the values of setDialogBackground in their order.
+	backgrounds []bool
 	// forwards are the requests that the shell forwarded to surfaces, and each gets an empty result.
 	forwards []map[string]any
 	// extra holds the host calls that the base table has not.
@@ -224,7 +226,15 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 			h.forwards = append(h.forwards, request)
 			return map[string]any{"result": nil}, nil
 		}),
-		"viewReply":       answer("viewReply", none),
+		"viewReply": answer("viewReply", none),
+		"setDialogBackground": answer("setDialogBackground", func(argument json.RawMessage) (any, error) {
+			var enabled bool
+			if err := json.Unmarshal(argument, &enabled); err != nil {
+				return nil, err
+			}
+			h.backgrounds = append(h.backgrounds, enabled)
+			return nil, nil
+		}),
 		"setMenuLanguage": answer("setMenuLanguage", func(argument json.RawMessage) (any, error) { h.language = argument; return nil, nil }),
 		"windowNew":       answer("windowNew", none),
 		"windowClose":     answer("windowClose", none),
