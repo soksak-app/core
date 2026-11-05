@@ -107,7 +107,7 @@ func (s *Shell) drawCard(c *ui.Context, id string, data *layout.CardData, rect l
 		border = s.palette.Focus
 	}
 	card := s.binder.Press(c, "core.card", "core.card.focus", id, cardParam{Card: id})
-	s.binder.Observing(card, "core.card", s.placeInput(CardScope(id)))
+	card.ObserveInput(s.placeInput(CardScope(id)))
 	s.anchored("core.card/"+id, card)
 	card.Role(ui.RoleGroup).Label(id).Absolute().Left(float32(rect.X)+inset).Top(float32(rect.Y)+inset).Size(float32(rect.W), float32(rect.H)).
 		Background(s.palette.Card).Border(s.palette.BorderWidth, border).Radius(s.palette.Radius).Clip().Column().Children(func() {
