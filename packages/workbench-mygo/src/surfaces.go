@@ -162,8 +162,10 @@ type heldSurface struct {
 	section *sectionStart
 	// unload is the declaration of unload of a section surface.
 	unload *surfaceUnload
-	// declared tells that the host took its composition.
+	// declared tells that the host took its composition, and hosted that a placement that held it finished, so the host holds its
+	// view.
 	declared bool
+	hosted   bool
 }
 
 // sectionStart is the start value section of a section surface. A section of a window sidebar has no card.
@@ -655,6 +657,7 @@ func (s *Shell) placeSurfaces() {
 			})
 	}
 	settled := request["settled"]
+	requested := slices.Clone(s.surfaces.order)
 	s.calls.CallInOrder(surfaceOrder, "syncSurfaces", request, func(value any, err error) {
 		if err != nil {
 			s.placed(err)
@@ -676,6 +679,13 @@ func (s *Shell) placeSurfaces() {
 			func(answer any, err error) {
 				if err == nil {
 					err = s.seatRecord(record, answer)
+				}
+				if err == nil {
+					for _, id := range requested {
+						if held := s.surfaces.held[id]; held != nil {
+							held.hosted = true
+						}
+					}
 				}
 				s.placed(err)
 				s.options.Invalidate()

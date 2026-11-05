@@ -1,13 +1,15 @@
 // The keyboard of the window follows the focus ring (docs/spec/exposure.md#keyboard-focus): while no modal is open and no editable
 // element of the workbench has the focus, the active surface of the card with the ring holds the keyboard. The plane moves the ring
-// in one function, which owes the keyboard here. The one host call surfaceFocus follows the placement that shows the surface, so a
-// surface that the host does not hold yet receives the keyboard when it stands.
+// in one function, which owes the keyboard here. The one host call surfaceFocus goes out at once for a surface that a placement
+// gave the host, so the host gives it the keyboard at the release of the press that moved the ring, before a key that follows the
+// release; a surface that the host does not hold yet receives the keyboard after the placement that shows it, when it stands.
 import { modalState, onModalState, report, surfaces } from "./host.js";
 
 /* The surface of the ring, which the plane registers. */
 let ringSurface = () => null;
-/* The surfaces that the last drawn placement shows. */
+/* The surfaces that the last drawn placement shows, and held all that it placed, shown or hidden, which the host holds. */
 let shown = new Set();
+let held = new Set();
 /* owed: the keyboard has to move even when the target is the same. sent: the target of the last call, null for the workbench. */
 let owed = false;
 let sent = null;
@@ -29,14 +31,14 @@ function send(surface) {
   Promise.resolve(surfaces.focus(surface)).catch((why) => report(`surface focus: ${why}`));
 }
 
-/** Sends the call when the target stands. A target that no placement showed yet waits for the placement. */
+/** Sends the call when the host holds the target. A target that no placement placed yet waits for the placement. */
 function follow() {
   if (modalState() !== null) {
     owed = true;
     return;
   }
   const surface = target();
-  if (surface === null || shown.has(surface)) send(surface);
+  if (surface === null || shown.has(surface) || held.has(surface)) send(surface);
 }
 
 /** Registers the function that reads the active surface of the card with the ring, null without one. */
@@ -54,9 +56,13 @@ export function keyboardOwed() {
   queueMicrotask(follow);
 }
 
-/** A drawn placement answered with the surfaces it shows. The ring on a surface that it does not show leaves the keyboard with the workbench. */
-export function keyboardPlaced(ids) {
+/**
+ * A drawn placement answered with the surfaces it shows and the surfaces it placed. The ring on a surface that it does not show
+ * leaves the keyboard with the workbench.
+ */
+export function keyboardPlaced(ids, placedIds) {
   shown = new Set(ids);
+  held = new Set(placedIds);
   if (modalState() !== null) {
     owed = true;
     return;

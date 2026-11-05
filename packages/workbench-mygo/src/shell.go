@@ -714,8 +714,9 @@ func (s *Shell) View(c *ui.Context) {
 	s.forgetUnseated()
 	s.observeSections()
 	s.holdHiddenTabs()
+	s.followKeyboard(true)
 	s.placeSurfaces()
-	s.followKeyboard()
+	s.followKeyboard(false)
 	s.clearVisibleNotices()
 	s.drawn = true
 	s.pushStatuses()

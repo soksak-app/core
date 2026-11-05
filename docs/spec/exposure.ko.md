@@ -111,7 +111,7 @@ status `core.focus`는 창의 first responder를 가진 문서에서 키보드 �
 
 ### 키보드는 focus ring을 따른다
 
-창이 key이고 modal이 열려 있지 않은 동안 focus ring이 있는 card의 active surface가 키보드를 가지며, 둘은 어긋나지 않는다. ring을 옮기거나 그 card의 active surface를 바꾸는 모든 경로는 키보드도 옮긴다. 새 탭, 탭 press, `core.tab.select`, `core.card.focus`, 탭이나 card 닫기, 프로젝트 열기, space 복원이 여기에 든다. 각 워크벤치는 ring을 한 함수에서 옮기고, surface를 보여주는 placement 뒤에 하나의 host call `surfaceFocus {surface}`([surface의 키보드](native-surfaces.ko.md#surface의-키보드))를 보낸다. 그래서 호스트가 아직 갖지 않은 surface는 준비되는 때에 키보드를 받는다. surface가 키보드를 가져야 하는 동안 first responder가 워크벤치에 오면 surface로 돌아간다.
+창이 key이고 modal이 열려 있지 않은 동안 focus ring이 있는 card의 active surface가 키보드를 가지며, 둘은 어긋나지 않는다. ring을 옮기거나 그 card의 active surface를 바꾸는 모든 경로는 키보드도 옮긴다. 새 탭, 탭 press, `core.tab.select`, `core.card.focus`, 탭이나 card 닫기, 프로젝트 열기, space 복원이 여기에 든다. 각 워크벤치는 ring을 한 함수에서 옮기고, 하나의 host call `surfaceFocus {surface}`([surface의 키보드](native-surfaces.ko.md#surface의-키보드))를 보낸다. 앞선 placement가 호스트에 준 surface는 보이든 숨겨졌든 그것을 보여 주는 placement보다 먼저 호출을 보낸다. 그래서 호스트는 ring을 옮긴 press의 release에서 키보드를 주고, release 뒤의 키는 surface에 닿는다. 호스트가 아직 갖지 않은 surface는 그것을 보여 주는 placement 뒤에 호출을 받아, 준비되는 때에 키보드를 받는다. surface가 키보드를 가져야 하는 동안 first responder가 워크벤치에 오면 surface로 돌아간다.
 
 - modal이 열려 있는 동안 키보드는 modal에 머물고, modal이 닫히면 surface로 돌아간다.
 - surface가 없는 card(빈 card, 설치되지 않은 플러그인의 placeholder)와 library는 키보드를 워크벤치에 둔다(`surface: null`).

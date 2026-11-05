@@ -356,7 +356,7 @@ onCommit((record) => {
     releaseRetainedSurfaceSlots(record, ids, unload);
     const placedIds = new Set(answer.placements.map(({ id }) => id));
     for (const surface of record.surfaces) if (placedIds.has(surface.id)) authorizeSurface(surface.id);
-    if (record.drawn) keyboardPlaced(answer.placements.filter(({ visible }) => visible).map(({ id }) => id));
+    if (record.drawn) keyboardPlaced(answer.placements.filter(({ visible }) => visible).map(({ id }) => id), [...placedIds]);
     return answer;
   });
 });
