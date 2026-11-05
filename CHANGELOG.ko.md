@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F539: `sok input pointer`가 사람처럼 이동한다. 좌표를 포함하는 모든 추적 영역이 이동과 진입, 이탈을 듣고, key window의 press는 그 좌표로 먼저 이동한다.
 - F502-28: 창의 키보드가 모든 호스트에서 focus ring을 따른다. 새 탭, 탭 press, `core.card.focus`, 프로젝트 열기 직후에 입력한 글자가 ring이 있는 card의 active surface에 닿는다. 영역의 첫 focus 보고가 handler를 기다리므로 새 terminal 탭도 focus된 cursor를 그린다. 영역이 표시되지 않아 키보드를 받은 page는 다음 이동 때 그때 표시된 영역에 키보드를 넘긴다.
 - F502-21: mygo workbench가 modal을 native UI로 그린다: 설정 창, 추가·분할·도구·탭·context menu를 가진 picker layer, 수정된 tab에 대한 질문. `core.card.close`, `core.tab.close`, `core.space.close`는 사람의 답 없이 수정된 tab을 닫지 않고, plugin과 그 setting은 설치된 plugin 문서에서 온다. 설정 `left`, `right`는 고정 창 sidebar를 plane에 넣고 뺀다.
 - F502-12: mygo workbench 의 `core.plugins.show-updates` 가 플러그인 화면의 업데이트 목록이 보이도록 스크롤한다.

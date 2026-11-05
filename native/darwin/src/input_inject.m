@@ -137,21 +137,65 @@ static NSEvent *mouseEvent(NSWindow *window, NSEventType type, NSPoint point, NS
         context:nil eventNumber:0 clickCount:clicks pressure:pressure];
 }
 
-// Delivers a move to the owner of the tracking area that contains the coordinates. With overlapping views, only the topmost view receives it.
+// The tracking areas of a window that hold the pointer of its last move, so a move crosses their enter and exit.
+static char enteredAreasKey;
+
+static bool areaHolds(NSView *view, NSTrackingArea *area, NSPoint point) {
+    if ((area.options & NSTrackingActiveWhenFirstResponder) && view.window.firstResponder != view) return false;
+    NSRect rect = area.options & NSTrackingInVisibleRect ? view.visibleRect : NSIntersectionRect(area.rect, view.visibleRect);
+    return NSPointInRect([view convertPoint:point fromView:nil], rect);
+}
+
+// Gathers each tracking area of the shown views under view. A view that covers another does not hide its area from AppKit.
+static void gatherAreas(NSView *view, NSPoint point, NSMutableArray<NSTrackingArea *> *held, NSMutableArray<NSTrackingArea *> *left) {
+    if (view.isHidden) return;
+    [view updateTrackingAreas];
+    for (NSTrackingArea *area in view.trackingAreas) [(areaHolds(view, area, point) ? held : left) addObject:area];
+    for (NSView *child in view.subviews) gatherAreas(child, point, held, left);
+}
+
+static NSEvent *crossing(NSWindow *window, NSEventType type, NSPoint point) {
+    return [NSEvent enterExitEventWithType:type location:point modifierFlags:0
+        timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber context:nil
+        eventNumber:0 trackingNumber:0 userData:NULL];
+}
+
+// Delivers a move as a person's move arrives: the web view routing runs as for an event that AppKit dispatches, each tracking area
+// that the point leaves or enters hears that, and the owner of each area that holds the point and tracks moves hears the move,
+// also under a view that covers it. It reports whether any owner heard anything.
 static bool moveTo(NSWindow *window, NSPoint point) {
-    NSView *hit = hitView(window, point);
-    if (!hit) return false;
     NSEvent *event = mouseEvent(window, NSEventTypeMouseMoved, point, 0, 0);
-    for (NSView *view = hit; view; view = view.superview) {
-        [view updateTrackingAreas];
-        for (NSTrackingArea *area in view.trackingAreas) {
-            if (!(area.options & NSTrackingMouseMoved)) continue;
-            if (!NSPointInRect([view convertPoint:point fromView:nil], area.rect) && !(area.options & NSTrackingInVisibleRect)) continue;
-            [area.owner mouseMoved:event];
-            return true;
+    webviewInputRoutePointer(event);
+    NSMutableArray<NSTrackingArea *> *held = [NSMutableArray array], *left = [NSMutableArray array];
+    gatherAreas(window.contentView.superview ?: window.contentView, point, held, left);
+    NSHashTable<NSTrackingArea *> *entered = objc_getAssociatedObject(window, &enteredAreasKey);
+    if (!entered) {
+        entered = [NSHashTable weakObjectsHashTable];
+        objc_setAssociatedObject(window, &enteredAreasKey, entered, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    bool heard = false;
+    for (NSTrackingArea *area in left) {
+        if (![entered containsObject:area]) continue;
+        [entered removeObject:area];
+        if ([area.owner respondsToSelector:@selector(mouseExited:)]) {
+            [area.owner mouseExited:crossing(window, NSEventTypeMouseExited, point)];
+            heard = true;
         }
     }
-    return false;
+    for (NSTrackingArea *area in held) {
+        if (!(area.options & NSTrackingMouseEnteredAndExited) || [entered containsObject:area]) continue;
+        [entered addObject:area];
+        if ([area.owner respondsToSelector:@selector(mouseEntered:)]) {
+            [area.owner mouseEntered:crossing(window, NSEventTypeMouseEntered, point)];
+            heard = true;
+        }
+    }
+    for (NSTrackingArea *area in held) {
+        if (!(area.options & NSTrackingMouseMoved) || ![area.owner respondsToSelector:@selector(mouseMoved:)]) continue;
+        [area.owner mouseMoved:event];
+        heard = true;
+    }
+    return heard;
 }
 
 // Measurement of the turn rejected with SP_INPUT_BUTTON_HELD. front is a retained reference that heldDone releases.
@@ -223,6 +267,8 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
         case 1:
             // A delivered release ends an open press. A rejected release leaves the press open, so the next press reports that fact.
             if (objc_getAssociatedObject(window, pressedViewKey(button))) { held->why = "a press of this button is still open"; return SP_INPUT_PRESS_OPEN; }
+            // A person moves to the point before the press. A window that is not the key window hears no move.
+            if (window.isKeyWindow) moveTo(window, point);
             objc_setAssociatedObject(window, pressedViewKey(button), hit, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             sp_input_press_origin_set(window, button, point.x, point.y);
             // -[NSApplication sendEvent:] is not used because it fails to deliver a synthetic first click to an inactive

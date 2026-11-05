@@ -7,6 +7,10 @@
 BOOL webviewInputRegister(WKWebView *view);
 void webviewInputUnregister(WKWebView *view);
 
+// Main thread only. Chooses the web view of the window that takes the pointer at event, as the local monitor does for an event that
+// AppKit dispatches. A move that a caller delivers directly passes through here first.
+void webviewInputRoutePointer(NSEvent *event);
+
 // Main thread only. Calls done(YES) when the document of view receives the next trusted DOM event of
 // type ("pointerdown" or "pointerup") and calls done(NO) after timeout seconds. A script in a separate
 // WebKit content world, which the page cannot see, reports the receipt. A view that is not registered
