@@ -231,6 +231,13 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F610",
+    implementation: [{ file: "native/darwin/src/capture.m", symbol: "beginCaptureSourceArtifacts" }],
+    tests: [{ file: "native/darwin/tests/capture_metadata_test.m", id: "a capture writes the source file only when its reader needs it" }],
+    expected: "A recording writes source files only when it has frame identity.",
+    levels: ["unit"],
+  },
+  {
     id: "F608",
     implementation: [{ file: "e2e/platform/darwin/darwin.js", symbol: "build-capture-text-path" }],
     tests: [{ file: "scripts/test/soksak-scripts.test.mjs", id: "the native target that the window-check setup runs is one the native Makefile declares" }],

@@ -51,6 +51,9 @@ typedef struct {
 // Starts diagnostic-only source matching. A null path and queue configure matcher history only; otherwise accepted
 // source artifacts stream to that capture directory on the serial writer queue.
 void sp_image_capture_match_begin(const char *capture_directory, dispatch_queue_t writer_queue);
+// sp_image_capture_match_begin for a capture whose reader needs no source files: it matches from the history and writes only the
+// manifest and the identity artifacts.
+void sp_image_capture_match_begin_without_source_files(const char *capture_directory, dispatch_queue_t writer_queue);
 // Stops accepting snapshots, drains source writes, and writes the manifest. Returns false on an artifact or manifest I/O error.
 bool sp_image_capture_match_write_manifest(const char *capture_directory);
 // Stops source retention and releases every retained diagnostic copy.

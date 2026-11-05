@@ -92,6 +92,7 @@ static NSMutableDictionary<NSString *, SPImageCaptureSource *> *pendingArtifactS
 static NSMutableDictionary<NSString *, NSDictionary *> *artifactIdentityRecords;
 static NSString *artifactDirectory;
 static dispatch_queue_t artifactWriterQueue;
+static bool sourceFilesKept = true;
 static NSUInteger artifactComparisons;
 static bool identitySessionActive;
 static bool identitySessionStarted;
@@ -255,10 +256,11 @@ static void finishIdentityDecodePendingJob(void) {
     [historyLock unlock];
 }
 
-void sp_image_capture_match_begin(const char *capture_directory, dispatch_queue_t writer_queue) {
+static void beginMatching(const char *capture_directory, dispatch_queue_t writer_queue, bool sourceFiles) {
     initializeHistory();
     NSString *directory = capture_directory ? [NSString stringWithUTF8String:capture_directory] : nil;
     [historyLock lock];
+    sourceFilesKept = sourceFiles;
     if (artifactWriterQueue) dispatch_release(artifactWriterQueue);
     [artifactDirectory release];
     artifactDirectory = [directory copy];
@@ -283,6 +285,14 @@ void sp_image_capture_match_begin(const char *capture_directory, dispatch_queue_
     artifactComparisons = 0;
     atomic_store(&historyEnabled, true);
     [historyLock unlock];
+}
+
+void sp_image_capture_match_begin(const char *capture_directory, dispatch_queue_t writer_queue) {
+    beginMatching(capture_directory, writer_queue, true);
+}
+
+void sp_image_capture_match_begin_without_source_files(const char *capture_directory, dispatch_queue_t writer_queue) {
+    beginMatching(capture_directory, writer_queue, false);
 }
 
 void sp_image_capture_match_end(void) {
@@ -451,7 +461,7 @@ bool sp_image_capture_match_retain(sp_image_capture_identity identity, const uin
         return false;
     }
 
-    if (artifactWriterQueue && artifactDirectory) {
+    if (sourceFilesKept && artifactWriterQueue && artifactDirectory) {
         if (artifactCount >= kImageCaptureHistoryCountLimit
             || byteCount > kImageCaptureArtifactPendingLimit
             || artifactPendingBytes > kImageCaptureArtifactPendingLimit - byteCount
@@ -482,7 +492,7 @@ bool sp_image_capture_match_retain(sp_image_capture_identity identity, const uin
     source.colorSpace = colorSpace;
     [history addObject:source];
     historyBytes += byteCount;
-    if (artifactWriterQueue && artifactDirectory) {
+    if (sourceFilesKept && artifactWriterQueue && artifactDirectory) {
         artifactPendingBytes += byteCount;
         artifactBytes += byteCount;
         artifactCount++;
@@ -669,7 +679,7 @@ bool sp_image_capture_match_write_manifest(const char *capture_directory) {
         return false;
     }
     NSDictionary *manifest = @{
-        @"format": @2, @"pixelFormat": @"BGRA8", @"alpha": @"premultiplied-first",
+        @"format": @2, @"pixelFormat": @"BGRA8", @"alpha": @"premultiplied-first", @"sourceFiles": @(sourceFilesKept),
         @"limits": @{ @"historyBytes": @(kImageCaptureHistoryLimit),
             @"historyIdentities": @(kImageCaptureHistoryCountLimit),
             @"pendingArtifactBytes": @(kImageCaptureArtifactPendingLimit),
