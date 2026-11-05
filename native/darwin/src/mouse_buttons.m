@@ -7,6 +7,7 @@
 // accessibility permission.
 #import <Cocoa/Cocoa.h>
 #import "mouse_buttons.h"
+#import "input_inject.h"
 #import "observe.h"
 
 static const NSEventMask buttonEvents = NSEventMaskLeftMouseDown | NSEventMaskLeftMouseUp
@@ -17,7 +18,7 @@ static id localMonitor, globalMonitor;
 bool sp_mouse_buttons_watch(sp_mouse_buttons_changed changed, void *context) {
     if (!changed || !NSThread.isMainThread || localMonitor || globalMonitor) return false;
     // The handler of a monitor runs on the main thread. The mask is read from the AppKit state of the turn being handled, not from the event.
-    void (^report)(void) = ^{ changed(context, NSEvent.pressedMouseButtons); };
+    void (^report)(void) = ^{ changed(context, sp_input_physical_buttons()); };
     id local = sp_observe_local_monitor("mouse_buttons.local", SP_OBSERVE_RECORD, buttonEvents, ^NSEvent *(NSEvent *event) {
         report();
         return event;
