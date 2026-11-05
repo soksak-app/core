@@ -96,18 +96,17 @@ func (s *Shell) exposedBox(c *ui.Context, name, command, item string) ui.Element
 }
 
 func (s *Shell) drawSettingsHead(c *ui.Context, model *settingsModel, width float32, pane settingsPane) {
-	ui.Row(c).Size(width, pane.headH).Padding(0, pane.headPadEnd, 0, pane.headPadStart).Gap(pane.headGap).AlignItems(ui.Center).
-		BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.Edge).Children(func() {
-		grip := s.exposedBox(c, "core.settings-modal.grip", "core.settings-modal.move", "")
-		grip.Grow(1).FillHeight().AlignItems(ui.Center).Row().Cursor(ui.CursorGrab).Role(ui.RoleGroup).Label(settingsName).Children(func() {
-			ui.Text(c, settingsName).FontSize(s.textControl()).TextColor(s.palette.Fg)
-		})
-		if dx, dy, pressed := grip.Dragged(); pressed && (dx != 0 || dy != 0) {
-			s.binder.run("core.settings-modal.move", windowParam{DX: float64(dx), DY: float64(dy)})
-		}
+	// The whole head moves the card, as the header of the page does, and the button that closes it stands inside.
+	grip := s.exposedBox(c, "core.settings-modal.grip", "core.settings-modal.move", "")
+	grip.Size(width, pane.headH).Padding(0, pane.headPadEnd, 0, pane.headPadStart).Gap(pane.headGap).Row().AlignItems(ui.Center).
+		BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.Edge).Cursor(ui.CursorGrab).Role(ui.RoleGroup).Label(settingsName).Children(func() {
+		ui.Text(c, settingsName).Grow(1).FontSize(s.textControl()).TextColor(s.palette.Fg)
 		closing := model.close
 		s.drawAct(c, s.binder.Press(c, closing.Name, closing.Command.Name, closing.item(), closing.Command.Params), closing.Label, "close", false, 1)
 	})
+	if dx, dy, pressed := grip.Dragged(); pressed && (dx != 0 || dy != 0) {
+		s.binder.run("core.settings-modal.move", windowParam{DX: float64(dx), DY: float64(dy)})
+	}
 }
 
 func (s *Shell) drawSettingsNav(c *ui.Context, model *settingsModel, pane settingsPane) {

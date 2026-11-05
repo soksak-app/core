@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F502-13: mygo settings card의 grip은 page header의 padding과 border를 포함한 head 전체이고, 닫기 button은 그 안에 있다. Red: `TestTheGripIsTheWholeHeadOfTheCard`가 이전 drawing에서 실패했다.
 - F617: 사이드카 메시지가 요청의 cids를 안고 표면 소유자에게 간다.
 - F631: 가득 찬 event queue의 test는 writer를 붙잡아 거부를 모두 세고, 한 run을 count 합이 거부된 event 수인 여러 `log.dropped` 범위로 읽는다. writer는 queue를 쓸 때마다 손실을 기록하므로, `log.dropped` 하나를 기대한 test는 거부 도중에 writer가 깨면 실패했다. Red: 기록 양쪽의 두 거부를 `log.dropped` 하나로 기대했다.
 - F626: mygo host에서 열린 dialog의 frame은 dialog를 다시 그리고, 그 뒤의 blur된 workbench는 바뀔 때까지 유지해 다시 그리지 않는다. scroll하는 dialog의 매 frame이 창 전체를 바꿨다. Red: `TestScrollingTheSettingsCardRedrawsTheCardAlone`이 167 frame 모두에서 바뀐 pixel 960,000을 읽었고, card의 상한은 430,080이다.
