@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/egoist/mygo/ui"
 
@@ -450,6 +451,12 @@ func (s *Sidebars) setSurfaces(space, sidebar, id string, sets []SidebarSet) []s
 		}
 	}
 	return surfaces
+}
+
+// surfacePlugin returns the plugin that declares the section of a surface that setSurfaces returned, whose id is
+// `<space id>/<sidebar id>/<section id>` (docs/spec/plugins.md#sections).
+func (s *Sidebars) surfacePlugin(surface string) string {
+	return s.sections[surface[strings.LastIndex(surface, "/")+1:]].plugin
 }
 
 // fill gives the frame the loaded sections of set and the choices of its sidebar. The sections of a plugin that is not loaded remain

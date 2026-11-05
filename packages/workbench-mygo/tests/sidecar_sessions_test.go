@@ -87,6 +87,26 @@ func TestTheSectionsOfTheShownProjectAreRetained(t *testing.T) {
 	}
 }
 
+// The host keeps the service of a surface that a layout holds, so each entry names the plugin that may hold a session there: the
+// plugin of the tab, and the plugin that declares the section.
+func TestARetainNamesThePluginOfEachSurface(t *testing.T) {
+	stored := &storedHost{installed: sidebarsInstalled, projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"))}}
+	newShell(t, stored).run("core.project.activate", map[string]string{"id": "prj-a"})
+	var request struct {
+		Surfaces []struct{ Surface, Plugin string }
+	}
+	if err := json.Unmarshal(stored.retains[len(stored.retains)-1], &request); err != nil {
+		t.Fatal(err)
+	}
+	plugins := map[string]string{}
+	for _, item := range request.Surfaces {
+		plugins[item.Surface] = item.Plugin
+	}
+	if plugins["tab-aaaaaa"] != "notes" || plugins["spc-aaaaaa/left/files.tree"] != "files" {
+		t.Fatalf("retained %v", plugins)
+	}
+}
+
 // A stored card that shows the installed set on its left.
 func cardWithSidebar(project map[string]any) string {
 	card := project["spaces"].([]map[string]any)[0]["layout"].(map[string]any)["state"].(map[string]any)["cards"].([]map[string]any)[0]

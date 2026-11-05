@@ -722,7 +722,10 @@ fn invalid_json_closes_connection() {
 | `image.drawing.configures-only-drawing-regions` | 그리기 상태가 아닌 region은 설정을 받지 않고 표시 대기도 그것을 기다리지 않는다. 준비 중에 그리기 상태가 된 region은 설정을 받고 대기에 들어간다. | all |
 | `image.drawing.configures-a-raster-that-changed-while-not-drawing` | 호스트는 창이 화면에 없는 동안에도 보이는 region의 raster를 읽되 설정을 보내지 않는다. region이 다시 그리기 상태가 되면 그리기 메시지 뒤에 바뀐 raster의 설정을 한 번 보내고, 바뀌지 않은 raster는 다시 설정하지 않는다. | all |
 | `image.drawing.answers-transfers-while-not-drawing` | region이 그리기를 멈추기 전에 받은 전송 그림은 `consumed`나 오류로 답을 받는다. | all |
-| `sidecars-transport.replace.runs-when-sessions-reach-zero` | 오래된 service로 보낸 마지막 열린 표면이 닫히면 host가 그 service를 교체한다. | all |
+| `sidecars-transport.replace.runs-when-sessions-reach-zero` | layout 목록이 오래된 service에 표면을 남기지 않으면 host가 그 service를 교체한다. | all |
+| `sidecars-transport.replace.keeps-a-service-that-a-layout-holds` | 이 process에서 보낸 적이 없는, 그 사이드카의 plugin 표면을 layout이 쥐는 동안에는 표면이 닫혀도 오래된 service가 남고 그 표면은 `sessions`에 들어간다. 그 표면이 없는 목록이 오면 service를 교체한다. | all |
+| `sidecars-transport.replace.counts-the-surfaces-of-the-plugins-of-the-sidecar` | plugin이 그 사이드카를 나열하지 않는 layout 표면은 오래된 service를 붙들지 않는다. | all |
+| `sidecars-transport.replace.waits-for-the-first-layout-list` | layout의 첫 목록 전에는 표면이 닫혀도 오래된 service를 교체하지 않는다. | all |
 | `sidecars-transport.persistent.starts-in-new-session` | 호스트가 시작한 영속 서비스는 새 session의 leader이므로 애플리케이션의 process group이나 terminal의 signal을 받지 않는다. | all |
 | `sidecars-transport.endpoint.zombie-service-does-not-exist` | 좀비 서비스 pid 는 존재하는 서비스로 치지 않아 낡은 endpoint 를 교체한다. | all |
 | `sidecars-transport.endpoint.foreign-service-process-exists` | 다른 사용자가 소유한 프로세스의 service pid 는 존재하는 service 다. 거부된 signal 확인이 그 프로세스가 있음을 보이기 때문이다. | all |

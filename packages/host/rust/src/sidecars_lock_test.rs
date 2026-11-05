@@ -581,7 +581,7 @@ fn retain_notifies_outdated_session_counts() {
         super::retain_layout_owners(
             &sidecars.core,
             &mut sidecars.core.state.lock().unwrap(),
-            &["tab-fixture"].into(),
+            &[("tab-fixture", "probe")].into(),
         )
         .is_none(),
         "a status-only fixture has no UI invalidation consumer"

@@ -85,6 +85,7 @@ mock.module("../environment.js", { namedExports: {
 } });
 
 const projects = await import("../projects.js");
+const { registerSection } = await import("../registry.js");
 
 /**
  * A recorder that acts as the plane. A clear after hold() does not finish until release(). The test rejects a rejected layout.
@@ -191,27 +192,27 @@ test("a flush writes the window geometry only when it changed", async () => {
 test("the surfaces of every layout are listed with their project root, and removing a project retains the rest", async () => {
   const layout = { state: { cards: [
     { id: "left" },
-    { id: "right", data: { tabs: [{ id: "tab-a" }, { id: "tab-b" }] } },
+    { id: "right", data: { tabs: [{ id: "tab-a", plugin: "fixture" }, { id: "tab-b", plugin: "fixture" }] } },
   ] } };
   const two = {
     ...structuredClone(PROJECT), id: "prj-two", root: "/work/two",
     spaces: [{ id: "spc-two", title: "SPACE1", layout }],
   };
   const one = { ...structuredClone(PROJECT), id: "prj-three" };
-  one.spaces[0].layout = { state: { cards: [{ id: "one", data: { tabs: [{ id: "tab-one" }] } }] } };
+  one.spaces[0].layout = { state: { cards: [{ id: "one", data: { tabs: [{ id: "tab-one", plugin: "beta" }] } }] } };
   let listed = [one, two];
   const local = { ...store, snapshot: async () => ({ common: {}, projects: listed.map((item) => structuredClone(item)), open: [] }),
     remove: async (id) => { listed = listed.filter((item) => item.id !== id); } };
   await projects.initialise(local);
   assert.deepEqual(projects.layoutSurfaces(), [
-    { surface: "tab-one", root: "/work/one" },
-    { surface: "tab-a", root: "/work/two" },
-    { surface: "tab-b", root: "/work/two" },
+    { surface: "tab-one", plugin: "beta", root: "/work/one" },
+    { surface: "tab-a", plugin: "fixture", root: "/work/two" },
+    { surface: "tab-b", plugin: "fixture", root: "/work/two" },
   ]);
   retained.length = 0;
   await projects.close("prj-two");
   // It cleans up the surface modules of the deleted project first. If a module remains, it reopens the finished session in the deleted folder (F44).
-  assert.deepEqual(retained, [{ modules: ["tab-one"] }, [{ surface: "tab-one", root: "/work/one" }]],
+  assert.deepEqual(retained, [{ modules: ["tab-one"] }, [{ surface: "tab-one", plugin: "beta", root: "/work/one" }]],
     "removing a project disposes the surface modules of its tabs before it ends their sidecar sessions");
   listed[0].spaces[0].layout = { state: {} };
   reported.length = 0;
@@ -223,9 +224,13 @@ test("the surfaces of every layout are listed with their project root, and remov
 });
 
 test("the layouts hold the sections of every space of every project, whatever the window draws, with the sets of each project", async () => {
+  // Each section names the plugin that declares it, and a section that no loaded plugin declares (gone.list) has no surface.
+  for (const [id, plugin] of [["alpha.tree", "alpha"], ["alpha.bookmarks", "alpha"], ["other.list", "other"]]) {
+    registerSection({ id, name: id, plugin, surface: { composition: { kind: "view" } } });
+  }
   const card = { id: "crd", data: { tabs: [{ id: "tab-x", plugin: "beta" }], activeId: "tab-x", sidebars: { left: { set: "own" } } } };
   const sets = (first) => ({
-    sets: [{ id: first, sections: ["alpha.tree"] }, { id: "own", sections: ["alpha.bookmarks"] }],
+    sets: [{ id: first, sections: ["alpha.tree", "gone.list"] }, { id: "own", sections: ["alpha.bookmarks"] }],
     links: [{ place: "left", plugin: null, set: first }],
   });
   const listed = [
@@ -238,11 +243,11 @@ test("the layouts hold the sections of every space of every project, whatever th
   ];
   await projects.initialise({ ...store, snapshot: async () => ({ common: {}, projects: structuredClone(listed), open: [] }) });
   assert.deepEqual(projects.layoutSurfaces(), [
-    { surface: "tab-x", root: "/work/a" },
-    { surface: "spc-a1/left/alpha.tree", root: "/work/a" },
-    { surface: "spc-a1/crd:left/alpha.bookmarks", root: "/work/a" },
-    { surface: "spc-a2/left/alpha.tree", root: "/work/a" },
-    { surface: "spc-b/right/other.list", root: "/work/b" },
+    { surface: "tab-x", plugin: "beta", root: "/work/a" },
+    { surface: "spc-a1/left/alpha.tree", plugin: "alpha", root: "/work/a" },
+    { surface: "spc-a1/crd:left/alpha.bookmarks", plugin: "alpha", root: "/work/a" },
+    { surface: "spc-a2/left/alpha.tree", plugin: "alpha", root: "/work/a" },
+    { surface: "spc-b/right/other.list", plugin: "other", root: "/work/b" },
   ]);
 });
 
@@ -390,7 +395,7 @@ test("a project that the start document drew falls back to the library when its 
 test("a project removed from the registry by another window ends in the window that shows it as closing its tab does", async () => {
   /** A project with one tab in one card. */
   const project = (id, tab) => ({ ...structuredClone(PROJECT), id, root: `/work/${id}`, spaces: [
-    { id: `spc-${id}`, title: "SPACE1", layout: { state: { cards: [{ id: `card-${id}`, data: { tabs: [{ id: tab }] } }] } } },
+    { id: `spc-${id}`, title: "SPACE1", layout: { state: { cards: [{ id: `card-${id}`, data: { tabs: [{ id: tab, plugin: "fixture" }] } }] } } },
   ], activeSpaceId: `spc-${id}` });
   let listed = [project("prj-shown", "tab-shown"), project("prj-next", "tab-next"), project("prj-other", "tab-other")];
   let notify = null;
@@ -418,14 +423,14 @@ test("a project removed from the registry by another window ends in the window t
   assert.equal(projects.active()?.id, "prj-next", "the window did not open its next project as closing the project tab does");
   assert.deepEqual(retained.slice(0, 2), [
     { modules: ["tab-next", "tab-other"] },
-    [{ surface: "tab-next", root: "/work/prj-next" }, { surface: "tab-other", root: "/work/prj-other" }],
+    [{ surface: "tab-next", plugin: "fixture", root: "/work/prj-next" }, { surface: "tab-other", plugin: "fixture", root: "/work/prj-other" }],
   ], "the window kept the surface modules and sidecar sessions of the removed project's tabs");
   assert.equal(patches.includes("prj-shown"), false, "the window saved the removed project");
   await removeElsewhere("prj-next");
   assert.equal(projects.active(), null);
   assert.equal(projects.inLibrary(), true, "the window without a project did not show the library");
   assert.deepEqual(projects.local(), []);
-  assert.deepEqual(retained, [{ modules: ["tab-other"] }, [{ surface: "tab-other", root: "/work/prj-other" }]],
+  assert.deepEqual(retained, [{ modules: ["tab-other"] }, [{ surface: "tab-other", plugin: "fixture", root: "/work/prj-other" }]],
     "the window kept the surface modules and sidecar sessions of its last removed project");
   assert.deepEqual(reported, [], "ending the removed project reported an error");
   await projects.flush();
@@ -433,7 +438,7 @@ test("a project removed from the registry by another window ends in the window t
 
 test("an activation received while a removed project is clearing waits for the clear", async () => {
   const project = (id, tab) => ({ ...structuredClone(PROJECT), id, root: `/work/${id}`, spaces: [
-    { id: `spc-${id}`, title: "SPACE1", layout: { state: { cards: [{ id: `card-${id}`, data: { tabs: [{ id: tab }] } }] } } },
+    { id: `spc-${id}`, title: "SPACE1", layout: { state: { cards: [{ id: `card-${id}`, data: { tabs: [{ id: tab, plugin: "fixture" }] } }] } } },
   ], activeSpaceId: `spc-${id}` });
   const removed = project("prj-clearing-removed", "tab-clearing-removed");
   const next = project("prj-clearing-next", "tab-clearing-next");
@@ -506,7 +511,7 @@ test("browsing shows the library in the draw that empties the plane, not where a
 });
 
 test("closing a tab removes its session file after the layout write, and the start removes the files of tabs in no layout", async () => {
-  const layout = (...tabs) => ({ state: { cards: [{ id: "card-one", data: { tabs: tabs.map((id) => ({ id })) } }] } });
+  const layout = (...tabs) => ({ state: { cards: [{ id: "card-one", data: { tabs: tabs.map((id) => ({ id, plugin: "fixture" })) } }] } });
   const project = { ...structuredClone(PROJECT), spaces: [{ id: "spc-one", title: "SPACE1", layout: layout("tab-a", "tab-b") }] };
   const puts = [];
   plane.layout = layout("tab-a", "tab-b");
@@ -521,7 +526,7 @@ test("closing a tab removes its session file after the layout write, and the sta
   plane.layout = layout("tab-b");
   await projects.keep();
   assert.deepEqual(puts, [["tab-a", null]], "closing a tab left its session file");
-  assert.deepEqual(retained, [[{ surface: "tab-b", root: "/work/one" }]],
+  assert.deepEqual(retained, [[{ surface: "tab-b", plugin: "fixture", root: "/work/one" }]],
     "closing the last layout occurrence did not retain only the remaining project surfaces");
   await projects.flush();
 

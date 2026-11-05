@@ -182,6 +182,9 @@ type Sidecars struct {
 	ClosingChanged     func(SidecarStatus)
 	ClosingInvalidated func()
 	owners             map[string]SidecarOwner
+	// layout is the plugin of each surface of the last complete list of the project layouts, and nil before the first list. A session
+	// stays recoverable while a layout holds its surface, also when the surface has not sent in this process.
+	layout map[string]string
 	// roots are the project directories at the time a surface first sent. A sidecar finds a session by root and surface,
 	// so even after the project of the window changed, the requests and closes of an already open surface are sent with this root.
 	roots   map[string]string
@@ -997,6 +1000,12 @@ func (c *Sidecars) outdatedLocked() []OutdatedSidecar {
 				sessions++
 			}
 		}
+		// A surface of a layout that has not sent in this process may hold a session that an earlier application left.
+		for surface, plugin := range c.layout {
+			if slices.Contains(c.dependents[name], plugin) && !(process.surfaces[surface] && c.owners[surface] != nil) {
+				sessions++
+			}
+		}
 		var running *string
 		if process.version != nil {
 			version := *process.version
@@ -1068,13 +1077,15 @@ func (c *Sidecars) Replace(ctx context.Context, name string) error {
 	return nil
 }
 
-// replaceIdle replaces each outdated service that has no open surface of this application.
+// replaceIdle replaces each outdated service that no open surface of this application and no project layout holds. Before the
+// first list of the layouts the host does not know what they hold, so it replaces nothing.
 func (c *Sidecars) replaceIdle() {
 	for _, item := range c.Outdated() {
 		c.mu.Lock()
 		_, busy := c.replacing[item.Sidecar]
+		known := c.layout != nil
 		c.mu.Unlock()
-		if item.Sessions != 0 || busy {
+		if item.Sessions != 0 || busy || !known {
 			continue
 		}
 		name := item.Sidecar
@@ -1293,14 +1304,23 @@ func (c *Sidecars) stopProcesses(processes []*sidecar, detach bool) {
 type RetainedSurface struct {
 	Surface string `json:"surface"`
 	Root    string `json:"root"`
+	// Plugin is the plugin of the tab or the section: only a plugin that lists a sidecar opens a session in its service.
+	Plugin string `json:"plugin"`
 }
 
-// retainLayoutOwners removes layout owners omitted from an authoritative snapshot.
-// The caller holds c.mu.
-func (c *Sidecars) retainLayoutOwners(listed map[string]bool) bool {
+// retainKept is one surface of the retain request that the service reads.
+type retainKept struct {
+	Surface string `json:"surface"`
+	Root    string `json:"root"`
+}
+
+// retainLayoutOwners records an authoritative snapshot of the layouts, with the plugin of each surface, and removes the layout owners
+// that it omits. The caller holds c.mu.
+func (c *Sidecars) retainLayoutOwners(listed map[string]string) bool {
 	before := c.statusLocked()
+	c.layout = listed
 	for surface := range c.roots {
-		if listed[surface] {
+		if _, held := listed[surface]; held {
 			continue
 		}
 		delete(c.roots, surface)
@@ -1324,12 +1344,12 @@ func (c *Sidecars) Retain(surfaces []RetainedSurface) (int, error) {
 	if surfaces == nil {
 		return 0, errors.New("retain requires a surfaces list")
 	}
-	listed := make(map[string]bool, len(surfaces))
+	listed := make(map[string]string, len(surfaces))
 	for _, item := range surfaces {
-		if item.Surface == "" || item.Root == "" {
+		if item.Surface == "" || item.Root == "" || item.Plugin == "" {
 			return 0, fmt.Errorf("retain surface entry is invalid: %+v", item)
 		}
-		listed[item.Surface] = true
+		listed[item.Surface] = item.Plugin
 	}
 	// The supplied list is the complete set of layout surface sessions. Retire stale owners before building each service's keep list;
 	//
@@ -1393,12 +1413,16 @@ func (c *Sidecars) Retain(surfaces []RetainedSurface) (int, error) {
 		}
 		// The keep list is built here, after the service started, so a session first sent during the start is kept (F229-7).
 		// Starts from a non-nil slice so that an empty list is also sent as a JSON array.
-		keep := append(make([]RetainedSurface, 0, len(surfaces)+len(c.roots)), surfaces...)
+		// The service holds surfaces and roots, and the plugin of a surface stays in the host.
+		keep := make([]retainKept, 0, len(surfaces)+len(c.roots))
+		for _, item := range surfaces {
+			keep = append(keep, retainKept{Surface: item.Surface, Root: item.Root})
+		}
 		for surface, root := range c.roots {
-			if listed[surface] {
+			if _, held := listed[surface]; held {
 				continue
 			}
-			keep = append(keep, RetainedSurface{Surface: surface, Root: root})
+			keep = append(keep, retainKept{Surface: surface, Root: root})
 		}
 		for _, item := range keep {
 			if item.Surface == "" || item.Root == "" {
@@ -1439,6 +1463,8 @@ func (c *Sidecars) Retain(surfaces []RetainedSurface) (int, error) {
 		delete(process.retained, request)
 		c.mu.Unlock()
 	}
+	// The list may leave an outdated service without a surface.
+	c.replaceIdle()
 	return total, nil
 }
 

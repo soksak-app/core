@@ -421,17 +421,10 @@ fn sidecar_send(
         .send_with_cids(&window, &sidecar, &surface, &body, &cids)
 }
 
-/// One surface of a retain request: the surface and the project root that opened it.
-#[derive(serde::Deserialize)]
-struct RetainedSurface {
-    surface: String,
-    root: String,
-}
-
 /// The surface list that every project layout holds.
 #[derive(serde::Deserialize)]
 struct RetainRequest {
-    surfaces: Vec<RetainedSurface>,
+    surfaces: Vec<soksak_host::sidecars::RetainedSurface>,
 }
 
 /// The outdated persistent services (docs/spec/installation.md).
@@ -468,20 +461,9 @@ async fn sidecars_retain(
 ) -> Result<serde_json::Value, String> {
     let Argument(request) = request;
     blocking(move || {
-        let surfaces: Vec<(String, String)> = request
-            .surfaces
-            .into_iter()
-            .map(|item| {
-                if item.surface.is_empty() || item.root.is_empty() {
-                    Err("retain surface entry is invalid".to_string())
-                } else {
-                    Ok((item.surface, item.root))
-                }
-            })
-            .collect::<Result<_, _>>()?;
         let closed = window
             .state::<WindowSidecars>()
-            .retain_sessions(&surfaces)?;
+            .retain_sessions(&request.surfaces)?;
         Ok(serde_json::json!({ "closed": closed }))
     })
     .await
