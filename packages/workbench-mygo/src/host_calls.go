@@ -39,6 +39,7 @@ func hostCalls(h *host.Host) map[string]HostCall {
 		"syncSurfaces":             answerOf(h.SyncSurfaces),
 		"presentSurfaces":          answerOf(h.PresentSurfaces),
 		"cancelSurfaces":           doneOf(h.CancelSurfaces),
+		"surfaceFocus":             doneOf(h.SurfaceFocus),
 		"waitPresented":            readOf(h.WaitPresented),
 		"setTheme":                 doneOf(h.SetTheme),
 		"setMenuLanguage":          doneOf(h.SetMenuLanguage),

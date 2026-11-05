@@ -1,0 +1,247 @@
+package workbench_test
+
+import (
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"testing"
+)
+
+// keyboardRing returns the card of the focus ring and the active surface of that card.
+func keyboardRing(t *testing.T, f *shellFixture) (string, *string) {
+	t.Helper()
+	for _, card := range status[gridRead](t, f, "core.grid").Cards {
+		if card.Focused {
+			return card.ID, card.Active
+		}
+	}
+	return "", nil
+}
+
+// keyboardCards returns the two cards of the shell and the first tab of each.
+func keyboardCards(t *testing.T, f *shellFixture) (cards []string, tabs map[string][]string) {
+	t.Helper()
+	tabs = map[string][]string{}
+	for _, card := range f.cardsOf() {
+		data, _ := card["data"].(map[string]any) // silent: a window sidebar has no data.
+		if data == nil || data["tabs"] == nil {
+			continue
+		}
+		id := card["id"].(string)
+		cards = append(cards, id)
+		for _, tab := range data["tabs"].([]any) {
+			tabs[id] = append(tabs[id], tab.(map[string]any)["id"].(string))
+		}
+	}
+	return cards, tabs
+}
+
+// keyboardAddTab adds a tab of the terminal to card and returns the tabs of each card.
+func keyboardAddTab(t *testing.T, f *shellFixture, card string) map[string][]string {
+	t.Helper()
+	f.run("core.card.focus", map[string]string{"card": card})
+	f.click("core.card.add", card)
+	f.click("core.picker.item", "terminal")
+	_, tabs := keyboardCards(t, f)
+	return tabs
+}
+
+// The active surface of the card with the focus ring holds the keyboard after every path that moves the focus
+// (docs/spec/exposure.md#keyboard-focus).
+func TestTheKeyboardFollowsTheFocusRing(t *testing.T) {
+	paths := []struct {
+		name string
+		// run takes the path after the test took the keyboard to the other card.
+		run func(t *testing.T, f *shellFixture, stored *surfaceHost, other string)
+	}{
+		{"opening a project", func(*testing.T, *shellFixture, *surfaceHost, string) {}},
+		{"a new tab", func(t *testing.T, f *shellFixture, _ *surfaceHost, other string) {
+			f.click("core.card.add", other)
+			f.click("core.picker.item", "terminal")
+		}},
+		{"a new tab of another card", func(t *testing.T, f *shellFixture, _ *surfaceHost, other string) {
+			f.click("core.card.add", other)
+			f.click("core.picker.item", "browser")
+		}},
+		{"a split", func(t *testing.T, f *shellFixture, _ *surfaceHost, other string) {
+			f.click("core.card.split-x", other)
+			f.click("core.picker.item", "terminal")
+		}},
+		{"a press on a tab", func(t *testing.T, f *shellFixture, _ *surfaceHost, other string) {
+			tabs := keyboardAddTab(t, f, other)
+			f.click("core.card.tab", tabs[other][0])
+		}},
+		{"core.tab.select", func(t *testing.T, f *shellFixture, _ *surfaceHost, other string) {
+			tabs := keyboardAddTab(t, f, other)
+			f.run("core.tab.select", map[string]string{"tab": tabs[other][0]})
+		}},
+		{"core.card.focus", func(t *testing.T, f *shellFixture, _ *surfaceHost, other string) {
+			f.run("core.card.focus", map[string]string{"card": other})
+		}},
+		{"a press on a card", func(t *testing.T, f *shellFixture, _ *surfaceHost, other string) {
+			f.click("core.card.header", other)
+		}},
+		{"a press on a surface", func(t *testing.T, f *shellFixture, _ *surfaceHost, other string) {
+			_, tabs := keyboardCards(t, f)
+			f.shell.Event("surface-pressed", []any{tabs[other][0]})
+			f.settle()
+		}},
+		{"closing the active tab", func(t *testing.T, f *shellFixture, _ *surfaceHost, other string) {
+			tabs := keyboardAddTab(t, f, other)
+			f.run("core.tab.close", map[string]string{"tab": tabs[other][1]})
+		}},
+		{"closing a card", func(t *testing.T, f *shellFixture, _ *surfaceHost, other string) {
+			f.run("core.card.focus", map[string]string{"card": other})
+			f.run("core.card.close", map[string]string{"card": other})
+		}},
+		{"restoring a space", func(t *testing.T, f *shellFixture, _ *surfaceHost, other string) {
+			f.run("core.card.focus", map[string]string{"card": other})
+			first := f.host.projects[0]["activeSpaceId"].(string)
+			f.click("core.space-tab.add", "")
+			f.click("core.space-tab", first)
+		}},
+		{"closing a picker", func(t *testing.T, f *shellFixture, _ *surfaceHost, other string) {
+			f.click("core.card.add", other)
+			f.run("core.picker.close", nil)
+		}},
+		{"closing the settings", func(t *testing.T, f *shellFixture, _ *surfaceHost, _ string) {
+			f.run("core.settings.open", nil)
+			f.run("core.settings.close", nil)
+		}},
+		{"leaving the library", func(t *testing.T, f *shellFixture, _ *surfaceHost, _ string) {
+			f.run("core.projects.browse", nil)
+			f.run("core.library.return", nil)
+		}},
+		{"AppKit moving the keyboard to the workbench", func(t *testing.T, f *shellFixture, stored *surfaceHost, _ string) {
+			stored.keyboard = nil
+			f.shell.Event("window-responder", []any{map[string]any{"owner": "workbench", "surface": nil, "document": nil}})
+			f.settle()
+		}},
+	}
+	for _, path := range paths {
+		t.Run(path.name, func(t *testing.T) {
+			f, stored := surfaceShell(t)
+			cards, _ := keyboardCards(t, f)
+			focused, _ := keyboardRing(t, f)
+			other := cards[0]
+			if other == focused {
+				other = cards[1]
+			}
+			path.run(t, f, stored, other)
+			f.settle()
+			ring, active := keyboardRing(t, f)
+			if active == nil {
+				t.Fatalf("the card %s of the ring has no active surface", ring)
+			}
+			got, ok := stored.keyboardTarget()
+			if !ok {
+				t.Fatalf("the ring is on the card %s and no keyboard call reached the host", ring)
+			}
+			if got == nil || *got != *active {
+				t.Fatalf("the ring is on the surface %s and the keyboard went to %s", *active, describeTarget(got))
+			}
+		})
+	}
+}
+
+func describeTarget(target *string) string {
+	if target == nil {
+		return "the workbench"
+	}
+	return *target
+}
+
+// A surface that is placed later receives the keyboard after the placement that holds it: the host call follows presentSurfaces.
+func TestTheKeyboardCallFollowsThePlacementOfTheSurface(t *testing.T) {
+	f, stored := surfaceShell(t)
+	cards, _ := keyboardCards(t, f)
+	stored.order = nil
+	keyboardAddTab(t, f, cards[0])
+	f.settle()
+	last := strings.Join(stored.order, " ")
+	if !strings.Contains(last, "syncSurfaces presentSurfaces surfaceFocus") {
+		t.Fatalf("the calls of the new tab are %s", last)
+	}
+}
+
+// While a modal is open the workbench holds the keyboard for it, and the host call does not name a surface.
+func TestAModalKeepsTheKeyboardUntilItCloses(t *testing.T) {
+	f, stored := surfaceShell(t)
+	cards, _ := keyboardCards(t, f)
+	f.click("core.card.add", cards[0])
+	f.settle()
+	if got, ok := stored.keyboardTarget(); !ok || got != nil {
+		t.Fatalf("the picker is open and the keyboard went to %s (%v)", describeTarget(got), ok)
+	}
+	f.run("core.picker.close", nil)
+	f.settle()
+	if got, ok := stored.keyboardTarget(); !ok || got == nil {
+		t.Fatalf("the picker closed and the keyboard stayed with %s (%v)", describeTarget(got), ok)
+	}
+}
+
+// A window that shows the library has no surface in front, so the keyboard stays with the workbench for its form.
+func TestTheLibraryKeepsTheKeyboardWithTheWorkbench(t *testing.T) {
+	f, stored := surfaceShell(t)
+	f.run("core.projects.browse", nil)
+	f.settle()
+	if got, ok := stored.keyboardTarget(); !ok || got != nil {
+		t.Fatalf("the library shows and the keyboard went to %s (%v)", describeTarget(got), ok)
+	}
+}
+
+// A press on the active tab of the focused card moves the first responder to the workbench, and the call gives it back.
+func TestAPressOnTheActiveTabGivesTheKeyboardBack(t *testing.T) {
+	f, stored := surfaceShell(t)
+	ring, active := keyboardRing(t, f)
+	stored.keyboard = nil
+	f.click("core.card.tab", *active)
+	f.settle()
+	got, ok := stored.keyboardTarget()
+	if !ok || got == nil || *got != *active {
+		t.Fatalf("the ring is on %s %s and the keyboard went to %s (%v)", ring, *active, describeTarget(got), ok)
+	}
+}
+
+// A tab keeps the focus of the Tab key and takes none from a pointer press.
+func TestAPressOnATabLeavesTheElementFocus(t *testing.T) {
+	f, _ := surfaceShell(t)
+	_, active := keyboardRing(t, f)
+	f.click("core.card.tab", *active)
+	if f.tester.Focused(tabFocusLabel(t, f, *active)) {
+		t.Fatal("a press left the element focus on the tab")
+	}
+}
+
+func tabFocusLabel(t *testing.T, f *shellFixture, tab string) string {
+	t.Helper()
+	return element(t, f.tester, "core.card.tab", tab).Label
+}
+
+// Every move of the focus ring goes through the one function, so a new path cannot skip the keyboard.
+func TestTheFocusRingMovesInOnePlace(t *testing.T) {
+	sources, err := filepath.Glob("../src/*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sources) == 0 {
+		t.Fatal("no source of the workbench")
+	}
+	assignment := regexp.MustCompile(`\.focused(\s*,\s*[\w.]+)*\s*(:?=)[^=]`)
+	for _, source := range sources {
+		text, err := os.ReadFile(source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for number, line := range strings.Split(string(text), "\n") {
+			if !assignment.MatchString(line) {
+				continue
+			}
+			if filepath.Base(source) == "keyboard.go" && strings.TrimSpace(line) == "s.focused = card" {
+				continue
+			}
+			t.Errorf("%s:%d assigns the focus ring directly: %s", filepath.Base(source), number+1, strings.TrimSpace(line))
+		}
+	}
+}

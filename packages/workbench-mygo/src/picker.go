@@ -164,7 +164,7 @@ func (s *Shell) openCardMenu(card, menu string) error {
 	if s.toggled(anchor) {
 		return nil
 	}
-	s.focused = card
+	s.focusCard(card)
 	s.settle()
 	s.openAddMenu(anchor, tool.tool, card)
 	return nil
@@ -192,7 +192,7 @@ func (s *Shell) openCardTools(card string) error {
 			items = append(items, pickerItem{Key: tool.Do, Name: name, Icon: s.headIconElements(tool.Icon), Active: tool.Pressed})
 		}
 	}
-	s.focused = card
+	s.focusCard(card)
 	s.settle()
 	s.openPicker("카드 도구", items, func(key string) error {
 		if key == "close" {
@@ -240,7 +240,7 @@ func (s *Shell) openTabList(card string) error {
 		items = append(items, item)
 	}
 	layer := s.openPicker(fmt.Sprintf("탭 %d개", len(tabs)), items, func(tab string) error {
-		s.focused = card
+		s.focusCard(card)
 		return s.selectTab(tab)
 	})
 	layer.anchor, layer.start = anchor, true
@@ -321,7 +321,8 @@ func (s *Shell) showFullscreen(card, tab string) error {
 	if err := s.storeCard(card, data); err != nil {
 		return err
 	}
-	s.focused, s.fullscreen = card, card
+	s.focusCard(card)
+	s.fullscreen = card
 	s.settle()
 	return nil
 }

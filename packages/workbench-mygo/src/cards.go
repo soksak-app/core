@@ -326,6 +326,8 @@ func (s *Shell) drawTab(c *ui.Context, tab layout.Tab, on bool, size, width floa
 		}
 		button := s.binder.Press(c, "core.card.tab", "core.tab.select", tab.ID, tabParam{tab.ID})
 		s.anchored("core.card.tab/"+tab.ID, button)
+		// A press leaves the keyboard focus where it is, and the Tab key still stops here.
+		button.KeepFocus()
 		button.Padding(0, m.tabGap, 0, start).AlignItems(ui.Center).Label(name).Tooltip(name).Children(func() {
 			ui.Text(c, name).SingleLine().Ellipsis("…").FontSize(size).MaxWidth(width).TextColor(color)
 		})

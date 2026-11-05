@@ -72,7 +72,7 @@ func (s *Shell) register() {
 	s.registerSettings()
 	s.registerPicker()
 	s.text.Register(s.registry)
-	s.keyboard.Register(s.registry)
+	s.exposedFocus.Register(s.registry)
 	s.registerCardSidebars()
 	s.registerPlugins()
 	s.registerDebug()
@@ -138,7 +138,7 @@ func (s *Shell) register() {
 		if _, ok := s.plane.Card(value.Card); !ok {
 			return fmt.Errorf("Unknown card: %s", value.Card)
 		}
-		s.focused = value.Card
+		s.focusCard(value.Card)
 		if s.fullscreen != value.Card {
 			s.fullscreen = ""
 		}
@@ -152,7 +152,7 @@ func (s *Shell) register() {
 		if err := s.paneCard(value.Card); err != nil {
 			return err
 		}
-		s.focused = value.Card
+		s.focusCard(value.Card)
 		if s.fullscreen == value.Card {
 			s.fullscreen = ""
 		} else {
