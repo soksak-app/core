@@ -1992,6 +1992,30 @@ fn replies_of_child(name: &str, variable: &str) -> (String, Vec<serde_json::Valu
     )
 }
 
+// contract: sidecars.protocol.reply-cids-reach-the-owner
+#[test]
+fn a_message_of_a_sidecar_reaches_its_owner_with_the_identifiers_of_its_request() {
+    let (sidecars, _directory) = script_sidecars(REPLY_SCRIPT);
+    let (window, events) = owner("a", "/projects/a");
+    let body = raw(r#"{"operation":"input"}"#);
+    sidecars
+        .send_with_cids(
+            &window,
+            ECHO,
+            "s1",
+            &body,
+            &["b1.7".to_string(), "b1.8".to_string()],
+        )
+        .unwrap();
+    assert_eq!(events.recv_timeout(STALL).unwrap().cids, ["b1.7", "b1.8"]);
+    sidecars
+        .send_with_cids(&window, ECHO, "s1", &body, &["b1.9".to_string()])
+        .unwrap();
+    assert_eq!(events.recv_timeout(STALL).unwrap().cids, ["b1.9"]);
+    sidecars.send(&window, ECHO, "s1", &body).unwrap();
+    assert!(events.recv_timeout(STALL).unwrap().cids.is_empty());
+}
+
 // contract: sidecars.protocol.reply-with-cids-is-recorded
 #[test]
 fn a_reply_of_a_sidecar_is_recorded_with_the_identifiers_of_its_request() {

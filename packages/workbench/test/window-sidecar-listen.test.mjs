@@ -49,3 +49,13 @@ test("the first listener of a pair registers the page, on resolves after the hos
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(listens().at(-1), { sidecar: "@x/side", id: "tab-a", on: false }, "the last listener removes the registration");
 });
+
+test("a listener receives the identifiers of the requests that a message answers", { timeout: 10000 }, async () => {
+  const sidecar = windowSidecar("@x/cids");
+  const received = [];
+  const off = await sidecar.on("tab-cids", (body, cids) => received.push([body, cids]));
+  deliver({ sidecar: "@x/cids", surface: "tab-cids", cids: ["b1.7"], body: { ack: true } });
+  deliver({ sidecar: "@x/cids", surface: "tab-cids", body: { event: "state" } });
+  assert.deepEqual(received, [[{ ack: true }, ["b1.7"]], [{ event: "state" }, []]]);
+  await off();
+});

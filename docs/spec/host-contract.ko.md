@@ -525,6 +525,7 @@ fn invalid_json_closes_connection() {
 | `mygo.benchmark.empty-window-reads-the-window` | 빈 창 benchmark는 세 host benchmark의 창을 읽고, 읽기에 실패하면 끝나며, 인수를 받고, JSON 한 줄을 보고하고, `footprint`의 출력에서 footprint를 읽는다. | mygo only: 이 benchmark는 mygo framework의 창을 실행한다 |
 | `sidecars.protocol.request-line-carries-cids` | 입력을 이어받는 페이지 요청은 `root`와 `body` 사이에 필드 `cids`(상관 식별자, 순서대로)를 가진 요청 줄로 사이드카에 가고, 입력을 이어받지 않는 요청에는 `cids` 필드가 없다. | all |
 | `sidecars.protocol.request-with-cids-is-recorded` | `cids`를 가진 페이지 요청은 그 `cids`, 사이드카의 `name`, `surface`, body 크기 `bytes`를 가진 level `info`의 event `host.sidecar.request`가 되고, `cids`가 없는 요청은 이 event를 저장하지 않는다. | all |
+| `sidecars.protocol.reply-cids-reach-the-owner` | 줄이 `cids`를 밝힌 sidecar의 메시지는 그 `cids`와 함께 surface의 owner에게 간다. `sidecar-message` event와 host가 view에 post하는 메시지 모두, 표준 입출력 transport와 persistent 연결 모두 같다. `cids`가 없는 메시지에는 없다. | all |
 | `sidecars.protocol.reply-with-cids-is-recorded` | 줄이 `cids`를 밝히거나 body가 `error` member를 가진 객체인 sidecar의 메시지는 event `host.sidecar.reply`이다. `name`, `surface`, body 크기 `bytes`, `ok`(`error`이면 false), 줄의 `cids`, 그 첫 번째 요청을 host가 기억하면 `micros`, 오류이면 `error` `-32603: <text>`(문자열 오류는 그 글, 다른 값은 JSON 글)를 level `warn`(오류가 없는 reply는 `info`)으로 가진다. 둘 다 없는 메시지는 이 event를 저장하지 않는다. | all |
 | `sidecars.protocol.failure-fails-the-pending-requests` | sidecar의 실패는 기다리는 요청이 있는 surface마다 level `warn`에 `ok: false`, `bytes: 0`, `error` `-32603: <reason>`(page가 받는 이유)과 그 요청들의 `cids`를 가진 event `host.sidecar.reply`를 저장한다. | all |
 | `log.input.region-event-with-cids-is-recorded` | JSON에 `cids`가 있는 image region event는 그 `cids`, region의 `surface`와 `name`, event의 `type`을 가진 level `info`의 event `host.input.relay`가 된다. `cids`가 없는 region event는 `host.input.relay`를 저장하지 않는다. | all |
@@ -1070,7 +1071,7 @@ fn invalid_json_closes_connection() {
 | `log.writer.assigns-seq-and-opens-with-log-open` | host 로그 파일은 `schema`(3), `pid`, `role`, `boot`를 담은 `log.open`으로 시작하며, writer는 모든 줄에 1부터 연속인 `seq`를 부여한다. | all |
 | `log.writer.stores-both-clocks` | writer의 모든 줄은, `log.open`, `log.rotated`, `log.dropped`를 포함해, `ts_us`(호출 시점의 wall clock, 마이크로초)와 `mono_ns`(호출 시점의 플랫폼 monotonic clock, 나노초이며 양수이고 앞선 호출의 `mono_ns`보다 작지 않다)를 가진다. | all |
 | `log.writer.stores-cids` | host의 생산자가 상관 식별자와 함께 낸 event는 `cids`(순서대로의 목록)와 함께 저장되고, 식별자가 없는 event에는 `cids`가 없다. 비어 있거나 따옴표, 역슬래시, 제어 문자를 담은 식별자는 거부하고 손실로 센다. | all |
-| `log.writer.never-blocks-and-counts-loss` | `emit`은 기다리지 않고 돌아온다. 큐에 자리가 없으면 false를 돌려주고, writer는 거부된 event 수와 같은 `count`와 거부된 event의 `channel`을 가진 `log.dropped` 하나를 그것이 가리키는 `seq` 범위 뒤에 저장한다. | all |
+| `log.writer.never-blocks-and-counts-loss` | `emit`은 기다리지 않고 돌아온다. 큐에 자리가 없으면 false를 돌려준다. writer는 손실을 기록할 때마다 직전 기록 이후 거부된 event 수와 같은 `count`와 거부된 event의 `channel`을 가진 `log.dropped` 하나를 그것이 가리키는 `seq` 범위 뒤에 저장하며, `count`의 합은 거부된 event 수다. | all |
 | `log.writer.writes-each-interval` | writer는 마지막 쓰기 뒤 batch 간격이 끝날 때마다 모인 것을 쓰며, event가 간격보다 빨리 계속 들어올 때도 그렇다. event가 없는 간격을 기다리는 writer는 꾸준한 입력 동안 아무것도 쓰지 않고 kill에서 한 간격보다 많이 잃는다. | all |
 | `log.writer.sleeps-with-nothing-to-write` | batch 간격 동안 쓴 것이 없는 writer는 event, source의 wake, 기다린 count가 닿을 때까지 다시 깨어나지 않는다. | all |
 | `log.writer.a-count-waits-for-a-write` | gate count만으로는 쓰지 않는다. 잠든 writer는 다음 event까지 최대 1분 동안 count를 들고 있는다. | all |

@@ -96,10 +96,15 @@ impl SidecarRoutes {
 
 /// The message that the host posts to a view for a sidecar message: {"sok":1,"event":"sidecar.message","data":{"id","body"}},
 /// composed around the raw body that the sidecar sent, which is not parsed again.
-pub(crate) fn view_message(id: &str, body: &RawValue) -> String {
+pub(crate) fn view_message(id: &str, cids: &[String], body: &RawValue) -> String {
     let id = Value::String(id.to_string()).to_string();
+    let cids = if cids.is_empty() {
+        String::new()
+    } else {
+        format!(r#","cids":{}"#, Value::from(cids.to_vec()))
+    };
     format!(
-        r#"{{"sok":1,"event":"sidecar.message","data":{{"id":{id},"body":{}}}}}"#,
+        r#"{{"sok":1,"event":"sidecar.message","data":{{"id":{id}{cids},"body":{}}}}}"#,
         body.get()
     )
 }

@@ -95,12 +95,18 @@ func (r *sidecarRoutes) clear() {
 
 // viewSidecarMessage returns the message that the host posts to a view for a sidecar message:
 // {"sok":1,"event":"sidecar.message","data":{"id","body"}}, composed around the raw body that the sidecar sent, which is not parsed again.
-func viewSidecarMessage(id string, body json.RawMessage) []byte {
+func viewSidecarMessage(id string, cids []string, body json.RawMessage) []byte {
 	// default: a string always marshals.
 	quoted, _ := json.Marshal(id)
 	message := make([]byte, 0, len(body)+len(quoted)+64)
 	message = append(message, `{"sok":1,"event":"sidecar.message","data":{"id":`...)
 	message = append(message, quoted...)
+	if len(cids) > 0 {
+		// default: a list of strings always marshals.
+		listed, _ := json.Marshal(cids)
+		message = append(message, `,"cids":`...)
+		message = append(message, listed...)
+	}
 	message = append(message, `,"body":`...)
 	message = append(message, body...)
 	return append(message, "}}"...)

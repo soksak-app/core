@@ -124,11 +124,26 @@ fn a_message_reaches_the_page_only_while_it_listens_and_each_routed_view() {
 #[test]
 fn the_view_message_wraps_the_raw_body_without_parsing_it_again() {
     let body = RawValue::from_string(r#"{"event":"screen","rows":2}"#.to_string()).unwrap();
-    let text = view_message("tab-\"a", &body);
+    let text = view_message("tab-\"a", &[], &body);
     assert_eq!(
         text,
         r#"{"sok":1,"event":"sidecar.message","data":{"id":"tab-\"a","body":{"event":"screen","rows":2}}}"#
     );
     let value: Value = serde_json::from_str(&text).unwrap();
     assert_eq!(value["data"]["body"]["rows"], json!(2));
+}
+
+// contract: sidecars.protocol.reply-cids-reach-the-owner
+#[test]
+fn the_view_message_names_the_identifiers_of_the_requests_that_it_answers() {
+    let body = RawValue::from_string(r#"{"ack":true}"#.to_string()).unwrap();
+    let text = view_message(
+        "tab-1",
+        &["b1.7".to_string(), "view-a.1".to_string()],
+        &body,
+    );
+    assert_eq!(
+        text,
+        r#"{"sok":1,"event":"sidecar.message","data":{"id":"tab-1","cids":["b1.7","view-a.1"],"body":{"ack":true}}}"#
+    );
 }

@@ -40,6 +40,9 @@ pub struct Message {
     pub surface: String,
     /// The message body, not interpreted.
     pub body: Box<RawValue>,
+    /// The correlation identifiers of the requests that this message answers (docs/spec/sidecars.md#protocol).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub cids: Vec<String>,
 }
 
 /// The event value that reports a sidecar failure to the page (docs/spec/sidecars.md#failure).
@@ -1708,6 +1711,7 @@ impl<O: Owner> Sidecars<O> {
                         sidecar: name.to_string(),
                         surface: surface.to_string(),
                         body,
+                        cids: Vec::new(),
                     }),
                     Err(error) => log_error(
                         &format!("sidecar {name}"),
@@ -3337,6 +3341,7 @@ impl<O: Owner> Core<O> {
                             sidecar: sidecar.clone(),
                             surface: event.surface,
                             body: event.body,
+                            cids: event.cids,
                         });
                     } else {
                         let response_sender = ReadThreadResponseSender {
@@ -3820,6 +3825,7 @@ fn notify_connection<O: Owner>(core: &Arc<Core<O>>, name: &str, outcome: Result<
             sidecar: name.to_string(),
             surface,
             body: body.clone(),
+            cids: Vec::new(),
         });
     }
 }
@@ -3984,6 +3990,7 @@ fn relay<O: Owner>(
             sidecar: sidecar.to_string(),
             surface: event.surface,
             body: event.body,
+            cids: event.cids,
         });
     }
 }
