@@ -8,7 +8,7 @@ test("the measurement records start, idle and reloads and whether the starting p
   const calls = [];
   let clock = 0;
   await measure({
-    status: async () => ({ pageProcess: 42 + calls.filter((call) => call === "reload").length }),
+    status: async () => ({ occluded: false, pageProcess: 42 + calls.filter((call) => call === "reload").length }),
     reload: async () => { calls.push("reload"); },
     alive: (pid) => { calls.push(`alive ${pid}`); return false; },
     footprint: (pid) => { calls.push(`footprint ${pid}`); return 1000 + calls.length; },
@@ -25,9 +25,19 @@ test("the measurement records start, idle and reloads and whether the starting p
 
 test("a window without a page process fails the measurement", async () => {
   await assert.rejects(measure({
-    status: async () => ({ pageProcess: 0 }),
+    status: async () => ({ occluded: false, pageProcess: 0 }),
     reload: async () => {}, footprint: () => 1, alive: () => true, wait: async () => {}, idleMs: 0, reloads: 0, log: () => {},
   }), /start: the window has no page process \(0\)/);
+});
+
+test("a covered window fails the measurement at the reading that finds it, because a covered window measures another state", async () => {
+  const entries = [];
+  const covered = [false, true];
+  await assert.rejects(measure({
+    status: async () => ({ window: "main", occluded: covered.shift(), pageProcess: 42 }),
+    reload: async () => {}, footprint: () => 1, alive: () => true, wait: async () => {}, idleMs: 0, reloads: 0, log: (entry) => entries.push(entry),
+  }), /window main reports occluded true; the measurement requires occluded false/);
+  assert.deepEqual(entries.map(({ phase }) => phase), ["start"]);
 });
 
 test("footprint output and options are read strictly", () => {
@@ -44,7 +54,7 @@ test("footprint output and options are read strictly", () => {
 test("a window whose host.window reports pageProcess null fails before any step with the error of the mygo host", async () => {
   const steps = [];
   await assert.rejects(measure({
-    status: async () => ({ pageProcess: null, frames: 0 }),
+    status: async () => ({ occluded: false, pageProcess: null, frames: 0 }),
     reload: async () => { steps.push("reload"); },
     footprint: () => { steps.push("footprint"); return 1; },
     alive: () => true, wait: async () => { steps.push("wait"); }, idleMs: 0, reloads: 1, log: () => {},

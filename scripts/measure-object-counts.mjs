@@ -21,7 +21,7 @@ import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { promisify } from "node:util";
 import { parseArgs } from "node:util";
-import { PROCESS_TABLE_BYTES, hostProcess, parseProcessTable } from "./measure-app-usage.mjs";
+import { PROCESS_TABLE_BYTES, hostProcess, parseProcessTable, requireOcclusion } from "./measure-app-usage.mjs";
 import { applyTrace, parseTrace, traceSettings } from "./measure-trace.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -203,7 +203,10 @@ async function settledReply(objects, settle) {
  * page process must report its page.
  */
 async function footprintOf(status, footprint, host, reply) {
-  const { pageProcess, documents } = await status();
+  const reading = await status();
+  // A covered window measures another state, so every reading requires a window that is not covered.
+  requireOcclusion(null, [reading]);
+  const { pageProcess, documents } = reading;
   if (pageProcess !== null && (!Number.isInteger(pageProcess) || pageProcess <= 0)) throw new Error(`the window has no page process (${pageProcess})`);
   if ((pageProcess === null) !== (reply.page === null)) {
     throw new Error(`diagnostics.objects reports the page ${JSON.stringify(reply.page)} while host.window reports pageProcess ${pageProcess}`);
@@ -407,7 +410,7 @@ if (import.meta.main) {
   try {
     await measure({
       objects: () => step("diagnostics.objects", () => client.request("diagnostics.objects", { window })),
-      status: () => step("host.window", () => run(["status", "host.window", "--window", window])),
+      status: () => step("host.window", async () => ({ ...await run(["status", "host.window", "--window", window]), window })),
       host,
       footprint: (pid) => {
         const text = execFileSync("footprint", ["-p", String(pid), "-f", "bytes"], { encoding: "utf8" });

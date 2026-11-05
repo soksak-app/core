@@ -2163,7 +2163,7 @@ type ViewEventRequest struct {
 	Surface    string          `json:"surface"`
 	Generation uint64          `json:"generation"`
 	Event      string          `json:"event"`
-	Data       json.RawMessage `json:"data"`
+	Data       json.RawMessage `json:"data,nullvalue"`
 }
 
 // pushViewEvent posts the event of req to the ready document of its view as {"sok": 1, "event", "data"}. An event without a name or
@@ -2204,7 +2204,7 @@ type ViewRequestRequest struct {
 	Generation uint64          `json:"generation"`
 	ID         uint64          `json:"id"`
 	Command    string          `json:"command"`
-	Params     json.RawMessage `json:"params"`
+	Params     json.RawMessage `json:"params,nullvalue"`
 	Cids       []string        `json:"cids,omitempty"`
 }
 

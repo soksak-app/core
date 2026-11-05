@@ -27,6 +27,7 @@ test("the measurement records the totals and the footprint at start and each min
       assert.equal(pid, 7);
       return footprints.shift();
     },
+    readWindows: async () => [{ window: "w1", occluded: false }],
     readFrames: async () => frames.shift(),
     wait: async (ms) => {
       waits.push(ms);
@@ -67,6 +68,22 @@ test("B3_MEASUREMENTS declares hostFootprintKb, the settled footprint in KB that
   });
   assert.deepEqual(Object.keys(output.measurements), B3_MEASUREMENTS);
   assert.equal(b3Output({ settledBytes: 1024, windows, trace: 1, policy }).conditions.traceState, true);
+});
+
+test("a covered window fails the measurement at the reading that finds it: at the start, at a minute and after the settle", async () => {
+  for (const [readings, phases] of [[[true], []], [[false, true], ["start"]], [[false, false, true], ["start", "minute 1"]]]) {
+    const entries = [];
+    await assert.rejects(measure({
+      pid: 7, minutes: 1,
+      totals: () => ({ nodes: 1, bytes: 1 }),
+      footprint: async () => 1,
+      readFrames: async () => [1],
+      readWindows: async () => [{ window: "w1", occluded: readings.shift() }],
+      wait: async () => {},
+      log: (entry) => entries.push(entry),
+    }), /window w1 reports occluded true; the measurement requires occluded false/);
+    assert.deepEqual(entries.map(({ phase }) => phase), phases);
+  }
 });
 
 test("the options name the application by its configuration folder and sok, and take the trace state", () => {

@@ -18,6 +18,7 @@ import { execFileSync } from "node:child_process";
 import { parseArgs } from "node:util";
 import { setTimeout as sleep } from "node:timers/promises";
 import { connect } from "@soksak/client";
+import { requireOcclusion } from "./measure-app-usage.mjs";
 
 /** The most calls of one diagnostics.page.calls request (docs/spec/endpoint.md); a round sends its calls in requests of this size. */
 export const BATCH = 50;
@@ -33,9 +34,14 @@ export const EVENT_BATCH = 1000;
 export async function measure({ status, collect, calls, footprint, count, rounds, log, idleMs, wait, events, hostEvents }) {
   // host.window reports pageProcess null for a window without a main page, which the mygo host draws in native UI; the
   // measurement fails before its first request instead of sending main-page methods that the host refuses.
-  if ((await status()).pageProcess === null) throw new Error("the mygo host has no main page");
+  const first = await status();
+  if (first.pageProcess === null) throw new Error("the mygo host has no main page");
+  // A covered window measures another state, so every reading requires a window that is not covered.
+  requireOcclusion(null, [first]);
   const read = async (round, phase, extra = {}) => {
-    const { pageProcess } = await status();
+    const reading = await status();
+    requireOcclusion(null, [reading]);
+    const { pageProcess } = reading;
     if (pageProcess === null) throw new Error("the mygo host has no main page");
     if (!Number.isInteger(pageProcess) || pageProcess <= 0) throw new Error(`round ${round} ${phase}: the window has no page process (${pageProcess})`);
     const entry = { round, phase, pageProcess, ...footprint(pageProcess), ...extra };
@@ -125,7 +131,7 @@ if (import.meta.main) {
   const client = await connect({ configDir: options.configDir });
   try {
     await measure({
-      status: async () => JSON.parse(sok("status", "host.window", "--window", window)),
+      status: async () => ({ ...JSON.parse(sok("status", "host.window", "--window", window)), window }),
       // The diagnostic methods are methods of the local endpoint of a diagnostic build, not declared commands, so the client calls them.
       collect: () => client.request("diagnostics.page.collect", { window }),
       calls: (count) => client.request("diagnostics.page.calls", { window, count }),

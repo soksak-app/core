@@ -9,7 +9,7 @@ test("the measurement reads the footprint before the calls, after them and after
   const sizes = [1000, 3000, 1200, 1100, 2100, 1400];
   // WebKit malloc is half of each footprint, so the growth per call is half of the footprint growth.
   await measure({
-    status: async () => ({ pageProcess: 7 }),
+    status: async () => ({ occluded: false, pageProcess: 7 }),
     collect: async () => { steps.push("collect"); },
     calls: async (count) => { steps.push(`calls ${count}`); return { count, ms: 5 }; },
     footprint: (pid) => { steps.push(`footprint ${pid}`); const footprint = sizes.shift(); return { footprint, webkitMalloc: footprint / 2 }; },
@@ -24,12 +24,23 @@ test("the measurement reads the footprint before the calls, after them and after
   assert.deepEqual(entries.at(-1), { calls: 60, rounds: 2, perCall: { beforeCollect: 13, afterCollect: 2 } });
 });
 
+test("a covered window fails the measurement before its first request and at a later reading", async () => {
+  const base = { collect: async () => {}, calls: async (count) => ({ count, ms: 1 }), footprint: () => ({ footprint: 1, webkitMalloc: 1 }), count: 1, rounds: 1, log: () => {} };
+  const sent = [];
+  await assert.rejects(measure({ ...base, collect: async () => { sent.push("collect"); }, status: async () => ({ window: "w1", occluded: true, pageProcess: 7 }) }),
+    /window w1 reports occluded true; the measurement requires occluded false/);
+  assert.deepEqual(sent, []);
+  const covered = [false, false, true];
+  await assert.rejects(measure({ ...base, status: async () => ({ window: "w1", occluded: covered.shift(), pageProcess: 7 }) }),
+    /window w1 reports occluded true; the measurement requires occluded false/);
+});
+
 test("the idle mode waits instead of sending calls and reports the growth per minute", async () => {
   const entries = [];
   const steps = [];
   const sizes = [1000, 7000, 1600];
   await measure({
-    status: async () => ({ pageProcess: 7 }),
+    status: async () => ({ occluded: false, pageProcess: 7 }),
     collect: async () => { steps.push("collect"); },
     calls: async () => { throw new Error("the idle mode sent a call"); },
     footprint: () => { const webkitMalloc = sizes.shift(); return { footprint: webkitMalloc * 2, webkitMalloc, reclaimable: 0 }; },
@@ -48,7 +59,7 @@ test("the event mode has the host send events in requests of 1000, then one barr
   const steps = [];
   const sizes = [1000, 3500, 1250];
   await measure({
-    status: async () => ({ pageProcess: 7 }),
+    status: async () => ({ occluded: false, pageProcess: 7 }),
     collect: async () => { steps.push("collect"); },
     calls: async (count) => { steps.push(`calls ${count}`); return { count, ms: 1 }; },
     hostEvents: async (count) => { steps.push(`events ${count}`); return { count }; },
@@ -64,13 +75,13 @@ test("the event mode has the host send events in requests of 1000, then one barr
 
 test("a page that answers another count or changes its process fails the round", async () => {
   const base = { collect: async () => {}, footprint: () => ({ footprint: 1, webkitMalloc: 1 }), count: 3, rounds: 1, log: () => {} };
-  await assert.rejects(measure({ ...base, status: async () => ({ pageProcess: 7 }), calls: async () => ({ count: 2, ms: 1 }) }),
+  await assert.rejects(measure({ ...base, status: async () => ({ occluded: false, pageProcess: 7 }), calls: async () => ({ count: 2, ms: 1 }) }),
     /round 1: the page answered \{"count":2,"ms":1\} for 3 calls/);
   // The page process changes when the page receives the calls.
   let pid = 7;
-  await assert.rejects(measure({ ...base, status: async () => ({ pageProcess: pid }), calls: async (count) => { pid = 8; return { count, ms: 1 }; } }),
+  await assert.rejects(measure({ ...base, status: async () => ({ occluded: false, pageProcess: pid }), calls: async (count) => { pid = 8; return { count, ms: 1 }; } }),
     /round 1: the page process changed from 7 during the round/);
-  await assert.rejects(measure({ ...base, status: async () => ({ pageProcess: 0 }), calls: async (count) => ({ count, ms: 1 }) }),
+  await assert.rejects(measure({ ...base, status: async () => ({ occluded: false, pageProcess: 0 }), calls: async (count) => ({ count, ms: 1 }) }),
     /round 1 base: the window has no page process \(0\)/);
 });
 
@@ -95,7 +106,7 @@ test("footprint output and options are read strictly", () => {
 test("a window whose host.window reports pageProcess null fails before any request with the error of the mygo host", async () => {
   const steps = [];
   await assert.rejects(measure({
-    status: async () => ({ pageProcess: null, frames: 0 }),
+    status: async () => ({ occluded: false, pageProcess: null, frames: 0 }),
     collect: async () => { steps.push("collect"); },
     calls: async (count) => { steps.push(`calls ${count}`); return { count, ms: 1 }; },
     footprint: () => { steps.push("footprint"); return { footprint: 1, webkitMalloc: 1 }; },

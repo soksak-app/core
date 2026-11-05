@@ -286,6 +286,9 @@ $(BUILD)/capture_source_writer_test: src/capture.m
 
 $(BUILD)/capture_resize_test: src/capture.m
 
+$(BUILD)/capture_covered_test: tests/capture_covered_test.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h)
+	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Metal -framework Network $(MINIMUM) -o $@
+
 $(BUILD)/capture_presentation_test: tests/capture_presentation_test.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h)
 	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Metal -framework Network $(MINIMUM) -o $@
 
@@ -419,6 +422,7 @@ NATIVE_E2E_TESTS = window_titlebar_layout_test \
   capture_presentation_test \
   capture_resize_test \
   capture_test \
+  capture_covered_test \
   capture_checker_test \
   capture_file_checker_test \
   capture_directory_checker_test \
