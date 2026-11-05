@@ -1,10 +1,7 @@
-//go:build !windows
-
 package host
 
 import (
 	"os"
-	"syscall"
 	"testing"
 	"time"
 
@@ -18,6 +15,9 @@ type pipeWake struct {
 
 func (p pipeWake) NativeEventWake() (int, error) { return p.descriptor, nil }
 
+// wakeReaders keeps the file of each pipe reachable: the wake owns the descriptor, and a file that is collected would close it as well.
+var wakeReaders []*os.File
+
 // A byte in the pipe of the native ring reaches the Wake of the writer, again after the first.
 // contract: log.native.wake-stores-a-record-at-once
 func TestNativeWakeTurnsThePipeIntoTheWakeOfTheWriter(t *testing.T) {
@@ -26,14 +26,8 @@ func TestNativeWakeTurnsThePipeIntoTheWakeOfTheWriter(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer writer.Close()
-	descriptor, err := syscall.Dup(int(reader.Fd()))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := syscall.SetNonblock(descriptor, true); err != nil {
-		t.Fatal(err)
-	}
-	reader.Close()
+	wakeReaders = append(wakeReaders, reader)
+	descriptor := int(reader.Fd())
 	wake, err := nativeWake(pipeWake{descriptor: descriptor})
 	if err != nil {
 		t.Fatal(err)
