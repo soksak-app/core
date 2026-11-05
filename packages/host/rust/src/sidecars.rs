@@ -2091,7 +2091,10 @@ impl<O: Owner> Sidecars<O> {
                     // default: a lock that a panicking thread poisoned still holds the sidecar state, which is only
                     // read; the panic hook records the panic.
                     .unwrap_or_else(PoisonError::into_inner);
-                (state.replacing.contains_key(&item.sidecar), state.layout.is_some())
+                (
+                    state.replacing.contains_key(&item.sidecar),
+                    state.layout.is_some(),
+                )
             };
             if item.sessions != 0 || busy || !known {
                 continue;

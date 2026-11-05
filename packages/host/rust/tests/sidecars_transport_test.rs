@@ -2842,9 +2842,9 @@ fn a_layout_surface_of_another_plugin_does_not_hold_an_outdated_service() {
         0,
     );
     let sidecars = replace_sidecars(config_directory.path(), executable_directory.path());
-    let mut files = layout_surface("tab-files");
-    files.plugin = "files".to_string();
-    sidecars.retain_sessions(&[files]).unwrap();
+    let mut other = layout_surface("tab-other");
+    other.plugin = "other".to_string();
+    sidecars.retain_sessions(&[other]).unwrap();
     service.second.recv_timeout(STALL).unwrap();
     let operations = service.operations.lock().unwrap().clone();
     assert_eq!(

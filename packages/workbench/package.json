@@ -134,6 +134,7 @@
   "specFiles": [
     "docs/spec/cases/layout/",
     "docs/spec/cases/log-contract/query/",
+    "docs/spec/cases/project-data/",
     "docs/spec/events.json"
   ],
   "dependencies": {

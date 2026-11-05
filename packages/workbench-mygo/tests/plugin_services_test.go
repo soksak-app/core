@@ -110,7 +110,7 @@ func projectDataValues(t *testing.T) []struct {
 	Same   bool   `json:"same"`
 } {
 	t.Helper()
-	text, err := os.ReadFile(filepath.Join("..", "..", "workbench", "test", "fixtures", "project-data-values.json"))
+	text, err := os.ReadFile(filepath.Join("..", "..", "..", "docs", "spec", "cases", "project-data", "values.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
