@@ -1135,3 +1135,30 @@ fn a_failed_presentation_notice_ends_the_present_with_its_error() {
         Err("the window holds its frames".to_string())
     );
 }
+
+// contract: surface-layout.keyboard-follows-the-focus-ring
+#[test]
+fn an_image_region_declaration_keeps_the_keys_of_its_surface() {
+    let region = |name: &str, kind: &str, input: &str| super::SurfaceRegion {
+        name: name.into(),
+        kind: kind.into(),
+        sidecar: String::new(),
+        present: String::new(),
+        input: input.into(),
+    };
+    let composition = |regions| SurfaceComposition {
+        kind: "view".into(),
+        page: "ui/page.html".into(),
+        regions,
+        overlays: None,
+    };
+    assert!(!composition(vec![]).declares_image_region());
+    assert!(!composition(vec![region("page", "document", "native")]).declares_image_region());
+    assert!(
+        composition(vec![
+            region("page", "document", "native"),
+            region("view", "image", "dom")
+        ])
+        .declares_image_region()
+    );
+}

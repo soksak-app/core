@@ -158,6 +158,9 @@ impl Platform for Windows {
     fn focus_surface(&self, surface: Handle) -> Result<(), String> {
         unsupported::focus_surface(surface)
     }
+    fn focus_surface_for_region(&self, surface: Handle) -> Result<(), String> {
+        unsupported::focus_surface_for_region(surface)
+    }
     fn focus_workbench(&self, window: Handle) -> Result<(), String> {
         unsupported::focus_workbench(window)
     }

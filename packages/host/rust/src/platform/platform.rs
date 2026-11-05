@@ -449,6 +449,8 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// Gives the keyboard of its window to the surface (docs/spec/native-surfaces.md#keyboard-of-a-surface). Call it on the main
     /// thread.
     fn focus_surface(&self, surface: Handle) -> Result<(), String>;
+    /// Gives the keyboard to a surface that declared an image region, which keeps the keys until the region shows.
+    fn focus_surface_for_region(&self, surface: Handle) -> Result<(), String>;
     /// Gives the keyboard of window to the workbench. Call it on the main thread.
     fn focus_workbench(&self, window: Handle) -> Result<(), String>;
     fn set_window_overlays(&self, main: Handle, overlays: &[WindowOverlay]) -> Result<(), String>;

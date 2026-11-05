@@ -218,6 +218,16 @@ type SurfaceComposition struct {
 	Overlays []string        `json:"overlays,omitempty"`
 }
 
+// declaresImageRegion reports whether the composition declares an image region, which takes the keys of its surface.
+func (c SurfaceComposition) declaresImageRegion() bool {
+	for _, region := range c.Regions {
+		if region.Kind == "image" {
+			return true
+		}
+	}
+	return false
+}
+
 func validCompositionName(name string) bool {
 	if len(name) < 1 || len(name) > 64 {
 		return false
@@ -1334,6 +1344,12 @@ func (s *Surfaces) FocusSurface(req FocusRequest) error {
 	if s.window == nil {
 		return errNoWindow
 	}
+	declared := false
+	if req.Surface != nil {
+		s.mu.Lock()
+		declared = s.compositions[*req.Surface].declaresImageRegion()
+		s.mu.Unlock()
+	}
 	done := make(chan error, 1)
 	window := s.window.NativeWindow()
 	if err := system.EnqueueUI(func() {
@@ -1347,7 +1363,11 @@ func (s *Surfaces) FocusSurface(req FocusRequest) error {
 			done <- fmt.Errorf("surface %q is not attached", *req.Surface)
 			return
 		}
-		system.FocusSurface(view.handle)
+		if declared {
+			system.FocusSurfaceForRegion(view.handle)
+		} else {
+			system.FocusSurface(view.handle)
+		}
 		done <- nil
 	}); err != nil {
 		return err

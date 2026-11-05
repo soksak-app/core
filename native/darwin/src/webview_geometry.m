@@ -3,6 +3,7 @@
 #import <objc/runtime.h>
 #import "input_inject.h"
 #import "application_log.h"
+#import "event_ring.h"
 #import "input_press_context.h"
 #import "observe.h"
 #import "webview_geometry.h"
@@ -67,6 +68,16 @@ static void sendPointerMove(NSView *root) {
 }
 @end
 
+// A person types about 10 keys in a second, so this is about 25 seconds of keys before a region shows.
+static const NSUInteger kKeptKeysLimit = 256;
+
+static void recordKeys(const char *name, uint8_t level, NSUInteger count, const char *reason) {
+    NSString *fields = reason ? [NSString stringWithFormat:@"{\"count\":%lu,\"reason\":\"%s\"}", (unsigned long)count, reason]
+        : [NSString stringWithFormat:@"{\"count\":%lu}", (unsigned long)count];
+    // events: native.surface.key_kept, native.surface.keys_delivered, native.surface.keys_dropped
+    sp_event(SP_CLASS_INPUT, level, name, fields.UTF8String);
+}
+
 @interface SPSurfaceHost : NSView {
     id _keyboardOwner;
 }
@@ -77,6 +88,13 @@ static void sendPointerMove(NSView *root) {
 @property(nonatomic, assign) NSView *keyboardOwner;
 // The surface landed on its web view and gives the keyboard to the first image region that shows.
 @property(nonatomic) BOOL keyboardWanted;
+// The surface declared an image region that has not shown: the surface itself takes the keyboard instead of its page and keeps
+// the keys for the region.
+@property(nonatomic) BOOL awaitsRegion;
+// The keys that wait for the region, oldest first. A surface holds at most kKeptKeysLimit of them.
+@property(nonatomic, retain) NSMutableArray<NSEvent *> *keptKeys;
+// The keys over the limit since the last delivery.
+@property(nonatomic) NSUInteger droppedKeys;
 @end
 
 // A surface places native regions below its view WebView. CSS transparency does not turn off the native opaque
@@ -228,12 +246,26 @@ static void notifyScale(NSView *view) {
 - (void)dealloc {
     sp_window_object_change(SP_WINDOW_OBJECT_SURFACE_HOST, -1);
     objc_storeWeak(&_keyboardOwner, nil);
+    [_keptKeys release];
     [_nativePlane release];
     [_domOverlays release];
     [super dealloc];
 }
 - (NSView *)keyboardOwner { return objc_loadWeak(&_keyboardOwner); }
 - (void)setKeyboardOwner:(NSView *)owner { objc_storeWeak(&_keyboardOwner, owner); }
+- (BOOL)acceptsFirstResponder { return self.awaitsRegion; }
+- (void)keyDown:(NSEvent *)event {
+    if (!self.keptKeys) self.keptKeys = [NSMutableArray array];
+    if (self.keptKeys.count >= kKeptKeysLimit) {
+        self.droppedKeys++;
+        if (self.droppedKeys == 1) recordKeys("native.surface.keys_dropped", SP_EVENT_WARN, 1, "full");
+        return;
+    }
+    [self.keptKeys addObject:event];
+    recordKeys("native.surface.key_kept", SP_EVENT_DEBUG, self.keptKeys.count, NULL);
+}
+// The release of a kept key belongs to no view: the region reads presses only.
+- (void)keyUp:(NSEvent *)event { (void)event; }
 - (BOOL)isFlipped { return YES; }
 // Rectangles of the visible declared overlays (host coordinates). The hit test and the native mask use the same
 // rectangles. Surface DOM coordinates are CSS/AppKit points. A document region can use a different pageZoom, but it is
@@ -495,6 +527,9 @@ void *sp_surface_create(void *handle) {
 void sp_surface_close(void *handle) {
     NSCAssert(NSThread.isMainThread, @"surface closure requires the UI thread");
     SPSurfaceHost *surface = (SPSurfaceHost *)handle;
+    // The first key over the limit recorded itself, so the counts of these events add up to the keys dropped.
+    NSUInteger dropped = surface.keptKeys.count + (surface.droppedKeys ? surface.droppedKeys - 1 : 0);
+    if (dropped) recordKeys("native.surface.keys_dropped", SP_EVENT_WARN, dropped, "closed");
     [surface removeFromSuperview];
     [surface release];
 }
@@ -574,6 +609,18 @@ static NSView *shownInputRegion(NSView *view) {
     return nil;
 }
 
+// Gives the keys that the surface kept to its region, in the order they came.
+static void deliverKeptKeys(SPSurfaceHost *host, NSView *region) {
+    // The first key over the limit recorded itself, so the counts of these events add up to the keys dropped.
+    if (host.droppedKeys > 1) recordKeys("native.surface.keys_dropped", SP_EVENT_WARN, host.droppedKeys - 1, "full");
+    host.droppedKeys = 0;
+    NSArray<NSEvent *> *keys = [[host.keptKeys copy] autorelease];
+    if (keys.count == 0) return;
+    [host.keptKeys removeAllObjects];
+    for (NSEvent *key in keys) [region keyDown:key];
+    recordKeys("native.surface.keys_delivered", SP_EVENT_INFO, keys.count, NULL);
+}
+
 static void giveKeyboardToSurface(NSView *view) {
     SPSurfaceHost *host = surfaceHost(view);
     NSView *surface = host ?: view;
@@ -586,9 +633,11 @@ static void giveKeyboardToSurface(NSView *view) {
     // A page that holds the keyboard for want of a region holds it only until a region shows.
     if (!host.keyboardWanted && [first isKindOfClass:NSView.class] && [(NSView *)first isDescendantOf:surface]) return;
     NSView *owner = host.keyboardOwner;
-    NSView *target = owner && [owner isDescendantOf:surface] && !owner.isHiddenOrHasHiddenAncestor ? owner : nil;
+    // The surface holds the keyboard only for want of a region, so it is not a view that kept the keyboard.
+    NSView *target = owner && owner != host && [owner isDescendantOf:surface] && !owner.isHiddenOrHasHiddenAncestor ? owner : nil;
     if (!target && host) target = shownInputRegion(host.nativePlane);
     BOOL landed = !target;
+    if (!target && host.awaitsRegion) target = host;
     // A surface without a web view of its own is a surface module of the main web view.
     if (!target) target = host.webview ?: sp_window_main_webview(window);
     if (!target) {
@@ -602,17 +651,28 @@ static void giveKeyboardToSurface(NSView *view) {
     host.keyboardWanted = landed;
     // The page took the keyboard for want of a region: nothing chose it, so it does not keep the keyboard from a region later.
     if (landed) host.keyboardOwner = nil;
+    else if (target != host.webview) deliverKeptKeys(host, target);
 }
 
-void sp_surface_focus(void *handle) {
+static void focusSurface(NSView *view, BOOL awaitsRegion) {
     NSCAssert(NSThread.isMainThread, @"the keyboard of a surface belongs to the UI thread");
-    NSView *view = (NSView *)handle;
     NSWindow *window = view.window;
     if (!window) {
         sp_log_error("surface keyboard", "the surface that takes the keyboard is not in a window");
         return;
     }
-    giveKeyboardAfterPress(window, ^{ giveKeyboardToSurface(view); });
+    giveKeyboardAfterPress(window, ^{
+        surfaceHost(view).awaitsRegion = awaitsRegion;
+        giveKeyboardToSurface(view);
+    });
+}
+
+void sp_surface_focus(void *handle) {
+    focusSurface((NSView *)handle, NO);
+}
+
+void sp_surface_focus_for_region(void *handle) {
+    focusSurface((NSView *)handle, YES);
 }
 
 void sp_surface_region_shown(void *handle) {
@@ -622,11 +682,19 @@ void sp_surface_region_shown(void *handle) {
     NSWindow *window = region.window;
     if (!window || region.isHiddenOrHasHiddenAncestor) return;
     NSResponder *holder = window.firstResponder;
-    // The page holds the keyboard for want of a region, or AppKit gave it to the window when this region hid.
-    if (!(host.keyboardWanted && holder == host.webview) && !(host.keyboardOwner == region && holder == window)) return;
+    // The page or the surface holds the keyboard for want of a region, or AppKit gave it to the window when this region hid.
+    if (!(host.keyboardWanted && (holder == host.webview || holder == host)) && !(host.keyboardOwner == region && holder == window)) {
+        // The keyboard went elsewhere. The keys were typed into this surface, so its region still reads them.
+        deliverKeptKeys(host, region);
+        return;
+    }
     // A geometry change shows a region again and again, and it does not replace a call that waits for the release.
     if (leftPressOpen(window) && objc_getAssociatedObject(window, &keyboardPendingKey)) return;
-    giveKeyboardAfterPress(window, ^{ if (window.firstResponder == holder) [window makeFirstResponder:region]; });
+    // A press can give the region the keyboard before its release, and the region reads the kept keys all the same.
+    giveKeyboardAfterPress(window, ^{
+        if (window.firstResponder == holder) [window makeFirstResponder:region];
+        deliverKeptKeys(host, region);
+    });
 }
 
 void sp_surface_region_focus(void *handle) {
@@ -634,7 +702,9 @@ void sp_surface_region_focus(void *handle) {
     NSView *region = (NSView *)handle;
     NSWindow *window = region.window;
     if (!window) return;
-    giveKeyboardAfterPress(window, ^{ if (region.window == window) [window makeFirstResponder:region]; });
+    giveKeyboardAfterPress(window, ^{
+        if (region.window == window && [window makeFirstResponder:region]) deliverKeptKeys(surfaceHost(region), region);
+    });
 }
 
 void sp_surface_responder_moved(void *from, void *to) {
@@ -643,7 +713,7 @@ void sp_surface_responder_moved(void *from, void *to) {
     SPSurfaceHost *into = [entered isKindOfClass:NSView.class] ? surfaceHost(entered) : nil;
     if (into) {
         into.keyboardOwner = entered;
-        if (entered != into.webview) into.keyboardWanted = NO;
+        if (entered != into.webview && entered != into) into.keyboardWanted = NO;
     }
     SPSurfaceHost *outOf = [left isKindOfClass:NSView.class] ? surfaceHost(left) : nil;
     if (outOf && outOf != into) outOf.keyboardWanted = NO;
