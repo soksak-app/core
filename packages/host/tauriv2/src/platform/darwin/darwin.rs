@@ -44,6 +44,14 @@ pub(crate) fn show_window(window: &tauri::Window) -> port::Result<()> {
         .map_err(crate::framework::error)
 }
 
+/// Calls ended when the process of the page of a web view ended. Tauri offers this hook only on macOS and iOS.
+pub(crate) fn watch_page_process_end(
+    builder: tauri::Builder<tauri::Wry>,
+    ended: impl Fn(&tauri::Webview) + Send + Sync + 'static,
+) -> tauri::Builder<tauri::Wry> {
+    builder.on_web_content_process_terminate(ended)
+}
+
 /// Activates the application at launch, ignoring other applications when ignore_other_apps is true.
 pub(crate) fn launch_activation(
     builder: tauri::Builder<tauri::Wry>,

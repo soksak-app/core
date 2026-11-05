@@ -70,6 +70,16 @@ packages/host/go/                          packages/host/rust/
       windows/                                   windows/
         windows.go     패키지 문서, 등록                windows.rs
         identity.go    파일 ID                          identity.rs
+        input.go       WebView2 의 pointer·키 입력       input.rs
+        devtools_input.go  DevTools protocol 호출       devtools_input.rs
+        webview.go     창의 WebView2                    webview.rs
+        capture.go     still capture                    capture.rs
+        capture_diagnostics.go  diagnostic method      차이 H54
+        com.go         COM table                        차이 H53
+        (없음)                                          process_failure.rs   차이 H55
+        show.go        show 명령                        show.rs
+        show_windows.go  앞을 지키는 show               show_windows.rs
+        ui_thread.go   UI thread 와 그 대기             ui_thread.rs
         unsupported.go named pipe 엔드포인트를 포함한 "not implemented" 동작  unsupported.rs
       linux/  (구현 시 추가)                     linux/
   tests/                                     tests/
@@ -174,6 +184,8 @@ Rust: `src/platform/platform.rs`는 각 운영체제 모듈을 `#[cfg(target_os 
 
 정지 캡처는 녹화 오류와 분리된 호출자 소유 오류 문자열을 반환하며 호출자는 free()로 해제한다. 정지 캡처 실패는 기존 녹화 오류를 지우거나 정상 녹화를 실패하게 만들지 않는다. 잘못된 UTF-8 경로는 플랫폼 API 호출 전에 거부한다. 늦은 정지 캡처 콜백은 자기 호출 상태만 보존하며 녹화 결과를 바꿀 수 없다. 네이티브 sp_capture_still 오류 출력 포인터는 필수이며 성공은 그 값을 NULL로 설정하고 실패는 UTF-8 오류 문자열을 할당한다. 두 호스트는 sp_capture_error 대신 호출별 출력을 읽고 해제한다.
 
+macOS에서 정지 캡처와 녹화는 세 host 모두 ScreenCaptureKit으로 창을 읽는다. filter는 현재 프로세스의 content(`getCurrentProcessShareableContentWithCompletionHandler:`)에서 얻은 창의 desktop-independent filter이다. SDK는 이 content를 TCC 사용자 동의 없이 현재 프로세스가 쓸 수 있는 것으로 설명하며, 캡처는 화면 기록 권한이 필요한 일반 shareable content를 요청하지 않는다. 캡처는 cursor를 요청하지 않고 아무것도 활성화하지 않는다. 보장이 아닌 운영체제 동작의 관측값으로, `CGPreflightScreenCaptureAccess`가 false일 때 캡처는 이미지를 기록했고 prompt는 뜨지 않았으며 시스템 log에는 `auth_value 0, result false`가 남았다. 다른 창 아래에 있는 창은 web view, WebGL canvas, composited layer, Metal layer, IOSurface layer까지 가리기 전과 같은 byte로 캡처되고, 가려진 동안의 변경은 다음 캡처에 나타난다. 이는 host가 web view의 occlusion 감지를 끄기 때문이다. 켜져 있으면 가려진 캡처에서 web layer가 빠진다. layer를 직접 읽는 경로는 이 pixel을 내지 못해 쓰지 않는다. `takeSnapshot`에는 Metal과 IOSurface layer가 없고, `renderInContext:`에는 Metal layer와 창 배경이 없고, `cacheDisplayInRect:`에는 Metal layer가 없고 값이 1 다르며, `takeSnapshot`, Metal readback, IOSurface의 합성은 title bar가 없고 글자와 둥근 모서리가 다르다. 실패한 ScreenCaptureKit 호출의 메시지는 오류 domain과 code로 끝난다. description만으로는 둘 다 드러나지 않을 수 있기 때문이다.
+
 녹화 대상 준비·시작은 이미 활성 녹화가 있으면 대상·프레임 계수·녹화 오류 변경 전에 거부한다. 각 open/start 호출은 필수 출력 포인터로 별도의 호출자 소유 UTF-8 오류를 반환한다(성공은 NULL, 실패는 free()로 해제). 거부된 중첩 작업은 정상 녹화 준비를 무효화하거나 이전 녹화 실패를 지울 수 없다.
 
 대상 준비는 자기 조회가 10000ms 제한 안에 성공 완료했을 때만 필터·설정을 게시한다. 시간 초과된 조회는 자기 콜백 상태만 보존하고 늦은 실패는 보고하며 늦은 성공은 이후 대상을 덮어쓸 수 없다. 준비는 쓰지 않는 객체를 유지하지 않고 비활성 이전 대상/설정 소유를 해제한다. 준비 오류는 호출별 출력으로 반환하며 녹화 오류를 바꾸지 않는다. 성공한 준비를 게시하기 전에 녹화가 활성화되면 게시를 거부하고 활성 녹화를 유지한다.
@@ -202,7 +214,7 @@ Wayland에서 client는 toplevel을 배치하거나 focus할 수 없다. 둘 다
 
 ## Windows 상태
 
-Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`)만 구현한다. `platform/windows/unsupported.*`의 나머지 연산은 `<operation> is not implemented on windows` 형식의 오류를 반환한다. Windows에서는 애플리케이션 시작이 첫 platform 연산에서 실패한다. Wails의 `Run`과 Tauri의 `run`은 창을 열기 전에 `window resize animation is not implemented on windows`와 상태 1로 끝난다. Linux 구현은 없으며, 그곳에서 `platform.Current()`와 `platform::current()`는 오류를 반환한다.
+Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`), WebView2 의 pointer·키 입력(`platform/windows/input.*`, `devtools_input.*`), still capture(`capture.*`), 앞을 지키는 show(`show.*`, `show_windows.*`)를 구현한다. `platform/windows/unsupported.*`의 나머지 연산은 `<operation> is not implemented on windows` 형식의 오류를 반환한다. Windows에서는 애플리케이션 시작이 첫 platform 연산에서 실패한다. Wails의 `Run`과 Tauri의 `run`은 창을 열기 전에 `window resize animation is not implemented on windows`와 상태 1로 끝난다. Linux 구현은 없으며, 그곳에서 `platform.Current()`와 `platform::current()`는 오류를 반환한다.
 
 `make check-host-files`는 `make check-windows-build`를 실행하며, 이 target은 Go language host library와 Wails framework adapter의 source를 기본 build와 diagnostics build에서 `windows/arm64`용으로 vet한다.
 
@@ -287,6 +299,9 @@ Go language host library의 header `src/platform/darwin/main_thread.h`는 두 ma
 | C8 | `go.mod`, `go.sum` | `Cargo.toml` | 언어마다 매니페스트와 잠금 파일이 다르다. Rust 패키지의 잠금 파일은 워크스페이스의 `Cargo.lock`이다 |
 | C9 | `tests/installed_plugins_test.go` | 없음 | mygo workbench는 Go process에서 그리므로 Go `sok`이 그를 위해 `AcceptInstalledPlugins`로 설치된 plugin 문서를 검사한다. Rust host의 창은 그 문서를 page에서 `packages/plugin-api`의 `acceptInstalledPlugins`로 검사하므로 Rust `sok`에는 test할 검사가 없다 |
 | C10 | `src/event_log_idle_test.go` | `src/event_log_flush_test.rs`, `tests/event_log_idle_test.rs` | 두 언어는 writer의 같은 잠듦과 flush의 같은 응답을 확인한다. Go test는 file system fixture 때문에 `package sok`에 있고, Rust flush test는 비공개 `wait_for_flush` 때문에 `event_log.rs`의 자식이다 |
+| H53 | `src/platform/windows/com.go` | 없음 | Go host 는 cgo 없이 COM table 로 WebView2 를 호출한다. Rust host 는 그 table 을 `webview2-com` crate 에서 얻는다 |
+| H54 | `src/platform/windows/capture_diagnostics.go` | 없음 | Go build tag 는 파일 전체를 고르므로 diagnostic build 의 method 가 자기 파일을 가진다. Rust 는 `src/platform/windows/windows.rs` 에서 method 마다 feature 로 고른다 |
+| H55 | 없음 | `src/platform/windows/process_failure.rs`, `src/platform/windows/process_failure_test.rs` | Tauri framework adapter 는 자기 web view 의 process failure 를 읽는다. Go host 는 아직 창의 WebView2 를 쥐지 못하므로 거기서는 failure 를 읽을 수 없다 |
 
 ### Framework 표
 
@@ -348,6 +363,8 @@ host의 goroutine과 스레드는 진입점으로만 시작한다. Go는 `routin
 Launch Services는 실행 요청이 activation을 요청하지 않은 경우(`open -g`, `kLSLaunchDontSwitch`, `NSWorkspaceOpenConfiguration.activates` false)를 빼고 자신이 실행한 애플리케이션을 activate하므로, host는 실행 시점의 activation을 시스템에 맡긴다. host는 다른 애플리케이션이 active인 동안 실행을 마칠 때 스스로 activate하지 않는다. Wails는 기본으로 regular activation policy의 모든 애플리케이션을 실행 시점에 activate하므로 Wails host는 `MacOptions.DisableActivationOnLaunch`를 설정하고, Tauri는 기본으로 다른 애플리케이션과 상관없이 activate하므로 Tauri host는 `activate_ignoring_other_apps(false)`를 설정하고, mygo는 기본으로 regular activation policy의 모든 애플리케이션을 실행 시점과 `Window.Show`마다 activate하므로 mygo host는 `App.SetSelfActivation(false)`를 호출한다. 애플리케이션을 연 사람은 애플리케이션이 앞으로 오는 것을 보고, `sok app relaunch`의 relaunch 같은 background 실행은 frontmost 애플리케이션을 바꾸지 않는다.
 
 host 가 보이는 window 는 한 규칙을 따르고, 그 값은 시스템이 애플리케이션을 active 로 보는지 하나다(`NSRunningApplication.active`. virtual key window 가 대신 답하는 `NSApp.isActive` 가 아니다). 시스템이 active 로 보는 애플리케이션은 window 를 key 로 만들고 앞으로 올린다. 시스템이 active 로 보지 않는 애플리케이션은 앞 애플리케이션과 그 window 를 그대로 둔다. window 는 애플리케이션의 가장 앞 window 바로 위에 놓이고, 다른 window 가 보이지 않으면 모든 window 뒤에 놓이며, 애플리케이션의 key window 가 된다. check 와 endpoint run 은 실행 파일이나 `open -g` 로 시작하므로 activation 이 오지 않아, 그 window 는 사람이 쓰는 것 뒤에 머문다. 가려진 window 가 이들의 보통 경우다. Launch Services 로 애플리케이션을 연 사람에게는 앞으로 온다. activation 이 activation 전에 보인 window 까지 애플리케이션의 window 를 앞으로 가져온다. terminal 에서 실행 파일을 시작한 사람도 activation 을 요청하지 않았으므로 window 는 terminal 뒤에 열린다. 규칙은 `sp_window_show`(`native/darwin/src/window_reveal.h`)에 있다. mygo host 는 이것을 `App.SetWindowShow` 에, Wails host 는 `MacOptions.WindowShow` 에 넘기고, Tauri frontend 는 `Window::show` 대신 이것을 부른다. tao 가 보이는 모든 window 를 앞으로 올리기 때문이다. `Focus` 는 사람의 요청(사람이 누른 notification)이고 activate 한다. `input.pointer` 의 `activate: true` 는 check 가 activate 하는 유일한 요청이고, 사람이 확인하는 tier 에 쓴다.
+
+이 규칙은 최소화한 window 의 복원을 다루지 않는다. `deminiaturize:` 는 애플리케이션이 active 인지와 상관없이 window 를 다른 모든 window 위에 놓는다. active 가 아닌 애플리케이션은 active 가 아닌 채로 있고 앞 애플리케이션도 그대로 앞에 있으므로, 복원된 window 가 사람이 쓰는 것을 가린다. 사람은 Dock 으로 window 를 복원하고 Dock 이 애플리케이션을 activate 한다. endpoint 에는 window 를 최소화하는 command 가 없어 check 와 endpoint run 은 이 경우에 닿지 않으므로, host 는 복원을 AppKit 에 맡긴다.
 
 Windows 의 창도 같은 규칙을 따르며, 그 값 하나는 foreground 창이 이 프로세스의 것인지다. Tauri host 는 visibility 를 쥔 tao 로 창을 보이고, 창의 subclass 가 그 show 의 위치 변경에 `SWP_NOACTIVATE` 와 `SWP_NOZORDER` 를 더한다. Go 플랫폼은 `SW_SHOWNOACTIVATE` 로 `ShowWindow` 를 호출하며, Wails 는 아직 이를 부르지 않는다 ([features](../features.ko.md)). 이 경로는 Windows 에서 실행된 적이 없어 효과가 확인되지 않았다.
 

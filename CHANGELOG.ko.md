@@ -4,7 +4,10 @@
 
 ## 미배포
 
+- F584-4: 실패한 캡처의 메시지는 시스템 오류의 domain과 code로 끝난다. description만으로는 둘 다 드러나지 않을 수 있기 때문이다. Red: description이 `the stream failed`인 실패에서 content query, 정지 캡처, 녹화 시작의 code가 사라졌다. native test는 가려진 창이 layer 종류마다, 가려진 동안의 변경까지 가리기 전과 같은 byte로 캡처되고 일반 content query를 쓰지 않음을 확인한다.
 - F608: setup이 이름이 바뀐 native target을 실행하므로, recognizer를 고르지 않아도 macOS window check가 다시 시작된다.
+- F561-1: keyboard를 가진 채 닫힌 document는 close 때 web content process를 끝내고, data store도 끝날 수 있다.
+- F502-23: `native`를 쓰는 `diagnostics.drag`는 창이 현재 layout을 표시한 뒤에 경계 점을 읽는다. 그래서 split 직후의 누름이 divider에 닿는다.
 - F595: 합성 입력은 layout을 기다리는 입력 뒤에서 순서를 지킨다.
 - F586: lease 방식 영역이 있는 창을 닫아도 Tauri host가 `image view released: project window is closed`를 기록하지 않는다. Red: 창이 닫힌 뒤의 해제가 그 실패를 보고했다.
 - F502-16: Wails host의 window는 요청한 크기를 갖고 web view는 content 크기를 가지므로, page의 마지막 row가 보이고 native view가 page 위 제자리에 선다. F592가 fork를 publish할 때까지 Wails module은 fork의 local checkout을 읽는다.
@@ -74,7 +77,7 @@
 - F557: 포인터를 잃은 page가 추적 영역의 진입, 이탈, 이동이 어떤 순서로 와도 hover를 멈춘다.
 - F570: mygo host의 `core.workbench.audit`이 연결되지 않은 요소가 없을 때 `null`이 아니라 빈 목록을 낸다.
 - F561: 문서 검사의 activation 실행이 data store를 끝내기 전에 window의 다른 곳을 누른다. 마지막 press의 web view는 다음 press까지 잡혀 있기 때문이다.
-- F561-1: 문서 검사의 activation 실행이 store를 끝내기 전에 추가 press를 하지 않는다. web view를 잡는 주체를 찾는 일은 열어 둔다.
+- F561-1: 문서 검사의 activation 실행이 store를 끝내기 전에 추가 press를 하지 않는다.
 - F560: 포인터를 잃은 page가 추적 영역의 진입, 이탈, 이동이 어떤 순서로 와도 hover를 멈춘다.
 - F543: key window에서 `sok input pointer`의 press가 애플리케이션을 지나, local monitor가 press를 보고 AppKit이 first responder를 옮긴다.
 - F544: release가 뒤따르는 키보드 이동을 멈추지 않는다. image region이 있는 surface를 클릭한 직후에도 키보드가 다음 release를 기다리지 않고 옮겨진다.
@@ -151,6 +154,9 @@
 - F502-13: exposure kind `dom`은 모든 host와 모든 plugin 선언에서 `element`가 된다: `exposes.element`, `expose.element`, `element.rect`, `element.act`, `sok element`, MCP tool `element_rect`와 `element_act`, `exposure.list`의 member `element`. `exposes.dom`을 가진 manifest는 거부된다. workbench status는 workbench에 대해 정의된다: `core.window.workbench`, `core.workbench.error`, 행이 `{role, expose, command, text}`인 `core.workbench.audit`, responder owner와 `host.hit` kind `workbench`. window check는 `core.window.workbench`의 새 `start`를 기다리고, 각각 `Object.values(APPS)` 또는 `MAIN_PAGE_APPS`를 순회하며, `scripts/check-e2e-host-parity.mjs`가 이를 검사한다.
 - F463: core가 checks kit과 실행 파일 하나 `soksak-check`를 씁니다. Red: `scripts/test/workflows.test.mjs`가 실패했습니다. Green: 통과합니다.
 - F466: 기록은 임시 log를 인용하지 않고, record 검사가 새 인용을 보고합니다.
+- F480: `e2e/terminal-reopen.test.mjs`가 앞선 terminal이 닫힌 뒤 연 terminal의 prompt 표시를 검사하고, benchmark readiness 실패가 session, surface, region을 보고합니다.
+- F478: Wails host가 view event의 null `data`와 view request의 null `params`를 값으로 보존합니다.
+- F477: window check setup이 선언된 make target `build-capture-text-path`를 부릅니다.
 - F476: 0.0.36 release 뒤에도 0.0.34였던 `LATEST_PUBLISHED`와 그 test를 지워 test가 선언된 version을 되풀이하지 않습니다.
 - F474: release run이 v0.0.36을 게시했고 registry가 이를 plugin, sidecar release와 함께 올립니다.
 - F474: release candidate는 0.0.36입니다.

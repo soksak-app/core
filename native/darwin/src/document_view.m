@@ -2285,6 +2285,12 @@ void sp_document_close(void *handle) {
     frameIdentityClose(view);
     [view restoreViewportMarker];
 #endif
+    // AppKit keeps the view that held the keyboard when it leaves the window until the next change of the first responder, and
+    // the web content process of the view lives that long. The change here happens at the close.
+    NSWindow *window = view.window;
+    if ([window.firstResponder isKindOfClass:NSView.class] && [(NSView *)window.firstResponder isDescendantOf:view]) {
+        [window makeFirstResponder:nil];
+    }
     view.closed = YES;
     [view.binaries releaseAll];
     view.binaries = nil;

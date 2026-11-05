@@ -60,9 +60,17 @@ pub(crate) fn show_window(window: &tauri::Window) -> port::Result<()> {
         .map_err(crate::framework::error)
 }
 
+/// Calls ended when the process of the page of a web view ended.
+pub(crate) fn watch_page_process_end(
+    builder: tauri::Builder<tauri::Wry>,
+    ended: impl Fn(&tauri::Webview) + Send + Sync + 'static,
+) -> tauri::Builder<tauri::Wry> {
+    builder.plugin(process_failure_plugin(ended))
+}
+
 /// The plugin that reads the process failures of every web view, which Tauri does not offer on Windows. ended receives a web view that lost
 /// its page.
-pub(crate) fn process_failure_plugin(
+fn process_failure_plugin(
     ended: impl Fn(&tauri::Webview) + Send + Sync + 'static,
 ) -> tauri::plugin::TauriPlugin<tauri::Wry> {
     let ended = Arc::new(ended);

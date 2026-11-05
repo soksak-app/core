@@ -4,7 +4,10 @@
 
 ## Unreleased
 
+- F584-4: The message of a failed capture ends with the domain and code of the system error, because the description alone may name neither. Red: a failure with the description `the stream failed` lost its code at the content query, at a still capture and at a recording start. A native test checks that a covered window captures the same bytes as before the cover, for each kind of layer and for a change made while covered, without the general content query.
 - F608: The macOS window checks start again without a selected recognizer, because the setup runs the renamed native target.
+- F561-1: A document closed with the keyboard ends its web content process at the close, and its data store can end.
+- F502-23: `diagnostics.drag` with `native` waits until the window presented its current layout before it reads the point of the boundary, so a press right after a split reaches the divider.
 - F595: Injected input keeps its order behind input that waits for a layout.
 - F586: The close of a window with a region in the lease mode no longer records `image view released: project window is closed` on the Tauri host. Red: a release after its window closed reported that failure.
 - F502-16: A window of the Wails host has the size that it was asked for, and its web view has the size of its content, so the page shows its last rows and a native view stands on the page. The Wails modules read a local checkout of the fork until F592 publishes it.
@@ -74,7 +77,7 @@
 - F557: a page that loses the pointer stops hovering, in each order of the enter, the exit, and the move of its tracking area.
 - F570: `core.workbench.audit` of the mygo host reports an empty list, not `null`, when nothing is unbound.
 - F561: the activation run of the document check presses elsewhere in the window before its data stores end, because the web view of the last press stays held until the next one.
-- F561-1: the activation run of the document check makes no further press before its stores end; finding the holder of the web view stays open.
+- F561-1: the activation run of the document check makes no further press before its stores end.
 - F560: a page that loses the pointer stops hovering, in each order of the enter, the exit, and the move of its tracking area.
 - F543: a press of `sok input pointer` in a key window passes the application, so local monitors see it and AppKit moves the first responder.
 - F544: a release no longer stops a later keyboard move: right after a click in a surface with an image region, the keyboard moves without waiting for the next release.
@@ -151,6 +154,9 @@
 - F502-13: The exposure kind `dom` becomes `element` on every host and in every plugin declaration: `exposes.element`, `expose.element`, `element.rect`, `element.act`, `sok element`, the MCP tools `element_rect` and `element_act` and the member `element` of `exposure.list`; a manifest with `exposes.dom` is refused. The workbench statuses are defined over the workbench: `core.window.workbench`, `core.workbench.error` and `core.workbench.audit`, whose rows are `{role, expose, command, text}`, and the responder owner and the `host.hit` kind `workbench`. The window checks wait for a new `start` of `core.window.workbench`, and each iterates `Object.values(APPS)` or `MAIN_PAGE_APPS`, which `scripts/check-e2e-host-parity.mjs` checks.
 - F463: Core uses the checks kit and its one executable `soksak-check`. Red: `scripts/test/workflows.test.mjs` failed. Green: it passes.
 - F466: Records cite no temporary log, and the record check reports a new citation.
+- F480: `e2e/terminal-reopen.test.mjs` checks that a terminal opened after the earlier terminals closed displays its prompt, and the benchmark readiness failure reports the session, the surface and its regions.
+- F478: The Wails host keeps a null `data` of a view event and a null `params` of a view request as values.
+- F477: The window check setup names the declared make target `build-capture-text-path`.
 - F476: `LATEST_PUBLISHED`, which read 0.0.34 after the release of 0.0.36, and its test are removed, so a test repeats no declared version.
 - F474: The release run published v0.0.36, and the registry lists it with the plugin and sidecar releases.
 - F474: The release candidate is 0.0.36.

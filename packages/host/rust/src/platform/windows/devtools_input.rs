@@ -478,5 +478,5 @@ pub(crate) fn check_still(data: &[u8]) -> Result<(), String> {
 }
 
 #[cfg(test)]
-#[path = "devtools_test.rs"]
+#[path = "devtools_input_test.rs"]
 mod tests;
