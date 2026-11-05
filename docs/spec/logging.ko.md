@@ -277,6 +277,7 @@ JavaScript의 emit site는 `emitEvent(`와 page writer의 batcher 호출이며, 
 | `workbench.tab.unload.skipped` | info | `trigger`, `seq`, `reasons` | pressure 보고가 후보를 찾지 못했거나, 보호가 생기거나 탭이 보여 unload 시도가 끝났다. `seq`는 pressure 보고의 번호다 |
 | `workbench.tab.state.stored` | debug | `tab`, `bytes` | 탭 상태 저장소가 탭의 항목을 썼다. 상태, 표시, label을 포함한다 |
 | `workbench.tab.state.orphan` | info | `tab` | load할 때의 맞춤이 `projects.json`의 어떤 layout에도 없는 탭의 항목을 지웠다 |
+| `workbench.tab.session.read` | debug | `tab`, `cause` | core가 쓰기 전에 탭의 document region session history를 읽는다. `cause`는 읽기를 부른 것이다: `navigation`(navigation commit 뒤 모아 쓰는 쓰기), `flush`(창을 닫을 때나 quit할 때 창 저장), `unload`(memory saver의 unload 전). |
 | `workbench.tab.session.stored` | debug | `tab`, `bytes` | core가 탭의 document region session history를 `tab-sessions/<tab>.json`에 썼다 |
 | `workbench.tab.session.dropped` | warn | `tab`, `region`, `bytes` | document region의 session history가 decode한 크기로 1 MiB를 넘어 저장하지 않았다 |
 | `workbench.tab.session.orphan` | info | `tab` | load할 때의 맞춤이 `projects.json`의 어떤 layout에도 없는 탭의 session file을 지웠다 |

@@ -6,6 +6,8 @@
 import { emitEvent } from "./page-log.js";
 
 const COALESCE_MS = 1000;
+/** What asks for a read of the sessions of a tab: a navigation commit, the save of a window, or the unload of a tab. */
+const CAUSES = new Set(["navigation", "flush", "unload"]);
 /** The largest decoded session of one region that is stored, in bytes. */
 export const SESSION_LIMIT = 1024 * 1024;
 
@@ -40,10 +42,12 @@ export function createTabSessions({ store, interaction, tabs, failed }) {
   }
 
   // Reads the regions of tab and stores those of at most SESSION_LIMIT bytes; a tab without regions writes nothing.
-  async function capture(tab) {
+  async function capture(tab, cause) {
+    if (!CAUSES.has(cause)) throw new Error(`tab session of ${tab}: the read names no known cause: ${cause}`);
     clearTimeout(pending.get(tab));
     pending.delete(tab);
     if (removed.has(tab)) return;
+    emitEvent("debug", "workbench.tab.session.read", { tab, cause });
     const history = await interaction(tab);
     if (!history || removed.has(tab)) return;
     const regions = {};
@@ -55,7 +59,7 @@ export function createTabSessions({ store, interaction, tabs, failed }) {
     await put(tab, Object.keys(regions).length ? regions : null);
   }
 
-  const reported = (tab) => capture(tab).catch((error) => failed(new Error(`tab session of ${tab}: ${error.message}`)));
+  const reported = (tab, cause) => capture(tab, cause).catch((error) => failed(new Error(`tab session of ${tab}: ${error.message}`)));
 
   function remove(tab) {
     clearTimeout(pending.get(tab));
@@ -85,9 +89,9 @@ export function createTabSessions({ store, interaction, tabs, failed }) {
       if (regions.get(name) === key) return;
       regions.set(name, key);
       if (pending.has(tab)) return;
-      pending.set(tab, setTimeout(() => { reported(tab); }, COALESCE_MS));
+      pending.set(tab, setTimeout(() => { reported(tab, "navigation"); }, COALESCE_MS));
     },
-    /** Writes the session of tab now; the memory saver calls it before an unload, and a failure fails the unload. */
+    /** Writes the session of tab now for cause; the memory saver calls it before an unload, and a failure fails the unload. */
     capture,
     /** Removes the files of tabs after the layout write that drops them is confirmed; a refused write removes none. */
     async removeAfter(layoutWrite, dropped) {
@@ -102,7 +106,7 @@ export function createTabSessions({ store, interaction, tabs, failed }) {
     },
     /** Writes the session of every tab with attached regions now; the page calls it at quit, before the regions close. */
     async flush() {
-      await Promise.all(tabs().map(reported));
+      await Promise.all(tabs().map((tab) => reported(tab, "flush")));
     },
     /** Resolves when the writes started so far have ended. */
     idle: () => writing,

@@ -2761,6 +2761,32 @@
       },
       "description": "The reconciliation at load removed the entry of a tab that no layout of projects.json holds."
     },
+    "workbench.tab.session.read": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tab": {
+            "type": "string"
+          },
+          "cause": {
+            "type": "string",
+            "enum": [
+              "navigation",
+              "flush",
+              "unload"
+            ]
+          }
+        },
+        "required": [
+          "tab",
+          "cause"
+        ]
+      }
+    },
     "workbench.tab.session.stored": {
       "layer": "workbench",
       "class": "lifecycle",

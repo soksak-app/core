@@ -67,9 +67,10 @@ test("a session stored before a restart is passed to the first attach after it a
   answers.documentInteractionState = async (_surface, document) => ({ page: "AAAA", side: "" })[document];
   first.regions.attached("tab-a", "page");
   first.regions.attached("tab-a", "side");
-  await first.sessions.capture("tab-a");
+  await first.sessions.capture("tab-a", "unload");
   assert.deepEqual(files.sessions.get("tab-a"), { format: 1, regions: { page: { session: "AAAA" } } });
-  assert.deepEqual(emitted, [{ level: "debug", event: "workbench.tab.session.stored", fields: { tab: "tab-a", bytes: 50 } }]);
+  assert.deepEqual(emitted, [{ level: "debug", event: "workbench.tab.session.read", fields: { tab: "tab-a", cause: "unload" } },
+    { level: "debug", event: "workbench.tab.session.stored", fields: { tab: "tab-a", bytes: 50 } }]);
   // The restart: a new page over the same files.
   const second = start(files);
   assert.deepEqual(await second.regions.attachRequest("tab-a", "page"), { document: "page", interactionState: "AAAA" });
@@ -79,7 +80,7 @@ test("a session stored before a restart is passed to the first attach after it a
   assert.deepEqual(await second.regions.attach("tab-a", "fixture", "page", async () => null), { history: false });
   // An unload stores the session; the restore reads it for the attach of the restored surface.
   answers.documentInteractionState = async () => "BBBB";
-  await second.sessions.capture("tab-a");
+  await second.sessions.capture("tab-a", "unload");
   second.regions.released("tab-a");
   second.regions.restore("tab-a");
   assert.deepEqual(await second.regions.attach("tab-a", "fixture", "page", async () => null), { history: true });
@@ -136,6 +137,25 @@ test("navigation commits of a tab are coalesced to one write per second; a title
   assert.deepEqual(store.puts.map((put) => put.tab).sort(), ["tab-a", "tab-b"]);
 });
 
+// The read of the sessions names what asked for it: a navigation commit, the save of a window, or the unload of a tab.
+test("each read of the sessions of a tab records its cause", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const files = fakeFiles();
+  const { regions, sessions } = start(files);
+  answers.documentInteractionState = async (surface) => `S-${surface}`;
+  regions.attached("tab-a", "page");
+  const reads = () => emitted.filter((entry) => entry.event === "workbench.tab.session.read").map((entry) => entry.fields);
+  sessions.navigated("tab-a", "page", { index: 0, entries: [{ url: "https://a.test/", title: "" }] });
+  t.mock.timers.tick(1000);
+  await new Promise(setImmediate);
+  await sessions.idle();
+  await sessions.flush();
+  await sessions.capture("tab-a", "unload");
+  assert.deepEqual(reads(), [{ tab: "tab-a", cause: "navigation" }, { tab: "tab-a", cause: "flush" }, { tab: "tab-a", cause: "unload" }]);
+  assert.ok(emitted.filter((entry) => entry.event === "workbench.tab.session.read").every((entry) => entry.level === "debug"));
+  await assert.rejects(sessions.capture("tab-a"), /cause/);
+});
+
 test("a region session over 1 MiB decoded is dropped with a warn event and the others are stored", async () => {
   const files = fakeFiles();
   const { regions, sessions } = start(files);
@@ -145,13 +165,13 @@ test("a region session over 1 MiB decoded is dropped with a warn event and the o
   answers.documentInteractionState = async (_surface, document) => ({ page: large, side: "AAAA" })[document];
   regions.attached("tab-a", "page");
   regions.attached("tab-a", "side");
-  await sessions.capture("tab-a");
+  await sessions.capture("tab-a", "unload");
   assert.deepEqual(files.sessions.get("tab-a"), { format: 1, regions: { side: { session: "AAAA" } } });
-  assert.deepEqual(emitted[0], { level: "warn", event: "workbench.tab.session.dropped",
-    fields: { tab: "tab-a", region: "page", bytes: SESSION_LIMIT + 2 } });
+  assert.deepEqual(emitted.slice(0, 2), [{ level: "debug", event: "workbench.tab.session.read", fields: { tab: "tab-a", cause: "unload" } },
+    { level: "warn", event: "workbench.tab.session.dropped", fields: { tab: "tab-a", region: "page", bytes: SESSION_LIMIT + 2 } }]);
   // A tab whose every region is over the limit keeps no file.
   answers.documentInteractionState = async () => large;
-  await sessions.capture("tab-a");
+  await sessions.capture("tab-a", "unload");
   assert.equal(files.sessions.has("tab-a"), false);
 });
 
@@ -161,7 +181,7 @@ test("closing a tab removes its file after the layout write, and the reconcile r
   answers.documentInteractionState = async () => "AAAA";
   for (const tab of ["tab-a", "tab-b", "tab-c"]) {
     regions.attached(tab, "page");
-    await sessions.capture(tab);
+    await sessions.capture(tab, "unload");
   }
   await assert.rejects(sessions.removeAfter(Promise.reject(new Error("layout refused")), ["tab-a"]), /layout refused/);
   assert.equal(files.sessions.has("tab-a"), true, "a refused layout write removes no file");
@@ -169,7 +189,7 @@ test("closing a tab removes its file after the layout write, and the reconcile r
   assert.equal(files.sessions.has("tab-a"), false);
   // A later state of the closing region writes nothing.
   sessions.navigated("tab-a", "page", { index: 0, entries: [{ url: "https://a.test/", title: "" }] });
-  await sessions.capture("tab-a");
+  await sessions.capture("tab-a", "unload");
   assert.equal(files.sessions.has("tab-a"), false);
   emitted.length = 0;
   await sessions.reconcile((tab) => tab === "tab-b");
