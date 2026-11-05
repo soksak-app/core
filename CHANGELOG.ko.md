@@ -8,6 +8,7 @@
 - F502-23: Go 호스트의 `diagnostics.gc.loop` `{on}`은 goroutine에서 `runtime.GC`를 쉬지 않고 돌리거나, 멈춘 뒤 goroutine이 끝나면 답한다.
 - F502-23: mygo 호스트에서 `diagnostics.page.request`, `diagnostics.page.calls`, `diagnostics.host.events`, `diagnostics.page.collect`는 `the mygo host has no main page`로, `diagnostics.modal.hold`, `diagnostics.modal.held`는 `the mygo host has no modal web views`로 답한다.
 - F502-23: `make exposure-check`는 workbench가 선언한 status나 command를 mygo workbench의 Go 소스와 view bridge 어디에서도 등록하지 않으면 실패한다.
+- F457: mygo workbench의 run 시작마다 각 view에 `run-start`를 보낸다. run은 항상 settled placement로 끝나므로, drag의 release가 아무것도 옮기지 않아도 host가 run을 끝낸다.
 - F502-21: `setDialogBackground`가 다른 host call처럼 object `{enabled}`를 받고, framework 표의 B 행이 이 call을 mygo에만 있는 call로 나열해 host parity check가 통과한다. P 행이 `Frontend.Frames`를 나열한다.
 - F502-16: mygo workbench의 모든 모양 값은 page도 읽는 `workbench.json`에서 나온다: card foot의 caption, sidebar의 status line, placeholder와 멈춘 view의 글자, dialog의 scrim과 blur, layer의 anchor 아래 간격이다.
 - F551: Tauri host는 비동기 runtime의 worker를 processor마다 하나가 아니라 둘만 두고, 일 없는 blocking thread는 10초가 아니라 1초 뒤에 끝난다.
