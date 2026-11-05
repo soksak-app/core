@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F608: The macOS window checks start again without a selected recognizer, because the setup runs the renamed native target.
 - F595: Injected input keeps its order behind input that waits for a layout.
 - F586: The close of a window with a region in the lease mode no longer records `image view released: project window is closed` on the Tauri host. Red: a release after its window closed reported that failure.
 - F502-16: A window of the Wails host has the size that it was asked for, and its web view has the size of its content, so the page shows its last rows and a native view stands on the page. The Wails modules read a local checkout of the fork until F592 publishes it.

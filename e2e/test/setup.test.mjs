@@ -34,7 +34,7 @@ test("capture recognition resolves its executable through the native build targe
       : "/work/native-output/capture_text_test\n", stderr: "" };
   });
   assert.equal(command, "/work/native-output/capture_text_test");
-  assert.deepEqual(calls[1], ["make", "--no-print-directory", "-s", "-C", "/work/project/native/darwin", "capture-text-path"]);
+  assert.deepEqual(calls[1], ["make", "--no-print-directory", "-s", "-C", "/work/project/native/darwin", "build-capture-text-path"]);
 });
 
 test("capture recognition preserves a native build failure", { timeout: 5000 }, () => {

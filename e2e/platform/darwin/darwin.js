@@ -16,7 +16,7 @@ export function captureTextCommand(run = (command, args) => spawnSync(command, a
   if (metadata.status !== 0) throw new Error(`cargo metadata exited with ${metadata.status}: ${String(metadata.stderr).trim()}`);
   const root = JSON.parse(metadata.stdout).workspace_root;
   if (typeof root !== "string" || !isAbsolute(root)) throw new Error("cargo metadata reported no absolute workspace_root");
-  const result = run("make", ["--no-print-directory", "-s", "-C", join(root, "native", "darwin"), "capture-text-path"]);
+  const result = run("make", ["--no-print-directory", "-s", "-C", join(root, "native", "darwin"), "build-capture-text-path"]);
   if (result.error) throw new Error(`capture text build: ${result.error.message}`);
   if (result.status !== 0) throw new Error(`capture text build exited with ${result.status}: ${String(result.stderr).trim()}`);
   const command = result.stdout.trim();
