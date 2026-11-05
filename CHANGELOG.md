@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F482: The Tauri host ends the layout trace of a recorded drag after the last layout is presented, so the trace holds its presentation.
 - F481: The plain view benchmark waits until the probe view registered `probeplain.measure` before its content trace starts.
 - F463: Core uses the checks kit and its one executable `soksak-check`. Red: `scripts/test/workflows.test.mjs` failed. Green: it passes.
 - F466: Records cite no temporary log, and the record check reports a new citation.

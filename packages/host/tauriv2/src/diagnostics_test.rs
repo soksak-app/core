@@ -481,3 +481,40 @@ fn recording_rejects_start_while_document_identity_cleanup_is_incomplete() {
         matches!(result, Err(error) if error.contains("cleanup for surface \"surface-a\" generation 7 is incomplete"))
     );
 }
+
+// contract: recording.drag.layout-trace-after-settle
+#[test]
+fn a_recorded_drag_stops_its_layout_trace_after_the_last_placement_is_presented() {
+    let order = RefCell::new(Vec::new());
+    let (settled, stopped) = stop_after_settled(
+        || {
+            order.borrow_mut().push("settle");
+            Ok::<_, Failure>(1)
+        },
+        || {
+            order.borrow_mut().push("stop");
+            Ok::<_, Failure>(2)
+        },
+    );
+    assert_eq!((settled.unwrap(), stopped.unwrap()), (1, 2));
+    assert_eq!(*order.borrow(), ["settle", "stop"]);
+
+    let order = RefCell::new(Vec::new());
+    let (settled, stopped) = stop_after_settled(
+        || -> Result<(), Failure> {
+            order.borrow_mut().push("settle");
+            Err(internal("the drag was not presented"))
+        },
+        || {
+            order.borrow_mut().push("stop");
+            Ok::<_, Failure>(())
+        },
+    );
+    assert_eq!(settled.unwrap_err().message, "the drag was not presented");
+    assert!(stopped.is_ok());
+    assert_eq!(
+        *order.borrow(),
+        ["settle", "stop"],
+        "the trace stops also when the drag fails"
+    );
+}

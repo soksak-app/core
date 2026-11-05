@@ -1103,17 +1103,33 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
         Some(TIMEOUT + length),
         move || tick(app, label, steps, clock, recorded),
     );
-    // The record is stopped regardless of the success of the drag.
-    let layouts = (|| -> Result<_, Failure> {
-        if frames.is_some() {
-            let platform = platform::current().map_err(internal)?;
-            on_main(window, move || platform.layout_trace_stop())
-                .map(Some)
-                .map_err(internal)
-        } else {
-            Ok(None)
-        }
-    })();
+    let (result, layouts) = stop_after_settled(
+        || {
+            let result = result?;
+            // Waits until the last placement is committed and presented. Waiting for one next presentation could end
+            // at a presentation before the commit of the last step. The Wails host waits for the same point.
+            let context = crate::windows::window_data(window).map_err(internal)?;
+            let settled = crate::surfaces::when_settled(&context.running).map_err(internal)?;
+            if settled.recv_timeout(TIMEOUT).is_err() {
+                return Err(Failure::new(
+                    crate::endpoint::TIMED_OUT,
+                    format!("the drag was not presented within {TIMEOUT:?}"),
+                ));
+            }
+            exposure::note(window, "diagnostics: drag presented");
+            Ok(result)
+        },
+        || {
+            if frames.is_some() {
+                let platform = platform::current().map_err(internal)?;
+                on_main(window, move || platform.layout_trace_stop())
+                    .map(Some)
+                    .map_err(internal)
+            } else {
+                Ok(None)
+            }
+        },
+    );
     let finished = (|| -> Result<Value, Failure> {
         let (result, layouts) = match (result, layouts) {
             (Ok(result), Ok(layouts)) => (result, layouts),
@@ -1125,17 +1141,6 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
                 )));
             }
         };
-        // Waits until the last placement is committed and presented. Waiting for one next presentation could end at a
-        // presentation before the commit of the last step. The Wails host waits for the same point.
-        let context = crate::windows::window_data(window).map_err(internal)?;
-        let settled = crate::surfaces::when_settled(&context.running).map_err(internal)?;
-        if settled.recv_timeout(TIMEOUT).is_err() {
-            return Err(Failure::new(
-                crate::endpoint::TIMED_OUT,
-                format!("the drag was not presented within {TIMEOUT:?}"),
-            ));
-        }
-        exposure::note(window, "diagnostics: drag presented");
         let mut merged = match exposure::parsed(&result)? {
             Value::Object(fields) => fields,
             Value::Null => Map::new(),
@@ -1176,6 +1181,16 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
         return Err(error);
     }
     finished
+}
+
+/// Runs settle, which waits until the last placement of a drag is committed and presented, and then stop, which ends the
+/// layout trace, so that the trace holds the presentation of the last placement. stop runs also when settle fails.
+fn stop_after_settled<T, L>(
+    settle: impl FnOnce() -> Result<T, Failure>,
+    stop: impl FnOnce() -> Result<L, Failure>,
+) -> (Result<T, Failure>, Result<L, Failure>) {
+    let settled = settle();
+    (settled, stop())
 }
 
 /// Sends the drag step time to the page steps times. Each step is sent at its scheduled time relative to the start

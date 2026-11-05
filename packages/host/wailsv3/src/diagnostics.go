@@ -445,19 +445,20 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 		return nil
 	})
 	close(stop)
-	result, err := dragResult(s, reply)
 	var layouts []map[string]any
-	if captureOptions.capture {
-		if capture, captureErr := recorder(); captureErr == nil {
-			var records [][5]float64
-			var traceErr error
-			application.InvokeSync(func() { records, traceErr = capture.LayoutTraceStop() })
-			err = errors.Join(err, traceErr)
-			layouts = layoutTrace(records)
-		} else {
-			err = errors.Join(err, captureErr)
+	result, err := stopAfterSettled(func() (map[string]any, error) { return dragResult(s, reply) }, func() error {
+		if !captureOptions.capture {
+			return nil
 		}
-	}
+		capture, err := recorder()
+		if err != nil {
+			return err
+		}
+		var records [][5]float64
+		application.InvokeSync(func() { records, err = capture.LayoutTraceStop() })
+		layouts = layoutTrace(records)
+		return err
+	})
 	if err != nil {
 		// When the requester does not receive the frame folder, the recording stops and the folder is deleted.
 		if captureOptions.capture {
@@ -496,6 +497,13 @@ func layoutTrace(records [][5]float64) []map[string]any {
 		})
 	}
 	return layouts
+}
+
+// stopAfterSettled runs settle, which waits until the last layout of a drag is displayed, and then stop, which ends the layout
+// trace, so that the trace holds the presentation of the last layout. stop runs also when settle fails.
+func stopAfterSettled[T any](settle func() (T, error), stop func() error) (T, error) {
+	result, err := settle()
+	return result, errors.Join(err, stop())
 }
 
 // dragResult checks the drag reply of the page, waits until the last layout is displayed, and returns the result.
