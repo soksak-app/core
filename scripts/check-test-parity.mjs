@@ -1150,6 +1150,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F552",
+    implementation: [
+      { file: "packages/host/rust/src/performance.rs", symbol: "fn require_test_switch()" },
+      { file: "packages/host/rust/src/view_join_test.rs", symbol: "const UNREAD_SURFACE" },
+      { file: "packages/host/rust/src/presentation_wait_test.rs", symbol: "const CANCELLED_SURFACE" },
+    ],
+    tests: [
+      { file: "packages/host/rust/src/performance_lock_test.rs", id: "a_test_that_switches_the_trace_without_holding_the_switch_fails_at_once" },
+      { file: "packages/host/rust/src/view_responsiveness_test.rs", id: "creating_a_view_writes_the_request_and_its_first_ready_message_writes_the_ready_event_once" },
+    ],
+    expected: "A test that switches the performance trace without the lock of the switch fails on every run, and a test that counts records shares its surface with no writer.",
+    levels: ["unit"],
+  },
+  {
     id: "F544",
     implementation: [
       { file: "native/darwin/src/input_press_context.h", symbol: "bool sp_input_press_open(void *window, int button);" },
@@ -8911,7 +8925,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F285-2",
-    implementation: [{ file: "packages/host/rust/src/performance.rs", symbol: "pub(crate) static TEST_SWITCH: Mutex<()>" }],
+    implementation: [{ file: "packages/host/rust/src/performance.rs", symbol: "static TEST_SWITCH: Mutex<()>" }],
     tests: [{ file: "packages/host/rust/src/view_join_test.rs", id: "presentation_join_trace_records_exact_wait_identity_and_nonpresentation_end" }],
     expected: "A Tauri host test that switches the performance trace or reads its records runs alone among those tests.",
     levels: ["unit"],

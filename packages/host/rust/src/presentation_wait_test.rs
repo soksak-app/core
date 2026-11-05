@@ -13,14 +13,20 @@ const GENERATION: u64 = 7;
 const TICKET: u64 = 11;
 /// The surface of the abandon checks, which write abandoned records while the other checks read theirs.
 const ABANDON_SURFACE: &str = "presentation-abandon-surface";
+/// A test that reads the abandoned records has a surface of its own, because the buffer holds the records of every test of the
+/// binary (`buffered_fields_of`).
+const EACH_END_SURFACE: &str = "presentation-each-end-surface";
+const PRESENTED_SURFACE: &str = "presentation-presented-surface";
+const CANCELLED_SURFACE: &str = "presentation-cancelled-surface";
+const HIDDEN_SURFACE: &str = "presentation-hidden-surface";
 
 fn placement(frame: [f64; 4], visible: bool) -> ViewPlacement {
     ViewPlacement { frame, visible }
 }
 
 /// The fields of each buffered abandoned-presentation record of the surface.
-fn abandoned_of_surface() -> Vec<serde_json::Value> {
-    buffered_fields_of("host.trace.view.presentation-abandoned", SURFACE)
+fn abandoned_of_surface(surface: &str) -> Vec<serde_json::Value> {
+    buffered_fields_of("host.trace.view.presentation-abandoned", surface)
 }
 
 // contract: view.presentation-wait.ends
@@ -69,32 +75,42 @@ fn each_end_without_presentation_writes_the_abandoned_event() {
     let _trace = crate::performance::test_trace();
     for reason in ["process-ended", "hidden", "unresponsive", "timeout"] {
         let wait = PresentationWait::default();
-        wait.begin(SURFACE, GENERATION, TICKET);
-        let before = abandoned_of_surface().len();
-        assert_eq!(wait.end(SURFACE, GENERATION, TICKET, reason), Ok(true));
-        let written = abandoned_of_surface();
+        wait.begin(EACH_END_SURFACE, GENERATION, TICKET);
+        let before = abandoned_of_surface(EACH_END_SURFACE).len();
+        assert_eq!(
+            wait.end(EACH_END_SURFACE, GENERATION, TICKET, reason),
+            Ok(true)
+        );
+        let written = abandoned_of_surface(EACH_END_SURFACE);
         assert_eq!(written.len(), before + 1);
         assert_eq!(
             written.last(),
-            Some(&json!({"surface": SURFACE, "reason": reason}))
+            Some(&json!({"surface": EACH_END_SURFACE, "reason": reason}))
         );
-        assert_eq!(wait.end(SURFACE, GENERATION, TICKET, reason), Ok(false));
+        assert_eq!(
+            wait.end(EACH_END_SURFACE, GENERATION, TICKET, reason),
+            Ok(false)
+        );
     }
 }
 
 // contract: view.presentation-wait.ends
 #[test]
 fn a_presentation_ends_the_exact_wait_without_an_abandoned_event() {
+    let _trace = crate::performance::test_trace();
     let wait = PresentationWait::default();
-    wait.begin(SURFACE, GENERATION, TICKET);
-    let before = abandoned_of_surface().len();
+    wait.begin(PRESENTED_SURFACE, GENERATION, TICKET);
+    let before = abandoned_of_surface(PRESENTED_SURFACE).len();
     assert_eq!(
-        wait.end(SURFACE, GENERATION, TICKET, "presented"),
+        wait.end(PRESENTED_SURFACE, GENERATION, TICKET, "presented"),
         Ok(false)
     );
-    assert_eq!(abandoned_of_surface().len(), before);
+    assert_eq!(abandoned_of_surface(PRESENTED_SURFACE).len(), before);
     // Cancellation aborts its layout transaction (abandon_ticket), so it is not a reason that ends a wait.
-    assert!(wait.end(SURFACE, GENERATION, TICKET, "cancelled").is_err());
+    assert!(
+        wait.end(PRESENTED_SURFACE, GENERATION, TICKET, "cancelled")
+            .is_err()
+    );
 }
 
 // contract: view.presentation-wait.joins
@@ -152,28 +168,29 @@ fn a_presentation_does_not_abandon_the_native_join() {
 // contract: view.presentation-wait.ends, view.presentation-wait.cancel-clears-ticket
 #[test]
 fn cancellation_removes_only_its_ticket_before_abandoning_the_native_join() {
+    let _trace = crate::performance::test_trace();
     let wait = Arc::new(PresentationWait::default());
     let abandons = Arc::new(AtomicUsize::new(0));
     let counted = Arc::clone(&abandons);
     let wait_for_abandon = Arc::clone(&wait);
-    wait.begin(SURFACE, GENERATION, TICKET);
-    wait.begin(SURFACE, GENERATION, TICKET + 1);
+    wait.begin(CANCELLED_SURFACE, GENERATION, TICKET);
+    wait.begin(CANCELLED_SURFACE, GENERATION, TICKET + 1);
     assert!(wait.attach_abandon(
-        SURFACE,
+        CANCELLED_SURFACE,
         GENERATION,
         TICKET,
         Box::new(move || {
-            assert!(!wait_for_abandon.waits(SURFACE, GENERATION, TICKET));
+            assert!(!wait_for_abandon.waits(CANCELLED_SURFACE, GENERATION, TICKET));
             counted.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }),
     ));
-    let before = abandoned_of_surface().len();
+    let before = abandoned_of_surface(CANCELLED_SURFACE).len();
     assert_eq!(wait.abandon_ticket(TICKET), Ok(()));
-    assert!(!wait.waits(SURFACE, GENERATION, TICKET));
-    assert!(wait.waits(SURFACE, GENERATION, TICKET + 1));
+    assert!(!wait.waits(CANCELLED_SURFACE, GENERATION, TICKET));
+    assert!(wait.waits(CANCELLED_SURFACE, GENERATION, TICKET + 1));
     assert_eq!(abandons.load(Ordering::SeqCst), 1);
-    assert_eq!(abandoned_of_surface().len(), before);
+    assert_eq!(abandoned_of_surface(CANCELLED_SURFACE).len(), before);
 }
 
 // contract: view.presentation-wait.joins
@@ -227,9 +244,9 @@ fn a_hide_after_a_presented_callback_ends_no_wait() {
     let wait = PresentationWait::default();
     let abandons = Arc::new(AtomicUsize::new(0));
     let counted = Arc::clone(&abandons);
-    assert!(wait.begin(ABANDON_SURFACE, GENERATION, TICKET));
+    assert!(wait.begin(HIDDEN_SURFACE, GENERATION, TICKET));
     assert!(wait.attach_abandon(
-        ABANDON_SURFACE,
+        HIDDEN_SURFACE,
         GENERATION,
         TICKET,
         Box::new(move || {
@@ -237,21 +254,21 @@ fn a_hide_after_a_presented_callback_ends_no_wait() {
             Ok(())
         }),
     ));
-    wait.mark_presented(ABANDON_SURFACE, GENERATION, TICKET);
+    wait.mark_presented(HIDDEN_SURFACE, GENERATION, TICKET);
     let abandoned_before =
-        buffered_fields_of("host.trace.view.presentation-abandoned", ABANDON_SURFACE).len();
+        buffered_fields_of("host.trace.view.presentation-abandoned", HIDDEN_SURFACE).len();
     assert_eq!(
-        wait.end(ABANDON_SURFACE, GENERATION, TICKET, "hidden"),
+        wait.end(HIDDEN_SURFACE, GENERATION, TICKET, "hidden"),
         Ok(false)
     );
-    assert!(!wait.waits(ABANDON_SURFACE, GENERATION, TICKET));
+    assert!(!wait.waits(HIDDEN_SURFACE, GENERATION, TICKET));
     assert_eq!(abandons.load(Ordering::SeqCst), 0);
     assert_eq!(
-        wait.end(ABANDON_SURFACE, GENERATION, TICKET, "presented"),
+        wait.end(HIDDEN_SURFACE, GENERATION, TICKET, "presented"),
         Ok(false)
     );
     let abandoned_after =
-        buffered_fields_of("host.trace.view.presentation-abandoned", ABANDON_SURFACE).len();
+        buffered_fields_of("host.trace.view.presentation-abandoned", HIDDEN_SURFACE).len();
     assert_eq!(abandoned_after, abandoned_before);
 }
 

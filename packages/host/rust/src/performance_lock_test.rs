@@ -23,9 +23,21 @@ fn poison<T>(lock: &Mutex<T>) {
     assert!(lock.is_poisoned(), "the lock was not poisoned");
 }
 
+/// The switch belongs to the process, so a test that switches the trace without holding `test_switch` changes what another test
+/// stores. Such a test fails on its first call, on every run.
+#[test]
+fn a_test_that_switches_the_trace_without_holding_the_switch_fails_at_once() {
+    let unheld = std::thread::spawn(|| command(json!({"action": "off"}))).join();
+    assert!(
+        unheld.is_err(),
+        "a thread that does not hold the test switch switched the trace"
+    );
+}
+
 // contract: host.locks.poisoned-state-is-recovered
 #[test]
 fn the_trace_switch_answers_when_the_switch_lock_is_poisoned() {
+    let _switch = crate::performance::test_switch();
     poison(&super::SWITCHING);
     let answer = command(json!({"action": "off"}));
     assert!(
@@ -37,6 +49,7 @@ fn the_trace_switch_answers_when_the_switch_lock_is_poisoned() {
 // contract: host.locks.poisoned-state-is-recovered
 #[test]
 fn the_sampler_and_its_registries_answer_when_their_locks_are_poisoned() {
+    let _switch = crate::performance::test_switch();
     poison(&PROCESSES);
     poison(&WINDOWS);
     poison(&SAMPLER);
