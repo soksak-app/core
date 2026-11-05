@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F556: The HWP startup window check fails when the document requests an address outside `soksak://`. Red: its owner case failed. Green: it passes.
 - F502-21: `setDialogBackground` takes an object `{enabled}`, as every other host call does, and a row B of the framework table lists it as the call that only mygo has, so the host parity check passes. A row P lists `Frontend.Frames`.
 - F502-16: Every look of the mygo workbench takes its value from `workbench.json`, which the page reads too: the caption of a card foot, the status line of a sidebar, the text of a placeholder and of a stopped view, the scrim of a dialog with its blur, and the gap under an anchor of a layer.
 - F502-16: A hidden element of the mygo workbench keeps its index among the elements of its name, as a page element under `display:none`, so a window check that names a tab by its place in `core.grid` reaches that tab through every stage of a card head and through a full screen card. The bar is the element `core.chrome.bar`.

@@ -1084,6 +1084,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F556",
+    implementation: [{ file: "e2e/hwp-startup.mjs", symbol: "export async function collectHwpStartupResourceEvidence" }],
+    tests: [{ file: "e2e/test/hwp-startup.test.mjs", id: "HWP startup collection fails when the document requests an address outside soksak" }],
+    expected: "The HWP startup window check fails with each address outside soksak that the resource entries of the document name.",
+    levels: ["unit"],
+  },
+  {
     id: "F547",
     implementation: [
       { file: "packages/workbench-mygo/src/events.go", symbol: "if e.gatedTimer || e.sending || len(e.gated) == 0 {" },

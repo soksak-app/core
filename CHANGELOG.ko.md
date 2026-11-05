@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F556: 문서가 `soksak://` 밖의 address를 요청하면 HWP startup window check가 실패한다. Red: owner case가 실패했다. Green: 통과한다.
 - F502-21: `setDialogBackground`가 다른 host call처럼 object `{enabled}`를 받고, framework 표의 B 행이 이 call을 mygo에만 있는 call로 나열해 host parity check가 통과한다. P 행이 `Frontend.Frames`를 나열한다.
 - F502-16: mygo workbench의 모든 모양 값은 page도 읽는 `workbench.json`에서 나온다: card foot의 caption, sidebar의 status line, placeholder와 멈춘 view의 글자, dialog의 scrim과 blur, layer의 anchor 아래 간격이다.
 - F502-16: mygo workbench의 숨은 element는 `display:none`인 page element처럼 같은 이름의 element 사이에서 index를 유지하므로, tab을 `core.grid`의 자리로 부르는 window check는 card head의 모든 단계와 전체 화면 card에서 그 tab에 닿는다. bar는 element `core.chrome.bar`다.
