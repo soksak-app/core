@@ -284,6 +284,14 @@ impl Platform for Darwin {
     fn focus_webview(&self, view: &PlatformWebview) -> Result<(), String> {
         webview::focus(view)
     }
+    fn focus_surface(&self, surface: Handle) -> Result<(), String> {
+        webview::focus_surface(surface);
+        Ok(())
+    }
+    fn focus_workbench(&self, window: Handle) -> Result<(), String> {
+        webview::focus_workbench(window);
+        Ok(())
+    }
     fn create_document(
         &self,
         surface: Handle,

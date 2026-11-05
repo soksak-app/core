@@ -128,6 +128,7 @@ static void failFrameIdentitySession(NSString *message) {
 extern double sp_surface_scale(void *surface) __attribute__((weak_import));
 extern void *sp_surface_main_webview(void *surface) __attribute__((weak_import));
 extern void *sp_surface_native_plane(void *surface) __attribute__((weak_import));
+extern void sp_surface_region_shown(void *region) __attribute__((weak_import));
 
 static WKWebView *surfaceWebView(NSView *surface) {
     if (sp_surface_main_webview) return (WKWebView *)sp_surface_main_webview(surface);
@@ -489,6 +490,7 @@ static void spEnsurePressOriginMonitor(void) {
     // flag, the region would stay hidden permanently in a transition where showing the surface again
     // does not call applyInsets again.
     self.hidden = !self.wanted || width < 1 || height < 1;
+    if (!self.hidden && sp_surface_region_shown) sp_surface_region_shown(self);
 }
 
 - (void)applyInsetsNow {

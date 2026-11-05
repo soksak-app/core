@@ -52,6 +52,17 @@ type surfaceHost struct {
 	calls map[string]workbench.HostCall
 	// tabs gives the shell its tab ports.
 	tabs func(*workbench.Shell) workbench.TabPorts
+	// keyboard holds the argument of each surfaceFocus, and order the host calls of a placement in their order.
+	keyboard []*string
+	order    []string
+}
+
+// keyboardTarget returns the surface of the last surfaceFocus, nil for the workbench, and whether there was one.
+func (h *surfaceHost) keyboardTarget() (*string, bool) {
+	if len(h.keyboard) == 0 {
+		return nil, false
+	}
+	return h.keyboard[len(h.keyboard)-1], true
 }
 
 func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
@@ -62,11 +73,24 @@ func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 			return nil, err
 		}
 		h.requests = append(h.requests, request)
+		h.order = append(h.order, "syncSurfaces")
 		return map[string]any{"ticket": len(h.requests), "placements": []any{}, "chrome": map[string]any{}}, nil
 	}
 	table["presentSurfaces"] = func(context.Context, json.RawMessage) (any, error) {
 		h.placed++
+		h.order = append(h.order, "presentSurfaces")
 		return []any{}, nil
+	}
+	table["surfaceFocus"] = func(_ context.Context, argument json.RawMessage) (any, error) {
+		var request struct {
+			Surface *string `json:"surface"`
+		}
+		if err := json.Unmarshal(argument, &request); err != nil {
+			return nil, err
+		}
+		h.keyboard = append(h.keyboard, request.Surface)
+		h.order = append(h.order, "surfaceFocus")
+		return nil, nil
 	}
 	table["compositionDeclare"] = func(_ context.Context, argument json.RawMessage) (any, error) {
 		var request struct{ Surface string }

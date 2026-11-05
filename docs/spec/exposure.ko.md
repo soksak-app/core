@@ -108,6 +108,16 @@ status `core.focus`는 창의 first responder를 가진 문서에서 키보드 �
 | `surface` | `surface`의 view가 `tab.focus`로 마지막에 알린 값과 그 `surface`. 알린 것이 없으면 `null` |
 | `document`, `modal`, `webview`, `native` | `null`. document region, native modal, 등록되지 않은 web view, native view는 exposed focus를 알리지 않는다 |
 
+### 키보드는 focus ring을 따른다
+
+창이 key이고 modal이 열려 있지 않은 동안 focus ring이 있는 card의 active surface가 키보드를 가지며, 둘은 어긋나지 않는다. ring을 옮기거나 그 card의 active surface를 바꾸는 모든 경로는 키보드도 옮긴다. 새 탭, 탭 press, `core.tab.select`, `core.card.focus`, 탭이나 card 닫기, 프로젝트 열기, space 복원이 여기에 든다. 각 워크벤치는 ring을 한 함수에서 옮기고, surface를 보여주는 placement 뒤에 하나의 host call `surfaceFocus {surface}`([surface의 키보드](native-surfaces.ko.md#surface의-키보드))를 보낸다. 그래서 호스트가 아직 갖지 않은 surface는 준비되는 때에 키보드를 받는다. surface가 키보드를 가져야 하는 동안 first responder가 워크벤치에 오면 surface로 돌아간다.
+
+- modal이 열려 있는 동안 키보드는 modal에 머물고, modal이 닫히면 surface로 돌아간다.
+- surface가 없는 card(빈 card, 설치되지 않은 플러그인의 placeholder)와 library는 키보드를 워크벤치에 둔다(`surface: null`).
+- 워크벤치의 편집 가능한 element(library 양식 필드, 이름 변경 필드)는 포커스가 있는 동안 키보드를 가진다. [키보드 단축키](#키보드-단축키)에서 그 필드를 조건으로 하는 단축키가 이를 요구하기 때문이다. 필드가 포커스를 잃거나 닫히면 키보드는 surface로 돌아간다.
+- 탭 pointer press는 element focus를 남기지 않는다. `Tab` 키는 여전히 탭에 멈추고, 키보드가 워크벤치에 있는 동안 그 멈춤을 유지한다.
+- 사용자가 press한 sidebar의 section view는 키보드를 유지한다. ring이 그 위에 있지 않기 때문이다.
+
 첫 `window-responder` event 전과 호스트가 없는 runtime에서는 워크벤치가 포커스를 가진다. member가 문자열이나 `null`인 `{owner, surface, document}`가 아닌 `window-responder` event는 `error: window responder: invalid window-responder event <value>`로 알린다.
 
 ## 워크벤치 status

@@ -108,6 +108,16 @@ The status `core.focus` reports the exposed element that has keyboard focus in t
 | `surface` | the value that the view of `surface` last reported with `tab.focus`, with that `surface`; `null` when it reported none |
 | `document`, `modal`, `webview`, `native` | `null`: a document region, a native modal, an unregistered web view and a native view report no exposed focus |
 
+### The keyboard follows the focus ring
+
+While the window is key and no modal is open, the active surface of the card with the focus ring holds the keyboard, and the two never disagree. Every path that moves the ring or changes the active surface of its card moves the keyboard: a new tab, a press on a tab, `core.tab.select`, `core.card.focus`, closing a tab or a card, opening a project and restoring a space. Each workbench moves the ring in one function and sends the one host call `surfaceFocus {surface}` ([keyboard of a surface](native-surfaces.md#keyboard-of-a-surface)) after the placement that shows the surface, so a surface that the host does not hold yet takes the keyboard when it stands. A first responder that reaches the workbench while the surface should hold the keyboard goes back to the surface.
+
+- While a modal is open the keyboard stays in the modal, and the close of the modal returns it to the surface.
+- A card without a surface, which is an empty card or the placeholder of a plugin that is not installed, and the library leave the keyboard with the workbench (`surface: null`).
+- An editable element of the workbench, which is a library form field or a rename field, holds the keyboard while it has the focus, because the shortcuts of [keyboard shortcuts](#keyboard-shortcuts) that name those fields require it. The keyboard returns to the surface when the field loses the focus or closes.
+- A pointer press on a tab leaves no element focus, and the `Tab` key still stops there and keeps that stop while the keyboard stays in the workbench.
+- A section view of a sidebar that the user presses keeps the keyboard, because no ring is on it.
+
 Before the first `window-responder` event, and in a runtime without a host, the workbench holds the focus. A `window-responder` event that is not `{owner, surface, document}` with string or `null` members is reported as `error: window responder: invalid window-responder event <value>`.
 
 ## Workbench statuses

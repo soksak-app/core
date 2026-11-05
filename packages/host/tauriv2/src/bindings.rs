@@ -26,7 +26,7 @@ use soksak_host::projects::{self, CreateProject, Folder};
 use soksak_host::shapes::{self, ShapeRequest};
 use soksak_host::sidecars::WindowSidecars;
 use soksak_host::surfaces::{
-    self, CancelRequest, Placement, PreparedSurfaces, PresentRequest, Rect, SyncRequest,
+    self, CancelRequest, FocusRequest, Placement, PreparedSurfaces, PresentRequest, Rect, SyncRequest,
 };
 use soksak_host::theme::{self, Theme};
 use soksak_host::windows::{self, Geometry, OpenProject, ProjectShown};
@@ -286,6 +286,13 @@ async fn present_surfaces(
 ) -> Result<Vec<Placement>, String> {
     let Argument(request) = request;
     surfaces::present(window.0, request).await
+}
+
+/// Gives the keyboard of the window to a surface or to the workbench.
+#[tauri::command]
+fn surface_focus(window: Window, request: Argument<FocusRequest>) -> Result<(), String> {
+    let Argument(request) = request;
+    surfaces::focus(&window, request)
 }
 
 /// Ends a preparation that the page does not present, so the windows that wait for its transaction continue.

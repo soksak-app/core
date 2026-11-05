@@ -567,6 +567,9 @@ export const surfaces = native ? {
     /** Sends one failure line to the application log. */
     report: (line) => reportRecord("error", line),
 
+    /** Gives the keyboard of the window to a surface, and to the workbench for null (docs/spec/native-surfaces.md#keyboard-of-a-surface). */
+    focus: (surface) => tellInTurn("surfaceFocus", { surface }),
+
     theme(values) {
       themeReply = tellInTurn("setTheme", values);
       return themeReply;
@@ -715,6 +718,7 @@ export const surfaces = native ? {
   kinds: [],
   // A failure of a document without a host is written to the error level of the console (docs/spec/plugins.md).
   report: (line) => console.error(line),
+  focus: () => {},
   theme: () => {},
   menuLanguage: () => {},
   // Without a host, the place where this document seats the surface is the actual place. The compositor records that reply.

@@ -327,8 +327,10 @@ type Shell struct {
 	page string
 
 	text *TextSize
-	// keyboard is the keyboard focus of the window, which the first responder and the views report.
-	keyboard     *Focus
+	// exposedFocus is the keyboard focus of the window, which the first responder and the views report.
+	exposedFocus *Focus
+	// keyboard is what the workbench asked of the host about the keyboard.
+	keyboard     keyboardState
 	pointer      *PointerSequence
 	verification *Verification
 	// diagnostics holds the policy and the trace switch that the host received last.
@@ -365,7 +367,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s := &Shell{cardReads: map[string]cardRead{}, options: options, metrics: read, palette: palette, registry: NewRegistry(options.Declared), calls: options.Calls,
 		grid: environment.Workspace.Grid, focus: environment.Workspace.Focus, browsing: true, library: newLibraryState(), strips: map[string]*stripPlace{}, icons: map[string]*ui.SVG{}, heads: map[string]layout.HeadFit{}}
 	s.text = NewTextSize(shellText{s}, steps)
-	s.keyboard = NewFocus(options.Declared, func() { s.options.Invalidate() })
+	s.exposedFocus = NewFocus(options.Declared, func() { s.options.Invalidate() })
 	s.verification = NewVerification(func() { s.options.Invalidate() })
 	s.events = NewEvents(EventsOptions{Calls: s.calls, Post: options.Post, Report: options.Report, Now: time.Now,
 		After: func(delay time.Duration, task func()) { time.AfterFunc(delay, task) }})
@@ -374,7 +376,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.errors = NewShownErrors(s.events.Error)
 	s.binder = NewBinder(s.registry, func(_ string, err error) { s.fail(err) })
 	s.pointer = NewPointerSequence(func() { s.options.Invalidate() })
-	s.binder.Attach(s.pointer, s.keyboard)
+	s.binder.Attach(s.pointer, s.exposedFocus)
 	s.starter = environment.pluginStarter
 	s.pluginOperations = NewPluginOperations(s.calls, s.events.BeginOperation, func() []LoadedPlugin { return s.plugins }, func() map[string]bool { return s.refused }, options.Invalidate)
 	s.appUpdates = NewAppUpdates(s.calls, s.events.BeginOperation, s.pluginOperations.State, options.Invalidate)
@@ -631,7 +633,7 @@ func baseName(root string) string { return path.Base(root) }
 
 // View draws the workbench of the window.
 func (s *Shell) View(c *ui.Context) {
-	s.keyboard.Frame(c)
+	s.exposedFocus.Frame(c)
 	s.pointer.Frame()
 	s.sidebars.Begin()
 	clear(s.surfaces.drawn)
@@ -670,6 +672,7 @@ func (s *Shell) View(c *ui.Context) {
 	s.forgetUnseated()
 	s.observeSections()
 	s.placeSurfaces()
+	s.followKeyboard()
 	s.clearVisibleNotices()
 	s.drawn = true
 	s.pushStatuses()

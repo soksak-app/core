@@ -56,6 +56,7 @@ const METHOD = {
   syncSurfaces: "SyncSurfaces",
   presentSurfaces: "PresentSurfaces",
   cancelSurfaces: "CancelSurfaces",
+  surfaceFocus: "SurfaceFocus",
   waitPresented: "WaitPresented",
   setTheme: "SetTheme",
   setMenuLanguage: "SetMenuLanguage",

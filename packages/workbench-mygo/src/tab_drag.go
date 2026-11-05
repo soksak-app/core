@@ -218,7 +218,7 @@ func (s *Shell) dropTab(from, tab string, hit *layout.ZoneHit) error {
 	if len(source.TabList()) == 1 {
 		if from != hit.ID {
 			s.plane.Move(from, hit.ID, hit.Zone)
-			s.focused = from
+			s.focusCard(from)
 		}
 		s.settle()
 		return nil
@@ -234,7 +234,7 @@ func (s *Shell) dropTab(from, tab string, hit *layout.ZoneHit) error {
 		if err := s.storeCard(from, source); err != nil {
 			return err
 		}
-		s.focused = born
+		s.focusCard(born)
 	}
 	s.settle()
 	return nil
@@ -258,7 +258,7 @@ func (s *Shell) dropOnCentre(from string, source *layout.CardData, moving layout
 	if err := s.storeCard(card, target); err != nil {
 		return err
 	}
-	s.focused = card
+	s.focusCard(card)
 	if len(source.TabList()) == 0 && s.plane.CanClose(from) {
 		s.plane.Close(from)
 		delete(s.operated, from)

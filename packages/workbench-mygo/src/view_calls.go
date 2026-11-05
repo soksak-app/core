@@ -457,7 +457,7 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 		s.tabs.states.Write(call.Surface, state)
 		done()
 	case "tab.focus":
-		if err := s.keyboard.SetViewFocus(call.Surface, call.Params); err != nil {
+		if err := s.exposedFocus.SetViewFocus(call.Surface, call.Params); err != nil {
 			return err
 		}
 		done()
@@ -1158,7 +1158,7 @@ func (s *Shell) viewEnded(data []any) {
 func (s *Shell) forgetView(surface string, view *viewState) {
 	view.end()
 	delete(s.surfaces.views, surface)
-	s.keyboard.ForgetView(surface)
+	s.exposedFocus.ForgetView(surface)
 	delete(s.surfaces.documents, surface)
 }
 
@@ -1214,7 +1214,7 @@ func (s *Shell) surfacePressed(data []any) {
 		if held, err := s.cardData(card.ID); err == nil && held != nil {
 			for _, tab := range held.TabList() {
 				if tab.ID == surface && s.focused != card.ID {
-					s.focused = card.ID
+					s.focusCard(card.ID)
 					s.options.Invalidate()
 				}
 			}

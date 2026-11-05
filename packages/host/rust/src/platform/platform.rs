@@ -425,6 +425,11 @@ pub trait Platform: CoreRootHost + Send + Sync {
     fn surface_frame(&self, surface: Handle) -> Result<[f64; 4], String>;
     fn set_surface_hidden_handle(&self, surface: Handle, hidden: bool) -> Result<(), String>;
     fn set_surface_alpha_handle(&self, surface: Handle, alpha: f64) -> Result<(), String>;
+    /// Gives the keyboard of its window to the surface (docs/spec/native-surfaces.md#keyboard-of-a-surface). Call it on the main
+    /// thread.
+    fn focus_surface(&self, surface: Handle) -> Result<(), String>;
+    /// Gives the keyboard of window to the workbench. Call it on the main thread.
+    fn focus_workbench(&self, window: Handle) -> Result<(), String>;
     fn set_window_overlays(&self, main: Handle, overlays: &[WindowOverlay]) -> Result<(), String>;
     /// Receives the files dropped on the window of the main webview. receive receives {"urls":[...],"x":..,"y":..}
     /// (page coordinates).

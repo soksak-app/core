@@ -120,6 +120,12 @@ pub fn surface_frame(_surface: Handle) -> Result<[f64; 4], String> {
 pub fn set_surface_hidden_handle(_surface: Handle, _hidden: bool) -> Result<(), String> {
     missing("surface visibility")
 }
+pub fn focus_surface(_surface: Handle) -> Result<(), String> {
+    missing("surface keyboard")
+}
+pub fn focus_workbench(_window: Handle) -> Result<(), String> {
+    missing("workbench keyboard")
+}
 pub fn set_surface_alpha_handle(_surface: Handle, _alpha: f64) -> Result<(), String> {
     missing("surface opacity")
 }

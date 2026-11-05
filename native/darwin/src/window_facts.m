@@ -470,7 +470,10 @@ static void emitResponderChange(NSInteger windowNumber, id from, id to) {
     }
     id from = change[NSKeyValueChangeOldKey];
     id to = change[NSKeyValueChangeNewKey];
-    if (from != to) emitResponderChange(((NSWindow *)object).windowNumber, from, to);
+    if (from != to) {
+        sp_surface_responder_moved(from == NSNull.null ? nil : from, to == NSNull.null ? nil : to);
+        emitResponderChange(((NSWindow *)object).windowNumber, from, to);
+    }
     _changed();
 }
 - (instancetype)initWithWindow:(NSWindow *)window {

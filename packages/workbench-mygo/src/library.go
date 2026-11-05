@@ -112,9 +112,9 @@ func (s *Shell) registerLibrary() {
 			return fmt.Errorf("the library is not shown")
 		}
 		if s.library.page == pluginsPage {
-			return s.keyboard.Set("core.library.plugins.search", 0)
+			return s.exposedFocus.Set("core.library.plugins.search", 0)
 		}
-		return s.keyboard.Set("core.library.search", 0)
+		return s.exposedFocus.Set("core.library.search", 0)
 	})
 	act(s, "core.library.open", func(value idParam) error { s.activate(value.ID); return nil })
 	later(s, "core.library.pin", func(value pinParam, answer func(any, error)) {

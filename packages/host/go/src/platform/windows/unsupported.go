@@ -408,6 +408,14 @@ func (implementation) SetSurfaceHiddenHandle(unsafe.Pointer, bool) {
 	unreachable("surface visibility")
 }
 
+func (implementation) FocusSurface(unsafe.Pointer) {
+	unreachable("surface keyboard")
+}
+
+func (implementation) FocusWorkbench(unsafe.Pointer) {
+	unreachable("workbench keyboard")
+}
+
 func (implementation) SetSurfaceAlphaHandle(unsafe.Pointer, float64) {
 	unreachable("surface opacity")
 }

@@ -139,6 +139,12 @@ impl Platform for Windows {
     fn set_surface_hidden_handle(&self, surface: Handle, hidden: bool) -> Result<(), String> {
         unsupported::set_surface_hidden_handle(surface, hidden)
     }
+    fn focus_surface(&self, surface: Handle) -> Result<(), String> {
+        unsupported::focus_surface(surface)
+    }
+    fn focus_workbench(&self, window: Handle) -> Result<(), String> {
+        unsupported::focus_workbench(window)
+    }
     fn set_surface_alpha_handle(&self, surface: Handle, alpha: f64) -> Result<(), String> {
         unsupported::set_surface_alpha_handle(surface, alpha)
     }

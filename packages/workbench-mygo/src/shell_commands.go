@@ -84,7 +84,7 @@ func (s *Shell) register() {
 	s.registerRename()
 	s.registerSettings()
 	s.registerPicker()
-	Functions{Text: s.text, Focus: s.keyboard, Pointer: s.pointer, Contributions: s.contributions, Verification: s.verification}.Register(s.registry)
+	Functions{Text: s.text, Focus: s.exposedFocus, Pointer: s.pointer, Contributions: s.contributions, Verification: s.verification}.Register(s.registry)
 	s.registerTabDrag()
 	s.registerCardSidebars()
 	s.registerPlugins()
@@ -174,7 +174,7 @@ func (s *Shell) register() {
 		if _, ok := s.plane.Card(value.Card); !ok {
 			return fmt.Errorf("Unknown card: %s", value.Card)
 		}
-		s.focused = value.Card
+		s.focusCard(value.Card)
 		if s.fullscreen != value.Card {
 			s.fullscreen = ""
 		}
@@ -188,7 +188,7 @@ func (s *Shell) register() {
 		if err := s.paneCard(value.Card); err != nil {
 			return err
 		}
-		s.focused = value.Card
+		s.focusCard(value.Card)
 		if s.fullscreen == value.Card {
 			s.fullscreen = ""
 		} else {

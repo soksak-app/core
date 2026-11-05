@@ -316,11 +316,13 @@ func (s *Shell) menuCommand(data []any) {
 func (s *Shell) windowResponder(data []any) {
 	responder, err := eventBody[Responder]("window-responder", data)
 	if err == nil {
-		err = s.keyboard.SetResponder(responder)
+		err = s.exposedFocus.SetResponder(responder)
 	}
 	if err != nil {
 		s.fail(err)
+		return
 	}
+	s.keyboardLeft(responder)
 }
 
 // eventBody reads the one value of the event name.

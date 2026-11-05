@@ -35,6 +35,7 @@ import { changeRow, createSet, deleteSet, updateSet } from "./sidebar-sets.js";
 import { pluginUnits } from "./environment.js";
 import { latest, seated } from "./compositor.js";
 import { filePlace, modalState, onFilesDropped, onModalState, onWindowResponder } from "./host.js";
+import { keyboardResponder } from "./keyboard.js";
 import { plugin, sectionSurfacePlugin } from "./registry.js";
 import { compositionKindOf } from "./surface-composition-kind.js";
 import { retainedSurfaceEntries, surfaceKindOf } from "./surface-listing.js";
@@ -349,6 +350,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   onWindowResponder((event) => {
     try {
       setResponder(event);
+      keyboardResponder(event);
     } catch (error) {
       report(`window responder: ${error.message}`);
     }

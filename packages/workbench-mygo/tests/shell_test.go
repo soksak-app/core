@@ -225,6 +225,7 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 			return map[string]any{"ticket": 1, "placements": []any{}, "chrome": map[string]any{}}, nil
 		}),
 		"presentSurfaces": answer("presentSurfaces", none),
+		"surfaceFocus":    answer("surfaceFocus", none),
 		"exposureForward": answer("exposureForward", func(argument json.RawMessage) (any, error) {
 			var request map[string]any
 			if err := json.Unmarshal(argument, &request); err != nil {

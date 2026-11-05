@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F502-28: 창의 키보드가 모든 호스트에서 focus ring을 따른다. 새 탭, 탭 press, `core.card.focus`, 프로젝트 열기 직후에 입력한 글자가 ring이 있는 card의 active surface에 닿는다. 영역의 첫 focus 보고가 handler를 기다리므로 새 terminal 탭도 focus된 cursor를 그린다.
 - F502-12: 큰 파일을 쓰는 plugin view 를 열어도 그 파일이 host 메모리에 남지 않는다. document 응답은 plugin 파일을 256 KiB chunk 로 읽어 보내고, core root 응답은 보내는 byte 를 다시 복사하지 않는다.
 - F502-23: mygo workbench 의 `core.project.close` 와 `core.space.add` 는 `exposure.json` 이 선언한 값을 답한다. library 에는 프로젝트 검색이 그려지고, `core.library.search.focus` 가 이 검색에 focus 를 준다.
 - F502-23: mygo workbench 가 `core.window.new` 를 실행한다. 이 command 는 `core.library.window` 처럼 프로젝트가 없는 새 창을 연다.

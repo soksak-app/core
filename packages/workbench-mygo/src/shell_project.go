@@ -387,10 +387,11 @@ func (s *Shell) loadSpace(project *projectRecord) error {
 	}
 	s.plane, s.fullscreen = plane, ""
 	// A new space stores no focus, and the stored focus of a card that left the layout names no card.
-	s.focused = stored.FocusedID
-	if _, known := plane.Card(s.focused); !known {
-		s.focused = s.firstCard(plane)
+	focused := stored.FocusedID
+	if _, known := plane.Card(focused); !known {
+		focused = s.firstCard(plane)
 	}
+	s.focusCard(focused)
 	if _, err := s.arrangeWindowSidebars(); err != nil {
 		return fmt.Errorf("space %s: %w", space.ID, err)
 	}
@@ -414,7 +415,7 @@ func (s *Shell) arrangeWindowSidebars() (bool, error) {
 	width, _ := s.settings.Value("sidebarWidth").(float64)
 	changed, err := layout.ArrangeWindowSidebars(s.plane, s.sidebars.Sides(), s.windowSidebars, width, shown)
 	if _, ok := s.plane.Card(s.focused); !ok {
-		s.focused = s.firstCard(s.plane)
+		s.focusCard(s.firstCard(s.plane))
 	}
 	return changed, err
 }
@@ -852,7 +853,7 @@ func (s *Shell) splitCard(id, side, plugin string) (map[string]string, error) {
 	if !ok {
 		return nil, fmt.Errorf("card %s cannot split toward %s", id, side)
 	}
-	s.focused = born
+	s.focusCard(born)
 	s.settle()
 	return map[string]string{"card": born, "tab": tab.ID}, nil
 }
@@ -877,7 +878,7 @@ func (s *Shell) closeCard(id string) error {
 	s.plane.Close(id)
 	delete(s.operated, id)
 	if s.focused == id {
-		s.focused = s.firstCard(s.plane)
+		s.focusCard(s.firstCard(s.plane))
 	}
 	s.settleThen(s.droppedTabs(dropped))
 	return nil
@@ -911,7 +912,7 @@ func (s *Shell) addTab(id, plugin string, params json.RawMessage) (string, error
 	if err := s.storeCard(id, data); err != nil {
 		return "", err
 	}
-	s.focused = id
+	s.focusCard(id)
 	s.settle()
 	return tab.ID, nil
 }
@@ -951,7 +952,7 @@ func (s *Shell) selectTab(id string) error {
 	if err := s.storeCard(card, data); err != nil {
 		return err
 	}
-	s.focused = card
+	s.focusCard(card)
 	s.settle()
 	return nil
 }

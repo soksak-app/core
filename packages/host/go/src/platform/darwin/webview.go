@@ -27,6 +27,8 @@ static void main_sp_surface_close(void *surface) { hostRunOnMain(^{ sp_surface_c
 static void main_webviewSetFrame(void *view, double x, double y, double width, double height) {
     hostRunOnMain(^{ webviewSetFrame(view, x, y, width, height); });
 }
+static void main_sp_surface_focus(void *surface) { hostRunOnMain(^{ sp_surface_focus(surface); }); }
+static void main_sp_window_focus_workbench(void *window) { hostRunOnMain(^{ sp_window_focus_workbench(window); }); }
 static void main_webviewSetSurfaceHidden(void *view, bool hidden) { hostRunOnMain(^{ webviewSetSurfaceHidden(view, hidden); }); }
 static void main_webviewSetSurfaceAlpha(void *view, double alpha) { hostRunOnMain(^{ webviewSetSurfaceAlpha(view, alpha); }); }
 static void main_sp_surface_set_window_overlays(void *main, const double *rects, size_t count) {
@@ -276,6 +278,8 @@ func (implementation) SurfaceFrame(surface unsafe.Pointer) platform.Rect {
 func (implementation) SetSurfaceHiddenHandle(surface unsafe.Pointer, hidden bool) {
 	C.main_webviewSetSurfaceHidden(surface, C.bool(hidden))
 }
+func (implementation) FocusSurface(surface unsafe.Pointer) { C.main_sp_surface_focus(surface) }
+func (implementation) FocusWorkbench(window unsafe.Pointer) { C.main_sp_window_focus_workbench(window) }
 func (implementation) SetSurfaceAlphaHandle(surface unsafe.Pointer, alpha float64) {
 	C.main_webviewSetSurfaceAlpha(surface, C.double(alpha))
 }
