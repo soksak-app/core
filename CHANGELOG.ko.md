@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F545: 포인터를 잃은 page가 추적 영역의 진입, 이탈, 이동이 어떤 순서로 와도 hover를 멈춘다.
 - F543: key window에서 `sok input pointer`의 press가 애플리케이션을 지나, local monitor가 press를 보고 AppKit이 first responder를 옮긴다.
 - F544: release가 뒤따르는 키보드 이동을 멈추지 않는다. image region이 있는 surface를 클릭한 직후에도 키보드가 다음 release를 기다리지 않고 옮겨진다.
 - F539: `sok input pointer`가 사람처럼 이동한다. 좌표를 포함하는 모든 추적 영역이 이동과 진입, 이탈을 듣고, key window의 press는 그 좌표로 먼저 이동한다.
