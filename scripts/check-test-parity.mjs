@@ -8689,6 +8689,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F502-18-1",
+    implementation: [
+      { file: "packages/workbench/memory-placement.js", symbol: "export function memoryStart(saver) {" },
+      { file: "packages/workbench-mygo/src/shell_tabs.go", symbol: "func (s *Shell) observeSections() {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/memory-saver.test.mjs", id: "a hidden section of a project opened from the library starts unloaded in the placement that first holds it" },
+      { file: "packages/workbench-mygo/tests/app_tabs_test.go", id: "TestAHiddenSectionThatDeclaresUnloadStartsUnloaded" },
+    ],
+    expected: "A window starts its memory saver at its first drawn layout that holds a surface, so a hidden section that declares unload never mounts only to unload.",
+    levels: ["unit"],
+  },
+  {
     id: "F292-22",
     implementation: [{ file: "packages/workbench/memory-placement.js", symbol: "const started = start(candidates);" }],
     tests: [{ file: "packages/workbench/test/memory-placement-start.test.mjs", id: "a placement keeps the start values of its commit when a tab leaves its layout during the readiness wait" }],
