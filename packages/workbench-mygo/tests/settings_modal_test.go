@@ -764,6 +764,70 @@ func TestKoreanTextBreaksAtTheSpaces(t *testing.T) {
 	}
 }
 
+// A focus of a page brings its element into view, as the focus command does with an element past the end of a pane.
+func TestTheFocusCommandBringsItsElementIntoThePane(t *testing.T) {
+	f := opened(t)
+	card := f.palette().Card
+	want := color.RGBA{card.R, card.G, card.B, 255}
+	beside := func() color.RGBA {
+		t.Helper()
+		slider, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.set", "gap")
+		if !ok {
+			t.Fatal("no slider of the gap")
+		}
+		return f.pixelOf(slider.Bounds.X-6, slider.Bounds.Y+slider.Bounds.H/2)
+	}
+	if got := beside(); got == want {
+		t.Fatal("the slider already lies inside the pane")
+	}
+	f.run("core.focus.set", map[string]any{"name": "core.settings-modal.set", "index": sliderIndex(t, f)})
+	f.settle()
+	if got := beside(); got != want {
+		t.Fatalf("beside the focused slider lies %v, not the pane %v", got, want)
+	}
+}
+
+// The browser rings a focused slider around its track and its thumb, in the focus color of the system.
+func TestAFocusedSliderTakesTheRingOfTheSystem(t *testing.T) {
+	f := opened(t)
+	ring := ui.Color{R: 200, G: 30, B: 90, A: 255}
+	want := color.RGBA{ring.R, ring.G, ring.B, 255}
+	f.tester.SetPreferences(ui.Preferences{DarkFocusRing: ring})
+	f.tester.Key(0, ui.KeyTab)
+	f.settle()
+	f.run("core.focus.set", map[string]any{"name": "core.settings-modal.set", "index": sliderIndex(t, f)})
+	f.settle()
+	// The focus scrolled the slider into the pane.
+	slider, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.set", "gap")
+	if !ok {
+		t.Fatal("no slider of the gap")
+	}
+	box, width := slider.Bounds, plainLength(t, "ring-w")
+	x := box.X + box.W/2
+	if got := f.pixelOf(x, box.Y-width/2); got != want {
+		t.Fatalf("the ring is %v, not %v, around %+v", got, want, box)
+	}
+	if got := f.pixelOf(box.X-width/2, box.Y+box.H/2); got != want {
+		t.Fatalf("the ring beside the track is %v, not %v, around %+v", got, want, box)
+	}
+	if got := f.pixelOf(x, box.Y-width-.5); got == want {
+		t.Fatalf("the ring goes past its width, around %+v", box)
+	}
+	if got := f.pixelOf(box.X+box.W/4, box.Y+.5); got == want {
+		t.Fatalf("the ring goes inside the box %+v", box)
+	}
+}
+
+// sliderIndex is the position of the slider of the gap among the elements of its name, in the order of the window.
+func sliderIndex(t *testing.T, f *shellFixture) int {
+	t.Helper()
+	for index := 0; ; index++ {
+		if node := positional(t, f.tester, "core.settings-modal.set", index); node.Role == ui.RoleSlider && node.Label == "gap" {
+			return index
+		}
+	}
+}
+
 // The figures of the value of a slider take six widths of a figure of the font, as 6ch of the page does (--slide-value-w).
 func TestTheValueOfASliderIsSixFiguresWide(t *testing.T) {
 	f := opened(t)
@@ -975,11 +1039,8 @@ func TestTheSearchOfTheSettingsIsThePillOfThePage(t *testing.T) {
 		t.Fatalf("no search in %q", f.tester.Texts())
 	}
 	box := node.Bounds
-	if want := plainLength(t, "search-h"); box.H != want {
+	if want := inputHeight(t) - 2*plainLength(t, "search-inset"); box.H != want {
 		t.Fatalf("the search is %v high, not %v", box.H, want)
-	}
-	if want := plainLength(t, "search-w"); box.W != want {
-		t.Fatalf("the search is %v wide, not %v", box.W, want)
 	}
 	fill := controlBackground(t)
 	if got := f.pixelOf(box.X+2, box.Y+2); got == fill {
@@ -1005,8 +1066,22 @@ func TestTheSearchOfTheSettingsIsThePillOfThePage(t *testing.T) {
 	}
 }
 
-// The browser rings a focused input of type search outside its box, with a gap.
-func TestAFocusedSearchOfTheSettingsHasTheRingOfThePage(t *testing.T) {
+// inputHeight is the height of an input of the page: a line of its text inside the padding and the edge of the browser.
+func inputHeight(t *testing.T) float32 {
+	t.Helper()
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	line, ok := declared.Metric("line-height")
+	if !ok {
+		t.Fatal("no line height is declared")
+	}
+	return float32(line)*13 + 2*(plainLength(t, "pad-y")+plainLength(t, "edge-w"))
+}
+
+// The browser rings a focused input outside its box, in the focus color of the system, which follows the accent color.
+func TestAFocusedSearchTakesTheRingOfTheSystem(t *testing.T) {
 	f := opened(t)
 	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
 	f.settle()
@@ -1014,27 +1089,202 @@ func TestAFocusedSearchOfTheSettingsHasTheRingOfThePage(t *testing.T) {
 	if !ok {
 		t.Fatalf("no search in %q", f.tester.Texts())
 	}
-	declared, err := workbench.Declared()
-	if err != nil {
-		t.Fatal(err)
-	}
-	ring := ui.Hex(declared.PlainControl("ring"))
-	width, gap := plainLength(t, "ring-w"), plainLength(t, "ring-gap")
+	width, inset := plainLength(t, "ring-w"), plainLength(t, "search-inset")
 	// The top edge, which is straight: the left of a pill is a curve.
 	x, y := node.Bounds.X+node.Bounds.W/2, node.Bounds.Y
-	beside, around := f.pixelOf(x, y-gap/2), f.pixelOf(x, y-gap-width-.5)
+	beside, around := f.pixelOf(x, y-inset/2), f.pixelOf(x, y-inset-width-.5)
 	f.tester.Key(0, ui.KeyTab)
 	f.settle()
 	f.run("core.focus.set", map[string]any{"name": "core.settings-modal.search", "index": 0})
 	f.settle()
-	if got, want := f.pixelOf(x, y-gap-width/2), (color.RGBA{ring.R, ring.G, ring.B, 255}); got != want {
-		t.Fatalf("the ring is %v, not %v", got, want)
+	for _, ring := range []ui.Color{{R: 200, G: 30, B: 90, A: 255}, {R: 40, G: 210, B: 70, A: 255}} {
+		f.tester.SetPreferences(ui.Preferences{DarkFocusRing: ring})
+		f.settle()
+		if got, want := f.pixelOf(x, y-inset-width/2), (color.RGBA{ring.R, ring.G, ring.B, 255}); got != want {
+			t.Fatalf("the ring is %v, not %v", got, want)
+		}
 	}
-	if got := f.pixelOf(x, y-gap/2); got != beside {
+	if got := f.pixelOf(x, y-inset/2); got != beside {
 		t.Fatalf("the gap inside the ring is %v, not %v", got, beside)
 	}
-	if got := f.pixelOf(x, y-gap-width-.5); got != around {
+	if got := f.pixelOf(x, y-inset-width-.5); got != around {
 		t.Fatalf("outside the ring lies %v, not %v", got, around)
+	}
+}
+
+// A desktop without a ring of its own leaves a focused input the focus color of the theme.
+func TestAFocusedSearchWithoutARingOfTheSystemTakesTheFocusColor(t *testing.T) {
+	f := opened(t)
+	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
+	f.settle()
+	node, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.search", "")
+	if !ok {
+		t.Fatalf("no search in %q", f.tester.Texts())
+	}
+	f.tester.Key(0, ui.KeyTab)
+	f.settle()
+	f.run("core.focus.set", map[string]any{"name": "core.settings-modal.search", "index": 0})
+	f.settle()
+	focus := f.palette().Focus
+	width, inset := plainLength(t, "ring-w"), plainLength(t, "search-inset")
+	if got, want := f.pixelOf(node.Bounds.X+node.Bounds.W/2, node.Bounds.Y-inset-width/2), (color.RGBA{focus.R, focus.G, focus.B, 255}); got != want {
+		t.Fatalf("the ring is %v, not %v", got, want)
+	}
+}
+
+// A search with a text has the cancel of the browser, which empties it and leaves it the focus.
+func TestTheCancelOfTheSearchEmptiesIt(t *testing.T) {
+	f := opened(t)
+	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
+	f.settle()
+	node, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.search", "")
+	if !ok {
+		t.Fatalf("no search in %q", f.tester.Texts())
+	}
+	box := node.Bounds
+	end, size := plainLength(t, "search-cancel-end"), plainLength(t, "search-cancel-size")
+	x, y := box.X+box.W-end-size/2, box.Y+box.H/2
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cancel := ui.Hex(declared.PlainControl("search-cancel"))
+	want := color.RGBA{cancel.R, cancel.G, cancel.B, 255}
+	// The left of the circle, beside the cross.
+	if got := f.pixelOf(x-size/2+1.5, y); got == want {
+		t.Fatal("an empty search has a cancel")
+	}
+	f.run("core.settings-modal.search", map[string]string{"query": "term"})
+	f.settle()
+	if got := f.pixelOf(x-size/2+1.5, y); got != want {
+		t.Fatalf("the cancel is %v, not %v", got, want)
+	}
+	f.tester.ClickAt(box.X+box.W/2, y)
+	f.settle()
+	f.tester.ClickAt(x, y)
+	f.settle()
+	if got := f.pixelOf(x-size/2+1.5, y); got == want {
+		t.Fatal("the cancel stays after its press")
+	}
+	if !f.tester.Focused(node.Label) {
+		t.Fatal("the search lost the focus to its cancel")
+	}
+}
+
+// The column of a row is the free width of the pane, which the border of a theme narrows. The box of a search is that column, and
+// the search lies inside its box.
+func TestTheSearchOfTheSettingsFillsTheColumnOfItsRow(t *testing.T) {
+	f := opened(t)
+	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
+	f.settle()
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	metric := func(name string) float32 {
+		value, _ := declared.Metric(name)
+		return float32(value)
+	}
+	check := func(border float32) {
+		t.Helper()
+		node, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.search", "")
+		if !ok {
+			t.Fatalf("no search in %q", f.tester.Texts())
+		}
+		want := metric("set-card-w") - 2*border - metric("set-nav-w") - 2*metric("set-pane-pad-x") - metric("set-row-name-w") - metric("set-row-gap")
+		if got := node.Bounds.W + 2*plainLength(t, "search-inset"); got != want {
+			t.Fatalf("with a border of %v the box of the search is %v wide, not %v", border, got, want)
+		}
+	}
+	check(1)
+	f.run("core.settings-modal.nav", map[string]string{"section": "general"})
+	f.settle()
+	f.click("core.settings-modal.theme", "theme:solar")
+	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
+	f.settle()
+	check(2)
+}
+
+// The browser empties a search on Escape and keeps it focused, as its input event tells the page. Escape closes no dialog.
+func TestEscapeEmptiesTheSearchOfTheSettings(t *testing.T) {
+	f := opened(t)
+	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
+	f.run("core.settings-modal.search", map[string]string{"query": "term"})
+	f.run("core.focus.set", map[string]any{"name": "core.settings-modal.search", "index": 0})
+	f.settle()
+	node, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.search", "")
+	if !ok {
+		t.Fatalf("no search in %q", f.tester.Texts())
+	}
+	f.tester.Key(0, ui.KeyEscape)
+	f.settle()
+	if got := f.modal().Query; got != "" {
+		t.Fatalf("after Escape the query is %q", got)
+	}
+	if !f.tester.Focused(node.Label) {
+		t.Fatal("Escape took the focus from the search")
+	}
+	f.tester.Key(0, ui.KeyEscape)
+	f.settle()
+	if !f.modal().Open {
+		t.Fatal("Escape closed the settings")
+	}
+}
+
+// The browser selects the text of a field that a script focuses for the first time, so the next key replaces it.
+func TestTheFocusCommandSelectsTheTextOfAFieldNotYetFocused(t *testing.T) {
+	f := opened(t)
+	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
+	f.run("core.settings-modal.search", map[string]string{"query": "term"})
+	f.settle()
+	f.run("core.focus.set", map[string]any{"name": "core.settings-modal.search", "index": 0})
+	f.settle()
+	f.tester.Type("x")
+	f.settle()
+	if got := f.modal().Query; got != "x" {
+		t.Fatalf("the key after the focus made the query %q", got)
+	}
+}
+
+// The browser gives a field that had the focus its own selection back when a script focuses it again.
+func TestTheFocusCommandKeepsTheSelectionOfAFieldThatHadTheFocus(t *testing.T) {
+	f := opened(t)
+	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
+	f.run("core.settings-modal.search", map[string]string{"query": "term"})
+	f.settle()
+	f.run("core.focus.set", map[string]any{"name": "core.settings-modal.search", "index": 0})
+	f.settle()
+	f.tester.Key(0, ui.KeyEnd)
+	f.settle()
+	f.run("core.focus.set", map[string]any{"name": "core.settings-modal.manage", "index": 0})
+	f.settle()
+	f.run("core.focus.set", map[string]any{"name": "core.settings-modal.search", "index": 0})
+	f.settle()
+	f.tester.Type("x")
+	f.settle()
+	if got := f.modal().Query; got != "termx" {
+		t.Fatalf("the key after the second focus made the query %q", got)
+	}
+}
+
+// Tab selects the text of the field it reaches, whatever selection that field had.
+func TestTabSelectsTheTextOfTheSearchItReaches(t *testing.T) {
+	f := opened(t)
+	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
+	f.run("core.settings-modal.search", map[string]string{"query": "term"})
+	f.settle()
+	f.run("core.focus.set", map[string]any{"name": "core.settings-modal.search", "index": 0})
+	f.settle()
+	f.tester.Key(0, ui.KeyEnd)
+	f.settle()
+	f.run("core.focus.set", map[string]any{"name": "core.settings-modal.manage", "index": 0})
+	f.settle()
+	f.tester.Key(0, ui.KeyTab)
+	f.settle()
+	f.tester.Type("x")
+	f.settle()
+	if got := f.modal().Query; got != "x" {
+		t.Fatalf("the key after Tab made the query %q", got)
 	}
 }
 

@@ -421,6 +421,14 @@ func (s *Shell) drawSlider(c *ui.Context, control *SettingsControl, pane setting
 			p.Fill(ui.Rect{X: r.X, Y: r.Y + (r.H-trackH)/2, W: r.W, H: trackH}, track, trackH/2)
 			p.Fill(ui.Rect{X: r.X + (r.W-thumb)*share, Y: r.Y + (r.H-thumb)/2, W: thumb, H: thumb}, thumbColor, thumb/2)
 		})
+		// The browser rings the slider of the page around its track and the thumb that stands out of it.
+		plain, ringed := s.plainControls(), slider.FocusVisible()
+		ring := plain.ringColor(c)
+		slider.FocusRing(false).DrawOver(func(p *ui.Painter, r ui.Rect) {
+			if ringed {
+				plain.ring(p, r, r.H/2, ring)
+			}
+		})
 		ui.Text(c, *control.Value+control.unit).Width(s.chLength(c, "slide-value-w", s.textSmall())).TextAlign(ui.End).FontSize(s.textSmall()).TextColor(s.palette.Muted)
 	})
 }
@@ -430,22 +438,17 @@ func (s *Shell) drawSlider(c *ui.Context, control *SettingsControl, pane setting
 func (s *Shell) drawTextControl(c *ui.Context, control *SettingsControl) {
 	w := &s.settingsWindow
 	key := control.item()
+	if control.searchable {
+		s.drawSearchControl(c, control)
+		return
+	}
 	value, drafted := w.drafts[key]
 	if !drafted {
 		value = *control.Value
 	}
 	s.binder.Control(c, control.Name, control.Command.Name, key)
-	plain, field := s.plainControls(), s.binder.Bound(ui.TextInputBase(c, &value), control.Name).Label(key).Placeholder(control.Label)
-	if control.searchable {
-		field = plain.search(field)
-	} else {
-		field = plain.field(c, field).Grow(1)
-	}
+	field := s.plainControls().field(c, s.binder.Bound(ui.TextInputBase(c, &value), control.Name)).Label(key).Placeholder(control.Label).Grow(1)
 	if field.Changed() {
-		if control.searchable {
-			s.runControl(control, value)
-			return
-		}
 		w.drafts[key] = value
 		drafted = true
 	}
@@ -453,4 +456,20 @@ func (s *Shell) drawTextControl(c *ui.Context, control *SettingsControl) {
 		delete(w.drafts, key)
 		s.runControl(control, value)
 	}
+}
+
+// drawSearchControl draws the search, which runs its command for each change and has the cancel of the browser while it has a text.
+func (s *Shell) drawSearchControl(c *ui.Context, control *SettingsControl) {
+	plain, value := s.plainControls(), *control.Value
+	plain.searchBox(c).Children(func() {
+		s.binder.Control(c, control.Name, control.Command.Name, control.item())
+		field := plain.search(c, s.binder.Bound(ui.TextInputBase(c, &value), control.Name)).Label(control.item()).Placeholder(control.Label)
+		if field.Changed() {
+			s.runControl(control, value)
+		}
+		// The browser empties a search on Escape as its cancel does. An empty search leaves the key to the window.
+		if value != "" && (plain.drawSearchCancel(c) || field.Shortcut(0, ui.KeyEscape)) {
+			s.runControl(control, "")
+		}
+	})
 }

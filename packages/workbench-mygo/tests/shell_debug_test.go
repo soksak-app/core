@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image/color"
 	"slices"
 	"strings"
 	"testing"
@@ -520,6 +521,34 @@ func TestAFilterOfTheTimelineHasTheBackgroundOfThePage(t *testing.T) {
 	}
 }
 
+// The browser rings a focused input and select of the timeline outside their box, in the focus color of the system.
+func TestAFocusedFilterOfTheTimelineTakesTheRingOfTheSystem(t *testing.T) {
+	for _, name := range []string{"core.debug.timeline.class", "core.debug.timeline.level"} {
+		t.Run(name, func(t *testing.T) {
+			f, _ := timelineShell(t, logPage("null", 2, 1))
+			node, ok := exposedNode(f.tester.ElementTree(), name, "")
+			if !ok {
+				t.Fatalf("no filter in %q", f.tester.Texts())
+			}
+			width := plainLength(t, "ring-w")
+			x, y := node.Bounds.X+node.Bounds.W/2, node.Bounds.Y
+			around := f.pixelOf(x, y-width-.5)
+			ring := ui.Color{R: 200, G: 30, B: 90, A: 255}
+			f.tester.SetPreferences(ui.Preferences{DarkFocusRing: ring})
+			f.tester.Key(0, ui.KeyTab)
+			f.settle()
+			f.run("core.focus.set", map[string]any{"name": name, "index": 0})
+			f.settle()
+			if got, want := f.pixelOf(x, y-width/2), (color.RGBA{ring.R, ring.G, ring.B, 255}); got != want {
+				t.Fatalf("the ring is %v, not %v", got, want)
+			}
+			if got := f.pixelOf(x, y-width-.5); got != around {
+				t.Fatalf("outside the ring lies %v, not %v", got, around)
+			}
+		})
+	}
+}
+
 // The filters of the timeline flow as those of the page (.dbg-card__filters): an input starts as wide as twenty figures and grows
 // into what its line leaves, and a select is as wide as its longest option.
 func TestTheFiltersOfTheTimelineFlowAsOnThePage(t *testing.T) {
@@ -534,12 +563,8 @@ func TestTheFiltersOfTheTimelineFlowAsOnThePage(t *testing.T) {
 	}
 	channel, level, layer, text := bounds("channel"), bounds("level"), bounds("layer"), bounds("text")
 	class, event, prefix, surface := bounds("class"), bounds("event"), bounds("event-prefix"), bounds("surface")
-	declared, err := workbench.Declared()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if height := declared.PlainControl("h"); fmt.Sprintf("%gpx", class.H) != height {
-		t.Fatalf("an input is %v high, not %s", class.H, height)
+	if want := inputHeight(t); class.H != want {
+		t.Fatalf("an input is %v high, not %v", class.H, want)
 	}
 	if channel.W != level.W || layer.W <= channel.W {
 		t.Fatalf("the selects are %v, %v and %v wide", channel.W, level.W, layer.W)
