@@ -236,6 +236,8 @@ Release는 plugin과 sidecar 저장소가 build에 쓰는 것을 담으므로, �
 
 `make check-app-update HOST=wailsv3|tauriv2|mygo`는 빌드한 디버그 번들의 복사본으로 애플리케이션 업데이트를 검사한다. 이 target은 번들을 두 번 복사하고, 두 번째 복사본에 버전 99.0.0과 ad-hoc 서명을 주고, 자신이 쓴 registry index의 core release로 압축하고, 첫 복사본을 빈 설치의 일회용 설정 디렉터리로 시작하고, `core.app`이 그 release를 나열하기를 기다리고, `core.app.update`를 실행하고, `sok app update`가 시작하는 애플리케이션을 기다린 뒤, 첫 복사본이 버전 99.0.0을 갖고 `.previous` 번들이 남지 않고 이전 프로세스가 끝났고 다시 시작한 애플리케이션이 그 release를 다시 나열하는지 검사한다. 상태는 `sok status <name> --watch`로 기다리며, 자신의 자식 프로세스가 아닌 애플리케이션의 끝을 기다릴 때만 프로세스의 존재를 100 ms마다 읽는다. 시작한 애플리케이션을 끝내고 폴더를 지우며, 프로세스가 남으면 실패한다.
 
+`make measure-page-memory`, `make measure-object-counts`, `make measure-host-calls`, `make measure-host-allocations` 는 `make measure-app-usage`, `make measure-terminal-redraw` 와 같이 `occluded` true 를 보고하는 window 를 읽은 시점에 실패한다. 가려진 window 는 다른 상태를 재기 때문이다.
+
 ## 빈 창 benchmark
 
 `make benchmark-empty-window [SECONDS=N]`은 `packages/host/mygo/benchmark/cmd`를 실행한다. mygo framework adapter 없이 1200×760 point의 framework 창을 열어 workbench를 그리지 않고, JSON 한 줄을 쓴다: 유휴 창의 footprint(`footprintBytes`), `seconds`(기본 240) 동안의 CPU(`cpuSeconds`), resize 중간의 footprint(`resizeFootprintBytes`), 그 3 s 뒤의 footprint(`afterResizeFootprintBytes`). `packages/host/mygo/benchmark/empty_window_test.go`는 fixture 창으로 인자, 창 크기, 측정값, 출력을 검사한다.
