@@ -334,6 +334,7 @@ fn a_burst_of_window_changes_is_one_more_read_on_one_thread() {
 }
 
 /// Two keys both run, and a later request after the burst ended runs on the thread that the first request started.
+// contract: status.window.latest-reads-run-on-one-thread
 #[test]
 fn each_window_keeps_its_own_latest_read_on_the_same_thread() {
     let (work, runs, release, begins) = held_latest_work();
