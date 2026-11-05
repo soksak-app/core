@@ -1304,6 +1304,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F614",
+    implementation: [
+      { file: "scripts/checklist.mjs", symbol: "export function conflictMarkerErrors() {" },
+    ],
+    tests: [
+      { file: "scripts/test/checklist.test.mjs", id: "check-docs fails on a conflict marker in a document or a source file and names the file and the line" },
+      { file: "scripts/test/checklist.test.mjs", id: "check-docs passes a text that holds no conflict marker at the start of a line" },
+    ],
+    expected: "check-docs fails on a conflict marker at the start of a line of a tracked or new text file.",
+    levels: ["unit"],
+  },
+  {
     id: "F612",
     implementation: [
       { file: "docs/operations/examples.md", symbol: "## Three-host benchmark" },
