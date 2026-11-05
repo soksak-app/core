@@ -10,6 +10,7 @@
 - F479: The release candidate is 0.0.37.
 - F479: The release run published v0.0.37, and the registry lists it with the plugins that require it.
 - F435-5: A convergence failure of a view drag states when the gesture ended.
+- F435-6: A convergence result of a view drag states the last host layout and the last source frame of the final viewport relative to the gesture end.
 - F480: `e2e/terminal-reopen.test.mjs` checks that a terminal opened after the earlier terminals closed displays its prompt, and the benchmark readiness failure reports the session, the surface and its regions.
 - F478: The Wails host keeps a null `data` of a view event and a null `params` of a view request as values.
 - F477: The window check setup names the declared make target `build-capture-text-path`.

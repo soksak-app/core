@@ -443,6 +443,9 @@ test("drag cadence is in-gesture and convergence meets both frame and time bound
   tooLate.drag.contentFrames[6].sourceSequence = 6;
   assert.throws(() => assertViewMeasurements(tooLate, options), /source-backed final-target paint capture/);
   assert.throws(() => assertViewMeasurements(tooLate, options), /"gestureEndedAtMs":/, "the report states when the gesture ended");
+  assert.throws(() => assertViewMeasurements(tooLate, options),
+    /"stages":\{"finalLayout":\{"ticket":1,"begunMs":-70,"requestedMs":-60,"presentedMs":-55,"committedMs":-50\},"finalSourceFrame":\{"sourceSequence":5,"lowerMs":34,"upperMs":36\}\}/,
+    "the report states each stage of the final size after the gesture end");
 
   const alreadyMatched = metrics();
   alreadyMatched.drag.contentFrames.splice(3);

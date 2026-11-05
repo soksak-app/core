@@ -10,6 +10,7 @@
 - F479: release candidate는 0.0.37입니다.
 - F479: release run이 v0.0.37을 게시했고, registry가 이를 요구하는 plugin과 함께 올립니다.
 - F435-5: view drag의 수렴 실패가 gesture 종료 시각을 밝힙니다.
+- F435-6: view drag의 수렴 결과가 마지막 host layout과 최종 viewport의 마지막 source frame을 gesture 종료 기준으로 밝힙니다.
 - F480: `e2e/terminal-reopen.test.mjs`가 앞선 terminal이 닫힌 뒤 연 terminal의 prompt 표시를 검사하고, benchmark readiness 실패가 session, surface, region을 보고합니다.
 - F478: Wails host가 view event의 null `data`와 view request의 null `params`를 값으로 보존합니다.
 - F477: window check setup이 선언된 make target `build-capture-text-path`를 부릅니다.
