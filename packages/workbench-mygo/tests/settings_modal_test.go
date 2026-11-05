@@ -2,6 +2,7 @@ package workbench_test
 
 import (
 	"encoding/json"
+	"image"
 	"image/color"
 	"reflect"
 	"slices"
@@ -758,5 +759,67 @@ func TestKoreanTextBreaksAtTheSpaces(t *testing.T) {
 	// The last word is five characters, and a break inside it leaves at most two.
 	if ink := lastLineInk(f, node); ink < 3*float32(size) {
 		t.Fatalf("the last line of the caption is %v wide: it broke inside a word", ink)
+	}
+}
+
+// The name of a group of settings is a heading of the page, so it is bold.
+func TestTheNameOfASettingsGroupIsBold(t *testing.T) {
+	f := opened(t)
+	f.run("core.settings.theme", map[string]any{"name": "midnight", "mode": "dark"})
+	f.settle()
+	catalog, err := workbench.ReadSettingsCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stack := catalog.Stack(status[map[string]any](t, f, "core.settings")["values"].(map[string]any)["font"].(string))
+	declared, err := workbench.ReadDeclarations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	size, _ := declared.Metric("text-caption-at-base")
+	tracking, _ := declared.Metric("section-tracking")
+	rail, card := themeToken(t, "midnight", "dark", "rail"), themeToken(t, "midnight", "dark", "card")
+	ink := func(drawn *image.RGBA) int {
+		count := 0
+		bounds := drawn.Bounds()
+		for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+			for x := bounds.Min.X; x < bounds.Max.X; x++ {
+				at := drawn.RGBAAt(x, y)
+				if int(at.B)-int(card.B) > int(rail.B-card.B)/2 {
+					count++
+				}
+			}
+		}
+		return count
+	}
+	var line ui.Rect
+	written := func(bold bool) int {
+		tester := ui.NewTester(func(c *ui.Context) {
+			ui.Box(c).Fill().Background(ui.Color{R: card.R, G: card.G, B: card.B, A: 255}).Children(func() {
+				name := ui.Text(c, "테마").Font(stack).FontSize(float32(size)).LetterSpacing(float32(size*tracking)).
+					TextColor(ui.Color{R: rail.R, G: rail.G, B: rail.B, A: 255})
+				if bold {
+					name.Bold()
+				}
+			})
+		}, 200, 100)
+		tester.Frame()
+		line, _ = tester.Find("테마")
+		return ink(tester.Image())
+	}
+	regular, bold := written(false), written(true)
+	// The group holds the name as its label, so its rect starts with the line of the name.
+	box, ok := f.tester.Find("테마")
+	if !ok {
+		t.Fatalf("the texts are %q", f.tester.Texts())
+	}
+	whole := f.tester.Image()
+	scale := float32(whole.Bounds().Dx()) / 1200
+	drawn := whole.SubImage(image.Rect(int(box.X*scale), int(box.Y*scale), int((box.X+line.W)*scale)+1, int((box.Y+line.H)*scale)+1)).(*image.RGBA)
+	if regular >= bold {
+		t.Fatalf("the reference has %d points of a regular name and %d of a bold one", regular, bold)
+	}
+	if got := ink(drawn); got < (regular+bold)/2 {
+		t.Fatalf("the name has %d points of ink, a regular name %d and a bold one %d", got, regular, bold)
 	}
 }

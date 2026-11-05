@@ -4,7 +4,7 @@
 
 ## Unreleased
 
-- F502-16: The whole of a tab of the mygo workbench is its button, as on the page: a press on its padding shows the tab, and the close button stands in it. A card tab has the line height of the page, and the text of a card foot stands on the padding of the page.
+- F502-16: The whole of a tab of the mygo workbench is its button, as on the page: a press on its padding shows the tab, and the close button stands in it. A card tab has the line height of the page, the text of a card foot stands on the padding of the page, and the name of a settings group is bold.
 - F502-16: Every look of the mygo workbench takes its value from `workbench.json`, which the page reads too: the caption of a card foot, the status line of a sidebar, the text of a placeholder and of a stopped view, the scrim of a dialog with its blur, and the gap under an anchor of a layer.
 - F502-16: A hidden element of the mygo workbench keeps its index among the elements of its name, as a page element under `display:none`, so a window check that names a tab by its place in `core.grid` reaches that tab through every stage of a card head and through a full screen card. The bar is the element `core.chrome.bar`.
 - F502-16: The mygo workbench answers `core.plugin.open-calls`, `core.plugin.losses` and `core.plugin.views`.

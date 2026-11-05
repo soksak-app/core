@@ -4,7 +4,7 @@
 
 ## 미배포
 
-- F502-16: mygo workbench의 tab은 page처럼 전체가 button이다: padding을 눌러도 tab을 보이고 close button은 그 안에 선다. card tab은 page의 line height를 가지고, card foot의 글자는 page의 padding에 선다.
+- F502-16: mygo workbench의 tab은 page처럼 전체가 button이다: padding을 눌러도 tab을 보이고 close button은 그 안에 선다. card tab은 page의 line height를 가지고, card foot의 글자는 page의 padding에 서고, settings group 이름은 굵다.
 - F502-16: mygo workbench의 모든 모양 값은 page도 읽는 `workbench.json`에서 나온다: card foot의 caption, sidebar의 status line, placeholder와 멈춘 view의 글자, dialog의 scrim과 blur, layer의 anchor 아래 간격이다.
 - F502-16: mygo workbench의 숨은 element는 `display:none`인 page element처럼 같은 이름의 element 사이에서 index를 유지하므로, tab을 `core.grid`의 자리로 부르는 window check는 card head의 모든 단계와 전체 화면 card에서 그 tab에 닿는다. bar는 element `core.chrome.bar`다.
 - F502-16: mygo workbench는 `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.views`에 답한다.
