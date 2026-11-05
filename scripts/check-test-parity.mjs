@@ -968,14 +968,21 @@ const FEATURE_LINKS = [
   {
     id: "F526",
     implementation: [
-      { file: "packages/window-check/stall-sample.mjs", symbol: "function endError(error, stderr, limitMs) {" },
-      { file: "packages/window-check/stall-sample.mjs", symbol: "export function runProcess(command, args, limitMs = 10000) {" },
+      { file: "packages/window-check/stall-sample.mjs", symbol: "function endError(error, stderr, limitMs, state) {" },
+      { file: "packages/window-check/stall-sample.mjs", symbol: "function readState(atLimit, pid, stateLimitMs) {" },
+      { file: "packages/window-check/stall-sample.mjs", symbol: "export async function samplerState(pid, file, run = runProcess) {" },
+      { file: "packages/window-check/stall-sample.mjs", symbol: "export function runProcess(command, args, { limitMs = 10000, atLimit = systemState, stateLimitMs = STATE_LIMIT } = {}) {" },
     ],
     tests: [
-      { file: "packages/window-check/test/stall-sample.test.mjs", id: "a process ended at its limit is named with the signal, the limit and its standard error" },
+      { file: "packages/window-check/test/stall-sample.test.mjs", id: "a process ended at its limit is named with the signal, the limit, its standard error and the state of the system" },
+      { file: "packages/window-check/test/stall-sample.test.mjs", id: "the state at the limit is read while the process still runs" },
+      { file: "packages/window-check/test/stall-sample.test.mjs", id: "a state at the limit that does not finish does not hold the end of the process" },
+      { file: "packages/window-check/test/stall-sample.test.mjs", id: "a sample that stalls records the stacks of the sampling process before it ends" },
+      { file: "packages/window-check/test/stall-sample.test.mjs", id: "the limit of a process holds while a check moves mocked timers" },
+      { file: "packages/window-check/test/stall-sample.test.mjs", id: "stacks that the sampling process cannot record are named with the reason" },
       { file: "packages/window-check/test/stall-sample.test.mjs", id: "a process ended by a signal of another sender is not reported as ended at its limit" },
     ],
-    expected: "A process of the stall sample that does not reach its own exit fails with its signal, the limit when the limit ended it, and its standard error.",
+    expected: "A process of the stall sample that does not reach its own exit fails with its signal, the limit when the limit ended it, its standard error and the state of the machine at the limit; a sample that stalls leaves the stacks of its own process or the reason they are missing.",
     levels: ["unit"],
   },
   {
