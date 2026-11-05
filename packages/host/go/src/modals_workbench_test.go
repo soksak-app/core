@@ -7,6 +7,7 @@ import (
 )
 
 // A dialog that the workbench draws itself blurs the documents of the window and each document created while it is open.
+// contract: modal.dialog-blurs-each-document-and-image-region
 func TestAWorkbenchDialogBlursTheDocuments(t *testing.T) {
 	fake := &creationPlatform{}
 	useCreationPlatform(t, fake)

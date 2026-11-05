@@ -140,6 +140,7 @@ impl Idle {
 
 // A wakeup of each interval would be ten wakeups each second of an idle application, which G2 of docs/spec/hosts.md does not
 // leave room for.
+// contract: log.writer.sleeps-with-nothing-to-write
 #[test]
 fn a_writer_with_nothing_to_write_does_not_wake() {
     let idle = idle(Duration::from_millis(5));
@@ -148,6 +149,7 @@ fn a_writer_with_nothing_to_write_does_not_wake() {
     assert_eq!(idle.pulls() - from, 0);
 }
 
+// contract: log.writer.sleeps-with-nothing-to-write
 #[test]
 fn the_writer_sleeps_again_after_a_wake() {
     let idle = idle(Duration::from_millis(5));
@@ -161,6 +163,7 @@ fn the_writer_sleeps_again_after_a_wake() {
     );
 }
 
+// contract: log.writer.stores-the-first-event-at-once
 #[test]
 fn the_first_event_is_stored_at_once() {
     let idle = idle(HOUR);
@@ -168,6 +171,7 @@ fn the_first_event_is_stored_at_once() {
     idle.wait_for("writer.idle.first");
 }
 
+// contract: log.native.wake-stores-a-record-at-once
 #[test]
 fn the_first_record_of_the_source_is_stored_at_once() {
     let idle = idle(HOUR);
@@ -176,6 +180,7 @@ fn the_first_record_of_the_source_is_stored_at_once() {
     idle.wait_for("native.idle.first");
 }
 
+// contract: log.writer.stores-the-first-event-at-once
 #[test]
 fn the_events_after_the_first_wait_for_the_batch() {
     let idle = idle(HOUR);
@@ -188,6 +193,7 @@ fn the_events_after_the_first_wait_for_the_batch() {
     assert!(idle.stores("writer.idle.second"));
 }
 
+// contract: log.writer.sleeps-with-nothing-to-write
 #[test]
 fn a_count_of_the_gate_wakes_the_writer() {
     let idle = idle(Duration::from_millis(5));
@@ -199,6 +205,7 @@ fn a_count_of_the_gate_wakes_the_writer() {
     }
 }
 
+// contract: log.writer.sleeps-with-nothing-to-write
 #[test]
 fn a_loss_wakes_the_writer() {
     let idle = idle(HOUR);
@@ -206,6 +213,7 @@ fn a_loss_wakes_the_writer() {
     idle.wait_for("log.dropped");
 }
 
+// contract: log.native.close-stores-the-ring
 #[test]
 fn close_stores_what_waits_and_what_the_source_holds() {
     let idle = idle(HOUR);
@@ -218,6 +226,7 @@ fn close_stores_what_waits_and_what_the_source_holds() {
     assert!(idle.stores("native.idle.held"));
 }
 
+// contract: log.native.close-stores-the-ring
 #[test]
 fn a_writer_that_sleeps_takes_the_source_when_it_flushes_and_closes() {
     let idle = idle(HOUR);
@@ -229,6 +238,7 @@ fn a_writer_that_sleeps_takes_the_source_when_it_flushes_and_closes() {
     assert!(idle.stores("native.idle.closed"));
 }
 
+// contract: log.native.pull-needs-a-wake
 #[test]
 fn a_pull_without_a_wake_is_refused() {
     let folder = Folder::new("event-log-idle");

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
-import { auditDeclarations, auditHostContract, parseContractCases, groupResults, goTestSourceFilesForRun, parseDeclarations, selectRustDeclarations, uncoveredCases } from '../check-host-contract.mjs';
+import { auditDeclarations, auditHostContract, parseContractCases, GO_RUNS, groupResults, goTestSourceFilesForRun, parseDeclarations, selectRustDeclarations, uncoveredCases } from '../check-host-contract.mjs';
 
 const SPEC = `# Hosts
 
@@ -45,6 +45,8 @@ fn shared() {}
 `;
 
 const GO_OWNER = 'packages/host/wailsv3/tests';
+const MYGO_OWNER = 'packages/host/mygo/tests';
+const MYGO = 'package tests\n\n// contract: area.shared\nfunc TestShared(t *testing.T) {}\n';
 /** A host of the static audit: the declarations of its test sources, without run results. */
 const staticHost = (name, language, parsed) => ({ name, language, tests: parsed.tests, errors: parsed.errors });
 
@@ -57,6 +59,7 @@ function hosts({ go = GO, rust = RUST, goRuns, rustRuns } = {}) {
   return [
     { name: 'wailsv3', language: 'go', ...wails, items: [], runs: goRuns ?? [owners(GO_OWNER, [['TestShared', 'pass'], ['TestWailsOnly', 'pass']])] },
     { name: 'tauriv2', language: 'rust', ...tauri, items: [], runs: rustRuns ?? [owners('.', [['shared', 'pass']])] },
+    { name: 'mygo', language: 'go', ...parseDeclarations(MYGO, 'go', `${MYGO_OWNER}/mygo_test.go`), items: [], runs: [owners(MYGO_OWNER, [['TestShared', 'pass']])] },
   ];
 }
 
@@ -67,9 +70,11 @@ test('the scope all covers every host, and a list of hosts names each host with 
     '| `a.one` | One host does this. | wailsv3 only: the framework owns it |',
     '| `a.two` | Two hosts do this. | wailsv3, tauriv2 only: a main web view |',
   ].join('\n')));
-  assert.deepEqual([...cases.get('a.every').hosts].sort(), ['tauriv2', 'wailsv3']);
+  assert.deepEqual([...cases.get('a.every').hosts].sort(), ['mygo', 'tauriv2', 'wailsv3']);
   assert.deepEqual(cases.get('a.one').hosts, ['wailsv3']);
   assert.deepEqual([...cases.get('a.two').hosts].sort(), ['tauriv2', 'wailsv3']);
+  const goHosts = parseContractCases(section('| `a.go` | Each Go host does this. | wailsv3, mygo only: a reason |'));
+  assert.deepEqual([...goHosts.get('a.go').hosts].sort(), ['mygo', 'wailsv3']);
   assert.throws(() => parseContractCases(section('| `a.b` | x | both |')), /scope "both"; use "all" or "<host>\[, <host>\] only: <reason>"/);
   assert.throws(() => parseContractCases(section('| `a.b` | x | wailsv3, tauriv2 only |')), /limits its scope without a reason/);
   assert.throws(() => parseContractCases(section('| `a.b` | x | wailsv3, other only: a reason |')), /unknown host other/);
@@ -84,7 +89,7 @@ test('host contract passes when each host runs a passing test for every case in 
 
 test('single-host audit keeps shared cases while limiting required coverage to the selected host', () => {
   const cases = parseContractCases(SPEC);
-  assert.deepEqual(cases.get('area.shared').hosts, ['wailsv3', 'tauriv2']);
+  assert.deepEqual(cases.get('area.shared').hosts, ['wailsv3', 'tauriv2', 'mygo']);
   const { errors, covered } = auditHostContract(cases, [
     { name: 'tauriv2', language: 'rust', ...parseDeclarations(RUST, 'rust', 'tauri_test.rs'), items: [], runs: [owners('.', [['shared', 'pass']])] },
   ], { selectedHosts: ['tauriv2'] });
@@ -125,6 +130,75 @@ test('a declaration of an undefined case or of a case outside the host scope fai
   const { errors } = auditHostContract(parseContractCases(SPEC), hosts({ rust, rustRuns: [owners('.', [['shared', 'pass'], ['other', 'pass']])] }));
   assert.ok(errors.some((error) => error.includes('declares undefined contract case area.missing')), errors.join('\n'));
   assert.ok(errors.some((error) => error.includes('declares area.wails-only, which the specification limits to wailsv3')), errors.join('\n'));
+});
+
+const SCOPES = `# Hosts
+
+## Contract cases
+
+| Case | Behavior | Scope |
+| --- | --- | --- |
+| \`area.shared\` | Every host does this. | all |
+| \`area.wails\` | Only Wails does this. | wailsv3 only: the framework owns it |
+| \`area.pages\` | The hosts with a main page do this. | wailsv3, tauriv2 only: a main page |
+| \`area.mygo\` | Only mygo does this. | mygo only: no main page |
+| \`area.tauri\` | Only Tauri does this. | tauriv2 only: the framework owns it |
+
+## Next
+`;
+const goTest = (name, ...ids) => `// contract: ${ids.join(', ')}\nfunc ${name}(t *testing.T) {}\n`;
+const libraryTest = (name, ...ids) => parseDeclarations(goTest(name, ...ids), 'go', 'packages/host/go/tests/a_test.go');
+const adapterTest = (name, ...ids) => parseDeclarations(goTest(name, ...ids), 'go', 'packages/host/mygo/tests/a_test.go');
+
+test('a host mygo runs the Go language host library, its framework adapter and the Go sok, each tag set with the tag mygo', { timeout: 1000 }, () => {
+  const runs = GO_RUNS.mygo('-flags');
+  const of = (folder) => runs.filter((run) => run.patterns.includes(folder)).map((run) => run.tags).sort();
+  assert.deepEqual(of('./packages/host/go/...'), ['diagnostics mygo', 'mygo']);
+  assert.deepEqual(of('./packages/host/mygo/...'), ['diagnostics mygo', 'mygo']);
+  assert.deepEqual(of('./packages/sok/go/...'), ['diagnostics dev mygo', 'diagnostics mygo', 'mygo']);
+  assert.ok(!runs.some((run) => run.patterns.includes('./packages/host/wailsv3/...')), 'the host mygo runs no test of the Wails framework adapter');
+  assert.ok(!GO_RUNS.wailsv3('-flags').some((run) => run.patterns.includes('./packages/host/mygo/...')), 'the host wailsv3 runs no test of the mygo framework adapter');
+  assert.ok(!GO_RUNS.wailsv3('-flags').some((run) => run.tags?.includes('mygo')), 'the host wailsv3 runs without the tag mygo');
+});
+
+test('the audit of the host mygo counts a case of the scope all that only a test of the Go language host library declares', { timeout: 1000 }, () => {
+  const cases = parseContractCases(SCOPES);
+  const { errors, declared } = auditDeclarations(cases, [{ name: 'mygo', language: 'go', ...libraryTest('TestShared', 'area.shared') }]);
+  assert.deepEqual(errors, []);
+  assert.deepEqual([...declared.get('mygo')], ['area.shared']);
+});
+
+test('a test of the Go language sources declares a case of either Go host, and its own host counts only the cases of its scope', { timeout: 1000 }, () => {
+  const cases = parseContractCases(SCOPES);
+  const library = libraryTest('TestBoth', 'area.wails', 'area.pages', 'area.mygo');
+  const sok = parseDeclarations(goTest('TestSok', 'area.wails'), 'go', 'packages/sok/go/tests/a_test.go');
+  const { errors, declared } = auditDeclarations(cases, [
+    { name: 'wailsv3', language: 'go', ...library },
+    { name: 'mygo', language: 'go', tests: [...library.tests, ...sok.tests], errors: [] },
+  ]);
+  assert.deepEqual(errors, []);
+  assert.deepEqual([...declared.get('wailsv3')].sort(), ['area.pages', 'area.wails']);
+  assert.deepEqual([...declared.get('mygo')], ['area.mygo']);
+});
+
+test('a test of the Go language sources does not declare a case that no Go host has, and an adapter test declares only the cases of its host', { timeout: 1000 }, () => {
+  const cases = parseContractCases(SCOPES);
+  const tauri = auditDeclarations(cases, [{ name: 'mygo', language: 'go', ...libraryTest('TestTauri', 'area.tauri') }]);
+  assert.deepEqual(tauri.errors, ['mygo: packages/host/go/tests/a_test.go:2 TestTauri declares area.tauri, which the specification limits to tauriv2']);
+  const adapter = auditDeclarations(cases, [{ name: 'mygo', language: 'go', ...adapterTest('TestWails', 'area.wails') }]);
+  assert.deepEqual(adapter.errors, ['mygo: packages/host/mygo/tests/a_test.go:2 TestWails declares area.wails, which the specification limits to wailsv3']);
+});
+
+test('the audit of the host mygo fails a case of the scope wailsv3, mygo only that no test of its runs passed', { timeout: 1000 }, () => {
+  const section = `\n## Contract cases\n\n| Case | Behavior | Scope |\n| --- | --- | --- |\n| \`area.go\` | Each Go host does this. | wailsv3, mygo only: a reason |\n\n## Next\n`;
+  const cases = parseContractCases(section);
+  const parsed = libraryTest('TestGo', 'area.go');
+  const host = (status) => ({ name: 'mygo', language: 'go', ...parsed, items: [], runs: [owners('packages/host/go/tests', [['TestGo', status], ['TestOther', 'pass']])] });
+  assert.deepEqual(auditHostContract(cases, [host('pass')], { selectedHosts: ['mygo'] }).errors, []);
+  assert.deepEqual(auditHostContract(cases, [host('fail')], { selectedHosts: ['mygo'] }).errors, [
+    'mygo: packages/host/go/tests/a_test.go:2 TestGo (area.go) reported fail',
+    'mygo runs no passing test for contract case area.go',
+  ]);
 });
 
 test('a declaration that is not attached to a test function is reported', () => {
@@ -233,11 +307,13 @@ test('every contract case of each host scope has a declaring test in the current
     return { tests, errors };
   };
   const wails = sourcesOf(['packages/host/go', 'packages/host/wailsv3', 'packages/sok/go'], '_test.go');
+  const mygo = sourcesOf(['packages/host/go', 'packages/host/mygo', 'packages/sok/go'], '_test.go');
   const tauri = sourcesOf(['packages/host/rust/tests', 'packages/host/rust/src', 'packages/host/tauriv2/tests', 'packages/host/tauriv2/src',
     'packages/sok/rust/tests', 'packages/sok/rust/src'], '.rs');
   const { declared } = auditDeclarations(cases, [
     { name: 'wailsv3', language: 'go', ...wails },
     { name: 'tauriv2', language: 'rust', ...tauri },
+    { name: 'mygo', language: 'go', ...mygo },
   ]);
   assert.deepEqual(uncoveredCases(cases, declared), []);
 });
@@ -266,8 +342,8 @@ test('a declaration takes its result only from the items of its own owner', () =
   const body = 'package tests\n\n// contract: area.shared\nfunc TestShared(t *testing.T) {}\n';
   const tests = [...parseDeclarations(body, 'go', `${host}/a_test.go`).tests, ...parseDeclarations(body, 'go', `${sok}/a_test.go`).tests];
   const wails = { name: 'wailsv3', language: 'go', tests, errors: [], items: [], runs: [owners(host, [['TestShared', 'pass']])] };
-  const [, tauri] = hosts({ go: body });
-  const { errors } = auditHostContract(parseContractCases(ONE_CASE), [wails, tauri]);
+  const [, tauri, mygo] = hosts({ go: body });
+  const { errors } = auditHostContract(parseContractCases(ONE_CASE), [wails, tauri, mygo]);
   assert.deepEqual(errors, [`wailsv3: ${sok}/a_test.go:4 TestShared (area.shared) did not run`]);
 });
 
@@ -278,8 +354,8 @@ test('owners of one run do not merge: a failing owner reports its own declaratio
   const tests = [...parseDeclarations(body, 'go', `${host}/a_test.go`).tests, ...parseDeclarations(body, 'go', `${sok}/a_test.go`).tests];
   const runs = [new Map([[host, new Map([['TestShared', 'pass']])], [sok, new Map([['TestShared', 'fail']])]])];
   const wails = { name: 'wailsv3', language: 'go', tests, errors: [], items: [], runs };
-  const [, tauri] = hosts({ go: body });
-  const { errors } = auditHostContract(parseContractCases(ONE_CASE), [wails, tauri]);
+  const [, tauri, mygo] = hosts({ go: body });
+  const { errors } = auditHostContract(parseContractCases(ONE_CASE), [wails, tauri, mygo]);
   assert.deepEqual(errors, [`wailsv3: ${sok}/a_test.go:4 TestShared (area.shared) reported fail`]);
 });
 
@@ -323,10 +399,11 @@ test('the static audit reports each case of a host scope that no test declares',
   const cases = parseContractCases(SPEC);
   const wails = parseDeclarations(GO, 'go', `${GO_OWNER}/wails_test.go`);
   const tauri = parseDeclarations('// contract: area.shared\n#[test]\nfn shared() {}\n', 'rust', 'tauri_test.rs');
-  const { declared } = auditDeclarations(cases, [staticHost('wailsv3', 'go', wails), staticHost('tauriv2', 'rust', tauri)]);
+  const mygo = parseDeclarations(MYGO, 'go', `${MYGO_OWNER}/mygo_test.go`);
+  const { declared } = auditDeclarations(cases, [staticHost('wailsv3', 'go', wails), staticHost('tauriv2', 'rust', tauri), staticHost('mygo', 'go', mygo)]);
   assert.deepEqual(uncoveredCases(cases, declared), []);
   const missing = parseDeclarations('// contract: area.shared\n#[test]\nfn shared() {}\n', 'rust', 'tauri_test.rs');
-  const partial = auditDeclarations(cases, [staticHost('wailsv3', 'go', parseDeclarations('package tests\n', 'go', 'w_test.go')), staticHost('tauriv2', 'rust', missing)]);
+  const partial = auditDeclarations(cases, [staticHost('wailsv3', 'go', parseDeclarations('package tests\n', 'go', 'w_test.go')), staticHost('tauriv2', 'rust', missing), staticHost('mygo', 'go', mygo)]);
   assert.deepEqual(uncoveredCases(cases, partial.declared), ['wailsv3 declares no test for contract case area.shared', 'wailsv3 declares no test for contract case area.wails-only']);
 });
 

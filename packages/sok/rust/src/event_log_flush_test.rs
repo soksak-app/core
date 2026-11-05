@@ -59,6 +59,7 @@ fn hold_a_request(log: &Arc<EventLog>, held: &Held) -> Receiver<()> {
     second
 }
 
+// contract: log.writer.flush-behind-a-flush-or-a-stop-is-answered
 #[test]
 fn a_flush_that_a_flush_finds_behind_it_is_answered() {
     let directory = Folder::new("event-log-flush");
@@ -73,6 +74,7 @@ fn a_flush_that_a_flush_finds_behind_it_is_answered() {
     log.close();
 }
 
+// contract: log.writer.flush-behind-a-flush-or-a-stop-is-answered
 #[test]
 fn a_flush_that_a_stop_finds_behind_it_is_answered() {
     let directory = Folder::new("event-log-flush-stop");
@@ -91,6 +93,7 @@ fn a_flush_that_a_stop_finds_behind_it_is_answered() {
     );
 }
 
+// contract: log.writer.flush-behind-a-flush-or-a-stop-is-answered
 #[test]
 fn a_writer_that_ended_is_not_reported_as_a_deadline() {
     let (done, wait) = sync_channel(1);

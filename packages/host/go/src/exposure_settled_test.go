@@ -55,6 +55,7 @@ func settledSurfaces(t *testing.T, window *settledFrontend, fake *settledPlatfor
 }
 
 // The settled wait brings the content to the screen through the settled presentation of the Frontend.
+// contract: exposure.settled-wait.presents-through-the-frontend
 func TestSettledWaitBringsTheContentThroughTheFrontend(t *testing.T) {
 	native := unsafe.Pointer(new(int))
 	var brought int
@@ -73,6 +74,7 @@ func TestSettledWaitBringsTheContentThroughTheFrontend(t *testing.T) {
 }
 
 // A settled presentation that the Frontend cannot make ends the wait with its error, before the settled wait of the platform.
+// contract: exposure.settled-wait.presents-through-the-frontend
 func TestSettledWaitEndsWithTheFailureOfTheFrontend(t *testing.T) {
 	refused := errors.New("the main web view is gone")
 	fake := &settledPlatform{}
@@ -86,6 +88,7 @@ func TestSettledWaitEndsWithTheFailureOfTheFrontend(t *testing.T) {
 }
 
 // The failure of the block ends the settled wait.
+// contract: exposure.settled-wait.presents-through-the-frontend
 func TestSettledWaitEndsWithTheFailureOfThePresentation(t *testing.T) {
 	native := unsafe.Pointer(new(int))
 	failed := errors.New("the document did not finish")

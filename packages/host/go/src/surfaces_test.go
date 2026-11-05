@@ -1535,6 +1535,7 @@ func presentThroughFixture(t *testing.T, ticket uint64) (func(error), *layoutPla
 }
 
 // The layout transaction commits only after the presentation notice of the Frontend calls back.
+// contract: surface-layout.commits-after-the-presentation-notice
 func TestLayoutCommitsAfterThePresentationNoticeOfTheFrontend(t *testing.T) {
 	notice, fake, finished := presentThroughFixture(t, 7)
 	select {
@@ -1559,6 +1560,7 @@ func TestLayoutCommitsAfterThePresentationNoticeOfTheFrontend(t *testing.T) {
 }
 
 // A presentation notice that fails cancels the layout transaction and ends the present with its error.
+// contract: surface-layout.commits-after-the-presentation-notice
 func TestAFailedPresentationNoticeCancelsTheLayout(t *testing.T) {
 	notice, fake, finished := presentThroughFixture(t, 8)
 	notice(errors.New("the window holds its frames"))

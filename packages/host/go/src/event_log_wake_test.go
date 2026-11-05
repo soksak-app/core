@@ -19,6 +19,7 @@ type pipeWake struct {
 func (p pipeWake) NativeEventWake() (int, error) { return p.descriptor, nil }
 
 // A byte in the pipe of the native ring reaches the Wake of the writer, again after the first.
+// contract: log.native.wake-stores-a-record-at-once
 func TestNativeWakeTurnsThePipeIntoTheWakeOfTheWriter(t *testing.T) {
 	reader, writer, err := os.Pipe()
 	if err != nil {

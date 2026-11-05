@@ -79,6 +79,7 @@ func TestApplicationMenuLanguages(t *testing.T) {
 	}
 }
 
+// contract: mygo.menu.set-menu-builds-the-application-menu
 func TestSetMenuInstallsTheMenuInTheApplication(t *testing.T) {
 	ran := make(chan struct{}, 1)
 	framework := adapter.NewFramework(&sceneWorkbench{})
@@ -105,6 +106,7 @@ func TestSetMenuInstallsTheMenuInTheApplication(t *testing.T) {
 	<-ran
 }
 
+// contract: mygo.menu.set-menu-builds-the-application-menu
 func TestAnItemWithAnUnknownRoleOrModifierBuildsNoMenu(t *testing.T) {
 	framework := adapter.NewFramework(&sceneWorkbench{})
 	if err := framework.SetMenu([]host.Menu{{Title: "Tools", Items: []host.MenuItem{{Role: "unknown"}}}}); err == nil {
@@ -112,6 +114,29 @@ func TestAnItemWithAnUnknownRoleOrModifierBuildsNoMenu(t *testing.T) {
 	}
 	if err := framework.SetMenu([]host.Menu{{Title: "Tools", Items: []host.MenuItem{{Title: "Run", Key: "hyper+r", Run: func() {}}}}}); err == nil {
 		t.Fatal("an unknown modifier built a menu")
+	}
+}
+
+// contract: menu.application.help-has-debug
+func TestApplicationMenuHelpHasDebug(t *testing.T) {
+	for language, want := range map[string][2]string{"en": {"Help", "Debug"}, "ko": {"도움말", "디버그"}} {
+		menu, err := adapter.ApplicationMenuFor(language)
+		if err != nil {
+			t.Fatal(err)
+		}
+		help := submenuOf(menu, want[0])
+		if help == nil {
+			t.Fatalf("the %s application menu has no %s menu", language, want[0])
+		}
+		if got := labels(help); !slices.Equal(got, []string{want[1]}) {
+			t.Fatalf("%s menu items = %v, want [%s]", want[0], got, want[1])
+		}
+		if help[0].Accelerator != "" {
+			t.Fatalf("the debug item has the key %q", help[0].Accelerator)
+		}
+	}
+	if command, ok := host.MenuCommand("debug"); !ok || command != "core.debug.open" {
+		t.Fatalf("the debug item runs %q (%v), want core.debug.open", command, ok)
 	}
 }
 

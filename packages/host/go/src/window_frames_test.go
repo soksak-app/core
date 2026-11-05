@@ -4,6 +4,7 @@ import (
 	"testing"
 )
 
+// contract: window.frames.counts-frames-and-reports-settled
 func TestWindowFramesCountEachFrameAndEachCommandBuffer(t *testing.T) {
 	frames := NewWindowFrames("main")
 	if got := frames.Counters(); *got.Frames != 0 || *got.CommandBuffers != 0 || *got.Settled {
@@ -22,6 +23,7 @@ func TestWindowFramesCountEachFrameAndEachCommandBuffer(t *testing.T) {
 	}
 }
 
+// contract: window.frames.counts-frames-and-reports-settled
 func TestWindowFramesNotifyOnlyWhenSettledChanges(t *testing.T) {
 	frames := NewWindowFrames("main")
 	notices := 0
@@ -39,6 +41,7 @@ func TestWindowFramesNotifyOnlyWhenSettledChanges(t *testing.T) {
 	}
 }
 
+// contract: window.frames.records-reach-the-class-frame
 func TestFrameRecordsReachTheClassFrame(t *testing.T) {
 	frames := NewWindowFrames("main")
 	isolateTraceRecords(t)

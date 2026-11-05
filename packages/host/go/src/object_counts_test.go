@@ -40,6 +40,7 @@ func (*objectPlatform) CountPageObjects(_ unsafe.Pointer, _ bool, done func(elem
 	done(3, 1, nil)
 }
 
+// contract: diagnostics.objects.page-is-null-without-a-main-page
 func TestAWindowWithoutAMainPageCountsItsHostObjects(t *testing.T) {
 	window := &elementWindow{}
 	window.native = unsafe.Pointer(new(byte))

@@ -140,8 +140,9 @@ func TestTheMainThreadRunsNoCodeOutsideItsOwnStack(t *testing.T) {
 					beats <- struct{}{}
 					return now, answered
 				},
-				Sample: func(string) error { return nil },
-				Folder: t.TempDir(),
+				AwaitAwake: system.StallAwaitAwake,
+				Sample:     func(string) error { return nil },
+				Folder:     t.TempDir(),
 				EmitHost: func(_ host.Level, name string, _ map[string]any) {
 					emittedLock.Lock()
 					defer emittedLock.Unlock()

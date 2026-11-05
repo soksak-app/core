@@ -1,7 +1,7 @@
-// Checks that the two hosts (Wails and Tauri) run the contract cases of the host specification at the same level.
+// Checks that the hosts (Wails, Tauri and mygo) run the contract cases of the host specification at the same level.
 //
 // The contract cases are defined by the "Contract cases" table of docs/spec/host-contract.md. The test function of each host declares the case it runs with the line
-// `// contract: <id>[, <id>]` right above it. The dynamic check runs the tests of both hosts in the default, diagnostics and development
+// `// contract: <id>[, <id>]` right above it. The dynamic check runs the tests of each host in the default, diagnostics and development
 // configurations and judges from the results whether the declared tests ran and passed. The static check builds and lists the current-target
 // Rust tests without executing test bodies. Neither check uses file names or counts to infer coverage.
 import { parseArgs } from 'node:util';
@@ -16,7 +16,10 @@ import { runTests } from './test-runner.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const SPEC = 'docs/spec/host-contract.md';
-const HOSTS = ['wailsv3', 'tauriv2'];
+const HOSTS = ['wailsv3', 'tauriv2', 'mygo'];
+// Both Go hosts run the Go language host library and the Go sok, so a test of those sources may declare a case of either host.
+const GO_HOSTS = ['wailsv3', 'mygo'];
+const GO_LANGUAGE_OWNER = /^packages\/(host\/go|sok\/go)(\/|$)/;
 const CASE_ID = /^[a-z][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)+$/;
 
 /**
@@ -190,6 +193,11 @@ function statusOf(test, language, runs) {
   return statuses.includes('skip') ? 'skip' : 'pass';
 }
 
+/** Whether a test of the Go language sources, which both Go hosts run, declares a case of the other Go host. */
+function declaresOfTheOtherGoHost(name, test, contract) {
+  return GO_HOSTS.includes(name) && GO_LANGUAGE_OWNER.test(test.owner) && contract.hosts.some((host) => GO_HOSTS.includes(host));
+}
+
 /**
  * Compares the declarations of each host with the contract cases, without run results: parse errors, tests without a case,
  * undefined cases, and cases outside the host scope. Returns the errors and, per host, the set of cases its tests declare.
@@ -209,8 +217,8 @@ export function auditDeclarations(cases, hosts) {
       for (const id of test.cases) {
         const contract = cases.get(id);
         if (!contract) errors.push(`${where} declares undefined contract case ${id}`);
-        else if (!contract.hosts.includes(host.name)) errors.push(`${where} declares ${id}, which the specification limits to ${contract.hosts.join(', ')}`);
-        else declared.get(host.name).add(id);
+        else if (contract.hosts.includes(host.name)) declared.get(host.name).add(id);
+        else if (!declaresOfTheOtherGoHost(host.name, test, contract)) errors.push(`${where} declares ${id}, which the specification limits to ${contract.hosts.join(', ')}`);
       }
     }
   }
@@ -372,19 +380,31 @@ function goTestSourceInventory(runs) {
 }
 
 const HOST_SOURCES = {
-  wailsv3: { language: 'go', files: () => goTestSourceInventory(GO_RUNS('')) },
+  wailsv3: { language: 'go', files: () => goTestSourceInventory(GO_RUNS.wailsv3('')) },
+  mygo: { language: 'go', files: () => goTestSourceInventory(GO_RUNS.mygo('')) },
 };
 
 /** The limit of one contract test. A test that needs more is reported by the run and gets its own limit with its reason. */
 const TEST_TIMEOUT_MS = 120_000;
 
-const GO_RUNS = (ldflags) => [
-  { id: 'wailsv3-tests', patterns: ['./packages/host/go/...', './packages/host/wailsv3/...'], ldflags },
-  { id: 'wailsv3-diagnostics-tests', patterns: ['./packages/host/go/...', './packages/host/wailsv3/...'], tags: 'diagnostics', ldflags },
-  { id: 'wailsv3-sok-tests', patterns: ['./packages/sok/go/...'] },
-  { id: 'wailsv3-sok-diagnostics-tests', patterns: ['./packages/sok/go/...'], tags: 'diagnostics' },
-  { id: 'wailsv3-sok-dev-tests', patterns: ['./packages/sok/go/...'], tags: 'diagnostics dev' },
-];
+/** The Go runs of each Go host: its framework adapter with the Go language host library, and the Go sok. */
+const goRuns = (host, adapter, tag) => (ldflags) => {
+  const tags = (...names) => ({ ...([...names, ...tag].length > 0 ? { tags: [...names, ...tag].join(' ') } : {}) });
+  const library = ['./packages/host/go/...', adapter];
+  const sok = ['./packages/sok/go/...'];
+  return [
+    { id: `${host}-tests`, patterns: library, ...tags(), ldflags },
+    { id: `${host}-diagnostics-tests`, patterns: library, ...tags('diagnostics'), ldflags },
+    { id: `${host}-sok-tests`, patterns: sok, ...tags() },
+    { id: `${host}-sok-diagnostics-tests`, patterns: sok, ...tags('diagnostics') },
+    { id: `${host}-sok-dev-tests`, patterns: sok, ...tags('diagnostics', 'dev') },
+  ];
+};
+
+export const GO_RUNS = {
+  wailsv3: goRuns('wailsv3', './packages/host/wailsv3/...', []),
+  mygo: goRuns('mygo', './packages/host/mygo/...', ['mygo']),
+};
 
 const RUST_RUNS = [
   { id: 'tauriv2-tests', packageName: 'soksak-host' },
@@ -509,7 +529,7 @@ async function main(argv) {
     options: { 'go-ldflags': { type: 'string' }, host: { type: 'string' }, run: { type: 'string' }, only: { type: 'string' }, static: { type: 'boolean' } },
   });
   const cases = parseContractCases(readFileSync(join(ROOT, SPEC), 'utf8'));
-  if (values.host !== undefined && !HOSTS.includes(values.host)) throw new Error('--host must be wailsv3 or tauriv2');
+  if (values.host !== undefined && !HOSTS.includes(values.host)) throw new Error('--host must be wailsv3, tauriv2 or mygo');
   if (values.host !== undefined && values.static) throw new Error('--host cannot be combined with --static');
   // --static checks declarations from the current compiler target. Rust test executables are built and listed, but never run.
   if (values.static) {
@@ -519,7 +539,7 @@ async function main(argv) {
     const rustItems = rustFound.flatMap((entry) => entry.tests);
     return checkDeclarations(cases, rustItems, rustFound.flatMap((entry) => entry.failures));
   }
-  if (values.host !== 'tauriv2' && !values['go-ldflags']) throw new Error('usage: check-host-contract.mjs [--host wailsv3|tauriv2] [--go-ldflags=<flags>] [--run <text>] [--only <text>] | --static');
+  if (values.host !== 'tauriv2' && !values['go-ldflags']) throw new Error('usage: check-host-contract.mjs [--host wailsv3|tauriv2|mygo] [--go-ldflags=<flags>] [--run <text>] [--only <text>] | --static');
   const write = (line) => process.stdout.write(`${line}\n`);
   const concurrency = Math.max(2, cpus().length - 2);
   const buildDir = mkdtempSync(join(tmpdir(), 'host-contract-'));
@@ -538,9 +558,9 @@ async function runContract(values, cases, buildDir, write, concurrency) {
   // default: without --run every run builds, because every id contains the empty text.
   const runText = values.run ?? '';
   const selectedHosts = values.host === undefined ? HOSTS : [values.host];
-  const goDiscovery = selectedHosts.includes('wailsv3')
-    ? Promise.all(GO_RUNS(values['go-ldflags']).filter((run) => run.id.includes(runText)).map((run) => discoverGo({ ...run, cwd: ROOT, buildDir, write, concurrency, timeoutMs: TEST_TIMEOUT_MS })))
-    : Promise.resolve([]);
+  const discoverRuns = (name) => (selectedHosts.includes(name)
+    ? Promise.all(GO_RUNS[name](values['go-ldflags']).filter((run) => run.id.includes(runText)).map((run) => discoverGo({ ...run, cwd: ROOT, buildDir, write, concurrency, timeoutMs: TEST_TIMEOUT_MS })))
+    : Promise.resolve([]));
   const rustDiscovery = (async () => {
     const found = [];
     if (selectedHosts.includes('tauriv2')) {
@@ -548,12 +568,12 @@ async function runContract(values, cases, buildDir, write, concurrency) {
     }
     return found;
   })();
-  const [goFound, rustFound] = await Promise.all([goDiscovery, rustDiscovery]);
-  const found = { wailsv3: goFound, tauriv2: rustFound };
+  const [wailsFound, mygoFound, rustFound] = await Promise.all([discoverRuns('wailsv3'), discoverRuns('mygo'), rustDiscovery]);
+  const found = { wailsv3: wailsFound, mygo: mygoFound, tauriv2: rustFound };
   // default: without --only every test runs.
   const only = values.only ?? null;
   if (only === '') throw new Error('--only needs a text that the name of a test contains');
-  const items = [...goFound, ...rustFound].flatMap((entry) => entry.tests).filter((item) => only === null || item.name.includes(only));
+  const items = [...wailsFound, ...mygoFound, ...rustFound].flatMap((entry) => entry.tests).filter((item) => only === null || item.name.includes(only));
   if (only !== null) {
     // A scoped run shows the tests it ran; the contract audit needs every test, so it belongs to the full run.
     if (items.length === 0) throw new Error(`no test name contains ${JSON.stringify(only)}`);

@@ -547,10 +547,10 @@ rust-format-check:
 	@cargo fmt --all --check
 	@echo "Rust format check passed: 1 workspace"
 
-# Runs the tests of the two hosts in the default configuration and the diagnostic configuration and checks from the results that the host contract cases
+# Runs the tests of the hosts in the default configuration and the diagnostic configuration and checks from the results that the host contract cases
 # (docs/spec/host-contract.md) run at the same level.
 # Host contract tests build their fixture plugins and sidecars under test-owned temporary directories.
-host-contract-check: native-darwin frontend-wailsv3-core frontend-tauriv2-core
+host-contract-check: native-darwin frontend-wailsv3-core frontend-tauriv2-core frontend-mygo-core
 	@$(GO_ENV) $(CARGO_ENV) node scripts/check-host-contract.mjs --go-ldflags="$(GO_LINK)"
 
 # Per-language CI checks use the same selected host contract without discovering or building the other host.
@@ -560,10 +560,10 @@ host-test-wailsv3: native-darwin frontend-wailsv3-core
 host-test-tauriv2: native-darwin frontend-tauriv2-core
 	@$(CARGO_ENV) node scripts/check-host-contract.mjs --host tauriv2
 
-# The mygo host has no contract run yet: this target runs the unit tests of its Go packages, of its framework adapter and of its application.
+# The contract run of the mygo host, and the unit tests of its workbench and of its application.
 host-test-mygo: native-darwin frontend-mygo-core
 	@node scripts/go-tests.mjs --package './packages/workbench-mygo/...' --count 1 --timeout $(TEST_TIMEOUT)
-	@$(GO_ENV) go -C packages/host/mygo test -ldflags "$(GO_LINK)" ./...
+	@$(GO_ENV) node scripts/check-host-contract.mjs --host mygo --go-ldflags="$(GO_LINK)"
 	@pnpm -F @soksak/mygo test
 
 # Release host checks build and audit only the selected application bundle; the release reads no registry (docs/spec/verification.md).
