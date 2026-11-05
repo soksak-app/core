@@ -666,7 +666,7 @@ static NSString *insertViewPage(NSString *html, NSString *map, NSString **reason
     NSString *file = inside ? [self.root stringByAppendingPathComponent:[url.path substringFromIndex:1]] : nil;
     BOOL directory = NO;
     NSData *data = file && [[NSFileManager defaultManager] fileExistsAtPath:file isDirectory:&directory] && !directory
-        ? [NSData dataWithContentsOfFile:file] : nil;
+        ? [NSData dataWithContentsOfFile:file options:NSDataReadingMappedIfSafe error:NULL] : nil;
     if (!data) {
         sp_log_error("document view", [NSString stringWithFormat:@"plugin file not found: %@", url.absoluteString].UTF8String);
         [task didFailWithError:[NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorFileDoesNotExist
