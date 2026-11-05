@@ -116,30 +116,20 @@ size_t surfaceLayoutTraceStop(double *out, size_t capacity) {
 // Takes a press that surfaceLayoutPressWaits holds back, and every later press, release and key of the window, so the input
 // stays in order.
 static BOOL holdInput(NSEvent *event) {
+    const NSEventMask presses = NSEventMaskLeftMouseDown | NSEventMaskRightMouseDown;
+    const NSEventMask later = presses | NSEventMaskLeftMouseDragged | NSEventMaskLeftMouseUp | NSEventMaskRightMouseDragged
+        | NSEventMaskRightMouseUp | NSEventMaskKeyDown | NSEventMaskKeyUp;
+    NSEventMask type = NSEventMaskFromType(event.type);
     NSWindow *window = event.window;
-    if (!window) return NO;
-    BOOL press = NO;
-    switch (event.type) {
-        case NSEventTypeLeftMouseDown:
-        case NSEventTypeRightMouseDown:
-            press = YES;
-            break;
-        case NSEventTypeLeftMouseDragged:
-        case NSEventTypeLeftMouseUp:
-        case NSEventTypeRightMouseDragged:
-        case NSEventTypeRightMouseUp:
-        case NSEventTypeKeyDown:
-        case NSEventTypeKeyUp:
-            break;
-        default:
-            return NO;
-    }
     BOOL held = NO;
     for (NSEvent *earlier in heldInput) held = held || earlier.window == window;
-    if (!held && !(press && surfaceLayoutPressWaits(window, event.locationInWindow.x, event.locationInWindow.y))) return NO;
-    if (!heldInput) heldInput = [[NSMutableArray alloc] init];
-    [heldInput addObject:event];
-    return YES;
+    BOOL waits = window && (type & later)
+        && (held || ((type & presses) && surfaceLayoutPressWaits(window, event.locationInWindow.x, event.locationInWindow.y)));
+    if (waits) {
+        if (!heldInput) heldInput = [[NSMutableArray alloc] init];
+        [heldInput addObject:event];
+    }
+    return waits;
 }
 
 static void (*applicationSendEvent)(id, SEL, NSEvent *);
