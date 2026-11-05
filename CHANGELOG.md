@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F502-13: The edit and delete buttons of a mygo sidebar set stand in a segment at the end of the row, with the seg metrics of the chrome, and the caption takes the rest of the row. Red: `TestTheButtonsOfASetAreASegment` failed on the previous drawing.
 - F502-13: A control of a mygo settings row stands in the middle of its row, as in the page's grid; only a row with a reset button wraps. Red: `TestAControlStandsInTheMiddleOfItsRow` failed on the previous drawing.
 - F502-13: A mygo settings slider is as tall as its track, as the range input of the page is; it takes the pointer over the thumb that stands out of it, and its focus ring goes around the thumb. Red: `TestASliderIsAsTallAsItsTrack` failed on the previous drawing.
 - F502-13: The mygo settings card ends with its content, and its pane scrolls past the largest height, as the page's card with max-height does. Red: `TestTheCardEndsWithItsContent` failed on the previous drawing.

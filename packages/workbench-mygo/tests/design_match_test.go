@@ -71,3 +71,19 @@ func TestAControlStandsInTheMiddleOfItsRow(t *testing.T) {
 		}
 	}
 }
+
+// The two buttons of a set stand in a segment at the end of the row, and the caption takes the rest of it.
+func TestTheButtonsOfASetAreASegment(t *testing.T) {
+	f := settingsSection(t, "sidebars")
+	line := f.box("core.settings-modal.set-caption", "")
+	edit, remove := f.box("core.settings-modal.edit", "edit:set-1"), f.box("core.settings-modal.delete", "delete:set-1")
+	if !designNear(edit.X, 774) || !designNear(edit.W, 41) || !designNear(edit.H, 22) {
+		t.Fatalf("the edit button is %+v, want x 774, 41x22", edit)
+	}
+	if !designNear(remove.X, 817) || !designNear(remove.W, 41) || !designNear(remove.H, 22) {
+		t.Fatalf("the delete button is %+v, want x 817, 41x22", remove)
+	}
+	if !designNear(line.X, 475) || !designNear(line.W, 284) {
+		t.Fatalf("the caption is %+v, want x 475, width 284", line)
+	}
+}

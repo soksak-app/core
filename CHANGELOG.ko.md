@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F502-13: mygo sidebar set의 edit와 delete button은 chrome의 seg metric으로 row 끝의 segment에 서고, caption이 row의 나머지를 차지한다. Red: `TestTheButtonsOfASetAreASegment`가 이전 drawing에서 실패했다.
 - F502-13: mygo settings row의 control은 page grid처럼 row 가운데에 선다. reset button이 있는 row만 wrap된다. Red: `TestAControlStandsInTheMiddleOfItsRow`가 이전 drawing에서 실패했다.
 - F502-13: mygo settings slider는 page의 range input처럼 track 높이이다. track 밖으로 나온 thumb 위에서도 pointer를 받고, focus ring은 thumb 둘레에 그려진다. Red: `TestASliderIsAsTallAsItsTrack`가 이전 drawing에서 실패했다.
 - F502-13: mygo settings card는 content와 함께 끝나고, 가장 큰 높이를 넘으면 pane이 scroll된다. max-height를 가진 page card와 같다. Red: `TestTheCardEndsWithItsContent`가 이전 drawing에서 실패했다.

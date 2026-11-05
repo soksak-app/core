@@ -19,6 +19,7 @@ type settingsPane struct {
 	headH, headGap, headPadStart, headPadEnd                                                   float32
 	shadowY, shadowBlur, shadowAlpha                                                           float32
 	rowNameW, rowH, gap                                                                        float32
+	segGap, segPad, segButtonPadY, segButtonPadX                                               float32
 	scopeGap, scopePadY, scopePadX, scopeMark, nameGap, captionGap, lineHeight, tracking       float32
 	paneTop, paneX, paneBottom, rowGap, fieldPadY, buttonPadX, fieldPadX, arrowInset           float32
 	swatchMinW, swatchW, gridGap, gridMargin, swatchGap, swatchPad, boxH, boxBorder            float32
@@ -38,6 +39,7 @@ func (s *Shell) readSettingsPane() settingsPane {
 		headH: metric("set-card-head-h"), headGap: metric("set-card-head-gap"), headPadStart: metric("set-card-head-pad-start"), headPadEnd: metric("set-card-head-pad-end"),
 		shadowY: metric("set-card-shadow-y"), shadowBlur: metric("set-card-shadow-blur"), shadowAlpha: metric("set-card-shadow-alpha"),
 		rowNameW: metric("set-row-name-w"), rowH: metric("set-row-h"), gap: metric("set-group-gap"),
+		segGap: metric("seg-gap"), segPad: metric("seg-pad"), segButtonPadY: metric("seg-button-pad-y"), segButtonPadX: metric("seg-button-pad-x"),
 		scopeGap: metric("space-4"), scopePadY: metric("space-2"), scopePadX: metric("space-1"), scopeMark: metric("scope-tab-mark"),
 		paneTop: metric("set-pane-pad-top"), paneX: metric("set-pane-pad-x"), paneBottom: metric("set-pane-pad-bottom"), rowGap: metric("set-row-gap"),
 		fieldPadY: metric("field-pad-y"), buttonPadX: metric("space-3"), fieldPadX: metric("space-2"), arrowInset: metric("select-arrow-inset"),
@@ -212,6 +214,18 @@ func (s *Shell) drawSettingsRow(c *ui.Context, row settingsRow, pane settingsPan
 		})
 		return
 	}
+	if len(row.controls) > 0 && row.controls[0].kind == controlCaption {
+		// A row with a caption has the columns 1fr and auto, and its buttons stand in a segment at its end.
+		ui.Row(c).FillWidth().MinHeight(pane.rowH).Gap(pane.rowGap).AlignItems(ui.Center).Children(func() {
+			s.drawControl(c, row.controls[0], pane)
+			ui.Row(c).Shrink(0).Gap(pane.segGap).Padding(pane.segPad).Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.radiusSmall()).Background(s.palette.Bg).Children(func() {
+				for _, control := range row.controls[1:] {
+					s.drawSegmentButton(c, control, pane)
+				}
+			})
+		})
+		return
+	}
 	if row.list {
 		ui.Row(c).FillWidth().Wrap().Children(func() {
 			for _, control := range row.controls {
@@ -256,7 +270,7 @@ func (s *Shell) drawControl(c *ui.Context, control *SettingsControl, pane settin
 	case controlText:
 		s.drawTextControl(c, control)
 	case controlCaption:
-		s.exposedBox(c, control.Name, "", "").Grow(1).Role(ui.RoleGroup).Label(control.Label).Children(func() {
+		s.exposedBox(c, control.Name, "", "").Grow(1).Basis(0).Role(ui.RoleGroup).Label(control.Label).Children(func() {
 			ui.Text(c, control.Label).Wrap().FontSize(s.textSmall()).TextColor(s.palette.Muted)
 		})
 	}
@@ -296,6 +310,22 @@ func (s *Shell) drawButton(c *ui.Context, control *SettingsControl, pane setting
 	}
 	button.Padding(pane.fieldPadY, pane.buttonPadX).Border(s.palette.BorderWidth, edge).Radius(s.radiusSmall()).Background(fill).AlignItems(ui.Center).Label(control.Label).Children(func() {
 		ui.Text(c, control.Label).FontSize(s.textControl()).TextColor(s.palette.Fg)
+	})
+}
+
+// drawSegmentButton draws a button of a segment, the .set-seg button of packages/workbench/app.css.
+func (s *Shell) drawSegmentButton(c *ui.Context, control *SettingsControl, pane settingsPane) {
+	button := s.binder.Press(c, control.Name, control.Command.Name, control.item(), control.Command.Params)
+	color := s.palette.Muted
+	if button.Hovered() {
+		color = s.palette.Fg
+	}
+	if control.On != nil && *control.On {
+		color = s.palette.Fg
+		button.Background(faded(s.palette.Fg, s.metrics.chipSelMix))
+	}
+	button.Padding(pane.segButtonPadY, pane.segButtonPadX).Radius(s.radiusSmall()).AlignItems(ui.Center).Label(control.Label).Children(func() {
+		ui.Text(c, control.Label).NoWrap().FontSize(s.textSmall()).TextColor(color)
 	})
 }
 
