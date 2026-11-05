@@ -247,7 +247,7 @@ func (s *Shell) drawSwatch(c *ui.Context, control *SettingsControl) {
 func (s *Shell) drawSwitch(c *ui.Context, control *SettingsControl) {
 	on := control.On != nil && *control.On
 	run := s.binder.Control(c, control.Name, control.Command.Name, control.item())
-	if ui.Switch(c, &on).Label(control.Label).Changed() {
+	if s.binder.Bound(ui.Switch(c, &on), control.Name).Label(control.Label).Changed() {
 		params := make(map[string]any, len(control.Command.Params)+1)
 		for key, param := range control.Command.Params {
 			params[key] = param
@@ -261,6 +261,7 @@ func (s *Shell) drawSelect(c *ui.Context, control *SettingsControl) {
 	value := *control.Value
 	s.binder.Control(c, control.Name, control.Command.Name, control.item())
 	selector := ui.SelectBase(c, &value)
+	s.binder.Bound(selector.Trigger, control.Name)
 	selector.Trigger.PaddingX(8).Height(26).Radius(4).Border(s.palette.BorderWidth, s.palette.Edge).AlignItems(ui.Center).Label(control.item()).Children(func() {
 		ui.Text(c, control.labels[value]).FontSize(12).NoWrap()
 	})
@@ -298,7 +299,7 @@ func (s *Shell) drawSlider(c *ui.Context, control *SettingsControl) {
 		return
 	}
 	s.binder.Control(c, control.Name, control.Command.Name, control.item())
-	slider := ui.Slider(c, &value, control.lo, control.hi).Label(control.item()).Grow(1)
+	slider := s.binder.Bound(ui.Slider(c, &value, control.lo, control.hi), control.Name).Label(control.item()).Grow(1)
 	if slider.Changed() {
 		s.runControl(control, math.Round(value))
 	}
@@ -315,7 +316,7 @@ func (s *Shell) drawTextControl(c *ui.Context, control *SettingsControl) {
 		value = *control.Value
 	}
 	s.binder.Control(c, control.Name, control.Command.Name, key)
-	field := ui.TextInput(c, &value).Label(key).Placeholder(control.Label).Grow(1).FontSize(12)
+	field := s.binder.Bound(ui.TextInput(c, &value), control.Name).Label(key).Placeholder(control.Label).Grow(1).FontSize(12)
 	if field.Changed() {
 		if control.searchable {
 			s.runControl(control, value)

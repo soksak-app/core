@@ -260,7 +260,7 @@ func (s *Shell) projectTabsPlace() string {
 
 // projectColumnWidth is the width of the column of the project tabs, and 0 while the window has none.
 func (s *Shell) projectColumnWidth() float32 {
-	if s.libraryShown() || s.projectTabsPlace() != "left" {
+	if s.inLibrary() || s.projectTabsPlace() != "left" {
 		return 0
 	}
 	return float32(math.Round(float64(s.frameLength(s.metrics.projectColumnW))))

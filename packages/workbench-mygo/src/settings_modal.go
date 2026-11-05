@@ -31,9 +31,11 @@ type LoadedPlugin struct {
 	// Mark is the short text and Icon the SVG elements of the add menu, Menu the context menu of the surface, and Save the command
 	// that saves a surface.
 	Mark, Icon, Save string
-	Menu             []PluginMenuItem
-	Sections         []LoadedSection
-	Surface          bool
+	// Ink is the theme token of the color of the plugin in a library preview, and empty without one.
+	Ink      string
+	Menu     []PluginMenuItem
+	Sections []LoadedSection
+	Surface  bool
 	// Params is surface.params, the schema of the parameters of a tab, and nil for a plugin that opens tabs without them.
 	Params any
 }

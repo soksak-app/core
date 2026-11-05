@@ -84,8 +84,19 @@ func (s *Shell) libraryStatus() libraryStatus {
 	}
 	status := libraryStatus{Page: s.library.page, Plugins: libraryPlugins{Query: page.Query, Shown: ShownPlugins(page), Actions: PluginPageActions(page)},
 		Shown: shown, Pinned: pinned, Count: fmt.Sprintf("프로젝트 %d · 열림 %d", len(s.projects), s.openCount()), Query: s.library.query, Sort: s.library.order,
-		Form: s.library.formMode != "", ReturnVisible: s.opened() != nil, Empty: len(s.projects) == 0 && s.library.formMode == "",
+		Form: s.library.formMode != "", ReturnVisible: s.opened() != nil, Empty: len(s.projects) == 0,
 		NoResults: len(s.projects) > 0 && len(shown) == 0, Previews: map[string]any{}, PreviewErrors: map[string]string{}, FolderErrors: map[string]string{}}
+	for _, project := range s.projects {
+		if reason, failed := s.library.folderErrors[project.Root]; failed {
+			status.FolderErrors[project.ID] = reason
+		}
+		if reason, failed := s.library.previewErrors[project.ID]; failed {
+			status.PreviewErrors[project.ID] = reason
+		}
+		if panes, drawn := s.library.previews[project.ID]; drawn {
+			status.Previews[project.ID] = panes
+		}
+	}
 	if text, ok := s.errors.Text(workbenchErrorPlace); ok {
 		status.Error = &text
 	}

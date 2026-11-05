@@ -103,6 +103,20 @@ func (s *Shell) register() {
 		s.newWindow(func(err error) { answer(nil, err) })
 	})
 	act(s, "core.space.activate", func(value idParam) error { return s.activateSpace(value.ID) })
+	act(s, "core.grid.size", func(value struct {
+		Card string      `json:"card"`
+		Axis layout.Axis `json:"axis"`
+		Size float64     `json:"size"`
+	}) error {
+		if err := s.requirePlane(); err != nil {
+			return err
+		}
+		if !s.plane.SetSize(value.Card, value.Axis, &value.Size) {
+			return fmt.Errorf("cannot size %s on %s", value.Card, value.Axis)
+		}
+		s.settle()
+		return nil
+	})
 	s.registry.CommandLater("core.space.close", func(raw json.RawMessage, answer func(any, error)) {
 		value, err := params[idParam](raw)
 		if err != nil {

@@ -65,7 +65,10 @@ func readLoadedPlugins(installed, environment []byte) ([]LoadedPlugin, []Setting
 				Description string `json:"description"`
 				Mark        string `json:"mark"`
 				Icon        string `json:"icon"`
-				Surface     *struct {
+				Preview     *struct {
+					Ink string `json:"ink"`
+				} `json:"preview"`
+				Surface *struct {
 					Composition *struct {
 						Kind string `json:"kind"`
 					} `json:"composition"`
@@ -96,6 +99,9 @@ func readLoadedPlugins(installed, environment []byte) ([]LoadedPlugin, []Setting
 	for _, entry := range document.Plugins {
 		plugin := LoadedPlugin{ID: entry.ID, Name: entry.Manifest.Name, Description: entry.Manifest.Description, Mark: entry.Manifest.Mark,
 			Icon: entry.Manifest.Icon, Surface: entry.Manifest.Surface != nil, Version: entry.Version, Dependencies: entry.Manifest.Dependencies}
+		if entry.Manifest.Preview != nil {
+			plugin.Ink = entry.Manifest.Preview.Ink
+		}
 		if entry.Manifest.Surface != nil {
 			plugin.Menu, plugin.Save = entry.Manifest.Surface.Menu, entry.Manifest.Surface.Save
 			plugin.Params = entry.Manifest.Surface.Params

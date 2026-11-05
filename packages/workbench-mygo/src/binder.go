@@ -31,8 +31,8 @@ func NewBinder(registry *Registry, failed func(command string, err error)) *Bind
 // Attach gives the binder the pointer sequence and the focus of its window.
 func (b *Binder) Attach(pointer *PointerSequence, focus *Focus) { b.pointer, b.focus = pointer, focus }
 
-// Focusable lets a command give the keyboard focus to element under its element name.
-func (b *Binder) Focusable(element ui.Element, name string) ui.Element {
+// Bound gives a widget of the element name name to the keyboard focus of the window, which reaches it by that name.
+func (b *Binder) Bound(element ui.Element, name string) ui.Element {
 	if b.focus == nil {
 		return element
 	}
@@ -51,7 +51,7 @@ func (b *Binder) Press(c *ui.Context, name, command, item string, params any) ui
 	if b.pointer != nil {
 		button.ObserveInput(b.pointer.Observer(name))
 	}
-	return button
+	return b.Bound(button, name)
 }
 
 // Control gives the next widget of c its element name and command, for a widget that takes its input as it is created. It returns
