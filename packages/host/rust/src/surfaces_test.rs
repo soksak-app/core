@@ -1081,6 +1081,7 @@ fn a_press_reads_its_target_before_its_delivery() {
 }
 
 /// The layout transaction commits only after the presentation notice of the Frontend calls back.
+// contract: surface-layout.commits-after-the-presentation-notice
 #[test]
 fn the_layout_commits_after_the_presentation_notice_of_the_frontend() {
     use super::{ask_presentation_notice, await_presentation_notice};
@@ -1113,6 +1114,7 @@ fn the_layout_commits_after_the_presentation_notice_of_the_frontend() {
 }
 
 /// A presentation notice that fails ends the present with its error, without its commit.
+// contract: surface-layout.commits-after-the-presentation-notice
 #[test]
 fn a_failed_presentation_notice_ends_the_present_with_its_error() {
     use super::{ask_presentation_notice, await_presentation_notice};
