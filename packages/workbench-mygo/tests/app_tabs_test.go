@@ -157,3 +157,74 @@ func TestAnUnloadedTabLeavesThePlacementAndReturnsWhenItIsShown(t *testing.T) {
 		t.Fatalf("the shown tab is %s", state)
 	}
 }
+
+// A tab that unloads stores the history of its region, and the view of the tab that comes back attaches the region with that history.
+func TestAnUnloadedTabGetsTheHistoryOfItsRegionBack(t *testing.T) {
+	stored := &surfaceHost{}
+	stored.installed = unloadDocument
+	stored.projects = []map[string]any{storedProject(tab("tab-aaaaaa", "notes"), tab("tab-bbbbbb", "notes"))}
+	base := stored.table()["workspace"]
+	var session json.RawMessage
+	var attaches []map[string]any
+	stored.calls = map[string]workbench.HostCall{
+		"workspace": func(ctx context.Context, argument json.RawMessage) (any, error) {
+			var request struct {
+				Kind    string
+				Tab     string
+				Regions json.RawMessage
+			}
+			if err := json.Unmarshal(argument, &request); err != nil {
+				return nil, err
+			}
+			switch {
+			case request.Kind == "tabSession" && request.Tab == "tab-aaaaaa" && session != nil:
+				return session, nil
+			case request.Kind == "tabSessionPut" && request.Tab == "tab-aaaaaa":
+				session = json.RawMessage(`{"regions":` + string(request.Regions) + `}`)
+				return 1, nil
+			}
+			return base(ctx, argument)
+		},
+		"documentAttach": func(_ context.Context, argument json.RawMessage) (any, error) {
+			var request map[string]any
+			if err := json.Unmarshal(argument, &request); err != nil {
+				return nil, err
+			}
+			attaches = append(attaches, request)
+			return nil, nil
+		},
+		"documentInteractionState": func(context.Context, json.RawMessage) (any, error) { return "c3RhdGU=", nil },
+		"documentQuery":            func(context.Context, json.RawMessage) (any, error) { return map[string]any{}, nil },
+	}
+	f := newTabApp(t, stored, unloadDocument)
+	attach := func(id int) any {
+		t.Helper()
+		f.app.Emit(f.window, "view-call", map[string]any{"surface": "tab-aaaaaa", "plugin": "notes", "generation": 1, "id": id, "command": "document.attach",
+			"params": map[string]any{"name": "page"}})
+		f.settle()
+		reply := stored.replies[len(stored.replies)-1]
+		if reply["error"] != nil {
+			t.Fatalf("the reply is %v", reply)
+		}
+		return reply["result"].(map[string]any)["history"]
+	}
+	f.command("core.project.activate", map[string]string{"id": "prj-a"})
+	if history := attach(1); history != false {
+		t.Fatalf("the first attach restored the history %v", history)
+	}
+	f.command("core.tab.select", map[string]string{"tab": "tab-bbbbbb"})
+	f.command("core.tab.unload", map[string]string{"tab": "tab-aaaaaa"})
+	if state := f.stateOf("tab-aaaaaa"); state != "unloaded" {
+		t.Fatalf("the unloaded tab is %s", state)
+	}
+	f.command("core.tab.select", map[string]string{"tab": "tab-aaaaaa"})
+	if history := attach(2); history != true {
+		t.Fatalf("the attach after the unload restored the history %v", history)
+	}
+	if last := attaches[len(attaches)-1]; last["interactionState"] != "c3RhdGU=" {
+		t.Fatalf("the last attach is %v", last)
+	}
+	if history := attach(3); history != false {
+		t.Fatalf("a history restored twice: %v", history)
+	}
+}
