@@ -74,6 +74,21 @@ fn remove_index(logs: &Path) {
     }
 }
 
+// contract: cli.debug.reports-a-rejected-file
+#[test]
+fn query_prints_the_other_files_and_reports_a_rejected_file() {
+    let config = temp_dir("cli-rejected");
+    std::fs::write(config.join("logs/host-a.jsonl"), host_lines()).expect("write");
+    std::fs::write(config.join("logs/files-old.jsonl"), "{\"ts_us\":1,\"mono_ns\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"sidecar\",\"event\":\"log.open\",\"fields\":{\"schema\":2}}\n").expect("write");
+    let (stdout, stderr, code) = run_query_command(&config, &[]);
+    assert!(
+        code == 0
+            && stdout.matches('\n').count() == 3
+            && stderr == "rejected: logs/files-old.jsonl: schema 2 is not 3\n",
+        "code {code} stdout {stdout:?} stderr {stderr:?}"
+    );
+}
+
 // contract: cli.debug.query-errors
 #[test]
 fn query_refuses_what_breaks_the_contract() {
@@ -90,7 +105,6 @@ fn query_refuses_what_breaks_the_contract() {
     let line = |extra: &str| format!("{open}{extra}\n");
     let cases: Vec<(&str, String, &str)> = vec![
         ("first line", "{\"ts_us\":1,\"mono_ns\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"host\",\"event\":\"host.x\"}\n".into(), "logs/host-b1.jsonl: the first line is not log.open: \"host.x\""),
-        ("schema", "{\"ts_us\":1,\"mono_ns\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"host\",\"event\":\"log.open\",\"fields\":{\"schema\":2}}\n".into(), "logs/host-b1.jsonl: schema 2 is not 3"),
         ("not json", line("not json"), "logs/host-b1.jsonl:2: not JSON: not json"),
         ("not object", line("[1]"), "logs/host-b1.jsonl:2: not an event object: [1]"),
         ("seq", line("{\"ts_us\":1,\"seq\":\"x\",\"level\":\"info\",\"layer\":\"host\",\"event\":\"a\"}"), "logs/host-b1.jsonl:2: seq must be an integer, found \"x\""),

@@ -131,6 +131,22 @@ func TestReplayReportsEqualWhenEveryStoredHashIsTheReplayedOne(t *testing.T) {
 	}
 }
 
+// contract: cli.debug.reports-a-rejected-file
+func TestReplayReportsARejectedFile(t *testing.T) {
+	config := replayConfig(t, standardEvents(), fakeReplay, "fake")
+	writeFile(t, filepath.Join(config, "logs", "files-old.jsonl"), oldSchemaOpen)
+	stdout, stderr, code := runReplay(t, config, "s1")
+	if code != 0 || stdout != "replay session s1: 2 sidecar frames and 2 page frames equal in 1 segments\n" || stderr != "rejected: logs/files-old.jsonl: schema 2 is not 3\n" {
+		t.Errorf("code %d stdout %q stderr %q", code, stdout, stderr)
+	}
+	config = replayConfig(t, standardEvents(), fakeReplay, "fake")
+	writeFile(t, filepath.Join(config, "logs", "fake-b1.jsonl"), oldSchemaOpen)
+	writeFile(t, filepath.Join(config, "logs", "host-b1.jsonl"), linesOf(1, 1))
+	if _, stderr, code := runReplay(t, config, "s1"); code != 1 || !strings.Contains(stderr, "rejected: logs/fake-b1.jsonl: schema 2 is not 3\n") || !strings.Contains(stderr, "hold no event of the layer sidecar") {
+		t.Errorf("the rejected file holds the session: code %d stderr %q", code, stderr)
+	}
+}
+
 // contract: cli.debug.replay-until
 func TestReplayStopsAtTheSequenceOfUntil(t *testing.T) {
 	events := standardEvents()

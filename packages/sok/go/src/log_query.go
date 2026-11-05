@@ -7,6 +7,7 @@ package sok
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -305,6 +306,8 @@ type LogPage struct {
 	Next    *LogCursor       `json:"next"`
 	Tail    map[string]int64 `json:"tail"`
 	Scanned LogScanned       `json:"scanned"`
+	// Rejected holds the error of each event file of the channel of another schema number, which the query left out.
+	Rejected []string `json:"rejected"`
 }
 
 // logSource is an event file of the channel.
@@ -524,7 +527,7 @@ func queryPage(configDir string, query LogQuery, indexed func(IndexUpdate)) (res
 	if err != nil {
 		return LogPage{}, err
 	}
-	page := LogPage{Rows: []LogRow{}, Tail: map[string]int64{}}
+	page := LogPage{Rows: []LogRow{}, Tail: map[string]int64{}, Rejected: []string{}}
 	var logs []queriedLog
 	defer func() {
 		for _, l := range logs {
@@ -535,6 +538,11 @@ func queryPage(configDir string, query LogQuery, indexed func(IndexUpdate)) (res
 	}()
 	for _, source := range sources {
 		opened, err := openLog(source.path)
+		var rejected rejectedLog
+		if errors.As(err, &rejected) {
+			page.Rejected = append(page.Rejected, rejected.text)
+			continue
+		}
 		if err != nil {
 			return LogPage{}, err
 		}
@@ -713,7 +721,7 @@ func queryAround(configDir string, query LogQuery, indexed func(IndexUpdate)) (L
 	if err != nil {
 		return LogPage{}, err
 	}
-	answer := LogPage{Tail: first.Tail, Scanned: first.Scanned}
+	answer := LogPage{Tail: first.Tail, Scanned: first.Scanned, Rejected: first.Rejected}
 	var middle []LogRow
 	if len(first.Rows) == 1 {
 		key, err := rowKey(first.Rows[0])

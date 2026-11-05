@@ -41,7 +41,7 @@ event는 한 줄의 JSON 객체 하나다.
 | `fields` | catalog가 선언한 event의 값. |
 | `truncated` | event의 fields 글이 event 크기 상한을 넘었을 때만 있다. 자르기 전 그 글의 바이트 크기다. 이런 event의 `fields`는 글의 첫 바이트인 `head`만 담는다([상한](#상한)). |
 
-모든 파일의 첫 줄은 `log.open`이며 main 파일과 debug 파일 모두 그렇다. schema 번호(`schema`), `pid`, 프로세스의 역할(`role`), 실행의 식별자(`boot`)를 담는다. schema 번호는 3이다. schema 2는 모든 줄에 `mono_ns`와 `class`를 더했고, schema 3은 layer `workbench`와 그 member `start`를 더한다. 다른 schema 번호를 만난 reader는, schema 1이나 2 파일도, 파일 이름과 그 번호를 담은 오류로 그 파일을 거부하며 어떤 reader도 이전 schema를 위한 코드를 두지 않는다. 감사는 선언된 event인데 `class`가 없는 줄을 보고한다.
+모든 파일의 첫 줄은 `log.open`이며 main 파일과 debug 파일 모두 그렇다. schema 번호(`schema`), `pid`, 프로세스의 역할(`role`), 실행의 식별자(`boot`)를 담는다. schema 번호는 3이다. schema 2는 모든 줄에 `mono_ns`와 `class`를 더했고, schema 3은 layer `workbench`와 그 member `start`를 더한다. 다른 schema 번호를 만난 reader는, schema 1이나 2 파일도, 파일 이름과 그 번호를 담은 오류로 그 파일을 거부하며 어떤 reader도 이전 schema를 위한 코드를 두지 않는다. [질의](#질의)는 그 파일을 빼고 답에 그 이름을 담는다. 감사는 선언된 event인데 `class`가 없는 줄을 보고한다.
 
 writer가 회전하는 파일은 경계를 넘게 될 줄 앞에서 끝난다. 닫은 파일은 다음 번호의 세대 `<name>.<generation>`이 되며, 번호는 회전 순서대로 1부터 센다(`.1`이 가장 오래됨). 새 파일은 `log.open`으로 시작하고 이어서 `log.rotated` `{bytes, generation}`이 온다. `bytes`는 닫은 파일의 크기, `generation`은 그 번호다. 회전은 세대를 지우지 않는다. `seq`는 회전을 건너 이어지므로 독자는 세대를 첫 `seq`로 정렬한다.
 
@@ -240,12 +240,13 @@ Bloom filter는 `8 × 바이트` 비트를 가진다. 항목의 hash는 UTF-8 �
 
 **순서와 cursor.** 행은 `ts_us`, `role`, `boot`, `seq` 순으로 정렬하며 이것이 행의 key다. channel은 이 key로 합쳐지므로 debug 파일과 한 프로세스의 파일은 시각과 `seq`로 섞인다. 행의 cursor는 그 key다. page는 순서에서 cursor 뒤의 `limit`개 행을 담고, 파일이 끝나거나 행의 줄 글이 8,388,608바이트를 넘게 되면 더 적게 담는다(첫 행은 항상 담는다). `next`는 뒤따르는 행이 있으면 page의 마지막 행의 cursor이고 없으면 `null`이다.
 
-**답.** `{rows, next, tail, scanned}`:
+**답.** `{rows, next, tail, scanned, rejected}`:
 
 - `rows`는 객체 `{role, boot, file, offset, event}`의 목록이다: 프로세스, 줄을 가진 파일(설정 디렉터리 기준 `logs/...`), 줄의 바이트 offset, 파일에 적힌 event 객체인 줄.
 - `next`는 `after`로 넘길 cursor 또는 `null`이다.
 - `tail`은 질의가 읽은 시점에 각 프로세스의 색인이 덮는 가장 큰 `seq`다. 파일을 따라가는 client는 이를 `since`로 시작한다([debug](debug.ko.md#타임라인)).
-- `scanned`는 `{logs, segments, read, lines, rebuilt}`다: channel의 파일 수, 그 segment 수, 줄을 읽은 segment 수, 검사한 줄 수, 질의 중에 파일 전체로 만든 색인 수.
+- `scanned`는 `{logs, segments, read, lines, rebuilt}`다: channel에서 거부되지 않은 파일 수, 그 segment 수, 줄을 읽은 segment 수, 검사한 줄 수, 질의 중에 파일 전체로 만든 색인 수.
+- `rejected`는 channel에서 schema 번호가 다른 각 파일의 오류 `<file>: schema <n> is not 3`을 이름 순서로 담고, 그런 파일이 없으면 비어 있다. 그런 파일은 답의 행, `tail`, segment를 내지 않고 다른 파일의 행은 답한다. 그 파일은 retention이 지울 때까지 `logs/`에 남고 sidecar는 host와 따로 설치되므로, 그런 파일 하나가 다른 파일을 가려서는 안 된다. 그 밖의 방식으로 event 구조를 어기는 파일은 질의를 실패시킨다.
 
 **평가.** 질의는 각 파일의 색인을 최신으로 맞춘 뒤 행을 가질 수 있는 segment만 남긴다: 시간 범위가 경계와 cursor에 겹치고, level(그 level과 더 심각한 level), layer, class의 비트가 값을 담으며, event 이름이나 앞부분, surface, session, cid의 filter가 받아들이는 segment다. 남긴 segment를 `min_ts_us` 순(`desc`는 `max_ts_us` 내림차순)으로 읽고, segment의 줄을 하나씩 완전히 검사하며, 지금까지 찾은 key가 가장 작은(`desc`는 가장 큰) 행 `limit + 1`개를 유지한다. 다음 segment가 유지한 행보다 앞서는 행을 가질 수 없으면 멈춘다. 그래서 page의 비용은 파일 크기가 아니라 행을 가질 수 있는 segment의 수에 달려 있다. `text`만 있는 질의는 channel의 모든 segment를 읽는다. event 구조를 어기는 줄은 오류 `<file>:<line>: <reason>`이다.
 

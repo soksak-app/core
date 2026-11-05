@@ -362,6 +362,34 @@ fn query_resolves_a_run_to_the_range_of_its_marks() {
     );
 }
 
+const OLD_SCHEMA_OPEN: &str = "{\"ts_us\":1,\"mono_ns\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"sidecar\",\"event\":\"log.open\",\"fields\":{\"schema\":2}}\n";
+
+// contract: log.query.leaves-out-a-file-of-another-schema
+#[test]
+fn query_leaves_out_a_file_of_another_schema_and_names_it() {
+    let config = temp_dir("query-rejected");
+    std::fs::write(config.join("logs/host-a.jsonl"), host_lines()).expect("write");
+    std::fs::write(config.join("logs/files-old.jsonl"), OLD_SCHEMA_OPEN).expect("write");
+    let want = vec!["logs/files-old.jsonl: schema 2 is not 3".to_string()];
+    let page = run_query(&config, "{}");
+    assert_eq!(page.rows.len(), 3);
+    assert_eq!(page.rejected, want);
+    assert!(!page.tail.contains_key("files-old"), "tail {:?}", page.tail);
+    assert_eq!(page.scanned.logs, 1);
+    let around = run_query(
+        &config,
+        "{\"around\":{\"ts_us\":1002,\"role\":\"host\",\"boot\":\"a\",\"seq\":2}}",
+    );
+    assert_eq!(around.rows.len(), 3);
+    assert_eq!(around.rejected, want);
+    let serialized = serde_json::to_value(&page).expect("serialize");
+    assert_eq!(serialized["rejected"], json!(want));
+    let clean = temp_dir("query-not-rejected");
+    std::fs::write(clean.join("logs/host-a.jsonl"), host_lines()).expect("write");
+    let page = serde_json::to_value(run_query(&clean, "{}")).expect("serialize");
+    assert_eq!(page["rejected"], json!([]));
+}
+
 // contract: log.query.refuses-invalid-parameters
 #[test]
 fn query_refuses_invalid_parameters() {

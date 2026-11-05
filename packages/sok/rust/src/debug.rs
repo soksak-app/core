@@ -469,6 +469,14 @@ fn after_flag(value: &str) -> serde_json::Value {
 }
 
 /// Runs `sok debug query`.
+/// Writes each event file that a query left out to the standard error.
+pub(crate) fn report_rejected(stderr: &mut dyn Write, rejected: &[String]) -> Result<(), Error> {
+    for text in rejected {
+        writeln!(stderr, "rejected: {text}").map_err(|error| Error::Failed(error.to_string()))?;
+    }
+    Ok(())
+}
+
 pub(crate) fn run_debug(
     a: &Arguments,
     stdout: &mut dyn Write,
@@ -477,7 +485,7 @@ pub(crate) fn run_debug(
 ) -> Result<(), Error> {
     let view = a.positional(1, "debug view")?;
     if view == "replay" {
-        return crate::replay::run_replay(a, stdout, options);
+        return crate::replay::run_replay(a, stdout, stderr, options);
     }
     if view != "query" {
         return Err(Error::Usage(format!("unknown command: debug {view}")));
@@ -545,6 +553,7 @@ pub(crate) fn run_debug(
     stdout
         .write_all(out.as_bytes())
         .map_err(|error| Error::Failed(error.to_string()))?;
+    report_rejected(stderr, &page.rejected)?;
     if let Some(next) = &page.next {
         writeln!(stderr, "more: --after {}", format_log_cursor(next))
             .map_err(|error| Error::Failed(error.to_string()))?;

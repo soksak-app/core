@@ -347,6 +347,35 @@ func TestLogQueryResolvesARunToTheRangeOfItsMarks(t *testing.T) {
 	}
 }
 
+const oldSchemaOpen = `{"ts_us":1,"mono_ns":1,"seq":1,"level":"info","layer":"sidecar","event":"log.open","fields":{"schema":2}}` + "\n"
+
+// contract: log.query.leaves-out-a-file-of-another-schema
+func TestLogQueryLeavesOutAFileOfAnotherSchemaAndNamesIt(t *testing.T) {
+	config := t.TempDir()
+	writeReplayFile(t, filepath.Join(config, "logs", "host-a.jsonl"), linesOf(1, 3), 0o644)
+	writeFile(t, filepath.Join(config, "logs", "files-old.jsonl"), oldSchemaOpen)
+	want := []string{"logs/files-old.jsonl: schema 2 is not 3"}
+	page := runQuery(t, config, `{}`)
+	if len(page.Rows) != 3 || !reflect.DeepEqual(page.Rejected, want) {
+		t.Errorf("rows %d rejected %v", len(page.Rows), page.Rejected)
+	}
+	if _, present := page.Tail["files-old"]; present || page.Scanned.Logs != 1 {
+		t.Errorf("tail %v scanned %+v", page.Tail, page.Scanned)
+	}
+	if text, err := json.Marshal(page); err != nil || !strings.Contains(string(text), `"rejected":["logs/files-old.jsonl: schema 2 is not 3"]`) {
+		t.Errorf("the answer is %s err %v", text, err)
+	}
+	around := runQuery(t, config, `{"around":{"ts_us":1002,"role":"host","boot":"a","seq":2}}`)
+	if len(around.Rows) != 3 || !reflect.DeepEqual(around.Rejected, want) {
+		t.Errorf("around: rows %d rejected %v", len(around.Rows), around.Rejected)
+	}
+	config = t.TempDir()
+	writeReplayFile(t, filepath.Join(config, "logs", "host-a.jsonl"), linesOf(1, 1), 0o644)
+	if page := runQuery(t, config, `{}`); page.Rejected == nil || len(page.Rejected) != 0 {
+		t.Errorf("a query without a rejected file answers %#v", page.Rejected)
+	}
+}
+
 // contract: log.query.refuses-invalid-parameters
 func TestLogQueryRefusesInvalidParameters(t *testing.T) {
 	cases := []struct{ params, want string }{

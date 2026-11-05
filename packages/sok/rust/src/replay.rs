@@ -637,6 +637,7 @@ fn run_replay_executable(
 pub(crate) fn run_replay(
     a: &Arguments,
     stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
     options: &Options,
 ) -> Result<(), Error> {
     let session = a.positional(2, "session")?;
@@ -657,6 +658,10 @@ pub(crate) fn run_replay(
         None => None,
     };
     let config_dir = config_dir_of(&a.values, options)?;
+    // A segment in a file that the query leaves out is not compared, so each such file is named whatever the replay finds.
+    let query = parse_log_query(r#"{"channel":"all","limit":1}"#).map_err(Error::Failed)?;
+    let files = query_logs(&config_dir, &query, None).map_err(Error::Failed)?;
+    crate::debug::report_rejected(stderr, &files.rejected)?;
     match replay_logs(&config_dir, session, until) {
         Ok(result) => writeln!(
             stdout,

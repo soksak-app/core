@@ -1200,6 +1200,27 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F542",
+    implementation: [
+      { file: "packages/sok/go/src/log_query.go", symbol: "page.Rejected = append(page.Rejected, rejected.text)" },
+      { file: "packages/sok/rust/src/log_query.rs", symbol: "page.rejected.push(text);" },
+      { file: "packages/sok/go/src/debug.go", symbol: "func reportRejected(stderr io.Writer, rejected []string) error" },
+      { file: "packages/sok/rust/src/debug.rs", symbol: "pub(crate) fn report_rejected(stderr: &mut dyn Write, rejected: &[String])" },
+      { file: "packages/workbench/debug-ui.js", symbol: "rejected = page.rejected;" },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/log_query_test.go", id: "TestLogQueryLeavesOutAFileOfAnotherSchemaAndNamesIt" },
+      { file: "packages/sok/rust/tests/log_query_test.rs", id: "query_leaves_out_a_file_of_another_schema_and_names_it" },
+      { file: "packages/sok/go/tests/debug_test.go", id: "TestQueryPrintsTheOtherFilesAndReportsARejectedFile" },
+      { file: "packages/sok/rust/tests/debug_test.rs", id: "query_prints_the_other_files_and_reports_a_rejected_file" },
+      { file: "packages/sok/go/tests/replay_test.go", id: "TestReplayReportsARejectedFile" },
+      { file: "packages/sok/rust/tests/replay_test.rs", id: "replay_reports_a_rejected_file" },
+      { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "a file that the query rejected is shown through the error display beside the rows of the other files" },
+    ],
+    expected: "A query leaves out a file of another schema number, answers the other files and names the file.",
+    levels: ["unit"],
+  },
+  {
     id: "F533",
     implementation: [
       { file: "packages/workbench/memory-saver.js", symbol: 'if (trigger === "delay") entry.unloadAt = now() + delayMs();' },
