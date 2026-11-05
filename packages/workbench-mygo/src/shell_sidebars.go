@@ -200,9 +200,31 @@ func (s *Shell) drawGrip(c *ui.Context, id string, side layout.Side, shown layou
 		title = "눌러 " + name + " 사이드바 펼치기"
 	}
 	run := s.binder.Control(c, "core.card.sidebar.grip", "core.card.sidebar.size", id+":"+side)
-	ui.Box(c).Role(ui.RoleSplitter).Label(title).Tooltip(title).Absolute().Left(left).Top(top).Size(w, h).Cursor(cursor).
+	box := ui.Box(c).Role(ui.RoleSplitter).Label(title).Tooltip(title).Absolute().Left(left).Top(top).Size(w, h).Cursor(cursor).
 		BorderWidth(edges[0], edges[1], edges[2], edges[3]).BorderColor(s.palette.Edge).
 		HandleInput(s.gripInput(id, side, float64(x+left), float64(y+top), float64(extent), shown.Collapsed, run))
+	if shown.Collapsed {
+		s.drawGripDots(box, side)
+	}
+}
+
+// drawGripDots draws the three dots of a folded side at the center of its grip.
+func (s *Shell) drawGripDots(box ui.Element, side layout.Side) {
+	m := s.metrics
+	color := faded(s.palette.Muted, m.gripMix)
+	if box.Hovered() || box.Pressed() {
+		color = s.palette.Focus
+	}
+	color = box.AnimateColor("dots", color, ui.Animation{Duration: m.gripTransition})
+	box.Draw(func(p *ui.Painter, r ui.Rect) {
+		dx, dy := m.gripDotSpacing, float32(0)
+		if side == "left" || side == "right" {
+			dx, dy = 0, m.gripDotSpacing
+		}
+		for at := float32(-1); at <= 1; at++ {
+			p.Fill(ui.Rect{X: r.X + (r.W-m.gripDot)/2 + at*dx, Y: r.Y + (r.H-m.gripDot)/2 + at*dy, W: m.gripDot, H: m.gripDot}, color, m.gripDot/2)
+		}
+	})
 }
 
 // gripInput handles the pointer on the grip of a side that stands at x and y of the window. The position of an event is relative to

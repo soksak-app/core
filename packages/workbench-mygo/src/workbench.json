@@ -502,6 +502,8 @@
     "inset-mix": "10%",
     "sp-line-crossing-mix": "45%",
     "sp-grip-mix": "70%",
+    "sp-grip-thickness": "3px",
+    "sp-grip-length": "24px",
     "fill": "100%",
     "focus-outline": "2px",
     "chrome-row-h": "36px",
