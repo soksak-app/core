@@ -168,6 +168,7 @@ document audit는 open shadow tree를 포함하여 그 document의 모든 shared
 | status | `core.surface.document` | `{url, timeOrigin, readyState, themed, scale, body, viewport, filter, unbound, params}`: 문서 주소, 시간 원점, 준비 상태, 첫 테마 적용 여부, 기기 픽셀 비율, 표면 내용의 크기인 `body`(표면 요소의 상자에 그 밖으로 넘치거나 스크롤되는 내용을 더한 크기)와 표면 요소의 보이는 상자 크기인 `viewport`(모두 CSS 픽셀이며, 내용이 들어맞지 않을 때만 `body`가 `viewport`보다 크다), 루트 요소의 계산된 `filter`, 조작 요소의 audit(`core.workbench.audit`와 같은 형식), view bridge 시작 시 읽은 정확한 `window.sokSurface.params` 값의 snapshot인 `params`(`null` 포함). 값이 없거나 object 또는 null이 아니면 관측 시작을 거부하고 필드명을 보고함 |
 | status | `core.surface.input` | 문서의 최근 입력 이벤트 32개(신뢰 여부 포함)를 순서대로 담는다. `pointerdown`, `pointerup`, `pointermove`, `click`, `wheel`, `keydown`에 대한 `{sequence, type, trusted, x, y, key, modifiers}`. `modifiers`는 이벤트가 담은 수정 키(`shift`, `alt`, `control`, `command`)의 목록이다. `sequence`는 1부터 기록한 이벤트마다 1씩 증가한다 |
 | command | `core.surface.hit` | CSS 픽셀 단위 `{x, y}`. 그 점에 문서의 요소가 있으면 `true`를 반환한다 |
+| command | `core.surface.clock` | `{}`. `{timeOrigin, now}`을 반환한다: 문서의 time origin과 `performance.now()`(밀리초)이며, check가 두 native clock 읽기 사이에서 읽어 문서 시각을 native clock에 대응시킨다 |
 
 마운트된 모듈은 애플리케이션 문서에서 자기 요청 콜백을 소유한다. 해제는 같은 논리 표면 식별자로 다시 마운트하기 전에 콜백과 등록을 제거한다. 반복 해제는 그 식별자의 이후 소유자에게 영향을 주지 않는다. 해제 후 요청은 해제된 모듈에 전달되지 않는다.
 
