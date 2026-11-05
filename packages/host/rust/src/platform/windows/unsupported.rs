@@ -145,6 +145,14 @@ pub fn sample_threads(_path: &std::path::Path) -> Result<(), String> {
     missing("thread sampling")
 }
 
+pub fn stall_heartbeat() -> Result<(u64, u64), String> {
+    missing("stall heartbeat")
+}
+
+pub fn stall_await_awake() -> Result<(), String> {
+    missing("stall await awake")
+}
+
 pub fn collect_garbage(_view: &PlatformWebview) -> Result<(), String> {
     missing("JavaScript garbage collection")
 }

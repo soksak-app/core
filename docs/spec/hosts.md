@@ -545,7 +545,7 @@ These facts complete U1:
 
 ### Operation groups
 
-The darwin platform layer of the Go host has 177 operations: the 152 methods of the `Platform` interface (`packages/host/go/src/platform/platform.go`) and 25 methods of its optional interfaces and of the diagnostic build. The Surface layout group makes the block of a main web view, and its settled wait takes a block; for the mygo host it adds the block of a Go function of its caller and the registration of the layout observer of N1 with Go functions of its caller, each such function run on the worker through `hostRunOnWorker`. The table groups them by file and states how the mygo host provides each group.
+The darwin platform layer of the Go host has 178 operations: the 153 methods of the `Platform` interface (`packages/host/go/src/platform/platform.go`) and 25 methods of its optional interfaces and of the diagnostic build. The Surface layout group makes the block of a main web view, and its settled wait takes a block; for the mygo host it adds the block of a Go function of its caller and the registration of the layout observer of N1 with Go functions of its caller, each such function run on the worker through `hostRunOnWorker`. The table groups them by file and states how the mygo host provides each group.
 
 | Group (file of `src/platform/darwin`) | Operations | mygo host |
 | --- | --- | --- |

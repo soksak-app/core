@@ -334,6 +334,7 @@ NATIVE_TESTS = observe_test \
   process_exit_test \
   quit_request_test \
   memory_pressure_test \
+  stall_watch_test \
   webview_navigation_test \
   window_controls_test \
   window_cursor_rects_test \

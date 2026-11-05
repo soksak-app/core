@@ -346,9 +346,13 @@ type Platform interface {
 	SampleThreads(path string) error
 	// StallHeartbeat sends a heartbeat that a C function answers on the main thread, so no Go code runs on the main thread for it
 	// (docs/spec/hosts.md, main thread of the Wails host). It returns the time of the call and the time of the last answer on the
-	// clock of MonotonicNanos; while no heartbeat was answered, the time of the answer is the time of the first heartbeat. The
-	// watch of the main thread calls it (docs/spec/logging.md, stalls).
+	// clock of MonotonicNanos; while no heartbeat was answered, the time of the answer is the time of the first heartbeat. While the
+	// main run loop waits for an event it sends nothing and returns the start of that wait as both times. The watch of the main
+	// thread calls it (docs/spec/logging.md, stalls).
 	StallHeartbeat() (now, answered uint64)
+	// StallAwaitAwake blocks the calling goroutine and its thread while the main run loop waits for an event, and returns at once
+	// while it does not. The watch of the main thread calls it (docs/spec/logging.md, stalls).
+	StallAwaitAwake()
 	// CollectGarbage makes the WebContent processes of view collect JavaScript objects. The memory measurement of a diagnostic build
 	// uses it. Call it on the UI thread.
 	CollectGarbage(view unsafe.Pointer) error

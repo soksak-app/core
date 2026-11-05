@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F536: 가만히 있는 window가 host의 stall 감시 때문에 깨어나지 않는다. main run loop가 기다리는 동안 감시는 timer 없이 막힌 채 heartbeat를 보내지 않고 깨어나면 다시 시작하므로, run loop가 event를 처리하는 동안의 stall은 그대로 기록된다.
 - F502-29: `input.pointer`는 `down`과 `up`에서 event의 click count인 `clicks`를 1부터 3까지 받는다. 모든 호스트, `sok input pointer --clicks`, MCP 도구에서 double click을 실제 press 두 번으로 보낸다. `input.pointer`는 정의하지 않은 field에 -32602를 반환한다.
 - F502-28: 창의 키보드가 모든 호스트에서 focus ring을 따른다. 새 탭, 탭 press, `core.card.focus`, 프로젝트 열기 직후에 입력한 글자가 ring이 있는 card의 active surface에 닿는다. 영역의 첫 focus 보고가 handler를 기다리므로 새 terminal 탭도 focus된 cursor를 그린다.
 - F502-12: 큰 파일을 쓰는 plugin view 를 열어도 그 파일이 host 메모리에 남지 않는다. document 응답은 plugin 파일을 256 KiB chunk 로 읽어 보내고, core root 응답은 보내는 byte 를 다시 복사하지 않는다.
