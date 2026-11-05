@@ -1,10 +1,11 @@
-// Checks that the native Escape of the active key window reaches the picker document.
+// Checks that the native Escape of the active key window reaches the picker: its document on a host with a main page, and
+// the picker that the host draws itself on a host without one.
 import test from "node:test";
 
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, MAIN_PAGE_APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
 
-for (const app of Object.values(APPS)) {
+for (const app of MAIN_PAGE_APPS) {
   test(`${app.name}: an active key window closes its add picker with native Escape`, async (t) => {
     const s = await open(t, app);
     await fresh(s);
@@ -19,5 +20,21 @@ for (const app of Object.values(APPS)) {
     await s.press("Escape");
     await s.until("host.window", (state) => state.modal === null,
       "native Escape did not close the add picker in the active key window");
+  });
+}
+
+for (const app of Object.values(APPS).filter((item) => !MAIN_PAGE_APPS.includes(item))) {
+  test(`${app.name}: an active key window closes the add picker it draws with native Escape`, async (t) => {
+    const s = await open(t, app);
+    await fresh(s);
+    const grid = await s.get("core.grid");
+    const card = grid.cards.find((item) => item.pane === 0);
+    await s.run("core.card.menu", { card: card.id, menu: "add" });
+    await s.until("core.picker", (picker) => picker.open, "the add picker did not open");
+    await s.pointer(grid.plane.x + card.x + card.w / 2, grid.plane.y + card.y + card.h - 24, "move", { activate: true });
+    await s.until("host.window", (state) => state.active && state.key,
+      "the window did not become the active key window");
+    await s.press("Escape");
+    await s.until("core.picker", (picker) => !picker.open, "native Escape did not close the add picker");
   });
 }
