@@ -151,6 +151,24 @@ func (s *Shell) barTabColors(tab barTab, hovered bool) (ui.Color, ui.Color) {
 	return s.palette.Muted, faded(s.palette.Fg, m.chipMix)
 }
 
+// renameOnDoubleClick begins the rename of a tab when the release of a double click lands on it, as dblclick of a page follows that
+// release. The second press stays on the tab until then, and a press that leaves the tab begins nothing.
+func (s *Shell) renameOnDoubleClick(name ui.Element, target renameTarget) {
+	doubled := name.DoubleClicked()
+	if doubled {
+		s.doublePressed = target
+	}
+	clicked := name.Clicked()
+	switch {
+	case s.doublePressed != target:
+	case clicked:
+		s.doublePressed = renameTarget{}
+		s.binder.run("core.rename.begin", target)
+	case !name.Pressed():
+		s.doublePressed = renameTarget{}
+	}
+}
+
 func (s *Shell) drawBarTab(c *ui.Context, tab barTab) {
 	if s.renaming != nil && s.renaming.renameTarget == tab.rename {
 		s.drawRenameField(c, s.frameLength(s.metrics.barTabRootW))
@@ -168,9 +186,7 @@ func (s *Shell) drawBarTab(c *ui.Context, tab barTab) {
 		// close button stands over the room that the chip keeps for it.
 		chip := tab.pick().Height(high).AlignItems(ui.Center).Radius(tab.radius[0], tab.radius[1], tab.radius[2], tab.radius[3]).
 			Label(tab.title).Tooltip(tab.title).Background(fill)
-		if chip.DoubleClicked() {
-			s.binder.run("core.rename.begin", tab.rename)
-		}
+		s.renameOnDoubleClick(chip, tab.rename)
 		if tab.drag != nil {
 			chip.Drag(tab.drag)
 		}
@@ -307,9 +323,7 @@ func (s *Shell) drawColumnTab(c *ui.Context, tab barTab, width float32) {
 	tab.drop(chip)
 	chip.Background(fill).Children(func() {
 		name := tab.pick()
-		if name.DoubleClicked() {
-			s.binder.run("core.rename.begin", tab.rename)
-		}
+		s.renameOnDoubleClick(name, tab.rename)
 		name.Drag(tab.drag).Fill().PaddingX(s.frameLength(m.projectTabPad)).Center().Label(tab.title).Tooltip(tab.title).Children(func() {
 			ui.Text(c, tab.title).SingleLine().Ellipsis("…").FontSize(size).TextColor(color)
 		})
