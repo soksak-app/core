@@ -6,7 +6,7 @@
 
 - F443-1: Close the first run finding; the excess follows the load of the machine and a launch does not determine it.
 - F456: A shown image keeps its size when the window changes to a display of another backing scale, and both hosts configure the rasters again.
-- F455: A view measurement records the refresh rate of its display; F435 is held until its benchmarks run at 120 Hz.
+- F455: A view measurement records the refresh rate of its display.
 - F435-4: A run ends when its settled drawing has presented, so the status values held during a drag do not compete with its final layouts.
 - F435-3: Convergence reads every source frame after a drag, so a final viewport in a later frame is measured.
 - F435-2: Every view drag is judged with the performance trace off and the log policy reduced to the frame class.
