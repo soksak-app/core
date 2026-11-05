@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F589: A press and a release that wait for a layout reach every event monitor once, and a release that waits longer than a second no longer reports that its receipt did not arrive.
 - F502-16: A press under a surface whose layout is preparing waits for the commit and reaches the surface. It used to reach the main page, or nothing in a window without one.
 - F585: A terminal whose region shows after a hide of its surface, or in a press, takes the keyboard from its page, and a region that hid with the keyboard takes it back when it shows.
 - F535-3: A count of the gate alone does not write: a writer that sleeps keeps it until the next event, for at most a minute, so a change of the input source in another application no longer costs an idle application a write and an index update each second. Red: `TestACountWaitsForTheNextWrite`, `a_count_waits_for_the_next_write` and the pipe checks of `event_ring_test` found the count written.

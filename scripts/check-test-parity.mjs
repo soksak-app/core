@@ -1028,6 +1028,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F589",
+    implementation: [{ file: "native/darwin/src/surface_layout.m", symbol: "sendEventAfterLayout" }],
+    tests: [
+      { file: "native/darwin/tests/webview_geometry_test.m", id: "every monitor sees a held press and release once each" },
+      { file: "native/darwin/tests/webview_geometry_test.m", id: "a release that waits past the receipt wait reports no lost release" },
+    ],
+    expected: "No local monitor sees a press or a release that waits for a layout, each sees it once when it comes back, and a release that waits longer than its receipt wait reports nothing.",
+    levels: ["unit"],
+  },
+  {
     id: "F585",
     implementation: [{ file: "native/darwin/src/webview_geometry.m", symbol: "void sp_surface_region_shown" }],
     tests: [
