@@ -884,6 +884,9 @@ impl Platform for Darwin {
     fn write_private_file(&self, path: &Path, data: &[u8]) -> Result<(), String> {
         private_files::write_private_file(path, data)
     }
+    fn private_file_options(&self) -> std::fs::OpenOptions {
+        private_files::private_file_options()
+    }
     fn directory_identity(&self, _path: &Path, metadata: &Metadata) -> Result<String, String> {
         Ok(identity::identity(metadata))
     }

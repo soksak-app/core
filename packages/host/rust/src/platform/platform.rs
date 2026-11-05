@@ -38,16 +38,16 @@ mod windows;
 pub use windows::keep_front_on_show;
 
 #[cfg(any(windows, test))]
-#[path = "windows/devtools.rs"]
-mod devtools;
+#[path = "windows/devtools_input.rs"]
+mod devtools_input;
 
 #[cfg(any(windows, test))]
 #[path = "windows/process_failure.rs"]
 pub mod process_failure;
 
 #[cfg(any(windows, test))]
-#[path = "windows/show_rule.rs"]
-mod show_rule;
+#[path = "windows/show.rs"]
+mod show;
 
 /// The number of live objects, among those that the shared library attached to windows and webviews, whose lifetime
 /// shows the release of the window and the webview. When a closed window and its webviews are released, the object
@@ -1013,6 +1013,8 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// Replaces the content of the file at path with data. If it does not exist, it is created as a file that only the
     /// current user reads and writes. The permissions of an existing file are not changed.
     fn write_private_file(&self, path: &Path, data: &[u8]) -> Result<(), String>;
+    /// The options that create a file for the current user only. The caller adds how it opens the file.
+    fn private_file_options(&self) -> std::fs::OpenOptions;
     #[cfg(feature = "diagnostics")]
     /// Creates a directory that only the current user can access, together with its parent directories.
     fn private_directory(&self, path: &Path) -> Result<(), String>;
