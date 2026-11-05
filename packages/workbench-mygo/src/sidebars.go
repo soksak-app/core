@@ -70,10 +70,17 @@ type SidebarsOptions struct {
 	Changed func()
 	// Seat draws what stands on the seat of a section, whose box is in window coordinates. Without it a seat stays empty.
 	Seat func(c *ui.Context, seat SidebarSeat)
-	// Mounted tells whether the surface id stands.
-	Mounted func(id string) bool
+	// Progress returns the state of the section surface id.
+	Progress func(id string) SectionProgress
 	// Rail returns the rail color of the current theme.
 	Rail func() ui.Color
+}
+
+// SectionProgress is the state of a section surface that core.sidebars reports.
+type SectionProgress struct {
+	Mounted bool
+	Phase   *string
+	Error   *string
 }
 
 // section is a section of a loaded plugin.
@@ -609,7 +616,7 @@ type sidebarRect struct {
 	H float64 `json:"h"`
 }
 
-// sectionStatus is a section in core.sidebars. A section surface reports mounted, phase and error once its surface stands.
+// sectionStatus is a section in core.sidebars.
 type sectionStatus struct {
 	ID        string  `json:"id"`
 	Name      string  `json:"name"`
@@ -661,8 +668,12 @@ func (s *Sidebars) status() []sidebarStatus {
 				height = "fill"
 			}
 			id := seatOf(frame, section).SurfaceID
-			sections[i] = sectionStatus{ID: section.ID, Name: section.Name, Folded: section.Folded,
-				SurfaceID: id, Surface: surface, Height: height, Size: section.Size, Mounted: s.options.Mounted != nil && s.options.Mounted(id)}
+			var progress SectionProgress
+			if s.options.Progress != nil {
+				progress = s.options.Progress(id)
+			}
+			sections[i] = sectionStatus{ID: section.ID, Name: section.Name, Folded: section.Folded, SurfaceID: id, Surface: surface, Height: height,
+				Size: section.Size, Mounted: progress.Mounted, Phase: progress.Phase, Error: progress.Error}
 		}
 		placement, plugin := "window", nullable(drawn.owner.Plugin)
 		if frame.Side == "" {

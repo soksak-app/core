@@ -403,18 +403,39 @@ func (u *installedUnit) exposedNames() []string {
 	return names
 }
 
-// surfacePhase is the page status of a surface: its reported failure, or ready once the document of the view answered.
-func (s *Shell) surfacePhase(id string) map[string]any {
+// surfaceProgress is the phase of a surface with the reason of an error: its reported failure, or ready once the document of the
+// view answered.
+func (s *Shell) surfaceProgress(id string) (phase, reason string) {
 	if reason, stopped := s.surfaces.stopped(id); stopped {
-		return map[string]any{"phase": "error", "reason": reason}
+		return "error", reason
 	}
 	if report := s.surfaces.reports[id]; report != nil && report.Error != "" {
-		return map[string]any{"phase": "error", "reason": report.Error}
+		return "error", report.Error
 	}
 	if s.surfaces.views[id] != nil {
-		return map[string]any{"phase": "ready"}
+		return "ready", ""
 	}
-	return map[string]any{"phase": "loading"}
+	return "loading", ""
+}
+
+// surfacePhase is the page status of a surface.
+func (s *Shell) surfacePhase(id string) map[string]any {
+	phase, reason := s.surfaceProgress(id)
+	if phase == "error" {
+		return map[string]any{"phase": phase, "reason": reason}
+	}
+	return map[string]any{"phase": phase}
+}
+
+// sectionProgress is the state of a section surface in core.sidebars. A section is mounted once its view answered, and a view that
+// stopped is no longer mounted. A section without a surface has no phase.
+func (s *Shell) sectionProgress(id string) SectionProgress {
+	if s.surfaces.held[id] == nil {
+		return SectionProgress{}
+	}
+	phase, reason := s.surfaceProgress(id)
+	_, stopped := s.surfaces.stopped(id)
+	return SectionProgress{Mounted: s.surfaces.views[id] != nil && !stopped, Phase: &phase, Error: nullable(reason)}
 }
 
 // registerStatuses adds the statuses of the shell.

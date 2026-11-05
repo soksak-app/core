@@ -292,18 +292,35 @@ func (s *Shell) drawSeat(c *ui.Context, tab layout.Tab, box layout.Rect) {
 // hidden, and a section that was never visible has none.
 func (s *Shell) drawSectionSeat(c *ui.Context, seat SidebarSeat) {
 	s.surfaces.seated[seat.SurfaceID] = true
-	if !seat.Visible {
-		return
-	}
 	if reason, stopped := s.surfaces.failed[seat.SurfaceID]; stopped {
-		ui.Text(c, reason).FontSize(12).TextColor(s.palette.No)
+		if seat.Visible {
+			ui.Text(c, reason).FontSize(12).TextColor(s.palette.No)
+		}
 		return
 	}
 	start := &sectionStart{ID: seat.Section, Sidebar: seat.Sidebar}
 	if card, _, ok := strings.Cut(seat.Sidebar, ":"); ok {
 		start.Card = &card
 	}
-	s.standSurface(c, &heldSurface{tab: layout.Tab{ID: seat.SurfaceID, Plugin: seat.Plugin}, composition: seat.Composition, box: seat.Box, section: start}, seat.Box)
+	surface := &heldSurface{tab: layout.Tab{ID: seat.SurfaceID, Plugin: seat.Plugin}, composition: seat.Composition, box: seat.Box, section: start}
+	// Every section of a set has its surface: a folded section and a section of an unselected tab keep it hidden.
+	if !seat.Visible {
+		s.holdSurface(surface)
+		return
+	}
+	s.standSurface(c, surface, seat.Box)
+}
+
+// holdSurface makes the host hold a new surface from the next placement.
+func (s *Shell) holdSurface(surface *heldSurface) {
+	id := surface.tab.ID
+	if s.surfaces.held[id] != nil {
+		return
+	}
+	project := s.opened()
+	surface.project = projectStart{ID: project.ID, Root: project.Root}
+	s.surfaces.held[id] = surface
+	s.surfaces.order = append(s.surfaces.order, id)
 }
 
 // standSurface seats a surface in the frame at box, in window coordinates, and draws its native view. The host holds a new surface
@@ -311,12 +328,7 @@ func (s *Shell) drawSectionSeat(c *ui.Context, seat SidebarSeat) {
 func (s *Shell) standSurface(c *ui.Context, surface *heldSurface, box layout.Rect) {
 	id := surface.tab.ID
 	s.surfaces.drawn[id] = box
-	if s.surfaces.held[id] == nil {
-		project := s.opened()
-		surface.project = projectStart{ID: project.ID, Root: project.Root}
-		s.surfaces.held[id] = surface
-		s.surfaces.order = append(s.surfaces.order, id)
-	}
+	s.holdSurface(surface)
 	if view, key, ok := s.options.Element(id); ok {
 		// A web page paints whole points only: past them a fractional view shows the window, and here the card shows instead.
 		ui.NativeView(c, view, key).Size(float32(math.Floor(box.W)), float32(math.Floor(box.H)))

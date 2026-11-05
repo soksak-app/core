@@ -213,16 +213,86 @@ func TestASectionStandsInItsSurface(t *testing.T) {
 	if surface["x"] != float64(body.X+cardBorder) || surface["w"] != float64(body.W-2*cardBorder) || surface["y"].(float64) <= float64(body.Y) {
 		t.Fatalf("the surface stands at %v in the sidebar %+v", surface, body)
 	}
-	value, err := f.shell.Registry().Read("core.sidebars")
-	if err != nil {
-		t.Fatal(err)
+}
+
+// sectionState is a section of core.sidebars.
+type sectionState struct {
+	ID        string  `json:"id"`
+	SurfaceID string  `json:"surfaceId"`
+	Folded    bool    `json:"folded"`
+	Mounted   bool    `json:"mounted"`
+	Phase     *string `json:"phase"`
+	Error     *string `json:"error"`
+}
+
+// sectionOf returns the section of the sidebar in core.sidebars.
+func (f *shellFixture) sectionOf(sidebar, section string) sectionState {
+	f.t.Helper()
+	var sidebars []struct {
+		Sidebar  string         `json:"sidebar"`
+		Sections []sectionState `json:"sections"`
 	}
-	encoded, err := json.Marshal(value)
-	if err != nil {
-		t.Fatal(err)
+	if err := json.Unmarshal([]byte(f.status("core.sidebars")), &sidebars); err != nil {
+		f.t.Fatal(err)
 	}
-	if !strings.Contains(string(encoded), `"mounted":true`) {
-		t.Fatalf("the status is %s", encoded)
+	for _, drawn := range sidebars {
+		if drawn.Sidebar != sidebar {
+			continue
+		}
+		for _, state := range drawn.Sections {
+			if state.ID == section {
+				return state
+			}
+		}
+	}
+	f.t.Fatalf("core.sidebars has no section %s of %s: %+v", section, sidebar, sidebars)
+	return sectionState{}
+}
+
+func TestASectionIsMountedOnceItsViewAnswers(t *testing.T) {
+	f, stored := surfaceShellOf(t, sidebarsInstalled)
+	loading := f.sectionOf("left", "files.tree")
+	if loading.Mounted || loading.Phase == nil || *loading.Phase != "loading" {
+		t.Fatalf("a section whose view did not answer is %+v", loading)
+	}
+	viewCall(t, f, stored, loading.SurfaceID, "runtime.settings.read", nil)
+	ready := f.sectionOf("left", "files.tree")
+	if !ready.Mounted || ready.Phase == nil || *ready.Phase != "ready" || ready.Error != nil {
+		t.Fatalf("a section whose view answered is %+v", ready)
+	}
+	// A folded section keeps its surface, as a hidden tab does.
+	f.run("core.sidebar.section.fold", map[string]string{"sidebar": "left", "section": "files.tree"})
+	if folded := f.sectionOf("left", "files.tree"); !folded.Folded || !folded.Mounted || *folded.Phase != "ready" {
+		t.Fatalf("a folded section is %+v", folded)
+	}
+}
+
+func TestASectionShowsThatItsViewStopped(t *testing.T) {
+	f, stored := surfaceShellOf(t, sidebarsInstalled)
+	id := f.sectionOf("left", "files.tree").SurfaceID
+	viewCall(t, f, stored, id, "runtime.settings.read", nil)
+	f.shell.Event("view-stopped", []any{map[string]any{"surface": id, "reason": "the view stopped"}})
+	f.settle()
+	stopped := f.sectionOf("left", "files.tree")
+	if stopped.Mounted || stopped.Phase == nil || *stopped.Phase != "error" || stopped.Error == nil || *stopped.Error != "the view stopped" {
+		t.Fatalf("a section whose view stopped is %+v", stopped)
+	}
+}
+
+// Every section of a set has its surface from the start, and a section of an unselected tab keeps it hidden.
+func TestASectionOfAnUnselectedTabHasItsSurfaceHidden(t *testing.T) {
+	f, stored := surfaceShellOf(t, sidebarsInstalled)
+	card := f.tabbedCards()[0]
+	f.run("core.card.sidebar.set", map[string]string{"card": card, "side": "left", "set": "set-browser"})
+	tail := "/" + card + ":left/browser.history"
+	surface := sectionSurface(t, stored, tail)
+	if surface == nil || surface["visible"] != false {
+		t.Fatalf("the section of the unselected tab has the surface %v", surface)
+	}
+	f.run("core.sidebar.section.select", map[string]string{"sidebar": card + ":left", "section": "browser.history"})
+	surface = sectionSurface(t, stored, tail)
+	if surface == nil || surface["visible"] != true || surface["w"].(float64) <= 0 || surface["h"].(float64) <= 0 {
+		t.Fatalf("the section of the selected tab has the surface %v", surface)
 	}
 }
 
