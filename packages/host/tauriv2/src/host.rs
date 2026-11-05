@@ -233,15 +233,9 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 &mut |webview| soksak_host::start::start_page(&scheme_app, webview),
             )
         });
-    // Tauri offers this hook only on macOS and iOS.
-    #[cfg(target_os = "macos")]
-    let builder = builder.on_web_content_process_terminate(move |webview| {
+    let builder = platform::watch_page_process_end(builder, move |webview| {
         soksak_host::web_content_process_terminated(&webview_of(&terminated_app, webview))
     });
-    #[cfg(windows)]
-    let builder = builder.plugin(crate::platform::process_failure_plugin(move |webview| {
-        soksak_host::web_content_process_terminated(&webview_of(&terminated_app, webview))
-    }));
     builder
         .setup(move |tauri_app| {
             let deep = tauri_app.handle().clone();

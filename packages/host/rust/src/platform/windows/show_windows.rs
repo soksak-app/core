@@ -10,7 +10,7 @@ use ::windows::Win32::UI::WindowsAndMessaging::{
 };
 
 use crate::platform::Handle;
-use crate::platform::show_rule::{show_command, shown_position_flags};
+use crate::platform::show::{show_command, shown_position_flags};
 
 /// Whether the foreground window belongs to this process. No foreground window means that it does not.
 fn holds_foreground() -> bool {

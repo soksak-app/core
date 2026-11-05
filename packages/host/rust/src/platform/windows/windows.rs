@@ -20,19 +20,23 @@ use super::{
     Platform, Pointer, ProcessFootprint, Raster, WindowOverlay,
 };
 
+#[cfg(feature = "diagnostics")]
+#[path = "capture.rs"]
+mod capture;
 #[path = "identity.rs"]
 mod identity;
+#[path = "input.rs"]
+mod input;
+#[path = "show_windows.rs"]
+mod show_windows;
+#[path = "ui_thread.rs"]
+mod ui_thread;
 #[path = "unsupported.rs"]
 mod unsupported;
-#[cfg(feature = "diagnostics")]
-#[path = "webview_capture.rs"]
-mod webview_capture;
-#[path = "webview_input.rs"]
-mod webview_input;
-#[path = "window_show.rs"]
-mod window_show;
+#[path = "webview.rs"]
+mod webview;
 
-pub use window_show::keep_front_on_show;
+pub use show_windows::keep_front_on_show;
 
 /// The Windows platform implementation.
 pub struct Windows;
@@ -72,7 +76,7 @@ impl Platform for Windows {
         unsupported::reveal_after_load(window)
     }
     fn show_window(&self, window: Handle) -> Result<(), String> {
-        window_show::show_window(window)
+        show_windows::show_window(window)
     }
     fn set_main_appearance(&self, view: &PlatformWebview, dark: bool) -> Result<(), String> {
         unsupported::set_main_appearance(view, dark)
@@ -101,7 +105,7 @@ impl Platform for Windows {
     }
     #[cfg(feature = "diagnostics")]
     fn window_numbers(&self, window: &Window) -> Result<Vec<isize>, String> {
-        webview_capture::window_numbers(window)
+        capture::window_numbers(window)
     }
     fn hit(&self, window: Handle, x: f64, y: f64) -> Result<Hit, String> {
         unsupported::hit(window, x, y)
@@ -444,7 +448,7 @@ impl Platform for Windows {
     }
 
     fn register_input(&self, view: &PlatformWebview) -> Result<bool, String> {
-        webview_input::register(view)
+        webview::register(view)
     }
     fn ignore_page_focus(&self, view: &PlatformWebview) -> Result<bool, String> {
         unsupported::ignore_page_focus(view)
@@ -467,7 +471,7 @@ impl Platform for Windows {
         receive: Duration,
         done: Box<dyn FnOnce(Delivery) + Send>,
     ) -> Result<(), String> {
-        webview_input::pointer(window, pointer, receive, done)
+        input::pointer(window, pointer, receive, done)
     }
     fn input_activate(
         &self,
@@ -477,10 +481,10 @@ impl Platform for Windows {
         timeout: Duration,
         done: Box<dyn FnOnce(Result<(), String>) + Send>,
     ) -> Result<(), String> {
-        webview_input::activate(window, timeout, done)
+        input::activate(window, timeout, done)
     }
     fn input_key(&self, window: Handle, key: &Key) -> Result<Delivery, String> {
-        webview_input::key(window, key)
+        input::key(window, key)
     }
 
     #[cfg(feature = "diagnostics")]
@@ -542,7 +546,7 @@ impl Platform for Windows {
     }
     #[cfg(feature = "diagnostics")]
     fn capture_still(&self, window_number: isize, path: &str) -> Result<(), String> {
-        webview_capture::capture_still(window_number, path)
+        capture::capture_still(window_number, path)
     }
     #[cfg(feature = "diagnostics")]
     fn delivered_notifications(&self, done: Box<dyn FnOnce(String) + Send>) -> Result<(), String> {
@@ -734,6 +738,10 @@ impl Platform for Windows {
     }
     fn write_private_file(&self, path: &Path, data: &[u8]) -> Result<(), String> {
         unsupported::write_private_file(path, data)
+    }
+    fn private_file_options(&self) -> std::fs::OpenOptions {
+        // The access of a new file comes from its folder.
+        std::fs::OpenOptions::new()
     }
     fn directory_identity(&self, path: &Path, _metadata: &Metadata) -> Result<String, String> {
         identity::identity(path)
