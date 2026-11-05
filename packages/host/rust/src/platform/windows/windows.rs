@@ -29,6 +29,10 @@ mod unsupported;
 mod webview_capture;
 #[path = "webview_input.rs"]
 mod webview_input;
+#[path = "window_show.rs"]
+mod window_show;
+
+pub use window_show::keep_front_on_show;
 
 /// The Windows platform implementation.
 pub struct Windows;
@@ -68,7 +72,7 @@ impl Platform for Windows {
         unsupported::reveal_after_load(window)
     }
     fn show_window(&self, window: Handle) -> Result<(), String> {
-        unsupported::show_window(window)
+        window_show::show_window(window)
     }
     fn set_main_appearance(&self, view: &PlatformWebview, dark: bool) -> Result<(), String> {
         unsupported::set_main_appearance(view, dark)

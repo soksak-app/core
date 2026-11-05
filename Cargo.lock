@@ -3411,6 +3411,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tempfile",
  "url",
+ "webview2-com",
  "windows",
 ]
 

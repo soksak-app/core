@@ -136,7 +136,7 @@ impl tauri::Assets<tauri::Wry> for PageAssets {
 }
 
 /// The web view handle of a Tauri web view.
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", windows))]
 fn webview_of(app: &AppHandle, webview: &tauri::Webview) -> soksak_host::framework::Webview {
     app.webview_of(Arc::new(Frontend::new(webview.window())), webview.label())
 }
@@ -212,7 +212,7 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
         }
     };
     let scheme_app = app.clone();
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", windows))]
     let terminated_app = app.clone();
     let setup_app = app.clone();
     let menu_app = app.clone();
@@ -238,6 +238,10 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
     let builder = builder.on_web_content_process_terminate(move |webview| {
         soksak_host::web_content_process_terminated(&webview_of(&terminated_app, webview))
     });
+    #[cfg(windows)]
+    let builder = builder.plugin(crate::platform::process_failure_plugin(move |webview| {
+        soksak_host::web_content_process_terminated(&webview_of(&terminated_app, webview))
+    }));
     builder
         .setup(move |tauri_app| {
             let deep = tauri_app.handle().clone();

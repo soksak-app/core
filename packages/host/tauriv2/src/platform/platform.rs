@@ -18,5 +18,6 @@ pub(crate) use darwin::{
 
 #[cfg(windows)]
 pub(crate) use windows::{
-    launch_activation, ns_window, platform_webview, prepare_window, show_window,
+    launch_activation, ns_window, platform_webview, prepare_window, process_failure_plugin,
+    show_window,
 };

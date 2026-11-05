@@ -25,7 +25,8 @@ tauri-plugin-deep-link = "2"
 url = "2"
 
 [target.'cfg(windows)'.dependencies]
-# The controller that tauri gives is passed to soksak-host as a raw COM pointer.
+# The controller that tauri gives is passed to soksak-host as a raw COM pointer, and the process failures of a web view are read from it.
+webview2-com = "0.39"
 windows = { version = "0.62", features = ["Win32_Foundation"] }
 
 [dev-dependencies]
