@@ -989,6 +989,20 @@ func TestAProjectWithARefusedSettingsFileDoesNotOpen(t *testing.T) {
 	}
 }
 
+// The host answers a folder that it knows with its project, and the window keeps one tab of that project.
+func TestProjectOpenCommandShowsAKnownFolderOnce(t *testing.T) {
+	stored := &storedHost{}
+	f := newShell(t, stored)
+	for range 2 {
+		if err := f.finish("core.project.open", map[string]string{"root": "/work/alpha"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if projects := status[[]map[string]any](t, f, "core.projects"); len(projects) != 1 {
+		t.Fatalf("the window holds the projects %v", projects)
+	}
+}
+
 func TestProjectOpenCommandRefusesAnEmptyRoot(t *testing.T) {
 	f := newShell(t, &storedHost{})
 	if err := f.finish("core.project.open", map[string]string{"root": " "}); err == nil || err.Error() != "Project directory is empty" {

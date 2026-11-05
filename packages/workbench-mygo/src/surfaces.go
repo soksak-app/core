@@ -345,7 +345,12 @@ func (s *Shell) standSurface(c *ui.Context, surface *heldSurface, box layout.Rec
 			s.surfaces.behindDialog = append(s.surfaces.behindDialog, viewBehindDialog{view, key, box, width, height})
 			return
 		}
-		ui.NativeView(c, view, key).Size(width, height)
+		ui.NativeView(c, view, key).Size(width, height).ObserveInput(func(ev ui.InputEvent) {
+			// A press reaches the content here while the host holds the views of a placement out of the pointer.
+			if ev.Kind == ui.InputPointerDown {
+				s.pressSurface(id)
+			}
+		})
 	}
 }
 
@@ -362,6 +367,42 @@ func (s *Shell) drawViewsBehindDialog(c *ui.Context) {
 		ui.NativeView(c, behind.view, behind.key).Absolute().Left(float32(behind.box.X)).Top(float32(behind.box.Y)).Size(behind.width, behind.height)
 	}
 	s.surfaces.behindDialog = s.surfaces.behindDialog[:0]
+}
+
+// pressSurface focuses the card that holds a pressed surface: the card of its tab or of its section. A section of a window
+// sidebar stands in no card.
+func (s *Shell) pressSurface(surface string) {
+	if s.plane == nil {
+		return
+	}
+	var sectionCard string
+	if held := s.surfaces.held[surface]; held != nil && held.section != nil && held.section.Card != nil {
+		sectionCard = *held.section.Card
+	}
+	for _, card := range s.plane.Cards() {
+		if card.ID != sectionCard && !s.cardHoldsTab(card.ID, surface) {
+			continue
+		}
+		if s.focused != card.ID {
+			s.focusCard(card.ID)
+			s.options.Invalidate()
+		}
+		return
+	}
+}
+
+// cardHoldsTab reports whether the card holds the tab.
+func (s *Shell) cardHoldsTab(card, tab string) bool {
+	held, err := s.cardData(card)
+	if err != nil || held == nil {
+		return false
+	}
+	for _, item := range held.TabList() {
+		if item.ID == tab {
+			return true
+		}
+	}
+	return false
 }
 
 // forgetUnseated forgets the section surfaces that no sidebar of the frame holds: a section lives while a drawn set holds it. Only a
