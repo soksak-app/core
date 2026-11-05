@@ -40,7 +40,7 @@ func (s *Shell) drawChrome(c *ui.Context, width float32) {
 	browsing := s.browsing || s.opened() == nil
 	ui.Row(c).Size(width, s.chromeHeight()).Padding(0, s.metrics.spacePad, 0, s.metrics.spacePad+bar.Left).AlignItems(ui.Center).Gap(s.metrics.chromeGap).
 		Background(s.palette.Card).BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.Edge).DragWindow().
-		Role(ui.RoleGroup).Label("core.chrome.bar").Children(func() {
+		ObserveInput(s.placeInput(FrameScope())).Role(ui.RoleGroup).Label("core.chrome.bar").Children(func() {
 		s.drawBrand(c)
 		ui.Row(c).Grow(1).MinWidth(0).Clip().AlignItems(ui.Center).Gap(s.frameLength(s.metrics.tabsGap)).Children(func() {
 			if !browsing && s.projectTabsPlace() != "left" {
@@ -286,7 +286,7 @@ func (s *Shell) drawProjectColumn(c *ui.Context, width, height float32) {
 	m := s.metrics
 	pad := s.frameLength(m.projectColumnPad)
 	ui.Column(s.binder.Name(c, "core.projects.column", "")).Role(ui.RoleGroup).Label("프로젝트 탭").Size(width, height).Shrink(0).Clip().Padding(pad).Gap(s.frameLength(m.projectColumnGap)).
-		Background(s.palette.Card).BorderWidth(0, s.palette.BorderWidth, 0, 0).BorderColor(s.palette.Edge).Children(func() {
+		Background(s.palette.Card).BorderWidth(0, s.palette.BorderWidth, 0, 0).BorderColor(s.palette.Edge).ObserveInput(s.placeInput(FrameScope())).Children(func() {
 		for _, project := range s.projects {
 			s.drawColumnTab(c, s.projectTab(c, project), width-2*pad-s.palette.BorderWidth)
 		}
@@ -336,7 +336,7 @@ func (s *Shell) drawColumnTab(c *ui.Context, tab barTab, width float32) {
 func (s *Shell) drawSpaces(c *ui.Context, project *projectRecord, width float32) {
 	m := s.metrics
 	ui.Row(c).Size(width, s.spaceRowHeight()).Padding(0, s.frameLength(m.spacePad)).AlignItems(ui.Center).Gap(s.frameLength(m.spaceGap)).
-		Background(s.palette.Card).BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.Edge).Children(func() {
+		Background(s.palette.Card).BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.Edge).ObserveInput(s.placeInput(FrameScope())).Children(func() {
 		for _, space := range project.Spaces {
 			s.drawSpaceTab(c, project, space)
 		}

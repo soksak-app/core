@@ -767,3 +767,253 @@ func TestAPressOnASectionOfAWindowSidebarLeavesTheFocusedCard(t *testing.T) {
 		t.Fatalf("after the press on the section %s the focused cards are %v", id, got)
 	}
 }
+
+// textScope returns the scope of the status core.text.
+func textScope(t *testing.T, f *shellFixture) workbench.TextScope {
+	t.Helper()
+	var text struct {
+		Scope workbench.TextScope `json:"scope"`
+	}
+	if err := json.Unmarshal([]byte(f.status("core.text")), &text); err != nil {
+		t.Fatal(err)
+	}
+	return text.Scope
+}
+
+// leaveForTheFrame presses the frame, so that the scope is not the one that the focused card gives.
+func leaveForTheFrame(t *testing.T, f *shellFixture) {
+	t.Helper()
+	pressElement(f, "core.brand", "")
+	f.tester.Release(0, 0)
+	f.settle()
+	if got := textScope(t, f); got != workbench.FrameScope() {
+		t.Fatalf("after the press on the frame the scope is %+v", got)
+	}
+}
+
+// pressElement presses the middle of an element and does not release it.
+func pressElement(f *shellFixture, name, item string) {
+	f.t.Helper()
+	box := f.box(name, item)
+	f.tester.Press(box.X+box.W/2, box.Y+box.H/2)
+	f.settle()
+}
+
+// The scope of the text size is the place the user pressed last, whatever in it the press lands on.
+func TestAPressMovesTheTextScope(t *testing.T) {
+	card := func(id string) workbench.TextScope { return workbench.CardScope(id) }
+	t.Run("the head of a card", func(t *testing.T) {
+		f, _ := surfaceShell(t)
+		cards := f.tabbedCards()
+		f.run("core.card.focus", map[string]string{"card": cards[0]})
+		f.settle()
+		pressElement(f, "core.card.header", cards[1])
+		if got := textScope(t, f); got != card(cards[1]) {
+			t.Fatalf("the scope is %+v", got)
+		}
+	})
+	t.Run("a control of a card", func(t *testing.T) {
+		f, _ := surfaceShell(t)
+		cards := f.tabbedCards()
+		f.run("core.card.focus", map[string]string{"card": cards[0]})
+		f.settle()
+		var tab string
+		for _, stored := range f.cardsOf() {
+			if stored["id"] == cards[1] {
+				tab = stored["data"].(map[string]any)["tabs"].([]any)[0].(map[string]any)["id"].(string)
+			}
+		}
+		pressElement(f, "core.card.tab-close", tab)
+		if got := textScope(t, f); got != card(cards[1]) {
+			t.Fatalf("the scope is %+v", got)
+		}
+	})
+	t.Run("the seat of a view", func(t *testing.T) {
+		f, stored := surfaceShell(t)
+		stored.elements = true
+		f.settle()
+		cards := f.tabbedCards()
+		f.run("core.card.focus", map[string]string{"card": cards[0]})
+		f.settle()
+		leaveForTheFrame(t, f)
+		box := f.box("core.card", cards[1])
+		f.tester.Press(box.X+box.W/2, box.Y+box.H/2)
+		f.settle()
+		if got := textScope(t, f); got != card(cards[1]) {
+			t.Fatalf("the scope is %+v", got)
+		}
+		pointer := status[struct{ Down *string }](t, f, "core.pointer")
+		if pointer.Down == nil || *pointer.Down != "core.card" {
+			t.Fatalf("the pointer sequence went down on %v", pointer.Down)
+		}
+	})
+	t.Run("a view that takes the press", func(t *testing.T) {
+		f, stored := surfaceShell(t)
+		cards := f.tabbedCards()
+		f.run("core.card.focus", map[string]string{"card": cards[0]})
+		f.settle()
+		var surface string
+		for id, placed := range stored.lastSurfaces(t) {
+			if placed["visible"] == true && f.cardOfTab(id) == cards[1] {
+				surface = id
+			}
+		}
+		leaveForTheFrame(t, f)
+		f.shell.Event("surface-pressed", []any{surface})
+		f.settle()
+		if got := textScope(t, f); got != card(cards[1]) {
+			t.Fatalf("the scope is %+v", got)
+		}
+	})
+	t.Run("the focused card itself", func(t *testing.T) {
+		f, _ := surfaceShell(t)
+		cards := f.tabbedCards()
+		f.run("core.card.focus", map[string]string{"card": cards[1]})
+		f.settle()
+		pressElement(f, "core.brand", "")
+		if got := textScope(t, f); got != workbench.FrameScope() {
+			t.Fatalf("after the press on the frame the scope is %+v", got)
+		}
+		pressElement(f, "core.card.header", cards[1])
+		if got := textScope(t, f); got != card(cards[1]) {
+			t.Fatalf("the scope is %+v", got)
+		}
+	})
+	t.Run("a section of a card", func(t *testing.T) {
+		f, stored := surfaceShellOf(t, sidebarsInstalled)
+		cards := f.tabbedCards()
+		f.run("core.card.sidebar.set", map[string]string{"card": cards[1], "side": "left", "set": "set-install"})
+		f.run("core.card.focus", map[string]string{"card": cards[0]})
+		f.settle()
+		section := ""
+		for id := range stored.lastSurfaces(t) {
+			if strings.Contains(id, "/"+cards[1]+":left/") {
+				section = id
+			}
+		}
+		leaveForTheFrame(t, f)
+		f.shell.Event("surface-pressed", []any{section})
+		f.settle()
+		if got := textScope(t, f); got != card(cards[1]) {
+			t.Fatalf("after the press on %q the scope is %+v", section, got)
+		}
+	})
+	t.Run("a window sidebar", func(t *testing.T) {
+		f, stored := surfaceShellOf(t, sidebarsInstalled)
+		cards := f.tabbedCards()
+		f.run("core.card.focus", map[string]string{"card": cards[1]})
+		f.settle()
+		section := ""
+		for id := range stored.lastSurfaces(t) {
+			if strings.HasSuffix(id, "/left/files.tree") {
+				section = id
+			}
+		}
+		f.shell.Event("surface-pressed", []any{section})
+		f.settle()
+		if got := textScope(t, f); got != card("left") {
+			t.Fatalf("after the press on %q the scope is %+v", section, got)
+		}
+		if got := focusedCards(t, f); !slices.Equal(got, []string{cards[1]}) {
+			t.Fatalf("the press moved the focused card to %v", got)
+		}
+		f.run("core.card.focus", map[string]string{"card": cards[0]})
+		f.settle()
+		pressElement(f, "core.card", "left")
+		if got := textScope(t, f); got != card("left") {
+			t.Fatalf("after the press on the sidebar the scope is %+v", got)
+		}
+		f.run("core.text.larger", nil)
+		f.settle()
+		var text struct {
+			Cards map[string]float64 `json:"cards"`
+		}
+		if err := json.Unmarshal([]byte(f.status("core.text")), &text); err != nil {
+			t.Fatal(err)
+		}
+		if text.Cards["left"] == 1 || text.Cards[cards[0]] != 1 {
+			t.Fatalf("the change of the sidebar left the factors %v", text.Cards)
+		}
+	})
+	t.Run("the frame", func(t *testing.T) {
+		f, _ := surfaceShell(t)
+		for _, element := range []struct{ name, item string }{{"core.brand", ""}, {"core.space-tab.add", ""}} {
+			f.run("core.card.focus", map[string]string{"card": f.tabbedCards()[0]})
+			pressElement(f, "core.card.header", f.tabbedCards()[0])
+			f.tester.Release(0, 0)
+			f.settle()
+			pressElement(f, element.name, element.item)
+			if got := textScope(t, f); got != workbench.FrameScope() {
+				t.Fatalf("after the press on %s the scope is %+v", element.name, got)
+			}
+			f.tester.Move(0, 0)
+			f.tester.Release(0, 0)
+			f.settle()
+		}
+		f.run("core.text.larger", nil)
+		f.settle()
+		var text struct {
+			Frame float64            `json:"frame"`
+			Cards map[string]float64 `json:"cards"`
+		}
+		if err := json.Unmarshal([]byte(f.status("core.text")), &text); err != nil {
+			t.Fatal(err)
+		}
+		if text.Frame == 1 {
+			t.Fatalf("the text size of the frame stays %v", text.Frame)
+		}
+		for id, factor := range text.Cards {
+			if factor != 1 {
+				t.Fatalf("the press on the frame changed the card %s to %v", id, factor)
+			}
+		}
+	})
+	t.Run("a watcher", func(t *testing.T) {
+		f, stored := surfaceShell(t)
+		cards := f.tabbedCards()
+		f.run("core.card.focus", map[string]string{"card": cards[0]})
+		f.settle()
+		var surface string
+		for id, placed := range stored.lastSurfaces(t) {
+			if placed["visible"] == true && f.cardOfTab(id) == cards[1] {
+				surface = id
+			}
+		}
+		leaveForTheFrame(t, f)
+		var seen workbench.TextStatus
+		watch := json.RawMessage(`{"name":"core.text"}`)
+		if _, err := f.shell.Registry().Answer("status.watch", watch, func(_ string, value any) { seen = value.(workbench.TextStatus) }); err != nil {
+			t.Fatal(err)
+		}
+		f.shell.Event("surface-pressed", []any{surface})
+		f.settle()
+		if seen.Scope != card(cards[1]) {
+			t.Fatalf("the watcher last saw the scope %+v", seen.Scope)
+		}
+	})
+	t.Run("focus without a press", func(t *testing.T) {
+		f, _ := surfaceShell(t)
+		cards := f.tabbedCards()
+		pressElement(f, "core.card.header", cards[1])
+		f.run("core.card.focus", map[string]string{"card": cards[0]})
+		f.settle()
+		if got := textScope(t, f); got != card(cards[1]) {
+			t.Fatalf("a focus without a press moved the scope to %+v", got)
+		}
+	})
+}
+
+// cardOfTab returns the card that holds the tab.
+func (f *shellFixture) cardOfTab(tab string) string {
+	f.t.Helper()
+	for _, stored := range f.cardsOf() {
+		data, _ := stored["data"].(map[string]any) // silent: a card without data holds no tab.
+		tabs, _ := data["tabs"].([]any)
+		for _, item := range tabs {
+			if item.(map[string]any)["id"] == tab {
+				return stored["id"].(string)
+			}
+		}
+	}
+	return ""
+}

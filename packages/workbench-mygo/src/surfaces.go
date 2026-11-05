@@ -377,23 +377,26 @@ func (s *Shell) drawViewsBehindDialog(c *ui.Context) {
 	s.surfaces.behindDialog = s.surfaces.behindDialog[:0]
 }
 
-// pressSurface focuses the card that holds a pressed surface: the card of its tab or of its section. A section of a window
-// sidebar stands in no card.
+// pressSurface is a press on the card that holds a surface: the card of its tab or of its section, or the card of the window
+// sidebar of its section. The press makes that card the scope of the text size and focuses it. A window sidebar takes no focus.
 func (s *Shell) pressSurface(surface string) {
 	if s.plane == nil {
 		return
 	}
 	var sectionCard string
-	if held := s.surfaces.held[surface]; held != nil && held.section != nil && held.section.Card != nil {
-		sectionCard = *held.section.Card
+	if held := s.surfaces.held[surface]; held != nil && held.section != nil {
+		sectionCard = held.section.Sidebar
+		if held.section.Card != nil {
+			sectionCard = *held.section.Card
+		}
 	}
 	for _, card := range s.plane.Cards() {
 		if card.ID != sectionCard && !s.cardHoldsTab(card.ID, surface) {
 			continue
 		}
-		if s.focused != card.ID {
+		s.pressPlace(CardScope(card.ID))
+		if !isPlace(card.ID) && s.focused != card.ID {
 			s.focusCard(card.ID)
-			s.options.Invalidate()
 		}
 		return
 	}

@@ -54,6 +54,19 @@ func (b *Binder) Press(c *ui.Context, name, command, item string, params any) ui
 	return b.Bound(button, name)
 }
 
+// Observing has see receive the input in element, a button that Press made with the element name name, after the pointer
+// sequence does. An element holds one observer, so this one takes the place of the observer of Press.
+func (b *Binder) Observing(element ui.Element, name string, see func(ui.InputEvent)) ui.Element {
+	if b.pointer == nil {
+		return element.ObserveInput(see)
+	}
+	sequence := b.pointer.Observer(name)
+	return element.ObserveInput(func(ev ui.InputEvent) {
+		sequence(ev)
+		see(ev)
+	})
+}
+
 // Control gives the next widget of c its element name and command, for a widget that takes its input as it is created. It returns
 // the function that runs the command with the value of the widget.
 func (b *Binder) Control(c *ui.Context, name, command, item string) func(params any) {
