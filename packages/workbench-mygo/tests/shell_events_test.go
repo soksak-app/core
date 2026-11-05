@@ -1,6 +1,8 @@
 package workbench_test
 
 import (
+	"encoding/json"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -141,5 +143,46 @@ func TestTheDebugViewShowsAFileAndSavesIt(t *testing.T) {
 	tester.Frame()
 	if slices.Contains(tester.Texts(), "text of newer.log") {
 		t.Fatal("the debug view stayed after its close")
+	}
+}
+
+// The host reloads the window after the answer of this command, so the answer comes when the store holds what the window held.
+func TestTheFlushOfTheProjectsAnswersWhenTheStoreHoldsThem(t *testing.T) {
+	stored := &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"))}}
+	f := newTabShell(t, stored)
+	f.open(t)
+	stored.calls = nil
+	answered := false
+	f.shell.Registry().RunLater("core.projects.flush", json.RawMessage(`{}`), func(_ any, err error) {
+		if err != nil {
+			t.Error(err)
+		}
+		answered = true
+	})
+	if answered {
+		t.Fatal("the flush answered before the store")
+	}
+	f.settle()
+	if !answered {
+		t.Fatal("the flush did not answer")
+	}
+	for _, name := range []string{"workspace", "windowState"} {
+		if !slices.Contains(stored.calls, name) {
+			t.Fatalf("the flush made no call %s: %v", name, stored.calls)
+		}
+	}
+}
+
+// The reload that follows a flush would lose what did not reach the store, so the host hears of a store that failed.
+func TestAFlushOfTheProjectsAnswersAStoreThatFailed(t *testing.T) {
+	stored := &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"))}}
+	f := newTabShell(t, stored)
+	f.open(t)
+	stored.failing = map[string]error{"workspace": errors.New("the disk is full")}
+	var failure error
+	f.shell.Registry().RunLater("core.projects.flush", json.RawMessage(`{}`), func(_ any, err error) { failure = err })
+	f.settle()
+	if failure == nil || !strings.Contains(failure.Error(), "the disk is full") {
+		t.Fatalf("the flush answered %v", failure)
 	}
 }
