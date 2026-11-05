@@ -1269,6 +1269,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F613",
+    implementation: [
+      { file: "scripts/benchmark-b3.mjs", symbol: "export async function activateWindow(configDir, { waitMs = 5000 } = {}) {" },
+    ],
+    tests: [
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a window that opens behind the front is activated before the first target of a run" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a run whose activation is refused or whose window stays covered fails and measures nothing" },
+    ],
+    expected: "Each run of B3 activates its first window through input.pointer before its first target and fails when it stays covered.",
+    levels: ["unit"],
+  },
+  {
     id: "F612",
     implementation: [
       { file: "docs/operations/examples.md", symbol: "## Three-host benchmark" },
