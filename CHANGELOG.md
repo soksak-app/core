@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F462: Core 0.0.35 installs the plugin releases that declare `^0.0.35`, and the registry lists them.
+- F453: The release run published v0.0.35, and the registry lists it.
 - F461: The release candidate is 0.0.35.
 - F460: `.gitignore` names the local output folder `/build/`.
 - F459: The optional call that ends the run start listener states its reason.

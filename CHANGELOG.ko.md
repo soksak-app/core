@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F462: core 0.0.35가 `^0.0.35`를 선언한 plugin release를 설치하고 registry가 이를 나열합니다.
+- F453: release run이 v0.0.35를 게시했고 registry가 이를 나열합니다.
 - F461: release candidate는 0.0.35입니다.
 - F460: `.gitignore`가 local 출력 폴더 `/build/`를 지정합니다.
 - F459: run start listener를 끝내는 optional call이 사유를 밝힙니다.
