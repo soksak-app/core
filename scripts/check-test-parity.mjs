@@ -1145,6 +1145,10 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/sidecar_sessions_test.go", id: "TestARetainNamesThePluginOfEachSurface" },
       { file: "packages/workbench/test/projects-switch.test.mjs", id: "the layouts hold the sections of every space of every project, whatever the window draws, with the sets of each project" },
     expected: "An outdated persistent service stays while a project layout holds a surface of a plugin of its sidecar, and a list of the layouts without such a surface replaces it.",
+    id: "F556",
+    implementation: [{ file: "e2e/hwp-startup.mjs", symbol: "export async function collectHwpStartupResourceEvidence" }],
+    tests: [{ file: "e2e/test/hwp-startup.test.mjs", id: "HWP startup collection fails when the document requests an address outside soksak" }],
+    expected: "The HWP startup window check fails with each address outside soksak that the resource entries of the document name.",
     id: "F547",
     implementation: [
       { file: "packages/workbench-mygo/src/events.go", symbol: "if e.gatedTimer || e.sending || len(e.gated) == 0 {" },

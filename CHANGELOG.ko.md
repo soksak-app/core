@@ -11,6 +11,7 @@
 - F562: mygo workbench의 test는 `drain`을 step 없는 시간으로 끝내지 않으므로, 늦게 시작한 host call 때문에 실패하지 않는다.
 - F571: B3 judge는 host가 어느 run에도 기록하지 않은 값을 `not measured`로 출력하고, `make app-usage`는 모든 창이 null로 보고하는 counter와 frame을 읽지 않은 idle 대기를 출력한다.
 - F457: mygo workbench의 run 시작마다 각 view에 `run-start`를 보낸다. run은 항상 settled placement로 끝나므로, drag의 release가 아무것도 옮기지 않아도 host가 run을 끝낸다.
+- F556: 문서가 `soksak://` 밖의 address를 요청하면 HWP startup window check가 실패한다. Red: owner case가 실패했다. Green: 통과한다.
 - F502-21: `setDialogBackground`가 다른 host call처럼 object `{enabled}`를 받고, framework 표의 B 행이 이 call을 mygo에만 있는 call로 나열해 host parity check가 통과한다. P 행이 `Frontend.Frames`를 나열한다.
 - F502-16: mygo workbench의 모든 모양 값은 page도 읽는 `workbench.json`에서 나온다: card foot의 caption, sidebar의 status line, placeholder와 멈춘 view의 글자, dialog의 scrim과 blur, layer의 anchor 아래 간격이다.
 - F551: Tauri host는 비동기 runtime의 worker를 processor마다 하나가 아니라 둘만 두고, 일 없는 blocking thread는 10초가 아니라 1초 뒤에 끝난다.

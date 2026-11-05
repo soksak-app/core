@@ -110,6 +110,8 @@ export async function collectHwpStartupResourceEvidence(s, opened, {
   "HWP resource timing read has no studio document clock");
   assert.ok(Array.isArray(evidence.read?.resourceTimings),
     "HWP resource timing read did not return the available Resource Timing entries");
+  const outside = evidence.read.resourceTimings.map((entry) => entry.name).filter((name) => !name.startsWith("soksak://"));
+  assert.equal(outside.length, 0, `opening the HWP document requested addresses outside soksak: ${outside.join(", ")}`);
   assert.equal(evidence.stop?.enabled, false, "HWP resource timing stop left diagnostics active");
   assert.equal(evidence.stop?.studioViewport, null, "HWP resource timing stop left the viewport marker active");
   assert.equal(evidence.recording?.directory, recordingCopyDirectory,

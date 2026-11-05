@@ -6,7 +6,7 @@ import test from "node:test";
 
 import { collectHwpStartupResourceEvidence } from "../hwp-startup.mjs";
 
-function startupFixture(t, { startError, readError, stopError, clockValues = [100, 101] } = {}) {
+function startupFixture(t, { startError, readError, stopError, clockValues = [100, 101], resourceTimings = [] } = {}) {
   const calls = [];
   const evidence = { errors: [] };
   const saved = [];
@@ -27,7 +27,7 @@ function startupFixture(t, { startError, readError, stopError, clockValues = [10
       }
       if (name === "hwp.diagnostics.frames.read") {
         if (readError) throw readError;
-        return { sequence: 4, width: 760, height: 286, resourceTimings: [],
+        return { sequence: 4, width: 760, height: 286, resourceTimings,
           studioClock: { documentTimeOriginMs: 2000, snapshotAtMs: 25 } };
       }
       if (name === "hwp.diagnostics.frames.stop") {
@@ -87,6 +87,17 @@ test("HWP startup collection stops before offline content verification and prese
   rmSync(fixture.sourceDirectory, { recursive: true, force: true });
   assert.equal(readFileSync(join(fixture.recordingCopyDirectory, "frame-0001.bgra"), "utf8"), "raw-frame",
     "preserved recording must remain after the source capture is removed");
+});
+
+test("HWP startup collection fails when the document requests an address outside soksak", async (t) => {
+  const fixture = startupFixture(t, { resourceTimings: [
+    { name: "soksak://hwp/ui/studio/assets/rhwp_bg.wasm" },
+    { name: "https://cdn.example.test/font.woff" },
+  ] });
+  await assert.rejects(collectHwpStartupResourceEvidence(fixture.s, fixture.opened, {
+    app: "wailsv3", path: "fixture/content.hwp", evidence: fixture.evidence, persist: fixture.persist,
+    recordingCopyDirectory: fixture.recordingCopyDirectory,
+  }), /outside soksak: https:\/\/cdn\.example\.test\/font\.woff/);
 });
 
 test("HWP startup read failure still stops tracing and retains offline verification", async (t) => {
