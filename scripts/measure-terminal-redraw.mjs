@@ -5,7 +5,8 @@
 // and ends that watch, because a watch of the screen relays every screen too. It then measures the CPU time of each process of the
 // application over INTERVAL seconds with measure-app-usage.mjs and divides it by the change of presentedFrames of the image region of the
 // tab in host.window over the same interval. The measurement fails while host.window of the window reports occluded true, because a
-// covered window presents less often. It prints the CPU time of each process, its CPU milliseconds per presented frame and the presented
+// covered window presents less often; it reads that status once per second, because a watch of host.window relays every presented frame
+// and would add its own cost to each frame. It prints the CPU time of each process, its CPU milliseconds per presented frame and the presented
 // frames per second, and closes the project window afterwards. It also prints the CPU time of the window server over the interval, which
 // draws the whole screen and belongs to no application, so it stays outside the sums of the application and the B3 record. Every error is
 // printed to stderr, and the exit status is 1 when an error occurred. `make terminal-redraw-usage` runs it.
@@ -36,6 +37,8 @@ const FIXTURE = fileURLToPath(new URL("./fixtures/status-redraw.mjs", import.met
 const START = "status-redraw start";
 /** The content size of the window of the measurement in points, the window of sidecar alacritty S21 (G5). */
 const WINDOW_SIZE = Object.freeze({ width: 760, height: 614 });
+/** The milliseconds between two readings of host.window for a covered window during the interval. */
+const COVERED_READ_MS = 1000;
 /** The seconds that the fixture draws after the interval, so that it draws during the whole measurement. */
 const DRAW_MARGIN = 5;
 
@@ -107,6 +110,21 @@ export function frameCost({ rows, totals, presented, seconds }) {
     rows: rows.map((row) => ({ ...row, msPerFrame: perFrame(row.cpuSeconds) })),
     totals: Object.fromEntries(Object.entries(totals).map(([name, sum]) => [name, perFrame(sum.cpuSeconds)])),
   };
+}
+
+/**
+ * Resolves with the host.window value that reports occluded true within ms, or with null. It reads the status once per second and at
+ * the end: the host sends a watcher of host.window a new value for each presented frame, which the measurement would count as a cost of
+ * the frame. read() answers host.window, and sleep and now replace the clock in a test.
+ */
+export async function untilCovered({ read, ms, sleep = (wait) => new Promise((resolve) => setTimeout(resolve, wait)), now = Date.now }) {
+  const end = now() + ms;
+  for (let left = ms; left > 0; left = end - now()) {
+    await sleep(Math.min(COVERED_READ_MS, left));
+    const status = await read();
+    if (status.occluded === true) return status;
+  }
+  return null;
 }
 
 /** The pid and the CPU seconds of the window server in the rows of ps -axww -o pid=,time=,comm=. */
@@ -239,11 +257,7 @@ async function measureRedraw({ sok, configDir, plugin, rows, rate, interval, tra
     const { measurement, cost, status } = await measureRegion({
       s: w, tab, interval,
       measure: (marks) => measureApps({ sok, configDirs: [configDir], interval, footprints: "at-once", marks }),
-      covered: (ms) => client.watch(w.window, "host.window", (status) => status.occluded === true, { timeout: ms })
-        .catch((error) => {
-          if (error.code === "ETIMEDOUT") return null;
-          throw error;
-        }),
+      covered: (ms) => untilCovered({ read: () => w.get("host.window"), ms }),
       windowServer: readWindowServer,
     });
     // The conditions of a B3 output are read only for one: a plain measurement does not require a window on a screen.

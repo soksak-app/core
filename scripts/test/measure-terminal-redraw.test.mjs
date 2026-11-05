@@ -8,7 +8,7 @@ import test from "node:test";
 
 import { readB3Out, writeB3Out } from "../b3-out.mjs";
 
-import { B3_MEASUREMENTS, formatReport, frameCost, redrawConditions, measureRegion, parseOptions, parseWindowServer, prepareRedraw, presentedFramesOf, redrawMeasurements, requireRows, screenText } from "../measure-terminal-redraw.mjs";
+import { B3_MEASUREMENTS, formatReport, frameCost, redrawConditions, measureRegion, parseOptions, parseWindowServer, prepareRedraw, presentedFramesOf, redrawMeasurements, requireRows, screenText, untilCovered } from "../measure-terminal-redraw.mjs";
 
 test("the text of a screen joins the characters of each row and counts an empty cell as spaces of its width", () => {
   assert.equal(screenText([[{ ch: "a", width: 1 }, { width: 1 }, { ch: "b", width: 1 }], [{ ch: "한", width: 2 }, { width: 0 }]]), "a b\n한");
@@ -189,6 +189,24 @@ test("the region measurement reads presentedFrames right around the cpu interval
   const covered = fakeSession((kind, window, name) => (name === "host.window" ? redrawWindow({ occluded: true }) : null), "w2");
   await assert.rejects(measureRegion({ s: covered, tab: "tab-1", interval: 10, measure, covered: async () => null, windowServer }),
     /window w2 reports occluded true; the measurement requires occluded false/);
+});
+
+test("the watch for a covered window reads host.window once per second, because a status watch relays every presented frame", async () => {
+  const clock = { now: 0 };
+  const sleep = async (ms) => {
+    clock.now += ms;
+  };
+  const reads = [];
+  const read = (occludedAt) => async () => {
+    reads.push(clock.now);
+    return { occluded: clock.now >= occludedAt, at: clock.now };
+  };
+  assert.equal(await untilCovered({ read: read(Infinity), ms: 2500, sleep, now: () => clock.now }), null);
+  assert.deepEqual(reads, [1000, 2000, 2500]);
+  clock.now = 0;
+  reads.length = 0;
+  assert.deepEqual(await untilCovered({ read: read(2000), ms: 10000, sleep, now: () => clock.now }), { occluded: true, at: 2000 });
+  assert.deepEqual(reads, [1000, 2000]);
 });
 
 test("the window server is the process of that name in the process table, and a table without it is an error", () => {
