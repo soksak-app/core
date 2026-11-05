@@ -43,6 +43,7 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 		paintGrips(p, r, inset, grips)
 		s.drawRules(p, r, inset, rules, true)
 	}).Children(func() {
+		s.drawStageEdge(c, width, stage)
 		cards := s.plane.Cards()
 		s.forgetCardReads(cards)
 		for _, card := range cards {
