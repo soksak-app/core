@@ -4,7 +4,7 @@
 
 ## Unreleased
 
-- F502-28: The keyboard of the window follows the focus ring on all hosts: typing right after a new tab, a press on a tab, `core.card.focus` or the opening of a project reaches the active surface of the card with the ring.
+- F502-28: The keyboard of the window follows the focus ring on all hosts: typing right after a new tab, a press on a tab, `core.card.focus` or the opening of a project reaches the active surface of the card with the ring, and a new terminal tab draws a focused cursor because the first focus report of its region waits for its handler.
 - F502-21: The mygo workbench draws its modals as native UI: the settings window, the picker layer with the add, split, tool, tab and context menus, and the question about a modified tab. `core.card.close`, `core.tab.close` and `core.space.close` do not close a modified tab without the answer of the person, and the plugins and their settings come from the document of the installed plugins. The settings `left` and `right` take the fixed window sidebars in and out of the plane.
 - F502-12: `core.plugins.show-updates` of the mygo workbench brings the update list into view on the plugin page.
 - F502-12: The mygo workbench checks the installed plugin document with the rules of the page: a plugin that the window refuses is left out, its error is shown, and its row states `refused`.
