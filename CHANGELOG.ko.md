@@ -8,6 +8,7 @@
 - F502-16: mygo workbench는 `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.views`에 답한다.
 - F502-16: mygo workbench의 library는 page와 같은 자리에 선다: 줄 높이, form 간격, 빈 화면 여백이 `library.css`와 같고, plugin page는 card를 열로 놓으며, project card는 project를 연 날을 보이고, library는 bar의 sidebar switch를 숨긴다.
 - F547: log batch가 진행 중이고 gate count의 보고 때가 되었을 때 mygo workbench가 쉬지 않고 step을 올리지 않는다.
+- F549: 대기 중인 창이 깨어나도 거부된 적 없는 frame event의 count를 저장하려고 log writer를 깨우지 않는다.
 - F502-23: mygo workbench 가 `diagnostics.layout.fail` 에 답한다. 다음 surface 배치가 `diagnostic layout fault` 로 한 번 실패하고, workbench 는 그 실패를 보여 준 뒤 계속 요청에 답한다.
 - F544: release가 뒤따르는 키보드 이동을 멈추지 않는다. image region이 있는 surface를 클릭한 직후에도 키보드가 다음 release를 기다리지 않고 옮겨진다.
 - F539: `sok input pointer`가 사람처럼 이동한다. 좌표를 포함하는 모든 추적 영역이 이동과 진입, 이탈을 듣고, key window의 press는 그 좌표로 먼저 이동한다.

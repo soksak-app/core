@@ -94,6 +94,32 @@ int main(void) { @autoreleasepool {
     check(named(counted, @"native.observe.delivered").count == 0, @"a counted source stores no event for each delivery");
     check([summaries[0][@"level"] intValue] == 3, @"a summary is at the level debug");
 
+    // A closed gate leaves the summary due: the deliveries wait in the count, so the gate counts no refused event and the writer has no
+    // reason to wake for a turn of the main run loop (docs/spec/logging.md#entrances).
+    const int8_t noFrames[SP_CLASS_COUNT] = {SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, -1};
+    check(sp_event_set_policy(noFrames), @"the policy refuses the class frame");
+    NSArray<NSDictionary *> *closed = capturedEvents(^{
+        usleep(1100000);
+        [center postNotificationName:@"ObserveTestFast" object:nil];
+        sp_observe_flush();
+        usleep(1100000);
+    });
+    NSPredicate *gatedFrames = [NSPredicate predicateWithBlock:^BOOL(NSDictionary *event, id bindings) {
+        return [event[@"fields"][@"class"] isEqual:@"frame"];
+    }];
+    check(named(closed, @"native.observe.counted").count == 0, @"a closed gate stores no summary");
+    check([named(closed, @"native.log.gated") filteredArrayUsingPredicate:gatedFrames].count == 0,
+        @"a summary that a closed gate leaves due is no refused event");
+    check(sp_event_set_policy(allLevels), @"the policy stores the class frame again");
+    NSArray<NSDictionary *> *opened = capturedEvents(^{
+        usleep(1100000);
+        [center postNotificationName:@"ObserveTestFast" object:nil];
+    });
+    NSArray *resumed = named(opened, @"native.observe.counted");
+    check(resumed.count == 1 && [resumed[0][@"fields"][@"count"] longValue] == 2 && [resumed[0][@"fields"][@"total"] longValue] == 5002 &&
+            [resumed[0][@"fields"][@"micros"] longValue] >= 2000000,
+        [NSString stringWithFormat:@"the first summary after the gate opens holds the deliveries since the earlier summary: %@", resumed]);
+
     // A selector and a key path count their deliveries through sp_observe_delivered.
     Probe *target = [[Probe alloc] init];
     NSArray<NSDictionary *> *selector = capturedEvents(^{
