@@ -160,10 +160,10 @@ func checkFields(fields map[string]any, t reflect.Type, path string) error {
 		if name == "" {
 			name = field.Name
 		}
-		// A field that is null is a missing field (docs/spec/native-host.md#host-calls).
-		item := fields[name]
+		// A field that is null is a missing field, except a field with the option nullvalue, whose null is a value (docs/spec/native-host.md#host-calls).
+		item, present := fields[name]
 		if item == nil {
-			if field.Type.Kind() == reflect.Pointer || slices.Contains(tag[1:], "omitempty") {
+			if field.Type.Kind() == reflect.Pointer || slices.Contains(tag[1:], "omitempty") || (present && slices.Contains(tag[1:], "nullvalue")) {
 				continue
 			}
 			return fmt.Errorf("argument %s is missing", path+"."+name)

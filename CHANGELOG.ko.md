@@ -153,6 +153,9 @@
 - F502-13: exposure kind `dom`은 모든 host와 모든 plugin 선언에서 `element`가 된다: `exposes.element`, `expose.element`, `element.rect`, `element.act`, `sok element`, MCP tool `element_rect`와 `element_act`, `exposure.list`의 member `element`. `exposes.dom`을 가진 manifest는 거부된다. workbench status는 workbench에 대해 정의된다: `core.window.workbench`, `core.workbench.error`, 행이 `{role, expose, command, text}`인 `core.workbench.audit`, responder owner와 `host.hit` kind `workbench`. window check는 `core.window.workbench`의 새 `start`를 기다리고, 각각 `Object.values(APPS)` 또는 `MAIN_PAGE_APPS`를 순회하며, `scripts/check-e2e-host-parity.mjs`가 이를 검사한다.
 - F463: core가 checks kit과 실행 파일 하나 `soksak-check`를 씁니다. Red: `scripts/test/workflows.test.mjs`가 실패했습니다. Green: 통과합니다.
 - F466: 기록은 임시 log를 인용하지 않고, record 검사가 새 인용을 보고합니다.
+- F480: `e2e/terminal-reopen.test.mjs`가 앞선 terminal이 닫힌 뒤 연 terminal의 prompt 표시를 검사하고, benchmark readiness 실패가 session, surface, region을 보고합니다.
+- F478: Wails host가 view event의 null `data`와 view request의 null `params`를 값으로 보존합니다.
+- F477: window check setup이 선언된 make target `build-capture-text-path`를 부릅니다.
 - F476: 0.0.36 release 뒤에도 0.0.34였던 `LATEST_PUBLISHED`와 그 test를 지워 test가 선언된 version을 되풀이하지 않습니다.
 - F474: release run이 v0.0.36을 게시했고 registry가 이를 plugin, sidecar release와 함께 올립니다.
 - F474: release candidate는 0.0.36입니다.
