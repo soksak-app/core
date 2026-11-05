@@ -4,6 +4,9 @@
 
 ## 미배포
 
+- F502-16: mygo workbench의 숨은 element는 `display:none`인 page element처럼 같은 이름의 element 사이에서 index를 유지하므로, tab을 `core.grid`의 자리로 부르는 window check는 card head의 모든 단계와 전체 화면 card에서 그 tab에 닿는다. bar는 element `core.chrome.bar`다.
+- F502-16: mygo workbench는 `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.views`에 답한다.
+- F502-16: mygo workbench의 library는 page와 같은 자리에 선다: 줄 높이, form 간격, 빈 화면 여백이 `library.css`와 같고, plugin page는 card를 열로 놓으며, project card는 project를 연 날을 보이고, library는 bar의 sidebar switch를 숨긴다.
 - F539: `sok input pointer`가 사람처럼 이동한다. 좌표를 포함하는 모든 추적 영역이 이동과 진입, 이탈을 듣고, key window의 press는 그 좌표로 먼저 이동한다.
 - F538: retain이 저장된 모든 layout의 section persistent session을 유지하므로, tab을 없애거나 space를 닫거나 project를 제거해도 다른 space와 project의 sidebar session이 끝나지 않는다.
 - F502-21: mygo workbench에서 창을 닫으면, Cmd+W를 포함해, 먼저 수정된 탭마다 묻는다. 유지한 탭이 있으면 창이 남는다.

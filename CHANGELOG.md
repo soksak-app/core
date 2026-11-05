@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- F502-16: A hidden element of the mygo workbench keeps its index among the elements of its name, as a page element under `display:none`, so a window check that names a tab by its place in `core.grid` reaches that tab through every stage of a card head and through a full screen card. The bar is the element `core.chrome.bar`.
+- F502-16: The mygo workbench answers `core.plugin.open-calls`, `core.plugin.losses` and `core.plugin.views`.
+- F502-16: The library of the mygo workbench stands where the page stands it: its line heights, form gaps and empty margins are those of `library.css`, the plugin page lays its cards in columns, a project card shows the day its project opened, and the library hides the sidebar switches of the bar.
 - F539: `sok input pointer` moves as a person moves: every tracking area that holds the point hears the move, its enter and its exit, and a press in the key window moves there first.
 - F538: A retain keeps the persistent sessions of the sections of every stored layout, so a dropped tab, a closed space or a removed project no longer ends the sessions of the sidebars of the other spaces and projects.
 - F502-21: Closing a window of the mygo workbench, as Cmd+W does, asks about each modified tab first; a kept tab keeps the window.
