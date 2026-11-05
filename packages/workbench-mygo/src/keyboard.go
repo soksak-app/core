@@ -23,9 +23,10 @@ func (s *Shell) focusCard(card string) {
 }
 
 // keyboardTarget is the surface that holds the keyboard, and nil when the workbench holds it: while a modal is open, while the
-// window shows the library, and for a card without a surface. It reads the seats of the frame that was drawn.
+// window shows the library, while a rename field is open, and for a card without a surface. It reads the seats of the frame that
+// was drawn.
 func (s *Shell) keyboardTarget() *string {
-	if s.modalName() != nil || s.browsing || s.plane == nil || s.opened() == nil {
+	if s.modalName() != nil || s.browsing || s.renaming != nil || s.plane == nil || s.opened() == nil {
 		return nil
 	}
 	data, err := s.cardData(s.focused)

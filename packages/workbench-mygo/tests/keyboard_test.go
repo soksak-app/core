@@ -191,6 +191,29 @@ func TestTheLibraryKeepsTheKeyboardWithTheWorkbench(t *testing.T) {
 	}
 }
 
+// A rename field of the workbench holds the keyboard while it is open: its text and its shortcuts reach the workbench. When it closes
+// the keyboard returns to the surface of the ring.
+func TestARenameFieldHoldsTheKeyboardUntilItCloses(t *testing.T) {
+	for _, end := range []string{"core.rename.commit", "core.rename.cancel"} {
+		t.Run(end, func(t *testing.T) {
+			f, stored := surfaceShell(t)
+			f.settle()
+			space := f.host.projects[0]["spaces"].([]any)[0].(map[string]any)["id"].(string)
+			f.run("core.rename.begin", map[string]string{"kind": "space", "id": space})
+			f.settle()
+			if got, ok := stored.keyboardTarget(); !ok || got != nil {
+				t.Fatalf("the rename field is open and the keyboard went to %s (%v)", describeTarget(got), ok)
+			}
+			f.run(end, nil)
+			f.settle()
+			_, want := keyboardRing(t, f)
+			if got, ok := stored.keyboardTarget(); !ok || got == nil || want == nil || *got != *want {
+				t.Fatalf("the field closed, the ring is on %s and the keyboard went to %s (%v)", describeTarget(want), describeTarget(got), ok)
+			}
+		})
+	}
+}
+
 // A press on the active tab of the focused card moves the first responder to the workbench, and the call gives it back.
 func TestAPressOnTheActiveTabGivesTheKeyboardBack(t *testing.T) {
 	f, stored := surfaceShell(t)
