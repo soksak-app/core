@@ -335,7 +335,7 @@ func (h *sessionHarness) capture(t *testing.T, tab string) error {
 	t.Helper()
 	var result error
 	called := false
-	h.sessions.Capture(tab, func(err error) { result, called = err, true })
+	h.sessions.Capture(tab, "unload", func(err error) { result, called = err, true })
 	if !called {
 		t.Fatal("the capture did not answer")
 	}
@@ -357,7 +357,8 @@ func TestASessionIsCapturedAndReadBack(t *testing.T) {
 		t.Fatal(err)
 	}
 	equal(t, h.store.files["tab-a"], map[string]workbench.TabRegionSession{"page": {Session: "AAAA"}})
-	equal(t, h.events.events, []savedEvent{{"debug", "workbench.tab.session.stored", map[string]any{"tab": "tab-a", "bytes": 50}}})
+	equal(t, h.events.events, []savedEvent{{"debug", "workbench.tab.session.read", map[string]any{"tab": "tab-a", "cause": "unload"}},
+		{"debug", "workbench.tab.session.stored", map[string]any{"tab": "tab-a", "bytes": 50}}})
 	var read map[string]string
 	h.sessions.Read("tab-a", func(regions map[string]string, err error) {
 		if err != nil {
@@ -392,6 +393,33 @@ func TestNavigationCommitsOfATabAreCoalescedToOneWritePerSecondAndATitleChangeIs
 	equal(t, h.store.puts, []string{"tab-a", "tab-b"})
 }
 
+// The read of the sessions names what asked for it: a navigation commit, the save of a window, or the unload of a tab.
+func TestEachReadOfTheSessionsOfATabRecordsItsCause(t *testing.T) {
+	h := newSessions()
+	h.attached = []string{"tab-a"}
+	h.history["tab-a"] = map[string]string{"page": "S-a"}
+	h.sessions.Navigated("tab-a", "page", at(0, "https://a.test/"))
+	h.timers.tick(1000)
+	h.sessions.Flush(func() {})
+	if err := h.capture(t, "tab-a"); err != nil {
+		t.Fatal(err)
+	}
+	var reads []savedEvent
+	for _, event := range h.events.events {
+		if event.name == "workbench.tab.session.read" {
+			reads = append(reads, event)
+		}
+	}
+	equal(t, reads, []savedEvent{{"debug", "workbench.tab.session.read", map[string]any{"tab": "tab-a", "cause": "navigation"}},
+		{"debug", "workbench.tab.session.read", map[string]any{"tab": "tab-a", "cause": "flush"}},
+		{"debug", "workbench.tab.session.read", map[string]any{"tab": "tab-a", "cause": "unload"}}})
+	var refused error
+	h.sessions.Capture("tab-a", "", func(err error) { refused = err })
+	if refused == nil || !strings.Contains(refused.Error(), "cause") {
+		t.Fatalf("a read without a cause answered %v", refused)
+	}
+}
+
 func TestARegionSessionOver1MiBDecodedIsDroppedWithAWarnEventAndTheOthersAreStored(t *testing.T) {
 	limit := workbench.SessionLimit
 	large := strings.Repeat("A", (limit+2)/3*4)
@@ -404,7 +432,8 @@ func TestARegionSessionOver1MiBDecodedIsDroppedWithAWarnEventAndTheOthersAreStor
 		t.Fatal(err)
 	}
 	equal(t, h.store.files["tab-a"], map[string]workbench.TabRegionSession{"side": {Session: "AAAA"}})
-	equal(t, h.events.events[0], savedEvent{"warn", "workbench.tab.session.dropped", map[string]any{"tab": "tab-a", "region": "page", "bytes": limit + 2}})
+	equal(t, h.events.events[:2], []savedEvent{{"debug", "workbench.tab.session.read", map[string]any{"tab": "tab-a", "cause": "unload"}},
+		{"warn", "workbench.tab.session.dropped", map[string]any{"tab": "tab-a", "region": "page", "bytes": limit + 2}}})
 	// A tab whose every region is over the limit keeps no file.
 	h.history["tab-a"] = map[string]string{"page": large}
 	if err := h.capture(t, "tab-a"); err != nil {

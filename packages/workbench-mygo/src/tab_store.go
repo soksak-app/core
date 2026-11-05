@@ -398,14 +398,23 @@ func (s *TabSessions) put(tab string, regions map[string]TabRegionSession, answe
 	})
 }
 
-// Capture writes the session of tab now, which stores the regions of at most SessionLimit bytes. A tab without regions writes
-// nothing. The memory saver calls it before an unload, and a failure fails the unload.
-func (s *TabSessions) Capture(tab string, answer func(err error)) {
+// tabSessionCauses are what asks for a read of the sessions of a tab: a navigation commit, the save of a window, or the unload of a
+// tab.
+var tabSessionCauses = map[string]bool{"navigation": true, "flush": true, "unload": true}
+
+// Capture writes the session of tab now for cause, which stores the regions of at most SessionLimit bytes. A tab without regions
+// writes nothing. The memory saver calls it before an unload, and a failure fails the unload.
+func (s *TabSessions) Capture(tab, cause string, answer func(err error)) {
+	if !tabSessionCauses[cause] {
+		answer(fmt.Errorf("tab session of %s: the read names no known cause: %q", tab, cause))
+		return
+	}
 	s.pending.cancel(tab)
 	if s.removed[tab] {
 		answer(nil)
 		return
 	}
+	s.ports.Emit("debug", "workbench.tab.session.read", map[string]any{"tab": tab, "cause": cause})
 	s.ports.Interaction(tab, func(history map[string]string, err error) {
 		if err != nil || history == nil || s.removed[tab] {
 			answer(err)
@@ -428,8 +437,8 @@ func (s *TabSessions) Capture(tab string, answer func(err error)) {
 }
 
 // reported is Capture for a write that no caller waits for, so its failure goes to the error display.
-func (s *TabSessions) reported(tab string, answer func()) {
-	s.Capture(tab, func(err error) {
+func (s *TabSessions) reported(tab, cause string, answer func()) {
+	s.Capture(tab, cause, func(err error) {
 		if err != nil {
 			s.ports.Failed(fmt.Sprintf("tab session of %s: %s", tab, err))
 		}
@@ -487,7 +496,7 @@ func (s *TabSessions) Navigated(tab, name string, history TabHistory) {
 	if s.pending[tab] != nil {
 		return
 	}
-	s.pending[tab] = s.ports.After(tabCoalesceMilliseconds, func() { s.reported(tab, func() {}) })
+	s.pending[tab] = s.ports.After(tabCoalesceMilliseconds, func() { s.reported(tab, "navigation", func() {}) })
 }
 
 func (s *TabSessions) remove(tabs []string, answer func(err error)) {
@@ -541,7 +550,7 @@ func (s *TabSessions) Flush(answer func()) {
 		return
 	}
 	for _, tab := range tabs {
-		s.reported(tab, func() {
+		s.reported(tab, "flush", func() {
 			left--
 			if left == 0 {
 				answer()

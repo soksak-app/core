@@ -120,7 +120,7 @@ func (s *Shell) connectTabs(ports TabPorts) {
 		Kept:        func(tab string) bool { return tabs.states.Kept(tab) },
 		SetKept:     func(tab string, on bool) { tabs.states.SetKept(tab, on) },
 		Regions:     ports.Surfaces.Regions,
-		Interaction: func(tab string, answer func(error)) { tabs.sessions.Capture(tab, answer) },
+		Interaction: func(tab string, answer func(error)) { tabs.sessions.Capture(tab, "unload", answer) },
 		Restore:     ports.Surfaces.Restore,
 		Commit:      ports.Commit,
 		ShowLabel: func(tab string) {
@@ -402,21 +402,26 @@ func (s *Shell) droppedTabs(tabs []string) func() {
 	}
 }
 
-// flushTabs writes the pending tab state and sessions. The window runs it when it closes.
-func (s *Shell) flushTabs() {
+// flushTabs writes the pending tab state and sessions and answers when both are written. The window runs it before it closes or
+// reloads: the reads of the sessions and the writes are host calls of the window, which end with it.
+func (s *Shell) flushTabs(answer func()) {
 	if s.tabs == nil {
+		answer()
 		return
 	}
-	s.tabs.sessions.Flush(func() {})
-	if s.tabs.states != nil {
-		s.tabs.states.Flush(func() {})
-	}
+	s.tabs.sessions.Flush(func() {
+		if s.tabs.states == nil {
+			answer()
+			return
+		}
+		s.tabs.states.Flush(answer)
+	})
 }
 
-// Closed ends these parts of a window that closed: it writes what is pending, and no timer of them runs after it.
+// Closed ends these parts of a window that closed: no timer of them runs after it. It writes nothing: the window flushed them
+// before its close, and a host call of a window that is gone fails.
 func (s *Shell) Closed() {
 	s.surfaces.closed = true
-	s.flushTabs()
 	if s.tabs != nil {
 		s.tabs.closed = true
 	}
