@@ -520,6 +520,13 @@ func (r *Registry) watch(name string, changed Changed) error {
 	return r.send(name, current, read())
 }
 
+// Watched tells whether a receiver watches the status name.
+func (r *Registry) Watched(name string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.watches[name] != nil
+}
+
 // send gives the receiver of a watch the value when it differs from the last value.
 func (r *Registry) send(name string, watched *watch, value any) error {
 	text, err := json.Marshal(value)

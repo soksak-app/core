@@ -15,17 +15,26 @@ import (
 // what the window drew, changes nothing, and the rows have the names of the page workbench. Everything that a row reads is a value
 // of VerifyInput, so adding a row requires no edit of the shell.
 
-// VerifyRow is a row of the verification.
+// VerifyRow is a row of the verification. A row that is Skipped had nothing to measure: the status lists it apart from the rows.
 type VerifyRow struct {
-	Name string `json:"name"`
-	Note string `json:"note"`
-	OK   bool   `json:"ok"`
+	Name    string `json:"name"`
+	Note    string `json:"note"`
+	OK      bool   `json:"ok"`
+	Skipped bool   `json:"-"`
 }
 
 // VerifyStatus is the value of the status core.verify.
 type VerifyStatus struct {
 	Failed int         `json:"failed"`
 	Rows   []VerifyRow `json:"rows"`
+	// Skipped holds the checks that had nothing to measure in this state, which are no pass.
+	Skipped []VerifySkipped `json:"skipped"`
+}
+
+// VerifySkipped is a check that had nothing to measure, and why.
+type VerifySkipped struct {
+	Name string `json:"name"`
+	Note string `json:"note"`
 }
 
 // VerifySurface is a surface of a layout record: where the workbench declared it, where the host applied it, and its state.
@@ -44,13 +53,11 @@ type VerifyRecord struct {
 	Settled  bool
 }
 
-// DrawnSurface is the slot of a surface that the plane drew. Predicted is false for a surface whose place is measured after the
-// drawing, which a prediction never holds. Card is the card that holds it.
+// DrawnSurface is the slot of a surface that the plane drew. Card is the card that holds it.
 type DrawnSurface struct {
-	Frame     layout.Rect
-	Dim       bool
-	Predicted bool
-	Card      string
+	Frame layout.Rect
+	Dim   bool
+	Card  string
 }
 
 // DropBand is how far the header and the footer of a drop zone reach into a card.
@@ -73,15 +80,14 @@ type VerifyInput struct {
 	// Outline is the rail outline and RailGroups the rectangles of each of its groups.
 	Outline    layout.Outline
 	RailGroups [][]layout.Rect
-	// Latest, Ahead and Seated are the last commit, the prediction published before drawing, and the commit that the host answered.
-	Latest, Ahead, Seated *VerifyRecord
+	// Latest and Seated are the last commit and the commit that the host answered.
+	Latest, Seated *VerifyRecord
 	// Pending tells that the latest commit waits for the native placement answer of the host.
 	Pending bool
 	// Drawn holds the slots of the plane by surface, Cards the drawn box of each card, and Transformed the number of cards that a
 	// transform moves.
-	Drawn       map[string]DrawnSurface
-	Cards       map[string]layout.Rect
-	Transformed int
+	Drawn map[string]DrawnSurface
+	Cards map[string]layout.Rect
 	// Plane is the box of the plane, Pad its margin and Rules the drawn lines.
 	Plane layout.Rect
 	Pad   float64
@@ -108,11 +114,11 @@ func beyond(a, b layout.Rect) float64 {
 	return max(0, b.X-a.X, b.Y-a.Y, a.X+a.W-(b.X+b.W), a.Y+a.H-(b.Y+b.H))
 }
 
-// fitted is r fitted inward to the device pixels of scale, as both hosts fit a declared surface.
-func fitted(r layout.Rect, scale float64) layout.Rect {
-	step := 1 / scale
-	left, top := math.Ceil(r.X*scale)/scale, math.Ceil(r.Y*scale)/scale
-	return layout.Rect{X: left, Y: top, W: max(math.Floor((r.X+r.W)*scale)/scale-left, step), H: max(math.Floor((r.Y+r.H)*scale)/scale-top, step)}
+// WholePoints returns the whole points inside r, where a window stands the view of a surface whose slot is r: a web page paints whole
+// points only, and a whole point lies on a device pixel at each scale.
+func WholePoints(r layout.Rect) layout.Rect {
+	left, top := math.Ceil(r.X), math.Ceil(r.Y)
+	return layout.Rect{X: left, Y: top, W: max(math.Floor(r.X+r.W)-left, 0), H: max(math.Floor(r.Y+r.H)-top, 0)}
 }
 
 // expectedRailLoops adds up the connected clusters of each rail group: two rectangles are connected when both their gaps are at
@@ -192,7 +198,7 @@ func named(ids []string) string {
 
 // compare compares surfaces with the slots of the plane. It counts the surfaces that are only in the record and the surfaces that
 // are only in the plane together: a record that overlaps nothing passes because nothing overlaps, not because it is correct.
-func compare(in VerifyInput, surfaces []VerifySurface, onlyPredicted bool) surfaceComparison {
+func compare(in VerifyInput, surfaces []VerifySurface) surfaceComparison {
 	var out surfaceComparison
 	told := make(map[string]bool, len(surfaces))
 	for _, surface := range surfaces {
@@ -217,8 +223,8 @@ func compare(in VerifyInput, surfaces []VerifySurface, onlyPredicted bool) surfa
 			out.dim++
 		}
 	}
-	for id, slot := range in.Drawn {
-		if !told[id] && (!onlyPredicted || slot.Predicted) {
+	for id := range in.Drawn {
+		if !told[id] {
 			out.missed = append(out.missed, id)
 		}
 	}
@@ -235,6 +241,10 @@ func Verify(in VerifyInput) ([]VerifyRow, error) {
 	add := func(name string, ok bool, note string) {
 		rows = append(rows, VerifyRow{Name: name, Note: note, OK: ok})
 	}
+	// skip states a check that has nothing to measure in this state: it is no pass.
+	skip := func(name, note string) {
+		rows = append(rows, VerifyRow{Name: name, Note: note, Skipped: true})
+	}
 	cards := grid.Cards()
 	box := grid.Rects()
 	rects := make([]layout.Rect, 0, len(cards))
@@ -250,12 +260,16 @@ func Verify(in VerifyInput) ([]VerifyRow, error) {
 	if in.CardRadius == 0 {
 		wantSharp = in.Outline.Corners
 	}
-	add("V0 레일 외곽선", in.Outline.Sharp == wantSharp && len(in.Outline.Loops) == expected,
-		fmt.Sprintf("%d/%d개 루프 · %d개 연결 묶음 · %d개 사각형", len(in.Outline.Loops), expected, len(in.RailGroups), railRects))
+	if len(in.RailGroups) == 0 && len(in.Outline.Loops) == 0 {
+		skip("V0 레일 외곽선", "레일이 없다")
+	} else {
+		add("V0 레일 외곽선", in.Outline.Sharp == wantSharp && len(in.Outline.Loops) == expected,
+			fmt.Sprintf("%d/%d개 루프 · %d개 연결 묶음 · %d개 사각형", len(in.Outline.Loops), expected, len(in.RailGroups), railRects))
+	}
 
 	// V1: cards that read the same line have exactly the same boundary. The far side of a card is x + w, so two cards that end on one
 	// line can differ in the last bit of that addition, and the check allows only as much as tells that from a misaligned layout.
-	drift := 0.0
+	drift, shared := 0.0, 0
 	const ulp = 1e-9
 	for _, axis := range []layout.Axis{"x", "y"} {
 		for line := 1; line < len(grid.Lines(axis))-1; line++ {
@@ -276,11 +290,16 @@ func Verify(in VerifyInput) ([]VerifyRow, error) {
 			for _, values := range [][]float64{ends, starts} {
 				if len(values) > 1 {
 					drift = max(drift, slices.Max(values)-slices.Min(values))
+					shared++
 				}
 			}
 		}
 	}
-	add("V1 공유 경계 편차 == 0", drift <= ulp, fmt.Sprintf("최대 %.1epx · 허용 %.0epx", drift, ulp))
+	if shared == 0 {
+		skip("V1 공유 경계 편차 == 0", "경계를 함께 쓰는 카드가 없다")
+	} else {
+		add("V1 공유 경계 편차 == 0", drift <= ulp, fmt.Sprintf("최대 %.1epx · 허용 %.0epx · 경계 %d개", drift, ulp, shared))
+	}
 
 	// V2: the sum of the slot boxes. A card that lost its place in a plane too small is what the library does, so only a card with a
 	// negative side violates the rule; such cards cancel each other in the sum, so they are counted.
@@ -315,18 +334,19 @@ func Verify(in VerifyInput) ([]VerifyRow, error) {
 		}
 	}
 	gap := grid.Gap()
-	gapOK := math.IsInf(worst, 1) || squeezed && worst <= gap+0.5 || !squeezed && math.Abs(worst-gap) < 0.5
+	gapOK := squeezed && worst <= gap+0.5 || !squeezed && math.Abs(worst-gap) < 0.5
 	note = fmt.Sprintf("겹침 %d쌍", overlap)
 	if overlap == 0 {
 		note = fmt.Sprintf("최소 %.1fpx", worst)
-		if math.IsInf(worst, 1) {
-			note = fmt.Sprintf("최소 %vpx", gap)
-		}
 		if squeezed {
 			note += " · 판이 좁아 통로가 줄었다"
 		}
 	}
-	add(fmt.Sprintf("V3 겹침 0 · 통로 %vpx", gap), overlap == 0 && gapOK, note)
+	if overlap == 0 && math.IsInf(worst, 1) {
+		skip(fmt.Sprintf("V3 겹침 0 · 통로 %vpx", gap), "카드가 하나뿐이다")
+	} else {
+		add(fmt.Sprintf("V3 겹침 0 · 통로 %vpx", gap), overlap == 0 && gapOK, note)
+	}
 
 	// V4: capturing the state and restoring it gives the same state. A space switch goes through this path, so if they differ the
 	// layout changes just by moving between spaces. It rebuilds a copy, so the live plane does not change.
@@ -361,16 +381,22 @@ func Verify(in VerifyInput) ([]VerifyRow, error) {
 			}
 		}
 	}
-	add("V6 마지막 하나 빼고 전부 닫힌다", open <= 1 || closable == open, fmt.Sprintf("%d/%d", closable, open))
+	if open <= 1 {
+		skip("V6 마지막 하나 빼고 전부 닫힌다", "열린 카드가 하나뿐이다")
+	} else {
+		add("V6 마지막 하나 빼고 전부 닫힌다", closable == open, fmt.Sprintf("%d/%d", closable, open))
+	}
 
 	const pendingNote = "host placement pending"
 	switch {
 	case in.Latest == nil:
-		add("V7a element − declared == 0", true, "아직 커밋 없음")
+		skip("V7a element − declared == 0", "아직 커밋 없음")
 	case in.Pending:
-		add("V7a element − declared == 0", true, pendingNote)
+		skip("V7a element − declared == 0", pendingNote)
+	case len(in.Latest.Surfaces) == 0 && len(in.Drawn) == 0:
+		skip("V7a element − declared == 0", "커밋에도 판에도 표면이 없다")
 	default:
-		found := compare(in, in.Latest.Surfaces, false)
+		found := compare(in, in.Latest.Surfaces)
 		seated := "none"
 		if in.Seated != nil {
 			seated = strconv.Itoa(in.Seated.Seq)
@@ -380,27 +406,17 @@ func Verify(in VerifyInput) ([]VerifyRow, error) {
 				found.worst, len(found.missed), named(found.missed), len(found.gone), named(found.gone), found.dim, in.Latest.Seq, seated, in.Pending, found.at))
 	}
 
-	switch {
-	case in.Ahead == nil:
-		add("V7c 미리 게시한 자리 == 그려진 자리", true, "이번 렌더는 미리 게시하지 않았다")
-	case in.Pending:
-		add("V7c 미리 게시한 자리 == 그려진 자리", true, pendingNote)
-	default:
-		found := compare(in, in.Ahead.Surfaces, true)
-		add("V7c 미리 게시한 자리 == 그려진 자리", len(found.gone) == 0 && len(found.missed) == 0 && found.worst == 0 && found.dim == 0,
-			fmt.Sprintf("최대 %.2fpx · 없음 %d%s · 누락 %d%s · 흐림이 다른 표면 %d (seq %d)%s",
-				found.worst, len(found.gone), named(found.gone), len(found.missed), named(found.missed), found.dim, in.Ahead.Seq, found.at))
-	}
+	skip("V7c 미리 게시한 자리 == 그려진 자리", "이 창은 자리를 미리 게시하지 않는다")
 
-	// V7b: the host fits the declared rectangle inward to the device pixels, so the applied rectangle is compared with the declared
-	// one fitted the same way.
+	// V7b: the window stands a surface on the whole points inside its declared rectangle, so the applied rectangle is compared with
+	// exactly those.
 	land, escaped, landed, landedAt := 0.0, 0.0, 0, ""
 	if in.Seated != nil {
 		for _, surface := range in.Seated.Surfaces {
 			if !surface.Visible || surface.Declared.W < 1 || surface.Declared.H < 1 {
 				continue
 			}
-			delta := maxDelta(fitted(surface.Declared, in.Scale), surface.Applied)
+			delta := maxDelta(WholePoints(surface.Declared), surface.Applied)
 			if delta > land {
 				landedAt = fmt.Sprintf(" · %s declared %s applied %s", surface.ID, frameText(surface.Declared), frameText(surface.Applied))
 			}
@@ -409,25 +425,27 @@ func Verify(in VerifyInput) ([]VerifyRow, error) {
 			landed++
 		}
 	}
-	note = "아직 답 없음"
-	if landed > 0 {
+	if landed == 0 {
+		skip("V7b applied == declared", "아직 답 없음")
+	} else {
 		state := "갱신 중"
 		if in.Seated.Settled {
 			state = "정지"
 		}
-		note = fmt.Sprintf("밖으로 %.2fpx · 차이 %.2fpx · %s (seq %d)%s", escaped, land, state, in.Seated.Seq, landedAt)
+		add("V7b applied == declared", escaped == 0 && land == 0,
+			fmt.Sprintf("밖으로 %.2fpx · 차이 %.2fpx · %s (seq %d)%s", escaped, land, state, in.Seated.Seq, landedAt))
 	}
-	add("V7b applied == declared", landed == 0 || escaped == 0 && land == 0, note)
 
-	add("V8 뷰가 transform 을 안 쓴다", in.Transformed == 0, fmt.Sprintf("%d개 카드에 transform", in.Transformed))
+	skip("V8 뷰가 transform 을 안 쓴다", "이 창의 카드에는 transform 이 없다")
 
 	// V9: a stroke of the outline that passes inside a card is covered there by the native surface of the card.
-	onCard := 0
+	onCard, samples := 0, 0
 	for _, loop := range in.Outline.Loops {
 		for i, a := range loop {
 			b := loop[(i+1)%len(loop)]
 			steps := max(1, int(math.Ceil(math.Hypot(b.X-a.X, b.Y-a.Y)/6)))
 			for step := 0; step <= steps; step++ {
+				samples++
 				part := float64(step) / float64(steps)
 				x, y := a.X+(b.X-a.X)*part, a.Y+(b.Y-a.Y)*part
 				for _, r := range in.Cards {
@@ -439,25 +457,33 @@ func Verify(in VerifyInput) ([]VerifyRow, error) {
 			}
 		}
 	}
-	add("V9 레일 획이 카드 안을 안 지난다", onCard == 0, fmt.Sprintf("표본 %d점 침범", onCard))
+	if samples == 0 {
+		skip("V9 레일 획이 카드 안을 안 지난다", "레일 획이 없다")
+	} else {
+		add("V9 레일 획이 카드 안을 안 지난다", onCard == 0, fmt.Sprintf("표본 %d점 중 %d점 침범", samples, onCard))
+	}
 
 	// V10: a native surface is not clipped by the card, so a surface larger than the card is drawn outside it.
-	escape := 0.0
+	escape, standing := 0.0, 0
 	if in.Latest != nil {
 		for _, surface := range in.Latest.Surfaces {
 			card, ok := in.Cards[in.Drawn[surface.ID].Card]
 			if !surface.Visible || !ok {
 				continue
 			}
+			standing++
 			a := surface.Applied
 			escape = max(escape, card.X-a.X, a.X+a.W-(card.X+card.W), card.Y-a.Y, a.Y+a.H-(card.Y+card.H))
 		}
 	}
-	note = pendingNote
-	if !in.Pending {
-		note = fmt.Sprintf("최대 %.2fpx", escape)
+	switch {
+	case in.Pending:
+		skip("V10 표면이 카드를 안 뚫는다", pendingNote)
+	case standing == 0:
+		skip("V10 표면이 카드를 안 뚫는다", "카드 안에 보이는 표면이 없다")
+	default:
+		add("V10 표면이 카드를 안 뚫는다", escape <= 0, fmt.Sprintf("최대 %.2fpx · 표면 %d개", escape, standing))
 	}
-	add("V10 표면이 카드를 안 뚫는다", in.Pending || escape <= 0, note)
 
 	// R: a line continues from the edge of the plane to the border outside it and no further. It is measured only when the plane has
 	// the size that the cards were drawn at: until then the lines are of the earlier size.
@@ -466,22 +492,25 @@ func Verify(in VerifyInput) ([]VerifyRow, error) {
 		paintedWidth, paintedHeight = max(paintedWidth, r.X+r.W), max(paintedHeight, r.Y+r.H)
 	}
 	laid := math.Abs(in.Plane.W-paintedWidth) < 0.5 && math.Abs(in.Plane.H-paintedHeight) < 0.5
-	past := 0.0
+	past, lines := 0.0, 0
 	for _, rule := range in.Rules {
 		// A line that is not drawn has size 0 and coordinate 0, which would count as going out by the whole plane.
 		if rule.W == 0 && rule.H == 0 {
 			continue
 		}
+		lines++
 		past = max(past, in.Plane.X-rule.X, rule.X+rule.W-(in.Plane.X+in.Plane.W), in.Plane.Y-rule.Y, rule.Y+rule.H-(in.Plane.Y+in.Plane.H))
 	}
-	note = "판이 아직 새 크기로 그려지지 않았다"
 	switch {
 	case in.Pending:
-		note = pendingNote
-	case laid:
-		note = fmt.Sprintf("최대 %.2fpx · 여백 %.2fpx", past, in.Pad)
+		skip("R 선은 판 밖으로 여백까지만 나간다", pendingNote)
+	case !laid:
+		skip("R 선은 판 밖으로 여백까지만 나간다", "판이 아직 새 크기로 그려지지 않았다")
+	case lines == 0:
+		skip("R 선은 판 밖으로 여백까지만 나간다", "그려진 선이 없다")
+	default:
+		add("R 선은 판 밖으로 여백까지만 나간다", past <= in.Pad+0.01, fmt.Sprintf("최대 %.2fpx · 여백 %.2fpx", past, in.Pad))
 	}
-	add("R 선은 판 밖으로 여백까지만 나간다", in.Pending || !laid || past <= in.Pad+0.01, note)
 
 	// D: the header and the footer of a drop zone end where the drawn head and foot end. A card too low to hold both rows shrinks
 	// them, so its drawn rows are not a target to measure.
@@ -493,11 +522,12 @@ func Verify(in VerifyInput) ([]VerifyRow, error) {
 		bandOff = max(bandOff, math.Abs(card.Head.Y+card.Head.H-card.Box.Y-in.Band.HeaderPx), math.Abs(card.Box.Y+card.Box.H-card.Foot.Y-in.Band.FooterPx))
 		banded++
 	}
-	note = "머리와 발을 온전히 담은 카드가 없다"
-	if banded > 0 {
-		note = fmt.Sprintf("최대 %.2fpx · 카드 %d장 · 머리 %.1fpx · 발 %.1fpx", bandOff, banded, in.Band.HeaderPx, in.Band.FooterPx)
+	if banded == 0 {
+		skip("D 드롭 구획이 그려진 머리·발에서 끝난다", "머리와 발을 온전히 담은 카드가 없다")
+	} else {
+		add("D 드롭 구획이 그려진 머리·발에서 끝난다", bandOff < 0.01,
+			fmt.Sprintf("최대 %.2fpx · 카드 %d장 · 머리 %.1fpx · 발 %.1fpx", bandOff, banded, in.Band.HeaderPx, in.Band.FooterPx))
 	}
-	add("D 드롭 구획이 그려진 머리·발에서 끝난다", bandOff < 0.01, note)
 
 	empty := 0
 	for _, card := range cards {
@@ -513,11 +543,17 @@ func Verify(in VerifyInput) ([]VerifyRow, error) {
 			places++
 		}
 	}
-	add("P 자리는 카드다", windowSidebarsPlaced(grid), fmt.Sprintf("%d개 창 사이드바 · 가장자리 연속 열 · 저장 폭 상한 · 전체 높이", places))
+	if places == 0 {
+		skip("P 자리는 카드다", "창 사이드바가 없다")
+	} else {
+		add("P 자리는 카드다", windowSidebarsPlaced(grid), fmt.Sprintf("%d개 창 사이드바 · 가장자리 연속 열 · 저장 폭 상한 · 전체 높이", places))
+	}
 
 	// W: the buttons stand at the vertical center of the first row. In full screen the window moves them out of the row, so there is
 	// nothing to compare, and AppKit aligns them to device pixels, so an odd remainder differs by one pixel.
-	if in.Controls != nil && in.Controls.Y+in.Controls.H <= in.Bar.Y+in.Bar.H {
+	if in.Controls == nil || in.Controls.Y+in.Controls.H > in.Bar.Y+in.Bar.H {
+		skip("W 창 단추는 첫 행 가운데", "창 단추가 첫 행에 없다")
+	} else {
 		above, below := in.Controls.Y-in.Bar.Y, in.Bar.Y+in.Bar.H-(in.Controls.Y+in.Controls.H)
 		pixel := 1 / in.Scale
 		add("W 창 단추는 첫 행 가운데", math.Abs(above-below) <= pixel,
@@ -580,12 +616,11 @@ func DrawnChrome(tree []ui.ElementNode) []CardChrome {
 
 // Verification holds the value of the status core.verify.
 type Verification struct {
-	changed func()
-	status  *VerifyStatus
+	status *VerifyStatus
 }
 
-// NewVerification makes the verification of a window. changed runs on each update.
-func NewVerification(changed func()) *Verification { return &Verification{changed: changed} }
+// NewVerification makes the verification of a window.
+func NewVerification() *Verification { return &Verification{} }
 
 // Update replaces the status with the rows of the current state. rows runs the verification of the drawn plane and runs only when
 // drawn is true: without a drawn plane nothing is verified, so no stale row stays. failure is the error of the last layout that
@@ -605,14 +640,19 @@ func (v *Verification) Update(drawn bool, rows func() ([]VerifyRow, error), fail
 	if failure != nil {
 		out = append(out, VerifyRow{Name: "Surface presentation", Note: *failure})
 	}
-	failed := 0
+	status := &VerifyStatus{Rows: []VerifyRow{}, Skipped: []VerifySkipped{}}
 	for _, row := range out {
-		if !row.OK {
-			failed++
+		switch {
+		case row.Skipped:
+			status.Skipped = append(status.Skipped, VerifySkipped{Name: row.Name, Note: row.Note})
+		case !row.OK:
+			status.Failed++
+			status.Rows = append(status.Rows, row)
+		default:
+			status.Rows = append(status.Rows, row)
 		}
 	}
-	v.status = &VerifyStatus{Failed: failed, Rows: out}
-	v.changed()
+	v.status = status
 	return unverified
 }
 

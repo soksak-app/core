@@ -170,9 +170,10 @@ function check() {
   });
   setVerify(rows);
   if (!drawn) return;
-  const failed = rows.filter((r) => !r.ok);
+  const measured = rows.filter((r) => !r.skipped);
+  const failed = measured.filter((r) => !r.ok);
   const line = failed.length === 0
-    ? `verify: ${rows.length} pass`
+    ? `verify: ${measured.length} pass`
     : `verify: ${failed.length} fail — ` +
       failed.map((r) => `${r.name} (${r.note})`).join(" · ");
   if (line === lastSaid) return;

@@ -35,7 +35,12 @@ type debugHost struct {
 type fixtureElements struct{ f *shellFixture }
 
 func (e fixtureElements) ElementTree() ([]ui.ElementNode, error) {
-	return e.f.tester.ElementTree(), nil
+	e.f.treeReads++
+	tree := e.f.tester.ElementTree()
+	if e.f.treeEdit != nil {
+		e.f.treeEdit(tree)
+	}
+	return tree, nil
 }
 
 func (e fixtureElements) ActElement(id uint64, action ui.Actions, text string) error {

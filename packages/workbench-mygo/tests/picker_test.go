@@ -300,9 +300,6 @@ func TestScreenStatusNamesTheOpenModal(t *testing.T) {
 	if got := read(); got != `{"screen":"workspace","modal":"settings"}` {
 		t.Fatalf("the status is %s", got)
 	}
-	if value, err := f.shell.Registry().Read("core.modal"); err != nil || value != nil {
-		t.Fatalf("the status core.modal is %v, %v", value, err)
-	}
 }
 
 func TestARightClickOfATabOpensItsKeepItem(t *testing.T) {

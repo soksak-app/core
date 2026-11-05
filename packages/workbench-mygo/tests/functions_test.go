@@ -41,14 +41,13 @@ func TestFunctionsAnswerTheRegistry(t *testing.T) {
 		Focus:         focus,
 		Pointer:       pointer,
 		Contributions: workbench.NewContributions(),
-		Verification:  workbench.NewVerification(func() {}),
 	}.Register(registry)
 
 	commands, statuses := registry.Names()
 	if want := []string{"core.focus.set", "core.text.larger", "core.text.reset", "core.text.smaller"}; !slices.Equal(commands, want) {
 		t.Fatalf("the commands are %v, want %v", commands, want)
 	}
-	if want := []string{"core.contributions", "core.focus", "core.pointer", "core.text", "core.verify"}; !slices.Equal(statuses, want) {
+	if want := []string{"core.contributions", "core.focus", "core.pointer", "core.text"}; !slices.Equal(statuses, want) {
 		t.Fatalf("the statuses are %v, want %v", statuses, want)
 	}
 
@@ -64,9 +63,6 @@ func TestFunctionsAnswerTheRegistry(t *testing.T) {
 
 	if got, want := statusText(t, registry, "core.contributions"), "[]"; got != want {
 		t.Fatalf("core.contributions is %s, want %s", got, want)
-	}
-	if got, want := statusText(t, registry, "core.verify"), "null"; got != want {
-		t.Fatalf("core.verify is %s, want %s", got, want)
 	}
 
 	if _, err := registry.Run("core.focus.set", json.RawMessage(`{"name":"core.card","index":1}`)); err != nil {

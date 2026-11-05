@@ -314,6 +314,39 @@ func TestTheMemorySaverReadsTheTabsOfThePlaneAndAShowRestoresAnUnloadedTab(t *te
 	equal(t, unloaded, []string{"tab-aaaaaa"})
 }
 
+// core.surfaces states that the memory saver unloaded a surface.
+func TestTheSurfaceStatusStatesAnUnloadedSurface(t *testing.T) {
+	f := newTabShell(t, &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"), tab("tab-bbbbbb", "notes"))}})
+	f.open(t)
+	if _, err := f.shell.Registry().Run("core.tab.select", json.RawMessage(`{"tab":"tab-bbbbbb"}`)); err != nil {
+		t.Fatal(err)
+	}
+	f.settle()
+	f.timers.tick(120 * minute)
+	f.settle()
+	equal(t, memoryTabs(t, f)["tab-aaaaaa"]["state"], "unloaded")
+	value, err := f.shell.Registry().Read("core.surfaces")
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var surfaces []struct {
+		Surface string `json:"surface"`
+		State   string `json:"state"`
+	}
+	if err := json.Unmarshal(encoded, &surfaces); err != nil {
+		t.Fatal(err)
+	}
+	states := map[string]string{}
+	for _, surface := range surfaces {
+		states[surface.Surface] = surface.State
+	}
+	equal(t, states, map[string]string{"tab-aaaaaa": "unloaded", "tab-bbbbbb": "loaded"})
+}
+
 func TestCoreTabKeepStoresTheMarkInTheTabStateStore(t *testing.T) {
 	f := newTabShell(t, &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"), tab("tab-bbbbbb", "notes"))}})
 	f.open(t)

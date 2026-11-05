@@ -395,6 +395,10 @@ type shellFixture struct {
 	reloads int
 	// frames counts the frames that the shell asked for.
 	frames int
+	// treeReads counts the reads of the element tree.
+	treeReads int
+	// treeEdit changes the element tree that the shell reads, as a window that drew elsewhere.
+	treeEdit func(tree []ui.ElementNode)
 }
 
 // installedDocument is the document of the installed plugins of the host.

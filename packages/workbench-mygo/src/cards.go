@@ -94,6 +94,18 @@ func (s *Shell) drawWorkError(c *ui.Context, width float32) float32 {
 	return height
 }
 
+// cardRows sizes the head and the foot of a card of the given inner height, as the grid of the page does: each row takes its height
+// while the card has room for both, and a card too low shrinks them together, sharing the height equally up to the height of a row.
+func cardRows(inner, head, foot float32) (float32, float32) {
+	if inner >= head+foot {
+		return head, foot
+	}
+	inner = max(0, inner)
+	shrunkHead := min(head, inner/2)
+	shrunkFoot := min(foot, inner-shrunkHead)
+	return min(head, inner-shrunkFoot), shrunkFoot
+}
+
 // drawCard draws a card at its rectangle of the plane. originX and originY are the origin of the plane in the window.
 func (s *Shell) drawCard(c *ui.Context, id string, data *layout.CardData, rect layout.Rect, inset, originX, originY float32) {
 	sides, err := s.cardSides(id, data, rect)
@@ -114,12 +126,13 @@ func (s *Shell) drawCard(c *ui.Context, id string, data *layout.CardData, rect l
 		Background(s.palette.Card).Border(s.palette.BorderWidth, border).Radius(s.palette.Radius).Clip().Column().Children(func() {
 		// The border takes its width from every edge of the card, so the rows stand in what lies inside it.
 		edge := s.palette.BorderWidth
-		inner := float32(rect.W) - 2*edge
-		s.drawHead(c, id, data, sides, inner)
-		body := float32(rect.H) - 2*edge - s.metrics.headH
-		width := inner - sides.extent("left") - sides.extent("right")
-		slot := body - s.metrics.footH - sides.extent("top") - sides.extent("bottom")
-		x, y := float32(rect.X)+originX+edge, float32(rect.Y)+originY+edge+s.metrics.headH
+		inner := max(0, float32(rect.W)-2*edge)
+		head, foot := cardRows(float32(rect.H)-2*edge, s.metrics.headH, s.metrics.footH)
+		s.drawHead(c, id, data, sides, inner, head)
+		body := max(0, float32(rect.H)-2*edge-head)
+		width := max(0, inner-sides.extent("left")-sides.extent("right"))
+		slot := max(0, body-foot-sides.extent("top")-sides.extent("bottom"))
+		x, y := float32(rect.X)+originX+edge, float32(rect.Y)+originY+edge+head
 		// Left and right run from below the header to the edge of the card, and the content column lies between them.
 		ui.Row(c).Size(inner, body).Children(func() {
 			s.drawCardSide(c, id, sides, "left", x, y, sides.extent("left"), body)
@@ -132,7 +145,7 @@ func (s *Shell) drawCard(c *ui.Context, id string, data *layout.CardData, rect l
 					}
 				})
 				s.drawCardSide(c, id, sides, "bottom", x+sides.extent("left"), y+sides.extent("top")+slot, width, sides.extent("bottom"))
-				s.drawStatus(c, id, data, sides.fold)
+				s.drawStatus(c, id, data, sides.fold, foot)
 			})
 			s.drawCardSide(c, id, sides, "right", x+sides.extent("left")+width, y, sides.extent("right"), body)
 		})
@@ -147,7 +160,7 @@ const cardToolTotal = 5
 
 // drawHead draws the head of a card: its tab list button, its tabs and its tools in one group, folded as the width of the head allows
 // (.chrome of packages/workbench/app.css).
-func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides cardSides, width float32) {
+func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides cardSides, width, height float32) {
 	m := s.metrics
 	tabs := data.TabList()
 	active := data.ActiveTab()
@@ -179,7 +192,7 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides 
 		tools = group
 	}
 	strip := width - 2*m.cardHeadPad - m.cardButton - 2*m.cardHeadGap - tools
-	ui.Row(s.binder.Name(c, "core.card.header", id)).Size(width, m.headH).PaddingX(m.cardHeadPad).AlignItems(ui.Center).Gap(m.cardHeadGap).Clip().
+	ui.Row(s.binder.Name(c, "core.card.header", id)).Size(width, height).PaddingX(m.cardHeadPad).AlignItems(ui.Center).Gap(m.cardHeadGap).Clip().
 		Role(ui.RoleGroup).Label("core.card.header").BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.cardLine()).Children(func() {
 		// What the head does not show stands out of the flow, where the gap of the head does not reach it. The tree holds what stands
 		// out of the flow after what stands in it, which keeps the order of each name, as each card holds these once.
@@ -204,7 +217,7 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides 
 			ui.Row(c).Grow(1).Children(func() { s.drawAbsentTabs(c, tabs) })
 		} else {
 			state := s.stripState(id, active, activeLeft, activeWidth, left-float64(m.cardTabsGap), float64(strip), fit.Fit)
-			ui.ScrollHorizontal(c.Key("strip-"+id)).Size(strip, m.headH).Scrollbars(false).TrackScroll(state).Children(func() {
+			ui.ScrollHorizontal(c.Key("strip-"+id)).Size(strip, height).Scrollbars(false).TrackScroll(state).Children(func() {
 				// The tabs that the head does not show stand in the flow, which keeps their order, so a head of one tab has no gap.
 				gap := m.cardTabsGap
 				if fit.Fit != "strip" {
@@ -566,9 +579,9 @@ func faded(color ui.Color, share float32) ui.Color {
 	return color
 }
 
-// drawStatus draws the status line of a card, with the text of the sides folded for lack of space when there is one.
-func (s *Shell) drawStatus(c *ui.Context, id string, data *layout.CardData, fold string) {
-	ui.Row(s.binder.Name(c, "core.card.status", id)).FillWidth().Height(s.metrics.footH).PaddingX(s.metrics.tabsPad).AlignItems(ui.Center).BorderWidth(s.palette.BorderWidth, 0, 0, 0).BorderColor(s.cardLine()).
+// drawStatus draws the status line of a card at height, with the text of the sides folded for lack of space when there is one.
+func (s *Shell) drawStatus(c *ui.Context, id string, data *layout.CardData, fold string, height float32) {
+	ui.Row(s.binder.Name(c, "core.card.status", id)).FillWidth().Height(height).Clip().PaddingX(s.metrics.tabsPad).AlignItems(ui.Center).BorderWidth(s.palette.BorderWidth, 0, 0, 0).BorderColor(s.cardLine()).
 		Role(ui.RoleStatus).Label("core.card.status").Children(func() {
 		text := s.cardStatusText(data)
 		if fold != "" {

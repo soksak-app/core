@@ -532,6 +532,44 @@ func TestAViewFillsTheCardBetweenItsHeadAndItsFoot(t *testing.T) {
 	}
 }
 
+// The view of a surface stands on whole points inside its slot, also when the lines of the plane lie between points: the framework
+// rounds a fractional edge to the nearest device pixel, which can leave the slot.
+func TestAViewStandsInsideItsSlotOnWholePoints(t *testing.T) {
+	f, stored := surfaceShell(t)
+	stored.elements = true
+	f.run("core.card.focus", map[string]string{"card": f.tabbedCards()[0]})
+	var views []ui.ElementNode
+	var walk func(nodes []ui.ElementNode)
+	walk = func(nodes []ui.ElementNode) {
+		for _, node := range nodes {
+			if _, ok := node.Key.(workbench.SurfaceSlot); ok {
+				views = append(views, node)
+			}
+			walk(node.Children)
+		}
+	}
+	walk(f.tester.ElementTree())
+	fractional := false
+	for _, slot := range views {
+		fractional = fractional || slot.Bounds.Y != float32(math.Floor(float64(slot.Bounds.Y)))
+		if len(slot.Children) != 1 {
+			t.Fatalf("the slot %+v holds %d elements", slot.Bounds, len(slot.Children))
+		}
+		view := slot.Children[0].Bounds
+		for _, edge := range []float32{view.X, view.Y, view.W, view.H} {
+			if float64(edge) != math.Round(float64(edge)) {
+				t.Fatalf("the view %+v of the slot %+v stands between points", view, slot.Bounds)
+			}
+		}
+		if view.X < slot.Bounds.X || view.Y < slot.Bounds.Y || view.X+view.W > slot.Bounds.X+slot.Bounds.W || view.Y+view.H > slot.Bounds.Y+slot.Bounds.H {
+			t.Fatalf("the view %+v leaves the slot %+v", view, slot.Bounds)
+		}
+	}
+	if len(views) == 0 || !fractional {
+		t.Fatalf("no slot stands between points, so the test shows nothing: %+v", views)
+	}
+}
+
 // A web page paints whole points only, so a native view of a fractional height would show the window below its last row.
 func TestAViewStandsOnWholePoints(t *testing.T) {
 	f, stored := surfaceShell(t)

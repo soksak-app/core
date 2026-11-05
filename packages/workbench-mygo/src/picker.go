@@ -540,6 +540,26 @@ func (s *Shell) modalName() *string {
 	return &name
 }
 
+// modalStatus is the value of the status core.modal. Document is always null: this host creates no modal web view.
+type modalStatus struct {
+	ID       string `json:"id"`
+	Mode     string `json:"mode"`
+	Document any    `json:"document"`
+}
+
+// modalStatus returns the value of core.modal: the open modal, or nil.
+func (s *Shell) modalStatus() any {
+	name := s.modalName()
+	if name == nil {
+		return nil
+	}
+	mode := "dialog"
+	if *name == "picker" {
+		mode = "menu"
+	}
+	return &modalStatus{ID: *name, Mode: mode}
+}
+
 type menuParam struct {
 	Card string `json:"card"`
 	Menu string `json:"menu"`
@@ -599,7 +619,7 @@ func (s *Shell) registerPicker() {
 	act(s, "core.picker.close", func(struct{}) error { s.closePicker(); return nil })
 	act(s, "core.modal.dismiss", func(struct{}) error { s.closePicker(); return nil })
 	s.registry.Status("core.picker", func() any { return s.pickerStatus() })
-	s.registry.Status("core.modal", func() any { return nil })
+	s.registry.Status("core.modal", s.modalStatus)
 	s.registry.Status("core.screen", func() any {
 		screen := "workspace"
 		if s.browsing || s.opened() == nil {

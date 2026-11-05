@@ -47,18 +47,21 @@ export function verify(controls = null) {
   // The current plane. One verification targets one point in time, so the plane is read once at the start.
   const grid = currentGrid();
   const rows = [];
-  const add = (n, ok, note) => rows.push([n, note, ok]);
+  const add = (n, ok, note) => rows.push({ name: n, note, ok });
+  // A check that has nothing to measure in this state is no pass. It is stated as skipped.
+  const skip = (n, note) => rows.push({ name: n, note, skipped: true });
   const cards = [...grid.cards];
   const box = grid.rects();                 // Measures once and looks up by id
   const rects = cards.map((c) => box.get(c.id));
   const { shape, rects: railRects, groups } = railOutline();
   const expectedLoops = expectedRailLoops(groups, grid.gap);
   const square = cardRadius() === 0;
-  add("V0 레일 외곽선", shape.sharp === (square ? shape.corners : 0) && shape.loops.length === expectedLoops,
+  if (groups.length === 0 && shape.loops.length === 0) skip("V0 레일 외곽선", "레일이 없다");
+  else add("V0 레일 외곽선", shape.sharp === (square ? shape.corners : 0) && shape.loops.length === expectedLoops,
       `${shape.loops.length}/${expectedLoops}개 루프 · ${groups.length}개 연결 묶음 · ${railRects.length}개 사각형`);
 
   // V1 — cards that read the same line have exactly the same boundary (no tolerance)
-  let drift = 0;
+  let drift = 0, shared = 0;
   for (const axis of ["x", "y"]) {
     const [lo, hi] = axis === "x" ? ["c0", "c1"] : ["r0", "r1"];
     for (let k = 1; k < grid.lines(axis).length - 1; k++) {
@@ -68,7 +71,12 @@ export function verify(controls = null) {
       const starts = cards.filter((c) => c[lo] === k).map((c) => {
         const r = box.get(c.id); return axis === "x" ? r.x : r.y;
       });
-      for (const arr of [ends, starts]) if (arr.length > 1) drift = Math.max(drift, Math.max(...arr) - Math.min(...arr));
+      for (const arr of [ends, starts]) {
+        if (arr.length > 1) {
+          drift = Math.max(drift, Math.max(...arr) - Math.min(...arr));
+          shared++;
+        }
+      }
     }
   }
   // The far side of a card is the value restored as `x + w`, and w is the difference of two lines. Two cards that end
@@ -76,8 +84,9 @@ export function verify(controls = null) {
   // boundaries; it is the digits of a double, so the check allows only as much as distinguishes it from a misaligned
   // layout — a layout that is actually misaligned differs by pixels.
   const ULP = 1e-9;
-  add("V1 공유 경계 편차 == 0", drift <= ULP,
-      `최대 ${drift.toExponential(1)}px · 허용 ${ULP.toExponential(0)}px`);
+  if (shared === 0) skip("V1 공유 경계 편차 == 0", "경계를 함께 쓰는 카드가 없다");
+  else add("V1 공유 경계 편차 == 0", drift <= ULP,
+      `최대 ${drift.toExponential(1)}px · 허용 ${ULP.toExponential(0)}px · 경계 ${shared}개`);
 
   // The sum of the slot boxes. `(w+gap)(h+gap)` assumes that every line occupies one gap, and
   // cards with a negative width cancelled each other and passed.
@@ -104,11 +113,10 @@ export function verify(controls = null) {
   // themselves shrink to fit the plane (R5). Requiring gap in that state would check a promise that the library
   // does not make, so the check only looks that the gap is not wider than gap.
   const squeezed = rects.some((r) => r.w <= 0 || r.h <= 0);
-  add(`V3 겹침 0 · 통로 ${grid.gap}px`,
-      overlap === 0 && (!isFinite(worst)
-        || (squeezed ? worst <= grid.gap + 0.5 : Math.abs(worst - grid.gap) < 0.5)),
-      overlap ? `겹침 ${overlap}쌍`
-        : `최소 ${isFinite(worst) ? worst.toFixed(1) : grid.gap}px${squeezed ? " · 판이 좁아 통로가 줄었다" : ""}`);
+  if (overlap === 0 && !isFinite(worst)) skip(`V3 겹침 0 · 통로 ${grid.gap}px`, "카드가 하나뿐이다");
+  else add(`V3 겹침 0 · 통로 ${grid.gap}px`,
+      overlap === 0 && (squeezed ? worst <= grid.gap + 0.5 : Math.abs(worst - grid.gap) < 0.5),
+      overlap ? `겹침 ${overlap}쌍` : `최소 ${worst.toFixed(1)}px${squeezed ? " · 판이 좁아 통로가 줄었다" : ""}`);
 
   // V4 — capturing the current state and restoring it must give the same state. A space switch goes through
   // this path — capture stores with toJSON and adopt restores with replace. If they differ here,
@@ -131,7 +139,8 @@ export function verify(controls = null) {
   add("V5 배치가 slicing", grid.isSlicing(), "한 영역을 통째로 자른 결과만 가능");
 
   const open = cards.filter((c) => !c.fixed);
-  add("V6 마지막 하나 빼고 전부 닫힌다", open.length <= 1 || open.every((c) => grid.canClose(c.id)),
+  if (open.length <= 1) skip("V6 마지막 하나 빼고 전부 닫힌다", "열린 카드가 하나뿐이다");
+  else add("V6 마지막 하나 빼고 전부 닫힌다", open.every((c) => grid.canClose(c.id)),
       `${open.filter((c) => grid.canClose(c.id)).length}/${open.length}`);
 
   // V7a — does the last commit hold the surfaces that are drawn now, exactly, at the places where they are drawn.
@@ -196,8 +205,9 @@ export function verify(controls = null) {
 
   const record = latest();
   const pendingPlacement = placementPending();
-  if (!record) add("V7a element − declared == 0", true, "아직 커밋 없음");
-  else if (pendingPlacement) add("V7a element − declared == 0", true, "host placement pending");
+  if (!record) skip("V7a element − declared == 0", "아직 커밋 없음");
+  else if (pendingPlacement) skip("V7a element − declared == 0", "host placement pending");
+  else if (record.surfaces.length === 0 && onPlane.size === 0) skip("V7a element − declared == 0", "커밋에도 판에도 표면이 없다");
   else {
     const { worst, at, dim, gone, missed, goneIds, missedIds } = compare(record.surfaces);
     add("V7a element − declared == 0", gone === 0 && missed === 0 && worst < 0.5 && dim === 0,
@@ -211,8 +221,8 @@ export function verify(controls = null) {
   // rectangle, so there is no place for an error to remain. The check runs only when the prediction holds exactly the card surfaces; a
   // section surface is measured by the commit that follows, which V7a checks.
   const guess = ahead();
-  if (!guess) add("V7c 미리 게시한 자리 == 그려진 자리", true, "이번 렌더는 미리 게시하지 않았다");
-  else if (pendingPlacement) add("V7c 미리 게시한 자리 == 그려진 자리", true, "host placement pending");
+  if (!guess) skip("V7c 미리 게시한 자리 == 그려진 자리", "이번 렌더는 미리 게시하지 않았다");
+  else if (pendingPlacement) skip("V7c 미리 게시한 자리 == 그려진 자리", "host placement pending");
   else {
     const { worst, at, dim, gone, missed, goneIds, missedIds } = compare(guess.surfaces, true);
     add("V7c 미리 게시한 자리 == 그려진 자리",
@@ -240,12 +250,10 @@ export function verify(controls = null) {
     escaped = Math.max(escaped, beyond(s.applied, s.declared));
     landed++;
   }
-  add("V7b applied == declared",
-      landed === 0 || (escaped === 0 && land === 0),
-      landed
-        ? `밖으로 ${escaped.toFixed(2)}px · 차이 ${land.toFixed(2)}px · ` +
-          `${placed.settled ? "정지" : "갱신 중"} (seq ${placed.seq})${landedAt}`
-        : "아직 답 없음");
+  if (landed === 0) skip("V7b applied == declared", "아직 답 없음");
+  else add("V7b applied == declared", escaped === 0 && land === 0,
+      `밖으로 ${escaped.toFixed(2)}px · 차이 ${land.toFixed(2)}px · ` +
+        `${placed.settled ? "정지" : "갱신 중"} (seq ${placed.seq})${landedAt}`);
 
   const transformed = [...plane.querySelectorAll(".card")]
     .filter((el) => el.style.transform && el.style.transform !== "none").length;
@@ -257,20 +265,22 @@ export function verify(controls = null) {
     const r = el.getBoundingClientRect();
     return { x: r.left - origin.left, y: r.top - origin.top, w: r.width, h: r.height };
   });
-  let onCard = 0;
+  let onCard = 0, samples = 0;
   for (const loop of shape.loops) for (let i = 0; i < loop.length; i++) {
     const a = loop[i], b = loop[(i + 1) % loop.length];
     const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 6));
     for (let t = 0; t <= steps; t++) {
+      samples++;
       const x = a.x + (b.x - a.x) * (t / steps), y = a.y + (b.y - a.y) * (t / steps);
       if (renderedCards.some((r) => x > r.x + 2 && x < r.x + r.w - 2 && y > r.y + 2 && y < r.y + r.h - 2)) onCard++;
     }
   }
-  add("V9 레일 획이 카드 안을 안 지난다", onCard === 0, `표본 ${onCard}점 침범`);
+  if (samples === 0) skip("V9 레일 획이 카드 안을 안 지난다", "레일 획이 없다");
+  else add("V9 레일 획이 카드 안을 안 지난다", onCard === 0, `표본 ${samples}점 중 ${onCard}점 침범`);
 
   // V10 — a native surface is not clipped by DOM overflow. If the declared rect is larger than the clip area,
   // the surface is drawn outside the card.
-  let escape = 0;
+  let escape = 0, standing = 0;
   // default: when there is no commit yet, there is no surface to measure.
   for (const s of latest()?.surfaces ?? []) {
     if (!s.visible) continue;
@@ -279,13 +289,15 @@ export function verify(controls = null) {
       .querySelector(`[data-native-surface-id="${s.id}"][data-native-surface]`)
       ?.closest("[data-card-id]");
     if (!el) continue;
+    standing++;
     const c = el.getBoundingClientRect();
     const box = { x: c.left - host.left, y: c.top - host.top, w: c.width, h: c.height };
     escape = Math.max(escape, box.x - s.applied.x, (s.applied.x + s.applied.w) - (box.x + box.w),
                               box.y - s.applied.y, (s.applied.y + s.applied.h) - (box.y + box.h));
   }
-  add("V10 표면이 카드를 안 뚫는다", pendingPlacement || escape <= 0,
-      pendingPlacement ? "host placement pending" : `최대 ${Math.max(0, escape).toFixed(2)}px`);
+  if (pendingPlacement) skip("V10 표면이 카드를 안 뚫는다", "host placement pending");
+  else if (standing === 0) skip("V10 표면이 카드를 안 뚫는다", "카드 안에 보이는 표면이 없다");
+  else add("V10 표면이 카드를 안 뚫는다", escape <= 0, `최대 ${Math.max(0, escape).toFixed(2)}px · 표면 ${standing}개`);
 
   // R — the line continues from the edge of the plane to the border outside it. That distance is the inner
   // margin of the stage, and the bleed of the view is that value. If it goes further, the line is drawn outside the plane, on the border.
@@ -309,17 +321,19 @@ export function verify(controls = null) {
   }
   const laid = Math.abs(host.width - paintedWidth) < 0.5
     && Math.abs(host.height - paintedHeight) < 0.5;
-  let past = 0;
+  let past = 0, lines = 0;
   for (const rule of plane.querySelectorAll(".sp-rule")) {
     const r = rule.getBoundingClientRect();
     // A line that is not drawn has size 0 and coordinate 0. Comparing it with the plane would count it as going out by the whole plane.
     if (r.width === 0 && r.height === 0) continue;
+    lines++;
     past = Math.max(past, host.left - r.left, r.right - host.right,
                           host.top - r.top, r.bottom - host.bottom);
   }
-  add("R 선은 판 밖으로 여백까지만 나간다", pendingPlacement || !laid || past <= pad + 0.01,
-      pendingPlacement ? "host placement pending" : laid ? `최대 ${past.toFixed(2)}px · 여백 ${pad.toFixed(2)}px`
-           : "판이 아직 새 크기로 그려지지 않았다");
+  if (pendingPlacement) skip("R 선은 판 밖으로 여백까지만 나간다", "host placement pending");
+  else if (!laid) skip("R 선은 판 밖으로 여백까지만 나간다", "판이 아직 새 크기로 그려지지 않았다");
+  else if (lines === 0) skip("R 선은 판 밖으로 여백까지만 나간다", "그려진 선이 없다");
+  else add("R 선은 판 밖으로 여백까지만 나간다", past <= pad + 0.01, `최대 ${past.toFixed(2)}px · 여백 ${pad.toFixed(2)}px`);
 
   // D — the header and the footer of a drop zone must end where the drawn header and footer end.
   // The plane passes the zones based on the rect of the card, and that rect includes the border, but the header and
@@ -345,11 +359,10 @@ export function verify(controls = null) {
       Math.abs((box.bottom - bottom.top) - band.footerPx));
     banded++;
   }
-  add("D 드롭 구획이 그려진 머리·발에서 끝난다", bandOff < 0.01,
-      banded
-        ? `최대 ${bandOff.toFixed(2)}px · 카드 ${banded}장 · ` +
-          `머리 ${band.headerPx.toFixed(1)}px · 발 ${band.footerPx.toFixed(1)}px`
-        : "머리와 발을 온전히 담은 카드가 없다");
+  if (banded === 0) skip("D 드롭 구획이 그려진 머리·발에서 끝난다", "머리와 발을 온전히 담은 카드가 없다");
+  else add("D 드롭 구획이 그려진 머리·발에서 끝난다", bandOff < 0.01,
+      `최대 ${bandOff.toFixed(2)}px · 카드 ${banded}장 · ` +
+        `머리 ${band.headerPx.toFixed(1)}px · 발 ${band.footerPx.toFixed(1)}px`);
 
   // T5 — an empty card is not a reachable state.
   const empty = cards.filter((c) => !isPlace(c.id) && tabsOf(c).length === 0);
@@ -358,14 +371,16 @@ export function verify(controls = null) {
   // Checks that every window sidebar is placed by its own rule. It measures the drawn width, not the declared value.
   // The declared value is a request, and the target of verification is the result.
   const places = grid.cards.filter(card => isPlace(card.id));
-  add("P 자리는 카드다", windowSidebarsPlaced(grid), `${places.length}개 창 사이드바 · 가장자리 연속 열 · 저장 폭 상한 · 전체 높이`);
+  if (places.length === 0) skip("P 자리는 카드다", "창 사이드바가 없다");
+  else add("P 자리는 카드다", windowSidebarsPlaced(grid), `${places.length}개 창 사이드바 · 가장자리 연속 열 · 저장 폭 상한 · 전체 높이`);
 
   // W — the buttons that the window draws are located at the vertical center of the first row. The OS draws the buttons and
   // the page cannot read that area, so the check compares the area that the host returned with the first row.
   // In full screen the window moves the buttons out of the first row. Then there is nothing to compare.
   // AppKit aligns the buttons to device pixels, so when the remaining height is an odd number of pixels, the top and the bottom differ by one pixel.
   const bar = document.querySelector(".chrome-bar").getBoundingClientRect();
-  if (controls && controls.y + controls.h <= bar.bottom) {
+  if (!controls || controls.y + controls.h > bar.bottom) skip("W 창 단추는 첫 행 가운데", "창 단추가 첫 행에 없다");
+  else {
     const above = controls.y - bar.top;
     const below = bar.bottom - (controls.y + controls.h);
     const pixel = 1 / devicePixelRatio;
@@ -374,5 +389,5 @@ export function verify(controls = null) {
         `위 ${above.toFixed(1)} 아래 ${below.toFixed(1)} · device pixel ${pixel.toFixed(2)}px`);
   }
 
-  return rows.map(([name, note, ok]) => ({ name, note, ok }));
+  return rows;
 }

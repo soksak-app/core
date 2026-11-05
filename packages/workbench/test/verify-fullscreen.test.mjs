@@ -19,7 +19,7 @@ test("containment checks visible surfaces while hidden surfaces retain their nat
   t.mock.module('../settings.js',{exports:{cardRadius:()=>4}});
   const { verify } = await import('../verify.js');
   try {
-    assert.equal(verify().find(row=>row.name.startsWith('V10 ')).ok,true,'an invisible retained frame is reported as drawn outside its hidden card');
+    assert.equal(verify().find(row=>row.name.startsWith('V10 ')).skipped,true,'an invisible retained frame is reported as drawn outside its hidden card');
     surface.visible=true;
     assert.equal(verify().find(row=>row.name.startsWith('V10 ')).ok,false,'a visible escaping frame must fail');
   } finally {dom.window.close();}

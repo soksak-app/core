@@ -1461,7 +1461,7 @@
       },
       {
         "name": "core.verify",
-        "description": "The latest layout verification rows and the number of failed rows, or null before the first verification.",
+        "description": "The latest layout verification: the rows that measured something, the number of failed rows and the checks skipped because they had nothing to measure in this state, or null before the first verification.",
         "schema": {
           "type": [
             "object",
@@ -1484,6 +1484,20 @@
                   },
                   "ok": {
                     "type": "boolean"
+                  }
+                }
+              }
+            },
+            "skipped": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "note": {
+                    "type": "string"
                   }
                 }
               }

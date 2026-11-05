@@ -138,6 +138,8 @@ An image region with DOM input lets pointer events reach its anchor while native
 
 Composition validation fails closed. Manifest validation rejects undeclared, missing, duplicate, and input-conflicting regions and overlays. The page controller requires the exact declared element set before attachment. The host keeps the last complete valid composition or hides the affected native regions; it never applies a partial request, reparents a region outside `SurfaceHost`, infers a missing declaration, substitutes a compatibility path, reduces coordinate precision, or paints over an unexplained gap.
 
+A check of the verification status that has nothing to measure in the current state is not a pass: `core.verify` lists it with its reason under `skipped`, and it is neither a row nor a failure. A host that cannot have what a check measures always lists that check as skipped.
+
 A failed preparation or presentation rejects its requesting operation and appears in verification status and the error display. It does not permanently reject the work queue: a subsequent user layout operation can submit a new preparation. Rejected preparation promises are not reused, and no automatic retry reports the failed operation as successful.
 
 ## Acceptance

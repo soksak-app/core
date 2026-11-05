@@ -28,7 +28,6 @@ type Functions struct {
 	Focus         *Focus
 	Pointer       *PointerSequence
 	Contributions *Contributions
-	Verification  *Verification
 }
 
 // Register registers the statuses and the commands of the functions.
@@ -37,5 +36,4 @@ func (f Functions) Register(registry *Registry) {
 	f.Focus.Register(registry)
 	registry.Status("core.pointer", func() any { return f.Pointer.Status() })
 	registry.Status("core.contributions", func() any { return f.Contributions.Status() })
-	registry.Status("core.verify", func() any { return f.Verification.Status() })
 }

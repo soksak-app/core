@@ -342,8 +342,8 @@ type Shell struct {
 	keyboard     keyboardState
 	pointer      *PointerSequence
 	verification *Verification
-	// verifying tells that the step of the verification waits to run.
-	verifying bool
+	// verifying tells that the step that gives a watcher the verification waits to run, and building that a frame builds.
+	verifying, building bool
 	// diagnostics holds the policy and the trace switch that the host received last.
 	diagnostics struct{ policy, trace string }
 	// started is set once the host took the first state of the shell, changed once plugins changed before that, and reloading while the
@@ -379,7 +379,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 		grid: environment.Workspace.Grid, focus: environment.Workspace.Focus, browsing: true, library: newLibraryState(), strips: map[string]*stripPlace{}, icons: map[string]*ui.SVG{}, heads: map[string]layout.HeadFit{}}
 	s.text = NewTextSize(shellText{s}, steps)
 	s.exposedFocus = NewFocus(options.Declared, func() { s.options.Invalidate() })
-	s.verification = NewVerification(s.pushStatuses)
+	s.verification = NewVerification()
 	s.events = NewEvents(EventsOptions{Calls: s.calls, Post: options.Post, Report: options.Report, Now: time.Now,
 		After: func(delay time.Duration, task func()) { time.AfterFunc(delay, task) }})
 	s.calls.Observe(s.events.Call)
@@ -645,6 +645,8 @@ func baseName(root string) string { return path.Base(root) }
 
 // View draws the workbench of the window.
 func (s *Shell) View(c *ui.Context) {
+	s.building = true
+	defer func() { s.building = false }()
 	s.exposedFocus.Frame(c)
 	s.pointer.Frame()
 	s.sidebars.Begin()
