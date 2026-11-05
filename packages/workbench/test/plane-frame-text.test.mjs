@@ -82,6 +82,15 @@ test("a frame factor change prepares the row of the next draw and writes the fac
     assert.equal(records.at(-1).titlebar, 54, "the preparation record carries the row of the next draw");
     held.draw();
     assert.equal(drawnFactor(), "1.5", "the prepared draw writes the factor");
+    // A section is in no card: a view of a drawn section reads the frame factor, as the mygo workbench answers it.
+    const { showSectionSurface, hideSectionSurface } = await import("../section-surfaces.js");
+    const { surfaceTextSize } = await import("../text-size.js");
+    const section = "spc-aaaaaa/left/files.tree";
+    assert.equal(surfaceTextSize(section), null, "a section that no sidebar draws has no scale");
+    showSectionSurface(section);
+    assert.equal(surfaceTextSize(section), 1.5, "a drawn section reads the frame factor");
+    hideSectionSurface(section);
+    assert.equal(surfaceTextSize(section), null, "a section that the sidebar left keeps the last scale of its view");
     compositor.publish();
     assert.equal(records.at(-1).drawn, true);
     assert.equal(records.at(-1).titlebar, 54, "the record after the draw carries the drawn row");
