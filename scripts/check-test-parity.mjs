@@ -897,6 +897,30 @@ const FEATURE_LINKS = [
     levels: ["native"],
   },
   {
+    id: "F537",
+    implementation: [
+      { file: "packages/host/rust/src/exposure.rs", symbol: "Some(Value::String(text)) if text.is_empty() => None," },
+      { file: "packages/host/rust/src/images.rs", symbol: "fn attach_on_main(" },
+      { file: "packages/host/go/src/documents.go", symbol: "mainThreadStep(func() { err = s.attachImageOnMain(key, req) })" },
+      { file: "packages/host/rust/src/documents.rs", symbol: "attach_on_main(&host, &data, &key, platform, restore)" },
+      { file: "packages/host/go/src/documents.go", symbol: "mainThreadStep(func() { err = s.attachDocumentOnMain(key, restore) })" },
+      { file: "packages/workbench/bar-tabs.js", symbol: "keepChildren(spaceBar, spaceTabs);" },
+      { file: "packages/workbench/projects.js", symbol: "if (JSON.stringify([projects, [...openProjects]]) !== shown) changed();" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/exposure_test.rs", id: "a_key_with_empty_text_types_its_key_name" },
+      { file: "packages/host/go/tests/endpoint_test.go", id: "TestEndpointKeyWithEmptyTextHasNoText" },
+      { file: "packages/host/rust/src/images_test.rs", id: "a_surface_close_during_an_attach_finds_no_name_of_the_attach" },
+      { file: "packages/host/go/src/image_detach_test.go", id: "TestAReloadDuringAnAttachLeavesNoRegionWithoutAName" },
+      { file: "packages/host/rust/src/documents_test.rs", id: "a_surface_close_during_an_attach_finds_no_name_of_the_attach" },
+      { file: "packages/host/go/src/documents_test.go", id: "TestAReloadDuringADocumentAttachLeavesNoRegionWithoutAName" },
+      { file: "packages/workbench/test/bar-tabs.test.mjs", id: "a draw between a press and its release keeps the pressed project and space tabs" },
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "a registry read after the write of this window draws nothing, and a read that finds a change draws once" },
+    ],
+    expected: "Each path of a person on the Tauri host holds: a key with an empty text types, an attach of an image or a document runs in one step of the main thread, a draw keeps a pressed tab, and a read that finds nothing new draws nothing.",
+    levels: ["unit"],
+  },
+  {
     id: "F533",
     implementation: [
       { file: "packages/workbench/memory-saver.js", symbol: 'if (trigger === "delay") entry.unloadAt = now() + delayMs();' },

@@ -244,7 +244,7 @@ language host library의 darwin platform layer는 Surface layout group의 operat
 
 Native document callback은 자신의 document를 닫거나 교체하더라도 호출이 반환될 때까지 closure를 유지한다. Close는 저장된 receiver를 즉시 해제하지만 실행 중인 closure는 해제하지 않는다.
 
-두 host는 문서 영역을 main thread의 한 task에서 만든다. Native document 없이 실패할 수 있는 단계는 그 생성 전에 실행된다. 생성 후 host는 영역의 history를 restore하고, appearance와 background를 설정하고, message, stream, event receiver를 설정하고, attach의 stream effect를 적용한다. 이 단계 중 하나가 실패하면 host는 오류가 반환되기 전에 native document를 닫고 이후 단계를 실행하지 않는다. 그래서 document web view도 그 web content process도 영역 없이 남지 않고, 영역은 reserved name도 request log도 남기지 않는다. View surface는 view 구성 단계나 page load가 실패할 때 같은 방식으로 view를 닫는다. 실패한 close는 생성의 실패와 함께 보고된다.
+두 host에서 문서 attach는 영역 확인, 이름 예약, 문서 생성과 등록을 main thread의 한 task에서 실행한다. 표면 닫기와 page reload도 main thread에서 실행되므로, 어느 것도 문서 없는 이름을 만나거나 이름 없는 문서를 남기지 않는다. Native document 없이 실패할 수 있는 단계는 그 생성 전에 실행된다. 생성 후 host는 영역의 history를 restore하고, appearance와 background를 설정하고, message, stream, event receiver를 설정하고, attach의 stream effect를 적용한다. 이 단계 중 하나가 실패하면 host는 오류가 반환되기 전에 native document를 닫고 이후 단계를 실행하지 않는다. 그래서 document web view도 그 web content process도 영역 없이 남지 않고, 영역은 reserved name도 request log도 남기지 않는다. View surface는 view 구성 단계나 page load가 실패할 때 같은 방식으로 view를 닫는다. 실패한 close는 생성의 실패와 함께 보고된다.
 
 Page는 retained-view 준비부터 host placement와 page 쪽 release까지 각 placement를 직렬화한다. 이전 placement가 아직 mount를 release할 수 있는 동안 다음 placement는 mount를 준비하지 않는다. 거부된 placement는 caller에게 오류를 보고하고 다음 placement의 실행을 막지 않는다.
 

@@ -275,10 +275,23 @@ func (s *Surfaces) attachDocument(viewID uint64, req DocumentRequest) error {
 	if err != nil {
 		return err
 	}
+	return s.attachCheckedDocument(key, req)
+}
+
+// attachCheckedDocument takes the name, creates the region and registers it in one step of the main thread, where a close of
+// the surface and a reload of its page also run, so neither finds a name of the attach or a region without a name
+// (docs/spec/native-surfaces.md#region-lifetime).
+func (s *Surfaces) attachCheckedDocument(key DocumentKey, req DocumentRequest) error {
 	restore, err := req.RestoreState()
 	if err != nil {
 		return err
 	}
+	mainThreadStep(func() { err = s.attachDocumentOnMain(key, restore) })
+	return err
+}
+
+// attachDocumentOnMain is the attach of a checked request. It runs on the UI thread.
+func (s *Surfaces) attachDocumentOnMain(key DocumentKey, restore string) error {
 	if _, err := s.requireRegion(key.Surface, key.Name, "document", ""); err != nil {
 		return err
 	}
@@ -288,62 +301,65 @@ func (s *Surfaces) attachDocument(viewID uint64, req DocumentRequest) error {
 	// The request log exists before native can send an entry of the region.
 	effects, err := s.streams.Attach(key)
 	if err != nil {
-		s.documents.Remove(key)
+		s.takeBackDocumentName(key)
 		return err
 	}
-	var handle unsafe.Pointer
-	mainThreadStep(func() {
-		view := s.views[key.Surface]
-		if view == nil || view.handle == nil {
-			err = fmt.Errorf("surface %q has no view", key.Surface)
-			return
-		}
-		s.mu.Lock()
-		plugin := s.surfacePlugins[key.Surface]
-		s.mu.Unlock()
-		var folder string
-		folder, err = PluginFolder(s.host.configDir, plugin)
-		if err != nil {
-			return
-		}
-		handle, err = system.CreateDocument(view.handle, filepath.Join(s.host.configDir, documentData), folder, plugin, "", func(state string) {
-			s.documentChanged(key, state)
-		})
-		if err != nil {
-			return
-		}
-		s.mu.Lock()
-		dark := s.theme.Scheme == "dark"
-		s.mu.Unlock()
-		err = configureDocument(handle, documentSetup{
-			name:    key.Name,
-			restore: restore,
-			dark:    dark,
-			dialog:  s.dialog(),
-			message: func(value string) { s.documentMessage(key, value) },
-			stream:  func(value string) { s.documentStream(key, value) },
-			effects: effects,
-			event:   func(event string) { s.documentEvent(key, event) },
-		})
-	})
+	handle, err := s.createDocument(key, restore, effects)
 	if err != nil {
-		s.documents.Remove(key)
+		s.takeBackDocumentName(key)
 		s.streams.RemoveRegion(key)
 		return err
 	}
-	// When the surface was removed during creation, the created document is closed. Registration and closing run on the UI thread.
-	var registered bool
-	mainThreadStep(func() {
-		registered = s.documents.Set(key, handle)
-		if !registered {
-			s.streams.RemoveRegion(key)
-			system.CloseDocument(handle)
-		}
-	})
-	if !registered {
-		return fmt.Errorf("surface %q closed while its document was created", key.Surface)
+	if !s.documents.Set(key, handle) {
+		s.streams.RemoveRegion(key)
+		system.CloseDocument(handle)
+		return fmt.Errorf("document %q lost its name while it was created", key.Name)
 	}
 	return nil
+}
+
+// takeBackDocumentName takes back the name of a document region whose creation failed. Everything that removes a name runs on
+// the UI thread, as the attach does, so a failure is a defect that the record reports.
+func (s *Surfaces) takeBackDocumentName(key DocumentKey) {
+	if _, err := s.documents.Remove(key); err != nil {
+		LogError(fmt.Sprintf("document %s", key.Name), fmt.Errorf("remove the reserved name: %w", err))
+	}
+}
+
+// createDocument creates the document web view of a region and configures it. It runs on the UI thread.
+func (s *Surfaces) createDocument(key DocumentKey, restore string, effects []StreamEffect) (unsafe.Pointer, error) {
+	view := s.views[key.Surface]
+	if view == nil || view.handle == nil {
+		return nil, fmt.Errorf("surface %q has no view", key.Surface)
+	}
+	s.mu.Lock()
+	plugin := s.surfacePlugins[key.Surface]
+	dark := s.theme.Scheme == "dark"
+	s.mu.Unlock()
+	folder, err := PluginFolder(s.host.configDir, plugin)
+	if err != nil {
+		return nil, err
+	}
+	handle, err := system.CreateDocument(view.handle, filepath.Join(s.host.configDir, documentData), folder, plugin, "", func(state string) {
+		s.documentChanged(key, state)
+	})
+	if err != nil {
+		return nil, err
+	}
+	err = configureDocument(handle, documentSetup{
+		name:    key.Name,
+		restore: restore,
+		dark:    dark,
+		dialog:  s.dialog(),
+		message: func(value string) { s.documentMessage(key, value) },
+		stream:  func(value string) { s.documentStream(key, value) },
+		effects: effects,
+		event:   func(event string) { s.documentEvent(key, event) },
+	})
+	if err != nil {
+		return nil, err
+	}
+	return handle, nil
 }
 
 // documentSetup is the configuration of a created document region.
@@ -412,7 +428,7 @@ func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, director
 	}
 	generation, err := s.sourceOriginState().create(surfaceID)
 	if err != nil {
-		s.documents.Remove(key)
+		s.takeBackDocumentName(key)
 		return fmt.Errorf("view of surface %q cannot start: %w", surfaceID, err)
 	}
 	var handle unsafe.Pointer
@@ -467,7 +483,7 @@ func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, director
 		err = fmt.Errorf("view of surface %q cannot load soksak://%s/%s", surfaceID, plugin, page)
 	}
 	if err != nil {
-		s.documents.Remove(key)
+		s.takeBackDocumentName(key)
 		if s.sourceOriginState().retire(surfaceID, generation) && registeredEvent {
 			s.windowEvent("view-source-ended", map[string]any{"plugin": plugin, "surface": surfaceID, "generation": generation})
 		}

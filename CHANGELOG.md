@@ -5,6 +5,7 @@
 ## Unreleased
 
 - F537-5: A read of the registry, the plugin state or the application update that finds nothing new draws nothing.
+- F537-4: A document region attach runs in one step of the main thread on both hosts, so a page reload during the attach leaves no region without a name, and a failure of taking the name back is recorded.
 - F537-3: A draw of the project and space tab strips keeps the tabs that did not change, so a press on a tab during a draw keeps its click.
 - F537-2: An image attach runs in one step of the main thread on both hosts, so a tab closed during the attach of its image region records no error, and a page reload during the attach leaves no region open without a name.
 - F537-1: `input.key` with an empty `text` types its key on the Tauri host, as on the Wails host, so Enter runs the line of a terminal.
