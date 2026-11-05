@@ -286,6 +286,7 @@ Go language host library의 header `src/platform/darwin/main_thread.h`는 두 ma
 | H37 | 없음 | 없음 | `tests/system_test.go` | mygo 창의 workbench는 Go 코드이므로, 이 test의 자식 프로세스는 workbench처럼 host handler를 호출하는 fixture workbench로 애플리케이션을 실행한다. Wails host의 창은 그렇게 하려면 page가 필요하다 |
 | H39 | 없음 | 없음 | `tests/platform/darwin/frame.go`, `tests/surface_test.go`, `tests/view_still_test.go`, `tests/view_surface_test.go` | mygo 창의 surface는 native view 안에 있고 배치는 표시된 frame에서 실행되므로, 이 test는 display가 필요해 build constraint `e2e`를 가진다. `tests/platform/darwin/frame.go`는 전송 이미지의 IOSurface를 가지며, cgo는 test 파일에 쓸 수 없다. 다른 framework는 surface를 page로 보여 주고, 그 test는 window check다 |
 | B1 | `overlayShow`, `overlayPlace`, `overlayUpdate`, `overlayHide`, `setShape`, `clearShape` | `overlayShow`, `overlayPlace`, `overlayUpdate`, `overlayHide`, `setShape`, `clearShape` | none | native modal web view와 surface 위 shape의 call이다. mygo host의 window는 modal과 shape를 native UI로 그리므로 `packages/workbench-mygo`의 `hostCalls`에는 이 call이 없다. |
+| B2 | 없음 | 없음 | `setDialogBackground` | mygo host의 window는 dialog를 직접 그리고, dialog가 열리면 host에 알린다. 다른 host는 mode `dialog`의 modal web view를 host가 열므로 이미 안다. |
 | A1 | 내용만 다름 | 내용만 다름 | 없음 | `runtime/index.js`가 각 프레임워크의 호출 방식을 사용한다. mygo 애플리케이션에는 runtime이 없다(A6 행). |
 | A2 | 없음 | `build.rs` | 없음 | Tauri는 `tauri_build::build()`를 요구한다 |
 | A3 | 없음 | `tauri.conf.json`, `capabilities/`, `icons/`, `gen/` | 없음 | Tauri 설정 |

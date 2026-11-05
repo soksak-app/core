@@ -9,7 +9,7 @@
 // platform method called. Proposition 7 (framework port) checks that the Go and Rust framework ports have the same methods outside the
 // rows P of the language table. The comparison of the actual menu bar belongs to the window check layer, and propositions 4 and 5 are the next
 // extension.
-import { FRAMEWORK_TABLE, LANGUAGE_TABLE, allowedDifferenceTables } from './check-hosts.mjs';
+import { FRAMEWORK_TABLE, LANGUAGE_TABLE, MYGO_TABLE, allowedDifferenceTables } from './check-hosts.mjs';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -71,6 +71,17 @@ export function absentOnMygo(hostsMarkdown) {
     for (const match of row[FRAMEWORK_TABLE.left].matchAll(/`(\w+)`/g)) absent.add(snake(match[1]));
   }
   return absent;
+}
+
+/** The host.call names that a row B of the framework table lists in the column of mygo, as only a mygo window has them. */
+export function onlyOnMygo(hostsMarkdown) {
+  const rows = allowedDifferenceTables(hostsMarkdown).get(MYGO_TABLE.title);
+  const only = new Set();
+  for (const [id, row] of rows) {
+    if (!/^B\d+$/.test(id) || row[FRAMEWORK_TABLE.left] !== 'none') continue;
+    for (const match of row[MYGO_TABLE.right].matchAll(/`(\w+)`/g)) only.add(snake(match[1]));
+  }
+  return only;
 }
 
 /** The set of method names that the Rust endpoint declares (per build flavor). */
@@ -547,7 +558,8 @@ export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, wailsv3Runtim
   }
   const mygo = goHostCalls(mygoCallsSource);
   const absent = absentOnMygo(hostsSpec);
-  for (const name of [...mygo.keys()].filter((item) => !wailsv3.calls.has(item)).sort()) {
+  const only = onlyOnMygo(hostsSpec);
+  for (const name of [...mygo.keys()].filter((item) => !wailsv3.calls.has(item) && !only.has(item)).sort()) {
     failures.push(`mygo host.call(${name}) does not exist on wailsv3`);
   }
   for (const name of [...wailsv3.calls].filter((item) => !mygo.has(item) && !absent.has(item)).sort()) {

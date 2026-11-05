@@ -107,10 +107,11 @@ const hostsFixture = `## Allowed differences
 
 ### Framework table
 
-| ID | Wails | Tauri | Reason |
-| --- | --- | --- | --- |
-| H9 | \`tests/framework_log_test.go\` | none | file difference |
-| B1 | \`overlayShow\` | \`overlayShow\` | calls that a mygo window does not have |
+| ID | Wails | Tauri | mygo | Reason |
+| --- | --- | --- | --- | --- |
+| H9 | \`tests/framework_log_test.go\` | none | none | file difference |
+| B1 | \`overlayShow\` | \`overlayShow\` | none | calls that a mygo window does not have |
+| B2 | none | none | \`mygoOwn\` | a call that only a mygo window has |
 
 ## Process lifecycle`;
 
@@ -147,6 +148,14 @@ test("a name of hostCalls without a handler fails", () => {
   const changed = sources();
   changed.mygoCallsSource = changed.mygoCallsSource.replace('"windowNew": run(h.WindowNew),', '"windowNew": run(h.WindowNew),\n\t\t"overlayShow": run(h.OverlayShow),\n\t\t"absent": run(h.Absent),');
   assert.deepEqual(auditHostParity(changed), ["mygo host.call(absent) does not exist on wailsv3", "mygo host.call(absent) has no Host method", "mygo host.call(overlay_show) is listed as absent on mygo"]);
+});
+
+test("a call that only hostCalls names passes when a row B lists it in the column of mygo", () => {
+  const changed = sources();
+  changed.mygoCallsSource = changed.mygoCallsSource.replace('"windowNew": run(h.WindowNew),', '"windowNew": run(h.WindowNew),\n\t\t"mygoOwn": run(h.WindowNew),');
+  assert.deepEqual(auditHostParity(changed), []);
+  changed.hostsSpec = changed.hostsSpec.replace('\`mygoOwn\`', 'none');
+  assert.deepEqual(auditHostParity(changed), ["mygo host.call(mygo_own) does not exist on wailsv3"]);
 });
 
 test("a call of wailsv3 that hostCalls does not name fails unless a row B lists it", () => {
