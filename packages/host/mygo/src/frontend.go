@@ -77,6 +77,7 @@ func (f *Frontend) placeNativeView() {
 // before the framework takes the keyboard from the views that left: native/darwin notes what held the keyboard when a surface hides,
 // and gives it back when the surface shows.
 func (f *Frontend) placeSurfaces(system platform.Platform, views []mygo.NativePlacement) {
+	f.frames.SetNativeViews(int64(len(views)))
 	placed := make(map[uintptr]mygo.RectF, len(views))
 	for _, view := range views {
 		placed[view.View] = view.Box

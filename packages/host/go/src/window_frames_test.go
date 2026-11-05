@@ -64,3 +64,15 @@ func TestFrameRecordsReachTheClassFrame(t *testing.T) {
 		t.Fatalf("the commits: %v", commits)
 	}
 }
+
+func TestTheFramesHoldTheNativeViewElementsOfTheLastPlacement(t *testing.T) {
+	frames := NewWindowFrames("main")
+	if frames.NativeViews() != 0 {
+		t.Fatalf("a window that placed nothing holds %d native view elements", frames.NativeViews())
+	}
+	frames.SetNativeViews(2)
+	frames.SetNativeViews(1)
+	if frames.NativeViews() != 1 {
+		t.Fatalf("the frames hold %d native view elements, want the 1 of the last placement", frames.NativeViews())
+	}
+}
