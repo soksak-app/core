@@ -43,3 +43,12 @@ func TestAButtonOfARowWithoutANameStandsInTheControlColumn(t *testing.T) {
 		t.Fatalf("the create button is at x %v, want 611", create.X)
 	}
 }
+
+// The card ends with its content, with the padding of the pane and the border below the last row, as a card with max-height does.
+func TestTheCardEndsWithItsContent(t *testing.T) {
+	f := settingsSection(t, "sidebars")
+	card, create := f.box("core.settings-modal.card", ""), f.box("core.settings-modal.create", "sets:create")
+	if end, want := card.Y+card.H, create.Y+create.H+20; !designNear(end, want) {
+		t.Fatalf("the card ends at %v and its last row at %v, want the card to end at %v", end, create.Y+create.H, want)
+	}
+}

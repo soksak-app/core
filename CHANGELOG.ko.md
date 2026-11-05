@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F502-13: mygo settings card는 content와 함께 끝나고, 가장 큰 높이를 넘으면 pane이 scroll된다. max-height를 가진 page card와 같다. Red: `TestTheCardEndsWithItsContent`가 이전 drawing에서 실패했다.
 - F502-13: 이름 없는 mygo settings row는 page grid의 빈 name column을 유지하므로 그 button은 control column에 선다. Red: `TestAButtonOfARowWithoutANameStandsInTheControlColumn`가 이전 drawing에서 실패했다.
 - F502-13: mygo settings card의 grip은 page header의 padding과 border를 포함한 head 전체이고, 닫기 button은 그 안에 있다. Red: `TestTheGripIsTheWholeHeadOfTheCard`가 이전 drawing에서 실패했다.
 - F617: 사이드카 메시지가 요청의 cids를 안고 표면 소유자에게 간다.

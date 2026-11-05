@@ -129,6 +129,8 @@ type settingsModel struct {
 
 // settingsWindow is the state of the window of a shell. Its section, scope, search, plugin and edited set outlast a close.
 type settingsWindow struct {
+	// drawnHeight is the height of the card in the last frame, and 0 before its first frame.
+	drawnHeight     float64
 	open            bool
 	section, scope  string
 	query           string
@@ -684,8 +686,15 @@ func (s *Shell) buildSidebars(b *settingsBuilder) error {
 // settingsCard is the rectangle of the card in the window.
 func (s *Shell) settingsCard() (x, y, width, height float64) {
 	x, y = s.settingsCardOrigin()
-	return x, y, s.options.Declared.ChromeNumber("set-card-w", "px"), s.settingsWindow.height * settingsCardMaxShare
+	height = s.settingsWindow.drawnHeight
+	if height == 0 {
+		height = s.settingsCardMost()
+	}
+	return x, y, s.options.Declared.ChromeNumber("set-card-w", "px"), height
 }
+
+// settingsCardMost is the largest height of the card in the window.
+func (s *Shell) settingsCardMost() float64 { return s.settingsWindow.height * settingsCardMaxShare }
 
 // settingsCardOrigin is the corner of the card in the window.
 func (s *Shell) settingsCardOrigin() (x, y float64) {

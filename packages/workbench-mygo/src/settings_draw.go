@@ -66,7 +66,7 @@ func (s *Shell) drawSettings(c *ui.Context, width, height float32) {
 	if w.moved {
 		s.clampCard()
 	}
-	x, y, cardW, cardH := s.settingsCard()
+	x, y, cardW, _ := s.settingsCard()
 	pane := s.readSettingsPane()
 	ui.Overlay(c, func() {
 		scrim := s.binder.Watched(s.exposedBox(c, "core.settings-modal.scrim", "", ""))
@@ -75,15 +75,17 @@ func (s *Shell) drawSettings(c *ui.Context, width, height float32) {
 			card := s.exposedBox(c, "core.settings-modal.card", "", "")
 			// The card takes the focus of the dialog, so a key presses no control before Tab or a press reaches one.
 			card.Focusable().FocusRing(false).LineHeight(pane.lineHeight)
-			card.Absolute().Left(float32(x)).Top(float32(y)).Size(float32(cardW), float32(cardH)).Column().Background(s.palette.Card).
+			// The card ends with its content, and past its largest height the pane scrolls, as a card with max-height does.
+			w.drawnHeight = float64(card.Bounds().H)
+			card.Absolute().Left(float32(x)).Top(float32(y)).Width(float32(cardW)).Column().Background(s.palette.Card).
 				Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.radiusMiddle()).Clip().Shadow(0, pane.shadowY, pane.shadowBlur, 0, ui.RGBA(0, 0, 0, pane.shadowAlpha)).
 				Role(ui.RoleDialog).Label(settingsName).Children(func() {
 				// The border of the card takes its width and height from the content.
 				border := 2 * s.palette.BorderWidth
 				s.drawSettingsHead(c, model, float32(cardW)-border, pane)
-				ui.Row(c).Height(float32(cardH) - border - pane.headH).FillWidth().Children(func() {
+				ui.Row(c).FillWidth().AlignItems(ui.Stretch).Children(func() {
 					s.drawSettingsNav(c, model, pane)
-					s.drawSettingsBody(c, model, float32(cardW)-border-pane.navW, pane)
+					s.drawSettingsBody(c, model, float32(cardW)-border-pane.navW, float32(s.settingsCardMost())-border-pane.headH, pane)
 				})
 			})
 		})
@@ -110,7 +112,7 @@ func (s *Shell) drawSettingsHead(c *ui.Context, model *settingsModel, width floa
 }
 
 func (s *Shell) drawSettingsNav(c *ui.Context, model *settingsModel, pane settingsPane) {
-	ui.Column(c).Width(pane.navW).FillHeight().Gap(pane.navGap).Padding(pane.navPadY, pane.navPadX).BorderWidth(0, s.palette.BorderWidth, 0, 0).BorderColor(s.palette.Edge).Children(func() {
+	ui.Column(c).Width(pane.navW).Gap(pane.navGap).Padding(pane.navPadY, pane.navPadX).BorderWidth(0, s.palette.BorderWidth, 0, 0).BorderColor(s.palette.Edge).Children(func() {
 		for _, control := range model.nav {
 			s.drawSettingsNavItem(c, control, pane)
 		}
@@ -139,13 +141,13 @@ func (s *Shell) drawSettingsNavItem(c *ui.Context, control *SettingsControl, pan
 	})
 }
 
-func (s *Shell) drawSettingsBody(c *ui.Context, model *settingsModel, width float32, pane settingsPane) {
+func (s *Shell) drawSettingsBody(c *ui.Context, model *settingsModel, width, most float32, pane settingsPane) {
 	w := &s.settingsWindow
 	key := fmt.Sprint(w.section, w.scope, w.chosen, w.editing)
 	if key != w.scrollKey {
 		w.scrollKey, w.scroll.X, w.scroll.Y = key, 0, 0
 	}
-	ui.Scroll(c).TrackScroll(&w.scroll).Width(width).FillHeight().Children(func() {
+	ui.Scroll(c).TrackScroll(&w.scroll).Width(width).MaxHeight(most).Children(func() {
 		ui.Column(c).Width(width).Padding(pane.paneTop, pane.paneX, pane.paneBottom, pane.paneX).Children(func() {
 			ui.Row(c).FillWidth().Gap(pane.scopeGap).Margin(0, 0, pane.scopeGap, 0).BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.Edge).Role(ui.RoleGroup).Label("설정 범위").Children(func() {
 				for _, control := range model.scopes {
