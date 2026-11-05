@@ -115,6 +115,8 @@ type stripPlace struct {
 	state  *ui.ScrollState
 	target stripTarget
 	drawn  bool
+	// aim is whether the next frame takes the glide to the target again.
+	aim bool
 }
 
 // stripTarget is where a strip centres its active tab.
