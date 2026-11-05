@@ -51,6 +51,12 @@
 - F546: A page no longer wakes at the rate of the engine while a log batch is in flight and a count of the gate is due.
 - F542: One event file of another schema number no longer fails `sok debug query`, `sok debug replay` and the timeline of the debug view as a whole: a query leaves the file out, answers the other files and names the file in `rejected`.
 - F540: A persistent service that stays silent for a day keeps its connection to the Rust host, and its read thread no longer holds a timed read. The host removes the read deadline after the hello, as the Go host does.
+- F537-6: A test resolves every name of the inline scripts of the pages and of the shipped modules, so a name that a page does not declare fails before the page opens.
+- F537-5: A read of the registry, the plugin state or the application update that finds nothing new draws nothing.
+- F537-4: A document region attach runs in one step of the main thread on both hosts, so a page reload during the attach leaves no region without a name, and a failure of taking the name back is recorded.
+- F537-3: A draw of the project and space tab strips keeps the tabs that did not change, so a press on a tab during a draw keeps its click.
+- F537-2: An image attach runs in one step of the main thread on both hosts, so a tab closed during the attach of its image region records no error, and a page reload during the attach leaves no region open without a name.
+- F537-1: `input.key` with an empty `text` types its key on the Tauri host, as on the Wails host, so Enter runs the line of a terminal.
 - F533: A delay unload of the memory saver that fails gets its next deadline one delay later, so a read or a commit that keeps failing no longer runs again at once with the error display each time.
 - F534: A read of the window facts no longer goes through the WebKit feature list, which allocated every feature in the WebKit heap of the application process for each web view at each read; the feature is looked up once in a process.
 - F532: The update step of the Rust diagnostics ends the application through `quit` of the framework port, so `make tauriv2-build` compiles again. `make hosts-check` runs the new `make host-debug-check`, which compiles the two hosts and the two apps in the configuration of the debug apps.

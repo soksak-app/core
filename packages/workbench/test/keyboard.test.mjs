@@ -272,7 +272,9 @@ test("the page answers each placement and each responder move to the keyboard", 
   const page = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   assert.match(page, /if \(record\.drawn\) keyboardPlaced\(/);
   // The field of a rename leaves the document in this draw, and a removal does not always report the lost focus.
-  assert.equal(page.match(/drawBars\(\);\n\s+keyboardOwed\(\);/g)?.length, 2);
+  assert.match(page, /createBarTabs\(\{[^}]*keyboardOwed/);
+  const barTabs = readFileSync(new URL("../bar-tabs.js", import.meta.url), "utf8");
+  assert.equal(barTabs.match(/redraw\(\);\n\s+keyboardOwed\(\);/g)?.length, 2);
   const exposure = readFileSync(new URL("../core-exposure.js", import.meta.url), "utf8");
   assert.match(exposure, /keyboardResponder\(event\);/);
 });

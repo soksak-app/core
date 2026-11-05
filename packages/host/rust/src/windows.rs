@@ -292,6 +292,16 @@ fn remove_window_records(registry: &Windows, label: &str) -> bool {
     windows.is_empty() && registry.quit.active()
 }
 
+/// Registers records as the records of the window of label, without the native steps of register.
+#[cfg(test)]
+pub(crate) fn register_records(registry: &Windows, label: &str, records: Arc<WindowData>) {
+    registry
+        .windows
+        .lock()
+        .unwrap()
+        .insert(label.to_string(), records);
+}
+
 /// Returns the state of the window.
 pub fn window_data(window: &Window) -> Result<Arc<WindowData>, String> {
     window_records_in(&window.state::<Windows>(), window.label())

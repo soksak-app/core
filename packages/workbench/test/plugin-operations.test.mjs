@@ -503,3 +503,21 @@ test("a plugin state read that ended after a newer read does not replace its sta
   await older;
   assert.equal(operations.status().registry, "file:///newer/index.json", "the older read replaced the state of the newer read");
 });
+
+test("a read that finds what the page holds calls no listener, and a read that finds a change calls it once", async () => {
+  let changes = 0;
+  const moved = { ...state, registry: "https://registry.test/other.json" };
+  const failed = new Error("the state cannot be read");
+  const host = fakeHost({ pluginsState: [state, state, moved, failed, failed], sidecarsOutdated: [[], [], [{ sidecar: "a/b" }], [{ sidecar: "a/b" }]] });
+  const operations = createPluginOperations({ host, loaded: () => loaded, refused: () => new Set(), changed: () => { changes += 1; } });
+  const counted = async (read) => { const before = changes; await read(); return changes - before; };
+  assert.equal(await counted(operations.refresh), 1, "the first state");
+  assert.equal(await counted(operations.refresh), 0, "the same state");
+  assert.equal(await counted(operations.refresh), 1, "another state");
+  assert.equal(await counted(operations.refresh), 1, "a failed read");
+  assert.equal(await counted(operations.refresh), 0, "the same failure");
+  assert.equal(await counted(operations.refreshOutdated), 0, "no outdated sidecar, as the page held");
+  assert.equal(await counted(operations.refreshOutdated), 0, "still none");
+  assert.equal(await counted(operations.refreshOutdated), 1, "an outdated sidecar");
+  assert.equal(await counted(operations.refreshOutdated), 0, "the same outdated sidecar");
+});

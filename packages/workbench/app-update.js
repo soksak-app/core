@@ -44,6 +44,16 @@ export function createAppUpdate({ host, plugins = () => null, changed }) {
   let operation = null;
   // The number of the last started read. A read over the network can end after a read that started later, whose state stands.
   let lastRead = 0;
+  // What the listeners last heard. The window reads again on each activation, and a read that finds what the page holds
+  // calls no listener: each of them draws the bars and the exposure again.
+  let reported = null;
+
+  function report() {
+    const now = JSON.stringify(status());
+    if (now === reported) return;
+    reported = now;
+    changed();
+  }
 
   /** Reads the candidate of the registry index again. A read that fails is the error of the status. */
   async function refresh() {
@@ -54,12 +64,12 @@ export function createAppUpdate({ host, plugins = () => null, changed }) {
       if (read !== lastRead) return;
       state = value;
       failure = null;
-      changed();
+      report();
     } catch (error) {
       if (read !== lastRead) return;
       state = null;
       failure = error.message;
-      changed();
+      report();
     }
   }
 
@@ -69,16 +79,16 @@ export function createAppUpdate({ host, plugins = () => null, changed }) {
     if (!state?.available) throw new Error("no application update is available");
     const { version } = state.available;
     operation = { state: "staging", version, error: null };
-    changed();
+    report();
     const cids = beginOperation("workbench.update.operation", { action: "update", version });
     try {
       const { bundle } = await host.call("appUpdateStage", { version }, { cids });
       operation = { state: "applying", version, error: null };
-      changed();
+      report();
       await host.call("appUpdateApply", { bundle }, { cids });
     } catch (error) {
       operation = { state: "failed", version, error: error.message };
-      changed();
+      report();
       throw error;
     }
   }

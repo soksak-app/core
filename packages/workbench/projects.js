@@ -193,6 +193,7 @@ async function setPluginData(id, plugin, key, value) {
  * initialise then checks the folder, owns the window and reports its failures.
  */
 export function begin(snapshot) {
+  const shown = JSON.stringify([projects, [...openProjects]]);
   // default: the store of the browser example has no other window, so it carries no open.
   openProjects = new Set(snapshot.open ?? []);
   projects = snapshot.projects;
@@ -338,6 +339,7 @@ async function readProjects() {
   const removedProjects = projects.some((p) => !listed.has(p.id));
   // The cleanup below keeps only the tabs of the stored layouts. If the plane of the remaining active project has tabs that are not stored yet, they are stored first so that their surfaces remain too. The removed project is not stored.
   if (removedProjects && listed.has(activeProjectId)) await awaited("projects.read.keep", () => keep("saved layout"));
+  const shown = JSON.stringify([projects, [...openProjects]]);
   // default: the store of the browser example has no other window, so it carries no open.
   openProjects = new Set(snapshot.open ?? []);
   const previous = new Map(projects.map((p) => [p.id, p]));
@@ -363,7 +365,9 @@ async function readProjects() {
     await awaited("projects.read.retain", () => listener.retain(new Set(remaining.map((item) => item.surface))));
     await awaited("projects.read.retainSidecarSessions", () => retainSidecarSessions(remaining));
   }
-  changed();
+  // The host answers every write of this window with workspace-changed, so a read finds its own write. A read that found
+  // nothing new draws nothing: a draw of the first rows between a press and its release does work for no change.
+  if (JSON.stringify([projects, [...openProjects]]) !== shown) changed();
   return ended;
 }
 

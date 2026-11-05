@@ -51,6 +51,12 @@
 - F546: log batch가 진행 중이고 gate count의 보고 때가 되었을 때 page가 engine의 속도로 깨어나지 않는다.
 - F542: schema 번호가 다른 event 파일 하나가 더는 `sok debug query`, `sok debug replay`, debug 화면의 타임라인을 통째로 실패시키지 않는다. 질의는 그 파일을 빼고 다른 파일을 답하며 `rejected`에 그 이름을 담는다.
 - F540: 하루 동안 말이 없는 persistent service도 Rust host와의 연결을 유지하고, 그 read thread는 timed read를 들고 있지 않는다. host는 Go host와 같이 hello 뒤에 read deadline을 없앤다.
+- F537-6: test가 페이지의 inline script와 배포되는 module의 모든 이름을 찾으므로, 페이지가 선언하지 않은 이름은 페이지가 열리기 전에 실패한다.
+- F537-5: 새로 찾은 것이 없는 registry, plugin 상태, 애플리케이션 업데이트의 read는 아무것도 그리지 않는다.
+- F537-4: 문서 영역 attach는 두 host에서 main thread의 한 step에서 실행되므로, attach 중의 page reload가 이름 없는 영역을 남기지 않고, 이름을 되돌리는 실패가 기록된다.
+- F537-3: project 탭 줄과 space 탭 줄의 draw는 바뀌지 않은 탭을 유지하므로, draw 중에 누른 탭의 click이 사라지지 않는다.
+- F537-2: 두 host에서 그림 영역 attach는 main thread의 한 step에서 실행되므로, attach 중에 닫힌 탭은 오류를 기록하지 않고 attach 중의 page reload는 이름 없이 열린 영역을 남기지 않는다.
+- F537-1: Tauri host에서도 Wails host처럼 `text`가 빈 `input.key`는 그 키를 입력하므로, Enter가 terminal의 줄을 실행한다.
 - F533: 실패한 memory saver delay unload는 다음 deadline을 한 delay 뒤에 받으므로, 계속 실패하는 읽기나 commit이 매번 오류 표시와 함께 곧바로 다시 돌지 않는다.
 - F534: window facts 읽기는 더 이상 WebKit feature 목록을 훑지 않는다. 이 목록은 읽을 때마다 web view별로 애플리케이션 프로세스의 WebKit heap에 모든 feature를 할당했다. feature는 프로세스에서 한 번만 찾는다.
 - F532: Rust diagnostics의 update 단계가 framework port의 `quit`으로 애플리케이션을 끝내므로, `make tauriv2-build`가 다시 컴파일된다. `make hosts-check`는 새 `make host-debug-check`를 실행하며, 이 target은 두 host와 두 앱을 debug 앱의 구성으로 컴파일한다.

@@ -201,6 +201,7 @@ fn invalid_json_closes_connection() {
 | `binding.record.every-host-method-is-callable` | host의 내보낸 모든 메서드는 입구를 통해 이름으로 닿고, 지원하지 않는 서명의 메서드는 그 메서드의 이름을 말하는 오류로 host 시작을 멈춘다. | wailsv3 only: Tauri는 `bindings!` 매크로가 정의한 command를 등록하므로 매크로 밖의 command는 등록에 들어가지 않는다 |
 | `binding.record.unsupported-method-fails-at-start` | 매개변수가 선택적 context와 `json.RawMessage` 값이 아니거나 결과가 선택적 값과 선택적 오류가 아닌 내보낸 메서드는 입구의 생성을 그 메서드의 이름을 말하는 오류로 실패시킨다. | wailsv3 only: Tauri는 command를 reflection으로 읽지 않는다 |
 | `diagnostics.test-mark.needs-the-event-log` | event log가 연결되지 않은 동안의 표시는 `the event log of the host is not attached`로 실패한다. | all |
+| `documents.attach.one-main-step` | attach는 영역 확인, 이름 예약, 문서 생성과 등록을 main thread의 한 step에서 실행하므로, 표면 닫기나 page reload는 attach 전체의 앞이나 뒤에 실행된다. 실패한 attach는 오류 기록 없이 자기 이름과 request log만 되돌리고, 이름 없이 열린 문서는 남지 않는다. | all |
 | `documents.request.accepts-own-surface` | 호출자 자신의 표면에 대한 문서 요청을 받아들이고 표면과 이름 키를 반환한다. | all |
 | `documents.request.rejects-foreign-or-missing-caller` | 호출자 표면이 없거나 다른 표면에서 온 문서 요청은 "not surface"로 실패한다. | all |
 | `documents.request.rejects-invalid-names` | 빈 이름, 대문자, 하이픈으로 시작, 슬래시 포함, 65자 문서 이름을 거부한다. | all |
@@ -367,6 +368,7 @@ fn invalid_json_closes_connection() {
 | `endpoint.input.key-unknown-modifier-rejected` | 알 수 없는 키 수정자는 -32602를 반환한다. | all |
 | `endpoint.input.key-shift-command-mask` | shift와 command 수정자는 비트 마스크 9가 되고, 키와 phase는 그대로 전달된다. | all |
 | `endpoint.input.key-control-option-and-text` | control과 option 수정자는 6이 되고 text는 그대로 전달된다. | all |
+| `endpoint.input.key-empty-text-types-the-key` | text가 빈 키는 text 없이 플랫폼에 닿으므로, 키 이름이 event의 문자를 정한다. | all |
 | `endpoint.input.key-invalid-phase-or-modifier-type` | 알 수 없는 키 phase나 배열이 아닌 modifiers 값은 -32602를 반환한다. | all |
 | `endpoint.discovery.writes-endpoint-json` | endpoint.json은 전송 방식, 주소, pid, 애플리케이션, 버전, 실행 파일, 시작 시각을 담는다. | all |
 | `endpoint.discovery.written-after-first-window` | 엔드포인트를 시작할 때 endpoint.json을 쓰지 않는다. 없는 창으로 게시하면 실패하고 파일을 쓰지 않으며, 있는 창으로 게시한 뒤에는 그 창의 요청에 응답한다. | all |
@@ -568,6 +570,7 @@ fn invalid_json_closes_connection() {
 | `images.present.older-ack-preserves-newer-rejection` | 성공한 오래된 in-flight presentation은 실제 presented sequence를 전진시키지만 더 새 accepted sequence의 rejection을 지우지 않는다. 최신 accepted sequence의 성공 acknowledgment만 그 rejection을 지운다. | all |
 | `images.present.missing-native-surface-requests-reconfiguration` | notFound로 실패한 표시는 같은 raster의 새 구성을 요청한다. | all |
 | `images.attach.surface-close-removes-only-its-images` | 표면을 제거하면 그 이미지 핸들을 반환하고 다른 표면의 이미지는 유지한다. | all |
+| `images.attach.one-main-step` | attach는 요청 확인, 이름 예약, 영역 생성과 등록을 main thread의 한 step에서 실행하므로, 표면 닫기나 page reload는 attach 전체의 앞이나 뒤에 실행된다. 실패한 attach는 오류 기록 없이 자기 이름만 되돌리고, 이름 없이 열린 영역은 남지 않는다. | all |
 | `images.attach.rejects-reservation-without-sidecar` | 소유 사이드카가 없는 이미지 예약을 거부하고 아무것도 등록하지 않는다. | all |
 | `images.present.replaced-frame-is-logged-as-invalidated` | 더는 현재가 아닌 프레임(`stale`, `notAttached`, `staleRaster native=... frame=...`)은 `stale`로 답하고 표시 실패로 기록하지 않으며 `image frame invalidated before native presentation: ... reason=<detail>`을 남긴다. | all |
 | `images.present.frame-of-undeclared-sidecar-is-invalidated` | 어떤 plugin도 선언하지 않는 사이드카의 그림은 `stale`로 답하고 native 표시, 복구, 오류 없이 기록되며, 끝난 사이드카에 대한 답은 `not sent`로 기록된다. | all |
