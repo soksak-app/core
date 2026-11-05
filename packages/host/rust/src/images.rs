@@ -99,6 +99,11 @@ struct Inner {
     /// Whether the window is occluded or minimized; the host reads it from AppKit before it attaches a region and at each
     /// change (docs/spec/native-surfaces.md#image-regions).
     off_screen: bool,
+    /// Whether the regions of the window draw while it is not on screen. Only the diagnostic method
+    /// diagnostics.window.draw-covered sets it (images_draw_covered.rs); a build without the diagnostics feature has no such
+    /// state.
+    #[cfg(feature = "diagnostics")]
+    draw_covered: bool,
     /// The last (generation, raster) that a detached image region used. A region attached again in the same generation
     /// counts from the next raster, because the sidecar treats a configuration whose (generation, raster) did not grow
     /// as an old configuration and ignores it. It is cleared when the generation of the surface changes.
@@ -119,7 +124,7 @@ impl Inner {
     /// Whether a region is drawing: it is attached and visible, its outer surface is visible and the window is neither
     /// occluded nor minimized.
     fn drawing(&self, key: &Key, state: &RasterState) -> bool {
-        self.shown(key, state) && !self.off_screen
+        self.shown(key, state) && (!self.off_screen || self.draws_covered())
     }
 
     /// Reports whether a region and its outer surface are shown, whatever the state of the window.
@@ -1260,6 +1265,14 @@ fn create(
     });
     platform.create_image(surface, &name, event, released)
 }
+
+#[cfg(feature = "diagnostics")]
+#[path = "images_draw_covered.rs"]
+mod draw_covered;
+
+#[cfg(not(feature = "diagnostics"))]
+#[path = "images_draw_covered_release.rs"]
+mod draw_covered;
 
 #[cfg(test)]
 #[path = "images_test.rs"]

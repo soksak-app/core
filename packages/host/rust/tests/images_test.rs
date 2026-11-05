@@ -6,7 +6,7 @@ mod folder;
 use serde_json::json;
 use soksak_host::application_log::start_standard_error;
 use soksak_host::images::{
-    Configure, Decision, Drawing, Images, Key, after_present, decide, handle_envelope,
+    Configure, Decision, Images, Key, after_present, decide, handle_envelope,
     handle_envelope_with_recovery, leased_reply, released_reply,
 };
 use std::sync::{Arc, Mutex};
@@ -14,6 +14,10 @@ use std::time::Duration;
 
 #[path = "support/records.rs"]
 mod records;
+
+#[path = "support/drawing.rs"]
+mod drawing;
+use drawing::{DrawingStep, attached_drawing_image, drawing_values};
 
 fn configured_envelope(configuration: &Configure, sequence: i32) -> String {
     json!({
@@ -1469,30 +1473,6 @@ fn image_frame_nonce_cause_is_recorded() {
         String::from_utf8_lossy(&output.stderr)
     );
 }
-
-/// Attaches one image region of sidecar-a and returns its key.
-fn attached_drawing_image(images: &Images, surface: &str) -> Key {
-    let key: Key = (surface.to_string(), "view".to_string());
-    images
-        .reserve(&key, "owner-a", "sidecar-a")
-        .expect("reserve image");
-    assert!(images.set(&key, 100), "attach image");
-    key
-}
-
-/// Gives each drawing change as name=value, followed by the word hidden for a hidden surface.
-fn drawing_values(changes: Vec<Drawing>) -> Vec<String> {
-    changes
-        .into_iter()
-        .map(|change| {
-            let hidden = if change.hidden { " hidden" } else { "" };
-            format!("{}={}{hidden}", change.name, change.drawing)
-        })
-        .collect()
-}
-
-/// One step of the drawing test: its name, the change it makes and the drawing changes it expects.
-type DrawingStep<'a> = (&'static str, Box<dyn Fn() + 'a>, Vec<&'static str>);
 
 // contract: image.drawing.sent-at-attach-and-on-change
 #[test]

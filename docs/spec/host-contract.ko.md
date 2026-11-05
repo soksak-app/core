@@ -147,6 +147,7 @@ fn invalid_json_closes_connection() {
 | `diagnostics.document.viewport-marker.schedules-native-work-and-returns-native-result` | command는 UI dispatcher를 통해 marker 작업을 실행하고 native enabled 상태, kind, color, border width를 그대로 반환한다. | all |
 | `diagnostics.document.viewport-marker.reports-native-errors` | native marker 실패는 원래 text와 internal-error code로 반환하며 성공으로 보고하지 않는다. | all |
 | `diagnostics.capture.document-identity.start.is-declared` | 진단 build는 `diagnostics.capture.document-identity.start`를 선언한다. | all |
+| `diagnostics.window.draw-covered.is-declared` | 진단 build는 `diagnostics.window.draw-covered`를 선언한다. | all |
 | `diagnostics.capture-document-identity.stop-preserves-captures-without-a-document-source` | 선택된 document identity source가 없는 중지는 source freeze와 제거를 건너뛰고 capture를 한 번 중지하며 `frameIdentity` option의 두 값을 모두 보존한다. | all |
 | `diagnostics.capture-document-identity.stop-orders-freeze-capture-and-cleanup` | 선택된 source가 있으면 중지는 source를 freeze하고 capture를 중지한 뒤 같은 generation을 제거한다. `issuedSlots`는 성공한 freeze reply에서 온다. | all |
 | `diagnostics.capture-document-identity.stop-does-not-credit-unconfirmed-freeze` | source freeze에 실패하면 issued-slot count를 더하지 않지만 capture finalization과 source 제거는 계속 시도하고 오류를 보존한다. | all |
@@ -757,6 +758,8 @@ fn invalid_json_closes_connection() {
 | `image.drawing.configures-shown-regions` | 보이는 region은 창의 상태와 상관없이 설정을 받고, 화면에 없는 창에서 raster가 바뀔 때도 받으며, 숨겨진 region은 받지 않는다. 표시 대기는 그리기 상태가 아닌 region을 기다리지 않고 그리기 상태가 된 region을 기다리며, 설정된 raster는 region이 그리기 상태가 될 때 다시 설정되지 않는다. | all |
 | `image.drawing.configures-a-raster-that-changed-while-hidden` | region이 숨겨진 동안 바뀐 raster는 설정을 받지 않는다. region이 보이면 그리기 메시지 뒤에 바뀐 raster의 설정을 한 번 보내고, 바뀌지 않은 raster는 다시 설정하지 않는다. | all |
 | `image.drawing.answers-transfers-while-not-drawing` | region이 그리기를 멈추기 전에 받은 전송 그림은 `consumed`나 오류로 답을 받는다. | all |
+| `image.drawing.draws-covered-in-diagnostic-builds` | 진단 build에서 가려진 창의 region은 창이 가려진 채 그리는 동안 그리기 상태이고, 바깥 표면이 숨은 동안과 창이 가려진 채 그리기를 끝낸 뒤에는 그리기 상태가 아니며, 화면에 있는 창에서 가려진 채 그리기는 아무것도 바꾸지 않는다. | all |
+| `image.drawing.covered-window-never-draws-without-diagnostics` | 진단이 없는 build에는 가려진 채 그리기의 setter가 없고 `diagnostics.window.draw-covered`를 선언하지 않는다. 가려진 창의 region은 창이 화면에 다시 있을 때만 그린다. | all |
 | `sidecars-transport.replace.runs-when-sessions-reach-zero` | layout 목록이 오래된 service에 표면을 남기지 않으면 host가 그 service를 교체한다. | all |
 | `sidecars-transport.replace.keeps-a-service-that-a-layout-holds` | 이 process에서 보낸 적이 없는, 그 사이드카의 plugin 표면을 layout이 쥐는 동안에는 표면이 닫혀도 오래된 service가 남고 그 표면은 `sessions`에 들어간다. 그 표면이 없는 목록이 오면 service를 교체한다. | all |
 | `sidecars-transport.replace.counts-the-surfaces-of-the-plugins-of-the-sidecar` | plugin이 그 사이드카를 나열하지 않는 layout 표면은 오래된 service를 붙들지 않는다. | all |

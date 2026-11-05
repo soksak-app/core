@@ -96,6 +96,9 @@ type Images struct {
 	// onScreen is whether the window is neither occluded nor minimized; the host reads it from AppKit before it attaches a region and at
 	// each change (docs/spec/native-surfaces.md#image-regions).
 	onScreen bool
+	// drawCovered keeps the regions of the window drawing while it is not on screen. Only the diagnostic method
+	// diagnostics.window.draw-covered sets it (images_draw_covered.go); a build without the diagnostics tag reads it as false.
+	drawCovered bool
 	// The generation and the raster that a detached image region used last. A region attached again in the same generation counts from the next raster, because the sidecar
 	// ignores a configuration whose (generation, raster) did not increase as a past configuration. It is cleared when the generation of the surface changes.
 	detachedRasters map[ImageKey][2]uint64
@@ -162,7 +165,7 @@ func (i *Images) SetOnScreen(onScreen bool) {
 // drawingLocked reports whether a region is drawing: it is attached and visible, its outer surface is visible and the window is neither
 // occluded nor minimized. Call it while holding i.mu.
 func (i *Images) drawingLocked(key ImageKey, state *ImageRasterState) bool {
-	return i.shownLocked(key, state) && i.onScreen
+	return i.shownLocked(key, state) && (i.onScreen || i.drawsCoveredLocked())
 }
 
 // shownLocked reports whether a region and its outer surface are shown, whatever the state of the window. Call it while
