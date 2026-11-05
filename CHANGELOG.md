@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F502-23: `host.window` reports `pageProcess` as null on a host without a main page, as its specification says, and the memory sampler reads no page process for that window.
 - F502-23: `host.window` of the mygo host counts the frames and the command buffers of its workbench and reports whether the window settled after its last frame, and `host.frame.record` and `host.frame.commit` write each frame and each commit outside a frame to the class `frame`.
 - F502-21: The mygo workbench draws its modals as native UI: the settings window, the picker layer with the add, split, tool, tab and context menus, and the question about a modified tab. `core.card.close`, `core.tab.close` and `core.space.close` do not close a modified tab without the answer of the person, and the plugins and their settings come from the document of the installed plugins. The settings `left` and `right` take the fixed window sidebars in and out of the plane.
 - F502-12: `core.plugins.show-updates` of the mygo workbench brings the update list into view on the plugin page.

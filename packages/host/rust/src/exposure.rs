@@ -102,7 +102,7 @@ fn host_declarations() -> Value {
                 "content": rect,
                 "scale": {"type": "number"},
                 "refreshRate": {"type": ["integer", "null"]},
-                "pageProcess": {"type": "integer"},
+                "pageProcess": {"type": ["integer", "null"]},
                 "quitting": {"type": "boolean"},
                 "maximized": {"type": "boolean"},
                 "key": {"type": "boolean"},

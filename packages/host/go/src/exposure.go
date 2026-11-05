@@ -54,7 +54,7 @@ var hostStatus = map[string]hostEntry{
 			"content":     rectSchema,
 			"scale":       map[string]any{"type": "number"},
 			"refreshRate": map[string]any{"type": []string{"integer", "null"}},
-			"pageProcess": map[string]any{"type": "integer"},
+			"pageProcess": map[string]any{"type": []any{"integer", "null"}},
 			"quitting":    map[string]any{"type": "boolean"},
 			"maximized":   map[string]any{"type": "boolean"},
 			"key":         map[string]any{"type": "boolean"},
@@ -1390,7 +1390,7 @@ type WindowStatus struct {
 	Active           bool             `json:"active"`
 	Occluded         bool             `json:"occluded"`
 	Children         int              `json:"children"`
-	PageProcess      int              `json:"pageProcess"`
+	PageProcess      *int             `json:"pageProcess"`
 	Quitting         bool             `json:"quitting"`
 	AppDomWebviews   int              `json:"appDomWebviews"`
 	DocumentWebviews int              `json:"documentWebviews"`
@@ -1489,9 +1489,12 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 	out := WindowStatus{
 		Frame: facts.Frame, Pointer: facts.Pointer, Content: frame{Width: facts.Content.Width, Height: facts.Content.Height},
 		Scale: facts.Scale, RefreshRate: facts.RefreshRate, Maximized: facts.Zoomed, Key: facts.Key, Active: facts.Active, Occluded: facts.Occluded, Children: facts.Children,
-		PageProcess: facts.PageProcess, Quitting: s.host.quit.Active(),
+		Quitting: s.host.quit.Active(),
 		Controls: facts.Controls, Surfaces: []WindowSurface{}, Documents: []WindowDocument{}, Regions: regions,
 		Webviews: []WindowWebview{},
+	}
+	if framework.MainPage() {
+		out.PageProcess = &facts.PageProcess
 	}
 	if s.window != nil {
 		if frames := s.window.Frames(); frames != nil {
