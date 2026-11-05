@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F537-3: project 탭 줄과 space 탭 줄의 draw는 바뀌지 않은 탭을 유지하므로, draw 중에 누른 탭의 click이 사라지지 않는다.
 - F537-2: 두 host에서 그림 영역 attach는 main thread의 한 step에서 실행되므로, attach 중에 닫힌 탭은 오류를 기록하지 않고 attach 중의 page reload는 이름 없이 열린 영역을 남기지 않는다.
 - F537-1: Tauri host에서도 Wails host처럼 `text`가 빈 `input.key`는 그 키를 입력하므로, Enter가 terminal의 줄을 실행한다.
 - F533: 실패한 memory saver delay unload는 다음 deadline을 한 delay 뒤에 받으므로, 계속 실패하는 읽기나 commit이 매번 오류 표시와 함께 곧바로 다시 돌지 않는다.

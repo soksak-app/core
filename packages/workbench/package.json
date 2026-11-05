@@ -111,6 +111,8 @@
     "core-exposure.js",
     "file-open.js",
     "focus-state.js",
+    "keep-children.js",
+    "bar-tabs.js",
     "pointer-state.js",
     "plugin-processes.js",
     "stage.mjs",
