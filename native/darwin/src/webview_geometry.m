@@ -575,6 +575,8 @@ static void giveKeyboardToSurface(NSView *view) {
         return;
     }
     host.keyboardWanted = landed;
+    // The page took the keyboard for want of a region: nothing chose it, so it does not keep the keyboard from a region later.
+    if (landed) host.keyboardOwner = nil;
 }
 
 void sp_surface_focus(void *handle) {

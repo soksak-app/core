@@ -264,7 +264,7 @@ place가 빼는 표면의 영역 종료는 호스트가 맡는다. 두 호스트
 
 호스트의 `surfaceFocus {surface}`는 창의 키보드를 surface에 주고, `surface: null`은 워크벤치에 준다. 모든 호스트는 `native/darwin`의 구현 하나(`sp_surface_focus`, `sp_window_focus_workbench`)에 닿는다. 무엇이 키보드를 갖는지의 규칙은 [exposure](exposure.ko.md#키보드는-focus-ring을-따른다)에 있다.
 
-- surface 안의 first responder는 유지된다. 그렇지 않으면 키보드는 그 surface에서 마지막으로 키보드를 가졌던 view, 키보드를 받는 첫 번째 표시된 그림 영역, surface의 web view 순으로 간다. 메인 page의 surface module이면 메인 web view로 간다.
+- surface 안의 first responder는 유지된다. 그렇지 않으면 키보드는 그 surface에서 마지막으로 키보드를 가졌던 view, 키보드를 받는 첫 번째 표시된 그림 영역, surface의 web view 순으로 간다. 메인 page의 surface module이면 메인 web view로 간다. 이 마지막 단계에서 키보드를 받은 web view는 키보드를 가졌던 view로 치지 않으므로, 이후 호출은 그때 표시된 영역에 키보드를 준다.
 - 그림 영역이 아직 표시되지 않은 surface는 web view에 키보드를 두고, 영역이 처음 표시될 때 영역이 키보드를 받는다. 영역은 자기 element의 geometry로 표시되므로 page의 call이 필요 없다.
 - 왼쪽 mouse button이 눌려 있는 동안의 call은 button이 올라올 때 적용된다. press 중 first responder가 옮겨지면 press가 끝나 click과 탭이나 divider drag가 취소되기 때문이다. 한 press의 마지막 call이 이긴다.
 - `surface: null`은 키보드를 메인 web view에 주고, 메인 page가 없는 창에서는 content view에서 키보드를 받는 첫 view에 준다.
