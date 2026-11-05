@@ -43,10 +43,16 @@ func (e *ShownErrors) ShowFrom(where, source, text, detail string) {
 	e.sources[where] = source
 }
 
+// ShownFrom tells whether the error of the place where is one that source showed.
+func (e *ShownErrors) ShownFrom(where, source string) bool {
+	shown, ok := e.sources[where]
+	return ok && shown == source
+}
+
 // HideFrom withdraws the error of the place where when source showed it, and tells whether it did. An error that another
 // source showed since then stays.
 func (e *ShownErrors) HideFrom(where, source string) bool {
-	if shown, ok := e.sources[where]; !ok || shown != source {
+	if !e.ShownFrom(where, source) {
 		return false
 	}
 	e.Hide(where)

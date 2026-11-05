@@ -40,8 +40,11 @@ export function createErrorDisplay({ document, changed }) {
   };
 }
 
-/** The source of the error of a layout that failed, which the next presentation withdraws. */
+/** The source of the error of a layout that failed, which the presentation of every surface after a later render withdraws. */
 const LAYOUT_SOURCE = "layout";
+
+/** The milliseconds before the wait for the surfaces asks again after an answer that they have not presented. */
+const PRESENTED_RETRY = 1000;
 
 /**
  * Creates the function that withdraws the error of the banner when source showed it. An error that another source showed since then
@@ -110,6 +113,7 @@ export function createPageLayout({
       // default: a rejection that is not an Error is shown as its own value converted to a string.
       const message = String(error?.message ?? error);
       console.error(`surface presentation failed: ${message}`);
+      failureShown = true;
       showError(`surface presentation failed: ${message}`, "", LAYOUT_SOURCE);
       setVerify([{ name: "Surface presentation", ok: false, note: message }]);
     },
@@ -117,17 +121,39 @@ export function createPageLayout({
       supersededLayouts++;
     },
   });
+  // Whether the banner may show the failure of a layout, and whether the wait that withdraws it runs.
+  let failureShown = false;
+  let withdrawing = false;
   let layoutEpoch = 0;
   /* Layout number of the performance trace. While the trace is on, each layout records the times (performance.now, ms) of the wait,
      the prepare reply, before and after the DOM draw, the animation frame and the presentation, so the stage that delays the layout on screen can be identified. */
   let layoutTraceId = 0;
 
+  /**
+   * Withdraws the error of a failed layout after a later render, once every surface has presented. The failure names a surface that did
+   * not present, which the presentation of another render does not end. A layout that fails during the wait keeps its failure, and the
+   * presentation after it asks again.
+   */
+  function withdrawWhenPresented() {
+    if (!failureShown || withdrawing) return;
+    withdrawing = true;
+    surfaces.waitPresented().then(() => {
+      withdrawing = false;
+      if (failure !== null) return;
+      failureShown = false;
+      withdrawError(LAYOUT_SOURCE);
+    }, () => {
+      withdrawing = false;
+      if (failure === null) setTimeout(withdrawWhenPresented, PRESENTED_RETRY);
+    });
+  }
+
   return {
-    /** Error of the last layout that failed. clearFailure removes it and its banner when a later render is presented. */
+    /** Error of the last layout that failed. clearFailure removes it when a later render is presented, and its banner when every surface has. */
     failure: () => failure,
     clearFailure() {
-      withdrawError(LAYOUT_SOURCE);
       failure = null;
+      withdrawWhenPresented();
     },
     /** Writes the number of replaced layouts as one line and resets the count. */
     reportSuperseded() {
