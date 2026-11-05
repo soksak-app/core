@@ -3,8 +3,8 @@
 // time too; then the test binary lists its tests, and every test becomes one process with the working directory that
 // `go test` and `cargo test` give it.
 import { execFile } from 'node:child_process';
-import { mkdirSync, realpathSync } from 'node:fs';
-import { dirname, isAbsolute, join, relative } from 'node:path';
+import { mkdirSync, readdirSync, realpathSync, rmSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join, relative } from 'node:path';
 import { promisify } from 'node:util';
 import { runTests } from './test-runner.mjs';
 
@@ -62,9 +62,11 @@ export async function discoverGo({ patterns, cwd, tags, ldflags, buildDir, id, w
 /**
  * The tests of the Rust package `packageName` built with `features`. `cargo test --no-run` builds the test executables; each
  * executable lists its tests and every test runs as `<executable> --exact <name>` in the folder of its manifest. Returns the
- * same `{tests, failures}` as discoverGo; a test that is `#[ignore]` is listed and its result is `skip`.
+ * same `{tests, failures}` as discoverGo; a test that is `#[ignore]` is listed and its result is `skip`. With `listOnly`, each
+ * executable and the object files that rustc kept beside it are removed once it listed its tests: a check that only lists
+ * the tests of several runs then holds the executables of one run on the disk, and its tests are not run.
  */
-export async function discoverRust({ packageName, features, cwd, env, id, write, timeoutMs }) {
+export async function discoverRust({ packageName, features, cwd, env, id, write, timeoutMs, listOnly = false }) {
   const build = await runTests({
     tests: [{ name: `build ${id}`, command: 'cargo', cwd, env, timeoutMs: BUILD_TIMEOUT_MS,
       args: ['test', '--locked', '-p', packageName, ...(features ? ['--features', features] : []), '--no-run', '--message-format=json'] }],
@@ -80,9 +82,23 @@ export async function discoverRust({ packageName, features, cwd, env, id, write,
       const match = line.match(/^(.+): test$/);
       if (match) tests.push({ name: `${id} ${target}::${match[1]}`, run: id, testName: match[1], owner: relative(realpathSync(cwd), dir), target, sourcePath: srcPath, command: executable, args: ['--exact', match[1]], cwd: dir, env, timeoutMs });
     }
+    if (listOnly) removeExecutable(executable);
   }
   if (tests.length === 0) return { tests, failures: [`${id}: the compiler listed no tests`] };
   return { tests, failures: [] };
+}
+
+/**
+ * Removes a test executable and the object files of its crate that rustc keeps beside it for the debug information on macOS
+ * (`<executable>.<unit>.rcgu.o`). The libraries of its dependencies stay, so the next run of the same package reuses them.
+ */
+function removeExecutable(executable) {
+  const dir = dirname(executable);
+  const prefix = `${basename(executable)}.`;
+  for (const name of readdirSync(dir)) {
+    if (name.startsWith(prefix) && name.endsWith('.o')) rmSync(join(dir, name), { force: true });
+  }
+  rmSync(executable, { force: true });
 }
 
 /**

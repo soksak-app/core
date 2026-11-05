@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -123,6 +123,34 @@ esac
   } finally {
     process.env.PATH = oldPath;
   }
+});
+
+test("a Rust discovery that only lists removes each executable and its objects once listed", { timeout: 10_000 }, async (t) => {
+  const root = folder();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const deps = join(root, "deps");
+  mkdirSync(deps);
+  writeFileSync(join(root, "Cargo.toml"), '[package]\nname = "fixture"\nversion = "0.0.1"\nedition = "2021"\n\n[workspace]\n');
+  const binary = join(deps, "fixture-0a1b");
+  writeFileSync(binary, '#!/bin/sh\nprintf "fixture::listed: test\\n\\n1 tests, 0 benchmarks\\n"\n');
+  chmodSync(binary, 0o755);
+  for (const name of ["fixture-0a1b.fixture.1c-cgu.0.rcgu.o", "fixture-0a1b.d", "fixture-0a1bc", "libdependency-9f.rlib"]) writeFileSync(join(deps, name), "");
+  const cargo = join(root, "cargo");
+  writeFileSync(cargo, `#!/bin/sh
+printf '%s\\n' '{"reason":"compiler-artifact","profile":{"test":true},"manifest_path":"${join(root, "Cargo.toml")}","target":{"name":"fixture","src_path":"${join(root, "src/lib.rs")}"},"executable":"${binary}"}'
+`);
+  chmodSync(cargo, 0o755);
+  const oldPath = process.env.PATH;
+  const lines = [];
+  process.env.PATH = `${root}:${oldPath}`;
+  try {
+    const { tests, failures } = await discoverRust({ packageName: "fixture", cwd: root, id: "list", write: (line) => lines.push(line), timeoutMs: 1000, listOnly: true });
+    assert.deepEqual(failures, [], lines.join("\n"));
+    assert.deepEqual(tests.map((item) => item.testName), ["fixture::listed"]);
+  } finally {
+    process.env.PATH = oldPath;
+  }
+  assert.deepEqual(readdirSync(deps).sort(), ["fixture-0a1b.d", "fixture-0a1bc", "libdependency-9f.rlib"]);
 });
 
 test("a cargo line that starts with a brace but is not JSON fails with the line", async () => {

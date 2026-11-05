@@ -531,11 +531,12 @@ async function main(argv) {
   const cases = parseContractCases(readFileSync(join(ROOT, SPEC), 'utf8'));
   if (values.host !== undefined && !HOSTS.includes(values.host)) throw new Error('--host must be wailsv3, tauriv2 or mygo');
   if (values.host !== undefined && values.static) throw new Error('--host cannot be combined with --static');
-  // --static checks declarations from the current compiler target. Rust test executables are built and listed, but never run.
+  // --static checks declarations from the current compiler target. Rust test executables are built and listed, but never run;
+  // each is removed once listed, so the seven runs hold one run of executables on the disk at a time.
   if (values.static) {
     const write = (line) => process.stdout.write(`${line}\n`);
     const rustFound = [];
-    for (const run of RUST_RUNS) rustFound.push(await discoverRust({ ...run, cwd: ROOT, write, timeoutMs: TEST_TIMEOUT_MS }));
+    for (const run of RUST_RUNS) rustFound.push(await discoverRust({ ...run, cwd: ROOT, write, timeoutMs: TEST_TIMEOUT_MS, listOnly: true }));
     const rustItems = rustFound.flatMap((entry) => entry.tests);
     return checkDeclarations(cases, rustItems, rustFound.flatMap((entry) => entry.failures));
   }
