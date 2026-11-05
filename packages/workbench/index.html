@@ -69,7 +69,7 @@ import {
    know this module. */
 import { verify } from "./verify.js";
 /* Wiring of the error display and the layout queue. This document passes the document, the host, the plane and the compositor. */
-import { createErrorDisplay, createPageLayout, reportUncaught, verificationRows } from "./page-layout.js";
+import { createErrorDisplay, createErrorWithdrawal, createPageLayout, reportUncaught, verificationRows } from "./page-layout.js";
 
 /* Application interface. When it is absent, an implementation that does nothing is used. */
 import { chrome, log, onDocumentState, onImageDetachEnded, onMemoryPressure, onMenuCommand, retainSidecarSessions, surfaces as host } from "./host.js";
@@ -383,7 +383,7 @@ onRender(() => {
 
 /* Layout queue. It marks the layout of the plane, the first row of a window without a plane, and the empty plane of a project switch, one by one. */
 const pageLayout = createPageLayout({
-  document, showError, setVerify, log, surfaces: host,
+  document, showError, withdrawError: createErrorWithdrawal({ document, changed: coreChanged }), setVerify, log, surfaces: host,
   plane: { currentGrid, settle, clear },
   compositor: { publishAhead, publish, cancelPrepared },
   textSize: () => value("textSize"),

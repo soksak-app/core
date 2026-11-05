@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F587: A placement that succeeds withdraws the failure of the placement before it from the error banner, in the native and the page workbench. The banner records the source of what it shows, so an error of another source stays, also with the same text, and the failure stays while placements keep failing. Red: `TestARecoveredPlacementWithdrawsItsError` and the banner test of `layout-verify-state.test.mjs` found the failure still shown.
 - F502-16: A press under a surface whose layout is preparing waits for the commit and reaches the surface. It used to reach the main page, or nothing in a window without one.
 - F585: A terminal whose region shows after a hide of its surface, or in a press, takes the keyboard from its page, and a region that hid with the keyboard takes it back when it shows.
 - F535-3: A count of the gate alone does not write: a writer that sleeps keeps it until the next event, for at most a minute, so a change of the input source in another application no longer costs an idle application a write and an index update each second. Red: `TestACountWaitsForTheNextWrite`, `a_count_waits_for_the_next_write` and the pipe checks of `event_ring_test` found the count written.

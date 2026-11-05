@@ -3,6 +3,7 @@ package workbench_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"slices"
@@ -42,12 +43,15 @@ type surfaceHost struct {
 	window workbench.WindowView
 	// windowFailure is the error of each read of the state of the window.
 	windowFailure error
-	requests      []map[string]any
-	placed        int
-	declared      []string
-	replies       []map[string]any
-	hostName      []string
-	hostNameMu    sync.Mutex
+	// presentFailure and declareFailure are the errors of each presentSurfaces and compositionDeclare.
+	presentFailure error
+	declareFailure error
+	requests       []map[string]any
+	placed         int
+	declared       []string
+	replies        []map[string]any
+	hostName       []string
+	hostNameMu     sync.Mutex
 	// clipboard is the text of the clipboard.
 	clipboard string
 	debug     debugHost
@@ -85,6 +89,9 @@ func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 		return map[string]any{"ticket": len(h.requests), "placements": []any{}, "chrome": map[string]any{}}, nil
 	}
 	table["presentSurfaces"] = func(context.Context, json.RawMessage) (any, error) {
+		if h.presentFailure != nil {
+			return nil, h.presentFailure
+		}
 		h.placed++
 		h.order = append(h.order, "presentSurfaces")
 		return []any{}, nil
@@ -101,6 +108,9 @@ func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 		return nil, nil
 	}
 	table["compositionDeclare"] = func(_ context.Context, argument json.RawMessage) (any, error) {
+		if h.declareFailure != nil {
+			return nil, h.declareFailure
+		}
 		var request struct{ Surface string }
 		if err := json.Unmarshal(argument, &request); err != nil {
 			return nil, err
@@ -933,6 +943,82 @@ func TestALayoutFaultFailsOnlyTheNextDraw(t *testing.T) {
 	}
 	f.tester.SetSize(1100, 800)
 	f.settle()
+}
+
+// The placement after a fault succeeds, so the banner withdraws the failure of the placement, and the record of the failure stays.
+func TestARecoveredPlacementWithdrawsItsError(t *testing.T) {
+	f, _ := surfaceShell(t)
+	f.shell.Registry().Reply("diagnostics.layout.fail", json.RawMessage(`{}`), nil, func(any, error) {})
+	f.settle()
+	f.tester.SetSize(1160, 800)
+	if shown := f.shownErrors(); len(shown) != 1 {
+		t.Fatalf("the fault showed %q", shown)
+	}
+	f.settle()
+	if got := f.status("core.workbench.error"); got != "null" {
+		t.Fatalf("after the placement that succeeded the banner holds %s", got)
+	}
+}
+
+// A window that returns to the lines of the last placement before the next frame recovers as well.
+func TestAFaultOfTheSameLinesIsWithdrawnByTheNextPlacement(t *testing.T) {
+	f, stored := surfaceShell(t)
+	f.tester.SetSize(1160, 800)
+	f.settle()
+	f.shell.Registry().Reply("diagnostics.layout.fail", json.RawMessage(`{}`), nil, func(any, error) {})
+	f.settle()
+	f.tester.SetSize(1100, 800)
+	if shown := f.shownErrors(); len(shown) != 1 {
+		t.Fatalf("the fault showed %q", shown)
+	}
+	f.tester.SetSize(1160, 800)
+	placed := stored.placed
+	f.settle()
+	if stored.placed <= placed {
+		t.Fatal("the frames after the fault placed nothing")
+	}
+	if got := f.status("core.workbench.error"); got != "null" {
+		t.Fatalf("after the window came back the banner holds %s", got)
+	}
+}
+
+// A placement that keeps failing keeps its error, and the first that succeeds withdraws it.
+func TestAPlacementThatKeepsFailingKeepsItsError(t *testing.T) {
+	f, stored := surfaceShell(t)
+	stored.presentFailure = errors.New("the host refused the placement")
+	f.tester.SetSize(1160, 800)
+	f.shownErrors()
+	f.tester.SetSize(1100, 800)
+	f.shownErrors()
+	if got := f.status("core.workbench.error"); !strings.Contains(got, "the host refused the placement") {
+		t.Fatalf("while the placement fails the banner holds %s", got)
+	}
+	stored.presentFailure = nil
+	f.tester.SetSize(1160, 800)
+	f.settle()
+	if got := f.status("core.workbench.error"); got != "null" {
+		t.Fatalf("after the placement that succeeded the banner holds %s", got)
+	}
+}
+
+// The banner shows the last error of its place. The recovery of a placement withdraws only the failure of that placement.
+func TestARecoveredPlacementLeavesAnotherError(t *testing.T) {
+	f, stored := surfaceShell(t)
+	stored.presentFailure = errors.New("the host refused the placement")
+	f.tester.SetSize(1160, 800)
+	f.shownErrors()
+	stored.presentFailure = nil
+	stored.declareFailure = errors.New("the host refused the declaration")
+	raw, err := json.Marshal(map[string]string{"card": f.tabbedCards()[0], "plugin": "terminal"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.shell.Registry().RunLater("core.card.add-tab", raw, func(any, error) {})
+	f.shownErrors()
+	f.shownErrors()
+	if got := f.status("core.workbench.error"); !strings.Contains(got, "the host refused the declaration") {
+		t.Fatalf("after the placement that succeeded the banner holds %s", got)
+	}
 }
 
 // textScope returns the scope of the status core.text.

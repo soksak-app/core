@@ -568,6 +568,9 @@ func rawOrNull(value json.RawMessage) json.RawMessage {
 	return value
 }
 
+// placementSource is the source of the error of a placement that failed, which the next placement that succeeds withdraws.
+const placementSource = "placement"
+
 // placeSurfaces places the surfaces when the frame moved one of them. One placement runs at a time, and the frame that
 // follows it places what changed meanwhile.
 func (s *Shell) placeSurfaces() {
@@ -583,9 +586,11 @@ func (s *Shell) placeSurfaces() {
 		return
 	}
 	if s.surfaces.layoutFault {
-		// The placement fails without a change, so the next frame draws the same lines again.
+		// The placement fails without a change, so the next frame places the lines again, also when the window came back to
+		// the lines of the last placement.
 		s.surfaces.layoutFault = false
 		s.surfaces.placing, s.surfaces.commits = s.surfaces.commits, nil
+		s.surfaces.placed = nil
 		s.placed(errors.New("surface presentation failed: " + layoutFaultText))
 		s.options.Invalidate()
 		return
@@ -666,9 +671,13 @@ func (s *Shell) placed(err error) {
 	s.surfaces.running = false
 	var failure *string
 	if err != nil {
-		s.fail(err)
+		s.errors.ShowFrom(workbenchErrorPlace, placementSource, err.Error(), "")
+		s.options.Invalidate()
 		text := err.Error()
 		failure = &text
+	} else if s.errors.HideFrom(workbenchErrorPlace, placementSource) {
+		// A placement that succeeds ends the failure of the placement before it. The record of the failure stays in the log.
+		s.options.Invalidate()
 	}
 	s.surfaces.failure = failure
 	s.verifyLater()

@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { JSDOM } from "jsdom";
-import { createErrorDisplay, createPageLayout, verificationRows } from "../page-layout.js";
+import { createErrorDisplay, createErrorWithdrawal, createPageLayout, verificationRows } from "../page-layout.js";
 
 const TIMEOUT = "the current image raster did not present within 10s; pending tab-1/view generation 2 raster 1 sequence 0 presented 0/0 surface visible";
 
@@ -21,6 +21,7 @@ function layoutWith(state) {
   return createPageLayout({
     document,
     showError: createErrorDisplay({ document, changed: () => {} }),
+    withdrawError: createErrorWithdrawal({ document, changed: () => {} }),
     setVerify: () => {},
     log: () => {},
     surfaces: { waitPresented: async () => {} },
@@ -46,6 +47,63 @@ test("a presentation after a failed presentation ends the failure of the page la
   assert.equal(await page.presented(), true, "the layout after the failure must be presented");
   page.clearFailure();
   assert.equal(page.failure(), null, "a later presentation must end the failure of the page layout");
+});
+
+test("a presentation after a failed presentation withdraws the error of that failure from the banner", async () => {
+  const state = { fail: true };
+  const page = layoutWith(state);
+  page.onLayout(new Map(), () => {}, new Map(), 40);
+  await settle();
+  await page.presented();
+  assert.match(document.getElementById("applicationError")?.textContent ?? "", /surface presentation failed/);
+  state.fail = false;
+  page.onLayout(new Map(), () => {}, new Map(), 40);
+  await settle();
+  await page.presented();
+  page.clearFailure();
+  assert.equal(document.getElementById("applicationError"), null, "the banner keeps the failure of a layout that recovered");
+});
+
+test("a presentation after a failed presentation leaves another error in the banner", async () => {
+  const state = { fail: true };
+  const page = layoutWith(state);
+  page.onLayout(new Map(), () => {}, new Map(), 40);
+  await settle();
+  await page.presented();
+  const showError = createErrorDisplay({ document, changed: () => {} });
+  showError("another failure");
+  state.fail = false;
+  page.onLayout(new Map(), () => {}, new Map(), 40);
+  await settle();
+  await page.presented();
+  page.clearFailure();
+  assert.equal(document.getElementById("applicationError")?.textContent, "another failure");
+  document.getElementById("applicationError").remove();
+});
+
+test("a failure that repeats stays in the banner", async () => {
+  const state = { fail: true };
+  const page = layoutWith(state);
+  for (let round = 0; round < 2; round++) {
+    page.onLayout(new Map(), () => {}, new Map(), 40);
+    await settle();
+    await page.presented();
+  }
+  assert.match(document.getElementById("applicationError")?.textContent ?? "", /surface presentation failed/);
+  document.getElementById("applicationError").remove();
+});
+
+test("an error of another source with the text of the failure stays in the banner", async () => {
+  const state = { fail: true };
+  const page = layoutWith(state);
+  page.onLayout(new Map(), () => {}, new Map(), 40);
+  await settle();
+  await page.presented();
+  const text = document.getElementById("applicationError").textContent;
+  createErrorDisplay({ document, changed: () => {} })(text);
+  page.clearFailure();
+  assert.equal(document.getElementById("applicationError")?.textContent, text);
+  document.getElementById("applicationError").remove();
 });
 
 test("with no plane shown, a cleared failure leaves no failed row in the verification rows", async () => {

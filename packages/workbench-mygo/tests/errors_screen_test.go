@@ -9,6 +9,29 @@ import (
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
+// The source that showed an error withdraws it, and an error that another source showed since then stays, also with the same text.
+func TestAnErrorIsWithdrawnOnlyByItsSource(t *testing.T) {
+	errors := workbench.NewShownErrors(func(string) {})
+	errors.ShowFrom("workbench", "placement", "failed", "")
+	if errors.HideFrom("workbench", "other") {
+		t.Fatal("another source withdrew the error")
+	}
+	if !errors.HideFrom("workbench", "placement") {
+		t.Fatal("the source did not withdraw its error")
+	}
+	if _, ok := errors.Text("workbench"); ok {
+		t.Fatal("the withdrawn error is still shown")
+	}
+	errors.ShowFrom("workbench", "placement", "failed", "")
+	errors.Show("workbench", "failed", "")
+	if errors.HideFrom("workbench", "placement") {
+		t.Fatal("the source withdrew an error of no source with the same text")
+	}
+	if text, ok := errors.Text("workbench"); !ok || text != "failed" {
+		t.Fatalf("the place shows %q, %v", text, ok)
+	}
+}
+
 func TestAnErrorIsWrittenWhenTheErrorOfItsPlaceChanges(t *testing.T) {
 	var lines []string
 	errors := workbench.NewShownErrors(func(line string) { lines = append(lines, line) })

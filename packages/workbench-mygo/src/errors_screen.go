@@ -11,16 +11,19 @@ const workbenchErrorPlace = "workbench"
 type ShownErrors struct {
 	report func(line string)
 	shown  map[string]string
+	// sources holds the source of the error of a place that has one.
+	sources map[string]string
 }
 
 // NewShownErrors returns the display that writes each line with report.
 func NewShownErrors(report func(line string)) *ShownErrors {
-	return &ShownErrors{report: report, shown: map[string]string{}}
+	return &ShownErrors{report: report, shown: map[string]string{}, sources: map[string]string{}}
 }
 
 // Show shows the error text of the place where, and writes `<where>: <text><detail>` only when the error of that place
 // changes. detail is kept only in the record.
 func (e *ShownErrors) Show(where, text, detail string) {
+	delete(e.sources, where)
 	if shown, ok := e.shown[where]; ok && shown == text {
 		return
 	}
@@ -29,7 +32,26 @@ func (e *ShownErrors) Show(where, text, detail string) {
 }
 
 // Hide withdraws the error of the place where, so the same error is written when it is shown again.
-func (e *ShownErrors) Hide(where string) { delete(e.shown, where) }
+func (e *ShownErrors) Hide(where string) {
+	delete(e.shown, where)
+	delete(e.sources, where)
+}
+
+// ShowFrom is Show for an error whose end its source can tell: HideFrom of the same source withdraws it.
+func (e *ShownErrors) ShowFrom(where, source, text, detail string) {
+	e.Show(where, text, detail)
+	e.sources[where] = source
+}
+
+// HideFrom withdraws the error of the place where when source showed it, and tells whether it did. An error that another
+// source showed since then stays.
+func (e *ShownErrors) HideFrom(where, source string) bool {
+	if shown, ok := e.sources[where]; !ok || shown != source {
+		return false
+	}
+	e.Hide(where)
+	return true
+}
 
 // Text returns the error shown at the place where.
 func (e *ShownErrors) Text(where string) (string, bool) {
