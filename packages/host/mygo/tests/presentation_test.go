@@ -30,6 +30,41 @@ func TestE2EShowWaitsForTheFirstFrame(t *testing.T) {
 	}
 }
 
+// A status read of whether the window is occluded is worth nothing to a watcher that hears of no change, so a window hears when
+// another covers all of it and when some of it shows again.
+func TestE2EAWindowHearsWhenAnotherCoversIt(t *testing.T) {
+	framework, _, below := open(t, "below")
+	above := framework.NewWindow(host.WindowOptions{Name: "above", Title: "soksak", Width: 400, Height: 300}).(*adapter.Frontend)
+	t.Cleanup(above.Window().Destroy)
+	covered := make(chan struct{}, 8)
+	uncovered := make(chan struct{}, 8)
+	below.OnWindowEvent(host.WindowHide, func() { covered <- struct{}{} })
+	below.OnWindowEvent(host.WindowShow, func() { uncovered <- struct{}{} })
+	below.Show()
+	wait(t, "the window below", below.Window().IsVisible)
+	above.Show()
+	wait(t, "the window above", above.Window().IsVisible)
+	x, y := below.Position()
+	above.SetSize(600, 500)
+	above.SetPosition(x-100, y-100)
+	receive(t, "the cover", covered)
+	for len(uncovered) > 0 {
+		<-uncovered
+	}
+	above.SetPosition(x+1000, y)
+	receive(t, "the uncover", uncovered)
+}
+
+// receive waits for a value of events.
+func receive(t *testing.T, what string, events <-chan struct{}) {
+	t.Helper()
+	select {
+	case <-events:
+	case <-time.After(10 * time.Second):
+		t.Fatalf("%s did not arrive within 10 s", what)
+	}
+}
+
 // presentation runs the presentation notice as a step of the main thread and returns its result.
 func presentation(t *testing.T, window *adapter.Frontend) error {
 	t.Helper()

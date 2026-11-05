@@ -21,6 +21,12 @@
 - F502-16: 프로젝트를 닫은 뒤 다음 프레임 전에 구분선이나 탭에 들어온 누름과 키가 mygo host를 멈추지 않고, 잡은 경계와 끌던 탭은 그 plane이 떠날 때 끝나므로 다른 space의 경계를 옮기지 않는다. 떠난 plane의 탭에 관한 질문은 닫히고, 탭이 떠난 뒤 성공한 저장은 실패를 보여 주지 않되 실패한 저장은 그대로 보여 주며, `core.card.sidebar.*`는 프로젝트가 없는 창에서 거절한다.
 - F502-16: 보이는 프로젝트를 닫은 뒤 `core.verify`를 읽어도 mygo host가 멈추지 않는다. 떠난 plane은 다음 plane의 프레임까지 행이 없으므로, 창이 그리지 않은 plane을 말하지 않는다.
 - F580: `copy` 방식 그림 영역은 1초 동안 frame이 오지 않으면 여분 복사본을 놓으므로, 쉬는 terminal card가 화면의 frame보다 3.36 MiB를 더 잡지 않는다.
+- F502-23: mygo 창은 occlusion 변화를 알리므로, `host.window` watcher 는 다른 창이 덮은 것을 듣고 `make app-usage STATE=S9` 가 끝까지 돈다.
+- F502-23: mygo 창의 workbench 는 창의 첫 프레임 뒤에 시작하므로, `windows` 가 ready 로 보고한 창은 element 를 읽는 command 에 답한다.
+- F502-23: mygo host 의 `host.window` watcher 는 프레임이 창을 settle 상태로 남길 때 알림을 받으므로, 프레임 하나를 그리는 동작도 알림으로 끝난다.
+- F502-23: mygo workbench 가 `diagnostics.drag` 와 `diagnostics.drag.boundary` 에 답한다. boundary drag 는 host 의 tick 에 맞춰 boundary 의 input 경로로 돌고, `make object-counts` 가 mygo 에서 돌 수 있다.
+- F502-23: mygo host 의 main thread 는 class `frame` 이 `debug` 를 저장하는 동안 worker 에 넘긴 step 을 `host.frame.step` 으로 기록한다. host 가 그리는 workbench 의 `diagnostics.objects` 는 등록된 callback 수와 마지막 build pass 의 node 수를 담은 `framework` 를 더한다.
+- F502-16: 배치를 준비 중인 표면 위의 누름은 commit을 기다렸다가 표면에 간다. 이전에는 main page로 갔고, main page가 없는 창에서는 어디에도 가지 않았다.
 - F502-21: `setDialogBackground`가 다른 host call처럼 object `{enabled}`를 받고, framework 표의 B 행이 이 call을 mygo에만 있는 call로 나열해 host parity check가 통과한다. P 행이 `Frontend.Frames`를 나열한다.
 - F502-16: mygo workbench의 모든 모양 값은 page도 읽는 `workbench.json`에서 나온다: card foot의 caption, sidebar의 status line, placeholder와 멈춘 view의 글자, dialog의 scrim과 blur, layer의 anchor 아래 간격이다.
 - F551: Tauri host는 비동기 runtime의 worker를 processor마다 하나가 아니라 둘만 두고, 일 없는 blocking thread는 10초가 아니라 1초 뒤에 끝난다.

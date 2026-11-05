@@ -279,8 +279,21 @@ func WindowEventSource(window *mygo.Window, event host.WindowEvent, listener fun
 		host.WindowMove:      window.OnMove,
 		host.WindowFocus:     window.OnFocus,
 		host.WindowFocusLost: window.OnBlur,
-		host.WindowShow:      window.OnShow,
-		host.WindowHide:      window.OnHide,
+		// The port names a change of the occlusion of the window (windows.go), which also comes when the window opens and closes.
+		host.WindowShow: func(listener func()) func() {
+			return window.OnOcclusionChange(func(occluded bool) {
+				if !occluded {
+					listener()
+				}
+			})
+		},
+		host.WindowHide: func(listener func()) func() {
+			return window.OnOcclusionChange(func(occluded bool) {
+				if occluded {
+					listener()
+				}
+			})
+		},
 		host.WindowScaleChanged: func(listener func()) func() {
 			return window.OnScaleChange(func(float64) { listener() })
 		},
