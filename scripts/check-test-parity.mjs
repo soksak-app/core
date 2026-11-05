@@ -1048,6 +1048,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F534",
+    implementation: [
+      { file: "native/darwin/src/surface_layout.m", symbol: "near60 = [feature retain];" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/window_facts_test.m", id: "a later read of the window facts reads no feature list" },
+      { file: "native/darwin/tests/window_facts_test.m", id: "a later read reports the rendering preference of the view" },
+    ],
+    expected: "A read of the window facts reads no WebKit feature list, and each view reports its own rendering preference.",
+    levels: ["native"],
+  },
+  {
     id: "F531",
     implementation: [
       { file: "scripts/measure-app-usage.mjs", symbol: "const remaining = unattributed.filter(({ pid }) => !ended.has(pid));" },
