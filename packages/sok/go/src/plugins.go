@@ -388,24 +388,33 @@ func ReadInstalled(configDir string) (*InstalledState, error) {
 	return state, err
 }
 
-// ReadInstalledManifests reads plugins/installed.json and the plugin.json of each installed plugin, each once. It
-// returns the state and the manifest of each installed plugin by id.
-func ReadInstalledManifests(configDir string) (*InstalledState, map[string]InstalledManifest, error) {
+// ReadInstalledRecord reads and checks plugins/installed.json alone. A missing file is the empty state.
+func ReadInstalledRecord(configDir string) (*InstalledState, error) {
 	path := filepath.Join(configDir, Installed)
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return &InstalledState{Format: InstalledFormat, Plugins: map[string]InstalledPlugin{}, Sidecars: map[string]InstalledSidecar{}}, map[string]InstalledManifest{}, nil
+		return &InstalledState{Format: InstalledFormat, Plugins: map[string]InstalledPlugin{}, Sidecars: map[string]InstalledSidecar{}}, nil
 	}
 	if err != nil {
-		return nil, nil, fileError(path, err)
+		return nil, fileError(path, err)
 	}
 	value, err := DecodeJSON(data)
 	if err != nil {
-		return nil, nil, fmt.Errorf("%s is not valid JSON", path)
+		return nil, fmt.Errorf("%s is not valid JSON", path)
 	}
 	state, err := ValidateInstalled(value)
 	if err != nil {
-		return nil, nil, fmt.Errorf("%s: %w", path, err)
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	return state, nil
+}
+
+// ReadInstalledManifests reads plugins/installed.json and the plugin.json of each installed plugin, each once. It
+// returns the state and the manifest of each installed plugin by id.
+func ReadInstalledManifests(configDir string) (*InstalledState, map[string]InstalledManifest, error) {
+	state, err := ReadInstalledRecord(configDir)
+	if err != nil {
+		return nil, nil, err
 	}
 	manifests, err := readInstalledManifests(configDir, state)
 	if err != nil {
@@ -636,31 +645,40 @@ func manifestFile(configDir string, plugin InstalledPlugin) string {
 func readInstalledManifests(configDir string, state *InstalledState) (map[string]InstalledManifest, error) {
 	manifests := map[string]InstalledManifest{}
 	for _, id := range sortedPluginIDs(state.Plugins) {
-		file := manifestFile(configDir, state.Plugins[id])
-		data, err := os.ReadFile(file)
-		switch {
-		case errors.Is(err, os.ErrNotExist):
-			return nil, fmt.Errorf("%s: the plugin manifest is missing", file)
-		case err != nil:
-			return nil, fileError(file, err)
-		}
-		manifest, err := parseManifest(file, data)
+		manifest, err := ReadInstalledManifest(configDir, id, state.Plugins[id])
 		if err != nil {
 			return nil, err
 		}
-		if err := checkPluginID(id, file, manifest); err != nil {
-			return nil, err
-		}
-		var compact bytes.Buffer
-		if err := json.Compact(&compact, data); err != nil {
-			return nil, fmt.Errorf("%s is not valid JSON", file)
-		}
-		manifests[id] = InstalledManifest{Compact: compact.Bytes(), Value: manifest}
-		if afterManifestRead != nil {
-			afterManifestRead(file)
-		}
+		manifests[id] = manifest
 	}
 	return manifests, nil
+}
+
+// ReadInstalledManifest reads and checks the plugin.json of the installed plugin id.
+func ReadInstalledManifest(configDir, id string, plugin InstalledPlugin) (InstalledManifest, error) {
+	file := manifestFile(configDir, plugin)
+	data, err := os.ReadFile(file)
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		return InstalledManifest{}, fmt.Errorf("%s: the plugin manifest is missing", file)
+	case err != nil:
+		return InstalledManifest{}, fileError(file, err)
+	}
+	manifest, err := parseManifest(file, data)
+	if err != nil {
+		return InstalledManifest{}, err
+	}
+	if err := checkPluginID(id, file, manifest); err != nil {
+		return InstalledManifest{}, err
+	}
+	var compact bytes.Buffer
+	if err := json.Compact(&compact, data); err != nil {
+		return InstalledManifest{}, fmt.Errorf("%s is not valid JSON", file)
+	}
+	if afterManifestRead != nil {
+		afterManifestRead(file)
+	}
+	return InstalledManifest{Compact: compact.Bytes(), Value: manifest}, nil
 }
 
 // parseManifest parses a plugin.json text into an object. file is the location for errors. The error names only the

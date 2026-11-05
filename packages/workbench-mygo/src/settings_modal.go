@@ -1195,8 +1195,8 @@ func (s *Shell) registerSettingsWindow() {
 	})
 }
 
-// beginSettings takes the stored settings of the window and of its project.
-func (s *Shell) beginSettings() error {
+// beginSettings takes the common settings and the stored settings of the project of the window.
+func (s *Shell) beginSettings(common map[string]any) error {
 	var overrides map[string]any
 	project := s.opened()
 	id := ""
@@ -1206,7 +1206,7 @@ func (s *Shell) beginSettings() error {
 			return err
 		}
 	}
-	if err := s.settings.Begin(s.commonSettings, overrides, id); err != nil {
+	if err := s.settings.Begin(common, overrides, id); err != nil {
 		return err
 	}
 	return s.applySettings()

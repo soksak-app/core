@@ -402,55 +402,65 @@ pub fn read_installed(config_dir: &Path) -> Result<InstalledState, String> {
     read_installed_manifests(config_dir).map(|(state, _)| state)
 }
 
-/// Reads plugins/installed.json and the plugin.json of each installed plugin, each once. It returns the state and the manifest of
-/// each installed plugin by id.
-pub fn read_installed_manifests(
-    config_dir: &Path,
-) -> Result<(InstalledState, BTreeMap<String, InstalledManifest>), String> {
+/// Reads and checks plugins/installed.json alone. A missing file is the empty state.
+pub fn read_installed_record(config_dir: &Path) -> Result<InstalledState, String> {
     let path = config_dir.join(INSTALLED);
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok((InstalledState::empty(), BTreeMap::new()));
+            return Ok(InstalledState::empty());
         }
         Err(error) => return Err(crate::files::file_error(path.display(), &error)),
     };
     let value: Value =
         serde_json::from_str(&text).map_err(|_| format!("{} is not valid JSON", path.display()))?;
-    let state = install::validate_installed(&value)
-        .map_err(|error| format!("{}: {error}", path.display()))?;
+    install::validate_installed(&value).map_err(|error| format!("{}: {error}", path.display()))
+}
+
+/// Reads plugins/installed.json and the plugin.json of each installed plugin, each once. It returns the state and the manifest of
+/// each installed plugin by id.
+pub fn read_installed_manifests(
+    config_dir: &Path,
+) -> Result<(InstalledState, BTreeMap<String, InstalledManifest>), String> {
+    let state = read_installed_record(config_dir)?;
     let mut manifests = BTreeMap::new();
     for (id, plugin) in &state.plugins {
-        let file = manifest_file(config_dir, plugin);
-        let data = match std::fs::read(&file) {
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return Err(format!(
-                    "{}: the plugin manifest is missing",
-                    file.display()
-                ));
-            }
-            other => other.map_err(|error| crate::files::file_error(file.display(), &error))?,
-        };
-        let location = file.display().to_string();
-        let manifest = parse_manifest(&location, &data)?;
-        install::check_plugin_id(id, &manifest).map_err(|error| format!("{location}: {error}"))?;
-        let invalid = || format!("{location} is not valid JSON");
-        let text = std::str::from_utf8(&data).map_err(|_| invalid())?;
-        let compact = RawValue::from_string(compact_json(text)).map_err(|_| invalid())?;
-        manifests.insert(
-            id.clone(),
-            InstalledManifest {
-                compact,
-                value: manifest,
-            },
-        );
-        AFTER_MANIFEST_READ.with(|slot| {
-            if let Some(hook) = slot.borrow().as_ref() {
-                hook(&file);
-            }
-        });
+        manifests.insert(id.clone(), read_installed_manifest(config_dir, id, plugin)?);
     }
     Ok((state, manifests))
+}
+
+/// Reads and checks the plugin.json of the installed plugin id.
+pub fn read_installed_manifest(
+    config_dir: &Path,
+    id: &str,
+    plugin: &InstalledPlugin,
+) -> Result<InstalledManifest, String> {
+    let file = manifest_file(config_dir, plugin);
+    let data = match std::fs::read(&file) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Err(format!(
+                "{}: the plugin manifest is missing",
+                file.display()
+            ));
+        }
+        other => other.map_err(|error| crate::files::file_error(file.display(), &error))?,
+    };
+    let location = file.display().to_string();
+    let manifest = parse_manifest(&location, &data)?;
+    install::check_plugin_id(id, &manifest).map_err(|error| format!("{location}: {error}"))?;
+    let invalid = || format!("{location} is not valid JSON");
+    let text = std::str::from_utf8(&data).map_err(|_| invalid())?;
+    let compact = RawValue::from_string(compact_json(text)).map_err(|_| invalid())?;
+    AFTER_MANIFEST_READ.with(|slot| {
+        if let Some(hook) = slot.borrow().as_ref() {
+            hook(&file);
+        }
+    });
+    Ok(InstalledManifest {
+        compact,
+        value: manifest,
+    })
 }
 
 /// The plugin.json in the recorded folder of an installed plugin.

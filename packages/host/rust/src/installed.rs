@@ -292,6 +292,28 @@ fn core_root_targets(frontend: &dyn Fn(&str) -> Option<Vec<u8>>) -> Result<Vec<S
     Ok(paths)
 }
 
+/// Serves a core target of the view import map to a view of plugin. A page asks for each of its modules while it starts, so the
+/// request reads the installation record and the manifest of plugin and no manifest of another plugin.
+fn core_target(
+    config_dir: &Path,
+    plugin: &str,
+    url_path: &str,
+    frontend: &dyn Fn(&str) -> Option<Vec<u8>>,
+) -> Result<Option<CoreRootFile>, String> {
+    let state = soksak_sok::plugins::read_installed_record(config_dir)?;
+    let Some(entry) = state.plugins.get(plugin).filter(|entry| entry.enabled) else {
+        return Ok(refuse_core_root(url_path, plugin));
+    };
+    soksak_sok::plugins::read_installed_manifest(config_dir, plugin, entry)?;
+    let name = url_path.trim_start_matches('/');
+    let data = frontend(name)
+        .ok_or_else(|| format!("{url_path}: the core file is missing from the bundled frontend"))?;
+    Ok(Some(CoreRootFile {
+        data,
+        content_type: core_content_type(url_path),
+    }))
+}
+
 /// Returns the file at url_path of the core root for a view of plugin (docs/spec/plugin-processes.md, rule 4). A core
 /// target is read from the bundled frontend, which frontend gives by its name without a leading slash. Any other path is
 /// read from an installed plugin folder only when the granted item rule (granted_files) grants it to plugin; the rule
@@ -305,19 +327,12 @@ pub fn core_root(
     frontend: &dyn Fn(&str) -> Option<Vec<u8>>,
 ) -> Result<Option<CoreRootFile>, String> {
     let targets = core_root_targets(frontend)?;
+    if targets.iter().any(|target| target == url_path) {
+        return core_target(config_dir, plugin, url_path, frontend);
+    }
     let (plugins, state) = enabled_plugins(config_dir)?;
     if !plugins.iter().any(|entry| entry.id == plugin) {
         return Ok(refuse_core_root(url_path, plugin));
-    }
-    if targets.iter().any(|target| target == url_path) {
-        let name = url_path.trim_start_matches('/');
-        let data = frontend(name).ok_or_else(|| {
-            format!("{url_path}: the core file is missing from the bundled frontend")
-        })?;
-        return Ok(Some(CoreRootFile {
-            data,
-            content_type: core_content_type(url_path),
-        }));
     }
     let mut files = BTreeMap::new();
     for entry in &plugins {

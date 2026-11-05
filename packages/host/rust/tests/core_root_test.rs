@@ -190,6 +190,23 @@ fn core_root_serves_a_core_file() {
 
 // contract: document.core-root.grant
 #[test]
+fn core_root_serves_a_core_target_beside_a_malformed_plugin() {
+    let config = core_root_fixture();
+    std::fs::write(
+        config.path().join("plugins/other/1.0.0/plugin.json"),
+        "not json",
+    )
+    .unwrap();
+    served(
+        config.path(),
+        "provider",
+        "/modules/@soksak/plugin-api/index.js",
+        "export const index = 1;",
+    );
+}
+
+// contract: document.core-root.grant
+#[test]
 fn core_root_refuses_an_unrelated_plugin_file() {
     let cases = [
         ("provider", "/modules/plugin-other/secret.js"),

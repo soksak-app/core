@@ -82,4 +82,5 @@ func (s *Shell) surfaceRegistered(data []any) {
 	if err := s.registry.Registered(event); err != nil {
 		s.fail(fmt.Errorf("exposure: %w", err))
 	}
+	s.pushStatuses()
 }

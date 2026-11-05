@@ -223,7 +223,6 @@ type Shell struct {
 	settings       *SettingsStore
 	settingsWindow settingsWindow
 	debugView      debugViewState
-	commonSettings map[string]any
 	menuLanguage   string
 	plugins        []LoadedPlugin
 	// refused holds the ids of the installed plugins whose manifest the window refused.
@@ -251,7 +250,8 @@ type Shell struct {
 
 	text *TextSize
 	// keyboard is the keyboard focus of the window, which the first responder and the views report.
-	keyboard *Focus
+	keyboard     *Focus
+	verification *Verification
 	// started is set once the host took the first state of the shell, changed once plugins changed before that, and reloading while the
 	// shell saves before a reload. They belong to the main thread.
 	started, changed, reloading bool
@@ -285,6 +285,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 		grid: environment.Workspace.Grid, focus: environment.Workspace.Focus, browsing: true, library: newLibraryState(), strips: map[string]*stripPlace{}, icons: map[string]*ui.SVG{}, heads: map[string]layout.HeadFit{}}
 	s.text = NewTextSize(shellText{s}, steps)
 	s.keyboard = NewFocus(options.Declared, func() { s.options.Invalidate() })
+	s.verification = NewVerification(func() { s.options.Invalidate() })
 	s.events = NewEvents(EventsOptions{Calls: s.calls, Post: options.Post, Report: options.Report, Now: time.Now,
 		After: func(delay time.Duration, task func()) { time.AfterFunc(delay, task) }})
 	s.calls.Observe(s.events.Call)
@@ -460,8 +461,7 @@ func (s *Shell) adopt(value any) error {
 		projects = append(projects, record)
 	}
 	s.projects = projects
-	s.commonSettings = snapshot.Common
-	return s.beginSettings()
+	return s.beginSettings(snapshot.Common)
 }
 
 // decode reads the answer of a host call, which is the value of the handler or its JSON text.
