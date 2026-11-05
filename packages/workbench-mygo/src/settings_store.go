@@ -80,6 +80,17 @@ func (c *SettingsCatalog) Stack(id string) string {
 	return ""
 }
 
+// AppLanguages returns the languages that the application is written in: the languages of its menu, the default language first.
+func (c *SettingsCatalog) AppLanguages() []string {
+	languages := []string{c.Default}
+	for _, language := range c.MenuLanguages {
+		if language.ID != c.Default {
+			languages = append(languages, language.ID)
+		}
+	}
+	return languages
+}
+
 // ReadSettingsCatalog reads the embedded workbench.json.
 func ReadSettingsCatalog() (*SettingsCatalog, error) {
 	var catalog SettingsCatalog
