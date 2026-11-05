@@ -19,7 +19,8 @@
     "benchmark:resize-catch-up": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs benchmark/resize-catch-up.test.mjs",
     "benchmark:idle-tab": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs benchmark/idle-tab.test.mjs",
     "benchmark:split-load": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs benchmark/split-load.test.mjs",
-    "benchmark:plain-view": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs benchmark/plain-view.test.mjs"
+    "benchmark:plain-view": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs benchmark/plain-view.test.mjs",
+    "benchmark:input-latency": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs input-latency.test.mjs"
   },
   "specFiles": [
     "docs/spec/events.json",

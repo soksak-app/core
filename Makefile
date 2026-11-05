@@ -324,7 +324,7 @@ DIAGNOSTIC_RELEASE := $(filter 0.0.%,$(shell sed -n 's/^export const RELEASE = "
         tauriv2 tauriv2-release tauriv2-build tauriv2-build-release \
         wailsv3 wailsv3-release wailsv3-build wailsv3-build-release \
         mygo mygo-release mygo-build mygo-build-release \
-        e2e e2e-host-go e2e-activation e2e-real e2e-person e2e-section-design examples-size
+        e2e e2e-host-go e2e-activation e2e-real e2e-person e2e-section-design input-latency examples-size
 
 # rustup installs cargo here and adds the path to the shell profile. The shell of make
 # does not read the profile.
@@ -640,6 +640,11 @@ e2e-benchmark-split-load:
 
 e2e-benchmark-plain-view:
 	@pnpm -F @soksak/e2e run benchmark:plain-view
+
+# The time from a key to the prompt in an open application (docs/operations/examples.md#input-latency): APP names the application, by
+# default mygo, and SOKSAK_CONFIG_DIR the configuration folder that the application runs with.
+input-latency:
+	@$(B3_BENCHMARK_ENV) SOKSAK_APP=$(or $(APP),mygo) node scripts/node-tests.mjs --script benchmark:input-latency --concurrency 1 --timeout 600
 
 e2e-repeat:
 	@case "$(FILE)" in '') echo "e2e-repeat requires FILE=<test file> NAME=<test name pattern> COUNT=<n>" >&2; exit 2;; esac
