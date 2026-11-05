@@ -97,6 +97,21 @@ test("the bridge registers the actual view document without plugin exposure setu
   assert.equal(await request("command.run", "core.surface.hit", { params: { x: 0, y: 0 } }), false);
 });
 
+// The gate of the core names of the mygo workbench leaves the names of surfaceNames to the document of each view. Those are
+// the names that this document registers, and the exposure declares them.
+test("the names that the mygo workbench leaves to a view are the names that its document registers", { timeout: 5000 }, async (t) => {
+  const { registrations } = setup(t);
+  await turn();
+  const source = readFileSync(new URL("../../workbench-mygo/src/surfaces.go", import.meta.url), "utf8");
+  const literal = source.match(/surfaceNames = map\[string\]bool\{([^}]*)\}/);
+  assert.ok(literal, "surfaces.go holds no surfaceNames");
+  const left = [...literal[1].matchAll(/"([^"]+)": true/g)].map((match) => match[1]).sort();
+  assert.deepEqual(left, registrations());
+  const { exposes } = JSON.parse(readFileSync(new URL("../../workbench/exposure.json", import.meta.url), "utf8"));
+  const declared = [...exposes.status, ...exposes.commands].map((entry) => entry.name);
+  assert.deepEqual(left.filter((name) => !declared.includes(name)), []);
+});
+
 test("the document status preserves null view start params", { timeout: 5000 }, async (t) => {
   const { request } = setup(t, { params: null });
   await turn();

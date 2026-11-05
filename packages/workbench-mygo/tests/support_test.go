@@ -70,6 +70,7 @@ var sidebarCommands = []string{"core.sidebar.section.fold", "core.sidebar.sectio
 // positional returns the element with the name at the position index in document order.
 func positional(t *testing.T, tt *ui.Tester, name string, index int) ui.ElementNode {
 	t.Helper()
+	noteElementNames(tt.ElementTree())
 	node, ok := atPosition(tt.ElementTree(), name, &index)
 	if !ok {
 		t.Fatalf("no element %s; the texts are %q", name, tt.Texts())

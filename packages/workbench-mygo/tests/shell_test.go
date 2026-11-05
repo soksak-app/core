@@ -466,6 +466,7 @@ func (f *shellFixture) settle() {
 	f.tester.Frame()
 	f.pending.drain(f.t)
 	f.tester.Frame()
+	noteElementNames(f.tester.ElementTree())
 	if len(f.lines) > 0 {
 		f.t.Fatalf("the shell reported %q", f.lines)
 	}
@@ -476,11 +477,16 @@ func (f *shellFixture) settle() {
 
 // exposedNode returns the element with the element name, and with the item when item is not "".
 func exposedNode(nodes []ui.ElementNode, name, item string) (ui.ElementNode, bool) {
+	noteElementNames(nodes)
+	return findExposed(nodes, name, item)
+}
+
+func findExposed(nodes []ui.ElementNode, name, item string) (ui.ElementNode, bool) {
 	for _, node := range nodes {
 		if exposed, ok := node.Key.(workbench.Exposed); ok && exposed.Name == name && (item == "" || exposed.Item == item) {
 			return node, true
 		}
-		if found, ok := exposedNode(node.Children, name, item); ok {
+		if found, ok := findExposed(node.Children, name, item); ok {
 			return found, true
 		}
 	}
