@@ -58,6 +58,7 @@ var hostStatus = map[string]hostEntry{
 			"quitting":    map[string]any{"type": "boolean"},
 			"maximized":   map[string]any{"type": "boolean"},
 			"key":         map[string]any{"type": "boolean"},
+			"virtualKey":  map[string]any{"type": "boolean"},
 			"active":      map[string]any{"type": "boolean"},
 			"occluded":    map[string]any{"type": "boolean"},
 			"children":    map[string]any{"type": "integer"},
@@ -1112,7 +1113,7 @@ func (b hostBackend) Key(window string, input KeyInput) error {
 		return nativeError(codeNoInput, err)
 	}
 	if result == platform.PointerInactive {
-		return rpcError(codeInactive, "keys reach only the key window of the active application")
+		return rpcError(codeInactive, "keys of an active application reach only its key window")
 	}
 	return delivered(result == platform.PointerDelivered, nil)
 }
@@ -1185,6 +1186,7 @@ type windowFacts struct {
 	RefreshRate    *int                 `json:"refreshRate"`
 	Zoomed         bool                 `json:"zoomed"`
 	Key            bool                 `json:"key"`
+	VirtualKey     bool                 `json:"virtualKey"`
 	Active         bool                 `json:"active"`
 	Occluded       bool                 `json:"occluded"`
 	Children       int                  `json:"children"`
@@ -1389,6 +1391,7 @@ type WindowStatus struct {
 	RefreshRate      *int             `json:"refreshRate"`
 	Maximized        bool             `json:"maximized"`
 	Key              bool             `json:"key"`
+	VirtualKey       bool             `json:"virtualKey"`
 	Active           bool             `json:"active"`
 	Occluded         bool             `json:"occluded"`
 	Children         int              `json:"children"`
@@ -1490,7 +1493,7 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 	// The native facts were read in the same UI-thread operation.
 	out := WindowStatus{
 		Frame: facts.Frame, Pointer: facts.Pointer, Content: frame{Width: facts.Content.Width, Height: facts.Content.Height},
-		Scale: facts.Scale, RefreshRate: facts.RefreshRate, Maximized: facts.Zoomed, Key: facts.Key, Active: facts.Active, Occluded: facts.Occluded, Children: facts.Children,
+		Scale: facts.Scale, RefreshRate: facts.RefreshRate, Maximized: facts.Zoomed, Key: facts.Key, VirtualKey: facts.VirtualKey, Active: facts.Active, Occluded: facts.Occluded, Children: facts.Children,
 		Quitting: s.host.quit.Active(),
 		Controls: facts.Controls, Surfaces: []WindowSurface{}, Documents: []WindowDocument{}, Regions: regions,
 		Webviews: []WindowWebview{},

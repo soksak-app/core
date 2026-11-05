@@ -14,6 +14,7 @@
 #import "support/temporary_folder.h"
 #import "document_view.h"
 #import "input_inject.h"
+#import "input_virtual.h"
 #import "webview_geometry.h"
 #import "window_facts.h"
 
@@ -320,7 +321,7 @@ int main(void) { @autoreleasepool {
     check([latest[2][@"canGoBack"] isEqual:@YES] && [latest[2][@"history"] isEqual:latest[1][@"history"]],
         [NSString stringWithFormat:@"the restored region has the history of the first region (%@, first %@)", latest[2][@"history"],
             latest[1][@"history"]]);
-    check(!NSApp.isActive, @"the application stays inactive");
+    check(!sp_input_virtual_real_active(), @"the application stays inactive");
 
     sp_document_close(restored);
     sp_document_close(document);

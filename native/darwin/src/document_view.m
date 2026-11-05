@@ -2312,6 +2312,7 @@ void sp_document_close(void *handle) {
     view.UIDelegate = nil;
     webviewInputUnregister(view);
     [view stopLoading];
+    sp_view_give_up_keyboard(view);
     [view removeFromSuperview];
     [view release];
 }

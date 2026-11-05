@@ -4,7 +4,7 @@
 typedef enum {
     SP_INPUT_DELIVERED = 0,
     SP_INPUT_REJECTED = 1, // the window, coordinates, phase, or thread is invalid
-    SP_INPUT_INACTIVE = 2, // a move without a button while the window is not the key window (WebKit does not update hover for this move), or a key sent to a window that is not the key window of the active application
+    SP_INPUT_INACTIVE = 2, // a move or key while the application is really active and the window is not its key window (WebKit does not update hover for this move), or a key sent to a window that is not the key window of the active application
     SP_INPUT_UNRECEIVED = 3, // the document did not receive the press or release within the timeout, or the scroll target did not render within the timeout
     SP_INPUT_BUTTON_HELD = 4, // AppKit reports a pressed mouse button, so the synthetic press or release was not delivered
     SP_INPUT_PRESS_OPEN = 5, // a synthetic press of that button is still open in that window, so the press was not delivered
@@ -27,6 +27,10 @@ sp_input_result sp_input_pointer_clicks(void *window, double x, double y, int ph
 // the button of that press, because WebKit reads the buttons of a page event from there. Native code that decides by what
 // a person holds reads this function. Before the first delivered press the two values are the same value of AppKit.
 unsigned long sp_input_physical_buttons(void);
+
+// The buttons that a person holds as input of this application may read them: none while a virtual key window is open
+// (input_virtual.h), whose pages never see a real button.
+unsigned long sp_input_person_buttons(void);
 
 // State measured in the same turn that rejected the input with SP_INPUT_BUTTON_HELD. This state alone does not
 // identify the cause, so the rejection is reported for the receiver to find the cause.

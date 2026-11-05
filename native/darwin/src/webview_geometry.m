@@ -2,6 +2,7 @@
 #import <QuartzCore/QuartzCore.h>
 #import <objc/runtime.h>
 #import "input_inject.h"
+#import "input_virtual.h"
 #import "application_log.h"
 #import "event_ring.h"
 #import "input_press_context.h"
@@ -37,8 +38,14 @@ static NSView *domHit(WKWebView *web, NSView *from, NSPoint point) {
 // of the document under the pointer in root. It is not passed while a button is pressed, because that is a drag.
 static void sendPointerMove(NSView *root) {
     NSWindow *window = root.window;
-    if (!window || sp_input_physical_buttons() != 0) return;
+    if (!window || sp_input_person_buttons() != 0) return;
+    // A page of a virtual key window hears only injected positions, so without one nothing is sent.
     NSPoint location = window.mouseLocationOutsideOfEventStream;
+    if (sp_input_virtual_is((__bridge void *)window)) {
+        double x = 0, y = 0;
+        if (!sp_input_virtual_point((__bridge void *)window, &x, &y)) return;
+        location = NSMakePoint(x, y);
+    }
     NSView *hit = [root hitTest:[root.superview convertPoint:location fromView:nil]];
     while (hit && ![hit isKindOfClass:WKWebView.class]) hit = hit.superview;
     if (!hit) return;
@@ -524,12 +531,21 @@ void *sp_surface_create(void *handle) {
     return surface;
 }
 
+void sp_view_give_up_keyboard(void *handle) {
+    NSCAssert(NSThread.isMainThread, @"the keyboard belongs to the main thread");
+    NSView *view = (NSView *)handle;
+    NSWindow *window = view.window;
+    NSResponder *first = window.firstResponder;
+    if ([first isKindOfClass:NSView.class] && [(NSView *)first isDescendantOf:view]) [window makeFirstResponder:window.contentView];
+}
+
 void sp_surface_close(void *handle) {
     NSCAssert(NSThread.isMainThread, @"surface closure requires the UI thread");
     SPSurfaceHost *surface = (SPSurfaceHost *)handle;
     // The first key over the limit recorded itself, so the counts of these events add up to the keys dropped.
     NSUInteger dropped = surface.keptKeys.count + (surface.droppedKeys ? surface.droppedKeys - 1 : 0);
     if (dropped) recordKeys("native.surface.keys_dropped", SP_EVENT_WARN, dropped, "closed");
+    sp_view_give_up_keyboard(surface);
     [surface removeFromSuperview];
     [surface release];
 }
@@ -540,7 +556,7 @@ void *sp_surface_native_plane(void *handle) {
 
 // The left press of the window that is open: a physical press that AppKit reports, or a diagnostic press of sp_input_pointer.
 static BOOL leftPressOpen(NSWindow *window) {
-    return (sp_input_physical_buttons() & 1) != 0 || sp_input_press_open(window, 0);
+    return (sp_input_person_buttons() & 1) != 0 || sp_input_press_open(window, 0);
 }
 
 static char keyboardPendingKey, keyboardMonitorKey, keyboardClosedKey;
@@ -588,7 +604,7 @@ static void giveKeyboardAfterPress(NSWindow *window, void (^give)(void)) {
         return;
     }
     objc_setAssociatedObject(window, &keyboardPendingKey, give, OBJC_ASSOCIATION_COPY);
-    if ((sp_input_physical_buttons() & 1) == 0 || objc_getAssociatedObject(window, &keyboardMonitorKey)) return;
+    if ((sp_input_person_buttons() & 1) == 0 || objc_getAssociatedObject(window, &keyboardMonitorKey)) return;
     id monitor = sp_observe_local_monitor("webview_geometry.press_release", SP_OBSERVE_RECORD, NSEventMaskLeftMouseUp, ^NSEvent *(NSEvent *event) {
         // It runs after AppKit delivered this release to the view.
         dispatch_async(dispatch_get_main_queue(), ^{ sp_surface_press_released(window); });

@@ -182,6 +182,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   ], { sharedTests: true }),
   lane("Darwin input", "objective-c", [
     "native/darwin/src/input_inject.m",
+    "native/darwin/src/input_virtual.m",
     "native/darwin/src/input_source.m",
     "native/darwin/src/input_reference.m",
     "native/darwin/src/webview_input.m",
@@ -190,6 +191,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
     "native/darwin/tests/input_activate_test.m",
     "native/darwin/tests/input_reference_test.m",
     "native/darwin/tests/input_inject_test.m",
+    "native/darwin/tests/input_virtual_test.m",
     "native/darwin/tests/webview_focus_test.m",
     "native/darwin/tests/webview_input_test.m",
   ], { sharedTests: true }),

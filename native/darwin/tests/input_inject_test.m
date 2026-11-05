@@ -4,6 +4,7 @@
 #import <Cocoa/Cocoa.h>
 #import <objc/runtime.h>
 #import "input_inject.h"
+#import "input_virtual.h"
 #import "input_activity_wait.h"
 #import "support/records.h"
 #import "event_ring.h"
@@ -714,9 +715,6 @@ int main(void) { @autoreleasepool {
     [view _doAfterNextPresentationUpdate:^{ painted = YES; }];
     until(^BOOL { return painted; });
 
-    check(sp_input_pointer(window, 150, 100, 0, 0, 0, 0) == SP_INPUT_INACTIVE, @"a move without a button is reported as inactive in a window that is not key");
-    drain(view);
-    check([evaluate(view, @"probe.events.filter(e=>e.type==='pointermove').length") intValue] == 0, @"a rejected move sends nothing to the page");
     evaluate(view, @"probe.events.length=0; null");
     pointerOutside(window);
     check(sp_input_pointer(window, 150, 100, 1, 0, 0, 0) == SP_INPUT_DELIVERED, @"press delivered");
@@ -833,7 +831,7 @@ int main(void) { @autoreleasepool {
     check([evaluate(view, @"document.getElementById('field').value") isEqual:@"a"], @"the previous webview keeps its text");
     [child release];
 
-    check(!NSApp.isActive, @"application stays inactive");
+    check(!sp_input_virtual_real_active(), @"application stays inactive");
     check(NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier != getpid(), @"this process did not become the frontmost application");
     [window close];
     checkIndependentWindowKeys();
