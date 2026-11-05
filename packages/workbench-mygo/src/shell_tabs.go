@@ -80,7 +80,9 @@ type shellTabs struct {
 	// memory saver read last.
 	sectionsStarted bool
 	seats           []string
-	closed          bool
+	// hiddenDue tells that a change of the plane may have left a hidden tab without its surface.
+	hiddenDue bool
+	closed    bool
 	// shown tells that the host took the first shown project, and failed that it refused it.
 	shown, failed bool
 	waiting       func(err error)
@@ -252,23 +254,15 @@ func (s *Shell) backgroundTabs() []BackgroundTab {
 func (s *Shell) layoutTabs(project *projectRecord) ([]MemorySurface, map[string]bool, error) {
 	var surfaces []MemorySurface
 	shown := map[string]bool{}
-	add := func(tab layout.Tab, active bool) {
+	err := s.eachLayoutTab(project, func(tab layout.Tab, active bool) {
 		plugin := s.pluginOf(tab.Plugin)
 		surfaces = append(surfaces, MemorySurface{ID: tab.ID, Plugin: tab.Plugin, Kind: "tab", Unload: plugin != nil && plugin.Unload})
 		if active {
 			shown[tab.ID] = true
 		}
-	}
-	for _, space := range project.Spaces {
-		if space.ID == project.ActiveSpaceID {
-			eachTab(s.plane.Cards(), add)
-			continue
-		}
-		var stored storedLayout
-		if err := json.Unmarshal(space.Layout, &stored); err != nil {
-			return nil, nil, fmt.Errorf("space %s: %w", space.ID, err)
-		}
-		eachTab(stored.State.Cards, func(tab layout.Tab, _ bool) { add(tab, false) })
+	})
+	if err != nil {
+		return nil, nil, err
 	}
 	for _, seat := range s.seatsInOrder() {
 		surfaces = append(surfaces, MemorySurface{ID: seat.SurfaceID, Plugin: seat.Plugin, Kind: "section", Unload: seat.Unload != nil})
@@ -277,6 +271,43 @@ func (s *Shell) layoutTabs(project *projectRecord) ([]MemorySurface, map[string]
 		}
 	}
 	return surfaces, shown, nil
+}
+
+// eachLayoutTab visits the tabs of every space of project, with the plane in the place of the shown space.
+func (s *Shell) eachLayoutTab(project *projectRecord, visit func(tab layout.Tab, active bool)) error {
+	for _, space := range project.Spaces {
+		if space.ID == project.ActiveSpaceID {
+			eachTab(s.plane.Cards(), visit)
+			continue
+		}
+		var stored storedLayout
+		if err := json.Unmarshal(space.Layout, &stored); err != nil {
+			return fmt.Errorf("space %s: %w", space.ID, err)
+		}
+		eachTab(stored.State.Cards, func(tab layout.Tab, _ bool) { visit(tab, false) })
+	}
+	return nil
+}
+
+// holdHiddenTabs holds a surface for each hidden tab that the memory saver left loaded, as the start mounts it: only a tab that starts
+// unloaded and a tab of a plugin with a background session have no surface while hidden (docs/spec/plugins.md#memory-saver).
+func (s *Shell) holdHiddenTabs() {
+	project := s.opened()
+	if s.tabs == nil || !s.tabs.hiddenDue || !s.tabs.sectionsStarted || project == nil || s.plane == nil {
+		return
+	}
+	s.tabs.hiddenDue = false
+	err := s.eachLayoutTab(project, func(tab layout.Tab, active bool) {
+		unit := s.units[tab.Plugin]
+		_, stopped := s.surfaces.stopped(tab.ID)
+		if active || unit == nil || unit.Composition == nil || unit.Background != nil || stopped || s.surfaces.detachHeld(tab.ID) || s.tabs.saver.Unloaded(tab.ID) {
+			return
+		}
+		s.holdSurface(&heldSurface{tab: tab, composition: unit.Composition})
+	})
+	if err != nil {
+		s.fail(err)
+	}
 }
 
 // seatsInOrder returns the seats of the section surfaces of the last frame in the order of their ids.
@@ -309,6 +340,7 @@ func (s *Shell) observeSections() {
 	if !s.tabs.sectionsStarted {
 		s.tabs.sectionsStarted = true
 		s.tabs.saver.Start()
+		s.tabs.hiddenDue = true
 	}
 }
 
@@ -323,6 +355,7 @@ func (s *Shell) tabsSettled() {
 	if !s.observeMemory() {
 		return
 	}
+	s.tabs.hiddenDue = true
 	if !s.tabs.started {
 		s.tabs.started = true
 		s.tabs.saver.Start()

@@ -671,6 +671,7 @@ func (s *Shell) View(c *ui.Context) {
 	s.tellBackground()
 	s.forgetUnseated()
 	s.observeSections()
+	s.holdHiddenTabs()
 	s.placeSurfaces()
 	s.followKeyboard()
 	s.clearVisibleNotices()
