@@ -416,13 +416,28 @@ static void pressDelivered(void *context, sp_input_result result, const sp_input
     *(sp_input_result *)context = result;
 }
 
+// An application that overrides sendEvent: as a framework does: it reads each event before super, and it sends a key up with
+// the command key past super to the key window.
+@interface SPOverridingApplication : NSApplication
+@end
+
+static NSMutableArray<NSNumber *> *overrideSights;
+
+@implementation SPOverridingApplication
+- (void)sendEvent:(NSEvent *)event {
+    [overrideSights addObject:@(event.type)];
+    if (event.type == NSEventTypeKeyUp && (event.modifierFlags & NSEventModifierFlagCommand)) [self.keyWindow sendEvent:event];
+    else [super sendEvent:event];
+}
+@end
+
 static void heldRegionEvent(void *context, const char *json) {}
 
 // Sends the queued presses and releases of the check until done or the deadline, as the application loop does.
 static void pumpInput(double seconds, BOOL (^done)(void)) {
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:seconds];
     while (!done() && deadline.timeIntervalSinceNow > 0) {
-        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskLeftMouseDown | NSEventMaskLeftMouseUp
+        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny
             untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01] inMode:NSDefaultRunLoopMode dequeue:YES];
         if (event) [NSApp sendEvent:event];
     }
@@ -569,6 +584,35 @@ static void checkHitTesting(WKWebView *main) {
     for (int index = 0; index < 32; index++) wrongSights += seen[index] != 2;
     check(wrongSights == 0, [NSString stringWithFormat:@"every monitor sees a held press and release once each (%lu monitors differ)", (unsigned long)wrongSights]);
     for (id watcher in watchers) [NSEvent removeMonitor:watcher];
+
+    // The override of the application stands behind the hold too, and input that overtakes nothing else keeps its order.
+    NSEvent *commandUp = [NSEvent keyEventWithType:NSEventTypeKeyUp location:NSZeroPoint modifierFlags:NSEventModifierFlagCommand
+        timestamp:0 windowNumber:main.window.windowNumber context:nil characters:@"x" charactersIgnoringModifiers:@"x"
+        isARepeat:NO keyCode:7];
+    NSEvent *otherDown = [NSEvent mouseEventWithType:NSEventTypeOtherMouseDown location:pressInWindow modifierFlags:0 timestamp:0
+        windowNumber:main.window.windowNumber context:nil eventNumber:0 clickCount:1 pressure:1];
+    NSEvent *otherUp = [NSEvent mouseEventWithType:NSEventTypeOtherMouseUp location:pressInWindow modifierFlags:0 timestamp:0
+        windowNumber:main.window.windowNumber context:nil eventNumber:0 clickCount:1 pressure:0];
+    NSEvent *flags = [NSEvent keyEventWithType:NSEventTypeFlagsChanged location:NSZeroPoint modifierFlags:NSEventModifierFlagShift
+        timestamp:0 windowNumber:main.window.windowNumber context:nil characters:@"" charactersIgnoringModifiers:@""
+        isARepeat:NO keyCode:56];
+    NSEvent *heldMove = [NSEvent mouseEventWithType:NSEventTypeMouseMoved location:pressInWindow modifierFlags:0 timestamp:0
+        windowNumber:main.window.windowNumber context:nil eventNumber:0 clickCount:0 pressure:0];
+    NSArray<NSEvent *> *ordered = @[ heldDown, heldMove, otherDown, otherUp, flags, heldUp, commandUp ];
+    surfaceLayoutBegin(main.window, 77006, ^(int allowed) {});
+    overrideSights = [NSMutableArray array];
+    for (NSEvent *event in ordered) [NSApp postEvent:event atStart:NO];
+    pumpInput(0.1, ^BOOL { return NO; });
+    check(overrideSights.count == 0,
+        [NSString stringWithFormat:@"an override of the application sees no input that waits: %@", overrideSights]);
+    [overrideSights removeAllObjects];
+    check(surfaceLayoutCommit(main.window, 77006), @"the layout of the input held from the override commits");
+    pumpInput(0.5, ^BOOL { return overrideSights.count >= ordered.count; });
+    NSMutableArray<NSNumber *> *expectedSights = [NSMutableArray array];
+    for (NSEvent *event in ordered) [expectedSights addObject:@(event.type)];
+    check([overrideSights isEqual:expectedSights],
+        [NSString stringWithFormat:@"held input comes back to the override once each and in order: %@", overrideSights]);
+    overrideSights = nil;
     free(seen);
     free(seenWhenHeld);
     [counter removeFromSuperview];
@@ -631,7 +675,7 @@ static void checkHitTesting(WKWebView *main) {
 }
 
 int main(void) { @autoreleasepool {
-    [NSApplication sharedApplication];
+    [SPOverridingApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];

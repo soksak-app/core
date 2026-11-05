@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F593: Input that waits for a layout keeps its order on the Tauri host, where the framework overrides `sendEvent:`, and a middle button, a scroll, a move and a modifier change no longer overtake it.
 - F590: `IDLE=1` waits after its last request until the counts of the gate that the preparation left are written, and only then takes the first CPU reading, because those writes are no cost of the settled state. It prints the records written over the CPU interval. The bounds of G2 are unchanged. Red: `measure-app-usage.test.mjs` found no wait between the marks and the first CPU reading.
 - F591: A window that closes no longer logs `window on screen: the window is gone`.
 - F589: A press and a release that wait for a layout reach every event monitor once, and a release that waits longer than a second no longer reports that its receipt did not arrive.
