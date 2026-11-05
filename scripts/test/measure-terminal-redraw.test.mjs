@@ -8,7 +8,7 @@ import test from "node:test";
 
 import { readB3Out, writeB3Out } from "../b3-out.mjs";
 
-import { B3_MEASUREMENTS, frameCost, redrawConditions, measureRegion, parseOptions, prepareRedraw, presentedFramesOf, redrawMeasurements, requireRows, screenText } from "../measure-terminal-redraw.mjs";
+import { B3_MEASUREMENTS, formatReport, frameCost, redrawConditions, measureRegion, parseOptions, parseWindowServer, prepareRedraw, presentedFramesOf, redrawMeasurements, requireRows, screenText } from "../measure-terminal-redraw.mjs";
 
 test("the text of a screen joins the characters of each row and counts an empty cell as spaces of its width", () => {
   assert.equal(screenText([[{ ch: "a", width: 1 }, { width: 1 }, { ch: "b", width: 1 }], [{ ch: "한", width: 2 }, { width: 0 }]]), "a b\n한");
@@ -153,15 +153,44 @@ test("the region measurement reads presentedFrames right around the cpu interval
     const after = await marks.after();
     return { seconds: 10, marks: { before, after }, apps: [{ rows: [{ role: "host", pid: 10, cpuSeconds: 1.5 }], totals: { application: { cpuSeconds: 1.5 }, sidecars: { cpuSeconds: 0 }, total: { cpuSeconds: 1.5 } } }], errors: [] };
   };
-  const result = await measureRegion({ s, tab: "tab-1", interval: 10, measure, covered: async () => null });
+  let server = 100;
+  const windowServer = async () => {
+    const reading = { pid: 77, seconds: server };
+    server += 0.9;
+    return reading;
+  };
+  const result = await measureRegion({ s, tab: "tab-1", interval: 10, measure, covered: async () => null, windowServer });
   assert.equal(result.cost.presented, 300);
   assert.equal(result.cost.totals.total, 5);
+  assert.equal(result.cost.windowServer.pid, 77);
+  assert.equal(result.cost.windowServer.cpuSeconds.toFixed(2), "0.90");
+  assert.equal(result.cost.windowServer.msPerFrame.toFixed(2), "3.00");
   assert.deepEqual(result.status.content, { x: 0, y: 28, width: 760, height: 614 });
-  await assert.rejects(measureRegion({ s, tab: "tab-1", interval: 10, measure, covered: async () => redrawWindow({ occluded: true }) }),
+  await assert.rejects(measureRegion({ s, tab: "tab-1", interval: 10, measure, covered: async () => redrawWindow({ occluded: true }), windowServer }),
     /window w2 reported occluded true during the interval/);
   const covered = fakeSession((kind, window, name) => (name === "host.window" ? redrawWindow({ occluded: true }) : null), "w2");
-  await assert.rejects(measureRegion({ s: covered, tab: "tab-1", interval: 10, measure, covered: async () => null }),
+  await assert.rejects(measureRegion({ s: covered, tab: "tab-1", interval: 10, measure, covered: async () => null, windowServer }),
     /window w2 reports occluded true; the measurement requires occluded false/);
+});
+
+test("the window server is the process of that name in the process table, and a table without it is an error", () => {
+  const table = "  101  0:01.20 /usr/libexec/logd\n77164 223:45.54 /System/Library/PrivateFrameworks/SkyLight.framework/Versions/A/Resources/WindowServer\n  202  0:00.10 /tmp/WindowServer-copy\n";
+  assert.deepEqual(parseWindowServer(table), { pid: 77164, seconds: 223 * 60 + 45.54 });
+  assert.throws(() => parseWindowServer("  101  0:01.20 /usr/libexec/logd\n"), /the process table has no window server/);
+});
+
+test("the report adds the window server to the sums of the application, because the screen of the terminal costs it too", () => {
+  const rows = [{ role: "host", pid: 10, cpuSeconds: 1.5 }];
+  const totals = { application: { cpuSeconds: 1.5 }, sidecars: { cpuSeconds: 0.3 }, total: { cpuSeconds: 1.8 } };
+  const cost = { ...frameCost({ rows, totals, presented: 300, seconds: 10 }), windowServer: { pid: 77, cpuSeconds: 0.9, msPerFrame: 3 } };
+  const lines = formatReport({ plugin: "term", rows: 20, rate: 30, window: "w2", tab: "tab-1", seconds: 10, cost }).split("\n");
+  assert.deepEqual(lines.slice(-5), [
+    "application without sidecars 5.00 ms/frame",
+    "sidecars 1.00 ms/frame",
+    "total 6.00 ms/frame",
+    "window server 77 0.900 3.00 the whole screen",
+    "total with the window server 9.00 ms/frame",
+  ]);
 });
 
 test("the fixture draws a start line, frames of the given rows and an end line with the number of frames", { timeout: 10000 }, () => {
