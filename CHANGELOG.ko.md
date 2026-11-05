@@ -50,6 +50,7 @@
 - F541: 두 host 모두 page module 요청이 자기 plugin의 manifest만 읽으므로, 첫 창이 module마다 설치된 manifest를 모두 읽고 parse하지 않으며, 한 plugin의 잘못된 manifest가 다른 plugin의 module을 거부하지 않는다.
 - F546: log batch가 진행 중이고 gate count의 보고 때가 되었을 때 page가 engine의 속도로 깨어나지 않는다.
 - F542: schema 번호가 다른 event 파일 하나가 더는 `sok debug query`, `sok debug replay`, debug 화면의 타임라인을 통째로 실패시키지 않는다. 질의는 그 파일을 빼고 다른 파일을 답하며 `rejected`에 그 이름을 담는다.
+- F540: 하루 동안 말이 없는 persistent service도 Rust host와의 연결을 유지하고, 그 read thread는 timed read를 들고 있지 않는다. host는 Go host와 같이 hello 뒤에 read deadline을 없앤다.
 - F533: 실패한 memory saver delay unload는 다음 deadline을 한 delay 뒤에 받으므로, 계속 실패하는 읽기나 commit이 매번 오류 표시와 함께 곧바로 다시 돌지 않는다.
 - F534: window facts 읽기는 더 이상 WebKit feature 목록을 훑지 않는다. 이 목록은 읽을 때마다 web view별로 애플리케이션 프로세스의 WebKit heap에 모든 feature를 할당했다. feature는 프로세스에서 한 번만 찾는다.
 - F532: Rust diagnostics의 update 단계가 framework port의 `quit`으로 애플리케이션을 끝내므로, `make tauriv2-build`가 다시 컴파일된다. `make hosts-check`는 새 `make host-debug-check`를 실행하며, 이 target은 두 host와 두 앱을 debug 앱의 구성으로 컴파일한다.

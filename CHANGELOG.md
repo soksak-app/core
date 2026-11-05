@@ -50,6 +50,7 @@
 - F541: A request of a page module reads the manifest of its own plugin alone, in both hosts, so the first window no longer reads and parses every installed manifest for each module, and a malformed manifest of one plugin no longer refuses the modules of the others.
 - F546: A page no longer wakes at the rate of the engine while a log batch is in flight and a count of the gate is due.
 - F542: One event file of another schema number no longer fails `sok debug query`, `sok debug replay` and the timeline of the debug view as a whole: a query leaves the file out, answers the other files and names the file in `rejected`.
+- F540: A persistent service that stays silent for a day keeps its connection to the Rust host, and its read thread no longer holds a timed read. The host removes the read deadline after the hello, as the Go host does.
 - F533: A delay unload of the memory saver that fails gets its next deadline one delay later, so a read or a commit that keeps failing no longer runs again at once with the error display each time.
 - F534: A read of the window facts no longer goes through the WebKit feature list, which allocated every feature in the WebKit heap of the application process for each web view at each read; the feature is looked up once in a process.
 - F532: The update step of the Rust diagnostics ends the application through `quit` of the framework port, so `make tauriv2-build` compiles again. `make hosts-check` runs the new `make host-debug-check`, which compiles the two hosts and the two apps in the configuration of the debug apps.
