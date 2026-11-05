@@ -5,6 +5,7 @@
 ## 미배포
 
 - F463: core가 checks kit과 실행 파일 하나 `soksak-check`를 씁니다. Red: `scripts/test/workflows.test.mjs`가 실패했습니다. Green: 통과합니다.
+- F466: 기록은 임시 log를 인용하지 않고, record 검사가 새 인용을 보고합니다.
 - F467: core가 `@soksak/kit`을 pin합니다.
 - F465: 기록은 local build 폴더의 log를 인용하지 않고, record 검사가 새 인용을 보고합니다.
 - F464: build environment 검사는 Node와 pnpm의 major version만 비교합니다. Red: `scripts/test/check-build-environment.sh`가 Node 26.13.0에서 실패했습니다. Green: 통과합니다.
@@ -1211,7 +1212,7 @@
   Resize 조건, 기존 target과 1초 deadline은 유지한다. Owner test가 1/1 통과했고
   runtime acceptance는 남아 있다.
 
-- F239-137: 설정 폴더 event-log 감사에 설치된 모든 plugin manifest catalog를 포함한다. 설치 manifest, plugin identity, catalog layer와 namespace를 검증하고 없거나 잘못된 catalog 파일을 명시적으로 보고한다. `composeCatalogs`는 기존 sidecar 검증을 유지하면서 plugin event 선언과 layer를 합친다. Red: 설치 plugin event가 `catalogOf`에 없어 owner assertion이 `actual: undefined`로 실패했다. Green: 비활성 설치 plugin과 잘못된 manifest/catalog 경우를 포함한 plugin owner test 두 개가 한 번의 실행에서 통과했고, sidecar audit와 log-contract composition 회귀가 각각 3/3 통과했다. Runtime host catalog loader는 plugin catalog를 이미 읽고 있어 변경하지 않았다. Wails catalog preflight 두 번(`/tmp/soksak-final-development-20261025.7QLhon/async-wails-ime-check-02.log`, `/tmp/soksak-final-development-20261025.7QLhon/accepted-frame-wails-ime.log`)은 stored-catalog 확인을 통과했고 plugin catalog 오류 없이 reference/terminal 단계 10개와 capture stop까지 실행했다. 두 실행은 별도 F134 frame-message/accepted-marker 결합 문제와 33 ms capture-gap 검사(33.287 ms, 33.800 ms)에서 실패했으며 IME visual acceptance 결과는 아니다.
+- F239-137: 설정 폴더 event-log 감사에 설치된 모든 plugin manifest catalog를 포함한다. 설치 manifest, plugin identity, catalog layer와 namespace를 검증하고 없거나 잘못된 catalog 파일을 명시적으로 보고한다. `composeCatalogs`는 기존 sidecar 검증을 유지하면서 plugin event 선언과 layer를 합친다. Red: 설치 plugin event가 `catalogOf`에 없어 owner assertion이 `actual: undefined`로 실패했다. Green: 비활성 설치 plugin과 잘못된 manifest/catalog 경우를 포함한 plugin owner test 두 개가 한 번의 실행에서 통과했고, sidecar audit와 log-contract composition 회귀가 각각 3/3 통과했다. Runtime host catalog loader는 plugin catalog를 이미 읽고 있어 변경하지 않았다. Wails catalog preflight 두 번은 stored-catalog 확인을 통과했고 plugin catalog 오류 없이 reference/terminal 단계 10개와 capture stop까지 실행했다. 두 실행은 별도 F134 frame-message/accepted-marker 결합 문제와 33 ms capture-gap 검사(33.287 ms, 33.800 ms)에서 실패했으며 IME visual acceptance 결과는 아니다.
 
 - F239-139: Base catalog 합성에 `layers` 선언을 요구하고 선택적 plugin
   diagnostic source를 한 번 정규화한다. 제공된 source 경로와 chain extension이
@@ -1395,17 +1396,13 @@
 
 - F239-114-3: capture artifact serialization catch 두 곳이 exception reason을
   보존해 기존 capture error 경로로 반환하는 이유를 기록한다. Red: 보존된 Node
-  실행이 reason 없는 catch 두 곳을 보고했다
- . Green: 정확한
-  reason comment 뒤 fallback owner file이 10/10 통과했다
- . Capture error는 억제되지 않는다.
+  실행이 reason 없는 catch 두 곳을 보고했다. Green: 정확한
+  reason comment 뒤 fallback owner file이 10/10 통과했다. Capture error는 억제되지 않는다.
 
 - F239-115: process identity, capture, image matching, image regions, input
   activation의 Objective-C `m.error-return` 11곳에 caller가 관찰하는 이유를
-  기록한다. Red: 보존된 Node 실행이 이유 없는 11개 지점을 보고했다
- . Green: scoped
-  reason comment를 추가한 뒤 tracked repository census owner test가 1/1 통과했다
- . 동작과 census rule은 바뀌지 않았다.
+  기록한다. Red: 보존된 Node 실행이 이유 없는 11개 지점을 보고했다. Green: scoped
+  reason comment를 추가한 뒤 tracked repository census owner test가 1/1 통과했다. 동작과 census rule은 바뀌지 않았다.
 
 - F239-110: 오래된 F239-104 구현 참조를 교체하고 완료된 동작 기능 10개의 구현과
   소유 test를 정확히 연결한다. Fixture, aggregate, reason-only, refactor, mapping,
@@ -1459,9 +1456,7 @@
   검사 뒤에 두고, non-null reply, command 및 cancel marker를 처리하는 Tauri의
   경계를 유지한다. Red: 변경 전 Go 구현은 retired malformed envelope를
   `accepted=false, error=nil`로 취소했다.
-  Green: 같은 owner test가 default와 diagnostics build에서 각각 1/1 통과했다
-  (`/tmp/F239-106-envelope-green-default-01.log`,
-  `/tmp/F239-106-envelope-green-diagnostics-01.log`).
+  Green: 같은 owner test가 default와 diagnostics build에서 각각 1/1 통과했다.
 
 - F239-100: native activation 뒤 대기 중인 visible webview를 식별한다.
   Activity-state waiter는 미완료 member를 정확히 보고하고 callback
@@ -1523,9 +1518,7 @@
   `terminal.cursor.render`를 요구하고 metadata가 없으면 `SOKSAK_VT_TRACE_DIR`
   안내 오류를 기록한다. Red: 변경 전 recording consumer가 opt-in 값을 생략해
   capture를 renderer metadata 없이 시작했으며 다른 callback display time에
-  속한 identity row도 허용했다(`/tmp/F239-98-ime-frame-optin-red-01.log`,
-  `/tmp/F239-98-ime-render-preflight-red-01.log`,
-  `/tmp/F239-98-ime-display-time-join-red-01.log`). Green: helper와 manifest
+  속한 identity row도 허용했다. Green: helper와 manifest
   consumer가 17/17 통과하고
   `make e2e-check`도
   통과한다. 두 host visual acceptance는 남아 있으며 application 실행과 bundle
@@ -1541,29 +1534,22 @@
 
 - F239-98-1-1: 저장하는 visual record에 cadence evidence를 필수로 포함한다.
   기존 helper는 생략된 cadence를 `null`로 처리해 33 ms gate를 우회할 수 있었다.
-  Red: cadence 없이 helper를 호출해도 거부하지 않았다
- . Green: 같은 test가 누락 거부,
+  Red: cadence 없이 helper를 호출해도 거부하지 않았다. Green: 같은 test가 누락 거부,
   33 ms 경계 통과, 제한 초과 전 record 저장, visual/cadence 동시 실패 보고를 확인하며
   helper 18/18이 통과한다.
 
 - F239-98-2: rows-only terminal status에서 visual input text를 투영한다.
   `terminal.screen` status에는 frame identity가 없지만 consumer가 해당 rows를
   strict framed `terminal.screen.read` helper에 전달했다. Red: 실제 rows-only
-  status와 exported projection을 사용한 owner integration이 실패했다
- . Green: rows-only projection은
+  status와 exported projection을 사용한 owner integration이 실패했다. Green: rows-only projection은
   통과하고 framed wrapper의 엄격 검증은 유지한다. Visual consumer와 terminal
-  document suite는 각각 19/19, 38/38 통과한다
-  (`/tmp/F239-98-2-visual-index-green-01.log`,
-  `/tmp/F239-98-2-terminal-document-green-01.log`).
+  document suite는 각각 19/19, 38/38 통과한다.
 
 - F239-98-3: CoreGraphics sRGB 이름을 consumer 경계에서 매핑한다. Source
   artifact와 capture callback의 raw metadata 및 raster byte는 유지하고
   `kCGColorSpaceSRGB`만 semantic `sRGB`로 매핑하며 다른 이름은 거부한다.
-  Red: 두 owner 경계가 native 이름을 그대로 반환했다
- . Green: unsupported-name 거부를 포함해
-  두 경계 test가 2/2, visual consumer가 19/19 통과한다
-  (`/tmp/F239-98-3-color-name-green-01.log`,
-  `/tmp/F239-98-3-visual-owner-green.log`). 보존된 네 실행의 첫 9단계 offline
+  Red: 두 owner 경계가 native 이름을 그대로 반환했다. Green: unsupported-name 거부를 포함해
+  두 경계 test가 2/2, visual consumer가 19/19 통과한다. 보존된 네 실행의 첫 9단계 offline
   replay는 retained-source status 누락 때문에 계속 `no-proof`다(Tauri 33/28,
   Wails 3/3). 10번째 단계 경계는 추론하지 않았다
  .

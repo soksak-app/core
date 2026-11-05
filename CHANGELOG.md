@@ -5,6 +5,7 @@
 ## Unreleased
 
 - F463: Core uses the checks kit and its one executable `soksak-check`. Red: `scripts/test/workflows.test.mjs` failed. Green: it passes.
+- F466: Records cite no temporary log, and the record check reports a new citation.
 - F467: Core pins `@soksak/kit`.
 - F465: Records cite no log of the local build folder, and the record check reports a new citation.
 - F464: The build environment check compares only major versions of Node and pnpm. Red: `scripts/test/check-build-environment.sh` failed on Node 26.13.0. Green: it passes.
@@ -1179,8 +1180,7 @@
 - F239-109: Show each Rust test build's start and elapsed pass/fail result through
   the shared test runner while retaining its per-build timeout. Controlled
   negative: temporarily restoring the no-output callback makes the tracked
-  discovery assertion fail with `no build start line: []`
- . Green:
+  discovery assertion fail with `no build start line: []`. Green:
   the same owner test passes, and
   the Rust discovery plus Cargo metadata owner cases pass 2/2
  .
@@ -1188,8 +1188,7 @@
 - F239-102: Select Rust host-contract declarations from Cargo-listed test
   executables and their target source paths. The preserved initial static audit
   included Linux-only and Windows-only Tauri sok declarations in the macOS
-  inventory. The focused selector owner test passes 1/1
- . The current full
+  inventory. The focused selector owner test passes 1/1. The current full
   declaration audit remains pending while other F239-93 owner changes land.
 
 - F239-140: Explain six typed image detach acknowledgement parse conversions.
@@ -1234,7 +1233,7 @@
   the resize guard, existing target and one-second deadline. The owner test
   passes 1/1; runtime acceptance remains pending.
 
-- F239-137: Include every installed plugin manifest catalog in per-configuration event-log audits. Validate the installed manifest, plugin identity, catalog layer and namespace, and report missing or invalid catalog files explicitly. `composeCatalogs` now preserves sidecar validation while adding plugin event declarations and layers. Red: the owner assertion failed because the installed plugin event was absent from `catalogOf` (`actual: undefined`). Green: both installed-plugin owner cases pass in one run, including a disabled installed plugin and invalid manifest/catalog cases; sidecar audit and log-contract composition regressions each pass 3/3. Runtime host catalog loading already included plugin catalogs and was unchanged. The Wails catalog preflight passed in `/tmp/soksak-final-development-20261025.7QLhon/async-wails-ime-check-02.log` and `/tmp/soksak-final-development-20261025.7QLhon/accepted-frame-wails-ime.log`: the stored-catalog check passed, and all ten reference/terminal steps and capture stop ran without the plugin-catalog error. Both runs still failed the separate F134 frame-message/accepted-marker join and the 33 ms capture-gap check (33.287 ms and 33.800 ms); this is not IME visual acceptance.
+- F239-137: Include every installed plugin manifest catalog in per-configuration event-log audits. Validate the installed manifest, plugin identity, catalog layer and namespace, and report missing or invalid catalog files explicitly. `composeCatalogs` now preserves sidecar validation while adding plugin event declarations and layers. Red: the owner assertion failed because the installed plugin event was absent from `catalogOf` (`actual: undefined`). Green: both installed-plugin owner cases pass in one run, including a disabled installed plugin and invalid manifest/catalog cases; sidecar audit and log-contract composition regressions each pass 3/3. Runtime host catalog loading already included plugin catalogs and was unchanged. The Wails catalog preflight passed: the stored-catalog check passed, and all ten reference/terminal steps and capture stop ran without the plugin-catalog error. Both runs still failed the separate F134 frame-message/accepted-marker join and the 33 ms capture-gap check (33.287 ms and 33.800 ms); this is not IME visual acceptance.
 
 - F239-139: Require `layers` when composing a base catalog and normalize the
   optional plugin diagnostic source once. Preserve supplied source paths and
@@ -1431,10 +1430,8 @@
 
 - F239-114-3: State why both capture artifact serialization catches preserve
   the exception reason and return it through the existing capture error path.
-  Red: the preserved Node run reported both catch clauses without reasons
- . Green: the
-  fallback owner file passes 10/10 after the precise reason comments
- . No capture error is suppressed.
+  Red: the preserved Node run reported both catch clauses without reasons. Green: the
+  fallback owner file passes 10/10 after the precise reason comments. No capture error is suppressed.
 
 - F239-115: State the caller-visible reason at each of the 11 Objective-C
   `m.error-return` sites in process identity, capture, image matching, image
@@ -1498,11 +1495,8 @@
   from a retired generation. Keep event payload decoding, dispatch and state
   mutation behind the current-generation check, and preserve the Tauri handling
   of non-null reply, command and cancel markers. Red: unchanged Go behavior
-  canceled a retired malformed envelope with `accepted=false, error=nil`
- . Green: the same owner test
-  passes 1/1 in default and diagnostics builds
-  (`/tmp/F239-106-envelope-green-default-01.log`,
-  `/tmp/F239-106-envelope-green-diagnostics-01.log`).
+  canceled a retired malformed envelope with `accepted=false, error=nil`. Green: the same owner test
+  passes 1/1 in default and diagnostics builds.
 
 - F239-100: Identify the visible webview that remains pending after native
   activation. The activity-state waiter reports exact unresolved members and
@@ -1574,9 +1568,7 @@
   records a clear `SOKSAK_VT_TRACE_DIR` error when renderer metadata is absent.
   Red: the unchanged recording consumer omitted the opt-in option, started
   capture without renderer metadata, and accepted an identity row with a
-  different callback display time (`/tmp/F239-98-ime-frame-optin-red-01.log`,
-  `/tmp/F239-98-ime-render-preflight-red-01.log`,
-  `/tmp/F239-98-ime-display-time-join-red-01.log`). Green: the same helper and
+  different callback display time. Green: the same helper and
   manifest consumer pass 17/17
  ; `make e2e-check`
   passes. Two-host visual acceptance remains pending; no application or bundle
@@ -1588,14 +1580,12 @@
   34 ms gap after measured visual results and did not report simultaneous
   visual and cadence failures. Green: the
   same test verifies persistence before rejection and an `AggregateError` with
-  both failures; the helper passes 18/18
- . The 33 ms bound is unchanged.
+  both failures; the helper passes 18/18. The 33 ms bound is unchanged.
   Two-host visual acceptance remains pending under F239-98.
 
 - F239-98-1-1: Require cadence evidence in the persisted visual record. The
   helper previously defaulted omitted cadence to `null`, bypassing the 33 ms
-  gate. Red: the owner test observed no rejection when cadence was omitted
- . Green: the same test confirms
+  gate. Red: the owner test observed no rejection when cadence was omitted. Green: the same test confirms
   missing-evidence rejection, acceptance at 33 ms, persistence before an
   over-limit failure and combined visual/cadence reporting; the helper passes
   18/18.
@@ -1606,18 +1596,14 @@
   Red: the owner integration with actual rows-only status and the exported
   projection failed. Green: the
   rows-only projection passes, the framed wrapper remains strict, and the
-  visual consumer and terminal document suites pass 19/19 and 38/38
-  (`/tmp/F239-98-2-visual-index-green-01.log`,
-  `/tmp/F239-98-2-terminal-document-green-01.log`).
+  visual consumer and terminal document suites pass 19/19 and 38/38.
 
 - F239-98-3: Map the emitted CoreGraphics sRGB name at the consumer boundary.
   The source artifact and capture callback keep their raw metadata and raster
   bytes; the consumer maps only `kCGColorSpaceSRGB` to semantic `sRGB` and
   rejects other names. Red: both owner boundaries returned the native name
   unchanged. Green: both pass 2/2,
-  including unsupported-name rejection, and the visual consumer passes 19/19
-  (`/tmp/F239-98-3-color-name-green-01.log`,
-  `/tmp/F239-98-3-visual-owner-green.log`). First-nine offline replay across
+  including unsupported-name rejection, and the visual consumer passes 19/19. First-nine offline replay across
   four preserved runs remains `no-proof` due to missing retained-source status
   (Tauri 33/28, Wails 3/3); no tenth-stage boundary is inferred
  .
