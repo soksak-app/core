@@ -11,6 +11,7 @@
 #import <IOSurface/IOSurface.h>
 #import <CoreImage/CoreImage.h>
 #import <QuartzCore/QuartzCore.h>
+#include <math.h>
 #include <stdlib.h>
 #import "application_log.h"
 #import "capture_frame_identity.h"
@@ -49,6 +50,18 @@ static void failFrameIdentitySession(NSString *message) {
 }
 @end
 
+// The time in seconds without a frame after which a region releases its spare copy (sp_region_set_spare_delay).
+static NSTimeInterval spareDelay = 1;
+
+// The running spare delay of a region. The delay holds this token and not the region, so a closed region is released before
+// its delay ends.
+@interface SPSpareDelay : NSObject
+@property(assign) SPImageRegion *region;
+@end
+
+@implementation SPSpareDelay
+@end
+
 // Image region implementation.
 @interface SPImageRegion : NSView <NSTextInputClient>
 @property sp_region_event event;
@@ -59,6 +72,8 @@ static void failFrameIdentitySession(NSString *message) {
 @property sp_region_released released;      // Set in the lease mode; reports each held surface that the region stops holding.
 @property void *releasedContext;
 @property(assign) IOSurfaceRef spare;      // The earlier presentation copy, reused for the next frame when the compositor released it.
+@property(retain) SPSpareDelay *runningSpareDelay;  // Set while the release of the spare copy waits for the spare delay.
+@property CFTimeInterval lastSpareTime;     // When the last copy became the spare, in CACurrentMediaTime.
 @property size_t presentedWidth;
 @property size_t presentedHeight;
 @property double presentedScale;
@@ -372,8 +387,40 @@ static void spEnsurePressOriginMonitor(void) {
     return self;
 }
 
+// A supplier that stops sending frames sends no event, so the end of the frames has no event source: one delay runs from the
+// first frame, and when it ends while frames still arrive it runs again for the rest. A region at rest has no delay running.
+- (void)waitForSpareDelay:(NSTimeInterval)seconds {
+    SPSpareDelay *delay = [[SPSpareDelay new] autorelease];
+    delay.region = self;
+    self.runningSpareDelay = delay;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(seconds * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        SPImageRegion *region = delay.region;
+        if (!region) return;
+        delay.region = nil;
+        region.runningSpareDelay = nil;
+        [region spareDelayEnded];
+    });
+}
+
+- (void)spareDelayEnded {
+    if (!self.spare) return;
+    NSTimeInterval rest = self.lastSpareTime + spareDelay - CACurrentMediaTime();
+    if (rest > 0) {
+        [self waitForSpareDelay:rest];
+        return;
+    }
+    IOSurfaceRef spare = self.spare;
+    self.spare = NULL;
+    char fields[64];
+    snprintf(fields, sizeof fields, "{\"bytes\":%zu}", IOSurfaceGetAllocSize(spare));
+    CFRelease(spare);
+    sp_event(SP_CLASS_LIFECYCLE, SP_EVENT_DEBUG, "native.image.spare_released", fields);
+}
+
 - (void)dealloc {
     [NSNotificationCenter.defaultCenter removeObserver:self];
+    _runningSpareDelay.region = nil;
+    [_runningSpareDelay release];
     [_reportedPreedit release];
     [_inputActions release];
     [_inputErrors release];
@@ -1788,8 +1835,17 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
     } else if (previous) {
         if (view.spare) CFRelease(view.spare);
         view.spare = previous;
+        view.lastSpareTime = CACurrentMediaTime();
+        if (!view.runningSpareDelay) [view waitForSpareDelay:spareDelay];
     }
 
+    return true;
+}
+
+bool sp_region_set_spare_delay(double seconds) {
+    NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
+    if (!isfinite(seconds) || seconds <= 0) return false;
+    spareDelay = seconds;
     return true;
 }
 
@@ -1868,6 +1924,12 @@ void sp_region_close(void *handle) {
     }
     view.closed = YES;
     view.event = NULL;
+    view.runningSpareDelay.region = nil;
+    view.runningSpareDelay = nil;
+    if (view.spare) {
+        CFRelease(view.spare);
+        view.spare = NULL;
+    }
     if (view.released && view.presented) {
         // Closing ends the lease of the presented surface: the layer stops presenting it in a committed transaction.
         [CATransaction begin];

@@ -20,6 +20,7 @@
 - F502-16: 닫힌 프로젝트의 페이지가 retain 중에 보낸 요청이 그 retain을 `retain surface entry is invalid`로 실패시키지 않는다. mygo와 Wails 호스트가 그 요청을 거절하고, 호스트의 전송은 root 없는 세션을 남기지 않는다.
 - F502-16: 프로젝트를 닫은 뒤 다음 프레임 전에 구분선이나 탭에 들어온 누름과 키가 mygo host를 멈추지 않고, 잡은 경계와 끌던 탭은 그 plane이 떠날 때 끝나므로 다른 space의 경계를 옮기지 않는다. 떠난 plane의 탭에 관한 질문은 닫히고, 탭이 떠난 뒤 성공한 저장은 실패를 보여 주지 않되 실패한 저장은 그대로 보여 주며, `core.card.sidebar.*`는 프로젝트가 없는 창에서 거절한다.
 - F502-16: 보이는 프로젝트를 닫은 뒤 `core.verify`를 읽어도 mygo host가 멈추지 않는다. 떠난 plane은 다음 plane의 프레임까지 행이 없으므로, 창이 그리지 않은 plane을 말하지 않는다.
+- F580: `copy` 방식 그림 영역은 1초 동안 frame이 오지 않으면 여분 복사본을 놓으므로, 쉬는 terminal card가 화면의 frame보다 3.36 MiB를 더 잡지 않는다.
 - F502-21: `setDialogBackground`가 다른 host call처럼 object `{enabled}`를 받고, framework 표의 B 행이 이 call을 mygo에만 있는 call로 나열해 host parity check가 통과한다. P 행이 `Frontend.Frames`를 나열한다.
 - F502-16: mygo workbench의 모든 모양 값은 page도 읽는 `workbench.json`에서 나온다: card foot의 caption, sidebar의 status line, placeholder와 멈춘 view의 글자, dialog의 scrim과 blur, layer의 anchor 아래 간격이다.
 - F551: Tauri host는 비동기 runtime의 worker를 processor마다 하나가 아니라 둘만 두고, 일 없는 blocking thread는 10초가 아니라 1초 뒤에 끝난다.

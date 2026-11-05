@@ -1746,6 +1746,18 @@ const FEATURE_LINKS = [
     levels: ["native", "unit"],
   },
   {
+    id: "F580",
+    implementation: [
+      { file: "docs/spec/native-surfaces.md", symbol: "**Image consumption**" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_region_spare_test.m", id: "the spare is released when no frame arrives for the delay" },
+      { file: "native/darwin/tests/image_region_spare_test.m", id: "frames within the delay keep the spare" },
+    ],
+    expected: "An image region in the copy mode releases its spare copy when no frame arrives for the spare delay, keeps the frame on screen, and allocates the copy of the next frame within the time of one frame.",
+    levels: ["native"],
+  },
+  {
     id: "F501",
     implementation: [
       { file: "scripts/check-host-parity.mjs", symbol: "export function specDiagnosticMethods(endpointMarkdown) {" },

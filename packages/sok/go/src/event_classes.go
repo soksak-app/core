@@ -88,6 +88,7 @@ var eventClasses = map[string]Class{
 	"native.app.unhidden":                    ClassLifecycle,
 	"native.capture.lifecycle":               ClassLifecycle,
 	"native.document.backforward_cleared":    ClassLifecycle,
+	"native.image.spare_released":            ClassLifecycle,
 	"native.input.callback":                  ClassInput,
 	"native.input.key_down":                  ClassInput,
 	"native.input.query":                     ClassInput,
