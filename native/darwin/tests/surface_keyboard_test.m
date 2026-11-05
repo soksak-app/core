@@ -155,6 +155,51 @@ int main(void) { @autoreleasepool {
     check(window.firstResponder == terminalPage, "a page that held the keyboard by a press takes it back");
     sp_region_close(later);
 
+    // A window that closes takes no keyboard. The region of its surface stays alive until the host closes it, so the owner of
+    // the surface is still readable: a call that follows it would put the first responder into a window that gets no key.
+    NSWindow *closing = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 800, 500)
+        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+    closing.releasedWhenClosed = NO;
+    WKWebView *closingMain = [[[WKWebView alloc] initWithFrame:closing.contentView.bounds] autorelease];
+    [closing.contentView addSubview:closingMain];
+    void *closingObservation = sp_window_observe_responder(closing, ^{});
+    void *closingComposition = sp_window_set_main_webview(closing, closingMain);
+    void *ownedHost = sp_surface_create(closingComposition);
+    void *otherHost = sp_surface_create(closingComposition);
+    webviewSetFrame(ownedHost, 0, 0, 400, 500);
+    webviewSetFrame(otherHost, 400, 0, 400, 500);
+    webviewSetSurfaceHidden(ownedHost, false);
+    webviewSetSurfaceHidden(otherHost, false);
+    WKWebView *ownedPage = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 500)] autorelease];
+    WKWebView *otherPage = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 500)] autorelease];
+    check(sp_surface_place_view(ownedHost, ownedPage), "the page of a surface of the second window is placed");
+    check(sp_surface_place_view(otherHost, otherPage), "the page of the other surface of the second window is placed");
+    void *ownedRegion = sp_region_create(ownedHost, "view", regionEvent, NULL);
+    placeRegion(ownedRegion);
+    sp_surface_focus(ownedHost);
+    check(closing.firstResponder == (NSResponder *)ownedRegion, "the region of the second window takes the keyboard");
+    sp_surface_focus(otherHost);
+    check(closing.firstResponder == otherPage, "the other surface of the second window takes the keyboard");
+    // A call that waits for the release of a press when the window closes.
+    check(sp_input_pointer(closing, 600, 250, 1, 0, 0, 0) == SP_INPUT_DELIVERED, "a press in the second window is delivered");
+    sp_surface_focus(ownedHost);
+    check(closing.firstResponder == otherPage, "the press keeps the keyboard where it is");
+    [closing close];
+    sp_input_pointer(closing, 600, 250, 3, 0, 0, 0);
+    sp_surface_press_released(closing);
+    check(closing.firstResponder == otherPage, "a call that waited for the release of a press does not move in a closed window");
+    sp_surface_focus(ownedHost);
+    check(closing.firstResponder == otherPage, "a surface of a closed window does not take the keyboard");
+    sp_surface_region_focus(ownedRegion);
+    check(closing.firstResponder == otherPage, "a region of a closed window does not take the keyboard");
+    // A window that shows again takes the keyboard as before.
+    [closing orderBack:nil];
+    sp_surface_focus(ownedHost);
+    check(closing.firstResponder == (NSResponder *)ownedRegion, "a window that shows again gives the keyboard to its surface");
+    [closing close];
+    sp_region_close(ownedRegion);
+    sp_window_end_responder_observation(closingObservation);
+
     sp_window_end_responder_observation(observation);
     return failures ? 1 : 0;
 } }
