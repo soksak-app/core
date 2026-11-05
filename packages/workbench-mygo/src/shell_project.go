@@ -18,8 +18,9 @@ import (
 // storedLayout is a stored layout: the state of the plane with the other members as they are stored.
 type storedLayout struct {
 	State          layout.State    `json:"state"`
-	Sidebars       json.RawMessage `json:"sidebars"`
+	FocusedID      string          `json:"focusedId"`
 	WindowSidebars json.RawMessage `json:"windowSidebars"`
+	Sidebars       json.RawMessage `json:"sidebars"`
 }
 
 // newLayout returns the layout of a new space, from the grid of the environment declaration.
@@ -271,14 +272,18 @@ func (s *Shell) loadSpace(project *projectRecord) error {
 	if err := s.sidebars.Restore(stored.Sidebars); err != nil {
 		return fmt.Errorf("space %s: %w", space.ID, err)
 	}
-	// default: a stored layout without records has no stored width (docs/spec/projects.md#persistence).
-	widths := map[string]layout.WindowSidebar{}
+	s.windowSidebars = map[string]layout.WindowSidebar{}
 	if len(stored.WindowSidebars) > 0 {
-		if widths, err = layout.RestoreWindowSidebars(stored.WindowSidebars); err != nil {
+		if s.windowSidebars, err = layout.RestoreWindowSidebars(stored.WindowSidebars); err != nil {
 			return fmt.Errorf("space %s: %w", space.ID, err)
 		}
 	}
-	s.plane, s.focused, s.fullscreen, s.windowSidebars = plane, s.firstCard(plane), "", widths
+	s.plane, s.fullscreen = plane, ""
+	// A new space stores no focus, and the stored focus of a card that left the layout names no card.
+	s.focused = stored.FocusedID
+	if _, known := plane.Card(s.focused); !known {
+		s.focused = s.firstCard(plane)
+	}
 	if _, err := s.arrangeWindowSidebars(); err != nil {
 		return fmt.Errorf("space %s: %w", space.ID, err)
 	}
@@ -353,6 +358,9 @@ func (s *Shell) keepPlane(project *projectRecord) error {
 		return err
 	}
 	kept["state"] = state
+	if kept["focusedId"], err = json.Marshal(s.focused); err != nil {
+		return err
+	}
 	if kept["sidebars"], err = json.Marshal(s.sidebars.Stored()); err != nil {
 		return err
 	}
@@ -495,6 +503,7 @@ func (s *Shell) activateSpace(id string) error {
 		return err
 	}
 	s.storeSpaces(project)
+	s.tabsSettled()
 	s.options.Invalidate()
 	return nil
 }
@@ -517,6 +526,7 @@ func (s *Shell) addSpace() error {
 		return err
 	}
 	s.storeSpaces(project)
+	s.tabsSettled()
 	s.options.Invalidate()
 	return nil
 }

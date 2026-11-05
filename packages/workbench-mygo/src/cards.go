@@ -24,12 +24,12 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 	s.drawSpaces(c, project, width)
 	stage := height - banner - s.metrics.spaceTabH - s.metrics.tabsGap
 	inset := s.stageInset()
-	sized := s.plane.Width() > 0
 	s.plane.Resize(float64(width-2*inset), float64(stage-2*inset))
-	if !sized {
-		if _, err := s.arrangeWindowSidebars(); err != nil {
-			s.fail(err)
-		}
+	// A column needs the size of the plane, and the settings, the space and the project all decide the columns, so a frame matches them.
+	if changed, err := s.arrangeWindowSidebars(); err != nil {
+		s.errors.Show(workbenchErrorPlace, err.Error(), "")
+	} else if changed {
+		s.keep()
 	}
 	originX, originY := inset, s.chromeHeight()+banner+s.metrics.spaceTabH+s.metrics.tabsGap+inset
 	ui.Box(c).Size(width, stage).DrawOver(func(p *ui.Painter, r ui.Rect) { s.drawRail(p, r, inset) }).Children(func() {

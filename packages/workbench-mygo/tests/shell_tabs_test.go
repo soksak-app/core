@@ -239,6 +239,24 @@ func TestCoreFileOpenWithoutAProjectIsRefused(t *testing.T) {
 	equal(t, message(failure), "this window shows no project")
 }
 
+// A tab of a space that left the screen is hidden for the memory saver, and showing the space shows it again.
+func TestAChangeOfSpaceHidesAndShowsItsTabs(t *testing.T) {
+	f := newTabShell(t, &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"))}})
+	f.open(t)
+	shown := func() bool { return memoryTabs(t, f)["tab-aaaaaa"]["hiddenAt"] == nil }
+	if !shown() {
+		t.Fatalf("the tab is not shown: %v", memoryTabs(t, f))
+	}
+	f.shellFixture.run("core.space.add", nil)
+	if shown() {
+		t.Fatalf("a new space left the tab shown: %v", memoryTabs(t, f))
+	}
+	f.shellFixture.run("core.space.activate", map[string]any{"id": "spc-aaaaaa"})
+	if !shown() {
+		t.Fatalf("the space came back without its tab: %v", memoryTabs(t, f))
+	}
+}
+
 func memoryTabs(t *testing.T, f *tabShell) map[string]map[string]any {
 	t.Helper()
 	status, err := f.shell.Registry().Read("core.tab.memory")

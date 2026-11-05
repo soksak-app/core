@@ -45,6 +45,8 @@ func (s *Shell) drawChrome(c *ui.Context, width float32) {
 		if !browsing {
 			s.chromeAct(c, "core.chrome.projects", "core.projects.browse", "프로젝트", nil)
 			s.chromeAct(c, "core.chrome.balance", "core.layout.balance", "균형", nil)
+			s.chromeSide(c, "left", "왼쪽")
+			s.chromeSide(c, "right", "오른쪽")
 		}
 		if updates := len(s.pluginOperations.Status().Updates); updates > 0 {
 			s.chromeAct(c, "core.chrome.updates", "core.plugins.show-updates", fmt.Sprintf("업데이트 %d", updates), nil)
@@ -55,6 +57,12 @@ func (s *Shell) drawChrome(c *ui.Context, width float32) {
 
 func (s *Shell) chromeAct(c *ui.Context, name, command, label string, params any) {
 	s.barText(c, s.binder.Press(c, name, command, "", params), label, false)
+}
+
+// chromeSide draws the control that shows or hides the window sidebar side.
+func (s *Shell) chromeSide(c *ui.Context, side, label string) {
+	shown, _ := s.settings.Value(side).(bool) // silent: the settings store checks the type of the value.
+	s.barText(c, s.binder.Press(c, "core.chrome."+side, "core.settings.set", "", settingsPatchParam{map[string]any{side: !shown}}), label, shown)
 }
 
 // drawProjectTabs draws the tabs of the projects that the window owns, which are the open projects of the window.

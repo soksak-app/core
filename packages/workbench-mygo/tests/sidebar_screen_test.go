@@ -222,6 +222,19 @@ func TestAWindowSidebarEndsInItsStatusLineAndFoldControl(t *testing.T) {
 	}
 }
 
+// A section shorter than the set leaves the status line at the bottom of the sidebar.
+func TestTheStatusLineStandsAtTheBottomOfASidebarWithTabs(t *testing.T) {
+	frame := listFrame()
+	frame.Layout, frame.Tab = "tabs", frame.Sections[0].ID
+	frame.Sections[0].Fill, frame.Sections[0].Height = false, 40
+	frame.Sections[0].Size = nil
+	tt := drawSidebar(&frame, recorder(t, new([]call), sidebarCommands...))
+	status := element(t, tt, "core.sidebar.status", "left")
+	if status.Bounds.Y+status.Bounds.H != 400 {
+		t.Fatalf("the status line is %+v in a sidebar of the height 400", status.Bounds)
+	}
+}
+
 func TestACardSidebarEndsInItsOwnStatusLine(t *testing.T) {
 	frame := listFrame()
 	frame.Sidebar, frame.Side, frame.Status = "card-1:left", "", "왼쪽 사이드바 · Files"

@@ -126,6 +126,67 @@ func TestLayoutStatusIsTheSavedFormOfTheSpace(t *testing.T) {
 	}
 }
 
+// focusedOf returns the focused card of the stored layout of the space id.
+func focusedOf(t *testing.T, f *shellFixture, id string) any {
+	t.Helper()
+	for _, space := range f.host.projects[0]["spaces"].([]any) {
+		if space := space.(map[string]any); space["id"] == id {
+			return space["layout"].(map[string]any)["focusedId"]
+		}
+	}
+	t.Fatalf("no space %s", id)
+	return nil
+}
+
+// A space stores the focus with its layout, and showing the space again gives the focus back to that card.
+func TestASpaceKeepsTheFocusOfItsCard(t *testing.T) {
+	f, _ := surfaceShell(t)
+	f.run("core.card.split", map[string]string{"card": f.tabbedCards()[0], "side": "right", "plugin": "terminal"})
+	focused := status[map[string]any](t, f, "core.layout")["focusedId"]
+	if focused == f.tabbedCards()[0] {
+		t.Fatalf("the split left the focus on %v", focused)
+	}
+	first := f.host.projects[0]["spaces"].([]any)[0].(map[string]any)["id"].(string)
+	f.run("core.space.add", nil)
+	f.settle()
+	if got := focusedOf(t, f, first); got != focused {
+		t.Fatalf("the space stored the focus %v and not %v", got, focused)
+	}
+	f.run("core.space.activate", map[string]string{"id": first})
+	f.settle()
+	if got := status[map[string]any](t, f, "core.layout")["focusedId"]; got != focused {
+		t.Fatalf("the focus came back on %v and not on %v", got, focused)
+	}
+}
+
+// A stored focus that names no card of the layout gives the focus to the first card with a tab.
+func TestAStoredFocusOnNoCardTakesTheFirstCard(t *testing.T) {
+	first := projectWithPlugins(t)
+	first.host.projects[0]["spaces"].([]any)[0].(map[string]any)["layout"].(map[string]any)["focusedId"] = "gone"
+	second := newShell(t, first.host)
+	second.click("core.library.open", first.host.projects[0]["id"].(string))
+	if got := status[map[string]any](t, second, "core.layout")["focusedId"]; got != second.tabbedCards()[0] {
+		t.Fatalf("the focus is on %v and not on %v", got, second.tabbedCards()[0])
+	}
+}
+
+// A project opens with the stored focus of its space.
+func TestAStoredProjectOpensWithItsFocus(t *testing.T) {
+	first := projectWithPlugins(t)
+	first.click("core.card.split-x", first.tabbedCards()[0])
+	first.click("core.picker.item", "acme")
+	focused := status[map[string]any](t, first, "core.layout")["focusedId"]
+	id := first.host.projects[0]["spaces"].([]any)[0].(map[string]any)["id"].(string)
+	if got := focusedOf(t, first, id); got != focused {
+		t.Fatalf("the space stored the focus %v and not %v", got, focused)
+	}
+	second := newShell(t, first.host)
+	second.click("core.library.open", first.host.projects[0]["id"].(string))
+	if got := status[map[string]any](t, second, "core.layout")["focusedId"]; got != focused {
+		t.Fatalf("the focus is on %v and not on %v", got, focused)
+	}
+}
+
 func TestSurfacesStatusListsTheHeldViews(t *testing.T) {
 	f, stored := surfaceShell(t)
 	surfaces := status[[]map[string]any](t, f, "core.surfaces")
