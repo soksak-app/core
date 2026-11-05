@@ -33,6 +33,18 @@ pub fn set_modified(path: &Path) {
 }
 
 /// A new configuration directory with an empty logs folder, removed when the value is dropped.
+/// The lines of a host file with the keys (1000, 1), (1002, 2) and (1003, 3): its `log.open` and two events.
+pub fn host_lines() -> String {
+    let mut lines = "{\"ts_us\":1000,\"mono_ns\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"host\",\"event\":\"log.open\",\"fields\":{\"schema\":3}}\n".to_string();
+    for seq in 2..=3 {
+        let ts = 1000 + seq;
+        lines += &format!(
+            "{{\"ts_us\":{ts},\"mono_ns\":{seq},\"seq\":{seq},\"level\":\"debug\",\"layer\":\"host\",\"event\":\"host.x.y\"}}\n"
+        );
+    }
+    lines
+}
+
 pub fn temp_dir(name: &str) -> Folder {
     let dir = Folder::new(&format!("log-{name}"));
     std::fs::create_dir(dir.join("logs")).expect("create the logs folder");

@@ -786,7 +786,7 @@ func indexFrom(name string, state indexState, source, idx *os.File, size uint64,
 					return read, 0, 0, err
 				}
 				if schema != eventSchema {
-					return read, 0, 0, fmt.Errorf("%s: schema %d is not %d", name, schema, eventSchema)
+					return read, 0, 0, rejectedLog{fmt.Sprintf("%s: schema %d is not %d", name, schema, eventSchema)}
 				}
 				next.headLen = uint32(lineSize)
 				next.headHash = fnv1a(append(append([]byte(nil), lineBytes...), '\n'))
@@ -826,6 +826,11 @@ func indexFrom(name string, state indexState, source, idx *os.File, size uint64,
 	}
 	return read, int64(events - firstEvent), announcing, nil
 }
+
+// rejectedLog is the error of an event file of another schema number: a query leaves the file out and names it in its answer.
+type rejectedLog struct{ text string }
+
+func (r rejectedLog) Error() string { return r.text }
 
 // schemaOf reads the schema number of a log.open line.
 func schemaOf(name string, raw []byte) (int64, error) {

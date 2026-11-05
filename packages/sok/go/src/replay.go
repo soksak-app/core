@@ -406,7 +406,7 @@ func runReplayExecutable(session, folder, executable string, input []byte) (map[
 }
 
 // runReplay runs `sok debug replay <session> [--until <sequence>]`.
-func runReplay(a arguments, stdout io.Writer, options Options) error {
+func runReplay(a arguments, stdout, stderr io.Writer, options Options) error {
 	session, err := a.positional(2, "session")
 	if err != nil {
 		return err
@@ -424,6 +424,18 @@ func runReplay(a arguments, stdout io.Writer, options Options) error {
 	}
 	configDir, err := configDirOf(a.values, options)
 	if err != nil {
+		return err
+	}
+	// A segment in a file that the query leaves out is not compared, so each such file is named whatever the replay finds.
+	query, err := ParseLogQuery([]byte(`{"channel":"all","limit":1}`))
+	if err != nil {
+		return err
+	}
+	files, err := QueryLogs(configDir, query, nil)
+	if err != nil {
+		return err
+	}
+	if err := reportRejected(stderr, files.Rejected); err != nil {
 		return err
 	}
 	result, err := ReplayLogs(configDir, session, until)

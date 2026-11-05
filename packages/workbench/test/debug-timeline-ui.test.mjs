@@ -63,16 +63,16 @@ function answer(rows, request) {
   const tail = {};
   for (const r of rows) tail[`${r.role}-${r.boot}`] = Math.max(tail[`${r.role}-${r.boot}`] ?? 0, r.event.seq);
   const next = found.length > limit ? { ts_us: page.at(-1).event.ts_us, role: page.at(-1).role, boot: page.at(-1).boot, seq: page.at(-1).event.seq } : null;
-  return { rows: page, next, tail, scanned: { logs: 1, segments: 1, read: 1, lines: found.length, rebuilt: 0 } };
+  return { rows: page, next, tail, scanned: { logs: 1, segments: 1, read: 1, lines: found.length, rebuilt: 0 }, rejected: [] };
 }
 
 /** A host whose event files hold `rows`: the host call `logQuery` answers with the reference and records each request. */
 function served(rows) {
-  const log = { rows: [...rows], requests: [], failure: null };
+  const log = { rows: [...rows], requests: [], failure: null, rejected: [] };
   const query = async (request) => {
     log.requests.push(structuredClone(request));
     if (log.failure !== null) throw log.failure;
-    return answer(log.rows, request);
+    return { ...answer(log.rows, request), rejected: log.rejected };
   };
   return Object.assign(query, { log });
 }
@@ -207,6 +207,26 @@ test("a query that the host refuses is shown through the error display and the s
   assert.equal(shown.at(-1).where, "debug");
   assert.equal(ui.debugState().timeline.level, "trace");
   assert.deepEqual(names(), ["log.open", "host.window.created", "workbench.call.slow"]);
+});
+
+test("a file that the query rejected is shown through the error display beside the rows of the other files", async (t) => {
+  const query = served(SMALL);
+  query.log.rejected = ["logs/files-old.jsonl: schema 2 is not 3"];
+  const { ui, shown } = await openView(t, { query });
+  await ui.showDebugTimeline();
+  assert.deepEqual(names(), ["log.open", "host.window.created", "workbench.call.slow"]);
+  assert.deepEqual(shown.at(-1), { where: "debug", text: "rejected: logs/files-old.jsonl: schema 2 is not 3" });
+  assert.equal(ui.debugState().error, null, "a rejected file is no failed step");
+  query.log.failure = new Error('log query level "loud" is not one of error, warn, info, debug, trace');
+  await assert.rejects(ui.filterDebugTimeline({ level: "loud" }));
+  assert.match(shown.at(-1).text, /^filter: log query level "loud"/);
+  assert.match(shown.at(-1).text, /\nrejected: logs\/files-old\.jsonl: schema 2 is not 3$/);
+});
+
+test("a page without the list of the rejected files is refused", async (t) => {
+  const query = async () => ({ rows: [], next: null, tail: {} });
+  const { ui } = await openView(t, { query });
+  await assert.rejects(ui.showDebugTimeline(), /without rows, a tail and the rejected files/);
 });
 
 test("a query that fails when the timeline is shown leaves no timeline and shows the error with its file", async (t) => {

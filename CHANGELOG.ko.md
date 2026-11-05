@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F542: schema 번호가 다른 event 파일 하나가 더는 `sok debug query`, `sok debug replay`, debug 화면의 타임라인을 통째로 실패시키지 않는다. 질의는 그 파일을 빼고 다른 파일을 답하며 `rejected`에 그 이름을 담는다.
 - F533: 실패한 memory saver delay unload는 다음 deadline을 한 delay 뒤에 받으므로, 계속 실패하는 읽기나 commit이 매번 오류 표시와 함께 곧바로 다시 돌지 않는다.
 - F532: Rust diagnostics의 update 단계가 framework port의 `quit`으로 애플리케이션을 끝내므로, `make tauriv2-build`가 다시 컴파일된다. `make hosts-check`는 새 `make host-debug-check`를 실행하며, 이 target은 두 host와 두 앱을 debug 앱의 구성으로 컴파일한다.
 - F522: image region에서 친 한글이 첫 음절부터 조합된다. region의 input context가 만들어질 때 자기 input document에서 document access를 제거하므로, input method는 marked buffer만 가진 region에서 committed text를 다시 읽는 대신 모든 key를 marked text로 보낸다. 제거에 실패하면 input error로 보고하고, 이미 없는 property는 제거된 것으로 본다. `doCommandBySelector` record에는 도달할 수 없던 경로의 `unhandledKey` field가 더 이상 없다.

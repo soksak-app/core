@@ -817,6 +817,7 @@ fn invalid_json_closes_connection() {
 | `log.query.follows-the-tail-with-since` | 앞선 답의 `tail`을 `since`로 준 질의는 그 뒤에 덧붙은 행을 돌려주며 앞선 답이 담은 행보다 `ts_us`가 이른 행도 돌려주고, 프로세스의 `seq` 이하의 행은 뺀다. | all |
 | `log.query.resolves-a-run-to-the-range-of-its-marks` | `run`은 질의를 channel의 모든 파일에서 그 run의 가장 이른 `host.test.start`부터 가장 늦은 `host.test.end`까지의 시간 범위로 한정하고, start가 없는 run은 오류 `log query run "<run>" has no host.test.start in the channel`이다. | all |
 | `log.query.refuses-invalid-parameters` | 선언하지 않은 항목과 매개변수의 잘못된 값은 명세의 오류 문구로 거절하고, event 구조를 어기는 줄이 있는 파일을 읽는 질의는 파일과 줄을 밝히며 실패한다. | all |
+| `log.query.leaves-out-a-file-of-another-schema` | 질의는 schema 번호가 다른 파일을 빼고 다른 파일의 행을 답하며, `around`에서도 그 파일의 오류를 `rejected`에 담는다. 그런 파일이 없는 질의는 빈 `rejected`를 답한다. | all |
 | `log.query.answers-the-rows-around-a-row` | `around`가 있는 질의는 key 앞의 `earlier`개 행과 뒤의 `later`개 행을 key에 있는 행과 함께 channel의 파일에서 filter 없이 key 순서로 돌려주고, 각 행에 `context`(이웃은 true, key의 행은 false)를 표시하며 `next`는 null이다. 행이 없는 key는 이웃만 돌려준다. `docs/spec/cases/log-contract/query/cases.json`의 golden `around` 사례와 그 글 줄(context 행은 공백 둘로 들여 쓴다)은 두 구현에서 같다. `channel`, `earlier`, `later` 외의 항목, `around` 없는 `earlier`나 `later`, 잘못된 cursor, 0에서 500을 벗어난 개수는 명세의 오류 문구로 거절하며, 답의 줄 글은 8,388,608바이트 이하다. | all |
 | `log.query.reads-only-the-segments-that-can-hold-a-row` | segment가 여럿인 로그에서 `cid`, `event`, `surface`, 시간 범위로 묻는 질의는 색인이 받아들이는 segment만 읽고(`scanned.read`), `text`가 있는 질의는 모든 segment를 읽는다. | all |
 | `log.query.answers-a-million-events-within-the-limit` | event 1,000,000개의 로그가 첫 page, `cid`, event 이름, surface, 시간 범위, level, `text`로 묻는 page를 test가 밝힌 한도 안에서 답하고 색인 생성도 한도 안에 끝나며, test는 시간을 출력한다. | all |
@@ -920,6 +921,7 @@ fn invalid_json_closes_connection() {
 | `cli.process-wait.registered-platform-receives-request` | 등록된 Wails process-wait 구현은 요청한 PID와 timeout을 받고 command는 그 결과를 직렬화한다. | wailsv3 only: Go CLI는 변경 가능한 platform 등록 API를 제공한다 |
 | `cli.debug.query-golden-lines` | `sok debug query`가 모든 사례에서 `docs/spec/cases/log-contract/query`의 golden page의 글 줄을 debug 화면과 같은 줄로 출력하고, 행이 page 뒤에 더 있으면 표준 오류에 `more: --after <cursor>`를 쓴다. | all |
 | `cli.debug.query-errors` | `sok debug query`는 event 파일이 event 구조를 어기면 파일과 줄 번호를 담은 오류로, `logs/` 폴더가 없으면 폴더를 담은 오류로 실패한다. | all |
+| `cli.debug.reports-a-rejected-file` | `sok debug query`는 다른 파일의 줄을 상태 0으로 출력하고, `sok debug query`와 `sok debug replay`는 schema 번호가 다른 파일마다 표준 오류에 `rejected: <error>`를 쓴다. | all |
 | `cli.debug.query-flag-values` | `sok debug query`는 잘못된 flag 값을 질의의 오류 문구를 가진 사용법 오류로 거부하고, 명령에 없는 flag를 거부한다. | all |
 | `cli.debug.replay-equal` | `sok debug replay <session>`은 session의 sidecar event가 가진 role을 선언한 설치된 sidecar의 replay 실행 파일을 segment마다 한 번 실행하고, 저장된 hash가 모두 재생한 hash이면 `replay session <session>: <n> sidecar frames and <m> page frames equal in <k> segments`를 출력한다. | all |
 | `cli.debug.replay-until` | `sok debug replay --until <sequence>`는 실행 파일에 그 순번까지의 event만 주고 그 순번까지의 frame 기록만 비교한다. 음이 아닌 정수가 아닌 값은 사용법 오류다. | all |

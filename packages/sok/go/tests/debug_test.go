@@ -46,6 +46,17 @@ func TestQueryPrintsTheGoldenLinesOfEveryCase(t *testing.T) {
 	}
 }
 
+// contract: cli.debug.reports-a-rejected-file
+func TestQueryPrintsTheOtherFilesAndReportsARejectedFile(t *testing.T) {
+	config := t.TempDir()
+	writeReplayFile(t, filepath.Join(config, "logs", "host-a.jsonl"), linesOf(1, 3), 0o644)
+	writeFile(t, filepath.Join(config, "logs", "files-old.jsonl"), oldSchemaOpen)
+	stdout, stderr, code := runQueryCommand(t, config)
+	if code != 0 || strings.Count(stdout, "\n") != 3 || stderr != "rejected: logs/files-old.jsonl: schema 2 is not 3\n" {
+		t.Errorf("code %d stdout %q stderr %q", code, stdout, stderr)
+	}
+}
+
 // contract: cli.debug.query-errors
 func TestQueryRefusesWhatBreaksTheContract(t *testing.T) {
 	if _, stderr, code := runQueryCommand(t, t.TempDir()); code != 1 || !strings.Contains(stderr, "logs: no such file or directory") {
@@ -59,7 +70,6 @@ func TestQueryRefusesWhatBreaksTheContract(t *testing.T) {
 	open := `{"ts_us":1,"mono_ns":1,"seq":1,"level":"info","layer":"host","event":"log.open","fields":{"schema":3}}` + "\n"
 	cases := []struct{ name, text, want string }{
 		{"first line", `{"ts_us":1,"mono_ns":1,"seq":1,"level":"info","layer":"host","event":"host.x"}` + "\n", `logs/host-b1.jsonl: the first line is not log.open: "host.x"`},
-		{"schema", `{"ts_us":1,"mono_ns":1,"seq":1,"level":"info","layer":"host","event":"log.open","fields":{"schema":2}}` + "\n", "logs/host-b1.jsonl: schema 2 is not 3"},
 		{"not json", open + "not json\n", "logs/host-b1.jsonl:2: not JSON: not json"},
 		{"not object", open + "[1]\n", "logs/host-b1.jsonl:2: not an event object: [1]"},
 		{"seq", open + `{"ts_us":1,"seq":"x","level":"info","layer":"host","event":"a"}` + "\n", `logs/host-b1.jsonl:2: seq must be an integer, found "x"`},

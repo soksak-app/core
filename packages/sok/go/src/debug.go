@@ -418,7 +418,7 @@ func runDebug(a arguments, stdout, stderr io.Writer, options Options) error {
 		return err
 	}
 	if view == "replay" {
-		return runReplay(a, stdout, options)
+		return runReplay(a, stdout, stderr, options)
 	}
 	if view != "query" {
 		return usage("unknown command: debug %s", view)
@@ -491,8 +491,21 @@ func runDebug(a arguments, stdout, stderr io.Writer, options Options) error {
 	if _, err := io.WriteString(stdout, out.String()); err != nil {
 		return err
 	}
+	if err := reportRejected(stderr, page.Rejected); err != nil {
+		return err
+	}
 	if page.Next != nil {
 		_, err = fmt.Fprintf(stderr, "more: --after %s\n", FormatLogCursor(*page.Next))
 	}
 	return err
+}
+
+// reportRejected writes each event file that a query left out to the standard error.
+func reportRejected(stderr io.Writer, rejected []string) error {
+	for _, text := range rejected {
+		if _, err := fmt.Fprintf(stderr, "rejected: %s\n", text); err != nil {
+			return err
+		}
+	}
+	return nil
 }

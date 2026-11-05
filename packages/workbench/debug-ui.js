@@ -51,6 +51,8 @@ let stateShown = null;
 let operation = null;
 /** The error of the last failed step or operation, or null. */
 let failure = null;
+/** The errors of the event files that the last page of the query left out (docs/spec/logging.md#query). */
+let rejected = [];
 /** The scroll position of the shown content in points that the native modal reported; negative while it is pulled past its start. */
 let paneScroll = 0;
 
@@ -146,8 +148,9 @@ function draw() {
     view.querySelector(".dbg-card__path").textContent = `${viewing.path} · ${sizeText(viewing.size)}`;
     view.querySelector(".dbg-card__cut").hidden = !viewing.truncated;
   }
-  if (failure === null) hideError(error, "debug");
-  else showError(error, "debug", failure);
+  const problems = [...(failure === null ? [] : [failure]), ...(timeline === null ? [] : rejected.map((text) => `rejected: ${text}`))];
+  if (problems.length === 0) hideError(error, "debug");
+  else showError(error, "debug", problems.join("\n"));
   // A save of the logs folder shows its progress and keeps its button disabled while the host writes.
   const writing = operation?.action === "save-all" && operation.state === "running" && operation.total !== undefined;
   const progress = card.querySelector(".dbg-card__progress");
@@ -521,9 +524,10 @@ function exclusive(task) {
 /** Asks the host for a page of the query. */
 async function pageOf(request) {
   const page = await debug.query(request);
-  if (page === null || typeof page !== "object" || !Array.isArray(page.rows) || typeof page.tail !== "object") {
-    throw new Error(`the host answered a page without rows and a tail: ${JSON.stringify(page)}`);
+  if (page === null || typeof page !== "object" || !Array.isArray(page.rows) || typeof page.tail !== "object" || !Array.isArray(page.rejected)) {
+    throw new Error(`the host answered a page without rows, a tail and the rejected files: ${JSON.stringify(page)}`);
   }
+  rejected = page.rejected;
   return page;
 }
 
