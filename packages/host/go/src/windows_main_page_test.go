@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 	"unsafe"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
@@ -65,6 +66,76 @@ func TestAWindowWithoutAMainPageCallsNoMainWebViewOperation(t *testing.T) {
 	}
 	if window.shows != 1 {
 		t.Fatalf("the window was shown %d times, want once", window.shows)
+	}
+}
+
+// eventWindow is a pageless window that holds the listeners of its window events.
+type eventWindow struct {
+	pagelessWindow
+	listeners map[WindowEvent][]func()
+}
+
+func (w *eventWindow) OnWindowEvent(event WindowEvent, listener func()) {
+	w.listeners[event] = append(w.listeners[event], listener)
+}
+
+// rasterPlatform reports each read of the placement of an image, the first step of a raster refresh.
+type rasterPlatform struct {
+	pagelessPlatform
+	placed chan unsafe.Pointer
+}
+
+func (p *rasterPlatform) WindowOnScreen(unsafe.Pointer) (bool, error) { return true, nil }
+
+func (p *rasterPlatform) SurfacePlacedImage(image unsafe.Pointer) bool {
+	p.placed <- image
+	return false
+}
+
+// contract: application.window.scale-change-refreshes-rasters
+func TestAChangeOfTheBackingScaleRefreshesTheRastersOfTheWindow(t *testing.T) {
+	window := &eventWindow{pagelessWindow: pagelessWindow{native: unsafe.Pointer(new(byte))}, listeners: map[WindowEvent][]func(){}}
+	previousFramework, previousSystem := framework, system
+	fake := &rasterPlatform{placed: make(chan unsafe.Pointer, 4)}
+	framework, system = pagelessFramework{window: window}, fake
+	t.Cleanup(func() { framework, system = previousFramework, previousSystem })
+	host := &Host{windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{}}
+	s := host.newWindow("main", "")
+	key := ImageKey{Surface: "tab", Name: "picture"}
+	handle := unsafe.Pointer(new(byte))
+	if err := s.images.Reserve(key, &ImageOwner{}); err != nil {
+		t.Fatal(err)
+	}
+	if !s.images.Set(key, handle) {
+		t.Fatal("the image is not stored")
+	}
+	if err := s.images.SetVisible(key, true); err != nil {
+		t.Fatal(err)
+	}
+	s.images.SetSurfaceVisible(key.Surface, true)
+	// The drawing state of the image is already sent, so the listeners of the window have no message for its supplier.
+	s.images.DrawingChanges()
+	for _, listener := range window.listeners[WindowMove] {
+		listener()
+	}
+	select {
+	case <-fake.placed:
+		t.Fatal("a move refreshed the rasters")
+	case <-time.After(100 * time.Millisecond):
+	}
+	if len(window.listeners[WindowScaleChanged]) == 0 {
+		t.Fatal("the window does not listen to a change of the backing scale")
+	}
+	for _, listener := range window.listeners[WindowScaleChanged] {
+		listener()
+	}
+	select {
+	case got := <-fake.placed:
+		if got != handle {
+			t.Fatalf("the refresh read the placement of %p, want %p", got, handle)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a change of the backing scale did not refresh the rasters")
 	}
 }
 

@@ -701,6 +701,20 @@ pub fn window_new(app: AppHandle) -> Result<(), String> {
 
 /// Adds the window to the registry and handles the window events. The window buttons are placed when the page is ready
 /// and when the window size changes.
+/// Answers a move or a change of the backing scale of a window. A frame of the earlier backing scale is refused, so each supplier
+/// draws at the new raster when the window changes display: `refresh_rasters` starts that, and its native part runs on the main
+/// thread.
+pub fn placement_changed(
+    event: &WindowEvent,
+    changed: impl FnOnce(),
+    refresh_rasters: impl FnOnce(),
+) {
+    changed();
+    if matches!(event, WindowEvent::ScaleFactorChanged) {
+        refresh_rasters();
+    }
+}
+
 pub(crate) fn register(window: Window) -> Result<(), String> {
     let context = Arc::new(WindowData::default());
     window
@@ -906,19 +920,19 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             crate::exposure::window_changed(&host);
             crate::exposure::windows_changed(host.app_handle());
         }
-        WindowEvent::Moved => {
-            crate::exposure::window_changed(&host);
-        }
-        WindowEvent::ScaleFactorChanged => {
-            crate::exposure::window_changed(&host);
-            // A frame of the earlier backing scale is refused, so each supplier draws at the new raster when the window
-            // changes display. The refresh runs its native part on the main thread and waits for it.
-            let window = host.clone();
-            crate::routine::spawn_named("image-rasters", move || {
-                if let Err(error) = crate::composition::refresh_image_rasters(&window) {
-                    log_error("image rasters", error);
-                }
-            });
+        event @ (WindowEvent::Moved | WindowEvent::ScaleFactorChanged) => {
+            placement_changed(
+                event,
+                || crate::exposure::window_changed(&host),
+                || {
+                    let window = host.clone();
+                    crate::routine::spawn_named("image-rasters", move || {
+                        if let Err(error) = crate::composition::refresh_image_rasters(&window) {
+                            log_error("image rasters", error);
+                        }
+                    });
+                },
+            );
         }
     });
     Ok(())
