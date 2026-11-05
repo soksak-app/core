@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F502-16: 보이는 프로젝트를 닫은 뒤 `core.verify`를 읽어도 mygo host가 멈추지 않는다. 떠난 plane은 다음 plane의 프레임까지 행이 없으므로, 창이 그리지 않은 plane을 말하지 않는다.
 - F502-21: `setDialogBackground`가 다른 host call처럼 object `{enabled}`를 받고, framework 표의 B 행이 이 call을 mygo에만 있는 call로 나열해 host parity check가 통과한다. P 행이 `Frontend.Frames`를 나열한다.
 - F502-16: mygo workbench의 모든 모양 값은 page도 읽는 `workbench.json`에서 나온다: card foot의 caption, sidebar의 status line, placeholder와 멈춘 view의 글자, dialog의 scrim과 blur, layer의 anchor 아래 간격이다.
 - F551: Tauri host는 비동기 runtime의 worker를 processor마다 하나가 아니라 둘만 두고, 일 없는 blocking thread는 10초가 아니라 1초 뒤에 끝난다.

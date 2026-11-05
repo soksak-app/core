@@ -18,7 +18,7 @@ func (s *Shell) stageInset() float32 { return s.palette.Gap + s.palette.BorderWi
 
 // drawWork draws the spaces and the stage of the shown project.
 func (s *Shell) drawWork(c *ui.Context, width, height float32) {
-	s.surfaces.planeDrawn = true
+	s.surfaces.drawnPlane = s.plane
 	project := s.opened()
 	s.workBanner = s.drawWorkError(c, width)
 	s.drawSpaces(c, project, width)

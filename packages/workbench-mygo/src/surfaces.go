@@ -186,11 +186,11 @@ type surfaceState struct {
 	order       []string
 	// drawn holds the tabs that the current frame seats, with their boxes in window coordinates.
 	drawn map[string]layout.Rect
-	// seated holds the seats of the section surfaces of the sidebars of the current frame, and planeDrawn tells that the frame drew a plane.
+	// seated holds the seats of the section surfaces of the sidebars of the current frame, and drawnPlane is the plane that the frame drew.
 	seated map[string]SidebarSeat
 	// behindDialog are the native views of the frame that wait to draw over the blurred workbench.
 	behindDialog []viewBehindDialog
-	planeDrawn   bool
+	drawnPlane   *layout.Grid
 	// placed is the lines of the last request, and running tells that a placement has not finished.
 	placed  []surfaceLine
 	running bool
@@ -432,7 +432,7 @@ func (s *Shell) cardHoldsTab(card, tab string) bool {
 // forgetUnseated forgets the section surfaces that no sidebar of the frame holds: a section lives while a drawn set holds it. Only a
 // frame of a plane tells, because the library draws no sidebar and its surfaces stay hidden.
 func (s *Shell) forgetUnseated() {
-	if !s.surfaces.planeDrawn {
+	if s.surfaces.drawnPlane == nil {
 		return
 	}
 	var gone []string

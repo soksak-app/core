@@ -388,3 +388,82 @@ func TestTheGridStatesTheSidesOfACard(t *testing.T) {
 	}
 	t.Fatalf("core.grid has no card %s", card)
 }
+
+// The step after a frame outlives a close of the project: the window goes on and its watcher still waits for the result of that
+// frame. A window without a plane verifies nothing, as the next frame of the library will state.
+func TestTheStepAfterAFrameReadsAClosedProjectAsNoPlane(t *testing.T) {
+	f, _ := placingShell(t)
+	resized(f, 1000)
+	var last workbench.VerifyStatus
+	if _, err := f.shell.Registry().Answer("status.watch", json.RawMessage(`{"name":"core.verify"}`), func(_ string, value any) {
+		text, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		last = workbench.VerifyStatus{}
+		if err := json.Unmarshal(text, &last); err != nil {
+			t.Fatal(err)
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(last.Rows) == 0 {
+		t.Fatalf("the plane has no rows before the close: %+v", last)
+	}
+	// The frame posts its step, and the close finishes before that step runs.
+	f.tester.Frame()
+	var posted []func()
+	for len(f.pending) > 0 {
+		posted = append(posted, <-f.pending)
+	}
+	if len(posted) == 0 {
+		t.Fatal("the frame posted no step")
+	}
+	var answered error
+	done := false
+	raw, err := json.Marshal(map[string]string{"id": f.host.projects[0]["id"].(string)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.shell.Registry().RunLater("core.project.close", raw, func(_ any, err error) { answered, done = err, true })
+	f.pending.drain(t)
+	if !done || answered != nil {
+		t.Fatalf("the close answered %v, done %t", answered, done)
+	}
+	for _, step := range posted {
+		step()
+	}
+	if last.Failed != 0 || len(last.Rows) != 0 {
+		t.Fatalf("core.verify without a plane is %+v", last)
+	}
+}
+
+// A read between a change of the plane and the next frame finds a frame of the plane that left, so it states no rows of it. The rows
+// come back with the frame of the new plane.
+func TestAReadBeforeTheFrameOfAnotherPlaneStatesNoRows(t *testing.T) {
+	f, _ := placingShell(t)
+	resized(f, 1000)
+	other := f.host.projects[0]["activeSpaceId"].(string)
+	f.answerText("core.space.add", nil)
+	f.settle()
+	if f.host.projects[0]["activeSpaceId"] == other {
+		t.Fatal("the new space is not active")
+	}
+	var answered error
+	done := false
+	raw, err := json.Marshal(map[string]string{"id": other})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.shell.Registry().RunLater("core.space.activate", raw, func(_ any, err error) { answered, done = err, true })
+	f.pending.drain(t)
+	if !done || answered != nil {
+		t.Fatalf("the activation answered %v, done %t", answered, done)
+	}
+	verify := status[workbench.VerifyStatus](t, f, "core.verify")
+	if verify.Failed != 0 || len(verify.Rows) != 0 {
+		t.Fatalf("core.verify before the frame of the plane is %+v", verify)
+	}
+	f.settle()
+	verifyRow(t, status[workbench.VerifyStatus](t, f, "core.verify"), "V2 ")
+}
