@@ -157,6 +157,8 @@ type heldSurface struct {
 	project     projectStart
 	// section is the start value of a section surface, and nil for the surface of a tab.
 	section *sectionStart
+	// unload is the declaration of unload of a section surface.
+	unload *surfaceUnload
 	// declared tells that the host took its composition.
 	declared bool
 }
@@ -180,8 +182,8 @@ type surfaceState struct {
 	order []string
 	// drawn holds the tabs that the current frame seats, with their boxes in window coordinates.
 	drawn map[string]layout.Rect
-	// seated holds the section surfaces of the sidebars of the current frame, and planeDrawn tells that the frame drew a plane.
-	seated     map[string]bool
+	// seated holds the seats of the section surfaces of the sidebars of the current frame, and planeDrawn tells that the frame drew a plane.
+	seated     map[string]SidebarSeat
 	planeDrawn bool
 	// placed is the lines of the last request, and running tells that a placement has not finished.
 	placed  []surfaceLine
@@ -261,7 +263,7 @@ type storedSession struct {
 }
 
 func newSurfaceState() surfaceState {
-	return surfaceState{held: map[string]*heldSurface{}, drawn: map[string]layout.Rect{}, seated: map[string]bool{},
+	return surfaceState{held: map[string]*heldSurface{}, drawn: map[string]layout.Rect{}, seated: map[string]SidebarSeat{},
 		views: map[string]*viewState{}, reports: map[string]*tabReport{}, failed: map[string]string{}, documents: map[string]map[string]bool{},
 		detaching: map[string]bool{}, detachFailed: map[string]string{}, sessions: map[string]*storedSession{}}
 }
@@ -291,7 +293,7 @@ func (s *Shell) drawSeat(c *ui.Context, tab layout.Tab, box layout.Rect) {
 // drawSectionSeat draws the body of a section: the native view of its section surface. A seat that is not visible keeps its surface
 // hidden, and a section that was never visible has none.
 func (s *Shell) drawSectionSeat(c *ui.Context, seat SidebarSeat) {
-	s.surfaces.seated[seat.SurfaceID] = true
+	s.surfaces.seated[seat.SurfaceID] = seat
 	if reason, stopped := s.surfaces.failed[seat.SurfaceID]; stopped {
 		if seat.Visible {
 			ui.Text(c, reason).FontSize(12).TextColor(s.palette.No)
@@ -302,10 +304,13 @@ func (s *Shell) drawSectionSeat(c *ui.Context, seat SidebarSeat) {
 	if card, _, ok := strings.Cut(seat.Sidebar, ":"); ok {
 		start.Card = &card
 	}
-	surface := &heldSurface{tab: layout.Tab{ID: seat.SurfaceID, Plugin: seat.Plugin}, composition: seat.Composition, box: seat.Box, section: start}
-	// Every section of a set has its surface: a folded section and a section of an unselected tab keep it hidden.
+	surface := &heldSurface{tab: layout.Tab{ID: seat.SurfaceID, Plugin: seat.Plugin}, composition: seat.Composition, box: seat.Box, section: start, unload: seat.Unload}
+	// Every section of a set has its surface: a folded section and a section of an unselected tab keep it hidden. A hidden section that
+	// the memory saver unloaded has none until it is shown (docs/spec/plugins.md#memory-saver).
 	if !seat.Visible {
-		s.holdSurface(surface)
+		if s.tabs == nil || !s.tabs.saver.Unloaded(seat.SurfaceID) {
+			s.holdSurface(surface)
+		}
 		return
 	}
 	s.standSurface(c, surface, seat.Box)
@@ -343,7 +348,7 @@ func (s *Shell) forgetUnseated() {
 	}
 	var gone []string
 	for _, id := range s.surfaces.order {
-		if s.surfaces.held[id].section != nil && !s.surfaces.seated[id] {
+		if _, seated := s.surfaces.seated[id]; s.surfaces.held[id].section != nil && !seated {
 			gone = append(gone, id)
 		}
 	}

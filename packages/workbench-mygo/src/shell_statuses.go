@@ -372,10 +372,25 @@ func (s *Shell) surfacesState() []surfaceStatus {
 		}
 		if held.section != nil {
 			entry.Kind = "section"
+			entry.Sidebar = &held.section.Sidebar
 		}
 		status = append(status, entry)
 	}
-	return status
+	return append(status, s.unloadedSections()...)
+}
+
+// unloadedSections returns the rows of the sections whose surfaces the memory saver unloaded: a section keeps its seat, so it stays in the
+// list without a view.
+func (s *Shell) unloadedSections() []surfaceStatus {
+	var rows []surfaceStatus
+	for _, seat := range s.seatsInOrder() {
+		if s.surfaces.held[seat.SurfaceID] != nil || s.tabs == nil || !s.tabs.saver.Unloaded(seat.SurfaceID) {
+			continue
+		}
+		rows = append(rows, surfaceStatus{Surface: seat.SurfaceID, Plugin: seat.Plugin, Declared: &layout.Rect{}, Exposes: s.registry.EntriesOf(seat.SurfaceID),
+			Status: s.surfacePhase(seat.SurfaceID), Composition: seat.Composition, Kind: "section", Sidebar: &seat.Sidebar, State: "unloaded"})
+	}
+	return rows
 }
 
 // surfaceProgress is the phase of a surface with the reason of an error: its reported failure, or ready once the document of the

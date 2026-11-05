@@ -322,6 +322,11 @@ func (h *storedHost) workspace(argument json.RawMessage) (any, error) {
 	case "tabStatePut", "tabSessionPut":
 		return 1, nil
 	case "add":
+		for _, project := range h.projects {
+			if project["root"] == request.Project["root"] {
+				return project, nil
+			}
+		}
 		h.projects = append(h.projects, request.Project)
 		return request.Project, nil
 	case "patch":
@@ -789,6 +794,20 @@ func TestProjectOpenCommandOpensTheFolder(t *testing.T) {
 	}
 	if opened.Root != "/work/alpha" || project["id"] != opened.ID || len(stored.projects) != 1 || stored.projects[0]["color"] != "#ffb36b" {
 		t.Fatalf("the command answered %s, the shell shows %v and stores %v", text, project, stored.projects)
+	}
+}
+
+// The host answers a folder that it knows with its project, and the window keeps one tab of that project.
+func TestProjectOpenCommandShowsAKnownFolderOnce(t *testing.T) {
+	stored := &storedHost{}
+	f := newShell(t, stored)
+	for range 2 {
+		if err := f.finish("core.project.open", map[string]string{"root": "/work/alpha"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if projects := status[[]map[string]any](t, f, "core.projects"); len(projects) != 1 {
+		t.Fatalf("the window holds the projects %v", projects)
 	}
 }
 

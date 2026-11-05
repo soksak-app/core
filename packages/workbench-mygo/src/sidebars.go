@@ -36,6 +36,8 @@ type PluginSection struct {
 	Name        string          `json:"name"`
 	Composition json.RawMessage `json:"composition"`
 	Height      json.RawMessage `json:"height"`
+	// Unload holds the declaration that lets the memory saver unload the section surface.
+	Unload *surfaceUnload `json:"unload"`
 }
 
 // PluginSidebars are the default sidebar sets of a plugin (docs/spec/plugins.md#default-sidebar-sets).
@@ -434,7 +436,7 @@ func (s *Sidebars) fill(frame *SidebarFrame, set *SidebarSet) {
 		if !ok {
 			continue
 		}
-		drawn := SidebarSection{ID: id, Name: loaded.Name, Plugin: loaded.plugin, Height: loaded.height, Fill: loaded.fill,
+		drawn := SidebarSection{ID: id, Name: loaded.Name, Plugin: loaded.plugin, Height: loaded.height, Fill: loaded.fill, Unload: loaded.Unload,
 			Folded: set.Layout == "list" && slices.Contains(choice.Folded, id), Composition: loaded.Composition}
 		if size, ok := choice.Sizes[id]; ok {
 			drawn.Size = &size

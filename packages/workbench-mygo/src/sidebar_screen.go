@@ -68,6 +68,8 @@ type SidebarSection struct {
 	Folded bool
 	// Composition is the composition that the section declares.
 	Composition json.RawMessage
+	// Unload holds the declaration of unload of the section.
+	Unload *surfaceUnload
 }
 
 // SidebarFrame is what a sidebar draws.
@@ -99,7 +101,9 @@ type SidebarSeat struct {
 	Title     string
 	// Composition is the composition that the section declares.
 	Composition json.RawMessage
-	Visible     bool
+	// Unload holds the declaration of unload of the section.
+	Unload  *surfaceUnload
+	Visible bool
 	// Box is the body of the section, from the top left of the sidebar. A seat that is not visible has an empty box.
 	Box layout.Rect
 }
@@ -129,7 +133,7 @@ func seatOf(frame SidebarFrame, section SidebarSection) SidebarSeat {
 	}
 	return SidebarSeat{
 		SurfaceID: frame.Space + "/" + frame.Sidebar + "/" + section.ID, Sidebar: frame.Sidebar,
-		Section: section.ID, Plugin: section.Plugin, Title: section.Name, Composition: section.Composition, Visible: visible,
+		Section: section.ID, Plugin: section.Plugin, Title: section.Name, Composition: section.Composition, Unload: section.Unload, Visible: visible,
 	}
 }
 
