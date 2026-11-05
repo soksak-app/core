@@ -413,18 +413,20 @@ export function keep(path) {
   if (key === savedLayout) return writing;
   savedLayout = key;
   const copy = structuredClone(patch);
-  writing = writing.then(() => store.patch(project.id, copy));
+  const stored = writing.then(() => store.patch(project.id, copy));
+  // The refusal reaches the caller through stored; the next write does not depend on it, and the same layout is written again.
+  writing = stored.then(() => undefined, () => { if (savedLayout === key) savedLayout = ""; });
   // The entries of the dropped tabs are removed only after the layout write is confirmed (docs/spec/projects.md#persistence).
   const after = projectTabs(project);
   const dropped = [...before].filter((tab) => !after.has(tab));
   if (dropped.length) {
-    writing = Promise.all([tabStates.removeAfter(writing, dropped), tabSessions.removeAfter(writing, dropped)]);
+    const removed = Promise.all([tabStates.removeAfter(stored, dropped), tabSessions.removeAfter(stored, dropped)]);
     const retained = layoutSurfaces();
-    const retainedWrite = writing.then(() => retainSidecarSessions(retained));
+    const retainedWrite = removed.then(() => retainSidecarSessions(retained));
     writing = retainedWrite.then(() => undefined, failed);
     return retainedWrite;
   }
-  return writing;
+  return stored;
 }
 
 function activateHere(id) {

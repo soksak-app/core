@@ -501,13 +501,15 @@ export function set(patch, scope = projectId ? "project" : "common", actor) {
     Object.hasOwn(patch, "diagnostics.log") ? setLogPolicy(settings["diagnostics.log"], cids) : undefined,
   ]);
   const saved = Promise.all([writing, propagation]).then(() => store.settings(id, patch, cids));
-  writing = saved.finally(async () => {
+  const finished = saved.finally(async () => {
     changes--;
     if (changes) return;
     await refresh();
     savedListener();
   });
-  return writing;
+  // The refusal reaches the caller through finished; the next write does not depend on it.
+  writing = finished.then(() => undefined, () => undefined);
+  return finished;
 }
 
 /**

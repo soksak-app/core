@@ -23,7 +23,7 @@ async function start(t) {
   globalThis.addEventListener = dom.window.addEventListener.bind(dom.window);
   t.after(() => dom.window.close());
 
-  const memory = { common: {}, projects: [] };
+  const memory = { common: {}, projects: [], refusals: 0 };
   const settings = await import("../settings.js");
   settings.setPluginSettings([{ id: "fixture", settings: {
     shape: { label: "모양", type: "enum", values: ["block", "beam"], default: "block" },
@@ -34,6 +34,10 @@ async function start(t) {
   await settings.connectSettings({
     snapshot: async () => structuredClone(memory),
     settings: async (id, values) => {
+      if (memory.refusals > 0) {
+        memory.refusals -= 1;
+        throw new Error("the disk is full");
+      }
       if (id) Object.assign(memory.projects.find((project) => project.id === id).settings, values);
       else memory.common = { ...memory.common, ...values };
     },
@@ -118,6 +122,14 @@ test("core.settings.change gives each setting a value of its declared type", asy
     await registry.run("core.settings.change", { key: "gap", value: 3 });
     assert.equal(memory.common.gap, 3);
     assert.deepEqual(memory.projects[0].settings, {});
+  });
+
+  await t.test("a refused write answers its caller, and the next write reaches the store", async () => {
+    memory.refusals = 1;
+    await assert.rejects(change("gap", 7), /the disk is full/);
+    await change("gap", 9);
+    assert.equal(memory.common.gap, 9);
+    await settings.flushSettings();
   });
 
   await t.test("every setting declares the type of its default", () => {
