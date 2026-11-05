@@ -268,6 +268,7 @@ The allowed differences are two tables, and a row ID is unique across both. The 
 | C6 | `tests/process_wait_test.go` | `src/process_wait_test.rs` | The Rust test is a child of `sok.rs` so it can call the private injected `run_with_process_wait` boundary without making it public. The Go test calls public `sok.Run` through its external test package. Both assert the shared `cli.process-wait.platform-error-is-reported` result; these exact paths record only the private-test placement difference and waive no shared behavior |
 | C7 | `src/wailsv3.go`, `src/mygo.go` | none | The Go `sok` serves the Wails host and the mygo host, so a file of each build constraint holds the release identifier of its host: `src/wailsv3.go` (`!mygo`) holds `app.soksak.wails` and `src/mygo.go` (`mygo`) holds `app.soksak.mygo`; the Rust `sok` serves only the Tauri host and holds `app.soksak.tauri` in `src/identity.rs` |
 | C8 | `go.mod`, `go.sum` | `Cargo.toml` | Each language has its own manifest and lock file; the lock file of the Rust packages is the `Cargo.lock` of the workspace |
+| C9 | `tests/installed_plugins_test.go` | none | The mygo workbench draws in the Go process, so the Go `sok` checks the installed plugin document with `AcceptInstalledPlugins` for it; a window of the Rust host checks that document in its page, with `acceptInstalledPlugins` of `packages/plugin-api`, so the Rust `sok` has no such check to test |
 
 ### Framework table
 

@@ -268,6 +268,7 @@ Go language host library의 header `src/platform/darwin/main_thread.h`는 두 ma
 | C6 | `tests/process_wait_test.go` | `src/process_wait_test.rs` | Rust test는 비공개 injected `run_with_process_wait` 경계를 public으로 만들지 않고 호출하도록 `sok.rs`의 child module로 둔다. Go test는 external test package에서 공개 `sok.Run`을 호출한다. 양쪽은 공유 `cli.process-wait.platform-error-is-reported` 결과를 검사한다. 이 정확한 두 경로는 비공개 test 배치 차이만 기록하며 공통 동작 검사를 면제하지 않는다 |
 | C7 | `src/wailsv3.go`, `src/mygo.go` | 없음 | Go `sok`은 Wails host와 mygo host를 맡으므로, build constraint마다 한 파일이 그 host의 release 식별자를 둔다. `src/wailsv3.go`(`!mygo`)는 `app.soksak.wails`를, `src/mygo.go`(`mygo`)는 `app.soksak.mygo`를 둔다. Rust `sok`은 Tauri host만 맡고 `app.soksak.tauri`를 `src/identity.rs`에 둔다 |
 | C8 | `go.mod`, `go.sum` | `Cargo.toml` | 언어마다 매니페스트와 잠금 파일이 다르다. Rust 패키지의 잠금 파일은 워크스페이스의 `Cargo.lock`이다 |
+| C9 | `tests/installed_plugins_test.go` | 없음 | mygo workbench는 Go process에서 그리므로 Go `sok`이 그를 위해 `AcceptInstalledPlugins`로 설치된 plugin 문서를 검사한다. Rust host의 창은 그 문서를 page에서 `packages/plugin-api`의 `acceptInstalledPlugins`로 검사하므로 Rust `sok`에는 test할 검사가 없다 |
 
 ### Framework 표
 
