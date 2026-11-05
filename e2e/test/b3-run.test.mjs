@@ -17,6 +17,17 @@ function folder(t) {
   return path;
 }
 
+/** The conditions that b3Conditions returns for a window of the size `content` whose status stays the same. */
+async function started(t, content = CONDITIONS.window) {
+  const configDir = folder(t);
+  writeFileSync(policyFile(configDir), JSON.stringify({ schema: 1, classes: FRAME_DEBUG }));
+  const settings = { "diagnostics.performance": false, "diagnostics.log": { frame: "debug" } };
+  return b3Conditions({
+    window: "w1", app: { configDir },
+    get: async (name) => (name === "core.settings" ? { values: settings } : { refreshRate: 120, scale: 2, content, occluded: false, active: true }),
+  }, settings);
+}
+
 test("the conditions of a B3 run are host.window of its window, its diagnostics.performance and the classes of its policy file, which hold the settings of the benchmark", { timeout: 5000 }, async (t) => {
   const configDir = folder(t);
   writeFileSync(policyFile(configDir), JSON.stringify({ schema: 1, classes: FRAME_DEBUG }));
@@ -76,14 +87,14 @@ test("a benchmark writes its values, its conditions and its verdict through the 
   const target = { path, state: "0", keys: B3_MEASUREMENTS["view-drag"]["0"] };
   await withB3Out(target, async (run) => {
     assert.equal(run.state, "0");
-    run.conditions = CONDITIONS;
+    run.conditions = await started(t);
     run.measurements.dragCpuSeconds = 0.5;
   });
   assert.deepEqual(JSON.parse(readFileSync(path, "utf8")), { measurements: { dragCpuSeconds: 0.5, verdict: "passed" }, conditions: CONDITIONS });
 
   const failed = join(folder(t), "out.json");
   await assert.rejects(withB3Out({ ...target, path: failed }, async (run) => {
-    run.conditions = CONDITIONS;
+    run.conditions = await started(t);
     run.measurements.dragCpuSeconds = 0.7;
     throw new Error("the drag lost a frame");
   }), new Error("the drag lost a frame"));
@@ -91,7 +102,7 @@ test("a benchmark writes its values, its conditions and its verdict through the 
 
   const values = join(folder(t), "out.json");
   await withB3Out({ path: values, state: null, keys: B3_MEASUREMENTS["idle-tab"] }, async (run) => {
-    run.conditions = CONDITIONS;
+    run.conditions = await started(t);
     run.measurements.idleTabCostKb = 42000;
   });
   assert.deepEqual(JSON.parse(readFileSync(values, "utf8")).measurements, { idleTabCostKb: 42000 });
@@ -100,11 +111,11 @@ test("a benchmark writes its values, its conditions and its verdict through the 
 test("a value that the benchmark does not declare, or outside the form of the B3 output, is refused and nothing is written", { timeout: 5000 }, async (t) => {
   const path = join(folder(t), "out.json");
   await assert.rejects(withB3Out({ path, state: null, keys: B3_MEASUREMENTS["idle-tab"] }, async (run) => {
-    run.conditions = CONDITIONS;
+    run.conditions = await started(t);
     run.measurements.idleTabCost = 1;
   }), new Error("B3 measurement idleTabCost is not declared for this benchmark; it declares idleTabCostKb, documentPartKb"));
   await assert.rejects(withB3Out({ path, state: null, keys: B3_MEASUREMENTS["idle-tab"] }, async (run) => {
-    run.conditions = CONDITIONS;
+    run.conditions = await started(t);
     run.measurements.idleTabCostKb = Number.NaN;
   }), new Error("B3 measurement idleTabCostKb must be a finite number, \"passed\" or \"failed\", not NaN"));
   assert.throws(() => readFileSync(path), { code: "ENOENT" });
@@ -114,7 +125,7 @@ test("a run that fails before it read its conditions writes nothing and reports 
   const path = join(folder(t), "out.json");
   await assert.rejects(withB3Out({ path, state: null, keys: B3_MEASUREMENTS["browser-view"] }, async () => { throw new Error("no window"); }),
     (error) => error instanceof AggregateError && error.errors[0].message === "no window" &&
-      error.errors[1].message === "B3 conditions must be refreshRate, backingScale, traceState, logPolicy, window, occluded, active, not undefined");
+      error.errors[1].message === "the B3 conditions of a benchmark are the object that b3Conditions returned, which withB3Out reads again when it writes, not undefined");
   assert.throws(() => readFileSync(path), { code: "ENOENT" });
 });
 
@@ -129,18 +140,18 @@ test("the tests of one benchmark file add to one B3 output under the same condit
   { timeout: 5000 }, async (t) => {
     const path = join(folder(t), "out.json");
     const target = { path, state: null, keys: B3_MEASUREMENTS["hwp-view"] };
-    await withB3Out(target, async (run) => { run.conditions = CONDITIONS; });
-    await assert.rejects(withB3Out(target, async (run) => { run.conditions = CONDITIONS; throw new Error("reclaim returned 80%"); }),
+    await withB3Out(target, async (run) => { run.conditions = await started(t); });
+    await assert.rejects(withB3Out(target, async (run) => { run.conditions = await started(t); throw new Error("reclaim returned 80%"); }),
       new Error("reclaim returned 80%"));
-    await withB3Out(target, async (run) => { run.conditions = CONDITIONS; });
+    await withB3Out(target, async (run) => { run.conditions = await started(t); });
     assert.deepEqual(JSON.parse(readFileSync(path, "utf8")), { measurements: { verdict: "failed" }, conditions: CONDITIONS });
     const values = join(folder(t), "values.json");
     const idle = { path: values, state: null, keys: B3_MEASUREMENTS["idle-tab"] };
-    await withB3Out(idle, async (run) => { run.conditions = CONDITIONS; run.measurements.idleTabCostKb = 1; });
-    await assert.rejects(withB3Out(idle, async (run) => { run.conditions = CONDITIONS; run.measurements.idleTabCostKb = 2; }),
+    await withB3Out(idle, async (run) => { run.conditions = await started(t); run.measurements.idleTabCostKb = 1; });
+    await assert.rejects(withB3Out(idle, async (run) => { run.conditions = await started(t); run.measurements.idleTabCostKb = 2; }),
       new Error(`${values}: B3 measurement idleTabCostKb was written by an earlier test of the run`));
     const other = { ...CONDITIONS, window: { width: 1000, height: 760 } };
-    await assert.rejects(withB3Out(target, async (run) => { run.conditions = other; }),
+    await assert.rejects(withB3Out(target, async (run) => { run.conditions = await started(t, other.window); }),
       new Error(`${path}: the conditions ${JSON.stringify(other)} of this test differ from the conditions ${JSON.stringify(CONDITIONS)} of an earlier test of the run`));
   });
 
@@ -215,4 +226,13 @@ test("a benchmark records an application that lost its activation during the int
   assert.equal(await written([true, true]), true);
   assert.equal(await written([true, false]), false, "the activation ended before the benchmark wrote its value");
   assert.equal(await written([false, true]), false, "the application was not active at the start of the interval");
+});
+
+test("a benchmark that sets a copy of its conditions writes nothing, because a copy would record the window of its start", { timeout: 5000 }, async (t) => {
+  const path = join(folder(t), "out.json");
+  const target = { path, state: null, keys: B3_MEASUREMENTS["idle-tab"] };
+  const copy = { ...(await started(t)) };
+  await assert.rejects(withB3Out(target, async (run) => { run.conditions = copy; run.measurements.idleTabCostKb = 1; }),
+    new Error(`the B3 conditions of a benchmark are the object that b3Conditions returned, which withB3Out reads again when it writes, not ${JSON.stringify(copy)}`));
+  assert.throws(() => readFileSync(path), { code: "ENOENT" });
 });

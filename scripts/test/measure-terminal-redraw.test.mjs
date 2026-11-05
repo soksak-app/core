@@ -8,7 +8,7 @@ import test from "node:test";
 
 import { readB3Out, writeB3Out } from "../b3-out.mjs";
 
-import { B3_MEASUREMENTS, formatReport, frameCost, redrawConditions, measureRegion, parseOptions, parseWindowServer, prepareRedraw, presentedFramesOf, redrawMeasurements, requireRows, screenText, untilCovered } from "../measure-terminal-redraw.mjs";
+import { B3_MEASUREMENTS, formatReport, frameCost, readRedrawConditions, redrawConditions, measureRegion, parseOptions, parseWindowServer, prepareRedraw, presentedFramesOf, redrawMeasurements, requireRows, screenText, untilCovered } from "../measure-terminal-redraw.mjs";
 
 test("the text of a screen joins the characters of each row and counts an empty cell as spaces of its width", () => {
   assert.equal(screenText([[{ ch: "a", width: 1 }, { width: 1 }, { ch: "b", width: 1 }], [{ ch: "한", width: 2 }, { width: 0 }]]), "a b\n한");
@@ -263,4 +263,15 @@ test("the B3 output of the redraw takes its conditions from b3-out with the perf
   } finally {
     rmSync(folder, { recursive: true, force: true });
   }
+});
+
+test("the conditions of the redraw read the window again after the interval, so a window that was covered or lost its activation is recorded", async () => {
+  const policy = { lifecycle: "error", input: "error", call: "debug", io: "error", frame: "debug" };
+  const status = redrawWindow({ scale: 2, refreshRate: 120 });
+  const read = async (end) => readRedrawConditions({ s: { window: "w2", get: async (name) => { assert.equal(name, "host.window"); return { ...status, ...end }; } },
+    status, trace: 0, policy });
+  const { occluded, active } = await read({});
+  assert.deepEqual({ occluded, active }, { occluded: false, active: true });
+  assert.equal((await read({ occluded: true })).occluded, true);
+  assert.equal((await read({ active: false })).active, false);
 });

@@ -1274,6 +1274,8 @@ const FEATURE_LINKS = [
       { file: "scripts/b3-out.mjs", symbol: 'const CONDITIONS = ["refreshRate", "backingScale", "traceState", "logPolicy", "window", "occluded", "active"];' },
       { file: "scripts/b3-judge.mjs", symbol: "const covered = goals.conditions.occludedScenarios.includes(scenario);" },
       { file: "e2e/benchmark/cases/b3-run.mjs", symbol: "async function conditionsAtEnd(conditions, failure) {" },
+      { file: "scripts/b3-out.mjs", symbol: "export function b3End(start, end) {" },
+      { file: "scripts/measure-terminal-redraw.mjs", symbol: "export async function readRedrawConditions({ s, status, trace, policy }) {" },
     ],
     tests: [
       { file: "scripts/test/b3-out.test.mjs", id: "the conditions of a run state whether the first window, the window of the state, is covered" },
@@ -1287,6 +1289,9 @@ const FEATURE_LINKS = [
       { file: "scripts/test/b3-out.test.mjs", id: "the conditions of a run state whether the application of the first window is active" },
       { file: "scripts/test/b3-judge.test.mjs", id: "a target of every scenario reports an active application, S9 as well" },
       { file: "e2e/test/b3-run.test.mjs", id: "a benchmark records an application that lost its activation during the interval" },
+      { file: "e2e/test/b3-run.test.mjs", id: "a benchmark that sets a copy of its conditions writes nothing, because a copy would record the window of its start" },
+      { file: "scripts/test/b3-out.test.mjs", id: "the window at the end of an interval is covered when it was at the start or is now, and active only when it was and is" },
+      { file: "scripts/test/measure-terminal-redraw.test.mjs", id: "the conditions of the redraw read the window again after the interval, so a window that was covered or lost its activation is recorded" },
     ],
     expected: "Each target of B3 records whether its window is covered and its application active, and the run and the judge refuse a value of a window that its scenario does not require.",
     levels: ["unit"],

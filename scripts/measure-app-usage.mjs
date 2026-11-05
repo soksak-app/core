@@ -64,7 +64,7 @@ import { currentEventOffsets, readEventErrors, untilEventLine } from "@soksak/wi
 import { readPolicy } from "@soksak/window-check/log-policy.mjs";
 import { launchdServices } from "@soksak/window-check/stall-sample.mjs";
 import { catalogOf } from "./check-events.mjs";
-import { b3Conditions, writeB3Out } from "./b3-out.mjs";
+import { b3Conditions, b3End, writeB3Out } from "./b3-out.mjs";
 import { readFootprint, settledFootprints } from "./footprints.mjs";
 import { percentile, requireCompleteGesture, stepTimes, U7_EVENTS } from "./frame-records.mjs";
 import { applyTrace, FRAME_RECORDS, parseTrace, traceSettings } from "./measure-trace.mjs";
@@ -1218,7 +1218,7 @@ export function usageOutput({ options, measurement, gesture, faultLines }) {
   } else {
     measurements = usageMeasurements({ app, marks: { before: before.windows, after: after.windows }, faultLines, gesture: null });
   }
-  const conditions = b3Conditions({ windows: before.windows.map((window, index) => ({ ...window, occluded: after.windows[index].occluded, active: after.windows[index].active })), performance: traceSettings(options.trace)["diagnostics.performance"], policy: before.policy });
+  const conditions = b3Conditions({ windows: before.windows.map((window, index) => ({ ...window, ...b3End(window, after.windows[index]) })), performance: traceSettings(options.trace)["diagnostics.performance"], policy: before.policy });
   return { measurements, conditions };
 }
 

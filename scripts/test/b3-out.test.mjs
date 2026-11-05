@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { b3Conditions, readB3Out, writeB3Out } from "../b3-out.mjs";
+import { b3Conditions, b3End, readB3Out, writeB3Out } from "../b3-out.mjs";
 
 const POLICY = { lifecycle: "error", input: "error", call: "debug", io: "error", frame: "debug" };
 
@@ -93,4 +93,11 @@ test("the conditions of a run state whether the application of the first window 
   assert.equal(conditions({ active: true }).active, true);
   assert.equal(conditions({ active: false }).active, false);
   assert.throws(() => conditions({ active: null }), /window w1 reports active null, not true or false/);
+});
+
+test("the window at the end of an interval is covered when it was at the start or is now, and active only when it was and is", () => {
+  const at = (occluded, active) => ({ occluded, active });
+  assert.deepEqual(b3End(at(false, true), at(false, true)), at(false, true));
+  assert.deepEqual(b3End(at(false, true), at(true, false)), at(true, false));
+  assert.deepEqual(b3End(at(true, false), at(false, true)), at(true, false));
 });

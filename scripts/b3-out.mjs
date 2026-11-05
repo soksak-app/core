@@ -57,6 +57,14 @@ const positive = (value) => typeof value === "number" && Number.isFinite(value) 
 const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const sameNames = (value, names) => Object.keys(value).length === names.length && names.every((name) => Object.hasOwn(value, name));
 
+/**
+ * The members occluded and active of a window or of the conditions that read it at the start of an interval and at its end: covered when
+ * it was covered at either reading, and active only when it was active at both, so an activation that ended during the interval is recorded.
+ */
+export function b3End(start, end) {
+  return { occluded: start.occluded || end.occluded, active: start.active && end.active };
+}
+
 /** Throws an error that names the first measurement or condition outside the form of the B3 output. */
 function requireB3(output) {
   if (!isObject(output) || !sameNames(output, ["measurements", "conditions"])) {
