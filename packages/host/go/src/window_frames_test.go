@@ -43,6 +43,7 @@ func TestWindowFramesNotifyWhenAFrameLeavesTheWindowSettledOrEndsItsRest(t *test
 	}
 }
 
+// contract: window.frames.counts-frames-and-reports-settled
 func TestAFrameWithoutAWatcherAllocatesNothing(t *testing.T) {
 	frames := NewWindowFrames("main")
 	frames.OnSettled(func() {})
@@ -76,6 +77,7 @@ func TestFrameRecordsReachTheClassFrame(t *testing.T) {
 	}
 }
 
+// contract: window.frames.native-views-of-the-last-placement
 func TestTheFramesHoldTheNativeViewElementsOfTheLastPlacement(t *testing.T) {
 	frames := NewWindowFrames("main")
 	if frames.NativeViews() != 0 {

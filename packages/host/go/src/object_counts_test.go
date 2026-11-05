@@ -64,6 +64,7 @@ func TestAWindowWithoutAMainPageCountsItsHostObjects(t *testing.T) {
 	}
 }
 
+// contract: diagnostics.objects.framework-counts-of-a-drawn-workbench
 func TestTheObjectCountsNameTheFrameworkCountsOfAWorkbenchThatTheHostDraws(t *testing.T) {
 	drawn := ObjectCounts{Framework: &FrameworkObjects{Callbacks: 180, Nodes: 412, NativeViews: 3}}.Payload()
 	if got, ok := drawn["framework"].(map[string]int64); !ok || got["callbacks"] != 180 || got["nodes"] != 412 || got["nativeViews"] != 3 {
