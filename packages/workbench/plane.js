@@ -12,6 +12,7 @@ import { CHROME, placeFocusMark } from "./chrome-metrics.js";
 import { activeTab, appendTab, cardTextSize, removeTab, settleActiveTab, tabsOf } from "./card-data.js";
 import { fitHead } from "./head-fit.js";
 import { hasPlugin, isPlace, plugin, plugins } from "./registry.js";
+import { sectionSurfaceShown } from "./section-surfaces.js";
 import { clearSet, drawSet, restoreSidebarChoices, sidebarChoices } from "./sidebar-sections.js";
 import { bindSidebarGrip } from "./sidebar-grip.js";
 import { targetCardInsets } from "./card-insets.js";
@@ -2119,10 +2120,11 @@ export function currentTextScope() {
   return effectiveTextScope(textScope(), focusedId);
 }
 
-/** The actual text scale of a surface (tab). It is the frame scale multiplied by the scale of the card that holds the tab. A tab not in the plane is null. */
+/** The actual text scale of a surface. A tab has the frame scale multiplied by the scale of the card that holds it, and a section that a drawn sidebar holds has the frame scale. Any other surface is not in the plane and is null. */
 function surfaceTextSize(surfaceId) {
   const card = grid?.cards.find((item) => tabsOf(item).some((t) => t.id === surfaceId));
-  return card ? value("textSize") * cardTextSize(card) : null;
+  if (card) return value("textSize") * cardTextSize(card);
+  return sectionSurfaceShown(surfaceId) ? value("textSize") : null;
 }
 
 setSurfaceTextSize(surfaceTextSize);

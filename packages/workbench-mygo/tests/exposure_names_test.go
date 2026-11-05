@@ -27,6 +27,48 @@ func missingNames(declared *workbench.Declarations, names map[string]bool, serve
 	return absent
 }
 
+// pressedAt presses the point and returns the status core.pointer of the press.
+func pressedAt(t *testing.T, f *shellFixture, x, y float32) workbench.PointerStatus {
+	t.Helper()
+	before := status[workbench.PointerStatus](t, f, "core.pointer").Sequence
+	f.tester.ClickAt(x, y)
+	f.settle()
+	got := status[workbench.PointerStatus](t, f, "core.pointer")
+	if got.Sequence != before+1 {
+		t.Fatalf("the press at %v, %v is the sequence %d after %d", x, y, got.Sequence, before)
+	}
+	return got
+}
+
+// The places of the workbench that declare no name, which the page reports by the tag of a plain element and this host as the
+// specification states (docs/spec/exposure.md#workbench-statuses). A name that one of them takes belongs in the exposure.
+func TestAPlaceWithoutADeclaredNameStaysEmpty(t *testing.T) {
+	f := openedShell(t)
+	f.settle()
+	add := f.box("core.space-tab.add", "")
+	for _, place := range []struct {
+		name string
+		x, y float32
+	}{
+		{"the space row beside its tabs", add.X + add.W + 40, add.Y + add.H/2},
+		{"the left margin of the plane", 2, 400},
+		{"the right margin of the plane", 1198, 400},
+		{"the bottom margin of the plane", 600, 798},
+	} {
+		got := pressedAt(t, f, place.x, place.y)
+		if *got.Down != "unknown" || *got.Up != "unknown" || *got.Click != "unknown" || got.PressedConnected != nil {
+			t.Errorf("%s is %s, %s, %s", place.name, *got.Down, *got.Up, *got.Click)
+		}
+	}
+	f.run("core.projects.browse", nil)
+	if got := pressedAt(t, f, 600, 790); *got.Down != "unknown" || got.PressedConnected != nil {
+		t.Errorf("the foot of the library is %s", *got.Down)
+	}
+	if got := pressedAt(t, f, 1100, 500); *got.Down != "region" || *got.Click != "region" {
+		t.Errorf("the body of the library is %s, %s", *got.Down, *got.Click)
+	}
+}
+
 func TestTheRegistryServesEveryDeclaredCommandAndStatus(t *testing.T) {
 	f := newTabShell(t, &storedHost{})
 	declared, err := workbench.ReadDeclarations()

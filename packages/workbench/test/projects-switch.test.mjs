@@ -632,3 +632,80 @@ test("a registry read after the write of this window draws nothing, and a read t
     projects.onChange(() => {});
   }
 });
+
+test("a change of the store is read through the read of that change", async () => {
+  let notify = null;
+  let snapshots = 0;
+  await projects.initialise({
+    ...store,
+    snapshot: async () => { snapshots += 1; return { common: {}, projects: [structuredClone(PROJECT)], open: [] }; },
+    onChange: (fn) => { notify = fn; },
+  });
+  snapshots = 0;
+  let reads = 0;
+  notify(async () => {
+    reads += 1;
+    return { common: {}, projects: [structuredClone(PROJECT)], open: [] };
+  });
+  for (let turn = 0; turn < 5; turn++) await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(reads, 1, "the read of the change");
+  assert.equal(snapshots, 0, "no read of its own");
+});
+
+test("a registry read that waited behind another read finds what the host holds at its turn", async () => {
+  const { HostWorkspaceStore } = await import("../host-store.js");
+  const listed = [structuredClone(PROJECT)];
+  const answer = () => ({ common: {}, projects: structuredClone(listed), open: [] });
+  let held = null;
+  const listeners = [];
+  const host = {
+    on: (name, fn) => { listeners.push(fn); },
+    call: async () => {
+      if (!held) return answer();
+      const value = answer();
+      const wait = held;
+      held = null;
+      await wait;
+      return value;
+    },
+  };
+  const shared = new HostWorkspaceStore(host);
+  await projects.initialise({ ...store, snapshot: () => shared.snapshot(), onChange: (fn) => shared.onChange(fn) });
+  // The settings of the window start the read of each change.
+  let settings = null;
+  shared.onChange((read) => { settings = read(); });
+  const settled = async () => { for (let turn = 0; turn < 5; turn++) await new Promise((resolve) => setImmediate(resolve)); };
+  // The first read holds the registry reads of this window while the read of the second change ends.
+  let release = null;
+  held = new Promise((resolve) => { release = resolve; });
+  listeners[0]();
+  listeners[0]();
+  await settings;
+  // Another window adds a project after that read ended, and its change has not arrived yet.
+  listed.push({ ...structuredClone(PROJECT), id: "prj-later", root: "/work/later", title: "later" });
+  release();
+  await settled();
+  assert.ok(projects.all().some((item) => item.id === "prj-later"), "the second registry read reads at its turn");
+});
+
+test("the registry and the settings of a window call the host once for one change", async () => {
+  const { HostWorkspaceStore } = await import("../host-store.js");
+  const listeners = [];
+  let calls = 0;
+  const host = {
+    on: (name, fn) => { listeners.push(fn); },
+    // The host answers on a later turn of the event loop, after the page ran every waiting promise.
+    call: async () => {
+      calls += 1;
+      await new Promise((resolve) => setImmediate(resolve));
+      return { common: {}, projects: [structuredClone(PROJECT)], open: [] };
+    },
+  };
+  const shared = new HostWorkspaceStore(host);
+  await projects.initialise({ ...store, snapshot: () => shared.snapshot(), onChange: (fn) => shared.onChange(fn) });
+  shared.onChange((read) => { read(); });
+  calls = 0;
+  listeners[0]();
+  for (let turn = 0; turn < 5; turn++) await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(calls, 1);
+});

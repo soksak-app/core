@@ -75,7 +75,7 @@ func (s *Shell) runDrop(data []any, record *dropRecord) error {
 
 // surfaceAt returns the view that the point of the window shows. A layer of the window covers the views under it.
 func (s *Shell) surfaceAt(x, y float64) (string, bool) {
-	if s.picker.open || s.settingsWindow.open {
+	if s.modalName() != nil {
 		return "", false
 	}
 	for id, box := range s.surfaces.drawn {

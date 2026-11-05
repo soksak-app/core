@@ -657,6 +657,10 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/plugin_services_test.go", id: "TestANoticeOfASystemPolicyIsPostedAndLeavesWhenItsTabIsShown" },
       { file: "packages/workbench-mygo/tests/plugin_services_test.go", id: "TestTwoWritesInARowKeepBothKeys" },
       { file: "packages/workbench-mygo/tests/plugin_services_test.go", id: "TestAWriteOfAnotherWindowReachesTheViewsThatFollowTheData" },
+      { file: "packages/workbench-mygo/tests/plugin_services_test.go", id: "TestASnapshotThatAWriteOutranKeepsTheWrite" },
+      { file: "packages/workbench-mygo/tests/plugin_services_test.go", id: "TestADropOnAViewBehindTheDebugViewIsRecordedAsItsReason" },
+      { file: "packages/workbench-mygo/tests/plugin_services_test.go", id: "TestANotificationIsNamedAsItsTabIsNamed" },
+      { file: "packages/workbench/test/project-data-writes.test.mjs", id: "two writes in a row keep both keys, and the store takes them in order" },
     ],
     expected: "The mygo workbench runs the drop command of the view under a dropped file, follows the visible tab with its notices and the notification center, and keeps each write of project data.",
     levels: ["unit"],
@@ -1084,6 +1088,28 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F554",
+    implementation: [
+      { file: "packages/workbench/plane.js", symbol: "return sectionSurfaceShown(surfaceId) ? value(\"textSize\") : null;" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/plane-frame-text.test.mjs", id: "a frame factor change prepares the row of the next draw and writes the factor in that draw" },
+    ],
+    expected: "A view of a section that a drawn sidebar holds reads the frame factor in the Wails workbench.",
+    levels: ["unit"],
+  },
+  {
+    id: "F549",
+    implementation: [
+      { file: "native/darwin/src/observe.m", symbol: "if (!sp_event_enabled(SP_CLASS_FRAME, SP_EVENT_DEBUG)) return;" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/observe_test.m", id: "a summary that a closed gate leaves due is no refused event" },
+    ],
+    expected: "A source of the mode count holds its summary back while the gate is closed, so the gate refuses nothing, and the first summary after the gate opens holds every delivery.",
+    levels: ["native"],
+  },
+  {
     id: "F547",
     implementation: [
       { file: "packages/workbench-mygo/src/events.go", symbol: "if e.gatedTimer || e.sending || len(e.gated) == 0 {" },
@@ -1105,18 +1131,7 @@ const FEATURE_LINKS = [
       { file: "native/darwin/tests/webview_input_test.m", id: "a move off the view on top leaves it before its exit comes" },
     ],
     expected: "In each order of the enter, the exit and the move, only the view at the point hovers, and a view that loses the pointer hovers nothing.",
-    levels: ["unit"],
-  },
-  {
-    id: "F549",
-    implementation: [
-      { file: "native/darwin/src/observe.m", symbol: "if (!sp_event_enabled(SP_CLASS_FRAME, SP_EVENT_DEBUG)) return;" },
-    ],
-    tests: [
-      { file: "native/darwin/tests/observe_test.m", id: "a summary that a closed gate leaves due is no refused event" },
-    ],
-    expected: "A closed gate leaves the summary due without a count of the gate, and the first summary after the gate opens holds the deliveries since the earlier summary.",
-    levels: ["unit"],
+    levels: ["native"],
   },
   {
     id: "F548",
@@ -1197,6 +1212,26 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/view_responsiveness_test.rs", id: "creating_a_view_writes_the_request_and_its_first_ready_message_writes_the_ready_event_once" },
     ],
     expected: "A test that switches the performance trace without the lock of the switch fails on every run, and a test that counts records shares its surface with no writer.",
+    levels: ["unit"],
+  },
+  {
+    id: "F555",
+    implementation: [
+      { file: "packages/workbench/host-store.js", symbol: "reading = this.snapshot();" },
+      { file: "packages/workbench/projects.js", symbol: "store.onChange((read) => { reread(read).catch(failed); });" },
+      { file: "packages/workbench/settings.js", symbol: "async function refresh(read = () => store.snapshot())" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/workspace-change-read.test.mjs", id: "the listeners of one change read the host once and each receives a value of its own" },
+      { file: "packages/workbench/test/workspace-change-read.test.mjs", id: "each change reads the host again, and a change that no listener reads calls nothing" },
+      { file: "packages/workbench/test/workspace-change-read.test.mjs", id: "a listener that reads after the read of its change ended reads the host again" },
+      { file: "packages/workbench/test/workspace-change-read.test.mjs", id: "a listener that reads while the read of its change runs shares that call" },
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "a registry read that waited behind another read finds what the host holds at its turn" },
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "the registry and the settings of a window call the host once for one change" },
+      { file: "packages/workbench/test/settings.test.mjs", id: "a change of the store is read through the read of that change" },
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "a change of the store is read through the read of that change" },
+    ],
+    expected: "One change of the store is one read of the host for a window, and each listener receives a value of its own.",
     levels: ["unit"],
   },
   {
@@ -9002,14 +9037,19 @@ const FEATURE_LINKS = [
   {
     id: "F502-18-1",
     implementation: [
-      { file: "packages/workbench/memory-placement.js", symbol: "export function memoryStart(saver) {" },
-      { file: "packages/workbench-mygo/src/shell_tabs.go", symbol: "func (s *Shell) observeSections() {" },
+      { file: "packages/workbench/memory-placement.js", symbol: "if (record.drawn) saver.classify();" },
+      { file: "packages/workbench/memory-saver.js", symbol: "    classify() {" },
+      { file: "packages/workbench-mygo/src/memory_saver.go", symbol: "func (s *MemorySaver) Classify() {" },
     ],
     tests: [
-      { file: "packages/workbench/test/memory-saver.test.mjs", id: "a hidden section of a project opened from the library starts unloaded in the placement that first holds it" },
+      { file: "packages/workbench/test/memory-saver.test.mjs", id: "a drawn placement starts unloaded every surface that it first holds hidden" },
+      { file: "packages/workbench/test/memory-saver.test.mjs", id: "a surface first seen while the setting is off waits for the delay after the setting turns on" },
       { file: "packages/workbench-mygo/tests/app_tabs_test.go", id: "TestAHiddenSectionThatDeclaresUnloadStartsUnloaded" },
+      { file: "packages/workbench-mygo/tests/app_tabs_test.go", id: "TestASetLinkedAfterTheStartHoldsNoPageOfAHiddenSection" },
+      { file: "packages/workbench-mygo/tests/app_tabs_test.go", id: "TestAHiddenTabOfAProjectOpenedLaterStartsUnloaded" },
+      { file: "packages/workbench-mygo/tests/memory_saver_test.go", id: "TestClassifyTakesOnlyASurfaceFirstSeenSinceTheLast" },
     ],
-    expected: "A window starts its memory saver at its first drawn layout that holds a surface, so a hidden section that declares unload never mounts only to unload.",
+    expected: "While the memory saver is on, a hidden surface that declares unload and was never shown starts unloaded at the first drawn layout that holds it, so it never mounts only to unload.",
     levels: ["unit"],
   },
   {

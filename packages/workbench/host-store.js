@@ -11,10 +11,34 @@ export function storedFileErrors(snapshot) {
 }
 
 export class HostWorkspaceStore {
+  #listeners = [];
+  #listening = null;
   constructor(host) {
     this.host = host;
   }
-  onChange(fn) { return this.host.on("workspace-changed", fn); }
+  /**
+   * Calls fn at each change with the read of that change. The registry and the settings of a window both listen, and the host
+   * reads two files and answers with the whole registry, so the listeners that read while one call runs share it, and each
+   * receives a value of its own. A listener that reads after that call ended calls the host again: its read can wait behind
+   * other work, and a write can follow the call that ended.
+   */
+  onChange(fn) {
+    this.#listeners.push(fn);
+    if (this.#listeners.length > 1) return this.#listening;
+    this.#listening = this.host.on("workspace-changed", () => {
+      let reading = null;
+      const read = () => {
+        if (!reading) {
+          reading = this.snapshot();
+          const ended = () => { reading = null; };
+          reading.then(ended, ended);
+        }
+        return reading.then((snapshot) => structuredClone(snapshot));
+      };
+      for (const listener of this.#listeners) listener(read);
+    });
+    return this.#listening;
+  }
   snapshot() { return this.host.call("workspace", { kind: "snapshot" }); }
   add(project) { return this.host.call("workspace", { kind: "add", project }); }
   patch(id, patch) { return this.host.call("workspace", { kind: "patch", id, patch }); }

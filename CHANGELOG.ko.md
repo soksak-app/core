@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F555: store 변경 하나가 창마다 프로젝트 목록을 두 번이 아니라 한 번 읽는다.
 - F502-21: `setDialogBackground`가 다른 host call처럼 object `{enabled}`를 받고, framework 표의 B 행이 이 call을 mygo에만 있는 call로 나열해 host parity check가 통과한다. P 행이 `Frontend.Frames`를 나열한다.
 - F502-16: mygo workbench의 모든 모양 값은 page도 읽는 `workbench.json`에서 나온다: card foot의 caption, sidebar의 status line, placeholder와 멈춘 view의 글자, dialog의 scrim과 blur, layer의 anchor 아래 간격이다.
 - F551: Tauri host는 비동기 runtime의 worker를 processor마다 하나가 아니라 둘만 두고, 일 없는 blocking thread는 10초가 아니라 1초 뒤에 끝난다.
@@ -13,6 +14,7 @@
 - F502-16: mygo workbench는 `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.views`에 답한다.
 - F502-16: mygo workbench의 library는 page와 같은 자리에 선다: 줄 높이, form 간격, 빈 화면 여백이 `library.css`와 같고, plugin page는 card를 열로 놓으며, project card는 project를 연 날을 보이고, library는 bar의 sidebar switch를 숨긴다.
 - F547: log batch가 진행 중이고 gate count의 보고 때가 되었을 때 mygo workbench가 쉬지 않고 step을 올리지 않는다.
+- F554: Wails workbench에서 section의 view가 text 배율을 읽을 수 있다.
 - F502-12: document region의 WebContent process 표시 이름이 `soksak://plugin/<plugin id>/<region>`이 되어 활성 상태 보기와 `lsappinfo`에서 어느 plugin의 어느 region인지 보인다. 지금까지는 view만 자기 이름이 있었고 region은 앱 이름으로 보였다. Host가 이름을 만들고 `sp_document_create`가 받는다.
 - F548: 첫 window가 설정 modal과 debug view의 module을 읽지 않고, 각 화면은 처음 쓸 때 불러온다.
 - F549: 대기 중인 창이 깨어나도 거부된 적 없는 frame event의 count를 저장하려고 log writer를 깨우지 않는다.

@@ -341,9 +341,9 @@ func (s *Shell) observeSections() {
 	if !s.observeMemory() {
 		return
 	}
+	s.tabs.saver.Classify()
 	if !s.tabs.sectionsStarted {
 		s.tabs.sectionsStarted = true
-		s.tabs.saver.Start()
 		s.tabs.hiddenDue = true
 	}
 }
@@ -360,10 +360,8 @@ func (s *Shell) tabsSettled() {
 		return
 	}
 	s.tabs.hiddenDue = true
-	if !s.tabs.started {
-		s.tabs.started = true
-		s.tabs.saver.Start()
-	}
+	s.tabs.started = true
+	s.tabs.saver.Classify()
 }
 
 // observeMemory gives the memory saver the surfaces of the layouts of the window, and tells whether it took them.

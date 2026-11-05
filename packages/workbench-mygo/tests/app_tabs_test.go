@@ -500,26 +500,26 @@ func TestTheDelayUnloadsAHiddenSection(t *testing.T) {
 	}
 }
 
-// A set that a person links after the start holds its hidden sections, and the delay unloads those that declare unload.
-func TestTheDelayUnloadsTheHiddenSectionsOfASetLinkedAfterTheStart(t *testing.T) {
-	f, stored, time := delaySections(t, map[string]any{})
+// A set that a person links after the start holds no page of a hidden section that declares unload, and its show mounts it.
+func TestASetLinkedAfterTheStartHoldsNoPageOfAHiddenSection(t *testing.T) {
+	f, stored, _ := delaySections(t, map[string]any{})
 	values := f.ask("status.get", map[string]any{"name": "core.settings"})["result"].(map[string]any)["values"].(map[string]any)
 	sets := append(values["sets"].([]any), sectionsSet()["sets"].([]any)...)
 	f.command("core.settings.set", map[string]any{"patch": map[string]any{"sets": sets}, "scope": "common"})
 	f.command("core.settings.link", map[string]any{"place": "left", "plugin": nil, "set": "set-all", "scope": "common"})
-	if surface := stored.lastSurfaces(t)[sectionTabs]; surface == nil || surface["visible"] != false {
+	surfaces := stored.lastSurfaces(t)
+	if surface := surfaces[sectionTabs]; surface != nil {
 		t.Fatalf("after the link the hidden section is %v", surface)
 	}
-	if state := f.memoryOf(sectionTabs)["state"]; state != "loaded" {
+	if state := f.memoryOf(sectionTabs)["state"]; state != "unloaded" {
 		t.Fatalf("after the link the hidden section is %v", state)
 	}
-	time.tick(memoryDelayMinutes * minute)
-	f.settle()
-	if surface := stored.lastSurfaces(t)[sectionTabs]; surface != nil {
-		t.Fatalf("after the delay the hidden section is %v", surface)
+	if surface := surfaces[sectionBookmarks]; surface == nil || surface["visible"] != false {
+		t.Fatalf("after the link the hidden section without a declaration is %v", surface)
 	}
-	if surface := stored.lastSurfaces(t)[sectionBookmarks]; surface == nil {
-		t.Fatal("the delay unloaded a section without a declaration")
+	f.command("core.sidebar.section.select", map[string]string{"sidebar": "left", "section": "browser.tabs"})
+	if surface := stored.lastSurfaces(t)[sectionTabs]; surface == nil || surface["visible"] != true {
+		t.Fatalf("the shown section is %v", surface)
 	}
 }
 
@@ -528,7 +528,7 @@ func twoProjectsApp(t *testing.T) (*tabApp, *surfaceHost, *clock) {
 	t.Helper()
 	stored := &surfaceHost{}
 	stored.installed = hiddenTabsDocument
-	stored.common = map[string]any{"memorySaverDelay": memoryDelayMinutes}
+	stored.common = map[string]any{"memorySaverDelay": memoryDelayMinutes, "projectOpening": "tabs"}
 	other := storedProject(tab("tab-dddddd", "plain"), tab("tab-eeeeee", "notes"))
 	other["id"], other["root"], other["identity"] = "prj-b", "/b", "identity of /b"
 	other["spaces"].([]map[string]any)[0]["id"] = "spc-bbbbbb"
@@ -574,5 +574,21 @@ func TestTheDelayUnloadsATabOfAProjectThatTheWindowLeft(t *testing.T) {
 	}
 	if state := f.memoryOf("tab-aaaaaa")["state"]; state != "loaded" {
 		t.Fatalf("the restored tab is %v", state)
+	}
+}
+
+// A hidden tab of a project that the window opens later has never been seen, so it starts unloaded and its show mounts it.
+func TestAHiddenTabOfAProjectOpenedLaterStartsUnloaded(t *testing.T) {
+	f, stored, _ := twoProjectsApp(t)
+	f.command("core.project.activate", map[string]string{"id": "prj-b"})
+	if surface := stored.lastSurfaces(t)["tab-eeeeee"]; surface != nil {
+		t.Fatalf("the hidden tab of the later project is %v", surface)
+	}
+	if state := f.memoryOf("tab-eeeeee")["state"]; state != "unloaded" {
+		t.Fatalf("the hidden tab of the later project is %v", state)
+	}
+	f.command("core.tab.select", map[string]string{"tab": "tab-eeeeee"})
+	if surface := stored.lastSurfaces(t)["tab-eeeeee"]; surface == nil || surface["visible"] != true {
+		t.Fatalf("the shown tab is %v", surface)
 	}
 }
