@@ -431,22 +431,24 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 		view.levels = true
 		done()
 	case "tab.state.read":
-		if unit.Unload == nil || s.tabs == nil || s.tabs.states == nil {
+		unload := s.unloadOf(call.Surface, unit)
+		if unload == nil || s.tabs == nil || s.tabs.states == nil {
 			return fmt.Errorf("view call %s: the tab state is not declared", call.Command)
 		}
-		value, err := readTabState(call.Surface, unit, s.tabs.states)
+		value, err := readTabState(call.Surface, unload, s.tabs.states)
 		if err != nil {
 			return err
 		}
 		answer(value, nil)
 	case "tab.state.write":
-		if unit.Unload == nil || s.tabs == nil || s.tabs.states == nil {
+		unload := s.unloadOf(call.Surface, unit)
+		if unload == nil || s.tabs == nil || s.tabs.states == nil {
 			return fmt.Errorf("view call %s: the tab state is not declared", call.Command)
 		}
-		if len(call.Params) > unit.Unload.MaxBytes {
-			return fmt.Errorf("tab %s state of %d bytes exceeds %d", call.Surface, len(call.Params), unit.Unload.MaxBytes)
+		if len(call.Params) > unload.MaxBytes {
+			return fmt.Errorf("tab %s state of %d bytes exceeds %d", call.Surface, len(call.Params), unload.MaxBytes)
 		}
-		state, err := json.Marshal(map[string]json.RawMessage{"format": unit.Unload.Format, "value": call.Params})
+		state, err := json.Marshal(map[string]json.RawMessage{"format": unload.Format, "value": call.Params})
 		if err != nil {
 			return err
 		}
@@ -860,7 +862,15 @@ func (s *Shell) viewTextSize(surface string, view *viewState) (float64, error) {
 }
 
 // readTabState returns the value of the state of the tab: null without one, and a state of another format is refused.
-func readTabState(tab string, unit *installedUnit, states *TabStates) (any, error) {
+// unloadOf returns the declaration of unload of the surface: a section surface has the declaration of its section, and a tab that of its plugin.
+func (s *Shell) unloadOf(surface string, unit *installedUnit) *surfaceUnload {
+	if held := s.surfaces.held[surface]; held != nil && held.section != nil {
+		return held.unload
+	}
+	return unit.Unload
+}
+
+func readTabState(tab string, unload *surfaceUnload, states *TabStates) (any, error) {
 	entry, _ := states.Entry(tab) // silent: a tab without an entry reads null, as a tab without a state.
 	if len(entry.State) == 0 {
 		return nil, nil
@@ -872,8 +882,8 @@ func readTabState(tab string, unit *installedUnit, states *TabStates) (any, erro
 	if err := json.Unmarshal(entry.State, &stored); err != nil {
 		return nil, fmt.Errorf("tab %s state: %w", tab, err)
 	}
-	if string(stored.Format) != string(unit.Unload.Format) {
-		return nil, fmt.Errorf("tab %s state format %s is not %s", tab, stored.Format, unit.Unload.Format)
+	if string(stored.Format) != string(unload.Format) {
+		return nil, fmt.Errorf("tab %s state format %s is not %s", tab, stored.Format, unload.Format)
 	}
 	return stored.Value, nil
 }

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
@@ -74,7 +76,11 @@ type shellTabs struct {
 	sidecars   *HostSidecars
 	after      func(milliseconds int64, run func()) (cancel func())
 	started    bool
-	closed     bool
+	// sectionsStarted tells that the first frame of a plane ended the start for the sections, and seats holds the seats that the
+	// memory saver read last.
+	sectionsStarted bool
+	seats           []string
+	closed          bool
 	// shown tells that the host took the first shown project, and failed that it refused it.
 	shown, failed bool
 	waiting       func(err error)
@@ -264,7 +270,46 @@ func (s *Shell) layoutTabs(project *projectRecord) ([]MemorySurface, map[string]
 		}
 		eachTab(stored.State.Cards, func(tab layout.Tab, _ bool) { add(tab, false) })
 	}
+	for _, seat := range s.seatsInOrder() {
+		surfaces = append(surfaces, MemorySurface{ID: seat.SurfaceID, Plugin: seat.Plugin, Kind: "section", Unload: seat.Unload != nil})
+		if seat.Visible {
+			shown[seat.SurfaceID] = true
+		}
+	}
 	return surfaces, shown, nil
+}
+
+// seatsInOrder returns the seats of the section surfaces of the last frame in the order of their ids.
+func (s *Shell) seatsInOrder() []SidebarSeat {
+	seats := make([]SidebarSeat, 0, len(s.surfaces.seated))
+	for _, id := range slices.Sorted(maps.Keys(s.surfaces.seated)) {
+		seats = append(seats, s.surfaces.seated[id])
+	}
+	return seats
+}
+
+// observeSections gives the memory saver the seats of a frame that changed them, because only a frame knows which section it shows. The
+// first frame of a plane ends the start for the sections: the start of the tabs ran before any section had a seat
+// (docs/spec/plugins.md#memory-saver).
+func (s *Shell) observeSections() {
+	if s.tabs == nil || !s.surfaces.planeDrawn || !s.tabs.started {
+		return
+	}
+	lines := make([]string, 0, len(s.surfaces.seated))
+	for _, seat := range s.seatsInOrder() {
+		lines = append(lines, fmt.Sprintf("%s %t", seat.SurfaceID, seat.Visible))
+	}
+	if s.tabs.sectionsStarted && slices.Equal(lines, s.tabs.seats) {
+		return
+	}
+	s.tabs.seats = lines
+	if !s.observeMemory() {
+		return
+	}
+	if !s.tabs.sectionsStarted {
+		s.tabs.sectionsStarted = true
+		s.tabs.saver.Start()
+	}
 }
 
 // tabsSettled brings these parts to the plane after each change of it.
@@ -275,9 +320,20 @@ func (s *Shell) tabsSettled() {
 	if err := s.tabs.background.Sync(); err != nil {
 		s.fail(err)
 	}
+	if !s.observeMemory() {
+		return
+	}
+	if !s.tabs.started {
+		s.tabs.started = true
+		s.tabs.saver.Start()
+	}
+}
+
+// observeMemory gives the memory saver the surfaces of the shown project, and tells whether it took them.
+func (s *Shell) observeMemory() bool {
 	project := s.opened()
 	if project == nil || s.plane == nil || s.tabs.states == nil {
-		return
+		return false
 	}
 	surfaces, shown, err := s.layoutTabs(project)
 	if err == nil {
@@ -285,12 +341,9 @@ func (s *Shell) tabsSettled() {
 	}
 	if err != nil {
 		s.fail(err)
-		return
+		return false
 	}
-	if !s.tabs.started {
-		s.tabs.started = true
-		s.tabs.saver.Start()
-	}
+	return true
 }
 
 // droppedTabs removes the stored state and session of tabs and ends their sidecar sessions after the layout write that drops them is

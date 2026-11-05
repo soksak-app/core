@@ -619,6 +619,7 @@ func (s *Shell) View(c *ui.Context) {
 	s.drawSettings(c, width, height)
 	s.drawDebug(c)
 	s.forgetUnseated()
+	s.observeSections()
 	s.placeSurfaces()
 	s.clearVisibleNotices()
 	s.drawn = true

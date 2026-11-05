@@ -228,3 +228,147 @@ func TestAnUnloadedTabGetsTheHistoryOfItsRegionBack(t *testing.T) {
 		t.Fatalf("a history restored twice: %v", history)
 	}
 }
+
+// sectionsDocument is the document of the installed plugins with a tab view, sections that declare unload and sections that do not.
+const sectionsDocument = `{"plugins": [
+	{"id": "notes", "package": "@scope/plugin-notes", "version": "1.0.0", "manifest": {"id": "notes", "name": "노트", "description": "notes",
+		"mark": "n", "icon": "<path d=\"M1 1h14\"/>", "surface": {"unload": {"format": 1, "maxBytes": 1024}, "composition": {"kind": "view", "page": "ui/index.html"}}}},
+	{"id": "browser", "package": "b", "version": "1.0.0", "manifest": {"id": "browser", "name": "브라우저", "description": "browser", "sections": [
+		{"id": "browser.tabs", "name": "탭", "composition": {"kind": "view", "page": "ui/section.html"}, "height": 160, "unload": {"format": 2, "maxBytes": 16}}]}},
+	{"id": "files", "package": "f", "version": "1.0.0", "manifest": {"id": "files", "name": "파일", "description": "files", "sections": [
+		{"id": "files.tree", "name": "파일 트리", "composition": {"kind": "view", "page": "ui/tree.html"}, "height": "fill"},
+		{"id": "files.bookmarks", "name": "북마크", "composition": {"kind": "view", "page": "ui/bookmarks.html"}, "height": 160}]}}]}`
+
+// sectionsApp opens the project of an application whose left sidebar shows the sections as tabs, files.tree first.
+func sectionsApp(t *testing.T) (*tabApp, *surfaceHost) {
+	t.Helper()
+	stored := &surfaceHost{}
+	stored.installed = sectionsDocument
+	stored.common = map[string]any{"sets": []any{map[string]any{"id": "set-all", "title": "전체", "layout": "tabs",
+		"sections": []any{"files.tree", "browser.tabs", "files.bookmarks"}}}, "links": []any{map[string]any{"place": "left", "plugin": nil, "set": "set-all"}}}
+	stored.projects = []map[string]any{storedProject(tab("tab-aaaaaa", "notes"))}
+	f := newTabApp(t, stored, sectionsDocument)
+	f.command("core.project.activate", map[string]string{"id": "prj-a"})
+	return f, stored
+}
+
+// memoryOf reads the row of the surface id from core.tab.memory.
+func (f *tabApp) memoryOf(id string) map[string]any {
+	f.t.Helper()
+	reply := f.ask("status.get", map[string]any{"name": "core.tab.memory"})
+	for _, item := range reply["result"].(map[string]any)["tabs"].([]any) {
+		if entry := item.(map[string]any); entry["tab"] == id {
+			return entry
+		}
+	}
+	f.t.Fatalf("core.tab.memory has no surface %s: %v", id, reply)
+	return nil
+}
+
+// surfaceOf reads the row of the surface id from core.surfaces.
+func (f *tabApp) surfaceOf(id string) map[string]any {
+	f.t.Helper()
+	reply := f.ask("status.get", map[string]any{"name": "core.surfaces"})
+	for _, item := range reply["result"].([]any) {
+		if entry := item.(map[string]any); entry["surface"] == id {
+			return entry
+		}
+	}
+	return nil
+}
+
+const (
+	sectionTree      = "spc-aaaaaa/left/files.tree"
+	sectionTabs      = "spc-aaaaaa/left/browser.tabs"
+	sectionBookmarks = "spc-aaaaaa/left/files.bookmarks"
+)
+
+// The memory saver observes the section surfaces with the tabs: a hidden section that declares unload starts unloaded and has no view,
+// a hidden section without the declaration keeps its view, and showing the section restores it (docs/spec/plugins.md#memory-saver).
+func TestAHiddenSectionThatDeclaresUnloadStartsUnloaded(t *testing.T) {
+	f, stored := sectionsApp(t)
+	surfaces := stored.lastSurfaces(t)
+	if surface := surfaces[sectionTree]; surface == nil || surface["visible"] != true {
+		t.Fatalf("the shown section is %v", surface)
+	}
+	if surface := surfaces[sectionBookmarks]; surface == nil || surface["visible"] != false {
+		t.Fatalf("the hidden section without a declaration is %v", surface)
+	}
+	if surface := surfaces[sectionTabs]; surface != nil {
+		t.Fatalf("the hidden section that declares unload has a view: %v", surface)
+	}
+	unloaded := f.memoryOf(sectionTabs)
+	if unloaded["kind"] != "section" || unloaded["state"] != "unloaded" {
+		t.Fatalf("the hidden section that declares unload is %v", unloaded)
+	}
+	if kept := f.memoryOf(sectionBookmarks); kept["kind"] != "section" || kept["state"] != "loaded" {
+		t.Fatalf("the hidden section without a declaration is %v", kept)
+	}
+	listed := f.surfaceOf(sectionTabs)
+	if listed == nil || listed["kind"] != "section" || listed["sidebar"] != "left" || listed["visible"] != false || listed["state"] != "unloaded" {
+		t.Fatalf("core.surfaces lists the unloaded section as %v", listed)
+	}
+	f.command("core.sidebar.section.select", map[string]string{"sidebar": "left", "section": "browser.tabs"})
+	if surface := stored.lastSurfaces(t)[sectionTabs]; surface == nil || surface["visible"] != true {
+		t.Fatalf("the shown section is %v", surface)
+	}
+	if state := f.memoryOf(sectionTabs)["state"]; state != "loaded" {
+		t.Fatalf("the restored section is %v", state)
+	}
+	if surface := stored.lastSurfaces(t)[sectionTree]; surface == nil || surface["visible"] != false {
+		t.Fatalf("the section of the earlier tab is %v", surface)
+	}
+}
+
+// Memory pressure unloads a hidden section that declares unload, and the next show restores it.
+func TestPressureUnloadsAHiddenSection(t *testing.T) {
+	f, stored := sectionsApp(t)
+	f.command("core.sidebar.section.select", map[string]string{"sidebar": "left", "section": "browser.tabs"})
+	f.command("core.sidebar.section.select", map[string]string{"sidebar": "left", "section": "files.tree"})
+	if surface := stored.lastSurfaces(t)[sectionTabs]; surface == nil || surface["visible"] != false {
+		t.Fatalf("the section that was shown is %v", surface)
+	}
+	f.app.Emit(f.window, "memory-pressure", map[string]any{"level": "warn", "seq": 1})
+	f.settle()
+	if surface := stored.lastSurfaces(t)[sectionTabs]; surface != nil {
+		t.Fatalf("the section keeps a view after the unload: %v", surface)
+	}
+	if state := f.memoryOf(sectionTabs)["state"]; state != "unloaded" {
+		t.Fatalf("the hidden section is %v", state)
+	}
+	if surface := stored.lastSurfaces(t)[sectionBookmarks]; surface == nil {
+		t.Fatal("pressure unloaded a section without a declaration")
+	}
+	f.app.Emit(f.window, "memory-pressure", map[string]any{"level": "normal", "seq": 2})
+	f.command("core.sidebar.section.select", map[string]string{"sidebar": "left", "section": "browser.tabs"})
+	if surface := stored.lastSurfaces(t)[sectionTabs]; surface == nil || surface["visible"] != true {
+		t.Fatalf("the shown section is %v", surface)
+	}
+	if state := f.memoryOf(sectionTabs)["state"]; state != "loaded" {
+		t.Fatalf("the restored section is %v", state)
+	}
+}
+
+// A section view writes its state under the declaration of its section, which is not the declaration of a tab of its plugin.
+func TestASectionWritesItsStateUnderItsOwnDeclaration(t *testing.T) {
+	f, stored := sectionsApp(t)
+	f.command("core.sidebar.section.select", map[string]string{"sidebar": "left", "section": "browser.tabs"})
+	call := func(surface, plugin, command string, params any) map[string]any {
+		t.Helper()
+		f.app.Emit(f.window, "view-call", map[string]any{"surface": surface, "plugin": plugin, "generation": 1, "id": 9, "command": command, "params": params})
+		f.settle()
+		return stored.replies[len(stored.replies)-1]
+	}
+	if reply := call(sectionTabs, "browser", "tab.state.write", "short"); reply["error"] != nil {
+		t.Fatalf("the write is %v", reply)
+	}
+	if reply := call(sectionTabs, "browser", "tab.state.read", nil); reply["error"] != nil || reply["result"] != "short" {
+		t.Fatalf("the read is %v", reply)
+	}
+	if reply := call(sectionTabs, "browser", "tab.state.write", "more than sixteen bytes"); reply["error"] == nil {
+		t.Fatalf("a write over maxBytes is %v", reply)
+	}
+	if reply := call(sectionTree, "files", "tab.state.write", "short"); reply["error"] == nil {
+		t.Fatalf("a section without the declaration wrote its state: %v", reply)
+	}
+}
