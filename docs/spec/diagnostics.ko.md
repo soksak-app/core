@@ -105,6 +105,8 @@ Diagnostic capture는 matching용 image source를 메모리에 보존한다. `fr
 | Tauri host가 main thread 감시의 heartbeat를 그 thread에 보내지 못한다 | `error host stall watch: heartbeat: <reason>`, 그리고 감시가 끝난다([logging](logging.ko.md), 정지) |
 | `diagnostics.input.source`의 선택한 input source 대기가 응답이 끝난 뒤에 답한다(Tauri host) | `error host input source: the wait answered after its reply ended: <result>` |
 | Windows 에서 입력 대기 timer 가 시작되거나 멈추지 않거나, WebView2 의 pointer 입력이 실패한다 (Tauri host) | `error host input wait: <reason>`, `error host input.pointer: <failure>` |
+| Windows 에서 raw mouse input 을 읽을 수 없거나, 그 원천 thread 가 끝났거나, 그 보고가 UI thread 에 닿지 못한다 (Tauri host) | `error host mouse input: <reason>` |
+| Windows 에서 UI thread 의 지연된 task 가 거절되어 나중에 들어간다 (Tauri host) | `error host UI task: <reason>` |
 | Windows 에서 Tauri host 가 web view 의 프로세스 실패를 읽지 못하거나, 실패가 인자 없이 온다 | `error host web view process: <label>: <reason>`, `error host web view process: a process failure came without its arguments` |
 | document-frame identity callback이 wait 종료 뒤 error를 보고하거나 Go callback이 두 번 이상 호출된다 | Go는 `error host document frame identity callback: <reason>`을 쓴다. Tauri는 늦은 callback failure를 `error host diagnostics: document frame identity callback failed after its request ended: <reason>`으로 쓴다. 첫 callback 결과가 유지된다. |
 | writer가 쓴 뒤 event 파일의 색인을 최신으로 맞출 수 없다(event 구조를 어기는 줄, 손상된 색인, 열 수 없는 파일) | `error host log index: <reason>`, 파일마다 이유가 다를 때마다 한 번([logging](logging.ko.md#색인)) |

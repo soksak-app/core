@@ -3,7 +3,6 @@
 package windows
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -32,9 +31,6 @@ var (
 	procCreateStreamOnHGlobal = ole32.NewProc("CreateStreamOnHGlobal")
 )
 
-// uiPostRetry is the wait before a task message is posted again.
-const uiPostRetry = 50 * time.Millisecond
-
 const (
 	hwndMessage = ^uintptr(2) // HWND_MESSAGE, (HWND)-3
 	wmRunTasks  = 0x8000 + 1  // WM_APP + 1
@@ -49,49 +45,68 @@ type windowClass struct {
 	iconSmall                          uintptr
 }
 
-// uiThread runs tasks on the thread of the web views. COM calls of a web view and its completions belong to that thread.
+// uiThread is the thread of the web views. COM calls of a web view and its completions belong to that thread.
 var uiThread struct {
 	mu     sync.Mutex
 	window uintptr
 	thread uint32
-	tasks  []func()
+}
+
+// uiTasks is the queue of the UI thread.
+var uiTasks = uiQueue{
+	after: func(wait time.Duration, fire func()) { time.AfterFunc(wait, fire) },
+	report: func(err error) {
+		// A delayed task has no caller to answer, and the queue tries again.
+		fmt.Fprintf(os.Stderr, "UI task: %v\n", err)
+	},
+}
+
+// createMessageWindow registers a window class of that name and creates a message-only window of it on this thread.
+func createMessageWindow(className string, proc uintptr) (uintptr, error) {
+	name, err := sys.UTF16PtrFromString(className)
+	if err != nil {
+		return 0, err
+	}
+	instance, _, err := procGetModuleHandleW.Call(0)
+	if instance == 0 {
+		return 0, fmt.Errorf("module: %w", err)
+	}
+	class := windowClass{instance: instance, proc: proc, className: name}
+	class.size = uint32(unsafe.Sizeof(class))
+	if atom, _, err := procRegisterClassExW.Call(uintptr(unsafe.Pointer(&class))); atom == 0 {
+		return 0, fmt.Errorf("class: %w", err)
+	}
+	window, _, err := procCreateWindowExW.Call(0, uintptr(unsafe.Pointer(name)), 0, 0, 0, 0, 0, 0, hwndMessage, 0, instance, 0)
+	if window == 0 {
+		return 0, fmt.Errorf("creation: %w", err)
+	}
+	return window, nil
 }
 
 // startUIThread makes the calling thread the thread that post runs tasks on. Call it on the UI thread.
 var startUIThread = sync.OnceValue(func() error {
-	name, err := sys.UTF16PtrFromString("soksak-ui-tasks")
-	if err != nil {
-		return err
-	}
-	instance, _, err := procGetModuleHandleW.Call(0)
-	if instance == 0 {
-		return fmt.Errorf("UI task window module: %w", err)
-	}
-	class := windowClass{instance: instance, proc: syscall.NewCallback(func(window, message, wParam, lParam uintptr) uintptr {
+	window, err := createMessageWindow("soksak-ui-tasks", syscall.NewCallback(func(window, message, wParam, lParam uintptr) uintptr {
 		if message != wmRunTasks {
 			result, _, _ := procDefWindowProcW.Call(window, message, wParam, lParam)
 			return result
 		}
-		uiThread.mu.Lock()
-		tasks := uiThread.tasks
-		uiThread.tasks = nil
-		uiThread.mu.Unlock()
-		for _, task := range tasks {
-			task()
-		}
+		uiTasks.run()
 		return 0
-	}), className: name}
-	class.size = uint32(unsafe.Sizeof(class))
-	if atom, _, err := procRegisterClassExW.Call(uintptr(unsafe.Pointer(&class))); atom == 0 {
-		return fmt.Errorf("UI task window class: %w", err)
-	}
-	window, _, err := procCreateWindowExW.Call(0, uintptr(unsafe.Pointer(name)), 0, 0, 0, 0, 0, 0, hwndMessage, 0, instance, 0)
-	if window == 0 {
+	}))
+	if err != nil {
 		return fmt.Errorf("UI task window: %w", err)
 	}
 	uiThread.mu.Lock()
 	uiThread.window, uiThread.thread = window, sys.GetCurrentThreadId()
 	uiThread.mu.Unlock()
+	uiTasks.mu.Lock()
+	uiTasks.wake = func() error {
+		if posted, _, err := procPostMessageW.Call(window, wmRunTasks, 0, 0); posted == 0 {
+			return err
+		}
+		return nil
+	}
+	uiTasks.mu.Unlock()
 	return nil
 })
 
@@ -104,18 +119,7 @@ func onUIThread() bool {
 
 // post runs task as a later step of the UI thread. It runs in the message loop, so it works from any thread.
 func post(task func()) error {
-	uiThread.mu.Lock()
-	window := uiThread.window
-	if window == 0 {
-		uiThread.mu.Unlock()
-		return errors.New("no web view of this process has started the UI thread")
-	}
-	uiThread.tasks = append(uiThread.tasks, task)
-	uiThread.mu.Unlock()
-	if posted, _, err := procPostMessageW.Call(window, wmRunTasks, 0, 0); posted == 0 {
-		return fmt.Errorf("UI task message: %w", err)
-	}
-	return nil
+	return uiTasks.add(task)
 }
 
 // afterOnUIThread runs task on the UI thread after a wait, unless the returned function cancels it. A cancel on the UI thread is final,
@@ -140,4 +144,14 @@ func afterOnUIThread(wait time.Duration, task func()) (cancel func()) {
 		canceled = true
 		timer.Stop()
 	}
+}
+
+// EnqueueUI runs work once as a later step of the UI thread, in the order of the calls.
+func (implementation) EnqueueUI(work func()) error {
+	return uiTasks.add(work)
+}
+
+// EnqueueUIAfter runs work once as a later step of the UI thread after delay.
+func (implementation) EnqueueUIAfter(delay time.Duration, work func()) error {
+	return uiTasks.addAfter(delay, work)
 }

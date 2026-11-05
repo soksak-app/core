@@ -33,14 +33,6 @@ func (implementation) PrepareWindow(unsafe.Pointer) error {
 	return unsupported("window preparation")
 }
 
-func (implementation) EnqueueUI(func()) error {
-	return unsupported("UI queue")
-}
-
-func (implementation) EnqueueUIAfter(time.Duration, func()) error {
-	return unsupported("UI queue")
-}
-
 func (implementation) Fullscreen(unsafe.Pointer, bool, func()) error {
 	return unsupported("full screen")
 }
@@ -515,18 +507,6 @@ func (implementation) RaiseShape(unsafe.Pointer) {
 
 func (implementation) DestroyShape(unsafe.Pointer) {
 	unreachable("native shape destroy")
-}
-
-func (implementation) WatchInput(unsafe.Pointer, platform.Input) (uintptr, error) {
-	return 0, unsupported("surface input")
-}
-
-func (implementation) UnwatchInput(uintptr) {
-	unreachable("surface input release")
-}
-
-func (implementation) WatchButtons(func(uint64)) error {
-	return unsupported("mouse button state")
 }
 
 func (implementation) Listen(string, string) (net.Listener, platform.Endpoint, error) {

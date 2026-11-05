@@ -63,7 +63,6 @@ pub(super) fn after() -> After {
 /// Makes a web view take the input and the capture of its parent window. The first web view of a window is its main web view, which the
 /// host registers before any other. Call it on the UI thread, while the controller of the view is valid.
 pub fn register(view: &PlatformWebview) -> Result<bool, String> {
-    #[cfg(feature = "diagnostics")]
     super::ui_thread::start_task_window()?;
     let controller = unsafe { ICoreWebView2Controller::from_raw_borrowed(&view.controller) }
         .ok_or("the web view has no controller")?

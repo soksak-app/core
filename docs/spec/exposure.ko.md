@@ -278,6 +278,8 @@ workbench page와 card 요소는 app DOM document를 공유하고 view surface�
 
 Windows 에서 호스트는 `SendInput` 이 아니라 web view 의 DevTools protocol 을 호출한다. `input.pointer` 는 `Input.dispatchMouseEvent`, `input.key` 는 `Input.dispatchKeyEvent` 가 되며, protocol 이 순서를 지키지 않으므로 호출은 앞 호출이 끝난 뒤에 시작한다. web view 의 첫 입력이 `Emulation.setFocusEmulationEnabled` 를 켜므로 다른 창 뒤에 있는 창에서도 `:focus` 가 유지되고, 입력은 시스템 focus 를 가져가지 않는다. press 규칙은 위와 같고, `move` 와 키는 활성이 아닌 창에 1006 으로 답하지 않는다. page 의 mouse pointer 는 하나이므로 창은 버튼마다 press 를 하나 가진다. 대기 시간 안에 끝나지 않은 호출은 실패로 답하며, 그 호출이 끝날 때까지 이후 입력은 모두 거절된다. `activate: true` 는 시스템에 foreground 를 요청하고, 시스템의 거절이 곧 답이다. `diagnostics.capture.still` 은 `CapturePreview` 를 쓴다. 최소화된 창, 표시되지 않은 창, 숨겨진 web view 는 호출을 받고도 끝나지 않는다는 보고가 있어 곧바로 거절하며, 10 초 안에 끝나지 않은 capture 는 가려진 창을 지목하는 실패로 답한다. 이 경로는 아직 Windows 에서 실행된 적이 없다.
 
+Windows 에서 `host.buttons` 와 창의 press·drag 는 system hook 이 아니라 raw mouse input (`RIDEV_INPUTSINK` 를 준 `RegisterRawInputDevices`) 에서 온다. raw input 은 system 이 입력과 나란히 보내는 사본이므로 사람의 입력이 호스트를 기다리지 않는다. bit 0 은 물리적 왼쪽 버튼, bit 1 은 오른쪽, bit 2 는 가운데, bit 3 과 4 는 네 번째와 다섯 번째 버튼이다. 이 원천의 한계는 다음과 같다. 그 thread 는 다른 애플리케이션 위에서도 mouse 가 움직일 때마다 깨어난다. system 이 raw mouse input 으로 보내지 않는 touch·pen 입력은 아무것도 바꾸지 않는다. press 의 hit test 는 버튼이 바뀐 곳이 아니라 원천이 읽을 때 pointer 가 있는 곳에서 한다. keyboard 는 등록하지 않으므로, macOS 와 달리 키 입력이 어느 view 가 focus 를 가졌는지 호스트에 알려 주지 않는다. integrity 가 더 높은 애플리케이션이 foreground 를 가진 동안 raw input 이 호스트에 닿는지는 관찰하지 않았다.
+
 실제 입력 경로를 검사하는 테스트는 `input.pointer`와 `input.key`만 사용한다. 테스트는 상태 준비에만 `element.act`를 사용한다.
 
 ## 전달
