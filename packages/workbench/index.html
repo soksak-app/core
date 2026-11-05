@@ -249,7 +249,7 @@ const memorySaver = createMemorySaver({
   kept: (tab) => projects.tabStateStore()?.entry(tab)?.kept === true,
   setKept: (tab, on) => projects.tabStateStore().setKept(tab, on),
   regions: (tab) => documentRegions.reasons(tab),
-  interaction: (tab) => projects.tabSessionStore().capture(tab),
+  interaction: (tab) => projects.tabSessionStore().capture(tab, "unload"),
   restore: (tab) => {
     restoreSection(tab);
     return documentRegions.restore(tab);

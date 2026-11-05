@@ -279,6 +279,7 @@ The [memory saver](plugins.md#memory-saver) emits these page events of the class
 | `workbench.tab.unload.skipped` | info | `trigger`, `seq`, `reasons` | A pressure report found no candidate, or an unload attempt ended because a protection appeared or the tab was shown; `seq` is the number of the pressure report |
 | `workbench.tab.state.stored` | debug | `tab`, `bytes` | The tab state store wrote the entry of a tab, its state, mark and label included |
 | `workbench.tab.state.orphan` | info | `tab` | The reconciliation at load removed the entry of a tab that no layout of `projects.json` holds |
+| `workbench.tab.session.read` | debug | `tab`, `cause` | Core reads the session history of the document regions of a tab before a write. `cause` names what asked for it: `navigation` (the coalesced write after a navigation commit), `flush` (the save of the window at its close or at quit) or `unload` (the memory saver before an unload). |
 | `workbench.tab.session.stored` | debug | `tab`, `bytes` | Core wrote the session history of the document regions of a tab to `tab-sessions/<tab>.json` |
 | `workbench.tab.session.dropped` | warn | `tab`, `region`, `bytes` | The session history of a document region exceeded 1 MiB decoded and was not stored |
 | `workbench.tab.session.orphan` | info | `tab` | The reconciliation at load removed the session file of a tab that no layout of `projects.json` holds |

@@ -50,6 +50,11 @@ func TestACommandThatAnswersLaterRepliesThroughTheRelay(t *testing.T) {
 type fakeSurfaces struct {
 	mounted  map[string]bool
 	restored []string
+	// attached lists the tabs with attached regions; each read of their sessions waits in held while hold is set.
+	attached []string
+	reads    int
+	hold     bool
+	held     []func(map[string]string, error)
 }
 
 func (f *fakeSurfaces) Mounted(tab string) bool { return f.mounted[tab] }
@@ -59,9 +64,14 @@ func (f *fakeSurfaces) Regions(_ string, answer func([]string, error)) {
 	answer(nil, nil)
 }
 func (f *fakeSurfaces) Interaction(_ string, answer func(map[string]string, error)) {
+	f.reads++
+	if f.hold {
+		f.held = append(f.held, answer)
+		return
+	}
 	answer(nil, nil)
 }
-func (f *fakeSurfaces) AttachedTabs() []string     { return nil }
+func (f *fakeSurfaces) AttachedTabs() []string     { return f.attached }
 func (f *fakeSurfaces) Restore(tab string)         { f.restored = append(f.restored, tab) }
 func (f *fakeSurfaces) ReportTitle(string, string) {}
 func (f *fakeSurfaces) ReportState(string, string) {}
@@ -435,4 +445,37 @@ func TestATimerOfTheTabPartsDoesNotRunAfterTheWindowClosed(t *testing.T) {
 	f.timers.tick(120 * 60 * 1000)
 	f.settle()
 	equal(t, f.commits, commits)
+}
+
+// The window flushed its tab parts before it closed; a read of a session after the close is a host call of a window that is gone.
+func TestAWindowThatClosedReadsNoSession(t *testing.T) {
+	f := newTabShell(t, &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"))}})
+	f.open(t)
+	f.surfaces.attached = []string{"tab-aaaaaa"}
+	reads := f.surfaces.reads
+	f.shell.Closed()
+	f.settle()
+	equal(t, f.surfaces.reads, reads)
+}
+
+// A close request writes the sessions of the tabs before it closes the window: the read of a session is a host call of the window.
+func TestACloseRequestClosesTheWindowAfterTheSessionsAreRead(t *testing.T) {
+	f := newTabShell(t, &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"))}})
+	f.open(t)
+	f.surfaces.attached = []string{"tab-aaaaaa"}
+	f.surfaces.hold = true
+	f.shell.Event("project-close-request", nil)
+	f.settle()
+	if len(f.surfaces.held) != 1 {
+		t.Fatalf("the close read %d sessions, want 1", len(f.surfaces.held))
+	}
+	if f.host.called("windowClose") {
+		t.Fatal("the window closed before the session of its tab was read")
+	}
+	f.surfaces.hold = false
+	f.surfaces.held[0](map[string]string{"page": "AAAA"}, nil)
+	f.settle()
+	if !f.host.called("windowClose") {
+		t.Fatalf("the window did not close after the read: %v", f.host.calls)
+	}
 }

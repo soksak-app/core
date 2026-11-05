@@ -224,15 +224,16 @@ func (s *Shell) pluginsChanged() {
 	}
 	s.reloading = true
 	s.keep()
-	s.flushTabs()
-	s.events.Flush(func() {
-		s.calls.CallInOrder("workspace", "workspace", map[string]string{"kind": "snapshot"}, func(_ any, err error) {
-			if err != nil {
-				s.reloading = false
-				s.fail(err)
-				return
-			}
-			s.options.Reload()
+	s.flushTabs(func() {
+		s.events.Flush(func() {
+			s.calls.CallInOrder("workspace", "workspace", map[string]string{"kind": "snapshot"}, func(_ any, err error) {
+				if err != nil {
+					s.reloading = false
+					s.fail(err)
+					return
+				}
+				s.options.Reload()
+			})
 		})
 	})
 }
