@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F502-21: Closing a window of the mygo workbench, as Cmd+W does, asks about each modified tab first; a kept tab keeps the window.
 - F502-21: The mygo workbench draws its modals as native UI: the settings window, the picker layer with the add, split, tool, tab and context menus, and the question about a modified tab. `core.card.close`, `core.tab.close` and `core.space.close` do not close a modified tab without the answer of the person, and the plugins and their settings come from the document of the installed plugins. The settings `left` and `right` take the fixed window sidebars in and out of the plane. A dialog blurs the workbench and the documents under black at 50% opacity, and a key closes no dialog before the person reaches a control. The head and the sections of the settings window use the metrics of the page, with the close icon and the mark of the shown section. The language setting `auto` of the mygo application follows the system language.
 - F502-28: The keyboard of the window follows the focus ring on all hosts: typing right after a new tab, a press on a tab, `core.card.focus` or the opening of a project reaches the active surface of the card with the ring, and a new terminal tab draws a focused cursor because the first focus report of its region waits for its handler.
 - F502-12: Opening a plugin view with a large file no longer leaves that file in the memory of the host. A document response reads and sends a plugin file in chunks of 256 KiB, and a core root answer no longer copies the bytes that it sends.

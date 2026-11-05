@@ -696,3 +696,36 @@ func TestTheLayerOfAPickerTakesTheMiddleRadius(t *testing.T) {
 		t.Fatalf("the left border of the layer is %v at 8.5 above its bottom, near %v is wanted", got, want)
 	}
 }
+
+// A close request of the window, as Cmd+W sends, asks about a modified tab: discarding closes the window and keeping keeps it and tells
+// the host (docs/spec/plugins.md#tab-reports).
+func TestACloseRequestOfTheWindowAsksAboutAModifiedTab(t *testing.T) {
+	for _, answer := range []struct {
+		key  string
+		call string
+	}{{"keep", "windowCloseKept"}, {"discard", "windowClose"}} {
+		t.Run(answer.key, func(t *testing.T) {
+			f := modifiedShell(t)
+			f.shell.Event("project-close-request", nil)
+			f.settle()
+			if f.host.called("windowClose") {
+				t.Fatal("the window closed before the question")
+			}
+			if !f.tester.HasText("저장하지 않고 닫기") {
+				t.Fatalf("no question in %q", f.tester.Texts())
+			}
+			item, ok := exposedNode(f.tester.ElementTree(), "core.picker.item", answer.key)
+			if !ok {
+				t.Fatal("no item")
+			}
+			f.tester.ClickAt(item.Bounds.X+4, item.Bounds.Y+4)
+			f.settle()
+			if !f.host.called(answer.call) {
+				t.Fatalf("the answer %s called %v", answer.key, f.host.calls)
+			}
+			if answer.key == "keep" && f.host.called("windowClose") {
+				t.Fatal("the kept tab closed the window")
+			}
+		})
+	}
+}

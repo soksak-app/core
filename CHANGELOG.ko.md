@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F502-21: mygo workbench에서 창을 닫으면, Cmd+W를 포함해, 먼저 수정된 탭마다 묻는다. 유지한 탭이 있으면 창이 남는다.
 - F502-21: mygo workbench가 modal을 native UI로 그린다: 설정 창, 추가·분할·도구·탭·context menu를 가진 picker layer, 수정된 tab에 대한 질문. `core.card.close`, `core.tab.close`, `core.space.close`는 사람의 답 없이 수정된 tab을 닫지 않고, plugin과 그 setting은 설치된 plugin 문서에서 온다. 설정 `left`, `right`는 고정 창 sidebar를 plane에 넣고 뺀다. Dialog는 workbench와 document를 50% opacity의 검정 아래에서 blur하고, 사람이 control에 닿기 전의 key는 dialog를 닫지 않는다. 설정 창의 head와 section은 page의 metric을 쓰고, 닫기 icon과 보이는 section의 mark를 그린다. mygo application의 언어 설정 `auto`는 시스템 언어를 따른다.
 - F502-28: 창의 키보드가 모든 호스트에서 focus ring을 따른다. 새 탭, 탭 press, `core.card.focus`, 프로젝트 열기 직후에 입력한 글자가 ring이 있는 card의 active surface에 닿는다. 영역의 첫 focus 보고가 handler를 기다리므로 새 terminal 탭도 focus된 cursor를 그린다.
 - F502-12: 큰 파일을 쓰는 plugin view 를 열어도 그 파일이 host 메모리에 남지 않는다. document 응답은 plugin 파일을 256 KiB chunk 로 읽어 보내고, core root 응답은 보내는 byte 를 다시 복사하지 않는다.

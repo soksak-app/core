@@ -268,17 +268,7 @@ func (s *Shell) event(name string, data []any) {
 		s.pluginOperations.Refresh(func() {})
 		s.appUpdates.Refresh()
 	case "project-close-request":
-		s.keep()
-		s.flushTabs()
-		// The call ends the workbench of the window, so its first event leaves before the call.
-		cids := s.events.BeginOperation("workbench.window.operation", map[string]any{"action": "close"})
-		s.events.Flush(func() {
-			s.calls.Caused(cids).CallInOrder("workspace", "windowClose", nil, func(_ any, err error) {
-				if err != nil {
-					s.fail(err)
-				}
-			})
-		})
+		s.closeWindowAsked()
 	case "menu-command":
 		s.menuCommand(data)
 	case "debug-save-progress", "debug-save-done", "debug-log-changed":

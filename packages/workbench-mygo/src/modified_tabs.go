@@ -161,3 +161,30 @@ func (s *Shell) settleModified(done func(settled bool)) {
 	}
 	next(0)
 }
+
+// closeWindowAsked answers a close request of the window: a modified tab that the person keeps keeps the window open, and the host hears
+// of it, because the request may belong to a quit.
+func (s *Shell) closeWindowAsked() {
+	s.settleModified(func(settled bool) {
+		if !settled {
+			cids := s.events.BeginOperation("workbench.window.operation", map[string]any{"action": "close_kept"})
+			s.calls.Caused(cids).CallInOrder("workspace", "windowCloseKept", nil, func(_ any, err error) {
+				if err != nil {
+					s.fail(err)
+				}
+			})
+			return
+		}
+		s.keep()
+		s.flushTabs()
+		// The call ends the workbench of the window, so its first event leaves before the call.
+		cids := s.events.BeginOperation("workbench.window.operation", map[string]any{"action": "close"})
+		s.events.Flush(func() {
+			s.calls.Caused(cids).CallInOrder("workspace", "windowClose", nil, func(_ any, err error) {
+				if err != nil {
+					s.fail(err)
+				}
+			})
+		})
+	})
+}
