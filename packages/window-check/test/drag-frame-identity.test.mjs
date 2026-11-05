@@ -20,6 +20,7 @@ async function runDrag(t, options) {
     presented: async () => ({ displayed: 12 }),
     trackRecording() {},
     request: async (method, params) => {
+      if (method === "diagnostics.window.draw-covered") return null;
       calls.push({ method, params });
       if (method === "diagnostics.drag") return { frames, took: 100, asked: 100 };
       if (method === "diagnostics.capture.stop") return {

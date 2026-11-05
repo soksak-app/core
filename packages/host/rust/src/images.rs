@@ -99,6 +99,10 @@ struct Inner {
     /// Whether the window is occluded or minimized; the host reads it from AppKit before it attaches a region and at each
     /// change (docs/spec/native-surfaces.md#image-regions).
     off_screen: bool,
+    /// Whether the regions of the window draw while it is not on screen. Only the diagnostic method
+    /// diagnostics.window.draw-covered sets it; a build without the diagnostics feature has no such state.
+    #[cfg(feature = "diagnostics")]
+    draw_covered: bool,
     /// The last (generation, raster) that a detached image region used. A region attached again in the same generation
     /// counts from the next raster, because the sidecar treats a configuration whose (generation, raster) did not grow
     /// as an old configuration and ignores it. It is cleared when the generation of the surface changes.
@@ -119,7 +123,19 @@ impl Inner {
     /// Whether a region is drawing: it is attached and visible, its outer surface is visible and the window is neither
     /// occluded nor minimized.
     fn drawing(&self, key: &Key, state: &RasterState) -> bool {
-        self.shown(key, state) && !self.off_screen
+        self.shown(key, state) && (!self.off_screen || self.draws_covered())
+    }
+
+    /// Whether the regions of the window draw while it is not on screen.
+    #[cfg(feature = "diagnostics")]
+    fn draws_covered(&self) -> bool {
+        self.draw_covered
+    }
+
+    /// False: only a diagnostic build makes a covered window draw its regions.
+    #[cfg(not(feature = "diagnostics"))]
+    fn draws_covered(&self) -> bool {
+        false
     }
 
     /// Reports whether a region and its outer surface are shown, whatever the state of the window.
@@ -247,6 +263,17 @@ impl Images {
         let mut inner = self.lock();
         if inner.off_screen == on_screen {
             inner.off_screen = !on_screen;
+            self.changed();
+        }
+    }
+
+    /// Makes the regions of the window draw while the window is occluded or minimized, for a check that reads the pixels of a
+    /// covered window (docs/spec/native-surfaces.md#image-regions). The window keeps reporting its occlusion.
+    #[cfg(feature = "diagnostics")]
+    pub fn set_draw_covered(&self, draw: bool) {
+        let mut inner = self.lock();
+        if inner.draw_covered != draw {
+            inner.draw_covered = draw;
             self.changed();
         }
     }

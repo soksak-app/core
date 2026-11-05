@@ -212,11 +212,28 @@ pub(crate) fn call(
             exposure::inject_presentation_failure(window)?;
             Ok(Value::Null)
         }
+        "diagnostics.window.draw-covered" => {
+            let Some(draw) = params.get("draw").and_then(Value::as_bool) else {
+                return Err(Failure::params("draw must be a boolean"));
+            };
+            draw_covered(window, draw)
+        }
         _ => Err(Failure::new(
             -32601,
             format!("{method} is not a diagnostic method"),
         )),
     }
+}
+
+/// Makes the image regions of the window draw while the window is covered, or ends that, and sends the drawing state that
+/// changed. The window keeps reporting its occlusion (docs/spec/native-surfaces.md#image-regions).
+fn draw_covered(window: &Window, draw: bool) -> Result<Value, Failure> {
+    crate::windows::with_open_window(&crate::windows::window_data(window), |data| {
+        data.images.set_draw_covered(draw);
+        crate::composition::send_image_drawing_of(window, data)
+    })
+    .map(|()| Value::Null)
+    .map_err(internal)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

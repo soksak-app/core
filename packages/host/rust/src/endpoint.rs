@@ -83,6 +83,7 @@ const DIAGNOSTICS: &[&str] = &[
     "diagnostics.modal.hold",
     "diagnostics.modal.held",
     "diagnostics.presentation.failure",
+    "diagnostics.window.draw-covered",
     "diagnostics.input.source",
     "diagnostics.input.reference",
     "diagnostics.log.flush",
@@ -1477,6 +1478,10 @@ fn forget(shared: &Arc<Shared>, peer: u64) {
 #[cfg(test)]
 #[path = "endpoint_lock_test.rs"]
 mod lock_test;
+
+#[cfg(test)]
+#[path = "endpoint_methods_test.rs"]
+mod methods_test;
 
 #[cfg(all(test, feature = "diagnostics"))]
 mod input_reference_declaration_test {
