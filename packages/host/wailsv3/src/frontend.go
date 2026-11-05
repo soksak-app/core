@@ -65,6 +65,7 @@ func WailsWindowEvent(event host.WindowEvent) events.WindowEventType {
 		host.WindowFocusLost:          events.Common.WindowLostFocus,
 		host.WindowShow:               events.Common.WindowShow,
 		host.WindowHide:               events.Common.WindowHide,
+		host.WindowScaleChanged:       events.Mac.WindowDidChangeBackingProperties,
 		host.WindowWorkbenchEnded:     events.Mac.WebViewWebContentProcessDidTerminate,
 		host.WindowWorkbenchCommitted: events.Mac.WebViewDidCommitNavigation,
 	}[event]

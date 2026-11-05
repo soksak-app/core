@@ -277,3 +277,13 @@ test("runtime.log.levels returns the start levels, subscribes once and returns t
   assert.deepEqual(bridge.runtime.log.levels(), { ...start, frame: "debug" });
   assert.equal(posted.filter((message) => message.command === "runtime.log.levels.on").length, 1, "a later read subscribes no more");
 });
+
+test("the start of a run requests one frame of the view and no later frame", async (t) => {
+  const { view, host } = setup(t);
+  const frames = [];
+  view.requestAnimationFrame = (fn) => frames.push(fn);
+  host({ sok: 1, event: "run-start", data: null });
+  assert.equal(frames.length, 1, "the start of a run requests a frame");
+  frames.shift()();
+  assert.equal(frames.length, 0, "a frame of the start of a run requests no next frame");
+});

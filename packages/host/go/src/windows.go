@@ -455,6 +455,15 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 		RecordWindowEvent(s.name, "window-active")
 		s.Emit("window-active")
 	})
+	// A frame of the earlier backing scale is refused, so each supplier draws at the new raster when the window changes display.
+	win.OnWindowEvent(WindowScaleChanged, func() {
+		RecordWindowEvent(s.name, "scale_factor_changed")
+		routine.Go("image-rasters", func() {
+			if err := s.refreshImageRasters(); err != nil {
+				LogError("image rasters", err)
+			}
+		})
+	})
 	// The framework loads the page again after the WebContent process ends; the host writes the end as an error line
 	// (docs/spec/diagnostics.md).
 	win.OnWindowEvent(WindowWorkbenchEnded, func() {

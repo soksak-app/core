@@ -96,6 +96,8 @@ macOS에서 각 표면의 root view는 AppKit point를 좌표 단위로 사용�
 
 view는 `view` 합성을 가진 표면의 native 웹뷰다([plugins](plugins.ko.md#view-표면)). 각 view는 탭마다 하나의 웹뷰이며 `soksak://<plugin id>` origin에서 그 plugin의 페이지를 실행한다. 워크벤치 페이지는 plugin 코드를 실행하지 않는다.
 
+view는 run이 시작될 때 event `run-start`를 받고 animation frame을 한 번 요청한다. idle document는 새 크기를 바로 render한 뒤 display를 기다리지만, run의 이후 크기는 이미 display를 기다리는 document에 도착한다. 그래서 이 frame이 없으면 run의 두 번째 크기가 display frame 하나를 놓친다. view는 frame loop를 두지 않는다. 모든 view의 frame loop는 run의 각 layout을 늘리기 때문이다.
+
 워크벤치는 mount 전에 tab에서 활성 surface descriptor를 만들고 compositor의 placement record까지 같은 descriptor를 보존한다. Dormant surface는 저장된 `params`를 포함해 저장 tab에서 descriptor를 만든다. Host request는 이 descriptor에서 계산한 view start values를 기존 `start` member에 담으며 별도 `params` member를 추가하지 않는다. Slot이 placeholder가 되면 surface descriptor도 더 이상 제공하지 않는다.
 
 - **구성.** 호스트는 view를 다음을 가진 웹뷰 구성으로 만든다.
@@ -346,7 +348,7 @@ place가 빼는 표면의 영역 종료는 호스트가 맡는다. 두 호스트
 - **오류 보고**: 호스트가 그림을 표시할 수 없으면 영역이 오류 이벤트를 보낸다: `{type: "error", reason}`. 사유에는 `notFound`(IOSurface를 찾지 못함), `forbidden`(접근 거부), `size`(선언한 크기가 IOSurface의 실제 크기와 맞지 않음), `scale`(창 배율과 다른 배율로 그린 그림), `presentFailed`(플랫폼 표시 실패)가 있다.
 - **끝난 사이드카**: 어떤 plugin도 선언하지 않는 사이드카의 그림, 예를 들어 카드가 열린 채 plugin을 제거할 때 오가던 그림은 buffer와 함께 끝난 process의 것이다: 호스트는 그것을 표시하지 않고 `stale`로 답하고 기록하며, 오류 이벤트를 보내지 않고 복구를 시작하지 않는다. 끝난 사이드카에 닿지 못하는 답은 보내지 않음으로 기록된다.
 
-`host.window.regions[].error`는 유효한 프레임이 표시될 때까지 마지막 네이티브 표시 거절을 유지한다. 이전의 유효 스냅샷이 이후 거절을 없애지는 않는다. 그림 픽셀은 네이티브 백킹 배율에서 크기를 유지하며, 레이어 크기 변경으로 글자를 늘려 새 영역을 채우면 안 된다.
+`host.window.regions[].error`는 유효한 프레임이 표시될 때까지 마지막 네이티브 표시 거절을 유지한다. 이전의 유효 스냅샷이 이후 거절을 없애지는 않는다. 그림 픽셀은 네이티브 백킹 배율에서 크기를 유지하며, 레이어 크기 변경으로 글자를 늘려 새 영역을 채우면 안 된다. 창의 backing scale이 바뀌면 표시 중인 그림은 그려진 밀도를 유지하고, host가 보이는 region의 raster를 다시 구성하여 새 scale의 frame이 그것을 대체한다.
 
 성공한 native image acknowledgment는 표시 전 검사 후 더 새 sequence가 수락됐더라도 같은 generation과 raster의 실제 presented sequence를 단조 증가하도록 기록한다. Future, duplicate, 후퇴하는 sequence, 다른 generation이나 raster의 acknowledgment는 거부한다. 표시 전 검사는 여전히 stale sequence를 거부하고 settled presentation 대기는 최신 accepted sequence를 요구한다.
 
@@ -404,7 +406,7 @@ Review는 glyph 획이 cell 아래쪽까지 내려올 수 있고 cursor color는
 
 성능 acceptance는 로컬에서 최적화한 diagnostic binary를 사용한다. 양 core host와 설치된 sidecar는 diagnostic 지원을 켠 release compile profile을 사용한다. Source revision, executable hash, profile, display mode와 system load를 기록한다. Debug-profile 관측은 별도로 보존하며 통과는 측정한 profile만 증명한다. Compiler 최적화로 목표를 바꾸지 않는다.
 
-- 연속 capture view-drag frame의 목표 최대 간격은 33 ms다. ScreenCaptureKit은 요청된 update 간격을 보장하지 않으며 측정 간격과 목표 초과 여부를 보존한다.
+- 연속 capture view-drag frame의 목표 최대 간격은 35 ms다. ScreenCaptureKit은 요청된 update 간격을 보장하지 않으며 측정 간격과 목표 초과 여부를 보존한다.
 - 경계를 끄는 동안 녹화된 프레임은 격자가 한 걸음의 배치를 떠난 뒤 최대 화면 네 프레임 안에 그 배치를 보여주고, 끌기 전체에서 지연의 중앙값은 2.5 프레임, 90번째 백분위수는 3 프레임 이하다(60Hz에서 66.7ms, 41.7ms, 50ms).
 - 문서 영역은 보여주는 page에 메모리도 CPU도 더하지 않는다: 다섯 번 실행에서 영역에 있는 page의 메모리와 CPU는 같은 user agent의 plain web view에 있는 같은 page의 것과 실행들의 interquartile range 안에서 같다. `make -C native/darwin benchmark-region-cost URL=<address>`는 둘의 메모리를 잰다.
 - `make -C native/darwin benchmark-site-cost [RUNS=<count>]`는 트리를 쉬지 않고 바꾸는 page를 포함한 정해진 목록의 각 사이트에 대해, element와 request stream을 구독한 문서 영역에서 탭의 비용을 보고한다. 비용은 탭이 없는 baseline 대비 content, GPU, network process의 메모리, 쉴 때와 background일 때의 CPU, 로딩 시간, 입력 지연이고, 각각 적어도 다섯 번 실행의 median과 interquartile range다. 한계는 두지 않으며, 이 repository의 몫으로 보이는 비용은 자기 unit test 아래에서 고친다.

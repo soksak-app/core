@@ -459,6 +459,9 @@ func TestEachWindowEventOfTheFrontendIsAnEventOfMygo(t *testing.T) {
 			t.Errorf("the window event %d has no event of mygo", event)
 		}
 	}
+	if adapter.WindowEventSource(window.Window(), host.WindowScaleChanged, func() {}) {
+		t.Error("the change of the backing scale has an event of mygo, and mygo has none")
+	}
 	for _, event := range []host.WindowEvent{host.WindowWorkbenchEnded, host.WindowWorkbenchCommitted} {
 		if adapter.WindowEventSource(window.Window(), event, func() {}) {
 			t.Errorf("the workbench event %d has an event of mygo, and no process or navigation of a mygo workbench ends", event)

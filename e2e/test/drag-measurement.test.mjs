@@ -40,9 +40,9 @@ test("pointer lag measures finite frames after input", { timeout: 1000 }, () => 
 });
 
 
-test("view drag cadence requires every frame within 33 milliseconds", { timeout: 1000 }, () => {
-  assert.equal(assertDragFrameCadence([0, 16, 49, 65]), 33);
-  assert.throws(() => assertDragFrameCadence([0, 16, 49.01, 65]), /33.*gap|gap.*33/);
+test("view drag cadence requires every frame within 35 milliseconds", { timeout: 1000 }, () => {
+  assert.equal(assertDragFrameCadence([0, 16, 51, 67]), 35);
+  assert.throws(() => assertDragFrameCadence([0, 16, 51.01, 67]), /35.*gap|gap.*35/);
 });
 
 test("view drag cadence rejects missing or invalid frame times", { timeout: 1000 }, () => {
@@ -82,15 +82,15 @@ test("drag cadence measurement retains intervals beyond the performance target",
   assert.equal(typeof measurement.measureDragFrameCadence, "function", "separate cadence measurement is required");
   assert.equal(measurement.measureDragFrameCadence([0, 34, 68]), 34);
   assert.throws(() => measurement.measureDragFrameCadence([0, 0]), /frame times/);
-  assert.throws(() => measurement.assertDragFrameCadence([0, 34, 68]), /exceeds 33ms/);
+  assert.throws(() => measurement.assertDragFrameCadence([0, 36, 72]), /exceeds 35ms/);
 });
 
 
 test("drag performance keeps existing targets separate from valid measurements", { timeout: 1000 }, () => {
   assert.equal(typeof measurement.measureDragPerformance, "function", "separate performance results are required");
-  const report = measurement.measureDragPerformance([0, 34, 68], { lag: 100, median: 40, p90: 70 }, 60);
+  const report = measurement.measureDragPerformance([0, 36, 72], { lag: 100, median: 40, p90: 70 }, 60);
   assert.deepEqual(report.exceeded, ["cadence", "p90", "worst"]);
-  assert.throws(() => measurement.assertDragPerformance([0, 34, 68], { lag: 100, median: 40, p90: 70 }, 60),
+  assert.throws(() => measurement.assertDragPerformance([0, 36, 72], { lag: 100, median: 40, p90: 70 }, 60),
     /performance targets/);
   assert.equal(measurement.assertDragPerformance([0, 16, 32], { lag: 20, median: 10, p90: 15 }, 120).targetsMet, true);
   assert.throws(() => measurement.measureDragPerformance([0, 16], { lag: NaN, median: 1, p90: 2 }, 60), /latency/);

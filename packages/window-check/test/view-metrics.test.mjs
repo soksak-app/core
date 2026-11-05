@@ -130,9 +130,9 @@ function cadenceFailureWithPaintOutcome({ wrongTailPaint = false, wrongGestureGe
   drag.gestureEndedAtMs = 150;
   drag.geometryFrames[2].timeMs = 150;
   drag.finalPresentation.displayedAtMs = 150;
-  drag.contentFrames[2].frameTimeMs = 94;
-  drag.contentFrames[2].timeRange = { lowerMs: 93, upperMs: 95 };
-  drag.contentFrames[2].captureTimeMs = 95;
+  drag.contentFrames[2].frameTimeMs = 92;
+  drag.contentFrames[2].timeRange = { lowerMs: 91, upperMs: 93 };
+  drag.contentFrames[2].captureTimeMs = 93;
   drag.contentFrames[2].displayCapture = { frameIndex: 7, timeMs: 175 };
   drag.contentFrames[3].displayCapture = { frameIndex: 7, timeMs: 175 };
   for (const frame of drag.contentFrames.slice(0, 2)) {
@@ -154,7 +154,7 @@ test("view metrics judge convergence by time, not by the count of recorded frame
   [120, 125, 130].forEach((timeMs, index) => { raw.drag.tailGeometryFrames[index].timeMs = timeMs; });
   const result = assertViewMeasurements(raw, options);
   assert.equal(result.evaluation.drag.convergedFrame, 3);
-  assert.ok(result.evaluation.drag.convergenceMs <= 33, `convergence ${result.evaluation.drag.convergenceMs} ms`);
+  assert.ok(result.evaluation.drag.convergenceMs <= 35, `convergence ${result.evaluation.drag.convergenceMs} ms`);
 });
 
 test("view metrics accept exact thresholds and preserve frame and process evidence", { timeout: 1000 }, () => {
@@ -171,7 +171,7 @@ test("view metrics accept exact thresholds and preserve frame and process eviden
   assert.equal(report.evaluation.drag.convergedFrame, 2);
   assert.deepEqual(Object.values(report.evaluation.drag.criteria).map(({ passed }) => passed), [true, true, true]);
   assert.equal(report.evaluation.drag.criteria.geometry.limitPt, 2);
-  assert.equal(report.evaluation.drag.criteria.cadence.limitMs, 33);
+  assert.equal(report.evaluation.drag.criteria.cadence.limitMs, 35);
   assert.strictEqual(report.measurements, raw);
 });
 
@@ -418,11 +418,20 @@ test("the geometry rule takes the greatest distance of a native rectangle from i
     /view measurement geometryFrames\[0\]\.nativeRectPt: expected an object/);
 });
 
+test("drag cadence reads the middle of a source time range, because its bounds state the uncertainty of the mapping", { timeout: 1000 }, () => {
+  const wide = metrics();
+  Object.assign(wide.drag.contentFrames[0], { frameTimeMs: 60, timeRange: { lowerMs: 59, upperMs: 61 } });
+  Object.assign(wide.drag.contentFrames[1], { frameTimeMs: 104, timeRange: { lowerMs: 98, upperMs: 110 }, captureTimeMs: 110 });
+  Object.assign(wide.drag.contentFrames[2], { frameTimeMs: 112, timeRange: { lowerMs: 111, upperMs: 113 }, captureTimeMs: 113 });
+  wide.drag.gestureEndedAtMs = 120;
+  assert.equal(assertViewMeasurements(wide, options).evaluation.drag.criteria.cadence.maxIntervalMs, 34);
+});
+
 test("drag cadence is in-gesture and convergence meets both frame and time bounds", { timeout: 1000 }, () => {
   const cadence = metrics();
-  cadence.drag.contentFrames[1].frameTimeMs = 114;
-  cadence.drag.contentFrames[1].timeRange = { lowerMs: 113, upperMs: 115 };
-  cadence.drag.contentFrames[1].captureTimeMs = 115;
+  cadence.drag.contentFrames[1].frameTimeMs = 116;
+  cadence.drag.contentFrames[1].timeRange = { lowerMs: 115, upperMs: 117 };
+  cadence.drag.contentFrames[1].captureTimeMs = 117;
   cadence.drag.contentFrames[2].frameTimeMs = 120;
   cadence.drag.contentFrames[2].timeRange = { lowerMs: 119, upperMs: 121 };
   cadence.drag.contentFrames[2].captureTimeMs = 121;
@@ -432,7 +441,7 @@ test("drag cadence is in-gesture and convergence meets both frame and time bound
   cadence.drag.contentFrames[3].displayCapture = { frameIndex: 6, timeMs: 141 };
   cadence.drag.gestureEndedAtMs = 130;
   cadence.drag.tailGeometryFrames[1].timeMs = 141;
-  assert.throws(() => assertViewMeasurements(cadence, options), /in-gesture content-frame interval 34 ms/);
+  assert.throws(() => assertViewMeasurements(cadence, options), /in-gesture content-frame interval 36 ms/);
 
   const tooLate = metrics();
   tooLate.drag.gestureEndedAtMs = 130;
@@ -479,7 +488,7 @@ test("drag convergence uses the early source-backed paint capture instead of the
   assert.equal(report.evaluation.drag.convergedFrame, 2,
     "the first target-size source frame was captured two frames after gesture end");
   assert.equal(report.evaluation.drag.convergenceMs, 29,
-    "the source-backed paint capture, rather than the later presentation barrier, is within 33 ms");
+    "the source-backed paint capture, rather than the later presentation barrier, is within 35 ms");
   assert.equal(report.evaluation.drag.paintCaptureFrameIndex, 6);
   assert.equal(report.evaluation.drag.paintCaptureTimeMs, 129);
   assert.equal(report.evaluation.drag.paintSourceSequence, 3);
@@ -579,7 +588,7 @@ test("drag convergence rejects internally aligned paint at a different final tar
   assert.throws(() => assertViewMeasurements(raw, options), /source-backed final-target paint capture/);
 });
 
-test("drag convergence rejects a source-backed capture at 34.888 ms even when presentation was earlier", { timeout: 1000 }, () => {
+test("drag convergence rejects a source-backed capture at 35.888 ms even when presentation was earlier", { timeout: 1000 }, () => {
   const raw = metrics();
   raw.drag.recordedFrameCount = 67;
   raw.drag.firstGestureFrameIndex = 58;
@@ -594,7 +603,7 @@ test("drag convergence rejects a source-backed capture at 34.888 ms even when pr
   }));
   raw.drag.tailGeometryFrames = Array.from({ length: 6 }, (_, index) => ({
     frameIndex: 61 + index,
-    timeMs: [120, 134.888, 150, 200, 251, 252][index],
+    timeMs: [120, 135.888, 150, 200, 251, 252][index],
     cardRectPt: { left: 0, top: 0, right: 120, bottom: 80 },
     nativeRectPt: { left: 0, top: 0, right: 120, bottom: 80 },
     contentRectPt: { left: 0, top: 0, right: 120, bottom: 80 },
@@ -607,8 +616,8 @@ test("drag convergence rejects a source-backed capture at 34.888 ms even when pr
     contentFrame(2, 60, 96, 95, 97, 100, 100),
     contentFrame(3, 62, 124, 123, 125, 120, 120),
   ];
-  raw.drag.contentFrames[3].captureTimeMs = 134.888;
-  raw.drag.contentFrames[3].displayCapture = { frameIndex: 62, timeMs: 134.888 };
+  raw.drag.contentFrames[3].captureTimeMs = 135.888;
+  raw.drag.contentFrames[3].displayCapture = { frameIndex: 62, timeMs: 135.888 };
   raw.drag.finalPresentation = { displayedAtMs: 125, targetViewport: { width: 120, height: 80 },
     targetRectPt: { left: 0, top: 0, right: 120, bottom: 80 } };
 
@@ -658,7 +667,7 @@ test("drag cadence preserves distinct source frames that map to the same capture
     contentInsetsPt: { left: 0, top: 0, right: 0, bottom: 0 },
   }));
   const report = assertViewMeasurements(raw, options);
-  assert.equal(report.evaluation.drag.maxContentFrameIntervalMs, 11);
+  assert.equal(report.evaluation.drag.maxContentFrameIntervalMs, 10);
   assert.equal(report.evaluation.drag.convergedFrame, 1);
 });
 
@@ -719,7 +728,7 @@ test("drag cadence excludes observer idle time outside the recorded gesture", { 
   }));
 
   const report = assertViewMeasurements(idle, options);
-  assert.equal(report.evaluation.drag.maxContentFrameIntervalMs, 9,
+  assert.equal(report.evaluation.drag.maxContentFrameIntervalMs, 8,
     "cadence includes the in-gesture parts of both boundary gaps and the exact in-gesture RAF gaps");
 });
 

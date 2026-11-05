@@ -10,7 +10,9 @@ const PROCESS_START_SAMPLES = 5;
 const NEW_PROCESS_RUNS = 3;
 export const LAYOUT_DISPLAY_LIMIT_MS = 100;
 const DRAG_GEOMETRY_LIMIT_PT = 2;
-const DRAG_CONTENT_INTERVAL_LIMIT_MS = 33;
+// Two display frames at 60 Hz, 33.3 ms, and the error of the two whole-millisecond readings of an interval.
+const DRAG_CONTENT_INTERVAL_LIMIT_MS = 35;
+const rangeMiddleMs = ({ lowerMs, upperMs }) => (lowerMs + upperMs) / 2;
 const EDITOR_SIDECAR_THRESHOLD_BYTES = 50_000_000;
 
 export const normalizeViewText = text => text.normalize("NFC").replace(/\s/gu, "");
@@ -591,10 +593,11 @@ function evaluateDrag(value) {
   const intervalsMs = cadenceFrames.slice(1).map((frame, index) => {
     const previous = cadenceFrames[index];
     const sourceGapMs = frame.frameTimeMs - previous.frameTimeMs;
-    const possibleGestureGapMs = Math.max(0,
-      Math.min(gestureEndedAtMs, frame.timeRange.upperMs)
-        - Math.max(gestureStartedAtMs, previous.timeRange.lowerMs));
-    return Math.min(sourceGapMs, possibleGestureGapMs);
+    // The bounds of a time range state the uncertainty of the mapping, so the part of a gap inside the gesture reads the middle.
+    const gestureGapMs = Math.max(0,
+      Math.min(gestureEndedAtMs, rangeMiddleMs(frame.timeRange))
+        - Math.max(gestureStartedAtMs, rangeMiddleMs(previous.timeRange)));
+    return Math.min(sourceGapMs, gestureGapMs);
   });
   const maxContentFrameIntervalMs = Math.max(...intervalsMs);
   const cadence = {
@@ -694,7 +697,7 @@ function evaluateDrag(value) {
   const selectedPaint = paintCandidates[0];
   if (!selectedPaint && targetSourceFrames.length > 0) {
     criterionFailures.push({ criterion: "convergence", error: new Error(
-      `drag.contentFrames: expected a source-backed final-target paint capture within 33 ms after gesture end; received ${JSON.stringify({
+      `drag.contentFrames: expected a source-backed final-target paint capture within ${DRAG_CONTENT_INTERVAL_LIMIT_MS} ms after gesture end; received ${JSON.stringify({
         mismatchedAtEnd, targetViewport: { width: targetWidth, height: targetHeight },
         finalTargetRectPt, targetSourceFrames, tailGeometryFrames: [...tailGeometryByIndex.values()],
       })}`) });

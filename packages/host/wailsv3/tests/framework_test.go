@@ -45,6 +45,7 @@ func TestEachWindowEventOfTheFrontendIsAnEventOfWails(t *testing.T) {
 		host.WindowFocusLost:          events.Common.WindowLostFocus,
 		host.WindowShow:               events.Common.WindowShow,
 		host.WindowHide:               events.Common.WindowHide,
+		host.WindowScaleChanged:       events.Mac.WindowDidChangeBackingProperties,
 		host.WindowWorkbenchEnded:     events.Mac.WebViewWebContentProcessDidTerminate,
 		host.WindowWorkbenchCommitted: events.Mac.WebViewDidCommitNavigation,
 	} {

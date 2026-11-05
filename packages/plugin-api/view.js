@@ -391,6 +391,12 @@ export function createViewBridge({ handler, report }) {
     reply.then((payload) => channel.send({ sok: 1, reply: request.id, ...payload }));
   };
   const dispatch = (message) => {
+    // An idle document renders a new size at once and then waits for the display, so the second size of a run misses a frame.
+    // A frame requested at the start of a run makes the first size wait for the display like every later size.
+    if (message.event === "run-start") {
+      window.requestAnimationFrame(() => {});
+      return;
+    }
     if (message.event === "exposure-request" && surfaceDocumentEntry(message.data?.params?.name)) {
       if (!onCoreExposure) throw new Error(`view ${plugin} has no core document exposure handler`);
       onCoreExposure(message.data);

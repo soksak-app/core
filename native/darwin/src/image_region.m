@@ -54,6 +54,7 @@ static void failFrameIdentitySession(NSString *message) {
 @property sp_region_event event;
 @property void *context;
 @property(retain) CALayer *imageLayer;
+@property (nonatomic) CGFloat shownPixelsPerUnit;
 @property(assign) IOSurfaceRef presented;  // The surface that the layer shows: the host-owned copy, or in the lease mode the held surface of the supplier.
 @property sp_region_released released;      // Set in the lease mode; reports each held surface that the region stops holding.
 @property void *releasedContext;
@@ -544,8 +545,10 @@ static void spEnsurePressOriginMonitor(void) {
     return NSWidth([self convertRectToBacking:bounds]) / NSWidth(bounds);
 }
 
+// A shown image keeps the density it was drawn at. After a backing scale change its pixels would otherwise cover half or
+// twice the region until a frame of the new raster replaces it.
 - (void)updateContentsScale {
-    CGFloat pixels = [self backingPixelsPerUnit];
+    CGFloat pixels = self.imageLayer.contents ? self.shownPixelsPerUnit : [self backingPixelsPerUnit];
     if (pixels > 0) self.imageLayer.contentsScale = pixels;
 }
 
@@ -1738,6 +1741,7 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
     [CATransaction setDisableActions:YES];
     [view applyInsetsInTransaction];
     view.imageLayer.contents = displayContents;
+    view.shownPixelsPerUnit = [view backingPixelsPerUnit];
     [view updateContentsScale];
     [CATransaction commit];
     view.presented = presentation;

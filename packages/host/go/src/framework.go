@@ -57,6 +57,8 @@ const (
 	WindowFocusLost
 	WindowShow
 	WindowHide
+	// WindowScaleChanged reports that the backing scale of the window changed. A frontend without that event does not report it.
+	WindowScaleChanged
 	// WindowWorkbenchEnded reports that the process that draws the workbench ended, and WindowWorkbenchCommitted that the
 	// workbench committed a navigation. A frontend that has no such process does not report them.
 	WindowWorkbenchEnded

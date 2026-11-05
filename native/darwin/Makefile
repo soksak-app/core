@@ -73,7 +73,7 @@
 #   make benchmark-webview-resize-cadence
 #                         measures source ResizeObserver-to-next-rAF cadence during 48 display-paced root-view resizes
 #                         from an observed 300×200 source baseline, and gates intervals after the first pulse response
-#                         at 33 ms; the baseline interval and first-pulse response latency are not gated
+#                         at 35 ms; the baseline interval and first-pulse response latency are not gated
 #   make repeat TEST=<name>_test COUNT=<n>
 #                         runs one check of the test target n times in a row and reports the run number and the system load at the first failure
 #   make e2e-activation-backspace-repeat COUNT=<n>
@@ -378,6 +378,7 @@ NATIVE_TESTS = observe_test \
   image_region_decoration_test \
   iosurface_use_count_test \
   image_region_lease_test \
+  image_region_scale_test \
   ime_reference_state_test \
   ime_source_restore_test \
   ime_wire_document_test \
