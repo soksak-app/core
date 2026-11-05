@@ -302,7 +302,7 @@ func bandColor(body color.RGBA, text ui.Color, share float32) color.RGBA {
 }
 
 func near(a, b color.RGBA) bool {
-	off := func(x, y uint8) bool { return x+1 < y || y+1 < x }
+	off := func(x, y uint8) bool { return int(x)+1 < int(y) || int(y)+1 < int(x) }
 	return !off(a.R, b.R) && !off(a.G, b.G) && !off(a.B, b.B)
 }
 

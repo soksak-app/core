@@ -80,6 +80,10 @@ type metrics struct {
 	errorPadY, errorPadX, errorBorder float32
 	// debugW is the width of the debug view, and debugH its largest share of the window height.
 	debugW, debugH float32
+	// The grip of a divider, the dots of a folded side and the lines of the boundaries (.sp-divider, .card-sidebar__grip and .sp-rule of
+	// packages/workbench/app.css).
+	gripThickness, gripLength, gripMix, gripDot, gripDotSpacing, lineCrossingMix float32
+	gripTransition                                                               time.Duration
 }
 
 func readMetrics(declared *Declarations) (metrics, error) {
@@ -145,6 +149,17 @@ func readMetrics(declared *Declarations) (metrics, error) {
 	mix("chip-sel-mix", &m.chipSelMix)
 	mix("inset-mix", &m.insetMix)
 	mix("tab-x-hover-mix", &m.tabXHoverMix)
+	mix("sp-grip-mix", &m.gripMix)
+	mix("sp-line-crossing-mix", &m.lineCrossingMix)
+	read("sp-grip-thickness", &m.gripThickness)
+	read("sp-grip-length", &m.gripLength)
+	read("grip-dot", &m.gripDot)
+	read("grip-dot-spacing", &m.gripDotSpacing)
+	seconds, ok := declared.Seconds("grip-transition")
+	if !ok {
+		failed = errors.New("the chrome metric grip-transition has no time")
+	}
+	m.gripTransition = time.Duration(seconds * float64(time.Second))
 	return m, failed
 }
 
