@@ -85,6 +85,9 @@ int main(void) { @autoreleasepool {
         @"the second window leaves the front application in front");
     check(!NSRunningApplication.currentApplication.active, @"the application is not activated");
 
+    printf("window show order: front %s pid %d place %ld, first window place %ld, second window place %ld, front after %s, application active %d\n",
+        front.localizedName.UTF8String, front.processIdentifier, (long)frontPlace, (long)placeOf(first), (long)placeOf(second),
+        NSWorkspace.sharedWorkspace.frontmostApplication.localizedName.UTF8String, NSRunningApplication.currentApplication.active);
     [first close];
     [second close];
     [first release];
