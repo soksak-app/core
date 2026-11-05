@@ -30,6 +30,13 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
 	}
+	catalog, err := workbench.ReadSettingsCatalog()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
+	// The framework shows English when it is not told that the application is written in the language of the system.
+	mygo.App.SetLanguages(catalog.AppLanguages()...)
 	mygoWorkbench, err := newWorkbench()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

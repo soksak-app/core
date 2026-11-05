@@ -246,6 +246,7 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 		"setMenuLanguage": answer("setMenuLanguage", func(argument json.RawMessage) (any, error) { h.language = argument; return nil, nil }),
 		"windowNew":       answer("windowNew", none),
 		"windowClose":     answer("windowClose", none),
+		"windowCloseKept": answer("windowCloseKept", none),
 		"pluginsState":    answer("pluginsState", h.pluginHost().state),
 		"pluginsRun":      answer("pluginsRun", h.pluginHost().run),
 		"pluginsUseRegistry": answer("pluginsUseRegistry", func(argument json.RawMessage) (any, error) {
