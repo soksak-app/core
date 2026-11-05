@@ -636,6 +636,7 @@ judge는 다음 규칙을 적용한다:
 - session은 조건 표가 정하는 수만큼 각 application의 run을 가지며, run은 그 표의 조건에서만 시작한다; `make e2e-b3`는 조건이 맞지 않는 run을 실패시킨다.
 - median으로 판정하는 값은 그 run들의 median이다; 각 run에서 판정하는 값은 run 하나가 한계를 넘으면 실패한다. 값의 spread는 그 run들의 범위다.
 - 한계는 mygo host의 값에 적용한다.
+- host가 어느 run에도 기록하지 않은 값은 `not measured`로 출력한다. 단, 기준이 그 host의 값을 요구하면 실패한다. 이 값은 그 host의 통과도 실패도 아니다. Wails host와 Tauri host에서는 `host.window`의 `frames`와 `commandBuffers`가 null이므로 그 host의 `G2-S0-frames`는 `not measured`이고, 그 창에 대한 idle 대기는 frame을 읽지 않는다.
 - 각 other host와 baseline host와 비교하는 값은 mygo host의 spread가 그 host 중 하나의 같은 값의 spread보다 완전히 한계 쪽에 있을 때 실패한다: 시간, CPU 시간, footprint(`s`, `ms`, `KB`)에서는 가장 낮은 run이 그 host의 가장 높은 run보다 위에 있을 때, frame rate(`frames/s`)에서는 가장 높은 run이 그 host의 가장 낮은 run보다 아래에 있을 때다. other host의 같은 값은 그 spread가 같은 뜻으로 그 baseline host의 같은 값의 spread보다 완전히 한계 쪽에 있을 때 regression이며, regression은 session을 실패시킨다.
 - mygo host의 다른 값과 비교하는 값은 그 spread가 그 값의 spread보다 완전히 위에 있을 때 실패한다.
 - 단위 `verdict`의 값은 그 행의 benchmark가 그 run에 기록한 verdict이다.

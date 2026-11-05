@@ -1260,6 +1260,13 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/host_calls_test.go", id: "TestDrainEndsWhileAHostCallWaitsForTheTest" },
       { file: "packages/workbench-mygo/tests/host_calls_test.go", id: "TestDrainFollowsTheCallsOfAnAnswer" },
     expected: "drain ends when no step waits and every other goroutine waits for something only another goroutine or the test can end.",
+    id: "F571",
+      { file: "scripts/b3-judge.mjs", symbol: "lines.push(`not measured ${value.id} ${name}`)" },
+      { file: "scripts/measure-app-usage.mjs", symbol: "export function notMeasuredLines({ idle, marks })" },
+      { file: "scripts/test/b3-judge.test.mjs", id: "a value that a host records in no run is printed as not measured, and it is no pass and no failure" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "an idle wait over a window whose frames is null reports that no frame was read, and frames that hold still report quiet" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the report names the counters that no window reports and an idle wait that read no frame" },
+    expected: "A value that a host records in no run is printed as not measured, and an idle wait over a window whose frames is null says that it read no frame.",
     levels: ["unit"],
   },
   {

@@ -32,6 +32,7 @@ import {
   untilFramesQuiet,
   usageMeasurements,
   waitIdle,
+  notMeasuredLines,
   windowApplicationRows,
   windowRows,
 } from "../measure-app-usage.mjs";
@@ -259,6 +260,26 @@ test("every window must be visible except the covered first window of S9", () =>
   assert.throws(() => requireOcclusion("S9", visible), /window w1 reports occluded false; S9 requires occluded true/);
   requireOcclusion("S9", [{ window: "w1", occluded: true }, { window: "w2", occluded: false }]);
   assert.throws(() => requireOcclusion("S0", [{ window: "w1", occluded: "no" }]), /window w1 reports occluded "no", not a boolean/);
+});
+
+test("an idle wait over a window whose frames is null reports that no frame was read, and frames that hold still report quiet", async () => {
+  const s = fakeSession((kind, window, name) => (name === "core.surfaces" ? [] : {}));
+  const sleep = async () => {};
+  assert.equal(await waitIdle({ sessions: [s], frames: async () => [null], sleep }), "not measured");
+  assert.equal(await waitIdle({ sessions: [s], frames: async () => [12, null], sleep }), "not measured");
+  assert.equal(await waitIdle({ sessions: [s], frames: async () => [12, 40], sleep }), "quiet");
+});
+
+test("the report names the counters that no window reports and an idle wait that read no frame", () => {
+  const counted = { window: "w1", frames: 3, commandBuffers: 3 };
+  const blank = { window: "w1", frames: null, commandBuffers: null };
+  assert.deepEqual(notMeasuredLines({ idle: "not measured", marks: { before: [blank], after: [blank] } }), [
+    "idle: not measured: the wait read no frame of a window whose frames is null, so it only waited",
+    "not measured: frames of host.window is null in every window",
+    "not measured: commandBuffers of host.window is null in every window",
+  ]);
+  assert.deepEqual(notMeasuredLines({ idle: "quiet", marks: { before: [counted], after: [counted] } }), []);
+  assert.deepEqual(notMeasuredLines({ idle: null, marks: { before: [counted], after: [counted] } }), []);
 });
 
 test("a window whose frames is null waits 3 seconds once", async () => {

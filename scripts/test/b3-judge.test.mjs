@@ -39,6 +39,16 @@ test("a session that meets every bound and criterion passes, and each value is p
   assert.ok(result.lines.includes("value G4-S5-view-drag mygo: runs passed passed passed"));
 });
 
+test("a value that a host records in no run is printed as not measured, and it is no pass and no failure", { timeout: 1000 }, () => {
+  const session = fixtureSession();
+  for (const record of session.records) if (record.application === "tauriv2") delete record.values["G2-S0-frames"];
+  const result = judgeSession(fixtureGoals(), session);
+  assert.ok(result.lines.includes("not measured G2-S0-frames tauriv2"), result.lines.join("\n"));
+  assert.ok(!result.lines.some((line) => line.includes("G2-S0-frames tauriv2") && line !== "not measured G2-S0-frames tauriv2"), result.lines.join("\n"));
+  assert.deepEqual(failedLines(result), []);
+  assert.ok(!result.lines.includes("not measured G2-S0-frames mygo"));
+});
+
 test("a recorded run of the mygo host outside a bound fails the value", { timeout: 1000 }, () => {
   const each = fixtureSession();
   setReading(each, "mygo", 2, "G2-S0-frames", 3);
