@@ -75,6 +75,9 @@ func TestDroppingATabOnTheCentreOfACardMovesItThere(t *testing.T) {
 	if drag.Preview == nil || math.Abs(drag.Preview.X+plane.X-float64(box.X)) > 0.01 || math.Abs(drag.Preview.Y+plane.Y-float64(box.Y)) > 0.01 {
 		t.Fatalf("the preview is %+v over the card %v", drag.Preview, box)
 	}
+	if !f.has("core.drop", "") {
+		t.Fatal("the preview has no element name")
+	}
 	f.tester.Release(x, y)
 	f.settle()
 	if status[*dragRead](t, f, "core.drag") != nil {

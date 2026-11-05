@@ -278,6 +278,6 @@ func (s *Shell) drawDropPreview(c *ui.Context, inset float32) {
 		return
 	}
 	rect := s.dragging.preview
-	ui.Box(c).Absolute().Left(float32(rect.X)+inset).Top(float32(rect.Y)+inset).Size(float32(rect.W), float32(rect.H)).Radius(s.palette.Radius).
+	ui.Box(s.binder.Name(c, "core.drop", "")).Role(ui.RoleGroup).Label("놓을 자리").Absolute().Left(float32(rect.X)+inset).Top(float32(rect.Y)+inset).Size(float32(rect.W), float32(rect.H)).Radius(s.palette.Radius).
 		Background(faded(s.palette.Focus, s.metrics.dropMix)).Border(s.metrics.dropBorder, s.palette.Focus)
 }

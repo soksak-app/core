@@ -106,3 +106,35 @@ func TestARenameFitsTheColumn(t *testing.T) {
 		t.Fatalf("the field %+v leaves the column %+v", field, column)
 	}
 }
+
+func TestADragOrdersTheTabsOfTheColumn(t *testing.T) {
+	f, first, second := twoProjects(t)
+	f.run("core.settings.set", map[string]any{"patch": map[string]any{"projectTabs": "left"}})
+	f.settle()
+	dragBetween(f, f.box("core.project-tab", second), f.box("core.project-tab", first))
+	if f.host.projects[0]["id"] != second {
+		t.Fatalf("the store holds %v first", f.host.projects[0]["id"])
+	}
+	if f.box("core.project-tab", second).Y >= f.box("core.project-tab", first).Y {
+		t.Fatal("the tabs did not change places")
+	}
+}
+
+// In the column the close button shows only on the tab under the pointer or with the focus.
+func TestTheFocusShowsTheCloseButtonOfTheColumn(t *testing.T) {
+	f, first, _ := twoProjects(t)
+	f.run("core.settings.set", map[string]any{"patch": map[string]any{"projectTabs": "left"}})
+	f.settle()
+	f.tester.Move(600, 400)
+	f.tester.Frame()
+	mark := f.box("core.project-tab.close", first)
+	x, y := mark.X+mark.W/2, mark.Y+mark.H/2 // The middle of the mark, which the ring around the button does not reach.
+	before := f.pixelOf(x, y)
+	f.run("core.focus.set", map[string]any{"name": "core.project-tab.close", "index": 0})
+	f.tester.Key(0, ui.KeyTab)
+	f.tester.Key(ui.Shift, ui.KeyTab)
+	f.settle()
+	if f.pixelOf(x, y) == before {
+		t.Fatal("the focus did not show the close button")
+	}
+}
