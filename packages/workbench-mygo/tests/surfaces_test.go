@@ -46,12 +46,14 @@ type surfaceHost struct {
 	// presentFailure and declareFailure are the errors of each presentSurfaces and compositionDeclare.
 	presentFailure error
 	declareFailure error
-	requests       []map[string]any
-	placed         int
-	declared       []string
-	replies        []map[string]any
-	hostName       []string
-	hostNameMu     sync.Mutex
+	// presentedFailure is the error of each waitPresented, while a surface has not presented.
+	presentedFailure error
+	requests         []map[string]any
+	placed           int
+	declared         []string
+	replies          []map[string]any
+	hostName         []string
+	hostNameMu       sync.Mutex
 	// clipboard is the text of the clipboard.
 	clipboard string
 	debug     debugHost
@@ -87,6 +89,9 @@ func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 		h.requests = append(h.requests, request)
 		h.order = append(h.order, "syncSurfaces")
 		return map[string]any{"ticket": len(h.requests), "placements": []any{}, "chrome": map[string]any{}}, nil
+	}
+	table["waitPresented"] = func(context.Context, json.RawMessage) (any, error) {
+		return 0, h.presentedFailure
 	}
 	table["presentSurfaces"] = func(context.Context, json.RawMessage) (any, error) {
 		if h.presentFailure != nil {
@@ -987,6 +992,28 @@ func TestAPlacementThatKeepsFailingKeepsItsError(t *testing.T) {
 	f.settle()
 	if got := f.status("core.workbench.error"); got != "null" {
 		t.Fatalf("after the placement that succeeded the banner holds %s", got)
+	}
+}
+
+// While a surface has not presented, the placement of another change leaves the failure, because it is still true. When the surface
+// presents, the next wait withdraws it.
+func TestAFailureStaysUntilTheSurfacesPresent(t *testing.T) {
+	f, stored := surfaceShell(t)
+	stored.presentFailure = errors.New("the current image raster did not present")
+	f.tester.SetSize(1160, 800)
+	f.shownErrors()
+	stored.presentFailure = nil
+	stored.presentedFailure = errors.New("the current image raster did not present")
+	f.tester.SetSize(1100, 800)
+	f.settle()
+	if got := f.status("core.workbench.error"); !strings.Contains(got, "did not present") {
+		t.Fatalf("while the surface has not presented the banner holds %s", got)
+	}
+	stored.presentedFailure = nil
+	time.Sleep(1100 * time.Millisecond)
+	f.settle()
+	if got := f.status("core.workbench.error"); got != "null" {
+		t.Fatalf("after the surface presented the banner holds %s", got)
 	}
 }
 
