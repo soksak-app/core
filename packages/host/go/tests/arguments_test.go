@@ -28,8 +28,7 @@ func TestEveryBindingDecodesItsArgumentsFirst(t *testing.T) {
 			case contextType:
 				args = append(args, reflect.ValueOf(context.Background()))
 			case rawType:
-				// A list of lists is the argument of no binding, and a boolean is the argument of some.
-				args = append(args, reflect.ValueOf(json.RawMessage("[[true]]")))
+				args = append(args, reflect.ValueOf(json.RawMessage("true")))
 				decoded = true
 			default:
 				t.Errorf("%s takes %s, which the framework decodes", method.Name, kind.In(p))
@@ -42,7 +41,7 @@ func TestEveryBindingDecodesItsArgumentsFirst(t *testing.T) {
 		results := bindings.Method(i).Call(args)
 		err, _ := results[len(results)-1].Interface().(error)
 		if err == nil || !strings.HasPrefix(err.Error(), "argument ") {
-			t.Errorf("%s with wrong arguments returned %v, want an argument error", method.Name, err)
+			t.Errorf("%s with true arguments returned %v, want an argument error", method.Name, err)
 		}
 	}
 	if checked == 0 {
