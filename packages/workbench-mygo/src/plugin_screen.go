@@ -284,24 +284,60 @@ func versionLine(page PluginPage, row PluginRow) string {
 	return strings.Join(parts, " · ")
 }
 
-// DrawPluginPage draws the plugin page: the search, the reason of a failure, the update list, the outdated services and one
-// card for each shown plugin.
-func DrawPluginPage(c *ui.Context, binder *Binder, page PluginPage, shown *ShownErrors) {
-	ui.Scroll(c).Fill().Children(func() {
-		ui.Column(c).FillWidth().Gap(12).Padding(16).Children(func() {
-			drawPluginFailure(c, page, shown)
-			if page.Hosted {
-				drawUpdateList(c, binder, page, shown)
-				drawOutdatedSidecars(c, binder, page)
-			}
-			rows := shownRows(page)
-			for _, row := range rows {
-				drawPluginCard(c, binder, page, row, shown)
-			}
-			if len(rows) == 0 && (page.Failure == nil || page.Failure.Kind != "state") {
-				ui.Text(c, "찾는 플러그인이 없습니다.").TextColor(c.Theme().TextMuted)
-			}
-		})
+// PluginLook is the theme and the lengths of the plugin page, which the window gives. Width is the width of the page.
+type PluginLook struct {
+	Bg, Card, Fg, Muted, Edge, Rail, No                 ui.Color
+	Control, Small, Caption, LineHeight                 float32
+	Radius, RadiusSmall, BorderWidth, Gap               float32
+	Space1, Space2, Space3, FieldPadY, Width, LeastCard float32
+}
+
+func (l PluginLook) text(c *ui.Context, text string, size float32, color ui.Color) ui.Element {
+	return ui.Text(c, text).LineHeight(l.LineHeight).FontSize(size).TextColor(color)
+}
+
+// button gives a pressable element the look of .ui-button.
+func (l PluginLook) button(c *ui.Context, button ui.Element, label string) ui.Element {
+	edge := l.Edge
+	if button.Hovered() {
+		edge = l.Rail
+	}
+	button.Padding(l.FieldPadY, l.Space3, l.FieldPadY, l.Space3).Border(l.BorderWidth, edge).Radius(l.RadiusSmall).Background(l.Bg).Label(label).Children(func() {
+		l.text(c, label, l.Control, l.Fg).SingleLine()
+	})
+	return button
+}
+
+// error draws the shown error of the place where at the size of the page.
+func (l PluginLook) error(c *ui.Context, shown *ShownErrors, where string) {
+	if text, ok := shown.Text(where); ok {
+		l.text(c, text, l.Control, l.No).Wrap().Role(ui.RoleStatus).Label(text)
+	}
+}
+
+// DrawPluginPage draws the plugin page: the reason of a failure, the update list, the outdated services and the cards of the shown plugins in as
+// many columns of the least card width as the page takes.
+func DrawPluginPage(c *ui.Context, binder *Binder, page PluginPage, shown *ShownErrors, look PluginLook) {
+	gap := 2 * look.Gap
+	ui.Column(c).FillWidth().Gap(gap).Children(func() {
+		drawPluginFailure(c, page, shown, look)
+		if page.Hosted {
+			drawUpdateList(c, binder, page, shown, look)
+			drawOutdatedSidecars(c, binder, page, look)
+		}
+		rows := shownRows(page)
+		columns := max(1, int((look.Width+gap)/(look.LeastCard+gap)))
+		width := (look.Width - float32(columns-1)*gap) / float32(columns)
+		for start := 0; start < len(rows); start += columns {
+			ui.Row(c.Key(start)).FillWidth().Gap(gap).AlignItems(ui.Stretch).Children(func() {
+				for _, row := range rows[start:min(start+columns, len(rows))] {
+					drawPluginCard(c.Key(row.ID), binder, page, row, shown, look, width)
+				}
+			})
+		}
+		if len(rows) == 0 && (page.Failure == nil || page.Failure.Kind != "state") {
+			look.text(c, "찾는 플러그인이 없습니다.", look.Control, look.Muted)
+		}
 	})
 }
 
@@ -315,7 +351,7 @@ func DrawPluginSearch(c *ui.Context, binder *Binder, query string, place func(ui
 	}
 }
 
-func drawPluginFailure(c *ui.Context, page PluginPage, shown *ShownErrors) {
+func drawPluginFailure(c *ui.Context, page PluginPage, shown *ShownErrors, look PluginLook) {
 	const where = "library plugins"
 	if page.Failure == nil {
 		shown.Hide(where)
@@ -326,42 +362,42 @@ func drawPluginFailure(c *ui.Context, page PluginPage, shown *ShownErrors) {
 		text = "레지스트리를 읽지 못했습니다: " + page.Failure.Message
 	}
 	shown.Show(where, text, "")
-	DrawError(c, shown, where)
+	look.error(c, shown, where)
 }
 
-func drawUpdateList(c *ui.Context, binder *Binder, page PluginPage, shown *ShownErrors) {
+func drawUpdateList(c *ui.Context, binder *Binder, page PluginPage, shown *ShownErrors, look PluginLook) {
 	if page.App.Operation == nil || page.App.Operation.State != "failed" {
 		shown.Hide("library app update")
 	}
 	if page.App.Available == nil && len(page.Updates) == 0 {
 		return
 	}
-	list := ui.Column(c).FillWidth().Gap(8)
+	list := ui.Column(c).FillWidth().Gap(look.Space2).PaddingY(look.Space2).AlignItems(ui.Start)
 	if page.Reveal {
 		list.ScrollIntoView()
 	}
 	list.Children(func() {
 		if page.App.Available != nil {
-			drawAppUpdateRow(c, binder, page.App, shown)
+			drawAppUpdateRow(c, binder, page.App, shown, look)
 		}
 		for _, update := range page.Updates {
 			line := fmt.Sprintf("%s: %s → %s", update.ID, update.Installed, update.Latest)
-			ui.Text(binder.Name(c, "core.library.plugins.updates", update.ID), line).Label(line)
+			ui.Text(binder.Name(c, "core.library.plugins.updates", update.ID), line).LineHeight(look.LineHeight).FontSize(look.Control).TextColor(look.Fg).Wrap().Label(line)
 		}
 		if len(page.Updates) > 0 {
-			binder.Button(c, "core.library.plugins.update-all", "core.plugins.update-all", "", "모두 업데이트", nil)
+			look.button(c, binder.Press(c, "core.library.plugins.update-all", "core.plugins.update-all", "", nil), "모두 업데이트")
 		}
 	})
 }
 
-func drawAppUpdateRow(c *ui.Context, binder *Binder, app AppUpdate, shown *ShownErrors) {
-	ui.Column(binder.Name(c, "core.library.app.row", "")).FillWidth().Gap(4).Role(ui.RoleGroup).Label("core").Children(func() {
-		ui.Text(c, fmt.Sprintf("core: %s → %s", app.Version, app.Available.Version))
-		ui.Row(c).Gap(8).Children(func() {
+func drawAppUpdateRow(c *ui.Context, binder *Binder, app AppUpdate, shown *ShownErrors, look PluginLook) {
+	ui.Column(binder.Name(c, "core.library.app.row", "")).FillWidth().Gap(look.Space2).Role(ui.RoleGroup).Label("core").Children(func() {
+		look.text(c, fmt.Sprintf("core: %s → %s", app.Version, app.Available.Version), look.Control, look.Fg)
+		ui.Row(c).Gap(look.Space2).Children(func() {
 			if app.Available.Release != "" {
-				binder.Button(c, "core.library.app.release", "core.app.release", "", "릴리스 페이지", nil)
+				look.button(c, binder.Press(c, "core.library.app.release", "core.app.release", "", nil), "릴리스 페이지")
 			}
-			binder.Button(c, "core.library.app.update", "core.app.update", "", "업데이트", nil)
+			look.button(c, binder.Press(c, "core.library.app.update", "core.app.update", "", nil), "업데이트")
 		})
 		for _, item := range app.Incompatible {
 			version := "버전 없음"
@@ -369,13 +405,13 @@ func drawAppUpdateRow(c *ui.Context, binder *Binder, app AppUpdate, shown *Shown
 				version = "최신 버전 " + *item.Compatible
 			}
 			line := fmt.Sprintf("%s %s (%s): %s에 맞는 %s", item.ID, item.Installed, item.Range, app.Available.Version, version)
-			ui.Text(binder.Name(c, "core.library.app.incompatible", item.ID), line).Label(line)
+			ui.Text(binder.Name(c, "core.library.app.incompatible", item.ID), line).LineHeight(look.LineHeight).FontSize(look.Control).TextColor(look.Fg).Wrap().Label(line)
 		}
-		drawAppOperation(c, binder, app, shown)
+		drawAppOperation(c, binder, app, shown, look)
 	})
 }
 
-func drawAppOperation(c *ui.Context, binder *Binder, app AppUpdate, shown *ShownErrors) {
+func drawAppOperation(c *ui.Context, binder *Binder, app AppUpdate, shown *ShownErrors, look PluginLook) {
 	operation := app.Operation
 	if operation == nil {
 		return
@@ -384,7 +420,7 @@ func drawAppOperation(c *ui.Context, binder *Binder, app AppUpdate, shown *Shown
 	if operation.State == "failed" {
 		const where = "library app update"
 		shown.Show(where, operation.Version+" 업데이트하지 못했습니다: "+operation.Error, "")
-		ui.Box(binder.Name(c, name, "")).Role(ui.RoleGroup).Children(func() { DrawError(c, shown, where) })
+		ui.Box(binder.Name(c, name, "")).Role(ui.RoleGroup).Children(func() { look.error(c, shown, where) })
 		return
 	}
 	step := "적용하는 중"
@@ -392,10 +428,10 @@ func drawAppOperation(c *ui.Context, binder *Binder, app AppUpdate, shown *Shown
 		step = "받는 중"
 	}
 	line := operation.Version + " " + step
-	ui.Text(binder.Name(c, name, ""), line).Label(line)
+	ui.Text(binder.Name(c, name, ""), line).LineHeight(look.LineHeight).FontSize(look.Control).TextColor(look.Fg).Label(line)
 }
 
-func drawOutdatedSidecars(c *ui.Context, binder *Binder, page PluginPage) {
+func drawOutdatedSidecars(c *ui.Context, binder *Binder, page PluginPage, look PluginLook) {
 	for _, item := range page.Outdated {
 		running, declared, verb := "이전 버전", "선언 없음", "종료"
 		if item.Running != nil {
@@ -405,45 +441,50 @@ func drawOutdatedSidecars(c *ui.Context, binder *Binder, page PluginPage) {
 			declared, verb = *item.Installed, "적용"
 		}
 		line := fmt.Sprintf("%s: %s → %s", item.Sidecar, running, declared)
-		ui.Row(binder.Name(c, "core.library.plugins.outdated", item.Sidecar)).FillWidth().Gap(8).AlignItems(ui.Center).Role(ui.RoleGroup).Label(line).Children(func() {
-			ui.Text(c, line).Grow(1)
-			binder.Button(c, "core.library.plugins.replace", "core.plugins.replace", item.Sidecar, fmt.Sprintf("세션 %d개를 끝내고 %s", item.Sessions, verb),
-				map[string]any{"sidecar": item.Sidecar})
+		ui.Row(binder.Name(c, "core.library.plugins.outdated", item.Sidecar)).FillWidth().Gap(look.Space3).PaddingY(look.Space2).AlignItems(ui.Center).Role(ui.RoleGroup).Label(line).Children(func() {
+			look.text(c, line, look.Control, look.Fg).Wrap().Grow(1)
+			look.button(c, binder.Press(c, "core.library.plugins.replace", "core.plugins.replace", item.Sidecar, map[string]any{"sidecar": item.Sidecar}),
+				fmt.Sprintf("세션 %d개를 끝내고 %s", item.Sessions, verb))
 		})
 	}
 }
 
-func drawPluginCard(c *ui.Context, binder *Binder, page PluginPage, row PluginRow, shown *ShownErrors) {
-	theme := c.Theme()
+func drawPluginCard(c *ui.Context, binder *Binder, page PluginPage, row PluginRow, shown *ShownErrors, look PluginLook, width float32) {
 	where := "library plugin " + row.ID
-	ui.Column(c).FillWidth().Gap(4).Padding(12).Border(1, theme.Border).Role(ui.RoleListItem).Label(row.Name).Children(func() {
-		ui.Row(c).FillWidth().Gap(8).Children(func() {
-			ui.Text(c, row.Name).Bold().Grow(1)
-			ui.Text(c, pluginStates[row.State]).TextColor(theme.TextMuted)
+	edge, stateColor := look.Edge, look.Muted
+	if row.State == "loaded" {
+		edge, stateColor = look.Rail, look.Rail
+	}
+	ui.Column(c).Width(width).Gap(look.Space1).Padding(look.Space2, look.Space3, look.Space2, look.Space3).Border(look.BorderWidth, edge).Radius(look.Radius).
+		Background(look.Card).Role(ui.RoleListItem).Label(row.Name).Children(func() {
+		ui.Row(c).FillWidth().Gap(look.Space2).AlignItems(ui.Baseline).Children(func() {
+			look.text(c, row.Name, look.Control, look.Fg).Bold().SingleLine().Ellipsis("…").Shrink(1)
+			ui.Spacer(c).Grow(1)
+			look.text(c, pluginStates[row.State], look.Caption, stateColor).SingleLine()
 		})
-		ui.Text(c, row.ID).TextColor(theme.TextMuted)
+		look.text(c, row.ID, look.Caption, look.Muted).Wrap()
 		if row.Description != "" {
-			ui.Text(c, row.Description).Wrap()
+			look.text(c, row.Description, look.Small, look.Fg).Wrap()
 		}
 		if line := versionLine(page, row); line != "" {
-			ui.Text(c, line).TextColor(theme.TextMuted)
+			look.text(c, line, look.Caption, look.Muted).Wrap()
 		}
 		if _, err := hasUpdate(row); err != nil {
 			shown.Show(where+" version", err.Error(), "")
-			DrawError(c, shown, where+" version")
+			look.error(c, shown, where+" version")
 		} else {
 			shown.Hide(where + " version")
 		}
 		if row.Sidecars != nil {
-			ui.Text(c, sidecarLine(row.Sidecars)).TextColor(theme.TextMuted)
+			look.text(c, sidecarLine(row.Sidecars), look.Caption, look.Muted).Wrap()
 		}
-		drawPluginContributions(c, page, row, shown)
-		drawCardActions(c, binder, page, row)
-		drawCardOperation(c, page, row, shown)
+		drawPluginContributions(c, page, row, shown, look)
+		drawCardActions(c, binder, page, row, look)
+		drawCardOperation(c, page, row, shown, look)
 	})
 }
 
-func drawPluginContributions(c *ui.Context, page PluginPage, row PluginRow, shown *ShownErrors) {
+func drawPluginContributions(c *ui.Context, page PluginPage, row PluginRow, shown *ShownErrors, look PluginLook) {
 	for _, entry := range page.Contributions {
 		if entry.Plugin != row.ID {
 			continue
@@ -452,11 +493,11 @@ func drawPluginContributions(c *ui.Context, page PluginPage, row PluginRow, show
 		where := fmt.Sprintf("library plugin %s contribution %s %d", row.ID, entry.Point, number)
 		if entry.State == "invalid" {
 			shown.Show(where, fmt.Sprintf("%s 기여 %d: %s", entry.Point, number, entry.Reason), "")
-			DrawError(c, shown, where)
+			look.error(c, shown, where)
 			continue
 		}
 		shown.Hide(where)
-		ui.Text(c, fmt.Sprintf("%s 기여 %d: %s", entry.Point, number, contributionStates[entry.State])).TextColor(c.Theme().TextMuted)
+		look.text(c, fmt.Sprintf("%s 기여 %d: %s", entry.Point, number, contributionStates[entry.State]), look.Control, look.Fg).Wrap()
 	}
 }
 
@@ -464,29 +505,27 @@ func drawPluginContributions(c *ui.Context, page PluginPage, row PluginRow, show
 var pluginCommands = map[string]string{"install": "core.plugins.install", "update": "core.plugins.update", "remove": "core.plugins.remove",
 	"enable": "core.plugins.enable", "disable": "core.plugins.disable", "apply": "core.plugins.apply"}
 
-func drawCardActions(c *ui.Context, binder *Binder, page PluginPage, row PluginRow) {
+func drawCardActions(c *ui.Context, binder *Binder, page PluginPage, row PluginRow, look PluginLook) {
 	actions := cardActions(page, row)
 	if len(actions) == 0 {
 		return
 	}
-	ui.Row(c).Gap(8).Children(func() {
+	ui.Row(c).Gap(look.Space2).Margin(look.Space1, 0, 0, 0).Children(func() {
 		for _, action := range actions {
-			run := binder.Control(c, "core.library.plugins.action", pluginCommands[action.Action], row.ID+"/"+action.Action)
-			if binder.Bound(ui.Button(c, actionLabel(action.Action)), "core.library.plugins.action").Disabled(action.Disabled).Clicked() {
-				// core.plugins.apply reloads the window for every changed plugin, so it takes no plugin.
-				params := map[string]any{"plugin": row.ID}
-				if action.Action == "apply" {
-					params = nil
-				}
-				run(params)
+			// core.plugins.apply reloads the window for every changed plugin, so it takes no plugin.
+			var params any = map[string]any{"plugin": row.ID}
+			if action.Action == "apply" {
+				params = nil
 			}
+			button := binder.Press(c, "core.library.plugins.action", pluginCommands[action.Action], row.ID+"/"+action.Action, params)
+			look.button(c, button.Disabled(action.Disabled), actionLabel(action.Action))
 		}
 	})
 }
 
 // drawCardOperation shows the operation of the plugin. An operation that succeeds reloads the window, so a done operation
 // shows no line.
-func drawCardOperation(c *ui.Context, page PluginPage, row PluginRow, shown *ShownErrors) {
+func drawCardOperation(c *ui.Context, page PluginPage, row PluginRow, shown *ShownErrors, look PluginLook) {
 	where := "library plugin " + row.ID
 	operation := page.Operation
 	if operation == nil || operation.Plugin != row.ID || operation.State != "failed" {
@@ -497,9 +536,9 @@ func drawCardOperation(c *ui.Context, page PluginPage, row PluginRow, shown *Sho
 	}
 	switch operation.State {
 	case "running":
-		ui.Text(c, row.ID+" "+operation.Action+" 진행 중").TextColor(c.Theme().TextMuted)
+		look.text(c, row.ID+" "+operation.Action+" 진행 중", look.Caption, look.Muted)
 	case "failed":
 		shown.Show(where, operation.Error, "")
-		DrawError(c, shown, where)
+		look.error(c, shown, where)
 	}
 }

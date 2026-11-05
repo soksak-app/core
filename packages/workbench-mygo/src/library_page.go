@@ -98,7 +98,7 @@ func (s *Shell) drawLibrary(c *ui.Context, width, height float32) {
 			s.drawLibraryHead(c, width-2*m.space3)
 			DrawErrorBanner(c, s.errors)
 			if s.library.page == pluginsPage {
-				s.drawPlugins(c)
+				s.drawPlugins(c, width-2*m.space3)
 				return
 			}
 			if s.library.formMode != "" {
@@ -209,11 +209,16 @@ func (s *Shell) drawnTextField(field ui.Element) ui.Element {
 		Background(s.palette.Bg).TextColor(s.palette.Fg).LineHeight(s.metrics.lineHeight).FontSize(s.textControl())
 }
 
+// drawLibraryEmpty draws the start of an empty library. The heading and the line keep the margins of a browser, which the page leaves to them: .83em
+// around a heading and 1em around a line, where the margin between the two is the larger of them.
 func (s *Shell) drawLibraryEmpty(c *ui.Context) {
 	m := s.metrics
-	ui.Column(s.binder.Name(c, "core.library.empty", "")).Role(ui.RoleGroup).Label("프로젝트를 시작하세요").FillWidth().AlignItems(ui.Center).Gap(m.space2).PaddingY(m.space4).Children(func() {
-		ui.Text(c, "프로젝트를 시작하세요").Bold().LineHeight(s.metrics.lineHeight).FontSize(float32(s.settings.Value("size").(float64))).TextColor(s.palette.Fg)
-		ui.Text(c, "새 프로젝트를 만들거나 기존 폴더를 여세요.").LineHeight(s.metrics.lineHeight).FontSize(s.textControl()).TextColor(s.palette.Muted)
+	const headingMargin = .83
+	size := float32(s.settings.Value("size").(float64))
+	between := max(size*headingMargin, s.textControl())
+	ui.Column(s.binder.Name(c, "core.library.empty", "")).Role(ui.RoleGroup).Label("프로젝트를 시작하세요").FillWidth().AlignItems(ui.Center).PaddingY(m.space4).Children(func() {
+		ui.Text(c, "프로젝트를 시작하세요").Bold().LineHeight(m.lineHeight).FontSize(size).TextColor(s.palette.Fg).Margin(size*headingMargin, 0, between, 0)
+		ui.Text(c, "새 프로젝트를 만들거나 기존 폴더를 여세요.").LineHeight(m.lineHeight).FontSize(s.textControl()).TextColor(s.palette.Muted).Margin(0, 0, s.textControl(), 0)
 	})
 }
 
@@ -506,6 +511,18 @@ func (s *Shell) drawLibraryFooter(c *ui.Context, width float32) {
 		ui.Spacer(c).Grow(1)
 		text(s.binder.Press(c, "core.library.window", "core.library.window", "", nil), "＋ 새 창")
 	})
+}
+
+// pluginLook is the theme and the lengths of the plugin page at width.
+func (s *Shell) pluginLook(width float32) PluginLook {
+	m, p := s.metrics, s.palette
+	least := m.libraryCardMinW
+	if width+2*m.space3 < m.libraryNarrowW {
+		least = m.libraryCardMinWNarrow
+	}
+	return PluginLook{Bg: p.Bg, Card: p.Card, Fg: p.Fg, Muted: p.Muted, Edge: p.Edge, Rail: p.Rail, No: p.No, Control: s.textControl(), Small: s.textSmall(),
+		Caption: s.textCaption(), LineHeight: m.lineHeight, Radius: p.Radius, RadiusSmall: s.radiusSmall(), BorderWidth: p.BorderWidth, Gap: p.Gap, Space1: m.space1,
+		Space2: m.space2, Space3: m.space3, FieldPadY: m.fieldPadY, Width: width, LeastCard: least}
 }
 
 // uiButton gives a pressable element the look of .ui-button, and of .library-primary with primary.

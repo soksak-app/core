@@ -29,7 +29,8 @@ func hostedPlugins() workbench.PluginPage {
 func drawPlugins(page *workbench.PluginPage, errors *workbench.ShownErrors, binder *workbench.Binder) *ui.Tester {
 	return ui.NewTester(func(c *ui.Context) {
 		workbench.DrawPluginSearch(c, binder, page.Query, func(field ui.Element) ui.Element { return field.FillWidth() })
-		workbench.DrawPluginPage(c, binder, *page, errors)
+		workbench.DrawPluginPage(c, binder, *page, errors, workbench.PluginLook{Width: 640, LeastCard: 245, Gap: 10, Control: 12, Small: 11, Caption: 10, LineHeight: 1.45,
+			Space1: 4, Space2: 8, Space3: 12, FieldPadY: 5, BorderWidth: 1})
 	}, 640, 900)
 }
 
@@ -46,6 +47,20 @@ func TestAPluginCardShowsItsStateVersionsAndSidecars(t *testing.T) {
 		if !tt.HasText(want) {
 			t.Errorf("no text %q in %q", want, tt.Texts())
 		}
+	}
+}
+
+func TestThePluginsStandInColumnsOfCards(t *testing.T) {
+	page := hostedPlugins()
+	tt := drawPlugins(&page, noErrors(), recorder(t, new([]call), screenCommands...))
+	first, _ := tt.Find("Alpha")
+	second, _ := tt.Find("Beta")
+	third, _ := tt.Find("gamma")
+	if first.Y != second.Y || second.X <= first.X {
+		t.Fatalf("the first two stand at %+v and %+v", first, second)
+	}
+	if third.Y <= first.Y || third.X != first.X {
+		t.Fatalf("the third stands at %+v under %+v", third, first)
 	}
 }
 
@@ -83,6 +98,18 @@ func TestWhileAnOperationRunsEveryActionIsDisabled(t *testing.T) {
 		}
 	}
 	pressPositional(t, tt, "core.library.plugins.action", 3)
+	if len(calls) != 0 {
+		t.Fatalf("a disabled action ran %+v", calls)
+	}
+}
+
+func TestADisabledActionRunsNothing(t *testing.T) {
+	var calls []call
+	page := hostedPlugins()
+	page.Operation = &workbench.PluginOperation{Plugin: "beta", Action: "install", State: "running"}
+	tt := drawPlugins(&page, noErrors(), recorder(t, &calls, screenCommands...))
+	pressPositional(t, tt, "core.library.plugins.action", 0)
+	tt.Frame()
 	if len(calls) != 0 {
 		t.Fatalf("a disabled action ran %+v", calls)
 	}
