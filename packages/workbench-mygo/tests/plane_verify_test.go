@@ -3,11 +3,13 @@ package workbench_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"math"
 	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+	host "github.com/soksak-app/core/packages/host/go/src"
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
@@ -466,4 +468,63 @@ func TestAReadBeforeTheFrameOfAnotherPlaneStatesNoRows(t *testing.T) {
 	}
 	f.settle()
 	verifyRow(t, status[workbench.VerifyStatus](t, f, "core.verify"), "V2 ")
+}
+
+// shownError reads the error that the workbench shows, or "" when it shows none.
+func shownError(t *testing.T, f *shellFixture) string {
+	t.Helper()
+	shown, err := f.shell.Registry().Read("core.workbench.error")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text, ok := shown.(*string); ok && text != nil {
+		return *text
+	}
+	return ""
+}
+
+// A read of the verification reads the window, and the step that gives a watcher the result of a frame can run after the window
+// closed. A window that closed has no screen and nothing to verify, so the read shows no failure.
+func TestAVerificationOfAClosedWindowShowsNoFailure(t *testing.T) {
+	f, stored := placingShell(t)
+	resized(f, 1000)
+	stored.windowFailure = &host.RPCError{Code: 1003, Message: `window "main" does not exist`}
+	status[workbench.VerifyStatus](t, f, "core.verify")
+	if text := shownError(t, f); text != "" {
+		t.Fatalf("the closed window shows %q", text)
+	}
+}
+
+// The status that reads the window answers null for a window that closed, and shows no failure.
+func TestTheWorkbenchStatusOfAClosedWindowShowsNoFailure(t *testing.T) {
+	f, stored := placingShell(t)
+	resized(f, 1000)
+	stored.windowFailure = &host.RPCError{Code: 1003, Message: `window "main" does not exist`}
+	shown, err := f.shell.Registry().Read("core.window.workbench")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if shown != nil {
+		t.Fatalf("the status of a closed window is %v", shown)
+	}
+	if text := shownError(t, f); text != "" {
+		t.Fatalf("the closed window shows %q", text)
+	}
+}
+
+// Any other failure to read the window stays a failure that the workbench shows.
+func TestAReadOfAnOpenWindowThatFailsIsShown(t *testing.T) {
+	for _, name := range []string{"core.verify", "core.window.workbench"} {
+		t.Run(name, func(t *testing.T) {
+			f, stored := placingShell(t)
+			resized(f, 1000)
+			stored.windowFailure = errors.New("the window state cannot be read")
+			if _, err := f.shell.Registry().Read(name); err != nil {
+				t.Fatal(err)
+			}
+			if text := shownError(t, f); text != "the window state cannot be read" {
+				t.Fatalf("the workbench shows %q", text)
+			}
+		})
+	}
 }

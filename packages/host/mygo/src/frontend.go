@@ -190,14 +190,24 @@ func (f *Frontend) ContentSize() (width, height float64) {
 // Visible tells whether the window shows, which it does not while it is minimized or not shown.
 func (f *Frontend) Visible() bool { return f.window.IsVisible() && !f.window.IsMinimized() }
 
-// Scale is the backing scale of the window, from its native facts.
+// Scale is the backing scale of the window, from its native facts. A window that closed gives the error of a closed window.
 func (f *Frontend) Scale() (float64, error) {
 	system, err := platform.Current()
 	if err != nil {
 		return 0, err
 	}
+	return WindowScale(mygo.RunOnMain, f.name, f.NativeWindow, system.WindowFacts)
+}
+
+// WindowScale reads the backing scale of the window of name from its native facts in one step of the main thread. A step that finds
+// no native window calls no native code, because native code records a read without a window as an error.
+func WindowScale(invoke func(func()), name string, native func() unsafe.Pointer, read func(unsafe.Pointer) (string, error)) (float64, error) {
 	var text string
-	mygo.RunOnMain(func() { text, err = system.WindowFacts(f.NativeWindow()) })
+	err := host.UseNativeWindow(invoke, name, native, func(window unsafe.Pointer) error {
+		var err error
+		text, err = read(window)
+		return err
+	})
 	if err != nil {
 		return 0, err
 	}

@@ -499,7 +499,7 @@ func (s *Shell) registerStatuses() {
 	s.registry.Status("core.window.workbench", func() any {
 		window, err := s.options.Window()
 		if err != nil {
-			s.fail(err)
+			s.failWindowRead(err)
 			return nil
 		}
 		ready, visibility := "interactive", "hidden"

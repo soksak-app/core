@@ -16,6 +16,7 @@
 - F547: The mygo workbench no longer posts steps without a pause while a log batch is in flight and a count of the gate is due.
 - F502-12: The WebContent process of a document region has the display label `soksak://plugin/<plugin id>/<region>`, so Activity Monitor and `lsappinfo` show which plugin and region it belongs to. Before, only a view had a label of its own and a region showed the name of the application. The host composes the label and `sp_document_create` receives it.
 - F548: The first window no longer reads the modules of the settings modal and the debug view; each loads at its first use.
+- F559: A normal quit of the mygo app no longer records a `window facts` error: a read of a closed window calls no native code and shows no workbench error.
 - F549: A wake of a settled window no longer wakes the log writer to store a count of frame events that were never refused.
 - F502-23: The mygo workbench answers `diagnostics.layout.fail`: its next placement of the surfaces fails once with `diagnostic layout fault`, and the workbench shows that failure and goes on answering.
 - F557: a page that loses the pointer stops hovering, in each order of the enter, the exit, and the move of its tracking area.
