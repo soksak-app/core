@@ -405,20 +405,33 @@ func (s *Sidebars) Hide(c *ui.Context, frame SidebarFrame) {
 	}
 }
 
-// Surfaces returns the ids of the section surfaces of the fixed sidebars in the space.
-func (s *Sidebars) Surfaces(space string, focused FocusedSurface) []string {
+// WindowSurfaces returns the ids of the section surfaces of the fixed sidebars in the space, for every set that a link gives them,
+// because the set of a fixed sidebar follows the plugin that has the focus.
+func (s *Sidebars) WindowSurfaces(space string) []string {
 	var surfaces []string
 	for _, place := range []string{"left", "right"} {
-		set, _ := s.windowSet(place, focused)
-		if set == nil {
-			continue
-		}
-		frame := SidebarFrame{Sidebar: place, Space: space}
-		s.fill(&frame, set)
-		for _, seat := range SidebarSeats(frame) {
-			if len(seat.Composition) > 0 {
-				surfaces = append(surfaces, seat.SurfaceID)
+		seen := map[string]bool{}
+		for _, link := range s.links {
+			if (link.Place == place || link.Place == "window-"+place) && !seen[link.Set] {
+				seen[link.Set] = true
+				surfaces = append(surfaces, s.SetSurfaces(space, place, link.Set)...)
 			}
+		}
+	}
+	return surfaces
+}
+
+// SetSurfaces returns the ids of the section surfaces of the set on the sidebar of the space. A set or a section that no plugin that
+// is loaded declares has no surface.
+func (s *Sidebars) SetSurfaces(space, sidebar, set string) []string {
+	declared := s.set(set)
+	if declared == nil {
+		return nil
+	}
+	var surfaces []string
+	for _, id := range declared.Sections {
+		if loaded, ok := s.sections[id]; ok && len(loaded.Composition) > 0 {
+			surfaces = append(surfaces, space+"/"+sidebar+"/"+id)
 		}
 	}
 	return surfaces

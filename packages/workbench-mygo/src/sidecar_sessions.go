@@ -14,9 +14,11 @@ type retainedSurface struct {
 	Root    string `json:"root"`
 }
 
-// layoutSurfaces returns the tabs of every space of every project with the root of their project, and the section surfaces of the shown
-// project. The spaces of a project hold the plane of its shown space, because each change of the plane writes it there before it
-// reaches this list.
+// layoutSurfaces returns what the layouts of every space of every project hold, with the root of their project: the tabs and the section
+// surfaces of their sidebars. A session stays recoverable while a layout holds its surface (docs/spec/persistent-services.md), so the list
+// follows from the layouts and the declared sets, and not from what the window draws: a window starts in the library, where no sidebar
+// is drawn, and the sessions of a service outlive an application that ended. The spaces of a project hold the plane of its shown space,
+// because each change of the plane writes it there before it reaches this list.
 func (s *Shell) layoutSurfaces() ([]retainedSurface, error) {
 	surfaces := []retainedSurface{}
 	for i := range s.projects {
@@ -29,23 +31,37 @@ func (s *Shell) layoutSurfaces() ([]retainedSurface, error) {
 			eachTab(stored.State.Cards, func(tab layout.Tab, _ bool) {
 				surfaces = append(surfaces, retainedSurface{tab.ID, project.Root})
 			})
-		}
-	}
-	// The library shows no project, so its sidebars hold no section surface.
-	if project := s.opened(); project != nil && s.plane != nil && !s.browsing {
-		listed := map[string]bool{}
-		for _, id := range s.sidebars.Surfaces(project.ActiveSpaceID, s.focusedSurface()) {
-			listed[id] = true
-			surfaces = append(surfaces, retainedSurface{id, project.Root})
-		}
-		// The sections of a card sidebar are known by the surfaces that the window holds.
-		for _, id := range s.surfaces.order {
-			if held := s.surfaces.held[id]; held != nil && held.section != nil && !listed[id] {
-				surfaces = append(surfaces, retainedSurface{id, held.project.Root})
+			sections, err := s.spaceSections(space.ID, stored.State.Cards)
+			if err != nil {
+				return nil, fmt.Errorf("space %s: %w", space.ID, err)
+			}
+			for _, id := range sections {
+				surfaces = append(surfaces, retainedSurface{id, project.Root})
 			}
 		}
 	}
 	return surfaces, nil
+}
+
+// spaceSections returns the section surfaces of the sidebars of a space: of its fixed sidebars and of the sides of its cards.
+func (s *Shell) spaceSections(space string, cards []layout.Card) ([]string, error) {
+	sections := s.sidebars.WindowSurfaces(space)
+	for _, card := range cards {
+		data, err := layout.DecodeCardData(card.Data)
+		if err != nil || data == nil {
+			continue // A place card has no sides, and the shell refuses a stored card that does not read when it loads the space.
+		}
+		for _, side := range layout.SidebarSides {
+			current, err := layout.EffectiveSidebar(card.ID, data, side, s.sidebarSizes(), s.linkedSide(data, side))
+			if err != nil {
+				return nil, err
+			}
+			if current != nil {
+				sections = append(sections, s.sidebars.SetSurfaces(space, card.ID+":"+side, current.Set)...)
+			}
+		}
+	}
+	return sections, nil
 }
 
 // storedSurfaceKept returns whether a stored entry belongs to a surface that a layout holds: a tab of a layout, a section of a fixed
