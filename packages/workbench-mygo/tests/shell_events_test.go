@@ -29,15 +29,6 @@ func TestAnEventThatTheWorkbenchLeavesIsNoError(t *testing.T) {
 	queue.drain(t)
 }
 
-// storedSettings reports that the host stored count settings, on the goroutine of a host call.
-func storedSettings(stored *storedHost, count int) func() bool {
-	return func() bool {
-		stored.mu.Lock()
-		defer stored.mu.Unlock()
-		return len(stored.settings) == count
-	}
-}
-
 func TestTheMenuRunsTheTextSizeCommands(t *testing.T) {
 	stored := &storedHost{}
 	app, window, queue, _ := fixtureApp(t, stored)
@@ -45,9 +36,8 @@ func TestTheMenuRunsTheTextSizeCommands(t *testing.T) {
 	app.Shown(window)
 	queue.drain(t)
 	app.Emit(window, "menu-command", map[string]any{"name": "core.text.larger"})
-	queue.until(t, storedSettings(stored, 1))
+	queue.drain(t)
 	app.Emit(window, "menu-command", map[string]any{"name": "core.text.reset"})
-	queue.until(t, storedSettings(stored, 2))
 	queue.drain(t)
 	if len(stored.settings) != 2 {
 		t.Fatalf("the menu stored %v", stored.settings)
@@ -67,7 +57,6 @@ func TestTheStoredFrameTextSizeIsReadAtTheStart(t *testing.T) {
 	app.Shown(window)
 	queue.drain(t)
 	app.Emit(window, "menu-command", map[string]any{"name": "core.text.smaller"})
-	queue.until(t, storedSettings(stored, 1))
 	queue.drain(t)
 	if len(stored.settings) != 1 || stored.settings[0]["patch"].(map[string]any)["textSize"] == nil || stored.settings[0]["patch"].(map[string]any)["textSize"].(float64) >= 1.25 {
 		t.Fatalf("the smaller item stored %v", stored.settings)
