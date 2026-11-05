@@ -63,6 +63,9 @@ type SidebarMetrics struct {
 	// the pointer.
 	SectionHeadMix      float32
 	SectionHeadHoverMix float32
+	// StatusGap and StatusPad are the gap and the side padding of a status line. BorderWidth and StatusText follow the settings of the
+	// window: the width of a line and the size of a caption.
+	StatusGap, StatusPad, BorderWidth, StatusText float32
 	// FoldButton and FoldIcon are the sizes of the fold control of a status line and of its icon.
 	FoldButton float32
 	FoldIcon   float32
@@ -265,7 +268,7 @@ func drawSectionHeader(c *ui.Context, binder *Binder, frame SidebarFrame, sectio
 	header := binder.Press(c, "core.sidebar.section.header", "core.sidebar.section.fold", item, sectionParam{frame.Sidebar, section.ID}).
 		Role(ui.RoleListItem).Label(section.Name).Height(metrics.HeadH).FillWidth().Row().
 		Justify(ui.Start).AlignItems(ui.Center).Gap(metrics.SectionHeadGap).PaddingX(metrics.SectionHeadPad).Expanded(!section.Folded).
-		BorderWidth(0, 0, 1, 0).BorderColor(theme.Border).Background(faded(theme.Text, metrics.SectionHeadMix))
+		BorderWidth(0, 0, metrics.BorderWidth, 0).BorderColor(theme.Border).Background(faded(theme.Text, metrics.SectionHeadMix))
 	if header.Hovered() {
 		header.Background(faded(theme.Text, metrics.SectionHeadHoverMix))
 	}
@@ -424,9 +427,9 @@ func drawSidebarStatus(c *ui.Context, binder *Binder, frame SidebarFrame, metric
 	if frame.Side != "" {
 		name = "core.sidebar.status"
 	}
-	ui.Row(binder.Name(c, name, frame.Sidebar)).FillWidth().Height(metrics.FootH).AlignItems(ui.Center).Gap(6).PaddingX(8).
-		BorderWidth(1, 0, 0, 0).BorderColor(theme.Border).Role(ui.RoleStatus).Label(frame.Status).Children(func() {
-		ui.Text(c, frame.Status).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).Grow(1).FontSize(10).TextColor(theme.TextMuted)
+	ui.Row(binder.Name(c, name, frame.Sidebar)).FillWidth().Height(metrics.FootH).AlignItems(ui.Center).Gap(metrics.StatusGap).PaddingX(metrics.StatusPad).
+		BorderWidth(metrics.BorderWidth, 0, 0, 0).BorderColor(theme.Border).Role(ui.RoleStatus).Label(frame.Status).Children(func() {
+		ui.Text(c, frame.Status).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).Grow(1).FontSize(metrics.StatusText).TextColor(theme.TextMuted)
 		if frame.Side == "" {
 			return
 		}

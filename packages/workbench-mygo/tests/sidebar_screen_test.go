@@ -12,7 +12,7 @@ import (
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
-var sidebarMetrics = workbench.SidebarMetrics{HeadH: 32, FootH: 22, SectionMinH: 32, SectionDivider: 6, SectionHeadGap: 6, SectionHeadPad: 10, SectionHeadText: 11.5, SectionTabMark: 2, FoldButton: 18, FoldIcon: 14, IconStroke: 1.3, FoldRadiusRatio: 0.5, FoldHoverMix: 0.1, SectionHeadMix: 0.03, SectionHeadHoverMix: 0.07}
+var sidebarMetrics = workbench.SidebarMetrics{StatusGap: 6, StatusPad: 8, BorderWidth: 1, StatusText: 10, HeadH: 32, FootH: 22, SectionMinH: 32, SectionDivider: 6, SectionHeadGap: 6, SectionHeadPad: 10, SectionHeadText: 11.5, SectionTabMark: 2, FoldButton: 18, FoldIcon: 14, IconStroke: 1.3, FoldRadiusRatio: 0.5, FoldHoverMix: 0.1, SectionHeadMix: 0.03, SectionHeadHoverMix: 0.07}
 
 func pixels(v int) *int { return &v }
 

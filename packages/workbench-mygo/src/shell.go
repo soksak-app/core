@@ -425,6 +425,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 		return (*string)(nil)
 	})
 	s.sidebars, err = NewSidebars(SidebarsOptions{Declared: options.Declared, Registry: s.registry, Binder: s.binder,
+		Look:        func() (float32, float32) { return s.palette.BorderWidth, s.textCaption() },
 		Environment: options.Environment, Installed: installed, Changed: s.settle, Seat: s.drawSectionSeat,
 		Progress: s.sectionProgress, Rail: func() ui.Color { return s.palette.Rail }})
 	if err != nil {
@@ -672,7 +673,7 @@ func (s *Shell) View(c *ui.Context) {
 	// Korean breaks at the spaces, as body of packages/workbench/app.css says. It is inherited, except by an overlay, whose root takes it.
 	root := ui.Column(c).Size(width, height).Background(s.palette.Bg).TextColor(s.palette.Fg).KeepAll().Clip()
 	if s.dialogOpen() {
-		root.Blur(dialogBlur)
+		root.Blur(s.dialogBlur())
 	}
 	root.Children(func() {
 		s.drawChrome(c, width)

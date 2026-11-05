@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 
-import { CHROME, followLibraryWidth, placeFocusMark } from "../chrome-metrics.js";
+import { backgroundBlurRule, CHROME, followLibraryWidth, placeFocusMark } from "../chrome-metrics.js";
 
 const read = (name) => readFileSync(new URL(`../${name}`, import.meta.url), "utf8");
 const declared = () => JSON.parse(read("workbench.json")).chrome;
@@ -86,4 +86,8 @@ test("the focus mark surrounds the slot, outside it on every side by the chrome 
   const size = rule.match(/background-size:([^;}]*)/)[1];
   assert.deepEqual([...new Set(size.match(/var\(--[\w-]+\)/g))].sort(), ["var(--focus-mark-len)", "var(--focus-mark-t)"]);
   assert.equal(size.replace(/var\(--[\w-]+\)|[\s,]/g, ""), "");
+});
+
+test("the background blur of each web document is the chrome metric scrim-blur", () => {
+  assert.ok(read("background.js").includes(backgroundBlurRule));
 });

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/egoist/mygo/ui"
 	"slices"
 	"strings"
 	"testing"
@@ -434,5 +435,38 @@ func TestATabOfAPluginThatIsNotLoadedOffersItsInstall(t *testing.T) {
 	f.settle()
 	if !slices.Contains(f.tester.Texts(), fmt.Sprintf("%s 플러그인을 사용하지 않습니다.", "terminal")) {
 		t.Fatalf("the tab of a disabled plugin says %q", f.tester.Texts())
+	}
+}
+
+// The line of a placeholder is a paragraph of the page: its margin of one line and the gap of the placeholder stand between it and the button.
+func TestThePlaceholderStandsAsThePageStandsIt(t *testing.T) {
+	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(map[string][]string{"terminal": {"1.0.0"}})}
+	stored := &storedHost{plugins: plugins}
+	plugins.core, plugins.plugins = "1.0.0", map[string]map[string]any{}
+	f := newShell(t, stored)
+	f.run("core.library.form.open", map[string]string{"mode": "open"})
+	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
+	f.run("core.library.form.submit", nil)
+	var line ui.ElementNode
+	var find func(nodes []ui.ElementNode)
+	find = func(nodes []ui.ElementNode) {
+		for _, node := range nodes {
+			if line.Bounds.H == 0 && strings.HasSuffix(node.Label, "플러그인이 설치되어 있지 않습니다.") {
+				line = node
+			}
+			find(node.Children)
+		}
+	}
+	find(f.tester.ElementTree())
+	button := f.box("core.card.placeholder-action", "")
+	if line.Bounds.H == 0 {
+		t.Fatalf("no line: %q", f.tester.Texts())
+	}
+	const size, margin, gap, lineHeight = 13, 13, 10, 1.45
+	if got := button.Y - (line.Bounds.Y + line.Bounds.H); got < margin+gap-0.01 || got > margin+gap+0.01 {
+		t.Fatalf("the button stands %v under the line %+v", got, line.Bounds)
+	}
+	if want := float32(size * lineHeight); line.Bounds.H < want-0.5 || line.Bounds.H > want+0.5 {
+		t.Fatalf("the line is %v high, want %v", line.Bounds.H, want)
 	}
 }

@@ -42,7 +42,7 @@ func newSidebars(t *testing.T, environment, installed string) *sidebarsFixture {
 	}
 	fixture := &sidebarsFixture{registry: workbench.NewRegistry(declared)}
 	binder := workbench.NewBinder(fixture.registry, func(command string, err error) { t.Errorf("%s: %v", command, err) })
-	fixture.sidebars, err = workbench.NewSidebars(workbench.SidebarsOptions{Declared: declared, Registry: fixture.registry, Binder: binder,
+	fixture.sidebars, err = workbench.NewSidebars(workbench.SidebarsOptions{Look: func() (float32, float32) { return 1, 10 }, Declared: declared, Registry: fixture.registry, Binder: binder,
 		Environment: []byte(environment), Installed: []byte(installed), Changed: func() { fixture.changes++ },
 		Seat: func(_ *ui.Context, seat workbench.SidebarSeat) { fixture.seats = append(fixture.seats, seat) }})
 	if err != nil {
@@ -126,7 +126,7 @@ func TestAnInstalledDocumentWithAnErrorIsRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	registry := workbench.NewRegistry(declared)
-	_, err = workbench.NewSidebars(workbench.SidebarsOptions{Declared: declared, Registry: registry, Binder: workbench.NewBinder(registry, nil),
+	_, err = workbench.NewSidebars(workbench.SidebarsOptions{Look: func() (float32, float32) { return 1, 10 }, Declared: declared, Registry: registry, Binder: workbench.NewBinder(registry, nil),
 		Environment: []byte(sidebarsEnvironment), Installed: []byte(`{"error":"plugins cannot be read"}`)})
 	if err == nil || !strings.Contains(err.Error(), "plugins cannot be read") {
 		t.Fatalf("the error is %v", err)
@@ -140,7 +140,7 @@ func TestALinkToASetThatIsGoneIsRefused(t *testing.T) {
 	}
 	registry := workbench.NewRegistry(declared)
 	environment := `{"sidebars":{"sets":[],"links":[{"place":"left","plugin":null,"set":"set-gone"}]}}`
-	_, err = workbench.NewSidebars(workbench.SidebarsOptions{Declared: declared, Registry: registry, Binder: workbench.NewBinder(registry, nil),
+	_, err = workbench.NewSidebars(workbench.SidebarsOptions{Look: func() (float32, float32) { return 1, 10 }, Declared: declared, Registry: registry, Binder: workbench.NewBinder(registry, nil),
 		Environment: []byte(environment), Installed: []byte(`{"plugins":[]}`)})
 	if err == nil || !strings.Contains(err.Error(), "link points at a set that is gone: set-gone") {
 		t.Fatalf("the error is %v", err)
