@@ -1278,6 +1278,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F620",
+    implementation: [
+      { file: "scripts/benchmark-b3.mjs", symbol: "const executable = kind === 'baseline' ? `soksak-${host}` : `sok-${host}`;" },
+    ],
+    tests: [
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a baseline host starts by the executable name of its revision and the other hosts by the current one" },
+    ],
+    expected: "A baseline host of B3 starts by the executable name of its revision.",
+    levels: ["unit"],
+  },
+  {
     id: "F618",
     implementation: [
       { file: "scripts/benchmark-b3.mjs", symbol: "export function baselineRecordFile(root) {" },

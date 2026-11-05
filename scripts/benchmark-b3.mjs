@@ -264,10 +264,12 @@ export function fseventsdCores(before, after, seconds) {
 export function applicationsOf({ root, baseline }, build = 'release') {
   return APPLICATIONS.map(([name, host, kind]) => {
     const checkout = kind === 'baseline' ? baseline : root;
-    const bundle = build === 'release' ? join(checkout, 'target', 'release', host, 'soksak.app') : join(checkout, 'target', 'debug', `sok-${host}.app`);
+    // The baseline branch keeps the host code of its revision, whose executables carry the name of that revision.
+    const executable = kind === 'baseline' ? `soksak-${host}` : `sok-${host}`;
+    const bundle = build === 'release' ? join(checkout, 'target', 'release', host, 'soksak.app') : join(checkout, 'target', 'debug', `${executable}.app`);
     return {
       name, host, build: kind, checkout, bundle,
-      executable: join(bundle, 'Contents', 'MacOS', `sok-${host}`), sok: join(bundle, 'Contents', 'MacOS', 'sok'),
+      executable: join(bundle, 'Contents', 'MacOS', executable), sok: join(bundle, 'Contents', 'MacOS', 'sok'),
       index: join(root, 'target', kind === 'baseline' ? 'registry-public' : 'registry', 'index.json'),
     };
   });

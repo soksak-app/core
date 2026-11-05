@@ -174,7 +174,7 @@ test("a target runs in the checkout of its application with its configuration fo
   assert.equal(make.cwd, "/baseline");
   assert.equal(make.env.SOKSAK_APP, "wailsv3");
   assert.equal(make.env.SOKSAK_CONFIG_ROOT, paths.configRoot);
-  assert.equal(make.env.SOKSAK_BINARY_WAILSV3, "/baseline/target/release/wailsv3/soksak.app/Contents/MacOS/sok-wailsv3");
+  assert.equal(make.env.SOKSAK_BINARY_WAILSV3, "/baseline/target/release/wailsv3/soksak.app/Contents/MacOS/soksak-wailsv3");
   assert.equal(make.env.SOKSAK_B3_OUT, undefined, "a make target takes B3_OUT as a variable");
   const frameRecords = targetCommand("make benchmark-view-drag TRACE=frame-records", { application: baseline, ...paths });
   assert.deepEqual(frameRecords.argv.filter((word) => word.startsWith("TRACE=")), ["TRACE=frame-records"], "the TRACE argument of the entry is the trace state of the target");
@@ -200,7 +200,7 @@ test("a run installs the index of its application into a new configuration folde
     ["prepare", "run", [baseline.sok, "registry", "use", "/core/target/registry-public/index.json", "--config-dir", configDir]],
     ["prepare", "run", [baseline.sok, "plugin", "install", "browser", "--config-dir", configDir]],
     ["prepare", "run", [baseline.sok, "plugin", "install", "term", "--config-dir", configDir]],
-    ["prepare", "start", ["/baseline/target/release/wailsv3/soksak.app/Contents/MacOS/sok-wailsv3", "--config-dir", configDir]],
+    ["prepare", "start", ["/baseline/target/release/wailsv3/soksak.app/Contents/MacOS/soksak-wailsv3", "--config-dir", configDir]],
   ]);
   assert.equal(plan.prepare[3].app, "baseline-wailsv3");
   assert.deepEqual(plan.cleanup.map((step) => [step.phase, step.kind, step.app ?? step.paths]), [
@@ -565,4 +565,18 @@ test("the baseline record is one file of the git common directory, which every w
   const record = baselineRecordFile(main);
   assert.equal(record, join(main, ".git", "b3", "baseline.json"));
   assert.equal(baselineRecordFile(worktree), record);
+});
+
+test("a baseline host starts by the executable name of its revision and the other hosts by the current one", { timeout: 1000 }, () => {
+  const executables = (build) => Object.fromEntries(applicationsOf({ root: "/core", baseline: "/base" }, build)
+    .map((application) => [application.name, application.executable]));
+  assert.deepEqual(executables("release"), {
+    mygo: "/core/target/release/mygo/soksak.app/Contents/MacOS/sok-mygo",
+    wailsv3: "/core/target/release/wailsv3/soksak.app/Contents/MacOS/sok-wailsv3",
+    tauriv2: "/core/target/release/tauriv2/soksak.app/Contents/MacOS/sok-tauriv2",
+    "baseline-wailsv3": "/base/target/release/wailsv3/soksak.app/Contents/MacOS/soksak-wailsv3",
+    "baseline-tauriv2": "/base/target/release/tauriv2/soksak.app/Contents/MacOS/soksak-tauriv2",
+  });
+  assert.equal(executables("debug")["baseline-wailsv3"], "/base/target/debug/soksak-wailsv3.app/Contents/MacOS/soksak-wailsv3");
+  assert.equal(executables("debug").wailsv3, "/core/target/debug/sok-wailsv3.app/Contents/MacOS/sok-wailsv3");
 });
