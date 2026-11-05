@@ -8,6 +8,7 @@
 - F621: `make benchmark-b3`는 host를 한 번에 하나씩, Tauri host부터 build하고 다음 build 전에 각 build의 중간 출력을 지운다. 한꺼번에 build하면 session의 디스크에 들어가지 않았다. Red: `scripts/test/benchmark-b3.test.mjs`가 build 단계의 순서와 각 단계 뒤의 제거를 읽는다.
 - F620: `make benchmark-b3`는 baseline host를 그 revision의 executable 이름 `soksak-<host>`로 시작한다. 그 revision이 build하지 않는 `sok-<host>`를 찾고 있었다. Red: `scripts/test/benchmark-b3.test.mjs`가 다섯 application의 executable을 읽는다.
 - F618: `make benchmark-b3`의 baseline record는 git common directory의 `b3/baseline.json`이다. `target/b3`에서는 `cargo clean`이 지웠고, 그러면 session이 시작할 수 없었다. Red: `scripts/test/benchmark-b3.test.mjs`가 main checkout과 그 worktree에서 경로를 읽는다.
+- F615: B3의 모든 target은 output을 쓸 때 창이 가려졌는지를 `occluded`에 적고, `make benchmark-b3`와 `make check-b3`는 가려진 창의 값을 거부한다. S9는 가려진 scenario로 이름한 유일한 scenario이며, 여기서는 가려지지 않은 창을 거부한다. 각 target은 `active`도 적고, 활성이 아닌 application을 거부하므로 run 도중 활성화가 풀리면 run이 실패한다. e2e benchmark와 `e2e/input-latency.test.mjs`에는 이 읽기가 없어 가려진 창이 실패 없이 값을 낼 수 있었다. Red: `b3-out.test.mjs`, `b3-judge.test.mjs`, `b3-run.test.mjs`, `benchmark-b3.test.mjs`.
 - F611: 숨은 region의 frame 위 press는 그 press가 닿은 view에 남는다. keyboard가 숨은 tab으로 가지 않고 divider나 tab의 drag가 끊기지 않는다.
 - F616: `make benchmark-b3`는 두 registry를 `make build-registry`로 build한다. 옛 이름의 target을 불러 session이 그 build 단계에서 멈췄다. Red: `scripts/test/benchmark-b3.test.mjs`가 build 단계의 각 make target을 Makefile과 대조한다.
 - F614: `make check-docs`는 tracked 또는 새 text 파일의 줄 시작에 있는 conflict marker에서 실패하고 파일과 줄을 적는다. marker가 든 merge commit이 이 검사와 commit hook을 통과한 적이 있다. Red: `scripts/test/checklist.test.mjs`.
@@ -20,6 +21,8 @@
 - F608: setup이 이름이 바뀐 native target을 실행하므로, recognizer를 고르지 않아도 macOS window check가 다시 시작된다.
 - F561-1: keyboard를 가진 채 닫힌 document는 close 때 web content process를 끝내고, data store도 끝날 수 있다.
 - F502-23: `native`를 쓰는 `diagnostics.drag`는 창이 현재 layout을 표시한 뒤에 경계 점을 읽는다. 그래서 split 직후의 누름이 divider에 닿는다.
+- F502-13: `element.rect` 는 모든 host 에서 element 의 ARIA role 인 `role` 을 답하고, 묶거나 글자만 담는 element 에는 null 을 답한다. Red: mygo workbench 의 request test 가 role 을 답하지 않았다.
+- F502-13: mygo debug view 의 select 는 element 이름과 command 를 감싸는 group 이 아니라 trigger 에 둔다. audit 은 select 의 list box 와 option 을 select 의 일부로 본다. Red: TestALongSelectStaysInsideTheWindow 가 trigger, list box, option 201 개를 나열했다.
 - F595: 합성 입력은 layout을 기다리는 입력 뒤에서 순서를 지킨다.
 - F586: lease 방식 영역이 있는 창을 닫아도 Tauri host가 `image view released: project window is closed`를 기록하지 않는다. Red: 창이 닫힌 뒤의 해제가 그 실패를 보고했다.
 - F502-16: Wails host의 window는 요청한 크기를 갖고 web view는 content 크기를 가지므로, page의 마지막 row가 보이고 native view가 page 위 제자리에 선다. F592가 fork를 publish할 때까지 Wails module은 fork의 local checkout을 읽는다.

@@ -29,7 +29,7 @@ import { parseArgs } from "node:util";
 import { connect } from "@soksak/client";
 import { Session } from "@soksak/window-check/app.mjs";
 import { readPolicy } from "@soksak/window-check/log-policy.mjs";
-import { b3Conditions, writeB3Out } from "./b3-out.mjs";
+import { b3Conditions, b3End, writeB3Out } from "./b3-out.mjs";
 import { b3OutOption, execute, measureApps, newWindow, openOnlyTab, parseCpuTime, requireOcclusion } from "./measure-app-usage.mjs";
 import { applyTrace, parseTrace, traceSettings } from "./measure-trace.mjs";
 
@@ -169,6 +169,14 @@ export function redrawConditions({ status, window, trace, policy }) {
 }
 
 /**
+ * The conditions of the B3 output from the host.window value `status` before the first CPU reading and a reading of the window of the session
+ * s now (b3End). The measurement reads them after the interval, as the last reading of a window that it closes before it writes the output.
+ */
+export async function readRedrawConditions({ s, status, trace, policy }) {
+  return redrawConditions({ status: { ...status, ...b3End(status, await s.get("host.window")) }, window: s.window, trace, policy });
+}
+
+/**
  * Opens a new window of the application of the session s, opens a project of the folder root in it, sets its content to 760 by 614
  * points and opens one tab of plugin in it, the only tab of its cards; waits until the tab registers `<plugin>.input` and
  * `<plugin>.screen`. Returns the session of the window, the tab and the id of the project.
@@ -261,7 +269,7 @@ async function measureRedraw({ sok, configDir, plugin, rows, rate, interval, tra
       windowServer: readWindowServer,
     });
     // The conditions of a B3 output are read only for one: a plain measurement does not require a window on a screen.
-    const conditions = b3Out === null ? null : redrawConditions({ status, window: w.window, trace, policy: readPolicy(configDir).classes });
+    const conditions = b3Out === null ? null : await readRedrawConditions({ s: w, status, trace, policy: readPolicy(configDir).classes });
     result = { plugin, rows, rate, interval, window: w.window, tab, seconds: measurement.seconds, cost, conditions, errors: measurement.errors };
   } catch (error) {
     failure = error;

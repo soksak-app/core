@@ -684,6 +684,7 @@ The judge applies these rules:
 | CPU share of `fseventsd` at the start of a run | below 0.1 of a core |
 | Content size of the window of each scenario | 1200×760 points |
 | Content size of the window of S2 | 760×614 points |
+| Scenarios whose window is covered | S9 |
 
 The values of the goals, each with the scenario and the target that measure it and the measurement, the key of the output of that target that holds the value in its unit:
 

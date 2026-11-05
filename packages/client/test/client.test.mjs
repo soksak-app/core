@@ -323,6 +323,6 @@ test("the sample endpoint lists element entries and answers element.rect and ele
   assert.deepEqual(Object.keys(listed), ["status", "commands", "element"]);
   assert.deepEqual(listed.element.map((entry) => entry.name), ["core.tab"]);
   assert.deepEqual(await client.request("element.rect", { window: "main", name: "core.tab", index: 1 }),
-    { x: 10, y: 20, width: 30, height: 40, index: 1, document: { x: 0, y: 0 } });
+    { x: 10, y: 20, width: 30, height: 40, index: 1, role: null, document: { x: 0, y: 0 } });
   assert.equal(await client.request("element.act", { window: "main", name: "core.tab", action: "click" }), null);
 });

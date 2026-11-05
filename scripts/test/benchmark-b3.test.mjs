@@ -214,7 +214,7 @@ const policyOf = (state) => policyOfSetting(traceSettings(state)["diagnostics.lo
 
 /** The conditions that a target reports for a run on the display and the window of the run conditions in the trace state `state`. */
 const targetConditions = (state = 0) => ({
-  refreshRate: 120, backingScale: 2, traceState: traceSettings(state)["diagnostics.performance"], logPolicy: policyOf(state), window: { width: 1200, height: 760 },
+  refreshRate: 120, backingScale: 2, traceState: traceSettings(state)["diagnostics.performance"], logPolicy: policyOf(state), window: { width: 1200, height: 760 }, occluded: false, active: true,
 });
 
 /**
@@ -244,7 +244,7 @@ const BENCHMARKS = {
 /** The conditions that an e2e benchmark reports on the display and the window of the run conditions under the settings `settings`. */
 const settingsConditions = (settings) => ({
   refreshRate: 120, backingScale: 2, traceState: settings["diagnostics.performance"], logPolicy: policyOfSetting(settings["diagnostics.log"]).classes,
-  window: { width: 1200, height: 760 },
+  window: { width: 1200, height: 760 }, occluded: false, active: true,
 });
 
 /** Writes `output` (an object, or text as it is) into a new file of a temporary folder and returns the path of the file. */
@@ -541,6 +541,32 @@ test("make benchmark-b3 refuses a phase, a run count or a baseline checkout that
   assert.match(run("PHASE=2", "RUNS=7", "BASELINE=/baseline").stderr, /^benchmark-b3 requires PHASE=1\|final RUNS=<n> BASELINE=<checkout>$/m);
   assert.match(run("PHASE=final", "RUNS=0", "BASELINE=/baseline").stderr, /^benchmark-b3 requires PHASE=1\|final RUNS=<n> BASELINE=<checkout>$/m);
   assert.match(run("PHASE=final", "RUNS=7").stderr, /^benchmark-b3 requires PHASE=1\|final RUNS=<n> BASELINE=<checkout>$/m);
+});
+
+test("a target that reports a covered window fails its run", { timeout: 30000 }, async (t) => {
+  const { context, application } = fixtureContext(t, { values: { "G2-S0-frames": 0, "G2-S0-host-cpu": 0.05 } });
+  const runTarget = context.runTarget;
+  context.runTarget = async (command, options) => {
+    const result = await runTarget(command, options);
+    const output = JSON.parse(readFileSync(command.out, "utf8"));
+    writeFileSync(command.out, JSON.stringify({ ...output, conditions: { ...output.conditions, occluded: true } }));
+    return result;
+  };
+  const [record] = await runUnit({ scenarios: ["S0"], run: 1, application }, context);
+  assert.ok(record.failures.some((failure) => failure.endsWith("the window reports occluded true, expected false")), JSON.stringify(record.failures));
+});
+
+test("a target whose application lost its activation fails its run", { timeout: 30000 }, async (t) => {
+  const { context, application } = fixtureContext(t, { values: { "G2-S0-frames": 0, "G2-S0-host-cpu": 0.05 } });
+  const runTarget = context.runTarget;
+  context.runTarget = async (command, options) => {
+    const result = await runTarget(command, options);
+    const output = JSON.parse(readFileSync(command.out, "utf8"));
+    writeFileSync(command.out, JSON.stringify({ ...output, conditions: { ...output.conditions, active: false } }));
+    return result;
+  };
+  const [record] = await runUnit({ scenarios: ["S0"], run: 1, application }, context);
+  assert.ok(record.failures.some((failure) => failure.endsWith("the application reports active false, expected true")), JSON.stringify(record.failures));
 });
 
 test("each build step of a session names a target of the Makefile", { timeout: 1000 }, () => {
