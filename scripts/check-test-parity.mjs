@@ -1328,6 +1328,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/documents_test.rs", id: "a_surface_close_during_an_attach_finds_no_name_of_the_attach" },
       { file: "packages/host/go/src/documents_test.go", id: "TestAReloadDuringADocumentAttachLeavesNoRegionWithoutAName" },
       { file: "packages/workbench/test/bar-tabs.test.mjs", id: "a draw between a press and its release keeps the pressed project and space tabs" },
+      { file: "packages/workbench/test/bar-tabs.test.mjs", id: "the shown project tab has the background of its project, and another project tab has none" },
       { file: "packages/workbench/test/page-identifiers.test.mjs", id: "every shipped module declares the names that it reads" },
       { file: "packages/workbench/test/projects-switch.test.mjs", id: "a registry read after the write of this window draws nothing, and a read that finds a change draws once" },
     ],

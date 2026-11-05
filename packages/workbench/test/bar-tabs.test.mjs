@@ -40,6 +40,16 @@ test("a draw between a press and its release keeps the pressed project and space
   assert.equal(project.isConnected && space.isConnected, true);
 });
 
+test("the shown project tab has the background of its project, and another project tab has none", () => {
+  const { tabs, projectBar } = strips();
+  tabs.draw(false);
+  const [shown, other] = projectBar.children;
+  assert.equal(shown.dataset.tinted, "true");
+  assert.equal(shown.style.getPropertyValue("--project-color"), "#111");
+  assert.equal(other.dataset.tinted, undefined);
+  assert.equal(other.style.getPropertyValue("--project-color"), "");
+});
+
 test("the top strip holds the project tabs and the plus button, and the space strip the spaces of the shown project", () => {
   const { tabs, projectBar, spaceBar, workarea, texts } = strips();
   tabs.draw(false);
