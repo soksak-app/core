@@ -62,13 +62,14 @@ int main(void) { @autoreleasepool {
     NSRunningApplication *front = NSWorkspace.sharedWorkspace.frontmostApplication;
     check(front != nil && front.processIdentifier != getpid(), @"another application is in front at the start");
     NSInteger frontPlace = placeOfProcess(front.processIdentifier);
-    check(frontPlace >= 0, @"the front application has a window on the screen");
+    // A front application without a window has nothing to cover: the place is not compared, and the front is.
+    if (frontPlace < 0) printf("window show order: the front application %s shows no window, so the place is not compared\n", front.localizedName.UTF8String);
 
     NSWindow *first = makeWindow();
     sp_window_show(first);
     spin();
     check(first.isVisible, @"the first window is on the screen");
-    check(placeOf(first) > frontPlace, [NSString stringWithFormat:
+    check(frontPlace < 0 || placeOf(first) > frontPlace, [NSString stringWithFormat:
         @"the first window is at place %ld, behind the front application at place %ld", (long)placeOf(first), (long)frontPlace]);
     check(NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier == front.processIdentifier,
         @"the first window leaves the front application in front");
@@ -77,7 +78,7 @@ int main(void) { @autoreleasepool {
     sp_window_show(second);
     spin();
     check(second.isVisible, @"the second window is on the screen");
-    check(placeOf(second) > frontPlace, [NSString stringWithFormat:
+    check(frontPlace < 0 || placeOf(second) > frontPlace, [NSString stringWithFormat:
         @"the second window is at place %ld, behind the front application at place %ld", (long)placeOf(second), (long)frontPlace]);
     check(placeOf(second) < placeOf(first), @"the second window is in front of the first window of its application");
     check(NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier == front.processIdentifier,

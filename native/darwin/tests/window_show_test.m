@@ -73,8 +73,10 @@ int main(void) { @autoreleasepool {
     shown(NO, YES, onlyItself, @[@"makeKeyWindow"], @"the only window on the screen of an application that is not active");
 
     // A virtual key window makes NSApp answer as active, and the system still holds the application as not active.
-    method_setImplementation(class_getInstanceMethod(NSApplication.class, @selector(isActive)), (IMP)answersActive);
+    Method answers = class_getInstanceMethod(NSApplication.class, @selector(isActive));
+    IMP real = method_setImplementation(answers, (IMP)answersActive);
     shown(NO, NO, none, (@[@"order below 0", @"makeKeyWindow"]), @"an application that only answers as active");
+    method_setImplementation(answers, real);
 
     if (failures) return 1;
     printf("window show: ok\n");

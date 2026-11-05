@@ -101,6 +101,7 @@ Matching용 image source를 보존하는 동안 diagnostic capture는 snapshot�
 | image detach가 10초 안에 응답을 받지 못하거나, page 시작이 이전 page가 받지 못한 실패를 담은 `image-detach-ended` event를 버린다([sidecars](sidecars.ko.md)) | detach마다 한 번 `error host image detach: image detach sidecar <sidecar> surface <surface> image <name> generation <generation> request <request> timed out`, 버린 event의 실패로 `error host image detach: <failure>` |
 | host가 mygo 창의 frame 기록 시계를 읽을 수 없다 | `error host frame record clock: <failure>` |
 | 호스트가 창의 first responder를 읽지 못하거나 `window-responder` event를 전달하지 못한다([exposure](exposure.ko.md#키보드-포커스)) | `error host window responder: <failure>` |
+| 호스트가 자신의 show 로 창을 화면에 올리지 못한다([launch activation](hosts.ko.md#launch-activation)) | `error host window show: <failure>` |
 | Tauri host가 main thread 감시의 heartbeat를 그 thread에 보내지 못한다 | `error host stall watch: heartbeat: <reason>`, 그리고 감시가 끝난다([logging](logging.ko.md), 정지) |
 | `diagnostics.input.source`의 선택한 input source 대기가 응답이 끝난 뒤에 답한다(Tauri host) | `error host input source: the wait answered after its reply ended: <result>` |
 | document-frame identity callback이 wait 종료 뒤 error를 보고하거나 Go callback이 두 번 이상 호출된다 | Go는 `error host document frame identity callback: <reason>`을 쓴다. Tauri는 늦은 callback failure를 `error host diagnostics: document frame identity callback failed after its request ended: <reason>`으로 쓴다. 첫 callback 결과가 유지된다. |
