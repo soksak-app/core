@@ -278,7 +278,7 @@ func (implementation) SurfaceFrame(surface unsafe.Pointer) platform.Rect {
 func (implementation) SetSurfaceHiddenHandle(surface unsafe.Pointer, hidden bool) {
 	C.main_webviewSetSurfaceHidden(surface, C.bool(hidden))
 }
-func (implementation) FocusSurface(surface unsafe.Pointer) { C.main_sp_surface_focus(surface) }
+func (implementation) FocusSurface(surface unsafe.Pointer)  { C.main_sp_surface_focus(surface) }
 func (implementation) FocusWorkbench(window unsafe.Pointer) { C.main_sp_window_focus_workbench(window) }
 func (implementation) SetSurfaceAlphaHandle(surface unsafe.Pointer, alpha float64) {
 	C.main_webviewSetSurfaceAlpha(surface, C.double(alpha))
