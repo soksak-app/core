@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use super::*;
 
 /// A watch that starts after the watch of the window ended receives the value of the window that changed while no
@@ -277,4 +279,81 @@ fn a_request_after_the_reload_is_refused_until_the_new_page_starts() {
         accepted.is_ok(),
         "a request after the new page started was not sent"
     );
+}
+
+/// A run held open, with a recording of each value and of the thread it ran on.
+fn held_latest_work() -> (
+    LatestWork<u32>,
+    Arc<Mutex<Vec<(u32, std::thread::ThreadId)>>>,
+    std::sync::mpsc::Sender<()>,
+    std::sync::mpsc::Receiver<()>,
+) {
+    let runs = Arc::new(Mutex::new(Vec::new()));
+    let recording = Arc::clone(&runs);
+    let (release, released) = std::sync::mpsc::channel::<()>();
+    let released = Mutex::new(released);
+    let (began, begins) = std::sync::mpsc::channel::<()>();
+    let work = LatestWork::new("latest-work-test", move |value| {
+        recording
+            .lock()
+            .unwrap()
+            .push((value, std::thread::current().id()));
+        began.send(()).unwrap();
+        released.lock().unwrap().recv().unwrap();
+    });
+    (work, runs, release, begins)
+}
+
+/// The requests that arrive during a run join into one further run on the same thread, so a burst of changes holds one thread
+/// and the last value of the burst is the last one that runs.
+// contract: status.window.latest-value-last
+#[test]
+fn a_burst_of_window_changes_is_one_more_read_on_one_thread() {
+    let (work, runs, release, begins) = held_latest_work();
+    work.ask("main", 0);
+    begins.recv_timeout(Duration::from_secs(5)).unwrap();
+    for value in 1..=100 {
+        work.ask("main", value);
+    }
+    // Every run that the burst started has begun or never will: it is released, and the last value decides the end.
+    for _ in 0..101 {
+        release.send(()).unwrap();
+    }
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while runs.lock().unwrap().last().map(|run| run.0) != Some(100)
+        && std::time::Instant::now() < deadline
+    {
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    std::thread::sleep(Duration::from_millis(100));
+    let runs = runs.lock().unwrap();
+    let values: Vec<u32> = runs.iter().map(|run| run.0).collect();
+    assert_eq!(values, [0, 100], "the runs of the burst");
+    let threads: HashSet<_> = runs.iter().map(|run| run.1).collect();
+    assert_eq!(threads.len(), 1, "the threads of the burst");
+}
+
+/// Two keys both run, and a later request after the burst ended runs on the thread that the first request started.
+#[test]
+fn each_window_keeps_its_own_latest_read_on_the_same_thread() {
+    let (work, runs, release, begins) = held_latest_work();
+    work.ask("main", 1);
+    begins.recv_timeout(Duration::from_secs(5)).unwrap();
+    work.ask("second", 2);
+    work.ask("third", 3);
+    release.send(()).unwrap();
+    begins.recv_timeout(Duration::from_secs(5)).unwrap();
+    release.send(()).unwrap();
+    begins.recv_timeout(Duration::from_secs(5)).unwrap();
+    release.send(()).unwrap();
+    // The queue is empty now; the thread waits and takes the next request.
+    work.ask("main", 4);
+    begins.recv_timeout(Duration::from_secs(5)).unwrap();
+    release.send(()).unwrap();
+    let runs = runs.lock().unwrap();
+    let mut values: Vec<u32> = runs.iter().map(|run| run.0).collect();
+    values.sort_unstable();
+    assert_eq!(values, [1, 2, 3, 4]);
+    let threads: HashSet<_> = runs.iter().map(|run| run.1).collect();
+    assert_eq!(threads.len(), 1, "the threads of the requests");
 }

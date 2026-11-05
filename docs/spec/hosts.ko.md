@@ -253,7 +253,7 @@ Go language host library의 header `src/platform/darwin/main_thread.h`는 두 ma
 | H38 | `src/surface_elements.go`, `src/surface_elements_test.go` | 없음 | Go framework에만 main page가 없는 경우가 있고, main page 없는 창은 각 surface를 native view element로 보여 주며, 이 source는 그 view를 다음 settled frame까지 붙든다 |
 | E1 | `diagnostics.heap.profile` | 없음 | 이 endpoint method는 Go runtime의 heap profile(`runtime/pprof`)을 쓴다. Rust language host library에는 profile할 garbage-collected heap이 없다. ID가 E로 시작하는 행은 endpoint method를 나열하고 `make host-parity-check`가 그 행을 읽는다 |
 | P1 | `Framework.Step` | 없음 | Go language host library는 main thread의 worker에서 실행되며 main thread의 step을 기다린다(H20 행). Rust language host library는 `post`로 step을 보내고 그 channel을 기다린다 |
-| P2 | 없음 | `Framework.spawn_blocking` | Go goroutine은 다른 작업을 막지 않는다. Rust language host library의 blocking 작업은 framework 비동기 runtime의 blocking thread에서 실행된다 |
+| P2 | 없음 | `Framework.spawn_blocking` | Go goroutine은 다른 작업을 막지 않는다. Rust language host library의 blocking 작업은 framework 비동기 runtime의 blocking thread에서 실행된다. 호스트는 그 runtime을 worker 둘로 만든다. worker는 await하고 page 파일에 답할 뿐이기 때문이다. blocking thread는 1초 동안 일이 없으면 끝난다 |
 | P3 | 없음 | `Framework.config_dir`, `Framework.home_dir` | Go는 두 directory를 표준 라이브러리(`os.UserConfigDir`, `os.UserHomeDir`)에서 읽는다. Rust 표준 라이브러리에는 설정 directory가 없어 framework가 둘 다 준다 |
 | P4 | `Frontend.ID` | 없음 | Go language host library는 window의 main page를 window 번호로 식별하고, 그 번호가 그 page의 view id다. Rust language host library는 각 web view를 label로 식별한다 |
 | P5 | 없음 | `Frontend.title` | Go language host library는 자신이 설정한 제목을 window record에 둔다. Rust language host library는 window에서 읽는다 |

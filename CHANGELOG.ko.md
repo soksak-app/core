@@ -6,6 +6,8 @@
 
 - F502-21: `setDialogBackground`가 다른 host call처럼 object `{enabled}`를 받고, framework 표의 B 행이 이 call을 mygo에만 있는 call로 나열해 host parity check가 통과한다. P 행이 `Frontend.Frames`를 나열한다.
 - F502-16: mygo workbench의 모든 모양 값은 page도 읽는 `workbench.json`에서 나온다: card foot의 caption, sidebar의 status line, placeholder와 멈춘 view의 글자, dialog의 scrim과 blur, layer의 anchor 아래 간격이다.
+- F551: Tauri host는 비동기 runtime의 worker를 processor마다 하나가 아니라 둘만 두고, 일 없는 blocking thread는 10초가 아니라 1초 뒤에 끝난다.
+- F550: 구독된 `host.window`는 한 창의 값을 한 번에 하나만 읽는다. 읽는 동안 들어온 변경은 다음 읽기 하나로 합쳐지므로, redraw가 프레임마다 thread를 시작하지 않고 구독이 새 값 뒤에 옛 값을 받지 않는다.
 - F502-16: mygo workbench의 숨은 element는 `display:none`인 page element처럼 같은 이름의 element 사이에서 index를 유지하므로, tab을 `core.grid`의 자리로 부르는 window check는 card head의 모든 단계와 전체 화면 card에서 그 tab에 닿는다. bar는 element `core.chrome.bar`다.
 - F502-16: mygo workbench는 `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.views`에 답한다.
 - F502-16: mygo workbench의 library는 page와 같은 자리에 선다: 줄 높이, form 간격, 빈 화면 여백이 `library.css`와 같고, plugin page는 card를 열로 놓으며, project card는 project를 연 날을 보이고, library는 bar의 sidebar switch를 숨긴다.

@@ -6,6 +6,8 @@
 
 - F502-21: `setDialogBackground` takes an object `{enabled}`, as every other host call does, and a row B of the framework table lists it as the call that only mygo has, so the host parity check passes. A row P lists `Frontend.Frames`.
 - F502-16: Every look of the mygo workbench takes its value from `workbench.json`, which the page reads too: the caption of a card foot, the status line of a sidebar, the text of a placeholder and of a stopped view, the scrim of a dialog with its blur, and the gap under an anchor of a layer.
+- F551: The Tauri host holds two workers of its asynchronous runtime instead of one for each processor, and an idle blocking thread ends after one second instead of ten.
+- F550: A watched `host.window` holds one reading of a window: the changes that arrive during a reading join one further reading, so a redraw no longer starts one thread for each frame and a watch no longer receives an older value after a newer one.
 - F502-16: A hidden element of the mygo workbench keeps its index among the elements of its name, as a page element under `display:none`, so a window check that names a tab by its place in `core.grid` reaches that tab through every stage of a card head and through a full screen card. The bar is the element `core.chrome.bar`.
 - F502-16: The mygo workbench answers `core.plugin.open-calls`, `core.plugin.losses` and `core.plugin.views`.
 - F502-16: The library of the mygo workbench stands where the page stands it: its line heights, form gaps and empty margins are those of `library.css`, the plugin page lays its cards in columns, a project card shows the day its project opened, and the library hides the sidebar switches of the bar.

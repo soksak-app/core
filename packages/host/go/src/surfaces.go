@@ -443,6 +443,8 @@ type Surfaces struct {
 	elements surfaceElements
 	// drawingMu orders the drawing messages to the suppliers of image regions (sendImageDrawing).
 	drawingMu sync.Mutex
+	// windowReads joins the changes of host.window that arrive during a reading (windowChanged).
+	windowReads latestRead
 	// prepareNative registers the main web view and prepares the window. It is decided when the window is created.
 	prepareNative func()
 	window        Frontend
