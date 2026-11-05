@@ -12,6 +12,16 @@ import (
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
+// contract: document.process-label
+func TestTheProcessLabelNamesThePluginAndTheRegion(t *testing.T) {
+	if got := host.ProcessLabel("reader", ""); got != "soksak://plugin/reader" {
+		t.Fatalf("view label %q", got)
+	}
+	if got := host.ProcessLabel("reader", "studio"); got != "soksak://plugin/reader/studio" {
+		t.Fatalf("region label %q", got)
+	}
+}
+
 // contract: documents.request.accepts-own-surface, documents.request.rejects-foreign-or-missing-caller, documents.request.rejects-invalid-names
 func TestDocumentRequestsBelongToTheCallingSurface(t *testing.T) {
 	req := host.DocumentRequest{Surface: "tab-1", Document: "page"}

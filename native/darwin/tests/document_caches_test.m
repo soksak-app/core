@@ -230,7 +230,7 @@ int main(void) { @autoreleasepool {
 
     storeDirectory = temporaryFolder(@"soksak-document-caches-");
     document = sp_document_create(surface, [storeDirectory stringByAppendingPathComponent:@"store"].fileSystemRepresentation,
-        NULL, NULL, NULL, changed, NULL);
+        NULL, NULL, NULL, NULL, changed, NULL);
     if (!document) {
         fprintf(stderr, "FAIL: a document view is not created inside the surface\n");
         cleanupAndExit();

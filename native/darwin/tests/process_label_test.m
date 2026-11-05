@@ -20,6 +20,7 @@ static int failures;
 static NSString *pluginViewState;
 static NSString *pluginViewStateFailure;
 static NSString *secondPluginViewState;
+static NSString *regionState;
 
 static int waitForControlByte(const char *helperName) {
     char controlByte = 0;
@@ -351,7 +352,7 @@ static pid_t measureCorePluginViewLabel(NSWindow *window) {
     void *surface = sp_surface_create(sp_window_set_main_webview((__bridge void *)main.window, (__bridge void *)main));
     check(surface != NULL, @"core creates the plugin surface host");
     void *document = surface ? sp_document_create(surface, store.fileSystemRepresentation,
-        folder.fileSystemRepresentation, "probe", "window.sokView = 1;", pluginStateChanged, NULL) : NULL;
+        folder.fileSystemRepresentation, "probe", "soksak://plugin/probe", "window.sokView = 1;", pluginStateChanged, NULL) : NULL;
     check(document != NULL, [NSString stringWithFormat:@"core creates the plugin view: %s", sp_document_last_error()]);
     if (!document) {
         if (surface) sp_surface_close(surface);
@@ -402,7 +403,7 @@ static pid_t measureCorePluginViewLabel(NSWindow *window) {
         encoding:NSUTF8StringEncoding error:&failure];
     check(secondWritten, [NSString stringWithFormat:@"second plugin fixture page is written: %@", failure]);
     void *secondDocument = secondWritten ? sp_document_create(surface, secondStore.fileSystemRepresentation,
-        secondFolder.fileSystemRepresentation, "other", "window.sokView = 1;", pluginStateChanged,
+        secondFolder.fileSystemRepresentation, "other", "soksak://plugin/other", "window.sokView = 1;", pluginStateChanged,
         &secondPluginViewState) : NULL;
     check(secondDocument != NULL, [NSString stringWithFormat:@"core creates a second plugin view: %s", sp_document_last_error()]);
     if (secondDocument) {
@@ -443,6 +444,36 @@ static pid_t measureCorePluginViewLabel(NSWindow *window) {
         sp_document_close(secondDocument);
         [secondPluginViewState release];
         secondPluginViewState = nil;
+    }
+
+    // A document region of the same plugin has its own process, and the label of that process names the plugin and the region.
+    void *region = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe",
+        "soksak://plugin/probe/studio", NULL, pluginStateChanged, &regionState);
+    check(region != NULL, [NSString stringWithFormat:@"core creates a document region: %s", sp_document_last_error()]);
+    if (region) {
+        check(sp_document_load(region, "soksak://probe/page.html"), @"the document region accepts the origin of its plugin");
+        BOOL regionLoaded = until(^BOOL {
+            NSData *stateData = [regionState dataUsingEncoding:NSUTF8StringEncoding];
+            NSDictionary *state = stateData ? [NSJSONSerialization JSONObjectWithData:stateData options:0 error:nil] : nil;
+            return [state[@"url"] isEqual:@"soksak://probe/page.html"] && ![state[@"loading"] boolValue];
+        }, 15);
+        check(regionLoaded, [NSString stringWithFormat:@"the document region reaches loaded state within 15000ms (got %@)", regionState]);
+        pid_t regionPid = ((__bridge WKWebView *)region)._webProcessIdentifier;
+        check(regionPid > 0 && regionPid != pid,
+            [NSString stringWithFormat:@"the view and the region of a plugin use distinct WebContent processes (%d, %d)", pid, regionPid]);
+        if (regionPid > 0) {
+            printf("CORE_PLUGIN_PID %d\n", regionPid);
+            fflush(stdout);
+        }
+        NSString *regionName = nil;
+        NSString *regionListingFailure = nil;
+        NSString *regionListing = regionPid > 0 ? processListing(regionPid, &regionName, &regionListingFailure) : nil;
+        check(regionListing != nil, [NSString stringWithFormat:@"region LaunchServices lookup succeeds: %@", regionListingFailure]);
+        if (regionListing) check([regionName isEqualToString:@"soksak://plugin/probe/studio"],
+            [NSString stringWithFormat:@"region process label is soksak://plugin/probe/studio (got %@)", regionName]);
+        sp_document_close(region);
+        [regionState release];
+        regionState = nil;
     }
 
     NSString *launchServicesName = nil;

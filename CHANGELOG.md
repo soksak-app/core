@@ -10,6 +10,7 @@
 - F502-16: The mygo workbench answers `core.plugin.open-calls`, `core.plugin.losses` and `core.plugin.views`.
 - F502-16: The library of the mygo workbench stands where the page stands it: its line heights, form gaps and empty margins are those of `library.css`, the plugin page lays its cards in columns, a project card shows the day its project opened, and the library hides the sidebar switches of the bar.
 - F547: The mygo workbench no longer posts steps without a pause while a log batch is in flight and a count of the gate is due.
+- F502-12: The WebContent process of a document region has the display label `soksak://plugin/<plugin id>/<region>`, so Activity Monitor and `lsappinfo` show which plugin and region it belongs to. Before, only a view had a label of its own and a region showed the name of the application. The host composes the label and `sp_document_create` receives it.
 - F502-23: The mygo workbench answers `diagnostics.layout.fail`: its next placement of the surfaces fails once with `diagnostic layout fault`, and the workbench shows that failure and goes on answering.
 - F544: a release no longer stops a later keyboard move: right after a click in a surface with an image region, the keyboard moves without waiting for the next release.
 - F502-21: The app menu of the three hosts has 설정… (Settings…) with `cmd+,`, which opens the settings window.

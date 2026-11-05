@@ -423,7 +423,7 @@ int main(void) { @autoreleasepool {
         name:NSWindowDidChangeOcclusionStateNotification object:window];
     [window orderFrontRegardless];
     NSString *store = temporaryFolder(@"soksak-resize-cadence-store-");
-    void *document = sp_document_create(surface, store.fileSystemRepresentation, "fixture", "fixture", "void 0;", changed, receiver);
+    void *document = sp_document_create(surface, store.fileSystemRepresentation, "fixture", "fixture", NULL, "void 0;", changed, receiver);
     check(document != NULL, [NSString stringWithFormat:@"a plugin root view is created (%s)", sp_document_last_error()]);
     if (!document) {
         [[NSNotificationCenter defaultCenter] removeObserver:receiver name:NSWindowDidChangeOcclusionStateNotification object:window];

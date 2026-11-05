@@ -8,7 +8,7 @@ import "testing"
 // contract: host.document.creation-error-states-the-cause
 func TestCreateDocumentReportsTheNativeCause(t *testing.T) {
 	failNextCreation("cannot create the data store directory /probe: test fault")
-	_, err := implementation{}.CreateDocument(nil, "/probe", "", "probe", "", func(string) {})
+	_, err := implementation{}.CreateDocument(nil, "/probe", "", "probe", "", "", func(string) {})
 	want := "cannot create a document view in this surface: cannot create the data store directory /probe: test fault"
 	if err == nil || err.Error() != want {
 		t.Fatalf("CreateDocument error %v, want %q", err, want)
@@ -20,7 +20,7 @@ func TestCreateDocumentReportsTheNativeCause(t *testing.T) {
 // contract: host.document.creation-error-states-the-cause
 func TestCreateDocumentReportsAMissingNativeCause(t *testing.T) {
 	failNextCreation("")
-	_, err := implementation{}.CreateDocument(nil, "/probe", "", "probe", "", func(string) {})
+	_, err := implementation{}.CreateDocument(nil, "/probe", "", "probe", "", "", func(string) {})
 	want := "cannot create a document view in this surface: the native layer stated no cause"
 	if err == nil || err.Error() != want {
 		t.Fatalf("CreateDocument error %v, want %q", err, want)

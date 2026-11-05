@@ -12,7 +12,7 @@ Measurements do not reverse this decision. They fix the process counts, the per-
 
 ## Operating-system display labels
 
-A plugin view's WebContent process uses the display label `soksak://plugin/<plugin id>`. The label is set on the view's WebKit process configuration; it does not change the isolated `soksak://<plugin id>` origin, grants no access, and is not used to route requests. The plugin identifier comes from the view declaration. This private WebKit setting is per configuration; configurations for distinct plugin identifiers must not share a WebContent process because one process can expose only one process display label.
+A plugin view's WebContent process uses the display label `soksak://plugin/<plugin id>`, and the WebContent process of a document region uses `soksak://plugin/<plugin id>/<region>`, where `<region>` is the name that the manifest declares for the region. The host composes the label and sets it on the WebKit process configuration of the web view; it does not change the isolated `soksak://<plugin id>` origin, grants no access, and is not used to route requests. The plugin identifier comes from the view declaration. This private WebKit setting is per configuration; configurations with distinct labels must not share a WebContent process because one process can expose only one process display label.
 
 ## Reasons
 

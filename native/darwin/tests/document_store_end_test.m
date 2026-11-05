@@ -138,7 +138,7 @@ static void *prepareSurface(void) {
 }
 
 static void *loadPage(void *surface, nw_listener_t listener, NSString *store) {
-    void *document = sp_document_create(surface, store.fileSystemRepresentation, NULL, NULL, NULL, changed, NULL);
+    void *document = sp_document_create(surface, store.fileSystemRepresentation, NULL, NULL, NULL, NULL, changed, NULL);
     check(document != NULL, @"a document region is created");
     sp_document_place(document, 0, 0, 0, 0, true);
     NSString *address = [NSString stringWithFormat:@"http://127.0.0.1:%d/page", nw_listener_get_port(listener)];
@@ -241,7 +241,7 @@ int main(int argc, char **argv) { @autoreleasepool {
     NSString *unloaded = [temporaryFolder(@"soksak-document-store-unloaded-") stringByAppendingPathComponent:@"store"];
     void *unloadedSurface = prepareSurface();
     @autoreleasepool {
-        void *unloadedDocument = sp_document_create(unloadedSurface, unloaded.fileSystemRepresentation, NULL, NULL, NULL, changed, NULL);
+        void *unloadedDocument = sp_document_create(unloadedSurface, unloaded.fileSystemRepresentation, NULL, NULL, NULL, NULL, changed, NULL);
         check(unloadedDocument != NULL, @"a document that loads nothing is created");
         sp_document_close(unloadedDocument);
     }
