@@ -35,7 +35,12 @@ export const terminalViewDescriptor = Object.freeze({
     const session = await s.until("terminal.session", (value) => value?.sessionId && value.cols > 0 && value.rows > 0,
       `terminal view ${surface} did not open its session`, { surface });
     const lines = await readScreenUntil(s, surface, (rows) => rows.some((line) => line.startsWith("sh-3.2$")),
-      `terminal view ${surface} did not display its initial shell prompt`);
+      `terminal view ${surface} did not display its initial shell prompt`).catch(async (error) => {
+      const shown = (await s.get("core.surfaces")).find((item) => item.surface === surface);
+      const regions = (await s.get("host.window")).regions.filter((region) => region.surface === surface);
+      const state = await s.get("terminal.session", surface);
+      throw new Error(`${error.message.slice(0, 200)}; session ${JSON.stringify(state)}; surface ${JSON.stringify(shown)}; regions ${JSON.stringify(regions)}`, { cause: error });
+    });
     const rect = await s.rect("terminal.view", undefined, surface);
     assert.ok(rect.width > 0 && rect.height > 0, `terminal view ${surface} has no visible content region`);
     const history = await s.run("terminal.view.history", {}, surface);
