@@ -356,6 +356,51 @@ func TestAClosedGateStoresNoEventAndReportsItsCount(t *testing.T) {
 	}
 }
 
+func TestTheReportOfTheCountsArmsNoTimerWhileABatchIsInFlight(t *testing.T) {
+	f := newWriter(t, nil)
+	f.host.hold = make(chan struct{})
+	f.events.Info("place: one")
+	f.host.pass(time.Second)
+	f.timers[0]()
+	f.queue.until(t, func() bool { return len(f.host.batches()) == 1 })
+	// A second count waits while the host does not answer the first batch, and its second passes.
+	f.events.Info("place: two")
+	f.host.pass(time.Second)
+	for ran := 1; ran < len(f.timers) && ran <= 10; ran++ {
+		f.timers[ran]()
+		f.queue.run()
+	}
+	if armed := len(f.timers); armed != 1 {
+		t.Fatalf("%d timers were armed while a batch was in flight", armed-1)
+	}
+	// The end of the batch sends the count that is due, and then no count and no timer remain.
+	close(f.host.hold)
+	f.queue.until(t, func() bool { return len(f.host.batches()) == 2 })
+	f.sent()
+	if armed := len(f.timers); armed != 1 {
+		t.Fatalf("%d timers were armed after the counts left", armed-1)
+	}
+}
+
+func TestACountRefusedWhileABatchIsInFlightWaitsForTheRestOfItsInterval(t *testing.T) {
+	f := newWriter(t, nil)
+	f.host.hold = make(chan struct{})
+	f.events.Info("place: one")
+	f.host.pass(time.Second)
+	f.timers[0]()
+	f.queue.until(t, func() bool { return len(f.host.batches()) == 1 })
+	f.events.Info("place: two")
+	f.host.pass(400 * time.Millisecond)
+	close(f.host.hold)
+	f.queue.until(t, func() bool { return len(f.timers) == 2 })
+	if batches := len(f.host.batches()); batches != 1 {
+		t.Fatalf("the count left in batch %d before its interval ended", batches)
+	}
+	f.host.pass(600 * time.Millisecond)
+	f.timers[1]()
+	f.queue.until(t, func() bool { return len(f.host.batches()) == 2 })
+}
+
 func TestThePolicyInForceOfTheHostOpensTheGate(t *testing.T) {
 	f := newWriter(t, nil)
 	f.host.classes = map[string]string{}

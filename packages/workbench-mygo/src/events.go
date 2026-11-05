@@ -380,9 +380,10 @@ func (e *Events) gatedDue() bool {
 	return len(e.gated) > 0 && e.options.Now().Sub(e.gatedAt) >= gatedReportInterval
 }
 
-// awaitGated waits for the end of the interval of the counts: no event marks it.
+// awaitGated waits for the end of the interval of the counts: no event marks it. A batch in flight holds no timer: the
+// end of that batch sends a count that is due or waits for the rest of the interval.
 func (e *Events) awaitGated() {
-	if e.gatedTimer || len(e.gated) == 0 {
+	if e.gatedTimer || e.sending || len(e.gated) == 0 {
 		return
 	}
 	e.gatedTimer = true
@@ -495,6 +496,7 @@ func (e *Events) batchEnded(count int, err error) {
 		e.options.Report(fmt.Sprintf("event batch of %d events failed: %v", count, err))
 	}
 	e.send(len(e.flushes) > 0)
+	e.awaitGated()
 }
 
 // anchored reads the clocks of the host once and then runs ready; a failed reading is read again by the next batch.
