@@ -15,8 +15,19 @@ var ariaRoles = map[ui.Role]string{
 	ui.RoleComboBox: "combobox", ui.RoleDisclosure: "button", ui.RoleMeter: "meter", ui.RoleStepper: "spinbutton",
 	ui.RoleColorWell: "button", ui.RoleAlertDialog: "alertdialog", ui.RoleMenu: "menu", ui.RoleMenuBar: "menubar",
 	ui.RoleMenuItem: "menuitem", ui.RoleMenuItemCheckBox: "menuitemcheckbox", ui.RoleMenuItemRadio: "menuitemradio",
-	ui.RoleHeading: "heading", ui.RoleNavigation: "navigation",
+	ui.RoleHeading: "heading", ui.RoleRegion: "region", ui.RoleLog: "log", ui.RoleTimer: "timer", ui.RoleAlert: "alert",
+	ui.RoleSeparator: "separator", ui.RoleRowHeader: "rowheader", ui.RoleSearch: "search", ui.RoleArticle: "article",
+	ui.RoleNavigation: "navigation",
 }
 
 // AriaRole returns the ARIA role of role.
 func AriaRole(role ui.Role) string { return ariaRoles[role] }
+
+// ElementRole returns the role that element.rect answers: the ARIA role of role, and null for a group and a text, as a page
+// answers for a div and a span (docs/spec/exposure.md).
+func ElementRole(role ui.Role) any {
+	if role == ui.RoleGroup || role == ui.RoleText {
+		return nil
+	}
+	return AriaRole(role)
+}

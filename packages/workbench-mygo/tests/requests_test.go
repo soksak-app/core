@@ -328,7 +328,7 @@ func TestAnElementRequestAnswersFromTheElementTree(t *testing.T) {
 		}
 	}
 	want := map[string]any{"x": float64(second.Bounds.X), "y": float64(second.Bounds.Y), "width": float64(second.Bounds.W),
-		"height": float64(second.Bounds.H), "zoom": float64(1), "document": map[string]any{"x": float64(0), "y": float64(0)}}
+		"height": float64(second.Bounds.H), "zoom": float64(1), "role": workbench.ElementRole(second.Role), "document": map[string]any{"x": float64(0), "y": float64(0)}}
 	if reply := r.ask("element.rect", `{"name":"core.card","index":1}`); !reflect.DeepEqual(reply["result"], want) {
 		t.Fatalf("the rectangle is %v, want %v", reply, want)
 	}
@@ -448,7 +448,7 @@ func TestAnAbsentElementHoldsItsIndexWithoutAPlace(t *testing.T) {
 	declared.Elements(drawnElements{tester})
 	r := newRelay(t, declared)
 	reply := r.ask("element.rect", `{"name":"core.card","index":1}`)
-	want := map[string]any{"x": float64(0), "y": float64(0), "width": float64(0), "height": float64(0), "zoom": float64(1), "document": map[string]any{"x": float64(0), "y": float64(0)}}
+	want := map[string]any{"x": float64(0), "y": float64(0), "width": float64(0), "height": float64(0), "zoom": float64(1), "role": "button", "document": map[string]any{"x": float64(0), "y": float64(0)}}
 	if !reflect.DeepEqual(reply["result"], want) {
 		t.Fatalf("the absent element answered %v", reply)
 	}
@@ -475,5 +475,14 @@ func TestAnAbsentElementHoldsItsIndexWithoutAPlace(t *testing.T) {
 	tester.Frame()
 	if !tester.Focused("c1") {
 		t.Fatal("core.focus.set took the focus to an element that the window does not show")
+	}
+}
+
+// A group and a text answer null as a div and a span of a page do, and other roles answer their ARIA names.
+func TestElementRoleOfElementRect(t *testing.T) {
+	for role, want := range map[ui.Role]any{ui.RoleGroup: nil, ui.RoleText: nil, ui.RoleButton: "button", ui.RoleList: "list", ui.RoleTab: "tab"} {
+		if got := workbench.ElementRole(role); got != want {
+			t.Fatalf("role %v answers %v, want %v", role, got, want)
+		}
 	}
 }
