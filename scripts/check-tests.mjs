@@ -1066,6 +1066,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F586",
+    implementation: [{ file: "packages/host/rust/src/images.rs", symbol: "fn send_released(" }],
+    tests: [
+      { file: "packages/host/rust/src/images_test.rs", id: "a_release_after_its_window_closed_sends_nothing_and_reports_no_failure" },
+      { file: "packages/host/rust/src/images_test.rs", id: "a_release_of_an_open_window_sends_the_frame_with_the_root_of_the_window" },
+      { file: "packages/host/rust/src/images_test.rs", id: "a_release_that_fails_in_an_open_window_reports_the_failure" },
+    ],
+    expected: "A release after the close of its window sends nothing and reports no failure, and a release in an open window is sent with the root of the window and reports its failure.",
+    levels: ["unit"],
+  },
+  {
     id: "F585",
     implementation: [{ file: "native/darwin/src/webview_geometry.m", symbol: "void sp_surface_region_shown" }],
     tests: [
