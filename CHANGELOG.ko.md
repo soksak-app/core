@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F555: store 변경 하나가 창마다 프로젝트 목록을 두 번이 아니라 한 번 읽는다.
 - F502-21: `setDialogBackground`가 다른 host call처럼 object `{enabled}`를 받고, framework 표의 B 행이 이 call을 mygo에만 있는 call로 나열해 host parity check가 통과한다. P 행이 `Frontend.Frames`를 나열한다.
 - F502-16: mygo workbench의 숨은 element는 `display:none`인 page element처럼 같은 이름의 element 사이에서 index를 유지하므로, tab을 `core.grid`의 자리로 부르는 window check는 card head의 모든 단계와 전체 화면 card에서 그 tab에 닿는다. bar는 element `core.chrome.bar`다.
 - F502-16: mygo workbench는 `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.views`에 답한다.

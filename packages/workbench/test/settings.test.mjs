@@ -365,3 +365,26 @@ test('the debug switch sets the trace and every class to trace, and off restores
     globalThis.document = realDocument;
   }
 });
+
+test('a change of the store is read through the read of that change', async () => {
+  const realDocument = globalThis.document;
+  globalThis.document = { addEventListener: () => {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
+  const { connectSettings, value } = await import('../settings.js?test=change-read');
+  try {
+    let changed = null;
+    let snapshots = 0;
+    await connectSettings({
+      snapshot: async () => { snapshots += 1; return { common: {}, projects: [] }; },
+      settings: async () => {},
+      onChange: (listener) => { changed = listener; },
+    });
+    snapshots = 0;
+    let reads = 0;
+    await changed(async () => { reads += 1; return { common: { gap: 9 }, projects: [] }; });
+    assert.equal(reads, 1, 'the read of the change');
+    assert.equal(snapshots, 0, 'no read of its own');
+    assert.equal(value('gap'), 9);
+  } finally {
+    globalThis.document = realDocument;
+  }
+});

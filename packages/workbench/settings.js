@@ -341,13 +341,14 @@ export function beginSettings(snapshot, id) {
 
 export async function connectSettings(storage) {
   store = storage;
-  store.onChange(() => { if (!changes) return refresh().catch((e) => dispatchEvent(new ErrorEvent("error", { message: e.message }))); });
+  store.onChange((read) => { if (!changes) return refresh(read).catch((e) => dispatchEvent(new ErrorEvent("error", { message: e.message }))); });
   await refresh();
 }
 
-async function refresh() {
+// default: a read that no change of the store gave reads the store itself.
+async function refresh(read = () => store.snapshot()) {
   const mine = ++revision;
-  const snapshot = await store.snapshot();
+  const snapshot = await read();
   if (changes || mine !== revision) return;
   const project = snapshot.projects.find((p) => p.id === projectId);
   // The settings file of the shown project that the host now refuses is reported, and the applied settings stay
