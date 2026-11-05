@@ -160,7 +160,8 @@ export function scenarioWindow(goals, scenario) {
 /**
  * The failures of the conditions that a target of `scenario` reported for its measurement: its refresh rate and its backing scale
  * against the run conditions, the content size of its window against the window of the scenario, and whether its window is covered against
- * the scenarios that the run conditions name as covered, because a covered window draws less and its value measures another state.
+ * the scenarios that the run conditions name as covered, because a covered window draws less and its value measures another state. An
+ * application that is not active is refused in every scenario: its activation ended before the target wrote its value.
  */
 export function targetConditionFailures(goals, scenario, conditions) {
   const failures = displayFailures(goals, conditions);
@@ -171,6 +172,7 @@ export function targetConditionFailures(goals, scenario, conditions) {
   }
   const covered = goals.conditions.occludedScenarios.includes(scenario);
   if (conditions?.occluded !== covered) failures.push(`the window reports occluded ${conditions?.occluded}, expected ${covered}`);
+  if (conditions?.active !== true) failures.push(`the application reports active ${conditions?.active}, expected true`);
   return failures;
 }
 

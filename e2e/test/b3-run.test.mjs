@@ -9,7 +9,7 @@ import { b3Conditions, b3Target, fixtureSettings, withB3Out } from "../benchmark
 import { B3_MEASUREMENTS } from "../benchmark/measurements.mjs";
 
 const FRAME_DEBUG = policyOfSetting({ frame: "debug" }).classes;
-const CONDITIONS = { refreshRate: 120, backingScale: 2, traceState: false, logPolicy: FRAME_DEBUG, window: { width: 1200, height: 760 }, occluded: false };
+const CONDITIONS = { refreshRate: 120, backingScale: 2, traceState: false, logPolicy: FRAME_DEBUG, window: { width: 1200, height: 760 }, occluded: false, active: true };
 
 function folder(t) {
   const path = mkdtempSync(join(tmpdir(), "b3-run-"));
@@ -24,7 +24,7 @@ test("the conditions of a B3 run are host.window of its window, its diagnostics.
     window: "w1",
     app: { configDir },
     get: async (name) => {
-      if (name === "host.window") return { pageProcess: null, frames: 40, refreshRate: 120, scale: 2, content: { width: 1200, height: 760 }, occluded: false };
+      if (name === "host.window") return { pageProcess: null, frames: 40, refreshRate: 120, scale: 2, content: { width: 1200, height: 760 }, occluded: false, active: true };
       if (name === "core.settings") return { values: { "diagnostics.performance": false, "diagnostics.log": { frame: "debug" } } };
       throw new Error(`unexpected status ${name}`);
     },
@@ -114,7 +114,7 @@ test("a run that fails before it read its conditions writes nothing and reports 
   const path = join(folder(t), "out.json");
   await assert.rejects(withB3Out({ path, state: null, keys: B3_MEASUREMENTS["browser-view"] }, async () => { throw new Error("no window"); }),
     (error) => error instanceof AggregateError && error.errors[0].message === "no window" &&
-      error.errors[1].message === "B3 conditions must be refreshRate, backingScale, traceState, logPolicy, window, occluded, not undefined");
+      error.errors[1].message === "B3 conditions must be refreshRate, backingScale, traceState, logPolicy, window, occluded, active, not undefined");
   assert.throws(() => readFileSync(path), { code: "ENOENT" });
 });
 
@@ -153,7 +153,7 @@ test("a benchmark records whether its window is covered when it writes, and a wi
     get: async (name) => {
       if (name === "core.settings") return { values: settings };
       if (name !== "host.window") throw new Error(`unexpected status ${name}`);
-      return { refreshRate: 120, scale: 2, content: { width: 1200, height: 760 }, occluded: readings.shift() };
+      return { refreshRate: 120, scale: 2, content: { width: 1200, height: 760 }, occluded: readings.shift(), active: true };
     },
   });
   const written = async (readings) => {
@@ -179,7 +179,7 @@ test("a benchmark that failed and cannot read its window keeps the conditions of
     get: async (name) => {
       if (name === "core.settings") return { values: settings };
       if (gone) throw new Error("the window is gone");
-      return { refreshRate: 120, scale: 2, content: { width: 1200, height: 760 }, occluded: false };
+      return { refreshRate: 120, scale: 2, content: { width: 1200, height: 760 }, occluded: false, active: true };
     },
   };
   const path = join(folder(t), "out.json");
@@ -191,4 +191,28 @@ test("a benchmark that failed and cannot read its window keeps the conditions of
   const output = JSON.parse(readFileSync(path, "utf8"));
   assert.equal(output.measurements.verdict, "failed");
   assert.equal(output.conditions.occluded, false);
+});
+
+test("a benchmark records an application that lost its activation during the interval", { timeout: 5000 }, async (t) => {
+  const configDir = folder(t);
+  writeFileSync(policyFile(configDir), JSON.stringify({ schema: 1, classes: FRAME_DEBUG }));
+  const settings = { "diagnostics.performance": false, "diagnostics.log": { frame: "debug" } };
+  const written = async (readings) => {
+    const s = {
+      window: "w1", app: { configDir },
+      get: async (name) => {
+        if (name === "core.settings") return { values: settings };
+        return { refreshRate: 120, scale: 2, content: { width: 1200, height: 760 }, occluded: false, active: readings.shift() };
+      },
+    };
+    const path = join(folder(t), "out.json");
+    await withB3Out({ path, state: null, keys: B3_MEASUREMENTS["idle-tab"] }, async (run) => {
+      run.conditions = await b3Conditions(s, settings);
+      run.measurements.idleTabCostKb = 1;
+    });
+    return JSON.parse(readFileSync(path, "utf8")).conditions.active;
+  };
+  assert.equal(await written([true, true]), true);
+  assert.equal(await written([true, false]), false, "the activation ended before the benchmark wrote its value");
+  assert.equal(await written([false, true]), false, "the application was not active at the start of the interval");
 });

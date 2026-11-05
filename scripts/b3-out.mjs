@@ -4,12 +4,12 @@
 // state of the run: refreshRate and backingScale of the screen that every measured window shares, traceState, the value of
 // diagnostics.performance over the measured interval (true or false), logPolicy, the classes of the policy in force, which with
 // traceState states every trace state of a run, window {width, height}, the content size of the first window, the window of the
-// state, in points, and occluded, whether that window is covered, which the judge compares with its scenario. The writer and the reader refuse the same forms with the same errors.
+// state, in points, occluded, whether that window is covered, and active, whether its application is active, which the judge compares with its scenario. The writer and the reader refuse the same forms with the same errors.
 import { readFileSync, writeFileSync } from "node:fs";
 import { EVERY_LEVEL, policyOfSetting } from "@soksak/window-check/log-policy.mjs";
 
 /** The members of the conditions, in the order of the output. */
-const CONDITIONS = ["refreshRate", "backingScale", "traceState", "logPolicy", "window", "occluded"];
+const CONDITIONS = ["refreshRate", "backingScale", "traceState", "logPolicy", "window", "occluded", "active"];
 
 /** The classes of a log policy (docs/spec/logging.md#policy). */
 const CLASSES = Object.keys(EVERY_LEVEL);
@@ -41,6 +41,7 @@ export function b3Conditions({ windows, performance, policy }) {
     }
   }
   if (typeof first.occluded !== "boolean") throw new Error(`window ${first.window} reports occluded ${JSON.stringify(first.occluded)}, not true or false`);
+  if (typeof first.active !== "boolean") throw new Error(`window ${first.window} reports active ${JSON.stringify(first.active)}, not true or false`);
   return {
     refreshRate: first.refreshRate,
     backingScale: first.scale,
@@ -48,6 +49,7 @@ export function b3Conditions({ windows, performance, policy }) {
     logPolicy: policy,
     window: { width: first.content?.width, height: first.content?.height },
     occluded: first.occluded,
+    active: first.active,
   };
 }
 
@@ -89,7 +91,9 @@ function requireB3(output) {
   if (!isObject(window) || !sameNames(window, ["width", "height"]) || !positive(window.width) || !positive(window.height)) {
     throw new Error(`B3 condition window must be {width, height} of positive numbers, not ${JSON.stringify(window)}`);
   }
-  if (typeof conditions.occluded !== "boolean") throw new Error(`B3 condition occluded must be true or false, not ${JSON.stringify(conditions.occluded)}`);
+  for (const name of ["occluded", "active"]) {
+    if (typeof conditions[name] !== "boolean") throw new Error(`B3 condition ${name} must be true or false, not ${JSON.stringify(conditions[name])}`);
+  }
 }
 
 /** Writes the B3 output of a run to `file`; a measurement or a condition outside the form is an error that names it, and nothing is written. */

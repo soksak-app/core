@@ -35,6 +35,7 @@ function redrawWindow(overrides = {}) {
     frame: { x: 40, y: 60, width: 760, height: 642 },
     content: { x: 0, y: 28, width: 760, height: 614 },
     occluded: false,
+    active: true,
     pageProcess: null,
     frames: 900,
     commandBuffers: 899,
@@ -248,7 +249,7 @@ test("the B3 output of the redraw takes its conditions from b3-out with the perf
   const policy = { lifecycle: "error", input: "error", call: "debug", io: "error", frame: "debug" };
   const status = redrawWindow({ scale: 2, refreshRate: 120 });
   const conditions = redrawConditions({ status, window: "w2", trace: 1, policy });
-  assert.deepEqual(conditions, { refreshRate: 120, backingScale: 2, traceState: true, logPolicy: policy, window: { width: 760, height: 614 }, occluded: false });
+  assert.deepEqual(conditions, { refreshRate: 120, backingScale: 2, traceState: true, logPolicy: policy, window: { width: 760, height: 614 }, occluded: false, active: true });
   assert.equal(redrawConditions({ status, window: "w2", trace: 0, policy }).traceState, false);
   assert.throws(() => redrawConditions({ status: redrawWindow({ scale: 2, refreshRate: null }), window: "w2", trace: 0, policy }),
     /window w2 reports the refresh rate null, so it is on no screen/);

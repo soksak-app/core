@@ -835,8 +835,8 @@ test("the records of the interval are the lines that the event logs gained, in a
 /** The window marks of a measurement of two windows of the mygo host, before and after the cpu interval. */
 function marksOfTwo({ frames = [[340, 340], [512, 513]], commandBuffers = [[338, 338], [500, 502]] } = {}) {
   const mark = (index) => [
-    { window: "w1", occluded: false, frames: frames[0][index], commandBuffers: commandBuffers[0][index], scale: 2, refreshRate: 120, content: { width: 1200, height: 760 } },
-    { window: "w2", occluded: false, frames: frames[1][index], commandBuffers: commandBuffers[1][index], scale: 2, refreshRate: 120, content: { width: 1200, height: 760 } },
+    { window: "w1", occluded: false, active: true, frames: frames[0][index], commandBuffers: commandBuffers[0][index], scale: 2, refreshRate: 120, content: { width: 1200, height: 760 } },
+    { window: "w2", occluded: false, active: true, frames: frames[1][index], commandBuffers: commandBuffers[1][index], scale: 2, refreshRate: 120, content: { width: 1200, height: 760 } },
   ];
   return { before: mark(0), after: mark(1) };
 }
@@ -1017,7 +1017,7 @@ test("a pointer output holds the keys of one trace state: the cpu and footprint 
   assert.deepEqual(Object.keys(records.measurements), B3_MEASUREMENTS["frame-records"]);
   assert.deepEqual(records, {
     measurements: { pointerMoveP90Ms: 6 },
-    conditions: { refreshRate: 120, backingScale: 2, traceState: false, logPolicy: POLICY, window: { width: 1200, height: 760 }, occluded: false },
+    conditions: { refreshRate: 120, backingScale: 2, traceState: false, logPolicy: POLICY, window: { width: 1200, height: 760 }, occluded: false, active: true },
   });
   assert.throws(() => usageOutput({ options: { trace: "frame-records", step: "pointer" }, measurement, gesture: null }),
     /the pointer output under the trace state frame-records is pointerMoveP90Ms, which a window with a main page has not/);
@@ -1038,7 +1038,7 @@ test("the B3 output of app-usage takes its conditions from b3-out with the perfo
     },
   };
   const output = usageOutput({ options: { trace: 0 }, measurement, faultLines: undefined, gesture: undefined });
-  assert.deepEqual(output.conditions, { refreshRate: 120, backingScale: 2, traceState: false, logPolicy: POLICY, window: { width: 1200, height: 760 }, occluded: false });
+  assert.deepEqual(output.conditions, { refreshRate: 120, backingScale: 2, traceState: false, logPolicy: POLICY, window: { width: 1200, height: 760 }, occluded: false, active: true });
   assert.equal(output.measurements.hostCpuSeconds, 0.12);
   assert.equal(usageOutput({ options: { trace: 1 }, measurement }).conditions.traceState, true);
   const covered = { ...measurement, marks: { ...measurement.marks, after: [{ ...measurement.marks.after[0], windows: marksOfTwo().after.map((window) => ({ ...window, occluded: true })) }] } };

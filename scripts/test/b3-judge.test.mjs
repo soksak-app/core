@@ -180,7 +180,7 @@ function sessionMeeting(goals, path) {
           display: { refreshRate: goals.conditions.refreshRate, backingScale: goals.conditions.backingScale }, end: { loadAverage: [1, 1, 1] },
           conditions: Object.fromEntries(goals.values.filter((value) => value.scenario === scenario).map((value) => [value.target, {
             refreshRate: goals.conditions.refreshRate, backingScale: goals.conditions.backingScale, traceState: false, logPolicy: { lifecycle: "error", input: "error", call: "error", io: "error", frame: "error" },
-            window: goals.conditions.scenarioWindows[scenario] ?? goals.conditions.window, occluded: goals.conditions.occludedScenarios.includes(scenario),
+            window: goals.conditions.scenarioWindows[scenario] ?? goals.conditions.window, occluded: goals.conditions.occludedScenarios.includes(scenario), active: true,
           }])),
         }));
       }
@@ -216,7 +216,7 @@ test("a target of S9 reports a covered window and a target of any other scenario
   const goals = readGoals(readFileSync(GOALS_FILE, "utf8"), "performance-goals.json");
   const conditions = (scenario, occluded) => ({
     refreshRate: goals.conditions.refreshRate, backingScale: goals.conditions.backingScale,
-    window: goals.conditions.scenarioWindows[scenario] ?? goals.conditions.window, ...(occluded === undefined ? {} : { occluded }),
+    window: goals.conditions.scenarioWindows[scenario] ?? goals.conditions.window, active: true, ...(occluded === undefined ? {} : { occluded }),
   });
   assert.deepEqual(targetConditionFailures(goals, "S9", conditions("S9", true)), []);
   assert.deepEqual(targetConditionFailures(goals, "S5", conditions("S5", false)), []);
@@ -231,7 +231,7 @@ test("the judge refuses a session whose run records a covered window", () => {
     scenario: "S5", start: { loadAverage: [1, 1, 1], swap: { usedBytes: 0, totalBytes: 1 << 30 }, fseventsdCores: 0 },
     display: { refreshRate: goals.conditions.refreshRate, backingScale: goals.conditions.backingScale }, end: { loadAverage: [1, 1, 1] },
     conditions: { "make benchmark-view-drag TRACE=0": {
-      refreshRate: goals.conditions.refreshRate, backingScale: goals.conditions.backingScale, window: goals.conditions.window, occluded: true,
+      refreshRate: goals.conditions.refreshRate, backingScale: goals.conditions.backingScale, window: goals.conditions.window, occluded: true, active: true,
     } },
   };
   assert.deepEqual(runConditionFailures(goals, record), ["make benchmark-view-drag TRACE=0: the window reports occluded true, expected false"]);
@@ -244,4 +244,18 @@ test("the goals name the scenarios whose window is covered, each of them a scena
   assert.throws(() => readGoals(changed((copy) => { delete copy.conditions.occludedScenarios; }), "goals.json"), /holds the conditions/);
   assert.throws(() => readGoals(changed((copy) => { copy.conditions.occludedScenarios = "S9"; }), "goals.json"), /holds the condition occludedScenarios "S9", expected an array/);
   assert.throws(() => readGoals(changed((copy) => { copy.conditions.occludedScenarios = ["S99"]; }), "goals.json"), /names S99 as covered, which no value names/);
+});
+
+test("a target of every scenario reports an active application, S9 as well", () => {
+  const goals = readGoals(readFileSync(GOALS_FILE, "utf8"), "performance-goals.json");
+  const conditions = (scenario, active) => ({
+    refreshRate: goals.conditions.refreshRate, backingScale: goals.conditions.backingScale,
+    window: goals.conditions.scenarioWindows[scenario] ?? goals.conditions.window, occluded: goals.conditions.occludedScenarios.includes(scenario),
+    ...(active === undefined ? {} : { active }),
+  });
+  assert.deepEqual(targetConditionFailures(goals, "S5", conditions("S5", true)), []);
+  assert.deepEqual(targetConditionFailures(goals, "S9", conditions("S9", true)), []);
+  assert.deepEqual(targetConditionFailures(goals, "S5", conditions("S5", false)), ["the application reports active false, expected true"]);
+  assert.deepEqual(targetConditionFailures(goals, "S9", conditions("S9", false)), ["the application reports active false, expected true"]);
+  assert.deepEqual(targetConditionFailures(goals, "S8", conditions("S8")), ["the application reports active undefined, expected true"]);
 });

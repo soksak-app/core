@@ -1061,7 +1061,7 @@ async function windowMark(s) {
   const objects = await s.request("diagnostics.objects");
   // The Tauri host has no garbage-collected runtime and reports no runtime member (docs/spec/endpoint.md).
   return {
-    window: s.window, occluded: status.occluded, frames: status.frames, commandBuffers: status.commandBuffers, runtime: objects.runtime ?? null,
+    window: s.window, occluded: status.occluded, active: status.active, frames: status.frames, commandBuffers: status.commandBuffers, runtime: objects.runtime ?? null,
     scale: status.scale, refreshRate: status.refreshRate, content: status.content,
   };
 }
@@ -1218,7 +1218,7 @@ export function usageOutput({ options, measurement, gesture, faultLines }) {
   } else {
     measurements = usageMeasurements({ app, marks: { before: before.windows, after: after.windows }, faultLines, gesture: null });
   }
-  const conditions = b3Conditions({ windows: before.windows.map((window, index) => ({ ...window, occluded: after.windows[index].occluded })), performance: traceSettings(options.trace)["diagnostics.performance"], policy: before.policy });
+  const conditions = b3Conditions({ windows: before.windows.map((window, index) => ({ ...window, occluded: after.windows[index].occluded, active: after.windows[index].active })), performance: traceSettings(options.trace)["diagnostics.performance"], policy: before.policy });
   return { measurements, conditions };
 }
 

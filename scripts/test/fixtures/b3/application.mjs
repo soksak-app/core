@@ -17,7 +17,7 @@ const fake = await startFakeEndpoint({
     if (params.name !== "host.window") throw Object.assign(new Error(`unknown status ${params.name}`), { code: 1004 });
     return {
       scale: Number(process.env.B3_FIXTURE_BACKING_SCALE), refreshRate: Number(process.env.B3_FIXTURE_REFRESH_RATE),
-      content: { width: 1200, height: 760 }, occluded: !activated || process.env.B3_FIXTURE_COVERED === "1",
+      content: { width: 1200, height: 760 }, occluded: !activated || process.env.B3_FIXTURE_COVERED === "1", active: activated,
     };
   },
   "input.pointer": (params) => {

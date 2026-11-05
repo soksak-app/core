@@ -42,15 +42,16 @@ export async function b3Conditions(s, settings) {
 }
 
 /**
- * The conditions to write when the interval ends: a window covered at the start or now is covered. A benchmark that failed keeps the
+ * The conditions to write when the interval ends: a window covered at the start or now is covered, and an application is active only when
+ * it was active at the start and is now, so an activation that ended during the interval is recorded. A benchmark that failed keeps the
  * conditions of its start when its window cannot be read, because its failure is what it records.
  */
 async function conditionsAtEnd(conditions, failure) {
   const s = SESSIONS.get(conditions);
   if (s === undefined) return conditions;
   try {
-    const { occluded } = await s.get("host.window");
-    return { ...conditions, occluded: conditions.occluded || occluded };
+    const { occluded, active } = await s.get("host.window");
+    return { ...conditions, occluded: conditions.occluded || occluded, active: conditions.active && active };
   } catch (error) {
     if (failure) return conditions;
     throw error;
