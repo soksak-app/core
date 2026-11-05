@@ -2,6 +2,7 @@ package workbench
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"slices"
@@ -182,8 +183,10 @@ type projectStart struct {
 
 // surfaceState is the placement state of a window.
 type surfaceState struct {
-	held  map[string]*heldSurface
-	order []string
+	// layoutFault tells that the next placement fails once (diagnostics.layout.fail).
+	layoutFault bool
+	held        map[string]*heldSurface
+	order       []string
 	// drawn holds the tabs that the current frame seats, with their boxes in window coordinates.
 	drawn map[string]layout.Rect
 	// seated holds the seats of the section surfaces of the sidebars of the current frame, and planeDrawn tells that the frame drew a plane.
@@ -554,6 +557,14 @@ func (s *Shell) placeSurfaces() {
 	if slices.Equal(lines, s.surfaces.placed) {
 		s.answerCommits(s.surfaces.commits, nil)
 		s.surfaces.commits = nil
+		return
+	}
+	if s.surfaces.layoutFault {
+		// The placement fails without a change, so the next frame draws the same lines again.
+		s.surfaces.layoutFault = false
+		s.surfaces.placing, s.surfaces.commits = s.surfaces.commits, nil
+		s.placed(errors.New("surface presentation failed: " + layoutFaultText))
+		s.options.Invalidate()
 		return
 	}
 	request, err := s.surfaceRequest()

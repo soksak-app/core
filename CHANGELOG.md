@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F502-23: The mygo workbench answers `diagnostics.layout.fail`: its next placement of the surfaces fails once with `diagnostic layout fault`, and the workbench shows that failure and goes on answering.
 - F539: `sok input pointer` moves as a person moves: every tracking area that holds the point hears the move, its enter and its exit, and a press in the key window moves there first.
 - F538: A retain keeps the persistent sessions of the sections of every stored layout, so a dropped tab, a closed space or a removed project no longer ends the sessions of the sidebars of the other spaces and projects.
 - F502-21: Closing a window of the mygo workbench, as Cmd+W does, asks about each modified tab first; a kept tab keeps the window.

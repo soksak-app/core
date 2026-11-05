@@ -767,3 +767,44 @@ func TestAPressOnASectionOfAWindowSidebarLeavesTheFocusedCard(t *testing.T) {
 		t.Fatalf("after the press on the section %s the focused cards are %v", id, got)
 	}
 }
+
+func TestALayoutFaultFailsOneDrawAndLeavesTheShellAnswering(t *testing.T) {
+	f, stored := surfaceShell(t)
+	answered := false
+	f.shell.Registry().Reply("diagnostics.layout.fail", json.RawMessage(`{}`), nil, func(value any, err error) {
+		answered = true
+		if value != nil || err != nil {
+			t.Fatalf("diagnostics.layout.fail answered %v, %v", value, err)
+		}
+	})
+	f.settle()
+	if !answered {
+		t.Fatal("diagnostics.layout.fail did not answer")
+	}
+	before, presented := len(stored.requests), stored.placed
+	f.tester.SetSize(1160, 800)
+	shown := f.shownErrors()
+	if len(shown) != 1 || !strings.Contains(shown[0], "surface presentation failed: diagnostic layout fault") {
+		t.Fatalf("the fault showed %q", shown)
+	}
+	// The fault fails one draw, and the next draw of the window places the views again.
+	f.settle()
+	if len(stored.requests) <= before || stored.placed <= presented {
+		t.Fatalf("after the fault %d of %d requests, %d of %d presented", len(stored.requests), before, stored.placed, presented)
+	}
+	if status[map[string]any](t, f, "core.grid") == nil {
+		t.Fatal("the shell does not answer after the fault")
+	}
+}
+
+func TestALayoutFaultFailsOnlyTheNextDraw(t *testing.T) {
+	f, _ := surfaceShell(t)
+	f.shell.Registry().Reply("diagnostics.layout.fail", json.RawMessage(`{}`), nil, func(any, error) {})
+	f.settle()
+	f.tester.SetSize(1160, 800)
+	if shown := f.shownErrors(); len(shown) != 1 {
+		t.Fatalf("the fault showed %q", shown)
+	}
+	f.tester.SetSize(1100, 800)
+	f.settle()
+}
