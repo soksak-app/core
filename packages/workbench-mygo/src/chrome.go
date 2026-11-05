@@ -3,6 +3,7 @@ package workbench
 import (
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -37,7 +38,7 @@ func (s *Shell) drawChrome(c *ui.Context, width float32) {
 	bar := c.TitleBar()
 	s.controlsWidth = bar.Left
 	browsing := s.browsing || s.opened() == nil
-	ui.Row(c).Size(width, s.chromeHeight()).Padding(0, s.metrics.spacePad, 0, s.metrics.spacePad+bar.Left).AlignItems(ui.Center).Gap(s.metrics.chromeGap).
+	ui.Row(s.binder.Name(c, "core.chrome.bar", "")).Size(width, s.chromeHeight()).Padding(0, s.metrics.spacePad, 0, s.metrics.spacePad+bar.Left).AlignItems(ui.Center).Gap(s.metrics.chromeGap).
 		Background(s.palette.Card).BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.Edge).DragWindow().
 		Role(ui.RoleGroup).Label("core.chrome.bar").Children(func() {
 		s.drawBrand(c)
@@ -143,6 +144,8 @@ type barTab struct {
 	radius [4]float32
 	pick   func() ui.Element
 	close  func() ui.Element
+	// input takes the pointer of the name of the tab, for a tab that can be dragged.
+	input func(name ui.Element)
 }
 
 func (s *Shell) drawBarTab(c *ui.Context, tab barTab) {
@@ -172,6 +175,9 @@ func (s *Shell) drawBarTab(c *ui.Context, tab barTab) {
 	pad := s.frameLength(m.chromeGap)
 	chip.Background(fill).Children(func() {
 		name := tab.pick()
+		if tab.input != nil {
+			tab.input(name)
+		}
 		if name.DoubleClicked() {
 			s.binder.run("core.rename.begin", tab.rename)
 		}
@@ -222,6 +228,10 @@ func (s *Shell) drawProjectTabs(c *ui.Context, column bool) {
 	for _, project := range s.projects {
 		s.drawBarTab(c, barTab{key: "project-" + project.ID, title: project.Title, on: project.ID == s.active, tint: project.Color, column: column,
 			rename: renameTarget{"project", project.ID}, radius: [4]float32{radius, radius, radius, radius},
+			input: func(name ui.Element) {
+				s.projectBoxes[project.ID] = name.Bounds()
+				name.HandleInput(s.projectTabInput(project.ID, name.Bounds()))
+			},
 			pick: func() ui.Element {
 				return s.binder.Press(c, "core.project-tab", "core.project.activate", project.ID, idParam{project.ID})
 			},
@@ -236,6 +246,55 @@ func (s *Shell) drawProjectTabs(c *ui.Context, column bool) {
 	s.drawBarAdd(c, add)
 	if column {
 		add.Height(s.frameLength(s.metrics.projectTabAddH))
+	}
+}
+
+// projectTabDrag is a press on a project tab, which moves its project when it ends on another project tab.
+type projectTabDrag struct {
+	id    string
+	x, y  float32
+	moved bool
+}
+
+// projectTabInput handles the pointer on the name of a project tab. A press that does not move stays a press of the tab.
+func (s *Shell) projectTabInput(id string, bounds ui.Rect) func(ui.InputEvent) bool {
+	return func(event ui.InputEvent) bool {
+		x, y := bounds.X+event.X, bounds.Y+event.Y
+		drag := s.projectDrag
+		switch event.Kind {
+		case ui.InputPointerDown:
+			if event.Button == 0 {
+				s.projectDrag = &projectTabDrag{id: id, x: x, y: y}
+			}
+		case ui.InputPointerMove:
+			if drag == nil || drag.id != id {
+				return false
+			}
+			drag.moved = drag.moved || math.Hypot(float64(x-drag.x), float64(y-drag.y)) > tabDragThreshold
+			return drag.moved
+		case ui.InputPointerUp:
+			if drag == nil || drag.id != id {
+				return false
+			}
+			s.projectDrag = nil
+			if drag.moved {
+				s.dropProjectTab(id, x, y)
+			}
+			return drag.moved
+		}
+		return false
+	}
+}
+
+// dropProjectTab moves the project id to the place of the project tab under x and y.
+func (s *Shell) dropProjectTab(id string, x, y float32) {
+	from := slices.IndexFunc(s.projects, func(project projectRecord) bool { return project.ID == id })
+	for to, project := range s.projects {
+		box, drawn := s.projectBoxes[project.ID]
+		if drawn && to != from && x >= box.X && x < box.X+box.W && y >= box.Y && y < box.Y+box.H {
+			s.binder.run("core.project.move", map[string]any{"id": id, "delta": to - from})
+			return
+		}
 	}
 }
 

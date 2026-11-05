@@ -309,8 +309,11 @@ type Shell struct {
 	// windowSidebars holds the widths of the fixed sidebars of the shown space, which outlive their columns.
 	windowSidebars map[string]layout.WindowSidebar
 
-	units         map[string]*installedUnit
-	processes     pluginProcesses
+	units     map[string]*installedUnit
+	processes pluginProcesses
+	// projectDrag is the press on a project tab, and projectBoxes holds the names of the project tabs as the last frame placed them.
+	projectDrag   *projectTabDrag
+	projectBoxes  map[string]ui.Rect
 	contributions *Contributions
 	// lastDrop is the status core.drop, and notices the state of the notification center.
 	lastDrop *dropRecord
@@ -361,6 +364,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s := &Shell{cardReads: map[string]cardRead{}, options: options, metrics: read, palette: palette, registry: NewRegistry(options.Declared), calls: options.Calls,
 		grid: environment.Workspace.Grid, focus: environment.Workspace.Focus, browsing: true, library: newLibraryState(), strips: map[string]*stripPlace{}, icons: map[string]*ui.SVG{}, heads: map[string]layout.HeadFit{}}
 	s.text = NewTextSize(shellText{s}, steps)
+	s.projectBoxes = map[string]ui.Rect{}
 	s.keyboard = NewFocus(options.Declared, func() { s.options.Invalidate() })
 	s.verification = NewVerification(func() { s.options.Invalidate() })
 	s.events = NewEvents(EventsOptions{Calls: s.calls, Post: options.Post, Report: options.Report, Now: time.Now,
@@ -631,6 +635,7 @@ func (s *Shell) View(c *ui.Context) {
 	clear(s.surfaces.drawn)
 	clear(s.picker.drawn)
 	clear(s.heads)
+	clear(s.projectBoxes)
 	clear(s.surfaces.seated)
 	s.surfaces.planeDrawn = false
 	width, height := c.Size()

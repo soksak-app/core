@@ -159,3 +159,33 @@ func TestTheCommandsOfAProjectChangeTheStore(t *testing.T) {
 		t.Fatalf("the store holds %v first", f.host.projects[0]["id"])
 	}
 }
+
+// A project tab that is dropped on another tab moves its project to the place of that tab.
+func TestAProjectTabDraggedToAnotherMovesItsProject(t *testing.T) {
+	f, alpha, beta := twoProjects(t)
+	f.run("core.library.return", nil)
+	f.settle()
+	first, second := f.box("core.project-tab", alpha), f.box("core.project-tab", beta)
+	from, at := first.X+first.W/2, first.Y+first.H/2
+	f.tester.Move(from, at)
+	f.tester.Frame()
+	f.tester.Press(from, at)
+	f.tester.Frame()
+	f.tester.Move(second.X+second.W/2, at)
+	f.tester.Frame()
+	f.tester.Release(second.X+second.W/2, at)
+	f.settle()
+	if got := f.host.projects[0]["id"]; got != beta {
+		t.Fatalf("the first project is %v, the order did not change", got)
+	}
+	if got := status[map[string]any](t, f, "core.project"); got["id"] != beta {
+		t.Fatalf("the drag activated %v", got["id"])
+	}
+	// A press that stays on its tab activates its project and moves nothing.
+	moved := f.box("core.project-tab", alpha)
+	f.tester.ClickAt(moved.X+moved.W/2, moved.Y+moved.H/2)
+	f.settle()
+	if got := status[map[string]any](t, f, "core.project"); got["id"] != alpha || f.host.projects[0]["id"] != beta {
+		t.Fatalf("the click left %v active over %v", got["id"], f.host.projects[0]["id"])
+	}
+}
