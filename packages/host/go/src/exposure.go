@@ -54,7 +54,7 @@ var hostStatus = map[string]hostEntry{
 			"content":     rectSchema,
 			"scale":       map[string]any{"type": "number"},
 			"refreshRate": map[string]any{"type": []string{"integer", "null"}},
-			"pageProcess": map[string]any{"type": "integer"},
+			"pageProcess": map[string]any{"type": []any{"integer", "null"}},
 			"quitting":    map[string]any{"type": "boolean"},
 			"maximized":   map[string]any{"type": "boolean"},
 			"key":         map[string]any{"type": "boolean"},
@@ -1367,6 +1367,15 @@ func windowResponder(class string, view, surface uint64, main bool, named map[ui
 	return out
 }
 
+// windowPageProcess is pageProcess of host.window: the WebContent process of the main page, 0 before it starts, and nil in a
+// window without a main page, which has no such process.
+func windowPageProcess(process int) *int {
+	if !framework.MainPage() {
+		return nil
+	}
+	return &process
+}
+
 // WindowFrameCounters are the frame counters of host.window. WebKit draws the workbench of this host, and the host
 // counts neither the frames of the workbench nor the command buffers that WebKit commits for it, so frames,
 // commandBuffers and settled are null; the mygo host counts them through the frame reports of its workbench (U7).
@@ -1390,7 +1399,7 @@ type WindowStatus struct {
 	Active           bool             `json:"active"`
 	Occluded         bool             `json:"occluded"`
 	Children         int              `json:"children"`
-	PageProcess      int              `json:"pageProcess"`
+	PageProcess      *int             `json:"pageProcess"`
 	Quitting         bool             `json:"quitting"`
 	AppDomWebviews   int              `json:"appDomWebviews"`
 	DocumentWebviews int              `json:"documentWebviews"`
@@ -1489,7 +1498,7 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 	out := WindowStatus{
 		Frame: facts.Frame, Pointer: facts.Pointer, Content: frame{Width: facts.Content.Width, Height: facts.Content.Height},
 		Scale: facts.Scale, RefreshRate: facts.RefreshRate, Maximized: facts.Zoomed, Key: facts.Key, Active: facts.Active, Occluded: facts.Occluded, Children: facts.Children,
-		PageProcess: facts.PageProcess, Quitting: s.host.quit.Active(),
+		PageProcess: windowPageProcess(facts.PageProcess), Quitting: s.host.quit.Active(),
 		Controls: facts.Controls, Surfaces: []WindowSurface{}, Documents: []WindowDocument{}, Regions: regions,
 		Webviews: []WindowWebview{},
 	}

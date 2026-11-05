@@ -2,8 +2,10 @@ package host
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"testing"
+	"unsafe"
 )
 
 // contract: window.facts.modal-order-is-above-every-webview
@@ -34,6 +36,67 @@ func TestWindowDocumentReportsItsNativeBlur(t *testing.T) {
 	}
 	if entry := windowDocument(key, 2, windowWebviewFacts{View: 7}); entry.Blurred {
 		t.Fatalf("document entry %#v of a web view without a filter, want blurred false", entry)
+	}
+}
+
+// pageFactsPlatform answers the window facts with the WebContent process of a main page.
+type pageFactsPlatform struct {
+	elementPlatform
+	process int
+}
+
+func (p *pageFactsPlatform) WindowFacts(unsafe.Pointer) (string, error) {
+	return fmt.Sprintf(`{"pageProcess":%d,"nativeSurfaces":[],"webviews":[]}`, p.process), nil
+}
+
+// A window without a main page has no page process, so host.window reports null and the sampler reads no page. A window
+// with a main page reports 0 until its WebContent process starts.
+func TestWindowReportsNoPageProcessWithoutAMainPage(t *testing.T) {
+	savedFramework, savedSystem := framework, system
+	t.Cleanup(func() { framework, system = savedFramework, savedSystem })
+	window := &elementWindow{}
+	window.native = unsafe.Pointer(new(byte))
+	surfaces := &Surfaces{host: &Host{quit: &Quit{}}, window: window, images: NewImages(), documents: NewDocuments(), invoke: func(task func()) { task() }}
+	for _, c := range []struct {
+		name      string
+		framework Framework
+		process   int
+		want      string
+		page      *int
+	}{
+		{name: "no main page", framework: pagelessFramework{window: window}, want: "null"},
+		{name: "a main page before its process starts", framework: stepFramework{}, want: "0", page: new(int)},
+		{name: "a main page", framework: stepFramework{}, process: 501, want: "501", page: func() *int { process := 501; return &process }()},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			framework, system = c.framework, &pageFactsPlatform{process: c.process}
+			state, err := surfaces.windowState()
+			if err != nil {
+				t.Fatal(err)
+			}
+			text, err := json.Marshal(state)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var status map[string]json.RawMessage
+			if err := json.Unmarshal(text, &status); err != nil {
+				t.Fatal(err)
+			}
+			if got := string(status["pageProcess"]); got != c.want {
+				t.Fatalf("host.window pageProcess is %s, want %s", got, c.want)
+			}
+			processes, err := surfaces.performanceProcesses()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(processes.Page, c.page) {
+				t.Fatalf("the sampler reads the page %v, want %v", processes.Page, c.page)
+			}
+		})
+	}
+	declared := hostStatus["host.window"].Schema["properties"].(map[string]any)["pageProcess"].(map[string]any)
+	if !reflect.DeepEqual(declared["type"], []any{"integer", "null"}) {
+		t.Fatalf("host.window declares pageProcess as %v", declared)
 	}
 }
 

@@ -178,9 +178,11 @@ func PerformanceSample() {
 			})
 			continue
 		}
-		PerformanceObserve("sampler", func() map[string]any {
-			return processMemory(map[string]any{"role": "page", "window": window}, processes.Page)
-		})
+		if processes.Page != nil {
+			PerformanceObserve("sampler", func() map[string]any {
+				return processMemory(map[string]any{"role": "page", "window": window}, *processes.Page)
+			})
+		}
 		for _, document := range processes.Documents {
 			PerformanceObserve("sampler", func() map[string]any {
 				return processMemory(map[string]any{"role": "document", "window": window, "surface": document.Surface, "document": document.Document}, document.Process)
@@ -236,9 +238,9 @@ func addFootprint(record map[string]any, footprint platform.ProcessFootprint) {
 }
 
 // PerformanceWindowProcesses are the processes of one window that the sampler reads: the WebContent process of its page,
-// each document web view with its surface. A process is 0 before it starts.
+// each document web view with its surface. A process is 0 before it starts, and Page is nil in a window without a main page.
 type PerformanceWindowProcesses struct {
-	Page      int
+	Page      *int
 	Documents []PerformanceDocumentProcess
 }
 
