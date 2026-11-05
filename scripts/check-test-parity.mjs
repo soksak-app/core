@@ -920,6 +920,23 @@ const FEATURE_LINKS = [
     levels: ["unit", "native"],
   },
   {
+    id: "F535-2",
+    implementation: [
+      { file: "packages/sok/rust/src/event_log.rs", symbol: "while let Some(request) = drain(&mut out, true) {" },
+      { file: "packages/sok/rust/src/event_log.rs", symbol: "RecvTimeoutError::Disconnected => {" },
+      { file: "packages/sok/go/src/event_log.go", symbol: "for behind := drain(); behind != nil; behind = drain() {" },
+      { file: "packages/sok/go/src/event_log.go", symbol: "the event writer ended before it answered the flush" },
+    ],
+    tests: [
+      { file: "packages/sok/rust/src/event_log_flush_test.rs", id: "a_flush_that_a_stop_finds_behind_it_is_answered" },
+      { file: "packages/sok/rust/src/event_log_flush_test.rs", id: "a_writer_that_ended_is_not_reported_as_a_deadline" },
+      { file: "packages/sok/go/src/event_log_idle_test.go", id: "TestAFlushThatAStopFindsBehindItIsAnswered" },
+      { file: "packages/sok/go/src/event_log_idle_test.go", id: "TestAFlushOfAWriterThatEndedSaysSo" },
+    ],
+    expected: "A flush request behind a stop is answered, and a caller whose writer ended gets that error at once.",
+    levels: ["unit"],
+  },
+  {
     id: "F535-1",
     implementation: [
       { file: "packages/sok/rust/src/event_log.rs", symbol: "queued = drain(&mut out, true);" },

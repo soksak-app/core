@@ -1,22 +1,24 @@
-//! Checks that a flush request that the writer finds while it answers another flush request is answered too.
+//! Checks that each flush request gets the answer that is true: one that the writer finds while it answers another request is
+//! answered, and a caller is not told of a deadline when the writer ended.
 
-use std::sync::mpsc::{SyncSender, sync_channel};
+use std::sync::mpsc::{Receiver, sync_channel};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use serde_json::json;
+
 use super::lock_test::folder::Folder;
-use super::{EventLog, Message, Options};
+use super::{EventLog, Level, Message, Options, wait_for_flush};
 
 const DEADLINE: Duration = Duration::from_secs(5);
 
-// The source puts the second request in the queue while the writer pulls for the first, so the writer finds it in the same
-// drain. An interval of an hour keeps the end of an interval out of the answer.
-#[test]
-fn a_flush_that_a_flush_finds_behind_it_is_answered() {
-    let directory = Folder::new("event-log-flush");
-    let queue: Arc<Mutex<Option<SyncSender<Message>>>> = Arc::new(Mutex::new(None));
-    let held: Arc<Mutex<Option<Message>>> = Arc::new(Mutex::new(None));
-    let (source_queue, source_held) = (queue.clone(), held.clone());
+type Held = Arc<Mutex<Option<Box<dyn FnOnce() + Send>>>>;
+
+// The source runs what the test holds while the writer pulls, so what that puts in the queue is found by the same drain. An
+// interval of an hour keeps the end of an interval out of the answer.
+fn writer(directory: &Folder) -> (Arc<EventLog>, Held) {
+    let held: Held = Arc::new(Mutex::new(None));
+    let source = held.clone();
     let log = EventLog::start(Options {
         directory: directory.path().to_path_buf(),
         role: "probe".into(),
@@ -34,9 +36,8 @@ fn a_flush_that_a_flush_finds_behind_it_is_answered() {
         batch_interval: Duration::from_secs(3600),
         rotate_bytes: 0,
         pull: Some(Box::new(move |_| {
-            if let Some(message) = source_held.lock().unwrap().take() {
-                let queue = source_queue.lock().unwrap();
-                assert!(queue.as_ref().unwrap().try_send(message).is_ok());
+            if let Some(run) = source.lock().unwrap().take() {
+                run();
             }
         })),
         wake: Some(Box::new(|_| Ok(()))),
@@ -44,9 +45,25 @@ fn a_flush_that_a_flush_finds_behind_it_is_answered() {
         prune: None,
     })
     .unwrap();
-    *queue.lock().unwrap() = Some(log.sender.clone());
+    (Arc::new(log), held)
+}
+
+// Holds a second flush request, and an event behind it, for the next pull.
+fn hold_a_request(log: &Arc<EventLog>, held: &Held) -> Receiver<()> {
     let (done, second) = sync_channel(1);
-    *held.lock().unwrap() = Some(Message::Flush(done));
+    let writer = log.clone();
+    *held.lock().unwrap() = Some(Box::new(move || {
+        assert!(writer.sender.try_send(Message::Flush(done)).is_ok());
+        assert!(writer.emit(Level::Info, "sok.probe.behind", &json!({})));
+    }));
+    second
+}
+
+#[test]
+fn a_flush_that_a_flush_finds_behind_it_is_answered() {
+    let directory = Folder::new("event-log-flush");
+    let (log, held) = writer(&directory);
+    let second = hold_a_request(&log, &held);
 
     log.flush(DEADLINE).unwrap();
 
@@ -54,4 +71,40 @@ fn a_flush_that_a_flush_finds_behind_it_is_answered() {
         .recv_timeout(DEADLINE)
         .expect("the flush behind the flush is answered");
     log.close();
+}
+
+#[test]
+fn a_flush_that_a_stop_finds_behind_it_is_answered() {
+    let directory = Folder::new("event-log-flush-stop");
+    let (log, held) = writer(&directory);
+    let second = hold_a_request(&log, &held);
+
+    log.close();
+
+    second
+        .recv_timeout(DEADLINE)
+        .expect("the flush behind the stop is answered");
+    let stored = std::fs::read_to_string(log.path()).unwrap();
+    assert!(
+        stored.contains("sok.probe.behind"),
+        "the event behind the flush was not stored: {stored}"
+    );
+}
+
+#[test]
+fn a_writer_that_ended_is_not_reported_as_a_deadline() {
+    let (done, wait) = sync_channel(1);
+    drop(done);
+    let error = wait_for_flush(&wait, DEADLINE).unwrap_err();
+    assert!(
+        error.contains("ended") && !error.contains("within"),
+        "the error names a deadline that did not pass: {error}"
+    );
+}
+
+#[test]
+fn a_flush_that_gets_no_answer_reports_its_deadline() {
+    let (_done, wait) = sync_channel::<()>(1);
+    let error = wait_for_flush(&wait, Duration::from_millis(1)).unwrap_err();
+    assert!(error.contains("within"), "{error}");
 }

@@ -254,3 +254,53 @@ func TestAFlushThatAFlushFindsBehindItIsAnswered(t *testing.T) {
 		t.Fatal("the flush behind the flush was not answered")
 	}
 }
+
+// A flush request and an event are in the queue behind the stop: the source puts them there while the writer pulls for it.
+func TestAFlushThatAStopFindsBehindItIsAnswered(t *testing.T) {
+	useEventLogFilesystemPlatform(t)
+	second := make(chan struct{})
+	var armed atomic.Bool
+	var log *EventLog
+	var err error
+	log, err = StartEventLog(EventLogOptions{
+		Directory: t.TempDir(), Role: "host", Boot: "flush", Layer: "host", Clock: func() uint64 { return 1 },
+		Spawn:       func(_ string, run func()) { go run() },
+		QueueEvents: 64, QueueBytes: 1 << 20, BatchInterval: time.Hour,
+		Pull: func(func(RelayedEvent), func(uint64, uint64, string, Channel)) {
+			if armed.CompareAndSwap(true, false) {
+				log.messages <- eventMessage{flush: second}
+				log.Emit(LevelInfo, "writer.flush.behind", map[string]any{})
+			}
+		},
+		Wake: make(chan struct{}, 1),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	armed.Store(true)
+	log.Close()
+	select {
+	case <-second:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the flush behind the stop was not answered")
+	}
+	if !fileHas(t, log.Path(), "writer.flush.behind") {
+		t.Fatal("the event behind the flush was not stored")
+	}
+}
+
+// A writer that ended cannot answer, and its caller learns that at once and not as a deadline that passed.
+func TestAFlushOfAWriterThatEndedSaysSo(t *testing.T) {
+	log, _, _ := idleLog(t, time.Hour)
+	log.Close()
+	answered := make(chan error, 1)
+	go func() { answered <- log.Flush(time.Hour) }()
+	select {
+	case err := <-answered:
+		if err == nil || !strings.Contains(err.Error(), "ended") || strings.Contains(err.Error(), "within") {
+			t.Fatalf("Flush of a writer that ended returned %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Flush of a writer that ended waited for its deadline")
+	}
+}
