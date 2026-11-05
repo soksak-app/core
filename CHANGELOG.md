@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F502-13: The note of no results of the mygo library has the margins of a paragraph of the page, with the grid gap between it and the card that adds a project. Red: `TestTheNoteOfNoResultsHasTheMarginsOfAParagraph` failed on the previous drawing.
 - F502-13: The rename field of a mygo project tab has the line height of the chrome and the height of the page's input. Red: `TestTheRenameFieldHasTheHeightOfThePage` failed on the previous drawing.
 - F502-13: The element of a mygo settings search is the whole field, as the page's input is; the pill is drawn inside it by the search inset and the focus ring goes around the field. Red: `TestTheSearchOfPluginsIsTheWholeField` failed on the previous drawing.
 - F502-13: The edit and delete buttons of a mygo sidebar set stand in a segment at the end of the row, with the seg metrics of the chrome, and the caption takes the rest of the row. Red: `TestTheButtonsOfASetAreASegment` failed on the previous drawing.

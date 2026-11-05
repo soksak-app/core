@@ -236,7 +236,8 @@ func (s *Shell) drawProjectGrid(c *ui.Context, width float32) {
 	shown := s.shownProjects()
 	if len(shown) == 0 && len(s.projects) > 0 {
 		ui.Text(s.binder.Name(c, "core.library.no-results", ""), "일치하는 프로젝트가 없습니다.").LineHeight(s.metrics.lineHeight).FontSize(s.textControl()).
-			TextColor(s.palette.Muted).Margin(0, 0, 2*s.palette.Gap, 0)
+			// The margins of a paragraph of the page, with the gap of the grid below.
+			TextColor(s.palette.Muted).Margin(s.textControl(), 0, s.textControl()+2*s.palette.Gap, 0)
 	}
 	least := m.libraryCardMinW
 	if width+2*m.space3 < m.libraryNarrowW {

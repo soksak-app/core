@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F502-13: mygo library의 결과 없음 note는 page 문단의 margin을 갖고, project를 추가하는 card와의 사이에 grid gap이 있다. Red: `TestTheNoteOfNoResultsHasTheMarginsOfAParagraph`가 이전 drawing에서 실패했다.
 - F502-13: mygo project tab의 rename field는 chrome의 line height를 가져 page input과 같은 높이이다. Red: `TestTheRenameFieldHasTheHeightOfThePage`가 이전 drawing에서 실패했다.
 - F502-13: mygo settings search의 element는 page input처럼 field 전체이다. pill은 search inset만큼 안쪽에 그려지고 focus ring은 field 둘레에 그려진다. Red: `TestTheSearchOfPluginsIsTheWholeField`가 이전 drawing에서 실패했다.
 - F502-13: mygo sidebar set의 edit와 delete button은 chrome의 seg metric으로 row 끝의 segment에 서고, caption이 row의 나머지를 차지한다. Red: `TestTheButtonsOfASetAreASegment`가 이전 drawing에서 실패했다.

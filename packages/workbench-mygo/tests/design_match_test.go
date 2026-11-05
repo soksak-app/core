@@ -106,3 +106,18 @@ func TestTheRenameFieldHasTheHeightOfThePage(t *testing.T) {
 		t.Fatalf("the field is %v tall, want 19", field.H)
 	}
 }
+
+// The note of no results has the margins of a paragraph, and the grid gap stands between it and the card that adds a project.
+func TestTheNoteOfNoResultsHasTheMarginsOfAParagraph(t *testing.T) {
+	f := openedShell(t)
+	f.run("core.projects.browse", nil)
+	top := f.box("core.library.add", "").Y
+	f.run("core.library.search", map[string]string{"query": "없는 이름"})
+	note, add := f.box("core.library.no-results", ""), f.box("core.library.add", "")
+	if !designNear(note.Y, top+12) {
+		t.Fatalf("the note is at y %v, want %v", note.Y, top+12)
+	}
+	if !designNear(add.Y, note.Y+note.H+24) {
+		t.Fatalf("the add card is at y %v, want %v", add.Y, note.Y+note.H+24)
+	}
+}
