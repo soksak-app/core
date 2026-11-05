@@ -341,6 +341,23 @@ func viewCall(t *testing.T, f *shellFixture, stored *surfaceHost, surface, comma
 	t.Helper()
 	f.shell.Event("view-call", []any{map[string]any{"surface": surface, "plugin": "terminal", "generation": 1, "id": 5, "command": command, "params": params}})
 	f.settle()
+	return viewReply(t, stored, surface, command)
+}
+
+// viewCallShowing is viewCall for a call whose result the error display shows: it takes the records of the shown errors before
+// the frames that settle the call, which fail on a record that no test took.
+func viewCallShowing(t *testing.T, f *shellFixture, stored *surfaceHost, surface, command string, params any) []shownRecord {
+	t.Helper()
+	f.shell.Event("view-call", []any{map[string]any{"surface": surface, "plugin": "terminal", "generation": 1, "id": 5, "command": command, "params": params}})
+	records := f.shownRecords()
+	f.settle()
+	viewReply(t, stored, surface, command)
+	return records
+}
+
+// viewReply returns the last reply of a view call, which answers the call of surface.
+func viewReply(t *testing.T, stored *surfaceHost, surface, command string) map[string]any {
+	t.Helper()
 	if len(stored.replies) == 0 {
 		t.Fatalf("view call %s has no reply", command)
 	}
@@ -1396,5 +1413,26 @@ func TestTheSameSpaceKeepsThePressOfACard(t *testing.T) {
 	f.settle()
 	if got := textScope(t, f); got != workbench.CardScope(cards[1]) {
 		t.Fatalf("the scope is %+v", got)
+	}
+}
+
+// The error of an operation of the active tab is shown in its card's status row through the error display, which records
+// `tab error <tab>: <text>` when the text appears and again after it was removed (docs/spec/plugins.md#tab-reports).
+func TestTheErrorOfTheActiveTabIsRecordedWhenItAppears(t *testing.T) {
+	f, stored := surfaceShell(t)
+	surface := terminalSurface(t, stored)
+	want := []shownRecord{{"tab error " + surface, "late"}}
+	if got := viewCallShowing(t, f, stored, surface, "tab.error", "late"); !slices.Equal(got, want) {
+		t.Fatalf("the records of the shown error are %q", got)
+	}
+	// The same text in later frames records nothing; the text after its removal is recorded again.
+	if got := viewCallShowing(t, f, stored, surface, "tab.error", "late"); len(got) != 0 {
+		t.Fatalf("the same error was recorded again: %q", got)
+	}
+	if got := viewCallShowing(t, f, stored, surface, "tab.error", nil); len(got) != 0 {
+		t.Fatalf("the removal of the error was recorded: %q", got)
+	}
+	if got := viewCallShowing(t, f, stored, surface, "tab.error", "late"); !slices.Equal(got, want) {
+		t.Fatalf("the records of the error shown again are %q", got)
 	}
 }

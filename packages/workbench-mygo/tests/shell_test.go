@@ -147,12 +147,25 @@ func (h *storedHost) written(name string) []map[string]any {
 // shownErrors takes the errors that the shell recorded and returns their texts.
 func (f *shellFixture) shownErrors() []string {
 	f.t.Helper()
+	var texts []string
+	for _, record := range f.shownRecords() {
+		texts = append(texts, record.text)
+	}
+	return texts
+}
+
+// shownRecord is a record workbench.record.error: its place and its text.
+type shownRecord struct{ where, text string }
+
+// shownRecords takes the errors that the shell recorded and returns their places and texts.
+func (f *shellFixture) shownRecords() []shownRecord {
+	f.t.Helper()
 	f.pending.drain(f.t)
 	f.tester.Frame()
 	f.pending.drain(f.t)
 	f.host.mu.Lock()
 	defer f.host.mu.Unlock()
-	var texts []string
+	var records []shownRecord
 	kept := f.host.batches[:0]
 	for _, event := range f.host.batches {
 		if event["event"] != "workbench.record.error" {
@@ -160,11 +173,12 @@ func (f *shellFixture) shownErrors() []string {
 			continue
 		}
 		fields, _ := event["fields"].(map[string]any)
+		where, _ := fields["where"].(string)
 		text, _ := fields["text"].(string)
-		texts = append(texts, text)
+		records = append(records, shownRecord{where, text})
 	}
 	f.host.batches = kept
-	return texts
+	return records
 }
 
 func (h *storedHost) table() map[string]workbench.HostCall {
