@@ -170,8 +170,12 @@
 - F527: `core.settings.change`는 설정의 type을 그 선언에서 정하므로, `applyTrace`, `make app-usage TRACE=0`, `make terminal-redraw-usage TRACE=0`이 `diagnostics.log`를 객체로 설정한다. 컨트롤의 문자열은 설정이 선언한 boolean이나 number가 되고, 다른 type의 값은 -32602와 그 설정의 검사로 실패하며, scope가 없으면 command는 common 값을 설정한다
 - F502-10: framework는 scene을 보여 주는 frame의 결과를 알리고(`Window.AfterPresent`), release build를 포함한 모든 build에서 element tree를 읽으며(`Content.ElementTree`), `WindowOptions.DrawWhileOccluded`로 화면 밖 window의 frame을 그린다. 두 language host library에서 `Frontend` port의 presentation notice는 실패를 전달하고 그 실패는 layout transaction을 취소하며, port의 settled presentation은 platform의 settled wait가 받는 block을 만들어 transaction도 wait도 main web view를 이름으로 부르지 않는다. Wails와 Tauri framework adapter는 Surface layout group의 새 operation `MainPresentation`으로 그 block을 만든다. main-thread audit은 block 호출을 native 함수 호출로 센다.
 - F502-13: exposure kind `dom`은 모든 host와 모든 plugin 선언에서 `element`가 된다: `exposes.element`, `expose.element`, `element.rect`, `element.act`, `sok element`, MCP tool `element_rect`와 `element_act`, `exposure.list`의 member `element`. `exposes.dom`을 가진 manifest는 거부된다. workbench status는 workbench에 대해 정의된다: `core.window.workbench`, `core.workbench.error`, 행이 `{role, expose, command, text}`인 `core.workbench.audit`, responder owner와 `host.hit` kind `workbench`. window check는 `core.window.workbench`의 새 `start`를 기다리고, 각각 `Object.values(APPS)` 또는 `MAIN_PAGE_APPS`를 순회하며, `scripts/check-e2e-host-parity.mjs`가 이를 검사한다.
+- F481: plain view benchmark가 probe view가 `probeplain.measure`를 등록할 때까지 기다린 뒤 content trace를 시작합니다.
 - F463: core가 checks kit과 실행 파일 하나 `soksak-check`를 씁니다. Red: `scripts/test/workflows.test.mjs`가 실패했습니다. Green: 통과합니다.
 - F466: 기록은 임시 log를 인용하지 않고, record 검사가 새 인용을 보고합니다.
+- F479: release candidate는 0.0.37입니다.
+- F479: release run이 v0.0.37을 게시했고, registry가 이를 요구하는 plugin과 함께 올립니다.
+- F435-5: view drag의 수렴 실패가 gesture 종료 시각을 밝힙니다.
 - F480: `e2e/terminal-reopen.test.mjs`가 앞선 terminal이 닫힌 뒤 연 terminal의 prompt 표시를 검사하고, benchmark readiness 실패가 session, surface, region을 보고합니다.
 - F478: Wails host가 view event의 null `data`와 view request의 null `params`를 값으로 보존합니다.
 - F477: window check setup이 선언된 make target `build-capture-text-path`를 부릅니다.

@@ -1,6 +1,6 @@
 {
   "name": "@soksak/host-rust",
-  "version": "0.0.36",
+  "version": "0.0.37",
   "private": true,
   "description": "Rust language host library: project windows, native surfaces and document regions, modals, the local endpoint, the sidecar channel, and the platform implementations."
 }

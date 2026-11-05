@@ -698,7 +698,7 @@ function evaluateDrag(value) {
   if (!selectedPaint && targetSourceFrames.length > 0) {
     criterionFailures.push({ criterion: "convergence", error: new Error(
       `drag.contentFrames: expected a source-backed final-target paint capture within ${DRAG_CONTENT_INTERVAL_LIMIT_MS} ms after gesture end; received ${JSON.stringify({
-        mismatchedAtEnd, targetViewport: { width: targetWidth, height: targetHeight },
+        gestureEndedAtMs, mismatchedAtEnd, targetViewport: { width: targetWidth, height: targetHeight },
         finalTargetRectPt, targetSourceFrames, tailGeometryFrames: [...tailGeometryByIndex.values()],
       })}`) });
   }
