@@ -241,7 +241,7 @@ document audit는 open shadow tree를 포함하여 그 document의 모든 shared
 | `element.rect` | `{window, name, index?}` | `{x, y, width, height}`: 소유 문서의 CSS 픽셀로 나타낸 요소의 `getBoundingClientRect()`, `zoom`: 요소의 유효 CSS zoom으로, 요소와 flat tree의 각 ancestor의 computed `zoom`을 곱한 값, 그리고 창 좌표로 나타낸 문서 원점 `{document}`. CSS `zoom` subtree 안에서 WebKit 7624 이후는 CSS Viewport zoom object model이 정의하는 대로 zoom을 적용한 rectangle을 보고하고, 그 이전 WebKit은 `zoom`으로 나눈 rectangle을 보고한다 |
 | `element.act` | `{window, name, index?, action, value?, event?}` | `null`. `action`은 `click`, `input`, `dispatch` 중 하나다. 페이지는 `isTrusted`가 false인 합성 DOM 이벤트를 받는다 |
 | `input.pointer` | `{window, x, y, phase, button?, deltaX?, deltaY?, activate?}` | `null`. 창 좌표를 쓴다. `phase`는 `move`, `down`, `drag`, `up`, `scroll` 중 하나다. `button`은 `left`(기본값) 또는 `right`다. `deltaX`, `deltaY`는 포인트 단위 스크롤 거리다. `activate`는 `move`에 적용한다 |
-| `input.key` | `{window, key, text?, modifiers?, phase}` | `null`. `key`는 키 이름(`Enter`, `Tab`, `Escape`, `Backspace`, `Delete`, `Space`, `ArrowLeft`, `ArrowRight`, `ArrowUp`, `ArrowDown`, `Home`, `End`, `PageUp`, `PageDown`) 또는 문자 하나다. `modifiers`는 `shift`, `control`, `option`, `command`의 배열이다. `phase`는 `down` 또는 `up`이다 |
+| `input.key` | `{window, key, text?, modifiers?, phase}` | `null`. `key`는 키 이름(`Enter`, `Tab`, `Escape`, `Backspace`, `Delete`, `Space`, `ArrowLeft`, `ArrowRight`, `ArrowUp`, `ArrowDown`, `Home`, `End`, `PageUp`, `PageDown`) 또는 문자 하나다. `text`는 키가 입력하는 문자열이며, 없거나 비어 있으면 키 이름이 event의 문자를 정한다. `modifiers`는 `shift`, `control`, `option`, `command`의 배열이다. `phase`는 `down` 또는 `up`이다 |
 
 `index`는 0 이상의 정수이며, 타입이 다른 `index`를 준 요청은 -32602로 거부한다.
 

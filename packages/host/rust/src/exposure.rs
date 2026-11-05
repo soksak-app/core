@@ -325,6 +325,8 @@ pub fn key(params: &Map<String, Value>) -> Result<Key, Failure> {
     };
     let text = match params.get("text") {
         None | Some(Value::Null) => None,
+        // An empty text is no text: the key name gives the characters of the event (docs/spec/exposure.md).
+        Some(Value::String(text)) if text.is_empty() => None,
         Some(Value::String(text)) => Some(text.clone()),
         Some(_) => return Err(Failure::params("text must be a string")),
     };

@@ -571,6 +571,23 @@ func TestEndpointKeyModifiers(t *testing.T) {
 	}
 }
 
+// contract: endpoint.input.key-empty-text-types-the-key
+func TestEndpointKeyWithEmptyTextHasNoText(t *testing.T) {
+	backend := newFakeBackend()
+	_, address, _ := serve(t, backend)
+	conn := dial(t, address)
+	got := call(t, conn, 1, "input.key", map[string]any{"window": "main", "key": "Enter", "text": "", "phase": "down"})
+	if got.Error != nil {
+		t.Fatalf("input.key with empty text: %+v", got)
+	}
+	backend.mu.Lock()
+	defer backend.mu.Unlock()
+	want := host.KeyInput{Key: "Enter", Down: true}
+	if len(backend.keys) != 1 || backend.keys[0] != want {
+		t.Fatalf("key input %+v, want %+v: InjectKey types the key name for an empty text", backend.keys, want)
+	}
+}
+
 // contract: endpoint.discovery.writes-endpoint-json, endpoint.discovery.endpoint-json-mode-0600, endpoint.discovery.removes-endpoint-json-on-close
 func TestEndpointFileIsWrittenAndRemoved(t *testing.T) {
 	endpoint, address, config := serve(t, newFakeBackend())

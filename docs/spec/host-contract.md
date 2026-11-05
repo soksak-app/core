@@ -360,6 +360,7 @@ Items:
 | `endpoint.input.key-unknown-modifier-rejected` | An unknown key modifier returns -32602. | all |
 | `endpoint.input.key-shift-command-mask` | The shift and command modifiers become the bit mask 9, with the key and phase passed through. | all |
 | `endpoint.input.key-control-option-and-text` | The control and option modifiers become 6, and text is passed through. | all |
+| `endpoint.input.key-empty-text-types-the-key` | A key with an empty text reaches the platform with no text, so the key name gives the characters of the event. | all |
 | `endpoint.input.key-invalid-phase-or-modifier-type` | An unknown key phase or a non-array modifiers value returns -32602. | all |
 | `endpoint.discovery.writes-endpoint-json` | endpoint.json holds the transport, address, pid, application, version, executable, and start time. | all |
 | `endpoint.discovery.written-after-first-window` | endpoint.json is not written when the endpoint starts; publishing it for a window that does not exist fails and writes no file; after publishing for an existing window, a request for that window is answered. | all |

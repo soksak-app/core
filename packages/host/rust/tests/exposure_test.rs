@@ -480,6 +480,23 @@ fn pointer_and_key_params_are_validated() {
     );
 }
 
+// contract: endpoint.input.key-empty-text-types-the-key
+#[test]
+fn a_key_with_empty_text_types_its_key_name() {
+    let key = exposure::key(
+        &json!({"key": "Enter", "text": "", "phase": "down"})
+            .as_object()
+            .unwrap()
+            .clone(),
+    )
+    .unwrap();
+    assert_eq!(
+        (key.key.as_str(), key.text),
+        ("Enter", None),
+        "an empty text is no text: the key name gives the characters of the event"
+    );
+}
+
 // contract: endpoint.input.pointer-button-held-message
 #[test]
 fn button_held_message_reports_mask_and_frontmost_application() {
