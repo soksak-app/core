@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F460: `.gitignore` names the local output folder `/build/`.
 - F459: The optional call that ends the run start listener states its reason.
 - F458: The cadence and convergence limit of a view drag is 35 ms, and a cadence interval reads the middle of a source time range.
 - F457: A view requests one animation frame at the start of a run, so the second size of a drag no longer misses a display frame.

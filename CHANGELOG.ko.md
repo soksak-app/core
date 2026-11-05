@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F460: `.gitignore`가 local 출력 폴더 `/build/`를 지정합니다.
 - F459: run start listener를 끝내는 optional call이 사유를 밝힙니다.
 - F458: view drag의 cadence와 convergence 한도는 35 ms이고, cadence interval은 source time range의 중간을 읽습니다.
 - F457: view가 run 시작에 animation frame을 한 번 요청하여 drag의 두 번째 크기가 display frame을 놓치지 않습니다.
