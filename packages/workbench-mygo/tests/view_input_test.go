@@ -80,6 +80,37 @@ func TestAViewOfAHiddenSpaceFollowsTheLayoutWhenItsSpaceReturns(t *testing.T) {
 	}
 }
 
+// A view whose page starts after its space left the screen has no scale of its own: it starts with the frame factor of now and the factor of
+// its card, which left the plane with the space.
+func TestAViewThatFirstReadsInAHiddenSpaceTakesTheFactorOfItsCard(t *testing.T) {
+	f, stored := surfaceShell(t)
+	surface := terminalSurface(t, stored)
+	f.run("core.text.larger", nil)
+	f.settle()
+	var text struct {
+		Cards map[string]float64 `json:"cards"`
+	}
+	if err := json.Unmarshal([]byte(f.status("core.text")), &text); err != nil {
+		t.Fatal(err)
+	}
+	factor := 1.0
+	for _, value := range text.Cards {
+		if value != 1 {
+			factor = value
+		}
+	}
+	if factor == 1 {
+		t.Fatalf("no card has its own factor: %v", text.Cards)
+	}
+	f.run("core.space.add", nil)
+	f.settle()
+	f.run("core.settings.set", map[string]any{"scope": "common", "patch": map[string]any{"textSize": 1.25}})
+	f.settle()
+	if reply := viewCall(t, f, stored, surface, "runtime.textSize.read", nil); reply["error"] != nil || reply["result"] != 1.25*factor {
+		t.Fatalf("the first read off the screen is %v, want %v", reply, 1.25*factor)
+	}
+}
+
 func TestViewCallClipboardReadsAndWritesText(t *testing.T) {
 	f, stored := surfaceShell(t)
 	surface := anySurface(t, stored)

@@ -852,15 +852,19 @@ func (s *Shell) surfaceTextSize(surface string) (float64, bool) {
 	return s.text.Effective(card), true
 }
 
-// viewTextSize returns the text scale that view reads: a view of a space off the screen keeps the scale it last had.
+// viewTextSize returns the text scale that view reads: a view of a space off the screen keeps the scale it last had, and one that has read
+// none yet starts with the frame factor of now and the factor of its card (docs/spec/text-size.md).
 func (s *Shell) viewTextSize(surface string, view *viewState) (float64, error) {
 	if size, shown := s.surfaceTextSize(surface); shown {
 		return size, nil
 	}
-	if view.scale == 0 {
-		return 0, fmt.Errorf("surface %s is not in the layout", surface)
+	if view.scale != 0 {
+		return view.scale, nil
 	}
-	return view.scale, nil
+	if held := s.surfaces.held[surface]; held != nil && held.cardFactor != 0 {
+		return s.text.Frame() * held.cardFactor, nil
+	}
+	return 0, fmt.Errorf("surface %s is not in the layout", surface)
 }
 
 // readTabState returns the value of the state of the tab: null without one, and a state of another format is refused.
