@@ -2,6 +2,7 @@ package workbench
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/egoist/mygo/ui"
 
@@ -29,7 +30,8 @@ func (s *Shell) barTextWithin(c *ui.Context, button ui.Element, label string, on
 	}
 }
 
-// drawChrome draws the chrome bar of the window, a band of the card color with its edge under it.
+// drawChrome draws the chrome bar of the window, a band of the card color with its edge under it: the logo, the tabs of the projects and the
+// switches. The library screen has no layout, so its bar leaves out the project list and the balance.
 func (s *Shell) drawChrome(c *ui.Context, width float32) {
 	bar := c.TitleBar()
 	s.controlsWidth = bar.Left
@@ -37,24 +39,93 @@ func (s *Shell) drawChrome(c *ui.Context, width float32) {
 	ui.Row(c).Size(width, s.chromeHeight()).Padding(0, s.metrics.spacePad, 0, s.metrics.spacePad+bar.Left).AlignItems(ui.Center).Gap(s.metrics.chromeGap).
 		Background(s.palette.Card).BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.Edge).DragWindow().
 		Role(ui.RoleGroup).Label("core.chrome.bar").Children(func() {
-		ui.Text(c, "soksak").Label("soksak").Bold().FontSize(s.frameFont(13))
-		if !browsing {
-			ui.Row(c).AlignItems(ui.Center).Gap(s.frameLength(s.metrics.tabsGap)).Children(func() { s.drawProjectTabs(c) })
-		}
-		ui.Spacer(c).Grow(1)
-		if !browsing {
-			s.chromeAct(c, "core.chrome.projects", "core.projects.browse", "프로젝트", nil)
-			s.chromeAct(c, "core.chrome.balance", "core.layout.balance", "균형", nil)
-		}
-		if updates := len(s.pluginOperations.Status().Updates); updates > 0 {
-			s.chromeAct(c, "core.chrome.updates", "core.plugins.show-updates", fmt.Sprintf("업데이트 %d", updates), nil)
-		}
-		s.chromeAct(c, "core.chrome.settings", "core.settings.open", "설정", nil)
+		s.drawBrand(c)
+		ui.Row(c).Grow(1).MinWidth(0).Clip().AlignItems(ui.Center).Gap(s.frameLength(s.metrics.tabsGap)).Children(func() {
+			if !browsing {
+				s.drawProjectTabs(c)
+			}
+		})
+		ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(s.frameLength(s.metrics.chromeActsGap)).Children(func() { s.drawChromeActs(c, browsing) })
 	})
 }
 
-func (s *Shell) chromeAct(c *ui.Context, name, command, label string, params any) {
-	s.barText(c, s.binder.Press(c, name, command, "", params), label, false)
+// drawBrand draws the logo of the workbench. It does not receive presses, so a press on it drags the window.
+func (s *Shell) drawBrand(c *ui.Context) {
+	box, _ := s.options.Declared.ChromeText("brand-logo-box")
+	var left, top, wide, high float32
+	if _, err := fmt.Sscanf(box, "%g %g %g %g", &left, &top, &wide, &high); err != nil {
+		s.fail(fmt.Errorf("the chrome value brand-logo-box %q: %w", box, err))
+		return
+	}
+	mode := "brand-text-dark"
+	if s.settings.Value("mode") == "light" {
+		mode = "brand-text-light"
+	}
+	text, _ := s.options.Declared.ChromeText(mode)
+	height := s.frameLength(float32(s.settings.Value("size").(float64)) * s.metrics.brandLogoAtBase / s.metrics.textBase)
+	ui.Box(s.binder.Name(c, "core.brand", "")).Shrink(0).MarginEnd(s.frameLength(s.metrics.brandGap)).Role(ui.RoleImage).Label("soksak").Children(func() {
+		// An icon takes one color, and the tile of the logo keeps its own, so the logo is an image with its letters in the color of the mode.
+		ui.Image(c, s.declaredIcon(box, "", strings.ReplaceAll(s.options.Declared.Icons["brand-logo"], "currentColor", text))).Size(height*wide/high, height)
+	})
+}
+
+// drawChromeActs draws the switches of the chrome bar in the order of the page.
+func (s *Shell) drawChromeActs(c *ui.Context, browsing bool) {
+	if updates := len(s.pluginOperations.Status().Updates); updates > 0 {
+		s.chromeTextAct(c, "core.chrome.updates", "core.plugins.show-updates", fmt.Sprintf("업데이트 %d", updates))
+	}
+	if !browsing {
+		s.chromeAct(c, "core.chrome.projects", "core.projects.browse", "프로젝트 목록", "projects", false, nil)
+		s.chromeAct(c, "core.chrome.balance", "core.layout.balance", "카드 자동 정렬", "columns-3", false, nil)
+	}
+	for _, side := range []struct{ key, name, title, icon string }{
+		{"left", "core.chrome.left", "좌측 사이드바 위치", "panel-left"},
+		{"right", "core.chrome.right", "우측 사이드바 위치", "panel-right"},
+	} {
+		on, _ := s.settings.Value(side.key).(bool)
+		s.chromeAct(c, side.name, "core.settings.set", side.title, side.icon, on, settingsPatchParam{map[string]any{side.key: !on}})
+	}
+	next, icon := "light", "sun"
+	if s.settings.Value("mode") != "dark" {
+		next, icon = "dark", "moon"
+	}
+	s.chromeAct(c, "core.chrome.mode", "core.settings.set", "밝게 / 어둡게", icon, false, settingsPatchParam{map[string]any{"mode": next}})
+	s.chromeAct(c, "core.chrome.settings", "core.settings.open", "설정", "settings", false, nil)
+}
+
+// chromeAct draws an icon switch of the chrome bar, the .act of packages/workbench/app.css.
+func (s *Shell) chromeAct(c *ui.Context, name, command, title, icon string, on bool, params any) {
+	m := s.metrics
+	button := s.binder.Press(c, name, command, "", params)
+	button.Size(s.frameLength(m.actW), s.frameLength(m.actH)).Shrink(0).Center().Radius(s.radiusSmall()).Label(title).Tooltip(title)
+	color := s.palette.Muted
+	if button.Hovered() {
+		color = s.palette.Fg
+		button.Background(faded(s.palette.Fg, m.insetMix))
+	}
+	if on {
+		color = s.palette.Focus
+	}
+	paint := fmt.Sprintf(`fill="none" stroke="currentColor" stroke-width="%g"`, m.actStroke)
+	button.Children(func() {
+		size := s.frameLength(m.actIcon)
+		ui.Icon(c, s.declaredIcon("0 0 24 24", paint, s.options.Declared.Icons[icon])).Size(size, size).TextColor(color)
+	})
+}
+
+// chromeTextAct draws a switch of the chrome bar that shows a text, the .act--text of packages/workbench/app.css.
+func (s *Shell) chromeTextAct(c *ui.Context, name, command, title string) {
+	m := s.metrics
+	button := s.binder.Press(c, name, command, "", nil)
+	button.Height(s.frameLength(m.actH)).Shrink(0).PaddingX(s.frameLength(m.chromeGap)).AlignItems(ui.Center).Radius(s.radiusSmall()).Label(title)
+	color := s.palette.Muted
+	if button.Hovered() {
+		color = s.palette.Fg
+		button.Background(faded(s.palette.Fg, m.insetMix))
+	}
+	button.Children(func() {
+		ui.Text(c, title).SingleLine().FontSize(s.frameFont(s.textControl())).TextColor(color)
+	})
 }
 
 // barTab is a tab of a bar, the .bar-tab of packages/workbench/app.css: a chip that holds its name and its close button. The chip of the selected tab
