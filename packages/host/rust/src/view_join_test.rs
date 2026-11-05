@@ -4,8 +4,11 @@ use super::{PresentationWait, ViewPlacement, trace_presentation_join};
 use crate::event_record::buffered_fields_of;
 use std::sync::Arc;
 
-/// The surface of the records of this file, which no other test of the binary uses.
+/// The surface of the tests of this file that read the join records; each holds the trace, so they run one at a time.
 const SURFACE: &str = "view-join-surface";
+/// The surface of the tests of this file that read no record. They hold no switch, so while another test holds the trace on they
+/// write join records, and those stay away from the surface that the other test counts.
+const UNREAD_SURFACE: &str = "view-join-unread-surface";
 const GENERATION: u64 = 4;
 const JOIN_TICKET: u64 = 11;
 /// The surface of the records that another test of the binary writes in parallel; a test reads only the records of its own surface.
@@ -18,25 +21,11 @@ fn placement(x: f64) -> ViewPlacement {
     }
 }
 
-struct PerformanceTraceGuard;
-
-impl Drop for PerformanceTraceGuard {
-    fn drop(&mut self) {
-        if let Err(error) = crate::performance::command(serde_json::json!({"action": "off"})) {
-            eprintln!("turning off the performance trace after the test failed: {error}");
-        }
-    }
-}
-
 // contract: view.presentation-wait.join-trace
 #[test]
 fn presentation_join_trace_records_exact_wait_identity_and_nonpresentation_end() {
     const TRACE: &str = "host.trace.view.presentation-join";
-    let _switch = crate::performance::TEST_SWITCH
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    crate::performance::command(serde_json::json!({"action": "on"})).unwrap();
-    let _trace_guard = PerformanceTraceGuard;
+    let _trace = crate::performance::test_trace();
     let wait = PresentationWait::default();
     let before = buffered_fields_of(TRACE, SURFACE).len();
     // A record of another surface between the two reads stands for a test that runs in parallel.
@@ -79,11 +68,7 @@ fn presentation_join_trace_records_exact_wait_identity_and_nonpresentation_end()
 #[test]
 fn held_and_late_native_callbacks_keep_their_exact_join_identity() {
     const TRACE: &str = "host.trace.view.presentation-join";
-    let _switch = crate::performance::TEST_SWITCH
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    crate::performance::command(serde_json::json!({"action": "on"})).unwrap();
-    let _trace_guard = PerformanceTraceGuard;
+    let _trace = crate::performance::test_trace();
     let wait = Arc::new(PresentationWait::default());
     let before = buffered_fields_of(TRACE, SURFACE).len();
     let mut callbacks: Vec<Box<dyn FnOnce()>> = Vec::new();
@@ -167,11 +152,7 @@ fn held_and_late_native_callbacks_keep_their_exact_join_identity() {
 #[test]
 fn synchronous_native_callback_precedes_the_join_result() {
     const TRACE: &str = "host.trace.view.presentation-join";
-    let _switch = crate::performance::TEST_SWITCH
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    crate::performance::command(serde_json::json!({"action": "on"})).unwrap();
-    let _trace_guard = PerformanceTraceGuard;
+    let _trace = crate::performance::test_trace();
     let wait = PresentationWait::default();
     let before = buffered_fields_of(TRACE, SURFACE).len();
     assert!(wait.begin(SURFACE, GENERATION, JOIN_TICKET));
@@ -205,43 +186,43 @@ fn changed_unsettled_placement_joins_and_old_callback_cannot_end_new_wait() {
     // The first placement is joined while its layout ticket is still open.
     let first_ticket = 20;
     let first = placement(10.0);
-    assert!(presentation.needs_join(SURFACE, GENERATION, first));
-    assert!(presentation.begin(SURFACE, GENERATION, first_ticket));
+    assert!(presentation.needs_join(UNREAD_SURFACE, GENERATION, first));
+    assert!(presentation.begin(UNREAD_SURFACE, GENERATION, first_ticket));
     let first_wait = Arc::clone(&presentation);
     callbacks.push((
         first_ticket,
         Box::new(move || {
             first_wait
-                .end(SURFACE, GENERATION, first_ticket, "presented")
+                .end(UNREAD_SURFACE, GENERATION, first_ticket, "presented")
                 .unwrap();
         }),
     ));
-    presentation.commit([(SURFACE.to_string(), GENERATION, first)]);
+    presentation.commit([(UNREAD_SURFACE.to_string(), GENERATION, first)]);
 
     // A changed placement in a newer, unsettled ticket must join without waiting for ticket 20's callback.
     let second_ticket = 21;
     let changed = placement(40.0);
-    assert!(presentation.needs_join(SURFACE, GENERATION, changed));
-    assert!(presentation.begin(SURFACE, GENERATION, second_ticket));
+    assert!(presentation.needs_join(UNREAD_SURFACE, GENERATION, changed));
+    assert!(presentation.begin(UNREAD_SURFACE, GENERATION, second_ticket));
     let second_wait = Arc::clone(&presentation);
     callbacks.push((
         second_ticket,
         Box::new(move || {
             second_wait
-                .end(SURFACE, GENERATION, second_ticket, "presented")
+                .end(UNREAD_SURFACE, GENERATION, second_ticket, "presented")
                 .unwrap();
         }),
     ));
-    presentation.commit([(SURFACE.to_string(), GENERATION, changed)]);
+    presentation.commit([(UNREAD_SURFACE.to_string(), GENERATION, changed)]);
 
     let (_, old_callback) = callbacks.remove(0);
     old_callback();
-    assert!(presentation.waits(SURFACE, GENERATION, second_ticket));
+    assert!(presentation.waits(UNREAD_SURFACE, GENERATION, second_ticket));
 
     let (_, current_callback) = callbacks.remove(0);
     current_callback();
-    assert!(!presentation.waits(SURFACE, GENERATION, second_ticket));
-    assert!(!presentation.needs_join(SURFACE, GENERATION, changed));
+    assert!(!presentation.waits(UNREAD_SURFACE, GENERATION, second_ticket));
+    assert!(!presentation.needs_join(UNREAD_SURFACE, GENERATION, changed));
 }
 
 // contract: view.presentation-wait.joins
@@ -250,11 +231,11 @@ fn a_cancelled_ticket_removes_its_wait_before_a_later_layout() {
     let presentation = PresentationWait::default();
     let first_ticket = 31;
     let second_ticket = 32;
-    assert!(presentation.begin(SURFACE, GENERATION, first_ticket));
+    assert!(presentation.begin(UNREAD_SURFACE, GENERATION, first_ticket));
     assert_eq!(presentation.abandon_ticket(first_ticket), Ok(()));
-    assert!(!presentation.waits(SURFACE, GENERATION, first_ticket));
+    assert!(!presentation.waits(UNREAD_SURFACE, GENERATION, first_ticket));
     let changed = placement(50.0);
-    assert!(presentation.needs_join(SURFACE, GENERATION, changed));
-    assert!(presentation.begin(SURFACE, GENERATION, second_ticket));
-    assert!(presentation.waits(SURFACE, GENERATION, second_ticket));
+    assert!(presentation.needs_join(UNREAD_SURFACE, GENERATION, changed));
+    assert!(presentation.begin(UNREAD_SURFACE, GENERATION, second_ticket));
+    assert!(presentation.waits(UNREAD_SURFACE, GENERATION, second_ticket));
 }

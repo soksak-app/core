@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F552: A lib test of the Tauri host that switches the performance trace without the lock of the switch fails on every run, and the tests that overlapped such a switch or counted the records of a shared surface no longer fail at random.
 - F502-16: A hidden element of the mygo workbench keeps its index among the elements of its name, as a page element under `display:none`, so a window check that names a tab by its place in `core.grid` reaches that tab through every stage of a card head and through a full screen card. The bar is the element `core.chrome.bar`.
 - F502-16: The mygo workbench answers `core.plugin.open-calls`, `core.plugin.losses` and `core.plugin.views`.
 - F502-16: The library of the mygo workbench stands where the page stands it: its line heights, form gaps and empty margins are those of `library.css`, the plugin page lays its cards in columns, a project card shows the day its project opened, and the library hides the sidebar switches of the bar.

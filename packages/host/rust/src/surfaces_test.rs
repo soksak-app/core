@@ -279,14 +279,20 @@ fn surface_dispatch_wrapper_records_queue_entry_and_return_boundaries() {
 // contract: performance.surface.dispatch-records-frame-only-boundaries
 #[test]
 fn surface_dispatch_records_frame_boundaries_when_performance_trace_is_off() {
-    let _switch = crate::performance::TEST_SWITCH
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let _switch = crate::performance::test_switch();
+    // The buffer holds the records of every test of the binary, so this test reads only the records of a window of its own.
+    const WINDOW: &str = "frame-dispatch-window";
+    let of_window = |event: &str| -> Vec<serde_json::Value> {
+        crate::event_record::buffered_fields(event)
+            .into_iter()
+            .filter(|fields| fields["window"] == WINDOW)
+            .collect()
+    };
     let was_on = crate::performance::enabled();
     crate::performance::command(serde_json::json!({"action": "off"})).unwrap();
     let dispatch = surface_dispatch_context_with(
         || Some((400, SurfaceDispatchMode::Frame)),
-        || "main".to_owned(),
+        || WINDOW.to_owned(),
         None,
         "present",
         "present-prepare-ui",
@@ -299,11 +305,11 @@ fn surface_dispatch_records_frame_boundaries_when_performance_trace_is_off() {
         super::record_surface_dispatch,
         || (),
     );
-    let got = crate::event_record::buffered_fields("host.frame.surface.dispatch");
+    let got = of_window("host.frame.surface.dispatch");
     assert_eq!(
         got.last(),
         Some(&serde_json::json!({
-            "window": "main",
+            "window": WINDOW,
             "operation": "present",
             "stage": "present-prepare-ui",
             "queued_ns": "400",
@@ -313,7 +319,7 @@ fn surface_dispatch_records_frame_boundaries_when_performance_trace_is_off() {
         "frame-only dispatch must store the same clock boundaries"
     );
     assert!(
-        crate::event_record::buffered_fields("host.trace.surface.dispatch").is_empty(),
+        of_window("host.trace.surface.dispatch").is_empty(),
         "frame-only dispatch must not duplicate the performance event"
     );
     if was_on {

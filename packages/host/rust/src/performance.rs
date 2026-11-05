@@ -14,18 +14,52 @@ static SWITCHING: Mutex<()> = Mutex::new(());
 /// Held by each test that switches the trace or reads what the trace stored. The switch belongs to the process, so a test
 /// that switches it while another test runs would change what the other test stores.
 #[cfg(test)]
-pub(crate) static TEST_SWITCH: Mutex<()> = Mutex::new(());
-
-/// The performance trace of a lib test, turned on while the value lives; the value holds `TEST_SWITCH`. The switch controls
-/// the `host.trace` events (docs/spec/performance-trace.md#the-switch), so a test that reads them turns it on.
-#[cfg(test)]
-pub(crate) struct TestTrace(#[allow(dead_code)] std::sync::MutexGuard<'static, ()>);
+static TEST_SWITCH: Mutex<()> = Mutex::new(());
 
 #[cfg(test)]
-pub(crate) fn test_trace() -> TestTrace {
+thread_local! {
+    /// Whether this thread holds `TEST_SWITCH`. A switch of the trace asks it, so a test that does not hold the lock fails on its
+    /// first call instead of on the rare run that overlaps another test.
+    static HOLDS_TEST_SWITCH: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// The hold of a lib test on the switch of the trace, while the value lives.
+#[cfg(test)]
+pub(crate) struct TestSwitch(#[allow(dead_code)] std::sync::MutexGuard<'static, ()>);
+
+#[cfg(test)]
+pub(crate) fn test_switch() -> TestSwitch {
     // default: a test that panicked while it held the switch leaves the lock poisoned; the next test still takes the switch,
     // which holds no data, and the panic fails the earlier test.
     let switch = TEST_SWITCH.lock().unwrap_or_else(PoisonError::into_inner);
+    HOLDS_TEST_SWITCH.set(true);
+    TestSwitch(switch)
+}
+
+#[cfg(test)]
+impl Drop for TestSwitch {
+    fn drop(&mut self) {
+        HOLDS_TEST_SWITCH.set(false);
+    }
+}
+
+/// Fails a test whose thread switches the trace or the sampler without holding `test_switch`.
+#[cfg(test)]
+fn require_test_switch() {
+    assert!(
+        HOLDS_TEST_SWITCH.get(),
+        "a test switches the trace or the sampler only while it holds test_switch"
+    );
+}
+
+/// The performance trace of a lib test, turned on while the value lives; the value holds `test_switch`. The switch controls
+/// the `host.trace` events (docs/spec/performance-trace.md#the-switch), so a test that reads them turns it on.
+#[cfg(test)]
+pub(crate) struct TestTrace(#[allow(dead_code)] TestSwitch);
+
+#[cfg(test)]
+pub(crate) fn test_trace() -> TestTrace {
+    let switch = test_switch();
     command(json!({"action": "on"})).unwrap();
     TestTrace(switch)
 }
@@ -66,6 +100,8 @@ pub fn observe(layer: &str, fields: impl FnOnce() -> Value) {
 /// (event_relay.rs), not through this call. Turning the trace on stores the event `host.trace.on` and starts the sampler;
 /// turning it off stores `host.trace.off` before the switch goes off.
 pub fn command(request: Value) -> Result<Value, String> {
+    #[cfg(test)]
+    require_test_switch();
     let action = request
         .get("action")
         .and_then(Value::as_str)
@@ -137,6 +173,8 @@ struct Sampler {
 static SAMPLER: Mutex<Option<Sampler>> = Mutex::new(None);
 
 fn start_sampler() {
+    #[cfg(test)]
+    require_test_switch();
     // default: a lock that a panicking thread poisoned still holds the sampler, which the start amends; the panic hook
     // records the panic.
     let mut sampler = SAMPLER.lock().unwrap_or_else(PoisonError::into_inner);
@@ -163,6 +201,8 @@ fn start_sampler() {
 }
 
 fn end_sampler() {
+    #[cfg(test)]
+    require_test_switch();
     let Some(sampler) = SAMPLER
         .lock()
         // default: a lock that a panicking thread poisoned still holds the sampler, which the end takes; the panic hook
