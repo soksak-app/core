@@ -465,3 +465,34 @@ func TestARegistrationReachesAWatchWithoutAFrame(t *testing.T) {
 		t.Fatalf("the watch holds %s", last)
 	}
 }
+
+// A page that starts anew in a surface holds nothing of the page before it, also when the end of that page arrives after its first
+// call: it registers the same command again, and the late end leaves its registration.
+func TestANewDocumentOfASurfaceRegistersItsCommandsAgain(t *testing.T) {
+	r := newViewRelay(t)
+	surface := r.surface()
+	register := func(generation, id int) map[string]any {
+		t.Helper()
+		r.f.shell.Event("view-call", []any{map[string]any{"surface": surface, "plugin": "terminal", "generation": generation, "id": id,
+			"command": "runtime.command.register", "params": map[string]any{"name": "terminal.input"}}})
+		r.f.settle()
+		for _, reply := range r.stored.replies {
+			if reply["id"] == float64(id) && reply["generation"] == float64(generation) {
+				return reply
+			}
+		}
+		t.Fatalf("the call %d has no reply", id)
+		return nil
+	}
+	if reply := register(1, 21); reply["error"] != nil {
+		t.Fatalf("the first document: %v", reply["error"])
+	}
+	if reply := register(2, 22); reply["error"] != nil {
+		t.Fatalf("the second document: %v", reply["error"])
+	}
+	r.f.shell.Event("view-process-ended", []any{map[string]any{"surface": surface, "generation": 1}})
+	r.f.settle()
+	if reply := register(2, 23); reply["error"] == nil {
+		t.Fatal("the second document registered its command twice")
+	}
+}

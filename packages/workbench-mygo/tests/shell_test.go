@@ -48,6 +48,9 @@ type storedHost struct {
 	// retains holds the argument of each sidecarsRetain call.
 	retains []json.RawMessage
 	failing map[string]error
+	// policies holds the policy of each log call that stores one, and traces the action of each performance call.
+	policies []map[string]string
+	traces   []string
 	// installed is the document of the installed plugins, and it is empty without plugins.
 	installed string
 	// classes is the policy in force that the host call log answers; none stores the errors.
@@ -69,8 +72,9 @@ func (h *storedHost) log(_ context.Context, argument json.RawMessage) (any, erro
 		return nil, err
 	}
 	var request struct {
-		Action string           `json:"action"`
-		Events []map[string]any `json:"events"`
+		Action  string            `json:"action"`
+		Events  []map[string]any  `json:"events"`
+		Classes map[string]string `json:"classes"`
 	}
 	if err := json.Unmarshal(argument, &request); err != nil {
 		return nil, err
@@ -78,6 +82,11 @@ func (h *storedHost) log(_ context.Context, argument json.RawMessage) (any, erro
 	switch request.Action {
 	case "clock":
 		return &host.ClockReading{TsMicros: time.Now().UnixMicro(), MonoNs: 1 << 40}, nil
+	case "policy":
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		h.policies = append(h.policies, request.Classes)
+		return nil, nil
 	case "policy-read":
 		if h.classes != nil {
 			return map[string]any{"classes": h.classes}, nil
@@ -155,6 +164,16 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 			return map[string]string{"authorization": "notDetermined"}, nil
 		}),
 		"workspace": answer("workspace", h.workspace),
+		"performance": answer("performance", func(argument json.RawMessage) (any, error) {
+			var request struct {
+				Action string `json:"action"`
+			}
+			if err := json.Unmarshal(argument, &request); err != nil {
+				return nil, err
+			}
+			h.traces = append(h.traces, request.Action)
+			return nil, nil
+		}),
 		"projectFolder": answer("projectFolder", func(argument json.RawMessage) (any, error) {
 			var root string
 			if err := json.Unmarshal(argument, &root); err != nil {
@@ -556,11 +575,11 @@ func TestStartSendsTheThemeAndTheLanguageOfTheMenu(t *testing.T) {
 	}
 }
 
-// startCalls are the calls of the start without the appearance, which runs in its own order beside them.
+// startCalls are the calls of the start without the appearance and the trace switch, which run in their own order beside them.
 func startCalls(calls []string) []string {
 	var kept []string
 	for _, call := range calls {
-		if call != "setTheme" && call != "setMenuLanguage" {
+		if call != "setTheme" && call != "setMenuLanguage" && call != "performance" {
 			kept = append(kept, call)
 		}
 	}

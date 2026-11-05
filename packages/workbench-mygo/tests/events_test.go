@@ -771,7 +771,7 @@ func traceClasses() map[string]any {
 }
 
 func TestTheShellWritesItsEventsThroughTheHostCallLog(t *testing.T) {
-	stored := &storedHost{classes: traceClasses()}
+	stored := &storedHost{classes: traceClasses(), common: map[string]any{"diagnostics.log": traceClasses()}}
 	f := newShell(t, stored)
 	if got := stored.written("workbench.start"); len(got) != 1 {
 		t.Fatalf("the host received %v", got)

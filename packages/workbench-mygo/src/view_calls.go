@@ -139,6 +139,11 @@ func (s *Shell) viewCall(data []any) {
 		return
 	}
 	view := s.view(call.Surface)
+	// The first call of a page that started anew can arrive before the end of the page before it.
+	if view.generation != 0 && call.Generation > view.generation {
+		s.forgetView(call.Surface, view)
+		view = s.view(call.Surface)
+	}
 	if call.Cancel {
 		// default: a cancel of a call that has no pending call ends nothing, because that call has already replied.
 		if pending := view.pending[call.ID]; pending != nil {
@@ -1134,10 +1139,15 @@ func (s *Shell) viewEnded(data []any) {
 	if view == nil || view.generation != event.Generation {
 		return
 	}
+	s.forgetView(event.Surface, view)
+}
+
+// forgetView ends what the page of a view held.
+func (s *Shell) forgetView(surface string, view *viewState) {
 	view.end()
-	delete(s.surfaces.views, event.Surface)
-	s.keyboard.ForgetView(event.Surface)
-	delete(s.surfaces.documents, event.Surface)
+	delete(s.surfaces.views, surface)
+	s.keyboard.ForgetView(surface)
+	delete(s.surfaces.documents, surface)
 }
 
 // viewStopped shows the reason of a view that stopped its restarts as the error of its surface.
