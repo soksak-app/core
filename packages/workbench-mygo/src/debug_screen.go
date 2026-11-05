@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -153,8 +154,19 @@ func sizeText(size int64) string {
 	return fmt.Sprintf("%.1f MB", float64(size)/1024/1024)
 }
 
-// timeText is a modification time in milliseconds since the epoch as local text.
-func timeText(modified int64) string { return time.UnixMilli(modified).Format(time.DateTime) }
+// TimeText is a modification time in milliseconds since the epoch as local text in the language of the locale, written as a page writes
+// a date: Korean has its own form and any other language has the form of English.
+func TimeText(modified int64, locale string) string {
+	moment := time.UnixMilli(modified)
+	if language, _, _ := strings.Cut(locale, "-"); language == "ko" {
+		noon := "오전"
+		if moment.Hour() >= 12 {
+			noon = "오후"
+		}
+		return moment.Format("2006. 1. 2. ") + noon + moment.Format(" 3:04:05")
+	}
+	return moment.Format("1/2/2006, 3:04:05 PM")
+}
 
 func megabytes(size int64) string { return fmt.Sprintf("%.1f", float64(size)/1024/1024) }
 
@@ -224,7 +236,7 @@ func drawDebugList(c *ui.Context, binder *Binder, st DebugStyle, entries []Debug
 	for _, file := range entries {
 		ui.Row(binder.Name(c, "core.debug.file", file.Path)).FillWidth().Gap(st.RowGap).MinHeight(st.RowH).AlignItems(ui.Center).Role(ui.RoleRow).Label(file.Path).Children(func() {
 			ui.Text(c, file.Path).Grow(1).SingleLine().Ellipsis("…").FontSize(st.TextControl).TextColor(st.Fg)
-			ui.Text(c, sizeText(file.Size)+" · "+timeText(file.Modified)).FontSize(st.TextSmall).TextColor(st.Muted)
+			ui.Text(c, sizeText(file.Size)+" · "+TimeText(file.Modified, c.Locale())).FontSize(st.TextSmall).TextColor(st.Muted)
 			params := map[string]any{"path": file.Path}
 			// The three columns of actions stay in place on a row without the state of a file.
 			ui.Row(c).Gap(st.Space2).Shrink(0).Children(func() {
