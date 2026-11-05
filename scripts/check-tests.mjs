@@ -1247,6 +1247,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F612",
+    implementation: [
+      { file: "docs/operations/examples.md", symbol: "## Three-host benchmark" },
+    ],
+    tests: [
+      { file: "scripts/test/test-kinds.test.mjs", id: "the build and verify examples state each paragraph once and name only targets of the Makefile" },
+    ],
+    expected: "The build and verify examples state each paragraph once and name only targets of the Makefile.",
+    levels: ["unit"],
+  },
+  {
     id: "F590",
     implementation: [
       { file: "scripts/measure-app-usage.mjs", symbol: "export const COUNT_WAIT_MS = 62000;" },
