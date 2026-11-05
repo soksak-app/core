@@ -152,3 +152,17 @@ test("an update state read that ended after a newer read does not replace its st
   await older;
   assert.equal(update.status().available?.version, "0.0.9", "the older read replaced the state of the newer read");
 });
+
+test("a read that finds what the page holds calls no listener, and a read that finds a change calls it once", async () => {
+  const replies = { appUpdateState: { version: "0.0.8", available } };
+  let changes = 0;
+  const update = createAppUpdate({ host: fakeHost(replies), changed: () => { changes += 1; } });
+  const counted = async () => { const before = changes; await update.refresh(); return changes - before; };
+  assert.equal(await counted(), 1, "the first state");
+  assert.equal(await counted(), 0, "the same state");
+  replies.appUpdateState = { version: "0.0.8", available: null };
+  assert.equal(await counted(), 1, "another state");
+  replies.appUpdateState = new Error("the index cannot be read");
+  assert.equal(await counted(), 1, "a failed read");
+  assert.equal(await counted(), 0, "the same failure");
+});

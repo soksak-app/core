@@ -565,3 +565,45 @@ test("a project close that waits names each awaited step it started and has not 
   assert.equal(await closing, true);
   projects.runSteps(null);
 });
+
+test("a registry read after the write of this window draws nothing, and a read that finds a change draws once", async () => {
+  const project = structuredClone(PROJECT);
+  const other = { ...structuredClone(PROJECT), id: "prj-other", root: "/work/other", title: "other" };
+  const listed = [project, other];
+  let open = [];
+  let notify = null;
+  await projects.initialise({ ...store,
+    snapshot: async () => ({ common: {}, projects: structuredClone(listed), open: [...open] }),
+    // The host answers a write of this window with workspace-changed, and the snapshot reads the file that the write changed.
+    patch: async (id, patch) => { Object.assign(listed.find((item) => item.id === id), patch); notify(); },
+    onChange: (fn) => { notify = fn; } });
+  await projects.activate(project.id);
+  await projects.flush();
+  let draws = 0;
+  projects.onChange(() => { draws += 1; });
+  const settled = async () => { for (let turn = 0; turn < 5; turn++) await new Promise((resolve) => setImmediate(resolve)); };
+  try {
+    const space = projects.addSpace({ state: { cards: [], name: "two" } });
+    assert.equal(draws, 1, "the addition draws its space");
+    await projects.flush();
+    await settled();
+    assert.equal(draws, 1, "the read that the write of this window caused drew an unchanged registry");
+    assert.ok(projects.active().spaces.some((item) => item.id === space.id));
+
+    other.title = "renamed elsewhere";
+    notify();
+    await settled();
+    assert.equal(draws, 2, "the title that another window changed");
+    assert.equal(projects.all().find((item) => item.id === other.id).title, "renamed elsewhere");
+
+    open = [other.id];
+    notify();
+    await settled();
+    assert.equal(draws, 3, "the project that another window opened");
+    notify();
+    await settled();
+    assert.equal(draws, 3, "a read that found the same registry");
+  } finally {
+    projects.onChange(() => {});
+  }
+});
