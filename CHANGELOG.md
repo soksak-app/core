@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F618: The baseline record of `make benchmark-b3` is `b3/baseline.json` in the git common directory. In `target/b3` a `cargo clean` removed it, and a session could not start without it. Red: `scripts/test/benchmark-b3.test.mjs` reads the path from a main checkout and from its worktree.
 - F611: A press over the frame of a hidden region stays with the view that it reached, so the keyboard does not go to a hidden tab and the drag of a divider or a tab is not cut off.
 - F616: `make benchmark-b3` builds its two registries with `make build-registry`. It named the target by its old name, so a session stopped at that build step. Red: `scripts/test/benchmark-b3.test.mjs` checks each make target of a build step against the Makefile.
 - F614: `make check-docs` fails on a conflict marker at the start of a line of a tracked or new text file, and names the file and the line. A merge commit that held markers had passed the check and the commit hook. Red: `scripts/test/checklist.test.mjs`.

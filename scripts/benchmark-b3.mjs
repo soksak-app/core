@@ -25,7 +25,7 @@
 // trace state of the run and name no TRACE of their own, and runs make measure-host-calls on the other and the baseline hosts and make
 // measure-trace-share on all five applications from their debug bundles.
 //
-// The baseline record target/b3/baseline.json of this checkout, which the measurement target items write:
+// The baseline record b3/baseline.json in the git common directory of this checkout (baselineRecordFile), which the measurement target items write:
 //   {"schema": 1, "heads": [<40 hex digits>, ...], "sidecars": [{"repository": <path>, "revisions": [<40 hex digits>, ...]}],
 //    "plugins": [{"id": <plugin id>, "version": <version>, "sha256": <64 hex digits>}]}
 // `heads` are the heads of the baseline branch in order and `revisions` the revisions of each sidecar repository in order; the last
@@ -106,6 +106,15 @@ const HEX64 = /^[0-9a-f]{64}$/;
 const fail = (where, text) => { throw new Error(`${where}: ${text}`); };
 const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'));
+
+/**
+ * The file of the baseline record of the checkout `root`: in its git common directory, beside the refs of the baseline branch whose heads it
+ * holds. Every worktree of the checkout shares it, a clean of the build outputs does not remove it, and it is never a record of the repository.
+ */
+export function baselineRecordFile(root) {
+  const common = execFileSync('git', ['-C', root, 'rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8' }).trim();
+  return join(common, 'b3', 'baseline.json');
+}
 
 /** Reads the baseline record from the text of `file`. */
 export function readBaselineRecord(text, file) {
@@ -720,7 +729,7 @@ async function main(argv) {
   const runs = Number(values.runs);
   const write = (line) => process.stdout.write(`${line}\n`);
   const goals = readGoals(readFileSync(GOALS_FILE, 'utf8'), 'docs/spec/performance-goals.json');
-  const recordFile = join(ROOT, 'target', 'b3', 'baseline.json');
+  const recordFile = baselineRecordFile(ROOT);
   const baseline = readBaselineRecord(readFileSync(recordFile, 'utf8'), recordFile);
   const checkout = baselineCheckoutFailures(baseline, readCheckout(values.baseline), values.baseline);
   if (checkout.length > 0) {

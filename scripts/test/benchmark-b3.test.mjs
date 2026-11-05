@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { connect } from "@soksak/client";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import { policyOfSetting } from "@soksak/window-check/log-policy.mjs";
 import { judgeSession, readGoals, readSession } from "../b3-judge.mjs";
 import {
-  appendRecord, buildSteps, applicationsOf, attributionUnits, baselineCheckoutFailures, baselinePluginFailures, createSession, fseventsdCores, installedReleases, parseSwapUsage,
+  appendRecord, baselineRecordFile, buildSteps, applicationsOf, attributionUnits, baselineCheckoutFailures, baselinePluginFailures, createSession, fseventsdCores, installedReleases, parseSwapUsage,
   readBaselineRecord, readCheckout, readSidecarRevisions, readTargetOutput, runUnit, scenarioTargets, sessionUnits, sidecarRevisionFailures,
   surfacePlugins, targetCommand, traceStateOf, unitPlan,
 } from "../benchmark-b3.mjs";
@@ -23,7 +23,7 @@ import { B3_MEASUREMENTS, B3_SETTINGS } from "../../e2e/benchmark/measurements.m
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const FIXTURES = join(ROOT, "scripts", "test", "fixtures", "b3");
 const hex = (digit, length = 40) => digit.repeat(length);
-const baselineRecord = () => readBaselineRecord(readFileSync(join(FIXTURES, "baseline.json"), "utf8"), "target/b3/baseline.json");
+const baselineRecord = () => readBaselineRecord(readFileSync(join(FIXTURES, "baseline.json"), "utf8"), "baseline.json");
 const fixtureGoals = () => readGoals(readFileSync(join(FIXTURES, "goals.json"), "utf8"), "goals.json");
 
 function folder(t) {
@@ -551,4 +551,18 @@ test("each build step of a session names a target of the Makefile", { timeout: 1
       assert.deepEqual(named.filter((name) => !targets.has(name)), [], argv.join(" "));
     }
   }
+});
+
+test("the baseline record is one file of the git common directory, which every worktree shares and no clean of the build outputs removes", { timeout: 10000 }, (t) => {
+  const folder = realpathSync(mkdtempSync(join(tmpdir(), "b3-record-")));
+  t.after(() => rmSync(folder, { recursive: true, force: true }));
+  const main = join(folder, "main");
+  const worktree = join(folder, "worktree");
+  const git = (...args) => execFileSync("git", ["-C", main, "-c", "user.name=b3", "-c", "user.email=b3@test", ...args], { stdio: "pipe" });
+  execFileSync("git", ["init", "-q", main], { stdio: "pipe" });
+  git("commit", "-q", "--allow-empty", "-m", "first");
+  git("worktree", "add", "-q", worktree);
+  const record = baselineRecordFile(main);
+  assert.equal(record, join(main, ".git", "b3", "baseline.json"));
+  assert.equal(baselineRecordFile(worktree), record);
 });

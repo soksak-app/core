@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F618: `make benchmark-b3`의 baseline record는 git common directory의 `b3/baseline.json`이다. `target/b3`에서는 `cargo clean`이 지웠고, 그러면 session이 시작할 수 없었다. Red: `scripts/test/benchmark-b3.test.mjs`가 main checkout과 그 worktree에서 경로를 읽는다.
 - F611: 숨은 region의 frame 위 press는 그 press가 닿은 view에 남는다. keyboard가 숨은 tab으로 가지 않고 divider나 tab의 drag가 끊기지 않는다.
 - F616: `make benchmark-b3`는 두 registry를 `make build-registry`로 build한다. 옛 이름의 target을 불러 session이 그 build 단계에서 멈췄다. Red: `scripts/test/benchmark-b3.test.mjs`가 build 단계의 각 make target을 Makefile과 대조한다.
 - F614: `make check-docs`는 tracked 또는 새 text 파일의 줄 시작에 있는 conflict marker에서 실패하고 파일과 줄을 적는다. marker가 든 merge commit이 이 검사와 commit hook을 통과한 적이 있다. Red: `scripts/test/checklist.test.mjs`.

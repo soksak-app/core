@@ -646,7 +646,7 @@ repeat-app-test:
 	@pnpm -F @soksak/e2e run repeat --file '$(FILE)' --name '$(NAME)' --count $(COUNT)
 
 # The three-host benchmark B3 (scripts/benchmark-b3.mjs, docs/operations/examples.md#three-host-benchmark): it checks the BASELINE checkout
-# against target/b3/baseline.json, builds the release bundles of this checkout and of BASELINE and the two registry indexes, starts and
+# against the baseline record b3/baseline.json of the git common directory, builds the release bundles of this checkout and of BASELINE and the two registry indexes, starts and
 # quits each application for each run of each scenario and writes one session folder under target/b3 for make check-b3. It runs
 # the accessibility client of S13, so it runs with the Accessibility permission.
 benchmark-b3:

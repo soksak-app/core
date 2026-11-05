@@ -1278,6 +1278,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F618",
+    implementation: [
+      { file: "scripts/benchmark-b3.mjs", symbol: "export function baselineRecordFile(root) {" },
+    ],
+    tests: [
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "the baseline record is one file of the git common directory, which every worktree shares and no clean of the build outputs removes" },
+    ],
+    expected: "The baseline record of B3 is one file of the git common directory.",
+    levels: ["unit"],
+  },
+  {
     id: "F616",
     implementation: [
       { file: "scripts/benchmark-b3.mjs", symbol: "export function buildSteps(phase, baseline) {" },

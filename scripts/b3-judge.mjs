@@ -12,7 +12,7 @@
 //                            "applications": [{"name": <application>, "host": "mygo" | "wailsv3" | "tauriv2", "build": "current" | "baseline"}, ...],
 //                            "builds": {<application>: {"revision": <source revision>, "executable": <sha256 of the executable>}},
 //                            "toolchains": {"go": <go version>, "rust": <rustc version>}}
-//   baseline.json           the copy of the baseline record target/b3/baseline.json
+//   baseline.json           the copy of the baseline record that the session read
 //   sidecar-revisions.json  the copy of the sidecar revision record of the workspace registry
 //   runs.jsonl              one run record per line, in the order of the runs:
 //                           {"scenario": <scenario>, "run": <1..runs>, "application": <application>,
