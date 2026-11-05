@@ -107,7 +107,7 @@ fn attach_request(surface: &str, name: &str) -> super::Request {
 
 // contract: images.attach.one-main-step
 #[test]
-fn a_surface_close_during_an_attach_finds_no_name_of_the_attach() {
+fn a_surface_close_during_an_image_attach_finds_no_name_of_the_attach() {
     let (surface, name) = ("attach-close-surface", "attach-close-region");
     let (webview, records, framework) = attach_fixture(surface, name);
     let closed = records.clone();

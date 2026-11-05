@@ -1873,9 +1873,9 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/host/rust/tests/exposure_test.rs", id: "a_key_with_empty_text_types_its_key_name" },
       { file: "packages/host/go/tests/endpoint_test.go", id: "TestEndpointKeyWithEmptyTextHasNoText" },
-      { file: "packages/host/rust/src/images_test.rs", id: "a_surface_close_during_an_attach_finds_no_name_of_the_attach" },
+      { file: "packages/host/rust/src/images_test.rs", id: "a_surface_close_during_an_image_attach_finds_no_name_of_the_attach" },
       { file: "packages/host/go/src/image_detach_test.go", id: "TestAReloadDuringAnAttachLeavesNoRegionWithoutAName" },
-      { file: "packages/host/rust/src/documents_test.rs", id: "a_surface_close_during_an_attach_finds_no_name_of_the_attach" },
+      { file: "packages/host/rust/src/documents_test.rs", id: "a_surface_close_during_a_document_attach_finds_no_name_of_the_attach" },
       { file: "packages/host/go/src/documents_test.go", id: "TestAReloadDuringADocumentAttachLeavesNoRegionWithoutAName" },
       { file: "packages/workbench/test/bar-tabs.test.mjs", id: "a draw between a press and its release keeps the pressed project and space tabs" },
       { file: "packages/workbench/test/bar-tabs.test.mjs", id: "the shown project tab has the background of its project, and another project tab has none" },
