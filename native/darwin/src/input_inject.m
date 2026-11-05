@@ -441,7 +441,19 @@ static void logPointer(double x, double y, int phase, int button, double deltaX,
     sp_log_info("input inject", text.UTF8String);
 }
 
+// Delivers a phase of a gesture behind the input of its window that waits. Whether the input is kept is the only answer the
+// caller has until its turn, and the record of that turn states the result.
 static sp_input_result pointerAt(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY, int clicks) {
+    NSWindow *window = (__bridge NSWindow *)handle;
+    NSPoint at = window && NSThread.isMainThread ? windowPoint(window, x, y) : NSZeroPoint;
+    if (window && NSThread.isMainThread && surfaceLayoutHoldCall(window, phase == 1, at.x, at.y, ^{
+            SPHeld kept = {0, nil, ""};
+            sp_input_result result = pointerInput(window, x, y, phase, button, deltaX, deltaY, clicks, &kept);
+            logPointer(x, y, phase, button, deltaX, deltaY, clicks, result, kept.why);
+            [kept.front release];
+        })) {
+        return SP_INPUT_DELIVERED;
+    }
     SPHeld held = {0, nil, ""};
     sp_input_result result = pointerInput(handle, x, y, phase, button, deltaX, deltaY, clicks, &held);
     logPointer(x, y, phase, button, deltaX, deltaY, clicks, result, held.why);
@@ -489,19 +501,24 @@ static WKWebView *webViewAt(NSWindow *window, double x, double y) {
     return (WKWebView *)view;
 }
 
+static void pointerThen(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY, int clicks,
+    double timeoutSeconds, sp_input_done done, void *context);
+
 void sp_input_pointer_then(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY, int clicks,
     double timeoutSeconds, sp_input_done done, void *context) {
     NSWindow *window = (__bridge NSWindow *)handle;
-    if (phase == 1 && window && NSThread.isMainThread) {
-        // A press that has no target before the open layout reaches the screen waits for that, as the press of the window system does.
-        NSPoint at = windowPoint(window, x, y);
-        if (surfaceLayoutPressWaits(window, at.x, at.y)) {
-            surfaceLayoutAfterCommit(window, ^{
-                sp_input_pointer_then(handle, x, y, phase, button, deltaX, deltaY, clicks, timeoutSeconds, done, context);
-            });
-            return;
-        }
+    NSPoint at = window && NSThread.isMainThread ? windowPoint(window, x, y) : NSZeroPoint;
+    // A press that has no target before the open layout reaches the screen waits for that, and all input waits behind it.
+    if (!(window && NSThread.isMainThread && surfaceLayoutHoldCall(window, phase == 1, at.x, at.y, ^{
+            pointerThen(window, x, y, phase, button, deltaX, deltaY, clicks, timeoutSeconds, done, context);
+        }))) {
+        pointerThen(handle, x, y, phase, button, deltaX, deltaY, clicks, timeoutSeconds, done, context);
     }
+}
+
+static void pointerThen(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY, int clicks,
+    double timeoutSeconds, sp_input_done done, void *context) {
+    NSWindow *window = (__bridge NSWindow *)handle;
     NSView *pressed = window && NSThread.isMainThread ? pointerTarget(window, windowPoint(window, x, y), phase, button) : nil;
     while (pressed && ![pressed isKindOfClass:WKWebView.class]) pressed = pressed.superview;
     WKWebView *target = (WKWebView *)pressed;
@@ -864,7 +881,22 @@ static NSString *jsonText(const char *text) {
     return data ? [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease] : @"null";
 }
 
+static sp_input_result keyNow(void *handle, const char *key, const char *text, unsigned modifiers, bool down);
+
+// Delivers a key behind the input of its window that waits. Whether the key is kept is the only answer the caller has until its
+// turn, and the record of that turn states the result.
 sp_input_result sp_input_key(void *handle, const char *key, const char *text, unsigned modifiers, bool down) {
+    NSWindow *window = (__bridge NSWindow *)handle;
+    NSString *keptKey = key ? [NSString stringWithUTF8String:key] : nil, *keptText = text ? [NSString stringWithUTF8String:text] : nil;
+    if (window && NSThread.isMainThread && surfaceLayoutHoldCall(window, false, 0, 0, ^{
+            keyNow(window, keptKey.UTF8String, keptText.UTF8String, modifiers, down);
+        })) {
+        return SP_INPUT_DELIVERED;
+    }
+    return keyNow(handle, key, text, modifiers, down);
+}
+
+static sp_input_result keyNow(void *handle, const char *key, const char *text, unsigned modifiers, bool down) {
     const char *why = "";
     // The view that holds the keyboard when the key is sent receives it; the record names it with the key window.
     NSWindow *window = (__bridge NSWindow *)handle;

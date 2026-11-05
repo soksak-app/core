@@ -196,6 +196,10 @@ AppKit 이 창 자신의 단추를 소유한다. 제목줄 높이가 AppKit 이 
 
 단추를 페이지 쪽 뷰로 옮기면 제목이나 녹화 표시가 바뀔 때 AppKit 이 되찾아 갔고, 창 이동·크기 변경 48회당 한 번꼴로 단추가 사라지거나 제목줄 자리에 있는 프레임이 화면에 나왔다. 제목줄 높이는 도구막대에서 오지 않는다. 항목이 없는 unified compact 도구막대는 제목줄을 40pt 로 고정하므로, 프레임 배율이 키운 첫 행에서 단추가 가운데를 벗어난다.
 
+## Wayland 한계
+
+Wayland에서 client는 toplevel을 배치하거나 focus할 수 없다. 둘 다 compositor가 정하고, GDK의 `set_accept_focus`와 `set_focus_on_map`은 거기서 아무 일도 하지 않는다. 둘 중 하나가 필요한 연산은 `<operation> is not implemented on wayland`를 반환하고, 둘 중 하나가 필요한 창 검사는 X11에서 실행한다. page 입력에는 둘 다 필요 없다. X11과 Wayland에서 host는 process 안에서 `GdkEvent` 값을 만들어 `gtk_main_do_event`에 주며, XTEST를 쓰지 않고 실제 pointer를 움직이지 않는다.
+
 ## Windows 상태
 
 Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`)만 구현한다. `platform/windows/unsupported.*`의 나머지 연산은 `<operation> is not implemented on windows` 형식의 오류를 반환한다. Windows에서는 애플리케이션 시작이 첫 platform 연산에서 실패한다. Wails의 `Run`과 Tauri의 `run`은 창을 열기 전에 `window resize animation is not implemented on windows`와 상태 1로 끝난다. Linux 구현은 없으며, 그곳에서 `platform.Current()`와 `platform::current()`는 오류를 반환한다.

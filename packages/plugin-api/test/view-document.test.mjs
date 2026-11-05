@@ -282,7 +282,7 @@ test("the start of a run requests one frame of the view and no later frame", asy
   const { view, host } = setup(t);
   const frames = [];
   view.requestAnimationFrame = (fn) => frames.push(fn);
-  host({ sok: 1, event: "run-start", data: null });
+  host({ sok: 1, event: "run-start", data: {} });
   assert.equal(frames.length, 1, "the start of a run requests a frame");
   frames.shift()();
   assert.equal(frames.length, 0, "a frame of the start of a run requests no next frame");

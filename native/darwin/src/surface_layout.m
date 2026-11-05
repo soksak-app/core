@@ -27,13 +27,14 @@
 - (void)dealloc { [_window release]; [_present release]; [_done release]; [super dealloc]; }
 @end
 
-// SPAfterCommit is work that waits for the end of the open layout transaction of a window.
-@interface SPAfterCommit : NSObject
+// SPHeldInput is one piece of the input of a window that waits: an event of the window system or an injected call.
+@interface SPHeldInput : NSObject
 @property(nonatomic, assign) void *owner;
-@property(nonatomic, copy) void (^done)(void);
+@property(nonatomic, retain) NSEvent *event;
+@property(nonatomic, copy) void (^call)(void);
 @end
-@implementation SPAfterCommit
-- (void)dealloc { [_done release]; [super dealloc]; }
+@implementation SPHeldInput
+- (void)dealloc { [_event release]; [_call release]; [super dealloc]; }
 @end
 
 // SPViewJoin is a view that the open layout transaction waits for. It ends once: by its presentation or by an abandon.
@@ -59,8 +60,14 @@ static void (^layoutEnded)(void *);
 // YES while surfaceLayoutPressWaits asks where a press goes once the open transaction has reached the screen.
 static BOOL pastPreparation;
 // The input of a window that waits for the end of its open transaction, in the order it arrived.
-static NSMutableArray<NSEvent *> *heldInput;
-static NSMutableArray<SPAfterCommit *> *afterCommit;
+static NSMutableArray<SPHeldInput *> *heldInput;
+// The windows whose released input is on its way back through the event queue, once for each release.
+static NSCountedSet<NSValue *> *returning;
+// The turns of the event queue that the release of a window posted: an injected call, or the end of the release with no call.
+static NSMutableDictionary<NSNumber *, SPHeldInput *> *heldTurns;
+static long nextHeldTurn;
+// The subtype of an application event that is a turn of held input.
+static const short kHeldTurnSubtype = 0x6869;
 
 static void releaseSettled(void);
 
@@ -115,6 +122,21 @@ size_t surfaceLayoutTraceStop(double *out, size_t capacity) {
 
 // Takes a press that surfaceLayoutPressWaits holds back, and every later pointer and key event of the window, so the input stays
 // in order.
+static BOOL inputHeld(void *owner) {
+    BOOL held = NO;
+    for (SPHeldInput *earlier in heldInput) held = held || earlier.owner == owner;
+    return held;
+}
+
+static void keepInput(void *owner, NSEvent *event, void (^call)(void)) {
+    SPHeldInput *input = [[[SPHeldInput alloc] init] autorelease];
+    input.owner = owner;
+    input.event = event;
+    input.call = call;
+    if (!heldInput) heldInput = [[NSMutableArray alloc] init];
+    [heldInput addObject:input];
+}
+
 static BOOL holdInput(NSEvent *event) {
     const NSEventMask presses = NSEventMaskLeftMouseDown | NSEventMaskRightMouseDown;
     const NSEventMask later = presses | NSEventMaskLeftMouseDragged | NSEventMaskLeftMouseUp | NSEventMaskRightMouseDragged
@@ -122,21 +144,32 @@ static BOOL holdInput(NSEvent *event) {
         | NSEventMaskMouseMoved | NSEventMaskScrollWheel | NSEventMaskKeyDown | NSEventMaskKeyUp | NSEventMaskFlagsChanged;
     NSEventMask type = NSEventMaskFromType(event.type);
     NSWindow *window = event.window;
-    BOOL held = NO;
-    for (NSEvent *earlier in heldInput) held = held || earlier.window == window;
-    BOOL waits = window && (type & later)
-        && (held || ((type & presses) && surfaceLayoutPressWaits(window, event.locationInWindow.x, event.locationInWindow.y)));
-    if (waits) {
-        if (!heldInput) heldInput = [[NSMutableArray alloc] init];
-        [heldInput addObject:event];
-    }
+    // A release puts its events at the start of the queue, so while it returns every event of the window is in its turn.
+    BOOL waits = window && (type & later) && ![returning containsObject:[NSValue valueWithPointer:window]]
+        && (inputHeld(window) || ((type & presses) && surfaceLayoutPressWaits(window, event.locationInWindow.x, event.locationInWindow.y)));
+    if (waits) keepInput(window, event, nil);
     return waits;
 }
 
 static void (*applicationSendEvent)(id, SEL, NSEvent *);
 
+static void releaseInput(void *owner);
+
+// Runs one turn of a release: an injected call, or the end of the release, which sends on what arrived while it returned.
+static void runHeldTurn(long turn) {
+    SPHeldInput *input = [[heldTurns[@(turn)] retain] autorelease];
+    [heldTurns removeObjectForKey:@(turn)];
+    if (input.call) {
+        input.call();
+    } else {
+        [returning removeObject:[NSValue valueWithPointer:input.owner]];
+        if (activeOwner != input.owner) releaseInput(input.owner);
+    }
+}
+
 static void sendEventAfterLayout(id application, SEL selector, NSEvent *event) {
-    if (!holdInput(event)) applicationSendEvent(application, selector, event);
+    if (event.type == NSEventTypeApplicationDefined && event.subtype == kHeldTurnSubtype) runHeldTurn(event.data1);
+    else if (!holdInput(event)) applicationSendEvent(application, selector, event);
 }
 
 // -[NSApplication sendEvent:] calls the local monitors, in no fixed order, and a monitor that returns nil ends the others. A
@@ -152,21 +185,32 @@ static void watchInput(void) {
     });
 }
 
-// Gives the waiting input of owner back after its transaction ended. The events go to the start of the queue from the last
-// to the first, so they stay in order and ahead of the input that arrived after them.
+// Posts a turn of the event queue at the start of the queue.
+static void postHeldTurn(SPHeldInput *input) {
+    long turn = ++nextHeldTurn;
+    if (!heldTurns) heldTurns = [[NSMutableDictionary alloc] init];
+    heldTurns[@(turn)] = input;
+    NSEvent *event = [NSEvent otherEventWithType:NSEventTypeApplicationDefined location:NSZeroPoint modifierFlags:0 timestamp:0
+        windowNumber:0 context:nil subtype:kHeldTurnSubtype data1:turn data2:0];
+    [NSApp postEvent:event atStart:YES];
+}
+
+// Gives the waiting input of owner back after its transaction ended, through the event queue, because a press can run a loop of
+// its own and the application reads NSApp.currentEvent. The turns go to the start of the queue from the last to the first, so
+// they stay in order and ahead of the input that arrived after them, and the end of the release comes after them.
 static void releaseInput(void *owner) {
-    NSArray<NSEvent *> *held = [[heldInput copy] autorelease];
-    for (NSEvent *event in held.reverseObjectEnumerator) {
-        if (event.window != owner) continue;
-        [NSApp postEvent:event atStart:YES];
-        [heldInput removeObjectIdenticalTo:event];
-    }
-    NSArray<SPAfterCommit *> *waits = [[afterCommit copy] autorelease];
-    for (SPAfterCommit *wait in waits) {
-        if (wait.owner != owner) continue;
-        [[wait retain] autorelease];
-        [afterCommit removeObjectIdenticalTo:wait];
-        wait.done();
+    if (!inputHeld(owner)) return;
+    if (!returning) returning = [[NSCountedSet alloc] init];
+    [returning addObject:[NSValue valueWithPointer:owner]];
+    SPHeldInput *end = [[[SPHeldInput alloc] init] autorelease];
+    end.owner = owner;
+    postHeldTurn(end);
+    NSArray<SPHeldInput *> *held = [[heldInput copy] autorelease];
+    for (SPHeldInput *input in held.reverseObjectEnumerator) {
+        if (input.owner != owner) continue;
+        if (input.event) [NSApp postEvent:input.event atStart:YES];
+        else postHeldTurn(input);
+        [heldInput removeObjectIdenticalTo:input];
     }
 }
 
@@ -274,17 +318,12 @@ bool surfaceLayoutPressWaits(void *owner, double x, double y) {
     return now != committed;
 }
 
-void surfaceLayoutAfterCommit(void *owner, void (^done)(void)) {
+bool surfaceLayoutHoldCall(void *owner, bool press, double x, double y, void (^call)(void)) {
     NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
-    if (activeOwner != owner) {
-        done();
-        return;
-    }
-    SPAfterCommit *wait = [[[SPAfterCommit alloc] init] autorelease];
-    wait.owner = owner;
-    wait.done = done;
-    if (!afterCommit) afterCommit = [[NSMutableArray alloc] init];
-    [afterCommit addObject:wait];
+    BOOL waits = [returning containsObject:[NSValue valueWithPointer:owner]] || inputHeld(owner)
+        || (press && surfaceLayoutPressWaits(owner, x, y));
+    if (waits) keepInput(owner, nil, call);
+    return waits;
 }
 
 void surfaceLayoutCancel(void *owner) {

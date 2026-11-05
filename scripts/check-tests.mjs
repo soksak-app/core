@@ -1036,6 +1036,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F595",
+    implementation: [{ file: "native/darwin/src/surface_layout.m", symbol: "surfaceLayoutHoldCall" }],
+    tests: [
+      { file: "native/darwin/tests/webview_geometry_test.m", id: "an injected press reaches the view before the injected key behind it" },
+      { file: "native/darwin/tests/webview_geometry_test.m", id: "a person's press reaches the view before the injected keys behind it" },
+    ],
+    expected: "Injected input waits in the one hold with the events of the window system and reaches the view in the order it arrived.",
+    levels: ["unit"],
+  },
+  {
     id: "F593",
     implementation: [{ file: "native/darwin/src/surface_layout.m", symbol: "object_getClass([NSApplication sharedApplication])" }],
     tests: [
@@ -1053,6 +1063,17 @@ const FEATURE_LINKS = [
       { file: "native/darwin/tests/webview_geometry_test.m", id: "a release that waits past the receipt wait reports no lost release" },
     ],
     expected: "No local monitor sees a press or a release that waits for a layout, each sees it once when it comes back, and a release that waits longer than its receipt wait reports nothing.",
+    levels: ["unit"],
+  },
+  {
+    id: "F586",
+    implementation: [{ file: "packages/host/rust/src/images.rs", symbol: "fn send_released(" }],
+    tests: [
+      { file: "packages/host/rust/src/images_test.rs", id: "a_release_after_its_window_closed_sends_nothing_and_reports_no_failure" },
+      { file: "packages/host/rust/src/images_test.rs", id: "a_release_of_an_open_window_sends_the_frame_with_the_root_of_the_window" },
+      { file: "packages/host/rust/src/images_test.rs", id: "a_release_that_fails_in_an_open_window_reports_the_failure" },
+    ],
+    expected: "A release after the close of its window sends nothing and reports no failure, and a release in an open window is sent with the root of the window and reports its failure.",
     levels: ["unit"],
   },
   {
@@ -8709,14 +8730,12 @@ const FEATURE_LINKS = [
     id: "F264",
     implementation: [
       { file: "scripts/check-versions.mjs", symbol: 'export const RELEASE = "' },
-      { file: "scripts/check-versions.mjs", symbol: 'export const LATEST_PUBLISHED = "' },
     ],
     tests: [
-      { file: "scripts/test/versions.test.mjs", id: "the development contract has a distinct identity from the latest published release" },
       { file: "scripts/test/versions.test.mjs", id: "every declared workspace version is the release candidate" },
       { file: "scripts/test/versions.test.mjs", id: "workspace Cargo.lock package versions match the release candidate" },
     ],
-    expected: "The development release candidate is 0.0.21, distinct from latest published 0.0.20, and the tracked version tests audit workspace manifests and Cargo.lock against that candidate.",
+    expected: "The tracked version tests audit workspace manifests and Cargo.lock against the release candidate.",
     levels: ["unit"],
   },
   {
@@ -10150,53 +10169,45 @@ const FEATURE_LINKS = [
   {
     id: "F336",
     implementation: [
-      { file: "scripts/check-versions.mjs", symbol: 'export const RELEASE = "0.0.35"' },
-      { file: "scripts/check-versions.mjs", symbol: 'export const LATEST_PUBLISHED = "0.0.34"' },
+      { file: "scripts/check-versions.mjs", symbol: 'export const RELEASE = "0.0.36"' },
     ],
     tests: [
-      { file: "scripts/test/versions.test.mjs", id: "the development contract has a distinct identity from the latest published release" },
       { file: "scripts/test/versions.test.mjs", id: "every declared workspace version is the release candidate" },
     ],
-    expected: "The development release candidate is 0.0.35, distinct from latest published 0.0.34, and every declared workspace version and lock entry is 0.0.35.",
+    expected: "Every declared workspace version and lock entry is the release candidate.",
     levels: ["unit"],
   },
   {
     id: "F326",
     implementation: [
       { file: "scripts/check-versions.mjs", symbol: 'export const RELEASE = "' },
-      { file: "scripts/check-versions.mjs", symbol: 'export const LATEST_PUBLISHED = "' },
     ],
     tests: [
-      { file: "scripts/test/versions.test.mjs", id: "the development contract has a distinct identity from the latest published release" },
       { file: "scripts/test/versions.test.mjs", id: "every declared workspace version is the release candidate" },
     ],
-    expected: "The development release candidate is 0.0.24, distinct from latest published 0.0.23, and every declared workspace version and lock entry is 0.0.24.",
+    expected: "Every declared workspace version and lock entry is the release candidate.",
     levels: ["unit"],
   },
   {
     id: "F324",
     implementation: [
       { file: "scripts/check-versions.mjs", symbol: 'export const RELEASE = "' },
-      { file: "scripts/check-versions.mjs", symbol: 'export const LATEST_PUBLISHED = "' },
     ],
     tests: [
-      { file: "scripts/test/versions.test.mjs", id: "the development contract has a distinct identity from the latest published release" },
       { file: "scripts/test/versions.test.mjs", id: "every declared workspace version is the release candidate" },
     ],
-    expected: "The development release candidate is 0.0.23, distinct from latest published 0.0.22, and every declared workspace version and lock entry is 0.0.23.",
+    expected: "Every declared workspace version and lock entry is the release candidate.",
     levels: ["unit"],
   },
   {
     id: "F323",
     implementation: [
       { file: "scripts/check-versions.mjs", symbol: 'export const RELEASE = "' },
-      { file: "scripts/check-versions.mjs", symbol: 'export const LATEST_PUBLISHED = "' },
     ],
     tests: [
-      { file: "scripts/test/versions.test.mjs", id: "the development contract has a distinct identity from the latest published release" },
       { file: "scripts/test/versions.test.mjs", id: "every declared workspace version is the release candidate" },
     ],
-    expected: "The development release candidate is 0.0.22, distinct from latest published 0.0.21, and every declared workspace version and lock entry is 0.0.22.",
+    expected: "Every declared workspace version and lock entry is the release candidate.",
     levels: ["unit"],
   },
   {
@@ -12553,7 +12564,7 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // F503 states the framework fork that the Wails host pins in the native surfaces specification and in the go.mod comments; it
 // changes no runtime capability.
 // F524 corrects the release checks that the verification specification states; it changes no runtime capability.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F475", "F473", "F472", "F471", "F239-276", "F97", "F16", "F470", "F469", "F468", "F466", "F467", "F465", "F463", "F464", "F561", "F581", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
+const NON_CAPABILITY_COMPLETIONS = new Set(["F476", "F474", "F475", "F473", "F472", "F471", "F239-276", "F97", "F16", "F470", "F469", "F468", "F466", "F467", "F465", "F463", "F464", "F561", "F581", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66), the window checks of plugins (F110) and the registry listing of the hwp plugin (F141, registry items G37 and G38). Core cannot read

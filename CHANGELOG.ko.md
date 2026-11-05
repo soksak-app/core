@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F595: 합성 입력은 layout을 기다리는 입력 뒤에서 순서를 지킨다.
+- F586: lease 방식 영역이 있는 창을 닫아도 Tauri host가 `image view released: project window is closed`를 기록하지 않는다. Red: 창이 닫힌 뒤의 해제가 그 실패를 보고했다.
 - F502-16: Wails host의 window는 요청한 크기를 갖고 web view는 content 크기를 가지므로, page의 마지막 row가 보이고 native view가 page 위 제자리에 선다. F592가 fork를 publish할 때까지 Wails module은 fork의 local checkout을 읽는다.
 - F593: layout을 기다리는 입력은 framework가 `sendEvent:`를 override하는 Tauri host에서도 순서를 지키고, 가운데 버튼, scroll, 이동, modifier 변경이 앞지르지 않는다.
 - F590: `IDLE=1`은 마지막 요청 뒤 준비가 남긴 gate count가 기록되기를 기다린 다음 첫 CPU를 읽는다. 그 기록은 settled 상태의 비용이 아니기 때문이다. CPU 구간에 쓰인 기록 수도 출력한다. G2의 한계는 그대로다. Red: `measure-app-usage.test.mjs`가 mark와 첫 CPU 읽기 사이에 대기가 없음을 찾았다.
@@ -13,6 +15,7 @@
 - F502-16: 배치를 준비 중인 표면 위의 누름은 commit을 기다렸다가 표면에 간다. 이전에는 main page로 갔고, main page가 없는 창에서는 어디에도 가지 않았다.
 - F585: surface가 숨겨진 뒤나 press 중에 영역이 표시되는 터미널은 page에서 키보드를 받고, 키보드를 가진 채 숨겨진 영역은 표시될 때 키보드를 되찾는다.
 - F535-3: gate count만으로는 쓰지 않는다. 잠든 writer는 다음 event까지 최대 1분 동안 count를 들고 있으므로, 다른 앱에서 입력 소스를 바꿔도 idle 앱이 초마다 쓰기와 index update를 치르지 않는다. Red: `TestACountWaitsForTheNextWrite`, `a_count_waits_for_the_next_write`, `event_ring_test`의 pipe 검사가 count가 쓰인 것을 찾았다.
+- F457: run 시작 event가 빈 object를 담는다. Go host는 data가 null인 view event를 거절하므로, 이제 `run-start`가 mygo와 Wails의 view에 도달한다.
 - F502-16: 허용된 host 차이 표가 합류로 늘어난 파일을 적고, main page 없는 창의 library test 는 framework 를 부르지 않는다. Red: host structure audit 이 각 파일을 지목했다.
 - F502-16: contract 는 hello deadline 의 끝을 모든 host 의 case 로 두고, Rust host 도 Go host 처럼 hello 뒤의 침묵을 test 한다. Red: host structure audit 이 case 없는 Go test 를 지목했다.
 - F502-16: mygo workbench의 `core.projects.flush`는 host가 layout, 창 geometry, tab을 저장한 뒤에 답하고 저장이 실패하면 그 실패를 답하므로, reload가 쓰기를 잃지 않는다.
@@ -146,6 +149,9 @@
 - F502-13: exposure kind `dom`은 모든 host와 모든 plugin 선언에서 `element`가 된다: `exposes.element`, `expose.element`, `element.rect`, `element.act`, `sok element`, MCP tool `element_rect`와 `element_act`, `exposure.list`의 member `element`. `exposes.dom`을 가진 manifest는 거부된다. workbench status는 workbench에 대해 정의된다: `core.window.workbench`, `core.workbench.error`, 행이 `{role, expose, command, text}`인 `core.workbench.audit`, responder owner와 `host.hit` kind `workbench`. window check는 `core.window.workbench`의 새 `start`를 기다리고, 각각 `Object.values(APPS)` 또는 `MAIN_PAGE_APPS`를 순회하며, `scripts/check-e2e-host-parity.mjs`가 이를 검사한다.
 - F463: core가 checks kit과 실행 파일 하나 `soksak-check`를 씁니다. Red: `scripts/test/workflows.test.mjs`가 실패했습니다. Green: 통과합니다.
 - F466: 기록은 임시 log를 인용하지 않고, record 검사가 새 인용을 보고합니다.
+- F476: 0.0.36 release 뒤에도 0.0.34였던 `LATEST_PUBLISHED`와 그 test를 지워 test가 선언된 version을 되풀이하지 않습니다.
+- F474: release run이 v0.0.36을 게시했고 registry가 이를 plugin, sidecar release와 함께 올립니다.
+- F474: release candidate는 0.0.36입니다.
 - F475: `@soksak/plugin-api`가 registry의 publish 검사가 각 core release에서 읽는 `./exposure-check`를 다시 export합니다. 명령은 없습니다. Red: `packages/plugin-api/test/package-files.test.mjs`가 실패했습니다. Green: 통과합니다.
 - F473: process identity library가 깨끗한 checkout에서 빌드됩니다. Red: `scripts/test/process-identity-build.test.mjs`가 실패했습니다. Green: 통과합니다.
 - F472: 모든 실행 파일은 `sok` 또는 `sok-<what>`이고 모든 make target은 선언된 동사로 시작하며, `make check-commands`가 이 형식을 강제합니다. Red: kit test가 이전 형식을 보고했습니다. Green: `make check-commands`가 통과합니다.

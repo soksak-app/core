@@ -691,7 +691,7 @@ func (s *Shell) followRun(going bool) {
 		return
 	}
 	for surface, view := range s.surfaces.views {
-		s.pushView(surface, view, "run-start", nil)
+		s.pushView(surface, view, "run-start", map[string]any{})
 	}
 }
 

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F595: Injected input keeps its order behind input that waits for a layout.
+- F586: The close of a window with a region in the lease mode no longer records `image view released: project window is closed` on the Tauri host. Red: a release after its window closed reported that failure.
 - F502-16: A window of the Wails host has the size that it was asked for, and its web view has the size of its content, so the page shows its last rows and a native view stands on the page. The Wails modules read a local checkout of the fork until F592 publishes it.
 - F593: Input that waits for a layout keeps its order on the Tauri host, where the framework overrides `sendEvent:`, and a middle button, a scroll, a move and a modifier change no longer overtake it.
 - F590: `IDLE=1` waits after its last request until the counts of the gate that the preparation left are written, and only then takes the first CPU reading, because those writes are no cost of the settled state. It prints the records written over the CPU interval. The bounds of G2 are unchanged. Red: `measure-app-usage.test.mjs` found no wait between the marks and the first CPU reading.
@@ -13,6 +15,7 @@
 - F502-16: A press under a surface whose layout is preparing waits for the commit and reaches the surface. It used to reach the main page, or nothing in a window without one.
 - F585: A terminal whose region shows after a hide of its surface, or in a press, takes the keyboard from its page, and a region that hid with the keyboard takes it back when it shows.
 - F535-3: A count of the gate alone does not write: a writer that sleeps keeps it until the next event, for at most a minute, so a change of the input source in another application no longer costs an idle application a write and an index update each second. Red: `TestACountWaitsForTheNextWrite`, `a_count_waits_for_the_next_write` and the pipe checks of `event_ring_test` found the count written.
+- F457: The start of a run carries an empty object, because the Go host refuses a view event whose data is null, so `run-start` reaches the views of mygo and Wails.
 - F502-16: The tables of the allowed host differences list the files that the joined lines added, and the library test of a window without a main page names no framework. Red: the audit of the host structure named each file.
 - F502-16: The contract holds the end of the hello deadline as a case of every host, and the Rust host tests the silence after a hello as the Go host does. Red: the audit of the host structure named the Go test without a case.
 - F502-16: `core.projects.flush` on the mygo workbench answers after the host stored the layout, the geometry of the window and the tabs, and with the failure of a store that failed, so a reload loses no write.
@@ -146,6 +149,9 @@
 - F502-13: The exposure kind `dom` becomes `element` on every host and in every plugin declaration: `exposes.element`, `expose.element`, `element.rect`, `element.act`, `sok element`, the MCP tools `element_rect` and `element_act` and the member `element` of `exposure.list`; a manifest with `exposes.dom` is refused. The workbench statuses are defined over the workbench: `core.window.workbench`, `core.workbench.error` and `core.workbench.audit`, whose rows are `{role, expose, command, text}`, and the responder owner and the `host.hit` kind `workbench`. The window checks wait for a new `start` of `core.window.workbench`, and each iterates `Object.values(APPS)` or `MAIN_PAGE_APPS`, which `scripts/check-e2e-host-parity.mjs` checks.
 - F463: Core uses the checks kit and its one executable `soksak-check`. Red: `scripts/test/workflows.test.mjs` failed. Green: it passes.
 - F466: Records cite no temporary log, and the record check reports a new citation.
+- F476: `LATEST_PUBLISHED`, which read 0.0.34 after the release of 0.0.36, and its test are removed, so a test repeats no declared version.
+- F474: The release run published v0.0.36, and the registry lists it with the plugin and sidecar releases.
+- F474: The release candidate is 0.0.36.
 - F475: `@soksak/plugin-api` exports `./exposure-check` again, which the publish check of the registry reads from each core release. It has no command. Red: `packages/plugin-api/test/package-files.test.mjs` failed. Green: it passes.
 - F473: The process identity library builds in a clean checkout. Red: `scripts/test/process-identity-build.test.mjs` failed. Green: it passes.
 - F472: Every executable is `sok` or `sok-<what>`, every make target starts with a declared verb, and `make check-commands` holds this form. Red: the kit test reported the earlier forms. Green: `make check-commands` passes.

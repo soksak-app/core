@@ -196,6 +196,10 @@ The page owns the height of its first row: `--chrome-row` in `packages/workbench
 
 Moving the buttons into the page's own view is what made AppKit take them back on a title or recording-indicator change, which showed one frame with the buttons missing or at the title bar position in about one of 48 window moves and resizes. The title bar height does not come from a toolbar: an empty toolbar with the unified compact style fixes the title bar at 40pt, so the buttons would leave the centre of a first row that the frame factor enlarges.
 
+## Wayland limits
+
+A client on Wayland cannot place or focus a toplevel: the compositor decides both, and GDK's `set_accept_focus` and `set_focus_on_map` do nothing there. An operation that needs either returns `<operation> is not implemented on wayland`, and a window check that needs either runs on X11. Input into a page needs neither: on X11 and on Wayland a host makes `GdkEvent` values inside the process and gives them to `gtk_main_do_event`, and it uses no XTEST and moves no real pointer.
+
 ## Windows state
 
 On Windows both hosts implement only directory identity (`platform/windows/identity.*`). Every other operation in `platform/windows/unsupported.*` returns an error of the form `<operation> is not implemented on windows`. Application startup fails on Windows at its first platform operation: Wails `Run` and Tauri `run` end with `window resize animation is not implemented on windows` and status 1 before any window opens. Linux has no implementation; `platform.Current()` and `platform::current()` return an error there.
