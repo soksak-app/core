@@ -20,9 +20,9 @@ func (s *Shell) stageInset() float32 { return s.palette.Gap + s.palette.BorderWi
 func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 	s.surfaces.planeDrawn = true
 	project := s.opened()
-	banner := s.drawWorkError(c, width)
+	s.workBanner = s.drawWorkError(c, width)
 	s.drawSpaces(c, project, width)
-	stage := height - banner - s.metrics.spaceTabH - s.metrics.tabsGap
+	stage := height - s.workBanner - s.spaceRowHeight()
 	inset := s.stageInset()
 	sized := s.plane.Width() > 0
 	s.plane.Resize(float64(width-2*inset), float64(stage-2*inset))
@@ -31,7 +31,8 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 			s.fail(err)
 		}
 	}
-	originX, originY := inset, s.chromeHeight()+banner+s.metrics.spaceTabH+s.metrics.tabsGap+inset
+	origin := s.planeOrigin()
+	originX, originY := float32(origin.X), float32(origin.Y)
 	ui.Box(c).Size(width, stage).DrawOver(func(p *ui.Painter, r ui.Rect) { s.drawRail(p, r, inset) }).Children(func() {
 		cards := s.plane.Cards()
 		s.forgetCardReads(cards)

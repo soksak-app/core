@@ -477,7 +477,7 @@ function tab(text, on, { dot, pick, close, rename, expose, closeExpose }) {
   el.dataset.on = String(on);
   el.title = text;
   // The project color is shown as the background of the selected tab. No separate mark is used.
-  if (dot && on) el.style.background = `color-mix(in srgb, ${dot} 24%, transparent)`;
+  if (dot && on) el.style.background = `color-mix(in srgb, ${dot} var(--project-tab-mix), transparent)`;
   const name = document.createElement("span");
   name.className = "bar-tab__name";
   name.textContent = text;
