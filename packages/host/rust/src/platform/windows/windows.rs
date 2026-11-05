@@ -20,19 +20,19 @@ use super::{
     Platform, Pointer, ProcessFootprint, Raster, WindowOverlay,
 };
 
-#[path = "identity.rs"]
-mod identity;
-#[path = "unsupported.rs"]
-mod unsupported;
 #[cfg(feature = "diagnostics")]
 #[path = "capture.rs"]
 mod capture;
+#[path = "identity.rs"]
+mod identity;
 #[path = "input.rs"]
 mod input;
 #[path = "show_windows.rs"]
 mod show_windows;
 #[path = "ui_thread.rs"]
 mod ui_thread;
+#[path = "unsupported.rs"]
+mod unsupported;
 #[path = "webview.rs"]
 mod webview;
 
