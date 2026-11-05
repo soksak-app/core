@@ -119,7 +119,7 @@ ancillary data 를 읽는 방법은 언어마다 다르다. Go 는 표준 라이
 각 결정은 권장 선택과 그 이유를 적는다. 이후 항목이 기대는 의존성이나 계약을 정하므로 선택은 사용자의 몫이다.
 
 - **D1 Toolkit.** 권장: 두 호스트 모두 GTK3 와 WebKitGTK 4.1, Wails 는 `gtk3` build tag [S2]. 이유: Tauri 에는 GTK3 만 있고 [S6][S8], 공유 `native/linux` 라이브러리 하나가 `native/darwin` 처럼 두 호스트에 하나의 구현과 하나의 테스트 세트를 유지한다. Wails 는 v3.1 이 GTK3 build 를 제거한다고 적는다 [S3]. 그 release 가 이 결정을 다시 연다. 그때의 선택은 Tauri 의 GTK3 라이브러리 옆에 Wails 용 GTK4 라이브러리를 두는 것이다.
-- **D2 Display server.** 권장: 애플리케이션이 X11 과 Wayland 에서 동작하도록 GTK 의 backend 선택 위에 만든다(`GDK_BACKEND` 가 backend 를 고른다 [S54]). 창 캡처 [S36][S37]와 `MoveWindow` [S28]는 Wayland 에서 사용자 조작 없이 쓸 수 없으므로 창 검사는 X11 에서 실행한다. backend 가 제공할 수 없는 연산은 `<operation> is not implemented on wayland` 를 반환한다.
+- **D2 Display server.** 권장: 애플리케이션이 X11 과 Wayland 에서 동작하도록 GTK 의 backend 선택 위에 만든다(`GDK_BACKEND` 가 backend 를 고른다 [S54]). 창 캡처 [S36][S37]와 `MoveWindow` [S28]는 Wayland 에서 사용자 조작 없이 쓸 수 없으므로 창 검사는 X11 에서 실행한다. backend 가 제공할 수 없는 연산은 `<operation> is not implemented on wayland` 를 반환한다. Wayland 에서 client 는 toplevel 을 배치하거나 focus 할 수 없다 ([호스트](../spec/hosts.ko.md#wayland-한계)).
 - **D3 글꼴 rasterizer.** 권장: Pango 와 cairo(선택 1). 이유: GTK3 와 WebKitGTK 가 호스트를 실행하는 모든 기계에 이 라이브러리를 이미 요구하고, fontconfig 가 사용자의 글꼴 설정과 fallback 을 적용하며 [S49], C 구조가 `frame.m` 과 대응한다.
 - **D4 프레임 전송.** 권장: seal 한 memfd 를 persistent socket 의 `SCM_RIGHTS` 로 전달. 이유: 다른 프로세스가 열 수 있는 파일 이름이 없고, descriptor 자체가 권한이며, 복사 후 `consumed` 규칙을 바꿀 필요가 없다. 비용은 Rust `recvmsg` 의존성이다 [S53].
 - **D5 표시 대기.** 권장: R2-7-4 를 prototype 으로 두고, DOM 변경 뒤 toplevel frame clock 의 `after-paint` [S24]가 WebKitGTK 의 그 변경 그리기 뒤에 오는지를 tracked test 로 측정한다. 그렇지 않으면 공개 WebKitGTK API 로는 [네이티브 표면](../spec/native-surfaces.ko.md)의 commit 계약을 충족할 수 없으며, 그 발견은 다른 Linux 호스트 항목보다 먼저 사용자에게 돌아간다.
