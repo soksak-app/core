@@ -664,12 +664,32 @@ function evaluateDrag(value) {
 
   const targetSourceFrames = contentFrames.filter(({ width, height }) =>
     width === targetWidth && height === targetHeight);
+  // The stages of the final size relative to the gesture end: the last host layout and the last source frame of the final
+  // viewport. A convergence result states them, so the stage that took the time is read from the result.
+  const finalLayout = drag.layouts.at(-1);
+  const sinceEnd = (stage) => (finalLayout[stage] === null
+    ? null : numberAt(finalLayout[stage], `drag.layouts[${drag.layouts.length - 1}].${stage}`) - gestureEndedAtMs);
+  const finalSource = targetSourceFrames.at(-1);
+  const stages = {
+    finalLayout: {
+      ticket: finalLayout.ticket,
+      begunMs: sinceEnd("begun"),
+      requestedMs: sinceEnd("requested"),
+      presentedMs: sinceEnd("presented"),
+      committedMs: sinceEnd("committed"),
+    },
+    finalSourceFrame: finalSource ? {
+      sourceSequence: finalSource.sourceSequence,
+      lowerMs: finalSource.timeRange.lowerMs - gestureEndedAtMs,
+      upperMs: finalSource.timeRange.upperMs - gestureEndedAtMs,
+    } : null,
+  };
   if (targetSourceFrames.length === 0) {
     criterionFailures.push({ criterion: "convergence", error: new Error(
       `drag.contentFrames: expected ${mismatchedAtEnd
         ? "a post-input source frame matching the presented viewport"
         : "a source frame matching the final viewport"}; received ${JSON.stringify({
-        displayedAtMs, targetViewport: { width: targetWidth, height: targetHeight }, contentFrames,
+        displayedAtMs, stages, targetViewport: { width: targetWidth, height: targetHeight }, contentFrames,
       })}`) });
   }
 
@@ -698,7 +718,7 @@ function evaluateDrag(value) {
   if (!selectedPaint && targetSourceFrames.length > 0) {
     criterionFailures.push({ criterion: "convergence", error: new Error(
       `drag.contentFrames: expected a source-backed final-target paint capture within ${DRAG_CONTENT_INTERVAL_LIMIT_MS} ms after gesture end; received ${JSON.stringify({
-        gestureEndedAtMs, mismatchedAtEnd, targetViewport: { width: targetWidth, height: targetHeight },
+        gestureEndedAtMs, stages, mismatchedAtEnd, targetViewport: { width: targetWidth, height: targetHeight },
         finalTargetRectPt, targetSourceFrames, tailGeometryFrames: [...tailGeometryByIndex.values()],
       })}`) });
   }
@@ -715,6 +735,7 @@ function evaluateDrag(value) {
       paintCaptureTimeMs: capture.timeMs,
       paintSourceSequence: converged.sourceSequence,
       eventualPresentationCaptureFrameIndex: converged.displayCapture.frameIndex,
+      stages,
       timeLimitMs: DRAG_CONTENT_INTERVAL_LIMIT_MS,
     };
     paintCaptureFrameIndex = capture.frameIndex;
@@ -762,6 +783,7 @@ function evaluateDrag(value) {
       paintCaptureTimeMs: null,
       paintSourceSequence: null,
       eventualPresentationCaptureFrameIndex: null,
+      stages,
       timeLimitMs: DRAG_CONTENT_INTERVAL_LIMIT_MS,
     };
   }

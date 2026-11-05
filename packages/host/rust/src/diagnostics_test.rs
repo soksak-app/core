@@ -586,3 +586,40 @@ fn native_drag_delivers_the_press_the_steps_and_the_release_of_each_round_trip()
     );
     assert_eq!(*phases.borrow(), [1, 2, 3], "down, drag and the release up");
 }
+
+// contract: recording.drag.layout-trace-after-settle
+#[test]
+fn a_recorded_drag_stops_its_layout_trace_after_the_last_placement_is_presented() {
+    let order = RefCell::new(Vec::new());
+    let (settled, stopped) = stop_after_settled(
+        || {
+            order.borrow_mut().push("settle");
+            Ok::<_, Failure>(1)
+        },
+        || {
+            order.borrow_mut().push("stop");
+            Ok::<_, Failure>(2)
+        },
+    );
+    assert_eq!((settled.unwrap(), stopped.unwrap()), (1, 2));
+    assert_eq!(*order.borrow(), ["settle", "stop"]);
+
+    let order = RefCell::new(Vec::new());
+    let (settled, stopped) = stop_after_settled(
+        || -> Result<(), Failure> {
+            order.borrow_mut().push("settle");
+            Err(internal("the drag was not presented"))
+        },
+        || {
+            order.borrow_mut().push("stop");
+            Ok::<_, Failure>(())
+        },
+    );
+    assert_eq!(settled.unwrap_err().message, "the drag was not presented");
+    assert!(stopped.is_ok());
+    assert_eq!(
+        *order.borrow(),
+        ["settle", "stop"],
+        "the trace stops also when the drag fails"
+    );
+}

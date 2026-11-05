@@ -529,29 +529,33 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 			tickMu.Unlock()
 		}
 	}
-	var result map[string]any
-	switch {
-	case !framework.MainPage():
-		result, err = workbenchDrag(plan, func(method string, params any) (json.RawMessage, error) {
-			return h.ask(s, method, params, pageTimeout)
-		}, h.steps.listen, func() (map[string]any, error) { return nativeDragPresented(h, s, plan, from, stepped) })
-	case native:
-		result, err = nativeDragPresented(h, s, plan, from, stepped)
-	default:
-		result, err = pageDrag(h, s, plan, ticks, stepped)
-	}
-	var layouts []map[string]any
-	if captureOptions.capture {
-		if capture, captureErr := recorder(); captureErr == nil {
-			var records [][5]float64
-			var traceErr error
-			mainThreadStep(func() { records, traceErr = capture.LayoutTraceStop() })
-			err = errors.Join(err, traceErr)
-			layouts = layoutTrace(records)
-		} else {
-			err = errors.Join(err, captureErr)
+	// Each drag path answers after its last layout is displayed, so the layout trace stops after that presentation.
+	settle := func() (map[string]any, error) {
+		switch {
+		case !framework.MainPage():
+			return workbenchDrag(plan, func(method string, params any) (json.RawMessage, error) {
+				return h.ask(s, method, params, pageTimeout)
+			}, h.steps.listen, func() (map[string]any, error) { return nativeDragPresented(h, s, plan, from, stepped) })
+		case native:
+			return nativeDragPresented(h, s, plan, from, stepped)
+		default:
+			return pageDrag(h, s, plan, ticks, stepped)
 		}
 	}
+	var layouts []map[string]any
+	result, err := stopAfterSettled(settle, func() error {
+		if !captureOptions.capture {
+			return nil
+		}
+		capture, err := recorder()
+		if err != nil {
+			return err
+		}
+		var records [][5]float64
+		mainThreadStep(func() { records, err = capture.LayoutTraceStop() })
+		layouts = layoutTrace(records)
+		return err
+	})
 	if err != nil {
 		// When the requester does not receive the frame folder, the recording stops and the folder is deleted.
 		if captureOptions.capture {
@@ -697,6 +701,13 @@ func layoutTrace(records [][5]float64) []map[string]any {
 		})
 	}
 	return layouts
+}
+
+// stopAfterSettled runs settle, which waits until the last layout of a drag is displayed, and then stop, which ends the layout
+// trace, so that the trace holds the presentation of the last layout. stop runs also when settle fails.
+func stopAfterSettled[T any](settle func() (T, error), stop func() error) (T, error) {
+	result, err := settle()
+	return result, errors.Join(err, stop())
 }
 
 // dragResult checks the drag reply of the page, waits until the last layout is displayed, and returns the result.
