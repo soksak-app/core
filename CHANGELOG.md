@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F502-16: A request that the page of a closed project sends while a retain runs no longer fails that retain with `retain surface entry is invalid`: the mygo and Wails hosts refuse the request, and a send of the host leaves no session without a root.
 - F502-16: A press or a key on a divider or a tab between the close of a project and the next frame no longer stops the mygo host, and a held boundary or a dragged tab ends when its plane leaves, so it moves no boundary of another space. A question about a tab of a plane that left closes, a save that succeeds after its tab left shows no failure and one that fails is still shown, and `core.card.sidebar.*` refuses in a window that shows no project.
 - F502-16: A read of `core.verify` after the close of the shown project no longer stops the mygo host. A plane that left has no rows until the frame of the next plane, so a read states no plane that the window did not draw.
 - F502-21: `setDialogBackground` takes an object `{enabled}`, as every other host call does, and a row B of the framework table lists it as the call that only mygo has, so the host parity check passes. A row P lists `Frontend.Frames`.

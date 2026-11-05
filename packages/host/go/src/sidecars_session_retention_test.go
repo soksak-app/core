@@ -302,6 +302,99 @@ func TestRetainKeepsAnOrdinarySurfaceFirstSentDuringTheStart(t *testing.T) {
 	}
 }
 
+// sendDuringARetain runs a retain, makes send while it prepares its service, and returns the line of the retain.
+func sendDuringARetain(t *testing.T, s *Surfaces, send func(c *Sidecars, name string)) []RetainedSurface {
+	t.Helper()
+	c := s.sidecars
+	c.stopped = false
+	c.persistent["fixture-sidecar"] = true
+	service := &sidecar{name: "fixture-sidecar", persistent: true, outbox: make(chan queuedLine, 4), closeWaiters: map[string]chan error{}, retained: map[string]int{}, surfaces: map[string]bool{}}
+	c.running[service.name] = service
+	c.RetainSending = func(name string) { send(c, name) }
+	done := make(chan error, 1)
+	go func() {
+		_, err := c.Retain([]RetainedSurface{{Surface: "listed", Root: "/fixture/listed"}})
+		done <- err
+	}()
+	for {
+		var request struct {
+			Request  string            `json:"request"`
+			Surfaces []RetainedSurface `json:"surfaces"`
+		}
+		select {
+		case err := <-done:
+			t.Fatalf("the retain answered before its request: %v", err)
+		case line := <-service.outbox:
+			if err := json.Unmarshal(line.bytes, &request); err != nil {
+				t.Fatalf("line: %v", err)
+			}
+		}
+		if request.Request == "" {
+			continue // The send that the retain let through.
+		}
+		c.mu.Lock()
+		waiter := service.closeWaiters[request.Request]
+		service.retained[request.Request] = 0
+		c.mu.Unlock()
+		waiter <- nil
+		if err := <-done; err != nil {
+			t.Fatalf("retain: %v", err)
+		}
+		return request.Surfaces
+	}
+}
+
+// The page of a tab outlives the close of its project for a moment, and its request then finds a window that shows no project.
+// That request starts no session, and the retain goes on.
+func TestARequestOfAPageInAWindowWithNoProjectIsRefusedDuringARetain(t *testing.T) {
+	s := sidecarSessionSurfaces(t)
+	s.root = ""
+	var refused error
+	kept := sendDuringARetain(t, s, func(c *Sidecars, name string) {
+		refused = s.SidecarSend(name, "tab-of-a-closed-project", json.RawMessage(`{"operation":"open"}`), nil)
+	})
+	if refused == nil {
+		t.Fatal("the request of a page in a window with no project was not refused")
+	}
+	if !reflect.DeepEqual(kept, []RetainedSurface{{Surface: "listed", Root: "/fixture/listed"}}) {
+		t.Fatalf("retain surfaces = %v", kept)
+	}
+}
+
+// A send of the host reaches its service in a window with no project, as an image detach does, and leaves no session behind.
+func TestASendOfTheHostInAWindowWithNoProjectLeavesNoSession(t *testing.T) {
+	s := sidecarSessionSurfaces(t)
+	s.root = ""
+	const surface = "tab-of-a-closed-project"
+	kept := sendDuringARetain(t, s, func(c *Sidecars, name string) {
+		if err := c.Send(s, name, surface, json.RawMessage(`{"operation":"open"}`)); err != nil {
+			t.Errorf("send: %v", err)
+		}
+	})
+	if !reflect.DeepEqual(kept, []RetainedSurface{{Surface: "listed", Root: "/fixture/listed"}}) {
+		t.Fatalf("retain surfaces = %v", kept)
+	}
+	c := s.sidecars
+	c.mu.Lock()
+	root, rooted := c.roots[surface]
+	c.mu.Unlock()
+	if rooted {
+		t.Fatalf("the send left the root %q", root)
+	}
+	c.RetainSending = nil
+	delete(c.running, "fixture-sidecar")
+	c.persistent = map[string]bool{}
+	if _, err := c.Retain([]RetainedSurface{}); err != nil {
+		t.Fatal(err)
+	}
+	c.mu.Lock()
+	_, owned := c.owners[surface]
+	c.mu.Unlock()
+	if owned {
+		t.Fatal("a retain left the owner of a surface that it does not list")
+	}
+}
+
 // contract: sidecars.native-view-removal.retains-persistent-layout-session
 func TestNativeViewRemovalRetainsPersistentSession(t *testing.T) {
 	s := sidecarSessionSurfaces(t)
