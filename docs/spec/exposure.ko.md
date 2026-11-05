@@ -132,6 +132,8 @@ status `core.focus`는 창의 first responder를 가진 문서에서 키보드 �
 | `core.workbench.audit` | `{unbound}`: audit이 나열한 워크벤치의 조작 요소([사용자 인터페이스](#사용자-인터페이스)) |
 | `core.pointer` | `{sequence, down, up, pressedConnected, click}`: workbench가 받은 마지막 pointer sequence다. press는 `sequence`를 늘리고 나머지 member를 새로 시작한다. `down`, `up`, `click`은 대상을 가리킨다. 대상을 둘러싼 가장 가까운 exposed element의 이름이고, 없으면 tag다. Wails와 Tauri host에서 대상은 page의 element이고 tag는 tag name이다. mygo host에는 tag가 없다. 대상은 마지막 frame의 element tree에서 pointer 위치의 가장 안쪽 element이고, tag는 그 ARIA role이며, tree의 어떤 element도 없는 자리는 `unknown`이고 `pressedConnected`는 `null`이다. release는 press와 release를 둘러싼 가장 가까운 element를 click하고, primary button만 click하며, press한 element가 release 전에 workbench를 떠나면 click이 없다. 버튼을 누르는 key나 assistive technology action은 press 없이 `click`을 기록한다. sequence는 workbench와 그것이 그리는 overlay를 다룬다. native view와 native modal은 별개의 document다. 이 값은 관찰을 식별할 뿐 판정에 쓰지 않는다 |
 
+mygo host에서는 워크벤치의 step이 native window가 닫힌 뒤에 실행될 수 있다. 그런 step의 `core.verify`와 `core.window.workbench` read는 native code를 부르지 않고 워크벤치 오류도 표시하지 않는다. 그 밖의 read 실패는 `core.workbench.error`로 표시한다.
+
 `host.window.reload`는 창의 워크벤치를 다시 시작하고, `plugins-changed`를 받거나 `core.plugins.apply`를 실행한 창도 같은 방식으로 다시 시작한다([설치](installation.ko.md#변경-적용)). 워크벤치의 새 시작을 기다리는 window check와 측정 대상은 새 page process가 아니라 `core.window.workbench`의 새 `start`를 기다린다.
 
 ## 등록

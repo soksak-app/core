@@ -83,6 +83,13 @@ func errMissingWindow(window string) *RPCError {
 	return rpcError(codeNoWindow, "window %q does not exist", window)
 }
 
+// WindowClosed reports whether err is the error of a window that closed before the read: a window that closed has nothing to
+// read and no screen to show a failure.
+func WindowClosed(err error) bool {
+	var coded *RPCError
+	return errors.As(err, &coded) && coded.Code == codeNoWindow
+}
+
 // WindowEntry is an item of windows.list.
 type WindowEntry struct {
 	Window string `json:"window"`
