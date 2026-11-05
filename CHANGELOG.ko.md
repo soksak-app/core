@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F502-32: Tauri host는 project가 보이지 않을 때 닫힌 project의 page가 보낸 요청을 거절하고, service에 빈 root의 surface를 보내지 않는다. mygo workbench는 제거된 project의 view가 빠진 placement 뒤에 그 session을 끝낸다.
 - F555: store 변경 하나가 창마다 프로젝트 목록을 두 번이 아니라 한 번 읽는다.
 - F456: mygo host는 창의 backing scale이 바뀌면 image region의 raster를 다시 구성한다.
 - F502-16: mygo workbench의 tab은 page처럼 전체가 button이다: padding을 눌러도 tab을 보이고 close button은 그 안에 선다. card tab은 page의 line height를 가지고, card foot의 글자는 page의 padding에 서고, settings group 이름은 굵다.

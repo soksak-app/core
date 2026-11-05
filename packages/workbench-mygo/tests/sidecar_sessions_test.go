@@ -74,6 +74,22 @@ func TestARemovedProjectLeavesTheRetainedSessions(t *testing.T) {
 	}
 }
 
+// A view of a removed project sends until the placement without it, so the sessions of the project end after that placement.
+func TestARemovedProjectRetainsAfterThePlacementWithoutItsViews(t *testing.T) {
+	stored := &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"))}}
+	f := newTabShell(t, stored)
+	f.open(t)
+	stored.calls, stored.retains = nil, nil
+	f.shell.Registry().Run("core.library.remove", json.RawMessage(`{"id":"prj-a"}`))
+	f.settle()
+	retain := slices.Index(stored.calls, "sidecarsRetain")
+	placement := slices.Index(stored.calls, "presentSurfaces")
+	if retain < 0 || placement < 0 || retain < placement {
+		t.Fatalf("calls %v", stored.calls)
+	}
+	equal(t, retained(t, stored), [][]string{{}})
+}
+
 func TestTheSectionsOfTheShownProjectAreRetained(t *testing.T) {
 	stored := &storedHost{installed: sidebarsInstalled, projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"), tab("tab-bbbbbb", "notes"))}}
 	f := newShell(t, stored)

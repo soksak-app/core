@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F502-32: The Tauri host refuses a request that the page of a closed project sends with no project shown, and sends the service no surface with an empty root. The mygo workbench ends the sessions of a removed project after the placement without its views.
 - F555: A change of the store reads the project registry once for a window instead of twice.
 - F456: The mygo host configures the rasters of its image regions again when the backing scale of a window changes.
 - F502-16: The whole of a tab of the mygo workbench is its button, as on the page: a press on its padding shows the tab, and the close button stands in it. A card tab has the line height of the page, the text of a card foot stands on the padding of the page, and the name of a settings group is bold.
