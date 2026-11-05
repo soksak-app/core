@@ -3,6 +3,7 @@ package support
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,6 +21,18 @@ type CrashReports struct {
 	watcher     *fsnotify.Watcher
 	directory   string
 	application string
+}
+
+// CrashChild returns a path of the running test binary whose name no other process uses. The system can stop writing the crash
+// reports of a process name, and tests.test is the name of every test package of every checkout, so a child that crashes under
+// that name can wait in vain for its report. A hard link keeps the signature of the binary.
+func CrashChild(t *testing.T) string {
+	t.Helper()
+	child := filepath.Join(t.TempDir(), fmt.Sprintf("crash-child-%d", os.Getpid()))
+	if err := os.Link(os.Args[0], child); err != nil {
+		t.Fatal(err)
+	}
+	return child
 }
 
 // WatchCrashReports starts the watch of the crash reports of application before the test starts the child that crashes.

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F547: The Go test whose child crashes on purpose gives the child a name of its own, so it no longer fails when the system writes no crash report for the name `tests.test`.
 - F535: The event writer of each host and of the tool sleeps while it has nothing to write, so an idle application has no wakeup of its log. What wakes a writer that sleeps is stored at once and the batch interval gathers what follows; a native thread wakes it through the pipe of `sp_event_wake_fd`.
 - F535-1: The Rust event writer answers a flush request that it finds while it answers another one, where the second caller got a false deadline error at once.
 - F535-2: The event writer answers a flush request behind a stop and stores the events behind that request, and a caller whose writer ended gets that error at once instead of a false deadline error.

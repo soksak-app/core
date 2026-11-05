@@ -920,6 +920,17 @@ const FEATURE_LINKS = [
     levels: ["unit", "native"],
   },
   {
+    id: "F547",
+    implementation: [
+      { file: "packages/host/go/tests/support/crash_reports.go", symbol: "func CrashChild(" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/application_log_test.go", id: "TestStartStandardErrorWritesAFatalErrorToTheCrashFileAndEndsTheProcessWithTheSystemCrash" },
+    ],
+    expected: "The child that crashes on purpose has a name of its own, and the test requires the crash report of that child.",
+    levels: ["unit"],
+  },
+  {
     id: "F535-2",
     implementation: [
       { file: "packages/sok/rust/src/event_log.rs", symbol: "while let Some(request) = drain(&mut out, true) {" },

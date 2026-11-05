@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F547: 일부러 crash하는 child를 쓰는 Go test는 child에 고유한 이름을 주므로, 시스템이 `tests.test` 이름의 crash report를 쓰지 않아도 더 이상 실패하지 않는다.
 - F535: 각 host와 도구의 event writer는 쓸 것이 없는 동안 잠들므로 유휴 앱에는 log의 깨움이 없다. 잠든 writer를 깨운 것은 즉시 저장되고 batch 간격이 뒤따르는 것을 모으며, native 스레드는 `sp_event_wake_fd`의 pipe로 writer를 깨운다.
 - F535-1: Rust event writer는 flush 요청에 답하는 중에 찾은 다른 flush 요청에도 답한다. 전에는 두 번째 호출자가 사실이 아닌 deadline 오류를 곧바로 받았다.
 - F535-2: event writer는 stop 뒤의 flush 요청에 답하고 그 요청 뒤의 event를 저장한다. writer가 끝난 호출자는 사실이 아닌 deadline 오류 대신 그 사실을 알리는 오류를 곧바로 받는다.
