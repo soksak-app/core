@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	sok "github.com/soksak-app/core/packages/sok/go/src"
@@ -168,7 +169,7 @@ func TestInstalledPluginsDocumentReportsAnInvalidState(t *testing.T) {
 func TestInstalledAssetsServeTheFilesOfEnabledPackages(t *testing.T) {
 	config := installedFixture(t)
 	frontend := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "frontend "+r.URL.Path) })
-	handler := host.InstalledAssets(config)(frontend)
+	handler := host.InstalledAssets(config, fstest.MapFS{})(frontend)
 	get := func(path string) (int, string, string) {
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
@@ -197,7 +198,7 @@ func TestAnUnreadableInstallationServesTheFrontendModules(t *testing.T) {
 	config := t.TempDir()
 	writeInstalled(t, config, map[string]string{"plugins/installed.json": `{"format": 2, "plugins": {}}`})
 	frontend := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "frontend "+r.URL.Path) })
-	handler := host.InstalledAssets(config)(frontend)
+	handler := host.InstalledAssets(config, fstest.MapFS{})(frontend)
 	for _, path := range []string{"/modules/soksak/dist/index.js", "/modules/@soksak/plugin-api/index.js"} {
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
@@ -225,7 +226,7 @@ func sharedFixture(t *testing.T) string {
 func TestInstalledAssetsServeTheSharedModulesOfExtensionPoints(t *testing.T) {
 	config := sharedFixture(t)
 	frontend := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "frontend "+r.URL.Path) })
-	handler := host.InstalledAssets(config)(frontend)
+	handler := host.InstalledAssets(config, fstest.MapFS{})(frontend)
 	get := func(path string) (int, string, string) {
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
@@ -416,14 +417,20 @@ func writeReadsRecord(t *testing.T, config string, ids ...string) {
 	})
 }
 
-// manifestsRead returns the manifests that requests reads, in order.
-func manifestsRead(t *testing.T, requests func()) []string {
+// filesRead returns the plugin.json and package.json files that requests reads, in order.
+func filesRead(t *testing.T, requests func()) []string {
 	t.Helper()
 	var read []string
-	sok.SetAfterManifestRead(func(file string) { read = append(read, file) })
-	defer sok.SetAfterManifestRead(nil)
+	sok.SetAfterPluginFileRead(func(file string) { read = append(read, file) })
+	defer sok.SetAfterPluginFileRead(nil)
 	requests()
 	return read
+}
+
+// manifestsRead returns the plugin.json files that requests reads, in order.
+func manifestsRead(t *testing.T, requests func()) []string {
+	t.Helper()
+	return slices.DeleteFunc(filesRead(t, requests), func(file string) bool { return filepath.Base(file) != "plugin.json" })
 }
 
 // readsRepeated is the manifest once for each of the requests of a read test.
@@ -544,4 +551,123 @@ func TestTheRequestAfterAnUpdateReadsTheNewManifest(t *testing.T) {
 	writeInstalled(t, config, map[string]string{"plugins/beta/1.0.0/plugin.json": `{"id": "beta", "extends": {"language": {"version": "1.0.0",
 		"schema": {}, "modules": {"other": "ui/state.js"}}}}`})
 	checkShared(t, config, "/shared/beta.language/state.js", "")
+}
+
+// readsCoreModule is the file of a core package that the bundled frontend of a read test holds.
+const readsCoreModule = "/modules/soksak/dist/index.js"
+
+// readsPageFiles is the handler of the page files of a host on config, whose next handler answers core.
+func readsPageFiles(config string) http.Handler {
+	frontend := fstest.MapFS{"modules/soksak/dist/index.js": {Data: []byte("core")}}
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "core") })
+	return host.InstalledAssets(config, frontend)(next)
+}
+
+// readsAnswer is the body of the answer of handler to urlPath.
+func readsAnswer(handler http.Handler, urlPath string) string {
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, urlPath, nil))
+	return recorder.Body.String()
+}
+
+// contract: installed.modules.frontend-first
+func TestAFileOfTheFrontendReadsNoFileOfAPlugin(t *testing.T) {
+	handler := readsPageFiles(readsFixture(t))
+	read := filesRead(t, func() {
+		for range readsRequests {
+			if body := readsAnswer(handler, readsCoreModule); body != "core" {
+				t.Fatalf("answer %q", body)
+			}
+		}
+	})
+	if len(read) != 0 {
+		t.Fatalf("read %v, want no file of a plugin", read)
+	}
+}
+
+// contract: installed.modules.frontend-first
+func TestAFileOfTheFrontendWinsOverAPluginOfTheSamePackage(t *testing.T) {
+	config := readsFixture(t)
+	writeInstalled(t, config, map[string]string{
+		"plugins/alpha/1.0.0/package.json":  `{"name": "soksak"}`,
+		"plugins/alpha/1.0.0/dist/index.js": "plugin",
+		"plugins/alpha/1.0.0/dist/other.js": "plugin other",
+	})
+	handler := readsPageFiles(config)
+	if body := readsAnswer(handler, readsCoreModule); body != "core" {
+		t.Fatalf("core file answered %q", body)
+	}
+	if body := readsAnswer(handler, "/modules/soksak/dist/other.js"); body != "plugin other" {
+		t.Fatalf("other file answered %q", body)
+	}
+}
+
+// contract: installed.modules.read-the-manifest-of-the-request
+func TestAModuleOfAPluginStopsReadingAtItsPackage(t *testing.T) {
+	config := readsFixture(t)
+	read := filesRead(t, func() {
+		checkModule(t, config, "/modules/plugin-beta/ui/state.js", "plugins/beta/1.0.0/ui/state.js")
+	})
+	want := []string{
+		filepath.Join(config, "plugins", "alpha", "1.0.0", "package.json"),
+		filepath.Join(config, "plugins", "beta", "1.0.0", "package.json"),
+		filepath.Join(config, "plugins", "beta", "1.0.0", "plugin.json"),
+	}
+	if !slices.Equal(read, want) {
+		t.Fatalf("read %v, want %v", read, want)
+	}
+}
+
+// contract: installed.modules.read-the-manifest-of-the-request
+func TestAModuleBesideAMalformedPackageJSONIsServed(t *testing.T) {
+	config := readsFixture(t)
+	writeInstalled(t, config, map[string]string{"plugins/alpha/1.0.0/package.json": "{"})
+	checkModule(t, config, "/modules/plugin-beta/ui/state.js", "plugins/beta/1.0.0/ui/state.js")
+	checkModule(t, config, "/modules/plugin-alpha/ui/state.js", "")
+}
+
+// contract: document.plugin.folder
+func TestThePluginFolderReadsTheManifestOfItsPluginAlone(t *testing.T) {
+	config := readsFixture(t)
+	beta := filepath.Join(config, "plugins", "beta", "1.0.0")
+	read := filesRead(t, func() {
+		if folder, err := host.PluginFolder(config, "beta"); err != nil || folder != beta {
+			t.Fatalf("folder %q error %v", folder, err)
+		}
+	})
+	if want := []string{filepath.Join(beta, "plugin.json")}; !slices.Equal(read, want) {
+		t.Fatalf("read %v, want %v", read, want)
+	}
+}
+
+// contract: document.plugin.folder
+func TestThePluginFolderIsFoundBesideAMalformedPlugin(t *testing.T) {
+	config := readsFixture(t)
+	writeInstalled(t, config, map[string]string{
+		"plugins/alpha/1.0.0/plugin.json":  "{",
+		"plugins/gamma/1.0.0/package.json": "{",
+	})
+	if folder, err := host.PluginFolder(config, "beta"); err != nil || folder != filepath.Join(config, "plugins", "beta", "1.0.0") {
+		t.Fatalf("folder %q error %v", folder, err)
+	}
+	manifest := filepath.Join(config, "plugins", "alpha", "1.0.0", "plugin.json")
+	if _, err := host.PluginFolder(config, "alpha"); err == nil || !strings.Contains(err.Error(), manifest) {
+		t.Fatalf("error %v, want one that names %s", err, manifest)
+	}
+}
+
+// contract: document.plugin.folder
+func TestThePluginFolderFollowsTheInstallation(t *testing.T) {
+	config := readsFixture(t)
+	if _, err := host.PluginFolder(config, "beta"); err != nil {
+		t.Fatal(err)
+	}
+	writeReadsRecord(t, config, "alpha", "gamma")
+	if _, err := host.PluginFolder(config, "beta"); err == nil || err.Error() != "plugin beta is not installed and enabled" {
+		t.Fatalf("removed plugin: %v", err)
+	}
+	writeReadsRecord(t, config, "alpha", "beta", "gamma")
+	if _, err := host.PluginFolder(config, "beta"); err != nil {
+		t.Fatal(err)
+	}
 }

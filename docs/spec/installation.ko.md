@@ -126,12 +126,12 @@ plugin은 설정 폴더에 저장 file을 소유하지 않는다. plugin이 남�
 
 ## 설치된 plugin 제공
 
-두 host는 설정 폴더에서 다음 경로를 제공하며, 요청마다 `plugins/installed.json`을 읽으므로 변경 뒤에 불러온 page는 그 변경을 본다. `/modules/`와 `/shared/` 아래 요청은 자기가 가리키는 plugin의 `plugin.json`만 읽으므로 core module은 하나도 읽지 않는다.
+두 host는 설정 폴더에서 다음 경로를 제공하며, 요청마다 `plugins/installed.json`을 읽으므로 변경 뒤에 불러온 page는 그 변경을 본다. 애플리케이션 frontend가 가진 `/modules/` 아래 파일은 이 경로에 들지 않는다. frontend가 제공하고 그 요청은 설치에서 아무것도 읽지 않으므로, 어떤 plugin도 core 파일을 대신하지 않는다. 그 밖의 `/modules/` 아래 요청은 켜진 plugin의 `package.json`을 id 순서로 자기 package의 plugin까지 읽는다. 읽을 수 없는 `package.json`은 어떤 package도 가리키지 않으며, 그 오류는 `/installed-plugins.json`이 담는다. `/modules/`와 `/shared/` 아래 요청은 자기가 가리키는 plugin의 `plugin.json`만 읽는다.
 
 | 경로 | 내용 |
 | --- | --- |
 | `/installed-plugins.json` | `{ "plugins": [{ id, package, version, manifest, sidecars?, diagnostics? }] }`: `installed.json`의 켜진 plugin을 id 순서로 담고, `manifest`는 설치된 `plugin.json`의 내용이다. `sidecars`는 plugin의 사이드카 의존마다 사이드카 이름 아래 그 사이드카 `sidecar.json`의 `message` 필드를 담으며, 사이드카 의존이 없는 plugin에는 `sidecars`가 없다. 진단 build에서 `diagnostics`는 설치된 package가 `diagnostics.json`을 담을 때 그 내용이며, release build는 보내지 않는다. `installed.json`이 없으면 `{ "plugins": [] }`다. `installed.json`, `plugin.json`, `diagnostics.json`을 읽거나 검사할 수 없으면 문서는 `{ "error": "<message>" }`다 |
-| `/modules/<package>/<path>` | 켜진 설치 plugin의 package는 그 plugin의 기록된 `path` 안의 `<path>` 파일이다. 빈 segment, `.`, `..`가 있는 경로나 없는 파일은 찾을 수 없다. 다른 package는 애플리케이션 frontend에서 온다 |
+| `/modules/<package>/<path>` | 애플리케이션 frontend가 가진 파일은 frontend에서 온다. 그 밖에 켜진 설치 plugin의 package는 그 plugin의 기록된 `path` 안의 `<path>` 파일이다. 빈 segment, `.`, `..`가 있는 경로나 없는 파일은 찾을 수 없다. 다른 package는 애플리케이션 frontend에서 온다 |
 | `/shared/<plugin id>.<point>/<specifier>.js` | 켜진 설치 plugin `<plugin id>`의 `extends.<point>.modules`가 `<specifier>`에 대응한, 그 plugin의 기록된 `path` 안의 파일. 제공자는 연결된 contributor가 없어도 자신이 선언한 module을 읽을 수 있고, 다른 page는 item range가 provider point version을 포함해야 한다. `.js`로 끝나지 않는 경로, 켜진 plugin이 선언하지 않은 지점, 그 지점이 대응하지 않은 specifier, 없는 파일은 찾을 수 없다 |
 
 Workbench는 `/installed-plugins.json`을 JSON module로 가져와 받아들인 각 plugin을 `manifest`로 등록한다. Workbench가 entry나 manifest를 거부한 plugin은 빠지고, 그 오류는 애플리케이션 로그에 쓰는 오류 표시로 보인다. 거부된 manifest는 `installed plugin <id> <version> (<package>): <이유>`로, `error` 문서는 plugin을 등록하지 않은 채 `installed plugins: <error>`로 보인다. 다른 plugin과 page는 시작하고 page는 준비를 보고한다. 빠진 plugin의 tab은 불러오지 않은 plugin의 placeholder로 열린다. `plugins/installed.json`을 읽을 수 없으면 host는 `/installed-plugins.json`을 `error` 문서로 제공하고, 설치 plugin을 가리킬 수 없으므로 `/modules/` 아래 모든 경로를 bundled frontend에서 제공한다. core module이 불러와지고 page가 시작한다. 다른 형식의 문서나, 받아들인 plugin 둘이 같은 id나 package를 가진 문서는 host의 오류다. Main page는 plugin을 등록하기 전에 오류 표시를 설치하고 창 버튼 영역을 비우므로, 그런 문서는 그 오류를 보이고 애플리케이션 로그에 쓴 채로 page 시작을 멈춘다. page는 준비를 보고하지 않으며, `host.window.reload`가 다시 시작한다. plugin의 staged page는 받아들인 plugin 사이에서 자기 plugin을 찾으므로 다른 plugin의 거부가 그 page를 멈추지 않고, 자기 plugin이 거부되면 그 오류가 거부 내용을 밝힌다.

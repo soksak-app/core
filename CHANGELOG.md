@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F545: A core module no longer reads the installation, in both hosts, and a core file of the frontend wins over a plugin of the same package on the main page as it does in a view. A plugin module stops reading `package.json` files at its own plugin, and a malformed `package.json` of one plugin no longer refuses the modules of the others. The plugin folder of a view reads the manifest of its plugin alone.
 - F541: A request of a page module reads the manifest of its own plugin alone, in both hosts, so the first window no longer reads and parses every installed manifest for each module, and a malformed manifest of one plugin no longer refuses the modules of the others.
 - F533: A delay unload of the memory saver that fails gets its next deadline one delay later, so a read or a commit that keeps failing no longer runs again at once with the error display each time.
 - F532: The update step of the Rust diagnostics ends the application through `quit` of the framework port, so `make tauriv2-build` compiles again. `make hosts-check` runs the new `make host-debug-check`, which compiles the two hosts and the two apps in the configuration of the debug apps.

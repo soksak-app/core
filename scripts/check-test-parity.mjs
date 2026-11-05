@@ -897,6 +897,33 @@ const FEATURE_LINKS = [
     levels: ["native"],
   },
   {
+    id: "F545",
+    implementation: [
+      { file: "packages/host/rust/src/installed.rs", symbol: "if path.starts_with(\"/modules/\")" },
+      { file: "packages/host/rust/src/installed.rs", symbol: "state.plugins.get(plugin).filter(|entry| entry.enabled)" },
+      { file: "packages/host/go/src/installed.go", symbol: "func holdsModule(frontend fs.FS, urlPath string) bool {" },
+      { file: "packages/host/go/src/installed.go", symbol: "func PluginFolder(configDir, plugin string) (string, error) {" },
+    ],
+    tests: [
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "a_file_of_the_frontend_reads_no_file_of_a_plugin" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "a_file_of_the_frontend_wins_over_a_plugin_of_the_same_package" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "a_module_of_a_plugin_stops_reading_at_its_package" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "a_module_beside_a_malformed_package_json_is_served" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "the_plugin_folder_reads_the_manifest_of_its_plugin_alone" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "the_plugin_folder_is_found_beside_a_malformed_plugin" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "the_plugin_folder_follows_the_installation" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestAFileOfTheFrontendReadsNoFileOfAPlugin" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestAFileOfTheFrontendWinsOverAPluginOfTheSamePackage" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestAModuleOfAPluginStopsReadingAtItsPackage" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestAModuleBesideAMalformedPackageJSONIsServed" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestThePluginFolderReadsTheManifestOfItsPluginAlone" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestThePluginFolderIsFoundBesideAMalformedPlugin" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestThePluginFolderFollowsTheInstallation" },
+    ],
+    expected: "A core module reads nothing of the installation and wins over a plugin of its package; a plugin module and a plugin folder read up to their own plugin.",
+    levels: ["unit"],
+  },
+  {
     id: "F541",
     implementation: [
       { file: "packages/host/rust/src/installed.rs", symbol: "fn installed_package(config_dir: &Path, name: &str) -> Result<Option<PathBuf>, String> {" },

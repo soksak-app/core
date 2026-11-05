@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F545: 두 host 모두 core module이 설치를 읽지 않으며, frontend의 core 파일은 view에서처럼 main page에서도 같은 package의 plugin보다 우선한다. plugin module은 자기 plugin에서 `package.json` 읽기를 멈추고, 한 plugin의 잘못된 `package.json`이 다른 plugin의 module을 거부하지 않는다. view의 plugin 폴더는 자기 plugin의 manifest만 읽는다.
 - F541: 두 host 모두 page module 요청이 자기 plugin의 manifest만 읽으므로, 첫 창이 module마다 설치된 manifest를 모두 읽고 parse하지 않으며, 한 plugin의 잘못된 manifest가 다른 plugin의 module을 거부하지 않는다.
 - F533: 실패한 memory saver delay unload는 다음 deadline을 한 delay 뒤에 받으므로, 계속 실패하는 읽기나 commit이 매번 오류 표시와 함께 곧바로 다시 돌지 않는다.
 - F532: Rust diagnostics의 update 단계가 framework port의 `quit`으로 애플리케이션을 끝내므로, `make tauriv2-build`가 다시 컴파일된다. `make hosts-check`는 새 `make host-debug-check`를 실행하며, 이 target은 두 host와 두 앱을 debug 앱의 구성으로 컴파일한다.

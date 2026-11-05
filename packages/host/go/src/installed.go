@@ -65,15 +65,18 @@ func enabledPlugins(configDir string) ([]installedPlugin, *sok.InstalledState, e
 // PluginFolder returns the folder of the enabled installed plugin, which the document regions of its surfaces serve
 // at soksak://<plugin>/ (docs/spec/native-surfaces.md#document-regions).
 func PluginFolder(configDir, plugin string) (string, error) {
-	plugins, _, err := enabledPlugins(configDir)
+	state, err := sok.ReadInstalledRecord(configDir)
 	if err != nil {
 		return "", err
 	}
-	index := slices.IndexFunc(plugins, func(entry installedPlugin) bool { return entry.id == plugin })
-	if index < 0 {
+	entry, ok := state.Plugins[plugin]
+	if !ok || !entry.Enabled {
 		return "", fmt.Errorf("plugin %s is not installed and enabled", plugin)
 	}
-	return plugins[index].dir, nil
+	if _, err := sok.ReadInstalledManifest(configDir, plugin, entry); err != nil {
+		return "", err
+	}
+	return filepath.Join(configDir, entry.Path), nil
 }
 
 // sidecarFacts are the facts of a sidecar dependency that the installed document carries: the message form
@@ -199,36 +202,29 @@ func InstalledModule(configDir, urlPath string) (file string, installed, found b
 	return file, true, found, nil
 }
 
-// installedPackage returns the folder of the enabled installed plugin of the package name, or an empty string for no
-// such plugin. A page asks for each of its modules while it starts, so the request reads the name of each enabled plugin
-// and the manifest of that plugin alone.
+// installedPackage returns the folder of the enabled installed plugin of the package name, or an empty string when
+// no enabled plugin has it. The name of a plugin is in its package.json, so the request reads the names in id order up
+// to that plugin, and the manifest of that plugin alone. A package.json that cannot be read names no package;
+// /installed-plugins.json carries its error.
 func installedPackage(configDir, name string) (string, error) {
 	state, err := sok.ReadInstalledRecord(configDir)
 	if err != nil {
 		return "", err
 	}
-	found := ""
 	for _, id := range slices.Sorted(maps.Keys(state.Plugins)) {
 		plugin := state.Plugins[id]
 		if !plugin.Enabled {
 			continue
 		}
-		pkg, err := sok.InstalledName(configDir, plugin)
-		if err != nil {
+		if pkg, err := sok.InstalledName(configDir, plugin); err != nil || pkg != name {
+			continue
+		}
+		if _, err := sok.ReadInstalledManifest(configDir, id, plugin); err != nil {
 			return "", err
 		}
-		if pkg == name && found == "" {
-			found = id
-		}
+		return filepath.Join(configDir, plugin.Path), nil
 	}
-	if found == "" {
-		return "", nil
-	}
-	plugin := state.Plugins[found]
-	if _, err := sok.ReadInstalledManifest(configDir, found, plugin); err != nil {
-		return "", err
-	}
-	return filepath.Join(configDir, plugin.Path), nil
+	return "", nil
 }
 
 // insidePackage returns the file at a relative path inside a package when every part of the path is a name and the
@@ -442,8 +438,17 @@ func InstalledShared(configDir, urlPath string) (file string, shared, found bool
 	return file, true, found, nil
 }
 
+// holdsModule reports whether urlPath is a file under /modules/ of the bundled frontend.
+func holdsModule(frontend fs.FS, urlPath string) bool {
+	if !strings.HasPrefix(urlPath, "/modules/") {
+		return false
+	}
+	info, err := fs.Stat(frontend, strings.TrimPrefix(urlPath, "/"))
+	return err == nil && !info.IsDir()
+}
+
 // InstalledAssets is the asset server middleware that serves the installed plugins. The next handler serves other paths.
-func InstalledAssets(configDir string) Middleware {
+func InstalledAssets(configDir string, frontend fs.FS) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == InstalledPluginsPath {
@@ -452,6 +457,11 @@ func InstalledAssets(configDir string) Middleware {
 				if _, err := w.Write(InstalledPluginsDocument(configDir, diagnosticPlugins)); err != nil {
 					LogError(InstalledPluginsPath, err)
 				}
+				return
+			}
+			// A file of the frontend reads nothing of the installation, so no plugin replaces it.
+			if holdsModule(frontend, r.URL.Path) {
+				next.ServeHTTP(w, r)
 				return
 			}
 			lookup := InstalledModule
