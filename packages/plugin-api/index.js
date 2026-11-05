@@ -1531,7 +1531,12 @@ export function actOn(element, { action, value, event }) {
  * request, and each later different value is sent with the next version until status.unwatch. A repeated status.watch sends the
  * current value again with its version, so a new subscriber of the same watch receives it (docs/spec/exposure.md#relay).
  */
-export function exposureEntries(declared) {
+export function exposureEntries(declared, { place = () => null } = {}) {
+  // The owner of the document may know a place of an element that the document does not lay out; it answers null for any other element.
+  const rectOf = (element) => {
+    const placed = place(element);
+    return placed ? { ...elementRect(element), ...placed } : elementRect(element);
+  };
   const statuses = new Map();
   const commands = new Map();
   const elementEntries = new Map();
@@ -1712,7 +1717,7 @@ export function exposureEntries(declared) {
         if (!resolve) throw new ExposureError(EXPOSURE_ERRORS.invalidParams, `element ${name} takes no address`);
         const element = resolve(params.address, elements(name));
         if (!element) throw new ExposureError(EXPOSURE_ERRORS.noControl, `element ${name} has no element at the address`);
-        if (method === "element.rect") return elementRect(element);
+        if (method === "element.rect") return rectOf(element);
         return actOn(element, params);
       }
       const list = elements(name);
@@ -1725,7 +1730,7 @@ export function exposureEntries(declared) {
       if (!Number.isInteger(index) || index < 0) throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "index must be a non-negative integer");
       const element = list[index];
       if (!element) throw new ExposureError(EXPOSURE_ERRORS.unregistered, `element ${name} has no element at index ${index}`);
-      if (method === "element.rect") return elementRect(element);
+      if (method === "element.rect") return rectOf(element);
       return actOn(element, params);
     },
   };

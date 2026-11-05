@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F502-13: `element.rect` of an item of a picker answers where the modal document draws it on the Wails and Tauri hosts, as the mygo host does, and fails until that document has reported it. Red: the hidden item of the main document answered an empty box at the origin of the window while the item stood on the screen.
 - F584-4: The message of a failed capture ends with the domain and code of the system error, because the description alone may name neither. Red: a failure with the description `the stream failed` lost its code at the content query, at a still capture and at a recording start. A native test checks that a covered window captures the same bytes as before the cover, for each kind of layer and for a change made while covered, without the general content query.
 - F608: The macOS window checks start again without a selected recognizer, because the setup runs the renamed native target.
 - F561-1: A document closed with the keyboard ends its web content process at the close, and its data store can end.
