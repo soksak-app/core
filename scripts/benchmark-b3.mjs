@@ -10,7 +10,7 @@
 // held changes. Phase 1 also builds the debug bundles.
 //
 // Each run of a scenario starts a new application from the executable of its release bundle through the steps `start`, `quit` and
-// `remaining` of runPlan (scripts/test-app.mjs), in a new configuration folder under the session folder in target/b3 into which it
+// `remaining` of runPlan (scripts/test-app.mjs), in a new configuration folder under the session folder in b3Folder into which it
 // installs the index of that application: the workspace registry for the mygo and the other hosts, the public index for the baseline
 // hosts. S0b runs in the application that S3 leaves. A run starts only while swap use is below its share of the swap total and
 // fseventsd uses less than its share of a core, and fails when the display mode or the backing scale of a window differs from the run
@@ -25,7 +25,7 @@
 // trace state of the run and name no TRACE of their own, and runs make measure-host-calls on the other and the baseline hosts and make
 // measure-trace-share on all five applications from their debug bundles.
 //
-// The baseline record target/b3/baseline.json of this checkout, which the measurement target items write:
+// The baseline record b3/baseline.json in the git common directory of this checkout (baselineRecordFile), which the measurement target items write:
 //   {"schema": 1, "heads": [<40 hex digits>, ...], "sidecars": [{"repository": <path>, "revisions": [<40 hex digits>, ...]}],
 //    "plugins": [{"id": <plugin id>, "version": <version>, "sha256": <64 hex digits>}]}
 // `heads` are the heads of the baseline branch in order and `revisions` the revisions of each sidecar repository in order; the last
@@ -64,7 +64,7 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { once } from 'node:events';
-import { appendFileSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { loadavg } from 'node:os';
 import { basename, join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -74,6 +74,7 @@ import { connect } from '@soksak/client';
 import { policyOfSetting } from '@soksak/window-check/log-policy.mjs';
 import { displayFailures, GOALS_FILE, readGoals, startConditionFailures, targetConditionFailures } from './b3-judge.mjs';
 import { readB3Out } from './b3-out.mjs';
+import { trusted } from '../e2e/real/hid.mjs';
 import { runPlan } from './test-app.mjs';
 import { parseCpuTime } from './measure-app-usage.mjs';
 import { FRAME_RECORDS, traceSettings } from './measure-trace.mjs';
@@ -108,6 +109,21 @@ const HEX64 = /^[0-9a-f]{64}$/;
 const fail = (where, text) => { throw new Error(`${where}: ${text}`); };
 const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'));
+
+/**
+ * The folder of the records of B3 for the checkout `root`, b3 in its git common directory: the baseline record, beside the refs of the
+ * baseline branch whose heads it holds, and the session folders, whose values took hours to measure. Every worktree of the checkout shares
+ * it, a clean of the build outputs does not remove it, and it is never a record of the repository.
+ */
+export function b3Folder(root) {
+  const common = execFileSync('git', ['-C', root, 'rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8' }).trim();
+  return join(common, 'b3');
+}
+
+/** The file of the baseline record of the checkout `root` in b3Folder. */
+export function baselineRecordFile(root) {
+  return join(b3Folder(root), 'baseline.json');
+}
 
 /** Reads the baseline record from the text of `file`. */
 export function readBaselineRecord(text, file) {
@@ -257,10 +273,12 @@ export function fseventsdCores(before, after, seconds) {
 export function applicationsOf({ root, baseline }, build = 'release') {
   return APPLICATIONS.map(([name, host, kind]) => {
     const checkout = kind === 'baseline' ? baseline : root;
-    const bundle = build === 'release' ? join(checkout, 'target', 'release', host, 'soksak.app') : join(checkout, 'target', 'debug', `sok-${host}.app`);
+    // The baseline branch keeps the host code of its revision, whose executables carry the name of that revision.
+    const executable = kind === 'baseline' ? `soksak-${host}` : `sok-${host}`;
+    const bundle = build === 'release' ? join(checkout, 'target', 'release', host, 'soksak.app') : join(checkout, 'target', 'debug', `${executable}.app`);
     return {
       name, host, build: kind, checkout, bundle,
-      executable: join(bundle, 'Contents', 'MacOS', `sok-${host}`), sok: join(bundle, 'Contents', 'MacOS', 'sok'),
+      executable: join(bundle, 'Contents', 'MacOS', executable), sok: join(bundle, 'Contents', 'MacOS', 'sok'),
       index: join(root, 'target', kind === 'baseline' ? 'registry-public' : 'registry', 'index.json'),
     };
   });
@@ -583,21 +601,29 @@ export async function runUnit(unit, context) {
   const {
     goals, session, write, baseline = null, trace = RUN_TRACE, benchmarks, recordsFile = 'runs.jsonl', prefix = '', interrupted,
     readStart = readStartConditions, display = readDisplay, activate = activateWindow, loadAverage = loadavg, runTarget = runTargetCommand,
-    targetsOf = (scenario) => scenarioTargets(goals, scenario),
+    targetsOf = (scenario) => scenarioTargets(goals, scenario), accessibility = () => trusted() === true,
   } = context;
   const { application } = unit;
   const name = `${prefix}${unit.scenarios.join('+')}-${unit.run}-${application.name}`;
   const configRoot = join(session, 'configs', name);
-  if (existsSync(configRoot)) throw new Error(`${configRoot} exists; every run starts in a new configuration folder`);
-  mkdirSync(configRoot, { recursive: true });
   const configDir = join(configRoot, `soksak-check-${application.host}`);
   const failures = [];
+  // A target that reads the window through an accessibility client needs the Accessibility permission, which a check never asks for, so
+  // without it the run fails before it makes a configuration or starts the application (F622).
+  const needsPermission = unit.scenarios.flatMap((scenario) => targetsOf(scenario)).filter((target) => /(^|\s)ACCESSIBILITY=1(\s|$)/.test(target));
+  if (needsPermission.length > 0 && !accessibility()) {
+    failures.push(...needsPermission.map((target) => `${target} needs the Accessibility permission for its accessibility client, which the process of the session lacks; a person runs it (F622)`));
+  } else {
+    if (existsSync(configRoot)) throw new Error(`${configRoot} exists; every run starts in a new configuration folder`);
+    mkdirSync(configRoot, { recursive: true });
+  }
   const values = Object.fromEntries(unit.scenarios.map((scenario) => [scenario, {}]));
   const conditions = Object.fromEntries(unit.scenarios.map((scenario) => [scenario, {}]));
   let installed = [];
   let shown = null;
   write(`run ${name}`);
   const start = await readStart();
+  const permitted = failures.length === 0;
   failures.push(...startConditionFailures(goals, start));
   if (failures.length === 0) {
     const index = readJson(application.index);
@@ -659,13 +685,33 @@ export async function runUnit(unit, context) {
   for (const record of records) appendRecord(session, record, recordsFile);
   if (failures.length === 0) rmSync(configRoot, { recursive: true });
   else {
-    // The persistent services of a host that ended without host.quit exit when their folder is removed (docs/spec/persistent-services.md).
-    const services = join(configDir, 'services');
-    if (existsSync(services)) rmSync(services, { recursive: true });
     for (const failure of failures) write(`failure ${name}: ${failure}`);
-    write(`kept ${configRoot}: the run failed`);
+    if (permitted) write(`kept ${configRoot}: the run failed; its logs take ${keepRunLogs(configRoot, configDir)} KB`);
   }
   return records;
+}
+
+/**
+ * Removes from the configuration folder `configRoot` of a failed run everything but what judges the run: the output of its application
+ * beside the configuration and the logs of the configuration `configDir`. The installed plugins and sidecars and the data of the web
+ * views take tens of MB in each run. Removing the folder of the persistent services ends the services of a host that ended without
+ * host.quit (docs/spec/persistent-services.md). Returns the size of what stays, in KB.
+ */
+export function keepRunLogs(configRoot, configDir) {
+  for (const entry of readdirSync(configRoot, { withFileTypes: true })) {
+    if (entry.isFile()) continue;
+    if (join(configRoot, entry.name) !== configDir) rmSync(join(configRoot, entry.name), { recursive: true, force: true });
+  }
+  if (existsSync(configDir)) {
+    for (const entry of readdirSync(configDir, { withFileTypes: true })) {
+      if (entry.name !== 'logs') rmSync(join(configDir, entry.name), { recursive: true, force: true });
+    }
+  }
+  let bytes = 0;
+  for (const entry of readdirSync(configRoot, { recursive: true, withFileTypes: true })) {
+    if (entry.isFile()) bytes += statSync(join(entry.parentPath, entry.name)).size;
+  }
+  return Math.ceil(bytes / 1024);
 }
 
 /** The source revision of each checkout and the sha256 of the executable of each application. */
@@ -684,18 +730,27 @@ function toolchains() {
   };
 }
 
-/** The build steps of a phase: the release bundles of both checkouts, the two registry indexes and, in phase 1, the debug bundles. */
+/**
+ * The build steps of a phase: the release bundles of both checkouts and, in phase 1, the debug bundles, one host at a time with the Tauri hosts
+ * first, because they take the most disk, and then the two registry indexes.
+ */
 export function buildSteps(phase, baseline) {
   const step = (name, argv) => ({ name, phase: 'prepare', kind: 'run', argv, env: {} });
+  const profiles = phase === '1' ? ['-release', ''] : ['-release'];
+  // The intermediate outputs leave before the next build; the bundles and the executables stay, because the runs start them.
+  const outputs = (checkout) => ['debug', 'release'].flatMap((profile) => ['build', 'deps', '.fingerprint', 'incremental'].map((name) => join(checkout, 'target', profile, name)));
+  const host = (name, target, checkout) => [
+    step(`${name} ${target}`, checkout === ROOT ? ['make', target] : ['make', '-C', checkout, target]),
+    step(`outputs of ${name} ${target}`, ['rm', '-rf', ...outputs(checkout)]),
+  ];
+  const each = (name, checkouts) => profiles.flatMap((profile) => checkouts.flatMap(([label, checkout]) => host(label, `build-${name}${profile}`, checkout)));
+  const both = [['current', ROOT], ['baseline', baseline]];
   return [
-    step('release bundles', ['make', 'build-wailsv3-release', 'build-tauriv2-release', 'build-mygo-release']),
-    step('baseline release bundles', ['make', '-C', baseline, 'build-wailsv3-release', 'build-tauriv2-release']),
+    ...each('tauriv2', both),
+    ...each('wailsv3', both),
+    ...each('mygo', [['current', ROOT]]),
     step('workspace registry', ['make', 'build-registry', 'SIDECARS=diagnostic']),
     step('public index', ['make', 'build-registry', 'SIDECARS=diagnostic', 'PLUGINS=public']),
-    ...(phase === '1' ? [
-      step('debug bundles', ['make', 'build-wailsv3', 'build-tauriv2', 'build-mygo']),
-      step('baseline debug bundles', ['make', '-C', baseline, 'build-wailsv3', 'build-tauriv2']),
-    ] : []),
   ];
 }
 
@@ -722,7 +777,7 @@ async function main(argv) {
   const runs = Number(values.runs);
   const write = (line) => process.stdout.write(`${line}\n`);
   const goals = readGoals(readFileSync(GOALS_FILE, 'utf8'), 'docs/spec/performance-goals.json');
-  const recordFile = join(ROOT, 'target', 'b3', 'baseline.json');
+  const recordFile = baselineRecordFile(ROOT);
   const baseline = readBaselineRecord(readFileSync(recordFile, 'utf8'), recordFile);
   const checkout = baselineCheckoutFailures(baseline, readCheckout(values.baseline), values.baseline);
   if (checkout.length > 0) {
@@ -749,7 +804,7 @@ async function main(argv) {
     return 1;
   }
   const applications = applicationsOf({ root: ROOT, baseline: values.baseline });
-  const base = join(ROOT, 'target', 'b3');
+  const base = b3Folder(ROOT);
   mkdirSync(base, { recursive: true });
   const session = mkdtempSync(join(base, `${new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)}-phase-${values.phase}-`));
   createSession(session, { phase: values.phase, runs, applications, builds: buildsOf(applications), toolchains: toolchains(), baseline, sidecars });

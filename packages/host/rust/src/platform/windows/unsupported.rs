@@ -115,6 +115,9 @@ pub fn set_surface_hidden_handle(_surface: Handle, _hidden: bool) -> Result<(), 
 pub fn focus_surface(_surface: Handle) -> Result<(), String> {
     missing("surface keyboard")
 }
+pub fn focus_surface_for_region(_surface: Handle) -> Result<(), String> {
+    missing("surface keyboard")
+}
 pub fn focus_workbench(_window: Handle) -> Result<(), String> {
     missing("workbench keyboard")
 }

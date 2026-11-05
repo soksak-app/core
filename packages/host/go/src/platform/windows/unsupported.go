@@ -408,6 +408,10 @@ func (implementation) FocusSurface(unsafe.Pointer) {
 	unreachable("surface keyboard")
 }
 
+func (implementation) FocusSurfaceForRegion(unsafe.Pointer) {
+	unreachable("surface keyboard")
+}
+
 func (implementation) FocusWorkbench(unsafe.Pointer) {
 	unreachable("workbench keyboard")
 }

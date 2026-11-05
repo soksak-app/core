@@ -4,6 +4,8 @@
 #import "image_region.h"
 #import "input_inject.h"
 #import "input_press_context.h"
+#import "event_ring.h"
+#import "support/records.h"
 #import "webview_geometry.h"
 #import "window_facts.h"
 
@@ -16,6 +18,23 @@ static void check(BOOL ok, const char *message) {
 static void regionEvent(void *context, const char *json) {
     (void)context;
     (void)json;
+}
+
+// The characters of the keys that a region received while block ran, in order.
+static NSString *regionKeys(void (^block)(void)) {
+    NSMutableString *keys = [NSMutableString string];
+    for (NSDictionary *event in capturedEvents(block)) {
+        if ([event[@"name"] isEqual:@"native.input.key_down"]) [keys appendString:event[@"fields"][@"characters"]];
+    }
+    return keys;
+}
+
+static void typeKeys(NSWindow *window, const char *text) {
+    for (const char *at = text; *at; at++) {
+        char key[2] = {*at, 0};
+        check(sp_input_key(window, key, key, 0, true) == SP_INPUT_DELIVERED, "a key press is delivered");
+        check(sp_input_key(window, key, key, 0, false) == SP_INPUT_DELIVERED, "a key release is delivered");
+    }
 }
 
 static void placeRegion(void *region) {
@@ -35,6 +54,9 @@ int main(void) { @autoreleasepool {
     WKWebView *main = [[WKWebView alloc] initWithFrame:content.bounds];
     [content addSubview:main];
     void *composition = sp_window_set_main_webview(window, main);
+    // The keys of a region are debug and input records, which the default policy does not store.
+    const int8_t everything[SP_CLASS_COUNT] = {SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE};
+    check(sp_event_set_policy(everything), "the policy stores every level");
     void *observation = sp_window_observe_responder(window, ^{});
     check(observation != NULL, "the first responder of the window is observed");
 
@@ -201,6 +223,103 @@ int main(void) { @autoreleasepool {
     webviewSetSurfaceHidden(waitingHost, false);
     check(window.firstResponder == (NSResponder *)behind, "a region that showed behind the hidden surface takes the keyboard when the surface shows");
     sp_region_close(behind);
+
+    // A surface that declared a region takes keys before the region shows: nothing reaches the page, and the region receives
+    // them in order when it shows.
+    sp_window_focus_workbench(window);
+    void *holdingHost = sp_surface_create(composition);
+    webviewSetFrame(holdingHost, 0, 0, 400, 500);
+    webviewSetSurfaceHidden(holdingHost, false);
+    WKWebView *holdingPage = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 500)] autorelease];
+    check(sp_surface_place_view(holdingHost, holdingPage), "the page of the surface that declared a region is placed");
+    sp_surface_focus_for_region(holdingHost);
+    check(window.firstResponder != holdingPage, "a surface that declared a region keeps the keyboard from its page");
+    typeKeys(window, "echo");
+    void *holdingRegion = sp_region_create(holdingHost, "view", regionEvent, NULL);
+    check(holdingRegion != NULL, "the declared region is created");
+    NSString *notShown = regionKeys(^{ [NSRunLoop.mainRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]]; });
+    check(notShown.length == 0, "a region that does not show receives no key");
+    NSString *received = regionKeys(^{ placeRegion(holdingRegion); });
+    check(window.firstResponder == (NSResponder *)holdingRegion, "the declared region takes the keyboard when it shows");
+    check([received isEqual:@"echo"], [NSString stringWithFormat:@"the region receives the keys in order (got %@)", received].UTF8String);
+    NSString *following = regionKeys(^{ typeKeys(window, "x"); });
+    check([following isEqual:@"x"], [NSString stringWithFormat:@"a later key follows the kept keys (got %@)", following].UTF8String);
+    sp_region_close(holdingRegion);
+
+    // The surface hides while it keeps keys, and its region shows when the surface shows again.
+    void *keepingHost = sp_surface_create(composition);
+    webviewSetFrame(keepingHost, 0, 0, 400, 500);
+    webviewSetSurfaceHidden(keepingHost, false);
+    WKWebView *keepingPage = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 500)] autorelease];
+    check(sp_surface_place_view(keepingHost, keepingPage), "the page of the surface that hides with kept keys is placed");
+    sp_surface_focus_for_region(keepingHost);
+    typeKeys(window, "ls");
+    webviewSetSurfaceHidden(keepingHost, true);
+    void *keepingRegion = sp_region_create(keepingHost, "view", regionEvent, NULL);
+    NSString *whileHidden = regionKeys(^{ placeRegion(keepingRegion); });
+    check(whileHidden.length == 0, "a region of a hidden surface receives no kept key");
+    NSString *afterHide = regionKeys(^{
+        webviewSetSurfaceHidden(keepingHost, false);
+        placeRegion(keepingRegion);
+    });
+    check(window.firstResponder == (NSResponder *)keepingRegion, "the region takes the keyboard when its surface shows again");
+    check([afterHide isEqual:@"ls"], [NSString stringWithFormat:@"the region receives the keys kept through the hide (got %@)", afterHide].UTF8String);
+    sp_region_close(keepingRegion);
+
+    // The keyboard leaves before the region shows: the keys were typed into this surface, and its region still receives them.
+    void *leftHost = sp_surface_create(composition);
+    webviewSetFrame(leftHost, 0, 0, 400, 500);
+    webviewSetSurfaceHidden(leftHost, false);
+    WKWebView *leftPage = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 500)] autorelease];
+    check(sp_surface_place_view(leftHost, leftPage), "the page of the surface that the keyboard leaves is placed");
+    sp_surface_focus_for_region(leftHost);
+    typeKeys(window, "ab");
+    sp_window_focus_workbench(window);
+    void *leftRegion = sp_region_create(leftHost, "view", regionEvent, NULL);
+    NSString *receivedLater = regionKeys(^{ placeRegion(leftRegion); });
+    check(window.firstResponder == main, "a region that shows takes no keyboard from the workbench it left to");
+    check([receivedLater isEqual:@"ab"], [NSString stringWithFormat:@"the region receives the keys typed before the keyboard left (got %@)", receivedLater].UTF8String);
+    sp_region_close(leftRegion);
+
+    // A surface keeps 256 keys. The keys after them are dropped and recorded, and the region receives the first 256 in order.
+    void *fullHost = sp_surface_create(composition);
+    webviewSetFrame(fullHost, 0, 0, 400, 500);
+    webviewSetSurfaceHidden(fullHost, false);
+    WKWebView *fullPage = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 500)] autorelease];
+    check(sp_surface_place_view(fullHost, fullPage), "the page of the surface that keeps too many keys is placed");
+    sp_surface_focus_for_region(fullHost);
+    NSArray<NSDictionary *> *filling = capturedEvents(^{
+        for (int count = 0; count < 257; count++) {
+            sp_input_key(window, "a", "a", 0, true);
+            sp_input_key(window, "a", "a", 0, false);
+        }
+    });
+    NSUInteger dropsWhenFull = 0;
+    for (NSDictionary *event in filling) {
+        if ([event[@"name"] isEqual:@"native.surface.keys_dropped"] && [event[@"fields"][@"reason"] isEqual:@"full"]) dropsWhenFull++;
+    }
+    check(dropsWhenFull == 1, "the first key over the limit is recorded as dropped");
+    void *fullRegion = sp_region_create(fullHost, "view", regionEvent, NULL);
+    NSString *keptKeys = regionKeys(^{ placeRegion(fullRegion); });
+    check(keptKeys.length == 256, [NSString stringWithFormat:@"the region receives the 256 kept keys (got %lu)", (unsigned long)keptKeys.length].UTF8String);
+    sp_region_close(fullRegion);
+
+    // A surface that closes without a region drops its keys and records how many.
+    void *closedHost = sp_surface_create(composition);
+    webviewSetFrame(closedHost, 0, 0, 400, 500);
+    webviewSetSurfaceHidden(closedHost, false);
+    WKWebView *closedPage = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 500)] autorelease];
+    check(sp_surface_place_view(closedHost, closedPage), "the page of the surface that closes without a region is placed");
+    sp_surface_focus_for_region(closedHost);
+    typeKeys(window, "abc");
+    NSArray<NSDictionary *> *closingEvents = capturedEvents(^{ sp_surface_close(closedHost); });
+    BOOL dropsWhenClosed = NO;
+    for (NSDictionary *event in closingEvents) {
+        if ([event[@"name"] isEqual:@"native.surface.keys_dropped"] && [event[@"fields"][@"reason"] isEqual:@"closed"]
+            && [event[@"fields"][@"count"] intValue] == 3) dropsWhenClosed = YES;
+    }
+    check(dropsWhenClosed, "a surface that closes without a region records the keys it drops");
+    sp_window_focus_workbench(window);
 
     // A press of a surface whose page holds the keyboard when its region shows, and a call that follows in the press.
     sp_surface_focus(waitingHost);

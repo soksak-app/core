@@ -300,6 +300,10 @@ impl Platform for Darwin {
         webview::focus_surface(surface);
         Ok(())
     }
+    fn focus_surface_for_region(&self, surface: Handle) -> Result<(), String> {
+        webview::focus_surface_for_region(surface);
+        Ok(())
+    }
     fn focus_workbench(&self, window: Handle) -> Result<(), String> {
         webview::focus_workbench(window);
         Ok(())
