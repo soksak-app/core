@@ -78,12 +78,14 @@ func (s *Shell) drawChromeActs(c *ui.Context, browsing bool) {
 		s.chromeAct(c, "core.chrome.projects", "core.projects.browse", "프로젝트 목록", "projects", false, nil)
 		s.chromeAct(c, "core.chrome.balance", "core.layout.balance", "카드 자동 정렬", "columns-3", false, nil)
 	}
-	for _, side := range []struct{ key, name, title, icon string }{
-		{"left", "core.chrome.left", "좌측 사이드바 위치", "panel-left"},
-		{"right", "core.chrome.right", "우측 사이드바 위치", "panel-right"},
-	} {
-		on, _ := s.settings.Value(side.key).(bool)
-		s.chromeAct(c, side.name, "core.settings.set", side.title, side.icon, on, settingsPatchParam{map[string]any{side.key: !on}})
+	if !browsing {
+		for _, side := range []struct{ key, name, title, icon string }{
+			{"left", "core.chrome.left", "좌측 사이드바 위치", "panel-left"},
+			{"right", "core.chrome.right", "우측 사이드바 위치", "panel-right"},
+		} {
+			on, _ := s.settings.Value(side.key).(bool)
+			s.chromeAct(c, side.name, "core.settings.set", side.title, side.icon, on, settingsPatchParam{map[string]any{side.key: !on}})
+		}
 	}
 	next, icon := "light", "sun"
 	if s.settings.Value("mode") != "dark" {

@@ -3,6 +3,7 @@ package workbench_test
 import (
 	"fmt"
 	"testing"
+	"time"
 )
 
 // libraryRead is the part of the status core.library that the page of the projects draws.
@@ -215,5 +216,60 @@ func TestTheLibraryKeepsItsSizeWhenTheFrameTextGrows(t *testing.T) {
 	after, ok := f.tester.Find("저장 순서")
 	if !ok || after.H != before.H {
 		t.Fatalf("the text was %+v and is %+v", before, after)
+	}
+}
+
+func TestTheLibraryHidesTheSidebarSwitches(t *testing.T) {
+	f, _, _ := twoProjects(t)
+	if f.has("core.chrome.left", "") || f.has("core.chrome.right", "") {
+		t.Fatal("the library shows the switches of the sidebars")
+	}
+	if !f.has("core.chrome.mode", "") || !f.has("core.chrome.settings", "") {
+		t.Fatal("the library lost the other switches")
+	}
+	f.run("core.library.return", nil)
+	f.tester.Frame()
+	if !f.has("core.chrome.left", "") || !f.has("core.chrome.right", "") {
+		t.Fatal("the work screen has no switches of the sidebars")
+	}
+}
+
+func TestACardShowsTheDayItsProjectOpened(t *testing.T) {
+	f := openedShell(t)
+	f.run("core.projects.browse", nil)
+	f.tester.Frame()
+	now := time.Now()
+	if day := fmt.Sprintf("%d월 %d일", now.Month(), now.Day()); !f.tester.HasText(day) {
+		t.Fatalf("the library shows %q, without %q", f.tester.Texts(), day)
+	}
+}
+
+func TestTheLinesOfTheLibraryHaveTheHeightOfThePage(t *testing.T) {
+	f, _, _ := twoProjects(t)
+	// .text-field: a line of text-control at the line height of the page, two paddings of 5 and two borders.
+	if field := f.box("core.library.search", ""); field.H < 28 || field.H > 29.5 {
+		t.Fatalf("the search is %+v", field)
+	}
+}
+
+func TestTheFormStandsAsThePageStandsIt(t *testing.T) {
+	f, _, _ := twoProjects(t)
+	f.run("core.library.form.open", map[string]string{"mode": "open"})
+	f.tester.Frame()
+	first, second := f.box("core.library.form.mode-new", ""), f.box("core.library.form.mode-existing", "")
+	if first.X+first.W != second.X {
+		t.Fatalf("the two modes stand at %+v and %+v", first, second)
+	}
+	// The title of the field follows the modes without a gap: a line of the page and the gap of a label.
+	field := f.box("core.library.form.parent", "")
+	if gap := field.Y - (first.Y + first.H); gap < 24 || gap > 27 {
+		t.Fatalf("the field stands %v under the modes", gap)
+	}
+	choose, cancel := f.box("core.library.form.choose", ""), f.box("core.library.form.cancel", "")
+	if gap := choose.Y - (field.Y + field.H); gap != 8 {
+		t.Fatalf("the choose button stands %v under the field", gap)
+	}
+	if gap := cancel.Y - (choose.Y + choose.H); gap != 12 {
+		t.Fatalf("the form buttons stand %v under the choose button", gap)
 	}
 }
