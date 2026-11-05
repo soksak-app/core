@@ -689,8 +689,13 @@ func (s *Shell) dropProject(id string) {
 			}
 		}
 	}
-	s.retainSessions()
-	s.options.Invalidate()
+	// The views of the project send until the placement without them, so its sessions end after that placement. A placement that
+	// failed reported its failure and leaves the views, and the next retain ends their sessions.
+	s.afterPlacement(func(err error) {
+		if err == nil {
+			s.retainSessions()
+		}
+	})
 }
 
 // showPlane makes plane, or none, the plane of the window. A gesture and a layer belong to the plane that they started on, so they end

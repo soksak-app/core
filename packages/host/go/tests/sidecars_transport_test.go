@@ -2419,7 +2419,7 @@ func TestALayoutSurfaceOfAnotherPluginDoesNotHoldAnOutdatedService(t *testing.T)
 	root := t.TempDir()
 	service := serveReplaceService(t, root, "0.0.6", "0.0.7")
 	sidecars := replaceSidecars(t, root, service)
-	if _, err := sidecars.Retain([]host.RetainedSurface{{Surface: "tab-files", Root: "/replace", Plugin: "files"}}); err != nil {
+	if _, err := sidecars.Retain([]host.RetainedSurface{{Surface: "tab-other", Root: "/replace", Plugin: "other"}}); err != nil {
 		t.Fatal(err)
 	}
 	<-service.second

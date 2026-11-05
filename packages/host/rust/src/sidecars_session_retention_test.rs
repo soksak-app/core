@@ -259,12 +259,27 @@ fn owner(key: &str) -> SessionOwner {
     SessionOwner(key.to_string())
 }
 
+/// A window whose shown project changes during a test.
+#[derive(Clone)]
+struct ShownOwner(Arc<Mutex<String>>);
+
+impl Owner for ShownOwner {
+    fn key(&self) -> String {
+        "window-a".to_string()
+    }
+    fn root(&self) -> Result<String, String> {
+        Ok(self.0.lock().unwrap().clone())
+    }
+    fn deliver(&self, _message: Message) {}
+    fn deliver_failure(&self, _failure: Failure) {}
+}
+
 fn raw(text: &str) -> Box<RawValue> {
     RawValue::from_string(text.to_string()).unwrap()
 }
 
 /// The persistent sidecar fixture-sidecar that the plugin probe depends on. Its service endpoint is in config.
-fn declared(executable: &Path, config: &Path) -> Sidecars<SessionOwner> {
+fn declared<O: Owner>(executable: &Path, config: &Path) -> Sidecars<O> {
     Sidecars::new(
         &[SidecarDeclaration {
             name: SIDECAR.to_string(),
@@ -391,6 +406,136 @@ fn a_retain_keeps_an_ordinary_surface_first_sent_during_its_start() {
     slot.lock().unwrap().take();
     sidecars.stop();
     thread.join().unwrap();
+}
+
+/// Runs a retain with listed as its list, makes send while it prepares its service, and returns the lines that reached the service.
+fn lines_of_a_retain(
+    config: &Path,
+    executable: &Path,
+    window: &ShownOwner,
+    send: impl Fn(&Sidecars<ShownOwner>, &ShownOwner, &str) + Send + Sync + 'static,
+) -> Vec<serde_json::Value> {
+    let (received, thread) = service(config);
+    let slot: Arc<Mutex<Option<Arc<Sidecars<ShownOwner>>>>> = Arc::new(Mutex::new(None));
+    let hook_slot = slot.clone();
+    let hook_window = window.clone();
+    let sidecars = declared(executable, config).with_retain_sending(move |name| {
+        if name != SIDECAR {
+            return;
+        }
+        let guard = hook_slot.lock().unwrap();
+        let sidecars = guard
+            .as_ref()
+            .expect("the sidecars are set before the retain");
+        send(sidecars, &hook_window, name);
+    });
+    let sidecars = Arc::new(sidecars);
+    *slot.lock().unwrap() = Some(sidecars.clone());
+    sidecars
+        .retain_sessions(&[RetainedSurface {
+            surface: "listed".to_string(),
+            root: "/project".to_string(),
+            plugin: "probe".to_string(),
+        }])
+        .unwrap();
+    let lines = received.try_iter().collect();
+    slot.lock().unwrap().take();
+    sidecars.stop();
+    thread.join().unwrap();
+    lines
+}
+
+fn kept_surfaces(lines: &[serde_json::Value]) -> serde_json::Value {
+    lines
+        .iter()
+        .find(|line| line["operation"] == "retain")
+        .expect("the retain line reached the service")["surfaces"]
+        .clone()
+}
+
+// contract: sidecars.send.page-needs-a-project-root
+#[test]
+fn a_request_of_a_page_in_a_window_with_no_project_is_refused_during_a_retain() {
+    const SURFACE: &str = "tab-of-a-closed-project";
+    let executable = Folder::new();
+    let config = Folder::new();
+    let window = ShownOwner(Arc::new(Mutex::new(String::new())));
+    let lines = lines_of_a_retain(
+        config.path(),
+        executable.path(),
+        &window,
+        |sidecars, window, name| {
+            let refused = sidecars
+                .send_from_page(window, name, SURFACE, &raw(r#"{"operation":"open"}"#), &[])
+                .unwrap_err();
+            assert!(
+                refused.contains("has no project"),
+                "the request of a page: {refused}"
+            );
+        },
+    );
+    assert!(
+        !lines.iter().any(|line| line["surface"] == SURFACE),
+        "the refused request reached the service: {lines:?}"
+    );
+    assert_eq!(
+        kept_surfaces(&lines),
+        serde_json::json!([{"surface": "listed", "root": "/project"}])
+    );
+}
+
+// contract: sidecars.send.page-needs-a-project-root
+#[test]
+fn a_request_of_a_page_with_a_recorded_root_goes_on_with_no_project() {
+    const SURFACE: &str = "tab-known";
+    let executable = Folder::new();
+    let config = Folder::new();
+    let (received, thread) = service(config.path());
+    let shown = Arc::new(Mutex::new(ROOT.to_string()));
+    let window = ShownOwner(shown.clone());
+    let sidecars: Sidecars<ShownOwner> = declared(executable.path(), config.path());
+    sidecars
+        .send_from_page(&window, SIDECAR, SURFACE, &raw(r#"{"operation":"open"}"#), &[])
+        .unwrap();
+    *shown.lock().unwrap() = String::new();
+    sidecars
+        .send_from_page(&window, SIDECAR, SURFACE, &raw(r#"{"operation":"input"}"#), &[])
+        .unwrap();
+    sidecars.stop();
+    thread.join().unwrap();
+    let lines: Vec<serde_json::Value> = received.try_iter().collect();
+    let input = lines
+        .iter()
+        .find(|line| line["surface"] == SURFACE && line["body"]["operation"] == "input")
+        .expect("the request reached the service");
+    assert_eq!(input["root"], ROOT);
+}
+
+// contract: sidecars.send.host-send-leaves-no-session-without-a-root
+#[test]
+fn a_send_of_the_host_in_a_window_with_no_project_leaves_no_session() {
+    const SURFACE: &str = "tab-of-a-closed-project";
+    let executable = Folder::new();
+    let config = Folder::new();
+    let window = ShownOwner(Arc::new(Mutex::new(String::new())));
+    let lines = lines_of_a_retain(
+        config.path(),
+        executable.path(),
+        &window,
+        |sidecars, window, name| {
+            sidecars
+                .send(window, name, SURFACE, &raw(r#"{"operation":"open"}"#))
+                .unwrap();
+        },
+    );
+    assert!(
+        lines.iter().any(|line| line["surface"] == SURFACE),
+        "the send of the host did not reach the service: {lines:?}"
+    );
+    assert_eq!(
+        kept_surfaces(&lines),
+        serde_json::json!([{"surface": "listed", "root": "/project"}])
+    );
 }
 
 // contract: sidecars.native-view-removal.retains-persistent-layout-session

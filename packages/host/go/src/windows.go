@@ -423,7 +423,7 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	if win.NativeWindow() != nil {
 		s.prepareNative()
 	}
-	// Tells the connections that watch host.window about changes of the window position, size, key state and occlusion state. Wails sends the occlusion
+	// Tells the connections that watch host.window about changes of the window position, size, key state and occlusion state. A framework sends the occlusion
 	// state change of macOS as WindowShow (visible) and WindowHide (completely covered).
 	changed := func() {
 		// An occluded or minimized window draws no image region (docs/spec/native-surfaces.md#image-regions).

@@ -7,7 +7,7 @@ const stored = [{ id: "prj-alpha", root: "/work/alpha", identity: "alpha", title
   activeSpaceId: "spc-alpha", spaces: [{ id: "spc-alpha", title: "SPACE1", layout: { state: { cards: [] } } }], settings: {} }];
 const project = { id: "prj-alpha", root: "/work/alpha" };
 // The stored values and bases that every host answers alike.
-const VALUES = JSON.parse(readFileSync(new URL("fixtures/project-data-values.json", import.meta.url), "utf8"));
+const VALUES = JSON.parse(readFileSync(new URL("../../../docs/spec/cases/project-data/values.json", import.meta.url), "utf8"));
 
 mock.module("@soksak/runtime", {
   namedExports: {

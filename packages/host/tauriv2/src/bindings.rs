@@ -418,7 +418,7 @@ fn sidecar_send(
         .pending_detach_error(&surface)?;
     window
         .state::<WindowSidecars>()
-        .send_with_cids(&window, &sidecar, &surface, &body, &cids)
+        .send_from_page(&window, &sidecar, &surface, &body, &cids)
 }
 
 /// The surface list that every project layout holds.

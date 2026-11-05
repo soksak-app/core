@@ -1,7 +1,7 @@
 name: release
 # build-machine: skip smoke reason=the end-to-end checks need a display and run only locally through make (docs/operations/examples.md#test-kinds)
 
-# A push to main runs the checks, and the repository releases itself when they succeed and `soksak-release-gate` finds no tag
+# A push to main runs the checks, and the repository releases itself when they succeed and `soksak-check release` finds no tag
 # of the declared version; open checklist items are carried into the next version (docs/operations/examples.md#release). The
 # tag is created with the release.
 on:
@@ -32,11 +32,11 @@ jobs:
       - uses: ./.github/actions/setup-node
         with:
           root: .
-      - name: Install the records kit
+      - name: Install the checks kit
         run: pnpm install --frozen-lockfile --filter soksak-workspace
       - name: Decide the release
         id: gate
-        run: pnpm exec soksak-release-gate packages/plugin-api/package.json docs/features.md
+        run: pnpm exec soksak-check release packages/plugin-api/package.json docs/features.md
 
   release-wailsv3:
     needs: gate

@@ -712,6 +712,11 @@ func (s *Shell) commitSurfaces(answer func(err error)) {
 			s.report(tab).Title = *label
 		}
 	}
+	s.afterPlacement(answer)
+}
+
+// afterPlacement answers after the host replied to the next placement. A frame runs the placement.
+func (s *Shell) afterPlacement(answer func(err error)) {
 	s.surfaces.commits = append(s.surfaces.commits, answer)
 	s.options.Invalidate()
 }

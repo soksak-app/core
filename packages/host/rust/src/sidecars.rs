@@ -1598,6 +1598,32 @@ impl<O: Owner> Sidecars<O> {
         self.send_in_root(owner, name, surface, current, body, cids)
     }
 
+    /// Sends a request of a page. A page outlives the close of its project for a moment, and its request then starts no
+    /// session: a session has the root of its project.
+    pub fn send_from_page(
+        &self,
+        owner: &O,
+        name: &str,
+        surface: &str,
+        body: &RawValue,
+        cids: &[String],
+    ) -> Result<(), String> {
+        let current = owner.root()?;
+        let known = self
+            .core
+            .state
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the surface roots, which are only read; the
+            // panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .roots
+            .contains_key(surface);
+        if !known && current.is_empty() {
+            return Err(format!("sidecar {name}: surface {surface} has no project"));
+        }
+        self.send_in_root(owner, name, surface, current, body, cids)
+    }
+
     /// Sends a page request with current as the root of the surface unless the surface has a recorded root.
     fn send_in_root(
         &self,
@@ -1706,10 +1732,13 @@ impl<O: Owner> Sidecars<O> {
             .owners
             .insert(surface.to_string(), owner.clone())
             .is_none();
-        state
-            .roots
-            .entry(surface.to_string())
-            .or_insert_with(|| root.clone());
+        // A surface of a window that shows no project has no session to keep: no retain list can name it without a root.
+        if !root.is_empty() {
+            state
+                .roots
+                .entry(surface.to_string())
+                .or_insert_with(|| root.clone());
+        }
         let process = state.running.get_mut(name).expect("started above");
         // New ownership or a service start changes the outdated session count. The status is enqueued under the
         // state lock, and UI invalidation runs after unlock.
@@ -2091,7 +2120,10 @@ impl<O: Owner> Sidecars<O> {
                     // default: a lock that a panicking thread poisoned still holds the sidecar state, which is only
                     // read; the panic hook records the panic.
                     .unwrap_or_else(PoisonError::into_inner);
-                (state.replacing.contains_key(&item.sidecar), state.layout.is_some())
+                (
+                    state.replacing.contains_key(&item.sidecar),
+                    state.layout.is_some(),
+                )
             };
             if item.sessions != 0 || busy || !known {
                 continue;
@@ -3644,6 +3676,9 @@ fn retain_layout_owners<O>(
         state.owners.remove(&surface);
         state.persistent_surfaces.remove(&surface);
     }
+    state
+        .owners
+        .retain(|surface, _| listed.contains_key(surface.as_str()));
     closing_notification(state, before != status_locked(core, state))
 }
 

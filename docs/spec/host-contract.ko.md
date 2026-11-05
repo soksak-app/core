@@ -643,6 +643,8 @@ fn invalid_json_closes_connection() {
 | `sidecars.retain.skips-service-without-endpoint` | 실행 중인 서비스와 그 엔드포인트 파일이 없으면 retain은 서비스를 시작하지 않고 아무것도 닫지 않는다. | all |
 | `sidecars.retain.timeout-names-the-request-stage` | service가 읽고 답하지 않은 retain은 10초 뒤 요청 줄의 stage, 즉 쓰인 뒤의 시간과 service에서 마지막 줄이 도착한 뒤의 시간으로 실패한다. | all |
 | `sidecars.retain.keeps-surface-first-sent-during-start` | Persistent service가 시작된 뒤 keep 목록을 모으기 전에 처음 보낸 일반 surface session도 해당 retain에 포함된다. | all |
+| `sidecars.send.page-needs-a-project-root` | project를 보여 주지 않는 window에서 root가 기록되지 않은 surface로 보내는 page 요청은 실패하고, 어떤 sidecar에도 가지 않으며, 진행 중인 retain은 계속된다. root가 기록된 surface는 그 root로 계속 보낸다. | all |
+| `sidecars.send.host-send-leaves-no-session-without-a-root` | project를 보여 주지 않는 window에서 host의 send는 sidecar에 도달하되 root를 기록하지 않아, 어떤 retain도 그 surface를 유지하지 않는다. | all |
 | `sidecars.retain.closes-sessions-absent-from-layout` | 이전에 알려진 일반 surface를 retain에서 생략하면 stale owner와 root를 제거하고 persistent service에 그 surface가 없는 keep 목록을 보낸다. | all |
 | `sidecars.restart.enable-clears-stops` | plugin 하나를 사람이 enable하면 그 plugin이 `dependencies`에 나열한 사이드카마다 정지를 해제해 다음 전송이 사이드카를 시작한다. 어떤 활성 plugin도 나열하지 않은 사이드카의 정지는 그대로 남는다. | all |
 | `sidecars.retain.rejects-after-stop` | 사이드카가 멈춘 뒤 시작한 retain이나 서비스를 준비한 뒤 멈춤이 끼어든 retain은 "sidecars are stopped"로 실패하고 서비스에 retain을 보내지 않는다. | all |
@@ -1181,13 +1183,15 @@ Wails와 Tauri 호스트의 메인 페이지와 mygo 호스트의 workbench는 �
 | Go 호스트, Rust 호스트 | 없음: patch는 자기가 실은 `plugins` object를 저장하고, 어느 호스트도 그 안의 key를 읽지 않는다. `workspace.projects.plugin-data-patched`가 이것을 다룬다 | 없음 |
 | SDK | `packages/plugin-api/view.js`: 모든 호스트에 하나인 `runtime.data.change` | `packages/plugin-api/test/view.test.mjs` |
 
+이 절의 case:
+
 | Case | Behavior |
 | --- | --- |
 | `project-data.write.keeps-the-keys-before-it` | 뷰의 쓰기는 앞선 쓰기 뒤에 store에 닿고 앞선 쓰기를 함께 실으므로, 연달아 쓴 두 key가 모두 남는다. |
 | `project-data.write.outran-read-keeps-the-write` | 쓰기가 앞지른 store 읽기는 창의 기록에서 그 쓰기를 빼지 않는다. |
 | `project-data.write.refusal-answers-the-view` | store가 거부한 쓰기는 view call을 실패시키고 key의 값을 그대로 둔다. |
 | `project-data.replace.changed-value-writes-nothing` | 한 읽기에서 나온 `runtime.data.replace` 두 호출 중 첫째는 값을 저장하고 `true`를 답하며, 둘째는 아무것도 저장하지 않고 `false`를 답한다. |
-| `project-data.replace.compares-json-values` | `packages/workbench/test/fixtures/project-data-values.json`의 각 행은 한 답을 낸다. object member의 순서, 숫자의 표기, 문자열의 escape는 차이를 만들지 않고, 값이 다르면 `false`를 답한다. |
+| `project-data.replace.compares-json-values` | `docs/spec/cases/project-data/values.json`의 각 행은 한 답을 낸다. object member의 순서, 숫자의 표기, 문자열의 escape는 차이를 만들지 않고, 값이 다르면 `false`를 답한다. |
 | `project-data.replace.read-value-is-its-base` | 그 파일의 각 저장 값에 `runtime.data.get`이 답한 값을 `base`로 돌려보내면 `true`를 답한다. |
 | `project-data.replace.requires-base` | `base`가 없는 `runtime.data.replace`는 `view call runtime.data.replace requires base`로 실패한다. |
 | `project-data.replace.refusal-answers-the-view` | store가 거부한 replace는 view call을 실패시키고 key의 값을 그대로 둔다. |

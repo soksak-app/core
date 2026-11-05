@@ -605,8 +605,6 @@ type attachPlatform struct {
 	onScreen        error
 }
 
-func (*attachPlatform) SetImageBackground(unsafe.Pointer, bool) {}
-
 func (p *attachPlatform) CreateImage(surface unsafe.Pointer, name string, event func(json string), released func(generation, raster uint64, sequence int)) (unsafe.Pointer, error) {
 	handle := unsafe.Pointer(new(int))
 	p.created = append(p.created, handle)
