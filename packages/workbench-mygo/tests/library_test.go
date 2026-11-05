@@ -325,3 +325,10 @@ func TestTheProjectTabsStandInAColumnAtTheLeft(t *testing.T) {
 		t.Fatal("the library shows the column")
 	}
 }
+
+func TestTheBarIsAnElement(t *testing.T) {
+	f := openedShell(t)
+	if bar := f.box("core.chrome.bar", ""); bar.X != 0 || bar.Y != 0 || bar.H != 40 {
+		t.Fatalf("the bar is %+v", bar)
+	}
+}

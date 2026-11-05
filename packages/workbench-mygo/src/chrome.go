@@ -38,7 +38,7 @@ func (s *Shell) drawChrome(c *ui.Context, width float32) {
 	bar := c.TitleBar()
 	s.controlsWidth = bar.Left
 	browsing := s.browsing || s.opened() == nil
-	ui.Row(c).Size(width, s.chromeHeight()).Padding(0, s.metrics.spacePad, 0, s.metrics.spacePad+bar.Left).AlignItems(ui.Center).Gap(s.metrics.chromeGap).
+	ui.Row(s.binder.Name(c, "core.chrome.bar", "")).Size(width, s.chromeHeight()).Padding(0, s.metrics.spacePad, 0, s.metrics.spacePad+bar.Left).AlignItems(ui.Center).Gap(s.metrics.chromeGap).
 		Background(s.palette.Card).BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.Edge).DragWindow().
 		Role(ui.RoleGroup).Label("core.chrome.bar").Children(func() {
 		s.drawBrand(c)
