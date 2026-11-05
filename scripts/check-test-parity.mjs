@@ -1084,6 +1084,27 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F558",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) replaceIdle()" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn replace_idle(&self)" },
+      { file: "packages/workbench/projects.js", symbol: "sectionSurfacePlugin(surface)" },
+      { file: "packages/workbench-mygo/src/sidebars.go", symbol: "func (s *Sidebars) surfacePlugin(surface string) string {" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestAnOutdatedServiceKeepsASurfaceThatALayoutHolds" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestALayoutSurfaceOfAnotherPluginDoesNotHoldAnOutdatedService" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestAnOutdatedServiceWaitsForTheFirstLayoutList" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "an_outdated_service_keeps_a_surface_that_a_layout_holds" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "a_layout_surface_of_another_plugin_does_not_hold_an_outdated_service" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "an_outdated_service_waits_for_the_first_layout_list" },
+      { file: "packages/workbench-mygo/tests/sidecar_sessions_test.go", id: "TestARetainNamesThePluginOfEachSurface" },
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "the layouts hold the sections of every space of every project, whatever the window draws, with the sets of each project" },
+    ],
+    expected: "An outdated persistent service stays while a project layout holds a surface of a plugin of its sidecar, and a list of the layouts without such a surface replaces it.",
+    levels: ["unit"],
+  },
+  {
     id: "F547",
     implementation: [
       { file: "packages/workbench-mygo/src/events.go", symbol: "if e.gatedTimer || e.sending || len(e.gated) == 0 {" },

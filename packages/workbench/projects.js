@@ -12,6 +12,7 @@ import { compareProjectData, configureData } from "./plugin-data.js";
 import { openTabStates } from "./tab-state.js";
 import { createTabSessions } from "./tab-session.js";
 import { documentRegions } from "./document-regions.js";
+import { sectionSurfacePlugin } from "./registry.js";
 import { spaceSectionSurfaces, storedSurfaceKept } from "./section-surfaces.js";
 
 let store;
@@ -92,9 +93,9 @@ export const storedTabTaken = (id) => projects.some((project) => projectTabs(pro
 const projectTabs = (project) => new Set(spaceTabIds(project));
 
 /**
- * Returns what the layouts of all spaces of all projects hold, as surfaces with the root of their project: the tabs and the section
- * surfaces of the sidebars of each space (docs/spec/plugins.md#sections). A sidecar session of a surface that is not in this list has
- * nowhere to attach again (docs/spec/persistent-services.md).
+ * Returns what the layouts of all spaces of all projects hold, as surfaces with their plugin and the root of their project: the tabs and
+ * the section surfaces of the sidebars of each space (docs/spec/plugins.md#sections). A sidecar session of a surface that is not in this
+ * list has nowhere to attach again, and the host keeps the service of a surface that is in it (docs/spec/persistent-services.md).
  */
 export function layoutSurfaces() {
   return projects.flatMap((project) => {
@@ -103,8 +104,12 @@ export function layoutSurfaces() {
       const cards = space.layout?.state?.cards;
       if (!Array.isArray(cards)) throw new Error(`project ${project.id} space ${space.id} has no layout cards`);
       // default: a seat card has null data, so it has no tabs.
-      const tabs = cards.flatMap((card) => (card.data?.tabs ?? []).map((tab) => tab.id));
-      return [...tabs, ...spaceSectionSurfaces(space.id, cards, sets, links)].map((surface) => ({ surface, root: project.root }));
+      const tabs = cards.flatMap((card) => (card.data?.tabs ?? []).map((tab) => ({ surface: tab.id, plugin: tab.plugin, root: project.root })));
+      // The plugin is the one that declares the section. A section that no loaded plugin declares has no surface (docs/spec/plugins.md).
+      const sections = spaceSectionSurfaces(space.id, cards, sets, links)
+        .map((surface) => ({ surface, plugin: sectionSurfacePlugin(surface), root: project.root }))
+        .filter((entry) => entry.plugin !== null);
+      return [...tabs, ...sections];
     });
   });
 }

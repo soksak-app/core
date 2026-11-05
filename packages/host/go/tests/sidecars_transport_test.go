@@ -900,7 +900,8 @@ func TestPersistentRetainSendsOnlyLayoutSurfaces(t *testing.T) {
 			var reply map[string]any
 			switch request["operation"] {
 			case "hello":
-				reply = map[string]any{"operation": "hello", "protocol": 1, "ok": true}
+				// The service is of the installed version, so the retain replaces nothing.
+				reply = map[string]any{"operation": "hello", "protocol": 1, "ok": true, "version": "0.0.1"}
 			case "close-owner":
 				reply = map[string]any{"operation": "closed-owner", "request": request["request"], "ok": true}
 			case "shutdown":
@@ -923,7 +924,9 @@ func TestPersistentRetainSendsOnlyLayoutSurfaces(t *testing.T) {
 		}
 	}()
 
-	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
+	declarations := harnessDeclarations(t.TempDir())
+	declarations[0].Version = "0.0.1"
+	sidecars, err := NewSidecars(declarations, root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -940,7 +943,7 @@ func TestPersistentRetainSendsOnlyLayoutSurfaces(t *testing.T) {
 	if err := sidecars.Send(owner, "fixture-service", "sent", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	closed, err := sidecars.Retain([]host.RetainedSurface{{Surface: "listed", Root: "/project"}})
+	closed, err := sidecars.Retain([]host.RetainedSurface{{Surface: "listed", Plugin: "probe", Root: "/project"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2192,6 +2195,8 @@ func serveReplaceService(t *testing.T, root, oldVersion, installedVersion string
 						reply, _ = json.Marshal(map[string]any{"operation": "closed-owner", "request": request["request"], "ok": true})
 					case "shutdown":
 						reply, _ = json.Marshal(map[string]any{"operation": "shutdown", "request": request["request"], "ok": true})
+					case "retain":
+						reply, _ = json.Marshal(map[string]any{"operation": "retained", "request": request["request"], "ok": true, "closed": 0})
 					default:
 						reply = line[:len(line)-1]
 					}
@@ -2225,6 +2230,7 @@ func replaceSidecars(t *testing.T, root string, service *replaceService) *host.S
 	t.Helper()
 	declarations := harnessDeclarations(service.folder)
 	declarations[0].Version = "0.0.7"
+	declarations[0].Dependents = []string{"probe"}
 	sidecars, err := NewSidecars(declarations, root)
 	if err != nil {
 		t.Fatal(err)
@@ -2345,10 +2351,97 @@ func TestAnOutdatedServiceIsReplacedWhenItsSessionsEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	receiveSidecarMessage(t, owner.seen)
-	sidecars.Close("surface-1")
+	if _, err := sidecars.Retain([]host.RetainedSurface{}); err != nil {
+		t.Fatal(err)
+	}
 	<-service.second
 	if got := service.received(); len(got) < 4 || got[len(got)-2] != "close-owner" || got[len(got)-1] != "shutdown" {
 		t.Fatalf("the old service received %v", got)
+	}
+}
+
+// awaitNoReplacement checks that the service keeps running: a retain that the service answers comes after the lines of what the
+// close started, and a replacement runs on its own routine, so the check also gives that routine time to send.
+func awaitNoReplacement(t *testing.T, service *replaceService, sidecars *host.Sidecars, layout []host.RetainedSurface) {
+	t.Helper()
+	time.Sleep(200 * time.Millisecond)
+	if _, err := sidecars.Retain(layout); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(200 * time.Millisecond)
+	if got := service.received(); slices.Contains(got, "close-owner") || slices.Contains(got, "shutdown") {
+		t.Fatalf("the service with a session that a layout holds received %v", got)
+	}
+}
+
+// contract: sidecars-transport.replace.keeps-a-service-that-a-layout-holds
+func TestAnOutdatedServiceKeepsASurfaceThatALayoutHolds(t *testing.T) {
+	root := t.TempDir()
+	service := serveReplaceService(t, root, "0.0.6", "0.0.7")
+	sidecars := replaceSidecars(t, root, service)
+	layout := []host.RetainedSurface{
+		{Surface: "surface-1", Root: "/replace", Plugin: "probe"},
+		{Surface: "space-b/left/probe.section", Root: "/replace", Plugin: "probe"},
+	}
+	if _, err := sidecars.Retain(layout); err != nil {
+		t.Fatal(err)
+	}
+	owner := &harnessOwner{root: "/replace", seen: make(chan SidecarMessage, 8)}
+	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	receiveSidecarMessage(t, owner.seen)
+	sidecars.Close("surface-1")
+	// The hidden section has not sent in this process, so only the layout says that its session is recoverable.
+	layout = layout[1:]
+	if _, err := sidecars.Retain(layout); err != nil {
+		t.Fatal(err)
+	}
+	// A close of any other surface asks for the replacement as well.
+	sidecars.NativeViewRemoved("tab-of-another-plugin")
+	awaitNoReplacement(t, service, sidecars, layout)
+	got := sidecars.Outdated()
+	if len(got) != 1 || got[0].Sessions != 1 {
+		t.Fatalf("outdated with a section that a layout holds: %+v", got)
+	}
+	// A layout surface leaves the count and the service is replaced.
+	if _, err := sidecars.Retain([]host.RetainedSurface{}); err != nil {
+		t.Fatal(err)
+	}
+	<-service.second
+	if got := service.received(); len(got) < 4 || got[len(got)-2] != "close-owner" || got[len(got)-1] != "shutdown" {
+		t.Fatalf("the old service received %v", got)
+	}
+}
+
+// contract: sidecars-transport.replace.counts-the-surfaces-of-the-plugins-of-the-sidecar
+func TestALayoutSurfaceOfAnotherPluginDoesNotHoldAnOutdatedService(t *testing.T) {
+	root := t.TempDir()
+	service := serveReplaceService(t, root, "0.0.6", "0.0.7")
+	sidecars := replaceSidecars(t, root, service)
+	if _, err := sidecars.Retain([]host.RetainedSurface{{Surface: "tab-files", Root: "/replace", Plugin: "files"}}); err != nil {
+		t.Fatal(err)
+	}
+	<-service.second
+	if got := service.received(); len(got) < 3 || got[len(got)-2] != "close-owner" || got[len(got)-1] != "shutdown" {
+		t.Fatalf("the old service received %v", got)
+	}
+}
+
+// contract: sidecars-transport.replace.waits-for-the-first-layout-list
+func TestAnOutdatedServiceWaitsForTheFirstLayoutList(t *testing.T) {
+	root := t.TempDir()
+	service := serveReplaceService(t, root, "0.0.6", "0.0.7")
+	sidecars := replaceSidecars(t, root, service)
+	owner := &harnessOwner{root: "/replace", seen: make(chan SidecarMessage, 8)}
+	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	receiveSidecarMessage(t, owner.seen)
+	sidecars.Close("surface-1")
+	time.Sleep(200 * time.Millisecond)
+	if got := service.received(); slices.Contains(got, "close-owner") || slices.Contains(got, "shutdown") {
+		t.Fatalf("the service before the first layout list received %v", got)
 	}
 }
 

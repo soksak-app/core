@@ -12,6 +12,7 @@ import (
 type retainedSurface struct {
 	Surface string `json:"surface"`
 	Root    string `json:"root"`
+	Plugin  string `json:"plugin"`
 }
 
 // layoutSurfaces returns what the layouts of every space of every project hold, with the root of their project: the tabs and the section
@@ -29,14 +30,14 @@ func (s *Shell) layoutSurfaces() ([]retainedSurface, error) {
 				return nil, fmt.Errorf("space %s: %w", space.ID, err)
 			}
 			eachTab(stored.State.Cards, func(tab layout.Tab, _ bool) {
-				surfaces = append(surfaces, retainedSurface{tab.ID, project.Root})
+				surfaces = append(surfaces, retainedSurface{tab.ID, project.Root, tab.Plugin})
 			})
 			sections, err := s.spaceSections(project, space.ID, stored.State.Cards)
 			if err != nil {
 				return nil, fmt.Errorf("space %s: %w", space.ID, err)
 			}
 			for _, id := range sections {
-				surfaces = append(surfaces, retainedSurface{id, project.Root})
+				surfaces = append(surfaces, retainedSurface{id, project.Root, s.sidebars.surfacePlugin(id)})
 			}
 		}
 	}

@@ -7,7 +7,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc::{Receiver, TryRecvError, channel, sync_channel};
 use std::thread::JoinHandle;
 
-use crate::sidecars::SidecarDeclaration;
+use crate::sidecars::{RetainedSurface, SidecarDeclaration};
 use crate::test_folder::Folder;
 use std::sync::{Arc, Mutex};
 
@@ -310,7 +310,8 @@ fn service(config: &Path) -> (Receiver<serde_json::Value>, JoinHandle<()>) {
             requests.send(request.clone()).unwrap();
             let reply = match request["operation"].as_str() {
                 Some("hello") => {
-                    serde_json::json!({"operation": "hello", "protocol": 1, "ok": true})
+                    // The service is of the installed version, so a retain replaces nothing.
+                    serde_json::json!({"operation": "hello", "protocol": 1, "ok": true, "version": "0.0.1"})
                 }
                 Some("retain") => {
                     serde_json::json!({"operation": "retained", "request": request["request"], "ok": true, "closed": 0})
@@ -369,7 +370,11 @@ fn a_retain_keeps_an_ordinary_surface_first_sent_during_its_start() {
     *slot.lock().unwrap() = Some(sidecars.clone());
 
     let closed = sidecars
-        .retain_sessions(&[("listed".to_string(), "/project".to_string())])
+        .retain_sessions(&[RetainedSurface {
+            surface: "listed".to_string(),
+            root: "/project".to_string(),
+            plugin: "probe".to_string(),
+        }])
         .unwrap();
     assert_eq!(closed, 0, "the service's closed count");
     let requests: Vec<serde_json::Value> = received.try_iter().collect();

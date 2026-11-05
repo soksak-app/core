@@ -182,19 +182,19 @@ func TestRetainNotifiesOutdatedSessionCounts(t *testing.T) {
 	var snapshots []SidecarStatus
 	c.ClosingChanged = func(value SidecarStatus) { snapshots = append(snapshots, value) }
 	c.mu.Lock()
-	c.retainLayoutOwners(map[string]bool{"tab-fixture": true})
+	c.retainLayoutOwners(map[string]string{"tab-fixture": "probe"})
 	c.mu.Unlock()
 	if len(snapshots) != 0 {
 		t.Fatal("retaining all owners announced unchanged status")
 	}
 	c.mu.Lock()
-	c.retainLayoutOwners(map[string]bool{})
+	c.retainLayoutOwners(map[string]string{})
 	c.mu.Unlock()
 	if len(snapshots) != 1 || len(snapshots[0].Outdated) != 1 || snapshots[0].Outdated[0].Sessions != 0 {
 		t.Fatalf("retained session-count notifications = %+v, want one zero-session status", snapshots)
 	}
 	c.mu.Lock()
-	c.retainLayoutOwners(map[string]bool{})
+	c.retainLayoutOwners(map[string]string{})
 	c.mu.Unlock()
 	if len(snapshots) != 1 {
 		t.Fatal("repeated retention announced unchanged status")
@@ -206,7 +206,7 @@ func TestReusedRetainedSurfaceNotifiesOutdatedSessionCount(t *testing.T) {
 	c, _, _ := outdatedSidecarsFixture(t, "0.0.6", "0.0.7")
 	owner := c.owners["tab-fixture"]
 	c.mu.Lock()
-	c.retainLayoutOwners(map[string]bool{})
+	c.retainLayoutOwners(map[string]string{})
 	c.mu.Unlock()
 	var snapshots []SidecarStatus
 	c.ClosingChanged = func(value SidecarStatus) { snapshots = append(snapshots, value) }
@@ -256,7 +256,9 @@ func TestRetainKeepsAnOrdinarySurfaceFirstSentDuringTheStart(t *testing.T) {
 	c.stopped = false
 	c.persistent["fixture-sidecar"] = true
 	const surface = "tab-during-retain-start"
-	service := &sidecar{name: "fixture-sidecar", persistent: true, outbox: make(chan queuedLine, 4), closeWaiters: map[string]chan error{}, retained: map[string]int{}, surfaces: map[string]bool{}}
+	// The service is of the installed version, so the retain replaces nothing.
+	installedVersion := ""
+	service := &sidecar{name: "fixture-sidecar", version: &installedVersion, persistent: true, outbox: make(chan queuedLine, 4), closeWaiters: map[string]chan error{}, retained: map[string]int{}, surfaces: map[string]bool{}}
 	c.running[service.name] = service
 	c.RetainSending = func(name string) {
 		if name != service.name {
@@ -268,7 +270,7 @@ func TestRetainKeepsAnOrdinarySurfaceFirstSentDuringTheStart(t *testing.T) {
 	}
 	done := make(chan error, 1)
 	go func() {
-		_, err := c.Retain([]RetainedSurface{{Surface: "listed", Root: "/fixture/listed"}})
+		_, err := c.Retain([]RetainedSurface{{Surface: "listed", Plugin: "probe", Root: "/fixture/listed"}})
 		done <- err
 	}()
 	<-service.outbox // open request emitted by RetainSending
@@ -334,7 +336,10 @@ func TestRetainClosesPersistentSessionAbsentFromTheLayout(t *testing.T) {
 	c := s.sidecars
 	c.stopped = false
 	c.persistent["fixture-persistent"] = true
-	service := &sidecar{name: "fixture-persistent", persistent: true, outbox: make(chan queuedLine, 4),
+	// The service is of the installed version, so the retain replaces nothing.
+	c.declared["fixture-persistent"] = "build/worker"
+	installedVersion := ""
+	service := &sidecar{name: "fixture-persistent", version: &installedVersion, persistent: true, outbox: make(chan queuedLine, 4),
 		closeWaiters: map[string]chan error{}, retained: map[string]int{}, surfaces: map[string]bool{"tab-removed": true}}
 	c.running[service.name] = service
 	c.owners["tab-removed"] = s

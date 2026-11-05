@@ -20,7 +20,7 @@ mod records;
 
 use serde_json::value::RawValue;
 use soksak_host::sidecars::{
-    Failure, Message, OutdatedSidecar, Owner, SidecarDeclaration, Sidecars,
+    Failure, Message, OutdatedSidecar, Owner, RetainedSurface, SidecarDeclaration, Sidecars,
 };
 
 #[derive(Clone)]
@@ -1227,7 +1227,8 @@ fn persistent_retain_sends_only_layout_surfaces() {
             let request: serde_json::Value = serde_json::from_str(&line).unwrap();
             let reply = match request["operation"].as_str() {
                 Some("hello") => {
-                    serde_json::json!({"operation": "hello", "protocol": 1, "ok": true})
+                    // The service is of the installed version, so the retain replaces nothing.
+                    serde_json::json!({"operation": "hello", "protocol": 1, "ok": true, "version": "0.0.1"})
                 }
                 Some("retain") => {
                     answered += 1;
@@ -1273,7 +1274,11 @@ fn persistent_retain_sends_only_layout_surfaces() {
         .send(&owner, ECHO, "sent", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     let closed = sidecars
-        .retain_sessions(&[("listed".to_string(), "/project".to_string())])
+        .retain_sessions(&[RetainedSurface {
+            surface: "listed".to_string(),
+            root: "/project".to_string(),
+            plugin: "probe".to_string(),
+        }])
         .unwrap();
     assert_eq!(closed, 2, "the service's closed count");
     let request = received.recv_timeout(STALL).unwrap();
@@ -2556,6 +2561,7 @@ fn serve_replace_service(
                         "hello" => serde_json::json!({"operation": "hello", "protocol": 1, "ok": true, "version": version}).to_string(),
                         "close-owner" => serde_json::json!({"operation": "closed-owner", "request": request["request"], "ok": true}).to_string(),
                         "shutdown" => serde_json::json!({"operation": "shutdown", "request": request["request"], "ok": true}).to_string(),
+                        "retain" => serde_json::json!({"operation": "retained", "request": request["request"], "ok": true, "closed": 0}).to_string(),
                         _ => line.trim_end().to_string(),
                     };
                     if writeln!(stream, "{reply}").is_err() {
@@ -2594,7 +2600,36 @@ fn replace_sidecars(config_directory: &Path, executable_directory: &Path) -> Sid
     );
     let mut declarations = declare(&fixture, executable_directory);
     declarations[0].version = "0.0.7".to_string();
+    declarations[0].dependents = vec!["probe".to_string()];
     Sidecars::new(&declarations, config_directory.to_path_buf()).unwrap()
+}
+
+/// One surface of a layout of the plugin that lists the sidecar of the replace fixture.
+fn layout_surface(surface: &str) -> RetainedSurface {
+    RetainedSurface {
+        surface: surface.to_string(),
+        root: "/projects/replace".to_string(),
+        plugin: "probe".to_string(),
+    }
+}
+
+/// Checks that the service keeps running: a retain that the service answers comes after the lines of what the close
+/// started, and a replacement runs on its own thread, so the check also gives that thread time to send.
+fn assert_no_replacement(
+    service: &ReplaceService,
+    sidecars: &Sidecars<FakeOwner>,
+    layout: &[RetainedSurface],
+) {
+    thread::sleep(Duration::from_millis(200));
+    sidecars.retain_sessions(layout).unwrap();
+    thread::sleep(Duration::from_millis(200));
+    let operations = service.operations.lock().unwrap().clone();
+    assert!(
+        !operations
+            .iter()
+            .any(|item| item == "close-owner" || item == "shutdown"),
+        "the service with a session that a layout holds received {operations:?}"
+    );
 }
 
 // contract: sidecars-transport.replace.replaces-an-outdated-service
@@ -2739,12 +2774,113 @@ fn an_outdated_service_is_replaced_when_its_sessions_end() {
         .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     events.recv_timeout(STALL).unwrap();
-    sidecars.retain(&owner, &|_| false).unwrap();
+    sidecars.retain_sessions(&[]).unwrap();
     service.second.recv_timeout(STALL).unwrap();
     let operations = service.operations.lock().unwrap().clone();
     assert_eq!(
         &operations[operations.len() - 2..],
         ["close-owner", "shutdown"]
+    );
+    sidecars.stop();
+}
+
+// contract: sidecars-transport.replace.keeps-a-service-that-a-layout-holds
+#[test]
+fn an_outdated_service_keeps_a_surface_that_a_layout_holds() {
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
+    let service = serve_replace_service(
+        config_directory.path(),
+        executable_directory.path(),
+        "0.0.6",
+        "0.0.7",
+        Duration::ZERO,
+        0,
+    );
+    let sidecars = replace_sidecars(config_directory.path(), executable_directory.path());
+    let hidden = layout_surface("space-b/left/probe.section");
+    sidecars
+        .retain_sessions(&[layout_surface("surface-1"), hidden.clone()])
+        .unwrap();
+    let (owner, events) = owner("replace", "/projects/replace");
+    sidecars
+        .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    events.recv_timeout(STALL).unwrap();
+    sidecars.retain(&owner, &|_| false).unwrap();
+    // The hidden section has not sent in this process, so only the layout says that its session is recoverable.
+    let layout = [hidden];
+    sidecars.retain_sessions(&layout).unwrap();
+    // A close of any other surface asks for the replacement as well.
+    sidecars
+        .native_views_removed(&owner, &["tab-of-another-plugin".to_string()].into())
+        .unwrap();
+    assert_no_replacement(&service, &sidecars, &layout);
+    assert_eq!(sidecars.outdated()[0].sessions, 1);
+    // A layout surface leaves the count and the service is replaced.
+    sidecars.retain_sessions(&[]).unwrap();
+    service.second.recv_timeout(STALL).unwrap();
+    let operations = service.operations.lock().unwrap().clone();
+    assert_eq!(
+        &operations[operations.len() - 2..],
+        ["close-owner", "shutdown"]
+    );
+    sidecars.stop();
+}
+
+// contract: sidecars-transport.replace.counts-the-surfaces-of-the-plugins-of-the-sidecar
+#[test]
+fn a_layout_surface_of_another_plugin_does_not_hold_an_outdated_service() {
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
+    let service = serve_replace_service(
+        config_directory.path(),
+        executable_directory.path(),
+        "0.0.6",
+        "0.0.7",
+        Duration::ZERO,
+        0,
+    );
+    let sidecars = replace_sidecars(config_directory.path(), executable_directory.path());
+    let mut files = layout_surface("tab-files");
+    files.plugin = "files".to_string();
+    sidecars.retain_sessions(&[files]).unwrap();
+    service.second.recv_timeout(STALL).unwrap();
+    let operations = service.operations.lock().unwrap().clone();
+    assert_eq!(
+        &operations[operations.len() - 2..],
+        ["close-owner", "shutdown"]
+    );
+    sidecars.stop();
+}
+
+// contract: sidecars-transport.replace.waits-for-the-first-layout-list
+#[test]
+fn an_outdated_service_waits_for_the_first_layout_list() {
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
+    let service = serve_replace_service(
+        config_directory.path(),
+        executable_directory.path(),
+        "0.0.6",
+        "0.0.7",
+        Duration::ZERO,
+        0,
+    );
+    let sidecars = replace_sidecars(config_directory.path(), executable_directory.path());
+    let (owner, events) = owner("replace", "/projects/replace");
+    sidecars
+        .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    events.recv_timeout(STALL).unwrap();
+    sidecars.retain(&owner, &|_| false).unwrap();
+    thread::sleep(Duration::from_millis(200));
+    let operations = service.operations.lock().unwrap().clone();
+    assert!(
+        !operations
+            .iter()
+            .any(|item| item == "close-owner" || item == "shutdown"),
+        "the service before the first layout list received {operations:?}"
     );
     sidecars.stop();
 }

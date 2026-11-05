@@ -719,7 +719,10 @@ Items:
 | `image.drawing.configures-only-drawing-regions` | A region that is not drawing receives no configuration and is not waited for by the presentation wait; a region that starts drawing during a preparation is configured and waited for. | all |
 | `image.drawing.configures-a-raster-that-changed-while-not-drawing` | The host reads the raster of a shown region while its window is off screen and sends no configuration; when the region draws again, the drawing message is followed by one configuration of the changed raster, and a raster that did not change is not configured again. | all |
 | `image.drawing.answers-transfers-while-not-drawing` | A transfer image accepted before its region stopped drawing is answered with `consumed` or an error. | all |
-| `sidecars-transport.replace.runs-when-sessions-reach-zero` | When the last open surface that sent to an outdated service closes, the host replaces that service. | all |
+| `sidecars-transport.replace.runs-when-sessions-reach-zero` | When a list of the layouts leaves an outdated service with no surface, the host replaces that service. | all |
+| `sidecars-transport.replace.keeps-a-service-that-a-layout-holds` | An outdated service stays, with the surface in `sessions`, after a surface closes while a layout holds a surface of a plugin of the sidecar that has not sent in this process; a list without that surface replaces the service. | all |
+| `sidecars-transport.replace.counts-the-surfaces-of-the-plugins-of-the-sidecar` | A surface of a layout whose plugin does not list the sidecar does not hold its outdated service. | all |
+| `sidecars-transport.replace.waits-for-the-first-layout-list` | Before the first list of the layouts, a surface that closes does not replace an outdated service. | all |
 | `sidecars-transport.persistent.starts-in-new-session` | A persistent service that the host starts is the leader of a new session, so it receives no signal of the application's process group or terminal. | all |
 | `sidecars-transport.endpoint.zombie-service-does-not-exist` | A zombie service pid does not count as an existing service, so its stale endpoint is replaced. | all |
 | `sidecars-transport.endpoint.foreign-service-process-exists` | A service pid of a process that another user owns counts as an existing service, because the refused signal check shows that the process exists. | all |

@@ -228,7 +228,22 @@ fn status_locked<O>(core: &Core<O>, state: &State<O>) -> SidecarStatus {
                     .surfaces
                     .iter()
                     .filter(|surface| state.owners.contains_key(*surface))
-                    .count(),
+                    .count()
+                    // A surface of a layout that has not sent in this process may hold a session that an earlier
+                    // application left.
+                    + state
+                        .layout
+                        .iter()
+                        .flatten()
+                        .filter(|(surface, plugin)| {
+                            declarations
+                                .dependents
+                                .get(name)
+                                .is_some_and(|plugins| plugins.contains(plugin))
+                                && !(process.surfaces.contains(*surface)
+                                    && state.owners.contains_key(*surface))
+                        })
+                        .count(),
             })
         })
         .collect();
@@ -973,6 +988,9 @@ struct State<O> {
     /// Enqueues an immutable status while the state lock orders mutations.
     status_changed: Option<StatusChanged<O>>,
     owners: HashMap<String, O>,
+    /// The plugin of each surface of the last complete list of the project layouts, and None before the first list. A
+    /// session stays recoverable while a layout holds its surface, also when the surface has not sent in this process.
+    layout: Option<HashMap<String, String>>,
     // The project directory at the time a surface is first sent. A sidecar finds a session by root and surface, so even
     // after the project of the window changed, requests and closes of an already opened surface are sent with this
     // root.
@@ -1135,6 +1153,15 @@ struct CheckedDeclaration {
     basename: String,
 }
 
+/// One surface of the list of what the project layouts hold: the surface, the project root that opened it and the plugin of
+/// the tab or the section. Only a plugin that lists a sidecar opens a session in its service.
+#[derive(Clone, Debug, serde::Deserialize)]
+pub struct RetainedSurface {
+    pub surface: String,
+    pub root: String,
+    pub plugin: String,
+}
+
 /// One installed sidecar. data is the content of its sidecar.json and folder is the folder that holds it.
 #[derive(Clone, Debug)]
 pub struct SidecarDeclaration {
@@ -1240,6 +1267,7 @@ impl<O: Owner> Sidecars<O> {
                     closing_changed: None,
                     status_changed: None,
                     owners: HashMap::new(),
+                    layout: None,
                     roots: HashMap::new(),
                     persistent_surfaces: HashMap::new(),
                     stopped: false,
@@ -2048,22 +2076,24 @@ impl<O: Owner> Sidecars<O> {
         }
     }
 
-    /// Replaces each outdated service that has no open surface of this application.
+    /// Replaces each outdated service that no open surface of this application and no project layout holds. Before the
+    /// first list of the layouts the host does not know what they hold, so it replaces nothing.
     fn replace_idle(&self)
     where
         O: 'static,
     {
         for item in self.outdated() {
-            let busy = self
-                .core
-                .state
-                .lock()
-                // default: a lock that a panicking thread poisoned still holds the sidecar state, which is only read;
-                // the panic hook records the panic.
-                .unwrap_or_else(PoisonError::into_inner)
-                .replacing
-                .contains_key(&item.sidecar);
-            if item.sessions != 0 || busy {
+            let (busy, known) = {
+                let state = self
+                    .core
+                    .state
+                    .lock()
+                    // default: a lock that a panicking thread poisoned still holds the sidecar state, which is only
+                    // read; the panic hook records the panic.
+                    .unwrap_or_else(PoisonError::into_inner);
+                (state.replacing.contains_key(&item.sidecar), state.layout.is_some())
+            };
+            if item.sessions != 0 || busy || !known {
                 continue;
             }
             let core = Arc::clone(&self.core);
@@ -2114,10 +2144,19 @@ impl<O: Owner> Sidecars<O> {
     /// returns the number of closed sessions (docs/spec/persistent-services.md). It removes previously known omitted layout
     /// surfaces before starting a service; a session newly accepted while preparing the retain request is included in that
     /// request. When no service is running and there is no endpoint, there is no session, so it is skipped.
-    pub fn retain_sessions(&self, surfaces: &[(String, String)]) -> Result<usize, String> {
-        let listed: HashSet<&str> = surfaces
+    pub fn retain_sessions(&self, surfaces: &[RetainedSurface]) -> Result<usize, String>
+    where
+        O: 'static,
+    {
+        if surfaces
             .iter()
-            .map(|(surface, _)| surface.as_str())
+            .any(|item| item.surface.is_empty() || item.root.is_empty() || item.plugin.is_empty())
+        {
+            return Err("retain surface entry is invalid".to_string());
+        }
+        let listed: HashMap<&str, &str> = surfaces
+            .iter()
+            .map(|item| (item.surface.as_str(), item.plugin.as_str()))
             .collect();
         let changed = {
             let mut state = self
@@ -2211,13 +2250,13 @@ impl<O: Owner> Sidecars<O> {
                 }
                 let mut keep: Vec<serde_json::Value> = surfaces
                     .iter()
-                    .map(|(surface, root)| serde_json::json!({"surface": surface, "root": root}))
+                    .map(|item| serde_json::json!({"surface": item.surface, "root": item.root}))
                     .collect();
                 keep.extend(
                     state
                         .roots
                         .iter()
-                        .filter(|&(surface, _)| !listed.contains(surface.as_str()))
+                        .filter(|&(surface, _)| !listed.contains_key(surface.as_str()))
                         .map(
                             |(surface, root)| serde_json::json!({"surface": surface, "root": root}),
                         ),
@@ -2267,6 +2306,8 @@ impl<O: Owner> Sidecars<O> {
                 })?
                 .map_err(|error| format!("sidecar {name}: retain: {error}"))?;
         }
+        // The list may leave an outdated service without a surface.
+        self.replace_idle();
         Ok(total)
     }
 
@@ -3583,13 +3624,19 @@ fn revive_persistent<O: Owner>(core: &Arc<Core<O>>, name: &str, loss: &str) {
 fn retain_layout_owners<O>(
     core: &Core<O>,
     state: &mut State<O>,
-    listed: &HashSet<&str>,
+    listed: &HashMap<&str, &str>,
 ) -> Option<ClosingChanged> {
     let before = status_locked(core, state);
+    state.layout = Some(
+        listed
+            .iter()
+            .map(|(surface, plugin)| (surface.to_string(), plugin.to_string()))
+            .collect(),
+    );
     let stale: Vec<String> = state
         .roots
         .keys()
-        .filter(|surface| !listed.contains(surface.as_str()))
+        .filter(|surface| !listed.contains_key(surface.as_str()))
         .cloned()
         .collect();
     for surface in stale {

@@ -16,6 +16,7 @@
 - F502-12: The WebContent process of a document region has the display label `soksak://plugin/<plugin id>/<region>`, so Activity Monitor and `lsappinfo` show which plugin and region it belongs to. Before, only a view had a label of its own and a region showed the name of the application. The host composes the label and `sp_document_create` receives it.
 - F548: The first window no longer reads the modules of the settings modal and the debug view; each loads at its first use.
 - F549: A wake of a settled window no longer wakes the log writer to store a count of frame events that were never refused.
+- F558: An update of a sidecar keeps the sessions that a project layout holds.
 - F502-23: The mygo workbench answers `diagnostics.layout.fail`: its next placement of the surfaces fails once with `diagnostic layout fault`, and the workbench shows that failure and goes on answering.
 - F557: a page that loses the pointer stops hovering, in each order of the enter, the exit, and the move of its tracking area.
 - F543: a press of `sok input pointer` in a key window passes the application, so local monitors see it and AppKit moves the first responder.
