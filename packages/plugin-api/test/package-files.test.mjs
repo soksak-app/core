@@ -60,3 +60,13 @@ test("the plugin API ships no event source check or event source rules", () => {
   }
   assert.equal(manifest.dependencies?.ajv, undefined, "only the event source check used ajv");
 });
+
+test("the plugin API ships no check command that no repository runs", () => {
+  const manifest = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
+  assert.equal(manifest.bin, undefined);
+  assert.equal(manifest.exports["./exposure-check"], undefined);
+  for (const file of ["exposure-check.js", "engines-check.js", "view-check.js", "core-exposure.json"]) {
+    assert.ok(!manifest.files.includes(file), file);
+    assert.ok(!existsSync(join(packageRoot, file)), file);
+  }
+});

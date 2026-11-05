@@ -63,6 +63,7 @@ lane("end-to-end run", "js-ts", ["scripts/e2e-run.mjs"], ["scripts/test/e2e-run.
 lane("log command audit", "js-ts", ["scripts/audit-log.mjs"], ["scripts/test/audit-log.test.mjs"]),
 lane("temporary folder audit", "js-ts", ["scripts/check-temp.mjs"], ["scripts/test/temp.test.mjs"]),
 lane("event source check", "declaration", ["scripts/event-sources.json"], ["scripts/test/event-sources.test.mjs"], { testLanguage: "js-ts" }),
+lane("exposure rules", "js-ts", ["scripts/exposure-rules.mjs"], ["scripts/test/exposure-rules.test.mjs"]),
 lane("package bin audit", "js-ts", ["scripts/check-package-bins.mjs"], ["scripts/test/package-bins.test.mjs"]),
 lane("failure table", "js-ts", ["scripts/check-failure-table.mjs"], ["scripts/test/check-failure-table.test.mjs"]),
 lane("language test adapters", "js-ts", ["scripts/language-test-adapters.mjs"], ["scripts/test/test-language-test-adapters.test.mjs", "scripts/test/fixtures/node-color-count.mjs"]),
@@ -598,16 +599,6 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/plugin-api/package.json", symbol: '"contract/"' }],
     tests: [{ file: "packages/plugin-api/test/package-files.test.mjs", id: "the packed SDK contains every current contract file" }],
     expected: "The SDK tar release contains every current file under its public contract directory, checked from the packed output rather than a mirrored manifest list.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-276",
-    implementation: [{ file: "packages/plugin-api/view-check.js", symbol: "export const VIEW_START_SHA256" }],
-    tests: [
-      { file: "packages/plugin-api/test/view-check.test.mjs", id: "a literal copied from the SDK has no difference" },
-      { file: "packages/plugin-api/test/view-check.test.mjs", id: "a changed view-start.js fails until the constant and the literals are updated" },
-    ],
-    expected: "The SDK constant matches its injected bootstrap while script and literal drift remain explicit errors.",
     levels: ["unit"],
   },
 {
@@ -4673,15 +4664,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F225",
-    implementation: [{ file: "packages/plugin-api/exposure-check.js", symbol: "checkPluginRepository" }],
-    tests: [
-      { file: "packages/plugin-api/test/exposure-check.test.mjs", id: "a plugin repository whose sources match its declarations passes" },
-    ],
-    expected: "The exposure check reads a manifest whose sections are status-form sections, which carry no module source, so a manifest with a status section is checked instead of crashing.",
-    levels: ["unit"],
-  },
-  {
     id: "F251",
     implementation: [
       { file: "packages/workbench/view-calls.js", symbol: "statusNameOf" },
@@ -6363,14 +6345,12 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/sok/wailsv3/src/install.go", symbol: "func ParseRange" },
       { file: "packages/sok/tauriv2/src/install.rs", symbol: "pub fn parse_range" },
-      { file: "packages/plugin-api/engines-check.js", symbol: "export function enginesErrors" },
     ],
     tests: [
       { file: "packages/sok/wailsv3/tests/install_test.go", id: "TestVersionRangesAcceptExactCaretTildeAndBoundedForms" },
       { file: "packages/sok/tauriv2/tests/install_test.rs", id: "version_ranges_accept_exact_caret_tilde_and_bounded_forms" },
-      { file: "packages/plugin-api/test/engines-check.test.mjs", id: "a plugin declares the core release of its plugin API" },
     ],
-    expected: "The range * is >=0.0.0 without an upper bound in both installers, and soksak-engines accepts it.",
+    expected: "The range * is >=0.0.0 without an upper bound in both installers.",
     levels: ["unit"],
   },
   {
@@ -6445,17 +6425,6 @@ const FEATURE_LINKS = [
       { file: "scripts/test/check-release-paths.test.mjs", id: "machoMinimum reads the minimum macOS version of an executable" },
     ],
     expected: "make release-check fails unless both bundles declare MACOS_MINIMUM and both application executables are built for it.",
-    levels: ["unit"],
-  },
-  {
-    id: "F97",
-    implementation: [
-      { file: "packages/plugin-api/engines-check.js", symbol: "engines.soksak is ${pkg.engines.soksak}" },
-    ],
-    tests: [
-      { file: "packages/plugin-api/test/engines-check.test.mjs", id: "the command checks the package.json of the given plugin repository" },
-    ],
-    expected: "soksak-engines prints the range it checked.",
     levels: ["unit"],
   },
   {
@@ -6618,16 +6587,6 @@ const FEATURE_LINKS = [
       { file: "packages/host/tauriv2/tests/endpoint_test.rs", id: "a_held_lock_with_another_form_is_refused_and_kept" },
     ],
     expected: "Both hosts refuse a held process.lock whose contents are not the current form, with the same text.",
-    levels: ["unit"],
-  },
-  {
-    id: "F16",
-    implementation: [
-      { file: "packages/plugin-api/exposure-check.js", symbol: "realpathSync(process.argv[1])" },
-      { file: "packages/plugin-api/engines-check.js", symbol: "realpathSync(process.argv[1])" },
-    ],
-    tests: [{ file: "packages/plugin-api/test/command-entry.test.mjs", id: "the plugin commands run their check when started through a linked package" }],
-    expected: "soksak-exposure and soksak-engines run their check when a plugin repository starts them through the package that its package manager links.",
     levels: ["unit"],
   },
   {
@@ -10877,7 +10836,7 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // F433 removes a check; it adds no capability.
 // F431 names the release candidate 0.0.34; it changes no runtime capability.
 // F432 records the plugin releases and the registry entry for core 0.0.34; it changes no runtime capability of core.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F470", "F469", "F468", "F466", "F467", "F465", "F463", "F464", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
+const NON_CAPABILITY_COMPLETIONS = new Set(["F471", "F239-276", "F225", "F97", "F16", "F470", "F469", "F468", "F466", "F467", "F465", "F463", "F464", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66), the window checks of plugins (F110) and the registry listing of the hwp plugin (F141, registry items G37 and G38). Core cannot read

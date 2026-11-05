@@ -6,6 +6,7 @@
 
 - F463: core가 checks kit과 실행 파일 하나 `soksak-check`를 씁니다. Red: `scripts/test/workflows.test.mjs`가 실패했습니다. Green: 통과합니다.
 - F466: 기록은 임시 log를 인용하지 않고, record 검사가 새 인용을 보고합니다.
+- F471: `@soksak/plugin-api`는 어떤 저장소도 실행하지 않던 `soksak-exposure`, `soksak-engines`, `soksak-view-check`를 더 이상 선언하지 않습니다. `make exposure-check`의 규칙은 `scripts/exposure-rules.mjs`에 있습니다. Red: `packages/plugin-api/test/package-files.test.mjs`의 새 test가 실패했습니다. Green: 통과합니다.
 - F470: CI의 structure step이 현재 make target을 적고, Makefile이 선언하지 않은 workflow target이면 test가 실패합니다. Red: test가 네 target을 보고했습니다. Green: 통과합니다.
 - F469: `scripts/e2e-run.mjs`의 interrupt test가 완성된 process id 파일을 읽습니다. Red: `make node-repeat`이 1회차에 실패했습니다. Green: 10회 통과합니다.
 - F468: 검사를 실행하는 모든 make target이 `<what it reads>-check`이고 검사의 명령은 하나이며, core는 `scripts/event-sources.json`과 함께 `soksak-check docs`와 `events`를 씁니다. 임시 폴더 검사는 `scripts/check-temp.mjs`입니다. Red: `scripts/test/workflows.test.mjs`의 새 test가 이전 Makefile에서 실패했습니다. Green: 통과합니다.

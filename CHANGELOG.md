@@ -6,6 +6,7 @@
 
 - F463: Core uses the checks kit and its one executable `soksak-check`. Red: `scripts/test/workflows.test.mjs` failed. Green: it passes.
 - F466: Records cite no temporary log, and the record check reports a new citation.
+- F471: `@soksak/plugin-api` no longer declares `soksak-exposure`, `soksak-engines` and `soksak-view-check`, which no repository ran. The rules of `make exposure-check` are in `scripts/exposure-rules.mjs`. Red: the new test of `packages/plugin-api/test/package-files.test.mjs` failed. Green: it passes.
 - F470: The structure step of CI names the current make targets, and a test fails on a workflow target that the Makefile does not declare. Red: the test reported four targets. Green: it passes.
 - F469: The interrupt test of `scripts/e2e-run.mjs` reads a complete process id file. Red: `make node-repeat` failed on run 1. Green: it passes 10 runs.
 - F468: Every make target that runs a check is `<what it reads>-check`, a check has one command, and core uses `soksak-check docs` and `events` with `scripts/event-sources.json`. The temporary folder check is `scripts/check-temp.mjs`. Red: the new test of `scripts/test/workflows.test.mjs` failed on the earlier Makefile. Green: it passes.

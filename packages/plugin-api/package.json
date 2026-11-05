@@ -8,7 +8,6 @@
     ".": "./index.js",
     "./page": "./page.js",
     "./view": "./view.js",
-    "./exposure-check": "./exposure-check.js",
     "./package.json": "./package.json",
     "./screen-hash": "./screen-hash.js",
     "./view-modules": "./view-modules.js",
@@ -39,25 +38,15 @@
     "calls.js",
     "view.js",
     "view-start.js",
-    "view-check.js",
     "view-modules.js",
     "log-batch.js",
     "bounded-json.js",
-    "exposure-check.js",
-    "engines-check.js",
-    "core-exposure.json",
     "contract/"
   ],
-  "bin": {
-    "soksak-exposure": "./exposure-check.js",
-    "soksak-engines": "./engines-check.js",
-    "soksak-view-check": "./view-check.js"
-  },
   "scripts": {
     "test": "node --test test/"
   },
   "specFiles": [
-    "docs/spec/cases/log-contract/replay/screen-message.json",
     "docs/spec/cases/manifest-validation.json"
   ],
   "devDependencies": {
