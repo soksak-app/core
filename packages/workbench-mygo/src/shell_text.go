@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/egoist/mygo/ui"
+
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
@@ -79,3 +81,26 @@ func (s *Shell) chromeHeight() float32 {
 
 // frameFont is the size of a text of the frame chrome.
 func (s *Shell) frameFont(size float32) float32 { return size * float32(s.text.Frame()) }
+
+// textSmall is the size of the small text of a card head, the proportion of the size setting that the page states.
+func (s *Shell) textSmall() float32 {
+	return float32(s.settings.Value("size").(float64)) * s.metrics.textSmallAtBase / s.metrics.textBase
+}
+
+// fontFamily is the font stack of the font setting.
+func (s *Shell) fontFamily() string {
+	return s.settings.Catalog.Stack(s.settings.Value("font").(string))
+}
+
+// stripPlace is the scroll of a tab strip and the target it was last given.
+type stripPlace struct {
+	state  *ui.ScrollState
+	target stripTarget
+	drawn  bool
+}
+
+// stripTarget is where a strip centres its active tab.
+type stripTarget struct {
+	tab string
+	to  float64
+}

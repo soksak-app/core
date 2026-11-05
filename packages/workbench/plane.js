@@ -24,7 +24,7 @@ import { checkTabParams, storedParamsProblem } from "./tab-params.js";
 import { chooseOpener } from "./file-open.js";
 import { clearSlotSurface, setSlotSurface, standIn } from "./compositor.js";
 import { native, onSurfaceInput, overlay, report, shapes, windowSidecar } from "./host.js";
-import { icon } from "./icons.js";
+import { declaredIcons, icon } from "./icons.js";
 import { issueId } from "./ids.js";
 import { bind, delegate, mark, run, runOn } from "./commands.js";
 import { fillPicker, pickerAnswer, pickerColumns, pickerGroups, pickerItems } from "./picker-layer.js";
@@ -294,8 +294,7 @@ function updateCard(el, card, rect) {
     ham.dataset.expose = "core.card.tab-list";
     ham.type = "button";
     ham.title = "탭 목록";
-    ham.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true">' +
-      '<path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/></svg>';
+    ham.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true">${declaredIcons["card-tabs"]}</svg>`;
     bind(ham, "core.card.tab-list", () => ({ card: el.dataset.cardId }));
     chrome.insertBefore(ham, chrome.firstChild);
   }
@@ -307,8 +306,7 @@ function updateCard(el, card, rect) {
     apps.type = "button";
     apps.title = "스페이스 앱";
     apps.setAttribute("aria-label", apps.title);
-    apps.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true">' +
-      '<path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/></svg>';
+    apps.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true">${declaredIcons["card-tabs"]}</svg>`;
     bind(apps, "core.space.apps", () => ({ card: el.dataset.cardId }));
     chrome.insertBefore(apps, chrome.firstChild);
   }
@@ -364,8 +362,7 @@ function updateCard(el, card, rect) {
     more.type = "button";
     more.title = "카드 도구";
     more.setAttribute("aria-label", more.title);
-    more.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true">' +
-      '<circle cx="3.5" cy="8" r="1"/><circle cx="8" cy="8" r="1"/><circle cx="12.5" cy="8" r="1"/></svg>';
+    more.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true">${declaredIcons["card-more"]}</svg>`;
     bind(more, "core.card.tools", () => ({ card: el.dataset.cardId }));
     chrome.appendChild(more);
   }

@@ -38,6 +38,8 @@ type Declarations struct {
 	Statuses, Commands, Elements map[string]bool
 	// Shortcuts is the shortcut table.
 	Shortcuts []Shortcut
+	// Icons are the SVG elements of the icons of a card head.
+	Icons map[string]string
 	// surface holds the entries of surfaceNames under the keys of the declaration file, and params the parameter schema of each
 	// command.
 	surface map[string][]map[string]any
@@ -63,6 +65,17 @@ func (d *Declarations) Metric(name string) (float64, bool) {
 	}
 	number, err := strconv.ParseFloat(strings.TrimSuffix(value, "px"), 64)
 	return number, err == nil
+}
+
+// Share returns the chrome metric name, which is a percentage, as a ratio, and false when the metric does not exist or holds another
+// unit.
+func (d *Declarations) Share(name string) (float64, bool) {
+	value, ok := strings.CutSuffix(d.chrome[name], "%")
+	if !ok {
+		return 0, false
+	}
+	number, err := strconv.ParseFloat(value, 64)
+	return number / 100, err == nil
 }
 
 // HeightMetric returns the chrome metric name, which is a share of the window height in vh, as a ratio, and false when the metric does
@@ -125,6 +138,7 @@ func ReadDeclarations() (*Declarations, error) {
 		return nil, fmt.Errorf("shortcuts.json: %w", err)
 	}
 	var values struct {
+		Icons  map[string]string `json:"icons"`
 		Chrome map[string]string `json:"chrome"`
 		Themes []declaredTheme   `json:"themes"`
 	}
@@ -156,7 +170,7 @@ func ReadDeclarations() (*Declarations, error) {
 	}
 	return &Declarations{
 		Statuses: names(exposes["status"]), Commands: names(exposes["commands"]), Elements: names(exposes["element"]),
-		Shortcuts: shortcuts.Shortcuts, surface: surface, params: params, many: many, chrome: values.Chrome, themes: values.Themes,
+		Icons: values.Icons, Shortcuts: shortcuts.Shortcuts, surface: surface, params: params, many: many, chrome: values.Chrome, themes: values.Themes,
 	}, nil
 }
 

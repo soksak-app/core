@@ -29,6 +29,8 @@ type ShellOptions struct {
 	Environment []byte
 	// Invalidate asks for a frame.
 	Invalidate func()
+	// Backdrop sets the color of the window behind its content, which a surface without a background of its own shows.
+	Backdrop func(color string) error
 	// Post runs a task as a later step of the main thread.
 	Post func(task func())
 	// Report writes a failure of the event writer to the application log.
@@ -72,6 +74,10 @@ type environmentGrid struct {
 // metrics are the chrome metrics that the shell draws with.
 type metrics struct {
 	chromeH, headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW float32
+	// The card head (.chrome of packages/workbench/app.css).
+	cardHeadGap, cardHeadPad, cardTabsGap, cardButton, cardIcon, cardActsGap, cardActsPad, cardActHalfOpacity, tabGap, tabPadY, tabPadX, tabXPad, tabXOpacity, iconStroke, disabledOpacity, noticeDotInset, radiusSmallRatio, textSmallAtBase, textBase, chipSelMix, insetMix, tabXHoverMix float32
+	// The error line (#applicationError of packages/workbench/app.css).
+	errorPadY, errorPadX, errorBorder float32
 	// debugW is the width of the debug view, and debugH its largest share of the window height.
 	debugW, debugH float32
 }
@@ -107,6 +113,38 @@ func readMetrics(declared *Declarations) (metrics, error) {
 	read("tab-max-w", &m.tabMaxW)
 	read("tab-peek-w", &m.tabPeekW)
 	read("tab-min-w", &m.tabMinW)
+	read("card-head-gap", &m.cardHeadGap)
+	read("card-head-pad", &m.cardHeadPad)
+	read("card-tabs-gap", &m.cardTabsGap)
+	read("card-button", &m.cardButton)
+	read("card-icon", &m.cardIcon)
+	read("card-acts-gap", &m.cardActsGap)
+	read("card-acts-pad", &m.cardActsPad)
+	read("card-act-half-opacity", &m.cardActHalfOpacity)
+	read("tab-gap", &m.tabGap)
+	read("tab-pad-y", &m.tabPadY)
+	read("tab-pad-x", &m.tabPadX)
+	read("tab-x-pad", &m.tabXPad)
+	read("tab-x-opacity", &m.tabXOpacity)
+	read("icon-stroke", &m.iconStroke)
+	read("error-pad-y", &m.errorPadY)
+	read("error-pad-x", &m.errorPadX)
+	read("error-border", &m.errorBorder)
+	read("disabled-opacity", &m.disabledOpacity)
+	read("notice-dot-inset", &m.noticeDotInset)
+	read("r-xs-ratio", &m.radiusSmallRatio)
+	read("text-small-at-base", &m.textSmallAtBase)
+	read("text-base", &m.textBase)
+	mix := func(name string, into *float32) {
+		value, ok := declared.Share(name)
+		if !ok {
+			failed = fmt.Errorf("the chrome metric %s has no share", name)
+		}
+		*into = float32(value)
+	}
+	mix("chip-sel-mix", &m.chipSelMix)
+	mix("inset-mix", &m.insetMix)
+	mix("tab-x-hover-mix", &m.tabXHoverMix)
 	return m, failed
 }
 
@@ -171,6 +209,8 @@ type Shell struct {
 	focused  string
 	// fullscreen is the card that covers the plane, or "" while the cards stand in their arrangement.
 	fullscreen string
+	// strips holds the scroll of the tab strip of each card.
+	strips map[string]*stripPlace
 	// heads holds the fit of the head that the last frame drew for each card.
 	heads map[string]layout.HeadFit
 	// controlsWidth is the width that the window keeps for its own buttons.
@@ -236,7 +276,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 		return nil, fmt.Errorf("environment declaration: %w", err)
 	}
 	s := &Shell{cardReads: map[string]cardRead{}, options: options, metrics: read, palette: palette, registry: NewRegistry(options.Declared), calls: options.Calls,
-		grid: environment.Workspace.Grid, focus: environment.Workspace.Focus, browsing: true, library: newLibraryState(), icons: map[string]*ui.SVG{}, heads: map[string]layout.HeadFit{}}
+		grid: environment.Workspace.Grid, focus: environment.Workspace.Focus, browsing: true, library: newLibraryState(), strips: map[string]*stripPlace{}, icons: map[string]*ui.SVG{}, heads: map[string]layout.HeadFit{}}
 	s.text = NewTextSize(shellText{s}, steps)
 	s.keyboard = NewFocus(options.Declared, func() { s.options.Invalidate() })
 	s.events = NewEvents(EventsOptions{Calls: s.calls, Post: options.Post, Report: options.Report, Now: time.Now,
@@ -510,6 +550,7 @@ func (s *Shell) View(c *ui.Context) {
 	theme.Border = s.palette.Edge
 	theme.Danger = s.palette.No
 	theme.FontSize = theme.Rem(1) * float32(s.text.Frame())
+	theme.Font = s.fontFamily()
 	c.SetTheme(&theme)
 	s.keys.Declare(c)
 	ui.Column(c).Size(width, height).Background(s.palette.Bg).TextColor(s.palette.Fg).Clip().Children(func() {

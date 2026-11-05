@@ -54,14 +54,6 @@ var panelShapes = map[layout.Side]string{
 	"right":  `<rect width="12" height="12" x="2" y="2" rx="1.5"/><path d="M10 2v12"/>`,
 }
 
-// panelIcons are the icons of the sides in the header of a card.
-var panelIcons = map[layout.Side]*ui.SVG{
-	"top":    strokeIcon(`<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/>`),
-	"bottom": strokeIcon(`<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 15h18"/>`),
-	"left":   strokeIcon(`<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/>`),
-	"right":  strokeIcon(`<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/>`),
-}
-
 // cardSideParam is the parameter of the card sidebar commands.
 type cardSideParam struct {
 	Card string  `json:"card"`
@@ -267,12 +259,14 @@ func (s *Shell) drawSideToggles(c *ui.Context, id string, sides cardSides) {
 		open := !current.shown.Collapsed
 		title := sideTitle(side, open)
 		button := s.binder.Press(c, "core.card.sidebar.fold", "core.card.sidebar.toggle", id+":"+side, cardSideParam{Card: id, Side: side})
-		button.Size(s.metrics.actW, s.metrics.actH).Center().Label(title).Tooltip(title).Checked(open).Children(func() {
-			ui.Icon(c, panelIcons[side]).Size(14, 14)
-		})
+		s.dressHeadButton(button, title, false)
+		color := s.headIconColor(button)
 		if open {
-			button.Background(s.palette.Rail)
+			color = s.palette.Focus
 		}
+		button.Checked(open).Children(func() {
+			ui.Icon(c, s.panelIcon(side)).Size(s.metrics.cardIcon, s.metrics.cardIcon).TextColor(color)
+		})
 	}
 }
 

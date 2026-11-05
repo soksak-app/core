@@ -45,6 +45,10 @@ type SidebarMetrics struct {
 	SectionHeadText float32
 	// SectionTabMark is the height of the mark of the selected tab of a `tabs` set.
 	SectionTabMark float32
+	// SectionHeadMix and SectionHeadHoverMix are the shares of the text color over the card in a section band, and in a band under
+	// the pointer.
+	SectionHeadMix      float32
+	SectionHeadHoverMix float32
 	// FoldButton and FoldIcon are the sizes of the fold control of a status line and of its icon.
 	FoldButton float32
 	FoldIcon   float32
@@ -237,9 +241,9 @@ func drawSectionHeader(c *ui.Context, binder *Binder, frame SidebarFrame, sectio
 	header := binder.Press(c, "core.sidebar.section.header", "core.sidebar.section.fold", item, sectionParam{frame.Sidebar, section.ID}).
 		Role(ui.RoleListItem).Label(section.Name).Height(metrics.HeadH).FillWidth().Row().
 		Justify(ui.Start).AlignItems(ui.Center).Gap(metrics.SectionHeadGap).PaddingX(metrics.SectionHeadPad).Expanded(!section.Folded).
-		BorderWidth(0, 0, 1, 0).BorderColor(theme.Border)
+		BorderWidth(0, 0, 1, 0).BorderColor(theme.Border).Background(faded(theme.Text, metrics.SectionHeadMix))
 	if header.Hovered() {
-		header.Background(theme.Surface)
+		header.Background(faded(theme.Text, metrics.SectionHeadHoverMix))
 	}
 	header.Children(func() {
 		icon := chevronDown
@@ -347,7 +351,7 @@ func drawSectionTabs(c *ui.Context, binder *Binder, frame SidebarFrame, metrics 
 	theme := c.Theme()
 	// The set keeps the height of the room, so a section with an integer height leaves the status line at the end of the sidebar.
 	ui.Column(c).Size(width, room).Children(func() {
-		ui.ScrollHorizontal(binder.Name(c, "core.sidebar.tabs", frame.Sidebar)).Size(width, metrics.HeadH).Role(ui.RoleTabList).Children(func() {
+		ui.ScrollHorizontal(binder.Name(c, "core.sidebar.tabs", frame.Sidebar)).Size(width, metrics.HeadH).Role(ui.RoleTabList).Background(faded(theme.Text, metrics.SectionHeadMix)).Children(func() {
 			ui.Row(c).FillHeight().Children(func() {
 				for _, section := range frame.Sections {
 					drawSectionTab(c, binder, frame, section, metrics, theme)
@@ -379,7 +383,8 @@ func drawSectionTab(c *ui.Context, binder *Binder, frame SidebarFrame, section S
 	tab := binder.Press(c, "core.sidebar.section.tab", "core.sidebar.section.select", sectionItem(frame, section), sectionParam{frame.Sidebar, section.ID}).
 		Role(ui.RoleTab).Selected(selected).FillHeight().Background(ui.Transparent)
 	if tab.Hovered() {
-		tab.Background(theme.Surface)
+		// The row is a band already, so a tab adds what the band under the pointer has over it.
+		tab.Background(faded(theme.Text, metrics.SectionHeadHoverMix-metrics.SectionHeadMix))
 	}
 	tab.Children(func() {
 		ui.Text(c, section.Name).NoWrap().FontSize(metrics.SectionHeadText).Bold().TextColor(color).Padding(0, metrics.SectionHeadPad)

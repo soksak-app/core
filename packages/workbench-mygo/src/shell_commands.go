@@ -38,6 +38,12 @@ type cardParam struct {
 	Plugin string `json:"plugin"`
 }
 
+type addTabParam struct {
+	Card   string          `json:"card"`
+	Plugin string          `json:"plugin"`
+	Params json.RawMessage `json:"params"`
+}
+
 type boundaryParam struct {
 	Axis     layout.Axis `json:"axis"`
 	Line     int         `json:"line"`
@@ -151,11 +157,11 @@ func (s *Shell) register() {
 		s.settle()
 		return map[string]float64{"position": moved}, nil
 	})
-	command(s, "core.card.add-tab", func(value cardParam) (any, error) {
+	command(s, "core.card.add-tab", func(value addTabParam) (any, error) {
 		if err := s.requirePlane(); err != nil {
 			return nil, err
 		}
-		tab, err := s.addTab(value.Card, value.Plugin)
+		tab, err := s.addTab(value.Card, value.Plugin, value.Params)
 		if err != nil {
 			return nil, err
 		}

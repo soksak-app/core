@@ -712,16 +712,11 @@ func (s *Shell) closeCard(id string) error {
 	return nil
 }
 
-// addTab adds a new tab to the card id and shows it.
-func (s *Shell) addTab(id, plugin string) (string, error) {
+// addTab adds a new tab of plugin with params to the card id, shows it and focuses the card.
+func (s *Shell) addTab(id, plugin string, params json.RawMessage) (string, error) {
 	if err := s.layoutChangeable(id); err != nil {
 		return "", err
 	}
-	return s.addTabWith(id, plugin, nil)
-}
-
-// addTabWith is addTab for a tab with the members rest.
-func (s *Shell) addTabWith(id, plugin string, rest map[string]json.RawMessage) (string, error) {
 	data, err := s.cardData(id)
 	if err != nil {
 		return "", err
@@ -730,17 +725,45 @@ func (s *Shell) addTabWith(id, plugin string, rest map[string]json.RawMessage) (
 	if err != nil {
 		return "", err
 	}
+	checked, err := checkTabParams(known, params)
+	if err != nil {
+		return "", err
+	}
 	tab, err := s.newTabOf(known, data.ActiveTab())
 	if err != nil {
 		return "", err
 	}
-	maps.Copy(tab.Rest, rest)
+	if checked != nil {
+		tab.Rest["params"] = checked
+	}
 	data.AppendTab(tab)
 	if err := s.storeCard(id, data); err != nil {
 		return "", err
 	}
+	s.focused = id
 	s.settle()
 	return tab.ID, nil
+}
+
+// checkTabParams returns params of a new tab of plugin, nil without params. They match surface.params of the plugin
+// (docs/spec/plugins.md#pluginjson).
+func checkTabParams(plugin *LoadedPlugin, params json.RawMessage) (json.RawMessage, error) {
+	var value any
+	if len(params) > 0 {
+		if err := json.Unmarshal(params, &value); err != nil {
+			return nil, fmt.Errorf("params of %s: %w", plugin.ID, err)
+		}
+	}
+	if value == nil {
+		return nil, nil
+	}
+	if plugin.Params == nil {
+		return nil, fmt.Errorf("plugin %s declares no tab params", plugin.ID)
+	}
+	if !MatchesSchema(plugin.Params, value) {
+		return nil, fmt.Errorf("params do not match %s surface.params", plugin.ID)
+	}
+	return params, nil
 }
 
 // selectTab shows the tab id in its card.

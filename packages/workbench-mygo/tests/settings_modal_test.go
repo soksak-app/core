@@ -90,7 +90,8 @@ const acmeDocument = `{"plugins":[
 	{"id":"plain","package":"plain","version":"1.0.0","manifest":{"id":"plain","name":"Plain","description":"nothing"}},
 	{"id":"acme","package":"acme","version":"1.0.0","manifest":{"id":"acme","name":"Acme","description":"the files",
 		"mark":"Ac","icon":"<path d=\"M1 1h14\"/>",
-		"surface":{"composition":{"kind":"view","page":"a.html"},"menu":[{"command":"acme.copy","title":"복사"}]},
+		"surface":{"composition":{"kind":"view","page":"a.html"},"menu":[{"command":"acme.copy","title":"복사"}],
+			"params":{"type":"object","properties":{"path":{"type":"string"}}}},
 		"sections":[{"id":"acme.files","name":"파일","composition":{"kind":"view","page":"f.html"},"height":"fill"},
 			{"id":"acme.git","name":"변경","composition":{"kind":"view","page":"g.html"},"height":120}],
 		"settings":{"level":{"type":"integer","label":"수준","description":"높을수록 많다","minimum":1,"maximum":5,"default":2},
@@ -346,6 +347,19 @@ func TestAModeOfTheThemeRepaintsTheWorkbench(t *testing.T) {
 	f.run("core.settings.close", map[string]any{})
 	if light := f.tester.Image().RGBAAt(2, 2); light == dark {
 		t.Fatalf("the background stays %v", dark)
+	}
+}
+
+// A view without a background of its own shows the window through the hole of its element, so the window takes the color of the cards.
+func TestTheWindowBehindTheSurfacesTakesTheCardColorOfTheTheme(t *testing.T) {
+	f := opened(t)
+	if got := f.host.backdrops; len(got) == 0 || got[len(got)-1] != "#191b24" {
+		t.Fatalf("the backdrops are %q", got)
+	}
+	f.run("core.settings.theme", map[string]any{"name": "paper", "mode": "light"})
+	f.run("core.settings.close", map[string]any{})
+	if got := f.host.backdrops; got[len(got)-1] != "#fbfbfb" {
+		t.Fatalf("the backdrops are %q", got)
 	}
 }
 
