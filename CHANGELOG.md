@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F502-13: A mygo settings row without a name keeps the empty name column of the page's grid, so its button stands in the control column. Red: `TestAButtonOfARowWithoutANameStandsInTheControlColumn` failed on the previous drawing.
 - F502-13: The grip of the mygo settings card is its whole head, with the padding and the border of the page's header, and the close button stands inside it. Red: `TestTheGripIsTheWholeHeadOfTheCard` failed on the previous drawing.
 - F617: A message of a sidecar reaches the owner of its surface with the cids of its request.
 - F631: The tests of a full event queue hold the writer, so each refusal is counted, and they read a run as several `log.dropped` ranges whose counts add up to the refused events. The writer records the loss each time it writes the queue, and a test that expected one `log.dropped` failed when the writer woke in the middle of the refusals. Red: two refusals on both sides of a record were expected as one `log.dropped`.

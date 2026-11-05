@@ -220,6 +220,9 @@ func (s *Shell) drawSettingsRow(c *ui.Context, row settingsRow, pane settingsPan
 	ui.Row(c).FillWidth().MinHeight(pane.rowH).Gap(pane.rowGap).AlignItems(ui.Center).Wrap().Children(func() {
 		if row.name != "" {
 			ui.Text(c, row.name).Width(pane.rowNameW).FontSize(s.textControl()).TextColor(s.palette.Muted)
+		} else {
+			// A row without a name keeps the empty name column of the grid of the page.
+			ui.Box(c).Width(pane.rowNameW)
 		}
 		for _, control := range row.controls {
 			s.drawControl(c, control, pane)

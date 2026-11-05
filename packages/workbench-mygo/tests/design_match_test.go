@@ -31,3 +31,15 @@ func TestTheGripIsTheWholeHeadOfTheCard(t *testing.T) {
 		t.Fatalf("the grip is %+v, want 321,73 558x44", grip)
 	}
 }
+
+// A row without a name keeps the empty name column of the grid of the page.
+func TestAButtonOfARowWithoutANameStandsInTheControlColumn(t *testing.T) {
+	f := settingsSection(t, "plugins")
+	if manage := f.box("core.settings-modal.manage", "plugins:manage"); !designNear(manage.X, 611) {
+		t.Fatalf("the manage button is at x %v, want 611", manage.X)
+	}
+	f = settingsSection(t, "sidebars")
+	if create := f.box("core.settings-modal.create", "sets:create"); !designNear(create.X, 611) {
+		t.Fatalf("the create button is at x %v, want 611", create.X)
+	}
+}
