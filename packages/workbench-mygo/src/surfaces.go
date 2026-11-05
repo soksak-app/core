@@ -285,7 +285,7 @@ func (s *Shell) drawSeat(c *ui.Context, tab layout.Tab, box layout.Rect) {
 		s.drawPluginPlaceholder(c, tab.Plugin)
 		return
 	case unit.Composition == nil:
-		ui.Text(c, tab.Plugin+" 플러그인에는 화면이 없습니다.").FontSize(12).TextColor(s.palette.Muted)
+		ui.Text(c, tab.Plugin+" 플러그인에는 화면이 없습니다.").FontSize(s.textBody()).TextColor(s.palette.Muted)
 		return
 	}
 	// A surface whose image detach is pending is not placed, so the host creates no view for it.
@@ -293,7 +293,7 @@ func (s *Shell) drawSeat(c *ui.Context, tab layout.Tab, box layout.Rect) {
 		return
 	}
 	if reason, stopped := s.surfaces.stopped(tab.ID); stopped {
-		ui.Text(c, reason).FontSize(12).TextColor(s.palette.No)
+		ui.Text(c, reason).FontSize(s.textBody()).TextColor(s.palette.No)
 		return
 	}
 	s.standSurface(c, &heldSurface{tab: tab, composition: unit.Composition, box: box}, box)
@@ -305,7 +305,7 @@ func (s *Shell) drawSectionSeat(c *ui.Context, seat SidebarSeat) {
 	s.surfaces.seated[seat.SurfaceID] = seat
 	if reason, stopped := s.surfaces.failed[seat.SurfaceID]; stopped {
 		if seat.Visible {
-			ui.Text(c, reason).FontSize(12).TextColor(s.palette.No)
+			ui.Text(c, reason).FontSize(s.textBody()).TextColor(s.palette.No)
 		}
 		return
 	}

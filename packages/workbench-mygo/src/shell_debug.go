@@ -1111,7 +1111,7 @@ func (s *Shell) debugStyle() DebugStyle {
 		return float32(value)
 	}
 	pane := s.readSettingsPane()
-	return DebugStyle{Card: s.palette.Card, Background: s.palette.Bg, Edge: s.palette.Edge, Rail: s.palette.Rail, Fg: s.palette.Fg, Muted: s.palette.Muted,
+	return DebugStyle{Scrim: s.dialogScrim(), Card: s.palette.Card, Background: s.palette.Bg, Edge: s.palette.Edge, Rail: s.palette.Rail, Fg: s.palette.Fg, Muted: s.palette.Muted,
 		Border: s.palette.BorderWidth, Radius: s.radiusMiddle(), ButtonRadius: s.radiusSmall(), Top: metric("set-card-top"),
 		HeadH: pane.headH, HeadGap: pane.headGap, HeadPadStart: pane.headPadStart, HeadPadEnd: pane.headPadEnd,
 		ShadowY: pane.shadowY, ShadowBlur: pane.shadowBlur, ShadowAlpha: pane.shadowAlpha,

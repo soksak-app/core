@@ -57,8 +57,8 @@ type picker struct {
 
 // pickerMetrics are the chrome metrics of the layer.
 type pickerMetrics struct {
-	minW, maxW, maxH, outerPad, pad, icon, iconH, gap, itemPadY, headTop, headX, headBottom, noteGap, shadowY, shadowBlur, shadowAlpha float32
-	indent, groupedMaxW, groupedMaxH, groupedMargin, groupedIcon, groupTop, groupBottom, groupStroke                                   float32
+	anchorGap, minW, maxW, maxH, outerPad, pad, icon, iconH, gap, itemPadY, headTop, headX, headBottom, noteGap, shadowY, shadowBlur, shadowAlpha float32
+	indent, groupedMaxW, groupedMaxH, groupedMargin, groupedIcon, groupTop, groupBottom, groupStroke                                              float32
 }
 
 func (s *Shell) readPickerMetrics() pickerMetrics {
@@ -66,7 +66,7 @@ func (s *Shell) readPickerMetrics() pickerMetrics {
 		value, _ := s.options.Declared.Metric("picker-" + name)
 		return float32(value)
 	}
-	return pickerMetrics{minW: metric("min-w"), maxW: metric("max-w"), maxH: metric("max-h"), outerPad: metric("outer-pad"), pad: metric("pad"),
+	return pickerMetrics{anchorGap: metric("anchor-gap"), minW: metric("min-w"), maxW: metric("max-w"), maxH: metric("max-h"), outerPad: metric("outer-pad"), pad: metric("pad"),
 		icon: metric("icon"), iconH: metric("icon-h"), gap: metric("gap"), itemPadY: metric("item-pad-y"), headTop: metric("head-pad-top"),
 		headX: metric("head-pad-x"), headBottom: metric("head-pad-bottom"), noteGap: metric("item-note-gap"), shadowY: metric("shadow-y"),
 		shadowBlur: metric("shadow-blur"), shadowAlpha: metric("shadow-alpha"), indent: metric("indent"), groupedMaxW: metric("grouped-max-w"),
@@ -496,9 +496,15 @@ type screenStatus struct {
 }
 
 // The background of a dialog (docs/spec/native-modals.md): black at 50% opacity over the workbench, which is blurred by 3 points.
-const dialogBlur = 3
+func (s *Shell) dialogBlur() float32 {
+	blur, _ := s.options.Declared.Metric("scrim-blur")
+	return float32(blur)
+}
 
-var dialogScrim = ui.RGBA(0, 0, 0, 0.5)
+func (s *Shell) dialogScrim() ui.Color {
+	alpha, _ := s.options.Declared.Metric("scrim-alpha")
+	return ui.RGBA(0, 0, 0, float32(alpha))
+}
 
 // dialogOpen tells whether a dialog of the window is open. A menu has no background.
 func (s *Shell) dialogOpen() bool { return s.settingsWindow.open || s.debugView.open }
@@ -642,7 +648,7 @@ func (s *Shell) drawPicker(c *ui.Context, width, height float32) {
 			maxW, maxH = metrics.groupedMaxW, min(metrics.groupedMaxH, height-metrics.groupedMargin)
 		}
 		lineHeight, _ := s.options.Declared.Metric("line-height")
-		panel.Margin(5, 0, 0, 0).KeepAll().MinWidth(metrics.minW).MaxWidth(maxW).MaxHeight(maxH).Column().Padding(metrics.outerPad).LineHeight(float32(lineHeight)).
+		panel.Margin(metrics.anchorGap, 0, 0, 0).KeepAll().MinWidth(metrics.minW).MaxWidth(maxW).MaxHeight(maxH).Column().Padding(metrics.outerPad).LineHeight(float32(lineHeight)).
 			Background(s.palette.Card).Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.radiusMiddle()).Label(layer.title).
 			Shadow(0, metrics.shadowY, metrics.shadowBlur, 0, ui.RGBA(0, 0, 0, metrics.shadowAlpha)).Children(func() {
 			ui.Box(c).Padding(metrics.headTop, metrics.headX, metrics.headBottom, metrics.headX).Children(func() {

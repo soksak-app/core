@@ -61,6 +61,8 @@ type SidebarChoice struct {
 
 // SidebarsOptions is what the sidebars of a window need.
 type SidebarsOptions struct {
+	// Look returns the width of a line and the size of a caption at the settings of the window.
+	Look     func() (float32, float32)
 	Declared *Declarations
 	Registry *Registry
 	Binder   *Binder
@@ -169,6 +171,8 @@ func readSidebarMetrics(declared *Declarations) (SidebarMetrics, error) {
 	read("section-head-pad", &m.SectionHeadPad)
 	read("section-head-text", &m.SectionHeadText)
 	read("section-tab-mark", &m.SectionTabMark)
+	read("sidebar-status-gap", &m.StatusGap)
+	read("space-2", &m.StatusPad)
 	read("fold-button", &m.FoldButton)
 	read("card-icon", &m.FoldIcon)
 	read("icon-stroke", &m.IconStroke)
@@ -490,7 +494,9 @@ func (s *Sidebars) Draw(c *ui.Context, frame SidebarFrame, box layout.Rect) {
 	if s.options.Rail != nil {
 		frame.Rail = s.options.Rail()
 	}
-	DrawSidebar(c, s.options.Binder, drag, frame, s.metrics, float32(box.W), float32(box.H), func(c *ui.Context, seat SidebarSeat) {
+	metrics := s.metrics
+	metrics.BorderWidth, metrics.StatusText = s.options.Look()
+	DrawSidebar(c, s.options.Binder, drag, frame, metrics, float32(box.W), float32(box.H), func(c *ui.Context, seat SidebarSeat) {
 		if s.options.Seat == nil {
 			return
 		}

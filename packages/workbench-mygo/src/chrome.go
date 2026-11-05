@@ -14,24 +14,6 @@ import (
 // The chrome bar and the tabs of the spaces. The buttons, their order and their commands are those of packages/workbench/index.html
 // and projects.js.
 
-// barText is a text button of a bar.
-func (s *Shell) barText(c *ui.Context, button ui.Element, label string, on bool) {
-	s.barTextWithin(c, button, label, on, s.metrics.barTabMaxW)
-}
-
-// barTextWithin is barText with a text of at most width.
-func (s *Shell) barTextWithin(c *ui.Context, button ui.Element, label string, on bool, width float32) {
-	button.Height(s.metrics.spaceTabH).PaddingX(s.metrics.barTabGap).Radius(4).AlignItems(ui.Center).Label(label).Children(func() {
-		text := ui.Text(c, label).SingleLine().Ellipsis("…").FontSize(s.frameFont(12)).MaxWidth(width)
-		if !on {
-			text.TextColor(s.palette.Muted)
-		}
-	})
-	if on {
-		button.Background(s.palette.Card)
-	}
-}
-
 // drawChrome draws the chrome bar of the window, a band of the card color with its edge under it: the logo, the tabs of the projects and the
 // switches. The library screen has no layout, so its bar leaves out the project list and the balance.
 func (s *Shell) drawChrome(c *ui.Context, width float32) {

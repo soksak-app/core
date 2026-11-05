@@ -237,8 +237,10 @@ type pluginStarter struct {
 // that is what the tab waits for.
 func (s *Shell) drawPluginPlaceholder(c *ui.Context, plugin string) {
 	line, action, label := s.placeholderOf(plugin)
-	ui.Column(c).Fill().Gap(s.metrics.tabsGap).Center().Children(func() {
-		ui.Text(c, line).FontSize(12).TextColor(s.palette.Muted)
+	// The line is a paragraph of the page, whose margin of one line stands under it as well as the gap of the placeholder.
+	gap, _ := s.options.Declared.Metric("placeholder-gap")
+	ui.Column(c).Fill().Gap(float32(gap) + s.textBody()).Center().Children(func() {
+		ui.Text(c, line).LineHeight(s.metrics.lineHeight).FontSize(s.textBody()).TextColor(s.palette.Muted)
 		if action != "" {
 			s.binder.Button(c, "core.card.placeholder-action", "core.plugins."+action, plugin, label, pluginParam{plugin})
 		}

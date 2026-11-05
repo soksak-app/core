@@ -97,6 +97,9 @@ func (s *Shell) textControl() float32 {
 	return float32(s.settings.Value("size").(float64)) * s.metrics.textControlAtBase / s.metrics.textBase
 }
 
+// textBody is the size of the text that inherits it from the body of the page, the size setting.
+func (s *Shell) textBody() float32 { return float32(s.settings.Value("size").(float64)) }
+
 // textCaption is the size of a caption at the size setting.
 func (s *Shell) textCaption() float32 {
 	return float32(s.settings.Value("size").(float64)) * s.metrics.textCaptionAtBase / s.metrics.textBase
