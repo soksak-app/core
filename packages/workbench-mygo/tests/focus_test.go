@@ -174,3 +174,25 @@ func TestFocusRefusesInvalidValues(t *testing.T) {
 		t.Fatalf("the event failed with %v", err)
 	}
 }
+
+// core.focus.set reaches each kind of named element of the window, and the status names the element that has the focus.
+func TestTheFocusCommandReachesTheElementsOfTheShell(t *testing.T) {
+	f := openedShell(t)
+	id := f.host.projects[0]["id"].(string)
+	type focused struct {
+		Name  string `json:"name"`
+		Index int    `json:"index"`
+	}
+	f.run("core.focus.set", map[string]any{"name": "core.chrome.settings"})
+	f.settle()
+	if got := status[*focused](t, f, "core.focus"); got == nil || got.Name != "core.chrome.settings" {
+		t.Fatalf("the focus is %+v", got)
+	}
+	f.run("core.rename.begin", map[string]string{"kind": "project", "id": id})
+	f.settle()
+	f.run("core.focus.set", map[string]any{"name": "core.rename.input"})
+	f.settle()
+	if got := status[*focused](t, f, "core.focus"); got == nil || got.Name != "core.rename.input" {
+		t.Fatalf("the focus is %+v", got)
+	}
+}

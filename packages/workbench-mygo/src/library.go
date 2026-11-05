@@ -274,7 +274,7 @@ func (s *Shell) drawLibraryForm(c *ui.Context) {
 func (s *Shell) drawFormField(c *ui.Context, name, field string, value *string, label string) {
 	set := s.binder.Control(c, name, "core.library.form.set", field)
 	before := *value
-	ui.TextInput(c, value).FillWidth().Label(label).Placeholder(label)
+	s.binder.Bound(ui.TextInput(c, value), name).FillWidth().Label(label).Placeholder(label)
 	if *value != before {
 		set(libraryField{Field: field, Value: *value})
 	}

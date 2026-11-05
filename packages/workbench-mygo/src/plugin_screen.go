@@ -291,7 +291,7 @@ func DrawPluginPage(c *ui.Context, binder *Binder, page PluginPage, shown *Shown
 		ui.Column(c).FillWidth().Gap(12).Padding(16).Children(func() {
 			search := binder.Control(c, "core.library.plugins.search", "core.library.plugins.search", "")
 			query := page.Query
-			ui.TextInput(c, &query).Label("플러그인 검색").Placeholder("플러그인 검색").FillWidth()
+			binder.Bound(ui.TextInput(c, &query), "core.library.plugins.search").Label("플러그인 검색").Placeholder("플러그인 검색").FillWidth()
 			if query != page.Query {
 				search(map[string]any{"query": query})
 			}
@@ -468,7 +468,7 @@ func drawCardActions(c *ui.Context, binder *Binder, page PluginPage, row PluginR
 	ui.Row(c).Gap(8).Children(func() {
 		for _, action := range actions {
 			run := binder.Control(c, "core.library.plugins.action", pluginCommands[action.Action], row.ID+"/"+action.Action)
-			if ui.Button(c, actionLabel(action.Action)).Disabled(action.Disabled).Clicked() {
+			if binder.Bound(ui.Button(c, actionLabel(action.Action)), "core.library.plugins.action").Disabled(action.Disabled).Clicked() {
 				// core.plugins.apply reloads the window for every changed plugin, so it takes no plugin.
 				params := map[string]any{"plugin": row.ID}
 				if action.Action == "apply" {

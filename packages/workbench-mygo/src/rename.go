@@ -188,7 +188,7 @@ func (s *Shell) drawRenameField(c *ui.Context) {
 	held := s.renaming
 	value := held.Value
 	s.binder.Control(c, "core.rename.input", "core.rename.set", "")
-	field := ui.TextInputBase(c, &value).Label(value).AutoFocus().Shrink(0).Width(s.frameLength(m.barTabRootW)).PaddingX(s.frameLength(m.barTabRootPad)).
+	field := s.binder.Bound(ui.TextInputBase(c, &value), "core.rename.input").Label(value).AutoFocus().Shrink(0).Width(s.frameLength(m.barTabRootW)).PaddingX(s.frameLength(m.barTabRootPad)).
 		Border(s.palette.BorderWidth, s.palette.Focus).Radius(s.radiusSmall()).Background(s.palette.Bg).TextColor(s.palette.Fg).
 		FontSize(s.frameFont(s.textControl())).
 		HandleInput(func(event ui.InputEvent) bool {

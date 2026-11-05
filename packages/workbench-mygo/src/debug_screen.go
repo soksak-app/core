@@ -162,7 +162,7 @@ func drawDebugActions(c *ui.Context, binder *Binder, view DebugView) {
 	saving := operation != nil && operation.Action == "save-all" && operation.State == "running"
 	ui.Row(c).Gap(8).Children(func() {
 		saveAll := binder.Control(c, "core.debug.save-all", "core.debug.save-all", "")
-		if ui.Button(c, "모두 저장").Disabled(saving).Clicked() {
+		if binder.Bound(ui.Button(c, "모두 저장"), "core.debug.save-all").Disabled(saving).Clicked() {
 			saveAll(nil)
 		}
 		binder.Button(c, "core.debug.timeline", "core.debug.timeline", "", "타임라인", nil)
@@ -224,7 +224,7 @@ func drawDebugState(c *ui.Context, binder *Binder, state DebugStateView) {
 	}
 	compare := binder.Control(c, "core.debug.state.with", "core.debug.state.compare", "")
 	ui.Box(c).Role(ui.RoleGroup).Label("비교할 상태 파일").Children(func() {
-		if ui.Select(c, &with, append([]string{without}, state.Compare...)).Label("비교할 상태 파일").Changed() {
+		if binder.Bound(ui.Select(c, &with, append([]string{without}, state.Compare...)), "core.debug.state.with").Label("비교할 상태 파일").Changed() {
 			chosen := with
 			if chosen == without {
 				chosen = ""
@@ -332,7 +332,7 @@ func drawTimelineFilters(c *ui.Context, binder *Binder, timeline DebugTimeline) 
 func drawFilterSelect(c *ui.Context, binder *Binder, member, name, label, value string, options []string) {
 	run := binder.Control(c, "core.debug.timeline."+name, "core.debug.timeline.filter", "")
 	ui.Box(c).Role(ui.RoleGroup).Label(label).Children(func() {
-		if ui.Select(c, &value, options).Label(label).Changed() {
+		if binder.Bound(ui.Select(c, &value, options), "core.debug.timeline."+name).Label(label).Changed() {
 			run(map[string]any{member: value})
 		}
 	})
@@ -346,7 +346,7 @@ func drawFilterField(c *ui.Context, binder *Binder, timeline DebugTimeline, memb
 		text = value
 	}
 	run := binder.Control(c, "core.debug.timeline."+name, "core.debug.timeline.filter", "")
-	field := ui.TextInput(c, &text).Placeholder(label).Label(label).Grow(1)
+	field := binder.Bound(ui.TextInput(c, &text), "core.debug.timeline."+name).Placeholder(label).Label(label).Grow(1)
 	if field.Changed() {
 		timeline.Drafts[member] = text
 		drafted = true
