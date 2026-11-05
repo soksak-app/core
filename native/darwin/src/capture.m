@@ -80,12 +80,13 @@ static SPCaptureAttempt* captureAttempt = nil;
 // Starts diagnostic source artifact retention on its own serial writer.
 static void endCaptureSourceArtifacts(void);
 
-static bool beginCaptureSourceArtifacts(NSString *directory) {
+static bool beginCaptureSourceArtifacts(NSString *directory, bool sourceFiles) {
     if (directory == nil || captureWriter == NULL) return false;
     if (captureSourceWriter != NULL) endCaptureSourceArtifacts();
     captureSourceWriter = dispatch_queue_create("sp.capture.source-writer", DISPATCH_QUEUE_SERIAL);
     if (captureSourceWriter == NULL) return false;
-    sp_image_capture_match_begin(directory.fileSystemRepresentation, captureSourceWriter);
+    if (sourceFiles) sp_image_capture_match_begin(directory.fileSystemRepresentation, captureSourceWriter);
+    else sp_image_capture_match_begin_without_source_files(directory.fileSystemRepresentation, captureSourceWriter);
     return true;
 }
 
@@ -1578,7 +1579,8 @@ bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut
         [attempt release];
         return captureOperationFailure(errorOut, @"capture directory is not valid UTF-8");
     }
-    if (!beginCaptureSourceArtifacts(captureSink.directory)) {
+    // Only the reader of a frame identity recording reads the source files, and a raster of a large view is megabytes.
+    if (!beginCaptureSourceArtifacts(captureSink.directory, frameIdentity)) {
         setCaptureError(@"diagnostic source artifact writer could not start");
         [attempt release];
         return captureOperationFailure(errorOut, @"diagnostic source artifact writer could not start");

@@ -48,7 +48,7 @@ int main(void) { @autoreleasepool {
             dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC)) == 0;
         check(sourceWriterStarted, @"the production frame writer reaches the controlled hold");
         if (sourceWriterStarted) {
-            BOOL began = beginCaptureSourceArtifacts(directoryPath);
+            BOOL began = beginCaptureSourceArtifacts(directoryPath, true);
             check(began, @"the production capture setup selects the source artifact writer");
             if (began) {
                 const size_t width = 32, height = 32, stride = width * 4;

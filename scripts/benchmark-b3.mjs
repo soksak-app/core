@@ -17,7 +17,9 @@
 // conditions of docs/spec/performance-goals.json. It runs the targets of each value of the scenario in the order of the goals, the
 // STEP=pointer readings last, each in the checkout of its application with `APP`, `CONFIG`, `CONFIG_DIR`, `SOK`, `PLUGINS` (the
 // installed surface plugins), `B3_OUT` and, for a target that takes the trace state of the run, `TRACE`, and with the environment of
-// the window checks. The runs interleave the applications: one run of each application before the next run of any. A scenario
+// the window checks. Before the first target it activates the first window through input.pointer, because a window opens behind the front
+// and a covered window measures another state; a refused activation and a window that stays covered fail the run and measure nothing.
+// The runs interleave the applications: one run of each application before the next run of any. A scenario
 // whose values no other host compares runs only on the mygo host.
 // Phase 1 also runs each scenario once on each application with TRACE=1 to attribute its costs, through the targets that take the
 // trace state of the run and name no TRACE of their own, and runs make measure-host-calls on the other and the baseline hosts and make
@@ -489,6 +491,30 @@ export async function readDisplay(configDir) {
   return first;
 }
 
+/**
+ * Makes the first window of the application of a configuration folder the window that a person sees. A window opens behind the front
+ * window, and a covered window measures another state, so a run activates it through input.pointer before its first target. A refused
+ * activation fails with its message, and a window that stays covered after waitMs fails.
+ */
+export async function activateWindow(configDir, { waitMs = 5000 } = {}) {
+  const client = await connect({ configDir });
+  try {
+    const [{ window }] = await client.request('windows.list');
+    const read = () => client.request('status.get', { window, name: 'host.window' });
+    const { content } = await read();
+    await client.request('input.pointer', { window, x: content.width / 2, y: 4, phase: 'move', activate: true });
+    const until = performance.now() + waitMs;
+    let status = await read();
+    while (status.occluded !== false && performance.now() < until) {
+      await new Promise((resolve) => { setTimeout(resolve, 100); });
+      status = await read();
+    }
+    if (status.occluded !== false) throw new Error(`window ${window} reports occluded ${status.occluded} after its activation`);
+  } finally {
+    client.close();
+  }
+}
+
 /** Reads `plugins/installed.json` of a configuration folder, or null when the folder has installed nothing. */
 function readInstalled(configDir) {
   const file = join(configDir, 'plugins', 'installed.json');
@@ -554,7 +580,7 @@ async function readStartConditions() {
 export async function runUnit(unit, context) {
   const {
     goals, session, write, baseline = null, trace = RUN_TRACE, benchmarks, recordsFile = 'runs.jsonl', prefix = '', interrupted,
-    readStart = readStartConditions, display = readDisplay, loadAverage = loadavg, runTarget = runTargetCommand,
+    readStart = readStartConditions, display = readDisplay, activate = activateWindow, loadAverage = loadavg, runTarget = runTargetCommand,
     targetsOf = (scenario) => scenarioTargets(goals, scenario),
   } = context;
   const { application } = unit;
@@ -586,6 +612,7 @@ export async function runUnit(unit, context) {
         plugins = surfacePlugins(record, (path) => readJson(join(configDir, path, 'plugin.json')));
         shown = await display(configDir);
         failures.push(...displayFailures(goals, shown));
+        if (failures.length === 0) await activate(configDir);
       } catch (error) {
         failures.push(error.message);
       }
@@ -661,8 +688,8 @@ export function buildSteps(phase, baseline) {
   return [
     step('release bundles', ['make', 'build-wailsv3-release', 'build-tauriv2-release', 'build-mygo-release']),
     step('baseline release bundles', ['make', '-C', baseline, 'build-wailsv3-release', 'build-tauriv2-release']),
-    step('workspace registry', ['make', 'registry', 'SIDECARS=diagnostic']),
-    step('public index', ['make', 'registry', 'SIDECARS=diagnostic', 'PLUGINS=public']),
+    step('workspace registry', ['make', 'build-registry', 'SIDECARS=diagnostic']),
+    step('public index', ['make', 'build-registry', 'SIDECARS=diagnostic', 'PLUGINS=public']),
     ...(phase === '1' ? [
       step('debug bundles', ['make', 'build-wailsv3', 'build-tauriv2', 'build-mygo']),
       step('baseline debug bundles', ['make', '-C', baseline, 'build-wailsv3', 'build-tauriv2']),

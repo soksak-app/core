@@ -208,3 +208,24 @@ test("a specification that cites a checklist ID is rejected", () => {
   ]);
   assert.deepEqual(checkSpecificationIds("Version 1.2-beta and UTF-8 text.\n", "docs/spec/fixture.md"), []);
 });
+
+test("check-docs fails on a conflict marker in a document or a source file and names the file and the line", { timeout: 5000 }, (t) => {
+  const [open, close] = ["<".repeat(7), ">".repeat(7)];
+  const result = check(t, "- [~] G1 — task\n", "- [~] G1 — 작업\n", "", undefined, {
+    "guide.md": `one\n${open} HEAD\ntwo\n=======\nthree\n${close} main\n`,
+    "guide.ko.md": "하나\n",
+    "source.mjs": `const a = 1;\n${close} main\n`,
+    ".gitignore": "ignored.mjs\n",
+    "ignored.mjs": `${open} HEAD\n`,
+    "image.bin": Buffer.concat([Buffer.from([0]), Buffer.from(`\n${open} HEAD\n`)]),
+    "inline.mjs": `const text = "${open} HEAD";\n`,
+  });
+  assert.equal(result.status, 1, result.stdout);
+  const errors = result.stderr.split("\n").filter((line) => line.includes("conflict marker")).sort();
+  assert.deepEqual(errors, ["guide.md:2: a conflict marker", "guide.md:6: a conflict marker", "source.mjs:2: a conflict marker"]);
+});
+
+test("check-docs passes a text that holds no conflict marker at the start of a line", { timeout: 5000 }, (t) => {
+  const result = check(t, "- [~] G1 — task\n", "- [~] G1 — 작업\n", "", undefined, { "heading.md": "Title\n=======\n", "heading.ko.md": "제목\n=======\n" });
+  assert.equal(result.status, 0, result.stderr);
+});

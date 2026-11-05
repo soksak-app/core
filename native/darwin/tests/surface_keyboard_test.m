@@ -132,6 +132,22 @@ int main(void) { @autoreleasepool {
     check(sp_input_pointer(window, 600, 250, 3, 0, 0, 0) == SP_INPUT_DELIVERED, "the release after the call of a region is delivered");
     check(window.firstResponder == (NSResponder *)region, "the release gives the keyboard to the region that asked for it");
 
+    // A surface that hides keeps the frame of its last placement, and that frame can lie under a press elsewhere in the window. A
+    // region that does not show takes no press: the view that the press reached keeps the keyboard, so the press stays open in it.
+    void *hiddenHost = sp_surface_create(composition);
+    webviewSetFrame(hiddenHost, 0, 0, 800, 500);
+    webviewSetSurfaceHidden(hiddenHost, false);
+    void *hidden = sp_region_create(hiddenHost, "hidden", regionEvent, NULL);
+    check(hidden != NULL, "the image region of the surface that hides is created");
+    placeRegion(hidden);
+    webviewSetSurfaceHidden(hiddenHost, true);
+    check(window.firstResponder == (NSResponder *)region, "a region of a hidden surface leaves the keyboard where it is");
+    check(sp_input_pointer(window, 600, 250, 1, 0, 0, 0) == SP_INPUT_DELIVERED, "a press over the frame of the hidden region is delivered");
+    [NSRunLoop.mainRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+    check(window.firstResponder == browserPage, "a press over the frame of a hidden region stays with the view that it reached");
+    check(sp_input_pointer(window, 600, 250, 3, 0, 0, 0) == SP_INPUT_DELIVERED, "the release over the frame of the hidden region is delivered");
+    sp_region_close(hidden);
+
     // A closed region leaves no owner, and the surface lands on its page.
     sp_region_close(region);
     sp_surface_focus(browserHost);

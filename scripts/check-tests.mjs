@@ -231,6 +231,13 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F610",
+    implementation: [{ file: "native/darwin/src/capture.m", symbol: "beginCaptureSourceArtifacts" }],
+    tests: [{ file: "native/darwin/tests/capture_metadata_test.m", id: "a capture writes the source file only when its reader needs it" }],
+    expected: "A recording writes source files only when it has frame identity.",
+    levels: ["unit"],
+  },
+  {
     id: "F608",
     implementation: [{ file: "e2e/platform/darwin/darwin.js", symbol: "build-capture-text-path" }],
     tests: [{ file: "scripts/test/soksak-scripts.test.mjs", id: "the native target that the window-check setup runs is one the native Makefile declares" }],
@@ -345,7 +352,7 @@ const FEATURE_LINKS = [
       { file: "scripts/measure-app-usage.mjs", symbol: "export async function prepareState(s, state, deps)" },
       { file: "scripts/measure-app-usage.mjs", symbol: "export async function waitIdle({ sessions, frames, sleep })" },
       { file: "scripts/measure-app-usage.mjs", symbol: "export async function untilFramesQuiet({ frames, sleep = delay, intervals = QUIET_INTERVALS })" },
-      { file: "scripts/measure-app-usage.mjs", symbol: "export async function measurePointer({ s, app, hid, measure, frameRecords, restore, tail, records })" },
+      { file: "scripts/measure-app-usage.mjs", symbol: "export async function measurePointer({ s, measure, frameRecords, restore, tail, records })" },
       { file: "scripts/measure-app-usage.mjs", symbol: "export function gestureFigures({ records, dropped, window, framesBefore, framesAfter, fromSeq, toSeq })" },
       { file: "scripts/footprints.mjs", symbol: "export async function settledFootprints({ readFootprints, readFrames, sleep, readings = SETTLE_READINGS })" },
       { file: "scripts/footprints.mjs", symbol: "export async function readFootprint(pid, run)" },
@@ -372,10 +379,10 @@ const FEATURE_LINKS = [
     tests: [
       { file: "scripts/test/measure-app-usage.test.mjs", id: "the options take a state, the idle wait, the pointer step and the trace state" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "the B3 measurements of app-usage are the host and application figures, the WebKit processes and the change of the frame counters" },
-      { file: "scripts/test/measure-app-usage.test.mjs", id: "the B3 measurements add the footprint after the pointer move, the error lines of the fault and the hit-test p90" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the B3 measurements add the footprint after the pointer move, the error lines of the fault and the pointer move p90" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "a host whose host.window reports no frame counters has no frames and commandBuffers measurements, and a partial counter fails" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "the B3 output of app-usage takes its conditions from b3-out with the performance switch of the trace state" },
-      { file: "scripts/test/measure-app-usage.test.mjs", id: "a pointer output holds the keys of one trace state: the cpu and footprint keys under TRACE 0 or 1, hitTestP90Ms alone under frame-records" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "a pointer output holds the keys of one trace state: the cpu and footprint keys under TRACE 0 or 1, pointerMoveP90Ms alone under frame-records" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "TRACE frame-records is the trace state of the pointer step and needs --step pointer" },
       { file: "scripts/test/measure-trace.test.mjs", id: "a target that also measures FRAME_RECORDS reads it from TRACE and names its three states in the error" },
       { file: "scripts/test/measure-terminal-redraw.test.mjs", id: "the B3 output of the redraw takes its conditions from b3-out with the performance switch of the trace state" },
@@ -384,7 +391,7 @@ const FEATURE_LINKS = [
       { file: "scripts/test/frame-records.test.mjs", id: "the frame time runs from the start of a frame to its presentation request less its wait for a drawable" },
       { file: "scripts/test/frame-records.test.mjs", id: "the step time runs from the entry of each step to its return and keeps the kind of the step" },
       { file: "scripts/test/frame-records.test.mjs", id: "the first frame time runs from the start of the first frame of the gesture to its presentation request" },
-      { file: "scripts/test/measure-app-usage.test.mjs", id: "the step that follows a hitTest: step is the next step that no other step contains" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "a nested step is part of the step that contains it and is not added again" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "the process listing of a configuration folder holds its host, its sidecars and the WebKit services of the domain of its host" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "the processes of the windows of an application are its listing with the page and document rows of each window, one row per pid" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "the cpu reading runs ps -axo pid=,time= and names the command of a failure" },
@@ -396,11 +403,11 @@ const FEATURE_LINKS = [
       { file: "scripts/test/footprints.test.mjs", id: "reading a footprint runs footprint -p PID -f bytes and names the process of a failure" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "the idle wait waits for the cursor idle timeout of every term tab and then for 3 seconds without a frame" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "without sleep the quiet wait waits the 3 seconds of G2 on the timer of the module" },
-      { file: "scripts/test/measure-app-usage.test.mjs", id: "the gesture figures are the 90th percentile of the hitTest: step with the step that follows it" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the gesture figures are the 90th percentile of the mouseMoved: steps with the hitTest: step right before each" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "the pointer step reads the frames of the gesture before the flush, so a frame presented after the flush is in neither" },
       { file: "scripts/test/frame-records.test.mjs", id: "a gesture with fewer frame records than the change of frames fails and names the missing records" },
       { file: "scripts/test/frame-records.test.mjs", id: "a gesture that contains a seq range that a log.dropped event names fails" },
-      { file: "scripts/test/measure-app-usage.test.mjs", id: "the pointer step measures the move in the front window and repeats it in the trace state of the frame records to read the U7 records" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the pointer step sends input.pointer moves without activating the window, and repeats them in the trace state of the frame records to read the U7 records" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "S0b closes the project and waits for the exit of each WebContent process of a view page or a document region" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "S12 makes one layout draw fail and waits for its error line, and S15 opens the settings window" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "measureApps reads a mygo application without a page row, settles its footprints and reads the marks around the cpu interval" },
@@ -1085,6 +1092,15 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F611",
+    implementation: [{ file: "native/darwin/src/image_region.m", symbol: "spRegionShowsPoint" }],
+    tests: [
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "a press over the frame of a hidden region stays with the view that it reached" },
+    ],
+    expected: "A region that does not show takes no press, so a press over the frame of a hidden region leaves the first responder with the view that it reached.",
+    levels: ["unit"],
+  },
+  {
     id: "F585",
     implementation: [{ file: "native/darwin/src/webview_geometry.m", symbol: "void sp_surface_region_shown" }],
     tests: [
@@ -1230,6 +1246,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F588",
+    implementation: [
+      { file: "scripts/measure-app-usage.mjs", symbol: "async function movePointer(s, path) {" },
+    ],
+    tests: [
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "a move that the tracking area delivers has a value without a hitTest: step" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "only the hitTest: step right before a move adds to that move" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "a gesture without a delivered move and a gesture with incomplete records fail" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the measurement does not import the real-input tool" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "a move that input.pointer refuses fails the pointer step and sets the trace state again" },
+    ],
+    expected: "The pointer step measures the moves that input.pointer delivers, by the outermost mouseMoved: step, without a real cursor or activation.",
+    levels: ["unit"],
+  },
+  {
     id: "F587",
     implementation: [
       { file: "packages/workbench-mygo/src/surfaces.go", symbol: "func (s *Shell) placed(err error) {" },
@@ -1244,6 +1275,52 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/layout-verify-state.test.mjs", id: "a presentation after a failed presentation withdraws the error of that failure from the banner" },
     ],
     expected: "A placement that succeeds withdraws only the failure of the placement before it from the error banner.",
+    levels: ["unit"],
+  },
+  {
+    id: "F616",
+    implementation: [
+      { file: "scripts/benchmark-b3.mjs", symbol: "export function buildSteps(phase, baseline) {" },
+    ],
+    tests: [
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "each build step of a session names a target of the Makefile" },
+    ],
+    expected: "Each build step of a B3 session names a target of the Makefile.",
+    levels: ["unit"],
+  },
+  {
+    id: "F613",
+    implementation: [
+      { file: "scripts/benchmark-b3.mjs", symbol: "export async function activateWindow(configDir, { waitMs = 5000 } = {}) {" },
+    ],
+    tests: [
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a window that opens behind the front is activated before the first target of a run" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a run whose activation is refused or whose window stays covered fails and measures nothing" },
+    ],
+    expected: "Each run of B3 activates its first window through input.pointer before its first target and fails when it stays covered.",
+    levels: ["unit"],
+  },
+  {
+    id: "F614",
+    implementation: [
+      { file: "scripts/checklist.mjs", symbol: "export function conflictMarkerErrors() {" },
+    ],
+    tests: [
+      { file: "scripts/test/checklist.test.mjs", id: "check-docs fails on a conflict marker in a document or a source file and names the file and the line" },
+      { file: "scripts/test/checklist.test.mjs", id: "check-docs passes a text that holds no conflict marker at the start of a line" },
+    ],
+    expected: "check-docs fails on a conflict marker at the start of a line of a tracked or new text file.",
+    levels: ["unit"],
+  },
+  {
+    id: "F612",
+    implementation: [
+      { file: "docs/operations/examples.md", symbol: "## Three-host benchmark" },
+    ],
+    tests: [
+      { file: "scripts/test/test-kinds.test.mjs", id: "the build and verify examples state each paragraph once and name only targets of the Makefile" },
+    ],
+    expected: "The build and verify examples state each paragraph once and name only targets of the Makefile.",
     levels: ["unit"],
   },
   {
