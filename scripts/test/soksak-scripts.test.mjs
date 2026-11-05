@@ -544,7 +544,7 @@ test("window-source audit rejects a source path of another repository component"
 
 test("window-source audit distinguishes expected path literals from source access", { timeout: 1000 }, () => {
   const expected = `import assert from "node:assert/strict";
-assert.deepEqual(calls[1], ["make", "-C", "/work/project/native/darwin", "capture-text-path"]);`;
+assert.deepEqual(calls[1], ["make", "-C", "/work/project/native/darwin", "build-capture-text-path"]);`;
   assert.deepEqual(auditE2ESource(expected, "e2e/test/fixture.test.mjs"), []);
 
   for (const source of [

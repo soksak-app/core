@@ -6,6 +6,7 @@
 
 - F463: Core uses the checks kit and its one executable `soksak-check`. Red: `scripts/test/workflows.test.mjs` failed. Green: it passes.
 - F466: Records cite no temporary log, and the record check reports a new citation.
+- F477: The window check setup names the declared make target `build-capture-text-path`.
 - F476: `LATEST_PUBLISHED`, which read 0.0.34 after the release of 0.0.36, and its test are removed, so a test repeats no declared version.
 - F474: The release run published v0.0.36, and the registry lists it with the plugin and sidecar releases.
 - F474: The release candidate is 0.0.36.
