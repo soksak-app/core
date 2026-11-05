@@ -186,18 +186,49 @@ func InstalledModule(configDir, urlPath string) (file string, installed, found b
 		return "", false, false, nil
 	}
 	name := strings.Join(parts[:count], "/")
-	plugins, _, err := enabledPlugins(configDir)
+	dir, err := installedPackage(configDir, name)
 	if err != nil {
 		// default: an installation that cannot be read has no installed plugin, so the bundled frontend serves the path and the core
 		// modules load; /installed-plugins.json carries the error and the start records it (docs/spec/installation.md#serving-installed-plugins).
 		return "", false, false, nil
 	}
-	index := slices.IndexFunc(plugins, func(plugin installedPlugin) bool { return plugin.pkg == name })
-	if index < 0 {
+	if dir == "" {
 		return "", false, false, nil
 	}
-	file, found = insidePackage(plugins[index].dir, parts[count:])
+	file, found = insidePackage(dir, parts[count:])
 	return file, true, found, nil
+}
+
+// installedPackage returns the folder of the enabled installed plugin of the package name, or an empty string for no
+// such plugin. A page asks for each of its modules while it starts, so the request reads the name of each enabled plugin
+// and the manifest of that plugin alone.
+func installedPackage(configDir, name string) (string, error) {
+	state, err := sok.ReadInstalledRecord(configDir)
+	if err != nil {
+		return "", err
+	}
+	found := ""
+	for _, id := range slices.Sorted(maps.Keys(state.Plugins)) {
+		plugin := state.Plugins[id]
+		if !plugin.Enabled {
+			continue
+		}
+		pkg, err := sok.InstalledName(configDir, plugin)
+		if err != nil {
+			return "", err
+		}
+		if pkg == name && found == "" {
+			found = id
+		}
+	}
+	if found == "" {
+		return "", nil
+	}
+	plugin := state.Plugins[found]
+	if _, err := sok.ReadInstalledManifest(configDir, found, plugin); err != nil {
+		return "", err
+	}
+	return filepath.Join(configDir, plugin.Path), nil
 }
 
 // insidePackage returns the file at a relative path inside a package when every part of the path is a name and the
@@ -382,16 +413,16 @@ func InstalledShared(configDir, urlPath string) (file string, shared, found bool
 	if !ok || !dotted || !module || specifier == "" {
 		return "", true, false, nil
 	}
-	plugins, _, err := enabledPlugins(configDir)
+	state, err := sok.ReadInstalledRecord(configDir)
 	if err != nil {
 		return "", true, false, err
 	}
-	index := slices.IndexFunc(plugins, func(plugin installedPlugin) bool { return plugin.id == id })
-	if index < 0 {
+	plugin, installed := state.Plugins[id]
+	if !installed || !plugin.Enabled {
 		return "", true, false, nil
 	}
-	manifestFile := filepath.Join(plugins[index].dir, "plugin.json")
-	data, err := os.ReadFile(manifestFile)
+	dir := filepath.Join(configDir, plugin.Path)
+	read, err := sok.ReadInstalledManifest(configDir, id, plugin)
 	if err != nil {
 		return "", true, false, err
 	}
@@ -400,14 +431,14 @@ func InstalledShared(configDir, urlPath string) (file string, shared, found bool
 			Modules map[string]string `json:"modules"`
 		} `json:"extends"`
 	}
-	if err := json.Unmarshal(data, &manifest); err != nil {
-		return "", true, false, fmt.Errorf("%s: %w", manifestFile, err)
+	if err := json.Unmarshal(read.Compact, &manifest); err != nil {
+		return "", true, false, fmt.Errorf("%s: %w", filepath.Join(dir, "plugin.json"), err)
 	}
 	target, ok := manifest.Extends[point].Modules[specifier]
 	if !ok {
 		return "", true, false, nil
 	}
-	file, found = insidePackage(plugins[index].dir, strings.Split(target, "/"))
+	file, found = insidePackage(dir, strings.Split(target, "/"))
 	return file, true, found, nil
 }
 

@@ -126,7 +126,7 @@ A plugin owns no stored file of a configuration folder: the values it persists l
 
 ## Serving installed plugins
 
-Both hosts serve these paths from the configuration directory and read `plugins/installed.json` for each request, so a page that loads after a change sees it:
+Both hosts serve these paths from the configuration directory and read `plugins/installed.json` for each request, so a page that loads after a change sees it. A request under `/modules/` or `/shared/` reads the `plugin.json` of the plugin that it names and of no other, so a core module reads none:
 
 | Path | Content |
 | --- | --- |

@@ -10,10 +10,12 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
+	sok "github.com/soksak-app/core/packages/sok/go/src"
 )
 
 // writeInstalled writes the content for each path into the configuration folder.
@@ -377,4 +379,169 @@ func TestDocumentMessageIsSentToTheSurfaceOrItsReasonIsLogged(t *testing.T) {
 	if _, _, err := host.DocumentMessage("tab-1", "page", `{}`); err == nil || err.Error() != "document message page has neither message nor error" {
 		t.Fatalf("empty %v", err)
 	}
+}
+
+// readsFixture is a configuration folder with the enabled plugins alpha, beta and gamma, each of the package
+// plugin-<id>, with the shared module state of the point language.
+func readsFixture(t *testing.T) string {
+	config := t.TempDir()
+	for _, id := range []string{"alpha", "beta", "gamma"} {
+		writeReadsPlugin(t, config, id)
+	}
+	writeReadsRecord(t, config, "alpha", "beta", "gamma")
+	return config
+}
+
+// writeReadsPlugin writes the files of the plugin id.
+func writeReadsPlugin(t *testing.T, config, id string) {
+	t.Helper()
+	folder := "plugins/" + id + "/1.0.0/"
+	writeInstalled(t, config, map[string]string{
+		folder + "package.json": `{"name": "plugin-` + id + `"}`,
+		folder + "plugin.json": `{"id": "` + id + `", "extends": {"language": {"version": "1.0.0", "schema": {},
+			"modules": {"state": "ui/state.js"}}}}`,
+		folder + "ui/state.js": "export const state = 1;",
+	})
+}
+
+// writeReadsRecord writes installed.json with the plugins of ids.
+func writeReadsRecord(t *testing.T, config string, ids ...string) {
+	t.Helper()
+	records := make([]string, len(ids))
+	for i, id := range ids {
+		records[i] = `"` + id + `": {"version": "1.0.0", "path": "plugins/` + id + `/1.0.0", "enabled": true, "sidecars": {}}`
+	}
+	writeInstalled(t, config, map[string]string{
+		"plugins/installed.json": `{"format": 3, "plugins": {` + strings.Join(records, ",") + `}, "sidecars": {}}`,
+	})
+}
+
+// manifestsRead returns the manifests that requests reads, in order.
+func manifestsRead(t *testing.T, requests func()) []string {
+	t.Helper()
+	var read []string
+	sok.SetAfterManifestRead(func(file string) { read = append(read, file) })
+	defer sok.SetAfterManifestRead(nil)
+	requests()
+	return read
+}
+
+// readsRepeated is the manifest once for each of the requests of a read test.
+func readsRepeated(manifest string) []string {
+	return slices.Repeat([]string{manifest}, readsRequests)
+}
+
+// readsRequests is the number of times that a read test asks for a module.
+const readsRequests = 5
+
+// checkModule fails unless urlPath is the installed file, relative to config, or the frontend for an empty file.
+func checkModule(t *testing.T, config, urlPath, file string) {
+	t.Helper()
+	got, installed, found, err := host.InstalledModule(config, urlPath)
+	if file == "" {
+		if err != nil || installed || found {
+			t.Fatalf("%s: file %q installed %v found %v error %v, want the frontend", urlPath, got, installed, found, err)
+		}
+		return
+	}
+	if want := filepath.Join(config, filepath.FromSlash(file)); err != nil || !installed || !found || got != want {
+		t.Fatalf("%s: file %q installed %v found %v error %v, want %s", urlPath, got, installed, found, err, want)
+	}
+}
+
+// checkShared fails unless urlPath is the shared file, relative to config, or is not found for an empty file.
+func checkShared(t *testing.T, config, urlPath, file string) {
+	t.Helper()
+	got, shared, found, err := host.InstalledShared(config, urlPath)
+	if file == "" {
+		if err != nil || !shared || found {
+			t.Fatalf("%s: file %q shared %v found %v error %v, want not found", urlPath, got, shared, found, err)
+		}
+		return
+	}
+	if want := filepath.Join(config, filepath.FromSlash(file)); err != nil || !shared || !found || got != want {
+		t.Fatalf("%s: file %q shared %v found %v error %v, want %s", urlPath, got, shared, found, err, want)
+	}
+}
+
+// contract: installed.modules.read-the-manifest-of-the-request
+func TestAModuleOfAPluginReadsTheManifestOfThatPluginAlone(t *testing.T) {
+	config := readsFixture(t)
+	read := manifestsRead(t, func() {
+		for range readsRequests {
+			checkModule(t, config, "/modules/plugin-beta/ui/state.js", "plugins/beta/1.0.0/ui/state.js")
+		}
+	})
+	if want := readsRepeated(filepath.Join(config, "plugins", "beta", "1.0.0", "plugin.json")); !slices.Equal(read, want) {
+		t.Fatalf("read %v, want %v", read, want)
+	}
+}
+
+// contract: installed.modules.read-the-manifest-of-the-request
+func TestAModuleOfTheFrontendReadsNoManifest(t *testing.T) {
+	config := readsFixture(t)
+	read := manifestsRead(t, func() {
+		for range readsRequests {
+			checkModule(t, config, "/modules/soksak/dist/index.js", "")
+		}
+	})
+	if len(read) != 0 {
+		t.Fatalf("read %v, want no manifest", read)
+	}
+}
+
+// contract: installed.modules.read-the-manifest-of-the-request
+func TestASharedModuleReadsTheManifestOfItsProviderAlone(t *testing.T) {
+	config := readsFixture(t)
+	read := manifestsRead(t, func() {
+		for range readsRequests {
+			checkShared(t, config, "/shared/beta.language/state.js", "plugins/beta/1.0.0/ui/state.js")
+		}
+	})
+	if want := readsRepeated(filepath.Join(config, "plugins", "beta", "1.0.0", "plugin.json")); !slices.Equal(read, want) {
+		t.Fatalf("read %v, want %v", read, want)
+	}
+}
+
+// contract: installed.modules.read-the-manifest-of-the-request
+func TestAMalformedManifestRefusesTheModulesOfItsOwnPluginAlone(t *testing.T) {
+	config := readsFixture(t)
+	writeInstalled(t, config, map[string]string{"plugins/alpha/1.0.0/plugin.json": "{"})
+	checkModule(t, config, "/modules/plugin-beta/ui/state.js", "plugins/beta/1.0.0/ui/state.js")
+	checkShared(t, config, "/shared/beta.language/state.js", "plugins/beta/1.0.0/ui/state.js")
+	checkModule(t, config, "/modules/plugin-alpha/ui/state.js", "")
+	manifest := filepath.Join(config, "plugins", "alpha", "1.0.0", "plugin.json")
+	if _, _, _, err := host.InstalledShared(config, "/shared/alpha.language/state.js"); err == nil || !strings.Contains(err.Error(), manifest) {
+		t.Fatalf("error %v, want one that names %s", err, manifest)
+	}
+}
+
+// contract: installed.modules.follow-the-installation
+func TestTheRequestAfterAnInstallServesTheNewPlugin(t *testing.T) {
+	config := readsFixture(t)
+	checkModule(t, config, "/modules/plugin-delta/ui/state.js", "")
+	checkShared(t, config, "/shared/delta.language/state.js", "")
+	writeReadsPlugin(t, config, "delta")
+	writeReadsRecord(t, config, "alpha", "beta", "gamma", "delta")
+	checkModule(t, config, "/modules/plugin-delta/ui/state.js", "plugins/delta/1.0.0/ui/state.js")
+	checkShared(t, config, "/shared/delta.language/state.js", "plugins/delta/1.0.0/ui/state.js")
+}
+
+// contract: installed.modules.follow-the-installation
+func TestTheRequestAfterARemovalDoesNotServeThePlugin(t *testing.T) {
+	config := readsFixture(t)
+	checkModule(t, config, "/modules/plugin-beta/ui/state.js", "plugins/beta/1.0.0/ui/state.js")
+	checkShared(t, config, "/shared/beta.language/state.js", "plugins/beta/1.0.0/ui/state.js")
+	writeReadsRecord(t, config, "alpha", "gamma")
+	checkModule(t, config, "/modules/plugin-beta/ui/state.js", "")
+	checkShared(t, config, "/shared/beta.language/state.js", "")
+}
+
+// contract: installed.modules.follow-the-installation
+func TestTheRequestAfterAnUpdateReadsTheNewManifest(t *testing.T) {
+	config := readsFixture(t)
+	checkShared(t, config, "/shared/beta.language/state.js", "plugins/beta/1.0.0/ui/state.js")
+	writeInstalled(t, config, map[string]string{"plugins/beta/1.0.0/plugin.json": `{"id": "beta", "extends": {"language": {"version": "1.0.0",
+		"schema": {}, "modules": {"other": "ui/state.js"}}}}`})
+	checkShared(t, config, "/shared/beta.language/state.js", "")
 }

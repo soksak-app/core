@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F541: A request of a page module reads the manifest of its own plugin alone, in both hosts, so the first window no longer reads and parses every installed manifest for each module, and a malformed manifest of one plugin no longer refuses the modules of the others.
 - F533: A delay unload of the memory saver that fails gets its next deadline one delay later, so a read or a commit that keeps failing no longer runs again at once with the error display each time.
 - F532: The update step of the Rust diagnostics ends the application through `quit` of the framework port, so `make tauriv2-build` compiles again. `make hosts-check` runs the new `make host-debug-check`, which compiles the two hosts and the two apps in the configuration of the debug apps.
 - F522: Korean typed in an image region composes from its first syllable. The input context of a region removes document access from its input document when the context is created, so the input method sends every key as marked text instead of reading committed text back from a region that holds only its marked buffer; a failed removal is reported as an input error, and a property already absent counts as removed. The `doCommandBySelector` record no longer has the `unhandledKey` field, whose path could not be reached.

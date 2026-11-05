@@ -222,15 +222,14 @@ pub fn installed_shared(config_dir: &Path, url_path: &str) -> Result<Module, Str
     else {
         return Ok(Module::Missing);
     };
-    let (plugins, _) = enabled_plugins(config_dir)?;
-    let Some(plugin) = plugins.iter().find(|plugin| plugin.id == id) else {
+    let state = soksak_sok::plugins::read_installed_record(config_dir)?;
+    let Some(plugin) = state.plugins.get(id).filter(|plugin| plugin.enabled) else {
         return Ok(Module::Missing);
     };
-    let file = plugin.dir.join("plugin.json");
-    let text =
-        std::fs::read_to_string(&file).map_err(|error| format!("{}: {error}", file.display()))?;
-    let manifest: Manifest =
-        serde_json::from_str(&text).map_err(|error| format!("{}: {error}", file.display()))?;
+    let dir = config_dir.join(&plugin.path);
+    let installed = soksak_sok::plugins::read_installed_manifest(config_dir, id, plugin)?;
+    let manifest: Manifest = serde_json::from_str(installed.compact.get())
+        .map_err(|error| format!("{}: {error}", dir.join("plugin.json").display()))?;
     let Some(target) = manifest
         .extends
         .get(point)
@@ -239,7 +238,7 @@ pub fn installed_shared(config_dir: &Path, url_path: &str) -> Result<Module, Str
         return Ok(Module::Missing);
     };
     let parts: Vec<&str> = target.split('/').collect();
-    Ok(inside_package(&plugin.dir, &parts))
+    Ok(inside_package(&dir, &parts))
 }
 
 /// Returns the path when /modules/<package>/<path> is a file of an enabled installed plugin.
@@ -256,13 +255,27 @@ pub fn installed_module(config_dir: &Path, url_path: &str) -> Result<Module, Str
     // default: an installation that cannot be read has no installed plugin, so the bundled frontend serves the path and the
     // core modules load; /installed-plugins.json carries the error and the start records it
     // (docs/spec/installation.md#serving-installed-plugins).
-    let Ok((plugins, _)) = enabled_plugins(config_dir) else {
+    let Ok(Some(dir)) = installed_package(config_dir, &name) else {
         return Ok(Module::Frontend);
     };
-    let Some(plugin) = plugins.iter().find(|plugin| plugin.package == name) else {
-        return Ok(Module::Frontend);
+    Ok(inside_package(&dir, &parts[count..]))
+}
+
+/// Returns the folder of the enabled installed plugin of the package name. A page asks for each of its modules while it
+/// starts, so the request reads the name of each enabled plugin and the manifest of that plugin alone.
+fn installed_package(config_dir: &Path, name: &str) -> Result<Option<PathBuf>, String> {
+    let state = soksak_sok::plugins::read_installed_record(config_dir)?;
+    let mut found = None;
+    for (id, plugin) in state.plugins.iter().filter(|(_, plugin)| plugin.enabled) {
+        if soksak_sok::plugins::installed_name(config_dir, plugin)? == name && found.is_none() {
+            found = Some((id, plugin));
+        }
+    }
+    let Some((id, plugin)) = found else {
+        return Ok(None);
     };
-    Ok(inside_package(&plugin.dir, &parts[count..]))
+    soksak_sok::plugins::read_installed_manifest(config_dir, id, plugin)?;
+    Ok(Some(config_dir.join(&plugin.path)))
 }
 
 /// A file that the core root serves to a view: its content and its content type.
@@ -573,3 +586,7 @@ pub fn register_view_import_map(
     })?;
     platform.set_view_import_map(&text)
 }
+
+#[cfg(test)]
+#[path = "installed_reads_test.rs"]
+mod reads_test;

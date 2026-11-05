@@ -126,7 +126,7 @@ plugin은 설정 폴더에 저장 file을 소유하지 않는다. plugin이 남�
 
 ## 설치된 plugin 제공
 
-두 host는 설정 폴더에서 다음 경로를 제공하며, 요청마다 `plugins/installed.json`을 읽으므로 변경 뒤에 불러온 page는 그 변경을 본다.
+두 host는 설정 폴더에서 다음 경로를 제공하며, 요청마다 `plugins/installed.json`을 읽으므로 변경 뒤에 불러온 page는 그 변경을 본다. `/modules/`와 `/shared/` 아래 요청은 자기가 가리키는 plugin의 `plugin.json`만 읽으므로 core module은 하나도 읽지 않는다.
 
 | 경로 | 내용 |
 | --- | --- |

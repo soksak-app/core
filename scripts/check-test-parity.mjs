@@ -137,7 +137,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Tauri runtime", "js-ts", ["apps/tauriv2/runtime/**/*.js"], ["apps/tauriv2/test/**/*.mjs"], { sharedTests: true }),
   lane("Wails runtime", "js-ts", ["apps/wailsv3/runtime/**/*.js"], ["apps/wailsv3/test/**/*.mjs"], { sharedTests: true }),
 
-  lane("Rust language host library", "rust", ["packages/host/rust/src/**/*.rs", "packages/host/rust/build.rs"], ["packages/host/rust/tests/**/*.rs", "packages/host/rust/src/exposure_settled_test.rs", "packages/host/rust/src/documents_test.rs", "packages/host/rust/src/windows_front_test.rs", "packages/host/rust/src/sidecars_route_test.rs", "packages/host/rust/src/document_post_test.rs", "packages/host/rust/src/images_test.rs", "packages/host/rust/src/images_relay_test.rs", "packages/host/rust/src/object_counts_test.rs", "packages/host/rust/src/composition_overlay_test.rs", "packages/host/rust/src/platform/darwin/webview_overlay_test.rs", "packages/host/rust/src/platform/darwin/document_test.rs", "packages/host/rust/src/sidecar_reply_test.rs", "packages/host/rust/src/surfaces_test.rs", "packages/host/rust/src/modals_readiness_test.rs", "packages/host/rust/src/exposure_webviews_test.rs", "packages/host/rust/src/exposure_status_test.rs", "packages/host/rust/src/notifications_test.rs", "packages/host/rust/src/project_removal_test.rs", "packages/host/rust/src/endpoint_lock_test.rs", "packages/host/rust/src/windows_records_test.rs", "packages/host/rust/src/responder_test.rs", "packages/host/rust/src/sidecars_lock_test.rs", "packages/host/rust/src/image_detach_test.rs", "packages/host/rust/src/start_test.rs", "packages/host/rust/src/performance_lock_test.rs", "packages/host/rust/src/workspace_lock_test.rs", "packages/host/rust/src/view_lifecycle_test.rs", "packages/host/rust/src/view_origin_test.rs", "packages/host/rust/src/view_responsiveness_test.rs", "packages/host/rust/src/view_theme_test.rs", "packages/host/rust/src/surface_close_test.rs", "packages/host/rust/src/presentation_end_test.rs", "packages/host/rust/src/view_start_test.rs", "packages/host/rust/src/log_policy_levels_test.rs", "packages/host/rust/src/view_call_peer_test.rs", "packages/host/rust/src/view_binary_test.rs", "packages/host/rust/src/presentation_wait_test.rs", "packages/host/rust/src/view_join_test.rs", "packages/host/rust/benches/**/*.rs", "packages/host/rust/tests/fixtures/**/*.json", "packages/host/rust/src/diagnostics_lock_test.rs", "packages/host/rust/src/diagnostics_input_reference_test.rs", "packages/host/rust/src/diagnostics_test.rs", "packages/host/rust/src/platform/darwin/input_reference_test.rs", "packages/host/rust/src/log_policy_watch_hook_lock_test.rs", "packages/host/rust/src/process_lock_hook_lock_test.rs", "packages/host/rust/src/assets_lock_test.rs", "packages/host/rust/src/deep_link_lock_test.rs", "packages/host/rust/src/log_query_lock_test.rs", "packages/host/rust/src/debug_follow_lock_test.rs", "packages/host/rust/src/source_origins_test.rs", "packages/host/rust/src/sidecar_routes_test.rs", "packages/host/rust/src/sidecars_session_retention_test.rs"], { testExtensions: new Set([".rs", ".json"]) }),
+  lane("Rust language host library", "rust", ["packages/host/rust/src/**/*.rs", "packages/host/rust/build.rs"], ["packages/host/rust/tests/**/*.rs", "packages/host/rust/src/exposure_settled_test.rs", "packages/host/rust/src/documents_test.rs", "packages/host/rust/src/windows_front_test.rs", "packages/host/rust/src/sidecars_route_test.rs", "packages/host/rust/src/document_post_test.rs", "packages/host/rust/src/images_test.rs", "packages/host/rust/src/images_relay_test.rs", "packages/host/rust/src/object_counts_test.rs", "packages/host/rust/src/composition_overlay_test.rs", "packages/host/rust/src/platform/darwin/webview_overlay_test.rs", "packages/host/rust/src/platform/darwin/document_test.rs", "packages/host/rust/src/sidecar_reply_test.rs", "packages/host/rust/src/surfaces_test.rs", "packages/host/rust/src/modals_readiness_test.rs", "packages/host/rust/src/exposure_webviews_test.rs", "packages/host/rust/src/exposure_status_test.rs", "packages/host/rust/src/notifications_test.rs", "packages/host/rust/src/project_removal_test.rs", "packages/host/rust/src/endpoint_lock_test.rs", "packages/host/rust/src/windows_records_test.rs", "packages/host/rust/src/responder_test.rs", "packages/host/rust/src/sidecars_lock_test.rs", "packages/host/rust/src/installed_reads_test.rs", "packages/host/rust/src/image_detach_test.rs", "packages/host/rust/src/start_test.rs", "packages/host/rust/src/performance_lock_test.rs", "packages/host/rust/src/workspace_lock_test.rs", "packages/host/rust/src/view_lifecycle_test.rs", "packages/host/rust/src/view_origin_test.rs", "packages/host/rust/src/view_responsiveness_test.rs", "packages/host/rust/src/view_theme_test.rs", "packages/host/rust/src/surface_close_test.rs", "packages/host/rust/src/presentation_end_test.rs", "packages/host/rust/src/view_start_test.rs", "packages/host/rust/src/log_policy_levels_test.rs", "packages/host/rust/src/view_call_peer_test.rs", "packages/host/rust/src/view_binary_test.rs", "packages/host/rust/src/presentation_wait_test.rs", "packages/host/rust/src/view_join_test.rs", "packages/host/rust/benches/**/*.rs", "packages/host/rust/tests/fixtures/**/*.json", "packages/host/rust/src/diagnostics_lock_test.rs", "packages/host/rust/src/diagnostics_input_reference_test.rs", "packages/host/rust/src/diagnostics_test.rs", "packages/host/rust/src/platform/darwin/input_reference_test.rs", "packages/host/rust/src/log_policy_watch_hook_lock_test.rs", "packages/host/rust/src/process_lock_hook_lock_test.rs", "packages/host/rust/src/assets_lock_test.rs", "packages/host/rust/src/deep_link_lock_test.rs", "packages/host/rust/src/log_query_lock_test.rs", "packages/host/rust/src/debug_follow_lock_test.rs", "packages/host/rust/src/source_origins_test.rs", "packages/host/rust/src/sidecar_routes_test.rs", "packages/host/rust/src/sidecars_session_retention_test.rs"], { testExtensions: new Set([".rs", ".json"]) }),
   lane("Tauri framework adapter", "rust", ["packages/host/tauriv2/src/**/*.rs"], ["packages/host/tauriv2/tests/**/*.rs", "packages/host/tauriv2/src/plugins_starter_test.rs"]),
   lane("Tauri application bootstrap", "rust", ["apps/tauriv2/src/main.rs", "apps/tauriv2/build.rs"], ["e2e/**/*.mjs", "e2e/platform/platform.js", "e2e/platform/darwin/darwin.js", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js", "e2e/fixtures/*/*/ui/*.html"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
 
@@ -895,6 +895,31 @@ const FEATURE_LINKS = [
     ],
     expected: "The input context of an image region states no document access, so Korean composes from its first syllable.",
     levels: ["native"],
+  },
+  {
+    id: "F541",
+    implementation: [
+      { file: "packages/host/rust/src/installed.rs", symbol: "fn installed_package(config_dir: &Path, name: &str) -> Result<Option<PathBuf>, String> {" },
+      { file: "packages/host/go/src/installed.go", symbol: "func installedPackage(configDir, name string) (string, error) {" },
+    ],
+    tests: [
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "a_module_of_a_plugin_reads_the_manifest_of_that_plugin_alone" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "a_module_of_the_frontend_reads_no_manifest" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "a_shared_module_reads_the_manifest_of_its_provider_alone" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "a_malformed_manifest_refuses_the_modules_of_its_own_plugin_alone" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "the_request_after_an_install_serves_the_new_plugin" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "the_request_after_a_removal_does_not_serve_the_plugin" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "the_request_after_an_update_reads_the_new_manifest" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestAModuleOfAPluginReadsTheManifestOfThatPluginAlone" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestAModuleOfTheFrontendReadsNoManifest" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestASharedModuleReadsTheManifestOfItsProviderAlone" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestAMalformedManifestRefusesTheModulesOfItsOwnPluginAlone" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestTheRequestAfterAnInstallServesTheNewPlugin" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestTheRequestAfterARemovalDoesNotServeThePlugin" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestTheRequestAfterAnUpdateReadsTheNewManifest" },
+    ],
+    expected: "A request of a page module reads the manifest of its own plugin alone, and the request after a change of the installation answers from the new files.",
+    levels: ["unit"],
   },
   {
     id: "F533",
@@ -8873,7 +8898,7 @@ const FEATURE_LINKS = [
     id: "F321-7",
     implementation: [
       { file: "packages/host/go/src/installed.go", symbol: "func InstalledModule(" },
-      { file: "packages/host/rust/src/installed.rs", symbol: "let Ok((plugins, _)) = enabled_plugins(config_dir) else {" },
+      { file: "packages/host/rust/src/installed.rs", symbol: "let Ok(Some(dir)) = installed_package(config_dir, &name) else {" },
     ],
     tests: [
       { file: "packages/host/go/tests/installed_test.go", id: "TestAnUnreadableInstallationServesTheFrontendModules" },
