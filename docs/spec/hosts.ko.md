@@ -686,6 +686,7 @@ judge는 다음 규칙을 적용한다:
 | run 시작 시 `fseventsd`의 CPU 비율 | core 하나의 0.1 미만 |
 | 각 scenario의 window content 크기 | 1200×760 point |
 | S2의 window content 크기 | 760×614 point |
+| window가 가려지는 scenario | S9 |
 
 목표의 값과, 각 값을 측정하는 scenario와 target, 그리고 그 target의 출력에서 값을 그 단위로 담는 key인 measurement:
 

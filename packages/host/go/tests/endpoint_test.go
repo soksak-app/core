@@ -43,6 +43,8 @@ type fakeBackend struct {
 	watched chan struct{}
 	// failures are the errors that a page request returns for each method.
 	failures map[string]error
+	// replies are the results that a page request returns for each method.
+	replies map[string]json.RawMessage
 }
 
 func newFakeBackend() *fakeBackend {
@@ -80,9 +82,13 @@ func (b *fakeBackend) PageRequest(window, method string, params json.RawMessage)
 	}
 	b.mu.Lock()
 	failure := b.failures[method]
+	reply, replied := b.replies[method]
 	b.mu.Unlock()
 	if failure != nil {
 		return nil, failure
+	}
+	if replied {
+		return reply, nil
 	}
 	if method == "exposure.list" {
 		return json.RawMessage(`{"status":[{"name":"core.layout","registered":true}],"commands":[],"element":[]}`), nil
@@ -394,6 +400,26 @@ func TestEndpointMissingWindow(t *testing.T) {
 	}
 	if requests, _ := backend.seen(); len(requests) != 0 {
 		t.Fatalf("a request without window reached the page: %v", requests)
+	}
+}
+
+// contract: endpoint.rpc.element-rect-role
+func TestEndpointElementRectKeepsRole(t *testing.T) {
+	for _, role := range []string{`"button"`, `null`} {
+		backend := newFakeBackend()
+		backend.replies = map[string]json.RawMessage{"element.rect": json.RawMessage(`{"x":1,"y":2,"width":3,"height":4,"zoom":1,"role":` + role + `}`)}
+		_, address, _ := serve(t, backend)
+		got := call(t, dial(t, address), 1, "element.rect", map[string]any{"window": "main", "name": "core.save"})
+		if got.Error != nil {
+			t.Fatalf("element.rect: %+v", got.Error)
+		}
+		var result map[string]json.RawMessage
+		if err := json.Unmarshal(got.Result, &result); err != nil {
+			t.Fatalf("result %s: %v", got.Result, err)
+		}
+		if answered, has := result["role"]; !has || string(answered) != role {
+			t.Fatalf("the reply %s, want the role %s", got.Result, role)
+		}
 	}
 }
 

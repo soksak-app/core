@@ -390,12 +390,12 @@ test("B3_MEASUREMENTS declares the keys of the B3 output of object-counts, which
 });
 
 test("the B3 output of object-counts states the performance switch that TRACE set, the policy and the window it measured", () => {
-  const status = { refreshRate: 120, scale: 2, content: { width: 1200, height: 760 }, pageProcess: null };
+  const status = { refreshRate: 120, scale: 2, content: { width: 1200, height: 760 }, pageProcess: null, occluded: false, active: true };
   const policy = { lifecycle: "error", input: "error", call: "debug", io: "error", frame: "debug" };
   const on = counts.b3Output({ entries: run30(() => 5, () => 1), window: "w1", status, trace: 1, policy });
   assert.deepEqual(on, {
     measurements: { changedCounts: 0, growingFigures: 0 },
-    conditions: { refreshRate: 120, backingScale: 2, traceState: true, logPolicy: policy, window: { width: 1200, height: 760 } },
+    conditions: { refreshRate: 120, backingScale: 2, traceState: true, logPolicy: policy, window: { width: 1200, height: 760 }, occluded: false, active: true },
   });
   assert.equal(counts.b3Output({ entries: run30(() => 5, () => 1), window: "w1", status, trace: 0, policy }).conditions.traceState, false);
   assert.throws(() => counts.b3Output({ entries: run30(() => 5, () => 1), window: "w1", status: { ...status, refreshRate: null }, trace: 0, policy }),

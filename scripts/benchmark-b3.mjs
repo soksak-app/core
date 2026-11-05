@@ -39,7 +39,8 @@
 // through which the run reads it:
 //   {"measurements": {<key>: <number> | "passed" | "failed", ...},
 //    "conditions": {"refreshRate": <Hz>, "backingScale": <scale>, "traceState": <diagnostics.performance over the measured interval>,
-//                   "logPolicy": {<class>: <level>, ...}, "window": {"width": <points>, "height": <points>}}}
+//                   "logPolicy": {<class>: <level>, ...}, "window": {"width": <points>, "height": <points>},
+//                   "occluded": <whether that window is covered>, "active": <whether its application is active>}}
 // The keys of "measurements" are the flat camelCase names of the measurements of the target, which its B3_MEASUREMENTS declares; a
 // target knows neither the ids of the goals nor which hosts compare a value, so it writes every measurement that it makes. A target
 // with an error exits with another code than 0 and writes no output, and that exit fails the run. Each value of
@@ -48,7 +49,8 @@
 // its key, on the other and the baseline hosts the values that are compared with other hosts; a missing key fails the run with the
 // value, the target and the key. The verdict of a benchmark of S5 and S7 is its measurement "passed" or "failed", never its exit
 // code. The run fails when a target reports a refresh rate or a backing scale other than the run conditions, a window other than
-// the window of its scenario in the run conditions, or a traceState and a logPolicy other than the diagnostics.performance and the
+// the window of its scenario in the run conditions, a covered window in a scenario that the run conditions do not name as covered or
+// a window that is not covered in one that they name, an application that is not active, or a traceState and a logPolicy other than the diagnostics.performance and the
 // classes of the policy of the settings of its measured interval. A target of measure-app-usage, measure-terminal-redraw, measure-object-counts or
 // measure-host-allocations measures in traceSettings (scripts/measure-trace.mjs) of the TRACE argument of its entry, which the pointer step
 // of measure-app-usage names for each of the two trace states of its outputs, or else of the TRACE of the run. An e2e benchmark takes no

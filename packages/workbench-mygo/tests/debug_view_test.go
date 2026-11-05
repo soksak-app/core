@@ -405,7 +405,7 @@ func TestALongSelectStaysInsideTheWindow(t *testing.T) {
 	var find func(nodes []ui.ElementNode)
 	find = func(nodes []ui.ElementNode) {
 		for _, node := range nodes {
-			if node.Role == ui.RolePopup {
+			if node.Role == ui.RoleList { // The element tree reads the list box of a select as a list.
 				bottom = max(bottom, node.Bounds.Y+node.Bounds.H)
 			}
 			find(node.Children)
@@ -417,5 +417,22 @@ func TestALongSelectStaysInsideTheWindow(t *testing.T) {
 	}
 	if bottom > 900 {
 		t.Fatalf("the popup ends at %v, outside the window", bottom)
+	}
+	// The trigger holds the name and the command; the list box and its options are parts of the select.
+	if loose := workbench.Audit(tt.ElementTree()); len(loose) != 0 {
+		t.Fatalf("the audit of the open select lists %+v", loose)
+	}
+}
+
+// Each select of the timeline filter holds its name and its command on its trigger, not on the group around it.
+func TestTheSelectsOfTheTimelineFilterAreBound(t *testing.T) {
+	var calls []call
+	view := timelineView()
+	tt := drawDebug(&view, noErrors(), recorder(t, &calls, screenCommands...))
+	if loose := workbench.Audit(tt.ElementTree()); len(loose) != 0 {
+		t.Fatalf("the audit of the timeline lists %+v", loose)
+	}
+	if node := positional(t, tt, "core.debug.timeline.channel", 0); node.Role != ui.RolePopUpButton {
+		t.Fatalf("the name core.debug.timeline.channel stands on %+v", node)
 	}
 }

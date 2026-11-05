@@ -40,7 +40,7 @@ const UNITS = { count: null, verdict: null, s: "above", ms: "above", KB: "above"
 const BOUNDS = ["equals", "atMost", "atLeast", "below"];
 /** The numeric run conditions; the window conditions are the content size of the window of each scenario and of the scenarios that differ. */
 const CONDITIONS = ["refreshRate", "backingScale", "swapUseBelow", "fseventsdCoreBelow"];
-const WINDOW_CONDITIONS = ["window", "scenarioWindows"];
+const WINDOW_CONDITIONS = ["window", "scenarioWindows", "occludedScenarios"];
 const VALUE_KEYS = new Set(["id", "goal", "scenario", "target", "measurement", "unit", "over", "bound", "relative", "against", "constant"]);
 const VERDICTS = new Set(["passed", "failed"]);
 const HOSTS = ["mygo", "wailsv3", "tauriv2"];
@@ -67,6 +67,7 @@ export function readGoals(text, file) {
   for (const [scenario, size] of Object.entries(goals.conditions.scenarioWindows)) {
     if (!isSize(size)) fail(file, `holds the window of ${scenario} ${JSON.stringify(size)}, expected {width, height} of positive numbers`);
   }
+  if (!Array.isArray(goals.conditions.occludedScenarios)) fail(file, `holds the condition occludedScenarios ${JSON.stringify(goals.conditions.occludedScenarios)}, expected an array of scenarios`);
   if (!Array.isArray(goals.values) || goals.values.length === 0) fail(file, "holds no values");
   const ids = new Set();
   for (const value of goals.values) {
@@ -96,6 +97,9 @@ export function readGoals(text, file) {
   }
   for (const scenario of Object.keys(goals.conditions.scenarioWindows)) {
     if (!goals.values.some((value) => value.scenario === scenario)) fail(file, `holds a window of ${scenario}, which no value names`);
+  }
+  for (const scenario of goals.conditions.occludedScenarios) {
+    if (!goals.values.some((value) => value.scenario === scenario)) fail(file, `names ${scenario} as covered, which no value names`);
   }
   for (const value of goals.values.filter((entry) => entry.against !== undefined)) {
     const reference = goals.values.find((entry) => entry.id === value.against);
@@ -155,7 +159,9 @@ export function scenarioWindow(goals, scenario) {
 
 /**
  * The failures of the conditions that a target of `scenario` reported for its measurement: its refresh rate and its backing scale
- * against the run conditions, and the content size of its window against the window of the scenario.
+ * against the run conditions, the content size of its window against the window of the scenario, and whether its window is covered against
+ * the scenarios that the run conditions name as covered, because a covered window draws less and its value measures another state. An
+ * application that is not active is refused in every scenario: its activation ended before the target wrote its value.
  */
 export function targetConditionFailures(goals, scenario, conditions) {
   const failures = displayFailures(goals, conditions);
@@ -164,6 +170,9 @@ export function targetConditionFailures(goals, scenario, conditions) {
   if (window?.width !== expected.width || window?.height !== expected.height) {
     failures.push(`the window is ${window?.width}×${window?.height} points, expected ${expected.width}×${expected.height} points`);
   }
+  const covered = goals.conditions.occludedScenarios.includes(scenario);
+  if (conditions?.occluded !== covered) failures.push(`the window reports occluded ${conditions?.occluded}, expected ${covered}`);
+  if (conditions?.active !== true) failures.push(`the application reports active ${conditions?.active}, expected true`);
   return failures;
 }
 
