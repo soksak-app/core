@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F584-4: The message of a failed capture ends with the domain and code of the system error, because the description alone may name neither. Red: a failure with the description `the stream failed` lost its code at the content query, at a still capture and at a recording start. A native test checks that a covered window captures the same bytes as before the cover, for each kind of layer and for a change made while covered, without the general content query.
 - F608: The macOS window checks start again without a selected recognizer, because the setup runs the renamed native target.
 - F595: Injected input keeps its order behind input that waits for a layout.
 - F586: The close of a window with a region in the lease mode no longer records `image view released: project window is closed` on the Tauri host. Red: a release after its window closed reported that failure.

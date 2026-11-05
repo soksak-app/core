@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F584-4: 실패한 캡처의 메시지는 시스템 오류의 domain과 code로 끝난다. description만으로는 둘 다 드러나지 않을 수 있기 때문이다. Red: description이 `the stream failed`인 실패에서 content query, 정지 캡처, 녹화 시작의 code가 사라졌다. native test는 가려진 창이 layer 종류마다, 가려진 동안의 변경까지 가리기 전과 같은 byte로 캡처되고 일반 content query를 쓰지 않음을 확인한다.
 - F608: setup이 이름이 바뀐 native target을 실행하므로, recognizer를 고르지 않아도 macOS window check가 다시 시작된다.
 - F595: 합성 입력은 layout을 기다리는 입력 뒤에서 순서를 지킨다.
 - F586: lease 방식 영역이 있는 창을 닫아도 Tauri host가 `image view released: project window is closed`를 기록하지 않는다. Red: 창이 닫힌 뒤의 해제가 그 실패를 보고했다.
