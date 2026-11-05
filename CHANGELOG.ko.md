@@ -5,6 +5,7 @@
 ## 미배포
 
 - F632: mygo workbench는 활성 tab의 작업 오류가 나타날 때 그 글을 `tab error <tab>`으로 기록하며, 다른 두 host의 workbench와 같다. Red: card status 줄은 오류를 보였지만 `workbench.record.error`를 저장하지 않았다.
+- F502-13: mygo workbench의 고정 sidebar section은 page처럼 library가 보이는 동안 placement에서 빠지고, 돌아오면 다시 자리를 잡는다. Red: `TestTheLibraryLeavesTheSectionsOfTheSidebars`가 library 아래에 놓인 왼쪽 sidebar의 두 section을 찾았다.
 - F502-13: mygo library가 가린 project의 view는 자리가 없다. `element.rect`는 page처럼 그 surface에 유효한 applied frame이 없다고 답한다. Red: `TestAViewUnderTheLibraryHasNoPlace`가 이전 drawing에서 실패했다.
 - F502-33: mygo workbench의 section 이름은 settings가 고른 font와 무관하게 page section header의 굵기, 즉 chrome이 `section-head-weight` 옆에 선언한 font stack `ui-font`의 600을 갖는다. Red: 이름을 bold로 그렸을 때 `TestTheNameOfASectionHasTheStemsOfThePageHeader`와 `TestASectionNameHasTheWeightOfThePage`가 실패했다.
 - F502-13: mygo card tab의 닫기 mark는 page 높이, 즉 작은 text size와 tight line height를 갖는다. framework에서 style이 정한 line height가 line의 높이가 되었기 때문이다. Red: `TestTheCloseMarkOfATabHasTheHeightOfThePage`가 그 framework 변경 전에 실패했다.

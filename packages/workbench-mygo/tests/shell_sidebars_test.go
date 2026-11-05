@@ -156,3 +156,29 @@ func TestStatusOfTheShellReportsItsSidebars(t *testing.T) {
 		t.Fatalf("the status is %s", encoded)
 	}
 }
+
+// The library draws no sidebar, so the sections of the fixed sidebars leave the placement while it is shown, and the return seats them
+// again. The page empties the plane for the library, and its placement holds the tabs alone, hidden (TestLibraryHidesTheViews).
+func TestTheLibraryLeavesTheSectionsOfTheSidebars(t *testing.T) {
+	f, stored := surfaceShellOf(t, sidebarsInstalled)
+	sections := func() (ids []string) {
+		for id := range stored.lastSurfaces(t) {
+			if strings.Contains(id, "/left/") || strings.Contains(id, "/right/") {
+				ids = append(ids, id)
+			}
+		}
+		return ids
+	}
+	shown := sections()
+	if len(shown) == 0 {
+		t.Fatal("the workspace places no section")
+	}
+	f.run("core.projects.browse", nil)
+	if under := sections(); len(under) != 0 {
+		t.Fatalf("the library places the sections %q", under)
+	}
+	f.run("core.library.return", nil)
+	if back := sections(); len(back) != len(shown) {
+		t.Fatalf("the return places the sections %q, want %q", back, shown)
+	}
+}
