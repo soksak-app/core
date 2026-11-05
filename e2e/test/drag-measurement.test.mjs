@@ -122,3 +122,10 @@ test("transaction cadence rejects invalid or reversed stage timestamps", { timeo
     { begun: 0, requested: 14, presented: 30, committed: 20 },
   ]), /committed.*before/);
 });
+
+test("drag cadence reads the shown frames from the first input", { timeout: 1000 }, () => {
+  const samples = [{ time: 10, position: 0 }, { time: 80, position: 10 }, { time: 96, position: 20 }];
+  assert.deepEqual(measurement.shownTimes(samples, [70, 86]), [80, 96]);
+  assert.throws(() => measurement.shownTimes(samples, []), /no step times/);
+});
+

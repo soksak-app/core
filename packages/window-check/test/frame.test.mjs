@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { crc32 } from "node:zlib";
-import { captureCadence, frames, readFrame } from "../frame.mjs";
+import { captureCadence, frameChange, frames, readFrame } from "../frame.mjs";
 
 function fixture(block = Buffer.concat([Buffer.from([0xf0, 17]), Buffer.from(Array.from({ length: 32 }, (_, i) => i))])) {
   const header = Buffer.alloc(80);
@@ -67,4 +67,15 @@ test("capture cadence rejects missing or invalid timing evidence", { timeout: 50
   for (const [reported, times] of [[NaN, [1, 2]], [-1, [1, 2]], [1, [1]], [1, [2, 1]], [1, [1, Infinity]]]) {
     assert.throws(() => captureCadence(reported, times), /capture.*(time|gap|interval|frame)/);
   }
+});
+
+test("frame change states the rectangle of the pixels that differ between two frames", () => {
+  const frame = (changes = []) => {
+    const data = Buffer.alloc(4 * 16);
+    for (const [x, y] of changes) data[y * 16 + x * 4 + 1] = 9;
+    return { width: 3, height: 4, stride: 16, scale: 2, data };
+  };
+  assert.equal(frameChange(frame(), frame()), null);
+  assert.deepEqual(frameChange(frame(), frame([[1, 1], [2, 3]])), { x: 0.5, y: 0.5, width: 1, height: 1.5, pixels: 2 });
+  assert.throws(() => frameChange(frame(), { ...frame(), width: 2 }), /frames of 3x4 and 2x4/);
 });
