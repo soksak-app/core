@@ -10,7 +10,7 @@
 #                         title bar height display inside a layout transaction, the start transaction of a re-read, display wait,
 #                         webview focus, view focus, document region, image region, release of a closed window, and window object count.
 #                         It does not activate the application
-#   make e2e-activation  runs the hover check after window activation, the overlapping webview input check (baseline run and
+#   make test-app-activation  runs the hover check after window activation, the overlapping webview input check (baseline run and
 #                         registered run), the web inspector check, the OS event queue click and key check of the document region,
 #                         the Korean input method composition check of the image region, and the activated view-focus page/key check.
 #                         It activates the application and takes the focus
@@ -76,7 +76,7 @@
 #                         at 35 ms; the baseline interval and first-pulse response latency are not gated
 #   make repeat TEST=<name>_test COUNT=<n>
 #                         runs one check of the test target n times in a row and reports the run number and the system load at the first failure
-#   make e2e-activation-backspace-repeat COUNT=<n>
+#   make test-app-activation-backspace-repeat COUNT=<n>
 #                         runs the focused ABC-baseline eight-k, Backspace and Space activation target in separate processes, stopping at the first failure
 #   make test-ime-source-restoration
 #                         checks the input-source baseline setup and cleanup ordering with controlled callbacks; it does not activate
@@ -122,9 +122,9 @@ ifeq ($(DIAGNOSTIC),1)
 CFLAGS     += -DSOKSAK_DIAGNOSTIC
 endif
 
-.PHONY: all fetch capture-text-path test e2e benchmark-site-cost test-capture-frame-identity test-capture-stop-intake e2e-activation e2e-input-reference-readiness e2e-view-focus-restore e2e-activation-backspace e2e-activation-backspace-repeat build-ime-activation-target test-ime-cli e2e-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost benchmark-webview-resize-cadence repeat repeat-suite clean pkgconfig-current
+.PHONY: build fetch build-capture-text-path test test-app benchmark-site-cost test-capture-frame-identity test-capture-stop-intake test-app-activation test-app-input-reference-readiness test-app-view-focus-restore test-app-activation-backspace test-app-activation-backspace-repeat build-ime-activation-target test-ime-cli test-app-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost benchmark-webview-resize-cadence repeat repeat-suite clean pkgconfig-current
 
-all: fetch $(LIBRARY) $(PKGCONFIG)
+build: fetch $(LIBRARY) $(PKGCONFIG)
 
 $(BUILD)/%.o: src/%.m $(wildcard src/*.h src/private/*.h) Makefile $(ZXING_LIBRARY) | $(BUILD)
 	@clang $(CFLAGS) -I$(ZXING_INSTALL)/include -c $< -o $@
@@ -198,7 +198,7 @@ $(BUILD):
 # Every check links tests/support/no_activation.m. A check that does not declare activation fails if the application
 # is active when it exits.
 $(PROCESS_IDENTITY_LIBRARY):
-	@$(MAKE) -C $(CURDIR)/process-identity all
+	@$(MAKE) -C $(CURDIR)/process-identity build
 
 $(BUILD)/%_test: tests/%_test.m tests/support/no_activation.m $(LIBRARY) $(PROCESS_IDENTITY_LIBRARY) $(wildcard src/*.h src/private/*.h tests/support/*.h tests/support/*.m)
 	@clang $(CFLAGS) -I$(CURDIR)/process-identity/include -DVIEW_PAGE_CASES='"$(VIEW_PAGE_CASES)"' -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m tests/support/records.m tests/support/temporary_folder.m tests/support/view_import_map.m -L$(BUILD) -lsoksak-darwin -L$(CURDIR)/process-identity/lib -lsoksak-process-identity $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
@@ -210,7 +210,7 @@ $(BUILD)/site_cost_test: tests/site_cost_test.m tests/support/site_cost.m tests/
 $(BUILD)/capture_text_test: tests/capture_text_test.m tests/support/no_activation.m | $(BUILD)
 	@clang $(CFLAGS) $< tests/support/no_activation.m -framework Foundation -framework AppKit -framework Vision -framework CoreText -o $@
 
-capture-text-path: $(BUILD)/capture_text_test
+build-capture-text-path: $(BUILD)/capture_text_test
 	@printf '%s\n' '$(abspath $(BUILD)/capture_text_test)'
 
 # A measurement tool is not a test. It prints numbers, asserts nothing, and is not part of the test target.
@@ -435,7 +435,7 @@ VIEW_PAGE_CASES := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../packages/p
 test: $(addprefix $(BUILD)/,$(NATIVE_TEST_EXECUTABLES))
 	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) $(NATIVE_TESTS)
 
-e2e: $(addprefix $(BUILD)/,$(call executables,$(NATIVE_E2E_TESTS)))
+test-app: $(addprefix $(BUILD)/,$(call executables,$(NATIVE_E2E_TESTS)))
 	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) $(NATIVE_E2E_TESTS)
 
 benchmark-webview-resize-cadence: $(BUILD)/webview_resize_cadence_test
@@ -450,20 +450,20 @@ test-capture-stop-intake: $(BUILD)/capture_stop_intake_test
 test-pressure: $(BUILD)/document_pressure_test
 	@$(BUILD)/document_pressure_test
 
-e2e-activation: $(BUILD)/input_activate_test $(BUILD)/webview_input_test $(BUILD)/webview_inspector_test $(BUILD)/window_fullscreen_test $(BUILD)/document_view_test $(BUILD)/image_region_test $(BUILD)/image_region_ime_test $(BUILD)/view_focus_test
+test-app-activation: $(BUILD)/input_activate_test $(BUILD)/webview_input_test $(BUILD)/webview_inspector_test $(BUILD)/window_fullscreen_test $(BUILD)/document_view_test $(BUILD)/image_region_test $(BUILD)/image_region_ime_test $(BUILD)/view_focus_test
 	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) input_activate_test webview_inspector_test window_fullscreen_test webview_input_test,--baseline webview_input_test document_view_test,--activation image_region_test,--activation image_region_ime_test view_focus_test,--activation
 
 # Runs only the focused AppKit reference input-context readiness case and restores the outer input source and application.
-e2e-input-reference-readiness: $(BUILD)/input_reference_test
+test-app-input-reference-readiness: $(BUILD)/input_reference_test
 	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) input_reference_test,--activation-readiness
 
-e2e-view-focus-restore: $(BUILD)/view_focus_test
+test-app-view-focus-restore: $(BUILD)/view_focus_test
 	@$(BUILD)/view_focus_test --frontmost-restore-test
 
 # Focused Korean IME comparison. This records the outer input source and frontmost application, establishes ABC,
 # activates the test application, selects Korean 2-set, and sends eight k keys, Backspace, and Space to an AppKit reference and an image region.
 # Run only with approval for an activation-tier input check.
-e2e-activation-backspace: $(BUILD)/image_region_ime_test $(BUILD)/ime_source_probe
+test-app-activation-backspace: $(BUILD)/image_region_ime_test $(BUILD)/ime_source_probe
 	@SOKSAK_IME_SOURCE_PROBE="$(BUILD)/ime_source_probe" node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) image_region_ime_test,--backspace-trace-abc-baseline
 
 # Build the activation executable without running it; the absolute prerequisite is the only supported build target.
@@ -476,8 +476,8 @@ $(BUILD)/ime_cli_test: tests/ime_cli_test.m tests/support/ime_cli.m tests/suppor
 	@clang $(CFLAGS) -I$(CURDIR)/tests $< tests/support/ime_cli.m -o $@
 
 # Repeat the focused activation variant and preserve each child output plus an independent source read after process exit.
-e2e-activation-backspace-repeat: $(BUILD)/image_region_ime_test $(BUILD)/ime_source_probe
-	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "e2e-activation-backspace-repeat requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
+test-app-activation-backspace-repeat: $(BUILD)/image_region_ime_test $(BUILD)/ime_source_probe
+	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "test-app-activation-backspace-repeat requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
 	@set -eu; \
 	  evidence_root=$$(mktemp -d "$${TMPDIR:-/tmp}/soksak-F239-47-8-activation-repeat.XXXXXX"); \
 	  echo "EVIDENCE: $$evidence_root"; \
@@ -500,7 +500,7 @@ e2e-activation-backspace-repeat: $(BUILD)/image_region_ime_test $(BUILD)/ime_sou
 	  i=$$((i + 1)); \
 	done; echo "PASS: image_region_ime_test --backspace-trace-abc-baseline passed $(COUNT) consecutive runs"
 
-e2e-activation-backspace-reference: $(BUILD)/ime_reference_state_test
+test-app-activation-backspace-reference: $(BUILD)/ime_reference_state_test
 	@$(BUILD)/ime_reference_state_test
 
 test-ime-source-restoration: $(BUILD)/ime_source_restore_test

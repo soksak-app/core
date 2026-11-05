@@ -9,7 +9,7 @@
 // A timeout may reject through local helper calls and their attached Promise completion callbacks.
 // Checks every .mjs file under e2e and the window check harness (packages/window-check) (node_modules excluded).
 //
-//   node scripts/check-e2e.mjs
+//   node scripts/check-app-tests.mjs
 import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join, relative, resolve, sep } from "node:path";

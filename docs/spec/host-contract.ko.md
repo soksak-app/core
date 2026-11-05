@@ -19,11 +19,11 @@ func TestEndpointClosesOnInvalidJSON(t *testing.T) {
 fn invalid_json_closes_connection() {
 ```
 
-테스트 함수 하나는 쉼표로 나눈 여러 사례를 선언할 수 있다. 열다섯 개 선언 경로에서 선택된 테스트 함수는 사례를 하나 이상 선언한다: `packages/host/go/tests/`, `packages/host/go/src/*_test.go`, `packages/host/wailsv3/tests/`, `packages/host/wailsv3/src/*_test.go`, `packages/host/mygo/tests/`, `packages/host/mygo/src/*_test.go`, `packages/host/mygo/benchmark/`, `packages/sok/go/tests/`, `packages/sok/go/src/*_test.go`, `packages/host/rust/tests/`, `packages/host/rust/src/`, `packages/host/tauriv2/tests/`, `packages/host/tauriv2/src/`, `packages/sok/rust/tests/`, `packages/sok/rust/src/`. 테스트는 단언이 사례의 결과를 확인할 때만 그 사례를 선언한다. Go 선언 inventory는 현재 `GOOS`와 `GOARCH`에서 host-contract의 각 설정에 대해 `go list`가 선택한 `_test.go` 파일의 합집합이다. 모든 설정에서 제외된 파일은 이 platform의 host-contract inventory에 포함하지 않는다. 공유 계약 텍스트는 어느 패키지도 소유하지 않는 `docs/spec/cases`에 있다(manifest 사례표와 log-contract fixture). 테스트는 거기서 읽고, `make boundaries-check`는 핵심 패키지의 테스트가 다른 핵심 패키지의 경로를 읽는 것을 거부한다.
+테스트 함수 하나는 쉼표로 나눈 여러 사례를 선언할 수 있다. 열다섯 개 선언 경로에서 선택된 테스트 함수는 사례를 하나 이상 선언한다: `packages/host/go/tests/`, `packages/host/go/src/*_test.go`, `packages/host/wailsv3/tests/`, `packages/host/wailsv3/src/*_test.go`, `packages/host/mygo/tests/`, `packages/host/mygo/src/*_test.go`, `packages/host/mygo/benchmark/`, `packages/sok/go/tests/`, `packages/sok/go/src/*_test.go`, `packages/host/rust/tests/`, `packages/host/rust/src/`, `packages/host/tauriv2/tests/`, `packages/host/tauriv2/src/`, `packages/sok/rust/tests/`, `packages/sok/rust/src/`. 테스트는 단언이 사례의 결과를 확인할 때만 그 사례를 선언한다. Go 선언 inventory는 현재 `GOOS`와 `GOARCH`에서 host-contract의 각 설정에 대해 `go list`가 선택한 `_test.go` 파일의 합집합이다. 모든 설정에서 제외된 파일은 이 platform의 host-contract inventory에 포함하지 않는다. 공유 계약 텍스트는 어느 패키지도 소유하지 않는 `docs/spec/cases`에 있다(manifest 사례표와 log-contract fixture). 테스트는 거기서 읽고, `make check-boundaries`는 핵심 패키지의 테스트가 다른 핵심 패키지의 경로를 읽는 것을 거부한다.
 
 ## 검사
 
-`make host-contract-check`는 명령 감독자로 각 호스트의 테스트를 기본 구성과 진단 구성(Go 태그 `diagnostics`, Rust 기능 `diagnostics`)에서 실행하고 보고된 결과를 읽는다. mygo 호스트의 실행은 각 태그 집합에 `mygo` 태그를 더한다. `packages/host/go`와 `packages/host/mygo`는 `mygo`와 `diagnostics mygo`로, `packages/sok/go`는 `mygo`, `diagnostics mygo`, `diagnostics dev mygo`로 실행한다. 다음 경우에 실패한다.
+`make test-hosts`는 명령 감독자로 각 호스트의 테스트를 기본 구성과 진단 구성(Go 태그 `diagnostics`, Rust 기능 `diagnostics`)에서 실행하고 보고된 결과를 읽는다. mygo 호스트의 실행은 각 태그 집합에 `mygo` 태그를 더한다. `packages/host/go`와 `packages/host/mygo`는 `mygo`와 `diagnostics mygo`로, `packages/sok/go`는 `mygo`, `diagnostics mygo`, `diagnostics dev mygo`로 실행한다. 다음 경우에 실패한다.
 
 - 호스트 범위의 사례에 그 호스트의 통과한 테스트가 없다.
 - 선언한 테스트가 어느 구성에서도 실행되지 않았거나, 한 구성에서 실패했거나 건너뛰었다.
@@ -35,7 +35,7 @@ fn invalid_json_closes_connection() {
 
 소유자 규칙: 선언된 테스트는 자기 소유자의 항목에서만 결과를 얻는다. Go 테스트의 소유자는 패키지 디렉터리이고, Rust 테스트의 소유자는 크레이트 디렉터리(파일 위쪽에서 가장 가까운 `Cargo.toml`이 있는 폴더)다. 결과는 실행, 소유자, 테스트 이름으로 묶으며, 호스트의 결과가 sok 선언에 쓰이거나 그 반대가 되지 않는다. Rust 선언은 이름이 같은 잎 이름을 가진 테스트 하나와 일치한다.
 
-범위 열은 `all`이거나, 이름을 든 호스트에만 있는 동작이면 `<host>[, <host>] only: <이유>`다. 검사의 호스트는 `wailsv3`, `tauriv2`, `mygo`이고, 각 호스트는 모든 `all` 사례를 실행하며, 범위는 이 호스트만 이름으로 든다. 호스트는 자기 contract run과 함께 이 목록에 들어간다. 그때부터 모든 `all` 사례가 그 호스트에도 세어지기 때문이다. language host library가 framework port 없이 구현하는 사례는 library의 test가 선언하고, 그 library를 link하는 범위 안의 각 호스트에 센다. 두 Go 호스트는 Go language host library와 Go `sok`의 test를 모두 실행하므로, 그런 test는 어느 Go 호스트의 사례든 선언할 수 있고, 그 사례의 호스트만 그것을 센다. 동작이 `Framework`나 `Frontend`를 거치는 사례는 범위 안의 각 framework adapter의 test가 선언한다([host tree](hosts.ko.md#호스트-트리)). Language host library가 선언하는 사례의 id는 호스트 이름으로 시작하지 않는다. 호스트는 범위가 이름으로 든다. 검사는 호스트들이 구현한 유일한 플랫폼인 macOS에서 실행한다. Windows와 Linux 진입점은 `not implemented` 오류를 반환하며 사례가 없다. 검사의 단위 테스트(`scripts/test/check-host-contract.test.mjs`)는 각 실패를 주입하며 `pnpm test`에서 실행된다.
+범위 열은 `all`이거나, 이름을 든 호스트에만 있는 동작이면 `<host>[, <host>] only: <이유>`다. 검사의 호스트는 `wailsv3`, `tauriv2`, `mygo`이고, 각 호스트는 모든 `all` 사례를 실행하며, 범위는 이 호스트만 이름으로 든다. 호스트는 자기 contract run과 함께 이 목록에 들어간다. 그때부터 모든 `all` 사례가 그 호스트에도 세어지기 때문이다. language host library가 framework port 없이 구현하는 사례는 library의 test가 선언하고, 그 library를 link하는 범위 안의 각 호스트에 센다. 두 Go 호스트는 Go language host library와 Go `sok`의 test를 모두 실행하므로, 그런 test는 어느 Go 호스트의 사례든 선언할 수 있고, 그 사례의 호스트만 그것을 센다. 동작이 `Framework`나 `Frontend`를 거치는 사례는 범위 안의 각 framework adapter의 test가 선언한다([host tree](hosts.ko.md#호스트-트리)). Language host library가 선언하는 사례의 id는 호스트 이름으로 시작하지 않는다. 호스트는 범위가 이름으로 든다. 검사는 호스트들이 구현한 유일한 플랫폼인 macOS에서 실행한다. Windows와 Linux 진입점은 `not implemented` 오류를 반환하며 사례가 없다. 검사의 단위 테스트(`scripts/test/test-hosts.test.mjs`)는 각 실패를 주입하며 `pnpm test`에서 실행된다.
 
 ## 애플리케이션 메뉴
 
@@ -79,7 +79,7 @@ fn invalid_json_closes_connection() {
 | window | bring-all-to-front | system | | | |
 | help | debug | title | 디버그 | Debug | |
 
-`host.menu`는 `{language, menus}` 를 보고한다 — 활성 메뉴 언어와 구성된 메뉴다. 언어는 호스트 자신의 상태이지 제목에서 추측하는 값이 아니다. 호스트 사이 비교와 위 표 대조는 창 검사 계층에서 확인하고, `scripts/check-host-parity.mjs`가 두 호스트의 메뉴 빌더가 이 표와 같은 표를 담고 있는지 검사한다.
+`host.menu`는 `{language, menus}` 를 보고한다 — 활성 메뉴 언어와 구성된 메뉴다. 언어는 호스트 자신의 상태이지 제목에서 추측하는 값이 아니다. 호스트 사이 비교와 위 표 대조는 창 검사 계층에서 확인하고, `scripts/check-hosts-same.mjs`가 두 호스트의 메뉴 빌더가 이 표와 같은 표를 담고 있는지 검사한다.
 
 ## Contract cases
 
@@ -791,7 +791,7 @@ fn invalid_json_closes_connection() {
 | `images.calls.name-the-call` | 인자 해석 뒤 image 영역 호출의 실패는 호출 이름 `imageAttach`, `imageFocus`, `imageCaret`, `imageText`, `imageDetach`를 붙인 `<call>: <reason>`이다. | all |
 | `host-calls.decode.messages` | 인자 decoder는 빠졌거나 `null`인 필수 field, 다른 JSON 형식의 값, 정수 field 범위 밖이거나 소수인 수, `null` 인자, 길이가 다른 고정 길이 배열을 [host 호출](native-host.ko.md#host-호출)의 message로 거부하고, 빠졌거나 `null`인 선택 field는 받는다. | all |
 | `host-calls.native.image-argument-lists` | surface 페이지의 요청 하나와 좌표 넷인 `ImageCaret` 호출과 요청 하나와 텍스트인 `ImageText` 호출은 각자의 인자 목록으로 해석되어 호출자 확인에 닿는다. | wailsv3 only: Wails page runtime은 surface 페이지 호출을 native bridge로 보내고 host가 그 인자 목록을 해석한다. Tauri surface 페이지는 메인 페이지의 명령을 부른다. |
-| `host-calls.decode.every-binding` | 모든 `Host` binding의 모든 인자는 binding이 다른 일보다 먼저 해석하는 raw JSON이므로 framework는 인자를 해석하지 않는다. | wailsv3 only: Go reflection은 실행 중에 binding을 나열한다. `make host-layout-check`는 framework 객체가 아닌 모든 Tauri 명령 인자가 `Argument<T>`이기를 요구한다. |
+| `host-calls.decode.every-binding` | 모든 `Host` binding의 모든 인자는 binding이 다른 일보다 먼저 해석하는 raw JSON이므로 framework는 인자를 해석하지 않는다. | wailsv3 only: Go reflection은 실행 중에 binding을 나열한다. `make check-host-files`는 framework 객체가 아닌 모든 Tauri 명령 인자가 `Argument<T>`이기를 요구한다. |
 | `termination.signal.first-requests-quit-second-ends-process` | 첫 종료 신호는 종료를 요청하고 두 번째 신호는 프로세스를 끝낸다. | all |
 | `termination.signal.begins-the-quit-state` | 첫 종료 신호는 종료를 요청하기 전에 종료 상태를 시작한다. `host.quit`이 시작하는 상태와 같으므로, 그 종료 중의 WebContent process 종료는 오류 줄을 쓰지 않는다. | all |
 | `log.closed.signal-before-quit` | 첫 종료 신호는 quit을 요청하기 전에 원인 `signal`과 번호를 담은 `log.closed`를 저장하므로, quit의 flush가 실행될 때 기록이 로그에 있다. | all |
@@ -1178,7 +1178,7 @@ fn invalid_json_closes_connection() {
 
 ## Workbench cases
 
-Wails와 Tauri 호스트의 메인 페이지와 mygo 호스트의 workbench는 각자 project data의 view call에 답한다. 그래서 한 동작의 page 시험과 mygo 시험은 시험 바로 위의 줄 `// contract: <id>`로 한 사례를 선언한다. 시험 목록 검사(`scripts/check-test-parity.mjs`)는 한쪽에 시험이 없는 사례, `packages/workbench-mygo/tests/`의 시험이 선언한 표에 없는 사례, 시험에 붙지 않은 선언에서 실패한다.
+Wails와 Tauri 호스트의 메인 페이지와 mygo 호스트의 workbench는 각자 project data의 view call에 답한다. 그래서 한 동작의 page 시험과 mygo 시험은 시험 바로 위의 줄 `// contract: <id>`로 한 사례를 선언한다. 시험 목록 검사(`scripts/check-tests.mjs`)는 한쪽에 시험이 없는 사례, `packages/workbench-mygo/tests/`의 시험이 선언한 표에 없는 사례, 시험에 붙지 않은 선언에서 실패한다.
 
 | 층 | 이 사례의 코드 | 시험 |
 | --- | --- | --- |

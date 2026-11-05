@@ -36,22 +36,22 @@ const lane = (capability, language, implementation, tests, options = {}) => ({
 
 // The connections of existing components are also kept as a file list. They are not interpreted as behavior evidence.
 const MATRIX = [
-  lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/rust-repeat.test.mjs", "scripts/test/windows-build-check.test.mjs", "scripts/test/host-debug-check.test.mjs", "scripts/test/e2e-registry-tls.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/repeat-rust.test.mjs", "scripts/test/check-windows-build.test.mjs", "scripts/test/host-debug-check.test.mjs", "scripts/test/create-test-certificates.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("macOS application bundle preparation", "js-ts", ["scripts/platform/darwin/prepare-app-bundle.mjs"], ["scripts/test/platform/darwin/bundle-preparation.test.mjs"], { sharedTests: true }),
   lane("CI workflows", "workflow", [".github/workflows/*.yml"], ["scripts/test/workflows.test.mjs", "scripts/test/test-kinds.test.mjs"], { testLanguage: "js-ts" }),
   lane("CI toolchain setup actions", "workflow", [".github/actions/setup-*/action.yml"], ["scripts/test/workflow-setup.test.mjs"], { testLanguage: "js-ts" }),
   lane("Rust workspace release profile", "build", ["Cargo.toml"], ["scripts/test/rust-release-profile.test.mjs"], { testLanguage: "js-ts" }),
-  lane("native library build and pkg-config", "build", ["native/darwin/Makefile", "native/darwin/process-identity/Makefile"], ["scripts/test/native-pkgconfig.test.mjs", "scripts/test/native-offline.test.mjs", "scripts/test/native-architecture.test.mjs"], { testLanguage: "js-ts" }),
+  lane("native library build and pkg-config", "build", ["native/darwin/Makefile"], ["scripts/test/native-pkgconfig.test.mjs", "scripts/test/native-offline.test.mjs", "scripts/test/native-architecture.test.mjs"], { testLanguage: "js-ts" }),
   lane("workspace audit scripts", "js-ts", [
-    "scripts/check-e2e.mjs",
+    "scripts/check-app-tests.mjs",
     "scripts/check-e2e-host-parity.mjs",
     "scripts/check-exposure.mjs",
-    "scripts/check-host-parity.mjs",
-  ], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/e2e-host-parity.test.mjs", "scripts/test/main-page-apps.test.mjs", "scripts/test/check-host-parity.test.mjs", "scripts/test/check-exposure.test.mjs"], { sharedTests: true }),
-  lane("test inventory", "js-ts", ["scripts/check-test-parity.mjs"], ["scripts/test/test-parity.test.mjs"]),
-  lane("host contract audit", "js-ts", ["scripts/check-host-contract.mjs"], ["scripts/test/check-host-contract.test.mjs", "scripts/test/view-region-calls.test.mjs", "scripts/test/plugin-host-calls.test.mjs"]),
+    "scripts/check-hosts-same.mjs",
+  ], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/e2e-host-parity.test.mjs", "scripts/test/main-page-apps.test.mjs", "scripts/test/check-hosts-same.test.mjs", "scripts/test/check-exposure.test.mjs"], { sharedTests: true }),
+  lane("test inventory", "js-ts", ["scripts/check-tests.mjs"], ["scripts/test/check-tests.test.mjs"]),
+  lane("host contract audit", "js-ts", ["scripts/test-hosts.mjs"], ["scripts/test/test-hosts.test.mjs", "scripts/test/view-region-calls.test.mjs", "scripts/test/plugin-host-calls.test.mjs"]),
 lane("command supervision", "js-ts", ["scripts/test-command.mjs"], ["scripts/test/test-command.test.mjs"]),
-lane("test runner", "js-ts", ["scripts/test-runner.mjs", "scripts/test-event-reporter.mjs", "scripts/rust-tests.mjs"], ["scripts/test/test-runner.test.mjs", "scripts/test/rust-repeat.test.mjs"], { sharedTests: true }),
+lane("test runner", "js-ts", ["scripts/test-runner.mjs", "scripts/test-event-reporter.mjs", "scripts/rust-tests.mjs"], ["scripts/test/test-runner.test.mjs", "scripts/test/repeat-rust.test.mjs"], { sharedTests: true }),
 lane("test discovery", "js-ts", ["scripts/test-discovery.mjs"], ["scripts/test/test-discovery.test.mjs"]),
 lane("node tests", "js-ts", ["scripts/node-tests.mjs"], ["scripts/test/node-tests.test.mjs"]),
 lane("test runs", "js-ts", ["scripts/test-runs.mjs"], ["scripts/test/test-runs.test.mjs"]),
@@ -60,13 +60,14 @@ lane("event log audit", "js-ts", ["scripts/check-events.mjs"], ["scripts/test/ch
 lane("event class tables", "js-ts", ["scripts/generate-event-classes.mjs"], ["scripts/test/event-classes.test.mjs"]),
 lane("run log audit", "js-ts", ["scripts/audit-run.mjs"], ["scripts/test/audit-run.test.mjs"]),
 lane("crash report fault", "js-ts", ["scripts/crash-fault.mjs"], ["scripts/test/crash-fault.test.mjs"]),
-lane("end-to-end run", "js-ts", ["scripts/e2e-run.mjs"], ["scripts/test/e2e-run.test.mjs"]),
+lane("end-to-end run", "js-ts", ["scripts/test-app.mjs"], ["scripts/test/test-app.test.mjs"]),
 lane("log command audit", "js-ts", ["scripts/audit-log.mjs"], ["scripts/test/audit-log.test.mjs"]),
-lane("temporary folder audit", "js-ts", ["scripts/check-temp.mjs"], ["scripts/test/temp.test.mjs"]),
+lane("temporary folder audit", "js-ts", ["scripts/check-temp-files.mjs"], ["scripts/test/check-temp-files.test.mjs"]),
 lane("event source check", "declaration", ["scripts/event-sources.json"], ["scripts/test/event-sources.test.mjs"], { testLanguage: "js-ts" }),
 lane("performance goals", "declaration", ["docs/spec/performance-goals.json"], ["scripts/test/performance-goals.test.mjs"], { testLanguage: "js-ts" }),
 lane("three-host benchmark judge", "js-ts", ["scripts/b3-judge.mjs"], ["scripts/test/b3-judge.test.mjs"]),
-lane("three-host benchmark", "js-ts", ["scripts/e2e-b3.mjs"], ["scripts/test/e2e-b3.test.mjs", "scripts/test/fixtures/b3/application.mjs", "scripts/test/fixtures/b3/sok.mjs"]),
+lane("three-host benchmark", "js-ts", ["scripts/benchmark-b3.mjs"], ["scripts/test/benchmark-b3.test.mjs", "scripts/test/fixtures/b3/application.mjs", "scripts/test/fixtures/b3/sok.mjs"]),
+lane("process identity build", "build", ["native/darwin/process-identity/Makefile"], ["scripts/test/process-identity-build.test.mjs"], { testLanguage: "js-ts" }),
 lane("package bin audit", "js-ts", ["scripts/check-package-bins.mjs"], ["scripts/test/package-bins.test.mjs"]),
 lane("failure table", "js-ts", ["scripts/check-failure-table.mjs"], ["scripts/test/check-failure-table.test.mjs"]),
 lane("private API inventory", "js-ts", ["scripts/check-private-apis.mjs"], ["scripts/test/check-private-apis.test.mjs"]),
@@ -89,14 +90,14 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
     "packages/soksak/scripts/emit-dom-reference.mjs",
     "packages/soksak/scripts/fuzz.mjs",
   ], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
-  lane("build environment audit", "shell", ["scripts/check-build-environment.sh"], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/check-build-environment.sh"], {
+  lane("build environment audit", "shell", ["scripts/check-tools.sh"], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/check-tools.sh"], {
     testLanguage: "js-ts", testExtensions: new Set([".mjs", ".sh"]), sharedTests: true,
   }),
   lane("break and mutation inventory", "js-ts", [
     "packages/soksak/scripts/check-breaks.mjs",
     "packages/soksak/scripts/mutate.mjs",
   ], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
-  lane("host structure audit", "js-ts", ["scripts/check-hosts.mjs"], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/main-thread-calls.test.mjs"], { sharedTests: true }),
+  lane("host structure audit", "js-ts", ["scripts/check-host-files.mjs"], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/main-thread-calls.test.mjs"], { sharedTests: true }),
   lane("main-thread audit Go reader", "go", ["scripts/cgo-sources.go"], ["scripts/test/main-thread-calls.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("release diagnostic audit", "js-ts", ["scripts/check-release.mjs"], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/check-release-paths.test.mjs"], { sharedTests: true }),
   lane("installed format mentions", "js-ts", ["scripts/test/format-mentions.test.mjs"], ["scripts/test/format-mentions.test.mjs"]),
@@ -111,13 +112,13 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("measurement footprints", "js-ts", ["scripts/footprints.mjs"], ["scripts/test/footprints.test.mjs"]),
   lane("frame records", "js-ts", ["scripts/frame-records.mjs"], ["scripts/test/frame-records.test.mjs"]),
   lane("application update check", "js-ts", ["scripts/check-app-update.mjs"], ["scripts/test/check-app-update.test.mjs"]),
-  lane("Go repeat tests", "js-ts", ["scripts/go-tests.mjs"], ["scripts/test/go-repeat.test.mjs"]),
-  lane("Node repeat tests", "js-ts", ["scripts/node-repeat.mjs"], ["scripts/test/node-repeat.test.mjs"]),
+  lane("Go repeat tests", "js-ts", ["scripts/go-tests.mjs"], ["scripts/test/repeat-go.test.mjs"]),
+  lane("Node repeat tests", "js-ts", ["scripts/repeat-node.mjs"], ["scripts/test/repeat-node.test.mjs"]),
   lane("push gate tests", "js-ts", ["scripts/gate-tests.mjs"], ["scripts/test/gate-tests.test.mjs"]),
   lane("benchmark runner tests", "js-ts", ["scripts/benchmarks.mjs"], ["scripts/test/benchmarks.test.mjs"]),
   lane("Go repeat inputs", "js-ts", ["scripts/go-repeat-inputs.mjs"], ["scripts/test/go-repeat-inputs.test.mjs"]),
   lane("workspace registry", "js-ts", ["scripts/workspace-registry.mjs"], ["scripts/test/workspace-registry.test.mjs"]),
-  lane("platform boundary audit", "js-ts", ["scripts/check-platforms.mjs"], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
+  lane("platform boundary audit", "js-ts", ["scripts/check-platform-files.mjs"], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
   lane("component boundary audit", "js-ts", ["scripts/check-boundaries.mjs"], ["scripts/test/check-boundaries.test.mjs", "scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
   lane("plugin API", "js-ts", ["packages/plugin-api/*.js"], ["packages/plugin-api/test/**/*.mjs", "scripts/test/fixture-compositions.test.mjs", "scripts/test/surface-names.test.mjs"]),
   lane("log contract", "js-ts", ["packages/log-contract/*.js"], ["packages/log-contract/test/**/*.mjs"]),
@@ -323,11 +324,11 @@ const FEATURE_LINKS = [
       { file: "scripts/test/workspace-registry.test.mjs", id: "the registry options take SIDECARS=diagnostic and PLUGINS=public, and PLUGINS=public only with SIDECARS=diagnostic" },
       { file: "scripts/test/workspace-registry.test.mjs", id: "PLUGINS=public lists the plugin versions of the public registry whose sidecar ranges the diagnostic sidecar releases satisfy" },
       { file: "scripts/test/workspace-registry.test.mjs", id: "PLUGINS=public fails when leaving out a version would make an installation select an older version or no version" },
-      { file: "scripts/test/workspace-registry.test.mjs", id: "PLUGINS=public writes the public plugin entries beside the sidecar entries of make registry SIDECARS=diagnostic and builds no release" },
-      { file: "scripts/test/workspace-registry.test.mjs", id: "PLUGINS=public fails when the checkout holds no sidecar releases of make registry SIDECARS=diagnostic" },
+      { file: "scripts/test/workspace-registry.test.mjs", id: "PLUGINS=public writes the public plugin entries beside the sidecar entries of make build-registry SIDECARS=diagnostic and builds no release" },
+      { file: "scripts/test/workspace-registry.test.mjs", id: "PLUGINS=public fails when the checkout holds no sidecar releases of make build-registry SIDECARS=diagnostic" },
       { file: "scripts/test/workspace-registry.test.mjs", id: "the index of the public registry is read from its address, and an answer other than 200 is an error" },
     ],
-    expected: "`make registry SIDECARS=diagnostic` runs `make release PROFILE=release FEATURES=diagnostics` of each sidecar repository and writes `sidecar-revisions.json` beside its index with the revision and the working tree changes of each sidecar repository; `make registry SIDECARS=diagnostic PLUGINS=public` packs and builds nothing and writes an index of the plugins of the public registry beside those sidecar releases, and fails when they are missing.",
+    expected: "`make build-registry SIDECARS=diagnostic` runs `make release PROFILE=release FEATURES=diagnostics` of each sidecar repository and writes `sidecar-revisions.json` beside its index with the revision and the working tree changes of each sidecar repository; `make build-registry SIDECARS=diagnostic PLUGINS=public` packs and builds nothing and writes an index of the plugins of the public registry beside those sidecar releases, and fails when they are missing.",
     levels: ["unit"],
   },
   {
@@ -399,7 +400,7 @@ const FEATURE_LINKS = [
       { file: "scripts/test/measure-terminal-redraw.test.mjs", id: "the region measurement reads presentedFrames right around the cpu interval and fails while the window is occluded" },
       { file: "scripts/test/measure-terminal-redraw.test.mjs", id: "the cpu time of each process is divided by the frames that the region presented over the interval" },
     ],
-    expected: "make app-usage prepares the states of the three-host benchmark, waits for the idle state, measures a pointer move with the U7 records of a window without a main page and sets the trace state of TRACE, and make terminal-redraw-usage opens one tab of PLUGIN in a new project window of 760 by 614 points and divides the CPU time of each process by the frames that the region of the tab presented; with B3_OUT both write the figures of a run and its conditions as a B3 record.",
+    expected: "make measure-app-usage prepares the states of the three-host benchmark, waits for the idle state, measures a pointer move with the U7 records of a window without a main page and sets the trace state of TRACE, and make measure-terminal-redraw opens one tab of PLUGIN in a new project window of 760 by 614 points and divides the CPU time of each process by the frames that the region of the tab presented; with B3_OUT both write the figures of a run and its conditions as a B3 record.",
     levels: ["unit"],
   },
   {
@@ -511,21 +512,21 @@ const FEATURE_LINKS = [
     id: "F502-24",
     implementation: [
       { file: "scripts/check-release.mjs", symbol: "export function viewRootSources(frontend) {" },
-      { file: "scripts/e2e-run.mjs", symbol: "const APPS = ['wailsv3', 'tauriv2', 'mygo'];" },
+      { file: "scripts/test-app.mjs", symbol: "const APPS = ['wailsv3', 'tauriv2', 'mygo'];" },
       { file: "packages/window-check/app.mjs", symbol: "export function requiresAll(env) {" },
-      { file: "Makefile", symbol: "release-check-mygo: mygo-build-release" },
-      { file: "Makefile", symbol: "E2E_BUILD = wailsv3-build tauriv2-build mygo-build registry" },
+      { file: "Makefile", symbol: "check-release-mygo: build-mygo-release" },
+      { file: "Makefile", symbol: "E2E_BUILD = build-wailsv3 build-tauriv2 build-mygo build-registry" },
       { file: ".github/workflows/release.yml", symbol: "  release-mygo:" },
     ],
     tests: [
       { file: "scripts/test/check-release-paths.test.mjs", id: "the view root of a host without a main page is every staged file, and the audit asks for no page module" },
       { file: "scripts/test/workflows.test.mjs", id: "release builds and packages each host after the reusable CI checks succeed" },
-      { file: "scripts/test/e2e-run.test.mjs", id: "the plan prepares, starts the three applications, checks and quits them in this order" },
+      { file: "scripts/test/test-app.test.mjs", id: "the plan prepares, starts the three applications, checks and quits them in this order" },
       { file: "scripts/test/native-pkgconfig.test.mjs", id: "release host checks audit only their own optimized bundle" },
       { file: "scripts/test/host-debug-check.test.mjs", id: "the debug check compiles the features and tags of the debug apps" },
       { file: "packages/window-check/test/required-apps.test.mjs", id: "requiresAll holds only for a set that covers the mygo application" },
     ],
-    expected: "A release builds, audits and packages the three applications, and make e2e builds and starts them, so a window session without SOKSAK_APP covers the three.",
+    expected: "A release builds, audits and packages the three applications, and make test-app builds and starts them, so a window session without SOKSAK_APP covers the three.",
     levels: ["unit"],
   },
   {
@@ -619,19 +620,19 @@ const FEATURE_LINKS = [
       { file: "scripts/b3-judge.mjs", symbol: "export function readGoals(text, file) {" },
       { file: "scripts/b3-judge.mjs", symbol: "export function judgeSession(goals, session) {" },
       { file: "scripts/b3-judge.mjs", symbol: "export function targetConditionFailures(goals, scenario, conditions) {" },
-      { file: "scripts/e2e-b3.mjs", symbol: "export function baselineCheckoutFailures(record, { head, status }, path) {" },
-      { file: "scripts/e2e-b3.mjs", symbol: "export function sidecarRevisionFailures(record, revisions) {" },
-      { file: "scripts/e2e-b3.mjs", symbol: "export function baselinePluginFailures(record, releases) {" },
-      { file: "scripts/e2e-b3.mjs", symbol: "export function sessionUnits(goals, runs, applications) {" },
-      { file: "scripts/e2e-b3.mjs", symbol: "export function readTargetOutput(file, { goals, scenario, target, application, trace, code, benchmarks }) {" },
-      { file: "scripts/e2e-b3.mjs", symbol: "export function traceStateOf(target, trace) {" },
-      { file: "scripts/e2e-b3.mjs", symbol: "export function benchmarkOf(target) {" },
-      { file: "scripts/e2e-b3.mjs", symbol: "export function measuredSettings(target, trace, benchmarks) {" },
-      { file: "scripts/e2e-b3.mjs", symbol: "export function attributionUnits(goals, applications, debugApplications) {" },
-      { file: "scripts/e2e-b3.mjs", symbol: "export async function runUnit(unit, context) {" },
-      { file: "Makefile", symbol: "e2e-b3:" },
-      { file: "Makefile", symbol: "b3-judge:" },
-      { file: "scripts/e2e-run.mjs", symbol: "async function startApplication(item, children) {" },
+      { file: "scripts/benchmark-b3.mjs", symbol: "export function baselineCheckoutFailures(record, { head, status }, path) {" },
+      { file: "scripts/benchmark-b3.mjs", symbol: "export function sidecarRevisionFailures(record, revisions) {" },
+      { file: "scripts/benchmark-b3.mjs", symbol: "export function baselinePluginFailures(record, releases) {" },
+      { file: "scripts/benchmark-b3.mjs", symbol: "export function sessionUnits(goals, runs, applications) {" },
+      { file: "scripts/benchmark-b3.mjs", symbol: "export function readTargetOutput(file, { goals, scenario, target, application, trace, code, benchmarks }) {" },
+      { file: "scripts/benchmark-b3.mjs", symbol: "export function traceStateOf(target, trace) {" },
+      { file: "scripts/benchmark-b3.mjs", symbol: "export function benchmarkOf(target) {" },
+      { file: "scripts/benchmark-b3.mjs", symbol: "export function measuredSettings(target, trace, benchmarks) {" },
+      { file: "scripts/benchmark-b3.mjs", symbol: "export function attributionUnits(goals, applications, debugApplications) {" },
+      { file: "scripts/benchmark-b3.mjs", symbol: "export async function runUnit(unit, context) {" },
+      { file: "Makefile", symbol: "benchmark-b3:" },
+      { file: "Makefile", symbol: "check-b3:" },
+      { file: "scripts/test-app.mjs", symbol: "async function startApplication(item, children) {" },
     ],
     tests: [
       { file: "scripts/test/performance-goals.test.mjs", id: "docs/spec/performance-goals.json names each value once and compares a value only with a value that it holds" },
@@ -650,36 +651,36 @@ const FEATURE_LINKS = [
       { file: "scripts/test/b3-judge.test.mjs", id: "a run outside the run conditions, a failed run, a missing run and an unknown reading fail the session" },
       { file: "scripts/test/b3-judge.test.mjs", id: "the session names the mygo host, the two other hosts and their baseline hosts" },
       { file: "scripts/test/b3-judge.test.mjs", id: "the goals are rejected when they do not hold the format that the judge applies" },
-      { file: "scripts/test/b3-judge.test.mjs", id: "make b3-judge judges a session folder against docs/spec/performance-goals.json and exits with status 1 when a value fails" },
-      { file: "scripts/test/e2e-b3.test.mjs", id: "a BASELINE checkout whose head differs from the last head of the baseline record or whose working tree holds changes fails before the first run" },
-      { file: "scripts/test/e2e-b3.test.mjs", id: "a sidecar revision of the registry record that differs from the last revision of the baseline record, or a working tree with changes, fails" },
-      { file: "scripts/test/e2e-b3.test.mjs", id: "the installed plugins of a baseline host that differ in version or sha256 from the baseline record fail the run" },
-      { file: "scripts/test/e2e-b3.test.mjs", id: "the surface plugins are the installed plugins whose manifest declares a surface" },
-      { file: "scripts/test/e2e-b3.test.mjs", id: "the run conditions are read from injected readings of swap use, of fseventsd and of the display" },
-      { file: "scripts/test/e2e-b3.test.mjs", id: "a swap total of zero leaves no swap in use, so the run may start" },
-      { file: "scripts/test/e2e-b3.test.mjs", id: "the runs interleave the five applications, run S0b in the application that S3 leaves, and run a scenario without a relative value only on the mygo host" },
-      { file: "scripts/test/e2e-b3.test.mjs", id: "the targets of a scenario come from the goals in their order, and STEP=pointer runs after every other reading of the scenario" },
-      { file: "scripts/test/e2e-b3.test.mjs", id: "phase 1 reruns with TRACE=1 each target that takes the trace state of the run, and no target that names its own TRACE" },
-      { file: "scripts/test/e2e-b3.test.mjs", id: "a target runs in the checkout of its application with its configuration folder, its sok, its trace state and its value file" },
-      { file: "scripts/test/e2e-b3.test.mjs", id: "a run installs the index of its application into a new configuration folder under target/b3 and starts the executable of its release bundle" },
-      { file: "scripts/test/e2e-b3.test.mjs", id: "a target writes its measurements under its own keys, and the run records each that an entry names under the id of the entry" },
-      { file: "scripts/test/e2e-b3.test.mjs", id: "a target reports the conditions of its measurement, and a display, a window or a trace state other than the run gave fails the run" },
-      { file: "scripts/test/e2e-b3.test.mjs", id: "an e2e benchmark reports the settings that B3_SETTINGS declares for it in the state that its TRACE names, and other settings fail the run" },
-      { file: "scripts/test/e2e-b3.test.mjs", id: "the run reads the declarations of the e2e benchmarks from e2e/benchmark/measurements.mjs" },
-      { file: "scripts/test/e2e-b3.test.mjs", id: "B3_SETTINGS of a benchmark has the shape of its B3_MEASUREMENTS, and a missing or an extra state or another shape fails the run" },
-      { file: "scripts/test/e2e-b3.test.mjs", id: "a benchmark records its verdict as a measurement, and a target that exits with another code than 0 fails the run" },
-      { file: "scripts/test/e2e-b3.test.mjs", id: "a run of a fixture application fails on a display at another refresh rate or backing scale and quits the application, and no process of it remains" },
-      { file: "scripts/test/e2e-b3.test.mjs", id: "a run of a fixture application that exits before it writes its endpoint fails and measures nothing" },
-      { file: "scripts/test/e2e-b3.test.mjs", id: "a run that starts outside the run conditions starts no application" },
-      { file: "scripts/test/e2e-b3.test.mjs", id: "a run of a fixture application measures each scenario of its unit in one application and writes one record per scenario into the session folder" },
-      { file: "scripts/test/e2e-b3.test.mjs", id: "a failed benchmark is the verdict failed of its row, and a target that exits with another code than 0 fails the run" },
-      { file: "scripts/test/e2e-b3.test.mjs", id: "a target that cannot be run fails the run, and the application of the run quits" },
-      { file: "scripts/test/e2e-b3.test.mjs", id: "the session folder holds the session, the baseline record and the sidecar record, and make b3-judge reads it" },
-      { file: "scripts/test/e2e-b3.test.mjs", id: "make e2e-b3 refuses a phase, a run count or a baseline checkout that it does not take before it reads anything" },
-      { file: "scripts/test/test-kinds.test.mjs", id: "a root target that starts an application through the start step of runPlan without the e2e prefix is reported" },
-      { file: "scripts/test/e2e-run.test.mjs", id: "a failed start skips the quit of its application, so the run reports the start as its one failure" },
+      { file: "scripts/test/b3-judge.test.mjs", id: "make check-b3 judges a session folder against docs/spec/performance-goals.json and exits with status 1 when a value fails" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a BASELINE checkout whose head differs from the last head of the baseline record or whose working tree holds changes fails before the first run" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a sidecar revision of the registry record that differs from the last revision of the baseline record, or a working tree with changes, fails" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "the installed plugins of a baseline host that differ in version or sha256 from the baseline record fail the run" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "the surface plugins are the installed plugins whose manifest declares a surface" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "the run conditions are read from injected readings of swap use, of fseventsd and of the display" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a swap total of zero leaves no swap in use, so the run may start" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "the runs interleave the five applications, run S0b in the application that S3 leaves, and run a scenario without a relative value only on the mygo host" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "the targets of a scenario come from the goals in their order, and STEP=pointer runs after every other reading of the scenario" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "phase 1 reruns with TRACE=1 each target that takes the trace state of the run, and no target that names its own TRACE" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a target runs in the checkout of its application with its configuration folder, its sok, its trace state and its value file" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a run installs the index of its application into a new configuration folder under target/b3 and starts the executable of its release bundle" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a target writes its measurements under its own keys, and the run records each that an entry names under the id of the entry" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a target reports the conditions of its measurement, and a display, a window or a trace state other than the run gave fails the run" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "an e2e benchmark reports the settings that B3_SETTINGS declares for it in the state that its TRACE names, and other settings fail the run" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "the run reads the declarations of the e2e benchmarks from e2e/benchmark/measurements.mjs" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "B3_SETTINGS of a benchmark has the shape of its B3_MEASUREMENTS, and a missing or an extra state or another shape fails the run" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a benchmark records its verdict as a measurement, and a target that exits with another code than 0 fails the run" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a run of a fixture application fails on a display at another refresh rate or backing scale and quits the application, and no process of it remains" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a run of a fixture application that exits before it writes its endpoint fails and measures nothing" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a run that starts outside the run conditions starts no application" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a run of a fixture application measures each scenario of its unit in one application and writes one record per scenario into the session folder" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a failed benchmark is the verdict failed of its row, and a target that exits with another code than 0 fails the run" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a target that cannot be run fails the run, and the application of the run quits" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "the session folder holds the session, the baseline record and the sidecar record, and make check-b3 reads it" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "make benchmark-b3 refuses a phase, a run count or a baseline checkout that it does not take before it reads anything" },
+      { file: "scripts/test/test-kinds.test.mjs", id: "a root target that starts an application through the start step of runPlan outside the test-app and benchmark targets is reported" },
+      { file: "scripts/test/test-app.test.mjs", id: "a failed start skips the quit of its application, so the run reports the start as its one failure" },
     ],
-    expected: "`make e2e-b3` runs the three-host benchmark on five applications into a session folder and fails on a baseline checkout, a sidecar revision, a baseline plugin release, a run condition or a display that differs from its record or condition; `make b3-judge` judges that folder against `docs/spec/performance-goals.json`, whose values the two tables of the section Performance goals of `docs/spec/hosts.md` and of its translation copy.",
+    expected: "`make benchmark-b3` runs the three-host benchmark on five applications into a session folder and fails on a baseline checkout, a sidecar revision, a baseline plugin release, a run condition or a display that differs from its record or condition; `make check-b3` judges that folder against `docs/spec/performance-goals.json`, whose values the two tables of the section Performance goals of `docs/spec/hosts.md` and of its translation copy.",
     levels: ["unit"],
   },
   {
@@ -838,11 +839,11 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/src/layout/outline.go", symbol: "func ComputeOutline(rects []Rect, options OutlineOptions) Outline {" },
       { file: "packages/workbench-mygo/src/layout/stored.go", symbol: "func CheckStoredLayout(layout json.RawMessage, units []PluginUnit) error {" },
       { file: "packages/workbench-mygo/src/layout/spaces.go", symbol: "func ClosingSpace(p *Project, id string) (*Closing, error) {" },
-      { file: "scripts/check-host-parity.mjs", symbol: "workbenchDeclarationSource" },
+      { file: "scripts/check-hosts-same.mjs", symbol: "workbenchDeclarationSource" },
       { file: "scripts/check-exposure.mjs", symbol: "export function auditDeclarationCopies(copies, read) {" },
       { file: "packages/host/go/src/workspace.go", symbol: "func CommonOnlyKeys() []string" },
       { file: "packages/host/rust/src/workspace.rs", symbol: "pub fn common_only_keys() -> &'static [String]" },
-      { file: "Makefile", symbol: "host-contract-check-mygo:" },
+      { file: "Makefile", symbol: "test-mygo:" },
     ],
     tests: [
       { file: "packages/workbench/test/workbench-declaration.test.mjs", id: "no stylesheet of the workbench holds a literal length, ratio or duration" },
@@ -853,14 +854,14 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/layout/cases_test.go", id: "TestOutlineCases" },
       { file: "packages/workbench-mygo/tests/layout/cases_test.go", id: "TestStoredCases" },
       { file: "packages/workbench-mygo/tests/layout/cases_test.go", id: "TestSpaceCases" },
-      { file: "scripts/test/check-host-parity.test.mjs", id: "the common-only keys of the hosts and the workbench are read from their sources" },
+      { file: "scripts/test/check-hosts-same.test.mjs", id: "the common-only keys of the hosts and the workbench are read from their sources" },
       { file: "packages/host/go/tests/workspace_test.go", id: "TestCommonOnlyKeysAreTheDeclaredList" },
       { file: "packages/host/rust/tests/workspace_test.rs", id: "common_only_keys_are_the_declared_list" },
       { file: "scripts/test/check-exposure.test.mjs", id: "each language host library and the mygo workbench hold their copies of the declarations" },
       { file: "scripts/test/check-exposure.test.mjs", id: "a copy of workbench.json in a language host library that differs from its source fails" },
-      { file: "scripts/test/workflows.test.mjs", id: "make host-contract-check-mygo runs the unit tests of the Go packages of the mygo host" },
+      { file: "scripts/test/workflows.test.mjs", id: "make test-mygo runs the unit tests of the Go packages of the mygo host" },
     ],
-    expected: "The workbench values are declared once in `packages/workbench/workbench.json`, which `settings.js` and `text-size.js` import and whose chrome metrics the workbench sets as custom properties of the document root, so no stylesheet holds a literal length, ratio or duration; the JavaScript layout model of `packages/soksak` and `packages/workbench` and the Go layout model of `packages/workbench-mygo` pass the same layout cases of `docs/spec/cases/layout`, which `make host-contract-check-mygo` runs for the Go model. Each language host library embeds a copy of `workbench.json` and reads the common-only keys from it, and `make exposure-check` fails when a copy differs from its source.",
+    expected: "The workbench values are declared once in `packages/workbench/workbench.json`, which `settings.js` and `text-size.js` import and whose chrome metrics the workbench sets as custom properties of the document root, so no stylesheet holds a literal length, ratio or duration; the JavaScript layout model of `packages/soksak` and `packages/workbench` and the Go layout model of `packages/workbench-mygo` pass the same layout cases of `docs/spec/cases/layout`, which `make test-mygo` runs for the Go model. Each language host library embeds a copy of `workbench.json` and reads the common-only keys from it, and `make check-exposure` fails when a copy differs from its source.",
     levels: ["unit"],
   },
   {
@@ -881,13 +882,13 @@ const FEATURE_LINKS = [
     id: "F532",
     implementation: [
       { file: "packages/host/rust/src/diagnostics.rs", symbol: "crate::event_record::quit_with_cause(\"update\", || host.0.quit());" },
-      { file: "Makefile", symbol: "host-layout-check: windows-build-check host-debug-check" },
+      { file: "Makefile", symbol: "check-host-files: check-windows-build check-host-debug" },
     ],
     tests: [
       { file: "scripts/test/host-debug-check.test.mjs", id: "the debug check compiles the features and tags of the debug apps" },
-      { file: "scripts/test/host-debug-check.test.mjs", id: "host-layout-check runs the debug check" },
+      { file: "scripts/test/host-debug-check.test.mjs", id: "check-host-files runs the debug check" },
     ],
-    expected: "make host-layout-check compiles the sources and the tests of the two hosts and the two apps with the features and the tags of the debug apps, and the update step of the Rust diagnostics ends the application through quit.",
+    expected: "make check-host-files compiles the sources and the tests of the two hosts and the two apps with the features and the tags of the debug apps, and the update step of the Rust diagnostics ends the application through quit.",
     levels: ["unit"],
   },
   {
@@ -896,13 +897,13 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/package.json", symbol: "\"head-fit.js\"," },
       { file: "packages/plugin-api/index.js", symbol: "export function importSpecifiers(source) {" },
       { file: "packages/workbench/staged.js", symbol: "export function missingPageReferences(out, page) {" },
-      { file: "packages/workbench/stage.mjs", symbol: "const missing = noMainPage ? [] : STAGED.pages.flatMap((page) => missingPageReferences(target, page));" },
+      { file: "packages/workbench/copy-frontend.mjs", symbol: "const missing = noMainPage ? [] : STAGED.pages.flatMap((page) => missingPageReferences(target, page));" },
     ],
     tests: [
-      { file: "packages/workbench/test/stage.test.mjs", id: "staging holds every file that a staged page reaches, in a release and in a diagnostic build" },
-      { file: "packages/workbench/test/stage.test.mjs", id: "staging fails on a page that reaches a file that is not staged, and names the file" },
-      { file: "packages/workbench/test/stage.test.mjs", id: "staging leaves the imports of the application runtime to its host" },
-      { file: "packages/workbench/test/stage.test.mjs", id: "staging reads the references of a page as a browser parser does" },
+      { file: "packages/workbench/test/copy-frontend.test.mjs", id: "staging holds every file that a staged page reaches, in a release and in a diagnostic build" },
+      { file: "packages/workbench/test/copy-frontend.test.mjs", id: "staging fails on a page that reaches a file that is not staged, and names the file" },
+      { file: "packages/workbench/test/copy-frontend.test.mjs", id: "staging leaves the imports of the application runtime to its host" },
+      { file: "packages/workbench/test/copy-frontend.test.mjs", id: "staging reads the references of a page as a browser parser does" },
     ],
     expected: "Every script, style and import that a staged page reaches in a release and in a diagnostic build is staged, except the documents that a host creates for each request.",
     levels: ["unit"],
@@ -1015,14 +1016,14 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/workspace.rs", symbol: "static COMMON_ONLY: LazyLock<Vec<String>>" },
       { file: "apps/browser/runtime/browser-storage.js", symbol: "const COMMON_ONLY = declaration.settings.commonOnly;" },
       { file: "packages/workbench/settings.js", symbol: "for (const key of COMMON_ONLY) if (id && Object.hasOwn(patch, key)) throw new Error(`${key} is common-only`);" },
-      { file: "scripts/check-host-parity.mjs", symbol: "export function auditCommonOnlyKeys(keys) {" },
+      { file: "scripts/check-hosts-same.mjs", symbol: "export function auditCommonOnlyKeys(keys) {" },
     ],
     tests: [
       { file: "packages/host/go/tests/workspace_test.go", id: "TestProjectCommonOnlyKeysAreRejected" },
       { file: "packages/host/rust/tests/workspace_test.rs", id: "project_common_only_keys_are_rejected" },
       { file: "apps/browser/test/browser-storage.test.mjs", id: "a project write of each common-only key fails with the message of the hosts" },
       { file: "packages/workbench/test/settings.test.mjs", id: "a project write of each common-only key fails with the message of the hosts" },
-      { file: "scripts/test/check-host-parity.test.mjs", id: "a common-only key that the workbench refuses and a host accepts fails" },
+      { file: "scripts/test/check-hosts-same.test.mjs", id: "a common-only key that the workbench refuses and a host accepts fails" },
     ],
     expected: "Both hosts, the browser runtime and the workbench refuse the four common-only keys in a project settings file and in a project write with `<key> is common-only`; the workbench and the browser runtime import the list of `workbench.json`, and the host parity check fails when the list of a language host library differs from it.",
     levels: ["unit"],
@@ -1068,7 +1069,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "scripts/test/event-sources.test.mjs", id: "the repository passes the event source check of its enabled rules and prints every pending rule with its item and count" },
-      { file: "scripts/test/test-kinds.test.mjs", id: "every script of the e2e package that drives an application is run by a root target with the e2e prefix" },
+      { file: "scripts/test/test-kinds.test.mjs", id: "every script of the e2e package that drives an application is run by a root target of its kind" },
       { file: "scripts/test/fallbacks.test.mjs", id: "the repository states a reason for every default and discarded error in product code" },
       { file: "scripts/test/soksak-scripts.test.mjs", id: "platform audit finds no selectors outside platform directories" },
       { file: "packages/workbench-mygo/tests/declarations_test.go", id: "TestAChromeNumberThatIsNotDeclaredIsRefusedWithItsName" },
@@ -1697,7 +1698,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/platform/darwin/layout.rs", symbol: "pub fn main_presentation(view: &PlatformWebview) -> Handle {" },
       { file: "packages/host/wailsv3/src/frontend.go", symbol: "func (f Frontend) SettledPresentation() (unsafe.Pointer, error) {" },
       { file: "packages/host/tauriv2/src/frontend.rs", symbol: "fn settled_presentation(&self) -> port::Result<*mut c_void> {" },
-      { file: "scripts/check-hosts.mjs", symbol: "function callsBlock(call) {" },
+      { file: "scripts/check-host-files.mjs", symbol: "function callsBlock(call) {" },
     ],
     tests: [
       { file: "packages/host/go/src/surfaces_test.go", id: "TestLayoutCommitsAfterThePresentationNoticeOfTheFrontend" },
@@ -1761,23 +1762,23 @@ const FEATURE_LINKS = [
   {
     id: "F513",
     implementation: [
-      { file: "scripts/check-host-parity.mjs", symbol: "export function auditPlatformCallers(host, methods, sources, scope) {" },
-      { file: "scripts/check-host-parity.mjs", symbol: "function callerGraph(language, sources, scope) {" },
-      { file: "scripts/check-host-parity.mjs", symbol: "export function withoutRustTestItems(source) {" },
-      { file: "scripts/check-host-parity.mjs", symbol: "export function libraryCrate(manifest, file) {" },
+      { file: "scripts/check-hosts-same.mjs", symbol: "export function auditPlatformCallers(host, methods, sources, scope) {" },
+      { file: "scripts/check-hosts-same.mjs", symbol: "function callerGraph(language, sources, scope) {" },
+      { file: "scripts/check-hosts-same.mjs", symbol: "export function withoutRustTestItems(source) {" },
+      { file: "scripts/check-hosts-same.mjs", symbol: "export function libraryCrate(manifest, file) {" },
       { file: "packages/host/rust/tests/support/platform/darwin/endpoint_client.rs", symbol: "pub fn connect(address: &str, read_timeout: Duration) -> Connection {" },
     ],
     tests: [
-      { file: "scripts/test/check-host-parity.test.mjs", id: "every platform method with a caller passes" },
-      { file: "scripts/test/check-host-parity.test.mjs", id: "a platform method without a caller outside the platform fails" },
-      { file: "scripts/test/check-host-parity.test.mjs", id: "a platform method named only in a comment has no caller" },
-      { file: "scripts/test/check-host-parity.test.mjs", id: "auditHostParity reports a platform method of either host that no source outside the platform calls" },
-      { file: "scripts/test/check-host-parity.test.mjs", id: "a platform method that only a test item of a Rust source calls has no caller" },
-      { file: "scripts/test/check-host-parity.test.mjs", id: "the product sources of a host are its source files outside the platform folder, without test files" },
-      { file: "scripts/test/check-host-parity.test.mjs", id: "a platform method whose only callers are free functions that no live function calls has no caller" },
-      { file: "scripts/test/check-host-parity.test.mjs", id: "a free function that a live function, an application or a command calls keeps its platform method called" },
-      { file: "scripts/test/check-host-parity.test.mjs", id: "free functions that only call each other have no caller" },
-      { file: "scripts/test/check-host-parity.test.mjs", id: "the library crate of a host is the package name in Rust form and its root file under src" },
+      { file: "scripts/test/check-hosts-same.test.mjs", id: "every platform method with a caller passes" },
+      { file: "scripts/test/check-hosts-same.test.mjs", id: "a platform method without a caller outside the platform fails" },
+      { file: "scripts/test/check-hosts-same.test.mjs", id: "a platform method named only in a comment has no caller" },
+      { file: "scripts/test/check-hosts-same.test.mjs", id: "auditHostParity reports a platform method of either host that no source outside the platform calls" },
+      { file: "scripts/test/check-hosts-same.test.mjs", id: "a platform method that only a test item of a Rust source calls has no caller" },
+      { file: "scripts/test/check-hosts-same.test.mjs", id: "the product sources of a host are its source files outside the platform folder, without test files" },
+      { file: "scripts/test/check-hosts-same.test.mjs", id: "a platform method whose only callers are free functions that no live function calls has no caller" },
+      { file: "scripts/test/check-hosts-same.test.mjs", id: "a free function that a live function, an application or a command calls keeps its platform method called" },
+      { file: "scripts/test/check-hosts-same.test.mjs", id: "free functions that only call each other have no caller" },
+      { file: "scripts/test/check-hosts-same.test.mjs", id: "the library crate of a host is the package name in Rust form and its root file under src" },
     ],
     expected: "Host parity reports each platform method that no production source of its host outside src/platform calls; a method named only in a comment, a test file or a Rust test item is not called, and a call inside a free function counts only when an entry point, an application source or another counting call reaches that function. The integration tests connect to the endpoint through a macOS test client whose reads have a time limit.",
     levels: ["unit"],
@@ -1831,11 +1832,11 @@ const FEATURE_LINKS = [
   {
     id: "F501",
     implementation: [
-      { file: "scripts/check-host-parity.mjs", symbol: "export function specDiagnosticMethods(endpointMarkdown) {" },
+      { file: "scripts/check-hosts-same.mjs", symbol: "export function specDiagnosticMethods(endpointMarkdown) {" },
     ],
     tests: [
-      { file: "scripts/test/check-host-parity.test.mjs", id: "a diagnostic method that the diagnostic builds table does not list fails" },
-      { file: "scripts/test/check-host-parity.test.mjs", id: "a method of the diagnostic builds table that no host declares fails" },
+      { file: "scripts/test/check-hosts-same.test.mjs", id: "a diagnostic method that the diagnostic builds table does not list fails" },
+      { file: "scripts/test/check-hosts-same.test.mjs", id: "a method of the diagnostic builds table that no host declares fails" },
     ],
     expected: "The host parity check fails on a diagnostic method of a host that the diagnostic builds table of the endpoint specification does not list and on a row of that table that no host declares.",
     levels: ["unit"],
@@ -1904,9 +1905,9 @@ const FEATURE_LINKS = [
       { file: ".github/workflows/ci.yml", symbol: "- name: Record the display session" },
     ],
     tests: [
-      { file: "scripts/test/workflows.test.mjs", id: "the native-darwin job records the display session before the native tests" },
+      { file: "scripts/test/workflows.test.mjs", id: "the build-native job records the display session before the native tests" },
     ],
-    expected: "The native-darwin job records the display session before the native tests.",
+    expected: "The build-native job records the display session before the native tests.",
     levels: ["unit"],
   },
   {
@@ -2928,13 +2929,13 @@ const FEATURE_LINKS = [
     id: "F239-172-1",
     implementation: [
       {
-        file: "scripts/check-test-parity.mjs",
+        file: "scripts/check-tests.mjs",
         symbol: "const FEATURE_LINKS = ["
       }
     ],
     tests: [
       {
-        file: "scripts/test/test-parity.test.mjs",
+        file: "scripts/test/check-tests.test.mjs",
         id: "completed capability entries all have feature evidence links"
       }
     ],
@@ -3272,7 +3273,7 @@ const FEATURE_LINKS = [
       { file: "Makefile", symbol: "@$(CARGO_ENV) node scripts/rust-tests.mjs" },
     ],
     tests: [
-      { file: "scripts/test/rust-repeat.test.mjs", id: "make ${target} applies the declared deployment environment to every Cargo call" },
+      { file: "scripts/test/repeat-rust.test.mjs", id: "make ${target} applies the declared deployment environment to every Cargo call" },
     ],
     expected: "Rust owning targets apply the declared deployment environment to every Cargo call.",
     levels: ["unit"],
@@ -3283,7 +3284,7 @@ const FEATURE_LINKS = [
       { file: "scripts/rust-tests.mjs", symbol: "process.stderr.write(error.stdout)" },
     ],
     tests: [
-      { file: "scripts/test/rust-repeat.test.mjs", id: "Rust owner CLI reports captured Cargo ${stage} failure output" },
+      { file: "scripts/test/repeat-rust.test.mjs", id: "Rust owner CLI reports captured Cargo ${stage} failure output" },
     ],
     expected: "Rust owner discovery preserves compiler and metadata failure stdout and starts no test after failure.",
     levels: ["unit"],
@@ -3439,8 +3440,8 @@ const FEATURE_LINKS = [
     id: "F239-266",
     implementation: [
       { file: "scripts/check-release.mjs", symbol: "const selectedHost = values.host;" },
-      { file: "Makefile", symbol: "release-check-wailsv3: wailsv3-build-release" },
-      { file: "Makefile", symbol: "release-check-tauriv2: tauriv2-build-release" },
+      { file: "Makefile", symbol: "check-release-wailsv3: build-wailsv3-release" },
+      { file: "Makefile", symbol: "check-release-tauriv2: build-tauriv2-release" },
       { file: ".github/workflows/release.yml", symbol: "  release-wailsv3:" },
       { file: ".github/workflows/release.yml", symbol: "  release-tauriv2:" },
     ],
@@ -3458,8 +3459,8 @@ const FEATURE_LINKS = [
     id: "F239-266-3",
     implementation: [
       { file: "scripts/check-release.mjs", symbol: "const selectedHost = values.host;" },
-      { file: "Makefile", symbol: "release-check-wailsv3: wailsv3-build-release" },
-      { file: "Makefile", symbol: "release-check-tauriv2: tauriv2-build-release" },
+      { file: "Makefile", symbol: "check-release-wailsv3: build-wailsv3-release" },
+      { file: "Makefile", symbol: "check-release-tauriv2: build-tauriv2-release" },
       { file: ".github/workflows/release.yml", symbol: "  release-wailsv3:" },
       { file: ".github/workflows/release.yml", symbol: "  release-tauriv2:" },
     ],
@@ -3787,11 +3788,11 @@ const FEATURE_LINKS = [
   {
     id: "F239-172",
     implementation: [
-      { file: "scripts/check-test-parity.mjs", symbol: "const FEATURE_LINKS = [" },
+      { file: "scripts/check-tests.mjs", symbol: "const FEATURE_LINKS = [" },
     ],
     tests: [
-      { file: "scripts/test/test-parity.test.mjs", id: "completed capability entries all have feature evidence links" },
-      { file: "scripts/test/test-parity.test.mjs", id: "recorded parity counts cannot drift from the current inventory" },
+      { file: "scripts/test/check-tests.test.mjs", id: "completed capability entries all have feature evidence links" },
+      { file: "scripts/test/check-tests.test.mjs", id: "recorded parity counts cannot drift from the current inventory" },
     ],
     expected: "Completed capabilities retain links to their actual implementation and owning tests, and documentation records the discovered inventory counts.",
     levels: ["unit"],
@@ -3941,7 +3942,7 @@ const FEATURE_LINKS = [
     id: "F258-2",
     implementation: [{ file: "scripts/check-boundaries.mjs", symbol: "export function checkTestPathReads" }],
     tests: [{ file: "scripts/test/check-boundaries.test.mjs", id: "checkTestPathReads refuses a test that reads a path of another core package" }],
-    expected: "make boundaries-check refuses a test of a core package whose string resolves into another core package, and the shared contract text of the manifest case table is read from docs/spec/cases, which no package owns.",
+    expected: "make check-boundaries refuses a test of a core package whose string resolves into another core package, and the shared contract text of the manifest case table is read from docs/spec/cases, which no package owns.",
     levels: ["unit"],
   },
   {
@@ -4165,8 +4166,8 @@ const FEATURE_LINKS = [
   },
   {
     id: "F0.4-1",
-    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditFailureMatrix" }],
-    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "failure matrix preserves JS/TS, Rust, Go, and Objective-C lane attribution" }],
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "auditFailureMatrix" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "failure matrix preserves JS/TS, Rust, Go, and Objective-C lane attribution" }],
     expected: "The complete failure-propagation audit covers every declared JS/TS, Rust, Go, and Objective-C production lane with attributable errors and no ignored outcomes.",
     levels: ["unit", "native"],
   },
@@ -4182,44 +4183,44 @@ const FEATURE_LINKS = [
   },
   {
     id: "G1",
-    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditInventory" }],
-    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "inventory reports uncovered implementations and tests as separate results" }],
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "auditInventory" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "inventory reports uncovered implementations and tests as separate results" }],
     expected: "The workspace inventory reports implementation and test ownership separately, rejects uncovered files, and preserves structural evidence without claiming behavior coverage.",
     levels: ["unit"],
   },
   {
     id: "G2-1",
-    implementation: [{ file: "scripts/check-hosts.mjs", symbol: "PAIRS" }],
+    implementation: [{ file: "scripts/check-host-files.mjs", symbol: "PAIRS" }],
     tests: [{ file: "scripts/test/soksak-scripts.test.mjs", id: "host structure audit reports a clean paired-host graph" }],
     expected: "The paired Tauri/Wails host and application structure contains only declared differences and no missing counterpart or obsolete process path.",
     levels: ["unit"],
   },
   {
     id: "G2-2",
-    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditCompletedFeatureLinks" }, { file: "scripts/check-test-parity.mjs", symbol: "auditRecordedInventoryCounts" }],
-    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "completed capability entries all have feature evidence links" }, { file: "scripts/test/test-parity.test.mjs", id: "recorded parity counts cannot drift from the current inventory" }],
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "auditCompletedFeatureLinks" }, { file: "scripts/check-tests.mjs", symbol: "auditRecordedInventoryCounts" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "completed capability entries all have feature evidence links" }, { file: "scripts/test/check-tests.test.mjs", id: "recorded parity counts cannot drift from the current inventory" }],
     expected: "Completed host-structure and parity-correction entries remain linked to named evidence, and the current inventory count cannot drift from the current-state record in the operations document.",
     levels: ["unit"],
   },
   {
     id: "G2-3",
-    implementation: [{ file: "scripts/check-host-contract.mjs", symbol: "auditHostContract" }, { file: "scripts/check-host-contract.mjs", symbol: "parseDeclarations" }],
-    tests: [{ file: "scripts/test/check-host-contract.test.mjs", id: "a host without a test for a shared case fails" }, { file: "scripts/test/check-host-contract.test.mjs", id: "a declared test that did not run, failed, or was skipped does not cover its case" }],
+    implementation: [{ file: "scripts/test-hosts.mjs", symbol: "auditHostContract" }, { file: "scripts/test-hosts.mjs", symbol: "parseDeclarations" }],
+    tests: [{ file: "scripts/test/test-hosts.test.mjs", id: "a host without a test for a shared case fails" }, { file: "scripts/test/test-hosts.test.mjs", id: "a declared test that did not run, failed, or was skipped does not cover its case" }],
     expected: "Both hosts' tests declare the host contract cases they execute, and the check fails when a host has no passing executed test for a case in its scope.",
     levels: ["unit", "native"],
   },
   {
     id: "G3-1",
     implementation: [
-      { file: "scripts/check-test-parity.mjs", symbol: "auditInventory" },
-      { file: "scripts/check-test-parity.mjs", symbol: "auditFeatureLinks" },
+      { file: "scripts/check-tests.mjs", symbol: "auditInventory" },
+      { file: "scripts/check-tests.mjs", symbol: "auditFeatureLinks" },
       { file: "scripts/language-test-adapters.mjs", symbol: "runLanguageCases" },
       { file: "scripts/test-evidence.mjs", symbol: "evidenceDrift" },
     ],
     tests: [
-      { file: "scripts/test/test-parity.test.mjs", id: "boundary audit rejects a duplicate implementation and test owner" },
-      { file: "scripts/test/test-parity.test.mjs", id: "evidence audit rejects attribution to the wrong behavior-test file" },
-      { file: "scripts/test/test-parity.test.mjs", id: "behavior mutation audit rejects a no-op implementation and an omitted response" },
+      { file: "scripts/test/check-tests.test.mjs", id: "boundary audit rejects a duplicate implementation and test owner" },
+      { file: "scripts/test/check-tests.test.mjs", id: "evidence audit rejects attribution to the wrong behavior-test file" },
+      { file: "scripts/test/check-tests.test.mjs", id: "behavior mutation audit rejects a no-op implementation and an omitted response" },
       { file: "scripts/test/test-language-test-adapters.test.mjs", id: "parses each language result and rejects zero, skipped, and crashed outcomes" },
       { file: "scripts/test/test-evidence.test.mjs", id: "evidence records content hashes, dirty state, expected/actual result, and retry history" },
     ],
@@ -4229,13 +4230,13 @@ const FEATURE_LINKS = [
   {
     id: "G3",
     implementation: [
-      { file: "scripts/check-test-parity.mjs", symbol: "auditInventory" },
-      { file: "scripts/check-hosts.mjs", symbol: "auditHostPairs" },
+      { file: "scripts/check-tests.mjs", symbol: "auditInventory" },
+      { file: "scripts/check-host-files.mjs", symbol: "auditHostPairs" },
       { file: "scripts/language-test-adapters.mjs", symbol: "runLanguageCases" },
       { file: "scripts/test-evidence.mjs", symbol: "evidenceDrift" },
     ],
     tests: [
-      { file: "scripts/test/test-parity.test.mjs", id: "inventory reports uncovered implementations and tests as separate results" },
+      { file: "scripts/test/check-tests.test.mjs", id: "inventory reports uncovered implementations and tests as separate results" },
       { file: "scripts/test/test-language-test-adapters.test.mjs", id: "parses each language result and rejects zero, skipped, and crashed outcomes" },
       { file: "scripts/test/test-evidence.test.mjs", id: "evidence records content hashes, dirty state, expected/actual result, and retry history" },
       { file: "scripts/test/soksak-scripts.test.mjs", id: "host structure audit rejects a missing host and a missing counterpart" },
@@ -4245,20 +4246,20 @@ const FEATURE_LINKS = [
   },
   {
     id: "G1.3-5",
-    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditCommittedEvidenceWording" }],
-    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "F0.1 evidence identifies its build by its checklist ID" }],
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "auditCommittedEvidenceWording" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "F0.1 evidence identifies its build by its checklist ID" }],
     expected: "F0.1 evidence identifies the build used for its host result by its checklist ID and does not claim that the current worktree is dirty.",
     levels: ["unit"],
   },
   {
     id: "G1.4-1",
     implementation: [
-      { file: "scripts/check-test-parity.mjs", symbol: "auditOwnership" },
+      { file: "scripts/check-tests.mjs", symbol: "auditOwnership" },
       { file: "packages/workbench/host.js", symbol: "takes no argument; it uses the declared sidecar" },
       { file: "packages/workbench/environment.js", symbol: "sidecars: surface.sidecars" },
     ],
     tests: [
-      { file: "scripts/test/test-parity.test.mjs", id: "ownership audit rejects cross-owner implementation names and private paths" },
+      { file: "scripts/test/check-tests.test.mjs", id: "ownership audit rejects cross-owner implementation names and private paths" },
       { file: "packages/workbench/test/surface-runtime.test.mjs", id: "surface sidecar access is resolved from the declared surface and takes no argument" },
     ],
     expected: "Implementation and test sources cannot cross owner boundaries or read private paths; plugin sidecar access is resolved from the declaration and never by a name that the page passes.",
@@ -4266,29 +4267,29 @@ const FEATURE_LINKS = [
   },
   {
     id: "G1.3-4",
-    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditModalParitySnapshotWording" }],
-    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "modal parity Red is dated and followed by current F10.2 evidence" }],
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "auditModalParitySnapshotWording" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "modal parity Red is dated and followed by current F10.2 evidence" }],
     expected: "The original Wails modal Red remains as a dated observation and the current F10.2 correction is stated without conflating the two states.",
     levels: ["unit"],
   },
   {
     id: "G1.3-3",
-    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditHistoricalScopeWording" }],
-    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "completed F3 scope is not reported as currently open" }],
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "auditHistoricalScopeWording" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "completed F3 scope is not reported as currently open" }],
     expected: "Completed F3 records preserve their historical sequence without reporting already-closed controlled-site and restored/new-document checks as currently open.",
     levels: ["unit"],
   },
   {
     id: "G1.3-2",
-    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditRecordedInventoryCounts" }],
-    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "recorded parity counts cannot drift from the current inventory" }],
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "auditRecordedInventoryCounts" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "recorded parity counts cannot drift from the current inventory" }],
     expected: "The current lane, implementation, and test counts recorded in both operations-document translations match current inventory output, a count drift fails explicitly, and completed checklist evidence is not compared.",
     levels: ["unit"],
   },
   {
     id: "G1.3-1",
-    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditCompletedFeatureLinks" }],
-    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "completed capability entries all have feature evidence links" }],
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "auditCompletedFeatureLinks" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "completed capability entries all have feature evidence links" }],
     expected: "Every completed capability checklist entry has a linked implementation, named behavior test, expected result, and verification level, while aggregate review records are explicitly excluded.",
     levels: ["unit"],
   },
@@ -4548,7 +4549,7 @@ const FEATURE_LINKS = [
   {
     id: "F0.4-1.2",
     implementation: [
-      { file: "scripts/check-test-parity.mjs", symbol: "auditJsFailurePropagation" },
+      { file: "scripts/check-tests.mjs", symbol: "auditJsFailurePropagation" },
       { file: "packages/client/client.js", symbol: "status.unwatch" },
       { file: "packages/workbench/exposure.js", symbol: "release" },
       { file: "packages/workbench/host.js", symbol: "layoutStepEnd" },
@@ -4556,7 +4557,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/transcript.js", symbol: "createTranscript" },
     ],
     tests: [
-      { file: "scripts/test/test-parity.test.mjs", id: "JS failure audit rejects promise handlers that hide rejection" },
+      { file: "scripts/test/check-tests.test.mjs", id: "JS failure audit rejects promise handlers that hide rejection" },
       { file: "packages/workbench/test/transcript.test.mjs", id: "a failed send does not stop later lines" },
     ],
     expected: "Promise rejection handlers in the audited JS/TS implementation cannot silently turn failures into successful completion; visible reporting preserves the failure while allowing independent queued work to proceed.",
@@ -4565,10 +4566,10 @@ const FEATURE_LINKS = [
   {
     id: "F0.4-1.3.1",
     implementation: [
-      { file: "scripts/check-test-parity.mjs", symbol: "auditRustFailurePropagation" },
+      { file: "scripts/check-tests.mjs", symbol: "auditRustFailurePropagation" },
     ],
     tests: [
-      { file: "scripts/test/test-parity.test.mjs", id: "Rust failure audit rejects ignored outcomes in the scoped production lane" },
+      { file: "scripts/test/check-tests.test.mjs", id: "Rust failure audit rejects ignored outcomes in the scoped production lane" },
     ],
     expected: "The VT sidecar does not discard production Result or task outcomes; actor, session, monitor, and shutdown failures remain observable through returned errors or explicit reports.",
     levels: ["unit", "native"],
@@ -4579,12 +4580,12 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/sidecars.rs", symbol: "PersistentConnection" },
       { file: "packages/host/rust/src/recording.rs", symbol: "abort" },
       { file: "packages/host/rust/src/exposure.rs", symbol: "on_main" },
-      { file: "scripts/check-test-parity.mjs", symbol: "auditRustFailurePropagation" },
+      { file: "scripts/check-tests.mjs", symbol: "auditRustFailurePropagation" },
     ],
     tests: [
       { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_transport_reconnects_after_connection_loss_and_preserves_owner" },
       { file: "packages/host/rust/tests/recording_test.rs", id: "an_aborted_recording_is_stopped_and_removed_and_allows_the_next" },
-      { file: "scripts/test/test-parity.test.mjs", id: "Rust failure audit rejects ignored outcomes in the scoped production lane" },
+      { file: "scripts/test/check-tests.test.mjs", id: "Rust failure audit rejects ignored outcomes in the scoped production lane" },
     ],
     expected: "The Tauri host does not discard production Result or callback and cleanup outcomes; transport, delivery, recording, and shutdown failures remain observable through returned errors or explicit reports.",
     levels: ["unit", "native"],
@@ -4592,11 +4593,11 @@ const FEATURE_LINKS = [
   {
     id: "F0.4-1.3.3",
     implementation: [
-      { file: "scripts/check-test-parity.mjs", symbol: "auditRustFailurePropagation" },
+      { file: "scripts/check-tests.mjs", symbol: "auditRustFailurePropagation" },
       { file: "packages/host/rust/src/platform/windows/unsupported.rs", symbol: "missing" },
     ],
     tests: [
-      { file: "scripts/test/test-parity.test.mjs", id: "Rust failure audit covers every production lane" },
+      { file: "scripts/test/check-tests.test.mjs", id: "Rust failure audit covers every production lane" },
       { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_transport_rejects_unsupported_hello_protocol_without_replacing_endpoint" },
     ],
     expected: "Every Rust production lane is included in the ignored-outcome audit, and unsupported host operations return explicit errors instead of successful no-op results.",
@@ -4607,11 +4608,11 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "native/darwin/src/capture.m", symbol: "sp_capture_error" },
       { file: "packages/host/rust/src/platform/darwin/capture.rs", symbol: "last_error" },
-      { file: "scripts/check-test-parity.mjs", symbol: "auditNativeFailurePropagation" },
+      { file: "scripts/check-tests.mjs", symbol: "auditNativeFailurePropagation" },
     ],
     tests: [
       { file: "native/darwin/tests/support/capture_boundary.m", id: "open failure is observable to the caller" },
-      { file: "scripts/test/test-parity.test.mjs", id: "Darwin native failure audit rejects log-only capture boundaries" },
+      { file: "scripts/test/check-tests.test.mjs", id: "Darwin native failure audit rejects log-only capture boundaries" },
     ],
     expected: "Darwin capture open, start, wait, and stop failures cross the native boundary as explicit errors; invalid directory input and frame-write failures are not silently discarded.",
     levels: ["unit", "native"],
@@ -4619,11 +4620,11 @@ const FEATURE_LINKS = [
   {
     id: "F0.4-1.5",
     implementation: [
-      { file: "scripts/check-test-parity.mjs", symbol: "auditFailureMatrix" },
+      { file: "scripts/check-tests.mjs", symbol: "auditFailureMatrix" },
       { file: "packages/host/go/src/recording.go", symbol: "func (r *Recording) Abort" },
     ],
     tests: [
-      { file: "scripts/test/test-parity.test.mjs", id: "Go failure audit rejects ignored results in every Go production lane" },
+      { file: "scripts/test/check-tests.test.mjs", id: "Go failure audit rejects ignored results in every Go production lane" },
       { file: "packages/host/go/tests/recording_test.go", id: "TestAbortRetiredStopFailureRemovesFolderAndReportsStopError" },
     ],
     expected: "The JS/TS, Rust, Go, and Objective-C failure lanes run as one machine-audited matrix; each lane rejects ignored outcomes, and Wails capture, recording cleanup, and shell close failures remain attributable.",
@@ -4682,8 +4683,8 @@ const FEATURE_LINKS = [
     levels: ["native"],
   },  {
     id: "F0.4-1-1-4",
-    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "export function auditCompletedFeatureLinks" }],
-    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "completed capability entries all have feature evidence links" }],
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "export function auditCompletedFeatureLinks" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "completed capability entries all have feature evidence links" }],
     expected: "Every completed checklist capability, the merged sidecar failure delivery included, has a feature link to its implementation and tests.",
     levels: ["unit"],
   },
@@ -4820,8 +4821,8 @@ const FEATURE_LINKS = [
   },
   {
     id: "G2.7",
-    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditRecordedInventoryCounts" }],
-    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "recorded parity counts cannot drift from the current inventory" }],
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "auditRecordedInventoryCounts" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "recorded parity counts cannot drift from the current inventory" }],
     expected: "The parity inventory records the current 56 lanes, 251 implementation files, and 171 test files after adding the mechanical E2E host audit.",
     levels: ["unit"],
   },
@@ -5600,7 +5601,7 @@ const FEATURE_LINKS = [
   {
     id: "F388",
     implementation: [
-      { file: "package.json", symbol: "soksak-kit-0.0.12.tgz" },
+      { file: "package.json", symbol: "soksak-kit-0.0.13.tgz" },
     ],
     tests: [
       { file: "scripts/test/workflows.test.mjs", id: "the kit release that core pins defines the presentation mode terms" },
@@ -5935,7 +5936,7 @@ const FEATURE_LINKS = [
       { file: "packages/sok/rust/src/install.rs", symbol: "pub fn validate_installed" },
       { file: "packages/host/go/src/installed.go", symbol: "func enabledPlugins" },
       { file: "packages/host/rust/src/installed.rs", symbol: "fn enabled_plugins" },
-      { file: "packages/workbench/stage.mjs", symbol: "function enabledInstalledPlugins" },
+      { file: "packages/workbench/copy-frontend.mjs", symbol: "function enabledInstalledPlugins" },
     ],
     tests: [
       { file: "packages/sok/go/tests/plugins_test.go", id: "TestPluginDependentsReadTheNameFromThePackageJSONOfTheInstalledPlugin" },
@@ -5946,7 +5947,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/tests/installed_test.go", id: "TestInstalledPluginsDocumentRefusesAPackageField" },
       { file: "packages/host/rust/tests/installed_test.rs", id: "installed_plugins_document_reads_the_name_from_the_package_json" },
       { file: "packages/host/rust/tests/installed_test.rs", id: "installed_plugins_document_refuses_a_package_field" },
-      { file: "packages/workbench/test/stage.test.mjs", id: "staging refuses an installed.json entry that holds package" },
+      { file: "packages/workbench/test/copy-frontend.test.mjs", id: "staging refuses an installed.json entry that holds package" },
     ],
     expected: "installed.json holds no package; the hosts, sok and the staging read the name of an installed plugin from its package.json and refuse an installed.json that holds package with an error that names the file and the field.",
     levels: ["unit"],
@@ -6263,15 +6264,15 @@ const FEATURE_LINKS = [
   },
   {
     id: "F222",
-    implementation: [{ file: ".githooks/pre-push", symbol: "push-check" }],
+    implementation: [{ file: ".githooks/pre-push", symbol: "check-push" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs only the commit message check, and ci runs the structure, format and clippy checks" }],
     expected: "The pre-push hook runs make -C with the form the workflow test requires, with the range of the pushed refs.",
     levels: ["unit"],
   },
   {
     id: "F220",
-    implementation: [{ file: "scripts/check-host-contract.mjs", symbol: "auditDeclarations" }],
-    tests: [{ file: "scripts/test/check-host-contract.test.mjs", id: "the static audit fails a marker that names an undefined case, a case outside its scope, or no case, without running tests" }],
+    implementation: [{ file: "scripts/test-hosts.mjs", symbol: "auditDeclarations" }],
+    tests: [{ file: "scripts/test/test-hosts.test.mjs", id: "the static audit fails a marker that names an undefined case, a case outside its scope, or no case, without running tests" }],
     expected: "The static host contract check fails a test marker that names an undefined case, a case outside its host scope, or no case, and a case in a host scope that no test declares; CI runs it.",
     levels: ["unit"],
   },
@@ -6283,6 +6284,15 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/view-calls.test.mjs", id: "tab.state.write stores the params as the tab state of its surface" },
     ],
     expected: "A view reads and writes the tab state of its surface through tab.state of the surface context.",
+    levels: ["unit"],
+  },
+  {
+    id: "F225",
+    implementation: [{ file: "packages/plugin-api/exposure-check.js", symbol: "checkPluginRepository" }],
+    tests: [
+      { file: "packages/plugin-api/test/exposure-check.test.mjs", id: "a plugin repository whose sources match its declarations passes" },
+    ],
+    expected: "The exposure check reads a manifest whose sections are status-form sections, which carry no module source, so a manifest without one is checked.",
     levels: ["unit"],
   },
   {
@@ -6362,7 +6372,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-237",
-    implementation: [{ file: "scripts/check-e2e.mjs", symbol: "export function auditActivationUnboundNames" }],
+    implementation: [{ file: "scripts/check-app-tests.mjs", symbol: "export function auditActivationUnboundNames" }],
     tests: [
       { file: "scripts/test/soksak-scripts.test.mjs", id: "activation fixture audit rejects unresolved identifiers" },
       { file: "scripts/test/soksak-scripts.test.mjs", id: "activation unbound-name audit ignores unrelated multiline TypeScript diagnostics" },
@@ -6402,7 +6412,7 @@ const FEATURE_LINKS = [
   {
     id: "F239",
     implementation: [{ file: "scripts/rust-tests.mjs", symbol: "testNames" }],
-    tests: [{ file: "scripts/test/rust-repeat.test.mjs", id: "make rust-repeat names each test when it starts, reports its result and elapsed time, and kills a test at its limit" }],
+    tests: [{ file: "scripts/test/repeat-rust.test.mjs", id: "make repeat-rust names each test when it starts, reports its result and elapsed time, and kills a test at its limit" }],
     expected: "Each test runner names every test when it starts, reports its result and elapsed time, and ends a test at its own limit.",
     levels: ["unit"],
   },
@@ -6413,13 +6423,13 @@ const FEATURE_LINKS = [
       { file: "scripts/rust-tests.mjs", symbol: "cargoTargetArgs" },
     ],
     tests: [
-      { file: "scripts/test/rust-repeat.test.mjs", id: "make rust-repeat selects only the lib Cargo target before discovery" },
-      { file: "scripts/test/rust-repeat.test.mjs", id: "make rust-repeat selects only the test:integration Cargo target before discovery" },
-      { file: "scripts/test/rust-repeat.test.mjs", id: "make rust-repeat keeps package-wide target and doctest discovery by default" },
-      { file: "scripts/test/rust-repeat.test.mjs", id: "make rust-repeat rejects an invalid Cargo target before invoking Cargo" },
-      { file: "scripts/test/rust-repeat.test.mjs", id: "make rust-repeat rejects shell syntax in a Cargo target without executing it" },
-      { file: "scripts/test/rust-repeat.test.mjs", id: "runRustTests rejects an explicitly empty Cargo target before invoking Cargo" },
-      { file: "scripts/test/rust-repeat.test.mjs", id: "cargoTargetArgs rejects non-string selectors instead of coercing them" },
+      { file: "scripts/test/repeat-rust.test.mjs", id: "make repeat-rust selects only the lib Cargo target before discovery" },
+      { file: "scripts/test/repeat-rust.test.mjs", id: "make repeat-rust selects only the test:integration Cargo target before discovery" },
+      { file: "scripts/test/repeat-rust.test.mjs", id: "make repeat-rust keeps package-wide target and doctest discovery by default" },
+      { file: "scripts/test/repeat-rust.test.mjs", id: "make repeat-rust rejects an invalid Cargo target before invoking Cargo" },
+      { file: "scripts/test/repeat-rust.test.mjs", id: "make repeat-rust rejects shell syntax in a Cargo target without executing it" },
+      { file: "scripts/test/repeat-rust.test.mjs", id: "runRustTests rejects an explicitly empty Cargo target before invoking Cargo" },
+      { file: "scripts/test/repeat-rust.test.mjs", id: "cargoTargetArgs rejects non-string selectors instead of coercing them" },
     ],
     expected: "Rust repeat target selection limits prebuild and discovery before exact test-name filtering while preserving package-wide defaults.",
     levels: ["unit"],
@@ -6531,7 +6541,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F223",
-    implementation: [{ file: "scripts/check-e2e.mjs", symbol: "auditE2ESource" }],
+    implementation: [{ file: "scripts/check-app-tests.mjs", symbol: "auditE2ESource" }],
     tests: [{ file: "scripts/test/soksak-scripts.test.mjs", id: "window-source audit rejects forbidden control paths" }],
     expected: "The window-check source audit accepts a timer that records an observation through report and does not apply its timer rule to the harness tests, which run on mocked time.",
     levels: ["unit"],
@@ -6616,7 +6626,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F183",
-    implementation: [{ file: "Makefile", symbol: "release-check: wailsv3-build-release tauriv2-build-release mygo-build-release" }],
+    implementation: [{ file: "Makefile", symbol: "check-release: build-wailsv3-release build-tauriv2-release build-mygo-release" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "release builds and packages each host after the reusable CI checks succeed" }],
     expected: "A release publishes every bundle from a tag whose CI passed.",
     levels: ["unit"],
@@ -6810,15 +6820,15 @@ const FEATURE_LINKS = [
   },
   {
     id: "F170",
-    implementation: [{ file: "Makefile", symbol: "push-check:" }],
+    implementation: [{ file: "Makefile", symbol: "check-push:" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs only the commit message check, and ci runs the structure, format and clippy checks" }],
     expected: "A push checks only its commit messages before it leaves the checkout, and CI runs the structure, format and clippy checks.",
     levels: ["unit"],
   },
   {
     id: "F169",
-    implementation: [{ file: "scripts/check-build-environment.sh", symbol: "node_major=" }],
-    tests: [{ file: "scripts/test/check-build-environment.sh", id: "a node executable of the declared major version is accepted" }],
+    implementation: [{ file: "scripts/check-tools.sh", symbol: "node_major=" }],
+    tests: [{ file: "scripts/test/check-tools.sh", id: "a node executable of the declared major version is accepted" }],
     expected: "The build runs the major Node version that .node-version declares, and another major version stops the toolchain check.",
     levels: ["unit"],
   },
@@ -6908,8 +6918,8 @@ const FEATURE_LINKS = [
   },
   {
     id: "F236",
-    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "function declaredOwners(root)" }],
-    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "ownership audit classifies only declared names, by exact name" }],
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "function declaredOwners(root)" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "ownership audit classifies only declared names, by exact name" }],
     expected: "The ownership audit names no real plugin or sidecar: it classifies a package by its name prefix. The decoupling items F236-1 to F236-12 keep their evidence in docs/features.md, and the moves they name are in docs/plans/decouple-handoff.md.",
     levels: ["unit"],
   },
@@ -7241,10 +7251,10 @@ const FEATURE_LINKS = [
   {
     id: "F29",
     implementation: [
-      { file: "scripts/check-build-environment.sh", symbol: "pnpm_actual=$(pnpm --version" },
+      { file: "scripts/check-tools.sh", symbol: "pnpm_actual=$(pnpm --version" },
     ],
     tests: [
-      { file: "scripts/test/check-build-environment.sh", id: "a standalone pnpm executable of the declared version is accepted" },
+      { file: "scripts/test/check-tools.sh", id: "a standalone pnpm executable of the declared version is accepted" },
     ],
     expected: "The build environment check accepts a pnpm executable of the declared major version wherever it is installed and rejects another major version.",
     levels: ["unit"],
@@ -7513,13 +7523,13 @@ const FEATURE_LINKS = [
   {
     id: "F52",
     implementation: [
-      { file: "Makefile", symbol: "windows-build-check:" },
+      { file: "Makefile", symbol: "check-windows-build:" },
       { file: "packages/host/go/src/platform/darwin/endpoint.go", symbol: "err != syscall.EPERM" },
       { file: "packages/host/rust/src/platform/darwin/endpoint.rs", symbol: "Some(EPERM) => {}" },
     ],
     tests: [
-      { file: "scripts/test/windows-build-check.test.mjs", id: "the Windows build check compiles the Go host source in the default and diagnostics builds" },
-      { file: "scripts/test/windows-build-check.test.mjs", id: "host-layout-check runs the Windows build check" },
+      { file: "scripts/test/check-windows-build.test.mjs", id: "the Windows build check compiles the Go host source in the default and diagnostics builds" },
+      { file: "scripts/test/check-windows-build.test.mjs", id: "check-host-files runs the Windows build check" },
       { file: "packages/host/go/tests/service_process_test.go", id: "TestAServiceProcessOfAnotherUserExists" },
       { file: "packages/host/rust/tests/service_process_test.rs", id: "a_service_process_of_another_user_exists" },
     ],
@@ -7558,7 +7568,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/tests/endpoint_test.rs", id: "the_process_lock_is_owner_only" },
       { file: "packages/host/go/tests/private_files_test.go", id: "TestWritePrivateFileCreatesAnOwnerOnlyFileAndReplacesItsContents" },
       { file: "packages/host/rust/tests/private_files_test.rs", id: "write_private_file_creates_an_owner_only_file_and_replaces_its_contents" },
-      { file: "scripts/test/windows-build-check.test.mjs", id: "the Windows build check compiles the Go host source in the default and diagnostics builds" },
+      { file: "scripts/test/check-windows-build.test.mjs", id: "the Windows build check compiles the Go host source in the default and diagnostics builds" },
     ],
     expected: "Both hosts create owner-only files and directories only through the platform operations, Darwin gives them modes 0700 and 0600, the process lock has mode 0600 in both hosts, and the Windows implementation compiles and returns its not-implemented errors.",
     levels: ["unit"],
@@ -7713,7 +7723,7 @@ const FEATURE_LINKS = [
   {
     id: "F72",
     implementation: [
-      { file: "e2e/package.json", symbol: "verify:shutdown" },
+      { file: "e2e/package.json", symbol: "test-app:shutdown" },
     ],
     tests: [
       { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
@@ -7724,12 +7734,12 @@ const FEATURE_LINKS = [
   {
     id: "F74",
     implementation: [
-      { file: "Makefile", symbol: "host-layout-check: windows-build-check" },
+      { file: "Makefile", symbol: "check-host-files: check-windows-build" },
     ],
     tests: [
-      { file: "scripts/test/windows-build-check.test.mjs", id: "host-layout-check runs the Windows build check" },
+      { file: "scripts/test/check-windows-build.test.mjs", id: "check-host-files runs the Windows build check" },
     ],
-    expected: "host-layout-check vets the Wails host for Windows and needs no Windows C compiler.",
+    expected: "check-host-files vets the Wails host for Windows and needs no Windows C compiler.",
     levels: ["unit"],
   },
   {
@@ -7931,10 +7941,10 @@ const FEATURE_LINKS = [
       { file: "scripts/go-tests.mjs", symbol: "has no test files built with tags" },
     ],
     tests: [
-      { file: "scripts/test/go-repeat.test.mjs", id: "make go-repeat fails a package whose test files are not built" },
-      { file: "scripts/test/go-repeat.test.mjs", id: "make go-repeat passes a pattern whose tested package passed while a support package has no test files" },
-      { file: "scripts/test/go-repeat.test.mjs", id: "make go-repeat fails a run in which no test matched" },
-      { file: "scripts/test/rust-repeat.test.mjs", id: "make rust-repeat passes its features to every cargo test call" },
+      { file: "scripts/test/repeat-go.test.mjs", id: "make repeat-go fails a package whose test files are not built" },
+      { file: "scripts/test/repeat-go.test.mjs", id: "make repeat-go passes a pattern whose tested package passed while a support package has no test files" },
+      { file: "scripts/test/repeat-go.test.mjs", id: "make repeat-go fails a run in which no test matched" },
+      { file: "scripts/test/repeat-rust.test.mjs", id: "make repeat-rust passes its features to every cargo test call" },
     ],
     expected: "The Go and Rust repeat targets run tests behind build tags and features and fail when no test ran.",
     levels: ["unit"],
@@ -8046,7 +8056,7 @@ const FEATURE_LINKS = [
       { file: "scripts/test/check-release-paths.test.mjs", id: "minimum audit requires the declared minimum in Info.plist and the application, and no newer executable" },
       { file: "scripts/test/check-release-paths.test.mjs", id: "machoMinimum reads the minimum macOS version of an executable" },
     ],
-    expected: "make release-check fails unless every bundle declares MACOS_MINIMUM and every application executable is built for it.",
+    expected: "make check-release fails unless every bundle declares MACOS_MINIMUM and every application executable is built for it.",
     levels: ["unit"],
   },
   {
@@ -8221,7 +8231,7 @@ const FEATURE_LINKS = [
   {
     id: "V2",
     implementation: [
-      { file: "scripts/check-hosts.mjs", symbol: "auditHostPairs" },
+      { file: "scripts/check-host-files.mjs", symbol: "auditHostPairs" },
       { file: "packages/workbench/host.js", symbol: "waitPresented" },
     ],
     tests: [
@@ -8271,8 +8281,8 @@ const FEATURE_LINKS = [
   
   {
     id: "G1.1",
-    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "discoverInventory" }],
-    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "discovery includes nested languages" }],
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "discoverInventory" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "discovery includes nested languages" }],
     expected: "The inventory discovers nested implementation and test languages without fixed package roots and reports omissions.",
     levels: ["unit"],
   },
@@ -8293,22 +8303,22 @@ const FEATURE_LINKS = [
   },
   {
     id: "G1.3-6",
-    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditRecordedInventoryCounts" }],
-    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "recorded parity counts cannot drift from the current inventory" }],
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "auditRecordedInventoryCounts" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "recorded parity counts cannot drift from the current inventory" }],
     expected: "The inventory record remains synchronized after adding language adapter implementation and test files, while the earlier count remains historical evidence.",
     levels: ["unit"],
   },
   {
     id: "G1.3-7",
-    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditRecordedInventoryCounts" }],
-    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "recorded parity counts cannot drift from the current inventory" }],
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "auditRecordedInventoryCounts" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "recorded parity counts cannot drift from the current inventory" }],
     expected: "The inventory record remains synchronized after adding the evidence recorder and its test.",
     levels: ["unit"],
   },
   {
     id: "G1.3-8",
-    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditFeatureLinks" }],
-    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "completed capability entries all have feature evidence links" }],
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "auditFeatureLinks" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "completed capability entries all have feature evidence links" }],
     expected: "The feature-link and parity self-test record is synchronized with the current completed entries.",
     levels: ["unit"],
   },
@@ -8423,8 +8433,8 @@ const FEATURE_LINKS = [
   },
   {
     id: "G1.4",
-    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "implementationOwners" }],
-    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "inventory reports uncovered implementations and tests as separate results" }],
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "implementationOwners" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "inventory reports uncovered implementations and tests as separate results" }],
     expected: "Every discovered implementation and test file has one explicit ownership lane, with duplicate and uncovered ownership rejected.",
     levels: ["unit"],
   },
@@ -8730,7 +8740,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F270",
-    implementation: [{ file: "scripts/check-e2e.mjs", symbol: "export function auditE2ESource(" }],
+    implementation: [{ file: "scripts/check-app-tests.mjs", symbol: "export function auditE2ESource(" }],
     tests: [
       { file: "scripts/test/soksak-scripts.test.mjs", id: "window-source audit accepts a Promise reject forwarded through a local timeout helper" },
       { file: "scripts/test/soksak-scripts.test.mjs", id: "window-source audit keeps a local helper's rejection bound to its definition scope" },
@@ -8901,8 +8911,8 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-47-30-2",
-    implementation: [{ file: "scripts/check-host-parity.mjs", symbol: "export function goEndpointMethods(" }],
-    tests: [{ file: "scripts/test/check-host-parity.test.mjs", id: "hyphenated diagnostic endpoint methods are read from both hosts" }],
+    implementation: [{ file: "scripts/check-hosts-same.mjs", symbol: "export function goEndpointMethods(" }],
+    tests: [{ file: "scripts/test/check-hosts-same.test.mjs", id: "hyphenated diagnostic endpoint methods are read from both hosts" }],
     expected: "The host parity parser recognizes a declared diagnostic method containing hyphens in both Go and Rust host sources.",
     levels: ["unit"],
   },
@@ -9184,7 +9194,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F285-3",
-    implementation: [{ file: "scripts/check-hosts.mjs", symbol: "const FRAMEWORK_ARGUMENT" }],
+    implementation: [{ file: "scripts/check-host-files.mjs", symbol: "const FRAMEWORK_ARGUMENT" }],
     tests: [{ file: "scripts/test/soksak-scripts.test.mjs", id: "command argument audit accepts the application handle of a command that is generic over the runtime" }],
     expected: "The command argument check accepts AppHandle<R> as the framework application handle.",
     levels: ["unit"],
@@ -9214,7 +9224,7 @@ const FEATURE_LINKS = [
     id: "F239-303",
     implementation: [{ file: ".github/workflows/ci.yml", symbol: "run: make -C core/native/darwin test" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "the hosted native job runs the native unit tests" }],
-    expected: "The native-darwin job runs every native test that a hosted runner can run, and the presentation tests run in the local checks.",
+    expected: "The build-native job runs every native test that a hosted runner can run, and the presentation tests run in the local checks.",
     levels: ["unit"],
   },
   {
@@ -9419,14 +9429,14 @@ const FEATURE_LINKS = [
   {
     id: "F279-1",
     implementation: [{ file: "Makefile", symbol: "> tls.cnf" }],
-    tests: [{ file: "scripts/test/e2e-registry-tls.test.mjs", id: "the registry TLS target writes only its own extensions, whatever the openssl configuration of the machine adds" }],
+    tests: [{ file: "scripts/test/create-test-certificates.test.mjs", id: "the registry TLS target writes only its own extensions, whatever the openssl configuration of the machine adds" }],
     expected: "The registry TLS target passes its own openssl configuration, so the certificates hold only the extensions that it declares.",
     levels: ["unit"],
   },
   {
     id: "F279",
     implementation: [{ file: "Makefile", symbol: "E2E_REGISTRY_TLS_PARSE = node -e" }],
-    tests: [{ file: "scripts/test/e2e-registry-tls.test.mjs", id: "the registry TLS target fails and names the file when openssl writes no certificate" }],
+    tests: [{ file: "scripts/test/create-test-certificates.test.mjs", id: "the registry TLS target fails and names the file when openssl writes no certificate" }],
     expected: "The registry TLS target reports the errors of openssl, parses each certificate, and fails and removes its folder when a certificate does not parse.",
     levels: ["unit"],
   },
@@ -9453,8 +9463,8 @@ const FEATURE_LINKS = [
   },
   {
     id: "F298-3-1",
-    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "export function packageIndex(root = ROOT)" }],
-    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "the package index holds only the packages of this checkout and reads no declared repository" }],
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "export function packageIndex(root = ROOT)" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "the package index holds only the packages of this checkout and reads no declared repository" }],
     expected: "The package index of the parity check holds only the packages of the checkout and reads no folder of another repository.",
     levels: ["unit"],
   },
@@ -9472,11 +9482,11 @@ const FEATURE_LINKS = [
     id: "F298-5",
     implementation: [
       { file: "native/darwin/Makefile", symbol: "NATIVE_E2E_TESTS = " },
-      { file: "Makefile", symbol: "e2e: docs-check e2e-source-check exposure-check $(E2E_BUILD)" },
+      { file: "Makefile", symbol: "test-app: check-docs check-app-tests check-exposure $(E2E_BUILD)" },
       { file: "e2e/package.json", symbol: "\"test\": \"node --test test/\"" },
     ],
     tests: [
-      { file: "scripts/test/test-kinds.test.mjs", id: "native unit targets run no end-to-end case and native end-to-end targets carry the e2e prefix" },
+      { file: "scripts/test/test-kinds.test.mjs", id: "native unit targets run no end-to-end case and native end-to-end targets start with test-app" },
       { file: "scripts/test/test-kinds.test.mjs", id: "the root make targets are the only entry points of the window checks" },
       { file: "scripts/test/test-kinds.test.mjs", id: "the test script of the e2e package runs only its unit test folder" },
       { file: "scripts/test/workflows.test.mjs", id: "the hosted native job runs the native unit tests" },
@@ -9551,7 +9561,7 @@ const FEATURE_LINKS = [
   {
     id: "F325-1",
     implementation: [
-      { file: ".github/workflows/ci.yml", symbol: "run: make -C core host-contract-check-tauriv2" },
+      { file: ".github/workflows/ci.yml", symbol: "run: make -C core test-tauriv2" },
     ],
     tests: [
       { file: "scripts/test/workflows.test.mjs", id: "ci keeps language host checks independent and gates release on every required job" },
@@ -9789,10 +9799,10 @@ const FEATURE_LINKS = [
   {
     id: "F350",
     implementation: [
-      { file: "scripts/e2e-run.mjs", symbol: "async function runCommand(item, interrupted)" },
+      { file: "scripts/test-app.mjs", symbol: "async function runCommand(item, interrupted)" },
     ],
     tests: [
-      { file: "scripts/test/e2e-run.test.mjs", id: "an interrupting signal ends the running step, runs the cleanup steps and fails the run with the signal" },
+      { file: "scripts/test/test-app.test.mjs", id: "an interrupting signal ends the running step, runs the cleanup steps and fails the run with the signal" },
     ],
     expected: "An interrupted end-to-end run ends its running step, runs its cleanup steps and fails with the signal.",
     levels: ["unit"],
@@ -10003,10 +10013,10 @@ const FEATURE_LINKS = [
   {
     id: "F346",
     implementation: [
-      { file: "scripts/e2e-run.mjs", symbol: "async function lockReleased(configDir)" },
+      { file: "scripts/test-app.mjs", symbol: "async function lockReleased(configDir)" },
     ],
     tests: [
-      { file: "scripts/test/e2e-run.test.mjs", id: "a quit step ends when the process that holds the configuration lock exits, also when that process is not the started one" },
+      { file: "scripts/test/test-app.test.mjs", id: "a quit step ends when the process that holds the configuration lock exits, also when that process is not the started one" },
     ],
     expected: "The quit step of the end-to-end run waits until no process holds the configuration lock.",
     levels: ["unit"],
@@ -10172,12 +10182,12 @@ const FEATURE_LINKS = [
   {
     id: "F380",
     implementation: [
-      { file: "scripts/e2e-run.mjs", symbol: "async function startApplication(item, children) {" },
+      { file: "scripts/test-app.mjs", symbol: "async function startApplication(item, children) {" },
     ],
     tests: [
-      { file: "scripts/test/e2e-run.test.mjs", id: "a start step ends when endpoint.json is written before the watch of the folder is active" },
+      { file: "scripts/test/test-app.test.mjs", id: "a start step ends when endpoint.json is written before the watch of the folder is active" },
     ],
-    expected: "The start step of make e2e reads the configuration folder once its watch is active and at each change, so it finds an endpoint.json written before the watch started.",
+    expected: "The start step of make test-app reads the configuration folder once its watch is active and at each change, so it finds an endpoint.json written before the watch started.",
     levels: ["unit"],
   },
   {
@@ -10438,7 +10448,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F424",
-    implementation: [{ file: "scripts/check-e2e.mjs", symbol: "a skipped test; assert its precondition" }],
+    implementation: [{ file: "scripts/check-app-tests.mjs", symbol: "a skipped test; assert its precondition" }],
     tests: [{ file: "e2e/library.test.mjs", id: "terminal source card not found" }],
     expected: "A window check whose precondition fails reports a failure.",
     levels: ["application"],
@@ -10622,7 +10632,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "scripts/test/test-discovery.test.mjs", id: "a discovered Go test has the deadline of its limit" },
-      { file: "scripts/test/go-repeat.test.mjs", id: "make go-repeat gives each test the deadline of its limit" },
+      { file: "scripts/test/repeat-go.test.mjs", id: "make repeat-go gives each test the deadline of its limit" },
     ],
     expected: "Each Go test that the runners start has the deadline of its limit.",
     levels: ["unit"],
@@ -10656,8 +10666,8 @@ const FEATURE_LINKS = [
   },
   {
     id: "F306",
-    implementation: [{ file: "scripts/e2e-run.mjs", symbol: "export function finishRoot" }],
-    tests: [{ file: "scripts/test/e2e-run.test.mjs", id: "a failed run keeps the logs and removes the service folders, so the services of a host that ended without host.quit exit" }],
+    implementation: [{ file: "scripts/test-app.mjs", symbol: "export function finishRoot" }],
+    tests: [{ file: "scripts/test/test-app.test.mjs", id: "a failed run keeps the logs and removes the service folders, so the services of a host that ended without host.quit exit" }],
     expected: "A failed end-to-end run keeps its logs and removes the service folder of each application, so the services of the run exit.",
     levels: ["unit"],
   },
@@ -10745,22 +10755,22 @@ const FEATURE_LINKS = [
   {
     id: "F298-6",
     implementation: [
-      { file: "scripts/e2e-run.mjs", symbol: "export function e2ePlan" },
-      { file: "scripts/e2e-run.mjs", symbol: "export async function runPlan" },
-      { file: "Makefile", symbol: "@node scripts/e2e-run.mjs --script verify --native e2e" },
+      { file: "scripts/test-app.mjs", symbol: "export function e2ePlan" },
+      { file: "scripts/test-app.mjs", symbol: "export async function runPlan" },
+      { file: "Makefile", symbol: "@node scripts/test-app.mjs --script test-app --native e2e" },
     ],
     tests: [
-      { file: "scripts/test/e2e-run.test.mjs", id: "each run gets a new empty configuration root under target/e2e" },
-      { file: "scripts/test/e2e-run.test.mjs", id: "the plan prepares, starts the three applications, checks and quits them in this order" },
-      { file: "scripts/test/e2e-run.test.mjs", id: "a failed preparation skips the checks, runs the cleanup and names the failed step" },
-      { file: "scripts/test/e2e-run.test.mjs", id: "a failed check does not skip the next check" },
-      { file: "scripts/test/e2e-run.test.mjs", id: "a start step ends when the application writes endpoint.json and fails when the application exits first" },
-      { file: "scripts/test/e2e-run.test.mjs", id: "a quit step requests host.quit and ends when the application exits" },
-      { file: "scripts/test/e2e-run.test.mjs", id: "a quit step without a started application is skipped" },
-      { file: "scripts/test/e2e-run.test.mjs", id: "a process whose command names the configuration root or an application bundle remains" },
-      { file: "scripts/test/e2e-run.test.mjs", id: "a passed run removes its configuration root and a failed run keeps it" },
+      { file: "scripts/test/test-app.test.mjs", id: "each run gets a new empty configuration root under target/e2e" },
+      { file: "scripts/test/test-app.test.mjs", id: "the plan prepares, starts the three applications, checks and quits them in this order" },
+      { file: "scripts/test/test-app.test.mjs", id: "a failed preparation skips the checks, runs the cleanup and names the failed step" },
+      { file: "scripts/test/test-app.test.mjs", id: "a failed check does not skip the next check" },
+      { file: "scripts/test/test-app.test.mjs", id: "a start step ends when the application writes endpoint.json and fails when the application exits first" },
+      { file: "scripts/test/test-app.test.mjs", id: "a quit step requests host.quit and ends when the application exits" },
+      { file: "scripts/test/test-app.test.mjs", id: "a quit step without a started application is skipped" },
+      { file: "scripts/test/test-app.test.mjs", id: "a process whose command names the configuration root or an application bundle remains" },
+      { file: "scripts/test/test-app.test.mjs", id: "a passed run removes its configuration root and a failed run keeps it" },
     ],
-    expected: "make e2e runs the end-to-end checks in a new configuration root for each run: it starts the applications, runs the checks, quits the applications with host.quit and fails on a remaining process.",
+    expected: "make test-app runs the end-to-end checks in a new configuration root for each run: it starts the applications, runs the checks, quits the applications with host.quit and fails on a remaining process.",
     levels: ["unit"],
   },
   {
@@ -10807,7 +10817,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F272-3",
-    implementation: [{ file: ".github/workflows/release.yml", symbol: "soksak-check release packages/plugin-api/package.json docs/features.md" }],
+    implementation: [{ file: ".github/workflows/release.yml", symbol: "sok-check release packages/plugin-api/package.json docs/features.md" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "a push to main releases the declared version after the checks and the gate succeed" }],
     expected: "A push to main runs the checks once, and the release jobs and the tag follow only a gate that releases.",
     levels: ["unit"],
@@ -10821,7 +10831,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-86",
-    implementation: [{ file: "scripts/check-e2e.mjs", symbol: "export function auditActivationUnboundNames" }],
+    implementation: [{ file: "scripts/check-app-tests.mjs", symbol: "export function auditActivationUnboundNames" }],
     tests: [{ file: "scripts/test/soksak-scripts.test.mjs", id: "activation fixture audit rejects unresolved identifiers" }],
     expected: "Activation fixtures with unresolved identifiers fail the declared compiler-backed audit.",
     levels: ["unit"],
@@ -10842,8 +10852,8 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-92",
-    implementation: [{ file: "scripts/check-host-contract.mjs", symbol: "export function parseContractCases" }],
-    tests: [{ file: "scripts/test/check-host-contract.test.mjs", id: "the case table rejects duplicate ids, invalid ids, and a limited scope without a reason" }],
+    implementation: [{ file: "scripts/test-hosts.mjs", symbol: "export function parseContractCases" }],
+    tests: [{ file: "scripts/test/test-hosts.test.mjs", id: "the case table rejects duplicate ids, invalid ids, and a limited scope without a reason" }],
     expected: "The host-contract table rejects duplicate or invalid identifiers and limited scopes without a reason.",
     levels: ["unit"],
   },
@@ -10891,15 +10901,15 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-93",
-    implementation: [{ file: "scripts/check-host-contract.mjs", symbol: "export function auditHostContract" }],
-    tests: [{ file: "scripts/test/check-host-contract.test.mjs", id: "the static audit reports each case of a host scope that no test declares" }],
+    implementation: [{ file: "scripts/test-hosts.mjs", symbol: "export function auditHostContract" }],
+    tests: [{ file: "scripts/test/test-hosts.test.mjs", id: "the static audit reports each case of a host scope that no test declares" }],
     expected: "The host-contract audit compares declared cases with owning test markers and retains uncovered declarations as findings.",
     levels: ["unit"],
   },
   {
     id: "F239-102",
-    implementation: [{ file: "scripts/check-host-contract.mjs", symbol: "export function selectRustDeclarations" }],
-    tests: [{ file: "scripts/test/check-host-contract.test.mjs", id: "Rust declarations follow compiler-listed tests and reject ambiguous crate leaves" }],
+    implementation: [{ file: "scripts/test-hosts.mjs", symbol: "export function selectRustDeclarations" }],
+    tests: [{ file: "scripts/test/test-hosts.test.mjs", id: "Rust declarations follow compiler-listed tests and reject ambiguous crate leaves" }],
     expected: "Rust host-contract declarations are selected from compiler-listed tests and ambiguous crate leaves fail explicitly.",
     levels: ["unit"],
   },
@@ -10972,8 +10982,8 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-110",
-    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "export function auditFeatureLinks" }],
-    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "completed capability entries all have feature evidence links" }],
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "export function auditFeatureLinks" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "completed capability entries all have feature evidence links" }],
     expected: "Completed capabilities have exact implementation and owner-test links, and their recorded inventory counts match the discovered workspace files.",
     levels: ["unit"],
   },
@@ -11369,7 +11379,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-200",
-    implementation: [{ file: "scripts/check-e2e.mjs", symbol: "function expectedPathLiteralRanges(" }],
+    implementation: [{ file: "scripts/check-app-tests.mjs", symbol: "function expectedPathLiteralRanges(" }],
     tests: [{ file: "scripts/test/soksak-scripts.test.mjs", id: "window-source audit distinguishes expected path literals from source access" }],
     expected: "Static imported assertion expectations are data; actual component source reads remain rejected.",
     levels: ["unit"],
@@ -11400,8 +11410,8 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-193",
-    implementation: [{ file: "packages/workbench/stage.mjs", symbol: "pageImportsForBuild({ diagnostics })" }],
-    tests: [{ file: "packages/workbench/test/stage.test.mjs", id: "a staged frontend with --diagnostics has the page diagnostic methods" }],
+    implementation: [{ file: "packages/workbench/copy-frontend.mjs", symbol: "pageImportsForBuild({ diagnostics })" }],
+    tests: [{ file: "packages/workbench/test/copy-frontend.test.mjs", id: "a staged frontend with --diagnostics has the page diagnostic methods" }],
     expected: "The diagnostic workbench page resolves the helper imported by installed plugin diagnostics.",
     levels: ["unit"],
   },
@@ -11414,7 +11424,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-191",
-    implementation: [{ file: "native/darwin/Makefile", symbol: "e2e-activation:" }],
+    implementation: [{ file: "native/darwin/Makefile", symbol: "test-app-activation:" }],
     tests: [{ file: "scripts/test/native-tests.test.mjs", id: "activation target builds and runs its cases through the native test runner" }],
     expected: "Activation cases build their declared executables and use the sequential bounded native runner without changing their order.",
     levels: ["unit"],
@@ -11956,7 +11966,7 @@ const FEATURE_LINKS = [
 
 // Generated output is checked for agreement with its source and is not counted as an independent implementation.
 const GENERATED_ROOTS = new Map([
-  ["packages/soksak/dist/", "generated library output; verified by make verify"],
+  ["packages/soksak/dist/", "generated library output; verified by make test-all"],
   ["apps/tauriv2/gen/schemas/", "generated Tauri permission schemas"],
 ]);
 
@@ -12496,7 +12506,7 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // F359 names the release candidate 0.0.27; it changes no runtime capability.
 // F357 ends the group of one runner test through killGroup in its cleanup; it changes no runtime capability.
 // These items change no runtime capability and remain outside this capability-link inventory.
-// F386-7 removes a default value that the event source check reported; make events-check is its check.
+// F386-7 removes a default value that the event source check reported; make check-events is its check.
 // F391 states a screen form in the contract; the replay of both sok packages already compares only existing page frames.
 // F389 records the plugin releases and the registry entry for core 0.0.32; it changes no runtime capability of core.
 // F400 removes the build folder of the host contract check; it changes no runtime capability.
@@ -12510,7 +12520,7 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // F503 states the framework fork that the Wails host pins in the native surfaces specification and in the go.mod comments; it
 // changes no runtime capability.
 // F524 corrects the release checks that the verification specification states; it changes no runtime capability.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F471", "F239-276", "F225", "F97", "F16", "F470", "F469", "F468", "F466", "F467", "F465", "F463", "F464", "F561", "F581", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
+const NON_CAPABILITY_COMPLETIONS = new Set(["F475", "F473", "F472", "F471", "F239-276", "F97", "F16", "F470", "F469", "F468", "F466", "F467", "F465", "F463", "F464", "F561", "F581", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66), the window checks of plugins (F110) and the registry listing of the hwp plugin (F141, registry items G37 and G38). Core cannot read

@@ -1,7 +1,7 @@
 name: release
 # build-machine: skip smoke reason=the end-to-end checks need a display and run only locally through make (docs/operations/examples.md#test-kinds)
 
-# A push to main runs the checks, and the repository releases itself when they succeed and `soksak-check release` finds no tag
+# A push to main runs the checks, and the repository releases itself when they succeed and `sok-check release` finds no tag
 # of the declared version; open checklist items are carried into the next version (docs/operations/examples.md#release). The
 # tag is created with the release.
 on:
@@ -36,7 +36,7 @@ jobs:
         run: pnpm install --frozen-lockfile --filter soksak-workspace
       - name: Decide the release
         id: gate
-        run: pnpm exec soksak-check release packages/plugin-api/package.json docs/features.md
+        run: pnpm exec sok-check release packages/plugin-api/package.json docs/features.md
 
   release-wailsv3:
     needs: gate
@@ -65,12 +65,12 @@ jobs:
           root: core
       - name: Install locked dependencies
         run: |
-          make toolchain-check
+          make check-tools
           CI=1 PNPM_DISABLE_SELF_UPDATE_CHECK=1 pnpm install --frozen-lockfile
           go -C apps/wailsv3 mod download
           go -C packages/sok/go mod download
       - name: Fetch the pinned native release file
-        run: make native-darwin-fetch
+        run: make fetch-native
       - name: Build and audit Wails release bundle offline
         env:
           OFFLINE: '1'
@@ -79,7 +79,7 @@ jobs:
           GOFLAGS: -mod=readonly
           GOPROXY: 'off'
           GOSUMDB: 'off'
-        run: make release-check-wailsv3
+        run: make check-release-wailsv3
       - name: Package Wails release bundle
         run: |
           version="${{ needs.gate.outputs.version }}"
@@ -127,17 +127,17 @@ jobs:
           root: core
       - name: Install locked dependencies
         run: |
-          make toolchain-check
+          make check-tools
           CI=1 PNPM_DISABLE_SELF_UPDATE_CHECK=1 pnpm install --frozen-lockfile
           cargo fetch --locked
       - name: Fetch the pinned native release file
-        run: make native-darwin-fetch
+        run: make fetch-native
       - name: Build and audit Tauri release bundle offline
         env:
           OFFLINE: '1'
           npm_config_offline: 'true'
           CARGO_NET_OFFLINE: 'true'
-        run: make release-check-tauriv2
+        run: make check-release-tauriv2
       - name: Package Tauri release bundle
         run: |
           version="${{ needs.gate.outputs.version }}"
@@ -180,12 +180,12 @@ jobs:
           root: core
       - name: Install locked dependencies
         run: |
-          make toolchain-check
+          make check-tools
           CI=1 PNPM_DISABLE_SELF_UPDATE_CHECK=1 pnpm install --frozen-lockfile
           go -C apps/mygo mod download
           go -C packages/sok/go mod download
       - name: Fetch the pinned native release file
-        run: make native-darwin-fetch
+        run: make fetch-native
       - name: Build and audit mygo release bundle offline
         env:
           OFFLINE: '1'
@@ -194,7 +194,7 @@ jobs:
           GOFLAGS: -mod=readonly
           GOPROXY: 'off'
           GOSUMDB: 'off'
-        run: make release-check-mygo
+        run: make check-release-mygo
       - name: Package mygo release bundle
         run: |
           version="${{ needs.gate.outputs.version }}"

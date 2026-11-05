@@ -4,12 +4,12 @@
 // suffix files are placed only in platform/<os>/ of the owning package. The following are not checked.
 //
 //   native/<os>/                      the directory name denotes the operating system
-//   scripts/check-build-environment.sh the build tool checks the running host
+//   scripts/check-tools.sh the build tool checks the running host
 //   Cargo.toml                        the target-specific dependency tables are declarations
 //   platform/platform.{go,rs,js}      implementation selection files
-//   scripts/check-platforms.mjs       this check itself
+//   scripts/check-platform-files.mjs       this check itself
 //
-//   node scripts/check-platforms.mjs
+//   node scripts/check-platform-files.mjs
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { parse } from "acorn";
@@ -19,12 +19,12 @@ const OS = "(darwin|macos|linux|windows|unix|other|freebsd|ios|android)";
 const SOURCE = /\.(js|mjs|go|rs|m|h|sh)$/;
 const SKIPPED = [
   /^native\/[^/]+\//,
-  /^scripts\/check-build-environment\.sh$/,
+  /^scripts\/check-tools\.sh$/,
   // This file checks whether the command supervisor supports the current host.
   // That is an execution environment contract, not an OS implementation.
   /^scripts\/test-command\.mjs$/,
   /(^|\/)platform\/platform\.(go|rs|js)$/,
-  /^scripts\/check-platforms\.mjs$/,
+  /^scripts\/check-platform-files\.mjs$/,
 ];
 const RULES = [
   { what: "Go runtime.GOOS", pattern: /\bruntime\.GOOS\b/ },

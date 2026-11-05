@@ -5,7 +5,7 @@
 	<key>CFBundleIdentifier</key>
 	<string>app.soksak.tauri</string>
 	<key>CFBundleExecutable</key>
-	<string>soksak-tauriv2</string>
+	<string>sok-tauriv2</string>
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
 	<key>CFBundleName</key>

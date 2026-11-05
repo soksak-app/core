@@ -1,4 +1,4 @@
-// Verifies that `make go-repeat` names each test of a Go package when it starts, reports its result and elapsed time, kills a test at
+// Verifies that `make repeat-go` names each test of a Go package when it starts, reports its result and elapsed time, kills a test at
 // its own limit, passes the build tags, and judges a package pattern by its test packages. The Go toolchain is replaced by a fake
 // `go` on PATH; `make` gets its HOME in the same folder. The fake `go test -c -o <file>` writes a test binary that lists two tests
 // (`-test.list`) and runs the test named by `-test.run`. FAKE_GO_MODE selects the packages that `go list` reports: `run` is one
@@ -55,8 +55,8 @@ function makeGo(t, mode, target) {
   return { ...result, directory };
 }
 
-test('make go-repeat names each test when it starts, reports its result and elapsed time, and asks a test at its limit for its stacks', (t) => {
-  const { stdout, stderr, status } = makeGo(t, 'run', ['go-repeat', 'PACKAGE=./fixture', 'COUNT=1', 'TEST_TIMEOUT=2']);
+test('make repeat-go names each test when it starts, reports its result and elapsed time, and asks a test at its limit for its stacks', (t) => {
+  const { stdout, stderr, status } = makeGo(t, 'run', ['repeat-go', 'PACKAGE=./fixture', 'COUNT=1', 'TEST_TIMEOUT=2']);
   assert.match(stdout, /^RUN  TestAlpha \(1 running, limit 2\.000s\)$/m, stdout + stderr);
   assert.match(stdout, /^PASS TestAlpha \d+\.\d{3}s$/m, stdout + stderr);
   assert.match(stdout, /^RUN  TestBeta \(1 running, limit 2\.000s\)$/m, stdout + stderr);
@@ -69,9 +69,9 @@ test('make go-repeat names each test when it starts, reports its result and elap
   assert.match(stdout, /^FAIL: \.\/fixture run 1 of 1; load /m, stdout + stderr);
 });
 
-test('make go-repeat passes the build tags to the list and the test build and selects the named tests', (t) => {
+test('make repeat-go passes the build tags to the list and the test build and selects the named tests', (t) => {
   const directory = fakeGo(t);
-  const result = spawnSync('make', ['go-repeat', 'PACKAGE=./fixture', 'COUNT=1', 'TAGS=diagnostics', 'TEST=TestAlpha'], {
+  const result = spawnSync('make', ['repeat-go', 'PACKAGE=./fixture', 'COUNT=1', 'TAGS=diagnostics', 'TEST=TestAlpha'], {
     cwd: root, env: { ...process.env, HOME: directory, PATH: `${directory}:${process.env.PATH}`, FAKE_GO_MODE: 'run' }, encoding: 'utf8', timeout: 60000,
   });
   assert.equal(result.status, 0, result.stdout + result.stderr);
@@ -82,28 +82,28 @@ test('make go-repeat passes the build tags to the list and the test build and se
   assert.ok(calls.some((call) => /^test -c .*-tags diagnostics/.test(call)), JSON.stringify(calls));
 });
 
-test('make go-repeat gives each test the deadline of its limit', (t) => {
-  const { stdout, stderr, status, directory } = makeGo(t, 'run', ['go-repeat', 'PACKAGE=./fixture', 'COUNT=1', 'TEST=TestAlpha', 'TEST_TIMEOUT=7']);
+test('make repeat-go gives each test the deadline of its limit', (t) => {
+  const { stdout, stderr, status, directory } = makeGo(t, 'run', ['repeat-go', 'PACKAGE=./fixture', 'COUNT=1', 'TEST=TestAlpha', 'TEST_TIMEOUT=7']);
   assert.equal(status, 0, stdout + stderr);
   const runs = readFileSync(join(directory, 'binary-args'), 'utf8').trim().split('\n').filter((line) => line.startsWith('-test.run'));
   assert.ok(runs.length === 1 && runs[0].split(' ').includes('-test.timeout=7000ms'), `the test binary did not receive the deadline of its limit: ${JSON.stringify(runs)}`);
 });
 
-test('make go-repeat fails a package whose test files are not built', (t) => {
-  const { stdout, stderr, status } = makeGo(t, 'nofiles', ['go-repeat', 'PACKAGE=./fixture/src', 'COUNT=1', 'TEST=TestAlpha']);
+test('make repeat-go fails a package whose test files are not built', (t) => {
+  const { stdout, stderr, status } = makeGo(t, 'nofiles', ['repeat-go', 'PACKAGE=./fixture/src', 'COUNT=1', 'TEST=TestAlpha']);
   assert.notEqual(status, 0, stdout + stderr);
   assert.match(stderr, /has no test files built with tags ''/, stdout + stderr);
 });
 
-test('make go-repeat passes a pattern whose tested package passed while a support package has no test files', (t) => {
-  const { stdout, stderr, status } = makeGo(t, 'support', ['go-repeat', 'PACKAGE=./fixture/tests/...', 'COUNT=1', 'TEST=TestAlpha']);
+test('make repeat-go passes a pattern whose tested package passed while a support package has no test files', (t) => {
+  const { stdout, stderr, status } = makeGo(t, 'support', ['repeat-go', 'PACKAGE=./fixture/tests/...', 'COUNT=1', 'TEST=TestAlpha']);
   assert.equal(status, 0, stdout + stderr);
   assert.match(stdout, /^PASS TestAlpha \d+\.\d{3}s$/m, stdout + stderr);
   assert.match(stdout, /1 of 1 runs pass/, stdout + stderr);
 });
 
-test('make go-repeat fails a run in which no test matched', (t) => {
-  const { stdout, stderr, status } = makeGo(t, 'run', ['go-repeat', 'PACKAGE=./fixture', 'COUNT=1', 'TEST=TestMissing']);
+test('make repeat-go fails a run in which no test matched', (t) => {
+  const { stdout, stderr, status } = makeGo(t, 'run', ['repeat-go', 'PACKAGE=./fixture', 'COUNT=1', 'TEST=TestMissing']);
   assert.notEqual(status, 0, stdout + stderr);
   assert.match(stderr, /no test matching TestMissing/, stdout + stderr);
 });

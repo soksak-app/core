@@ -3,7 +3,7 @@ import test from "node:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { allowedEndpointMethods, allowedPortMethods, auditCommonOnlyKeys, auditHostParity, auditMenuTables, auditPlatformCallers, auditPortMethods, commonOnlyKeys, goMenuTables, goPlatformMethods, goPortMethods, hostProductSources, libraryCrate, rustHandlers, rustMenuTables, rustPlatformMethods, rustPortMethods, snake, specMenuTables, withoutRustTestItems } from "../check-host-parity.mjs";
+import { allowedEndpointMethods, allowedPortMethods, auditCommonOnlyKeys, auditHostParity, auditMenuTables, auditPlatformCallers, auditPortMethods, commonOnlyKeys, goMenuTables, goPlatformMethods, goPortMethods, hostProductSources, libraryCrate, rustHandlers, rustMenuTables, rustPlatformMethods, rustPortMethods, snake, specMenuTables, withoutRustTestItems } from "../check-hosts-same.mjs";
 
 // The base sources of the injection checks. Changing only one name in the real sources proves that each failure is produced mechanically.
 const sources = () => ({

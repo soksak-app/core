@@ -1,6 +1,6 @@
 // Measures the allocations of the host process of a running application at start and after each minute.
 //
-// The host is the one application process whose command line has --config-dir DIR, found as `make app-usage` finds it
+// The host is the one application process whose command line has --config-dir DIR, found as `make measure-app-usage` finds it
 // (hostProcess of scripts/measure-app-usage.mjs), so the measurement names the application and not a process id. Before the
 // first reading it sets the trace state of TRACE through the sok of the application (scripts/measure-trace.mjs). The
 // allocations are the live nodes and bytes of every malloc zone that `heap` reports for the process ("All zones: N nodes
@@ -10,7 +10,7 @@
 // scripts/footprints.mjs, with the frames of every window of the application) and printed as {phase: "settled", elapsedMs, pid,
 // footprint}. It makes no judgment. With --b3-out FILE, which needs the 60 minutes of S4, it writes the B3 output of S4
 // (scripts/b3-out.mjs) with the measurement that B3_MEASUREMENTS declares, hostFootprintKb, the settled footprint in KB, and the
-// conditions of the windows. `make host-allocations` runs it.
+// conditions of the windows. `make measure-host-allocations` runs it.
 //
 //   node scripts/measure-host-allocations.mjs --sok PATH --config-dir DIR --trace 0|1 [--minutes N] [--b3-out FILE]
 import { execFileSync, spawnSync } from "node:child_process";

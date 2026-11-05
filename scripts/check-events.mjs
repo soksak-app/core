@@ -5,8 +5,8 @@
 //                                                  that the window checks used) hold only declared events with their required
 //                                                  fields, consecutive seq across generations and the debug file, complete
 //                                                  chains and no error event.
-// The first form runs in `make events-check`; its rules are in the kit, which every repository
-// calls as `soksak-check events`. The second form audits configuration folders without the judgment of tests;
+// The first form runs in `make check-events`; its rules are in the kit, which every repository
+// calls as `sok-check events`. The second form audits configuration folders without the judgment of tests;
 // `node scripts/audit-run.mjs <run folder>` audits a run and judges each test by the log.
 import { parseArgs } from 'node:util';
 import { readFileSync, readdirSync, statSync } from 'node:fs';

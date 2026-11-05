@@ -13,8 +13,7 @@
     "test:scripts": "node --test scripts/test/*.test.mjs scripts/test/platform/darwin/*.test.mjs",
     "fuzz": "pnpm -F soksak fuzz",
     "mutate": "pnpm -F soksak mutate",
-    "breaks": "pnpm -F soksak breaks",
-    "example": "make browser-example"
+    "check-breaks": "pnpm -F soksak check-breaks"
   },
   "license": "MIT",
   "author": "soksak",
@@ -27,7 +26,7 @@
     "@soksak/window-check": "workspace:*"
   },
   "devDependencies": {
-    "@soksak/kit": "https://github.com/soksak-app/kit/releases/download/v0.0.12/soksak-kit-0.0.12.tgz",
+    "@soksak/kit": "https://github.com/soksak-app/kit/releases/download/v0.0.13/soksak-kit-0.0.13.tgz",
     "acorn": "8.18.0",
     "yaml": "2.9.1"
   }

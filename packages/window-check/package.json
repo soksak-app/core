@@ -44,7 +44,7 @@
     "text-difference.mjs"
   ],
   "bin": {
-    "soksak-window-repeat": "./repeat.mjs"
+    "sok-repeat": "./repeat.mjs"
   },
   "scripts": {
     "test": "node --test --experimental-test-module-mocks test/*.test.mjs"

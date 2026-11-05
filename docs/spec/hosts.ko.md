@@ -200,9 +200,9 @@ AppKit 이 창 자신의 단추를 소유한다. 제목줄 높이가 AppKit 이 
 
 Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`)만 구현한다. `platform/windows/unsupported.*`의 나머지 연산은 `<operation> is not implemented on windows` 형식의 오류를 반환한다. Windows에서는 애플리케이션 시작이 첫 platform 연산에서 실패한다. Wails의 `Run`과 Tauri의 `run`은 창을 열기 전에 `window resize animation is not implemented on windows`와 상태 1로 끝난다. Linux 구현은 없으며, 그곳에서 `platform.Current()`와 `platform::current()`는 오류를 반환한다.
 
-`make host-layout-check`는 `make windows-build-check`를 실행하며, 이 target은 Go language host library와 Wails framework adapter의 source를 기본 build와 diagnostics build에서 `windows/arm64`용으로 vet한다.
+`make check-host-files`는 `make check-windows-build`를 실행하며, 이 target은 Go language host library와 Wails framework adapter의 source를 기본 build와 diagnostics build에서 `windows/arm64`용으로 vet한다.
 
-`make host-layout-check`는 `make host-debug-check`도 실행하며, 이 target은 세 host와 세 앱의 source와 test를 debug 앱의 feature와 tag로 macOS용으로 컴파일한다. `make tauriv2-build`, `make wailsv3-build`, `make mygo-build`, 이 check는 그 구성을 Makefile의 정의 하나에서 읽는다.
+`make check-host-files`는 `make check-host-debug`도 실행하며, 이 target은 세 host와 세 앱의 source와 test를 debug 앱의 feature와 tag로 macOS용으로 컴파일한다. `make build-tauriv2`, `make build-wailsv3`, `make build-mygo`, 이 check는 그 구성을 Makefile의 정의 하나에서 읽는다.
 
 ## Wails host의 main thread
 
@@ -212,7 +212,7 @@ host는 `application.Run` 바로 앞에서 framework가 init에서 main thread�
 
 Go language host library의 header `src/platform/darwin/main_thread.h`는 두 main-thread 함수 `hostRunOnWorker`와 `hostRunOnMain`, 그리고 이 함수로 식을 평가하는 macro `ON_WORKER`와 `ON_MAIN`을 선언한다. `main_thread.m`은 framework adapter가 설치한 함수를 가진다. Wails framework adapter는 library 시작 전에 자기 darwin 패키지의 `init`에서 Wails fork의 함수(`wailsRunOnWorker`와 `wailsRunOnMain`)를 이 함수로 설치하므로, library의 어떤 파일도 Wails를 이름으로 부르지 않는다. library의 시작은 둘 다 요구한다. `Prepare`는 첫 native call 전에 platform의 `RequireMainThread`를 부르고, 이 함수는 `main-thread functions are not installed`와 빠진 함수 각각의 이름으로 실패한다. 설치되지 않은 함수를 부르면 프로세스가 그 이름을 내고 끝난다. block을 호출한 thread에서 실행하면 Go code나 native call이 잘못된 thread에서 실행되기 때문이다. framework adapter 없이 darwin layer를 실행하는 test는 자기 `TestMain`에서 둘 다에 test 함수를 설치한다.
 
-`make host-layout-check`는 Go language host library darwin layer의 C code, 즉 `packages/host/go/src/platform/darwin/`의 각 Go 파일의 cgo preamble과 각 Objective-C 파일에서 이 규칙을 검사한다(`scripts/check-hosts.mjs`의 `auditMainThreadCalls`. 이 함수는 `scripts/cgo-sources.go`를 통해 `go/parser`로 Go 파일을 읽고, macro를 펼치고 호출한 각 함수를 그것을 선언한 header로 해석한 clang의 JSON AST로 C code를 읽는다). C code가 Go 파일이 export(`//export`)한 함수를 `hostRunOnWorker`나 `ON_WORKER` 밖에서 참조하면 실패한다. Go code가 `native/darwin/src`의 header가 선언한 함수를 `main_` wrapper 대신 직접 부르면 실패한다. 단 thread가 필요 없는 함수(`MAIN_THREAD_FREE`, 각각 이유를 가진다: event ring과 그 clock, `sp_observe_flush`, `sp_phys_footprint`, `sp_diagnostic_reports_directory`, `sp_capture_clock`, `sp_capture_error`, `sp_facts_free`, `sp_ui_enqueue`, `sp_ui_enqueue_after`)는 예외다. Go code가 부르는 layer의 C 함수가 `hostRunOnMain`이나 `ON_MAIN` 밖에서 Objective-C message를 보내거나, native 함수나 `NS` 함수나 block을 부르거나, 그렇게 하는 layer의 다른 함수를 부르면 실패한다. native 함수, Objective-C message, block이 `hostRunOnWorker`나 `ON_WORKER` 안에서 실행되어도 실패한다.
+`make check-host-files`는 Go language host library darwin layer의 C code, 즉 `packages/host/go/src/platform/darwin/`의 각 Go 파일의 cgo preamble과 각 Objective-C 파일에서 이 규칙을 검사한다(`scripts/check-host-files.mjs`의 `auditMainThreadCalls`. 이 함수는 `scripts/cgo-sources.go`를 통해 `go/parser`로 Go 파일을 읽고, macro를 펼치고 호출한 각 함수를 그것을 선언한 header로 해석한 clang의 JSON AST로 C code를 읽는다). C code가 Go 파일이 export(`//export`)한 함수를 `hostRunOnWorker`나 `ON_WORKER` 밖에서 참조하면 실패한다. Go code가 `native/darwin/src`의 header가 선언한 함수를 `main_` wrapper 대신 직접 부르면 실패한다. 단 thread가 필요 없는 함수(`MAIN_THREAD_FREE`, 각각 이유를 가진다: event ring과 그 clock, `sp_observe_flush`, `sp_phys_footprint`, `sp_diagnostic_reports_directory`, `sp_capture_clock`, `sp_capture_error`, `sp_facts_free`, `sp_ui_enqueue`, `sp_ui_enqueue_after`)는 예외다. Go code가 부르는 layer의 C 함수가 `hostRunOnMain`이나 `ON_MAIN` 밖에서 Objective-C message를 보내거나, native 함수나 `NS` 함수나 block을 부르거나, 그렇게 하는 layer의 다른 함수를 부르면 실패한다. native 함수, Objective-C message, block이 `hostRunOnWorker`나 `ON_WORKER` 안에서 실행되어도 실패한다.
 
 이유: 애플리케이션 프로세스는 WebKit과 다른 in-process client가 만든 JavaScriptCore VM을 가지며, VM의 lock은 그것을 잡은 thread를, main thread를 포함해, collector가 suspend하고 scan하는 thread에 더한다. collector는 각 thread의 stack을 stack pointer부터 그 thread stack의 origin까지 복사하고, 합한 크기의 두 배인 buffer를 할당한다. main thread의 Go code는 Go heap이 main thread의 stack 밖에 둔 goroutine stack에서 실행되므로, 그때의 scan에서 크기 `origin − sp`가 wrap되고 buffer 할당이 실패하며, JavaScriptCore는 `pas_panic_on_out_of_memory_error`에서 프로세스를 끝낸다. Tauri host에는 이 규칙이 필요 없다. 그 main thread는 main thread의 stack에서 Rust를 실행한다.
 
@@ -220,7 +220,7 @@ Go language host library의 header `src/platform/darwin/main_thread.h`는 두 ma
 
 ## 허용 차이
 
-허용 차이는 두 표이며, 행 ID는 두 표를 통틀어 하나다. 언어 표는 `packages/host/go`와 `packages/host/rust`(H 행), `packages/sok/go`와 `packages/sok/rust`(C 행), 두 언어의 endpoint method(E 행), 두 언어의 framework port method(P 행)를 비교한다. Framework 표는 `packages/host/wailsv3`를 `packages/host/tauriv2` 및 `packages/host/mygo`와(H 행), `apps/wailsv3`를 `apps/tauriv2` 및 `apps/mygo`와(A 행) 비교한다. `scripts/check-hosts.mjs`는 각 쌍의 표에서 ID가 그 쌍의 글자로 시작하는 행을 읽는다. 내용만 다름 칸은 그 열의 쌍이 양쪽에 가진 파일을 뜻하므로, 그 행은 그 쌍에 파일을 나열하지 않는다.
+허용 차이는 두 표이며, 행 ID는 두 표를 통틀어 하나다. 언어 표는 `packages/host/go`와 `packages/host/rust`(H 행), `packages/sok/go`와 `packages/sok/rust`(C 행), 두 언어의 endpoint method(E 행), 두 언어의 framework port method(P 행)를 비교한다. Framework 표는 `packages/host/wailsv3`를 `packages/host/tauriv2` 및 `packages/host/mygo`와(H 행), `apps/wailsv3`를 `apps/tauriv2` 및 `apps/mygo`와(A 행) 비교한다. `scripts/check-host-files.mjs`는 각 쌍의 표에서 ID가 그 쌍의 글자로 시작하는 행을 읽는다. 내용만 다름 칸은 그 열의 쌍이 양쪽에 가진 파일을 뜻하므로, 그 행은 그 쌍에 파일을 나열하지 않는다.
 
 ### 언어 표
 
@@ -261,7 +261,7 @@ Go language host library의 header `src/platform/darwin/main_thread.h`는 두 ma
 | H48 | `src/step_records.go`, `src/step_records_test.go` | 없음 | row P10 의 step 기록이다. main thread 의 callback 을 worker 에 넘기는 것은 Go framework 뿐이다 |
 | H50 | 없음 | `tests/support/platform/native_event.rs`, `tests/support/platform/darwin/native_event.rs`, `tests/support/platform/windows/native_event.rs` | 행 H42 의 integration test 는 자기 crate 이므로 운영체제마다 이 파일로 native ring 에 기록한다. Go test 는 library package 안에 있어 그 binding 을 쓴다 |
 | H51 | `src/diagnostics_no_main_page_test.go` | 없음 | Go framework 에만 main page 가 없는 경우가 있고, 이 test 는 그 창의 diagnostics 답을 지킨다 |
-| E1 | `diagnostics.heap.profile` | 없음 | 이 endpoint method는 Go runtime의 heap profile(`runtime/pprof`)을 쓴다. Rust language host library에는 profile할 garbage-collected heap이 없다. ID가 E로 시작하는 행은 endpoint method를 나열하고 `make host-parity-check`가 그 행을 읽는다 |
+| E1 | `diagnostics.heap.profile` | 없음 | 이 endpoint method는 Go runtime의 heap profile(`runtime/pprof`)을 쓴다. Rust language host library에는 profile할 garbage-collected heap이 없다. ID가 E로 시작하는 행은 endpoint method를 나열하고 `make check-hosts-same`가 그 행을 읽는다 |
 | E2 | `diagnostics.gc.loop` | 없음 | 이 endpoint method는 Go runtime의 `runtime.GC`를 쉬지 않고 돈다. Rust language host library에는 수집할 garbage-collected heap이 없다 |
 | P1 | `Framework.Step` | 없음 | Go language host library는 main thread의 worker에서 실행되며 main thread의 step을 기다린다(H20 행). Rust language host library는 `post`로 step을 보내고 그 channel을 기다린다 |
 | P2 | 없음 | `Framework.spawn_blocking` | Go goroutine은 다른 작업을 막지 않는다. Rust language host library의 blocking 작업은 framework 비동기 runtime의 blocking thread에서 실행된다. 호스트는 그 runtime을 worker 둘로 만든다. worker는 await하고 page 파일에 답할 뿐이기 때문이다. blocking thread는 1초 동안 일이 없으면 끝난다 |
@@ -399,9 +399,9 @@ packages/sok/go/          packages/sok/rust/
 
 ## 프런트엔드와 실행 파일
 
-`soksak-stage`는 프런트엔드를 `apps/<app>/src/frontend/`에 배치하며, 각 애플리케이션의 `.gitignore`가 이 디렉터리를 제외한다. `apps/mygo`에서 이것은 view root이고([스테이징 배치](plugins.ko.md#스테이징-배치)), `src/main.go`가 Wails처럼 포함한다. `go:embed`는 포함하는 패키지 디렉터리 아래의 파일만 포함할 수 있으므로 Wails는 `src/main.go`의 `//go:embed all:frontend`로 이 디렉터리를 포함한다. Go language host library의 `Prepare`는 `frontend/`를 자산 루트로 사용한다. Tauri는 `tauri.conf.json`의 `"frontendDist": "src/frontend"`로 이 디렉터리를 읽고, `src/main.rs`는 `frontend/background.js`를 포함한다.
+`sok-copy-frontend`는 프런트엔드를 `apps/<app>/src/frontend/`에 배치하며, 각 애플리케이션의 `.gitignore`가 이 디렉터리를 제외한다. `apps/mygo`에서 이것은 view root이고([스테이징 배치](plugins.ko.md#스테이징-배치)), `src/main.go`가 Wails처럼 포함한다. `go:embed`는 포함하는 패키지 디렉터리 아래의 파일만 포함할 수 있으므로 Wails는 `src/main.go`의 `//go:embed all:frontend`로 이 디렉터리를 포함한다. Go language host library의 `Prepare`는 `frontend/`를 자산 루트로 사용한다. Tauri는 `tauri.conf.json`의 `"frontendDist": "src/frontend"`로 이 디렉터리를 읽고, `src/main.rs`는 `frontend/background.js`를 포함한다.
 
-macOS에서 각 애플리케이션은 애플리케이션 번들에서 실행된다. 운영체제의 알림 센터가 번들에서 실행된 프로세스만 받기 때문이다([플러그인](plugins.ko.md#탭-알림)). 두 release 애플리케이션은 표시 이름 `soksak`의 `soksak.app`이다. release 번들은 `target/release/wailsv3/soksak.app`과 `target/release/tauriv2/soksak.app`이고, 번들 식별자는 설정 디렉터리의 식별자인 `app.soksak.wails`와 `app.soksak.tauri`다([projects](projects.ko.md#저장)). 디버그 번들은 release 애플리케이션 옆에서 함께 실행되도록 이름을 유지한다. `target/debug/soksak-wailsv3.app/Contents/MacOS/soksak-wailsv3`와 `target/debug/soksak-tauriv2.app/Contents/MacOS/soksak-tauriv2`이며, 번들 이름은 실행 파일 이름이고 식별자는 `app.soksak.wails.dev`와 `app.soksak.tauri.dev`다. 각 번들 안의 실행 파일은 `soksak-wailsv3` 또는 `soksak-tauriv2`다. 빌드는 각 번들의 `Contents/Info.plist`를 release 값을 선언한 `apps/<app>/platform/darwin/Info.plist`에서 쓰고, 디버그 빌드는 번들 식별자와 번들 이름을 바꾼다. Dock이 보이는 soksak 아이콘 `apps/<app>/platform/darwin/AppIcon.icns`를 `Contents/Resources/`에 복사하며, 번들에 ad hoc 서명을 하고 LaunchServices에 다시 등록한다. Dock은 등록된 번들의 아이콘을 보이며, 번들 안의 파일만 바뀌면 LaunchServices는 번들을 다시 읽지 않는다. 번들에는 플러그인도 사이드카도 없다. 호스트는 설정 디렉터리에 설치된 플러그인을 제공하고 사이드카를 시작하며, `plugins/installed.json`이 기록한 폴더를 쓴다([설치](installation.ko.md#설치된-plugin-제공)).
+macOS에서 각 애플리케이션은 애플리케이션 번들에서 실행된다. 운영체제의 알림 센터가 번들에서 실행된 프로세스만 받기 때문이다([플러그인](plugins.ko.md#탭-알림)). 두 release 애플리케이션은 표시 이름 `soksak`의 `soksak.app`이다. release 번들은 `target/release/wailsv3/soksak.app`과 `target/release/tauriv2/soksak.app`이고, 번들 식별자는 설정 디렉터리의 식별자인 `app.soksak.wails`와 `app.soksak.tauri`다([projects](projects.ko.md#저장)). 디버그 번들은 release 애플리케이션 옆에서 함께 실행되도록 이름을 유지한다. `target/debug/sok-wailsv3.app/Contents/MacOS/sok-wailsv3`와 `target/debug/sok-tauriv2.app/Contents/MacOS/sok-tauriv2`이며, 번들 이름은 실행 파일 이름이고 식별자는 `app.soksak.wails.dev`와 `app.soksak.tauri.dev`다. 각 번들 안의 실행 파일은 `sok-wailsv3` 또는 `sok-tauriv2`다. 빌드는 각 번들의 `Contents/Info.plist`를 release 값을 선언한 `apps/<app>/platform/darwin/Info.plist`에서 쓰고, 디버그 빌드는 번들 식별자와 번들 이름을 바꾼다. Dock이 보이는 soksak 아이콘 `apps/<app>/platform/darwin/AppIcon.icns`를 `Contents/Resources/`에 복사하며, 번들에 ad hoc 서명을 하고 LaunchServices에 다시 등록한다. Dock은 등록된 번들의 아이콘을 보이며, 번들 안의 파일만 바뀌면 LaunchServices는 번들을 다시 읽지 않는다. 번들에는 플러그인도 사이드카도 없다. 호스트는 설정 디렉터리에 설치된 플러그인을 제공하고 사이드카를 시작하며, `plugins/installed.json`이 기록한 폴더를 쓴다([설치](installation.ko.md#설치된-plugin-제공)).
 
 ## 워크스페이스 파일
 
@@ -416,14 +416,14 @@ macOS에서 각 애플리케이션은 애플리케이션 번들에서 실행된�
 
 | 명령 | 동작 |
 | --- | --- |
-| `make wailsv3-build`, `make tauriv2-build`, `make mygo-build` | `native/darwin`과 프런트엔드를 빌드하고 스테이징한 뒤 디버그 실행 파일을 빌드한다 |
-| `make wailsv3-build-release`, `make tauriv2-build-release`, `make mygo-build-release` | 릴리스 실행 파일을 빌드한다 |
-| `make wailsv3`, `make tauriv2`, `make mygo` | 디버그 실행 파일을 빌드하고 실행한다 |
-| `make registry`, `make install-plugins CONFIG=DIR` | `scripts/workspace-registry.json`이 선언한 plugin·sidecar repository로 `target/registry`에 workspace registry를 만들고([Repository](plugins.ko.md#repository)), 그 플러그인을 설정 디렉터리에 설치한다 |
-| `make rust-clippy-check` | Rust workspace의 모든 package와 test를 진단 feature가 있을 때와 없을 때 `-D warnings`로 clippy 검사한다. `make native-test`가 실행한다 |
-| `make native-test` | `make -C native/darwin test`, `packages/host/go`와 `packages/host/wailsv3`의 `go test`, `cargo test -p soksak-host -p soksak-host-tauriv2`를 실행한다. 호스트 검사는 진단 빌드와 일반 빌드로 각각 실행한다. 각 sidecar repository는 자기 test를 실행한다 |
-| `make platforms-check` | `scripts/check-platforms.mjs`를 실행한다 |
-| `make host-layout-check` | `make windows-build-check`, `make host-debug-check`, `scripts/check-hosts.mjs`를 실행한다 |
+| `make build-wailsv3`, `make build-tauriv2`, `make build-mygo` | `native/darwin`과 프런트엔드를 빌드하고 스테이징한 뒤 디버그 실행 파일을 빌드한다 |
+| `make build-wailsv3-release`, `make build-tauriv2-release`, `make build-mygo-release` | 릴리스 실행 파일을 빌드한다 |
+| `make run-wailsv3`, `make run-tauriv2`, `make run-mygo` | 디버그 실행 파일을 빌드하고 실행한다 |
+| `make build-registry`, `make install-plugins CONFIG=DIR` | `scripts/workspace-registry.json`이 선언한 plugin·sidecar repository로 `target/registry`에 workspace registry를 만들고([Repository](plugins.ko.md#repository)), 그 플러그인을 설정 디렉터리에 설치한다 |
+| `make check-rust-clippy` | Rust workspace의 모든 package와 test를 진단 feature가 있을 때와 없을 때 `-D warnings`로 clippy 검사한다. `make test-native`가 실행한다 |
+| `make test-native` | `make -C native/darwin test`, `packages/host/go`와 `packages/host/wailsv3`의 `go test`, `cargo test -p soksak-host -p soksak-host-tauriv2`를 실행한다. 호스트 검사는 진단 빌드와 일반 빌드로 각각 실행한다. 각 sidecar repository는 자기 test를 실행한다 |
+| `make check-platform-files` | `scripts/check-platform-files.mjs`를 실행한다 |
+| `make check-host-files` | `make check-windows-build`, `make check-host-debug`, `scripts/check-host-files.mjs`를 실행한다 |
 
 macOS 애플리케이션 bundle build target 네 개는 `Contents`를 교체하기 전에 대상 bundle을 확인한다. 해당 bundle에서 process가 실행 중이면 preparation은 bundle을 변경하기 전에 process PID와 정확한 bundle 경로를 오류로 보고한다. 의도한 검증 checkout에서 build하고 실행 중인 애플리케이션이 사용하는 bundle을 build 대상으로 지정하지 않는다.
 
@@ -448,7 +448,7 @@ Wails host와 Tauri host는 workbench를 window마다 WKWebView 하나 안의 Ja
 | C9 | `terminal` 탭의 구분선 drag | trace를 끈 120 Hz에서: Wails 지연 median, p90, 최악 68.3, 97.6, 127.4 ms와 간격 34.1 ms, Tauri 90.0, 141.5, 196.6 ms와 33.7 ms이며, 비교 기준은 20.8, 25, 33.3 ms와 33 ms다; 60 Hz display 모드에서: Wails 61.0, 88.7, 116.9 ms와 34.2 ms, Tauri 66.8, 97.9, 130.6 ms와 33.9 ms이며, 비교 기준은 41.7, 50, 66.7 ms다. cohort들은 display 모드와 부하가 다르며 지연을 단계에 귀속시키지 않는다 |
 | C10 | 브라우저 document | 브라우저 탭의 document web view 하나가 1.31 GB를 hold했다 |
 | C11 | 브라우저 section | 브라우저 plugin의 section 네 개는 `unload`를 선언하지 않으므로 숨겨진 동안에도 자기 view를 유지한다 |
-| C12 | Host process 메모리 | 사흘 사용 후 각 host에서 약 154 MB; release Wails host의 빈 library 화면에서 108 MB; `make object-counts`를 30번 반복하는 동안 Wails host는 Go heap 객체 3~5 MB와 goroutine 50~52개로 80 MB에서 89 MB 사이에 안정되고, Tauri host는 70 MB에서 76 MB 사이에 안정된다 |
+| C12 | Host process 메모리 | 사흘 사용 후 각 host에서 약 154 MB; release Wails host의 빈 library 화면에서 108 MB; `make measure-object-counts`를 30번 반복하는 동안 Wails host는 Go heap 객체 3~5 MB와 goroutine 50~52개로 80 MB에서 89 MB 사이에 안정되고, Tauri host는 70 MB에서 76 MB 사이에 안정된다 |
 
 C1, C4, C5는 page로서의 workbench가 치르는 비용이다: 그 상태, 그 WebContent process, 그것이 시작하는 WebKit process다. C3은 그 page의 그래픽 메모리다. native workbench는 이를 자기 Metal layer의 drawable(정지 시 window 크기 buffer 하나, window가 animation 중인 동안 세 개)과 일시 정지 후 Metal driver가 차지하는 메모리로 대체한다[S17]. C9의 각 layout transaction은 main page의 presentation, 합류한 각 root view의 presentation, 필요한 image raster를 기다리며([배치 순서](native-surfaces.ko.md#배치-순서), step 4), layout 하나는 frame 경계 네 개(입력의 도착, 그 앞 layout의 frame, WebKit의 rendering update, display 갱신)를 거쳐 화면에 이른다. native workbench는 main page에 대한 대기만 없앤다. 구분선 drag는 여전히 자기가 크기를 바꾸는 root view와 그 image region의 raster를 기다리며, G4는 그 drag의 지연 target을 mygo host에 그대로 적용한다. C2는 page의 비용이 아니라 main page의 결함이며, mygo host에는 main page가 없다. G2는 실패하는 그리기가 mygo host를 계속 바쁘게 하지 않을 것을 요구한다. C6과 C7은 web view로서의 plugin view가 치르는 비용이며, [plugin process 결정](plugin-processes.ko.md#결정)이 이를 유지한다. C8은 view page의 image region을 지나는 터미널 frame의 비용이며, 이 경로는 mygo host가 유지하고(D5) G5가 세 host에서 상한을 둔다. C10은 WebKit 자체의 document 메모리이며 host 비용이 아니다. C11은 브라우저 plugin의 선언이며, 그 plugin이 이를 바로잡는다. C12는 mygo host에서 workbench의 상태를 가지는 process다.
 
@@ -517,9 +517,9 @@ mygo는 version 0.7.4이며, tag의 이력은 2026-09-26에 시작한다[S25]. v
 
 두 workbench는 하나의 제품을 구현하며, 세 mechanism이 둘을 같게 유지한다:
 
-- **선언.** `packages/workbench-mygo`는 `packages/workbench`의 `exposure.json`, `shortcuts.json`, `workbench.json` 사본을 embed하며, `make exposure-check`는 지금 `core-exposure.json`을 그렇게 하듯 이 사본들을 원본과 같게 유지한다. `make exposure-check`는 또한 exposure check의 규칙 1과 2를 `packages/workbench-mygo`의 Go source에 적용한다: Go source가 registry나 binder에 넘기는 모든 status, command, element name은 선언되어 있고, 선언된 모든 status와 command는 등록되어 있으며, 선언된 모든 element name은 어떤 element에 주어진다. 그 test는 `packages/plugin-api`의 `contributions.json`과 `apps/mygo`의 `environment.json` 사본을 같은 검사 아래 가진다.
+- **선언.** `packages/workbench-mygo`는 `packages/workbench`의 `exposure.json`, `shortcuts.json`, `workbench.json` 사본을 embed하며, `make check-exposure`는 지금 `core-exposure.json`을 그렇게 하듯 이 사본들을 원본과 같게 유지한다. `make check-exposure`는 또한 exposure check의 규칙 1과 2를 `packages/workbench-mygo`의 Go source에 적용한다: Go source가 registry나 binder에 넘기는 모든 status, command, element name은 선언되어 있고, 선언된 모든 status와 command는 등록되어 있으며, 선언된 모든 element name은 어떤 element에 주어진다. 그 test는 `packages/plugin-api`의 `contributions.json`과 `apps/mygo`의 `environment.json` 사본을 같은 검사 아래 가진다.
 - **Host call.** `packages/workbench-mygo`는 language host library의 host handler를 각 handler의 이름을 적은 표 하나, 즉 `src/host_calls.go`의 `hostCalls`를 통해서만 호출한다. Wails host의 각 service call이 자기 goroutine에서 도착하듯, workbench는 `hostCalls`의 각 handler를 자기 goroutine에서 실행하고 그 answer를 나중 step에서 받는데, `SyncSurfaces`와 `PresentSurfaces`가 U1의 worker에서 실행되는 작업을 기다리기 때문이다; 그런 goroutine은 각각 language host library의 `routine.Go`를 통해 시작하고, 한 sidecar로의 send처럼 specification이 순서를 요구하는 call은 그 순서의 이전 call이 끝난 뒤에야 시작한다. [Host parity](host-parity.ko.md) 명제 1은 `runtime/index.js`의 `METHOD`와 `COMMAND`를 읽듯 그 표를 읽는다: 각 표의 각 이름은 그 host의 handler를 가지며, 세 표는 framework 표의 B 행이 나열하는 call, 즉 mygo에 없는 call(native modal web view의 overlay call과 shape call)과 mygo에만 있는 call(dialog background)을 제외하면 같은 이름을 담는다.
-- **동작.** [host parity](host-parity.ko.md)의 명제 8은 세 application이 같은 status, command, element name을 선언하고, 모든 window check가 세 application에 대해 실행된다고 말한다. 단, 대상이 main page나 modal web view인 check는 `MAIN_PAGE_APPS`를 순회한다; `scripts/check-host-parity.mjs`가 `make exposure-check`의 사본 규칙과 `scripts/check-e2e-host-parity.mjs`의 규칙으로 이를 판정한다.
+- **동작.** [host parity](host-parity.ko.md)의 명제 8은 세 application이 같은 status, command, element name을 선언하고, 모든 window check가 세 application에 대해 실행된다고 말한다. 단, 대상이 main page나 modal web view인 check는 `MAIN_PAGE_APPS`를 순회한다; `scripts/check-hosts-same.mjs`가 `make check-exposure`의 사본 규칙과 `scripts/check-e2e-host-parity.mjs`의 규칙으로 이를 판정한다.
 
 workbench의 element tree(U4)가 binder audit, element 사각형, element action에 answer를 주므로, window check는 `endpoint.json`을 통해 세 application에 대해 실행된다. 단, 대상이 main page나 modal web view인 check는 제외한다. head가 숨긴 tab처럼 page가 `display:none`으로 두는 element는 크기 없이 tree에 있다: 같은 이름의 element 사이에서 index를 유지하고, `element.rect`는 0으로 답하며, `element.act`는 그것을 누르고, pointer와 keyboard는 그 위에 멈추지 않는다.
 
@@ -637,11 +637,11 @@ mygo source는 `github.com/egoist/mygo`의 tag v0.7.4에서 읽었다; purego는
 
 ## Performance goals
 
-목표 G1부터 G8까지는 Wails host와 Tauri host 옆에서 mygo host가 드는 비용을 정한다. [three-host benchmark](../operations/examples.ko.md#three-host-benchmark)가 그 scenario S0부터 S16까지에서 이 목표를 측정하고, `make b3-judge`가 그 각 session을 판정한다. other host는 mygo host의 revision에서 build한 Wails host와 Tauri host이고, baseline host는 benchmark가 정하는 baseline revision에서 build한 Wails host와 Tauri host이다. `docs/spec/performance-goals.json`이 목표의 수치 한계를 가진다; 이 section의 두 표는 그 file의 사본이며 `scripts/test/performance-goals.test.mjs`가 둘을 같게 유지하고, idle tab benchmark와 split load benchmark는 `IDLE_TAB_BOUND_KB`와 `SPLIT_LOAD_GROWTH_BOUND_KB`를 그 file에서 읽는다. [plugin process](plugin-processes.ko.md#통과값)나 [native surface](native-surfaces.ko.md#인수-기준)가 정하는 값은 file에 복사하지 않는다: 그 값을 가진 benchmark가 판정하고, judge는 그 benchmark의 verdict만 읽는다.
+목표 G1부터 G8까지는 Wails host와 Tauri host 옆에서 mygo host가 드는 비용을 정한다. [three-host benchmark](../operations/examples.ko.md#three-host-benchmark)가 그 scenario S0부터 S16까지에서 이 목표를 측정하고, `make check-b3`가 그 각 session을 판정한다. other host는 mygo host의 revision에서 build한 Wails host와 Tauri host이고, baseline host는 benchmark가 정하는 baseline revision에서 build한 Wails host와 Tauri host이다. `docs/spec/performance-goals.json`이 목표의 수치 한계를 가진다; 이 section의 두 표는 그 file의 사본이며 `scripts/test/performance-goals.test.mjs`가 둘을 같게 유지하고, idle tab benchmark와 split load benchmark는 `IDLE_TAB_BOUND_KB`와 `SPLIT_LOAD_GROWTH_BOUND_KB`를 그 file에서 읽는다. [plugin process](plugin-processes.ko.md#통과값)나 [native surface](native-surfaces.ko.md#인수-기준)가 정하는 값은 file에 복사하지 않는다: 그 값을 가진 benchmark가 판정하고, judge는 그 benchmark의 verdict만 읽는다.
 
 judge는 다음 규칙을 적용한다:
 
-- session은 조건 표가 정하는 수만큼 각 application의 run을 가지며, run은 그 표의 조건에서만 시작한다; `make e2e-b3`는 조건이 맞지 않는 run을 실패시킨다.
+- session은 조건 표가 정하는 수만큼 각 application의 run을 가지며, run은 그 표의 조건에서만 시작한다; `make benchmark-b3`는 조건이 맞지 않는 run을 실패시킨다.
 - median으로 판정하는 값은 그 run들의 median이다; 각 run에서 판정하는 값은 run 하나가 한계를 넘으면 실패한다. 값의 spread는 그 run들의 범위다.
 - 한계는 mygo host의 값에 적용한다.
 - host가 어느 run에도 기록하지 않은 값은 `not measured`로 출력한다. 단, 기준이 그 host의 값을 요구하면 실패한다. 이 값은 그 host의 통과도 실패도 아니다. Wails host와 Tauri host에서는 `host.window`의 `frames`와 `commandBuffers`가 null이므로 그 host의 `G2-S0-frames`는 `not measured`이고, 그 창에 대한 idle 대기는 frame을 읽지 않는다.
@@ -663,42 +663,42 @@ judge는 다음 규칙을 적용한다:
 
 | 값 | 목표 | scenario | target | measurement | 단위 | 판정 대상 | 한계 | 비교 대상 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `G1-S0-webkit-processes` | G1 | S0 | `make app-usage STATE=S0` | `webKitProcesses` | count | 각 run | 정확히 0 | — |
-| `G1-S0b-webcontent-processes` | G1 | S0b | `make app-usage STATE=S0b` | `webContentProcesses` | count | 각 run | 정확히 0 | — |
-| `G2-S0-frames` | G2 | S0 | `make app-usage STATE=S0 IDLE=1 INTERVAL=240` | `frames` | count | 각 run | 정확히 0 | — |
-| `G2-S0-command-buffers` | G2 | S0 | `make app-usage STATE=S0 IDLE=1 INTERVAL=240` | `commandBuffers` | count | 각 run | 정확히 0 | — |
-| `G2-S0-host-cpu` | G2 | S0 | `make app-usage STATE=S0 IDLE=1 INTERVAL=240` | `hostCpuSeconds` | s | median | 0.12 s 이하 | 각 other host와 baseline host |
-| `G2-S1-frames` | G2 | S1 | `make app-usage STATE=S1 IDLE=1 INTERVAL=240` | `frames` | count | 각 run | 정확히 0 | — |
-| `G2-S1-command-buffers` | G2 | S1 | `make app-usage STATE=S1 IDLE=1 INTERVAL=240` | `commandBuffers` | count | 각 run | 정확히 0 | — |
-| `G2-S1-host-cpu` | G2 | S1 | `make app-usage STATE=S1 IDLE=1 INTERVAL=240` | `hostCpuSeconds` | s | median | 0.12 s 이하 | 각 other host와 baseline host |
-| `G2-S9-frames` | G2 | S9 | `make app-usage STATE=S9 IDLE=1 INTERVAL=240` | `frames` | count | 각 run | 정확히 0 | — |
-| `G2-S9-command-buffers` | G2 | S9 | `make app-usage STATE=S9 IDLE=1 INTERVAL=240` | `commandBuffers` | count | 각 run | 정확히 0 | — |
-| `G2-S9-host-cpu` | G2 | S9 | `make app-usage STATE=S9 IDLE=1 INTERVAL=240` | `hostCpuSeconds` | s | median | 0.12 s 이하 | 각 other host와 baseline host |
-| `G2-S12-frames` | G2 | S12 | `make app-usage STATE=S12 IDLE=1 INTERVAL=240` | `frames` | count | 각 run | 정확히 0 | — |
-| `G2-S12-command-buffers` | G2 | S12 | `make app-usage STATE=S12 IDLE=1 INTERVAL=240` | `commandBuffers` | count | 각 run | 정확히 0 | — |
-| `G2-S12-host-cpu` | G2 | S12 | `make app-usage STATE=S12 IDLE=1 INTERVAL=240` | `hostCpuSeconds` | s | median | 0.12 s 이하 | 각 other host와 baseline host |
-| `G2-S0-footprint-before-pointer` | G2 | S0 | `make app-usage STATE=S0 STEP=pointer` | `applicationFootprintKb` | KB | median | — | — |
-| `G2-S0-footprint-after-pointer` | G2 | S0 | `make app-usage STATE=S0 STEP=pointer` | `applicationFootprintAfterKb` | KB | median | — | `G2-S0-footprint-before-pointer` |
-| `G2-S1-footprint-before-pointer` | G2 | S1 | `make app-usage STATE=S1 STEP=pointer` | `applicationFootprintKb` | KB | median | — | — |
-| `G2-S1-footprint-after-pointer` | G2 | S1 | `make app-usage STATE=S1 STEP=pointer` | `applicationFootprintAfterKb` | KB | median | — | `G2-S1-footprint-before-pointer` |
-| `G2-S12-error-lines` | G2 | S12 | `make app-usage STATE=S12` | `errorLines` | count | 각 run | 정확히 1 | — |
-| `G3-S0-footprint` | G3 | S0 | `make app-usage STATE=S0` | `applicationFootprintKb` | KB | median | — | 각 other host와 baseline host |
-| `G3-S0b-footprint` | G3 | S0b | `make app-usage STATE=S0b` | `applicationFootprintKb` | KB | median | — | 각 other host와 baseline host |
-| `G3-S1-footprint` | G3 | S1 | `make app-usage STATE=S1` | `applicationFootprintKb` | KB | median | — | 각 other host와 baseline host |
-| `G3-S1-host-footprint` | G3 | S1 | `make app-usage STATE=S1` | `hostFootprintKb` | KB | median | — | — |
-| `G3-S5-peak-before-drag` | G3 | S5 | `make e2e-benchmark-view-drag TRACE=0` | `peakBeforeDragKb` | KB | median | — | 각 other host와 baseline host |
-| `G3-S5-peak-after-drag` | G3 | S5 | `make e2e-benchmark-view-drag TRACE=0` | `peakAfterDragKb` | KB | median | — | 각 other host와 baseline host |
-| `G3-S13-peak-before-drag` | G3 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1 TRACE=0` | `peakBeforeDragKb` | KB | median | — | 각 other host와 baseline host |
-| `G3-S13-peak-after-drag` | G3 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1 TRACE=0` | `peakAfterDragKb` | KB | median | — | 각 other host와 baseline host |
-| `G3-S11-second-window-footprint` | G3 | S11 | `make app-usage STATE=S11` | `applicationFootprintKb` | KB | median | — | 각 other host와 baseline host |
-| `G3-S15-settings-window-footprint` | G3 | S15 | `make app-usage STATE=S15` | `applicationFootprintKb` | KB | median | — | 각 other host와 baseline host |
-| `G3-S14-footprint` | G3 | S14 | `make app-usage STATE=S14` | `applicationFootprintKb` | KB | median | — | 각 other host와 baseline host |
-| `G3-S3-changed-counts` | G3 | S3 | `make object-counts BUILD=release REPETITIONS=30` | `changedCounts` | count | 각 run | 정확히 0 | — |
-| `G3-S3-growing-figures` | G3 | S3 | `make object-counts BUILD=release REPETITIONS=30` | `growingFigures` | count | 각 run | 정확히 0 | — |
-| `G3-S4-host-footprint` | G3 | S4 | `make host-allocations MINUTES=60` | `hostFootprintKb` | KB | median | — | `G3-S1-host-footprint` |
-| `G3-S10-host-growth` | G3 | S10 | `make e2e-benchmark-split-load` | `hostGrowthKb` | KB | median | 131072 KB 미만 (`SPLIT_LOAD_GROWTH_BOUND_KB`) | — |
-| `G4-S5-view-drag` | G4 | S5 | `make e2e-benchmark-view-drag TRACE=0` | `verdict` | verdict | 각 run | passed | — |
-| `G4-S5-resize-catch-up` | G4 | S5 | `make e2e-benchmark-resize-catch-up TRACE=captured` | `verdict` | verdict | 각 run | passed | — |
+| `G1-S0-webkit-processes` | G1 | S0 | `make measure-app-usage STATE=S0` | `webKitProcesses` | count | 각 run | 정확히 0 | — |
+| `G1-S0b-webcontent-processes` | G1 | S0b | `make measure-app-usage STATE=S0b` | `webContentProcesses` | count | 각 run | 정확히 0 | — |
+| `G2-S0-frames` | G2 | S0 | `make measure-app-usage STATE=S0 IDLE=1 INTERVAL=240` | `frames` | count | 각 run | 정확히 0 | — |
+| `G2-S0-command-buffers` | G2 | S0 | `make measure-app-usage STATE=S0 IDLE=1 INTERVAL=240` | `commandBuffers` | count | 각 run | 정확히 0 | — |
+| `G2-S0-host-cpu` | G2 | S0 | `make measure-app-usage STATE=S0 IDLE=1 INTERVAL=240` | `hostCpuSeconds` | s | median | 0.12 s 이하 | 각 other host와 baseline host |
+| `G2-S1-frames` | G2 | S1 | `make measure-app-usage STATE=S1 IDLE=1 INTERVAL=240` | `frames` | count | 각 run | 정확히 0 | — |
+| `G2-S1-command-buffers` | G2 | S1 | `make measure-app-usage STATE=S1 IDLE=1 INTERVAL=240` | `commandBuffers` | count | 각 run | 정확히 0 | — |
+| `G2-S1-host-cpu` | G2 | S1 | `make measure-app-usage STATE=S1 IDLE=1 INTERVAL=240` | `hostCpuSeconds` | s | median | 0.12 s 이하 | 각 other host와 baseline host |
+| `G2-S9-frames` | G2 | S9 | `make measure-app-usage STATE=S9 IDLE=1 INTERVAL=240` | `frames` | count | 각 run | 정확히 0 | — |
+| `G2-S9-command-buffers` | G2 | S9 | `make measure-app-usage STATE=S9 IDLE=1 INTERVAL=240` | `commandBuffers` | count | 각 run | 정확히 0 | — |
+| `G2-S9-host-cpu` | G2 | S9 | `make measure-app-usage STATE=S9 IDLE=1 INTERVAL=240` | `hostCpuSeconds` | s | median | 0.12 s 이하 | 각 other host와 baseline host |
+| `G2-S12-frames` | G2 | S12 | `make measure-app-usage STATE=S12 IDLE=1 INTERVAL=240` | `frames` | count | 각 run | 정확히 0 | — |
+| `G2-S12-command-buffers` | G2 | S12 | `make measure-app-usage STATE=S12 IDLE=1 INTERVAL=240` | `commandBuffers` | count | 각 run | 정확히 0 | — |
+| `G2-S12-host-cpu` | G2 | S12 | `make measure-app-usage STATE=S12 IDLE=1 INTERVAL=240` | `hostCpuSeconds` | s | median | 0.12 s 이하 | 각 other host와 baseline host |
+| `G2-S0-footprint-before-pointer` | G2 | S0 | `make measure-app-usage STATE=S0 STEP=pointer` | `applicationFootprintKb` | KB | median | — | — |
+| `G2-S0-footprint-after-pointer` | G2 | S0 | `make measure-app-usage STATE=S0 STEP=pointer` | `applicationFootprintAfterKb` | KB | median | — | `G2-S0-footprint-before-pointer` |
+| `G2-S1-footprint-before-pointer` | G2 | S1 | `make measure-app-usage STATE=S1 STEP=pointer` | `applicationFootprintKb` | KB | median | — | — |
+| `G2-S1-footprint-after-pointer` | G2 | S1 | `make measure-app-usage STATE=S1 STEP=pointer` | `applicationFootprintAfterKb` | KB | median | — | `G2-S1-footprint-before-pointer` |
+| `G2-S12-error-lines` | G2 | S12 | `make measure-app-usage STATE=S12` | `errorLines` | count | 각 run | 정확히 1 | — |
+| `G3-S0-footprint` | G3 | S0 | `make measure-app-usage STATE=S0` | `applicationFootprintKb` | KB | median | — | 각 other host와 baseline host |
+| `G3-S0b-footprint` | G3 | S0b | `make measure-app-usage STATE=S0b` | `applicationFootprintKb` | KB | median | — | 각 other host와 baseline host |
+| `G3-S1-footprint` | G3 | S1 | `make measure-app-usage STATE=S1` | `applicationFootprintKb` | KB | median | — | 각 other host와 baseline host |
+| `G3-S1-host-footprint` | G3 | S1 | `make measure-app-usage STATE=S1` | `hostFootprintKb` | KB | median | — | — |
+| `G3-S5-peak-before-drag` | G3 | S5 | `make benchmark-view-drag TRACE=0` | `peakBeforeDragKb` | KB | median | — | 각 other host와 baseline host |
+| `G3-S5-peak-after-drag` | G3 | S5 | `make benchmark-view-drag TRACE=0` | `peakAfterDragKb` | KB | median | — | 각 other host와 baseline host |
+| `G3-S13-peak-before-drag` | G3 | S13 | `make benchmark-view-drag ACCESSIBILITY=1 TRACE=0` | `peakBeforeDragKb` | KB | median | — | 각 other host와 baseline host |
+| `G3-S13-peak-after-drag` | G3 | S13 | `make benchmark-view-drag ACCESSIBILITY=1 TRACE=0` | `peakAfterDragKb` | KB | median | — | 각 other host와 baseline host |
+| `G3-S11-second-window-footprint` | G3 | S11 | `make measure-app-usage STATE=S11` | `applicationFootprintKb` | KB | median | — | 각 other host와 baseline host |
+| `G3-S15-settings-window-footprint` | G3 | S15 | `make measure-app-usage STATE=S15` | `applicationFootprintKb` | KB | median | — | 각 other host와 baseline host |
+| `G3-S14-footprint` | G3 | S14 | `make measure-app-usage STATE=S14` | `applicationFootprintKb` | KB | median | — | 각 other host와 baseline host |
+| `G3-S3-changed-counts` | G3 | S3 | `make measure-object-counts BUILD=release REPETITIONS=30` | `changedCounts` | count | 각 run | 정확히 0 | — |
+| `G3-S3-growing-figures` | G3 | S3 | `make measure-object-counts BUILD=release REPETITIONS=30` | `growingFigures` | count | 각 run | 정확히 0 | — |
+| `G3-S4-host-footprint` | G3 | S4 | `make measure-host-allocations MINUTES=60` | `hostFootprintKb` | KB | median | — | `G3-S1-host-footprint` |
+| `G3-S10-host-growth` | G3 | S10 | `make benchmark-split-load` | `hostGrowthKb` | KB | median | 131072 KB 미만 (`SPLIT_LOAD_GROWTH_BOUND_KB`) | — |
+| `G4-S5-view-drag` | G4 | S5 | `make benchmark-view-drag TRACE=0` | `verdict` | verdict | 각 run | passed | — |
+| `G4-S5-resize-catch-up` | G4 | S5 | `make benchmark-resize-catch-up TRACE=captured` | `verdict` | verdict | 각 run | passed | — |
 | `G4-S7-browser-view` | G4 | S7 | `e2e/benchmark/browser-view.test.mjs` | `verdict` | verdict | 각 run | passed | — |
 | `G4-S7-editor-view` | G4 | S7 | `e2e/benchmark/editor-view.test.mjs` | `verdict` | verdict | 각 run | passed | — |
 | `G4-S7-hwp-view` | G4 | S7 | `e2e/benchmark/hwp-view.test.mjs` | `verdict` | verdict | 각 run | passed | — |
@@ -706,30 +706,30 @@ judge는 다음 규칙을 적용한다:
 | `G4-S7-term-view` | G4 | S7 | `e2e/benchmark/term-view.test.mjs` | `verdict` | verdict | 각 run | passed | — |
 | `G4-S7-section-view` | G4 | S7 | `e2e/benchmark/section-view.test.mjs` | `verdict` | verdict | 각 run | passed | — |
 | `G4-S7-editor-footprint` | G4 | S7 | `e2e/benchmark/editor-footprint.test.mjs` | `verdict` | verdict | 각 run | passed | — |
-| `G5-S2-rows-1-cpu-per-frame` | G5 | S2 | `make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=1` | `applicationCpuPerFrameMs` | ms | median | 1.6 ms 이하 | 각 other host와 baseline host |
-| `G5-S2-rows-20-cpu-per-frame` | G5 | S2 | `make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=20` | `applicationCpuPerFrameMs` | ms | median | 3.1 ms 이하 | 각 other host와 baseline host |
-| `G5-S2-rows-1-frame-rate` | G5 | S2 | `make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=1` | `framesPerSecond` | frames/s | median | 27 frames/s 이상 | — |
-| `G5-S2-rows-20-frame-rate` | G5 | S2 | `make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=20` | `framesPerSecond` | frames/s | median | 27 frames/s 이상 | — |
-| `G6-S6-idle-tab-cost` | G6 | S6 | `make e2e-benchmark-idle-tab` | `idleTabCostKb` | KB | median | 51200 KB 이하 (`IDLE_TAB_BOUND_KB`) | — |
-| `G6-S6-document-part` | G6 | S6 | `make e2e-benchmark-idle-tab` | `documentPartKb` | KB | median | — | 각 other host와 baseline host |
+| `G5-S2-rows-1-cpu-per-frame` | G5 | S2 | `make measure-terminal-redraw PLUGIN=term RATE=30 ROWS=1` | `applicationCpuPerFrameMs` | ms | median | 1.6 ms 이하 | 각 other host와 baseline host |
+| `G5-S2-rows-20-cpu-per-frame` | G5 | S2 | `make measure-terminal-redraw PLUGIN=term RATE=30 ROWS=20` | `applicationCpuPerFrameMs` | ms | median | 3.1 ms 이하 | 각 other host와 baseline host |
+| `G5-S2-rows-1-frame-rate` | G5 | S2 | `make measure-terminal-redraw PLUGIN=term RATE=30 ROWS=1` | `framesPerSecond` | frames/s | median | 27 frames/s 이상 | — |
+| `G5-S2-rows-20-frame-rate` | G5 | S2 | `make measure-terminal-redraw PLUGIN=term RATE=30 ROWS=20` | `framesPerSecond` | frames/s | median | 27 frames/s 이상 | — |
+| `G6-S6-idle-tab-cost` | G6 | S6 | `make benchmark-idle-tab` | `idleTabCostKb` | KB | median | 51200 KB 이하 (`IDLE_TAB_BOUND_KB`) | — |
+| `G6-S6-document-part` | G6 | S6 | `make benchmark-idle-tab` | `documentPartKb` | KB | median | — | 각 other host와 baseline host |
 | `G7-S8-terminal-median` | G7 | S8 | `e2e/input-latency.test.mjs` | `terminalMedianMs` | ms | median | — | 각 other host와 baseline host |
 | `G7-S8-terminal-p90` | G7 | S8 | `e2e/input-latency.test.mjs` | `terminalP90Ms` | ms | median | — | 각 other host와 baseline host |
 | `G7-S8-term-median` | G7 | S8 | `e2e/input-latency.test.mjs` | `termMedianMs` | ms | median | — | 각 other host와 baseline host |
 | `G7-S8-term-p90` | G7 | S8 | `e2e/input-latency.test.mjs` | `termP90Ms` | ms | median | — | 각 other host와 baseline host |
-| `G8-S5-drag-cpu` | G8 | S5 | `make e2e-benchmark-view-drag TRACE=0` | `dragCpuSeconds` | s | median | — | 각 other host와 baseline host |
-| `G8-S13-drag-cpu` | G8 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1 TRACE=0` | `dragCpuSeconds` | s | median | — | 각 other host와 baseline host |
-| `G8-S1-pointer-cpu` | G8 | S1 | `make app-usage STATE=S1 STEP=pointer` | `applicationCpuSeconds` | s | median | — | 각 other host와 baseline host |
-| `G8-S5-drag-frame-p90` | G8 | S5 | `make e2e-benchmark-view-drag TRACE=frame-records` | `dragFrameP90Ms` | ms | median | 8.33 ms 이하 | — |
-| `G8-S5-drag-step-p90` | G8 | S5 | `make e2e-benchmark-view-drag TRACE=frame-records` | `dragStepP90Ms` | ms | median | 8.33 ms 이하 | — |
-| `G8-S13-drag-frame-p90` | G8 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1 TRACE=frame-records` | `dragFrameP90Ms` | ms | median | 8.33 ms 이하 | — |
-| `G8-S13-drag-step-p90` | G8 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1 TRACE=frame-records` | `dragStepP90Ms` | ms | median | 8.33 ms 이하 | — |
-| `G8-S16-drag-frame-p90` | G8 | S16 | `make e2e-benchmark-view-drag GC_LOOP=1 TRACE=frame-records` | `dragFrameP90Ms` | ms | median | 8.33 ms 이하 | — |
-| `G8-S16-drag-step-p90` | G8 | S16 | `make e2e-benchmark-view-drag GC_LOOP=1 TRACE=frame-records` | `dragStepP90Ms` | ms | median | 8.33 ms 이하 | — |
-| `G8-S5-drag-first-frame` | G8 | S5 | `make e2e-benchmark-view-drag TRACE=frame-records` | `dragFirstFrameMs` | ms | median | 8.33 ms 이하 | — |
-| `G8-S13-drag-first-frame` | G8 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1 TRACE=frame-records` | `dragFirstFrameMs` | ms | median | 8.33 ms 이하 | — |
-| `G8-S5-maximise-frame-p90` | G8 | S5 | `make e2e-benchmark-resize-catch-up TRACE=frame-records` | `maximiseFrameP90Ms` | ms | median | 8.33 ms 이하 | — |
-| `G8-S5-maximise-step-p90` | G8 | S5 | `make e2e-benchmark-resize-catch-up TRACE=frame-records` | `maximiseStepP90Ms` | ms | median | 8.33 ms 이하 | — |
-| `G8-S1-hit-test-p90` | G8 | S1 | `make app-usage STATE=S1 STEP=pointer TRACE=frame-records` | `hitTestP90Ms` | ms | median | 8.33 ms 이하 | — |
+| `G8-S5-drag-cpu` | G8 | S5 | `make benchmark-view-drag TRACE=0` | `dragCpuSeconds` | s | median | — | 각 other host와 baseline host |
+| `G8-S13-drag-cpu` | G8 | S13 | `make benchmark-view-drag ACCESSIBILITY=1 TRACE=0` | `dragCpuSeconds` | s | median | — | 각 other host와 baseline host |
+| `G8-S1-pointer-cpu` | G8 | S1 | `make measure-app-usage STATE=S1 STEP=pointer` | `applicationCpuSeconds` | s | median | — | 각 other host와 baseline host |
+| `G8-S5-drag-frame-p90` | G8 | S5 | `make benchmark-view-drag TRACE=frame-records` | `dragFrameP90Ms` | ms | median | 8.33 ms 이하 | — |
+| `G8-S5-drag-step-p90` | G8 | S5 | `make benchmark-view-drag TRACE=frame-records` | `dragStepP90Ms` | ms | median | 8.33 ms 이하 | — |
+| `G8-S13-drag-frame-p90` | G8 | S13 | `make benchmark-view-drag ACCESSIBILITY=1 TRACE=frame-records` | `dragFrameP90Ms` | ms | median | 8.33 ms 이하 | — |
+| `G8-S13-drag-step-p90` | G8 | S13 | `make benchmark-view-drag ACCESSIBILITY=1 TRACE=frame-records` | `dragStepP90Ms` | ms | median | 8.33 ms 이하 | — |
+| `G8-S16-drag-frame-p90` | G8 | S16 | `make benchmark-view-drag GC_LOOP=1 TRACE=frame-records` | `dragFrameP90Ms` | ms | median | 8.33 ms 이하 | — |
+| `G8-S16-drag-step-p90` | G8 | S16 | `make benchmark-view-drag GC_LOOP=1 TRACE=frame-records` | `dragStepP90Ms` | ms | median | 8.33 ms 이하 | — |
+| `G8-S5-drag-first-frame` | G8 | S5 | `make benchmark-view-drag TRACE=frame-records` | `dragFirstFrameMs` | ms | median | 8.33 ms 이하 | — |
+| `G8-S13-drag-first-frame` | G8 | S13 | `make benchmark-view-drag ACCESSIBILITY=1 TRACE=frame-records` | `dragFirstFrameMs` | ms | median | 8.33 ms 이하 | — |
+| `G8-S5-maximise-frame-p90` | G8 | S5 | `make benchmark-resize-catch-up TRACE=frame-records` | `maximiseFrameP90Ms` | ms | median | 8.33 ms 이하 | — |
+| `G8-S5-maximise-step-p90` | G8 | S5 | `make benchmark-resize-catch-up TRACE=frame-records` | `maximiseStepP90Ms` | ms | median | 8.33 ms 이하 | — |
+| `G8-S1-hit-test-p90` | G8 | S1 | `make measure-app-usage STATE=S1 STEP=pointer TRACE=frame-records` | `hitTestP90Ms` | ms | median | 8.33 ms 이하 | — |
 
 각 목표의 값:
 
@@ -746,20 +746,20 @@ judge는 다음 규칙을 적용한다:
 
 ## 구조 검사
 
-`scripts/check-hosts.mjs`는 네 쌍을 비교한다: [언어 표](#언어-표)로 `packages/host/go`와 `packages/host/rust`, `packages/sok/go`와 `packages/sok/rust`를, [Framework 표](#framework-표)로 `packages/host/wailsv3`와 `packages/host/tauriv2`, `apps/wailsv3`와 `apps/tauriv2`를 비교한다. `.go`와 `.rs` 파일은 확장자를 제외한 상대 경로로, 그 밖의 파일은 상대 경로로 비교한다. 한쪽에만 있는 파일은 그 쌍의 표에서 ID가 그 쌍의 글자(호스트 패키지는 H, command line은 C, 애플리케이션은 A)로 시작하는 행이 그 파일을 나열할 때만 통과한다. 검사는 Git이 추적하거나 추적할 파일만 읽으므로 생성된 `src/frontend/` 파일은 비교하지 않는다.
+`scripts/check-host-files.mjs`는 네 쌍을 비교한다: [언어 표](#언어-표)로 `packages/host/go`와 `packages/host/rust`, `packages/sok/go`와 `packages/sok/rust`를, [Framework 표](#framework-표)로 `packages/host/wailsv3`와 `packages/host/tauriv2`, `apps/wailsv3`와 `apps/tauriv2`를 비교한다. `.go`와 `.rs` 파일은 확장자를 제외한 상대 경로로, 그 밖의 파일은 상대 경로로 비교한다. 한쪽에만 있는 파일은 그 쌍의 표에서 ID가 그 쌍의 글자(호스트 패키지는 H, command line은 C, 애플리케이션은 A)로 시작하는 행이 그 파일을 나열할 때만 통과한다. 검사는 Git이 추적하거나 추적할 파일만 읽으므로 생성된 `src/frontend/` 파일은 비교하지 않는다.
 
 경로 prefix로 파일을 고르는 검사의 audit은 prefix 하나라도 파일을 고르지 못하면 실패한다. main-thread audit은 `packages/host/go/src/platform/darwin/`을, 해석하지 않은 명령 인자 audit은 `packages/host/tauriv2/src/`의 Rust source를, stub 검사는 language host library, framework adapter, `native/darwin`의 `src` 폴더를 쓴다. Library import audit은 `packages/host/go`의 Go 파일이 Wails의 패키지를 가져오거나 그 `go.mod`가 Wails를 요구할 때, 그리고 `packages/host/rust`의 Rust 파일이 Tauri의 크레이트를 이름으로 부르거나 그 `Cargo.toml`이 그런 크레이트에 의존할 때 실패한다. Library name audit(`auditLibraryNames`)은 `packages/host/go`나 `packages/host/rust`의 source와 test의 주석 밖 code가 framework나 그 host를 이름으로 부르는 단어를 가질 때, 그리고 그 파일의 contract 선언이 그런 단어를 가질 때 실패한다. 단어는 identifier나 문자열을 밑줄과 대소문자 변화에서 나눈 부분이다.
 
-`scripts/check-platforms.mjs`는 `platform/<os>/` 밖에서 `_darwin`, `_windows` 등의 운영체제 접미사가 붙은 파일 이름과 Go 파일의 `runtime.GOOS` 및 운영체제 build tag, Rust 파일의 운영체제 `cfg`, JavaScript 파일의 실행 가능한 Node `process.platform` member expression을 보고한다. JavaScript는 syntax로 분석하므로 string과 comment는 selector가 아니다. 유일한 metadata 예외는 `environment()` 함수가 반환하는 object의 `platform` property에 쓰는 `process.platform`, 그리고 test 경로의 `assert.equal(result.environment.platform, process.platform)` 또는 `assert.strictEqual`이다. test 경로 안의 selector를 포함해 다른 모든 실행 가능한 사용은 finding이다. `native/<os>/`, `scripts/check-build-environment.sh`, `platform/platform.{go,rs,js}`, 검사 파일 자신은 건너뛴다. `Cargo.toml`은 읽지 않으므로 대상별 의존성 표는 허용된다.
+`scripts/check-platform-files.mjs`는 `platform/<os>/` 밖에서 `_darwin`, `_windows` 등의 운영체제 접미사가 붙은 파일 이름과 Go 파일의 `runtime.GOOS` 및 운영체제 build tag, Rust 파일의 운영체제 `cfg`, JavaScript 파일의 실행 가능한 Node `process.platform` member expression을 보고한다. JavaScript는 syntax로 분석하므로 string과 comment는 selector가 아니다. 유일한 metadata 예외는 `environment()` 함수가 반환하는 object의 `platform` property에 쓰는 `process.platform`, 그리고 test 경로의 `assert.equal(result.environment.platform, process.platform)` 또는 `assert.strictEqual`이다. test 경로 안의 selector를 포함해 다른 모든 실행 가능한 사용은 finding이다. `native/<os>/`, `scripts/check-tools.sh`, `platform/platform.{go,rs,js}`, 검사 파일 자신은 건너뛴다. `Cargo.toml`은 읽지 않으므로 대상별 의존성 표는 허용된다.
 
 플랫폼별 test는 소유 package의 `tests/platform/<os>/` 또는 root script의 해당 `platform/<os>/` directory에 둔다. Cargo target이나 test-runner 경로를 명시적으로 등록한다. 공통 directory의 test는 운영체제를 선택하거나 가정하지 않는 동작을 검증한다.
 
 ## native/darwin
 
-`native/darwin`은 두 호스트가 호출하는 공용 macOS 라이브러리다. 최소 macOS 버전은 14.4다. `capture.m`이 macOS 14.4에서 추가된 `SCShareableContent getCurrentProcessShareableContentWithCompletionHandler:`를 호출하기 때문이다. Makefile은 이 값을 `MACOS_MINIMUM`에 선언하고 라이브러리와 두 애플리케이션을 그 값으로 build한다. 두 애플리케이션의 `Info.plist`는 `LSMinimumSystemVersion`에, `apps/tauriv2/tauri.conf.json`은 `bundle.macOS.minimumSystemVersion`에 같은 값을 선언하는데, Tauri bundler가 그 값으로 애플리케이션을 build하기 때문이다. 번들이 다른 값을 선언하거나, 애플리케이션 실행 파일이 다른 macOS version으로 build되었거나, 번들의 다른 실행 파일이 더 새 version으로 build되었으면 `make release-check`가 실패한다. Bundled Rust 실행 파일은 application과 같은 선언된 Cargo deployment target을 사용하므로 deployment 환경만으로 공용 의존성의 build identity가 달라지지 않는다.
+`native/darwin`은 두 호스트가 호출하는 공용 macOS 라이브러리다. 최소 macOS 버전은 14.4다. `capture.m`이 macOS 14.4에서 추가된 `SCShareableContent getCurrentProcessShareableContentWithCompletionHandler:`를 호출하기 때문이다. Makefile은 이 값을 `MACOS_MINIMUM`에 선언하고 라이브러리와 두 애플리케이션을 그 값으로 build한다. 두 애플리케이션의 `Info.plist`는 `LSMinimumSystemVersion`에, `apps/tauriv2/tauri.conf.json`은 `bundle.macOS.minimumSystemVersion`에 같은 값을 선언하는데, Tauri bundler가 그 값으로 애플리케이션을 build하기 때문이다. 번들이 다른 값을 선언하거나, 애플리케이션 실행 파일이 다른 macOS version으로 build되었거나, 번들의 다른 실행 파일이 더 새 version으로 build되었으면 `make check-release`가 실패한다. Bundled Rust 실행 파일은 application과 같은 선언된 Cargo deployment target을 사용하므로 deployment 환경만으로 공용 의존성의 build identity가 달라지지 않는다.
 
 | 경로 | 내용 |
 | --- | --- |
 | `src/` | `<이름>.h`와 `<이름>.m` 소스. 두 호스트가 창 캡처에 사용하는 `capture.m`을 포함한다. 디렉터리가 플랫폼을 나타내므로 파일 이름에 `_darwin` 접미사가 없다 |
-| `tests/` | `window_motion_test.m`, `input_inject_test.m`, `webview_input_receipts_test.m`, `window_facts_test.m`, `window_controls_test.m`, `window_titlebar_layout_test.m`, `window_titlebar_reload_test.m`, `surface_layout_test.m`, `surface_layout_observe_test.m`, `surface_container_test.m`, `webview_focus_test.m`, `webview_geometry_test.m`, `document_view_test.m` 기본 실행(`make test`, 활성화 없음. `document_view_test`는 종료 시 프로세스가 활성이면 실패한다), `input_activate_test.m`, `webview_input_test.m`, `webview_inspector_test.m`, `window_fullscreen_test.m`, `image_region_ime_test.m`, `document_view_test.m --activation`(`make e2e-activation`, 애플리케이션 활성화) |
-| `Makefile` | 호스트가 pkg-config에서 `soksak-darwin`으로 찾는 정적 라이브러리를 빌드한다. `make -C native/darwin test`와 `make -C native/darwin e2e-activation`이 입력 검사를 실행한다 |
+| `tests/` | `window_motion_test.m`, `input_inject_test.m`, `webview_input_receipts_test.m`, `window_facts_test.m`, `window_controls_test.m`, `window_titlebar_layout_test.m`, `window_titlebar_reload_test.m`, `surface_layout_test.m`, `surface_layout_observe_test.m`, `surface_container_test.m`, `webview_focus_test.m`, `webview_geometry_test.m`, `document_view_test.m` 기본 실행(`make test`, 활성화 없음. `document_view_test`는 종료 시 프로세스가 활성이면 실패한다), `input_activate_test.m`, `webview_input_test.m`, `webview_inspector_test.m`, `window_fullscreen_test.m`, `image_region_ime_test.m`, `document_view_test.m --activation`(`make test-app-activation`, 애플리케이션 활성화) |
+| `Makefile` | 호스트가 pkg-config에서 `soksak-darwin`으로 찾는 정적 라이브러리를 빌드한다. `make -C native/darwin test`와 `make -C native/darwin test-app-activation`이 입력 검사를 실행한다 |

@@ -16,9 +16,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
 import { BREAKS } from "../../packages/soksak/scripts/breaks.mjs";
 import { find as findReleaseMarkers } from "../check-release.mjs";
-import { FRAMEWORK_TABLE, LANGUAGE_TABLE, auditHostPairs, findStubs, findUndecodedCommandArguments } from "../check-hosts.mjs";
-import { auditPlatformSource } from "../check-platforms.mjs";
-import { auditActivationUnboundNames, auditE2ESource } from "../check-e2e.mjs";
+import { FRAMEWORK_TABLE, LANGUAGE_TABLE, auditHostPairs, findStubs, findUndecodedCommandArguments } from "../check-host-files.mjs";
+import { auditPlatformSource } from "../check-platform-files.mjs";
+import { auditActivationUnboundNames, auditE2ESource } from "../check-app-tests.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const packageRoot = join(root, "packages/soksak");
@@ -161,7 +161,7 @@ test("boundary audit reports core sources that name a declared plugin without re
 
 test("native and host contract tests stage the frontend without resetting an application bundle", { timeout: 60000 }, async () => {
   // A test run must not remove the executable of the debug app that window checks use. It only reads the plan and does not run it.
-  for (const target of ["native-test", "host-contract-check"]) {
+  for (const target of ["test-native", "test-hosts"]) {
     const plan = await run("make", ["-n", target], { cwd: root });
     assert.equal(plan.code, 0, plan.stderr);
     assert.deepEqual(plan.stdout.split("\n").filter((line) => /rm -rf \S*\.app\/Contents/.test(line)), [],
@@ -170,7 +170,7 @@ test("native and host contract tests stage the frontend without resetting an app
 });
 
 test("host structure audit reports a clean paired-host graph", { timeout: TREE_AUDIT_LIMIT_MS }, async () => {
-  const result = await run(node, [join(root, "scripts/check-hosts.mjs")]);
+  const result = await run(node, [join(root, "scripts/check-host-files.mjs")]);
   assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
   assert.match(result.stdout, /Host structure checks passed:/);
 });
@@ -232,7 +232,7 @@ test("host structure audit compares the language host libraries, the framework a
 });
 
 test("host structure audit rejects a language host library that imports a package of a framework", { timeout: 1000 }, async () => {
-  const { auditLibraryImports } = await import("../check-hosts.mjs");
+  const { auditLibraryImports } = await import("../check-host-files.mjs");
   const files = {
     "packages/host/go/src/windows.go": 'package host\n\nimport (\n\t"github.com/wailsapp/wails/v3/pkg/application"\n)\n',
     "packages/host/go/src/platform/darwin/window.go": 'package darwin\n\nimport _ "github.com/wailsapp/wails/v3/pkg/events"\n',
@@ -256,7 +256,7 @@ test("host structure audit rejects a language host library that imports a packag
 });
 
 test("host structure audit rejects a language host library whose code or contract declaration names a framework", { timeout: 1000 }, async () => {
-  const { auditLibraryNames } = await import("../check-hosts.mjs");
+  const { auditLibraryNames } = await import("../check-host-files.mjs");
   const files = {
     "packages/host/rust/src/start.rs": 'pub const PAGE_ORIGIN: &str = "tauri://localhost";\n// The Tauri page origin is a word of this comment.\n',
     "packages/host/rust/src/raw.rs": 'let a = r#"// "#; let b = TauriWindow::new(); /* Tauri /* nested */ still a comment */\nlet c = \'"\'; // tauri\n',
@@ -278,7 +278,7 @@ test("host structure audit rejects a language host library whose code or contrac
 });
 
 test("a prefix audit of the host structure fails when a prefix selects no file", { timeout: 1000 }, async () => {
-  const { auditPrefixes } = await import("../check-hosts.mjs");
+  const { auditPrefixes } = await import("../check-host-files.mjs");
   const tracked = ["packages/host/go/src/platform/darwin/window.go", "packages/host/tauriv2/src/host.rs", "packages/host/go/src/host.go",
     "packages/host/rust/src/host.rs", "packages/host/wailsv3/src/host.go", "packages/host/mygo/src/host.go", "native/darwin/src/a.m", "packages/workbench-mygo/src/layout/grid.go"];
   assert.deepEqual(auditPrefixes(tracked), []);
@@ -460,7 +460,7 @@ test("stub audit reads every product source file and reports a file it cannot re
 });
 
 test("window-source audit rejects forbidden control paths", { timeout: TREE_AUDIT_LIMIT_MS }, async () => {
-  const result = await run(node, [join(root, "scripts/check-e2e.mjs")]);
+  const result = await run(node, [join(root, "scripts/check-app-tests.mjs")]);
   assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
   assert.match(result.stdout, /Window check sources use only the endpoint/);
 });
@@ -745,7 +745,7 @@ test("exposure audit verifies every declared core entry", { timeout: TREE_AUDIT_
 // The limit bounds a hang: the audit starts the node, pnpm and shasum commands, and `pnpm --version` takes about 2 s alone, more than
 // 5 s when the push gate runs the package tests in parallel (F244-1).
 test("build environment audit reports the measured toolchain", { timeout: 30000 }, async () => {
-  const result = await run("sh", [join(root, "scripts/check-build-environment.sh")]);
+  const result = await run("sh", [join(root, "scripts/check-tools.sh")]);
   assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
   assert.match(result.stdout, /BUILD_ENVIRONMENT_READY node=v\S+ pnpm=\S+ runtime=\S+\/\S+ lockSHA256=[a-f0-9]{64}/);
 });
@@ -795,7 +795,7 @@ test("release marker scanner reports diagnostics and ignores clean content", { t
 
 test("release marker scanner finds the diagnostic registry authority argument", { timeout: 2000 }, () => {
   const errors = [];
-  findReleaseMarkers(errors, "soksak-wailsv3", "unknown argument\u0000registry-ca\u0000config-dir");
+  findReleaseMarkers(errors, "sok-wailsv3", "unknown argument\u0000registry-ca\u0000config-dir");
   assert.equal(errors.length, 1);
   assert.match(errors[0], /diagnostic argument/);
 });
@@ -809,7 +809,7 @@ test("release marker scanner finds capture code in an executable without symbols
 });
 
 test("platform audit finds no selectors outside platform directories", { timeout: TREE_AUDIT_LIMIT_MS }, async () => {
-  const result = await run(node, [join(root, "scripts/check-platforms.mjs")]);
+  const result = await run(node, [join(root, "scripts/check-platform-files.mjs")]);
   const output = `${result.stdout}\n${result.stderr}`;
   assert.equal(result.code, 0, output);
   assert.match(output, /Platform checks passed: \d+ files/);

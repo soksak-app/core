@@ -208,7 +208,7 @@ test("the audit of the logs runs after a run of window checks and of the activat
   const audit = (folder) => { ran.push(folder); return ["/c/logs/host-1-2.jsonl:3: undeclared error place: boom"]; };
   assert.equal(auditAfterRun("test", run, (line) => lines.push(line), audit), 0);
   assert.deepEqual(ran, []);
-  for (const script of ["verify", "verify:activation"]) {
+  for (const script of ["test-app", "test-app:activation"]) {
     assert.equal(auditAfterRun(script, run, (line) => lines.push(line), audit), 1);
   }
   assert.deepEqual(ran, [run.folder, run.folder]);
@@ -216,9 +216,9 @@ test("the audit of the logs runs after a run of window checks and of the activat
     "AUDIT /c/logs/host-1-2.jsonl:3: undeclared error place: boom",
     "AUDIT FAIL 1 findings in the logs of run r1; the judgment of each test is /repo/target/test-runs/r1/judgment.json",
   ]);
-  assert.equal(auditAfterRun("verify", run, (line) => lines.push(line), () => []), 0);
+  assert.equal(auditAfterRun("test-app", run, (line) => lines.push(line), () => []), 0);
   assert.equal(lines.at(-1), "AUDIT PASS the logs of run r1");
-  assert.equal(auditAfterRun("verify", run, (line) => lines.push(line), () => { throw new Error("marks.jsonl: the run left no test marks"); }), 1);
+  assert.equal(auditAfterRun("test-app", run, (line) => lines.push(line), () => { throw new Error("marks.jsonl: the run left no test marks"); }), 1);
   assert.equal(lines.at(-1), "AUDIT FAIL marks.jsonl: the run left no test marks");
 });
 

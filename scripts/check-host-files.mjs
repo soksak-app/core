@@ -5,7 +5,7 @@
 // A file that exists on only one side passes only when a row of the allowed differences of docs/spec/hosts.md lists it: the rows
 // of the table of the pair whose ID starts with the letter of the pair.
 //
-//   node scripts/check-hosts.mjs
+//   node scripts/check-host-files.mjs
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

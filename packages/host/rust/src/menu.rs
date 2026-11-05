@@ -3,7 +3,7 @@
 //! The "Application menu" table of docs/spec/host-contract.md is the contract of the menu. [`MENUS`] and [`ITEMS`] are
 //! that table, and [`build`] builds the menu in a language of the table, which the framework installs. An item whose source is "title" uses the title
 //! of the table, and an item whose source is "system" keeps the title and shortcut that the framework provides.
-//! scripts/check-host-parity.mjs checks mechanically that both hosts carry the same table.
+//! scripts/check-hosts-same.mjs checks mechanically that both hosts carry the same table.
 
 use std::sync::PoisonError;
 
@@ -50,7 +50,7 @@ pub const MENUS: &[(&str, &str, &str)] = &[
 
 /// The contract table of the menu items. (menu, id, source, ko, en, key). An item whose source is "system" keeps the
 /// framework title, and an item whose source is "title" uses the title of the table. Each row must be one line so that
-/// scripts/check-host-parity.mjs can read the rows, so this table is excluded from alignment.
+/// scripts/check-hosts-same.mjs can read the rows, so this table is excluded from alignment.
 #[rustfmt::skip]
 pub const ITEMS: &[(&str, &str, &str, &str, &str, &str)] = &[
     ("app", "about", "title", "정보", "About", ""),

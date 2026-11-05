@@ -5,7 +5,7 @@ import { isAbsolute, join } from "node:path";
 export function debugBinaries(target) {
   return Object.fromEntries(["wailsv3", "tauriv2", "mygo"].map((name) => [
     `SOKSAK_BINARY_${name.toUpperCase()}`,
-    join(target, "debug", `soksak-${name}.app`, "Contents", "MacOS", `soksak-${name}`),
+    join(target, "debug", `sok-${name}.app`, "Contents", "MacOS", `sok-${name}`),
   ]));
 }
 

@@ -132,8 +132,8 @@ ancillary data 를 읽는 방법은 언어마다 다르다. Go 는 표준 라이
 각 항목은 R2-7 의 하위 항목이며 시작 전에 [기능](../features.ko.md)에 등록한다. 항목이 달리 적지 않으면 검증은 build-machine Linux lane 에서 실행한다. 항목 1 이 나머지 항목의 가능 여부를 정한다.
 
 1. R2-7-4 — `native/linux` 의 합성과 표시 prototype(D5): `GtkOverlay` 에서 투명한 `WebKitWebView` 를 `GtkDrawingArea` 위에 두고 DOM 을 바꾼 뒤, frame clock 의 `after-paint` 가 그려진 변경 뒤에 오는지를 X11 과 Wayland 에서 기록하는 tracked C 테스트. 검증: 테스트가 측정한 픽셀과 시각. 부정적 결과는 사용자에게 보고한다.
-2. R2-7-5 — Toolkit 과 build(D1): pkg-config 파일을 가진 `native/linux` 라이브러리, Wails `gtk3` tag, Tauri Linux target, `platform/linux/` 를 받아들이는 `make platforms-check` 와 `make host-layout-check`. 검증: 두 호스트가 Linux 에서 build 되고, 시작할 때 구현되지 않은 각 연산의 이름을 대며 실패한다.
-3. R2-7-6 — 프로세스, endpoint, 신호, 표준 오류, 식별, 종료 요청(그룹 1, 25–30). 검증: Linux 의 `make host-contract-check` case. Query End 응답의 tracked test.
+2. R2-7-5 — Toolkit 과 build(D1): pkg-config 파일을 가진 `native/linux` 라이브러리, Wails `gtk3` tag, Tauri Linux target, `platform/linux/` 를 받아들이는 `make check-platform-files` 와 `make check-host-files`. 검증: 두 호스트가 Linux 에서 build 되고, 시작할 때 구현되지 않은 각 연산의 이름을 대며 실패한다.
+3. R2-7-6 — 프로세스, endpoint, 신호, 표준 오류, 식별, 종료 요청(그룹 1, 25–30). 검증: Linux 의 `make test-hosts` case. Query End 응답의 tracked test.
 4. R2-7-7 — 창과 webview(그룹 2–8, 31): 호스트 container 로의 부모 변경, 투명, 표시, 전체 화면, header bar. 검증: module 별 네이티브 C 테스트. 두 호스트가 Linux 에서 준비된 창을 연다.
 5. R2-7-8 — 표면, 도형, 입력 감시, 배치 트랜잭션(그룹 9, 10, 14, 15). 검증: X11 에서의 기하와 표시 창 검사.
 6. R2-7-9 — 문서 영역(그룹 11). 검증: `browser.test.mjs` 의 문서 데이터와 navigation case.

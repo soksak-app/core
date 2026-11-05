@@ -283,7 +283,7 @@ test("every import of a published file is listed in its package files", () => {
       const imports = collectPublishedImports(name, packageDir, pkg.files);
 
       for (const imp of imports) {
-        // Files that staging creates are allowed (stage.mjs creates them at publish time)
+        // Files that staging creates are allowed (copy-frontend.mjs creates them at publish time)
         if (imp.isStaged) {
           allowed.push(`${name}: ${imp.file} → ${imp.resolvedPath} (${imp.stagedType === "served" ? "host 가 제공" : "스테이징이 생성"})`);
           continue;

@@ -9,7 +9,7 @@
 // platform method called. Proposition 7 (framework port) checks that the Go and Rust framework ports have the same methods outside the
 // rows P of the language table. The comparison of the actual menu bar belongs to the window check layer, and propositions 4 and 5 are the next
 // extension.
-import { FRAMEWORK_TABLE, LANGUAGE_TABLE, MYGO_TABLE, allowedDifferenceTables } from './check-hosts.mjs';
+import { FRAMEWORK_TABLE, LANGUAGE_TABLE, MYGO_TABLE, allowedDifferenceTables } from './check-host-files.mjs';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -614,7 +614,7 @@ export function libraryCrate(manifest, file) {
   return { root: path, name: name.replaceAll('-', '_') };
 }
 
-if (process.argv[1] && process.argv[1].endsWith('check-host-parity.mjs')) {
+if (process.argv[1] && process.argv[1].endsWith('check-hosts-same.mjs')) {
   const read = (path) => readFileSync(join(ROOT, path), 'utf8');
   // The sources of an application that links a host, by their path in the repository.
   const applicationSources = (directory, extension) => Object.fromEntries(

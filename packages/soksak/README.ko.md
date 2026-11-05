@@ -24,4 +24,4 @@ view.render();
 
 - [배치 규칙과 API](docs/layout.ko.md)
 
-이 디렉터리에서 `pnpm test`, `pnpm breaks`, `pnpm fuzz`, `pnpm mutate`를 실행한다. MIT 라이선스: [LICENSE](LICENSE).
+이 디렉터리에서 `pnpm test`, `pnpm check-breaks`, `pnpm fuzz`, `pnpm mutate`를 실행한다. MIT 라이선스: [LICENSE](LICENSE).

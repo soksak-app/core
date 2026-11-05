@@ -1,5 +1,5 @@
-// The names of the files that stage.mjs creates in the publish root.
-// stage.mjs imports this list and verifies it so that the declaration and the actual files match.
+// The names of the files that copy-frontend.mjs creates in the publish root.
+// copy-frontend.mjs imports this list and verifies it so that the declaration and the actual files match.
 //
 // Publish root files (modules can import them directly):
 // - always: created in every build that stages a main page
@@ -8,7 +8,7 @@
 // - served: documents that the host provides. Staging writes them only with --installed
 //
 // Note: the files copied under modules/ are not declared here.
-//      They are managed by the files array of each plugin or sidecar, and stage.mjs only copies them.
+//      They are managed by the files array of each plugin or sidecar, and copy-frontend.mjs only copies them.
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { RUNTIME, importSpecifiers, pageImports } from "@soksak/plugin-api";

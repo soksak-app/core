@@ -20,13 +20,13 @@ function rules(text) {
 // one of these modes, and the presentation tests need a display that presents frames.
 const NATIVE_END_TO_END = /\$\(NATIVE_E2E_TESTS\)|,--activation|,--backspace|--frontmost|,--baseline/;
 
-test("native unit targets run no end-to-end case and native end-to-end targets carry the e2e prefix", { timeout: 1000 }, () => {
+test("native unit targets run no end-to-end case and native end-to-end targets start with test-app", { timeout: 1000 }, () => {
   const native = rules(read("native/darwin/Makefile"));
   const recipe = (target) => native.find((rule) => rule.target === target)?.recipe ?? "";
   assert.match(recipe("test"), /\$\(NATIVE_TEST_RUNNER\).*\$\(NATIVE_TESTS\)\s*$/m, "make -C native/darwin test does not run NATIVE_TESTS");
-  assert.match(recipe("e2e"), /\$\(NATIVE_E2E_TESTS\)/, "make -C native/darwin e2e does not run NATIVE_E2E_TESTS");
-  const misnamed = native.filter((rule) => NATIVE_END_TO_END.test(rule.recipe) && !rule.target.startsWith("e2e")).map((rule) => rule.target);
-  assert.deepEqual(misnamed, [], "a native target runs an end-to-end case without the e2e prefix");
+  assert.match(recipe("test-app"), /\$\(NATIVE_E2E_TESTS\)/, "make -C native/darwin test-app does not run NATIVE_E2E_TESTS");
+  const misnamed = native.filter((rule) => NATIVE_END_TO_END.test(rule.recipe) && !rule.target.startsWith("test-app")).map((rule) => rule.target);
+  assert.deepEqual(misnamed, [], "a native target runs an end-to-end case outside the test-app targets");
 });
 
 /** The entries of a make variable that lists native tests: the executable of each `name` or `name,mode` entry. */
@@ -58,62 +58,62 @@ test("a native unit test records no window of the screen", { timeout: 1000 }, ()
 
 /**
  * Whether a script of the checkout starts an application through the `start` step of runPlan: it imports runPlan from
- * scripts/e2e-run.mjs and declares a step of the kind `start`.
+ * scripts/test-app.mjs and declares a step of the kind `start`.
  */
 function startsApplications(path, readScript) {
   const source = readScript(path);
   const folder = posix.dirname(path);
   const imports = [...source.matchAll(/import\s*\{([^}]*)\}\s*from\s*["']([^"']+)["']/g)]
-    .some(([, names, from]) => /\brunPlan\b/.test(names) && posix.normalize(posix.join(folder, from)) === "scripts/e2e-run.mjs");
+    .some(([, names, from]) => /\brunPlan\b/.test(names) && posix.normalize(posix.join(folder, from)) === "scripts/test-app.mjs");
   return imports && /\bkind:\s*["']start["']/.test(source);
 }
 
 /**
- * The targets of a root Makefile that run end-to-end checks without the e2e prefix: a recipe that runs a window-check script, the
- * native end-to-end target or scripts/e2e-run.mjs, or that runs a script that starts an application through the `start` step of
+ * The targets of a root Makefile that run end-to-end checks outside the test-app and benchmark targets: a recipe that runs a window-check script, the
+ * native end-to-end target or scripts/test-app.mjs, or that runs a script that starts an application through the `start` step of
  * runPlan. `readScript(path)` reads a file of the checkout.
  */
 function misnamedRootTargets(makefile, readScript) {
-  const endToEnd = (recipe) => /run verify|--script verify|make -C native\/darwin e2e|e2e-run\.mjs|\bgo\b.*\btest\b.*-tags[ =]"?(?:[\w ]* )?e2e\b/.test(recipe)
+  const endToEnd = (recipe) => /run test-app|--script test-app|make -C native\/darwin test-app|test-app\.mjs|\bgo\b.*\btest\b.*-tags[ =]"?(?:[\w ]* )?e2e\b/.test(recipe)
     || [...recipe.matchAll(/\bnode\s+(scripts\/[\w./-]+\.mjs)\b/g)].some(([, path]) => startsApplications(path, readScript));
-  return rules(makefile).filter((rule) => endToEnd(rule.recipe) && !rule.target.startsWith("e2e")).map((rule) => rule.target);
+  return rules(makefile).filter((rule) => endToEnd(rule.recipe) && !/^(?:test-app|benchmark-)/.test(rule.target)).map((rule) => rule.target);
 }
 
-test("a root target that starts an application through the start step of runPlan without the e2e prefix is reported", { timeout: 1000 }, () => {
-  const makefile = "b3:\n\t@node scripts/fixture-b3.mjs --runs 1\n\ne2e-fixture:\n\t@node scripts/fixture-b3.mjs\n\nbuilds:\n\t@node scripts/fixture-builds.mjs\n";
+test("a root target that starts an application through the start step of runPlan outside the test-app and benchmark targets is reported", { timeout: 1000 }, () => {
+  const makefile = "b3:\n\t@node scripts/fixture-b3.mjs --runs 1\n\ntest-app-fixture:\n\t@node scripts/fixture-b3.mjs\n\nbuilds:\n\t@node scripts/fixture-builds.mjs\n";
   const scripts = {
-    "scripts/fixture-b3.mjs": "import { runPlan } from './e2e-run.mjs';\nawait runPlan([{ name: 'start app', phase: 'prepare', kind: 'start', app: 'app', argv: [] }], { write: console.log });\n",
-    "scripts/fixture-builds.mjs": "import { runPlan } from './e2e-run.mjs';\nawait runPlan([{ name: 'build', phase: 'prepare', kind: 'run', argv: ['make'] }], { write: console.log });\n",
+    "scripts/fixture-b3.mjs": "import { runPlan } from './test-app.mjs';\nawait runPlan([{ name: 'start app', phase: 'prepare', kind: 'start', app: 'app', argv: [] }], { write: console.log });\n",
+    "scripts/fixture-builds.mjs": "import { runPlan } from './test-app.mjs';\nawait runPlan([{ name: 'build', phase: 'prepare', kind: 'run', argv: ['make'] }], { write: console.log });\n",
   };
   assert.deepEqual(misnamedRootTargets(makefile, (path) => scripts[path]), ["b3"]);
 });
 
-test("a root target that runs go test with the tag e2e without the e2e prefix is reported", { timeout: 1000 }, () => {
-  const makefile = 'host-go:\n\t@go -C packages/host/mygo test -tags e2e ./tests/...\n\ne2e-host-go:\n\t@go -C packages/host/mygo test -tags e2e ./tests/...\n\nunit:\n\t@go -C packages/host/mygo test -tags diagnostics ./tests/...\n';
+test("a root target that runs go test with the tag e2e outside the test-app and benchmark targets is reported", { timeout: 1000 }, () => {
+  const makefile = 'host-go:\n\t@go -C packages/host/mygo test -tags e2e ./tests/...\n\ntest-app-host-go:\n\t@go -C packages/host/mygo test -tags e2e ./tests/...\n\nunit:\n\t@go -C packages/host/mygo test -tags diagnostics ./tests/...\n';
   assert.deepEqual(misnamedRootTargets(makefile, () => ""), ["host-go"]);
 });
 
-test("the root target e2e-host-go runs the tests with the build constraint e2e of the Go library and adapters", { timeout: 1000 }, () => {
-  const recipe = rules(read("Makefile")).find((rule) => rule.target === "e2e-host-go")?.recipe ?? "";
-  assert.match(recipe, /-tags e2e/, "make e2e-host-go does not run the tag e2e");
+test("the root target test-app-host-go runs the tests with the build constraint e2e of the Go library and adapters", { timeout: 1000 }, () => {
+  const recipe = rules(read("Makefile")).find((rule) => rule.target === "test-app-host-go")?.recipe ?? "";
+  assert.match(recipe, /-tags e2e/, "make test-app-host-go does not run the tag e2e");
   for (const library of ["packages/host/go", "packages/host/wailsv3", "packages/host/mygo"]) assert.ok(read("Makefile").includes(library), library);
 });
 
 test("the root make targets are the only entry points of the window checks", { timeout: 1000 }, () => {
   const root = rules(read("Makefile"));
-  for (const target of ["e2e", "e2e-activation", "e2e-real", "e2e-person", "e2e-b3"]) assert.ok(root.some((rule) => rule.target === target), `the Makefile has no target ${target}`);
-  assert.match(root.find((rule) => rule.target === "e2e").recipe, /node scripts\/e2e-run\.mjs/, "make e2e does not run scripts/e2e-run.mjs");
-  assert.deepEqual(misnamedRootTargets(read("Makefile"), read), [], "a root target runs end-to-end checks without the e2e prefix");
-  const scripts = Object.keys(JSON.parse(read("package.json")).scripts ?? {}).filter((name) => name.startsWith("verify"));
+  for (const target of ["test-app", "test-app-activation", "test-app-real", "test-app-person", "benchmark-b3"]) assert.ok(root.some((rule) => rule.target === target), `the Makefile has no target ${target}`);
+  assert.match(root.find((rule) => rule.target === "test-app").recipe, /node scripts\/test-app\.mjs/, "make test-app does not run scripts/test-app.mjs");
+  assert.deepEqual(misnamedRootTargets(read("Makefile"), read), [], "a root target runs end-to-end checks outside the test-app targets");
+  const scripts = Object.keys(JSON.parse(read("package.json")).scripts ?? {}).filter((name) => name.startsWith("test-app"));
   assert.deepEqual(scripts, [], "the root package declares a window-check entry point");
 });
 
 // Every script of the e2e package except its unit test script drives a running application.
-test("every script of the e2e package that drives an application is run by a root target with the e2e prefix", { timeout: 1000 }, () => {
-  const targets = rules(read("Makefile")).filter((rule) => rule.target.startsWith("e2e"));
+test("every script of the e2e package that drives an application is run by a root target of its kind", { timeout: 1000 }, () => {
+  const targets = rules(read("Makefile")).filter((rule) => /^(test-app|benchmark-|repeat-app-test$)/.test(rule.target));
   const scripts = Object.keys(JSON.parse(read("e2e/package.json")).scripts).filter((name) => name !== "test");
   const runs = (recipe, name) => recipe.split(/\s+/).some((word, index, words) => word === name && ["run", "--script"].includes(words[index - 1]));
-  assert.deepEqual(scripts.filter((name) => !targets.some((rule) => runs(rule.recipe, name))), [], "these scripts of e2e/package.json have no e2e target");
+  assert.deepEqual(scripts.filter((name) => !targets.some((rule) => runs(rule.recipe, name))), [], "these scripts of e2e/package.json have no root target");
 });
 
 test("the test script of the e2e package runs only its unit test folder", { timeout: 1000 }, () => {
@@ -124,7 +124,7 @@ test("no workflow runs a target or script of the end-to-end checks", { timeout: 
   const workflows = join(ROOT, ".github", "workflows");
   for (const file of readdirSync(workflows).filter((name) => name.endsWith(".yml"))) {
     const text = readFileSync(join(workflows, file), "utf8");
-    const found = /\be2e\b|verify:|run verify\b|--script verify\b/.exec(text);
+    const found = /\be2e\b|\btest-app\b/.exec(text);
     assert.equal(found, null, `${file} names ${found?.[0]}`);
   }
 });

@@ -16,10 +16,10 @@ test("the registry TLS target fails and names the file when openssl writes no ce
   spawnSync("mkdir", ["-p", bin]);
   writeFileSync(join(bin, "openssl"), '#!/bin/sh\nwhile [ $# -gt 0 ]; do if [ "$1" = -out ] || [ "$1" = -keyout ]; then : > "$2"; fi; shift; done\n');
   chmodSync(join(bin, "openssl"), 0o755);
-  const run = spawnSync("make", ["--no-print-directory", "e2e-registry-tls"], {
+  const run = spawnSync("make", ["--no-print-directory", "create-test-certificates"], {
     cwd: ROOT, encoding: "utf8", env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, SOKSAK_CONFIG_ROOT: join(root, "config") },
   });
-  assert.notEqual(run.status, 0, `make e2e-registry-tls accepted an empty certificate: ${run.stdout}`);
+  assert.notEqual(run.status, 0, `make create-test-certificates accepted an empty certificate: ${run.stdout}`);
   assert.match(run.stderr, /soksak-check-registry-tls\/ca\.pem holds no certificate/);
 });
 
@@ -29,7 +29,7 @@ test("the registry TLS target writes only its own extensions, whatever the opens
   // A machine configuration that adds extensions to every self-signed certificate, as the default configuration of some openssl
   // releases does; its basicConstraints repeats one that the target declares, which gives a certificate with a duplicate extension.
   writeFileSync(join(root, "machine.cnf"), "[req]\ndistinguished_name=name\nx509_extensions=machine\n[name]\n[machine]\nbasicConstraints=critical,CA:true\nnsComment=machine\n");
-  const run = spawnSync("make", ["--no-print-directory", "e2e-registry-tls"], {
+  const run = spawnSync("make", ["--no-print-directory", "create-test-certificates"], {
     cwd: ROOT, encoding: "utf8", env: { ...process.env, OPENSSL_CONF: join(root, "machine.cnf"), SOKSAK_CONFIG_ROOT: join(root, "config") },
   });
   assert.equal(run.status, 0, run.stderr);

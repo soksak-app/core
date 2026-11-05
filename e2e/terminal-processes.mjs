@@ -13,7 +13,7 @@ export function processRows(text) {
 }
 
 export function terminalProcessSnapshot(configDir) {
-  const serviceDir = join(realpathSync(configDir), "services", "soksak-vt-alacritty");
+  const serviceDir = join(realpathSync(configDir), "services", "sok-vt-alacritty");
   const endpoint = JSON.parse(readFileSync(join(serviceDir, "endpoint.json"), "utf8"));
   assert.equal(endpoint.protocol, 1, "terminal service protocol does not match");
   assert.ok(Number.isInteger(endpoint.pid) && endpoint.pid > 0, "terminal service PID is missing");

@@ -1,7 +1,7 @@
 // Prints, for each Go file that a line of the standard input names, the cgo preamble with the line of its first line, the
 // flags of its #cgo CFLAGS lines, the functions that the file exports to C, and the calls of C functions, as a JSON array.
 // go/parser reads the files; the preamble is the comment of import "C" and its #cgo lines are blank, as cmd/cgo reads them.
-// scripts/check-hosts.mjs runs it for the main-thread audit of the darwin layer of the Wails host (docs/spec/hosts.md, main
+// scripts/check-host-files.mjs runs it for the main-thread audit of the darwin layer of the Wails host (docs/spec/hosts.md, main
 // thread of the Wails host). The paths come from the standard input because go run takes every .go argument as a file of the
 // program.
 //

@@ -37,7 +37,7 @@ pub fn prepare_config_directory(
 /// govern is shared by its projects (docs/spec/settings.md#values). The workbench refuses the same keys.
 static COMMON_ONLY: LazyLock<Vec<String>> = LazyLock::new(|| {
     let declaration: Value = serde_json::from_str(WORKBENCH_DECLARATION)
-        .expect("the embedded workbench.json parses: make exposure-check holds it to its source");
+        .expect("the embedded workbench.json parses: make check-exposure holds it to its source");
     let keys: Vec<String> = serde_json::from_value(declaration["settings"]["commonOnly"].clone())
         .expect("the embedded workbench.json lists the common-only keys as strings");
     assert!(
@@ -47,7 +47,7 @@ static COMMON_ONLY: LazyLock<Vec<String>> = LazyLock::new(|| {
     keys
 });
 
-/// The copy of `packages/workbench/workbench.json`, which `make exposure-check` holds equal to its source.
+/// The copy of `packages/workbench/workbench.json`, which `make check-exposure` holds equal to its source.
 const WORKBENCH_DECLARATION: &str = include_str!("workbench.json");
 
 /// The keys that a project setting cannot hold.

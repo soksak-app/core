@@ -1,7 +1,7 @@
 // Checks pointer and keyboard input of overlapping webviews and restoration after removal on the installed WebKit.
 //
 // WebKit updates hover only in the key window, so this check activates the application and takes the focus of the
-// user. It is not part of make test and runs only through make e2e-activation. AppKit also delivers movement to a
+// user. It is not part of make test and runs only through make test-app-activation. AppKit also delivers movement to a
 // tracking area that holds the real pointer, so the check places the window away from the pointer and reports the
 // measurement as a failure if the pointer enters the window.
 #import <Cocoa/Cocoa.h>
@@ -194,7 +194,7 @@ static void checkTrackingOrders(NSWindow *window, WKWebView *bottom, WKWebView *
     expectHover(views, @[@NO, @NO], @"the exit of the last view clears the hover");
 }
 
-// tests/support/no_activation.m: this check activates the app in make e2e-activation.
+// tests/support/no_activation.m: this check activates the app in make test-app-activation.
 void sp_test_declare_activation(void);
 
 int main(int argc, const char **argv) { @autoreleasepool {

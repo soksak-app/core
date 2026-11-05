@@ -1,4 +1,4 @@
-// The run of the end-to-end checks (scripts/e2e-run.mjs, docs/operations/examples.md#end-to-end-run): the steps of a run, a fresh
+// The run of the end-to-end checks (scripts/test-app.mjs, docs/operations/examples.md#end-to-end-run): the steps of a run, a fresh
 // configuration root for each run, the report of each step, and the failure on a process that remains after the applications quit.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { startFakeEndpoint } from "@soksak/client/testing";
-import { e2ePlan, finishRoot, newConfigRoot, remainingProcesses, runPlan } from "../e2e-run.mjs";
+import { e2ePlan, finishRoot, newConfigRoot, remainingProcesses, runPlan } from "../test-app.mjs";
 
 const node = (code) => [process.execPath, "-e", code];
 const step = (name, phase, code) => ({ name, phase, kind: "run", argv: node(code), env: {} });
@@ -57,25 +57,25 @@ test("the plan prepares, starts the three applications, checks and quits them in
   for (const item of plan.filter((entry) => entry.kind === "run")) assert.equal(item.env.SOKSAK_CONFIG_ROOT, configRoot, item.name);
   const start = plan.find((item) => item.name === "start wailsv3");
   assert.deepEqual(start.argv, [
-    "/work/target/debug/soksak-wailsv3.app/Contents/MacOS/soksak-wailsv3",
+    "/work/target/debug/sok-wailsv3.app/Contents/MacOS/sok-wailsv3",
     "--config-dir", "/work/target/e2e/run/soksak-check-wailsv3",
     "--registry-ca", "/work/target/e2e/run/soksak-check-registry-tls/ca.pem",
   ]);
   const checks = plan.find((item) => item.name === "window checks");
-  assert.equal(checks.env.SOKSAK_BINARY_TAURIV2, "/work/target/debug/soksak-tauriv2.app/Contents/MacOS/soksak-tauriv2");
-  assert.equal(checks.env.SOKSAK_BINARY_MYGO, "/work/target/debug/soksak-mygo.app/Contents/MacOS/soksak-mygo");
+  assert.equal(checks.env.SOKSAK_BINARY_TAURIV2, "/work/target/debug/sok-tauriv2.app/Contents/MacOS/sok-tauriv2");
+  assert.equal(checks.env.SOKSAK_BINARY_MYGO, "/work/target/debug/sok-mygo.app/Contents/MacOS/sok-mygo");
   assert.deepEqual(plan.find((item) => item.name === "start mygo").argv, [
-    "/work/target/debug/soksak-mygo.app/Contents/MacOS/soksak-mygo",
+    "/work/target/debug/sok-mygo.app/Contents/MacOS/sok-mygo",
     "--config-dir", "/work/target/e2e/run/soksak-check-mygo",
     "--registry-ca", "/work/target/e2e/run/soksak-check-registry-tls/ca.pem",
   ]);
-  assert.ok(plan.find((item) => item.name === "remaining processes").paths.includes("/work/target/debug/soksak-mygo.app"));
+  assert.ok(plan.find((item) => item.name === "remaining processes").paths.includes("/work/target/debug/sok-mygo.app"));
   assert.equal(checks.env.SOKSAK_CANDIDATE_REGISTRY, "file:///work/target/registry/index.json");
   assert.deepEqual(checks.argv.slice(2, 4), ["--script", "verify"]);
   assert.ok(!checks.argv.includes("--when-idle"));
   assert.deepEqual(plan.find((item) => item.name === "native end-to-end tests").argv, ["make", "-C", "native/darwin", "e2e"]);
-  const person = e2ePlan({ root, configRoot, script: "verify:person", whenIdle: "60" });
-  assert.deepEqual(person.find((item) => item.name === "window checks").argv.slice(2, 4), ["--script", "verify:person"]);
+  const person = e2ePlan({ root, configRoot, script: "test-app:person", whenIdle: "60" });
+  assert.deepEqual(person.find((item) => item.name === "window checks").argv.slice(2, 4), ["--script", "test-app:person"]);
   assert.deepEqual(person.find((item) => item.name === "window checks").argv.slice(-2), ["--when-idle", "60"]);
   assert.equal(person.some((item) => item.name === "native end-to-end tests"), false);
 });
@@ -182,13 +182,13 @@ test("a quit step without a started application is skipped", { timeout: 5000 }, 
 
 test("a process whose command names the configuration root or an application bundle remains", { timeout: 1000 }, () => {
   const text = [
-    "  101 /work/target/debug/soksak-wailsv3.app/Contents/MacOS/vt --config-dir /x",
+    "  101 /work/target/debug/sok-wailsv3.app/Contents/MacOS/vt --config-dir /x",
     "  102 /usr/bin/other /tmp",
     "  103 /bin/sh -c cat /work/target/e2e/run/soksak-check-tauriv2/logs/host.jsonl",
   ].join("\n");
-  assert.deepEqual(remainingProcesses(text, ["/work/target/e2e/run", "/work/target/debug/soksak-wailsv3.app"], 999),
-    ["101 /work/target/debug/soksak-wailsv3.app/Contents/MacOS/vt --config-dir /x", "103 /bin/sh -c cat /work/target/e2e/run/soksak-check-tauriv2/logs/host.jsonl"]);
-  assert.deepEqual(remainingProcesses("  999 node scripts/e2e-run.mjs /work/target/e2e/run", ["/work/target/e2e/run"], 999), []);
+  assert.deepEqual(remainingProcesses(text, ["/work/target/e2e/run", "/work/target/debug/sok-wailsv3.app"], 999),
+    ["101 /work/target/debug/sok-wailsv3.app/Contents/MacOS/vt --config-dir /x", "103 /bin/sh -c cat /work/target/e2e/run/soksak-check-tauriv2/logs/host.jsonl"]);
+  assert.deepEqual(remainingProcesses("  999 node scripts/test-app.mjs /work/target/e2e/run", ["/work/target/e2e/run"], 999), []);
 });
 
 test("a passed run removes its configuration root and a failed run keeps it", { timeout: 5000 }, (t) => {
@@ -207,8 +207,8 @@ test("a failed run keeps the logs and removes the service folders, so the servic
   const root = workspace(t);
   const failed = newConfigRoot(root);
   for (const app of ["soksak-check-wailsv3", "soksak-check-tauriv2"]) {
-    mkdirSync(join(failed, app, "services", "soksak-vt-alacritty"), { recursive: true });
-    writeFileSync(join(failed, app, "services", "soksak-vt-alacritty", "endpoint.json"), "{}");
+    mkdirSync(join(failed, app, "services", "sok-vt-alacritty"), { recursive: true });
+    writeFileSync(join(failed, app, "services", "sok-vt-alacritty", "endpoint.json"), "{}");
     mkdirSync(join(failed, app, "logs"), { recursive: true });
     writeFileSync(join(failed, app, "logs", "host.jsonl"), "{}\n");
   }

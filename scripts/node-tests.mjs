@@ -2,7 +2,7 @@
 // starts and ends with its elapsed time, has its own limit, and runs in parallel (docs/operations/examples.md#test-runner).
 // The test script of each package names the flags and the paths: `node --test [flags] <paths>`, optionally after commands such as
 // `pnpm build`. `--script <name>` reads another script of the packages that have it (`verify` runs the window checks, with
-// `--concurrency 1` because they share the applications, and `--timeout <seconds>`, at most 600, which is the limit of each test that declares none, and `--when-idle <seconds>` starts a file only after the person gave no input for that long, so the checks do not take the focus of the person). A file has no limit of its own. The files are those that `node --test` runs for the paths: a directory holds every JavaScript file under it. `--changed <range>` selects only the packages that hold a file which `git diff --name-only <range>` lists or declare it in `specFiles` of their package.json; `make push-check` runs the tests of the changed packages with it.
+// `--concurrency 1` because they share the applications, and `--timeout <seconds>`, at most 600, which is the limit of each test that declares none, and `--when-idle <seconds>` starts a file only after the person gave no input for that long, so the checks do not take the focus of the person). A file has no limit of its own. The files are those that `node --test` runs for the paths: a directory holds every JavaScript file under it. `--changed <range>` selects only the packages that hold a file which `git diff --name-only <range>` lists or declare it in `specFiles` of their package.json; `make check-push` runs the tests of the changed packages with it.
 import { parseArgs } from 'node:util';
 import { execFileSync } from 'node:child_process';
 import { existsSync, globSync, readdirSync, readFileSync, statSync } from 'node:fs';
@@ -107,7 +107,7 @@ const REPORTERS = ['--test-reporter=spec', '--test-reporter-destination=stdout',
 
 /**
  * The specification files that the sources of a package read, which its manifest declares in `specFiles` (paths under
- * `docs/spec/`; a path that ends in `/` names a folder). `make boundaries-check` fails when a source reads a file of docs/spec that its
+ * `docs/spec/`; a path that ends in `/` names a folder). `make check-boundaries` fails when a source reads a file of docs/spec that its
  * package does not declare, so the declaration is complete.
  */
 export function specFilesOf(manifest, where) {
@@ -215,12 +215,12 @@ export function workspacePackages(root) {
 }
 
 /**
- * The audit of the logs that follows a run of window checks (`--script verify`) or of the activation tier
- * (`--script verify:activation`): `audit(run folder)` returns the findings `<file>:<line>: <message>`, which are written, and the
+ * The audit of the logs that follows a run of window checks (`--script test-app`) or of the activation tier
+ * (`--script test-app:activation`): `audit(run folder)` returns the findings `<file>:<line>: <message>`, which are written, and the
  * status is 1 when there is one or when the audit cannot run (for example, the run left no marks). Other scripts leave no logs.
  */
 export function auditAfterRun(scriptName, run, write, audit = auditRunWithCatalog) {
-  if (scriptName !== 'verify' && !scriptName.startsWith('verify:')) return 0;
+  if (scriptName !== 'test-app' && !scriptName.startsWith('test-app:')) return 0;
   let findings;
   try {
     findings = audit(run.folder);

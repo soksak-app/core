@@ -2,13 +2,13 @@
 // runs the list of operations N times, settles after each operation, and reads the counts, the Go runtime figures (the member runtime of the
 // Wails and the mygo host) and the footprint of the host process, of the page process and of each document process again. A window whose
 // host.window reports pageProcess null has no main page, which is the window of the mygo host: its reply has page null, and the measurement
-// reads no page process. The host is the process whose command line has --config-dir DIR, found as `make app-usage` finds it. The measure
+// reads no page process. The host is the process whose command line has --config-dir DIR, found as `make measure-app-usage` finds it. The measure
 // function asserts nothing: it logs one entry per repetition, {repetition, counts, runtime, footprint}, and then one summary per count,
 // {count, baseline, values, grows}, where grows is true when the count rises in every repetition after the second. A count that grows is a
 // defect for the owning check to judge. With --b3-out FILE, which needs at least 30 repetitions, it writes the B3 output of S3
 // (scripts/b3-out.mjs) with the measurements that B3_MEASUREMENTS declares, changedCounts and growingFigures of b3Measurements, and
 // the conditions of the window, whose traceState is the diagnostics.performance that TRACE set (b3Output).
-// `make object-counts` runs it.
+// `make measure-object-counts` runs it.
 //
 //   node scripts/measure-object-counts.mjs --sok PATH --config-dir DIR --trace 0|1 --plugin ID [--plugin ID]... [--repetitions N] [--b3-out FILE]
 import { spawn, execFile, execFileSync } from "node:child_process";

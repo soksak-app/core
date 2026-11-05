@@ -12,7 +12,7 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// The copies of the declarations of packages/workbench, which make exposure-check holds equal to their source
+// The copies of the declarations of packages/workbench, which make check-exposure holds equal to their source
 // (docs/spec/hosts.md#workbench).
 var (
 	//go:embed exposure.json
