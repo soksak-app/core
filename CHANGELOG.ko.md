@@ -5,6 +5,7 @@
 ## 미배포
 
 - F463: core가 checks kit과 실행 파일 하나 `soksak-check`를 씁니다. Red: `scripts/test/workflows.test.mjs`가 실패했습니다. Green: 통과합니다.
+- F465: 기록은 local build 폴더의 log를 인용하지 않고, record 검사가 새 인용을 보고합니다.
 - F464: build environment 검사는 Node와 pnpm의 major version만 비교합니다. Red: `scripts/test/check-build-environment.sh`가 Node 26.13.0에서 실패했습니다. Green: 통과합니다.
 - F462: core 0.0.35가 `^0.0.35`를 선언한 plugin release를 설치하고 registry가 이를 나열합니다.
 - F453: release run이 v0.0.35를 게시했고 registry가 이를 나열합니다.
@@ -294,9 +295,9 @@
 - F292-67: `node scripts/node-tests.mjs --changed`는 `--only`와 `--exclude`가 바뀐 범위의 test file을 하나도 남기지 않으면 `no test file contains ""`로 실패하지 않고 `SKIP` 줄과 함께 통과한다.
 - F292-65: `document_report_test`는 reload 전에 test가 설정한 title을 region이 보고할 때까지 기다리고, reload된 form page의 frame을 1초 늦게 응답하며, target을 focus하지 않은 press를 page와 frame의 load state, 마지막으로 보고된 state, first responder, hit view와 함께, 전달되지 않은 press나 key를 그 result code와 함께 실패시킨다. release run의 frame field step 실패는 20회와 겹친 10회 repeat 두 개에서 재현되지 않았다. 검증: `make -C native/darwin repeat TEST=document_report_test COUNT=20`.
 - F292-63: 두 host가 case `install.stored.no-migration`의 통과하는 시험을 가진다. Go와 Rust `sok` install 시험은 `migrations`를 선언한 plugin manifest를 `plugin.json: unknown field migrations`로 거부하며, 선언 감사 시험은 Contract cases 표의 모든 case에 현재 source의 선언 시험이 있는지 확인한다. 검증: 감사 시험은 변경 전 시험에서 두 host에 이 case의 시험이 없다고 보고했고, 새 시험을 추가한 뒤 통과한다. `make go-repeat`와 `make rust-repeat`가 새 시험을 실행하며 통과한다.
-- F277-3: process identity package가 등록한 process는 등록 시점부터 LaunchServices 목록에 display name으로 나타난다. `_RegisterApplication`이 `_kLSDisplayNameKey`를 담은 check-in dictionary를 받기 때문이다. 이전에는 `_LSSetApplicationInformationItem`이 돌아올 때까지 process가 executable 이름으로 나타났고, `lsappinfo list`를 읽는 files sidecar 시험이 `soksak-files`를 받았다. 검증: `process_identity_test.m`의 live case `LaunchServices lists the process with its display name from its registration`은 변경 전 코드에서 `found process_identity_test`로 실패했고 변경 후 통과한다. `make -C native/darwin/process-identity repeat TEST=process_identity_test COUNT=20`은 단독 실행과 동시에 실행한 두 copy에서 통과한다(`build/logs/F277/`).
+- F277-3: process identity package가 등록한 process는 등록 시점부터 LaunchServices 목록에 display name으로 나타난다. `_RegisterApplication`이 `_kLSDisplayNameKey`를 담은 check-in dictionary를 받기 때문이다. 이전에는 `_LSSetApplicationInformationItem`이 돌아올 때까지 process가 executable 이름으로 나타났고, `lsappinfo list`를 읽는 files sidecar 시험이 `soksak-files`를 받았다. 검증: `process_identity_test.m`의 live case `LaunchServices lists the process with its display name from its registration`은 변경 전 코드에서 `found process_identity_test`로 실패했고 변경 후 통과한다. `make -C native/darwin/process-identity repeat TEST=process_identity_test COUNT=20`은 단독 실행과 동시에 실행한 두 copy에서 통과한다.
 - F277-2: process identity package에 native/darwin과 같은 형식의 `repeat` target `make -C native/darwin/process-identity repeat TEST=process_identity_test COUNT=<n>`이 있다. 이 target은 native test runner로 시험을 실행하며 시험별 RUNNING과 PASS 줄 및 시간 제한을 적용한다. `make -C native/darwin repeat`는 이 시험에 대해 `No rule to make target`으로 더 이상 실패하지 않는다. 검증: `scripts/test/native-repeat.test.mjs`의 `make repeat in the process-identity package names its test of each run, reports its result and elapsed time, and stops at a failed run`은 변경 전 Makefile에서 `No rule to make target 'repeat'`로 실패했고 변경 후 통과한다. 변수 이름을 바꾼 뒤 `test-process-identity`가 통과한다.
-- F277: process identity 시험의 display name readback을 실패 없이 75회 반복했으며, 그중 60회는 겹쳐 실행한 두 복사본의 run이다. F277은 not reproduced로 닫는다. 원인은 재발할 때 F277-1의 오류 문장으로 기록한다. 검증: `make -C native/darwin/process-identity repeat TEST=process_identity_test COUNT=<n>`의 로그 `build/logs/F277/`(단독, 순차, 겹친 run).
+- F277: process identity 시험의 display name readback을 실패 없이 75회 반복했으며, 그중 60회는 겹쳐 실행한 두 복사본의 run이다. F277은 not reproduced로 닫는다. 원인은 재발할 때 F277-1의 오류 문장으로 기록한다. 검증: `make -C native/darwin/process-identity repeat TEST=process_identity_test COUNT=<n>`의 단독, 순차, 겹친 run.
 - F296-4: 각 host의 release workflow는 저장 데이터 migration 단계를 실행하지 않는다. `scripts/release-step.sh`와 그 시험을 제거했다. 생성된 event class 표와 window-check gate 목록은 더 이상 `log.migrated`를 이름으로 들지 않는다.
 - F296-3: host reader는 projects.json, settings.json, tab-state.json, tab-sessions의 다른 형식 file을 읽지 않고 `<file>: <name>: format must be <n>`으로 거부한다. workbench는 다른 형식이거나 format 없이 저장된 plugin data 항목을 변환하지 않고 거부한다.
 - F296-2: 두 호스트의 `sok` command line은 migration 정의를 적용하지 않는다. format이 3이 아닌 `plugins/installed.json`은 `<file>: plugins/installed.json: format must be 3`으로 거부되며, `migrations` member의 manifest case는 Go, Rust, plugin-api runner가 재생한다.
@@ -1084,8 +1085,8 @@
   확인 뒤, 다음 key를 보내기 전에 기다린다. 이 대기는 reference 입력 사이에
   application window가 presentation update를 거치게 하지만 AppKit text view의 paint나
   물리적 scanout을 증명하지 않는다. 제어된 owner는 presentation 전에 두 번째 key가
-  시작되어 실패했다(`/tmp/F239-151-reference-step-red-01.log`). Checkpoint를 추가한 뒤
-  같은 owner가 1/1 통과했다(`/tmp/F239-151-reference-step-green-01.log`). 기존 capture,
+  시작되어 실패했다. Checkpoint를 추가한 뒤
+  같은 owner가 1/1 통과했다. 기존 capture,
   frame identity, 600-frame 및 33 ms acceptance 기준은 그대로 유지하며 runtime
   acceptance는 남아 있다.
 
@@ -1097,9 +1098,9 @@
   artifact drain 동작은 유지한다. Stop timeout/late completion 격리 owner도
   6.499초에 1/1 통과했다.
 
-- F239-148: Decoded frame identity row를 기존 serial identity lane에서 sample 순서대로 append한다. JSONL append가 끝난 뒤 admitted job을 해제해 공유 raw/source artifact writer와 독립적으로 처리한다. 8-job 및 64 MiB limit은 유지한다. Red: matcher owner는 blocked-writer row-commit assertion에서 실패했다(`/tmp/F239-148-image-match-red.log`). Green: 같은 owner가 0.873초에 1/1 통과했고 artifact writer가 멈춘 동안 순서가 맞는 row 8개를 확인한 뒤 writer 해제 후 8개 모두 drain됨을 검증했다(`/tmp/F239-148-image-match-green-final.log`). `make docs-check`도 통과했다(`/tmp/F239-148-docs-check-final.log`).
+- F239-148: Decoded frame identity row를 기존 serial identity lane에서 sample 순서대로 append한다. JSONL append가 끝난 뒤 admitted job을 해제해 공유 raw/source artifact writer와 독립적으로 처리한다. 8-job 및 64 MiB limit은 유지한다. Red: matcher owner는 blocked-writer row-commit assertion에서 실패했다. Green: 같은 owner가 0.873초에 1/1 통과했고 artifact writer가 멈춘 동안 순서가 맞는 row 8개를 확인한 뒤 writer 해제 후 8개 모두 drain됨을 검증했다. `make docs-check`도 통과했다.
 
-- F239-149: Expected ROI 경계를 넘는 QR이 감지되면 기존 canonical helper reason `code-outside-expected-roi`를 반환한다. Matcher는 이미 이를 `cropped`로 매핑하며 issued set에 없는 valid payload는 계속 `unissued`다. Red: `capture_frame_identity_test`는 측정된 네 clipped edge에서 동의어 `cropped-code-in-expected-roi`를 보고했다(`/tmp/F239-149-capture-frame-identity-helper-red-01.log`). Green: 같은 owner가 0.444초에 1/1 통과한다(`/tmp/F239-149-capture-frame-identity-helper-green-01.log`).
+- F239-149: Expected ROI 경계를 넘는 QR이 감지되면 기존 canonical helper reason `code-outside-expected-roi`를 반환한다. Matcher는 이미 이를 `cropped`로 매핑하며 issued set에 없는 valid payload는 계속 `unissued`다. Red: `capture_frame_identity_test`는 측정된 네 clipped edge에서 동의어 `cropped-code-in-expected-roi`를 보고했다. Green: 같은 owner가 0.444초에 1/1 통과한다.
 
 - F239-146: 보존된 recording이 기존 8-job Vision backlog 상한에 도달한 뒤 frame-identity QR decoder를 고정된 ZXing-C++ v3.1.1로 교체한다. Source release SHA-256을 확인하고 QR 전용 C API를 기존 macOS static library에 빌드하며 두 app bundle에 Apache-2.0 license를 포함한다. Exact payload, ROI, ambiguity, error, artifact ordering, resource bound 및 raw-frame 동작을 유지한다. Focused native owner 5개와 pkg-config owner가 통과했고 bundle preparation은 두 host 모두에서 license를 확인했다. 두 host build와 full-recording cadence acceptance는 남아 있다.
 
@@ -1111,7 +1112,7 @@
   assertion까지 진행했지만 frontmost application이 Chrome에서 Terminal로 바뀌어
   cleanup에 실패했다. 이후 새 session은 baseline을 유지했다.
 
-- F239-145: Native application deactivation 시 frontmost process를 기록한다. Activity observer는 event gate를 확인한 뒤 `NSWorkspace.frontmostApplication`을 조회하고 nullable PID와 bundle field를 저장한다. Red: `make -C native/darwin repeat TEST=activity_observers_test COUNT=1`은 `native.app.deactivated`에 fields가 없어 실패했다(`/tmp/F239-145-activity-observers-red-01.log`). Green: 같은 target이 0.498초에 통과했다(`/tmp/F239-145-activity-observers-green-01.log`). 이 값은 key event를 받는 process만 식별하며 focus 변경 이유를 증명하거나 보존된 F143 실패를 해결하지 않는다.
+- F239-145: Native application deactivation 시 frontmost process를 기록한다. Activity observer는 event gate를 확인한 뒤 `NSWorkspace.frontmostApplication`을 조회하고 nullable PID와 bundle field를 저장한다. Red: `make -C native/darwin repeat TEST=activity_observers_test COUNT=1`은 `native.app.deactivated`에 fields가 없어 실패했다. Green: 같은 target이 0.498초에 통과했다. 이 값은 key event를 받는 process만 식별하며 focus 변경 이유를 증명하거나 보존된 F143 실패를 해결하지 않는다.
 
 - F239-144: 기존 frame-identity capacity 오류에 거부 stage, pending job 및 crop-byte 수치, incoming crop, artifact pending bytes와 적용된 limit을 기록한다. 8-job 및 64 MiB 상한은 유지한다. 보존된 Tauri trace는 crop-byte 총량이 64 MiB보다 낮은 상태에서 두 장기 Vision decode로 8개 pending job이 채워졌음을 보여준다.
 
@@ -1157,16 +1158,16 @@
 - F239-109: Rust test build마다 시작 및 경과 시간이 포함된 pass/fail 결과를
   공통 test runner로 출력하며 build별 timeout을 유지한다. 제어된 negative:
   no-output callback을 일시적으로 복원하면 tracked discovery assertion이
-  `no build start line: []`로 실패한다(`/tmp/F239-109-rust-build-progress-red.log`).
+  `no build start line: []`로 실패한다.
   Green: 같은 owner test가 통과했고
-  (`/tmp/F239-109-rust-build-progress-green.log`), Rust discovery와 Cargo metadata
+ , Rust discovery와 Cargo metadata
   owner case는 2/2 통과했다
-  (`/tmp/F239-109-rust-build-progress-green-plus-cargo-metadata.log`).
+ .
 
 - F239-102: Cargo가 나열한 test executable과 target source path에서 Rust
   host-contract 선언을 선택한다. 보존된 초기 static audit은 Linux 및 Windows 전용
   Tauri sok 선언을 macOS inventory에 포함했다. 집중 selector owner test는 1/1
-  통과했다(`/tmp/F239-102-rust-declaration-inventory-green.log`). 다른 F239-93 owner
+  통과했다. 다른 F239-93 owner
   변경이 반영되기 전까지 current 전체 declaration audit은 대기한다.
 
 - F239-140: Image detach acknowledgement typed parse 변환 여섯 곳의 이유를
@@ -1184,8 +1185,8 @@
 - F239-117: E2E subprocess fixture가 각 case override를 적용하기 전에
   상속된 run metadata를 제거한다. 두 nonempty 값을 요구하는 production
   조건은 유지한다. Red: 유효한 외부 metadata 아래 누락·부분 case가 baseline을
-  조회하고 child를 시작했다(`/tmp/F239-117-red.log`). Green: 같은 focused owner
-  test가 4/4 통과한다(`/tmp/F239-117-green.log`). Production runner 동작은 바뀌지
+  조회하고 child를 시작했다. Green: 같은 focused owner
+  test가 4/4 통과한다. Production runner 동작은 바뀌지
   않았다.
 
 - F239-134: 캡처 raster를 정확히 일치하는 host screen body와 수락된 frame
@@ -1209,7 +1210,7 @@
   Resize 조건, 기존 target과 1초 deadline은 유지한다. Owner test가 1/1 통과했고
   runtime acceptance는 남아 있다.
 
-- F239-137: 설정 폴더 event-log 감사에 설치된 모든 plugin manifest catalog를 포함한다. 설치 manifest, plugin identity, catalog layer와 namespace를 검증하고 없거나 잘못된 catalog 파일을 명시적으로 보고한다. `composeCatalogs`는 기존 sidecar 검증을 유지하면서 plugin event 선언과 layer를 합친다. Red: 설치 plugin event가 `catalogOf`에 없어 owner assertion이 `actual: undefined`로 실패했다. Green: 비활성 설치 plugin과 잘못된 manifest/catalog 경우를 포함한 plugin owner test 두 개가 한 번의 실행에서 통과했고, sidecar audit와 log-contract composition 회귀가 각각 3/3 통과했다. Runtime host catalog loader는 plugin catalog를 이미 읽고 있어 변경하지 않았다. Wails catalog preflight 두 번(`/tmp/soksak-final-development-20261025.7QLhon/async-wails-ime-check-02.log`, `/tmp/soksak-final-development-20261025.7QLhon/accepted-frame-wails-ime.log`)은 stored-catalog 확인을 통과했고 plugin catalog 오류 없이 reference/terminal 단계 10개와 capture stop까지 실행했다. 두 실행은 별도 F134 frame-message/accepted-marker 결합 문제와 33 ms capture-gap 검사(33.287 ms, 33.800 ms)에서 실패했으며 IME visual acceptance 결과는 아니다.
+- F239-137: 설정 폴더 event-log 감사에 설치된 모든 plugin manifest catalog를 포함한다. 설치 manifest, plugin identity, catalog layer와 namespace를 검증하고 없거나 잘못된 catalog 파일을 명시적으로 보고한다. `composeCatalogs`는 기존 sidecar 검증을 유지하면서 plugin event 선언과 layer를 합친다. Red: 설치 plugin event가 `catalogOf`에 없어 owner assertion이 `actual: undefined`로 실패했다. Green: 비활성 설치 plugin과 잘못된 manifest/catalog 경우를 포함한 plugin owner test 두 개가 한 번의 실행에서 통과했고, sidecar audit와 log-contract composition 회귀가 각각 3/3 통과했다. Runtime host catalog loader는 plugin catalog를 이미 읽고 있어 변경하지 않았다. Wails catalog preflight 두 번은 stored-catalog 확인을 통과했고 plugin catalog 오류 없이 reference/terminal 단계 10개와 capture stop까지 실행했다. 두 실행은 별도 F134 frame-message/accepted-marker 결합 문제와 33 ms capture-gap 검사(33.287 ms, 33.800 ms)에서 실패했으며 IME visual acceptance 결과는 아니다.
 
 - F239-139: Base catalog 합성에 `layers` 선언을 요구하고 선택적 plugin
   diagnostic source를 한 번 정규화한다. 제공된 source 경로와 chain extension이
@@ -1388,22 +1389,22 @@
   `packages/sok/tauriv2/tests/plugin_catalog_test.rs`를 포맷한다. Red: 최종
   format 검사가 두 파일을 unformatted로 보고했다. Green: 지정한 명령 뒤
   `make rust-format-check`와 `make go-format-check`가 통과한다
-  (`/tmp/soksak-final-development-20261025.7QLhon/format-recheck-02.log`).
+ .
   Semantic change는 없었다.
 
 - F239-114-3: capture artifact serialization catch 두 곳이 exception reason을
   보존해 기존 capture error 경로로 반환하는 이유를 기록한다. Red: 보존된 Node
   실행이 reason 없는 catch 두 곳을 보고했다
-  (`/tmp/soksak-final-development-20261025.7QLhon/node-suite.log`). Green: 정확한
+ . Green: 정확한
   reason comment 뒤 fallback owner file이 10/10 통과했다
-  (`/tmp/F239-139-fallback-owner-final.log`). Capture error는 억제되지 않는다.
+ . Capture error는 억제되지 않는다.
 
 - F239-115: process identity, capture, image matching, image regions, input
   activation의 Objective-C `m.error-return` 11곳에 caller가 관찰하는 이유를
   기록한다. Red: 보존된 Node 실행이 이유 없는 11개 지점을 보고했다
-  (`/tmp/soksak-final-development-20261025.7QLhon/node-suite.log`). Green: scoped
+ . Green: scoped
   reason comment를 추가한 뒤 tracked repository census owner test가 1/1 통과했다
-  (`/tmp/F239-140-census-green.log`). 동작과 census rule은 바뀌지 않았다.
+ . 동작과 census rule은 바뀌지 않았다.
 
 - F239-110: 오래된 F239-104 구현 참조를 교체하고 완료된 동작 기능 10개의 구현과
   소유 test를 정확히 연결한다. Fixture, aggregate, reason-only, refactor, mapping,
@@ -1456,7 +1457,7 @@
   검증한다. Event payload decoding, dispatch 및 state mutation은 current-generation
   검사 뒤에 두고, non-null reply, command 및 cancel marker를 처리하는 Tauri의
   경계를 유지한다. Red: 변경 전 Go 구현은 retired malformed envelope를
-  `accepted=false, error=nil`로 취소했다(`/tmp/F239-106-envelope-red-standard-01.log`).
+  `accepted=false, error=nil`로 취소했다.
   Green: 같은 owner test가 default와 diagnostics build에서 각각 1/1 통과했다
   (`/tmp/F239-106-envelope-green-default-01.log`,
   `/tmp/F239-106-envelope-green-diagnostics-01.log`).
@@ -1524,7 +1525,7 @@
   속한 identity row도 허용했다(`/tmp/F239-98-ime-frame-optin-red-01.log`,
   `/tmp/F239-98-ime-render-preflight-red-01.log`,
   `/tmp/F239-98-ime-display-time-join-red-01.log`). Green: helper와 manifest
-  consumer가 17/17 통과하고(`/tmp/F239-98-ime-visual-capture-green-final-04.log`)
+  consumer가 17/17 통과하고
   `make e2e-check`도
   통과한다. 두 host visual acceptance는 남아 있으며 application 실행과 bundle
   build는 하지 않았다.
@@ -1532,23 +1533,23 @@
 - F239-98-1: 기존 33 ms 최대 frame gap을 검사하기 전에 IME visual 증거 전체를
   저장한다. 이전 assertion은 callback identity 연결과 visual 평가 전에 중단됐다.
   Red: 소유 helper는 측정된 visual 결과가 있어도 34 ms gap을 거부하지 않았고,
-  visual/cadence 동시 실패도 보고하지 못했다(`/tmp/F239-98-1-cadence-red-01.log`).
+  visual/cadence 동시 실패도 보고하지 못했다.
   Green: 같은 test가 cadence 거부 전 저장과 두 실패를 포함한 `AggregateError`를
-  검증하며 helper가 18/18 통과한다(`/tmp/F239-98-1-cadence-green-02.log`).
+  검증하며 helper가 18/18 통과한다.
   33 ms 기준은 바뀌지 않았다. 두 host visual acceptance는 F239-98에서 계속 추적한다.
 
 - F239-98-1-1: 저장하는 visual record에 cadence evidence를 필수로 포함한다.
   기존 helper는 생략된 cadence를 `null`로 처리해 33 ms gate를 우회할 수 있었다.
   Red: cadence 없이 helper를 호출해도 거부하지 않았다
-  (`/tmp/F239-98-1-1-missing-cadence-red-01.log`). Green: 같은 test가 누락 거부,
+ . Green: 같은 test가 누락 거부,
   33 ms 경계 통과, 제한 초과 전 record 저장, visual/cadence 동시 실패 보고를 확인하며
-  helper 18/18이 통과한다(`/tmp/F239-98-1-1-cadence-green-01.log`).
+  helper 18/18이 통과한다.
 
 - F239-98-2: rows-only terminal status에서 visual input text를 투영한다.
   `terminal.screen` status에는 frame identity가 없지만 consumer가 해당 rows를
   strict framed `terminal.screen.read` helper에 전달했다. Red: 실제 rows-only
   status와 exported projection을 사용한 owner integration이 실패했다
-  (`/tmp/F239-98-2-rows-only-screen-red-01.log`). Green: rows-only projection은
+ . Green: rows-only projection은
   통과하고 framed wrapper의 엄격 검증은 유지한다. Visual consumer와 terminal
   document suite는 각각 19/19, 38/38 통과한다
   (`/tmp/F239-98-2-visual-index-green-01.log`,
@@ -1558,13 +1559,13 @@
   artifact와 capture callback의 raw metadata 및 raster byte는 유지하고
   `kCGColorSpaceSRGB`만 semantic `sRGB`로 매핑하며 다른 이름은 거부한다.
   Red: 두 owner 경계가 native 이름을 그대로 반환했다
-  (`/tmp/F239-98-3-color-name-red.log`). Green: unsupported-name 거부를 포함해
+ . Green: unsupported-name 거부를 포함해
   두 경계 test가 2/2, visual consumer가 19/19 통과한다
   (`/tmp/F239-98-3-color-name-green-01.log`,
   `/tmp/F239-98-3-visual-owner-green.log`). 보존된 네 실행의 첫 9단계 offline
   replay는 retained-source status 누락 때문에 계속 `no-proof`다(Tauri 33/28,
   Wails 3/3). 10번째 단계 경계는 추론하지 않았다
-  (`/tmp/F239-98-3-offline-first-nine-final.log`).
+ .
 
 - F239-98-4: 기존 raw crop 결과와 별도로 opt-in tag-scoped IME raster proof를
   기록한다. Consumer는 issued identity artifact와 decoded row를 정확한 target
