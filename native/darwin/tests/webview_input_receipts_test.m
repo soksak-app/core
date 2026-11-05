@@ -96,6 +96,17 @@ int main(void) { @autoreleasepool {
     }, ^(BOOL value) { received=value; completed++; });
     until(^BOOL { return completed > 0; });
     check(received && completed == 1 && view.drains == 2, @"successful receipt completes after the second drain");
+    // The press of a key window is awaited twice, by the sender and by the monitor of the press origin. One receipt answers both.
+    completed=0; received=NO;
+    __block BOOL heardByMonitor = NO;
+    webviewInputSendThen(view, @"pointerdown", 1, ^BOOL {
+        webviewInputReceive(view, @"pointerdown", 1, ^(BOOL value) { heardByMonitor = value; });
+        postReceipt(view);
+        return YES;
+    }, ^(BOOL value) { received=value; completed++; });
+    until(^BOOL { return completed > 0; });
+    until(^BOOL { return heardByMonitor; });
+    check(received && heardByMonitor, @"one receipt answers every wait of its type");
     // If sending is rejected, ends the wait as a failure and records the reason.
     view.hold=NO; view.held=nil; completed=0; received=YES;
     NSString *refusedSend = capturedRecords(^{

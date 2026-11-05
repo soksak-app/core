@@ -1094,6 +1094,19 @@ const FEATURE_LINKS = [
     levels: ["native"],
   },
   {
+    id: "F544",
+    implementation: [
+      { file: "native/darwin/src/input_press_context.h", symbol: "bool sp_input_press_open(void *window, int button);" },
+      { file: "native/darwin/src/webview_input.m", symbol: "BOOL answered = NO;" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "an origin that outlives its release does not hold the keyboard" },
+      { file: "native/darwin/tests/webview_input_receipts_test.m", id: "one receipt answers every wait of its type" },
+    ],
+    expected: "Only an open press holds a keyboard move, and one receipt answers every wait of its type.",
+    levels: ["native"],
+  },
+  {
     id: "F533",
     implementation: [
       { file: "packages/workbench/memory-saver.js", symbol: 'if (trigger === "delay") entry.unloadAt = now() + delayMs();' },

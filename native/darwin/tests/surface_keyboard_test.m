@@ -2,6 +2,7 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "image_region.h"
+#import "input_inject.h"
 #import "input_press_context.h"
 #import "webview_geometry.h"
 #import "window_facts.h"
@@ -74,17 +75,23 @@ int main(void) { @autoreleasepool {
     sp_surface_focus(browserHost);
 
     // A later move replaces a move that waits, and a press delays both until its release.
-    uint64_t token = sp_input_press_origin_set(window, 0, 10, 10);
+    check(sp_input_pointer(window, 600, 250, 1, 0, 0, 0) == SP_INPUT_DELIVERED, "a press on the page that holds the keyboard is delivered");
     sp_surface_focus(terminalHost);
     check(window.firstResponder == browserPage, "an open press keeps the keyboard where it is");
     sp_window_focus_workbench(window);
     sp_surface_focus(terminalHost);
     check(window.firstResponder == browserPage, "a second call during the press waits too");
-    sp_input_press_origin_clear(window, 0, token);
-    sp_surface_press_released(window);
+    check(sp_input_pointer(window, 600, 250, 3, 0, 0, 0) == SP_INPUT_DELIVERED, "the release of that press is delivered");
     check(window.firstResponder == terminalPage, "the release gives the keyboard to the last surface that asked for it");
     sp_surface_press_released(window);
     check(window.firstResponder == terminalPage, "a release without a waiting move changes nothing");
+
+    // The origin of a press outlives its release until the page received the release, and no press is open meanwhile.
+    sp_surface_focus(browserHost);
+    uint64_t kept = sp_input_press_origin_set(window, 0, 10, 10);
+    sp_surface_focus(terminalHost);
+    check(window.firstResponder == terminalPage, "an origin that outlives its release does not hold the keyboard");
+    sp_input_press_origin_clear(window, 0, kept);
 
     // A surface hidden with the keyboard keeps its owner for the next call.
     sp_surface_focus(browserHost);

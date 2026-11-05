@@ -500,8 +500,7 @@ void *sp_surface_native_plane(void *handle) {
 
 // The left press of the window that is open: a physical press that AppKit reports, or a diagnostic press of sp_input_pointer.
 static BOOL leftPressOpen(NSWindow *window) {
-    uint64_t token = 0;
-    return (NSEvent.pressedMouseButtons & 1) != 0 || sp_input_press_origin_point(window, 0, NULL, NULL, &token);
+    return (NSEvent.pressedMouseButtons & 1) != 0 || sp_input_press_open(window, 0);
 }
 
 static char keyboardPendingKey, keyboardMonitorKey;
