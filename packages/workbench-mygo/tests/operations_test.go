@@ -93,8 +93,9 @@ func TestOpeningAndRemovingAProjectAreChains(t *testing.T) {
 	}
 	id := fields["project"].(string)
 	f.host.batches = nil
-	f.run("core.project.close", map[string]string{"id": id})
-	f.settle()
+	if err := f.finish("core.project.close", map[string]string{"id": id}); err != nil {
+		t.Fatal(err)
+	}
 	fields = f.chain(f.host, "workbench.project.operation", "projectRemoveAsk", "projectRelease")
 	if fields["action"] != "remove" || fields["project"] != id {
 		t.Fatalf("the fields are %v", fields)

@@ -147,6 +147,42 @@ func (s *Shell) openRoot(root, color string, done func(project json.RawMessage, 
 	})
 }
 
+// registerProjectClose registers core.project.close. The window that shows the project asks about its modified tabs, and the
+// command answers when the host removed the project or when a tab or another window kept it.
+func (s *Shell) registerProjectClose() {
+	s.registry.CommandLater("core.project.close", func(raw json.RawMessage, answer func(any, error)) {
+		value, err := params[idParam](raw)
+		if err != nil {
+			answer(nil, Refuse(InvalidParams, "core.project.close: %s", err))
+			return
+		}
+		if s.project(value.ID) == nil {
+			answer(nil, fmt.Errorf("Unknown project: %s", value.ID))
+			return
+		}
+		remove := func() {
+			s.removeProjectThen(value.ID, func(removed bool, err error) {
+				if err != nil {
+					answer(nil, err)
+					return
+				}
+				answer(closed(removed), nil)
+			})
+		}
+		if value.ID != s.active {
+			remove()
+			return
+		}
+		s.settleModified(func(settled bool) {
+			if !settled {
+				answer(closed(false), nil)
+				return
+			}
+			remove()
+		})
+	})
+}
+
 // newWindow opens a new unassigned window, as projects.newWindow does, and gives done the outcome of the host call.
 func (s *Shell) newWindow(done func(err error)) {
 	cids := s.events.BeginOperation("workbench.window.operation", map[string]any{"action": "new"})

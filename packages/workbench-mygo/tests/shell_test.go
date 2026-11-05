@@ -21,7 +21,8 @@ import (
 
 // storedHost answers the host calls of the shell from memory, as the workspace store of the language host library does.
 type storedHost struct {
-	plugins *pluginsHost
+	keepsProjects bool // The answer of projectRemoveAsk is that the project stays.
+	plugins       *pluginsHost
 	// reloads counts the starts of the workbench that the shell asked for.
 	reloads int
 	// located is the project that the shell last named as the one that its window shows.
@@ -201,7 +202,7 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 			return nil, nil
 		}),
 		"projectRelease":   answer("projectRelease", none),
-		"projectRemoveAsk": answer("projectRemoveAsk", func(json.RawMessage) (any, error) { return true, nil }),
+		"projectRemoveAsk": answer("projectRemoveAsk", func(json.RawMessage) (any, error) { return !h.keepsProjects, nil }),
 		"folderChoose":     answer("folderChoose", func(json.RawMessage) (any, error) { return "/chosen", nil }),
 		"windowReady":      answer("windowReady", none),
 		"sidecarsRetain": answer("sidecarsRetain", func(argument json.RawMessage) (any, error) {
@@ -555,7 +556,9 @@ func TestTheWindowNamesTheProjectThatItShows(t *testing.T) {
 	if f.host.located != id {
 		t.Fatal("the library over an open project gave up the project of the window")
 	}
-	f.run("core.project.close", map[string]string{"id": id})
+	if err := f.finish("core.project.close", map[string]string{"id": id}); err != nil {
+		t.Fatal(err)
+	}
 	if f.host.located != "" {
 		t.Fatalf("the window still names %q", f.host.located)
 	}
@@ -789,6 +792,59 @@ func TestProjectOpenCommandOpensTheFolder(t *testing.T) {
 	}
 	if opened.Root != "/work/alpha" || project["id"] != opened.ID || len(stored.projects) != 1 || stored.projects[0]["color"] != "#ffb36b" {
 		t.Fatalf("the command answered %s, the shell shows %v and stores %v", text, project, stored.projects)
+	}
+}
+
+// answerOf runs the command name, which may answer in a later step, and returns the text of its answer.
+func (f *shellFixture) answerOf(name string, params any) string {
+	f.t.Helper()
+	raw, err := json.Marshal(params)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	var value any
+	var failure error
+	answered := false
+	f.shell.Registry().RunLater(name, raw, func(result any, err error) { value, failure, answered = result, err, true })
+	f.settle()
+	if !answered || failure != nil {
+		f.t.Fatalf("%s answered %v with %v", name, answered, failure)
+	}
+	text, err := json.Marshal(value)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	return string(text)
+}
+
+// core.project.close answers after the host removed the project, as a client that closes the last window reads it.
+func TestProjectCloseCommandAnswersThatItClosed(t *testing.T) {
+	f := openedShell(t)
+	id := f.host.projects[0]["id"].(string)
+	if got := f.answerOf("core.project.close", map[string]string{"id": id}); got != `{"closed":true}` {
+		t.Fatalf("the command answered %s", got)
+	}
+	if len(f.host.projects) != 0 {
+		t.Fatalf("the host still stores %v", f.host.projects)
+	}
+}
+
+func TestProjectCloseCommandAnswersThatTheHostKeptTheProject(t *testing.T) {
+	f := openedShell(t)
+	f.host.keepsProjects = true
+	id := f.host.projects[0]["id"].(string)
+	if got := f.answerOf("core.project.close", map[string]string{"id": id}); got != `{"closed":false}` {
+		t.Fatalf("the command answered %s", got)
+	}
+	if len(f.host.projects) != 1 {
+		t.Fatalf("the host stores %v", f.host.projects)
+	}
+}
+
+func TestProjectCloseCommandRefusesAnUnknownProject(t *testing.T) {
+	f := openedShell(t)
+	if err := f.finish("core.project.close", map[string]string{"id": "project-none"}); err == nil || err.Error() != "Unknown project: project-none" {
+		t.Fatalf("the command failed with %v", err)
 	}
 }
 
