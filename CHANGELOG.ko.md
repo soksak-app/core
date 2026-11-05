@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F570: mygo host의 `core.workbench.audit`이 연결되지 않은 요소가 없을 때 `null`이 아니라 빈 목록을 낸다.
 - F561: 문서 검사의 activation 실행이 data store를 끝내기 전에 window의 다른 곳을 누른다. 마지막 press의 web view는 다음 press까지 잡혀 있기 때문이다.
 - F560: 포인터를 잃은 page가 추적 영역의 진입, 이탈, 이동이 어떤 순서로 와도 hover를 멈춘다.
 - F543: key window에서 `sok input pointer`의 press가 애플리케이션을 지나, local monitor가 press를 보고 AppKit이 first responder를 옮긴다.

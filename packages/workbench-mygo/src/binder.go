@@ -86,7 +86,7 @@ type Unbound struct {
 
 // Audit lists each interactive element of tree that has no command or no element name.
 func Audit(tree []ui.ElementNode) []Unbound {
-	var unbound []Unbound
+	unbound := []Unbound{}
 	var walk func(nodes []ui.ElementNode)
 	walk = func(nodes []ui.ElementNode) {
 		for _, node := range nodes {
