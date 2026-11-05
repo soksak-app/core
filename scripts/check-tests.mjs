@@ -1660,6 +1660,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F543",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "static void deliverGesture(NSView *hit, NSEvent *event, BOOL throughApplication) {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/input_inject_test.m", id: "a local monitor sees the drag of a key window once" },
+      { file: "native/darwin/tests/input_inject_test.m", id: "the gesture of a window that is not key passes no monitor" },
+    ],
+    expected: "A press, drag, and release of a key window pass -[NSApplication sendEvent:], so a local monitor sees each, and a window that is not the key window keeps direct delivery.",
+    levels: ["native"],
+  },
+  {
     id: "F539",
     implementation: [
       { file: "native/darwin/src/input_inject.m", symbol: "static void gatherAreas(" },
