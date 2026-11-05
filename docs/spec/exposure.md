@@ -134,6 +134,8 @@ Each status and command of the workbench declarations is defined over the workbe
 
 On the mygo host a step of the workbench can run after its native window closed. A read of `core.verify` or `core.window.workbench` in such a step calls no native code and shows no workbench error. Any other failure of those reads is shown as `core.workbench.error`.
 
+On the mygo host a step of the workbench can run after its native window closed. A read of `core.verify` or `core.window.workbench` in such a step calls no native code and shows no workbench error. Any other failure of those reads is shown as `core.workbench.error`.
+
 `host.window.reload` starts the workbench of the window again, and a window that receives `plugins-changed` or runs `core.plugins.apply` starts it again in the same way ([installation](installation.md#applying-a-change)). A window check or measurement target that waits for a new start of the workbench waits for a new `start` of `core.window.workbench`, not for a new page process.
 
 ## Registration
