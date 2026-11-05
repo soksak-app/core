@@ -966,6 +966,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F526-1",
+    implementation: [{ file: "scripts/language-test-adapters.mjs", symbol: "function caseResult(caseSpec, commandResult) {" }],
+    tests: [{ file: "scripts/test/test-language-test-adapters.test.mjs", id: "parses each language result and rejects zero, skipped, and crashed outcomes" }],
+    expected: "A case that a signal ends is reported as crashed with that signal, and the case of the test ends with a signal that leaves no crash report.",
+    levels: ["unit"],
+  },
+  {
     id: "F526",
     implementation: [
       { file: "packages/window-check/stall-sample.mjs", symbol: "function endError(error, stderr, limitMs, state) {" },
