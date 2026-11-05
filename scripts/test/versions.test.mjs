@@ -2,13 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { auditVersions, cargoPackageVersion, LATEST_PUBLISHED, RELEASE, workspaceManifests } from "../check-versions.mjs";
-
-test("the development contract has a distinct identity from the latest published release", { timeout: 1000 }, () => {
-  assert.equal(RELEASE, "0.0.35");
-  assert.equal(LATEST_PUBLISHED, "0.0.34");
-  assert.notEqual(RELEASE, LATEST_PUBLISHED);
-});
+import { auditVersions, cargoPackageVersion, RELEASE, workspaceManifests } from "../check-versions.mjs";
 
 test("every declared workspace version is the release candidate", { timeout: 10000 }, () => {
   assert.deepEqual(auditVersions(workspaceManifests()), []);

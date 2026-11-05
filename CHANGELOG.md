@@ -147,6 +147,9 @@
 - F502-13: The exposure kind `dom` becomes `element` on every host and in every plugin declaration: `exposes.element`, `expose.element`, `element.rect`, `element.act`, `sok element`, the MCP tools `element_rect` and `element_act` and the member `element` of `exposure.list`; a manifest with `exposes.dom` is refused. The workbench statuses are defined over the workbench: `core.window.workbench`, `core.workbench.error` and `core.workbench.audit`, whose rows are `{role, expose, command, text}`, and the responder owner and the `host.hit` kind `workbench`. The window checks wait for a new `start` of `core.window.workbench`, and each iterates `Object.values(APPS)` or `MAIN_PAGE_APPS`, which `scripts/check-e2e-host-parity.mjs` checks.
 - F463: Core uses the checks kit and its one executable `soksak-check`. Red: `scripts/test/workflows.test.mjs` failed. Green: it passes.
 - F466: Records cite no temporary log, and the record check reports a new citation.
+- F476: `LATEST_PUBLISHED`, which read 0.0.34 after the release of 0.0.36, and its test are removed, so a test repeats no declared version.
+- F474: The release run published v0.0.36, and the registry lists it with the plugin and sidecar releases.
+- F474: The release candidate is 0.0.36.
 - F475: `@soksak/plugin-api` exports `./exposure-check` again, which the publish check of the registry reads from each core release. It has no command. Red: `packages/plugin-api/test/package-files.test.mjs` failed. Green: it passes.
 - F473: The process identity library builds in a clean checkout. Red: `scripts/test/process-identity-build.test.mjs` failed. Green: it passes.
 - F472: Every executable is `sok` or `sok-<what>`, every make target starts with a declared verb, and `make check-commands` holds this form. Red: the kit test reported the earlier forms. Green: `make check-commands` passes.
