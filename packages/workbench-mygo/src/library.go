@@ -101,14 +101,7 @@ func (s *Shell) registerLibrary() {
 		ID     string `json:"id"`
 		Pinned bool   `json:"pinned"`
 	}) error {
-		project := s.project(value.ID)
-		if project == nil {
-			return fmt.Errorf("Unknown project: %s", value.ID)
-		}
-		project.Pinned = value.Pinned
-		s.patch(value.ID, map[string]any{"pinned": value.Pinned})
-		s.options.Invalidate()
-		return nil
+		return s.pinProject(value.ID, value.Pinned)
 	})
 	act(s, "core.library.remove", func(value idParam) error { s.removeProject(value.ID); return nil })
 	act(s, "core.library.return", func(struct{}) error {

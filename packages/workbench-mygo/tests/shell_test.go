@@ -315,6 +315,7 @@ func (h *storedHost) workspace(argument json.RawMessage) (any, error) {
 		Project map[string]any
 		Patch   map[string]any
 		Remove  []string
+		Delta   int
 	}
 	if err := json.Unmarshal(argument, &request); err != nil {
 		return nil, err
@@ -348,6 +349,14 @@ func (h *storedHost) workspace(argument json.RawMessage) (any, error) {
 			project[key] = value
 		}
 		return project, nil
+	case "move":
+		at := slices.IndexFunc(h.projects, func(project map[string]any) bool { return project["id"] == request.ID })
+		to := at + request.Delta
+		if at >= 0 && to >= 0 && to < len(h.projects) {
+			project := h.projects[at]
+			h.projects = slices.Insert(slices.Delete(h.projects, at, at+1), to, project)
+		}
+		return nil, nil
 	case "remove":
 		for i, project := range h.projects {
 			if project["id"] == request.ID {

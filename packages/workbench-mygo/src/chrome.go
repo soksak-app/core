@@ -138,12 +138,17 @@ type barTab struct {
 	key, title string
 	on         bool
 	tint       string
+	rename     renameTarget
 	radius     [4]float32
 	pick       func() ui.Element
 	close      func() ui.Element
 }
 
 func (s *Shell) drawBarTab(c *ui.Context, tab barTab) {
+	if s.renaming != nil && s.renaming.renameTarget == tab.rename {
+		s.drawRenameField(c)
+		return
+	}
 	m := s.metrics
 	chip := ui.Row(c.Key(tab.key)).Height(s.frameLength(m.spaceTabH)).Shrink(0).AlignItems(ui.Center).
 		Radius(tab.radius[0], tab.radius[1], tab.radius[2], tab.radius[3])
@@ -163,6 +168,9 @@ func (s *Shell) drawBarTab(c *ui.Context, tab barTab) {
 	pad := s.frameLength(m.chromeGap)
 	chip.Background(fill).Children(func() {
 		name := tab.pick()
+		if name.DoubleClicked() {
+			s.binder.run("core.rename.begin", tab.rename)
+		}
 		name.Padding(0, s.frameLength(m.barGap), 0, pad).AlignItems(ui.Center).Label(tab.title).Tooltip(tab.title).Children(func() {
 			ui.Text(c, tab.title).SingleLine().Ellipsis("…").FontSize(size).MaxWidth(s.frameLength(m.barTabMaxW)).TextColor(color)
 		})
@@ -199,7 +207,7 @@ func (s *Shell) drawProjectTabs(c *ui.Context) {
 		if project.ID != s.active {
 			continue
 		}
-		s.drawBarTab(c, barTab{key: "project-" + project.ID, title: project.Title, on: true, tint: project.Color, radius: [4]float32{radius, radius, radius, radius},
+		s.drawBarTab(c, barTab{key: "project-" + project.ID, title: project.Title, on: true, tint: project.Color, rename: renameTarget{"project", project.ID}, radius: [4]float32{radius, radius, radius, radius},
 			pick: func() ui.Element {
 				return s.binder.Press(c, "core.project-tab", "core.project.activate", project.ID, idParam{project.ID})
 			},
@@ -224,7 +232,7 @@ func (s *Shell) drawSpaces(c *ui.Context, project *projectRecord, width float32)
 
 func (s *Shell) drawSpaceTab(c *ui.Context, project *projectRecord, space layout.Space) {
 	radius := s.radiusSmall()
-	tab := barTab{key: "space-" + space.ID, title: space.Title, on: space.ID == project.ActiveSpaceID, radius: [4]float32{radius, radius, 0, 0},
+	tab := barTab{key: "space-" + space.ID, title: space.Title, on: space.ID == project.ActiveSpaceID, rename: renameTarget{"space", space.ID}, radius: [4]float32{radius, radius, 0, 0},
 		pick: func() ui.Element {
 			return s.binder.Press(c, "core.space-tab", "core.space.activate", space.ID, idParam{space.ID})
 		}}

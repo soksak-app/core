@@ -246,3 +246,26 @@ func TestAFoldedSideShowsThreeDots(t *testing.T) {
 		t.Fatalf("the dot under the pointer is %v, want %v", got, want)
 	}
 }
+
+// A line of the rule color stands around the stage, and the plane starts inside it.
+func TestAStageHasALineAround(t *testing.T) {
+	f, left, _ := splitShell(t)
+	f.settle()
+	palette := f.palette()
+	card := f.box("core.card", left)
+	root := f.tester.ElementTree()[0].Bounds
+	y := card.Y + card.H/2
+	if got, want := f.pixelOf(0.5, y), opaque(palette.Rule); !near(got, want) {
+		t.Fatalf("the left edge of the stage is %v, want %v", got, want)
+	}
+	if got, want := f.pixelOf(root.W-0.5, y), opaque(palette.Rule); !near(got, want) {
+		t.Fatalf("the right edge of the stage is %v, want %v", got, want)
+	}
+	bottom := card.Y + card.H + palette.Gap + palette.BorderWidth - 0.5
+	if got, want := f.pixelOf(card.X+card.W/2, bottom), opaque(palette.Rule); !near(got, want) {
+		t.Fatalf("the bottom edge of the stage at %v of %v is %v, want %v", bottom, root.H, got, want)
+	}
+	if got := f.pixelOf(palette.BorderWidth+1, y); near(got, opaque(palette.Rule)) {
+		t.Fatalf("the line is wider than the border: %v", got)
+	}
+}

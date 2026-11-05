@@ -12,7 +12,7 @@ import (
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
-var sidebarMetrics = workbench.SidebarMetrics{HeadH: 32, FootH: 22, SectionMinH: 32, SectionDivider: 6, SectionHeadGap: 6, SectionHeadPad: 10, SectionHeadText: 11.5, SectionTabMark: 2, FoldButton: 18, FoldIcon: 14, SectionHeadMix: 0.03, SectionHeadHoverMix: 0.07}
+var sidebarMetrics = workbench.SidebarMetrics{HeadH: 32, FootH: 22, SectionMinH: 32, SectionDivider: 6, SectionHeadGap: 6, SectionHeadPad: 10, SectionHeadText: 11.5, SectionTabMark: 2, FoldButton: 18, FoldIcon: 14, IconStroke: 1.3, FoldRadiusRatio: 0.5, FoldHoverMix: 0.1, SectionHeadMix: 0.03, SectionHeadHoverMix: 0.07}
 
 func pixels(v int) *int { return &v }
 
@@ -341,5 +341,64 @@ func TestASectionHeadIsABandOverTheCard(t *testing.T) {
 				t.Fatalf("the band under the pointer is %v, want %v", got, want)
 			}
 		})
+	}
+}
+
+// The fold control of a status line is a stroke icon in the muted color, and in the text color on a band under the pointer.
+func TestTheFoldOfAStatusLineIsAMutedStrokeIcon(t *testing.T) {
+	var calls []call
+	var theme *ui.Theme
+	frame := listFrame()
+	frame.Side = "left"
+	binder := recorder(t, &calls, sidebarCommands...)
+	body := color.RGBA{0xff, 0xff, 0xff, 255}
+	tt := ui.NewTester(func(c *ui.Context) {
+		theme = c.Theme()
+		ui.Box(c).Size(240, 400).Background(ui.RGB(body.R, body.G, body.B)).Children(func() {
+			workbench.DrawSidebar(c, binder, &workbench.SectionDrag{}, frame, sidebarMetrics, 240, 400, func(*ui.Context, workbench.SidebarSeat) {})
+		})
+	}, 240, 400)
+	box := element(t, tt, "core.sidebar.fold", "left").Bounds
+	scale := float32(tt.Image().Bounds().Dx()) / 240
+	distance := func(a color.RGBA, b ui.Color) int {
+		abs := func(x int) int {
+			if x < 0 {
+				return -x
+			}
+			return x
+		}
+		return abs(int(a.R)-int(b.R)) + abs(int(a.G)-int(b.G)) + abs(int(a.B)-int(b.B))
+	}
+	// ink is the pixel of the control farthest from the corner of the control.
+	ink := func() (color.RGBA, color.RGBA) {
+		image := tt.Image()
+		corner := image.RGBAAt(int((box.X+box.W/2)*scale), int((box.Y+1)*scale))
+		far, best := corner, -1
+		for y := int(box.Y * scale); y < int((box.Y+box.H)*scale); y++ {
+			for x := int(box.X * scale); x < int((box.X+box.W)*scale); x++ {
+				at := image.RGBAAt(x, y)
+				if d := distance(at, ui.RGB(corner.R, corner.G, corner.B)); d > best {
+					far, best = at, d
+				}
+			}
+		}
+		return far, corner
+	}
+	at, around := ink()
+	if around != body {
+		t.Fatalf("the control has a background of its own without the pointer: %v", around)
+	}
+	// The stroke is thinner than a pixel of the test, so the ink is a share of the color over the white body: it cannot pass the color.
+	if at.R < theme.TextMuted.R {
+		t.Fatalf("the icon is %v, darker than the muted color %v", at, theme.TextMuted)
+	}
+	tt.Move(box.X+box.W/2, box.Y+box.H/2)
+	tt.Frame()
+	at, around = ink()
+	if around == body {
+		t.Fatal("the control has no band under the pointer")
+	}
+	if at.R >= theme.TextMuted.R {
+		t.Fatalf("the icon under the pointer is %v, no darker than the muted color %v", at, theme.TextMuted)
 	}
 }
