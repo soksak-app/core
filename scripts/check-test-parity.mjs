@@ -146,7 +146,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("mygo framework adapter", "go", ["packages/host/mygo/src/**/*.go"], ["packages/host/mygo/tests/**/*.go"], { sharedTests: true }),
   lane("empty mygo window benchmark", "go", ["packages/host/mygo/benchmark/empty_window.go", "packages/host/mygo/benchmark/cmd/main.go"], ["packages/host/mygo/benchmark/empty_window_test.go"], { sharedTests: true }),
   lane("Wails command line", "go", ["packages/sok/go/src/**/*.go"], ["packages/sok/go/tests/**/*.go", "packages/sok/go/src/diagnostics_test.go", "packages/sok/go/src/dev_test.go", "packages/sok/go/src/wailsv3_test.go", "packages/sok/go/src/mygo_test.go", "packages/sok/go/src/debug_test.go", "packages/sok/go/src/event_log_loss_test.go", "packages/sok/go/src/event_log_idle_test.go"]),
-  lane("Tauri command line", "rust", ["packages/sok/rust/src/**/*.rs"], ["packages/sok/rust/tests/**/*.rs", "packages/sok/rust/src/event_log_lock_test.rs", "packages/sok/rust/src/debug_test.rs", "packages/sok/rust/src/event_log_loss_test.rs", "packages/sok/rust/src/process_wait_test.rs"]),
+  lane("Tauri command line", "rust", ["packages/sok/rust/src/**/*.rs"], ["packages/sok/rust/tests/**/*.rs", "packages/sok/rust/src/event_log_lock_test.rs", "packages/sok/rust/src/event_log_flush_test.rs", "packages/sok/rust/src/debug_test.rs", "packages/sok/rust/src/event_log_loss_test.rs", "packages/sok/rust/src/process_wait_test.rs"]),
   lane("Wails application bootstrap", "go", ["apps/wailsv3/src/main.go"], ["e2e/**/*.mjs", "e2e/platform/platform.js", "e2e/platform/darwin/darwin.js", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js", "e2e/fixtures/*/*/ui/*.html"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
   lane("mygo application bootstrap", "go", ["apps/mygo/src/main.go"], ["packages/host/mygo/tests/framework_test.go"], { sharedTests: true }),
 
@@ -1037,6 +1037,18 @@ const FEATURE_LINKS = [
     ],
     expected: "A writer with nothing to write sleeps, what wakes it is stored at once, and a flush or a close stores what waits.",
     levels: ["unit", "native"],
+  },
+  {
+    id: "F535-1",
+    implementation: [
+      { file: "packages/sok/rust/src/event_log.rs", symbol: "queued = drain(&mut out, true);" },
+    ],
+    tests: [
+      { file: "packages/sok/rust/src/event_log_flush_test.rs", id: "a_flush_that_a_flush_finds_behind_it_is_answered" },
+      { file: "packages/sok/go/src/event_log_idle_test.go", id: "TestAFlushThatAFlushFindsBehindItIsAnswered" },
+    ],
+    expected: "A flush request that the writer finds while it answers another flush request is answered.",
+    levels: ["unit"],
   },
   {
     id: "F536",
