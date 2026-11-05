@@ -242,6 +242,8 @@ type Shell struct {
 	strips map[string]*stripPlace
 	// heads holds the fit of the head that the last frame drew for each card.
 	heads map[string]layout.HeadFit
+	// tabsNamed is how many tabs the shown layout has named; a new tab takes the next number.
+	tabsNamed int
 	// renaming is the rename of a project or a space in progress.
 	renaming *rename
 	// dragging is the drag of a tab in progress.
