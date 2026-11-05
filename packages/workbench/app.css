@@ -106,8 +106,8 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .chrome-bar .tabs > *{pointer-events:auto}
 /* This text does not receive presses. A press reaches the drag area below. */
 /* The letters of the soksak logo are light in dark mode and dark in light mode. The color of the icon tile is fixed to the logo. */
-.brand{flex:0 0 auto;color:#EDE6D8;margin-right:var(--brand-gap);pointer-events:none;display:flex;align-items:center}
-:root[data-mode=light] .brand{color:#16181D}
+.brand{flex:0 0 auto;color:var(--brand-text-dark);margin-right:var(--brand-gap);pointer-events:none;display:flex;align-items:center}
+:root[data-mode=light] .brand{color:var(--brand-text-light)}
 .brand__logo{display:block;height:calc(var(--size) * var(--brand-logo-at-base) / var(--text-base));width:auto}
 
 
@@ -129,6 +129,7 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
   font:inherit;font-size:var(--text-control);cursor:pointer;max-width:var(--bar-tab-max-w);white-space:nowrap}
 .bar-tab:hover{background:var(--chip-hover)}
 .bar-tab[data-on=true]{background:var(--chip-on);color:var(--fg)}
+.bar-tab[data-tinted=true]{background:color-mix(in srgb,var(--project-color) var(--project-tab-mix),transparent)}
 .bar-tab__name{overflow:hidden;text-overflow:ellipsis}
 .bar-tab__x{opacity:var(--bar-tab-x-opacity);padding:0 var(--bar-tab-x-pad);flex:0 0 auto;cursor:pointer}
 .bar-tab__x:hover{opacity:var(--opaque)}

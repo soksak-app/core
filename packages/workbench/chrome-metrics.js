@@ -6,6 +6,12 @@ import declaration from "./workbench.json" with { type: "json" };
 /** The chrome metrics of workbench.json: a custom property name without the leading dashes and its CSS value. */
 export const CHROME = declaration.chrome;
 
+/** Draws the logo, the one declaration of both workbenches, in the logo element of the chrome bar. */
+export function installBrandLogo(element) {
+  element.setAttribute("viewBox", CHROME["brand-logo-box"]);
+  element.innerHTML = declaration.icons["brand-logo"];
+}
+
 /** Sets every chrome metric on root as the custom property --<name>. */
 export function installChromeMetrics(root) {
   for (const [name, value] of Object.entries(CHROME)) root.style.setProperty(`--${name}`, value);

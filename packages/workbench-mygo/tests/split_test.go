@@ -823,3 +823,49 @@ func TestATabOfABarIsAChipOverTheBand(t *testing.T) {
 		t.Fatalf("beside the close button the chip is %v, want %v", got, want)
 	}
 }
+
+// The chrome bar holds the logo and the switches of the page, each with the size that the page declares, and a switch runs its setting.
+func TestTheChromeBarHoldsTheLogoAndTheSwitchesOfThePage(t *testing.T) {
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	wide, _ := declared.Metric("act-w")
+	high, _ := declared.Metric("act-h")
+	f := projectWithPlugins(t)
+	f.run("core.settings.theme", map[string]any{"name": "midnight", "mode": "dark"})
+	settings := func() map[string]any {
+		return status[struct {
+			Values map[string]any `json:"values"`
+		}](t, f, "core.settings").Values
+	}
+	order := []string{"core.chrome.projects", "core.chrome.balance", "core.chrome.left", "core.chrome.right", "core.chrome.mode", "core.chrome.settings"}
+	last := float32(0)
+	for _, name := range order {
+		box := f.box(name, "")
+		if float64(box.W) != wide || float64(box.H) != high || box.X <= last {
+			t.Fatalf("%s is %v after %v", name, box, last)
+		}
+		last = box.X
+	}
+	logo := f.box("core.brand", "")
+	image := f.tester.Image()
+	scale := float32(image.Bounds().Dx()) / 1200
+	tile := image.RGBAAt(int((logo.X+logo.H/8)*scale), int((logo.Y+logo.H/2)*scale))
+	if want := (color.RGBA{0x16, 0x18, 0x1d, 255}); tile != want {
+		t.Fatalf("the tile of the logo is %v, want %v", tile, want)
+	}
+	left, _ := settings()["left"].(bool)
+	f.click("core.chrome.left", "")
+	if got, _ := settings()["left"].(bool); got == left {
+		t.Fatalf("the switch left the setting left at %v", got)
+	}
+	f.click("core.chrome.mode", "")
+	if settings()["mode"] != "light" {
+		t.Fatalf("the mode is %v after the switch", settings()["mode"])
+	}
+	f.click("core.chrome.projects", "")
+	if f.has("core.chrome.projects", "") || f.has("core.chrome.balance", "") || !f.has("core.chrome.settings", "") || !f.has("core.brand", "") {
+		t.Fatal("the bar of the library holds other switches than those of the page")
+	}
+}

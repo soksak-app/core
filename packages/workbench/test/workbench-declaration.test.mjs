@@ -115,7 +115,7 @@ test("every chrome metric is a CSS value that a stylesheet or a module of the wo
   // The other custom properties that the stylesheets read: the theme tokens of the settings, the values of the page and the ones the stylesheets declare.
   const themeTokens = ["--bg", "--card", "--fg", "--muted", "--edge", "--rule", "--rail", "--focus", "--no", "--r", "--half-gap", "--bw", "--font", "--size"];
   const page = ["--controls-w", "--pl", "--pr", "--pt", "--pb", "--depth", "--text-zoom", "--section-height",
-    "--preview-ink", "--font-mono"];
+    "--preview-ink", "--font-mono", "--project-color"];
   const unknown = [...new Set([...sheets.matchAll(/var\(\s*(--[\w-]+)/g)].map((match) => match[1]))]
     .filter((name) => !set.has(name) && !declaredHere.has(name) && !themeTokens.includes(name) && !page.includes(name));
   assert.deepEqual(unknown, [], `the stylesheets read custom properties that nothing declares: ${unknown.join(", ")}`);

@@ -67,6 +67,12 @@ func (d *Declarations) Metric(name string) (float64, bool) {
 	return number, err == nil
 }
 
+// ChromeText returns the chrome value name as it is declared, and false when it does not exist.
+func (d *Declarations) ChromeText(name string) (string, bool) {
+	value, ok := d.chrome[name]
+	return value, ok
+}
+
 // Share returns the chrome metric name, which is a percentage, as a ratio, and false when the metric does not exist or holds another
 // unit.
 func (d *Declarations) Share(name string) (float64, bool) {
