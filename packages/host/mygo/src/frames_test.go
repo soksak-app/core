@@ -10,6 +10,7 @@ import (
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
+// contract: window.frames.steps-reach-the-class-frame
 func TestAStepRecordCarriesTheNamesOfTheEventLog(t *testing.T) {
 	for kind, want := range map[mygo.StepKind]string{mygo.StepSelector: "selector", mygo.StepBlock: "block", mygo.StepCallback: "callback"} {
 		got := stepRecord(mygo.StepRecord{Kind: kind, Callback: "hitTest:", Entry: 1, Return: 2, Forwarded: 3, Wait: 4}, "main")
@@ -19,6 +20,7 @@ func TestAStepRecordCarriesTheNamesOfTheEventLog(t *testing.T) {
 	}
 }
 
+// contract: window.frames.step-recording-follows-the-policy
 func TestRecordStepsEndsWhenItsStopReturns(t *testing.T) {
 	stop := (&Framework{}).RecordSteps(func(host.StepRecord) {}, func(uint64) {})
 	stop()
@@ -30,6 +32,7 @@ type placementPlatform struct{ platform.Platform }
 func (placementPlatform) SetSurfaceBounds(unsafe.Pointer, float64, float64, float64, float64) {}
 func (placementPlatform) SetSurfaceHiddenHandle(unsafe.Pointer, bool)                         {}
 
+// contract: window.frames.native-views-of-the-last-placement
 func TestAPlacementStoresTheNativeViewElementsOfTheWindow(t *testing.T) {
 	f := &Frontend{frames: host.NewWindowFrames("main")}
 	f.placeSurfaces(placementPlatform{}, []mygo.NativePlacement{{View: 1}, {View: 2}})
@@ -42,6 +45,7 @@ func TestAPlacementStoresTheNativeViewElementsOfTheWindow(t *testing.T) {
 	}
 }
 
+// contract: window.frames.steps-reach-the-class-frame
 func TestAStepWithoutAFocusedWindowBelongsToTheOnlyOpenWindow(t *testing.T) {
 	one := &Framework{frontends: map[*mygo.Window]*Frontend{{}: {name: "main"}}}
 	if got := one.stepWindow(); got != "main" {
