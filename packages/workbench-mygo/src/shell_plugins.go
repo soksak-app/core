@@ -245,7 +245,8 @@ func (s *Shell) drawPluginPlaceholder(c *ui.Context, plugin string) {
 	ui.Column(c).Fill().Gap(float32(gap) + s.textBody()).Center().Children(func() {
 		ui.Text(c, line).LineHeight(s.metrics.lineHeight).FontSize(s.textBody()).TextColor(s.palette.Muted)
 		if action != "" {
-			s.binder.Button(c, "core.card.placeholder-action", "core.plugins."+action, plugin, label, pluginParam{plugin})
+			command := "core.plugins." + action
+			s.uiButton(c, s.binder.Press(c, "core.card.placeholder-action", command, plugin, pluginParam{plugin}), label, false)
 		}
 	})
 }

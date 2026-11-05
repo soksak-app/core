@@ -21,13 +21,3 @@ func (b *Binder) Name(c *ui.Context, name, item string) *ui.Context {
 	}
 	return c.Key(Exposed{Name: name, Item: item})
 }
-
-// Button draws a button of the theme with the text label, which runs command with params.
-func (b *Binder) Button(c *ui.Context, name, command, item, label string, params any) ui.Element {
-	run := b.Control(c, name, command, item)
-	button := b.Bound(ui.Button(c, label), name)
-	if button.Clicked() {
-		run(params)
-	}
-	return button
-}
