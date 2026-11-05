@@ -3,6 +3,7 @@
 // path that leaves the plugin folder, and exchanges JSON messages with its page.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
+#import <mach/mach.h>
 #import "support/temporary_folder.h"
 #import "support/records.h"
 #import "application_log.h"
@@ -47,6 +48,16 @@ static void writeFile(NSString *root, NSString *path, NSString *text) {
     [text writeToFile:file atomically:YES encoding:NSUTF8StringEncoding error:nil];
 }
 
+static uint64_t footprintBytes(void) {
+    task_vm_info_data_t info;
+    mach_msg_type_number_t count = TASK_VM_INFO_COUNT;
+    if (task_info(mach_task_self(), TASK_VM_INFO, (task_info_t)&info, &count) != KERN_SUCCESS) {
+        fprintf(stderr, "FAIL: the footprint of the process cannot be read\n");
+        exit(1);
+    }
+    return info.phys_footprint;
+}
+
 static BOOL storeClosed;
 static NSString *storeError;
 
@@ -77,7 +88,9 @@ int main(void) { @autoreleasepool {
         "buffer: () => new ArrayBuffer(4), bytes: () => new Uint8Array([1, 2]), date: () => new Date(0),"
         "nested: () => ({ list: [1, 'a', null, true], text: 'ok' }),"
         "cycle: () => { const value = {}; value.self = value; return value; } };"
-        "addEventListener('message', (event) => {"
+        "addEventListener('message', async (event) => {"
+        "if (event.data && event.data.fetch) {"
+        "const size = (await (await fetch(event.data.fetch)).arrayBuffer()).byteLength; postMessage({ size }, location.origin); }"
         "if (event.data && event.data.ping) postMessage({ pong: event.data.ping }, location.origin);"
         "if (event.data && event.data.reply) postMessage(replies[event.data.reply](), location.origin); });");
     writeFile(temporary, @"secret.html", @"<!doctype html><title>outside</title>");
@@ -140,6 +153,26 @@ int main(void) { @autoreleasepool {
             check([messages[index + 1] isEqual:reply[1]],
                 [NSString stringWithFormat:@"the %@ reply arrives as %@: %@", reply[0], reply[1], messages[index + 1]]);
         }
+
+        // A plugin file reaches the page without staying in the memory of the application, which holds the file on disk.
+        const NSUInteger chunkSize = 1 << 20, chunks = 32;
+        NSString *large = [folder stringByAppendingPathComponent:@"ui/app/large.bin"];
+        check([[NSFileManager defaultManager] createFileAtPath:large contents:nil attributes:nil], @"the large plugin file is created");
+        NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:large];
+        NSMutableData *chunk = [NSMutableData dataWithLength:chunkSize];
+        memset(chunk.mutableBytes, 7, chunkSize);
+        for (NSUInteger index = 0; index < chunks; index++) [handle writeData:chunk];
+        [handle closeFile];
+        uint64_t before = footprintBytes();
+        NSUInteger fetched = messages.count;
+        check(sp_document_post(document, "{\"fetch\":\"./large.bin\"}"), @"the plugin document posts the fetch request");
+        until(@"the page fetches the large file", ^BOOL{ return messages.count >= fetched + 2; });
+        check([messages[fetched + 1] isEqual:@{ @"size": @(chunks * chunkSize) }],
+            [NSString stringWithFormat:@"the page receives the whole file: %@", messages[fetched + 1]]);
+        uint64_t after = footprintBytes();
+        uint64_t held = after - MIN(after, before);
+        check(held < 8 << 20, [NSString stringWithFormat:@"the application holds %llu MB after it served %lu MB",
+            held >> 20, (unsigned long)(chunks * chunkSize >> 20)]);
 
         // The URL parser resolves the dot segments, so the last address requests soksak://probe/secret.html. A refused request is
         // logged once as an error with its URL (docs/spec/native-surfaces.md#document-regions).
