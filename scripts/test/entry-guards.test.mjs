@@ -14,8 +14,8 @@ test("check-versions.mjs can be imported by a process that has no script path", 
   importWithoutScriptPath("check-versions.mjs");
 });
 
-test("check-host-contract.mjs can be imported by a process that has no script path", { timeout: 10000 }, () => {
-  importWithoutScriptPath("check-host-contract.mjs");
+test("test-hosts.mjs can be imported by a process that has no script path", { timeout: 10000 }, () => {
+  importWithoutScriptPath("test-hosts.mjs");
 });
 
 test("generate-event-classes.mjs can be imported by a process that has no script path", { timeout: 10000 }, () => {

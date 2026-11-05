@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// soksak-mcp: a stdio server that provides the exposure of the local endpoint as MCP tools.
+// sok-mcp: a stdio server that provides the exposure of the local endpoint as MCP tools.
 // It opens no network port. It writes only MCP messages to stdout and diagnostics to stderr.
 import { createInterface } from "node:readline";
 import { isDeepStrictEqual, parseArgs } from "node:util";
@@ -12,7 +12,7 @@ const SUPPORTED_VERSIONS = [MODERN_VERSION, LEGACY_VERSION];
 const META_VERSION = "io.modelcontextprotocol/protocolVersion";
 const META_CAPABILITIES = "io.modelcontextprotocol/clientCapabilities";
 const META_SERVER = "io.modelcontextprotocol/serverInfo";
-const SERVER_INFO = { name: "soksak-mcp", version: "0.0.1" };
+const SERVER_INFO = { name: "sok-mcp", version: "0.0.1" };
 const INSTRUCTIONS =
   "Tools read status values, run declared commands, and act on declared elements of a running soksak application. " +
   "The window argument defaults to the selected window.";
@@ -35,7 +35,7 @@ const { values } = parseArgs({
 });
 const configDir = values["config-dir"];
 if (configDir === undefined) {
-  process.stderr.write("soksak-mcp: --config-dir is required\n");
+  process.stderr.write("sok-mcp: --config-dir is required\n");
   process.exit(2);
 }
 
@@ -46,7 +46,7 @@ function client() {
     connection = connect({ configDir }).then(
       (c) => {
         // Records the connection end to stderr. The next request creates a new connection.
-        c.ended.then((error) => process.stderr.write(`soksak-mcp: ${error.message}\n`));
+        c.ended.then((error) => process.stderr.write(`sok-mcp: ${error.message}\n`));
         return c;
       },
       (error) => {

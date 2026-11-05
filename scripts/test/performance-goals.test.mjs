@@ -7,7 +7,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { B3_MEASUREMENTS as BENCHMARK_MEASUREMENTS, B3_SETTINGS as BENCHMARK_SETTINGS } from "../../e2e/benchmark/measurements.mjs";
-import { ATTRIBUTION_TRACE, benchmarkOf, measuredSettings, RUN_TRACE, traceStateOf } from "../e2e-b3.mjs";
+import { ATTRIBUTION_TRACE, benchmarkOf, measuredSettings, RUN_TRACE, traceStateOf } from "../benchmark-b3.mjs";
 import { B3_MEASUREMENTS as APP_USAGE_MEASUREMENTS } from "../measure-app-usage.mjs";
 import { B3_MEASUREMENTS as HOST_ALLOCATION_MEASUREMENTS } from "../measure-host-allocations.mjs";
 import { B3_MEASUREMENTS as OBJECT_COUNT_MEASUREMENTS } from "../measure-object-counts.mjs";
@@ -28,6 +28,7 @@ const WORDS = {
       fseventsdCoreBelow: (n) => ["CPU share of `fseventsd` at the start of a run", `below ${n} of a core`],
       window: (size) => [["Content size of the window of each scenario", `${size.width}×${size.height} points`]],
       scenarioWindows: (sizes) => Object.entries(sizes).map(([scenario, size]) => [`Content size of the window of ${scenario}`, `${size.width}×${size.height} points`]),
+      occludedScenarios: (scenarios) => [["Scenarios whose window is covered", scenarios.join(", ")]],
     },
     over: { median: "median", each: "each run" },
     bound: {
@@ -47,6 +48,7 @@ const WORDS = {
       fseventsdCoreBelow: (n) => ["run 시작 시 `fseventsd`의 CPU 비율", `core 하나의 ${n} 미만`],
       window: (size) => [["각 scenario의 window content 크기", `${size.width}×${size.height} point`]],
       scenarioWindows: (sizes) => Object.entries(sizes).map(([scenario, size]) => [`${scenario}의 window content 크기`, `${size.width}×${size.height} point`]),
+      occludedScenarios: (scenarios) => [["window가 가려지는 scenario", scenarios.join(", ")]],
     },
     over: { median: "median", each: "각 run" },
     bound: {
@@ -150,10 +152,10 @@ test("each value of docs/spec/performance-goals.json names the measurement of it
  * of an e2e benchmark runs the benchmark of its name, and a check of e2e/ is the benchmark of its file name.
  */
 const MEASUREMENT_SCRIPTS = {
-  "app-usage": "scripts/measure-app-usage.mjs",
-  "terminal-redraw-usage": "scripts/measure-terminal-redraw.mjs",
-  "object-counts": "scripts/measure-object-counts.mjs",
-  "host-allocations": "scripts/measure-host-allocations.mjs",
+  "measure-app-usage": "scripts/measure-app-usage.mjs",
+  "measure-terminal-redraw": "scripts/measure-terminal-redraw.mjs",
+  "measure-object-counts": "scripts/measure-object-counts.mjs",
+  "measure-host-allocations": "scripts/measure-host-allocations.mjs",
 };
 
 /** The recipe lines of the root make target `name`. */
@@ -171,7 +173,7 @@ function recipeOf(makefile, name) {
 
 /**
  * The failures of the measurements of `values`: each measurement is a key that the declaration of its target holds in each trace
- * state in which the target measures, which traceStateOf of scripts/e2e-b3.mjs gives: the TRACE argument of the target, else both
+ * state in which the target measures, which traceStateOf of scripts/benchmark-b3.mjs gives: the TRACE argument of the target, else both
  * RUN_TRACE of the runs of the session and ATTRIBUTION_TRACE of the runs of phase 1 for a target that takes the trace state of the
  * run. `declarations` holds the keys of each measurement script by the name of its make target
  * (`scripts`) and of each e2e benchmark (`benchmarks`). A list of keys holds the keys of every trace state that the target takes;
@@ -221,7 +223,7 @@ function measurementFailures(values, makefile, declarations) {
   return failures;
 }
 
-/** The e2e benchmark that `target` runs (benchmarkOf of scripts/e2e-b3.mjs), whose make target runs it through its recipe. */
+/** The e2e benchmark that `target` runs (benchmarkOf of scripts/benchmark-b3.mjs), whose make target runs it through its recipe. */
 function benchmarkTarget(target, makefile) {
   const benchmark = benchmarkOf(target);
   if (benchmark === null) return { reason: `${target} is no target whose measurements a script declares` };
@@ -232,8 +234,8 @@ function benchmarkTarget(target, makefile) {
 
 /** The declarations of the targets that B3 runs: B3_MEASUREMENTS of each measurement script and of the e2e benchmarks. */
 const DECLARATIONS = {
-  scripts: { "app-usage": APP_USAGE_MEASUREMENTS, "terminal-redraw-usage": TERMINAL_REDRAW_MEASUREMENTS, "object-counts": OBJECT_COUNT_MEASUREMENTS,
-    "host-allocations": HOST_ALLOCATION_MEASUREMENTS },
+  scripts: { "measure-app-usage": APP_USAGE_MEASUREMENTS, "measure-terminal-redraw": TERMINAL_REDRAW_MEASUREMENTS, "measure-object-counts": OBJECT_COUNT_MEASUREMENTS,
+    "measure-host-allocations": HOST_ALLOCATION_MEASUREMENTS },
   benchmarks: BENCHMARK_MEASUREMENTS,
 };
 
@@ -249,16 +251,16 @@ test("each e2e benchmark of docs/spec/performance-goals.json measures in the set
 });
 
 test("a target that takes the trace state of the run declares its measurement in the trace states 0 and 1, and a target that names TRACE in that state", { timeout: 1000 }, () => {
-  const declarations = { scripts: { "app-usage": { 0: ["applicationCpuSeconds", "hitTestP90Ms"], 1: ["applicationCpuSeconds"], "frame-records": ["hitTestP90Ms"] } }, benchmarks: {} };
+  const declarations = { scripts: { "measure-app-usage": { 0: ["applicationCpuSeconds", "pointerMoveP90Ms"], 1: ["applicationCpuSeconds"], "frame-records": ["pointerMoveP90Ms"] } }, benchmarks: {} };
   const value = (id, target, measurement) => ({ id, target, measurement });
   assert.deepEqual(measurementFailures([
-    value("cpu", "make app-usage STATE=S1 STEP=pointer", "applicationCpuSeconds"),
-    value("hit-test", "make app-usage STATE=S1 STEP=pointer", "hitTestP90Ms"),
-    value("frame-records", "make app-usage STATE=S1 STEP=pointer TRACE=frame-records", "hitTestP90Ms"),
-    value("named", "make app-usage STATE=S1 STEP=pointer TRACE=1", "hitTestP90Ms"),
+    value("cpu", "make measure-app-usage STATE=S1 STEP=pointer", "applicationCpuSeconds"),
+    value("hit-test", "make measure-app-usage STATE=S1 STEP=pointer", "pointerMoveP90Ms"),
+    value("frame-records", "make measure-app-usage STATE=S1 STEP=pointer TRACE=frame-records", "pointerMoveP90Ms"),
+    value("named", "make measure-app-usage STATE=S1 STEP=pointer TRACE=1", "pointerMoveP90Ms"),
   ], read("Makefile"), declarations), [
-    "hit-test: make app-usage STATE=S1 STEP=pointer declares no measurement hitTestP90Ms in the trace state 1",
-    "named: make app-usage STATE=S1 STEP=pointer TRACE=1 declares no measurement hitTestP90Ms in the trace state 1",
+    "hit-test: make measure-app-usage STATE=S1 STEP=pointer declares no measurement pointerMoveP90Ms in the trace state 1",
+    "named: make measure-app-usage STATE=S1 STEP=pointer TRACE=1 declares no measurement pointerMoveP90Ms in the trace state 1",
   ]);
 });
 

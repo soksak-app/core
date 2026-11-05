@@ -17,8 +17,8 @@ soksak 배치 라이브러리, 워크벤치 프런트엔드, 플러그인, 애�
 플러그인과 사이드카는 자기 repository에 있다([Repository](docs/spec/plugins.ko.md#repository)).
 
 ```sh
-make prepare
-make verify
+make install
+make test-all
 pnpm test
 ```
 

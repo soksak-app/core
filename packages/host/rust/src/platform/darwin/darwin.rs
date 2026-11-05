@@ -164,6 +164,9 @@ impl Platform for Darwin {
     fn reveal_after_load(&self, window: Handle) -> Result<(), String> {
         window::reveal_after_load(window)
     }
+    fn show_window(&self, window: Handle) -> Result<(), String> {
+        window::show_window(window)
+    }
     fn set_main_appearance(&self, view: &PlatformWebview, dark: bool) -> Result<(), String> {
         webview::set_main_appearance(view, dark)
     }
@@ -295,6 +298,10 @@ impl Platform for Darwin {
     }
     fn focus_surface(&self, surface: Handle) -> Result<(), String> {
         webview::focus_surface(surface);
+        Ok(())
+    }
+    fn focus_surface_for_region(&self, surface: Handle) -> Result<(), String> {
+        webview::focus_surface_for_region(surface);
         Ok(())
     }
     fn focus_workbench(&self, window: Handle) -> Result<(), String> {
@@ -880,6 +887,9 @@ impl Platform for Darwin {
     }
     fn write_private_file(&self, path: &Path, data: &[u8]) -> Result<(), String> {
         private_files::write_private_file(path, data)
+    }
+    fn private_file_options(&self) -> std::fs::OpenOptions {
+        private_files::private_file_options()
     }
     fn directory_identity(&self, _path: &Path, metadata: &Metadata) -> Result<String, String> {
         Ok(identity::identity(metadata))

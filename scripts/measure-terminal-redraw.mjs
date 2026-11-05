@@ -9,7 +9,7 @@
 // and would add its own cost to each frame. It prints the CPU time of each process, its CPU milliseconds per presented frame and the presented
 // frames per second, and closes the project window afterwards. It also prints the CPU time of the window server over the interval, which
 // draws the whole screen and belongs to no application, so it stays outside the sums of the application and the B3 record. Every error is
-// printed to stderr, and the exit status is 1 when an error occurred. `make terminal-redraw-usage` runs it.
+// printed to stderr, and the exit status is 1 when an error occurred. `make measure-terminal-redraw` runs it.
 //
 // --b3-out FILE writes the B3 output of a measurement without an error to FILE through writeB3Out of scripts/b3-out.mjs, with the
 // conditions of b3Conditions for the window of the measurement (redrawConditions). The keys, which B3_MEASUREMENTS lists, end in their
@@ -29,7 +29,7 @@ import { parseArgs } from "node:util";
 import { connect } from "@soksak/client";
 import { Session } from "@soksak/window-check/app.mjs";
 import { readPolicy } from "@soksak/window-check/log-policy.mjs";
-import { b3Conditions, writeB3Out } from "./b3-out.mjs";
+import { b3Conditions, b3End, writeB3Out } from "./b3-out.mjs";
 import { b3OutOption, execute, measureApps, newWindow, openOnlyTab, parseCpuTime, requireOcclusion } from "./measure-app-usage.mjs";
 import { applyTrace, parseTrace, traceSettings } from "./measure-trace.mjs";
 
@@ -144,10 +144,10 @@ async function readWindowServer() {
   return parseWindowServer(result.stdout);
 }
 
-/** The keys of the measurements of a B3 record of make terminal-redraw-usage. */
+/** The keys of the measurements of a B3 record of make measure-terminal-redraw. */
 export const B3_MEASUREMENTS = Object.freeze(["hostCpuPerFrameMs", "applicationCpuPerFrameMs", "sidecarCpuPerFrameMs", "framesPerSecond", "presentedFrames"]);
 
-/** The measurements of a B3 record of make terminal-redraw-usage (the keys that the header declares) from the frame cost of the region. */
+/** The measurements of a B3 record of make measure-terminal-redraw (the keys that the header declares) from the frame cost of the region. */
 export function redrawMeasurements(cost) {
   const host = cost.rows.find(({ role }) => role === "host");
   if (host === undefined) throw new Error("the measurement has no host row");
@@ -166,6 +166,14 @@ export function redrawMeasurements(cost) {
  */
 export function redrawConditions({ status, window, trace, policy }) {
   return b3Conditions({ windows: [{ ...status, window }], performance: traceSettings(trace)["diagnostics.performance"], policy });
+}
+
+/**
+ * The conditions of the B3 output from the host.window value `status` before the first CPU reading and a reading of the window of the session
+ * s now (b3End). The measurement reads them after the interval, as the last reading of a window that it closes before it writes the output.
+ */
+export async function readRedrawConditions({ s, status, trace, policy }) {
+  return redrawConditions({ status: { ...status, ...b3End(status, await s.get("host.window")) }, window: s.window, trace, policy });
 }
 
 /**
@@ -261,7 +269,7 @@ async function measureRedraw({ sok, configDir, plugin, rows, rate, interval, tra
       windowServer: readWindowServer,
     });
     // The conditions of a B3 output are read only for one: a plain measurement does not require a window on a screen.
-    const conditions = b3Out === null ? null : redrawConditions({ status, window: w.window, trace, policy: readPolicy(configDir).classes });
+    const conditions = b3Out === null ? null : await readRedrawConditions({ s: w, status, trace, policy: readPolicy(configDir).classes });
     result = { plugin, rows, rate, interval, window: w.window, tab, seconds: measurement.seconds, cost, conditions, errors: measurement.errors };
   } catch (error) {
     failure = error;

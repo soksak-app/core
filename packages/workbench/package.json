@@ -1,11 +1,11 @@
 {
   "name": "@soksak/workbench",
-  "version": "0.0.35",
+  "version": "0.0.36",
   "private": true,
   "description": "Workbench frontend: projects, spaces, cards, tabs, sidebars, settings, and plugin loading.",
   "type": "module",
   "bin": {
-    "soksak-stage": "./stage.mjs"
+    "sok-copy-frontend": "./copy-frontend.mjs"
   },
   "files": [
     "index.html",
@@ -116,7 +116,7 @@
     "bar-tabs.js",
     "pointer-state.js",
     "plugin-processes.js",
-    "stage.mjs",
+    "copy-frontend.mjs",
     "staged.js",
     "replace-file.mjs"
   ],

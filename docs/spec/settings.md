@@ -132,7 +132,7 @@ Each core setting accepts one form. Reading the settings files and every change 
 | `memorySaverDelay` | An integer from 5 to 720 (minutes), common scope, default 120: the time a tab stays hidden before the memory saver unloads it; another value is refused with `Invalid setting memorySaverDelay: <value>`, and a change re-arms the scheduler |
 | `sets`, `links` | [Stored sets and links](#stored-sets-and-links) |
 
-The theme catalog with the modes, the fonts, the menu languages with the default language, and the defaults, ranges, choices, switches and common-only keys of these settings are declared once, in the settings of `packages/workbench/workbench.json`; `settings.js` and `text-size.js` import that file as a JSON module and define none of them. The browser runtime imports the common-only keys from that file. Each language host library embeds a copy of that file and reads the common-only keys from it, and `make exposure-check` fails when a copy differs from its source.
+The theme catalog with the modes, the fonts, the menu languages with the default language, and the defaults, ranges, choices, switches and common-only keys of these settings are declared once, in the settings of `packages/workbench/workbench.json`; `settings.js` and `text-size.js` import that file as a JSON module and define none of them. The browser runtime imports the common-only keys from that file. Each language host library embeds a copy of that file and reads the common-only keys from it, and `make check-exposure` fails when a copy differs from its source.
 
 Plugin settings take the form of their declaration ([plugins](plugins.md)).
 

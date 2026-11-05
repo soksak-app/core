@@ -235,6 +235,12 @@ void sp_region_restore_capture_identity(void) {
     }
 }
 
+// Whether a press at a point of the window reaches region. A region that does not show takes no press: a surface that hides keeps
+// the frame of its last placement, and that frame can lie under a press elsewhere in the window.
+static BOOL spRegionShowsPoint(SPImageRegion *region, NSPoint windowPoint) {
+    return !region.isHiddenOrHasHiddenAncestor && NSPointInRect([region convertPoint:windowPoint fromView:nil], region.bounds);
+}
+
 // Is the original point of a mouse press inside a live image region of the same window? Returns that region (including
 // the region itself, nil if none). A paired drag or release is classified by its press origin.
 static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
@@ -264,21 +270,17 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
                 return nil;
         }
     }
-    NSPoint point = [view convertPoint:windowPoint fromView:nil];
-    if (NSPointInRect(point, view.bounds)) return view;
+    if (spRegionShowsPoint(view, windowPoint)) return view;
     for (SPImageRegion *other in spLiveRegions) {
         if (other == view || !other.window || other.window != view.window || other.closed) continue;
-        NSPoint inOther = [other convertPoint:windowPoint fromView:nil];
-        if (NSPointInRect(inOther, other.bounds)) return other;
+        if (spRegionShowsPoint(other, windowPoint)) return other;
     }
     return nil;
 }
 
 static SPImageRegion *spRegionAtWindowPoint(NSWindow *window, NSPoint windowPoint) {
     for (SPImageRegion *region in spLiveRegions) {
-        if (!region.closed && region.window == window && NSPointInRect([region convertPoint:windowPoint fromView:nil], region.bounds)) {
-            return region;
-        }
+        if (!region.closed && region.window == window && spRegionShowsPoint(region, windowPoint)) return region;
     }
     return nil;
 }

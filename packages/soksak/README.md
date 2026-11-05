@@ -24,4 +24,4 @@ Give `#stage` a size and `position: relative`, and set `box-sizing: border-box` 
 
 - [Layout rules and API](docs/layout.md)
 
-Run `pnpm test`, `pnpm breaks`, `pnpm fuzz`, and `pnpm mutate` in this directory. MIT license: [LICENSE](LICENSE).
+Run `pnpm test`, `pnpm check-breaks`, `pnpm fuzz`, and `pnpm mutate` in this directory. MIT license: [LICENSE](LICENSE).

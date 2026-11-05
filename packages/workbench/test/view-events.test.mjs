@@ -346,7 +346,7 @@ test("each start of a run is pushed to the view as the event run-start, and a cl
   });
   started();
   await new Promise(setImmediate);
-  assert.deepEqual(f.pushed.map(({ event, data }) => [event, data]), [["run-start", null]]);
+  assert.deepEqual(f.pushed.map(({ event, data }) => [event, data]), [["run-start", {}]]);
   await subs.close();
   assert.equal(started, null, "the listener of the start of a run ends with the subscriptions");
 });

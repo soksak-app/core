@@ -197,7 +197,7 @@ test("core entries answer requests and undeclared or unregistered names fail wit
   const button = document.querySelector('[data-expose="core.fixture.button"]');
   button.getBoundingClientRect = () => ({ left: 4, top: 5, width: 6, height: 7 });
   assert.deepEqual(await made.handle({ method: "element.rect", params: { name: "core.fixture.button" } }),
-    { result: { x: 4, y: 5, width: 6, height: 7, zoom: 1, document: { x: 0, y: 0 } } });
+    { result: { x: 4, y: 5, width: 6, height: 7, zoom: 1, role: "button", document: { x: 0, y: 0 } } });
   let clicked = 0;
   button.addEventListener("click", () => clicked++);
   assert.deepEqual(await made.handle({ method: "element.act", params: { name: "core.fixture.button", action: "click" } }), { result: null });

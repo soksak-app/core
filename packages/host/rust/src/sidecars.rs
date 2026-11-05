@@ -1625,7 +1625,7 @@ impl<O: Owner> Sidecars<O> {
     }
 
     /// Sends a page request with current as the root of the surface unless the surface has a recorded root.
-    fn send_in_root(
+    pub(crate) fn send_in_root(
         &self,
         owner: &O,
         name: &str,

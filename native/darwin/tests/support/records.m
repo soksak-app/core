@@ -65,6 +65,14 @@ NSString *capturedRecords(void (^block)(void)) {
         gmtime_r(&seconds, &utc);
         char stamp[32];
         strftime(stamp, sizeof stamp, "%Y-%m-%dT%H:%M:%S", &utc);
+        // A structured event has no where and no text: its whole name and fields say which event it is.
+        if (fields[@"where"] == nil) {
+            NSData *json = [NSJSONSerialization dataWithJSONObject:fields options:NSJSONWritingSortedKeys error:NULL];
+            NSString *body = [[[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding] autorelease];
+            [lines appendFormat:@"%s.%03uZ %@ %@ %@\n", stamp, (unsigned)((micros / 1000u) % 1000u), levelNames[[record[@"level"] intValue]],
+                record[@"name"], body];
+            return;
+        }
         NSString *text = [fields[@"text"] stringByReplacingOccurrencesOfString:@"\n" withString:@"\\n"];
         [lines appendFormat:@"%s.%03uZ %@ %@ %@: %@\n", stamp, (unsigned)((micros / 1000u) % 1000u), levelNames[[record[@"level"] intValue]],
             [record[@"name"] componentsSeparatedByString:@"."].firstObject, fields[@"where"], text];

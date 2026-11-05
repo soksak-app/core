@@ -29,7 +29,7 @@
 - F7. `scripts/workspace-registry.json`은 plugin, sidecar, pack을 나열한다. 선언된 contract repository는 없다.
 - F8. [logging](../spec/logging.ko.md)의 `plugin` 층(`docs/spec/logging.md:34`, 층 `native`, `host`, `page`, `plugin`, `sidecar`, `sok`)은 일반적인 logging 층 이름이다. 한국어 번역은 `docs/spec/logging.ko.md:35`에 같은 내용을 적는다.
 - F9. `docs/spec/plugins.ko.md`의 42줄은 plugin과 sidecar의 버전이 자기 것이며 core 버전과 관계가 없다고 적는다. 따라서 설치된 terminal plugin은 core 버전이 바뀌어도 바뀌지 않는다. F4의 `#v0.0.11` 고정은 개발 의존성이다.
-- F10. `scripts/check-test-parity.mjs`는 helper를 다음 항목에서 이름으로 부른다. `F160.25`(2621줄, `export async function screenHash`), `F160.34`(`expected` 글이 "the view-state inputs of a session"을 적고, 시험이 replay 입력 파일을 인용한다), `F160.35`(2651줄, `export function screenFromMessage`, 2655줄과 2656줄의 시험).
+- F10. `scripts/check-tests.mjs`는 helper를 다음 항목에서 이름으로 부른다. `F160.25`(2621줄, `export async function screenHash`), `F160.34`(`expected` 글이 "the view-state inputs of a session"을 적고, 시험이 replay 입력 파일을 인용한다), `F160.35`(2651줄, `export function screenFromMessage`, 2655줄과 2656줄의 시험).
 - F11. 이 결정이 옮기는 anchor를 가리키는 교차 참조는 모두 `scripts/check-docs.mjs`가 heading에 대해 검사한다. `docs/spec/replay.ko.md`의 20, 22, 26, 66줄(`view-state anchor`)과 83줄. `docs/spec/terminal-runtime.ko.md`의 117줄(`replay.mdview-state anchor`)과 135줄(`#screen-message`). `docs/features.md`의 880줄(`replay.mdview-state anchor`)과 885, 886줄(`terminal-runtime.md screen-message anchor`), 그리고 `docs/features.ko.md`의 같은 줄. `docs/plans/decouple-handoff.md`의 73줄과 그 한국어 번역. `CHANGELOG.md`의 538~550줄과 그 한국어 번역. 주석 `packages/plugin-api/test/validate.test.mjs:269`와 `packages/plugin-api/test/screen-hash.test.mjs:32`. 인용 `packages/sok/go/tests/replay_test.go:63`과 `packages/sok/rust/tests/replay_test.rs:68`.
 
 ## 결정
@@ -72,11 +72,11 @@
 - `packages/plugin-api/screen-hash.js`: 1줄(결정 2). `screenFromMessage`(104~134줄)는 결정 5의 gate가 통과할 때만 지운다.
 - `packages/log-contract/test/replay-doc.test.mjs`(신규, core 소유): `docs/spec/replay.md`와 `packages/plugin-api/terms.json`을 읽고 다음을 검사한다. "### Hashed members" 절이 있다. "Golden vectors" 절의 어떤 줄도 `screenFromMessage`를 적지 않는다. `terms.json`의 "screen hash"와 "replay" 정의가 terminal을 적지 않는다. 변경 전 트리에서는 실패한다. `replay.md` 101줄이 "terminal 엔진"을 적고, `terms.json` 151줄이 "a terminal session"을 적기 때문이다. 편집 뒤에는 통과한다. 이 시험은 helper를 import하지 않으므로 파서 제거가 시험을 지우지 않는다.
 - `packages/log-contract/test/screen-message.test.mjs`와 `packages/log-contract/fixtures/replay/screen-message.json`: 결정 4의 변경에서 gate 뒤에 core에서 지우고 plugin 저장소로 옮긴다.
-- `scripts/check-test-parity.mjs`: F160.34의 `expected` 글을 입력 종류로 바꾼다(결정 3). F160.35의 2651, 2655, 2656줄 항목은 파서가 옮겨갈 때 plugin 항목으로 옮긴다. F160.25(2621줄)는 `screenHash`가 남으므로 유지한다.
+- `scripts/check-tests.mjs`: F160.34의 `expected` 글을 입력 종류로 바꾼다(결정 3). F160.35의 2651, 2655, 2656줄 항목은 파서가 옮겨갈 때 plugin 항목으로 옮긴다. F160.25(2621줄)는 `screenHash`가 남으므로 유지한다.
 - `docs/features.md`와 `docs/features.ko.md` 2014줄: F236-9는 이 결정으로 닫는다. 세 handoff 항목이 gate가 있는 후속 작업이다.
 - `CHANGELOG.md`와 `CHANGELOG.ko.md`: 결정, 검토 라운드, 답변.
 
-문서 검증: `make docs-check`(모든 fragment를 검사하므로 위 연결 변경이 모두 필요하다), `make test-inventory-check`, `node --test packages/log-contract/test/*.test.mjs packages/plugin-api/test/*.test.mjs`. Red와 Green: 위의 `replay-doc.test.mjs`. sok 인용 편집의 소유자 검사: `packages/sok/go`에서 `go test ./tests`, `cargo test -p soksak-sok --test replay_test`.
+문서 검증: `make check-docs`(모든 fragment를 검사하므로 위 연결 변경이 모두 필요하다), `make check-tests`, `node --test packages/log-contract/test/*.test.mjs packages/plugin-api/test/*.test.mjs`. Red와 Green: 위의 `replay-doc.test.mjs`. sok 인용 편집의 소유자 검사: `packages/sok/go`에서 `go test ./tests`, `cargo test -p soksak-sok --test replay_test`.
 
 ## 잔여
 
@@ -179,7 +179,7 @@ C2가 하지 않는 것. C2는 core를 전체적으로 규칙에 맞게 만들�
 - **gate G1이 성립할 때 제거(F236-9-2):** `packages/log-contract`의 fixture `screen-hash.json`과 `screen-message.json`, 테스트 `screen-hash.test.mjs`와 `screen-message.test.mjs`. `replay-vectors-named.test.mjs`에서는 screen-hash vector에 관한 단언만 지운다(`inputs.json`에 관한 단언은 남는다).
 - **gate G1이 성립할 때 포인터로 대체(F236-9-2):** `replay.md`의 "Screen hash" 정의 본문(33~55줄)과 "Golden vectors" 본문(56~70줄), 그리고 `persistent-services.md` 51~68줄(H2). 한국어 번역(`replay.ko.md` 39, 54, 58, 83줄; `persistent-services.ko.md` 68줄)도 같다. 각 제목은 남기고 그 자리에 일반 문장을 둔다. 화면 메시지와 화면 hash는 생산자와 소비자가 선언한 계약이 정의하며, frame record의 `fields.hash`는 소문자 16진수 64자인 SHA-256 문자열이다. 제목을 남기는 이유는 `replay.md` 22줄과 sidecar의 `screen_hash.rs`가 쓰는 `#screen-hash`, 그리고 `#golden-vectors` 앵커가 `scripts/check-docs.mjs`에서 계속 해석되게 하려는 것이다.
 - **crate가 들어올 때 sidecar에서 재배치(F236-9-2):** `vt-core/src/screen_hash.rs`는 hash의 소유자 자리에서 물러난다. 호출처는 crate로 옮긴다. `vt-core/src/protocol.rs` 1276줄(`message_cells`)과 1333줄(프레임 기록의 screen hash), `vt-alacritty/src/replay.rs` 18줄과 309줄, `vt-core/tests/screen_hash_test.rs` 8줄, `vt-core/tests/screen_message_test.rs` 6줄과 `screen-message.json`을 읽는 부분. `message_cells`는 엔진 화면의 producer로 sidecar에 남는다. `screen_hash.rs`에서 sidecar의 모듈로 옮기며, 메시지의 cell과 cursor 형식은 crate에서 온다. 폴더 `vt-core/tests/fixtures/log-contract/`의 사본 `screen-hash.json`과 `screen-message.json`(H5), 그리고 README 8~11줄("Core owns all three")은 제거한다.
-- **재배정하며 삭제하지 않음(F236-9-2):** `scripts/check-test-parity.mjs`의 F160.25와 F160.35 행(2617~2660줄). 각 행은 주인이 테스트를 보유할 때 계약이나 plugin 저장소로 옮긴다. core에 남는 테스트(`sok`의 `replay_test.go`와 `replay_test.rs`, `e2e/terminal-replay.test.mjs`)는 남는 주인에게 다시 연결한다.
+- **재배정하며 삭제하지 않음(F236-9-2):** `scripts/check-tests.mjs`의 F160.25와 F160.35 행(2617~2660줄). 각 행은 주인이 테스트를 보유할 때 계약이나 plugin 저장소로 옮긴다. core에 남는 테스트(`sok`의 `replay_test.go`와 `replay_test.rs`, `e2e/terminal-replay.test.mjs`)는 남는 주인에게 다시 연결한다.
 - **주인이 보유할 때 이동(F236-9-2):** "View state"의 producer 규칙(`replay.md` 74~98줄). 이들은 terminal 엔진이 그려진 화면을 계산하는 방법(선택 강조, theme에 따른 trimming, viewport 밖의 cursor)을 설명한다. 이는 바이트 정의가 아니라 생산하는 sidecar의 동작이며, sidecar의 명세가 이를 보유할 때 core를 떠난다.
 - **감독자가 정함(page frame의 layer, 아래 감독자 결정):** layer는 `plugin`이다. 명세 `docs/spec/replay.md` 22줄, `plugins.md` 242줄, `host-contract.md` 829줄, `logging.md` 34줄과 37줄이 그렇게 말한다. F236-9-2와 F236-9-3은 `replay.md` 22줄, `packages/sok/rust/src/replay.rs` 274~280줄과 `packages/sok/go/src/replay.go` 181~187줄의 `sok` layer 검사, 어떤 layer 이름도 바꾸지 않는다. `terms.json`의 "replay" 용어는 terminal 문구를 잃는다(F236-9-3).
 - **유지, 일반적:** `sok`의 형식 검사(`replay.rs` 100줄의 `is_screen_hash`, `replay.go` 26줄의 `screenHashText`). 문자열 형식을 검사할 뿐 계산하지 않는다.

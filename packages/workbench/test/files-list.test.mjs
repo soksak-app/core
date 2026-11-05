@@ -9,7 +9,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const here = new URL("../", import.meta.url);
-const STAGE = fileURLToPath(new URL("../stage.mjs", import.meta.url));
+const STAGE = fileURLToPath(new URL("../copy-frontend.mjs", import.meta.url));
 const listed = new Set(JSON.parse(readFileSync(new URL("package.json", here), "utf8")).files);
 
 /** The relative imports of a source text, as file names of this folder. */

@@ -12,7 +12,13 @@ mod darwin;
 mod windows;
 
 #[cfg(target_os = "macos")]
-pub(crate) use darwin::{launch_activation, ns_window, platform_webview, prepare_window};
+pub(crate) use darwin::{
+    launch_activation, ns_window, platform_webview, prepare_window, show_window,
+    watch_page_process_end,
+};
 
 #[cfg(windows)]
-pub(crate) use windows::{launch_activation, ns_window, platform_webview, prepare_window};
+pub(crate) use windows::{
+    launch_activation, ns_window, platform_webview, prepare_window, show_window,
+    watch_page_process_end,
+};

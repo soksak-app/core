@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import test, { mock } from "node:test";
 
 import { readB3Out, writeB3Out } from "../b3-out.mjs";
@@ -10,6 +11,9 @@ import {
   applicationRows,
   attributeWebKit,
   B3_MEASUREMENTS,
+  COUNT_WAIT_MS,
+  logLineCounts,
+  recordsOver,
   cpuPercent,
   execute,
   faultErrorCount,
@@ -37,7 +41,7 @@ import {
   windowRows,
 } from "../measure-app-usage.mjs";
 
-const DIR = "/Users/tester/Library/Application Support/soksak-check";
+const DIR = "/Users/tester/Library/Application Support/sok-check";
 
 test("parses the cpu time formats of ps", () => {
   assert.equal(parseCpuTime("0:01.23"), 1.23);
@@ -75,7 +79,7 @@ test("parses ps command rows and rejects a malformed row", () => {
 
 test("finds the host by the config-dir argument and skips tools, sidecars and WebKit", () => {
   const table = parseProcessTable([
-    `  10 /Applications/soksak-check.app/Contents/MacOS/soksak --config-dir ${DIR}`,
+    `  10 /Applications/sok-check.app/Contents/MacOS/soksak --config-dir ${DIR}`,
     `  11 node scripts/measure-app-usage.mjs --sok /x/sok --config-dir ${DIR}`,
     `  12 /x/target/debug/sok windows --config-dir ${DIR}`,
     `  13 ${DIR}/sidecars/probe-service/build/probe --config-dir ${DIR}`,
@@ -88,7 +92,7 @@ test("finds the host by the config-dir argument and skips tools, sidecars and We
 test("matches a data folder whose launch path has a doubled slash", () => {
   const launched = DIR.replace("/Library/", "//Library/");
   const table = parseProcessTable([
-    `  10 /Applications/soksak-check.app/Contents/MacOS/soksak --config-dir ${launched} --registry-ca ${launched}/ca.pem`,
+    `  10 /Applications/sok-check.app/Contents/MacOS/soksak --config-dir ${launched} --registry-ca ${launched}/ca.pem`,
     `  11 ${launched}/sidecars/probe/bin/probe --config-dir ${launched}`,
   ].join("\n"));
   assert.deepEqual(hostProcess(table, DIR), { pid: 10 });
@@ -96,10 +100,10 @@ test("matches a data folder whose launch path has a doubled slash", () => {
 });
 
 test("finds the host and the sidecars of a data folder that the processes launch by its real path", () => {
-  const given = "/var/tester/soksak-check";
-  const real = "/private/var/tester/soksak-check";
+  const given = "/var/tester/sok-check";
+  const real = "/private/var/tester/sok-check";
   const table = parseProcessTable([
-    `  10 /Applications/soksak-check.app/Contents/MacOS/soksak --config-dir ${real}`,
+    `  10 /Applications/sok-check.app/Contents/MacOS/soksak --config-dir ${real}`,
     `  11 ${real}/sidecars/probe/bin/probe --x`,
   ].join("\n"));
   assert.deepEqual(hostProcess(table, given, real), { pid: 10 });
@@ -108,7 +112,7 @@ test("finds the host and the sidecars of a data folder that the processes launch
 
 test("reports a missing or duplicate host", () => {
   const none = parseProcessTable("  15 /usr/bin/other --config-dir /elsewhere\n");
-  assert.throws(() => hostProcess(none, DIR), /no host process has --config-dir .*soksak-check/);
+  assert.throws(() => hostProcess(none, DIR), /no host process has --config-dir .*sok-check/);
   const two = parseProcessTable(`  10 /a/soksak --config-dir ${DIR}\n  20 /b/soksak --config-dir ${DIR}\n`);
   assert.throws(() => hostProcess(two, DIR), /2 host processes have --config-dir/);
 });
@@ -249,6 +253,16 @@ test("a window with a main page has its page row, and a page process that is nei
     { rows: [], errors: [`page of window w1 of ${MYGO}: no page process (0)`] });
   assert.deepEqual(windowRows("w1", MYGO, { pageProcess: null }),
     { rows: [], errors: [`page of window w1 of ${MYGO}: host.window reply has no documents array`] });
+});
+
+test("a hidden document that has not loaded has no row and is no error, and a shown document or a view without a process is an error", () => {
+  const started = { surface: "tab-2", document: "", process: 902 };
+  assert.deepEqual(windowRows("w1", MYGO, { pageProcess: null, documents: [started, { surface: "tab-2", document: "page", process: 0, visible: false }] }),
+    { rows: [{ role: "document tab-2/", pid: 902, attribution: "host.window" }], errors: [] });
+  assert.deepEqual(windowRows("w1", MYGO, { pageProcess: null, documents: [{ surface: "tab-2", document: "page", process: 0, visible: true }] }),
+    { rows: [], errors: [`document tab-2/page of window w1 of ${MYGO}: no process (0)`] });
+  assert.deepEqual(windowRows("w1", MYGO, { pageProcess: null, documents: [{ surface: "tab-2", document: "", process: 0, visible: false }] }),
+    { rows: [], errors: [`document tab-2/ of window w1 of ${MYGO}: no process (0)`] });
 });
 
 test("every window must be visible except the covered first window of S9", () => {
@@ -399,66 +413,70 @@ const MOVES = [
   [[30000, 30200], [30200, 30400]],
 ];
 
-test("the gesture figures are the 90th percentile of the hitTest: step with the step that follows it", () => {
+test("the gesture figures are the 90th percentile of the mouseMoved: steps with the hitTest: step right before each", () => {
   const figures = gestureFigures({ records: u7Move(MOVES), dropped: [], window: "w1", framesBefore: 340, framesAfter: 344, fromSeq: 100, toSeq: 112 });
-  assert.deepEqual(figures, { frameRecords: 4, pairs: 4, p90Ms: 6, framesChange: 4 });
+  assert.deepEqual(figures, { frameRecords: 4, moves: 4, p90Ms: 6, framesChange: 4 });
 });
 
-test("a hitTest: step without a following step and a gesture without a hitTest: step fail", () => {
-  const records = u7Move(MOVES).filter((record) => record.seq !== 111);
-  assert.throws(() => gestureFigures({ records, dropped: [], window: "w1", framesBefore: 340, framesAfter: 344, fromSeq: 100, toSeq: 112 }),
-    /the hitTest: step at seq 110 of window w1 has no following step/);
+/** The records of the steps `[callback, entry, return]` of window w1, with no frame record. */
+function u7Steps(steps) {
+  return steps.map(([callback, entry, back], index) => ({ seq: 100 + index + 1, event: "host.frame.step",
+    fields: { window: "w1", kind: "selector", callback, entry_ns: ns(entry), return_ns: ns(back), forwarded: 0, wait_ns: "0" } }));
+}
+
+const steps = (list) => ({ records: u7Steps(list), dropped: [], window: "w1", framesBefore: 10, framesAfter: 10, fromSeq: 100, toSeq: 100 + list.length });
+
+test("a move that the tracking area delivers has a value without a hitTest: step", () => {
+  assert.deepEqual(gestureFigures(steps([["mouseMoved:", 0, 2000], ["mouseMoved:", 10000, 11000], ["mouseMoved:", 20000, 23000]])),
+    { frameRecords: 0, framesChange: 0, moves: 3, p90Ms: 3 });
+});
+
+test("only the hitTest: step right before a move adds to that move", () => {
+  assert.deepEqual(gestureFigures(steps([["hitTest:", 0, 1000], ["mouseMoved:", 1000, 2000], ["hitTest:", 10000, 14000], ["isFlipped", 14000, 15000],
+    ["mouseMoved:", 20000, 21000]])), { frameRecords: 0, framesChange: 0, moves: 2, p90Ms: 2 });
+});
+
+test("a gesture without a delivered move and a gesture with incomplete records fail", () => {
+  assert.throws(() => gestureFigures(steps([["hitTest:", 0, 1000], ["isFlipped", 1000, 2000]])), /the gesture of window w1 has no mouseMoved: step/);
   assert.throws(() => gestureFigures({ records: [], dropped: [], window: "w1", framesBefore: 340, framesAfter: 340, fromSeq: 100, toSeq: 100 }),
-    /the gesture of window w1 has no hitTest: step/);
+    /the gesture of window w1 has no mouseMoved: step/);
   assert.throws(() => gestureFigures({ records: u7Move(MOVES), dropped: [], window: "w1", framesBefore: 340, framesAfter: 345, fromSeq: 100, toSeq: 112 }),
     /the gesture of window w1 has 4 frame records for a change of frames of 5/);
 });
 
-test("the step that follows a hitTest: step is the next step that no other step contains", () => {
+test("a nested step is part of the step that contains it and is not added again", () => {
   // The isFlipped that the hitTest: sends runs inside it, and the isFlipped of the move runs inside the move.
-  const nested = [
-    { seq: 120, event: "host.frame.step", fields: { window: "w1", kind: "selector", callback: "isFlipped", entry_ns: ns(100), return_ns: ns(200), forwarded: 0, wait_ns: "0" } },
-    { seq: 121, event: "host.frame.step", fields: { window: "w1", kind: "selector", callback: "hitTest:", entry_ns: ns(0), return_ns: ns(1000), forwarded: 2, wait_ns: "0" } },
-    { seq: 122, event: "host.frame.step", fields: { window: "w1", kind: "selector", callback: "isFlipped", entry_ns: ns(1200), return_ns: ns(1300), forwarded: 0, wait_ns: "0" } },
-    { seq: 123, event: "host.frame.step", fields: { window: "w1", kind: "selector", callback: "mouseMoved:", entry_ns: ns(1100), return_ns: ns(4100), forwarded: 6, wait_ns: "0" } },
-  ];
-  assert.deepEqual(gestureFigures({ records: nested, dropped: [], window: "w1", framesBefore: 10, framesAfter: 10, fromSeq: 119, toSeq: 123 }),
-    { frameRecords: 0, framesChange: 0, pairs: 1, p90Ms: 4 });
+  assert.deepEqual(gestureFigures(steps([["isFlipped", 100, 200], ["hitTest:", 0, 1000], ["isFlipped", 1200, 1300], ["mouseMoved:", 1100, 4100]])),
+    { frameRecords: 0, framesChange: 0, moves: 1, p90Ms: 4 });
 });
 
-test("the pointer path moves across the content of the window at its middle", () => {
+test("the pointer path moves across the content of the window at its middle in the coordinates of input.pointer", () => {
   const path = pointerPath(mygoWindow());
   assert.equal(path.length, 61);
-  assert.ok(path.every((step) => step.type === "move" && step.y === 50 + 28 + 380));
-  assert.deepEqual([path[0].x, path.at(-1).x], [101, 1299]);
+  assert.ok(path.every((step) => step.y === 380));
+  assert.deepEqual([path[0].x, path.at(-1).x], [1, 1199]);
 });
 
-test("the pointer step fails without the Accessibility permission before it brings the window to the front", async () => {
-  const calls = [];
-  const hid = {
-    requireTrusted: () => { calls.push("requireTrusted"); throw new Error("the terminal that runs real-input checks has no Accessibility permission"); },
-    bringFront: async () => { calls.push("bringFront"); },
-    post: () => { calls.push("post"); },
-  };
-  const s = fakeSession(() => mygoWindow());
-  await assert.rejects(measurePointer({ s, app: { name: "mygo", configDir: MYGO }, hid }), /no Accessibility permission/);
-  assert.deepEqual(calls, ["requireTrusted"]);
+test("the measurement does not import the real-input tool", () => {
+  assert.doesNotMatch(readFileSync(fileURLToPath(new URL("../measure-app-usage.mjs", import.meta.url)), "utf8"), /e2e\/real|hid\.|bringFront|requireTrusted/);
 });
 
-test("the pointer step measures the move in the front window and repeats it in the trace state of the frame records to read the U7 records", async () => {
+test("the pointer step sends input.pointer moves without activating the window, and repeats them in the trace state of the frame records to read the U7 records", async () => {
   const calls = [];
   let frames = 340;
-  const s = fakeSession((kind, window, name) => {
+  const moves = [];
+  const s = fakeSession((kind, window, name, params) => {
+    if (name === "input.pointer") {
+      moves.push(params);
+      if (moves.length % 61 === 0) frames += 4;
+      if (moves.length % 61 === 1) calls.push("moving");
+      return null;
+    }
     calls.push(`${kind} ${name}`);
     return name === "host.window" ? mygoWindow({ frames }) : null;
   });
-  const hid = {
-    requireTrusted: () => { calls.push("requireTrusted"); },
-    bringFront: async (session, app, rect) => { calls.push(`bringFront ${app.name} ${JSON.stringify(rect)}`); },
-    post: (steps) => { calls.push(`post ${steps.length}`); frames += 4; },
-  };
   const result = await measurePointer({
-    s, app: { name: "mygo", configDir: MYGO }, hid,
+    s,
     measure: async ({ span }) => { calls.push("measure"); await span(); calls.push("measured"); return { apps: [] }; },
     frameRecords: async () => { calls.push("frameRecords"); },
     restore: async () => { calls.push("restore"); },
@@ -466,23 +484,25 @@ test("the pointer step measures the move in the front window and repeats it in t
     records: async (since) => { calls.push(`records ${JSON.stringify(since)}`); return { records: u7Move(MOVES), dropped: [], fromSeq: 100, toSeq: 112 }; },
   });
   assert.deepEqual(calls, [
-    "requireTrusted",
     "get host.window",
-    `bringFront mygo ${JSON.stringify({ document: { x: 0, y: 0 }, x: 0, y: 0, width: 1200, height: 760 })}`,
-    "measure", "post 61", "measured",
+    "measure", "moving", "measured",
     "frameRecords",
-    "get host.window", "tail", "post 61", "get host.window", "request diagnostics.log.flush",
+    "get host.window", "tail", "moving", "get host.window", "request diagnostics.log.flush",
     'records {"host-1-10":100}',
     "restore",
   ]);
-  assert.deepEqual(result.gesture, { window: "w1", frameRecords: 4, pairs: 4, p90Ms: 6, framesChange: 4 });
+  assert.equal(moves.length, 122);
+  assert.deepEqual(moves[0], { x: 1, y: 380, phase: "move" });
+  assert.deepEqual(result.gesture, { window: "w1", frameRecords: 4, moves: 4, p90Ms: 6, framesChange: 4 });
 });
 
 test("the pointer step reads the frames of the gesture before the flush, so a frame presented after the flush is in neither", async () => {
   // The host writes the U7 record of a presented frame to the files at the flush; a frame presents right after the flush.
   let frames = 340;
   let flushedFrames = 340;
+  let moved = 0;
   const s = fakeSession((kind, window, name) => {
+    if (name === "input.pointer" && ++moved % 61 === 0) frames += 4;
     if (name === "host.window") return mygoWindow({ frames });
     if (name === "diagnostics.log.flush") {
       flushedFrames = frames;
@@ -490,9 +510,8 @@ test("the pointer step reads the frames of the gesture before the flush, so a fr
     }
     return null;
   });
-  const hid = { requireTrusted: () => {}, bringFront: async () => {}, post: () => { frames += 4; } };
   const result = await measurePointer({
-    s, app: { name: "mygo", configDir: MYGO }, hid,
+    s,
     measure: async ({ span }) => { await span(); return { apps: [] }; },
     frameRecords: async () => {},
     restore: async () => {},
@@ -502,23 +521,44 @@ test("the pointer step reads the frames of the gesture before the flush, so a fr
       return { records: u7Move(moves), dropped: [], fromSeq: 100, toSeq: 100 + moves.length * 3 };
     },
   });
-  assert.deepEqual(result.gesture, { window: "w1", frameRecords: 4, pairs: 4, p90Ms: 6, framesChange: 4 });
+  assert.deepEqual(result.gesture, { window: "w1", frameRecords: 4, moves: 4, p90Ms: 6, framesChange: 4 });
 });
 
 test("the pointer step of a window with a main page repeats the move and reads no U7 records", async () => {
   const calls = [];
-  const s = fakeSession((kind, window, name) => (name === "host.window" ? mygoWindow({ pageProcess: 501, frames: null }) : null));
-  const hid = { requireTrusted: () => {}, bringFront: async () => {}, post: () => { calls.push("post"); } };
+  let moved = 0;
+  const s = fakeSession((kind, window, name) => {
+    if (name === "input.pointer" && ++moved % 61 === 1) calls.push("moving");
+    return name === "host.window" ? mygoWindow({ pageProcess: 501, frames: null }) : null;
+  });
   const result = await measurePointer({
-    s, app: { name: "tauriv2", configDir: MYGO }, hid,
+    s,
     measure: async ({ span }) => { await span(); return { apps: [] }; },
     frameRecords: async () => { calls.push("frameRecords"); },
     restore: async () => { calls.push("restore"); },
     tail: async () => { throw new Error("tail read"); },
     records: async () => { throw new Error("records read"); },
   });
-  assert.deepEqual(calls, ["post", "frameRecords", "post", "restore"]);
+  assert.deepEqual(calls, ["moving", "frameRecords", "moving", "restore"]);
   assert.equal(result.gesture, null);
+});
+
+test("a move that input.pointer refuses fails the pointer step and sets the trace state again", async () => {
+  const calls = [];
+  let moved = 0;
+  const s = fakeSession((kind, window, name) => {
+    if (name === "input.pointer" && ++moved > 61) throw new Error("the window is not active (1006)");
+    return name === "host.window" ? mygoWindow({ frames: 10 }) : null;
+  });
+  await assert.rejects(measurePointer({
+    s,
+    measure: async ({ span }) => { await span(); return { apps: [] }; },
+    frameRecords: async () => { calls.push("frameRecords"); },
+    restore: async () => { calls.push("restore"); },
+    tail: async () => ({}),
+    records: async () => { throw new Error("records read"); },
+  }), /the window is not active \(1006\)/);
+  assert.deepEqual(calls, ["frameRecords", "restore"]);
 });
 
 const URL_BLANK = "http://127.0.0.1:4100/blank";
@@ -701,7 +741,7 @@ function mygoProcesses({ footprints, cpu }) {
   return async (command, args) => {
     const line = [command, ...args].join(" ");
     const ok = (stdout) => ({ status: 0, stdout, stderr: "" });
-    if (line === "ps -axww -o pid=,command=") return ok(`   10 /Applications/soksak-mygo.app/Contents/MacOS/soksak --config-dir ${MYGO}\n   11 ${MYGO}/sidecars/probe/bin/probe\n`);
+    if (line === "ps -axww -o pid=,command=") return ok(`   10 /Applications/sok-mygo.app/Contents/MacOS/soksak --config-dir ${MYGO}\n   11 ${MYGO}/sidecars/probe/bin/probe\n`);
     if (line === `/b/sok windows --config-dir ${MYGO}`) return ok(JSON.stringify([{ window: "w1", ready: true }]));
     if (line === `/b/sok status host.window --window w1 --config-dir ${MYGO}`) return ok(JSON.stringify(mygoWindow()));
     if (line === "/bin/launchctl print pid/10") return ok(`\t\t   300      - \tcom.apple.WebKit.GPU.79E5AEE6-A76D-4B8E-9BE4-197F4E2ACD4D\n\t\t   902      - \tcom.apple.WebKit.WebContent.042944D2\n`);
@@ -751,11 +791,52 @@ test("measureApps reads a mygo application without a page row, settles its footp
   assert.deepEqual(result.apps[0].totals.application.bytes, (10 + 902 + 300) * MB);
 });
 
+test("measureApps waits for the counts after the marks and before the first cpu reading, and counts the records over the interval", async () => {
+  const order = [];
+  let cpuReads = 0;
+  const run = mygoProcesses({
+    footprints: (pid) => [pid * MB, pid * MB * 2],
+    cpu: () => { order.push(`cpu ${++cpuReads}`); return [[10, "0:01.00"], [11, "0:00.50"], [902, "0:02.00"], [300, "0:00.10"]]; },
+  });
+  const result = await measureApps({
+    sok: "/b/sok", configDirs: [MYGO], interval: 240, footprints: "at-once", run, realpath: (path) => path,
+    sleep: async (ms) => { order.push(`sleep ${ms}`); },
+    marks: { before: async () => { order.push("before"); return []; }, after: async () => { order.push("after"); return []; } },
+    beforeCpu: async () => { order.push("counts written"); },
+    afterCpu: async () => { order.push("records read"); },
+  });
+  assert.deepEqual(result.errors, []);
+  const at = (name) => order.indexOf(name);
+  assert.ok(at("before") < at("counts written") && at("counts written") < at("cpu 1") && at("cpu 2") < at("records read") && at("records read") < at("after"), order.join(", "));
+});
+
+test("the wait for the counts is longer than the time a count of the gate waits for a write", () => {
+  const source = readFileSync(fileURLToPath(new URL("../../packages/sok/go/src/event_log.go", import.meta.url)), "utf8");
+  assert.match(source, /const gatedWait = time\.Minute\n/);
+  assert.ok(COUNT_WAIT_MS > 60000);
+});
+
+test("the records of the interval are the lines that the event logs gained, in a file that appeared as well", () => {
+  const folder = mkdtempSync(join(tmpdir(), "records-over-"));
+  try {
+    mkdirSync(join(folder, "logs"));
+    writeFileSync(join(folder, "logs", "host-1-1.jsonl"), "{}\n{}\n");
+    writeFileSync(join(folder, "logs", "host-1-1.stderr"), "not counted\n");
+    const before = logLineCounts(folder);
+    assert.equal(recordsOver(before, logLineCounts(folder)), 0);
+    appendFileSync(join(folder, "logs", "host-1-1.jsonl"), "{}\n");
+    writeFileSync(join(folder, "logs", "files-2-2.jsonl"), "{}\n{}\n");
+    assert.equal(recordsOver(before, logLineCounts(folder)), 3);
+  } finally {
+    rmSync(folder, { recursive: true });
+  }
+});
+
 /** The window marks of a measurement of two windows of the mygo host, before and after the cpu interval. */
 function marksOfTwo({ frames = [[340, 340], [512, 513]], commandBuffers = [[338, 338], [500, 502]] } = {}) {
   const mark = (index) => [
-    { window: "w1", occluded: false, frames: frames[0][index], commandBuffers: commandBuffers[0][index], scale: 2, refreshRate: 120, content: { width: 1200, height: 760 } },
-    { window: "w2", occluded: false, frames: frames[1][index], commandBuffers: commandBuffers[1][index], scale: 2, refreshRate: 120, content: { width: 1200, height: 760 } },
+    { window: "w1", occluded: false, active: true, frames: frames[0][index], commandBuffers: commandBuffers[0][index], scale: 2, refreshRate: 120, content: { width: 1200, height: 760 } },
+    { window: "w2", occluded: false, active: true, frames: frames[1][index], commandBuffers: commandBuffers[1][index], scale: 2, refreshRate: 120, content: { width: 1200, height: 760 } },
   ];
   return { before: mark(0), after: mark(1) };
 }
@@ -836,14 +917,14 @@ test("the B3 measurements of app-usage are the host and application figures, the
   assert.deepEqual([measured.webKitProcesses, measured.webContentProcesses, measured.frames, measured.commandBuffers], [3, 1, 1, 2]);
 });
 
-test("the B3 measurements add the footprint after the pointer move, the error lines of the fault and the hit-test p90", () => {
+test("the B3 measurements add the footprint after the pointer move, the error lines of the fault and the pointer move p90", () => {
   const measured = usageMeasurements({
-    app: measuredApp({ after: true }), marks: marksOfTwo(), faultLines: 1, gesture: { window: "w1", frameRecords: 4, pairs: 4, p90Ms: 6, framesChange: 4 },
+    app: measuredApp({ after: true }), marks: marksOfTwo(), faultLines: 1, gesture: { window: "w1", frameRecords: 4, moves: 4, p90Ms: 6, framesChange: 4 },
   });
   assert.equal(measured.applicationFootprintAfterKb, 152 * 1024);
   assert.equal(measured.errorLines, 1);
-  assert.equal(measured.hitTestP90Ms, 6);
-  assert.equal("hitTestP90Ms" in usageMeasurements({ app: measuredApp(), marks: marksOfTwo(), gesture: null }), false);
+  assert.equal(measured.pointerMoveP90Ms, 6);
+  assert.equal("pointerMoveP90Ms" in usageMeasurements({ app: measuredApp(), marks: marksOfTwo(), gesture: null }), false);
 });
 
 test("a host whose host.window reports no frame counters has no frames and commandBuffers measurements, and a partial counter fails", () => {
@@ -907,7 +988,7 @@ test("the B3 keys of app-usage end in their unit, are listed for each trace stat
     "applicationFootprintAfterKb", "applicationPeakFootprintKb", "webKitProcesses", "webContentProcesses", "frames", "commandBuffers",
     "errorLines",
   ];
-  assert.deepEqual(B3_MEASUREMENTS, { 0: RUN, 1: RUN, "frame-records": ["hitTestP90Ms"] });
+  assert.deepEqual(B3_MEASUREMENTS, { 0: RUN, 1: RUN, "frame-records": ["pointerMoveP90Ms"] });
   assert.ok(Object.isFrozen(B3_MEASUREMENTS) && Object.values(B3_MEASUREMENTS).every(Object.isFrozen));
   const measured = usageMeasurements({ app: measuredApp({ after: true }), marks: marksOfTwo(), faultLines: 1, gesture: null });
   assert.deepEqual(Object.keys(measured).toSorted(), B3_MEASUREMENTS[0].toSorted());
@@ -916,7 +997,7 @@ test("the B3 keys of app-usage end in their unit, are listed for each trace stat
 /** The classes of the log policy in force of a B3 test: the default policy with the class frame at debug. */
 const POLICY = { lifecycle: "error", input: "error", call: "error", io: "error", frame: "debug" };
 
-test("a pointer output holds the keys of one trace state: the cpu and footprint keys under TRACE 0 or 1, hitTestP90Ms alone under frame-records", () => {
+test("a pointer output holds the keys of one trace state: the cpu and footprint keys under TRACE 0 or 1, pointerMoveP90Ms alone under frame-records", () => {
   const measurement = {
     apps: [measuredApp({ after: true })],
     marks: {
@@ -924,10 +1005,10 @@ test("a pointer output holds the keys of one trace state: the cpu and footprint 
       after: [{ configDir: MYGO, trace: false, policy: POLICY, windows: marksOfTwo().after }],
     },
   };
-  const gesture = { window: "w1", frameRecords: 4, pairs: 4, p90Ms: 6, framesChange: 4 };
+  const gesture = { window: "w1", frameRecords: 4, moves: 4, p90Ms: 6, framesChange: 4 };
   for (const trace of [0, 1]) {
     const output = usageOutput({ options: { trace, step: "pointer" }, measurement, gesture });
-    assert.equal("hitTestP90Ms" in output.measurements, false);
+    assert.equal("pointerMoveP90Ms" in output.measurements, false);
     assert.deepEqual(Object.keys(output.measurements).filter((key) => !B3_MEASUREMENTS[trace].includes(key)), []);
     assert.equal(output.measurements.applicationFootprintAfterKb, 152 * 1024);
     assert.equal(output.conditions.traceState, trace === 1);
@@ -935,11 +1016,11 @@ test("a pointer output holds the keys of one trace state: the cpu and footprint 
   const records = usageOutput({ options: { trace: "frame-records", step: "pointer" }, measurement, gesture });
   assert.deepEqual(Object.keys(records.measurements), B3_MEASUREMENTS["frame-records"]);
   assert.deepEqual(records, {
-    measurements: { hitTestP90Ms: 6 },
-    conditions: { refreshRate: 120, backingScale: 2, traceState: false, logPolicy: POLICY, window: { width: 1200, height: 760 } },
+    measurements: { pointerMoveP90Ms: 6 },
+    conditions: { refreshRate: 120, backingScale: 2, traceState: false, logPolicy: POLICY, window: { width: 1200, height: 760 }, occluded: false, active: true },
   });
   assert.throws(() => usageOutput({ options: { trace: "frame-records", step: "pointer" }, measurement, gesture: null }),
-    /the pointer output under the trace state frame-records is hitTestP90Ms, which a window with a main page has not/);
+    /the pointer output under the trace state frame-records is pointerMoveP90Ms, which a window with a main page has not/);
 });
 
 test("TRACE frame-records is the trace state of the pointer step and needs --step pointer", () => {
@@ -957,9 +1038,15 @@ test("the B3 output of app-usage takes its conditions from b3-out with the perfo
     },
   };
   const output = usageOutput({ options: { trace: 0 }, measurement, faultLines: undefined, gesture: undefined });
-  assert.deepEqual(output.conditions, { refreshRate: 120, backingScale: 2, traceState: false, logPolicy: POLICY, window: { width: 1200, height: 760 } });
+  assert.deepEqual(output.conditions, { refreshRate: 120, backingScale: 2, traceState: false, logPolicy: POLICY, window: { width: 1200, height: 760 }, occluded: false, active: true });
   assert.equal(output.measurements.hostCpuSeconds, 0.12);
   assert.equal(usageOutput({ options: { trace: 1 }, measurement }).conditions.traceState, true);
+  const covered = { ...measurement, marks: { ...measurement.marks, after: [{ ...measurement.marks.after[0], windows: marksOfTwo().after.map((window) => ({ ...window, occluded: true })) }] } };
+  assert.equal(usageOutput({ options: { trace: 0 }, measurement: covered }).conditions.occluded, true, "the output states a window covered at the end");
+  const mark = (name, members) => ({ ...measurement, marks: { ...measurement.marks, [name]: [{ ...measurement.marks[name][0], windows: marksOfTwo()[name].map((window) => ({ ...window, ...members })) }] } });
+  assert.equal(usageOutput({ options: { trace: 0 }, measurement: mark("before", { active: false }) }).conditions.active, false, "the output states an application that was not active at the start");
+  assert.equal(usageOutput({ options: { trace: 0 }, measurement: mark("after", { active: false }) }).conditions.active, false, "the output states an activation that ended");
+  assert.equal(usageOutput({ options: { trace: 0 }, measurement: mark("before", { occluded: true }) }).conditions.occluded, true, "the output states a window covered at the start");
   const folder = mkdtempSync(join(tmpdir(), "b3-usage-"));
   try {
     writeB3Out(join(folder, "S1.json"), output);

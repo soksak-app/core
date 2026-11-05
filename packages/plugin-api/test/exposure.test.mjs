@@ -132,6 +132,10 @@ function element(rect = { left: 1, top: 2, width: 3, height: 4 }, { zoom = "1", 
     value: "",
     dataset: {},
     isConnected: true,
+    tagName: "DIV",
+    getAttribute: () => null,
+    hasAttribute: () => false,
+    matches: () => false,
     // getComputedStyle reports the specified zoom of each element; the parent chain and the root node form the flat tree.
     ownerDocument: { defaultView: { Event, KeyboardEvent, MouseEvent, getComputedStyle: (node) => ({ zoom: node.specifiedZoom }) } },
     specifiedZoom: zoom,
@@ -184,7 +188,7 @@ test("an element entry resolves one element, or one of many by index, and acts o
   entries.element("probe.row", () => [rows[1]]);
   assert.equal(entries.registered("element", "probe.row"), true);
   assert.deepEqual(await entries.answer("element.rect", { name: "probe.input" }),
-    { x: 1, y: 2, width: 3, height: 4, zoom: 1 });
+    { x: 1, y: 2, width: 3, height: 4, zoom: 1, role: null });
   assert.equal((await entries.answer("element.rect", { name: "probe.row", index: 1 })).y, 5);
   await assert.rejects(entries.answer("element.rect", { name: "probe.row", index: 2 }), /no element at index 2/);
 
@@ -263,7 +267,7 @@ test("a surface page registers declared names once through its port and answers 
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(replies.sort((a, b) => a[0] - b[0]), [
     [7, { result: 3 }],
-    [8, { result: { x: 1, y: 2, width: 3, height: 4, zoom: 1 } }],
+    [8, { result: { x: 1, y: 2, width: 3, height: 4, zoom: 1, role: null } }],
     [9, { error: { code: EXPOSURE_ERRORS.unknownName, message: "unknown status probe.missing" } }],
   ]);
 });
@@ -291,11 +295,32 @@ test("an element entry of many elements takes a provider of the current elements
   request({ id: 3, method: "element.rect", params: { name: "probe.row", index: 1 } });
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(replies.sort((x, y) => x[0] - y[0]), [
-    [1, { result: { x: 0, y: 10, width: 10, height: 10, zoom: 1 } }],
-    [2, { result: { x: 0, y: 40, width: 10, height: 10, zoom: 1 } }],
+    [1, { result: { x: 0, y: 10, width: 10, height: 10, zoom: 1, role: null } }],
+    [2, { result: { x: 0, y: 40, width: 10, height: 10, zoom: 1, role: null } }],
     [3, { error: { code: EXPOSURE_ERRORS.unregistered, message: "element probe.row has no element at index 1" } }],
   ], "a request reads the rows that the provider returns at that request, so a replaced row is not kept");
   await assert.rejects(expose.element("probe.row", 5), /element probe.row takes an element or a function that returns the current elements/);
+});
+
+// element.rect names the role by the rule of the audit, from the role attribute, from the tag, and null without either.
+test("element.rect reports the ARIA role of the element", async () => {
+  const entries = exposureEntries(declarationMap(exposes()));
+  const named = element();
+  named.getAttribute = (attribute) => attribute === "role" ? "tab selected" : null;
+  const button = element();
+  button.tagName = "BUTTON";
+  const plain = element();
+  const grouping = element();
+  grouping.getAttribute = (attribute) => attribute === "role" ? "group" : null;
+  const list = element();
+  list.tagName = "UL";
+  entries.element("probe.input", () => [named]);
+  entries.element("probe.row", () => [button, plain, grouping, list]);
+  assert.equal((await entries.answer("element.rect", { name: "probe.input" })).role, "tab");
+  assert.equal((await entries.answer("element.rect", { name: "probe.row", index: 0 })).role, "button");
+  assert.equal((await entries.answer("element.rect", { name: "probe.row", index: 1 })).role, null);
+  assert.equal((await entries.answer("element.rect", { name: "probe.row", index: 2 })).role, null);
+  assert.equal((await entries.answer("element.rect", { name: "probe.row", index: 3 })).role, "list");
 });
 
 // element.rect reports the effective CSS zoom of the element from the computed zoom of the element and of its flat-tree ancestors,
@@ -309,8 +334,8 @@ test("element.rect reports the effective CSS zoom from the computed zoom of the 
   const content = element({ left: 4, top: 5, width: 6, height: 7 }, { root: { host } });
   entries.element("probe.input", () => [tab]);
   entries.element("probe.row", () => [content]);
-  assert.deepEqual(await entries.answer("element.rect", { name: "probe.input" }), { x: 1, y: 2, width: 61, height: 26, zoom: 1.5 });
-  assert.deepEqual(await entries.answer("element.rect", { name: "probe.row" }), { x: 4, y: 5, width: 6, height: 7, zoom: 3 });
+  assert.deepEqual(await entries.answer("element.rect", { name: "probe.input" }), { x: 1, y: 2, width: 61, height: 26, zoom: 1.5, role: null });
+  assert.deepEqual(await entries.answer("element.rect", { name: "probe.row" }), { x: 4, y: 5, width: 6, height: 7, zoom: 3, role: null });
 });
 
 test("a rejected stale exposure reply is reported instead of becoming an unhandled promise", async () => {
@@ -490,7 +515,7 @@ test("an element request gives an index or an address, never both, and an addres
     return found;
   });
   assert.deepEqual(await entries.answer("element.rect", { name: "probe.row", address: { key: "go" } }),
-    { x: 9, y: 9, width: 1, height: 1, zoom: 1 });
+    { x: 9, y: 9, width: 1, height: 1, zoom: 1, role: null });
   assert.deepEqual(seen, [{ address: { key: "go" }, count: 1 }], "the resolver did not receive the address and the elements");
   assert.equal(await code(() => entries.answer("element.rect", { name: "probe.row", address: { key: "none" } })), 1009);
 });
@@ -538,4 +563,13 @@ test("an undefined status value or command result is refused with an error that 
   const nullResult = exposureEntries(declarationMap(exposes()));
   nullResult.command("probe.send", () => null);
   assert.deepEqual(await replyPayload(() => nullResult.answer("command.run", { name: "probe.send", params: {} })), { result: null });
+});
+
+test("the owner of a document can place an element that the document does not lay out", async () => {
+  const placed = element();
+  const own = element({ left: 5, top: 6, width: 7, height: 8 });
+  const entries = exposureEntries(declarationMap(exposes()), { place: (target) => target === placed ? { x: 10, y: 20, width: 30, height: 40, document: { x: 100, y: 200 } } : null });
+  entries.element("probe.row", () => [placed, own]);
+  assert.deepEqual(await entries.answer("element.rect", { name: "probe.row", index: 0 }), { x: 10, y: 20, width: 30, height: 40, zoom: 1, role: null, document: { x: 100, y: 200 } });
+  assert.deepEqual(await entries.answer("element.rect", { name: "probe.row", index: 1 }), { x: 5, y: 6, width: 7, height: 8, zoom: 1, role: null });
 });

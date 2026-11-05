@@ -69,6 +69,7 @@ impl Service for Fake {
         method: &str,
         params: Map<String, Value>,
     ) -> Result<Box<RawValue>, Failure> {
+        let plain = params.get("name").and_then(Value::as_str) == Some("core.plain");
         let call = (
             window.to_string(),
             method.to_string(),
@@ -84,6 +85,10 @@ impl Service for Fake {
         }
         match method {
             "status.get" => raw(&json!(7)),
+            "element.rect" => raw(&json!({
+                "x": 1, "y": 2, "width": 3, "height": 4, "zoom": 1,
+                "role": if plain { Value::Null } else { json!("button") },
+            })),
             _ => raw(&Value::Null),
         }
     }
@@ -512,6 +517,28 @@ fn declared_method_on_unknown_window_returns_1003() {
     );
     assert_eq!(reply["error"]["code"], -32602);
     assert!(fake.calls().is_empty());
+    endpoint.stop();
+}
+
+// contract: endpoint.rpc.element-rect-role
+#[test]
+fn an_element_rect_reply_keeps_the_role() {
+    let config = folder::Folder::new();
+    let (fake, _) = Fake::new();
+    let endpoint = start(config.path(), "test-element-role", fake);
+    let mut connection = open(&endpoint);
+    for (id, (name, role)) in [("core.save", json!("button")), ("core.plain", Value::Null)]
+        .into_iter()
+        .enumerate()
+    {
+        let reply = request(
+            &mut connection,
+            id as u64 + 1,
+            "element.rect",
+            json!({"window": "w1", "name": name}),
+        );
+        assert_eq!(reply["result"].get("role"), Some(&role), "{reply}");
+    }
     endpoint.stop();
 }
 

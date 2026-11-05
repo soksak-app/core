@@ -416,6 +416,10 @@ func (implementation) FocusSurface(unsafe.Pointer) {
 	unreachable("surface keyboard")
 }
 
+func (implementation) FocusSurfaceForRegion(unsafe.Pointer) {
+	unreachable("surface keyboard")
+}
+
 func (implementation) FocusWorkbench(unsafe.Pointer) {
 	unreachable("workbench keyboard")
 }
@@ -523,18 +527,6 @@ func (implementation) UnwatchInput(uintptr) {
 
 func (implementation) WatchButtons(func(uint64)) error {
 	return unsupported("mouse button state")
-}
-
-func (implementation) InjectPointer(unsafe.Pointer, float64, float64, int, int, float64, float64, int, float64, func(platform.PointerResult, platform.ButtonHeld)) error {
-	return unsupported("native pointer input")
-}
-
-func (implementation) ActivateWindow(unsafe.Pointer, float64, float64, float64, func(error)) error {
-	return unsupported("window activation")
-}
-
-func (implementation) InjectKey(unsafe.Pointer, string, string, uint, bool) (platform.PointerResult, error) {
-	return platform.PointerRejected, unsupported("native key input")
 }
 
 func (implementation) Listen(string, string) (net.Listener, platform.Endpoint, error) {

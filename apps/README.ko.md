@@ -5,18 +5,18 @@
 각 애플리케이션은 같은 워크벤치를 자기 `environment.json`의 플러그인과 기본값으로 조립한다. 브라우저 애플리케이션은 네이티브 호스트가 없어 플러그인 표면 자리만 표시한다. Wails와 Tauri 애플리케이션은 플러그인 표면을 네이티브 웹뷰로 표시한다.
 
 ```sh
-make prepare
-pnpm example
+make install
+make run-browser
 ```
 
 브라우저 애플리케이션은 `http://localhost:8749/index.html`에서 연다. macOS 14.0 이상에서 네이티브 애플리케이션 빌드와 실행:
 
 ```sh
-make wailsv3
-make tauriv2
+make run-wailsv3
+make run-tauriv2
 ```
 
-두 대상은 `target/debug/soksak-wailsv3.app`와 `target/debug/soksak-tauriv2.app`를 빌드하고 실행한다. 애플리케이션은 Wails framework adapter `packages/host/wailsv3`와 Tauri framework adapter `packages/host/tauriv2`를 호출하며, 두 adapter가 language host library `packages/host/go`와 `packages/host/rust`를 실행한다.
+두 대상은 `target/debug/sok-wailsv3.app`와 `target/debug/sok-tauriv2.app`를 빌드하고 실행한다. 애플리케이션은 Wails framework adapter `packages/host/wailsv3`와 Tauri framework adapter `packages/host/tauriv2`를 호출하며, 두 adapter가 language host library `packages/host/go`와 `packages/host/rust`를 실행한다.
 
 앱 시작 시 프로젝트 라이브러리를 표시한다. 프로젝트를 생성하거나 저장된 프로젝트를 선택하여 같은 창에서 작업을 시작한다. 제목 표시줄의 프로젝트 목록 버튼은 현재 작업을 유지하면서 라이브러리로 돌아간다. macOS Dock 메뉴를 포함한 새 창 동작은 다른 창에 라이브러리를 표시한다. 공통 열기 방식은 이미 프로젝트가 있는 창에서 적용한다. 공통 설정은 앱 설정 디렉터리에, 폴더 재정의는 프로젝트 내부의 `.soksak/settings.json`에 저장한다.
 

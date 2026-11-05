@@ -44,6 +44,7 @@ static void main_windowResizeInstant(void) { hostRunOnMain(^{ windowResizeInstan
 static bool main_sp_window_reveal_after_load(void *window, char **error) {
     return ON_MAIN(bool, sp_window_reveal_after_load(window, error));
 }
+static void main_sp_window_show(void *window) { hostRunOnMain(^{ sp_window_show(window); }); }
 */
 import "C"
 
@@ -175,6 +176,11 @@ func (implementation) Screens() (string, error) {
 
 func (implementation) InstantWindowResize() error {
 	C.main_windowResizeInstant()
+	return nil
+}
+
+func (implementation) ShowWindow(window unsafe.Pointer) error {
+	C.main_sp_window_show(window)
 	return nil
 }
 

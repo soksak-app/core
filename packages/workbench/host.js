@@ -736,6 +736,26 @@ let modalDocument = null;
 const modalListeners = new Set();
 const modalChanged = () => { for (const fn of modalListeners) fn(); };
 
+/* The frame of the open modal that the page last gave the host, which applies it as given. */
+let modalFrame = null;
+
+/**
+ * The place of an element of the open modal when the main document hides that modal, so that the element has no box of its own
+ * (docs/spec/exposure.md): the rectangle that the modal document reported, with the frame of the modal as its document origin. It
+ * is null for any other element, and refuses when the modal document reported no rectangle for the element.
+ */
+export function overlayElementRect(element) {
+  const el = shown ? document.getElementById(shown) : null;
+  if (!el?.hidden || !el.contains(element)) return null;
+  if (!modalDocument?.elements) throw new Error(`modal ${shown} has not reported its elements`);
+  const name = element.dataset.expose;
+  const index = [...el.querySelectorAll("[data-expose]")].filter((other) => other.dataset.expose === name).indexOf(element);
+  const reported = modalDocument.elements.filter((other) => other.name === name)[index];
+  if (!reported) throw new Error(`modal ${shown} has reported no element ${name} at index ${index}`);
+  const { x, y, width, height } = reported;
+  return { x, y, width, height, document: { x: modalFrame.x, y: modalFrame.y } };
+}
+
 /** The open modal and the state its document reported. It is null when no modal is open. */
 export function modalState() {
   if (!shown) return null;
@@ -869,10 +889,11 @@ export const overlay = native ? {
       modalDocument = null;
       modalChanged();
       const style = getComputedStyle(el);
+      modalFrame = overlayFrame(el, rect);
       tellInTurn("overlayShow", {
         id: shown,
         title: name,
-        rect: overlayFrame(el, rect),
+        rect: modalFrame,
         ...drawing(el),
         radius: el.dataset.nativeModal === "dialog" ? 0 : parseFloat(style.borderTopLeftRadius),
       });
@@ -887,7 +908,8 @@ export const overlay = native ? {
      */
     place(el, rect) {
       if (shown !== el.id) return;
-      tellInTurn("overlayPlace", { id: shown, rect: overlayFrame(el, rect), card: cardFrame(el) });
+      modalFrame = overlayFrame(el, rect);
+      tellInTurn("overlayPlace", { id: shown, rect: modalFrame, card: cardFrame(el) });
     },
 
     /** Replaces the content of the modal view of this element. Recreating the view flickers. */

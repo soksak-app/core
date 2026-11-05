@@ -34,6 +34,21 @@ mod darwin;
 #[path = "windows/windows.rs"]
 mod windows;
 
+#[cfg(windows)]
+pub use windows::keep_front_on_show;
+
+#[cfg(any(windows, test))]
+#[path = "windows/devtools_input.rs"]
+mod devtools_input;
+
+#[cfg(any(windows, test))]
+#[path = "windows/process_failure.rs"]
+pub mod process_failure;
+
+#[cfg(any(windows, test))]
+#[path = "windows/show.rs"]
+mod show;
+
 /// The number of live objects, among those that the shared library attached to windows and webviews, whose lifetime
 /// shows the release of the window and the webview. When a closed window and its webviews are released, the object
 /// count of that window decreases.
@@ -361,6 +376,10 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// main webview ended. The caller puts the window on the screen after this call
     /// (native/darwin/src/window_reveal.h). Call it on the UI thread.
     fn reveal_after_load(&self, window: Handle) -> Result<(), String>;
+    /// Puts the window on the screen without taking the front from another application: it comes to the front of an
+    /// active application, and an application that is not active keeps it behind the front window
+    /// (docs/spec/hosts.md#launch-activation). Call it on the main thread.
+    fn show_window(&self, window: Handle) -> Result<(), String>;
     fn set_main_appearance(&self, view: &PlatformWebview, dark: bool) -> Result<(), String>;
     /// Changes the window to full screen or back, and calls done when the transition ends. A request that arrives
     /// during a transition is handled after that transition ends.
@@ -430,6 +449,8 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// Gives the keyboard of its window to the surface (docs/spec/native-surfaces.md#keyboard-of-a-surface). Call it on the main
     /// thread.
     fn focus_surface(&self, surface: Handle) -> Result<(), String>;
+    /// Gives the keyboard to a surface that declared an image region, which keeps the keys until the region shows.
+    fn focus_surface_for_region(&self, surface: Handle) -> Result<(), String>;
     /// Gives the keyboard of window to the workbench. Call it on the main thread.
     fn focus_workbench(&self, window: Handle) -> Result<(), String>;
     fn set_window_overlays(&self, main: Handle, overlays: &[WindowOverlay]) -> Result<(), String>;
@@ -994,6 +1015,8 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// Replaces the content of the file at path with data. If it does not exist, it is created as a file that only the
     /// current user reads and writes. The permissions of an existing file are not changed.
     fn write_private_file(&self, path: &Path, data: &[u8]) -> Result<(), String>;
+    /// The options that create a file for the current user only. The caller adds how it opens the file.
+    fn private_file_options(&self) -> std::fs::OpenOptions;
     #[cfg(feature = "diagnostics")]
     /// Creates a directory that only the current user can access, together with its parent directories.
     fn private_directory(&self, path: &Path) -> Result<(), String>;

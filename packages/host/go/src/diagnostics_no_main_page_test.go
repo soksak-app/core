@@ -182,3 +182,26 @@ func TestADragThatRecordedFewerStepsThanItDeliveredFails(t *testing.T) {
 		}
 	}
 }
+
+// A press goes where the last frame drew, so a boundary that a change just made takes the press only after the window presented it.
+func TestANativeDragAsksForItsBoundaryAfterTheWindowPresentedIt(t *testing.T) {
+	order := []string{}
+	from, err := presentedBoundary(func() (float64, error) {
+		order = append(order, "presented")
+		return 0, nil
+	}, func() (point, error) {
+		order = append(order, "boundary")
+		return point{X: 7, Y: 9}, nil
+	})
+	if err != nil || from != (point{X: 7, Y: 9}) || !reflect.DeepEqual(order, []string{"presented", "boundary"}) {
+		t.Fatalf("the point is %+v, the error %v, the order %v", from, err, order)
+	}
+	failure := errors.New("the window did not present")
+	_, err = presentedBoundary(func() (float64, error) { return 0, failure }, func() (point, error) {
+		t.Fatal("a window that did not present was asked for its boundary")
+		return point{}, nil
+	})
+	if !errors.Is(err, failure) {
+		t.Fatalf("the failure of the wait answered %v", err)
+	}
+}

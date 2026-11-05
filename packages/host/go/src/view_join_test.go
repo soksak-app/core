@@ -566,6 +566,25 @@ func TestTheLimitOfAPresentedJoinChangesNothing(t *testing.T) {
 }
 
 // contract: surface-layout.keyboard-follows-the-focus-ring
+func TestAnImageRegionDeclarationKeepsTheKeysOfItsSurface(t *testing.T) {
+	cases := []struct {
+		name        string
+		composition SurfaceComposition
+		want        bool
+	}{
+		{"no composition", SurfaceComposition{}, false},
+		{"a page alone", SurfaceComposition{Kind: "view", Page: "ui/page.html"}, false},
+		{"a document region", SurfaceComposition{Regions: []SurfaceRegion{{Name: "page", Kind: "document", Input: "native"}}}, false},
+		{"an image region", SurfaceComposition{Regions: []SurfaceRegion{{Name: "page", Kind: "document", Input: "native"}, {Name: "view", Kind: "image", Input: "dom"}}}, true},
+	}
+	for _, c := range cases {
+		if got := c.composition.declaresImageRegion(); got != c.want {
+			t.Errorf("%s: declaresImageRegion = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// contract: surface-layout.keyboard-follows-the-focus-ring
 func TestSurfaceFocusRefusesAWindowlessCallAndAMissingMember(t *testing.T) {
 	s, _, _ := newLifecycleSurfaces(t, &fakeClock{})
 	s.window = nil

@@ -159,7 +159,7 @@ export function sampleHandlers() {
       if (params.name === "host.window.reload") return null;
       throw rpcError(1001, `unknown name ${params.name}`);
     },
-    "element.rect": (params) => (window(params), { x: 10, y: 20, width: 30, height: 40, index: params.index ?? 0, document: { x: 0, y: 0 } }),
+    "element.rect": (params) => (window(params), { x: 10, y: 20, width: 30, height: 40, index: params.index ?? 0, role: null, document: { x: 0, y: 0 } }),
     "element.act": (params) => (window(params), null),
     "input.pointer": (params) => {
       window(params);

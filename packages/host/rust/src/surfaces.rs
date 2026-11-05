@@ -325,6 +325,13 @@ pub struct SurfaceComposition {
     pub(crate) overlays: Option<Vec<String>>,
 }
 
+impl SurfaceComposition {
+    /// Reports whether the composition declares an image region, which takes the keys of its surface.
+    pub(crate) fn declares_image_region(&self) -> bool {
+        self.regions.iter().any(|region| region.kind == "image")
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct CompositionDeclareRequest {
     pub(crate) surface: String,
@@ -1032,7 +1039,22 @@ pub fn focus(window: &Window, request: FocusRequest) -> Result<(), String> {
     let platform = platform::current()?;
     let focus_window = window.clone();
     exposure::on_main(window, move || match request.surface {
-        Some(surface) => platform.focus_surface(surface_handle(&focus_window, &surface)?),
+        Some(surface) => {
+            let handle = surface_handle(&focus_window, &surface)?;
+            let declared = window_data(&focus_window)?
+                .compositions
+                .lock()
+                // default: a lock that a panicking thread poisoned still holds the composition declarations, which are only
+                // read; the panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner)
+                .get(&surface)
+                .is_some_and(SurfaceComposition::declares_image_region);
+            if declared {
+                platform.focus_surface_for_region(handle)
+            } else {
+                platform.focus_surface(handle)
+            }
+        }
         None => platform.focus_workbench(
             focus_window
                 .native_window()

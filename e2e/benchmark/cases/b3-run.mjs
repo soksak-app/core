@@ -8,8 +8,11 @@
 import { existsSync } from "node:fs";
 import { isDeepStrictEqual } from "node:util";
 import { policyOfSetting, readPolicy } from "@soksak/window-check/log-policy.mjs";
-import { b3Conditions as conditionsOf, readB3Out, writeB3Out } from "../../../scripts/b3-out.mjs";
+import { b3Conditions as conditionsOf, b3End, readB3Out, writeB3Out } from "../../../scripts/b3-out.mjs";
 import { parseTrace } from "../../../scripts/measure-trace.mjs";
+
+/** The session of the conditions that b3Conditions read, whose window withB3Out reads again when it writes them. */
+const SESSIONS = new WeakMap();
 
 const OUT = "SOKSAK_B3_OUT";
 const TRACE = "SOKSAK_B3_TRACE";
@@ -34,7 +37,24 @@ export async function b3Conditions(s, settings) {
       `${JSON.stringify(conditions.logPolicy)}, not the settings ${JSON.stringify(settings)} of the benchmark, whose log classes are ` +
       `${JSON.stringify(classes)}`);
   }
+  SESSIONS.set(conditions, s);
   return conditions;
+}
+
+/**
+ * The conditions to write when the interval ends (b3End). A benchmark that failed keeps the conditions of its start when its window cannot
+ * be read, because its failure is what it records. Conditions that b3Conditions did not return, a copy among them, are refused: no session
+ * reads them again, so they would record the window of the start without saying so.
+ */
+async function conditionsAtEnd(conditions, failure) {
+  const s = SESSIONS.get(conditions);
+  if (s === undefined) throw new Error(`the B3 conditions of a benchmark are the object that b3Conditions returned, which withB3Out reads again when it writes, not ${JSON.stringify(conditions)}`);
+  try {
+    return { ...conditions, ...b3End(conditions, await s.get("host.window")) };
+  } catch (error) {
+    if (failure) return conditions;
+    throw error;
+  }
 }
 
 /**
@@ -112,7 +132,7 @@ export async function withB3Out(target, measure) {
       if (!values.includes(key)) throw new Error(`B3 measurement ${key} is not declared for this benchmark; it declares ${values.join(", ")}`);
     }
     const measurements = target.keys.includes("verdict") ? { ...run.measurements, verdict: failure ? "failed" : "passed" } : { ...run.measurements };
-    writeB3Out(target.path, mergedOutput(target.path, { measurements, conditions: run.conditions }));
+    writeB3Out(target.path, mergedOutput(target.path, { measurements, conditions: await conditionsAtEnd(run.conditions, failure) }));
   } catch (error) {
     if (failure) throw new AggregateError([failure, error], `the benchmark failed (${failure.message}) and its B3 output was not written (${error.message})`);
     throw error;

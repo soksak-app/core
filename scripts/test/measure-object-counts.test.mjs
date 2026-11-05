@@ -23,7 +23,7 @@ function effects(calls, objectsOf) {
     objects: async () => { calls.push("objects"); return objectsOf(operations); },
     operate: async (name) => { operations += 1; calls.push(`operate ${name}`); },
     settle: async () => { calls.push("settle"); },
-    status: async () => { calls.push("status"); return { pageProcess: 42, documents: [{ surface: "probe", document: "doc", process: 43 }] }; },
+    status: async () => { calls.push("status"); return { occluded: false, pageProcess: 42, documents: [{ surface: "probe", document: "doc", process: 43 }] }; },
     footprint: (pid) => { calls.push(`footprint ${pid}`); return pid * 1000; },
     host: 41,
   };
@@ -46,6 +46,17 @@ test("the measurement requires at least one --plugin and the trace state", () =>
     "/o/s3.json");
   assert.throws(() => counts.parseOptions(["--sok", "s", "--config-dir", "d", "--trace", "0", "--plugin", "probe", "--b3-out", "/o/s3.json"]),
     /--b3-out needs at least 30 repetitions, not 20/);
+});
+
+test("a covered window fails the measurement at the reading that finds it", async () => {
+  const logged = [];
+  await assert.rejects(measure({
+    ...effects([], () => snapshot(1)),
+    status: async () => ({ window: "main", occluded: true, pageProcess: 42, documents: [] }),
+    repetitions: 1,
+    log: (entry) => logged.push(entry),
+  }), /window main reports occluded true; the measurement requires occluded false/);
+  assert.deepEqual(logged, []);
 });
 
 test("constant counts are not reported as growing", async () => {
@@ -181,7 +192,7 @@ function mygo(calls) {
       readings += 1;
       return { ...snapshot(3), page: null, sessions: [], runtime: { ...runtime(3), goroutines: readings } };
     },
-    status: async () => { calls.push("status"); return { pageProcess: null, documents: [{ surface: "probe", document: "", process: 43 }] }; },
+    status: async () => { calls.push("status"); return { occluded: false, pageProcess: null, documents: [{ surface: "probe", document: "", process: 43 }] }; },
   };
 }
 
@@ -379,12 +390,12 @@ test("B3_MEASUREMENTS declares the keys of the B3 output of object-counts, which
 });
 
 test("the B3 output of object-counts states the performance switch that TRACE set, the policy and the window it measured", () => {
-  const status = { refreshRate: 120, scale: 2, content: { width: 1200, height: 760 }, pageProcess: null };
+  const status = { refreshRate: 120, scale: 2, content: { width: 1200, height: 760 }, pageProcess: null, occluded: false, active: true };
   const policy = { lifecycle: "error", input: "error", call: "debug", io: "error", frame: "debug" };
   const on = counts.b3Output({ entries: run30(() => 5, () => 1), window: "w1", status, trace: 1, policy });
   assert.deepEqual(on, {
     measurements: { changedCounts: 0, growingFigures: 0 },
-    conditions: { refreshRate: 120, backingScale: 2, traceState: true, logPolicy: policy, window: { width: 1200, height: 760 } },
+    conditions: { refreshRate: 120, backingScale: 2, traceState: true, logPolicy: policy, window: { width: 1200, height: 760 }, occluded: false, active: true },
   });
   assert.equal(counts.b3Output({ entries: run30(() => 5, () => 1), window: "w1", status, trace: 0, policy }).conditions.traceState, false);
   assert.throws(() => counts.b3Output({ entries: run30(() => 5, () => 1), window: "w1", status: { ...status, refreshRate: null }, trace: 0, policy }),

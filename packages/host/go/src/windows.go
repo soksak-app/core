@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"unsafe"
 
+	"github.com/soksak-app/core/packages/host/go/src/platform"
 	"github.com/soksak-app/core/packages/host/go/src/routine"
 )
 
@@ -250,6 +251,19 @@ func (h *Host) WindowClose(ctx context.Context) error {
 	return nil
 }
 
+// ShowWindow puts a native window on the screen without taking the front from another application, for the show of a
+// framework (docs/spec/hosts.md#launch-activation). The show asks for the registered platform: a framework shows a window
+// whether or not the start of the host selected one.
+func ShowWindow(window unsafe.Pointer) {
+	current, err := platform.Current()
+	if err != nil {
+		fatalError("window show", err)
+	}
+	if err := current.ShowWindow(window); err != nil {
+		fatalError("window show", err)
+	}
+}
+
 // WindowCloseKept records that the page kept a modified tab when the window was asked to close, which ends a quit that
 // asked the window (docs/spec/hosts.md#process-lifecycle).
 func (h *Host) WindowCloseKept(ctx context.Context) error {
@@ -435,8 +449,11 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	changed := func() {
 		// An occluded or minimized window draws no image region (docs/spec/native-surfaces.md#image-regions).
 		mainThreadStep(func() {
-			if err := s.readOnScreen(); err != nil {
-				LogError("window on screen", err)
+			// A window that closes still reports changes, and it has no state left to read.
+			if win.NativeWindow() != nil {
+				if err := s.readOnScreen(); err != nil {
+					LogError("window on screen", err)
+				}
 			}
 		})
 		routine.Go("image-drawing", func() {

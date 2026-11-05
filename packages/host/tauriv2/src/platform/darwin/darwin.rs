@@ -29,6 +29,29 @@ pub(crate) fn ns_window(window: &tauri::Window) -> port::Result<*mut c_void> {
     window.ns_window().map_err(crate::framework::error)
 }
 
+/// Puts a window on the screen through the show of the library, because tao makes every window that it shows key and
+/// orders it front (docs/spec/hosts.md#launch-activation).
+pub(crate) fn show_window(window: &tauri::Window) -> port::Result<()> {
+    let handle = ns_window(window)? as usize;
+    window
+        .run_on_main_thread(move || {
+            let shown =
+                soksak_host::platform::current().and_then(|system| system.show_window(handle));
+            if let Err(error) = shown {
+                soksak_host::application_log::log_error("window show", error);
+            }
+        })
+        .map_err(crate::framework::error)
+}
+
+/// Calls ended when the process of the page of a web view ended. Tauri offers this hook only on macOS and iOS.
+pub(crate) fn watch_page_process_end(
+    builder: tauri::Builder<tauri::Wry>,
+    ended: impl Fn(&tauri::Webview) + Send + Sync + 'static,
+) -> tauri::Builder<tauri::Wry> {
+    builder.on_web_content_process_terminate(ended)
+}
+
 /// Activates the application at launch, ignoring other applications when ignore_other_apps is true.
 pub(crate) fn launch_activation(
     builder: tauri::Builder<tauri::Wry>,

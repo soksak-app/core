@@ -181,6 +181,9 @@ type projectStart struct {
 
 // surfaceState is the placement state of a window.
 type surfaceState struct {
+	// withdrawing tells that a wait for the surfaces runs to withdraw the error of a failed placement, and closed that the window ended.
+	withdrawing bool
+	closed      bool
 	// layoutFault tells that the next placement fails once (diagnostics.layout.fail).
 	layoutFault bool
 	held        map[string]*heldSurface
@@ -567,8 +570,35 @@ func rawOrNull(value json.RawMessage) json.RawMessage {
 	return value
 }
 
-// placementSource is the source of the error of a placement that failed, which the next placement that succeeds withdraws.
+// placementSource is the source of the error of a placement that failed, which the presentation of every surface after a later
+// placement withdraws.
 const placementSource = "placement"
+
+// presentedRetry is the time before the wait for the surfaces asks again after an answer that they have not presented.
+const presentedRetry = time.Second
+
+// withdrawWhenPresented withdraws the error of a failed placement once every surface has presented. The failure names a surface that
+// did not present, which the placement of another change does not end. A placement that fails during the wait keeps its failure, and
+// the placement after it asks again. The record of the failure stays in the log.
+func (s *Shell) withdrawWhenPresented() {
+	if s.surfaces.withdrawing || s.surfaces.closed || !s.errors.ShownFrom(workbenchErrorPlace, placementSource) {
+		return
+	}
+	s.surfaces.withdrawing = true
+	s.calls.Call("waitPresented", nil, func(_ any, err error) {
+		s.surfaces.withdrawing = false
+		if s.surfaces.failure != nil {
+			return
+		}
+		if err != nil {
+			time.AfterFunc(presentedRetry, func() { s.options.Post(s.withdrawWhenPresented) })
+			return
+		}
+		if s.errors.HideFrom(workbenchErrorPlace, placementSource) {
+			s.options.Invalidate()
+		}
+	})
+}
 
 // placeSurfaces places the surfaces when the frame moved one of them. One placement runs at a time, and the frame that
 // follows it places what changed meanwhile.
@@ -661,7 +691,7 @@ func (s *Shell) followRun(going bool) {
 		return
 	}
 	for surface, view := range s.surfaces.views {
-		s.pushView(surface, view, "run-start", nil)
+		s.pushView(surface, view, "run-start", map[string]any{})
 	}
 }
 
@@ -674,11 +704,11 @@ func (s *Shell) placed(err error) {
 		s.options.Invalidate()
 		text := err.Error()
 		failure = &text
-	} else if s.errors.HideFrom(workbenchErrorPlace, placementSource) {
-		// A placement that succeeds ends the failure of the placement before it. The record of the failure stays in the log.
-		s.options.Invalidate()
 	}
 	s.surfaces.failure = failure
+	if err == nil {
+		s.withdrawWhenPresented()
+	}
 	s.verifyLater()
 	placing := s.surfaces.placing
 	s.surfaces.placing = nil

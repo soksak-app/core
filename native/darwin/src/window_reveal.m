@@ -73,3 +73,25 @@ bool sp_window_reveal_after_load(void *handle, char **error) {
     [[[SPWindowReveal alloc] initWithWindow:window webview:main] start];
     return true;
 }
+
+void sp_window_show(void *handle) {
+    NSCAssert(NSThread.isMainThread, @"window show requires the UI thread");
+    NSWindow *window = (NSWindow *)handle;
+    if (NSRunningApplication.currentApplication.active) {
+        [window makeKeyAndOrderFront:nil];
+        return;
+    }
+    NSInteger frontmost = 0;
+    for (NSNumber *number in [NSWindow windowNumbersWithOptions:0]) {
+        if (number.integerValue != window.windowNumber) {
+            frontmost = number.integerValue;
+            break;
+        }
+    }
+    if (frontmost != 0) {
+        [window orderWindow:NSWindowAbove relativeTo:frontmost];
+    } else if (!window.isVisible) {
+        [window orderWindow:NSWindowBelow relativeTo:0];
+    }
+    [window makeKeyWindow];
+}

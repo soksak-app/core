@@ -1,6 +1,6 @@
 [package]
 name = "soksak-host-tauriv2"
-version = "0.0.35"
+version = "0.0.36"
 edition = "2024"
 description = "Tauri v2 framework adapter of the soksak host"
 
@@ -23,6 +23,11 @@ serde_json = { version = "1", features = ["raw_value"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-deep-link = "2"
 url = "2"
+
+[target.'cfg(windows)'.dependencies]
+# The controller that tauri gives is passed to soksak-host as a raw COM pointer, and the process failures of a web view are read from it.
+webview2-com = "0.39"
+windows = { version = "0.62", features = ["Win32_Foundation"] }
 
 [dev-dependencies]
 tauri = { version = "2", default-features = false, features = ["test"] }

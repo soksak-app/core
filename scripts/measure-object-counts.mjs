@@ -2,13 +2,13 @@
 // runs the list of operations N times, settles after each operation, and reads the counts, the Go runtime figures (the member runtime of the
 // Wails and the mygo host) and the footprint of the host process, of the page process and of each document process again. A window whose
 // host.window reports pageProcess null has no main page, which is the window of the mygo host: its reply has page null, and the measurement
-// reads no page process. The host is the process whose command line has --config-dir DIR, found as `make app-usage` finds it. The measure
+// reads no page process. The host is the process whose command line has --config-dir DIR, found as `make measure-app-usage` finds it. The measure
 // function asserts nothing: it logs one entry per repetition, {repetition, counts, runtime, footprint}, and then one summary per count,
 // {count, baseline, values, grows}, where grows is true when the count rises in every repetition after the second. A count that grows is a
 // defect for the owning check to judge. With --b3-out FILE, which needs at least 30 repetitions, it writes the B3 output of S3
 // (scripts/b3-out.mjs) with the measurements that B3_MEASUREMENTS declares, changedCounts and growingFigures of b3Measurements, and
 // the conditions of the window, whose traceState is the diagnostics.performance that TRACE set (b3Output).
-// `make object-counts` runs it.
+// `make measure-object-counts` runs it.
 //
 //   node scripts/measure-object-counts.mjs --sok PATH --config-dir DIR --trace 0|1 --plugin ID [--plugin ID]... [--repetitions N] [--b3-out FILE]
 import { spawn, execFile, execFileSync } from "node:child_process";
@@ -21,7 +21,7 @@ import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { promisify } from "node:util";
 import { parseArgs } from "node:util";
-import { PROCESS_TABLE_BYTES, hostProcess, parseProcessTable } from "./measure-app-usage.mjs";
+import { PROCESS_TABLE_BYTES, hostProcess, parseProcessTable, requireOcclusion } from "./measure-app-usage.mjs";
 import { applyTrace, parseTrace, traceSettings } from "./measure-trace.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -203,7 +203,10 @@ async function settledReply(objects, settle) {
  * page process must report its page.
  */
 async function footprintOf(status, footprint, host, reply) {
-  const { pageProcess, documents } = await status();
+  const reading = await status();
+  // A covered window measures another state, so every reading requires a window that is not covered.
+  requireOcclusion(null, [reading]);
+  const { pageProcess, documents } = reading;
   if (pageProcess !== null && (!Number.isInteger(pageProcess) || pageProcess <= 0)) throw new Error(`the window has no page process (${pageProcess})`);
   if ((pageProcess === null) !== (reply.page === null)) {
     throw new Error(`diagnostics.objects reports the page ${JSON.stringify(reply.page)} while host.window reports pageProcess ${pageProcess}`);
@@ -407,7 +410,7 @@ if (import.meta.main) {
   try {
     await measure({
       objects: () => step("diagnostics.objects", () => client.request("diagnostics.objects", { window })),
-      status: () => step("host.window", () => run(["status", "host.window", "--window", window])),
+      status: () => step("host.window", async () => ({ ...await run(["status", "host.window", "--window", window]), window })),
       host,
       footprint: (pid) => {
         const text = execFileSync("footprint", ["-p", String(pid), "-f", "bytes"], { encoding: "utf8" });

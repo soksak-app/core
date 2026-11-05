@@ -5,7 +5,7 @@
 	<key>CFBundleIdentifier</key>
 	<string>app.soksak.tauri</string>
 	<key>CFBundleExecutable</key>
-	<string>soksak-tauriv2</string>
+	<string>sok-tauriv2</string>
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
 	<key>CFBundleName</key>
@@ -15,9 +15,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.0.35</string>
+	<string>0.0.36</string>
 	<key>CFBundleVersion</key>
-	<string>0.0.35</string>
+	<string>0.0.36</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.4</string>
 	<key>CFBundleLocalizations</key>

@@ -415,6 +415,7 @@ func (s *Shell) flushTabs() {
 
 // Closed ends these parts of a window that closed: it writes what is pending, and no timer of them runs after it.
 func (s *Shell) Closed() {
+	s.surfaces.closed = true
 	s.flushTabs()
 	if s.tabs != nil {
 		s.tabs.closed = true

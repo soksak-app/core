@@ -340,6 +340,10 @@ type Platform interface {
 	// RevealAfterLoad keeps the window transparent and makes it opaque when the next display ends after the first load of the main web view finished.
 	// The caller puts the window on the screen after this call (native/darwin/src/window_reveal.h). Call it on the UI thread.
 	RevealAfterLoad(window unsafe.Pointer) error
+	// ShowWindow puts the window on the screen without taking the front from another application: it comes to the
+	// front of an active application, and an application that is not active keeps it behind the front window
+	// (native/darwin/src/window_reveal.h, docs/spec/hosts.md#launch-activation).
+	ShowWindow(window unsafe.Pointer) error
 	// FileDrop receives, as dropped, the files that were dropped on the window of the main web view. json is {"urls":[...],"x":..,"y":..}
 	// (page coordinates). Call it on the UI thread.
 	FileDrop(main unsafe.Pointer, dropped func(json string)) error
@@ -412,6 +416,8 @@ type Platform interface {
 	// FocusSurface gives the keyboard of its window to the surface, and FocusWorkbench gives the keyboard of window to the
 	// workbench (docs/spec/native-surfaces.md#keyboard-of-a-surface). Call them on the main thread.
 	FocusSurface(surface unsafe.Pointer)
+	// FocusSurfaceForRegion gives the keyboard to a surface that declared an image region, which keeps the keys until the region shows.
+	FocusSurfaceForRegion(surface unsafe.Pointer)
 	FocusWorkbench(window unsafe.Pointer)
 	SetWindowOverlays(main unsafe.Pointer, overlays []WindowOverlay) error
 	// SetSurfaceOverlays sets the declared DOM overlays to process before the native input.

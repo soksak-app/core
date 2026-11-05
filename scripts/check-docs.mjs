@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, extname, resolve } from "node:path";
 import { absolute, markdownLinks } from "./markdown-links.mjs";
-import { checkChangelogTranslations, checkChecklistTranslations, checkCompletedItems, checkSpecificationIds, retiredChecklistItems } from "./checklist.mjs";
+import { conflictMarkerErrors, checkChangelogTranslations, checkChecklistTranslations, checkCompletedItems, checkSpecificationIds, retiredChecklistItems } from "./checklist.mjs";
 
 const files = [...new Set(execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
   { encoding: "utf8" }).split("\0"))].filter((file) => file.endsWith(".md") && existsSync(file));
@@ -52,6 +52,7 @@ if (existsSync("CHANGELOG.md") && existsSync("CHANGELOG.ko.md")) {
 }
 const retired = retiredChecklistItems(changelogEnglish, changelogKorean);
 errors.push(...retired.errors);
+errors.push(...conflictMarkerErrors());
 errors.push(...checkChecklistTranslations(...statusFiles.map((file) => readFileSync(file, "utf8"))));
 for (const file of statusFiles) {
   // The default output limit of execFileSync (1 MiB) is smaller than the checklist, so the size of the committed file is the limit.

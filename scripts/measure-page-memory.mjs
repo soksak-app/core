@@ -5,13 +5,15 @@
 // set by duration. For each step it prints {phase, elapsedMs, pageProcess, footprint} as one JSON line and makes no judgment. Reload
 // opens the document in a new page process (docs/spec/native-host.md), so the last step also records whether the process of the start still exists
 // (startProcessAlive). A window whose host.window reports pageProcess null has no main page, which is the window of the mygo host, and the
-// measurement fails with "the mygo host has no main page" at its first step.
-// `make page-memory` runs it.
+// measurement fails with "the mygo host has no main page" at its first step. A window that reports occluded true fails the measurement at the
+// step that reads it, because a covered window measures another state (requireOcclusion of scripts/measure-app-usage.mjs).
+// `make measure-page-memory` runs it.
 //
 //   node scripts/measure-page-memory.mjs --sok PATH --config-dir DIR [--idle-minutes N] [--reloads N]
 import { execFileSync } from "node:child_process";
 import { parseArgs } from "node:util";
 import { setTimeout as sleep } from "node:timers/promises";
+import { requireOcclusion } from "./measure-app-usage.mjs";
 
 /**
  * Measures the steps in sequence. status() is the host.window state, reload() is one reload, footprint(pid) is the number of bytes, and wait(ms) is
@@ -20,7 +22,9 @@ import { setTimeout as sleep } from "node:timers/promises";
 export async function measure({ status, reload, footprint, alive, wait, idleMs, reloads, log, now = Date.now }) {
   const started = now();
   const record = async (phase, extra = () => ({})) => {
-    const { pageProcess } = await status();
+    const reading = await status();
+    requireOcclusion(null, [reading]);
+    const { pageProcess } = reading;
     // host.window reports pageProcess null for a window without a main page, which the mygo host draws in native UI.
     if (pageProcess === null) throw new Error("the mygo host has no main page");
     if (!Number.isInteger(pageProcess) || pageProcess <= 0) throw new Error(`${phase}: the window has no page process (${pageProcess})`);
@@ -60,8 +64,9 @@ export function parseOptions(args) {
 if (import.meta.main) {
   const options = parseOptions(process.argv.slice(2));
   const sok = (...args) => execFileSync(options.sok, [...args, "--config-dir", options.configDir], { encoding: "utf8" });
+  const [{ window }] = JSON.parse(sok("windows"));
   await measure({
-    status: async () => JSON.parse(sok("status", "host.window")),
+    status: async () => ({ ...JSON.parse(sok("status", "host.window")), window }),
     reload: async () => { sok("host.window.reload"); },
     footprint: (pid) => parseFootprint(execFileSync("footprint", ["-p", String(pid), "-f", "bytes"], { encoding: "utf8" })),
     alive: (pid) => {

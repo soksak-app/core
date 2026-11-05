@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { GOALS_FILE, judgeSession, readGoals, readSession } from "../b3-judge.mjs";
+import { GOALS_FILE, judgeSession, readGoals, readSession, runConditionFailures, targetConditionFailures } from "../b3-judge.mjs";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const FIXTURES = join(ROOT, "scripts", "test", "fixtures", "b3");
@@ -109,11 +109,11 @@ test("a run outside the run conditions, a failed run, a missing run and an unkno
   record("S0", 2, "mygo").display.backingScale = 1;
   record("S0", 3, "mygo").start.swap.usedBytes = 536870912;
   record("S1", 1, "mygo").start.fseventsdCores = 0.1;
-  record("S1", 2, "wailsv3").failures.push("make app-usage STATE=S1 exited with code 1");
+  record("S1", 2, "wailsv3").failures.push("make measure-app-usage STATE=S1 exited with code 1");
   record("S1", 3, "tauriv2").values["G2-S0-frames"] = 0;
-  record("S5", 1, "mygo").conditions["make e2e-benchmark-view-drag TRACE=0"].refreshRate = 60;
-  record("S5", 3, "mygo").conditions["make e2e-benchmark-view-drag TRACE=0"].window = { width: 760, height: 614 };
-  record("S2", 1, "mygo").conditions["make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=1"].window = { width: 1200, height: 760 };
+  record("S5", 1, "mygo").conditions["make benchmark-view-drag TRACE=0"].refreshRate = 60;
+  record("S5", 3, "mygo").conditions["make benchmark-view-drag TRACE=0"].window = { width: 760, height: 614 };
+  record("S2", 1, "mygo").conditions["make measure-terminal-redraw PLUGIN=term RATE=30 ROWS=1"].window = { width: 1200, height: 760 };
   delete record("S5", 2, "mygo").conditions;
   session.records.splice(session.records.indexOf(record("S10", 3, "mygo")), 1);
   assert.deepEqual(failedLines(judgeSession(fixtureGoals(), session)), [
@@ -121,12 +121,12 @@ test("a run outside the run conditions, a failed run, a missing run and an unkno
     "failed run 2 of mygo in S0: the backing scale of the window is 1, expected 2",
     "failed run 3 of mygo in S0: swap use 536870912 B is not below 0.5 of the swap total 1073741824 B",
     "failed run 1 of mygo in S1: fseventsd uses 0.1 of a core, not below 0.1",
-    "failed run 2 of wailsv3 in S1: make app-usage STATE=S1 exited with code 1",
+    "failed run 2 of wailsv3 in S1: make measure-app-usage STATE=S1 exited with code 1",
     "failed run 3 of tauriv2 in S1: it records G2-S0-frames, which is no value of S1",
-    "failed run 1 of mygo in S5: make e2e-benchmark-view-drag TRACE=0: the display mode runs at 60 Hz, expected 120 Hz",
+    "failed run 1 of mygo in S5: make benchmark-view-drag TRACE=0: the display mode runs at 60 Hz, expected 120 Hz",
     "failed run 2 of mygo in S5: the run records no conditions of its targets (undefined)",
-    "failed run 3 of mygo in S5: make e2e-benchmark-view-drag TRACE=0: the window is 760×614 points, expected 1200×760 points",
-    "failed run 1 of mygo in S2: make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=1: the window is 1200×760 points, expected 760×614 points",
+    "failed run 3 of mygo in S5: make benchmark-view-drag TRACE=0: the window is 760×614 points, expected 1200×760 points",
+    "failed run 1 of mygo in S2: make measure-terminal-redraw PLUGIN=term RATE=30 ROWS=1: the window is 1200×760 points, expected 760×614 points",
     "failed G3-S10-host-growth mygo: the session records 2 of its 3 runs",
   ]);
   const short = fixtureSession();
@@ -180,7 +180,7 @@ function sessionMeeting(goals, path) {
           display: { refreshRate: goals.conditions.refreshRate, backingScale: goals.conditions.backingScale }, end: { loadAverage: [1, 1, 1] },
           conditions: Object.fromEntries(goals.values.filter((value) => value.scenario === scenario).map((value) => [value.target, {
             refreshRate: goals.conditions.refreshRate, backingScale: goals.conditions.backingScale, traceState: false, logPolicy: { lifecycle: "error", input: "error", call: "error", io: "error", frame: "error" },
-            window: goals.conditions.scenarioWindows[scenario] ?? goals.conditions.window,
+            window: goals.conditions.scenarioWindows[scenario] ?? goals.conditions.window, occluded: goals.conditions.occludedScenarios.includes(scenario), active: true,
           }])),
         }));
       }
@@ -190,24 +190,72 @@ function sessionMeeting(goals, path) {
   return lines;
 }
 
-test("make b3-judge judges a session folder against docs/spec/performance-goals.json and exits with status 1 when a value fails", { timeout: 20000 }, (t) => {
+test("make check-b3 judges a session folder against docs/spec/performance-goals.json and exits with status 1 when a value fails", { timeout: 20000 }, (t) => {
   const goals = readGoals(readFileSync(GOALS_FILE, "utf8"), "docs/spec/performance-goals.json");
   const path = folder(t);
   const lines = sessionMeeting(goals, path);
-  const judge = () => spawnSync("make", ["-s", "--no-print-directory", "b3-judge", `SESSION=${path}`], { cwd: ROOT, encoding: "utf8" });
+  const judge = () => spawnSync("make", ["-s", "--no-print-directory", "check-b3", `SESSION=${path}`], { cwd: ROOT, encoding: "utf8" });
   const passed = judge();
   assert.equal(passed.status, 0, passed.stdout + passed.stderr);
   assert.match(passed.stdout, new RegExp(`^passed session ${path}: 0 failures$`, "m"));
   for (const value of goals.values) assert.match(passed.stdout, new RegExp(`^value ${value.id} mygo: runs `, "m"), `${value.id} is not printed`);
   const records = lines.map((line) => JSON.parse(line));
-  const hitTests = records.filter((entry) => entry.application === "mygo" && Object.hasOwn(entry.values, "G8-S1-hit-test-p90"));
-  for (const entry of hitTests.slice(0, Math.ceil(goals.runs / 2))) entry.values["G8-S1-hit-test-p90"] = 8.34;
+  const moves = records.filter((entry) => entry.application === "mygo" && Object.hasOwn(entry.values, "G8-S1-pointer-move-p90"));
+  for (const entry of moves.slice(0, Math.ceil(goals.runs / 2))) entry.values["G8-S1-pointer-move-p90"] = 8.34;
   const verdict = records.find((entry) => entry.application === "mygo" && Object.hasOwn(entry.values, "G4-S7-term-view"));
   verdict.values["G4-S7-term-view"] = "failed";
   writeFileSync(join(path, "runs.jsonl"), `${records.map((entry) => JSON.stringify(entry)).join("\n")}\n`);
   const failed = judge();
   assert.equal(failed.status, 2, `make reports the exit status 1 of the judge as 2: ${failed.stdout}${failed.stderr}`);
-  assert.match(failed.stdout, /^failed G8-S1-hit-test-p90 mygo: median 8\.34, at most 8\.33 ms$/m);
+  assert.match(failed.stdout, /^failed G8-S1-pointer-move-p90 mygo: median 8\.34, at most 8\.33 ms$/m);
   assert.match(failed.stdout, /^failed G4-S7-term-view mygo: runs (passed )*failed( passed)*, equals passed$/m);
   assert.match(failed.stdout, new RegExp(`^failed session ${path}: 2 failures$`, "m"));
+});
+
+test("a target of S9 reports a covered window and a target of any other scenario a window that is not covered", () => {
+  const goals = readGoals(readFileSync(GOALS_FILE, "utf8"), "performance-goals.json");
+  const conditions = (scenario, occluded) => ({
+    refreshRate: goals.conditions.refreshRate, backingScale: goals.conditions.backingScale,
+    window: goals.conditions.scenarioWindows[scenario] ?? goals.conditions.window, active: true, ...(occluded === undefined ? {} : { occluded }),
+  });
+  assert.deepEqual(targetConditionFailures(goals, "S9", conditions("S9", true)), []);
+  assert.deepEqual(targetConditionFailures(goals, "S5", conditions("S5", false)), []);
+  assert.deepEqual(targetConditionFailures(goals, "S5", conditions("S5", true)), ["the window reports occluded true, expected false"]);
+  assert.deepEqual(targetConditionFailures(goals, "S9", conditions("S9", false)), ["the window reports occluded false, expected true"]);
+  assert.deepEqual(targetConditionFailures(goals, "S8", conditions("S8")), ["the window reports occluded undefined, expected false"]);
+});
+
+test("the judge refuses a session whose run records a covered window", () => {
+  const goals = readGoals(readFileSync(GOALS_FILE, "utf8"), "performance-goals.json");
+  const record = {
+    scenario: "S5", start: { loadAverage: [1, 1, 1], swap: { usedBytes: 0, totalBytes: 1 << 30 }, fseventsdCores: 0 },
+    display: { refreshRate: goals.conditions.refreshRate, backingScale: goals.conditions.backingScale }, end: { loadAverage: [1, 1, 1] },
+    conditions: { "make benchmark-view-drag TRACE=0": {
+      refreshRate: goals.conditions.refreshRate, backingScale: goals.conditions.backingScale, window: goals.conditions.window, occluded: true, active: true,
+    } },
+  };
+  assert.deepEqual(runConditionFailures(goals, record), ["make benchmark-view-drag TRACE=0: the window reports occluded true, expected false"]);
+});
+
+test("the goals name the scenarios whose window is covered, each of them a scenario of a value", () => {
+  const goals = JSON.parse(readFileSync(GOALS_FILE, "utf8"));
+  assert.deepEqual(goals.conditions.occludedScenarios, ["S9"]);
+  const changed = (change) => { const copy = structuredClone(goals); change(copy); return JSON.stringify(copy); };
+  assert.throws(() => readGoals(changed((copy) => { delete copy.conditions.occludedScenarios; }), "goals.json"), /holds the conditions/);
+  assert.throws(() => readGoals(changed((copy) => { copy.conditions.occludedScenarios = "S9"; }), "goals.json"), /holds the condition occludedScenarios "S9", expected an array/);
+  assert.throws(() => readGoals(changed((copy) => { copy.conditions.occludedScenarios = ["S99"]; }), "goals.json"), /names S99 as covered, which no value names/);
+});
+
+test("a target of every scenario reports an active application, S9 as well", () => {
+  const goals = readGoals(readFileSync(GOALS_FILE, "utf8"), "performance-goals.json");
+  const conditions = (scenario, active) => ({
+    refreshRate: goals.conditions.refreshRate, backingScale: goals.conditions.backingScale,
+    window: goals.conditions.scenarioWindows[scenario] ?? goals.conditions.window, occluded: goals.conditions.occludedScenarios.includes(scenario),
+    ...(active === undefined ? {} : { active }),
+  });
+  assert.deepEqual(targetConditionFailures(goals, "S5", conditions("S5", true)), []);
+  assert.deepEqual(targetConditionFailures(goals, "S9", conditions("S9", true)), []);
+  assert.deepEqual(targetConditionFailures(goals, "S5", conditions("S5", false)), ["the application reports active false, expected true"]);
+  assert.deepEqual(targetConditionFailures(goals, "S9", conditions("S9", false)), ["the application reports active false, expected true"]);
+  assert.deepEqual(targetConditionFailures(goals, "S8", conditions("S8")), ["the application reports active undefined, expected true"]);
 });

@@ -1273,6 +1273,35 @@ func TestStaleViewCommandsAreCancelledAfterTheViewRestarts(t *testing.T) {
 }
 
 // contract: view.event.push
+func TestViewEventKeepsANullDataAsItsValue(t *testing.T) {
+	s, fake := newViewChannelSurfaces(t)
+	ready := `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`
+	if err := s.viewMessage("probe-surface", ready); err != nil {
+		t.Fatalf("ready message: %v", err)
+	}
+	raw := fmt.Sprintf(`{"surface":"probe-surface","generation":%d,"event":"run-start","data":null}`, viewGeneration(s, "probe-surface"))
+	req, err := argument[ViewEventRequest]("request", json.RawMessage(raw))
+	if err != nil {
+		t.Fatalf("event with null data: %v", err)
+	}
+	if accepted, err := s.pushViewEvent(req); err != nil || !accepted {
+		t.Fatalf("push: accepted %v, error %v", accepted, err)
+	}
+	if got, want := fake.posted[len(fake.posted)-1], `{"data":null,"event":"run-start","sok":1}`; got != want {
+		var posted, expected any
+		if json.Unmarshal([]byte(got), &posted) != nil || json.Unmarshal([]byte(want), &expected) != nil || !reflect.DeepEqual(posted, expected) {
+			t.Fatalf("event message %s, want %s", got, want)
+		}
+	}
+	if request, err := argument[ViewRequestRequest]("request", json.RawMessage(`{"surface":"probe-surface","generation":1,"id":1,"command":"probe.run","params":null}`)); err != nil || string(request.Params) != "null" {
+		t.Fatalf("request with null params: %s, error %v", request.Params, err)
+	}
+	if _, err := argument[ViewEventRequest]("request", json.RawMessage(`{"surface":"probe-surface","generation":1,"event":"run-start"}`)); err == nil || err.Error() != "argument request.data is missing" {
+		t.Fatalf("absent data: %v, want argument request.data is missing", err)
+	}
+}
+
+// contract: view.event.push
 func TestViewEventPostsTheEventWithItsDataToTheReadyDocument(t *testing.T) {
 	s, fake := newViewChannelSurfaces(t)
 	if _, err := s.pushViewEvent(ViewEventRequest{Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), Event: "probe.changed", Data: json.RawMessage(`{"count":1}`)}); err == nil || err.Error() != "probe-surface has no ready document" {

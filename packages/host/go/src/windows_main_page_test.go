@@ -79,6 +79,40 @@ func (w *eventWindow) OnWindowEvent(event WindowEvent, listener func()) {
 	w.listeners[event] = append(w.listeners[event], listener)
 }
 
+// goneWindowPlatform reports a read of the state of a window that has no native window, which the real platform refuses.
+type goneWindowPlatform struct {
+	pagelessPlatform
+	read chan struct{}
+}
+
+func (p *goneWindowPlatform) WindowOnScreen(window unsafe.Pointer) (bool, error) {
+	if window == nil {
+		p.read <- struct{}{}
+		return false, errors.New("window on screen: the window is gone")
+	}
+	return true, nil
+}
+
+// A window that closes may still report a change of its state, and with no native window there is nothing to read.
+func TestAWindowThatIsGoneReadsNoStateOnAChange(t *testing.T) {
+	window := &eventWindow{pagelessWindow: pagelessWindow{native: unsafe.Pointer(new(byte))}, listeners: map[WindowEvent][]func(){}}
+	previousFramework, previousSystem := framework, system
+	fake := &goneWindowPlatform{read: make(chan struct{}, 4)}
+	framework, system = pagelessFramework{window: window}, fake
+	t.Cleanup(func() { framework, system = previousFramework, previousSystem })
+	host := &Host{windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{}}
+	host.newWindow("main", "")
+	window.native = nil
+	for _, listener := range window.listeners[WindowMove] {
+		listener()
+	}
+	select {
+	case <-fake.read:
+		t.Fatal("a change of a window that is gone read its state and reported an error")
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
 // rasterPlatform reports each read of the placement of an image, the first step of a raster refresh.
 type rasterPlatform struct {
 	pagelessPlatform

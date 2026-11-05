@@ -1,4 +1,4 @@
-// The declarations that the workbench embeds are the copies of packages/workbench, which make exposure-check holds equal to their
+// The declarations that the workbench embeds are the copies of packages/workbench, which make check-exposure holds equal to their
 // source (docs/spec/hosts.md#workbench).
 package workbench_test
 

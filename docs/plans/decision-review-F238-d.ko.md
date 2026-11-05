@@ -28,17 +28,17 @@
 - `docs/spec/plugins.md`의 Repositories 단락: "none reads the files of another."는 거짓이다. `scripts/check-boundaries.mjs:27-42`는 선언된 모든 폴더의 `package.json` 이름과 의존 키, `plugin.json`의 id를 읽고, 형제가 없으면 `readJson`이 던진다. `Makefile:374-375`(`registry`)와 `Makefile:382-388`(`install-plugins`)은 선언된 형제 저장소를 읽어 패키징하고 설치한다.
 - 저장소 표는 "The plugins are `browser`, `terminal`, `files` and `shell`"이라고 쓴다. 레지스트리는 `editor`와 `hwp`를 선언하고 `shell`은 선언하지 않는다.
 - `AGENTS.md:32`는 "`environment.json` lists plugins"라고 쓰고, `AGENTS.md:33`은 `environment.json`을 "설치된 버전을 나열하는" 매니페스트에 넣는다. `CHANGELOG.md:1023`(R1-2-3-3)은 `environment.json`이 더 이상 플러그인을 나열하지 않는다고 기록한다. 그러나 탭은 여전히 플러그인을 이름으로 가리킨다: `apps/wailsv3/environment.json:47`(`"plugin": "terminal"`), `:60`과 `:115`(`"plugin": "browser"`). 설치 목록은 `plugins/installed.json`에 있다(`Makefile:385`가 그 `plugins` 키를 읽는다).
-- `.github/workflows/ci.yml:19-46`은 `plugins/browser`, `plugins/editor`, `plugins/files`, `plugins/hwp`, `plugins/terminal`, `sidecars/files`, `sidecars/vt`를 checkout한다. `ci.yml:73`은 Structure 작업에서 `make boundaries-check`를 실행한다. `window-checks.yml`은 `make install-plugins`를 위해 같은 형제를 checkout한다.
-- `scripts/check-registry-manifests.mjs`는 네트워크로 플러그인 릴리스를 내려받는다. `release-check`(`Makefile:35`)에서 실행되며 `push-check`에서는 실행되지 않고, 형제 파일을 읽지 않는다.
-- `scripts/check-test-parity.mjs`는 `scripts/workspace-registry.mjs`를 lane 파일로만 언급한다. 레지스트리 json을 읽지 않는다.
+- `.github/workflows/ci.yml:19-46`은 `plugins/browser`, `plugins/editor`, `plugins/files`, `plugins/hwp`, `plugins/terminal`, `sidecars/files`, `sidecars/vt`를 checkout한다. `ci.yml:73`은 Structure 작업에서 `make check-boundaries`를 실행한다. `window-checks.yml`은 `make install-plugins`를 위해 같은 형제를 checkout한다.
+- `scripts/check-registry-manifests.mjs`는 네트워크로 플러그인 릴리스를 내려받는다. `check-release`(`Makefile:35`)에서 실행되며 `check-push`에서는 실행되지 않고, 형제 파일을 읽지 않는다.
+- `scripts/check-tests.mjs`는 `scripts/workspace-registry.mjs`를 lane 파일로만 언급한다. 레지스트리 json을 읽지 않는다.
 
 필요한 변경:
 
-- R2.1 `docs/spec/plugins.md`(Repositories 단락, `.ko.md`도 동일): "none reads the files of another."를 다음으로 바꾼다: "`make boundaries-check`는 `scripts/workspace-registry.json`이 선언한 각 폴더의 `package.json` 이름과 의존 키, `plugin.json`의 id를 읽고, 선언된 폴더가 없으면 실패한다. `make registry`와 `make install-plugins`는 선언된 형제 저장소를 읽어 패키징하고 설치한다."
+- R2.1 `docs/spec/plugins.md`(Repositories 단락, `.ko.md`도 동일): "none reads the files of another."를 다음으로 바꾼다: "`make check-boundaries`는 `scripts/workspace-registry.json`이 선언한 각 폴더의 `package.json` 이름과 의존 키, `plugin.json`의 id를 읽고, 선언된 폴더가 없으면 실패한다. `make build-registry`와 `make install-plugins`는 선언된 형제 저장소를 읽어 패키징하고 설치한다."
 - R2.2 `docs/spec/plugins.md` 저장소 표(`.ko.md`도 동일): "The plugins are `browser`, `terminal`, `files` and `shell`"을 "The declared plugins are `browser`, `editor`, `files`, `hwp` and `terminal`, the same as `scripts/workspace-registry.json`. `shell` has a repository, is not published and is not declared."로 바꾼다. 사이드카 행은 선언된 폴더로 `vt-alacritty`를 적는다.
-- R2.3 `AGENTS.md:32-33`과 `AGENTS.ko.md:32-33`: "`environment.json` lists plugins"를 "`environment.json` names plugins only as tab and sidebar references in `workspace` and `sidebars`; it does not install them."로 바꾼다. 33행의 설치 버전 매니페스트 목록에서 `environment.json`을 뺀다. `plugins/installed.json`이 설치된 플러그인을 나열하고, `scripts/workspace-registry.json`이 `make boundaries-check`와 `make registry`가 읽는 형제 폴더를 선언한다는 점을 적는다.
+- R2.3 `AGENTS.md:32-33`과 `AGENTS.ko.md:32-33`: "`environment.json` lists plugins"를 "`environment.json` names plugins only as tab and sidebar references in `workspace` and `sidebars`; it does not install them."로 바꾼다. 33행의 설치 버전 매니페스트 목록에서 `environment.json`을 뺀다. `plugins/installed.json`이 설치된 플러그인을 나열하고, `scripts/workspace-registry.json`이 `make check-boundaries`와 `make build-registry`가 읽는 형제 폴더를 선언한다는 점을 적는다.
 - R2.4 Red와 Green: `scripts/test/workspace-registry.test.mjs`에 사례를 추가한다. `docs/spec/plugins.md` 저장소 표의 선언된 플러그인 이름과 `scripts/workspace-registry.json`의 `plugins`가 같은지 단언한다. 변경 전 표는 `shell`을 나열하고 `editor`와 `hwp`를 빠뜨리므로 실패한다. R2.2 후 Green.
-- R2.5 CI: `ci.yml`은 바꾸지 않는다. 스펙은 Structure 작업과 window 검사가 `make boundaries-check`와 `make install-plugins`를 위해 형제 checkout을 필요로 한다고 적는다.
+- R2.5 CI: `ci.yml`은 바꾸지 않는다. 스펙은 Structure 작업과 window 검사가 `make check-boundaries`와 `make install-plugins`를 위해 형제 checkout을 필요로 한다고 적는다.
 
 범위 밖: 레지스트리 선언을 registry 저장소로 옮기는 일.
 
@@ -48,19 +48,19 @@
 
 라운드 4 기록의 D8.2~D8.5 부모 확인:
 
-- D8.1 가림: `groupResults`(`check-host-contract.mjs:91-100`)는 실행과 이름으로만 묶고, `statusOf`(`:103-114`)는 `host.runs`의 모든 일치를 취한다. `host.runs`에는 wailsv3의 sok 실행이 든다(`GO_RUNS`, `:173-179`). 확인됨: 호스트의 통과가 sok 선언을 덮는다.
+- D8.1 가림: `groupResults`(`test-hosts.mjs:91-100`)는 실행과 이름으로만 묶고, `statusOf`(`:103-114`)는 `host.runs`의 모든 일치를 취한다. `host.runs`에는 wailsv3의 sok 실행이 든다(`GO_RUNS`, `:173-179`). 확인됨: 호스트의 통과가 sok 선언을 덮는다.
 - D8.2: 지금의 `packages/host/rust`와 `packages/host/tauriv2`인 Rust host 코드(테스트 601개)와 `packages/sok/rust`(테스트 139개)의 `#[test]` 잎 이름을 훑어 어느 크레이트에도 중복 잎이 없었다. 새 규칙은 현재 트리를 깨지 않는다. `discoverRust`가 실행 파일마다 목록을 내므로(`test-discovery.mjs:79-84`) 합산 검사가 모든 타겟을 덮는다.
-- D8.3: `parseDeclarations`는 모든 `#[` 줄에서 반환한다(`check-host-contract.mjs:78`). 그래서 선언 위나 선언과 `fn` 사이의 `#[should_panic]`과 `#[ignore]`는 조용히 통과한다. Rust 선언 752개를 훑어 허용 집합 밖의 속성이 없었다. `endpoint_test.rs:176-178`과 `sok_test.rs:333-334`의 `cfg(feature)`와 `cfg(not(feature))` 줄이 Green 사례다.
+- D8.3: `parseDeclarations`는 모든 `#[` 줄에서 반환한다(`test-hosts.mjs:78`). 그래서 선언 위나 선언과 `fn` 사이의 `#[should_panic]`과 `#[ignore]`는 조용히 통과한다. Rust 선언 752개를 훑어 허용 집합 밖의 속성이 없었다. `endpoint_test.rs:176-178`과 `sok_test.rs:333-334`의 `cfg(feature)`와 `cfg(not(feature))` 줄이 Green 사례다.
 - D8.4: `docs/spec/host-contract.md:22`은 `packages/host/...` 경로만 나열하므로 sok 경로가 빠져 있다고 한 말이 맞다.
-- D8.5: `scripts/test/check-host-contract.test.mjs`는 있으나 소유자 규칙, 잎 규칙, 속성 규칙의 사례가 없다. 사례는 새 작업이다.
+- D8.5: `scripts/test/test-hosts.test.mjs`는 있으나 소유자 규칙, 잎 규칙, 속성 규칙의 사례가 없다. 사례는 새 작업이다.
 
 결정: 호스트 계약 검사는 sok 선언(`packages/sok/go/tests`, `packages/sok/go/src/*_test.go`, `packages/sok/rust/tests`, `packages/sok/rust/src`)을 계속 읽고, 선언을 결과와 맞추는 방식을 바꾼다. F218-2.4-1 변경은 이미 `origin/main`에 있으며 수정(amend)하지 않는다. 수정은 새 변경이다.
 
 근거:
 
-- `scripts/check-host-contract.mjs:166-167`은 각 호스트 선언을 위해 sok 테스트 폴더와 소스 폴더를 읽는다.
+- `scripts/test-hosts.mjs:166-167`은 각 호스트 선언을 위해 sok 테스트 폴더와 소스 폴더를 읽는다.
 - 같은 테스트 이름이 두 패키지에 있다: `packages/host/go/tests/plugins_test.go:92-93`은 `TestPluginsStateReportsTheRegistryAndTheInstallation`에 `plugins.state.reports-registry-and-installed`를 선언하고, `packages/sok/go/tests/plugins_test.go:296-297`은 같은 이름에 `cli.plugin.state-reads-registry-and-installed`를 선언한다.
-- 가려짐: `groupResults`(`check-host-contract.mjs:91-100`)는 결과를 실행(run)과 테스트 이름으로만 묶는다. `statusOf`(`:103-114`)는 호스트의 모든 실행에서 이름이 같은 모든 결과를 가져간다. `wailsv3`에서는 호스트 실행과 sok 실행이 모두 `host.runs`에 들어간다(`:173-179`). 그래서 호스트 통과가 sok 선언의 통과로 계산되고, `auditHostContract`(`:132-138`)는 sok 사례를 충족으로 센다. 이 기록의 검증 실행에서 재현했다.
+- 가려짐: `groupResults`(`test-hosts.mjs:91-100`)는 결과를 실행(run)과 테스트 이름으로만 묶는다. `statusOf`(`:103-114`)는 호스트의 모든 실행에서 이름이 같은 모든 결과를 가져간다. `wailsv3`에서는 호스트 실행과 sok 실행이 모두 `host.runs`에 들어간다(`:173-179`). 그래서 호스트 통과가 sok 선언의 통과로 계산되고, `auditHostContract`(`:132-138`)는 sok 사례를 충족으로 센다. 이 기록의 검증 실행에서 재현했다.
 - Rust: `statusOf` 107행은 `name.endsWith('::' + test.name)`로 맞춘다. 같은 크레이트의 서로 다른 모듈에 같은 잎 이름의 테스트 함수가 둘 있으면 한 선언이 둘 다에 맞는다. libtest `--list` 이름은 모듈 경로다(`test-discovery.mjs:83`).
 - 속성: `parseDeclarations`(`:78`)는 모든 `#[` 줄을 건너뛴다. `packages/host/rust/tests/endpoint_test.rs:176-178`은 선언과 `#[test]` 사이에 `#[cfg(feature = "diagnostics")]`를 둔다. 이 사례는 검사가 요구하는 diagnostics 구성에서 실행된다. 같은 자리의 `#[should_panic]`이나 `#[ignore]`는 보고되는 결과를 바꾸는데도 보고 없이 통과한다.
 - `docs/spec/host-contract.md:22`는 호스트 경로만 적는다.
@@ -72,7 +72,7 @@
 - D8.2 Rust 잎 이름: 선언은 잎 함수 이름을 적는다. 한 크레이트에 대해 `--list`가 보고한 테스트(선언 여부와 무관) 중 같은 잎 이름이 두 번 나오면 검사는 실패한다. 선언은 마지막 경로 세그먼트가 잎과 같은 단 하나의 항목에 맞는다. 검사는 모듈 경로를 풀지 않는다. `mod` 사슬과 `#[path]`를 풀려면 검사가 구현하지 않는 해석이 필요하다.
 - D8.3 속성: `// contract:` 선언과 `fn` 사이에 허용되는 속성 줄은 `#[test]`, `#[tokio::test]`, `#[cfg(feature = "...")]`다. `cfg` 줄은 테스트가 컴파일되는 구성을 고르며 보고되는 결과를 바꾸지 않는다. 그 밖의 `#[` 줄은 파일, 줄, 속성 이름을 적은 오류다(예: `#[should_panic]`, `#[ignore]`).
 - D8.4 스펙: `docs/spec/host-contract.md:22`(`.ko.md:22`도 동일)는 모든 선언 경로를 적는다: `packages/host/go/tests/`, `packages/host/go/src/*_test.go`, `packages/host/wailsv3/tests/`, `packages/host/wailsv3/src/*_test.go`, `packages/sok/go/tests/`, `packages/sok/go/src/*_test.go`, `packages/host/rust/tests/`, `packages/host/rust/src/`, `packages/host/tauriv2/tests/`, `packages/host/tauriv2/src/`, `packages/sok/rust/tests/`, `packages/sok/rust/src/`. "Check" 절은 D8.1의 소유자 규칙과 D8.3의 속성 규칙을 적는다.
-- D8.5 Red와 Green: 소유 모듈인 `scripts/test/check-host-contract.test.mjs`에 합성 입력으로 `auditHostContract`를 호출하는 사례를 추가한다.
+- D8.5 Red와 Green: 소유 모듈인 `scripts/test/test-hosts.test.mjs`에 합성 입력으로 `auditHostContract`를 호출하는 사례를 추가한다.
   1. 한 소유자에 호스트 통과가 있고 같은 이름의 sok 소유자 결과가 없으면, sok 선언은 `did not run`을 보고한다. 변경 전 코드에서는 오류가 없어 Red이고, D8.1 후 Green이다.
   2. 같은 실행에서 같은 이름이 두 소유자에 있고 하나는 실패, 하나는 통과하면, 각 선언은 자기 상태를 보고하며 실패한 소유자의 선언은 `fail`을 보고한다. 변경 전 코드에서는 통과로 합쳐져 Red이고, D8.1 후 Green이다.
   3. 한 크레이트에 같은 잎 이름의 Rust 테스트 둘이 있으면 검사가 실패한다(D8.2).
@@ -141,7 +141,7 @@
 ## 검증 실행 (부모, 이 worktree)
 
 - `/tmp/d8-probe.mjs`(임시 probe이며 수락 근거가 아니다)는 `auditHostContract`를 호출한다. 입력은 `wailsv3` 선언 하나(`TestPluginsStateReportsTheRegistryAndTheInstallation`, 파일 `packages/sok/go/tests/plugins_test.go`, 사례 `cli.plugin.state-reads-registry-and-installed`)와, 같은 이름이 통과했고 sok 실행이 없는 호스트 실행 하나다. 출력: `errors: []`, `covered: ["cli.plugin.state-reads-registry-and-installed"]`, 종료 코드 0. 이것이 D8의 가려짐이다.
-- 초안이나 감사자의 문장이 아니라 파일에서 확인한 사실: `scripts/workspace-registry.json`, `scripts/check-boundaries.mjs:27-42`, `Makefile:374-388`, `.github/workflows/ci.yml:19-46,73`, `apps/wailsv3/environment.json:47,60,110,115`, `scripts/check-host-contract.mjs:91-114`, `packages/host/rust/tests/endpoint_test.rs:176-178`, `docs/spec/declared-ui.md:17-22,56,111-117,145,171`, `docs/spec/plugin-processes.md:24-28`, `docs/spec/sidecars.md:46`, `packages/sok/rust/src/event_log.rs:1307-1309`, `packages/sok/rust/src/sok.rs:19`, `plugins/files/plugin.json`, `plugins/files/ui/sections/tree.js:82-124`, `plugins/files/ui/sections/tree-horizontal.js:15-65`, `plugins/shell/plugin.json`, `plugins/shell/ui/shell.js:6,31-71,119,146-154`.
+- 초안이나 감사자의 문장이 아니라 파일에서 확인한 사실: `scripts/workspace-registry.json`, `scripts/check-boundaries.mjs:27-42`, `Makefile:374-388`, `.github/workflows/ci.yml:19-46,73`, `apps/wailsv3/environment.json:47,60,110,115`, `scripts/test-hosts.mjs:91-114`, `packages/host/rust/tests/endpoint_test.rs:176-178`, `docs/spec/declared-ui.md:17-22,56,111-117,145,171`, `docs/spec/plugin-processes.md:24-28`, `docs/spec/sidecars.md:46`, `packages/sok/rust/src/event_log.rs:1307-1309`, `packages/sok/rust/src/sok.rs:19`, `plugins/files/plugin.json`, `plugins/files/ui/sections/tree.js:82-124`, `plugins/files/ui/sections/tree-horizontal.js:15-65`, `plugins/shell/plugin.json`, `plugins/shell/ui/shell.js:6,31-71,119,146-154`.
 
 ## 라운드 1
 
@@ -150,7 +150,7 @@
 - A-D2-1(R2.3이 부분적으로 거짓, environment 탭이 플러그인을 이름으로 가리킴): 수락. `apps/wailsv3/environment.json:47,60,110,115`로 확인. R2.3 교체.
 - D2의 다른 반론 없음. 두 감사자 모두 레지스트리 내용, `check-boundaries.mjs:27-42`, Makefile 대상, CI와 `shell` 불일치를 확인했다.
 - A-D8-2와 cfg 사례(D8.3이 `#[cfg(feature)]` 선언을 깬다): 수락. `endpoint_test.rs:176-178`로 확인. D8.3은 `cfg(feature)`를 허용하고 결과를 바꾸는 속성을 거부한다.
-- A-D8-3과 B-D8-7(`groupResults`가 `statusOf` 전에 소유자를 합친다): 수락. `check-host-contract.mjs:91-100`로 확인. D8.1은 실행, 소유자, 이름으로 묶고 D8.5에 사례를 추가한다.
+- A-D8-3과 B-D8-7(`groupResults`가 `statusOf` 전에 소유자를 합친다): 수락. `test-hosts.mjs:91-100`로 확인. D8.1은 실행, 소유자, 이름으로 묶고 D8.5에 사례를 추가한다.
 - B-D9-1(플러그인 호스트가 목록에 필요한 사이드카 이벤트를 받을 수 없다): 필요한 스펙 변경으로 수락. 인용된 "no sidecar send" 문구는 main의 `plugin-host.md`에 없다. 실질 지적은 확인되었다: 스펙은 플러그인 사이드카 이벤트로 가는 호스트 채널을 정의하지 않는다. D9.2가 중계를 추가한다. view 경로 확인은 라운드 2 항목으로 처리했다. view 채널 대안은 D9.2에서 거부했다.
 - B-D9-2(펼침이 플러그인에 닿지 않는다): 수락. `declared-ui.md:117`("does not reach the plugin")로 확인. D9.3이 `declared-ui.expanded` 메시지를 추가한다.
 - A-D9-4와 B-D9-3(어휘 빈틈: git 표시, 행 북마크 동작, 열기 알림, 헤더 별, Enter로 열기): 수락. `tree-horizontal.js:15-17,29,62,65`와 `tree.js:82-85,119,124`로 확인. D9.1(d)부터 (g)가 추가한다. Enter로 열기는 D9.1b다.
@@ -173,7 +173,7 @@
 
 - C-D2-1, `environment.json`의 settings: 수락. 확인: `apps/wailsv3/environment.json`에 플러그인 `terminal`을 이름으로 가리키는 `settings` 키가 있다. R2.3 문장은 이제 "`environment.json` names plugins as tab references (`workspace`), sidebar link references (`sidebars`) and per-plugin settings keys (`settings`); it does not install them."이다.
 - C-D8-2, `#[cfg(not(feature))]`: 수락. 확인: `packages/sok/rust/tests/sok_test.rs:333-334`에 선언과 `#[test]` 사이 `#[cfg(not(feature = "diagnostics"))]`가 있다. D8.3 참고.
-- C-D8-3, 선언 위의 속성: 수락. 확인: `scripts/check-host-contract.mjs:78`은 모든 `#[` 줄에서 반환하고, 선언은 나중에 보일 때만 붙으므로 선언 위의 `#[should_panic]`이 조용히 통과한다. D8.3 참고.
+- C-D8-3, 선언 위의 속성: 수락. 확인: `scripts/test-hosts.mjs:78`은 모든 `#[` 줄에서 반환하고, 선언은 나중에 보일 때만 붙으므로 선언 위의 `#[should_panic]`이 조용히 통과한다. D8.3 참고.
 - D-D9-1과 C-D9-5, 호스트의 사이드카 경로: 수락. 확인: `sidecars.md:41`은 각 요청에 `{surface, root}`를 요구하고, `:46`은 표면에 처음 보낸 창에만 메시지를 전달하며, `:65`는 `sidecar-failure`를 소유 창에 보낸다. 표면이 없는 호스트에는 경로가 없으므로 스펙에 경로를 추가해야 한다. D9.2 참고.
 - D-D9-2와 C-D9-4, 항목별 검토: 수락. 각 항목을 아래 본문에서 검토했고, 사이드카 대안에는 그 결과로 답했다.
 - D-D9-3, Enter와 두 번 누르기: 수락. 확인: `declared-ui.md:130`은 선언형 요소에 키 처리가 없다고 하므로 Enter는 네이티브 `click`으로 전달된다. D9.1b 참고.
@@ -208,7 +208,7 @@
 
 ### 답변
 
-- F-D8.1, 선언 측 소유자: 수락. `parseDeclarations`는 파일만 받고(`check-host-contract.mjs:50`) 소유자를 저장하지 않는다(`:73`). D8.1 참고.
+- F-D8.1, 선언 측 소유자: 수락. `parseDeclarations`는 파일만 받고(`test-hosts.mjs:50`) 소유자를 저장하지 않는다(`:73`). D8.1 참고.
 - F-D8.2, 실행 파일 간 잠 이름 중복: 수락. `discoverRust`는 실행 파일마다 `--list`를 돌리고(`test-discovery.mjs:79-84`), 크레이트에는 여러 실행 파일이 있다. D8.2 참고.
 - F-D9.1e와 E-D9.2(라우트 키): 수락. 창마다 하나의 키 `plugin-host:<plugin id>:<window id>`가 필요하다. `plugin-host.md:31`이 창마다 플러그인 호스트 web view를 만들고, `sidecars.md:46`이 같은 표면에 두 번째 창을 거부하기 때문이다. D9.2 참고.
 - F-D9.2 root와 E-D9.2 root: 수락. `sidecars.md:41`이 프로젝트 변경 후에도 첫 root를 유지한다. D9.2 참고.
@@ -306,7 +306,7 @@
 
 - `AGENTS.md:32-33`과 `AGENTS.ko.md:32-33`(R2.3): 소유자는 사람이다. `AGENTS.md`는 사람의 파일이기 때문이다. 정확한 본문은 다음 문단에 있다. `docs/spec/plugins.md`(R2.1, R2.2), `scripts/test/workspace-registry.test.mjs`(R2.4): core main.
 
-R2.3의 정확한 본문(영문 `AGENTS.md` 32줄): "`environment.json` lists plugins, `plugin.json` lists"를 "`environment.json` names plugins only as references in `workspace`, `sidebars` and `settings`, and does not install them; `plugin.json` lists"로 바꾼다. 33줄: "manifests such as `environment.json`, `settings`, and `plugin.json` list what is installed at which version"을 "manifests such as `plugin.json` list what is installed at which version; `plugins/installed.json` lists the installed plugins, and `scripts/workspace-registry.json` declares the sibling folders that `make boundaries-check` and `make registry` read"로 바꾼다.
+R2.3의 정확한 본문(영문 `AGENTS.md` 32줄): "`environment.json` lists plugins, `plugin.json` lists"를 "`environment.json` names plugins only as references in `workspace`, `sidebars` and `settings`, and does not install them; `plugin.json` lists"로 바꾼다. 33줄: "manifests such as `environment.json`, `settings`, and `plugin.json` list what is installed at which version"을 "manifests such as `plugin.json` list what is installed at which version; `plugins/installed.json` lists the installed plugins, and `scripts/workspace-registry.json` declares the sibling folders that `make check-boundaries` and `make build-registry` read"로 바꾼다.
 - `../core-host-routes-F229/docs/plans/plugin-host-routes.md:55`에 이름만 있는 F230 백로그 항목은 `feat/host-routes-F229`에 커밋되지 않았다. 하위 항목 F238-d-10이다(소유자: F229 브랜치).
 - `plugins/files` 저장소: F238-d-15~F238-d-17. `plugins/shell` 저장소: F238-d-21(`plugin.json`의 `shell.history` 설명과 체크리스트 P10).
 - F229가 층 규칙, 표현 위치, 자르기 위치를 정한다: F238-d-20.

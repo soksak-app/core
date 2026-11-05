@@ -1,4 +1,5 @@
 // Compares task ID, depth, and state instead of translated sentences.
+import { spawnSync } from "node:child_process";
 import { checklist } from "@soksak/kit/checklist";
 
 export function checkChecklistTranslations(english, korean) {
@@ -99,4 +100,14 @@ export function checkSpecificationIds(text, file) {
     for (const match of line.matchAll(CHECKLIST_ID)) errors.push(`${file}:${index + 1}: specification cites checklist ID ${match[0]}`);
   });
   return errors;
+}
+
+/**
+ * The errors of the conflict markers that a merge left at the start of a line of a tracked or new text file under the current folder. The
+ * separator line is not one, because a Markdown heading has that form. git grep answers 1 when it finds nothing.
+ */
+export function conflictMarkerErrors() {
+  const found = spawnSync("git", ["grep", "--untracked", "-n", "-I", "-E", "^(<{7}|>{7}) "], { encoding: "utf8", maxBuffer: 1 << 24 });
+  if (found.status !== 0 && found.status !== 1) throw new Error(`git grep failed with status ${found.status}: ${found.stderr}`);
+  return found.stdout.split("\n").filter(Boolean).map((line) => `${line.split(":", 2).join(":")}: a conflict marker`);
 }

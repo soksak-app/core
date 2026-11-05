@@ -99,7 +99,7 @@ const REQUEST = 20_000;
  * The sequential-run lock between check files. A second check run fails without waiting. The lock file holds the number
  * of the owning process; when that process does not exist, the lock is a remnant and is replaced.
  */
-const LOCK = join(tmpdir(), "soksak-check.lock");
+const LOCK = join(tmpdir(), "sok-check.lock");
 
 function running(pid) {
   try {
@@ -215,7 +215,7 @@ export async function open(t, app) {
         "application that is already open and never open one themselves: a window that opens takes " +
         `the screen and the keyboard from whoever is using the machine. Start it once with ` +
         `\`${app.binary} --config-dir "${app.configDir}" --registry-ca "${join(process.env.SOKSAK_CONFIG_ROOT ?? tmpdir(), "soksak-check-registry-tls", "ca.pem")}"\` ` +
-        "after make e2e-registry-tls, and run them again.",
+        "after make create-test-certificates, and run them again.",
     );
   }
   const session = new Session(app, client);

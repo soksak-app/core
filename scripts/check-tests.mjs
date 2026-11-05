@@ -1,0 +1,12891 @@
+// Checks the ownership of implementation and test files. This structural check does not replace behavior verification.
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { basename, dirname, extname, join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { corePackageNames } from "./check-boundaries.mjs";
+
+const ROOT = fileURLToPath(new URL("../", import.meta.url));
+
+const languages = {
+  "js-ts": new Set([".js", ".mjs", ".ts", ".tsx"]),
+  rust: new Set([".rs"]),
+  go: new Set([".go"]),
+  "objective-c": new Set([".m"]),
+  "native-interface": new Set([".h"]),
+  declaration: new Set([".json"]),
+  // A build declaration is a Makefile, which has no extension, or the Cargo manifest of the Rust workspace and its profiles.
+  build: new Set(["Makefile", ".toml"]),
+  // A workflow declaration of the continuous integration is a YAML file.
+  workflow: new Set([".yml"]),
+};
+
+// The window checks and the manifests and modules of the plugins of their fixtures (e2e/fixtures/<check>/<plugin>/), which the
+// checks install into the applications.
+const FIXTURE_TEST_EXTENSIONS = new Set([".mjs", ".js", ".json", ".html"]);
+
+const lane = (capability, language, implementation, tests, options = {}) => ({
+  capability,
+  language,
+  implementation,
+  tests,
+  testLanguage: options.testLanguage ?? language,
+  testExtensions: options.testExtensions ?? null,
+  sharedTests: options.sharedTests ?? false,
+});
+
+// The connections of existing components are also kept as a file list. They are not interpreted as behavior evidence.
+const MATRIX = [
+  lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/repeat-rust.test.mjs", "scripts/test/check-windows-build.test.mjs", "scripts/test/host-debug-check.test.mjs", "scripts/test/create-test-certificates.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("macOS application bundle preparation", "js-ts", ["scripts/platform/darwin/prepare-app-bundle.mjs"], ["scripts/test/platform/darwin/bundle-preparation.test.mjs"], { sharedTests: true }),
+  lane("Window check capture recognizer target", "js-ts", ["e2e/platform/darwin/darwin.js"], ["scripts/test/platform/darwin/capture-text-target.test.mjs"], { sharedTests: true }),
+  lane("CI workflows", "workflow", [".github/workflows/*.yml"], ["scripts/test/workflows.test.mjs", "scripts/test/test-kinds.test.mjs"], { testLanguage: "js-ts" }),
+  lane("CI toolchain setup actions", "workflow", [".github/actions/setup-*/action.yml"], ["scripts/test/workflow-setup.test.mjs"], { testLanguage: "js-ts" }),
+  lane("Rust workspace release profile", "build", ["Cargo.toml"], ["scripts/test/rust-release-profile.test.mjs"], { testLanguage: "js-ts" }),
+  lane("native library build and pkg-config", "build", ["native/darwin/Makefile"], ["scripts/test/native-pkgconfig.test.mjs", "scripts/test/native-offline.test.mjs", "scripts/test/native-architecture.test.mjs"], { testLanguage: "js-ts" }),
+  lane("workspace audit scripts", "js-ts", [
+    "scripts/check-app-tests.mjs",
+    "scripts/check-e2e-host-parity.mjs",
+    "scripts/check-exposure.mjs",
+    "scripts/check-hosts-same.mjs",
+  ], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/e2e-host-parity.test.mjs", "scripts/test/main-page-apps.test.mjs", "scripts/test/check-hosts-same.test.mjs", "scripts/test/check-exposure.test.mjs"], { sharedTests: true }),
+  lane("test inventory", "js-ts", ["scripts/check-tests.mjs"], ["scripts/test/check-tests.test.mjs"]),
+  lane("host contract audit", "js-ts", ["scripts/test-hosts.mjs"], ["scripts/test/test-hosts.test.mjs", "scripts/test/view-region-calls.test.mjs", "scripts/test/plugin-host-calls.test.mjs"]),
+lane("command supervision", "js-ts", ["scripts/test-command.mjs"], ["scripts/test/test-command.test.mjs"]),
+lane("test runner", "js-ts", ["scripts/test-runner.mjs", "scripts/test-event-reporter.mjs", "scripts/rust-tests.mjs"], ["scripts/test/test-runner.test.mjs", "scripts/test/repeat-rust.test.mjs"], { sharedTests: true }),
+lane("test discovery", "js-ts", ["scripts/test-discovery.mjs"], ["scripts/test/test-discovery.test.mjs"]),
+lane("node tests", "js-ts", ["scripts/node-tests.mjs"], ["scripts/test/node-tests.test.mjs"]),
+lane("test runs", "js-ts", ["scripts/test-runs.mjs"], ["scripts/test/test-runs.test.mjs"]),
+lane("native tests", "js-ts", ["scripts/native-tests.mjs"], ["scripts/test/native-tests.test.mjs", "scripts/test/native-repeat.test.mjs"]),
+lane("event log audit", "js-ts", ["scripts/check-events.mjs"], ["scripts/test/check-events.test.mjs"]),
+lane("event class tables", "js-ts", ["scripts/generate-event-classes.mjs"], ["scripts/test/event-classes.test.mjs"]),
+lane("run log audit", "js-ts", ["scripts/audit-run.mjs"], ["scripts/test/audit-run.test.mjs"]),
+lane("crash report fault", "js-ts", ["scripts/crash-fault.mjs"], ["scripts/test/crash-fault.test.mjs"]),
+lane("end-to-end run", "js-ts", ["scripts/test-app.mjs"], ["scripts/test/test-app.test.mjs"]),
+lane("log command audit", "js-ts", ["scripts/audit-log.mjs"], ["scripts/test/audit-log.test.mjs"]),
+lane("temporary folder audit", "js-ts", ["scripts/check-temp-files.mjs"], ["scripts/test/check-temp-files.test.mjs"]),
+lane("event source check", "declaration", ["scripts/event-sources.json"], ["scripts/test/event-sources.test.mjs"], { testLanguage: "js-ts" }),
+lane("performance goals", "declaration", ["docs/spec/performance-goals.json"], ["scripts/test/performance-goals.test.mjs"], { testLanguage: "js-ts" }),
+lane("three-host benchmark judge", "js-ts", ["scripts/b3-judge.mjs"], ["scripts/test/b3-judge.test.mjs"]),
+lane("three-host benchmark", "js-ts", ["scripts/benchmark-b3.mjs"], ["scripts/test/benchmark-b3.test.mjs", "scripts/test/fixtures/b3/application.mjs", "scripts/test/fixtures/b3/sok.mjs"]),
+lane("process identity build", "build", ["native/darwin/process-identity/Makefile"], ["scripts/test/process-identity-build.test.mjs"], { testLanguage: "js-ts" }),
+lane("package bin audit", "js-ts", ["scripts/check-package-bins.mjs"], ["scripts/test/package-bins.test.mjs"]),
+lane("failure table", "js-ts", ["scripts/check-failure-table.mjs"], ["scripts/test/check-failure-table.test.mjs"]),
+lane("private API inventory", "js-ts", ["scripts/check-private-apis.mjs"], ["scripts/test/check-private-apis.test.mjs"]),
+lane("language test adapters", "js-ts", ["scripts/language-test-adapters.mjs"], ["scripts/test/test-language-test-adapters.test.mjs", "scripts/test/fixtures/node-color-count.mjs"]),
+lane("language test adapter manifest", "declaration", ["scripts/language-test-cases.json"], ["scripts/test/test-language-test-manifest.test.mjs"], { testLanguage: "js-ts" }),
+lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/test-evidence.test.mjs"]),
+  lane("workspace version audit", "js-ts", ["scripts/check-versions.mjs"], ["scripts/test/versions.test.mjs", "scripts/test/entry-guards.test.mjs"]),
+  lane("fallback and discarded error audit", "js-ts", ["scripts/check-fallbacks.mjs"], ["scripts/test/fallbacks.test.mjs"]),
+  lane("native window ownership audit", "js-ts", ["scripts/check-native-windows.mjs"], ["scripts/test/native-windows.test.mjs"]),
+  lane("Tauri command thread audit", "js-ts", ["scripts/check-tauri-commands.mjs"], ["scripts/test/tauri-commands.test.mjs"]),
+  lane("native test target audit", "js-ts", ["scripts/check-native-test-targets.mjs"], ["scripts/test/native-test-targets.test.mjs"]),
+  lane("comment language audit", "js-ts", ["scripts/check-comment-language.mjs"], ["scripts/test/comment-language.test.mjs"]),
+lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-range.test.mjs"]),
+  lane("documentation and checklist checks", "js-ts", ["scripts/check-docs.mjs", "scripts/checklist.mjs"], ["scripts/test/checklist.test.mjs"]),
+  lane("release notes", "js-ts", ["scripts/release-notes.mjs", "scripts/markdown-links.mjs"], ["scripts/test/release-notes.test.mjs"]),
+  lane("soksak layout", "js-ts", ["packages/soksak/src/**/*.ts"], ["packages/soksak/test/**/*.mjs"]),
+  lane("soksak utility scripts", "js-ts", [
+    "packages/soksak/scripts/bounded.mjs",
+    "packages/soksak/scripts/breaks.mjs",
+    "packages/soksak/scripts/emit-dom-reference.mjs",
+    "packages/soksak/scripts/fuzz.mjs",
+  ], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
+  lane("build environment audit", "shell", ["scripts/check-tools.sh"], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/check-tools.sh"], {
+    testLanguage: "js-ts", testExtensions: new Set([".mjs", ".sh"]), sharedTests: true,
+  }),
+  lane("break and mutation inventory", "js-ts", [
+    "packages/soksak/scripts/check-breaks.mjs",
+    "packages/soksak/scripts/mutate.mjs",
+  ], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
+  lane("host structure audit", "js-ts", ["scripts/check-host-files.mjs"], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/main-thread-calls.test.mjs"], { sharedTests: true }),
+  lane("main-thread audit Go reader", "go", ["scripts/cgo-sources.go"], ["scripts/test/main-thread-calls.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("release diagnostic audit", "js-ts", ["scripts/check-release.mjs"], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/check-release-paths.test.mjs"], { sharedTests: true }),
+  lane("installed format mentions", "js-ts", ["scripts/test/format-mentions.test.mjs"], ["scripts/test/format-mentions.test.mjs"]),
+  lane("page memory measurement", "js-ts", ["scripts/measure-page-memory.mjs"], ["scripts/test/measure-page-memory.test.mjs"]),
+  lane("object counts measurement", "js-ts", ["scripts/measure-object-counts.mjs"], ["scripts/test/measure-object-counts.test.mjs"]),
+  lane("host call memory measurement", "js-ts", ["scripts/measure-host-calls.mjs"], ["scripts/test/measure-host-calls.test.mjs"]),
+  lane("application usage measurement", "js-ts", ["scripts/measure-app-usage.mjs"], ["scripts/test/measure-app-usage.test.mjs"]),
+  lane("terminal redraw measurement", "js-ts", ["scripts/measure-terminal-redraw.mjs", "scripts/fixtures/status-redraw.mjs"], ["scripts/test/measure-terminal-redraw.test.mjs"]),
+  lane("host allocation measurement", "js-ts", ["scripts/measure-host-allocations.mjs"], ["scripts/test/measure-host-allocations.test.mjs"]),
+  lane("measurement trace state", "js-ts", ["scripts/measure-trace.mjs"], ["scripts/test/measure-trace.test.mjs"]),
+  lane("B3 measurement output", "js-ts", ["scripts/b3-out.mjs"], ["scripts/test/b3-out.test.mjs"]),
+  lane("measurement footprints", "js-ts", ["scripts/footprints.mjs"], ["scripts/test/footprints.test.mjs"]),
+  lane("frame records", "js-ts", ["scripts/frame-records.mjs"], ["scripts/test/frame-records.test.mjs"]),
+  lane("application update check", "js-ts", ["scripts/check-app-update.mjs"], ["scripts/test/check-app-update.test.mjs"]),
+  lane("Go repeat tests", "js-ts", ["scripts/go-tests.mjs"], ["scripts/test/repeat-go.test.mjs"]),
+  lane("Node repeat tests", "js-ts", ["scripts/repeat-node.mjs"], ["scripts/test/repeat-node.test.mjs"]),
+  lane("push gate tests", "js-ts", ["scripts/gate-tests.mjs"], ["scripts/test/gate-tests.test.mjs"]),
+  lane("benchmark runner tests", "js-ts", ["scripts/benchmarks.mjs"], ["scripts/test/benchmarks.test.mjs"]),
+  lane("Go repeat inputs", "js-ts", ["scripts/go-repeat-inputs.mjs"], ["scripts/test/go-repeat-inputs.test.mjs"]),
+  lane("workspace registry", "js-ts", ["scripts/workspace-registry.mjs"], ["scripts/test/workspace-registry.test.mjs"]),
+  lane("platform boundary audit", "js-ts", ["scripts/check-platform-files.mjs"], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
+  lane("component boundary audit", "js-ts", ["scripts/check-boundaries.mjs"], ["scripts/test/check-boundaries.test.mjs", "scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
+  lane("plugin API", "js-ts", ["packages/plugin-api/*.js"], ["packages/plugin-api/test/**/*.mjs", "scripts/test/fixture-compositions.test.mjs", "scripts/test/surface-names.test.mjs"]),
+  lane("log contract", "js-ts", ["packages/log-contract/*.js"], ["packages/log-contract/test/**/*.mjs"]),
+  lane("workbench", "js-ts", ["packages/workbench/*.js", "packages/workbench/*.mjs"], ["packages/workbench/test/**/*.js", "packages/workbench/test/**/*.mjs"], { sharedTests: true }),
+  lane("client", "js-ts", [
+    "packages/client/*.js",
+    "packages/client/platform/**/*.js",
+    "packages/client/testing/**/*.js",
+    "packages/client/bench/**/*.mjs",
+  ], ["packages/client/test/**/*.mjs"]),
+  lane("MCP client", "js-ts", ["packages/mcp/**/*.js"], ["packages/mcp/test/**/*.mjs"]),
+  lane("mygo workbench layout", "go", ["packages/workbench-mygo/src/**/*.go"], ["packages/workbench-mygo/tests/**/*.go"]),
+  // The C file is the fault injection library that test/folder-wait-stream-start.test.mjs compiles and loads into its child process.
+  lane("window check harness", "js-ts", ["packages/window-check/*.mjs"], ["packages/window-check/test/**/*.mjs", "packages/window-check/test/platform/darwin/*.c"], { testExtensions: new Set([".mjs", ".c"]) }),
+  lane("audit of the running documents", "js-ts", ["e2e/audit-surfaces.mjs"], ["scripts/test/audit-surfaces.test.mjs"]),
+  lane("browser runtime", "js-ts", ["apps/browser/runtime/**/*.js"], ["apps/browser/test/**/*.mjs", "apps/browser/check/**/*.mjs"], { sharedTests: true }),
+  lane("Tauri runtime", "js-ts", ["apps/tauriv2/runtime/**/*.js"], ["apps/tauriv2/test/**/*.mjs"], { sharedTests: true }),
+  lane("Wails runtime", "js-ts", ["apps/wailsv3/runtime/**/*.js"], ["apps/wailsv3/test/**/*.mjs"], { sharedTests: true }),
+
+  lane("Rust language host library", "rust", ["packages/host/rust/src/**/*.rs", "packages/host/rust/build.rs"], ["packages/host/rust/tests/**/*.rs", "packages/host/rust/src/exposure_settled_test.rs", "packages/host/rust/src/documents_test.rs", "packages/host/rust/src/windows_front_test.rs", "packages/host/rust/src/sidecars_route_test.rs", "packages/host/rust/src/document_post_test.rs", "packages/host/rust/src/images_test.rs", "packages/host/rust/src/images_relay_test.rs", "packages/host/rust/src/object_counts_test.rs", "packages/host/rust/src/composition_overlay_test.rs", "packages/host/rust/src/platform/darwin/webview_overlay_test.rs", "packages/host/rust/src/platform/darwin/document_test.rs", "packages/host/rust/src/sidecar_reply_test.rs", "packages/host/rust/src/surfaces_test.rs", "packages/host/rust/src/modals_readiness_test.rs", "packages/host/rust/src/exposure_webviews_test.rs", "packages/host/rust/src/exposure_status_test.rs", "packages/host/rust/src/notifications_test.rs", "packages/host/rust/src/project_removal_test.rs", "packages/host/rust/src/endpoint_lock_test.rs", "packages/host/rust/src/windows_records_test.rs", "packages/host/rust/src/responder_test.rs", "packages/host/rust/src/sidecars_lock_test.rs", "packages/host/rust/src/sidecars_read_deadline_test.rs", "packages/host/rust/src/image_detach_test.rs", "packages/host/rust/src/start_test.rs", "packages/host/rust/src/performance_lock_test.rs", "packages/host/rust/src/workspace_lock_test.rs", "packages/host/rust/src/view_lifecycle_test.rs", "packages/host/rust/src/view_origin_test.rs", "packages/host/rust/src/view_responsiveness_test.rs", "packages/host/rust/src/view_theme_test.rs", "packages/host/rust/src/surface_close_test.rs", "packages/host/rust/src/presentation_end_test.rs", "packages/host/rust/src/view_start_test.rs", "packages/host/rust/src/log_policy_levels_test.rs", "packages/host/rust/src/view_call_peer_test.rs", "packages/host/rust/src/view_binary_test.rs", "packages/host/rust/src/presentation_wait_test.rs", "packages/host/rust/src/view_join_test.rs", "packages/host/rust/benches/**/*.rs", "packages/host/rust/tests/fixtures/**/*.json", "packages/host/rust/src/diagnostics_lock_test.rs", "packages/host/rust/src/diagnostics_input_reference_test.rs", "packages/host/rust/src/diagnostics_test.rs", "packages/host/rust/src/platform/darwin/input_reference_test.rs", "packages/host/rust/src/log_policy_watch_hook_lock_test.rs", "packages/host/rust/src/process_lock_hook_lock_test.rs", "packages/host/rust/src/assets_lock_test.rs", "packages/host/rust/src/deep_link_lock_test.rs", "packages/host/rust/src/log_query_lock_test.rs", "packages/host/rust/src/debug_follow_lock_test.rs", "packages/host/rust/src/source_origins_test.rs", "packages/host/rust/src/sidecar_routes_test.rs", "packages/host/rust/src/sidecars_session_retention_test.rs", "packages/host/rust/src/installed_reads_test.rs", "packages/host/rust/src/routine/async_runtime_test.rs", "packages/host/rust/src/platform/windows/devtools_input_test.rs", "packages/host/rust/src/platform/windows/show_test.rs", "packages/host/rust/src/platform/windows/process_failure_test.rs"], { testExtensions: new Set([".rs", ".json"]) }),
+  lane("Tauri framework adapter", "rust", ["packages/host/tauriv2/src/**/*.rs"], ["packages/host/tauriv2/tests/**/*.rs", "packages/host/tauriv2/src/plugins_starter_test.rs"]),
+  lane("Tauri application bootstrap", "rust", ["apps/tauriv2/src/main.rs", "apps/tauriv2/build.rs"], ["e2e/**/*.mjs", "e2e/platform/platform.js", "e2e/platform/darwin/darwin.js", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js", "e2e/fixtures/*/*/ui/*.html"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
+
+  lane("Go language host library", "go", ["packages/host/go/src/**/*.go"], ["packages/host/go/tests/**/*.go", "packages/host/go/tests/fixtures/**/*.json", "packages/host/go/src/platform/windows/devtools_input_test.go", "packages/host/go/src/platform/windows/show_test.go", "packages/host/go/src/step_records_test.go", "packages/host/go/src/diagnostics_gc_loop_test.go", "packages/host/go/src/diagnostics_no_main_page_test.go", "packages/host/go/src/exposure_settled_test.go", "packages/host/go/src/modals_workbench_test.go", "packages/host/go/src/window_frames_test.go", "packages/host/go/src/window_page_process_test.go", "packages/host/go/src/event_log_wake_test.go", "packages/host/go/src/projects_test.go", "packages/host/go/src/windows_main_page_test.go", "packages/host/go/src/surface_elements_test.go", "packages/host/go/src/document_post_test.go", "packages/host/go/src/images_relay_test.go", "packages/host/go/src/image_detach_test.go", "packages/host/go/src/responder_test.go", "packages/host/go/src/start_test.go", "packages/host/go/src/diagnostics_test.go", "packages/host/go/src/diagnostics_input_reference_test.go", "packages/host/go/src/diagnostics_clock_test.go", "packages/host/go/src/composition_overlay_test.go", "packages/host/go/src/platform/darwin/webview_overlay_test.go", "packages/host/go/src/platform/darwin/document_test.go", "packages/host/go/src/platform/darwin/input_reference_test.go", "packages/host/go/src/exposure_status_test.go", "packages/host/go/src/exposure_webviews_test.go", "packages/host/go/src/modals_readiness_test.go", "packages/host/go/src/object_counts_test.go", "packages/host/go/src/view_lifecycle_test.go", "packages/host/go/src/view_responsiveness_test.go", "packages/host/go/src/view_theme_test.go", "packages/host/go/src/view_start_test.go", "packages/host/go/src/log_policy_levels_test.go", "packages/host/go/src/view_call_peer_test.go", "packages/host/go/src/view_call_record_test.go", "packages/host/go/src/view_error_test.go", "packages/host/go/src/view_binary_test.go", "packages/host/go/src/documents_test.go", "packages/host/go/src/presentation_wait_test.go", "packages/host/go/src/view_join_test.go", "packages/host/go/src/sidecar_reply_test.go", "packages/host/go/src/surfaces_test.go", "packages/host/go/src/view_origin_test.go", "packages/host/go/src/source_origins_test.go", "packages/host/go/src/sidecar_routes_test.go", "packages/host/go/src/sidecars_session_retention_test.go", "packages/host/go/src/plugins_starter_test.go", "packages/host/go/src/images_test.go", "packages/host/go/src/windows_front_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
+  lane("Wails framework adapter", "go", ["packages/host/wailsv3/src/**/*.go"], ["packages/host/wailsv3/tests/**/*.go"], { sharedTests: true }),
+  lane("mygo framework adapter", "go", ["packages/host/mygo/src/**/*.go"], ["packages/host/mygo/tests/**/*.go", "packages/host/mygo/src/frames_test.go"], { sharedTests: true }),
+  lane("empty mygo window benchmark", "go", ["packages/host/mygo/benchmark/empty_window.go", "packages/host/mygo/benchmark/cmd/main.go"], ["packages/host/mygo/benchmark/empty_window_test.go"], { sharedTests: true }),
+  lane("Wails command line", "go", ["packages/sok/go/src/**/*.go"], ["packages/sok/go/tests/**/*.go", "packages/sok/go/src/diagnostics_test.go", "packages/sok/go/src/dev_test.go", "packages/sok/go/src/wailsv3_test.go", "packages/sok/go/src/mygo_test.go", "packages/sok/go/src/debug_test.go", "packages/sok/go/src/event_log_loss_test.go", "packages/sok/go/src/event_log_idle_test.go"]),
+  lane("Tauri command line", "rust", ["packages/sok/rust/src/**/*.rs"], ["packages/sok/rust/tests/**/*.rs", "packages/sok/rust/src/event_log_lock_test.rs", "packages/sok/rust/src/event_log_flush_test.rs", "packages/sok/rust/src/debug_test.rs", "packages/sok/rust/src/event_log_loss_test.rs", "packages/sok/rust/src/process_wait_test.rs"]),
+  lane("Wails application bootstrap", "go", ["apps/wailsv3/src/main.go"], ["e2e/**/*.mjs", "e2e/platform/platform.js", "e2e/platform/darwin/darwin.js", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js", "e2e/fixtures/*/*/ui/*.html"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
+  lane("mygo application bootstrap", "go", ["apps/mygo/src/main.go"], ["packages/host/mygo/tests/framework_test.go"], { sharedTests: true }),
+
+  lane("Darwin clipboard", "objective-c", ["native/darwin/src/clipboard.m"], ["native/darwin/tests/clipboard_test.m"], { sharedTests: true }),
+  lane("Darwin link open", "objective-c", ["native/darwin/src/link.m"], ["native/darwin/tests/link_test.m"], { sharedTests: true }),
+  lane("Darwin diagnostic reports folder", "objective-c", ["native/darwin/src/diagnostic_reports.m"], ["native/darwin/tests/diagnostic_reports_test.m"], { sharedTests: true }),
+  lane("Darwin activity observers", "objective-c", ["native/darwin/src/activity_observers.m"], ["native/darwin/tests/activity_observers_test.m"], { sharedTests: true }),
+  lane("Darwin notifications", "objective-c", ["native/darwin/src/notifications.m"], ["native/darwin/tests/notifications_test.m"], { sharedTests: true }),
+  lane("Darwin document and surface", "objective-c", [
+    "native/darwin/src/document_view.m",
+    "native/darwin/src/image_region.m",
+    "native/darwin/src/declared_color_space.m",
+    "native/darwin/src/image_capture_match.m",
+    "native/darwin/src/surface_layout.m",
+    "native/darwin/src/webview_geometry.m",
+  ], [
+    "native/darwin/tests/document_view_test.m",
+    "native/darwin/tests/image_region_test.m",
+    "native/darwin/tests/image_region_capture_presentation_test.m",
+    "native/darwin/tests/image_nonce_ownership_test.m",
+    "native/darwin/tests/image_capture_match_test.m",
+    "native/darwin/tests/presentation_order_test.m",
+    "native/darwin/tests/surface_layout_test.m",
+    "native/darwin/tests/webview_geometry_test.m",
+    "native/darwin/tests/window_cursor_rects_test.m",
+    "native/darwin/tests/webview_inspector_test.m",
+    "native/darwin/tests/surface_host_test.m",
+    "native/darwin/tests/surface_keyboard_test.m",
+    "native/darwin/tests/surface_container_test.m",
+    "native/darwin/tests/surface_layout_observe_test.m",
+  ], { sharedTests: true }),
+  lane("Darwin input", "objective-c", [
+    "native/darwin/src/input_inject.m",
+    "native/darwin/src/input_source.m",
+    "native/darwin/src/input_reference.m",
+    "native/darwin/src/webview_input.m",
+  ], [
+    "native/darwin/tests/image_region_ime_test.m",
+    "native/darwin/tests/input_activate_test.m",
+    "native/darwin/tests/input_reference_test.m",
+    "native/darwin/tests/input_inject_test.m",
+    "native/darwin/tests/webview_focus_test.m",
+    "native/darwin/tests/webview_input_test.m",
+  ], { sharedTests: true }),
+  lane("Darwin window", "objective-c", ["native/darwin/src/window_*.m"], ["native/darwin/tests/window_*_test.m"], { sharedTests: true }),
+  lane("Darwin UI queue", "objective-c", ["native/darwin/src/ui_queue.m"], ["native/darwin/tests/ui_queue_test.m"], { sharedTests: true }),
+  lane("Darwin process exit", "objective-c", ["native/darwin/src/process_exit.m"], ["native/darwin/tests/process_exit_test.m"], { sharedTests: true }),
+  lane("Darwin application log", "objective-c", ["native/darwin/src/application_log.m"], ["native/darwin/tests/application_log_test.m"], { sharedTests: true }),
+  lane("Darwin event ring", "objective-c", ["native/darwin/src/event_ring.m"], ["native/darwin/tests/event_ring_test.m", "native/darwin/tests/event_gate_wait_test.m"], { sharedTests: true }),
+  lane("Darwin observe", "objective-c", ["native/darwin/src/observe.m"], ["native/darwin/tests/observe_test.m"], { sharedTests: true }),
+  lane("Darwin mouse buttons", "objective-c", ["native/darwin/src/mouse_buttons.m"], ["native/darwin/tests/mouse_buttons_test.m"], { sharedTests: true }),
+  lane("Darwin quit request", "objective-c", ["native/darwin/src/quit_request.m"], ["native/darwin/tests/quit_request_test.m"], { sharedTests: true }),
+  lane("Darwin stall watch", "objective-c", ["native/darwin/src/stall_watch.m"], ["native/darwin/tests/stall_watch_test.m"], { sharedTests: true }),
+  lane("Darwin memory pressure", "objective-c", ["native/darwin/src/memory_pressure.m"], ["native/darwin/tests/memory_pressure_test.m", "native/darwin/tests/document_backforward_test.m"], { sharedTests: true }),
+  lane("Darwin process identity", "objective-c", ["native/darwin/process-identity/src/process_identity.m"], ["native/darwin/process-identity/tests/**/*.m", "native/darwin/process-identity/tests/**/*.sh"], { testExtensions: new Set([".m", ".sh"]) }),
+  lane("Darwin process identity Node test entrypoint", "js-ts", ["native/darwin/process-identity/tests/package.test.mjs"], ["native/darwin/process-identity/tests/package.test.mjs"]),
+  lane("Darwin webview navigation", "objective-c", ["native/darwin/src/webview_navigation.m"], ["native/darwin/tests/webview_navigation_test.m"], { sharedTests: true }),
+  lane("Darwin capture", "objective-c", ["native/darwin/src/capture.m"], ["native/darwin/tests/capture_test.m", "native/darwin/tests/capture_covered_test.m", "native/darwin/tests/capture_pressure_test.m", "native/darwin/tests/capture_metadata_test.m", "native/darwin/tests/capture_resize_test.m", "native/darwin/tests/capture_checker_test.m", "native/darwin/tests/capture_file_checker_test.m", "native/darwin/tests/capture_storage_test.m", "native/darwin/tests/capture_frame_test.m", "native/darwin/tests/capture_lifecycle_test.m", "native/darwin/tests/capture_preparation_test.m", "native/darwin/tests/capture_cleanup_test.m", "native/darwin/tests/capture_callback_test.m", "native/darwin/tests/capture_source_writer_test.m"], { sharedTests: true }),
+  lane("Darwin capture frame identity", "objective-c", ["native/darwin/src/capture_frame_identity.m"], ["native/darwin/tests/capture_frame_identity_test.m"], { sharedTests: true }),
+  lane("Darwin dock menu", "objective-c", ["native/darwin/src/dock_menu.m"], ["native/darwin/tests/dock_menu_test.m"], { sharedTests: true }),
+  lane("Darwin appearance", "objective-c", ["native/darwin/src/appearance.m"], ["native/darwin/tests/appearance_test.m"], { sharedTests: true }),
+  lane("Darwin native interfaces", "native-interface", ["native/darwin/src/**/*.h", "native/darwin/process-identity/**/*.h"], ["native/darwin/tests/**/*.m", "native/darwin/tests/support/*.h"], { testLanguage: "objective-c", sharedTests: true, testExtensions: new Set([".m", ".mm", ".h"]) }),
+  lane("browser environment declaration", "declaration", ["apps/browser/environment.json"], ["apps/browser/test/environment.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("Tauri environment declaration", "declaration", ["apps/tauriv2/environment.json"], ["apps/tauriv2/test/environment.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("Wails environment declaration", "declaration", ["apps/wailsv3/environment.json"], ["apps/wailsv3/test/environment.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("mygo environment declaration", "declaration", ["apps/mygo/environment.json"], ["apps/mygo/test/environment.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("Go host bridge", "js-ts", ["packages/host/go/src/bridge.js"], ["apps/wailsv3/test/runtime-contract.test.mjs"], { sharedTests: true }),
+  lane("Go host native webview bridge", "objective-c", ["packages/host/go/src/platform/darwin/webview.m"], ["packages/host/go/tests/documents_test.go"], { testLanguage: "go", sharedTests: true }),
+  lane("Go host main-thread interface", "native-interface", ["packages/host/go/src/platform/darwin/main_thread.h"], ["packages/host/wailsv3/tests/platform/darwin/main_thread_stack_test.go", "packages/host/go/tests/main_thread_test.go", "packages/host/go/src/platform/darwin/main_test.go", "packages/host/go/src/main_test.go"], { testLanguage: "go", sharedTests: true }),
+  lane("Go host main-thread functions", "objective-c", ["packages/host/go/src/platform/darwin/main_thread.m"], ["packages/host/wailsv3/tests/platform/darwin/main_thread_stack_test.go", "packages/host/go/tests/main_thread_test.go", "packages/host/go/src/platform/darwin/main_test.go", "packages/host/go/src/main_test.go"], { testLanguage: "go", sharedTests: true }),
+  lane("Workbench styles", "stylesheet", ["packages/workbench/app.css", "packages/workbench/library.css"], ["packages/workbench/test/background.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("Workbench declarations", "declaration", ["packages/workbench/exposure.json"], ["packages/workbench/test/exposure.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("mygo workbench declarations", "declaration", ["packages/workbench-mygo/src/exposure.json"], ["scripts/test/check-exposure.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("Workbench shortcuts", "declaration", ["packages/workbench/shortcuts.json"], ["scripts/test/shortcut-table.test.mjs"], { testLanguage: "js-ts" }),
+  lane("Workbench documents", "document", ["packages/workbench/index.html", "packages/workbench/overlay.html"], ["packages/workbench/test/published-imports.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+];
+
+// A feature link is stronger than a file owner: it names the implementation, the behavior test,
+// the expected result, and the verification level of one feature.
+// The inventory remains structural, and the behavior is proved by the referenced test.
+const FEATURE_LINKS = [
+  {
+    id: "F610",
+    implementation: [{ file: "native/darwin/src/capture.m", symbol: "beginCaptureSourceArtifacts" }],
+    tests: [{ file: "native/darwin/tests/capture_metadata_test.m", id: "a capture writes the source file only when its reader needs it" }],
+    expected: "A recording writes source files only when it has frame identity.",
+    levels: ["unit"],
+  },
+  {
+    id: "F608",
+    implementation: [{ file: "e2e/platform/darwin/darwin.js", symbol: "build-capture-text-path" }],
+    tests: [{ file: "scripts/test/soksak-scripts.test.mjs", id: "the native target that the window-check setup runs is one the native Makefile declares" }],
+    expected: "The window-check setup builds the content recognizer through a target that the native Makefile declares.",
+    levels: ["unit"],
+  },
+  {
+    id: "F525",
+    implementation: [
+      { file: "packages/window-check/folder-wait.mjs", symbol: "RESCAN_REPORT" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/folder-wait-drop.test.mjs", id: "a report of lost events without a state rejects no wait and reads the folder once more" },
+    ],
+    expected: "A wait for a folder state reads the folder again at a report of lost events and goes on.",
+    levels: ["unit"],
+  },
+  {
+    id: "F560",
+    implementation: [
+      { file: "native/darwin/src/webview_input.m", symbol: "static void pointerLeft(WKWebView *view, NSEvent *event)" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/webview_input_test.m", id: "a move off the view on top leaves it before its exit comes" },
+      { file: "native/darwin/tests/webview_input_test.m", id: "overlapping areas hover the view on top" },
+    ],
+    expected: "A page that loses the pointer stops hovering, in any order of the moves and of the tracking events.",
+    levels: ["native"],
+  },
+  {
+    id: "F570",
+    implementation: [
+      { file: "packages/workbench-mygo/src/binder.go", symbol: "unbound := []Unbound{}" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/audit_test.go", id: "TestAnAuditWithNothingUnboundIsAnEmptyList" },
+    ],
+    expected: "The audit of the mygo host states an empty list when nothing is unbound.",
+    levels: ["unit"],
+  },
+  {
+    id: "F397",
+    implementation: [
+      { file: "packages/host/rust/src/event_record.rs", symbol: "pub fn quit_with_cause(cause: &str, quit: impl FnOnce()) {" },
+      { file: "packages/host/go/src/event_record.go", symbol: "func QuitWithCause(cause string, quit func()) {" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/termination_test.rs", id: "a_quit_stores_its_cause_before_it_runs" },
+      { file: "packages/host/go/tests/termination_test.go", id: "TestAQuitStoresItsCauseBeforeItRuns" },
+    ],
+    expected: "A request to end the process stores log.closed with its cause before quit runs.",
+    levels: ["unit"],
+  },
+  {
+    id: "F398",
+    implementation: [
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "format!(\"close {}: {error}\", answer.surface)," },
+      { file: "packages/host/go/src/sidecars.go", symbol: "if failure != nil && (pending || stopped) {" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "failed_close_answer_is_logged_before_the_closing_entry_ends" },
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestFailedCloseAnswerIsLoggedBeforeTheClosingEntryEnds" },
+    ],
+    expected: "The failure of a close answer is written to the log before the closing entry ends.",
+    levels: ["unit"],
+  },
+  {
+    id: "F399",
+    implementation: [
+      { file: "native/darwin/src/document_view.m", symbol: "fetchDataRecordsOfTypes" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/document_store_end_test.m", id: "no process writes into the folder of a store that loaded nothing" },
+    ],
+    expected: "The end of a store whose document loaded nothing also ends the network process of the store, so no process writes into its folder after the end.",
+    levels: ["unit"],
+  },
+  {
+    id: "F515",
+    implementation: [{ file: "rust-toolchain.toml", symbol: "channel = \"1.98.0\"" }],
+    tests: [{ file: "scripts/test/workflow-setup.test.mjs", id: "setup-rust installs the repository toolchain with format and lint components" }],
+    expected: "rust-toolchain.toml declares the Rust toolchain of every cargo command of the repository, and the setup action of the workflows installs the version and the components that it declares.",
+    levels: ["unit"],
+  },
+  {
+    id: "F502-2-5",
+    implementation: [
+      { file: "scripts/workspace-registry.mjs", symbol: "export function buildWorkspaceRegistry(" },
+      { file: "scripts/workspace-registry.mjs", symbol: "export function sourceRevision(" },
+      { file: "scripts/workspace-registry.mjs", symbol: "export function checkOptions(" },
+      { file: "scripts/workspace-registry.mjs", symbol: "export function publicRegistryEntries(" },
+      { file: "scripts/workspace-registry.mjs", symbol: "export function buildPublicRegistry(" },
+      { file: "scripts/workspace-registry.mjs", symbol: "export async function readIndex(" },
+    ],
+    tests: [
+      { file: "scripts/test/workspace-registry.test.mjs", id: "SIDECARS=diagnostic releases each sidecar with PROFILE=release FEATURES=diagnostics and records the revision of each sidecar repository" },
+      { file: "scripts/test/workspace-registry.test.mjs", id: "the default registry releases each sidecar as its make release builds it and removes the revision record of an earlier diagnostic run" },
+      { file: "scripts/test/workspace-registry.test.mjs", id: "the revision of a sidecar repository counts a tracked modification as a change and fails for a folder without a repository" },
+      { file: "scripts/test/workspace-registry.test.mjs", id: "the registry options take SIDECARS=diagnostic and PLUGINS=public, and PLUGINS=public only with SIDECARS=diagnostic" },
+      { file: "scripts/test/workspace-registry.test.mjs", id: "PLUGINS=public lists the plugin versions of the public registry whose sidecar ranges the diagnostic sidecar releases satisfy" },
+      { file: "scripts/test/workspace-registry.test.mjs", id: "PLUGINS=public fails when leaving out a version would make an installation select an older version or no version" },
+      { file: "scripts/test/workspace-registry.test.mjs", id: "PLUGINS=public writes the public plugin entries beside the sidecar entries of make build-registry SIDECARS=diagnostic and builds no release" },
+      { file: "scripts/test/workspace-registry.test.mjs", id: "PLUGINS=public fails when the checkout holds no sidecar releases of make build-registry SIDECARS=diagnostic" },
+      { file: "scripts/test/workspace-registry.test.mjs", id: "the index of the public registry is read from its address, and an answer other than 200 is an error" },
+    ],
+    expected: "`make build-registry SIDECARS=diagnostic` runs `make release PROFILE=release FEATURES=diagnostics` of each sidecar repository and writes `sidecar-revisions.json` beside its index with the revision and the working tree changes of each sidecar repository; `make build-registry SIDECARS=diagnostic PLUGINS=public` packs and builds nothing and writes an index of the plugins of the public registry beside those sidecar releases, and fails when they are missing.",
+    levels: ["unit"],
+  },
+  {
+    id: "F502-2-3",
+    implementation: [
+      { file: "scripts/measure-app-usage.mjs", symbol: "export async function prepareState(s, state, deps)" },
+      { file: "scripts/measure-app-usage.mjs", symbol: "export async function waitIdle({ sessions, frames, sleep })" },
+      { file: "scripts/measure-app-usage.mjs", symbol: "export async function untilFramesQuiet({ frames, sleep = delay, intervals = QUIET_INTERVALS })" },
+      { file: "scripts/measure-app-usage.mjs", symbol: "export async function measurePointer({ s, measure, frameRecords, restore, tail, records })" },
+      { file: "scripts/measure-app-usage.mjs", symbol: "export function gestureFigures({ records, dropped, window, framesBefore, framesAfter, fromSeq, toSeq })" },
+      { file: "scripts/footprints.mjs", symbol: "export async function settledFootprints({ readFootprints, readFrames, sleep, readings = SETTLE_READINGS })" },
+      { file: "scripts/footprints.mjs", symbol: "export async function readFootprint(pid, run)" },
+      { file: "scripts/frame-records.mjs", symbol: "export function requireCompleteGesture({ records, dropped, window, framesBefore, framesAfter, fromSeq, toSeq })" },
+      { file: "scripts/frame-records.mjs", symbol: "export function frameTimes(records)" },
+      { file: "scripts/frame-records.mjs", symbol: "export function stepTimes(records)" },
+      { file: "scripts/frame-records.mjs", symbol: "export function firstFrameMs(records)" },
+      { file: "scripts/measure-app-usage.mjs", symbol: "export async function applicationRows({ configDir, run = execute, realpath = realpathSync })" },
+      { file: "scripts/measure-app-usage.mjs", symbol: "export async function windowApplicationRows({ configDir, statuses, run = execute, realpath = realpathSync })" },
+      { file: "scripts/measure-app-usage.mjs", symbol: "export async function readCpuSeconds(run)" },
+      { file: "scripts/measure-app-usage.mjs", symbol: "export function execute(command, args)" },
+      { file: "scripts/measure-app-usage.mjs", symbol: "export function requireOcclusion(state, readings)" },
+      { file: "scripts/measure-app-usage.mjs", symbol: "export function windowRows(window, configDir, status)" },
+      { file: "scripts/measure-terminal-redraw.mjs", symbol: "export async function prepareRedraw(s, plugin, root)" },
+      { file: "scripts/measure-terminal-redraw.mjs", symbol: "export async function measureRegion({ s, tab, interval, measure, covered, windowServer })" },
+      { file: "scripts/measure-terminal-redraw.mjs", symbol: "export function frameCost({ rows, totals, presented, seconds })" },
+      { file: "scripts/measure-app-usage.mjs", symbol: "export function usageMeasurements({ app, marks, faultLines, gesture })" },
+      { file: "scripts/measure-app-usage.mjs", symbol: "export function usageOutput({ options, measurement, gesture, faultLines })" },
+      { file: "scripts/measure-terminal-redraw.mjs", symbol: "export function redrawConditions({ status, window, trace, policy })" },
+      { file: "scripts/measure-terminal-redraw.mjs", symbol: "export function redrawMeasurements(cost)" },
+      { file: "scripts/measure-app-usage.mjs", symbol: "export const B3_MEASUREMENTS" },
+      { file: "scripts/measure-terminal-redraw.mjs", symbol: "export const B3_MEASUREMENTS" },
+    ],
+    tests: [
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the options take a state, the idle wait, the pointer step and the trace state" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the B3 measurements of app-usage are the host and application figures, the WebKit processes and the change of the frame counters" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the B3 measurements add the footprint after the pointer move, the error lines of the fault and the pointer move p90" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "a host whose host.window reports no frame counters has no frames and commandBuffers measurements, and a partial counter fails" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the B3 output of app-usage takes its conditions from b3-out with the performance switch of the trace state" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "a pointer output holds the keys of one trace state: the cpu and footprint keys under TRACE 0 or 1, pointerMoveP90Ms alone under frame-records" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "TRACE frame-records is the trace state of the pointer step and needs --step pointer" },
+      { file: "scripts/test/measure-trace.test.mjs", id: "a target that also measures FRAME_RECORDS reads it from TRACE and names its three states in the error" },
+      { file: "scripts/test/measure-terminal-redraw.test.mjs", id: "the B3 output of the redraw takes its conditions from b3-out with the performance switch of the trace state" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the B3 keys of app-usage end in their unit, are listed for each trace state, and a measurement with every figure holds every key of TRACE 0 and 1" },
+      { file: "scripts/test/frame-records.test.mjs", id: "the U7 events are the frame, commit and step records that the U7 row of the plan names" },
+      { file: "scripts/test/frame-records.test.mjs", id: "the frame time runs from the start of a frame to its presentation request less its wait for a drawable" },
+      { file: "scripts/test/frame-records.test.mjs", id: "the step time runs from the entry of each step to its return and keeps the kind of the step" },
+      { file: "scripts/test/frame-records.test.mjs", id: "the first frame time runs from the start of the first frame of the gesture to its presentation request" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "a nested step is part of the step that contains it and is not added again" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the process listing of a configuration folder holds its host, its sidecars and the WebKit services of the domain of its host" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the processes of the windows of an application are its listing with the page and document rows of each window, one row per pid" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the cpu reading runs ps -axo pid=,time= and names the command of a failure" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the executor resolves to the status and the output of a command, and to the error of a command that does not start" },
+      { file: "scripts/test/measure-terminal-redraw.test.mjs", id: "the B3 measurements of the redraw are the cpu milliseconds per presented frame, the frame rate and the presented frames" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "a window without a main page has no page process row and is no error" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "every window must be visible except the covered first window of S9" },
+      { file: "scripts/test/footprints.test.mjs", id: "footprints settle when two readings 5 seconds apart differ by less than 1,024 KB and the reading is 3 seconds after the last frame" },
+      { file: "scripts/test/footprints.test.mjs", id: "reading a footprint runs footprint -p PID -f bytes and names the process of a failure" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the idle wait waits for the cursor idle timeout of every term tab and then for 3 seconds without a frame" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "without sleep the quiet wait waits the 3 seconds of G2 on the timer of the module" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the gesture figures are the 90th percentile of the mouseMoved: steps with the hitTest: step right before each" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the pointer step reads the frames of the gesture before the flush, so a frame presented after the flush is in neither" },
+      { file: "scripts/test/frame-records.test.mjs", id: "a gesture with fewer frame records than the change of frames fails and names the missing records" },
+      { file: "scripts/test/frame-records.test.mjs", id: "a gesture that contains a seq range that a log.dropped event names fails" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the pointer step sends input.pointer moves without activating the window, and repeats them in the trace state of the frame records to read the U7 records" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "S0b closes the project and waits for the exit of each WebContent process of a view page or a document region" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "S12 makes one layout draw fail and waits for its error line, and S15 opens the settings window" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "measureApps reads a mygo application without a page row, settles its footprints and reads the marks around the cpu interval" },
+      { file: "scripts/test/measure-terminal-redraw.test.mjs", id: "the measurement opens one tab of the plugin in a new project window of 760 by 614 points" },
+      { file: "scripts/test/measure-terminal-redraw.test.mjs", id: "the region measurement reads presentedFrames right around the cpu interval and fails while the window is occluded" },
+      { file: "scripts/test/measure-terminal-redraw.test.mjs", id: "the cpu time of each process is divided by the frames that the region presented over the interval" },
+    ],
+    expected: "make measure-app-usage prepares the states of the three-host benchmark, waits for the idle state, measures a pointer move with the U7 records of a window without a main page and sets the trace state of TRACE, and make measure-terminal-redraw opens one tab of PLUGIN in a new project window of 760 by 614 points and divides the CPU time of each process by the frames that the region of the tab presented; with B3_OUT both write the figures of a run and its conditions as a B3 record.",
+    levels: ["unit"],
+  },
+  {
+    id: "F502-2-4",
+    implementation: [
+      { file: "scripts/measure-trace.mjs", symbol: "export async function applyTrace" },
+      { file: "scripts/measure-object-counts.mjs", symbol: "export function operationSteps" },
+      { file: "scripts/measure-object-counts.mjs", symbol: "export function countsOf" },
+      { file: "scripts/measure-host-allocations.mjs", symbol: "export async function prepare" },
+      { file: "scripts/measure-host-calls.mjs", symbol: "the mygo host has no main page" },
+      { file: "scripts/measure-page-memory.mjs", symbol: "the mygo host has no main page" },
+      { file: "scripts/b3-out.mjs", symbol: "export function writeB3Out" },
+      { file: "scripts/b3-out.mjs", symbol: "export function readB3Out" },
+      { file: "scripts/measure-object-counts.mjs", symbol: "export function b3Measurements" },
+      { file: "scripts/measure-object-counts.mjs", symbol: "export function b3Output" },
+      { file: "scripts/measure-host-allocations.mjs", symbol: "export function b3Output" },
+      { file: "scripts/measure-host-allocations.mjs", symbol: "export function windowFrames" },
+    ],
+    tests: [
+      { file: "scripts/test/measure-trace.test.mjs", id: "TRACE 0 turns the trace off under the default policy, and TRACE 1 turns it on with the classes call and frame at debug" },
+      { file: "scripts/test/measure-trace.test.mjs", id: "applying a trace state changes each setting through core.settings.change and resolves when the policy file holds its policy" },
+      { file: "scripts/test/measure-object-counts.test.mjs", id: "a window of the mygo host reads the host footprint and the runtime figures in every repetition and no page process" },
+      { file: "scripts/test/measure-object-counts.test.mjs", id: "the divider drag splits a card, drags the boundary of the split through diagnostics.drag and closes the split" },
+      { file: "scripts/test/measure-object-counts.test.mjs", id: "the menu and the settings window open and close through their declared commands and wait for their statuses" },
+      { file: "scripts/test/measure-object-counts.test.mjs", id: "every count of every object member of the reply outside runtime, documents and sessions is a count of the measurement" },
+      { file: "scripts/test/measure-host-allocations.test.mjs", id: "the host is the process of the release bundle of the mygo host that has the --config-dir of the application, and the trace state is set" },
+      { file: "scripts/test/measure-host-calls.test.mjs", id: "a window whose host.window reports pageProcess null fails before any request with the error of the mygo host" },
+      { file: "scripts/test/measure-page-memory.test.mjs", id: "a window whose host.window reports pageProcess null fails before any step with the error of the mygo host" },
+      { file: "scripts/test/b3-out.test.mjs", id: "the B3 output holds the measurements and the conditions, and refuses a value that is not a number, passed or failed" },
+      { file: "scripts/test/b3-out.test.mjs", id: "the reader returns what the writer wrote and refuses a file outside the form with the file and the bad key" },
+      { file: "scripts/test/measure-object-counts.test.mjs", id: "B3_MEASUREMENTS declares the keys of the B3 output of object-counts, which b3Measurements gives" },
+      { file: "scripts/test/measure-object-counts.test.mjs", id: "the B3 output of object-counts states the performance switch that TRACE set, the policy and the window it measured" },
+      { file: "scripts/test/measure-host-allocations.test.mjs", id: "the measurement records the totals and the footprint at start and each minute, then the footprint after it settles by the rule of G3" },
+      { file: "scripts/test/measure-host-allocations.test.mjs", id: "B3_MEASUREMENTS declares hostFootprintKb, the settled footprint in KB that b3Output gives with the conditions of the windows" },
+      { file: "scripts/test/b3-out.test.mjs", id: "the conditions of a run are the refresh rate and the backing scale that every window shares, the content size of the first window, the performance switch and the policy" },
+      { file: "scripts/test/measure-object-counts.test.mjs", id: "the B3 measurements count the counts that change after the first repetition and the figures that grow from repetitions 11-20 to 21-30" },
+    ],
+    expected: "The measurement targets take the mygo host: object-counts and host-allocations set the trace state of TRACE, host-allocations finds the host by its --config-dir, object-counts adds a divider drag, a menu and the settings window and reads the runtime figures, the added counts and the host footprint without a page process, and the main page targets fail with the error of the mygo host; with B3_OUT, object-counts writes the S3 measurements and host-allocations the settled host footprint of S4 with the conditions of the run through the single writer and reader of the B3 output.",
+    levels: ["unit"],
+  },
+  {
+    id: "F502-6",
+    implementation: [
+      { file: "go.work", symbol: "go 1.27.3" },
+      { file: "packages/host/go/go.mod", symbol: "go 1.27.3" },
+      { file: "packages/host/wailsv3/go.mod", symbol: "go 1.27.3" },
+      { file: "packages/sok/go/go.mod", symbol: "go 1.27.3" },
+      { file: "apps/wailsv3/go.mod", symbol: "go 1.27.3" },
+    ],
+    tests: [{ file: "scripts/test/workflow-setup.test.mjs", id: "go.work and every module that it uses declare Go 1.27.3" }],
+    expected: "`go.work` and every module that it uses declare Go 1.27.3, so every Go build of core runs on Go 1.27.3 when CI installs the version of `go.work` with `GOTOOLCHAIN=local`.",
+    levels: ["unit"],
+  },
+  {
+    id: "F516",
+    implementation: [
+      { file: "native/darwin/src/document_view.m", symbol: "\"  if (resources !== null) { resources.disconnect(); resources = null; }\"" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/document_page_cache_test.m", id: "the element stream sends a snapshot of the restored page after its reset" },
+      { file: "native/darwin/tests/document_page_cache_test.m", id: "the request stream sends the navigation and style sheet entries of the restored page after its reset" },
+    ],
+    expected: "A page that a document region restores from its back-forward cache sends a snapshot and its navigation and resource entries after the reset of its streams.",
+    levels: ["unit"],
+  },
+  {
+    id: "F514",
+    implementation: [
+      { file: "packages/host/rust/src/documents.rs", symbol: "let Err(reason) = configure_steps(native, document, setup) else {" },
+      { file: "packages/host/rust/src/documents.rs", symbol: "let reason = match configure(handle).and_then(|()| load(handle, &address)) {" },
+      { file: "packages/host/go/src/documents.go", symbol: "func configureDocument(document unsafe.Pointer, setup documentSetup) error {" },
+    ],
+    tests: [
+      { file: "packages/host/rust/src/documents_test.rs", id: "a_failed_step_of_the_creation_closes_the_document" },
+      { file: "packages/host/rust/src/documents_test.rs", id: "a_creation_without_failure_keeps_the_document_and_a_failed_close_is_reported" },
+      { file: "packages/host/rust/tests/documents_test.rs", id: "a_failed_configuration_or_load_of_a_view_closes_the_view" },
+      { file: "packages/host/go/src/documents_test.go", id: "TestAFailedStepOfTheCreationClosesTheDocument" },
+      { file: "packages/host/go/src/documents_test.go", id: "TestACreationWithoutFailureKeepsTheDocument" },
+      { file: "packages/host/go/src/surfaces_test.go", id: "TestAFailedConfigurationOrLoadOfAViewClosesTheView" },
+    ],
+    expected: "Every failure after the native document of a document region or of a view exists closes the document before the error returns, in both hosts, and a failed close is reported with the failure.",
+    levels: ["unit"],
+  },
+  {
+    id: "F502-2-1",
+    implementation: [
+      { file: "packages/host/go/src/images.go", symbol: "func (i *Images) PresentedFrames(key ImageKey) (uint64, error) {" },
+      { file: "packages/host/rust/src/images.rs", symbol: "pub fn presented_frames(&self, key: &Key) -> Result<u64, String> {" },
+      { file: "packages/host/go/src/exposure.go", symbol: "type WindowFrameCounters struct {" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "fn window_frame_counters() -> serde_json::Map<String, Value> {" },
+      { file: "packages/host/go/src/diagnostics.go", symbol: "func nativeDrag(plan dragPlan, from point, deliver func(PointerInput) error, step func()) (map[string]any, error) {" },
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn native_drag(" },
+      { file: "packages/workbench/observe.js", symbol: "function boundaryPoint(axis, line) {" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/images_test.go", id: "TestWindowRegionCountsTheFramesThatTheHostMarkedPresented" },
+      { file: "packages/host/rust/src/images_test.rs", id: "window_region_counts_the_frames_that_the_host_marked_presented" },
+      { file: "packages/host/go/src/exposure_webviews_test.go", id: "TestWindowFrameCountersAreNullBecauseWebKitDrawsTheWorkbench" },
+      { file: "packages/host/rust/src/exposure_webviews_test.rs", id: "window_frame_counters_are_null_because_webkit_draws_the_workbench" },
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestNativeDragDeliversThePressTheStepsAndTheReleaseOfEachRoundTrip" },
+      { file: "packages/host/rust/src/diagnostics_test.rs", id: "native_drag_delivers_the_press_the_steps_and_the_release_of_each_round_trip" },
+      { file: "packages/workbench/test/observe-drag.test.mjs", id: "diagnostics.drag.boundary answers the centre of the named boundary and its absence" },
+      { file: "packages/workbench/test/observe-drag.test.mjs", id: "the page drag presses at the point that diagnostics.drag.boundary answers" },
+    ],
+    expected: "host.window of the Wails and the Tauri host reports presentedFrames of each image region and frames, commandBuffers and settled as null, and diagnostics.drag with native: true delivers the press, the steps and the release of each round trip as native input at the boundary point that the page answers, without activation.",
+    levels: ["unit"],
+  },
+  {
+    id: "F502-24",
+    implementation: [
+      { file: "scripts/check-release.mjs", symbol: "export function viewRootSources(frontend) {" },
+      { file: "scripts/test-app.mjs", symbol: "const APPS = ['wailsv3', 'tauriv2', 'mygo'];" },
+      { file: "packages/window-check/app.mjs", symbol: "export function requiresAll(env) {" },
+      { file: "Makefile", symbol: "check-release-mygo: build-mygo-release" },
+      { file: "Makefile", symbol: "E2E_BUILD = build-wailsv3 build-tauriv2 build-mygo build-registry" },
+      { file: ".github/workflows/release.yml", symbol: "  release-mygo:" },
+    ],
+    tests: [
+      { file: "scripts/test/check-release-paths.test.mjs", id: "the view root of a host without a main page is every staged file, and the audit asks for no page module" },
+      { file: "scripts/test/workflows.test.mjs", id: "release builds and packages each host after the reusable CI checks succeed" },
+      { file: "scripts/test/test-app.test.mjs", id: "the plan prepares, starts the three applications, checks and quits them in this order" },
+      { file: "scripts/test/native-pkgconfig.test.mjs", id: "release host checks audit only their own optimized bundle" },
+      { file: "scripts/test/host-debug-check.test.mjs", id: "the debug check compiles the features and tags of the debug apps" },
+      { file: "packages/window-check/test/required-apps.test.mjs", id: "requiresAll holds only for a set that covers the mygo application" },
+    ],
+    expected: "A release builds, audits and packages the three applications, and make test-app builds and starts them, so a window session without SOKSAK_APP covers the three.",
+    levels: ["unit"],
+  },
+  {
+    id: "F502-2-2",
+    implementation: [
+      { file: "packages/window-check/app.mjs", symbol: "export function requiredApps(env) {" },
+      { file: "packages/window-check/app.mjs", symbol: "export function requiresAll(env) {" },
+      { file: "packages/window-check/app.mjs", symbol: "export function windowPosition(name, area, frame) {" },
+      { file: "packages/window-check/view-metrics.mjs", symbol: "export function domMountBaselineMs(host, recordedMs) {" },
+      { file: "e2e/benchmark/cases/hwp.mjs", symbol: "export function hwpFirstDisplayLimitMs(host) {" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/required-apps.test.mjs", id: "requiredApps accepts mygo as SOKSAK_APP" },
+      { file: "packages/window-check/test/required-apps.test.mjs", id: "requiresAll is true only when the required set holds every application" },
+      { file: "packages/window-check/test/window-position.test.mjs", id: "windowPosition gives each of the three applications its own position inside the visible area" },
+      { file: "packages/window-check/test/window-position.test.mjs", id: "windowPosition centres mygo on whole points in an area of odd remaining width" },
+      { file: "packages/window-check/test/window-position.test.mjs", id: "windowPosition rejects an application that has no window position" },
+      { file: "packages/window-check/test/view-metrics.test.mjs", id: "domMountBaselineMs gives each recorded host its value and mygo the lower of the two" },
+      { file: "packages/window-check/test/view-metrics.test.mjs", id: "domMountBaselineMs gives every host 0 for a plugin without a recorded value" },
+      { file: "packages/window-check/test/view-metrics.test.mjs", id: "domMountBaselineMs rejects an unknown host and a record that is not one value per recorded host" },
+      { file: "packages/window-check/test/view-metrics.test.mjs", id: "view metric runner evaluates the mygo host with the lower of the recorded baselines" },
+      { file: "e2e/test/hwp-view-metrics-case.test.mjs", id: "HWP first-display limit is the DOM mount baseline of the host plus the first-display margin" },
+    ],
+    expected: "SOKSAK_APP=mygo selects the mygo application while the set without SOKSAK_APP stays wailsv3 and tauriv2, requiresAll holds when the required set holds every application of that set, the three applications have three window positions in the visible area, and one function gives the DOM mount baseline of each host, the lower recorded value for mygo.",
+    levels: ["unit"],
+  },
+  {
+    id: "F502-2-6",
+    implementation: [
+      { file: "e2e/benchmark/measurements.mjs", symbol: "export const B3_MEASUREMENTS = Object.freeze({" },
+      { file: "e2e/benchmark/measurements.mjs", symbol: "export const B3_SETTINGS = Object.freeze({" },
+      { file: "e2e/benchmark/cases/b3-run.mjs", symbol: "export async function b3Conditions(s, settings) {" },
+      { file: "e2e/benchmark/cases/b3-run.mjs", symbol: "export function b3Target(env, declared) {" },
+      { file: "e2e/benchmark/cases/b3-run.mjs", symbol: "export async function withB3Out(target, measure) {" },
+      { file: "e2e/benchmark/cases/performance-goals.mjs", symbol: "export function performanceGoalBound(constant, kind, path = GOALS) {" },
+      { file: "scripts/frame-records.mjs", symbol: "export function gestureRecords(events) {" },
+      { file: "e2e/benchmark/cases/gesture-records.mjs", symbol: "export async function recordGesture(s, gesture) {" },
+      { file: "e2e/benchmark/cases/gesture-records.mjs", symbol: "export function gestureB3Values(prefix, records, { firstFrame }) {" },
+      { file: "e2e/benchmark/cases/view-drag.mjs", symbol: "export async function runViewDrag({ options, pageProcess, steps }) {" },
+      { file: "e2e/benchmark/cases/view-drag.mjs", symbol: "export function viewDragB3Values(state, { firstDrag, recorded, gcLoop }) {" },
+      { file: "e2e/benchmark/cases/floor-page.mjs", symbol: "export async function openFloorPage(s, {" },
+      { file: "e2e/real/hid.mjs", symbol: "export function readWindowElements(app) {" },
+      { file: "e2e/benchmark/cases/resize.mjs", symbol: "export function resizeGeometry(gesture, decoded, { cornerRadiusPt, slotInsetsPt, measure = measureTerminalLayoutFrame }) {" },
+      { file: "e2e/benchmark/cases/resize.mjs", symbol: "export function resizeB3Values(state, { recorded }) {" },
+      { file: "e2e/benchmark/cases/terminal.mjs", symbol: "export async function runTerminalViewBenchmark(t, app, plugin, baselinesMs) {" },
+      { file: "e2e/view-metrics-collection.mjs", symbol: "export const TAB_PLACEMENT = Object.freeze({" },
+      { file: "e2e/benchmark/cases/marker-view.mjs", symbol: "export async function markerLayoutObservation(t, s, descriptor, surface, card, { owner, theme, cornerRadiusPt, axis }) {" },
+      { file: "e2e/benchmark/cases/marker-view.mjs", symbol: "export async function markerDragObservation(t, s, descriptor, surface, card, palette, { owner, plan }) {" },
+      { file: "packages/plugin-api/index.js", symbol: "export function validateDiagnostics(manifest, diagnostics) {" },
+      { file: "e2e/benchmark/cases/section-view.mjs", symbol: "export function installedSectionViews(configDir) {" },
+      { file: "e2e/benchmark/cases/section-view.mjs", symbol: "export function requireSectionDeclarations(view) {" },
+      { file: "e2e/benchmark/cases/section-view.mjs", symbol: "async function requireSectionState(s, owner, card) {" },
+      { file: "e2e/benchmark/cases/section-view.mjs", symbol: "export const SECTION_PLACEMENT = Object.freeze({" },
+      { file: "e2e/benchmark/cases/section-view.mjs", symbol: "export function sectionViewDescriptor(view) {" },
+      { file: "e2e/benchmark/cases/section-view.mjs", symbol: "export async function collectSectionViewMeasurements(t, s, descriptor) {" },
+    ],
+    tests: [
+      { file: "e2e/test/measurements.test.mjs", id: "B3_SETTINGS names the settings of each state of each benchmark, a trace state by traceSettings and the others by their classes" },
+      { file: "e2e/test/measurements.test.mjs", id: "B3_SETTINGS has the benchmarks and the states of B3_MEASUREMENTS; a state named after a trace state holds its traceSettings and another state differs from each" },
+      { file: "e2e/test/b3-run.test.mjs", id: "the conditions of a B3 run are host.window of its window, its diagnostics.performance and the classes of its policy file, which hold the settings of the benchmark" },
+      { file: "e2e/test/b3-run.test.mjs", id: "a benchmark of two states writes the keys of the state that SOKSAK_B3_TRACE names, one of its state names, and needs both variables or neither" },
+      { file: "e2e/test/performance-goals-case.test.mjs", id: "a bound of the performance goals is read by the constant of its value" },
+      { file: "e2e/test/gesture-records.test.mjs", id: "a recorded gesture reads frames before and after it, then flushes the log and returns the complete U7 records of its window" },
+      { file: "e2e/test/gesture-records.test.mjs", id: "a recorded gesture with fewer frame records than the change of frames fails" },
+      { file: "e2e/test/view-drag-case.test.mjs", id: "the view drag runs the drags of B3 in order and reads the processes around the first and the elements before them" },
+      { file: "e2e/test/view-drag-case.test.mjs", id: "the B3 values of the view drag are the first-drag figures in the state 0 and the U7 figures of the third drag in the state frame-records" },
+      { file: "e2e/test/floor-page-fixture.test.mjs", id: "the floor page is a view whose page draws the measurement colour and runs no code but the declaration of its composition" },
+      { file: "e2e/test/hid-elements.test.mjs", id: "the elements of the windows of an application are counted by their accessibility role" },
+      { file: "e2e/test/resize-case.test.mjs", id: "each recorded frame of a maximise is judged with the geometry rule of the terminal drag" },
+      { file: "e2e/test/resize-case.test.mjs", id: "the B3 values of the resize catch-up are its verdict in the state captured and the U7 figures of the maximise in the state frame-records" },
+      { file: "e2e/test/idle-tab-case.test.mjs", id: "the idle tab limit is the bound of IDLE_TAB_BOUND_KB in the performance goals, and a measured cost above it fails the benchmark" },
+      { file: "e2e/test/split-load-case.test.mjs", id: "the split load limit is the bound of SPLIT_LOAD_GROWTH_BOUND_KB in the performance goals, and a growth at or above it fails the benchmark" },
+      { file: "e2e/test/terminal-view-metrics-case.test.mjs", id: "the term view descriptor reads the statuses and commands of the term plugin" },
+      { file: "e2e/test/view-metrics-collection.test.mjs", id: "a view descriptor without a placement is refused by every collector with an error that names the descriptor" },
+      { file: "e2e/test/section-view-case.test.mjs", id: "a section view whose plugin does not declare the three entries of the section-view contract fails with its plugin and section" },
+      { file: "e2e/test/section-view-case.test.mjs", id: "the declaration of a plugin that has sections and no surface is a valid diagnostics declaration" },
+      { file: "e2e/test/section-view-case.test.mjs", id: "a section view whose ready status does not declare a single-entry enum content and language fails with its plugin, section and field" },
+      { file: "e2e/test/section-view-case.test.mjs", id: "a section view whose installed declaration the workbench refuses fails with the refusal of validateDiagnostics" },
+      { file: "e2e/test/section-view-case.test.mjs", id: "a section view that does not start in the fixture state fails with the expected and the actual state before it waits for readiness" },
+      { file: "e2e/test/section-view-case.test.mjs", id: "a section view starts in a new terminal card split below the tallest terminal card, as the section of its card-left sidebar" },
+      { file: "e2e/test/section-view-case.test.mjs", id: "a section view trace start without a marker color is refused with its plugin and section after the observer stops" },
+    ],
+    expected: "Each e2e benchmark applies the settings of its B3 state through fresh and asserts them, reads its bounds from docs/spec/performance-goals.json, and on a window without a page process reads the U7 records and the frame counters of each gesture; the view drag runs the drags of B3 in order; the term view and every section view of the installed plugins are measured for (i), (ii), (iii), (iii-b), (v) and (viii), a section view whose plugin does not declare the section-view contract fails with its plugin and section, a declaration that validateDiagnostics refuses fails with that refusal, and a section view outside the fixture state fails with the expected and the actual state.",
+    levels: ["unit"],
+  },
+  {
+    id: "F502-2-7",
+    implementation: [
+      { file: "docs/spec/performance-goals.json", symbol: "\"constant\": \"IDLE_TAB_BOUND_KB\"" },
+      { file: "docs/spec/performance-goals.json", symbol: "\"constant\": \"SPLIT_LOAD_GROWTH_BOUND_KB\"" },
+      { file: "scripts/b3-judge.mjs", symbol: "export function readGoals(text, file) {" },
+      { file: "scripts/b3-judge.mjs", symbol: "export function judgeSession(goals, session) {" },
+      { file: "scripts/b3-judge.mjs", symbol: "export function targetConditionFailures(goals, scenario, conditions) {" },
+      { file: "scripts/benchmark-b3.mjs", symbol: "export function baselineCheckoutFailures(record, { head, status }, path) {" },
+      { file: "scripts/benchmark-b3.mjs", symbol: "export function sidecarRevisionFailures(record, revisions) {" },
+      { file: "scripts/benchmark-b3.mjs", symbol: "export function baselinePluginFailures(record, releases) {" },
+      { file: "scripts/benchmark-b3.mjs", symbol: "export function sessionUnits(goals, runs, applications) {" },
+      { file: "scripts/benchmark-b3.mjs", symbol: "export function readTargetOutput(file, { goals, scenario, target, application, trace, code, benchmarks }) {" },
+      { file: "scripts/benchmark-b3.mjs", symbol: "export function traceStateOf(target, trace) {" },
+      { file: "scripts/benchmark-b3.mjs", symbol: "export function benchmarkOf(target) {" },
+      { file: "scripts/benchmark-b3.mjs", symbol: "export function measuredSettings(target, trace, benchmarks) {" },
+      { file: "scripts/benchmark-b3.mjs", symbol: "export function attributionUnits(goals, applications, debugApplications) {" },
+      { file: "scripts/benchmark-b3.mjs", symbol: "export async function runUnit(unit, context) {" },
+      { file: "Makefile", symbol: "benchmark-b3:" },
+      { file: "Makefile", symbol: "check-b3:" },
+      { file: "scripts/test-app.mjs", symbol: "async function startApplication(item, children) {" },
+    ],
+    tests: [
+      { file: "scripts/test/performance-goals.test.mjs", id: "docs/spec/performance-goals.json names each value once and compares a value only with a value that it holds" },
+      { file: "scripts/test/performance-goals.test.mjs", id: "each value of docs/spec/performance-goals.json names the measurement of its target that holds it, once in that target and in the unit of the value" },
+      { file: "scripts/test/performance-goals.test.mjs", id: "each measurement of docs/spec/performance-goals.json is a key that the target of its value declares in B3_MEASUREMENTS" },
+      { file: "scripts/test/performance-goals.test.mjs", id: "each e2e benchmark of docs/spec/performance-goals.json measures in the settings that B3_SETTINGS declares for it and the state that its TRACE names" },
+      { file: "scripts/test/performance-goals.test.mjs", id: "a target that takes the trace state of the run declares its measurement in the trace states 0 and 1, and a target that names TRACE in that state" },
+      { file: "scripts/test/performance-goals.test.mjs", id: "the tables of the section Performance goals of docs/spec/hosts.md are copies of docs/spec/performance-goals.json" },
+      { file: "scripts/test/performance-goals.test.mjs", id: "the tables of the section Performance goals of docs/spec/hosts.ko.md are copies of docs/spec/performance-goals.json" },
+      { file: "scripts/test/b3-judge.test.mjs", id: "a session that meets every bound and criterion passes, and each value is printed with its runs, its median and its spread" },
+      { file: "scripts/test/b3-judge.test.mjs", id: "a recorded run of the mygo host outside a bound fails the value" },
+      { file: "scripts/test/b3-judge.test.mjs", id: "a failed benchmark verdict of the mygo host fails G4" },
+      { file: "scripts/test/b3-judge.test.mjs", id: "a spread of the mygo host wholly on the bounded side of the spread of an other or a baseline host fails, above for a time and below for a frame rate" },
+      { file: "scripts/test/b3-judge.test.mjs", id: "a spread of an other host wholly above the spread of its baseline host is a regression" },
+      { file: "scripts/test/b3-judge.test.mjs", id: "a value of the mygo host whose spread lies wholly above the spread of the value that it is compared with fails" },
+      { file: "scripts/test/b3-judge.test.mjs", id: "a run outside the run conditions, a failed run, a missing run and an unknown reading fail the session" },
+      { file: "scripts/test/b3-judge.test.mjs", id: "the session names the mygo host, the two other hosts and their baseline hosts" },
+      { file: "scripts/test/b3-judge.test.mjs", id: "the goals are rejected when they do not hold the format that the judge applies" },
+      { file: "scripts/test/b3-judge.test.mjs", id: "make check-b3 judges a session folder against docs/spec/performance-goals.json and exits with status 1 when a value fails" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a BASELINE checkout whose head differs from the last head of the baseline record or whose working tree holds changes fails before the first run" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a sidecar revision of the registry record that differs from the last revision of the baseline record, or a working tree with changes, fails" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "the installed plugins of a baseline host that differ in version or sha256 from the baseline record fail the run" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "the surface plugins are the installed plugins whose manifest declares a surface" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "the run conditions are read from injected readings of swap use, of fseventsd and of the display" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a swap total of zero leaves no swap in use, so the run may start" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "the runs interleave the five applications, run S0b in the application that S3 leaves, and run a scenario without a relative value only on the mygo host" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "the targets of a scenario come from the goals in their order, and STEP=pointer runs after every other reading of the scenario" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "phase 1 reruns with TRACE=1 each target that takes the trace state of the run, and no target that names its own TRACE" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a target runs in the checkout of its application with its configuration folder, its sok, its trace state and its value file" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a run installs the index of its application into a new configuration folder under target/b3 and starts the executable of its release bundle" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a target writes its measurements under its own keys, and the run records each that an entry names under the id of the entry" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a target reports the conditions of its measurement, and a display, a window or a trace state other than the run gave fails the run" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "an e2e benchmark reports the settings that B3_SETTINGS declares for it in the state that its TRACE names, and other settings fail the run" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "the run reads the declarations of the e2e benchmarks from e2e/benchmark/measurements.mjs" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "B3_SETTINGS of a benchmark has the shape of its B3_MEASUREMENTS, and a missing or an extra state or another shape fails the run" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a benchmark records its verdict as a measurement, and a target that exits with another code than 0 fails the run" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a run of a fixture application fails on a display at another refresh rate or backing scale and quits the application, and no process of it remains" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a run of a fixture application that exits before it writes its endpoint fails and measures nothing" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a run that starts outside the run conditions starts no application" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a run of a fixture application measures each scenario of its unit in one application and writes one record per scenario into the session folder" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a failed benchmark is the verdict failed of its row, and a target that exits with another code than 0 fails the run" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a target that cannot be run fails the run, and the application of the run quits" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "the session folder holds the session, the baseline record and the sidecar record, and make check-b3 reads it" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "make benchmark-b3 refuses a phase, a run count or a baseline checkout that it does not take before it reads anything" },
+      { file: "scripts/test/test-kinds.test.mjs", id: "a root target that starts an application through the start step of runPlan outside the test-app and benchmark targets is reported" },
+      { file: "scripts/test/test-app.test.mjs", id: "a failed start skips the quit of its application, so the run reports the start as its one failure" },
+    ],
+    expected: "`make benchmark-b3` runs the three-host benchmark on five applications into a session folder and fails on a baseline checkout, a sidecar revision, a baseline plugin release, a run condition or a display that differs from its record or condition; `make check-b3` judges that folder against `docs/spec/performance-goals.json`, whose values the two tables of the section Performance goals of `docs/spec/hosts.md` and of its translation copy.",
+    levels: ["unit"],
+  },
+  {
+    id: "F502-22",
+    implementation: [
+      { file: "packages/host/mygo/src/host.go", symbol: "mygo.App.OnOpenURL(session.OpenDeepLink)" },
+      { file: "packages/host/mygo/src/frontend.go", symbol: "func FileDropText(event *mygo.FileDropEvent) (string, error) {" },
+      { file: "scripts/check-app-update.mjs", symbol: "--host must be wailsv3, tauriv2 or mygo" },
+    ],
+    tests: [
+      { file: "packages/host/mygo/tests/system_test.go", id: "TestALinkThatTheApplicationIsAskedToOpenRunsOnceTheWindowIsReady" },
+      { file: "packages/host/mygo/tests/system_test.go", id: "TestAFileDroppedOnAWindowReachesItsWorkbenchAsTheTextOfTheFileDropView" },
+      { file: "packages/host/mygo/tests/system_test.go", id: "TestADropOfAPathThatNoLongerResolvesIsRefused" },
+      { file: "packages/host/mygo/tests/system_test.go", id: "TestTheEventsOfTheNotificationCenterReachTheWorkbench" },
+      { file: "packages/host/mygo/tests/system_test.go", id: "TestAnUpdateQuitsTheApplicationAndStartsTheCommandThatReplacesItsBundle" },
+      { file: "scripts/test/check-app-update.test.mjs", id: "the options name the host, the bundle and the registry index" },
+    ],
+    expected: "The mygo framework adapter opens a link that the application is asked to open, gives the workbench a dropped file as the JSON text of the file drop view, delivers the events of the notification center, and quits an application update through the command that replaces the bundle; `scripts/check-app-update.mjs` takes the host `mygo`.",
+    levels: ["unit"],
+  },
+  {
+    id: "F502-22-1",
+    implementation: [
+      { file: "packages/workbench-mygo/src/file_drop.go", symbol: "func (s *Shell) filesDropped(data []any) {" },
+      { file: "packages/workbench-mygo/src/tab_notifications.go", symbol: "func (s *Shell) reportNotice(tab string, notice tabNotice) error {" },
+      { file: "packages/workbench-mygo/src/project_data.go", symbol: "func (s *Shell) workspaceChanged() {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/plugin_services_test.go", id: "TestAFileDroppedOnAViewRunsTheDropCommandOfItsPlugin" },
+      { file: "packages/workbench-mygo/tests/plugin_services_test.go", id: "TestANoticeOfASystemPolicyIsPostedAndLeavesWhenItsTabIsShown" },
+      { file: "packages/workbench-mygo/tests/plugin_services_test.go", id: "TestTwoWritesInARowKeepBothKeys" },
+      { file: "packages/workbench-mygo/tests/plugin_services_test.go", id: "TestAWriteOfAnotherWindowReachesTheViewsThatFollowTheData" },
+      { file: "packages/workbench-mygo/tests/plugin_services_test.go", id: "TestASnapshotThatAWriteOutranKeepsTheWrite" },
+      { file: "packages/workbench-mygo/tests/plugin_services_test.go", id: "TestADropOnAViewBehindTheDebugViewIsRecordedAsItsReason" },
+      { file: "packages/workbench-mygo/tests/plugin_services_test.go", id: "TestANotificationIsNamedAsItsTabIsNamed" },
+      { file: "packages/workbench/test/project-data-writes.test.mjs", id: "two writes in a row keep both keys, and the store takes them in order" },
+      { file: "packages/workbench/test/project-data-writes.test.mjs", id: "two replaces from one read keep the first, and the second answers false and writes nothing" },
+      { file: "packages/workbench-mygo/tests/plugin_services_test.go", id: "TestTwoReplacesFromOneReadKeepTheFirstAndTheSecondAnswersFalse" },
+      { file: "packages/plugin-api/test/view.test.mjs", id: "runtime.data.change reads, replaces, and starts over from a new read when another write came first" },
+    ],
+    expected: "The mygo workbench runs the drop command of the view under a dropped file, follows the visible tab with its notices and the notification center, and keeps each write of project data.",
+    levels: ["unit"],
+  },
+  {
+    id: "F502-18",
+    implementation: [
+      { file: "packages/host/go/src/surface_elements.go", symbol: "func ElementOf(h *Host, window Frontend, id string) (SurfaceElement, bool) {" },
+      { file: "packages/host/go/src/start.go", symbol: "func StartWorkbench(h *Host, window Frontend) error {" },
+      { file: "packages/host/mygo/src/frontend.go", symbol: "func (f *Frontend) StartWorkbench() {" },
+      { file: "packages/workbench-mygo/src/app.go", symbol: "func (s *Shell) pluginsChanged() {" },
+      { file: "packages/workbench-mygo/src/view_input.go", symbol: "func (s *Shell) followSettings() {" },
+      { file: "packages/workbench-mygo/src/surfaces.go", symbol: "func (s *Shell) drawSeat(c *ui.Context, tab layout.Tab, box layout.Rect) {" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/surface_elements_test.go", id: "TestAnElementHoldsItsViewsUntilTheNextFrameAfterItLeft" },
+      { file: "packages/host/go/src/surface_elements_test.go", id: "TestAnElementOfANewViewPageReplacesTheOneOfTheEndedPage" },
+      { file: "packages/host/go/src/surface_elements_test.go", id: "TestAnElementReleasesItsViewsWhenNoFrameCanFollow" },
+      { file: "packages/host/go/src/surface_elements_test.go", id: "TestAWindowWithAMainPageHasNoElements" },
+      { file: "packages/host/go/src/surface_elements_test.go", id: "TestAWindowWithoutAMainPageStartsWithoutThePageTitleBar" },
+      { file: "packages/host/go/src/object_counts_test.go", id: "TestAWindowWithoutAMainPageCountsItsHostObjects" },
+      { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestACardDrawsTheNativeViewElementOfItsSurface" },
+      { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestADiagnosticPluginAddsItsDeclarationsToTheSurface" },
+      { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestAViewFollowsTheSettingsOfItsPlugin" },
+      { file: "packages/workbench-mygo/tests/app_test.go", id: "TestPluginsChangedStartsTheWorkbenchAgain" },
+      { file: "packages/workbench-mygo/tests/app_test.go", id: "TestPluginsChangedWaitsForTheStart" },
+      { file: "packages/workbench-mygo/tests/app_test.go", id: "TestPluginsApplyStartsTheWorkbenchAgain" },
+      { file: "packages/host/mygo/tests/view_surface_test.go", id: "TestE2EAViewPageShowsInASurfaceHostOfTheNativeView" },
+      { file: "packages/host/mygo/tests/view_surface_test.go", id: "TestE2EClosingTheLastViewEndsItsProcess" },
+      { file: "packages/host/mygo/tests/view_surface_test.go", id: "TestE2EAViewPageHoldsTheKeyboardAgainAfterItsSurfaceHidAndShowed" },
+      { file: "packages/host/mygo/tests/view_surface_test.go", id: "TestE2EAReloadRequestStartsTheWorkbenchAgain" },
+      { file: "packages/host/mygo/tests/view_surface_test.go", id: "TestE2EADocumentRegionShowsInTheSurfaceHostOfItsView" },
+      { file: "packages/host/mygo/tests/view_surface_test.go", id: "TestE2EALeasedImageRegionHoldsItsFrameWhilePresented" },
+    ],
+    expected: "A card of the mygo workbench shows the view page of its surface in a SurfaceHost in the native view of the window, a document region of the view shows in that SurfaceHost, a leased image region there is in use while presented and released after, closing the last view ends its process, a view page holds the keyboard again after a layout hides and shows its surface, and a reload builds the workbench again with a new start.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F502-19",
+    implementation: [
+      { file: "packages/workbench-mygo/src/text_size.go", symbol: "func NextTextSize(steps []float64, value float64, direction int) (float64, error) {" },
+      { file: "packages/workbench-mygo/src/pointer.go", symbol: "func NewPointerSequence(elements Elements, changed func(), fail func(error)) *PointerSequence {" },
+      { file: "packages/workbench-mygo/src/focus.go", symbol: "func (f *Focus) SetResponder(event Responder) error {" },
+      { file: "packages/workbench-mygo/src/shortcuts.go", symbol: "func ParseShortcut(text string) (ui.Modifiers, ui.Key, error) {" },
+      { file: "packages/workbench-mygo/src/contributions.go", symbol: "func ResolveContributions(installed []InstalledPlugin) ([]ResolvedContribution, error) {" },
+      { file: "packages/workbench-mygo/src/verify.go", symbol: "func Verify(in VerifyInput) ([]VerifyRow, error) {" },
+      { file: "packages/workbench-mygo/src/functions.go", symbol: "func (f Functions) Register(registry *Registry) {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/text_size_test.go", id: "TestTextSizeChangesThePlacePressedLast" },
+      { file: "packages/workbench-mygo/tests/pointer_test.go", id: "TestPointerSequenceReportsAPressAndItsClick" },
+      { file: "packages/workbench-mygo/tests/focus_test.go", id: "TestFocusReportsTheFocusedElement" },
+      { file: "packages/workbench-mygo/tests/shortcuts_test.go", id: "TestShortcutsRunTheCommandOfTheRowThatHolds" },
+      { file: "packages/workbench-mygo/tests/contributions_test.go", id: "TestContributionCases" },
+      { file: "packages/workbench-mygo/tests/verify_test.go", id: "TestVerifyRowsFindTheirDefects" },
+      { file: "packages/workbench-mygo/tests/verify_test.go", id: "TestVerifyReadsTheDrawnCards" },
+      { file: "packages/workbench-mygo/tests/functions_test.go", id: "TestFunctionsAnswerTheRegistry" },
+    ],
+    expected: "The mygo workbench answers `core.text`, `core.focus`, `core.pointer`, `core.contributions` and `core.verify` through its registry with the same values as the page, takes the keys of `shortcuts.json`, and each function has a `ui.Tester` test.",
+    levels: ["unit"],
+  },
+  {
+    id: "F502-17",
+    implementation: [
+      { file: "packages/workbench-mygo/src/errors_screen.go", symbol: "func (e *ShownErrors) Show(where, text, detail string) {" },
+      { file: "packages/workbench-mygo/src/sidebar_screen.go", symbol: "func SectionHeights(sections []SidebarSection, metrics SidebarMetrics, room float32) []float32 {" },
+      { file: "packages/workbench-mygo/src/sidebar_screen.go", symbol: "func SidebarSeats(frame SidebarFrame) []SidebarSeat {" },
+      { file: "packages/workbench-mygo/src/plugin_screen.go", symbol: "func DrawPluginPage(c *ui.Context, binder *Binder, page PluginPage, shown *ShownErrors, look PluginLook) {" },
+      { file: "packages/workbench-mygo/src/debug_screen.go", symbol: "func DrawDebugView(c *ui.Context, binder *Binder, view DebugView, shown *ShownErrors) {" },
+      { file: "packages/workbench-mygo/src/debug_state.go", symbol: "func ParseDebugState(file, text string, truncated bool) (DebugState, error) {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/errors_screen_test.go", id: "TestTheErrorBannerShowsTheErrorOfTheWorkbench" },
+      { file: "packages/workbench-mygo/tests/sidebar_screen_test.go", id: "TestAListSidebarDrawsItsHeadersAndFoldsASection" },
+      { file: "packages/workbench-mygo/tests/sidebar_screen_test.go", id: "TestTheSeatOfASectionIsItsBody" },
+      { file: "packages/workbench-mygo/tests/plugin_screen_test.go", id: "TestTheActionsOfACardFollowThePlugin" },
+      { file: "packages/workbench-mygo/tests/debug_view_test.go", id: "TestTheDebugViewListsEachFileWithItsActions" },
+      { file: "packages/workbench-mygo/tests/debug_view_test.go", id: "TestTheTimelineHasItsRowsAndTheirButtons" },
+    ],
+    expected: "The error display, the sidebar frame with its seats, the plugin page and the debug view of the mygo workbench draw from values, each element has its declared name, and each control runs its command.",
+    levels: ["unit"],
+  },
+  {
+    id: "F502-16",
+    implementation: [
+      { file: "packages/workbench/workbench.json", symbol: "\"tab-peek-w\": \"56px\"" },
+      { file: "packages/workbench/plane.js", symbol: "const HEADER = parseFloat(CHROME[\"head-h\"]), FOOTER = parseFloat(CHROME[\"foot-h\"]);" },
+      { file: "packages/workbench/head-fit.js", symbol: "export function fitHead(head)" },
+      { file: "packages/workbench-mygo/src/layout/head.go", symbol: "func FitHead(head Head) HeadFit {" },
+      { file: "packages/workbench-mygo/src/layout/outline.go", symbol: "func pathData(steps []PathStep) string {" },
+      { file: "packages/workbench-mygo/src/outline_path.go", symbol: "func OutlineDrawSteps(outline layout.Outline) []DrawStep {" },
+      { file: "packages/workbench/card-data.js", symbol: "export function settleActiveTab(card) {" },
+      { file: "packages/workbench-mygo/src/layout/card_data.go", symbol: "func DecodeCardData(raw json.RawMessage) (*CardData, error) {" },
+      { file: "packages/workbench-mygo/src/layout/sidebars.go", symbol: "func PresentSidebars(requested map[Side]SidebarRequest, rect Rect, metrics SidebarMetrics, prefer map[string]Side) (map[Side]PresentedSidebar, error) {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/workbench-declaration.test.mjs", id: "the layout values that the plane reads are chrome metrics of workbench.json" },
+      { file: "packages/workbench-mygo/tests/layout/cases_test.go", id: "TestHeadCases" },
+      { file: "packages/workbench-mygo/tests/outline_path_test.go", id: "TestOutlineDrawStepsReplaceEachArcWithOneCubic" },
+      { file: "packages/workbench-mygo/tests/outline_path_test.go", id: "TestOutlineDrawStepsKeepASquareCorner" },
+      { file: "packages/workbench-mygo/tests/layout/cases_test.go", id: "TestTabCases" },
+      { file: "packages/workbench-mygo/tests/layout/cases_test.go", id: "TestSidebarCases" },
+      { file: "packages/workbench/test/layout-cases.test.mjs", id: "tabs: ${kase.name}" },
+      { file: "packages/workbench/test/layout-cases.test.mjs", id: "sidebar presentation: ${kase.name}" },
+    ],
+    expected: "The layout values that both workbenches read, the card head and foot and the tab strip thresholds, are chrome metrics of `packages/workbench/workbench.json`; the fold stage of a card head is a function of its measured widths that `packages/workbench` and the Go layout model of `packages/workbench-mygo` compute alike on the layout cases of `docs/spec/cases/layout/head.json`. The shell draws each arc of the rail outline as one cubic that stays within 0.03 % of the radius. The values of a card that the layout reads have one statement, the layout cases of `tabs.json` and `sidebars.json`, which both models pass.",
+    levels: ["unit"],
+  },
+  {
+    id: "F502-15",
+    implementation: [
+      { file: "packages/workbench/settings.js", symbol: "import declaration from \"./workbench.json\" with { type: \"json\" };" },
+      { file: "packages/workbench/text-size.js", symbol: "TEXT_STEPS = declaration.settings.textSteps" },
+      { file: "packages/workbench/chrome-metrics.js", symbol: "export function installChromeMetrics(root)" },
+      { file: "packages/workbench/spaces.js", symbol: "export function closingSpace(project, id)" },
+      { file: "packages/workbench-mygo/src/layout/grid.go", symbol: "func New(state *State, options Options) (*Grid, error) {" },
+      { file: "packages/workbench-mygo/src/layout/outline.go", symbol: "func ComputeOutline(rects []Rect, options OutlineOptions) Outline {" },
+      { file: "packages/workbench-mygo/src/layout/stored.go", symbol: "func CheckStoredLayout(layout json.RawMessage, units []PluginUnit) error {" },
+      { file: "packages/workbench-mygo/src/layout/spaces.go", symbol: "func ClosingSpace(p *Project, id string) (*Closing, error) {" },
+      { file: "scripts/check-hosts-same.mjs", symbol: "workbenchDeclarationSource" },
+      { file: "scripts/check-exposure.mjs", symbol: "export function auditDeclarationCopies(copies, read) {" },
+      { file: "packages/host/go/src/workspace.go", symbol: "func CommonOnlyKeys() []string" },
+      { file: "packages/host/rust/src/workspace.rs", symbol: "pub fn common_only_keys() -> &'static [String]" },
+      { file: "Makefile", symbol: "test-mygo:" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/workbench-declaration.test.mjs", id: "no stylesheet of the workbench holds a literal length, ratio or duration" },
+      { file: "packages/workbench/test/workbench-declaration.test.mjs", id: "settings.js and text-size.js take the values of workbench.json instead of defining them" },
+      { file: "packages/workbench/test/workbench-declaration.test.mjs", id: "the workbench sets the chrome metrics as custom properties of the document root" },
+      { file: "packages/workbench/test/space-rename.test.mjs", id: "a space of the active project takes its new title, and an unknown space id is an error that names it" },
+      { file: "packages/workbench-mygo/tests/layout/cases_test.go", id: "TestGridCases" },
+      { file: "packages/workbench-mygo/tests/layout/cases_test.go", id: "TestOutlineCases" },
+      { file: "packages/workbench-mygo/tests/layout/cases_test.go", id: "TestStoredCases" },
+      { file: "packages/workbench-mygo/tests/layout/cases_test.go", id: "TestSpaceCases" },
+      { file: "scripts/test/check-hosts-same.test.mjs", id: "the common-only keys of the hosts and the workbench are read from their sources" },
+      { file: "packages/host/go/tests/workspace_test.go", id: "TestCommonOnlyKeysAreTheDeclaredList" },
+      { file: "packages/host/rust/tests/workspace_test.rs", id: "common_only_keys_are_the_declared_list" },
+      { file: "scripts/test/check-exposure.test.mjs", id: "each language host library and the mygo workbench hold their copies of the declarations" },
+      { file: "scripts/test/check-exposure.test.mjs", id: "a copy of workbench.json in a language host library that differs from its source fails" },
+      { file: "scripts/test/workflows.test.mjs", id: "make test-mygo runs the unit tests of the Go packages of the mygo host" },
+    ],
+    expected: "The workbench values are declared once in `packages/workbench/workbench.json`, which `settings.js` and `text-size.js` import and whose chrome metrics the workbench sets as custom properties of the document root, so no stylesheet holds a literal length, ratio or duration; the JavaScript layout model of `packages/soksak` and `packages/workbench` and the Go layout model of `packages/workbench-mygo` pass the same layout cases of `docs/spec/cases/layout`, which `make test-mygo` runs for the Go model. Each language host library embeds a copy of `workbench.json` and reads the common-only keys from it, and `make check-exposure` fails when a copy differs from its source.",
+    levels: ["unit"],
+  },
+  {
+    id: "F502-9",
+    implementation: [
+      { file: "packages/host/go/src/host.go", symbol: "if err := system.RequireMainThread(); err != nil {" },
+      { file: "packages/host/go/src/platform/darwin/ui_queue.go", symbol: "func (implementation) RequireMainThread() error {" },
+      { file: "packages/host/go/src/platform/darwin/main_thread.m", symbol: "static void hostAbortMissing(const char *name) {" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/main_thread_test.go", id: "TestTheStartRequiresBothMainThreadFunctions" },
+      { file: "packages/host/wailsv3/tests/platform/darwin/main_thread_stack_test.go", id: "TestTheMainThreadRunsNoCodeOutsideItsOwnStack" },
+    ],
+    expected: "On macOS, the start of the Go language host library fails before its first native call and names each main-thread function that the framework adapter did not install.",
+    levels: ["unit"],
+  },
+  {
+    id: "F532",
+    implementation: [
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "crate::event_record::quit_with_cause(\"update\", || host.0.quit());" },
+      { file: "Makefile", symbol: "check-host-files: check-windows-build check-host-debug" },
+    ],
+    tests: [
+      { file: "scripts/test/host-debug-check.test.mjs", id: "the debug check compiles the features and tags of the debug apps" },
+      { file: "scripts/test/host-debug-check.test.mjs", id: "check-host-files runs the debug check" },
+    ],
+    expected: "make check-host-files compiles the sources and the tests of the two hosts and the two apps with the features and the tags of the debug apps, and the update step of the Rust diagnostics ends the application through quit.",
+    levels: ["unit"],
+  },
+  {
+    id: "F530",
+    implementation: [
+      { file: "packages/workbench/package.json", symbol: "\"head-fit.js\"," },
+      { file: "packages/plugin-api/index.js", symbol: "export function importSpecifiers(source) {" },
+      { file: "packages/workbench/staged.js", symbol: "export function missingPageReferences(out, page) {" },
+      { file: "packages/workbench/copy-frontend.mjs", symbol: "const missing = noMainPage ? [] : STAGED.pages.flatMap((page) => missingPageReferences(target, page));" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/copy-frontend.test.mjs", id: "staging holds every file that a staged page reaches, in a release and in a diagnostic build" },
+      { file: "packages/workbench/test/copy-frontend.test.mjs", id: "staging fails on a page that reaches a file that is not staged, and names the file" },
+      { file: "packages/workbench/test/copy-frontend.test.mjs", id: "staging leaves the imports of the application runtime to its host" },
+      { file: "packages/workbench/test/copy-frontend.test.mjs", id: "staging reads the references of a page as a browser parser does" },
+    ],
+    expected: "Every script, style and import that a staged page reaches in a release and in a diagnostic build is staged, except the documents that a host creates for each request.",
+    levels: ["unit"],
+  },
+  {
+    id: "F527",
+    implementation: [
+      { file: "packages/workbench/settings.js", symbol: "export function settingType(key) {" },
+      { file: "packages/workbench/settings.js", symbol: "export function controlValue(key, input) {" },
+      { file: "packages/workbench/core-exposure.js", symbol: "return set({ [key]: controlValue(key, input) }, scope ?? \"common\", actor);" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/settings-change-types.test.mjs", id: "core.settings.change gives each setting a value of its declared type" },
+    ],
+    expected: "core.settings.change takes the type of a setting from its declaration, converts only the string of a control, and refuses a value of another type with invalid params and the check of its setting.",
+    levels: ["unit"],
+  },
+  {
+    id: "F502-13",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "export const EXPOSE_KINDS = Object.freeze({ status: \"status\", commands: \"command\", element: \"element\" });" },
+      { file: "packages/plugin-api/binder.js", symbol: "export function roleOf(element) {" },
+      { file: "packages/workbench/core-exposure.js", symbol: "status(\"core.window.workbench\", () => ({" },
+      { file: "packages/host/go/src/endpoint.go", symbol: "\"element.rect\":  elementRequest(\"element.rect\")," },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "pub fn check_registration_kind(kind: &str) -> Result<(), String> {" },
+      { file: "packages/sok/go/src/manifest.go", symbol: "exposes.dom is removed; an exposed element is declared in exposes.element" },
+      { file: "packages/sok/rust/src/manifest.rs", symbol: "exposes.dom is removed; an exposed element is declared in exposes.element" },
+      { file: "packages/window-check/app.mjs", symbol: "export const MAIN_PAGE_APPS = Object.values(APPS).filter((app) => MAIN_PAGE_NAMES.includes(app.name));" },
+      { file: "scripts/check-e2e-host-parity.mjs", symbol: "function selections(text) {" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/removed-members.test.mjs", id: "the exposes member dom is refused as removed, and exposes.element declares an exposed element" },
+      { file: "packages/plugin-api/test/exposure-check.test.mjs", id: "a name registered with expose.element is an element name and must be declared" },
+      { file: "packages/workbench/test/workbench-statuses.test.mjs", id: "core.window.workbench, core.workbench.error and core.workbench.audit describe the workbench and the page names are refused" },
+      { file: "packages/host/go/src/exposure_status_test.go", id: "TestRelayedViewRegistrationRefusalsRecordNothing" },
+      { file: "packages/host/go/tests/exposure_test.go", id: "TestHostHitDeclaresTheWorkbenchDocumentAndNativeKinds" },
+      { file: "packages/host/rust/tests/exposure_test.rs", id: "a_registration_kind_is_status_command_or_element" },
+      { file: "packages/host/rust/tests/exposure_test.rs", id: "host_hit_declares_the_workbench_document_and_native_kinds" },
+      { file: "packages/client/test/client.test.mjs", id: "the sample endpoint lists element entries and answers element.rect and element.act" },
+      { file: "packages/window-check/test/required-apps.test.mjs", id: "requiresAll holds only for a set that covers the mygo application" },
+      { file: "packages/window-check/test/prepare-fixture-settings.test.mjs", id: "the preparation reloads the workbench and waits for a new start of core.window.workbench" },
+      { file: "scripts/test/e2e-host-parity.test.mjs", id: "a window check that iterates another set of applications is an error" },
+      { file: "scripts/test/main-page-apps.test.mjs", id: "MAIN_PAGE_APPS lists the applications whose environment.json names a runtime" },
+      { file: "scripts/test/measure-object-counts.test.mjs", id: "the plugins apply waits for a new start of core.window.workbench, which comes in the same page process" },
+    ],
+    expected: "The exposure kind is element on the plugin API, the workbench, both hosts, sok, MCP and the client, a manifest with exposes.dom is refused, the workbench statuses are defined over the workbench, an audit row names the role of an element, and a window check iterates Object.values(APPS) or MAIN_PAGE_APPS.",
+    levels: ["unit"],
+  },
+  {
+    id: "F502-14",
+    implementation: [
+      { file: "packages/sok/go/src/event_log.go", symbol: "var layers = []string{\"native\", \"host\", \"workbench\", \"page\", \"plugin\", \"sidecar\"}" },
+      { file: "packages/sok/go/src/event_log.go", symbol: "func checkWriter(e RelayedEvent) error {" },
+      { file: "packages/sok/rust/src/event_log.rs", symbol: "fn check_writer(" },
+      { file: "packages/sok/rust/src/log_index.rs", symbol: "pub(crate) const LAYERS: [&str; 7] = [" },
+      { file: "packages/log-contract/index.js", symbol: "const PAGE_LAYERS = new Map([[\"workbench\", [\"start\"]], [\"page\", [\"page\"]], [\"plugin\", [\"page\", \"start\"]]]);" },
+      { file: "packages/host/go/src/debug.go", symbol: "Workbench json.RawMessage `json:\"workbench\"`" },
+      { file: "packages/host/rust/src/debug.rs", symbol: "pub workbench: Value," },
+      { file: "packages/workbench/page-log.js", symbol: "export function recordWorkbenchStart" },
+    ],
+    tests: [
+      { file: "scripts/test/check-events.test.mjs", id: "the catalog puts the events that the workbench writes in the layer workbench and keeps the records of a view page in the layer page" },
+      { file: "packages/log-contract/test/audit.test.mjs", id: "an event of the layer workbench names the start of the workbench in start, and a plugin event names its page or its workbench start" },
+      { file: "packages/log-contract/test/audit.test.mjs", id: "a file of the event schema 2 is rejected with the file name and the number" },
+      { file: "packages/sok/go/tests/debug_test.go", id: "TestQueryRefusesWhatBreaksTheContract" },
+      { file: "packages/sok/rust/tests/debug_test.rs", id: "query_refuses_what_breaks_the_contract" },
+      { file: "packages/sok/go/tests/log_query_test.go", id: "TestLogQueryRefusesInvalidParameters" },
+      { file: "packages/sok/rust/tests/log_query_test.rs", id: "query_refuses_invalid_parameters" },
+      { file: "packages/host/go/tests/event_log_test.go", id: "TestARelayedEventNamesTheDocumentThatWroteItInTheMemberOfItsLayer" },
+      { file: "packages/host/rust/tests/event_log_test.rs", id: "a_relayed_event_names_the_document_that_wrote_it_in_the_member_of_its_layer" },
+      { file: "packages/host/go/tests/event_relay_test.go", id: "TestARelayedBatchIsStoredInOrderInTheLayerWorkbench" },
+      { file: "packages/host/rust/tests/event_relay_test.rs", id: "a_relayed_batch_is_stored_in_order_in_the_layer_workbench" },
+      { file: "packages/host/go/tests/debug_test.go", id: "TestDebugStateNamesTheValueOfTheWorkbench" },
+      { file: "packages/host/rust/tests/debug_test.rs", id: "debug_state_names_the_value_of_the_workbench" },
+      { file: "packages/window-check/test/event-log.test.mjs", id: "a record of the workbench reads as a line of the layer workbench, and the trace of the workbench as rows of the layer workbench" },
+      { file: "packages/plugin-api/test/log-batch.test.mjs", id: "a writer of the layer workbench names each event by its start, and the batcher writes its own records and its ungated events in that layer" },
+      { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "the layer choices of the timeline are every layer of the event contract, the workbench included, and the declarations list the same" },
+      { file: "packages/workbench/test/debug-state.test.mjs", id: "the workbench member of a state file is the value the workbench sent: an array of entries is accepted" },
+    ],
+    expected: "The workbench writes its events in the layer workbench as workbench.<name> with the member start, workbench.start carries started_at, view pages keep the layer page and the member page, the event log schema is 3 and a schema 2 log is refused, the sok query and index list the layer workbench, and the debug state file names the member workbench.",
+    levels: ["unit"],
+  },
+  {
+    id: "F511",
+    implementation: [
+      { file: "packages/host/rust/src/documents.rs", symbol: "pub fn attach(&self, key: &Key) -> Result<Vec<StreamEffect>, String> {" },
+      { file: "packages/host/go/src/documents.go", symbol: "func (d *DocumentStreams) Attach(key DocumentKey) ([]StreamEffect, error) {" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/documents_test.rs", id: "stream_attach_creates_the_request_log_and_turns_its_collection_on" },
+      { file: "packages/host/rust/tests/documents_test.rs", id: "stream_request_log_outlives_the_subscriptions_of_the_region" },
+      { file: "packages/host/rust/tests/documents_test.rs", id: "stream_request_log_keeps_the_entries_that_arrive_without_a_subscription" },
+      { file: "packages/host/rust/tests/documents_test.rs", id: "stream_requests_subscription_of_a_region_with_elements_subscription_posts_no_entry_again" },
+      { file: "packages/host/rust/tests/documents_test.rs", id: "stream_removal_ends_subscriptions_and_releases_the_log" },
+      { file: "packages/host/rust/tests/documents_test.rs", id: "a_page_process_end_removes_every_subscription_of_the_page" },
+      { file: "packages/host/go/tests/documents_test.go", id: "TestDocumentStreamAttachCreatesTheRequestLogAndTurnsItsCollectionOn" },
+      { file: "packages/host/go/tests/documents_test.go", id: "TestDocumentRequestLogOutlivesTheSubscriptionsOfTheRegion" },
+      { file: "packages/host/go/tests/documents_test.go", id: "TestDocumentRequestLogKeepsTheEntriesThatArriveWithoutASubscription" },
+      { file: "packages/host/go/tests/documents_test.go", id: "TestDocumentRequestsSubscriptionOfARegionWithElementsSubscriptionPostsNoEntryAgain" },
+      { file: "packages/host/go/tests/documents_test.go", id: "TestDocumentStreamRemovalEndsSubscriptionsAndReleasesTheLog" },
+      { file: "packages/host/go/tests/documents_test.go", id: "TestDocumentStreamEndedPageProcessKeepsTheRegionsOfItsSurface" },
+    ],
+    expected: "A document region collects its requests and keeps a request log of at most 200 entries from its attach to its removal, a requests subscription and its end change no collection, and the end of the subscriptions of a page keeps the logs of its regions.",
+    levels: ["unit"],
+  },
+  {
+    id: "F504",
+    implementation: [
+      { file: "packages/host/go/src/workspace.go", symbol: "var commonOnly = declaredCommonOnly()" },
+      { file: "packages/host/rust/src/workspace.rs", symbol: "static COMMON_ONLY: LazyLock<Vec<String>>" },
+      { file: "apps/browser/runtime/browser-storage.js", symbol: "const COMMON_ONLY = declaration.settings.commonOnly;" },
+      { file: "packages/workbench/settings.js", symbol: "for (const key of COMMON_ONLY) if (id && Object.hasOwn(patch, key)) throw new Error(`${key} is common-only`);" },
+      { file: "scripts/check-hosts-same.mjs", symbol: "export function auditCommonOnlyKeys(keys) {" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/workspace_test.go", id: "TestProjectCommonOnlyKeysAreRejected" },
+      { file: "packages/host/rust/tests/workspace_test.rs", id: "project_common_only_keys_are_rejected" },
+      { file: "apps/browser/test/browser-storage.test.mjs", id: "a project write of each common-only key fails with the message of the hosts" },
+      { file: "packages/workbench/test/settings.test.mjs", id: "a project write of each common-only key fails with the message of the hosts" },
+      { file: "scripts/test/check-hosts-same.test.mjs", id: "a common-only key that the workbench refuses and a host accepts fails" },
+    ],
+    expected: "Both hosts, the browser runtime and the workbench refuse the four common-only keys in a project settings file and in a project write with `<key> is common-only`; the workbench and the browser runtime import the list of `workbench.json`, and the host parity check fails when the list of a language host library differs from it.",
+    levels: ["unit"],
+  },
+  {
+    id: "F591",
+    implementation: [{ file: "packages/host/go/src/windows.go", symbol: "win.NativeWindow() != nil" }],
+    tests: [{ file: "packages/host/go/src/windows_main_page_test.go", id: "TestAWindowThatIsGoneReadsNoStateOnAChange" }],
+    expected: "A change of a window whose native window is gone reads no state and logs no error.",
+    levels: ["unit"],
+  },
+  {
+    id: "F609",
+    implementation: [
+      { file: "native/darwin/src/webview_geometry.m", symbol: "deliverKeptKeys" },
+      { file: "packages/host/go/src/surfaces.go", symbol: "declaresImageRegion" },
+      { file: "packages/host/rust/src/surfaces.rs", symbol: "declares_image_region" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "the region receives the keys in order" },
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "the region receives the 256 kept keys" },
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "a surface that closes without a region records the keys it drops" },
+      { file: "packages/host/go/src/view_join_test.go", id: "TestAnImageRegionDeclarationKeepsTheKeysOfItsSurface" },
+      { file: "packages/host/rust/src/surfaces_test.rs", id: "an_image_region_declaration_keeps_the_keys_of_its_surface" },
+      { file: "e2e/activation/new-tab-keys.test.mjs", id: "keys typed as a new tab opens reach its terminal whole" },
+    ],
+    expected: "Keys typed before the image region of a surface shows reach the region in order, up to 256, and the keys over the limit or left at the close are recorded as dropped.",
+    levels: ["native", "unit", "application"],
+  },
+  {
+    id: "F595",
+    implementation: [{ file: "native/darwin/src/surface_layout.m", symbol: "surfaceLayoutHoldCall" }],
+    tests: [
+      { file: "native/darwin/tests/webview_geometry_test.m", id: "an injected press reaches the view before the injected key behind it" },
+      { file: "native/darwin/tests/webview_geometry_test.m", id: "a person's press reaches the view before the injected keys behind it" },
+    ],
+    expected: "Injected input waits in the one hold with the events of the window system and reaches the view in the order it arrived.",
+    levels: ["unit"],
+  },
+  {
+    id: "F593",
+    implementation: [{ file: "native/darwin/src/surface_layout.m", symbol: "object_getClass([NSApplication sharedApplication])" }],
+    tests: [
+      { file: "native/darwin/tests/webview_geometry_test.m", id: "an override of the application sees no input that waits" },
+      { file: "native/darwin/tests/webview_geometry_test.m", id: "held input comes back to the override once each and in order" },
+    ],
+    expected: "No override of sendEvent: on the class of the application sees input that waits, and every later pointer and key event of the window comes back once and in order.",
+    levels: ["unit"],
+  },
+  {
+    id: "F589",
+    implementation: [{ file: "native/darwin/src/surface_layout.m", symbol: "sendEventAfterLayout" }],
+    tests: [
+      { file: "native/darwin/tests/webview_geometry_test.m", id: "every monitor sees a held press and release once each" },
+      { file: "native/darwin/tests/webview_geometry_test.m", id: "a release that waits past the receipt wait reports no lost release" },
+    ],
+    expected: "No local monitor sees a press or a release that waits for a layout, each sees it once when it comes back, and a release that waits longer than its receipt wait reports nothing.",
+    levels: ["unit"],
+  },
+  {
+    id: "F586",
+    implementation: [{ file: "packages/host/rust/src/images.rs", symbol: "fn send_released(" }],
+    tests: [
+      { file: "packages/host/rust/src/images_test.rs", id: "a_release_after_its_window_closed_sends_nothing_and_reports_no_failure" },
+      { file: "packages/host/rust/src/images_test.rs", id: "a_release_of_an_open_window_sends_the_frame_with_the_root_of_the_window" },
+      { file: "packages/host/rust/src/images_test.rs", id: "a_release_that_fails_in_an_open_window_reports_the_failure" },
+    ],
+    expected: "A release after the close of its window sends nothing and reports no failure, and a release in an open window is sent with the root of the window and reports its failure.",
+    levels: ["unit"],
+  },
+  {
+    id: "F611",
+    implementation: [{ file: "native/darwin/src/image_region.m", symbol: "spRegionShowsPoint" }],
+    tests: [
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "a press over the frame of a hidden region stays with the view that it reached" },
+    ],
+    expected: "A region that does not show takes no press, so a press over the frame of a hidden region leaves the first responder with the view that it reached.",
+    levels: ["unit"],
+  },
+  {
+    id: "F585",
+    implementation: [{ file: "native/darwin/src/webview_geometry.m", symbol: "void sp_surface_region_shown" }],
+    tests: [
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "the first region that shows after a hide takes the keyboard from the page" },
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "a region that showed behind the hidden surface takes the keyboard when the surface shows" },
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "a call in a press does not undo the region that showed in it" },
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "a region that shows again takes back the keyboard it lost to its hide" },
+    ],
+    expected: "A region takes the keyboard from the page that waited for it after a hide of the surface and in a press, and a region that hid with the keyboard takes it back when it shows, unless the keyboard moved on.",
+    levels: ["unit"],
+  },
+  {
+    id: "F583",
+    implementation: [{ file: "native/darwin/src/webview_geometry.m", symbol: "sp_observe_notification(\"webview_geometry.window_close\"" }],
+    tests: [
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "a surface of a closed window does not take the keyboard" },
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "a call that waited for the release of a press does not move in a closed window" },
+    ],
+    expected: "The first responder of a closed window stays until the window shows again, and the close of a window drops the keyboard call that waits for a release.",
+    levels: ["unit"],
+  },
+  {
+    id: "F526-2",
+    implementation: [
+      { file: "native/darwin/src/webview_geometry.m", symbol: "sp_observe_local_monitor(\"webview_geometry.press_release\"" },
+      { file: "packages/workbench-mygo/src/declarations.go", symbol: "func (d *Declarations) ChromeNumber(name, unit string) float64 {" },
+      { file: "packages/host/rust/tests/support/platform/native_event.rs", symbol: "pub use implementation::*;" },
+    ],
+    tests: [
+      { file: "scripts/test/event-sources.test.mjs", id: "the repository passes the event source check of its enabled rules and prints every pending rule with its item and count" },
+      { file: "scripts/test/test-kinds.test.mjs", id: "every script of the e2e package that drives an application is run by a root target of its kind" },
+      { file: "scripts/test/fallbacks.test.mjs", id: "the repository states a reason for every default and discarded error in product code" },
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "platform audit finds no selectors outside platform directories" },
+      { file: "packages/workbench-mygo/tests/declarations_test.go", id: "TestAChromeNumberThatIsNotDeclaredIsRefusedWithItsName" },
+      { file: "packages/workbench-mygo/tests/declarations_test.go", id: "TestEveryChromeNameThatASourceReadsIsDeclared" },
+      { file: "packages/workbench-mygo/tests/declarations_test.go", id: "TestEveryThemeHoldsTheShapeThatItsPreviewReads" },
+    ],
+    expected: "The monitor of a press release goes through the entrance of the observers, the script of the input latency has a root target with the e2e prefix, each discarded value in product code states its reason, no test holds a condition of an operating system outside a platform directory, and a chrome value that the declaration does not hold ends a draw with its name.",
+    levels: ["unit"],
+  },
+  {
+    id: "F526-1",
+    implementation: [{ file: "scripts/language-test-adapters.mjs", symbol: "function caseResult(caseSpec, commandResult) {" }],
+    tests: [{ file: "scripts/test/test-language-test-adapters.test.mjs", id: "parses each language result and rejects zero, skipped, and crashed outcomes" }],
+    expected: "A case that a signal ends is reported as crashed with that signal, and the case of the test ends with a signal that leaves no crash report.",
+    levels: ["unit"],
+  },
+  {
+    id: "F526",
+    implementation: [
+      { file: "packages/window-check/stall-sample.mjs", symbol: "function endError(error, stderr, limitMs, state) {" },
+      { file: "packages/window-check/stall-sample.mjs", symbol: "function readState(atLimit, pid, stateLimitMs) {" },
+      { file: "packages/window-check/stall-sample.mjs", symbol: "export async function samplerState(pid, file, run = runProcess) {" },
+      { file: "packages/window-check/stall-sample.mjs", symbol: "export function runProcess(command, args, { limitMs = 10000, atLimit = systemState, stateLimitMs = STATE_LIMIT } = {}) {" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/stall-sample.test.mjs", id: "a process ended at its limit is named with the signal, the limit, its standard error and the state of the system" },
+      { file: "packages/window-check/test/stall-sample.test.mjs", id: "the state at the limit is read while the process still runs" },
+      { file: "packages/window-check/test/stall-sample.test.mjs", id: "a state at the limit that does not finish does not hold the end of the process" },
+      { file: "packages/window-check/test/stall-sample.test.mjs", id: "a sample that stalls records the stacks of the sampling process before it ends" },
+      { file: "packages/window-check/test/stall-sample.test.mjs", id: "the limit of a process holds while a check moves mocked timers" },
+      { file: "packages/window-check/test/stall-sample.test.mjs", id: "stacks that the sampling process cannot record are named with the reason" },
+      { file: "packages/window-check/test/stall-sample.test.mjs", id: "a process ended by a signal of another sender is not reported as ended at its limit" },
+    ],
+    expected: "A process of the stall sample that does not reach its own exit fails with its signal, the limit when the limit ended it, its standard error and the state of the machine at the limit; a sample that stalls leaves the stacks of its own process or the reason they are missing.",
+    levels: ["unit"],
+  },
+  {
+    id: "F523",
+    implementation: [
+      { file: "packages/plugin-api/exposure-check.js", symbol: "export function checkContractCopies(root) {" },
+      { file: "packages/plugin-api/exposure-check.js", symbol: "}).concat(checkContractCopies(root));" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/exposure-check.test.mjs", id: "a contract copy with the SHA-256 of the published contract file passes" },
+      { file: "packages/plugin-api/test/exposure-check.test.mjs", id: "a contract copy whose SHA-256 differs from the published contract file is reported" },
+      { file: "packages/plugin-api/test/exposure-check.test.mjs", id: "a contract copy without a published contract file is reported" },
+      { file: "packages/plugin-api/test/exposure-check.test.mjs", id: "a release without contract-copies.json holds no contract copy" },
+    ],
+    expected: "checkPluginRepository compares each member of contract-copies.json with the SHA-256 of the file of the same name in contract/ of its package and reports a name that contract/ does not hold or a digest that differs.",
+    levels: ["unit"],
+  },
+  {
+    id: "F528",
+    implementation: [
+      { file: "packages/host/go/src/host.go", symbol: "<-session.started" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/termination_test.go", id: "TestATerminationSignalAfterTheStartQuitsTheFramework" },
+    ],
+    expected: "The first termination signal after the start of the application reaches the quit of the framework.",
+    levels: ["unit"],
+  },
+  {
+    id: "F522",
+    implementation: [
+      { file: "native/darwin/src/image_region.m", symbol: "@interface SPRegionInputContext : NSTextInputContext" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_region_input_document_test.m", id: "the region makes its input context" },
+    ],
+    expected: "The input context of an image region states no document access, so Korean composes from its first syllable.",
+    levels: ["native"],
+  },
+  {
+    id: "F535",
+    implementation: [
+      { file: "packages/sok/go/src/event_log.go", symbol: "wakeUp := func() bool {" },
+      { file: "packages/sok/rust/src/event_log.rs", symbol: "let sleep = || -> Option<Instant> {" },
+      { file: "packages/host/go/src/event_log.go", symbol: "func nativeWake(" },
+      { file: "packages/host/rust/src/event_log.rs", symbol: "fn native_wake(" },
+      { file: "native/darwin/src/event_ring.m", symbol: "int sp_event_wake_fd(void) {" },
+    ],
+    tests: [
+      { file: "packages/sok/go/src/event_log_idle_test.go", id: "TestWriterSleepsWithNothingToWrite" },
+      { file: "packages/sok/go/src/event_log_idle_test.go", id: "TestFirstEventIsStoredAtOnce" },
+      { file: "packages/sok/go/src/event_log_idle_test.go", id: "TestCloseStoresWhatWaits" },
+      { file: "packages/sok/rust/tests/event_log_idle_test.rs", id: "a_writer_with_nothing_to_write_does_not_wake" },
+      { file: "packages/sok/rust/tests/event_log_idle_test.rs", id: "the_first_event_is_stored_at_once" },
+      { file: "packages/sok/rust/tests/event_log_idle_test.rs", id: "close_stores_what_waits_and_what_the_source_holds" },
+      { file: "packages/host/go/src/event_log_wake_test.go", id: "TestNativeWakeTurnsThePipeIntoTheWakeOfTheWriter" },
+      { file: "packages/host/rust/tests/event_native_wake_test.rs", id: "a_native_event_ends_the_wait_of_the_platform" },
+      { file: "native/darwin/tests/event_ring_test.m", id: "a burst of events writes the pipe once" },
+    ],
+    expected: "A writer with nothing to write sleeps, what wakes it is stored at once, and a flush or a close stores what waits.",
+    levels: ["unit", "native"],
+  },
+  {
+    id: "F535-2",
+    implementation: [
+      { file: "packages/sok/rust/src/event_log.rs", symbol: "while let Some(request) = drain(&mut out, true) {" },
+      { file: "packages/sok/rust/src/event_log.rs", symbol: "RecvTimeoutError::Disconnected => {" },
+      { file: "packages/sok/go/src/event_log.go", symbol: "for behind := drain(); behind != nil; behind = drain() {" },
+      { file: "packages/sok/go/src/event_log.go", symbol: "the event writer ended before it answered the flush" },
+    ],
+    tests: [
+      { file: "packages/sok/rust/src/event_log_flush_test.rs", id: "a_flush_that_a_stop_finds_behind_it_is_answered" },
+      { file: "packages/sok/rust/src/event_log_flush_test.rs", id: "a_writer_that_ended_is_not_reported_as_a_deadline" },
+      { file: "packages/sok/go/src/event_log_idle_test.go", id: "TestAFlushThatAStopFindsBehindItIsAnswered" },
+      { file: "packages/sok/go/src/event_log_idle_test.go", id: "TestAFlushOfAWriterThatEndedSaysSo" },
+    ],
+    expected: "A flush request behind a stop is answered, and a caller whose writer ended gets that error at once.",
+    levels: ["unit"],
+  },
+  {
+    id: "F588",
+    implementation: [
+      { file: "scripts/measure-app-usage.mjs", symbol: "async function movePointer(s, path) {" },
+    ],
+    tests: [
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "a move that the tracking area delivers has a value without a hitTest: step" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "only the hitTest: step right before a move adds to that move" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "a gesture without a delivered move and a gesture with incomplete records fail" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the measurement does not import the real-input tool" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "a move that input.pointer refuses fails the pointer step and sets the trace state again" },
+    ],
+    expected: "The pointer step measures the moves that input.pointer delivers, by the outermost mouseMoved: step, without a real cursor or activation.",
+    levels: ["unit"],
+  },
+  {
+    id: "F587",
+    implementation: [
+      { file: "packages/workbench-mygo/src/surfaces.go", symbol: "func (s *Shell) placed(err error) {" },
+      { file: "packages/workbench/page-layout.js", symbol: "export function createErrorWithdrawal({ document, changed }) {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestARecoveredPlacementWithdrawsItsError" },
+      { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestARecoveredPlacementLeavesAnotherError" },
+      { file: "packages/workbench-mygo/tests/errors_screen_test.go", id: "TestAnErrorIsWithdrawnOnlyByItsSource" },
+      { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestAFailureStaysUntilTheSurfacesPresent" },
+      { file: "packages/workbench/test/layout-verify-state.test.mjs", id: "while a surface has not presented, the presentation of another render leaves the failure, and the presentation of that surface withdraws it" },
+      { file: "packages/workbench/test/layout-verify-state.test.mjs", id: "a presentation after a failed presentation withdraws the error of that failure from the banner" },
+    ],
+    expected: "A placement that succeeds withdraws only the failure of the placement before it from the error banner.",
+    levels: ["unit"],
+  },
+  {
+    id: "F615",
+    implementation: [
+      { file: "scripts/b3-out.mjs", symbol: 'const CONDITIONS = ["refreshRate", "backingScale", "traceState", "logPolicy", "window", "occluded", "active"];' },
+      { file: "scripts/b3-judge.mjs", symbol: "const covered = goals.conditions.occludedScenarios.includes(scenario);" },
+      { file: "e2e/benchmark/cases/b3-run.mjs", symbol: "async function conditionsAtEnd(conditions, failure) {" },
+      { file: "scripts/b3-out.mjs", symbol: "export function b3End(start, end) {" },
+      { file: "scripts/measure-terminal-redraw.mjs", symbol: "export async function readRedrawConditions({ s, status, trace, policy }) {" },
+    ],
+    tests: [
+      { file: "scripts/test/b3-out.test.mjs", id: "the conditions of a run state whether the first window, the window of the state, is covered" },
+      { file: "scripts/test/b3-judge.test.mjs", id: "a target of S9 reports a covered window and a target of any other scenario a window that is not covered" },
+      { file: "scripts/test/b3-judge.test.mjs", id: "the judge refuses a session whose run records a covered window" },
+      { file: "scripts/test/b3-judge.test.mjs", id: "the goals name the scenarios whose window is covered, each of them a scenario of a value" },
+      { file: "e2e/test/b3-run.test.mjs", id: "a benchmark records whether its window is covered when it writes, and a window covered at the start stays recorded" },
+      { file: "e2e/test/b3-run.test.mjs", id: "a benchmark that failed and cannot read its window keeps the conditions of its start, and its verdict is failed" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a target that reports a covered window fails its run" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a target whose application lost its activation fails its run" },
+      { file: "scripts/test/b3-out.test.mjs", id: "the conditions of a run state whether the application of the first window is active" },
+      { file: "scripts/test/b3-judge.test.mjs", id: "a target of every scenario reports an active application, S9 as well" },
+      { file: "e2e/test/b3-run.test.mjs", id: "a benchmark records an application that lost its activation during the interval" },
+      { file: "e2e/test/b3-run.test.mjs", id: "a benchmark that sets a copy of its conditions writes nothing, because a copy would record the window of its start" },
+      { file: "scripts/test/b3-out.test.mjs", id: "the window at the end of an interval is covered when it was at the start or is now, and active only when it was and is" },
+      { file: "scripts/test/measure-terminal-redraw.test.mjs", id: "the conditions of the redraw read the window again after the interval, so a window that was covered or lost its activation is recorded" },
+    ],
+    expected: "Each target of B3 records whether its window is covered and its application active, and the run and the judge refuse a value of a window that its scenario does not require.",
+    levels: ["unit"],
+  },
+  {
+    id: "F616",
+    implementation: [
+      { file: "scripts/benchmark-b3.mjs", symbol: "export function buildSteps(phase, baseline) {" },
+    ],
+    tests: [
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "each build step of a session names a target of the Makefile" },
+    ],
+    expected: "Each build step of a B3 session names a target of the Makefile.",
+    levels: ["unit"],
+  },
+  {
+    id: "F613",
+    implementation: [
+      { file: "scripts/benchmark-b3.mjs", symbol: "export async function activateWindow(configDir, { waitMs = 5000 } = {}) {" },
+    ],
+    tests: [
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a window that opens behind the front is activated before the first target of a run" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "a run whose activation is refused or whose window stays covered fails and measures nothing" },
+    ],
+    expected: "Each run of B3 activates its first window through input.pointer before its first target and fails when it stays covered.",
+    levels: ["unit"],
+  },
+  {
+    id: "F614",
+    implementation: [
+      { file: "scripts/checklist.mjs", symbol: "export function conflictMarkerErrors() {" },
+    ],
+    tests: [
+      { file: "scripts/test/checklist.test.mjs", id: "check-docs fails on a conflict marker in a document or a source file and names the file and the line" },
+      { file: "scripts/test/checklist.test.mjs", id: "check-docs passes a text that holds no conflict marker at the start of a line" },
+    ],
+    expected: "check-docs fails on a conflict marker at the start of a line of a tracked or new text file.",
+    levels: ["unit"],
+  },
+  {
+    id: "F612",
+    implementation: [
+      { file: "docs/operations/examples.md", symbol: "## Three-host benchmark" },
+    ],
+    tests: [
+      { file: "scripts/test/test-kinds.test.mjs", id: "the build and verify examples state each paragraph once and name only targets of the Makefile" },
+    ],
+    expected: "The build and verify examples state each paragraph once and name only targets of the Makefile.",
+    levels: ["unit"],
+  },
+  {
+    id: "F590",
+    implementation: [
+      { file: "scripts/measure-app-usage.mjs", symbol: "export const COUNT_WAIT_MS = 62000;" },
+      { file: "scripts/measure-app-usage.mjs", symbol: "export function recordsOver(before, after) {" },
+    ],
+    tests: [
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "measureApps waits for the counts after the marks and before the first cpu reading, and counts the records over the interval" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the wait for the counts is longer than the time a count of the gate waits for a write" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the records of the interval are the lines that the event logs gained, in a file that appeared as well" },
+    ],
+    expected: "The idle measurement starts its CPU interval after the counts of the preparation are written and reports the records of the interval.",
+    levels: ["unit"],
+  },
+  {
+    id: "F535-3",
+    implementation: [
+      { file: "packages/sok/go/src/event_log.go", symbol: "func (l *EventLog) rouseForCount() {" },
+      { file: "packages/sok/rust/src/event_log.rs", symbol: "pub(crate) fn nudge_for_count(&self) {" },
+      { file: "native/darwin/src/event_ring.m", symbol: "static void wakeWriterForCount(void) {" },
+    ],
+    tests: [
+      { file: "packages/sok/go/src/event_log_idle_test.go", id: "TestACountWaitsForTheNextWrite" },
+      { file: "packages/sok/rust/tests/event_log_idle_test.rs", id: "a_count_waits_for_the_next_write" },
+      { file: "native/darwin/tests/event_gate_wait_test.m", id: "a count leaves the pipe quiet during its wait" },
+    ],
+    expected: "A count of the gate alone makes no write: a writer that sleeps keeps it until the next event, for at most a minute.",
+    levels: ["unit", "native"],
+  },
+  {
+    id: "F535-1",
+    implementation: [
+      { file: "packages/sok/rust/src/event_log.rs", symbol: "queued = drain(&mut out, true);" },
+    ],
+    tests: [
+      { file: "packages/sok/rust/src/event_log_flush_test.rs", id: "a_flush_that_a_flush_finds_behind_it_is_answered" },
+      { file: "packages/sok/go/src/event_log_idle_test.go", id: "TestAFlushThatAFlushFindsBehindItIsAnswered" },
+    ],
+    expected: "A flush request that the writer finds while it answers another flush request is answered.",
+    levels: ["unit"],
+  },
+  {
+    id: "F536",
+    implementation: [
+      { file: "native/darwin/src/stall_watch.m", symbol: "void sp_stall_await_awake(void)" },
+      { file: "packages/host/go/src/stall_watch.go", symbol: "func StartStallWatch" },
+      { file: "packages/host/rust/src/stall_watch.rs", symbol: "pub fn start_stall_watch" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/stall_watch_test.go", id: "TestARunLoopThatWaitsTakesNoHeartbeat" },
+      { file: "packages/host/go/tests/stall_watch_test.go", id: "TestAStallThatEndsInAWaitIsResumedAndItsSampleEnds" },
+      { file: "packages/host/rust/tests/stall_watch_test.rs", id: "a_run_loop_that_waits_takes_no_heartbeat" },
+      { file: "packages/host/rust/tests/stall_watch_test.rs", id: "a_stall_that_ends_in_a_wait_is_resumed_and_its_sample_ends" },
+    ],
+    expected: "Both hosts send no heartbeat while the main run loop waits and block the watch without a timer, and they keep recording a stall while it handles an event.",
+    levels: ["unit"],
+  },
+  {
+    id: "F554",
+    implementation: [
+      { file: "packages/workbench/plane.js", symbol: "return sectionSurfaceShown(surfaceId) ? value(\"textSize\") : null;" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/plane-frame-text.test.mjs", id: "a frame factor change prepares the row of the next draw and writes the factor in that draw" },
+    ],
+    expected: "A view of a section that a drawn sidebar holds reads the frame factor in the Wails workbench.",
+    levels: ["unit"],
+  },
+  {
+    id: "F559",
+    implementation: [
+      { file: "packages/host/mygo/src/frontend.go", symbol: "func WindowScale(invoke func(func()), name string, native func() unsafe.Pointer, read func(unsafe.Pointer) (string, error)) (float64, error) {" },
+      { file: "packages/workbench-mygo/src/plane_verify.go", symbol: "func (s *Shell) failWindowRead(err error) {" },
+    ],
+    tests: [
+      { file: "packages/host/mygo/tests/framework_test.go", id: "TestAScaleOfAClosedWindowCallsNoNativeCode" },
+      { file: "packages/workbench-mygo/tests/plane_verify_test.go", id: "TestAVerificationOfAClosedWindowShowsNoFailure" },
+      { file: "packages/workbench-mygo/tests/plane_verify_test.go", id: "TestTheWorkbenchStatusOfAClosedWindowShowsNoFailure" },
+      { file: "packages/workbench-mygo/tests/plane_verify_test.go", id: "TestAReadOfAnOpenWindowThatFailsIsShown" },
+    ],
+    expected: "A read of a closed window gives the error 1003 without native code and shows no workbench error, and any other failure of the read is shown.",
+    levels: ["unit"],
+  },
+  {
+    id: "F549",
+    implementation: [
+      { file: "native/darwin/src/observe.m", symbol: "if (!sp_event_enabled(SP_CLASS_FRAME, SP_EVENT_DEBUG)) return;" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/observe_test.m", id: "a summary that a closed gate leaves due is no refused event" },
+    ],
+    expected: "A source of the mode count holds its summary back while the gate is closed, so the gate refuses nothing, and the first summary after the gate opens holds every delivery.",
+    levels: ["native"],
+  },
+  {
+    id: "F558",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) replaceIdle()" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn replace_idle(&self)" },
+      { file: "packages/workbench/projects.js", symbol: "sectionSurfacePlugin(surface)" },
+      { file: "packages/workbench-mygo/src/sidebars.go", symbol: "func (s *Sidebars) surfacePlugin(surface string) string {" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestAnOutdatedServiceKeepsASurfaceThatALayoutHolds" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestALayoutSurfaceOfAnotherPluginDoesNotHoldAnOutdatedService" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestAnOutdatedServiceWaitsForTheFirstLayoutList" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "an_outdated_service_keeps_a_surface_that_a_layout_holds" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "a_layout_surface_of_another_plugin_does_not_hold_an_outdated_service" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "an_outdated_service_waits_for_the_first_layout_list" },
+      { file: "packages/workbench-mygo/tests/sidecar_sessions_test.go", id: "TestARetainNamesThePluginOfEachSurface" },
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "the layouts hold the sections of every space of every project, whatever the window draws, with the sets of each project" },
+    ],
+    expected: "An outdated persistent service stays while a project layout holds a surface of a plugin of its sidecar, and a list of the layouts without such a surface replaces it.",
+    levels: ["unit"],
+  },
+  {
+    id: "F556",
+    implementation: [{ file: "e2e/hwp-startup.mjs", symbol: "export async function collectHwpStartupResourceEvidence" }],
+    tests: [{ file: "e2e/test/hwp-startup.test.mjs", id: "HWP startup collection fails when the document requests an address outside soksak" }],
+    expected: "The HWP startup window check fails with each address outside soksak that the resource entries of the document name.",
+    levels: ["unit"],
+  },
+  {
+    id: "F547",
+    implementation: [
+      { file: "packages/workbench-mygo/src/events.go", symbol: "if e.gatedTimer || e.sending || len(e.gated) == 0 {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/events_test.go", id: "TestTheReportOfTheCountsArmsNoTimerWhileABatchIsInFlight" },
+      { file: "packages/workbench-mygo/tests/events_test.go", id: "TestACountRefusedWhileABatchIsInFlightWaitsForTheRestOfItsInterval" },
+    ],
+    expected: "The report of the gate counts of the mygo workbench arms no timer while a batch is in flight.",
+    levels: ["unit"],
+  },
+  {
+    id: "F557",
+    implementation: [
+      { file: "native/darwin/src/webview_input.m", symbol: "static void pointerLeft(WKWebView *view, NSEvent *event)" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/webview_input_test.m", id: "a move before the enter hovers the view at the point" },
+      { file: "native/darwin/tests/webview_input_test.m", id: "a move off the view on top leaves it before its exit comes" },
+    ],
+    expected: "In each order of the enter, the exit and the move, only the view at the point hovers, and a view that loses the pointer hovers nothing.",
+    levels: ["native"],
+  },
+  {
+    id: "F548",
+    implementation: [
+      { file: "packages/workbench/core-exposure.js", symbol: "settingsScreen ??= await import(\"./settings-ui.js\");" },
+      { file: "packages/workbench/core-exposure.js", symbol: "debugScreen ??= await import(\"./debug-ui.js\");" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/page-start-imports.test.mjs", id: "the first window of a main page reads no module of the settings modal or the debug view" },
+      { file: "packages/workbench/test/page-start-imports.test.mjs", id: "a screen that never loaded answers its status as closed, and its first command loads it" },
+    ],
+    expected: "The first window reads no module of the settings modal or the debug view, and each screen loads at its first use.",
+    levels: ["unit"],
+  },
+  {
+    id: "F538",
+    implementation: [
+      { file: "packages/workbench/section-surfaces.js", symbol: "export function spaceSectionSurfaces(space, cards, sets, links)" },
+      { file: "packages/workbench/projects.js", symbol: "const { sets, links } = projectSidebars(project);" },
+      { file: "packages/workbench/settings.js", symbol: "export function projectSidebars(project)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "the layouts hold the sections of every space of every project, whatever the window draws, with the sets of each project" },
+      { file: "packages/workbench/test/section-surfaces.test.mjs", id: "a space holds the sections of the sets of its window sidebars and of the sides of its cards" },
+      { file: "packages/workbench/test/settings-debug-switch.test.mjs", id: "the sidebars of a project are its own overrides over the common settings" },
+    ],
+    expected: "A retain keeps the persistent sessions of the sections of every stored layout.",
+    levels: ["unit"],
+  },
+  {
+    id: "F539",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "static void gatherAreas(" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/input_inject_test.m", id: "each owner of a tracking area at the point hears the move" },
+      { file: "native/darwin/tests/input_inject_test.m", id: "the owners hear the point of a press before the press" },
+    ],
+    expected: "A driven move reaches every owner of a tracking area that holds the point, with its enter and its exit, and a press sends this move first.",
+    levels: ["native"],
+  },
+  {
+    id: "F551",
+    implementation: [
+      { file: "packages/host/rust/src/routine/routine.rs", symbol: "pub fn async_runtime()" },
+      { file: "packages/host/tauriv2/src/host.rs", symbol: "fn set_async_runtime()" },
+    ],
+    tests: [
+      { file: "packages/host/rust/src/routine/async_runtime_test.rs", id: "the_asynchronous_runtime_has_two_workers" },
+      { file: "packages/host/rust/src/routine/async_runtime_test.rs", id: "an_idle_blocking_thread_of_the_runtime_ends_after_one_second" },
+    ],
+    expected: "The asynchronous runtime of the Tauri host holds two workers, and an idle blocking thread ends after one second.",
+    levels: ["unit"],
+  },
+  {
+    id: "F550",
+    implementation: [
+      { file: "packages/host/rust/src/exposure.rs", symbol: "pub(crate) struct LatestWork<T>" },
+      { file: "packages/host/go/src/exposure.go", symbol: "type latestRead struct" },
+    ],
+    tests: [
+      { file: "packages/host/rust/src/exposure_status_test.rs", id: "a_burst_of_window_changes_is_one_more_read_on_one_thread" },
+      { file: "packages/host/rust/src/exposure_status_test.rs", id: "each_window_keeps_its_own_latest_read_on_the_same_thread" },
+      { file: "packages/host/go/src/exposure_status_test.go", id: "TestABurstOfWindowChangesIsOneMoreReadingAfterTheLastChange" },
+    ],
+    expected: "The changes of host.window that arrive during a reading join one further reading, on one thread of the Tauri host.",
+    levels: ["unit"],
+  },
+  {
+    id: "F552",
+    implementation: [
+      { file: "packages/host/rust/src/performance.rs", symbol: "fn require_test_switch()" },
+      { file: "packages/host/rust/src/view_join_test.rs", symbol: "const UNREAD_SURFACE" },
+      { file: "packages/host/rust/src/presentation_wait_test.rs", symbol: "const CANCELLED_SURFACE" },
+    ],
+    tests: [
+      { file: "packages/host/rust/src/performance_lock_test.rs", id: "a_test_that_switches_the_trace_without_holding_the_switch_fails_at_once" },
+      { file: "packages/host/rust/src/view_responsiveness_test.rs", id: "creating_a_view_writes_the_request_and_its_first_ready_message_writes_the_ready_event_once" },
+    ],
+    expected: "A test that switches the performance trace without the lock of the switch fails on every run, and a test that counts records shares its surface with no writer.",
+    levels: ["unit"],
+  },
+  {
+    id: "F555",
+    implementation: [
+      { file: "packages/workbench/host-store.js", symbol: "reading = this.snapshot();" },
+      { file: "packages/workbench/projects.js", symbol: "store.onChange((read) => { reread(read).catch(failed); });" },
+      { file: "packages/workbench/settings.js", symbol: "async function refresh(read = () => store.snapshot())" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/workspace-change-read.test.mjs", id: "the listeners of one change read the host once and each receives a value of its own" },
+      { file: "packages/workbench/test/workspace-change-read.test.mjs", id: "each change reads the host again, and a change that no listener reads calls nothing" },
+      { file: "packages/workbench/test/workspace-change-read.test.mjs", id: "a listener that reads after the read of its change ended reads the host again" },
+      { file: "packages/workbench/test/workspace-change-read.test.mjs", id: "a listener that reads while the read of its change runs shares that call" },
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "a registry read that waited behind another read finds what the host holds at its turn" },
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "the registry and the settings of a window call the host once for one change" },
+      { file: "packages/workbench/test/settings.test.mjs", id: "a change of the store is read through the read of that change" },
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "a change of the store is read through the read of that change" },
+    ],
+    expected: "One change of the store is one read of the host for a window, and each listener receives a value of its own.",
+    levels: ["unit"],
+  },
+  {
+    id: "F562",
+    implementation: [
+      { file: "packages/workbench-mygo/tests/host_calls_test.go", symbol: "func (s steps) drain(t testing.TB)" },
+      { file: "packages/workbench-mygo/tests/host_calls_test.go", symbol: "func workingGoroutine() string" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/host_calls_test.go", id: "TestDrainWaitsForAHostCallThatRuns" },
+      { file: "packages/workbench-mygo/tests/host_calls_test.go", id: "TestDrainEndsWhileAHostCallWaitsForTheTest" },
+      { file: "packages/workbench-mygo/tests/host_calls_test.go", id: "TestDrainFollowsTheCallsOfAnAnswer" },
+    ],
+    expected: "drain ends when no step waits and every other goroutine waits for something only another goroutine or the test can end.",
+    levels: ["unit"],
+  },
+  {
+    id: "F571",
+    implementation: [
+      { file: "scripts/b3-judge.mjs", symbol: "lines.push(`not measured ${value.id} ${name}`)" },
+      { file: "scripts/measure-app-usage.mjs", symbol: "export function notMeasuredLines({ idle, marks })" },
+    ],
+    tests: [
+      { file: "scripts/test/b3-judge.test.mjs", id: "a value that a host records in no run is printed as not measured, and it is no pass and no failure" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "an idle wait over a window whose frames is null reports that no frame was read, and frames that hold still report quiet" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the report names the counters that no window reports and an idle wait that read no frame" },
+    ],
+    expected: "A value that a host records in no run is printed as not measured, and an idle wait over a window whose frames is null says that it read no frame.",
+    levels: ["unit"],
+  },
+  {
+    id: "F544",
+    implementation: [
+      { file: "native/darwin/src/input_press_context.h", symbol: "bool sp_input_press_open(void *window, int button);" },
+      { file: "native/darwin/src/webview_input.m", symbol: "BOOL answered = NO;" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "an origin that outlives its release does not hold the keyboard" },
+      { file: "native/darwin/tests/webview_input_receipts_test.m", id: "one receipt answers every wait of its type" },
+    ],
+    expected: "Only an open press holds a keyboard move, and one receipt answers every wait of its type.",
+    levels: ["native"],
+  },
+  {
+    id: "F545",
+    implementation: [
+      { file: "packages/host/rust/src/installed.rs", symbol: "if path.starts_with(\"/modules/\")" },
+      { file: "packages/host/rust/src/installed.rs", symbol: "state.plugins.get(plugin).filter(|entry| entry.enabled)" },
+      { file: "packages/host/go/src/installed.go", symbol: "func holdsModule(frontend fs.FS, urlPath string) bool {" },
+      { file: "packages/host/go/src/installed.go", symbol: "func PluginFolder(configDir, plugin string) (string, error) {" },
+    ],
+    tests: [
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "a_file_of_the_frontend_reads_no_file_of_a_plugin" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "a_file_of_the_frontend_wins_over_a_plugin_of_the_same_package" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "a_module_of_a_plugin_stops_reading_at_its_package" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "a_module_beside_a_malformed_package_json_is_served" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "the_plugin_folder_reads_the_manifest_of_its_plugin_alone" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "the_plugin_folder_is_found_beside_a_malformed_plugin" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "the_plugin_folder_follows_the_installation" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestAFileOfTheFrontendReadsNoFileOfAPlugin" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestAFileOfTheFrontendWinsOverAPluginOfTheSamePackage" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestAModuleOfAPluginStopsReadingAtItsPackage" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestAModuleBesideAMalformedPackageJSONIsServed" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestThePluginFolderReadsTheManifestOfItsPluginAlone" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestThePluginFolderIsFoundBesideAMalformedPlugin" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestThePluginFolderFollowsTheInstallation" },
+    ],
+    expected: "A core module reads nothing of the installation and wins over a plugin of its package; a plugin module and a plugin folder read up to their own plugin.",
+    levels: ["unit"],
+  },
+  {
+    id: "F541",
+    implementation: [
+      { file: "packages/host/rust/src/installed.rs", symbol: "fn installed_package(config_dir: &Path, name: &str) -> Result<Option<PathBuf>, String> {" },
+      { file: "packages/host/go/src/installed.go", symbol: "func installedPackage(configDir, name string) (string, error) {" },
+    ],
+    tests: [
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "a_module_of_a_plugin_reads_the_manifest_of_that_plugin_alone" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "a_module_of_the_frontend_reads_no_manifest" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "a_shared_module_reads_the_manifest_of_its_provider_alone" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "a_malformed_manifest_refuses_the_modules_of_its_own_plugin_alone" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "the_request_after_an_install_serves_the_new_plugin" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "the_request_after_a_removal_does_not_serve_the_plugin" },
+      { file: "packages/host/rust/src/installed_reads_test.rs", id: "the_request_after_an_update_reads_the_new_manifest" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestAModuleOfAPluginReadsTheManifestOfThatPluginAlone" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestAModuleOfTheFrontendReadsNoManifest" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestASharedModuleReadsTheManifestOfItsProviderAlone" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestAMalformedManifestRefusesTheModulesOfItsOwnPluginAlone" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestTheRequestAfterAnInstallServesTheNewPlugin" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestTheRequestAfterARemovalDoesNotServeThePlugin" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestTheRequestAfterAnUpdateReadsTheNewManifest" },
+    ],
+    expected: "A request of a page module reads the manifest of its own plugin alone, and the request after a change of the installation answers from the new files.",
+    levels: ["unit"],
+  },
+  {
+    id: "F546",
+    implementation: [
+      { file: "packages/plugin-api/log-batch.js", symbol: "if (gatedTimer || sending || gated.size === 0) return;" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/log-batch.test.mjs", id: "the report of the counts arms no timer while a batch is in flight" },
+      { file: "packages/plugin-api/test/log-batch.test.mjs", id: "a count refused while a batch is in flight waits for the rest of its interval after the batch" },
+    ],
+    expected: "The report of the gate counts of a page arms no timer while a batch is in flight.",
+    levels: ["unit"],
+  },
+  {
+    id: "F542",
+    implementation: [
+      { file: "packages/sok/go/src/log_query.go", symbol: "page.Rejected = append(page.Rejected, rejected.text)" },
+      { file: "packages/sok/rust/src/log_query.rs", symbol: "page.rejected.push(text);" },
+      { file: "packages/sok/go/src/debug.go", symbol: "func reportRejected(stderr io.Writer, rejected []string) error" },
+      { file: "packages/sok/rust/src/debug.rs", symbol: "pub(crate) fn report_rejected(stderr: &mut dyn Write, rejected: &[String])" },
+      { file: "packages/workbench/debug-ui.js", symbol: "rejected = page.rejected;" },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/log_query_test.go", id: "TestLogQueryLeavesOutAFileOfAnotherSchemaAndNamesIt" },
+      { file: "packages/sok/rust/tests/log_query_test.rs", id: "query_leaves_out_a_file_of_another_schema_and_names_it" },
+      { file: "packages/sok/go/tests/debug_test.go", id: "TestQueryPrintsTheOtherFilesAndReportsARejectedFile" },
+      { file: "packages/sok/rust/tests/debug_test.rs", id: "query_prints_the_other_files_and_reports_a_rejected_file" },
+      { file: "packages/sok/go/tests/replay_test.go", id: "TestReplayReportsARejectedFile" },
+      { file: "packages/sok/rust/tests/replay_test.rs", id: "replay_reports_a_rejected_file" },
+      { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "a file that the query rejected is shown through the error display beside the rows of the other files" },
+    ],
+    expected: "A query leaves out a file of another schema number, answers the other files and names the file.",
+    levels: ["unit"],
+  },
+  {
+    id: "F540",
+    implementation: [
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn end_hello_deadline(stream: &dyn PersistentStream, name: &str) -> Result<(), String> {" },
+    ],
+    tests: [
+      { file: "packages/host/rust/src/sidecars_read_deadline_test.rs", id: "a_connection_after_its_hello_has_no_read_deadline" },
+      { file: "packages/host/rust/src/sidecars_read_deadline_test.rs", id: "a_read_after_the_hello_deadline_waits_past_that_deadline" },
+    ],
+    expected: "A persistent connection of the Rust host has no read deadline after its hello, so a silence neither wakes its read thread nor ends the connection.",
+    levels: ["unit"],
+  },
+  {
+    id: "F537",
+    implementation: [
+      { file: "packages/host/rust/src/exposure.rs", symbol: "Some(Value::String(text)) if text.is_empty() => None," },
+      { file: "packages/host/rust/src/images.rs", symbol: "fn attach_on_main(" },
+      { file: "packages/host/go/src/documents.go", symbol: "mainThreadStep(func() { err = s.attachImageOnMain(key, req) })" },
+      { file: "packages/host/rust/src/documents.rs", symbol: "attach_on_main(&host, &data, &key, platform, restore)" },
+      { file: "packages/host/go/src/documents.go", symbol: "mainThreadStep(func() { err = s.attachDocumentOnMain(key, restore) })" },
+      { file: "packages/workbench/bar-tabs.js", symbol: "keepChildren(spaceBar, spaceTabs);" },
+      { file: "packages/workbench/projects.js", symbol: "if (JSON.stringify([projects, [...openProjects]]) !== shown) changed();" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/exposure_test.rs", id: "a_key_with_empty_text_types_its_key_name" },
+      { file: "packages/host/go/tests/endpoint_test.go", id: "TestEndpointKeyWithEmptyTextHasNoText" },
+      { file: "packages/host/rust/src/images_test.rs", id: "a_surface_close_during_an_attach_finds_no_name_of_the_attach" },
+      { file: "packages/host/go/src/image_detach_test.go", id: "TestAReloadDuringAnAttachLeavesNoRegionWithoutAName" },
+      { file: "packages/host/rust/src/documents_test.rs", id: "a_surface_close_during_an_attach_finds_no_name_of_the_attach" },
+      { file: "packages/host/go/src/documents_test.go", id: "TestAReloadDuringADocumentAttachLeavesNoRegionWithoutAName" },
+      { file: "packages/workbench/test/bar-tabs.test.mjs", id: "a draw between a press and its release keeps the pressed project and space tabs" },
+      { file: "packages/workbench/test/bar-tabs.test.mjs", id: "the shown project tab has the background of its project, and another project tab has none" },
+      { file: "packages/workbench/test/page-identifiers.test.mjs", id: "every shipped module declares the names that it reads" },
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "a registry read after the write of this window draws nothing, and a read that finds a change draws once" },
+    ],
+    expected: "Each path of a person on the Tauri host holds: a key with an empty text types, an attach of an image or a document runs in one step of the main thread, a draw keeps a pressed tab, and a read that finds nothing new draws nothing.",
+    levels: ["unit"],
+  },
+  {
+    id: "F533",
+    implementation: [
+      { file: "packages/workbench/memory-saver.js", symbol: 'if (trigger === "delay") entry.unloadAt = now() + delayMs();' },
+    ],
+    tests: [
+      { file: "packages/workbench/test/memory-saver.test.mjs", id: "a failed ${step} at the deadline runs again one delay later, not at the deadline that passed" },
+    ],
+    expected: "A delay unload that fails runs again one delay later.",
+    levels: ["unit"],
+  },
+  {
+    id: "F534",
+    implementation: [
+      { file: "native/darwin/src/surface_layout.m", symbol: "near60 = [feature retain];" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/window_facts_test.m", id: "a later read of the window facts reads no feature list" },
+      { file: "native/darwin/tests/window_facts_test.m", id: "a later read reports the rendering preference of the view" },
+    ],
+    expected: "A read of the window facts reads no WebKit feature list, and each view reports its own rendering preference.",
+    levels: ["native"],
+  },
+  {
+    id: "F531",
+    implementation: [
+      { file: "scripts/measure-app-usage.mjs", symbol: "const remaining = unattributed.filter(({ pid }) => !ended.has(pid));" },
+    ],
+    tests: [
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "measureApps leaves out a process of no application that ends between the cpu reads" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "measureApps reports a process of the application that ends between the cpu reads" },
+    ],
+    expected: "A process of no application that ends during a measurement leaves the measurement, and a process of the application that ends fails it.",
+    levels: ["unit"],
+  },
+  {
+    id: "F520",
+    implementation: [
+      { file: "native/darwin/tests/support/site_cost.m", symbol: "NSString *siteCostSummarize(const double *values, int count, SiteCostSummary *summary) {" },
+      { file: "native/darwin/tests/support/site_cost.m", symbol: "NSString *siteCostParseRuns(const char *text, int *runs) {" },
+      { file: "native/darwin/tests/support/site_cost.m", symbol: "NSString *siteCostCheckRun(const SiteCostRun *run) {" },
+      { file: "native/darwin/tests/support/site_cost.m", symbol: "NSString *siteCostDecodeRun(NSData *data, SiteCostRun *run) {" },
+      { file: "native/darwin/tests/support/site_cost.m", symbol: "NSString *siteCostReport(const SiteCostRun *runs, int runCount, NSString **error) {" },
+      { file: "native/darwin/tests/site_cost_benchmark.m", symbol: "static void measureRun(const SiteCostSite *site, NSString *output) {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/site_cost_test.m", id: "the fixed list has seven sites" },
+      { file: "native/darwin/tests/site_cost_test.m", id: "five values have the quartiles 2, 4 and 5" },
+      { file: "native/darwin/tests/site_cost_test.m", id: "four values are refused" },
+      { file: "native/darwin/tests/site_cost_test.m", id: "five runs are accepted" },
+      { file: "native/darwin/tests/site_cost_test.m", id: "a run survives its file" },
+      { file: "native/darwin/tests/site_cost_test.m", id: "the refusal names the site, the run and the metric" },
+    ],
+    expected: "A tracked benchmark target measures each site of a fixed list in a document region, with a page that changes its tree without pause among them, and reports per site the memory increase of the content, graphics and network processes over a baseline without the tab, the CPU at rest and in the background, the load time and the input delay, as the median and interquartile range of at least five runs.",
+    levels: ["unit"],
+  },
+  {
+    id: "F518",
+    implementation: [
+      { file: "native/darwin/src/document_view.m", symbol: "char *sp_document_binary_put(void *handle, const void *bytes, size_t length, const char *type, char id[33]) {" },
+      { file: "packages/host/go/src/clipboard.go", symbol: "func (s *Surfaces) readViewPNG(surface string) (ClipboardViewReadResponse, error) {" },
+      { file: "packages/host/rust/src/clipboard.rs", symbol: "pub(crate) fn read_view_png_with(" },
+      { file: "packages/workbench/view-calls.js", symbol: "const persisted = await runtime.clipboard.persistPNG(fields.binary);" },
+      { file: "packages/plugin-api/view.js", symbol: "const uploadBinary = async (bytes, type) => {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/document_binary_test.m", id: "a native put stores the bytes under a new id" },
+      { file: "native/darwin/tests/document_binary_test.m", id: "a put over the page limit of 64 MiB is refused and stores nothing" },
+      { file: "packages/host/go/src/view_binary_test.go", id: "TestViewPNGReadPutsTheClipboardPNGIntoTheViewStore" },
+      { file: "packages/host/go/src/view_binary_test.go", id: "TestViewPNGPersistTakesTheIdAndSavesItsBytes" },
+      { file: "packages/host/rust/src/view_binary_test.rs", id: "a_view_png_read_puts_the_clipboard_png_into_the_view_store" },
+      { file: "packages/host/rust/src/view_binary_test.rs", id: "a_view_png_persist_takes_the_id_and_saves_its_bytes" },
+      { file: "packages/workbench/test/view-calls.test.mjs", id: "runtime.clipboard.persistPNG refuses params without a binary id, and base64 data, and persists nothing" },
+      { file: "packages/plugin-api/test/view-clipboard.test.mjs", id: "a png read downloads the bytes of the binary id that the reply names" },
+      { file: "packages/plugin-api/test/view-clipboard.test.mjs", id: "persistPNG uploads the bytes as image/png and sends the binary id of the upload" },
+    ],
+    expected: "A view uploads the PNG of persistPNG to its binary store and sends the id, which the host takes, and the host puts the PNG of a png read into that store and replies the id, which the view downloads; a native put keeps the bounds of an upload.",
+    levels: ["unit"],
+  },
+  {
+    id: "F519",
+    implementation: [
+      { file: "native/darwin/src/declared_color_space.m", symbol: "CGColorSpaceRef sp_declared_color_space_create(CFTypeRef declaration, CFStringRef *error) {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_region_test.m", id: "TEST 23: accepted snapshot preserves the IOSurface sRGB color-space tag" },
+      { file: "native/darwin/tests/image_region_test.m", id: "as the declared color space rejects the frame with an error naming" },
+      { file: "native/darwin/tests/image_region_test.m", id: "TEST 23: a DisplayP3 name string as the declared color space is accepted" },
+    ],
+    expected: "A declared color space that is a property list, a name or the number of a named space is decoded, and every other declaration rejects the frame with an error naming kIOSurfaceColorSpace and the type of its value instead of stopping the process.",
+    levels: ["unit"],
+  },
+  {
+    id: "F502-10",
+    implementation: [
+      { file: "packages/host/go/src/framework.go", symbol: "AfterPresentation(done func(err error)) error" },
+      { file: "packages/host/go/src/framework.go", symbol: "SettledPresentation() (unsafe.Pointer, error)" },
+      { file: "packages/host/rust/src/framework.rs", symbol: "fn after_presentation(&self, done: PresentationDone) -> Result<()>;" },
+      { file: "packages/host/rust/src/framework.rs", symbol: "fn settled_presentation(&self) -> Result<*mut c_void>;" },
+      { file: "packages/host/go/src/platform/darwin/layout.go", symbol: "func (implementation) MainPresentation(window unsafe.Pointer) (unsafe.Pointer, error) {" },
+      { file: "packages/host/rust/src/platform/darwin/layout.rs", symbol: "pub fn main_presentation(view: &PlatformWebview) -> Handle {" },
+      { file: "packages/host/wailsv3/src/frontend.go", symbol: "func (f Frontend) SettledPresentation() (unsafe.Pointer, error) {" },
+      { file: "packages/host/tauriv2/src/frontend.rs", symbol: "fn settled_presentation(&self) -> port::Result<*mut c_void> {" },
+      { file: "scripts/check-host-files.mjs", symbol: "function callsBlock(call) {" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/surfaces_test.go", id: "TestLayoutCommitsAfterThePresentationNoticeOfTheFrontend" },
+      { file: "packages/host/rust/src/surfaces_test.rs", id: "the_layout_commits_after_the_presentation_notice_of_the_frontend" },
+      { file: "packages/host/go/src/surfaces_test.go", id: "TestAFailedPresentationNoticeCancelsTheLayout" },
+      { file: "packages/host/rust/src/surfaces_test.rs", id: "a_failed_presentation_notice_ends_the_present_with_its_error" },
+      { file: "packages/host/go/src/exposure_settled_test.go", id: "TestSettledWaitBringsTheContentThroughTheFrontend" },
+      { file: "packages/host/rust/src/exposure_settled_test.rs", id: "the_settled_wait_brings_the_content_through_the_frontend" },
+      { file: "scripts/test/main-thread-calls.test.mjs", id: "main-thread audit counts a call of a block as a call of a native function" },
+    ],
+    expected: "The layout transaction commits only after the presentation notice of the `Frontend` port calls back and a failed notice cancels it, the settled wait brings the content to the screen through the block of the settled presentation of the port, and the main-thread audit fails on a function called from Go that calls a block outside `hostRunOnMain` or `ON_MAIN`.",
+    levels: ["unit"],
+  },
+  {
+    id: "F502-4",
+    implementation: [
+      { file: "native/darwin/src/webview_geometry.m", symbol: "void *sp_surface_create(void *handle) {" },
+      { file: "native/darwin/src/webview_geometry.m", symbol: "- (void)cursorUpdate:(NSEvent *)event { sendPointerMove(self.superview); }" },
+      { file: "native/darwin/src/window_facts.m", symbol: "void *sp_window_set_main_webview(void *handle, void *mainHandle) {" },
+      { file: "native/darwin/src/window_facts.m", symbol: "char *sp_window_hit(void *handle, void *surfaceView, double x, double y) {" },
+      { file: "native/darwin/src/surface_layout.m", symbol: "void surfaceLayoutObserve(void (^started)(void *), void (^ended)(void *)) {" },
+      { file: "native/darwin/src/surface_layout.m", symbol: "surfaceLayoutPresent surfaceLayoutMainPresentation(void *handle) {" },
+      { file: "packages/host/go/src/platform/darwin/webview.m", symbol: "surfaceLayoutAfterSettled(handle, (surfaceLayoutPresent)present, " },
+      { file: "packages/host/rust/src/platform/darwin/layout.rs", symbol: "surfaceLayoutAfterSettled(window as *mut c_void, present as *mut c_void, &done)" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/surface_container_test.m", id: "a surface host is created in an NSView that is not a web view" },
+      { file: "native/darwin/tests/surface_container_test.m", id: "the web view of a surface host takes the backing scale of the window of the container" },
+      { file: "native/darwin/tests/surface_container_test.m", id: "a cursorUpdate: of a web view of a surface host reaches the tracking area owner of that web view as a pointer move at the current position" },
+      { file: "native/darwin/tests/surface_layout_observe_test.m", id: "started precedes ready of each preparation, a newer preparation of the same window included" },
+      { file: "native/darwin/tests/surface_layout_observe_test.m", id: "ended of a deferred commit follows the joined view and precedes the next waiting transaction of another window" },
+      { file: "native/darwin/tests/surface_layout_observe_test.m", id: "the wait does not ask the block while a transaction of the window waits" },
+      { file: "native/darwin/tests/surface_host_test.m", id: "the registration returns the window composition around the main web view" },
+    ],
+    expected: "The native library places surface hosts in any NSView that holds their container, and window facts and window hits take that view; the registration of a main web view returns its window composition; the layout observer reports the start and the end of a transaction; and a settled wait takes the block that presents the content of the window.",
+    levels: ["native"],
+  },
+  {
+    id: "F508",
+    implementation: [
+      { file: "scripts/check-private-apis.mjs", symbol: "export function declaredApis(headers) {" },
+      { file: "scripts/check-private-apis.mjs", symbol: "export function apiUses(apis, sources) {" },
+      { file: "scripts/check-private-apis.mjs", symbol: "export function inventoryFindings({ apis, sources, document, markdown, uses = apiUses(apis, sources) }) {" },
+      { file: "scripts/check-private-apis.mjs", symbol: "export function unusedDeclarations(apis, uses) {" },
+    ],
+    tests: [
+      { file: "scripts/test/check-private-apis.test.mjs", id: "comments are removed and strings, character literals and the cgo preamble of a Go file are kept" },
+      { file: "scripts/test/check-private-apis.test.mjs", id: "the declarations of a header are its functions, constants, types and the members of its categories, classes and protocols" },
+      { file: "scripts/test/check-private-apis.test.mjs", id: "a source uses a member of a declared type only when it uses the type or defines an optional protocol member, and an identifier only outside comments" },
+      { file: "scripts/test/check-private-apis.test.mjs", id: "an inventory whose rows name every declared API and link exactly the sources that use it has no finding" },
+      { file: "scripts/test/check-private-apis.test.mjs", id: "a declared API that no row names is a finding at its declaration, with the sources that use it" },
+      { file: "scripts/test/check-private-apis.test.mjs", id: "a source that uses an API and that no row naming the API links is a finding" },
+      { file: "scripts/test/check-private-apis.test.mjs", id: "a linked source that uses no API of its row is a finding" },
+      { file: "scripts/test/check-private-apis.test.mjs", id: "a function, method or class that a row names in its caller column and that no linked file defines is a finding" },
+      { file: "scripts/test/check-private-apis.test.mjs", id: "a declaration that no source uses is a finding at its declaration" },
+      { file: "scripts/test/check-private-apis.test.mjs", id: "the private API inventory and its translation agree with the private declarations and the sources" },
+    ],
+    expected: "The check fails when no source uses a declared private API, when a declared private API has no inventory row, when a source that uses an API is not linked in a row that names it, when a linked source uses no API of its row, and when a caller that a row names is not defined in a file that the row links; the inventory and its translation pass.",
+    levels: ["unit"],
+  },
+  {
+    id: "F513",
+    implementation: [
+      { file: "scripts/check-hosts-same.mjs", symbol: "export function auditPlatformCallers(host, methods, sources, scope) {" },
+      { file: "scripts/check-hosts-same.mjs", symbol: "function callerGraph(language, sources, scope) {" },
+      { file: "scripts/check-hosts-same.mjs", symbol: "export function withoutRustTestItems(source) {" },
+      { file: "scripts/check-hosts-same.mjs", symbol: "export function libraryCrate(manifest, file) {" },
+      { file: "packages/host/rust/tests/support/platform/darwin/endpoint_client.rs", symbol: "pub fn connect(address: &str, read_timeout: Duration) -> Connection {" },
+    ],
+    tests: [
+      { file: "scripts/test/check-hosts-same.test.mjs", id: "every platform method with a caller passes" },
+      { file: "scripts/test/check-hosts-same.test.mjs", id: "a platform method without a caller outside the platform fails" },
+      { file: "scripts/test/check-hosts-same.test.mjs", id: "a platform method named only in a comment has no caller" },
+      { file: "scripts/test/check-hosts-same.test.mjs", id: "auditHostParity reports a platform method of either host that no source outside the platform calls" },
+      { file: "scripts/test/check-hosts-same.test.mjs", id: "a platform method that only a test item of a Rust source calls has no caller" },
+      { file: "scripts/test/check-hosts-same.test.mjs", id: "the product sources of a host are its source files outside the platform folder, without test files" },
+      { file: "scripts/test/check-hosts-same.test.mjs", id: "a platform method whose only callers are free functions that no live function calls has no caller" },
+      { file: "scripts/test/check-hosts-same.test.mjs", id: "a free function that a live function, an application or a command calls keeps its platform method called" },
+      { file: "scripts/test/check-hosts-same.test.mjs", id: "free functions that only call each other have no caller" },
+      { file: "scripts/test/check-hosts-same.test.mjs", id: "the library crate of a host is the package name in Rust form and its root file under src" },
+    ],
+    expected: "Host parity reports each platform method that no production source of its host outside src/platform calls; a method named only in a comment, a test file or a Rust test item is not called, and a call inside a free function counts only when an entry point, an application source or another counting call reaches that function. The integration tests connect to the endpoint through a macOS test client whose reads have a time limit.",
+    levels: ["unit"],
+  },
+  {
+    id: "F507",
+    implementation: [
+      { file: "native/darwin/src/webview_geometry.m", symbol: "bool sp_surface_place_view(void *surfaceHandle, void *viewHandle) {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/webview_geometry_test.m", id: "the placed view webview uses the main webview's canonical composition" },
+      { file: "native/darwin/tests/window_objects_test.m", id: "one window with a logical surface and a surface with a placed view webview counts" },
+    ],
+    expected: "The native tests build each surface with sp_surface_create and place its view web view with sp_surface_place_view, as the hosts do through sp_document_create, and no source attaches a web view through another path.",
+    levels: ["native"],
+  },
+  {
+    id: "F509",
+    implementation: [{ file: "Cargo.toml", symbol: "[profile.release.build-override]\nstrip = false" }],
+    tests: [{ file: "scripts/test/rust-release-profile.test.mjs", id: "a release build loads the proc-macro libraries that it builds for the host" }],
+    expected: "A release build of the Rust workspace with the deployment target of the Makefile builds the proc-macro libraries for the host without stripping them, so rustc loads them.",
+    levels: ["unit"],
+  },
+  {
+    id: "F506",
+    implementation: [
+      { file: "native/darwin/src/document_view.m", symbol: "static void *documentCreationFails(NSString *cause) {" },
+      { file: "packages/host/go/src/platform/darwin/document.go", symbol: "const missingNativeCause = \"the native layer stated no cause\"" },
+      { file: "packages/host/rust/src/platform/darwin/document.rs", symbol: "const MISSING_NATIVE_CAUSE: &str = \"the native layer stated no cause\";" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/document_cause_test.m", id: "the surface has no native plane" },
+      { file: "packages/host/go/src/platform/darwin/document_test.go", id: "TestCreateDocumentReportsAMissingNativeCause" },
+      { file: "packages/host/rust/src/platform/darwin/document_test.rs", id: "create_reports_a_missing_native_cause" },
+    ],
+    expected: "Every failed creation of a document region or view page states the condition that failed, and both hosts report an empty native cause as a missing cause.",
+    levels: ["native", "unit"],
+  },
+  {
+    id: "F580",
+    implementation: [
+      { file: "docs/spec/native-surfaces.md", symbol: "**Image consumption**" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_region_spare_test.m", id: "the spare is released when no frame arrives for the delay" },
+      { file: "native/darwin/tests/image_region_spare_test.m", id: "frames within the delay keep the spare" },
+    ],
+    expected: "An image region in the copy mode releases its spare copy when no frame arrives for the spare delay, keeps the frame on screen, and allocates the copy of the next frame within the time of one frame.",
+    levels: ["native"],
+  },
+  {
+    id: "F501",
+    implementation: [
+      { file: "scripts/check-hosts-same.mjs", symbol: "export function specDiagnosticMethods(endpointMarkdown) {" },
+    ],
+    tests: [
+      { file: "scripts/test/check-hosts-same.test.mjs", id: "a diagnostic method that the diagnostic builds table does not list fails" },
+      { file: "scripts/test/check-hosts-same.test.mjs", id: "a method of the diagnostic builds table that no host declares fails" },
+    ],
+    expected: "The host parity check fails on a diagnostic method of a host that the diagnostic builds table of the endpoint specification does not list and on a row of that table that no host declares.",
+    levels: ["unit"],
+  },
+  {
+    id: "F500",
+    implementation: [
+      { file: "native/darwin/src/webview_geometry.m", symbol: "view._windowOcclusionDetectionEnabled = NO;" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/window_occlusion_test.m", id: "the covered surface document stays visible" },
+      { file: "native/darwin/tests/window_occlusion_test.m", id: "the covered surface document runs an animation frame" },
+    ],
+    expected: "A view page that sp_surface_place_view places keeps its document visible and its animation frames running while its window is occluded.",
+    levels: ["native"],
+  },
+  {
+    id: "F505",
+    implementation: [
+      { file: "native/darwin/Makefile", symbol: "-DCMAKE_OSX_ARCHITECTURES=$(ARCH)" },
+      { file: "native/darwin/process-identity/Makefile", symbol: "CFLAGS := -arch $(ARCH)" },
+    ],
+    tests: [
+      { file: "scripts/test/native-architecture.test.mjs", id: "the library build compiles every object and configures ZXing for arm64 in a new build folder" },
+      { file: "scripts/test/native-architecture.test.mjs", id: "a ZXing library older than the Makefile is built again" },
+    ],
+    expected: "The native library builds every object and ZXing for arm64, the architecture of the release platform darwin-arm64, and configures ZXing in a new build folder whenever it builds it.",
+    levels: ["unit"],
+  },
+  {
+    id: "F396",
+    implementation: [
+      { file: "native/darwin/src/image_region.m", symbol: "application active at the press: %s, window key at the press: %s" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/press_release_test.m", id: "a release that the page does not receive reports the state of its press" },
+    ],
+    expected: "The error of a pointer release that the page did not receive names the button and whether the application was active and the window key at the press.",
+    levels: ["unit"],
+  },
+  {
+    id: "F395",
+    implementation: [
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "format!(\"close {surface}: outbox full, buffered\")," },
+      { file: "packages/host/go/src/sidecars.go", symbol: "LogInfo(\"sidecar \"+process.name, fmt.Sprintf(\"close %s: outbox full, buffered\", surface))" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/flush_test.rs", id: "a_close_that_finds_room_writes_no_buffered_record" },
+      { file: "packages/host/go/tests/flush_test.go", id: "TestACloseThatFindsRoomWritesNoBufferedRecord" },
+    ],
+    expected: "A closed notice that finds room in the queue of a sidecar is sent at once and writes no buffered record.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-295-1",
+    implementation: [{ file: "packages/host/rust/src/windows.rs", symbol: "pub fn reload_surface_sidecars<" }],
+    tests: [
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "a_page_reload_returns_before_the_image_detach_acknowledgement" },
+    ],
+    expected: "A Tauri page reload returns before the image detach acknowledgement.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-303-1",
+    implementation: [
+      { file: ".github/workflows/ci.yml", symbol: "- name: Record the display session" },
+    ],
+    tests: [
+      { file: "scripts/test/workflows.test.mjs", id: "the build-native job records the display session before the native tests" },
+    ],
+    expected: "The build-native job records the display session before the native tests.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-303-2",
+    implementation: [
+      { file: "native/darwin/Makefile", symbol: "webview_geometry_test,-AppleShowScrollBars,Always" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/webview_geometry_test.m", id: "the native surface keeps the fractional height" },
+    ],
+    expected: "The web view geometry test measures the frame size under both scroller styles.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-303-3",
+    implementation: [
+      { file: "packages/plugin-api/document-region.js", symbol: "regionInsets" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/document-region.test.mjs", id: "a classic scroll bar of the root keeps the insets measured from the frame edges" },
+    ],
+    expected: "Region insets are measured from the edges of the web view frame under classic scroll bars.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-303-8",
+    implementation: [
+      { file: "native/darwin/Makefile", symbol: "NATIVE_E2E_TESTS" },
+      { file: ".github/workflows/ci.yml", symbol: "run: make -C core/native/darwin test" },
+    ],
+    tests: [
+      { file: "scripts/test/workflows.test.mjs", id: "the hosted native job runs the native unit tests" },
+    ],
+    expected: "The native tests that need display presentation run in the local checks only and the others in the hosted job.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-303-4",
+    implementation: [
+      { file: "packages/plugin-api/document-region.js", symbol: "regionInsets" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/document-region.test.mjs", id: "a scroll bar of a right-to-left root on the left keeps the insets measured from the frame edges" },
+      { file: "native/darwin/tests/webview_geometry_test.m", id: "root with a 17 point scroll bar has its client origin" },
+    ],
+    expected: "The left inset of a right-to-left root adds the scroll bar that the web view places on the left.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-303-5",
+    implementation: [
+      { file: "scripts/check-native-windows.mjs", symbol: "findUnownedWindows" },
+    ],
+    tests: [
+      { file: "scripts/test/native-windows.test.mjs", id: "every NSWindow of the native package is owned by its creator" },
+    ],
+    expected: "Every NSWindow of the native package is owned by its creator alone.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-303-6",
+    implementation: [
+      { file: "scripts/check-native-test-targets.mjs", symbol: "findUnrunTests" },
+    ],
+    tests: [
+      { file: "scripts/test/native-test-targets.test.mjs", id: "every native test source is run by a make target" },
+    ],
+    expected: "Every native test source is run by a make target.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-303-7",
+    implementation: [
+      { file: "native/darwin/tests/webview_geometry_test.m", symbol: "pressSurface" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/webview_geometry_test.m", id: "reports its point at the pointer precision of WebKit" },
+    ],
+    expected: "The last device pixel press is expected at the pointer precision that the WebKit of the run reports.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-297-1",
+    implementation: [
+      { file: "native/darwin/src/window_facts.m", symbol: "static void emitResponderChange(NSInteger windowNumber, id from, id to)" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/window_responder_test.m", id: "two moves record two changes of the first responder" },
+    ],
+    expected: "Each change of an observed first responder writes one native.window.first_responder record.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-296-1",
+    implementation: [
+      { file: "packages/workbench/tab-reports.js", symbol: "export function forgetTabsLeft(previousCards, nextCards, operation)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/surface-view.test.mjs", id: "a view whose origin is missing names the tab, its plugin, space, project, creation path, session history, the drop and the tabs of the stored layout" },
+    ],
+    expected: "The refusal of a missing origin names the operation that dropped it.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-296",
+    implementation: [
+      { file: "packages/workbench/tab-reports.js", symbol: "export function forgetTabsLeft(previousCards, nextCards, operation)" },
+      { file: "packages/workbench/tab-reports.js", symbol: "export function settleLeftTabs()" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/tab-origin.test.mjs", id: "a view tab of a stored layout keeps its origin through the drawn layout of its space while its surface is mounted" },
+    ],
+    expected: "A view tab of a stored layout keeps its origin through the drawn layout of its space until its surface is disposed.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-299-2",
+    implementation: [
+      { file: "packages/workbench/performance.js", symbol: "export function createTracer(call, events = null)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/page-clock.test.mjs", id: "the main page states its clock once for the events of its records and of its trace" },
+    ],
+    expected: "The main page states workbench.log.clock once for its records and its trace.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-304",
+    implementation: [{ file: "scripts/test/soksak-scripts.test.mjs", symbol: "const TREE_AUDIT_LIMIT_MS = 30000;" }],
+    tests: [
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "boundary audit reports a clean component graph" },
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "window-source audit rejects forbidden control paths" },
+    ],
+    expected: "A test that runs an audit of every tracked file has a limit that ends a stopped audit and does not judge its speed.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-299-2-1",
+    implementation: [
+      { file: "packages/plugin-api/view-start.js", symbol: "const page = crypto.randomUUID();" },
+      { file: "packages/workbench/page-identity.js", symbol: "export const pageIdentity = crypto.randomUUID();" },
+      { file: "packages/host/go/src/event_relay.go", symbol: "func validViewTimeOrigin(value float64) bool" },
+      { file: "packages/host/rust/src/documents.rs", symbol: "time_origin: Option<Value>," },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/view.test.mjs", id: "two documents that start in the same millisecond have different page identities" },
+      { file: "packages/host/go/src/view_call_record_test.go", id: "TestViewReadyRequiresDocumentAndPositiveTimeOrigin" },
+      { file: "packages/host/rust/src/view_origin_test.rs", id: "view_ready_requires_a_document_and_a_positive_time_origin" },
+    ],
+    expected: "Every document has a UUID page identity, and both hosts require a document and a positive finite time origin in view.ready.",
+    id: "F239-297",
+    implementation: [
+      { file: "native/darwin/src/window_facts.m", symbol: "void *sp_window_observe_responder(" },
+      { file: "packages/host/go/src/responder.go", symbol: "func (r *responderState) send(" },
+      { file: "packages/host/rust/src/responder.rs", symbol: "pub fn send_changed_responder(" },
+      { file: "packages/plugin-api/view.js", symbol: "calls.request(\"tab.focus\", value)" },
+      { file: "packages/workbench/focus-state.js", symbol: "export function focusState(" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/window_responder_test.m", id: "an ended observation calls back no more" },
+      { file: "packages/host/go/src/responder_test.go", id: "TestTheResponderEventFollowsTheFirstResponderAfterThePageIsReady" },
+      { file: "packages/host/rust/src/responder_test.rs", id: "the_responder_event_follows_the_first_responder_after_the_page_is_ready" },
+      { file: "packages/plugin-api/test/view-document.test.mjs", id: "the bridge reports each change of the focused exposed element of the view with tab.focus" },
+      { file: "packages/workbench/test/view-focus.test.mjs", id: "core.focus follows the first responder to the element that a view reports" },
+    ],
+    expected: "core.focus reports the focused exposed element of the document that holds the first responder of the window.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-302",
+    implementation: [
+      { file: "packages/workbench/ids.js", symbol: "export function issueId(kind, taken)" },
+      { file: "packages/workbench/plane.js", symbol: "const tabTaken = " },
+    ],
+    tests: [
+      { file: "packages/workbench/test/ids.test.mjs", id: "an id that is taken is issued again" },
+      { file: "packages/workbench/test/plane-tab-ids.test.mjs", id: "a new tab avoids the ids of held surfaces, stored tabs and tabs issued before it" },
+    ],
+    expected: "A new tab takes no id of a stored tab, an issued tab or a held surface.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-301",
+    implementation: [
+      { file: "packages/host/go/src/image_detach.go", symbol: "func parseImageDetachAck(" },
+      { file: "packages/host/rust/src/image_detach.rs", symbol: "pub(super) fn acknowledge_image_detach(" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/image_detach_test.go", id: "TestAMalformedImageDetachAcknowledgementNamesItsMember" },
+      { file: "packages/host/rust/src/image_detach_test.rs", id: "a_malformed_detach_acknowledgement_names_its_member" },
+    ],
+    expected: "Both hosts refuse a malformed image detach acknowledgement with the same text that names its member and keep the pending detach.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-300",
+    implementation: [{ file: "packages/host/rust/src/windows.rs", symbol: "pub fn reload_surface_sidecars<" }],
+    tests: [
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "a_page_reload_sends_no_message_to_a_persistent_sidecar_of_the_surface" },
+      { file: "packages/host/go/src/start_test.go", id: "TestStartPageSendsTheReloadedImageDetachAndLeavesItsSurfacePending" },
+      { file: "packages/host/rust/tests/object_counts_test.rs", id: "sidecar_sessions_list_only_the_surfaces_that_sent" },
+    ],
+    expected: "A page reload sends a sidecar only the detach of each captured image on both hosts.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-295",
+    implementation: [
+      { file: "packages/host/go/src/image_detach.go", symbol: "func (s *Surfaces) beginImageDetaches(" },
+      { file: "packages/host/rust/src/image_detach.rs", symbol: "pub(crate) fn begin_image_detaches<" },
+      { file: "packages/workbench/image-detach-waits.js", symbol: "export function imageDetachHold(" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/image_detach_test.go", id: "TestAnUnacknowledgedImageDetachKeepsOnlyItsSurfacePending" },
+      { file: "packages/host/go/src/image_detach_test.go", id: "TestASurfaceEndsItsDetachesOnlyAfterTheAcknowledgementOfEachOfItsImages" },
+      { file: "packages/host/rust/src/image_detach_test.rs", id: "a_surface_ends_its_detaches_only_after_the_acknowledgement_of_each_of_its_images" },
+      { file: "packages/workbench/test/image-detach-waits.test.mjs", id: "a held tab is neither mounted nor given a background session until its detach ends" },
+    ],
+    expected: "A pending image detach holds only its surface: the page start returns at once, the host refuses that surface until the ended event, and the page mounts the surface only after the event.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-299-4",
+    implementation: [{ file: "e2e/terminal.test.mjs", symbol: "markedRange: { location: 0, length: 2 }" }],
+    tests: [{ file: "e2e/terminal.test.mjs", id: "diagnostic terminal entries inject preedit and record terminal input" }],
+    expected: "The compose check sends the markedRange that the terminal plugin requires and reads the preedit of the recorded input operation.",
+    levels: ["application"],
+  },
+  {
+    id: "F239-298",
+    implementation: [
+      { file: "packages/host/go/src/endpoint.go", symbol: "func (c *endpointConn) unsent(" },
+      { file: "packages/host/rust/src/endpoint.rs", symbol: "fn write_to_peer<" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/endpoint_test.go", id: "TestEndpointRecordsAReplyToAClosedConnectionAsNotSent" },
+      { file: "packages/host/go/tests/endpoint_test.go", id: "TestEndpointRecordsAWriteThatThePeerClosedAsNotSent" },
+      { file: "packages/host/rust/tests/endpoint_test.rs", id: "a_reply_to_a_connection_that_the_peer_closed_is_recorded_as_not_sent" },
+    ],
+    expected: "Both hosts record a reply or a notification that meets a connection that the peer closed as not sent, and neither records an error.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-292",
+    implementation: [{ file: "e2e/browser.test.mjs", symbol: "traceRows(readEvents(" }],
+    tests: [
+      { file: "e2e/browser.test.mjs", id: "a placement that keeps a shown document in place does not hide it" },
+      { file: "e2e/browser.test.mjs", id: "a browser without an address hides its document region and shows the empty state" },
+    ],
+    expected: "The placement check reads the applied placements from host.trace.surface and the empty state check expects the root document of the browser view at the empty state.",
+    levels: ["application"],
+  },
+  {
+    id: "F239-294",
+    implementation: [{ file: "e2e/library.test.mjs", symbol: "const removed = folder.replace(" }],
+    tests: [{ file: "e2e/library.test.mjs", id: "the library names a missing project folder and removes the project" }],
+    expected: "The library check declares the three texts of the files tree failure that its folder removal causes and passes on both hosts.",
+    levels: ["application"],
+  },
+  {
+    id: "F239-293",
+    implementation: [
+      { file: "packages/workbench/document-regions.js", symbol: "leave(tab) {" },
+      { file: "packages/workbench/surface-modules.js", symbol: "documentRegions.leave(id)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/surface-remount-composition.test.mjs", id: "a disposing surface leaves the tabs with attached regions before its exposure disposal ends" },
+      { file: "packages/workbench/test/surface-view-path.test.mjs", id: "a region query of a view that a running place leaves out waits for the place and asks no region of a released view" },
+      { file: "packages/workbench/test/surface-view-path.test.mjs", id: "a region query of a view waits for a failed place that left the view out and then asks its regions" },
+      { file: "e2e/library.test.mjs", id: "the library names a missing project folder and removes the project" },
+    ],
+    expected: "A region query of a surface that a disposal or a running place closes asks no closed region, and a failed place leaves the regions to the query.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F239-291",
+    implementation: [
+      { file: "packages/host/go/src/projects.go", symbol: "func (h *Host) ProjectOpen(" },
+      { file: "packages/host/rust/src/windows.rs", symbol: "pub fn show_project_owner(" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/windows_front_test.go", id: "TestProjectOpenShowsTheOtherOwnerWithoutActivation" },
+      { file: "packages/host/rust/src/windows_front_test.rs", id: "project_open_shows_the_other_owner_without_activation" },
+    ],
+    expected: "Both hosts show the window that owns a project opened from another window without requesting the activation of the application.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-290",
+    implementation: [
+      { file: "packages/host/go/src/images.go", symbol: "func (i *Images) SetSurfaceVisible(" },
+      { file: "packages/host/rust/src/images.rs", symbol: "pub fn set_surface_visible(" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/images_test.go", id: "TestShownSurfacePresentsFromItsNewRaster" },
+      { file: "packages/host/rust/tests/images_test.rs", id: "shown_surface_presents_from_its_new_raster" },
+    ],
+    expected: "Both hosts count the presented frames of a surface shown again from its new raster, so the first frame of that raster completes the presentation barrier.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-288",
+    implementation: [{ file: "scripts/checklist.mjs", symbol: "export function checkCompletedItems(" }],
+    tests: [
+      { file: "scripts/test/checklist.test.mjs", id: "open, active and blocked checklist items cannot be removed without a paired retirement record" },
+    ],
+    expected: "An open item leaves the checklist only through a recorded state or a retirement record.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-283",
+    implementation: [{ file: "packages/plugin-api/package.json", symbol: '"contract/"' }],
+    tests: [{ file: "packages/plugin-api/test/package-files.test.mjs", id: "the packed SDK contains every current contract file" }],
+    expected: "The SDK tar release contains every current file under its public contract directory, checked from the packed output rather than a mirrored manifest list.",
+    levels: ["unit"],
+  },
+{
+  "id": "F239-234",
+  "implementation": [
+    {
+      "file": "native/darwin/src/capture_frame_identity.m",
+      "symbol": "bool sp_capture_frame_identity_atlas("
+    },
+    {
+      "file": "native/darwin/src/image_capture_match.m",
+      "symbol": "bool sp_image_capture_match_identity_document_begin("
+    },
+    {
+      "file": "native/darwin/src/document_view.m",
+      "symbol": "bool sp_document_frame_identity_start("
+    },
+    {
+      "file": "native/darwin/src/document_view.m",
+      "symbol": "bool sp_document_frame_identity_freeze("
+    },
+    {
+      "file": "native/darwin/src/document_view.m",
+      "symbol": "bool sp_document_frame_identity_remove("
+    },
+    {
+      "file": "packages/host/go/src/diagnostics.go",
+      "symbol": "func diagnosticCaptureDocumentIdentityStart("
+    },
+    {
+      "file": "packages/host/rust/src/diagnostics.rs",
+      "symbol": "fn capture_document_identity_start("
+    },
+    {
+      "file": "e2e/document-frame-identity.mjs",
+      "symbol": "export function verifyDocumentFrameIdentityCapture("
+    },
+    {
+      "file": "e2e/document-frame-identity.mjs",
+      "symbol": "export function viewGenerationForSurface("
+    },
+    {
+      "file": "native/darwin/src/image_capture_match.m",
+      "symbol": "bool sp_image_capture_match_identity_session_fail_for_nonce("
+    },
+    {
+      "file": "e2e/document-frame-identity.mjs",
+      "symbol": "export function documentIdentityCardIds("
+    },
+    {
+      "file": "native/darwin/src/document_view.m",
+      "symbol": "void sp_document_frame_identity_after_target_update("
+    }
+  ],
+  "tests": [
+    {
+      "file": "native/darwin/tests/document_core_root_test.m",
+      "id": "freeze reports the bounded count of distinct atlas cells drawn"
+    },
+    {
+      "file": "packages/host/go/src/diagnostics_test.go",
+      "id": "TestCaptureDocumentIdentityStartIsRegistered"
+    },
+    {
+      "file": "packages/host/go/src/diagnostics_test.go",
+      "id": "TestCaptureStopPreservesCaptureModesWithoutDocumentSource"
+    },
+    {
+      "file": "packages/host/rust/src/endpoint.rs",
+      "id": "document_frame_identity_start_method_is_declared"
+    },
+    {
+      "file": "packages/host/rust/src/diagnostics_test.rs",
+      "id": "capture_stop_continues_cleanup_after_freeze_failure_without_issued_count"
+    },
+    {
+      "file": "e2e/test/capture-document-frame-identity.test.mjs",
+      "id": "document identity capture validates complete accounting and a decoded issued pixel identity"
+    },
+    {
+      "file": "e2e/test/capture-document-frame-identity.test.mjs",
+      "id": "document identity capture rejects missing accounting and unissued decoded identities"
+    },
+    {
+      "file": "e2e/test/capture-document-frame-identity.test.mjs",
+      "id": "view identity generation comes from one successful current-surface presentation join"
+    },
+    {
+      "file": "e2e/capture-document-frame-identity.test.mjs",
+      "id": "document-frame identity matches captured WebKit root pixels"
+    },
+    {
+      "file": "native/darwin/tests/image_capture_match_test.m",
+      "id": "a late failure from a retired document producer cannot fail a replacement capture session"
+    },
+    {
+      "file": "native/darwin/tests/document_core_root_test.m",
+      "id": "a repeated removal confirms the already removed generation"
+    },
+    {
+      "file": "packages/host/go/src/diagnostics_test.go",
+      "id": "TestCaptureStartWaitsForPriorIdentityRemoval"
+    },
+    {
+      "file": "packages/host/rust/src/diagnostics_test.rs",
+      "id": "capture_start_waits_for_prior_identity_removal"
+    },
+    {
+      "file": "packages/host/rust/src/diagnostics_test.rs",
+      "id": "document_frame_identity_callback_wait_is_bounded"
+    },
+    {
+      "file": "packages/host/rust/src/diagnostics_test.rs",
+      "id": "late_document_frame_identity_callback_errors_are_logged_as_errors"
+    },
+    {
+      "file": "e2e/test/capture-document-frame-identity.test.mjs",
+      "id": "document identity setup adds its editor tab only to editable pane cards"
+    },
+    {
+      "file": "native/darwin/tests/document_core_root_test.m",
+      "id": "the start reply remains pending while the target root presentation callback is held"
+    }
+  ],
+  "expected": "An opt-in current WebKit root document issues bounded non-repeating QR identities whose actual captured pixels and exact ScreenCaptureKit displayTime are retained with complete generated, issued and decoded accounting; stale and unmatched states remain unknown and cleanup preserves existing capture modes.",
+  "levels": [
+    "unit",
+    "native",
+    "application"
+  ]
+},
+{
+  "id": "F239-235",
+  "implementation": [
+    {
+      "file": "e2e/view-metrics-collection.mjs",
+      "symbol": "export async function openRecordedView("
+    },
+    {
+      "file": "e2e/view-metrics-collection.mjs",
+      "symbol": "export async function collectViewProcessGroups("
+    },
+    {
+      "file": "e2e/view-metrics-collection.mjs",
+      "symbol": "export async function collectViewStartAndMemory("
+    }
+  ],
+  "tests": [
+    {
+      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "id": "view totals are sampled at their declared count before extra process-start views open"
+    },
+    {
+      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "id": "one recording proves the physical anchor boundary before target content"
+    },
+    {
+      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "id": "footprint failure retains recording paths and skips deferred OCR"
+    },
+    {
+      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "id": "deferred OCR failure retains its recording path and rejects the collector"
+    }
+  ],
+  "expected": "Live readiness, finalized recordings and process identities precede clock-bracketed one-view and N-view footprint sampling; offline pixel analysis follows both samples without changing recordings, thresholds or failure retention.",
+  "levels": [
+    "unit",
+    "application"
+  ]
+},
+{
+  "id": "F239-233",
+  "implementation": [
+    {
+      "file": "packages/window-check/view-metrics.mjs",
+      "symbol": "function evaluateDrag("
+    },
+    {
+      "file": "e2e/benchmark/cases/browser.mjs",
+      "symbol": "async function dragObservation("
+    },
+    {
+      "file": "e2e/benchmark/cases/editor.mjs",
+      "symbol": "async function editorDragObservation("
+    },
+    {
+      "file": "e2e/benchmark/cases/hwp.mjs",
+      "symbol": "export function measureHwpPaintFrame("
+    },
+    {
+      "file": "e2e/benchmark/cases/terminal.mjs",
+      "symbol": "export function terminalRasterTargetRectPt("
+    }
+  ],
+  "tests": [
+    {
+      "file": "packages/window-check/test/view-metrics.test.mjs",
+      "id": "drag convergence selects a later qualifying paint capture when the first capture is stale"
+    },
+    {
+      "file": "packages/window-check/test/view-metrics.test.mjs",
+      "id": "drag convergence requires a captured final paint when source dimensions already match"
+    },
+    {
+      "file": "packages/window-check/test/view-metrics.test.mjs",
+      "id": "drag convergence rejects internally aligned paint at a different final target rectangle"
+    },
+    {
+      "file": "packages/window-check/test/view-metrics.test.mjs",
+      "id": "drag convergence accepts a final-size source interval that overlaps gesture end when later pixels prove it"
+    },
+    {
+      "file": "e2e/test/editor-view-metrics-case.test.mjs",
+      "id": "editor drag geometry uses the declared diagnostic CSS paint color rather than a sampled dominant color"
+    },
+    {
+      "file": "e2e/test/hwp-view-metrics-case.test.mjs",
+      "id": "HWP paint geometry measures the magenta HTML marker separately from cyan native bounds"
+    },
+    {
+      "file": "e2e/test/terminal-view-metrics-case.test.mjs",
+      "id": "terminal convergence target comes from the visible native raster region"
+    }
+  ],
+  "expected": "The earliest source-backed captured final paint meets two-frame, 33 ms and 2 pt convergence limits independently of eventual presentation, with exact target identity and stable later paint.",
+  "levels": [
+    "unit",
+    "application"
+  ]
+},
+{
+  "id": "F239-223-2",
+  "implementation": [
+    {
+      "file": "apps/wailsv3/runtime/index.js",
+      "symbol": "const runtime ="
+    }
+  ],
+  "tests": [
+    {
+      "file": "apps/wailsv3/test/runtime.test.mjs",
+      "id": "Wails host calls and listeners share one lazy runtime module resolution"
+    },
+    {
+      "file": "apps/wailsv3/test/runtime.test.mjs",
+      "id": "Wails runtime import failure is shared and is not retried"
+    }
+  ],
+  "expected": "Wails framework consumers share one lazy module-import result while native bridge calls bypass the import and all consumers retain its original rejection.",
+  "levels": [
+    "unit"
+  ]
+},
+{
+  "id": "F239-232",
+  "implementation": [
+    {
+      "file": "packages/window-check/view-metrics.mjs",
+      "symbol": "function contentProofAt("
+    },
+    {
+      "file": "packages/window-check/view-metrics.mjs",
+      "symbol": "export const normalizeViewText"
+    },
+    {
+      "file": "e2e/view-first-content.mjs",
+      "symbol": "normalizeViewText"
+    }
+  ],
+  "tests": [
+    {
+      "file": "packages/window-check/test/view-metrics.test.mjs",
+      "id": "view OCR proof normalizes Unicode and whitespace but still rejects missing text"
+    }
+  ],
+  "expected": "Captured text selection and acceptance share NFC and OCR whitespace normalization without accepting genuinely absent expected text.",
+  "levels": [
+    "unit"
+  ]
+},
+{
+  "id": "F239-231",
+  "implementation": [
+    {
+      "file": "e2e/benchmark/cases/terminal.mjs",
+      "symbol": "startContentTrace:"
+    }
+  ],
+  "tests": [
+    {
+      "file": "e2e/test/terminal-view-metrics-case.test.mjs",
+      "id": "terminal view descriptor reads browser history and controls only the diagnostic frame observer"
+    }
+  ],
+  "expected": "The terminal observer-start consumer accepts the current successful source-clock reply and leaves clock validation to the shared bracket owner.",
+  "levels": [
+    "unit"
+  ]
+},
+  {
+  "id": "F239-221-2",
+  "implementation": [
+    {
+      "file": "packages/window-check/view-metrics.mjs",
+      "symbol": "function evaluateLayoutDisplay("
+    },
+    {
+      "file": "packages/window-check/view-metrics.mjs",
+      "symbol": "function evaluateDrag("
+    },
+    {
+      "file": "e2e/view-metrics-collection.mjs",
+      "symbol": "export function rootNativePlacementBeforeCapture("
+    },
+    {
+      "file": "e2e/benchmark/cases/browser.mjs",
+      "symbol": "async function dragObservation("
+    },
+    {
+      "file": "e2e/benchmark/cases/editor.mjs",
+      "symbol": "async function editorDragObservation("
+    },
+    {
+      "file": "e2e/benchmark/cases/hwp.mjs",
+      "symbol": "async function dragObservation("
+    },
+    {
+      "file": "e2e/benchmark/cases/terminal.mjs",
+      "symbol": "async function terminalDragObservation("
+    }
+  ],
+  "tests": [
+    {
+      "file": "packages/window-check/test/view-metrics.test.mjs",
+      "id": "layout source accepts an overlapping placement readback when display covers both clocks"
+    },
+    {
+      "file": "packages/window-check/test/view-metrics.test.mjs",
+      "id": "drag cadence ignores an overlapping placement readback and converges against the presented viewport"
+    },
+    {
+      "file": "packages/window-check/test/view-metrics.test.mjs",
+      "id": "drag cadence is in-gesture and convergence meets both frame and time bounds"
+    },
+    {
+      "file": "e2e/test/editor-view-metrics-case.test.mjs",
+      "id": "editor motion evidence keeps source timing and mapped capture without per-source placement"
+    },
+    {
+      "file": "e2e/test/terminal-view-metrics-case.test.mjs",
+      "id": "terminal source content mapping retains source interval and capture time without placement association"
+    },
+    {
+      "file": "e2e/test/hwp-view-metrics-case.test.mjs",
+      "id": "HWP layout recording covers the full display deadline after presentation"
+    },
+    {
+      "file": "e2e/test/browser-view-metrics-case.test.mjs",
+      "id": "browser pixel geometry matches the independently declared document slot"
+    }
+  ],
+  "expected": "Native placement readback timestamps are retained as evidence but are not treated as setter times for individual source rows. Drag cadence and capture coverage use source intervals; each captured gesture frame keeps its independent pixel geometry proof. One-shot and final convergence retain the final viewport, successful presentation, post-request/input source and capture after both displayed and source bounds without changing thresholds.",
+  "levels": ["unit"]
+},
+  {
+    id: "F239-229",
+    implementation: [{ file: "e2e/view-content.mjs", symbol: "export async function recognizeViewFrame(" }],
+    tests: [
+      { file: "e2e/test/view-content.test.mjs", id: "view OCR consumes the exact crop without retaining it in the recording" },
+      { file: "e2e/test/view-content.test.mjs", id: "view OCR removes a crop after a recognizer error and preserves that error" },
+      { file: "e2e/test/view-content.test.mjs", id: "view OCR reports both recognition and scratch cleanup errors" },
+    ],
+    expected: "Each OCR crop exists only during its recognition call, is removed on success and failure, and preserves both recognition and cleanup errors when cleanup fails.",
+    levels: ["unit"],
+  },
+  {
+  "id": "F239-221-1",
+  "implementation": [
+    {
+      "file": "e2e/view-metrics-collection.mjs",
+      "symbol": "export function viewStartClockBracket("
+    },
+    {
+      "file": "e2e/view-metrics-collection.mjs",
+      "symbol": "export async function withViewContentTrace("
+    },
+    {
+      "file": "e2e/view-metrics-collection.mjs",
+      "symbol": "export async function monotonicTimeMs("
+    }
+  ],
+  "tests": [
+    {
+      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "id": "generic content trace brackets the successful start command with native clock reads"
+    },
+    {
+      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "id": "view start clock brackets require valid source identity and ordered native clock replies"
+    },
+    {
+      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "id": "content trace stops its observer when the post-start native clock read fails"
+    },
+    {
+      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "id": "content trace start failure does not read an after clock or stop an unstarted observer"
+    },
+    {
+      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "id": "content trace bracket rejects a replaced client, changed host process or target window"
+    }
+  ],
+  "expected": "The successful observer start is causally bracketed by monotonic clock reads from the same host client, PID and window; source-frame intervals retain both raw clock receipts and source identity.",
+  "levels": ["unit"]
+},
+  {
+  "id": "F239-221",
+  "implementation": [
+    {
+      "file": "e2e/view-metrics-collection.mjs",
+      "symbol": "export function viewStartClockBracket("
+    },
+    {
+      "file": "e2e/view-metrics-collection.mjs",
+      "symbol": "export function viewContentFrameEvents("
+    },
+    {
+      "file": "e2e/view-metrics-collection.mjs",
+      "symbol": "export function requireViewContentFrameCoverage("
+    },
+    {
+      "file": "packages/window-check/view-metrics.mjs",
+      "symbol": "function evaluateDrag("
+    }
+  ],
+  "tests": [
+    {
+      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "id": "view content-frame mapping uses the successful start's native clock bracket"
+    },
+    {
+      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "id": "view start clock brackets require valid source identity and ordered native clock replies"
+    },
+    {
+      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "id": "one-shot layout preserves a boundary interval and selects a later guaranteed post-request frame"
+    },
+    {
+      "file": "packages/window-check/test/view-metrics.test.mjs",
+      "id": "drag cadence keeps captured boundary frames and their neighboring cadence evidence"
+    },
+    {
+      "file": "packages/window-check/test/view-metrics.test.mjs",
+      "id": "drag cadence excludes observer idle time outside the recorded gesture"
+    },
+    {
+      "file": "e2e/test/browser-view-metrics-case.test.mjs",
+      "id": "browser diagnostic callbacks use the declared measurement actions"
+    },
+    {
+      "file": "e2e/test/editor-view-metrics-case.test.mjs",
+      "id": "editor view descriptor calls the declared hyphenated content-trace command"
+    },
+    {
+      "file": "e2e/test/hwp-view-metrics-case.test.mjs",
+      "id": "HWP descriptor waits for its declared document status exposure"
+    },
+    {
+      "file": "e2e/test/terminal-view-metrics-case.test.mjs",
+      "id": "terminal view descriptor reads browser history and controls only the diagnostic frame observer"
+    }
+  ],
+  "expected": "View source frames map to conservative native monotonic intervals from the successful start command bracket; ambiguous rows are preserved while one-shot and drag evidence require guaranteed ordering and coverage.",
+  "levels": ["unit"]
+},
+  {
+  "id": "F239-223-1",
+  "implementation": [
+    {
+      "file": "packages/host/go/src/surfaces.go",
+      "symbol": "func runSurfaceDispatch("
+    },
+    {
+      "file": "packages/host/rust/src/surfaces.rs",
+      "symbol": "fn surface_dispatch_result_with<T>("
+    }
+  ],
+  "tests": [
+    {
+      "file": "packages/host/go/src/surfaces_test.go",
+      "id": "TestSurfaceDispatchRecordKeepsTicketAndClockBoundaries"
+    },
+    {
+      "file": "packages/host/rust/src/surfaces_test.rs",
+      "id": "surface_dispatch_wrapper_records_queue_entry_and_return_boundaries"
+    }
+  ],
+  "expected": "Gated host traces expose exact UI enqueue and return clock boundaries, while disabled diagnostics add no clock label.",
+  "levels": ["unit"]
+},
+  {
+    id: "F239-219",
+    implementation: [
+      { file: "native/darwin/src/input_reference.m", symbol: "void sp_input_reference(" },
+      { file: "e2e/activation/ime-reference-steps.mjs", symbol: "export async function compareAppKitReference(" },
+      { file: "packages/host/go/src/diagnostics.go", symbol: "func parseInputReference(" },
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn parse_input_reference(" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/input_reference_test.m", id: "wait-document completes at the expected document while marked text remains" },
+      { file: "native/darwin/tests/input_reference_test.m", id: "the ready AppKit reference composes ㅎ" },
+      { file: "e2e/test/activation/ime-reference-steps.test.mjs", id: "reference keys wait for selected-source readiness on the newly focused client" },
+      { file: "e2e/test/activation/ime-reference-steps.test.mjs", id: "reference steps await a delayed document update while marked text remains" },
+      { file: "packages/host/go/src/diagnostics_input_reference_test.go", id: "TestInputReferenceValidatesDocument" },
+      { file: "packages/host/go/src/diagnostics_input_reference_test.go", id: "TestInputReferenceWaitDocumentAcceptsExpectedDocument" },
+      { file: "packages/host/go/src/diagnostics_input_reference_test.go", id: "TestInputReferenceWaitDocumentRequiresAString" },
+      { file: "packages/host/go/src/diagnostics_input_reference_test.go", id: "TestInputReferenceWaitDocumentActionErrorNamesAction" },
+      { file: "packages/host/go/src/diagnostics_input_reference_test.go", id: "TestInputReferenceDocumentErrorNamesBothWaitActions" },
+      { file: "packages/host/rust/src/diagnostics_input_reference_test.rs", id: "input_reference_validates_document" },
+      { file: "packages/host/rust/src/diagnostics_input_reference_test.rs", id: "input_reference_wait_document_accepts_expected_document" },
+      { file: "packages/host/rust/src/diagnostics_input_reference_test.rs", id: "input_reference_wait_document_requires_a_string" },
+      { file: "packages/host/rust/src/diagnostics_input_reference_test.rs", id: "input_reference_wait_document_boundary_errors_name_both_actions" },
+    ],
+    expected: "Reference input-source readiness is checked after focus; each dispatched key waits for matching document text while composition may remain marked, and final completion still requires unmarked text.",
+    levels: ["native", "unit"],
+  },
+
+  {
+    id: "F239-225",
+    implementation: [{ file: "packages/log-contract/index.js", symbol: "const byProcess = new Map();" }],
+    tests: [
+      { file: "packages/log-contract/test/audit.test.mjs", id: "a policy is in force from the change of a rotated file whose cids it carries when page time is later" },
+      { file: "packages/log-contract/test/audit.test.mjs", id: "same seq in another process cannot hide a missing workbench.call" },
+      { file: "packages/log-contract/test/audit.test.mjs", id: "a missing call remains a finding when the policy that the change brings stores it" },
+      { file: "packages/log-contract/test/audit.test.mjs", id: "a policy is placed at the change whose cids it carries, so changes without a policy and policies of gated changes move no pair" },
+    ],
+    expected: "The audit places each policy at the stored settings change of the same process whose cids it carries, retains the setting timestamp as the effective time, places a policy without such a change at its own time, and still reports a missing call when that policy stores it.",
+    levels: ["unit"],
+  },
+
+  {
+    id: "F239-222",
+    implementation: [{ file: "e2e/view-metrics-collection.mjs", symbol: "export async function collectViewProcessGroups(" }],
+    tests: [{ file: "e2e/test/view-metrics-collection.test.mjs", id: "view totals are sampled at their declared count before extra process-start views open" }],
+    expected: "The one-view group is sampled after one view; the declared N-view workload is sampled while exactly N views are open; extra views for five process-start samples open afterward.",
+    levels: ["unit"],
+  },
+
+  {
+    id: "F239-224",
+    implementation: [{ file: "packages/window-check/view-metrics.mjs", symbol: "export function assertViewMeasurements(" }],
+    tests: [
+      { file: "packages/window-check/test/view-metrics.test.mjs", id: "view metrics report independent failures together" },
+      { file: "packages/window-check/test/view-metrics.test.mjs", id: "view metric runner preserves independent failures in the error artifact" },
+      { file: "packages/window-check/test/view-metrics.test.mjs", id: "view metric runner retains raw measurements and an error artifact when evaluation fails" },
+      { file: "packages/window-check/test/view-metrics.test.mjs", id: "view metrics accept exact thresholds and preserve frame and process evidence" },
+    ],
+    expected: "All independent view-measurement categories are evaluated, with one failure retaining its original error and multiple failures preserving each cause in the AggregateError and error artifact.",
+    levels: ["unit"],
+  },
+
+  {
+  "id": "F239-216",
+  "implementation": [
+    {
+      "file": "packages/plugin-api/view.js",
+      "symbol": "export function createViewReporter("
+    }
+  ],
+  "tests": [
+    {
+      "file": "packages/plugin-api/test/view-reporter.test.mjs",
+      "id": "a failed view error report reaches the injected global error hook"
+    },
+    {
+      "file": "packages/plugin-api/test/view-reporter.test.mjs",
+      "id": "ordinary call counts and closed-surface call ends stay out of the application error path"
+    },
+    {
+      "file": "packages/plugin-api/test/view-reporter.test.mjs",
+      "id": "unexpected transport loss reaches the injected global error hook"
+    }
+  ],
+  "expected": "Actual bridge errors reach the browser error hook while normal notifications remain console records.",
+  "levels": [
+    "unit"
+  ]
+},
+  {
+  "id": "F239-218",
+  "implementation": [
+    {
+      "file": "scripts/check-boundaries.mjs",
+      "symbol": "export function corePackageFolders("
+    }
+  ],
+  "tests": [
+    {
+      "file": "scripts/test/check-boundaries.test.mjs",
+      "id": "e2e fixture payload manifests do not create independent core test owners"
+    },
+    {
+      "file": "scripts/test/check-boundaries.test.mjs",
+      "id": "checkTestPathReads discovers the declared e2e owner from the production package list"
+    }
+  ],
+  "expected": "E2E fixture payloads belong to the E2E owner while independent core implementation reads remain rejected.",
+  "levels": [
+    "unit"
+  ]
+},
+  {
+  "id": "F239-211",
+  "implementation": [
+    {
+      "file": "packages/plugin-api/view.js",
+      "symbol": "export function createViewBridge("
+    }
+  ],
+  "tests": [
+    {
+      "file": "e2e/activation/view-keyboard-routing.test.mjs",
+      "id": "IME Escape ends view composition as it does in AppKit"
+    }
+  ],
+  "expected": "The current consumer accepts committed text while IME Escape matches the same-window AppKit reference without forwarding a workbench command; sidecar publication remains separate.",
+  "levels": [
+    "application"
+  ]
+},
+  {
+  "id": "F239-214",
+  "implementation": [
+    {
+      "file": "packages/window-check/app.mjs",
+      "symbol": "async selectInputSource(id) {"
+    }
+  ],
+  "tests": [
+    {
+      "file": "packages/window-check/test/session-cleanup.test.mjs",
+      "id": "an input-source selection in a session tree restores the first source after baseline cleanup"
+    },
+    {
+      "file": "packages/window-check/test/session-cleanup.test.mjs",
+      "id": "a child-first input-source restore uses the root window after the child closes"
+    }
+  ],
+  "expected": "Session trees capture and restore the first original input source once through the root requester after baseline cleanup.",
+  "levels": [
+    "unit"
+  ]
+},
+  {
+  "id": "F212.1-4",
+  "implementation": [
+    {
+      "file": "e2e/benchmark/cases/main-page-footprint.mjs",
+      "symbol": "export function reduceMainPageFootprint("
+    },
+    {
+      "file": "e2e/benchmark/cases/main-page-footprint.mjs",
+      "symbol": "export async function readMainPageFootprint("
+    }
+  ],
+  "tests": [
+    {
+      "file": "e2e/test/main-page-footprint.test.mjs",
+      "id": "main-page footprint records both windows and sums unique process footprints"
+    },
+    {
+      "file": "e2e/test/main-page-footprint.test.mjs",
+      "id": "main-page footprint selects the latest owner rows and counts one shared PID once"
+    },
+    {
+      "file": "e2e/test/main-page-footprint.test.mjs",
+      "id": "main-page footprint waits on host.log notices until each assigned PID has a sampler row"
+    },
+    {
+      "file": "e2e/test/main-page-footprint.test.mjs",
+      "id": "main-page footprint reports a window-level sampler error without a PID"
+    },
+    {
+      "file": "e2e/test/main-page-footprint.test.mjs",
+      "id": "main-page footprint rejects a malformed window-level sampler error"
+    },
+    {
+      "file": "e2e/test/main-page-footprint.test.mjs",
+      "id": "two-window main-page footprint refuses a changed baseline page PID"
+    },
+    {
+      "file": "e2e/test/main-page-footprint.test.mjs",
+      "id": "main-page footprint cleanup attempts every added window and preserves close errors"
+    }
+  ],
+  "expected": "The collector preserves process identities, unique physical footprints, sampler errors and cleanup; owner verification does not establish measured application values.",
+  "levels": [
+    "unit"
+  ]
+},
+  {
+    id: "F239-172-1",
+    implementation: [
+      {
+        file: "scripts/check-tests.mjs",
+        symbol: "const FEATURE_LINKS = ["
+      }
+    ],
+    tests: [
+      {
+        file: "scripts/test/check-tests.test.mjs",
+        id: "completed capability entries all have feature evidence links"
+      }
+    ],
+    expected: "Completed corrections retain current implementation and owning-test evidence links.",
+    levels: [
+      "unit"
+    ]
+  },
+  {
+    id: "F239-173",
+    implementation: [
+      {
+        file: "e2e/activation/terminal-ime-document.mjs",
+        symbol: "export function terminalInputBaselineAfterReference("
+      }
+    ],
+    tests: [
+      {
+        file: "e2e/test/activation/terminal-ime-document.test.mjs",
+        id: "post-reference baseline accepts an unchanged prompt with fresh focus evidence"
+      }
+    ],
+    expected: "A restored unchanged prompt requires matching fresh status evidence while per-key acceptance still requires change.",
+    levels: [
+      "unit"
+    ]
+  },
+  {
+    id: "F239-174",
+    implementation: [
+      {
+        file: "native/darwin/src/capture.m",
+        symbol: "captureLimitReached = true;"
+      }
+    ],
+    tests: [
+      {
+        file: "native/darwin/tests/capture_pressure_test.m",
+        id: "a healthy recording writes the frame after 600 accepted frames"
+      }
+    ],
+    expected: "Recording retains the 601st frame while callback evidence overflow fails explicitly.",
+    levels: [
+      "unit"
+    ]
+  },
+  {
+    id: "F239-175",
+    implementation: [
+      {
+        file: "e2e/activation/ime-visual-capture.mjs",
+        symbol: "export function persistThenRequireVisualProof("
+      }
+    ],
+    tests: [
+      {
+        file: "e2e/test/activation/ime-visual-capture.test.mjs",
+        id: "visual proof preserves cadence measurements without a functional gap threshold"
+      }
+    ],
+    expected: "Complete IME visual proof preserves cadence measurements while missing proof remains a failure.",
+    levels: [
+      "unit"
+    ]
+  },
+  {
+    id: "F239-176",
+    implementation: [
+      {
+        file: "packages/window-check/stall-sample.mjs",
+        symbol: "export async function sampleProcess("
+      }
+    ],
+    tests: [
+      {
+        file: "packages/window-check/test/stall-sample.test.mjs",
+        id: "native stall sampling keeps the check event loop responsive"
+      }
+    ],
+    expected: "Asynchronous native stall sampling keeps endpoint reads and deadlines responsive.",
+    levels: [
+      "unit"
+    ]
+  },
+  {
+    id: "F239-176-1",
+    implementation: [
+      {
+        file: "scripts/measure-app-usage.mjs",
+        symbol: "export async function attributeWebKit("
+      }
+    ],
+    tests: [
+      {
+        file: "scripts/test/measure-app-usage.test.mjs",
+        id: "attributes the WebKit services of two hosts that started in the same second by the launchd domain of each host"
+      }
+    ],
+    expected: "Usage attribution awaits asynchronous discovery and preserves per-host attribution and errors.",
+    levels: [
+      "unit"
+    ]
+  },
+  {
+    id: "F239-177",
+    implementation: [
+      {
+        file: "e2e/activation/terminal-ime-document.mjs",
+        symbol: "export async function readTerminalObservationSnapshot("
+      },
+      {
+        file: "e2e/activation/ime.test.mjs",
+        symbol: "readHost: async () =>"
+      }
+    ],
+    tests: [
+      {
+        file: "e2e/test/activation/terminal-ime-document.test.mjs",
+        id: "terminal observation reads status pairs concurrently around the screen sample"
+      }
+    ],
+    expected: "Current terminal status reads precede the dependent host presentation checkpoint and read.",
+    levels: [
+      "unit"
+    ]
+  },
+  {
+    id: "F239-178",
+    implementation: [
+      {
+        file: "native/darwin/src/image_capture_match.m",
+        symbol: "kIdentityDecodePendingJobLimit = 16"
+      }
+    ],
+    tests: [
+      {
+        file: "native/darwin/tests/image_capture_match_test.m",
+        id: "the decoder admits sixteen pending jobs and reports the rejected branch with its job and byte counts"
+      }
+    ],
+    expected: "Sixteen bounded identity jobs drain in order and a seventeenth admission fails explicitly.",
+    levels: [
+      "unit"
+    ]
+  },
+  {
+    id: "F239-179",
+    implementation: [
+      {
+        file: "e2e/activation/terminal-ime-document.mjs",
+        symbol: "let stopping = null;"
+      },
+      {
+        file: "e2e/activation/ime.test.mjs",
+        symbol: "await stateObserver.stop();"
+      }
+    ],
+    tests: [
+      {
+        file: "e2e/test/activation/terminal-ime-document.test.mjs",
+        id: "terminal observer stop releases each subscription once across repeated and concurrent calls"
+      },
+      {
+        file: "e2e/test/activation/terminal-ime-document.test.mjs",
+        id: "terminal observer stop retries only subscriptions whose release did not succeed"
+      },
+      {
+        file: "e2e/activation/ime.test.mjs",
+        id: "eight Korean vowels and one Backspace retain an exact input trace"
+      }
+    ],
+    expected: "Observation ends before offline analysis and repeated cleanup retries only unfinished subscription releases.",
+    levels: [
+      "unit",
+      "application"
+    ]
+  },
+  {
+    id: "F239-47-6",
+    implementation: [
+      {
+        file: "e2e/activation/ime.test.mjs",
+        symbol: "const runRepeatedVowelScenario = async"
+      }
+    ],
+    tests: [
+      {
+        file: "e2e/activation/ime.test.mjs",
+        id: "eight Korean vowels and one Backspace retain an exact input trace"
+      }
+    ],
+    expected: "The complete approved two-host IME gesture retains matching documents, exact visual proof and error-free cleanup.",
+    levels: [
+      "application"
+    ]
+  },
+  {
+    id: "F239-98",
+    implementation: [
+      { file: "e2e/activation/ime-visual-capture.mjs", symbol: "export async function startImeCapture(" },
+      { file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function attachImeFrameIdentities(" },
+    ],
+    tests: [
+      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "IME capture does not start when renderer metadata is absent" },
+      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "display time differs" },
+    ],
+    expected: "IME capture requires renderer metadata and opt-in identity capture, and joins each exact callback display time to its issued source identity.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-146",
+    implementation: [{ file: "native/darwin/src/capture_frame_identity.m", symbol: "ZXing_ReaderOptions_new()" }],
+    tests: [
+      { file: "native/darwin/tests/capture_frame_identity_test.m", id: "multiple complete codes in the expected ROI are explicitly ambiguous" },
+      { file: "native/darwin/tests/capture_frame_identity_test.m", id: "a compact raster clipped through bottom QR modules cannot identify the source" },
+    ],
+    expected: "The bounded identity decoder preserves exact issued payload identity, rejects clipped codes and reports multiple complete codes as ambiguous.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-171",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) closingChanged()" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn publish_status<O>" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestFastCloseAnswerPreservesBothClosingTransitions" },
+      { file: "packages/host/rust/src/sidecars_lock_test.rs", id: "fast_close_answer_preserves_both_closing_transitions" },
+      { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestDeclarationNotifiesEachOutdatedVersionChange" },
+      { file: "packages/host/rust/src/sidecars_lock_test.rs", id: "disconnect_notifies_outdated_removal_without_pending_closes" },
+      { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestRetainNotifiesOutdatedSessionCounts" },
+      { file: "packages/host/rust/src/sidecars_lock_test.rs", id: "detach_notifies_outdated_removal_without_pending_closes" },
+    ],
+    expected: "Both hosts preserve ordered immutable closing and outdated status transitions independently of UI invalidation across close, declaration, disconnect, stop and retention.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-171-4",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) retainLayoutOwners(" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn retain_layout_owners<O>" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestDetachNotifiesOutdatedRemovalWithoutPendingCloses" },
+      { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestRetainNotifiesOutdatedSessionCounts" },
+      { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestReusedRetainedSurfaceNotifiesOutdatedSessionCount" },
+      { file: "packages/host/rust/src/sidecars_lock_test.rs", id: "detach_notifies_outdated_removal_without_pending_closes" },
+      { file: "packages/host/rust/src/sidecars_lock_test.rs", id: "retain_notifies_outdated_session_counts" },
+      { file: "packages/host/rust/src/sidecars_lock_test.rs", id: "reused_retained_surface_notifies_outdated_session_count" },
+    ],
+    expected: "Shared stop state cleanup and retained owner removal notify outdated changes without pending closes; reused owners restore counts and idempotent operations stay silent.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-171-3",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) persistentConnectionEnded(" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn persistent_connection_ended<O: Owner>(" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestDeclarationNotifiesEachOutdatedVersionChange" },
+      { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestDisconnectNotifiesOutdatedRemovalWithoutPendingCloses" },
+      { file: "packages/host/rust/src/sidecars_lock_test.rs", id: "declaration_notifies_each_outdated_version_change" },
+      { file: "packages/host/rust/src/sidecars_lock_test.rs", id: "disconnect_notifies_outdated_removal_without_pending_closes" },
+    ],
+    expected: "Version-only declaration changes and current persistent connection loss notify the complete outdated status without pending closes; rejected declarations, unchanged versions and stale connections do not announce changes.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-163",
+    implementation: [
+      { file: "packages/host/rust/src/surfaces.rs", symbol: "fn apply_surfaces(" },
+    ],
+    tests: [
+      { file: "e2e/surface-sync-turn.test.mjs", id: "a surface layout enters the main thread once and its ready callback once" },
+    ],
+    expected: "Prepared placement reads share one main-thread turn and preserve read errors.",
+    levels: ["application"],
+  },
+  {
+    id: "F239-164",
+    implementation: [
+      { file: "packages/host/rust/src/images.rs", symbol: "pub(crate) fn present_on_ui(" },
+    ],
+    tests: [
+      { file: "packages/host/rust/src/images_test.rs", id: "image_commit_runs_after_the_framework_event_releases_its_lock" },
+      { file: "packages/host/rust/src/images_test.rs", id: "image_enqueue_failure_reaches_the_frame_handler" },
+      { file: "packages/host/rust/src/images_test.rs", id: "native_image_failure_reaches_the_frame_handler" },
+    ],
+    expected: "Image commits leave the framework event lock and preserve enqueue and native presentation failures.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-165",
+    implementation: [
+      { file: "packages/host/rust/src/images.rs", symbol: "pub fn current_presented(" },
+      { file: "packages/host/go/src/images.go", symbol: "waitCurrentObserved" },
+    ],
+    tests: [
+      { file: "packages/host/rust/src/images_test.rs", id: "a_pending_newer_frame_is_required_after_the_wait_begins" },
+      { file: "packages/host/go/src/images_test.go", id: "TestPendingNewerFrameIsRequiredAfterTheWaitBegins" },
+    ],
+    expected: "Both image waiters require a newer accepted frame to present before completing.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-166",
+    implementation: [
+      { file: "native/darwin/src/capture.m", symbol: "uint64_t writerStarted = mach_absolute_time();" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/capture_metadata_test.m", id: "the frame artifact preserves actual enqueue and asynchronous writer bounds as ordered raw ticks" },
+    ],
+    expected: "Capture metadata records actual ordered asynchronous writer intervals separately from synchronous callback intervals.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-167",
+    implementation: [
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "pub fn receive_sidecar_message(" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "func ReceiveSidecarMessage(" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/sidecars_receive_trace_test.rs", id: "a_handled_image_records_its_receipt_once" },
+      { file: "packages/host/rust/tests/sidecars_receive_trace_test.rs", id: "receipt_precedes_native_dispatch" },
+      { file: "packages/host/go/tests/sidecars_receive_trace_test.go", id: "TestHandledImageRecordsItsReceiptOnce" },
+      { file: "packages/host/go/tests/sidecars_receive_trace_test.go", id: "TestReceiptPrecedesNativeDispatch" },
+    ],
+    expected: "Both host transports record image receipt before native handling without losing ordinary page delivery.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-168",
+    implementation: [
+      { file: "Makefile", symbol: "@$(CARGO_ENV) node scripts/rust-tests.mjs" },
+    ],
+    tests: [
+      { file: "scripts/test/repeat-rust.test.mjs", id: "make ${target} applies the declared deployment environment to every Cargo call" },
+    ],
+    expected: "Rust owning targets apply the declared deployment environment to every Cargo call.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-169",
+    implementation: [
+      { file: "scripts/rust-tests.mjs", symbol: "process.stderr.write(error.stdout)" },
+    ],
+    tests: [
+      { file: "scripts/test/repeat-rust.test.mjs", id: "Rust owner CLI reports captured Cargo ${stage} failure output" },
+    ],
+    expected: "Rust owner discovery preserves compiler and metadata failure stdout and starts no test after failure.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-58",
+    implementation: [
+      { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", symbol: "const lifecycle = s.on(" },
+    ],
+    tests: [
+      { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", id: "F239-47-33 lifecycle cycle ${cycleLabel} closes and reopens the project after the approved IME gesture" },
+    ],
+    expected: "The lifecycle fixture targets the dedicated window and declared app identity, completes reference input and two project reopen passes, and removes the canonical project registration.",
+    levels: ["application"],
+  },
+  {
+    id: "F239-74",
+    implementation: [
+      { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", symbol: "const addedWindows =" },
+    ],
+    tests: [
+      { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", id: "F239-47-33 lifecycle cycle ${cycleLabel} closes and reopens the project after the approved IME gesture" },
+    ],
+    expected: "The lifecycle fixture targets the dedicated window and declared app identity, completes reference input and two project reopen passes, and removes the canonical project registration.",
+    levels: ["application"],
+  },
+  {
+    id: "F239-79",
+    implementation: [
+      { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", symbol: "const canonicalProjectRoot =" },
+    ],
+    tests: [
+      { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", id: "F239-47-33 lifecycle cycle ${cycleLabel} closes and reopens the project after the approved IME gesture" },
+    ],
+    expected: "The lifecycle fixture targets the dedicated window and declared app identity, completes reference input and two project reopen passes, and removes the canonical project registration.",
+    levels: ["application"],
+  },
+  {
+    id: "F239-47-36",
+    implementation: [
+      { file: "e2e/activation/ime.test.mjs", symbol: "runRepeatedVowelScenario(t, \"zsh\")" },
+    ],
+    tests: [
+      { file: "e2e/activation/ime.test.mjs", id: "zsh ZLE redraw retains the eight-vowel Backspace and Space input trace" },
+    ],
+    expected: "The fixed zsh ZLE gesture preserves all reference documents and measured glyph/underline stages with complete captures and independent cadence metrics.",
+    levels: ["application"],
+  },
+  {
+    id: "F239-180",
+    implementation: [
+      { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", symbol: "const completed = await waitForTerminalStage(" },
+    ],
+    tests: [
+      { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", id: "F239-47-33 lifecycle cycle ${cycleLabel} closes and reopens the project after the approved IME gesture" },
+    ],
+    expected: "Lifecycle completion waits for a coherent complete reference document and preserves isolated observations and complete decoded capture artifacts.",
+    levels: ["application"],
+  },
+  {
+    id: "F239-181",
+    implementation: [
+      { file: "e2e/activation/ime-reference-steps.mjs", symbol: "export async function compareAppKitReference(" },
+    ],
+    tests: [
+      { file: "e2e/test/activation/ime-reference-steps.test.mjs", id: "lifecycle reference input finishes each presentation before the next key" },
+      { file: "e2e/test/activation/ime-reference-steps.test.mjs", id: "lifecycle reference input rejects lost reference focus before sending another key" },
+      { file: "e2e/test/activation/ime-reference-steps.test.mjs", id: "lifecycle reference input rejects a stale intermediate document before the next key" },
+      { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", id: "F239-47-33 lifecycle cycle ${cycleLabel} closes and reopens the project after the approved IME gesture" },
+    ],
+    expected: "Lifecycle reference input checks each expected document and focus before the next presentation checkpoint and preserves failures at their first input step.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F239-183",
+    implementation: [
+      { file: "packages/host/go/src/documents.go", symbol: "func (s *Surfaces) replyView(" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/view_call_peer_test.go", id: "TestSuccessfulViewDeliveryKeepsTheViewAlive" },
+      { file: "packages/host/go/src/view_lifecycle_test.go", id: "TestAViewEndStoresHostViewKilledWithItsPluginAndSurface" },
+    ],
+    expected: "Successful reply, event and request delivery preserves the live view while actual termination records its end.",
+    levels: ["unit"],
+  },
+  {
+    id: "F212.12-2-2-4",
+    implementation: [{ file: "e2e/activation/terminal-view-focus.test.mjs", symbol: "async function recordGesture(" }],
+    tests: [
+      { file: "packages/window-check/test/frame.test.mjs", id: "complete capture cadence over 33 ms remains a measurement" },
+      { file: "e2e/activation/terminal-view-focus.test.mjs", id: "a terminal click accepts the same native keys as its AppKit reference" },
+      { file: "e2e/activation/terminal-view-focus.test.mjs", id: "repeated Korean vowels stay visible before Space" },
+    ],
+    expected: "The approved input path and complete callback artifacts pass functional acceptance while cadence remains a separate measurement.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F212.12-2-2-4-1",
+    implementation: [{ file: "e2e/activation/terminal-view-focus.test.mjs", symbol: "async function recordGesture(" }],
+    tests: [
+      { file: "packages/window-check/test/frame.test.mjs", id: "complete capture cadence over 33 ms remains a measurement" },
+      { file: "e2e/activation/terminal-view-focus.test.mjs", id: "a terminal click accepts the same native keys as its AppKit reference" },
+      { file: "e2e/activation/terminal-view-focus.test.mjs", id: "repeated Korean vowels stay visible before Space" },
+    ],
+    expected: "The approved input path and complete callback artifacts pass functional acceptance while cadence remains a separate measurement.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F239-185",
+    implementation: [{ file: "packages/log-contract/index.js", symbol: "document field truncation must contain" }],
+    tests: [
+      { file: "packages/log-contract/test/audit.test.mjs", id: "document field truncation is audited as the declared bounded envelope" },
+      { file: "packages/log-contract/test/audit.test.mjs", id: "document field truncation cannot hide malformed metadata or ordinary fields" },
+    ],
+    expected: "Only the exact bounded document-field truncation envelope replaces the original field schema; missing original fields remain unavailable as evidence.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-184",
+    implementation: [
+      { file: "packages/host/go/src/image_detach.go", symbol: "rand.Text()" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/image_detach_test.go", id: "TestImageDetachRequestIdentityDoesNotRestartWithTheApplication" },
+      { file: "e2e/outside.test.mjs", id: "native content, cards, and the sidebar rail stay aligned" },
+    ],
+    expected: "Detach request identity does not restart with the application and reload reaches recorded divider-drag geometry acceptance.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F239-266-1",
+    implementation: [
+      { file: ".github/actions/setup-node/action.yml", symbol: "name: Set up the workspace Node toolchain" },
+      { file: ".github/actions/setup-go/action.yml", symbol: "name: Set up the workspace Go toolchain" },
+      { file: ".github/actions/setup-rust/action.yml", symbol: "name: Set up the workspace Rust toolchain" },
+      { file: ".github/actions/setup-native/action.yml", symbol: "name: Validate the runner native toolchain" },
+      { file: "native/darwin/Makefile", symbol: "fetch:" },
+    ],
+    tests: [
+      { file: "scripts/test/workflow-setup.test.mjs", id: "setup-node uses the exact Node and pnpm versions declared by the workspace" },
+      { file: "scripts/test/workflow-setup.test.mjs", id: "setup-go reads the workspace Go version and resolves a module from root" },
+      { file: "scripts/test/workflow-setup.test.mjs", id: "setup-rust installs the repository toolchain with format and lint components" },
+      { file: "scripts/test/workflow-setup.test.mjs", id: "setup-native validates the runner toolchain without installing packages" },
+      { file: "scripts/test/native-offline.test.mjs", id: "offline fetch reports the missing pinned release file before curl" },
+      { file: "scripts/test/native-offline.test.mjs", id: "offline fetch verifies a valid cached release file without extracting or compiling" },
+      { file: "scripts/test/native-offline.test.mjs", id: "online fetch downloads and verifies only the pinned release file" },
+      { file: "scripts/test/native-offline.test.mjs", id: "offline fetch rejects a cached release file whose hash differs" },
+    ],
+    expected: "Independent workflow jobs install the declared toolchains and fetch their locked dependencies before offline checks. Native fetch verifies the pinned release file without compiling, and offline mode refuses a missing file before network access.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-266",
+    implementation: [
+      { file: "scripts/check-release.mjs", symbol: "const selectedHost = values.host;" },
+      { file: "Makefile", symbol: "check-release-wailsv3: build-wailsv3-release" },
+      { file: "Makefile", symbol: "check-release-tauriv2: build-tauriv2-release" },
+      { file: ".github/workflows/release.yml", symbol: "  release-wailsv3:" },
+      { file: ".github/workflows/release.yml", symbol: "  release-tauriv2:" },
+    ],
+    tests: [
+      { file: "scripts/test/check-release-paths.test.mjs", id: "release CLI audits only the explicitly selected ${host} bundle" },
+      { file: "scripts/test/check-release-paths.test.mjs", id: "release CLI rejects an unselected ${other} bundle in ${host} mode" },
+      { file: "scripts/test/check-release-paths.test.mjs", id: "release CLI preserves the default audit of every host bundle" },
+      { file: "scripts/test/native-pkgconfig.test.mjs", id: "release host checks audit only their own optimized bundle" },
+      { file: "scripts/test/workflows.test.mjs", id: "release builds and packages each host after the reusable CI checks succeed" },
+    ],
+    expected: "Each release host builds and audits only its selected bundle before packaging. Publication requires both host jobs, reusable CI and registry validation; the CLI without a host selection continues to audit both bundles.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-266-3",
+    implementation: [
+      { file: "scripts/check-release.mjs", symbol: "const selectedHost = values.host;" },
+      { file: "Makefile", symbol: "check-release-wailsv3: build-wailsv3-release" },
+      { file: "Makefile", symbol: "check-release-tauriv2: build-tauriv2-release" },
+      { file: ".github/workflows/release.yml", symbol: "  release-wailsv3:" },
+      { file: ".github/workflows/release.yml", symbol: "  release-tauriv2:" },
+    ],
+    tests: [
+      { file: "scripts/test/check-release-paths.test.mjs", id: "release CLI audits only the explicitly selected ${host} bundle" },
+      { file: "scripts/test/check-release-paths.test.mjs", id: "release CLI rejects an unselected ${other} bundle in ${host} mode" },
+      { file: "scripts/test/check-release-paths.test.mjs", id: "release CLI preserves the default audit of every host bundle" },
+      { file: "scripts/test/native-pkgconfig.test.mjs", id: "release host checks audit only their own optimized bundle" },
+      { file: "scripts/test/workflows.test.mjs", id: "release builds and packages each host after the reusable CI checks succeed" },
+    ],
+    expected: "Each release host builds and audits only its selected bundle before packaging. Publication requires both host jobs, reusable CI and registry validation; the CLI without a host selection continues to audit both bundles.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-277",
+    implementation: [
+      { file: "packages/sok/go/src/install.go", symbol: "func ParseVersion(text string)" },
+      { file: "go.work.sum", symbol: "github.com/Masterminds/semver/v3 v3.5.0 h1:" },
+      { file: "packages/sok/go/go.sum", symbol: "github.com/Masterminds/semver/v3 v3.5.0 h1:" },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/install_test.go", id: "TestVersionRangesAcceptExactCaretTildeAndBoundedForms" },
+      { file: "packages/sok/go/tests/install_test.go", id: "TestVersionsAndRangesRefuseTheFormsThatTheLibraryAccepts" },
+    ],
+    expected: "The Sok installer parses and orders the declared semantic version forms, rejects unsupported forms, and both workspace and standalone module graphs retain the checksums needed to resolve that parser offline.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-278",
+    implementation: [
+      { file: ".github/workflows/ci.yml", symbol: "SOKSAK_NATIVE_TEST_RUN_FOLDER: ${{ runner.temp }}/soksak-native-darwin" },
+      { file: ".github/workflows/ci.yml", symbol: "- name: Keep native Darwin failure evidence" },
+      { file: ".github/workflows/ci.yml", symbol: "steps.native-diagnostic-reports.outputs.directory" },
+    ],
+    tests: [
+      { file: "scripts/test/workflows.test.mjs", id: "ci keeps language host checks independent and gates release on every required job" },
+    ],
+    expected: "The native Darwin job remains a required isolated CI job. Its workflow records runner output under runner.temp and configures a failure-only artifact containing that output and the resolved user DiagnosticReports directory; the existing workflow checks cover required-job ownership and failure-artifact configuration patterns.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-282",
+    implementation: [
+      { file: "native/darwin/tests/document_throttle_test.m", symbol: "[window setReleasedWhenClosed:NO]" },
+      { file: "native/darwin/tests/document_throttle_test.m", symbol: "[window release]" },
+      { file: "native/darwin/tests/document_throttle_test.m", symbol: "if (fflush(stdout) != 0)" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/document_throttle_test.m", id: "a hidden region runs at most 10%% of the shown animation frame rate" },
+      { file: "native/darwin/tests/document_throttle_test.m", id: "a covered region runs at most 10%% of the shown animation frame rate" },
+      { file: "native/darwin/tests/document_throttle_test.m", id: "PASS: document_throttle_test" },
+    ],
+    expected: "The document throttle owner measures shown, hidden, and covered animation and timer rates without activating the application, reports output flush failures, and explicitly closes and releases its owned window before the autorelease pool drains.",
+    levels: ["native"],
+  },
+  {
+    id: "F266.4",
+    implementation: [
+      { file: "packages/host/rust/tests/flush_test.rs", symbol: "fn finish_drain_scenario(" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/flush_test.rs", id: "the_drain_fixture_receives_pending_child_output_before_cleanup" },
+      { file: "packages/host/rust/tests/flush_test.rs", id: "every_pending_reply_is_flushed_after_the_queue_drains" },
+      { file: "packages/host/rust/tests/flush_test.rs", id: "order_is_correct_when_stop_flushes_buffered_messages" },
+    ],
+    expected: "The drain fixture observes pending child output before cleanup, while the separate shutdown scenario still verifies stop flushing.",
+    levels: ["unit"],
+  },
+  {
+    id: "F212.12-2-3",
+    implementation: [
+      { file: "e2e/view-input.test.mjs", symbol: "const clickAddress =" },
+    ],
+    tests: [
+      { file: "e2e/view-input.test.mjs", id: "an inactive view retains input across main focus and handles picker Escape" },
+    ],
+    expected: "Native text and focus move between view and main without losing the view draft; native Escape cancels rename and dismisses the picker without application activation.",
+    levels: ["application"],
+  },
+  {
+    id: "F239-210",
+    implementation: [
+      { file: "packages/workbench/event-classes.js", symbol: "export function classOf(" },
+      { file: "packages/sok/go/src/event_classes.go", symbol: "func EventClassOf(" },
+      { file: "packages/sok/rust/src/event_classes.rs", symbol: "pub fn class_of(" },
+    ],
+    tests: [
+      { file: "scripts/test/event-classes.test.mjs", id: "the committed class tables equal what the catalog gives" },
+      { file: "packages/sok/go/tests/event_class_test.go", id: "TestTheClassTableGivesTheCatalogClassOfEventsAndFamilies" },
+      { file: "packages/sok/rust/tests/event_class_test.rs", id: "the_class_table_gives_the_catalog_class_of_events_and_families" },
+    ],
+    expected: "The root-view presentation join event has the declared call class in generated and runtime tables.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-213",
+    implementation: [{ file: "native/darwin/src/input_inject.m", symbol: "static unsigned short characterKeyCode(" }],
+    tests: [{ file: "native/darwin/tests/input_inject_test.m", id: "the equal character keeps its physical ANSI key identity" }],
+    expected: "Equal and Minus native keys preserve their physical ANSI identity without a text override.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-209",
+    implementation: [{ file: "packages/workbench/core-exposure.js", symbol: "export async function installCoreExposure(" }],
+    tests: [{ file: "packages/workbench/test/library-search-focus.test.mjs", id: "the declared cmd+k command targets the shown library page and rejects a hidden library" }],
+    expected: "The parameterless library search focus command and declared shortcut select the current projects/plugins search field and explicitly reject a hidden library.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-207",
+    implementation: [
+      { file: "packages/host/go/src/presentation_wait.go", symbol: "func tracePresentationJoin(" },
+      { file: "packages/host/rust/src/presentation_wait.rs", symbol: "pub(crate) fn trace_presentation_join(" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/view_join_test.go", id: "TestPresentationJoinTraceKeepsExactIdentityAcrossCallbackAndAbandonment" },
+      { file: "packages/host/rust/src/view_join_test.rs", id: "held_and_late_native_callbacks_keep_their_exact_join_identity" },
+    ],
+    expected: "Root join phases preserve exact layout and view identity, including synchronous and late native callbacks, without claiming pixel presentation.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-208",
+    implementation: [{ file: "scripts/checklist.mjs", symbol: 'import { checklist } from "@soksak/kit/checklist";' }],
+    tests: [{ file: "scripts/test/checklist.test.mjs", id: "checklist permits a fully specified unavailable-evidence record in both translations" }],
+    expected: "Unavailable historical evidence records require scoped evidence, an explicitly unverified result and a follow-up condition without claiming a functional pass.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-206",
+    implementation: [{ file: "native/darwin/tests/view_focus_test.m", symbol: "@implementation MainPageReadiness" }],
+    tests: [{ file: "native/darwin/tests/view_focus_test.m", id: "the registered app DOM web view finishes its main page before activation" }],
+    expected: "The registered main document finishes navigation before native focus activation, with explicit failure reporting.",
+    levels: ["native"],
+  },
+  {
+    id: "F212.12-2-1-2",
+    implementation: [{ file: "native/darwin/tests/view_focus_test.m", symbol: "@implementation MainPageReadiness" }],
+    tests: [{ file: "native/darwin/tests/view_focus_test.m", id: "the page of the view receives the key x" }],
+    expected: "The initialized registered main document and plugin view complete activation, receive native press and key input, preserve first-responder ownership and restore the prior frontmost app.",
+    levels: ["native"],
+  },
+  {
+    id: "F212.12-2-1-1",
+    implementation: [
+      { file: "e2e/editor.test.mjs", symbol: "const focusEditorForKeys =" },
+    ],
+    tests: [
+      { file: "e2e/editor.test.mjs", id: "a file opens from the tree in the editor, saves, shows a save error and asks before it closes" },
+    ],
+    expected: "A native click focuses the view and subsequent native input reaches its document and persists through Command-S on both hosts.",
+    levels: ["application"],
+  },
+  {
+    id: "F212.12-1",
+    implementation: [
+      { file: "e2e/view-display.mjs", symbol: "export async function checkViewDisplay(" },
+      { file: "e2e/view-content.mjs", symbol: "export async function viewContentCases(" },
+    ],
+    tests: [
+      { file: "e2e/test/view-display.test.mjs", id: "view display rejects a readiness-only case without captured-pixel verification" },
+      { file: "e2e/test/view-content.test.mjs", id: "view pixel crops include the capture content origin and scale once" },
+      { file: "native/darwin/tests/capture_text_test.m", id: "SOKSAK CONTENT CHECK" },
+      { file: "e2e/view-display.test.mjs", id: "each installed view plugin requires an explicit content case in a card" },
+    ],
+    expected: "Every installed view reaches declared readiness and its expected recorded text, with exact finalized frame counts and empty binder audits.",
+    levels: ["unit", "native", "application"],
+  },
+  {
+    id: "F212.12-1-15",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "revivePersistent" },
+      { file: "e2e/view-display.mjs", symbol: "core.tab.close" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentTransportWritesAnErrorLineForALostConnection" },
+      { file: "e2e/projects.test.mjs", id: "project windows persist files, inherit settings, and isolate native state" },
+      { file: "e2e/view-display.test.mjs", id: "each installed view plugin requires an explicit content case in a card" },
+    ],
+    expected: "The five completed child contracts preserve null replies and sidecar-loss facts and close the intended surface and real project window without closed-window errors.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F262",
+    implementation: [
+      { file: "packages/workbench/tab-reports.js", symbol: "export function forgetTabsLeft(" },
+      { file: "e2e/projects.test.mjs", symbol: "timeout: 120000" },
+    ],
+    tests: [
+      { file: "e2e/projects.test.mjs", id: "two independent project states repeat create-use-close-recreate in one instance" },
+      { file: "e2e/projects.test.mjs", id: "project windows persist files, inherit settings, and isolate native state" },
+      { file: "e2e/projects.test.mjs", id: "a saved project window mounts its active view on first open and reopen" },
+      { file: "e2e/projects.test.mjs", id: "a saved layout naming a plugin that is not loaded opens with a placeholder card" },
+      { file: "e2e/projects.test.mjs", id: "the first project opened from the library replies and replaces the library in the same window" },
+      { file: "e2e/projects.test.mjs", id: "a window that holds no open project reports no project" },
+      { file: "e2e/projects.test.mjs", id: "a covered window keeps its document visible and completes presentation commands" },
+    ],
+    expected: "Both hosts complete all project recreation, persistence, settings, view reopen, placeholder, first-open, no-project and covered-presentation cases with clean error auditing and shutdown.",
+    levels: ["application"],
+  },
+  {
+    id: "F262-11",
+    implementation: [
+      { file: "packages/workbench/tab-reports.js", symbol: "export function forgetTabsLeft(" },
+      { file: "e2e/projects.test.mjs", symbol: "timeout: 120000" },
+    ],
+    tests: [
+      { file: "e2e/projects.test.mjs", id: "two independent project states repeat create-use-close-recreate in one instance" },
+      { file: "e2e/projects.test.mjs", id: "project windows persist files, inherit settings, and isolate native state" },
+      { file: "e2e/projects.test.mjs", id: "a saved project window mounts its active view on first open and reopen" },
+      { file: "e2e/projects.test.mjs", id: "a saved layout naming a plugin that is not loaded opens with a placeholder card" },
+      { file: "e2e/projects.test.mjs", id: "the first project opened from the library replies and replaces the library in the same window" },
+      { file: "e2e/projects.test.mjs", id: "a window that holds no open project reports no project" },
+      { file: "e2e/projects.test.mjs", id: "a covered window keeps its document visible and completes presentation commands" },
+    ],
+    expected: "Both hosts complete all project recreation, persistence, settings, view reopen, placeholder, first-open, no-project and covered-presentation cases with clean error auditing and shutdown.",
+    levels: ["application"],
+  },
+  {
+    id: "F212.13",
+    implementation: [
+      { file: "native/darwin/src/input_reference.m", symbol: "void sp_input_reference(" },
+      { file: "e2e/activation/ime.test.mjs", symbol: "runRepeatedVowelScenario" },
+    ],
+    tests: [
+      { file: "e2e/activation/ime.test.mjs", id: "eight Korean vowels and one Backspace retain an exact input trace" },
+    ],
+    expected: "Approved same-window AppKit and terminal activation inputs match all documents and measured glyph/underline stages with complete captures, restored baseline and clean shutdown.",
+    levels: ["application"],
+  },
+  {
+    id: "F212.7",
+    implementation: [
+      { file: "packages/plugin-api/view-start.js", symbol: "window.sokView = Object.freeze(" },
+      { file: "packages/host/go/src/documents.go", symbol: "const viewChannelPath =" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/view.test.mjs", id: "the injected script posts the ready message with a document identifier at document start" },
+      { file: "packages/plugin-api/test/view.test.mjs", id: "host messages posted before createViewChannel() are delivered in order after the attach" },
+      { file: "native/darwin/tests/view_channel_test.m", id: "the view configuration runs the channel script at document start" },
+      { file: "e2e/view-start-handoff.test.mjs", id: "file-open parameters reach editor and HWP pages" },
+    ],
+    expected: "The view composition uses the staged document-start channel with ready and ordered queued delivery and completes two-host page start-value handoff.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F212.7-14",
+    implementation: [
+      { file: "packages/plugin-api/view-start.js", symbol: "window.sokView = Object.freeze(" },
+      { file: "packages/host/go/src/documents.go", symbol: "const viewChannelPath =" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/view.test.mjs", id: "the injected script posts the ready message with a document identifier at document start" },
+      { file: "packages/plugin-api/test/view.test.mjs", id: "host messages posted before createViewChannel() are delivered in order after the attach" },
+      { file: "native/darwin/tests/view_channel_test.m", id: "the view configuration runs the channel script at document start" },
+      { file: "e2e/view-start-handoff.test.mjs", id: "file-open parameters reach editor and HWP pages" },
+    ],
+    expected: "The view composition uses the staged document-start channel with ready and ordered queued delivery and completes two-host page start-value handoff.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F212.14-1",
+    implementation: [
+      { file: "e2e/drag-measurement.mjs", symbol: "export function measureDragPerformance(" },
+      { file: "e2e/benchmark/view-drag.test.mjs", symbol: "writeFileSync(path," },
+    ],
+    tests: [
+      { file: "e2e/test/drag-measurement.test.mjs", id: "drag performance keeps existing targets separate from valid measurements" },
+      { file: "e2e/benchmark/view-drag.test.mjs", id: "the view drag runs the drags of B3 in order, and its captured drag meets the performance targets with the traces off" },
+    ],
+    expected: "The dedicated benchmark validates untraced application settings, preserves complete measured frames and writes results before enforcing unchanged cadence and latency limits.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F212.14-2",
+    implementation: [
+      { file: "e2e/benchmark/view-drag.test.mjs", symbol: "const report =" },
+    ],
+    tests: [
+      { file: "e2e/benchmark/view-drag.test.mjs", id: "the view drag runs the drags of B3 in order, and its captured drag meets the performance targets with the traces off" },
+    ],
+    expected: "A declared candidate build profile produces complete measured drag reports with unchanged targets and explicit performance failure rather than inferred optimization acceptance.",
+    levels: ["application"],
+  },
+  {
+    id: "F212.14-4",
+    implementation: [
+      { file: "packages/host/go/src/surfaces.go", symbol: "func PrepareRasterUpdate(" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/surface_layout_order_test.go", id: "TestContinuousPreparationStartsRasterBeforeReply" },
+      { file: "packages/host/go/tests/surface_layout_order_test.go", id: "TestRasterPreparationFailureCancelsBeforeReply" },
+      { file: "packages/host/go/tests/surface_layout_order_test.go", id: "TestRasterPreparationRetainsCancellationSchedulingError" },
+      { file: "e2e/outside.test.mjs", id: "native content, cards, and the sidebar rail stay aligned" },
+    ],
+    expected: "Every Wails layout preparation starts raster configuration before replying and preserves cancellation failures and geometry acceptance.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F212.14-3",
+    implementation: [
+      { file: "e2e/drag-measurement.mjs", symbol: "committing: spread(" },
+      { file: "e2e/benchmark/cases/terminal.mjs", symbol: "transactionCadence: transactionCadence(run.layouts)" },
+    ],
+    tests: [
+      { file: "e2e/test/drag-measurement.test.mjs", id: "transaction cadence includes commit waiting and total transaction duration" },
+      { file: "e2e/test/drag-measurement.test.mjs", id: "transaction cadence rejects invalid or reversed stage timestamps" },
+      { file: "e2e/benchmark/view-drag.test.mjs", id: "the view drag runs the drags of B3 in order, and its captured drag meets the performance targets with the traces off" },
+    ],
+    expected: "Native transaction metrics include commit wait and total duration, reject invalid timing and preserve raw rows before unchanged performance judgments.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F239-81",
+    implementation: [
+      { file: "native/darwin/src/capture.m", symbol: "captureStream != stream" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/capture_callback_test.m", id: "late start and delegate callbacks retain the old stream's session identity" },
+      { file: "e2e/capture-lifecycle.test.mjs", id: "consecutive captures preserve finalized recordings" },
+    ],
+    expected: "Retired stream callbacks retain their original identity while consecutive recordings keep independent counts and finalized artifact bytes.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-172",
+    implementation: [
+      { file: "scripts/check-tests.mjs", symbol: "const FEATURE_LINKS = [" },
+    ],
+    tests: [
+      { file: "scripts/test/check-tests.test.mjs", id: "completed capability entries all have feature evidence links" },
+      { file: "scripts/test/check-tests.test.mjs", id: "recorded parity counts cannot drift from the current inventory" },
+    ],
+    expected: "Completed capabilities retain links to their actual implementation and owning tests, and documentation records the discovered inventory counts.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-171-2",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) closingChanged()" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn publish_status<O>" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestFastCloseAnswerPreservesBothClosingTransitions" },
+      { file: "packages/host/rust/src/sidecars_lock_test.rs", id: "fast_close_answer_preserves_both_closing_transitions" },
+      { file: "packages/host/rust/src/sidecars_lock_test.rs", id: "status_only_consumer_receives_stop_closing_removal" },
+      { file: "packages/host/rust/src/sidecars_lock_test.rs", id: "detach_notification_contains_the_complete_final_status" },
+    ],
+    expected: "Fast close answers preserve pending and answered status transitions in order, and removal notifications contain the complete final status without requiring UI subscribers.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-100",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "- (NSArray<NSString *> *)finishAtTimeout" },
+      { file: "native/darwin/src/input_inject.m", symbol: "NSString *sp_input_activity_timeout_message" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/input_inject_test.m", id: "duplicate completion for one webview does not complete another pending webview" },
+      { file: "native/darwin/tests/input_inject_test.m", id: "timeout identifies only the unresolved webview" },
+      { file: "native/darwin/tests/input_inject_test.m", id: "a timed out wait registers no WebKit activity callbacks when its queued block runs late" },
+      { file: "native/darwin/tests/input_inject_test.m", id: "timeout before callback registration reports its exact stage" },
+      { file: "native/darwin/tests/input_inject_test.m", id: "registered timeout reports only actual unresolved identifiers" },
+      { file: "native/darwin/tests/view_focus_test.m", id: "the test output preserves captured activation errors from each source (%@)" },
+    ],
+    expected: "Activation waits identify only unresolved visible webviews, report whether callback registration started, reject late enrollment after timeout, and preserve emitted errors in the owner test output without retaining webviews.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-85",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) NativeViewRemoved" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) Retain" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "pub fn native_views_removed" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "pub fn retain_sessions" },
+      { file: "packages/workbench/projects.js", symbol: "export function keep" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentRetainSendsOnlyLayoutSurfaces" },
+      { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestNativeViewRemovalStillClosesAStandardIOSession" },
+      { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestNativeViewRemovalRetainsPersistentSession" },
+      { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestRetainClosesPersistentSessionAbsentFromTheLayout" },
+      { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestRetainKeepsAnOrdinarySurfaceFirstSentDuringTheStart" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_retain_sends_only_layout_surfaces" },
+      { file: "packages/host/rust/src/sidecars_session_retention_test.rs", id: "native_view_removal_still_closes_a_standard_io_session" },
+      { file: "packages/host/rust/src/sidecars_session_retention_test.rs", id: "native_view_removal_does_not_close_a_persistent_layout_session" },
+      { file: "packages/host/rust/src/sidecars_session_retention_test.rs", id: "logical_retain_closes_a_persistent_session_absent_from_the_layout" },
+      { file: "packages/host/rust/src/sidecars_session_retention_test.rs", id: "a_retain_keeps_an_ordinary_surface_first_sent_during_its_start" },
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "closing a tab removes its session file after the layout write, and the start removes the files of tabs in no layout" },
+    ],
+    expected: "Native-view removal keeps a persistent session for a surface still held by a layout while closing stdio sessions; authoritative retain removes surface owners absent from every layout after the final tab occurrence leaves.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-90",
+    implementation: [
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn try_handle_image_envelope" },
+      { file: "packages/host/rust/src/windows.rs", symbol: "window_data_if_registered" },
+    ],
+    tests: [
+      { file: "packages/host/rust/src/sidecars_session_retention_test.rs", id: "an_image_routed_to_an_owner_retired_after_lookup_receives_the_closed_answer" },
+      { file: "packages/host/rust/src/sidecars_session_retention_test.rs", id: "current_and_retired_owner_paths_keep_their_existing_dispositions" },
+    ],
+    expected: "A sidecar image routed to an owner whose window record was retired receives the existing closed-image answer; current-owner messages and malformed or non-image bodies retain their existing disposition.",
+    levels: ["unit"],
+  },
+  {
+    id: "F212.12-1-23",
+    implementation: [
+      { file: "packages/plugin-api/view.js", symbol: "observeSurfaceDocument" },
+      { file: "packages/plugin-api/surface-document.js", symbol: "auditDocument" },
+      { file: "packages/workbench/exposure.js", symbol: "options.surfaceFrame(surface)" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/view-document.test.mjs", id: "the bridge registers the actual view document without plugin exposure setup" },
+      { file: "packages/plugin-api/test/view-document.test.mjs", id: "document watchers observe delegated shadow controls and mutations and close after unwatch" },
+      { file: "packages/workbench/test/exposure.test.mjs", id: "a view rectangle uses the selected surface's current applied origin once" },
+      { file: "packages/workbench/test/exposure.test.mjs", id: "the surface menu command is owned by the main document" },
+    ],
+    expected: "The actual view owns its document, input and hit entries once, its audit includes shared binders and open shadow roots, and view rectangles add the current applied origin once while the main document retains its menu command.",
+    levels: ["unit"],
+  },
+  {
+    id: "F212.12-1-10-5",
+    implementation: [{ file: "packages/plugin-api/view-modules.js", symbol: "export function checkViewModules" }],
+    tests: [
+      { file: "packages/plugin-api/test/view-modules.test.mjs", id: "a string literal of a minified vendor bundle that reads as an import is not an import" },
+      { file: "packages/plugin-api/test/view-modules.test.mjs", id: "a module that imports a specifier outside the view import map is an error that names the module and the specifier" },
+    ],
+    expected: "The module graph rule of a view page reads only the code of each module with es-module-lexer, so a string literal of a bundle is not an import, and it still refuses an unmapped static, re-export or literal dynamic import.",
+    levels: ["unit"],
+  },
+  {
+    id: "F260-1",
+    implementation: [
+      { file: "packages/sok/go/src/ownership.go", symbol: "func ownConfiguration" },
+      { file: "packages/sok/rust/src/ownership.rs", symbol: "fn own_configuration" },
+      { file: "packages/sok/go/src/platform/darwin/process.go", symbol: "func (darwin) TryLockFile" },
+      { file: "packages/sok/go/src/platform/linux/process.go", symbol: "func (linux) TryLockFile" },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/process_lock_cases_test.go", id: "TestAWritingCommandReadsTheProcessLockCaseTable" },
+      { file: "packages/sok/rust/tests/process_lock_cases_test.rs", id: "a_writing_command_reads_the_process_lock_case_table" },
+      { file: "packages/host/go/tests/process_lock_cases_test.go", id: "TestTheHostRefusesAHeldLockOfEachCaseWithItsText" },
+      { file: "packages/host/rust/tests/process_lock_cases_test.rs", id: "the_host_refuses_a_held_lock_of_each_case_with_its_text" },
+    ],
+    expected: "A writing command of sok holds the advisory lock on process.lock for the whole command, refuses a held lock with the host text of its case, and takes over a free lock file, in both sok implementations; the host refuses the same held cases with the same texts.",
+    levels: ["unit"],
+  },
+  {
+    id: "F260",
+    implementation: [
+      { file: "packages/sok/go/src/ownership.go", symbol: "func parseLockOwner" },
+      { file: "packages/sok/rust/src/ownership.rs", symbol: "fn parse_lock_owner" },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/process_lock_cases_test.go", id: "TestAWritingCommandReadsTheProcessLockCaseTable" },
+      { file: "packages/sok/rust/tests/process_lock_cases_test.rs", id: "a_writing_command_reads_the_process_lock_case_table" },
+    ],
+    expected: "A writing command of sok reads process.lock in the form of the host: a live owner is refused with its pid, an ended owner is taken over, and a lock in another form is refused with its content named and kept, in both implementations.",
+    levels: ["unit"],
+  },
+  {
+    id: "F212.6a-1-3-2-3",
+    implementation: [
+      { file: "packages/host/rust/src/stall_watch.rs", symbol: "pub fn start_stall_watch" },
+      { file: "packages/host/go/src/stall_watch.go", symbol: "func StartStallWatch" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/stall_watch_test.rs", id: "a_stall_of_an_unscheduled_process_carries_its_lateness_in_the_watch" },
+      { file: "packages/host/rust/tests/stall_watch_test.rs", id: "a_stall_of_a_blocked_main_thread_has_no_lateness_in_the_watch" },
+      { file: "packages/host/go/tests/stall_watch_test.go", id: "TestAStallOfAnUnscheduledProcessCarriesItsLatenessInTheWatch" },
+      { file: "packages/host/go/tests/stall_watch_test.go", id: "TestAStallOfABlockedMainThreadHasNoLatenessInTheWatch" },
+    ],
+    expected: "Both hosts record host.stall with watch_late_ms, the lateness of the watch's own wake, so that a stall of an unscheduled process has a watch lateness of at least half its lateness and a blocked main thread has none.",
+    levels: ["unit"],
+  },
+  {
+    id: "F258-2",
+    implementation: [{ file: "scripts/check-boundaries.mjs", symbol: "export function checkTestPathReads" }],
+    tests: [{ file: "scripts/test/check-boundaries.test.mjs", id: "checkTestPathReads refuses a test that reads a path of another core package" }],
+    expected: "make check-boundaries refuses a test of a core package whose string resolves into another core package, and the shared contract text of the manifest case table is read from docs/spec/cases, which no package owns.",
+    levels: ["unit"],
+  },
+  {
+    id: "F258-3",
+    implementation: [{ file: "scripts/audit-log.mjs", symbol: "auditLog" }],
+    tests: [
+      { file: "packages/host/go/tests/event_log_test.go", id: "TestTheEventLogPassesTheAuditOfTheContractPackage" },
+      { file: "packages/host/rust/tests/event_log_test.rs", id: "the_file_passes_the_audit_of_the_contract_package" },
+    ],
+    expected: "The host tests audit their logs through the repository command, the log-contract fixtures are read from docs/spec/cases, and no test of a core package reads the fixtures or the audit module of another package by path.",
+    levels: ["unit"],
+  },
+  {
+    id: "F258-1",
+    implementation: [
+      { file: "packages/sok/go/src/manifest.go", symbol: "func ValidateManifest" },
+      { file: "packages/sok/rust/src/manifest.rs", symbol: "pub fn validate_manifest" },
+      { file: "packages/plugin-api/index.js", symbol: "function sortedEntries" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/manifest-validation.test.mjs", id: "manifest validation" },
+      { file: "packages/sok/go/tests/manifest_cases_test.go", id: "TestPluginInstallReplaysTheManifestCases" },
+      { file: "packages/sok/rust/tests/manifest_cases_test.rs", id: "plugin_install_replays_the_manifest_cases" },
+    ],
+    expected: "The reader and both sok implementations give every case of docs/spec/cases/manifest-validation.json the same result: a refused manifest fails with the reader's text, members are read in sorted key order, and a schema type that is not a type name is refused.",
+    levels: ["unit"],
+  },
+  {
+    id: "F258",
+    implementation: [{ file: "packages/sok/go/src/manifest.go", symbol: "func ValidateManifest" }],
+    tests: [
+      { file: "packages/sok/go/tests/plugins_test.go", id: "TestPluginInstallRefusesAManifestWithASchemaOutsideTheSubset" },
+      { file: "packages/sok/rust/tests/plugins_test.rs", id: "plugin_install_refuses_a_manifest_with_a_schema_outside_the_subset" },
+    ],
+    expected: "The install of sok refuses a plugin.json whose exposes declaration or surface params schema the reader refuses, with the reader's error text, in both the Go and the Rust implementation.",
+    levels: ["unit"],
+  },
+  {
+    id: "F252-2",
+    implementation: [{ file: "packages/host/go/src/endpoint.go", symbol: "func (e *Endpoint) accept" }],
+    tests: [
+      { file: "packages/host/go/tests/endpoint_test.go", id: "TestEndpointRecordsAnAcceptError" },
+      { file: "packages/host/go/tests/endpoint_test.go", id: "TestEndpointRecordsAReadErrorInsideAFrame" },
+      { file: "packages/host/rust/tests/endpoint_test.rs", id: "the_endpoint_records_an_accept_error" },
+    ],
+    expected: "Both hosts record an endpoint accept error and the I/O reason of a read error instead of hiding them, each checked by a Go and a Rust test; the other host and native error paths of F252-2 are recorded in the item with their tests.",
+    levels: ["unit"],
+  },
+  {
+    id: "F257-3",
+    implementation: [{ file: "scripts/test-runner.mjs", symbol: "function signalGroup" }],
+    tests: [
+      { file: "scripts/test/test-runner.test.mjs", id: "a refused group signal with no running member ends without error" },
+      { file: "scripts/test/test-runner.test.mjs", id: "a refused group signal with a running member names it" },
+    ],
+    expected: "A group signal that macOS refuses with EPERM because only zombies remain ends without error, and a refusal while a member runs fails with the running members named, so the runner's exit and timeout paths do not throw on a group of zombies.",
+    levels: ["unit"],
+  },
+  {
+    id: "F257-1",
+    implementation: [{ file: "scripts/test-runner.mjs", symbol: "function runOne" }],
+    tests: [{ file: "scripts/test/test-runner.test.mjs", id: "a test over its limit is stopped before the process table is read, and its elapsed time is taken at the stop" }],
+    expected: "At its limit the runner stops the test process group with SIGSTOP before it lists the leftovers, takes the elapsed time of the timeout at that stop, and then kills the group, so a slow process-table read does not let the test run past its limit.",
+    levels: ["unit"],
+  },
+  {
+    id: "F257",
+    implementation: [{ file: "scripts/test-command.mjs", symbol: "export function runCommand" }],
+    tests: [
+      { file: "scripts/test/test-command.test.mjs", id: "ends its own leader when every process-group signal is refused" },
+      { file: "scripts/test/test-command.test.mjs", id: "reports process-group signal failure without an unhandled timer error" },
+    ],
+    expected: "When a process-group signal is refused, the command runner ends its leader and finishes at the leader's close, so no child of the test process remains after the result, checked by the leader test and the signal-failure test.",
+    levels: ["unit"],
+  },
+  {
+    id: "F255",
+    implementation: [{ file: "packages/host/rust/tests/sidecars_transport_test.rs", symbol: "fn a_replaced_service_starts_after_the_end_of_its_process" }],
+    tests: [{ file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "a_replaced_service_starts_after_the_end_of_its_process" }],
+    expected: "The replace service fixture waits for the installed service process to end before its drop returns, so the test that reads the process state after drop passes in every repeat run.",
+    levels: ["unit"],
+  },
+  {
+    id: "F252-1-1",
+    implementation: [{ file: "packages/plugin-api/index.js", symbol: "export function createExpose" }],
+    tests: [
+      { file: "packages/plugin-api/test/exposure.test.mjs", id: "a port without report is refused when the exposure is created, because a failed reply needs a place to be reported" },
+      { file: "packages/plugin-api/test/exposure.test.mjs", id: "a report that fails is given with both errors to reportError, which dispatches the page error event" },
+    ],
+    expected: "createExpose refuses a port without report, reports a refused reply through it, and gives a failing report with both texts to reportError, each checked by a plugin-api test.",
+    levels: ["unit"],
+  },
+  {
+    id: "F254",
+    implementation: [{ file: "scripts/test-runner.mjs", symbol: "export async function runTests" }],
+    tests: [
+      { file: "scripts/test/test-runner.test.mjs", id: "a test file that leaves a timer open after its tests pass is ended at its limit, and the timeout names the process that remains" },
+      { file: "scripts/test/test-runner.test.mjs", id: "a process that outlives its test process is ended at that exit, and the failure names it" },
+    ],
+    expected: "The test runner ends a process group that a test file leaves running and fails that file with the names of the processes, at the exit of the file process or at its limit, checked by two runner tests.",
+    levels: ["unit"],
+  },
+  {
+    id: "F248-6",
+    implementation: [
+      { file: "packages/plugin-api/view.js", symbol: "export function createViewBridge" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/view-tab-calls-contract.test.mjs", id: "view tab call contract publishes the required cases in order" },
+    ],
+    expected: "The view bridge posts each tab call with its parameters and passes the host reply and refusal through, and it answers a declared UI snapshot pull with the pushed value or with seq 0 and value null, each replayed against the bridge with the same outputs.",
+    levels: ["unit"],
+  },
+  {
+    id: "F248-5",
+    implementation: [
+      { file: "packages/plugin-api/view.js", symbol: "export function createViewBridge" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/view-settings-contract.test.mjs", id: "view settings contract publishes the required cases in order" },
+    ],
+    expected: "The view bridge reads the settings and the text scale, delivers each host change to the listeners of its name, refuses a listener-less subscription, and removes the listener of a refused subscription, each replayed against the bridge with the same outputs.",
+    levels: ["unit"],
+  },
+  {
+    id: "F248-4",
+    implementation: [
+      { file: "packages/plugin-api/calls.js", symbol: "export function createCalls" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/calls-contract.test.mjs", id: "call limit contract publishes the required cases in order" },
+    ],
+    expected: "A call that receives no reply within its declared or default limit is rejected with -32000 and the limit message, and a reply after the limit is a late reply that is not passed to the call, each replayed against the call layer with mock timers and the same outputs.",
+    levels: ["unit"],
+  },
+  {
+    id: "F248-3",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "export function createExpose" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/expose-contract.test.mjs", id: "exposure contract publishes the required cases in order" },
+    ],
+    expected: "After dispose, an exposure refuses a registration or a binding and adds no request listener, including when dispose runs while the declarations load, and the removal of bindings at dispose is published as a case that replays against the implementation with the same outputs.",
+    levels: ["unit"],
+  },
+  {
+    id: "F248-2",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "export function resolveContributions" },
+      { file: "packages/plugin-api/view.js", symbol: "export function createViewBridge" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/contributions-contract.test.mjs", id: "contributions contract publishes the required cases in order" },
+      { file: "packages/plugin-api/test/view-native-contract.test.mjs", id: "view native contract publishes the required cases in order" },
+    ],
+    expected: "The contribution cases resolve every state of resolveContributions, and the view native case drops an event that arrives before its subscription, each against the implementation with the same outputs.",
+    levels: ["unit"],
+  },
+  {
+    id: "F248-1",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "export function createExpose" },
+      { file: "packages/plugin-api/surface-composition.js", symbol: "export async function createSurfaceCompositionController" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/expose-contract.test.mjs", id: "exposure contract publishes the required cases in order" },
+      { file: "packages/plugin-api/test/view-composition-contract.test.mjs", id: "view composition contract publishes the required cases in order" },
+    ],
+    expected: "The exposure case disposes a registration and answers no request after dispose, and the view composition cases replay a document region load and post alone and the teardown of a composition, each against the implementation with the same outputs.",
+    levels: ["unit"],
+  },
+  {
+    id: "F248",
+    implementation: [
+      { file: "packages/plugin-api/binder.js", symbol: "export function createBinder" },
+      { file: "packages/plugin-api/surface-composition.js", symbol: "export async function createSurfaceCompositionController" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/create-binder-contract.test.mjs", id: "createBinder publishes ordered cases for its consumer contract" },
+      { file: "packages/plugin-api/test/view-composition-contract.test.mjs", id: "view composition contract publishes the required cases in order" },
+    ],
+    expected: "The binder cases bind a keydown event with its when predicate and failed callback, and the view composition cases replay the message listener, stream subscription with close, and reload of a document region, each against the implementation with the same outputs.",
+    levels: ["unit"],
+  },
+  {
+    id: "F246",
+    implementation: [
+      { file: "packages/plugin-api/view.js", symbol: "export function createViewBridge" },
+      { file: "packages/plugin-api/index.js", symbol: "export function createExpose" },
+      { file: "packages/plugin-api/surface-composition.js", symbol: "export async function createSurfaceCompositionController" },
+      { file: "packages/plugin-api/binder.js", symbol: "export const INTERACTIVE" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/view-composition-contract.test.mjs", id: "view composition contract publishes the required cases in order" },
+      { file: "packages/plugin-api/test/expose-contract.test.mjs", id: "exposure contract publishes the required cases in order" },
+      { file: "packages/plugin-api/test/command-registration-contract.test.mjs", id: "command registration contract publishes the required cases in order" },
+      { file: "packages/plugin-api/test/view-commands-contract.test.mjs", id: "view command contract publishes the required cases in order" },
+      { file: "packages/plugin-api/test/view-native-contract.test.mjs", id: "view native contract publishes the required cases in order" },
+      { file: "packages/plugin-api/test/interactive-contract.test.mjs", id: "INTERACTIVE is the published selector of operable elements" },
+    ],
+    expected: "Each published case file lists its ordered steps, and the owning test runs each case against the implementation with the same outputs.",
+    levels: ["unit"],
+  },
+  {
+    id: "V5-118",
+    implementation: [{ file: "packages/workbench/plane.js", symbol: "export function toggleCardFullscreen" }],
+    tests: [
+      { file: "packages/workbench/test/card-fullscreen.test.mjs", id: "the header fullscreen control precedes close and runs its declared command" },
+      { file: "e2e/card-fullscreen.test.mjs", id: "card fullscreen fills the work area and restores live surfaces" },
+    ],
+    expected: "The fullscreen control before close fills the work area with the selected content card through its declared command and restores the arrangement and live sibling surfaces without OS fullscreen or saved-layout changes.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "V5-118-1",
+    implementation: [{ file: "packages/workbench/plane.js", symbol: "export const presentedCardRect" }],
+    tests: [{ file: "e2e/card-fullscreen.test.mjs", id: "sidebar settings apply to fullscreen and restored cards" }],
+    expected: "Saved sidebar settings of a fullscreen card produce the same selected sets, section DOM and native content rectangle in fullscreen and after restoration.",
+    levels: ["application"],
+  },
+  {
+    id: "F0.4-1",
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "auditFailureMatrix" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "failure matrix preserves JS/TS, Rust, Go, and Objective-C lane attribution" }],
+    expected: "The complete failure-propagation audit covers every declared JS/TS, Rust, Go, and Objective-C production lane with attributable errors and no ignored outcomes.",
+    levels: ["unit", "native"],
+  },
+  {
+    id: "F0.4-1.1",
+    implementation: [
+      { file: "packages/host/go/src/surfaces.go", symbol: "CreateLogicalSurfaceHandle" },
+      { file: "packages/host/go/src/modals.go", symbol: "alignErr" },
+    ],
+    tests: [{ file: "packages/host/go/tests/surface_activation_test.go", id: "TestLogicalSurfaceCreationPropagatesNativeFailure" }],
+    expected: "Wails surface creation and alignment failures return attributable errors, reject nil native handles, cancel the pending layout, and do not continue as a successful partial surface update.",
+    levels: ["native"],
+  },
+  {
+    id: "G1",
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "auditInventory" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "inventory reports uncovered implementations and tests as separate results" }],
+    expected: "The workspace inventory reports implementation and test ownership separately, rejects uncovered files, and preserves structural evidence without claiming behavior coverage.",
+    levels: ["unit"],
+  },
+  {
+    id: "G2-1",
+    implementation: [{ file: "scripts/check-host-files.mjs", symbol: "PAIRS" }],
+    tests: [{ file: "scripts/test/soksak-scripts.test.mjs", id: "host structure audit reports a clean paired-host graph" }],
+    expected: "The paired Tauri/Wails host and application structure contains only declared differences and no missing counterpart or obsolete process path.",
+    levels: ["unit"],
+  },
+  {
+    id: "G2-2",
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "auditCompletedFeatureLinks" }, { file: "scripts/check-tests.mjs", symbol: "auditRecordedInventoryCounts" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "completed capability entries all have feature evidence links" }, { file: "scripts/test/check-tests.test.mjs", id: "recorded parity counts cannot drift from the current inventory" }],
+    expected: "Completed host-structure and parity-correction entries remain linked to named evidence, and the current inventory count cannot drift from the current-state record in the operations document.",
+    levels: ["unit"],
+  },
+  {
+    id: "G2-3",
+    implementation: [{ file: "scripts/test-hosts.mjs", symbol: "auditHostContract" }, { file: "scripts/test-hosts.mjs", symbol: "parseDeclarations" }],
+    tests: [{ file: "scripts/test/test-hosts.test.mjs", id: "a host without a test for a shared case fails" }, { file: "scripts/test/test-hosts.test.mjs", id: "a declared test that did not run, failed, or was skipped does not cover its case" }],
+    expected: "Both hosts' tests declare the host contract cases they execute, and the check fails when a host has no passing executed test for a case in its scope.",
+    levels: ["unit", "native"],
+  },
+  {
+    id: "G3-1",
+    implementation: [
+      { file: "scripts/check-tests.mjs", symbol: "auditInventory" },
+      { file: "scripts/check-tests.mjs", symbol: "auditFeatureLinks" },
+      { file: "scripts/language-test-adapters.mjs", symbol: "runLanguageCases" },
+      { file: "scripts/test-evidence.mjs", symbol: "evidenceDrift" },
+    ],
+    tests: [
+      { file: "scripts/test/check-tests.test.mjs", id: "boundary audit rejects a duplicate implementation and test owner" },
+      { file: "scripts/test/check-tests.test.mjs", id: "evidence audit rejects attribution to the wrong behavior-test file" },
+      { file: "scripts/test/check-tests.test.mjs", id: "behavior mutation audit rejects a no-op implementation and an omitted response" },
+      { file: "scripts/test/test-language-test-adapters.test.mjs", id: "parses each language result and rejects zero, skipped, and crashed outcomes" },
+      { file: "scripts/test/test-evidence.test.mjs", id: "evidence records content hashes, dirty state, expected/actual result, and retry history" },
+    ],
+    expected: "The audit rejects injected structural and behavioral defects, mandatory skips, wrong evidence attribution, and stale executable evidence while reporting structural and behavior evidence separately.",
+    levels: ["unit"],
+  },
+  {
+    id: "G3",
+    implementation: [
+      { file: "scripts/check-tests.mjs", symbol: "auditInventory" },
+      { file: "scripts/check-host-files.mjs", symbol: "auditHostPairs" },
+      { file: "scripts/language-test-adapters.mjs", symbol: "runLanguageCases" },
+      { file: "scripts/test-evidence.mjs", symbol: "evidenceDrift" },
+    ],
+    tests: [
+      { file: "scripts/test/check-tests.test.mjs", id: "inventory reports uncovered implementations and tests as separate results" },
+      { file: "scripts/test/test-language-test-adapters.test.mjs", id: "parses each language result and rejects zero, skipped, and crashed outcomes" },
+      { file: "scripts/test/test-evidence.test.mjs", id: "evidence records content hashes, dirty state, expected/actual result, and retry history" },
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "host structure audit rejects a missing host and a missing counterpart" },
+    ],
+    expected: "Structural and behavioral audits reject missing implementation or test files, excluded or skipped execution, invalid evidence links, stale evidence, and missing host counterparts; no-op effects and responses fail their behavior assertions.",
+    levels: ["unit"],
+  },
+  {
+    id: "G1.3-5",
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "auditCommittedEvidenceWording" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "F0.1 evidence identifies its build by its checklist ID" }],
+    expected: "F0.1 evidence identifies the build used for its host result by its checklist ID and does not claim that the current worktree is dirty.",
+    levels: ["unit"],
+  },
+  {
+    id: "G1.4-1",
+    implementation: [
+      { file: "scripts/check-tests.mjs", symbol: "auditOwnership" },
+      { file: "packages/workbench/host.js", symbol: "takes no argument; it uses the declared sidecar" },
+      { file: "packages/workbench/environment.js", symbol: "sidecars: surface.sidecars" },
+    ],
+    tests: [
+      { file: "scripts/test/check-tests.test.mjs", id: "ownership audit rejects cross-owner implementation names and private paths" },
+      { file: "packages/workbench/test/surface-runtime.test.mjs", id: "surface sidecar access is resolved from the declared surface and takes no argument" },
+    ],
+    expected: "Implementation and test sources cannot cross owner boundaries or read private paths; plugin sidecar access is resolved from the declaration and never by a name that the page passes.",
+    levels: ["unit"],
+  },
+  {
+    id: "G1.3-4",
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "auditModalParitySnapshotWording" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "modal parity Red is dated and followed by current F10.2 evidence" }],
+    expected: "The original Wails modal Red remains as a dated observation and the current F10.2 correction is stated without conflating the two states.",
+    levels: ["unit"],
+  },
+  {
+    id: "G1.3-3",
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "auditHistoricalScopeWording" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "completed F3 scope is not reported as currently open" }],
+    expected: "Completed F3 records preserve their historical sequence without reporting already-closed controlled-site and restored/new-document checks as currently open.",
+    levels: ["unit"],
+  },
+  {
+    id: "G1.3-2",
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "auditRecordedInventoryCounts" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "recorded parity counts cannot drift from the current inventory" }],
+    expected: "The current lane, implementation, and test counts recorded in both operations-document translations match current inventory output, a count drift fails explicitly, and completed checklist evidence is not compared.",
+    levels: ["unit"],
+  },
+  {
+    id: "G1.3-1",
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "auditCompletedFeatureLinks" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "completed capability entries all have feature evidence links" }],
+    expected: "Every completed capability checklist entry has a linked implementation, named behavior test, expected result, and verification level, while aggregate review records are explicitly excluded.",
+    levels: ["unit"],
+  },
+  
+  {
+    id: "F2.12",
+    implementation: [
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "service_process_exists" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_transport_replaces_endpoint_left_by_a_dead_service" },
+    ],
+    expected: "Application-process loss reconnects to a surviving service, while service failure remains an explicit failure or declared replacement and never becomes a new shell.",
+    levels: ["native", "application"],
+  },
+  {
+    id: "F2.14",
+    implementation: [
+      { file: "packages/workbench/host.js", symbol: "onSurfacePrepared" },
+      { file: "packages/workbench/surface-modules.js", symbol: "authorizeSurface" },
+    ],
+    tests: [
+      { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
+      { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
+      { file: "e2e/terminal.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
+    ],
+    expected: "Prepared native surfaces authorize their modules after host creation, including late registration replay, and rebuilt Tauri/Wails split-terminal checks reach a presented raster without an authorization or presentation timeout.",
+    levels: ["unit", "application"],
+  },
+  
+  {
+    id: "F0.5.6",
+    implementation: [
+      { file: "packages/host/tauriv2/src/bindings.rs", symbol: "project_open" },
+      { file: "packages/host/tauriv2/src/bindings.rs", symbol: "window_new" },
+      { file: "packages/host/tauriv2/src/host.rs", symbol: "on_menu_event" },
+    ],
+    tests: [
+      { file: "e2e/library.test.mjs", id: "library windows create and open projects in place" },
+      { file: "e2e/activation/terminal-keyboard.test.mjs", id: "native keyboard edits and executes independently in three terminals" },
+      { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
+    ],
+    expected: "AppKit window creation and activation run on the event-loop thread, the bounded Tauri basic-operation matrix remains observable, and normal shutdown removes the owned endpoint and lock.",
+    levels: ["native", "application"],
+  },
+  {
+    id: "F0.5.8",
+    implementation: [{ file: "packages/host/rust/src/surfaces.rs", symbol: "sync" }],
+    tests: [{ file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" }],
+    expected: "Split-surface synchronization reads the AppKit scale factor on the main thread; a rebuilt Tauri host presents four split terminals without a foreign-exception crash.",
+    levels: ["native", "application"],
+  },
+  {
+    id: "F0.5.9",
+    implementation: [
+      { file: "packages/host/rust/src/exposure.rs", symbol: "root_view_on_main" },
+      { file: "packages/host/rust/src/windows.rs", symbol: "with_native_owner" },
+      { file: "packages/host/rust/src/surfaces.rs", symbol: "sync" },
+    ],
+    tests: [
+      { file: "e2e/terminal.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
+      { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
+      { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
+    ],
+    expected: "Endpoint and asynchronous split-path WebView and native window-handle lookups run through the AppKit main-thread executor; repeated split requests preserve native presentation and process survival on rebuilt Tauri.",
+    levels: ["native", "application"],
+  },
+  {
+    id: "F0.5.9-2",
+    implementation: [{ file: "packages/host/rust/src/windows.rs", symbol: "reload_surface_documents" }],
+    tests: [
+      { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
+      { file: "e2e/terminal.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
+    ],
+    expected: "Main-document reload cleanup finishes before replacement surface images attach; repeated split tests do not leave a new image generation loading after old native image teardown.",
+    levels: ["native", "application"],
+  },
+  {
+    id: "F0.5.9-3",
+    implementation: [{ file: "packages/window-check/app.mjs", symbol: "acquireWindowCheckSlot" }],
+    tests: [
+      { file: "e2e/test/app-contract.test.mjs", id: "window checks reject overlapping sessions that target the same application" },
+      { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
+      { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
+      { file: "e2e/terminal.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
+      { file: "e2e/terminal.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
+    ],
+    expected: "Same-application window checks cannot concurrently reset one app's native image generations; rebuilt Tauri and Wails split presentation cases pass with bounded output and no raster timeout.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F0.5.9-4",
+    implementation: [{ file: "packages/host/go/src/windows.go", symbol: "reloadSurfaceDocuments" }],
+    tests: [
+      { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
+      { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
+      { file: "e2e/terminal.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
+      { file: "e2e/terminal.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
+      { file: "e2e/terminal.test.mjs", id: "three terminals and two browsers keep one view web view each and one terminal service" },
+      { file: "e2e/terminal.test.mjs", id: "closing terminal tabs reaps every PTY child without killing the shared service" },
+    ],
+    expected: "The Wails stale-page runtime response race is closed at WebViewDidCommitNavigation; the isolated sequential cases pass and the preserved application log contains no stopped runtime response.",
+    levels: ["native", "application"],
+  },
+  {
+    id: "F0.5.9-5",
+    implementation: [{ file: "packages/host/go/src/windows.go", symbol: "reloadSurfaceDocuments" }],
+    tests: [
+      { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
+      { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
+      { file: "e2e/terminal.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
+      { file: "e2e/terminal.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
+      { file: "e2e/terminal.test.mjs", id: "three terminals and two browsers keep one view web view each and one terminal service" },
+      { file: "e2e/terminal.test.mjs", id: "closing terminal tabs reaps every PTY child without killing the shared service" },
+    ],
+    expected: "Wails main-document reload cleanup finishes before replacement surface images attach; the sequential split and cleanup cases pass without a raster presentation timeout.",
+    levels: ["native", "application"],
+  },
+  {
+    id: "F4",
+    implementation: [
+      { file: "native/darwin/src/window_facts.m", symbol: "focused" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "documents" },
+      { file: "packages/host/go/src/exposure.go", symbol: "WindowDocument" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/window_facts_test.m", id: "document webview focus is reported" },
+      { file: "e2e/browser.test.mjs", id: "browser document focus and isolation" },
+    ],
+    expected: "A single click inside a browser document makes that document the native first responder, and a later click in another document transfers focus without leaving the first document focused.",
+    levels: ["native", "application"],
+  },
+  {
+    id: "F0.5.7-1",
+    implementation: [
+      { file: "packages/workbench/page-layout.js", symbol: "waitSurfaceCompositionDeclared" },
+      { file: "packages/workbench/surface-modules.js", symbol: "waitSurfaceCompositionDeclared" },
+    ],
+    tests: [
+      { file: "e2e/projects.test.mjs", id: "project windows persist files, inherit settings, and isolate native state" },
+      { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
+    ],
+    expected: "Command settling waits for the composition declaration of a view without waiting on native presentation, so surface startup cannot form a presentation cycle; project-window and normal-shutdown evidence must pass independently.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "R1",
+    implementation: [
+      { file: "packages/sok/rust/src/plugins.rs", symbol: "pub fn read_plugins_state" },
+      { file: "packages/sok/go/src/plugins.go", symbol: "func ReadPluginsState" },
+      { file: "packages/workbench/plugin-operations.js", symbol: "async function installStarter" },
+    ],
+    tests: [
+      { file: "packages/sok/rust/tests/plugins_test.rs", id: "plugins_state_reports_the_registry_and_the_installation" },
+      { file: "packages/sok/go/tests/plugins_test.go", id: "TestPluginsStateReportsTheRegistryAndTheInstallation" },
+      { file: "packages/workbench/test/plugin-operations.test.mjs", id: "the first run installs the starter pack in its order and asks for a reload" },
+    ],
+    expected: "A registry index lists plugins, sidecars and the starter pack; the installer library of both command lines reports the registry, the index, the installation and the first run, installs selected versions with their sidecars, and the workbench installs the starter pack on the first run before it builds a space.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F0.5",
+    implementation: [
+      { file: "packages/workbench/core-exposure.js", symbol: "installCoreExposure" },
+      { file: "packages/workbench/surface-modules.js", symbol: "mountSurface" },
+    ],
+    tests: [
+      { file: "e2e/commands.test.mjs", id: "card, tab, and menu commands change the grid" },
+      { file: "e2e/modal.test.mjs", id: "settings blocks background input and closes only through its close button" },
+      { file: "e2e/browser.test.mjs", id: "browser documents follow host theme pixels for existing, new, and reloaded documents" },
+      { file: "e2e/activation/terminal-keyboard.test.mjs", id: "native keyboard edits and executes independently in three terminals" },
+      { file: "e2e/library.test.mjs", id: "library windows create and open projects in place" },
+      { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
+    ],
+    expected: "The rebuilt Tauri application starts, accepts prompt and native input, exposes working controls and scoped surfaces, completes first-run project opening, rejects a second owner, prevents undeclared surface placement, and removes its endpoint and lock on normal shutdown.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F0",
+    implementation: [
+      { file: "apps/tauriv2/src/main.rs", symbol: "run" },
+      { file: "packages/workbench/core-exposure.js", symbol: "installCoreExposure" },
+    ],
+    tests: [
+      { file: "e2e/commands.test.mjs", id: "card, tab, and menu commands change the grid" },
+      { file: "e2e/activation/terminal-keyboard.test.mjs", id: "native keyboard edits and executes independently in three terminals" },
+      { file: "e2e/browser.test.mjs", id: "browser documents follow host theme pixels for existing, new, and reloaded documents" },
+      { file: "e2e/library.test.mjs", id: "library windows create and open projects in place" },
+      { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
+    ],
+    expected: "The rebuilt application starts, performs the existing basic operations through declared commands and native input, and shuts down without leaving its endpoint or owned lock; broader Wails parity and composition/reflow are checked by separate feature entries.",
+    levels: ["application"],
+  },
+  {
+    id: "F0.1",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "sp_input_pointer" },
+      { file: "packages/host/rust/src/platform/darwin/input.rs", symbol: "pointer" },
+    ],
+    tests: [
+      { file: "e2e/terminal.test.mjs", id: "three terminal" },
+      { file: "native/darwin/tests/input_inject_test.m", id: "keys reach the focused field" },
+    ],
+    expected: "Native input reaches each of three terminal surfaces with exact focus, text, Enter, and isolation behavior.",
+    levels: ["native", "application"],
+  },
+  {
+    id: "F0.1.2",
+    implementation: [
+      { file: "native/darwin/src/webview_input.m", symbol: "webviewInputSendThen" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/input_inject_test.m", id: "a click focuses the field" },
+    ],
+    expected: "The first native click focuses a terminal and the next character is accepted without a second click.",
+    levels: ["unit", "native", "application"],
+  },
+  {
+    id: "F0.1.3",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "sp_input_key" },
+    ],
+    tests: [
+      { file: "e2e/browser.test.mjs", id: "browser document region navigates" },
+    ],
+    expected: "The first address entry replaces the selected URL instead of appending to it, while later clicks retain caret editing.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F0.2",
+    implementation: [
+      { file: "native/darwin/src/appearance.m", symbol: "sp_webview_set_appearance" },
+      { file: "packages/host/rust/src/platform/darwin/webview.rs", symbol: "sp_webview_set_appearance" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/appearance_test.m", id: "dark appearance is applied" },
+      { file: "apps/tauriv2/test/runtime-contract.test.mjs", id: "composition places geometry" },
+    ],
+    expected: "Dark and light appearance assignment uses the compiled native helper and rejects a null view explicitly.",
+    levels: ["unit", "native", "application"],
+  },
+  
+  {
+    id: "F0.4",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "webviewInputSendThen" },
+      { file: "native/darwin/src/webview_input.m", symbol: "webviewInputSendThen" },
+      { file: "packages/host/go/src/platform/darwin/input.go", symbol: "pointerSequence" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/input_inject_test.m", id: "a click after keyboard input synthesizes one DOM click" },
+      { file: "e2e/sidebar.test.mjs", id: "a combined set mounts every section in list layout and switches sections in tabs layout" },
+    ],
+    expected: "A native pointer click reaches the DOM control under it on both macOS hosts: a header click folds its section and a tab click shows its section.",
+    levels: ["unit", "native", "application"],
+  },
+  {
+    id: "F0.4-1.2",
+    implementation: [
+      { file: "scripts/check-tests.mjs", symbol: "auditJsFailurePropagation" },
+      { file: "packages/client/client.js", symbol: "status.unwatch" },
+      { file: "packages/workbench/exposure.js", symbol: "release" },
+      { file: "packages/workbench/host.js", symbol: "layoutStepEnd" },
+      { file: "packages/workbench/projects.js", symbol: "inTurn" },
+      { file: "packages/workbench/transcript.js", symbol: "createTranscript" },
+    ],
+    tests: [
+      { file: "scripts/test/check-tests.test.mjs", id: "JS failure audit rejects promise handlers that hide rejection" },
+      { file: "packages/workbench/test/transcript.test.mjs", id: "a failed send does not stop later lines" },
+    ],
+    expected: "Promise rejection handlers in the audited JS/TS implementation cannot silently turn failures into successful completion; visible reporting preserves the failure while allowing independent queued work to proceed.",
+    levels: ["unit"],
+  },
+  {
+    id: "F0.4-1.3.1",
+    implementation: [
+      { file: "scripts/check-tests.mjs", symbol: "auditRustFailurePropagation" },
+    ],
+    tests: [
+      { file: "scripts/test/check-tests.test.mjs", id: "Rust failure audit rejects ignored outcomes in the scoped production lane" },
+    ],
+    expected: "The VT sidecar does not discard production Result or task outcomes; actor, session, monitor, and shutdown failures remain observable through returned errors or explicit reports.",
+    levels: ["unit", "native"],
+  },
+  {
+    id: "F0.4-1.3.2",
+    implementation: [
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "PersistentConnection" },
+      { file: "packages/host/rust/src/recording.rs", symbol: "abort" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "on_main" },
+      { file: "scripts/check-tests.mjs", symbol: "auditRustFailurePropagation" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_transport_reconnects_after_connection_loss_and_preserves_owner" },
+      { file: "packages/host/rust/tests/recording_test.rs", id: "an_aborted_recording_is_stopped_and_removed_and_allows_the_next" },
+      { file: "scripts/test/check-tests.test.mjs", id: "Rust failure audit rejects ignored outcomes in the scoped production lane" },
+    ],
+    expected: "The Tauri host does not discard production Result or callback and cleanup outcomes; transport, delivery, recording, and shutdown failures remain observable through returned errors or explicit reports.",
+    levels: ["unit", "native"],
+  },
+  {
+    id: "F0.4-1.3.3",
+    implementation: [
+      { file: "scripts/check-tests.mjs", symbol: "auditRustFailurePropagation" },
+      { file: "packages/host/rust/src/platform/windows/unsupported.rs", symbol: "missing" },
+    ],
+    tests: [
+      { file: "scripts/test/check-tests.test.mjs", id: "Rust failure audit covers every production lane" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_transport_rejects_unsupported_hello_protocol_without_replacing_endpoint" },
+    ],
+    expected: "Every Rust production lane is included in the ignored-outcome audit, and unsupported host operations return explicit errors instead of successful no-op results.",
+    levels: ["unit", "native"],
+  },
+  {
+    id: "F0.4-1.4",
+    implementation: [
+      { file: "native/darwin/src/capture.m", symbol: "sp_capture_error" },
+      { file: "packages/host/rust/src/platform/darwin/capture.rs", symbol: "last_error" },
+      { file: "scripts/check-tests.mjs", symbol: "auditNativeFailurePropagation" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/support/capture_boundary.m", id: "open failure is observable to the caller" },
+      { file: "scripts/test/check-tests.test.mjs", id: "Darwin native failure audit rejects log-only capture boundaries" },
+    ],
+    expected: "Darwin capture open, start, wait, and stop failures cross the native boundary as explicit errors; invalid directory input and frame-write failures are not silently discarded.",
+    levels: ["unit", "native"],
+  },
+  {
+    id: "F0.4-1.5",
+    implementation: [
+      { file: "scripts/check-tests.mjs", symbol: "auditFailureMatrix" },
+      { file: "packages/host/go/src/recording.go", symbol: "func (r *Recording) Abort" },
+    ],
+    tests: [
+      { file: "scripts/test/check-tests.test.mjs", id: "Go failure audit rejects ignored results in every Go production lane" },
+      { file: "packages/host/go/tests/recording_test.go", id: "TestAbortRetiredStopFailureRemovesFolderAndReportsStopError" },
+    ],
+    expected: "The JS/TS, Rust, Go, and Objective-C failure lanes run as one machine-audited matrix; each lane rejects ignored outcomes, and Wails capture, recording cleanup, and shell close failures remain attributable.",
+    levels: ["unit", "native"],
+  },  {
+    id: "F0.4-1-1",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: 'Emit("sidecar-failure"' },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn fail<O: Owner>" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestOversizeSidecarMessageTerminatesAndNotifies" },
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestSidecarOutputCloseNotifiesEachSurface" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "an_oversize_message_terminates_and_notifies" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "an_output_close_notifies_each_surface" },
+    ],
+    expected: "An oversize, invalid or unreadable sidecar output, or an output end outside stop, terminates the sidecar process and delivers sidecar-failure to each owning window on both hosts.",
+    levels: ["native"],
+  },  {
+    id: "F0.4-1-1-1",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "addressed := process.surfaces[event.Surface]" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "unknown surface {}" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestClosedSurfaceMessagesAreDiscardedAndUnknownOnesFail" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "closed_surface_messages_are_discarded_and_unknown_ones_fail" },
+    ],
+    expected: "A stdio sidecar message for a surface the host closed is discarded, and a message for a surface the host never sent to that process fails the sidecar with unknown surface on both hosts.",
+    levels: ["native"],
+  },  {
+    id: "F0.4-1-1-2",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) readPersistentLines(" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn reply_of(" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentTransportFailsTheConnectionOnAnInvalidEvent" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentTransportFailsTheConnectionOnAnOversizeLine" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_transport_fails_the_connection_on_an_invalid_event" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_transport_fails_the_connection_on_an_oversize_line" },
+    ],
+    expected: "Both hosts read the persistent service connection with the 64 MiB message limit and end it with sidecar-failure to each surface that has sent on an oversize or invalid line, without reconnecting at once.",
+    levels: ["native"],
+  },  {
+    id: "F0.4-1-1-3",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "const sidecarMessageLimit = 64 << 20" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "const MESSAGE_LIMIT: usize = 64 << 20;" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestSidecarMessageAtTheLimitIsDelivered" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "a_message_at_the_limit_is_delivered" },
+    ],
+    expected: "A sidecar message at the 64 MiB limit reaches the owning window on both hosts at any load; the tests wait for the event, and the 6-19 s delivery at load average 31-33 is not judged by a timer.",
+    levels: ["native"],
+  },  {
+    id: "F0.4-1-1-4",
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "export function auditCompletedFeatureLinks" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "completed capability entries all have feature evidence links" }],
+    expected: "Every completed checklist capability, the merged sidecar failure delivery included, has a feature link to its implementation and tests.",
+    levels: ["unit"],
+  },
+
+
+  
+  
+  {
+    id: "F2.2",
+    implementation: [
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "shutdown_waiters" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "CloseOwner" },
+    ],
+    tests: [{ file: "e2e/test/terminal-processes.test.mjs", id: "process measurement preserves identities" }],
+    expected: "Normal application quit acknowledges owned-session closure, stops the service, and removes its endpoint.",
+    levels: ["application"],
+  },
+  {
+    id: "F2.3",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "Close" },
+    ],
+    tests: [{ file: "e2e/test/terminal-processes.test.mjs", id: "process measurement preserves identities" }],
+    expected: "Closing terminal tabs reaps their PTY children while retaining the shared terminal service.",
+    levels: ["native", "application"],
+  },
+  
+  
+  
+  {
+    id: "F2.6",
+    implementation: [
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "service_process_exists" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "NewSidecars" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_transport_replaces_endpoint_left_by_a_dead_service" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentTransportReplacesEndpointLeftByDeadService" },
+    ],
+    expected: "A dead service endpoint is replaced through authenticated bootstrap and routes requests to the new service.",
+    levels: ["native"],
+  },
+  {
+    id: "F2.7",
+    implementation: [
+      { file: "packages/host/rust/src/sidecars.rs", symbol: ".map_err(|e| format!(\"sidecar {name}: connect authenticated service: {e}\"))?;" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "return nil, fmt.Errorf(\"sidecar %s: connect authenticated service: %w\", name, err)" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_transport_reports_live_but_unreachable_endpoint_without_replacement" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentTransportReportsLiveButUnreachableEndpointWithoutReplacement" },
+    ],
+    expected: "A live but unreachable endpoint returns an explicit connection error and its endpoint record remains byte-for-byte unchanged.",
+    levels: ["native"],
+  },
+  
+  
+  
+  {
+    id: "F2.11",
+    implementation: [
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "protocol mismatch" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "protocol mismatch" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_transport_rejects_unsupported_hello_protocol_without_replacing_endpoint" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentTransportRejectsUnsupportedHelloProtocolWithoutReplacingEndpoint" },
+    ],
+    expected: "An unsupported service protocol is rejected explicitly and does not replace the endpoint record.",
+    levels: ["native"],
+  },
+  {
+    id: "F2.2-1",
+    implementation: [{ file: "e2e/normal-shutdown.mjs", symbol: "command.run" }],
+    tests: [{ file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" }],
+    expected: "A declared command.run host.quit request returns null and removes the application PID and endpoint within the bounded case limit.",
+    levels: ["application"],
+  },
+  {
+    id: "G2",
+    implementation: [
+      { file: "scripts/check-e2e-host-parity.mjs", symbol: "auditE2EHostParity" },
+      { file: "packages/plugin-api/binder.js", symbol: "parentNode" },
+      { file: "packages/plugin-api/surface-composition.js", symbol: "detachAll" },
+      { file: "apps/tauriv2/runtime/index.js", symbol: "waitPresented" },
+      { file: "apps/wailsv3/runtime/index.js", symbol: "waitPresented" },
+    ],
+    tests: [
+      { file: "scripts/test/e2e-host-parity.test.mjs", id: "every application E2E suite runs the same scenario through both adapters" },
+      { file: "packages/plugin-api/test/binder.test.mjs", id: "audit recognizes delegated controls inside a shadow root" },
+      { file: "packages/plugin-api/test/surface-composition.test.mjs", id: "disposal waits for an in-flight placement before detaching regions" },
+      { file: "apps/tauriv2/test/runtime-contract.test.mjs", id: "Tauri page regions expose operations but only composition places geometry" },
+      { file: "apps/wailsv3/test/runtime-contract.test.mjs", id: "Wails page regions expose operations but only composition places geometry" },
+    ],
+    expected: "The completed adapter-parity parent contract is mechanically represented by its child implementation and scenario links; no child evidence is omitted from the audit.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "G2.4",
+    implementation: [
+      { file: "packages/host/tauriv2/src/bindings.rs", symbol: "project_open" },
+      { file: "packages/host/go/src/projects.go", symbol: "ProjectOpen" },
+      { file: "packages/host/go/src/platform/darwin/webview.m", symbol: "nativeWindowPrepare" },
+    ],
+    tests: [
+      { file: "e2e/projects.test.mjs", id: "project windows persist files, inherit settings, and isolate native state" },
+      { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
+    ],
+    expected: "An isolated public project/window case reports its first failure and the host remains explicitly stoppable within its case limit.",
+    levels: ["application"],
+  },
+  {
+    id: "G2.5",
+    implementation: [
+      { file: "apps/tauriv2/runtime/index.js", symbol: "waitPresented" },
+      { file: "apps/wailsv3/runtime/index.js", symbol: "waitPresented" },
+    ],
+    tests: [
+      { file: "apps/tauriv2/test/runtime-contract.test.mjs", id: "Tauri page regions expose operations but only composition places geometry" },
+      { file: "apps/wailsv3/test/runtime-contract.test.mjs", id: "Wails page regions expose operations but only composition places geometry" },
+    ],
+    expected: "Tauri and Wails runtime adapters return the same displayed-state payload from waitPresented and their contract tests assert that returned value.",
+    levels: ["unit"],
+  },
+  {
+    id: "G2.9",
+    implementation: [{ file: "packages/plugin-api/surface-composition.js", symbol: "detachAll" }],
+    tests: [
+      { file: "packages/plugin-api/test/surface-composition.test.mjs", id: "disposal waits for an in-flight placement before detaching regions" },
+      { file: "e2e/terminal.test.mjs", id: "a newly split terminal presents its first native raster" },
+    ],
+    expected: "Closing a surface waits for its in-flight composition placement before detaching native regions; rebuilt Tauri and Wails split-terminal checks pass without composition-declaration errors.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "G2.7",
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "auditRecordedInventoryCounts" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "recorded parity counts cannot drift from the current inventory" }],
+    expected: "The parity inventory records the current 56 lanes, 251 implementation files, and 171 test files after adding the mechanical E2E host audit.",
+    levels: ["unit"],
+  },
+  {
+    id: "G2.6",
+    implementation: [{ file: "scripts/check-e2e-host-parity.mjs", symbol: "auditE2EHostParity" }],
+    tests: [{ file: "scripts/test/e2e-host-parity.test.mjs", id: "every application E2E suite runs the same scenario through both adapters" }],
+    expected: "Every application E2E suite is mechanically required to iterate both Tauri and Wails adapters, while only explicitly documented host-independent suites may be unit-only.",
+    levels: ["unit"],
+  },
+  {
+    id: "G2.3",
+    implementation: [{ file: "packages/plugin-api/binder.js", symbol: "parentNode" }],
+    tests: [
+      { file: "packages/plugin-api/test/binder.test.mjs", id: "audit recognizes delegated controls inside a shadow root" },
+      { file: "e2e/audit.test.mjs", id: "every control on every screen runs a declared command and has an element name" },
+    ],
+    expected: "Delegated controls inside plugin ShadowRoots are recognized by the runtime audit in both rebuilt hosts.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F11-1",
+    implementation: [
+      { file: "packages/workbench/core-exposure.js", symbol: "core.workbench.audit" },
+      { file: "packages/plugin-api/surface-document.js", symbol: "unbound" },
+    ],
+    tests: [{ file: "e2e/audit.test.mjs", id: "every control on every screen runs a declared command and has an element name" }],
+    expected: "Rebuilt Tauri and Wails audit every visible control on workspace, menus, renames, settings scopes and sections, library forms/search, and the return path; every control has a declared command and element name.",
+    levels: ["application"],
+  },
+  {
+    id: "F11",
+    implementation: [
+      { file: "packages/workbench/core-exposure.js", symbol: "core.workbench.audit" },
+      { file: "scripts/language-test-adapters.mjs", symbol: "runLanguageCases" },
+    ],
+    tests: [
+      { file: "e2e/audit.test.mjs", id: "every control on every screen runs a declared command and has an element name" },
+      { file: "scripts/test/test-language-test-adapters.test.mjs", id: "parses each language result and rejects zero, skipped, and crashed outcomes" },
+    ],
+    expected: "Exposure declarations, runtime binder coverage, and every declared JS/TS, Rust, Go, and Objective-C language lane provide attributable behavior results without hidden skips or fallback success.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F12",
+    implementation: [
+      { file: "packages/workbench/text-size.js", symbol: "nextTextSize" },
+      { file: "packages/workbench/plane.js", symbol: "changeTextSize" },
+      { file: "native/darwin/src/document_view.m", symbol: "sp_document_zoom" },
+    ],
+    tests: [
+      { file: "e2e/text-size.test.mjs", id: "text size commands enlarge the pressed card or the frame and keep the plane in the window" },
+      { file: "e2e/terminal.test.mjs", id: "the terminal font follows the pressed card's text size" },
+      { file: "e2e/browser.test.mjs", id: "the browser document zoom follows the pressed card's text size" },
+    ],
+    expected: "Command =, -, and 0 change the text size of the last pressed card or of the frame and every card: DOM content by CSS zoom, terminal cells by font size, and browser documents by page zoom, while the plane stays inside the window.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F17",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "the service did not print its endpoint within" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "the service did not print its endpoint within" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentStartFailsWhenTheServicePrintsNoEndpoint" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_start_fails_when_the_service_prints_no_endpoint" },
+    ],
+    expected: "A persistent service that prints no endpoint fails the start after the ready limit, and the host ends it, whenever the service starts.",
+    levels: ["unit"],
+  },
+  {
+    id: "F20",
+    implementation: [
+      { file: "packages/host/go/src/command_line.go", symbol: "ParseArguments" },
+      { file: "packages/host/rust/src/command_line.rs", symbol: "parse_arguments" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/command_line_test.go", id: "TestApplicationArgumentsAreDeclaredOnly" },
+      { file: "packages/host/rust/tests/command_line_test.rs", id: "application_arguments_are_declared_only" },
+    ],
+    expected: "Both applications reject an undeclared argument, a flag without a value and a repeated flag with the same text and status 2.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F26",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "function checkDependencies" },
+      { file: "packages/sok/go/src/install.go", symbol: "func ManifestDependencies" },
+      { file: "packages/sok/rust/src/install.rs", symbol: "pub fn manifest_dependencies" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/validate.test.mjs", id: "a manifest is rejected for each invalid field" },
+      { file: "packages/sok/go/tests/install_test.go", id: "TestPackageJSONDeclaresVersionCoreRangeAndFilesAndTheManifestDeclaresSidecarRanges" },
+      { file: "packages/sok/rust/tests/install_test.rs", id: "package_json_declares_version_core_range_and_files_and_the_manifest_declares_sidecar_ranges" },
+    ],
+    expected: "A plugin declares its sidecars and their version ranges only as the dependencies of plugin.json, and a package.json with soksak is refused.",
+    levels: ["unit"],
+  },
+  {
+    id: "F126",
+    implementation: [
+      { file: "packages/workbench/page-start-errors.js", symbol: "export function installPageStartErrors" },
+      { file: "packages/workbench/page-start-errors-install.js", symbol: "export const pageStart" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/page-start-errors.test.mjs", id: "an error before the first screen is written as a page start error with its file and line" },
+      { file: "packages/workbench/test/page-start-errors.test.mjs", id: "the first module of the start document installs the handler" },
+      { file: "packages/workbench/test/files-list.test.mjs", id: "every file that the start document and the modules of the page import is listed in package.json files" },
+    ],
+    expected: "An error that stops the main page from starting is written to the application log as error: page start: <text> @ <file>:<line>, and package.json lists every file that the start document and the page modules import.",
+    levels: ["unit"],
+  },
+  {
+    id: "F127",
+    implementation: [
+      { file: "packages/workbench/observe.js", symbol: "diagnostics.page.request" },
+      { file: "packages/host/go/src/assets.go", symbol: "func MissingAssets" },
+      { file: "packages/host/rust/src/assets.rs", symbol: "pub struct ReportingAssets" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/assets_test.go", id: "TestMissingAssetsReportEachPathOnce" },
+      { file: "packages/host/rust/tests/assets_test.rs", id: "missing_assets_report_each_path_once" },
+    ],
+    expected: "A request for a page file that does not exist writes error: page asset: <path>: not found once for the path in both hosts.",
+    levels: ["unit"],
+  },
+  {
+    id: "F132",
+    implementation: [
+      { file: "packages/host/tauriv2/src/host.rs", symbol: "Lookup::Start => None" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/framework_test.rs", id: "a_missing_file_is_not_answered_with_the_start_document" },
+    ],
+    expected: "The Tauri host does not answer a path with a file extension that names no file with the start document.",
+    levels: ["unit"],
+  },
+  {
+    id: "F129",
+    implementation: [
+      { file: "packages/window-check/app.mjs", symbol: "export async function prepareFixture" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/prepare-fixture-settings.test.mjs", id: "the preparation of a check restores the settings that it changed when the check ends" },
+    ],
+    expected: "The preparation of a window check restores the settings that it changed, including diagnostics.performance, when the check ends.",
+    levels: ["unit"],
+  },
+  {
+    id: "F128",
+    implementation: [
+      { file: "packages/host/go/src/page_process.go", symbol: "func PageProcessEnded" },
+      { file: "packages/host/rust/src/page_process.rs", symbol: "pub fn page_process_ended" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "pub fn connection_loss_report" },
+      { file: "packages/host/rust/src/application_log.rs", symbol: "pub fn install_panic_hook" },
+      { file: "native/darwin/src/application_log.m", symbol: "void sp_log_install_fatal_handlers" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/page_process_test.go", id: "TestThePageProcessEndIsAnErrorLine" },
+      { file: "packages/host/rust/tests/page_process_test.rs", id: "the_page_process_end_is_an_error_line" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentTransportWritesAnErrorLineForALostConnection" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "a_lost_connection_is_reported_as_an_error_line" },
+      { file: "packages/host/rust/tests/panic_hook_test.rs", id: "the_panic_hook_does_not_wait_for_the_writer_and_the_record_is_stored_before_the_process_ends" },
+      { file: "packages/host/go/tests/routine_test.go", id: "TestAPanicOfAGoroutineIsRecordedAsAnEventBeforeTheProcessEnds" },
+      { file: "packages/host/rust/tests/routine_test.rs", id: "a_panic_of_a_thread_is_recorded_as_an_event_before_the_process_ends" },
+      { file: "packages/host/rust/tests/fatal_signal_test.rs", id: "a_fatal_signal_writes_an_error_line_to_the_standard_error_file" },
+    ],
+    expected: "The end of a page process, a lost connection to a persistent service, a fatal signal each write one error line to the application log, and a panic of a goroutine or a thread is the event `host.panic`.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F120",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) processPersistent" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn start_persistent" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestTheHelloCarriesTheConfigurationDirectoryAsClient" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "the_hello_carries_the_configuration_directory_as_client" },
+    ],
+    expected: "The hello that either host sends to a persistent service carries the configuration directory of the application as client.",
+    levels: ["unit"],
+  },
+  {
+    id: "F130",
+    implementation: [
+      { file: "packages/host/go/src/debug.go", symbol: "func debugPruneStates" },
+      { file: "packages/host/rust/src/debug.rs", symbol: "fn prune_states" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/debug_test.go", id: "TestDebugWriteStateKeepsTheNewest20StateFiles" },
+      { file: "packages/host/rust/tests/debug_test.rs", id: "debug_write_state_keeps_the_newest_20_state_files" },
+    ],
+    expected: "The host keeps the newest 20 state files of logs/ after it writes one.",
+    levels: ["unit"],
+  },
+  {
+    id: "F122",
+    implementation: [
+      { file: "packages/workbench/projects.js", symbol: "async function closeWindow" },
+      { file: "packages/workbench/projects.js", symbol: "async function answerRemoval" },
+      { file: "packages/workbench/core-exposure.js", symbol: "registry.command(\"core.space.close\"" },
+      { file: "packages/host/go/src/quit.go", symbol: "type Quit struct" },
+      { file: "packages/host/rust/src/quit.rs", symbol: "pub struct Quit" },
+      { file: "packages/host/go/src/project_removal.go", symbol: "type Removals struct" },
+      { file: "packages/host/rust/src/project_removal.rs", symbol: "pub struct Removals" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/projects-close-window.test.mjs", id: "a window close request asks about modified tabs before it saves and closes" },
+      { file: "packages/workbench/test/projects-close-window.test.mjs", id: "a kept modified tab keeps the window open and unsaved" },
+      { file: "packages/workbench/test/projects-close-window.test.mjs", id: "removing the project shown in the window asks about modified tabs before it removes the project" },
+      { file: "packages/workbench/test/projects-close-window.test.mjs", id: "removing a project that another window shows asks that window and keeps the project when it refuses" },
+      { file: "packages/workbench/test/space-close-asks.test.mjs", id: "core.space.close asks about modified tabs before it removes the active space" },
+      { file: "packages/host/go/tests/quit_test.go", id: "TestACancelledQuitEndsTheQuitState" },
+      { file: "packages/host/rust/tests/quit_test.rs", id: "a_cancelled_quit_ends_the_quit_state" },
+      { file: "packages/host/go/tests/project_removal_test.go", id: "TestAProjectRemovalRequestResolvesWithTheOwnerAnswer" },
+      { file: "packages/host/rust/tests/project_removal_test.rs", id: "a_project_removal_request_resolves_with_the_owner_answer" },
+    ],
+    expected: "A window close, a quit, the removal of the active space and the removal of a project ask for each modified tab, and a kept tab keeps the window, the space or the project and ends the quit.",
+    levels: ["unit"],
+  },
+  {
+    id: "F133",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) closeOwnerAndShutdown" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn send_close_owner_and_shutdown" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestAStopLeavesTheCloseOfAReplacementToTheReplacement" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "stop_does_not_close_the_owner_again_while_a_replacement_closes_it" },
+    ],
+    expected: "The close of the owner of a persistent service runs once for its connection, whether a replacement or a stop begins it.",
+    levels: ["unit"],
+  },
+  {
+    id: "F117",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) Replace" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "pub fn replace" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestAnOutdatedServiceIsReplaced" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "an_outdated_service_is_replaced" },
+    ],
+    expected: "A persistent service that runs another version than the installed one is replaced after its sessions end.",
+    levels: ["unit"],
+  },
+  {
+    id: "F121",
+    implementation: [
+      { file: "packages/sok/go/src/appupdate.go", symbol: "func ReplaceApp" },
+      { file: "packages/sok/rust/src/appupdate.rs", symbol: "pub fn replace_app" },
+      { file: "packages/host/go/src/app_update.go", symbol: "func PrepareAppUpdateStart" },
+      { file: "packages/host/rust/src/app_update.rs", symbol: "pub fn prepare_start" },
+      { file: "packages/workbench/app-update.js", symbol: "export function createAppUpdate" },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/appupdate_test.go", id: "TestTheBundleIsReplacedAfterTheProcessEndedAndTheApplicationStarts" },
+      { file: "packages/sok/rust/tests/appupdate_test.rs", id: "the_bundle_is_replaced_after_the_process_ended_and_the_application_starts" },
+      { file: "packages/host/go/tests/app_update_test.go", id: "TestTheUpdateStartsSokFromACopyBesideTheUpdatesAndChecksTheStagedBundle" },
+      { file: "packages/host/rust/tests/app_update_test.rs", id: "the_update_starts_sok_from_a_copy_beside_the_updates_and_checks_the_staged_bundle" },
+      { file: "packages/workbench/test/app-update.test.mjs", id: "updating stages the candidate, then applies the staged bundle, and reports each step" },
+    ],
+    expected: "The application stages the release of a newer core, replaces its bundle after it quits and starts again.",
+    levels: ["unit"],
+  },
+  {
+    id: "F121.8",
+    implementation: [
+      { file: "scripts/check-app-update.mjs", symbol: "export function withCore" },
+    ],
+    tests: [
+      { file: "scripts/test/check-app-update.test.mjs", id: "the index lists one newer core release for the key and keeps the rest" },
+    ],
+    expected: "The application update check lists a core release of a newer version for the host and key of the built bundle.",
+    levels: ["unit"],
+  },
+  {
+    id: "F138",
+    implementation: [
+      { file: "packages/host/go/src/event_relay.go", symbol: "func LogCommand" },
+      { file: "packages/host/rust/src/event_relay.rs", symbol: "pub fn log_command" },
+      { file: "packages/window-check/event-log.mjs", symbol: "export function eventLine" },
+      { file: "native/darwin/src/application_log.m", symbol: "void sp_log_info" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/event_relay_test.go", id: "TestARelayedBatchReturnsTheTranscriptLinesOfItsWorkbenchRecords" },
+      { file: "packages/host/rust/tests/event_relay_test.rs", id: "a_relayed_batch_returns_the_transcript_lines_of_its_workbench_records" },
+      { file: "packages/window-check/test/event-log.test.mjs", id: "a record event reads as the line of the text form, and another event as its name and fields" },
+      { file: "packages/workbench/test/report-record.test.mjs", id: "a line `<where>: <text>` is split at its first `: `" },
+    ],
+    expected: "Every text line of the application log is one record of the form `<time> <level> <layer> <where>: <text>`, and the window check reads that form.",
+    levels: ["unit"],
+  },
+  {
+    id: "F148",
+    implementation: [
+      { file: "scripts/check-versions.mjs", symbol: "export const RELEASE" },
+    ],
+    tests: [
+      { file: "scripts/test/versions.test.mjs", id: "every declared workspace version is the release candidate" },
+    ],
+    expected: "Every declared workspace version is the version of the release that carries the records of the application log.",
+    levels: ["unit"],
+  },
+  {
+    id: "F150.4.2",
+    implementation: [
+      { file: "packages/plugin-api/plugin-runtime.js", symbol: "export function createPluginRuntime" },
+      { file: "packages/workbench/page-log.js", symbol: "export function captureConsole" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/surface.test.mjs", id: "surface context logs an event of the plugin at each level with the surface in its fields" },
+      { file: "packages/workbench/test/page-log.test.mjs", id: "captureConsole records what the page writes to its console and keeps the console working" },
+      { file: "packages/host/go/tests/event_relay_test.go", id: "TestARelayedBatchStoresAPluginEventInTheLayerPlugin" },
+      { file: "packages/host/rust/tests/event_relay_test.rs", id: "a_relayed_batch_stores_a_plugin_event_in_the_layer_plugin" },
+    ],
+    expected: "A plugin stores events plugin.<plugin>.<event> through its context, the page stores its console output as events, and the host stores each in the layer of its prefix.",
+    levels: ["unit"],
+  },
+  {
+    id: "F150.4.1",
+    implementation: [
+      { file: "packages/workbench/page-log.js", symbol: "export function reportRecord" },
+      { file: "packages/plugin-api/log-batch.js", symbol: "export function createEventBatcher" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/page-log.test.mjs", id: "a failure is the event workbench.record.error with the place and the text, and the wait ends when it was relayed" },
+      { file: "packages/plugin-api/test/log-batch.test.mjs", id: "emitAndWait ends when the batch that carries the event was relayed, and the events of one turn share the batch" },
+      { file: "apps/wailsv3/test/runtime-contract.test.mjs", id: "Wails page regions expose operations but only composition places geometry" },
+      { file: "e2e/host-records.test.mjs", id: "the event log holds the run record and the records the page reports" },
+    ],
+    expected: "A failure and an observation of the workbench are events workbench.record.<level> relayed in a batch of the host call log, and the host call report does not exist.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F150.3.6",
+    implementation: [
+      { file: "packages/host/rust/src/application_log.rs", symbol: "pub struct Entry" },
+      { file: "packages/host/go/src/application_log.go", symbol: "type Entry struct" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/application_log_test.rs", id: "a_record_is_one_line_and_escapes_a_line_feed" },
+      { file: "packages/host/rust/tests/images_test.rs", id: "presentation_outcome_names_the_current_frame_of_a_failure" },
+      { file: "packages/host/go/tests/event_relay_test.go", id: "TestARelayedBatchReturnsTheTranscriptLinesOfItsWorkbenchRecords" },
+    ],
+    expected: "A record travels as a structured entry that is stored as an event and shown as its line, in both hosts.",
+    levels: ["unit"],
+  },
+  {
+    id: "F150.3.5.2",
+    implementation: [
+      { file: "packages/host/go/src/event_record.go", symbol: "func emitTrace" },
+      { file: "packages/host/rust/src/event_record.rs", symbol: "pub fn emit_trace" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/event_record_test.go", id: "TestAHostObservationOfTheTraceIsAnEvent" },
+      { file: "packages/host/rust/tests/event_record_test.rs", id: "a_host_observation_of_the_trace_is_an_event" },
+    ],
+    expected: "An observation of the host or the sampler is stored as an event of the event log without the name in its fields, and an observation without a name is reported.",
+    levels: ["unit"],
+  },
+  {
+    id: "F150.3.5.1",
+    implementation: [
+      { file: "packages/workbench/performance.js", symbol: "export function createTracer" },
+      { file: "packages/window-check/event-log.mjs", symbol: "export function traceRows" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/performance.test.mjs", id: "an enabled trace relays its events of one turn in one log call, and the line has no timestamp of its own" },
+      { file: "packages/host/go/tests/performance_test.go", id: "TestTheSwitchAcceptsOnAndOffOnly" },
+      { file: "packages/host/rust/tests/performance_test.rs", id: "the_switch_accepts_on_and_off_only" },
+      { file: "e2e/settings.test.mjs", id: "performance tracing records enabled card focus and stops while disabled" },
+    ],
+    expected: "The trace of the page leaves as events of one batch through the call log, the switch accepts on and off only, and the events are in the event log.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F150.3.3",
+    implementation: [
+      { file: "native/darwin/src/application_log.m", symbol: "static void storeRecord" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/application_log_test.m", id: "an error is the event native.record.error with where and text" },
+      { file: "e2e/input-records.test.mjs", id: "a typed key leaves a record in every layer of the input path" },
+    ],
+    expected: "The records of the native library are events of the ring of the process with where and text, and a running application stores them in the event log.",
+    levels: ["native", "application"],
+  },
+  {
+    id: "F150.3.2",
+    implementation: [
+      { file: "packages/host/go/src/event_record.go", symbol: "func emitRecord" },
+      { file: "packages/host/rust/src/event_record.rs", symbol: "pub fn emit_record" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/event_record_test.go", id: "TestAnErrorAndAnObservationAreEventsWithWhereAndText" },
+      { file: "packages/host/rust/tests/event_record_test.rs", id: "an_error_and_an_observation_are_events_with_where_and_text" },
+      { file: "e2e/host-records.test.mjs", id: "the event log holds the run record and the records the page reports" },
+      { file: "e2e/page-process.test.mjs", id: "the end of the web content process is written to the event log" },
+    ],
+    expected: "The records of the host and of the page are events of the event log with where and text, a start buffer holds them until the writer exists, and a running application stores them.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F150.3.1",
+    implementation: [
+      { file: "packages/window-check/event-log.mjs", symbol: "export function readEventErrors" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/event-log.test.mjs", id: "readEventErrors returns the events of level error and ignores the other levels" },
+      { file: "packages/window-check/test/session-cleanup.test.mjs", id: "an error event of the event log fails the check unless it is declared" },
+    ],
+    expected: "A window check fails on an error event of the event log of the application unless the check declares it, and names the file of a line that is not an event.",
+    levels: ["unit"],
+  },
+  {
+    id: "F150.2.6.2",
+    implementation: [
+      { file: "packages/host/go/src/event_log.go", symbol: "func nativeEventOf" },
+      { file: "packages/host/go/src/platform/darwin/events.go", symbol: "PullNativeEvents" },
+      { file: "packages/host/rust/src/event_log.rs", symbol: "fn native_event_of" },
+      { file: "packages/host/rust/src/platform/darwin/events.rs", symbol: "pub fn pull" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/event_native_test.go", id: "TestARefusedNativeRecordAndTheLossOfTheRingAreCountedAsDropped" },
+      { file: "packages/host/go/tests/event_native_platform_test.go", id: "TestThePlatformPullsAnEmptyNativeRingAsZeroBytesAndNoLoss" },
+      { file: "packages/host/rust/tests/event_native_test.rs", id: "a_refused_native_record_and_the_loss_of_the_ring_are_counted_as_dropped" },
+      { file: "packages/host/rust/tests/event_native_platform_test.rs", id: "the_platform_pulls_an_empty_native_ring_as_zero_bytes_and_no_loss" },
+    ],
+    expected: "The writer of each host pulls the native ring through the platform, stores the records in the layer native, and counts the records it refuses and the events the ring refused.",
+    levels: ["unit"],
+  },
+  {
+    id: "F150.2.6.1",
+    implementation: [
+      { file: "native/darwin/src/event_ring.m", symbol: "bool sp_event(" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/event_ring_test.m", id: "a pulled record holds the time, the level, the name and the fields" },
+      { file: "native/darwin/tests/event_ring_test.m", id: "each refused event is counted" },
+    ],
+    expected: "The process ring stores the time, the level, the name and the fields of an event from any thread, returns the records in order, and counts the events it refuses.",
+    levels: ["native"],
+  },
+  {
+    id: "F150.2.5",
+    implementation: [
+      { file: "packages/sok/go/src/event_log.go", symbol: "func (l *EventLog) rotate" },
+      { file: "packages/sok/rust/src/event_log.rs", symbol: "fn rotate" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/event_log_test.go", id: "TestTheEventLogRotatesAtTheBoundAndKeepsEveryGeneration" },
+      { file: "packages/host/rust/tests/event_log_test.rs", id: "the_log_rotates_at_the_bound_and_keeps_every_generation" },
+    ],
+    expected: "A writer closes its file before the line that would pass the bound, keeps every generation under its number, opens the new file with log.open and log.rotated, and continues seq.",
+    levels: ["unit"],
+  },
+  {
+    id: "F150.2.4.5",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "sp_input_result sp_input_key" },
+    ],
+    tests: [
+      { file: "e2e/input-latency.test.mjs", id: "input latency from the injected key to the prompt, trace off and on" },
+    ],
+    expected: "Every injected Enter is answered by a prompt with the performance trace off, on and off again, and the measured times are reported.",
+    levels: ["application"],
+  },
+  {
+    id: "F150.2.4.4",
+    implementation: [
+      { file: "packages/host/go/src/event_log.go", symbol: "func StartHostEventLog" },
+      { file: "packages/host/rust/src/event_log.rs", symbol: "pub fn start_host" },
+    ],
+    tests: [
+      { file: "e2e/event-log.test.mjs", id: "the host writes its event log from the start of the process" },
+      { file: "apps/wailsv3/test/runtime.test.mjs", id: "the log command carries the page batch to the host" },
+      { file: "apps/tauriv2/test/runtime.test.mjs", id: "the log command carries the page batch to the host" },
+    ],
+    expected: "A running application has started the event writer of its host, and the runtime of each application carries the page call log to the host.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F150.2.4.3",
+    implementation: [
+      { file: "packages/host/go/src/event_relay.go", symbol: "func LogCommand" },
+      { file: "packages/host/rust/src/event_relay.rs", symbol: "pub fn log_command" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/event_relay_test.go", id: "TestAnInvalidRelayedBatchWritesNothingAndNamesTheEvent" },
+      { file: "packages/host/rust/tests/event_relay_test.rs", id: "an_invalid_relayed_batch_writes_nothing_and_names_the_event" },
+    ],
+    expected: "A batch of page events is validated as a whole before any event is written, and every valid event is stored in the layer page with the time the page gave it.",
+    levels: ["unit"],
+  },
+  {
+    id: "F150.2.4.2",
+    implementation: [
+      { file: "packages/sok/go/src/event_log.go", symbol: "func (l *EventLog) EmitRelayed" },
+      { file: "packages/sok/rust/src/event_log.rs", symbol: "pub fn emit_relayed" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/event_log_test.go", id: "TestARelayedEventKeepsItsLayerAndTimeAndGetsTheSeqOfTheWriter" },
+      { file: "packages/host/rust/tests/event_log_test.rs", id: "a_relayed_event_keeps_its_layer_and_time_and_gets_the_seq_of_the_writer" },
+    ],
+    expected: "A writer stores a relayed event with the layer and the time it carries and the seq of the writer, and refuses a name outside its layer and a layer outside the contract.",
+    levels: ["unit"],
+  },
+  {
+    id: "F150.2.4.1",
+    implementation: [
+      { file: "packages/plugin-api/log-batch.js", symbol: "export function createEventBatcher" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/log-batch.test.mjs", id: "events emitted in one turn are relayed in one call, in order" },
+      { file: "packages/plugin-api/test/log-batch.test.mjs", id: "a full queue refuses events and the next batch starts with the counted loss" },
+    ],
+    expected: "The events of one turn travel to the host in one ordered call, a full queue counts the refused events in <layer>.log.dropped of the layer of its writer, and a failed call is reported with its event count.",
+    levels: ["unit"],
+  },
+  {
+    id: "F150.2.2",
+    implementation: [
+      { file: "packages/sok/rust/src/event_log.rs", symbol: "pub fn emit" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/event_log_test.rs", id: "a_full_queue_returns_false_and_the_writer_records_the_range_as_dropped" },
+      { file: "packages/host/rust/tests/event_log_test.rs", id: "the_file_passes_the_audit_of_the_contract_package" },
+    ],
+    expected: "The Rust writer never blocks a producer, assigns consecutive seq, counts every refused event in log.dropped and writes a file that the audit of the contract accepts.",
+    levels: ["unit"],
+  },
+  {
+    id: "F150.2.3",
+    implementation: [
+      { file: "packages/sok/go/src/event_log.go", symbol: "func (l *EventLog) Emit" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/event_log_test.go", id: "TestAFullEventQueueReturnsFalseAndTheWriterRecordsTheRangeAsDropped" },
+      { file: "packages/host/go/tests/event_log_test.go", id: "TestTheEventLogPassesTheAuditOfTheContractPackage" },
+    ],
+    expected: "The Go writer never blocks a producer, assigns consecutive seq, counts every refused event in log.dropped and writes a file that the audit of the contract accepts.",
+    levels: ["unit"],
+  },
+  {
+    id: "F150.2.1",
+    implementation: [
+      { file: "native/darwin/src/event_ring.m", symbol: "bool sp_event_ring_push" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/event_ring_test.m", id: "producers deliver every event once and in order" },
+      { file: "native/darwin/tests/event_ring_test.m", id: "a full ring counts the lost events and bytes" },
+    ],
+    expected: "Many producer threads push events into the ring without a lock, one consumer drains them whole and in order, and a full ring counts the loss.",
+    levels: ["native"],
+  },
+  {
+    id: "F150.1",
+    implementation: [
+      { file: "packages/log-contract/index.js", symbol: "export function auditLog" },
+    ],
+    tests: [
+      { file: "packages/log-contract/test/audit.test.mjs", id: "a log with declared events, consecutive seq and a complete chain passes" },
+      { file: "packages/log-contract/test/audit.test.mjs", id: "a declared chain with a missing hop is a finding for its correlation identifier" },
+    ],
+    expected: "The audit of a log accepts a log that follows the event contract and reports undeclared events, missing fields, unexplained gaps of seq and incomplete chains.",
+    levels: ["unit"],
+  },
+  {
+    id: "F160.14",
+    implementation: [
+      { file: "scripts/audit-run.mjs", symbol: "export function auditRun" },
+      { file: "packages/log-contract/index.js", symbol: "export function auditLogs" },
+    ],
+    tests: [
+      { file: "scripts/test/audit-run.test.mjs", id: "an error in the range that the test did not declare is a finding with the file and the line" },
+      { file: "scripts/test/audit-run.test.mjs", id: "the logs of every layer under the configuration folders of the marks are audited, and a sidecar error is placed by time" },
+      { file: "packages/log-contract/test/audit.test.mjs", id: "seq continues across the rotated generations of one process, and a missing generation is a finding" },
+    ],
+    expected: "The audit of a run reads the configuration folders from the test marks, audits the event files of every layer and generation, and reports an undeclared error, a gap of seq and an incomplete chain as file, line and message.",
+    levels: ["unit"],
+  },
+  {
+    id: "F160.16",
+    implementation: [
+      { file: "scripts/audit-run.mjs", symbol: "export function auditRun" },
+      { file: "packages/window-check/app.mjs", symbol: "  expectEvent(event)" },
+    ],
+    tests: [
+      { file: "scripts/test/audit-run.test.mjs", id: "a test that omits an expected event fails with the missing name at its end mark" },
+      { file: "packages/window-check/test/test-marks.test.mjs", id: "expectError and expectEvent append their declaration to marks.jsonl while a run is kept, and only then" },
+    ],
+    expected: "The audit of a run writes the verdict of each test by the range of its log, and a test that omits a declared event fails with the missing name.",
+    levels: ["unit"],
+  },
+  {
+    id: "F160.30",
+    implementation: [
+      { file: "packages/sok/go/src/logged.go", symbol: "func Logged" },
+      { file: "packages/sok/go/src/routine.go", symbol: "func Go" },
+      { file: "packages/sok/rust/src/logged.rs", symbol: "pub fn logged" },
+      { file: "packages/sok/rust/src/routine.rs", symbol: "pub fn spawn_named" },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/event_log_test.go", id: "TestEachCommandIsRecordedWithItsResult" },
+      { file: "packages/sok/go/tests/event_log_test.go", id: "TestAPanicOfACommandIsRecordedWithItsStack" },
+      { file: "packages/sok/go/tests/event_log_test.go", id: "TestAPanicOfARoutineIsRecordedAndEndsTheProcess" },
+      { file: "packages/sok/go/tests/event_log_test.go", id: "TestAFolderThatCannotBeWrittenIsReportedAndTheCommandRuns" },
+      { file: "packages/sok/rust/tests/event_log_test.rs", id: "each_command_is_recorded_with_its_result" },
+      { file: "packages/sok/rust/tests/event_log_test.rs", id: "a_panic_of_a_command_is_recorded_with_its_stack" },
+      { file: "packages/sok/rust/tests/event_log_test.rs", id: "a_panic_of_a_routine_is_recorded_and_ends_the_process" },
+      { file: "packages/sok/rust/tests/event_log_test.rs", id: "a_folder_that_cannot_be_written_is_reported_and_the_command_runs" },
+      { file: "packages/sok/go/tests/event_log_fixture_test.go", id: "TestLinesFollowTheGoldenFixtures" },
+      { file: "packages/sok/go/tests/event_log_fixture_test.go", id: "TestFieldsAreEscapedAndAnOversizeEventIsCut" },
+      { file: "packages/sok/go/tests/event_log_fixture_test.go", id: "TestARefusedEventIsCountedAndExplainedByLogDropped" },
+      { file: "packages/sok/go/tests/event_log_fixture_test.go", id: "TestARunStoresOnlyTheEventsThatTheSpecificationNames" },
+      { file: "packages/sok/rust/tests/event_log_fixture_test.rs", id: "lines_follow_the_golden_fixtures" },
+      { file: "packages/sok/rust/tests/event_log_fixture_test.rs", id: "fields_are_escaped_and_an_oversize_event_is_cut" },
+      { file: "packages/sok/rust/tests/event_log_fixture_test.rs", id: "a_refused_event_is_counted_and_explained_by_log_dropped" },
+      { file: "packages/sok/rust/tests/event_log_fixture_test.rs", id: "a_run_stores_only_the_events_that_the_specification_names" },
+    ],
+    expected: "Each run of the command line tool stores the command with its result in its own event file of the targeted configuration directory, and a panic of the command or of a goroutine or thread is stored with its stack and ends the tool with the status 4, in both languages.",
+    levels: ["unit"],
+  },
+  {
+    id: "F149.1",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "static void logPointer" },
+    ],
+    tests: [
+      { file: "e2e/input-records.test.mjs", id: "a typed key leaves a record in every layer of the input path" },
+    ],
+    expected: "A key typed through the native input of the endpoint leaves a record in every layer of the input path, in time order.",
+    levels: ["application"],
+  },
+  {
+    id: "F153",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "responderName" },
+      { file: "native/darwin/src/image_region.m", symbol: "NSApp.isActive ? @\"true\"" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/input_inject_test.m", id: "a key record names the first responder that receives the key" },
+      { file: "native/darwin/tests/image_region_test.m", id: "TEST 8: callback before/after state records AppKit active and key-window booleans" },
+    ],
+    expected: "The records of the input path name the first responder, the active state of the application and the key window.",
+    levels: ["unit"],
+  },
+  {
+    id: "F145.12",
+    implementation: [
+      { file: "packages/host/go/src/endpoint.go", symbol: "endpoint timeout" },
+      { file: "packages/host/rust/src/endpoint.rs", symbol: "endpoint timeout" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/endpoint_test.go", id: "TestEndpointRecordsATimeoutOfARequest" },
+      { file: "packages/host/rust/tests/endpoint_test.rs", id: "the_endpoint_records_a_timeout_of_a_request" },
+    ],
+    expected: "Both hosts write the method and the reason of an endpoint request that ends with a timeout.",
+    levels: ["unit"],
+  },
+  {
+    id: "F145.13",
+    implementation: [
+      { file: "packages/host/go/src/app_update.go", symbol: "StartAppUpdate" },
+      { file: "packages/host/rust/src/app_update.rs", symbol: "start_update" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/app_update_test.go", id: "TestTheDetachedUpdateCommandKeepsItsErrorsAndIsRecordedWhenItStarts" },
+      { file: "packages/host/rust/tests/app_update_test.rs", id: "the_detached_update_command_keeps_its_errors_and_is_recorded_when_it_starts" },
+    ],
+    expected: "The detached update command keeps the standard error of the host, and both hosts store host.update.start with the pid and the command line before the final flush.",
+    levels: ["unit"],
+  },
+  {
+    id: "F145.14",
+    implementation: [
+      { file: "packages/host/go/src/project_removal.go", symbol: "host.project.removal_allowed" },
+      { file: "packages/host/rust/src/project_removal.rs", symbol: "host.project.removal_allowed" },
+      { file: "packages/host/go/src/workspace.go", symbol: "host.workspace.settings" },
+      { file: "packages/host/rust/src/workspace.rs", symbol: "host.workspace.settings" },
+      { file: "packages/host/go/src/notifications.go", symbol: "host.notification.event" },
+      { file: "packages/host/rust/src/notifications.rs", symbol: "host.notification.event" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/project_removal_test.go", id: "TestTheEndOfAWindowRecordsEachRemovalItAllows" },
+      { file: "packages/host/rust/tests/project_removal_test.rs", id: "the_end_of_a_window_records_each_removal_it_allows" },
+      { file: "packages/host/go/tests/workspace_test.go", id: "TestEachSettingsChangeIsRecordedWithItsKeys" },
+      { file: "packages/host/rust/tests/workspace_test.rs", id: "each_settings_change_is_recorded_with_its_keys" },
+      { file: "packages/host/go/tests/notifications_test.go", id: "TestEachNotificationEventAndFailureIsRecorded" },
+      { file: "packages/host/rust/tests/notifications_test.rs", id: "each_notification_event_and_failure_is_recorded" },
+    ],
+    expected: "Both hosts store an event for each removal that the end of a window allows, each settings change and each event of the notification center, record the failures of the notification center.",
+    id: "F145.15",
+    implementation: [
+      { file: "packages/host/go/src/performance.go", symbol: "func PerformanceProcessAdd" },
+      { file: "packages/host/go/src/performance.go", symbol: "func PerformanceSurface" },
+      { file: "packages/host/rust/src/performance.rs", symbol: "pub fn process_add" },
+      { file: "packages/host/rust/src/performance.rs", symbol: "pub fn surface" },
+      { file: "packages/workbench/page-log.js", symbol: "export function recordWorkbenchStart" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/performance_test.go", id: "TestTheSamplerReadsEveryRegisteredProcess" },
+      { file: "packages/host/go/tests/performance_test.go", id: "TestSurfaceLifecycleEventsHoldTheGeometry" },
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestTheSamplerNamesARunningSidecarUntilItEnds" },
+      { file: "packages/host/rust/tests/performance_test.rs", id: "the_sampler_reads_every_registered_process" },
+      { file: "packages/host/rust/tests/performance_test.rs", id: "surface_lifecycle_events_hold_the_geometry" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "the_sampler_names_a_running_sidecar_until_it_ends" },
+      { file: "packages/workbench/test/page-log.test.mjs", id: "the start of a document of the workbench is the event workbench.start with the origin of the document clock and its address" },
+    ],
+    expected: "The sampler of both hosts reads the host and every registered sidecar process, the surface lifecycle of the trace holds the geometry, and a document of the main page marks its start.",
+    levels: ["unit"],
+  },
+  {
+    id: "F145.18",
+    implementation: [
+      { file: "scripts/check-failure-table.mjs", symbol: "export function recordsMissingFromTable" },
+    ],
+    tests: [
+      { file: "scripts/test/check-failure-table.test.mjs", id: "every error record that a host or the native library writes at a literal place is in the failure table of the diagnostics" },
+    ],
+    expected: "Every error record that a host or the native library writes at a literal place is a row of the failure table of the diagnostics in both languages.",
+    levels: ["unit"],
+  },
+  {
+    id: "F152",
+    implementation: [
+      { file: "packages/plugin-api/sidecar-port.js", symbol: "orderedSidecar requires a failure handler" },
+      { file: "packages/workbench/host.js", symbol: "send failed:" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/window-sidecar-send.test.mjs", id: "a send after a failed send to the same sidecar is delivered and the failure is reported" },
+      { file: "packages/plugin-api/test/sidecar-port.test.mjs", id: "a port without a failure handler is refused at the boundary" },
+    ],
+    expected: "A failed send of the main page to a sidecar is reported and the sends after it are delivered.",
+    levels: ["unit"],
+  },
+  {
+    id: "F145.11",
+    implementation: [
+      { file: "packages/host/go/src/application_log.go", symbol: "func TranscriptEntry" },
+      { file: "packages/host/rust/src/application_log.rs", symbol: "pub fn transcript_entry" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/application_log_test.go", id: "TestTranscriptLinesReachTheApplicationLog" },
+      { file: "packages/host/rust/tests/application_log_test.rs", id: "transcript_lines_reach_the_application_log" },
+    ],
+    expected: "Both hosts write the lines of the diagnostic transcript of a window to the application log.",
+    levels: ["unit"],
+  },
+  {
+    id: "F377",
+    implementation: [
+      { file: "scripts/test/soksak-scripts.test.mjs", symbol: "bounded command propagates success and reports its deadline" },
+    ],
+    tests: [
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "bounded command propagates success and reports its deadline" },
+      { file: "scripts/test/test-runner.test.mjs", id: "a test file whose test events keep arriving is not ended at the event limit, though it runs longer than the limit" },
+    ],
+    expected: "The scripts tests judge their results by the events and states of the run, not by a deadline that the load of the machine reaches.",
+    levels: ["unit"],
+  },
+  {
+    id: "F386",
+    implementation: [
+      { file: "docs/spec/native-surfaces.md", symbol: "**Image lease**" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_region_lease_test.m", id: "a later frame releases exactly the surface that it replaced" },
+    ],
+    expected: "An image region declares its presentation mode, and in the lease mode the host presents the supplier's IOSurface without a copy and reports each surface that it releases.",
+    levels: ["unit"],
+  },
+  {
+    id: "F388",
+    implementation: [
+      { file: "package.json", symbol: "soksak-kit-0.0.13.tgz" },
+    ],
+    tests: [
+      { file: "scripts/test/workflows.test.mjs", id: "the kit release that core pins defines the presentation mode terms" },
+    ],
+    expected: "The kit release that core pins defines the presentation mode terms.",
+    levels: ["unit"],
+  },
+  {
+    id: "F386-6",
+    implementation: [
+      { file: "docs/spec/native-surfaces.md", symbol: "clears that mark at the latest once a later surface is presented" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/iosurface_use_count_test.m", id: "the window server clears the mark of a replaced surface once a later surface is presented" },
+    ],
+    expected: "The window server clears the in-use mark of a replaced surface at the latest once a later surface is presented.",
+    levels: ["unit"],
+  },
+  {
+    id: "F386-4",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "image present must be copy or lease" },
+      { file: "packages/sok/go/src/manifest.go", symbol: "image present must be copy or lease" },
+      { file: "packages/sok/rust/src/manifest.rs", symbol: "image present must be copy or lease" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/validate.test.mjs", id: "surface composition declarations are complete and fail closed" },
+      { file: "docs/spec/cases/manifest-validation.json", id: "surface.region-image-present-missing" },
+    ],
+    expected: "Every manifest reader refuses an image region whose present is not copy or lease.",
+    levels: ["unit"],
+  },
+  {
+    id: "F386-3",
+    implementation: [
+      { file: "packages/host/go/src/images.go", symbol: "func LeasedReply(name string, generation, raster uint64, sequence int) map[string]interface{} {" },
+      { file: "packages/host/rust/src/images.rs", symbol: "pub fn leased_reply(name: &str, generation: u64, raster: u64, sequence: i32) -> serde_json::Value {" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/surfaces_test.go", id: "TestImageRegionDeclaresItsPresentationMode" },
+      { file: "packages/host/rust/src/surfaces_test.rs", id: "an_image_region_declares_its_presentation_mode" },
+    ],
+    expected: "Both hosts require present on an image region, answer leased in the lease mode, and send released when a region stops holding a surface.",
+    levels: ["unit"],
+  },
+  {
+    id: "F386-2",
+    implementation: [
+      { file: "native/darwin/src/image_region.m", symbol: "void sp_region_lease(void *handle, sp_region_released released, void *context) {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_region_lease_test.m", id: "a later frame releases exactly the surface that it replaced" },
+    ],
+    expected: "A region in the lease mode presents the surface of its supplier and reports each surface that it stops holding.",
+    levels: ["unit"],
+  },
+  {
+    id: "F386-1",
+    implementation: [
+      { file: "native/darwin/Makefile", symbol: "iosurface_use_count_test" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/iosurface_use_count_test.m", id: "the window server marks the presented surface in use" },
+    ],
+    expected: "The window server marks a presented IOSurface in use and clears the mark after another surface replaces it; the host lookup does not mark it.",
+    levels: ["unit"],
+  },
+  {
+    id: "F384",
+    implementation: [
+      { file: "native/darwin/src/document_view.m", symbol: "globalThis.soksakSnapshot = () => {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/document_view_test.m", id: "each element keeps its node identity across snapshots and no two elements share one" },
+    ],
+    expected: "Each element of an elements snapshot carries an identity that stays while the element exists.",
+    levels: ["unit"],
+  },
+  {
+    id: "F335-8",
+    implementation: [
+      { file: "packages/host/go/src/host.go", symbol: "func (s *Session) Shutdown() {" },
+      { file: "packages/host/rust/src/windows.rs", symbol: "window.on_closing(move || {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/application_end_processes_test.m", id: "the native library offers no operation that kills a WebContent process" },
+      { file: "native/darwin/tests/application_end_processes_test.m", id: "the WebContent process %d ends after its application ends" },
+    ],
+    expected: "An application that ends through its termination command leaves no WebContent process, and no host kills a WebContent process.",
+    levels: ["unit"],
+  },
+  {
+    id: "F145.10.2",
+    implementation: [
+      { file: "native/darwin/src/webview_geometry.m", symbol: "void sp_webview_log_process_end" },
+      { file: "packages/host/go/src/platform/darwin/webview.m", symbol: "webViewWebContentProcessDidTerminate" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/webview_process_test.m", id: "the end of the WebContent process is recorded with the address" },
+    ],
+    expected: "The end of the WebContent process of a native web view is recorded with its address.",
+    levels: ["unit"],
+  },
+  {
+    id: "F145.10.1",
+    implementation: [
+      { file: "native/darwin/src/document_view.m", symbol: "webViewWebContentProcessDidTerminate" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/document_view_test.m", id: "a failed navigation is recorded with its address" },
+    ],
+    expected: "The native library records the failures and refusals of a document view and the end of its WebContent process.",
+    levels: ["unit"],
+  },
+  {
+    id: "F145.9",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) dropMessage" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn drop_message" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestClosedSurfaceMessagesAreDiscardedAndUnknownOnesFail" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "a_dropped_sidecar_message_is_recorded" },
+      { file: "packages/host/go/tests/flush_test.go", id: "TestEveryPendingReplyIsFlushedAfterTheQueueDrains" },
+      { file: "packages/host/rust/tests/flush_test.rs", id: "a_buffered_close_is_recorded" },
+    ],
+    expected: "Both hosts record a sidecar message that no window owns and a closed notice that waits for a full queue.",
+    levels: ["unit"],
+  },
+  {
+    id: "F145.8",
+    implementation: [
+      { file: "packages/host/go/src/images.go", symbol: "func logRefusedFrame" },
+      { file: "packages/host/rust/src/images.rs", symbol: "fn log_refused_frame" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/images_test.go", id: "TestImageFrameRefusalsAreRecorded" },
+      { file: "packages/host/rust/tests/images_test.rs", id: "image_frame_refusals_are_recorded" },
+    ],
+    expected: "Both hosts record each refused frame of an image region and each image field that is not an envelope.",
+    levels: ["unit"],
+  },
+  {
+    id: "F145.7",
+    implementation: [
+      { file: "packages/plugin-api/document-errors.js", symbol: "export function installDocumentErrors" },
+      { file: "packages/plugin-api/page.js", symbol: "installDocumentErrors({" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/document-errors.test.mjs", id: "a script error, a resource that does not load and an unhandled rejection are reported once each" },
+    ],
+    expected: "The errors and unhandled rejections of the document of a surface are written to the application log.",
+    levels: ["unit"],
+  },
+  {
+    id: "F145.6",
+    implementation: [
+      { file: "packages/plugin-api/sidecar-port.js", symbol: "export function orderedSidecar" },
+      { file: "apps/wailsv3/runtime/index.js", symbol: "report: async (record)" },
+      { file: "apps/tauriv2/runtime/index.js", symbol: "report: async (record)" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/sidecar-port.test.mjs", id: "a failed send is passed to the failure handler with its error" },
+      { file: "apps/wailsv3/test/runtime-contract.test.mjs", id: "Wails page regions expose operations but only composition places geometry" },
+      { file: "apps/tauriv2/test/runtime-contract.test.mjs", id: "Tauri page regions expose operations but only composition places geometry" },
+    ],
+    expected: "A failed send of a page to a sidecar is written to the application log through the report call of the page runtime.",
+    levels: ["unit"],
+  },
+  {
+    id: "F145.5",
+    implementation: [
+      { file: "packages/workbench/core-exposure.js", symbol: "drop: received" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/file-drop-records.test.mjs", id: "a failed file drop is reported with its reason and every drop is logged" },
+    ],
+    expected: "The page records each file drop and the reason that a drop fails.",
+    levels: ["unit"],
+  },
+  {
+    id: "F145.4",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "static void logPointer" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/input_inject_test.m", id: "a rejected key is recorded with its reason" },
+    ],
+    expected: "The native library records each injected pointer and key input with its arguments, its result and the reason of a refusal.",
+    levels: ["unit"],
+  },
+  {
+    id: "F145.3",
+    implementation: [
+      { file: "native/darwin/src/webview_input.m", symbol: "logReceiptTimeout" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/webview_input_receipts_test.m", id: "a timed-out wait is recorded with its type and limit" },
+    ],
+    expected: "The native library records why a wait for a webview input receipt ends.",
+    levels: ["unit"],
+  },
+  {
+    id: "F145.2",
+    implementation: [
+      { file: "native/darwin/src/image_region.m", symbol: "native.input.report" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_region_test.m", id: "TEST 8: reporting through a closed region is recorded as dropped" },
+    ],
+    expected: "The native library records an input that a region drops with its reason.",
+    levels: ["unit"],
+  },
+  {
+    id: "F145.1",
+    implementation: [
+      { file: "packages/host/go/src/endpoint.go", symbol: "connection closed: " },
+      { file: "packages/host/rust/src/endpoint.rs", symbol: "connection closed: {reason}" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/endpoint_test.go", id: "TestEndpointRecordsWhyAConnectionCloses" },
+      { file: "packages/host/rust/tests/endpoint_test.rs", id: "the_endpoint_records_why_a_connection_closes" },
+    ],
+    expected: "A connection of the endpoint that closes writes the reason of the close as an info record before the socket closes.",
+    levels: ["unit"],
+  },
+  {
+    id: "F102",
+    implementation: [
+      { file: "packages/workbench/contributions.js", symbol: "export function contributionsOf" },
+    ],
+    tests: [
+      { file: "e2e/extension-points.test.mjs", id: "a contributed item connects to the extension point of its provider and the provider uses it" },
+    ],
+    expected: "A provider plugin declares an extension point, a contributor plugin installed with it contributes an item, and the provider page imports the item and uses it in a running application.",
+    levels: ["application"],
+  },
+  {
+    id: "F143",
+    implementation: [
+      { file: "native/darwin/src/image_region.m", symbol: "- (void)handleSetMarkedText:(id)string selectedRange:(NSRange)selectedRange replacementRange:(NSRange)replacementRange" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_region_hangul_test.m", id: "Korean resyllabification replaces the local marked syllable" },
+      { file: "native/darwin/tests/image_region_hangul_test.m", id: "the resolved Korean syllables commit once in order" },
+    ],
+    expected: "The controlled marked-buffer test applies a Korean resyllabification replacement to the local marked syllable and commits the resolved syllables once in order. It does not establish the separate real input-source acceptance.",
+    levels: ["unit"],
+  },
+  {
+    id: "F161.45",
+    implementation: [
+      { file: "packages/workbench/settings-ui.js", symbol: "settings scroll position is not a number" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/settings-scroll.test.mjs", id: "a negative scroll position of the settings modal is kept as reported and a value that is not a number is refused" },
+    ],
+    expected: "The settings modal keeps a negative scroll position that the native modal reports and refuses a value that is not a number.",
+    levels: ["unit"],
+  },
+  {
+    id: "F146",
+    implementation: [
+      { file: "packages/workbench/debug-ui.js", symbol: "debug scroll position is not a number" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/debug-scroll.test.mjs", id: "a negative scroll position of the native modal is kept as reported and a value that is not a number is refused" },
+    ],
+    expected: "The debug view keeps a negative scroll position that the native modal reports and refuses a value that is not a number.",
+    levels: ["unit"],
+  },
+  {
+    id: "F104",
+    implementation: [
+      { file: "scripts/check-comment-language.mjs", symbol: "export function findKoreanComments" },
+    ],
+    tests: [
+      { file: "scripts/test/comment-language.test.mjs", id: "no tracked source file of the repository holds a Hangul comment" },
+      { file: "scripts/test/comment-language.test.mjs", id: "a regular expression literal with a quote does not hide the comments after it" },
+    ],
+    expected: "Every comment of the tracked source files is English, and the repository test of pnpm test reports each comment line that holds Hangul.",
+    levels: ["unit"],
+  },
+  {
+    id: "F140",
+    implementation: [
+      { file: "packages/workbench/file-open.js", symbol: "export function chooseOpener" },
+    ],
+    tests: [
+      // The message-row part of the expected result is held (F332-4-4-1); this test covers the error display part.
+      { file: "e2e/files.test.mjs", id: "a file that no plugin opens from the files tree section stays out of the error display" },
+    ],
+    expected: "The failure of core.file.open for a file that no plugin opens is shown in the message row of the file tree of the files plugin and not in the error display of the main document.",
+    levels: ["application"],
+  },
+  {
+    id: "F107",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "export function validateSidebars" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/settings-removed-plugin.test.mjs", id: "a stored link to the set of a plugin that was removed is kept and the settings load" },
+      { file: "packages/workbench/test/settings-removed-plugin.test.mjs", id: "a stored link of a loaded plugin to a missing set still fails the settings load" },
+      { file: "packages/plugin-api/test/sidebar-defaults.test.mjs", id: "a link of a plugin that is not loaded keeps its set and a link of a loaded plugin needs a known set" },
+    ],
+    expected: "A stored link to the set of a plugin that is no longer loaded is kept and the settings load, and a link of a loaded plugin to a missing set fails.",
+    levels: ["unit"],
+  },
+  {
+    id: "F151",
+    implementation: [
+      { file: "packages/workbench/debug-ui.js", symbol: "export async function showDebugState" },
+      { file: "packages/workbench/debug-timeline.js", symbol: "export function queryOf" },
+      { file: "packages/sok/go/src/debug.go", symbol: "func runDebug" },
+      { file: "packages/sok/rust/src/debug.rs", symbol: "pub(crate) fn run_debug" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/debug-timeline.test.mjs", id: "the text line of each golden page is the line that the implementations of sok print" },
+      { file: "packages/workbench/test/debug-state.test.mjs", id: "a comparison lists the paths whose values differ, including paths present in one file" },
+      { file: "packages/sok/go/tests/debug_test.go", id: "TestQueryPrintsTheGoldenLinesOfEveryCase" },
+      { file: "packages/sok/rust/tests/debug_test.rs", id: "query_prints_the_golden_lines_of_every_case" },
+    ],
+    expected: "The debug view shows the event files as a filtered, followed and saved timeline and the state files as a tree, and the command line prints the same timeline rows.",
+    levels: ["unit"],
+  },
+  {
+    id: "R5.4",
+    implementation: [
+      { file: "packages/sok/go/src/plugins.go", symbol: "func InstalledName" },
+      { file: "packages/sok/rust/src/plugins.rs", symbol: "pub fn installed_name" },
+      { file: "packages/sok/go/src/install.go", symbol: "func ValidateInstalled" },
+      { file: "packages/sok/rust/src/install.rs", symbol: "pub fn validate_installed" },
+      { file: "packages/host/go/src/installed.go", symbol: "func enabledPlugins" },
+      { file: "packages/host/rust/src/installed.rs", symbol: "fn enabled_plugins" },
+      { file: "packages/workbench/copy-frontend.mjs", symbol: "function enabledInstalledPlugins" },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/plugins_test.go", id: "TestPluginDependentsReadTheNameFromThePackageJSONOfTheInstalledPlugin" },
+      { file: "packages/sok/go/tests/plugins_test.go", id: "TestReadInstalledRefusesAPackageField" },
+      { file: "packages/sok/rust/tests/plugins_test.rs", id: "plugin_dependents_read_the_name_from_the_package_json_of_the_installed_plugin" },
+      { file: "packages/sok/rust/tests/plugins_test.rs", id: "read_installed_refuses_a_package_field" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestInstalledPluginsDocumentReadsTheNameFromThePackageJSON" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestInstalledPluginsDocumentRefusesAPackageField" },
+      { file: "packages/host/rust/tests/installed_test.rs", id: "installed_plugins_document_reads_the_name_from_the_package_json" },
+      { file: "packages/host/rust/tests/installed_test.rs", id: "installed_plugins_document_refuses_a_package_field" },
+      { file: "packages/workbench/test/copy-frontend.test.mjs", id: "staging refuses an installed.json entry that holds package" },
+    ],
+    expected: "installed.json holds no package; the hosts, sok and the staging read the name of an installed plugin from its package.json and refuse an installed.json that holds package with an error that names the file and the field.",
+    levels: ["unit"],
+  },
+  {
+    id: "F156",
+    implementation: [
+      { file: "packages/workbench/debug-ui.js", symbol: "export async function viewDebugFile" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/debug-image-ui.test.mjs", id: "the modal is placed again with the height of the card when the image has loaded" },
+      { file: "e2e/modal.test.mjs", id: "Help > Debug records the state, lists the logs folder and refuses a path outside it" },
+    ],
+    expected: "The native modal of the debug view has the height of the card with the loaded image.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F111",
+    implementation: [{ file: "packages/plugin-api/document-region.js", symbol: "export function attachRegion" }],
+    tests: [{ file: "packages/plugin-api/test/document-region.test.mjs", id: "a document handle posts messages and receives the messages of its own document" }],
+    expected: "A plugin document shows in a document region of its surface and exchanges messages with its page.",
+    levels: ["unit"],
+  },
+  {
+    id: "F112",
+    implementation: [
+      { file: "packages/host/go/src/deep_link.go", symbol: "func ParseDeepLink" },
+      { file: "packages/host/rust/src/deep_link.rs", symbol: "pub fn parse_deep_link" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/deep_link_test.go", id: "TestDeepLinkParseAcceptsCoreAndPluginOwners" },
+      { file: "packages/host/rust/tests/deep_link_test.rs", id: "deep_link_parse_accepts_core_and_plugin_owners" },
+    ],
+    expected: "A deep link soksak://<owner>/<command>?<params> parses to the declared command of its owner in both hosts, and a refused link names its reason.",
+    levels: ["unit"],
+  },
+  {
+    id: "F172",
+    implementation: [
+      { file: "packages/host/go/src/deep_link.go", symbol: "func (q *DeepLinkQueue) Ready" },
+      { file: "packages/host/rust/src/deep_link.rs", symbol: "pub fn ready(&self" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/deep_link_test.go", id: "TestDeepLinkQueueRunsKeptLinksInOrderWhenWindowIsReady" },
+      { file: "packages/host/rust/tests/deep_link_test.rs", id: "deep_link_queue_runs_kept_links_in_order_when_window_is_ready" },
+    ],
+    expected: "A deep link that arrives before the first window is ready runs in arrival order when the window becomes ready, and a link that arrives later runs at once.",
+    levels: ["unit"],
+  },
+  {
+    id: "F123",
+    implementation: [{ file: "packages/host/go/src/surfaces.go", symbol: "func FrameAnswerEvent" }],
+    tests: [
+      { file: "packages/host/go/tests/images_test.go", id: "TestFrameAnswerEventRecordsConsumedAndRefusedAnswers" },
+      { file: "packages/host/rust/tests/images_test.rs", id: "frame_answer_event_records_consumed_and_refused_answers" },
+    ],
+    expected: "Every answer to a frame is a trace event, so a terminal that holds typed text is located by the records; the terminal plugin sends its queued input when a session reattaches.",
+    levels: ["unit"],
+  },
+  {
+    id: "F124",
+    implementation: [{ file: "packages/workbench/core-exposure.js", symbol: 'registry.command("core.debug.save"' }],
+    tests: [{ file: "packages/host/rust/tests/debug_test.rs", id: "debug_copy_copies_a_file_of_the_logs_folder_only" }],
+    expected: "Every 0.0.x release is a diagnostic build, and the debug view lists and saves every diagnostic file.",
+    levels: ["unit"],
+  },
+  {
+    id: "F162",
+    implementation: [{ file: "packages/workbench/core-exposure.js", symbol: 'registry.command("core.file.place"' }],
+    tests: [
+      { file: "packages/host/go/tests/file_place_test.go", id: "TestAPlaceInsideTheProjectIsAnsweredRelativeToTheRoot" },
+      { file: "packages/host/rust/tests/file_place_test.rs", id: "a_place_inside_the_project_is_answered_relative_to_the_root" },
+    ],
+    expected: "A blank document opens from the new-tab control and its first save asks for the file inside the project.",
+    levels: ["unit"],
+  },
+  {
+    id: "F135",
+    implementation: [{ file: "native/darwin/src/document_view.h", symbol: "sp_document_load" }],
+    tests: [{ file: "native/darwin/tests/document_typing_test.m", id: "the region loads the page" }],
+    expected: "The difference between an inactive plain window and the hosts that take typed text in a document region is explained in the specification.",
+    levels: ["unit"],
+  },
+  {
+    id: "F160.24",
+    implementation: [{ file: "packages/sok/go/src/log_query.go", symbol: "func ParseLogQuery" }],
+    tests: [{ file: "packages/sok/go/tests/debug_test.go", id: "TestQueryPrintsTheGoldenLinesOfEveryCase" }],
+    expected: "One query that the host answers searches the logs.",
+    levels: ["unit"],
+  },
+  {
+    id: "F149",
+    implementation: [{ file: "packages/log-contract/index.js", symbol: "export function auditLog" }],
+    tests: [{ file: "e2e/activation/ime.test.mjs", id: "a Korean syllable typed right after an input-source switch reaches the PTY once" }],
+    expected: "Typed English text and a composed Korean syllable pass through every layer of a running application and reach the PTY once.",
+    levels: ["application"],
+  },
+  {
+    id: "F150",
+    implementation: [{ file: "packages/log-contract/index.js", symbol: "export function auditLog" }],
+    tests: [{ file: "packages/log-contract/test/audit.test.mjs", id: "a log with declared events, consecutive seq and a complete chain passes" }],
+    expected: "Every layer writes its records as events of one contract that the audit checks.",
+    levels: ["unit"],
+  },
+  {
+    id: "F154",
+    implementation: [{ file: "scripts/node-tests.mjs", symbol: "export function discoverNodeTests" }],
+    tests: [{ file: "scripts/test/node-tests.test.mjs", id: "each test file of a package is a test with the folder and the flags of its package" }],
+    expected: "Every long test suite runs as separate tests that report what runs, how long it has run and its result.",
+    levels: ["unit"],
+  },
+  {
+    id: "F158",
+    implementation: [{ file: "packages/workbench/debug-timeline.js", symbol: "export const HOLD_LIMIT" }],
+    tests: [{ file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "the view holds at most 2000 rows and refuses an older page beyond them with an error" }],
+    expected: "The debug view holds a bounded number of rows, so a large log does not stop the page.",
+    levels: ["unit"],
+  },
+  {
+    id: "F159",
+    implementation: [{ file: "packages/workbench/debug-ui.js", symbol: "export async function viewDebugFile" }],
+    tests: [{ file: "packages/workbench/test/debug-image-ui.test.mjs", id: "the modal is placed again with the height of the card when the image has loaded" }],
+    expected: "The native modal of an image in the debug view has the height of the card with the loaded image.",
+    levels: ["unit"],
+  },
+  {
+    id: "F160.28",
+    implementation: [{ file: "packages/log-contract/index.js", symbol: "export function auditLog" }],
+    tests: [{ file: "packages/log-contract/test/audit.test.mjs", id: "a line without mono_ns, or with a mono_ns that is not a positive integer, is a finding" }],
+    expected: "Every line of every layer carries the real time and a monotonic clock, and a line without them is a finding of the audit.",
+    levels: ["unit"],
+  },
+  {
+    id: "F160.32",
+    implementation: [
+      { file: "packages/plugin-api/plugin-runtime.js", symbol: "export function createPluginRuntime" },
+      { file: "packages/workbench/plugin-records.js", symbol: "export const pluginRecords" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/surface.test.mjs", id: "a plugin event carries the cids of its chain to the page writer" },
+      { file: "packages/workbench/test/plugin-records.test.mjs", id: "an event of a plugin leaves with its cids and its builder runs while the level is stored" },
+    ],
+    expected: "The plugin runtime gives plugins what they need to record by the contract.",
+    levels: ["unit"],
+  },
+  {
+    id: "F160.33",
+    implementation: [{ file: "scripts/audit-run.mjs", symbol: "export function auditRun" }],
+    tests: [{ file: "scripts/test/audit-run.test.mjs", id: "the events of a sidecar installed in a configuration folder of the run are audited against its catalog" }],
+    expected: "The events of a sidecar in the configuration folder of a run are audited against its catalog.",
+    levels: ["unit"],
+  },
+  {
+    id: "F166",
+    implementation: [{ file: "packages/host/go/src/log_policy.go", symbol: "func watchPolicyFile" }],
+    tests: [{ file: "packages/host/go/tests/log_policy_test.go", id: "TestThePolicyFileIsWatchedAndEveryChangeIsAppliedOnce" }],
+    expected: "A function that a maintained library provides uses that library, and code of its own states which requirement the libraries do not meet.",
+    levels: ["unit"],
+  },
+  {
+    id: "F187",
+    implementation: [{ file: "packages/host/go/tests/event_channels_test.go", symbol: "func TestALossNamesTheChannelOfTheRefusedEvents" }],
+    tests: [
+      { file: "packages/host/go/tests/event_channels_test.go", id: "TestALossNamesTheChannelOfTheRefusedEvents" },
+      { file: "packages/host/rust/tests/event_channels_test.rs", id: "a_loss_names_the_channel_of_the_refused_events" },
+    ],
+    expected: "The loss tests of both hosts add events until both channels are refused, and every contract comment is above its test.",
+    levels: ["unit"],
+  },
+  {
+    id: "F182",
+    implementation: [{ file: "e2e/input-records.test.mjs", symbol: "e.start === hops.pageCall.start" }],
+    tests: [{ file: "e2e/input-records.test.mjs", id: "a typed key leaves a record in every layer of the input path" }],
+    expected: "The input records check takes the clock anchor of the workbench start that wrote workbench.call.",
+    levels: ["application"],
+  },
+  {
+    id: "F192",
+    implementation: [{ file: "packages/workbench/plane.js", symbol: "function syncBackgroundSessions" }],
+    tests: [{ file: "packages/workbench/test/background-sessions.test.mjs", id: "a background session opens only for a tab without a mounted surface and ends when its surface mounts" }],
+    expected: "A background session exists only for a tab whose surface is not mounted, and each of its decisions is an event.",
+    levels: ["unit"],
+  },
+  {
+    id: "F197",
+    implementation: [{ file: "packages/workbench/settings.js", symbol: "export const debugOn" }],
+    tests: [{ file: "packages/workbench/test/settings-debug-switch.test.mjs", id: "the debug switch runs core.settings.debug and is on only when the trace and every class are at trace" }],
+    expected: "Diagnostics are off by default and the debug switch turns the trace and every log class on and off together.",
+    levels: ["unit"],
+  },
+  {
+    id: "F199",
+    implementation: [
+      { file: "packages/workbench/tab-session.js", symbol: "export function createTabSessions" },
+      { file: "packages/host/go/src/workspace.go", symbol: "func putTabSession" },
+      { file: "packages/host/rust/src/workspace.rs", symbol: "fn put_tab_session" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/tab-session.test.mjs", id: "a session stored before a restart is passed to the first attach after it and to the attach after a restore" },
+      { file: "packages/host/go/tests/workspace_test.go", id: "TestTabSessionPutRewritesOnlyItsOwnFile" },
+      { file: "packages/host/rust/tests/workspace_test.rs", id: "tab_session_put_rewrites_only_its_own_file" },
+    ],
+    expected: "A browser tab keeps the session history of its document regions across a restart in tab-sessions/<tab>.json.",
+    levels: ["unit"],
+  },
+  {
+    id: "F193",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "\"--service-dir\", serviceDir, \"--log-dir\"" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: ".arg(\"--service-dir\")" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestSidecarReceivesTheLogDirectory" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "a_sidecar_receives_the_log_directory" },
+    ],
+    expected: "A sidecar service starts with the arguments that the parser of its release accepts.",
+    levels: ["unit"],
+  },
+  {
+    id: "F196",
+    implementation: [{ file: "packages/plugin-api/document-region.js", symbol: "subscribe(stream, listener)" }],
+    tests: [{ file: "packages/plugin-api/test/document-region.test.mjs", id: "a stream subscription receives the messages of its handle and close ends it" }],
+    expected: "A document region sends its elements and requests only through a subscribed stream.",
+    levels: ["unit"],
+  },
+  {
+    id: "F200",
+    implementation: [{ file: "scripts/measure-host-calls.mjs", symbol: "export async function measure" }],
+    tests: [{ file: "scripts/test/measure-host-calls.test.mjs", id: "the idle mode waits instead of sending calls and reports the growth per minute" }],
+    expected: "The page garbage of host calls, idle time and host events is measured in both hosts.",
+    levels: ["unit"],
+  },
+  {
+    id: "F204",
+    implementation: [{ file: "packages/host/wailsv3/go.mod", symbol: "replace github.com/wailsapp/wails/v3 =>" }],
+    tests: [{ file: "packages/host/wailsv3/tests/framework_log_test.go", id: "TestTheTransportReturnsAFailedCallWithoutLoggingIt" }],
+    expected: "The Wails host builds against the fork under its renamed account.",
+    levels: ["unit"],
+  },
+  {
+    id: "F252-1",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "export function exposureEntries" },
+      { file: "packages/plugin-api/index.js", symbol: "export async function replyPayload" },
+      { file: "packages/workbench/exposure.js", symbol: "function reattach(observer)" },
+      { file: "packages/workbench/surface-modules.js", symbol: "view call ${event.id} reply" },
+      { file: "packages/workbench/page-log.js", symbol: "function consoleText" },
+      { file: "scripts/test-command.mjs", symbol: "export function combineFailures" },
+      { file: "scripts/test-discovery.mjs", symbol: "export function cargoTestExecutables" },
+      { file: "scripts/test-runner.mjs", symbol: "export async function runTests" },
+      { file: "scripts/language-test-adapters.mjs", symbol: "export const SUPPORTED_LANGUAGES" },
+      { file: "scripts/check-app-update.mjs", symbol: "export function endpointOf" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/exposure.test.mjs", id: "an element request refuses an index that is not a non-negative integer instead of reading it as the first element" },
+      { file: "packages/plugin-api/test/exposure.test.mjs", id: "an undefined status value or command result is refused with an error that names it, and null is the no-value" },
+      { file: "packages/workbench/test/surface-view.test.mjs", id: "a view reply the host refuses is reported through the page error path" },
+      { file: "packages/workbench/test/exposure.test.mjs", id: "an observation whose watch the surface refuses reports the error with its surface" },
+      { file: "packages/workbench/test/plugin-operations.test.mjs", id: "a host call that rejects with a value that is not an Error is reported with its text" },
+      { file: "packages/workbench/test/page-log.test.mjs", id: "a console argument that JSON cannot serialize is recorded as a marker with its reason, not as [object Object]" },
+      { file: "scripts/test/test-command.test.mjs", id: "keeps a process error and a cleanup error together when both occur" },
+      { file: "scripts/test/test-discovery.test.mjs", id: "a cargo line that starts with a brace but is not JSON fails with the line" },
+      { file: "scripts/test/test-runner.test.mjs", id: "a limit above ten minutes, a limit that is not an integer and an empty list are refused" },
+      { file: "scripts/test/test-language-test-adapters.test.mjs", id: "refuses a case without its own limit and names the case" },
+      { file: "scripts/test/check-app-update.test.mjs", id: "the endpoint file is absent until written, and a file that is not JSON is an error that names the path" },
+    ],
+    expected: "Each failure of the audited JavaScript paths is reported or refused with its cause, and each case or test declares its own limit.",
+    levels: ["unit"],
+  },
+  {
+    id: "F207",
+    implementation: [{ file: "scripts/language-test-adapters.mjs", symbol: "export const SUPPORTED_LANGUAGES" }],
+    tests: [{ file: "scripts/test/test-language-test-adapters.test.mjs", id: "discovers all supported language cases, each with its own explicit limit" }],
+    expected: "Each language case declares its own limit, and a case without one is refused.",
+    levels: ["unit"],
+  },
+  {
+    id: "F213",
+    implementation: [{ file: "scripts/push-range.mjs", symbol: "export function pushRanges" }],
+    tests: [{ file: "scripts/test/push-range.test.mjs", id: "a new branch without upstream resolves the commits that origin/main does not have" }],
+    expected: "The pre-push hook sends the commits of each pushed ref, and a branch without an upstream resolves them against origin/main.",
+    levels: ["unit"],
+  },
+  {
+    id: "F214",
+    implementation: [{ file: "scripts/check-comment-language.mjs", symbol: "export function findKoreanComments" }],
+    tests: [{ file: "scripts/test/comment-language.test.mjs", id: "hook files and extensionless scripts are checked, and other extensionless files are not" }],
+    expected: "The comment language check reads the hook folder and the extensionless scripts, so a Korean comment in them is reported.",
+    levels: ["unit"],
+  },
+  {
+    id: "F218",
+    implementation: [
+      { file: "packages/host/rust/src/routine/routine.rs", symbol: "pub fn record_panic(" },
+      { file: "packages/host/rust/src/buttons.rs", symbol: "pub fn report(&self, mask: u64)" },
+      { file: "packages/host/go/src/event_record.go", symbol: "func recordPanic(name, text, stack string)" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/panic_hook_test.rs", id: "a_panic_before_the_writer_exists_is_stored_when_the_writer_opens" },
+      { file: "packages/host/rust/tests/panic_hook_test.rs", id: "a_panic_that_no_writer_stores_is_written_to_the_standard_error_in_full" },
+      { file: "packages/host/rust/tests/buttons_test.rs", id: "a_poisoned_button_state_is_recovered_and_the_next_report_is_announced" },
+      { file: "packages/host/go/tests/routine_test.go", id: "TestAPanicBeforeTheWriterExistsIsRecordedWhenTheWriterOpens" },
+      { file: "packages/host/go/tests/routine_test.go", id: "TestAPanicThatNoWriterStoresIsWrittenToTheStandardErrorInFull" },
+    ],
+    expected: "A panic before the writer exists is stored when the writer opens, a panic that no writer stores is written to the standard error in full, and a poisoned button state is recovered by the next report.",
+    levels: ["unit"],
+  },
+  {
+    id: "F221",
+    implementation: [{ file: "scripts/generate-event-classes.mjs", symbol: "run" }],
+    tests: [{ file: "scripts/test/event-classes.test.mjs", id: "the committed class tables equal what the catalog gives" }],
+    expected: "The generated event class tables of sok and of the workbench equal the catalog, and the push gate runs the test.",
+    levels: ["unit"],
+  },
+  {
+    id: "F222",
+    implementation: [{ file: ".githooks/pre-push", symbol: "check-push" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs only the commit message check, and ci runs the structure, format and clippy checks" }],
+    expected: "The pre-push hook runs make -C with the form the workflow test requires, with the range of the pushed refs.",
+    levels: ["unit"],
+  },
+  {
+    id: "F220",
+    implementation: [{ file: "scripts/test-hosts.mjs", symbol: "auditDeclarations" }],
+    tests: [{ file: "scripts/test/test-hosts.test.mjs", id: "the static audit fails a marker that names an undefined case, a case outside its scope, or no case, without running tests" }],
+    expected: "The static host contract check fails a test marker that names an undefined case, a case outside its host scope, or no case, and a case in a host scope that no test declares; CI runs it.",
+    levels: ["unit"],
+  },
+  {
+    id: "F227",
+    implementation: [{ file: "packages/workbench/view-calls.js", symbol: "tab.state.read" }],
+    tests: [
+      { file: "packages/workbench/test/view-calls.test.mjs", id: "a forwarded tab.state.read returns the tab state of its surface" },
+      { file: "packages/workbench/test/view-calls.test.mjs", id: "tab.state.write stores the params as the tab state of its surface" },
+    ],
+    expected: "A view reads and writes the tab state of its surface through tab.state of the surface context.",
+    levels: ["unit"],
+  },
+  {
+    id: "F225",
+    implementation: [{ file: "packages/plugin-api/exposure-check.js", symbol: "checkPluginRepository" }],
+    tests: [
+      { file: "packages/plugin-api/test/exposure-check.test.mjs", id: "a plugin repository whose sources match its declarations passes" },
+    ],
+    expected: "The exposure check reads a manifest whose sections are status-form sections, which carry no module source, so a manifest without one is checked.",
+    levels: ["unit"],
+  },
+  {
+    id: "F251",
+    implementation: [
+      { file: "packages/workbench/view-calls.js", symbol: "statusNameOf" },
+      { file: "packages/workbench/view-events.js", symbol: "statusWatch" },
+      { file: "packages/plugin-api/view.js", symbol: "watchStatus" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/view-calls.test.mjs", id: "runtime.status.watch subscribes a core status or a status of the plugin and runtime.status.unwatch ends it" },
+      { file: "packages/workbench/test/view-calls.test.mjs", id: "runtime.status.watch and runtime.status.unwatch refuse a status of another plugin and a name that is not text, and subscribe to nothing" },
+      { file: "packages/workbench/test/view-events.test.mjs", id: "a status watch pushes each value of its name as the status event and ends at unwatch" },
+      { file: "packages/workbench/test/view-events.test.mjs", id: "a status watch that the page refuses registers nothing and rejects with the refusal" },
+      { file: "packages/workbench/test/surface-view.test.mjs", id: "a view watch of a status that the exposure does not declare is refused with its name" },
+      { file: "packages/plugin-api/test/view-status-contract.test.mjs", id: "view status contract publishes the required cases in order" },
+      { file: "packages/host/go/src/surfaces_test.go", id: "TestViewStatusWatchIsForwardedAndStatusValueIsPosted" },
+      { file: "packages/host/rust/tests/documents_test.rs", id: "view_status_watch_is_forwarded_and_a_status_value_is_posted" },
+    ],
+    expected: "A view watches a core status or a status of its plugin with runtime.status.watch and runtime.status.unwatch, receives each value as the view event status, and a name with another owner or an undeclared plugin status is refused and runs nothing; both hosts relay the calls and the event unchanged.",
+    levels: ["unit"],
+  },
+  {
+    id: "F241",
+    implementation: [{ file: "packages/workbench/view-calls.js", symbol: "case \"runtime.clipboard.persistPNG\"" }],
+    tests: [
+      { file: "packages/workbench/test/view-calls.test.mjs", id: "runtime.clipboard.read png returns the binary id of the PNG in the view store, or null when the clipboard holds none" },
+      { file: "packages/workbench/test/view-calls.test.mjs", id: "runtime.clipboard.persistPNG persists the PNG of a binary id of the view store and returns the shell path" },
+    ],
+    expected: "The view call runtime.clipboard.read with png returns the typed payload with the binary id of the PNG in the view store or null, and runtime.clipboard.persistPNG persists the PNG of a binary id of the view store and returns the shell path.",
+    levels: ["unit"],
+  },
+  {
+    id: "F242",
+    implementation: [{ file: "packages/plugin-api/view.js", symbol: "const writeLog = (level, event, fields, cids) =>" }],
+    tests: [
+      { file: "packages/plugin-api/test/view.test.mjs", id: "the view bridge keeps the public log API and batches source-clocked records through the direct writer" },
+      { file: "packages/host/rust/tests/event_relay_test.rs", id: "a_relayed_batch_stores_the_clock_and_the_cids_that_the_workbench_gave" },
+      { file: "packages/host/go/src/view_call_record_test.go", id: "TestViewRuntimeLogClockRepliesWithoutWorkbenchRelay" },
+    ],
+    expected: "The public runtime.log API carries its cids through the SDK direct writer, and host relays retain the supplied cids while storing page events.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-242",
+    implementation: [{ file: "native/darwin/src/capture.m", symbol: "static bool beginCaptureSourceArtifacts(" }],
+    tests: [{ file: "native/darwin/tests/capture_source_writer_test.m", id: "source artifacts and their manifest finish before the held frame writer is released" }],
+    expected: "Accepted diagnostic source artifacts progress independently of a held frame writer and both owned writers drain before recording state is released.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-240",
+    implementation: [
+      { file: "packages/plugin-api/view.js", symbol: "const writeLog = (level, event, fields, cids) =>" },
+      { file: "packages/host/go/src/event_relay.go", symbol: "func viewLogCommand(" },
+      { file: "packages/host/rust/src/event_relay.rs", symbol: "pub fn view_log_command(" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/view.test.mjs", id: "the view bridge keeps the public log API and batches source-clocked records through the direct writer" },
+      { file: "packages/host/go/src/view_call_record_test.go", id: "TestViewRuntimeLogReplyDoesNotReachANavigatedDocument" },
+      { file: "packages/host/rust/tests/event_relay_test.rs", id: "a_view_batch_rejects_a_foreign_source_without_writing_earlier_events" },
+      { file: "packages/host/rust/tests/event_relay_test.rs", id: "a_view_log_rejects_unknown_clock_and_batch_request_fields" },
+    ],
+    expected: "View records use the bounded direct writer with source clock, page and surface identity; malformed batches write no events and replies cannot reach a replacement document.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-236",
+    implementation: [{ file: "e2e/view-metrics-collection.mjs", symbol: "export async function withViewContentTrace(" }],
+    tests: [
+      { file: "e2e/test/view-metrics-collection.test.mjs", id: "generic content trace brackets the successful start command with native clock reads" },
+      { file: "e2e/test/view-metrics-collection.test.mjs", id: "content trace stops its diagnostic marker when the recorded action fails" },
+      { file: "e2e/test/view-metrics-collection.test.mjs", id: "content trace start failure does not read an after clock or stop an unstarted observer" },
+    ],
+    expected: "The content trace brackets the successful start command with native clock reads and stops the diagnostic marker on action failure; start failure does not read an after clock or stop an unstarted observer.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-237",
+    implementation: [{ file: "scripts/check-app-tests.mjs", symbol: "export function auditActivationUnboundNames" }],
+    tests: [
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "activation fixture audit rejects unresolved identifiers" },
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "activation unbound-name audit ignores unrelated multiline TypeScript diagnostics" },
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "activation unbound-name audit reports the selected TypeScript diagnostic codes" },
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "activation unbound-name audit reports compiler syntax errors" },
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "activation unbound-name audit preserves analysis and cleanup failures" },
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "activation unbound-name audit rejects malformed selected diagnostics" },
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "activation unbound-name audit skips only confirmed external diagnostics" },
+    ],
+    expected: "The activation audit uses compiler diagnostic objects, reports selected unresolved-name and syntax failures, rejects malformed diagnostics, and preserves cleanup errors while skipping only confirmed external diagnostics.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-238",
+    implementation: [{ file: "packages/window-check/view-metrics.mjs", symbol: "export function assertViewMeasurements(" }],
+    tests: [
+      { file: "packages/window-check/test/view-metrics.test.mjs", id: "view metrics report independent failures together" },
+      { file: "packages/window-check/test/view-metrics.test.mjs", id: "drag geometry requires every contiguous gesture frame and same-frame observations" },
+      { file: "packages/window-check/test/view-metrics.test.mjs", id: "drag cadence is in-gesture and convergence meets both frame and time bounds" },
+      { file: "packages/window-check/test/view-metrics.test.mjs", id: "malformed shared drag evidence has a path error without passing criteria" },
+    ],
+    expected: "The evaluator validates shared evidence before independently reporting geometry, cadence, and convergence outcomes; malformed required evidence cannot produce a passing criterion.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-239",
+    implementation: [{ file: "e2e/hwp-startup.mjs", symbol: "export async function collectHwpStartupResourceEvidence(" }],
+    tests: [
+      { file: "e2e/test/hwp-startup.test.mjs", id: "HWP startup collection stops before offline content verification and preserves evidence" },
+      { file: "e2e/test/hwp-startup.test.mjs", id: "HWP startup read failure still stops tracing and retains offline verification" },
+      { file: "e2e/test/hwp-startup.test.mjs", id: "HWP startup collection preserves start, stop, and offline verification errors" },
+      { file: "e2e/test/hwp-startup.test.mjs", id: "HWP startup collection reports a recording copy failure" },
+    ],
+    expected: "HWP startup collection preserves the recording and resource evidence, stops tracing before offline content verification, and reports collection, stop, verification, and recording-copy failures.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239",
+    implementation: [{ file: "scripts/rust-tests.mjs", symbol: "testNames" }],
+    tests: [{ file: "scripts/test/repeat-rust.test.mjs", id: "make repeat-rust names each test when it starts, reports its result and elapsed time, and kills a test at its limit" }],
+    expected: "Each test runner names every test when it starts, reports its result and elapsed time, and ends a test at its own limit.",
+    levels: ["unit"],
+  },
+  {
+    id: "F271",
+    implementation: [
+      { file: "Makefile", symbol: '--test-target "$$TEST_TARGET"' },
+      { file: "scripts/rust-tests.mjs", symbol: "cargoTargetArgs" },
+    ],
+    tests: [
+      { file: "scripts/test/repeat-rust.test.mjs", id: "make repeat-rust selects only the lib Cargo target before discovery" },
+      { file: "scripts/test/repeat-rust.test.mjs", id: "make repeat-rust selects only the test:integration Cargo target before discovery" },
+      { file: "scripts/test/repeat-rust.test.mjs", id: "make repeat-rust keeps package-wide target and doctest discovery by default" },
+      { file: "scripts/test/repeat-rust.test.mjs", id: "make repeat-rust rejects an invalid Cargo target before invoking Cargo" },
+      { file: "scripts/test/repeat-rust.test.mjs", id: "make repeat-rust rejects shell syntax in a Cargo target without executing it" },
+      { file: "scripts/test/repeat-rust.test.mjs", id: "runRustTests rejects an explicitly empty Cargo target before invoking Cargo" },
+      { file: "scripts/test/repeat-rust.test.mjs", id: "cargoTargetArgs rejects non-string selectors instead of coercing them" },
+    ],
+    expected: "Rust repeat target selection limits prebuild and discovery before exact test-name filtering while preserving package-wide defaults.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-48",
+    implementation: [
+      { file: "Makefile", symbol: "bundle-info = node scripts/platform/darwin/prepare-app-bundle.mjs" },
+      { file: "scripts/platform/darwin/prepare-app-bundle.mjs", symbol: "function runningBundleProcesses(" },
+      { file: "scripts/platform/darwin/prepare-app-bundle.mjs", symbol: "rmSync(contents, { recursive: true, force: true })" },
+    ],
+    tests: [
+      { file: "scripts/test/platform/darwin/bundle-preparation.test.mjs", id: "bundle preparation refuses a running bundle executable before removing Contents" },
+      { file: "scripts/test/platform/darwin/bundle-preparation.test.mjs", id: "bundle preparation recreates Contents when no process uses the bundle" },
+    ],
+    expected: "The Makefile bundle preparation refuses with the active process PID and target path before removing Contents, preserves the running bundle files, and recreates Contents when no process uses the bundle.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-48-3-9",
+    implementation: [
+      { file: "packages/host/go/src/documents.go", symbol: "func (s *Surfaces) viewReceived(" },
+      { file: "packages/host/rust/src/documents.rs", symbol: "fn accept_view_message(" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/view_origin_test.go", id: "TestCurrentViewCallbackEntersDispatch" },
+      { file: "packages/host/go/src/view_origin_test.go", id: "TestRetiredViewCallbackDoesNotReachDispatch" },
+      { file: "packages/host/go/src/view_origin_test.go", id: "TestRetiredViewCallbackPreservesItsProducerError" },
+      { file: "packages/host/go/src/view_origin_test.go", id: "TestRetiredViewCallbackPreservesMalformedAndTransportErrors" },
+      { file: "packages/host/go/src/view_origin_test.go", id: "TestViewChannelOverflowClosesTheViewAndCreatesItAgain" },
+      { file: "packages/host/rust/src/view_origin_test.rs", id: "a_current_view_callback_enters_dispatch" },
+      { file: "packages/host/rust/src/view_origin_test.rs", id: "a_retired_view_callback_is_cancelled_before_dispatch" },
+      { file: "packages/host/rust/src/view_origin_test.rs", id: "a_retired_view_error_keeps_its_producer_reason" },
+      { file: "packages/host/rust/src/view_origin_test.rs", id: "a_retired_malformed_message_keeps_its_channel_error" },
+      { file: "packages/host/rust/src/view_origin_test.rs", id: "a_retired_transport_error_keeps_its_channel_error" },
+      { file: "packages/host/rust/src/view_origin_test.rs", id: "a_retired_queue_overflow_does_not_fail_the_current_view" },
+    ],
+    expected: "Current view callbacks reach dispatch; callbacks from a retired view are canceled, and explicit producer, malformed-message, and transport errors retain their recorded reasons without reaching the replacement view.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-48-3-15",
+    implementation: [{ file: "packages/host/go/src/documents.go", symbol: "func (s *Surfaces) replyView(" }],
+    tests: [
+      { file: "packages/host/go/src/surfaces_test.go", id: "TestViewReplyRetainsOpenCallWhenGenerationRetiresBeforePost" },
+      { file: "packages/host/go/src/surfaces_test.go", id: "TestViewReplyPostRefusalLeavesCallOpenForProcessEnd" },
+      { file: "packages/host/go/src/surfaces_test.go", id: "TestViewReplyRecordsTheNativePostResultAfterPosting" },
+      { file: "packages/host/go/src/surfaces_test.go", id: "TestStaleViewReplyRecordsDiscardWithoutPosting" },
+      { file: "packages/host/go/src/surfaces_test.go", id: "TestViewReplyPostRefusalReturnsErrorWithoutPostedRecord" },
+      { file: "packages/host/go/src/view_call_peer_test.go", id: "TestViewCallAnsweredBeforeTheProcessEndWritesNoPeerLost" },
+      { file: "packages/host/go/src/view_call_peer_test.go", id: "TestViewProcessEndWritesPeerLostForEachOpenViewCall" },
+    ],
+    expected: "Wails settles a view call only after posting its reply to the same current generation; stale, refused, or unready replies leave the call available for process-ended settlement.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-1",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "sp_input_press_context_push(&context, window, point.x, point.y)" },
+      { file: "native/darwin/src/image_region.m", symbol: "sp_input_press_context_point(view.window, &x, &y)" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_region_test.m", id: "direct pointer focus: a press inside the focused region does not report focus loss" },
+      { file: "native/darwin/tests/image_region_test.m", id: "direct pointer focus: the region remains first responder after the click" },
+    ],
+    expected: "A diagnostic pointer press dispatched directly to the hit view supplies a scoped synthetic press context, so an in-region press retains image-region focus without modifying NSApp.currentEvent.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-47-3",
+    implementation: [
+      { file: "native/darwin/src/image_region.m", symbol: "- (NSString *)preeditSnapshotJSON:(BOOL *)changedOut" },
+      { file: "native/darwin/src/image_region.m", symbol: "- (void)handleSetMarkedText:(id)string selectedRange:(NSRange)selectedRange replacementRange:(NSRange)replacementRange" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_region_input_transaction_test.m", id: "the transaction carries only the final marked snapshot" },
+      { file: "native/darwin/tests/image_region_input_transaction_test.m", id: "input query returns exact marked-buffer UTF-16 text" },
+      { file: "native/darwin/tests/image_region_input_transaction_test.m", id: "partial mark replacement keeps both surrounding characters visible" },
+    ],
+    expected: "The input client reports the complete local marked buffer and its UTF-16 marked and selected ranges in the final input transaction; it does not retain already committed terminal text as composition state.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-46.1",
+    implementation: [
+      { file: "packages/host/go/src/source_origins.go", symbol: "func (o *sourceOrigins) create(" },
+      { file: "packages/host/go/src/source_origins.go", symbol: "func (o *sourceOrigins) snapshot()" },
+      { file: "packages/host/rust/src/source_origins.rs", symbol: "pub struct ViewSourceOrigins" },
+      { file: "packages/host/rust/src/source_origins.rs", symbol: "pub(crate) fn validate_view_source_generation_limit(" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/source_origins_test.go", id: "TestSourceOriginsDoesNotIssueAnUnsafeGeneration" },
+      { file: "packages/host/rust/src/source_origins_test.rs", id: "issuing_a_generation_past_the_javascript_safe_integer_limit_changes_no_state" },
+    ],
+    expected: "Both hosts assign unique per-window source generations, preserve the greatest issued generation in an atomic snapshot, and reject unsafe generation values without changing source state; plugin-host channel events carry the issued generation.",
+    levels: ["unit"],
+  },
+  {
+    id: "F244",
+    implementation: [{ file: "packages/workbench/tab-reports.js", symbol: "tabOrigin" }],
+    tests: [
+      { file: "packages/workbench/test/surface-view.test.mjs", id: "the start values of a view carry its params, origin, project, declarations and diagnostic declaration" },
+      { file: "scripts/test/check-release-paths.test.mjs", id: "release CLI inspects every executable in the bundle" },
+      { file: "scripts/test/native-tests.test.mjs", id: "the native tests run one at a time, each with its start and end, and a failure fails the run" },
+      { file: "scripts/test/node-tests.test.mjs", id: "a change under a package selects the test files of that package only" },
+    ],
+    expected: "A tab carries the origin that tab creation records, the release check resolves the workbench manifest through its exports, the native test runner output matches its normalization, and each test that a failed mount could hang ends at its limit.",
+    levels: ["unit"],
+  },
+  {
+    id: "F223",
+    implementation: [{ file: "scripts/check-app-tests.mjs", symbol: "auditE2ESource" }],
+    tests: [{ file: "scripts/test/soksak-scripts.test.mjs", id: "window-source audit rejects forbidden control paths" }],
+    expected: "The window-check source audit accepts a timer that records an observation through report and does not apply its timer rule to the harness tests, which run on mocked time.",
+    levels: ["unit"],
+  },
+
+  {
+    id: "F219",
+    implementation: [{ file: "packages/host/rust/tests/sidecars_test.rs", symbol: "static SERIAL: Mutex<()>" }],
+    tests: [
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "stops_at_the_fourth_failure_within_the_window" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "surface_open_clears_the_restart_limit" },
+    ],
+    expected: "The tests of the sidecar suite that attach the process-wide writer of the records run one at a time, so the records of each test stay in its own event log whichever test attaches first.",
+    levels: ["unit"],
+  },
+  {
+    id: "F217",
+    implementation: [{ file: "packages/workbench/plane.js", symbol: "function pluginPlaceholder(tab, paramsProblem)" }],
+    tests: [
+      { file: "packages/workbench/test/plane-placeholder-error.test.mjs", id: "a placeholder whose install state cannot be read is an error shown once, and withdrawn when its surface leaves" },
+      { file: "packages/workbench/test/plane-placeholder-params.test.mjs", id: "a stored tab whose params do not match its plugin is an error shown once, and withdrawn when its surface leaves" },
+      { file: "packages/workbench/test/plane-placeholder-reasons.test.mjs", id: "the placeholder reasons that are designed states write no error" },
+    ],
+    expected: "A tab whose install state cannot be read, or whose stored params do not match its loaded plugin, shows its placeholder error once through the error display path at the place of its surface, and the draw withdraws it when the surface leaves; the designed placeholder reasons write no error.",
+    levels: ["unit"],
+  },
+  {
+    id: "F209",
+    implementation: [{ file: "packages/workbench/plugin-operations.js", symbol: "export function pluginRows(loaded, state, refused)" }],
+    tests: [{ file: "packages/workbench/test/plugin-operations.test.mjs", id: "a plugin whose every registry version is revoked is not offered, and an installed one keeps its row without an update" }],
+    expected: "A plugin whose every registry version is revoked has no install action and no latest version.",
+    levels: ["unit"],
+  },
+  {
+    id: "F208",
+    implementation: [{ file: "packages/workbench/exposure.json", symbol: "\"name\": \"core.library.choose-folder\"" }],
+    tests: [{ file: "packages/workbench/test/dialog-command-timeout.test.mjs", id: "every declared command that shows a dialog is listed with its host call" }],
+    expected: "Each declared command that shows a system dialog or save panel has a timeout of 600000 ms.",
+    levels: ["unit"],
+  },
+  {
+    id: "F201",
+    implementation: [{ file: "native/darwin/src/document_view.m", symbol: "void sp_document_store_close(" }],
+    tests: [{ file: "native/darwin/tests/document_view_test.m", id: "the data stores end without an error" }],
+    expected: "A check ends the data store of its document directory before it removes the folder, so nothing writes into it afterward.",
+    levels: ["unit"],
+  },
+  {
+    id: "F202",
+    implementation: [{ file: "native/darwin/src/document_view.m", symbol: "@interface SPHiddenDelay : NSObject" }],
+    tests: [{ file: "native/darwin/tests/window_release_test.m", id: "the closed window releases its" }],
+    expected: "A closed document region is released before its hidden clear delay passes.",
+    levels: ["unit"],
+  },
+  {
+    id: "F245",
+    implementation: [{ file: "packages/plugin-api/surface-composition.js", symbol: "Object.defineProperty(exposed, \"history\"" }],
+    tests: [{ file: "packages/plugin-api/test/surface-composition.test.mjs", id: "a view composition region reports the history of its attach reply" }],
+    expected: "The region of a view composition reports the history of its attach reply, as the document handle of a page does.",
+    levels: ["unit"],
+  },
+  {
+    id: "F198",
+    implementation: [{ file: "packages/workbench/memory-saver.js", symbol: "export function createMemorySaver" }],
+    tests: [{ file: "packages/workbench/test/memory-saver.test.mjs", id: "the delay unloads a hidden tab and a show restores it" }],
+    expected: "The memory saver unloads a hidden tab after the delay and a show restores it from its stored state.",
+    levels: ["unit"],
+  },
+  {
+    id: "F191",
+    implementation: [{ file: ".github/workflows/release.yml", symbol: "release-wailsv3:" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the release workflow runs no stored data migration step and no release step script" }],
+    expected: "The release workflow runs no stored data migration step; the release step of F191 is removed by F296.",
+    levels: ["unit"],
+  },
+  {
+    id: "F189",
+    implementation: [{ file: ".github/workflows/release.yml", symbol: "release-tauriv2:" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the release workflow runs no stored data migration step and no release step script" }],
+    expected: "The release workflow runs no stored data migration step; the release step of F189 is removed by F296.",
+    levels: ["unit"],
+  },
+  {
+    id: "F183",
+    implementation: [{ file: "Makefile", symbol: "check-release: build-wailsv3-release build-tauriv2-release build-mygo-release" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "release builds and packages each host after the reusable CI checks succeed" }],
+    expected: "A release publishes every bundle from a tag whose CI passed.",
+    levels: ["unit"],
+  },
+  {
+    id: "F190",
+    implementation: [
+      { file: "packages/sok/go/src/ownership.go", symbol: "func ownConfiguration" },
+      { file: "packages/sok/rust/src/ownership.rs", symbol: "pub(crate) fn own_configuration" },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/ownership_test.go", id: "TestAPluginCommandRefusesWhileAnotherProcessOwnsTheConfiguration" },
+      { file: "packages/sok/rust/tests/ownership_test.rs", id: "a_plugin_command_refuses_while_another_process_owns_the_configuration" },
+    ],
+    expected: "A writing sok plugin command owns the configuration directory for the duration of its write.",
+    levels: ["unit"],
+  },
+  {
+    id: "F296",
+    implementation: [
+      { file: "packages/host/go/src/workspace.go", symbol: "func readStored" },
+      { file: "packages/host/rust/src/workspace.rs", symbol: "fn read_stored" },
+      { file: "packages/workbench/plugin-data.js", symbol: "function checkStored" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/workspace_test.go", id: "TestEarlierStoredFormsAreReportedBySnapshotAndRefusedByWrites" },
+      { file: "packages/host/rust/tests/workspace_test.rs", id: "earlier_stored_forms_are_reported_by_snapshot_and_refused_by_writes" },
+      { file: "packages/workbench/test/plugin-data.test.mjs", id: "a value stored without a format entry is refused by the read and is not changed" },
+      { file: "scripts/test/workflows.test.mjs", id: "the release workflow runs no stored data migration step and no release step script" },
+    ],
+    expected: "The stored files of another format are refused with the file and the number they require, no migration step or record remains, and no stored value is converted.",
+    levels: ["unit"],
+  },
+  {
+    id: "F188",
+    implementation: [
+      { file: "packages/sok/go/src/plugins.go", symbol: "func ReadInstalledManifests" },
+      { file: "packages/sok/rust/src/plugins.rs", symbol: "pub fn read_installed_manifests" },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/install_test.go", id: "TestInstalledFileOfTheReleasedFormat2IsRejected" },
+      { file: "packages/sok/rust/tests/plugins_test.rs", id: "an_installed_file_of_the_released_format_2_is_rejected" },
+    ],
+    expected: "The command lines of both hosts read installed.json only in its current format; the migration of F188 is removed by F296.",
+    levels: ["unit"],
+  },
+  {
+    id: "F188.3",
+    implementation: [
+      { file: "packages/sok/go/src/plugins.go", symbol: "func ReadInstalledManifests" },
+      { file: "packages/sok/rust/src/plugins.rs", symbol: "pub fn read_installed_manifests" },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/install_test.go", id: "TestInstalledFileOfAnotherFormatIsRejected" },
+      { file: "packages/sok/go/tests/install_test.go", id: "TestInstalledFileOfTheReleasedFormat2IsRejected" },
+      { file: "packages/sok/rust/tests/plugins_test.rs", id: "an_installed_file_of_another_format_is_rejected" },
+      { file: "packages/sok/rust/tests/plugins_test.rs", id: "an_installed_file_of_the_released_format_2_is_rejected" },
+    ],
+    expected: "The shared reader of installed.json refuses every format other than the current one before it reads, in every process.",
+    levels: ["unit"],
+  },
+  {
+    id: "F186",
+    implementation: [{ file: "native/darwin/src/observe.m", symbol: "id sp_observe_workspace_notification" }],
+    tests: [{ file: "native/darwin/tests/activity_observers_test.m", id: "the activation names the application that was frontmost before it" }],
+    expected: "The activation of the application records the application that was frontmost before it.",
+    levels: ["unit"],
+  },
+  {
+    id: "F185",
+    implementation: [{ file: "packages/host/rust/tests/event_native_platform_test.rs", symbol: "static SERIAL: Mutex<()>" }],
+    tests: [{ file: "packages/host/rust/tests/event_native_platform_test.rs", id: "the_platform_pulls_an_empty_native_ring_as_zero_bytes_and_no_loss" }],
+    expected: "The native platform tests of the Tauri host run one at a time and read an emptied ring.",
+    levels: ["unit"],
+  },
+  {
+    id: "F184",
+    implementation: [
+      { file: "packages/plugin-api/log-batch.js", symbol: "createEventBatcher requires the writer {layer, member, identity} of the document" },
+      { file: "packages/host/go/src/running_calls.go", symbol: "func ReloadTimeoutText" },
+      { file: "packages/host/rust/src/running_calls.rs", symbol: "pub fn reload_timeout_text" },
+    ],
+    tests: [
+      { file: "packages/log-contract/test/audit.test.mjs", id: "an event of the layer page or plugin names the page that wrote it, and an event of another layer names none" },
+      { file: "packages/plugin-api/test/log-batch.test.mjs", id: "every event of a batch names the page that wrote it by its page identity, the anchor of its clock included" },
+      { file: "packages/host/go/tests/running_calls_test.go", id: "TestAReloadThatTimesOutNamesTheHostCallsOfItsWindowThatStillRun" },
+      { file: "packages/host/rust/tests/running_calls_test.rs", id: "a_reload_that_times_out_names_the_host_calls_of_its_window_that_still_run" },
+    ],
+    expected: "Every page and plugin event names the page that wrote it, and a reload that times out names the host calls it waited for.",
+    levels: ["unit"],
+  },
+  {
+    id: "F181",
+    implementation: [
+      { file: "packages/host/rust/src/debug.rs", symbol: "pub fn save_all(window: &Window) -> Result<SaveAllStarted, String>" },
+      { file: "packages/host/go/src/debug.go", symbol: "func (h *Host) DebugSaveAll(ctx context.Context) (DebugSaveAllStarted, error)" },
+      { file: "packages/workbench/debug-ui.js", symbol: "export async function saveDebugFiles()" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/debug_test.rs", id: "debug_write_logs_tar_reports_progress_each_mebibyte_and_at_the_end" },
+      { file: "packages/host/go/tests/debug_test.go", id: "TestDebugWriteLogsTarReportsProgressEachMebibyteAndAtTheEnd" },
+      { file: "packages/workbench/test/debug-save-ui.test.mjs", id: "a save while one writes is refused and shown, and a failure of the write is shown" },
+      { file: "packages/host/rust/tests/modals_test.rs", id: "a_reply_of_a_modal_that_is_not_open_is_dropped_with_the_fields_of_its_record" },
+      { file: "packages/host/go/tests/modals_test.go", id: "TestAReplyOfAModalThatIsNotOpenIsDroppedWithTheFieldsOfItsRecord" },
+      { file: "packages/workbench/test/overlay-pick.test.mjs", id: "a reply of a modal that the page does not show is recorded as workbench.overlay.dropped" },
+    ],
+    expected: "A save of the logs folder shows its progress, refuses a second save while it writes, and every dropped modal reply is recorded.",
+    levels: ["unit"],
+  },
+  {
+    id: "F180",
+    implementation: [{ file: "scripts/node-tests.mjs", symbol: "const { values } = parseArgs({" }],
+    tests: [
+      { file: "scripts/test/check-app-update.test.mjs", id: "Unknown option '--other'" },
+      { file: "scripts/test/check-release-paths.test.mjs", id: "Unknown option '--unknown'" },
+    ],
+    expected: "Every script reads its command line with parseArgs of node:util and refuses an unknown or repeated option.",
+    levels: ["unit"],
+  },
+  {
+    id: "F179",
+    implementation: [
+      { file: "packages/sok/rust/src/event_log.rs", symbol: "const GATED_REPORT_INTERVAL" },
+      { file: "packages/sok/go/src/event_log.go", symbol: "const gatedReportInterval" },
+      { file: "packages/plugin-api/log-batch.js", symbol: "const GATED_REPORT_MS" },
+      { file: "native/darwin/src/event_ring.m", symbol: "static const uint64_t GATED_REPORT_NS" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/producer_gate_test.rs", id: "the_counts_of_a_closed_gate_are_reported_each_second_and_at_a_flush" },
+      { file: "packages/host/go/tests/producer_gate_test.go", id: "TestTheCountsOfAClosedGateAreReportedEachSecondAndAtAFlush" },
+      { file: "packages/workbench/test/log-gate.test.mjs", id: "the counts of a closed gate leave each second and at a flush, not with each batch" },
+      { file: "native/darwin/tests/event_ring_test.m", id: "a drain within a second of the earlier report reports no count" },
+    ],
+    expected: "The counts of refused events leave each second and at a flush in every writer.",
+    levels: ["unit"],
+  },
+  {
+    id: "F178",
+    implementation: [{ file: "packages/sok/rust/src/event_log.rs", symbol: "if queued.is_none() && due.is_some_and(|at| Instant::now() >= at) {" }],
+    tests: [
+      { file: "packages/host/rust/tests/event_log_test.rs", id: "a_steady_stream_of_events_is_written_at_each_batch_interval" },
+      { file: "packages/host/go/tests/event_log_test.go", id: "TestASteadyStreamOfEventsIsWrittenAtEachBatchInterval" },
+    ],
+    expected: "The event writer of each host writes its batch at each interval while events keep arriving.",
+    levels: ["unit"],
+  },
+  {
+    id: "F177",
+    implementation: [{ file: "packages/log-contract/index.js", symbol: "const stored = (file, from, to, hop)" }],
+    tests: [{ file: "packages/log-contract/test/audit.test.mjs", id: "a chain does not ask for a hop whose class and level the policy in force of the process does not store" }],
+    expected: "A log audit asks a chain only for the hops that the policy in force stores.",
+    levels: ["unit"],
+  },
+  {
+    id: "F176",
+    implementation: [{ file: "native/darwin/src/image_region.m", symbol: "- (void)failInput:(NSString *)reason" }],
+    tests: [
+      { file: "native/darwin/tests/image_region_test.m", id: "silent input method: the error with marked text" },
+      { file: "packages/log-contract/test/audit.test.mjs", id: "a chain ends at an error event that carries its correlation identifier" },
+    ],
+    expected: "A key that the input method does not answer is reported as an error that carries the identifier of the key, and its chain ends at that error.",
+    levels: ["unit"],
+  },
+  {
+    id: "F175",
+    implementation: [{ file: "scripts/audit-run.mjs", symbol: "const judged = (file, line)" }],
+    tests: [{ file: "scripts/test/audit-run.test.mjs", id: "a chain finding of an earlier process before the first start mark belongs to no test of the run and is not judged" }],
+    expected: "A run audit judges only the findings on lines inside the span of the run.",
+    levels: ["unit"],
+  },
+  {
+    id: "F174",
+    implementation: [{ file: "packages/window-check/event-log.mjs", symbol: "export function sessionEventStart" }],
+    tests: [{ file: "packages/window-check/test/event-log.test.mjs", id: "a session starts at the end of every host event log that exists at its start" }],
+    expected: "A window check judges the errors of the running process from its session start, never the history of earlier processes.",
+    levels: ["unit"],
+  },
+  {
+    id: "F173",
+    implementation: [{ file: ".github/workflows/ci.yml", symbol: "node-tests.mjs --only scripts/" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "ci keeps language host checks independent and gates release on every required job" }],
+    expected: "CI runs the event source check and fallback tests of the sources on each pushed commit, so a registration outside its entrance or an unexplained default fails the run and is not released.",
+    levels: ["unit"],
+  },
+  {
+    id: "F171",
+    implementation: [{ file: "packages/host/go/src/stall_watch.go", symbol: "func StartStallWatch" }],
+    tests: [{ file: "packages/host/go/tests/stall_watch_test.go", id: "TestABlockedMainThreadIsRecordedWithItsStacksAndItsEnd" }],
+    expected: "A stall of the main thread is recorded with its stacks, which show where AppKit waits.",
+    levels: ["unit"],
+  },
+  {
+    id: "F170",
+    implementation: [{ file: "Makefile", symbol: "check-push:" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs only the commit message check, and ci runs the structure, format and clippy checks" }],
+    expected: "A push checks only its commit messages before it leaves the checkout, and CI runs the structure, format and clippy checks.",
+    levels: ["unit"],
+  },
+  {
+    id: "F169",
+    implementation: [{ file: "scripts/check-tools.sh", symbol: "node_major=" }],
+    tests: [{ file: "scripts/test/check-tools.sh", id: "a node executable of the declared major version is accepted" }],
+    expected: "The build runs the major Node version that .node-version declares, and another major version stops the toolchain check.",
+    levels: ["unit"],
+  },
+  {
+    id: "F168",
+    implementation: [{ file: "packages/sok/rust/Cargo.toml", symbol: 'edition = "2024"' }],
+    tests: [{ file: "packages/sok/rust/tests/sok_test.rs", id: "the_default_configuration_directory_is_the_applications" }],
+    expected: "The Rust packages build with edition 2024, and no test changes the environment of its process.",
+    levels: ["unit"],
+  },
+  {
+    id: "F165",
+    implementation: [
+      { file: "packages/host/go/src/images.go", symbol: "func imageReply" },
+      { file: "packages/host/rust/src/images.rs", symbol: "fn image_reply" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/images_test.go", id: "TestFailedPresentIsReported" },
+      { file: "packages/host/rust/tests/images_test.rs", id: "failed_present_is_reported" },
+    ],
+    expected: "Every error answer of an image envelope carries the name, generation, raster and sequence of its frame.",
+    levels: ["unit"],
+  },
+  {
+    id: "F164",
+    implementation: [
+      { file: "packages/host/go/src/stall_watch.go", symbol: "func StartStallWatch" },
+      { file: "packages/host/rust/src/stall_watch.rs", symbol: "pub fn start_stall_watch" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/stall_watch_test.go", id: "TestABlockedMainThreadIsRecordedWithItsStacksAndItsEnd" },
+      { file: "packages/host/rust/tests/stall_watch_test.rs", id: "a_blocked_main_thread_is_recorded_with_its_stacks_and_its_end" },
+    ],
+    expected: "A stall of the main thread of either host of 1 s or more is recorded with the stacks of the threads and its end, without a window check.",
+    levels: ["unit"],
+  },
+  {
+    id: "F163",
+    implementation: [{ file: "packages/workbench/plugin-operations.js", symbol: "log(`first run: the starter pack ${failedPack} was not installed: ${errorText(error)}`)" }],
+    tests: [{ file: "packages/workbench/test/plugin-operations.test.mjs", id: "a first run that cannot read the registry starts the window without the pack and states why" }],
+    expected: "A first run without a network, or with a registry that cannot be read, starts the window without the starter pack, states why, and installs the pack at the next start.",
+    levels: ["unit"],
+  },
+  {
+    id: "F144",
+    implementation: [{ file: "native/darwin/src/image_region.m", symbol: "[self logInput:@\"insertText\" fields:fields before:before];" }],
+    tests: [{ file: "e2e/input-records.test.mjs", id: "a typed key leaves a record in every layer of the input path" }],
+    expected: "Each layer of the input path records what it received, decided and sent with the typed text and every field, so a defect of the input is located from the files alone.",
+    levels: ["application"],
+  },
+  {
+    id: "F145",
+    implementation: [{ file: "packages/host/go/src/endpoint.go", symbol: "func (c *endpointConn) close(reason string)" }],
+    tests: [{ file: "e2e/input-records.test.mjs", id: "a typed key leaves a record in every layer of the input path" }],
+    expected: "The gaps of the records that the audit of 2026-10-09 listed are closed by their children, each with its own tests.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F160.25",
+    implementation: [
+      { file: "packages/sok/go/src/replay.go", symbol: "func ReplayLogs" },
+      { file: "packages/plugin-api/screen-hash.js", symbol: "export async function screenHash" },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/replay_test.go", id: "TestReplayComparesEachSegmentOfASessionWhoseSequenceRestarts" },
+      { file: "packages/sok/rust/tests/replay_test.rs", id: "replay_compares_each_segment_of_a_session_whose_sequence_restarts" },
+      { file: "e2e/terminal-replay.test.mjs", id: "a session with output, a resize, a scroll, a selection, a theme and input replays with every hash equal" },
+      { file: "e2e/terminal-replay.test.mjs", id: "a stored input that was changed is a divergence of the layer sidecar" },
+    ],
+    expected: "A terminal session replays from its stored inputs with every sidecar and page hash equal, and a changed stored input or drawn screen is a divergence of the layer that stored it.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F160.34",
+    implementation: [
+      { file: "packages/sok/go/src/replay_inputs.go", symbol: "func ReplaySessionProblem" },
+      { file: "packages/sok/rust/src/replay_inputs.rs", symbol: "pub fn replay_session_problem" },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/replay_inputs_test.go", id: "TestTheReplayInputRulesReproduceTheGoldenCases" },
+      { file: "packages/sok/rust/tests/replay_inputs_test.rs", id: "the_replay_input_rules_reproduce_the_golden_cases" },
+      { file: "packages/sok/go/tests/log_policy_test.go", id: "TestThePolicyReaderRefusesEveryInvalidGoldenCaseWithItsText" },
+      { file: "packages/sok/rust/tests/log_policy_test.rs", id: "the_policy_reader_refuses_every_invalid_golden_case_with_its_text" },
+    ],
+    expected: "The catalog check finds the emit sites of a Rust sidecar through its declared emitters, the readers of the policy file reproduce its golden cases, and the replay checks the view-state inputs of a session with the rules of a session before it applies them.",
+    levels: ["unit"],
+  },
+  {
+    id: "F236",
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "function declaredOwners(root)" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "ownership audit classifies only declared names, by exact name" }],
+    expected: "The ownership audit names no real plugin or sidecar: it classifies a package by its name prefix. The decoupling items F236-1 to F236-12 keep their evidence in docs/features.md, and the moves they name are in docs/plans/decouple-handoff.md.",
+    levels: ["unit"],
+  },
+  {
+    id: "F160.35",
+    implementation: [
+      { file: "packages/plugin-api/screen-hash.js", symbol: "export function applyScreenMessage" },
+      { file: "packages/sok/go/src/replay.go", symbol: "func ReplayLogs" },
+    ],
+    tests: [
+      { file: "packages/log-contract/test/screen-message.test.mjs", id: "is refused with the error of the fixture" },
+      { file: "packages/plugin-api/test/screen-hash.test.mjs", id: "a screen message without a segment is refused with the member named" },
+      { file: "packages/sok/go/tests/replay_test.go", id: "TestReplayRefusesAPageFrameThatNamesNoSegmentOfTheSession" },
+      { file: "packages/sok/rust/tests/replay_test.rs", id: "replay_refuses_a_page_frame_that_names_no_segment_of_the_session" },
+      { file: "e2e/terminal-replay.test.mjs", id: "a terminal session replays with the sidecar and page hashes equal" },
+      { file: "e2e/terminal-replay.test.mjs", id: "a screen message changed on the way is a divergence of the layer plugin" },
+    ],
+    expected: "The screen message carries the members of the screen hash and its segment, the page hashes the grid it received into a frame record of the layer plugin, and the replay of a terminal session finds every sidecar and page hash equal and reports a message changed on the way as a divergence of the layer plugin.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F160.36",
+    implementation: [
+      { file: "packages/sok/go/src/plugin_catalog.go", symbol: "func PluginCatalogs" },
+      { file: "packages/sok/rust/src/plugin_catalog.rs", symbol: "pub fn plugin_catalogs" },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/plugin_catalog_test.go", id: "TestAPluginEventHasTheClassThatTheCatalogOfItsPluginDeclares" },
+      { file: "packages/sok/rust/tests/plugin_catalog_test.rs", id: "a_plugin_event_has_the_class_that_the_catalog_of_its_plugin_declares" },
+      { file: "packages/host/go/tests/plugin_catalog_test.go", id: "TestTheHostClassifiesPluginEventsByTheInstalledCatalogsAndRecordsACatalogItCannotUse" },
+      { file: "packages/host/rust/tests/plugin_catalog_test.rs", id: "the_host_classifies_plugin_events_by_the_installed_catalogs_and_records_a_catalog_it_cannot_use" },
+      { file: "e2e/terminal-replay.test.mjs", id: "a terminal session replays with the sidecar and page hashes equal" },
+    ],
+    expected: "The writer of each host stores a plugin event with the class that the catalog of its enabled installed plugin declares, and records a catalog it cannot use as an error that names the file.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F157",
+    implementation: [
+      { file: "packages/workbench/debug-timeline.js", symbol: "export const HOLD_LIMIT" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "the view holds at most 2000 rows and refuses an older page beyond them with an error" },
+      { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "the rows beyond the hold limit leave the view from the old end and are counted" },
+      { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "the timeline asks at each notice without a pause of its own and loses no row" },
+      { file: "packages/sok/go/tests/debug_test.go", id: "TestQueryRefusesWhatBreaksTheContract" },
+      { file: "packages/sok/rust/tests/debug_test.rs", id: "query_refuses_what_breaks_the_contract" },
+    ],
+    expected: "The page of the debug view keeps answering when an event file is large and grows: the timeline holds and draws a bounded number of rows, answers each notice of the host without a timer of its own, and reads a file without a line as no row.",
+    levels: ["unit"],
+  },
+  {
+    id: "F155",
+    implementation: [
+      { file: "packages/host/rust/src/startup.rs", symbol: "pub fn exit_on_failure_with" },
+      { file: "packages/host/go/src/startup.go", symbol: "func ExitOnFailureWith" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/startup_test.rs", id: "a_failed_setup_step_writes_its_message_and_exits_with_status_one" },
+      { file: "packages/host/go/tests/startup_test.go", id: "TestAFailedStartupStepWritesItsMessageAndExitsWithStatusOne" },
+    ],
+    expected: "A failure of a startup step of the Tauri host writes its message and ends the process with the status 1 instead of aborting it.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F160.26",
+    implementation: [{ file: "scripts/node-tests.mjs", symbol: "export function whenIdle" }],
+    tests: [{ file: "scripts/test/node-tests.test.mjs", id: "the idle gate waits until the person gave no input for the given seconds" }],
+    expected: "The wait of --when-idle reads the idle time of the input at an interval; the examined event sources and the reason each cannot serve are in docs/operations/examples.md.",
+    levels: ["unit"],
+  },
+  {
+    id: "F160.31",
+    implementation: [
+      { file: "packages/sok/go/src/event_log.go", symbol: "func StartEventLog" },
+      { file: "packages/sok/rust/src/event_log.rs", symbol: "pub fn start" },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/event_log_options_test.go", id: "TestAWriterRotatesAtItsBoundAndTheNewFileStartsWithLogOpenAndLogRotated" },
+      { file: "packages/sok/rust/tests/event_log_options_test.rs", id: "a_writer_rotates_at_its_bound_and_the_new_file_starts_with_log_open_and_log_rotated" },
+    ],
+    expected: "The hosts and the tool start one event writer per language, which lives in the tool packages and takes the layer, the clock, the thread entrance, the rotation and a pull as options.",
+    levels: ["unit"],
+  },
+  {
+    id: "F160.27",
+    implementation: [
+      { file: "packages/host/rust/src/recording.rs", symbol: "pub fn running" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/recording_test.rs", id: "a_poisoned_recording_state_is_recovered_when_it_ends" },
+    ],
+    expected: "A discarded Rust result is either reported as a record or carries a stated reason: a poisoned lock is a record.",
+    levels: ["unit"],
+  },
+  {
+    id: "F160.5.2",
+    implementation: [
+      { file: "packages/host/rust/src/binding_record.rs", symbol: "pub fn finish" },
+      { file: "packages/host/go/src/binding_record.go", symbol: "func (b *Bindings) Call" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/binding_record_test.rs", id: "a_binding_call_is_an_event_while_the_trace_is_off" },
+      { file: "packages/host/go/tests/binding_record_test.go", id: "TestABindingCallIsAnEventWhileTheTraceIsOff" },
+    ],
+    expected: "Every host call of a page is stored by the host as the event host.binding.call with its name, bounded arguments, result and microseconds.",
+    levels: ["unit"],
+  },
+  {
+    id: "F160.6.4",
+    implementation: [
+      { file: "packages/sok/rust/src/event_bounds.rs", symbol: "pub fn bounded_serialize" },
+      { file: "packages/sok/go/src/event_bounds.go", symbol: "func BoundedMarshal" },
+      { file: "packages/plugin-api/log-batch.js", symbol: "export function createEventBatcher" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/producer_bounds_test.rs", id: "the_fields_of_a_host_event_are_cut_while_they_are_serialized" },
+      { file: "packages/host/go/tests/producer_bounds_test.go", id: "TestTheFieldsOfAHostEventAreCutWhileTheyAreSerialized" },
+      { file: "packages/workbench/test/page-bounds.test.mjs", id: "the fields of an event of a plugin over 65536 bytes are replaced by their head while they are serialized" },
+    ],
+    expected: "A producer cuts the fields, the records and the queues to their bounds while it serializes them, and every cut or refusal is stored.",
+    levels: ["unit"],
+  },
+  {
+    id: "F160.11",
+    implementation: [
+      { file: "scripts/test-runner.mjs", symbol: "export async function runTests" },
+    ],
+    tests: [
+      { file: "scripts/test/test-runner.test.mjs", id: "a run with a folder gives each test its identifier, stores the output of every test and writes a manifest" },
+      { file: "scripts/test/test-runner.test.mjs", id: "a manifest names a test that is still running, so a run that stops leaves the test it stopped in" },
+    ],
+    expected: "A run gives each test its identifier and keeps a manifest with the status, start and end of each test, naming the test a stopped run was in.",
+    levels: ["unit"],
+  },
+  {
+    id: "F160.32.1",
+    implementation: [
+      { file: "packages/plugin-api/plugin-runtime.js", symbol: "export function createPluginRuntime" },
+      { file: "packages/workbench/plugin-records.js", symbol: "export const pluginRecords" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/surface.test.mjs", id: "a plugin event carries the cids of its chain to the page writer" },
+      { file: "packages/workbench/test/plugin-records.test.mjs", id: "an event of a plugin leaves with its cids and its builder runs while the level is stored" },
+    ],
+    expected: "A plugin event carries valid cids to the page writer, and an invalid cids argument throws before anything is stored.",
+    levels: ["unit"],
+  },
+  {
+    id: "F160.32.2",
+    implementation: [
+      { file: "packages/plugin-api/plugin-runtime.js", symbol: "trace.enabled" },
+      { file: "packages/workbench/page-log.js", symbol: "export function eventEnabled" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/surface.test.mjs", id: "a plugin has no level query: each record builds its fields, and a page without a host builds none" },
+      { file: "packages/plugin-api/test/surface.test.mjs", id: "a plugin trace builds its fields only while the trace is on" },
+      { file: "packages/workbench/test/plugin-records.test.mjs", id: "the trace of a plugin builds no object while the trace is off" },
+    ],
+    expected: "The fields of a plugin event and of a plugin trace event are built only while the level is stored or the trace is on.",
+    levels: ["unit"],
+  },
+  {
+    id: "F160.13",
+    implementation: [
+      { file: "scripts/test-runs.mjs", symbol: "export function pruneRuns" },
+      { file: "scripts/node-tests.mjs", symbol: "export function newRun" },
+    ],
+    tests: [
+      { file: "scripts/test/test-runs.test.mjs", id: "a run that passed is removed, and a run with an unclassified failure or a stop is kept and named" },
+      { file: "scripts/test/test-runs.test.mjs", id: "a run whose failures are all named by a classification record is removed, and a partial record keeps it" },
+      { file: "scripts/test/test-runs.test.mjs", id: "a malformed manifest or classification is an error that names the file" },
+      { file: "scripts/test/node-tests.test.mjs", id: "a run is named by its start time and process id and keeps its folder under target/test-runs" },
+    ],
+    expected: "The output of every test and the evidence of a failed run stay until a classification names each failure.",
+    levels: ["unit"],
+  },
+  {
+    id: "F154.4.3",
+    implementation: [
+      { file: "scripts/node-tests.mjs", symbol: "export function parseTestScript" },
+    ],
+    tests: [
+      { file: "scripts/test/node-tests.test.mjs", id: "another script of the packages that have it is discovered, and quotes around a glob are not part of the path" },
+    ],
+    expected: "The window-check files run one at a time through the test runner with the start, the end, the elapsed time and a limit of 600 s for each test that declares no timeout; a file has no limit of its own.",
+    levels: ["unit"],
+  },
+  {
+    id: "F154.4",
+    implementation: [
+      { file: "scripts/node-tests.mjs", symbol: "export function discoverNodeTests" },
+      { file: "scripts/native-tests.mjs", symbol: "export async function runNativeTests" },
+    ],
+    tests: [
+      { file: "scripts/test/node-tests.test.mjs", id: "each test file of a package is a test with the folder and the flags of its package" },
+      { file: "scripts/test/native-tests.test.mjs", id: "the native tests run one at a time, each with its start and end, and a failure fails the run" },
+    ],
+    expected: "The Node test files, the native tests and the window checks run through the test runner with the same output and limits.",
+    levels: ["unit"],
+  },
+  {
+    id: "F154.4.2",
+    implementation: [
+      { file: "scripts/native-tests.mjs", symbol: "export async function runNativeTests" },
+    ],
+    tests: [
+      { file: "scripts/test/native-tests.test.mjs", id: "the native tests run one at a time, each with its start and end, and a failure fails the run" },
+      { file: "scripts/test/native-tests.test.mjs", id: "a native test over its limit is killed and fails the run" },
+    ],
+    expected: "The native tests run one at a time through the test runner, each with its start, its end, its elapsed time and its own limit.",
+    levels: ["unit"],
+  },
+  {
+    id: "F154.4.1",
+    implementation: [
+      { file: "scripts/node-tests.mjs", symbol: "export function discoverNodeTests" },
+    ],
+    tests: [
+      { file: "scripts/test/node-tests.test.mjs", id: "each test file of a package is a test with the folder and the flags of its package" },
+      { file: "scripts/test/node-tests.test.mjs", id: "the discovered files run through the runner, each in the folder of its package" },
+    ],
+    expected: "Every Node test file of the workspace runs as a process of its own through the test runner with its own limit and the same output as the other long suites.",
+    levels: ["unit"],
+  },
+  {
+    id: "F151.6",
+    implementation: [
+      { file: "packages/sok/rust/src/debug.rs", symbol: "pub(crate) fn run_debug" },
+      { file: "packages/sok/go/src/debug.go", symbol: "func runDebug" },
+      { file: "packages/workbench/debug-timeline.js", symbol: "export function eventLine" },
+    ],
+    tests: [
+      { file: "packages/sok/rust/tests/debug_test.rs", id: "query_prints_the_golden_lines_of_every_case" },
+      { file: "packages/sok/rust/tests/debug_test.rs", id: "query_refuses_what_breaks_the_contract" },
+      { file: "packages/sok/rust/tests/debug_test.rs", id: "query_refuses_an_invalid_flag_value_as_a_usage_error" },
+      { file: "packages/sok/go/tests/debug_test.go", id: "TestQueryPrintsTheGoldenLinesOfEveryCase" },
+      { file: "packages/sok/go/tests/debug_test.go", id: "TestQueryRefusesWhatBreaksTheContract" },
+      { file: "packages/sok/go/tests/debug_test.go", id: "TestQueryRefusesAnInvalidFlagValueAsAUsageError" },
+      { file: "packages/workbench/test/debug-timeline.test.mjs", id: "the text line of each golden page is the line that the implementations of sok print" },
+    ],
+    expected: "The command sok debug query prints the text lines of one page of the query over the event files of a configuration directory with the same filter and order as the debug view, and both implementations print the same lines for the golden files.",
+    levels: ["unit"],
+  },
+  {
+    id: "F151.5",
+    implementation: [
+      { file: "packages/workbench/debug-state.js", symbol: "export function compareStates" },
+      { file: "packages/workbench/debug-ui.js", symbol: "export async function showDebugState" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/debug-state.test.mjs", id: "a comparison lists the paths whose values differ, including paths present in one file" },
+      { file: "packages/workbench/test/debug-state-ui.test.mjs", id: "a state file is shown as a tree and two state files are compared" },
+    ],
+    expected: "The debug view shows a state file as a tree, compares two state files by the paths whose values differ, and rejects a file that is not a state with its name and what was found.",
+    levels: ["unit"],
+  },
+  {
+    id: "F151.4.2",
+    implementation: [
+      { file: "packages/workbench/debug-ui.js", symbol: "export function selectDebugRow" },
+      { file: "packages/workbench/debug-ui.js", symbol: "export async function saveDebugRows" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "rows are selected and unselected by index, and the status reports the count and the warning" },
+      { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "the selected rows are saved in timeline order as one text, also those that the filter hides" },
+      { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "a cancelled save panel leaves no error and an empty selection is refused with an error" },
+    ],
+    expected: "The debug timeline selects and unselects rows, reports the number of selected rows and the warning that a saved file can hold typed text, saves the text lines of the selected rows in timeline order, treats a cancelled save panel as no error, and refuses an empty selection with an error.",
+    levels: ["unit"],
+  },
+  {
+    id: "F151.3",
+    implementation: [
+      { file: "packages/workbench/debug-timeline.js", symbol: "export function queryOf" },
+      { file: "packages/workbench/debug-ui.js", symbol: "export function filterDebugTimeline" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/debug-timeline.test.mjs", id: "the request of the query leaves the open members out and turns the UTC times into microseconds" },
+      { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "the filter asks the host for the newest page again with the members of the filter" },
+    ],
+    expected: "The debug timeline filters rows by event name, surface, session, correlation identifier and UTC time range through the query of the host, and rejects an invalid value with an error.",
+    levels: ["unit"],
+  },
+  {
+    id: "F151.1",
+    implementation: [
+      { file: "packages/workbench/debug-timeline.js", symbol: "export function mergeRows" },
+      { file: "packages/workbench/debug-ui.js", symbol: "export function showDebugTimeline" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/debug-timeline.test.mjs", id: "rows are ordered by the key of the query: time, then role, then boot, then seq, and each row once" },
+      { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "the timeline asks for the newest page and shows it oldest first with the status of the pages" },
+    ],
+    expected: "The debug view shows the events of the event files as a timeline of rows in time order with level, layer and text filters, and shows the error of a file that breaks the event structure with its name and line.",
+    levels: ["unit"],
+  },
+  {
+    id: "F151.2.3",
+    implementation: [
+      { file: "packages/workbench/debug-timeline.js", symbol: "export function isEventFile" },
+      { file: "packages/workbench/debug-ui.js", symbol: "export async function followDebugTimeline" },
+      { file: "packages/workbench/page-log.js", symbol: "\"logQuery\"" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "a changed event file adds the rows after the tail in time order, also a row with an earlier clock, and keeps the filter and the selection" },
+      { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "following pages through the rows that grew until none is left and asks again from the first tail" },
+      { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "stopping follows no more queries and resuming asks for what grew while stopped" },
+      { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "a query that fails while following stops following and is shown with its file and line" },
+      { file: "packages/workbench/test/page-log.test.mjs", id: "every host call is the event workbench.call with its name, arguments, duration and outcome, except the calls of the log itself and the queries of the debug timeline" },
+    ],
+    expected: "The debug timeline asks for the rows after the tail of the query when a debug-log-changed notice reports a write, adds them in time order while keeping the filter and the selection, stops and resumes following by a command, stops following with an error for a query that fails, and its queries are not recorded as page calls.",
+    levels: ["unit"],
+  },
+  {
+    id: "F137",
+    implementation: [
+      { file: "packages/sok/rust/src/appupdate.rs", symbol: "pub type OpenApplication" },
+      { file: "packages/sok/go/tests/appupdate_test.go", symbol: "func requireBundles" },
+      { file: "packages/sok/rust/tests/appupdate_test.rs", symbol: "fn bundles_supported" },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/appupdate_test.go", id: "TestTheBundleIsReplacedAfterTheProcessEndedAndTheApplicationStarts" },
+      { file: "packages/sok/rust/tests/appupdate_test.rs", id: "the_bundle_is_replaced_after_the_process_ended_and_the_application_starts" },
+    ],
+    expected: "The Rust sok passes clippy, and the tests that stage and replace an application bundle end at once on a platform that does not implement those operations.",
+    levels: ["unit"],
+  },
+  {
+    id: "F29",
+    implementation: [
+      { file: "scripts/check-tools.sh", symbol: "pnpm_actual=$(pnpm --version" },
+    ],
+    tests: [
+      { file: "scripts/test/check-tools.sh", id: "a standalone pnpm executable of the declared version is accepted" },
+    ],
+    expected: "The build environment check accepts a pnpm executable of the declared major version wherever it is installed and rejects another major version.",
+    levels: ["unit"],
+  },
+  {
+    id: "F30",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "is not keeping up" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "is not keeping up" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestSlowSidecarDoesNotBlockOtherSends" },
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestStopForcedKill" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "slow_sidecar_does_not_block_other_sends" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "stop_forced_kill" },
+    ],
+    expected: "A sidecar that does not read its input fills its channel and is killed after the stop deadline on any machine.",
+    levels: ["unit"],
+  },
+  {
+    id: "F31",
+    implementation: [
+      { file: "packages/window-check/event-log.mjs", symbol: "export function readEventErrors" },
+      { file: "packages/workbench/report-record.js", symbol: "export function recordOf" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/session-cleanup.test.mjs", id: "a record event of level error fails the check as the line of the text form unless it is declared" },
+      { file: "packages/workbench/test/report-levels.test.mjs", id: "a reported failure has the level error and an observation has the level info" },
+    ],
+    expected: "Every error line that the application logs during a window check is printed and fails the check unless the check declares it.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F34",
+    implementation: [
+      { file: "packages/workbench/verify.js", symbol: "presentedCardRect(card.id)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/verify-rail-lines.test.mjs", id: "rail lines are not measured while the plane shows a layout of an earlier size" },
+    ],
+    expected: "The page verification measures the rail lines only when the plane shows the size of its painted cards.",
+    levels: ["unit"],
+  },
+  {
+    id: "F33",
+    implementation: [
+      { file: "packages/workbench/plane.js", symbol: "transactionSeats?.get(card.id)?.presentation" },
+      { file: "packages/workbench/verify.js", symbol: "bands ${" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/verify-ahead.test.mjs", id: "a failed V7c names the surface and both of its rectangles" },
+      { file: "e2e/card-panels.test.mjs", id: "a click opens a side folded for lack of space and a drag opens a folded side under the pointer" },
+    ],
+    expected: "A layout transaction draws the card sidebars with the presentation it predicted the native surface seats with.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F36",
+    implementation: [
+      { file: "packages/workbench/app.css", symbol: "round(nearest,calc(var(--chrome-row-h) * var(--frame-text)),var(--pixel))" },
+    ],
+    tests: [
+      { file: "e2e/text-size.test.mjs", id: "text size commands enlarge the pressed card or the frame and keep the plane in the window" },
+      { file: "packages/workbench/test/verify-ahead.test.mjs", id: "a failed V7b names the surface and its declared and applied rectangles" },
+    ],
+    expected: "The plane stays on the device pixel grid at every frame text factor, so native surfaces are seated where they are declared.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F38",
+    implementation: [
+      { file: "packages/workbench/text-size.js", symbol: "export function effectiveTextScope" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/text-size.test.mjs", id: "without a pressed place the scope is the focused card, and the frame when no card is focused" },
+    ],
+    expected: "A window without a focused card has the frame as its text size scope.",
+    levels: ["unit"],
+  },
+  {
+    id: "F42",
+    implementation: [
+      { file: "packages/workbench/shown-errors.js", symbol: "export function showError" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/shown-errors.test.mjs", id: "an error shown on the screen is logged once until it changes or clears" },
+      { file: "packages/workbench/test/error-display.test.mjs", id: "the error color is used only by the elements of the error display path" },
+    ],
+    expected: "Every error that the page shows is written to the application log when it appears.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F32",
+    implementation: [
+      { file: "packages/plugin-api/surface-composition.js", symbol: "observeFrame = view.requestAnimationFrame" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/surface-composition.test.mjs", id: "the controller starts observing at the next animation frame, before that frame's observation round" },
+    ],
+    expected: "A surface composition controller starts observing at an animation frame, so its first observations are delivered in one round.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F44",
+    implementation: [
+      { file: "packages/workbench/projects.js", symbol: "listener.retain(new Set(remaining.map((item) => item.surface)))" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "the surfaces of every layout are listed with their project root, and removing a project retains the rest" },
+      { file: "e2e/library.test.mjs", id: "the library names a missing project folder and removes the project" },
+    ],
+    expected: "Removing a project disposes the surface modules of its tabs before it ends their sidecar sessions.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F39",
+    implementation: [
+      { file: "packages/plugin-api/document-region.js", symbol: "export function observeRegionInsets(element, view, onPlace, report)" },
+      { file: "packages/plugin-api/image-region.js", symbol: "no handlers for event type" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/document-region.test.mjs", id: "a placement that fails while observing is reported as an error" },
+      { file: "packages/plugin-api/test/image-region.test.mjs", id: "an event of a type without handlers is reported as an error, not dropped" },
+    ],
+    expected: "Region failures that no caller receives are reported as errors, and region observation starts at an animation frame.",
+    levels: ["unit"],
+  },
+  {
+    id: "F40",
+    implementation: [
+      { file: "packages/workbench/host.js", symbol: "data-native-paint-clip" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/overlay-paint-clip.test.mjs", id: "the dialog document receives the page styles without the native paint clip" },
+    ],
+    expected: "The dialog document receives the page styles without the native paint clip of the main document.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F37",
+    implementation: [
+      { file: "packages/host/go/src/exposure.go", symbol: "ButtonHeldMessage" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "button_held_message" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/endpoint_test.go", id: "TestButtonHeldMessage" },
+      { file: "packages/host/rust/tests/exposure_test.rs", id: "button_held_message_reports_mask_and_frontmost_application" },
+    ],
+    expected: "A 1007 refusal names the held button mask and the frontmost application in the same text on both hosts.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F35",
+    implementation: [
+      { file: "native/darwin/src/window_controls.m", symbol: "windowSetTitlebarHeight" },
+      { file: "packages/workbench/frame-text.js", symbol: "chromeRow" },
+    ],
+    tests: [
+      { file: "e2e/titlebar-recording.test.mjs", id: "every recorded frame keeps the window buttons centred in the first row while the frame factor steps from 1 to 3 and back" },
+    ],
+    expected: "The window buttons stay centred in the first row at every frame text factor.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F35.1",
+    implementation: [
+      { file: "native/darwin/src/surface_layout.m", symbol: "surfaceLayoutStartPage" },
+      { file: "packages/workbench/frame-text.js", symbol: "frameLayout" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/window_titlebar_test.go", id: "TestStartTitlebarFollowsFrameFactor" },
+      { file: "packages/host/rust/tests/window_titlebar_test.rs", id: "the_start_titlebar_follows_the_frame_factor" },
+      { file: "e2e/titlebar-recording.test.mjs", id: "every recorded frame of a reload after another window changed the frame factor keeps the window buttons centred" },
+    ],
+    expected: "The title bar height is presented in the layout transaction of the frame that draws the first row, at start, on a reload and at every factor step.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F35.2",
+    implementation: [
+      { file: "e2e/titlebar-measurement.mjs", symbol: "measureTitlebar" },
+    ],
+    tests: [
+      { file: "e2e/test/titlebar-measurement.test.mjs", id: "buttons 6px off the first-row centre fail the frame" },
+    ],
+    expected: "A recording fails on any frame whose button centre and first-row centre differ by more than 0.5px.",
+    levels: ["unit"],
+  },
+  {
+    id: "F47",
+    implementation: [
+      { file: "packages/host/go/src/application_log.go", symbol: "ErrorLine" },
+      { file: "packages/host/rust/src/application_log.rs", symbol: "error_line" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/application_log_test.go", id: "TestLogErrorWritesAnErrorEventToTheEventLog" },
+      { file: "packages/host/rust/tests/application_log_test.rs", id: "log_error_writes_an_error_event_to_the_event_log" },
+    ],
+    expected: "Every host failure is written to the application log as an error line that window checks read.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F48",
+    implementation: [
+      { file: "packages/host/rust/src/windows.rs", symbol: "list_entries" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/exposure_test.rs", id: "a_close_during_the_list_does_not_fail_the_list" },
+    ],
+    expected: "The Tauri window list reads each window's closing state and queries it in one main-thread step.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F49",
+    implementation: [
+      { file: "packages/workbench/projects.js", symbol: "readProjects" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "a project removed from the registry by another window ends in the window that shows it as closing its tab does" },
+      { file: "e2e/library.test.mjs", id: "the library names a missing project folder and removes the project" },
+    ],
+    expected: "Removing a project ends it in every window that shows it as closing its tab does.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F50",
+    implementation: [
+      { file: "packages/workbench/layout-queue.js", symbol: "async wait()" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/tab-close-settled.test.mjs", id: "core.tab.close answers after the tab close and its draw" },
+      { file: "packages/workbench/test/layout-queue.test.mjs", id: "the wait for the drawn layout answers false when the newest layout failed" },
+    ],
+    expected: "A command answers after its handler's work and the newest draw.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F51",
+    implementation: [
+      { file: "packages/host/rust/src/windows.rs", symbol: "with_native_owner" },
+      { file: "packages/host/go/src/windows.go", symbol: "UseNativeWindow" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/window_close_test.rs", id: "a_close_after_the_handle_read_does_not_reach_native_code" },
+      { file: "packages/host/go/tests/window_close_test.go", id: "TestACloseBeforeTheNativeStepDoesNotReachNativeCode" },
+    ],
+    expected: "A native window handle is used only in the main-thread step that reads it.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F56",
+    implementation: [
+      { file: "packages/host/rust/src/images.rs", symbol: "wait_current" },
+      { file: "packages/host/go/src/images.go", symbol: "WaitCurrentError" },
+      { file: "packages/workbench/host.js", symbol: "layoutStepEnd" },
+      { file: "packages/workbench/layout-queue.js", symbol: "async wait()" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/images_test.rs", id: "presentation_wait_timeout_returns_its_failure_and_writes_no_log_line" },
+      { file: "packages/host/go/tests/images_test.go", id: "TestPresentationWaitTimeoutReturnsItsFailureAndWritesNoLogLine" },
+      { file: "packages/workbench/test/presentation-failure-lines.test.mjs", id: "one presentation timeout writes one workbench error line" },
+    ],
+    expected: "One image presentation timeout writes one application log line, the page display line, on both hosts.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F52",
+    implementation: [
+      { file: "Makefile", symbol: "check-windows-build:" },
+      { file: "packages/host/go/src/platform/darwin/endpoint.go", symbol: "err != syscall.EPERM" },
+      { file: "packages/host/rust/src/platform/darwin/endpoint.rs", symbol: "Some(EPERM) => {}" },
+    ],
+    tests: [
+      { file: "scripts/test/check-windows-build.test.mjs", id: "the Windows build check compiles the Go host source in the default and diagnostics builds" },
+      { file: "scripts/test/check-windows-build.test.mjs", id: "check-host-files runs the Windows build check" },
+      { file: "packages/host/go/tests/service_process_test.go", id: "TestAServiceProcessOfAnotherUserExists" },
+      { file: "packages/host/rust/tests/service_process_test.rs", id: "a_service_process_of_another_user_exists" },
+    ],
+    expected: "Both hosts compile for Windows in the checks, every unsupported Windows operation returns its error, and a service pid of another user exists.",
+    levels: ["unit"],
+  },
+  {
+    id: "F53",
+    implementation: [
+      { file: "packages/host/go/src/platform/darwin/endpoint.go", symbol: "func (implementation) NewSession" },
+      { file: "packages/host/rust/src/platform/darwin/endpoint.rs", symbol: "pub fn new_session" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentServiceStartsInANewSession" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_service_starts_in_a_new_session" },
+    ],
+    expected: "Both hosts start a persistent service as the leader of a new session.",
+    levels: ["unit"],
+  },
+  {
+    id: "F59",
+    implementation: [
+      { file: "packages/host/go/src/platform/darwin/private_files.go", symbol: "func (implementation) CreatePrivateFile" },
+      { file: "packages/host/go/src/platform/windows/unsupported.go", symbol: "unsupported(\"private directory creation\")" },
+      { file: "packages/host/rust/src/platform/darwin/private_files.rs", symbol: "pub fn create_private_file" },
+      { file: "packages/host/rust/src/endpoint.rs", symbol: "platform.create_private_file(&path)" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/private_files_test.go", id: "TestCreatePrivateDirectoriesMakesMissingDirectoriesOwnerOnly" },
+      { file: "packages/host/go/tests/private_files_test.go", id: "TestAppendPrivateFileCreatesAnOwnerOnlyFileAndAppends" },
+      { file: "packages/host/go/tests/private_files_test.go", id: "TestCreatePrivateFileCreatesANewOwnerOnlyFileOnly" },
+      { file: "packages/host/go/tests/endpoint_test.go", id: "TestProcessLockIsOwnerOnly" },
+      { file: "packages/host/rust/tests/private_files_test.rs", id: "create_private_directories_makes_missing_directories_owner_only" },
+      { file: "packages/host/rust/tests/private_files_test.rs", id: "append_private_file_creates_an_owner_only_file_and_appends" },
+      { file: "packages/host/rust/tests/private_files_test.rs", id: "create_private_file_creates_a_new_owner_only_file_only" },
+      { file: "packages/host/rust/tests/endpoint_test.rs", id: "the_process_lock_is_owner_only" },
+      { file: "packages/host/go/tests/private_files_test.go", id: "TestWritePrivateFileCreatesAnOwnerOnlyFileAndReplacesItsContents" },
+      { file: "packages/host/rust/tests/private_files_test.rs", id: "write_private_file_creates_an_owner_only_file_and_replaces_its_contents" },
+      { file: "scripts/test/check-windows-build.test.mjs", id: "the Windows build check compiles the Go host source in the default and diagnostics builds" },
+    ],
+    expected: "Both hosts create owner-only files and directories only through the platform operations, Darwin gives them modes 0700 and 0600, the process lock has mode 0600 in both hosts, and the Windows implementation compiles and returns its not-implemented errors.",
+    levels: ["unit"],
+  },
+  {
+    id: "F63",
+    implementation: [{ file: "scripts/test-command.mjs", symbol: "function groupMembers" }],
+    tests: [
+      { file: "scripts/test/test-command.test.mjs", id: "counts a process group that holds only zombies as gone after a denied probe" },
+      { file: "scripts/test/test-command.test.mjs", id: "reads the members of a group from the real process table after a denied probe" },
+      { file: "scripts/test/test-command.test.mjs", id: "does not convert denied cleanup verification after SIGKILL into success" },
+    ],
+    expected: "A refused cleanup probe is decided from the process table: a group with no running member is cleaned, and a running member keeps the EPERM failure.",
+    levels: ["unit"],
+  },
+  {
+    id: "F58",
+    implementation: [
+      { file: "packages/workbench/page-layout.js", symbol: "export function createPageLayout" },
+      { file: "packages/workbench/index.html", symbol: "createPageLayout" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/presentation-failure-lines.test.mjs", id: "one presentation timeout writes one workbench error line" },
+      { file: "packages/workbench/test/layout-failure-lines.test.mjs", id: "a layout failure of a project switch started from the interface writes one workbench error line" },
+      { file: "packages/workbench/test/layout-failure-lines.test.mjs", id: "a layout failure that no command waits for writes one workbench error line" },
+    ],
+    expected: "The layout wiring of the main page is one module that the page and its tests import.",
+    levels: ["unit"],
+  },
+  {
+    id: "F41",
+    implementation: [
+      { file: "packages/workbench/surface-reply-hold.js", symbol: "createSurfaceReplyHold" },
+    ],
+    tests: [
+      { file: "e2e/late-reply.test.mjs", id: "a surface reply that arrives after its surface closed is discarded as an observation" },
+      { file: "e2e/test/late-reply.test.mjs", id: "the observation of a late reply is found only for the closed surface" },
+    ],
+    expected: "A surface reply that arrives after its surface closed is discarded with an observation and no error line on both hosts.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F57",
+    implementation: [
+      { file: "packages/workbench/layout-queue.js", symbol: "item.resolve({ status: \"failed\" })" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/layout-failure-lines.test.mjs", id: "a layout failure of a project switch started from the interface writes one workbench error line" },
+      { file: "packages/workbench/test/layout-failure-lines.test.mjs", id: "a layout failure that no command waits for writes one workbench error line" },
+    ],
+    expected: "A layout failure writes one page error line whether a command, a project switch or a gesture started the layout.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F61",
+    implementation: [
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn close_answer" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) closeAnswered" },
+    ],
+    tests: [
+      { file: "e2e/terminal.test.mjs", id: "closing terminal tabs reaps every PTY child without killing the shared service" },
+    ],
+    expected: "A terminal close answers only after the terminal service has reaped the PTY child, on both hosts.",
+    levels: ["application"],
+  },
+  {
+    id: "F65",
+    implementation: [
+      { file: "packages/workbench/plane.js", symbol: "drawSideToggles" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/plane-side-toggles.test.mjs", id: "a draw keeps the pressed card header fold control in the document" },
+      { file: "e2e/card-panels.test.mjs", id: "the card header has a fold control for each sidebar the card shows" },
+    ],
+    expected: "A redraw keeps the card header fold controls in the document, so a click that a draw interrupts still reaches its control.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F66.1",
+    implementation: [
+      { file: "packages/workbench/library.js", symbol: "function place(parent, nodes)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/library-redraw.test.mjs", id: "a library render keeps the controls of unchanged project cards in the document" },
+      { file: "packages/workbench/test/library-redraw.test.mjs", id: "a plugin page render keeps the controls of unchanged plugin cards in the document" },
+    ],
+    expected: "A library render keeps the cards and controls whose values did not change in the document.",
+    levels: ["unit"],
+  },
+  {
+    id: "F66.2",
+    implementation: [
+      { file: "packages/workbench/overlay-content.js", symbol: "export function updateContent" },
+      { file: "packages/workbench/overlay.html", symbol: "updateContent(root, html)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/overlay-content.test.mjs", id: "an update keeps the controls of the dialog in the document and applies the changed values" },
+      { file: "packages/workbench/test/overlay-content.test.mjs", id: "an update replaces an element whose kind or command changed" },
+    ],
+    expected: "A dialog content update keeps unchanged controls in the document and applies only the changes.",
+    levels: ["unit"],
+  },
+  {
+    id: "F66",
+    implementation: [
+      { file: "packages/workbench/library.js", symbol: "function place(parent, nodes)" },
+      { file: "packages/workbench/overlay-content.js", symbol: "export function updateContent" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/library-redraw.test.mjs", id: "a library render keeps the controls of unchanged project cards in the document" },
+      { file: "packages/workbench/test/overlay-content.test.mjs", id: "an update keeps the controls of the dialog in the document and applies the changed values" },
+    ],
+    expected: "No redraw of core takes an unchanged control out of the document.",
+    levels: ["unit"],
+  },
+  {
+    id: "F67",
+    implementation: [
+      { file: "packages/plugin-api/list.js", symbol: "export function drawList" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/list.test.mjs", id: "drawList keeps the element of each unchanged key and updates it" },
+      { file: "packages/plugin-api/test/list.test.mjs", id: "drawList builds new keys, removes missing keys and moves only elements out of order" },
+    ],
+    expected: "drawList keeps the element of each key in the document and moves only an element out of order.",
+    levels: ["unit"],
+  },
+  {
+    id: "F43",
+    implementation: [
+      { file: "packages/workbench/page-layout.js", symbol: "async empty(show)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "browsing shows the library in the draw that empties the plane, not where a later host reply resolves" },
+    ],
+    expected: "The switch to the library shows the library screen in the prepared draw that empties the plane, before the observation round.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F64",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "stopClosing map[string]int" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "struct Stopping" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestStopReadsOutputToItsEnd" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "stop_reads_output_to_its_end" },
+    ],
+    expected: "A stopping sidecar's output is read to its end on both hosts, so the sidecar completes its writes.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F72",
+    implementation: [
+      { file: "e2e/package.json", symbol: "test-app:shutdown" },
+    ],
+    tests: [
+      { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
+    ],
+    expected: "Every standalone window check script has a declared entry point.",
+    levels: ["application"],
+  },
+  {
+    id: "F74",
+    implementation: [
+      { file: "Makefile", symbol: "check-host-files: check-windows-build" },
+    ],
+    tests: [
+      { file: "scripts/test/check-windows-build.test.mjs", id: "check-host-files runs the Windows build check" },
+    ],
+    expected: "check-host-files vets the Wails host for Windows and needs no Windows C compiler.",
+    levels: ["unit"],
+  },
+  {
+    id: "F75",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) Declare(" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "pub fn declare(" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestDeclaringAddsSidecarsInstalledAfterTheStart" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "declaring_adds_sidecars_installed_after_the_start" },
+    ],
+    expected: "A plugin that the first run installs starts its sidecars without a restart in both hosts.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F70",
+    implementation: [
+      { file: "packages/host/wailsv3/go.mod", symbol: "replace github.com/wailsapp/wails/v3 =>" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/framework_log_test.go", id: "TestTheTransportReturnsAFailedCallWithoutLoggingIt" },
+    ],
+    expected: "A failed binding call of the Wails host is written once, by the page.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F79",
+    implementation: [
+      { file: "packages/host/go/src/exposure.go", symbol: "relayExpiredLimit" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "EXPIRED_LIMIT" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/exposure_test.go", id: "TestRelayLateReplyStatesItsDelay" },
+      { file: "packages/host/rust/tests/exposure_test.rs", id: "late_reply_states_its_delay" },
+    ],
+    expected: "Both hosts report a timed-out relayed request and its late reply with the same texts and the delay.",
+    levels: ["unit"],
+  },
+  {
+    id: "F80",
+    implementation: [
+      { file: "packages/soksak/src/balance.ts", symbol: "export function sliceTree" },
+      { file: "packages/workbench/core-exposure.js", symbol: "core.layout.balance" },
+    ],
+    tests: [
+      { file: "packages/soksak/test/balance.test.mjs", id: "three cards over four give a third and a quarter each, and the rows halve the height" },
+      { file: "e2e/balance.test.mjs", id: "the auto-arrange button gives three over four cards a fair share" },
+    ],
+    expected: "The card auto-arrange button gives every card a fair share and keeps the arrangement.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F81",
+    implementation: [
+      { file: "packages/workbench/plane.js", symbol: "export function openCardTools" },
+    ],
+    tests: [
+      { file: "e2e/card-tools-menu.test.mjs", id: "a narrow card folds its tools into a menu that runs them and keeps its title" },
+    ],
+    expected: "A narrow card header shows the tab list, the current title and a tool menu that runs the tools.",
+    levels: ["application"],
+  },
+  {
+    id: "F85",
+    implementation: [
+      { file: "packages/workbench/plane.js", symbol: "function beginTabDrag" },
+    ],
+    tests: [
+      { file: "e2e/card-fullscreen.test.mjs", id: "a native click on another tab of a fullscreen card switches the tab and keeps fullscreen" },
+    ],
+    expected: "A click on a tab of a fullscreen card keeps fullscreen.",
+    levels: ["application"],
+  },
+  {
+    id: "F86",
+    implementation: [
+      { file: "packages/workbench/index.html", symbol: "for (const text of installEnvironment(environmentFile, installedPlugins)) showError(text);" },
+    ],
+    tests: [
+      { file: "e2e/start-failure.test.mjs", id: "a rejected installed plugin manifest is shown and logged and the page starts without that plugin" },
+    ],
+    expected: "A rejected installed plugin manifest is shown and logged, and the page starts without that plugin.",
+    levels: ["application"],
+  },
+  {
+    id: "F87",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "installed plugin ${plugin.id} ${plugin.version}" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/exposure.test.mjs", id: "a rejected installed manifest names the plugin, its version and package" },
+    ],
+    expected: "A rejected installed manifest names the plugin, its version and package.",
+    levels: ["unit"],
+  },
+  {
+    id: "F84",
+    implementation: [
+      { file: "packages/workbench/plane.js", symbol: "export function openSpaceApps" },
+      { file: "packages/workbench/picker-layer.js", symbol: "export function fillPicker" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/picker-layer.test.mjs", id: "a grouped picker draws headings that take no press and counts only the items" },
+      { file: "packages/workbench/test/picker-layer.test.mjs", id: "the icon and the name of a heading and of an item carry declared element names and the headings are reported" },
+      { file: "packages/workbench/test/picker-columns.test.mjs", id: "the icon and the name of a heading and of its items share one column at every depth" },
+      { file: "e2e/space-apps.test.mjs", id: "a fullscreen card lists the apps of the space by card and switches to a picked one" },
+    ],
+    expected: "A fullscreen card lists the apps of the space by card and moves fullscreen to a picked tab's card.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F139",
+    implementation: [
+      { file: "packages/workbench/picker-layer.js", symbol: "export function pickerColumns" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/picker-layer.test.mjs", id: "the columns of the headings and the items are measured relative to the picker" },
+      { file: "packages/workbench/test/picker-columns.test.mjs", id: "the icon and the name of a heading and of its items share one column at every depth" },
+      { file: "e2e/space-apps.test.mjs", id: "a fullscreen card lists the apps of the space by card and switches to a picked one" },
+    ],
+    expected: "The icon and the name of a group heading and of its items start at the same x, measured in the running application through the status core.picker.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F82",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "!errors.Is(err, net.ErrClosed)" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentStopDoesNotLogItsOwnCloseAsAReadError" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_stop_does_not_log_its_own_close_as_a_read_error" },
+    ],
+    expected: "A stop that closes a persistent service connection writes no read error on either host.",
+    levels: ["unit"],
+  },
+  {
+    id: "F83",
+    implementation: [
+      { file: "packages/window-check/app.mjs", symbol: "export function recordingFolders" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/session-cleanup.test.mjs", id: "a recording folder that the check left fails the check and is preserved" },
+    ],
+    expected: "A window check that leaves a recording folder fails and preserves it when the check or cleanup fails.",
+    levels: ["unit"],
+  },
+  {
+    id: "F88",
+    implementation: [
+      { file: "native/darwin/src/window_controls.m", symbol: "windowSetTitlebarHeight" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/window_controls_test.m", id: "the buttons are centred within one device pixel" },
+    ],
+    expected: "AppKit centres the window buttons in a title bar of the requested height within one device pixel at every backing scale.",
+    levels: ["native"],
+  },
+  {
+    id: "F89",
+    implementation: [
+      { file: "packages/workbench/verify.js", symbol: "const pixel = 1 / devicePixelRatio" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/verify-controls.test.mjs", id: "the window buttons count as centred within one device pixel of the first row" },
+      { file: "e2e/titlebar-recording.test.mjs", id: "window buttons centred" },
+    ],
+    expected: "The page judges the window buttons centred in the first row within one device pixel at every scale.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F90",
+    implementation: [
+      { file: "packages/soksak/src/dom.ts", symbol: "const step = snapshot.step;" },
+    ],
+    tests: [
+      { file: "packages/soksak/test/dom.test.mjs", id: "a paint writes the rects its commit reported when the ratio changes before it draws" },
+      { file: "e2e/resize.test.mjs", id: "maximising and restoring settle with the layout at the window size" },
+    ],
+    expected: "A layout is written on the pixel grid its commit reported, so the cards stay on the rects the host placed when the ratio changes before the draw.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F73.1",
+    implementation: [
+      { file: "packages/window-check/app.mjs", symbol: "async record(params = {})" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/recording.test.mjs", id: "a recording whose stop fails fails finalization, sends no second stop and preserves its folder" },
+      { file: "e2e/window-first-frames.test.mjs", id: "a new window shows its complete first screen from its first frame" },
+    ],
+    expected: "A window check sends one stop for each recording and keeps that stop's error; failed recordings remain available for diagnosis.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F93",
+    implementation: [
+      { file: "Makefile", symbol: "node scripts/go-tests.mjs" },
+      { file: "scripts/go-tests.mjs", symbol: "has no test files built with tags" },
+    ],
+    tests: [
+      { file: "scripts/test/repeat-go.test.mjs", id: "make repeat-go fails a package whose test files are not built" },
+      { file: "scripts/test/repeat-go.test.mjs", id: "make repeat-go passes a pattern whose tested package passed while a support package has no test files" },
+      { file: "scripts/test/repeat-go.test.mjs", id: "make repeat-go fails a run in which no test matched" },
+      { file: "scripts/test/repeat-rust.test.mjs", id: "make repeat-rust passes its features to every cargo test call" },
+    ],
+    expected: "The Go and Rust repeat targets run tests behind build tags and features and fail when no test ran.",
+    levels: ["unit"],
+  },
+  {
+    id: "F92",
+    implementation: [
+      { file: "packages/workbench/layout-queue.js", symbol: "export function nextTask" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/layout-queue.test.mjs", id: "a prepared draw runs in the next task, not in the checkpoint that answered its preparation" },
+      { file: "e2e/outside.test.mjs", id: "native content, cards, and the sidebar rail stay aligned" },
+    ],
+    expected: "A prepared layout is drawn in the next task, so a drag shows a new layout every display frame at 60 Hz.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F94",
+    implementation: [
+      { file: "e2e/real/terminal.test.mjs", symbol: "async function prepare(t, app, line, { fullscreen = false, log = {}, reads = [] } = {})" },
+    ],
+    tests: [
+      { file: "e2e/real/terminal.test.mjs", id: "a real wheel over a long history is shown without lag, stalls, or reversal" },
+    ],
+    expected: "The real wheel check measures a fullscreen terminal wide enough for its history lines.",
+    levels: ["application"],
+  },
+  {
+    id: "F96.1",
+    implementation: [
+      { file: "packages/sok/go/src/install.go", symbol: "func ParseRange" },
+      { file: "packages/sok/rust/src/install.rs", symbol: "pub fn parse_range" },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/install_test.go", id: "TestVersionRangesAcceptExactCaretTildeAndBoundedForms" },
+      { file: "packages/sok/rust/tests/install_test.rs", id: "version_ranges_accept_exact_caret_tilde_and_bounded_forms" },
+    ],
+    expected: "The range * is >=0.0.0 without an upper bound in both installers.",
+    levels: ["unit"],
+  },
+  {
+    id: "F103",
+    implementation: [
+      { file: "packages/workbench/stored-layout.js", symbol: "an earlier form of sidebars" },
+      { file: "packages/workbench/settings.js", symbol: "const projectSettingsFile" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/window-sidebar-restoration.test.mjs", id: "a stored layout in an earlier form is refused with what it found" },
+      { file: "packages/workbench/test/library-preview.test.mjs", id: "a library preview of a layout in an earlier form names projects.json and what it found" },
+      { file: "packages/workbench/test/settings.test.mjs", id: "settings stored in an earlier form are refused with the file that holds them and are not written" },
+    ],
+    expected: "A stored layout or settings file in an earlier form fails with an error that names its file, and nothing is converted or written.",
+    levels: ["unit"],
+  },
+  {
+    id: "F113",
+    implementation: [
+      { file: "native/darwin/src/document_view.m", symbol: "SPDocumentView" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/document_typing_test.m", id: "the field takes the typed text" },
+      { file: "e2e/activation/document-typing.test.mjs", id: "an active key window gives a document region typed text" },
+    ],
+    expected: "A document region takes typed characters in the field that a native press focuses, in a plain AppKit window and in an active key window of both hosts.",
+    levels: ["native", "application"],
+  },
+  {
+    id: "F115",
+    implementation: [
+      { file: "native/darwin/src/document_view.m", symbol: "SPDocumentView" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/document_press_test.m", id: "the first press reaches the page and the drag selects text" },
+    ],
+    expected: "The first press on a document region that does not hold the keyboard focus reaches its page, and a drag selects text.",
+    levels: ["native"],
+  },
+  {
+    id: "F119",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "func take(counts map[string]int, key string) bool" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn take(counts: &mut std::collections::BTreeMap<String, usize>, key: &str) -> bool" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestRepeatedCloseAwaitsEachAnswer" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "repeated_close_awaits_each_answer" },
+    ],
+    expected: "A surface closed again before the sidecar answered stays closing until each close is answered, and no answer fails the sidecar.",
+    levels: ["unit"],
+  },
+  {
+    id: "F118",
+    implementation: [
+      { file: "packages/window-check/app.mjs", symbol: "step(what)" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/session-steps.test.mjs", id: "a check that its test limit ends names the steps it started" },
+    ],
+    expected: "A window check writes each request and status wait it starts with its elapsed time, so a check that its test limit ends names the step that ran.",
+    levels: ["unit"],
+  },
+  {
+    id: "F105",
+    implementation: [
+      { file: "scripts/check-release.mjs", symbol: "export function auditMinimum" },
+      { file: "scripts/check-release.mjs", symbol: "export function machoMinimum" },
+    ],
+    tests: [
+      { file: "scripts/test/check-release-paths.test.mjs", id: "minimum audit requires the declared minimum in Info.plist and the application, and no newer executable" },
+      { file: "scripts/test/check-release-paths.test.mjs", id: "machoMinimum reads the minimum macOS version of an executable" },
+    ],
+    expected: "make check-release fails unless every bundle declares MACOS_MINIMUM and every application executable is built for it.",
+    levels: ["unit"],
+  },
+  {
+    id: "F95",
+    implementation: [
+      { file: "native/darwin/src/webview_geometry.m", symbol: "[main.window disableCursorRects];" },
+    ],
+    tests: [
+      { file: "e2e/real/terminal.test.mjs", id: "slow pointer movement over terminal text" },
+    ],
+    expected: "The text pointer stays over terminal text during slow pointer movement on both hosts.",
+    levels: ["application"],
+  },
+  {
+    id: "F95.1",
+    implementation: [
+      { file: "native/darwin/src/webview_geometry.m", symbol: "[main.window disableCursorRects];" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/window_cursor_rects_test.m", id: "the window composition turns cursor rectangles off" },
+    ],
+    expected: "The window composition keeps cursor rectangles off through window changes.",
+    levels: ["native"],
+  },
+  {
+    id: "F46",
+    implementation: [
+      { file: "packages/window-check/app.mjs", symbol: "async releasePresses()" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/pointer-presses.test.mjs", id: "a refused release keeps the press open until the held button is released" },
+    ],
+    expected: "A check whose press or release a held button refused leaves no open press for a later check.",
+    levels: ["unit"],
+  },
+  {
+    id: "F76",
+    implementation: [
+      { file: "native/darwin/src/capture.m", symbol: "sp_capture_stop" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/capture_resize_test.m", id: "native capture follows a growing window" },
+    ],
+    expected: "A recording of a growing window ends with a frame of the grown window at device pixels.",
+    levels: ["native"],
+  },
+  {
+    id: "F45",
+    implementation: [
+      { file: "packages/workbench/shown-errors.js", symbol: "element.dataset.error = where" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/error-display.test.mjs", id: "only the error display path marks an element as an error" },
+      { file: "packages/workbench/test/error-display.test.mjs", id: "the error color is used only by the elements of the error display path" },
+    ],
+    expected: "Every error the page shows goes through one display path that logs it, and only that path's elements take the error color.",
+    levels: ["unit"],
+  },
+  {
+    id: "F62",
+    implementation: [
+      { file: "packages/host/go/tests/sidecars_transport_test.go", symbol: "func serveHarnessConnections" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "second opens after the first reconnected" },
+    ],
+    expected: "The Wails persistent transport harness receives a connection event for each host when one host's revived connection reaches the service before the other host's first connection.",
+    levels: ["unit"],
+  },
+  {
+    id: "F28",
+    implementation: [
+      { file: "packages/window-check/pasteboard.mjs", symbol: "pasteboardDifference" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/pasteboard.test.mjs", id: "a changed value names the item, the type and both lengths and digests" },
+    ],
+    expected: "A pasteboard that differs after a window check is reported by item, type, length and digest.",
+    levels: ["unit"],
+  },
+  {
+    id: "F27",
+    implementation: [
+      { file: "e2e/terminal.test.mjs", symbol: "the notification authorization of this application is not decided" },
+    ],
+    tests: [
+      { file: "e2e/terminal.test.mjs", id: "an OSC 9 notification from a terminal out of view follows the system policy and then the tab policy" },
+    ],
+    expected: "The OSC 9 policy check of a bundled application names an undecided authorization and checks that the tab policy posts nothing new.",
+    levels: ["application"],
+  },
+  {
+    id: "F24",
+    implementation: [
+      { file: "e2e/terminal.test.mjs", symbol: "region.presented !== null" },
+    ],
+    tests: [
+      { file: "e2e/terminal.test.mjs", id: "a presentation that fails while the terminal service is stopped leaves the next fixture and splits usable" },
+    ],
+    expected: "The window check of a failed terminal presentation waits while a region has not presented yet.",
+    levels: ["application"],
+  },
+  {
+    id: "F23",
+    implementation: [
+      { file: "packages/sok/go/src/plugins.go", symbol: "file.Chmod(mode)" },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/plugins_test.go", id: "TestPluginInstallSetsTheModesWhateverTheUmask" },
+      { file: "packages/sok/rust/tests/plugins_test.rs", id: "plugin_install_sets_the_modes_whatever_the_umask" },
+    ],
+    expected: "Both sok implementations write extracted files at mode 0755 or 0644 under any umask.",
+    levels: ["unit"],
+  },
+  {
+    id: "F14",
+    implementation: [
+      { file: "native/darwin/src/quit_request.m", symbol: "sp_quit_request_install" },
+      { file: "packages/host/go/src/platform/darwin/termination.go", symbol: "OnQuitRequest" },
+      { file: "packages/host/rust/src/platform/darwin/termination.rs", symbol: "on_quit_request" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/quit_request_test.m", id: "the quit event does not reach applicationShouldTerminate:" },
+    ],
+    expected: "The operating system's quit request runs the host's quit and is answered without an error after the saves, in both hosts.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F21",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) Stop()" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "pub fn stop(&self)" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentStopAcceptsTheAnswerToACloseSentBeforeTheStop" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_stop_accepts_the_answer_to_a_close_sent_before_the_stop" },
+    ],
+    expected: "A persistent service's answer to a close sent before the stop is accepted, and the stop sends close-owner and then shutdown.",
+    levels: ["unit"],
+  },
+  {
+    id: "F22",
+    implementation: [
+      { file: "packages/window-check/repeat.mjs", symbol: "USAGE" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/repeat.test.mjs", id: "repeat prints the diagnostics of each passing run" },
+    ],
+    expected: "The repeat tool's tests run the tool under the FORCE_COLOR they set, without an inherited NO_COLOR, so its output holds no node color warning.",
+    levels: ["unit"],
+  },
+  {
+    id: "F15",
+    implementation: [
+      { file: "packages/host/go/src/endpoint.go", symbol: "already owned by a live process" },
+      { file: "packages/host/rust/src/endpoint.rs", symbol: "already owned by a live process" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/endpoint_test.go", id: "TestEndpointRefusesAHeldLockWithAnotherForm" },
+      { file: "packages/host/rust/tests/endpoint_test.rs", id: "a_held_lock_with_another_form_is_refused_and_kept" },
+    ],
+    expected: "Both hosts refuse a held process.lock whose contents are not the current form, with the same text.",
+    levels: ["unit"],
+  },
+  {
+    id: "V1",
+    implementation: [{ file: "scripts/checklist.mjs", symbol: "checkCompletedItems" }],
+    tests: [{ file: "scripts/test/checklist.test.mjs", id: "checklist permits translated text and linked follow-up identifiers" }],
+    expected: "The canonical English and Korean checklist keeps the same identifiers, nesting, and states, preserves completed scope, and records only evidence-backed completion claims.",
+    levels: ["unit"],
+  },
+  {
+    id: "V2",
+    implementation: [
+      { file: "scripts/check-host-files.mjs", symbol: "auditHostPairs" },
+      { file: "packages/workbench/host.js", symbol: "waitPresented" },
+    ],
+    tests: [
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "host structure audit reports a clean paired-host graph" },
+      { file: "e2e/terminal.test.mjs", id: "a newly split terminal presents its first native raster" },
+    ],
+    expected: "Audit infrastructure and bounded basic surface presentation are complete for both adapters, while uncovered restoration and IME scopes remain open rather than nominally active.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "V4",
+    implementation: [{ file: "e2e/projects.test.mjs", symbol: "two independent project states" }],
+    tests: [{ file: "e2e/projects.test.mjs", id: "two independent project states repeat create-use-close-recreate in one instance" }],
+    expected: "Rebuilt Tauri and Wails repeat independent project creation, visible-surface use, close, registry removal, and recreation in one application instance without manual state compensation.",
+    levels: ["application"],
+  },
+  
+  
+  
+  
+  {
+    id: "F9",
+    implementation: [{ file: "e2e/library.test.mjs", symbol: "restoration connection" }],
+    tests: [{ file: "e2e/library.test.mjs", id: "library windows create and open projects in place" }],
+    expected: "Rebuilt Tauri and Wails library returns report connection, document, raster, and first-presentation phases with explicit failure preservation.",
+    levels: ["application"],
+  },
+  {
+    id: "F1",
+    implementation: [
+      { file: "e2e/terminal.test.mjs", symbol: "three terminals survive repeated divider drags and project returns" },
+    ],
+    tests: [
+      { file: "e2e/terminal.test.mjs", id: "three terminals survive repeated divider drags and project returns" },
+      { file: "e2e/terminal.test.mjs", id: "terminal image follows a window resize" },
+    ],
+    expected: "Current rebuilt Tauri and Wails windows preserve DOM/native containment and shell pixels through divider drags, while terminal resize preserves text, fixed cell metrics, and raster geometry.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F1.3",
+    implementation: [{ file: "e2e/terminal.test.mjs", symbol: "roundTripsPerSet" }],
+    tests: [{ file: "e2e/terminal.test.mjs", id: "three terminals survive repeated divider drags and project returns" }],
+    expected: "Three visible terminals complete six narrow-to-wide-and-back divider round trips in each of three project-return sets, with complete captures, no border intrusion, no white pixels, and no composition failure.",
+    levels: ["application"],
+  },
+  
+  {
+    id: "G1.1",
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "discoverInventory" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "discovery includes nested languages" }],
+    expected: "The inventory discovers nested implementation and test languages without fixed package roots and reports omissions.",
+    levels: ["unit"],
+  },
+  
+  {
+    id: "G1.2-1",
+    implementation: [{ file: "scripts/test-command.mjs", symbol: "timeoutMs" }],
+    tests: [{ file: "scripts/test/test-command.test.mjs", id: "rejects invalid arguments" }],
+    expected: "Invalid supervisor limits fail explicitly and no compatibility timeout path is used.",
+    levels: ["unit"],
+  },
+  {
+    id: "G1.3",
+    implementation: [{ file: "scripts/checklist.mjs", symbol: "checkCompletedItems" }],
+    tests: [{ file: "scripts/test/checklist.test.mjs", id: "checklist preserves completed scope" }],
+    expected: "Checklist translations and completed identifiers remain structurally synchronized and cannot be silently reopened.",
+    levels: ["unit"],
+  },
+  {
+    id: "G1.3-6",
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "auditRecordedInventoryCounts" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "recorded parity counts cannot drift from the current inventory" }],
+    expected: "The inventory record remains synchronized after adding language adapter implementation and test files, while the earlier count remains historical evidence.",
+    levels: ["unit"],
+  },
+  {
+    id: "G1.3-7",
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "auditRecordedInventoryCounts" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "recorded parity counts cannot drift from the current inventory" }],
+    expected: "The inventory record remains synchronized after adding the evidence recorder and its test.",
+    levels: ["unit"],
+  },
+  {
+    id: "G1.3-8",
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "auditFeatureLinks" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "completed capability entries all have feature evidence links" }],
+    expected: "The feature-link and parity self-test record is synchronized with the current completed entries.",
+    levels: ["unit"],
+  },
+  {
+    id: "G4",
+    implementation: [{ file: "scripts/language-test-adapters.mjs", symbol: "runLanguageCases" }],
+    tests: [{ file: "scripts/test/test-language-test-adapters.test.mjs", id: "reports expected and actual test counts without hiding mismatch" }],
+    expected: "Every declared language case is bounded, observable, attributable, and rejects incomplete or mismatched results.",
+    levels: ["unit", "native"],
+  },
+  {
+    id: "G4.1",
+    implementation: [{ file: "scripts/test-command.mjs", symbol: "runCommand" }],
+    tests: [{ file: "scripts/test/test-command.test.mjs", id: "emits ordered start and terminal events" }],
+    expected: "Supervised commands emit attributable start/progress/final events, visible output, bounded failure, and cleanup results.",
+    levels: ["unit"],
+  },
+  {
+    id: "G4.2",
+    implementation: [
+      { file: "scripts/language-test-adapters.mjs", symbol: "runLanguageCases" },
+      { file: "scripts/language-test-cases.json", symbol: "version" },
+    ],
+    tests: [
+      { file: "scripts/test/test-language-test-adapters.test.mjs", id: "discovers all supported language cases" },
+      { file: "scripts/test/test-language-test-manifest.test.mjs", id: "committed language manifest declares one non-empty case" },
+    ],
+    expected: "Each supported language has an attributable bounded case with expected and actual test counts; zero, skipped, failed, crashed, timed-out, or cancelled execution cannot pass.",
+    levels: ["unit", "native"],
+  },
+  {
+    id: "G4.3",
+    implementation: [{ file: "scripts/test-evidence.mjs", symbol: "collectEvidence" }],
+    tests: [{ file: "scripts/test/test-evidence.test.mjs", id: "evidence records content hashes, dirty state, expected/actual result, and retry history" }],
+    expected: "Evidence contains immutable source and process identity snapshots and preserves every retry result.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1.1",
+    implementation: [
+      { file: "packages/host/rust/src/surfaces.rs", symbol: "pub(crate) fn aligned" },
+      { file: "e2e/drag-measurement.mjs", symbol: "assertRoundTrips" },
+    ],
+    tests: [
+      { file: "e2e/outside.test.mjs", id: "native content, cards, and the sidebar rail stay aligned" },
+      { file: "e2e/outside.test.mjs", id: "terminal divider drag does not leave a white surface frame" },
+    ],
+    expected: "A complete divider recording keeps native content inside its card, keeps card and rail geometry aligned, contains no white surface frame, and returns to its initial position.",
+    levels: ["native", "application"],
+  },
+  {
+    id: "F3.3",
+    implementation: [
+      { file: "packages/host/rust/src/documents.rs", symbol: "set_document_appearance" },
+      { file: "packages/host/go/src/documents.go", symbol: "SetDocumentAppearance" },
+    ],
+    tests: [{ file: "e2e/browser.test.mjs", id: "browser documents follow host theme pixels for existing, new, and reloaded documents" }],
+    expected: "Existing, newly split, and reloaded browser documents apply the current host theme before presentation and retain their explicit HTTP(S) location.",
+    levels: ["unit", "native", "application"],
+  },
+  {
+    id: "F3.4",
+    implementation: [
+      { file: "packages/host/rust/src/theme.rs", symbol: "set" },
+      { file: "packages/host/go/src/theme.go", symbol: "SetTheme" },
+    ],
+    tests: [{ file: "e2e/browser.test.mjs", id: "a site's appearance remains independent of the host theme" }],
+    expected: "A local document that fixes its own colour keeps that colour when the host switches light to dark, the region receives the host color scheme, and its URL remains unchanged.",
+    levels: ["application"],
+  },
+  {
+    id: "F3.1",
+    implementation: [
+      { file: "native/darwin/src/document_view.m", symbol: "sp_document_appearance" },
+      { file: "packages/host/rust/src/theme.rs", symbol: "set" },
+      { file: "packages/host/go/src/theme.go", symbol: "SetTheme" },
+    ],
+    tests: [{ file: "native/darwin/tests/document_view_test.m", id: "the document renderer follows the owner's light appearance change" }],
+    expected: "Existing native browser documents follow explicit host dark/light appearance changes on both hosts.",
+    levels: ["native", "application"],
+  },
+  {
+    id: "F3.2",
+    implementation: [
+      { file: "packages/host/rust/src/windows.rs", symbol: "reload_surface_documents" },
+      { file: "packages/host/go/src/windows.go", symbol: "reloadSurfaceDocuments" },
+    ],
+    tests: [{ file: "packages/host/rust/tests/documents_test.rs", id: "documents_reserve_names_and_close_with_their_surface" }],
+    expected: "Restoring a native surface makes its document visible only after the authoritative surface host is ready.",
+    levels: ["unit", "native", "application"],
+  },
+  {
+    id: "F1.2",
+    implementation: [{ file: "e2e/terminal.test.mjs", symbol: "ensureTerminals" }],
+    tests: [{ file: "e2e/terminal.test.mjs", id: "three terminals survive repeated divider drags and project returns" }],
+    expected: "Three terminals retain sessions and presented native regions through repeated divider moves and project returns.",
+    levels: ["application"],
+  },
+  {
+    id: "F1.3-1",
+    implementation: [{ file: "e2e/terminal.test.mjs", symbol: "roundTripsPerSet" }],
+    tests: [{ file: "e2e/terminal.test.mjs", id: "three terminals survive repeated divider drags and project returns" }],
+    expected: "Rapid divider acceptance preserves complete draw transactions, native containment, text, and the declared return matrix.",
+    levels: ["application"],
+  },
+  {
+    id: "G4.1-1",
+    implementation: [{ file: "e2e/normal-shutdown.mjs", symbol: "normal-shutdown" }],
+    tests: [{ file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" }],
+    expected: "Normal shutdown reports bounded process and endpoint disappearance with event-driven progress and no fixed sleep success path.",
+    levels: ["application"],
+  },
+  {
+    id: "G1.4",
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "implementationOwners" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "inventory reports uncovered implementations and tests as separate results" }],
+    expected: "Every discovered implementation and test file has one explicit ownership lane, with duplicate and uncovered ownership rejected.",
+    levels: ["unit"],
+  },
+  {
+    id: "F5",
+    implementation: [
+      { file: "packages/workbench/core-exposure.js", symbol: "registry.command" },
+    ],
+    tests: [
+      { file: "e2e/terminal.test.mjs", id: "terminal cursor policy uses declared settings, persistence, and pixels" },
+      { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
+    ],
+    expected: "Both rebuilt macOS hosts persist declared terminal cursor settings, reject invalid updates, render the effective policy in native pixels, and complete the first raster after a split without a presentation timeout.",
+    levels: ["unit", "native", "application"],
+  },
+  {
+    id: "F6",
+    implementation: [
+      { file: "e2e/terminal.test.mjs", symbol: "terminal file drop pastes quoted paths without executing" },
+    ],
+    tests: [
+      { file: "e2e/terminal.test.mjs", id: "native terminal selection renders and copies through one explicit paste" },
+      { file: "e2e/terminal.test.mjs", id: "terminal file drop pastes quoted paths without executing" },
+      { file: "e2e/terminal.test.mjs", id: "inline image pixels follow scroll, resize, replacement, deletion, and cleanup" },
+    ],
+    expected: "The terminal selection, paste, file-drop, and inline-image contracts are implemented and verified through their unit and rebuilt native-host scenarios without input loss or unintended execution.",
+    levels: ["unit", "native", "application"],
+  },
+  {
+    id: "F6.4",
+    implementation: [
+      { file: "packages/host/rust/src/clipboard.rs", symbol: "pub(crate) fn read" },
+      { file: "packages/host/go/src/clipboard.go", symbol: "func (h *Host) ClipboardRead" },
+    ],
+    tests: [
+      { file: "e2e/terminal.test.mjs", id: "native terminal selection renders and copies through one explicit paste" },
+    ],
+    expected: "Explicit terminal paste preserves text, inserts validated quoted file paths and owned PNG paths exactly once without a newline or automatic execution, and both native hosts preserve typed absent clipboard responses.",
+    levels: ["unit", "native", "application"],
+  },
+  {
+    id: "F6.3-2",
+    implementation: [
+      { file: "native/darwin/src/surface_layout.m", symbol: "surfaceLayoutAfterSettled" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "pub fn presented" },
+      { file: "packages/host/go/src/exposure.go", symbol: "func (s *Surfaces) presented" },
+    ],
+    tests: [
+      { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
+      { file: "e2e/terminal.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
+      { file: "e2e/terminal.test.mjs", id: "three terminals and two browsers keep one view web view each and one terminal service" },
+    ],
+    expected: "A native settle failure is returned as an explicit callback error instead of being converted into a generic 1005 timeout, and fresh Tauri/Wails split regressions remain usable afterward.",
+    levels: ["native", "application"],
+  },
+  {
+    id: "F6.3-3",
+    implementation: [
+      { file: "packages/host/rust/src/surfaces.rs", symbol: "pub async fn present" },
+      { file: "native/darwin/src/surface_layout.m", symbol: "surfaceLayoutCancel" },
+    ],
+    tests: [
+      { file: "e2e/terminal.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
+    ],
+    expected: "A Tauri presentation failure cancels the open native layout transaction and the next split remains usable; the bounded regression reports START/PASS and exits cleanly.",
+    levels: ["native", "application"],
+  },
+  {
+    id: "F6.3-8",
+    implementation: [
+      { file: "packages/host/rust/src/images.rs", symbol: "pub fn handle_envelope_with_recovery" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn decide_image_envelope" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/images_test.rs", id: "missing_native_surface_requests_a_fresh_raster_configuration" },
+      { file: "packages/host/rust/tests/images_test.rs", id: "frame_detached_before_main_thread_presentation_is_reported_as_stale" },
+      { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
+      { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
+      { file: "e2e/terminal.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
+      { file: "e2e/terminal.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
+    ],
+    expected: "A missing IOSurface requests a fresh raster configuration, a detached frame is reported as explicit stale invalidation, and a rebuilt single-process Tauri host passes new, four, repeated, and failure-recovery split cases without a presentation error.",
+    levels: ["unit", "application"],
+  },
+  
+  
+  {
+    id: "F8",
+    implementation: [
+      { file: "native/darwin/src/image_region.m", symbol: "- (void)commitPending" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_region_ime_test.m", id: "image region: Backspace during a composition edits it to 하 without PTY input" },
+      { file: "native/darwin/tests/image_region_ime_test.m", id: "image region: Enter commits the edited syllable once and is reported after it" },
+      { file: "e2e/activation/ime.test.mjs", id: "a Korean syllable typed right after an input-source switch reaches the PTY once" },
+    ],
+    expected: "The image-region client commits its local marked buffer once before following input, while Backspace can edit the current composition without sending a PTY key. The real-input-source result remains separately verified by its activation case.",
+    levels: ["native", "application"],
+  },
+  {
+    id: "F6.5",
+    implementation: [
+      { file: "native/darwin/src/webview_geometry.m", symbol: "SPFileDropView" },
+      { file: "packages/workbench/core-exposure.js", symbol: "dropFiles" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/exposure.test.mjs", id: "a surface drop names a command declared in the manifest's exposes" },
+      { file: "e2e/terminal.test.mjs", id: "terminal file drop pastes quoted paths without executing" },
+      { file: "e2e/real/terminal.test.mjs", id: "a real Finder drag of a file and of an image pastes their quoted paths without executing" },
+    ],
+    expected: "A file dropped on a window reaches the native file drop view, which sends path URLs and the drop point; the page runs the drop command that the plugin of the surface under the point declares, and the terminal validates local URLs, shell-quotes all paths, and sends one non-executing paste; unsupported and malformed drops remain explicit errors on both rebuilt hosts.",
+    levels: ["unit", "application"],
+  },
+  
+  
+  {
+    id: "F10",
+    implementation: [
+      { file: "packages/host/rust/src/modals.rs", symbol: "pub fn show" },
+      { file: "packages/host/go/src/modals.go", symbol: "OverlayShow" },
+      { file: "packages/workbench/compositor.js", symbol: "placementPending" },
+    ],
+    tests: [
+      { file: "e2e/modal.test.mjs", id: "add and split menus are transparent and have no backdrop" },
+      { file: "e2e/modal.test.mjs", id: "settings blocks background input and closes only through its close button" },
+      { file: "e2e/modal.test.mjs", id: "moving settings and resizing the parent preserves its native coverage" },
+    ],
+    expected: "Both rebuilt hosts preserve the existing transparent picker and semi-transparent settings modal contract through focus, dismissal, movement, resize, reload, and deferred geometry verification.",
+    levels: ["native", "application"],
+  },
+  {
+    id: "F10.1",
+    implementation: [{ file: "packages/host/rust/src/modals.rs", symbol: "pub fn show" }],
+    tests: [{ file: "e2e/modal.test.mjs", id: "settings blocks background input and closes only through its close button" }],
+    expected: "Tauri picker and settings modals preserve transparent picker paint, semi-transparent settings coverage, input blocking, focus, resize, and cleanup.",
+    levels: ["application"],
+  },
+  {
+    id: "F10.2",
+    implementation: [{ file: "packages/host/go/src/modals.go", symbol: "OverlayShow" }],
+    tests: [{ file: "e2e/modal.test.mjs", id: "add and split menus are transparent and have no backdrop" }],
+    expected: "Wails uses the same hidden transparent child-webview modal contract and reports ready, focus, coverage, resize, and cleanup.",
+    levels: ["application"],
+  },
+  {
+    id: "F10.3",
+    implementation: [{ file: "packages/host/rust/src/modals.rs", symbol: "pub fn hide" }],
+    tests: [
+      { file: "e2e/modal.test.mjs", id: "add and split menus are transparent and have no backdrop" },
+      { file: "e2e/modal.test.mjs", id: "settings blocks background input and closes only through its close button" },
+    ],
+    expected: "A replacement native modal retains child-WebView focus; both rebuilt hosts preserve transparent picker paint, the settings scrim and blur, input blocking, dismissal, focus return, stale ordering, reload, movement, and resize.",
+    levels: ["native", "application"],
+  },
+  {
+    id: "F10.4",
+    implementation: [
+      { file: "packages/host/go/src/modals.go", symbol: "OverlayShow" },
+      { file: "packages/workbench/compositor.js", symbol: "placementPending" },
+      { file: "packages/workbench/verify.js", symbol: "placementPending" },
+    ],
+    tests: [
+      { file: "e2e/modal.test.mjs", id: "moving settings and resizing the parent preserves its native coverage" },
+      { file: "packages/workbench/test/compositor.test.mjs", id: "a layout published before drawing waits for the host's placement answer" },
+    ],
+    expected: "The rebuilt Wails host completes the full modal lifecycle and the verifier explicitly defers V7/V10/R geometry decisions until the native placement answer is seated.",
+    levels: ["native", "application"],
+  },
+  {
+    id: "F250",
+    implementation: [
+      { file: "packages/plugin-api/operation.js", symbol: "export function createOperationCids" },
+      { file: "packages/plugin-api/view.js", symbol: "beginOperation" },
+      { file: "packages/workbench/view-calls.js", symbol: "export async function answerViewCall" },
+      { file: "packages/workbench/exposure.js", symbol: "const commandRequest" },
+      { file: "packages/host/go/src/documents.go", symbol: "func ViewCallEvent" },
+      { file: "packages/host/rust/src/documents.rs", symbol: "fn cause_cids_of" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/view-operations-contract.test.mjs", id: "view.operation.begin-logs-first-event-and-carries-cids" },
+      { file: "packages/plugin-api/test/view-commands-contract.test.mjs", id: "view.commands.run-passes-cids-to-handler" },
+      { file: "packages/plugin-api/test/exposure.test.mjs", id: "a command run hands the cids of its cause to the handler as its context, and refuses a list a line cannot hold" },
+      { file: "packages/workbench/test/view-calls.test.mjs", id: "a call that carries the cids of its cause hands them to the command of its plugin" },
+      { file: "packages/workbench/test/view-calls.test.mjs", id: "a core command call that carries the cids of its cause hands them to runCore" },
+      { file: "packages/workbench/test/app-update.test.mjs", id: "the release page of a command that carries the cids of its cause opens it with those cids" },
+      { file: "packages/host/go/src/surfaces_test.go", id: "TestViewCallCarriesTheCidsOfItsCause" },
+      { file: "packages/host/rust/tests/documents_test.rs", id: "view_call_request_carries_the_cids_of_its_cause_and_refuses_invalid_ones" },
+    ],
+    expected: "A view starts an operation whose identifiers are in the page form and whose first event carries them, and a command call of the view reaches its plugin command or its core command with those identifiers, which the core command passes to its host call; both hosts forward the cids of a view call and refuse a list that a log line cannot hold.",
+    levels: ["unit"],
+  },
+  {
+    id: "V5",
+    implementation: [{ file: "packages/soksak/scripts/check-breaks.mjs", symbol: "run" }],
+    tests: [{ file: "scripts/test/soksak-scripts.test.mjs", id: "break inventory lists only requested, known entries" }],
+    expected: "The break audit runs each test file with a 20-second deadline in isolated parallel copies, reports progress, and catches all 142 declared breaks without an aggregate timeout or silent result.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-38",
+    implementation: [
+      { file: "packages/sok/go/src/log_policy.go", symbol: '"host.test.start", "host.test.end"' },
+      { file: "packages/sok/rust/src/event_log.rs", symbol: '"host.test.start"' },
+      { file: "packages/host/go/src/test_mark.go", symbol: "func EmitTestMark" },
+      { file: "packages/host/rust/src/test_mark.rs", symbol: "pub fn emit_test_mark" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/test_mark_test.go", id: "TestATestMarkIsAnEventAndTheReplyNamesItsPosition" },
+      { file: "packages/host/go/tests/test_mark_test.go", id: "TestATestMarkIsStoredWhenLifecycleIsOff" },
+      { file: "packages/host/rust/tests/test_mark_test.rs", id: "a_test_mark_is_an_event_and_the_reply_names_its_position" },
+      { file: "packages/host/rust/tests/test_mark_test.rs", id: "a_test_mark_is_stored_when_lifecycle_is_off" },
+    ],
+    expected: "Both hosts store and flush host.test.start and host.test.end at info under lifecycle=error and lifecycle=off, return their event positions, and still gate ordinary lifecycle/info records.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-40-1",
+    implementation: [{ file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) processPersistent" }],
+    tests: [{ file: "packages/host/go/src/sidecar_reply_test.go", id: "TestAZeroHelloTimeoutIsRefusedBeforeAServiceStarts" }],
+    expected: "The Wails persistent-service start refuses a zero HelloTimeout before starting a service, and its owning test calls the current processPersistent function signature and checks that error.",
+    levels: ["unit"],
+  },
+  {
+    id: "F263",
+    implementation: [
+      { file: "packages/workbench/host.js", symbol: "while (reply !== themeReply)" },
+      { file: "packages/workbench/host.js", symbol: 'async function syncSurfaces(request, surfaceModules, declarationBytes)' },
+    ],
+    tests: [
+      { file: "packages/workbench/test/host-theme-placement.test.mjs", id: "view placement waits for the latest host theme reply" },
+      { file: "packages/workbench/test/host-theme-placement.test.mjs", id: "view placement rechecks the theme after its reply continuation" },
+      { file: "packages/workbench/test/host-theme-placement.test.mjs", id: "a failed theme reply refuses view placement and reports the host error" },
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "the start document draws the project synchronously while the host theme reply is pending" },
+    ],
+    expected: "View placement waits for the latest host theme reply and refuses placement when that reply fails, while the start document keeps its synchronous first DOM draw.",
+    levels: ["unit"],
+  },
+  {
+    id: "F264",
+    implementation: [
+      { file: "scripts/check-versions.mjs", symbol: 'export const RELEASE = "' },
+    ],
+    tests: [
+      { file: "scripts/test/versions.test.mjs", id: "every declared workspace version is the release candidate" },
+      { file: "scripts/test/versions.test.mjs", id: "workspace Cargo.lock package versions match the release candidate" },
+    ],
+    expected: "The tracked version tests audit workspace manifests and Cargo.lock against the release candidate.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-12",
+    implementation: [{ file: "e2e/activation/terminal-ime-visual.mjs", symbol: "export function validateRenderMetadata(" }],
+    tests: [
+      { file: "e2e/test/activation/terminal-ime-visual.test.mjs", id: "renderer geometry is frame-bound and rejects unsupported pixel layouts" },
+      { file: "e2e/test/activation/terminal-ime-visual.test.mjs", id: "producer-shaped overlay metadata preserves effective colors and blink-off cursor state" },
+    ],
+    expected: "The visual calculator validates the producer screen.render metadata and its distinct capture pixel format, effective glyph colors, fractional geometry, and blink-off cursor representation.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-13",
+    implementation: [
+      { file: "e2e/activation/terminal-ime-visual.mjs", symbol: "export function mapCaptureRaster(" },
+      { file: "e2e/activation/terminal-ime-visual.mjs", symbol: "export function measureRenderedCell(" },
+    ],
+    tests: [{ file: "e2e/test/activation/terminal-ime-visual.test.mjs", id: "raw glyph ink bounds preserve signed overhang and clip only to the raster" }],
+    expected: "Signed glyph and underline bounds retain their source coordinates, map through capture raster origin, and clip only to the raster while rejecting mismatched frame provenance.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-14",
+    implementation: [{ file: "e2e/activation/terminal-ime-visual.mjs", symbol: "export function validateRenderMetadata(" }],
+    tests: [{ file: "e2e/test/activation/terminal-ime-visual.test.mjs", id: "producer-shaped overlay metadata preserves effective colors and blink-off cursor state" }],
+    expected: "Cursor rectangle and color metadata are required only when the producer draws the cursor, including normal and difference blend rules.",
+    levels: ["unit"],
+  },
+  {
+    id: "F268",
+    implementation: [
+      { file: "packages/plugin-api/contract/screen-hash.json", symbol: "screen.message.frame-preedit" },
+      { file: "packages/plugin-api/contract/screen-hash.json", symbol: "screen.hash.frame-preedit.sha256" },
+      { file: "packages/plugin-api/screen-hash.js", symbol: "export function applyScreenMessage(" },
+    ],
+    tests: [{ file: "packages/plugin-api/test/screen-hash-contract.test.mjs", id: "screenHash frame and preedit message pairs with its projected screen hash" }],
+    expected: "The public SDK fixture pairs a non-null-frame preedit message with the exact projected screen used as its published hash input.",
+    levels: ["unit"],
+  },
+  {
+    id: "F269",
+    implementation: [
+      { file: "packages/plugin-api/contract/screen-hash.json", symbol: "screen.hash.letter-x-hidden-cursor.sha256" },
+      { file: "packages/plugin-api/screen-hash.js", symbol: "export async function screenHash(" },
+      { file: "packages/plugin-api/screen-hash.js", symbol: "export function applyScreenMessage(" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/screen-hash-contract.test.mjs", id: "screenHash publishes one unique hash input for each valid message projection" },
+      { file: "packages/plugin-api/test/screen-hash-contract.test.mjs", id: "screenHash frame and preedit message pairs with its projected screen hash" },
+    ],
+    expected: "Every valid screen-message projection has exactly one matching published hash input, and the core recomputes each digest from the projected screen.",
+    levels: ["unit"],
+  },
+  {
+    id: "F270",
+    implementation: [{ file: "scripts/check-app-tests.mjs", symbol: "export function auditE2ESource(" }],
+    tests: [
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "window-source audit accepts a Promise reject forwarded through a local timeout helper" },
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "window-source audit keeps a local helper's rejection bound to its definition scope" },
+    ],
+    expected: "The E2E source audit recognizes Promise rejection forwarded through local timeout helpers while preserving lexical binding and rejection-scope checks.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-15",
+    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function terminalObserverStatusesMatch(" }],
+    tests: [{ file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "a fresh compose and cursor update can use unchanged known PTY rows" }],
+    expected: "The terminal observer accepts a fresh semantic composition update against unchanged known PTY rows while checking the current cursor state.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-16",
+    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export async function startTerminalStatusObserver(" }],
+    tests: [
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "a managed cursor until releases the observer's raw cursor watch" },
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "focus waits on the existing raw status stream after reference handoff" },
+    ],
+    expected: "The terminal status observer retains ownership of its raw status subscriptions while the consumer waits for cursor focus after the reference handoff.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-17",
+    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function indexFrameStatus(" }],
+    tests: [
+      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "indexes an advanced cursor frame against prior rows when identical rows suppress screen status" },
+      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "rejects future rows but reuses identical rows across a frame generation change" },
+    ],
+    expected: "Visual status indexing associates a cursor frame with the valid preceding screen rows even when identical rows suppress a new screen event, and rejects future row state.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-18",
+    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function selectCoherentTerminalObservation(" }],
+    tests: [
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "returns the latest coherent reread and its accepted event slice" },
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "does not select a terminal observation before reread and presentation are coherent" },
+    ],
+    expected: "The selected terminal observation is the latest coherent reread, screen, region and accepted event slice; an incoherent earlier read is not returned.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-19",
+    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function planVisualStage(" }],
+    tests: [
+      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "stage planning accepts prior base rows with the exact current overlay frame" },
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "requires coherent base screen presentation without equating a later overlay frame" },
+    ],
+    expected: "Visual stages retain the exact cursor overlay frame and use prior base-screen rows without requiring those distinct frames to have equal sequence identities.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-20",
+    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export async function waitForTerminalStage(" }],
+    tests: [
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "waits for the seven-vowel Backspace document after a coherent eight-vowel intermediate" },
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "keeps notifications that arrive after the first status wakes the input stage" },
+    ],
+    expected: "The stage waits for the same-window AppKit document after each input instead of accepting an earlier coherent intermediate state.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-23",
+    implementation: [{ file: "native/darwin/src/image_region.m", symbol: "- (void)drawRect:(NSRect)dirtyRect" }],
+    tests: [
+      { file: "native/darwin/tests/image_region_decoration_test.m", id: "the native input view paints no blue marked-text underline" },
+      { file: "native/darwin/tests/image_region_decoration_test.m", id: "repeated input paints no blue native underline pixels" },
+      { file: "native/darwin/tests/image_region_decoration_test.m", id: "the offscreen image-region composite shows the sidecar sentinel at the image-layer center" },
+    ],
+    expected: "The native input document paints no marked-text underline while retaining the sidecar image in the offscreen region composite and preserving composition state.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-47-25",
+    implementation: [{ file: "native/darwin/src/image_region.m", symbol: "- (void)publishInput" }],
+    tests: [
+      { file: "native/darwin/tests/image_region_input_transaction_test.m", id: "one physical key publishes one input transaction" },
+      { file: "native/darwin/tests/image_region_input_transaction_test.m", id: "insert and deleteBackward command remain ordered in one transaction" },
+      { file: "native/darwin/tests/image_region_input_transaction_test.m", id: "post-error callback is rejected without buffer mutation" },
+    ],
+    expected: "One physical input scope publishes ordered actions and one final strict preedit snapshot, and callbacks after a latched error cannot mutate it.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-47-26",
+    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function terminalInputReceiptMatches(" }],
+    tests: [
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "one terminal input request acknowledges a committed character key" },
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "input transaction validation checks every action and correlation identifier" },
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "native report and terminal request preserve actions, preedit and CID" },
+    ],
+    expected: "The acceptance consumer matches current native input transactions and the single corresponding terminal request using ordered actions, final preedit and correlation identity.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-27",
+    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "function strictAction(value, label)" }],
+    tests: [
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "native and terminal transactions preserve the ordered focus action" },
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "focus-only transactions do not acknowledge a key from retained preedit" },
+    ],
+    expected: "The strict input transaction reader preserves ordered focus actions and does not count focus-only events as character-key receipts.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-28",
+    implementation: [{ file: "native/darwin/src/image_region.m", symbol: "- (void)handleSetMarkedText:(id)string selectedRange:(NSRange)selectedRange replacementRange:(NSRange)replacementRange" }],
+    tests: [{ file: "native/darwin/tests/image_region_input_transaction_test.m", id: "invalid marked replacement and later callback are explicitly rejected without mutation" }],
+    expected: "A setMarkedText replacement outside the owned marked buffer is rejected before mutation, and later callbacks in that input scope are rejected without changing the buffer.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-47-29",
+    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "function strictTraceSequence(value, label)" }],
+    tests: [{ file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "zero-based input trace sequence keeps the native report before its terminal request" }],
+    expected: "The input trace accepts a zero-based native sequence followed by its later terminal request and rejects invalid or non-increasing sequence numbers.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-30-1",
+    implementation: [
+      { file: "native/darwin/src/window_facts.m", symbol: "sp_window_color_space_facts(void *handle)" },
+      { file: "packages/host/go/src/diagnostics.go", symbol: "diagnostics.native.window-color-space" },
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "native_window_color_space(window)" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/window_facts_test.m", id: "the one-shot facts report the actual AppKit color space and ICC digest without changing it" },
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestNativeWindowColorSpaceMethodIsDeclared" },
+      { file: "packages/host/rust/src/endpoint.rs", id: "diagnostics.native-window-color-space.reports-appkit-profile" },
+    ],
+    expected: "The diagnostic query reports the actual AppKit color-space name and ICC fingerprint without changing the host window's color policy.",
+    levels: ["native", "unit"],
+  },
+  {
+    id: "F239-47-40-1",
+    implementation: [
+      { file: "native/darwin/src/capture_frame_identity.m", symbol: "sp_capture_frame_identity_encode(" },
+      { file: "native/darwin/src/capture_frame_identity.m", symbol: "sp_capture_frame_identity_decode(" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/capture_frame_identity_test.m", id: "local CPU decoder decodes the exact issued nonce and source identity" },
+      { file: "native/darwin/tests/capture_frame_identity_test.m", id: "a complete target code decodes when a second QR code is outside the expected ROI" },
+      { file: "native/darwin/tests/capture_frame_identity_test.m", id: "QR modules use integer pixel blocks surrounded by four white quiet modules" },
+      { file: "native/darwin/tests/capture_frame_identity_test.m", id: "an odd-sized ROI centers integer QR modules and the complete quiet zone on pixel boundaries" },
+      { file: "native/darwin/tests/capture_frame_identity_test.m", id: "mutating the returned raster cannot mutate the immutable image backing" },
+      { file: "native/darwin/tests/capture_frame_identity_test.m", id: "canonical uint64 maximum values decode without overflow or coercion" },
+    ],
+    expected: "The opt-in native helper encodes and decodes the exact issued source identity inside one top-left ROI, using integer QR modules and a four-module quiet zone, preserving bytes and color metadata, and returning immutable raster data. It does not change exact matching or capture cadence.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-47-40-3",
+    implementation: [
+      { file: "native/darwin/src/capture.m", symbol: "bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut)" },
+      { file: "packages/host/go/src/diagnostics.go", symbol: "func parseCaptureStartOptions(params json.RawMessage)" },
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "frame_identity = match params.get(\"frameIdentity\")" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/support/capture_boundary.m", id: "identity capture without a prepared target is rejected" },
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestCaptureStartOptionsParseFrameIdentity" },
+      { file: "packages/host/rust/tests/recording_test.rs", id: "recording_start_forwards_frame_identity" },
+    ],
+    expected: "The diagnostic start option is strictly boolean and defaults off; both hosts pass it through, and native capture rejects identity mode until its implementation is available.",
+    levels: ["native", "unit"],
+  },
+  {
+    id: "F239-47-30-2",
+    implementation: [{ file: "scripts/check-hosts-same.mjs", symbol: "export function goEndpointMethods(" }],
+    tests: [{ file: "scripts/test/check-hosts-same.test.mjs", id: "hyphenated diagnostic endpoint methods are read from both hosts" }],
+    expected: "The host parity parser recognizes a declared diagnostic method containing hyphens in both Go and Rust host sources.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-30-3",
+    implementation: [
+      { file: "native/darwin/src/capture.m", symbol: "- (void)startDisplayLinkObservationForWindowNumber:(long)windowNumber" },
+      { file: "native/darwin/src/capture.m", symbol: "- (void)recordDisplayLinkTimestamp:(double)timestamp targetTimestamp:(double)targetTimestamp duration:(double)duration" },
+      { file: "native/darwin/src/capture.m", symbol: "static bool finalizeCaptureArtifacts(SPCapture *sink)" },
+      { file: "packages/host/go/src/diagnostics.go", symbol: "func captureStopPayload(" },
+      { file: "packages/host/rust/src/recording.rs", symbol: "pub fn stop_payload(" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/capture_metadata_test.m", id: "finalization reports an explicit unavailable display-link trace when no observation was recorded" },
+      { file: "native/darwin/tests/capture_metadata_test.m", id: "the finalized display-link trace preserves ordered timestamps, raw callback clock, timebase, and window state" },
+      { file: "native/darwin/tests/capture_metadata_test.m", id: "hidden and off-display observations remain recorded but cannot claim available refresh coverage" },
+      { file: "native/darwin/tests/capture_metadata_test.m", id: "the display-link trace records its 4096 bound, omitted count, incomplete state, and explicit error" },
+      { file: "native/darwin/tests/capture_resize_test.m", id: "stopping the capture invalidates its retained display link" },
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestCaptureStopPayloadReportsNormalFrameLimit" },
+      { file: "packages/host/rust/tests/recording_test.rs", id: "the_stop_payload_reports_a_normal_frame_limit" },
+    ],
+    expected: "A capture records bounded, validated AppKit display-link observations separately from ScreenCaptureKit callbacks and publishes the artifact path in both host stop payloads; hidden or missing observations are unavailable, overflow is explicitly incomplete, and the trace does not identify or prove presentation of a source frame.",
+    levels: ["native", "unit"],
+  },
+  {
+    id: "F239-47-31",
+    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function terminalStageEvents(events, stageOffset)" }],
+    tests: [{ file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "a status notification delivered during a sample satisfies the sample's original event offset" }],
+    expected: "A status notification that arrives after the first event wakes a wait remains in the current physical-key stage using its original event offset.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-35",
+    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function initialCursorFrameMatchesScreen(cursor, screen)" }],
+    tests: [
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "initial cursor baseline requires the accepted screen frame" },
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "initial cursor baseline accepts null render only for the accepted screen frame" },
+    ],
+    expected: "The initial cursor matches the accepted screen frame exactly; null renderer metadata is allowed, and present renderer metadata must identify that same frame.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-60",
+    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export async function observeTerminalBaseline" }],
+    tests: [
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "the initial terminal baseline observes a frame advanced during its read" },
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "a failed initial baseline stops its observer and preserves the read error" },
+    ],
+    expected: "The terminal observer is active before baseline reads can advance the frame, and a failed baseline read stops the observer while preserving its error.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-53",
+    implementation: [{ file: "packages/window-check/app.mjs", symbol: "async click(x, y)" }],
+    tests: [
+      { file: "packages/window-check/test/pointer-presses.test.mjs", id: "a high-level click waits for an already-held button before pressing" },
+      { file: "packages/window-check/test/pointer-presses.test.mjs", id: "a high-level click waits for a button released between its press and release" },
+    ],
+    expected: "A high-level native click waits for the host to report no pressed buttons before its down and up phases.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-40-5",
+    implementation: [{ file: "packages/host/go/src/documents.go", symbol: "func (s *Surfaces) ViewMessage" }],
+    tests: [
+      { file: "packages/host/go/src/view_call_record_test.go", id: "TestViewCallAndReplyAreRecordedAtDebugWithTheirIdentifier" },
+      { file: "packages/host/go/src/view_error_test.go", id: "TestViewErrorMessageIsWrittenOnTheErrorDisplayPathWithItsView" },
+    ],
+    expected: "Wails view call, reply and view.error records use the current declared-view generation and are observed through ViewMessage.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-40-6",
+    implementation: [
+      { file: "packages/host/go/src/projects.go", symbol: "func (h *Host) ProjectShown(" },
+      { file: "packages/host/go/src/projects.go", symbol: "type ProjectShown struct" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/projects_test.go", id: "TestProjectShownDecodesStandardArguments" },
+      { file: "packages/host/go/tests/arguments_test.go", id: "TestEveryBindingDecodesItsArgumentsFirst" },
+    ],
+    expected: "Wails ProjectShown arguments use the standard host decoder, keep explicit null projects, and ignore undeclared fields.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-40-7",
+    implementation: [
+      { file: "packages/host/rust/src/windows.rs", symbol: "pub struct ProjectShown" },
+      { file: "packages/host/rust/src/windows.rs", symbol: "struct ShownProject" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/project_data_order/project_data_order_test.rs", id: "project_shown_ignores_unknown_outer_fields" },
+      { file: "packages/host/rust/tests/project_data_order/project_data_order_test.rs", id: "shown_project_ignores_unknown_nested_fields" },
+    ],
+    expected: "Tauri ProjectShown and ShownProject ignore undeclared fields as required by the shared host-call contract.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-55",
+    implementation: [{ file: "e2e/run.mjs", symbol: "export function runE2E(" }],
+    tests: [
+      { file: "e2e/test/run.test.mjs", id: "runE2E rejects missing or partial metadata before injected operations" },
+      { file: "e2e/test/run.test.mjs", id: "run requires both run metadata values before child start" },
+      { file: "e2e/test/run.test.mjs", id: "run forwards valid run metadata unchanged" },
+    ],
+    expected: "The E2E runner requires both nonempty run metadata values before starting a child, and forwards a valid pair unchanged.",
+    levels: ["unit"],
+  },
+  {
+    id: "F292-39",
+    implementation: [{ file: "packages/window-check/app.mjs", symbol: "export async function open(t, app)" }],
+    tests: [
+      { file: "packages/window-check/test/session-frontmost.test.mjs", id: "a frontmost change to another application during a check does not reject the check result" },
+    ],
+    expected: "A window check neither reads nor changes the frontmost application, so a frontmost change during a check does not reject its result.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-57",
+    implementation: [{ file: "native/darwin/process-identity/tests/package.test.mjs", symbol: "function runNativeTarget" }],
+    tests: [
+      { file: "scripts/test/node-tests.test.mjs", id: "the native process identity package exposes its owning tests through Node discovery" },
+      { file: "native/darwin/process-identity/tests/package.test.mjs", id: "the native process identity test target passes" },
+      { file: "native/darwin/process-identity/tests/package.test.mjs", id: "the native package relocation test target passes" },
+    ],
+    expected: "The workspace discovers a Node test entrypoint that delegates each native process identity test to its existing owner target and preserves each target's result.",
+    levels: ["unit", "native"],
+  },
+  {
+    id: "F239-48-3-13",
+    implementation: [
+      { file: "packages/sok/go/src/platform/platform.go", symbol: "type Platform interface" },
+      { file: "packages/sok/go/src/platform/darwin/process.go", symbol: "func (darwin) PrepareLogDirectory" },
+      { file: "packages/sok/go/src/platform/linux/process.go", symbol: "func (linux) PrepareLogDirectory" },
+      { file: "packages/sok/go/src/platform/windows/unsupported.go", symbol: "func (windows) PrepareLogDirectory" },
+      { file: "packages/sok/go/src/event_log.go", symbol: "func StartEventLog" },
+      { file: "packages/sok/go/src/ownership.go", symbol: "func ownConfiguration" },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/event_log_test.go", id: "TestEventLogUsesRegisteredPlatformFileOperations" },
+      { file: "packages/sok/go/tests/event_log_test.go", id: "TestEventLogStartupReportsRegisteredPlatformPrepareError" },
+      { file: "packages/sok/go/tests/ownership_test.go", id: "TestConfigurationOwnershipUsesPrivateProcessLockOperation" },
+      { file: "packages/sok/go/tests/ownership_test.go", id: "TestConfigurationOwnershipReportsPrivateProcessLockFailure" },
+      { file: "packages/sok/go/tests/platform/darwin/private_files_test.go", id: "TestPrepareLogDirectoryCreatesAndRestrictsDirectory" },
+      { file: "packages/sok/go/tests/platform/darwin/private_files_test.go", id: "TestCreateLogFileIsNewAndOwnerOnly" },
+      { file: "packages/sok/go/tests/platform/darwin/private_files_test.go", id: "TestAppendLogFileCreatesOwnerOnlyAndPreservesExistingMode" },
+      { file: "packages/sok/go/tests/platform/darwin/private_files_test.go", id: "TestOpenProcessLockFileCreatesOwnerOnlyAndPreservesExistingMode" },
+      { file: "packages/sok/go/tests/platform/linux/private_files_test.go", id: "TestPrepareLogDirectoryCreatesAndRestrictsDirectory" },
+      { file: "packages/sok/go/tests/platform/linux/private_files_test.go", id: "TestCreateLogFileIsNewAndOwnerOnly" },
+      { file: "packages/sok/go/tests/platform/linux/private_files_test.go", id: "TestAppendLogFileCreatesOwnerOnlyAndPreservesExistingMode" },
+      { file: "packages/sok/go/tests/platform/linux/private_files_test.go", id: "TestOpenProcessLockFileCreatesOwnerOnlyAndPreservesExistingMode" },
+      { file: "packages/sok/go/tests/platform/windows/private_files_test.go", id: "TestPrivateFileOperationsFailExplicitlyWithoutCreatingFiles" },
+    ],
+    expected: "The Wails CLI routes event-log directory/file and process-lock creation through its platform interface; Darwin and Linux enforce the Unix private modes, and Windows rejects these operations before creating their paths.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-10",
+    implementation: [{ file: "e2e/activation/terminal-ime-visual.mjs", symbol: "export function validateRenderMetadata" }],
+    tests: [{ file: "e2e/test/activation/terminal-ime-visual.test.mjs", id: "renderer geometry is frame-bound and rejects unsupported pixel layouts" }],
+    expected: "Renderer metadata is accepted only when its geometry and pixel layout belong to the measured frame.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-61",
+    implementation: [
+      { file: "packages/host/rust/src/platform/platform.rs", symbol: "pub struct ImagePresentation" },
+      { file: "packages/host/rust/src/documents.rs", symbol: "struct ViewAttachment" },
+    ],
+    tests: [{ file: "packages/host/rust/src/images_test.rs", id: "presenting_a_frame_notifies_after_its_identity_is_current" }],
+    expected: "Image presentation and view attachment use named Rust contract types, and frame notification follows current identity registration.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-62",
+    implementation: [
+      { file: "scripts/check-events.mjs", symbol: "export function installedSidecarCatalogs(directory)" },
+      { file: "packages/plugin-api/index.js", symbol: "export function validateSidecar(sidecar)" },
+    ],
+    tests: [
+      { file: "scripts/test/check-events.test.mjs", id: "the catalogs of the installed sidecars are read from the folders that installed.json records" },
+      { file: "scripts/test/audit-run.test.mjs", id: "the events of a sidecar installed in a configuration folder of the run are audited against its catalog" },
+    ],
+    expected: "Installed-sidecar fixtures satisfy the manifest contract so catalog discovery and event auditing reach their intended assertions.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-63",
+    implementation: [{ file: "scripts/check-e2e-host-parity.mjs", symbol: "export function auditE2EHostParity" }],
+    tests: [{ file: "scripts/test/e2e-host-parity.test.mjs", id: "every application E2E suite runs the same scenario through both adapters" }],
+    expected: "Application E2E scenarios are explicitly classified for both host adapters.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-64",
+    implementation: [{ file: "packages/workbench/surface-modules.js", symbol: "export function mountSurface" }],
+    tests: [{ file: "packages/workbench/test/surface-view.test.mjs", id: "a page-start view waits for the initial project context and a disposed preview cannot declare composition" }],
+    expected: "A preview view waits for project context and a disposed preview cannot declare its composition.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-65",
+    implementation: [{ file: "e2e/run.mjs", symbol: "export function runE2E(" }],
+    tests: [{ file: "e2e/test/run.test.mjs", id: "run forwards valid run metadata unchanged" }],
+    expected: "The E2E runner resolves its module entrypoint independently of the caller working directory and forwards valid run metadata.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-66",
+    implementation: [{ file: "packages/workbench/surface-modules.js", symbol: "export function mountSurface" }],
+    tests: [{ file: "packages/workbench/test/host-chrome.test.mjs", id: "native view placement waits for current-page composition readiness" }],
+    expected: "Native view placement waits for the current page composition before presenting a view.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-67",
+    implementation: [{ file: "packages/workbench/error-text.js", symbol: "export function errorText(error)" }],
+    tests: [{ file: "packages/workbench/test/plugin-operations.test.mjs", id: "a structured starter failure keeps its code and data in operation, log, and display" }],
+    expected: "Structured starter failures preserve their code and data in operation status, logs, and displayed text.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-69",
+    implementation: [{ file: "native/darwin/src/observe.m", symbol: "sp_observe_timer(" }],
+    tests: [{ file: "native/darwin/tests/input_reference_test.m", id: "the wait timer registration and delivery are recorded" }],
+    expected: "The input-reference timeout is registered and its timer delivery is recorded before the handler runs.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-70",
+    implementation: [
+      { file: "native/darwin/src/image_region.m", symbol: "- (void)commitPending {" },
+      { file: "native/darwin/tests/capture_checker_test.m", symbol: "captureAcceptanceMain" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_region_decoration_test.m", id: "unmark and Enter-equivalent command transactions commit marked text once, retain newline, and finish clean" },
+      { file: "native/darwin/tests/capture_checker_test.m", id: "capture acceptance rejects a positive frame count with a stop error" },
+    ],
+    expected: "Input commits preserve marked text and newline exactly once, and capture acceptance rejects a positive frame count when stop reports an error.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-75",
+    implementation: [{ file: "e2e/capture-frame-identity.test.mjs", symbol: "const targetCard = terminalCards[0];" }],
+    tests: [{ file: "e2e/capture-frame-identity.test.mjs", id: "opt-in capture identity matches the presented terminal image" }],
+    expected: "The opt-in capture identity consumer binds the selected terminal card before creating the captured terminal.",
+    levels: ["application"],
+  },
+  {
+    id: "F239-77",
+    implementation: [{ file: "packages/log-contract/index.js", symbol: "fieldSchemaAjv.compile" }],
+    tests: [{ file: "packages/log-contract/test/audit.test.mjs", id: "sampler memory records match one strict role-shaped event schema" }],
+    expected: "Sampler memory records match one complete role-specific schema without accepting mixed role fields.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-80",
+    implementation: [{ file: "apps/tauriv2/runtime/index.js", symbol: "view-responsiveness" }],
+    tests: [{ file: "apps/tauriv2/test/runtime.test.mjs", id: "a late view notification without a surface subscriber does not block later events" }],
+    expected: "A late view notification without a subscriber does not block later ordered events.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-83",
+    implementation: [{ file: "scripts/checklist.mjs", symbol: 'import { checklist } from "@soksak/kit/checklist";' }],
+    tests: [{ file: "scripts/test/checklist.test.mjs", id: "checklist permits a platform-excluded item only with a named unavailable platform and unverified result" }],
+    expected: "A platform-excluded checklist item names the unavailable platform and states that runtime behavior remains unverified.",
+    levels: ["unit"],
+  },
+  {
+    id: "F285-1",
+    implementation: [
+      { file: "packages/host/tauriv2/src/bindings.rs", symbol: "tauri::async_runtime::spawn_blocking(body)" },
+      { file: "scripts/check-tauri-commands.mjs", symbol: "export function findWorkerBodies(source)" },
+    ],
+    tests: [{ file: "scripts/test/tauri-commands.test.mjs", id: "every async command of the Tauri host runs its body on the blocking threads of the async runtime" }],
+    expected: "A Tauri command that waits runs on the blocking threads of the async runtime and holds no worker of it.",
+    levels: ["unit"],
+  },
+  {
+    id: "F285-3",
+    implementation: [{ file: "scripts/check-host-files.mjs", symbol: "const FRAMEWORK_ARGUMENT" }],
+    tests: [{ file: "scripts/test/soksak-scripts.test.mjs", id: "command argument audit accepts the application handle of a command that is generic over the runtime" }],
+    expected: "The command argument check accepts AppHandle<R> as the framework application handle.",
+    levels: ["unit"],
+  },
+  {
+    id: "F285-2",
+    implementation: [{ file: "packages/host/rust/src/performance.rs", symbol: "static TEST_SWITCH: Mutex<()>" }],
+    tests: [{ file: "packages/host/rust/src/view_join_test.rs", id: "presentation_join_trace_records_exact_wait_identity_and_nonpresentation_end" }],
+    expected: "A Tauri host test that switches the performance trace or reads its records runs alone among those tests.",
+    levels: ["unit"],
+  },
+  {
+    id: "F288",
+    implementation: [{ file: "scripts/check-release.mjs", symbol: "export function frontendSources(workbench, frontend, diagnostic)" }],
+    tests: [{ file: "scripts/test/check-release-paths.test.mjs", id: "the frontend sources are the files that staging wrote, which a release embeds" }],
+    expected: "The release check compares the release executable with the frontend files that staging wrote.",
+    levels: ["unit"],
+  },
+  {
+    id: "F289",
+    implementation: [{ file: "scripts/check-versions.mjs", symbol: "if (import.meta.main) {" }],
+    tests: [{ file: "scripts/test/entry-guards.test.mjs", id: "check-versions.mjs can be imported by a process that has no script path" }],
+    expected: "A command module of the scripts can be imported by a process without a script path.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-303",
+    implementation: [{ file: ".github/workflows/ci.yml", symbol: "run: make -C core/native/darwin test" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the hosted native job runs the native unit tests" }],
+    expected: "The build-native job runs every native test that a hosted runner can run, and the presentation tests run in the local checks.",
+    levels: ["unit"],
+  },
+  {
+    id: "F283-3",
+    implementation: [
+      { file: "scripts/crash-fault.mjs", symbol: "export function crashFault(text, file)" },
+    ],
+    tests: [
+      { file: "scripts/test/crash-fault.test.mjs", id: "a breakpoint that a signal handler raised again is named by the instruction address of its exception" },
+    ],
+    expected: "The window-check job names the fault of each crash report and resolves its address with atos on the runner.",
+    levels: ["unit"],
+  },
+  {
+    id: "F502-18-1",
+    implementation: [
+      { file: "packages/workbench/memory-placement.js", symbol: "if (record.drawn) saver.classify();" },
+      { file: "packages/workbench/memory-saver.js", symbol: "    classify() {" },
+      { file: "packages/workbench-mygo/src/memory_saver.go", symbol: "func (s *MemorySaver) Classify() {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/memory-saver.test.mjs", id: "a drawn placement starts unloaded every surface that it first holds hidden" },
+      { file: "packages/workbench/test/memory-saver.test.mjs", id: "a surface first seen while the setting is off waits for the delay after the setting turns on" },
+      { file: "packages/workbench-mygo/tests/app_tabs_test.go", id: "TestAHiddenSectionThatDeclaresUnloadStartsUnloaded" },
+      { file: "packages/workbench-mygo/tests/app_tabs_test.go", id: "TestASetLinkedAfterTheStartHoldsNoPageOfAHiddenSection" },
+      { file: "packages/workbench-mygo/tests/app_tabs_test.go", id: "TestAHiddenTabOfAProjectOpenedLaterStartsUnloaded" },
+      { file: "packages/workbench-mygo/tests/memory_saver_test.go", id: "TestClassifyTakesOnlyASurfaceFirstSeenSinceTheLast" },
+    ],
+    expected: "While the memory saver is on, a hidden surface that declares unload and was never shown starts unloaded at the first drawn layout that holds it, so it never mounts only to unload.",
+    levels: ["unit"],
+  },
+  {
+    id: "F502-18-2",
+    implementation: [
+      { file: "packages/workbench/memory-placement.js", symbol: "record.surfaces = record.surfaces.filter(({ id }) => !unloaded.has(id));" },
+      { file: "packages/workbench/sidebar-sections.js", symbol: "export function unloadSections(ids) {" },
+      { file: "packages/workbench/sidebar-sections.js", symbol: "export function restoreSection(id) {" },
+      { file: "packages/workbench/sidebar-sections.js", symbol: "export function mountPlacedSections(ids) {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/memory-placement-start.test.mjs", id: "a placement takes the seat of an unloaded surface out of its record" },
+      { file: "packages/workbench/test/sidebar-section-surfaces.test.mjs", id: "a hidden section mounts only when a placement holds it" },
+      { file: "packages/workbench/test/sidebar-section-surfaces.test.mjs", id: "an unloaded section leaves the seats and returns to them on its show, and only the restore mounts it" },
+      { file: "packages/workbench/test/sidebar-section-surfaces.test.mjs", id: "a sidebar that draws an unloaded section again after its release holds a new surface" },
+    ],
+    expected: "A hidden section mounts at the placement that holds it; an unloaded section leaves the seats and mounts again when the memory saver restores it.",
+    levels: ["unit"],
+  },
+  {
+    id: "F292-22",
+    implementation: [{ file: "packages/workbench/memory-placement.js", symbol: "const started = start(candidates);" }],
+    tests: [{ file: "packages/workbench/test/memory-placement-start.test.mjs", id: "a placement keeps the start values of its commit when a tab leaves its layout during the readiness wait" }],
+    expected: "A placement reads the start values of its views with its candidates, before its readiness wait.",
+    levels: ["unit"],
+  },
+  {
+    id: "F292-12",
+    implementation: [
+      { file: "packages/host/go/src/exposure.go", symbol: "func windowDocument(key DocumentKey, order int, view windowWebviewFacts) WindowDocument {" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "fn window_document(" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/exposure_webviews_test.go", id: "TestWindowDocumentReportsItsNativeBlur" },
+      { file: "packages/host/rust/src/exposure_webviews_test.rs", id: "window_document_reports_its_native_blur" },
+    ],
+    expected: "host.window reports whether each document web view carries the native blur filter on both hosts.",
+    levels: ["unit"],
+  },
+  {
+    id: "F292-25",
+    implementation: [
+      { file: "packages/host/go/src/exposure.go", symbol: "func modalOrder(nativeSurfaces, webviews int) int {" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "fn modal_order(native_surfaces: usize, webviews: usize) -> usize {" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/exposure_webviews_test.go", id: "TestModalOrderIsAboveEveryNativeSurfaceAndWebview" },
+      { file: "packages/host/rust/src/exposure_webviews_test.rs", id: "modal_order_is_above_every_native_surface_and_webview" },
+    ],
+    expected: "host.window reports the order of an open modal above every native surface order and every web view order on both hosts.",
+    levels: ["unit"],
+  },
+  {
+    id: "F292-26-2",
+    implementation: [
+      { file: "packages/host/go/src/exposure.go", symbol: "func modalOrder(nativeSurfaces, webviews int) int {" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "fn modal_order(native_surfaces: usize, webviews: usize) -> usize {" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/exposure_webviews_test.go", id: "TestModalOrderIsAboveTheFirstWebviewWithoutNativeSurfaces" },
+      { file: "packages/host/rust/src/exposure_webviews_test.rs", id: "modal_order_is_above_the_first_webview_without_native_surfaces" },
+    ],
+    expected: "host.window reports the order of an open modal above the order of the first web view of a window without native surfaces, on both hosts.",
+    levels: ["unit"],
+  },
+  {
+    id: "F292-21",
+    implementation: [{ file: "packages/log-contract/index.js", symbol: "const HOST_FIELD_IDENTIFIERS = new Set([\"surface\", \"session\"]);" }],
+    tests: [{ file: "packages/log-contract/test/audit.test.mjs", id: "document field truncation keeps the surface and session that the host writer stores in the fields" }],
+    expected: "The audit accepts a document field truncation envelope that holds the surface and session that the host writer stores, and refuses any other member.",
+    levels: ["unit"],
+  },
+  {
+    id: "F292-5",
+    implementation: [{ file: "packages/window-check/app.mjs", symbol: "if (surface !== undefined) await this.registered(surface, [`status ${name}`]);" }],
+    tests: [{ file: "packages/window-check/test/surface-registration.test.mjs", id: "a wait on a status of a surface watches the status after the surface has registered it" }],
+    expected: "A wait on a status of a surface watches the status after the surface has registered it.",
+    levels: ["unit"],
+  },
+  {
+    id: "F295",
+    implementation: [
+      { file: "packages/host/go/src/event_record.go", symbol: "strings.HasPrefix(event, \"host.trace.\") && !performanceOn.Load()" },
+      { file: "packages/host/rust/src/event_record.rs", symbol: "event.starts_with(\"host.trace.\") && !crate::performance::enabled()" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/performance_test.go", id: "TestTheSwitchGatesEveryHostTraceEvent" },
+      { file: "packages/host/rust/tests/performance_test.rs", id: "the_switch_gates_every_host_trace_event" },
+    ],
+    expected: "Both hosts store no event host.trace.<event> while the switch of the performance trace is off.",
+    levels: ["unit"],
+  },
+  {
+    id: "F294",
+    implementation: [{ file: "packages/workbench/host.js", symbol: "if (name === \"exposureReply\") return gatedExposureReply(surfaceId, () => call(name, payload));" }],
+    tests: [{ file: "packages/workbench/test/surface-runtime.test.mjs", id: "an installed reply gate decides when the exposure reply of a view is sent" }],
+    expected: "The diagnostic reply gate holds the exposureReply call of a view surface as it holds the reply of a mounted surface.",
+    levels: ["unit"],
+  },
+  {
+    id: "F293",
+    implementation: [
+      { file: "packages/host/go/src/endpoint.go", symbol: "func windowParam(params json.RawMessage) (string, error)" },
+      { file: "packages/host/rust/src/endpoint.rs", symbol: "window must be a non-empty string" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/endpoint_test.go", id: "TestEndpointTargetParamsOrder" },
+      { file: "packages/host/rust/tests/endpoint_test.rs", id: "target_params_are_checked_in_order" },
+    ],
+    expected: "Both hosts check the window, then the name, then the existence of the window of an endpoint request with one error text.",
+    levels: ["unit"],
+  },
+  {
+    id: "F291",
+    implementation: [{ file: "scripts/audit-run.mjs", symbol: "mine.reduce((most, made) => Math.max(most, made.to === null ? made.fileEnd.ts_us : made.to.ts_us), -Infinity)" }],
+    tests: [{ file: "scripts/test/audit-run.test.mjs", id: "a run whose last test has no end mark audits a log of more events than the call stack holds arguments" }],
+    expected: "The run audit reads a log of any length and reports its findings.",
+    levels: ["unit"],
+  },
+  {
+    id: "F284",
+    implementation: [{ file: "e2e/fixtures/extension-probe/provider/ui/page.html", symbol: "<title>Probe provider</title>" }],
+    tests: [{ file: "e2e/test/view-fixture-pages.test.mjs", id: "each view page of the fixture plugins starts with a doctype and holds no import map" }],
+    expected: "Every view page of the window-check fixture plugins starts with a doctype and holds no import map of its own.",
+    levels: ["unit"],
+  },
+  {
+    id: "F281-1",
+    implementation: [
+      { file: "packages/host/go/src/responder.go", symbol: "closed func(error) bool" },
+      { file: "packages/host/rust/src/responder.rs", symbol: "closed: impl FnOnce(&str) -> bool" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/responder_test.go", id: "TestAResponderChangeOfAClosedWindowSendsNothing" },
+      { file: "packages/host/rust/src/responder_test.rs", id: "a_responder_change_of_a_closed_window_sends_nothing" },
+    ],
+    expected: "A first responder change of a closed window sends nothing and returns no error, and a failed read of an open window is an error.",
+    levels: ["unit"],
+  },
+  {
+    id: "F281",
+    implementation: [{ file: "native/darwin/src/window_facts.m", symbol: "void sp_window_end_responder_observation(void *observation)" }],
+    tests: [{ file: "native/darwin/tests/window_responder_test.m", id: "an observation ends after its window was released" }],
+    expected: "The first responder observation ends through its own observation, without using the window that AppKit may have released.",
+    levels: ["unit"],
+  },
+  {
+    id: "F282",
+    implementation: [
+      { file: "packages/host/go/src/exposure.go", symbol: "func windowResponder(" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "fn responder_of(" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/responder_test.go", id: "TestTheFirstResponderInTheViewOfAViewSurfaceIsOwnerSurface" },
+      { file: "packages/host/rust/src/exposure_status_test.rs", id: "the_first_responder_in_the_view_of_a_view_surface_is_owner_surface" },
+    ],
+    expected: "Both hosts report a first responder in the view of a view surface as the owner surface with no document.",
+    levels: ["unit"],
+  },
+  {
+    id: "F279-2",
+    implementation: [
+      { file: "packages/sok/go/src/diagnostics.go", symbol: "certificate %d does not parse" },
+      { file: "packages/sok/rust/src/fetch.rs", symbol: "webpki::anchor_from_trusted_cert" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/registry_ca_test.go", id: "TestADiagnosticBuildTrustsTheRegistryAuthority" },
+      { file: "packages/host/rust/tests/registry_ca_test.rs", id: "a_diagnostic_build_reads_the_registry_authority" },
+    ],
+    expected: "Both hosts parse each --registry-ca certificate when the flag is applied and report the parser reason of a certificate that does not parse.",
+    levels: ["unit"],
+  },
+  {
+    id: "F279-1",
+    implementation: [{ file: "Makefile", symbol: "> tls.cnf" }],
+    tests: [{ file: "scripts/test/create-test-certificates.test.mjs", id: "the registry TLS target writes only its own extensions, whatever the openssl configuration of the machine adds" }],
+    expected: "The registry TLS target passes its own openssl configuration, so the certificates hold only the extensions that it declares.",
+    levels: ["unit"],
+  },
+  {
+    id: "F279",
+    implementation: [{ file: "Makefile", symbol: "E2E_REGISTRY_TLS_PARSE = node -e" }],
+    tests: [{ file: "scripts/test/create-test-certificates.test.mjs", id: "the registry TLS target fails and names the file when openssl writes no certificate" }],
+    expected: "The registry TLS target reports the errors of openssl, parses each certificate, and fails and removes its folder when a certificate does not parse.",
+    levels: ["unit"],
+  },
+  {
+    id: "F277-1",
+    implementation: [{ file: "native/darwin/process-identity/src/process_identity.m", symbol: "LaunchServices display name readback found %s, expected" }],
+    tests: [{ file: "native/darwin/process-identity/tests/process_identity_test.m", id: "a mismatched display-name readback fails and names the value it found" }],
+    expected: "A failed display-name readback names the value that LaunchServices returned: no value, a value of another type, or another name.",
+    levels: ["unit"],
+  },
+  {
+    id: "F276",
+    implementation: [{ file: ".github/workflows/release.yml", symbol: "needs: [checks, gate, release-wailsv3, release-tauriv2, release-mygo]" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "a push to main releases the declared version after the checks and the gate succeed" }],
+    expected: "The release of core has no condition on the registry state; the registry checks the plugin versions of each core version that it lists.",
+    levels: ["unit"],
+  },
+  {
+    id: "F298-2",
+    implementation: [{ file: ".github/workflows/release.yml", symbol: "needs: [checks, gate, release-wailsv3, release-tauriv2, release-mygo]" }],
+    tests: [{ file: "scripts/test/test-kinds.test.mjs", id: "no workflow runs a target or script of the end-to-end checks" }],
+    expected: "No workflow runs an end-to-end check, and the release publishes after the checks, the gate and the two host builds succeed.",
+    levels: ["unit"],
+  },
+  {
+    id: "F298-3-1",
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "export function packageIndex(root = ROOT)" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "the package index holds only the packages of this checkout and reads no declared repository" }],
+    expected: "The package index of the parity check holds only the packages of the checkout and reads no folder of another repository.",
+    levels: ["unit"],
+  },
+  {
+    id: "F298-4",
+    implementation: [{ file: "packages/window-check/app.mjs", symbol: "request(method, params = {}, { timeout = REQUEST } = {})" }],
+    tests: [
+      { file: "packages/window-check/test/display.test.mjs", id: "the harness exports no options that skip a check in a run without a display or a person" },
+      { file: "packages/window-check/test/display.test.mjs", id: "a recording request is sent whatever the environment of the run holds" },
+    ],
+    expected: "The harness has no path for a run without a display or a person, and it sends every recording request.",
+    levels: ["unit"],
+  },
+  {
+    id: "F298-5",
+    implementation: [
+      { file: "native/darwin/Makefile", symbol: "NATIVE_E2E_TESTS = " },
+      { file: "Makefile", symbol: "test-app: check-docs check-app-tests check-exposure $(E2E_BUILD)" },
+      { file: "e2e/package.json", symbol: "\"test\": \"node --test test/\"" },
+    ],
+    tests: [
+      { file: "scripts/test/test-kinds.test.mjs", id: "native unit targets run no end-to-end case and native end-to-end targets start with test-app" },
+      { file: "scripts/test/test-kinds.test.mjs", id: "the root make targets are the only entry points of the window checks" },
+      { file: "scripts/test/test-kinds.test.mjs", id: "the test script of the e2e package runs only its unit test folder" },
+      { file: "scripts/test/workflows.test.mjs", id: "the hosted native job runs the native unit tests" },
+      { file: "scripts/test/e2e-host-parity.test.mjs", id: "a window-check file that does not run both adapters is an error whatever its name" },
+    ],
+    expected: "The name of a make target decides the kind of its checks: test runs unit tests only and a target whose name starts with e2e runs end-to-end checks.",
+    levels: ["unit"],
+  },
+  {
+    id: "F321-3",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "export function acceptInstalledPlugins(" },
+      { file: "packages/workbench/environment.js", symbol: "const { plugins: installed, errors, refused: refusedIds } = acceptInstalledPlugins(installedDocument);" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/environment-refused-plugins.test.mjs", id: "an installed plugin whose manifest is refused is left out with its error and the other plugins are registered" },
+      { file: "packages/workbench/test/environment-refused-plugins.test.mjs", id: "an installed plugins document that carries the error of the host registers no plugin and returns the error" },
+      { file: "packages/plugin-api/test/page-identity.test.mjs", id: "a staged page starts when another installed plugin is refused" },
+      { file: "packages/plugin-api/test/exposure.test.mjs", id: "accepting the installed plugin document leaves out each refused plugin with its error and keeps the others" },
+    ],
+    expected: "The page registers the installed plugins that it accepts and shows the error of each refused plugin or of an error document, and a staged page finds its plugin among the accepted plugins.",
+    levels: ["unit"],
+  },
+  {
+    id: "F322",
+    implementation: [
+      { file: "packages/host/go/src/start.go", symbol: "func startParts(" },
+      { file: "packages/host/rust/src/start.rs", symbol: "pub(crate) fn start_parts(" },
+      { file: "packages/workbench/index.html", symbol: "if (start.error !== undefined) {" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/start_test.go", id: "TestAFailedWorkspaceSnapshotStillReadsTheControlsAndCarriesTheError" },
+      { file: "packages/host/rust/src/start_test.rs", id: "a_failed_workspace_snapshot_still_reads_the_controls_and_carries_the_error" },
+    ],
+    expected: "On a failed workspace snapshot both hosts set the title bar for absent settings, read the controls and answer the start document with the error, and the page reserves the window button area before it shows the error and stops.",
+    levels: ["native"],
+  },
+  {
+    id: "F322-1",
+    implementation: [
+      { file: "packages/host/go/src/endpoint.go", symbol: "exposure.list owner must be host" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "pub fn exposure_list(" },
+      { file: "packages/sok/go/src/command.go", symbol: "list[\"owner\"] = \"host\"" },
+      { file: "packages/sok/rust/src/command.rs", symbol: "serde_json::json!({\"window\": window, \"owner\": \"host\"})" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/exposure_test.go", id: "TestExposureListOfTheHostOwnerDoesNotAskThePage" },
+      { file: "packages/host/rust/tests/exposure_test.rs", id: "the_exposure_list_of_the_host_owner_does_not_ask_the_page" },
+      { file: "packages/sok/go/tests/sok_test.go", id: "TestAHostCommandIsCheckedAgainstTheHostEntriesWithoutThePage" },
+      { file: "packages/sok/rust/tests/sok_test.rs", id: "a_host_command_is_checked_against_the_host_entries_without_the_page" },
+    ],
+    expected: "exposure.list with owner host answers the host entries without the main page on both hosts, and sok checks a host command against them, so host.quit runs whatever the state of the page.",
+    levels: ["native"],
+  },
+  {
+    id: "F321-8",
+    implementation: [
+      { file: "packages/host/go/src/workspace.go", symbol: "func snapshot(" },
+      { file: "packages/host/rust/src/workspace.rs", symbol: "fn snapshot(" },
+      { file: "packages/workbench/host-store.js", symbol: "export function storedFileErrors(" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/workspace_test.go", id: "TestEarlierStoredFormsAreReportedBySnapshotAndRefusedByWrites" },
+      { file: "packages/host/rust/tests/workspace_test.rs", id: "earlier_stored_forms_are_reported_by_snapshot_and_refused_by_writes" },
+      { file: "packages/workbench/test/stored-file-errors.test.mjs", id: "a snapshot lists the error of a refused projects.json and of a refused settings.json" },
+      { file: "packages/workbench/test/stored-file-errors.test.mjs", id: "the start document shows the errors of the refused stored files before the page draws" },
+      { file: "e2e/start-failure.test.mjs", id: "a refused projects.json is shown and logged and the page starts without it" },
+    ],
+    expected: "A refused projects.json or settings.json is reported in the snapshot, the page shows the error and starts, and a write of the refused file fails without changing it.",
+    levels: ["native", "unit", "application"],
+  },
+  {
+    id: "F325-1",
+    implementation: [
+      { file: ".github/workflows/ci.yml", symbol: "run: make -C core test-tauriv2" },
+    ],
+    tests: [
+      { file: "scripts/test/workflows.test.mjs", id: "ci keeps language host checks independent and gates release on every required job" },
+    ],
+    expected: "Each host suite runs once per CI run, in its host job, and equivalence runs only the static comparison and the script tests.",
+    levels: ["unit"],
+  },
+  {
+    id: "F325-2",
+    implementation: [
+      { file: ".github/workflows/release.yml", symbol: "The gate and the bundle builds run beside the checks" },
+    ],
+    tests: [
+      { file: "scripts/test/workflows.test.mjs", id: "the release bundles build beside the checks and publication waits for them" },
+    ],
+    expected: "The gate and both release bundle builds run beside the checks, and publish requires the success of the checks, the gate and both builds.",
+    levels: ["unit"],
+  },
+  {
+    id: "F321-6-1",
+    implementation: [
+      { file: "packages/workbench/installed-plugins.js", symbol: "refused: refusedPlugins" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/plane-tab-ids.test.mjs", id: "a new tab avoids the ids of held surfaces, stored tabs and tabs issued before it" },
+      { file: "packages/workbench/test/plane-side-toggles.test.mjs", id: "a draw keeps the pressed card header fold control in the document" },
+      { file: "packages/workbench/test/plane-stale-layout.test.mjs", id: "a held layout draw survives the close of a card it contains" },
+      { file: "packages/workbench/test/view-start-handoff.test.mjs", id: "core.file.open parameters reach the host placement request" },
+    ],
+    expected: "Every environment.js module mock that a page module imports through installed-plugins.js exports refusedPlugins, so the workbench tests load their modules.",
+    levels: ["unit"],
+  },
+  {
+    id: "F321-7",
+    implementation: [
+      { file: "packages/host/go/src/installed.go", symbol: "func InstalledModule(" },
+      { file: "packages/host/rust/src/installed.rs", symbol: "let Ok(Some(dir)) = installed_package(config_dir, &name) else {" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/installed_test.go", id: "TestAnUnreadableInstallationServesTheFrontendModules" },
+      { file: "packages/host/rust/tests/installed_test.rs", id: "an_unreadable_installation_serves_the_frontend_modules" },
+    ],
+    expected: "With an installation that cannot be read, both hosts serve the paths under /modules/ from the bundled frontend, so the core modules load.",
+    levels: ["native"],
+  },
+  {
+    id: "F321-6",
+    implementation: [
+      { file: "packages/workbench/plugin-operations.js", symbol: 'else if (!unit && record.enabled && refused.has(id)) status = "refused";' },
+      { file: "packages/workbench/environment.js", symbol: "export const refusedPlugins = () => refused;" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/plugin-operations.test.mjs", id: "an installed plugin that the window refused has the state refused and does not wait for a page reload" },
+    ],
+    expected: "An installed plugin that the window refused has the state refused, which does not make the page wait for a reload.",
+    levels: ["unit"],
+  },
+  {
+    id: "F325-3",
+    implementation: [{ file: ".github/workflows/ci.yml", symbol: "CARGO_PROFILE_DEV_DEBUG: line-tables-only" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the Tauri host job builds its tests with line tables as debug information, set on the job so that the Rust cache key holds it" }],
+    expected: "The Tauri host job builds its tests with line tables as debug information, and the Rust cache key holds the setting.",
+    levels: ["unit"],
+  },
+  {
+    id: "F331",
+    implementation: [
+      { file: "packages/workbench/file-open.js", symbol: "const openers = extension === null ? [] : plugins.filter((plugin) => plugin.opens?.includes(extension));" },
+      { file: "packages/plugin-api/index.js", symbol: "surface opens extension ${extension} must be lowercase letters and digits" },
+      { file: "packages/sok/go/src/manifest.go", symbol: "surface opens extension %s must be lowercase letters and digits" },
+      { file: "packages/sok/rust/src/manifest.rs", symbol: "surface opens extension {} must be lowercase letters and digits" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/file-open.test.mjs", id: "the plugin that declares the extension opens a file, and a file whose extension no plugin declares has no opener" },
+      { file: "packages/plugin-api/test/validate.test.mjs", id: "a surface that opens files declares extensions and a path parameter" },
+    ],
+    expected: "Only a declared extension connects a file to a plugin, and a manifest that declares * is refused.",
+    levels: ["unit"],
+  },
+  {
+    id: "F330",
+    implementation: [
+      { file: "packages/workbench/surface-modules.js", symbol: "diagnostics: surface.diagnostics," },
+      { file: "packages/host/go/src/surfaces.go", symbol: "func checkViewDiagnostics(surface string, diagnostics json.RawMessage) error" },
+      { file: "packages/host/rust/src/surfaces.rs", symbol: "pub(crate) fn check_view_diagnostics(" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/surface-view.test.mjs", id: "the start values of a view carry its params, origin, project, declarations and diagnostic declaration" },
+      { file: "packages/host/go/src/view_start_test.go", id: "TestSyncRequestValidatesTheStartValuesOfAView" },
+      { file: "packages/host/rust/tests/surfaces_geometry_test.rs", id: "sync_request_check_validates_the_start_values_of_a_view" },
+    ],
+    expected: "The view start values carry the diagnostic declaration of the plugin or null, which both hosts require and inject.",
+    levels: ["unit"],
+  },
+  {
+    id: "F328",
+    implementation: [
+      { file: "packages/workbench/plugin-operations.js", symbol: "const selected = entry?.versions.filter((item) => satisfies(item.engines.soksak, state.core))" },
+      { file: "packages/workbench/library.js", symbol: "에 맞는 버전 없음" },
+      { file: "packages/host/go/src/plugins.go", symbol: "return sok.ReadPluginsState(p.configDir, p.core)" },
+      { file: "packages/host/rust/src/plugins.rs", symbol: "plugins::read_plugins_state(&self.config_dir, &self.core)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/plugin-operations.test.mjs", id: "the latest version of a row is the newest version whose range contains the running core, and a plugin without one is incompatible" },
+      { file: "packages/workbench/test/library-plugins.test.mjs", id: "the plugin page of the library lists each plugin with its description, versions, sidecars and actions" },
+      { file: "packages/host/go/tests/plugins_test.go", id: "TestPluginsStateReportsTheRegistryAndTheInstallation" },
+      { file: "packages/host/rust/tests/plugins_test.rs", id: "plugins_state_reports_the_registry_and_the_installation" },
+    ],
+    expected: "The latest version of a plugin is the version that installation selects for the running core, which pluginsState reports.",
+    levels: ["unit"],
+  },
+  {
+    id: "F327",
+    implementation: [
+      { file: "scripts/release-notes.mjs", symbol: "export function releaseNotes(" },
+      { file: "scripts/markdown-links.mjs", symbol: "export function markdownLinks(" },
+      { file: ".github/workflows/release.yml", symbol: "run: node scripts/release-notes.mjs docs/operations/install.md" },
+    ],
+    tests: [
+      { file: "scripts/test/release-notes.test.mjs", id: "each relative link of the release body names its file at the release tag" },
+      { file: "scripts/test/release-notes.test.mjs", id: "the publish job writes the release body with the release notes script" },
+    ],
+    expected: "The release body names each relative link of docs/operations/install.md as its file at the release tag.",
+    levels: ["unit"],
+  },
+  {
+    id: "F338",
+    implementation: [
+      { file: "packages/workbench/registry.js", symbol: "export const surfacePlugins" },
+      { file: "packages/workbench/registry.js", symbol: "export const keepsBackground" },
+      { file: "packages/workbench/memory-saver.js", symbol: "export function unloadDeclaration" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/surface-plugins.test.mjs", id: "a plugin with only sections is a plugin that draws a surface, once" },
+      { file: "packages/workbench/test/memory-saver-declaration.test.mjs", id: "a section surface takes its declaration from its own unload" },
+      { file: "packages/workbench/test/memory-saver-declaration.test.mjs", id: "only a tab of a plugin with background keeps its session through the background path" },
+    ],
+    expected: "A plugin with only sections draws its section surfaces natively, and only a tab of a plugin with background takes the background path.",
+    levels: ["unit"],
+  },
+  {
+    id: "F342-1",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "export function createExpose(port, load)" },
+      { file: "packages/plugin-api/view.js", symbol: "changed: (name, value, version) =>" },
+      { file: "packages/workbench/exposure.js", symbol: "function deliver({ surface, name, value, version })" },
+      { file: "packages/workbench/view-calls.js", symbol: "if (fields.name === \"changed\")" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/exposure.test.mjs", id: "a watched surface status receives the values that the surface sends, and no forward waits for a change" },
+      { file: "packages/workbench/test/exposure.test.mjs", id: "a value that no watch takes is recorded in the trace with its reason" },
+      { file: "packages/workbench/test/view-calls.test.mjs", id: "a changed call of the view gives the value of its watched status to the page and replies null" },
+      { file: "packages/plugin-api/test/exposure.test.mjs", id: "a watched status sends its current value and each change with its version and ends with unwatch" },
+      { file: "packages/plugin-api/test/exposure.test.mjs", id: "a forwarded status watch sends the values through the port changed" },
+    ],
+    expected: "A surface status watch is an event subscription: the surface sends each value with its version through changed, and no forward waits for a change.",
+    levels: ["unit"],
+  },
+  {
+    id: "F355-5",
+    implementation: [
+      { file: "packages/sok/rust/src/registry.rs", symbol: "pub(crate) fn check_sidecar_release" },
+      { file: "packages/sok/go/src/registry.go", symbol: "func checkSidecarRelease" },
+      { file: "scripts/workspace-registry.mjs", symbol: "export function releaseSidecar(" },
+    ],
+    tests: [
+      { file: "packages/sok/rust/tests/plugins_test.rs", id: "plugin_install_refuses_a_sidecar_release_without_its_executable" },
+      { file: "packages/sok/go/tests/plugins_test.go", id: "TestPluginInstallRefusesASidecarReleaseWithoutItsExecutable" },
+      { file: "scripts/test/workspace-registry.test.mjs", id: "a sidecar is released by the make release target of its repository, which receives only the output folder" },
+    ],
+    expected: "sok plugin install extracts a sidecar release from package/ and refuses one without the executable of its sidecar.json; the workspace registry runs make release of a sidecar repository.",
+    levels: ["unit"],
+  },
+  {
+    id: "F355-2",
+    implementation: [
+      { file: "packages/sok/rust/src/registry.rs", symbol: "pub(crate) fn check_release_modules" },
+      { file: "packages/sok/go/src/registry.go", symbol: "func checkReleaseModules" },
+      { file: "scripts/workspace-registry.mjs", symbol: "export function pnpmPack(" },
+    ],
+    tests: [
+      { file: "packages/sok/rust/tests/plugins_test.rs", id: "plugin_install_refuses_a_release_entry_outside_package" },
+      { file: "packages/sok/rust/tests/plugins_test.rs", id: "plugin_install_refuses_a_release_without_the_view_page" },
+      { file: "packages/sok/rust/tests/plugins_test.rs", id: "plugin_install_refuses_a_release_with_a_binary_path" },
+      { file: "packages/sok/go/tests/plugins_test.go", id: "TestPluginInstallRefusesAReleaseEntryOutsidePackage" },
+      { file: "packages/sok/go/tests/plugins_test.go", id: "TestPluginInstallRefusesAReleaseWithoutTheViewPage" },
+      { file: "packages/sok/go/tests/plugins_test.go", id: "TestPluginInstallRefusesAReleaseWithABinaryPath" },
+      { file: "scripts/test/workspace-registry.test.mjs", id: "a plugin is packed by the make pack target of its repository, which receives only the output folder" },
+    ],
+    expected: "sok plugin install reads the pnpm pack layout of a plugin release and refuses an entry outside package/, a release without the modules that plugin.json loads and a file under .binary; the workspace registry passes only the output folder to make pack.",
+    levels: ["unit"],
+  },
+  {
+    id: "F332-4-1-1",
+    implementation: [{ file: "scripts/test/shortcut-table.test.mjs", symbol: "core.fixture.move" }],
+    tests: [{ file: "scripts/test/shortcut-table.test.mjs", id: "an arrow-key comparison without a workbench row is reported, and the table row clears it" }],
+    expected: "The arrow-key case of the shortcut audit test holds its own row.",
+    levels: ["unit"],
+  },
+  {
+    id: "F352",
+    implementation: [{ file: "packages/plugin-api/index.js", symbol: "export function applyTheme(root, theme)" }],
+    tests: [{ file: "packages/plugin-api/test/view-document.test.mjs", id: "the bridge sets the start theme and each later theme message on the root of the view document" }],
+    expected: "The view bridge sets the start theme and each later theme message on the root of the view document.",
+    levels: ["unit"],
+  },
+  {
+    id: "F353",
+    implementation: [{ file: "e2e/fixtures/extension-probe/provider/ui/port.js", symbol: "export function providerExposurePort(bridge)" }],
+    tests: [{ file: "e2e/test/probe-exposure-port.test.mjs", id: "the ${name} exposure port sends a watched status value through the changed call of the view bridge" }],
+    expected: "The probe views pass changed in their exposure port.",
+    levels: ["unit"],
+  },
+  {
+    id: "F354",
+    implementation: [{ file: "apps/wailsv3/runtime/index.js", symbol: "a modal document has no status watch route" }],
+    tests: [
+      { file: "apps/wailsv3/test/runtime.test.mjs", id: "the exposure port of a modal document has a changed that refuses a value for the missing watch route" },
+      { file: "apps/tauriv2/test/runtime.test.mjs", id: "the exposure port of a modal document has a changed that refuses a value for the missing watch route" },
+    ],
+    expected: "The exposure port of a modal document refuses a watched value for the missing watch route.",
+    levels: ["unit"],
+  },
+  {
+    id: "F351",
+    implementation: [
+      { file: "packages/window-check/app.mjs", symbol: "async function workbenchReplies(client, window)" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/unresponsive.test.mjs", id: "a document that does not reply to a request and to the probe after it makes the later checks of its application fail at once" },
+    ],
+    expected: "An application that does not reply to a request and to one probe fails every later request and check at once with the record.",
+    levels: ["unit"],
+  },
+  {
+    id: "F350",
+    implementation: [
+      { file: "scripts/test-app.mjs", symbol: "async function runCommand(item, interrupted)" },
+    ],
+    tests: [
+      { file: "scripts/test/test-app.test.mjs", id: "an interrupting signal ends the running step, runs the cleanup steps and fails the run with the signal" },
+    ],
+    expected: "An interrupted end-to-end run ends its running step, runs its cleanup steps and fails with the signal.",
+    levels: ["unit"],
+  },
+  {
+    id: "F347-1",
+    implementation: [
+      { file: "packages/workbench/plane.js", symbol: "export function adopt(kept, space)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/plane-sidebar-space.test.mjs", id: "a sidebar draws the section surface ids of the space of the held layout while the project state shows the library" },
+    ],
+    expected: "The sidebars that the plane draws take the space of the held layout, also while the project state shows the library.",
+    levels: ["unit"],
+  },
+  {
+    id: "F374-5-1",
+    implementation: [
+      { file: "packages/plugin-api/screen-hash.js", symbol: "export function applyScreenMessage(previous, message)" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/screen-hash.test.mjs", id: "a change replaces the rows it carries in the screen of the message it names and takes its cursor" },
+      { file: "packages/plugin-api/test/screen-hash.test.mjs", id: "a change that does not follow the screen it names is refused with the member that differs" },
+    ],
+    expected: "A change form of a screen message replaces only its rows in the screen of the message it names and gives the hash of the full screen; a change that does not follow that screen is refused.",
+    levels: ["unit"],
+  },
+  {
+    id: "F299",
+    implementation: [
+      { file: "scripts/test-runner.mjs", symbol: "function endGroup(pgid, leader)" },
+      { file: "scripts/test-command.mjs", symbol: "export function processTable()" },
+    ],
+    tests: [
+      { file: "scripts/test/test-runner.test.mjs", id: "a test process that exits and leaves no process in its group is ended without a read of the process table" },
+      { file: "scripts/test/test-runner.test.mjs", id: "a group at its limit is ended with the descendants that run in a group of their own, and the timeout names them" },
+    ],
+    expected: "The runner reads the process table at the end of a test only for a group that still has a process, and ends the descendants of the group that run in another group.",
+    levels: ["unit"],
+  },
+  {
+    id: "F375",
+    implementation: [
+      { file: "packages/host/go/src/documents.go", symbol: "func validateViewGeneration(where string, generation uint64) error" },
+      { file: "packages/host/go/src/source_origins.go", symbol: "func (o *sourceOrigins) create(surface string) (uint64, error)" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/source_origins_test.go", id: "TestSourceOriginsDoesNotIssueAnUnsafeGeneration" },
+      { file: "packages/host/go/src/source_origins_test.go", id: "TestAViewMessageAboveTheSafeIntegerLimitIsRefused" },
+      { file: "packages/host/rust/src/source_origins_test.rs", id: "issuing_a_generation_past_the_javascript_safe_integer_limit_changes_no_state" },
+    ],
+    expected: "Both hosts refuse a view generation above the JavaScript safe integer limit with the text that the host contract states.",
+    levels: ["unit"],
+  },
+  {
+    id: "F374-4",
+    implementation: [
+      { file: "packages/host/rust/src/sidecar_routes.rs", symbol: "pub struct SidecarRoutes" },
+      { file: "packages/host/go/src/sidecar_routes.go", symbol: "type sidecarRoutes struct" },
+      { file: "packages/workbench/host.js", symbol: "function onSidecarMessage(name, id, fn)" },
+    ],
+    tests: [
+      { file: "packages/host/rust/src/sidecar_routes_test.rs", id: "a_message_reaches_the_page_only_while_it_listens_and_each_routed_view" },
+      { file: "packages/host/go/src/sidecar_routes_test.go", id: "TestAMessageReachesThePageOnlyWhileItListensAndEachRoutedView" },
+      { file: "packages/workbench/test/window-sidecar-listen.test.mjs", id: "the first listener of a pair registers the page, on resolves after the host applied it, and the last listener removes it" },
+      { file: "packages/workbench/test/view-events.test.mjs", id: "a sidecar message subscription adds the host route of the view once, a restart removes it, and a failure is pushed" },
+    ],
+    expected: "The host delivers each sidecar message only to the main page while it listens to the pair and to each routed view of a current generation, without the hop through the main page.",
+    levels: ["unit"],
+  },
+  {
+    id: "F374-3",
+    implementation: [
+      { file: "native/darwin/src/document_view.m", symbol: "bool sp_document_post(void *handle, const char *json)" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/document_plugin_test.m", id: "a text that is not JSON is reported as a failed post" },
+    ],
+    expected: "A document post passes the JSON text and the document parses it, and a text that is not JSON is reported through the message receiver.",
+    levels: ["unit"],
+  },
+  {
+    id: "F374-2",
+    implementation: [
+      { file: "native/darwin/src/image_region.m", symbol: "static IOSurfaceRef copyPresentation(SPImageRegion *view, IOSurfaceRef source, char *declaredColorSpaceName, size_t nameCapacity)" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_region_test.m", id: "TEST 1: the layer presents a host-owned IOSurface" },
+    ],
+    expected: "The image region presents each accepted frame as a host-owned IOSurface copy with the declared color space, so Core Animation does not convert a CGImage on the CPU at each commit.",
+    levels: ["unit"],
+  },
+  {
+    id: "F374-1",
+    implementation: [
+      { file: "scripts/measure-terminal-redraw.mjs", symbol: "export function frameCost({ rows, totals, presented, seconds })" },
+      { file: "scripts/fixtures/status-redraw.mjs", symbol: "const SPINNER" },
+    ],
+    tests: [
+      { file: "scripts/test/measure-terminal-redraw.test.mjs", id: "the cpu time of each process is divided by the frames that the region presented over the interval" },
+      { file: "scripts/test/measure-terminal-redraw.test.mjs", id: "the fixture draws a start line, frames of the given rows and an end line with the number of frames" },
+    ],
+    expected: "The terminal redraw measurement prints the CPU time and the CPU milliseconds per presented frame of each process while a fixture redraws a status block at a fixed rate.",
+    levels: ["unit"],
+  },
+  {
+    id: "F373",
+    implementation: [
+      { file: "packages/workbench/sidebar-sections.js", symbol: "export function sizeSection(sidebar, section, height)" },
+      { file: "packages/workbench/sidebar-sections.js", symbol: "function bindSectionDivider(divider, sidebar, above, below)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/sidebar-choices.test.mjs", id: "a dragged section height is applied, reported, saved with the space and restored" },
+      { file: "packages/workbench/test/section-choice-settled.test.mjs", id: "folding, selecting and sizing a section lay out the plane again" },
+    ],
+    expected: "The divider between two open sections of a vertical list sizes a section; the height is reported, saved with the space and restored.",
+    levels: ["unit"],
+  },
+  {
+    id: "F372",
+    implementation: [
+      { file: "packages/workbench/core-exposure.js", symbol: "registry.command(\"core.sidebar.section.fold\", ({ sidebar, section }) => { foldSection(sidebar, section); settle(); });" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/section-choice-settled.test.mjs", id: "folding, selecting and sizing a section lay out the plane again" },
+    ],
+    expected: "A section fold and a section tab selection lay out the plane again, so the view of the hidden section is hidden.",
+    levels: ["unit"],
+  },
+  {
+    id: "F371",
+    implementation: [
+      { file: "native/darwin/src/document_view.m", symbol: "if (self.pluginRootView && self.viewDocumentCommitted && action.targetFrame.isMainFrame && !sameDocument(action, view.URL))" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/view_channel_test.m", id: "the view refuses a reload of its document" },
+    ],
+    expected: "A view keeps its first document: a main-frame navigation after its commit, a reload included, is refused and logged.",
+    levels: ["unit"],
+  },
+  {
+    id: "F370",
+    implementation: [
+      { file: "packages/plugin-api/view.js", symbol: "view.addEventListener(\"contextmenu\", openMenu);" },
+      { file: "packages/workbench/view-calls.js", symbol: "case \"surface.menu\": {" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/view-document.test.mjs", id: "the bridge cancels the default menu of a right click in the view and sends surface.menu with its point" },
+      { file: "packages/workbench/test/view-calls.test.mjs", id: "surface.menu runs core.surface.menu at the window point of a right click in the view" },
+    ],
+    expected: "A right click in a view cancels the default menu of the web view and opens the surface menu of its plugin at the point in the window.",
+    levels: ["unit"],
+  },
+  {
+    id: "F365",
+    implementation: [
+      { file: "packages/workbench/registry.js", symbol: "export function sectionSurfacePlugin(surface)" },
+      { file: "packages/workbench/core-exposure.js", symbol: "const owner = sectionSurfacePlugin(surface);" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/surface-plugins.test.mjs", id: "a section surface id names the plugin of its registered section" },
+    ],
+    expected: "The main page finds the plugin of a section surface from its registered section, so the registrations of a section view apply.",
+    levels: ["unit"],
+  },
+  {
+    id: "F362",
+    implementation: [
+      { file: "packages/workbench/exposure.js", symbol: "runOwned(name, params, owner, cids, surface, caller)" },
+      { file: "packages/workbench/view-calls.js", symbol: "runOwned: (name, value, owner, surface) => options.runOwned(name, value, owner, carried, surface, options.surface)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/exposure.test.mjs", id: "runOwned without surface runs a command on the calling section surface when it registered it" },
+      { file: "packages/workbench/test/view-calls.test.mjs", id: "a core command runs through runCore and a command of the plugin through runOwned" },
+    ],
+    expected: "A command of the plugin that a view runs without surface runs on the surface of that view when it registered the command, otherwise on the preferred tab surface.",
+    levels: ["unit"],
+  },
+  {
+    id: "F348",
+    implementation: [
+      { file: "packages/workbench/surface-modules.js", symbol: "export function surfaceLeftOut(surfaceId)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/exposure.test.mjs", id: "an observation chooses no surface that a drawing or a place left out, so no watch is forwarded to it" },
+      { file: "packages/workbench/test/view-events.test.mjs", id: "an event for a view whose surface is left out is canceled without a push, and pushes resume when it is drawn again" },
+    ],
+    expected: "A surface that a drawing or a place left out receives no forwarded request and no view event until it is drawn again or released.",
+    levels: ["unit"],
+  },
+  {
+    id: "F347",
+    implementation: [
+      { file: "packages/workbench/section-surfaces.js", symbol: "export const sectionSurfaceId = (space, sidebar, sectionId) =>" },
+      { file: "packages/workbench/section-surfaces.js", symbol: "export function storedSurfaceKept(tabIds, spaceCards)" },
+      { file: "packages/host/go/src/workspace.go", symbol: "func listTabSessions(directory string) (any, error)" },
+      { file: "packages/host/rust/src/workspace.rs", symbol: "fn valid_section_surface(id: &str) -> bool" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/sidebar-section-surfaces.test.mjs", id: "the same window sidebar section of two spaces gives two section surfaces with their own ids" },
+      { file: "packages/workbench/test/section-surfaces.test.mjs", id: "a load keeps the entries of layout tabs and of the sections of a space of a layout, keyed by that space" },
+      { file: "packages/host/go/tests/workspace_test.go", id: "TestTabSessionListRefusesAFileOfAnotherName" },
+      { file: "packages/host/rust/tests/workspace_test.rs", id: "tab_session_list_refuses_a_file_of_another_name" },
+    ],
+    expected: "A section surface id is <space>/<sidebar>/<section>, so it names one surface of the host, and a stored session file of another name is refused by name.",
+    levels: ["unit"],
+  },
+  {
+    id: "F346",
+    implementation: [
+      { file: "scripts/test-app.mjs", symbol: "async function lockReleased(configDir)" },
+    ],
+    tests: [
+      { file: "scripts/test/test-app.test.mjs", id: "a quit step ends when the process that holds the configuration lock exits, also when that process is not the started one" },
+    ],
+    expected: "The quit step of the end-to-end run waits until no process holds the configuration lock.",
+    levels: ["unit"],
+  },
+  {
+    id: "F345",
+    implementation: [
+      { file: "packages/workbench/verify.js", symbol: "const predicted = (id) =>" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/verify-ahead.test.mjs", id: "V7c compares the predicted card surfaces and does not count a section surface that the drawing added" },
+      { file: "packages/workbench/test/verify-ahead.test.mjs", id: "a failed V7c names the drawn card surface that the prediction missed" },
+    ],
+    expected: "V7c compares the predicted card surfaces with the drawing and names the ids that it counts.",
+    levels: ["unit"],
+  },
+  {
+    id: "F343-1",
+    implementation: [
+      { file: "native/darwin/src/webview_geometry.m", symbol: "bool sp_surface_place_view(void *surfaceHandle, void *viewHandle)" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/surface_host_test.m", id: "a view placed in a shown surface paints no opaque backing" },
+    ],
+    expected: "A view placed in a shown surface paints no opaque backing from its first frame.",
+    levels: ["unit"],
+  },
+  {
+    id: "F344",
+    implementation: [
+      { file: "packages/workbench/view-calls.js", symbol: "function statusWatchOf(command, params, plugin, holdsSurface)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/view-calls.test.mjs", id: "a status unwatch of a surface that the window no longer holds ends the view's own watch" },
+    ],
+    expected: "A view's status unwatch ends its own watch also after the surface of the watch closed.",
+    levels: ["unit"],
+  },
+  {
+    id: "F342",
+    implementation: [
+      { file: "packages/workbench/exposure.js", symbol: "function deliver({ surface, name, value, version })" },
+      { file: "packages/host/go/src/exposure.go", symbol: "func ForwardTimeout(timeout json.RawMessage)" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "pub fn forward_timeout(timeout: &Value)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/exposure.test.mjs", id: "a watched surface status receives the values that the surface sends, and no forward waits for a change" },
+      { file: "packages/host/go/tests/exposure_test.go", id: "TestForwardedRequestsUseTheDeclaredTimeout" },
+      { file: "packages/host/rust/tests/exposure_test.rs", id: "forwarded_requests_use_the_declared_timeout" },
+    ],
+    expected: "A surface status watch is an event subscription and no forward waits without a time limit, so a ready main page reloads after its calls are answered.",
+    levels: ["unit"],
+  },
+  {
+    id: "F342-2",
+    implementation: [
+      { file: "packages/host/go/src/exposure.go", symbol: "func ForwardTimeout(timeout json.RawMessage)" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "pub fn forward_timeout(timeout: &Value)" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/exposure_test.go", id: "TestForwardedRequestsUseTheDeclaredTimeout" },
+      { file: "packages/host/rust/tests/exposure_test.rs", id: "forwarded_requests_use_the_declared_timeout" },
+    ],
+    expected: "Every forwarded request has a time limit, 10 s or its declared timeout, whatever its method.",
+    levels: ["unit"],
+  },
+  {
+    id: "F341",
+    implementation: [{ file: "packages/workbench/exposure.js", symbol: "observe(name, surface, fn, { exact = false } = {})" }],
+    tests: [{ file: "packages/workbench/test/exposure.test.mjs", id: "without a registered surface the observer receives null" }],
+    expected: "A status observation delivers null while no surface registers the status.",
+    levels: ["unit"],
+  },
+  {
+    id: "F340",
+    implementation: [{ file: "packages/host/rust/src/surfaces.rs", symbol: "impl<'de> Deserialize<'de> for ViewStartRequest" }],
+    tests: [
+      { file: "packages/host/rust/src/surfaces_test.rs", id: "the_host_call_decoder_keeps_the_null_start_values_of_a_view" },
+      { file: "packages/host/go/src/view_start_test.go", id: "TestSyncRequestDecoderKeepsTheNullStartValues" },
+    ],
+    expected: "Both hosts decode a null diagnostics and section of the view start values as present values.",
+    levels: ["unit"],
+  },
+  {
+    id: "F339",
+    implementation: [{ file: "packages/workbench/sidebar-sections.js", symbol: "const attempt = entry.mount = {};" }],
+    tests: [{ file: "packages/workbench/test/sidebar-section-surfaces.test.mjs", id: "each section body is the slot of a view surface named <space id>/<sidebar id>/<section id>" }],
+    expected: "The first state that a section mount reports before mountSurface returns belongs to that mount attempt.",
+    levels: ["unit"],
+  },
+  {
+    id: "F337",
+    implementation: [{ file: "packages/workbench/surface-modules.js", symbol: "function surfaceOrigin(surface)" }],
+    tests: [{ file: "packages/workbench/test/section-surface-mount.test.mjs", id: "a section surface mounts with an origin that records no directory" }],
+    expected: "A section surface mounts with the context origin {directory: null} and reads no tab origin.",
+    levels: ["unit"],
+  },
+  {
+    id: "F336",
+    implementation: [
+      { file: "scripts/check-versions.mjs", symbol: 'export const RELEASE = "0.0.36"' },
+    ],
+    tests: [
+      { file: "scripts/test/versions.test.mjs", id: "every declared workspace version is the release candidate" },
+    ],
+    expected: "Every declared workspace version and lock entry is the release candidate.",
+    levels: ["unit"],
+  },
+  {
+    id: "F326",
+    implementation: [
+      { file: "scripts/check-versions.mjs", symbol: 'export const RELEASE = "' },
+    ],
+    tests: [
+      { file: "scripts/test/versions.test.mjs", id: "every declared workspace version is the release candidate" },
+    ],
+    expected: "Every declared workspace version and lock entry is the release candidate.",
+    levels: ["unit"],
+  },
+  {
+    id: "F324",
+    implementation: [
+      { file: "scripts/check-versions.mjs", symbol: 'export const RELEASE = "' },
+    ],
+    tests: [
+      { file: "scripts/test/versions.test.mjs", id: "every declared workspace version is the release candidate" },
+    ],
+    expected: "Every declared workspace version and lock entry is the release candidate.",
+    levels: ["unit"],
+  },
+  {
+    id: "F323",
+    implementation: [
+      { file: "scripts/check-versions.mjs", symbol: 'export const RELEASE = "' },
+    ],
+    tests: [
+      { file: "scripts/test/versions.test.mjs", id: "every declared workspace version is the release candidate" },
+    ],
+    expected: "Every declared workspace version and lock entry is the release candidate.",
+    levels: ["unit"],
+  },
+  {
+    id: "F321-5",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) checkDeclaration(" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn check_declaration(" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestDeclarationNotifiesEachOutdatedVersionChange" },
+      { file: "packages/host/rust/src/sidecars_lock_test.rs", id: "declaration_notifies_each_outdated_version_change" },
+    ],
+    expected: "A declaration whose sidecar.json does not parse succeeds on both hosts, notifies host.sidecars once and leaves the running service reported with a null installed version.",
+    levels: ["native"],
+  },
+  {
+    id: "F380",
+    implementation: [
+      { file: "scripts/test-app.mjs", symbol: "async function startApplication(item, children) {" },
+    ],
+    tests: [
+      { file: "scripts/test/test-app.test.mjs", id: "a start step ends when endpoint.json is written before the watch of the folder is active" },
+    ],
+    expected: "The start step of make test-app reads the configuration folder once its watch is active and at each change, so it finds an endpoint.json written before the watch started.",
+    levels: ["unit"],
+  },
+  {
+    id: "F381",
+    implementation: [
+      { file: "native/darwin/src/window_facts.m", symbol: "bool sp_window_on_screen(void *handle) {" },
+      { file: "packages/host/go/src/images.go", symbol: "func (i *Images) DrawingChanges() []ImageDrawing {" },
+      { file: "packages/host/rust/src/images.rs", symbol: "pub fn drawing_changes(&self) -> Vec<Drawing> {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/window_occlusion_test.m", id: "the covered window is not on screen" },
+      { file: "packages/host/go/tests/images_test.go", id: "TestDrawingStateIsSentAtAttachAndOnChange" },
+      { file: "packages/host/rust/tests/images_test.rs", id: "drawing_state_is_sent_at_attach_and_on_change" },
+    ],
+    expected: "The host reads whether a window is on screen from AppKit, sends the supplier of each image region its drawing state at the attachment and at each change, and configures and waits only for regions that draw.",
+    levels: ["native", "unit"],
+  },
+  {
+    id: "F321-4",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) endUndeclaredReplacement(" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn end_undeclared_replacement<" },
+      { file: "packages/workbench/library.js", symbol: "const declared = item.installed !== null;" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestAServiceOfAnUndeclaredSidecarIsEnded" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "a_service_of_an_undeclared_sidecar_is_ended" },
+      { file: "packages/workbench/test/library-plugins.test.mjs", id: "the plugin page of the library lists each plugin with its description, versions, sidecars and actions" },
+    ],
+    expected: "A running persistent service whose sidecar is no longer declared is reported with a null installed version, its replacement ends it without a start and tells its surfaces the undeclared error, and the plugin screen shows it as 선언 없음 with the action that ends it.",
+    levels: ["native", "unit"],
+  },
+  {
+    id: "F321-2",
+    implementation: [
+      { file: "packages/host/go/src/workspace.go", symbol: "func projectSettings(" },
+      { file: "packages/host/rust/src/workspace.rs", symbol: "fn project_settings(" },
+      { file: "packages/workbench/projects.js", symbol: "if (project.settingsError) throw new Error(project.settingsError);" },
+      { file: "packages/workbench/settings.js", symbol: "if (project?.settingsError) throw new Error(project.settingsError);" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/workspace_test.go", id: "TestARefusedProjectSettingsFileIsReportedAtItsProject" },
+      { file: "packages/host/rust/tests/workspace_test.rs", id: "a_refused_project_settings_file_is_reported_at_its_project" },
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "a project whose settings file the host refused is not opened, and the start shows the library with the error" },
+      { file: "packages/workbench/test/settings.test.mjs", id: "a settings file of the shown project that the host refuses is reported and the applied settings stay" },
+    ],
+    expected: "A refused project settings file is reported at its project in the snapshot of both hosts, and the page does not open that project while the other projects and the page start.",
+    levels: ["unit", "native"],
+  },
+  {
+    id: "F321-1",
+    implementation: [
+      { file: "packages/host/go/src/installed.go", symbol: "func NewInstalledSidecars(" },
+      { file: "packages/host/rust/src/installed.rs", symbol: "pub fn new_installed_sidecars<" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/installed_test.go", id: "TestAnUnreadableInstallationStartsTheSidecarsWithoutDeclarations" },
+      { file: "packages/host/rust/tests/installed_test.rs", id: "an_unreadable_installation_starts_the_sidecars_without_declarations" },
+    ],
+    expected: "A host start whose installed.json or plugin.json cannot be read records the error and creates its sidecar channel without declarations on both hosts.",
+    levels: ["native"],
+  },
+  {
+    id: "F321",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) checkDeclaration(" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn check_declaration(" },
+      { file: "packages/host/go/src/installed.go", symbol: "SidecarDeclaration{Name: name, Error:" },
+      { file: "packages/host/rust/src/installed.rs", symbol: "let refused = |error: String| SidecarDeclaration {" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestAnInvalidDeclarationLeavesTheOtherSidecarsDeclared" },
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestInvalidSidecarDeclarationsAreNotDeclared" },
+      { file: "packages/host/go/tests/installed_test.go", id: "TestInstalledSidecarsResolveTheInstalledVersionFolders" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "an_invalid_declaration_leaves_the_other_sidecars_declared" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "sidecar_declaration_requires_one_display_name_component" },
+      { file: "packages/host/rust/tests/installed_test.rs", id: "installed_sidecars_resolve_the_installed_version_folders" },
+    ],
+    expected: "An installed sidecar whose declaration cannot be read or checked is refused alone on both hosts: the construction succeeds, the other sidecars are declared, and a send to the refused one fails with sidecar <name>: <path>: <reason>.",
+    levels: ["native"],
+  },
+  {
+    id: "F320",
+    implementation: [{ file: ".github/workflows/release.yml", symbol: "pnpm -C packages/plugin-api pack --pack-destination" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the release publishes the packed releases that plugins and sidecars build with and sok only inside the bundles" }],
+    expected: "The core release publishes sok only inside its application zips.",
+    levels: ["unit"],
+  },
+  {
+    id: "F316",
+    implementation: [{ file: ".github/workflows/repeat.yml", symbol: "workflow_dispatch:" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "repeat.yml starts on a dispatch and runs only the tracked repeat targets" }],
+    expected: "A dispatch runs one tracked repeat target on the hosted macOS runner with the dispatched test and count.",
+    levels: ["unit"],
+  },
+  {
+    id: "F317-2",
+    implementation: [{ file: "native/darwin/tests/support/temporary_folder.m", symbol: "static int writeRefusedEntry(removefile_state_t state, const char *path, void *context)" }],
+    tests: [{ file: "native/darwin/tests/temporary_folder_test.m", id: "the message names the path that refused the removal with its error number" }],
+    expected: "A temporary folder that a native test cannot remove names each path that refused the removal with its error number and each remaining entry with its owner.",
+    levels: ["native"],
+  },
+  {
+    id: "F317-1",
+    implementation: [{ file: "native/darwin/tests/support/temporary_folder.m", symbol: "static void writeRemainingEntries(const char *folder)" }],
+    tests: [{ file: "native/darwin/tests/temporary_folder_test.m", id: "the message names the entry that remains with its mode, flags and owner" }],
+    expected: "A temporary folder that a native test cannot remove fails the process with each remaining entry, its mode and its flags.",
+    levels: ["native"],
+  },
+  {
+    id: "F315",
+    implementation: [{ file: "native/darwin/Makefile", symbol: "NATIVE_E2E_TESTS = " }],
+    tests: [
+      { file: "scripts/test/test-kinds.test.mjs", id: "a native unit test records no window of the screen" },
+      { file: "native/darwin/tests/support/capture_boundary.m", id: "starting without a capture target is rejected" },
+    ],
+    expected: "Every native test that records a real window runs in NATIVE_E2E_TESTS, and the capture boundary cases run in NATIVE_TESTS through capture_boundary_test.",
+    levels: ["unit", "native"],
+  },
+  {
+    id: "F313",
+    implementation: [
+      { file: "packages/host/rust/tests/support/crash_reports.rs", symbol: "pub fn watch_in(directory: PathBuf, application: &str) -> Self" },
+      { file: "packages/host/go/tests/support/crash_reports.go", symbol: "func WatchCrashReportsIn(" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/crash_reports_test.rs", id: "the_watch_removes_the_saved_report_and_not_the_hidden_file_that_the_system_renames" },
+      { file: "packages/host/go/tests/crash_reports_test.go", id: "TestTheWatchRemovesTheSavedReportAndNotTheHiddenFileThatTheSystemRenames" },
+    ],
+    expected: "The crash report watch of both host tests removes the saved report of its process and not the hidden file that the system renames.",
+    levels: ["unit"],
+  },
+  {
+    id: "F403",
+    implementation: [{ file: "packages/workbench/exposure.js", symbol: "const observeFailed =" }],
+    tests: [{ file: "packages/workbench/test/exposure.test.mjs", id: "an observation of a surface that ended is no failure, and its watch is forwarded again when the surface registers" }],
+    expected: "The observation of a surface that ended ends its watch without a failure, and a refusal with another code is reported.",
+    levels: ["unit"],
+  },
+  {
+    id: "F405",
+    implementation: [{ file: "packages/workbench/surface-modules.js", symbol: "function followSurfaceState(" }],
+    tests: [{ file: "packages/workbench/test/section-surface-mount.test.mjs", id: "a surface that a new drawing mounts again reports its state to the new drawing" }],
+    expected: "A surface that a new drawing mounts again reports its current state and later states to that drawing.",
+    levels: ["unit"],
+  },
+  {
+    id: "F406",
+    implementation: [{ file: "packages/workbench/app.css", symbol: ".card-sidebar[data-side-of=left] > .set{margin-right:var(--divider)}" }],
+    tests: [{ file: "packages/workbench/test/card-sidebars.test.mjs", id: "a section view of an open sidebar stops before the boundary line, so the view does not cover the grip" }],
+    expected: "The set of an open card sidebar stops before the band of its grip.",
+    levels: ["unit"],
+  },
+  {
+    id: "F407",
+    implementation: [{ file: "packages/workbench/projects.js", symbol: "const savedGeometry = new Map();" }],
+    tests: [{ file: "packages/workbench/test/projects-switch.test.mjs", id: "a flush writes the window geometry only when it changed" }],
+    expected: "A flush writes the window geometry only when it changed.",
+    levels: ["unit"],
+  },
+  {
+    id: "F408",
+    implementation: [{ file: "packages/workbench/app.css", symbol: "min-height:calc(var(--head-h) + var(--section-min-h))" }],
+    tests: [{ file: "packages/workbench/test/card-sidebars.test.mjs", id: "a section with an integer height gives way when the sidebar is short, and a fill section keeps its head and minimum height" }],
+    expected: "A section with an integer height gives way when the sidebar is shorter.",
+    levels: ["unit"],
+  },
+  {
+    id: "F409",
+    implementation: [{ file: "e2e/view-content.mjs", symbol: "export async function viewContentCases(" }],
+    tests: [{ file: "e2e/view-display.test.mjs", id: "each installed view plugin requires an explicit content case in a card" }],
+    expected: "The window checks read the entries that they name, wait for the status that they judge, and cover the installed plugins.",
+    levels: ["application"],
+  },
+  {
+    id: "F412",
+    implementation: [{ file: "packages/host/go/src/images.go", symbol: "func (i *Images) DrawingChanges" }],
+    tests: [{ file: "packages/host/go/tests/images_test.go", id: "TestARasterThatChangedWhileHiddenIsConfiguredWhenTheRegionIsShown" }],
+    expected: "A raster that changed while the window was off screen is configured when its region draws again.",
+    levels: ["unit"],
+  },
+  {
+    id: "F413",
+    implementation: [{ file: "docs/spec/events.json", symbol: "\"cancelled\"" }],
+    tests: [{ file: "packages/workbench/test/page-layout-trace.test.mjs", id: "a cancelled layout records only the phases that the event catalog declares" }],
+    expected: "The event catalog declares every phase that a cancelled layout records.",
+    levels: ["unit"],
+  },
+  {
+    id: "F414",
+    implementation: [{ file: "packages/host/rust/src/sidecars.rs", symbol: "fn route_message" }],
+    tests: [{ file: "packages/host/rust/src/sidecars_route_test.rs", id: "a_message_after_its_window_closed_posts_nothing_and_reports_no_failure" }],
+    expected: "A message after its window closed posts nothing and reports no failure.",
+    levels: ["unit"],
+  },
+  {
+    id: "F415",
+    implementation: [{ file: "e2e/window-sidebar-persistence.test.mjs", symbol: "near(inside.rect.w, 137" }],
+    tests: [{ file: "e2e/window-sidebar-persistence.test.mjs", id: "independent window and card settings survive hiding and project reload" }],
+    expected: "The section checks judge no activation state and expect the width inside the grip band.",
+    levels: ["application"],
+  },
+  {
+    id: "F416",
+    implementation: [{ file: "packages/host/rust/src/exposure.rs", symbol: "fn remove_surface_registrations" }],
+    tests: [{ file: "packages/host/rust/src/exposure.rs", id: "a_surface_that_closes_after_its_window_closed_records_nothing" }],
+    expected: "A notice that runs after its window closed reports no failure.",
+    levels: ["unit"],
+  },
+  {
+    id: "F417",
+    implementation: [{ file: "packages/host/go/src/surfaces.go", symbol: "func readPressThenDeliver" }],
+    tests: [{ file: "packages/host/go/src/surfaces_test.go", id: "TestAPressReadsItsTargetBeforeItsDelivery" }],
+    expected: "An injected press reads its target before its delivery.",
+    levels: ["unit"],
+  },
+  {
+    id: "F418",
+    implementation: [{ file: "e2e/hosts.test.mjs", symbol: "const byPosition" }],
+    tests: [{ file: "e2e/hosts.test.mjs", id: "every host answers the same page the same way" }],
+    expected: "The settled drag check compares surface frames ordered by position.",
+    levels: ["application"],
+  },
+  {
+    id: "F419",
+    implementation: [{ file: "native/darwin/src/surface_layout.m", symbol: "static void afterModalsPresented" }],
+    tests: [{ file: "native/darwin/tests/surface_layout_test.m", id: "the settled wait does not end before a shown modal has presented" }],
+    expected: "The settled wait ends after a shown modal has presented and does not ask a hidden modal.",
+    levels: ["unit"],
+  },
+  {
+    id: "F420",
+    implementation: [{ file: "packages/host/go/src/surfaces.go", symbol: "err = errWindowClosed" }],
+    tests: [{ file: "packages/host/go/src/surfaces_test.go", id: "TestClosedWindowCreatesNoSurface" }],
+    expected: "A layout request of a closed window creates no surface and fails with the closed window error.",
+    levels: ["unit"],
+  },
+  {
+    id: "F421",
+    implementation: [{ file: "packages/workbench/index.html", symbol: "onSettingsChange(() => {" }],
+    tests: [{ file: "packages/workbench/test/page-start-errors.test.mjs", id: "the settings listener is connected before a command can change a setting" }],
+    expected: "A setting changed during the page start is drawn.",
+    levels: ["unit"],
+  },
+  {
+    id: "F422",
+    implementation: [{ file: "packages/host/rust/src/exposure.rs", symbol: "fn ask_page_to_reload(" }],
+    tests: [{ file: "packages/host/rust/src/exposure_status_test.rs", id: "a_reload_asked_of_a_page_ends_the_requests_to_its_surfaces" }],
+    expected: "A reload asked of a page ends the requests to its surface documents.",
+    levels: ["unit"],
+  },
+  {
+    id: "F423",
+    implementation: [{ file: "native/darwin/src/window_facts.m", symbol: "callback(sp_window_on_screen(notification.object))" }],
+    tests: [{ file: "native/darwin/tests/window_facts_test.m", id: "the observation of a hidden window reports that it is not on screen" }],
+    expected: "An occlusion notice passes the state of the notified window.",
+    levels: ["unit"],
+  },
+  {
+    id: "F424",
+    implementation: [{ file: "scripts/check-app-tests.mjs", symbol: "a skipped test; assert its precondition" }],
+    tests: [{ file: "e2e/library.test.mjs", id: "terminal source card not found" }],
+    expected: "A window check whose precondition fails reports a failure.",
+    levels: ["application"],
+  },
+  {
+    id: "F239-299",
+    implementation: [{ file: "e2e/terminal.test.mjs", symbol: "three terminals and two browsers keep one view web view each and one terminal service" }],
+    tests: [{ file: "e2e/terminal.test.mjs", id: "three terminals and two browsers keep one view web view each and one terminal service" }],
+    expected: "The terminal window checks follow the view contracts.",
+    levels: ["application"],
+  },
+  {
+    id: "F294-1",
+    implementation: [{ file: "packages/workbench/observe.js", symbol: "registry.method(\"diagnostics.surface.held\"" }],
+    tests: [{ file: "e2e/late-reply.test.mjs", id: "a surface reply that arrives after its surface closed is discarded as an observation" }],
+    expected: "diagnostics.surface.held answers for a view surface.",
+    levels: ["application"],
+  },
+  {
+    id: "F298",
+    implementation: [{ file: ".github/workflows/release.yml", symbol: "needs: [checks, gate, release-wailsv3, release-tauriv2, release-mygo]" }],
+    tests: [{ file: "scripts/test/test-kinds.test.mjs", id: "no workflow runs a target or script of the end-to-end checks" }],
+    expected: "CI and release jobs run only unit tests and structure checks of their repository.",
+    levels: ["unit"],
+  },
+  {
+    id: "F343",
+    implementation: [{ file: "e2e/section-first-frame.test.mjs", symbol: "a section view shows the card colour from its first frame" }],
+    tests: [{ file: "e2e/section-first-frame.test.mjs", id: "a section view shows the card colour from its first frame" }],
+    expected: "A section view shows the card background from its first presented frame.",
+    levels: ["application"],
+  },
+  {
+    id: "F410",
+    implementation: [{ file: "native/darwin/src/window_facts.m", symbol: "callback(sp_window_on_screen(notification.object))" }],
+    tests: [{ file: "native/darwin/tests/window_facts_test.m", id: "the observation of a hidden window reports that it is not on screen" }],
+    expected: "An occlusion notice of a closing window reports no failure.",
+    levels: ["unit"],
+  },
+  {
+    id: "F411",
+    implementation: [{ file: "packages/host/go/src/surfaces.go", symbol: "err = errWindowClosed" }],
+    tests: [{ file: "packages/host/go/src/surfaces_test.go", id: "TestClosedWindowCreatesNoSurface" }],
+    expected: "A closed window creates no surface.",
+    levels: ["unit"],
+  },
+  {
+    id: "F425",
+    implementation: [{ file: "packages/host/go/src/surfaces.go", symbol: "func newNativeWebview(owner *Surfaces" }],
+    tests: [{ file: "packages/host/go/src/surfaces_test.go", id: "TestClosedWindowCreatesNoModalView" }],
+    expected: "A modal request of a closed window creates no view.",
+    levels: ["unit"],
+  },
+  {
+    id: "F426",
+    implementation: [{ file: "packages/host/rust/src/platform/platform.rs", symbol: "pub trait Platform: CoreRootHost + Send + Sync {" }],
+    tests: [{ file: "packages/host/rust/src/exposure_status_test.rs", id: "a_reload_asked_of_a_page_ends_the_requests_to_its_surfaces" }],
+    expected: "The platform interface declares only operations that the host calls.",
+    levels: ["unit"],
+  },
+  {
+    id: "F332-7",
+    implementation: [{ file: "e2e/observation/section-design.test.mjs", symbol: "stills of the files and browser sections in each mode" }],
+    tests: [{ file: "e2e/observation/section-design.test.mjs", id: "stills of the files and browser sections in each mode" }],
+    expected: "Stills of the applications in each mode show the sections for inspection.",
+    levels: ["application"],
+  },
+  {
+    id: "F428",
+    implementation: [{ file: "e2e/terminal-selection-follow.test.mjs", symbol: "the selection highlight of a drag follows the pointer while a status line redraws" }],
+    tests: [{ file: "e2e/terminal-selection-follow.test.mjs", id: "the selection highlight of a drag follows the pointer while a status line redraws" }],
+    expected: "The highlight of each recorded frame stays on the dragged cells and ends under the pointer.",
+    levels: ["application"],
+  },
+  {
+    id: "F429",
+    implementation: [{ file: "packages/workbench/package.json", symbol: "docs/spec/events.json" }],
+    tests: [{ file: "packages/workbench/test/page-layout-trace.test.mjs", id: "a cancelled layout records only the phases that the event catalog declares" }],
+    expected: "A package declares the spec files that its tests read.",
+    levels: ["unit"],
+  },
+  {
+    id: "F430",
+    implementation: [{ file: "e2e/card-panel-checks.mjs", symbol: "missingPoses" }],
+    tests: [{ file: "e2e/test/card-panel-checks.test.mjs", id: "a pose in the first frame that a recording gap delivers after two display frames counts as recorded" }],
+    expected: "A displayed state counts as recorded when the frames up to the first frame at or after two display frames hold it.",
+    levels: ["unit"],
+  },
+  {
+    id: "F434",
+    implementation: [{ file: "e2e/benchmark/cases/split-load.mjs", symbol: "export function hostRssKbOf" }],
+    tests: [{ file: "e2e/test/split-load-case.test.mjs", id: "the host process is found by its configuration folder in every build profile" }],
+    expected: "The benchmark finds the host in the process table by its configuration folder in every build profile.",
+    levels: ["unit"],
+  },
+  {
+    id: "F212.14-6",
+    implementation: [{ file: "e2e/benchmark/cases/plain-view.mjs", symbol: "export function sourceIntervalSummary" }],
+    tests: [{ file: "e2e/test/plain-view-case.test.mjs", id: "the plain view summary reads only the source frames that meet the gesture" }],
+    expected: "The plain view benchmark summarizes the in-gesture source intervals of a view without plugin code.",
+    levels: ["unit"],
+  },
+  {
+    id: "F436",
+    implementation: [{ file: "packages/workbench/compositor.js", symbol: "publishAhead" }],
+    tests: [{ file: "packages/workbench/test/compositor.test.mjs", id: "a preparation keeps a section surface at its offsets, so the drawn commit of a width change is the same request" }],
+    expected: "the preparation of a section surface equals its drawn commit",
+    levels: ["unit"],
+  },
+  {
+    id: "F437",
+    implementation: [{ file: "e2e/benchmark/cases/plain-view.mjs", symbol: "cardEdgeSamples" }],
+    tests: [{ file: "e2e/test/plain-view-case.test.mjs", id: "the plain view edge samples keep the measured frames and name the others" }],
+    expected: "the measured frames and the indexes of the others",
+    levels: ["unit"],
+  },
+  {
+    id: "F438",
+    implementation: [{ file: "packages/plugin-api/surface-composition.js", symbol: "createSurfaceCompositionController" }],
+    tests: [{ file: "packages/plugin-api/test/surface-composition.test.mjs", id: "an observed placement equal to the last one is not sent again, and a failed placement is sent again" }],
+    expected: "one placement for one observed geometry",
+    levels: ["unit"],
+  },
+  {
+    id: "F439",
+    implementation: [{ file: "packages/plugin-api/image-region.js", symbol: "attachImage" }],
+    tests: [{ file: "packages/plugin-api/test/image-region.test.mjs", id: "a caret equal to the last one is not sent again, and a refused caret is sent again" }],
+    expected: "An equal caret is not sent again and a refused caret is sent again",
+    levels: ["unit"],
+  },
+  {
+    id: "F440",
+    implementation: [{ file: "packages/workbench/compositor.js", symbol: "publishAhead" }],
+    tests: [{ file: "packages/workbench/test/compositor.test.mjs", id: "a preparation hides a section surface whose offsets do not fit the target card" }],
+    expected: "A section surface that does not fit its target card is hidden with a zero frame",
+    levels: ["unit"],
+  },
+  {
+    id: "F441",
+    implementation: [{ file: "packages/host/rust/src/surfaces.rs", symbol: "fn apply_surfaces(" }],
+    tests: [{ file: "e2e/surface-sync-turn.test.mjs", id: "a surface layout enters the main thread once and its ready callback once" }],
+    expected: "One main-thread entry and one ready callback per layout on both hosts",
+    levels: ["application"],
+  },
+  {
+    id: "F442",
+    implementation: [{ file: "packages/window-check/view-metrics.mjs", symbol: "convergenceMs = capture.timeMs - gestureEndedAtMs" }],
+    tests: [{ file: "packages/window-check/test/view-metrics.test.mjs", id: "view metrics judge convergence by time, not by the count of recorded frames" }],
+    expected: "A paint capture within 33 ms converges at any count of recorded frames",
+    levels: ["unit"],
+  },
+  {
+    id: "F444",
+    implementation: [{ file: "packages/workbench/surface-sync-request.js", symbol: "export function surfaceSyncRequestWithDeclarationTable(" }],
+    tests: [{ file: "packages/workbench/test/surface-sync-request.test.mjs", id: "a sync request carries the start values of a view only while the host does not hold them" }],
+    expected: "A request leaves out start values equal to the last sent ones, carries changed ones and carries them again for a surface named again.",
+    levels: ["unit"],
+  },
+  {
+    id: "F404",
+    implementation: [{ file: "packages/host/rust/src/windows.rs", symbol: "pub(crate) fn with_open_window(" }],
+    tests: [{ file: "packages/host/rust/src/windows_records_test.rs", id: "a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure" }],
+    expected: "A notification of a Tauri window that closed runs no step and reports no failure.",
+    levels: ["unit"],
+  },
+  {
+    id: "F312",
+    implementation: [{ file: "packages/host/rust/src/documents.rs", symbol: "pub(crate) fn end_ticket_waits(" }],
+    tests: [
+      { file: "packages/host/rust/src/presentation_end_test.rs", id: "a_deferred_end_in_an_open_window_ends_its_join" },
+      { file: "packages/host/rust/src/surface_close_test.rs", id: "a_surface_that_closes_in_an_open_window_ends_its_view_source_for_the_page" },
+    ],
+    expected: "Each Tauri host test of the closed-window corrections declares a tauriv2 only contract case.",
+    levels: ["unit"],
+  },
+  {
+    id: "F311-1",
+    implementation: [
+      { file: "scripts/test-discovery.mjs", symbol: "export async function discoverGo(" },
+      { file: "scripts/go-tests.mjs", symbol: "export async function runGoTests(" },
+    ],
+    tests: [
+      { file: "scripts/test/test-discovery.test.mjs", id: "a discovered Go test has the deadline of its limit" },
+      { file: "scripts/test/repeat-go.test.mjs", id: "make repeat-go gives each test the deadline of its limit" },
+    ],
+    expected: "Each Go test that the runners start has the deadline of its limit.",
+    levels: ["unit"],
+  },
+  {
+    id: "F311",
+    implementation: [{ file: "packages/host/go/src/application_log.go", symbol: "func StartStandardError(" }],
+    tests: [{ file: "packages/host/go/tests/application_log_test.go", id: "TestStartStandardErrorWritesAFatalErrorToTheCrashFileAndEndsTheProcessWithTheSystemCrash" }],
+    expected: "The child of the crash file test ends only through its crash, so the test checks the crash file and the signal SIGABRT.",
+    levels: ["unit"],
+  },
+  {
+    id: "F309",
+    implementation: [{ file: "packages/workbench/document-regions.js", symbol: "const attachmentOf = (tab, name)" }],
+    tests: [{ file: "packages/workbench/test/document-regions.test.mjs", id: "a region whose attachment ends while its state is read yields no state, and a held attachment reports its failure" }],
+    expected: "A region whose attachment ended during the read of its state yields no state, and a held attachment reports its failure.",
+    levels: ["unit"],
+  },
+  {
+    id: "F307",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (p *lineProgress) describe(" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn describe(&self, now: Instant, last_read: Instant)" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentRetainTimeoutNamesHowFarTheRequestWent" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "a_retain_timeout_names_how_far_the_request_went" },
+    ],
+    expected: "A retain that the service does not answer fails with the stage of its request line and the time since the last line from the service.",
+    levels: ["unit"],
+  },
+  {
+    id: "F306",
+    implementation: [{ file: "scripts/test-app.mjs", symbol: "export function finishRoot" }],
+    tests: [{ file: "scripts/test/test-app.test.mjs", id: "a failed run keeps the logs and removes the service folders, so the services of a host that ended without host.quit exit" }],
+    expected: "A failed end-to-end run keeps its logs and removes the service folder of each application, so the services of the run exit.",
+    levels: ["unit"],
+  },
+  {
+    id: "F305",
+    implementation: [
+      { file: "packages/host/rust/src/event_record.rs", symbol: "fn record_site(" },
+      { file: "packages/host/go/src/application_log.go", symbol: "func logHost(" },
+      { file: "packages/host/rust/src/documents.rs", symbol: "pub(crate) fn end_ticket_waits(" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/event_record_test.rs", id: "a_record_of_a_helper_names_the_file_and_line_of_its_call" },
+      { file: "packages/host/go/tests/event_record_test.go", id: "TestARecordOfAHelperNamesTheFileAndLineOfItsCall" },
+      { file: "packages/host/rust/src/presentation_end_test.rs", id: "a_deferred_end_after_its_window_closed_ends_nothing_and_reports_no_failure" },
+    ],
+    expected: "A host record names the call that wrote it, and the error that the records traced to a deferred presentation end of a closed window is removed.",
+    levels: ["unit"],
+  },
+  {
+    id: "F305-1",
+    implementation: [
+      { file: "packages/host/rust/src/event_record.rs", symbol: "fn record_site(" },
+      { file: "packages/host/go/src/application_log.go", symbol: "func logHost(" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/event_record_test.rs", id: "a_record_of_a_helper_names_the_file_and_line_of_its_call" },
+      { file: "packages/host/go/tests/event_record_test.go", id: "TestARecordOfAHelperNamesTheFileAndLineOfItsCall" },
+    ],
+    expected: "A record that a record helper of a host writes names the file and line of its call.",
+    levels: ["unit"],
+  },
+  {
+    id: "F303",
+    implementation: [{ file: "packages/host/rust/src/surfaces.rs", symbol: "pub fn with_registered_surface<T>(" }],
+    tests: [{ file: "packages/host/rust/src/surfaces_test.rs", id: "a_sync_step_that_runs_after_the_close_of_its_surface_does_not_use_the_closed_handle" }],
+    expected: "A layout step of the Tauri host uses a surface handle only while its registration still holds it.",
+    levels: ["unit"],
+  },
+  {
+    id: "F305-2",
+    implementation: [{ file: "packages/host/rust/src/documents.rs", symbol: "pub(crate) fn end_ticket_waits(" }],
+    tests: [
+      { file: "packages/host/rust/src/presentation_end_test.rs", id: "a_deferred_end_after_its_window_closed_ends_nothing_and_reports_no_failure" },
+      { file: "packages/host/rust/src/presentation_end_test.rs", id: "a_deferred_end_in_an_open_window_ends_its_join" },
+    ],
+    expected: "A deferred end of a presentation wait ends its join in an open window and reports no failure for a window that closed before it ran.",
+    levels: ["unit"],
+  },
+  {
+    id: "F300",
+    implementation: [
+      { file: "packages/host/go/src/application_log.go", symbol: "func StartStandardError(" },
+      { file: "native/darwin/src/document_view.m", symbol: "@property(retain) NSView *webSurface;" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/application_log_test.go", id: "TestStartStandardErrorWritesAFatalErrorToTheCrashFileAndEndsTheProcessWithTheSystemCrash" },
+      { file: "native/darwin/tests/document_surface_lifetime_test.m", id: "a surface that closes before its document stays alive while the document observes it" },
+    ],
+    expected: "A fatal error of the Wails host writes the crash file and the system crash report, and a document region keeps its surface until it closes.",
+    levels: ["unit"],
+  },
+  {
+    id: "F301",
+    implementation: [
+      { file: "packages/host/rust/src/documents.rs", symbol: "pub(crate) fn end_closed_surface(" },
+      { file: "packages/host/rust/src/documents.rs", symbol: "pub(crate) fn end_ticket_waits(" },
+    ],
+    tests: [
+      { file: "packages/host/rust/src/surface_close_test.rs", id: "a_surface_that_closes_after_its_window_closed_reports_no_failure_and_ends_its_view_source" },
+      { file: "packages/host/rust/src/presentation_end_test.rs", id: "a_deferred_end_after_its_window_closed_ends_nothing_and_reports_no_failure" },
+    ],
+    expected: "The close of a surface and a deferred presentation end of a window that closed report no failure.",
+    levels: ["unit"],
+  },
+  {
+    id: "F301-1",
+    implementation: [{ file: "packages/host/rust/src/documents.rs", symbol: "pub(crate) fn end_closed_surface(" }],
+    tests: [
+      { file: "packages/host/rust/src/surface_close_test.rs", id: "a_surface_that_closes_after_its_window_closed_reports_no_failure_and_ends_its_view_source" },
+      { file: "packages/host/rust/src/surface_close_test.rs", id: "a_surface_that_closes_in_an_open_window_ends_its_view_source_for_the_page" },
+    ],
+    expected: "The close of a surface ends its presentation waits and view source in the records that it took, tells the page only while the window is open, and reports no failure for a window that closed.",
+    levels: ["unit"],
+  },
+  {
+    id: "F298-6",
+    implementation: [
+      { file: "scripts/test-app.mjs", symbol: "export function e2ePlan" },
+      { file: "scripts/test-app.mjs", symbol: "export async function runPlan" },
+      { file: "Makefile", symbol: "@node scripts/test-app.mjs --script test-app --native e2e" },
+    ],
+    tests: [
+      { file: "scripts/test/test-app.test.mjs", id: "each run gets a new empty configuration root under target/e2e" },
+      { file: "scripts/test/test-app.test.mjs", id: "the plan prepares, starts the three applications, checks and quits them in this order" },
+      { file: "scripts/test/test-app.test.mjs", id: "a failed preparation skips the checks, runs the cleanup and names the failed step" },
+      { file: "scripts/test/test-app.test.mjs", id: "a failed check does not skip the next check" },
+      { file: "scripts/test/test-app.test.mjs", id: "a start step ends when the application writes endpoint.json and fails when the application exits first" },
+      { file: "scripts/test/test-app.test.mjs", id: "a quit step requests host.quit and ends when the application exits" },
+      { file: "scripts/test/test-app.test.mjs", id: "a quit step without a started application is skipped" },
+      { file: "scripts/test/test-app.test.mjs", id: "a process whose command names the configuration root or an application bundle remains" },
+      { file: "scripts/test/test-app.test.mjs", id: "a passed run removes its configuration root and a failed run keeps it" },
+    ],
+    expected: "make test-app runs the end-to-end checks in a new configuration root for each run: it starts the applications, runs the checks, quits the applications with host.quit and fails on a remaining process.",
+    levels: ["unit"],
+  },
+  {
+    id: "F298-7",
+    implementation: [{ file: ".github/workflows/release.yml", symbol: "name: Package the releases that plugins and sidecars build with" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the release publishes the packed releases that plugins and sidecars build with and sok only inside the bundles" }],
+    expected: "The core release holds sok and the packed releases of @soksak/plugin-api and @soksak/native-process-identity-darwin.",
+    levels: ["unit"],
+  },
+  {
+    id: "F275-2",
+    implementation: [{ file: "scripts/workspace-registry.mjs", symbol: "// make -C runs the target in the repository, so the path that it receives is absolute." }],
+    tests: [{ file: "scripts/test/workspace-registry.test.mjs", id: "a relative output folder of a pack resolves from the working directory, not from the plugin repository" }],
+    expected: "The workspace registry passes an absolute output folder to the make pack target of a plugin repository.",
+    levels: ["unit"],
+  },
+  {
+    id: "F275-1",
+    implementation: [{ file: "scripts/workspace-registry.mjs", symbol: "export function installFolders(" }],
+    tests: [{ file: "scripts/test/workspace-registry.test.mjs", id: "the installation stage runs make install once in every declared repository" }],
+    expected: "The installation stage runs make install once in every declared plugin and sidecar repository.",
+    levels: ["unit"],
+  },
+  {
+    id: "F275",
+    implementation: [{ file: "scripts/workspace-registry.mjs", symbol: "export function packPlugin(" }],
+    tests: [{ file: "scripts/test/workspace-registry.test.mjs", id: "a plugin is packed by the make pack target of its repository, which receives only the output folder" }],
+    expected: "The workspace registry packs each plugin with the make pack target of its repository and records the one release that the target adds.",
+    levels: ["unit"],
+  },
+  {
+    id: "F274",
+    implementation: [{ file: "Makefile", symbol: "because a published commit message is kept" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs only the commit message check, and ci runs the structure, format and clippy checks" }],
+    expected: "A push checks only its commit messages before it leaves the checkout, and CI runs every other check.",
+    levels: ["unit"],
+  },
+  {
+    id: "F272",
+    implementation: [{ file: ".github/workflows/release.yml", symbol: "needs.gate.outputs.release == 'true'" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "a push to main releases the declared version after the checks and the gate succeed" }],
+    expected: "A push to main runs the checks once and releases the declared version only when the gate finds no tag and every job succeeds.",
+    levels: ["unit"],
+  },
+  {
+    id: "F272-3",
+    implementation: [{ file: ".github/workflows/release.yml", symbol: "sok-check release packages/plugin-api/package.json docs/features.md" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "a push to main releases the declared version after the checks and the gate succeed" }],
+    expected: "A push to main runs the checks once, and the release jobs and the tag follow only a gate that releases.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-84",
+    implementation: [{ file: "packages/workbench/package.json", symbol: '"error-text.js"' }],
+    tests: [{ file: "packages/workbench/test/files-list.test.mjs", id: "every file that the start document and the modules of the page import is listed in package.json files" }],
+    expected: "Every Workbench module imported by the startup document and page is included in the staged package payload.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-86",
+    implementation: [{ file: "scripts/check-app-tests.mjs", symbol: "export function auditActivationUnboundNames" }],
+    tests: [{ file: "scripts/test/soksak-scripts.test.mjs", id: "activation fixture audit rejects unresolved identifiers" }],
+    expected: "Activation fixtures with unresolved identifiers fail the declared compiler-backed audit.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-88",
+    implementation: [{ file: "native/darwin/src/capture.m", symbol: "callbackMachTickString" }],
+    tests: [{ file: "native/darwin/tests/capture_metadata_test.m", id: "the callback artifact preserves stage ticks as decimal strings, absent stages as null, and the actual mach timebase" }],
+    expected: "Callback lifecycle Mach ticks remain exact decimal strings or explicit null values and preserve the actual timebase.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-91",
+    implementation: [{ file: "native/darwin/tests/support/ime_wire_document.h", symbol: "sp_ime_wire_document(" }],
+    tests: [{ file: "native/darwin/tests/ime_wire_document_test.m", id: "current input transaction applies its ordered insert and Backspace command" }],
+    expected: "The IME wire document helper applies current ordered input actions, including Backspace, and reads the transaction preedit state.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-92",
+    implementation: [{ file: "scripts/test-hosts.mjs", symbol: "export function parseContractCases" }],
+    tests: [{ file: "scripts/test/test-hosts.test.mjs", id: "the case table rejects duplicate ids, invalid ids, and a limited scope without a reason" }],
+    expected: "The host-contract table rejects duplicate or invalid identifiers and limited scopes without a reason.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-94",
+    implementation: [{ file: "native/darwin/src/input_inject.m", symbol: "held->front = [NSWorkspace.sharedWorkspace.frontmostApplication retain]" }],
+    tests: [{ file: "native/darwin/tests/view_focus_test.m", id: "the saved frontmost description survives the callback autorelease pool" }],
+    expected: "The activation callback retains its frontmost application description beyond the callback autorelease pool.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-95",
+    implementation: [{ file: "native/darwin/tests/view_focus_test.m", symbol: "static BOOL waitFor(" }],
+    tests: [{ file: "native/darwin/tests/view_focus_test.m", id: "waitFor dispatches a queued AppKit application event" }],
+    expected: "The view-focus wait dispatches queued AppKit application events while waiting.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-98-1-1",
+    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function persistThenRequireVisualProof" }],
+    tests: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "visual proof preserves cadence measurements without a functional gap threshold" }],
+    expected: "Visual proof persistence requires complete cadence evidence and records measured outcomes before rejection.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-98-1",
+    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function persistThenRequireVisualProof" }],
+    tests: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "visual proof preserves cadence measurements without a functional gap threshold" }],
+    expected: "Complete visual results and cadence measurements are persisted before incomplete functional proof is rejected.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-98-2",
+    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function indexFrameStatus" }],
+    tests: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "visual indexing projects rows-only screen status without inventing a screen frame" }],
+    expected: "Visual input uses prior rows-only terminal screen status without inventing a screen frame identity.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-98-3",
+    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "function semanticRasterColorSpace(name)" }],
+    tests: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "source manifest loads only digest-verified frame-bound rasters" }],
+    expected: "The retained-source consumer maps the emitted CoreGraphics sRGB name to the semantic sRGB label and rejects unsupported names without changing raster bytes.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-93",
+    implementation: [{ file: "scripts/test-hosts.mjs", symbol: "export function auditHostContract" }],
+    tests: [{ file: "scripts/test/test-hosts.test.mjs", id: "the static audit reports each case of a host scope that no test declares" }],
+    expected: "The host-contract audit compares declared cases with owning test markers and retains uncovered declarations as findings.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-102",
+    implementation: [{ file: "scripts/test-hosts.mjs", symbol: "export function selectRustDeclarations" }],
+    tests: [{ file: "scripts/test/test-hosts.test.mjs", id: "Rust declarations follow compiler-listed tests and reject ambiguous crate leaves" }],
+    expected: "Rust host-contract declarations are selected from compiler-listed tests and ambiguous crate leaves fail explicitly.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-104",
+    implementation: [
+      { file: "native/darwin/src/capture.m", symbol: "sp_image_capture_match_sample(" },
+      { file: "native/darwin/src/capture.m", symbol: "sp_image_capture_match_identity_enqueue_frame(" },
+      { file: "native/darwin/src/capture_frame_identity.m", symbol: "sp_capture_frame_identity_decode(" },
+    ],
+    tests: [{ file: "native/darwin/tests/capture_metadata_test.m", id: "the real delegate path records callback and image-match raw bounds, absent identity-stage ticks, the timebase, display time and frame marker" }],
+    expected: "The bounded callback record measures raw Mach start and completion ticks around image matching and optional identity decoding.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-106",
+    implementation: [
+      { file: "packages/host/go/src/documents.go", symbol: "func validateViewMessageEnvelope(" },
+      { file: "packages/host/rust/src/documents.rs", symbol: "fn retired_view_error(" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/view_origin_test.go", id: "TestRetiredGenerationMalformedInnerEnvelopeKeepsItsChannelError" },
+      { file: "packages/host/rust/src/view_origin_test.rs", id: "a_retired_malformed_envelope_keeps_its_channel_error" },
+    ],
+    expected: "Malformed view-message envelopes retain their channel errors before stale-generation cancellation, while valid stale calls remain canceled.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-107",
+    implementation: [
+      { file: "packages/host/go/src/documents.go", symbol: "func (s *Surfaces) viewFailed(" },
+      { file: "packages/host/rust/src/documents.rs", symbol: "fn retire_view_before_replacement(" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/view_lifecycle_test.go", id: "TestViewProcessEndNotifiesThePageBeforeRegisteringTheReplacement" },
+      { file: "packages/host/rust/src/view_origin_test.rs", id: "a_view_process_end_retires_its_origin_before_replacement_registration" },
+    ],
+    expected: "Provider creation follows successful source-generation allocation, and view-process-ended precedes replacement source registration.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-107-2",
+    implementation: [
+      { file: "packages/host/go/src/documents.go", symbol: "func (s *Surfaces) viewFailed(" },
+      { file: "packages/host/rust/src/documents.rs", symbol: "fn retire_view_before_replacement(" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/view_lifecycle_test.go", id: "TestViewProcessEndNotifiesThePageBeforeRegisteringTheReplacement" },
+      { file: "packages/host/rust/src/view_origin_test.rs", id: "a_view_process_end_retires_its_origin_before_replacement_registration" },
+    ],
+    expected: "A failed view retires its old origin and sends view-process-ended before replacement source registration.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-108",
+    implementation: [{ file: "native/darwin/tests/view_focus_test.m", symbol: "static NSString *inputActivityErrorReport(" }],
+    tests: [
+      { file: "native/darwin/tests/view_focus_test.m", id: "the test output preserves captured activation errors from each source" },
+      { file: "native/darwin/tests/view_focus_test.m", id: "the activation fixture registers its app DOM web view" },
+    ],
+    expected: "The activation fixture registers its main webview before creating the surface and reports captured errors from every source.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-109",
+    implementation: [{ file: "scripts/test-discovery.mjs", symbol: "export async function discoverRust" }],
+    tests: [{ file: "scripts/test/test-discovery.test.mjs", id: "a Rust package lists its tests, each test runs by itself, and an ignored test is a skip" }],
+    expected: "Rust test builds and individual tests report their start and elapsed pass, fail, timeout, or skip results through the shared runner.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-110",
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "export function auditFeatureLinks" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "completed capability entries all have feature evidence links" }],
+    expected: "Completed capabilities have exact implementation and owner-test links, and their recorded inventory counts match the discovered workspace files.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-114-2",
+    implementation: [{ file: "packages/sok/rust/src/process.rs", symbol: "fn run_wait(" }],
+    tests: [{ file: "packages/sok/rust/tests/process_wait_test.rs", id: "process_wait_rejects_invalid_inputs_before_waiting" }],
+    expected: "The Rust process wait command rejects invalid arguments before waiting.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-127",
+    implementation: [{ file: "packages/host/rust/src/image_detach.rs", symbol: "pub(super) fn detach_acknowledgement_body(" }],
+    tests: [{ file: "packages/host/rust/src/image_detach_test.rs", id: "a_deep_unrelated_member_does_not_hide_a_detach_acknowledgement" }],
+    expected: "Typed acknowledgement parsing ignores deep unrelated members without materializing them.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-131",
+    implementation: [{ file: "packages/window-check/app.mjs", symbol: "async record(params = {})" }],
+    tests: [{ file: "packages/window-check/test/recording.test.mjs", id: "a stop failure remains visible when the host removes its recording folder" }],
+    expected: "A recording stop failure remains reported when the host removes the recording folder.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-132",
+    implementation: [
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn finish_capture_stop(" },
+      { file: "packages/host/go/src/diagnostics.go", symbol: "func finishCaptureStop(" },
+    ],
+    tests: [
+      { file: "packages/host/rust/src/diagnostics_test.rs", id: "a_layout_trace_failure_keeps_the_started_capture_folder" },
+      { file: "packages/host/rust/tests/recording_test.rs", id: "a_stop_failure_keeps_the_folder_returned_by_start" },
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestCaptureStopLayoutFailurePreservesStartedFolder" },
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestRecordingFinishStopFailurePreservesFolder" },
+    ],
+    expected: "Capture stop and layout failures preserve and report the folder returned by capture start.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-134",
+    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function indexAcceptedFrameTrace(" }],
+    tests: [
+      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "indexes an accepted screen frame from its exact TRACE body and DEBUG hash marker" },
+      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "joins repeated screen messages to every exact accepted native frame tuple" },
+    ],
+    expected: "Visual screen records join only to accepted native frame tuples with exact trace and hash identity.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-136",
+    implementation: [
+      { file: "native/darwin/src/image_capture_match.m", symbol: "sp_image_capture_match_identity_enqueue_frame(" },
+      { file: "native/darwin/src/capture_frame_identity.m", symbol: "sp_capture_frame_identity_decode(" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_capture_match_test.m", id: "the decoder admits sixteen pending jobs and reports the rejected branch with its job and byte counts" },
+      { file: "native/darwin/tests/image_capture_match_test.m", id: "all admitted frames drain in sample order before session state is released, despite later overflow" },
+    ],
+    expected: "The bounded identity decoder accepts sixteen jobs, reports overflow without dropping admitted frames, and drains accepted work in sample order.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-137",
+    implementation: [{ file: "scripts/check-events.mjs", symbol: "export const catalogOf =" }],
+    tests: [{ file: "scripts/test/check-events.test.mjs", id: "the audit composes every installed plugin manifest event catalog and its plugin layer" }],
+    expected: "The event audit composes each installed plugin manifest catalog with its declared plugin layer.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-139",
+    implementation: [{ file: "packages/log-contract/index.js", symbol: "export function composeCatalogs(" }],
+    tests: [{ file: "packages/log-contract/test/audit.test.mjs", id: "catalog composition rejects a base catalog without its declared layers" }],
+    expected: "Catalog composition rejects a base catalog when its declared layers are missing.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-141",
+    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "async function readObservationBatch(" }],
+    tests: [
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "terminal observation reads status pairs concurrently around the screen sample" },
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "terminal observation reports every failed read in each concurrent phase" },
+    ],
+    expected: "Terminal observation reads each status pair concurrently in phase order and reports every failed read.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-143",
+    implementation: [
+      { file: "native/darwin/src/image_capture_match.m", symbol: "sp_image_capture_match_identity_enqueue_frame(" },
+      { file: "native/darwin/src/image_capture_match.m", symbol: "commitIdentityDecodeJob(" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_capture_match_test.m", id: "the second QR decode starts before the blocked first decode is released" },
+      { file: "native/darwin/tests/image_capture_match_test.m", id: "an asynchronous QR decoder exception is reported and fails manifest finalization after decoder drain" },
+    ],
+    expected: "Two bounded decode workers progress independently while results commit in sample order and decoder exceptions fail and drain explicitly.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-144",
+    implementation: [{ file: "native/darwin/src/image_capture_match.m", symbol: "static NSString *identityCapacityMessage(" }],
+    tests: [{ file: "native/darwin/tests/image_capture_match_test.m", id: "the decoder admits sixteen pending jobs and reports the rejected branch with its job and byte counts" }],
+    expected: "Decoder admission errors report the exhausted job or crop-byte bound with measured counters.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-145",
+    implementation: [{ file: "native/darwin/src/activity_observers.m", symbol: "void sp_observe_activity(void)" }],
+    tests: [{ file: "native/darwin/tests/activity_observers_test.m", id: "deactivation records the event-time frontmost process" }],
+    expected: "Native deactivation events record the event-time frontmost process without changing input acceptance.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-147",
+    implementation: [{ file: "e2e/app-update.test.mjs", symbol: "function installedPluginVersion(" }],
+    tests: [{ file: "e2e/app-update.test.mjs", id: "the update list shows the core release first and a refused release fails the operation" }],
+    expected: "The update fixture declares unrelated installed versions compatible before testing the intended incompatibility.",
+    levels: ["application"],
+  },
+  {
+    id: "F239-148",
+    implementation: [{ file: "native/darwin/src/image_capture_match.m", symbol: "static BOOL appendIdentityDecodeRecords(" }],
+    tests: [{ file: "native/darwin/tests/image_capture_match_test.m", id: "eight decoded JSONL rows commit in order while the shared raw/source artifact writer remains blocked" }],
+    expected: "Ordered identity rows commit on their serial lane independently of the shared raw and source artifact writer.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-149",
+    implementation: [{ file: "native/darwin/src/capture_frame_identity.m", symbol: "sp_capture_frame_identity_decode(" }],
+    tests: [{ file: "native/darwin/tests/capture_frame_identity_test.m", id: "QR modules clipped at the top ROI edge are unknown" }],
+    expected: "Module-clipped QR symbols report the canonical helper reason that the matcher classifies as cropped.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-150",
+    implementation: [{ file: "native/darwin/src/capture.m", symbol: "int sp_capture_stop(double after)" }],
+    tests: [{ file: "native/darwin/tests/capture_stop_intake_test.m", id: "sample intake is closed before the asynchronous stream stop is requested" }],
+    expected: "The stop boundary seals sample intake before asynchronous stream shutdown and retains late callback attribution.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-151",
+    implementation: [{ file: "e2e/activation/ime-reference-steps.mjs", symbol: "export async function runReferenceSteps(" }],
+    tests: [{ file: "e2e/test/activation/ime-reference-steps.test.mjs", id: "the next AppKit reference key waits for the prior presentation checkpoint" }],
+    expected: "Each reference key waits for the preceding document check and window presentation checkpoint.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-156",
+    implementation: [{ file: "packages/workbench/projects.js", symbol: "async function showProject(" }],
+    tests: [{ file: "e2e/projects.test.mjs", id: "project windows persist files, inherit settings, and isolate native state" }],
+    expected: "Project windows preserve saved state and complete close and reopen without application errors.",
+    levels: ["application"],
+  },
+  {
+    id: "F262-4",
+    implementation: [{ file: "packages/workbench/tab-reports.js", symbol: "export function restoreOrigin(" }],
+    tests: [{ file: "e2e/projects.test.mjs", id: "project windows persist files, inherit settings, and isolate native state" }],
+    expected: "Project windows preserve saved state and complete close and reopen without application errors.",
+    levels: ["application"],
+  },
+  {
+    id: "F212.12-4",
+    implementation: [
+      { file: "packages/workbench/surface-modules.js", symbol: "const registeredViewCommands = new Map();" },
+      { file: "packages/host/rust/src/platform/darwin/document.rs", symbol: "struct EndedReceiver(Rc<dyn Fn() + Send>);" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/surface-view-path.test.mjs", id: "a replacement view registers its command once in its own source generation" },
+      { file: "packages/host/rust/src/platform/darwin/document_test.rs", id: "callback_lifetime_ended_survives_document_retirement" },
+      { file: "e2e/view-restart.test.mjs", id: "a view restores state, stops after four failures and reopens after unload" },
+    ],
+    expected: "Replacement view generations register their commands without duplicates and active callbacks survive document retirement; restart, stop and reopen are measured through the application.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F239-157",
+    implementation: [{ file: "packages/workbench/surface-modules.js", symbol: "export function placeSurfaces(" }],
+    tests: [{ file: "packages/workbench/test/surface-view-path.test.mjs", id: "a later retained mount waits for the preceding placement release" }],
+    expected: "A retained mount starts only after the preceding placement finishes its release and survives that release.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-158",
+    implementation: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", symbol: "@capture-fixture/sidecar" }],
+    tests: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "indexes an accepted screen frame from its exact TRACE body and DEBUG hash marker" }],
+    expected: "Consumer capture fixtures retain wire behavior without naming a workspace sidecar implementation.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-155",
+    implementation: [{ file: "packages/workbench/projects.js", symbol: "async function showProject(" }],
+    tests: [{ file: "packages/workbench/test/projects-switch.test.mjs", id: "a reopened project restores inactive-space origins before retained views can start" }],
+    expected: "Locally owned projects register origins for inactive-space tabs before dormant placement starts their views.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-154",
+    implementation: [{ file: "e2e/projects-file.mjs", symbol: "export function projectRecords(" }],
+    tests: [{ file: "e2e/test/projects-file.test.mjs", id: "project records read the current registry envelope without replacing it" }],
+    expected: "The projects window consumer reads only the current stored envelope and preserves it when modifying a fixture.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-162",
+    implementation: [{ file: "e2e/supplier-draw.mjs", symbol: "export function supplierDrawDurations(" }],
+    tests: [{ file: "e2e/test/supplier-draw.test.mjs", id: "supplier draw durations classify screen records without a raster" }],
+    expected: "Supplier draw measurements classify screen-only records, reject invalid raster metrics and await stored records through log notifications.",
+    levels: ["unit"],
+  },
+  {
+    id: "F212.17-2",
+    implementation: [{ file: "packages/host/rust/src/modals.rs", symbol: 'let errors: Vec<_> = buffered_fields("host.record.error")' }],
+    tests: [{ file: "packages/host/rust/src/modals.rs", id: "a_poisoned_modal_record_is_recovered_when_it_is_read" }],
+    expected: "Modal recovery preserves unrelated lifecycle records without replacing the shared event writer.",
+    levels: ["unit"],
+  },
+  {
+    id: "F212.14-5-4",
+    implementation: [{ file: "e2e/view-process-footprint.mjs", symbol: "export function parsePhysicalFootprint(" }],
+    tests: [{ file: "e2e/test/view-process-footprint.test.mjs", id: "physical footprint parser requires one safe positive byte row" }],
+    expected: "The actual OS byte-footprint header yields one positive value for the requested process.",
+    levels: ["unit"],
+  },
+  {
+    id: "F212.14-5-26",
+    implementation: [{ file: "e2e/view-metrics-collection.mjs", symbol: "export function selectOneShotViewSourceFrame(" }],
+    tests: [{ file: "e2e/test/view-metrics-collection.test.mjs", id: "one-shot layout selects the exact-size source after request and before later placement readback" }],
+    expected: "One-shot layout source selection uses the request boundary and exact final viewport projection, not a later geometry readback timestamp.",
+    levels: ["unit"],
+  },
+  {
+    id: "F212.14-5-29",
+    implementation: [{ file: "e2e/view-metrics-collection.mjs", symbol: "export function selectOneShotViewSourceFrame(" }],
+    tests: [{ file: "e2e/test/view-metrics-collection.test.mjs", id: "one-shot layout retains the target and every post-request candidate when no frame matches" }],
+    expected: "All one-shot view collectors use the request boundary and exact final viewport, with complete failed-selection evidence.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-32",
+    implementation: [{ file: "native/darwin/src/image_region.m", symbol: "@implementation SPImageRegion" }],
+    tests: [
+      { file: "native/darwin/tests/image_region_input_transaction_test.m", id: "NSNotFound insertion matches the AppKit text-view reference" },
+      { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", id: "F143 gksk resyllabifies to 하나" },
+    ],
+    expected: "The marked buffer preserves replacement and single-commit semantics and passes OS resyllabification.",
+    levels: ["native", "application"],
+  },
+  {
+    id: "F239-47-33",
+    implementation: [{ file: "native/darwin/src/image_region.m", symbol: "@implementation SPImageRegion" }],
+    tests: [
+      { file: "native/darwin/tests/image_region_input_transaction_test.m", id: "close commits the pending text exactly once" },
+      { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", id: "F8-9 ddd and Korean 2-Set sequence commits 한글 once" },
+    ],
+    expected: "The client commits pending input once on close and the approved sequence and lifecycle conditions retain their scoped acceptance evidence.",
+    levels: ["native", "application"],
+  },
+  {
+    id: "F239-204",
+    implementation: [{ file: "native/darwin/src/input_source.m", symbol: "void sp_input_source_select_and_await(" }],
+    tests: [{ file: "native/darwin/tests/input_source_test.m", id: "an active context that reports the new property before its queued notification is not reported ready early" }],
+    expected: "Input-source selection observes before changing source and completes once after active-context adoption and notification.",
+    levels: ["unit"],
+  },
+  {
+    id: "F212.12-2-4",
+    implementation: [{ file: "native/darwin/src/document_view.m", symbol: "- (BOOL)performKeyEquivalent:(NSEvent *)event" }],
+    tests: [{ file: "e2e/activation/view-shortcut.test.mjs", id: "Command-zero in a focused view runs the native text-size menu command" }],
+    expected: "A native menu shortcut from the focused view resets its owning card text size without inserting address text.",
+    levels: ["native", "application"],
+  },
+  {
+    id: "F239-205",
+    implementation: [{ file: "native/darwin/src/document_view.m", symbol: "- (BOOL)performKeyEquivalent:(NSEvent *)event" }],
+    tests: [{ file: "native/darwin/tests/document_menu_key_equivalent_test.m", id: "the document view handles Command+0 through the application menu" }],
+    expected: "Native document responders give the application menu priority and retain unmatched key fallthrough.",
+    levels: ["unit"],
+  },
+  {
+    id: "F212.14-5-32",
+    implementation: [{ file: "e2e/benchmark/cases/hwp.mjs", symbol: "export async function collectHwpReclaimAfterMotion(" }],
+    tests: [{ file: "e2e/test/hwp-view-metrics-case.test.mjs", id: "HWP reclaim captures the opened group before reclaim closes the warm motion view" }],
+    expected: "HWP reclaim restores the initial declared card width before closing and reopening its measured group.",
+    levels: ["unit"],
+  },
+  {
+    id: "F212.14-5-31",
+    implementation: [
+      { file: "e2e/view-metrics-collection.mjs", symbol: "export async function openRecordedView(" },
+      { file: "e2e/benchmark/cases/hwp.mjs", symbol: "export async function collectHwpViewMeasurements(" },
+    ],
+    tests: [
+      { file: "e2e/test/view-metrics-collection.test.mjs", id: "one recording proves the physical anchor boundary before target content" },
+      { file: "e2e/test/view-metrics-collection.test.mjs", id: "recorded view observation window rejects nonpositive and nonfinite durations" },
+      { file: "e2e/test/hwp-view-metrics-case.test.mjs", id: "HWP descriptor waits for its declared document status exposure" },
+    ],
+    expected: "HWP capture retains its declared observation window while first-content acceptance uses actual captured timestamps.",
+    levels: ["unit"],
+  },
+  {
+    id: "F212.14-5-30",
+    implementation: [
+      { file: "native/darwin/src/document_view.m", symbol: "bool sp_document_viewport_marker(" },
+      { file: "packages/host/go/src/diagnostics.go", symbol: "func diagnosticDocumentViewportMarker(" },
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn document_viewport_marker(" },
+      { file: "e2e/benchmark/cases/hwp.mjs", symbol: "export function measureHwpNativeMarkerFrame(" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/document_viewport_marker_test.m", id: "the enabled marker reports cyan RGB and a 2-point border" },
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestDiagnosticViewportMarkerValidatesAndRunsOnUI" },
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestDiagnosticViewportMarkerIsDeclared" },
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestDiagnosticViewportMarkerRejectsInvalidAndUnownedTargets" },
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestDiagnosticViewportMarkerStartRequiresAttachedRegion" },
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestDiagnosticViewportMarkerStopAfterRegionRemoval" },
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestDiagnosticViewportMarkerPropagatesNativeFailure" },
+      { file: "packages/host/rust/src/endpoint.rs", id: "document_viewport_marker_method_is_declared" },
+      { file: "packages/host/rust/src/diagnostics.rs", id: "document_viewport_marker_requires_nonempty_names_and_a_boolean" },
+      { file: "packages/host/rust/src/diagnostics.rs", id: "document_viewport_marker_resolves_only_attached_documents_in_the_window" },
+      { file: "packages/host/rust/src/diagnostics.rs", id: "document_viewport_marker_runs_through_ui_dispatch_and_preserves_native_result" },
+      { file: "packages/host/rust/src/diagnostics.rs", id: "document_viewport_marker_returns_native_errors" },
+      { file: "e2e/test/hwp-view-metrics-case.test.mjs", id: "HWP native viewport marker measures native studio bounds at fixed and fractional capture scales" },
+      { file: "e2e/test/hwp-view-metrics-case.test.mjs", id: "HWP native marker starts before capture and is removed after capture failures" },
+      { file: "e2e/test/hwp-view-metrics-case.test.mjs", id: "HWP native marker cleanup runs after an invalid successful start reply" },
+    ],
+    expected: "The native marker reports and restores its actual document-view border; both hosts route the declared diagnostic endpoint to attached documents, and HWP measures the captured native bounds.",
+    levels: ["unit"],
+  },
+  {
+    id: "F212.14-5-28",
+    implementation: [{ file: "native/darwin/src/document_view.m", symbol: "if (!surfaceLayoutRenderAtDisplayRate(view))" }],
+    tests: [{ file: "native/darwin/tests/document_core_root_test.m", id: "a document region renders at the display refresh rate (preference %d)" }],
+    expected: "Attached document regions use the display-rate policy while background plugin-host creation remains independent.",
+    levels: ["unit"],
+  },
+  {
+    id: "F212.14-5-27",
+    implementation: [{ file: "native/darwin/src/document_view.m", symbol: "surfaceLayoutRenderAtDisplayRate(view)" }],
+    tests: [{ file: "native/darwin/tests/document_core_root_test.m", id: "a plugin root view renders at the display refresh rate (preference %d)" }],
+    expected: "Plugin root creation disables near-60fps rendering without changing document-region policy.",
+    levels: ["unit"],
+  },
+  {
+    id: "F212.14-5-25",
+    implementation: [{ file: "packages/workbench/surface-modules.js", symbol: "export function surfacePlacementsForHost(" }],
+    tests: [{ file: "packages/workbench/test/view-start-handoff.test.mjs", id: "core.file.open parameters reach the host placement request" }],
+    expected: "A placement projects one current core declaration snapshot for all view start values without retaining it between placements.",
+    levels: ["unit"],
+  },
+  {
+    id: "F212.14-5-24",
+    implementation: [
+      { file: "packages/host/go/src/surfaces.go", symbol: "func (s *Surfaces) ensureCurrentPresentationJoins(" },
+      { file: "packages/host/rust/src/surfaces.rs", symbol: "fn commit_layout_after_root_joins(" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/view_join_test.go", id: "TestProcessEndedRootIsRejoinedOnItsOpenTicketBeforeCommit" },
+      { file: "packages/host/go/src/view_join_test.go", id: "TestRestartLimitInvalidatesPlacementAfterItsJoinPresented" },
+      { file: "packages/host/rust/src/surfaces_test.rs", id: "a_replacement_generation_is_not_committed_without_its_own_join" },
+      { file: "packages/host/rust/src/surfaces_test.rs", id: "an_unchanged_committed_root_does_not_join_again" },
+    ],
+    expected: "Root joins precede independent waits; replacement generations join the same ticket before commit while unchanged roots and lifecycle stop states remain valid.",
+    levels: ["unit"],
+  },
+  {
+    id: "F212.14-5-14",
+    implementation: [
+      { file: "packages/host/go/src/surfaces.go", symbol: "func completeLayoutPresentation(" },
+      { file: "packages/host/rust/src/surfaces.rs", symbol: "fn complete_layout_presentation<T>(" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/surfaces_test.go", id: "TestContinuousLayoutWaitsForApplicationDOMBeforeRasterAndCommit" },
+      { file: "packages/host/rust/src/surfaces_test.rs", id: "root_view_join_is_registered_before_dom_presentation_wait" },
+      { file: "packages/host/rust/src/surfaces_test.rs", id: "webview_presentation_registration_failure_cancels_open_layout" },
+    ],
+    expected: "Continuous layouts wait for app DOM presentation before raster readiness and commit; callback setup failure queues cancellation and preserves errors.",
+    levels: ["unit"],
+  },
+  {
+    id: "F212.14-5-2",
+    implementation: [{ file: "e2e/view-metrics-collection.mjs", symbol: "export async function waitForViewReadiness(" }],
+    tests: [{ file: "e2e/test/view-metrics-collection.test.mjs", id: "shared readiness wrapper waits for the declared status exposure before reading it" }],
+    expected: "View readiness reads begin only after the declared exposure notification.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-201",
+    implementation: [{ file: "e2e/platform/darwin/darwin.js", symbol: "export function captureTextCommand(" }],
+    tests: [
+      { file: "e2e/test/setup.test.mjs", id: "capture recognition resolves its executable through the native build target" },
+      { file: "scripts/test/platform/darwin/capture-text-target.test.mjs", id: "the capture recognizer target that the window check setup names exists" },
+    ],
+    expected: "The selected platform setup builds the declared capture helper and preserves explicit build errors.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-200",
+    implementation: [{ file: "scripts/check-app-tests.mjs", symbol: "function expectedPathLiteralRanges(" }],
+    tests: [{ file: "scripts/test/soksak-scripts.test.mjs", id: "window-source audit distinguishes expected path literals from source access" }],
+    expected: "Static imported assertion expectations are data; actual component source reads remain rejected.",
+    levels: ["unit"],
+  },
+  {
+    id: "F212.14-5-3",
+    implementation: [{ file: "e2e/view-process-footprint.mjs", symbol: "export function viewDocumentHistoryInventory(" }],
+    tests: [{ file: "e2e/test/view-process-footprint.test.mjs", id: "an unstarted child document has no PID footprint or document-history row" }],
+    expected: "Unstarted documents remain evidence without becoming measured or shared processes.",
+    levels: ["unit"],
+  },
+  {
+    id: "F212.14-5-1",
+    implementation: [{ file: "packages/window-check/app.mjs", symbol: "frameIdentity: stopped.frameIdentity" }],
+    tests: [
+      { file: "packages/window-check/test/drag-frame-identity.test.mjs", id: "drag forwards opt-in frame identity and preserves the stop result" },
+      { file: "e2e/capture-frame-identity.test.mjs", id: "diagnostic drag retains opt-in frame identity artifacts" },
+    ],
+    expected: "Diagnostic drag preserves the requested identity artifacts without changing its default request.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F239-194",
+    implementation: [{ file: "packages/workbench/environment.js", symbol: "diagnosticModules = Promise.all(" }],
+    tests: [{ file: "e2e/capture-frame-identity.test.mjs", id: "diagnostic drag retains opt-in frame identity artifacts" }],
+    expected: "Installed diagnostic modules load at startup without application errors on both hosts.",
+    levels: ["application"],
+  },
+  {
+    id: "F239-193",
+    implementation: [{ file: "packages/workbench/copy-frontend.mjs", symbol: "pageImportsForBuild({ diagnostics })" }],
+    tests: [{ file: "packages/workbench/test/copy-frontend.test.mjs", id: "a staged frontend with --diagnostics has the page diagnostic methods" }],
+    expected: "The diagnostic workbench page resolves the helper imported by installed plugin diagnostics.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-192",
+    implementation: [{ file: "packages/workbench/projects.js", symbol: "await inTurn(emptyToLibrary);" }],
+    tests: [{ file: "packages/workbench/test/projects-switch.test.mjs", id: "an activation received while a removed project is clearing waits for the clear" }],
+    expected: "Registry-removal clearing finishes before a later project activation loads its layout.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-191",
+    implementation: [{ file: "native/darwin/Makefile", symbol: "test-app-activation:" }],
+    tests: [{ file: "scripts/test/native-tests.test.mjs", id: "activation target builds and runs its cases through the native test runner" }],
+    expected: "Activation cases build their declared executables and use the sequential bounded native runner without changing their order.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-189",
+    implementation: [{ file: "native/darwin/src/capture.m", symbol: "static bool requestCaptureStopAfterStart(" }],
+    tests: [{ file: "native/darwin/tests/capture_callback_test.m", id: "a successful late start requests exactly one stop after completion" }],
+    expected: "Capture stop preserves its wait bound and delegates exactly-once cleanup to successful late start completion.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-188",
+    implementation: [{ file: "packages/host/go/src/documents.go", symbol: "func (s *Surfaces) postViewGeneration(" }],
+    tests: [{ file: "packages/host/go/src/view_lifecycle_test.go", id: "TestReadyViewDeliveryDoesNotEndTheView" }],
+    expected: "Successful generation-qualified delivery leaves the view live and writes no false end record.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-187",
+    implementation: [{ file: "native/darwin/src/document_view.m", symbol: "NSString *sp_document_view_message_json(id body)" }],
+    tests: [{ file: "native/darwin/tests/view_channel_test.m", id: "view message encoding releases its temporary JSON string" }],
+    expected: "The view-channel encoder releases its temporary JSON string while preserving the complete message.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-186",
+    implementation: [{ file: "packages/host/rust/src/documents.rs", symbol: 'payload["params"] = message' }],
+    tests: [{ file: "packages/host/rust/src/view_origin_test.rs", id: "a_view_call_transfers_the_owned_params_tree_without_copying_it" }],
+    expected: "View-call forwarding transfers the decoded params tree without copying nested values.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-161",
+    implementation: [{ file: "packages/host/rust/src/documents.rs", symbol: "fn dispatch_with_decoder(" }],
+    tests: [
+      { file: "packages/host/rust/src/view_origin_test.rs", id: "a_current_view_envelope_is_decoded_once_for_every_dispatch_kind" },
+      { file: "packages/host/rust/src/view_origin_test.rs", id: "view_dispatch_preserves_precedence_and_invalid_field_errors" },
+    ],
+    expected: "Current view dispatch decodes once while preserving handler precedence, payloads and field errors.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-160",
+    implementation: [{ file: "native/darwin/src/image_region.m", symbol: "if (nonceRef) CFRelease(nonceRef);" }],
+    tests: [{ file: "native/darwin/tests/image_nonce_ownership_test.m", id: "nonce ownership mode" }],
+    expected: "Accepted and refused native image frames release the owned nonce property copy after authentication.",
+    levels: ["unit"],
+  },
+  {
+    id: "F212.12-3",
+    implementation: [{ file: "e2e/outside.test.mjs", symbol: "function assertAligned(" }],
+    tests: [
+      { file: "e2e/outside.test.mjs", id: "native content, cards, and the sidebar rail stay aligned" },
+      { file: "e2e/outside.test.mjs", id: "terminal divider drag does not leave a white surface frame" },
+      { file: "e2e/outside.test.mjs", id: "the terminal document fills its native frame before and after a divider drag" },
+    ],
+    expected: "Complete recordings verify card movement, symmetric content alignment, final size and document fill while retaining separate performance measurements.",
+    levels: ["application"],
+  },
+  {
+    id: "F212.7b",
+    implementation: [
+      { file: "native/darwin/src/surface_layout.m", symbol: "surfaceLayoutJoinView" },
+      { file: "packages/host/go/src/presentation_wait.go", symbol: "joinShownViews" },
+      { file: "packages/host/rust/src/presentation_wait.rs", symbol: "PresentationWait" },
+    ],
+    tests: [
+      { file: "e2e/card-fullscreen.test.mjs", id: "card fullscreen fills the work area and restores live surfaces" },
+      { file: "e2e/card-fullscreen.test.mjs", id: "a native click on another tab of a fullscreen card switches the tab and keeps fullscreen" },
+    ],
+    expected: "Recorded fullscreen and bidirectional tab switching complete presentation waits with the selected native surface visible and complete frame artifacts.",
+    levels: ["application"],
+  },
+  {
+    id: "F212.7b-1",
+    implementation: [
+      { file: "native/darwin/src/surface_layout.m", symbol: "surfaceLayoutJoinView" },
+      { file: "packages/host/go/src/presentation_wait.go", symbol: "joinShownViews" },
+      { file: "packages/host/rust/src/presentation_wait.rs", symbol: "PresentationWait" },
+    ],
+    tests: [
+      { file: "e2e/card-fullscreen.test.mjs", id: "card fullscreen fills the work area and restores live surfaces" },
+      { file: "e2e/card-fullscreen.test.mjs", id: "a native click on another tab of a fullscreen card switches the tab and keeps fullscreen" },
+    ],
+    expected: "Recorded fullscreen and bidirectional tab switching complete presentation waits with the selected native surface visible and complete frame artifacts.",
+    levels: ["application"],
+  },
+  {
+    id: "F212.7d",
+    implementation: [
+      { file: "e2e/view-theme.test.mjs", symbol: "const expected =" },
+    ],
+    tests: [
+      { file: "e2e/view-theme.test.mjs", id: "a newly created view paints the card theme throughout its first presentation" },
+    ],
+    expected: "Complete dark and light view-creation recordings retain the declared card theme token at three document background points in every decoded frame.",
+    levels: ["application"],
+  },
+  {
+    id: "F212.7d-1",
+    implementation: [
+      { file: "e2e/view-theme.test.mjs", symbol: "const expected =" },
+    ],
+    tests: [
+      { file: "e2e/view-theme.test.mjs", id: "a newly created view paints the card theme throughout its first presentation" },
+    ],
+    expected: "Complete dark and light view-creation recordings retain the declared card theme token at three document background points in every decoded frame.",
+    levels: ["application"],
+  },
+  {
+    id: "F212.7c",
+    implementation: [{ file: "e2e/outside.test.mjs", symbol: "function assertAligned(" }],
+    tests: [
+      { file: "e2e/outside.test.mjs", id: "native content, cards, and the sidebar rail stay aligned" },
+      { file: "e2e/outside.test.mjs", id: "terminal divider drag does not leave a white surface frame" },
+      { file: "e2e/outside.test.mjs", id: "the terminal document fills its native frame before and after a divider drag" },
+    ],
+    expected: "Complete recordings verify card movement, symmetric content alignment, final size and document fill while retaining separate performance measurements.",
+    levels: ["application"],
+  },
+  {
+    id: "F212.12-3-1",
+    implementation: [
+      { file: "e2e/drag-measurement.mjs", symbol: "export function assertFinalContentSize(" },
+      { file: "e2e/drag-measurement.mjs", symbol: "export function measureDragPerformance(" },
+      { file: "e2e/alignment.mjs", symbol: "export function alignmentDelta(" },
+    ],
+    tests: [
+      { file: "e2e/test/drag-measurement.test.mjs", id: "final content size rejects a late correction and a later regression" },
+      { file: "e2e/test/drag-measurement.test.mjs", id: "drag performance keeps existing targets separate from valid measurements" },
+      { file: "e2e/test/alignment.test.mjs", id: "a terminal raster that leaves a growing right inset is misaligned" },
+      { file: "e2e/outside.test.mjs", id: "native content, cards, and the sidebar rail stay aligned" },
+    ],
+    expected: "Both raster edges remain aligned, final size converges by the second recorded frame, and valid performance measurements remain separate from functional correctness.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F239-159",
+    implementation: [{ file: "e2e/drag-measurement.mjs", symbol: "export function assertDragFrameCadence(" }],
+    tests: [{ file: "e2e/test/drag-measurement.test.mjs", id: "view drag cadence requires every frame within 35 milliseconds" }],
+    expected: "The dedicated view-drag performance check includes every decoded frame and rejects gaps above 33 milliseconds.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-153",
+    implementation: [{ file: "e2e/drag-measurement.mjs", symbol: "export function pointerLag(" }],
+    tests: [{ file: "e2e/test/drag-measurement.test.mjs", id: "pointer lag rejects only frames before input" }],
+    expected: "Unavailable drag measurements fail instead of reporting zero latency.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-76",
+    implementation: [{ file: "e2e/activation/ime.test.mjs", symbol: 'await s.run("terminal.focus", {}, surface)' }],
+    tests: [{ file: "e2e/activation/ime.test.mjs", id: "eight Korean vowels and one Backspace retain an exact input trace" }],
+    expected: "The declared terminal focus command establishes focus before the input trace.",
+    levels: ["application"],
+  },
+  {
+    id: "F239-152",
+    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function terminalInputBaselineAfterReference(" }],
+    tests: [{ file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "the first terminal key compares against the prompt redrawn after reference focus" }],
+    expected: "The terminal observer validates and uses the post-reference prompt baseline while retaining strict per-key checks.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47",
+    implementation: [
+      { file: "e2e/activation/terminal-view-focus.test.mjs", symbol: "function assertTerminalStageCoherent(" },
+      { file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function assertInputTraceDelivery(" },
+    ],
+    tests: [{ file: "e2e/activation/terminal-view-focus.test.mjs", id: "repeated Korean vowels stay visible before Space" }],
+    expected: "Four native vowel keys match the same-window AppKit documents at coherent terminal frames and commit four vowels plus Space exactly once.",
+    levels: ["application"],
+  },
+  {
+    id: "F239-47-2",
+    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function visibleInputBeforeCursor(" }],
+    tests: [
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "reconstructs committed screen text plus only the current marked buffer" },
+      { file: "e2e/activation/ime.test.mjs", id: "eight Korean vowels and one Backspace retain an exact input trace" },
+    ],
+    expected: "Each Hangul and Backspace input matches its reference document and exact-frame visual state independently of the recording quality result.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F239-98-4",
+    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "function evaluateTagScopedStage(" }],
+    tests: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "tag-scoped proof evaluates an exact issued target when unrelated source state is incomplete" }],
+    expected: "Tag-scoped visual proof evaluates the exact issued target despite unrelated incomplete source state.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-111",
+    implementation: [{ file: "native/darwin/tests/input_reference_test.m", symbol: "static void drain(void)" }],
+    tests: [
+      { file: "native/darwin/tests/input_reference_test.m", id: "text-storage changes complete the pending wait once" },
+      { file: "native/darwin/tests/input_reference_test.m", id: "the wait timer registration and delivery are recorded" },
+    ],
+    expected: "The input-reference owner test pump dispatches queued AppKit events so main-queue document checks and timer observations complete within the existing drain interval.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-112",
+    implementation: [{ file: "packages/sok/rust/src/plugin_catalog.rs", symbol: "pub fn plugin_catalogs(" }],
+    tests: [{ file: "packages/sok/rust/tests/plugin_catalog_test.rs", id: "a_plugin_event_has_the_class_that_the_catalog_of_its_plugin_declares" }],
+    expected: "The plugin catalog continues to return the class declared for each enabled plugin event after formatting-only changes.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-113-1",
+    implementation: [{ file: "packages/log-contract/index.js", symbol: "export function validateCatalog(" }],
+    tests: [
+      { file: "packages/host/go/tests/event_log_test.go", id: "TestTheEventLogPassesTheAuditOfTheContractPackage" },
+      { file: "packages/host/rust/tests/event_log_test.rs", id: "the_file_passes_the_audit_of_the_contract_package" },
+    ],
+    expected: "Host audit fixtures use catalog schema 3 and Draft 2020-12 field schemas while raw log records retain schema 2.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-114-1",
+    implementation: [
+      { file: "apps/tauriv2/runtime/index.js", symbol: "const dispatchOrderedEvent =" },
+      { file: "packages/workbench/surface-modules.js", symbol: "export function mountSurface(" },
+    ],
+    tests: [
+      { file: "apps/tauriv2/test/runtime.test.mjs", id: "ordered event listener errors are reported without blocking later subscribers or messages" },
+      { file: "apps/tauriv2/test/runtime.test.mjs", id: "ordered listener failures fail explicitly when the page error path is unavailable" },
+      { file: "packages/workbench/test/host-required-surface-module.test.mjs", id: "a drawn view fails when its required composition wait is missing" },
+      { file: "packages/workbench/test/host-required-surface-module.test.mjs", id: "an undrawn view fails when its required mount lookup is missing" },
+    ],
+    expected: "Required runtime behavior and error-reporting paths fail explicitly instead of being replaced by no-op or discarded-error fallbacks.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-121",
+    implementation: [{ file: "packages/host/go/tests/buffer_bounds_test.go", symbol: "func useRoomyEventLog(" }],
+    tests: [{ file: "packages/host/go/tests/buffer_bounds_test.go", id: "TestTheRelayRemembersAtMost256ExpiredRequestsAndCountsTheOnesItForgets" }],
+    expected: "The buffer-bound owner fixture closes its event writer before its temporary directory is removed.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-122",
+    implementation: [
+      { file: "packages/host/rust/src/arguments.rs", symbol: "pub fn decode<" },
+      { file: "packages/host/rust/src/start.rs", symbol: "pub fn serve(" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/arguments_test.rs", id: "a_view_reply_keeps_a_null_result_as_the_result_of_a_command_without_a_value" },
+      { file: "packages/host/rust/tests/arguments_test.rs", id: "a_view_event_keeps_a_null_data_as_its_value" },
+      { file: "packages/host/rust/tests/start_test.rs", id: "start_document_is_served_at_the_core_owner_of_soksak" },
+    ],
+    expected: "Tauri host-contract fixtures provide required request identities while preserving explicit null values and the current application address.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-123",
+    implementation: [{ file: "packages/host/go/src/recording.go", symbol: "func (r *Recording) begin(" }],
+    tests: [{ file: "packages/host/go/tests/recording_test.go", id: "TestFinishedRecordingKeepsItsFolderAndReportsFrames" }],
+    expected: "The finished-recording fixture expects the frame-identity option forwarded at capture start and retained at finish.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-124",
+    implementation: [
+      { file: "packages/sok/go/src/event_log.go", symbol: "func (l *EventLog) rotate(" },
+      { file: "packages/sok/rust/src/event_log.rs", symbol: "fn rotate(&mut self, channel: Channel)" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/event_log_test.go", id: "TestTheEventLogRotatesAtTheBoundAndKeepsEveryGeneration" },
+      { file: "packages/host/rust/tests/event_log_test.rs", id: "the_log_rotates_at_the_bound_and_keeps_every_generation" },
+    ],
+    expected: "Rotation tests compare the reported byte count with the archived generation that emitted the rotation record.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-125",
+    implementation: [{ file: "packages/sok/go/src/event_log.go", symbol: "func StartEventLog(" }],
+    tests: [
+      { file: "packages/sok/go/src/event_log_loss_test.go", id: "TestAnUnserializableLineIsReportedAsDropped" },
+      { file: "packages/sok/go/src/event_log_loss_test.go", id: "TestAnUnwritableLineIsReportedAsDropped" },
+    ],
+    expected: "Go CLI event-log loss tests register a test-owned filesystem platform and restore the prior registration during cleanup.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-118",
+    implementation: [
+      { file: "packages/host/go/src/projects.go", symbol: "func (h *Host) ProjectShown(" },
+      { file: "packages/host/go/src/plugins.go", symbol: "func (p *Plugins) SetStarter(" },
+      { file: "packages/host/rust/src/documents.rs", symbol: "fn view_failed(" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "pub fn closed_image_answer(" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/projects_test.go", id: "TestProjectShownRootMismatchDoesNotMutateProjectState" },
+      { file: "packages/host/go/tests/plugins_test.go", id: "TestPluginsStarterPendingAndCompletedStatesSurviveManagerRecreation" },
+      { file: "packages/host/rust/src/view_origin_test.rs", id: "a_view_process_end_retires_its_origin_before_replacement_registration" },
+      { file: "packages/host/rust/src/sidecars_session_retention_test.rs", id: "an_image_routed_to_an_owner_retired_after_lookup_receives_the_closed_answer" },
+    ],
+    expected: "Project and starter tests remain in their existing Go owner files, while view failure-order and retired-image tests remain in existing Rust owner modules with their assertions and host-contract markers preserved.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-119",
+    implementation: [
+      { file: "packages/host/rust/src/windows.rs", symbol: "pub struct ProjectShown" },
+      { file: "packages/host/tauriv2/src/bindings.rs", symbol: "request: Argument<ProjectShown>" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/project_data_order/project_data_order_test.rs", id: "malformed_project_shown_arguments_are_rejected_before_committing_project_state" },
+      { file: "packages/host/rust/tests/project_data_order/project_data_order_test.rs", id: "showing_no_project_clears_committed_state_and_preserves_other_staged_owners" },
+    ],
+    expected: "The registered ProjectShown binding rejects an omitted project member but accepts explicit null and clears the committed project.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-243",
+    implementation: [{ file: "e2e/view-metrics-collection.mjs", symbol: "export async function withDragTraceMode" }],
+    tests: [
+      { file: "e2e/test/view-metrics-collection.test.mjs", id: "a measured drag stores only the frame class without the performance trace and restores both settings" },
+      { file: "e2e/test/view-metrics-collection.test.mjs", id: "a measured drag keeps the failure of its action and of the restoration" },
+      { file: "e2e/test/view-metrics-collection.test.mjs", id: "a measured drag restores the settings when the settings cannot be read after it" },
+      { file: "e2e/test/view-metrics-collection.test.mjs", id: "a measured drag refuses a log policy without the frame trace and changes nothing" },
+      { file: "e2e/test/view-metrics-collection.test.mjs", id: "a measured drag keeps a falsy rejection of its action" },
+    ],
+    expected: "Terminal drag measurement disables only the global performance trace while preserving frame logging, restores the original setting before reporting failures, and retains action and restoration errors without changing cadence or geometry acceptance criteria.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-245",
+    implementation: [
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn lifecycle_lock" },
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn pending_frame_identity_lock" },
+    ],
+    tests: [
+      { file: "packages/host/rust/src/diagnostics_lock_test.rs", id: "a_poisoned_lifecycle_lock_is_reported_before_the_operation_runs" },
+      { file: "packages/host/rust/src/diagnostics_lock_test.rs", id: "a_poisoned_pending_lock_is_reported_without_consuming_the_receiver" },
+      { file: "packages/host/rust/src/diagnostics_lock_test.rs", id: "a_pending_start_probe_releases_the_lock_before_receive" },
+    ],
+    expected: "The lock event source check accepts explicit error propagation while preserving findings for discarded errors and unapproved recovery defaults; poisoned identity lifecycle and pending-start locks return explicit errors, and the pending probe releases its guard before the receiving helper reacquires it.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-252",
+    implementation: [
+      { file: "native/darwin/src/capture.m", symbol: "bool sp_capture_has_stream(void)" },
+      { file: "packages/host/go/src/recording.go", symbol: "func (r *Recording) Finish" },
+      { file: "packages/host/rust/src/recording.rs", symbol: "pub fn finish" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/recording_test.go", id: "TestFinishRetiredStopFailureReleasesOwnerAndPreservesFolder" },
+      { file: "packages/host/go/tests/recording_test.go", id: "TestAbortStopOwnershipQueryFailurePreservesOwner" },
+      { file: "packages/host/rust/tests/recording_test.rs", id: "a_retired_stop_failure_preserves_folder_and_releases_owner" },
+      { file: "packages/host/rust/tests/recording_test.rs", id: "an_abort_retries_retired_folder_cleanup_without_repeating_stop" },
+      { file: "native/darwin/tests/capture_pressure_test.m", id: "a stop error retires the current native stream" },
+    ],
+    expected: "Stop errors remain observable while native ownership decides whether cleanup is retained or released; retired recordings permit another start and removal retries do not repeat stop.",
+    levels: ["unit", "native"],
+  },
+  {
+    id: "F239-255",
+    implementation: [
+      { file: "packages/host/go/src/surfaces.go", symbol: "func surfaceDispatchClockFrom" },
+      { file: "packages/host/rust/src/surfaces.rs", symbol: "fn surface_dispatch_clock_from" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/surfaces_test.go", id: "TestSurfaceDispatchRecordsFrameBoundariesWhenPerformanceTraceIsOff" },
+      { file: "packages/host/go/src/surfaces_test.go", id: "TestSurfaceDispatchFrameFallbackSelectionAndDisabledClock" },
+      { file: "packages/host/rust/src/surfaces_test.rs", id: "surface_dispatch_records_frame_boundaries_when_performance_trace_is_off" },
+      { file: "packages/host/rust/src/surfaces_test.rs", id: "surface_dispatch_frame_fallback_selection_and_disabled_clock" },
+    ],
+    expected: "Frame tracing records existing dispatch boundaries when the performance path is ineligible, without duplicate events or clock reads when both gates are closed.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-260",
+    implementation: [{ file: "scripts/generate-event-classes.mjs", symbol: "export function generatedTables" }],
+    tests: [
+      { file: "scripts/test/event-classes.test.mjs", id: "the committed class tables equal what the catalog gives" },
+      { file: "scripts/test/event-classes.test.mjs", id: "the page table gives every declared event and family member its catalog class" },
+    ],
+    expected: "The generated producer tables classify the declared surface dispatch event as frame and match the canonical catalog.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-259",
+    implementation: [
+      { file: "packages/host/go/src/diagnostics.go", symbol: "func awaitDocumentFrameIdentity" },
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn await_document_frame_identity_schedule_result" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestAwaitDocumentFrameIdentityReportsLateErrorAfterTimeout" },
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestAwaitDocumentFrameIdentityPreservesCallbackErrorWhenScheduleFails" },
+      { file: "packages/host/rust/src/diagnostics_test.rs", id: "document_frame_identity_preserves_synchronous_callback_error_when_scheduling_fails" },
+    ],
+    expected: "Bounded identity waits report late callback errors and preserve a synchronous callback failure together with a scheduling failure.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-261",
+    implementation: [{ file: "packages/workbench/performance.js", symbol: "export function createTracer" }],
+    tests: [
+      { file: "packages/workbench/test/performance.test.mjs", id: "a layout phase uses the frame gate while the performance trace is off" },
+      { file: "packages/workbench/test/performance.test.mjs", id: "a closed frame gate does not format or relay a layout phase" },
+    ],
+    expected: "Existing layout phases follow the frame gate independently of performance tracing while other trace events remain disabled.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-262",
+    implementation: [
+      { file: "packages/sok/go/src/log_policy.go", symbol: "func PassesEveryGate" },
+      { file: "packages/sok/rust/src/event_log.rs", symbol: "pub fn passes_every_gate" },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/log_policy_test.go", id: "TestPageClockAnchorPassesTheDefaultLifecyclePolicy" },
+      { file: "packages/sok/rust/tests/log_policy_test.rs", id: "page_clock_anchor_passes_the_default_lifecycle_policy" },
+    ],
+    expected: "The existing page clock anchor survives the default writer policy while ordinary lifecycle info remains gated.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-263",
+    implementation: [
+      { file: "packages/workbench/surface-sync-request.js", symbol: "export function surfaceSyncRequestWithDeclarationTable" },
+      { file: "packages/host/go/src/surfaces.go", symbol: "func decodeSyncRequest" },
+      { file: "packages/host/rust/src/surfaces.rs", symbol: "fn resolve(self)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/surface-sync-request.test.mjs", id: "surface sync declarations use a request-local table and preserve view start context" },
+      { file: "packages/workbench/test/view-start-handoff.test.mjs", id: "core.file.open parameters reach the host placement request" },
+      { file: "packages/host/go/src/view_start_test.go", id: "TestSyncRequestRequiresAndResolvesItsDeclarationTable" },
+      { file: "packages/host/rust/tests/surfaces_geometry_test.rs", id: "sync_request_resolves_request_local_view_declaration_indices" },
+    ],
+    expected: "Each request shares identical declarations while preserving complete view start values and rejecting invalid tables and indices before surface mutation.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-264",
+    implementation: [{ file: "Makefile", symbol: "sok-tauriv2 = $(CARGO_ENV) cargo build --locked" }],
+    tests: [{ file: "scripts/test/native-pkgconfig.test.mjs", id: "Tauri app and bundled CLI Cargo commands use the declared deployment target" }],
+    expected: "Application and bundled CLI Cargo commands use the same declared macOS deployment target in debug and release builds.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-265",
+    implementation: [
+      { file: "packages/workbench/plane.js", symbol: "const setData =" },
+      { file: "packages/workbench/card-tools.js", symbol: "export function updateCardTools" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/plane-stale-layout.test.mjs", id: "a held layout draw survives the close of a card it contains" },
+      { file: "packages/workbench/test/card-fullscreen.test.mjs", id: "the header fullscreen control precedes close and runs its declared command" },
+    ],
+    expected: "Stable redraws preserve state attributes without redundant mutation while actual focus, slot, availability and fullscreen changes remain visible.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-267",
+    implementation: [{ file: "packages/workbench/plane.js", symbol: "function updateCard" }],
+    tests: [{ file: "packages/workbench/test/plane-stale-layout.test.mjs", id: "a held layout draw survives the close of a card it contains" }],
+    expected: "Stable text zoom state does not repeat DOM writes during layout redraws while scale changes apply and clear the marker and property.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-270",
+    implementation: [
+      { file: "packages/plugin-api/view-start.js", symbol: "const page = crypto.randomUUID();" },
+      { file: "packages/plugin-api/view.js", symbol: "identity: window.sokView.page }," },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/view.test.mjs", id: "the view writer reuses the document-start page identity when later clock reads differ" },
+      { file: "packages/plugin-api/test/view-wire-contract.test.mjs", id: "view wire ${testCase.id} matches the view script step by step" },
+    ],
+    expected: "The view writer uses the read-only document-start page identity for batch records and page.start without resampling timeOrigin.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-271",
+    implementation: [
+      { file: "packages/host/go/src/images.go", symbol: "func (i *Images) MarkPresented" },
+      { file: "packages/host/rust/src/images.rs", symbol: "fn mark_presented" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/images_test.go", id: "TestInFlightFramePresentationIsRecordedAfterANewerFrameIsAccepted" },
+      { file: "packages/host/go/src/images_test.go", id: "TestOlderInFlightPresentationDoesNotClearANewerFrameFailure" },
+      { file: "packages/host/rust/src/images_test.rs", id: "an_in_flight_frame_presentation_is_recorded_after_a_newer_frame_is_accepted" },
+      { file: "packages/host/rust/src/images_test.rs", id: "an_older_in_flight_presentation_does_not_clear_a_newer_frame_failure" },
+    ],
+    expected: "Successful acknowledgments advance presentation state for the current generation and raster when their sequence is positive, no newer than the accepted sequence, and newer than the presented sequence; only a latest-sequence acknowledgment clears a presentation error, and freshness checks and current-frame waits remain latest-sequence strict.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-272",
+    implementation: [
+      { file: "packages/host/go/src/images.go", symbol: "func (i *Images) WaitLayoutRasters" },
+      { file: "packages/host/go/src/surfaces.go", symbol: "s.images.WaitLayoutRasters(pageTimeout, req.Settled)" },
+      { file: "packages/host/rust/src/images.rs", symbol: "pub(crate) fn wait_layout_rasters" },
+      { file: "packages/host/rust/src/surfaces.rs", symbol: ".wait_layout_rasters(exposure::TIMEOUT, presentation_settled)" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/images_test.go", id: "TestContinuousImageWaitUsesInstalledSnapshotAndBlocksAfterGenerationOrRasterChange" },
+      { file: "packages/host/go/src/images_test.go", id: "TestBeginningNewGenerationClearsThePresentedImageSnapshot" },
+      { file: "packages/host/go/src/images_test.go", id: "TestContinuousImageWaitIgnoresHiddenRegionsAndFailsOnPresentationError" },
+      { file: "packages/host/rust/src/images_test.rs", id: "continuous_image_wait_uses_the_installed_snapshot_and_blocks_after_generation_or_raster_change" },
+      { file: "packages/host/rust/src/images_test.rs", id: "beginning_new_generation_clears_the_presented_image_snapshot" },
+      { file: "packages/host/rust/src/images_test.rs", id: "continuous_image_wait_ignores_hidden_regions_and_fails_on_presentation_error" },
+    ],
+    expected: "Continuous requests complete from a positive presented snapshot of the current raster while settled requests remain latest-sequence strict; generation and raster changes invalidate the snapshot, hidden regions do not block, and presentation errors still fail closed.",
+    levels: ["unit"],
+  },
+  {
+    id: "F297",
+    implementation: [
+      { file: "e2e/benchmark/cases/resize.mjs", symbol: "export const CATCH_UP_LIMIT_MS = 150;" },
+      { file: "e2e/benchmark/cases/idle-tab.mjs", symbol: "export const IDLE_TAB_BOUND_KB = performanceGoalBound(\"IDLE_TAB_BOUND_KB\", \"atMost\");" },
+    ],
+    tests: [
+      { file: "e2e/test/resize-case.test.mjs", id: "the catch-up limit of a maximise or restore is 150 ms, and a measured time above it fails the benchmark" },
+      { file: "e2e/test/idle-tab-case.test.mjs", id: "the idle tab limit is the bound of IDLE_TAB_BOUND_KB in the performance goals, and a measured cost above it fails the benchmark" },
+      { file: "e2e/test/idle-tab-case.test.mjs", id: "the documents of a tab are counted once each footprint is settled" },
+    ],
+    expected: "The catch-up limit of 150 ms and the idle tab limit, which the idle tab case reads from IDLE_TAB_BOUND_KB of docs/spec/performance-goals.json, are judged by the benchmark cases, and the settled documents of a tab are counted; the window checks keep the behavior and the measured values, and their window run is pending the release candidate.",
+    levels: ["unit"],
+  },
+  {
+    id: "F297-1",
+    implementation: [
+      { file: "e2e/benchmark/cases/split-load.mjs", symbol: "export const SPLIT_LOAD_GROWTH_BOUND_KB = performanceGoalBound(\"SPLIT_LOAD_GROWTH_BOUND_KB\", \"below\");" },
+      { file: "e2e/benchmark/cases/split-load.mjs", symbol: "export function assertSplitLoadWithinBound(growth)" },
+    ],
+    tests: [
+      { file: "e2e/test/split-load-case.test.mjs", id: "the split load limit is the bound of SPLIT_LOAD_GROWTH_BOUND_KB in the performance goals, and a growth at or above it fails the benchmark" },
+    ],
+    expected: "The host RSS growth limit over the split, resize, reload and WebView churn rounds, which the split load case reads from SPLIT_LOAD_GROWTH_BOUND_KB of docs/spec/performance-goals.json, is judged by the benchmark case; the window check runs one round and judges only the behavior.",
+    levels: ["unit"],
+  },
+];
+
+// Generated output is checked for agreement with its source and is not counted as an independent implementation.
+const GENERATED_ROOTS = new Map([
+  ["packages/soksak/dist/", "generated library output; verified by make test-all"],
+  ["apps/tauriv2/gen/schemas/", "generated Tauri permission schemas"],
+]);
+
+const sourceLanguages = new Map([
+  [".js", "js-ts"], [".mjs", "js-ts"], [".cjs", "js-ts"], [".ts", "js-ts"], [".tsx", "js-ts"],
+  [".rs", "rust"], [".go", "go"], [".m", "objective-c"], [".mm", "objective-c"],
+  [".h", "native-interface"], [".c", "c"], [".cc", "cpp"], [".cpp", "cpp"],
+  [".html", "document"], [".css", "stylesheet"], [".sh", "shell"],
+]);
+const manifestNames = new Set(["package.json", "Cargo.toml", "go.mod", "Makefile"]);
+const declarationNames = new Set(["plugin.json", "sidecar.json", "environment.json", "exposure.json"]);
+
+const OWNER_ROOTS = [
+  ["packages/", "core"],
+  ["plugins/", "plugin"],
+  ["sidecars/", "sidecar"],
+  ["native/", "native"],
+  ["apps/", "application"],
+  ["e2e/", "contract"],
+];
+const DECLARATION_FILE = /(^|\/)(package|plugin|sidecar|environment|exposure)\.json$/;
+const PRIVATE_SEGMENT = /(^|\/)(src|tests?|internal|private)(\/|$)/;
+const IMPORT_SPECIFIER = /(?:from\s*|import\s*\(|require(?:\.resolve)?\s*\(|import\s+)["'`]([^"'`]+)["'`]/g;
+// The bare form of a reference is the argument of require.resolve; other bare names are not module references.
+const PACKAGE_REFERENCE = /require\.resolve\(\s*["'`](@soksak\/[a-z0-9][a-z0-9-]*(?:\/[^"'`\s]+)?)["'`]/g;
+
+function ownerFor(file) {
+  return OWNER_ROOTS.find(([root]) => file.startsWith(root))?.[1] ?? null;
+}
+
+function isDeclaration(file) {
+  return DECLARATION_FILE.test(file);
+}
+
+/**
+ * The packages of the checkout, by their exact names (decision D3, rules 2, 3 and 5): the folder relative to the checkout,
+ * the owner, and the exports map of the package.json. Core holds no list of the packages of other repositories and reads
+ * no other repository, so a core source that names a package of another repository names an undeclared package.
+ */
+export function packageIndex(root = ROOT) {
+  const index = new Map();
+  for (const file of execFileSync("git", ["ls-files", "-z"], { cwd: root, encoding: "utf8" }).split("\0")) {
+    if (!/(^|\/)package\.json$/.test(file)) continue;
+    const manifest = JSON.parse(readFileSync(`${root}/${file}`, "utf8"));
+    if (typeof manifest.name !== "string") continue;
+    const dir = dirname(file);
+    index.set(manifest.name, { dir: dir === "." ? "" : dir, owner: ownerFor(file) ?? "core", exports: manifest.exports });
+  }
+  // The core-served prefix (@soksak/shared) has no package.json; core serves every subpath of it.
+  for (const name of corePackageNames(root)) {
+    if (!index.has(name)) index.set(name, { dir: "", owner: "core", exports: { "./*": "./*" } });
+  }
+  return index;
+}
+
+/** The subpath following the first two path segments, or "" for the package itself. */
+function packageReference(value) {
+  const [scope, name, ...rest] = value.split("/");
+  return { base: `${scope}/${name}`, subpath: rest.join("/") };
+}
+
+/** Whether the exports map of a package lists the subpath (`./x`), exactly or through one `*` pattern. */
+function exported(exportsMap, subpath) {
+  if (!exportsMap || typeof exportsMap !== "object") return false;
+  return Object.keys(exportsMap).some((key) => {
+    if (!key.startsWith("./")) return false;
+    const star = key.indexOf("*");
+    if (star < 0) return key === subpath;
+    const prefix = key.slice(0, star);
+    const suffix = key.slice(star + 1);
+    return subpath.startsWith(prefix) && subpath.endsWith(suffix) && subpath.length >= prefix.length + suffix.length;
+  });
+}
+
+/** The declared package that holds the file: the longest folder of the index that contains it. */
+function packageOfFile(file, index) {
+  let found = null;
+  for (const [name, entry] of index) {
+    if (entry.dir && file.startsWith(`${entry.dir}/`) && (!found || entry.dir.length > found.dir.length)) {
+      found = { name, dir: entry.dir };
+    }
+  }
+  return found?.name ?? null;
+}
+
+function ownerReferences(source) {
+  const references = [];
+  for (const match of source.matchAll(IMPORT_SPECIFIER)) references.push({ value: match[1], private: PRIVATE_SEGMENT.test(match[1]) });
+  for (const match of source.matchAll(PACKAGE_REFERENCE)) {
+    if (!references.some(({ value }) => value === match[1])) references.push({ value: match[1], private: false });
+  }
+  return references;
+}
+
+/**
+ * Checks the owner boundaries. Only declaration files may connect a plugin and a sidecar.
+ * This function is not a behavior test: it mechanically decides on the forbidden references in implementation and test sources.
+ * The apps and e2e consume the public contract, so they may use other public packages,
+ * but the private, src and tests paths are forbidden for every owner.
+ */
+export function auditOwnership(files, readSource = (file) => readFileSync(`${ROOT}${file}`, "utf8"), index = packageIndex()) {
+  const errors = [];
+  for (const file of [...new Set(files)].sort()) {
+    const owner = ownerFor(file);
+    if (!owner || isDeclaration(file)) continue;
+    let source;
+    try { source = readSource(file); }
+    catch (error) {
+      errors.push(`${file}: ownership source cannot be read: ${error?.message ?? error}`);
+      continue;
+    }
+    const testFile = /(^|\/)(test|tests|e2e)\//.test(file) || /[._]test\./.test(file);
+    const kind = `${owner}${testFile ? " test" : " implementation"}`;
+    for (const reference of ownerReferences(source)) {
+      const value = reference.value;
+      if (value.startsWith("@soksak/")) {
+        const { base, subpath } = packageReference(value);
+        const entry = index.get(base);
+        // An undeclared name is a finding in every owner: core names only declared packages (decision D3, rule 2).
+        if (!entry) {
+          errors.push(`${file}: ${kind} names undeclared package ${base}`);
+          continue;
+        }
+        // A subpath is public only when the package lists it in its exports map; a package without one exposes none.
+        // A package reads its own subpaths without the map.
+        if (subpath && packageOfFile(file, index) !== base && !exported(entry.exports, `./${subpath}`)) {
+          errors.push(`${file}: ${kind} reads private path ${value}`);
+          continue;
+        }
+        if (entry.owner === "core" || entry.owner === owner) continue;
+        if (owner === "application" || owner === "contract") continue;
+        errors.push(`${file}: ${kind} names ${entry.owner} implementation ${value}`);
+        continue;
+      }
+      const pathOwner = OWNER_ROOTS.find(([root]) => value.includes(root))?.[1] ?? null;
+      if (!pathOwner) continue;
+      if (reference.private && pathOwner !== owner) {
+        errors.push(`${file}: ${kind} reads private path ${value}`);
+        continue;
+      }
+      if (pathOwner === owner || pathOwner === "core") continue;
+      if (owner === "application" || owner === "contract") continue;
+      errors.push(`${file}: ${kind} names ${pathOwner} implementation ${value}`);
+    }
+  }
+  return errors;
+}
+
+/** Reject promise handlers that turn a rejected operation into an unobservable success. */
+export function auditJsFailurePropagation(files, readSource = (file) => readFileSync(`${ROOT}${file}`, "utf8")) {
+  const errors = [];
+  for (const file of [...new Set(files)].sort()) {
+    if (!/\.(?:js|mjs|ts|tsx)$/.test(file) || /(^|\/)(test|tests|e2e)\//.test(file)) continue;
+    let source;
+    try { source = readSource(file); }
+    catch (error) {
+      errors.push(`${file}: failure-propagation source cannot be read: ${error?.message ?? error}`);
+      continue;
+    }
+    const patterns = [
+      { expression: /\.catch\(\s*\(\s*\)\s*=>\s*\{\s*\}\s*\)/g, name: "empty catch handler" },
+      { expression: /\.catch\(\s*\(\s*\)\s*=>\s*undefined\s*\)/g, name: "undefined catch handler" },
+    ];
+    for (const { expression, name } of patterns) {
+      for (const match of source.matchAll(expression)) {
+        const line = source.slice(0, match.index).split("\n").length;
+        errors.push(`${file}:${line}: ${name} hides a rejected operation`);
+      }
+    }
+  }
+  return errors;
+}
+
+/** Reject explicit Result/JoinHandle discards in the scoped Rust production lane. */
+export function auditRustFailurePropagation(files, readSource, scope) {
+  const errors = [];
+  for (const file of [...new Set(files)].sort()) {
+    if (!file.startsWith(scope) || !file.endsWith(".rs") || /(^|\/)(test|tests|benches)\//.test(file)) continue;
+    let source;
+    try { source = readSource(file); }
+    catch (error) {
+      errors.push(`${file}: Rust failure-propagation source cannot be read: ${error?.message ?? error}`);
+      continue;
+    }
+    for (const [index, line] of source.split("\n").entries()) {
+      if (/\blet\s+_\s*=/.test(line)) {
+        errors.push(`${file}:${index + 1}: ignored Rust result or task outcome`);
+      }
+    }
+  }
+  return errors;
+}
+
+/** Require the Darwin capture FFI to return native failures instead of logging and succeeding. */
+export function auditNativeFailurePropagation(files, readSource = (file) => readFileSync(`${ROOT}${file}`, "utf8")) {
+  const errors = [];
+  const header = "native/darwin/src/capture.h";
+  const bridge = "packages/host/rust/src/platform/darwin/capture.rs";
+  const implementation = "native/darwin/src/capture.m";
+  if (!files.includes(header) || !files.includes(bridge) || !files.includes(implementation)) return errors;
+  let headerSource, bridgeSource, implementationSource;
+  try {
+    headerSource = readSource(header);
+    bridgeSource = readSource(bridge);
+    implementationSource = readSource(implementation);
+  } catch (error) {
+    errors.push(`Darwin capture failure audit cannot read its sources: ${error?.message ?? error}`);
+    return errors;
+  }
+  for (const name of ["sp_capture_open", "sp_capture_start"]) {
+    const declaration = new RegExp(`\\bvoid\\s+${name}\\s*\\(`);
+    if (declaration.test(headerSource) || declaration.test(implementationSource)) {
+      errors.push(`${name}: native capture failure cannot be represented by a void return`);
+    }
+    if (!new RegExp(`fn\\s+${name}\\([^)]*\\)\\s*->\\s*bool`).test(bridgeSource)) {
+      errors.push(`${name}: Rust FFI declaration must return bool`);
+    }
+  }
+  if (!/sp_capture_error/.test(headerSource) || !/sp_capture_error/.test(bridgeSource)) {
+    errors.push("Darwin capture: native failure text is not exposed across the FFI boundary");
+  }
+  if (/let\s+Ok\([^)]*\)\s*=\s*CString::new[\s\S]{0,120}\breturn\s*;/.test(bridgeSource)) {
+    errors.push("Darwin capture: invalid directory input is silently discarded");
+  }
+  return errors;
+}
+
+/** Reject ignored Go outcomes in host and shell production lanes. */
+export function auditGoFailurePropagation(files, readSource = (file) => readFileSync(`${ROOT}${file}`, "utf8")) {
+  const errors = [];
+  for (const file of [...new Set(files)].sort()) {
+    if (!file.endsWith(".go") || /(^|\/)(test|tests)\//.test(file)) continue;
+    let source;
+    try { source = readSource(file); }
+    catch (error) {
+      errors.push(`${file}: Go failure-propagation source cannot be read: ${error?.message ?? error}`);
+      continue;
+    }
+    for (const [index, line] of source.split("\n").entries()) {
+      if (/\b_\s*=/.test(line)) {
+        errors.push(`${file}:${index + 1}: ignored Go result or fallback encoding`);
+      }
+    }
+  }
+  return errors;
+}
+
+/** Run every language-specific failure audit and preserve attribution by lane. */
+export function auditFailureMatrix(files, readSource = (file) => readFileSync(`${ROOT}${file}`, "utf8")) {
+  const lanes = [
+    ["js-ts", auditJsFailurePropagation(files, readSource)],
+    ["rust", [
+      "packages/host/rust/src/",
+      "packages/host/tauriv2/src/",
+      "packages/sok/rust/src/",
+      "apps/tauriv2/src/",
+    ].flatMap((scope) => auditRustFailurePropagation(files, readSource, scope))],
+    ["go", auditGoFailurePropagation(files, readSource)],
+    ["objective-c", auditNativeFailurePropagation(files, readSource)],
+  ];
+  return {
+    lanes: lanes.map(([language, errors]) => ({ language, errors })),
+    errors: lanes.flatMap(([language, errors]) => errors.map((error) => `${language}: ${error}`)),
+  };
+}
+
+// There is no fixed root per language: every other language of a package is found too.
+export function discoverInventory(files) {
+  const implementations = [], tests = [], manifests = [], generated = [];
+  for (const file of [...new Set(files)].sort()) {
+    const excluded = [...GENERATED_ROOTS].find(([root]) => file.startsWith(root));
+    if (excluded) {
+      generated.push({ file, reason: excluded[1] });
+      continue;
+    }
+    const name = file.split("/").at(-1);
+    if (manifestNames.has(name)) manifests.push(file);
+    const language = declarationNames.has(name) ? "declaration" : sourceLanguages.get(extname(file));
+    if (!language) continue;
+    const isTest = /(^|\/)(test|tests|benches)\//.test(file) || /(^|\/)e2e\//.test(file) || /[._]test\.(mjs|js|cjs|ts|go|rs|m|mm)$/.test(file);
+    (isTest ? tests : implementations).push({ file, language });
+  }
+  return { implementations, tests, manifests, generated };
+}
+
+const nonExecutableLanguages = new Set(["native-interface", "declaration", "document", "stylesheet"]);
+
+export function auditExecutableLanguageCoverage(files, adapterLanguages) {
+  const implemented = new Set(discoverInventory(files).implementations
+    .map(({ language }) => language)
+    .filter((language) => !nonExecutableLanguages.has(language)));
+  const covered = new Set(adapterLanguages);
+  const errors = [];
+  for (const language of [...implemented].sort()) {
+    if (!covered.has(language)) errors.push(`executable implementation language ${language} has no language adapter test case`);
+  }
+  for (const language of [...covered].sort()) {
+    if (!implemented.has(language)) errors.push(`language adapter declares ${language} but no executable implementation uses it`);
+  }
+  return errors;
+}
+
+function repositoryFiles() {
+  return execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], {
+    cwd: ROOT,
+    encoding: "utf8",
+  }).split("\0").filter((file) => file && existsSync(`${ROOT}${file}`));
+}
+
+// Only the patterns *, **, and ? that declarations use are expanded.
+function globRegex(glob) {
+  let source = "^";
+  for (let index = 0; index < glob.length; index += 1) {
+    const character = glob[index];
+    if (character === "*" && glob[index + 1] === "*") {
+      index += 1;
+      if (glob[index + 1] === "/") {
+        index += 1;
+        source += "(?:.*/)?";
+      } else {
+        source += ".*";
+      }
+    } else if (character === "*") {
+      source += "[^/]*";
+    } else if (character === "?") {
+      source += "[^/]";
+    } else {
+      source += character.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+  }
+  return new RegExp(`${source}$`);
+}
+
+export function auditInventory(files, matrix = MATRIX, readSource = (file) => readFileSync(`${ROOT}${file}`, "utf8")) {
+  const matches = new Map();
+  const expand = (pattern) => {
+    if (!matches.has(pattern)) {
+      const regex = globRegex(pattern);
+      matches.set(pattern, files.filter((file) => regex.test(file)));
+    }
+    return matches.get(pattern);
+  };
+  const unique = (patterns) => [...new Set(patterns.flatMap(expand))].sort();
+  const extensionOf = (file) => extname(file) || basename(file);
+  const errors = [];
+  const warnings = [];
+  const implementationOwners = new Map();
+  const testOwners = new Map();
+  const addOwner = (owners, file, entry, kind) => {
+    const list = owners.get(file) ?? [];
+    list.push(entry);
+    owners.set(file, list);
+    if (list.length > 1 && !(kind === "test" && list.every((item) => item.sharedTests))) {
+      errors.push(`${file}: ${kind} is claimed by multiple matrix entries: ${list.map((item) => item.capability).join(", ")}`);
+    }
+  };
+
+  // unique removes the repeats of a list, so the owners of a file cannot show them.
+  const repeats = (entry, patterns, kind) => {
+    const claims = new Map();
+    for (const pattern of patterns) {
+      for (const file of expand(pattern)) claims.set(file, [...(claims.get(file) ?? []), pattern]);
+    }
+    for (const [file, claiming] of claims) {
+      if (claiming.length > 1) errors.push(`${file}: ${entry.capability} repeats this ${kind}: ${claiming.join(", ")}`);
+    }
+  };
+
+  for (const entry of matrix) {
+    const implementations = unique(entry.implementation);
+    const tests = unique(entry.tests);
+    repeats(entry, entry.implementation, "implementation");
+    repeats(entry, entry.tests, "test");
+    for (const pattern of entry.implementation) {
+      if (expand(pattern).length === 0) errors.push(`${entry.capability} [${entry.language}]: implementation pattern matched no files: ${pattern}`);
+    }
+    for (const pattern of entry.tests) {
+      if (expand(pattern).length === 0) errors.push(`${entry.capability} [${entry.language}]: test pattern matched no files: ${pattern}`);
+    }
+    if (implementations.length === 0 && entry.implementation.length === 0) {
+      errors.push(`${entry.capability} [${entry.language}]: no implementation files`);
+    }
+    if (tests.length === 0 && entry.tests.length === 0) {
+      errors.push(`${entry.capability} [${entry.language}]: no test files`);
+    }
+
+    const implementationExtensions = languages[entry.language];
+    if (implementationExtensions) {
+      for (const file of implementations) {
+        if (!implementationExtensions.has(extensionOf(file))) {
+          errors.push(`${file}: ${entry.capability} declares ${entry.language} but the implementation extension is not valid`);
+        }
+      }
+    }
+    const testExtensions = entry.testExtensions ?? languages[entry.testLanguage];
+    if (testExtensions) {
+      for (const file of tests) {
+        if (!testExtensions.has(extensionOf(file))) {
+          errors.push(`${file}: ${entry.capability} declares ${entry.testLanguage} tests but the test extension is not valid`);
+        }
+      }
+    }
+    for (const file of implementations) addOwner(implementationOwners, file, entry, "implementation");
+    for (const file of tests) addOwner(testOwners, file, entry, "test");
+  }
+
+  const inventory = discoverInventory(files);
+  const uncoveredImplementations = inventory.implementations.filter(({ file }) => !implementationOwners.has(file));
+  const uncoveredTests = inventory.tests.filter(({ file }) => !testOwners.has(file));
+  for (const { file, language } of uncoveredImplementations) {
+    errors.push(`${file} [${language}]: implementation is not claimed by the test inventory`);
+  }
+  for (const { file, language } of uncoveredTests) {
+    errors.push(`${file} [${language}]: test is not claimed by the test inventory`);
+  }
+
+  const featureErrors = auditFeatureLinks(FEATURE_LINKS, files);
+  errors.push(...featureErrors);
+  const ownershipErrors = auditOwnership(files, readSource);
+  errors.push(...ownershipErrors);
+  const failureMatrix = auditFailureMatrix(files, readSource);
+  const jsFailureErrors = failureMatrix.lanes.find(({ language }) => language === "js-ts").errors;
+  errors.push(...failureMatrix.errors);
+  const rustFailureErrors = failureMatrix.lanes.find(({ language }) => language === "rust").errors;
+  const nativeFailureErrors = failureMatrix.lanes.find(({ language }) => language === "objective-c").errors;
+  const goFailureErrors = failureMatrix.lanes.find(({ language }) => language === "go").errors;
+
+  return {
+    errors,
+    warnings,
+    inventory,
+    uncoveredImplementations,
+    uncoveredTests,
+    featureErrors,
+    ownershipErrors,
+    jsFailureErrors,
+    rustFailureErrors,
+    nativeFailureErrors,
+    goFailureErrors,
+    failureMatrix,
+    featureLinks: FEATURE_LINKS,
+    trackCount: matrix.length,
+    implementationCount: implementationOwners.size,
+    testCount: testOwners.size,
+  };
+}
+
+export function auditFeatureLinks(features, files, readSource = (file) => readFileSync(`${ROOT}${file}`, "utf8")) {
+  const knownFiles = new Set(files);
+  const errors = [];
+  const ids = new Set();
+  const levels = new Set(["unit", "native", "application", "release"]);
+  for (const feature of features) {
+    if (!feature.id || ids.has(feature.id)) {
+      errors.push(`${feature.id || "<missing>"}: feature link id is missing or duplicated`);
+    }
+    ids.add(feature.id);
+    if (!feature.expected?.trim()) errors.push(`${feature.id}: feature link has no expected result`);
+    if (!Array.isArray(feature.levels) || feature.levels.length === 0 || feature.levels.some((level) => !levels.has(level))) {
+      errors.push(`${feature.id}: feature link has an invalid verification level`);
+    }
+    for (const implementation of feature.implementation ?? []) {
+      if (!implementation.file || !implementation.symbol) errors.push(`${feature.id}: implementation link must name a file and symbol`);
+      else if (!knownFiles.has(implementation.file)) errors.push(`${feature.id}: implementation file is not in the workspace: ${implementation.file}`);
+      else {
+        let source;
+        try { source = readSource(implementation.file); }
+        catch { source = null; }
+        if (source === null) errors.push(`${feature.id}: implementation source cannot be read: ${implementation.file}`);
+        else if (!source.includes(implementation.symbol)) errors.push(`${feature.id}: implementation symbol is not present in ${implementation.file}: ${implementation.symbol}`);
+      }
+    }
+    for (const test of feature.tests ?? []) {
+      if (!test.file || !test.id) errors.push(`${feature.id}: behavior test link must name a file and test id`);
+      else if (!knownFiles.has(test.file)) errors.push(`${feature.id}: behavior test file is not in the workspace: ${test.file}`);
+      else {
+        let source;
+        try { source = readSource(test.file); }
+        catch { source = null; }
+        if (source === null) errors.push(`${feature.id}: behavior test source cannot be read: ${test.file}`);
+        else if (!source.includes(test.id)) errors.push(`${feature.id}: behavior test id is not present in ${test.file}: ${test.id}`);
+      }
+    }
+    if (!feature.implementation?.length) errors.push(`${feature.id}: feature link has no implementation entry`);
+    if (!feature.tests?.length) errors.push(`${feature.id}: feature link has no behavior test entry`);
+  }
+  return errors;
+}
+
+// Aggregate review records (F13, F266, F267), release records, withdrawn items,
+// guidance changes (R4, R6), and fixture-only, structure-only, or reason-only
+// corrections do not add product behavior and need no feature link. F239-113
+// and F239-113-2 update fixtures; F239-114 aggregates children; F239-114-3,
+// F239-115, and F239-140 document existing error handling; F239-116, F239-117,
+// F239-120, F239-126, F239-135, F239-138, F239-142, and F239-71 correct test
+// fixtures, mappings, file structure, compile scope, or records; F239-129 is a
+// behavior-preserving refactor. Every completed product capability still
+// requires exact implementation and owning-test links.
+// F239-195 and F239-198 record candidate installation, F239-47-30-4 classifies
+// historical source evidence, and F239-199 corrects inventory records. None
+// adds runtime behavior. F239-202 relocates existing owner cases without changing their assertions.
+// F239-203 applies the Rust formatter without changing operations or assertions.
+// F239-215 corrects documentation of existing import-map and logging behavior.
+// F239-217 changes only synthetic identities in existing owner test fixtures.
+// F239-227 replaces an unsafe fixture identity without changing endpoint behavior.
+// F239-228 aligns paired test filenames without changing their assertions.
+// F239-190 corrects checklist evidence attribution; F239-244 aligns contract fixtures; F239-246 corrects adapter counts;
+// F239-248, F239-249 and F239-250 correct formatting and lint; F239-251 and F239-253 correct native test fixtures.
+// F239-254 registers existing host assertions against the current contract cases.
+// F239-256 corrects a fixture's startup flush; F239-257 aligns assertions with existing capture-source cleanup behavior.
+// F239-258 registers existing compiler-selected test assertions without changing runtime behavior.
+// F239-275 documents the existing nullable diagnostic mount identity without changing behavior.
+// F239-274 applies the Rust formatter without changing behavior or assertions.
+// F239-268 removes an unused mutable fixture binding without changing its assertions.
+// F239-284 restores exact parity links for completed lock, workflow-evidence, and test-fixture records.
+// F239-287 corrects only the event dispatch of the input-reference owner test.
+// F239-279 corrects only the fixtures of existing host argument-message owner tests.
+// F239-285 removes the Linux CI jobs; Linux is not a verified platform.
+// F239-286 removes the one-job Cargo limit of the equivalence CI job.
+// F239-289 ends the performance trace in two Tauri sidecar owner tests.
+// F314 states the release files of core in the plugin specification; each plugin and sidecar repository checks its workflows.
+// F292-34 records the publication of plugin and sidecar releases; each repository checks its own corrections.
+// F329 states the later-core range rule of the registry check; the registry repository implements and tests it.
+// F334 makes Tauri host tests read only their own records; it changes no runtime capability.
+// F355 removes the dependencies of plugins and sidecars on core releases; each repository checks its own dependencies.
+// F367 records the plugin releases for core 0.0.29; it changes no runtime capability.
+// F366 names the release candidate 0.0.29; it changes no runtime capability.
+// F383 records the CI result of the F381 commits; it changes no runtime capability.
+// F325 shortens the release run of the repository; it changes no runtime capability.
+// F387 and F382 publish core 0.0.31 and its plugins; they change no runtime capability.
+// F385 names the release candidate 0.0.31; it changes no runtime capability.
+// F378 names the release candidate 0.0.30; it changes no runtime capability.
+// F364 records the plugin releases for core 0.0.28; it changes no runtime capability.
+// F363 names the release candidate 0.0.28; it changes no runtime capability.
+// F361 records the sidecar releases and terminal 0.0.27; it changes no runtime capability.
+// F360 records the plugin releases and the registry entry for core 0.0.27; it changes no runtime capability.
+// F359 names the release candidate 0.0.27; it changes no runtime capability.
+// F357 ends the group of one runner test through killGroup in its cleanup; it changes no runtime capability.
+// These items change no runtime capability and remain outside this capability-link inventory.
+// F386-7 removes a default value that the event source check reported; make check-events is its check.
+// F391 states a screen form in the contract; the replay of both sok packages already compares only existing page frames.
+// F389 records the plugin releases and the registry entry for core 0.0.32; it changes no runtime capability of core.
+// F400 removes the build folder of the host contract check; it changes no runtime capability.
+// F292-70-5 declares the contract tests of the cancellation that F292-70-4 added; it changes no runtime capability.
+// F401 names the release candidate 0.0.33; it changes no runtime capability.
+// F402 records the plugin releases and the registry entry for core 0.0.33; it changes no runtime capability of core.
+// F239-273, F239-273-1 and F239-273-2 verified a candidate registry proof; F433 removed that check.
+// F433 removes a check; it adds no capability.
+// F431 names the release candidate 0.0.34; it changes no runtime capability.
+// F432 records the plugin releases and the registry entry for core 0.0.34; it changes no runtime capability of core.
+// F503 states the framework fork that the Wails host pins in the native surfaces specification and in the go.mod comments; it
+// changes no runtime capability.
+// F524 corrects the release checks that the verification specification states; it changes no runtime capability.
+const NON_CAPABILITY_COMPLETIONS = new Set(["F478", "F477", "F476", "F474", "F475", "F473", "F472", "F471", "F239-276", "F97", "F16", "F470", "F469", "F468", "F466", "F467", "F465", "F463", "F464", "F561", "F581", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
+
+// Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
+// moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66), the window checks of plugins (F110) and the registry listing of the hwp plugin (F141, registry items G37 and G38). Core cannot read
+// those repositories, so they have no link here and each repository checks its own evidence.
+// F167, F224, F287, R3 and R5 wrote the term list, the record check and the release gate, which F355-3-2 moves to the
+// kit; the kit holds their implementation and tests. F239-170, F239-197, F239-247, F273 and F273-1 wrote rules of
+// the event source check, which F355-3-5 moves to the kit.
+// F596 is a change of the mygo fork: its tests are there, and no host draws through that plugin.
+const MOVED_COMPLETIONS = new Set(["F596", "F239-170", "F239-197", "F239-247", "F273", "F273-1", "F167", "F224", "F287", "R3", "R5", "F0.3", "F1.4", "F2.1-1", "F2.10", "F2.1", "F2.4-1", "F2.4", "F2.5", "F2.8", "F2.9", "F2", "F3", "F6.3-10", "F6.6-1", "F6.6-2", "F7.14", "F7.15", "F7.16", "F7.17", "F7", "G1.2", "F18", "F19", "F98", "F100", "F101", "F109", "F110", "F203", "F210", "F141"]);
+
+// Completed capabilities whose implementation a later item removed: F68 wrote the WebKit child record, which F196.22
+// removed with the start that ended the recorded processes.
+// F60, F91, F114 and F116 wrote the module mount and dispose of a surface, which F212.11-2b removes with the module mount; their
+// tests and symbols are removed with it.
+// F125 and F239-269 wrote the registry manifest check of the core release, which F276 removes: the registry checks the
+// plugin versions of each core version that it lists.
+// F55, F239-47-24 and F239-182 wrote the frontmost baseline of a window-check session (the refusal of a tested host as the
+// baseline, the shared baseline identity and the report of a refused baseline activation), which F292-39 removes:
+// frontmost state is not a criterion of a check result.
+// F239-68, F278, F278-1, F280, F283-1 and F283-2 wrote the candidate registry variable, the kept output files, the exit status
+// files and the crash reports of the window-check workflow, which F298-2 removes: no workflow runs an end-to-end check.
+// F286, F290 and F292-26-3 wrote the options that skip a window check in a run without a display or a person, which F298-4
+// removes: window checks run only on a computer with a display and a person.
+// F226, F239-39, F239-41, F239-41-1, F239-42, F239-42-1, F239-42-2, F239-241, F248-7 and F248-8 wrote the declared section, the
+// view source, the snapshot channel, the failed pull of a declared section and the plugin-host log of the workbench and the view
+// bridge, which F332-2 and F332-4-1 remove: the declared UI and the plugin host are removed, and a sidebar section is a view of its
+// plugin.
+// F212.12-1-15-5, F212.9-3-1, F212.9a-1, F239-107-1, F239-220, F239-40, F239-43, F249 and F292-7 wrote the plugin host: the host disposal of a
+// project window, the relay of the plugin host channel, the memory sampling of the plugin host processes, the provider creation of the
+// plugin host, its binding, its view error identity, its callback identity, its command route and the plugin host window counts, which
+// F332-4-3 removes with the plugin host.
+// F212.9a, F212.9a-2, F239-226, F239-230, F239-51 and F239-52 wrote the plugin-host throttle benchmark and the Files open-failure and
+// closed-project snapshot helpers, which F332-4-4 removes with the declared section controls and the plugin-host snapshots.
+const REMOVED_COMPLETIONS = new Set(["F212.12-1-15-5", "F212.9-3-1", "F212.9a-1", "F239-107-1", "F239-220", "F239-40", "F239-43",
+  "F249", "F292-7", "F68", "F60", "F91", "F114", "F116", "F125", "F239-269", "F55", "F239-47-24", "F239-182", "F239-68", "F278",
+  "F278-1", "F280", "F283-1", "F283-2", "F286", "F290", "F292-26-3", "F226", "F239-39", "F239-41", "F239-41-1", "F239-42",
+  "F239-42-1", "F239-42-2", "F239-241", "F248-7", "F248-8", "F212.9a", "F212.9a-2", "F239-226", "F239-230", "F239-51", "F239-52"]);
+
+export function auditCompletedFeatureLinks(features, checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
+  const linked = new Set(features.map((feature) => feature.id));
+  const completed = [...checklistSource.matchAll(/^- \[o\] ([A-Z][A-Z0-9.-]*) —/gm)].map((match) => match[1]);
+  return completed
+    .filter((id) => !NON_CAPABILITY_COMPLETIONS.has(id) && !MOVED_COMPLETIONS.has(id) && !REMOVED_COMPLETIONS.has(id) && !linked.has(id))
+    .map((id) => `${id}: completed capability has no feature link`);
+}
+
+// The current inventory counts are recorded in the sentence of the operations document that states the current state. The evidence of a completed checklist item is not changed.
+// The tests of the workbench cases of the two workbenches, which the declaration line of each test names (docs/spec/host-contract.md#workbench-cases).
+const WORKBENCH_CASE_SIDES = [
+  { side: "page", directory: "packages/workbench/test/", file: /\.test\.mjs$/, test: /^\s*(?:await\s+)?test\(/ },
+  { side: "mygo", directory: "packages/workbench-mygo/tests/", file: /_test\.go$/, test: /^func Test/ },
+];
+
+/**
+ * Checks that each case of the table "Workbench cases" has a test of the page and a test of the mygo workbench. The page tests also
+ * declare host cases, which the table does not name; the mygo tests declare workbench cases only.
+ */
+export function auditWorkbenchCases(specification, files) {
+  const SPEC = "docs/spec/host-contract.md";
+  const start = specification.indexOf("\n## Workbench cases\n");
+  if (start < 0) return [`${SPEC} has no "Workbench cases" section`];
+  const next = specification.indexOf("\n## ", start + 1);
+  const section = specification.slice(start, next < 0 ? undefined : next);
+  const cases = [...section.matchAll(/^\| `([^`]+)` \|/gm)].map((match) => match[1]);
+  const declared = new Map(WORKBENCH_CASE_SIDES.map(({ side }) => [side, new Set()]));
+  const errors = [];
+  for (const { path, text } of files) {
+    const side = WORKBENCH_CASE_SIDES.find(({ directory, file }) => path.startsWith(directory) && file.test(path));
+    if (!side) continue;
+    const lines = text.split("\n");
+    lines.forEach((line, index) => {
+      const declaration = line.match(/^\s*\/\/\s*contract:\s*(.*)$/);
+      if (!declaration) return;
+      for (const id of declaration[1].split(",").map((item) => item.trim())) {
+        if (!cases.includes(id)) {
+          if (side.side === "mygo") errors.push(`${path}:${index + 1}: workbench case ${id} is not in ${SPEC}`);
+          continue;
+        }
+        if (side.test.test(lines[index + 1])) declared.get(side.side).add(id);
+        else errors.push(`${path}:${index + 1}: the declaration of ${id} is not attached to a test`);
+      }
+    });
+  }
+  for (const { side } of WORKBENCH_CASE_SIDES) {
+    for (const id of cases) {
+      if (!declared.get(side).has(id) && !errors.some((error) => error.includes(`declaration of ${id} `))) {
+        errors.push(`${SPEC}: workbench case ${id} has no ${side} test`);
+      }
+    }
+  }
+  return errors;
+}
+
+export function auditRecordedInventoryCounts(
+  inventory,
+  english = readFileSync(`${ROOT}docs/operations/examples.md`, "utf8"),
+  korean = readFileSync(`${ROOT}docs/operations/examples.ko.md`, "utf8"),
+) {
+  const expected = [inventory.trackCount, inventory.implementationCount, inventory.testCount].map(String);
+  const records = [
+    ["docs/operations/examples.md", english, /The current inventory has (\d+) lanes, (\d+) implementation files, and (\d+) test files\./],
+    ["docs/operations/examples.ko.md", korean, /현재 목록은 lane (\d+)개, 구현 파일 (\d+)개, 테스트 파일 (\d+)개다\./],
+  ];
+  const errors = [];
+  for (const [path, source, pattern] of records) {
+    const match = source.match(pattern);
+    if (!match) {
+      errors.push(`${path}: the current inventory count is not recorded in the expected form`);
+      continue;
+    }
+    const actual = match.slice(1);
+    if (!actual.every((value, index) => value === expected[index])) {
+      errors.push(`${path}: recorded parity counts ${actual.join(", ")} do not match current output ${expected.join(", ")}`);
+    }
+  }
+  return errors;
+}
+
+export function auditHistoricalScopeWording(checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
+  const forbidden = [
+    "Controlled-site pixel and restored/new-document application checks remain open under F3.",
+    "Controlled-site pixels and restored/new-document validation remain open under F3.",
+  ];
+  return forbidden.filter((phrase) => checklistSource.includes(phrase)).map((phrase) => `F3 scope is reported as currently open: ${phrase}`);
+}
+
+export function auditModalParitySnapshotWording(checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
+  const line = checklistSource.split("\n").find((entry) => entry.includes("At the 2026-09-21 audit snapshot"));
+  if (!line) return ["modal parity observation is not explicitly dated as a historical snapshot"];
+  if (!line.includes("The later F10.2 correction creates the Wails child-WebView contract")) {
+    return ["modal parity observation does not state the current F10.2 correction"];
+  }
+  return [];
+}
+
+export function auditCommittedEvidenceWording(checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
+  const line = checklistSource.split("\n").find((entry) => entry.includes("F0.1 — Unblock native input measurement"));
+  if (!line) return ["F0.1 evidence line is missing"];
+  if (line.includes("current dirty implementation")) return ["F0.1 evidence still claims a current dirty implementation"];
+  // A record does not state a commit id (AGENTS.md Documentation). Evidence points to its build by checklist ID.
+  if (!line.includes("this F0.1 change")) return ["F0.1 evidence does not identify its build by its checklist ID"];
+  return [];
+}
+
+export { MATRIX, repositoryFiles };
+
+if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
+  const { errors, warnings, uncoveredImplementations, uncoveredTests, featureErrors, featureLinks, trackCount, implementationCount, testCount } = auditInventory(repositoryFiles());
+  const adapterManifestFile = `${ROOT}scripts/language-test-cases.json`;
+  try {
+    const adapterManifest = JSON.parse(readFileSync(adapterManifestFile, "utf8"));
+    if (!Array.isArray(adapterManifest.cases)) errors.push(`${adapterManifestFile}: cases must be an array`);
+    else errors.push(...auditExecutableLanguageCoverage(repositoryFiles(), adapterManifest.cases.map(({ language }) => language)));
+  } catch (error) {
+    errors.push(`${adapterManifestFile}: cannot read language adapter cases: ${error.message}`);
+  }
+  errors.push(...auditCompletedFeatureLinks(featureLinks));
+  errors.push(...auditWorkbenchCases(readFileSync(`${ROOT}docs/spec/host-contract.md`, "utf8"),
+    repositoryFiles().filter((path) => WORKBENCH_CASE_SIDES.some(({ directory, file }) => path.startsWith(directory) && file.test(path)))
+      .map((path) => ({ path, text: readFileSync(`${ROOT}${path}`, "utf8") }))));
+  errors.push(...auditRecordedInventoryCounts({ trackCount, implementationCount, testCount }));
+  errors.push(...auditHistoricalScopeWording());
+  errors.push(...auditModalParitySnapshotWording());
+  errors.push(...auditCommittedEvidenceWording());
+  if (errors.length) {
+    console.error(`Test inventory checks failed: ${errors.length} issue(s); ` +
+      `${uncoveredImplementations.length} uncovered implementation(s), ${uncoveredTests.length} uncovered test(s), ` +
+      `${featureErrors.length} feature-link issue(s); ${featureLinks.length} feature link(s) inspected`);
+    if (uncoveredImplementations.length) {
+      console.error('Uncovered implementations:');
+      for (const { file, language } of uncoveredImplementations.sort((a, b) => a.file.localeCompare(b.file))) {
+        console.error(`- ${file} [${language}]`);
+      }
+    }
+    if (uncoveredTests.length) {
+      console.error('Uncovered tests:');
+      for (const { file, language } of uncoveredTests.sort((a, b) => a.file.localeCompare(b.file))) {
+        console.error(`- ${file} [${language}]`);
+      }
+    }
+    if (featureErrors.length) {
+      console.error('Feature-link errors:');
+      for (const error of featureErrors.sort()) console.error(`- ${error}`);
+    }
+    console.error('All audit errors:');
+    for (const error of [...new Set(errors)].sort()) console.error(`- ${error}`);
+    process.exitCode = 1;
+  } else console.log(`Test inventory checks passed: ${trackCount} tracks, ${implementationCount} implementation files, ${testCount} test files. Structural evidence only; behavior was not executed.`);
+  for (const warning of warnings) console.warn(`Warning: ${warning}`);
+}

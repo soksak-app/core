@@ -64,7 +64,7 @@ type watch struct {
 }
 
 // Registry holds the commands and the statuses of the workbench. Registering a name that is not declared is a programming error,
-// which make exposure-check also finds in the sources, so it panics.
+// which make check-exposure also finds in the sources, so it panics.
 type Registry struct {
 	declared *Declarations
 	mu       sync.Mutex
@@ -315,7 +315,7 @@ func (r *Registry) dispatch(method string, params json.RawMessage, changed Chang
 			element.Bounds = ui.Rect{} // An element that the window does not show has no place, as the rectangle of a page element under display:none.
 		}
 		return map[string]any{"x": element.Bounds.X, "y": element.Bounds.Y, "width": element.Bounds.W, "height": element.Bounds.H,
-			"zoom": 1, "document": map[string]any{"x": 0, "y": 0}}, nil
+			"zoom": 1, "role": ElementRole(element.Role), "document": map[string]any{"x": 0, "y": 0}}, nil
 	}
 	return nil, r.act(*name, element, fields)
 }

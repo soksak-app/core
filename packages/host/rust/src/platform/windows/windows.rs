@@ -1,6 +1,6 @@
 //! The Windows implementation.
 //!
-//! It implements directory identification. The other functions, including the local endpoint (named pipe), return a
+//! It implements directory identification, the pointer and key input of a WebView2 and, with the diagnostics feature, its still capture. The other functions, including the local endpoint (named pipe), return a
 //! "not implemented on windows" error from unsupported.
 
 use std::fs::Metadata;
@@ -20,10 +20,23 @@ use super::{
     Platform, Pointer, ProcessFootprint, Raster, WindowOverlay,
 };
 
+#[cfg(feature = "diagnostics")]
+#[path = "capture.rs"]
+mod capture;
 #[path = "identity.rs"]
 mod identity;
+#[path = "input.rs"]
+mod input;
+#[path = "show_windows.rs"]
+mod show_windows;
+#[path = "ui_thread.rs"]
+mod ui_thread;
 #[path = "unsupported.rs"]
 mod unsupported;
+#[path = "webview.rs"]
+mod webview;
+
+pub use show_windows::keep_front_on_show;
 
 /// The Windows platform implementation.
 pub struct Windows;
@@ -62,6 +75,9 @@ impl Platform for Windows {
     fn reveal_after_load(&self, window: Handle) -> Result<(), String> {
         unsupported::reveal_after_load(window)
     }
+    fn show_window(&self, window: Handle) -> Result<(), String> {
+        show_windows::show_window(window)
+    }
     fn set_main_appearance(&self, view: &PlatformWebview, dark: bool) -> Result<(), String> {
         unsupported::set_main_appearance(view, dark)
     }
@@ -89,7 +105,7 @@ impl Platform for Windows {
     }
     #[cfg(feature = "diagnostics")]
     fn window_numbers(&self, window: &Window) -> Result<Vec<isize>, String> {
-        unsupported::window_numbers(window)
+        capture::window_numbers(window)
     }
     fn hit(&self, window: Handle, x: f64, y: f64) -> Result<Hit, String> {
         unsupported::hit(window, x, y)
@@ -141,6 +157,9 @@ impl Platform for Windows {
     }
     fn focus_surface(&self, surface: Handle) -> Result<(), String> {
         unsupported::focus_surface(surface)
+    }
+    fn focus_surface_for_region(&self, surface: Handle) -> Result<(), String> {
+        unsupported::focus_surface_for_region(surface)
     }
     fn focus_workbench(&self, window: Handle) -> Result<(), String> {
         unsupported::focus_workbench(window)
@@ -432,7 +451,7 @@ impl Platform for Windows {
     }
 
     fn register_input(&self, view: &PlatformWebview) -> Result<bool, String> {
-        unsupported::register_input(view)
+        webview::register(view)
     }
     fn ignore_page_focus(&self, view: &PlatformWebview) -> Result<bool, String> {
         unsupported::ignore_page_focus(view)
@@ -455,20 +474,20 @@ impl Platform for Windows {
         receive: Duration,
         done: Box<dyn FnOnce(Delivery) + Send>,
     ) -> Result<(), String> {
-        unsupported::input_pointer(window, pointer, receive, done)
+        input::pointer(window, pointer, receive, done)
     }
     fn input_activate(
         &self,
         window: Handle,
-        x: f64,
-        y: f64,
+        _x: f64,
+        _y: f64,
         timeout: Duration,
         done: Box<dyn FnOnce(Result<(), String>) + Send>,
     ) -> Result<(), String> {
-        unsupported::input_activate(window, x, y, timeout, done)
+        input::activate(window, timeout, done)
     }
     fn input_key(&self, window: Handle, key: &Key) -> Result<Delivery, String> {
-        unsupported::input_key(window, key)
+        input::key(window, key)
     }
 
     #[cfg(feature = "diagnostics")]
@@ -530,7 +549,7 @@ impl Platform for Windows {
     }
     #[cfg(feature = "diagnostics")]
     fn capture_still(&self, window_number: isize, path: &str) -> Result<(), String> {
-        unsupported::capture_still(window_number, path)
+        capture::capture_still(window_number, path)
     }
     #[cfg(feature = "diagnostics")]
     fn delivered_notifications(&self, done: Box<dyn FnOnce(String) + Send>) -> Result<(), String> {
@@ -549,7 +568,7 @@ impl Platform for Windows {
     #[cfg(feature = "diagnostics")]
     fn count_page_objects(
         &self,
-        view: super::super::Handle,
+        view: Handle,
         document: bool,
         done: crate::object_counts::PageCountDone,
     ) -> Result<(), String> {
@@ -722,6 +741,10 @@ impl Platform for Windows {
     }
     fn write_private_file(&self, path: &Path, data: &[u8]) -> Result<(), String> {
         unsupported::write_private_file(path, data)
+    }
+    fn private_file_options(&self) -> std::fs::OpenOptions {
+        // The access of a new file comes from its folder.
+        std::fs::OpenOptions::new()
     }
     fn directory_identity(&self, path: &Path, _metadata: &Metadata) -> Result<String, String> {
         identity::identity(path)

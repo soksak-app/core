@@ -1,6 +1,6 @@
 {
   "name": "soksak",
-  "version": "0.0.35",
+  "version": "0.0.36",
   "private": true,
   "engines": {
     "node": ">=20"
@@ -31,7 +31,7 @@
     "test": "pnpm build && node --test test/",
     "fuzz": "pnpm build && node scripts/fuzz.mjs",
     "mutate": "pnpm build && node scripts/mutate.mjs",
-    "breaks": "pnpm build && node scripts/check-breaks.mjs"
+    "check-breaks": "pnpm build && node scripts/check-breaks.mjs"
   },
   "keywords": [
     "split",

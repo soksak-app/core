@@ -5,6 +5,7 @@
 #import <Cocoa/Cocoa.h>
 #import <Network/Network.h>
 #import <WebKit/WebKit.h>
+#import <objc/runtime.h>
 #import "support/temporary_folder.h"
 #import "document_view.h"
 #import "support/records.h"
@@ -174,6 +175,8 @@ static void settle(NSString *what, BOOL (^condition)(NSDictionary *state)) {
     until(what, ^BOOL { return latest && condition(latest); });
 }
 
+static id closedViews[2];
+
 static void pumpEvents(NSString *what, BOOL (^done)(void)) {
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
     while (!done() && deadline.timeIntervalSinceNow > 0) {
@@ -184,11 +187,11 @@ static void pumpEvents(NSString *what, BOOL (^done)(void)) {
     if (!done()) { fprintf(stderr, "FAIL: %s within 10 seconds\n", what.UTF8String); exit(1); }
 }
 
-// tests/support/no_activation.m: this check activates the application in make e2e-activation.
+// tests/support/no_activation.m: this check activates the application in make test-app-activation.
 void sp_test_declare_activation(void);
 
 int main(int argc, char **argv) { @autoreleasepool {
-    // activation activates the application and checks clicks and keys of the OS event queue. Used only by make e2e-activation.
+    // activation activates the application and checks clicks and keys of the OS event queue. Used only by make test-app-activation.
     BOOL activation = argc > 1 && strcmp(argv[1], "--activation") == 0;
     if (activation) sp_test_declare_activation();
     [NSApplication sharedApplication];
@@ -626,6 +629,7 @@ int main(int argc, char **argv) { @autoreleasepool {
 
         // Schedules a report just before closing and checks that no report arrives after that turn passes following the close.
         evaluate(view, @"scrollTo(0, 10); null");
+        objc_storeWeak(&closedViews[0], (id)document);
         sp_document_close(document);
         int after = reports;
         __block BOOL passed = NO;
@@ -633,6 +637,33 @@ int main(int argc, char **argv) { @autoreleasepool {
         until(@"the run loop did not continue", ^BOOL { return passed; });
         check(reports == after, @"a closed document reports nothing");
         check(documents(nativePlane) == 0, @"closing removes the document view");
+    }
+
+    // A closed document ends its web content process only as the last reference to its web view goes, so nothing holds the web
+    // view, whether the keyboard was in it at the close or had left it.
+    BOOL (^freed)(id *) = ^BOOL(id *closed) {
+        NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:5];
+        while (deadline.timeIntervalSinceNow > 0 && objc_loadWeak(closed)) {
+            @autoreleasepool {
+                [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+            }
+        }
+        return !objc_loadWeak(closed);
+    };
+    check(freed(&closedViews[0]), @"nothing holds the web view of a document closed with the keyboard in it");
+    if (activation) {
+        @autoreleasepool {
+            void *left = sp_document_create(surface, storeA.fileSystemRepresentation, NULL, NULL, NULL, NULL, changed, NULL);
+            sp_document_place(left, 10, 20, 30, 40, true);
+            [window makeFirstResponder:(NSView *)left];
+            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.2]];
+            [window makeFirstResponder:main];
+            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.2]];
+            objc_storeWeak(&closedViews[1], (id)left);
+            sp_document_close(left);
+            check(window.firstResponder == main, @"closing a document leaves the keyboard where it went");
+        }
+        check(freed(&closedViews[1]), @"nothing holds the web view of a document closed after the keyboard left it");
     }
 
     // The stores end before the check removes their folder, so the network process writes nothing into it afterward.
