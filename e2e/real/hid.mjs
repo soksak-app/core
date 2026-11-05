@@ -18,7 +18,8 @@ function run(argv) { const input = JSON.parse(argv[0]); ${body} }`;
   };
 }
 
-const trusted = jxa(`return JSON.stringify($.AXIsProcessTrusted());`);
+/** Whether the process that runs this script has the Accessibility permission; it reads the permission and asks for nothing. */
+export const trusted = jxa(`return JSON.stringify($.AXIsProcessTrusted());`);
 
 /** The process that runs the checks must be able to send HID events. Otherwise the events are discarded silently. */
 export function requireTrusted() {

@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- F623: The session folders of `make benchmark-b3` live in `b3/` of the git common directory beside the baseline record. In `target/b3` a `cargo clean` of a board removed values that took hours to measure. Red: `scripts/test/benchmark-b3.test.mjs` reads the folder from a main checkout and from its worktree.
+- F624: A failed B3 run keeps only the output of its application and the logs of its configuration and prints their size. It kept its whole configuration, tens of MB of plugins, sidecars and web view data. Red: `scripts/test/benchmark-b3.test.mjs` fails a run and reads what stays.
+- F625: A run of S13 fails before it makes a configuration when the process of the session lacks the Accessibility permission, and names the permission. It started the application and kept its configuration in every round. Red: `scripts/test/benchmark-b3.test.mjs` runs S13 without the permission.
 - F622: S13 of B3 is held for a person, because its accessibility client needs the Accessibility permission and no path inside the application is shown to give the same value.
 - F621: `make benchmark-b3` builds one host at a time, the Tauri hosts first, and removes the intermediate outputs of each build before the next. Built together, its bundles did not fit the disk of a session. Red: `scripts/test/benchmark-b3.test.mjs` reads the order of the build steps and the removal after each.
 - F620: `make benchmark-b3` starts a baseline host by the executable name of its revision, `soksak-<host>`. It looked for `sok-<host>`, which that revision does not build. Red: `scripts/test/benchmark-b3.test.mjs` reads the executables of the five applications.

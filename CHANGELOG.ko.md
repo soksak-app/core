@@ -4,6 +4,9 @@
 
 ## 미배포
 
+- F623: `make benchmark-b3`의 session folder는 git common directory의 `b3/`, baseline record 옆에 있다. `target/b3`에서는 판의 `cargo clean`이 몇 시간 동안 잰 값을 지웠다. Red: `scripts/test/benchmark-b3.test.mjs`가 main checkout과 그 worktree에서 folder를 읽는다.
+- F624: 실패한 B3 run은 application 출력과 configuration의 log만 남기고 그 크기를 출력한다. configuration 전체, 즉 plugin, sidecar, web view 데이터 수십 MB를 남기고 있었다. Red: `scripts/test/benchmark-b3.test.mjs`가 run을 실패시키고 남은 것을 읽는다.
+- F625: session의 process에 Accessibility 권한이 없으면 S13의 run은 configuration을 만들기 전에 실패하고 권한을 말한다. 매 round 애플리케이션을 시작하고 configuration을 남기고 있었다. Red: `scripts/test/benchmark-b3.test.mjs`가 권한 없이 S13을 돌린다.
 - F622: B3의 S13은 사람이 돌리도록 보류한다. accessibility client가 Accessibility 권한을 요구하고, application 안의 경로가 같은 값을 준다고 보일 수 없기 때문이다.
 - F621: `make benchmark-b3`는 host를 한 번에 하나씩, Tauri host부터 build하고 다음 build 전에 각 build의 중간 출력을 지운다. 한꺼번에 build하면 session의 디스크에 들어가지 않았다. Red: `scripts/test/benchmark-b3.test.mjs`가 build 단계의 순서와 각 단계 뒤의 제거를 읽는다.
 - F620: `make benchmark-b3`는 baseline host를 그 revision의 executable 이름 `soksak-<host>`로 시작한다. 그 revision이 build하지 않는 `sok-<host>`를 찾고 있었다. Red: `scripts/test/benchmark-b3.test.mjs`가 다섯 application의 executable을 읽는다.

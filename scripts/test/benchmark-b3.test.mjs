@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { connect } from "@soksak/client";
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import { policyOfSetting } from "@soksak/window-check/log-policy.mjs";
 import { judgeSession, readGoals, readSession } from "../b3-judge.mjs";
 import {
-  appendRecord, baselineRecordFile, buildSteps, applicationsOf, attributionUnits, baselineCheckoutFailures, baselinePluginFailures, createSession, fseventsdCores, installedReleases, parseSwapUsage,
+  appendRecord, b3Folder, baselineRecordFile, buildSteps, applicationsOf, attributionUnits, baselineCheckoutFailures, baselinePluginFailures, createSession, fseventsdCores, installedReleases, parseSwapUsage,
   readBaselineRecord, readCheckout, readSidecarRevisions, readTargetOutput, runUnit, scenarioTargets, sessionUnits, sidecarRevisionFailures,
   surfacePlugins, targetCommand, traceStateOf, unitPlan,
 } from "../benchmark-b3.mjs";
@@ -188,7 +188,7 @@ test("a target runs in the checkout of its application with its configuration fo
   assert.throws(() => targetCommand("node elsewhere.mjs", { application: baseline, ...paths }), /^Error: the target "node elsewhere\.mjs" is neither a make target nor a check of e2e\/$/);
 });
 
-test("a run installs the index of its application into a new configuration folder under target/b3 and starts the executable of its release bundle", { timeout: 1000 }, () => {
+test("a run installs the index of its application into a new configuration folder under its session folder and starts the executable of its release bundle", { timeout: 1000 }, () => {
   const [mygo, , , baseline] = applicationsOf({ root: "/core", baseline: "/baseline" });
   assert.equal(mygo.executable, "/core/target/release/mygo/soksak.app/Contents/MacOS/sok-mygo");
   assert.equal(mygo.index, "/core/target/registry/index.json");
@@ -433,7 +433,7 @@ test("a run of a fixture application fails on a display at another refresh rate 
     assert.ok(lines.some((line) => line.startsWith("passed quit mygo ")), lines.join("\n"));
     assert.ok(lines.some((line) => line.startsWith("passed remaining processes ")), lines.join("\n"));
     assert.deepEqual(readSession(session).records.map((record) => record.failures), [[expected]]);
-    assert.equal(existsSync(join(session, "configs", "S0-1-mygo")), true, "a failed run keeps its configuration folder");
+    assert.equal(existsSync(join(session, "configs", "S0-1-mygo")), true, "a failed run keeps the logs of its configuration folder");
   }
 });
 
@@ -628,4 +628,59 @@ test("a session builds one host at a time, the Tauri hosts first, and removes th
       assert.deepEqual(next.slice(2).sort(), ["debug", "release"].flatMap((profile) => ["build", "deps", ".fingerprint", "incremental"].map((name) => join(checkout, "target", profile, name))).sort());
     }
   });
+});
+
+test("the sessions of B3 live beside the baseline record in the git common directory, which every worktree shares and no clean of the build outputs removes", { timeout: 10000 }, (t) => {
+  const folder = realpathSync(mkdtempSync(join(tmpdir(), "b3-sessions-")));
+  t.after(() => rmSync(folder, { recursive: true, force: true }));
+  const main = join(folder, "main");
+  const worktree = join(folder, "worktree");
+  const git = (...args) => execFileSync("git", ["-C", main, "-c", "user.name=b3", "-c", "user.email=b3@test", ...args], { stdio: "pipe" });
+  execFileSync("git", ["init", "-q", main], { stdio: "pipe" });
+  git("commit", "-q", "--allow-empty", "-m", "first");
+  git("worktree", "add", "-q", worktree);
+  assert.equal(b3Folder(main), join(main, ".git", "b3"));
+  assert.equal(b3Folder(worktree), b3Folder(main));
+  assert.equal(baselineRecordFile(worktree), join(b3Folder(main), "baseline.json"));
+});
+
+test("a failed run keeps only the output of its application and the logs of its configuration, and writes their size", { timeout: 30000 }, async (t) => {
+  const { context, application, lines, session } = fixtureContext(t, { values: { "G2-S0-frames": 0, "G2-S0-host-cpu": 0.05 } });
+  const configRoot = join(session, "configs", "S0-1-mygo");
+  const configDir = join(configRoot, "soksak-check-mygo");
+  const runTarget = context.runTarget;
+  context.runTarget = async (command, options) => {
+    const result = await runTarget(command, options);
+    mkdirSync(join(configDir, "plugins", "terminal"), { recursive: true });
+    writeFileSync(join(configDir, "plugins", "terminal", "view.js"), "x".repeat(4096));
+    mkdirSync(join(configDir, "logs"), { recursive: true });
+    writeFileSync(join(configDir, "logs", "events.jsonl"), "y".repeat(2048));
+    const output = JSON.parse(readFileSync(command.out, "utf8"));
+    writeFileSync(command.out, JSON.stringify({ ...output, conditions: { ...output.conditions, occluded: true } }));
+    return result;
+  };
+  const [record] = await runUnit({ scenarios: ["S0"], run: 1, application }, context);
+  assert.ok(record.failures.length > 0);
+  const kept = (dir) => readdirSync(dir, { recursive: true, withFileTypes: true }).filter((entry) => entry.isFile())
+    .map((entry) => join(entry.parentPath, entry.name).slice(configRoot.length + 1)).sort();
+  assert.deepEqual(kept(configRoot).filter((path) => !path.endsWith(".out") || path.includes("/")).filter((path) => !path.startsWith(join("soksak-check-mygo", "logs"))), []);
+  assert.ok(kept(configRoot).includes(join("soksak-check-mygo", "logs", "events.jsonl")));
+  const line = lines.find((entry) => entry.startsWith(`kept ${configRoot}: `));
+  assert.match(line ?? "", /^kept .*: the run failed; its logs take \d+ KB$/, lines.join("\n"));
+});
+
+test("a run of a scenario whose target needs the Accessibility permission fails before its configuration when the permission is missing", { timeout: 10000 }, async (t) => {
+  const { context, application, lines, targets, session } = fixtureContext(t);
+  let asked = 0;
+  context.accessibility = () => { asked += 1; return false; };
+  context.targetsOf = () => ["make benchmark-view-drag ACCESSIBILITY=1 TRACE=0"];
+  const [record] = await runUnit({ scenarios: ["S13"], run: 1, application }, context);
+  assert.equal(asked, 1);
+  assert.deepEqual(record.failures, ["make benchmark-view-drag ACCESSIBILITY=1 TRACE=0 needs the Accessibility permission for its accessibility client, which the process of the session lacks; a person runs it (F622)"]);
+  assert.deepEqual(targets, []);
+  assert.equal(existsSync(join(session, "configs", "S13-1-mygo")), false, lines.join("\n"));
+  context.accessibility = () => { throw new Error("a run without such a target asks for the permission"); };
+  context.targetsOf = () => [];
+  const [other] = await runUnit({ scenarios: ["S0"], run: 1, application }, context);
+  assert.deepEqual(other.failures, []);
 });
