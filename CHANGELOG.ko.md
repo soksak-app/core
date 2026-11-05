@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F502-12: 큰 파일을 쓰는 plugin view 를 열어도 그 파일이 host 메모리에 남지 않는다. document 응답은 plugin 파일을 256 KiB chunk 로 읽어 보내고, core root 응답은 보내는 byte 를 다시 복사하지 않는다.
 - F502-21: mygo workbench가 modal을 native UI로 그린다: 설정 창, 추가·분할·도구·탭·context menu를 가진 picker layer, 수정된 tab에 대한 질문. `core.card.close`, `core.tab.close`, `core.space.close`는 사람의 답 없이 수정된 tab을 닫지 않고, plugin과 그 setting은 설치된 plugin 문서에서 온다. 설정 `left`, `right`는 고정 창 sidebar를 plane에 넣고 뺀다.
 - F502-12: mygo workbench 의 `core.plugins.show-updates` 가 플러그인 화면의 업데이트 목록이 보이도록 스크롤한다.
 - F502-12: mygo workbench 가 설치 plugin 문서를 page 와 같은 규칙으로 검사한다. window 가 거부한 plugin 은 빠지고, 에러가 보이며, 행의 상태는 `refused` 다.

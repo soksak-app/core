@@ -12,9 +12,12 @@
 #import <Security/Security.h>
 #import <WebKit/WebKit.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #import "application_log.h"
 #import "document_upload_body.h"
 #import "document_view.h"
@@ -645,6 +648,20 @@ static NSString *insertViewPage(NSString *html, NSString *map, NSString **reason
 @property(copy) NSString *viewPage;
 @end
 
+// The bytes of one didReceiveData of a document response. One message that carries a whole file raises the peak footprint of the
+// host by the size of the file, even when the file is mapped.
+static const size_t kResponseChunkBytes = 256 * 1024;
+
+// Sends data as the body of the task in chunks and finishes the task. WebKit keeps a chunk of a synchronous load, so each chunk
+// owns its bytes. The whole body is sent within the start of the task, so no stop of the task arrives between two chunks.
+static void sendBody(id<WKURLSchemeTask> task, NSData *data) {
+    for (NSUInteger offset = 0; offset < data.length; offset += kResponseChunkBytes) @autoreleasepool {
+        NSUInteger length = MIN(data.length - offset, kResponseChunkBytes);
+        [task didReceiveData:[data subdataWithRange:NSMakeRange(offset, length)]];
+    }
+    [task didFinish];
+}
+
 @implementation SPPluginScheme
 - (void)webView:(WKWebView *)view startURLSchemeTask:(id<WKURLSchemeTask>)task {
     (void)view;
@@ -664,28 +681,53 @@ static NSString *insertViewPage(NSString *html, NSString *map, NSString **reason
         if (part.length == 0 || [part isEqualToString:@"."] || [part isEqualToString:@".."]) inside = NO;
     }
     NSString *file = inside ? [self.root stringByAppendingPathComponent:[url.path substringFromIndex:1]] : nil;
-    BOOL directory = NO;
-    NSData *data = file && [[NSFileManager defaultManager] fileExistsAtPath:file isDirectory:&directory] && !directory
-        ? [NSData dataWithContentsOfFile:file options:NSDataReadingMappedIfSafe error:NULL] : nil;
-    if (!data) {
+    int descriptor = file ? open(file.fileSystemRepresentation, O_RDONLY | O_CLOEXEC | O_NONBLOCK) : -1;
+    struct stat facts;
+    if (descriptor < 0 || fstat(descriptor, &facts) != 0 || !S_ISREG(facts.st_mode)) {
+        if (descriptor >= 0) close(descriptor);
         sp_log_error("document view", [NSString stringWithFormat:@"plugin file not found: %@", url.absoluteString].UTF8String);
         [task didFailWithError:[NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorFileDoesNotExist
             userInfo:@{ NSLocalizedDescriptionKey: [NSString stringWithFormat:@"%@ is not found", url.absoluteString] }]];
         return;
     }
     if (self.allowsCoreRoot && [url.path isEqualToString:self.viewPage]) {
+        close(descriptor);
         // The length of the response is taken after the insertion, so the page is sent with the length of the page that runs.
-        data = [self viewPageData:data url:url];
-        if (!data) {
+        NSData *source = [NSData dataWithContentsOfFile:file];
+        NSData *page = source ? [self viewPageData:source url:url] : nil;
+        if (!page) {
             [task didFailWithError:[NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorCannotDecodeContentData
                 userInfo:@{ NSLocalizedDescriptionKey: [NSString stringWithFormat:@"%@ is refused", url.absoluteString] }]];
             return;
         }
+        [self respond:task status:200 type:pluginContentType(file) data:page];
+        return;
     }
     NSHTTPURLResponse *response = [[[NSHTTPURLResponse alloc] initWithURL:url statusCode:200 HTTPVersion:@"HTTP/1.1"
-        headerFields:@{ @"Content-Type": pluginContentType(file), @"Content-Length": @(data.length).stringValue }] autorelease];
+        headerFields:@{ @"Content-Type": pluginContentType(file), @"Content-Length": @((unsigned long long)facts.st_size).stringValue }] autorelease];
     [task didReceiveResponse:response];
-    [task didReceiveData:data];
+    [self sendFile:descriptor length:(size_t)facts.st_size url:url task:task];
+    close(descriptor);
+}
+
+// Sends the open file as the body of the task, one chunk in memory at a time, and finishes the task. A file that ends before the
+// length that the response declares fails the task, so the page does not take a shorter file as complete.
+- (void)sendFile:(int)descriptor length:(size_t)length url:(NSURL *)url task:(id<WKURLSchemeTask>)task {
+    for (size_t remaining = length; remaining > 0;) @autoreleasepool {
+        size_t wanted = MIN(remaining, kResponseChunkBytes);
+        void *bytes = malloc(wanted);
+        ssize_t count;
+        do { count = read(descriptor, bytes, wanted); } while (count < 0 && errno == EINTR);
+        if (count <= 0) {
+            free(bytes);
+            sp_log_error("document view", [NSString stringWithFormat:@"plugin file ended before its length: %@", url.absoluteString].UTF8String);
+            [task didFailWithError:[NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorCannotDecodeContentData
+                userInfo:@{ NSLocalizedDescriptionKey: [NSString stringWithFormat:@"%@ ended before its length", url.absoluteString] }]];
+            return;
+        }
+        [task didReceiveData:[NSData dataWithBytesNoCopy:bytes length:(NSUInteger)count freeWhenDone:YES]];
+        remaining -= (size_t)count;
+    }
     [task didFinish];
 }
 
@@ -733,8 +775,8 @@ static NSString *insertViewPage(NSString *html, NSString *map, NSString **reason
             userInfo:@{ NSLocalizedDescriptionKey: [NSString stringWithFormat:@"%@ is not found", url.absoluteString] }]];
         return;
     }
-    NSData *data = [NSData dataWithBytes:bytes length:length];
-    free(bytes);
+    // The data takes the buffer of the resolver, so the file has no second whole copy here.
+    NSData *data = [NSData dataWithBytesNoCopy:bytes length:length freeWhenDone:YES];
     NSString *contentType = [NSString stringWithUTF8String:type];
     free(type);
     NSHTTPURLResponse *response = [[[NSHTTPURLResponse alloc] initWithURL:url statusCode:200 HTTPVersion:@"HTTP/1.1" headerFields:@{
@@ -743,8 +785,7 @@ static NSString *insertViewPage(NSString *html, NSString *map, NSString **reason
         @"Access-Control-Allow-Origin": [NSString stringWithFormat:@"soksak://%@", self.plugin],
     }] autorelease];
     [task didReceiveResponse:response];
-    [task didReceiveData:data];
-    [task didFinish];
+    sendBody(task, data);
 }
 
 // Answers a request of the binary store. An upload answers {id, length}; a download answers the stored bytes and releases
@@ -801,8 +842,7 @@ static NSString *insertViewPage(NSString *html, NSString *map, NSString **reason
     NSHTTPURLResponse *response = [[[NSHTTPURLResponse alloc] initWithURL:task.request.URL statusCode:status
         HTTPVersion:@"HTTP/1.1" headerFields:@{ @"Content-Type": type, @"Content-Length": @(data.length).stringValue }] autorelease];
     [task didReceiveResponse:response];
-    [task didReceiveData:data];
-    [task didFinish];
+    sendBody(task, data);
 }
 
 - (void)dealloc { [_root release]; [_plugin release]; [_binaries release]; [super dealloc]; }
