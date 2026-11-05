@@ -150,3 +150,16 @@ func TestTheCloseMarkOfATabHasTheHeightOfThePage(t *testing.T) {
 		t.Fatalf("the close mark is %v tall, want 11", closing.H)
 	}
 }
+
+// A section name has the weight of the page, which is lighter than bold.
+func TestASectionNameHasTheWeightOfThePage(t *testing.T) {
+	f := sidebarShell(t)
+	name := element(t, f.tester, "core.sidebar.section.name", "left/files.tree")
+	var semibold float32
+	ui.NewTester(func(c *ui.Context) {
+		semibold, _ = c.MeasureText(0, ui.Span{Text: name.Label, Size: 11.5, Weight: 600})
+	}, 400, 300).Frame()
+	if !designNear(name.Bounds.W, semibold) || name.Bounds.W > semibold+0.5 {
+		t.Fatalf("the name %q is %v wide, want %v", name.Label, name.Bounds.W, semibold)
+	}
+}

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F502-33: A section name of the mygo workbench has the weight of the page's section header, 600 in the font stack `ui-font` that the chrome declares beside `section-head-weight`, whatever font the settings choose. Red: `TestTheNameOfASectionHasTheStemsOfThePageHeader` and `TestASectionNameHasTheWeightOfThePage` failed with the name drawn bold.
 - F502-13: The close mark of a mygo card tab has the page's height, the small text size with the tight line height, since a line height that the style sets is the height of the line in the framework. Red: `TestTheCloseMarkOfATabHasTheHeightOfThePage` failed before that framework change.
 - F502-13: The element `core.sidebar` of the mygo workbench is the set of a sidebar, above its status line, and a sidebar without a set has no such element, as on the page. Red: `TestTheSidebarElementEndsAboveItsStatus` and `TestASidebarWithoutASetHasNoElement` failed on the previous drawing, and so did the card tests that measure the set and its status line.
 - F502-13: The note of no results of the mygo library has the margins of a paragraph of the page, with the grid gap between it and the card that adds a project. Red: `TestTheNoteOfNoResultsHasTheMarginsOfAParagraph` failed on the previous drawing.

@@ -171,6 +171,8 @@ func readSidebarMetrics(declared *Declarations) (SidebarMetrics, error) {
 	read("section-head-gap", &m.SectionHeadGap)
 	read("section-head-pad", &m.SectionHeadPad)
 	read("section-head-text", &m.SectionHeadText)
+	read("section-head-weight", &m.SectionHeadWeight)
+	m.SectionHeadFont = declared.ChromeValue("ui-font")
 	read("section-tab-mark", &m.SectionTabMark)
 	read("sidebar-status-gap", &m.StatusGap)
 	read("space-2", &m.StatusPad)
