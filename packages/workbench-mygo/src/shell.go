@@ -73,8 +73,8 @@ type environmentGrid struct {
 
 // metrics are the chrome metrics that the shell draws with.
 type metrics struct {
-	gripMix, gripThickness, gripLength, lineCrossingMix, dropMix, dropBorder, tabDraggingOpacity, actStroke, chromeActsGap, brandGap, brandLogoAtBase, chromeH, chromeRowH, spaceGap, spacePad, chromeGap, barGap, barXPad, barXOpacity, barAddText, barAddPad, textControlAtBase, textCaptionAtBase, chipMix, chipHoverMix, chipOnMix, projectTabMix float32
-	headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW                                                                                                                                                                                                                      float32
+	barTabRootPad, barTabRootW, gripMix, gripThickness, gripLength, lineCrossingMix, dropMix, dropBorder, tabDraggingOpacity, actStroke, chromeActsGap, brandGap, brandLogoAtBase, chromeH, chromeRowH, spaceGap, spacePad, chromeGap, barGap, barXPad, barXOpacity, barAddText, barAddPad, textControlAtBase, textCaptionAtBase, chipMix, chipHoverMix, chipOnMix, projectTabMix float32
+	headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW                                                                                                                                                                                                                                                  float32
 	// The card head (.chrome of packages/workbench/app.css).
 	cardHeadGap, cardHeadPad, cardTabsGap, cardButton, cardIcon, cardActsGap, cardActsPad, cardActHalfOpacity, tabGap, tabPadY, tabPadX, tabXPad, tabXOpacity, iconStroke, disabledOpacity, noticeDotInset, radiusSmallRatio, textSmallAtBase, textBase, chipSelMix, insetMix, tabXHoverMix float32
 	// The error line (#applicationError of packages/workbench/app.css).
@@ -93,6 +93,8 @@ func readMetrics(declared *Declarations) (metrics, error) {
 		}
 		*into = float32(value)
 	}
+	read("bar-tab-root-pad", &m.barTabRootPad)
+	read("bar-tab-root-w", &m.barTabRootW)
 	read("sp-grip-thickness", &m.gripThickness)
 	read("sp-grip-length", &m.gripLength)
 	read("drop-border", &m.dropBorder)
@@ -240,6 +242,8 @@ type Shell struct {
 	strips map[string]*stripPlace
 	// heads holds the fit of the head that the last frame drew for each card.
 	heads map[string]layout.HeadFit
+	// renaming is the rename of a project or a space in progress.
+	renaming *rename
 	// dragging is the drag of a tab in progress.
 	dragging *tabDrag
 	// workBanner is the height of the error line over the row of the spaces in the last drawing.
