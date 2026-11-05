@@ -589,13 +589,16 @@ func NewVerification(changed func()) *Verification { return &Verification{change
 
 // Update replaces the status with the rows of the current state. rows runs the verification of the drawn plane and runs only when
 // drawn is true: without a drawn plane nothing is verified, so no stale row stays. failure is the error of the last layout that
-// failed, whose row is added in both cases.
+// failed, whose row is added in both cases. A verification that could not run is the error that it returns and a failed row, so the
+// answer of the verification before it does not stay.
 func (v *Verification) Update(drawn bool, rows func() ([]VerifyRow, error), failure *string) error {
 	out := []VerifyRow{}
+	var unverified error
 	if drawn {
 		verified, err := rows()
 		if err != nil {
-			return err
+			unverified = err
+			verified = []VerifyRow{{Name: "Verification", Note: err.Error()}}
 		}
 		out = verified
 	}
@@ -610,7 +613,7 @@ func (v *Verification) Update(drawn bool, rows func() ([]VerifyRow, error), fail
 	}
 	v.status = &VerifyStatus{Failed: failed, Rows: out}
 	v.changed()
-	return nil
+	return unverified
 }
 
 // Status is the value of the status core.verify, null before the first verification.

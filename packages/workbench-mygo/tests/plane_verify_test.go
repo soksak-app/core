@@ -178,3 +178,22 @@ func TestTheHostDimsTheSurfaceOutsideTheFocus(t *testing.T) {
 		t.Fatal("a change of the focus placed no surface")
 	}
 }
+
+// A verification that could not run does not leave the answer of the verification before it: a check reads a failure and the reason.
+func TestAVerificationThatCannotRunIsAFailure(t *testing.T) {
+	f, stored := placingShell(t)
+	resized(f, 1000)
+	if verify := status[workbench.VerifyStatus](t, f, "core.verify"); verify.Failed != 0 || len(verify.Rows) == 0 {
+		t.Fatalf("core.verify is %+v", verify)
+	}
+	stored.window.Scale = 0
+	f.tester.Frame()
+	f.pending.drain(t)
+	verify := status[workbench.VerifyStatus](t, f, "core.verify")
+	if verify.Failed == 0 || !strings.Contains(verifyRow(t, verify, "Verification").Note, "device pixel ratio") {
+		t.Fatalf("core.verify is %+v", verify)
+	}
+	if len(f.lines) == 0 && len(f.host.written("workbench.record.error")) == 0 {
+		t.Fatal("the failed verification reported nothing")
+	}
+}
