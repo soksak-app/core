@@ -151,6 +151,14 @@ fn a_key_becomes_its_key_event() {
             json!({"type": "rawKeyDown", "key": "c", "code": "KeyC", "windowsVirtualKeyCode": 67, "modifiers": 15}),
         ),
         (
+            key("a", None, 2, true),
+            json!({"type": "rawKeyDown", "key": "a", "code": "KeyA", "windowsVirtualKeyCode": 65, "modifiers": 2}),
+        ),
+        (
+            key("a", None, 8, true),
+            json!({"type": "rawKeyDown", "key": "a", "code": "KeyA", "windowsVirtualKeyCode": 65, "modifiers": 4}),
+        ),
+        (
             key("A", None, 1, true),
             json!({"type": "keyDown", "key": "A", "code": "KeyA", "windowsVirtualKeyCode": 65, "text": "A", "unmodifiedText": "A", "modifiers": 8}),
         ),
