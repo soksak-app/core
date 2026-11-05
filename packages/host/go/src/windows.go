@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"unsafe"
 
+	"github.com/soksak-app/core/packages/host/go/src/platform"
 	"github.com/soksak-app/core/packages/host/go/src/routine"
 )
 
@@ -251,9 +252,14 @@ func (h *Host) WindowClose(ctx context.Context) error {
 }
 
 // ShowWindow puts a native window on the screen without taking the front from another application, for the show of a
-// framework (docs/spec/hosts.md#launch-activation).
+// framework (docs/spec/hosts.md#launch-activation). The show asks for the registered platform: a framework shows a window
+// whether or not the start of the host selected one.
 func ShowWindow(window unsafe.Pointer) {
-	if err := system.ShowWindow(window); err != nil {
+	current, err := platform.Current()
+	if err != nil {
+		fatalError("window show", err)
+	}
+	if err := current.ShowWindow(window); err != nil {
 		fatalError("window show", err)
 	}
 }
