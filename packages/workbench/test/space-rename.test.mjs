@@ -38,7 +38,7 @@ mock.module("../host.js", {
 });
 mock.module("../plugin-data.js", { exports: { configureData: () => {}, compareProjectData: () => {} } });
 mock.module("../settings.js", {
-  exports: { beginSettings: async () => {}, selectProject: async () => {}, value: () => "tabs", flushSettings: async () => {} },
+  exports: { projectSidebars: () => ({ sets: [], links: [] }), beginSettings: async () => {}, selectProject: async () => {}, value: () => "tabs", flushSettings: async () => {} },
 });
 mock.module("../environment.js", { exports: { pluginUnits: () => [] } });
 

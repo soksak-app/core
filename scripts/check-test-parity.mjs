@@ -1055,6 +1055,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F538",
+    implementation: [
+      { file: "packages/workbench/section-surfaces.js", symbol: "export function spaceSectionSurfaces(space, cards, sets, links)" },
+      { file: "packages/workbench/projects.js", symbol: "const { sets, links } = projectSidebars(project);" },
+      { file: "packages/workbench/settings.js", symbol: "export function projectSidebars(project)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "the layouts hold the sections of every space of every project, whatever the window draws, with the sets of each project" },
+      { file: "packages/workbench/test/section-surfaces.test.mjs", id: "a space holds the sections of the sets of its window sidebars and of the sides of its cards" },
+      { file: "packages/workbench/test/settings-debug-switch.test.mjs", id: "the sidebars of a project are its own overrides over the common settings" },
+    ],
+    expected: "A retain keeps the persistent sessions of the sections of every stored layout.",
+    levels: ["unit"],
+  },
+  {
     id: "F533",
     implementation: [
       { file: "packages/workbench/memory-saver.js", symbol: 'if (trigger === "delay") entry.unloadAt = now() + delayMs();' },
@@ -9441,7 +9456,7 @@ const FEATURE_LINKS = [
   {
     id: "F347",
     implementation: [
-      { file: "packages/workbench/sidebar-sections.js", symbol: "export const sectionSurfaceId = (space, sidebar, sectionId) =>" },
+      { file: "packages/workbench/section-surfaces.js", symbol: "export const sectionSurfaceId = (space, sidebar, sectionId) =>" },
       { file: "packages/workbench/section-surfaces.js", symbol: "export function storedSurfaceKept(tabIds, spaceCards)" },
       { file: "packages/host/go/src/workspace.go", symbol: "func listTabSessions(directory string) (any, error)" },
       { file: "packages/host/rust/src/workspace.rs", symbol: "fn valid_section_surface(id: &str) -> bool" },

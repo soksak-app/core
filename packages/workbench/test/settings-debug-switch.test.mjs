@@ -44,3 +44,18 @@ test("the debug switch runs core.settings.debug and is on only when the trace an
   ui.showSection("general");
   assert.equal(debugSwitch().checked, false, "the switch is on while one class is not at trace");
 });
+
+// The stored sidebars of a project that is not selected follow from its own overrides (docs/spec/projects.md#settings).
+test("the sidebars of a project are its own overrides over the common settings", async (t) => {
+  const dom = new JSDOM("<body><div id=plane></div></body>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  globalThis.window = dom.window;
+  globalThis.CSS = dom.window.CSS ?? { escape: (text) => text };
+  globalThis.addEventListener = dom.window.addEventListener.bind(dom.window);
+  t.mock.module("../environment.js", { exports: { pluginUnits: () => [] } });
+  const settings = await import("../settings.js");
+  const sets = [{ id: "mine", title: "mine", sections: [], layout: "list" }];
+  const common = settings.projectSidebars({});
+  assert.ok(Array.isArray(common.sets) && Array.isArray(common.links), "a project without overrides has the common sets and links");
+  assert.deepEqual(settings.projectSidebars({ settings: { sets, links: [] } }), { sets, links: [] });
+});

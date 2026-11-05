@@ -52,7 +52,7 @@ mock.module("../page-log.js", {
 const operationStarts = [];
 const realSink = null;
 mock.module("../settings.js", {
-  namedExports: {
+  namedExports: { projectSidebars: () => ({ sets: [], links: [] }),
     beginSettings: () => {}, selectProject: async () => {}, value: () => "tabs",
     flushSettings: async () => { events.push("settings"); },
   },
