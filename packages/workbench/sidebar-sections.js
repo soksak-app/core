@@ -30,15 +30,19 @@ function choiceOf(sidebar) {
 
 export { sectionSurfaceId };
 
-/** The section surfaces that the memory saver unloaded: each keeps its slot and has no mount until the saver restores it. */
+/** The section surfaces that the memory saver unloaded: each has no seat while hidden and no mount until the saver restores it. */
 const unloaded = new Set();
+
+/** Gives a section its seat in the plane, without a view: the first commit that holds a hidden section mounts it, or the memory saver unloads it. */
+function seat(entry) {
+  setSlotSurface(entry.body, entry.surface);
+  showSectionSurface(entry.surface.surfaceId);
+}
 
 /** Mounts the view of a section once; a hidden section keeps its surface, which the compositor places invisible. */
 function mount(entry) {
   if (entry.mount || unloaded.has(entry.surface.surfaceId)) return;
   const surface = entry.surface;
-  setSlotSurface(entry.body, surface);
-  showSectionSurface(surface.surfaceId);
   // The attempt exists before mountSurface runs, because the mount reports its first state before it returns.
   const attempt = entry.mount = {};
   attempt.done = mountSurface(entry.body, surface, {
@@ -71,7 +75,6 @@ function mount(entry) {
 function release(entry) {
   // A sidebar that draws the section again holds a new surface, which the memory saver has not unloaded.
   unloaded.delete(entry.surface.surfaceId);
-  if (!entry.mount) return;
   entry.mount = null;
   entry.mounted = false;
   entry.error = null;
@@ -88,15 +91,29 @@ function drawnEntry(surfaceId) {
   return null;
 }
 
+/** Mounts the hidden sections among ids, which a drawn placement holds (docs/spec/plugins.md#memory-saver). The other ids are tabs. */
+export function mountPlacedSections(ids) {
+  for (const id of ids) {
+    const entry = drawnEntry(id);
+    if (entry) mount(entry);
+  }
+}
+
+/** The unloaded section surfaces as candidates of a commit: they have no seat, and the memory saver keeps their state. */
+export function unloadedSections() {
+  return [...unloaded].map((id) => ({ id, plugin: drawnEntry(id).surface.pluginId, surface: drawnEntry(id).surface }));
+}
+
 /**
- * Ends the mounts of the section surfaces among ids, which the placement of the memory saver leaves out. Each keeps its slot and its
- * seat, so its show reaches the saver (docs/spec/plugins.md#memory-saver). The other ids are tabs.
+ * Ends the mounts of the section surfaces among ids, which the placement of the memory saver leaves out, and takes them out of the seats:
+ * a seat of a section without a view has nothing to place (docs/spec/plugins.md#memory-saver). The other ids are tabs.
  */
 export function unloadSections(ids) {
   for (const id of ids) {
     const entry = drawnEntry(id);
     if (!entry) continue;
     unloaded.add(id);
+    delete entry.body.dataset.nativeSurface;
     entry.mount = null;
     entry.mounted = false;
     entry.phase = null;
@@ -157,6 +174,11 @@ function apply(record) {
     entry.element.dataset.height = String(height);
     if (height === "fill") entry.element.style.removeProperty("--section-height");
     else entry.element.style.setProperty("--section-height", `${height}px`);
+    seat(entry);
+    const shown = record.layout === "tabs" ? choice.tab === id : !choice.folded.has(id);
+    if (!shown) continue;
+    // A shown unloaded section takes its seat again, which gives the memory saver its show.
+    if (unloaded.has(entry.surface.surfaceId)) entry.body.dataset.nativeSurface = "view";
     mount(entry);
   }
   // A divider lies between two adjacent open sections of a vertical list.

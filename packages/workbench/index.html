@@ -93,7 +93,7 @@ import { bind, run } from "./commands.js";
 import { icon } from "./icons.js";
 import { adopt, capture, clear, onDrag } from "./plane.js";
 import { checkStoredLayout } from "./stored-layout.js";
-import { onChoicesChange, restoreSection, unloadSections } from "./sidebar-sections.js";
+import { mountPlacedSections, onChoicesChange, restoreSection, unloadedSections, unloadSections } from "./sidebar-sections.js";
 
 import { createLibrary } from "./library.js";
 import { followLibraryWidth, gripMetrics, installBrandLogo, installChromeMetrics } from "./chrome-metrics.js";
@@ -212,6 +212,13 @@ function dormant(shown, holders = null) {
       } : {}),
     });
   };
+  // An unloaded section has no seat, and it stays a surface of the memory saver.
+  for (const { id, plugin, surface } of unloadedSections()) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    holders?.set(id, "an unloaded section");
+    out.push({ id, plugin, layer: 0, declared: NOWHERE, applied: NOWHERE, visible: false, dim: false, surface });
+  }
   // Tabs of the current plane. Those that are not the active tab are collected here.
   for (const card of currentGrid()?.cards ?? []) for (const t of tabsOf(card)) add(t, card, "the current plane");
   // Tabs of the other spaces. For the active space, the plane above is correct, not the stored layout.
@@ -326,6 +333,7 @@ onCommit((record) => {
   });
   return Promise.all([startSourceOriginIngress(), placing]).then(async ([, { surfaces: all, retain: ids, unload }]) => {
     unloadSections(unload);
+    if (record.drawn) mountPlacedSections(all.map(({ id }) => id));
     // An unloaded tab stays in the layout: it is not declared to the host, its surface is released in the unload mode, and
     // it is retained so that it is not released as a closed tab.
     // A tab of a plugin that is not loaded is not a surface, but its placeholder must stay alive (docs/spec/plugins.md).

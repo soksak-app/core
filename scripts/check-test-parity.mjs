@@ -8940,13 +8940,15 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/memory-placement.js", symbol: "record.surfaces = record.surfaces.filter(({ id }) => !unloaded.has(id));" },
       { file: "packages/workbench/sidebar-sections.js", symbol: "export function unloadSections(ids) {" },
       { file: "packages/workbench/sidebar-sections.js", symbol: "export function restoreSection(id) {" },
+      { file: "packages/workbench/sidebar-sections.js", symbol: "export function mountPlacedSections(ids) {" },
     ],
     tests: [
       { file: "packages/workbench/test/memory-placement-start.test.mjs", id: "a placement takes the seat of an unloaded surface out of its record" },
-      { file: "packages/workbench/test/sidebar-section-surfaces.test.mjs", id: "an unloaded section keeps its slot without a mount until the memory saver restores it" },
-      { file: "packages/workbench/test/sidebar-section-surfaces.test.mjs", id: "a sidebar that draws an unloaded section again after its release mounts it" },
+      { file: "packages/workbench/test/sidebar-section-surfaces.test.mjs", id: "a hidden section mounts only when a placement holds it" },
+      { file: "packages/workbench/test/sidebar-section-surfaces.test.mjs", id: "an unloaded section leaves the seats and returns to them on its show, and only the restore mounts it" },
+      { file: "packages/workbench/test/sidebar-section-surfaces.test.mjs", id: "a sidebar that draws an unloaded section again after its release holds a new surface" },
     ],
-    expected: "An unloaded section keeps its slot, leaves the record of the host, and mounts again when the memory saver restores it.",
+    expected: "A hidden section mounts at the placement that holds it; an unloaded section leaves the seats and mounts again when the memory saver restores it.",
     levels: ["unit"],
   },
   {
