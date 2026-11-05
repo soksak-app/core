@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -25,6 +26,7 @@ type modalStatus struct {
 	Listed  []string `json:"listed"`
 	Plugin  *string  `json:"plugin"`
 	Editing *string  `json:"editing"`
+	Scroll  float64  `json:"scroll"`
 	Rows    []struct {
 		Key         string  `json:"key"`
 		Name        string  `json:"name"`
@@ -1427,5 +1429,49 @@ func TestTheNameOfASettingsGroupIsBold(t *testing.T) {
 	}
 	if got := ink(drawn); got < (regular+bold)/2 {
 		t.Fatalf("the name has %d points of ink, a regular name %d and a bold one %d", got, regular, bold)
+	}
+}
+
+// TestScrollingTheSettingsCardRedrawsTheCardAlone checks that the wheel over the open card changes the pixels of the card,
+// not those of the blurred workbench below it, which nothing changed.
+func TestScrollingTheSettingsCardRedrawsTheCardAlone(t *testing.T) {
+	f := openedShell(t)
+	f.click("core.chrome.settings", "")
+	card := f.modal().Card
+	// What the shadow of the card reaches around it.
+	const reach = 40
+	bound := int((card.W + 2*reach) * (card.H + 2*reach))
+	// A frame in memory changing more than half the window draws it whole, so a bound past half tells nothing.
+	if bound*2 >= 1200*800 {
+		t.Fatalf("the card %+v with its shadow is half the window or more", card)
+	}
+	var records []ui.FrameRecord
+	var clock uint64
+	f.tester.RecordFrames(&ui.FrameRecorder{
+		Clock: func() uint64 { clock++; return clock },
+		Frame: func(r *ui.FrameRecord) { records = append(records, *r) },
+	})
+	x, y := float32(card.X+card.W*0.7), float32(card.Y+card.H*0.6)
+	f.tester.Move(x, y)
+	for range 6 {
+		f.tester.Wheel(x, y, 0, 48)
+		f.tester.Advance(20 * time.Millisecond)
+	}
+	f.settle()
+	if f.modal().Scroll <= 0 {
+		t.Fatalf("the wheel did not scroll the card: %+v", f.modal().Card)
+	}
+	drew := 0
+	for i, r := range records {
+		if r.Damage == 0 {
+			continue
+		}
+		drew++
+		if r.Damage > bound {
+			t.Errorf("frame %d of the scroll changed %d pixels, more than the %d of the card %+v", i, r.Damage, bound, card)
+		}
+	}
+	if drew == 0 {
+		t.Fatal("the scroll drew no frame")
 	}
 }

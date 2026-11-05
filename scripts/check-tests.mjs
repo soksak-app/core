@@ -1318,6 +1318,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F626",
+    implementation: [
+      { file: "packages/workbench-mygo/src/shell.go", symbol: "\t\troot.Blur(s.dialogBlur()).Cache()" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/settings_modal_test.go", id: "TestScrollingTheSettingsCardRedrawsTheCardAlone" },
+    ],
+    expected: "A frame of an open dialog redraws the dialog and not the blurred workbench behind it.",
+    levels: ["unit"],
+  },
+  {
     id: "F628",
     implementation: [
       { file: "packages/host/go/src/object_counts.go", symbol: "func StartCPUProfile(folder string) error {" },
