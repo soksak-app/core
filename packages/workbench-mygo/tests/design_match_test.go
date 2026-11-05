@@ -87,3 +87,12 @@ func TestTheButtonsOfASetAreASegment(t *testing.T) {
 		t.Fatalf("the caption is %+v, want x 475, width 284", line)
 	}
 }
+
+// The element of a search is the whole field with its border.
+func TestTheSearchOfPluginsIsTheWholeField(t *testing.T) {
+	f := settingsSection(t, "plugins")
+	search := f.box("core.settings-modal.search", "plugin-search")
+	if !designNear(search.X, 611) || !designNear(search.W, 250) || !designNear(search.H, 29) {
+		t.Fatalf("the search is %+v, want x 611, 250x29", search)
+	}
+}

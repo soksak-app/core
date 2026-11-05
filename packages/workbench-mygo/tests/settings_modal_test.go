@@ -1049,10 +1049,12 @@ func TestTheSearchOfTheSettingsIsThePillOfThePage(t *testing.T) {
 	if !ok {
 		t.Fatalf("no search in %q", f.tester.Texts())
 	}
-	box := node.Bounds
-	if want := inputHeight(t) - 2*plainLength(t, "search-inset"); box.H != want {
-		t.Fatalf("the search is %v high, not %v", box.H, want)
+	if want := inputHeight(t); node.Bounds.H != want {
+		t.Fatalf("the search is %v high, not %v", node.Bounds.H, want)
 	}
+	// The pill lies inside the field by the inset.
+	inset := plainLength(t, "search-inset")
+	box := ui.Rect{X: node.Bounds.X + inset, Y: node.Bounds.Y + inset, W: node.Bounds.W - 2*inset, H: node.Bounds.H - 2*inset}
 	fill := controlBackground(t)
 	if got := f.pixelOf(box.X+2, box.Y+2); got == fill {
 		t.Fatal("the corner of the search is square")
@@ -1101,8 +1103,8 @@ func TestAFocusedSearchTakesTheRingOfTheSystem(t *testing.T) {
 		t.Fatalf("no search in %q", f.tester.Texts())
 	}
 	width, inset := plainLength(t, "ring-w"), plainLength(t, "search-inset")
-	// The top edge, which is straight: the left of a pill is a curve.
-	x, y := node.Bounds.X+node.Bounds.W/2, node.Bounds.Y
+	// The top edge of the pill, which is straight: the left of a pill is a curve. The pill lies inside the field by the inset.
+	x, y := node.Bounds.X+node.Bounds.W/2, node.Bounds.Y+inset
 	beside, around := f.pixelOf(x, y-inset/2), f.pixelOf(x, y-inset-width-.5)
 	f.tester.Key(0, ui.KeyTab)
 	f.settle()
@@ -1182,8 +1184,8 @@ func TestTheCancelOfTheSearchEmptiesIt(t *testing.T) {
 	}
 }
 
-// The column of a row is the free width of the pane, which the border of a theme narrows. The box of a search is that column, and
-// the search lies inside its box.
+// The column of a row is the free width of the pane, which the border of a theme narrows. The search, the whole field with its border,
+// is that column.
 func TestTheSearchOfTheSettingsFillsTheColumnOfItsRow(t *testing.T) {
 	f := opened(t)
 	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
@@ -1203,7 +1205,7 @@ func TestTheSearchOfTheSettingsFillsTheColumnOfItsRow(t *testing.T) {
 			t.Fatalf("no search in %q", f.tester.Texts())
 		}
 		want := metric("set-card-w") - 2*border - metric("set-nav-w") - 2*metric("set-pane-pad-x") - metric("set-row-name-w") - metric("set-row-gap")
-		if got := node.Bounds.W + 2*plainLength(t, "search-inset"); got != want {
+		if got := node.Bounds.W; got != want {
 			t.Fatalf("with a border of %v the box of the search is %v wide, not %v", border, got, want)
 		}
 	}
