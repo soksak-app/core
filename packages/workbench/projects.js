@@ -277,7 +277,7 @@ async function initialiseWindow(storage, unloadOf) {
   } catch (error) {
     failed(error);
   }
-  store.onChange(() => { reread().catch(failed); });
+  store.onChange((read) => { reread(read).catch(failed); });
   await windows.onActivate((id) => activateHere(id).catch(failed));
   await windows.onCloseRequest(() => closeWindow().catch(failed));
   await windows.onRemoveProjectRequest((id) => answerRemoval(id).catch(failed));
@@ -318,23 +318,28 @@ async function leaveBegun() {
   finishInitialProjectContext();
 }
 
-/** Reads the registry again. Resolves true when the active project of this window disappeared from the registry. */
-function refresh() {
-  refreshing = refreshing.then(readProjects, readProjects);
+/**
+ * Reads the registry again, through read when a change of the store gave one. Resolves true when the active project of this window
+ * disappeared from the registry.
+ */
+function refresh(read) {
+  const next = () => readProjects(read);
+  refreshing = refreshing.then(next, next);
   return refreshing;
 }
 
 /**
  * Reads the registry again, and when the active project of this window disappeared, opens the first remaining project of this window, as closing a project tab does. When no project remains, the window stays at the library that readProjects showed (docs/spec/projects.md#settings). The activation waits for refresh, so it is not done inside readProjects.
  */
-async function reread() {
-  if (!(await refresh())) return;
+async function reread(read) {
+  if (!(await refresh(read))) return;
   const next = local()[0];
   if (next) await activate(next.id);
 }
 
-async function readProjects() {
-  const snapshot = await awaited("projects.read.snapshot", () => store.snapshot());
+// default: a read that no change of the store gave reads the store itself.
+async function readProjects(readSnapshot = () => store.snapshot()) {
+  const snapshot = await awaited("projects.read.snapshot", readSnapshot);
   const listed = new Set(snapshot.projects.map((p) => p.id));
   const removedProjects = projects.some((p) => !listed.has(p.id));
   // The cleanup below keeps only the tabs of the stored layouts. If the plane of the remaining active project has tabs that are not stored yet, they are stored first so that their surfaces remain too. The removed project is not stored.

@@ -1200,6 +1200,26 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F555",
+    implementation: [
+      { file: "packages/workbench/host-store.js", symbol: "reading = this.snapshot();" },
+      { file: "packages/workbench/projects.js", symbol: "store.onChange((read) => { reread(read).catch(failed); });" },
+      { file: "packages/workbench/settings.js", symbol: "async function refresh(read = () => store.snapshot())" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/workspace-change-read.test.mjs", id: "the listeners of one change read the host once and each receives a value of its own" },
+      { file: "packages/workbench/test/workspace-change-read.test.mjs", id: "each change reads the host again, and a change that no listener reads calls nothing" },
+      { file: "packages/workbench/test/workspace-change-read.test.mjs", id: "a listener that reads after the read of its change ended reads the host again" },
+      { file: "packages/workbench/test/workspace-change-read.test.mjs", id: "a listener that reads while the read of its change runs shares that call" },
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "a registry read that waited behind another read finds what the host holds at its turn" },
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "the registry and the settings of a window call the host once for one change" },
+      { file: "packages/workbench/test/settings.test.mjs", id: "a change of the store is read through the read of that change" },
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "a change of the store is read through the read of that change" },
+    ],
+    expected: "One change of the store is one read of the host for a window, and each listener receives a value of its own.",
+    levels: ["unit"],
+  },
+  {
     id: "F544",
     implementation: [
       { file: "native/darwin/src/input_press_context.h", symbol: "bool sp_input_press_open(void *window, int button);" },
