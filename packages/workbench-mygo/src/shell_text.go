@@ -74,13 +74,26 @@ func (t shellText) SetCardTextSize(id string, size float64) error {
 	return nil
 }
 
-// chromeHeight is the height of the first row, which grows with the frame factor (docs/spec/text-size.md#rendering).
+// chromeHeight is the height of the first row, chromeRow of packages/workbench/frame-text.js (docs/spec/text-size.md#rendering).
 func (s *Shell) chromeHeight() float32 {
-	return float32(math.Round(max(1, s.text.Frame()) * float64(s.metrics.chromeH)))
+	return float32(math.Round(math.Max(float64(s.metrics.chromeH), s.text.Frame()*float64(s.metrics.chromeRowH))))
+}
+
+// spaceRowHeight is the height of the row of the spaces, which grows with the frame factor and stays on whole pixels.
+func (s *Shell) spaceRowHeight() float32 {
+	return float32(math.Round(s.text.Frame() * float64(s.metrics.chromeRowH)))
 }
 
 // frameFont is the size of a text of the frame chrome.
 func (s *Shell) frameFont(size float32) float32 { return size * float32(s.text.Frame()) }
+
+// frameLength is a length of the frame chrome, which grows with its text.
+func (s *Shell) frameLength(length float32) float32 { return length * float32(s.text.Frame()) }
+
+// textControl is the size of the text of a control of the bars at the size setting.
+func (s *Shell) textControl() float32 {
+	return float32(s.settings.Value("size").(float64)) * s.metrics.textControlAtBase / s.metrics.textBase
+}
 
 // textSmall is the size of the small text of a card head, the proportion of the size setting that the page states.
 func (s *Shell) textSmall() float32 {

@@ -73,7 +73,8 @@ type environmentGrid struct {
 
 // metrics are the chrome metrics that the shell draws with.
 type metrics struct {
-	chromeH, headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW float32
+	chromeH, chromeRowH, spaceGap, spacePad, chromeGap, barGap, barXPad, barXOpacity, barAddText, barAddPad, textControlAtBase, chipMix, chipHoverMix, chipOnMix, projectTabMix float32
+	headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW                                                float32
 	// The card head (.chrome of packages/workbench/app.css).
 	cardHeadGap, cardHeadPad, cardTabsGap, cardButton, cardIcon, cardActsGap, cardActsPad, cardActHalfOpacity, tabGap, tabPadY, tabPadX, tabXPad, tabXOpacity, iconStroke, disabledOpacity, noticeDotInset, radiusSmallRatio, textSmallAtBase, textBase, chipSelMix, insetMix, tabXHoverMix float32
 	// The error line (#applicationError of packages/workbench/app.css).
@@ -92,7 +93,17 @@ func readMetrics(declared *Declarations) (metrics, error) {
 		}
 		*into = float32(value)
 	}
-	read("chrome-row-h", &m.chromeH)
+	read("chrome-h", &m.chromeH)
+	read("chrome-row-h", &m.chromeRowH)
+	read("space-tabs-gap", &m.spaceGap)
+	read("space-3", &m.spacePad)
+	read("space-2", &m.chromeGap)
+	read("bar-tab-gap", &m.barGap)
+	read("bar-tab-x-pad", &m.barXPad)
+	read("bar-tab-x-opacity", &m.barXOpacity)
+	read("bar-tab-add-text", &m.barAddText)
+	read("bar-tab-add-pad", &m.barAddPad)
+	read("text-control-at-base", &m.textControlAtBase)
 	read("dbg-card-w", &m.debugW)
 	share, ok := declared.HeightMetric("set-card-max-h")
 	if !ok {
@@ -143,6 +154,10 @@ func readMetrics(declared *Declarations) (metrics, error) {
 		*into = float32(value)
 	}
 	mix("chip-sel-mix", &m.chipSelMix)
+	mix("chip-mix", &m.chipMix)
+	mix("chip-hover-mix", &m.chipHoverMix)
+	mix("chip-on-mix", &m.chipOnMix)
+	mix("project-tab-mix", &m.projectTabMix)
 	mix("inset-mix", &m.insetMix)
 	mix("tab-x-hover-mix", &m.tabXHoverMix)
 	return m, failed
@@ -213,6 +228,8 @@ type Shell struct {
 	strips map[string]*stripPlace
 	// heads holds the fit of the head that the last frame drew for each card.
 	heads map[string]layout.HeadFit
+	// workBanner is the height of the error line over the row of the spaces in the last drawing.
+	workBanner float32
 	// controlsWidth is the width that the window keeps for its own buttons.
 	controlsWidth float32
 	held          *heldDivider

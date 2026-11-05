@@ -3,7 +3,9 @@ package workbench_test
 import (
 	"encoding/json"
 	"fmt"
+	"image/color"
 	"math"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -567,5 +569,221 @@ func TestALongStatusKeepsTheFootOfItsCard(t *testing.T) {
 		if foot := f.box("core.card.status", card.ID); found.X+found.W > foot.X+foot.W {
 			t.Fatalf("the status %v leaves the foot %v", found, foot)
 		}
+	}
+}
+
+// tool reads a tool of the head of card from core.grid.
+func (f *shellFixture) tool(t *testing.T, card, key string) (enabled bool, title string) {
+	t.Helper()
+	for _, read := range status[gridRead](t, f, "core.grid").Cards {
+		if read.ID == card {
+			tool, ok := read.Acts[key].(map[string]any)
+			if !ok {
+				t.Fatalf("card %s has no tool %s: %v", card, key, read.Acts)
+			}
+			return tool["enabled"].(bool), tool["title"].(string)
+		}
+	}
+	t.Fatalf("no card %s", card)
+	return false, ""
+}
+
+func TestTheToolsOfAHeadFollowWhatTheCardCanDo(t *testing.T) {
+	const held = "전체 화면에서는 배치를 바꾸지 않는다 — 먼저 카드 배치를 복원한다"
+	f := narrowCard(t, 1, "a")
+	f.run("core.card.close", map[string]string{"card": "other"})
+	f.settle()
+	// The last card of the plane has no neighbor that fills its place.
+	if enabled, title := f.tool(t, "main", "close"); enabled || title != "닫을 수 없다 — 어느 이웃도 이 위치를 빈틈없이 못 메운다" {
+		t.Fatalf("the close tool of the last card is %v %q", enabled, title)
+	}
+	node, ok := exposedNode(f.tester.ElementTree(), "core.card.close", "main")
+	if !ok || node.Actions&ui.ActionPress != 0 {
+		t.Fatalf("the close tool of the last card takes a press: %+v", node)
+	}
+	if enabled, title := f.tool(t, "main", "split-x"); !enabled || title != "세로선으로 쪼개기 — 좌우로 나뉜다" {
+		t.Fatalf("the split tool is %v %q", enabled, title)
+	}
+
+	f.click("core.card.fullscreen", "main")
+	for _, key := range []string{"add", "split-x", "split-y", "close"} {
+		if enabled, title := f.tool(t, "main", key); enabled || title != held {
+			t.Fatalf("the tool %s of a fullscreen card is %v %q", key, enabled, title)
+		}
+	}
+	if enabled, title := f.tool(t, "main", "fullscreen"); !enabled || title != "카드 배치 복원" {
+		t.Fatalf("the fullscreen tool is %v %q", enabled, title)
+	}
+}
+
+// A card that is too narrow to cut across stays open to a cut along it, and its tool menu leaves out what it cannot do.
+func TestATooNarrowCardCannotSplitAndItsMenuHoldsWhatItCan(t *testing.T) {
+	f := projectWithPlugins(t)
+	card := f.tabbedCards()[0]
+	refused := false
+	for range 12 {
+		if _, err := f.answer("core.card.split", map[string]string{"card": card, "side": "right", "plugin": "acme"}); err != nil {
+			refused = true
+			break
+		}
+	}
+	if !refused {
+		t.Fatal("the card never stopped splitting")
+	}
+	if enabled, _ := f.tool(t, card, "split-x"); enabled {
+		t.Fatal("the split tool of a card that does not split is enabled")
+	}
+	if enabled, _ := f.tool(t, card, "split-y"); !enabled {
+		t.Fatal("the card cannot split along its height")
+	}
+	f.click("core.card.tools", card)
+	keys := f.menu().keys()
+	if slices.Contains(keys, "x") || !slices.Contains(keys, "y") || !slices.Contains(keys, "fullscreen") {
+		t.Fatalf("the tool menu holds %q", keys)
+	}
+}
+
+// themeToken returns the color token of a theme in its mode, as workbench.json declares it.
+func themeToken(t *testing.T, name, mode, token string) color.RGBA {
+	t.Helper()
+	text, err := os.ReadFile("../src/workbench.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var declared struct {
+		Themes []map[string]any `json:"themes"`
+	}
+	if err := json.Unmarshal(text, &declared); err != nil {
+		t.Fatal(err)
+	}
+	for _, theme := range declared.Themes {
+		if theme["name"] == name {
+			parsed := ui.Hex(theme[mode].(map[string]any)[token].(string))
+			return color.RGBA{parsed.R, parsed.G, parsed.B, 255}
+		}
+	}
+	t.Fatalf("no theme %s", name)
+	return color.RGBA{}
+}
+
+// The first row and the row of the spaces are bands of the card color, each with its edge under it, over the background of the stage.
+func TestTheBarsOfTheWindowTakeTheCardColorOfTheTheme(t *testing.T) {
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	metric := func(name string) float32 {
+		value, ok := declared.Metric(name)
+		if !ok {
+			t.Fatalf("no metric %s", name)
+		}
+		return float32(value)
+	}
+	for _, theme := range [][2]string{{"midnight", "dark"}, {"paper", "light"}} {
+		t.Run(theme[1], func(t *testing.T) {
+			f := projectWithPlugins(t)
+			f.run("core.settings.theme", map[string]any{"name": theme[0], "mode": theme[1]})
+			f.settle()
+			image := f.tester.Image()
+			scale := float32(image.Bounds().Dx()) / 1200
+			at := func(y float32) color.RGBA { return image.RGBAAt(int(600*scale), int(y*scale)) }
+			first, second := metric("chrome-h"), metric("chrome-h")+metric("chrome-row-h")
+			card, edge, stage := themeToken(t, theme[0], theme[1], "card"), themeToken(t, theme[0], theme[1], "edge"), themeToken(t, theme[0], theme[1], "bg")
+			if got := at(1); got != card {
+				t.Fatalf("the first row is %v, want %v", got, card)
+			}
+			if got := at(first - 0.5); got != edge {
+				t.Fatalf("the edge of the first row is %v, want %v", got, edge)
+			}
+			if got := at(first + 1); got != card {
+				t.Fatalf("the row of the spaces is %v, want %v", got, card)
+			}
+			if got := at(second - 0.5); got != edge {
+				t.Fatalf("the edge of the row of the spaces is %v, want %v", got, edge)
+			}
+			plane := status[struct {
+				Plane struct{ X float64 } `json:"plane"`
+			}](t, f, "core.grid").Plane
+			if got := at(second + 1); plane.X > 1 && got != stage {
+				t.Fatalf("the stage is %v, want %v", got, stage)
+			}
+		})
+	}
+}
+
+// The cards start under the two rows, whose heights the page declares.
+func TestTheCardsStartUnderTheTwoRows(t *testing.T) {
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, _ := declared.Metric("chrome-h")
+	second, _ := declared.Metric("chrome-row-h")
+	f := projectWithPlugins(t)
+	plane := status[struct {
+		Plane struct{ X, Y float64 } `json:"plane"`
+	}](t, f, "core.grid")
+	if want := first + second + plane.Plane.X; plane.Plane.Y != want {
+		t.Fatalf("the plane starts at %v, want %v under rows of %v and %v", plane.Plane.Y, want, first, second)
+	}
+	if box := f.box("core.card", f.tabbedCards()[0]); float64(box.Y) != plane.Plane.Y {
+		t.Fatalf("the first card stands at %v in a plane at %v", box.Y, plane.Plane.Y)
+	}
+}
+
+// The tabs of the bars are chips over the band of the card color: the selected one in the rail color, a selected project in its own color, the
+// others in the text color, and the close button stands inside the chip.
+func TestATabOfABarIsAChipOverTheBand(t *testing.T) {
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	share := func(name string) float64 {
+		value, ok := declared.Share(name)
+		if !ok {
+			t.Fatalf("no share %s", name)
+		}
+		return value
+	}
+	over := func(under, tint color.RGBA, amount float64) color.RGBA {
+		mix := func(a, b uint8) uint8 { return uint8(math.Round(float64(a)*(1-amount) + float64(b)*amount)) }
+		return color.RGBA{mix(under.R, tint.R), mix(under.G, tint.G), mix(under.B, tint.B), 255}
+	}
+	near := func(a, b color.RGBA) bool {
+		close := func(x, y uint8) bool { return math.Abs(float64(x)-float64(y)) <= 2 }
+		return close(a.R, b.R) && close(a.G, b.G) && close(a.B, b.B)
+	}
+	f := projectWithPlugins(t)
+	f.run("core.settings.theme", map[string]any{"name": "midnight", "mode": "dark"})
+	f.click("core.space-tab.add", "")
+	f.tester.Move(600, 500)
+	f.settle()
+	card, fg, rail := themeToken(t, "midnight", "dark", "card"), themeToken(t, "midnight", "dark", "fg"), themeToken(t, "midnight", "dark", "rail")
+	image := f.tester.Image()
+	scale := float32(image.Bounds().Dx()) / 1200
+	inside := func(box ui.Rect) color.RGBA { return image.RGBAAt(int((box.X+3)*scale), int((box.Y+box.H/2)*scale)) }
+	record := f.host.projects[0]
+	on, off := record["activeSpaceId"].(string), ""
+	for _, space := range record["spaces"].([]any) {
+		if id := space.(map[string]any)["id"].(string); id != on {
+			off = id
+		}
+	}
+	if got, want := inside(f.box("core.space-tab", on)), over(card, rail, share("chip-on-mix")); !near(got, want) {
+		t.Fatalf("the selected space tab is %v, want %v", got, want)
+	}
+	if got, want := inside(f.box("core.space-tab", off)), over(card, fg, share("chip-mix")); !near(got, want) {
+		t.Fatalf("the other space tab is %v, want %v", got, want)
+	}
+	tint := ui.Hex(record["color"].(string))
+	if got, want := inside(f.box("core.project-tab", record["id"].(string))), over(card, color.RGBA{tint.R, tint.G, tint.B, 255}, share("project-tab-mix")); !near(got, want) {
+		t.Fatalf("the selected project tab is %v, want %v", got, want)
+	}
+	name, closing := f.box("core.space-tab", on), f.box("core.space-tab.close", on)
+	if closing.X < name.X+name.W {
+		t.Fatalf("the close button starts at %v inside the name that ends at %v", closing.X, name.X+name.W)
+	}
+	if got, want := image.RGBAAt(int((closing.X+closing.W+1)*scale), int((closing.Y+closing.H/2)*scale)), over(card, rail, share("chip-on-mix")); !near(got, want) {
+		t.Fatalf("beside the close button the chip is %v, want %v", got, want)
 	}
 }
