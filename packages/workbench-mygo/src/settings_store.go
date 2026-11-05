@@ -315,6 +315,11 @@ func (s *SettingsStore) Common() map[string]any { return s.common }
 // Value returns the effective value of key.
 func (s *SettingsStore) Value(key string) any { return s.effectiveValue(s.common, s.overrides, key) }
 
+// ProjectValue is the value of key for a project with overrides, which need not be the selected project.
+func (s *SettingsStore) ProjectValue(overrides map[string]any, key string) any {
+	return s.effectiveValue(s.common, overrides, key)
+}
+
 // Scoped returns the value of key that the scope shows.
 func (s *SettingsStore) Scoped(key, scope string) any {
 	if scope != "common" {

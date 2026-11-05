@@ -169,6 +169,8 @@ type projectRecord struct {
 	Title, Root, Color, Identity string
 	Pinned                       bool
 	LastOpened                   float64
+	// Settings holds the overrides of the project, which a project that is not shown still has.
+	Settings map[string]any
 }
 
 // member reads the member key of a stored project into value. A project without the member keeps the zero value.
@@ -190,7 +192,8 @@ func readProject(raw json.RawMessage) (projectRecord, error) {
 	}
 	return record, errors.Join(member(record.Rest, "title", &record.Title), member(record.Rest, "root", &record.Root),
 		member(record.Rest, "color", &record.Color), member(record.Rest, "identity", &record.Identity),
-		member(record.Rest, "pinned", &record.Pinned), member(record.Rest, "lastOpened", &record.LastOpened))
+		member(record.Rest, "pinned", &record.Pinned), member(record.Rest, "lastOpened", &record.LastOpened),
+		member(record.Rest, "settings", &record.Settings))
 }
 
 // Shell is the workbench of one window.
