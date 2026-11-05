@@ -185,8 +185,8 @@ func (i *Images) DrawingChanges() []ImageDrawing {
 			continue
 		}
 		state.Drawing, state.DrawingSent = drawing, true
-		// A raster that changed while the region was not drawing has no configuration yet, and no later step sends it
-		// when the window returns without a new layout.
+		// A raster that changed while the region was hidden has no configuration yet, and no later step sends it when the
+		// region is shown without a new layout.
 		var configure *ImageConfigure
 		if drawing && !state.Configured && state.Width > 0 {
 			state.Configured = true
@@ -510,7 +510,9 @@ func (i *Images) ConfigureRaster(key ImageKey, width, height int, scale float64,
 		state.PresentationError = ""
 		i.changedLocked()
 	}
-	if !i.drawingLocked(key, state) || state.Configured {
+	// A supplier opens the session of a region at the size of its configuration, so a region of a window that is off
+	// screen is configured as well; its drawing state keeps the supplier from drawing.
+	if !i.shownLocked(key, state) || state.Configured {
 		return nil, nil
 	}
 	state.Configured = true

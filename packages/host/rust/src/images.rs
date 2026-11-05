@@ -273,8 +273,8 @@ impl Images {
                 continue;
             }
             state.drawing_sent = Some(drawing);
-            // A raster that changed while the region was not drawing has no configuration yet, and no later step
-            // sends it when the window returns without a new layout.
+            // A raster that changed while the region was hidden has no configuration yet, and no later step sends it
+            // when the region is shown without a new layout.
             let configure = (drawing && !state.configured && state.width > 0).then(|| {
                 state.configured = true;
                 Configure {
@@ -766,7 +766,9 @@ impl Images {
             state.presentation_error = None;
             self.changed();
         }
-        if state.configured || !inner.drawing(key, &inner.states[key]) {
+        // A supplier opens the session of a region at the size of its configuration, so a region of a window that is off
+        // screen is configured as well; its drawing state keeps the supplier from drawing.
+        if state.configured || !inner.shown(key, &inner.states[key]) {
             return Ok(None);
         }
         let state = inner.states.get_mut(key).expect("the state was read above");

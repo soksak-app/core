@@ -743,8 +743,8 @@ fn invalid_json_closes_connection() {
 | `input.pointer.reads-the-press-target-before-delivery` | 주입된 press는 main thread의 한 단계 안에서 전달 전에 그 아래 view를 읽고, target을 읽을 수 없는 press는 전달하지 않는다. | all |
 | `image.drawing.sent-at-attach-and-on-change` | 호스트는 image region의 공급자에게 region의 부착 때와 상태가 바뀔 때마다 그 그리기 상태를 보내고, 바뀌지 않은 상태는 다시 보내지 않는다. | all |
 | `image.drawing.reads-occlusion-at-attach` | 만들 때 완전히 가려진 창에 부착된 region의 그리기 상태는 false이며, 창 event가 아니라 AppKit occlusion 상태에서 읽는다. | all |
-| `image.drawing.configures-only-drawing-regions` | 그리기 상태가 아닌 region은 설정을 받지 않고 표시 대기도 그것을 기다리지 않는다. 준비 중에 그리기 상태가 된 region은 설정을 받고 대기에 들어간다. | all |
-| `image.drawing.configures-a-raster-that-changed-while-not-drawing` | 호스트는 창이 화면에 없는 동안에도 보이는 region의 raster를 읽되 설정을 보내지 않는다. region이 다시 그리기 상태가 되면 그리기 메시지 뒤에 바뀐 raster의 설정을 한 번 보내고, 바뀌지 않은 raster는 다시 설정하지 않는다. | all |
+| `image.drawing.configures-shown-regions` | 보이는 region은 창의 상태와 상관없이 설정을 받고, 화면에 없는 창에서 raster가 바뀔 때도 받으며, 숨겨진 region은 받지 않는다. 표시 대기는 그리기 상태가 아닌 region을 기다리지 않고 그리기 상태가 된 region을 기다리며, 설정된 raster는 region이 그리기 상태가 될 때 다시 설정되지 않는다. | all |
+| `image.drawing.configures-a-raster-that-changed-while-hidden` | region이 숨겨진 동안 바뀐 raster는 설정을 받지 않는다. region이 보이면 그리기 메시지 뒤에 바뀐 raster의 설정을 한 번 보내고, 바뀌지 않은 raster는 다시 설정하지 않는다. | all |
 | `image.drawing.answers-transfers-while-not-drawing` | region이 그리기를 멈추기 전에 받은 전송 그림은 `consumed`나 오류로 답을 받는다. | all |
 | `sidecars-transport.replace.runs-when-sessions-reach-zero` | layout 목록이 오래된 service에 표면을 남기지 않으면 host가 그 service를 교체한다. | all |
 | `sidecars-transport.replace.keeps-a-service-that-a-layout-holds` | 이 process에서 보낸 적이 없는, 그 사이드카의 plugin 표면을 layout이 쥐는 동안에는 표면이 닫혀도 오래된 service가 남고 그 표면은 `sessions`에 들어간다. 그 표면이 없는 목록이 오면 service를 교체한다. | all |

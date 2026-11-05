@@ -1555,9 +1555,9 @@ fn drawing_state_is_sent_at_attach_and_on_change() {
     }
 }
 
-// contract: image.drawing.configures-only-drawing-regions
+// contract: image.drawing.configures-shown-regions
 #[test]
-fn only_a_drawing_region_is_configured_and_awaited() {
+fn a_shown_region_is_configured_whatever_its_window_and_only_a_drawing_region_is_awaited() {
     let images = Images::default();
     let key = attached_drawing_image(&images, "tab-1");
     images.set_surface_visible(&key.0, false);
@@ -1570,31 +1570,53 @@ fn only_a_drawing_region_is_configured_and_awaited() {
     );
     images.set_surface_visible(&key.0, true);
     images.set_on_screen(false);
-    assert!(
-        images
-            .configure_raster(&key, 800, 600, 2.0, true)
-            .unwrap()
-            .is_none(),
-        "a region of an occluded window was configured"
+    assert_eq!(
+        images.visible(),
+        vec![(key.clone(), 100)],
+        "the raster of a shown region is not read while its window is off screen"
     );
+    // A supplier opens the session of a region at the size of its configuration, so a window opened covered holds a session.
+    images
+        .configure_raster(&key, 800, 600, 2.0, true)
+        .unwrap()
+        .expect("a shown region of an occluded window has no configuration");
     assert!(
         images.current_presented(),
         "the presentation wait waits for a region that is not drawing"
     );
-    images.set_on_screen(true);
-    images
-        .configure_raster(&key, 800, 600, 2.0, true)
+    let changed = images
+        .configure_raster(&key, 1000, 700, 2.0, true)
         .unwrap()
-        .expect("configure a drawing region");
+        .expect("a raster that changed in an occluded window has no configuration");
+    assert_eq!(
+        (changed.width, changed.height, changed.raster),
+        (1000, 700, 3)
+    );
+    assert!(
+        images
+            .configure_raster(&key, 1000, 700, 2.0, true)
+            .unwrap()
+            .is_none(),
+        "the raster was configured twice"
+    );
+    images.drawing_changes();
+    images.set_on_screen(true);
+    assert!(
+        images
+            .drawing_changes()
+            .iter()
+            .all(|change| change.configure.is_none()),
+        "a configured raster was configured again when its region started drawing"
+    );
     assert!(
         !images.current_presented(),
         "the presentation wait does not wait for a region that started drawing"
     );
 }
 
-// contract: image.drawing.configures-a-raster-that-changed-while-not-drawing
+// contract: image.drawing.configures-a-raster-that-changed-while-hidden
 #[test]
-fn a_raster_that_changed_while_not_drawing_is_configured_when_drawing_returns() {
+fn a_raster_that_changed_while_hidden_is_configured_when_the_region_is_shown() {
     let images = Images::default();
     let key = attached_drawing_image(&images, "tab-1");
     images
@@ -1602,30 +1624,26 @@ fn a_raster_that_changed_while_not_drawing_is_configured_when_drawing_returns() 
         .unwrap()
         .expect("configure a drawing region");
     images.drawing_changes();
-    images.set_on_screen(false);
-    assert_eq!(
-        images.visible(),
-        vec![(key.clone(), 100)],
-        "the raster of a shown region is not read while its window is off screen"
+    assert!(
+        images
+            .configure_raster(&key, 1000, 700, 2.0, false)
+            .unwrap()
+            .is_none(),
+        "a hidden region was configured"
     );
     assert!(
         images
-            .configure_raster(&key, 1000, 700, 2.0, true)
-            .unwrap()
-            .is_none(),
-        "a region of an occluded window was configured"
-    );
-    let stopped = images.drawing_changes();
-    assert!(
-        stopped.iter().all(|change| change.configure.is_none()),
+            .drawing_changes()
+            .iter()
+            .all(|change| change.configure.is_none()),
         "a region that stopped drawing received a configuration"
     );
-    images.set_on_screen(true);
-    let resumed = images.drawing_changes();
-    let configuration = resumed[0]
+    images.set_visible(&key, true).unwrap();
+    let shown = images.drawing_changes();
+    let configuration = shown[0]
         .configure
         .as_ref()
-        .expect("the raster that changed while the region was not drawing was not configured");
+        .expect("the raster that changed while the region was hidden was not configured");
     assert_eq!(
         (
             configuration.width,
@@ -1641,9 +1659,9 @@ fn a_raster_that_changed_while_not_drawing_is_configured_when_drawing_returns() 
             .is_none(),
         "the raster was configured twice"
     );
-    images.set_on_screen(false);
+    images.set_visible(&key, false).unwrap();
     images.drawing_changes();
-    images.set_on_screen(true);
+    images.set_visible(&key, true).unwrap();
     assert!(
         images.drawing_changes()[0].configure.is_none(),
         "a raster that did not change was configured again"
