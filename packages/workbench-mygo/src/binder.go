@@ -54,6 +54,15 @@ func (b *Binder) Press(c *ui.Context, name, command, item string, params any) ui
 	return b.Bound(button, name)
 }
 
+// Absent creates an element that the window holds but does not show, as the page holds an element under display:none. It keeps the
+// index of its name and takes the press of a request, and it has no size, so neither the pointer nor the keyboard stops at it.
+func (b *Binder) Absent(c *ui.Context, name, command, item string, params any) ui.Element {
+	if b.focus != nil {
+		b.focus.Hold(name)
+	}
+	return ui.Box(b.next(c, name, command, item)).Size(0, 0).Role(ui.RoleButton).OnClick(func() { b.run(command, params) })
+}
+
 // Control gives the next widget of c its element name and command, for a widget that takes its input as it is created. It returns
 // the function that runs the command with the value of the widget.
 func (b *Binder) Control(c *ui.Context, name, command, item string) func(params any) {

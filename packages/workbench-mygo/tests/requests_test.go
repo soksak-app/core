@@ -423,3 +423,57 @@ func TestAFrameSendsTheChangedStatusesOfTheShell(t *testing.T) {
 		t.Fatalf("the watch kept the value %s", after)
 	}
 }
+
+// An element that the window holds but does not show keeps the index of its name, answers with no place and takes the press of a request,
+// and the keyboard does not stop at it.
+func TestAnAbsentElementHoldsItsIndexWithoutAPlace(t *testing.T) {
+	declared := registry(t)
+	var ran []string
+	declared.Command("core.card.focus", func(params json.RawMessage) (any, error) {
+		ran = append(ran, string(params))
+		return nil, nil
+	})
+	focus := workbench.NewFocus(&workbench.Declarations{Elements: map[string]bool{"core.card": true}}, func() {})
+	binder := workbench.NewBinder(declared, func(_ string, err error) { t.Error(err) })
+	binder.Attach(nil, focus)
+	tester := ui.NewTester(func(c *ui.Context) {
+		focus.Frame(c)
+		ui.Column(c).Fill().Children(func() {
+			binder.Press(c, "core.card", "core.card.focus", "c1", map[string]string{"card": "c1"}).Label("c1").Size(100, 40)
+			binder.Absent(c, "core.card", "core.card.focus", "hidden", map[string]string{"card": "hidden"})
+			binder.Press(c, "core.card", "core.card.focus", "c2", map[string]string{"card": "c2"}).Label("c2").Size(100, 40)
+		})
+	}, 400, 300)
+	tester.Frame()
+	declared.Elements(drawnElements{tester})
+	r := newRelay(t, declared)
+	reply := r.ask("element.rect", `{"name":"core.card","index":1}`)
+	want := map[string]any{"x": float64(0), "y": float64(0), "width": float64(0), "height": float64(0), "zoom": float64(1), "document": map[string]any{"x": float64(0), "y": float64(0)}}
+	if !reflect.DeepEqual(reply["result"], want) {
+		t.Fatalf("the absent element answered %v", reply)
+	}
+	if reply := r.ask("element.rect", `{"name":"core.card","index":2}`); reply["result"].(map[string]any)["height"] != float64(40) {
+		t.Fatalf("the element after it answered %v", reply)
+	}
+	if reply := r.ask("element.act", `{"name":"core.card","index":1,"action":"click"}`); reply["error"] != nil {
+		t.Fatalf("the press answered %v", reply)
+	}
+	tester.Frame()
+	if len(ran) != 1 || ran[0] != `{"card":"hidden"}` {
+		t.Fatalf("the press ran %v", ran)
+	}
+	for _, want := range []string{"c1", "c2", "c1"} {
+		tester.Key(0, ui.KeyTab)
+		tester.Frame()
+		if !tester.Focused(want) {
+			t.Fatalf("the Tab key did not reach %s", want)
+		}
+	}
+	if err := focus.Set("core.card", 1); err != nil {
+		t.Fatal(err)
+	}
+	tester.Frame()
+	if !tester.Focused("c1") {
+		t.Fatal("core.focus.set took the focus to an element that the window does not show")
+	}
+}

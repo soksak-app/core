@@ -47,9 +47,6 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 		cards := s.plane.Cards()
 		s.forgetCardReads(cards)
 		for _, card := range cards {
-			if s.fullscreen != "" && card.ID != s.fullscreen {
-				continue
-			}
 			rect, ok := s.cardRect(card.ID)
 			if !ok {
 				continue
@@ -58,6 +55,10 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 			if err != nil {
 				s.errors.Show(card.ID, err.Error(), "")
 				DrawError(c, s.errors, card.ID)
+				continue
+			}
+			if s.fullscreen != "" && card.ID != s.fullscreen {
+				s.drawAbsentCard(c, card.ID, data, rect)
 				continue
 			}
 			if data == nil {
@@ -177,22 +178,43 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides 
 	}
 	strip := width - 2*m.cardHeadPad - m.cardButton - 2*m.cardHeadGap - tools
 	ui.Row(s.binder.Name(c, "core.card.header", id)).Size(width, m.headH).PaddingX(m.cardHeadPad).AlignItems(ui.Center).Gap(m.cardHeadGap).Clip().
-		Role(ui.RoleGroup).Label("core.card.header").BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.Edge).Children(func() {
+		Role(ui.RoleGroup).Label("core.card.header").BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.cardLine()).Children(func() {
+		// What the head does not show stands out of the flow, where the gap of the head does not reach it. The tree holds what stands
+		// out of the flow after what stands in it, which keeps the order of each name, as each card holds these once.
+		ui.Box(c).Absolute().Size(0, 0).Children(func() {
+			if s.fullscreen == id {
+				s.binder.Absent(c, "core.card.tab-list", "core.card.tab-list", id, cardParam{Card: id})
+			} else {
+				s.binder.Absent(c, "core.card.space-apps", "core.space.apps", id, cardParam{Card: id})
+			}
+			if fit.Tools == "bar" {
+				s.binder.Absent(c, "core.card.tools", "core.card.tools", id, cardParam{Card: id})
+			} else {
+				s.drawAbsentTools(c, id, sides)
+			}
+		})
 		if s.fullscreen == id {
 			s.drawSpaceApps(c, id)
 		} else {
 			s.drawTabList(c, id, tabs, fit)
 		}
 		if fit.Fit == "ham" {
-			ui.Spacer(c).Grow(1)
+			ui.Row(c).Grow(1).Children(func() { s.drawAbsentTabs(c, tabs) })
 		} else {
 			state := s.stripState(id, active, activeLeft, activeWidth, left-float64(m.cardTabsGap), float64(strip), fit.Fit)
 			ui.ScrollHorizontal(c.Key("strip-"+id)).Size(strip, m.headH).Scrollbars(false).TrackScroll(state).Children(func() {
-				ui.Row(c).FillHeight().AlignItems(ui.Center).Gap(m.cardTabsGap).Children(func() {
+				// The tabs that the head does not show stand in the flow, which keeps their order, so a head of one tab has no gap.
+				gap := m.cardTabsGap
+				if fit.Fit != "strip" {
+					gap = 0
+				}
+				ui.Row(c).FillHeight().AlignItems(ui.Center).Gap(gap).Children(func() {
 					for _, tab := range tabs {
 						on := active != nil && tab.ID == active.ID
 						if fit.Fit == "strip" || on {
 							s.drawTab(c, id, tab, on, size, min(m.tabMaxW, strip)-chrome)
+						} else {
+							s.drawAbsentTabs(c, []layout.Tab{tab})
 						}
 					}
 				})
@@ -206,6 +228,62 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides 
 			return
 		}
 		s.headButton(c, "core.card.tools", "core.card.tools", id, cardParam{Card: id}, "카드 도구", s.headIcon("card-more", true), true)
+	})
+}
+
+// cardLine is the color of the lines below the head of a card and above its foot: the rule of the plane when the cards share one line
+// (.chrome and .status of packages/workbench/app.css).
+func (s *Shell) cardLine() ui.Color {
+	if s.palette.Gap == 0 {
+		return s.palette.Rule
+	}
+	return s.palette.Edge
+}
+
+// drawAbsentTabs draws the elements of tabs that the head does not show.
+func (s *Shell) drawAbsentTabs(c *ui.Context, tabs []layout.Tab) {
+	for _, tab := range tabs {
+		s.binder.Absent(c, "core.card.tab", "core.tab.select", tab.ID, tabParam{tab.ID})
+		s.binder.Absent(c, "core.card.tab-close", "core.tab.close", tab.ID, tabParam{tab.ID})
+	}
+}
+
+// drawAbsentTools draws the elements of the tools of a card that the head does not show.
+func (s *Shell) drawAbsentTools(c *ui.Context, id string, sides cardSides) {
+	for _, side := range layout.SidebarSides {
+		if _, shown := sides.shown[side]; shown {
+			s.binder.Absent(c, "core.card.sidebar.fold", "core.card.sidebar.toggle", id+":"+side, cardSideParam{Card: id, Side: side})
+		}
+	}
+	for _, tool := range s.headTools(id) {
+		s.binder.Absent(c, tool.Name, tool.Command, id, tool.Params).Disabled(!tool.Enabled)
+	}
+}
+
+// drawAbsentCard draws the elements of a card that a full screen card hides, so each keeps its index among those of its name.
+func (s *Shell) drawAbsentCard(c *ui.Context, id string, data *layout.CardData, rect layout.Rect) {
+	if data == nil && !s.sidebars.Holds(id) {
+		return
+	}
+	ui.Box(c).Absolute().Size(0, 0).Children(func() {
+		s.binder.Absent(c, "core.card", "core.card.focus", id, cardParam{Card: id})
+		if data == nil {
+			return
+		}
+		sides, err := s.cardSides(id, data, rect)
+		if err != nil {
+			s.errors.Show(id, err.Error(), "")
+			DrawError(c, s.errors, id)
+			return
+		}
+		for _, name := range []string{"core.card.header", "core.card.status"} {
+			ui.Box(s.binder.Name(c, name, id)).Size(0, 0).Role(ui.RoleGroup)
+		}
+		s.binder.Absent(c, "core.card.tab-list", "core.card.tab-list", id, cardParam{Card: id})
+		s.binder.Absent(c, "core.card.space-apps", "core.space.apps", id, cardParam{Card: id})
+		s.drawAbsentTabs(c, data.TabList())
+		s.drawAbsentTools(c, id, sides)
+		s.binder.Absent(c, "core.card.tools", "core.card.tools", id, cardParam{Card: id})
 	})
 }
 
@@ -320,6 +398,7 @@ func (s *Shell) drawTab(c *ui.Context, card string, tab layout.Tab, on bool, siz
 	m := s.metrics
 	name := s.tabName(tab)
 	pill := ui.Row(c.Key("tab-" + tab.ID)).AlignItems(ui.Center).Radius(s.radiusSmall()).Shrink(0).PaddingY(m.tabPadY)
+	s.anchored("core.card.tab/"+tab.ID, pill)
 	color := s.palette.Muted
 	if on || pill.Hovered() {
 		color = s.palette.Fg
@@ -338,7 +417,6 @@ func (s *Shell) drawTab(c *ui.Context, card string, tab layout.Tab, on bool, siz
 			start = m.tabGap
 		}
 		button := s.binder.Press(c, "core.card.tab", "core.tab.select", tab.ID, tabParam{tab.ID})
-		s.anchored("core.card.tab/"+tab.ID, button)
 		// A press leaves the keyboard focus where it is, and the Tab key still stops here.
 		button.KeepFocus()
 		button.Padding(0, m.tabGap, 0, start).AlignItems(ui.Center).Label(name).Tooltip(name).Children(func() {
@@ -488,7 +566,7 @@ func faded(color ui.Color, share float32) ui.Color {
 
 // drawStatus draws the status line of a card, with the text of the sides folded for lack of space when there is one.
 func (s *Shell) drawStatus(c *ui.Context, id string, data *layout.CardData, fold string) {
-	ui.Row(s.binder.Name(c, "core.card.status", id)).FillWidth().Height(s.metrics.footH).PaddingX(s.metrics.tabsPad).AlignItems(ui.Center).BorderWidth(s.palette.BorderWidth, 0, 0, 0).BorderColor(s.palette.Rule).
+	ui.Row(s.binder.Name(c, "core.card.status", id)).FillWidth().Height(s.metrics.footH).PaddingX(s.metrics.tabsPad).AlignItems(ui.Center).BorderWidth(s.palette.BorderWidth, 0, 0, 0).BorderColor(s.cardLine()).
 		Role(ui.RoleStatus).Label("core.card.status").Children(func() {
 		text := s.cardStatusText(data)
 		if fold != "" {

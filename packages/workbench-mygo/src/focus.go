@@ -45,8 +45,10 @@ type Focus struct {
 	changed  func()
 	window   *ui.Context
 	// handles keeps the handle of each element between frames, and places lists the elements of the last frame in order.
-	handles   map[elementPlace]*ui.Handle
-	places    []elementPlace
+	handles map[elementPlace]*ui.Handle
+	places  []elementPlace
+	// absent holds the places of the last frame whose elements the window does not show.
+	absent    map[elementPlace]bool
 	responder Responder
 	views     map[string]*FocusStatus
 	reported  *FocusStatus
@@ -54,7 +56,7 @@ type Focus struct {
 
 // NewFocus makes the focus of a window. changed runs on each change of the status.
 func NewFocus(declared *Declarations, changed func()) *Focus {
-	return &Focus{declared: declared, changed: changed, handles: map[elementPlace]*ui.Handle{}, responder: Responder{Owner: "workbench"},
+	return &Focus{declared: declared, changed: changed, handles: map[elementPlace]*ui.Handle{}, absent: map[elementPlace]bool{}, responder: Responder{Owner: "workbench"},
 		views: map[string]*FocusStatus{}}
 }
 
@@ -78,17 +80,12 @@ func (f *Focus) Register(registry *Registry) {
 func (f *Focus) Frame(window *ui.Context) {
 	f.report()
 	f.window, f.places = window, f.places[:0]
+	clear(f.absent)
 }
 
 // Bind gives element the identity of the next element of name and returns it.
 func (f *Focus) Bind(element ui.Element, name string) ui.Element {
-	index := 0
-	for _, place := range f.places {
-		if place.name == name {
-			index++
-		}
-	}
-	place := elementPlace{name, index}
+	place := f.next(name)
 	handle := f.handles[place]
 	if handle == nil {
 		handle = &ui.Handle{}
@@ -96,6 +93,24 @@ func (f *Focus) Bind(element ui.Element, name string) ui.Element {
 	}
 	f.places = append(f.places, place)
 	return element.Bind(handle)
+}
+
+// Hold keeps the index of the next element of name for an element that the window does not show, which the focus does not reach.
+func (f *Focus) Hold(name string) {
+	place := f.next(name)
+	f.absent[place] = true
+	f.places = append(f.places, place)
+}
+
+// next returns the place of the next element of name.
+func (f *Focus) next(name string) elementPlace {
+	index := 0
+	for _, place := range f.places {
+		if place.name == name {
+			index++
+		}
+	}
+	return elementPlace{name, index}
 }
 
 // Set gives the keyboard focus to the element name at index, the command core.focus.set.
@@ -106,7 +121,9 @@ func (f *Focus) Set(name string, index int) error {
 	place := elementPlace{name, index}
 	for _, drawn := range f.places {
 		if drawn == place {
-			f.handles[place].Focus(f.window)
+			if !f.absent[place] {
+				f.handles[place].Focus(f.window)
+			}
 			return nil
 		}
 	}
@@ -161,7 +178,7 @@ func (f *Focus) Status() *FocusStatus {
 	switch f.responder.Owner {
 	case "workbench":
 		for _, place := range f.places {
-			if f.handles[place].Focused(f.window) {
+			if !f.absent[place] && f.handles[place].Focused(f.window) {
 				return &FocusStatus{Name: place.name, Index: place.index}
 			}
 		}
