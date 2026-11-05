@@ -870,23 +870,24 @@ func (s *Shell) viewTextSize(surface string, view *viewState) (float64, error) {
 
 // storedTextSize returns the text scale of a tab of a space off the screen, which reads the factor of its stored card.
 func (s *Shell) storedTextSize(surface string) (float64, bool) {
-	project := s.opened()
-	if project == nil {
-		return 0, false
-	}
-	for _, space := range project.Spaces {
-		var stored storedLayout
-		if space.ID == project.ActiveSpaceID || json.Unmarshal(space.Layout, &stored) != nil {
-			continue // silent: the memory saver reports a stored layout that does not read.
+	for _, project := range s.projects {
+		if !s.windowProjects[project.ID] {
+			continue
 		}
-		for _, card := range stored.State.Cards {
-			data, err := layout.DecodeCardData(card.Data)
-			if err != nil || data == nil {
-				continue // silent: a place card has no tabs, and the shell refuses a stored card that does not read when it loads the space.
+		for _, space := range project.Spaces {
+			var stored storedLayout
+			if (project.ID == s.active && space.ID == project.ActiveSpaceID) || json.Unmarshal(space.Layout, &stored) != nil {
+				continue // silent: the memory saver reports a stored layout that does not read.
 			}
-			for _, tab := range data.TabList() {
-				if tab.ID == surface {
-					return s.text.Frame() * data.CardTextSize(), true
+			for _, card := range stored.State.Cards {
+				data, err := layout.DecodeCardData(card.Data)
+				if err != nil || data == nil {
+					continue // silent: a place card has no tabs, and the shell refuses a stored card that does not read when it loads the space.
+				}
+				for _, tab := range data.TabList() {
+					if tab.ID == surface {
+						return s.text.Frame() * data.CardTextSize(), true
+					}
 				}
 			}
 		}

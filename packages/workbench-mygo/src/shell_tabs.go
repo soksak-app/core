@@ -250,11 +250,11 @@ func (s *Shell) backgroundTabs() []BackgroundTab {
 	return tabs
 }
 
-// layoutTabs returns the tabs of every space of project, with the plane in the place of the shown space, and the tabs that are shown.
-func (s *Shell) layoutTabs(project *projectRecord) ([]MemorySurface, map[string]bool, error) {
+// layoutTabs returns the tabs of the layouts of the window, with the plane in the place of the shown space, and the tabs that are shown.
+func (s *Shell) layoutTabs() ([]MemorySurface, map[string]bool, error) {
 	var surfaces []MemorySurface
 	shown := map[string]bool{}
-	err := s.eachLayoutTab(project, func(tab layout.Tab, active bool) {
+	err := s.eachLayoutTab(func(_ string, tab layout.Tab, active bool) {
 		plugin := s.pluginOf(tab.Plugin)
 		surfaces = append(surfaces, MemorySurface{ID: tab.ID, Plugin: tab.Plugin, Kind: "tab", Unload: plugin != nil && plugin.Unload})
 		if active {
@@ -273,18 +273,23 @@ func (s *Shell) layoutTabs(project *projectRecord) ([]MemorySurface, map[string]
 	return surfaces, shown, nil
 }
 
-// eachLayoutTab visits the tabs of every space of project, with the plane in the place of the shown space.
-func (s *Shell) eachLayoutTab(project *projectRecord, visit func(tab layout.Tab, active bool)) error {
-	for _, space := range project.Spaces {
-		if space.ID == project.ActiveSpaceID {
-			eachTab(s.plane.Cards(), visit)
+// eachLayoutTab visits the tabs of every space of the projects that the window opened, with the plane in the place of the shown space.
+func (s *Shell) eachLayoutTab(visit func(project string, tab layout.Tab, active bool)) error {
+	for _, project := range s.projects {
+		if !s.windowProjects[project.ID] {
 			continue
 		}
-		var stored storedLayout
-		if err := json.Unmarshal(space.Layout, &stored); err != nil {
-			return fmt.Errorf("space %s: %w", space.ID, err)
+		for _, space := range project.Spaces {
+			if project.ID == s.active && space.ID == project.ActiveSpaceID {
+				eachTab(s.plane.Cards(), func(tab layout.Tab, active bool) { visit(project.ID, tab, active) })
+				continue
+			}
+			var stored storedLayout
+			if err := json.Unmarshal(space.Layout, &stored); err != nil {
+				return fmt.Errorf("space %s: %w", space.ID, err)
+			}
+			eachTab(stored.State.Cards, func(tab layout.Tab, _ bool) { visit(project.ID, tab, false) })
 		}
-		eachTab(stored.State.Cards, func(tab layout.Tab, _ bool) { visit(tab, false) })
 	}
 	return nil
 }
@@ -292,18 +297,17 @@ func (s *Shell) eachLayoutTab(project *projectRecord, visit func(tab layout.Tab,
 // holdHiddenTabs holds a surface for each hidden tab that the memory saver left loaded, as the start mounts it: only a tab that starts
 // unloaded and a tab of a plugin with a background session have no surface while hidden (docs/spec/plugins.md#memory-saver).
 func (s *Shell) holdHiddenTabs() {
-	project := s.opened()
-	if s.tabs == nil || !s.tabs.hiddenDue || !s.tabs.sectionsStarted || project == nil || s.plane == nil {
+	if s.tabs == nil || !s.tabs.hiddenDue || !s.tabs.sectionsStarted || s.opened() == nil || s.plane == nil {
 		return
 	}
 	s.tabs.hiddenDue = false
-	err := s.eachLayoutTab(project, func(tab layout.Tab, active bool) {
+	err := s.eachLayoutTab(func(project string, tab layout.Tab, active bool) {
 		unit := s.units[tab.Plugin]
 		_, stopped := s.surfaces.stopped(tab.ID)
 		if active || unit == nil || unit.Composition == nil || unit.Background != nil || stopped || s.surfaces.detachHeld(tab.ID) || s.tabs.saver.Unloaded(tab.ID) {
 			return
 		}
-		s.holdSurface(&heldSurface{tab: tab, composition: unit.Composition})
+		s.holdSurface(&heldSurface{tab: tab, composition: unit.Composition, owner: project})
 	})
 	if err != nil {
 		s.fail(err)
@@ -362,13 +366,12 @@ func (s *Shell) tabsSettled() {
 	}
 }
 
-// observeMemory gives the memory saver the surfaces of the shown project, and tells whether it took them.
+// observeMemory gives the memory saver the surfaces of the layouts of the window, and tells whether it took them.
 func (s *Shell) observeMemory() bool {
-	project := s.opened()
-	if project == nil || s.plane == nil || s.tabs.states == nil {
+	if s.opened() == nil || s.plane == nil || s.tabs.states == nil {
 		return false
 	}
-	surfaces, shown, err := s.layoutTabs(project)
+	surfaces, shown, err := s.layoutTabs()
 	if err == nil {
 		err = s.tabs.saver.Observe(shown, surfaces)
 	}
