@@ -88,6 +88,10 @@ Benchmark는 B3 순서로 세 drag를 실행한다. 먼저 capture 없이 `diagn
 
 `SOKSAK_NATIVE_TEST_RUN_FOLDER=<unique-dir> make -C native/darwin benchmark-webview-resize-cadence`로 host layout과 plugin 작업에서 root-view ResizeObserver-to-next-requestAnimationFrame 전달을 분리한다. 비활성 native fixture는 초기 300×200 source row를 관측한 뒤 폭을 1 point씩 48회 증가시킨다. Baseline, 각 native setter interval, 예측 display-link timestamp, 실제 setter clock과 source row를 보존한다. Pulse response row 사이 간격만 변경하지 않은 33 ms 기준으로 판정하며 baseline idle 시간과 first-pulse response latency는 판정하지 않는다. 이 target은 기본 native suite 밖의 전용 성능 재현 target이다. Rendered pixel을 녹화하거나 application drag, initial-response 또는 convergence 통과를 입증하지 않는다. 실패한 측정을 포함해 runner manifest와 executable output을 보존한다.
 
+## Input latency
+
+이미 열린 애플리케이션의 `terminal` tab과 `term` tab에서 key부터 prompt까지의 시간은 `make input-latency`로 측정한다. 애플리케이션을 `--config-dir <folder>`로 시작하고 target을 `SOKSAK_CONFIG_DIR=<folder>`로 실행한다. `APP`은 애플리케이션을 지정하며 기본값은 `mygo`다. `target/test-runs` 아래 run folder에 있는 check output은 trace와 log gate의 configuration마다 median, 90th percentile, key별 시간을 담는다. `B3_OUT=<file>`은 trace off와 default gate의 값을 file에 쓴다.
+
 ## test 종류
 
 test는 unit test이거나 end-to-end 검사다. end-to-end 검사는 CI runner가 제공하지 않는 셋 중 하나가 필요하다: 실행 중인 애플리케이션(`e2e/`의 window check. `e2e/activation/`, `e2e/person/`, `e2e/real/`, `e2e/observation/`을 포함한다), frame을 내보내는 display(`native/darwin/Makefile`의 `NATIVE_E2E_TESTS`, `make -C native/darwin e2e`), 또는 사람이나 애플리케이션의 활성화(activation tier인 `make e2e-activation`, 실제 입력 등급인 `make e2e-real`, 사람이 조작하는 검사인 `make e2e-person`). Display나 process의 activation이 필요한 Go test는 build constraint `e2e`와 `TestE2E`로 시작하는 이름을 가지며 `make e2e-host-go`가 실행한다. 그 밖의 test는 모두 unit test다: `scripts/node-tests.mjs`가 실행하는 Node test(harness 자신의 test인 `e2e/test/`, `packages/window-check/test/`를 포함한다), host test, `NATIVE_TESTS`, process identity test.
@@ -274,7 +278,7 @@ run은 application을 번갈아 실행한다: 각 scenario마다 어느 applicat
 | S5 | `terminal` tab의 divider drag; 창 maximise와 restore | `make e2e-benchmark-view-drag`, `make e2e-benchmark-resize-catch-up` | G3, G4, G8 |
 | S6 | 빈 page의 idle browser tab | `make e2e-benchmark-idle-tab` | G6 |
 | S7 | 모든 plugin view의 첫 표시, 회수, 합계, drag | `e2e/benchmark/{browser,editor,hwp,terminal,term}-view.test.mjs`, `e2e/benchmark/section-view.test.mjs`, `e2e/benchmark/editor-footprint.test.mjs` | G4 |
-| S8 | `terminal` tab과 `term` tab에서 key부터 prompt까지 | `e2e/input-latency.test.mjs` | G7 |
+| S8 | `terminal` tab과 `term` tab에서 key부터 prompt까지 | `make input-latency` (`e2e/input-latency.test.mjs`) | G7 |
 | S9 | application의 두 번째 창을 library 화면으로 S1 창 위에 놓아 그 `host.window`가 `occluded` true를 보고하는 S1 | `make app-usage STATE=S9` | G2 |
 | S10 | split, resize, view churn round | `make e2e-benchmark-split-load` | G3 |
 | S11 | S1 옆의 두 번째 project 창 | `make app-usage STATE=S11` | G3 |
@@ -329,7 +333,7 @@ run은 application을 번갈아 실행한다: 각 scenario마다 어느 applicat
 | S5 | `terminal` tab의 divider drag; 창 maximise와 restore | `make e2e-benchmark-view-drag`, `make e2e-benchmark-resize-catch-up` | G3, G4, G8 |
 | S6 | 빈 page의 idle browser tab | `make e2e-benchmark-idle-tab` | G6 |
 | S7 | 모든 plugin view의 첫 표시, 회수, 합계, drag | `e2e/benchmark/{browser,editor,hwp,terminal,term}-view.test.mjs`, `e2e/benchmark/section-view.test.mjs`, `e2e/benchmark/editor-footprint.test.mjs` | G4 |
-| S8 | `terminal` tab과 `term` tab에서 key부터 prompt까지 | `e2e/input-latency.test.mjs` | G7 |
+| S8 | `terminal` tab과 `term` tab에서 key부터 prompt까지 | `make input-latency` (`e2e/input-latency.test.mjs`) | G7 |
 | S9 | application의 두 번째 창을 library 화면으로 S1 창 위에 놓아 그 `host.window`가 `occluded` true를 보고하는 S1 | `make app-usage STATE=S9` | G2 |
 | S10 | split, resize, view churn round | `make e2e-benchmark-split-load` | G3 |
 | S11 | S1 옆의 두 번째 project 창 | `make app-usage STATE=S11` | G3 |

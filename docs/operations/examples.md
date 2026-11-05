@@ -88,6 +88,10 @@ Each host writes `logs/view-drag-benchmark-*/result.json` before judging the unc
 
 Run `SOKSAK_NATIVE_TEST_RUN_FOLDER=<unique-dir> make -C native/darwin benchmark-webview-resize-cadence` to isolate root-view ResizeObserver-to-next-requestAnimationFrame delivery from host layout and plugin work. The inactive native fixture observes its initial 300×200 source row before applying 48 one-point width increments. It preserves the baseline, every native setter interval, predicted display-link timestamps, actual setter clocks and source rows. Only intervals between pulse response rows use the unchanged 33 ms gate; baseline idle time and first-pulse response latency are not judged. This is a dedicated performance reproduction target, outside the default native suite. It neither records rendered pixels nor establishes application drag, initial-response or convergence acceptance. Keep its runner manifest and executable output, including failed measurements.
 
+## Input latency
+
+Use `make input-latency` to measure the time from a key to the prompt in a `terminal` tab and a `term` tab of an application that is already open. Start the application with `--config-dir <folder>` and run the target with `SOKSAK_CONFIG_DIR=<folder>`. `APP` names the application, by default `mygo`. The output of the check, in the folder of the run under `target/test-runs`, holds the median, the 90th percentile and the time of each key for each configuration of the trace and the log gate. `B3_OUT=<file>` writes the values of the trace off and the default gate to the file.
+
 ## Test kinds
 
 A test is a unit test or an end-to-end check. An end-to-end check needs one of three things that a CI runner does not provide: a running application (the window checks of `e2e/`, including `e2e/activation/`, `e2e/person/`, `e2e/real/` and `e2e/observation/`), a display that presents frames (`NATIVE_E2E_TESTS` of `native/darwin/Makefile`, `make -C native/darwin e2e`), or a person or the activation of the application (the activation tier `make e2e-activation`, the real-input tier `make e2e-real` and the person-operated checks `make e2e-person`). The Go tests that need a display or the activation of a process carry the build constraint `e2e` and a name that starts with `TestE2E`, and `make e2e-host-go` runs them. Every other test is a unit test: the Node tests that `scripts/node-tests.mjs` runs, including the tests of the harness itself (`e2e/test/`, `packages/window-check/test/`), the host tests, `NATIVE_TESTS` and the process identity tests.
@@ -274,7 +278,7 @@ A value is the median of its runs, and the spread of a value is the range of its
 | S5 | Divider drag of a `terminal` tab; window maximise and restore | `make e2e-benchmark-view-drag`, `make e2e-benchmark-resize-catch-up` | G3, G4, G8 |
 | S6 | Idle browser tab on a blank page | `make e2e-benchmark-idle-tab` | G6 |
 | S7 | First display, reclaim, total and drag of every plugin view | `e2e/benchmark/{browser,editor,hwp,terminal,term}-view.test.mjs`, `e2e/benchmark/section-view.test.mjs`, `e2e/benchmark/editor-footprint.test.mjs` | G4 |
-| S8 | Key to prompt in a `terminal` tab and a `term` tab | `e2e/input-latency.test.mjs` | G7 |
+| S8 | Key to prompt in a `terminal` tab and a `term` tab | `make input-latency` (`e2e/input-latency.test.mjs`) | G7 |
 | S9 | S1 with a second window of the application, on the library screen, placed over the window of S1 so that its `host.window` reports `occluded` true | `make app-usage STATE=S9` | G2 |
 | S10 | Split, resize and view churn rounds | `make e2e-benchmark-split-load` | G3 |
 | S11 | A second project window beside S1 | `make app-usage STATE=S11` | G3 |
@@ -329,7 +333,7 @@ A value is the median of its runs, and the spread of a value is the range of its
 | S5 | Divider drag of a `terminal` tab; window maximise and restore | `make e2e-benchmark-view-drag`, `make e2e-benchmark-resize-catch-up` | G3, G4, G8 |
 | S6 | Idle browser tab on a blank page | `make e2e-benchmark-idle-tab` | G6 |
 | S7 | First display, reclaim, total and drag of every plugin view | `e2e/benchmark/{browser,editor,hwp,terminal,term}-view.test.mjs`, `e2e/benchmark/section-view.test.mjs`, `e2e/benchmark/editor-footprint.test.mjs` | G4 |
-| S8 | Key to prompt in a `terminal` tab and a `term` tab | `e2e/input-latency.test.mjs` | G7 |
+| S8 | Key to prompt in a `terminal` tab and a `term` tab | `make input-latency` (`e2e/input-latency.test.mjs`) | G7 |
 | S9 | S1 with a second window of the application, on the library screen, placed over the window of S1 so that its `host.window` reports `occluded` true | `make app-usage STATE=S9` | G2 |
 | S10 | Split, resize and view churn rounds | `make e2e-benchmark-split-load` | G3 |
 | S11 | A second project window beside S1 | `make app-usage STATE=S11` | G3 |

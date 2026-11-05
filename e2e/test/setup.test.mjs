@@ -22,6 +22,7 @@ test("each application's executable is the one inside its debug bundle", () => {
   assert.deepEqual(debugBinaries("/work/target"), {
     SOKSAK_BINARY_WAILSV3: "/work/target/debug/soksak-wailsv3.app/Contents/MacOS/soksak-wailsv3",
     SOKSAK_BINARY_TAURIV2: "/work/target/debug/soksak-tauriv2.app/Contents/MacOS/soksak-tauriv2",
+    SOKSAK_BINARY_MYGO: "/work/target/debug/soksak-mygo.app/Contents/MacOS/soksak-mygo",
   });
 });
 
