@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F435: Record the views without a frame loop; the Tauri terminal meets every criterion at 60 Hz, and the browser view runs at half the rate.
 - F443-1: Close the first run finding; the excess follows the load of the machine and a launch does not determine it.
 - F456: A shown image keeps its size when the window changes to a display of another backing scale, and both hosts configure the rasters again.
 - F455: A view measurement records the refresh rate of its display.
