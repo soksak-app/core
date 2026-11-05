@@ -17,6 +17,7 @@
 - F548: The first window no longer reads the modules of the settings modal and the debug view; each loads at its first use.
 - F549: A wake of a settled window no longer wakes the log writer to store a count of frame events that were never refused.
 - F502-23: The mygo workbench answers `diagnostics.layout.fail`: its next placement of the surfaces fails once with `diagnostic layout fault`, and the workbench shows that failure and goes on answering.
+- F581: `core.workbench.audit` of the mygo host reports an empty list, not `null`, when nothing is unbound.
 - F557: a page that loses the pointer stops hovering, in each order of the enter, the exit, and the move of its tracking area.
 - F543: a press of `sok input pointer` in a key window passes the application, so local monitors see it and AppKit moves the first responder.
 - F544: a release no longer stops a later keyboard move: right after a click in a surface with an image region, the keyboard moves without waiting for the next release.
