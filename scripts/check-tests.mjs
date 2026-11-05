@@ -1092,6 +1092,15 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F611",
+    implementation: [{ file: "native/darwin/src/image_region.m", symbol: "spRegionShowsPoint" }],
+    tests: [
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "a press over the frame of a hidden region stays with the view that it reached" },
+    ],
+    expected: "A region that does not show takes no press, so a press over the frame of a hidden region leaves the first responder with the view that it reached.",
+    levels: ["unit"],
+  },
+  {
     id: "F585",
     implementation: [{ file: "native/darwin/src/webview_geometry.m", symbol: "void sp_surface_region_shown" }],
     tests: [
