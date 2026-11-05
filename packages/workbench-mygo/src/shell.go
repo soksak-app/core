@@ -650,6 +650,9 @@ func (s *Shell) View(c *ui.Context) {
 	theme.Danger = s.palette.No
 	theme.FontSize = theme.Rem(1) * float32(s.text.Frame())
 	theme.Font = s.fontFamily()
+	// The outline of button:focus-visible of the page: inside the edge, in the focus color.
+	outline, _ := s.options.Declared.Metric("focus-outline")
+	theme.Focus, theme.FocusRingWidth, theme.FocusRingOffset = s.palette.Focus, float32(outline), -float32(outline)
 	c.SetTheme(&theme)
 	s.keys.Declare(c)
 	// Korean breaks at the spaces, as body of packages/workbench/app.css says. It is inherited, except by an overlay, whose root takes it.

@@ -760,3 +760,88 @@ func TestKoreanTextBreaksAtTheSpaces(t *testing.T) {
 		t.Fatalf("the last line of the caption is %v wide: it broke inside a word", ink)
 	}
 }
+
+// The figures of the value of a slider take six widths of a figure of the font, as 6ch of the page does (--slide-value-w).
+func TestTheValueOfASliderIsSixFiguresWide(t *testing.T) {
+	f := opened(t)
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	size, _ := declared.Metric("text-small-at-base")
+	catalog, err := workbench.ReadSettingsCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stack := catalog.Stack(status[map[string]any](t, f, "core.settings")["values"].(map[string]any)["font"].(string))
+	const figures = "000000"
+	plain := ui.NewTester(func(c *ui.Context) {
+		ui.Row(c).Children(func() { ui.Text(c, figures).FontSize(float32(size)).Font(stack) })
+	}, 1000, 100)
+	want, ok := nodeLabeled(plain.ElementTree(), figures)
+	if !ok {
+		t.Fatalf("no plain element of %q", figures)
+	}
+	node, ok := nodeLabeled(f.tester.ElementTree(), "6px")
+	if !ok {
+		t.Fatalf("no value of the passage in %q", f.tester.Texts())
+	}
+	if diff := node.Bounds.W - want.Bounds.W; diff < -.01 || diff > .01 {
+		t.Fatalf("the value is %v wide, six figures of its font are %v", node.Bounds.W, want.Bounds.W)
+	}
+}
+
+// switches lists the elements of the switches of a tree.
+func switches(nodes []ui.ElementNode) []ui.ElementNode {
+	var found []ui.ElementNode
+	for _, node := range nodes {
+		if node.Role == ui.RoleSwitch {
+			found = append(found, node)
+		}
+		found = append(found, switches(node.Children)...)
+	}
+	return found
+}
+
+// A switch that the keyboard reached has the outline of the page around it (.set-switch:focus-visible).
+func TestAFocusedSwitchHasTheOutlineOfThePage(t *testing.T) {
+	f := opened(t)
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	width, _ := declared.Metric("focus-outline")
+	offset, _ := declared.Metric("switch-focus-offset")
+	f.tester.SetSize(1200, 2400)
+	f.settle()
+	values := status[map[string]any](t, f, "core.settings")["values"].(map[string]any)
+	catalog, err := workbench.ReadSettingsCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	theme, err := catalog.Theme(values["theme"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	colors := theme.Dark
+	if values["mode"] == "light" {
+		colors = theme.Light
+	}
+	want := ui.Hex(colors["focus"])
+	focus := color.RGBA{want.R, want.G, want.B, 255}
+	reach := float32(offset) + float32(width)/2
+	var seen []color.RGBA
+	for range 60 {
+		f.tester.Key(0, ui.KeyTab)
+		f.settle()
+		for _, node := range switches(f.tester.ElementTree()) {
+			y := node.Bounds.Y + node.Bounds.H/2
+			left := f.pixelOf(node.Bounds.X-reach, y)
+			if left == focus && f.pixelOf(node.Bounds.X+node.Bounds.W+reach-1, y) == focus {
+				return
+			}
+			seen = append(seen, left)
+		}
+	}
+	t.Fatalf("Tab reached no switch with the outline %v: %v", focus, seen[:min(len(seen), 8)])
+}
