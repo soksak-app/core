@@ -111,7 +111,7 @@ export function createViewSubscriptions({ native, sidecar, textSize, settings, d
     return pending;
   };
   // default: subscriptions without a run state have no start to push.
-  const offRunStart = run?.onStart ? run.onStart(() => forward("run-start", null)) : null;
+  const offRunStart = run?.onStart ? run.onStart(() => forward("run-start", {})) : null;
   return {
     native(name) {
       return subscribe(`native:${name}`, () => {
