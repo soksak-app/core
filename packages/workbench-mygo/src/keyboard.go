@@ -4,8 +4,10 @@ import "fmt"
 
 // The keyboard of the window follows the focus ring (docs/spec/exposure.md#keyboard-focus): while no modal is open, the active
 // surface of the card with the ring holds the keyboard. Every move of the ring goes through focusCard, and the frame that shows
-// the move sends the one host call surfaceFocus after the placement that holds the surface, so a surface that the host does not
-// hold yet receives the keyboard when it stands.
+// the move sends the one host call surfaceFocus. A surface that an earlier placement gave the host receives the call ahead of the
+// placement of the frame, so the host gives it the keyboard at the release of the press that moved the ring, before a key that
+// follows the release; a surface that the host does not hold yet receives the call after the placement that holds it, when it
+// stands.
 
 // keyboardState is what the workbench last asked of the host about the keyboard.
 type keyboardState struct {
@@ -40,13 +42,18 @@ func (s *Shell) keyboardTarget() *string {
 	return &id
 }
 
-// followKeyboard ends a frame: it sends the host call when the target changed or a path owes the keyboard. A placement that runs
-// holds the call, because its end draws a frame.
-func (s *Shell) followKeyboard() {
-	if s.surfaces.running {
+// followKeyboard ends a frame: it sends the host call when the target changed or a path owes the keyboard. Ahead of the placement
+// of the frame it sends only a call for a surface that a finished placement held, whose view the host already holds.
+// After the placement a placement that runs holds the call, because its end draws a frame.
+func (s *Shell) followKeyboard(ahead bool) {
+	target := s.keyboardTarget()
+	if ahead {
+		if target == nil || s.surfaces.held[*target] == nil || !s.surfaces.held[*target].hosted {
+			return
+		}
+	} else if s.surfaces.running {
 		return
 	}
-	target := s.keyboardTarget()
 	same := (target == nil) == (s.keyboard.target == nil) && (target == nil || *target == *s.keyboard.target)
 	if same && !s.keyboard.owed {
 		return
