@@ -24,6 +24,7 @@ func queuedUI() (q *uiQueue, timers *[]fakeTimer, refuse *error, reported *[]err
 	return q, timers, refuse, reported
 }
 
+// contract: platform.windows.ui-queue.tasks-run-in-order-once
 func TestUITasksRunInTheirOrderOnce(t *testing.T) {
 	q, _, _, _ := queuedUI()
 	var ran []string
@@ -42,6 +43,7 @@ func TestUITasksRunInTheirOrderOnce(t *testing.T) {
 	}
 }
 
+// contract: platform.windows.ui-queue.task-queued-by-task-waits-for-later-step
 func TestAUITaskThatATaskQueuesWaitsForALaterStep(t *testing.T) {
 	q, _, _, _ := queuedUI()
 	var ran []string
@@ -63,6 +65,7 @@ func TestAUITaskThatATaskQueuesWaitsForALaterStep(t *testing.T) {
 	}
 }
 
+// contract: platform.windows.ui-queue.refused-task-never-runs
 func TestAUITaskThatTheQueueRefusesNeverRuns(t *testing.T) {
 	q, _, refuse, _ := queuedUI()
 	*refuse = errors.New("full")
@@ -78,6 +81,7 @@ func TestAUITaskThatTheQueueRefusesNeverRuns(t *testing.T) {
 	}
 }
 
+// contract: platform.windows.ui-queue.refuses-before-its-thread
 func TestAUIQueueBeforeItsThreadRefusesATask(t *testing.T) {
 	q := &uiQueue{}
 	if err := q.add(func() {}); err == nil {
@@ -88,6 +92,7 @@ func TestAUIQueueBeforeItsThreadRefusesATask(t *testing.T) {
 	}
 }
 
+// contract: platform.windows.ui-queue.delayed-task-runs-as-step-after-wait
 func TestADelayedUITaskRunsAsAStepAfterItsWait(t *testing.T) {
 	q, timers, _, _ := queuedUI()
 	ran := false
@@ -111,6 +116,7 @@ func TestADelayedUITaskRunsAsAStepAfterItsWait(t *testing.T) {
 	}
 }
 
+// contract: platform.windows.ui-queue.negative-delay-is-refused
 func TestANegativeDelayIsRefused(t *testing.T) {
 	q, timers, _, _ := queuedUI()
 	if err := q.addAfter(-time.Second, func() {}); err == nil {
@@ -121,6 +127,7 @@ func TestANegativeDelayIsRefused(t *testing.T) {
 	}
 }
 
+// contract: platform.windows.ui-queue.refused-delayed-task-enters-later
 func TestADelayedUITaskThatTheQueueRefusesEntersLater(t *testing.T) {
 	q, timers, refuse, reported := queuedUI()
 	ran := 0
