@@ -76,9 +76,10 @@ export function armLayoutFault() {
  *   textSize   frame scale of the current setting
  *   rendered   promise of the presentation that the last render committed (onRender of index.html)
  *   waitSurfaceCompositionDeclared  waits for the composition declaration of the surface modules (surface-modules.js)
+ *   surfaceUnloaded  whether the memory saver holds the surface unloaded (memory-saver.js), so that no mount declares its composition
  */
 export function createPageLayout({
-  document, showError, setVerify, log, surfaces, plane, compositor, textSize, rendered, waitSurfaceCompositionDeclared,
+  document, showError, setVerify, log, surfaces, plane, compositor, textSize, rendered, waitSurfaceCompositionDeclared, surfaceUnloaded,
 }) {
   let failure = null;
   /* Number of layouts replaced by a newer layout before they were presented. It is written as one line to the application log
@@ -192,8 +193,10 @@ export function createPageLayout({
     async drawn() {
       // If the newest layout fails, failed of the queue has already shown the failure. It does not wait for the slot of a layout that is not presented.
       if (!(await layouts.wait())) return;
+      // A hidden section keeps its slot while it is unloaded, and no mount of it will declare a composition.
       const ids = [...document.querySelectorAll("[data-native-surface-id]")]
-        .map((slot) => slot.dataset.nativeSurfaceId);
+        .map((slot) => slot.dataset.nativeSurfaceId)
+        .filter((id) => !surfaceUnloaded(id));
       await Promise.all(ids.map((id) => waitSurfaceCompositionDeclared(id)));
     },
   };

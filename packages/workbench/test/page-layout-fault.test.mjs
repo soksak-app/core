@@ -25,3 +25,20 @@ test("an armed layout fault fails the next draw once and the next layout draws",
   assert.equal(await page.presented(), true);
   assert.deepEqual(drawn, ["second"]);
 });
+
+test("a command waits for the declaration of each mounted surface and not for the slot of an unloaded hidden section", async () => {
+  const waited = [];
+  const page = createPageLayout({
+    document: { querySelectorAll: () => [{ dataset: { nativeSurfaceId: "shown" } }, { dataset: { nativeSurfaceId: "hidden" } }] },
+    showError: () => {}, setVerify: () => {}, log: () => {},
+    surfaces: { waitPresented: () => Promise.resolve() }, plane: { clear: () => {} },
+    compositor: { publishAhead: () => Promise.resolve(), publish: () => {}, cancelPrepared: () => {} },
+    waitSurfaceCompositionDeclared: (id) => {
+      waited.push(id);
+      return id === "hidden" ? Promise.reject(new Error(`surface ${id} is not mounted`)) : Promise.resolve();
+    },
+    surfaceUnloaded: (id) => id === "hidden",
+  });
+  await page.drawn();
+  assert.deepEqual(waited, ["shown"]);
+});

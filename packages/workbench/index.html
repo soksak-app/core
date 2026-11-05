@@ -389,6 +389,7 @@ const pageLayout = createPageLayout({
   textSize: () => value("textSize"),
   rendered: () => presented,
   waitSurfaceCompositionDeclared,
+  surfaceUnloaded: (surface) => memorySaver.unloaded(surface),
 });
 // The tab selection and collapse of a sidebar are stored in the space (docs/spec/projects.md#persistence).
 onChoicesChange(() => projects.keep());
