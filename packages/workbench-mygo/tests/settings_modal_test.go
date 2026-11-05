@@ -1288,6 +1288,75 @@ func TestTabSelectsTheTextOfTheSearchItReaches(t *testing.T) {
 	}
 }
 
+// The browser draws the magnifier and the cancel of a search from the symbols of the system, in the sizes of the page and the colors
+// that it gives them.
+func TestTheSearchDrawsTheSymbolsOfTheSystem(t *testing.T) {
+	f := opened(t)
+	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
+	f.run("core.settings-modal.search", map[string]string{"query": "term"})
+	f.settle()
+	asked := map[string]float64{}
+	f.tester.SetSystemSymbols(func(name string, pointSize, scale float64) (image.Image, bool) {
+		asked[name] = pointSize
+		return squareSymbols(name, pointSize, scale)
+	})
+	f.settle()
+	if want := float64(plainLength(t, "search-icon-pt")); asked["magnifyingglass"] != want {
+		t.Fatalf("asked for %v, not the magnifier at %v", asked, want)
+	}
+	if want := float64(plainLength(t, "search-cancel-pt")); asked["xmark.circle.fill"] != want {
+		t.Fatalf("asked for %v, not the cancel at %v", asked, want)
+	}
+	node, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.search", "")
+	if !ok {
+		t.Fatalf("no search in %q", f.tester.Texts())
+	}
+	box := node.Bounds
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	opaque := func(name string) color.RGBA {
+		value := ui.Hex(declared.PlainControl(name))
+		return color.RGBA{value.R, value.G, value.B, 255}
+	}
+	size := plainLength(t, "search-icon-size")
+	corner := size/2 - 1
+	x, y := box.X+plainLength(t, "search-icon-x")+size/2, box.Y+box.H/2
+	// The square of the fixture reaches the middle and the corners of the box.
+	for _, at := range [][2]float32{{x, y}, {x - corner, y - corner}} {
+		if got, want := f.pixelOf(at[0], at[1]), opaque("search-icon"); got != want {
+			t.Fatalf("the magnifier at %v is %v, not %v", at, got, want)
+		}
+	}
+	end, cancelSize := plainLength(t, "search-cancel-end"), plainLength(t, "search-cancel-size")
+	cx := box.X + box.W - end - cancelSize/2
+	for _, at := range [][2]float32{{cx, y}, {cx - corner, y - corner}} {
+		if got, want := f.pixelOf(at[0], at[1]), opaque("search-cancel"); got != want {
+			t.Fatalf("the cancel at %v is %v, not %v", at, got, want)
+		}
+	}
+	// The cancel still answers its press.
+	f.tester.ClickAt(cx, y)
+	f.settle()
+	if got := f.modal().Query; got != "" {
+		t.Fatalf("after the cancel the query is %q", got)
+	}
+}
+
+// Every system of the host has the symbols of a search, so one without them is an error and no other drawing stands in.
+func TestASearchWithoutItsSymbolsIsAnError(t *testing.T) {
+	f := opened(t)
+	f.tester.SetSystemSymbols(func(string, float64, float64) (image.Image, bool) { return nil, false })
+	defer func() {
+		if got := fmt.Sprint(recover()); !strings.Contains(got, "no symbol magnifyingglass") {
+			t.Fatalf("a search without its symbol ended with %q", got)
+		}
+	}()
+	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
+	f.settle()
+}
+
 // controlBackground is the declared background of a control without a look of its own.
 func controlBackground(t *testing.T) color.RGBA {
 	t.Helper()
