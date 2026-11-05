@@ -120,11 +120,11 @@ func beyond(a, b layout.Rect) float64 {
 	return max(0, b.X-a.X, b.Y-a.Y, a.X+a.W-(b.X+b.W), a.Y+a.H-(b.Y+b.H))
 }
 
-// WholePoints returns the whole points inside r, where a window stands the view of a surface whose slot is r: a web page paints whole
-// points only, and a whole point lies on a device pixel at each scale.
-func WholePoints(r layout.Rect) layout.Rect {
-	left, top := math.Ceil(r.X), math.Ceil(r.Y)
-	return layout.Rect{X: left, Y: top, W: max(math.Floor(r.X+r.W)-left, 0), H: max(math.Floor(r.Y+r.H)-top, 0)}
+// DevicePixels returns where a window stands the view of a surface whose slot is r: each edge at the nearest device pixel, where the
+// framework also paints an edge of the same place.
+func DevicePixels(r layout.Rect, scale float64) layout.Rect {
+	left, top := math.Round(r.X*scale)/scale, math.Round(r.Y*scale)/scale
+	return layout.Rect{X: left, Y: top, W: math.Round((r.X+r.W)*scale)/scale - left, H: math.Round((r.Y+r.H)*scale)/scale - top}
 }
 
 // expectedRailLoops adds up the connected clusters of each rail group: two rectangles are connected when both their gaps are at
@@ -416,7 +416,7 @@ func Verify(in VerifyInput) ([]VerifyRow, error) {
 
 	skip("V7c 미리 게시한 자리 == 그려진 자리", "이 창은 자리를 미리 게시하지 않는다")
 
-	// V7b: the window stands a surface on the whole points inside its declared rectangle, so the applied rectangle is compared with
+	// V7b: the window stands a surface on the device pixels nearest its declared rectangle, so the applied rectangle is compared with
 	// exactly those.
 	land, escaped, landed, landedAt := 0.0, 0.0, 0, ""
 	if in.Seated != nil {
@@ -424,12 +424,13 @@ func Verify(in VerifyInput) ([]VerifyRow, error) {
 			if !surface.Visible || surface.Declared.W < 1 || surface.Declared.H < 1 {
 				continue
 			}
-			delta := maxDelta(WholePoints(surface.Declared), surface.Applied)
+			standing := DevicePixels(surface.Declared, in.Scale)
+			delta := maxDelta(standing, surface.Applied)
 			if delta > land {
 				landedAt = fmt.Sprintf(" · %s declared %s applied %s", surface.ID, frameText(surface.Declared), frameText(surface.Applied))
 			}
 			land = max(land, delta)
-			escaped = max(escaped, beyond(surface.Applied, surface.Declared))
+			escaped = max(escaped, beyond(surface.Applied, standing))
 			landed++
 		}
 	}

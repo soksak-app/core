@@ -179,7 +179,6 @@ func (s *Shell) dropRect(from string, hit *layout.ZoneHit) *layout.Rect {
 	if !ok {
 		return nil
 	}
-	rect = s.onWholePoints(rect)
 	return &rect
 }
 

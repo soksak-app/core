@@ -164,37 +164,12 @@ func inPlane(box layout.Rect, origin layout.Point) layout.Rect {
 	return layout.Rect{X: box.X - origin.X, Y: box.Y - origin.Y, W: box.W, H: box.H}
 }
 
-// wholeRules are the lines of the plane where they stand with the cards between them: a line keeps its thickness in the middle of its
-// gap, and its ends take the whole points of the edges that it runs along.
-func (s *Shell) wholeRules() []layout.Rule {
-	rules := s.plane.Rules()
-	for index, rule := range rules {
-		r := s.onWholePoints(layout.Rect{X: rule.X, Y: rule.Y, W: rule.W, H: rule.H})
-		if rule.Axis == "x" {
-			r.X, r.W = s.lineOnWholePoint("x", rule.X+rule.W/2)-rule.W/2, rule.W
-		} else {
-			r.Y, r.H = s.lineOnWholePoint("y", rule.Y+rule.H/2)-rule.H/2, rule.H
-		}
-		rules[index].X, rules[index].Y, rules[index].W, rules[index].H = r.X, r.Y, r.W, r.H
-	}
-	return rules
-}
-
-// lineOnWholePoint is where the middle of the gap of a line stands on the plane, between the cards that stand on whole points.
-func (s *Shell) lineOnWholePoint(axis layout.Axis, at float64) float64 {
-	origin := s.planeOrigin()
-	if axis == "x" {
-		return wholePoint(origin.X+at) - origin.X
-	}
-	return wholePoint(origin.Y+at) - origin.Y
-}
-
 // drawnRules returns the lines that drawRules draws, in the coordinates of the plane.
 func (s *Shell) drawnRules() []layout.Rect {
 	place, _ := s.settings.Value("fullRule").(string) // silent: the settings store checks the type of the value.
 	inset := s.stageInset()
 	rules := []layout.Rect{}
-	for _, rule := range s.wholeRules() {
+	for _, rule := range s.plane.Rules() {
 		if rule.Virtual && place == "none" {
 			continue
 		}
