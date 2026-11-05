@@ -9,7 +9,7 @@
 // platform method called. Proposition 7 (framework port) checks that the Go and Rust framework ports have the same methods outside the
 // rows P of the language table. The comparison of the actual menu bar belongs to the window check layer, and propositions 4 and 5 are the next
 // extension.
-import { FRAMEWORK_TABLE, LANGUAGE_TABLE, allowedDifferenceTables } from './check-hosts.mjs';
+import { FRAMEWORK_TABLE, LANGUAGE_TABLE, MYGO_TABLE, allowedDifferenceTables } from './check-hosts.mjs';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -62,15 +62,20 @@ export function goHostCalls(source) {
   return calls;
 }
 
-/** The host.call names that a row B of the framework table of the host specification lists as absent on mygo. */
-export function absentOnMygo(hostsMarkdown) {
+/** The host.call names that a row B of the framework table of the host specification lists as absent on mygo, from its column of Wails. */
+export const absentOnMygo = (hostsMarkdown) => callsOfRowsB(hostsMarkdown, FRAMEWORK_TABLE.left);
+
+/** The calls of hostCalls that no other host has, from the column of mygo of the rows B of the framework table. */
+export const onlyOnMygo = (hostsMarkdown) => callsOfRowsB(hostsMarkdown, MYGO_TABLE.right);
+
+function callsOfRowsB(hostsMarkdown, column) {
   const rows = allowedDifferenceTables(hostsMarkdown).get(FRAMEWORK_TABLE.title);
-  const absent = new Set();
+  const calls = new Set();
   for (const [id, row] of rows) {
     if (!/^B\d+$/.test(id)) continue;
-    for (const match of row[FRAMEWORK_TABLE.left].matchAll(/`(\w+)`/g)) absent.add(snake(match[1]));
+    for (const match of row[column].matchAll(/`(\w+)`/g)) calls.add(snake(match[1]));
   }
-  return absent;
+  return calls;
 }
 
 /** The set of method names that the Rust endpoint declares (per build flavor). */
@@ -547,8 +552,13 @@ export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, wailsv3Runtim
   }
   const mygo = goHostCalls(mygoCallsSource);
   const absent = absentOnMygo(hostsSpec);
-  for (const name of [...mygo.keys()].filter((item) => !wailsv3.calls.has(item)).sort()) {
+  const only = onlyOnMygo(hostsSpec);
+  for (const name of [...mygo.keys()].filter((item) => !wailsv3.calls.has(item) && !only.has(item)).sort()) {
     failures.push(`mygo host.call(${name}) does not exist on wailsv3`);
+  }
+  for (const name of [...only].sort()) {
+    if (!mygo.has(name)) failures.push(`host.call(${name}) is listed as only on mygo and hostCalls does not name it`);
+    if (wailsv3.calls.has(name)) failures.push(`host.call(${name}) is listed as only on mygo and exists on wailsv3`);
   }
   for (const name of [...wailsv3.calls].filter((item) => !mygo.has(item) && !absent.has(item)).sort()) {
     failures.push(`wailsv3 host.call(${name}) does not exist on mygo`);

@@ -395,10 +395,15 @@ func (s *Surfaces) dialog() bool {
 	return s.workbenchDialog || s.modal != nil && s.modal.content.Mode == "dialog"
 }
 
+// DialogBackground is the argument of SetDialogBackground.
+type DialogBackground struct {
+	Enabled bool `json:"enabled"`
+}
+
 // SetDialogBackground tells whether a dialog that the workbench draws itself is open, which blurs the documents as a modal web view
 // of the mode dialog does. The mygo host calls it (docs/spec/hosts.md#native-views).
-func (h *Host) SetDialogBackground(ctx context.Context, enabledJSON json.RawMessage) error {
-	enabled, err := argument[bool]("enabled", enabledJSON)
+func (h *Host) SetDialogBackground(ctx context.Context, requestJSON json.RawMessage) error {
+	request, err := argument[DialogBackground]("request", requestJSON)
 	if err != nil {
 		return err
 	}
@@ -406,7 +411,7 @@ func (h *Host) SetDialogBackground(ctx context.Context, enabledJSON json.RawMess
 	if err != nil {
 		return err
 	}
-	s.setWorkbenchDialog(enabled)
+	s.setWorkbenchDialog(request.Enabled)
 	return nil
 }
 

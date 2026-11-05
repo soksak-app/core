@@ -8,6 +8,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
@@ -510,7 +511,7 @@ func (s *Shell) tellBackground() {
 		return
 	}
 	s.backgroundTold = open
-	s.calls.CallInOrder("appearance", "setDialogBackground", open, func(_ any, err error) {
+	s.calls.CallInOrder("appearance", "setDialogBackground", host.DialogBackground{Enabled: open}, func(_ any, err error) {
 		if err != nil {
 			s.fail(err)
 		}
