@@ -362,7 +362,8 @@ func (s *Shell) drawSelect(c *ui.Context, control *SettingsControl, pane setting
 	if selector.Trigger.Focused() {
 		edge = s.palette.Focus
 	}
-	selector.Trigger.Grow(1).Row().Padding(pane.fieldPadY, pane.arrowInset, pane.fieldPadY, pane.fieldPadX).Radius(s.radiusSmall()).Border(s.palette.BorderWidth, edge).Background(s.palette.Bg).AlignItems(ui.Center).Label(control.Label).Children(func() {
+	// .select-field select:focus-visible: the focus color on the border, without an outline.
+	selector.Trigger.FocusRing(false).Grow(1).Row().Padding(pane.fieldPadY, pane.arrowInset, pane.fieldPadY, pane.fieldPadX).Radius(s.radiusSmall()).Border(s.palette.BorderWidth, edge).Background(s.palette.Bg).AlignItems(ui.Center).Label(control.Label).Children(func() {
 		ui.Text(c, control.labels[value]).FontSize(s.textControl()).TextColor(s.palette.Fg).NoWrap().Grow(1)
 		ui.Text(c, "▾").FontSize(s.textCaption()).TextColor(s.palette.Muted)
 	})

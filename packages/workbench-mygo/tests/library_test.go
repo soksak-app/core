@@ -3,6 +3,8 @@ package workbench_test
 import (
 	"fmt"
 	"testing"
+
+	"github.com/egoist/mygo/ui"
 )
 
 // libraryRead is the part of the status core.library that the page of the projects draws.
@@ -211,5 +213,26 @@ func TestTheLibraryKeepsItsSizeWhenTheFrameTextGrows(t *testing.T) {
 	after, ok := f.tester.Find("저장 순서")
 	if !ok || after.H != before.H {
 		t.Fatalf("the text was %+v and is %+v", before, after)
+	}
+}
+
+// The sort of the library is a select box of the page: the focus color on its border and no outline.
+func TestAFocusedSortHasTheBorderOfThePage(t *testing.T) {
+	f, _, _ := libraryOfTwoProjects(t)
+	node, ok := exposedNode(f.tester.ElementTree(), "core.library.sort", "")
+	if !ok {
+		t.Fatal("the library has no sort")
+	}
+	y := node.Bounds.Y + node.Bounds.H/2
+	edge, inside := f.pixelOf(node.Bounds.X+.5, y), f.pixelOf(node.Bounds.X+1.5, y)
+	f.tester.Key(0, ui.KeyTab)
+	f.settle()
+	f.run("core.focus.set", map[string]any{"name": "core.library.sort", "index": 0})
+	f.settle()
+	if got := f.pixelOf(node.Bounds.X+.5, y); got == edge {
+		t.Fatalf("the border of the focused sort stays %v", got)
+	}
+	if got := f.pixelOf(node.Bounds.X+1.5, y); got != inside {
+		t.Fatalf("inside the border of the focused sort lies %v, not %v", got, inside)
 	}
 }

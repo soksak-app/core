@@ -2,6 +2,7 @@ package workbench_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"image/color"
 	"reflect"
 	"slices"
@@ -844,4 +845,76 @@ func TestAFocusedSwitchHasTheOutlineOfThePage(t *testing.T) {
 		}
 	}
 	t.Fatalf("Tab reached no switch with the outline %v: %v", focus, seen[:min(len(seen), 8)])
+}
+
+// A select box that the keyboard reached has the focus color on its border and no outline (.select-field select:focus-visible).
+func TestAFocusedSelectBoxHasTheBorderOfThePage(t *testing.T) {
+	f := opened(t)
+	values := status[map[string]any](t, f, "core.settings")["values"].(map[string]any)
+	catalog, err := workbench.ReadSettingsCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	theme, err := catalog.Theme(values["theme"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	colors := theme.Dark
+	if values["mode"] == "light" {
+		colors = theme.Light
+	}
+	want := ui.Hex(colors["focus"])
+	focus := color.RGBA{want.R, want.G, want.B, 255}
+	surface := ui.Hex(colors["bg"])
+	inside := color.RGBA{surface.R, surface.G, surface.B, 255}
+	f.tester.Key(0, ui.KeyTab)
+	f.settle()
+	var seen []string
+	for index := range 12 {
+		f.run("core.focus.set", map[string]any{"name": "core.settings-modal.set", "index": index})
+		f.settle()
+		for _, node := range selectBoxes(f.tester.ElementTree()) {
+			y := node.Bounds.Y + node.Bounds.H/2
+			edge, within := f.pixelOf(node.Bounds.X+.5, y), f.pixelOf(node.Bounds.X+1.5, y)
+			if edge == focus && within == inside {
+				return
+			}
+			seen = append(seen, fmt.Sprint(edge, within))
+		}
+	}
+	t.Fatalf("no select box has the border %v around the field %v: %v", focus, inside, seen[:min(len(seen), 6)])
+}
+
+// selectBoxes lists the elements of the select boxes of a tree.
+func selectBoxes(nodes []ui.ElementNode) []ui.ElementNode {
+	var found []ui.ElementNode
+	for _, node := range nodes {
+		if node.Role == ui.RolePopUpButton {
+			found = append(found, node)
+		}
+		found = append(found, selectBoxes(node.Children)...)
+	}
+	return found
+}
+
+// The card of the page draws no outline when it has the focus (.card): its border says which card it is.
+func TestAFocusedCardHasNoOutline(t *testing.T) {
+	f, _ := surfaceShell(t)
+	card := f.tabbedCards()[0]
+	node, ok := exposedNode(f.tester.ElementTree(), "core.card", card)
+	if !ok {
+		t.Fatalf("no card %s", card)
+	}
+	x, y := node.Bounds.X+1.5, node.Bounds.Y+node.Bounds.H/2
+	f.tester.Key(0, ui.KeyTab)
+	f.settle()
+	before := f.pixelOf(x, y)
+	f.run("core.focus.set", map[string]any{"name": "core.card", "index": 0})
+	f.settle()
+	if !f.tester.Focused(card) {
+		t.Fatalf("the keyboard did not reach the card %s", card)
+	}
+	if got := f.pixelOf(x, y); got != before {
+		t.Fatalf("the focused card has %v at its edge, %v before", got, before)
+	}
 }

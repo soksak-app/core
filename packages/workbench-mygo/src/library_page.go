@@ -171,8 +171,16 @@ func (s *Shell) drawLibrarySort(c *ui.Context) {
 	run := s.binder.Control(c, "core.library.sort", "core.library.sort", "")
 	selector := ui.SelectBase(c, &order)
 	s.binder.Bound(selector.Trigger, "core.library.sort")
-	selector.Trigger.Width(m.librarySortW).Padding(m.fieldPadY, m.selectArrowRoom, m.fieldPadY, m.space2).Radius(s.radiusSmall()).
-		Border(s.palette.BorderWidth, s.palette.Edge).Background(s.palette.Bg).AlignItems(ui.Center).Justify(ui.Start).Label("프로젝트 정렬").Children(func() {
+	edge := s.palette.Edge
+	switch {
+	case selector.Trigger.Focused():
+		edge = s.palette.Focus
+	case selector.Trigger.Hovered():
+		edge = s.palette.Rail
+	}
+	// .select-field select:focus-visible: the focus color on the border, without an outline.
+	selector.Trigger.FocusRing(false).Width(m.librarySortW).Padding(m.fieldPadY, m.selectArrowRoom, m.fieldPadY, m.space2).Radius(s.radiusSmall()).
+		Border(s.palette.BorderWidth, edge).Background(s.palette.Bg).AlignItems(ui.Center).Justify(ui.Start).Label("프로젝트 정렬").Children(func() {
 		ui.Text(c, librarySortLabels[order]).SingleLine().FontSize(s.textControl()).TextColor(s.palette.Fg)
 		ui.Row(c).Absolute().Right(m.selectArrowInset).Top(0).Bottom(0).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, "▾").FontSize(s.textCaption()).TextColor(s.palette.Muted)
