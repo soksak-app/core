@@ -94,8 +94,54 @@ func (s *Shell) openFolder(folder ProjectFolderValue, color string, done func(pr
 			done(nil, err)
 			return
 		}
-		s.projects = append(s.projects, added)
-		s.activateThen(added.ID, func() { done(raw, nil) })
+		s.adoptAdded(added.ID, func(err error) {
+			if err != nil {
+				done(nil, err)
+				return
+			}
+			s.activateThen(added.ID, func() { done(raw, nil) })
+		})
+	})
+}
+
+// adoptAdded takes the project id that the workspace just added or already knew, as readProjects does after an add: the record of
+// the workspace holds the settings of the file of its folder, which the answer of the add does not. A project that the window holds
+// keeps its layouts and takes the settings.
+func (s *Shell) adoptAdded(id string, done func(err error)) {
+	s.calls.CallInOrder("workspace", "workspace", map[string]string{"kind": "snapshot"}, func(value any, err error) {
+		if err != nil {
+			done(err)
+			return
+		}
+		snapshot, err := decode[struct {
+			Projects []json.RawMessage `json:"projects"`
+		}](value)
+		if err != nil {
+			done(err)
+			return
+		}
+		for _, raw := range snapshot.Projects {
+			stored, err := readProject(raw)
+			if err != nil {
+				done(err)
+				return
+			}
+			if stored.ID != id {
+				continue
+			}
+			if known := s.project(id); known != nil {
+				delete(known.Rest, "settings")
+				if settings, ok := stored.Rest["settings"]; ok {
+					known.Rest["settings"] = settings
+				}
+				done(nil)
+				return
+			}
+			s.projects = append(s.projects, stored)
+			done(nil)
+			return
+		}
+		done(fmt.Errorf("Unknown project: %s", id))
 	})
 }
 

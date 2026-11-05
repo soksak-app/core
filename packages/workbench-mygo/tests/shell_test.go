@@ -21,8 +21,9 @@ import (
 
 // storedHost answers the host calls of the shell from memory, as the workspace store of the language host library does.
 type storedHost struct {
-	keepsProjects bool // The answer of projectRemoveAsk is that the project stays.
-	plugins       *pluginsHost
+	folderSettings map[string]map[string]any // The settings files of the folders, by root.
+	keepsProjects  bool                      // The answer of projectRemoveAsk is that the project stays.
+	plugins        *pluginsHost
 	// reloads counts the starts of the workbench that the shell asked for.
 	reloads int
 	// located is the project that the shell last named as the one that its window shows.
@@ -312,6 +313,11 @@ func (h *storedHost) workspace(argument json.RawMessage) (any, error) {
 	}
 	switch request.Kind {
 	case "snapshot":
+		for _, project := range h.projects {
+			if settings, ok := h.folderSettings[project["root"].(string)]; ok {
+				project["settings"] = settings
+			}
+		}
 		return map[string]any{"projects": h.projects, "open": []string{}, "common": h.common}, nil
 	case "settings":
 		h.settings = append(h.settings, map[string]any{"id": request.ID, "patch": request.Patch, "remove": request.Remove})
@@ -323,6 +329,12 @@ func (h *storedHost) workspace(argument json.RawMessage) (any, error) {
 	case "tabStatePut", "tabSessionPut":
 		return 1, nil
 	case "add":
+		for _, project := range h.projects {
+			if project["root"] == request.Project["root"] {
+				return project, nil
+			}
+		}
+		delete(request.Project, "settings") // The settings of a project are the file of its folder.
 		h.projects = append(h.projects, request.Project)
 		return request.Project, nil
 	case "patch":
@@ -860,6 +872,50 @@ func TestWindowNewCommandOpensAWindow(t *testing.T) {
 	}
 	if !f.host.called("windowNew") {
 		t.Fatalf("the host received %v", f.host.calls)
+	}
+}
+
+// A folder that holds a settings file shows them when it opens, as after a start of the application.
+func TestAnOpenedFolderTakesTheSettingsOfItsFile(t *testing.T) {
+	stored := &storedHost{folderSettings: map[string]map[string]any{"/work/alpha": {"mode": "light"}}}
+	f := newShell(t, stored)
+	if err := f.finish("core.project.open", map[string]string{"root": "/work/alpha"}); err != nil {
+		t.Fatal(err)
+	}
+	var theme struct {
+		Scheme string `json:"scheme"`
+	}
+	if err := json.Unmarshal(stored.theme, &theme); err != nil {
+		t.Fatal(err)
+	}
+	if theme.Scheme != "light" {
+		t.Fatalf("the window shows the scheme %s of %s", theme.Scheme, stored.theme)
+	}
+}
+
+// A folder that the application knows opens as the project that it is.
+func TestOpeningAKnownFolderAddsNoProject(t *testing.T) {
+	f := newShell(t, &storedHost{})
+	for range 2 {
+		if err := f.finish("core.project.open", map[string]string{"root": "/work/alpha"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	projects := status[[]map[string]any](t, f, "core.projects")
+	if len(projects) != 1 {
+		t.Fatalf("the window lists %v", projects)
+	}
+}
+
+// Coming back to the application keeps the theme: the mode is a setting.
+func TestAnActivationKeepsTheTheme(t *testing.T) {
+	stored := &storedHost{}
+	f := newShell(t, stored)
+	before := string(stored.theme)
+	f.shell.Event("window-active", nil)
+	f.settle()
+	if got := string(stored.theme); got != before {
+		t.Fatalf("the theme went from %s to %s", before, got)
 	}
 }
 
