@@ -312,12 +312,16 @@ static void checkReceipts(void) {
 
 @interface SPAcceptingView : NSView
 @property(nonatomic) NSUInteger downs;
+@property(nonatomic) NSUInteger drags;
+@property(nonatomic) NSUInteger ups;
 @property(nonatomic) BOOL pressIsCurrent;
 @end
 @implementation SPAcceptingView
 - (BOOL)acceptsFirstResponder { return YES; }
 - (BOOL)acceptsFirstMouse:(NSEvent *)event { return YES; }
 - (void)mouseDown:(NSEvent *)event { self.downs++; self.pressIsCurrent = NSApp.currentEvent == event; }
+- (void)mouseDragged:(NSEvent *)event { self.drags++; }
+- (void)mouseUp:(NSEvent *)event { self.ups++; }
 @end
 
 // A person's move reaches the owner of every tracking area that holds the pointer, so a view under another view hears it too. The
@@ -364,8 +368,9 @@ static void checkMoveReachesEveryOwner(void) {
     [window release];
 }
 
-// A press of a key window passes the application as a person's press does: the local monitors see it before the view, and the
-// driver does not move the first responder ahead of it. A window that is not the key window keeps direct delivery.
+// A press, drag and release of a key window pass the application as a person's gesture does: the local monitors see them before
+// the view, and the driver does not move the first responder ahead of the press. A window that is not the key window keeps direct
+// delivery.
 static void checkKeyWindowPressPassesApplication(void) {
     NSWindow *window = [[SPKeyAnswerWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(300, 200))
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
@@ -376,10 +381,12 @@ static void checkKeyWindowPressPassesApplication(void) {
     [content addSubview:pressed];
     [window orderBack:nil];
     pointerOutside(window);
-    __block NSUInteger downs = 0, ups = 0;
+    __block NSUInteger downs = 0, drags = 0, ups = 0;
     __block NSResponder *atDown = nil;
-    id monitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown | NSEventMaskLeftMouseUp handler:^NSEvent *(NSEvent *event) {
+    NSEventMask gesture = NSEventMaskLeftMouseDown | NSEventMaskLeftMouseDragged | NSEventMaskLeftMouseUp;
+    id monitor = [NSEvent addLocalMonitorForEventsMatchingMask:gesture handler:^NSEvent *(NSEvent *event) {
         if (event.type == NSEventTypeLeftMouseDown) { downs++; atDown = event.window.firstResponder; }
+        else if (event.type == NSEventTypeLeftMouseDragged) drags++;
         else ups++;
         return event;
     }];
@@ -389,8 +396,12 @@ static void checkKeyWindowPressPassesApplication(void) {
     check(pressed.downs == 1, [NSString stringWithFormat:@"AppKit delivers the press of a key window to the view once (%lu)", (unsigned long)pressed.downs]);
     check(!pressed.pressIsCurrent, @"the application path leaves NSApp.currentEvent, so the press context stays on that path");
     check(atDown == window, [NSString stringWithFormat:@"the driver leaves the first responder until the press passes the application (%@)", atDown]);
-    check(sp_input_pointer(window, 50, 50, 3, 0, 0, 0) == SP_INPUT_DELIVERED && ups == 1,
+    check(sp_input_pointer(window, 120, 80, 2, 0, 0, 0) == SP_INPUT_DELIVERED && drags == 1,
+        [NSString stringWithFormat:@"a local monitor sees the drag of a key window once (%lu)", (unsigned long)drags]);
+    check(pressed.drags == 1, [NSString stringWithFormat:@"AppKit delivers the drag of a key window to the pressed view once (%lu)", (unsigned long)pressed.drags]);
+    check(sp_input_pointer(window, 120, 80, 3, 0, 0, 0) == SP_INPUT_DELIVERED && ups == 1,
         [NSString stringWithFormat:@"a local monitor sees the release of a key window once (%lu)", (unsigned long)ups]);
+    check(pressed.ups == 1, [NSString stringWithFormat:@"AppKit delivers the release of a key window to the pressed view once (%lu)", (unsigned long)pressed.ups]);
     [window close];
     [window release];
 
@@ -403,8 +414,11 @@ static void checkKeyWindowPressPassesApplication(void) {
     downs = 0;
     check(sp_input_pointer(other, 50, 50, 1, 0, 0, 0) == SP_INPUT_DELIVERED && direct.downs == 1 && other.firstResponder == direct,
         @"the press of a window that is not key reaches the view and moves the first responder");
-    check(downs == 0, @"the press of a window that is not key passes no monitor");
-    check(sp_input_pointer(other, 50, 50, 3, 0, 0, 0) == SP_INPUT_DELIVERED, @"the release of that press is delivered");
+    check(sp_input_pointer(other, 120, 80, 2, 0, 0, 0) == SP_INPUT_DELIVERED && direct.drags == 1,
+        @"the drag of a window that is not key reaches the pressed view");
+    check(sp_input_pointer(other, 120, 80, 3, 0, 0, 0) == SP_INPUT_DELIVERED && direct.ups == 1,
+        @"the release of a window that is not key reaches the pressed view");
+    check(downs == 0 && drags == 1 && ups == 1, @"the gesture of a window that is not key passes no monitor");
     [other close];
     [other release];
     [NSEvent removeMonitor:monitor];
