@@ -107,6 +107,8 @@ type SidebarFrame struct {
 	Side     string
 	Status   string
 	Sections []SidebarSection
+	// Set is the id of the set that the sidebar shows, and empty for a sidebar without a set.
+	Set string
 	// Rail is the color of the mark of the selected tab.
 	Rail ui.Color
 }
@@ -240,9 +242,22 @@ func sectionItem(frame SidebarFrame, section SidebarSection) string {
 // native view of the section surface stands, and at the end for each section that is not visible.
 func DrawSidebar(c *ui.Context, binder *Binder, drag *SectionDrag, frame SidebarFrame, metrics SidebarMetrics, width, height float32, seat seatDrawer) {
 	room := height - metrics.FootH
-	ui.Column(binder.Name(c, "core.sidebar", frame.Sidebar)).Size(width, height).Role(ui.RoleGroup).Label(frame.Sidebar).Clip().Children(func() {
+	// The group of the sidebar is its set, as the page names its container when it draws a set, and the set holds no status line. A
+	// sidebar without a set is a group as a whole and has no element.
+	named := frame.Set != ""
+	whole := ui.Column(c).Size(width, height).Clip()
+	if !named {
+		whole.Role(ui.RoleGroup).Label(frame.Sidebar)
+	}
+	whole.Children(func() {
 		// The set takes all the room, so a set of short sections leaves the status line at the bottom.
-		ui.Column(c).Size(width, room).Children(func() {
+		var set ui.Element
+		if named {
+			set = ui.Column(binder.Name(c, "core.sidebar", frame.Sidebar)).Size(width, room).Role(ui.RoleGroup).Label(frame.Sidebar)
+		} else {
+			set = ui.Column(c).Size(width, room)
+		}
+		set.Children(func() {
 			switch {
 			case frame.Layout == "tabs":
 				drawSectionTabs(c, binder, frame, metrics, width, room, seat)

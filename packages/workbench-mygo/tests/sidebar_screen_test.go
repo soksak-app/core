@@ -18,7 +18,7 @@ func pixels(v int) *int { return &v }
 
 func listFrame() workbench.SidebarFrame {
 	return workbench.SidebarFrame{
-		Sidebar: "left", Space: "spc-1", Layout: "list", Orientation: "vertical", Side: "left",
+		Sidebar: "left", Space: "spc-1", Layout: "list", Set: "set-1", Orientation: "vertical", Side: "left",
 		Status: "왼쪽 창 사이드바",
 		Sections: []workbench.SidebarSection{
 			{ID: "files.tree", Name: "Files", Plugin: "files", Height: 100},
@@ -184,7 +184,7 @@ func TestTheSelectedTabHasTheRailMarkOnItsPlainBackground(t *testing.T) {
 func TestDraggingADividerSizesTheSectionBelowItWithAnIntegerHeight(t *testing.T) {
 	var calls []call
 	frame := workbench.SidebarFrame{
-		Sidebar: "left", Space: "spc-1", Layout: "list", Orientation: "vertical", Side: "left", Status: "s",
+		Sidebar: "left", Space: "spc-1", Layout: "list", Set: "set-1", Orientation: "vertical", Side: "left", Status: "s",
 		Sections: []workbench.SidebarSection{
 			{ID: "a", Name: "A", Plugin: "p", Height: 100},
 			{ID: "b", Name: "B", Plugin: "p", Height: 100},

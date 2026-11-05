@@ -121,3 +121,24 @@ func TestTheNoteOfNoResultsHasTheMarginsOfAParagraph(t *testing.T) {
 		t.Fatalf("the add card is at y %v, want %v", add.Y, note.Y+note.H+24)
 	}
 }
+
+// The element of a sidebar holds its sections and not its status line.
+func TestTheSidebarElementEndsAboveItsStatus(t *testing.T) {
+	f := sidebarShell(t)
+	side := f.box("core.sidebar", "left")
+	status := f.box("core.sidebar.status", "left")
+	if !designNear(side.Y+side.H, status.Y) {
+		t.Fatalf("the sidebar ends at %v and its status starts at %v", side.Y+side.H, status.Y)
+	}
+}
+
+// A sidebar without a set has no element of that name: the page names the element only when it draws a set.
+func TestASidebarWithoutASetHasNoElement(t *testing.T) {
+	f := sidebarShell(t)
+	if !f.has("core.chrome.right", "") {
+		t.Fatal("no button of the right sidebar")
+	}
+	if f.has("core.sidebar", "right") {
+		t.Fatalf("the right sidebar without a set has an element at %+v", f.box("core.sidebar", "right"))
+	}
+}
