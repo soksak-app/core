@@ -75,7 +75,7 @@ In the main application survey the counts come first: no object count of the pag
 - Browser plugin: the DOM and Network panels subscribe while they show, the statuses `browser.elements` and `browser.requests` subscribe while watched and take one snapshot on a plain read, and both render the same content as before.
 - Browser level: the target of [Browser benchmark](#browser-benchmark) reports each metric per site.
 - Memory: the benchmark target of the main application reports the counts per repetition.
-- Each change runs `make docs-check` and the structural checks it touches: `make boundaries`, `make exposure-check` for the statuses, `make events-check` for the stream events and `make parity-check` for the hosts.
+- Each change runs `make docs-check` and the structural checks it touches: `make boundaries-check`, `make exposure-check` for the statuses, `make events-check` for the stream events and `make test-inventory-check` for the hosts.
 
 ## Order
 

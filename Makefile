@@ -1,15 +1,11 @@
 SHELL := /bin/sh
 
-.PHONY: push-check events-check census-check failures-check benchmark-rust benchmark-go preflight prepare build verify browser-example-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls e2e-terminal-sidebar-current e2e-terminal-focus-current e2e-shutdown e2e-benchmark-view-drag e2e-benchmark-resize-catch-up e2e-benchmark-idle-tab e2e-benchmark-split-load e2e-repeat exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat temp-audit page-memory object-counts host-calls app-usage terminal-redraw-usage trace-share host-allocations app-update-check
+.PHONY: push-check events-check benchmark-rust benchmark-go toolchain-check prepare build verify browser-example-check docs-check commits-check hooks boundaries-check platforms-check windows-build-check host-layout-check e2e-source-check e2e-registry-tls e2e-terminal-sidebar-current e2e-terminal-focus-current e2e-shutdown e2e-benchmark-view-drag e2e-benchmark-resize-catch-up e2e-benchmark-idle-tab e2e-benchmark-split-load e2e-repeat exposure-check test-inventory-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat temp-check page-memory object-counts host-calls app-usage terminal-redraw-usage trace-share host-allocations app-update-check
 
 docs-check:
 	@node scripts/check-docs.mjs
 	@node scripts/check-failure-table.mjs
-	@pnpm exec soksak-check records
-
-# Checks that the documents and configuration comments state only facts about the repository (AGENTS.md Documentation).
-records-check:
-	@pnpm exec soksak-check records
+	@pnpm exec soksak-check docs
 
 # Checks the commit message form of RANGE, which holds one or more revision ranges separated by spaces. Example: make commits-check RANGE=origin/main..HEAD
 commits-check:
@@ -96,22 +92,15 @@ host-allocations:
 	@node scripts/measure-host-allocations.mjs --pid $(PID) --minutes $(or $(MINUTES),10)
 
 # Checks that core, plugin, and sidecar sources do not name each other.
-boundaries:
+boundaries-check:
 	@node scripts/check-boundaries.mjs
 
-# Checks that the sources name every event declared in docs/spec/events.json. The audit of the logs that window checks leave is
-# `node scripts/check-events.mjs --logs <configuration folder>...` (docs/operations/examples.md).
+# Checks that the sources name every event declared in docs/spec/events.json, and applies the event source rules of the kit to the sources (docs/spec/logging.md#event-sources):
+# a source of occurrences has an event in its function or a reason marker, and a rule that waits for an entrance item is printed with its count. `--list` also prints each pending finding.
+# The audit of the logs that window checks leave is `node scripts/check-events.mjs --logs <configuration folder>...` (docs/operations/examples.md).
 events-check:
 	@node scripts/check-events.mjs
-
-# Applies the census rules of the kit to the sources (docs/spec/logging.md#census): a source of occurrences has an event
-# in its function or a reason marker, and a rule that waits for an entrance item is printed with its count. `--list` also prints each pending finding.
-census-check:
-	@pnpm exec soksak-check census --config scripts/census.json
-
-# Checks that every error record whose place is written in the sources of the hosts and the native library has a row in the failure table of docs/spec/diagnostics.md.
-failures-check:
-	@node scripts/check-failure-table.mjs
+	@pnpm exec soksak-check events --config scripts/event-sources.json
 
 # The TLS certificates of the registry window check (docs/operations/examples.md). Creates a certificate authority owned by the check and a server certificate for 127.0.0.1.
 # openssl reads only the configuration file that the target writes, so no machine configuration adds an extension.
@@ -152,7 +141,7 @@ browser-frontend: registry
 browser-example: browser-frontend
 	@python3 -m http.server 8749 -d apps/browser/build
 
-e2e-check:
+e2e-source-check:
 	@node scripts/check-e2e.mjs
 
 # Checks that UI operations run commands and that every displayed name is declared and registered.
@@ -160,7 +149,7 @@ exposure-check:
 	@node scripts/check-exposure.mjs
 
 # Checks the connection of the full source and test lists. It is separate from the result of behavior verification.
-parity-check:
+test-inventory-check:
 	@node scripts/check-test-parity.mjs
 
 # Mechanically checks that the public API surfaces of the two hosts (call names, connections, endpoint methods) are the same (docs/spec/host-parity.md).
@@ -223,16 +212,16 @@ node-repeat:
 	@node scripts/node-repeat.mjs --file '$(FILE)' --name='$(NAME)' --count $(COUNT) --timeout $(TEST_TIMEOUT)
 
 # Runs COMMAND with a temporary folder of its own and fails when it leaves a soksak- entry there, except the window-check
-# configuration folders soksak-check-* (docs/operations/examples.md#temporary-folders): make temp-audit COMMAND="pnpm test"
-temp-audit:
-	@test -n '$(COMMAND)' || { echo 'temp-audit requires COMMAND=<command>' >&2; exit 2; }
-	@node scripts/temp-audit.mjs /bin/sh -c '$(COMMAND)'
+# configuration folders soksak-check-* (docs/operations/examples.md#temporary-folders): make temp-check COMMAND="pnpm test"
+temp-check:
+	@test -n '$(COMMAND)' || { echo 'temp-check requires COMMAND=<command>' >&2; exit 2; }
+	@node scripts/check-temp.mjs /bin/sh -c '$(COMMAND)'
 
 # Checks that operating-system-specific code exists only under platform/<os>/.
-platforms:
+platforms-check:
 	@node scripts/check-platforms.mjs
 
-# Compiles the sources of the two native hosts for the Windows target in the default build and the diagnostic build. The file layout checks of platforms and hosts-check
+# Compiles the sources of the two native hosts for the Windows target in the default build and the diagnostic build. The file layout checks of platforms and host-layout-check
 # do not check the Windows implementation (platform/windows/) or the operating system API use of shared code, so this check
 # verifies them by compilation. Host tests run only on macOS (docs/spec/host-contract.md), so they are not compiled.
 WINDOWS_GOARCH      = arm64
@@ -245,23 +234,23 @@ windows-build-check:
 	@echo "PASS: wailsv3 diagnostics host for windows/$(WINDOWS_GOARCH)"
 
 # Checks that the file structures of the two native hosts and the two native apps differ only in the allowed ways.
-hosts-check: windows-build-check
+host-layout-check: windows-build-check
 	@node scripts/check-hosts.mjs
 
-preflight:
+toolchain-check:
 	@scripts/check-build-environment.sh
 
-prepare: preflight
+prepare: toolchain-check
 	@CI=1 PNPM_DISABLE_SELF_UPDATE_CHECK=1 pnpm install --frozen-lockfile
 
 build: prepare
 	@pnpm build
 
-verify: prepare docs-check exposure-check parity-check host-parity-check
+verify: prepare docs-check exposure-check test-inventory-check host-parity-check
 	@pnpm test
 	@$(MAKE) language-test
 	@pnpm breaks
-	@pnpm build
+	@$(MAKE) --no-print-directory build
 	@git diff --exit-code -- packages/soksak/dist
 
 # Applications. The two native apps and the sidecar executables are placed in target/{debug,release}. Each app assembles its frontend from environment.json and stages the
@@ -275,7 +264,7 @@ verify: prepare docs-check exposure-check parity-check host-parity-check
 COMMA := ,
 # The declared core release candidate is the RELEASE constant of scripts/check-versions.mjs.
 DIAGNOSTIC_RELEASE := $(filter 0.0.%,$(shell sed -n 's/^export const RELEASE = "\(.*\)";$$/\1/p' scripts/check-versions.mjs))
-.PHONY: native-darwin native-darwin-fetch registry registry-install install-plugins browser-frontend browser-example frontend-wailsv3 frontend-tauriv2 frontend-wailsv3-core frontend-tauriv2-core host-test-wailsv3 host-test-tauriv2 host-contract-check release-check-wailsv3 release-check-tauriv2 rust-format-check rust-clippy-check go-format-check \
+.PHONY: native-darwin native-darwin-fetch registry registry-install install-plugins browser-frontend browser-example frontend-wailsv3 frontend-tauriv2 frontend-wailsv3-core frontend-tauriv2-core host-contract-check-wailsv3 host-contract-check-tauriv2 host-contract-check release-check-wailsv3 release-check-tauriv2 rust-format-check rust-clippy-check go-format-check \
         tauriv2 tauriv2-release tauriv2-build tauriv2-build-release \
         wailsv3 wailsv3-release wailsv3-build wailsv3-build-release \
         e2e e2e-activation e2e-real e2e-person e2e-section-design examples-size
@@ -434,7 +423,7 @@ native-test: native-darwin frontend-wailsv3-core frontend-tauriv2-core
 	@$(MAKE) rust-clippy-check
 	@$(MAKE) go-format-check
 	@$(MAKE) -C native/darwin test
-	@$(GO_ENV) $(CARGO_ENV) node scripts/check-host-contract.mjs --go-ldflags="$(GO_LINK)"
+	@$(MAKE) host-contract-check
 
 # Checks that every Go file the repository tracks is in gofmt form. Reports every file of a different form and fails.
 go-format-check:
@@ -462,10 +451,10 @@ host-contract-check: native-darwin frontend-wailsv3-core frontend-tauriv2-core
 	@$(GO_ENV) $(CARGO_ENV) node scripts/check-host-contract.mjs --go-ldflags="$(GO_LINK)"
 
 # Per-language CI checks use the same selected host contract without discovering or building the other host.
-host-test-wailsv3: native-darwin frontend-wailsv3-core
+host-contract-check-wailsv3: native-darwin frontend-wailsv3-core
 	@$(GO_ENV) node scripts/check-host-contract.mjs --host wailsv3 --go-ldflags="$(GO_LINK)"
 
-host-test-tauriv2: native-darwin frontend-tauriv2-core
+host-contract-check-tauriv2: native-darwin frontend-tauriv2-core
 	@$(CARGO_ENV) node scripts/check-host-contract.mjs --host tauriv2
 
 # Release host checks build and audit only the selected application bundle. Registry verification is a separate target.
@@ -484,7 +473,7 @@ release-check-tauriv2: tauriv2-build-release
 # and the native end-to-end target of its tier in a new configuration root under target/e2e: it starts the applications, runs the
 # checks and quits the applications.
 E2E_BUILD = wailsv3-build tauriv2-build registry
-e2e: docs-check e2e-check exposure-check $(E2E_BUILD)
+e2e: docs-check e2e-source-check exposure-check $(E2E_BUILD)
 	@node scripts/e2e-run.mjs --script verify --native e2e $(if $(WHEN_IDLE),--when-idle $(WHEN_IDLE))
 
 e2e-activation: $(E2E_BUILD)

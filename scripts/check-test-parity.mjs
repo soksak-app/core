@@ -61,8 +61,8 @@ lane("run log audit", "js-ts", ["scripts/audit-run.mjs"], ["scripts/test/audit-r
 lane("crash report fault", "js-ts", ["scripts/crash-fault.mjs"], ["scripts/test/crash-fault.test.mjs"]),
 lane("end-to-end run", "js-ts", ["scripts/e2e-run.mjs"], ["scripts/test/e2e-run.test.mjs"]),
 lane("log command audit", "js-ts", ["scripts/audit-log.mjs"], ["scripts/test/audit-log.test.mjs"]),
-lane("temporary folder audit", "js-ts", ["scripts/temp-audit.mjs"], ["scripts/test/temp-audit.test.mjs"]),
-lane("census", "declaration", ["scripts/census.json"], ["scripts/test/census.test.mjs"], { testLanguage: "js-ts" }),
+lane("temporary folder audit", "js-ts", ["scripts/check-temp.mjs"], ["scripts/test/temp.test.mjs"]),
+lane("event source check", "declaration", ["scripts/event-sources.json"], ["scripts/test/event-sources.test.mjs"], { testLanguage: "js-ts" }),
 lane("package bin audit", "js-ts", ["scripts/check-package-bins.mjs"], ["scripts/test/package-bins.test.mjs"]),
 lane("failure table", "js-ts", ["scripts/check-failure-table.mjs"], ["scripts/test/check-failure-table.test.mjs"]),
 lane("language test adapters", "js-ts", ["scripts/language-test-adapters.mjs"], ["scripts/test/test-language-test-adapters.test.mjs", "scripts/test/fixtures/node-color-count.mjs"]),
@@ -2328,7 +2328,7 @@ const FEATURE_LINKS = [
     id: "F258-2",
     implementation: [{ file: "scripts/check-boundaries.mjs", symbol: "export function checkTestPathReads" }],
     tests: [{ file: "scripts/test/check-boundaries.test.mjs", id: "checkTestPathReads refuses a test that reads a path of another core package" }],
-    expected: "make boundaries refuses a test of a core package whose string resolves into another core package, and the shared contract text of the manifest case table is read from docs/spec/cases, which no package owns.",
+    expected: "make boundaries-check refuses a test of a core package whose string resolves into another core package, and the shared contract text of the manifest case table is read from docs/spec/cases, which no package owns.",
     levels: ["unit"],
   },
   {
@@ -3987,7 +3987,7 @@ const FEATURE_LINKS = [
   {
     id: "F388",
     implementation: [
-      { file: "package.json", symbol: "soksak-kit-0.0.11.tgz" },
+      { file: "package.json", symbol: "soksak-kit-0.0.12.tgz" },
     ],
     tests: [
       { file: "scripts/test/workflows.test.mjs", id: "the kit release that core pins defines the presentation mode terms" },
@@ -5194,7 +5194,7 @@ const FEATURE_LINKS = [
     id: "F173",
     implementation: [{ file: ".github/workflows/ci.yml", symbol: "node-tests.mjs --only scripts/" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "ci keeps language host checks independent and gates release on every required job" }],
-    expected: "CI runs the census and fallback tests of the sources on each pushed commit, so a registration outside its entrance or an unexplained default fails the run and is not released.",
+    expected: "CI runs the event source check and fallback tests of the sources on each pushed commit, so a registration outside its entrance or an unexplained default fails the run and is not released.",
     levels: ["unit"],
   },
   {
@@ -5215,7 +5215,7 @@ const FEATURE_LINKS = [
     id: "F169",
     implementation: [{ file: "scripts/check-build-environment.sh", symbol: "node_major=" }],
     tests: [{ file: "scripts/test/check-build-environment.sh", id: "a node executable of the declared major version is accepted" }],
-    expected: "The build runs the major Node version that .node-version declares, and another major version stops the preflight.",
+    expected: "The build runs the major Node version that .node-version declares, and another major version stops the toolchain check.",
     levels: ["unit"],
   },
   {
@@ -5915,7 +5915,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "scripts/test/windows-build-check.test.mjs", id: "the Windows build check compiles the Go host source in the default and diagnostics builds" },
-      { file: "scripts/test/windows-build-check.test.mjs", id: "hosts-check runs the Windows build check" },
+      { file: "scripts/test/windows-build-check.test.mjs", id: "host-layout-check runs the Windows build check" },
       { file: "packages/host/wailsv3/tests/service_process_test.go", id: "TestAServiceProcessOfAnotherUserExists" },
       { file: "packages/host/tauriv2/tests/service_process_test.rs", id: "a_service_process_of_another_user_exists" },
     ],
@@ -6120,12 +6120,12 @@ const FEATURE_LINKS = [
   {
     id: "F74",
     implementation: [
-      { file: "Makefile", symbol: "hosts-check: windows-build-check" },
+      { file: "Makefile", symbol: "host-layout-check: windows-build-check" },
     ],
     tests: [
-      { file: "scripts/test/windows-build-check.test.mjs", id: "hosts-check runs the Windows build check" },
+      { file: "scripts/test/windows-build-check.test.mjs", id: "host-layout-check runs the Windows build check" },
     ],
-    expected: "hosts-check vets the Wails host for Windows and needs no Windows C compiler.",
+    expected: "host-layout-check vets the Wails host for Windows and needs no Windows C compiler.",
     levels: ["unit"],
   },
   {
@@ -7856,7 +7856,7 @@ const FEATURE_LINKS = [
     id: "F298-5",
     implementation: [
       { file: "native/darwin/Makefile", symbol: "NATIVE_E2E_TESTS = " },
-      { file: "Makefile", symbol: "e2e: docs-check e2e-check exposure-check $(E2E_BUILD)" },
+      { file: "Makefile", symbol: "e2e: docs-check e2e-source-check exposure-check $(E2E_BUILD)" },
       { file: "e2e/package.json", symbol: "\"test\": \"node --test test/\"" },
     ],
     tests: [
@@ -7935,7 +7935,7 @@ const FEATURE_LINKS = [
   {
     id: "F325-1",
     implementation: [
-      { file: ".github/workflows/ci.yml", symbol: "run: make -C core host-test-tauriv2" },
+      { file: ".github/workflows/ci.yml", symbol: "run: make -C core host-contract-check-tauriv2" },
     ],
     tests: [
       { file: "scripts/test/workflows.test.mjs", id: "ci keeps language host checks independent and gates release on every required job" },
@@ -10138,7 +10138,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/tauriv2/src/diagnostics_lock_test.rs", id: "a_poisoned_pending_lock_is_reported_without_consuming_the_receiver" },
       { file: "packages/host/tauriv2/src/diagnostics_lock_test.rs", id: "a_pending_start_probe_releases_the_lock_before_receive" },
     ],
-    expected: "The lock census accepts explicit error propagation while preserving findings for discarded errors and unapproved recovery defaults; poisoned identity lifecycle and pending-start locks return explicit errors, and the pending probe releases its guard before the receiving helper reacquires it.",
+    expected: "The lock event source check accepts explicit error propagation while preserving findings for discarded errors and unapproved recovery defaults; poisoned identity lifecycle and pending-start locks return explicit errors, and the pending probe releases its guard before the receiving helper reacquires it.",
     levels: ["unit"],
   },
   {
@@ -10866,7 +10866,7 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // F359 names the release candidate 0.0.27; it changes no runtime capability.
 // F357 ends the group of one runner test through killGroup in its cleanup; it changes no runtime capability.
 // These items change no runtime capability and remain outside this capability-link inventory.
-// F386-7 removes a default value that the census check reported; make census-check is its check.
+// F386-7 removes a default value that the event source check reported; make events-check is its check.
 // F391 states a screen form in the contract; the replay of both sok packages already compares only existing page frames.
 // F389 records the plugin releases and the registry entry for core 0.0.32; it changes no runtime capability of core.
 // F400 removes the build folder of the host contract check; it changes no runtime capability.
@@ -10877,14 +10877,14 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // F433 removes a check; it adds no capability.
 // F431 names the release candidate 0.0.34; it changes no runtime capability.
 // F432 records the plugin releases and the registry entry for core 0.0.34; it changes no runtime capability of core.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F466", "F467", "F465", "F463", "F464", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
+const NON_CAPABILITY_COMPLETIONS = new Set(["F468", "F466", "F467", "F465", "F463", "F464", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66), the window checks of plugins (F110) and the registry listing of the hwp plugin (F141, registry items G37 and G38). Core cannot read
 // those repositories, so they have no link here and each repository checks its own evidence.
 // F167, F224, F287, R3 and R5 wrote the term list, the record check and the release gate, which F355-3-2 moves to the
 // kit; the kit holds their implementation and tests. F239-170, F239-197, F239-247, F273 and F273-1 wrote rules of
-// the census check, which F355-3-5 moves to the kit.
+// the event source check, which F355-3-5 moves to the kit.
 const MOVED_COMPLETIONS = new Set(["F239-170", "F239-197", "F239-247", "F273", "F273-1", "F167", "F224", "F287", "R3", "R5", "F0.3", "F1.4", "F2.1-1", "F2.10", "F2.1", "F2.4-1", "F2.4", "F2.5", "F2.8", "F2.9", "F2", "F3", "F6.3-10", "F6.6-1", "F6.6-2", "F7.14", "F7.15", "F7.16", "F7.17", "F7", "G1.2", "F18", "F19", "F98", "F100", "F101", "F109", "F110", "F203", "F210", "F141"]);
 
 // Completed capabilities whose implementation a later item removed: F68 wrote the WebKit child record, which F196.22

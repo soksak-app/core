@@ -67,7 +67,7 @@ test("registry and workspace lint targets use the tracked Cargo lockfile", { tim
 });
 
 test("per-host checks build only the selected host and core frontend", { timeout: 10000 }, () => {
-  for (const [host, target] of [["wailsv3", "host-test-wailsv3"], ["tauriv2", "host-test-tauriv2"]]) {
+  for (const [host, target] of [["wailsv3", "host-contract-check-wailsv3"], ["tauriv2", "host-contract-check-tauriv2"]]) {
     const output = execFileSync("make", ["-n", "-o", "native-darwin", "-o", "build", target], {
       cwd: workspace, encoding: "utf8",
     });

@@ -51,12 +51,12 @@ test("the plugin API ships no record check, release gate, checklist reader or te
   assert.equal(manifest.exports["./records"], undefined);
 });
 
-test("the plugin API ships no census check or census rules", () => {
+test("the plugin API ships no event source check or event source rules", () => {
   const manifest = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
   assert.equal(manifest.bin?.["soksak-check"], undefined);
-  for (const file of ["census.js", "census-rules.json"]) {
+  for (const file of ["events.js", "event-rules.json"]) {
     assert.ok(!manifest.files.includes(file), file);
     assert.ok(!existsSync(join(packageRoot, file)), file);
   }
-  assert.equal(manifest.dependencies?.ajv, undefined, "only the census check used ajv");
+  assert.equal(manifest.dependencies?.ajv, undefined, "only the event source check used ajv");
 });

@@ -75,7 +75,7 @@ workbench page와 host를 세 갈래로 조사한다:
 - browser plugin: DOM, Network 패널이 보이는 동안 구독하고, status `browser.elements`, `browser.requests`가 관찰되는 동안 구독하고 관찰 없는 읽기에 스냅샷 하나를 받으며, 둘 다 이전과 같은 내용을 그린다.
 - 브라우저: [브라우저 benchmark](#브라우저-benchmark)의 타깃이 사이트마다 각 수치를 보고한다.
 - 메모리: 메인 애플리케이션의 benchmark 타깃이 반복마다 수치를 보고한다.
-- 각 변경은 `make docs-check`와 닿는 구조 검사를 돌린다: `make boundaries`, status에 `make exposure-check`, 스트림 event에 `make events-check`, host에 `make parity-check`.
+- 각 변경은 `make docs-check`와 닿는 구조 검사를 돌린다: `make boundaries-check`, status에 `make exposure-check`, 스트림 event에 `make events-check`, host에 `make test-inventory-check`.
 
 ## 순서
 

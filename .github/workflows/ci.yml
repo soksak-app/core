@@ -65,7 +65,7 @@ jobs:
           GOFLAGS: -mod=readonly
           CARGO_NET_OFFLINE: 'true'
           OFFLINE: '1'
-        run: make -C core host-test-wailsv3
+        run: make -C core host-contract-check-wailsv3
       - name: Go format checks
         env:
           GOPROXY: 'off'
@@ -111,7 +111,7 @@ jobs:
           GOPROXY: 'off'
           GOFLAGS: -mod=readonly
           OFFLINE: '1'
-        run: make -C core host-test-tauriv2
+        run: make -C core host-contract-check-tauriv2
       - name: Rust format and clippy checks
         env:
           CARGO_NET_OFFLINE: 'true'
@@ -224,7 +224,7 @@ jobs:
           CARGO_NET_OFFLINE: 'true'
           CARGO_INCREMENTAL: '0'
           OFFLINE: '1'
-        run: make -C core docs-check boundaries platforms hosts-check exposure-check parity-check host-parity-check events-check census-check
+        run: make -C core docs-check boundaries platforms hosts-check exposure-check parity-check host-parity-check events-check
       - name: Cross-toolchain script tests
         env:
           npm_config_offline: 'true'

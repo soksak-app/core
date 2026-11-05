@@ -76,7 +76,7 @@ Documents and moves named above. Until a gate passes, no behaviour changes.
 - `docs/features.md` and `docs/features.ko.md` line 2014: F236-9 is closed by this decision; the three sub-items of the handoff are its gated follow-ups.
 - `CHANGELOG.md` and `CHANGELOG.ko.md`: the decision, the review rounds, and the answers.
 
-Verification for the documents: `make docs-check` (checks every fragment, so each repoint above is needed), `make parity-check`, and `node --test packages/log-contract/test/*.test.mjs packages/plugin-api/test/*.test.mjs`. Red and Green: `replay-doc.test.mjs` as described. Owner checks for the sok citation edits: `go test ./tests` in `packages/sok/wailsv3` and `cargo test -p soksak-sok-tauriv2 --test replay_test`.
+Verification for the documents: `make docs-check` (checks every fragment, so each repoint above is needed), `make test-inventory-check`, and `node --test packages/log-contract/test/*.test.mjs packages/plugin-api/test/*.test.mjs`. Red and Green: `replay-doc.test.mjs` as described. Owner checks for the sok citation edits: `go test ./tests` in `packages/sok/wailsv3` and `cargo test -p soksak-sok-tauriv2 --test replay_test`.
 
 ## Residual
 

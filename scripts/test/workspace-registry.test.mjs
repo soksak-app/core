@@ -125,7 +125,7 @@ test("a relative output folder of a pack resolves from the working directory, no
   assert.equal(readFileSync(pack.release, "utf8"), out);
 });
 
-// make boundaries reads the plugin ids from the declaration, so the registry build, which reads each plugin.json, rejects a
+// make boundaries-check reads the plugin ids from the declaration, so the registry build, which reads each plugin.json, rejects a
 // declaration that names another id.
 test("a plugin.json that names another id than its declaration fails the registry build with the file and both values", { timeout: 1000 }, () => {
   assert.equal(checkPluginId({ repository: "../plugins/a", id: "a" }, { id: "a" }, "/work/plugins/a/plugin.json"), undefined);

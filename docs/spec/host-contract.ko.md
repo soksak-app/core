@@ -19,7 +19,7 @@ func TestEndpointClosesOnInvalidJSON(t *testing.T) {
 fn invalid_json_closes_connection() {
 ```
 
-테스트 함수 하나는 쉼표로 나눈 여러 사례를 선언할 수 있다. 여덟 개 선언 경로에서 선택된 테스트 함수는 사례를 하나 이상 선언한다: `packages/host/wailsv3/tests/`, `packages/host/wailsv3/src/*_test.go`, `packages/sok/wailsv3/tests/`, `packages/sok/wailsv3/src/*_test.go`, `packages/host/tauriv2/tests/`, `packages/host/tauriv2/src/`, `packages/sok/tauriv2/tests/`, `packages/sok/tauriv2/src/`. 테스트는 단언이 사례의 결과를 확인할 때만 그 사례를 선언한다. Go 선언 inventory는 현재 `GOOS`와 `GOARCH`에서 host-contract의 각 설정에 대해 `go list`가 선택한 `_test.go` 파일의 합집합이다. 모든 설정에서 제외된 파일은 이 platform의 host-contract inventory에 포함하지 않는다. 공유 계약 텍스트는 어느 패키지도 소유하지 않는 `docs/spec/cases`에 있다(manifest 사례표와 log-contract fixture). 테스트는 거기서 읽고, `make boundaries`는 핵심 패키지의 테스트가 다른 핵심 패키지의 경로를 읽는 것을 거부한다.
+테스트 함수 하나는 쉼표로 나눈 여러 사례를 선언할 수 있다. 여덟 개 선언 경로에서 선택된 테스트 함수는 사례를 하나 이상 선언한다: `packages/host/wailsv3/tests/`, `packages/host/wailsv3/src/*_test.go`, `packages/sok/wailsv3/tests/`, `packages/sok/wailsv3/src/*_test.go`, `packages/host/tauriv2/tests/`, `packages/host/tauriv2/src/`, `packages/sok/tauriv2/tests/`, `packages/sok/tauriv2/src/`. 테스트는 단언이 사례의 결과를 확인할 때만 그 사례를 선언한다. Go 선언 inventory는 현재 `GOOS`와 `GOARCH`에서 host-contract의 각 설정에 대해 `go list`가 선택한 `_test.go` 파일의 합집합이다. 모든 설정에서 제외된 파일은 이 platform의 host-contract inventory에 포함하지 않는다. 공유 계약 텍스트는 어느 패키지도 소유하지 않는 `docs/spec/cases`에 있다(manifest 사례표와 log-contract fixture). 테스트는 거기서 읽고, `make boundaries-check`는 핵심 패키지의 테스트가 다른 핵심 패키지의 경로를 읽는 것을 거부한다.
 
 ## 검사
 
@@ -726,7 +726,7 @@ fn invalid_json_closes_connection() {
 | `images.calls.name-the-call` | 인자 해석 뒤 image 영역 호출의 실패는 호출 이름 `imageAttach`, `imageFocus`, `imageCaret`, `imageText`, `imageDetach`를 붙인 `<call>: <reason>`이다. | both |
 | `host-calls.decode.messages` | 인자 decoder는 빠졌거나 `null`인 필수 field, 다른 JSON 형식의 값, 정수 field 범위 밖이거나 소수인 수, `null` 인자, 길이가 다른 고정 길이 배열을 [host 호출](native-host.ko.md#host-호출)의 message로 거부하고, 빠졌거나 `null`인 선택 field는 받는다. | both |
 | `host-calls.native.image-argument-lists` | surface 페이지의 요청 하나와 좌표 넷인 `ImageCaret` 호출과 요청 하나와 텍스트인 `ImageText` 호출은 각자의 인자 목록으로 해석되어 호출자 확인에 닿는다. | wailsv3 only: Wails page runtime은 surface 페이지 호출을 native bridge로 보내고 host가 그 인자 목록을 해석한다. Tauri surface 페이지는 메인 페이지의 명령을 부른다. |
-| `host-calls.decode.every-binding` | 모든 `Host` binding의 모든 인자는 binding이 다른 일보다 먼저 해석하는 raw JSON이므로 framework는 인자를 해석하지 않는다. | wailsv3 only: Go reflection은 실행 중에 binding을 나열한다. `make hosts-check`는 framework 객체가 아닌 모든 Tauri 명령 인자가 `Argument<T>`이기를 요구한다. |
+| `host-calls.decode.every-binding` | 모든 `Host` binding의 모든 인자는 binding이 다른 일보다 먼저 해석하는 raw JSON이므로 framework는 인자를 해석하지 않는다. | wailsv3 only: Go reflection은 실행 중에 binding을 나열한다. `make host-layout-check`는 framework 객체가 아닌 모든 Tauri 명령 인자가 `Argument<T>`이기를 요구한다. |
 | `termination.signal.first-requests-quit-second-ends-process` | 첫 종료 신호는 종료를 요청하고 두 번째 신호는 프로세스를 끝낸다. | both |
 | `termination.signal.begins-the-quit-state` | 첫 종료 신호는 종료를 요청하기 전에 종료 상태를 시작한다. `host.quit`이 시작하는 상태와 같으므로, 그 종료 중의 WebContent process 종료는 오류 줄을 쓰지 않는다. | both |
 | `log.closed.signal-before-quit` | 첫 종료 신호는 quit을 요청하기 전에 원인 `signal`과 번호를 담은 `log.closed`를 저장하므로, quit의 flush가 실행될 때 기록이 로그에 있다. | both |

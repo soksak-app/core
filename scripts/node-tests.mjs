@@ -107,7 +107,7 @@ const REPORTERS = ['--test-reporter=spec', '--test-reporter-destination=stdout',
 
 /**
  * The specification files that the sources of a package read, which its manifest declares in `specFiles` (paths under
- * `docs/spec/`; a path that ends in `/` names a folder). `make boundaries` fails when a source reads a file of docs/spec that its
+ * `docs/spec/`; a path that ends in `/` names a folder). `make boundaries-check` fails when a source reads a file of docs/spec that its
  * package does not declare, so the declaration is complete.
  */
 export function specFilesOf(manifest, where) {

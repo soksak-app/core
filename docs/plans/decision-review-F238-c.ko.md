@@ -26,7 +26,7 @@
 
 SDK 동작은 소유 패키지에서만 검사한다. 플러그인 테스트가 SDK 값을 단언하면 그 단언은 소유 core 테스트로 옮기고, 플러그인은 리터럴 상수나 단언되는 가짜를 쓴다.
 
-명령 분리: `make test`는 플러그인 테스트 스크립트만 실행한다. `make check`는 SDK를 읽는 도구(`soksak-exposure`, `soksak-engines`, `soksak-check census --config`, `soksak-check records`), check 스크립트에 기록된 상수와 SDK `view-start.js`의 SHA-256을 비교하는 검사, 픽스처가 담은 값의 리터럴 일치 검사(`VIEW_IMPORTS` 항목, 화면 메시지 벡터), `build-vendor --check`를 실행한다. 모든 플러그인 저장소는 Makefile에 `check` 대상을 가지며 `pack`은 `check`에 의존한다. 빌드와 검사 스크립트(테스트가 아님)는 SDK 검증기를 호출할 수 있다.
+명령 분리: `make test`는 플러그인 테스트 스크립트만 실행한다. `make check`는 SDK를 읽는 도구(`soksak-exposure`, `soksak-engines`, `soksak-check events --config`, `soksak-check docs`), check 스크립트에 기록된 상수와 SDK `view-start.js`의 SHA-256을 비교하는 검사, 픽스처가 담은 값의 리터럴 일치 검사(`VIEW_IMPORTS` 항목, 화면 메시지 벡터), `build-vendor --check`를 실행한다. 모든 플러그인 저장소는 Makefile에 `check` 대상을 가지며 `pack`은 `check`에 의존한다. 빌드와 검사 스크립트(테스트가 아님)는 SDK 검증기를 호출할 수 있다.
 
 가짜가 SDK에 충실하도록 core가 소유한 계약 사례를 둔다. 계약 사례 하나는 플러그인의 리터럴 가짜가 대신하는 SDK 표면 하나를 덮는다. 뷰 wire(`view-start.js`의 시작 값과 `VIEW_IMPORTS` 항목, 뷰 브리지 메시지, 페이지가 호출하는 `sokView` 멤버), `createBinder`, `screenHash`, `drawList`, 매니페스트와 진단 검증기가 그것이다. 사례는 하나의 순서 있는 단계 목록이다. 단계는 입력과 기대 출력을 가진 호출, 또는 표면이 플러그인에 전달하는 수신 이벤트다. 순수한 호출 하나는 단계 하나짜리 목록이다. core는 이런 표면 전부의 사례를 `packages/plugin-api/contract/`에 리터럴 예제로 공개하고, core `make test`는 모든 사례를 core 자신의 구현에 대해 실행한다. 플러그인의 리터럴 가짜는 표로 구동된다. 복사한 사례의 단계를 들고, 호출은 목록에서 그 위치에서만 답하고, 이벤트는 테스트가 그 위치에 닿았을 때만 전달하며, 그 밖의 것에는 던진다. 그러므로 플러그인 테스트가 관찰하는 동작은 공개된 동작뿐이다. 플러그인 테스트에 필요하지만 core가 공개하지 않은 순서는 core가 먼저 추가한다. 테스트 트리 빌드는 플러그인이 커밋한 표가 나열한 (지정자, export 이름) 짝에 대해서만 SDK import를 그런 가짜로 바꾸고, 가짜는 나열된 이름만 export하며, core 경로는 읽지 않는다. 그 밖의 SDK import가 `ui/`에서 닿으면 빌드가 실패하므로, 플러그인은 그 코드 경로를 빼거나 core가 사례를 먼저 공개한다. 플러그인 테스트는 SDK 코드를 import하거나, 감싸거나, 기록하거나, 호출하지 않는다. 플러그인 `check` 대상은 복사한 각 표를 공개 파일과 비교하고 차이가 있으면 실패한다. 공개된 사례가 없는 표면을 덮는 가짜는 `check`에서 실패한다. 검사는 SDK 파일을 읽을 수 있고, 테스트는 읽을 수 없다.
 
@@ -34,13 +34,13 @@ SDK 동작은 소유 패키지에서만 검사한다. 플러그인 테스트가 
 
 ### 주장
 
-- SDK는 형식과 뷰 브리지를 core에서 이미 검사한다: `packages/plugin-api/test/view-page.test.mjs`(`checkViewPage`), `view.test.mjs`(`createViewBridge`), `binder.test.mjs`(`createBinder`), `view-imports.test.mjs`(`VIEW_IMPORTS`), `view-core-targets.test.mjs`, `events-check.test.mjs`(census 발견 사항, `:26`, `:147`, `:161`), `packages/log-contract/test/screen-hash.test.mjs`(화면 해시 벡터).
+- SDK는 형식과 뷰 브리지를 core에서 이미 검사한다: `packages/plugin-api/test/view-page.test.mjs`(`checkViewPage`), `view.test.mjs`(`createViewBridge`), `binder.test.mjs`(`createBinder`), `view-imports.test.mjs`(`VIEW_IMPORTS`), `view-core-targets.test.mjs`, `events-check.test.mjs`(event source check 발견 사항, `:26`, `:147`, `:161`), `packages/log-contract/test/screen-hash.test.mjs`(화면 해시 벡터).
 - `ui/` 소스를 import하는 테스트는 그 소스를 통해 SDK를 resolve한다. 빌드 출력에서 테스트에 보이는 SDK 지정자를 다시 쓰는 것이 SDK 코드를 테스트 실행에서 빼는 유일한 방법이다.
 - SDK 파일이나 core 데이터의 사본을 담은 픽스처는 테스트 실행에 SDK 바이트를 넣는다. `make check`가 core 파일과 비교하는 리터럴은 허용하지만, 사본은 허용하지 않는다.
 
 ### 근거(형제 `../plugins/*`, `main` 브랜치)
 
-테스트나 테스트 도우미에서 `@soksak/plugin-api`를 import하는 파일(17개): `appview/test/manifest.test.mjs`; `browser/test/{address-input,empty-state,manifest,page}.test.mjs`(`page.test.mjs:5`가 `INTERACTIVE`를, `address-input:5`와 `empty-state:5`가 `createBinder`를 import); `editor/test/{editor,view,manifest}.test.mjs`(`editor.test.mjs:6`이 `createBinder`를, `view.test.mjs:7`이 `VIEW_IMPORTS`와 `checkViewPage`를 import); `editor/test/view-host.mjs`; `files/test/manifest.test.mjs`; `hwp/test/hwp.test.mjs:6`(`createBinder`, `validateManifest`; `:158`이 `validateManifest`를 호출); `shell/test/{manifest,view}.test.mjs`(`view.test.mjs:7`이 `VIEW_IMPORTS`와 `checkViewPage`); `terminal/test/{census,manifest,terminal}.test.mjs`(`terminal.test.mjs:4`가 `createBinder`, `manifest.test.mjs:4`가 `validateDiagnostics`와 `validateManifest`를 import); `flowmark/ui/view.test.mjs:7`(`VIEW_IMPORTS`, `checkViewPage`).
+테스트나 테스트 도우미에서 `@soksak/plugin-api`를 import하는 파일(17개): `appview/test/manifest.test.mjs`; `browser/test/{address-input,empty-state,manifest,page}.test.mjs`(`page.test.mjs:5`가 `INTERACTIVE`를, `address-input:5`와 `empty-state:5`가 `createBinder`를 import); `editor/test/{editor,view,manifest}.test.mjs`(`editor.test.mjs:6`이 `createBinder`를, `view.test.mjs:7`이 `VIEW_IMPORTS`와 `checkViewPage`를 import); `editor/test/view-host.mjs`; `files/test/manifest.test.mjs`; `hwp/test/hwp.test.mjs:6`(`createBinder`, `validateManifest`; `:158`이 `validateManifest`를 호출); `shell/test/{manifest,view}.test.mjs`(`view.test.mjs:7`이 `VIEW_IMPORTS`와 `checkViewPage`); `terminal/test/{event source check,manifest,terminal}.test.mjs`(`terminal.test.mjs:4`가 `createBinder`, `manifest.test.mjs:4`가 `validateDiagnostics`와 `validateManifest`를 import); `flowmark/ui/view.test.mjs:7`(`VIEW_IMPORTS`, `checkViewPage`).
 
 `@soksak/shared` 지정자를 쓰는 테스트 파일: `editor/test/editor.test.mjs:184`와 `:198`; `editor/test/fixtures/upper-gutter.mjs:2`; `editor/test/shared-modules.mjs`.
 
@@ -54,7 +54,7 @@ SDK 동작은 소유 패키지에서만 검사한다. 플러그인 테스트가 
 
 resolver hook: `editor/test/shared-modules.mjs:4-18`(`registerHooks`, `POINT` `@soksak/shared/editor.extension/`), `editor/package.json:23`이 `--import`로 실행.
 
-`make test` 안의 SDK 도구: `editor/Makefile:16-20`과 `terminal/Makefile:16-20`(`soksak-exposure`, `soksak-engines`, `soksak-check census --config`); `flowmark/Makefile:10-14`(`soksak-engines`, `soksak-check census`, `soksak-check records`). `build-vendor --check`는 `editor/package.json:22`와 `files/package.json`의 `scripts.test`에서 실행된다.
+`make test` 안의 SDK 도구: `editor/Makefile:16-20`과 `terminal/Makefile:16-20`(`soksak-exposure`, `soksak-engines`, `soksak-check events --config`); `flowmark/Makefile:10-14`(`soksak-engines`, `soksak-check events`, `soksak-check docs`). `build-vendor --check`는 `editor/package.json:22`와 `files/package.json`의 `scripts.test`에서 실행된다.
 
 Makefile: 어떤 저장소도 `check` 대상을 정의하지 않는다(각 `Makefile` 확인).
 
@@ -83,10 +83,10 @@ CI: `ci.yml:23`이 `appview`, `browser`, `editor`, `files`, `hwp`, `shell`, `ter
 8. SDK 검증기는 테스트가 아니라 플러그인 빌드 스크립트(`scripts/build-test.mjs` 또는 기존 빌드)에서 실행한다:
    - `validateManifest`는 `appview`, `browser`, `editor`, `files`, `hwp`(`hwp/test/hwp.test.mjs:158`), `shell`, `terminal`(`manifest.test.mjs:22`)에서; `validateDiagnostics`는 `terminal`(`manifest.test.mjs:4`)에서. 매니페스트 테스트는 빌드 출력을 읽고 값을 리터럴로 검사한다.
    - `checkViewPage`는 뷰 페이지가 있는 `editor`, `shell`, `flowmark`에서 빌드가 호출한다.
-9. `terminal/test/census.test.mjs`를 삭제한다(`:24`, `:29`). 플러그인 소스의 census는 `make check`에서 실행한다. 프로브 사례는 `packages/plugin-api/test/events-check.test.mjs`(`:26`, `:147`, `:161`)가 다룬다.
+9. `terminal/test/event-sources.test.mjs`를 삭제한다(`:24`, `:29`). 플러그인 소스의 event source 검사는 `make check`에서 실행한다. 프로브 사례는 `packages/plugin-api/test/events-check.test.mjs`(`:26`, `:147`, `:161`)가 다룬다.
 10. flowmark는 테스트와 도우미를 `ui/`에서 `test/`로 옮기고, `test` 스크립트를 `node scripts/build-test.mjs && node --test test/`로 바꾼다. `ui/`에는 페이지 파일만 배포한다.
 11. Makefile: 각 플러그인 저장소(`appview`, `browser`, `editor`, `files`, `hwp`, `shell`, `terminal`, `flowmark`)는 12번 목록을 실행하는 `check` 대상을 추가한다. `pack`은 `check`를 선행 조건으로 가진다. `pack`이 이미 `studio`에 의존하는 `hwp`는 `pack: studio check`다.
-12. `make check`는 `soksak-exposure`, `soksak-engines`, `soksak-check census --config`, `soksak-check records`, view-start SHA-256 비교, 2번·5번·6번·7번 변경의 리터럴 일치 검사, `build-vendor --check`를 실행한다. 각 저장소의 `check` 대상은 자기 파일이 필요로 하는 부분집합을 실행하며, 명세가 저장소와 부분집합을 적는다.
+12. `make check`는 `soksak-exposure`, `soksak-engines`, `soksak-check events --config`, `soksak-check docs`, view-start SHA-256 비교, 2번·5번·6번·7번 변경의 리터럴 일치 검사, `build-vendor --check`를 실행한다. 각 저장소의 `check` 대상은 자기 파일이 필요로 하는 부분집합을 실행하며, 명세가 저장소와 부분집합을 적는다.
 13. CI와 릴리스는 저장소별로 적는다(파일이 없는 저장소에는 파일이 있다고 가정하지 않는다).
     - `appview`, `browser`, `editor`, `files`, `hwp`, `terminal`: `ci.yml`과 `release.yml`이 `make test` 뒤에 `make check`를 실행한다.
     - `shell`: `ci.yml`이 `make test` 뒤에 `make check`를 실행한다. `release.yml`이 없으므로 sub-item은 이를 소유자 `shell`의 열린 결함으로 기록하며, `make pack`은 손으로만 실행된다.
@@ -98,14 +98,14 @@ CI: `ci.yml:23`이 `appview`, `browser`, `editor`, `files`, `hwp`, `shell`, `ter
 
 ### 범위 확인
 
-제거되는 각 단언은 core 테스트, 플러그인 내 가짜 기반 단언, 또는 `make check`의 리터럴 검사에 대응한다. 대응표는 테스트를 삭제하기 전에 sub-item에 쓴다. 처음부터 필요한 행: `terminal/test/terminal.test.mjs:3874-3885`(해시 값 일치는 `screen-hash.test.mjs` 벡터에, 페이지 연결은 terminal에 남김), `:3880-3911`(가짜 기반으로 남김), `terminal/test/census.test.mjs:24,29`(`events-check.test.mjs`로), `browser/test/page.test.mjs:5`(`binder.test.mjs`로), binder 단언 `editor/test/editor.test.mjs:6`, `browser/test/address-input.test.mjs:5`, `browser/test/empty-state.test.mjs:5`, `hwp/test/hwp.test.mjs:6`, `terminal/test/terminal.test.mjs:4`(`binder.test.mjs`로), `VIEW_IMPORTS`/`checkViewPage` 단언 `editor/test/view.test.mjs:7`, `shell/test/view.test.mjs:7`, `flowmark/ui/view.test.mjs:7`(`view-imports.test.mjs`와 `view-page.test.mjs`로), 검증기 단언 `hwp/test/hwp.test.mjs:158`과 `terminal/test/manifest.test.mjs:4,22`(`packages/plugin-api/test/` 매니페스트와 진단 테스트로). 행이 없는 단언은 버리지 않는다.
+제거되는 각 단언은 core 테스트, 플러그인 내 가짜 기반 단언, 또는 `make check`의 리터럴 검사에 대응한다. 대응표는 테스트를 삭제하기 전에 sub-item에 쓴다. 처음부터 필요한 행: `terminal/test/terminal.test.mjs:3874-3885`(해시 값 일치는 `screen-hash.test.mjs` 벡터에, 페이지 연결은 terminal에 남김), `:3880-3911`(가짜 기반으로 남김), `terminal/test/event-sources.test.mjs:24,29`(`events-check.test.mjs`로), `browser/test/page.test.mjs:5`(`binder.test.mjs`로), binder 단언 `editor/test/editor.test.mjs:6`, `browser/test/address-input.test.mjs:5`, `browser/test/empty-state.test.mjs:5`, `hwp/test/hwp.test.mjs:6`, `terminal/test/terminal.test.mjs:4`(`binder.test.mjs`로), `VIEW_IMPORTS`/`checkViewPage` 단언 `editor/test/view.test.mjs:7`, `shell/test/view.test.mjs:7`, `flowmark/ui/view.test.mjs:7`(`view-imports.test.mjs`와 `view-page.test.mjs`로), 검증기 단언 `hwp/test/hwp.test.mjs:158`과 `terminal/test/manifest.test.mjs:4,22`(`packages/plugin-api/test/` 매니페스트와 진단 테스트로). 행이 없는 단언은 버리지 않는다.
 
 범위 표의 행(F238-c-12). 각 행은 제거될 plugin 단언, 그 의미를 지키는 core 대상, 대상이 확인하는 것을 적는다. 대상은 2026-10-21에 core(`packages/plugin-api/test/`, `packages/log-contract/test/`)에서 확인했다. 아직 plugin 단언이 제거된 것은 없다.
 
 | 제거될 plugin 단언 | core 대상 | 대상이 지키는 것 |
 | --- | --- | --- |
 | `terminal/test/terminal.test.mjs:3874-3885`(골든 벡터와의 해시 일치) | `packages/log-contract/test/screen-hash.test.mjs`, 이름으로 벡터를 도는 루프(`:13-21`) | 각 이름 벡터의 표준 바이트와 해시. plugin은 페이지 연결(`:3880-3911`)을 가짜에 대해 남긴다(F238-c-18) |
-| `terminal/test/census.test.mjs:24,29` | `packages/plugin-api/test/events-check.test.mjs`(`:26`, `:147`, `:161`) | 선언되지 않은 literal 이름의 emit는 파일과 줄의 발견, event도 이유 표식도 없는 source는 발견, 메시지는 파일, 줄, 규칙을 적는다 |
+| `terminal/test/event-sources.test.mjs:24,29` | `packages/plugin-api/test/events-check.test.mjs`(`:26`, `:147`, `:161`) | 선언되지 않은 literal 이름의 emit는 파일과 줄의 발견, event도 이유 표식도 없는 source는 발견, 메시지는 파일, 줄, 규칙을 적는다 |
 | `browser/test/page.test.mjs:5`(`INTERACTIVE`) | `packages/plugin-api/test/binder.test.mjs`(`:135`) | command 바인딩이나 DOM 이름이 없는 상호작용 요소를 목록한다 |
 | `editor/test/editor.test.mjs:6`, `browser/test/address-input.test.mjs:5`, `browser/test/empty-state.test.mjs:5`, `hwp/test/hwp.test.mjs:6`, `terminal/test/terminal.test.mjs:4`의 binder import | `packages/plugin-api/test/binder.test.mjs`(`:30`, `:51`, `:59`, `:73`, `:97`) | bind는 명령을 표시하고 실행한다. 실패한 실행은 failed로 보고한다. run은 선언되지 않은 명령을 거부한다. delegate는 클릭, 변경, live input을 처리한다 |
 | `editor/test/view.test.mjs:7`, `shell/test/view.test.mjs:7`, `flowmark/ui/view.test.mjs:7`의 `VIEW_IMPORTS`와 `checkViewPage` | `packages/plugin-api/test/view-imports.test.mjs`(`:66`, `:76`)와 `view-page.test.mjs`(`:12`, `:34`, `:43`, `:51`, `:59`) | import map은 정확히 네 항목이고, 모든 import이 제공된다. `checkViewPage`는 차이마다 이름을 붙인다 |
@@ -165,7 +165,7 @@ CI: `ci.yml:23`이 `appview`, `browser`, `editor`, `files`, `hwp`, `shell`, `ter
 
 ### 범위 밖
 
-`check-test-parity.mjs`의 lane과 개수 행(개수는 이 파일을 고치는 변경에서 `make parity-check`로 바뀐다).
+`check-test-parity.mjs`의 lane과 개수 행(개수는 이 파일을 고치는 변경에서 `make test-inventory-check`로 바뀐다).
 
 ---
 
