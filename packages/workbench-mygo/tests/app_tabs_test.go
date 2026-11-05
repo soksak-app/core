@@ -528,7 +528,7 @@ func twoProjectsApp(t *testing.T) (*tabApp, *surfaceHost, *clock) {
 	t.Helper()
 	stored := &surfaceHost{}
 	stored.installed = hiddenTabsDocument
-	stored.common = map[string]any{"memorySaverDelay": memoryDelayMinutes}
+	stored.common = map[string]any{"memorySaverDelay": memoryDelayMinutes, "projectOpening": "tabs"}
 	other := storedProject(tab("tab-dddddd", "plain"), tab("tab-eeeeee", "notes"))
 	other["id"], other["root"], other["identity"] = "prj-b", "/b", "identity of /b"
 	other["spaces"].([]map[string]any)[0]["id"] = "spc-bbbbbb"

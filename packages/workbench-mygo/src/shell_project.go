@@ -299,7 +299,7 @@ func (s *Shell) activateThen(id string, done func()) {
 			return
 		}
 		cids := s.events.BeginOperation("workbench.project.operation", map[string]any{"action": "open", "project": id})
-		s.calls.Caused(cids).Call("projectOpen", map[string]any{"id": id, "root": root, "separate": false, "geometry": nil}, func(value any, err error) {
+		s.calls.Caused(cids).Call("projectOpen", map[string]any{"id": id, "root": root, "separate": s.settings.Value("projectOpening") == "windows", "geometry": nil}, func(value any, err error) {
 			if err != nil {
 				s.fail(err)
 				done()
@@ -322,7 +322,8 @@ func (s *Shell) activateThen(id string, done func()) {
 				s.showThen(id, done)
 				return
 			}
-			done()
+			// Another window holds the project, so this window leaves the library for the project that it shows.
+			s.showThen(s.active, done)
 		})
 	})
 }
@@ -627,8 +628,11 @@ func (s *Shell) dropProject(id string) {
 		s.leavePlace()
 		s.active, s.plane, s.browsing, s.fullscreen = "", nil, true, ""
 		s.options.Located("")
-		if len(s.projects) > 0 {
-			s.activate(s.projects[0].ID)
+		for _, project := range s.projects {
+			if s.windowProjects[project.ID] {
+				s.activate(project.ID)
+				break
+			}
 		}
 	}
 	s.retainSessions()
