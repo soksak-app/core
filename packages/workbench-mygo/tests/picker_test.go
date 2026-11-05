@@ -729,3 +729,58 @@ func TestACloseRequestOfTheWindowAsksAboutAModifiedTab(t *testing.T) {
 		})
 	}
 }
+
+// nodeLabeled returns the first element with the label.
+func nodeLabeled(nodes []ui.ElementNode, label string) (ui.ElementNode, bool) {
+	for _, node := range nodes {
+		if node.Label == label && len(node.Children) == 0 {
+			return node, true
+		}
+		if found, ok := nodeLabeled(node.Children, label); ok {
+			return found, true
+		}
+	}
+	return ui.ElementNode{}, false
+}
+
+// The title of a layer has the tracking of a section name, as .picker__head has on the page.
+func TestTheTitleOfALayerHasTheSectionTracking(t *testing.T) {
+	f, _ := surfaceShell(t)
+	f.click("core.card.add", f.tabbedCards()[0])
+	const title = "새 탭에 무엇을 띄울까"
+	node, ok := nodeLabeled(f.tester.ElementTree(), title)
+	if !ok {
+		t.Fatalf("no title %q in %q", title, f.tester.Texts())
+	}
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	size, _ := declared.Metric("text-caption-at-base")
+	catalog, err := workbench.ReadSettingsCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stack := catalog.Stack(status[map[string]any](t, f, "core.settings")["values"].(map[string]any)["font"].(string))
+	plain := ui.NewTester(func(c *ui.Context) {
+		ui.Row(c).Children(func() { ui.Text(c, title).FontSize(float32(size)).Font(stack) })
+	}, 1000, 100)
+	bare, ok := nodeLabeled(plain.ElementTree(), title)
+	if !ok {
+		t.Fatalf("no plain element of %q", title)
+	}
+	// The element of the title fills the layer, so the width of the text is that of its ink.
+	background := f.pixelOf(node.Bounds.X+node.Bounds.W-1, node.Bounds.Y+1)
+	right := node.Bounds.X
+	for x := node.Bounds.X; x < node.Bounds.X+node.Bounds.W; x++ {
+		for y := node.Bounds.Y; y < node.Bounds.Y+node.Bounds.H; y++ {
+			if f.pixelOf(x, y) != background {
+				right = x
+			}
+		}
+	}
+	ink := right - node.Bounds.X
+	if want := bare.Bounds.W + 0.04*float32(size)*float32(len([]rune(title))-1)/2; ink < want {
+		t.Fatalf("the ink of the title is %v wide, want at least %v", ink, want)
+	}
+}

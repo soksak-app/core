@@ -645,7 +645,7 @@ func (s *Shell) drawPicker(c *ui.Context, width, height float32) {
 			Background(s.palette.Card).Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.radiusMiddle()).Label(layer.title).
 			Shadow(0, metrics.shadowY, metrics.shadowBlur, 0, ui.RGBA(0, 0, 0, metrics.shadowAlpha)).Children(func() {
 			ui.Box(c).Padding(metrics.headTop, metrics.headX, metrics.headBottom, metrics.headX).Children(func() {
-				ui.Text(c, layer.title).FontSize(s.textCaption()).TextColor(s.palette.Muted)
+				ui.Text(c, layer.title).FontSize(s.textCaption()).LetterSpacing(s.textCaption() * s.sectionTracking()).TextColor(s.palette.Muted)
 			})
 			ui.Scroll(c).Grow(1).Column().Children(func() {
 				heading := ""
