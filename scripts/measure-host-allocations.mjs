@@ -1,6 +1,6 @@
 // Measures the allocations of the host process of a running application at start and after each minute.
 //
-// The host is the one application process whose command line has --config-dir DIR, found as `make app-usage` finds it
+// The host is the one application process whose command line has --config-dir DIR, found as `make measure-app-usage` finds it
 // (hostProcess of scripts/measure-app-usage.mjs), so the measurement names the application and not a process id. Before the
 // first reading it sets the trace state of TRACE through the sok of the application (scripts/measure-trace.mjs). The
 // allocations are the live nodes and bytes of every malloc zone that `heap` reports for the process ("All zones: N nodes
@@ -10,7 +10,7 @@
 // scripts/footprints.mjs, with the frames of every window of the application) and printed as {phase: "settled", elapsedMs, pid,
 // footprint}. It makes no judgment. With --b3-out FILE, which needs the 60 minutes of S4, it writes the B3 output of S4
 // (scripts/b3-out.mjs) with the measurement that B3_MEASUREMENTS declares, hostFootprintKb, the settled footprint in KB, and the
-// conditions of the windows. `make host-allocations` runs it.
+// conditions of the windows. `make measure-host-allocations` runs it.
 //
 //   node scripts/measure-host-allocations.mjs --sok PATH --config-dir DIR --trace 0|1 [--minutes N] [--b3-out FILE]
 import { execFileSync, spawnSync } from "node:child_process";
@@ -21,7 +21,7 @@ import { parseArgs } from "node:util";
 import { readPolicy } from "@soksak/window-check/log-policy.mjs";
 import { b3Conditions, writeB3Out } from "./b3-out.mjs";
 import { readFootprint, settledFootprints } from "./footprints.mjs";
-import { PROCESS_TABLE_BYTES, hostProcess, parseProcessTable } from "./measure-app-usage.mjs";
+import { PROCESS_TABLE_BYTES, hostProcess, parseProcessTable, requireOcclusion } from "./measure-app-usage.mjs";
 import { applyTrace, parseTrace, traceSettings } from "./measure-trace.mjs";
 
 /** The keys of the B3 output of host-allocations (scripts/b3-out.mjs), which b3Output gives. */
@@ -43,17 +43,22 @@ export function heapTotals(text) {
 /**
  * Records the totals and the footprint (footprint(pid), in bytes) at start and after each of `minutes` intervals, then reads the
  * footprint until it settles by the rule of G3 with the frames of the windows (readFrames()) and records it; returns the settled
- * footprint in bytes. wait(ms) waits, for the minutes and for the readings of the settle rule.
+ * footprint in bytes. wait(ms) waits, for the minutes and for the readings of the settle rule. readWindows() gives the host.window
+ * reply of each window with its id in `window`: a covered window measures another state, so each record requires no window that is covered.
  */
-export async function measure({ pid, minutes, totals, footprint, readFrames, wait, log, now = Date.now }) {
+export async function measure({ pid, minutes, totals, footprint, readFrames, readWindows, wait, log, now = Date.now }) {
+  const uncovered = async () => requireOcclusion(null, await readWindows());
   const started = now();
+  await uncovered();
   log({ phase: "start", elapsedMs: 0, pid, ...totals(pid), footprint: await footprint(pid) });
   for (let minute = 1; minute <= minutes; minute++) {
     await wait(60_000);
+    await uncovered();
     log({ phase: `minute ${minute}`, elapsedMs: now() - started, pid, ...totals(pid), footprint: await footprint(pid) });
   }
   const { footprints } = await settledFootprints({ readFootprints: async () => new Map([[pid, await footprint(pid)]]), readFrames, sleep: wait });
   const settled = footprints.get(pid);
+  await uncovered();
   log({ phase: "settled", elapsedMs: now() - started, pid, footprint: settled });
   return settled;
 }
@@ -131,6 +136,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     totals: (id) => heapTotals(execFileSync("heap", [String(id)], { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 })),
     footprint: async (id) => (await readFootprint(id, async (command, args) => spawnSync(command, args, { encoding: "utf8" }))).bytes,
     readFrames: async () => windowFrames(replies()),
+    readWindows: async () => replies(),
     wait: (ms) => sleep(ms),
     log: (entry) => process.stdout.write(`${JSON.stringify(entry)}\n`),
   });

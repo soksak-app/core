@@ -119,7 +119,7 @@ ancillary data 를 읽는 방법은 언어마다 다르다. Go 는 표준 라이
 각 결정은 권장 선택과 그 이유를 적는다. 이후 항목이 기대는 의존성이나 계약을 정하므로 선택은 사용자의 몫이다.
 
 - **D1 Toolkit.** 권장: 두 호스트 모두 GTK3 와 WebKitGTK 4.1, Wails 는 `gtk3` build tag [S2]. 이유: Tauri 에는 GTK3 만 있고 [S6][S8], 공유 `native/linux` 라이브러리 하나가 `native/darwin` 처럼 두 호스트에 하나의 구현과 하나의 테스트 세트를 유지한다. Wails 는 v3.1 이 GTK3 build 를 제거한다고 적는다 [S3]. 그 release 가 이 결정을 다시 연다. 그때의 선택은 Tauri 의 GTK3 라이브러리 옆에 Wails 용 GTK4 라이브러리를 두는 것이다.
-- **D2 Display server.** 권장: 애플리케이션이 X11 과 Wayland 에서 동작하도록 GTK 의 backend 선택 위에 만든다(`GDK_BACKEND` 가 backend 를 고른다 [S54]). 창 캡처 [S36][S37]와 `MoveWindow` [S28]는 Wayland 에서 사용자 조작 없이 쓸 수 없으므로 창 검사는 X11 에서 실행한다. backend 가 제공할 수 없는 연산은 `<operation> is not implemented on wayland` 를 반환한다.
+- **D2 Display server.** 권장: 애플리케이션이 X11 과 Wayland 에서 동작하도록 GTK 의 backend 선택 위에 만든다(`GDK_BACKEND` 가 backend 를 고른다 [S54]). 창 캡처 [S36][S37]와 `MoveWindow` [S28]는 Wayland 에서 사용자 조작 없이 쓸 수 없으므로 창 검사는 X11 에서 실행한다. backend 가 제공할 수 없는 연산은 `<operation> is not implemented on wayland` 를 반환한다. Wayland 에서 client 는 toplevel 을 배치하거나 focus 할 수 없다 ([호스트](../spec/hosts.ko.md#wayland-한계)).
 - **D3 글꼴 rasterizer.** 권장: Pango 와 cairo(선택 1). 이유: GTK3 와 WebKitGTK 가 호스트를 실행하는 모든 기계에 이 라이브러리를 이미 요구하고, fontconfig 가 사용자의 글꼴 설정과 fallback 을 적용하며 [S49], C 구조가 `frame.m` 과 대응한다.
 - **D4 프레임 전송.** 권장: seal 한 memfd 를 persistent socket 의 `SCM_RIGHTS` 로 전달. 이유: 다른 프로세스가 열 수 있는 파일 이름이 없고, descriptor 자체가 권한이며, 복사 후 `consumed` 규칙을 바꿀 필요가 없다. 비용은 Rust `recvmsg` 의존성이다 [S53].
 - **D5 표시 대기.** 권장: R2-7-4 를 prototype 으로 두고, DOM 변경 뒤 toplevel frame clock 의 `after-paint` [S24]가 WebKitGTK 의 그 변경 그리기 뒤에 오는지를 tracked test 로 측정한다. 그렇지 않으면 공개 WebKitGTK API 로는 [네이티브 표면](../spec/native-surfaces.ko.md)의 commit 계약을 충족할 수 없으며, 그 발견은 다른 Linux 호스트 항목보다 먼저 사용자에게 돌아간다.
@@ -132,8 +132,8 @@ ancillary data 를 읽는 방법은 언어마다 다르다. Go 는 표준 라이
 각 항목은 R2-7 의 하위 항목이며 시작 전에 [기능](../features.ko.md)에 등록한다. 항목이 달리 적지 않으면 검증은 build-machine Linux lane 에서 실행한다. 항목 1 이 나머지 항목의 가능 여부를 정한다.
 
 1. R2-7-4 — `native/linux` 의 합성과 표시 prototype(D5): `GtkOverlay` 에서 투명한 `WebKitWebView` 를 `GtkDrawingArea` 위에 두고 DOM 을 바꾼 뒤, frame clock 의 `after-paint` 가 그려진 변경 뒤에 오는지를 X11 과 Wayland 에서 기록하는 tracked C 테스트. 검증: 테스트가 측정한 픽셀과 시각. 부정적 결과는 사용자에게 보고한다.
-2. R2-7-5 — Toolkit 과 build(D1): pkg-config 파일을 가진 `native/linux` 라이브러리, Wails `gtk3` tag, Tauri Linux target, `platform/linux/` 를 받아들이는 `make platforms-check` 와 `make host-layout-check`. 검증: 두 호스트가 Linux 에서 build 되고, 시작할 때 구현되지 않은 각 연산의 이름을 대며 실패한다.
-3. R2-7-6 — 프로세스, endpoint, 신호, 표준 오류, 식별, 종료 요청(그룹 1, 25–30). 검증: Linux 의 `make host-contract-check` case. Query End 응답의 tracked test.
+2. R2-7-5 — Toolkit 과 build(D1): pkg-config 파일을 가진 `native/linux` 라이브러리, Wails `gtk3` tag, Tauri Linux target, `platform/linux/` 를 받아들이는 `make check-platform-files` 와 `make check-host-files`. 검증: 두 호스트가 Linux 에서 build 되고, 시작할 때 구현되지 않은 각 연산의 이름을 대며 실패한다.
+3. R2-7-6 — 프로세스, endpoint, 신호, 표준 오류, 식별, 종료 요청(그룹 1, 25–30). 검증: Linux 의 `make test-hosts` case. Query End 응답의 tracked test.
 4. R2-7-7 — 창과 webview(그룹 2–8, 31): 호스트 container 로의 부모 변경, 투명, 표시, 전체 화면, header bar. 검증: module 별 네이티브 C 테스트. 두 호스트가 Linux 에서 준비된 창을 연다.
 5. R2-7-8 — 표면, 도형, 입력 감시, 배치 트랜잭션(그룹 9, 10, 14, 15). 검증: X11 에서의 기하와 표시 창 검사.
 6. R2-7-9 — 문서 영역(그룹 11). 검증: `browser.test.mjs` 의 문서 데이터와 navigation case.

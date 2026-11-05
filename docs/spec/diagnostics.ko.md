@@ -77,7 +77,7 @@ Matching용 image source를 보존하는 동안 diagnostic capture는 snapshot�
 ## 규칙
 
 - 실패 지점의 기록은 아래 표에 있다. 표에 없는 실패 지점은 이 문서의 결함이다.
-- `make docs-check`는 host와 네이티브 라이브러리의 소스가 리터럴 장소로 쓰는 오류 기록마다(`LogError`, `log_error`, `log_failure`, `sp_log_error`의 첫 인자) 장소를 읽고, 아래 표와 그 번역이 `error <layer> <place>`를 적을 것을 요구한다. 소스가 변수나 상수(파일 경로, 호출자가 계산한 label)에서 가져오는 장소는 리터럴 텍스트가 없으므로 검사가 읽지 않는다.
+- `make check-docs`는 host와 네이티브 라이브러리의 소스가 리터럴 장소로 쓰는 오류 기록마다(`LogError`, `log_error`, `log_failure`, `sp_log_error`의 첫 인자) 장소를 읽고, 아래 표와 그 번역이 `error <layer> <place>`를 적을 것을 요구한다. 소스가 변수나 상수(파일 경로, 호출자가 계산한 label)에서 가져오는 장소는 리터럴 텍스트가 없으므로 검사가 읽지 않는다.
 - 기록은 실패가 일어난 순간 그것을 알리는 event가 쓴다. timer나 polling으로 실패를 찾지 않는다. 한 원인은 한 줄을 쓰고, 같은 원인의 반복 보고는 아무것도 더하지 않는다.
 - 각 파일의 크기 한계는 쓰는 쪽이 파일을 열 때 적용한다. 쓰는 쪽이 하나인 performance trace는 쓰는 동안에도 적용하고, 한 descriptor를 여럿이 쓰는 application log와 service log는 다음에 열 때까지 커진다.
 - 입력 경로의 기록은 계층이 본 모든 것을 담는다: 입력한 글자, 모든 범위와 플래그, PTY에 쓰고 읽은 모든 바이트, 전과 후의 입력 문서 상태, 시각. 입력의 결함을 파일만으로 찾으므로 기록은 자르지 않고 계층은 볼 수 있는 값을 빼지 않는다. 파일은 사람의 컴퓨터의 `logs/`에 있고, 사람이 친 글자는 비밀번호를 포함해 그 안에 있다. 결함을 알릴 때 사람이 그 폴더를 넘긴다. 사람이 여는 파일의 내용은 입력이 아니므로 기록하지 않는다.
@@ -101,8 +101,11 @@ Matching용 image source를 보존하는 동안 diagnostic capture는 snapshot�
 | image detach가 10초 안에 응답을 받지 못하거나, page 시작이 이전 page가 받지 못한 실패를 담은 `image-detach-ended` event를 버린다([sidecars](sidecars.ko.md)) | detach마다 한 번 `error host image detach: image detach sidecar <sidecar> surface <surface> image <name> generation <generation> request <request> timed out`, 버린 event의 실패로 `error host image detach: <failure>` |
 | host가 mygo 창의 frame 기록 시계를 읽을 수 없다 | `error host frame record clock: <failure>` |
 | 호스트가 창의 first responder를 읽지 못하거나 `window-responder` event를 전달하지 못한다([exposure](exposure.ko.md#키보드-포커스)) | `error host window responder: <failure>` |
+| 호스트가 자신의 show 로 창을 화면에 올리지 못한다([launch activation](hosts.ko.md#launch-activation)) | `error host window show: <failure>` |
 | Tauri host가 main thread 감시의 heartbeat를 그 thread에 보내지 못한다 | `error host stall watch: heartbeat: <reason>`, 그리고 감시가 끝난다([logging](logging.ko.md), 정지) |
 | `diagnostics.input.source`의 선택한 input source 대기가 응답이 끝난 뒤에 답한다(Tauri host) | `error host input source: the wait answered after its reply ended: <result>` |
+| Windows 에서 입력 대기 timer 가 시작되거나 멈추지 않거나, WebView2 의 pointer 입력이 실패한다 (Tauri host) | `error host input wait: <reason>`, `error host input.pointer: <failure>` |
+| Windows 에서 Tauri host 가 web view 의 프로세스 실패를 읽지 못하거나, 실패가 인자 없이 온다 | `error host web view process: <label>: <reason>`, `error host web view process: a process failure came without its arguments` |
 | document-frame identity callback이 wait 종료 뒤 error를 보고하거나 Go callback이 두 번 이상 호출된다 | Go는 `error host document frame identity callback: <reason>`을 쓴다. Tauri는 늦은 callback failure를 `error host diagnostics: document frame identity callback failed after its request ended: <reason>`으로 쓴다. 첫 callback 결과가 유지된다. |
 | writer가 쓴 뒤 event 파일의 색인을 최신으로 맞출 수 없다(event 구조를 어기는 줄, 손상된 색인, 열 수 없는 파일) | `error host log index: <reason>`, 파일마다 이유가 다를 때마다 한 번([logging](logging.ko.md#색인)) |
 | 파일 `log-policy.json`이 [정책](logging.ko.md#정책)의 형식을 어기거나(JSON이 아닌 글, 모르는 항목, 빠졌거나 계약 밖인 class, 여섯 밖의 level) 정책을 감시하거나 적용할 수 없다 | `error host log policy: <file>: <발견한 것>`, 파일이 바뀔 때마다 한 번. 적용 중인 정책은 그대로 남는다 |

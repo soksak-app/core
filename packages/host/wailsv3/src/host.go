@@ -76,7 +76,10 @@ func Run(assets fs.FS, options host.Options) error {
 // LaunchMacOptions returns the macOS options of the application. Launch Services activates an application that it launches
 // unless the launch requested no activation (`open -g`, kLSLaunchDontSwitch, NSWorkspaceOpenConfiguration.activates false),
 // so the application does not activate itself when it finishes launching, which Wails does by default and which brings a
-// background launch to the front (docs/spec/hosts.md#launch-activation).
+// background launch to the front, and a window shows through the show of the host, because Wails orders every window that it
+// shows front (docs/spec/hosts.md#launch-activation).
 func LaunchMacOptions() application.MacOptions {
-	return application.MacOptions{ActivationPolicy: application.ActivationPolicyRegular, DisableActivationOnLaunch: true}
+	return application.MacOptions{
+		ActivationPolicy: application.ActivationPolicyRegular, DisableActivationOnLaunch: true, WindowShow: host.ShowWindow,
+	}
 }

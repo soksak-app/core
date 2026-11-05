@@ -18,14 +18,14 @@
 // S11 (S1 with a second project window beside it), S12 (S1 after one layout draw that fails), S14 (S0 10 seconds after one character in the
 // library search) and S15 (S1 with the settings window open). --idle waits for the cursor idle timeout of every tab whose plugin exposes a
 // cursor status (the term and terminal tabs) and then for 3 seconds without a change of frames of host.window, or 3 seconds on a window
-// whose frames is null. --step pointer moves the pointer across the window with the moves of input.pointer, which take no permission and
-// leave the cursor and the key window of the person, reads the CPU time over the move and the footprints before and after it, and
+// whose frames is null. --step pointer moves the pointer across the window, already the key window and not occluded, with the moves of
+// input.pointer, which take no permission and leave the cursor, reads the CPU time over the move and the footprints before and after it, and
 // repeats the move in the trace state of the frame records (FRAME_RECORDS) to read the U7 records of a window without a main page. The
 // measurement prints occluded, the trace switch, the log policy, the runtime figures of diagnostics.objects and frames and commandBuffers
 // of each window before the first and after the last CPU reading, and requires occluded false in every window, except the covered window of
 // S9, which must report occluded true. It prints each counter of host.window that every window reports null and an idle wait that read
 // no frame as not measured. Every error is printed to stderr with the process or window it concerns, and the exit status is 1
-// when an error occurred. `make app-usage` runs it.
+// when an error occurred. `make measure-app-usage` runs it.
 //
 // --b3-out FILE writes the B3 output of a measurement of one application without an error to FILE through writeB3Out of
 // scripts/b3-out.mjs: {"measurements": {KEY: number}, "conditions": {refreshRate, backingScale, traceState, logPolicy, window}}. The
@@ -53,7 +53,7 @@
 //   node scripts/measure-app-usage.mjs --sok PATH --config-dir DIR [--config-dir DIR ...] --trace 0|1|frame-records [--interval SECONDS]
 //     [--state S0|S0b|S1|S9|S11|S12|S14|S15] [--idle] [--step pointer] [--b3-out FILE] [--json]
 import { execFile } from "node:child_process";
-import { mkdirSync, readFileSync, realpathSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { createServer } from "node:http";
 import { basename, isAbsolute, join, posix } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -278,6 +278,9 @@ export function windowRows(window, configDir, status) {
     const role = `document ${document.surface}/${document.document}`;
     if (Number.isInteger(document.process) && document.process > 0) {
       rows.push({ role, pid: document.process, attribution: "host.window" });
+    } else if (document.document !== "" && document.process === 0 && document.visible === false) {
+      // A hidden document of a view holds no process until it loads, so it has nothing to read. A shown document and the view itself must have one.
+      continue;
     } else {
       errors.push(`${role} of window ${window} of ${configDir}: no process (${JSON.stringify(document.process)})`);
     }
@@ -320,6 +323,31 @@ export async function untilFramesQuiet({ frames, sleep = delay, intervals = QUIE
     previous = current;
   }
   throw new Error(`untilFramesQuiet needs at least 1 interval, not ${intervals}`);
+}
+
+/**
+ * The milliseconds of the wait of --idle between the last request and the first CPU reading. A request is an event that the gate of the
+ * default policy counts, and a count waits for at most a minute before a writer that sleeps writes it (docs/spec/logging.md#policy). No status
+ * announces the end of that wait, and asking would count again, so the wait is the time itself with the time the writer takes to wake.
+ * Those writes belong to the preparation and are no cost of the settled state.
+ */
+export const COUNT_WAIT_MS = 62000;
+
+/** The number of lines of each event log of the configuration folder, which it reads without a request to the application. */
+export function logLineCounts(configDir) {
+  const logs = join(configDir, "logs");
+  const counts = new Map();
+  for (const name of readdirSync(logs)) {
+    if (name.endsWith(".jsonl")) counts.set(name, readFileSync(join(logs, name), "utf8").split("\n").length - 1);
+  }
+  return counts;
+}
+
+/** The lines that the event logs gained between two readings of logLineCounts. */
+export function recordsOver(before, after) {
+  let gained = 0;
+  for (const [name, lines] of after) gained += lines - (before.get(name) ?? 0);
+  return gained;
 }
 
 /** The tabs whose plugin exposes a cursor status `<plugin>.cursor` with its idle timeout: the term and terminal tabs. */
@@ -411,8 +439,8 @@ async function movePointer(s, path) {
 }
 
 /**
- * The pointer step of G2 and G8 in the window of the session s. It takes no permission and leaves the window and the cursor of the person
- * where they are: it measures the moves of input.pointer across the window with measure({ span }), which reads the settled footprints
+ * The pointer step of G2 and G8 in the window of the session s, already the key window and not occluded, because input.pointer refuses
+ * a move in another window (1006). It takes no permission, activates nothing and leaves the cursor: it measures the moves of input.pointer across the window with measure({ span }), which reads the settled footprints
  * before and after the span and the CPU time over it. It then sets the trace state of the frame records
  * (frameRecords; FRAME_RECORDS of scripts/measure-trace.mjs), repeats the move and, for a window whose host.window reports pageProcess null,
  * reads the U7 records of that move (tail and records), gives them to gestureFigures, and sets the trace state of the measurement again
@@ -635,7 +663,7 @@ function formatMarks(when, marks) {
   ]).join("\n");
 }
 
-function formatReport({ options, context, measurement, gesture, faultLines, idle }) {
+function formatReport({ options, context, measurement, gesture, faultLines, idle, recordsOverCpu }) {
   const sections = [`state ${options.state ?? "none"}, trace ${options.trace}, idle ${options.idle ? 1 : 0}, step ${options.step ?? "none"}`];
   if (context?.exited) {
     sections.push([`exited webcontent processes: ${context.exited.join(", ") || "none"}`,
@@ -651,6 +679,7 @@ function formatReport({ options, context, measurement, gesture, faultLines, idle
     if (lines.length > 0) sections.push(lines.join("\n"));
   }
   if (faultLines !== undefined) sections.push(`error lines of the layout fault: ${faultLines}`);
+  if (recordsOverCpu !== undefined) sections.push(`records written over the cpu interval: ${recordsOverCpu}`);
   if (gesture !== undefined) {
     sections.push(gesture === null
       ? "pointer move under the trace state of the frame records: the window has a main page and no U7 records"
@@ -668,7 +697,7 @@ const RUN_MEASUREMENTS = Object.freeze([
 ]);
 
 /**
- * The keys of the B3 output of make app-usage for each trace state that TRACE takes: one output holds the keys of one trace state, and
+ * The keys of the B3 output of make measure-app-usage for each trace state that TRACE takes: one output holds the keys of one trace state, and
  * the trace state of the frame records (FRAME_RECORDS, with --step pointer) gives pointerMoveP90Ms alone.
  */
 export const B3_MEASUREMENTS = Object.freeze({ 0: RUN_MEASUREMENTS, 1: RUN_MEASUREMENTS, [FRAME_RECORDS]: Object.freeze(["pointerMoveP90Ms"]) });
@@ -699,7 +728,7 @@ function counterChange(name, marks) {
 }
 
 /**
- * The measurements of a B3 record of make app-usage (the keys that the header declares) from one application of measureApps (app), the
+ * The measurements of a B3 record of make measure-app-usage (the keys that the header declares) from one application of measureApps (app), the
  * window marks of that application before and after the CPU interval (marks), the error lines of the layout fault of S12 (faultLines)
  * and the figures of the pointer step (gesture).
  */
@@ -894,7 +923,7 @@ async function windowStatuses(configDir, sok, errors, text) {
  * realpath(path) are the process executor, the timer and the real path, which the tests replace.
  */
 export async function measureApps({
-  sok, configDirs, interval, footprints = "settled", settleAfter = false, span, marks,
+  sok, configDirs, interval, footprints = "settled", settleAfter = false, span, marks, beforeCpu, afterCpu,
   run = execute, sleep = delay, realpath = realpathSync,
 }) {
   if (footprints !== "settled" && footprints !== "at-once") throw new Error(`footprints must be settled or at-once, not ${JSON.stringify(footprints)}`);
@@ -951,12 +980,14 @@ export async function measureApps({
   for (const { row } of measured) row.bytes = first.footprints.get(row.pid) ?? null;
 
   const before = marks ? await marks.before() : undefined;
+  if (beforeCpu) await beforeCpu();
   const cpuBefore = await readCpu();
   const started = performance.now();
   if (span) await span();
   // The fixed sampling interval is the measurement itself; no status notification marks the end of a CPU interval.
   else await sleep(interval * 1000);
   const cpuAfter = await readCpu();
+  if (afterCpu) await afterCpu();
   const elapsed = span ? (performance.now() - started) / 1000 : interval;
   const after = marks ? await marks.after() : undefined;
   for (const { row, where } of measured) {
@@ -1108,8 +1139,19 @@ async function measureOptions(options) {
     };
     for (const mark of await marksOf()) requireOcclusion(state, mark.windows);
     const idleResult = idle ? await waitIdle({ sessions: windowSessions, frames, sleep: delay }) : null;
+    let lines;
+    let recordsOverCpu;
+    const settled = !idle ? {} : {
+      beforeCpu: async () => {
+        await delay(COUNT_WAIT_MS);
+        lines = configDirs.map(logLineCounts);
+      },
+      afterCpu: async () => {
+        recordsOverCpu = configDirs.reduce((sum, configDir, index) => sum + recordsOver(lines[index], logLineCounts(configDir)), 0);
+      },
+    };
     const measure = (extra) => measureApps({
-      sok, configDirs, interval, footprints: context?.footprints ?? "settled", marks: { before: marksOf, after: marksOf }, ...extra,
+      sok, configDirs, interval, footprints: context?.footprints ?? "settled", marks: { before: marksOf, after: marksOf }, ...settled, ...extra,
     });
     let measurement;
     let gesture;
@@ -1149,14 +1191,14 @@ async function measureOptions(options) {
       await sessions[0].s.request("diagnostics.log.flush");
       faultLines = faultErrorCount(readEventErrors(sessions[0].configDir, context.faultLog).errors);
     }
-    return { options, context, measurement, gesture, faultLines, errors, idle: idleResult };
+    return { options, context, measurement, gesture, faultLines, errors, idle: idleResult, recordsOverCpu };
   } finally {
     for (const cleanup of cleanups.reverse()) await cleanup();
   }
 }
 
 /**
- * The B3 output {measurements, conditions} of a measurement of make app-usage. One output holds the keys of one trace state, the state of
+ * The B3 output {measurements, conditions} of a measurement of make measure-app-usage. One output holds the keys of one trace state, the state of
  * its measured interval: with --step pointer, the trace state 0 or 1 gives the keys of the first move without pointerMoveP90Ms, and the trace
  * state FRAME_RECORDS gives pointerMoveP90Ms alone, from the repeated move in that state. The conditions come from b3Conditions of
  * scripts/b3-out.mjs with the window marks of the application before the first CPU reading, which carry the id, the refresh rate, the

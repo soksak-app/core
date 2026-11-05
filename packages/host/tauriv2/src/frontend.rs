@@ -84,7 +84,7 @@ impl port::Frontend for Frontend {
     }
 
     fn show(&self) -> port::Result<()> {
-        self.window.show().map_err(error)
+        crate::platform::show_window(&self.window)
     }
 
     fn focus(&self) -> port::Result<()> {

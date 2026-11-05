@@ -46,7 +46,7 @@ view branch `feat/view-kind-F212.7`은 2026-10-21에 main에 합쳐지고 지워
 
 ### 모든 항목
 
-개발이 먼저다. 항목은 바꾼 것의 소유 검사만 돌린다. 단위 시험(Red와 Green)과 그 항목이 건드리는 구조 검사다. 그다음 `[o]`로 표시하고 다음 항목으로 넘어간다. main에 합칠 때는 충돌 해결의 소유 검사를 돌린다. push된 main의 구조, 형식, clippy 검사는 CI가 돌린다. 전체 모음(`pnpm test`, `make native-test`, `make host-contract-check`, `make verify`), 창 검사, 측정(F212.1-2-2, F212.1-3, F212.7a, F212.7b-1, F212.7c, F212.7d-1, F212.12~F212.14)은 활성 체크리스트의 모든 항목이 끝났을 때 한 번 돌린다. 항목마다, 수정마다, 재귀적으로 돌리지 않는다.
+개발이 먼저다. 항목은 바꾼 것의 소유 검사만 돌린다. 단위 시험(Red와 Green)과 그 항목이 건드리는 구조 검사다. 그다음 `[o]`로 표시하고 다음 항목으로 넘어간다. main에 합칠 때는 충돌 해결의 소유 검사를 돌린다. push된 main의 구조, 형식, clippy 검사는 CI가 돌린다. 전체 모음(`pnpm test`, `make test-native`, `make test-hosts`, `make test-all`), 창 검사, 측정(F212.1-2-2, F212.1-3, F212.7a, F212.7b-1, F212.7c, F212.7d-1, F212.12~F212.14)은 활성 체크리스트의 모든 항목이 끝났을 때 한 번 돌린다. 항목마다, 수정마다, 재귀적으로 돌리지 않는다.
 
 시험 시간 한도와 긴 실행의 진행 출력은 [AGENTS.ko.md](../../AGENTS.ko.md)(검증)의 규칙을 따른다.
 
@@ -72,40 +72,40 @@ view branch `feat/view-kind-F212.7`은 2026-10-21에 main에 합쳐지고 지워
 - branch는 push하지 않는다. 모든 branch는 main에 합치고, push하는 것은 main뿐이다.
 - main에 합치기가 성공한 직후 worktree와 local branch를 지운다. 합치기가 실패했거나 아직 합치지 않은 것은 지우지 않는다. 지우는 조건은 합치기의 성공이다.
 - main에 합칠 수 없는 시험 코드나 탐색 코드는 커밋 전에, 의미가 있으면 cherry-pick하고 아니면 버린다. 바로 지울 수 없으면 지울 조건을 적은 하위 checklist 항목을 등록한다.
-- main에 합치기 전에 main에서 `git fetch`와 `git rev-list --count HEAD..origin/main`을 돌려, 0이 아니면 origin/main을 먼저 합친다. 합친 뒤 main에서 충돌 해결의 소유 검사를 돌린다. main을 push하면 pre-push hook이 `make push-check`를 돌린다.
-- 새 worktree에서는 시험 전에 `make hooks`, `make native-darwin`, `make frontend-tauriv2`를 돌린다.
-- CHANGELOG 충돌은 양쪽 항목을 모두 남긴다. `docs/operations/examples.md`의 기록된 수가 충돌하면 합친 tree에서 `make test-inventory-check`가 출력하는 수를 쓴다.
-- worktree를 옮기면 Tauri build cache가 옛 경로를 갖고 있어 clippy가 실패한다. 그 worktree에서 `cargo clean -p tauri -p soksak-tauriv2`를 돌린다.
+- main에 합치기 전에 main에서 `git fetch`와 `git rev-list --count HEAD..origin/main`을 돌려, 0이 아니면 origin/main을 먼저 합친다. 합친 뒤 main에서 충돌 해결의 소유 검사를 돌린다. main을 push하면 pre-push hook이 `make check-push`를 돌린다.
+- 새 worktree에서는 시험 전에 `make install-hooks`, `make build-native`, `make copy-frontend-tauriv2`를 돌린다.
+- CHANGELOG 충돌은 양쪽 항목을 모두 남긴다. `docs/operations/examples.md`의 기록된 수가 충돌하면 합친 tree에서 `make check-tests`가 출력하는 수를 쓴다.
+- worktree를 옮기면 Tauri build cache가 옛 경로를 갖고 있어 clippy가 실패한다. 그 worktree에서 `cargo clean -p tauri -p sok-tauriv2`를 돌린다.
 - 관문 명령은 `&&`로 잇고, pipe로 잇지 않는다(`make x | tail && ...`). pipe는 마지막 명령의 상태를 돌려주므로 실패해도 이어진 명령이 멈추지 않는다. 출력은 log 파일에 쓰고 종료 상태로 판정하거나 `pipefail`을 켠다.
-- 계약 case나 `packages/host`, `packages/sok`의 시험을 더하거나 건드리는 변경은 개발 중에 소유 Go 또는 Rust 시험을 돌린다. `make host-contract-check`는 체크리스트 완료 때 다른 전체 모음과 함께 한 번 돌린다. merge 뒤 이 검사가 처음 도는 곳은 CI다(F220).
+- 계약 case나 `packages/host`, `packages/sok`의 시험을 더하거나 건드리는 변경은 개발 중에 소유 Go 또는 Rust 시험을 돌린다. `make test-hosts`는 체크리스트 완료 때 다른 전체 모음과 함께 한 번 돌린다. merge 뒤 이 검사가 처음 도는 곳은 CI다(F220).
 
 ### 시험 파일을 더할 때
 
-- `scripts/check-test-parity.mjs`의 lane에 등록하고, `docs/operations/examples.md`(+ko)의 기록된 수를 `make test-inventory-check` 출력에 맞춘다.
-- Go 짝이 없는 Rust 시험은 `docs/spec/hosts.md`(+ko)와 `scripts/check-hosts.mjs`에 허용된 차이 행이 필요하다. 행 H13이 lock 시험을 나열한다.
-- 완료된 기능은 `scripts/check-test-parity.mjs`에 feature link가 필요하다.
+- `scripts/check-tests.mjs`의 lane에 등록하고, `docs/operations/examples.md`(+ko)의 기록된 수를 `make check-tests` 출력에 맞춘다.
+- Go 짝이 없는 Rust 시험은 `docs/spec/hosts.md`(+ko)와 `scripts/check-host-files.mjs`에 허용된 차이 행이 필요하다. 행 H13이 lock 시험을 나열한다.
+- 완료된 기능은 `scripts/check-tests.mjs`에 feature link가 필요하다.
 
 ### 시험 명령
 
 | 무엇 | 명령 |
 |---|---|
 | Node 시험 파일 하나 | `node --test packages/<pkg>/test/<file>.test.mjs` |
-| Node 시험 반복 | `make node-repeat FILE=<file> NAME=<pattern> COUNT=<n>` |
-| Go 시험 | `make go-repeat PACKAGE=./packages/host/go/tests COUNT=1 [TEST=<regexp>]` (`./packages/host/go/src`, `./packages/host/wailsv3/tests`, `./packages/sok/go/tests`도) |
-| Rust 시험 | `make rust-repeat PACKAGE=soksak-host-tauriv2 COUNT=1 [TEST=<name>]`, `PACKAGE=soksak-sok` |
-| Rust 순서 의존 | `make rust-tests-alone PACKAGE=<package>` |
+| Node 시험 반복 | `make repeat-node FILE=<file> NAME=<pattern> COUNT=<n>` |
+| Go 시험 | `make repeat-go PACKAGE=./packages/host/go/tests COUNT=1 [TEST=<regexp>]` (`./packages/host/go/src`, `./packages/host/wailsv3/tests`, `./packages/sok/go/tests`도) |
+| Rust 시험 | `make repeat-rust PACKAGE=soksak-host-tauriv2 COUNT=1 [TEST=<name>]`, `PACKAGE=soksak-sok` |
+| Rust 순서 의존 | `make test-rust-alone PACKAGE=<package>` |
 | Native 시험 | `make -C native/darwin repeat TEST=<name>_test COUNT=<n>` |
-| 문서, link, 번역, 기록 | `make docs-check` |
-| exposure 이름 | `make exposure-check` |
-| event catalog | `make events-check` |
-| host 파일 짝과 허용된 차이 | `make host-layout-check` |
-| 시험 목록 | `make test-inventory-check` |
-| core가 plugin 이름을 쓰지 않음 | `make boundaries-check` |
-| event source 규칙 | `make events-check` |
-| push 관문(commit message) | `make push-check` |
+| 문서, link, 번역, 기록 | `make check-docs` |
+| exposure 이름 | `make check-exposure` |
+| event catalog | `make check-events` |
+| host 파일 짝과 허용된 차이 | `make check-host-files` |
+| 시험 목록 | `make check-tests` |
+| core가 plugin 이름을 쓰지 않음 | `make check-boundaries` |
+| event source 규칙 | `make check-events` |
+| push 관문(commit message) | `make check-push` |
 | view 프로세스 benchmark | `make -C native/darwin benchmark-view-processes` |
 
-전체 suite(`pnpm test`, `make native-test`, `make host-contract-check`, `make verify`, 창 suite)는 항목 완료에 쓰지 않고 활성 체크리스트의 모든 항목이 완료된 뒤 배포 전에 한 번 돌린다. 개발 중에는 바꾼 것의 단위 시험만 돌리고, 간헐 실패의 반복 대상도 그 마지막 통과까지 기다린다.
+전체 suite(`pnpm test`, `make test-native`, `make test-hosts`, `make test-all`, 창 suite)는 항목 완료에 쓰지 않고 활성 체크리스트의 모든 항목이 완료된 뒤 배포 전에 한 번 돌린다. 개발 중에는 바꾼 것의 단위 시험만 돌리고, 간헐 실패의 반복 대상도 그 마지막 통과까지 기다린다.
 
 ### 창 검사와 측정
 
@@ -115,7 +115,7 @@ view branch `feat/view-kind-F212.7`은 2026-10-21에 main에 합쳐지고 지워
 - 창을 활성화하거나 focus하지 않는다. `diagnostics.capture.still`로 캡처하고 `diagnostics.capture.start`와 `diagnostics.capture.stop`으로 녹화한다. 이미지는 원래 해상도로 본다. 이미지는 관찰이지 통과 결과가 아니다.
 - 화면이나 시간 동작은 gesture 전체를 녹화하고, 잰 frame 간격과 좌표를 추적되는 증거로 만든다.
 - 검사 중 application 오류는 검사가 `expectError`로 선언하지 않으면 모두 실패다.
-- 입력기 검사(`make e2e-activation`)는 사람의 승인을 받고만 돌린다.
+- 입력기 검사(`make test-app-activation`)는 사람의 승인을 받고만 돌린다.
 - 시간 한도는 [AGENTS.md](../../AGENTS.ko.md)(검증)를 따른다.
 
 ### 검증이 필요한 결정
@@ -137,7 +137,7 @@ main에서 완료: F218-2.1, F218-2.2, F218-2.3(F218-2.2를 막던 순서 의존
 
 **F218-2.4** — `fix/lock-unwraps-F218-2-4`에서 진행 중. `unwrap`이나 `expect`를 부르는 lock 결과 86곳. 변경과 시험은 같고, Red는 호출 thread의 panic이다.
 
-**F218-2.5** — `rs.lock-result`를 찾은 곳 0으로 켜고 `scripts/event-sources.json`의 pending 항목을 지운다. Green은 `make events-check`가 0을 보고하는 것이다. 그다음 F218-2를 `[o]`로 표시한다.
+**F218-2.5** — `rs.lock-result`를 찾은 곳 0으로 켜고 `scripts/event-sources.json`의 pending 항목을 지운다. Green은 `make check-events`가 0을 보고하는 것이다. 그다음 F218-2를 `[o]`로 표시한다.
 
 **F212.1-2-2** — fixture 답이 files sidecar의 첫 답을 12.4초 기다렸다. `host.trace.sidecar.ready`(F212.1-2-2-6)가 spawn에서 첫 답까지를 잰다. files sidecar의 S31은 커밋되었다. trace를 켜고 F212.1-2의 창 검사를 되풀이하고, `host.trace.sidecar.ready`와 sidecar의 첫 기록을 읽는다. 공백이 sidecar의 첫 기록 이전이면 원인은 프로세스 시작(binary 실행)이다. 잰 시간과 그 원인을 기록한다. 공백이 sidecar 안이면 거기서 고친다.
 
@@ -183,7 +183,7 @@ F212.9는 필요하다. view가 하나도 열려 있지 않을 때 sidebar secti
 - files state를 sidecar로 옮기는 일은 files plugin과 files sidecar 저장소의 항목이다. editor buffer를 옮길지는 통과값 (iv)로 editor 저장소에서 정한다.
 - `engines.soksak` 범위를 가진 plugin release는 F212.15의 core release 뒤에 발행한다. 각 release는 그 plugin 저장소의 항목이며, F212.15가 요구하는 core 버전을 발행할 때까지 미배포로 기록한다.
 
-- core는 코드와 시험에서 plugin 이름을 쓰지 않는다(`make boundaries-check`). 각 plugin 저장소가 자기 source를 검사한다.
+- core는 코드와 시험에서 plugin 이름을 쓰지 않는다(`make check-boundaries`). 각 plugin 저장소가 자기 source를 검사한다.
 - 각 plugin 항목은 release 전에 자기 view를 잰다. (iii) 첫 표시, (v) 배치 변경 뒤 표시, (viii) 끌기다. plugin release는 core release 뒤다.
 - F212.10-editor가 먼저이고, F212.7a가 그 첫 editor view로 통과값 (i), (ii), (iii), (iii-b), (v), (viii)를 잰다.
 

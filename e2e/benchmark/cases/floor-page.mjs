@@ -19,7 +19,7 @@ export const FLOOR_PAGE = Object.freeze({
   folder: fileURLToPath(new URL("../../fixtures/view-drag/floor-page/", import.meta.url)),
 });
 
-/** The workspace registry that `make registry` writes. */
+/** The workspace registry that `make build-registry` writes. */
 export const WORKSPACE_REGISTRY = fileURLToPath(new URL("../../../target/registry/", import.meta.url));
 
 /**

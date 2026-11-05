@@ -34,6 +34,21 @@ mod darwin;
 #[path = "windows/windows.rs"]
 mod windows;
 
+#[cfg(windows)]
+pub use windows::keep_front_on_show;
+
+#[cfg(any(windows, test))]
+#[path = "windows/devtools.rs"]
+mod devtools;
+
+#[cfg(any(windows, test))]
+#[path = "windows/process_failure.rs"]
+pub mod process_failure;
+
+#[cfg(any(windows, test))]
+#[path = "windows/show_rule.rs"]
+mod show_rule;
+
 /// The number of live objects, among those that the shared library attached to windows and webviews, whose lifetime
 /// shows the release of the window and the webview. When a closed window and its webviews are released, the object
 /// count of that window decreases.
@@ -361,6 +376,10 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// main webview ended. The caller puts the window on the screen after this call
     /// (native/darwin/src/window_reveal.h). Call it on the UI thread.
     fn reveal_after_load(&self, window: Handle) -> Result<(), String>;
+    /// Puts the window on the screen without taking the front from another application: it comes to the front of an
+    /// active application, and an application that is not active keeps it behind the front window
+    /// (docs/spec/hosts.md#launch-activation). Call it on the main thread.
+    fn show_window(&self, window: Handle) -> Result<(), String>;
     fn set_main_appearance(&self, view: &PlatformWebview, dark: bool) -> Result<(), String>;
     /// Changes the window to full screen or back, and calls done when the transition ends. A request that arrives
     /// during a transition is handled after that transition ends.

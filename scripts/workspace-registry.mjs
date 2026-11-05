@@ -33,7 +33,7 @@ const DECLARATION = "scripts/workspace-registry.json";
 const REVISIONS = "sidecar-revisions.json";
 // The make variables of each sidecar release of --sidecars diagnostic.
 const DIAGNOSTIC_RELEASE = ["PROFILE=release", "FEATURES=diagnostics"];
-const DIAGNOSTIC_RUN = "make registry SIDECARS=diagnostic";
+const DIAGNOSTIC_RUN = "make build-registry SIDECARS=diagnostic";
 
 const read = (url) => JSON.parse(readFileSync(url, "utf8"));
 
@@ -41,7 +41,7 @@ const folderText = (value) => typeof value === "string" && value !== "" && !valu
 
 /**
  * Checks the declarations of scripts/workspace-registry.json. plugins are {repository, id} (id is the id of the plugin.json of
- * the repository, which make boundaries-check reads without the repository), sidecars are {repository, folder} (folder is the folder
+ * the repository, which make check-boundaries reads without the repository), sidecars are {repository, folder} (folder is the folder
  * in the repository that holds sidecar.json), and packs are registry pack entries. Folders are paths relative to the core checkout.
  */
 export function checkDeclaration(value) {
@@ -185,14 +185,14 @@ export function sourceRevision(dir) {
   return { revision, changes: git(["status", "--porcelain"]) !== "" };
 }
 
-/** Fails unless the options are those of make registry: SIDECARS=diagnostic, and PLUGINS=public only with it. */
+/** Fails unless the options are those of make build-registry: SIDECARS=diagnostic, and PLUGINS=public only with it. */
 export function checkOptions({ sidecars, plugins }) {
   if (sidecars !== undefined && sidecars !== "diagnostic") {
-    throw new Error(`--sidecars must be diagnostic (make registry SIDECARS=diagnostic), not ${JSON.stringify(sidecars)}`);
+    throw new Error(`--sidecars must be diagnostic (make build-registry SIDECARS=diagnostic), not ${JSON.stringify(sidecars)}`);
   }
-  if (plugins !== undefined && plugins !== "public") throw new Error(`--plugins must be public (make registry PLUGINS=public), not ${JSON.stringify(plugins)}`);
+  if (plugins !== undefined && plugins !== "public") throw new Error(`--plugins must be public (make build-registry PLUGINS=public), not ${JSON.stringify(plugins)}`);
   if (plugins !== undefined && sidecars === undefined) {
-    throw new Error("--plugins public lists the sidecar releases of --sidecars diagnostic: make registry SIDECARS=diagnostic PLUGINS=public");
+    throw new Error("--plugins public lists the sidecar releases of --sidecars diagnostic: make build-registry SIDECARS=diagnostic PLUGINS=public");
   }
 }
 

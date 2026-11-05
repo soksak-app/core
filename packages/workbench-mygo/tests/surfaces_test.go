@@ -3,6 +3,7 @@ package workbench_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"slices"
@@ -42,12 +43,17 @@ type surfaceHost struct {
 	window workbench.WindowView
 	// windowFailure is the error of each read of the state of the window.
 	windowFailure error
-	requests      []map[string]any
-	placed        int
-	declared      []string
-	replies       []map[string]any
-	hostName      []string
-	hostNameMu    sync.Mutex
+	// presentFailure and declareFailure are the errors of each presentSurfaces and compositionDeclare.
+	presentFailure error
+	declareFailure error
+	// presentedFailure is the error of each waitPresented, while a surface has not presented.
+	presentedFailure error
+	requests         []map[string]any
+	placed           int
+	declared         []string
+	replies          []map[string]any
+	hostName         []string
+	hostNameMu       sync.Mutex
 	// clipboard is the text of the clipboard.
 	clipboard string
 	debug     debugHost
@@ -84,7 +90,13 @@ func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 		h.order = append(h.order, "syncSurfaces")
 		return map[string]any{"ticket": len(h.requests), "placements": []any{}, "chrome": map[string]any{}}, nil
 	}
+	table["waitPresented"] = func(context.Context, json.RawMessage) (any, error) {
+		return 0, h.presentedFailure
+	}
 	table["presentSurfaces"] = func(context.Context, json.RawMessage) (any, error) {
+		if h.presentFailure != nil {
+			return nil, h.presentFailure
+		}
 		h.placed++
 		h.order = append(h.order, "presentSurfaces")
 		return []any{}, nil
@@ -101,6 +113,9 @@ func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 		return nil, nil
 	}
 	table["compositionDeclare"] = func(_ context.Context, argument json.RawMessage) (any, error) {
+		if h.declareFailure != nil {
+			return nil, h.declareFailure
+		}
 		var request struct{ Surface string }
 		if err := json.Unmarshal(argument, &request); err != nil {
 			return nil, err
@@ -544,67 +559,56 @@ func TestAViewFillsTheCardBetweenItsHeadAndItsFoot(t *testing.T) {
 	}
 }
 
-// The view of a surface stands on whole points inside its slot, also when the lines of the plane lie between points: the framework
-// rounds a fractional edge to the nearest device pixel, which can leave the slot.
-func TestAViewStandsInsideItsSlotOnWholePoints(t *testing.T) {
+// A view fills its slot, also when the lines of the plane lie between device pixels, and the head and the foot of a card touch it: the
+// framework rounds each edge to the nearest device pixel, so a view off its slot would show a device pixel of the card.
+func TestAViewTouchesTheHeadAndTheFootOfItsCard(t *testing.T) {
 	f, stored := surfaceShell(t)
 	stored.elements = true
 	f.run("core.card.focus", map[string]string{"card": f.tabbedCards()[0]})
-	var views []ui.ElementNode
+	grid := status[struct {
+		Cards []struct{ H float64 } `json:"cards"`
+	}](t, f, "core.grid")
+	fractional := false
+	for _, card := range grid.Cards {
+		fractional = fractional || card.H != math.Round(card.H)
+	}
+	if !fractional {
+		t.Fatalf("every card height of %+v is whole, so the test shows nothing", grid.Cards)
+	}
+	scale := float32(stored.window.Scale)
+	device := func(edge float32) float64 { return math.Round(float64(edge * scale)) }
+	var views []ui.Rect
 	var walk func(nodes []ui.ElementNode)
 	walk = func(nodes []ui.ElementNode) {
 		for _, node := range nodes {
 			if _, ok := node.Key.(workbench.SurfaceSlot); ok {
-				views = append(views, node)
+				if len(node.Children) != 1 {
+					t.Fatalf("the slot %+v holds %d elements", node.Bounds, len(node.Children))
+				}
+				if view := node.Children[0].Bounds; view != node.Bounds {
+					t.Errorf("the view %+v does not fill the slot %+v", view, node.Bounds)
+				}
+				views = append(views, node.Children[0].Bounds)
 			}
 			walk(node.Children)
 		}
 	}
 	walk(f.tester.ElementTree())
-	fractional := false
-	for _, slot := range views {
-		fractional = fractional || slot.Bounds.Y != float32(math.Floor(float64(slot.Bounds.Y)))
-		if len(slot.Children) != 1 {
-			t.Fatalf("the slot %+v holds %d elements", slot.Bounds, len(slot.Children))
-		}
-		view := slot.Children[0].Bounds
-		for _, edge := range []float32{view.X, view.Y, view.W, view.H} {
-			if float64(edge) != math.Round(float64(edge)) {
-				t.Fatalf("the view %+v of the slot %+v stands between points", view, slot.Bounds)
+	touched := 0
+	for _, card := range f.tabbedCards() {
+		box, head, foot := f.box("core.card", card), f.box("core.card.header", card), f.box("core.card.status", card)
+		for _, view := range views {
+			if view.X < box.X || view.X+view.W > box.X+box.W || view.Y < box.Y || view.Y+view.H > box.Y+box.H {
+				continue
+			}
+			touched++
+			if device(view.Y) != device(head.Y+head.H) || device(view.Y+view.H) != device(foot.Y) {
+				t.Errorf("the view %+v of %s does not touch the head %+v and the foot %+v at the scale %v", view, card, head, foot, scale)
 			}
 		}
-		if view.X < slot.Bounds.X || view.Y < slot.Bounds.Y || view.X+view.W > slot.Bounds.X+slot.Bounds.W || view.Y+view.H > slot.Bounds.Y+slot.Bounds.H {
-			t.Fatalf("the view %+v leaves the slot %+v", view, slot.Bounds)
-		}
 	}
-	if len(views) == 0 || !fractional {
-		t.Fatalf("no slot stands between points, so the test shows nothing: %+v", views)
-	}
-}
-
-// A web page paints whole points only, so a native view of a fractional height would show the window below its last row.
-func TestAViewStandsOnWholePoints(t *testing.T) {
-	f, stored := surfaceShell(t)
-	stored.elements = true
-	f.run("core.card.focus", map[string]string{"card": f.tabbedCards()[0]})
-	surface := stored.lastSurfaces(t)[anySurface(t, stored)]
-	height := surface["h"].(float64)
-	if height == math.Floor(height) {
-		t.Fatalf("the slot height %v is whole, so the test shows nothing", height)
-	}
-	found := false
-	var walk func(nodes []ui.ElementNode)
-	walk = func(nodes []ui.ElementNode) {
-		for _, node := range nodes {
-			if float64(node.Bounds.H) == math.Floor(height) && float64(node.Bounds.W) == surface["w"].(float64) {
-				found = true
-			}
-			walk(node.Children)
-		}
-	}
-	walk(f.tester.ElementTree())
-	if !found {
-		t.Fatalf("no native view of the height %v stands in the slot of the height %v", math.Floor(height), height)
+	if touched == 0 {
+		t.Fatalf("no view stands in a tabbed card: %+v", views)
 	}
 }
 
@@ -636,7 +640,8 @@ func TestEachStartOfARunTellsEachViewOnce(t *testing.T) {
 				Data    any
 			}
 			if text, found := strings.CutPrefix(line, "viewEvent "); found && json.Unmarshal([]byte(text), &event) == nil && event.Event == "run-start" {
-				if event.Data != nil {
+				// The host call refuses an event whose data is null, as a missing field (docs/spec/native-host.md#host-calls).
+				if data, isObject := event.Data.(map[string]any); !isObject || len(data) != 0 {
 					t.Fatalf("run-start carries %v", event.Data)
 				}
 				counts[event.Surface]++
@@ -933,6 +938,104 @@ func TestALayoutFaultFailsOnlyTheNextDraw(t *testing.T) {
 	}
 	f.tester.SetSize(1100, 800)
 	f.settle()
+}
+
+// The placement after a fault succeeds, so the banner withdraws the failure of the placement, and the record of the failure stays.
+func TestARecoveredPlacementWithdrawsItsError(t *testing.T) {
+	f, _ := surfaceShell(t)
+	f.shell.Registry().Reply("diagnostics.layout.fail", json.RawMessage(`{}`), nil, func(any, error) {})
+	f.settle()
+	f.tester.SetSize(1160, 800)
+	if shown := f.shownErrors(); len(shown) != 1 {
+		t.Fatalf("the fault showed %q", shown)
+	}
+	f.settle()
+	if got := f.status("core.workbench.error"); got != "null" {
+		t.Fatalf("after the placement that succeeded the banner holds %s", got)
+	}
+}
+
+// A window that returns to the lines of the last placement before the next frame recovers as well.
+func TestAFaultOfTheSameLinesIsWithdrawnByTheNextPlacement(t *testing.T) {
+	f, stored := surfaceShell(t)
+	f.tester.SetSize(1160, 800)
+	f.settle()
+	f.shell.Registry().Reply("diagnostics.layout.fail", json.RawMessage(`{}`), nil, func(any, error) {})
+	f.settle()
+	f.tester.SetSize(1100, 800)
+	if shown := f.shownErrors(); len(shown) != 1 {
+		t.Fatalf("the fault showed %q", shown)
+	}
+	f.tester.SetSize(1160, 800)
+	placed := stored.placed
+	f.settle()
+	if stored.placed <= placed {
+		t.Fatal("the frames after the fault placed nothing")
+	}
+	if got := f.status("core.workbench.error"); got != "null" {
+		t.Fatalf("after the window came back the banner holds %s", got)
+	}
+}
+
+// A placement that keeps failing keeps its error, and the first that succeeds withdraws it.
+func TestAPlacementThatKeepsFailingKeepsItsError(t *testing.T) {
+	f, stored := surfaceShell(t)
+	stored.presentFailure = errors.New("the host refused the placement")
+	f.tester.SetSize(1160, 800)
+	f.shownErrors()
+	f.tester.SetSize(1100, 800)
+	f.shownErrors()
+	if got := f.status("core.workbench.error"); !strings.Contains(got, "the host refused the placement") {
+		t.Fatalf("while the placement fails the banner holds %s", got)
+	}
+	stored.presentFailure = nil
+	f.tester.SetSize(1160, 800)
+	f.settle()
+	if got := f.status("core.workbench.error"); got != "null" {
+		t.Fatalf("after the placement that succeeded the banner holds %s", got)
+	}
+}
+
+// While a surface has not presented, the placement of another change leaves the failure, because it is still true. When the surface
+// presents, the next wait withdraws it.
+func TestAFailureStaysUntilTheSurfacesPresent(t *testing.T) {
+	f, stored := surfaceShell(t)
+	stored.presentFailure = errors.New("the current image raster did not present")
+	f.tester.SetSize(1160, 800)
+	f.shownErrors()
+	stored.presentFailure = nil
+	stored.presentedFailure = errors.New("the current image raster did not present")
+	f.tester.SetSize(1100, 800)
+	f.settle()
+	if got := f.status("core.workbench.error"); !strings.Contains(got, "did not present") {
+		t.Fatalf("while the surface has not presented the banner holds %s", got)
+	}
+	stored.presentedFailure = nil
+	time.Sleep(1100 * time.Millisecond)
+	f.settle()
+	if got := f.status("core.workbench.error"); got != "null" {
+		t.Fatalf("after the surface presented the banner holds %s", got)
+	}
+}
+
+// The banner shows the last error of its place. The recovery of a placement withdraws only the failure of that placement.
+func TestARecoveredPlacementLeavesAnotherError(t *testing.T) {
+	f, stored := surfaceShell(t)
+	stored.presentFailure = errors.New("the host refused the placement")
+	f.tester.SetSize(1160, 800)
+	f.shownErrors()
+	stored.presentFailure = nil
+	stored.declareFailure = errors.New("the host refused the declaration")
+	raw, err := json.Marshal(map[string]string{"card": f.tabbedCards()[0], "plugin": "terminal"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.shell.Registry().RunLater("core.card.add-tab", raw, func(any, error) {})
+	f.shownErrors()
+	f.shownErrors()
+	if got := f.status("core.workbench.error"); !strings.Contains(got, "the host refused the declaration") {
+		t.Fatalf("after the placement that succeeded the banner holds %s", got)
+	}
 }
 
 // textScope returns the scope of the status core.text.

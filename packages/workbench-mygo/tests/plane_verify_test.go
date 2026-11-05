@@ -39,10 +39,11 @@ func placingShell(t *testing.T) (*shellFixture, *placingHost) {
 			}
 			placements := []any{}
 			for _, surface := range raw.Surfaces {
-				// The element of the frame stands the view on the whole points inside the slot.
+				// The framework stands the view on the device pixels nearest the slot.
 				x, y := surface["x"].(float64), surface["y"].(float64)
-				left, top := math.Ceil(x), math.Ceil(y)
-				right, bottom := math.Floor(x+surface["w"].(float64)), math.Floor(y+surface["h"].(float64))
+				scale := stored.window.Scale
+				left, top := math.Round(x*scale)/scale, math.Round(y*scale)/scale
+				right, bottom := math.Round((x+surface["w"].(float64))*scale)/scale, math.Round((y+surface["h"].(float64))*scale)/scale
 				placements = append(placements, map[string]any{"id": surface["id"], "visible": surface["visible"],
 					"x": left + stored.moved, "y": top, "w": max(right-left, 0), "h": max(bottom-top, 0)})
 			}
@@ -674,5 +675,41 @@ func TestAReadOfAnOpenWindowThatFailsIsShown(t *testing.T) {
 				t.Fatalf("the workbench shows %q", text)
 			}
 		})
+	}
+}
+
+// core.grid states the cards as the layout states them, between points too: it reads the data that every host shares, and where a window
+// draws a card is its own matter.
+func TestTheGridStatesTheCardsOfTheLayout(t *testing.T) {
+	f, _ := surfaceShell(t)
+	grid := status[struct {
+		Gap   float64              `json:"gap"`
+		Lines map[string][]float64 `json:"lines"`
+		Cards []struct {
+			ID   string  `json:"id"`
+			RawY float64 `json:"y"`
+			RawH float64 `json:"h"`
+			R0   int     `json:"r0"`
+			R1   int     `json:"r1"`
+		} `json:"cards"`
+	}](t, f, "core.grid")
+	fractional := 0
+	for _, card := range grid.Cards {
+		top, bottom := grid.Lines["y"][card.R0], grid.Lines["y"][card.R1]
+		if card.R0 != 0 {
+			top += grid.Gap / 2
+		}
+		if card.R1 != len(grid.Lines["y"])-1 {
+			bottom -= grid.Gap / 2
+		}
+		if math.Abs(card.RawY-top) > 1e-6 || math.Abs(card.RawY+card.RawH-bottom) > 1e-6 {
+			t.Errorf("the card %s is at %v height %v, its lines %v and %v", card.ID, card.RawY, card.RawH, top, bottom)
+		}
+		if bottom != math.Round(bottom) {
+			fractional++
+		}
+	}
+	if fractional == 0 {
+		t.Fatalf("every card of %+v ends on a whole point, so the test shows nothing", grid)
 	}
 }

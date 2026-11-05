@@ -27,6 +27,11 @@ static void setCaptureError(NSString* message);
 static bool hasCaptureError(void);
 static void reportCaptureStreamFailure(SCStream *stream, NSString *message, NSError *error);
 
+// The text of a failed capture call: its description, which the system may localize, and its domain and code, which name the failure.
+static NSString *captureFailureText(NSError *error) {
+    return [NSString stringWithFormat:@"%@ (%@ %ld)", error.localizedDescription, error.domain, (long)error.code];
+}
+
 static dispatch_semaphore_t captureFirstFrame;
 // Completion of the stream start request. ScreenCaptureKit can deliver the first frame before the start completes,
 // and a
@@ -266,7 +271,7 @@ static bool requestCaptureStopAfterStart(SCStream *stream, SPCaptureAttempt *att
     [stream stopCaptureWithCompletionHandler:^(NSError *failed) {
         if (failed != nil) {
             reportCaptureStreamFailure(stream,
-                [NSString stringWithFormat:@"capture did not stop: %@", failed.localizedDescription], failed);
+                [NSString stringWithFormat:@"capture did not stop: %@", captureFailureText(failed)], failed);
         }
         dispatch_semaphore_signal(attempt.stopCompleted);
     }];
@@ -1105,7 +1110,7 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
     }
     if (error != nil) {
         reportCaptureStreamFailure(stream,
-            [NSString stringWithFormat:@"capture stopped with error: %@", error.localizedDescription], error);
+            [NSString stringWithFormat:@"capture stopped with error: %@", captureFailureText(error)], error);
     } else {
         sp_log_info("capture", [NSString stringWithFormat:@"stopped without a delegate error (stream=%p)", stream].UTF8String);
     }
@@ -1410,7 +1415,7 @@ static void followWindowSize(size_t width, size_t height, size_t needWidth, size
         [stream updateConfiguration:config completionHandler:^(NSError *failed) {
             if (failed != nil) {
                 reportCaptureStreamFailure(stream, [NSString stringWithFormat:
-                    @"capture did not follow the window size %zux%zu: %@", needWidth, needHeight, failed.localizedDescription], failed);
+                    @"capture did not follow the window size %zux%zu: %@", needWidth, needHeight, captureFailureText(failed)], failed);
             }
             @synchronized([SPCapture class]) {
                 if (stream == captureStream) captureUpdating = false;
@@ -1437,7 +1442,7 @@ bool sp_capture_open(long windowNumber, bool display, char **errorOut) {
         ^(SCShareableContent *content, NSError *error) {
         if (error != nil) {
             [result completeWithFilter:nil configuration:nil error:
-                [NSString stringWithFormat:@"current-process capture unavailable: %@", error.localizedDescription]];
+                [NSString stringWithFormat:@"current-process capture unavailable: %@", captureFailureText(error)]];
             return;
         }
         for (SCWindow *window in content.windows) {
@@ -1619,7 +1624,7 @@ bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut
                 sampleHandlerQueue:captureQueue
                              error:&error];
     if (error != nil) {
-        NSString *message = [NSString stringWithFormat:@"capture output was not added: %@", error.localizedDescription];
+        NSString *message = [NSString stringWithFormat:@"capture output was not added: %@", captureFailureText(error)];
         setCaptureError(message);
         sp_log_error("capture start", message.UTF8String);
         @synchronized([SPCapture class]) {
@@ -1630,7 +1635,7 @@ bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut
         endCaptureSourceArtifacts();
         [attempt release];
         return captureOperationFailure(errorOut,
-            [NSString stringWithFormat:@"capture output was not added: %@", error.localizedDescription]);
+            [NSString stringWithFormat:@"capture output was not added: %@", captureFailureText(error)]);
     }
     [captureSink startDisplayLinkObservationForWindowNumber:captureWindowNumber];
     // The copied completion block retains the original stream, so its identity is kept after a replacement.
@@ -1649,10 +1654,10 @@ bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut
         }
         [attempt emit:@"start-completion" level:SP_EVENT_DEBUG callbackMachTicks:@(completedAt) sampleType:nil
             statusPresent:NO status:nil displayTimePresent:NO displayTimeMachTicks:nil error:failed
-            reason:failed.localizedDescription];
+            reason:failed != nil ? captureFailureText(failed) : nil];
         if (failed != nil) {
             reportCaptureStreamFailure(stream,
-                [NSString stringWithFormat:@"capture did not start: %@", failed.localizedDescription], failed);
+                [NSString stringWithFormat:@"capture did not start: %@", captureFailureText(failed)], failed);
         }
         dispatch_semaphore_signal(startDone);
         requestCaptureStopAfterStart(stream, attempt);
@@ -1851,7 +1856,7 @@ bool sp_capture_still(long windowNumber, const char *path, char **errorOut) {
     [SCShareableContent getCurrentProcessShareableContentWithCompletionHandler:
         ^(SCShareableContent *content, NSError *error) {
         if (error != nil) {
-            [result complete:NO error:[NSString stringWithFormat:@"current-process capture unavailable: %@", error.localizedDescription]];
+            [result complete:NO error:[NSString stringWithFormat:@"current-process capture unavailable: %@", captureFailureText(error)]];
             return;
         }
         SCWindow *target = nil;
@@ -1877,7 +1882,7 @@ bool sp_capture_still(long windowNumber, const char *path, char **errorOut) {
             completionHandler:^(CGImageRef image, NSError *captureError) {
             if (image == NULL) {
                 [result complete:NO error:[NSString stringWithFormat:@"still capture failed: %@",
-                    captureError.localizedDescription ?: @"no image"]];
+                    captureError != nil ? captureFailureText(captureError) : @"no image"]];
                 return;
             }
             CGImageDestinationRef destination = CGImageDestinationCreateWithURL(

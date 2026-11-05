@@ -13,3 +13,15 @@
 // Call it on the main thread. Returns false when no main web view is registered for the window, and writes
 // an error string that the caller releases with free() to error. On success error is NULL.
 bool sp_window_reveal_after_load(void *window, char **error);
+
+// Puts a window on screen without taking the front from another application.
+//
+// The one value is whether the system holds this application as active (NSRunningApplication). Launch Services
+// activates an application that a person opens, and an activation brings the windows of the application forward, so
+// a window shown before that activation arrives comes forward with it. An active application makes the window key and
+// orders it front. An application that is not active orders the window directly above its own frontmost window, or
+// behind every window when it shows no other window, and leaves a window that is already its only one where it is. The
+// window then is the key window that the application gives the keyboard to when it is activated.
+//
+// Call it on the main thread (docs/spec/hosts.md#launch-activation).
+void sp_window_show(void *window);

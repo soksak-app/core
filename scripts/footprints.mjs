@@ -1,7 +1,7 @@
 // The footprint readings of the measurement targets: the phys_footprint and the phys_footprint_peak of a process that
 // `footprint -p PID -f bytes` prints, and the settle rule of G3 (docs/spec/hosts.md): a footprint is read after two consecutive
 // readings of every process 5 seconds apart differ by less than 1,024 KB, and at least 3 seconds after the last frame of every window
-// whose host.window counts its frames. `make app-usage` and `make host-allocations` read their footprints through this module.
+// whose host.window counts its frames. `make measure-app-usage` and `make measure-host-allocations` read their footprints through this module.
 
 /** The settle rule of G3: the interval of two readings, the bytes that they differ by at most, and the time after the last frame. */
 export const SETTLE_RULE = Object.freeze({ intervalMs: 5000, bytes: 1024 * 1024, quietMs: 3000 });

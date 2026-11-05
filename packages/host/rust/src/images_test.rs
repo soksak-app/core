@@ -1027,3 +1027,56 @@ fn an_image_region_made_under_a_dialog_starts_blurred() {
     crate::modals::open_for_test(&overlay, "menu");
     assert_eq!(seated(&overlay), Some(false), "a menu is open");
 }
+
+// The window event removes the records of a window and closes its surfaces at the supplier before the main-thread step
+// closes the regions, so the release of a region that closes with its window comes after the window closed.
+#[test]
+fn a_release_after_its_window_closed_sends_nothing_and_reports_no_failure() {
+    let closed: Result<Arc<crate::windows::WindowData>, String> =
+        Err("project window is closed".to_string());
+    let mut sent = false;
+    let result = super::send_released(&closed, "view", (1, 2, 3), |_, _| {
+        sent = true;
+        Ok(())
+    });
+    assert_eq!(
+        result,
+        Ok(()),
+        "the supplier already received the close of the surface, so the release has nothing to do"
+    );
+    assert!(
+        !sent,
+        "a message after the close would open the surface again"
+    );
+}
+
+#[test]
+fn a_release_of_an_open_window_sends_the_frame_with_the_root_of_the_window() {
+    let data = Arc::new(crate::windows::WindowData::default());
+    *data.root.lock().unwrap() = "/project".to_string();
+    let mut sent = None;
+    let result = super::send_released(&Ok(data), "view", (1, 2, 3), |root, body| {
+        sent = Some((root, body.get().to_string()));
+        Ok(())
+    });
+    assert_eq!(result, Ok(()));
+    let (root, body) = sent.expect("the release of an open window is sent");
+    assert_eq!(root, "/project");
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&body).unwrap(),
+        serde_json::json!({
+            "image": { "released": { "name": "view", "generation": 1, "raster": 2, "sequence": 3 } }
+        })
+    );
+}
+
+#[test]
+fn a_release_that_fails_in_an_open_window_reports_the_failure() {
+    let open = Ok(Arc::new(crate::windows::WindowData::default()));
+    assert_eq!(
+        super::send_released(&open, "view", (1, 2, 3), |_, _| {
+            Err("sidecars are stopped".to_string())
+        }),
+        Err("sidecars are stopped".to_string())
+    );
+}

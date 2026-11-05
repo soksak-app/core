@@ -1,6 +1,6 @@
 {
   "name": "@soksak/window-check",
-  "version": "0.0.35",
+  "version": "0.0.36",
   "private": true,
   "description": "Harness for window checks against running soksak applications.",
   "type": "module",
@@ -44,7 +44,7 @@
     "text-difference.mjs"
   ],
   "bin": {
-    "soksak-window-repeat": "./repeat.mjs"
+    "sok-repeat": "./repeat.mjs"
   },
   "scripts": {
     "test": "node --test --experimental-test-module-mocks test/*.test.mjs"

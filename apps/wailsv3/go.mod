@@ -22,6 +22,7 @@ require (
 )
 
 // The replacement runs no Go code on the main thread, avoids duplicate
-// transport-error records and rejects callbacks from retired windows while
-// preserving window event routing.
-replace github.com/wailsapp/wails/v3 => github.com/min-0-max/wails/v3 v3.0.0-20261104133706-e821df5be556
+// transport-error records, rejects callbacks from retired windows while
+// preserving window event routing, and gives a window and its web view the
+// size that it was asked for.
+replace github.com/wailsapp/wails/v3 => ../../../wails-fork/v3

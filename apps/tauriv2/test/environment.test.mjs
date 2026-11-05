@@ -26,5 +26,5 @@ test("the bundle and the Tauri configuration declare the release identity of doc
   assert.equal(value("CFBundleIdentifier"), "app.soksak.tauri");
   assert.equal(value("CFBundleName"), "soksak");
   assert.equal(value("CFBundleDisplayName"), "soksak");
-  assert.equal(value("CFBundleExecutable"), "soksak-tauriv2");
+  assert.equal(value("CFBundleExecutable"), "sok-tauriv2");
 });

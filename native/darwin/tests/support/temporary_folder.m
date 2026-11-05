@@ -134,7 +134,7 @@ NSString *temporaryFolder(NSString *prefix) {
         exit(1);
     }
     // NSTemporaryDirectory returns the folder of the user and ignores TMPDIR, so a run that gives the check its own
-    // temporary folder (make temp-check) would not see the folders of the check.
+    // temporary folder (make check-temp-files) would not see the folders of the check.
     NSString *parent = NSProcessInfo.processInfo.environment[@"TMPDIR"];
     if (parent.length == 0) {
         fprintf(stderr, "FAIL: TMPDIR is not set, so the check has no temporary folder\n");

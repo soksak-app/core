@@ -85,7 +85,7 @@ static NSArray<NSString *> *openRegion(void *surface, const char *name, BOOL foc
 }
 
 int main(void) { @autoreleasepool {
-    check(sp_event_set_boot("native-test"), @"the boot identifier of the run is accepted");
+    check(sp_event_set_boot("test-native"), @"the boot identifier of the run is accepted");
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];

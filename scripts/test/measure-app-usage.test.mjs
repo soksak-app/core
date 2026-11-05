@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,6 +11,9 @@ import {
   applicationRows,
   attributeWebKit,
   B3_MEASUREMENTS,
+  COUNT_WAIT_MS,
+  logLineCounts,
+  recordsOver,
   cpuPercent,
   execute,
   faultErrorCount,
@@ -38,7 +41,7 @@ import {
   windowRows,
 } from "../measure-app-usage.mjs";
 
-const DIR = "/Users/tester/Library/Application Support/soksak-check";
+const DIR = "/Users/tester/Library/Application Support/sok-check";
 
 test("parses the cpu time formats of ps", () => {
   assert.equal(parseCpuTime("0:01.23"), 1.23);
@@ -76,7 +79,7 @@ test("parses ps command rows and rejects a malformed row", () => {
 
 test("finds the host by the config-dir argument and skips tools, sidecars and WebKit", () => {
   const table = parseProcessTable([
-    `  10 /Applications/soksak-check.app/Contents/MacOS/soksak --config-dir ${DIR}`,
+    `  10 /Applications/sok-check.app/Contents/MacOS/soksak --config-dir ${DIR}`,
     `  11 node scripts/measure-app-usage.mjs --sok /x/sok --config-dir ${DIR}`,
     `  12 /x/target/debug/sok windows --config-dir ${DIR}`,
     `  13 ${DIR}/sidecars/probe-service/build/probe --config-dir ${DIR}`,
@@ -89,7 +92,7 @@ test("finds the host by the config-dir argument and skips tools, sidecars and We
 test("matches a data folder whose launch path has a doubled slash", () => {
   const launched = DIR.replace("/Library/", "//Library/");
   const table = parseProcessTable([
-    `  10 /Applications/soksak-check.app/Contents/MacOS/soksak --config-dir ${launched} --registry-ca ${launched}/ca.pem`,
+    `  10 /Applications/sok-check.app/Contents/MacOS/soksak --config-dir ${launched} --registry-ca ${launched}/ca.pem`,
     `  11 ${launched}/sidecars/probe/bin/probe --config-dir ${launched}`,
   ].join("\n"));
   assert.deepEqual(hostProcess(table, DIR), { pid: 10 });
@@ -97,10 +100,10 @@ test("matches a data folder whose launch path has a doubled slash", () => {
 });
 
 test("finds the host and the sidecars of a data folder that the processes launch by its real path", () => {
-  const given = "/var/tester/soksak-check";
-  const real = "/private/var/tester/soksak-check";
+  const given = "/var/tester/sok-check";
+  const real = "/private/var/tester/sok-check";
   const table = parseProcessTable([
-    `  10 /Applications/soksak-check.app/Contents/MacOS/soksak --config-dir ${real}`,
+    `  10 /Applications/sok-check.app/Contents/MacOS/soksak --config-dir ${real}`,
     `  11 ${real}/sidecars/probe/bin/probe --x`,
   ].join("\n"));
   assert.deepEqual(hostProcess(table, given, real), { pid: 10 });
@@ -109,7 +112,7 @@ test("finds the host and the sidecars of a data folder that the processes launch
 
 test("reports a missing or duplicate host", () => {
   const none = parseProcessTable("  15 /usr/bin/other --config-dir /elsewhere\n");
-  assert.throws(() => hostProcess(none, DIR), /no host process has --config-dir .*soksak-check/);
+  assert.throws(() => hostProcess(none, DIR), /no host process has --config-dir .*sok-check/);
   const two = parseProcessTable(`  10 /a/soksak --config-dir ${DIR}\n  20 /b/soksak --config-dir ${DIR}\n`);
   assert.throws(() => hostProcess(two, DIR), /2 host processes have --config-dir/);
 });
@@ -250,6 +253,16 @@ test("a window with a main page has its page row, and a page process that is nei
     { rows: [], errors: [`page of window w1 of ${MYGO}: no page process (0)`] });
   assert.deepEqual(windowRows("w1", MYGO, { pageProcess: null }),
     { rows: [], errors: [`page of window w1 of ${MYGO}: host.window reply has no documents array`] });
+});
+
+test("a hidden document that has not loaded has no row and is no error, and a shown document or a view without a process is an error", () => {
+  const started = { surface: "tab-2", document: "", process: 902 };
+  assert.deepEqual(windowRows("w1", MYGO, { pageProcess: null, documents: [started, { surface: "tab-2", document: "page", process: 0, visible: false }] }),
+    { rows: [{ role: "document tab-2/", pid: 902, attribution: "host.window" }], errors: [] });
+  assert.deepEqual(windowRows("w1", MYGO, { pageProcess: null, documents: [{ surface: "tab-2", document: "page", process: 0, visible: true }] }),
+    { rows: [], errors: [`document tab-2/page of window w1 of ${MYGO}: no process (0)`] });
+  assert.deepEqual(windowRows("w1", MYGO, { pageProcess: null, documents: [{ surface: "tab-2", document: "", process: 0, visible: false }] }),
+    { rows: [], errors: [`document tab-2/ of window w1 of ${MYGO}: no process (0)`] });
 });
 
 test("every window must be visible except the covered first window of S9", () => {
@@ -530,6 +543,24 @@ test("the pointer step of a window with a main page repeats the move and reads n
   assert.equal(result.gesture, null);
 });
 
+test("a move that input.pointer refuses fails the pointer step and sets the trace state again", async () => {
+  const calls = [];
+  let moved = 0;
+  const s = fakeSession((kind, window, name) => {
+    if (name === "input.pointer" && ++moved > 61) throw new Error("the window is not active (1006)");
+    return name === "host.window" ? mygoWindow({ frames: 10 }) : null;
+  });
+  await assert.rejects(measurePointer({
+    s,
+    measure: async ({ span }) => { await span(); return { apps: [] }; },
+    frameRecords: async () => { calls.push("frameRecords"); },
+    restore: async () => { calls.push("restore"); },
+    tail: async () => ({}),
+    records: async () => { throw new Error("records read"); },
+  }), /the window is not active \(1006\)/);
+  assert.deepEqual(calls, ["frameRecords", "restore"]);
+});
+
 const URL_BLANK = "http://127.0.0.1:4100/blank";
 
 /**
@@ -710,7 +741,7 @@ function mygoProcesses({ footprints, cpu }) {
   return async (command, args) => {
     const line = [command, ...args].join(" ");
     const ok = (stdout) => ({ status: 0, stdout, stderr: "" });
-    if (line === "ps -axww -o pid=,command=") return ok(`   10 /Applications/soksak-mygo.app/Contents/MacOS/soksak --config-dir ${MYGO}\n   11 ${MYGO}/sidecars/probe/bin/probe\n`);
+    if (line === "ps -axww -o pid=,command=") return ok(`   10 /Applications/sok-mygo.app/Contents/MacOS/soksak --config-dir ${MYGO}\n   11 ${MYGO}/sidecars/probe/bin/probe\n`);
     if (line === `/b/sok windows --config-dir ${MYGO}`) return ok(JSON.stringify([{ window: "w1", ready: true }]));
     if (line === `/b/sok status host.window --window w1 --config-dir ${MYGO}`) return ok(JSON.stringify(mygoWindow()));
     if (line === "/bin/launchctl print pid/10") return ok(`\t\t   300      - \tcom.apple.WebKit.GPU.79E5AEE6-A76D-4B8E-9BE4-197F4E2ACD4D\n\t\t   902      - \tcom.apple.WebKit.WebContent.042944D2\n`);
@@ -758,6 +789,47 @@ test("measureApps reads a mygo application without a page row, settles its footp
   assert.equal(result.seconds, 240);
   assert.deepEqual(result.apps[0].totals.sidecars.bytes, 11 * MB);
   assert.deepEqual(result.apps[0].totals.application.bytes, (10 + 902 + 300) * MB);
+});
+
+test("measureApps waits for the counts after the marks and before the first cpu reading, and counts the records over the interval", async () => {
+  const order = [];
+  let cpuReads = 0;
+  const run = mygoProcesses({
+    footprints: (pid) => [pid * MB, pid * MB * 2],
+    cpu: () => { order.push(`cpu ${++cpuReads}`); return [[10, "0:01.00"], [11, "0:00.50"], [902, "0:02.00"], [300, "0:00.10"]]; },
+  });
+  const result = await measureApps({
+    sok: "/b/sok", configDirs: [MYGO], interval: 240, footprints: "at-once", run, realpath: (path) => path,
+    sleep: async (ms) => { order.push(`sleep ${ms}`); },
+    marks: { before: async () => { order.push("before"); return []; }, after: async () => { order.push("after"); return []; } },
+    beforeCpu: async () => { order.push("counts written"); },
+    afterCpu: async () => { order.push("records read"); },
+  });
+  assert.deepEqual(result.errors, []);
+  const at = (name) => order.indexOf(name);
+  assert.ok(at("before") < at("counts written") && at("counts written") < at("cpu 1") && at("cpu 2") < at("records read") && at("records read") < at("after"), order.join(", "));
+});
+
+test("the wait for the counts is longer than the time a count of the gate waits for a write", () => {
+  const source = readFileSync(fileURLToPath(new URL("../../packages/sok/go/src/event_log.go", import.meta.url)), "utf8");
+  assert.match(source, /const gatedWait = time\.Minute\n/);
+  assert.ok(COUNT_WAIT_MS > 60000);
+});
+
+test("the records of the interval are the lines that the event logs gained, in a file that appeared as well", () => {
+  const folder = mkdtempSync(join(tmpdir(), "records-over-"));
+  try {
+    mkdirSync(join(folder, "logs"));
+    writeFileSync(join(folder, "logs", "host-1-1.jsonl"), "{}\n{}\n");
+    writeFileSync(join(folder, "logs", "host-1-1.stderr"), "not counted\n");
+    const before = logLineCounts(folder);
+    assert.equal(recordsOver(before, logLineCounts(folder)), 0);
+    appendFileSync(join(folder, "logs", "host-1-1.jsonl"), "{}\n");
+    writeFileSync(join(folder, "logs", "files-2-2.jsonl"), "{}\n{}\n");
+    assert.equal(recordsOver(before, logLineCounts(folder)), 3);
+  } finally {
+    rmSync(folder, { recursive: true });
+  }
 });
 
 /** The window marks of a measurement of two windows of the mygo host, before and after the cpu interval. */

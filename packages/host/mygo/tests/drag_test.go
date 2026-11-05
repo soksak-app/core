@@ -8,6 +8,8 @@ package adapter_test
 import (
 	"testing"
 
+	"github.com/egoist/mygo"
+
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
@@ -30,14 +32,21 @@ func TestE2EEachDeliveredDragIsOneStepOfItsCallback(t *testing.T) {
 		x     float64
 		phase int
 	}{{100, 1}, {110, 2}, {120, 2}, {120, 3}} {
+		// The delivery belongs to the main thread, as the delivery of input.pointer does.
 		done := make(chan platform.PointerResult, 1)
-		if err := system.InjectPointer(window.NativeWindow(), input.x, 100, input.phase, 0, 0, 0, 1, 1, func(result platform.PointerResult, _ platform.ButtonHeld) {
-			done <- result
-		}); err != nil {
-			t.Fatal(err)
+		var injected error
+		mygo.RunOnMain(func() {
+			injected = system.InjectPointer(window.NativeWindow(), input.x, 100, input.phase, 0, 0, 0, 1, 1, func(result platform.PointerResult, _ platform.ButtonHeld) {
+				done <- result
+			})
+		})
+		if injected != nil {
+			t.Fatal(injected)
 		}
 		if result := <-done; result != platform.PointerDelivered {
-			t.Fatalf("phase %d: the delivery answered %v", input.phase, result)
+			var hit string
+			mygo.RunOnMain(func() { hit, _ = system.WindowHit(window.NativeWindow(), input.x, 100) })
+			t.Fatalf("phase %d at %v: the delivery answered %v, the window finds %s", input.phase, input.x, result, hit)
 		}
 	}
 	stop()

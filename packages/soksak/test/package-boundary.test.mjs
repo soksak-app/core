@@ -36,7 +36,7 @@ test("the package declares its toolchain", () => {
   assert.match(workspace.packageManager, /^pnpm@\d+[.]\d+[.]\d+$/);
   assert.equal(pkg.type, "module");
   const makefile = readRoot("Makefile");
-  for (const target of ["preflight", "prepare", "build", "verify"]) {
+  for (const target of ["check-tools", "install", "build", "test-all"]) {
     assert.match(makefile, new RegExp(`^${target}:`, "m"));
   }
 });

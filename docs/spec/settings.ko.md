@@ -132,7 +132,7 @@ core 설정은 저마다 한 형식을 받는다. 설정 파일을 읽을 때와
 | `memorySaverDelay` | 5부터 720까지의 정수(분), 전역 범위, 기본값 120: 메모리 절약이 탭을 unload하기 전에 탭이 숨겨져 있는 시간. 다른 값은 `Invalid setting memorySaverDelay: <value>`로 거부하고, 변경은 scheduler를 다시 맞춘다 |
 | `sets`, `links` | [저장되는 세트와 연결](#저장되는-세트와-연결) |
 
-theme catalog와 mode, font, menu 언어와 기본 언어, 그리고 이 설정들의 기본값, 범위, 선택지, switch와 common 전용 key는 `packages/workbench/workbench.json`의 settings에 한 번 선언된다. `settings.js`와 `text-size.js`는 그 파일을 JSON module로 import하고 그중 어느 값도 정의하지 않는다. browser runtime은 common 전용 key를 그 파일에서 import한다. 각 language host library는 그 파일의 사본을 embed하고 common 전용 key를 그 사본에서 읽으며, `make exposure-check`는 사본이 원본과 다르면 실패한다.
+theme catalog와 mode, font, menu 언어와 기본 언어, 그리고 이 설정들의 기본값, 범위, 선택지, switch와 common 전용 key는 `packages/workbench/workbench.json`의 settings에 한 번 선언된다. `settings.js`와 `text-size.js`는 그 파일을 JSON module로 import하고 그중 어느 값도 정의하지 않는다. browser runtime은 common 전용 key를 그 파일에서 import한다. 각 language host library는 그 파일의 사본을 embed하고 common 전용 key를 그 사본에서 읽으며, `make check-exposure`는 사본이 원본과 다르면 실패한다.
 
 플러그인 설정은 그 선언의 형식을 따른다([플러그인](plugins.ko.md)).
 

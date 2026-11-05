@@ -25,9 +25,9 @@ function runPreparation(makefile, bundle) {
 
 test("bundle preparation refuses a running bundle executable before removing Contents", { timeout: 10000, skip: process.platform !== "darwin" }, async () => {
   const temporary = mkdtempSync(join(tmpdir(), "soksak-bundle-preparation-"));
-  const bundle = join(temporary, "soksak-tauriv2.app");
+  const bundle = join(temporary, "sok-tauriv2.app");
   const contents = join(bundle, "Contents");
-  const executable = join(contents, "MacOS", "soksak-tauriv2");
+  const executable = join(contents, "MacOS", "sok-tauriv2");
   const source = join(temporary, "child.c");
   const sentinel = join(contents, "Resources", "preserve-me.txt");
   mkdirSync(dirname(executable), { recursive: true });
@@ -58,7 +58,7 @@ test("bundle preparation refuses a running bundle executable before removing Con
 for (const application of ["wailsv3", "tauriv2"]) {
   test(`${application}: bundle preparation includes the ZXing license`, { timeout: 10000, skip: process.platform !== "darwin" }, () => {
     const temporary = mkdtempSync(join(tmpdir(), "soksak-bundle-license-"));
-    const bundle = join(temporary, `soksak-${application}.app`);
+    const bundle = join(temporary, `sok-${application}.app`);
     try {
       const result = runPreparation(makePreparationMakefile(temporary, application), bundle);
       assert.equal(result.status, 0, `preparation failed: ${result.stderr}`);
@@ -75,7 +75,7 @@ for (const application of ["wailsv3", "tauriv2"]) {
 
 test("bundle preparation recreates Contents when no process uses the bundle", { timeout: 10000, skip: process.platform !== "darwin" }, () => {
   const temporary = mkdtempSync(join(tmpdir(), "soksak-bundle-preparation-idle-"));
-  const bundle = join(temporary, "soksak-tauriv2.app");
+  const bundle = join(temporary, "sok-tauriv2.app");
   const contents = join(bundle, "Contents");
   const sentinel = join(contents, "Resources", "remove-me.txt");
   mkdirSync(dirname(sentinel), { recursive: true });
@@ -99,7 +99,7 @@ test("bundle preparation reads the whole process table while other processes car
     for (const child of large) child.kill("SIGKILL");
     rmSync(temporary, { recursive: true, force: true });
   });
-  const bundle = join(temporary, "soksak-tauriv2.app");
+  const bundle = join(temporary, "sok-tauriv2.app");
   const result = runPreparation(makePreparationMakefile(temporary), bundle);
   assert.equal(result.status, 0, `preparation failed: ${result.stderr}`);
   assert.ok(existsSync(join(bundle, "Contents", "Info.plist")), "preparation did not write Info.plist");

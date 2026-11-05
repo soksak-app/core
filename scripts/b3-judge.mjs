@@ -2,11 +2,11 @@
 // goals of docs/spec/performance-goals.json (docs/spec/hosts.md#performance-goals). It starts no application: it reads the folder,
 // applies the run conditions, every bound, the relative criteria, the regression rule and the comparisons of a value with another
 // value of the mygo host, prints each value with its runs, its spread and its result, and exits with status 1 when a value or a run
-// fails. `make b3-judge SESSION=<folder>` runs it.
+// fails. `make check-b3 SESSION=<folder>` runs it.
 //
 //   node scripts/b3-judge.mjs --session <folder>
 //
-// A session folder, which `make e2e-b3` (scripts/e2e-b3.mjs) writes, holds:
+// A session folder, which `make benchmark-b3` (scripts/benchmark-b3.mjs) writes, holds:
 //
 //   session.json            {"schema": 1, "phase": "1" | "final", "runs": <runs of each application>,
 //                            "applications": [{"name": <application>, "host": "mygo" | "wailsv3" | "tauriv2", "build": "current" | "baseline"}, ...],
@@ -20,7 +20,7 @@
 //                            "display": {"refreshRate": <Hz>, "backingScale": <scale>} | null, "end": {"loadAverage": [<1 min>, <5 min>, <15 min>]},
 //                            "installed": [{"kind": "plugin" | "sidecar", "id": <id>, "version": <version>, "sha256": <hash>}],
 //                            "values": {<value id>: <number> | "passed" | "failed"},
-//                            "conditions": {<target>: <the conditions that the target reported, described in scripts/e2e-b3.mjs>},
+//                            "conditions": {<target>: <the conditions that the target reported, described in scripts/benchmark-b3.mjs>},
 //                            "failures": [<text>]}
 //   attribution.jsonl       phase 1: the records of the runs with TRACE=1 and of the debug targets, which the judge does not read
 //   outputs/, configs/      the output log and the B3_OUT file of each target, and the configuration folder of each failed run
@@ -357,7 +357,7 @@ export function judgeSession(goals, session) {
 
 function main(argv) {
   const { values } = parseArgs({ args: argv, strict: true, options: { session: { type: "string" } } });
-  if (values.session === undefined) throw new Error("--session names the session folder of make e2e-b3");
+  if (values.session === undefined) throw new Error("--session names the session folder of make benchmark-b3");
   const goals = readGoals(readFileSync(GOALS_FILE, "utf8"), "docs/spec/performance-goals.json");
   const { lines, failures } = judgeSession(goals, readSession(values.session));
   for (const line of lines) process.stdout.write(`${line}\n`);

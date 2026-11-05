@@ -181,6 +181,9 @@ type projectStart struct {
 
 // surfaceState is the placement state of a window.
 type surfaceState struct {
+	// withdrawing tells that a wait for the surfaces runs to withdraw the error of a failed placement, and closed that the window ended.
+	withdrawing bool
+	closed      bool
 	// layoutFault tells that the next placement fails once (diagnostics.layout.fail).
 	layoutFault bool
 	held        map[string]*heldSurface
@@ -362,17 +365,16 @@ func (s *Shell) standSurface(c *ui.Context, surface *heldSurface, box layout.Rec
 	s.holdSurface(surface)
 	ui.Box(c.Key(SurfaceSlot{ID: id})).FillWidth().FillHeight().Role(ui.RoleGroup).Children(func() {
 		if view, key, ok := s.options.Element(id); ok {
-			// A web page paints whole points only: past them a fractional view shows the window, and here the card shows instead. The
-			// framework rounds a fractional edge to the nearest device pixel, so a view off the whole points could leave its slot.
-			whole := WholePoints(box)
-			width, height := float32(whole.W), float32(whole.H)
+			// The framework rounds each edge of a native view to the nearest device pixel, as it does for an edge that it paints, so a
+			// view and the lines beside it share their device pixels at any place of the plane.
+			width, height := float32(box.W), float32(box.H)
 			if s.dialogOpen() {
 				// A hole paints only outside a blurred element, so the view stands over the blurred workbench in the same place.
 				ui.Spacer(c).Size(width, height)
-				s.surfaces.behindDialog = append(s.surfaces.behindDialog, viewBehindDialog{view, key, whole, width, height})
+				s.surfaces.behindDialog = append(s.surfaces.behindDialog, viewBehindDialog{view, key, box, width, height})
 				return
 			}
-			ui.NativeView(c, view, key).Absolute().Left(float32(whole.X-box.X)).Top(float32(whole.Y-box.Y)).Size(width, height).ObserveInput(func(ev ui.InputEvent) {
+			ui.NativeView(c, view, key).Size(width, height).ObserveInput(func(ev ui.InputEvent) {
 				// A press reaches the content here while the host holds the views of a placement out of the pointer.
 				if ev.Kind == ui.InputPointerDown {
 					s.pressSurface(id)
@@ -568,6 +570,36 @@ func rawOrNull(value json.RawMessage) json.RawMessage {
 	return value
 }
 
+// placementSource is the source of the error of a placement that failed, which the presentation of every surface after a later
+// placement withdraws.
+const placementSource = "placement"
+
+// presentedRetry is the time before the wait for the surfaces asks again after an answer that they have not presented.
+const presentedRetry = time.Second
+
+// withdrawWhenPresented withdraws the error of a failed placement once every surface has presented. The failure names a surface that
+// did not present, which the placement of another change does not end. A placement that fails during the wait keeps its failure, and
+// the placement after it asks again. The record of the failure stays in the log.
+func (s *Shell) withdrawWhenPresented() {
+	if s.surfaces.withdrawing || s.surfaces.closed || !s.errors.ShownFrom(workbenchErrorPlace, placementSource) {
+		return
+	}
+	s.surfaces.withdrawing = true
+	s.calls.Call("waitPresented", nil, func(_ any, err error) {
+		s.surfaces.withdrawing = false
+		if s.surfaces.failure != nil {
+			return
+		}
+		if err != nil {
+			time.AfterFunc(presentedRetry, func() { s.options.Post(s.withdrawWhenPresented) })
+			return
+		}
+		if s.errors.HideFrom(workbenchErrorPlace, placementSource) {
+			s.options.Invalidate()
+		}
+	})
+}
+
 // placeSurfaces places the surfaces when the frame moved one of them. One placement runs at a time, and the frame that
 // follows it places what changed meanwhile.
 func (s *Shell) placeSurfaces() {
@@ -583,9 +615,11 @@ func (s *Shell) placeSurfaces() {
 		return
 	}
 	if s.surfaces.layoutFault {
-		// The placement fails without a change, so the next frame draws the same lines again.
+		// The placement fails without a change, so the next frame places the lines again, also when the window came back to
+		// the lines of the last placement.
 		s.surfaces.layoutFault = false
 		s.surfaces.placing, s.surfaces.commits = s.surfaces.commits, nil
+		s.surfaces.placed = nil
 		s.placed(errors.New("surface presentation failed: " + layoutFaultText))
 		s.options.Invalidate()
 		return
@@ -657,7 +691,7 @@ func (s *Shell) followRun(going bool) {
 		return
 	}
 	for surface, view := range s.surfaces.views {
-		s.pushView(surface, view, "run-start", nil)
+		s.pushView(surface, view, "run-start", map[string]any{})
 	}
 }
 
@@ -666,11 +700,15 @@ func (s *Shell) placed(err error) {
 	s.surfaces.running = false
 	var failure *string
 	if err != nil {
-		s.fail(err)
+		s.errors.ShowFrom(workbenchErrorPlace, placementSource, err.Error(), "")
+		s.options.Invalidate()
 		text := err.Error()
 		failure = &text
 	}
 	s.surfaces.failure = failure
+	if err == nil {
+		s.withdrawWhenPresented()
+	}
 	s.verifyLater()
 	placing := s.surfaces.placing
 	s.surfaces.placing = nil

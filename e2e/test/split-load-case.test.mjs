@@ -22,10 +22,10 @@ test("the split load limit is the bound of SPLIT_LOAD_GROWTH_BOUND_KB in the per
 // The rows of `ps -ax -o pid=,rss=,command=`: the host of a release bundle of the mygo application, its sidecar, a WebKit process and
 // the host of another configuration folder.
 const TABLE = [
-  "  4242 51200 /Applications/soksak-mygo.app/Contents/MacOS/soksak-mygo --config-dir /tmp/b3/mygo",
+  "  4242 51200 /Applications/sok-mygo.app/Contents/MacOS/sok-mygo --config-dir /tmp/b3/mygo",
   `  4243  9000 ${join("/tmp/b3/mygo", "sidecars", "alacritty", "bin", "alacritty")} --config-dir /tmp/b3/mygo`,
   "  4244 70000 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebKit.WebContent",
-  "  4245 61000 /Applications/soksak-wailsv3.app/Contents/MacOS/soksak-wailsv3 --config-dir /tmp/b3/wailsv3",
+  "  4245 61000 /Applications/sok-wailsv3.app/Contents/MacOS/sok-wailsv3 --config-dir /tmp/b3/wailsv3",
 ].join("\n");
 
 test("the split load finds the host process by the --config-dir of the application", { timeout: 5000 }, () => {
@@ -49,9 +49,9 @@ test("the split load sets the performance trace off and the log policy of B3_SET
 
 test("the host process is found by its configuration folder in every build profile", () => {
   const table = [
-    "  10 100 /work/target/release/tauriv2/soksak.app/Contents/MacOS/soksak-tauriv2 --config-dir /work/other",
-    "  11 200 /work/target/release/tauriv2/soksak.app/Contents/MacOS/soksak-tauriv2 --config-dir /work/check",
-    "  12 300 /work/target/debug/soksak-wailsv3.app/Contents/MacOS/soksak-wailsv3 --config-dir /work/debug",
+    "  10 100 /work/target/release/tauriv2/soksak.app/Contents/MacOS/sok-tauriv2 --config-dir /work/other",
+    "  11 200 /work/target/release/tauriv2/soksak.app/Contents/MacOS/sok-tauriv2 --config-dir /work/check",
+    "  12 300 /work/target/debug/sok-wailsv3.app/Contents/MacOS/sok-wailsv3 --config-dir /work/debug",
   ].join("\n");
   assert.equal(hostRssKbOf(table, "/work/check", "/work/check"), 200);
   assert.equal(hostRssKbOf(table, "/work/debug", "/work/debug"), 300);

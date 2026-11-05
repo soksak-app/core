@@ -216,7 +216,7 @@ if (requiresAll(process.env)) test("every host lays out the same page the same w
 
 /** The menu table of the host contract specification. The declaration is the reference, so the check reads it from the specification file. */
 async function menuContract() {
-  const { specMenuTables } = await import("../scripts/check-host-parity.mjs");
+  const { specMenuTables } = await import("../scripts/check-hosts-same.mjs");
   return specMenuTables(readFileSync(new URL("../docs/spec/host-contract.md", import.meta.url), "utf8"));
 }
 
@@ -262,8 +262,8 @@ if (requiresAll(process.env)) test("every host serves the declared application m
     assert.ok(typeof report?.language === "string" && columns.includes(report.language),
       `host.menu must report a declared language: ${JSON.stringify(report).slice(0, 200)}`);
     // The application name appears with different lengths in a menu title and an item title (for example soksak and
-    // soksak-tauriv2). Both are application names, so both are removed.
-    const names = [...new Set([report.menus[0].title, `soksak-${name}`])];
+    // sok-tauriv2). Both are application names, so both are removed.
+    const names = [...new Set([report.menus[0].title, `sok-${name}`])];
     const titles = (await s.get("host.windows")).map((entry) => entry.title);
     observed[name] = { language: report.language, menus: normalizeMenus(report.menus, names, titles, declaredCounts) };
   }

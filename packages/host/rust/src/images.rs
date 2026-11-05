@@ -1136,6 +1136,31 @@ fn owner(webview: &Webview, request: &Request) -> Result<(Key, crate::framework:
     Ok((key, window))
 }
 
+/// Tells the supplier that the region name stops holding a surface, with the root of the project of the window. The close of
+/// a window closes its surfaces at the supplier and removes its records before the main-thread step closes the regions, so a
+/// region that closes with its window reports here after that. The supplier ended that surface and a message would open it
+/// again, so nothing is sent and no failure is reported (docs/spec/native-surfaces.md#image-regions).
+fn send_released(
+    records: &Result<std::sync::Arc<crate::windows::WindowData>, String>,
+    name: &str,
+    (generation, raster, sequence): (u64, u64, i32),
+    send: impl FnOnce(String, &serde_json::value::RawValue) -> Result<(), String>,
+) -> Result<(), String> {
+    crate::windows::with_open_window(records, |data| {
+        let body =
+            serde_json::value::to_raw_value(&released_reply(name, generation, raster, sequence))
+                .map_err(|error| error.to_string())?;
+        let root = data
+            .root
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the root of the window, which is only read; the
+            // panic hook records the panic.
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        send(root, &body)
+    })
+}
+
 /// Creates the image region of key in its surface and returns the handle. Call it on the main thread.
 fn create(
     window: &crate::framework::Window,
@@ -1164,15 +1189,21 @@ fn create(
             );
             let app = window.app_handle().clone();
             app.spawn_detached(move || {
-                let sent = serde_json::value::to_raw_value(&released_reply(
-                    &name, generation, raster, sequence,
-                ))
-                .map_err(|e| e.to_string())
-                .and_then(|body| {
-                    window
-                        .state::<WindowSidecars>()
-                        .send(&window, &sidecar, &surface, &body)
-                });
+                let sent = send_released(
+                    &crate::windows::window_data(&window),
+                    &name,
+                    (generation, raster, sequence),
+                    |root, body| {
+                        window.state::<WindowSidecars>().send_in_root(
+                            &window,
+                            &sidecar,
+                            &surface,
+                            root,
+                            body,
+                            &[],
+                        )
+                    },
+                );
                 log_failure(&format!("image {name} released"), sent);
             });
         }) as Box<dyn Fn(u64, u64, i32)>

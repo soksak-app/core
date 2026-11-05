@@ -64,7 +64,7 @@ type watch struct {
 }
 
 // Registry holds the commands and the statuses of the workbench. Registering a name that is not declared is a programming error,
-// which make exposure-check also finds in the sources, so it panics.
+// which make check-exposure also finds in the sources, so it panics.
 type Registry struct {
 	declared *Declarations
 	mu       sync.Mutex

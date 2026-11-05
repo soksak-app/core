@@ -54,7 +54,7 @@ func NewWorkspace(directory string) *Workspace {
 // Record is one JSON object.
 type Record map[string]any
 
-// workbenchDeclaration is the copy of packages/workbench/workbench.json, which make exposure-check holds equal to its source.
+// workbenchDeclaration is the copy of packages/workbench/workbench.json, which make check-exposure holds equal to its source.
 //
 //go:embed workbench.json
 var workbenchDeclaration []byte
