@@ -34,7 +34,8 @@ func TestFunctionsAnswerTheRegistry(t *testing.T) {
 	}
 	place := &textPlace{frame: 1, cards: map[string]float64{"a": 1}}
 	focus := workbench.NewFocus(declared, func() {})
-	pointer := workbench.NewPointerSequence(func() {})
+	elements := &testerElements{}
+	pointer := workbench.NewPointerSequence(elements, func() {}, func(err error) { t.Error(err) })
 	registry := workbench.NewRegistry(declared)
 	workbench.Functions{
 		Text:          workbench.NewTextSize(place, steps),
@@ -54,12 +55,12 @@ func TestFunctionsAnswerTheRegistry(t *testing.T) {
 
 	tester := ui.NewTester(func(c *ui.Context) {
 		focus.Frame(c)
-		pointer.Frame()
-		ui.Column(c).Children(func() {
-			focus.Bind(ui.Box(c.Key("first")).Size(100, 30).Focusable().HandleInput(pointer.Handler("core.card")), "core.card")
+		ui.Column(c).ObserveInput(pointer.Observe).Children(func() {
+			focus.Bind(ui.Box(c.Key(workbench.Exposed{Name: "core.card"})).Role(ui.RoleGroup).Label("first").Size(100, 30).Focusable(), "core.card")
 			focus.Bind(ui.Box(c.Key("second")).Size(100, 30).Focusable(), "core.card")
 		})
 	}, 200, 200)
+	elements.tester = tester
 	tester.Frame()
 
 	if got, want := statusText(t, registry, "core.contributions"), "[]"; got != want {

@@ -698,7 +698,7 @@ const FEATURE_LINKS = [
     id: "F502-19",
     implementation: [
       { file: "packages/workbench-mygo/src/text_size.go", symbol: "func NextTextSize(steps []float64, value float64, direction int) (float64, error) {" },
-      { file: "packages/workbench-mygo/src/pointer.go", symbol: "func NewPointerSequence(changed func()) *PointerSequence {" },
+      { file: "packages/workbench-mygo/src/pointer.go", symbol: "func NewPointerSequence(elements Elements, changed func(), fail func(error)) *PointerSequence {" },
       { file: "packages/workbench-mygo/src/focus.go", symbol: "func (f *Focus) SetResponder(event Responder) error {" },
       { file: "packages/workbench-mygo/src/shortcuts.go", symbol: "func ParseShortcut(text string) (ui.Modifiers, ui.Key, error) {" },
       { file: "packages/workbench-mygo/src/contributions.go", symbol: "func ResolveContributions(installed []InstalledPlugin) ([]ResolvedContribution, error) {" },

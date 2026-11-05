@@ -18,7 +18,7 @@ type Exposed struct {
 type Binder struct {
 	registry *Registry
 	failed   func(command string, err error)
-	// pointer records the presses of the elements, and focus holds the elements that a command can focus, when the binder belongs to a window.
+	// pointer takes the clicks of the elements, and focus holds the elements that a command can focus, when the binder belongs to a window.
 	pointer *PointerSequence
 	focus   *Focus
 }
@@ -42,16 +42,12 @@ func (b *Binder) Bound(element ui.Element, name string) ui.Element {
 // Press creates a button without a look that runs command with params, and gives it the element name name. item tells it from
 // the elements of the same name. Add its look and its children to the element that it returns.
 func (b *Binder) Press(c *ui.Context, name, command, item string, params any) ui.Element {
-	button := ui.ButtonBase(b.next(c, name, command, item)).OnClick(func() {
+	return b.Bound(ui.ButtonBase(b.next(c, name, command, item)).OnClick(func() {
 		if b.pointer != nil {
 			b.pointer.Click(name)
 		}
 		b.run(command, params)
-	})
-	if b.pointer != nil {
-		button.ObserveInput(b.pointer.Observer(name))
-	}
-	return b.Bound(button, name)
+	}), name)
 }
 
 // Absent creates an element that the window holds but does not show, as the page holds an element under display:none. It keeps the

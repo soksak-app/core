@@ -383,7 +383,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.registry.Record(s.events.Command)
 	s.errors = NewShownErrors(s.events.Error)
 	s.binder = NewBinder(s.registry, func(_ string, err error) { s.fail(err) })
-	s.pointer = NewPointerSequence(func() { s.options.Invalidate() })
+	s.pointer = NewPointerSequence(options.Elements, func() { s.options.Invalidate() }, s.fail)
 	s.binder.Attach(s.pointer, s.exposedFocus)
 	s.starter = environment.pluginStarter
 	s.pluginOperations = NewPluginOperations(s.calls, s.events.BeginOperation, func() []LoadedPlugin { return s.plugins }, func() map[string]bool { return s.refused }, options.Invalidate)
@@ -643,7 +643,6 @@ func baseName(root string) string { return path.Base(root) }
 // View draws the workbench of the window.
 func (s *Shell) View(c *ui.Context) {
 	s.exposedFocus.Frame(c)
-	s.pointer.Frame()
 	s.sidebars.Begin()
 	clear(s.surfaces.drawn)
 	clear(s.picker.drawn)
@@ -662,7 +661,7 @@ func (s *Shell) View(c *ui.Context) {
 	c.SetTheme(&theme)
 	s.keys.Declare(c)
 	// Korean breaks at the spaces, as body of packages/workbench/app.css says. It is inherited, except by an overlay, whose root takes it.
-	root := ui.Column(c).Size(width, height).Background(s.palette.Bg).TextColor(s.palette.Fg).KeepAll().Clip()
+	root := ui.Column(c).Size(width, height).Background(s.palette.Bg).TextColor(s.palette.Fg).KeepAll().Clip().ObserveInput(s.pointer.Observe)
 	if s.dialogOpen() {
 		root.Blur(s.dialogBlur())
 	}

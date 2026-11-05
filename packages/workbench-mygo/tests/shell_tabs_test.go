@@ -133,6 +133,7 @@ func newTabShellWithState(t *testing.T, stored *storedHost, refused error) *tabS
 		installed = stored.installed
 	}
 	shell, err := workbench.NewShell(workbench.ShellOptions{
+		Elements:  fixtureElements{f.shellFixture},
 		Detaching: func() []string { return nil },
 		Window: func() (workbench.WindowView, error) {
 			return workbench.WindowView{Visible: true, Scale: 2, Width: 1200, Height: 800}, nil
