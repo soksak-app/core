@@ -18,6 +18,11 @@ type PlainControls struct {
 	PanelGap, PanelRadius, PanelEdgeW                    float32
 	PanelFill, PanelEdge                                 ui.Color
 	Arrows                                               *ui.SVG
+	// The search: an input of type search, and the ring of the browser around a focused one.
+	Ring, SearchIcon                             ui.Color
+	RingW, RingGap, SearchW, SearchH, SearchPadY float32
+	SearchIconX, SearchIconSize, SearchTextX     float32
+	Magnifier                                    *ui.SVG
 }
 
 // plainControls reads the look from the declaration.
@@ -39,6 +44,9 @@ func (s *Shell) plainControls() PlainControls {
 		EdgeW: metric("edge-w"), PadX: metric("pad-x"), PadY: metric("pad-y"), Radius: metric("r"), Height: metric("h"),
 		SelectH: metric("select-h"), SelectPad: metric("select-pad"), SelectRoom: metric("select-room"),
 		SelectRadius: metric("select-r"), Halo: metric("select-halo"), PanelGap: chrome("space-1"), PanelRadius: s.radiusSmall(), PanelEdgeW: s.palette.BorderWidth,
+		Ring: color("ring"), SearchIcon: color("search-icon"), RingW: metric("ring-w"), RingGap: metric("ring-gap"), SearchW: metric("search-w"), SearchH: metric("search-h"),
+		SearchPadY: metric("search-pad-y"), SearchIconX: metric("search-icon-x"), SearchIconSize: metric("search-icon-size"), SearchTextX: metric("search-text-x"),
+		Magnifier: s.declaredIcon("0 0 16 16", `fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"`, declared.Icons["control-search"]),
 		PanelFill: s.palette.Card, PanelEdge: s.palette.Edge, Arrows: s.declaredIcon("0 0 16 16", `fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"`, declared.Icons["control-select-arrows"])}
 }
 
@@ -52,6 +60,20 @@ func (p PlainControls) textWidth(c *ui.Context, text string) float32 {
 func (p PlainControls) field(c *ui.Context, field ui.Element) ui.Element {
 	return field.Basis(p.Figures*p.textWidth(c, "0")+2*(p.PadX+p.EdgeW)).Height(p.Height).Padding(p.PadY, p.PadX, p.PadY, p.PadX).
 		Border(p.EdgeW, p.Edge).Radius(p.Radius).Background(p.Background).TextColor(p.Fg).PlaceholderColor(p.Placeholder).FontSize(p.Size)
+}
+
+// search gives a text field the look of an input of type search: a pill with a magnifier in front of the text, and the ring of
+// the browser while it has the focus.
+func (p PlainControls) search(field ui.Element) ui.Element {
+	radius, focused := p.SearchH/2, field.Focused()
+	return field.Width(p.SearchW).Height(p.SearchH).Padding(p.SearchPadY, p.PadX, p.SearchPadY, p.SearchTextX).Radius(radius).Background(p.Background).
+		TextColor(p.Fg).PlaceholderColor(p.Placeholder).FontSize(p.Size).DrawOver(func(painter *ui.Painter, box ui.Rect) {
+		painter.Icon(p.Magnifier, ui.Rect{X: box.X + p.SearchIconX, Y: box.Y + (box.H-p.SearchIconSize)/2, W: p.SearchIconSize, H: p.SearchIconSize}, p.SearchIcon)
+		if focused {
+			out := p.RingGap + p.RingW
+			painter.Stroke(ui.Rect{X: box.X - out, Y: box.Y - out, W: box.W + 2*out, H: box.H + 2*out}, p.Ring, radius+out, p.RingW)
+		}
+	})
 }
 
 // drawSelect draws a select as wide as its longest option, and reports that the value changed.

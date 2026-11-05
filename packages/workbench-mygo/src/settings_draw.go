@@ -435,7 +435,12 @@ func (s *Shell) drawTextControl(c *ui.Context, control *SettingsControl) {
 		value = *control.Value
 	}
 	s.binder.Control(c, control.Name, control.Command.Name, key)
-	field := s.plainControls().field(c, s.binder.Bound(ui.TextInputBase(c, &value), control.Name)).Label(key).Placeholder(control.Label).Grow(1)
+	plain, field := s.plainControls(), s.binder.Bound(ui.TextInputBase(c, &value), control.Name).Label(key).Placeholder(control.Label)
+	if control.searchable {
+		field = plain.search(field)
+	} else {
+		field = plain.field(c, field).Grow(1)
+	}
 	if field.Changed() {
 		if control.searchable {
 			s.runControl(control, value)

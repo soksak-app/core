@@ -467,6 +467,7 @@
     ]
   },
   "icons": {
+    "control-search": "<circle cx=\"7\" cy=\"7\" r=\"5\"/><path d=\"M11 11l4 4\"/>",
     "control-select-arrows": "<path d=\"M5 6l3-3 3 3M5 10l3 3 3-3\"/>",
     "card-add": "<path d=\"M8 3v10M3 8h10\"/>",
     "card-split-x": "<rect class=\"half\" x=\"2\" y=\"3\" width=\"6\" height=\"10\" rx=\"1.5\"/><rect x=\"2\" y=\"3\" width=\"12\" height=\"10\" rx=\"2\"/><path d=\"M8 3v10\"/>",
@@ -504,7 +505,17 @@
     "select-h": "23px",
     "select-halo": "1px",
     "select-room": "34px",
-    "text-w": "20ch"
+    "text-w": "20ch",
+    "ring": "#216291",
+    "ring-w": "3px",
+    "ring-gap": "1px",
+    "search-w": "248px",
+    "search-h": "26.5px",
+    "search-icon": "#ffffff",
+    "search-icon-x": "7.25px",
+    "search-icon-size": "13px",
+    "search-text-x": "25px",
+    "search-pad-y": "3px"
   },
   "chrome": {
     "divider": "6px",

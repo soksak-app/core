@@ -6,6 +6,7 @@ import (
 	"image/color"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -946,6 +947,93 @@ func TestTheSearchOfTheSettingsHasTheBackgroundOfThePage(t *testing.T) {
 	want := controlBackground(t)
 	if got := f.pixelOf(node.Bounds.X+node.Bounds.W-6, node.Bounds.Y+node.Bounds.H/2); got != want {
 		t.Fatalf("the search has the background %v, not %v", got, want)
+	}
+}
+
+// plainLength is a declared length of a control without a look of its own.
+func plainLength(t *testing.T, name string) float32 {
+	t.Helper()
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, err := strconv.ParseFloat(strings.TrimSuffix(declared.PlainControl(name), "px"), 32)
+	if err != nil {
+		t.Fatalf("%s: %v", name, err)
+	}
+	return float32(value)
+}
+
+// The search of the settings is the input of type search of the page: a pill with a magnifier in front of the text.
+func TestTheSearchOfTheSettingsIsThePillOfThePage(t *testing.T) {
+	f := opened(t)
+	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
+	f.settle()
+	node, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.search", "")
+	if !ok {
+		t.Fatalf("no search in %q", f.tester.Texts())
+	}
+	box := node.Bounds
+	if want := plainLength(t, "search-h"); box.H != want {
+		t.Fatalf("the search is %v high, not %v", box.H, want)
+	}
+	if want := plainLength(t, "search-w"); box.W != want {
+		t.Fatalf("the search is %v wide, not %v", box.W, want)
+	}
+	fill := controlBackground(t)
+	if got := f.pixelOf(box.X+2, box.Y+2); got == fill {
+		t.Fatal("the corner of the search is square")
+	}
+	x, size, text := plainLength(t, "search-icon-x"), plainLength(t, "search-icon-size"), plainLength(t, "search-text-x")
+	painted := func(from, to float32) bool {
+		for at := box.X + from; at < box.X+to; at += .5 {
+			if f.pixelOf(at, box.Y+box.H/2) != fill {
+				return true
+			}
+		}
+		return false
+	}
+	if !painted(x, x+size) {
+		t.Fatal("the search has no magnifier")
+	}
+	if painted(x+size, text) {
+		t.Fatal("the text of the search begins before its place")
+	}
+	if !painted(text, text+size) {
+		t.Fatal("the search has no placeholder at its place")
+	}
+}
+
+// The browser rings a focused input of type search outside its box, with a gap.
+func TestAFocusedSearchOfTheSettingsHasTheRingOfThePage(t *testing.T) {
+	f := opened(t)
+	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
+	f.settle()
+	node, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.search", "")
+	if !ok {
+		t.Fatalf("no search in %q", f.tester.Texts())
+	}
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ring := ui.Hex(declared.PlainControl("ring"))
+	width, gap := plainLength(t, "ring-w"), plainLength(t, "ring-gap")
+	// The top edge, which is straight: the left of a pill is a curve.
+	x, y := node.Bounds.X+node.Bounds.W/2, node.Bounds.Y
+	beside, around := f.pixelOf(x, y-gap/2), f.pixelOf(x, y-gap-width-.5)
+	f.tester.Key(0, ui.KeyTab)
+	f.settle()
+	f.run("core.focus.set", map[string]any{"name": "core.settings-modal.search", "index": 0})
+	f.settle()
+	if got, want := f.pixelOf(x, y-gap-width/2), (color.RGBA{ring.R, ring.G, ring.B, 255}); got != want {
+		t.Fatalf("the ring is %v, not %v", got, want)
+	}
+	if got := f.pixelOf(x, y-gap/2); got != beside {
+		t.Fatalf("the gap inside the ring is %v, not %v", got, beside)
+	}
+	if got := f.pixelOf(x, y-gap-width-.5); got != around {
+		t.Fatalf("outside the ring lies %v, not %v", got, around)
 	}
 }
 
