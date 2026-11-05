@@ -70,6 +70,7 @@ func readLoadedPlugins(installed, environment []byte) ([]LoadedPlugin, []Setting
 						Kind string `json:"kind"`
 					} `json:"composition"`
 					Menu   []PluginMenuItem `json:"menu"`
+					Save   string           `json:"save"`
 					Params any              `json:"params"`
 				} `json:"surface"`
 				Dependencies map[string]string `json:"dependencies"`
@@ -96,7 +97,7 @@ func readLoadedPlugins(installed, environment []byte) ([]LoadedPlugin, []Setting
 		plugin := LoadedPlugin{ID: entry.ID, Name: entry.Manifest.Name, Description: entry.Manifest.Description, Mark: entry.Manifest.Mark,
 			Icon: entry.Manifest.Icon, Surface: entry.Manifest.Surface != nil, Version: entry.Version, Dependencies: entry.Manifest.Dependencies}
 		if entry.Manifest.Surface != nil {
-			plugin.Menu = entry.Manifest.Surface.Menu
+			plugin.Menu, plugin.Save = entry.Manifest.Surface.Menu, entry.Manifest.Surface.Save
 			plugin.Params = entry.Manifest.Surface.Params
 			if composition := entry.Manifest.Surface.Composition; composition != nil {
 				plugin.Composition = &composition.Kind

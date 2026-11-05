@@ -258,6 +258,20 @@ func TestASelectBoxASliderAndADebugSwitchChangeTheirSettings(t *testing.T) {
 	}
 }
 
+func TestTheKeysOfAnOpenSelectBoxChooseItsItem(t *testing.T) {
+	f := opened(t)
+	f.click("core.settings-modal.set", "mode")
+	f.tester.Key(0, ui.KeyDown)
+	f.tester.Key(0, ui.KeyEnter)
+	f.settle()
+	if f.settingValues()["mode"] != "light" {
+		t.Fatalf("mode %v", f.settingValues()["mode"])
+	}
+	if _, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.close", ""); !ok {
+		t.Fatal("the keys closed the settings window")
+	}
+}
+
 func TestATitleIsSavedWhenTheFieldSubmits(t *testing.T) {
 	f := opened(t)
 	f.run("core.settings-modal.nav", map[string]any{"section": "sidebars"})

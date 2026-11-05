@@ -477,7 +477,8 @@ func narrowCard(t *testing.T, tabs int, title string) *shellFixture {
 	state["xs"] = []float64{0, 0.5, 1}
 	state["cards"] = append(state["cards"].([]map[string]any), map[string]any{"id": "other", "c0": 1, "c1": 2, "r0": 0, "r1": 1, "data": map[string]any{
 		"tabs": []map[string]any{{"id": "tab-bbbbbb", "plugin": "notes", "title": "b"}}, "activeId": "tab-bbbbbb"}})
-	f := newShell(t, &storedHost{projects: []map[string]any{project}})
+	// The window shows no sidebars, so the width of the card is half of the plane and its head holds its tabs.
+	f := newShell(t, &storedHost{common: map[string]any{"left": false, "right": false}, projects: []map[string]any{project}})
 	if _, err := f.answer("core.project.activate", map[string]string{"id": "prj-a"}); err != nil {
 		t.Fatal(err)
 	}

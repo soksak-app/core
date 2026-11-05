@@ -265,6 +265,17 @@ func (s *Sidebars) set(id string) *SidebarSet {
 	return nil
 }
 
+// Sides returns the sides that have a fixed sidebar: those that a link of the window chooses content for.
+func (s *Sidebars) Sides() []string {
+	sides := []string{}
+	for _, side := range []string{"left", "right"} {
+		if slices.ContainsFunc(s.links, func(link SidebarLink) bool { return link.Place == side || link.Place == "window-"+side }) {
+			sides = append(sides, side)
+		}
+	}
+	return sides
+}
+
 // windowSet returns the set that the fixed sidebar of side shows and the plugin whose override chose it. The link of the focused
 // plugin goes before the general choice, and a plugin that is not loaded chooses no content (docs/spec/plugins.md).
 func (s *Sidebars) windowSet(side string, focused FocusedSurface) (*SidebarSet, string) {

@@ -27,11 +27,12 @@ type LoadedPlugin struct {
 	Dependencies map[string]string
 	// Composition is the kind of the surface composition, and nil without one.
 	Composition *string
-	// Mark is the short text and Icon the SVG elements of the add menu, and Menu the context menu of the surface.
-	Mark, Icon string
-	Menu       []PluginMenuItem
-	Sections   []LoadedSection
-	Surface    bool
+	// Mark is the short text and Icon the SVG elements of the add menu, Menu the context menu of the surface, and Save the command
+	// that saves a surface.
+	Mark, Icon, Save string
+	Menu             []PluginMenuItem
+	Sections         []LoadedSection
+	Surface          bool
 	// Params is surface.params, the schema of the parameters of a tab, and nil for a plugin that opens tabs without them.
 	Params any
 }
@@ -788,6 +789,13 @@ func (s *Shell) settingsChanged() error {
 	}
 	s.followScale()
 	s.followSettings()
+	changed, err := s.arrangeWindowSidebars()
+	if err != nil {
+		return err
+	}
+	if changed {
+		s.settle()
+	}
 	s.options.Invalidate()
 	return nil
 }
@@ -1098,17 +1106,13 @@ func windowAct(s *Shell, name string, run func(value windowParam) error) {
 func (s *Shell) registerSettingsWindow() {
 	w := &s.settingsWindow
 	act(s, "core.settings.open", func(struct{}) error {
-		s.closePicker()
 		s.closeDebug()
+		s.closePicker()
 		w.open = true
 		s.options.Invalidate()
 		return nil
 	})
-	act(s, "core.settings.close", func(struct{}) error {
-		w.open = false
-		s.options.Invalidate()
-		return nil
-	})
+	act(s, "core.settings.close", func(struct{}) error { s.closeSettings(); return nil })
 	windowAct(s, "core.settings-modal.nav", func(value windowParam) error {
 		if !slices.ContainsFunc(settingsSections, func(section [2]string) bool { return section[0] == value.Section }) {
 			return fmt.Errorf("unknown settings section %s", value.Section)
@@ -1177,4 +1181,10 @@ func (s *Shell) beginSettings() error {
 		return err
 	}
 	return s.applyPalette()
+}
+
+// closeSettings closes the card.
+func (s *Shell) closeSettings() {
+	s.settingsWindow.open = false
+	s.options.Invalidate()
 }
