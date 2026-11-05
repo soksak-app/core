@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F608: setup이 이름이 바뀐 native target을 실행하므로, recognizer를 고르지 않아도 macOS window check가 다시 시작된다.
 - F595: 합성 입력은 layout을 기다리는 입력 뒤에서 순서를 지킨다.
 - F586: lease 방식 영역이 있는 창을 닫아도 Tauri host가 `image view released: project window is closed`를 기록하지 않는다. Red: 창이 닫힌 뒤의 해제가 그 실패를 보고했다.
 - F502-16: Wails host의 window는 요청한 크기를 갖고 web view는 content 크기를 가지므로, page의 마지막 row가 보이고 native view가 page 위 제자리에 선다. F592가 fork를 publish할 때까지 Wails module은 fork의 local checkout을 읽는다.
@@ -15,6 +16,7 @@
 - F502-16: 배치를 준비 중인 표면 위의 누름은 commit을 기다렸다가 표면에 간다. 이전에는 main page로 갔고, main page가 없는 창에서는 어디에도 가지 않았다.
 - F585: surface가 숨겨진 뒤나 press 중에 영역이 표시되는 터미널은 page에서 키보드를 받고, 키보드를 가진 채 숨겨진 영역은 표시될 때 키보드를 되찾는다.
 - F535-3: gate count만으로는 쓰지 않는다. 잠든 writer는 다음 event까지 최대 1분 동안 count를 들고 있으므로, 다른 앱에서 입력 소스를 바꿔도 idle 앱이 초마다 쓰기와 index update를 치르지 않는다. Red: `TestACountWaitsForTheNextWrite`, `a_count_waits_for_the_next_write`, `event_ring_test`의 pipe 검사가 count가 쓰인 것을 찾았다.
+- F502-23: 측정의 process reader는 아직 load하지 않은 숨은 view document를 process가 없는 것으로 읽는다. 그래서 view drag benchmark가 load하지 않은 browser page가 있는 창을 읽는다. process가 없는 view는 계속 오류다.
 - F457: run 시작 event가 빈 object를 담는다. Go host는 data가 null인 view event를 거절하므로, 이제 `run-start`가 mygo와 Wails의 view에 도달한다.
 - F502-16: 허용된 host 차이 표가 합류로 늘어난 파일을 적고, main page 없는 창의 library test 는 framework 를 부르지 않는다. Red: host structure audit 이 각 파일을 지목했다.
 - F502-16: contract 는 hello deadline 의 끝을 모든 host 의 case 로 두고, Rust host 도 Go host 처럼 hello 뒤의 침묵을 test 한다. Red: host structure audit 이 case 없는 Go test 를 지목했다.
