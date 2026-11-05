@@ -75,6 +75,7 @@ The view reads the rows that it may forward with the view call `runtime.shortcut
 | `cmd+h` | native menu | framework role | app/hide | Any focus |
 | `opt+cmd+h` | native menu | framework role | app/hide-others | Any focus |
 | `cmd+q` | native menu | framework role | app/quit | Any focus |
+| `cmd+,` | native menu | core.settings.open | app/settings | Any focus |
 | `cmd+w` | native menu | framework role | file/close-window | Any focus |
 | `cmd+z` | native menu | framework role | edit/undo | Any focus |
 | `shift+cmd+z` | native menu | framework role | edit/redo | Any focus |

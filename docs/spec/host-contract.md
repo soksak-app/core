@@ -57,6 +57,7 @@ Items:
 | menu | id | source | ko | en | key |
 |---|---|---|---|---|---|
 | app | about | title | 정보 | About | |
+| app | settings | title | 설정… | Settings… | cmd+, |
 | app | services | system | | | |
 | app | hide | title | 가리기 | Hide | cmd+h |
 | app | hide-others | title | 기타 가리기 | Hide Others | opt+cmd+h |
@@ -613,6 +614,7 @@ Items:
 | `sidecars.retain.rejects-after-stop` | A retain that starts after the sidecars stop, or that a stop interrupts after the service is prepared, fails with "sidecars are stopped" and sends no retain to the service. | all |
 | `menu.application.view-has-full-screen-and-text-size` | The application menu's View menu has full screen and the [text size](text-size.md) items with Command `=`, `-`, and `0`; no menu item zooms or reloads the whole webview. | all |
 | `menu.application.help-has-debug` | The application menu's Help menu has the item 디버그 (Debug) without a key; it runs `core.debug.open` in the main page of the main window ([debug view](debug.md)). | all |
+| `menu.application.app-has-settings` | The application menu's app menu has the item 설정… (Settings…) right after the about item with Command `,`; it runs `core.settings.open` in the main page of the main window ([settings window](settings.md)). | all |
 | `sidecars.protocol.surface-keeps-its-first-root` | After the owning window changes project, requests and the closed notice of an open surface carry the root of its first request. | all |
 | `sidecars.protocol.closed-surface-messages-are-discarded-and-unknown-ones-fail` | A stdio sidecar message for a surface that the host closed is discarded, while a message for a surface that the host never sent to that process fails the sidecar with `unknown surface <surface>` delivered to the surfaces that sent. | all |
 | `sidecars.protocol.dropped-message-is-recorded` | A message of a sidecar that is discarded because no window owns its surface writes `info host sidecar <name>: message for surface <surface> dropped: no window owns the surface: <body>`. | all |

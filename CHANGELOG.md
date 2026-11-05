@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F502-21: The app menu of the three hosts has 설정… (Settings…) with `cmd+,`, which opens the settings window.
 - F502-21: A dialog blurs each image region as it does each document web view, on the three hosts, so a terminal under a dialog is no longer sharp. `host.window` reports `blurred` of each image region.
 - F539: `sok input pointer` moves as a person moves: every tracking area that holds the point hears the move, its enter and its exit, and a press in the key window moves there first.
 - F538: A retain keeps the persistent sessions of the sections of every stored layout, so a dropped tab, a closed space or a removed project no longer ends the sessions of the sidebars of the other spaces and projects.

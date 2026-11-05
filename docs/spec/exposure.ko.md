@@ -75,6 +75,7 @@ view는 넘길 수 있는 행을 view call `runtime.shortcuts.read`로 읽는다
 | `cmd+h` | native menu | framework role | app/hide | 모든 포커스 |
 | `opt+cmd+h` | native menu | framework role | app/hide-others | 모든 포커스 |
 | `cmd+q` | native menu | framework role | app/quit | 모든 포커스 |
+| `cmd+,` | native menu | core.settings.open | app/settings | 모든 포커스 |
 | `cmd+w` | native menu | framework role | file/close-window | 모든 포커스 |
 | `cmd+z` | native menu | framework role | edit/undo | 모든 포커스 |
 | `shift+cmd+z` | native menu | framework role | edit/redo | 모든 포커스 |

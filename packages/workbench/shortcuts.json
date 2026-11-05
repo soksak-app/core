@@ -3,6 +3,7 @@
     { "key": "cmd+h", "owner": "native menu", "command": "framework role", "menu": "app/hide", "when": "Any focus" },
     { "key": "opt+cmd+h", "owner": "native menu", "command": "framework role", "menu": "app/hide-others", "when": "Any focus" },
     { "key": "cmd+q", "owner": "native menu", "command": "framework role", "menu": "app/quit", "when": "Any focus" },
+    { "key": "cmd+,", "owner": "native menu", "command": "core.settings.open", "menu": "app/settings", "when": "Any focus" },
     { "key": "cmd+w", "owner": "native menu", "command": "framework role", "menu": "file/close-window", "when": "Any focus" },
     { "key": "cmd+z", "owner": "native menu", "command": "framework role", "menu": "edit/undo", "when": "Any focus" },
     { "key": "shift+cmd+z", "owner": "native menu", "command": "framework role", "menu": "edit/redo", "when": "Any focus" },

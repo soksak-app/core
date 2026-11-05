@@ -84,6 +84,26 @@ func TestTheDebugMenuOpensTheDebugView(t *testing.T) {
 	}
 }
 
+// The settings item of the app menu opens the settings window, which takes the keyboard (docs/spec/exposure.md#keyboard-shortcuts).
+func TestTheSettingsItemOfTheMenuOpensTheSettingsWindow(t *testing.T) {
+	stored := &storedHost{}
+	app, window, queue, _ := fixtureApp(t, stored)
+	view := app.Build(window)
+	app.Shown(window)
+	queue.drain(t)
+	tester := ui.NewTester(view, 900, 700)
+	tester.Frame()
+	if slices.Contains(tester.Texts(), "일반") {
+		t.Fatal("the settings window shows before the menu opened it")
+	}
+	app.Emit(window, "menu-command", map[string]any{"name": "core.settings.open"})
+	queue.drain(t)
+	tester.Frame()
+	if !slices.Contains(tester.Texts(), "일반") {
+		t.Fatalf("the menu did not open the settings window: %q", tester.Texts())
+	}
+}
+
 func TestAMenuCommandThatFailsGoesToTheErrorRecord(t *testing.T) {
 	stored := &storedHost{}
 	app, window, queue, _ := fixtureApp(t, stored)
