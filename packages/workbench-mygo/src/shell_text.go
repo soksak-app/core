@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"strconv"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -123,26 +122,31 @@ func (s *Shell) textCaption() float32 {
 	return float32(s.settings.Value("size").(float64)) * s.metrics.textCaptionAtBase / s.metrics.textBase
 }
 
+// spanWidth is the width of span on one line.
+func spanWidth(c *ui.Context, span ui.Span) float32 {
+	width, _ := c.MeasureText(0, span) // silent: the second result is the height, which a width does not read.
+	return width
+}
+
+// firstPart is the part of text before the first separator.
+func firstPart(text, separator string) string {
+	part, _, _ := strings.Cut(text, separator) // silent: a text without the separator is its own first part.
+	return part
+}
+
 // chromePercent is the chrome value name, a percentage, as a share.
 func (s *Shell) chromePercent(name string) float32 {
-	text, _ := s.options.Declared.ChromeText(name)
-	value, _ := strconv.ParseFloat(strings.TrimSuffix(text, "%"), 32)
-	return float32(value) / 100
+	return float32(s.options.Declared.ChromeNumber(name, "%")) / 100
 }
 
 // chLength is the chrome value name, a number of ch, at the font size: a figure of a form font is about .6 of its size wide.
 func (s *Shell) chLength(c *ui.Context, name string, size float32) float32 {
-	text, _ := s.options.Declared.ChromeText(name)
-	value, _ := strconv.ParseFloat(strings.TrimSuffix(text, "ch"), 32)
-	figure, _ := c.MeasureText(0, ui.Span{Text: "0", Size: size, Font: s.fontFamily()})
-	return float32(value) * figure
+	return float32(s.options.Declared.ChromeNumber(name, "ch")) * spanWidth(c, ui.Span{Text: "0", Size: size, Font: s.fontFamily()})
 }
 
 // sectionTracking is the chrome value section-tracking, the spacing of a section name as a share of its font size.
 func (s *Shell) sectionTracking() float32 {
-	text, _ := s.options.Declared.ChromeText("section-tracking")
-	value, _ := strconv.ParseFloat(strings.TrimSuffix(text, "em"), 32)
-	return float32(value)
+	return float32(s.options.Declared.ChromeNumber("section-tracking", "em"))
 }
 
 // textSmall is the size of the small text of a card head, the proportion of the size setting that the page states.

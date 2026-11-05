@@ -685,7 +685,7 @@ func (s *Shell) View(c *ui.Context) {
 	theme.FontSize = theme.Rem(1) * float32(s.text.Frame())
 	theme.Font = s.fontFamily()
 	// The outline of button:focus-visible of the page: inside the edge, in the focus color.
-	outline, _ := s.options.Declared.Metric("focus-outline")
+	outline := s.options.Declared.ChromeNumber("focus-outline", "px")
 	theme.Focus, theme.FocusRingWidth, theme.FocusRingOffset = s.palette.Focus, float32(outline), -float32(outline)
 	c.SetTheme(&theme)
 	s.keys.Declare(c)

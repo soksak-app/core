@@ -68,14 +68,41 @@ func (d *Declarations) Metric(name string) (float64, bool) {
 	return number, err == nil
 }
 
-// ChromeText returns the chrome value name as it is declared, and false when it does not exist.
-func (d *Declarations) ChromeText(name string) (string, bool) {
-	value, ok := d.chrome[name]
-	return value, ok
-}
-
 // PlainControl returns the value name of the look of a control that the page takes from its browser, which no stylesheet declares.
 func (d *Declarations) PlainControl(name string) string { return d.plain[name] }
+
+// ChromeValue returns the chrome value name as it is declared. A draw reads a value that the build declares, so a name that it does
+// not hold is refused, as an element name that is not declared is refused.
+func (d *Declarations) ChromeValue(name string) string {
+	value, ok := d.chrome[name]
+	if !ok {
+		panic(fmt.Sprintf("the chrome value %s is not declared", name))
+	}
+	return value
+}
+
+// ChromeNumber returns the number of the chrome value name, which holds the unit or no unit.
+func (d *Declarations) ChromeNumber(name, unit string) float64 {
+	return declaredNumber("chrome", name, d.ChromeValue(name), unit)
+}
+
+// PlainNumber returns the number of the plain control value name, which holds the unit or no unit.
+func (d *Declarations) PlainNumber(name, unit string) float64 {
+	value, ok := d.plain[name]
+	if !ok {
+		panic(fmt.Sprintf("the plain control value %s is not declared", name))
+	}
+	return declaredNumber("plain control", name, value, unit)
+}
+
+// declaredNumber is the number of a declared value, which the build states, so a value of another form is refused.
+func declaredNumber(kind, name, value, unit string) float64 {
+	number, err := strconv.ParseFloat(strings.TrimSuffix(value, unit), 64)
+	if err != nil {
+		panic(fmt.Sprintf("the %s value %s is %q, not a number of %s", kind, name, value, unit))
+	}
+	return number
+}
 
 // Share returns the chrome metric name, which is a percentage, as a ratio, and false when the metric does not exist or holds another
 // unit.

@@ -38,7 +38,7 @@ func (s *Shell) drawChrome(c *ui.Context, width float32) {
 
 // drawBrand draws the logo of the workbench. It does not receive presses, so a press on it drags the window.
 func (s *Shell) drawBrand(c *ui.Context) {
-	box, _ := s.options.Declared.ChromeText("brand-logo-box")
+	box := s.options.Declared.ChromeValue("brand-logo-box")
 	var left, top, wide, high float32
 	if _, err := fmt.Sscanf(box, "%g %g %g %g", &left, &top, &wide, &high); err != nil {
 		s.fail(fmt.Errorf("the chrome value brand-logo-box %q: %w", box, err))
@@ -48,7 +48,7 @@ func (s *Shell) drawBrand(c *ui.Context) {
 	if s.settings.Value("mode") == "light" {
 		mode = "brand-text-light"
 	}
-	text, _ := s.options.Declared.ChromeText(mode)
+	text := s.options.Declared.ChromeValue(mode)
 	height := s.frameLength(float32(s.settings.Value("size").(float64)) * s.metrics.brandLogoAtBase / s.metrics.textBase)
 	ui.Box(s.binder.Name(c, "core.brand", "")).Shrink(0).MarginEnd(s.frameLength(s.metrics.brandGap)).Role(ui.RoleImage).Label("soksak").Children(func() {
 		// An icon takes one color, and the tile of the logo keeps its own, so the logo is an image with its letters in the color of the mode.
@@ -70,7 +70,7 @@ func (s *Shell) drawChromeActs(c *ui.Context, browsing bool) {
 			{"left", "core.chrome.left", "좌측 사이드바 위치", "panel-left"},
 			{"right", "core.chrome.right", "우측 사이드바 위치", "panel-right"},
 		} {
-			on, _ := s.settings.Value(side.key).(bool)
+			on, _ := s.settings.Value(side.key).(bool) // silent: the settings store checks the type of the value.
 			s.chromeAct(c, side.name, "core.settings.set", side.title, side.icon, on, settingsPatchParam{map[string]any{side.key: !on}})
 		}
 	}
@@ -195,7 +195,7 @@ func (s *Shell) drawBarTab(c *ui.Context, tab barTab) {
 		}
 		room := pad
 		if tab.close != nil {
-			mark, _ := c.MeasureText(0, ui.Span{Text: tabCloseMark, Size: size, Font: s.fontFamily()})
+			mark := spanWidth(c, ui.Span{Text: tabCloseMark, Size: size, Font: s.fontFamily()})
 			room = s.frameLength(m.barGap) + mark + 2*s.frameLength(m.barXPad) + pad
 		}
 		chip.Children(func() {

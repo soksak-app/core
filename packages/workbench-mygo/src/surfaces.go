@@ -594,7 +594,7 @@ func (s *Shell) placeSurfaces() {
 	}
 	s.surfaces.placed = lines
 	s.surfaces.running = true
-	settledNow, _ := request["settled"].(bool)
+	settledNow, _ := request["settled"].(bool) // silent: surfaceRequest writes settled as a bool.
 	s.followRun(!settledNow)
 	record := s.surfaceRecord(lines, settledNow)
 	s.surfaces.latest = record

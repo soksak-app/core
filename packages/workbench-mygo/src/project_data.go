@@ -313,6 +313,6 @@ func sameJSON(a, b json.RawMessage) bool {
 		return bytes.Equal(a, b)
 	}
 	first, _ := json.Marshal(left)   // silent: a value that json decoded encodes again.
-	second, _ := json.Marshal(right) // silent: as above.
+	second, _ := json.Marshal(right) // silent: a value that json decoded encodes again.
 	return bytes.Equal(first, second)
 }

@@ -153,15 +153,11 @@ type debugTimelineState struct {
 
 // withPage adds the rows of a page in key order, once each, and sheds the oldest rows past the hold limit. A row of the context
 // that was not held is held as context, and a row of the filter that was held as context is a row of the filter from then on.
-// It returns the timeline and the number of new rows.
-func (t debugTimelineState) withPage(rows []debugRow, asContext bool) (debugTimelineState, int) {
-	fresh := make([]debugRow, 0, len(rows))
+func (t debugTimelineState) withPage(rows []debugRow, asContext bool) debugTimelineState {
+	fresh := t.newRows(rows)
 	brought := make(map[string]bool, len(rows))
 	for _, row := range rows {
 		brought[row.id()] = true
-		if !t.ids[row.id()] && !slices.ContainsFunc(fresh, func(held debugRow) bool { return held.id() == row.id() }) {
-			fresh = append(fresh, row)
-		}
 	}
 	merged := slices.SortedStableFunc(slices.Values(append(slices.Clone(t.rows), fresh...)), compareDebugRows)
 	shed := max(0, len(merged)-debugHoldLimit)
@@ -186,7 +182,18 @@ func (t debugTimelineState) withPage(rows []debugRow, asContext bool) (debugTime
 	t.rows, t.ids, t.context = merged, ids, context
 	t.omitted += shed
 	t.older = t.older || shed > 0
-	return t, len(fresh)
+	return t
+}
+
+// newRows are the rows of a page that the timeline does not hold, once each.
+func (t debugTimelineState) newRows(rows []debugRow) []debugRow {
+	fresh := make([]debugRow, 0, len(rows))
+	for _, row := range rows {
+		if !t.ids[row.id()] && !slices.ContainsFunc(fresh, func(held debugRow) bool { return held.id() == row.id() }) {
+			fresh = append(fresh, row)
+		}
+	}
+	return fresh
 }
 
 // debugOperation is the running or last operation. Written and Total are set for a save of the logs folder.
@@ -599,9 +606,8 @@ func (s *Shell) followDebugGrowth(answer func(err error)) {
 				if tail == nil {
 					tail = page.Tail
 				}
-				var added int
-				next, added = next.withPage(rows, false)
-				appended += added
+				appended += len(next.newRows(rows))
+				next = next.withPage(rows, false)
 				if page.Next != nil {
 					request["after"] = page.Next
 					read()
@@ -685,7 +691,7 @@ func (s *Shell) olderDebugTimeline(answer func(any, error)) {
 			}
 			if shown := d.timeline; shown != nil && shown.token == token {
 				omitted := shown.omitted
-				added, _ := shown.withPage(rows, false)
+				added := shown.withPage(rows, false)
 				added.older = page.Next != nil || added.omitted > omitted
 				*shown = added
 			}
@@ -801,7 +807,7 @@ func (s *Shell) contextDebugRow(row *int, answer func(any, error)) {
 			if err != nil {
 				d.fail("context", err)
 			} else if shown := d.timeline; shown != nil && shown.token == token {
-				added, _ := shown.withPage(rows, true)
+				added := shown.withPage(rows, true)
 				*shown = added
 			}
 			s.options.Invalidate()
@@ -1107,8 +1113,7 @@ func (s *Shell) debugStatusOf() debugStatus {
 // debugStyle reads the look of the card from the palette and the chrome metrics.
 func (s *Shell) debugStyle() DebugStyle {
 	metric := func(name string) float32 {
-		value, _ := s.options.Declared.Metric(name)
-		return float32(value)
+		return float32(s.options.Declared.ChromeNumber(name, "px"))
 	}
 	pane := s.readSettingsPane()
 	return DebugStyle{Scrim: s.dialogScrim(), Card: s.palette.Card, Background: s.palette.Bg, Edge: s.palette.Edge, Rail: s.palette.Rail, Fg: s.palette.Fg, Muted: s.palette.Muted,
@@ -1126,7 +1131,7 @@ func (s *Shell) debugStyle() DebugStyle {
 // debugScreen is what DrawDebugView draws.
 func (s *Shell) debugScreen() DebugView {
 	d := &s.debugView
-	width, _ := s.options.Declared.Metric("dbg-card-w")
+	width := s.options.Declared.ChromeNumber("dbg-card-w", "px")
 	view := DebugView{CardWidth: float32(width), CardMaxHeight: float32(s.settingsWindow.height * settingsCardMaxShare), Entries: d.entries,
 		Viewing: d.viewing, Failure: d.failure, Scroll: &d.scroll, Style: s.debugStyle()}
 	if operation := d.operation; operation != nil {

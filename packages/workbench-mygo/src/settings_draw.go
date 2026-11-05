@@ -28,8 +28,7 @@ type settingsPane struct {
 
 func (s *Shell) readSettingsPane() settingsPane {
 	metric := func(name string) float32 {
-		value, _ := s.options.Declared.Metric(name)
-		return float32(value)
+		return float32(s.options.Declared.ChromeNumber(name, "px"))
 	}
 	return settingsPane{
 		navW: metric("set-nav-w"), navGap: metric("set-nav-gap"), navPadY: metric("set-nav-pad-y"), navPadX: metric("set-nav-pad-x"),
@@ -299,7 +298,10 @@ func (s *Shell) drawSwatch(c *ui.Context, control *SettingsControl, pane setting
 		colors = theme.Light
 	}
 	shape := func(name string) float64 {
-		value, _ := strconv.ParseFloat(strings.TrimSuffix(theme.Shape[name], "px"), 64)
+		value, err := strconv.ParseFloat(strings.TrimSuffix(theme.Shape[name], "px"), 64)
+		if err != nil {
+			panic(fmt.Sprintf("the shape value %s of the theme %s is %q, not a number of px", name, theme.Name, theme.Shape[name]))
+		}
 		return value
 	}
 	// The box is small, so the passage is halved, and a theme without a passage keeps the line that its cards share.

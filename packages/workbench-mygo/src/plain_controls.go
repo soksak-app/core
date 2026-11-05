@@ -2,8 +2,6 @@ package workbench
 
 import (
 	"fmt"
-	"strconv"
-	"strings"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -51,15 +49,13 @@ type PlainControls struct {
 func (s *Shell) plainControls() PlainControls {
 	declared := s.options.Declared
 	metric := func(name string) float32 {
-		value, _ := strconv.ParseFloat(strings.TrimSuffix(declared.PlainControl(name), "px"), 32)
-		return float32(value)
+		return float32(declared.PlainNumber(name, "px"))
 	}
 	chrome := func(name string) float32 {
-		value, _ := declared.Metric(name)
-		return float32(value)
+		return float32(declared.ChromeNumber(name, "px"))
 	}
 	color := func(name string) ui.Color { return ui.Hex(declared.PlainControl(name)) }
-	figures, _ := strconv.ParseFloat(strings.TrimSuffix(declared.PlainControl("text-w"), "ch"), 32)
+	figures := declared.PlainNumber("text-w", "ch")
 	size := float32(s.settings.Value("size").(float64))
 	stroke := `fill="none" stroke="currentColor" stroke-width="%s" stroke-linecap="round" stroke-linejoin="round"`
 	return PlainControls{Background: color("bg"), Edge: color("edge"), Fg: color("fg"),
@@ -92,8 +88,7 @@ func (p PlainControls) ring(painter *ui.Painter, box ui.Rect, radius float32, co
 
 // textWidth is the width of text in the font of the controls.
 func (p PlainControls) textWidth(c *ui.Context, text string) float32 {
-	width, _ := c.MeasureText(0, ui.Span{Text: text, Size: p.Size, Font: p.Font})
-	return width
+	return spanWidth(c, ui.Span{Text: text, Size: p.Size, Font: p.Font})
 }
 
 // field gives a text field the look of an input: it starts as wide as twenty figures, the size that an input takes by default,

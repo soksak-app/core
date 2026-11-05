@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -159,7 +158,7 @@ func sizeText(size int64) string {
 // a date: Korean has its own form and any other language has the form of English.
 func TimeText(modified int64, locale string) string {
 	moment := time.UnixMilli(modified)
-	if language, _, _ := strings.Cut(locale, "-"); language == "ko" {
+	if firstPart(locale, "-") == "ko" {
 		noon := "오전"
 		if moment.Hour() >= 12 {
 			noon = "오후"

@@ -159,7 +159,7 @@ func inPlane(box layout.Rect, origin layout.Point) layout.Rect {
 
 // drawnRules returns the lines that drawRules draws, in the coordinates of the plane.
 func (s *Shell) drawnRules() []layout.Rect {
-	place, _ := s.settings.Value("fullRule").(string)
+	place, _ := s.settings.Value("fullRule").(string) // silent: the settings store checks the type of the value.
 	inset := s.stageInset()
 	rules := []layout.Rect{}
 	for _, rule := range s.plane.Rules() {

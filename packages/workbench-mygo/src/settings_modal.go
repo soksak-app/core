@@ -250,7 +250,7 @@ func (b *settingsBuilder) resetButton(key, label string) *SettingsControl {
 func (s *Shell) setting(key string) (*ControlCommand, string) {
 	scope := s.settingsWindow.scope
 	if rest, ok := strings.CutPrefix(key, "link:"); ok {
-		place, plugin, _ := strings.Cut(rest, ":")
+		place, plugin, _ := strings.Cut(rest, ":") // silent: the key of a link control is written with both parts.
 		params := map[string]any{"place": place, "plugin": nil, "scope": scope}
 		if plugin != "" {
 			params["plugin"] = plugin
@@ -277,7 +277,7 @@ func (s *Shell) choose(b *settingsBuilder, key string, options [][2]string, now 
 }
 
 func (s *Shell) toggle(b *settingsBuilder, key string) *SettingsControl {
-	on, _ := s.value(key).(bool)
+	on, _ := s.value(key).(bool) // silent: the settings store checks the type of the value.
 	command, param := s.setting(key)
 	return b.add(SettingsControl{Name: "core.settings-modal.set", Key: text(key), On: &on, Value: text(strconv.FormatBool(on)), Command: command, kind: controlSwitch, param: param})
 }
@@ -683,14 +683,17 @@ func (s *Shell) buildSidebars(b *settingsBuilder) error {
 
 // settingsCard is the rectangle of the card in the window.
 func (s *Shell) settingsCard() (x, y, width, height float64) {
+	x, y = s.settingsCardOrigin()
+	return x, y, s.options.Declared.ChromeNumber("set-card-w", "px"), s.settingsWindow.height * settingsCardMaxShare
+}
+
+// settingsCardOrigin is the corner of the card in the window.
+func (s *Shell) settingsCardOrigin() (x, y float64) {
 	w := &s.settingsWindow
-	cardW, _ := s.options.Declared.Metric("set-card-w")
-	top, _ := s.options.Declared.Metric("set-card-top")
-	x, y = (w.width-cardW)/2, top
 	if w.moved {
-		x, y = w.x, w.y
+		return w.x, w.y
 	}
-	return x, y, cardW, w.height * settingsCardMaxShare
+	return (w.width - s.options.Declared.ChromeNumber("set-card-w", "px")) / 2, s.options.Declared.ChromeNumber("set-card-top", "px")
 }
 
 // clampCard keeps a moved card inside the window.
@@ -704,7 +707,7 @@ func (s *Shell) clampCard() {
 // moveCard moves the card by dx and dy within the window.
 func (s *Shell) moveCard(dx, dy float64) {
 	w := &s.settingsWindow
-	x, y, _, _ := s.settingsCard()
+	x, y := s.settingsCardOrigin()
 	w.moved, w.x, w.y = true, x+dx, y+dy
 	s.clampCard()
 }
@@ -842,7 +845,7 @@ func (s *Shell) applyPalette() error {
 // pageTheme is the theme that a page of the host reads, as the page workbench sends it: the mode and the token values.
 func (s *SettingsStore) pageTheme() (map[string]any, error) {
 	values := s.effective(s.common, s.overrides)
-	name, _ := values["theme"].(string)
+	name, _ := values["theme"].(string) // silent: the settings store checks the type of the value.
 	theme, err := s.Catalog.Theme(name)
 	if err != nil {
 		return nil, err
@@ -855,7 +858,7 @@ func (s *SettingsStore) pageTheme() (map[string]any, error) {
 	for _, key := range []string{"bg", "card", "fg", "muted", "edge", "rule", "rail", "focus", "no"} {
 		tokens["--"+key] = colors[key]
 	}
-	gap, _ := values["gap"].(float64)
+	gap, _ := values["gap"].(float64) // silent: the settings store checks the type of the value.
 	if gap == 0 {
 		width, err := strconv.ParseFloat(strings.TrimSuffix(theme.Shape["bw"], "px"), 64)
 		if err != nil {
@@ -899,11 +902,11 @@ func (s *Shell) tellTheme() {
 // menuLanguage is the language of the application menu: the setting, or for auto the language of the locale, which is the
 // default language when the menu has no such language.
 func (s *SettingsStore) menuLanguage(locale string) string {
-	chosen, _ := s.Value("language").(string)
+	chosen, _ := s.Value("language").(string) // silent: the settings store checks the type of the value.
 	if chosen != "auto" {
 		return chosen
 	}
-	tag, _, _ := strings.Cut(strings.ToLower(locale), "-")
+	tag := firstPart(strings.ToLower(locale), "-")
 	for _, language := range s.Catalog.MenuLanguages {
 		if language.ID == tag {
 			return tag
@@ -939,7 +942,7 @@ func (s *SettingsStore) Scheme() string {
 
 // Palette is the palette of the effective theme, mode, gap and radius.
 func (s *SettingsStore) Palette() (Palette, error) {
-	name, _ := s.Value("theme").(string)
+	name, _ := s.Value("theme").(string) // silent: the settings store checks the type of the value.
 	theme, err := s.Catalog.Theme(name)
 	if err != nil {
 		return Palette{}, err
@@ -953,8 +956,8 @@ func (s *SettingsStore) Palette() (Palette, error) {
 	if err != nil {
 		return Palette{}, fmt.Errorf("theme %s: shape bw: %w", theme.Name, err)
 	}
-	radius, _ := s.Value("radius").(float64)
-	gap, _ := s.Value("gap").(float64)
+	radius, _ := s.Value("radius").(float64) // silent: the settings store checks the type of the value.
+	gap, _ := s.Value("gap").(float64)       // silent: the settings store checks the type of the value.
 	return Palette{Bg: color("bg"), Card: color("card"), Fg: color("fg"), Muted: color("muted"), Edge: color("edge"), Rule: color("rule"), Rail: color("rail"),
 		Focus: color("focus"), No: color("no"), Radius: float32(radius), Gap: float32(gap), BorderWidth: float32(border)}, nil
 }
