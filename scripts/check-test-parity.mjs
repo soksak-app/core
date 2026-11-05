@@ -8924,14 +8924,19 @@ const FEATURE_LINKS = [
   {
     id: "F502-18-1",
     implementation: [
-      { file: "packages/workbench/memory-placement.js", symbol: "export function memoryStart(saver) {" },
-      { file: "packages/workbench-mygo/src/shell_tabs.go", symbol: "func (s *Shell) observeSections() {" },
+      { file: "packages/workbench/memory-placement.js", symbol: "if (record.drawn) saver.classify();" },
+      { file: "packages/workbench/memory-saver.js", symbol: "    classify() {" },
+      { file: "packages/workbench-mygo/src/memory_saver.go", symbol: "func (s *MemorySaver) Classify() {" },
     ],
     tests: [
-      { file: "packages/workbench/test/memory-saver.test.mjs", id: "a hidden section of a project opened from the library starts unloaded in the placement that first holds it" },
+      { file: "packages/workbench/test/memory-saver.test.mjs", id: "a drawn placement starts unloaded every surface that it first holds hidden" },
+      { file: "packages/workbench/test/memory-saver.test.mjs", id: "a surface first seen while the setting is off waits for the delay after the setting turns on" },
       { file: "packages/workbench-mygo/tests/app_tabs_test.go", id: "TestAHiddenSectionThatDeclaresUnloadStartsUnloaded" },
+      { file: "packages/workbench-mygo/tests/app_tabs_test.go", id: "TestASetLinkedAfterTheStartHoldsNoPageOfAHiddenSection" },
+      { file: "packages/workbench-mygo/tests/app_tabs_test.go", id: "TestAHiddenTabOfAProjectOpenedLaterStartsUnloaded" },
+      { file: "packages/workbench-mygo/tests/memory_saver_test.go", id: "TestClassifyTakesOnlyASurfaceFirstSeenSinceTheLast" },
     ],
-    expected: "A window starts its memory saver at its first drawn layout that holds a surface, so a hidden section that declares unload never mounts only to unload.",
+    expected: "While the memory saver is on, a hidden surface that declares unload and was never shown starts unloaded at the first drawn layout that holds it, so it never mounts only to unload.",
     levels: ["unit"],
   },
   {

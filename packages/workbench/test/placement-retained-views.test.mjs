@@ -543,7 +543,7 @@ test("an unloaded cold view is classified before a drawn host placement", async 
     await Promise.resolve();
     assert.equal(classificationFinished, false, "drawn placement did not wait for startup memory classification");
     memory.observe(new Set(), [{ id: cold.id, plugin: cold.plugin, kind: "tab" }]);
-    memory.start();
+    memory.classify();
     initialized = true;
     resolveReady();
     const classified = await classifiedPlacement;
@@ -625,7 +625,7 @@ test("a disabled memory saver mounts a cold hidden view at startup", async (t) =
         composition: { kind: "view", page: "ui/page.html" } }, start: { origin: { directory: null }, declarations: emptySurfaceDeclarations } };
     const candidates = [cold];
     memory.observe(new Set(), [{ id: cold.id, plugin: cold.plugin, kind: "tab" }]);
-    memory.start();
+    memory.classify();
     const classified = await memoryPlacement({ surfaces: [], drawn: true }, candidates, {
       ready: Promise.resolve(), saver: memory, start: (entries) => entries,
       observe: (_record, tabs) => memory.observe(new Set(), tabs.map(({ id, plugin }) => ({ id, plugin, kind: "tab" }))),

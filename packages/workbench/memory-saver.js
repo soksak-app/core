@@ -236,7 +236,7 @@ export function createMemorySaver({
         const isShown = shown.has(id);
         if (!entry) {
           entry = { id, plugin, kind, unload, state: "loaded", hiddenAt: isShown ? null : time, shownAt: isShown ? time : null,
-            unloadAt: null, region: [], checkedAt: null, generation: 0, attempting: false };
+            unloadAt: null, region: [], checkedAt: null, generation: 0, attempting: false, firstSeen: true };
         } else if (isShown && entry.hiddenAt !== null) {
           entry.hiddenAt = null;
           entry.shownAt = time;
@@ -258,13 +258,16 @@ export function createMemorySaver({
       arm();
     },
     /**
-     * Ends the start of the page: while the setting is on, a hidden tab of a declaring plugin that was never shown starts
-     * unloaded and shows its cached label (docs/spec/plugins.md#memory-saver).
+     * Classifies the surfaces first seen since the last call, at a drawn commit: while the setting is on, a hidden surface that
+     * declares unload and was never shown starts unloaded and shows its cached label, so it never mounts only to unload. A surface
+     * first seen while the setting is off stays and waits for the delay (docs/spec/plugins.md#memory-saver).
      */
-    start() {
+    classify() {
+      const seen = [...entries.values()].filter((entry) => entry.firstSeen);
+      for (const entry of seen) entry.firstSeen = false;
       if (!enabled()) return;
       let changed = false;
-      for (const entry of entries.values()) {
+      for (const entry of seen) {
         if (entry.state !== "loaded" || entry.hiddenAt === null || entry.shownAt !== null) continue;
         if (declaration(entry) !== "unload") continue;
         setState(entry, "unloaded");
