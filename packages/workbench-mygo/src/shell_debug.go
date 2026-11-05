@@ -1104,12 +1104,31 @@ func (s *Shell) debugStatusOf() debugStatus {
 	return status
 }
 
+// debugStyle reads the look of the card from the palette and the chrome metrics.
+func (s *Shell) debugStyle() DebugStyle {
+	metric := func(name string) float32 {
+		value, _ := s.options.Declared.Metric(name)
+		return float32(value)
+	}
+	pane := s.readSettingsPane()
+	return DebugStyle{Card: s.palette.Card, Background: s.palette.Bg, Edge: s.palette.Edge, Rail: s.palette.Rail, Fg: s.palette.Fg, Muted: s.palette.Muted,
+		Border: s.palette.BorderWidth, Radius: s.radiusMiddle(), ButtonRadius: s.radiusSmall(), Top: metric("set-card-top"),
+		HeadH: pane.headH, HeadGap: pane.headGap, HeadPadStart: pane.headPadStart, HeadPadEnd: pane.headPadEnd,
+		ShadowY: pane.shadowY, ShadowBlur: pane.shadowBlur, ShadowAlpha: pane.shadowAlpha,
+		PanePadX: metric("dbg-pane-pad-x"), PaneTop: metric("dbg-pane-pad-top"), PaneBottom: metric("dbg-pane-pad-bottom"), ErrorGap: metric("dbg-error-gap"),
+		RowGap: metric("dbg-row-gap"), RowH: metric("dbg-row-h"), ActW: metric("dbg-act-w"), BarGap: metric("dbg-bar-gap"), CaptionGap: pane.captionGap,
+		ActionsGap: metric("set-actions-gap"), ActionsMargin: metric("set-actions-margin"), FieldPadY: metric("field-pad-y"),
+		Space1: metric("space-1"), Space2: metric("space-2"), Space3: metric("space-3"),
+		LineHeight: pane.lineHeight, TextControl: s.textControl(), TextSmall: s.textSmall(),
+		Close: func(c *ui.Context, button ui.Element, title string) { s.drawAct(c, button, title, "close", false, 1) }}
+}
+
 // debugScreen is what DrawDebugView draws.
 func (s *Shell) debugScreen() DebugView {
 	d := &s.debugView
 	width, _ := s.options.Declared.Metric("dbg-card-w")
 	view := DebugView{CardWidth: float32(width), CardMaxHeight: float32(s.settingsWindow.height * settingsCardMaxShare), Entries: d.entries,
-		Viewing: d.viewing, Failure: d.failure, Scroll: &d.scroll}
+		Viewing: d.viewing, Failure: d.failure, Scroll: &d.scroll, Style: s.debugStyle()}
 	if operation := d.operation; operation != nil {
 		view.Operation = &DebugOperation{Action: operation.Action, State: operation.State, Writing: operation.Total != nil}
 		if operation.Path != nil {

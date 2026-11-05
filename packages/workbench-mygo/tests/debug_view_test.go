@@ -24,6 +24,8 @@ func debugEntries() []workbench.DebugEntry {
 
 func drawDebug(view *workbench.DebugView, errors *workbench.ShownErrors, binder *workbench.Binder) *ui.Tester {
 	view.CardWidth, view.CardMaxHeight = 640, 880
+	view.Style = workbench.DebugStyle{HeadH: 40, ActW: 56, RowH: 30, TextControl: 12, TextSmall: 11, LineHeight: 1.45,
+		Close: func(_ *ui.Context, button ui.Element, title string) { button.Size(24, 24).Label(title) }}
 	return ui.NewTester(func(c *ui.Context) {
 		workbench.DrawDebugView(c, binder, *view, errors)
 	}, 1000, 900)
